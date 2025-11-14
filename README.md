@@ -14,4 +14,4 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173/ and press **Space** to flip the paddle.
+Open http://localhost:5173/ and press **Space** to flip the paddle. Hit the bumpers to score points! Press **R** to reset the ball and score.
