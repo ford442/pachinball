@@ -15,9 +15,9 @@ import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { Nullable } from '@babylonjs/core/types'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
-import { ActiveEvents } from '@dimforge/rapier3d-compat/pipeline/event_queue'
 
-const GRAVITY = new Vector3(0, -9.81, 0)
+// Gravity tilted to pull ball down (-Z) and onto the table (-Y)
+const GRAVITY = new Vector3(0, -9.81, -5.0)
 
 interface PhysicsBinding {
   mesh: TransformNode
@@ -31,18 +31,38 @@ interface BumperVisual {
   sweep: number
 }
 
+enum GameState {
+  MENU,
+  PLAYING,
+  GAME_OVER,
+}
+
 export class Game {
   private readonly engine: Engine | WebGPUEngine
   private scene: Nullable<Scene> = null
   private rapier: typeof RAPIER | null = null
   private world: RAPIER.World | null = null
   private bindings: PhysicsBinding[] = []
-  private flipperBody: RAPIER.RigidBody | null = null
+  private flipperLeftBody: RAPIER.RigidBody | null = null
+  private flipperRightBody: RAPIER.RigidBody | null = null
   private ready = false
+
+  // Game State
+  private state: GameState = GameState.MENU
   private score = 0
+  private lives = 3
+
+  // UI Elements
   private scoreElement: HTMLElement | null = null
+  private livesElement: HTMLElement | null = null
+  private menuOverlay: HTMLElement | null = null
+  private startScreen: HTMLElement | null = null
+  private gameOverScreen: HTMLElement | null = null
+  private finalScoreElement: HTMLElement | null = null
+
   private eventQueue: RAPIER.EventQueue | null = null
   private ballBody: RAPIER.RigidBody | null = null
+  private deathZoneBody: RAPIER.RigidBody | null = null
   private bumperBodies: RAPIER.RigidBody[] = []
   private bumperVisuals: BumperVisual[] = []
   private shards: Array<{ mesh: Mesh; vel: Vector3; life: number; material: StandardMaterial }> = []
@@ -65,12 +85,25 @@ export class Game {
     }
 
     this.scene = new Scene(this.engine)
-    this.scene.clearColor = Color3.Black().toColor4(1)
-    this.scoreElement = document.getElementById('score')
-    this.updateScore()
+    this.scene.clearColor = Color3.FromHexString("#050505").toColor4(1)
 
-    const camera = new ArcRotateCamera('camera', Math.PI / 2.5, 1, 25, new Vector3(0, 1, 0), this.scene)
+    // Bind UI
+    this.scoreElement = document.getElementById('score')
+    this.livesElement = document.getElementById('lives')
+    this.menuOverlay = document.getElementById('menu-overlay')
+    this.startScreen = document.getElementById('start-screen')
+    this.gameOverScreen = document.getElementById('game-over-screen')
+    this.finalScoreElement = document.getElementById('final-score')
+
+    document.getElementById('start-btn')?.addEventListener('click', () => this.startGame())
+    document.getElementById('restart-btn')?.addEventListener('click', () => this.startGame())
+
+    this.updateHUD()
+
+    // Camera positioned at -Z (Player side), looking slightly down
+    const camera = new ArcRotateCamera('camera', -Math.PI / 2, Math.PI / 3, 28, new Vector3(0, 1, 0), this.scene)
     camera.attachControl(canvas, true)
+
     this.bloomPipeline = new DefaultRenderingPipeline('pachinbloom', true, this.scene, [camera])
     if (this.bloomPipeline) {
       this.bloomPipeline.bloomEnabled = true
@@ -83,8 +116,6 @@ export class Game {
     await this.initPhysics()
     this.buildScene()
 
-    // Create AudioContext for short beep sounds. Some browsers require a user gesture to resume,
-    // but creating here is safe — playback will only work after user interaction if needed.
     try {
       this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
     } catch {
@@ -101,13 +132,15 @@ export class Game {
 
     window.addEventListener('keydown', this.onKeyDown)
     this.ready = true
+
+    // Initial state
+    this.setGameState(GameState.MENU)
   }
 
   dispose(): void {
     window.removeEventListener('keydown', this.onKeyDown)
     this.scene?.dispose()
     this.world?.free()
-    // dispose any live shard meshes and materials
     for (const s of this.shards) {
       try {
         s.mesh.dispose()
@@ -119,12 +152,16 @@ export class Game {
     this.world = null
     this.rapier = null
     this.bindings = []
-    this.flipperBody = null
+    this.flipperLeftBody = null
+    this.flipperRightBody = null
     this.ready = false
     this.score = 0
+    this.lives = 3
     this.scoreElement = null
+    this.livesElement = null
     this.eventQueue = null
     this.ballBody = null
+    this.deathZoneBody = null
     this.bumperBodies = []
     this.bumperVisuals = []
     this.contactForceMap.clear()
@@ -136,14 +173,74 @@ export class Game {
     this.voiceCooldown = 0
   }
 
+  private setGameState(newState: GameState) {
+    this.state = newState
+
+    if (this.menuOverlay) this.menuOverlay.classList.remove('hidden')
+    if (this.startScreen) this.startScreen.classList.add('hidden')
+    if (this.gameOverScreen) this.gameOverScreen.classList.add('hidden')
+
+    switch (newState) {
+      case GameState.MENU:
+        if (this.startScreen) this.startScreen.classList.remove('hidden')
+        break
+      case GameState.PLAYING:
+        if (this.menuOverlay) this.menuOverlay.classList.add('hidden')
+        if (this.audioCtx && this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume()
+        }
+        break
+      case GameState.GAME_OVER:
+        if (this.gameOverScreen) this.gameOverScreen.classList.remove('hidden')
+        if (this.finalScoreElement) this.finalScoreElement.textContent = this.score.toString()
+        break
+    }
+  }
+
+  private startGame() {
+    this.score = 0
+    this.lives = 3
+    this.updateHUD()
+    this.resetBall()
+    this.setGameState(GameState.PLAYING)
+  }
+
   private onKeyDown = (event: KeyboardEvent): void => {
-    if (event.code === 'KeyR') {
+    if (!this.ready || !this.rapier) return
+
+    if (event.code === 'KeyR' && this.state === GameState.PLAYING) {
       this.resetBall()
       return
     }
-    if (event.code !== 'Space' || !this.ready || !this.flipperBody || !this.rapier) return
-    const torque = new this.rapier.Vector3(0, 80, 0)
-    this.flipperBody.applyTorqueImpulse(torque, true)
+
+    if (this.state !== GameState.PLAYING) return
+
+    // Flipper control
+    const torqueMag = 80;
+
+    if (event.code === 'ArrowLeft' || event.code === 'KeyZ') {
+       if (this.flipperLeftBody) {
+         this.flipperLeftBody.applyTorqueImpulse(new this.rapier.Vector3(0, torqueMag, 0), true)
+       }
+    }
+
+    if (event.code === 'ArrowRight' || event.code === 'Slash') {
+       if (this.flipperRightBody) {
+         this.flipperRightBody.applyTorqueImpulse(new this.rapier.Vector3(0, -torqueMag, 0), true)
+       }
+    }
+
+    // Plunger
+    if (event.code === 'Space' || event.code === 'Enter') {
+        if (this.ballBody) {
+            // Only launch if ball is roughly in the plunger lane
+            const pos = this.ballBody.translation();
+            // Lane is roughly x > 8, z < -5
+            if (pos.x > 8 && pos.z < -4) {
+                 this.ballBody.applyImpulse(new this.rapier.Vector3(0, 0, 15), true)
+            }
+        }
+    }
   }
 
   private async initPhysics(): Promise<void> {
@@ -159,116 +256,251 @@ export class Game {
       throw new Error('Scene or physics not initialized')
     }
 
-    const ground = MeshBuilder.CreateGround('ground', { width: 20, height: 20 }, this.scene) as Mesh
+    // Materials
+    const groundMat = new StandardMaterial('groundMat', this.scene);
+    groundMat.diffuseColor = Color3.FromHexString("#222233");
+
+    const wallMat = new StandardMaterial('wallMat', this.scene);
+    wallMat.diffuseColor = Color3.FromHexString("#44aaff");
+    wallMat.alpha = 0.5;
+    wallMat.emissiveColor = Color3.FromHexString("#001133");
+
+    const flipperMat = new StandardMaterial('flipperMat', this.scene);
+    flipperMat.diffuseColor = Color3.FromHexString("#ffff00");
+
+    const slingshotMat = new StandardMaterial('slingshotMat', this.scene);
+    slingshotMat.diffuseColor = Color3.White();
+    slingshotMat.emissiveColor = Color3.FromHexString("#333333");
+
+    const ballMat = new StandardMaterial('ballMat', this.scene);
+    ballMat.diffuseColor = Color3.White();
+    ballMat.specularPower = 64;
+
+    // Ground - widen to 24 to fit plunger lane
+    const ground = MeshBuilder.CreateGround('ground', { width: 24, height: 26 }, this.scene) as Mesh
     ground.position.y = -1
-    ground.material = new StandardMaterial('groundMat', this.scene)
-    ;(ground.material as StandardMaterial).diffuseColor = Color3.Gray()
-    const groundBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(0, -1, 0))
-    this.world.createCollider(this.rapier.ColliderDesc.cuboid(10, 0.1, 10), groundBody)
+    ground.position.z = 2 // Shift up slightly to center play area
+    ground.material = groundMat;
+    const groundBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(0, -1, 2))
+    this.world.createCollider(this.rapier.ColliderDesc.cuboid(12, 0.1, 13), groundBody)
     this.bindings.push({ mesh: ground, rigidBody: groundBody })
 
-    // Add walls
-    const wallLeft = MeshBuilder.CreateBox('wallLeft', { width: 0.1, height: 10, depth: 20 }, this.scene) as Mesh
-    wallLeft.position.set(-10, 4, 0)
-    wallLeft.material = new StandardMaterial('wallMat', this.scene)
-    ;(wallLeft.material as StandardMaterial).diffuseColor = Color3.White()
-    ;(wallLeft.material as StandardMaterial).alpha = 0.3
-    const wallLeftBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(-10, 4, 0))
-    this.world.createCollider(this.rapier.ColliderDesc.cuboid(0.05, 5, 10), wallLeftBody)
-    this.bindings.push({ mesh: wallLeft, rigidBody: wallLeftBody })
+    // Walls
+    const wallHeight = 4;
 
-    const wallRight = MeshBuilder.CreateBox('wallRight', { width: 0.1, height: 10, depth: 20 }, this.scene) as Mesh
-    wallRight.position.set(10, 4, 0)
-    wallRight.material = new StandardMaterial('wallMat', this.scene)
-    ;(wallRight.material as StandardMaterial).diffuseColor = Color3.White()
-    ;(wallRight.material as StandardMaterial).alpha = 0.3
-    const wallRightBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(10, 4, 0))
-    this.world.createCollider(this.rapier.ColliderDesc.cuboid(0.05, 5, 10), wallRightBody)
-    this.bindings.push({ mesh: wallRight, rigidBody: wallRightBody })
+    // Left Wall
+    this.createWall(new Vector3(-10, wallHeight, 2), new Vector3(0.1, 5, 26), wallMat)
 
-    const wallTop = MeshBuilder.CreateBox('wallTop', { width: 20, height: 10, depth: 0.1 }, this.scene) as Mesh
-    wallTop.position.set(0, 4, -10)
-    wallTop.material = new StandardMaterial('wallMat', this.scene)
-    ;(wallTop.material as StandardMaterial).diffuseColor = Color3.White()
-    ;(wallTop.material as StandardMaterial).alpha = 0.3
-    const wallTopBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(0, 4, -10))
-    this.world.createCollider(this.rapier.ColliderDesc.cuboid(10, 5, 0.05), wallTopBody)
-    this.bindings.push({ mesh: wallTop, rigidBody: wallTopBody })
+    // Right Wall (Outer)
+    this.createWall(new Vector3(11.5, wallHeight, 2), new Vector3(0.1, 5, 26), wallMat)
 
+    // Top Wall
+    this.createWall(new Vector3(0.75, wallHeight, 14.5), new Vector3(22.5, 5, 0.1), wallMat)
+
+    // Plunger Lane Divider
+    // Gap at top for ball to enter playfield
+    // Lane width ~1.5 units. X pos around 9.
+    this.createWall(new Vector3(9.5, wallHeight, -1), new Vector3(0.1, 5, 20), wallMat)
+
+    // Plunger Lane Base (Stopper)
+    // At bottom of lane so ball doesn't roll out backwards
+    this.createWall(new Vector3(10.5, wallHeight, -10), new Vector3(1.9, 5, 0.1), wallMat)
+
+    // Death Zone (Bottom)
+    // Sensor to detect ball falling out
+    const deathZonePos = new Vector3(0, -1, -12);
+    this.deathZoneBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(deathZonePos.x, deathZonePos.y, deathZonePos.z))
+    this.world.createCollider(
+        this.rapier.ColliderDesc.cuboid(12, 1, 1)
+        .setSensor(true)
+        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
+        this.deathZoneBody
+    )
+
+    // Ball
     const ball = MeshBuilder.CreateSphere('ball', { diameter: 1 }, this.scene) as Mesh
-    ball.position.set(0, 5, 0)
-    ball.material = new StandardMaterial('ballMat', this.scene)
-    ;(ball.material as StandardMaterial).diffuseColor = Color3.White()
-    const ballBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.dynamic().setTranslation(0, 5, 0))
+    // Start position in plunger lane
+    ball.position.set(10.5, 0.5, -9)
+    ball.material = ballMat;
+    const ballBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.dynamic().setTranslation(10.5, 0.5, -9))
     this.world.createCollider(
       this.rapier
         .ColliderDesc.ball(0.5)
         .setRestitution(0.7)
-        .setActiveEvents(ActiveEvents.COLLISION_EVENTS | ActiveEvents.CONTACT_FORCE_EVENTS),
+        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS | this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS),
       ballBody
     )
     this.bindings.push({ mesh: ball, rigidBody: ballBody })
     this.ballBody = ballBody
 
-    const flipper = MeshBuilder.CreateBox('flipper', { width: 3, depth: 0.5, height: 0.3 }, this.scene) as Mesh
-    flipper.rotationQuaternion = Quaternion.Identity()
-    flipper.position.set(-4, -0.5, 0)
+    // Flippers
+    this.createFlippers(flipperMat)
 
-    const flipperBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.dynamic().setTranslation(-4, -0.5, 0)
-    )
-    this.world.createCollider(this.rapier.ColliderDesc.cuboid(1.5, 0.15, 0.25).setFriction(0.9), flipperBody)
-    this.bindings.push({ mesh: flipper, rigidBody: flipperBody })
-    this.flipperBody = flipperBody
+    // Bumpers
+    this.createBumpers()
 
-    const anchorBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(-4, -0.5, 0))
+    // Slingshots (Angled bumpers above flippers)
+    // Left Slingshot
+    // Position: X ~ -6.5, Z ~ -3
+    this.createSlingshot(new Vector3(-6.5, 0, -3), -Math.PI / 6, slingshotMat)
 
-    const hinge = this.rapier.JointData.revolute(
-      new this.rapier.Vector3(-1.5, 0, 0),
-      new this.rapier.Vector3(0, 0, 0),
-      new this.rapier.Vector3(0, 1, 0)
-    )
+    // Right Slingshot
+    this.createSlingshot(new Vector3(6.5, 0, -3), Math.PI / 6, slingshotMat)
+  }
 
-    this.world.createImpulseJoint(hinge, anchorBody, flipperBody, true)
+  private createWall(pos: Vector3, size: Vector3, mat: StandardMaterial): void {
+      if (!this.scene || !this.world || !this.rapier) return
 
-    // Add bumpers
-    const bumper1 = MeshBuilder.CreateSphere('bumper1', { diameter: 0.5 }, this.scene) as Mesh
-    bumper1.position.set(2, 2, 0)
+      const wall = MeshBuilder.CreateBox(`wall_${pos.x}_${pos.z}`, { width: size.x, height: size.y*2, depth: size.z }, this.scene)
+      wall.position.copyFrom(pos)
+      wall.material = mat;
+
+      const body = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z))
+      this.world.createCollider(this.rapier.ColliderDesc.cuboid(size.x/2, size.y, size.z/2), body)
+      this.bindings.push({ mesh: wall, rigidBody: body })
+  }
+
+  private createSlingshot(pos: Vector3, rotationY: number, mat: StandardMaterial): void {
+      if (!this.scene || !this.world || !this.rapier) return
+
+      const size = { w: 0.5, h: 2, d: 4 }
+
+      const mesh = MeshBuilder.CreateBox(`sling_${pos.x}`, { width: size.w, height: size.h, depth: size.d }, this.scene)
+      mesh.rotation.y = rotationY;
+      mesh.position.copyFrom(pos)
+      mesh.material = mat
+
+      // Rapier needs the rotation in the collider or body
+      const q = Quaternion.FromEulerAngles(0, rotationY, 0);
+
+      const body = this.world.createRigidBody(
+          this.rapier.RigidBodyDesc.fixed()
+            .setTranslation(pos.x, pos.y, pos.z)
+            .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+      )
+
+      this.world.createCollider(
+          this.rapier.ColliderDesc.cuboid(size.w/2, size.h/2, size.d/2)
+            .setRestitution(1.5) // High bounce
+            .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS | this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS),
+          body
+      )
+
+      this.bindings.push({ mesh: mesh, rigidBody: body })
+      this.bumperBodies.push(body) // Treat as bumper for scoring/sound
+      this.bumperVisuals.push({ mesh: mesh, body: body, hitTime: 0, sweep: Math.random() })
+  }
+
+  private createFlippers(mat: StandardMaterial): void {
+      if (!this.scene || !this.world || !this.rapier) return
+
+      // Left Flipper
+      this.flipperLeftBody = this.createFlipper(new Vector3(-4, -0.5, -7), false, mat)
+
+      // Right Flipper
+      this.flipperRightBody = this.createFlipper(new Vector3(4, -0.5, -7), true, mat)
+  }
+
+  private createFlipper(pos: Vector3, isRight: boolean, mat: StandardMaterial): RAPIER.RigidBody {
+      if (!this.scene || !this.world || !this.rapier) throw new Error('Physics not ready')
+
+      const width = 3.5
+      const depth = 0.5
+      const height = 0.3
+
+      const flipper = MeshBuilder.CreateBox(isRight ? 'flipperRight' : 'flipperLeft', { width, depth, height }, this.scene) as Mesh
+      flipper.rotationQuaternion = Quaternion.Identity()
+      flipper.material = mat;
+
+      const body = this.world.createRigidBody(
+          this.rapier.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z)
+      )
+
+      this.world.createCollider(
+          this.rapier.ColliderDesc.cuboid(width/2, height/2, depth/2).setFriction(0.9),
+          body
+      )
+      this.bindings.push({ mesh: flipper, rigidBody: body })
+
+      const anchorBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z))
+
+      const pivotX = isRight ? 1.5 : -1.5
+
+      const joint = this.rapier.JointData.revolute(
+          new this.rapier.Vector3(pivotX, 0, 0),
+           new this.rapier.Vector3(pivotX, 0, 0),
+           new this.rapier.Vector3(0, 1, 0)
+      )
+
+      if (isRight) {
+          joint.limitsEnabled = true
+          joint.limits = [-Math.PI / 4, Math.PI / 6]
+      } else {
+          joint.limitsEnabled = true
+          joint.limits = [-Math.PI / 6, Math.PI / 4]
+      }
+
+      this.world.createImpulseJoint(joint, anchorBody, body, true)
+
+      return body
+  }
+
+  private createBumpers(): void {
+      if (!this.scene || !this.world || !this.rapier) return
+
+    const bumper1 = MeshBuilder.CreateSphere('bumper1', { diameter: 0.8 }, this.scene) as Mesh
+    bumper1.position.set(2, 0.5, 3)
     bumper1.material = new StandardMaterial('bumperMat', this.scene)
     ;(bumper1.material as StandardMaterial).diffuseColor = Color3.Red()
-    const bumperBody1 = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(2, 2, 0))
+    const bumperBody1 = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(2, 0.5, 3))
     this.world.createCollider(
       this.rapier
-        .ColliderDesc.ball(0.25)
+        .ColliderDesc.ball(0.4)
         .setRestitution(1.5)
-        .setActiveEvents(ActiveEvents.COLLISION_EVENTS | ActiveEvents.CONTACT_FORCE_EVENTS),
+        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS | this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS),
       bumperBody1
     )
     this.bindings.push({ mesh: bumper1, rigidBody: bumperBody1 })
     this.bumperBodies.push(bumperBody1)
     this.bumperVisuals.push({ mesh: bumper1, body: bumperBody1, hitTime: 0, sweep: Math.random() })
 
-    const bumper2 = MeshBuilder.CreateSphere('bumper2', { diameter: 0.5 }, this.scene) as Mesh
-    bumper2.position.set(-2, 2, 0)
+    const bumper2 = MeshBuilder.CreateSphere('bumper2', { diameter: 0.8 }, this.scene) as Mesh
+    bumper2.position.set(-2, 0.5, 3)
     bumper2.material = new StandardMaterial('bumperMat', this.scene)
     ;(bumper2.material as StandardMaterial).diffuseColor = Color3.Red()
-    const bumperBody2 = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(-2, 2, 0))
+    const bumperBody2 = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(-2, 0.5, 3))
     this.world.createCollider(
       this.rapier
-        .ColliderDesc.ball(0.25)
+        .ColliderDesc.ball(0.4)
         .setRestitution(1.5)
-        .setActiveEvents(ActiveEvents.COLLISION_EVENTS | ActiveEvents.CONTACT_FORCE_EVENTS),
+        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS | this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS),
       bumperBody2
     )
     this.bindings.push({ mesh: bumper2, rigidBody: bumperBody2 })
     this.bumperBodies.push(bumperBody2)
     this.bumperVisuals.push({ mesh: bumper2, body: bumperBody2, hitTime: 0, sweep: Math.random() })
+
+    // Third bumper
+    const bumper3 = MeshBuilder.CreateSphere('bumper3', { diameter: 0.8 }, this.scene) as Mesh
+    bumper3.position.set(0, 0.5, 6)
+    bumper3.material = new StandardMaterial('bumperMat', this.scene)
+    ;(bumper3.material as StandardMaterial).diffuseColor = Color3.Red()
+    const bumperBody3 = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(0, 0.5, 6))
+    this.world.createCollider(
+      this.rapier
+        .ColliderDesc.ball(0.4)
+        .setRestitution(1.5)
+        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS | this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS),
+      bumperBody3
+    )
+    this.bindings.push({ mesh: bumper3, rigidBody: bumperBody3 })
+    this.bumperBodies.push(bumperBody3)
+    this.bumperVisuals.push({ mesh: bumper3, body: bumperBody3, hitTime: 0, sweep: Math.random() })
   }
 
-  private updateScore(): void {
-    if (this.scoreElement) {
-      this.scoreElement.textContent = this.score.toString()
-    }
+  private updateHUD(): void {
+    if (this.scoreElement) this.scoreElement.textContent = this.score.toString()
+    if (this.livesElement) this.livesElement.textContent = this.lives.toString()
   }
 
   private stepPhysics(): void {
@@ -278,6 +510,7 @@ export class Game {
     } else {
       this.world.step()
     }
+
     const engineTyped = this.engine as Engine
     const rawDt = typeof engineTyped.getDeltaTime === 'function' ? engineTyped.getDeltaTime() / 1000 : 1 / 60
     const dt = Math.min(0.1, Math.max(0.0001, rawDt))
@@ -305,6 +538,16 @@ export class Game {
     const body1 = this.world.getRigidBody(handle1)
     const body2 = this.world.getRigidBody(handle2)
     if (!body1 || !body2) return
+
+    // Check Death Zone
+    if (body1 === this.deathZoneBody || body2 === this.deathZoneBody) {
+        const other = body1 === this.deathZoneBody ? body2 : body1;
+        if (other === this.ballBody) {
+            this.handleBallLoss();
+            return;
+        }
+    }
+
     const bumperBody = this.bumperBodies.includes(body1) ? body1 : this.bumperBodies.includes(body2) ? body2 : null
     if (!bumperBody) return
     const other = bumperBody === body1 ? body2 : body1
@@ -313,9 +556,23 @@ export class Game {
     this.handleBumperHit(bumperBody, key, bumperHitDuration)
   }
 
+  private handleBallLoss(): void {
+      if (this.state !== GameState.PLAYING) return;
+
+      this.lives--;
+      this.updateHUD();
+      this.playVoiceCue('fever') // Reuse sound for now or add new one later
+
+      if (this.lives > 0) {
+          this.resetBall();
+      } else {
+          this.setGameState(GameState.GAME_OVER);
+      }
+  }
+
   private handleBumperHit(bumperBody: RAPIER.RigidBody, contactKey: string, bumperHitDuration: number): void {
     this.score += 10
-    this.updateScore()
+    this.updateHUD()
     const visual = this.bumperVisuals.find((v) => v.body === bumperBody)
     if (visual) {
       visual.hitTime = bumperHitDuration
@@ -355,7 +612,10 @@ export class Game {
         visual.hitTime = Math.max(0, visual.hitTime - dt)
         const t = visual.hitTime / bumperHitDuration
         const scale = 1 + 0.6 * t
+        // Handle vector scaling for different mesh types differently if needed,
+        // but uniform scaling is generally safe for visual effect
         visual.mesh.scaling.set(scale, scale, scale)
+
         if (mat) {
           const hue = (visual.sweep + (1 - t)) % 1
           mat.emissiveColor = Color3.FromHSV(hue, 0.9, 1)
@@ -366,8 +626,20 @@ export class Game {
         const eased = current + (1 - current) * restoreRate
         visual.mesh.scaling.set(eased, eased, eased)
         if (mat) {
-          mat.emissiveColor = Color3.Lerp(mat.emissiveColor, Color3.Black(), restoreRate)
-          mat.diffuseColor = Color3.Lerp(mat.diffuseColor, Color3.Red(), restoreRate)
+            // Restore to original color if it was changed
+            // Slingshots are white, Bumpers are red. We need to know which one it is or store original color?
+            // For now, let's just use a simple heuristic or reset to white-ish for slingshots if we can distinguish
+            // Actually `animateBumpers` logic assumes everything is a red bumper.
+            // I should fix this to respect the material's original color or type.
+            // But `bumperVisuals` stores mesh and body.
+            // I can check mesh name.
+            if (visual.mesh.name.startsWith('sling')) {
+                 mat.emissiveColor = Color3.Lerp(mat.emissiveColor, Color3.FromHexString("#333333"), restoreRate)
+                 mat.diffuseColor = Color3.Lerp(mat.diffuseColor, Color3.White(), restoreRate)
+            } else {
+                 mat.emissiveColor = Color3.Lerp(mat.emissiveColor, Color3.Black(), restoreRate)
+                 mat.diffuseColor = Color3.Lerp(mat.diffuseColor, Color3.Red(), restoreRate)
+            }
         }
       }
     }
@@ -449,11 +721,11 @@ export class Game {
   // Reset ball position/velocity and score
   private resetBall(): void {
     if (!this.world || !this.ballBody || !this.rapier) return
-    this.ballBody.setTranslation(new this.rapier.Vector3(0, 5, 0), true)
+    // Reset to plunger lane
+    this.ballBody.setTranslation(new this.rapier.Vector3(10.5, 0.5, -9), true)
     this.ballBody.setLinvel(new this.rapier.Vector3(0, 0, 0), true)
     this.ballBody.setAngvel(new this.rapier.Vector3(0, 0, 0), true)
-    this.score = 0
-    this.updateScore()
+    this.updateHUD()
   }
 
   private contactKey(handle1: number, handle2: number): string {
