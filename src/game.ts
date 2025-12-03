@@ -170,6 +170,12 @@ export class Game {
     // Camera positioned at -Z (Player side), looking slightly down
     const camera = new ArcRotateCamera('camera', -Math.PI / 2, Math.PI / 3, 28, new Vector3(0, 1, 0), this.scene)
     camera.attachControl(canvas, true)
+    // Disable the camera's built-in keyboard bindings so arrow keys are handled by our game input
+    // (ArcRotateCamera exposes keys arrays; clearing them prevents camera from capturing arrow keys)
+    camera.keysUp = []
+    camera.keysDown = []
+    camera.keysLeft = []
+    camera.keysRight = []
 
     this.bloomPipeline = new DefaultRenderingPipeline('pachinbloom', true, this.scene, [camera])
     if (this.bloomPipeline) {
@@ -355,15 +361,21 @@ export class Game {
     }
 
     // Plunger
+    // Allow Space/Enter to start the game from the menu
+    if ((event.code === 'Space' || event.code === 'Enter') && this.state === GameState.MENU) {
+      this.startGame()
+      return
+    }
+
     if (event.code === 'Space' || event.code === 'Enter') {
-        if (this.ballBody) {
-            // Only launch if ball is roughly in the plunger lane
-            const pos = this.ballBody.translation();
-            // Lane is roughly x > 8, z < -5
-            if (pos.x > 8 && pos.z < -4) {
-                 this.ballBody.applyImpulse(new this.rapier.Vector3(0, 0, 15), true)
-            }
+      if (this.ballBody && this.rapier) {
+        // Only launch if ball is roughly in the plunger lane
+        const pos = this.ballBody.translation();
+        // Lane is roughly x > 8, z < -5
+        if (pos.x > 8 && pos.z < -4) {
+           this.ballBody.applyImpulse(new this.rapier.Vector3(0, 0, 15), true)
         }
+      }
     }
 
     // Nudge (table nudge) — small impulse to move balls and can cause tilt if abused
@@ -386,7 +398,9 @@ export class Game {
     this.rapier = await import('@dimforge/rapier3d-compat')
     // Use the single-object form to avoid the runtime deprecation warning
     // (accepts options like { module_or_path }). Passing an empty object keeps defaults
-    await this.rapier.init({})
+    // use the object form at runtime to avoid the deprecation path in the loader
+    // types declare init() with no args — cast to any to keep type-checker happy
+    await (this.rapier.init as any)({})
     this.world = new this.rapier.World(new this.rapier.Vector3(GRAVITY.x, GRAVITY.y, GRAVITY.z))
     this.eventQueue = new this.rapier.EventQueue(true)
   }
