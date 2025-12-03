@@ -44,8 +44,8 @@ export class Game {
   private rapier: typeof RAPIER | null = null
   private world: RAPIER.World | null = null
   private bindings: PhysicsBinding[] = []
-  private flipperLeftBody: RAPIER.RigidBody | null = null
-  private flipperRightBody: RAPIER.RigidBody | null = null
+  private flipperLeftJoint: RAPIER.ImpulseJoint | null = null
+  private flipperRightJoint: RAPIER.ImpulseJoint | null = null
   private ready = false
 
   // Game State
@@ -204,6 +204,7 @@ export class Game {
     })
 
     window.addEventListener('keydown', this.onKeyDown)
+    window.addEventListener('keyup', this.onKeyUp)
     this.ready = true
 
     // Initial state
@@ -212,6 +213,7 @@ export class Game {
 
   dispose(): void {
     window.removeEventListener('keydown', this.onKeyDown)
+    window.removeEventListener('keyup', this.onKeyUp)
     this.scene?.dispose()
     this.world?.free()
     for (const s of this.shards) {
@@ -225,8 +227,8 @@ export class Game {
     this.world = null
     this.rapier = null
     this.bindings = []
-    this.flipperLeftBody = null
-    this.flipperRightBody = null
+    this.flipperLeftJoint = null
+    this.flipperRightJoint = null
     this.ready = false
     this.score = 0
     this.lives = 3
@@ -350,19 +352,22 @@ export class Game {
     if (this.state !== GameState.PLAYING) return
 
     // Flipper control
-    const torqueMag = 80;
+    const stiffness = 100000
+    const damping = 1000
 
     if (event.code === 'ArrowLeft' || event.code === 'KeyZ') {
        if (this.tiltActive) { this.playBeep(220); return }
-       if (this.flipperLeftBody) {
-         this.flipperLeftBody.applyTorqueImpulse(new this.rapier.Vector3(0, torqueMag, 0), true)
+       if (this.flipperLeftJoint) {
+         const target = -Math.PI / 6;
+         (this.flipperLeftJoint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(target, stiffness, damping)
        }
     }
 
     if (event.code === 'ArrowRight' || event.code === 'Slash') {
        if (this.tiltActive) { this.playBeep(220); return }
-       if (this.flipperRightBody) {
-         this.flipperRightBody.applyTorqueImpulse(new this.rapier.Vector3(0, -torqueMag, 0), true)
+       if (this.flipperRightJoint) {
+         const target = Math.PI / 6;
+         (this.flipperRightJoint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(target, stiffness, damping)
        }
     }
 
@@ -390,6 +395,28 @@ export class Game {
     if (event.code === 'KeyW') { // nudge forward
       this.applyNudge(new this.rapier.Vector3(0, 0, 0.8))
       return
+    }
+  }
+
+  private onKeyUp = (event: KeyboardEvent): void => {
+    if (!this.ready || !this.rapier) return
+    if (this.state !== GameState.PLAYING) return
+
+    const stiffness = 100000
+    const damping = 1000
+
+    if (event.code === 'ArrowLeft' || event.code === 'KeyZ') {
+       if (this.flipperLeftJoint) {
+         // Return to rest position (PI/4)
+         (this.flipperLeftJoint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(Math.PI / 4, stiffness, damping)
+       }
+    }
+
+    if (event.code === 'ArrowRight' || event.code === 'Slash') {
+       if (this.flipperRightJoint) {
+         // Return to rest position (-PI/4)
+         (this.flipperRightJoint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(-Math.PI / 4, stiffness, damping)
+       }
     }
   }
 
@@ -550,13 +577,17 @@ export class Game {
       if (!this.scene || !this.world || !this.rapier) return
 
       // Left Flipper
-      this.flipperLeftBody = this.createFlipper(new Vector3(-4, -0.5, -7), false, mat)
+      const left = this.createFlipper(new Vector3(-4, -0.5, -7), false, mat)
+      // this.flipperLeftBody = left.body
+      this.flipperLeftJoint = left.joint
 
       // Right Flipper
-      this.flipperRightBody = this.createFlipper(new Vector3(4, -0.5, -7), true, mat)
+      const right = this.createFlipper(new Vector3(4, -0.5, -7), true, mat)
+      // this.flipperRightBody = right.body
+      this.flipperRightJoint = right.joint
   }
 
-  private createFlipper(pos: Vector3, isRight: boolean, mat: StandardMaterial): RAPIER.RigidBody {
+  private createFlipper(pos: Vector3, isRight: boolean, mat: StandardMaterial): { body: RAPIER.RigidBody, joint: RAPIER.ImpulseJoint } {
       if (!this.scene || !this.world || !this.rapier) throw new Error('Physics not ready')
 
       const width = 3.5
@@ -581,23 +612,37 @@ export class Game {
 
       const pivotX = isRight ? 1.5 : -1.5
 
-      const joint = this.rapier.JointData.revolute(
+      const jointParams = this.rapier.JointData.revolute(
           new this.rapier.Vector3(pivotX, 0, 0),
            new this.rapier.Vector3(pivotX, 0, 0),
            new this.rapier.Vector3(0, 1, 0)
       )
 
+      // Limits
+      jointParams.limitsEnabled = true
       if (isRight) {
-          joint.limitsEnabled = true
-          joint.limits = [-Math.PI / 4, Math.PI / 6]
+          // Right flipper: rest at -PI/4 (down), active at PI/6 (up)
+          jointParams.limits = [-Math.PI / 4, Math.PI / 6]
       } else {
-          joint.limitsEnabled = true
-          joint.limits = [-Math.PI / 6, Math.PI / 4]
+          // Left flipper: rest at PI/4 (down, since it's mirrored?), wait.
+          // Left flipper pivot is at left end. It points right.
+          // Rest position: should point down-ish.
+          // Left flipper limits: [-PI/6, PI/4].
+          // If rest is down, and up is up.
+          jointParams.limits = [-Math.PI / 6, Math.PI / 4]
       }
 
-      this.world.createImpulseJoint(joint, anchorBody, body, true)
+      const joint = this.world.createImpulseJoint(jointParams, anchorBody, body, true) as RAPIER.RevoluteImpulseJoint
 
-      return body
+      // Configure motor to hold at rest position
+      // Stiffness (P) and Damping (D)
+      const stiffness = 100000
+      const damping = 1000
+      const restAngle = isRight ? -Math.PI / 4 : Math.PI / 4
+
+      joint.configureMotorPosition(restAngle, stiffness, damping)
+
+      return { body, joint }
   }
 
   private createBumpers(): void {
@@ -999,16 +1044,34 @@ export class Game {
     if (this.state !== GameState.PLAYING) return
     if (this.tiltActive) { this.playBeep(220); return }
     if (!this.rapier) return
-    const torqueMag = 80
-    if (this.flipperLeftBody) this.flipperLeftBody.applyTorqueImpulse(new this.rapier.Vector3(0, torqueMag, 0), true)
+    const stiffness = 100000
+    const damping = 1000
+    if (this.flipperLeftJoint) {
+        // Trigger up
+        (this.flipperLeftJoint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(-Math.PI / 6, stiffness, damping)
+        // Auto-release after short delay for touch controls if no touch-up event is easy to bind?
+        // Actually, touchstart is just one event. A real implementation would handle touchend.
+        // For now, let's just hold it for a bit or rely on user tapping?
+        // "touchstart" doesn't auto-release.
+        // Let's add a timeout to release for simple tap behavior on touch
+        setTimeout(() => {
+             if (this.flipperLeftJoint) (this.flipperLeftJoint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(Math.PI / 4, stiffness, damping)
+        }, 150)
+    }
   }
 
   private triggerRightFlipper(): void {
     if (this.state !== GameState.PLAYING) return
     if (this.tiltActive) { this.playBeep(220); return }
     if (!this.rapier) return
-    const torqueMag = 80
-    if (this.flipperRightBody) this.flipperRightBody.applyTorqueImpulse(new this.rapier.Vector3(0, -torqueMag, 0), true)
+    const stiffness = 100000
+    const damping = 1000
+    if (this.flipperRightJoint) {
+        (this.flipperRightJoint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(Math.PI / 6, stiffness, damping)
+        setTimeout(() => {
+             if (this.flipperRightJoint) (this.flipperRightJoint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(-Math.PI / 4, stiffness, damping)
+        }, 150)
+    }
   }
 
   private triggerPlunger(): void {
