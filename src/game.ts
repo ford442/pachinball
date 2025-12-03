@@ -384,7 +384,9 @@ export class Game {
   private async initPhysics(): Promise<void> {
     if (this.rapier) return
     this.rapier = await import('@dimforge/rapier3d-compat')
-    await this.rapier.init()
+    // Use the single-object form to avoid the runtime deprecation warning
+    // (accepts options like { module_or_path }). Passing an empty object keeps defaults
+    await this.rapier.init({})
     this.world = new this.rapier.World(new this.rapier.Vector3(GRAVITY.x, GRAVITY.y, GRAVITY.z))
     this.eventQueue = new this.rapier.EventQueue(true)
   }
