@@ -46,6 +46,31 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
+/* Combo HUD styling */
+#combo {
+  background: linear-gradient(135deg, rgba(255,100,0,0.95), rgba(255,40,40,0.85));
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.3);
+}
+
+#tilt {
+  background: linear-gradient(135deg, rgba(200,0,0,0.95), rgba(140,0,0,0.9));
+  color: #fff;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+/* subtle animation when combo gets updated */
+@keyframes comboPulse {
+  0% { transform: scale(1); box-shadow: 0 6px 18px rgba(255,80,0,0.15); }
+  50% { transform: scale(1.06); box-shadow: 0 8px 28px rgba(255,80,0,0.28); }
+  100% { transform: scale(1); box-shadow: 0 6px 18px rgba(255,80,0,0.15); }
+}
+
+#combo.pulse {
+  animation: comboPulse 380ms ease-out 1;
+}
+
 .overlay {
   position: fixed;
   inset: 0;
@@ -61,6 +86,76 @@ body {
 .overlay.hidden {
   display: none;
 }
+
+#controls-hint {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  color: #ddd;
+  font-size: 0.9rem;
+  z-index: 9;
+  pointer-events: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  #hud { left: 12px; top: 12px; }
+  .hud-item { font-size: 1rem; padding: 6px 10px; }
+  #controls-hint { font-size: 0.85rem; right: 10px; bottom: 10px; }
+  h1 { font-size: 2.2rem }
+}
+
+/* Touch control panel */
+#touch-controls {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 14px;
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  z-index: 12;
+  pointer-events: auto;
+}
+.touch-btn {
+  width: 58px;
+  height: 58px;
+  border-radius: 12px;
+  border: none;
+  background: rgba(255,255,255,0.07);
+  color: #fff;
+  font-size: 1.3rem;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+}
+.touch-btn:active { transform: scale(0.96); }
+
+@media (min-width: 680px) {
+  /* hide touch controls on desktop */
+  #touch-controls { display: none; }
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 88px;
+  padding: 10px 14px;
+  background: rgba(30,30,30,0.92);
+  color: #fff;
+  border-radius: 8px;
+  z-index: 20;
+  pointer-events: none;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 230ms ease, transform 260ms ease;
+}
+.toast.hidden { display: none; opacity: 0 }
+.toast.show { display: block; opacity: 1; transform: translateX(-50%) translateY(-6px) }
 
 .screen {
   text-align: center;
