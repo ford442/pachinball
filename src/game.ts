@@ -340,6 +340,12 @@ export class Game {
       return
     }
 
+    // Special-case: allow starting the game from the menu using Space/Enter
+    if ((event.code === 'Space' || event.code === 'Enter') && this.state === GameState.MENU) {
+      this.startGame()
+      return
+    }
+
     // Everything below is only for active gameplay
     if (this.state !== GameState.PLAYING) return
 
@@ -361,12 +367,6 @@ export class Game {
     }
 
     // Plunger
-    // Allow Space/Enter to start the game from the menu
-    if ((event.code === 'Space' || event.code === 'Enter') && this.state === GameState.MENU) {
-      this.startGame()
-      return
-    }
-
     if (event.code === 'Space' || event.code === 'Enter') {
       if (this.ballBody && this.rapier) {
         // Only launch if ball is roughly in the plunger lane
