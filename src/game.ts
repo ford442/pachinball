@@ -307,7 +307,7 @@ export class Game {
           try { this.bindings[bidx].mesh.dispose() } catch {}
           this.bindings.splice(bidx, 1)
         }
-        try { rb.remove() } catch {}
+        try { this.world?.removeRigidBody(rb) } catch {}
         this.ballBodies.splice(i, 1)
       }
     }
@@ -649,7 +649,7 @@ export class Game {
       const pos = positions[i]
       const target = MeshBuilder.CreateBox(`target_${i}`, { width: 1, height: 0.6, depth: 0.4 }, this.scene)
       target.position.copyFrom(pos)
-      target.rotationQuaternion = undefined
+      target.rotationQuaternion = null
       const mat = new StandardMaterial(`targetMat_${i}`, this.scene)
       mat.diffuseColor = Color3.FromHexString('#22ff88')
       mat.emissiveColor = Color3.FromHexString('#006633')
@@ -657,7 +657,7 @@ export class Game {
 
       const body = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z))
       // small thin collider to act as a target sensor
-      const collider = this.world.createCollider(this.rapier.ColliderDesc.cuboid(0.45, 0.3, 0.2)
+      this.world.createCollider(this.rapier.ColliderDesc.cuboid(0.45, 0.3, 0.2)
         .setSensor(true)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS), body)
 
@@ -773,7 +773,7 @@ export class Game {
               try { this.bindings[bidx].mesh.dispose() } catch {}
               this.bindings.splice(bidx, 1)
             }
-            try { rb.remove() } catch {}
+            try { this.world?.removeRigidBody(rb) } catch {}
             this.ballBodies.splice(i, 1)
           }
         }
@@ -860,7 +860,7 @@ export class Game {
           try { this.bindings[bidx].mesh.dispose() } catch {}
           this.bindings.splice(bidx, 1)
         }
-        try { lostBody.remove() } catch {}
+        try { this.world?.removeRigidBody(lostBody) } catch {}
         this.ballBodies.splice(idx, 1)
 
         // If additional balls remain, don't take a life
@@ -883,7 +883,7 @@ export class Game {
     if (this.lives > 0) {
       // Clean up any remaining ball bodies
       for (const b of this.ballBodies) {
-        try { b.remove() } catch {}
+        try { this.world?.removeRigidBody(b) } catch {}
       }
       this.ballBodies = []
       // Recreate a single main ball
@@ -997,12 +997,12 @@ export class Game {
 
   private triggerPlunger(): void {
     if (this.state !== GameState.PLAYING) return
-    if (!this.ballBody) return
+    if (!this.ballBody || !this.rapier) return
     try {
       const pos = this.ballBody.translation()
-      if (pos.x > 8 && pos.z < -4) {
-        this.ballBody.applyImpulse(new this.rapier.Vector3(0, 0, 15), true)
-      }
+        if (pos.x > 8 && pos.z < -4) {
+          this.ballBody.applyImpulse(new this.rapier.Vector3(0, 0, 15), true)
+        }
     } catch {}
   }
 
