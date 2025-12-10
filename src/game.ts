@@ -7,6 +7,12 @@ import {
   Scene,
   TransformNode,
   Vector3,
+  Texture,
+  DynamicTexture,
+  MirrorTexture,
+  Plane,
+  PointLight,
+  TrailMesh,
 } from '@babylonjs/core'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
@@ -19,6 +25,7 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 // Gravity tilted to pull ball down (-Z) and onto the table (-Y)
 const GRAVITY = new Vector3(0, -9.81, -5.0)
 
+// See ASSETS_GUIDE.md for info on adding real textures
 interface PhysicsBinding {
   mesh: TransformNode
   rigidBody: RAPIER.RigidBody
@@ -101,6 +108,7 @@ export class Game {
   private readonly tiltDuration = 3
   private bumperVisuals: BumperVisual[] = []
   private shards: Array<{ mesh: Mesh; vel: Vector3; life: number; material: StandardMaterial }> = []
+  private mirrorTexture: MirrorTexture | null = null
   private audioCtx: AudioContext | null = null
   private contactForceMap = new Map<string, number>()
   private bloomPipeline: DefaultRenderingPipeline | null = null
@@ -432,30 +440,89 @@ export class Game {
     this.eventQueue = new this.rapier.EventQueue(true)
   }
 
+  private createGridTexture(scene: Scene): Texture {
+    const dynamicTexture = new DynamicTexture('gridTexture', 512, scene, true)
+    dynamicTexture.hasAlpha = true
+    const ctx = dynamicTexture.getContext()
+    const size = 512
+
+    // Background
+    ctx.fillStyle = '#050510'
+    ctx.fillRect(0, 0, size, size)
+
+    // Grid
+    ctx.lineWidth = 3
+    ctx.strokeStyle = '#aa00ff'
+    ctx.shadowBlur = 10
+    ctx.shadowColor = '#d000ff'
+
+    const div = 8
+    const step = size / div
+
+    for (let i = 0; i <= size; i += step) {
+      ctx.beginPath()
+      ctx.moveTo(i, 0)
+      ctx.lineTo(i, size)
+      ctx.stroke()
+
+      ctx.beginPath()
+      ctx.moveTo(0, i)
+      ctx.lineTo(size, i)
+      ctx.stroke()
+    }
+
+    // Border
+    ctx.strokeRect(0, 0, size, size)
+
+    dynamicTexture.update()
+    return dynamicTexture
+  }
+
   private buildScene(): void {
     if (!this.scene || !this.world || !this.rapier) {
       throw new Error('Scene or physics not initialized')
     }
 
+    // Skybox
+    const skybox = MeshBuilder.CreateBox("skybox", { size: 100.0 }, this.scene);
+    const skyboxMaterial = new StandardMaterial("skyBox", this.scene);
+    skyboxMaterial.backFaceCulling = false;
+    skyboxMaterial.diffuseColor = new Color3(0, 0, 0);
+    skyboxMaterial.specularColor = new Color3(0, 0, 0);
+    skyboxMaterial.emissiveColor = new Color3(0.05, 0.05, 0.1);
+    skybox.material = skyboxMaterial;
+
     // Materials
     const groundMat = new StandardMaterial('groundMat', this.scene);
-    groundMat.diffuseColor = Color3.FromHexString("#222233");
+    groundMat.diffuseTexture = this.createGridTexture(this.scene);
+    (groundMat.diffuseTexture as Texture).uScale = 4;
+    (groundMat.diffuseTexture as Texture).vScale = 8;
+    groundMat.specularColor = new Color3(0.3, 0.3, 0.3);
 
+    this.mirrorTexture = new MirrorTexture("mirror", 1024, this.scene, true);
+    this.mirrorTexture.mirrorPlane = new Plane(0, -1, 0, -1.01);
+    this.mirrorTexture.level = 0.5;
+    groundMat.reflectionTexture = this.mirrorTexture;
+
+    // Walls - simple glass style
     const wallMat = new StandardMaterial('wallMat', this.scene);
-    wallMat.diffuseColor = Color3.FromHexString("#44aaff");
-    wallMat.alpha = 0.5;
-    wallMat.emissiveColor = Color3.FromHexString("#001133");
+    wallMat.diffuseColor = Color3.FromHexString("#000000");
+    wallMat.emissiveColor = Color3.FromHexString("#0088ff");
+    wallMat.alpha = 0.4;
+    wallMat.specularPower = 64;
 
     const flipperMat = new StandardMaterial('flipperMat', this.scene);
-    flipperMat.diffuseColor = Color3.FromHexString("#ffff00");
+    flipperMat.diffuseColor = Color3.Black();
+    flipperMat.emissiveColor = Color3.FromHexString("#ffdd00");
 
     const slingshotMat = new StandardMaterial('slingshotMat', this.scene);
-    slingshotMat.diffuseColor = Color3.White();
-    slingshotMat.emissiveColor = Color3.FromHexString("#333333");
+    slingshotMat.diffuseColor = Color3.Black();
+    slingshotMat.emissiveColor = Color3.White();
 
     const ballMat = new StandardMaterial('ballMat', this.scene);
     ballMat.diffuseColor = Color3.White();
-    ballMat.specularPower = 64;
+    ballMat.specularPower = 128;
+    ballMat.emissiveColor = new Color3(0.1, 0.1, 0.1);
 
     // Ground - widen to 24 to fit plunger lane
     const ground = MeshBuilder.CreateGround('ground', { width: 24, height: 26 }, this.scene) as Mesh
@@ -479,16 +546,19 @@ export class Game {
     this.createWall(new Vector3(0.75, wallHeight, 14.5), new Vector3(22.5, 5, 0.1), wallMat)
 
     // Plunger Lane Divider
-    // Gap at top for ball to enter playfield
-    // Lane width ~1.5 units. X pos around 9.
     this.createWall(new Vector3(9.5, wallHeight, -1), new Vector3(0.1, 5, 20), wallMat)
 
     // Plunger Lane Base (Stopper)
-    // At bottom of lane so ball doesn't roll out backwards
     this.createWall(new Vector3(10.5, wallHeight, -10), new Vector3(1.9, 5, 0.1), wallMat)
 
+    // Cabinet Shell
+    const cabinetMat = new StandardMaterial("cabinetMat", this.scene);
+    cabinetMat.diffuseColor = Color3.Black();
+    const cabBottom = MeshBuilder.CreateBox("cabinetBase", { width: 25, height: 2, depth: 30 }, this.scene);
+    cabBottom.position.set(0.75, -2, 2);
+    cabBottom.material = cabinetMat;
+
     // Death Zone (Bottom)
-    // Sensor to detect ball falling out
     const deathZonePos = new Vector3(0, -1, -12);
     this.deathZoneBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(deathZonePos.x, deathZonePos.y, deathZonePos.z))
     this.world.createCollider(
@@ -515,6 +585,16 @@ export class Game {
     this.ballBody = ballBody
     this.ballBodies.push(ballBody)
 
+    // Add ball to mirror
+    if (this.mirrorTexture?.renderList) this.mirrorTexture.renderList.push(ball);
+
+    // Ball Trail
+    const trail = new TrailMesh("ballTrail", ball, this.scene as Scene, 0.4, 30, true);
+    const trailMat = new StandardMaterial("trailMat", this.scene);
+    trailMat.emissiveColor = Color3.FromHexString("#00ffff");
+    trailMat.diffuseColor = Color3.FromHexString("#00ffff");
+    trail.material = trailMat;
+
     // Flippers
     this.createFlippers(flipperMat)
 
@@ -522,11 +602,7 @@ export class Game {
     this.createBumpers()
 
     // Slingshots (Angled bumpers above flippers)
-    // Left Slingshot
-    // Position: X ~ -6.5, Z ~ -3
     this.createSlingshot(new Vector3(-6.5, 0, -3), -Math.PI / 6, slingshotMat)
-
-    // Right Slingshot
     this.createSlingshot(new Vector3(6.5, 0, -3), Math.PI / 6, slingshotMat)
   }
 
@@ -540,6 +616,8 @@ export class Game {
       const body = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z))
       this.world.createCollider(this.rapier.ColliderDesc.cuboid(size.x/2, size.y, size.z/2), body)
       this.bindings.push({ mesh: wall, rigidBody: body })
+
+      if (this.mirrorTexture?.renderList) this.mirrorTexture.renderList.push(wall);
   }
 
   private createSlingshot(pos: Vector3, rotationY: number, mat: StandardMaterial): void {
@@ -552,7 +630,6 @@ export class Game {
       mesh.position.copyFrom(pos)
       mesh.material = mat
 
-      // Rapier needs the rotation in the collider or body
       const q = Quaternion.FromEulerAngles(0, rotationY, 0);
 
       const body = this.world.createRigidBody(
@@ -563,27 +640,23 @@ export class Game {
 
       this.world.createCollider(
           this.rapier.ColliderDesc.cuboid(size.w/2, size.h/2, size.d/2)
-            .setRestitution(1.5) // High bounce
+            .setRestitution(1.5)
             .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS | this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS),
           body
       )
 
       this.bindings.push({ mesh: mesh, rigidBody: body })
-      this.bumperBodies.push(body) // Treat as bumper for scoring/sound
+      this.bumperBodies.push(body)
       this.bumperVisuals.push({ mesh: mesh, body: body, hitTime: 0, sweep: Math.random() })
+
+      if (this.mirrorTexture?.renderList) this.mirrorTexture.renderList.push(mesh);
   }
 
   private createFlippers(mat: StandardMaterial): void {
       if (!this.scene || !this.world || !this.rapier) return
-
-      // Left Flipper
       const left = this.createFlipper(new Vector3(-4, -0.5, -7), false, mat)
-      // this.flipperLeftBody = left.body
       this.flipperLeftJoint = left.joint
-
-      // Right Flipper
       const right = this.createFlipper(new Vector3(4, -0.5, -7), true, mat)
-      // this.flipperRightBody = right.body
       this.flipperRightJoint = right.joint
   }
 
@@ -618,29 +691,22 @@ export class Game {
            new this.rapier.Vector3(0, 1, 0)
       )
 
-      // Limits
       jointParams.limitsEnabled = true
       if (isRight) {
-          // Right flipper: rest at -PI/4 (down), active at PI/6 (up)
           jointParams.limits = [-Math.PI / 4, Math.PI / 6]
       } else {
-          // Left flipper: rest at PI/4 (down, since it's mirrored?), wait.
-          // Left flipper pivot is at left end. It points right.
-          // Rest position: should point down-ish.
-          // Left flipper limits: [-PI/6, PI/4].
-          // If rest is down, and up is up.
           jointParams.limits = [-Math.PI / 6, Math.PI / 4]
       }
 
       const joint = this.world.createImpulseJoint(jointParams, anchorBody, body, true) as RAPIER.RevoluteImpulseJoint
 
-      // Configure motor to hold at rest position
-      // Stiffness (P) and Damping (D)
       const stiffness = 100000
       const damping = 1000
       const restAngle = isRight ? -Math.PI / 4 : Math.PI / 4
 
       joint.configureMotorPosition(restAngle, stiffness, damping)
+
+      if (this.mirrorTexture?.renderList) this.mirrorTexture.renderList.push(flipper);
 
       return { body, joint }
   }
@@ -648,54 +714,37 @@ export class Game {
   private createBumpers(): void {
       if (!this.scene || !this.world || !this.rapier) return
 
-    const bumper1 = MeshBuilder.CreateSphere('bumper1', { diameter: 0.8 }, this.scene) as Mesh
-    bumper1.position.set(2, 0.5, 3)
-    bumper1.material = new StandardMaterial('bumperMat', this.scene)
-    ;(bumper1.material as StandardMaterial).diffuseColor = Color3.Red()
-    const bumperBody1 = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(2, 0.5, 3))
-    this.world.createCollider(
-      this.rapier
-        .ColliderDesc.ball(0.4)
-        .setRestitution(1.5)
-        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS | this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS),
-      bumperBody1
-    )
-    this.bindings.push({ mesh: bumper1, rigidBody: bumperBody1 })
-    this.bumperBodies.push(bumperBody1)
-    this.bumperVisuals.push({ mesh: bumper1, body: bumperBody1, hitTime: 0, sweep: Math.random() })
+    const makeBumper = (name: string, x: number, z: number, color: Color3) => {
+        const bumper = MeshBuilder.CreateSphere(name, { diameter: 0.8 }, this.scene as Scene) as Mesh
+        bumper.position.set(x, 0.5, z)
+        const mat = new StandardMaterial(name + 'Mat', this.scene as Scene);
+        mat.diffuseColor = Color3.Black();
+        mat.emissiveColor = color;
+        bumper.material = mat;
 
-    const bumper2 = MeshBuilder.CreateSphere('bumper2', { diameter: 0.8 }, this.scene) as Mesh
-    bumper2.position.set(-2, 0.5, 3)
-    bumper2.material = new StandardMaterial('bumperMat', this.scene)
-    ;(bumper2.material as StandardMaterial).diffuseColor = Color3.Red()
-    const bumperBody2 = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(-2, 0.5, 3))
-    this.world.createCollider(
-      this.rapier
-        .ColliderDesc.ball(0.4)
-        .setRestitution(1.5)
-        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS | this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS),
-      bumperBody2
-    )
-    this.bindings.push({ mesh: bumper2, rigidBody: bumperBody2 })
-    this.bumperBodies.push(bumperBody2)
-    this.bumperVisuals.push({ mesh: bumper2, body: bumperBody2, hitTime: 0, sweep: Math.random() })
+        // Light
+        const light = new PointLight(name + "Light", new Vector3(x, 1, z), this.scene as Scene);
+        light.diffuse = color;
+        light.intensity = 0.8;
 
-    // Third bumper
-    const bumper3 = MeshBuilder.CreateSphere('bumper3', { diameter: 0.8 }, this.scene) as Mesh
-    bumper3.position.set(0, 0.5, 6)
-    bumper3.material = new StandardMaterial('bumperMat', this.scene)
-    ;(bumper3.material as StandardMaterial).diffuseColor = Color3.Red()
-    const bumperBody3 = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(0, 0.5, 6))
-    this.world.createCollider(
-      this.rapier
-        .ColliderDesc.ball(0.4)
-        .setRestitution(1.5)
-        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS | this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS),
-      bumperBody3
-    )
-    this.bindings.push({ mesh: bumper3, rigidBody: bumperBody3 })
-    this.bumperBodies.push(bumperBody3)
-    this.bumperVisuals.push({ mesh: bumper3, body: bumperBody3, hitTime: 0, sweep: Math.random() })
+        const body = this.world!.createRigidBody(this.rapier!.RigidBodyDesc.fixed().setTranslation(x, 0.5, z))
+        this.world!.createCollider(
+          this.rapier!
+            .ColliderDesc.ball(0.4)
+            .setRestitution(1.5)
+            .setActiveEvents(this.rapier!.ActiveEvents.COLLISION_EVENTS | this.rapier!.ActiveEvents.CONTACT_FORCE_EVENTS),
+          body
+        )
+        this.bindings.push({ mesh: bumper, rigidBody: body })
+        this.bumperBodies.push(body)
+        this.bumperVisuals.push({ mesh: bumper, body: body, hitTime: 0, sweep: Math.random() })
+
+        if (this.mirrorTexture?.renderList) this.mirrorTexture.renderList.push(bumper);
+    }
+
+    makeBumper('bumper1', 2, 3, Color3.FromHexString("#ff0044"));
+    makeBumper('bumper2', -2, 3, Color3.FromHexString("#ff0044"));
+    makeBumper('bumper3', 0, 6, Color3.FromHexString("#ff0044"));
 
     // Targets & ramps
     this.createTargets()
@@ -1022,6 +1071,7 @@ export class Game {
       )
       this.bindings.push({ mesh: b, rigidBody: rb })
       this.ballBodies.push(rb)
+      if (this.mirrorTexture?.renderList) this.mirrorTexture.renderList.push(b);
     }
   }
 
@@ -1255,7 +1305,7 @@ export class Game {
   private spawnShardBurst(pos: Vector3, count = 12, power = 2, hueSeed = Math.random()): void {
     if (!this.scene) return
     for (let i = 0; i < count; i++) {
-      const shard = MeshBuilder.CreateSphere(`shard_${Date.now()}_${i}`, { diameter: 0.12 }, this.scene) as Mesh
+      const shard = MeshBuilder.CreateSphere(`shard_${Date.now()}_${i}`, { diameter: 0.12 }, this.scene as Scene) as Mesh
       shard.position.set(pos.x, pos.y, pos.z)
       const mat = new StandardMaterial(`shardMat_${Date.now()}_${i}`, this.scene)
       const hue = (hueSeed + Math.random() * 0.12) % 1
