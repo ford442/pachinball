@@ -543,13 +543,14 @@ export class Game {
     this.createWall(new Vector3(11.5, wallHeight, 2), new Vector3(0.1, 5, 26), wallMat)
 
     // Top Wall
-    this.createWall(new Vector3(0.75, wallHeight, 14.5), new Vector3(22.5, 5, 0.1), wallMat)
+    // Increased thickness to prevent tunneling
+    this.createWall(new Vector3(0.75, wallHeight, 15.5), new Vector3(22.5, 5, 2.0), wallMat)
 
     // Plunger Lane Divider
     this.createWall(new Vector3(9.5, wallHeight, -1), new Vector3(0.1, 5, 20), wallMat)
 
     // Plunger Lane Base (Stopper)
-    this.createWall(new Vector3(10.5, wallHeight, -10), new Vector3(1.9, 5, 0.1), wallMat)
+    this.createWall(new Vector3(10.5, wallHeight, -10.5), new Vector3(1.9, 5, 1.0), wallMat)
 
     // Cabinet Shell
     const cabinetMat = new StandardMaterial("cabinetMat", this.scene);
@@ -573,7 +574,11 @@ export class Game {
     // Start position in plunger lane
     ball.position.set(10.5, 0.5, -9)
     ball.material = ballMat;
-    const ballBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.dynamic().setTranslation(10.5, 0.5, -9))
+    const ballBody = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.dynamic()
+        .setTranslation(10.5, 0.5, -9)
+        .setCcdEnabled(true)
+    )
     this.world.createCollider(
       this.rapier
         .ColliderDesc.ball(0.5)
