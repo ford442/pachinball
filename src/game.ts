@@ -15,6 +15,7 @@ import {
   VideoTexture,
   StandardMaterial,
   Mesh,
+  PointLight,
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import type { Engine } from '@babylonjs/core/Engines/engine'
@@ -45,6 +46,12 @@ enum GameState {
   GAME_OVER,
 }
 
+enum DisplayState {
+  IDLE,
+  REACH,
+  FEVER,
+}
+
 export class Game {
   private readonly engine: Engine | WebGPUEngine
   private scene: Nullable<Scene> = null
@@ -72,6 +79,20 @@ export class Game {
   private bloomEnergy = 0
   private mirrorTexture: MirrorTexture | null = null
   private audioCtx: AudioContext | null = null
+  
+  // Display System
+  private displayState: DisplayState = DisplayState.IDLE
+  private displayTransitionTimer = 0
+  private backboxLayers: {
+    background: Mesh | null
+    mainDisplay: Mesh | null
+    overlay: Mesh | null
+  } = { background: null, mainDisplay: null, overlay: null }
+  
+  // Cabinet Lighting
+  private cabinetLights: Array<{ mesh: Mesh; material: StandardMaterial; pointLight: PointLight }> = []
+  private lightingMode: 'normal' | 'hit' | 'fever' = 'normal'
+  private lightingTimer = 0
   
   // Game State
   private ready = false
@@ -143,7 +164,9 @@ export class Game {
     try {
       const v = localStorage.getItem('pachinball.best')
       if (v) this.bestScore = Math.max(0, parseInt(v, 10) || 0)
-    } catch {}
+    } catch {
+      // Ignore localStorage errors
+    }
     this.updateHUD()
 
     // --- CAMERA SETUP ---
@@ -170,7 +193,7 @@ export class Game {
 
     // Audio
     try {
-      this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      this.audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
     } catch {
       this.audioCtx = null
     }
@@ -223,7 +246,11 @@ export class Game {
         if (this.finalScoreElement) this.finalScoreElement.textContent = this.score.toString()
         if (this.score > this.bestScore) {
           this.bestScore = this.score
-          try { localStorage.setItem('pachinball.best', String(this.bestScore)) } catch {}
+          try { 
+            localStorage.setItem('pachinball.best', String(this.bestScore)) 
+          } catch {
+            // Ignore localStorage errors
+          }
         }
         this.updateHUD()
         break
@@ -307,7 +334,7 @@ export class Game {
   private async initPhysics(): Promise<void> {
     if (this.rapier) return
     this.rapier = await import('@dimforge/rapier3d-compat')
-    await (this.rapier.init as any)({})
+    await (this.rapier.init as unknown as () => Promise<void>)()
     this.world = new this.rapier.World(new this.rapier.Vector3(GRAVITY.x, GRAVITY.y, GRAVITY.z))
     this.eventQueue = new this.rapier.EventQueue(true)
   }
@@ -393,6 +420,9 @@ export class Game {
     // --- NEW: BACKBOX SCREEN ---
     this.createBackbox(new Vector3(0.75, 8, 21.5));
 
+    // --- NEW: CABINET LED STRIPS ---
+    this.createCabinetLighting();
+
     // Death Zone
     this.deathZoneBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(0, -2, -14))
     this.world.createCollider(this.rapier.ColliderDesc.cuboid(20, 2, 2).setSensor(true).setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS), this.deathZoneBody)
@@ -447,33 +477,98 @@ export class Game {
       frameMat.diffuseColor = Color3.Black()
       frame.material = frameMat
 
-      // Screen Surface
-      const screen = MeshBuilder.CreatePlane("backboxScreen", { width: 20, height: 12 }, this.scene)
-      screen.position.copyFrom(pos)
-      screen.position.z -= 1.01 // Push forward slightly
-      screen.rotation.y = Math.PI // Face player
-      screen.rotation.z = Math.PI // Fix orientation if needed
+      // --- LAYER 1: BACKGROUND (Deepest) ---
+      // Simulates mechanical/physical elements or static artwork
+      const bgLayer = MeshBuilder.CreatePlane("backboxBg", { width: 20, height: 12 }, this.scene)
+      bgLayer.position.copyFrom(pos)
+      bgLayer.position.z -= 0.5 // Deepest layer
+      bgLayer.rotation.y = Math.PI
+      
+      const bgMat = new StandardMaterial("bgMat", this.scene)
+      const bgTexture = this.createGridTexture(this.scene) // Reuse grid as mechanical look
+      bgMat.diffuseTexture = bgTexture
+      bgMat.emissiveColor = new Color3(0.1, 0.05, 0.2) // Dark purple glow
+      bgLayer.material = bgMat
+      this.backboxLayers.background = bgLayer
+
+      // --- LAYER 2: MAIN DISPLAY (Middle) ---
+      // Primary video/animation content
+      const mainDisplay = MeshBuilder.CreatePlane("backboxScreen", { width: 20, height: 12 }, this.scene)
+      mainDisplay.position.copyFrom(pos)
+      mainDisplay.position.z -= 0.8 // Middle layer
+      mainDisplay.rotation.y = Math.PI
 
       const screenMat = new StandardMaterial("screenMat", this.scene)
-      // Placeholder for the "Woman/Waterfall/Tiger" video
-      // To use a real video, replace null with a URL, e.g., "videos/myloop.mp4"
-      // Note: Browsers require user interaction to play video with audio, but muted usually works.
+      // Placeholder video texture - using vite.svg for now
       const videoTexture = new VideoTexture("screenVideo", ["/vite.svg"], this.scene, true, false) 
-      // Using vite.svg as placeholder. For real video:
-      // const videoTexture = new VideoTexture("vid", ["path/to/video.mp4"], this.scene, true)
-      
       screenMat.diffuseTexture = videoTexture
       screenMat.emissiveColor = Color3.White() // Self-illuminated
-      screen.material = screenMat
+      screenMat.alpha = 0.9 // Slightly transparent to see background
+      mainDisplay.material = screenMat
+      this.backboxLayers.mainDisplay = mainDisplay
+
+      // --- LAYER 3: TRANSPARENT LCD OVERLAY (Front) ---
+      // UI elements, "REACH" text, flashy effects
+      const overlay = MeshBuilder.CreatePlane("backboxOverlay", { width: 20, height: 12 }, this.scene)
+      overlay.position.copyFrom(pos)
+      overlay.position.z -= 1.01 // Front-most layer
+      overlay.rotation.y = Math.PI
+
+      const overlayMat = new StandardMaterial("overlayMat", this.scene)
+      // Create dynamic texture for overlay effects
+      const overlayTexture = new DynamicTexture("overlayTex", 512, this.scene, true)
+      overlayTexture.hasAlpha = true
+      overlayMat.diffuseTexture = overlayTexture
+      overlayMat.emissiveColor = Color3.White()
+      overlayMat.alpha = 0.8
+      overlayMat.opacityTexture = overlayTexture
+      overlay.material = overlayMat
+      this.backboxLayers.overlay = overlay
+  }
+
+  // --- NEW: CABINET LIGHTING SYSTEM ---
+  private createCabinetLighting(): void {
+      if (!this.scene) return
+      
+      // LED strips along the edges of the cabinet
+      const stripPositions = [
+          { pos: new Vector3(-12.5, 2, 5), size: new Vector3(0.3, 3, 30) },  // Left strip
+          { pos: new Vector3(13.5, 2, 5), size: new Vector3(0.3, 3, 30) },   // Right strip
+          { pos: new Vector3(0.75, 6, 5), size: new Vector3(24, 0.3, 30) },  // Top strip
+      ]
+
+      stripPositions.forEach((config, idx) => {
+          const strip = MeshBuilder.CreateBox(`ledStrip${idx}`, 
+              { width: config.size.x, height: config.size.y, depth: config.size.z }, 
+              this.scene as Scene)
+          strip.position.copyFrom(config.pos)
+          
+          const mat = new StandardMaterial(`ledStripMat${idx}`, this.scene as Scene)
+          mat.emissiveColor = Color3.FromHexString("#00aaff") // Start with blue/teal
+          mat.alpha = 0.6
+          strip.material = mat
+
+          // Add point light for each strip to cast light on playfield
+          const light = new PointLight(`stripLight${idx}`, config.pos, this.scene as Scene)
+          light.diffuse = Color3.FromHexString("#00aaff")
+          light.intensity = 0.5
+          light.range = 15
+
+          this.cabinetLights.push({ mesh: strip, material: mat, pointLight: light })
+      })
   }
 
   // --- NEW: PACHINKO NAILS FIELD ---
   private createPachinkoField(center: Vector3, width: number, height: number): void {
       if (!this.scene || !this.world || !this.rapier) return
       
+      // Metallic pin material for physical/digital contrast
       const pinMat = new StandardMaterial("pinMat", this.scene)
-      pinMat.emissiveColor = Color3.FromHexString("#00ffaa")
-      pinMat.alpha = 0.6
+      pinMat.diffuseColor = Color3.FromHexString("#cccccc") // Chrome/silver
+      pinMat.specularColor = Color3.White()
+      pinMat.specularPower = 128 // High shine
+      pinMat.emissiveColor = Color3.FromHexString("#003333").scale(0.1) // Subtle teal glow
+      pinMat.alpha = 1.0 // Fully opaque for physical look
 
       const rows = 6
       const cols = 9
@@ -500,10 +595,13 @@ export class Game {
           }
       }
 
-      // Add a Center Catcher (Bucket)
+      // Add a Center Catcher (Bucket) with distinct glowing material
       const catcher = MeshBuilder.CreateTorus("catcher", { diameter: 2.5, thickness: 0.2 }, this.scene)
       catcher.position.set(center.x, 0.2, center.z)
-      catcher.material = pinMat
+      const catcherMat = new StandardMaterial("catcherMat", this.scene)
+      catcherMat.emissiveColor = Color3.FromHexString("#ff00aa") // Bright pink glow
+      catcherMat.alpha = 0.8
+      catcher.material = catcherMat
       const catchBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(center.x, 0.2, center.z))
       // Sensor inside the ring
       this.world.createCollider(this.rapier.ColliderDesc.cylinder(0.5, 1.0).setSensor(true).setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS), catchBody)
@@ -645,6 +743,8 @@ export class Game {
     this.updateShards(dt)
     this.updateCombo(dt)
     this.updateBloom(dt)
+    this.updateDisplayState(dt)
+    this.updateCabinetLighting(dt)
     if (this.powerupActive) {
         this.powerupTimer -= dt
         if (this.powerupTimer <= 0) this.powerupActive = false
@@ -675,6 +775,9 @@ export class Game {
              this.bloomEnergy = 2.0
              this.playBeep(400 + Math.random()*200)
              this.updateHUD()
+             // Trigger cabinet lighting flash
+             this.lightingMode = 'hit'
+             this.lightingTimer = 0.2
           }
           return
       }
@@ -691,6 +794,10 @@ export class Game {
              this.playBeep(1200)
              this.spawnExtraBalls(1) // Prize: Extra ball!
              this.updateHUD()
+             // Trigger REACH display state
+             this.setDisplayState(DisplayState.REACH)
+             this.lightingMode = 'fever'
+             this.lightingTimer = 3.0
           }
       }
   }
@@ -792,6 +899,108 @@ export class Game {
       }
   }
 
+  private setDisplayState(newState: DisplayState) {
+      this.displayState = newState
+      this.displayTransitionTimer = 0
+      
+      // Update overlay display based on state
+      if (!this.backboxLayers.overlay || !this.scene) return
+      
+      const overlayMat = this.backboxLayers.overlay.material as StandardMaterial
+      const overlayTexture = overlayMat.diffuseTexture as DynamicTexture
+      if (!overlayTexture) return
+      
+      const ctx = overlayTexture.getContext() as unknown as CanvasRenderingContext2D
+      ctx.clearRect(0, 0, 512, 512)
+      
+      switch (newState) {
+          case DisplayState.REACH:
+              // Draw "REACH" text
+              ctx.fillStyle = 'rgba(255, 0, 85, 0.9)'
+              ctx.font = 'bold 80px Orbitron, Arial'
+              ctx.textAlign = 'center'
+              ctx.shadowBlur = 20
+              ctx.shadowColor = '#ff0055'
+              ctx.fillText('REACH!', 256, 256)
+              break
+          case DisplayState.FEVER:
+              // Draw "FEVER" text with more intensity
+              ctx.fillStyle = 'rgba(255, 215, 0, 1.0)'
+              ctx.font = 'bold 100px Orbitron, Arial'
+              ctx.textAlign = 'center'
+              ctx.shadowBlur = 30
+              ctx.shadowColor = '#ffd700'
+              ctx.fillText('FEVER!!', 256, 256)
+              break
+          case DisplayState.IDLE:
+          default:
+              // Clear overlay in idle state
+              break
+      }
+      overlayTexture.update()
+  }
+
+  private updateDisplayState(dt: number) {
+      this.displayTransitionTimer += dt
+      
+      // Auto-transition back to IDLE after a period
+      if (this.displayState === DisplayState.REACH && this.displayTransitionTimer > 3.0) {
+          this.setDisplayState(DisplayState.IDLE)
+      }
+      if (this.displayState === DisplayState.FEVER && this.displayTransitionTimer > 5.0) {
+          this.setDisplayState(DisplayState.IDLE)
+      }
+  }
+
+  private updateCabinetLighting(dt: number) {
+      const time = performance.now() * 0.001
+      
+      // Update lighting timer
+      if (this.lightingTimer > 0) {
+          this.lightingTimer -= dt
+          if (this.lightingTimer <= 0) {
+              this.lightingMode = 'normal'
+          }
+      }
+
+      this.cabinetLights.forEach((light, idx) => {
+          let targetColor: Color3
+          let intensity = 0.5
+          
+          switch (this.lightingMode) {
+              case 'hit':
+                  // Flash white/silver
+                  targetColor = Color3.White()
+                  intensity = 2.0
+                  break
+              case 'fever': {
+                  // Strobing rainbow/pulsing red-gold
+                  const hue = (time * 2 + idx * 0.3) % 1
+                  targetColor = Color3.FromHSV(hue * 360, 0.8, 1.0)
+                  intensity = 1.5 + Math.sin(time * 10) * 0.5
+                  break
+              }
+              case 'normal':
+              default: {
+                  // Breathing blue/teal
+                  const breath = 0.5 + Math.sin(time + idx * 0.5) * 0.3
+                  targetColor = Color3.FromHexString("#00aaff").scale(breath)
+                  intensity = 0.5 + breath * 0.2
+                  break
+              }
+          }
+          
+          // Smooth color transition
+          light.material.emissiveColor = Color3.Lerp(
+              light.material.emissiveColor, 
+              targetColor, 
+              dt * 10
+          )
+          light.pointLight.diffuse = light.material.emissiveColor
+          light.pointLight.intensity = intensity
+      })
+  }
+
   private spawnShardBurst(pos: Vector3) {
      if (!this.scene) return
      for(let i=0; i<8; i++) {
@@ -813,8 +1022,19 @@ export class Game {
   }
   
   // Touch/Nudge stubs
-  private triggerLeftFlipper() {}
-  private triggerRightFlipper() {}
-  private triggerPlunger() {}
-  private applyNudge(_v: RAPIER.Vector3) {}
+  private triggerLeftFlipper() {
+    // Stub for touch controls
+  }
+  private triggerRightFlipper() {
+    // Stub for touch controls
+  }
+  private triggerPlunger() {
+    // Stub for touch controls
+  }
+  private applyNudge(v: RAPIER.Vector3) {
+    // Stub for nudge functionality - would apply impulse to ball
+    if (this.ballBody && v) {
+      // Implementation placeholder
+    }
+  }
 }
