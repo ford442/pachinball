@@ -910,7 +910,7 @@ export class Game {
       const overlayTexture = overlayMat.diffuseTexture as DynamicTexture
       if (!overlayTexture) return
       
-      const ctx = overlayTexture.getContext() as unknown as CanvasRenderingContext2D
+      const ctx = overlayTexture.getContext() as CanvasRenderingContext2D
       ctx.clearRect(0, 0, 512, 512)
       
       switch (newState) {
@@ -1033,8 +1033,9 @@ export class Game {
   }
   private applyNudge(v: RAPIER.Vector3) {
     // Stub for nudge functionality - would apply impulse to ball
-    if (this.ballBody && v) {
-      // Implementation placeholder
+    if (this.ballBody) {
+      // Implementation placeholder - v parameter reserved for future use
+      void v
     }
   }
 }
