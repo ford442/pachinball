@@ -11,7 +11,6 @@ import {
   DynamicTexture,
   MirrorTexture,
   Plane,
-  PointLight,
   TrailMesh,
   VideoTexture,
   StandardMaterial,
@@ -63,8 +62,6 @@ export class Game {
   private targetMeshes: Mesh[] = []
   private targetActive: boolean[] = []
   private targetRespawnTimer: number[] = []
-  private spinnerBody: RAPIER.RigidBody | null = null
-  private spinnerMesh: Mesh | null = null
   private ballBodies: RAPIER.RigidBody[] = []
   private bumperVisuals: BumperVisual[] = []
   private shards: Array<{ mesh: Mesh; vel: Vector3; life: number; material: StandardMaterial }> = []
@@ -75,7 +72,6 @@ export class Game {
   private bloomEnergy = 0
   private mirrorTexture: MirrorTexture | null = null
   private audioCtx: AudioContext | null = null
-  private contactForceMap = new Map<string, number>()
   
   // Game State
   private ready = false
@@ -87,30 +83,13 @@ export class Game {
   private comboTimer = 0
   private powerupActive = false
   private powerupTimer = 0
-  private targetsHitSincePower = 0
-  private nudgeCount = 0
-  private nudgeWindowTimer = 0
   private tiltActive = false
-  private tiltTimer = 0
   
-  // Constants
-  private readonly comboTimeout = 1.6
-  private readonly powerupDuration = 10
-  private readonly nudgeWindow = 1.4
-  private readonly nudgeThreshold = 7
-  private readonly tiltDuration = 3
-  private readonly voiceCuePaths: Record<string, string> = { fever: '/voice/fever.mp3' }
-  private voiceBuffers = new Map<string, AudioBuffer | null>()
-  private voiceLoads = new Map<string, Promise<AudioBuffer | null>>()
-  private voiceCooldown = 0
-
   // UI
   private scoreElement: HTMLElement | null = null
   private livesElement: HTMLElement | null = null
   private comboElement: HTMLElement | null = null
   private bestHudElement: HTMLElement | null = null
-  private bestMenuElement: HTMLElement | null = null
-  private bestFinalElement: HTMLElement | null = null
   private menuOverlay: HTMLElement | null = null
   private startScreen: HTMLElement | null = null
   private gameOverScreen: HTMLElement | null = null
@@ -142,8 +121,7 @@ export class Game {
     this.pauseOverlay = document.getElementById('pause-overlay')
     this.comboElement = document.getElementById('combo')
     this.bestHudElement = document.getElementById('best')
-    this.bestMenuElement = document.getElementById('best-score-menu')
-    this.bestFinalElement = document.getElementById('best-score-final')
+    // Note: removed unused bestMenuElement/bestFinalElement bindings to satisfy linter
     this.startScreen = document.getElementById('start-screen')
     this.gameOverScreen = document.getElementById('game-over-screen')
     this.finalScoreElement = document.getElementById('final-score')
@@ -219,7 +197,6 @@ export class Game {
     this.ready = false
   }
 
-  // ... (GameState management methods same as before)
   private setGameState(newState: GameState) {
     this.state = newState
     if (this.menuOverlay) this.menuOverlay.classList.remove('hidden')
@@ -285,7 +262,6 @@ export class Game {
     this.setGameState(GameState.PLAYING)
   }
 
-  // ... (Input methods same as before: onKeyDown, onKeyUp)
   private onKeyDown = (event: KeyboardEvent): void => {
     if (!this.ready || !this.rapier) return
     if (event.code === 'KeyP') {
@@ -336,7 +312,6 @@ export class Game {
     this.eventQueue = new this.rapier.EventQueue(true)
   }
 
-  // ... (createGridTexture same as before)
   private createGridTexture(scene: Scene): Texture {
     const dynamicTexture = new DynamicTexture('gridTexture', 512, scene, true)
     dynamicTexture.hasAlpha = true
@@ -719,9 +694,6 @@ export class Game {
           }
       }
   }
-
-  // ... (Remaining helpers: handleBallLoss, spawnShardBurst, spawnExtraBalls, updateShards, updateCombo, updateBloom, playBeep, updateHUD, resetBall, etc.)
-  // These implementations can remain largely identical to previous version, ensuring basic functionality.
   
   private handleBallLoss(body: RAPIER.RigidBody) {
       if (this.state !== GameState.PLAYING) return
@@ -753,7 +725,7 @@ export class Game {
   }
 
   private resetBall() {
-      if (!this.world || !this.rapier) return
+      if (!this.world || !this.rapier || !this.scene) return
       // Create new ball if missing
       if (this.ballBodies.length === 0) {
           const mat = new StandardMaterial("ballMat", this.scene)
@@ -844,5 +816,5 @@ export class Game {
   private triggerLeftFlipper() {}
   private triggerRightFlipper() {}
   private triggerPlunger() {}
-  private applyNudge(v: RAPIER.Vector3) {}
+  private applyNudge(_v: RAPIER.Vector3) {}
 }
