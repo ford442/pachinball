@@ -117,6 +117,14 @@ export class Game {
   private powerupTimer = 0
   private tiltActive = false
   
+  // Adventure Mode (Holo-Deck)
+  private pinballMeshes: Mesh[] = [] // Track standard parts to hide them later
+  private adventureTrack: Mesh[] = []
+  private adventureActive = false
+  private adventureSensor: RAPIER.RigidBody | null = null
+  private tableCamera: ArcRotateCamera | null = null
+  private followCamera: ArcRotateCamera | null = null
+  
   // UI
   private scoreElement: HTMLElement | null = null
   private livesElement: HTMLElement | null = null
@@ -685,6 +693,7 @@ export class Game {
               const body = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.5, z))
               this.world.createCollider(this.rapier.ColliderDesc.cylinder(0.75, 0.15).setRestitution(0.5), body)
               this.bindings.push({ mesh: pin, rigidBody: body })
+              this.pinballMeshes.push(pin)
           }
       }
 
@@ -702,6 +711,89 @@ export class Game {
       this.targetMeshes.push(catcher)
       this.targetActive.push(true)
       this.targetRespawnTimer.push(0)
+      this.pinballMeshes.push(catcher)
+  }
+
+  // --- ADVENTURE MODE: HOLO-DECK TRACK ---
+  private createAdventureTrack() {
+      if (!this.scene || !this.world || !this.rapier) return
+
+      // Material: "Hard Light" (Bright, semi-transparent)
+      const holoMat = new StandardMaterial("holoTrackMat", this.scene)
+      holoMat.emissiveColor = Color3.FromHexString("#00ffff")
+      holoMat.diffuseColor = Color3.Black()
+      holoMat.alpha = 0.6
+      holoMat.wireframe = true
+
+      // Start the track slightly above the main board
+      let currentPos = new Vector3(0, 2, 8) 
+      
+      const addRamp = (width: number, length: number, drop: number, rotY: number) => {
+          // Visual
+          const box = MeshBuilder.CreateBox("holoRamp", { width, height: 0.5, depth: length }, this.scene)
+          
+          // Position relative to the "cursor"
+          // We move 'length/2' forward in the local rotation space
+          const forward = new Vector3(Math.sin(rotY), 0, Math.cos(rotY))
+          const center = currentPos.add(forward.scale(length / 2))
+          center.y -= drop / 2 // Slope down
+          
+          box.position.copyFrom(center)
+          box.rotation.y = rotY
+          box.rotation.x = Math.atan2(drop, length) // Tilt down
+          box.material = holoMat
+          this.adventureTrack.push(box)
+
+          // Physics
+          const q = Quaternion.FromEulerAngles(box.rotation.x, box.rotation.y, 0)
+          const body = this.world!.createRigidBody(
+             this.rapier!.RigidBodyDesc.fixed()
+             .setTranslation(center.x, center.y, center.z)
+             .setRotation({x: q.x, y: q.y, z: q.z, w: q.w})
+          )
+          this.world!.createCollider(this.rapier!.ColliderDesc.cuboid(width/2, 0.25, length/2), body)
+          
+          // Update cursor to end of ramp
+          currentPos = currentPos.add(forward.scale(length))
+          currentPos.y -= drop
+          
+          return currentPos
+      }
+
+      // --- GENERATE THE "TABLE MAZE" ---
+      // 1. Rise up! (A platform appearing out of the back)
+      // 2. A Zig-Zag course falling down towards the flippers
+      
+      let heading = Math.PI // Facing towards player (-Z)
+      
+      // Segment 1: Steep drop from backboard
+      addRamp(6, 10, 4, heading) 
+      
+      // Segment 2: Sharp Left Turn
+      heading += Math.PI / 2
+      addRamp(4, 6, 1, heading)
+      
+      // Segment 3: Sharp Right Turn (Downhill fast!)
+      heading -= Math.PI / 1.5
+      addRamp(4, 12, 3, heading)
+
+      // Segment 4: The Catch Basin (Near flippers)
+      const basin = MeshBuilder.CreateBox("basin", { width: 8, height: 1, depth: 4}, this.scene)
+      basin.position.set(0, currentPos.y - 1, -8)
+      basin.material = holoMat
+      this.adventureTrack.push(basin)
+      
+      const bBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(0, currentPos.y - 1, -8))
+      this.world.createCollider(this.rapier.ColliderDesc.cuboid(4, 0.5, 2), bBody)
+
+      // Add "Return Sensor" in the basin
+      const sensor = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(0, currentPos.y, -8))
+      this.world.createCollider(
+          this.rapier.ColliderDesc.cuboid(2, 1, 1).setSensor(true).setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS), 
+          sensor
+      )
+      // Store sensor separately for adventure mode detection
+      this.adventureSensor = sensor
   }
 
   // Helper Wrappers
@@ -712,6 +804,7 @@ export class Game {
      const b = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z))
      this.world.createCollider(this.rapier.ColliderDesc.cuboid(size.x/2, size.y, size.z/2), b)
      this.bindings.push({ mesh: w, rigidBody: b })
+     this.pinballMeshes.push(w)
   }
 
   private createSlingshot(pos: Vector3, rot: number, mat: StandardMaterial): void {
@@ -724,6 +817,7 @@ export class Game {
       this.bindings.push({mesh, rigidBody: b})
       this.bumperBodies.push(b)
       this.bumperVisuals.push({ mesh, body: b, hitTime: 0, sweep: 0 })
+      this.pinballMeshes.push(mesh)
   }
 
   private createFlippers(mat: StandardMaterial) {
@@ -734,6 +828,7 @@ export class Game {
         const body = this.world!.createRigidBody(this.rapier!.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z))
         this.world!.createCollider(this.rapier!.ColliderDesc.cuboid(1.75, 0.25, 0.25), body)
         this.bindings.push({mesh, rigidBody: body})
+        this.pinballMeshes.push(mesh)
         const anchor = this.world!.createRigidBody(this.rapier!.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z))
         const pX = right ? 1.5 : -1.5
         const jParams = this.rapier!.JointData.revolute(new this.rapier!.Vector3(pX,0,0), new this.rapier!.Vector3(pX,0,0), new this.rapier!.Vector3(0,1,0))
@@ -775,6 +870,8 @@ export class Game {
         this.bindings.push({ mesh: bumper, rigidBody: body })
         this.bumperBodies.push(body)
         this.bumperVisuals.push({ mesh: bumper, body: body, hologram: holo, hitTime: 0, sweep: Math.random() })
+        this.pinballMeshes.push(bumper)
+        this.pinballMeshes.push(holo)
     }
 
     make(0, 8, "#ff00aa")   // Center pink
@@ -847,6 +944,12 @@ export class Game {
   private processCollision(h1: number, h2: number) {
       const b1 = this.world!.getRigidBody(h1); const b2 = this.world!.getRigidBody(h2)
       if (!b1 || !b2) return
+      
+      // Adventure Mode Sensor - End Adventure
+      if (this.adventureActive && this.adventureSensor && (b1 === this.adventureSensor || b2 === this.adventureSensor)) {
+          this.endAdventureMode()
+          return
+      }
       
       // Death Zone
       if (b1 === this.deathZoneBody || b2 === this.deathZoneBody) {
@@ -1128,6 +1231,71 @@ export class Game {
           light.pointLight.diffuse = light.material.emissiveColor
           light.pointLight.intensity = intensity
       })
+  }
+
+  public startAdventureMode() {
+      if (this.adventureActive || !this.scene || !this.ballBody) return
+      this.adventureActive = true
+
+      // 1. Hide Physical Table (The "Dimming" Effect)
+      this.pinballMeshes.forEach(m => m.setEnabled(false)) 
+      // Note: We use setEnabled(false) so physics might still run, but visuals are gone. 
+      // For true "Holo-Deck", we assume the holo-track is above the physical colliders 
+      // or we accept that the ball might bump invisible bumpers if we aren't careful.
+      // Ideally, the holo-track is physically higher (y=2 to y=5).
+
+      // 2. Spawn Track
+      this.createAdventureTrack()
+
+      // 3. Teleport Ball to Start (Top of the new Holograms)
+      this.ballBody.setTranslation({ x: 0, y: 3, z: 8 }, true)
+      this.ballBody.setLinvel({ x: 0, y: 0, z: 0 }, true)
+
+      // 4. Isometric Camera Setup
+      this.tableCamera = this.scene.activeCamera as ArcRotateCamera
+      
+      // A steep angle (beta = 0.8) keeps it looking down, 
+      // but close zoom (radius = 15) focuses on the action.
+      this.followCamera = new ArcRotateCamera("isoCam", -Math.PI/2, 0.8, 15, Vector3.Zero(), this.scene)
+      
+      // Lock target to the ball mesh
+      const ballMesh = this.bindings.find(b => b.rigidBody === this.ballBody)?.mesh
+      if (ballMesh) this.followCamera.lockedTarget = ballMesh
+      
+      this.scene.activeCamera = this.followCamera
+      
+      if (this.scoreElement) this.scoreElement.innerText = "HOLO-DECK ACTIVE"
+  }
+  
+  public endAdventureMode() {
+       if (!this.adventureActive || !this.scene) return
+       this.adventureActive = false
+
+       // 1. Restore Physical Table
+       this.pinballMeshes.forEach(m => m.setEnabled(true))
+
+       // 2. Teleport Ball back to Plunger or Field
+       this.resetBall()
+
+       // 3. Restore Camera
+       if (this.tableCamera) {
+           this.scene.activeCamera = this.tableCamera
+           this.followCamera?.dispose()
+           this.followCamera = null
+       }
+
+       // 4. Cleanup Track
+       this.adventureTrack.forEach(m => m.dispose())
+       this.adventureTrack = []
+       
+       // 5. Cleanup Physics Bodies
+       if (this.adventureSensor && this.world) {
+           this.world.removeRigidBody(this.adventureSensor)
+           this.adventureSensor = null
+       }
+       
+       // Reset score display
+       this.updateHUD()
   }
 
   private spawnShardBurst(pos: Vector3) {
