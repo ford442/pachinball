@@ -13,6 +13,7 @@ import {
   Plane,
   TrailMesh,
   StandardMaterial,
+  ShaderMaterial,
   Mesh,
   PointLight,
 } from '@babylonjs/core'
@@ -24,6 +25,55 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 // Gravity: -Y (down), -Z (roll towards player)
 const GRAVITY = new Vector3(0, -9.81, -5.0)
+
+const cyberSpinShader = {
+    vertex: `
+        attribute vec3 position;
+        attribute vec2 uv;
+        uniform mat4 worldViewProjection;
+        varying vec2 vUV;
+        void main() {
+            vec4 p = vec4(position, 1.0);
+            gl_Position = worldViewProjection * p;
+            vUV = uv;
+        }
+    `,
+    fragment: `
+        varying vec2 vUV;
+        uniform float time;
+        uniform float speed; // 0.0 = Idle, 10.0 = Fever
+
+        // Pseudo-random
+        float rand(vec2 co){
+            return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+        }
+
+        void main() {
+            vec2 uv = vUV;
+
+            // distort UV based on speed (Cyber Glitch)
+            float glitch = step(0.98, rand(vec2(time * speed, uv.y))) * 0.1 * speed;
+            uv.x += glitch;
+
+            // Moving scanlines
+            float scan = sin(uv.y * 50.0 - time * 5.0) * 0.5 + 0.5;
+
+            // Base Color (Deep Purple/Blue)
+            vec3 color = vec3(0.1, 0.0, 0.2);
+
+            // Add "Data Stream" lines
+            float stream = step(0.9, fract(uv.x * 20.0 + time));
+            color += vec3(0.0, 1.0, 0.5) * stream * scan;
+
+            // Fever Mode Flash
+            if (speed > 5.0) {
+                color += vec3(1.0, 0.8, 0.0) * sin(time * 20.0) * 0.5;
+            }
+
+            gl_FragColor = vec4(color, 1.0);
+        }
+    `
+}
 
 interface PhysicsBinding {
   mesh: TransformNode
@@ -87,6 +137,13 @@ export class Game {
     mainDisplay: Mesh | null
     overlay: Mesh | null
   } = { background: null, mainDisplay: null, overlay: null }
+
+  // Hologram Catch
+  private caughtBalls: Array<{ body: RAPIER.RigidBody, targetPos: Vector3, timer: number }> = []
+
+  // New Display Textures/Materials
+  private staticTexture: DynamicTexture | null = null
+  private shaderMaterial: ShaderMaterial | null = null
 
   // --- SLOT MACHINE STATE ---
   private slotTexture: DynamicTexture | null = null
@@ -503,48 +560,51 @@ export class Game {
       frameMat.roughness = 0.5
       frame.material = frameMat
 
-      // --- LAYER 1: BACKGROUND ---
-      const bgLayer = MeshBuilder.CreatePlane("backboxBg", { width: 20, height: 12 }, this.scene)
-      bgLayer.position.copyFrom(pos)
-      bgLayer.position.z -= 0.5
-      bgLayer.rotation.y = Math.PI
+      // --- LAYER 1: SHADER PLANE (Deepest) ---
+      const shaderLayer = MeshBuilder.CreatePlane("backboxShader", { width: 20, height: 12 }, this.scene)
+      shaderLayer.position.copyFrom(pos)
+      shaderLayer.position.z -= 0.5
+      shaderLayer.rotation.y = Math.PI
+
+      this.shaderMaterial = new ShaderMaterial("cyberShader", this.scene, cyberSpinShader, {
+          attributes: ["position", "uv"],
+          uniforms: ["worldViewProjection", "time", "speed"]
+      })
+      this.shaderMaterial.setFloat("time", 0)
+      this.shaderMaterial.setFloat("speed", 0)
       
-      const bgMat = new StandardMaterial("bgMat", this.scene)
-      const bgTexture = this.createGridTexture(this.scene)
-      bgMat.diffuseTexture = bgTexture
-      bgMat.emissiveColor = new Color3(0.05, 0.0, 0.1)
-      bgLayer.material = bgMat
-      this.backboxLayers.background = bgLayer
+      shaderLayer.material = this.shaderMaterial
+      this.backboxLayers.background = shaderLayer
 
-      // --- LAYER 2: MAIN DISPLAY (Slot Machine) ---
-      const mainDisplay = MeshBuilder.CreatePlane("backboxScreen", { width: 20, height: 12 }, this.scene)
-      mainDisplay.position.copyFrom(pos)
-      mainDisplay.position.z -= 0.8
-      mainDisplay.rotation.y = Math.PI
+      // --- LAYER 2: VIDEO/STATIC PLANE (Middle) ---
+      const videoLayer = MeshBuilder.CreatePlane("backboxStatic", { width: 20, height: 12 }, this.scene)
+      videoLayer.position.copyFrom(pos)
+      videoLayer.position.z -= 0.8
+      videoLayer.rotation.y = Math.PI
 
-      const screenMat = new StandardMaterial("screenMat", this.scene)
-      // Confirmed: Removed VideoTexture placeholder
+      const videoMat = new StandardMaterial("videoMat", this.scene)
+      this.staticTexture = new DynamicTexture("staticTex", 256, this.scene, true)
+      this.staticTexture.hasAlpha = true
+      videoMat.diffuseTexture = this.staticTexture
+      videoMat.emissiveColor = Color3.White()
+      videoMat.alpha = 0.5 // Let Shader bleed through
+      videoLayer.material = videoMat
+      this.backboxLayers.mainDisplay = videoLayer
+
+      // --- LAYER 3: SLOT/UI PLANE (Front) ---
+      const uiLayer = MeshBuilder.CreatePlane("backboxUI", { width: 20, height: 12 }, this.scene)
+      uiLayer.position.copyFrom(pos)
+      uiLayer.position.z -= 1.01
+      uiLayer.rotation.y = Math.PI
+
+      const uiMat = new StandardMaterial("uiMat", this.scene)
       this.slotTexture = new DynamicTexture("slotTex", {width: 1024, height: 512}, this.scene, true)
-      screenMat.diffuseTexture = this.slotTexture
-      screenMat.emissiveColor = Color3.White()
-      screenMat.alpha = 1.0
-      mainDisplay.material = screenMat
-      this.backboxLayers.mainDisplay = mainDisplay
-
-      // --- LAYER 3: TRANSPARENT LCD OVERLAY ---
-      const overlay = MeshBuilder.CreatePlane("backboxOverlay", { width: 20, height: 12 }, this.scene)
-      overlay.position.copyFrom(pos)
-      overlay.position.z -= 1.01
-      overlay.rotation.y = Math.PI
-
-      const overlayMat = new StandardMaterial("overlayMat", this.scene)
-      const overlayTexture = new DynamicTexture("overlayTex", 512, this.scene, true)
-      overlayTexture.hasAlpha = true
-      overlayMat.diffuseTexture = overlayTexture
-      overlayMat.emissiveColor = Color3.White()
-      overlayMat.alpha = 0.99
-      overlay.material = overlayMat
-      this.backboxLayers.overlay = overlay
+      this.slotTexture.hasAlpha = true
+      uiMat.diffuseTexture = this.slotTexture
+      uiMat.emissiveColor = Color3.White()
+      uiMat.alpha = 1.0
+      uiLayer.material = uiMat
+      this.backboxLayers.overlay = uiLayer
   }
 
   // --- NEW: CABINET LIGHTING SYSTEM ---
@@ -629,6 +689,21 @@ export class Game {
       ctx.beginPath()
       ctx.moveTo(0, h/2); ctx.lineTo(w, h/2)
       ctx.stroke()
+
+      // Overlay Text (Merged Layer 3)
+      if (this.displayState === DisplayState.REACH) {
+          ctx.fillStyle = 'rgba(255, 0, 85, 0.8)'
+          ctx.font = 'bold 80px Orbitron, Arial'
+          ctx.textAlign = 'center'
+          ctx.fillText('REACH!', w/2, h/2)
+      } else if (this.displayState === DisplayState.FEVER) {
+          ctx.fillStyle = 'rgba(255, 215, 0, 1.0)'
+          ctx.font = 'bold 100px Orbitron, Arial'
+          ctx.textAlign = 'center'
+          ctx.shadowBlur = 30
+          ctx.shadowColor = '#ffd700'
+          ctx.fillText('JACKPOT!', w/2, h/2)
+      }
 
       this.slotTexture.update()
   }
@@ -875,8 +950,18 @@ export class Game {
         holo.material = holoMat
         
         const body = this.world!.createRigidBody(this.rapier!.RigidBodyDesc.fixed().setTranslation(x, 0.5, z))
+        // Physical collider
         this.world!.createCollider(this.rapier!.ColliderDesc.ball(0.4).setRestitution(1.5).setActiveEvents(this.rapier!.ActiveEvents.COLLISION_EVENTS), body)
         
+        // Sensor Trap (Hologram Zone)
+        this.world!.createCollider(
+            this.rapier!.ColliderDesc.cylinder(1.5, 0.5)
+            .setSensor(true)
+            .setTranslation(0, 2.0, 0) // Offset up into the wireframe
+            .setActiveEvents(this.rapier!.ActiveEvents.COLLISION_EVENTS),
+            body
+        )
+
         this.bindings.push({ mesh: bumper, rigidBody: body })
         this.bumperBodies.push(body)
         this.bumperVisuals.push({ mesh: bumper, body: body, hologram: holo, hitTime: 0, sweep: Math.random() })
@@ -941,10 +1026,12 @@ export class Game {
     }
 
     this.updateShards(dt)
+    this.updateCaughtBalls(dt)
     this.updateCombo(dt)
     this.updateBloom(dt)
     this.updateDisplayState(dt)
     this.updateCabinetLighting(dt)
+    this.updateVideo()
     if (this.powerupActive) {
         this.powerupTimer -= dt
         if (this.powerupTimer <= 0) this.powerupActive = false
@@ -968,24 +1055,47 @@ export class Game {
           return
       }
 
-      // Bumpers
+      // Bumpers (Collision & Sensor)
       const bump = this.bumperBodies.find(b => b === b1 || b === b2)
       if (bump) {
-          const vis = this.bumperVisuals.find(v => v.body === bump)
-          if (vis) {
-             vis.hitTime = 0.2
-             this.score += (10 * (Math.floor(this.comboCount/3)+1))
-             this.comboCount++
-             this.comboTimer = 1.5
-             this.spawnShardBurst(vis.mesh.position)
-             this.bloomEnergy = 2.0
-             this.playBeep(400 + Math.random()*200)
-             this.updateHUD()
-             // Trigger cabinet lighting flash
-             this.lightingMode = 'hit'
-             this.lightingTimer = 0.2
+          const ballBody = (bump === b1) ? b2 : b1
+
+          // Check if it's a valid ball
+          if (this.ballBodies.includes(ballBody)) {
+              // Check if caught (Sensor logic)
+              // Note: Rapier reports collisions for sensors too. We need to distinguish or just check logic.
+              // Since we added a sensor collider to the same body, we rely on the fact that the sensor is higher up.
+              // But collision event doesn't tell us WHICH collider was hit easily in this wrapper.
+              // However, if we are in IDLE, we can try to catch.
+
+              const vis = this.bumperVisuals.find(v => v.body === bump)
+              if (vis) {
+                   // Distance check to see if we are "in" the hologram (high up) or hitting the base
+                   // Base is at y=0.5. Hologram center is y=2.0 + 0.5 = 2.5
+                   // Ball radius is 0.5.
+                   const ballPos = ballBody.translation()
+                   // If ball is significantly above the bumper base, it's the sensor
+                   if (ballPos.y > 1.5) {
+                       if (this.displayState === DisplayState.IDLE) {
+                           this.activateHologramCatch(ballBody, bump)
+                           return
+                       }
+                   } else {
+                       // Regular Bumper Hit
+                       vis.hitTime = 0.2
+                       this.score += (10 * (Math.floor(this.comboCount/3)+1))
+                       this.comboCount++
+                       this.comboTimer = 1.5
+                       this.spawnShardBurst(vis.mesh.position)
+                       this.bloomEnergy = 2.0
+                       this.playBeep(400 + Math.random()*200)
+                       this.updateHUD()
+                       this.lightingMode = 'hit'
+                       this.lightingTimer = 0.2
+                       return
+                   }
+              }
           }
-          return
       }
 
       // Targets (Pachinko Catcher)
@@ -1008,6 +1118,35 @@ export class Game {
       }
   }
   
+  private activateHologramCatch(ball: RAPIER.RigidBody, bumper: RAPIER.RigidBody) {
+      if (!this.rapier) return
+
+      // 1. Switch Ball to Kinematic (Take control from physics engine)
+      ball.setBodyType(this.rapier.RigidBodyType.KinematicPositionBased, true)
+
+      // 2. Find the hologram visual location
+      const visual = this.bumperVisuals.find(v => v.body === bumper)
+      if (!visual || !visual.hologram) return
+
+      // 3. Add to our "caught" list to animate it
+      this.caughtBalls.push({
+          body: ball,
+          targetPos: visual.hologram.position.clone(), // Center of hologram
+          timer: 4.0 // Hold for 4 seconds (duration of spin)
+      })
+
+      // 4. Visuals: Turn ball Bright Red
+      const mesh = this.bindings.find(b => b.rigidBody === ball)?.mesh as Mesh;
+      if (mesh && mesh.material && mesh.material instanceof StandardMaterial) {
+           (mesh.material as StandardMaterial).emissiveColor = new Color3(1, 0, 0); // Red Glow
+      }
+
+      this.playBeep(880, 0) // High pitch "capture" sound
+
+      // 5. Trigger the Slots
+      this.setDisplayState(DisplayState.REACH)
+  }
+
   private handleBallLoss(body: RAPIER.RigidBody) {
       if (this.state !== GameState.PLAYING) return
       this.comboCount = 0
@@ -1091,6 +1230,65 @@ export class Game {
       }
   }
 
+  private updateCaughtBalls(dt: number) {
+      if (!this.rapier) return
+      for (let i = this.caughtBalls.length - 1; i >= 0; i--) {
+          const catchData = this.caughtBalls[i]
+          catchData.timer -= dt
+
+          // Levitate logic: Smoothly interpolate current pos to target pos
+          const current = catchData.body.translation()
+          const target = catchData.targetPos
+
+          const nextX = current.x + (target.x - current.x) * 5 * dt
+          const nextY = current.y + (target.y - current.y) * 5 * dt
+          const nextZ = current.z + (target.z - current.z) * 5 * dt
+
+          // Apply movement
+          catchData.body.setNextKinematicTranslation({ x: nextX, y: nextY, z: nextZ })
+
+          // Release logic
+          if (catchData.timer <= 0) {
+              // Restore physics
+              catchData.body.setBodyType(this.rapier.RigidBodyType.Dynamic, true)
+
+              // VISUALS: Restore color (White/Grey)
+              const mesh = this.bindings.find(b => b.rigidBody === catchData.body)?.mesh as Mesh;
+              if (mesh && mesh.material && mesh.material instanceof StandardMaterial) {
+                   (mesh.material as StandardMaterial).emissiveColor = new Color3(0.2, 0.2, 0.2); // Default
+              }
+
+              // Shoot it out!
+              catchData.body.applyImpulse({ x: (Math.random()-0.5)*5, y: 5, z: 5 }, true)
+              this.playBeep(440, 0) // Release sound
+
+              this.caughtBalls.splice(i, 1)
+          }
+      }
+  }
+
+  private updateVideo() {
+      if (!this.staticTexture) return
+      const ctx = this.staticTexture.getContext() as CanvasRenderingContext2D
+      const w = 256; const h = 256;
+      // Simple random noise
+      // Note: Direct pixel manipulation is slow in JS, so we might just draw random rectangles for perf
+      // or use createRadialGradient hacks. For "Static", let's do random noise.
+      // Optimization: Draw fewer large pixels or just random lines.
+
+      // Let's do random blocks for a "Digital Glitch" look instead of per-pixel noise
+      ctx.clearRect(0, 0, w, h)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'
+      for(let i=0; i<20; i++) {
+          const x = Math.random() * w
+          const y = Math.random() * h
+          const sw = Math.random() * 50
+          const sh = Math.random() * 5
+          ctx.fillRect(x, y, sw, sh)
+      }
+      this.staticTexture.update()
+  }
+
   private updateCombo(dt: number) {
       if (this.comboTimer > 0) {
           this.comboTimer -= dt
@@ -1130,35 +1328,22 @@ export class Game {
       }
 
       // --- OVERLAY TEXT LOGIC (Layer 3) ---
-      if (!this.backboxLayers.overlay || !this.scene) return
-      
-      const overlayMat = this.backboxLayers.overlay.material as StandardMaterial
-      const overlayTexture = overlayMat.diffuseTexture as DynamicTexture
-      if (!overlayTexture) return
-      
-      const ctx = overlayTexture.getContext() as CanvasRenderingContext2D
-      ctx.clearRect(0, 0, 512, 512)
-      
-      // Only draw text if meaningful
-      if (newState === DisplayState.REACH) {
-          ctx.fillStyle = 'rgba(255, 0, 85, 0.8)'
-          ctx.font = 'bold 60px Orbitron, Arial'
-          ctx.textAlign = 'center'
-          ctx.fillText('REACH!', 256, 100)
-      } else if (newState === DisplayState.FEVER) {
-          ctx.fillStyle = 'rgba(255, 215, 0, 1.0)'
-          ctx.font = 'bold 80px Orbitron, Arial'
-          ctx.textAlign = 'center'
-          ctx.shadowBlur = 30
-          ctx.shadowColor = '#ffd700'
-          ctx.fillText('JACKPOT!', 256, 256)
-      }
-      overlayTexture.update()
+      // Moved to drawSlots() loop for consolidated rendering
   }
 
   private updateDisplayState(dt: number) {
       this.displayTransitionTimer += dt
       
+      // Update Shader Uniforms
+      if (this.shaderMaterial) {
+          this.shaderMaterial.setFloat("time", performance.now() * 0.001)
+          // Speed: 0=Idle, 5=Reach, 10=Fever
+          let speed = 0.5
+          if (this.displayState === DisplayState.REACH) speed = 5.0
+          if (this.displayState === DisplayState.FEVER) speed = 10.0
+          this.shaderMaterial.setFloat("speed", speed)
+      }
+
       // Update the slot visuals every frame
       this.drawSlots(dt)
 
@@ -1331,7 +1516,7 @@ export class Game {
      }
   }
   
-  private playBeep(freq: number) {
+  private playBeep(freq: number, _dummy?: number) {
      if (!this.audioCtx) return
      const o = this.audioCtx.createOscillator(); const g = this.audioCtx.createGain()
      o.frequency.value = freq; o.connect(g); g.connect(this.audioCtx.destination)
