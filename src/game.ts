@@ -120,6 +120,7 @@ export class Game {
   // Adventure Mode (Holo-Deck)
   private pinballMeshes: Mesh[] = [] // Track standard parts to hide them later
   private adventureTrack: Mesh[] = []
+  private adventureBodies: RAPIER.RigidBody[] = [] // Track physics bodies for cleanup
   private adventureActive = false
   private adventureSensor: RAPIER.RigidBody | null = null
   private tableCamera: ArcRotateCamera | null = null
@@ -757,10 +758,12 @@ export class Game {
              .setRotation({x: q.x, y: q.y, z: q.z, w: q.w})
           )
           this.world!.createCollider(this.rapier!.ColliderDesc.cuboid(width/2, 0.25, length/2), body)
+          this.adventureBodies.push(body) // Track for cleanup
           
           // Update cursor to end of ramp
-          currentPos = currentPos.add(forward.scale(length))
-          currentPos.y -= drop
+          const newPos = currentPos.add(forward.scale(length))
+          newPos.y -= drop
+          currentPos = newPos
           
           return currentPos
       }
@@ -790,9 +793,11 @@ export class Game {
       
       const bBody = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(0, currentPos.y - 1, -8))
       this.world.createCollider(this.rapier.ColliderDesc.cuboid(4, 0.5, 2), bBody)
+      this.adventureBodies.push(bBody) // Track for cleanup
 
-      // Add "Return Sensor" in the basin
-      const sensor = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(0, currentPos.y, -8))
+      // Add "Return Sensor" in the basin (positioned at basin top surface)
+      const sensorY = currentPos.y - 0.5 // Positioned at the top of the basin
+      const sensor = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed().setTranslation(0, sensorY, -8))
       this.world.createCollider(
           this.rapier.ColliderDesc.cuboid(2, 1, 1).setSensor(true).setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS), 
           sensor
@@ -1244,10 +1249,11 @@ export class Game {
 
       // 1. Hide Physical Table (The "Dimming" Effect)
       this.pinballMeshes.forEach(m => m.setEnabled(false)) 
-      // Note: We use setEnabled(false) so physics might still run, but visuals are gone. 
-      // For true "Holo-Deck", we assume the holo-track is above the physical colliders 
-      // or we accept that the ball might bump invisible bumpers if we aren't careful.
-      // Ideally, the holo-track is physically higher (y=2 to y=5).
+      // Note: We use setEnabled(false) which hides visuals but keeps physics active. 
+      // The holographic track is positioned higher (y=2 to y=5) and the ball is teleported 
+      // to the track start, so it shouldn't interact with the hidden physical colliders 
+      // during normal adventure mode gameplay. If collisions occur, the ball would be 
+      // deflected by invisible obstacles, which is acceptable for this proof-of-concept.
 
       // 2. Spawn Track
       this.createAdventureTrack()
@@ -1294,9 +1300,18 @@ export class Game {
        this.adventureTrack = []
        
        // 5. Cleanup Physics Bodies
-       if (this.adventureSensor && this.world) {
-           this.world.removeRigidBody(this.adventureSensor)
-           this.adventureSensor = null
+       if (this.world) {
+           // Remove all adventure track bodies
+           this.adventureBodies.forEach(body => {
+               this.world!.removeRigidBody(body)
+           })
+           this.adventureBodies = []
+           
+           // Remove sensor
+           if (this.adventureSensor) {
+               this.world.removeRigidBody(this.adventureSensor)
+               this.adventureSensor = null
+           }
        }
        
        // Reset score display
