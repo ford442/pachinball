@@ -12,7 +12,6 @@ import {
   MirrorTexture,
   Plane,
   TrailMesh,
-  VideoTexture,
   StandardMaterial,
   Mesh,
   PointLight,
@@ -88,6 +87,18 @@ export class Game {
     mainDisplay: Mesh | null
     overlay: Mesh | null
   } = { background: null, mainDisplay: null, overlay: null }
+
+  // --- SLOT MACHINE STATE ---
+  private slotTexture: DynamicTexture | null = null
+  private slotSymbols = ['7️⃣', '💎', '🍒', '🔔', '🍇', '⭐']
+  // Current vertical offset of each reel (0 to 1)
+  private slotReels = [0, 0, 0]
+  // Speed of each reel
+  private slotSpeeds = [0, 0, 0]
+  // State: 0=Stopped, 1=Spinning, 2=Stopping
+  private slotMode = 0
+  // Timer to stagger the stopping of reels
+  private slotStopTimer = 0
   
   // Cabinet Lighting
   private cabinetLights: Array<{ mesh: Mesh; material: StandardMaterial; pointLight: PointLight }> = []
@@ -475,55 +486,137 @@ export class Game {
       frame.position.copyFrom(pos)
       const frameMat = new StandardMaterial("frameMat", this.scene)
       frameMat.diffuseColor = Color3.Black()
+      frameMat.roughness = 0.5
       frame.material = frameMat
 
-      // --- LAYER 1: BACKGROUND (Deepest) ---
-      // Simulates mechanical/physical elements or static artwork
+      // --- LAYER 1: BACKGROUND ---
       const bgLayer = MeshBuilder.CreatePlane("backboxBg", { width: 20, height: 12 }, this.scene)
       bgLayer.position.copyFrom(pos)
-      bgLayer.position.z -= 0.5 // Deepest layer
+      bgLayer.position.z -= 0.5
       bgLayer.rotation.y = Math.PI
       
       const bgMat = new StandardMaterial("bgMat", this.scene)
-      const bgTexture = this.createGridTexture(this.scene) // Reuse grid as mechanical look
+      const bgTexture = this.createGridTexture(this.scene)
       bgMat.diffuseTexture = bgTexture
-      bgMat.emissiveColor = new Color3(0.1, 0.05, 0.2) // Dark purple glow
+      bgMat.emissiveColor = new Color3(0.05, 0.0, 0.1)
       bgLayer.material = bgMat
       this.backboxLayers.background = bgLayer
 
-      // --- LAYER 2: MAIN DISPLAY (Middle) ---
-      // Primary video/animation content
+      // --- LAYER 2: MAIN DISPLAY (Slot Machine) ---
       const mainDisplay = MeshBuilder.CreatePlane("backboxScreen", { width: 20, height: 12 }, this.scene)
       mainDisplay.position.copyFrom(pos)
-      mainDisplay.position.z -= 0.8 // Middle layer
+      mainDisplay.position.z -= 0.8
       mainDisplay.rotation.y = Math.PI
 
       const screenMat = new StandardMaterial("screenMat", this.scene)
-      // Placeholder video texture - using vite.svg for now
-      const videoTexture = new VideoTexture("screenVideo", ["/vite.svg"], this.scene, true, false) 
-      screenMat.diffuseTexture = videoTexture
-      screenMat.emissiveColor = Color3.White() // Self-illuminated
-      screenMat.alpha = 0.9 // Slightly transparent to see background
+      // Confirmed: Removed VideoTexture placeholder
+      this.slotTexture = new DynamicTexture("slotTex", {width: 1024, height: 512}, this.scene, true)
+      screenMat.diffuseTexture = this.slotTexture
+      screenMat.emissiveColor = Color3.White()
+      screenMat.alpha = 1.0
       mainDisplay.material = screenMat
       this.backboxLayers.mainDisplay = mainDisplay
 
-      // --- LAYER 3: TRANSPARENT LCD OVERLAY (Front) ---
-      // UI elements, "REACH" text, flashy effects
+      // --- LAYER 3: TRANSPARENT LCD OVERLAY ---
       const overlay = MeshBuilder.CreatePlane("backboxOverlay", { width: 20, height: 12 }, this.scene)
       overlay.position.copyFrom(pos)
-      overlay.position.z -= 1.01 // Front-most layer
+      overlay.position.z -= 1.01
       overlay.rotation.y = Math.PI
 
       const overlayMat = new StandardMaterial("overlayMat", this.scene)
-      // Create dynamic texture for overlay effects
       const overlayTexture = new DynamicTexture("overlayTex", 512, this.scene, true)
       overlayTexture.hasAlpha = true
       overlayMat.diffuseTexture = overlayTexture
       overlayMat.emissiveColor = Color3.White()
-      overlayMat.alpha = 0.8
-      overlayMat.opacityTexture = overlayTexture
+      overlayMat.alpha = 0.99
       overlay.material = overlayMat
       this.backboxLayers.overlay = overlay
+  }
+
+  // --- NEW: CABINET LIGHTING SYSTEM ---
+  private drawSlots(dt: number) {
+      if (!this.slotTexture) return
+
+      // Update Physics/Animation of Reels
+      for (let i = 0; i < 3; i++) {
+          this.slotReels[i] += this.slotSpeeds[i] * dt
+          this.slotReels[i] %= 1.0
+
+          if (this.slotMode === 2) {
+              if (this.slotSpeeds[i] > 0 && this.slotSpeeds[i] < 0.5) {
+                   const snap = Math.round(this.slotReels[i] * this.slotSymbols.length) / this.slotSymbols.length
+                   if (Math.abs(this.slotReels[i] - snap) < 0.01) {
+                       this.slotReels[i] = snap
+                       this.slotSpeeds[i] = 0
+                   }
+              }
+          }
+      }
+
+      const ctx = this.slotTexture.getContext() as CanvasRenderingContext2D
+      const w = 1024
+      const h = 512
+
+      // Background (Dark Glass)
+      ctx.fillStyle = '#000000'
+      ctx.fillRect(0, 0, w, h)
+
+      // Draw Reels
+      const reelW = w / 3
+      // CHANGED: Use Orbitron for consistency
+      ctx.font = 'bold 140px Orbitron, Arial, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+
+      for (let i = 0; i < 3; i++) {
+          const centerX = i * reelW + reelW / 2
+          const offset = this.slotReels[i]
+          const totalSyms = this.slotSymbols.length
+          const rawIdx = offset * totalSyms
+          const baseIdx = Math.floor(rawIdx)
+          const subOffset = (rawIdx - baseIdx)
+
+          for (let row = -1; row <= 1; row++) {
+              let symIdx = (baseIdx - row) % totalSyms
+              if (symIdx < 0) symIdx += totalSyms
+
+              const symbol = this.slotSymbols[symIdx]
+              const y = h/2 + (row * 180) + (subOffset * 180)
+
+              if (this.slotSpeeds[i] > 2) {
+                  ctx.fillStyle = 'rgba(255, 255, 255, 0.3)'
+                  ctx.fillText(symbol, centerX, y - 20)
+              }
+
+              ctx.fillStyle = (this.slotMode === 0 && row === 0) ? '#ffffff' : '#888888' // Darker grey for inactive rows
+
+              if (this.displayState === DisplayState.FEVER && row === 0) {
+                   ctx.fillStyle = '#ffff00'
+                   ctx.shadowBlur = 40
+                   ctx.shadowColor = '#ffaa00'
+              } else {
+                   ctx.shadowBlur = 0
+              }
+
+              ctx.fillText(symbol, centerX, y)
+          }
+
+          // Reel Divider Lines
+          ctx.strokeStyle = '#222' // Subtle dividers
+          ctx.lineWidth = 4
+          ctx.beginPath()
+          ctx.moveTo(i * reelW, 0); ctx.lineTo(i * reelW, h)
+          ctx.stroke()
+      }
+
+      // Draw Payline Overlay
+      ctx.strokeStyle = 'rgba(255, 0, 50, 0.4)'
+      ctx.lineWidth = 6
+      ctx.beginPath()
+      ctx.moveTo(0, h/2); ctx.lineTo(w, h/2)
+      ctx.stroke()
+
+      this.slotTexture.update()
   }
 
   // --- NEW: CABINET LIGHTING SYSTEM ---
@@ -903,7 +996,27 @@ export class Game {
       this.displayState = newState
       this.displayTransitionTimer = 0
       
-      // Update overlay display based on state
+      // --- SLOT MACHINE LOGIC TRIGGERS ---
+      if (newState === DisplayState.REACH) {
+          // START SPIN
+          this.slotMode = 1 // Spinning
+          this.slotSpeeds = [5.0, 5.0, 5.0] // Fast speed
+          this.slotStopTimer = 2.0 // Spin for 2 seconds before slowing
+      }
+      else if (newState === DisplayState.FEVER) {
+          // FORCED WIN (Jackpot)
+          this.slotMode = 2 // Stopping
+          // Set reels to align to '7' (Index 0)
+          // We mathematically set the 'target' offset to 0.0 (Symbol 0)
+          this.slotReels = [0.1, 0.4, 0.7] // Offset slightly so they roll into place
+          this.slotSpeeds = [2.0, 3.0, 4.0] // Different speeds for drama
+      }
+      else if (newState === DisplayState.IDLE) {
+          this.slotMode = 0
+          this.slotSpeeds = [0, 0, 0]
+      }
+
+      // --- OVERLAY TEXT LOGIC (Layer 3) ---
       if (!this.backboxLayers.overlay || !this.scene) return
       
       const overlayMat = this.backboxLayers.overlay.material as StandardMaterial
@@ -913,29 +1026,19 @@ export class Game {
       const ctx = overlayTexture.getContext() as CanvasRenderingContext2D
       ctx.clearRect(0, 0, 512, 512)
       
-      switch (newState) {
-          case DisplayState.REACH:
-              // Draw "REACH" text
-              ctx.fillStyle = 'rgba(255, 0, 85, 0.9)'
-              ctx.font = 'bold 80px Orbitron, Arial'
-              ctx.textAlign = 'center'
-              ctx.shadowBlur = 20
-              ctx.shadowColor = '#ff0055'
-              ctx.fillText('REACH!', 256, 256)
-              break
-          case DisplayState.FEVER:
-              // Draw "FEVER" text with more intensity
-              ctx.fillStyle = 'rgba(255, 215, 0, 1.0)'
-              ctx.font = 'bold 100px Orbitron, Arial'
-              ctx.textAlign = 'center'
-              ctx.shadowBlur = 30
-              ctx.shadowColor = '#ffd700'
-              ctx.fillText('FEVER!!', 256, 256)
-              break
-          case DisplayState.IDLE:
-          default:
-              // Clear overlay in idle state
-              break
+      // Only draw text if meaningful
+      if (newState === DisplayState.REACH) {
+          ctx.fillStyle = 'rgba(255, 0, 85, 0.8)'
+          ctx.font = 'bold 60px Orbitron, Arial'
+          ctx.textAlign = 'center'
+          ctx.fillText('REACH!', 256, 100)
+      } else if (newState === DisplayState.FEVER) {
+          ctx.fillStyle = 'rgba(255, 215, 0, 1.0)'
+          ctx.font = 'bold 80px Orbitron, Arial'
+          ctx.textAlign = 'center'
+          ctx.shadowBlur = 30
+          ctx.shadowColor = '#ffd700'
+          ctx.fillText('JACKPOT!', 256, 256)
       }
       overlayTexture.update()
   }
@@ -943,11 +1046,37 @@ export class Game {
   private updateDisplayState(dt: number) {
       this.displayTransitionTimer += dt
       
-      // Auto-transition back to IDLE after a period
-      if (this.displayState === DisplayState.REACH && this.displayTransitionTimer > 3.0) {
-          this.setDisplayState(DisplayState.IDLE)
+      // Update the slot visuals every frame
+      this.drawSlots(dt)
+
+      // State Machine for Slots
+      if (this.slotMode === 1) { // Spinning
+           this.slotStopTimer -= dt
+           if (this.slotStopTimer <= 0) {
+               // Transition to stopping
+               this.slotMode = 2
+               // Stagger the stops: Left stops first, then middle, then right
+               this.slotSpeeds = [0.0, 5.0, 5.0] // Force Stop 1 immediately for effect, or dampen
+           }
       }
-      if (this.displayState === DisplayState.FEVER && this.displayTransitionTimer > 5.0) {
+
+      if (this.slotMode === 2) { // Stopping Phase
+           // Dampen speeds
+           this.slotSpeeds[0] = Math.max(0, this.slotSpeeds[0] - dt * 2)
+           this.slotSpeeds[1] = Math.max(0, this.slotSpeeds[1] - dt * 1.5)
+           this.slotSpeeds[2] = Math.max(0, this.slotSpeeds[2] - dt * 1.0)
+
+           // If all stopped and we are in REACH, auto-trigger FEVER (simulated win)
+           if (this.displayState === DisplayState.REACH &&
+               this.slotSpeeds[0] === 0 && this.slotSpeeds[1] === 0 && this.slotSpeeds[2] === 0) {
+                   // In a real game, you'd check RNG here.
+                   // For this demo, REACH always leads to FEVER/WIN after a moment.
+                   this.setDisplayState(DisplayState.FEVER)
+           }
+      }
+
+      // Logic to revert to IDLE
+      if (this.displayState === DisplayState.FEVER && this.displayTransitionTimer > 6.0) {
           this.setDisplayState(DisplayState.IDLE)
       }
   }
