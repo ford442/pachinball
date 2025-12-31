@@ -337,6 +337,11 @@ export class Game {
     if (event.code === 'KeyQ') this.applyNudge(new this.rapier.Vector3(-0.6, 0, 0.3))
     if (event.code === 'KeyE') this.applyNudge(new this.rapier.Vector3(0.6, 0, 0.3))
     if (event.code === 'KeyW') this.applyNudge(new this.rapier.Vector3(0, 0, 0.8))
+    // Holo-Deck Adventure Mode Toggle
+    if (event.code === 'KeyH') {
+      if (this.adventureActive) this.endAdventureMode()
+      else this.startAdventureMode()
+    }
   }
 
   private onKeyUp = (event: KeyboardEvent): void => {
