@@ -14,9 +14,11 @@ import {
   TrailMesh,
   StandardMaterial,
   ShaderMaterial,
+  ShaderLanguage,
   Mesh,
   PointLight,
 } from '@babylonjs/core'
+import { numberScrollShader } from './shaders/numberScroll'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { Nullable } from '@babylonjs/core/types'
@@ -25,55 +27,6 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 // Gravity: -Y (down), -Z (roll towards player)
 const GRAVITY = new Vector3(0, -9.81, -5.0)
-
-const cyberSpinShader = {
-    vertex: `
-        attribute vec3 position;
-        attribute vec2 uv;
-        uniform mat4 worldViewProjection;
-        varying vec2 vUV;
-        void main() {
-            vec4 p = vec4(position, 1.0);
-            gl_Position = worldViewProjection * p;
-            vUV = uv;
-        }
-    `,
-    fragment: `
-        varying vec2 vUV;
-        uniform float time;
-        uniform float speed; // 0.0 = Idle, 10.0 = Fever
-
-        // Pseudo-random
-        float rand(vec2 co){
-            return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
-        }
-
-        void main() {
-            vec2 uv = vUV;
-
-            // distort UV based on speed (Cyber Glitch)
-            float glitch = step(0.98, rand(vec2(time * speed, uv.y))) * 0.1 * speed;
-            uv.x += glitch;
-
-            // Moving scanlines
-            float scan = sin(uv.y * 50.0 - time * 5.0) * 0.5 + 0.5;
-
-            // Base Color (Deep Purple/Blue)
-            vec3 color = vec3(0.1, 0.0, 0.2);
-
-            // Add "Data Stream" lines
-            float stream = step(0.9, fract(uv.x * 20.0 + time));
-            color += vec3(0.0, 1.0, 0.5) * stream * scan;
-
-            // Fever Mode Flash
-            if (speed > 5.0) {
-                color += vec3(1.0, 0.8, 0.0) * sin(time * 20.0) * 0.5;
-            }
-
-            gl_FragColor = vec4(color, 1.0);
-        }
-    `
-}
 
 interface PhysicsBinding {
   mesh: TransformNode
@@ -146,6 +99,12 @@ export class Game {
   private shaderMaterial: ShaderMaterial | null = null
 
   // --- SLOT MACHINE STATE ---
+  private useWGSL = false
+  private reelMaterials: ShaderMaterial[] = []
+  private reelOffsets: number[] = [0, 0, 0]
+  private reelSpeeds: number[] = [0, 0, 0]
+  private overlayTexture: DynamicTexture | null = null
+
   private slotTexture: DynamicTexture | null = null
   private slotSymbols = ['7️⃣', '💎', '🍒', '🔔', '🍇', '⭐']
   // Current vertical offset of each reel (0 to 1)
@@ -552,7 +511,12 @@ export class Game {
   // --- NEW: BACKBOX SCREEN CREATION ---
   private createBackbox(pos: Vector3): void {
       if (!this.scene) return
-      // Frame
+
+      // Determine if we can use Cyber-Shock shaders
+      // Check if engine is WebGPUEngine. isWebGPU property might exist on WebGPUEngine instance.
+      this.useWGSL = this.engine.getClassName() === "WebGPUEngine" || (this.engine as any).isWebGPU === true;
+
+      // Frame (Standard)
       const frame = MeshBuilder.CreateBox("backboxFrame", { width: 22, height: 14, depth: 2 }, this.scene)
       frame.position.copyFrom(pos)
       const frameMat = new StandardMaterial("frameMat", this.scene)
@@ -560,58 +524,92 @@ export class Game {
       frameMat.roughness = 0.5
       frame.material = frameMat
 
-      // --- LAYER 1: SHADER PLANE (Deepest) ---
-      const shaderLayer = MeshBuilder.CreatePlane("backboxShader", { width: 20, height: 12 }, this.scene)
-      shaderLayer.position.copyFrom(pos)
-      shaderLayer.position.z -= 0.5
-      shaderLayer.rotation.y = Math.PI
+      // --- LAYER 1: BACKGROUND (Deepest) ---
+      const bgLayer = MeshBuilder.CreatePlane("backboxBg", { width: 20, height: 12 }, this.scene)
+      bgLayer.position.copyFrom(pos); bgLayer.position.z -= 0.5; bgLayer.rotation.y = Math.PI
 
-      this.shaderMaterial = new ShaderMaterial("cyberShader", this.scene, cyberSpinShader, {
-          attributes: ["position", "uv"],
-          uniforms: ["worldViewProjection", "time", "speed"]
-      })
-      this.shaderMaterial.setFloat("time", 0)
-      this.shaderMaterial.setFloat("speed", 0)
+      // Keep using the cyberSpinShader for background if desired, or switch to simple BG as per updated plan.
+      // The user snippet replaced Layer 1 with simple BG, but I should probably keep the cool shader if I can?
+      // The user snippet: "bgMat.emissiveColor = new Color3(0.05, 0.0, 0.1)".
+      // But Layer 1 was "cyberShader". The prompt said "The new reels replace Layer 2".
+      // But the provided 'Updated createBackbox' snippet REPLACES the whole function and uses a simple StandardMaterial for Layer 1.
+      // I will follow the user's snippet to be safe.
       
-      shaderLayer.material = this.shaderMaterial
-      this.backboxLayers.background = shaderLayer
+      const bgMat = new StandardMaterial("bgMat", this.scene)
+      bgMat.emissiveColor = new Color3(0.05, 0.0, 0.1)
+      bgLayer.material = bgMat
+      this.backboxLayers.background = bgLayer
 
-      // --- LAYER 2: VIDEO/STATIC PLANE (Middle) ---
-      const videoLayer = MeshBuilder.CreatePlane("backboxStatic", { width: 20, height: 12 }, this.scene)
-      videoLayer.position.copyFrom(pos)
-      videoLayer.position.z -= 0.8
-      videoLayer.rotation.y = Math.PI
+      // --- LAYER 2: MAIN DISPLAY (Reels) ---
+      if (this.useWGSL) {
+          // --- WGSL PATH (WebGPU) ---
+          console.log("Initializing WGSL Reels");
+          const gap = 7;
 
-      const videoMat = new StandardMaterial("videoMat", this.scene)
-      this.staticTexture = new DynamicTexture("staticTex", 256, this.scene, true)
-      this.staticTexture.hasAlpha = true
-      videoMat.diffuseTexture = this.staticTexture
-      videoMat.emissiveColor = Color3.White()
-      videoMat.alpha = 0.5 // Let Shader bleed through
-      videoLayer.material = videoMat
-      this.backboxLayers.mainDisplay = videoLayer
+          // Load Texture
+          const numTexture = new Texture("/concept/numbers.png", this.scene);
+          numTexture.wrapU = Texture.CLAMP_ADDRESSMODE;
+          numTexture.wrapV = Texture.WRAP_ADDRESSMODE; // Needed for scrolling
 
-      // --- LAYER 3: SLOT/UI PLANE (Front) ---
-      const uiLayer = MeshBuilder.CreatePlane("backboxUI", { width: 20, height: 12 }, this.scene)
-      uiLayer.position.copyFrom(pos)
-      uiLayer.position.z -= 1.01
-      uiLayer.rotation.y = Math.PI
+          for(let i=0; i<3; i++) {
+              const reel = MeshBuilder.CreatePlane(`reel_${i}`, { width: 6, height: 10 }, this.scene);
+              reel.position.copyFrom(pos);
+              reel.position.x += (i - 1) * gap;
+              reel.position.z -= 0.7;
+              reel.rotation.y = Math.PI;
 
-      const uiMat = new StandardMaterial("uiMat", this.scene)
-      this.slotTexture = new DynamicTexture("slotTex", {width: 1024, height: 512}, this.scene, true)
-      this.slotTexture.hasAlpha = true
-      uiMat.diffuseTexture = this.slotTexture
-      uiMat.emissiveColor = Color3.White()
-      uiMat.alpha = 1.0
-      uiLayer.material = uiMat
-      this.backboxLayers.overlay = uiLayer
+              const mat = new ShaderMaterial(`reelMat_${i}`, this.scene, {
+                  vertexSource: numberScrollShader.vertex,
+                  fragmentSource: numberScrollShader.fragment,
+              }, {
+                  attributes: ["position", "uv"],
+                  uniforms: ["worldViewProjection", "uOffset", "uSpeed", "uColor"],
+                  samplers: ["mySampler"],
+                  shaderLanguage: ShaderLanguage.WGSL
+              });
+
+              mat.setTexture("myTexture", numTexture);
+              mat.setFloat("uOffset", 0.0);
+              mat.setFloat("uSpeed", 0.0);
+              mat.setColor3("uColor", new Color3(1.0, 0.8, 0.2)); // Gold default
+
+              reel.material = mat;
+              this.reelMaterials.push(mat);
+          }
+      } else {
+          // --- LEGACY PATH (WebGL Fallback) ---
+          console.log("WebGPU not detected. Falling back to Canvas Reels.");
+          const mainDisplay = MeshBuilder.CreatePlane("backboxScreen", { width: 20, height: 12 }, this.scene)
+          mainDisplay.position.copyFrom(pos); mainDisplay.position.z -= 0.8; mainDisplay.rotation.y = Math.PI
+
+          const screenMat = new StandardMaterial("screenMat", this.scene)
+          this.slotTexture = new DynamicTexture("slotTex", {width: 1024, height: 512}, this.scene, true)
+          this.slotTexture.hasAlpha = true
+          screenMat.diffuseTexture = this.slotTexture
+          screenMat.emissiveColor = Color3.White()
+          mainDisplay.material = screenMat
+          this.backboxLayers.mainDisplay = mainDisplay
+      }
+
+      // --- LAYER 3: TRANSPARENT UI OVERLAY (Text Only) ---
+      const overlay = MeshBuilder.CreatePlane("backboxOverlay", { width: 20, height: 12 }, this.scene)
+      overlay.position.copyFrom(pos); overlay.position.z -= 1.01; overlay.rotation.y = Math.PI
+
+      const overlayMat = new StandardMaterial("overlayMat", this.scene)
+      this.overlayTexture = new DynamicTexture("overlayTex", 512, this.scene, true)
+      this.overlayTexture.hasAlpha = true
+      overlayMat.diffuseTexture = this.overlayTexture
+      overlayMat.emissiveColor = Color3.White()
+      overlayMat.alpha = 0.99
+      overlay.material = overlayMat
+      this.backboxLayers.overlay = overlay
   }
 
   // --- NEW: CABINET LIGHTING SYSTEM ---
   private drawSlots(dt: number) {
       if (!this.slotTexture) return
 
-      // Update Physics/Animation of Reels
+      // Update Physics/Animation of Reels (Legacy Fallback)
       for (let i = 0; i < 3; i++) {
           this.slotReels[i] += this.slotSpeeds[i] * dt
           this.slotReels[i] %= 1.0
@@ -637,7 +635,6 @@ export class Game {
 
       // Draw Reels
       const reelW = w / 3
-      // CHANGED: Use Orbitron for consistency
       ctx.font = 'bold 140px Orbitron, Arial, sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
@@ -690,22 +687,81 @@ export class Game {
       ctx.moveTo(0, h/2); ctx.lineTo(w, h/2)
       ctx.stroke()
 
+      this.slotTexture.update()
+  }
+
+  // New Dedicated WGSL Updater with SNAPPING
+  private updateWGSLReels(dt: number) {
+      for(let i=0; i<3; i++) {
+          const mat = this.reelMaterials[i];
+
+          // --- PHYSICS ---
+          if (this.slotMode === 1) {
+              // Accelerate
+              this.reelSpeeds[i] = lerp(this.reelSpeeds[i], 8.0, dt * 2);
+          }
+          else if (this.slotMode === 2) {
+               // STOPPING LOGIC WITH SNAP
+               // We want to snap to nearest 0.1 (assuming 10 digits 0-9)
+               const symbolHeight = 0.1;
+
+               // 1. Slow down naturally
+               this.reelSpeeds[i] = Math.max(0.5, this.reelSpeeds[i] - dt * 4);
+
+               // 2. Snap check
+               if (this.reelSpeeds[i] <= 1.0) { // If slow enough to snap
+                   const currentOffset = this.reelOffsets[i];
+                   // Calculate nearest symbol index
+                   const targetIndex = Math.round(currentOffset / symbolHeight);
+                   const targetOffset = targetIndex * symbolHeight;
+
+                   // Distance to snap point
+                   const diff = targetOffset - currentOffset;
+
+                   // If very close, SNAP and STOP
+                   if (Math.abs(diff) < 0.005) {
+                       this.reelOffsets[i] = targetOffset;
+                       this.reelSpeeds[i] = 0;
+                   } else {
+                       // Crawl towards target
+                       this.reelSpeeds[i] = diff * 10.0; // Proportional approach
+                   }
+               }
+          }
+
+          // Update Position
+          this.reelOffsets[i] += this.reelSpeeds[i] * dt;
+
+          // Send to Shader
+          mat.setFloat("uOffset", this.reelOffsets[i]);
+          mat.setFloat("uSpeed", Math.abs(this.reelSpeeds[i])); // Blur needs positive value
+      }
+  }
+
+  private updateOverlay() {
+      if (!this.overlayTexture) return
+      const ctx = this.overlayTexture.getContext() as CanvasRenderingContext2D
+      const w = 512
+      const h = 512 // 512x512 texture for overlay
+
+      // Clear previous frame
+      ctx.clearRect(0, 0, w, h)
+
       // Overlay Text (Merged Layer 3)
       if (this.displayState === DisplayState.REACH) {
           ctx.fillStyle = 'rgba(255, 0, 85, 0.8)'
-          ctx.font = 'bold 80px Orbitron, Arial'
+          ctx.font = 'bold 40px Orbitron, Arial' // Scaled down for 512
           ctx.textAlign = 'center'
           ctx.fillText('REACH!', w/2, h/2)
       } else if (this.displayState === DisplayState.FEVER) {
           ctx.fillStyle = 'rgba(255, 215, 0, 1.0)'
-          ctx.font = 'bold 100px Orbitron, Arial'
+          ctx.font = 'bold 50px Orbitron, Arial'
           ctx.textAlign = 'center'
-          ctx.shadowBlur = 30
+          ctx.shadowBlur = 15
           ctx.shadowColor = '#ffd700'
           ctx.fillText('JACKPOT!', w/2, h/2)
       }
-
-      this.slotTexture.update()
+      this.overlayTexture.update()
   }
 
   // --- NEW: CABINET LIGHTING SYSTEM ---
@@ -1334,41 +1390,50 @@ export class Game {
   private updateDisplayState(dt: number) {
       this.displayTransitionTimer += dt
       
-      // Update Shader Uniforms
+      // Update Shader Uniforms (Layer 1 Background - if used)
       if (this.shaderMaterial) {
           this.shaderMaterial.setFloat("time", performance.now() * 0.001)
-          // Speed: 0=Idle, 5=Reach, 10=Fever
           let speed = 0.5
           if (this.displayState === DisplayState.REACH) speed = 5.0
           if (this.displayState === DisplayState.FEVER) speed = 10.0
           this.shaderMaterial.setFloat("speed", speed)
       }
 
-      // Update the slot visuals every frame
-      this.drawSlots(dt)
+      // 1. UPDATE REELS (Logic Split)
+      if (this.useWGSL) {
+          this.updateWGSLReels(dt);
+      } else {
+          // Legacy Canvas Draw
+          this.drawSlots(dt);
+      }
 
-      // State Machine for Slots
+      // 2. UPDATE OVERLAY (Layer 3 Text)
+      this.updateOverlay();
+
+      // 3. STATE LOGIC (Stopping / Fever)
       if (this.slotMode === 1) { // Spinning
            this.slotStopTimer -= dt
            if (this.slotStopTimer <= 0) {
-               // Transition to stopping
-               this.slotMode = 2
-               // Stagger the stops: Left stops first, then middle, then right
-               this.slotSpeeds = [0.0, 5.0, 5.0] // Force Stop 1 immediately for effect, or dampen
+               this.slotMode = 2 // Start Stopping
+               // Set different stop speeds for staggered effect
+               this.slotSpeeds = [0.0, 5.0, 5.0]
            }
       }
 
       if (this.slotMode === 2) { // Stopping Phase
-           // Dampen speeds
-           this.slotSpeeds[0] = Math.max(0, this.slotSpeeds[0] - dt * 2)
-           this.slotSpeeds[1] = Math.max(0, this.slotSpeeds[1] - dt * 1.5)
-           this.slotSpeeds[2] = Math.max(0, this.slotSpeeds[2] - dt * 1.0)
+           // Note: Speed updates are handled inside updateWGSLReels / drawSlots based on mode
 
            // If all stopped and we are in REACH, auto-trigger FEVER (simulated win)
-           if (this.displayState === DisplayState.REACH &&
-               this.slotSpeeds[0] === 0 && this.slotSpeeds[1] === 0 && this.slotSpeeds[2] === 0) {
-                   // In a real game, you'd check RNG here.
-                   // For this demo, REACH always leads to FEVER/WIN after a moment.
+           // Actually, fallback uses slotSpeeds, WGSL uses reelSpeeds.
+
+           let stopped = false;
+           if (this.useWGSL) {
+               stopped = this.reelSpeeds[0] === 0 && this.reelSpeeds[1] === 0 && this.reelSpeeds[2] === 0;
+           } else {
+               stopped = this.slotSpeeds[0] === 0 && this.slotSpeeds[1] === 0 && this.slotSpeeds[2] === 0;
+           }
+
+           if (this.displayState === DisplayState.REACH && stopped) {
                    this.setDisplayState(DisplayState.FEVER)
            }
       }
@@ -1540,4 +1605,8 @@ export class Game {
       void v
     }
   }
+}
+
+function lerp(start: number, end: number, t: number) {
+  return start * (1 - t) + end * t
 }
