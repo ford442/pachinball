@@ -84,7 +84,7 @@ export class DisplaySystem {
         }, {
           attributes: ["position", "uv"],
           uniforms: ["worldViewProjection", "uOffset", "uSpeed", "uColor"],
-          samplers: ["mySampler"],
+          samplers: ["myTextureSampler"],
           shaderLanguage: ShaderLanguage.WGSL
         })
 
