@@ -17,7 +17,7 @@ export class EffectsSystem {
   private bloomEnergy = 0
   private shards: ShardParticle[] = []
   private cabinetLights: CabinetLight[] = []
-  private lightingMode: 'normal' | 'hit' | 'fever' = 'normal'
+  private lightingMode: 'normal' | 'hit' | 'fever' | 'reach' = 'normal'
   private lightingTimer = 0
 
   constructor(scene: Scene, bloomPipeline: DefaultRenderingPipeline | null) {
@@ -120,6 +120,11 @@ export class EffectsSystem {
           targetColor = Color3.White()
           intensity = 2.0
           break
+        case 'reach':
+          // Pulsing Red
+          targetColor = new Color3(1.0, 0.0, 0.2)
+          intensity = 1.0 + Math.sin(time * 15) * 0.8
+          break
         case 'fever': {
           const hue = (time * 2 + idx * 0.3) % 1
           targetColor = Color3.FromHSV(hue * 360, 0.8, 1.0)
@@ -141,7 +146,7 @@ export class EffectsSystem {
     })
   }
 
-  setLightingMode(mode: 'normal' | 'hit' | 'fever', duration: number = 0): void {
+  setLightingMode(mode: 'normal' | 'hit' | 'fever' | 'reach', duration: number = 0): void {
     this.lightingMode = mode
     this.lightingTimer = duration
   }

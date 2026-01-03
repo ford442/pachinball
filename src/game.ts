@@ -430,7 +430,7 @@ export class Game {
         this.ballManager?.spawnExtraBalls(1)
         this.updateHUD()
         this.display?.setDisplayState(DisplayState.REACH)
-        this.effects?.setLightingMode('fever', 3.0)
+        this.effects?.setLightingMode('reach', 3.0) // Changed from 'fever' to 'reach' to match state
       }
     }
   }
@@ -443,6 +443,7 @@ export class Game {
     this.ballManager?.activateHologramCatch(ball, visual.hologram.position, 4.0)
     this.effects?.playBeep(880)
     this.display?.setDisplayState(DisplayState.REACH)
+    this.effects?.setLightingMode('reach', 4.0) // Add Reach lighting
   }
 
   private handleBallLoss(body: RAPIER.RigidBody): void {

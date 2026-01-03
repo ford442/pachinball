@@ -63,46 +63,7 @@ export class DisplaySystem {
     frameMat.roughness = 0.5
     frame.material = frameMat
 
-    // LAYER 1: CYBER SHADER BACKGROUND
-    const bgLayer = MeshBuilder.CreatePlane("backboxBg", { width: 20, height: 12 }, this.scene)
-    bgLayer.position.copyFrom(pos)
-    bgLayer.position.z -= 0.5
-    bgLayer.rotation.y = Math.PI
-
-    const cyberShader = new ShaderMaterial("cyberBg", this.scene, {
-      vertexSource: `
-          attribute vec3 position;
-          attribute vec2 uv;
-          uniform mat4 worldViewProjection;
-          varying vec2 vUV;
-          void main() {
-              gl_Position = worldViewProjection * vec4(position, 1.0);
-              vUV = uv;
-          }
-      `,
-      fragmentSource: `
-          uniform float time;
-          uniform float speed;
-          varying vec2 vUV;
-          void main() {
-              float t = time * speed;
-              float gridX = step(0.95, fract(vUV.x * 20.0 + sin(t*0.5)*0.5));
-              float gridY = step(0.95, fract(vUV.y * 10.0 + t));
-              vec3 base = vec3(0.05, 0.0, 0.15);
-              vec3 lines = vec3(0.0, 1.0, 0.8) * (gridX + gridY) * 0.5;
-              gl_FragColor = vec4(base + lines, 1.0);
-          }
-      `
-    }, {
-      attributes: ["position", "uv"],
-      uniforms: ["worldViewProjection", "time", "speed"]
-    })
-
-    this.shaderMaterial = cyberShader
-    bgLayer.material = cyberShader
-    this.backboxLayers.background = bgLayer
-
-    // LAYER 2: MAIN DISPLAY (Reels)
+    // LAYER 1: PHYSICAL REELS (Deepest)
     if (this.useWGSL) {
       console.log("Initializing WGSL Reels")
       const gap = 7
@@ -114,7 +75,7 @@ export class DisplaySystem {
         const reel = MeshBuilder.CreatePlane(`reel_${i}`, { width: 6, height: 10 }, this.scene)
         reel.position.copyFrom(pos)
         reel.position.x += (i - 1) * gap
-        reel.position.z -= 0.7
+        reel.position.z -= 0.5 // Deepest layer
         reel.rotation.y = Math.PI
 
         const mat = new ShaderMaterial(`reelMat_${i}`, this.scene, {
@@ -139,7 +100,7 @@ export class DisplaySystem {
       console.log("WebGPU not detected. Falling back to Canvas Reels.")
       const mainDisplay = MeshBuilder.CreatePlane("backboxScreen", { width: 20, height: 12 }, this.scene)
       mainDisplay.position.copyFrom(pos)
-      mainDisplay.position.z -= 0.8
+      mainDisplay.position.z -= 0.5 // Deepest layer
       mainDisplay.rotation.y = Math.PI
 
       const screenMat = new StandardMaterial("screenMat", this.scene)
@@ -150,6 +111,52 @@ export class DisplaySystem {
       mainDisplay.material = screenMat
       this.backboxLayers.mainDisplay = mainDisplay
     }
+
+    // LAYER 2: TRANSPARENT VIDEO SCREEN (Middle)
+    const bgLayer = MeshBuilder.CreatePlane("backboxBg", { width: 20, height: 12 }, this.scene)
+    bgLayer.position.copyFrom(pos)
+    bgLayer.position.z -= 0.8 // Middle layer
+    bgLayer.rotation.y = Math.PI
+
+    const cyberShader = new ShaderMaterial("cyberBg", this.scene, {
+      vertexSource: `
+          attribute vec3 position;
+          attribute vec2 uv;
+          uniform mat4 worldViewProjection;
+          varying vec2 vUV;
+          void main() {
+              gl_Position = worldViewProjection * vec4(position, 1.0);
+              vUV = uv;
+          }
+      `,
+      fragmentSource: `
+          uniform float time;
+          uniform float speed;
+          uniform vec3 colorTint; // New uniform for context-aware color
+          varying vec2 vUV;
+          void main() {
+              float t = time * speed;
+              float gridX = step(0.95, fract(vUV.x * 20.0 + sin(t*0.5)*0.5));
+              float gridY = step(0.95, fract(vUV.y * 10.0 + t));
+
+              // Use colorTint for the base and lines
+              vec3 base = colorTint * 0.2;
+              vec3 lines = colorTint * (gridX + gridY) * 0.8;
+
+              // Dynamic alpha based on brightness
+              float alpha = 0.3 + (gridX + gridY) * 0.4;
+              gl_FragColor = vec4(base + lines, alpha);
+          }
+      `
+    }, {
+      attributes: ["position", "uv"],
+      uniforms: ["worldViewProjection", "time", "speed", "colorTint"],
+      needAlphaBlending: true
+    })
+
+    this.shaderMaterial = cyberShader
+    bgLayer.material = cyberShader
+    this.backboxLayers.background = bgLayer
 
     // LAYER 3: UI OVERLAY WITH SCANLINES
     const overlay = MeshBuilder.CreatePlane("backboxOverlay", { width: 20, height: 12 }, this.scene)
@@ -194,10 +201,21 @@ export class DisplaySystem {
     
     if (this.shaderMaterial) {
       this.shaderMaterial.setFloat("time", performance.now() * 0.001)
+
       let speed = 0.5
-      if (this.displayState === DisplayState.REACH) speed = 5.0
-      if (this.displayState === DisplayState.FEVER) speed = 10.0
+      let color = new Color3(0.0, 1.0, 0.8) // Default Cyan
+
+      if (this.displayState === DisplayState.REACH) {
+        speed = 5.0
+        color = new Color3(1.0, 0.0, 0.2) // Red
+      }
+      if (this.displayState === DisplayState.FEVER) {
+        speed = 10.0
+        color = new Color3(1.0, 0.8, 0.0) // Gold
+      }
+
       this.shaderMaterial.setFloat("speed", speed)
+      this.shaderMaterial.setColor3("colorTint", color)
     }
     
     if (this.useWGSL) {
@@ -331,20 +349,58 @@ export class DisplaySystem {
     const h = 512
     ctx.clearRect(0, 0, w, h)
 
-    if (this.displayState === DisplayState.REACH) {
-      ctx.fillStyle = 'rgba(255, 0, 85, 0.8)'
-      ctx.font = 'bold 40px Orbitron, Arial'
-      ctx.textAlign = 'center'
-      ctx.fillText('REACH!', w / 2, h / 2)
+    const time = performance.now() * 0.001
+
+    if (this.displayState === DisplayState.IDLE) {
+      // Random "Walk-by" shapes
+      if (Math.floor(time) % 5 === 0) {
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.1)'
+        const x = (time * 50) % w
+        ctx.fillRect(x, h/2 - 20, 40, 40)
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.3)'
+        ctx.font = '20px Orbitron'
+        ctx.fillText('SYSTEM READY', x + 20, h/2 + 40)
+      }
+    } else if (this.displayState === DisplayState.REACH) {
+      // Flashing Reach
+      const flash = Math.sin(time * 10) > 0
+      if (flash) {
+        ctx.fillStyle = 'rgba(255, 0, 85, 0.8)'
+        ctx.font = 'bold 60px Orbitron, Arial'
+        ctx.textAlign = 'center'
+        ctx.shadowBlur = 20
+        ctx.shadowColor = '#ff0055'
+        ctx.fillText('REACH!', w / 2, h / 2)
+      }
+
+      // Target Reticles
+      ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)'
+      ctx.lineWidth = 4
+      ctx.beginPath()
+      ctx.arc(w/2, h/2, 150 + Math.sin(time * 5) * 20, 0, Math.PI * 2)
+      ctx.stroke()
+
     } else if (this.displayState === DisplayState.FEVER) {
+      // Jackpot Text
       ctx.fillStyle = 'rgba(255, 215, 0, 1.0)'
-      ctx.font = 'bold 50px Orbitron, Arial'
+      ctx.font = 'bold 70px Orbitron, Arial'
       ctx.textAlign = 'center'
-      ctx.shadowBlur = 15
+      ctx.shadowBlur = 30
       ctx.shadowColor = '#ffd700'
       ctx.fillText('JACKPOT!', w / 2, h / 2)
+
+      // Coins / Sparks
+      for(let i=0; i<10; i++) {
+        const cx = (w/2) + Math.cos(time * 5 + i) * 100
+        const cy = (h/2) + Math.sin(time * 3 + i) * 100
+        ctx.fillStyle = `rgba(255, 255, 0, ${0.5 + Math.sin(time * 10 + i)*0.5})`
+        ctx.beginPath()
+        ctx.arc(cx, cy, 10, 0, Math.PI * 2)
+        ctx.fill()
+      }
     }
 
+    // Scanlines
     ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'
     for (let y = 0; y < h; y += 4) {
       ctx.fillRect(0, y, w, 2)
