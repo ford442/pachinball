@@ -3,7 +3,8 @@
 > vite
 
 
-  VITE v7.2.6  ready in 547 ms
+  VITE v7.2.6  ready in 240 ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
+5:30:11 PM [vite] (client) page reload src/game-elements/display.ts
