@@ -9,8 +9,10 @@ export const numberScrollShader = {
 
         @vertex
         fn main(input : VertexInputs) -> FragmentInputs {
-            vertexOutputs.position = worldViewProjection * vec4<f32>(vertexInputs.position, 1.0);
-            vertexOutputs.vUV = vertexInputs.uv;
+            var output : FragmentInputs;
+            output.position = uniforms.worldViewProjection * vec4<f32>(input.position, 1.0);
+            output.vUV = input.uv;
+            return output;
         }
     `,
 
@@ -26,15 +28,16 @@ export const numberScrollShader = {
 
         @fragment
         fn main(input : FragmentInputs) -> FragmentOutputs {
-            var uv = fragmentInputs.vUV;
+            var output : FragmentOutputs;
+            var uv = input.vUV;
 
             // 1. Scroll Effect (Vertical)
-            uv.y = uv.y + uOffset;
+            uv.y = uv.y + uniforms.uOffset;
 
             // 2. Motion Blur Distortion
             var color = vec4<f32>(0.0);
             let samples = 5;
-            let blurStrength = uSpeed * 0.1;
+            let blurStrength = uniforms.uSpeed * 0.1;
 
             for (var i = 0; i < samples; i++) {
                 let offset = (f32(i) / f32(samples) - 0.5) * blurStrength;
@@ -45,12 +48,13 @@ export const numberScrollShader = {
             color = color / f32(samples);
 
             // 3. Colorization & Glow
-            let glow = color.rgb * uColor * 2.0;
+            let glow = color.rgb * uniforms.uColor * 2.0;
 
             // 4. Alpha Masking
             let alpha = color.a;
 
-            fragmentOutputs.color = vec4<f32>(glow, alpha);
+            output.color = vec4<f32>(glow, alpha);
+            return output;
         }
     `
 };
