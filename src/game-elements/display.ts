@@ -67,7 +67,7 @@ export class DisplaySystem {
     if (this.useWGSL) {
       console.log("Initializing WGSL Reels")
       const gap = 7
-      const numTexture = new Texture("/reel.png", this.scene)
+      const numTexture = new Texture("./reel.png", this.scene)
       numTexture.wrapU = Texture.CLAMP_ADDRESSMODE
       numTexture.wrapV = Texture.WRAP_ADDRESSMODE
 
