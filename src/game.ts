@@ -197,10 +197,45 @@ export class Game {
     this.ballManager = new BallManager(this.scene, world, rapier, this.gameObjects.getBindings())
     this.adventureMode = new AdventureMode(this.scene, world, rapier)
 
+    // [NEW] LINK ADVENTURE EVENTS TO DISPLAY SYSTEM
+    this.adventureMode.setEventListener((event, _data) => {
+      console.log(`Adventure Event: ${event}`)
+
+      switch (event) {
+        case 'START':
+          // Switch display to Mission Mode
+          this.display?.setDisplayState(DisplayState.ADVENTURE)
+          this.display?.setStoryText("SECTOR 7: THE DESCENT")
+          // Set mood lighting
+          this.effects?.setLightingMode('reach', 0.5)
+          break
+
+        case 'END':
+          // Return to Pinball Mode
+          this.display?.setDisplayState(DisplayState.IDLE)
+          this.effects?.setLightingMode('normal', 1.0)
+          this.effects?.playBeep(440) // Transition sound
+
+          // Bonus Points
+          this.score += 5000
+          this.updateHUD()
+          break
+      }
+    })
+
     // Build game objects
     this.gameObjects.createGround(this.mirrorTexture)
     this.gameObjects.createWalls()
     
+    // 2. Build the new "Decorations"
+    this.gameObjects.createCabinetDecoration()
+
+    // 3. Register materials with Effects System
+    const plasticMat = this.scene.getMaterialByName("plasticMat") as StandardMaterial
+    if (plasticMat && this.effects) {
+      this.effects.registerDecorativeMaterial(plasticMat)
+    }
+
     // Cabinet
     const cabinetMat = new StandardMaterial("cabinetMat", this.scene)
     cabinetMat.diffuseColor = Color3.FromHexString("#111111")
