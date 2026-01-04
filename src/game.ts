@@ -8,6 +8,7 @@ import {
   MirrorTexture,
   Plane,
   StandardMaterial,
+  Quaternion,
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import type { Engine } from '@babylonjs/core/Engines/engine'
@@ -104,6 +105,10 @@ export class Game {
 
     const camera = new ArcRotateCamera('camera', -Math.PI / 2, Math.PI / 2.2, 25, new Vector3(0, 2, 5), this.scene)
     camera.attachControl(canvas, true)
+    camera.keysUp = []
+    camera.keysDown = []
+    camera.keysLeft = []
+    camera.keysRight = []
     
     this.bloomPipeline = new DefaultRenderingPipeline('pachinbloom', true, this.scene, [camera])
     if (this.bloomPipeline) {
@@ -342,6 +347,25 @@ export class Game {
       if (!start) return
       this.processCollision(h1, h2)
     })
+
+    // Sync physics to visual meshes
+    const bindings = this.gameObjects?.getBindings() || []
+    for (const binding of bindings) {
+      const body = binding.rigidBody
+      const mesh = binding.mesh
+      if (!body || !mesh) continue
+
+      const pos = body.translation()
+      const rot = body.rotation()
+
+      mesh.position.set(pos.x, pos.y, pos.z)
+
+      if (!mesh.rotationQuaternion) {
+        mesh.rotationQuaternion = new Quaternion(rot.x, rot.y, rot.z, rot.w)
+      } else {
+        mesh.rotationQuaternion.set(rot.x, rot.y, rot.z, rot.w)
+      }
+    }
 
     this.gameObjects?.updateBumpers(dt)
     this.gameObjects?.updateTargets(dt)
