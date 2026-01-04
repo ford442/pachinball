@@ -4,7 +4,7 @@
 export const GameConfig = {
   // --- Existing Sections (Preserved & Adapted to Plain Objects) ---
   magSpin: {
-    feederPosition: { x: 9, y: 0.5, z: 12 },
+    feederPosition: { x: 0, y: 0.5, z: 12 },
     catchRadius: 1.5,
     spinDuration: 1.2,
     cooldown: 3.0,
