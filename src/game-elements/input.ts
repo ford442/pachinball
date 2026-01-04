@@ -47,6 +47,7 @@ export class InputHandler {
   }
 
   handleKeyDown = (event: KeyboardEvent): void => {
+    // console.log('Key down:', event.code, event.key, this.getState())
     if (!this.rapier) return
     
     if (event.code === 'KeyP') {
