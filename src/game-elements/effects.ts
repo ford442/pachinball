@@ -5,6 +5,8 @@ import {
   StandardMaterial,
   Color3,
   PointLight,
+  Texture,
+  DynamicTexture,
 } from '@babylonjs/core'
 import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import type { Mesh } from '@babylonjs/core'
@@ -195,5 +197,20 @@ export class EffectsSystem {
 
   getAudioContext(): AudioContext | null {
     return this.audioCtx
+  }
+
+  createParticleTexture(): Texture {
+    const size = 64
+    const dynamicTexture = new DynamicTexture("particleTex", size, this.scene, false)
+    const ctx = dynamicTexture.getContext() as CanvasRenderingContext2D
+
+    const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2)
+    grad.addColorStop(0, "rgba(255, 255, 255, 1)")
+    grad.addColorStop(1, "rgba(255, 255, 255, 0)")
+
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, size, size)
+    dynamicTexture.update()
+    return dynamicTexture
   }
 }

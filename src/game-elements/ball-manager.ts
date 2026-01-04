@@ -8,6 +8,7 @@ import {
 } from '@babylonjs/core'
 import type { Mesh, MirrorTexture } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import { GameConfig } from '../config'
 import type { PhysicsBinding, CaughtBall } from './types'
 
 export class BallManager {
@@ -39,15 +40,17 @@ export class BallManager {
     const ball = MeshBuilder.CreateSphere('ball', { diameter: 1 }, this.scene) as Mesh
     ball.material = ballMat
     
+    const spawn = GameConfig.ball.spawnMain
     const ballBody = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.dynamic()
-        .setTranslation(10.5, 0.5, -9)
+        .setTranslation(spawn.x, spawn.y, spawn.z)
         .setCcdEnabled(true)
     )
     
     this.world.createCollider(
-      this.rapier.ColliderDesc.ball(0.5)
-        .setRestitution(0.7)
+      this.rapier.ColliderDesc.ball(GameConfig.ball.radius)
+        .setRestitution(GameConfig.ball.restitution)
+        .setFriction(GameConfig.ball.friction)
         .setActiveEvents(
           this.rapier.ActiveEvents.COLLISION_EVENTS | 
           this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS
@@ -72,9 +75,11 @@ export class BallManager {
   }
 
   spawnExtraBalls(count: number): void {
+    const spawn = GameConfig.ball.spawnPachinko
     for (let i = 0; i < count; i++) {
-      const b = MeshBuilder.CreateSphere("xb", { diameter: 1 }, this.scene) as Mesh
-      b.position.set(10.5, 0.5, -9 - i)
+      const b = MeshBuilder.CreateSphere("xb", { diameter: GameConfig.ball.radius * 2 }, this.scene) as Mesh
+      // Offset slightly to avoid stacking
+      b.position.set(spawn.x + (Math.random() - 0.5), spawn.y + (i * 2), spawn.z)
       
       const mat = new StandardMaterial("xbMat", this.scene)
       mat.diffuseColor = Color3.Green()
@@ -86,8 +91,9 @@ export class BallManager {
       )
       
       this.world.createCollider(
-        this.rapier.ColliderDesc.ball(0.5)
-          .setRestitution(0.7)
+        this.rapier.ColliderDesc.ball(GameConfig.ball.radius)
+          .setRestitution(GameConfig.ball.restitution)
+          .setFriction(GameConfig.ball.friction)
           .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
         body
       )
@@ -109,13 +115,15 @@ export class BallManager {
       const b = MeshBuilder.CreateSphere("ball", { diameter: 1 }, this.scene) as Mesh
       b.material = mat
       
+      const spawn = GameConfig.ball.spawnMain
       const body = this.world.createRigidBody(
-        this.rapier.RigidBodyDesc.dynamic().setTranslation(10.5, 0.5, -9)
+        this.rapier.RigidBodyDesc.dynamic().setTranslation(spawn.x, spawn.y, spawn.z)
       )
       
       this.world.createCollider(
-        this.rapier.ColliderDesc.ball(0.5)
-          .setRestitution(0.7)
+        this.rapier.ColliderDesc.ball(GameConfig.ball.radius)
+          .setRestitution(GameConfig.ball.restitution)
+          .setFriction(GameConfig.ball.friction)
           .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
         body
       )
@@ -128,7 +136,8 @@ export class BallManager {
         this.mirrorTexture.renderList.push(b)
       }
     } else {
-      this.ballBody!.setTranslation(new this.rapier.Vector3(10.5, 0.5, -9), true)
+      const spawn = GameConfig.ball.spawnMain
+      this.ballBody!.setTranslation(new this.rapier.Vector3(spawn.x, spawn.y, spawn.z), true)
       this.ballBody!.setLinvel(new this.rapier.Vector3(0, 0, 0), true)
       this.ballBody!.setAngvel(new this.rapier.Vector3(0, 0, 0), true)
     }

@@ -4,21 +4,25 @@ import {
   Scene,
   StandardMaterial,
   Color3,
+  Color4,
   Quaternion,
   Texture,
   DynamicTexture,
   MirrorTexture,
   Scalar,
   Animation,
+  ParticleSystem,
 } from '@babylonjs/core'
 import type { Mesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { GameConfigType } from '../config'
 import type { PhysicsBinding, BumperVisual } from './types'
 
 export class GameObjects {
   private scene: Scene
   private world: RAPIER.World
   private rapier: typeof RAPIER
+  private config: GameConfigType
   private bindings: PhysicsBinding[] = []
   private bumperVisuals: BumperVisual[] = []
   private bumperBodies: RAPIER.RigidBody[] = []
@@ -31,57 +35,54 @@ export class GameObjects {
   private deathZoneBody: RAPIER.RigidBody | null = null
   private pinballMeshes: Mesh[] = []
 
-  constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER) {
+  private bumperParticles: ParticleSystem[] = []
+  private particleTexture: Texture
+
+  constructor(
+    scene: Scene,
+    world: RAPIER.World,
+    rapier: typeof RAPIER,
+    config: GameConfigType,
+    particleTexture: Texture
+  ) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
+    this.config = config
+    this.particleTexture = particleTexture
   }
 
-  /**
-   * Creates the physical cabinet details: Ashtray, Controls, and Decorative Sculptures.
-   */
   createCabinetDecoration(): void {
-    // 1. MATERIALS
     const chromeMat = new StandardMaterial("chromeMat", this.scene)
     chromeMat.diffuseColor = new Color3(0.1, 0.1, 0.1)
     chromeMat.specularColor = new Color3(1, 1, 1)
     chromeMat.roughness = 0.2
 
-    // Simulate "Plastic Moulding" (common in Pachinko)
     const plasticMat = new StandardMaterial("plasticMat", this.scene)
     plasticMat.diffuseColor = Color3.FromHexString("#FF0055")
     plasticMat.emissiveColor = Color3.FromHexString("#440011")
     plasticMat.alpha = 0.9
 
-    const glowingTubeMat = new StandardMaterial("tubeMat", this.scene)
-    glowingTubeMat.emissiveColor = Color3.FromHexString("#00FFFF")
-    glowingTubeMat.alpha = 0.6
-
-    // 2. THE ASHTRAY (Ball Return Tray)
-    // Located at the bottom front of the cabinet
     const trayWidth = 16
     const tray = MeshBuilder.CreateBox("ashtray", { width: trayWidth, height: 1.5, depth: 4 }, this.scene)
-    tray.position.set(0, -2, -14) // Positioned at player's waist level
+    tray.position.set(0, -2, -14)
     tray.material = chromeMat
 
-    // Fill it with "static" balls (visual only)
     for(let i=0; i<30; i++) {
-        const dummyBall = MeshBuilder.CreateSphere(`dummyBall_${i}`, { diameter: 0.8 }, this.scene)
-        const x = Scalar.RandomRange(-trayWidth/2 + 1, trayWidth/2 - 1)
-        const z = Scalar.RandomRange(-1.5, 1.5)
-        dummyBall.position.set(x, 0.5, z).addInPlace(tray.position)
-        dummyBall.material = chromeMat
+      const dummyBall = MeshBuilder.CreateSphere(`dummyBall_${i}`, { diameter: 0.8 }, this.scene)
+      const x = Scalar.RandomRange(-trayWidth/2 + 1, trayWidth/2 - 1)
+      const z = Scalar.RandomRange(-1.5, 1.5)
+      dummyBall.position.set(x, 0.5, z).addInPlace(tray.position)
+      dummyBall.material = chromeMat
     }
 
-    // 3. CONTROL PANEL (Buttons & Triggers)
     const panel = MeshBuilder.CreateBox("controlPanel", { width: 8, height: 2, depth: 3 }, this.scene)
-    panel.position.set(10, -1, -12) // Right side hand rest
+    panel.position.set(10, -1, -12)
     panel.rotation.x = 0.2
     const panelMat = new StandardMaterial("blackPlastic", this.scene)
     panelMat.diffuseColor = Color3.Black()
     panel.material = panelMat
 
-    // The "Blast" Button (Big red button)
     const btn = MeshBuilder.CreateCylinder("blastBtn", { diameter: 1.5, height: 0.5 }, this.scene)
     btn.position.set(0, 1, 0)
     btn.parent = panel
@@ -90,54 +91,46 @@ export class GameObjects {
     btnMat.emissiveColor = Color3.Red().scale(0.4)
     btn.material = btnMat
 
-    // 4. SIDE SCULPTURES (The "Wings")
-    // Decorative "Pachinko-style" flowy shapes on the sides of the screen
     const path = [
-        new Vector3(0, 0, 0),
-        new Vector3(1, 2, 0),
-        new Vector3(0, 4, 1),
-        new Vector3(-1, 6, 0)
+      new Vector3(0, 0, 0),
+      new Vector3(1, 2, 0),
+      new Vector3(0, 4, 1),
+      new Vector3(-1, 6, 0)
     ]
 
-    // Left Wing
     const leftWing = MeshBuilder.CreateTube("wingL", { path, radius: 0.5, sideOrientation: 2 }, this.scene)
     leftWing.position.set(-14, 2, 0)
     leftWing.material = plasticMat
 
-    // Right Wing
     const rightWing = MeshBuilder.CreateTube("wingR", { path, radius: 0.5, sideOrientation: 2 }, this.scene)
     rightWing.position.set(14, 2, 0)
-    rightWing.scaling.x = -1 // Mirror it
+    rightWing.scaling.x = -1
     rightWing.material = plasticMat
 
-    // 5. "FALLING BALLS" TUBE (Visual Loop)
-    // A clear tube on the side showing balls fed into the machine
     const tubeMat = new StandardMaterial("glass", this.scene)
     tubeMat.alpha = 0.3
     tubeMat.diffuseColor = Color3.White()
+    tubeMat.backFaceCulling = false
 
     const feedTube = MeshBuilder.CreateCylinder("feedTube", { height: 15, diameter: 1.2 }, this.scene)
     feedTube.position.set(-12, 5, 5)
     feedTube.material = tubeMat
 
-    // Create animated falling balls inside
-    // We will animate these in the game loop or just use an animation clip here
     const ballCount = 5
     for(let i=0; i<ballCount; i++) {
-        const dropBall = MeshBuilder.CreateSphere(`dropBall_${i}`, { diameter: 0.7 }, this.scene)
-        dropBall.position.set(0, 6 - (i*3), 0)
-        dropBall.parent = feedTube
-        dropBall.material = chromeMat
+      const dropBall = MeshBuilder.CreateSphere(`dropBall_${i}`, { diameter: 0.7 }, this.scene)
+      dropBall.position.set(0, 6 - (i*3), 0)
+      dropBall.parent = feedTube
+      dropBall.material = chromeMat
 
-        // Simple animation: loop from top to bottom
-        const frameRate = 30
-        const anim = new Animation(`fall_${i}`, "position.y", frameRate, Animation.ANIMATIONTYPE_FLOAT, Animation.ANIMATIONLOOPMODE_CYCLE)
-        const keyFrames = []
-        keyFrames.push({ frame: 0, value: 7 })
-        keyFrames.push({ frame: 60, value: -7 }) // Drop through tube
-        anim.setKeys(keyFrames)
-        dropBall.animations.push(anim)
-        this.scene.beginAnimation(dropBall, 0, 60, true, 1.0 + (i * 0.1)) // Offset speed slightly
+      const frameRate = 30
+      const anim = new Animation(`fall_${i}`, "position.y", frameRate, Animation.ANIMATIONTYPE_FLOAT, Animation.ANIMATIONLOOPMODE_CYCLE)
+      const keyFrames = []
+      keyFrames.push({ frame: 0, value: 7 })
+      keyFrames.push({ frame: 60, value: -7 })
+      anim.setKeys(keyFrames)
+      dropBall.animations.push(anim)
+      this.scene.beginAnimation(dropBall, 0, 60, true, 1.0 + (i * 0.1))
     }
   }
 
@@ -149,14 +142,14 @@ export class GameObjects {
     groundMat.specularColor = new Color3(0.5, 0.5, 0.5)
     groundMat.reflectionTexture = mirrorTexture
 
-    const ground = MeshBuilder.CreateGround('ground', { width: 24, height: 32 }, this.scene) as Mesh
+    const ground = MeshBuilder.CreateGround('ground', { width: this.config.table.width, height: this.config.table.height }, this.scene) as Mesh
     ground.position.set(0, -1, 5)
     ground.material = groundMat
-    
+
     const groundBody = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.fixed().setTranslation(0, -1, 5)
     )
-    this.world.createCollider(this.rapier.ColliderDesc.cuboid(12, 0.1, 16), groundBody)
+    this.world.createCollider(this.rapier.ColliderDesc.cuboid(this.config.table.width/2, 0.1, this.config.table.height/2), groundBody)
     this.bindings.push({ mesh: ground, rigidBody: groundBody })
   }
 
@@ -166,7 +159,7 @@ export class GameObjects {
     wallMat.emissiveColor = Color3.FromHexString("#00eeff")
     wallMat.alpha = 0.3
 
-    const wallH = 4
+    const wallH = this.config.table.wallHeight
     this.createWall(new Vector3(-10, wallH, 5), new Vector3(0.2, 5, 32), wallMat)
     this.createWall(new Vector3(11.5, wallH, 5), new Vector3(0.2, 5, 32), wallMat)
     this.createWall(new Vector3(0.75, wallH, 20.5), new Vector3(22.5, 5, 1.0), wallMat)
@@ -184,23 +177,41 @@ export class GameObjects {
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       this.deathZoneBody
     )
+
+    const deathZoneVis = MeshBuilder.CreateBox("deathZoneVis", { width: 40, height: 0.1, depth: 4 }, this.scene)
+    deathZoneVis.position.set(0, -2, -14)
+    const deathMat = new StandardMaterial("deathMat", this.scene)
+    deathMat.emissiveColor = Color3.Red()
+    deathMat.alpha = 0.2
+    deathZoneVis.material = deathMat
   }
 
   createFlippers(): { left: RAPIER.ImpulseJoint; right: RAPIER.ImpulseJoint } {
     const flipperMat = new StandardMaterial('flipperMat', this.scene)
     flipperMat.diffuseColor = Color3.Yellow()
     flipperMat.emissiveColor = Color3.FromHexString("#aa6600")
+    flipperMat.specularColor = Color3.White()
+    flipperMat.specularPower = 64
 
     const make = (pos: Vector3, right: boolean): RAPIER.RevoluteImpulseJoint => {
       const mesh = MeshBuilder.CreateBox("flipper", { width: 3.5, depth: 0.5, height: 0.5 }, this.scene) as Mesh
       mesh.material = flipperMat
       
+      const flipperEnd = MeshBuilder.CreateSphere("flipperEnd", { diameter: 0.6 }, this.scene)
+      flipperEnd.position.x = right ? 1.5 : -1.5
+      flipperEnd.parent = mesh
+      flipperEnd.material = flipperMat
+
       const body = this.world.createRigidBody(
-        this.rapier.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z)
+        this.rapier.RigidBodyDesc.dynamic()
+          .setTranslation(pos.x, pos.y, pos.z)
+          .setLinearDamping(0.5)
+          .setAngularDamping(2)
       )
       this.world.createCollider(this.rapier.ColliderDesc.cuboid(1.75, 0.25, 0.25), body)
       this.bindings.push({ mesh, rigidBody: body })
       this.pinballMeshes.push(mesh)
+      this.pinballMeshes.push(flipperEnd)
       
       const anchor = this.world.createRigidBody(
         this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
@@ -216,7 +227,12 @@ export class GameObjects {
       jParams.limits = right ? [-Math.PI / 4, Math.PI / 6] : [-Math.PI / 6, Math.PI / 4]
       
       const joint = this.world.createImpulseJoint(jParams, anchor, body, true) as RAPIER.RevoluteImpulseJoint
-      joint.configureMotorPosition(right ? -Math.PI / 4 : Math.PI / 4, 100000, 1000)
+
+      joint.configureMotorPosition(
+        right ? -Math.PI / 4 : Math.PI / 4,
+        this.config.table.flipperStrength,
+        1000
+      )
       
       return joint
     }
@@ -237,6 +253,7 @@ export class GameObjects {
       
       const mat = new StandardMaterial("bMat", this.scene)
       mat.emissiveColor = Color3.FromHexString(colorHex)
+      mat.diffuseColor = Color3.FromHexString(colorHex).scale(0.5)
       bumper.material = mat
 
       const holo = MeshBuilder.CreateCylinder("holo", { diameter: 0.8, height: 3, tessellation: 16 }, this.scene)
@@ -254,7 +271,7 @@ export class GameObjects {
       
       this.world.createCollider(
         this.rapier.ColliderDesc.ball(0.4)
-          .setRestitution(1.5)
+          .setRestitution(this.config.physics.bumperRestitution)
           .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
         body
       )
@@ -272,6 +289,33 @@ export class GameObjects {
       this.bumperVisuals.push({ mesh: bumper, body: body, hologram: holo, hitTime: 0, sweep: Math.random() })
       this.pinballMeshes.push(bumper)
       this.pinballMeshes.push(holo)
+
+      // Particle System
+      if (this.config.visuals.enableParticles) {
+        const ps = new ParticleSystem(`bumperParticles_${x}_${z}`, 50, this.scene)
+        ps.particleTexture = this.particleTexture
+        ps.emitter = bumper
+        ps.minEmitBox = new Vector3(-0.5, 0, -0.5)
+        ps.maxEmitBox = new Vector3(0.5, 0, 0.5)
+        ps.color1 = new Color4(1, 0.5, 0, 1)
+        ps.color2 = new Color4(1, 0, 1, 1)
+        ps.minSize = 0.1
+        ps.maxSize = 0.3
+        ps.minLifeTime = 0.1
+        ps.maxLifeTime = 0.3
+        ps.emitRate = 100
+        ps.blendMode = ParticleSystem.BLENDMODE_ONEONE
+        ps.gravity = new Vector3(0, -9.81, 0)
+        ps.direction1 = new Vector3(-1, 1, -1)
+        ps.direction2 = new Vector3(1, 1, 1)
+        ps.minAngularSpeed = 0
+        ps.maxAngularSpeed = Math.PI
+        ps.minEmitPower = 2
+        ps.maxEmitPower = 5
+        ps.updateSpeed = 0.01
+        ps.stop()
+        this.bumperParticles.push(ps)
+      }
     }
 
     make(0, 8, "#ff00aa")
@@ -291,26 +335,28 @@ export class GameObjects {
     const cols = 9
     const spacingX = width / cols
     const spacingZ = height / rows
-    
+
     for (let r = 0; r < rows; r++) {
       const offsetX = (r % 2 === 0) ? 0 : spacingX / 2
       for (let c = 0; c < cols; c++) {
         const x = center.x - (width / 2) + c * spacingX + offsetX
         const z = center.z - (height / 2) + r * spacingZ
         if (Math.abs(x) < 2 && Math.abs(z - center.z) < 2) continue
-        
+
         const pin = MeshBuilder.CreateCylinder(`pin_${r}_${c}`, { diameter: 0.3, height: 1.5 }, this.scene)
         pin.position.set(x, 0.5, z)
         pin.material = pinMat
-        
+
         const body = this.world.createRigidBody(
           this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.5, z)
         )
         this.world.createCollider(
-          this.rapier.ColliderDesc.cylinder(0.75, 0.15).setRestitution(0.5),
+          this.rapier.ColliderDesc.cylinder(0.75, 0.15)
+            .setRestitution(0.5)
+            .setFriction(0.1),
           body
         )
-        
+
         this.bindings.push({ mesh: pin, rigidBody: body })
         this.pinballMeshes.push(pin)
       }
@@ -318,7 +364,7 @@ export class GameObjects {
 
     const catcher = MeshBuilder.CreateTorus("catcher", { diameter: 2.5, thickness: 0.2 }, this.scene)
     catcher.position.set(center.x, 0.2, center.z)
-    
+
     const catcherMat = new StandardMaterial("catcherMat", this.scene)
     catcherMat.emissiveColor = Color3.FromHexString("#ff00aa")
     catcherMat.alpha = 0.8
@@ -344,34 +390,43 @@ export class GameObjects {
   createSlingshots(): void {
     const slingMat = new StandardMaterial('slingMat', this.scene)
     slingMat.emissiveColor = Color3.White()
-    
+    slingMat.alpha = 0.7
+
     this.createSlingshot(new Vector3(-6.5, 0, -3), -Math.PI / 6, slingMat)
     this.createSlingshot(new Vector3(6.5, 0, -3), Math.PI / 6, slingMat)
   }
 
   updateBumpers(dt: number): void {
     const time = performance.now() * 0.001
-    
-    this.bumperVisuals.forEach(vis => {
+
+    this.bumperVisuals.forEach((vis, index) => {
       if (vis.hologram) {
         vis.hologram.rotation.y += dt * 1.5
         vis.hologram.position.y = 2.0 + Math.sin(time * 2 + vis.sweep * 10) * 0.2
       }
-      
+
       if (vis.hitTime > 0) {
         vis.hitTime -= dt
         const s = 1 + (vis.hitTime * 2)
         vis.mesh.scaling.set(s, s, s)
-        
+
         if (vis.hologram) {
           vis.hologram.scaling.set(1, 1 + vis.hitTime, 1)
           vis.hologram.material!.alpha = 0.8
+        }
+
+        if (this.config.visuals.enableParticles && this.bumperParticles[index]) {
+          this.bumperParticles[index].start()
         }
       } else {
         vis.mesh.scaling.set(1, 1, 1)
         if (vis.hologram) {
           vis.hologram.scaling.set(1, 1, 1)
           vis.hologram.material!.alpha = 0.3
+        }
+
+        if (this.bumperParticles[index] && this.bumperParticles[index].isStarted()) {
+          this.bumperParticles[index].stop()
         }
       }
     })
@@ -385,6 +440,9 @@ export class GameObjects {
           this.targetActive[i] = true
           this.targetMeshes[i].isVisible = true
         }
+      } else {
+        const pulse = Math.sin(performance.now() * 0.005) * 0.1 + 1
+        this.targetMeshes[i].scaling.set(pulse, pulse, pulse)
       }
     }
   }
@@ -401,7 +459,7 @@ export class GameObjects {
     if (idx !== -1 && this.targetActive[idx]) {
       this.targetActive[idx] = false
       this.targetMeshes[idx].isVisible = false
-      this.targetRespawnTimer[idx] = 5.0
+      this.targetRespawnTimer[idx] = this.config.gameplay.targetRespawnTime
       return true
     }
     return false
@@ -410,7 +468,10 @@ export class GameObjects {
   resetTargets(): void {
     this.targetActive.fill(true)
     this.targetRespawnTimer.fill(0)
-    this.targetMeshes.forEach(m => m.isVisible = true)
+    this.targetMeshes.forEach(m => {
+      m.isVisible = true
+      m.scaling.set(1, 1, 1)
+    })
   }
 
   private createWall(pos: Vector3, size: Vector3, mat: StandardMaterial): void {
@@ -422,7 +483,8 @@ export class GameObjects {
       this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
     )
     this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(size.x / 2, size.y, size.z / 2),
+      this.rapier.ColliderDesc.cuboid(size.x / 2, size.y, size.z / 2)
+        .setFriction(0.3),
       b
     )
     
@@ -460,14 +522,14 @@ export class GameObjects {
     dynamicTexture.hasAlpha = true
     const ctx = dynamicTexture.getContext()
     const size = 512
-    
+
     ctx.fillStyle = '#050510'
     ctx.fillRect(0, 0, size, size)
     ctx.lineWidth = 3
     ctx.strokeStyle = '#aa00ff'
     ctx.shadowBlur = 10
     ctx.shadowColor = '#d000ff'
-    
+
     const step = size / 8
     for (let i = 0; i <= size; i += step) {
       ctx.beginPath()
@@ -479,7 +541,7 @@ export class GameObjects {
       ctx.lineTo(size, i)
       ctx.stroke()
     }
-    
+
     ctx.strokeRect(0, 0, size, size)
     dynamicTexture.update()
     return dynamicTexture
@@ -526,5 +588,16 @@ export class GameObjects {
       this.bindings[idx].mesh.dispose()
       this.bindings.splice(idx, 1)
     }
+  }
+
+  dispose(): void {
+    this.bumperParticles.forEach(ps => ps.dispose())
+    this.pinballMeshes.forEach(m => m.dispose())
+    this.bindings = []
+    this.bumperVisuals = []
+    this.bumperBodies = []
+    this.targetBodies = []
+    this.targetMeshes = []
+    this.pinballMeshes = []
   }
 }
