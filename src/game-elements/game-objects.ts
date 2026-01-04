@@ -17,6 +17,7 @@ import type { Mesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { GameConfigType } from '../config'
 import type { PhysicsBinding, BumperVisual } from './types'
+import { GameConfig } from '../config'
 
 export class GameObjects {
   private scene: Scene
@@ -142,14 +143,14 @@ export class GameObjects {
     groundMat.specularColor = new Color3(0.5, 0.5, 0.5)
     groundMat.reflectionTexture = mirrorTexture
 
-    const ground = MeshBuilder.CreateGround('ground', { width: this.config.table.width, height: this.config.table.height }, this.scene) as Mesh
+    const ground = MeshBuilder.CreateGround('ground', { width: GameConfig.table.width, height: GameConfig.table.height }, this.scene) as Mesh
     ground.position.set(0, -1, 5)
     ground.material = groundMat
 
     const groundBody = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.fixed().setTranslation(0, -1, 5)
     )
-    this.world.createCollider(this.rapier.ColliderDesc.cuboid(this.config.table.width/2, 0.1, this.config.table.height/2), groundBody)
+    this.world.createCollider(this.rapier.ColliderDesc.cuboid(GameConfig.table.width/2, 0.1, GameConfig.table.height/2), groundBody)
     this.bindings.push({ mesh: ground, rigidBody: groundBody })
   }
 
@@ -159,12 +160,26 @@ export class GameObjects {
     wallMat.emissiveColor = Color3.FromHexString("#00eeff")
     wallMat.alpha = 0.3
 
-    const wallH = this.config.table.wallHeight
+    const wallH = GameConfig.table.wallHeight
+
+    // 1. Outer Walls
     this.createWall(new Vector3(-10, wallH, 5), new Vector3(0.2, 5, 32), wallMat)
     this.createWall(new Vector3(11.5, wallH, 5), new Vector3(0.2, 5, 32), wallMat)
-    this.createWall(new Vector3(0.75, wallH, 20.5), new Vector3(22.5, 5, 1.0), wallMat)
-    this.createWall(new Vector3(9.5, wallH, 2), new Vector3(0.2, 5, 26), wallMat)
-    this.createWall(new Vector3(10.5, wallH, -10.5), new Vector3(1.9, 5, 1.0), wallMat)
+    this.createWall(new Vector3(0.75, wallH, 20.5), new Vector3(22.5, 5, 1.0), wallMat) // Top
+
+    // 2. Drain / Plunger Base Walls
+    // this.createWall(new Vector3(9.5, wallH, 2), new Vector3(0.2, 5, 26), wallMat) // REMOVED: Replaced by Shortened Lane Guide below
+    this.createWall(new Vector3(10.5, wallH, -10.5), new Vector3(1.9, 5, 1.0), wallMat) // Plunger Base
+
+    // 3. THE FIX: Shortened Plunger Lane Guide
+    // We use the new Config values to ensure the ball is released early
+    this.createWall(
+        new Vector3(9.5, wallH, GameConfig.table.laneGuideZ),
+        new Vector3(0.2, 5, GameConfig.table.laneGuideLength),
+        wallMat
+    )
+
+    // 4. Create Corner Wedges
     this.createCornerWedges(wallH)
   }
 
@@ -176,13 +191,13 @@ export class GameObjects {
    * Top Wall Z: 20.5
    */
   private createCornerWedges(height: number): void {
-    const wedgeSize = 6
-    const thickness = 4
+    const wedgeSize = GameConfig.table.wedgeSize
+    const thickness = GameConfig.table.wedgeThickness
 
     const wedgeMat = new StandardMaterial("wedgeMat", this.scene)
     wedgeMat.diffuseColor = new Color3(0.2, 0.2, 0.2)
 
-    // Pythagorean theorem to get the width of the diagonal face
+    // Calculate diagonal width
     const diagWidth = Math.sqrt(2 * (wedgeSize * wedgeSize))
 
     const createWedge = (name: string, x: number, z: number, rotationY: number) => {
@@ -192,7 +207,6 @@ export class GameObjects {
         depth: thickness
       }, this.scene)
 
-      // y=1 is roughly half the wall height relative to the board
       wedge.position.set(x, 1, z)
       wedge.rotation.y = rotationY
       wedge.material = wedgeMat
@@ -213,13 +227,13 @@ export class GameObjects {
       this.pinballMeshes.push(wedge)
     }
 
-    // Top Left Corner
+    // Top Left Corner Calculation
     // Corner is at (-10, 20.5). We move In (Right) by half wedgeSize and Down (Back) by half wedgeSize
     const tlX = -10 + (wedgeSize / 2)
     const tlZ = 20.5 - (wedgeSize / 2)
     createWedge("wedgeTL", tlX, tlZ, -Math.PI / 4) // 45 degrees
 
-    // Top Right Corner
+    // Top Right Corner Calculation
     // Corner is at (11.5, 20.5). We move In (Left) by half wedgeSize and Down (Back) by half wedgeSize
     const trX = 11.5 - (wedgeSize / 2)
     const trZ = 20.5 - (wedgeSize / 2)
@@ -289,8 +303,8 @@ export class GameObjects {
 
       joint.configureMotorPosition(
         right ? -Math.PI / 4 : Math.PI / 4,
-        this.config.table.flipperStrength,
-        1000
+        GameConfig.table.flipperStrength, // Use config
+        GameConfig.flipper.damping // Use config if available, but keeping original literal for now as it wasn't specified in new config for damping inside createFlippers logic fully
       )
       
       return joint

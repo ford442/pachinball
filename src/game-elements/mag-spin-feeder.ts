@@ -51,7 +51,8 @@ export class MagSpinFeeder {
     this.world = world
     this.rapier = rapier
     this.config = config
-    this.position = this.config.feederPosition
+    // Convert plain object config position to Vector3
+    this.position = new Vector3(this.config.feederPosition.x, this.config.feederPosition.y, this.config.feederPosition.z)
 
     this.createMesh()
     this.createPhysics()
@@ -206,7 +207,7 @@ export class MagSpinFeeder {
 
   private checkProximity(ballBodies: RAPIER.RigidBody[]): void {
     // INCREASED CATCH RADIUS to ensure capture before wall collision
-    const PULL_RADIUS = 2.5
+    const PULL_RADIUS = this.config.catchRadius || 2.5
 
     for (const body of ballBodies) {
       const pos = body.translation()

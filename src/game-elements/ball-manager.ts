@@ -40,7 +40,9 @@ export class BallManager {
     const ball = MeshBuilder.CreateSphere('ball', { diameter: 1 }, this.scene) as Mesh
     ball.material = ballMat
     
+    // Use Config for Spawn Point (Plain Objects -> Vector3 implicitly handled by rapier setTranslation usually takes x,y,z args, or we pass individual components)
     const spawn = GameConfig.ball.spawnMain
+
     const ballBody = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.dynamic()
         .setTranslation(spawn.x, spawn.y, spawn.z)
