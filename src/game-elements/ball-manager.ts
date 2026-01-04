@@ -48,6 +48,7 @@ export class BallManager {
     this.world.createCollider(
       this.rapier.ColliderDesc.ball(0.5)
         .setRestitution(0.7)
+        .setFriction(0.1)
         .setActiveEvents(
           this.rapier.ActiveEvents.COLLISION_EVENTS | 
           this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS
@@ -88,6 +89,7 @@ export class BallManager {
       this.world.createCollider(
         this.rapier.ColliderDesc.ball(0.5)
           .setRestitution(0.7)
+          .setFriction(0.1)
           .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
         body
       )
@@ -116,6 +118,7 @@ export class BallManager {
       this.world.createCollider(
         this.rapier.ColliderDesc.ball(0.5)
           .setRestitution(0.7)
+          .setFriction(0.1)
           .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
         body
       )
