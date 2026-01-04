@@ -26,6 +26,8 @@ import {
   GameObjects,
   BallManager,
   AdventureMode,
+  MagSpinFeeder,
+  MagSpinState,
 } from './game-elements'
 import { GameConfig } from './config'
 
@@ -40,6 +42,7 @@ export class Game {
   private gameObjects: GameObjects | null = null
   private ballManager: BallManager | null = null
   private adventureMode: AdventureMode | null = null
+  private magSpinFeeder: MagSpinFeeder | null = null
   private inputHandler: InputHandler | null = null
   
   // Rendering
@@ -199,6 +202,21 @@ export class Game {
     this.gameObjects = new GameObjects(this.scene, world, rapier, GameConfig, particleTexture)
     this.ballManager = new BallManager(this.scene, world, rapier, this.gameObjects.getBindings())
     this.adventureMode = new AdventureMode(this.scene, world, rapier)
+
+    this.magSpinFeeder = new MagSpinFeeder(this.scene, world, rapier, GameConfig.magSpin)
+    this.magSpinFeeder.onStateChange = (state) => {
+      switch (state) {
+        case MagSpinState.CATCH:
+          this.effects?.playBeep(300)
+          break
+        case MagSpinState.SPIN:
+          this.effects?.playBeep(600)
+          break
+        case MagSpinState.RELEASE:
+          this.effects?.playBeep(1200)
+          break
+      }
+    }
 
     // [NEW] LINK ADVENTURE EVENTS TO DISPLAY SYSTEM
     this.adventureMode.setEventListener((event, _data) => {
@@ -408,6 +426,11 @@ export class Game {
     this.gameObjects?.updateBumpers(dt)
     this.gameObjects?.updateTargets(dt)
     
+    if (this.magSpinFeeder) {
+      const ballBodies = this.ballManager?.getBallBodies() || []
+      this.magSpinFeeder.update(dt, ballBodies)
+    }
+
     this.ballManager?.updateCaughtBalls(dt, () => {
       this.effects?.playBeep(440)
     })

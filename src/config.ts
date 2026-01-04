@@ -32,6 +32,14 @@ export const GameConfig = {
     height: 36,
     wallHeight: 4,
     flipperStrength: 100000
+  },
+  magSpin: {
+    feederPosition: new Vector3(9, 0.5, 12),
+    catchRadius: 1.5,
+    spinDuration: 1.2,
+    cooldown: 3.0,
+    releaseForce: 25.0,
+    releaseAngleVariance: 0.25
   }
 }
 
