@@ -377,7 +377,8 @@ export class Game {
     
     const pos = ballBody.translation()
     if (pos.x > 8 && pos.z < -4) {
-      ballBody.applyImpulse(new rapier.Vector3(0, 0, 15), true)
+      // Use config for impulse
+      ballBody.applyImpulse(new rapier.Vector3(0, 0, GameConfig.plunger.impulse), true)
     }
   }
 

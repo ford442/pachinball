@@ -1,12 +1,27 @@
-import { Vector3 } from '@babylonjs/core'
+// src/config.ts
 
+// Pure config - no Babylon.js dependencies
 export const GameConfig = {
-  physics: {
+  // --- Existing Sections (Preserved & Adapted to Plain Objects) ---
+  magSpin: {
+    feederPosition: { x: 9, y: 0.5, z: 12 },
+    catchRadius: 1.5,
+    spinDuration: 1.2,
+    cooldown: 3.0,
+    releaseForce: 25.0,
+    releaseAngleVariance: 0.25
+  },
+  visuals: {
+    enableParticles: true,
+    enableTrails: true,
+    particleIntensity: 1.0
+  },
+  physics: { // Keeping for backward compatibility if needed by things not covered
     ballRestitution: 0.7,
     ballFriction: 0.1,
     bumperRestitution: 1.5,
     flipperPower: 100000,
-    gravity: new Vector3(0, -9.81, -5.0)
+    gravity: { x: 0, y: -9.81, z: -5.0 }
   },
   gameplay: {
     maxBalls: 3,
@@ -15,31 +30,43 @@ export const GameConfig = {
     targetPoints: 500,
     slingshotPoints: 50
   },
-  visuals: {
-    enableParticles: true,
-    enableTrails: true,
-    particleIntensity: 1.0
-  },
-  ball: {
-    spawnMain: new Vector3(10.5, 0.5, -9),
-    spawnPachinko: new Vector3(0, 5, -10),
-    radius: 0.5,
-    friction: 0.1,
-    restitution: 0.7
-  },
+
+  // --- NEW / UPDATED SECTIONS ---
   table: {
     width: 28,
     height: 36,
     wallHeight: 4,
-    flipperStrength: 100000
+    wallThickness: 2,
+    // The inner wall that guides the ball from the plunger
+    // Shortened to 20 to ensure ball exits before hitting the top corner wedge
+    laneGuideLength: 20,
+    laneGuideZ: -1,
+
+    // Wedge Parameters
+    wedgeSize: 6,
+    wedgeThickness: 4,
+
+    flipperStrength: 100000 // Copied from original table config to keep it consistent
   },
-  magSpin: {
-    feederPosition: new Vector3(9, 0.5, 12),
-    catchRadius: 1.5,
-    spinDuration: 1.2,
-    cooldown: 3.0,
-    releaseForce: 25.0,
-    releaseAngleVariance: 0.25
+
+  ball: {
+    radius: 0.5,
+    mass: 1.0,
+    friction: 0.1,    // Low friction is critical for the "steel ball" feel
+    restitution: 0.7, // Bounciness
+    // Plain Objects for Spawn Points
+    spawnMain: { x: 10.5, y: 0.5, z: -9 },
+    spawnPachinko: { x: 0, y: 5, z: -10 }, // Ported from original
+    spawnDrop: { x: 0, y: 5, z: 8 },
+  },
+
+  plunger: {
+    impulse: 22,
+  },
+
+  flipper: {
+    strength: 10000,
+    damping: 1000,
   }
 }
 

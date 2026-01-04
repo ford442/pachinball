@@ -12,6 +12,21 @@ import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/Ren
 import type { Mesh } from '@babylonjs/core'
 import type { CabinetLight, ShardParticle } from './types'
 
+export function createSharedParticleTexture(scene: Scene): DynamicTexture {
+    const size = 64
+    const tex = new DynamicTexture("sharedParticleTex", size, scene, false)
+    const ctx = tex.getContext() as CanvasRenderingContext2D
+
+    const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2)
+    grad.addColorStop(0, "rgba(255, 255, 255, 1)")
+    grad.addColorStop(1, "rgba(255, 255, 255, 0)")
+
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, size, size)
+    tex.update()
+    return tex
+}
+
 export class EffectsSystem {
   private scene: Scene
   private audioCtx: AudioContext | null = null
@@ -200,17 +215,6 @@ export class EffectsSystem {
   }
 
   createParticleTexture(): Texture {
-    const size = 64
-    const dynamicTexture = new DynamicTexture("particleTex", size, this.scene, false)
-    const ctx = dynamicTexture.getContext() as CanvasRenderingContext2D
-
-    const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2)
-    grad.addColorStop(0, "rgba(255, 255, 255, 1)")
-    grad.addColorStop(1, "rgba(255, 255, 255, 0)")
-
-    ctx.fillStyle = grad
-    ctx.fillRect(0, 0, size, size)
-    dynamicTexture.update()
-    return dynamicTexture
+    return createSharedParticleTexture(this.scene)
   }
 }
