@@ -17,6 +17,7 @@ export class EffectsSystem {
   private bloomEnergy = 0
   private shards: ShardParticle[] = []
   private cabinetLights: CabinetLight[] = []
+  private decorativeLights: StandardMaterial[] = []
   private lightingMode: 'normal' | 'hit' | 'fever' | 'reach' = 'normal'
   private lightingTimer = 0
 
@@ -29,6 +30,14 @@ export class EffectsSystem {
     } catch {
       this.audioCtx = null
     }
+  }
+
+  /**
+   * Call this to register the "Plastic" materials created in GameObjects
+   * so they can react to Fever/Reach modes.
+   */
+  registerDecorativeMaterial(mat: StandardMaterial): void {
+      this.decorativeLights.push(mat)
   }
 
   createCabinetLighting(): void {
@@ -143,6 +152,24 @@ export class EffectsSystem {
       light.material.emissiveColor = Color3.Lerp(light.material.emissiveColor, targetColor, dt * 10)
       light.pointLight.diffuse = light.material.emissiveColor
       light.pointLight.intensity = intensity
+    })
+
+    // Update Plastics
+    this.decorativeLights.forEach(mat => {
+      if (this.lightingMode === 'fever') {
+        // Rainbow pulse
+        const r = Math.sin(time * 5) * 0.5 + 0.5
+        const g = Math.sin(time * 5 + 2) * 0.5 + 0.5
+        const b = Math.sin(time * 5 + 4) * 0.5 + 0.5
+        mat.emissiveColor.set(r, g, b)
+      } else if (this.lightingMode === 'reach') {
+        // Red Alert pulse
+        const val = (Math.sin(time * 10) * 0.5 + 0.5)
+        mat.emissiveColor.set(val, 0, 0)
+      } else {
+        // Idle Blue/Pink glow
+        mat.emissiveColor.set(0.2, 0.0, 0.1)
+      }
     })
   }
 

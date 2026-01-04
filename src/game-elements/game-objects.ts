@@ -8,6 +8,8 @@ import {
   Texture,
   DynamicTexture,
   MirrorTexture,
+  Scalar,
+  Animation,
 } from '@babylonjs/core'
 import type { Mesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
@@ -33,6 +35,110 @@ export class GameObjects {
     this.scene = scene
     this.world = world
     this.rapier = rapier
+  }
+
+  /**
+   * Creates the physical cabinet details: Ashtray, Controls, and Decorative Sculptures.
+   */
+  createCabinetDecoration(): void {
+    // 1. MATERIALS
+    const chromeMat = new StandardMaterial("chromeMat", this.scene)
+    chromeMat.diffuseColor = new Color3(0.1, 0.1, 0.1)
+    chromeMat.specularColor = new Color3(1, 1, 1)
+    chromeMat.roughness = 0.2
+
+    // Simulate "Plastic Moulding" (common in Pachinko)
+    const plasticMat = new StandardMaterial("plasticMat", this.scene)
+    plasticMat.diffuseColor = Color3.FromHexString("#FF0055")
+    plasticMat.emissiveColor = Color3.FromHexString("#440011")
+    plasticMat.alpha = 0.9
+
+    const glowingTubeMat = new StandardMaterial("tubeMat", this.scene)
+    glowingTubeMat.emissiveColor = Color3.FromHexString("#00FFFF")
+    glowingTubeMat.alpha = 0.6
+
+    // 2. THE ASHTRAY (Ball Return Tray)
+    // Located at the bottom front of the cabinet
+    const trayWidth = 16
+    const tray = MeshBuilder.CreateBox("ashtray", { width: trayWidth, height: 1.5, depth: 4 }, this.scene)
+    tray.position.set(0, -2, -14) // Positioned at player's waist level
+    tray.material = chromeMat
+
+    // Fill it with "static" balls (visual only)
+    for(let i=0; i<30; i++) {
+        const dummyBall = MeshBuilder.CreateSphere(`dummyBall_${i}`, { diameter: 0.8 }, this.scene)
+        const x = Scalar.RandomRange(-trayWidth/2 + 1, trayWidth/2 - 1)
+        const z = Scalar.RandomRange(-1.5, 1.5)
+        dummyBall.position.set(x, 0.5, z).addInPlace(tray.position)
+        dummyBall.material = chromeMat
+    }
+
+    // 3. CONTROL PANEL (Buttons & Triggers)
+    const panel = MeshBuilder.CreateBox("controlPanel", { width: 8, height: 2, depth: 3 }, this.scene)
+    panel.position.set(10, -1, -12) // Right side hand rest
+    panel.rotation.x = 0.2
+    const panelMat = new StandardMaterial("blackPlastic", this.scene)
+    panelMat.diffuseColor = Color3.Black()
+    panel.material = panelMat
+
+    // The "Blast" Button (Big red button)
+    const btn = MeshBuilder.CreateCylinder("blastBtn", { diameter: 1.5, height: 0.5 }, this.scene)
+    btn.position.set(0, 1, 0)
+    btn.parent = panel
+    const btnMat = new StandardMaterial("btnMat", this.scene)
+    btnMat.diffuseColor = Color3.Red()
+    btnMat.emissiveColor = Color3.Red().scale(0.4)
+    btn.material = btnMat
+
+    // 4. SIDE SCULPTURES (The "Wings")
+    // Decorative "Pachinko-style" flowy shapes on the sides of the screen
+    const path = [
+        new Vector3(0, 0, 0),
+        new Vector3(1, 2, 0),
+        new Vector3(0, 4, 1),
+        new Vector3(-1, 6, 0)
+    ]
+
+    // Left Wing
+    const leftWing = MeshBuilder.CreateTube("wingL", { path, radius: 0.5, sideOrientation: 2 }, this.scene)
+    leftWing.position.set(-14, 2, 0)
+    leftWing.material = plasticMat
+
+    // Right Wing
+    const rightWing = MeshBuilder.CreateTube("wingR", { path, radius: 0.5, sideOrientation: 2 }, this.scene)
+    rightWing.position.set(14, 2, 0)
+    rightWing.scaling.x = -1 // Mirror it
+    rightWing.material = plasticMat
+
+    // 5. "FALLING BALLS" TUBE (Visual Loop)
+    // A clear tube on the side showing balls fed into the machine
+    const tubeMat = new StandardMaterial("glass", this.scene)
+    tubeMat.alpha = 0.3
+    tubeMat.diffuseColor = Color3.White()
+
+    const feedTube = MeshBuilder.CreateCylinder("feedTube", { height: 15, diameter: 1.2 }, this.scene)
+    feedTube.position.set(-12, 5, 5)
+    feedTube.material = tubeMat
+
+    // Create animated falling balls inside
+    // We will animate these in the game loop or just use an animation clip here
+    const ballCount = 5
+    for(let i=0; i<ballCount; i++) {
+        const dropBall = MeshBuilder.CreateSphere(`dropBall_${i}`, { diameter: 0.7 }, this.scene)
+        dropBall.position.set(0, 6 - (i*3), 0)
+        dropBall.parent = feedTube
+        dropBall.material = chromeMat
+
+        // Simple animation: loop from top to bottom
+        const frameRate = 30
+        const anim = new Animation(`fall_${i}`, "position.y", frameRate, Animation.ANIMATIONTYPE_FLOAT, Animation.ANIMATIONLOOPMODE_CYCLE)
+        const keyFrames = []
+        keyFrames.push({ frame: 0, value: 7 })
+        keyFrames.push({ frame: 60, value: -7 }) // Drop through tube
+        anim.setKeys(keyFrames)
+        dropBall.animations.push(anim)
+        this.scene.beginAnimation(dropBall, 0, 60, true, 1.0 + (i * 0.1)) // Offset speed slightly
+    }
   }
 
   createGround(mirrorTexture: MirrorTexture): void {

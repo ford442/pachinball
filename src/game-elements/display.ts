@@ -24,6 +24,7 @@ export class DisplaySystem {
   private useWGSL = false
   private displayState: DisplayState = DisplayState.IDLE
   private displayTransitionTimer = 0
+  private currentStoryText: string = "LINK ESTABLISHED" // Story text buffer
   
   // Layers
   private backboxLayers: {
@@ -174,6 +175,12 @@ export class DisplaySystem {
     this.backboxLayers.overlay = overlay
   }
 
+  // Method to update story text
+  setStoryText(text: string): void {
+    this.currentStoryText = text
+    this.updateOverlay() // Force immediate redraw
+  }
+
   setDisplayState(newState: DisplayState): void {
     this.displayState = newState
     this.displayTransitionTimer = 0
@@ -186,7 +193,11 @@ export class DisplaySystem {
       this.slotMode = 2
       this.slotReels = [0.1, 0.4, 0.7]
       this.slotSpeeds = [2.0, 3.0, 4.0]
-    } else if (newState === DisplayState.IDLE) {
+    } else if (newState === DisplayState.ADVENTURE) {
+      // Stop slots immediately for story mode
+      this.slotMode = 0
+      this.slotSpeeds = [0, 0, 0]
+    } else {
       this.slotMode = 0
       this.slotSpeeds = [0, 0, 0]
     }
@@ -208,20 +219,26 @@ export class DisplaySystem {
       if (this.displayState === DisplayState.REACH) {
         speed = 5.0
         color = new Color3(1.0, 0.0, 0.2) // Red
-      }
-      if (this.displayState === DisplayState.FEVER) {
+      } else if (this.displayState === DisplayState.FEVER) {
         speed = 10.0
         color = new Color3(1.0, 0.8, 0.0) // Gold
+      } else if (this.displayState === DisplayState.ADVENTURE) {
+        // Dark Green Matrix look
+        speed = 1.0
+        color = new Color3(0.0, 0.3, 0.0)
       }
 
       this.shaderMaterial.setFloat("speed", speed)
       this.shaderMaterial.setColor3("colorTint", color)
     }
     
-    if (this.useWGSL) {
-      this.updateWGSLReels(dt)
-    } else {
-      this.drawSlots(dt)
+    // Skip slot updates in Adventure Mode
+    if (this.displayState !== DisplayState.ADVENTURE) {
+      if (this.useWGSL) {
+        this.updateWGSLReels(dt)
+      } else {
+        this.drawSlots(dt)
+      }
     }
     
     this.updateOverlay()
@@ -351,7 +368,34 @@ export class DisplaySystem {
 
     const time = performance.now() * 0.001
 
-    if (this.displayState === DisplayState.IDLE) {
+    if (this.displayState === DisplayState.ADVENTURE) {
+      // Adventure Mode HUD
+
+      // 1. Live Feed Box
+      ctx.strokeStyle = "rgba(0, 255, 0, 0.5)"
+      ctx.lineWidth = 4
+      ctx.strokeRect(40, 40, w-80, h-160)
+
+      // 2. "REC" Indicator
+      if (Math.floor(time * 2) % 2 === 0) {
+        ctx.fillStyle = "red"
+        ctx.beginPath(); ctx.arc(60, 60, 8, 0, Math.PI*2); ctx.fill()
+        ctx.fillStyle = "white"; ctx.font = "20px Orbitron"; ctx.fillText("LIVE", 80, 66)
+      }
+
+      // 3. Story Text (Mission Objectives)
+      ctx.fillStyle = "#ccffcc"
+      ctx.font = "28px Orbitron"
+      ctx.textAlign = "center"
+      ctx.shadowBlur = 10; ctx.shadowColor = "#00ff00"
+      ctx.fillText(this.currentStoryText, w/2, h - 60)
+
+      // 4. Data Stream Deco
+      ctx.fillStyle = "rgba(0, 255, 0, 0.2)"
+      ctx.fillRect(40, h-40, (Math.sin(time)*0.5+0.5) * (w-80), 5)
+
+      ctx.shadowBlur = 0 // Reset
+    } else if (this.displayState === DisplayState.IDLE) {
       // Random "Walk-by" shapes
       if (Math.floor(time) % 5 === 0) {
         ctx.fillStyle = 'rgba(0, 255, 255, 0.1)'
