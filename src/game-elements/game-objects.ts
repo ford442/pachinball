@@ -172,6 +172,65 @@ export class GameObjects {
     this.createWall(new Vector3(0.75, wallH, 20.5), new Vector3(22.5, 5, 1.0), wallMat)
     this.createWall(new Vector3(9.5, wallH, 2), new Vector3(0.2, 5, 26), wallMat)
     this.createWall(new Vector3(10.5, wallH, -10.5), new Vector3(1.9, 5, 1.0), wallMat)
+    this.createCornerWedges(wallH)
+  }
+
+  /**
+   * Creates angled deflectors in the top corners to prevent balls from sticking.
+   * Calculated based on actual wall positions:
+   * Left Wall X: -10
+   * Right Wall X: 11.5
+   * Top Wall Z: 20.5
+   */
+  private createCornerWedges(height: number): void {
+    const wedgeSize = 6
+    const thickness = 4
+
+    const wedgeMat = new StandardMaterial("wedgeMat", this.scene)
+    wedgeMat.diffuseColor = new Color3(0.2, 0.2, 0.2)
+
+    // Pythagorean theorem to get the width of the diagonal face
+    const diagWidth = Math.sqrt(2 * (wedgeSize * wedgeSize))
+
+    const createWedge = (name: string, x: number, z: number, rotationY: number) => {
+      const wedge = MeshBuilder.CreateBox(name, {
+        width: diagWidth,
+        height: height,
+        depth: thickness
+      }, this.scene)
+
+      // y=1 is roughly half the wall height relative to the board
+      wedge.position.set(x, 1, z)
+      wedge.rotation.y = rotationY
+      wedge.material = wedgeMat
+
+      const q = Quaternion.FromEulerAngles(0, rotationY, 0)
+      const body = this.world.createRigidBody(
+        this.rapier.RigidBodyDesc.fixed()
+          .setTranslation(x, 1, z)
+          .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+      )
+
+      this.world.createCollider(
+        this.rapier.ColliderDesc.cuboid(diagWidth / 2, height / 2, thickness / 2),
+        body
+      )
+
+      this.bindings.push({ mesh: wedge, rigidBody: body })
+      this.pinballMeshes.push(wedge)
+    }
+
+    // Top Left Corner
+    // Corner is at (-10, 20.5). We move In (Right) by half wedgeSize and Down (Back) by half wedgeSize
+    const tlX = -10 + (wedgeSize / 2)
+    const tlZ = 20.5 - (wedgeSize / 2)
+    createWedge("wedgeTL", tlX, tlZ, -Math.PI / 4) // 45 degrees
+
+    // Top Right Corner
+    // Corner is at (11.5, 20.5). We move In (Left) by half wedgeSize and Down (Back) by half wedgeSize
+    const trX = 11.5 - (wedgeSize / 2)
+    const trZ = 20.5 - (wedgeSize / 2)
+    createWedge("wedgeTR", trX, trZ, Math.PI / 4) // -45 degrees
   }
 
   createDeathZone(): void {
