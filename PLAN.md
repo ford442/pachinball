@@ -27,3 +27,34 @@ The cabinet itself needs to feel alive. We will add emissive strips to the outer
 ## 4. Refined Playfield (The "Concept" Look)
 * **Holographic Pillars:** Keep and refine the wireframe holograms over the bumpers.
 * **Physical/Digital Blend:** Ensure the "Nails" (Pachinko pins) look metallic and physical to contrast with the digital screen elements.
+
+## 5. The "Mag-Spin" Feeder System (Pachinko Mechanics)
+To enhance the "Pachinko" feel of the game, we will introduce a magnetic feeder mechanism that catches the ball, energizes it, and releases it back into play. This breaks up the flow and adds anticipation.
+
+### A. Mechanic: The "Mag-Spin" Well
+Located on the upper-right playfield wall (replacing a standard rebound bumper). When the ball enters its proximity, it is magnetically captured, spun up to high speed, and then shot out towards the center bumpers.
+
+### B. Logic State Machine
+1.  **IDLE:** The well is inactive, pulsing slowly with a blue light.
+2.  **CATCH:**
+    *   Trigger: Ball enters `catchRadius`.
+    *   Action: Physics body switches to `KinematicPositionBased`. Ball lerps to the center of the well.
+    *   Visual: Light turns purple/magenta.
+3.  **SPIN (Charging):**
+    *   Action: Ball rotates rapidly on its axis. Sound pitch rises.
+    *   Duration: `spinDuration` (e.g., 1.5 seconds).
+4.  **RELEASE:**
+    *   Action: Physics body restores to `Dynamic`.
+    *   Force: Apply impulse `releaseForce` in direction `targetDirection` +/- `releaseAngleVariance`.
+    *   Visual: Bright flash, shockwave particle effect.
+5.  **COOLDOWN:**
+    *   Action: Ignore collisions for `cooldown` seconds to prevent immediate re-catch.
+
+### C. Technical Specification
+*   **Location:** `feederPosition` (Vector3) - Suggested: Upper Right Wall.
+*   **Capture Zone:** `catchRadius` = 1.5 units.
+*   **Timing:** `spinDuration` = 1.2s, `cooldown` = 3.0s.
+*   **Physics:**
+    *   `releaseForce` = 25.0 (Impulse magnitude).
+    *   `releaseAngleVariance` = 0.25 radians (approx 15 degrees).
+*   **Visuals:** Needs a ring of emissive meshes that rotate during the SPIN phase.
