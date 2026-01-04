@@ -27,6 +27,7 @@ import {
   BallManager,
   AdventureMode,
 } from './game-elements'
+import { GameConfig } from './config'
 
 export class Game {
   private readonly engine: Engine | WebGPUEngine
@@ -193,7 +194,9 @@ export class Game {
     // Initialize systems
     this.effects = new EffectsSystem(this.scene, this.bloomPipeline)
     this.display = new DisplaySystem(this.scene, this.engine)
-    this.gameObjects = new GameObjects(this.scene, world, rapier)
+
+    const particleTexture = this.effects.createParticleTexture()
+    this.gameObjects = new GameObjects(this.scene, world, rapier, GameConfig, particleTexture)
     this.ballManager = new BallManager(this.scene, world, rapier, this.gameObjects.getBindings())
     this.adventureMode = new AdventureMode(this.scene, world, rapier)
 
