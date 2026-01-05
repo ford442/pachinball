@@ -90,6 +90,7 @@ export class BallManager {
       const body = this.world.createRigidBody(
         this.rapier.RigidBodyDesc.dynamic()
           .setTranslation(b.position.x, b.position.y, b.position.z)
+          .setCcdEnabled(true)
       )
       
       this.world.createCollider(
@@ -119,7 +120,9 @@ export class BallManager {
       
       const spawn = GameConfig.ball.spawnMain
       const body = this.world.createRigidBody(
-        this.rapier.RigidBodyDesc.dynamic().setTranslation(spawn.x, spawn.y, spawn.z)
+        this.rapier.RigidBodyDesc.dynamic()
+          .setTranslation(spawn.x, spawn.y, spawn.z)
+          .setCcdEnabled(true)
       )
       
       this.world.createCollider(
