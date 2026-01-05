@@ -58,3 +58,43 @@ Located on the upper-right playfield wall (replacing a standard rebound bumper).
     *   `releaseForce` = 25.0 (Impulse magnitude).
     *   `releaseAngleVariance` = 0.25 radians (approx 15 degrees).
 *   **Visuals:** Needs a ring of emissive meshes that rotate during the SPIN phase.
+
+## 6. Adventure Track: "The Neon Helix"
+A procedural "Holo-Deck" level designed to test ball control and momentum.
+
+### A. Concept
+A vertical spiral tower floating in a digital void. The ball must ascend a translucent energy ramp, jump a central gap, and land in the "Data Core" bucket.
+
+### B. Layout Definition (Procedural Steps)
+1.  **The Entry Ramp:**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 20 units
+    *   Incline: 15 degrees
+    *   Width: 4 units (Narrow)
+2.  **The Spiral Ascent (Segment 1):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 10 units
+    *   Angle: 90 degrees
+    *   Incline: 10 degrees
+    *   WallHeight: 2.0 (Safe)
+3.  **The Spiral Ascent (Segment 2 - The Hazard):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 10 units
+    *   Angle: 90 degrees
+    *   Incline: 15 degrees
+    *   WallHeight: 0.5 (Dangerous - Easy to fall off)
+4.  **The Void Jump:**
+    *   Type: `GAP`
+    *   Length: 5 units
+    *   TargetElevation: +2 units relative to launch
+5.  **The Data Core (Goal):**
+    *   Type: `BUCKET`
+    *   Diameter: 6 units
+    *   Trigger: `MISSION_COMPLETE`
+
+### C. Technical Variables (for `AdventureMode.ts`)
+*   `helixRadius` = 10.0
+*   `rampWidth` = 4.0
+*   `segmentResolution` = 10 (steps per 90 degrees)
+*   `voidGapSize` = 5.0
+*   `gravityMultiplier` = 0.8 (Low gravity feeling)
