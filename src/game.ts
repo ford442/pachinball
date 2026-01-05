@@ -214,6 +214,8 @@ export class Game {
           break
         case MagSpinState.RELEASE:
           this.effects?.playBeep(1200)
+          this.effects?.spawnShardBurst(this.magSpinFeeder?.getPosition() || new Vector3(0, 0, 0))
+          this.effects?.setBloomEnergy(2.0)
           break
       }
     }

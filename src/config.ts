@@ -4,7 +4,9 @@
 export const GameConfig = {
   // --- Existing Sections (Preserved & Adapted to Plain Objects) ---
   magSpin: {
-    feederPosition: { x: 0, y: 0.5, z: 12 },
+    // Moved to Upper Right (between Pachinko Field and Wall)
+    // Pachinko ends at x=7, Wall at x=11.5. Center at 9.25 fits a 3.5 diameter unit.
+    feederPosition: { x: 9.25, y: 0.5, z: 12 },
     catchRadius: 1.5,
     spinDuration: 1.2,
     cooldown: 3.0,
