@@ -2,7 +2,6 @@
 
 // Pure config - no Babylon.js dependencies
 export const GameConfig = {
-  // --- Existing Sections (Preserved & Adapted to Plain Objects) ---
   magSpin: {
     // Moved to Upper Right (between Pachinko Field and Wall)
     // Pachinko ends at x=7, Wall at x=11.5. Center at 9.25 fits a 3.5 diameter unit.
@@ -18,11 +17,11 @@ export const GameConfig = {
     enableTrails: true,
     particleIntensity: 1.0
   },
-  physics: { // Keeping for backward compatibility if needed by things not covered
+  physics: {
     ballRestitution: 0.7,
     ballFriction: 0.1,
     bumperRestitution: 1.5,
-    flipperPower: 100000,
+    // REMOVED: flipperPower (Legacy/Unused)
     gravity: { x: 0, y: -9.81, z: -5.0 }
   },
   gameplay: {
@@ -33,7 +32,6 @@ export const GameConfig = {
     slingshotPoints: 50
   },
 
-  // --- NEW / UPDATED SECTIONS ---
   table: {
     width: 28,
     height: 36,
@@ -48,7 +46,8 @@ export const GameConfig = {
     wedgeSize: 8,
     wedgeThickness: 0.5,
 
-    flipperStrength: 100000 // Copied from original table config to keep it consistent
+    // THE SOURCE OF TRUTH:
+    flipperStrength: 25000
   },
 
   ball: {
@@ -67,7 +66,7 @@ export const GameConfig = {
   },
 
   flipper: {
-    strength: 10000,
+    // REMOVED: strength (Legacy/Unused) - We use table.flipperStrength now
     damping: 1000,
   }
 }

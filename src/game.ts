@@ -77,7 +77,7 @@ export class Game {
     this.physics = new PhysicsSystem()
   }
 
-  async init(canvas: HTMLCanvasElement): Promise<void> {
+  async init(_canvas: HTMLCanvasElement): Promise<void> {
     if ('initAsync' in this.engine) {
       await this.engine.initAsync()
     }
@@ -107,12 +107,34 @@ export class Game {
     }
     this.updateHUD()
 
-    const camera = new ArcRotateCamera('camera', -Math.PI / 2, Math.PI / 2.2, 25, new Vector3(0, 2, 5), this.scene)
-    camera.attachControl(canvas, true)
-    camera.keysUp = []
-    camera.keysDown = []
-    camera.keysLeft = []
-    camera.keysRight = []
+    // --- UPDATED CAMERA: Orthographic Cabinet View ---
+    // 1. Position camera directly above (Beta = 0)
+    // 2. Use Orthographic mode to remove perspective distortion
+    // Target changed to (0, 0, 5) to center the table vertically
+    const camera = new ArcRotateCamera('camera', -Math.PI / 2, 0, 40, new Vector3(0, 0, 5), this.scene)
+
+    // Enable Orthographic Mode
+    camera.mode = ArcRotateCamera.ORTHOGRAPHIC_CAMERA
+
+    // Define the View Frustum (Visible Area)
+    // We add a little padding to the table dimensions so it fits nicely
+    const pWidth = GameConfig.table.width + 4
+    const pHeight = GameConfig.table.height + 4
+
+    // Set boundaries (Top, Bottom, Left, Right)
+    camera.orthoTop = pHeight / 2
+    camera.orthoBottom = -pHeight / 2
+    camera.orthoLeft = -pWidth / 2
+    camera.orthoRight = pWidth / 2
+
+    // LOCKED: We do NOT attach control. This forces the "Under Glass" perspective.
+    // camera.attachControl(canvas, true)
+
+    // Restrict movement so users don't accidentally rotate out of the flat view
+    camera.lowerBetaLimit = 0
+    camera.upperBetaLimit = 0
+    camera.lowerRadiusLimit = 20
+    camera.upperRadiusLimit = 60
     
     this.bloomPipeline = new DefaultRenderingPipeline('pachinbloom', true, this.scene, [camera])
     if (this.bloomPipeline) {
@@ -349,8 +371,9 @@ export class Game {
     
     const joint = this.gameObjects?.getFlipperJoints().left
     if (joint) {
-      const stiffness = 100000
-      const damping = 1000
+      // UPDATED: Use Config values
+      const stiffness = GameConfig.table.flipperStrength
+      const damping = GameConfig.flipper.damping
       const angle = pressed ? -Math.PI / 6 : Math.PI / 4
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
     }
@@ -365,8 +388,9 @@ export class Game {
     
     const joint = this.gameObjects?.getFlipperJoints().right
     if (joint) {
-      const stiffness = 100000
-      const damping = 1000
+      // UPDATED: Use Config values
+      const stiffness = GameConfig.table.flipperStrength
+      const damping = GameConfig.flipper.damping
       const angle = pressed ? Math.PI / 6 : -Math.PI / 4
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
     }
