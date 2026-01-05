@@ -58,6 +58,10 @@ export class MagSpinFeeder {
     this.createPhysics()
   }
 
+  getPosition(): Vector3 {
+      return this.position.clone()
+  }
+
   private createMesh(): void {
     // 1. Create a Tube-like Visual
     // Using Cylinder with no caps for the walls
@@ -118,6 +122,7 @@ export class MagSpinFeeder {
     )
 
     // 1. Floor Collider
+    // Visual radius is 1.75. Floor collider matches.
     this.world.createCollider(
       this.rapier.ColliderDesc.cylinder(0.1, 1.75) // HalfHeight, Radius
         .setTranslation(0, -0.4, 0),
@@ -125,11 +130,19 @@ export class MagSpinFeeder {
     )
 
     // 2. Wall Colliders
-    // 8 Boxes
+    // 8 Boxes arranged in a circle
+    // Visual diameter: 3.5 -> Radius 1.75
+    // Wall Thickness: 0.4
+    // Goal: Inner face of the box should align with Visual Radius (1.75)
+    // Box Center Radius = Visual Radius + (Thickness / 2) = 1.75 + 0.2 = 1.95
+
     const wallCount = 8
-    const radius = 1.8 // Radius to center of wall box
+    const radius = 1.95 // Adjusted radius so inner wall is at 1.75
     const wallHeight = 1.0
     const wallThickness = 0.4
+    // Calculate width to close the gaps
+    // Circumference at this radius = 2 * PI * 1.95 approx 12.25
+    // Width per segment = 12.25 / 8 approx 1.53
     const wallWidth = (2 * Math.PI * radius) / wallCount
 
     for (let i = 0; i < wallCount; i++) {
@@ -140,7 +153,8 @@ export class MagSpinFeeder {
       const q = Quaternion.FromEulerAngles(0, -angle, 0)
 
       this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(wallThickness / 2, wallHeight / 2, wallWidth / 2 + 0.2)
+        // Add 0.1 overlap to prevent leaks
+        this.rapier.ColliderDesc.cuboid(wallThickness / 2, wallHeight / 2, wallWidth / 2 + 0.1)
           .setTranslation(x, 0, z)
           .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }),
         this.physicsBody
@@ -217,8 +231,12 @@ export class MagSpinFeeder {
       )
 
       if (dist < PULL_RADIUS) {
-        this.captureBall(body)
-        return
+        // Only capture if roughly at the same height (in the well)
+        // Ball is at ~0.5. Feeder is at y=0 to 1.
+        if (pos.y < 2.0) {
+            this.captureBall(body)
+            return
+        }
       }
     }
   }
@@ -292,6 +310,8 @@ export class MagSpinFeeder {
 
     const currentPos = this.caughtBall.translation()
     // Target: Center of playfield (0, 0, 5)
+    // The feeder is at x~9, z~12. Center is x=0, z=5.
+    // Direction is (-9, 0, -7).
     const targetDir = new Vector3(0 - currentPos.x, 0, 5 - currentPos.z).normalize()
 
     const angleVariance = (Math.random() - 0.5) * this.config.releaseAngleVariance
