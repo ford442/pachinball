@@ -43,8 +43,8 @@ export const GameConfig = {
     laneGuideZ: -1,
 
     // Wedge Parameters
-    wedgeSize: 6,
-    wedgeThickness: 4,
+    wedgeSize: 8,
+    wedgeThickness: 0.5,
 
     flipperStrength: 100000 // Copied from original table config to keep it consistent
   },

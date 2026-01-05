@@ -219,7 +219,8 @@ export class GameObjects {
       )
 
       this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(diagWidth / 2, height / 2, thickness / 2),
+        this.rapier.ColliderDesc.cuboid(diagWidth / 2, height / 2, thickness / 2)
+          .setRestitution(0.5),
         body
       )
 
@@ -280,6 +281,7 @@ export class GameObjects {
           .setTranslation(pos.x, pos.y, pos.z)
           .setLinearDamping(0.5)
           .setAngularDamping(2)
+          .setCcdEnabled(true)
       )
       this.world.createCollider(this.rapier.ColliderDesc.cuboid(1.75, 0.25, 0.25), body)
       this.bindings.push({ mesh, rigidBody: body })
