@@ -98,3 +98,40 @@ A vertical spiral tower floating in a digital void. The ball must ascend a trans
 *   `segmentResolution` = 10 (steps per 90 degrees)
 *   `voidGapSize` = 5.0
 *   `gravityMultiplier` = 0.8 (Low gravity feeling)
+
+## 7. Adventure Track: "The Cyber-Core Descent"
+A high-velocity plunge through a corrupted data stream. Unlike the "Neon Helix" ascent, this track focuses on speed, momentum, and precision braking.
+
+### A. Concept
+The ball is "injected" into a server shaft and must spiral down to the root directory. The visual theme uses dark red and glitchy "corruption" effects.
+
+### B. Layout Definition
+1.  **The Injection Drop:**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: -20 degrees (Down)
+    *   Width: 6 units
+2.  **Velocity Curve (The Bank):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 15 units
+    *   Angle: 180 degrees
+    *   Incline: -5 degrees
+    *   WallHeight: 3.0 (High outer wall to catch speed)
+3.  **The Firewall Gap:**
+    *   Type: `GAP`
+    *   Length: 8 units
+    *   TargetElevation: -2 units relative to launch (Slight drop)
+4.  **The Corkscrew:**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 8 units
+    *   Angle: 270 degrees
+    *   Incline: -15 degrees
+    *   WallHeight: 1.0 (Narrow margin for error)
+5.  **Root Access (Goal):**
+    *   Type: `BUCKET`
+    *   Trigger: `MISSION_COMPLETE`
+
+### C. Technical Variables
+*   `descentGravity` = 1.2 (Heavier gravity for speed)
+*   `wallFriction` = 0.1 (Slippery walls)
+*   `gapAssist` = 1.1 (Slight velocity boost on jumps)
