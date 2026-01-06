@@ -51,7 +51,7 @@ export const GameConfig = {
   },
 
   ball: {
-    radius: 0.5,
+    radius: 0.25,
     mass: 1.0,
     friction: 0.1,    // Low friction is critical for the "steel ball" feel
     restitution: 0.7, // Bounciness

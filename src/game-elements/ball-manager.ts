@@ -32,12 +32,23 @@ export class BallManager {
     this.mirrorTexture = texture
   }
 
+  /**
+   * Helper to calculate density required to achieve target mass for a given radius.
+   * Volume = (4/3) * pi * r^3
+   * Density = Mass / Volume
+   */
+  private getDensityForMass(mass: number, radius: number): number {
+    const volume = (4 / 3) * Math.PI * Math.pow(radius, 3)
+    return mass / volume
+  }
+
   createMainBall(): RAPIER.RigidBody {
     const ballMat = new StandardMaterial('ballMat', this.scene)
     ballMat.diffuseColor = Color3.White()
     ballMat.emissiveColor = new Color3(0.2, 0.2, 0.2)
 
-    const ball = MeshBuilder.CreateSphere('ball', { diameter: 1 }, this.scene) as Mesh
+    const diameter = GameConfig.ball.radius * 2
+    const ball = MeshBuilder.CreateSphere('ball', { diameter: diameter }, this.scene) as Mesh
     ball.material = ballMat
     
     // Use Config for Spawn Point (Plain Objects -> Vector3 implicitly handled by rapier setTranslation usually takes x,y,z args, or we pass individual components)
@@ -49,10 +60,13 @@ export class BallManager {
         .setCcdEnabled(true)
     )
     
+    const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
+
     this.world.createCollider(
       this.rapier.ColliderDesc.ball(GameConfig.ball.radius)
         .setRestitution(GameConfig.ball.restitution)
         .setFriction(GameConfig.ball.friction)
+        .setDensity(density)
         .setActiveEvents(
           this.rapier.ActiveEvents.COLLISION_EVENTS | 
           this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS
@@ -68,7 +82,8 @@ export class BallManager {
       this.mirrorTexture.renderList.push(ball)
     }
 
-    const trail = new TrailMesh("ballTrail", ball, this.scene, 0.3, 20, true)
+    const trailWidth = GameConfig.ball.radius * 0.6
+    const trail = new TrailMesh("ballTrail", ball, this.scene, trailWidth, 20, true)
     const trailMat = new StandardMaterial("trailMat", this.scene)
     trailMat.emissiveColor = Color3.FromHexString("#00ffff")
     trail.material = trailMat
@@ -78,6 +93,8 @@ export class BallManager {
 
   spawnExtraBalls(count: number): void {
     const spawn = GameConfig.ball.spawnPachinko
+    const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
+
     for (let i = 0; i < count; i++) {
       const b = MeshBuilder.CreateSphere("xb", { diameter: GameConfig.ball.radius * 2 }, this.scene) as Mesh
       // Offset slightly to avoid stacking
@@ -97,6 +114,7 @@ export class BallManager {
         this.rapier.ColliderDesc.ball(GameConfig.ball.radius)
           .setRestitution(GameConfig.ball.restitution)
           .setFriction(GameConfig.ball.friction)
+          .setDensity(density)
           .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
         body
       )
@@ -111,11 +129,13 @@ export class BallManager {
   }
 
   resetBall(): void {
+    const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
+
     if (this.ballBodies.length === 0) {
       const mat = new StandardMaterial("ballMat", this.scene)
       mat.emissiveColor = new Color3(0.2, 0.2, 0.2)
       
-      const b = MeshBuilder.CreateSphere("ball", { diameter: 1 }, this.scene) as Mesh
+      const b = MeshBuilder.CreateSphere("ball", { diameter: GameConfig.ball.radius * 2 }, this.scene) as Mesh
       b.material = mat
       
       const spawn = GameConfig.ball.spawnMain
@@ -129,6 +149,7 @@ export class BallManager {
         this.rapier.ColliderDesc.ball(GameConfig.ball.radius)
           .setRestitution(GameConfig.ball.restitution)
           .setFriction(GameConfig.ball.friction)
+          .setDensity(density)
           .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
         body
       )
