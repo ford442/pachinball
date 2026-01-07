@@ -26,6 +26,7 @@ export enum DisplayState {
   REACH,
   FEVER,
   ADVENTURE,
+  JACKPOT,
 }
 
 export interface CabinetLight {

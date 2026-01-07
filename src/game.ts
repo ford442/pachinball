@@ -159,6 +159,7 @@ export class Game {
         onReset: () => this.resetBall(),
         onStart: () => this.startGame(),
         onAdventureToggle: () => this.toggleAdventure(),
+        onJackpotTrigger: () => this.triggerJackpot(),
         getState: () => this.state,
         getTiltActive: () => this.tiltActive,
       },
@@ -413,6 +414,18 @@ export class Game {
     void direction
   }
 
+  private triggerJackpot(): void {
+      if (this.state !== GameState.PLAYING) return
+      console.log("JACKPOT TRIGGERED!")
+
+      this.effects?.startJackpotSequence()
+      this.display?.setDisplayState(DisplayState.JACKPOT)
+
+      // Bonus Score
+      this.score += 100000
+      this.updateHUD()
+  }
+
   private toggleAdventure(): void {
     if (this.adventureMode?.isActive()) {
       this.endAdventureMode()
@@ -465,7 +478,15 @@ export class Game {
     this.effects?.updateShards(dt)
     this.effects?.updateBloom(dt)
     this.effects?.updateCabinetLighting(dt)
-    this.display?.update(dt)
+
+    // Pass Jackpot Phase to display
+    const jackpotPhase = this.effects?.jackpotPhase || 0
+    this.display?.update(dt, jackpotPhase)
+
+    // Sync State: If effects system says jackpot is over, revert display
+    if (this.effects && !this.effects.isJackpotActive && this.display?.getDisplayState() === DisplayState.JACKPOT) {
+        this.display.setDisplayState(DisplayState.IDLE)
+    }
     
     this.updateCombo(dt)
     

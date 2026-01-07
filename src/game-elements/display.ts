@@ -10,6 +10,7 @@ import {
   ShaderLanguage,
 } from '@babylonjs/core'
 import { numberScrollShader } from '../shaders/numberScroll'
+import { jackpotOverlayShader } from '../shaders/jackpotOverlay'
 import { DisplayState } from './types'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
@@ -35,6 +36,8 @@ export class DisplaySystem {
 
   // Shader materials
   private shaderMaterial: ShaderMaterial | null = null
+  private jackpotShader: ShaderMaterial | null = null
+  private standardOverlayMat: StandardMaterial | null = null
   private reelMaterials: ShaderMaterial[] = []
   private reelOffsets: number[] = [0, 0, 0]
   private reelSpeeds: number[] = [0, 0, 0]
@@ -165,13 +168,28 @@ export class DisplaySystem {
     overlay.position.z -= 1.01
     overlay.rotation.y = Math.PI
 
-    const overlayMat = new StandardMaterial("overlayMat", this.scene)
     this.overlayTexture = new DynamicTexture("overlayTex", 512, this.scene, true)
     this.overlayTexture.hasAlpha = true
-    overlayMat.diffuseTexture = this.overlayTexture
-    overlayMat.emissiveColor = Color3.White()
-    overlayMat.alpha = 0.99
-    overlay.material = overlayMat
+
+    // Create Standard Material for normal use
+    this.standardOverlayMat = new StandardMaterial("overlayMat", this.scene)
+    this.standardOverlayMat.diffuseTexture = this.overlayTexture
+    this.standardOverlayMat.emissiveColor = Color3.White()
+    this.standardOverlayMat.alpha = 0.99
+
+    // Create Jackpot Shader Material
+    this.jackpotShader = new ShaderMaterial("jackpotMat", this.scene, {
+        vertexSource: jackpotOverlayShader.vertex,
+        fragmentSource: jackpotOverlayShader.fragment,
+    }, {
+        attributes: ["position", "uv"],
+        uniforms: ["worldViewProjection", "uTime", "uPhase", "uGlitchIntensity", "uCrackProgress", "uShockwaveRadius"],
+        samplers: ["myTexture"],
+        needAlphaBlending: true
+    })
+    this.jackpotShader.setTexture("myTexture", this.overlayTexture)
+
+    overlay.material = this.standardOverlayMat
     this.backboxLayers.overlay = overlay
   }
 
@@ -185,11 +203,25 @@ export class DisplaySystem {
     this.displayState = newState
     this.displayTransitionTimer = 0
     
+    // Switch Overlay Material if Jackpot
+    if (this.backboxLayers.overlay) {
+        if (newState === DisplayState.JACKPOT && this.jackpotShader) {
+            if (this.backboxLayers.overlay.material !== this.jackpotShader) {
+                this.backboxLayers.overlay.material = this.jackpotShader
+            }
+        } else {
+            // Restore StandardMaterial if it was swapped
+            if (this.backboxLayers.overlay.material !== this.standardOverlayMat && this.standardOverlayMat) {
+                 this.backboxLayers.overlay.material = this.standardOverlayMat
+            }
+        }
+    }
+
     if (newState === DisplayState.REACH) {
       this.slotMode = 1
       this.slotSpeeds = [5.0, 5.0, 5.0]
       this.slotStopTimer = 2.0
-    } else if (newState === DisplayState.FEVER) {
+    } else if (newState === DisplayState.FEVER || newState === DisplayState.JACKPOT) {
       this.slotMode = 2
       this.slotReels = [0.1, 0.4, 0.7]
       this.slotSpeeds = [2.0, 3.0, 4.0]
@@ -207,7 +239,8 @@ export class DisplaySystem {
     return this.displayState
   }
 
-  update(dt: number): void {
+  // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
+  update(dt: number, jackpotPhase: number = 0): void {
     this.displayTransitionTimer += dt
     
     if (this.shaderMaterial) {
@@ -222,6 +255,9 @@ export class DisplaySystem {
       } else if (this.displayState === DisplayState.FEVER) {
         speed = 10.0
         color = new Color3(1.0, 0.8, 0.0) // Gold
+      } else if (this.displayState === DisplayState.JACKPOT) {
+        speed = 20.0
+        color = new Color3(1.0, 0.0, 1.0) // Magenta/Rainbow base
       } else if (this.displayState === DisplayState.ADVENTURE) {
         // Dark Green Matrix look
         speed = 1.0
@@ -230,6 +266,31 @@ export class DisplaySystem {
 
       this.shaderMaterial.setFloat("speed", speed)
       this.shaderMaterial.setColor3("colorTint", color)
+    }
+
+    if (this.jackpotShader && this.displayState === DisplayState.JACKPOT) {
+        this.jackpotShader.setFloat("uTime", performance.now() * 0.001)
+        this.jackpotShader.setInt("uPhase", jackpotPhase)
+
+        let glitch = 0.0
+        let crack = 0.0
+        let shock = 0.0
+
+        if (jackpotPhase === 1) { // Breach
+            glitch = 0.1
+            crack = Math.min(1.0, this.displayTransitionTimer * 0.5)
+        } else if (jackpotPhase === 2) { // Error
+            glitch = 0.5
+            crack = 1.0
+        } else if (jackpotPhase === 3) { // Meltdown
+            glitch = 0.0
+            crack = 0.0
+            shock = (this.displayTransitionTimer - 5.0) * 0.5 // Expanding wave
+        }
+
+        this.jackpotShader.setFloat("uGlitchIntensity", glitch)
+        this.jackpotShader.setFloat("uCrackProgress", crack)
+        this.jackpotShader.setFloat("uShockwaveRadius", shock)
     }
     
     // Skip slot updates in Adventure Mode
@@ -425,22 +486,54 @@ export class DisplaySystem {
       ctx.stroke()
 
     } else if (this.displayState === DisplayState.FEVER) {
-      // Jackpot Text
+      // Standard Fever Text
       ctx.fillStyle = 'rgba(255, 215, 0, 1.0)'
       ctx.font = 'bold 70px Orbitron, Arial'
       ctx.textAlign = 'center'
       ctx.shadowBlur = 30
       ctx.shadowColor = '#ffd700'
-      ctx.fillText('JACKPOT!', w / 2, h / 2)
+      ctx.fillText('FEVER MODE', w / 2, h / 2)
+    } else if (this.displayState === DisplayState.JACKPOT) {
+      // The text is handled partially by the shader effects, but we draw the core text here
+      ctx.clearRect(0, 0, w, h) // Clear mostly to let shader do work
 
-      // Coins / Sparks
-      for(let i=0; i<10; i++) {
-        const cx = (w/2) + Math.cos(time * 5 + i) * 100
-        const cy = (h/2) + Math.sin(time * 3 + i) * 100
-        ctx.fillStyle = `rgba(255, 255, 0, ${0.5 + Math.sin(time * 10 + i)*0.5})`
-        ctx.beginPath()
-        ctx.arc(cx, cy, 10, 0, Math.PI * 2)
-        ctx.fill()
+      // We know uPhase is an int, but Babylon's ShaderMaterial doesn't expose getInt() trivially on the type unless custom.
+      // However, we are passing `jackpotPhase` to the update method of DisplaySystem.
+      // Let's rely on that instead of trying to read back from the shader uniform.
+      // But updateOverlay doesn't have jackpotPhase argument.
+      // We can use the jackpotTimer or store the phase in a class member or just read it from game logic.
+      // Actually, DisplaySystem.update() sets the shader uniform. We can just mirror it.
+
+      // Let's assume we can deduce phase from time or just re-calculate it roughly here for display purposes,
+      // OR better, update `updateOverlay` to accept phase or store it.
+
+      // I will read `this.displayTransitionTimer` which aligns with the phases roughly.
+      let phase = 0;
+      if (this.displayTransitionTimer < 2.0) phase = 1;
+      else if (this.displayTransitionTimer < 5.0) phase = 2;
+      else phase = 3;
+
+      if (phase === 1) {
+          ctx.fillStyle = "red"
+          ctx.font = "bold 60px Orbitron"
+          ctx.textAlign = "center"
+          ctx.fillText("WARNING", w/2, h/2 - 40)
+          ctx.font = "30px Orbitron"
+          ctx.fillText("CORE UNSTABLE", w/2, h/2 + 40)
+      } else if (phase === 2) {
+          const countdown = Math.ceil(5.0 - this.displayTransitionTimer)
+          ctx.fillStyle = "white"
+          ctx.font = "bold 150px Orbitron"
+          ctx.textAlign = "center"
+          ctx.fillText(String(countdown), w/2, h/2 + 50)
+      } else if (phase === 3) {
+          ctx.fillStyle = "#FFD700" // Gold
+          ctx.font = "bold 80px Orbitron"
+          ctx.textAlign = "center"
+          ctx.shadowBlur = 50
+          ctx.shadowColor = "white"
+          ctx.fillText("JACKPOT", w/2, h/2)
+          ctx.shadowBlur = 0
       }
     }
 
