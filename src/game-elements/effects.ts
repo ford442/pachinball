@@ -124,7 +124,7 @@ export class EffectsSystem {
   updateBloom(dt: number): void {
     if (this.bloomPipeline) {
       this.bloomEnergy = Math.max(0, this.bloomEnergy - dt)
-      this.bloomPipeline.bloomWeight = 0.4 + (this.bloomEnergy * 0.4)
+      this.bloomPipeline.bloomWeight = 0.1 + (this.bloomEnergy * 0.8)
     }
   }
 

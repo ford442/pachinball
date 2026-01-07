@@ -148,7 +148,7 @@ export class DisplaySystem {
               vec3 lines = colorTint * (gridX + gridY) * 0.8;
 
               // Dynamic alpha based on brightness
-              float alpha = 0.3 + (gridX + gridY) * 0.4;
+              float alpha = 0.05 + (gridX + gridY) * 0.4;
               gl_FragColor = vec4(base + lines, alpha);
           }
       `
