@@ -135,3 +135,40 @@ The ball is "injected" into a server shaft and must spiral down to the root dire
 *   `descentGravity` = 1.2 (Heavier gravity for speed)
 *   `wallFriction` = 0.1 (Slippery walls)
 *   `gapAssist` = 1.1 (Slight velocity boost on jumps)
+
+## 8. Visual Storytelling: The Jackpot Sequence
+To elevate the "Fever" state from a simple light show to a narrative event, we will implement a scripted "Cyber-Shock" sequence.
+
+### A. The Concept
+The player has breached the system's "Core". The machine shouldn't just award points; it should look like it's overloading and breaking containment.
+
+### B. The Sequence Script
+1.  **Phase 1: The Breach (0.0s - 2.0s)**
+    *   **Trigger:** `JACKPOT_TRIGGER` event (e.g., hitting Center Target during Multiball).
+    *   **Audio:** Alarm siren followed by a deep sub-bass drop.
+    *   **Backbox (Main):** Video cuts to static interference, then flashes a "WARNING: CORE UNSTABLE" red alert message.
+    *   **Backbox (Overlay):** A "Cracked Glass" shader effect spreads from the center.
+    *   **Cabinet Lights:** Rapid Red pulsing (4Hz).
+2.  **Phase 2: The Critical Error (2.0s - 5.0s)**
+    *   **Audio:** Rising "turbine spin-up" sound (pitch scaling).
+    *   **Backbox (Main):** A digital countdown "3... 2... 1..." overlaid with heavy glitch artifacts.
+    *   **Backbox (Overlay):** Hexagonal "shield" tiles peel away from the center, revealing blinding white light.
+    *   **Cabinet Lights:** Strobing White/Gold (10Hz).
+3.  **Phase 3: The Meltdown (Jackpot Award) (5.0s - 10.0s)**
+    *   **Audio:** Explosion sound + Heavy Techno music drop.
+    *   **Backbox (Main):** "JACKPOT" text in 3D chrome font, spinning and exploding with gold particles.
+    *   **Backbox (Overlay):** Radial shockwaves (Gold/Cyan) ripple outwards from the center.
+    *   **Cabinet Lights:** "Rainbow Wave" pattern running top-to-bottom.
+    *   **Gameplay:** All bumpers light up; Flashers fire continuously.
+
+### C. Technical Specifications (Shader & Logic)
+*   **Shader Name:** `JackpotOverlayShader` (applies to Layer 3 Transparent Mesh).
+*   **Uniforms Needed:**
+    *   `uTime` (float): Global animation time.
+    *   `uPhase` (int): 0 (Idle), 1 (Breach), 2 (Error), 3 (Meltdown).
+    *   `uGlitchIntensity` (float): 0.0 to 1.0 (Controls vertex displacement magnitude).
+    *   `uCrackProgress` (float): 0.0 to 1.0 (Controls visibility of fracture lines).
+    *   `uShockwaveRadius` (float): Distance of the ripple from center.
+*   **Helper Variables (in `EffectsSystem`):**
+    *   `jackpotTimer`: Tracks the 10s sequence.
+    *   `isJackpotActive`: Boolean flag to override standard display logic.
