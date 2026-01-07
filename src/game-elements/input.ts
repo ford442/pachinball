@@ -10,6 +10,7 @@ export class InputHandler {
   private onReset: () => void
   private onStart: () => void
   private onAdventureToggle: () => void
+  private onJackpotTrigger?: () => void
   private getState: () => GameState
   private getTiltActive: () => boolean
   private rapier: typeof RAPIER | null = null
@@ -24,6 +25,7 @@ export class InputHandler {
       onReset: () => void
       onStart: () => void
       onAdventureToggle: () => void
+      onJackpotTrigger?: () => void
       getState: () => GameState
       getTiltActive: () => boolean
     },
@@ -37,6 +39,7 @@ export class InputHandler {
     this.onReset = handlers.onReset
     this.onStart = handlers.onStart
     this.onAdventureToggle = handlers.onAdventureToggle
+    this.onJackpotTrigger = handlers.onJackpotTrigger
     this.getState = handlers.getState
     this.getTiltActive = handlers.getTiltActive
     this.rapier = rapier
@@ -95,6 +98,10 @@ export class InputHandler {
     
     if (event.code === 'KeyH') {
       this.onAdventureToggle()
+    }
+
+    if (event.code === 'KeyJ' && this.onJackpotTrigger) {
+      this.onJackpotTrigger()
     }
   }
 
