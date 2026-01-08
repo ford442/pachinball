@@ -172,3 +172,38 @@ The player has breached the system's "Core". The machine shouldn't just award po
 *   **Helper Variables (in `EffectsSystem`):**
     *   `jackpotTimer`: Tracks the 10s sequence.
     *   `isJackpotActive`: Boolean flag to override standard display logic.
+
+## 9. Adventure Track: "The Quantum Grid"
+A precision platforming level inspired by retro grid-runners. Unlike the continuous ramps of the Helix or Descent, this track features flat, narrow pathways and sharp 90-degree turns that require careful momentum management.
+
+### A. Concept
+The ball enters a flat, neon-grid plane. The challenge is navigation, not speed. The walls are non-existent or very low, making "ring-outs" the primary threat.
+
+### B. Layout Definition
+1.  **The Initialization Vector:**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 10 units
+    *   Incline: 0 degrees (Flat)
+    *   Width: 4 units
+    *   WallHeight: 0.0 (No walls!)
+2.  **The Logic Gate (Zig-Zag):**
+    *   Type: `STRAIGHT_RAMP` x 3
+    *   Pattern: Forward 5, Left 90, Forward 5, Right 90, Forward 5.
+    *   Width: 3 units (Very Narrow)
+3.  **The Processor Core (Orbit):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 6 units
+    *   Angle: 270 degrees
+    *   Incline: 5 degrees (Slight Upward Spiral)
+    *   WallHeight: 0.5 (Low Curb)
+4.  **The Upload Gap:**
+    *   Type: `GAP`
+    *   Length: 4 units
+    *   TargetElevation: -1 units
+5.  **Target (Goal):**
+    *   Type: `BUCKET`
+
+### C. Technical Variables
+*   `gridWidth` = 3.0 (Hard mode width)
+*   `turnSharpness` = 1.0 (Multiplier for corner friction)
+*   `gridMaterialColor` = "#00FF00" (Matrix Green)
