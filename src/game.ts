@@ -26,6 +26,7 @@ import {
   GameObjects,
   BallManager,
   AdventureMode,
+  AdventureTrackType,
   MagSpinFeeder,
   MagSpinState,
 } from './game-elements'
@@ -625,6 +626,9 @@ export class Game {
     }
   }
 
+  // Cycling variable for adventure tracks
+  private nextAdventureTrack: AdventureTrackType = AdventureTrackType.NEON_HELIX;
+
   private startAdventureMode(): void {
     if (!this.adventureMode || !this.scene) return
     
@@ -637,11 +641,24 @@ export class Game {
       const pinballMeshes = this.gameObjects?.getPinballMeshes() || []
       pinballMeshes.forEach(m => m.setEnabled(false))
       
+      // Cycle through tracks
+      // Order: NEON_HELIX -> CYBER_CORE -> QUANTUM_GRID -> NEON_HELIX
+      const track = this.nextAdventureTrack
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.adventureMode.start(ballBody, camera, ballMesh as any)
+      this.adventureMode.start(ballBody, camera, ballMesh as any, track)
       
       if (this.scoreElement) {
-        this.scoreElement.innerText = "HOLO-DECK ACTIVE"
+        this.scoreElement.innerText = `HOLO-DECK: ${track.replace('_', ' ')}`
+      }
+
+      // Prepare next track
+      if (track === AdventureTrackType.NEON_HELIX) {
+          this.nextAdventureTrack = AdventureTrackType.CYBER_CORE;
+      } else if (track === AdventureTrackType.CYBER_CORE) {
+          this.nextAdventureTrack = AdventureTrackType.QUANTUM_GRID;
+      } else {
+          this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       }
     }
   }

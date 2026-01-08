@@ -16,6 +16,7 @@ export type AdventureCallback = (event: string, data?: any) => void
 export enum AdventureTrackType {
   NEON_HELIX = 'NEON_HELIX',
   CYBER_CORE = 'CYBER_CORE',
+  QUANTUM_GRID = 'QUANTUM_GRID',
 }
 
 export class AdventureMode {
@@ -78,6 +79,8 @@ export class AdventureMode {
 
     if (trackType === AdventureTrackType.CYBER_CORE) {
         this.createDescentTrack()
+    } else if (trackType === AdventureTrackType.QUANTUM_GRID) {
+        this.createQuantumGridTrack()
     } else {
         this.createHelixTrack()
     }
@@ -88,9 +91,12 @@ export class AdventureMode {
 
     // Teleport to the start position (should be synchronized with track creation)
     // For Cyber-Core, we start high up.
-    const startPos = trackType === AdventureTrackType.CYBER_CORE
-        ? new Vector3(0, 20, 0) // Adjusted for descent
-        : new Vector3(0, 3, 8)
+    let startPos = new Vector3(0, 3, 8)
+    if (trackType === AdventureTrackType.CYBER_CORE) {
+        startPos = new Vector3(0, 20, 0)
+    } else if (trackType === AdventureTrackType.QUANTUM_GRID) {
+        startPos = new Vector3(0, 10, 0)
+    }
 
     ballBody.setTranslation({ x: startPos.x, y: startPos.y, z: startPos.z }, true)
     
@@ -239,6 +245,77 @@ export class AdventureMode {
 
       // 5. Root Access (Goal)
       this.createBasin(currentPos, coreMat)
+  }
+
+  // --- Track: The Quantum Grid ---
+  private createQuantumGridTrack(): void {
+      const gridMat = this.getTrackMaterial("#00FF00") // Matrix Green
+      let currentPos = new Vector3(0, 10, 0)
+      let heading = 0 // North (+Z)
+
+      // 1. The Initialization Vector
+      // Straight, Length 10, Flat (0 deg), Width 4, WallHeight 0
+      // Note: addStraightRamp creates a box (floor), no walls built-in.
+      currentPos = this.addStraightRamp(currentPos, heading, 4, 10, 0, gridMat)
+
+      // 2. The Logic Gate (Zig-Zag)
+      // Width 3. Pattern: Fwd 5, Left 90, Fwd 5, Right 90, Fwd 5.
+      const zigzagWidth = 3
+      const zigzagLen = 5
+      const zigzagIncline = 0
+
+      // Fwd 5
+      currentPos = this.addStraightRamp(currentPos, heading, zigzagWidth, zigzagLen, zigzagIncline, gridMat)
+
+      // Left 90 (Decrease heading by 90 deg = -PI/2)
+      // Wait, standard math: Z is 0 deg. X is 90 deg?
+      // Babylon system:
+      // +Z is forward. +X is right.
+      // 0 heading -> +Z.
+      // +PI/2 heading -> +X (Right).
+      // -PI/2 heading -> -X (Left).
+
+      // "Left 90" usually implies -90 degrees in standard nav, but let's check Babylon rotation.
+      // Mesh rotation.y: +Y rot turns Counter-Clockwise?
+      // If I want to turn Left (from Z to -X), I should rotate Y by -90?
+      // Let's assume standard "Left" turn.
+      heading -= Math.PI / 2
+
+      // Fwd 5
+      currentPos = this.addStraightRamp(currentPos, heading, zigzagWidth, zigzagLen, zigzagIncline, gridMat)
+
+      // Right 90
+      heading += Math.PI / 2
+
+      // Fwd 5
+      currentPos = this.addStraightRamp(currentPos, heading, zigzagWidth, zigzagLen, zigzagIncline, gridMat)
+
+      // 3. The Processor Core (Orbit)
+      // Curved Ramp, Radius 6, Angle 270 (1.5 PI), Incline 5 deg (Upward = Negative Incline in my logic?)
+      // addCurvedRamp `inclineRad`: Positive = Downward slope.
+      // So Upward = Negative.
+      const orbitRadius = 6
+      const orbitAngle = (270 * Math.PI) / 180
+      const orbitIncline = - (5 * Math.PI) / 180
+      // const orbitWidth = 4 // Plan says GridWidth 3, but maybe widen for curve? Let's use 3.
+      const orbitWallHeight = 0.5 // Low Curb
+
+      currentPos = this.addCurvedRamp(currentPos, heading, orbitRadius, orbitAngle, orbitIncline, zigzagWidth, orbitWallHeight, gridMat)
+      heading += orbitAngle
+
+      // 4. The Upload Gap
+      // Length 4, Target Elevation -1.
+      const gapLength = 4
+      const gapDrop = 1
+      const gapForward = new Vector3(Math.sin(heading), 0, Math.cos(heading)).scale(gapLength)
+      currentPos = currentPos.add(gapForward)
+      currentPos.y -= gapDrop
+
+      // Landing pad before basin
+      currentPos = this.addStraightRamp(currentPos, heading, 4, 3, 0, gridMat)
+
+      // 5. Target (Goal)
+      this.createBasin(currentPos, gridMat)
   }
 
   // --- Primitive Builders ---
