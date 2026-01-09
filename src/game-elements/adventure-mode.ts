@@ -17,6 +17,7 @@ export enum AdventureTrackType {
   NEON_HELIX = 'NEON_HELIX',
   CYBER_CORE = 'CYBER_CORE',
   QUANTUM_GRID = 'QUANTUM_GRID',
+  SINGULARITY_WELL = 'SINGULARITY_WELL',
 }
 
 export class AdventureMode {
@@ -81,6 +82,8 @@ export class AdventureMode {
         this.createDescentTrack()
     } else if (trackType === AdventureTrackType.QUANTUM_GRID) {
         this.createQuantumGridTrack()
+    } else if (trackType === AdventureTrackType.SINGULARITY_WELL) {
+        this.createSingularityWell()
     } else {
         this.createHelixTrack()
     }
@@ -96,6 +99,8 @@ export class AdventureMode {
         startPos = new Vector3(0, 20, 0)
     } else if (trackType === AdventureTrackType.QUANTUM_GRID) {
         startPos = new Vector3(0, 10, 0)
+    } else if (trackType === AdventureTrackType.SINGULARITY_WELL) {
+        startPos = new Vector3(0, 25, 0)
     }
 
     ballBody.setTranslation({ x: startPos.x, y: startPos.y, z: startPos.z }, true)
@@ -318,6 +323,57 @@ export class AdventureMode {
       this.createBasin(currentPos, gridMat)
   }
 
+  // --- Track: The Singularity Well ---
+  private createSingularityWell(): void {
+      const wellMat = this.getTrackMaterial("#9900FF") // Deep Purple
+      let currentPos = new Vector3(0, 25, 0) // Start high
+      let heading = 0 // North (+Z)
+
+      // 1. Event Injection
+      // Straight, Length 12, Incline -15 deg (Down), Width 6
+      const injectLen = 12
+      const injectIncline = (15 * Math.PI) / 180 // Positive for Down
+      currentPos = this.addStraightRamp(currentPos, heading, 6, injectLen, injectIncline, wellMat)
+
+      // 2. The Outer Rim (Horizon)
+      // Radius 14, Angle 180, Incline -5 deg, Wall 4.0
+      // Banking? "Tilt inward". Left turn -> Bank Left (-Z?).
+      // Let's assume standard banking of 15 degrees (0.26 rad) for effect.
+      const rimRadius = 14
+      const rimAngle = Math.PI // 180 deg
+      const rimIncline = (5 * Math.PI) / 180
+      const rimBank = - (15 * Math.PI) / 180 // Bank Left
+
+      currentPos = this.addCurvedRamp(currentPos, heading, rimRadius, rimAngle, rimIncline, 6, 4.0, wellMat, 20, rimBank)
+      heading += rimAngle
+
+      // 3. Transfer Orbit (Gap)
+      // Length 4, Drop 2
+      const gapLength = 4
+      const gapDrop = 2
+      const gapForward = new Vector3(Math.sin(heading), 0, Math.cos(heading)).scale(gapLength)
+      currentPos = currentPos.add(gapForward)
+      currentPos.y -= gapDrop
+
+      // Landing Platform for Gap
+      // Small straight section to land on before next curve
+      currentPos = this.addStraightRamp(currentPos, heading, 6, 4, 0, wellMat)
+
+      // 4. The Accretion Disk
+      // Radius 8, Angle 270, Incline -10 deg, Wall 1.0
+      // Bank steeper: 25 degrees.
+      const diskRadius = 8
+      const diskAngle = (270 * Math.PI) / 180
+      const diskIncline = (10 * Math.PI) / 180
+      const diskBank = - (25 * Math.PI) / 180
+
+      currentPos = this.addCurvedRamp(currentPos, heading, diskRadius, diskAngle, diskIncline, 6, 1.0, wellMat, 20, diskBank)
+      heading += diskAngle
+
+      // 5. The Singularity (Goal)
+      this.createBasin(currentPos, wellMat)
+  }
+
   // --- Primitive Builders ---
 
   /**
@@ -393,7 +449,8 @@ export class AdventureMode {
       width: number,
       wallHeight: number,
       material: StandardMaterial,
-      segments: number = 20
+      segments: number = 20,
+      bankingAngle: number = 0
   ): Vector3 {
       if (!this.world) return startPos
 
@@ -429,14 +486,33 @@ export class AdventureMode {
 
           const box = MeshBuilder.CreateBox("curveSeg", { width, height: 0.5, depth: chordLen }, this.scene)
           box.position.copyFrom(center)
-          box.rotation.y = currentHeading
+          // Rotation Order:
+          // 1. Bank (Z) - Roll
+          // 2. Incline (X) - Pitch
+          // 3. Heading (Y) - Yaw
+          // However, Babylon Euler order is YXZ (Yaw, Pitch, Roll) or similar.
+          // We can use Quaternion to be precise.
+          // Roll (Banking): Z axis. Pitch (Incline): X axis. Yaw (Heading): Y axis.
+          // We want Banking to be "local" to the ramp surface?
+          // Usually Banking is rotation around the Z axis (Forward).
+          // Incline is rotation around X axis (Right).
+          // Heading is rotation around Y axis (Up).
+
           box.rotation.x = inclineRad
+          box.rotation.y = currentHeading
+          box.rotation.z = bankingAngle
+
+          // Re-calculate visual rotation using quaternion to ensure order is applied correctly if needed,
+          // but Babylon .rotation property applies YXZ order by default.
+          // Let's explicitly check if we need Quaternion for correct banking.
+          // If we bank, we want the "Right" vector to dip.
+          // If we Pitch (incline), we want the "Forward" vector to dip.
 
           box.material = material
           this.adventureTrack.push(box)
 
           // Physics
-          const q = Quaternion.FromEulerAngles(box.rotation.x, box.rotation.y, 0)
+          const q = Quaternion.FromEulerAngles(box.rotation.x, box.rotation.y, box.rotation.z)
           const body = this.world.createRigidBody(
               this.rapier.RigidBodyDesc.fixed()
                   .setTranslation(center.x, center.y, center.z)
