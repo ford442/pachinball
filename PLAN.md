@@ -207,3 +207,39 @@ The ball enters a flat, neon-grid plane. The challenge is navigation, not speed.
 *   `gridWidth` = 3.0 (Hard mode width)
 *   `turnSharpness` = 1.0 (Multiplier for corner friction)
 *   `gridMaterialColor` = "#00FF00" (Matrix Green)
+
+## 10. Adventure Track: "The Singularity Well"
+A physics-heavy track simulating a black hole's gravity well. The ball orbits a central point, spiraling inward as it gains speed, requiring perfect timing to exit.
+
+### A. Concept
+A large, multi-tiered funnel. The ball starts at the rim and must traverse three concentric rings of decreasing radius. The challenge is managing the increasing velocity to avoid flying off the track while ensuring enough momentum to clear the gaps between rings.
+
+### B. Layout Definition
+1.  **Event Injection:**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 12 units
+    *   Incline: -15 degrees (Steep Entry)
+    *   Width: 6 units
+2.  **The Outer Rim (Horizon):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 14 units
+    *   Angle: 180 degrees
+    *   Incline: -5 degrees
+    *   WallHeight: 4.0 (High safety wall)
+3.  **Transfer Orbit (Gap):**
+    *   Type: `GAP`
+    *   Length: 4 units
+    *   TargetElevation: -2 units (Drop to inner ring)
+4.  **The Accretion Disk:**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 8 units
+    *   Angle: 270 degrees
+    *   Incline: -10 degrees
+    *   WallHeight: 1.0 (Dangerous low wall)
+5.  **The Singularity (Goal):**
+    *   Type: `BUCKET` (Placed at center bottom)
+
+### C. Technical Variables
+*   `wellGravity` = 1.5 (High gravity to pull ball down)
+*   `orbitalFriction` = 0.05 (Very low friction for speed)
+*   **Feature Request:** `bankingAngle` support for curved ramps to tilt the floor inward (Roll).
