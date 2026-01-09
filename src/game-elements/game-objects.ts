@@ -140,6 +140,11 @@ export class GameObjects {
     groundMat.diffuseTexture = this.createGridTexture()
     ;(groundMat.diffuseTexture as Texture).uScale = 4
     ;(groundMat.diffuseTexture as Texture).vScale = 8
+
+    // LCD Screen Effect: Make the texture emissive so it glows like a screen
+    groundMat.emissiveTexture = groundMat.diffuseTexture
+    groundMat.emissiveColor = Color3.White()
+
     groundMat.specularColor = new Color3(0.5, 0.5, 0.5)
     groundMat.reflectionTexture = mirrorTexture
 
