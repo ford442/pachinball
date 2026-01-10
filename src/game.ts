@@ -659,6 +659,8 @@ export class Game {
           this.nextAdventureTrack = AdventureTrackType.QUANTUM_GRID;
       } else if (track === AdventureTrackType.QUANTUM_GRID) {
           this.nextAdventureTrack = AdventureTrackType.SINGULARITY_WELL;
+      } else if (track === AdventureTrackType.SINGULARITY_WELL) {
+          this.nextAdventureTrack = AdventureTrackType.GLITCH_SPIRE;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       }
