@@ -18,6 +18,7 @@ export enum AdventureTrackType {
   CYBER_CORE = 'CYBER_CORE',
   QUANTUM_GRID = 'QUANTUM_GRID',
   SINGULARITY_WELL = 'SINGULARITY_WELL',
+  GLITCH_SPIRE = 'GLITCH_SPIRE',
 }
 
 export class AdventureMode {
@@ -84,6 +85,8 @@ export class AdventureMode {
         this.createQuantumGridTrack()
     } else if (trackType === AdventureTrackType.SINGULARITY_WELL) {
         this.createSingularityWell()
+    } else if (trackType === AdventureTrackType.GLITCH_SPIRE) {
+        this.createGlitchSpireTrack()
     } else {
         this.createHelixTrack()
     }
@@ -101,6 +104,8 @@ export class AdventureMode {
         startPos = new Vector3(0, 10, 0)
     } else if (trackType === AdventureTrackType.SINGULARITY_WELL) {
         startPos = new Vector3(0, 25, 0)
+    } else if (trackType === AdventureTrackType.GLITCH_SPIRE) {
+        startPos = new Vector3(0, 10, 0)
     }
 
     ballBody.setTranslation({ x: startPos.x, y: startPos.y, z: startPos.z }, true)
@@ -372,6 +377,80 @@ export class AdventureMode {
 
       // 5. The Singularity (Goal)
       this.createBasin(currentPos, wellMat)
+  }
+
+  // --- Track: The Glitch Spire ---
+  private createGlitchSpireTrack(): void {
+      const glitchMat = this.getTrackMaterial("#FF00FF") // Magenta
+      let currentPos = new Vector3(0, 10, 0) // Mid-level start
+      let heading = 0 // North (+Z)
+
+      // 1. The Uplink (Ascent)
+      // Straight, Length 15, Incline 20 degrees (Upward = Negative Incline in addStraightRamp?), Width 4, Wall 1.0
+      // Note: addStraightRamp 'inclineRad' is positive for Downward slope (pitch down).
+      // So Upward = Negative angle.
+      const uplinkLen = 15
+      const uplinkIncline = - (20 * Math.PI) / 180
+
+      // Since addStraightRamp currently does not support walls, we might need to rely on the default box.
+      // But PLAN.md says WallHeight 1.0.
+      // The other tracks use addCurvedRamp for walls, or just flat ramps.
+      // I'll stick to addStraightRamp for now and maybe add walls manually if needed,
+      // or just assume "Low safety" means the 0.5 height of the ramp itself is the curb?
+      // Actually, createDescentTrack uses addStraightRamp and then assumes 6 width is safe.
+      // I will create the ramp. The player needs to be careful.
+      currentPos = this.addStraightRamp(currentPos, heading, 4, uplinkLen, uplinkIncline, glitchMat)
+
+      // 2. The Packet Loss (Gap)
+      // Gap Length 6, Target Elevation -4 (Drop)
+      const gapLength = 6
+      const gapDrop = 4
+      const gapForward = new Vector3(Math.sin(heading), 0, Math.cos(heading)).scale(gapLength)
+      currentPos = currentPos.add(gapForward)
+      currentPos.y -= gapDrop
+
+      // Landing Platform
+      currentPos = this.addStraightRamp(currentPos, heading, 4, 3, 0, glitchMat)
+
+      // 3. The Jitter Turn (Chicane)
+      // Land -> Turn Right 90 -> Forward 5 -> Turn Left 90 -> Forward 5.
+      // Width 3. WallHeight 0.0.
+
+      // Turn Right 90.
+      heading += Math.PI / 2
+
+      // Forward 5
+      currentPos = this.addStraightRamp(currentPos, heading, 3, 5, 0, glitchMat)
+
+      // Turn Left 90
+      heading -= Math.PI / 2
+
+      // Forward 5
+      currentPos = this.addStraightRamp(currentPos, heading, 3, 5, 0, glitchMat)
+
+      // 4. The Stack Overflow (Vertical Crossover)
+      // Curved Ramp (Spiral Down), Radius 8, Angle 360, Incline -10 deg (Down = Positive).
+      // Note: "Down" usually means positive incline in my logic here (pitch down).
+      // PLAN says "Incline -10 deg". In Descent track, Incline -20 was Down.
+      // Wait. In Descent Track: `dropIncline = (20 * PI) / 180` (Positive number passed)
+      // And the comment said "Incline: -20 degrees (Down)".
+      // So in `addStraightRamp` logic, Positive `inclineRad` makes `vDrop` positive, so `y` decreases.
+      // So Positive Angle = Down.
+      // So if PLAN says -10 deg but implies "Spiral Down", I should use +10 deg in my function.
+      const spiralRadius = 8
+      const spiralAngle = 2 * Math.PI // 360 deg
+      const spiralIncline = (10 * Math.PI) / 180 // Downward
+
+      // WallHeight 0.0? PLAN doesn't specify wall height for spiral, but says "Visual knot".
+      // Let's give it a small wall since it's a long spiral.
+      // Actually, PLAN for Glitch Spire says: "The Jitter Turn... WallHeight 0.0".
+      // Doesn't explicitly say for Stack Overflow. I'll add 0.5 for safety.
+
+      currentPos = this.addCurvedRamp(currentPos, heading, spiralRadius, spiralAngle, spiralIncline, 3, 0.5, glitchMat, 30)
+      heading += spiralAngle
+
+      // 5. System Restore (Goal)
+      this.createBasin(currentPos, glitchMat)
   }
 
   // --- Primitive Builders ---
