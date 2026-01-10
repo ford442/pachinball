@@ -243,3 +243,41 @@ A large, multi-tiered funnel. The ball starts at the rim and must traverse three
 *   `wellGravity` = 1.5 (High gravity to pull ball down)
 *   `orbitalFriction` = 0.05 (Very low friction for speed)
 *   **Feature Request:** `bankingAngle` support for curved ramps to tilt the floor inward (Roll).
+
+## 11. Adventure Track: "The Glitch Spire"
+An erratic, vertically complex track that simulates a corrupted data upload. It features sharp angular turns, sudden drops, and a "vertical crossover" where the path intersects itself at different elevations.
+
+### A. Concept
+A fractured data spire. The geometry is unstable, with missing walls and "glitch" artifacts (floating platforms). The player must navigate a path that zig-zags aggressively upwards before plunging into the core.
+
+### B. Layout Definition
+1.  **The Uplink (Ascent):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: 20 degrees (Steep Climb)
+    *   Width: 4 units
+    *   WallHeight: 1.0 (Low safety)
+2.  **The Packet Loss (Gap):**
+    *   Type: `GAP`
+    *   Length: 6 units
+    *   TargetElevation: -4 units (Significant Drop)
+    *   Note: The landing zone is offset slightly requiring a clean jump.
+3.  **The Jitter Turn (Chicane):**
+    *   Type: `STRAIGHT_RAMP` x 2 with Sharp Turns.
+    *   Sequence: Land -> Turn Right 90 -> Forward 5 -> Turn Left 90 -> Forward 5.
+    *   Width: 3 units (Narrow)
+    *   WallHeight: 0.0 (No walls - "Corrupted Geometry")
+4.  **The Stack Overflow (Vertical Crossover):**
+    *   Type: `CURVED_RAMP` (Spiral Down)
+    *   Radius: 8 units
+    *   Angle: 360 degrees
+    *   Incline: -10 degrees
+    *   Note: The exit of this spiral crosses *under* the entry point, creating a visual knot.
+5.  **System Restore (Goal):**
+    *   Type: `BUCKET`
+    *   Location: At the bottom of the spiral.
+
+### C. Technical Variables
+*   `glitchFrequency` = 0.5 (Controls visual stutter/offset intensity in shader)
+*   `platformStability` = 0.8 (If < 1.0, platforms might slowly rotate or tilt)
+*   `corruptionColor` = "#FF00FF" (Magenta)
