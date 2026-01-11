@@ -281,3 +281,38 @@ A fractured data spire. The geometry is unstable, with missing walls and "glitch
 *   `glitchFrequency` = 0.5 (Controls visual stutter/offset intensity in shader)
 *   `platformStability` = 0.8 (If < 1.0, platforms might slowly rotate or tilt)
 *   `corruptionColor` = "#FF00FF" (Magenta)
+
+## 12. The "Nano-Loom" Feeder System (Left Wall)
+To complement the "Mag-Spin" on the right, we introduce a chaos-engine on the left wall. The Nano-Loom is a vertical Pachinko pegboard that "weaves" the ball's path, acting as a randomizer.
+
+### A. Mechanic: The Vertical Weave
+A transparent, wall-mounted pegboard located on the Left Wall.
+1.  **Intake:** A "Weaver's Shuttle" vacuum tube located at mid-field (Left).
+2.  **Lift:** The ball is sucked up a tube to the top of the loom.
+3.  **Process:** The ball drops through a dense hex-grid of "Nano-Pins".
+4.  **Output:** The ball exits at the bottom with randomized velocity, aiming for the center field.
+
+### B. Logic State Machine
+1.  **IDLE:** Intake vacuum active (Particle suction effect).
+2.  **LIFT:**
+    *   Trigger: Ball enters `loomIntakeRadius`.
+    *   Action: Physics -> Kinematic. Animate ball up the tube path.
+    *   Visual: Blue "Data Stream" particles trailing the ball.
+3.  **WEAVE:**
+    *   Trigger: Ball reaches top.
+    *   Action: Physics -> Dynamic.
+    *   Visual: Pins light up when hit (Cyan/Magenta flash).
+4.  **EJECT:**
+    *   Trigger: Ball exits the bottom sensor.
+    *   Action: Apply slight forward impulse to clear the wall.
+
+### C. Technical Specification
+*   **Loom Position:** `loomPosition` = `{ x: -13.0, y: 4.0, z: 2.0 }` (Centered on Left Wall).
+*   **Intake Position:** `intakePosition` = `{ x: -12.0, y: 0.5, z: 2.0 }`.
+*   **Dimensions:** Width 2.0, Height 6.0, Depth 1.0.
+*   **Pin Grid:**
+    *   `pinRows` = 8
+    *   `pinCols` = 4
+    *   `pinSpacing` = 0.6
+    *   `pinBounciness` = 0.8 (High chaos).
+*   **Timing:** `liftDuration` = 1.5s.
