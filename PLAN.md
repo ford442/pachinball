@@ -316,3 +316,40 @@ A transparent, wall-mounted pegboard located on the Left Wall.
     *   `pinSpacing` = 0.6
     *   `pinBounciness` = 0.8 (High chaos).
 *   **Timing:** `liftDuration` = 1.5s.
+
+## 13. The "Prism-Core" Feeder System (Center)
+To provide a central goal and a "Multiball" mechanic, we introduce the Prism-Core at the top-center of the playfield.
+
+### A. Mechanic: The Crystal Lock
+A rotating crystalline structure that acts as a ball lock.
+1.  **Lock:** Captures up to 3 balls.
+2.  **Charge:** Visuals intensify as more balls are locked.
+3.  **Overload:** Releasing the 3rd ball triggers a "Multiball" event.
+
+### B. Logic State Machine
+1.  **IDLE (Empty):**
+    *   Visual: Rotating slow, Green pulsing light.
+    *   Action: Ready to capture.
+2.  **LOCKED_1 (1 Ball):**
+    *   Trigger: Ball enters `captureRadius`.
+    *   Action: Ball 1 is hidden/disabled.
+    *   Visual: Rotate faster, Yellow light. Spawn a new ball at Plunger.
+3.  **LOCKED_2 (2 Balls):**
+    *   Trigger: Ball enters `captureRadius`.
+    *   Action: Ball 2 is hidden/disabled.
+    *   Visual: Rotate very fast, Red light, electrical arcs. Spawn a new ball at Plunger.
+4.  **OVERLOAD (Multiball Start):**
+    *   Trigger: Ball enters `captureRadius` (3rd Ball).
+    *   Action:
+        *   Release Ball 1 & 2 (Restore Physics, apply impulse).
+        *   Release Ball 3 immediately.
+        *   Trigger `EVENT_MULTIBALL_START`.
+    *   Visual: White explosion, shockwave.
+
+### C. Technical Specification
+*   **Position:** `prismPosition` = `{ x: 0.0, y: 0.5, z: 12.0 }` (Top Center).
+*   **Capture Zone:** `captureRadius` = 1.2 units.
+*   **Physics:**
+    *   `ejectForce` = 20.0 (Explosive release).
+    *   `ejectSpread` = 45 degrees (Cone of release).
+*   **Visuals:** Needs a custom shader for the crystal (refraction).
