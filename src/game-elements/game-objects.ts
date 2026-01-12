@@ -38,6 +38,7 @@ export class GameObjects {
 
   private bumperParticles: ParticleSystem[] = []
   private particleTexture: Texture
+  private mirrorTexture: MirrorTexture | null = null // Store reference
 
   constructor(
     scene: Scene,
@@ -136,6 +137,7 @@ export class GameObjects {
   }
 
   createGround(mirrorTexture: MirrorTexture): void {
+    this.mirrorTexture = mirrorTexture // Store for later use
     const groundMat = new StandardMaterial('groundMat', this.scene)
     groundMat.diffuseTexture = this.createGridTexture()
     ;(groundMat.diffuseTexture as Texture).uScale = 4
@@ -336,14 +338,31 @@ export class GameObjects {
       mat.diffuseColor = Color3.FromHexString(colorHex).scale(0.5)
       bumper.material = mat
 
-      const holo = MeshBuilder.CreateCylinder("holo", { diameter: 0.8, height: 3, tessellation: 16 }, this.scene)
-      holo.position.set(x, 2.0, z)
+      // --- REFINED HOLOGRAM PILLAR (Section 4) ---
+      // Inner core (Dense)
+      const holoInner = MeshBuilder.CreateCylinder("holoInner", { diameter: 0.6, height: 2.5, tessellation: 12 }, this.scene)
+      holoInner.position.set(x, 1.8, z)
       
-      const holoMat = new StandardMaterial("holoMat", this.scene)
-      holoMat.wireframe = true
-      holoMat.emissiveColor = Color3.FromHexString(colorHex)
-      holoMat.alpha = 0.3
-      holo.material = holoMat
+      const innerMat = new StandardMaterial("holoInnerMat", this.scene)
+      innerMat.wireframe = true
+      innerMat.emissiveColor = Color3.FromHexString(colorHex).scale(1.2)
+      innerMat.alpha = 0.5
+      holoInner.material = innerMat
+
+      // Outer shell (Faint, wider)
+      const holoOuter = MeshBuilder.CreateCylinder("holoOuter", { diameter: 1.0, height: 3.5, tessellation: 8 }, this.scene)
+      holoOuter.position.set(x, 2.0, z)
+
+      const outerMat = new StandardMaterial("holoOuterMat", this.scene)
+      outerMat.wireframe = true
+      outerMat.emissiveColor = Color3.White() // Techy contrast
+      outerMat.alpha = 0.2
+      holoOuter.material = outerMat
+
+      // Parent outer to inner so we can reference one "hologram" group if needed,
+      // but BumperVisual expects a single 'hologram' mesh.
+      // We'll set 'holoInner' as the main ref, and parent outer to it for joint animation.
+      holoOuter.parent = holoInner
 
       const body = this.world.createRigidBody(
         this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.5, z)
@@ -366,9 +385,10 @@ export class GameObjects {
 
       this.bindings.push({ mesh: bumper, rigidBody: body })
       this.bumperBodies.push(body)
-      this.bumperVisuals.push({ mesh: bumper, body: body, hologram: holo, hitTime: 0, sweep: Math.random() })
+      this.bumperVisuals.push({ mesh: bumper, body: body, hologram: holoInner, hitTime: 0, sweep: Math.random() })
       this.pinballMeshes.push(bumper)
-      this.pinballMeshes.push(holo)
+      this.pinballMeshes.push(holoInner)
+      this.pinballMeshes.push(holoOuter)
 
       // Particle System
       if (this.config.visuals.enableParticles) {
@@ -404,12 +424,19 @@ export class GameObjects {
   }
 
   createPachinkoField(center: Vector3, width: number, height: number): void {
+    // --- REFINED METALLIC NAILS (Section 4) ---
     const pinMat = new StandardMaterial("pinMat", this.scene)
-    pinMat.diffuseColor = Color3.FromHexString("#cccccc")
+    pinMat.diffuseColor = Color3.FromHexString("#888888") // Darker base
     pinMat.specularColor = Color3.White()
-    pinMat.specularPower = 128
-    pinMat.emissiveColor = Color3.FromHexString("#003333").scale(0.1)
+    pinMat.specularPower = 64 // Sharp highlight
+    pinMat.emissiveColor = Color3.Black() // No emission for physical look
     pinMat.alpha = 1.0
+
+    // Add reflection if mirror texture is available
+    if (this.mirrorTexture) {
+        pinMat.reflectionTexture = this.mirrorTexture
+        pinMat.roughness = 0.4 // Chrome-like
+    }
 
     const rows = 6
     const cols = 9
@@ -423,7 +450,8 @@ export class GameObjects {
         const z = center.z - (height / 2) + r * spacingZ
         if (Math.abs(x) < 2 && Math.abs(z - center.z) < 2) continue
 
-        const pin = MeshBuilder.CreateCylinder(`pin_${r}_${c}`, { diameter: 0.3, height: 1.5 }, this.scene)
+        // Use slightly smaller diameter for more precision look
+        const pin = MeshBuilder.CreateCylinder(`pin_${r}_${c}`, { diameter: 0.2, height: 1.5, tessellation: 12 }, this.scene)
         pin.position.set(x, 0.5, z)
         pin.material = pinMat
 
@@ -431,7 +459,7 @@ export class GameObjects {
           this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.5, z)
         )
         this.world.createCollider(
-          this.rapier.ColliderDesc.cylinder(0.75, 0.15)
+          this.rapier.ColliderDesc.cylinder(0.75, 0.1) // Match visual radius closely (0.1 = dia 0.2)
             .setRestitution(0.5)
             .setFriction(0.1),
           body
@@ -480,9 +508,16 @@ export class GameObjects {
     const time = performance.now() * 0.001
 
     this.bumperVisuals.forEach((vis, index) => {
+      // Rotate the inner hologram
       if (vis.hologram) {
         vis.hologram.rotation.y += dt * 1.5
-        vis.hologram.position.y = 2.0 + Math.sin(time * 2 + vis.sweep * 10) * 0.2
+        vis.hologram.position.y = 1.8 + Math.sin(time * 2 + vis.sweep * 10) * 0.1
+
+        // Rotate child (Outer) in opposite direction if it exists
+        const child = vis.hologram.getChildren()[0] as Mesh
+        if (child) {
+            child.rotation.y -= dt * 3.0
+        }
       }
 
       if (vis.hitTime > 0) {
@@ -502,7 +537,7 @@ export class GameObjects {
         vis.mesh.scaling.set(1, 1, 1)
         if (vis.hologram) {
           vis.hologram.scaling.set(1, 1, 1)
-          vis.hologram.material!.alpha = 0.3
+          vis.hologram.material!.alpha = 0.5
         }
 
         if (this.bumperParticles[index] && this.bumperParticles[index].isStarted()) {
