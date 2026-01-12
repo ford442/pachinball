@@ -29,6 +29,8 @@ import {
   AdventureTrackType,
   MagSpinFeeder,
   MagSpinState,
+  NanoLoomFeeder,
+  NanoLoomState,
 } from './game-elements'
 import { GameConfig } from './config'
 
@@ -44,6 +46,7 @@ export class Game {
   private ballManager: BallManager | null = null
   private adventureMode: AdventureMode | null = null
   private magSpinFeeder: MagSpinFeeder | null = null
+  private nanoLoomFeeder: NanoLoomFeeder | null = null
   private inputHandler: InputHandler | null = null
   
   // Rendering
@@ -242,6 +245,24 @@ export class Game {
           this.effects?.setBloomEnergy(2.0)
           break
       }
+    }
+
+    this.nanoLoomFeeder = new NanoLoomFeeder(this.scene, world, rapier, GameConfig.nanoLoom)
+    this.nanoLoomFeeder.onStateChange = (state, position) => {
+        switch (state) {
+            case NanoLoomState.LIFT:
+                this.effects?.playBeep(800)
+                break
+            case NanoLoomState.WEAVE:
+                this.effects?.playBeep(1000)
+                break
+            case NanoLoomState.EJECT:
+                this.effects?.playBeep(1200)
+                if (position) {
+                  this.effects?.spawnShardBurst(position)
+                }
+                break
+        }
     }
 
     // [NEW] LINK ADVENTURE EVENTS TO DISPLAY SYSTEM
@@ -470,6 +491,11 @@ export class Game {
     if (this.magSpinFeeder) {
       const ballBodies = this.ballManager?.getBallBodies() || []
       this.magSpinFeeder.update(dt, ballBodies)
+    }
+
+    if (this.nanoLoomFeeder) {
+        const ballBodies = this.ballManager?.getBallBodies() || []
+        this.nanoLoomFeeder.update(dt, ballBodies)
     }
 
     this.ballManager?.updateCaughtBalls(dt, () => {

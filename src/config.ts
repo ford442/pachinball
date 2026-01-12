@@ -12,6 +12,18 @@ export const GameConfig = {
     releaseForce: 25.0,
     releaseAngleVariance: 0.25
   },
+  nanoLoom: {
+    loomPosition: { x: -13.0, y: 4.0, z: 2.0 },
+    intakePosition: { x: -12.0, y: 0.5, z: 2.0 },
+    width: 2.0,
+    height: 6.0,
+    depth: 1.0,
+    pinRows: 8,
+    pinCols: 4,
+    pinSpacing: 0.6,
+    pinBounciness: 0.8,
+    liftDuration: 1.5
+  },
   visuals: {
     enableParticles: true,
     enableTrails: true,
