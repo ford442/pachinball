@@ -31,6 +31,8 @@ import {
   MagSpinState,
   NanoLoomFeeder,
   NanoLoomState,
+  PrismCoreFeeder,
+  PrismCoreState,
 } from './game-elements'
 import { GameConfig } from './config'
 
@@ -47,6 +49,7 @@ export class Game {
   private adventureMode: AdventureMode | null = null
   private magSpinFeeder: MagSpinFeeder | null = null
   private nanoLoomFeeder: NanoLoomFeeder | null = null
+  private prismCoreFeeder: PrismCoreFeeder | null = null
   private inputHandler: InputHandler | null = null
   
   // Rendering
@@ -261,6 +264,27 @@ export class Game {
                 if (position) {
                   this.effects?.spawnShardBurst(position)
                 }
+                break
+        }
+    }
+
+    this.prismCoreFeeder = new PrismCoreFeeder(this.scene, world, rapier, GameConfig.prismCore)
+    this.prismCoreFeeder.onStateChange = (state, count) => {
+        switch (state) {
+            case PrismCoreState.LOCKED_1:
+            case PrismCoreState.LOCKED_2:
+                this.effects?.playBeep(1500)
+                this.display?.setStoryText(`CORE LOCK: ${count}/3`)
+                this.effects?.spawnShardBurst(this.prismCoreFeeder?.getPosition() || Vector3.Zero())
+                // Spawn a replacement ball at the plunger so play continues
+                this.ballManager?.spawnExtraBalls(1, new Vector3(8.5, 0.5, -9)) // Plunger lane approx
+                break
+
+            case PrismCoreState.OVERLOAD:
+                this.effects?.playBeep(2000)
+                this.effects?.startJackpotSequence() // Optional: sync with Jackpot
+                this.display?.setStoryText("MULTIBALL ENGAGED")
+                this.effects?.spawnShardBurst(this.prismCoreFeeder?.getPosition() || Vector3.Zero())
                 break
         }
     }
@@ -496,6 +520,11 @@ export class Game {
     if (this.nanoLoomFeeder) {
         const ballBodies = this.ballManager?.getBallBodies() || []
         this.nanoLoomFeeder.update(dt, ballBodies)
+    }
+
+    if (this.prismCoreFeeder) {
+        const ballBodies = this.ballManager?.getBallBodies() || []
+        this.prismCoreFeeder.update(dt, ballBodies)
     }
 
     this.ballManager?.updateCaughtBalls(dt, () => {

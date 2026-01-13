@@ -24,6 +24,12 @@ export const GameConfig = {
     pinBounciness: 0.8,
     liftDuration: 1.5
   },
+  prismCore: {
+    prismPosition: { x: 0.0, y: 0.5, z: 12.0 },
+    captureRadius: 1.2,
+    ejectForce: 20.0,
+    ejectSpread: 45 // degrees
+  },
   visuals: {
     enableParticles: true,
     enableTrails: true,
