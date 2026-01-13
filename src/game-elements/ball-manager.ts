@@ -91,8 +91,8 @@ export class BallManager {
     return ballBody
   }
 
-  spawnExtraBalls(count: number): void {
-    const spawn = GameConfig.ball.spawnPachinko
+  spawnExtraBalls(count: number, position?: Vector3): void {
+    const spawn = position ? { x: position.x, y: position.y, z: position.z } : GameConfig.ball.spawnPachinko
     const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
 
     for (let i = 0; i < count; i++) {
