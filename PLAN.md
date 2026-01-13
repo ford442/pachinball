@@ -353,3 +353,47 @@ A rotating crystalline structure that acts as a ball lock.
     *   `ejectForce` = 20.0 (Explosive release).
     *   `ejectSpread` = 45 degrees (Cone of release).
 *   **Visuals:** Needs a custom shader for the crystal (refraction).
+
+## 14. Adventure Track: "The Retro-Wave Hills"
+A rhythmic, momentum-based track inspired by 80s "Outrun" aesthetics. Unlike the technical precision of the Grid or the speed of the Descent, this track requires "flowing" with the terrain.
+
+### A. Concept
+A rolling "Vaporwave" highway featuring a series of sinusoidal hills and banked turns, culminating in a massive jump into a "Setting Sun" bucket.
+
+### B. Layout Definition
+   (Side View of Hills)
+      /\      /\
+     /  \    /  \
+   _/    \__/    \__ ... -> Jump
+
+1.  **The Fade In:**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 10 units
+    *   Incline: 0 degrees
+    *   Width: 6 units
+2.  **The Modulation (The Hills):**
+    *   *Hill 1:* Rise (Len 8, Inc -15°) -> Fall (Len 8, Inc +15°)
+    *   *Hill 2:* Rise (Len 8, Inc -20°) -> Fall (Len 8, Inc +20°)
+    *   Note: Smooth transitions are key.
+3.  **The Carrier Wave (Banked Turn):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 12 units
+    *   Angle: 180 degrees
+    *   Incline: 0 degrees (Level turn)
+    *   Banking: -15 degrees (Inward Tilt)
+    *   WallHeight: 2.0
+4.  **The High Pass Filter (The Jump):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 12 units
+    *   Incline: -25 degrees (Steep Ramp Up)
+    *   Width: 4 units
+5.  **The Sunset (Goal):**
+    *   Type: `BUCKET`
+    *   Location: 15 units forward, 5 units up from jump release.
+    *   Visual: "Sun" holographic shader.
+
+### C. Technical Variables
+*   `hillAmplitude` = 2.0
+*   `waveFrequency` = 1.0
+*   `sunColor` = "#FF8800" (Orange)
+*   `gridColor` = "#FF00FF" (Magenta)
