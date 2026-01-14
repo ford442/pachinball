@@ -716,6 +716,8 @@ export class Game {
           this.nextAdventureTrack = AdventureTrackType.SINGULARITY_WELL;
       } else if (track === AdventureTrackType.SINGULARITY_WELL) {
           this.nextAdventureTrack = AdventureTrackType.GLITCH_SPIRE;
+      } else if (track === AdventureTrackType.GLITCH_SPIRE) {
+          this.nextAdventureTrack = AdventureTrackType.RETRO_WAVE_HILLS;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       }
