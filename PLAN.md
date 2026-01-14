@@ -397,3 +397,41 @@ A rolling "Vaporwave" highway featuring a series of sinusoidal hills and banked 
 *   `waveFrequency` = 1.0
 *   `sunColor` = "#FF8800" (Orange)
 *   `gridColor` = "#FF00FF" (Magenta)
+
+## 15. Adventure Track: "The Chrono-Core"
+A mechanical, timing-based level inspired by the inside of a giant clock. Unlike the flow of the Helix or the speed of the Descent, this track requires *patience* and precise timing to navigate rotating platforms.
+
+### A. Concept
+The ball enters a massive clockwork mechanism. The floor itself is alive—rotating gears act as islands in the void. The player must ride the gears and transfer between them when the paths align.
+
+### B. Layout Definition
+1.  **The Escapement (Entry):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 10 units
+    *   Incline: -10 degrees (Slope Down)
+    *   Width: 5 units
+2.  **Gear One (The Minute Hand):**
+    *   Type: `ROTATING_PLATFORM`
+    *   Radius: 8 units
+    *   Rotation: Clockwise (30 deg/sec)
+    *   Note: The ball must land on this, ride it for ~180 degrees, and exit.
+3.  **The Transfer Bar (Bridge):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 12 units
+    *   Width: 3 units (Narrow)
+    *   Incline: 0 degrees
+    *   Alignment: Connects Gear One (at 6 o'clock relative position) to Gear Two.
+4.  **Gear Two (The Hour Hand):**
+    *   Type: `ROTATING_PLATFORM`
+    *   Radius: 10 units
+    *   Rotation: Counter-Clockwise (20 deg/sec)
+    *   Feature: "Teeth" (Partial walls) on the perimeter with gaps for entry/exit.
+5.  **The Mainspring (Goal):**
+    *   Type: `BUCKET`
+    *   Location: Suspended above the center of Gear Two.
+    *   Access: A small ramp jump from the Gear surface.
+
+### C. Technical Variables
+*   `gearRotationSpeed` = 0.5 (Radians per second)
+*   `gearFriction` = 1.0 (High friction to prevent slipping)
+*   `clockworkColor` = "#FFD700" (Gold)
