@@ -19,6 +19,7 @@ export enum AdventureTrackType {
   QUANTUM_GRID = 'QUANTUM_GRID',
   SINGULARITY_WELL = 'SINGULARITY_WELL',
   GLITCH_SPIRE = 'GLITCH_SPIRE',
+  RETRO_WAVE_HILLS = 'RETRO_WAVE_HILLS',
 }
 
 export class AdventureMode {
@@ -87,6 +88,8 @@ export class AdventureMode {
         this.createSingularityWell()
     } else if (trackType === AdventureTrackType.GLITCH_SPIRE) {
         this.createGlitchSpireTrack()
+    } else if (trackType === AdventureTrackType.RETRO_WAVE_HILLS) {
+        this.createRetroWaveHills()
     } else {
         this.createHelixTrack()
     }
@@ -106,6 +109,8 @@ export class AdventureMode {
         startPos = new Vector3(0, 25, 0)
     } else if (trackType === AdventureTrackType.GLITCH_SPIRE) {
         startPos = new Vector3(0, 10, 0)
+    } else if (trackType === AdventureTrackType.RETRO_WAVE_HILLS) {
+        startPos = new Vector3(0, 5, 0)
     }
 
     ballBody.setTranslation({ x: startPos.x, y: startPos.y, z: startPos.z }, true)
@@ -451,6 +456,82 @@ export class AdventureMode {
 
       // 5. System Restore (Goal)
       this.createBasin(currentPos, glitchMat)
+  }
+
+  // --- Track: The Retro-Wave Hills ---
+  private createRetroWaveHills(): void {
+      const retroMat = this.getTrackMaterial("#FF8800") // Orange
+      let currentPos = new Vector3(0, 5, 0)
+      let heading = 0 // North (+Z)
+
+      // 1. The Fade In
+      // Straight, Length 10, Incline 0, Width 6
+      currentPos = this.addStraightRamp(currentPos, heading, 6, 10, 0, retroMat)
+
+      // 2. The Modulation (The Hills)
+      // Hill 1: Rise (8u, -15°) -> Fall (8u, +15°)
+      const hillLen = 8
+      const rise1Incline = - (15 * Math.PI) / 180
+      const fall1Incline = (15 * Math.PI) / 180
+
+      currentPos = this.addStraightRamp(currentPos, heading, 6, hillLen, rise1Incline, retroMat)
+      currentPos = this.addStraightRamp(currentPos, heading, 6, hillLen, fall1Incline, retroMat)
+
+      // Hill 2: Rise (8u, -20°) -> Fall (8u, +20°)
+      const rise2Incline = - (20 * Math.PI) / 180
+      const fall2Incline = (20 * Math.PI) / 180
+
+      currentPos = this.addStraightRamp(currentPos, heading, 6, hillLen, rise2Incline, retroMat)
+      currentPos = this.addStraightRamp(currentPos, heading, 6, hillLen, fall2Incline, retroMat)
+
+      // 3. The Carrier Wave (Banked Turn)
+      // Radius 12, Angle 180, Incline 0, Banking -15 deg (Inward Tilt)
+      // Turn is 180 degrees. Let's assume standard "Right" or "Left"?
+      // PLAN doesn't specify direction, but usually turns are continuations.
+      // Let's do a Left Turn (Standard positive angle in my addCurvedRamp seems to be left? No wait.)
+      // My addCurvedRamp:
+      // currentHeading += (segmentAngle / 2)
+      // forward = sin(heading), cos(heading).
+      // If segmentAngle is Positive, heading Increases.
+      // North (0) -> +PI/2 (Right/East).
+      // So Positive Angle = Right Turn.
+      // To "Bank Inward" on a Right Turn, we need to tilt Right.
+      // Rotation Z: +Z roll tilts Left (CCW around Z). -Z roll tilts Right (CW around Z).
+      // So for Right Turn, Banking should be Negative.
+      // PLAN says Banking: -15 degrees.
+      // Matches Right Turn.
+
+      const turnRadius = 12
+      const turnAngle = Math.PI // 180
+      const turnIncline = 0
+      const banking = - (15 * Math.PI) / 180
+
+      currentPos = this.addCurvedRamp(currentPos, heading, turnRadius, turnAngle, turnIncline, 6, 2.0, retroMat, 20, banking)
+      heading += turnAngle
+
+      // 4. The High Pass Filter (The Jump)
+      // Straight, Length 12, Incline -25 deg (Steep Ramp Up), Width 4
+      const jumpLen = 12
+      const jumpIncline = - (25 * Math.PI) / 180
+
+      // Add a small flat lead-in to settle the ball before the jump? Not specified, stick to plan.
+      // We need to calculate the release point carefully.
+      // addStraightRamp returns the end position of the ramp mesh (top surface center).
+
+      // Store start of jump to calculate trajectory if needed, but we just place the bucket.
+      currentPos = this.addStraightRamp(currentPos, heading, 4, jumpLen, jumpIncline, retroMat)
+
+      // 5. The Sunset (Goal)
+      // Location: 15 units forward, 5 units up from jump release.
+      const jumpForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const goalDist = 15
+      const goalHeight = 5
+
+      const goalPos = currentPos.add(jumpForward.scale(goalDist))
+      goalPos.y += goalHeight
+
+      // Create goal basin at calculated position
+      this.createBasin(goalPos, retroMat)
   }
 
   // --- Primitive Builders ---
