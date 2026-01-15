@@ -509,6 +509,9 @@ export class Game {
       }
     }
 
+    // Sync Adventure Mode Kinematics
+    this.adventureMode?.update()
+
     this.gameObjects?.updateBumpers(dt)
     this.gameObjects?.updateTargets(dt)
     
@@ -718,6 +721,8 @@ export class Game {
           this.nextAdventureTrack = AdventureTrackType.GLITCH_SPIRE;
       } else if (track === AdventureTrackType.GLITCH_SPIRE) {
           this.nextAdventureTrack = AdventureTrackType.RETRO_WAVE_HILLS;
+      } else if (track === AdventureTrackType.RETRO_WAVE_HILLS) {
+          this.nextAdventureTrack = AdventureTrackType.CHRONO_CORE;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       }
