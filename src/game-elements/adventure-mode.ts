@@ -20,6 +20,12 @@ export enum AdventureTrackType {
   SINGULARITY_WELL = 'SINGULARITY_WELL',
   GLITCH_SPIRE = 'GLITCH_SPIRE',
   RETRO_WAVE_HILLS = 'RETRO_WAVE_HILLS',
+  CHRONO_CORE = 'CHRONO_CORE',
+}
+
+interface KinematicBinding {
+  body: RAPIER.RigidBody
+  mesh: Mesh
 }
 
 export class AdventureMode {
@@ -30,6 +36,7 @@ export class AdventureMode {
   // State Management
   private adventureTrack: Mesh[] = []
   private adventureBodies: RAPIER.RigidBody[] = []
+  private kinematicBindings: KinematicBinding[] = []
   private adventureSensor: RAPIER.RigidBody | null = null
   private adventureActive = false
 
@@ -61,6 +68,24 @@ export class AdventureMode {
     return this.adventureSensor
   }
 
+  update(): void {
+    if (!this.adventureActive) return
+
+    // Sync kinematic bodies to visuals (or vice-versa?)
+    // Actually, for KinematicVelocityBased, Physics drives Position. Visual must follow.
+    for (const binding of this.kinematicBindings) {
+      if (!binding.body || !binding.mesh) continue
+      const pos = binding.body.translation()
+      const rot = binding.body.rotation()
+      binding.mesh.position.set(pos.x, pos.y, pos.z)
+      if (!binding.mesh.rotationQuaternion) {
+        binding.mesh.rotationQuaternion = new Quaternion(rot.x, rot.y, rot.z, rot.w)
+      } else {
+        binding.mesh.rotationQuaternion.set(rot.x, rot.y, rot.z, rot.w)
+      }
+    }
+  }
+
   /**
    * Activates Adventure Mode:
    * 1. Emits 'START' event
@@ -90,6 +115,8 @@ export class AdventureMode {
         this.createGlitchSpireTrack()
     } else if (trackType === AdventureTrackType.RETRO_WAVE_HILLS) {
         this.createRetroWaveHills()
+    } else if (trackType === AdventureTrackType.CHRONO_CORE) {
+        this.createChronoCore()
     } else {
         this.createHelixTrack()
     }
@@ -111,6 +138,8 @@ export class AdventureMode {
         startPos = new Vector3(0, 10, 0)
     } else if (trackType === AdventureTrackType.RETRO_WAVE_HILLS) {
         startPos = new Vector3(0, 5, 0)
+    } else if (trackType === AdventureTrackType.CHRONO_CORE) {
+        startPos = new Vector3(0, 15, 0)
     }
 
     ballBody.setTranslation({ x: startPos.x, y: startPos.y, z: startPos.z }, true)
@@ -147,6 +176,7 @@ export class AdventureMode {
     // Cleanup Visuals
     this.adventureTrack.forEach(m => m.dispose())
     this.adventureTrack = []
+    this.kinematicBindings = []
     
     // Cleanup Physics
     this.adventureBodies.forEach(body => {
@@ -534,6 +564,65 @@ export class AdventureMode {
       this.createBasin(goalPos, retroMat)
   }
 
+  // --- Track: The Chrono-Core ---
+  private createChronoCore(): void {
+      const chronoMat = this.getTrackMaterial("#FFD700") // Gold
+      let currentPos = new Vector3(0, 15, 0)
+      const heading = 0 // North (+Z)
+
+      // 1. The Escapement (Entry)
+      // Straight, Length 10, Incline -10 deg (Down), Width 5
+      const entryLen = 10
+      const entryIncline = (10 * Math.PI) / 180 // Positive for Down
+      currentPos = this.addStraightRamp(currentPos, heading, 5, entryLen, entryIncline, chronoMat)
+
+      // 2. Gear One (Minute Hand)
+      // Radius 8, CW 30 deg/sec
+      const gear1Radius = 8
+      const gear1Speed = (30 * Math.PI) / 180
+      const gear1AngVel = -gear1Speed // CW = -Y
+
+      const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      // Drop slightly so ball falls onto gear
+      currentPos.y -= 1.0
+      // Move center forward so we land on the edge
+      const gear1Center = currentPos.add(forward.scale(gear1Radius + 1))
+
+      this.createRotatingPlatform(gear1Center, gear1Radius, gear1AngVel, chronoMat)
+
+      // Update position to the "Far Side" of the gear for the bridge
+      currentPos = gear1Center.add(forward.scale(gear1Radius))
+
+      // 3. The Transfer Bar (Bridge)
+      // Straight, Length 12, Width 3, Flat.
+      currentPos = this.addStraightRamp(currentPos, heading, 3, 12, 0, chronoMat)
+
+      // 4. Gear Two (Hour Hand)
+      // Radius 10, CCW 20 deg/sec.
+      const gear2Radius = 10
+      const gear2Speed = (20 * Math.PI) / 180
+      const gear2AngVel = gear2Speed // CCW = +Y
+
+      const gear2Center = currentPos.add(forward.scale(gear2Radius + 0.5))
+
+      // Add "Teeth" to this one
+      this.createRotatingPlatform(gear2Center, gear2Radius, gear2AngVel, chronoMat, true)
+
+      // 5. The Mainspring (Goal)
+      const goalPos = gear2Center.clone()
+      goalPos.y += 4.0
+
+      // Access Ramp: Static Jump Ramp at the far edge, pointing back to center
+      const jumpRampPos = gear2Center.add(forward.scale(gear2Radius - 2))
+      // Rotate heading 180 to face center
+      const jumpHeading = heading + Math.PI
+
+      this.addStraightRamp(jumpRampPos, jumpHeading, 4, 4, -(30 * Math.PI)/180, chronoMat)
+
+      // Goal Bucket
+      this.createBasin(goalPos, chronoMat)
+  }
+
   // --- Primitive Builders ---
 
   /**
@@ -739,6 +828,72 @@ export class AdventureMode {
           )
           this.adventureBodies.push(body)
       })
+  }
+
+  private createRotatingPlatform(
+    center: Vector3,
+    radius: number,
+    angVelY: number,
+    material: StandardMaterial,
+    hasTeeth: boolean = false
+  ): void {
+      if (!this.world) return
+
+      const thickness = 0.5
+      const cylinder = MeshBuilder.CreateCylinder("gear", { diameter: radius * 2, height: thickness, tessellation: 32 }, this.scene)
+      cylinder.position.copyFrom(center)
+      cylinder.material = material
+      this.adventureTrack.push(cylinder)
+
+      // Physics: Kinematic Velocity Based
+      const bodyDesc = this.rapier.RigidBodyDesc.kinematicVelocityBased()
+          .setTranslation(center.x, center.y, center.z)
+
+      const body = this.world.createRigidBody(bodyDesc)
+      body.setAngvel({ x: 0, y: angVelY, z: 0 }, true)
+
+      const colliderDesc = this.rapier.ColliderDesc.cylinder(thickness / 2, radius)
+          .setFriction(1.0) // High friction as per plan
+
+      this.world.createCollider(colliderDesc, body)
+      this.adventureBodies.push(body)
+
+      // Sync Binding
+      this.kinematicBindings.push({ body, mesh: cylinder })
+
+      // Teeth (Optional)
+      if (hasTeeth) {
+        const toothCount = 12
+        const angleStep = (2 * Math.PI) / toothCount
+
+        for (let i = 0; i < toothCount; i++) {
+             // Leave every other spot open
+             if (i % 2 !== 0) continue
+
+             const angle = i * angleStep
+             // Local position relative to center
+             const tx = Math.sin(angle) * (radius - 0.25)
+             const tz = Math.cos(angle) * (radius - 0.25)
+
+             // Collider (Relative to Body center)
+             const toothCollider = this.rapier.ColliderDesc.cuboid(0.5, 0.5, 1.0)
+                 .setTranslation(tx, 0.5 + 0.25, tz)
+                 .setRotation( { w: Math.cos(angle/2), x: 0, y: Math.sin(angle/2), z: 0 } )
+
+             this.world.createCollider(toothCollider, body)
+
+             // Visual Tooth (Parented to Cylinder)
+             const tooth = MeshBuilder.CreateBox("tooth", { width: 1, height: 1, depth: 2 }, this.scene)
+             tooth.parent = cylinder
+             tooth.position.set(tx, 0.5 + 0.25, tz)
+             tooth.rotation.y = angle // Relative to parent
+             tooth.material = material
+
+             // No need to push tooth to adventureTrack if parent is there?
+             // Actually, parent.dispose() disposes children.
+             // But we might want to track it anyway if we detach later, but parenting is safe.
+        }
+      }
   }
 
   private createBasin(pos: Vector3, material: StandardMaterial): void {
