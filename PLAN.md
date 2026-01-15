@@ -435,3 +435,50 @@ The ball enters a massive clockwork mechanism. The floor itself is alive—rotat
 *   `gearRotationSpeed` = 0.5 (Radians per second)
 *   `gearFriction` = 1.0 (High friction to prevent slipping)
 *   `clockworkColor` = "#FFD700" (Gold)
+
+## 16. Adventure Track: "The Hyper-Drift"
+A high-speed racing track inspired by futuristic anti-gravity racers. Unlike the platforming of the Grid or the verticality of the Helix, this track is about maintaining maximum velocity through wide, banked turns.
+
+### A. Concept
+A neon-lit highway floating in a void. The track is wide but features extreme banking angles (up to 45 degrees). The player must use momentum to "drift" along the walls without flying off.
+
+### B. Layout Definition
+1.  **Gravity Injection (Launch):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: -20 degrees (Down)
+    *   Width: 8 units (Wide)
+2.  **Alpha Turn (Drift Left):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 15 units
+    *   Angle: 90 degrees
+    *   Incline: -5 degrees
+    *   Banking: -30 degrees (Inward)
+    *   WallHeight: 2.0
+3.  **Beta Turn (Drift Right - S-Curve):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 15 units
+    *   Angle: 90 degrees
+    *   Incline: -5 degrees
+    *   Banking: 30 degrees (Inward relative to turn)
+    *   WallHeight: 2.0
+4.  **The Corkscrew (Inversion):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 10 units
+    *   Angle: 360 degrees
+    *   Incline: -10 degrees
+    *   Banking: -45 degrees (Steep)
+5.  **Nitro Jump (Goal Approach):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 10 units
+    *   Incline: 30 degrees (Up)
+    *   Width: 6 units
+6.  **Finish Line (Goal):**
+    *   Type: `BUCKET`
+    *   Location: At the end of the jump trajectory.
+
+### C. Technical Variables
+*   `driftBankingMax` = 45.0 (Degrees)
+*   `trackWidthWide` = 8.0
+*   `boostGravity` = 1.2 (Slightly higher gravity to stick to track)
+*   `neonColor` = "#00FFFF" (Cyan)
