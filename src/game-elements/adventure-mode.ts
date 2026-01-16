@@ -21,6 +21,7 @@ export enum AdventureTrackType {
   GLITCH_SPIRE = 'GLITCH_SPIRE',
   RETRO_WAVE_HILLS = 'RETRO_WAVE_HILLS',
   CHRONO_CORE = 'CHRONO_CORE',
+  HYPER_DRIFT = 'HYPER_DRIFT',
 }
 
 interface KinematicBinding {
@@ -117,6 +118,8 @@ export class AdventureMode {
         this.createRetroWaveHills()
     } else if (trackType === AdventureTrackType.CHRONO_CORE) {
         this.createChronoCore()
+    } else if (trackType === AdventureTrackType.HYPER_DRIFT) {
+        this.createHyperDriftTrack()
     } else {
         this.createHelixTrack()
     }
@@ -139,6 +142,8 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.RETRO_WAVE_HILLS) {
         startPos = new Vector3(0, 5, 0)
     } else if (trackType === AdventureTrackType.CHRONO_CORE) {
+        startPos = new Vector3(0, 15, 0)
+    } else if (trackType === AdventureTrackType.HYPER_DRIFT) {
         startPos = new Vector3(0, 15, 0)
     }
 
@@ -621,6 +626,67 @@ export class AdventureMode {
 
       // Goal Bucket
       this.createBasin(goalPos, chronoMat)
+  }
+
+  // --- Track: The Hyper-Drift ---
+  private createHyperDriftTrack(): void {
+      const driftMat = this.getTrackMaterial("#00FFFF") // Cyan
+      let currentPos = new Vector3(0, 15, 0)
+      let heading = 0 // North (+Z)
+
+      // 1. Gravity Injection (Launch)
+      // Straight, Length 15, Incline -20 deg (Down), Width 8
+      const launchLen = 15
+      const launchIncline = (20 * Math.PI) / 180 // Positive for Down
+      currentPos = this.addStraightRamp(currentPos, heading, 8, launchLen, launchIncline, driftMat)
+
+      // 2. Alpha Turn (Drift Left)
+      // Radius 15, Angle 90 (Left = -90), Incline -5 deg (Down), Bank Left (-30 in PLAN -> +30 Z)
+      const alphaRadius = 15
+      const alphaAngle = -Math.PI / 2 // Left
+      const alphaIncline = (5 * Math.PI) / 180
+      const alphaBank = (30 * Math.PI) / 180 // Bank Left = +Z
+
+      currentPos = this.addCurvedRamp(currentPos, heading, alphaRadius, alphaAngle, alphaIncline, 8, 2.0, driftMat, 20, alphaBank)
+      heading += alphaAngle
+
+      // 3. Beta Turn (Drift Right - S-Curve)
+      // Radius 15, Angle 90 (Right = +90), Incline -5 deg, Bank Right (+30 in PLAN? "Inward" -> -30 Z)
+      const betaRadius = 15
+      const betaAngle = Math.PI / 2 // Right
+      const betaIncline = (5 * Math.PI) / 180
+      const betaBank = -(30 * Math.PI) / 180 // Bank Right = -Z
+
+      currentPos = this.addCurvedRamp(currentPos, heading, betaRadius, betaAngle, betaIncline, 8, 2.0, driftMat, 20, betaBank)
+      heading += betaAngle
+
+      // 4. The Corkscrew (Inversion)
+      // Radius 10, Angle 360 (Right), Incline -10 deg, Bank Right 45
+      const corkRadius = 10
+      const corkAngle = 2 * Math.PI // Right 360
+      const corkIncline = (10 * Math.PI) / 180
+      const corkBank = -(45 * Math.PI) / 180
+
+      currentPos = this.addCurvedRamp(currentPos, heading, corkRadius, corkAngle, corkIncline, 8, 2.0, driftMat, 30, corkBank)
+      heading += corkAngle
+
+      // 5. Nitro Jump (Goal Approach)
+      // Straight, Length 10, Incline 30 deg (Up -> Negative), Width 6
+      const jumpLen = 10
+      const jumpIncline = -(30 * Math.PI) / 180 // Up
+
+      currentPos = this.addStraightRamp(currentPos, heading, 6, jumpLen, jumpIncline, driftMat)
+
+      // 6. Finish Line (Goal)
+      // Location: At the end of the jump trajectory.
+      const jumpForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const goalDist = 15
+      const goalHeight = 8
+
+      const goalPos = currentPos.add(jumpForward.scale(goalDist))
+      goalPos.y += goalHeight
+
+      this.createBasin(goalPos, driftMat)
   }
 
   // --- Primitive Builders ---
