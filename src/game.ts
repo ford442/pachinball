@@ -723,6 +723,8 @@ export class Game {
           this.nextAdventureTrack = AdventureTrackType.RETRO_WAVE_HILLS;
       } else if (track === AdventureTrackType.RETRO_WAVE_HILLS) {
           this.nextAdventureTrack = AdventureTrackType.CHRONO_CORE;
+      } else if (track === AdventureTrackType.CHRONO_CORE) {
+          this.nextAdventureTrack = AdventureTrackType.HYPER_DRIFT;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       }
