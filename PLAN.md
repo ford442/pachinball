@@ -482,3 +482,38 @@ A neon-lit highway floating in a void. The track is wide but features extreme ba
 *   `trackWidthWide` = 8.0
 *   `boostGravity` = 1.2 (Slightly higher gravity to stick to track)
 *   `neonColor` = "#00FFFF" (Cyan)
+
+## 17. Adventure Track: "The Pachinko Spire"
+A tribute to the game's roots. This vertical-scrolling track turns the adventure mode into a massive, perilous Pachinko board. The ball falls down a steep incline filled with pins, requiring nudging to avoid "Dead Zones".
+
+### A. Concept
+A giant, glowing vertical board. The camera looks down (or sideways?). The ball tumbles through a forest of neon pegs.
+
+### B. Layout Definition
+1.  **The Drop Gate:**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 5 units
+    *   Incline: -45 degrees
+    *   Width: 6 units
+2.  **The Pin Field (Main Body):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 30 units (Very Long)
+    *   Incline: -75 degrees (Almost Vertical)
+    *   Width: 12 units (Wide)
+    *   Feature: "Peg Grid" - Static Cylinder Obstacles spaced every 2 units.
+3.  **The Mill (Mid-Field Hazard):**
+    *   Type: `ROTATING_PLATFORM` x 2
+    *   Radius: 3 units
+    *   Rotation: Opposing directions.
+    *   Location: Embedded in the ramp surface (half-submerged?).
+4.  **The Catch Basins (Bottom):**
+    *   Type: `BUCKET` x 3
+    *   Left: "Reset" (Teleport back to top).
+    *   Center: "Goal" (Mission Complete).
+    *   Right: "Reset".
+
+### C. Technical Variables
+*   `pinDensity` = 0.5 (Pins per unit area)
+*   `boardIncline` = 75.0
+*   `pinBounciness` = 0.6
+*   `boardColor` = "#FFFFFF" (Silver/Chrome)
