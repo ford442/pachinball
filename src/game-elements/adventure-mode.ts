@@ -22,6 +22,7 @@ export enum AdventureTrackType {
   RETRO_WAVE_HILLS = 'RETRO_WAVE_HILLS',
   CHRONO_CORE = 'CHRONO_CORE',
   HYPER_DRIFT = 'HYPER_DRIFT',
+  PACHINKO_SPIRE = 'PACHINKO_SPIRE',
 }
 
 interface KinematicBinding {
@@ -39,7 +40,9 @@ export class AdventureMode {
   private adventureBodies: RAPIER.RigidBody[] = []
   private kinematicBindings: KinematicBinding[] = []
   private adventureSensor: RAPIER.RigidBody | null = null
+  private resetSensors: RAPIER.RigidBody[] = []
   private adventureActive = false
+  private currentStartPos: Vector3 = Vector3.Zero()
 
   // Camera Management
   private tableCamera: ArcRotateCamera | null = null
@@ -69,11 +72,18 @@ export class AdventureMode {
     return this.adventureSensor
   }
 
+  getResetSensors(): RAPIER.RigidBody[] {
+    return this.resetSensors
+  }
+
+  getStartPos(): Vector3 {
+    return this.currentStartPos
+  }
+
   update(): void {
     if (!this.adventureActive) return
 
-    // Sync kinematic bodies to visuals (or vice-versa?)
-    // Actually, for KinematicVelocityBased, Physics drives Position. Visual must follow.
+    // Sync kinematic bodies to visuals
     for (const binding of this.kinematicBindings) {
       if (!binding.body || !binding.mesh) continue
       const pos = binding.body.translation()
@@ -106,54 +116,57 @@ export class AdventureMode {
     // Notify the Game class to update the Display
     if (this.onEvent) this.onEvent('START', trackType)
 
+    // Set Start Position based on Track
     if (trackType === AdventureTrackType.CYBER_CORE) {
+        this.currentStartPos = new Vector3(0, 20, 0)
         this.createDescentTrack()
     } else if (trackType === AdventureTrackType.QUANTUM_GRID) {
+        this.currentStartPos = new Vector3(0, 10, 0)
         this.createQuantumGridTrack()
     } else if (trackType === AdventureTrackType.SINGULARITY_WELL) {
+        this.currentStartPos = new Vector3(0, 25, 0)
         this.createSingularityWell()
     } else if (trackType === AdventureTrackType.GLITCH_SPIRE) {
+        this.currentStartPos = new Vector3(0, 10, 0)
         this.createGlitchSpireTrack()
     } else if (trackType === AdventureTrackType.RETRO_WAVE_HILLS) {
+        this.currentStartPos = new Vector3(0, 5, 0)
         this.createRetroWaveHills()
     } else if (trackType === AdventureTrackType.CHRONO_CORE) {
+        this.currentStartPos = new Vector3(0, 15, 0)
         this.createChronoCore()
     } else if (trackType === AdventureTrackType.HYPER_DRIFT) {
+        this.currentStartPos = new Vector3(0, 15, 0)
         this.createHyperDriftTrack()
+    } else if (trackType === AdventureTrackType.PACHINKO_SPIRE) {
+        this.currentStartPos = new Vector3(0, 30, 0)
+        this.createPachinkoSpireTrack()
     } else {
+        this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
     }
     
-    // Reset ball velocity and teleport to start of track
+    // Reset ball velocity
     ballBody.setLinvel({ x: 0, y: 0, z: 0 }, true)
     ballBody.setAngvel({ x: 0, y: 0, z: 0 }, true)
-
-    // Teleport to the start position (should be synchronized with track creation)
-    // For Cyber-Core, we start high up.
-    let startPos = new Vector3(0, 3, 8)
-    if (trackType === AdventureTrackType.CYBER_CORE) {
-        startPos = new Vector3(0, 20, 0)
-    } else if (trackType === AdventureTrackType.QUANTUM_GRID) {
-        startPos = new Vector3(0, 10, 0)
-    } else if (trackType === AdventureTrackType.SINGULARITY_WELL) {
-        startPos = new Vector3(0, 25, 0)
-    } else if (trackType === AdventureTrackType.GLITCH_SPIRE) {
-        startPos = new Vector3(0, 10, 0)
-    } else if (trackType === AdventureTrackType.RETRO_WAVE_HILLS) {
-        startPos = new Vector3(0, 5, 0)
-    } else if (trackType === AdventureTrackType.CHRONO_CORE) {
-        startPos = new Vector3(0, 15, 0)
-    } else if (trackType === AdventureTrackType.HYPER_DRIFT) {
-        startPos = new Vector3(0, 15, 0)
-    }
-
-    ballBody.setTranslation({ x: startPos.x, y: startPos.y, z: startPos.z }, true)
+    ballBody.setTranslation({ x: this.currentStartPos.x, y: this.currentStartPos.y, z: this.currentStartPos.z }, true)
     
     // Store original camera to restore later
     this.tableCamera = currentCamera
 
     // Create new RPG-style Isometric Camera
+    // For Pachinko Spire, maybe a different angle?
+    // Plan says "Camera looks down (or sideways?)".
+    // Default ISO is fine, but maybe steeper pitch?
+
     this.followCamera = new ArcRotateCamera("isoCam", -Math.PI / 2, Math.PI / 3, 14, Vector3.Zero(), this.scene)
+
+    if (trackType === AdventureTrackType.PACHINKO_SPIRE) {
+        // Look more directly at the board
+        this.followCamera.beta = Math.PI / 2.5
+        this.followCamera.radius = 20
+    }
+
     this.followCamera.lowerRadiusLimit = 8
     this.followCamera.upperRadiusLimit = 35
     this.followCamera.attachControl(this.scene.getEngine().getRenderingCanvas(), true)
@@ -193,6 +206,11 @@ export class AdventureMode {
       this.world.removeRigidBody(this.adventureSensor)
       this.adventureSensor = null
     }
+
+    this.resetSensors.forEach(s => {
+        if (this.world) this.world.removeRigidBody(s)
+    })
+    this.resetSensors = []
   }
 
   // --- Shared Helper for Materials ---
@@ -208,32 +226,13 @@ export class AdventureMode {
   // --- Track: The Neon Helix (Original) ---
   private createHelixTrack(): void {
     const holoMat = this.getTrackMaterial("#00ffff")
-    let currentPos = new Vector3(0, 2, 8)
+    let currentPos = this.currentStartPos.clone()
     let heading = Math.PI
 
-    // Re-using the logic, but adapting to use the new robust helpers if possible,
-    // or keeping it simple. Let's convert it to use addStraightRamp for consistency if feasible,
-    // but the original logic was slightly different.
-    // To minimize regression risk on the Helix, I will keep a legacy helper or inline it here
-    // using the new helper with correct math.
-
-    // Original: addRamp(width, length, drop, rotY)
-    // drop was Y change. length was Z (depth) of box.
-    // pitch was atan2(drop, length).
-    // This implies 'length' was the Adjacent side.
-    
     const addRamp = (width: number, length: number, drop: number, rotY: number) => {
-       // length here is Horizontal Distance approx.
        const incline = Math.atan2(drop, length)
-       // Hypotenuse
        const meshLen = Math.sqrt(length * length + drop * drop)
        this.addStraightRamp(currentPos, rotY, width, meshLen, incline, holoMat)
-
-       // Update pos manually as addStraightRamp returns endPos
-       // But addStraightRamp moves 'meshLen' along incline.
-       // Horizontal distance covered: meshLen * cos(incline) = length.
-       // Vertical drop: meshLen * sin(incline) = drop.
-       // So it matches.
        const forward = new Vector3(Math.sin(rotY), 0, Math.cos(rotY))
        currentPos = currentPos.add(forward.scale(length))
        currentPos.y -= drop
@@ -250,21 +249,14 @@ export class AdventureMode {
 
   // --- Track: The Cyber-Core Descent (New) ---
   private createDescentTrack(): void {
-      const coreMat = this.getTrackMaterial("#ff0033") // Red for "Corrupted" theme
-      let currentPos = new Vector3(0, 20, 0) // Start high
-      let heading = 0 // Facing North (+Z)
+      const coreMat = this.getTrackMaterial("#ff0033")
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
 
-      // Track Parameters from PLAN.md
-
-      // 1. The Injection Drop
-      // Length 15 (Hypotenuse), Incline -20deg.
       const dropLen = 15
       const dropIncline = (20 * Math.PI) / 180
       currentPos = this.addStraightRamp(currentPos, heading, 6, dropLen, dropIncline, coreMat)
 
-      // 2. Velocity Curve
-      // Radius 15, Angle 180 (PI), Incline -5deg.
-      // Left Turn (Standard positive angle).
       const curve1Radius = 15
       const curve1Angle = Math.PI
       const curve1Incline = (5 * Math.PI) / 180
@@ -272,20 +264,14 @@ export class AdventureMode {
       currentPos = this.addCurvedRamp(currentPos, heading, curve1Radius, curve1Angle, curve1Incline, 6, 3.0, coreMat)
       heading += curve1Angle
 
-      // 3. The Firewall Gap
-      // Length 8, Target Elevation -2.
-      // Gap logic:
       const gapLength = 8
       const gapDrop = 2
       const gapForward = new Vector3(Math.sin(heading), 0, Math.cos(heading)).scale(gapLength)
       currentPos = currentPos.add(gapForward)
       currentPos.y -= gapDrop
 
-      // Landing Platform
       currentPos = this.addStraightRamp(currentPos, heading, 6, 5, 0, coreMat)
 
-      // 4. The Corkscrew
-      // Radius 8, Angle 270 (1.5 PI), Incline -15 deg.
       const corkRadius = 8
       const corkAngle = (270 * Math.PI) / 180
       const corkIncline = (15 * Math.PI) / 180
@@ -293,120 +279,72 @@ export class AdventureMode {
       currentPos = this.addCurvedRamp(currentPos, heading, corkRadius, corkAngle, corkIncline, 6, 1.0, coreMat)
       heading += corkAngle
 
-      // 5. Root Access (Goal)
       this.createBasin(currentPos, coreMat)
   }
 
   // --- Track: The Quantum Grid ---
   private createQuantumGridTrack(): void {
-      const gridMat = this.getTrackMaterial("#00FF00") // Matrix Green
-      let currentPos = new Vector3(0, 10, 0)
-      let heading = 0 // North (+Z)
+      const gridMat = this.getTrackMaterial("#00FF00")
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
 
-      // 1. The Initialization Vector
-      // Straight, Length 10, Flat (0 deg), Width 4, WallHeight 0
-      // Note: addStraightRamp creates a box (floor), no walls built-in.
       currentPos = this.addStraightRamp(currentPos, heading, 4, 10, 0, gridMat)
 
-      // 2. The Logic Gate (Zig-Zag)
-      // Width 3. Pattern: Fwd 5, Left 90, Fwd 5, Right 90, Fwd 5.
       const zigzagWidth = 3
       const zigzagLen = 5
       const zigzagIncline = 0
 
-      // Fwd 5
       currentPos = this.addStraightRamp(currentPos, heading, zigzagWidth, zigzagLen, zigzagIncline, gridMat)
-
-      // Left 90 (Decrease heading by 90 deg = -PI/2)
-      // Wait, standard math: Z is 0 deg. X is 90 deg?
-      // Babylon system:
-      // +Z is forward. +X is right.
-      // 0 heading -> +Z.
-      // +PI/2 heading -> +X (Right).
-      // -PI/2 heading -> -X (Left).
-
-      // "Left 90" usually implies -90 degrees in standard nav, but let's check Babylon rotation.
-      // Mesh rotation.y: +Y rot turns Counter-Clockwise?
-      // If I want to turn Left (from Z to -X), I should rotate Y by -90?
-      // Let's assume standard "Left" turn.
       heading -= Math.PI / 2
-
-      // Fwd 5
       currentPos = this.addStraightRamp(currentPos, heading, zigzagWidth, zigzagLen, zigzagIncline, gridMat)
-
-      // Right 90
       heading += Math.PI / 2
-
-      // Fwd 5
       currentPos = this.addStraightRamp(currentPos, heading, zigzagWidth, zigzagLen, zigzagIncline, gridMat)
 
-      // 3. The Processor Core (Orbit)
-      // Curved Ramp, Radius 6, Angle 270 (1.5 PI), Incline 5 deg (Upward = Negative Incline in my logic?)
-      // addCurvedRamp `inclineRad`: Positive = Downward slope.
-      // So Upward = Negative.
       const orbitRadius = 6
       const orbitAngle = (270 * Math.PI) / 180
       const orbitIncline = - (5 * Math.PI) / 180
-      // const orbitWidth = 4 // Plan says GridWidth 3, but maybe widen for curve? Let's use 3.
-      const orbitWallHeight = 0.5 // Low Curb
+      const orbitWallHeight = 0.5
 
       currentPos = this.addCurvedRamp(currentPos, heading, orbitRadius, orbitAngle, orbitIncline, zigzagWidth, orbitWallHeight, gridMat)
       heading += orbitAngle
 
-      // 4. The Upload Gap
-      // Length 4, Target Elevation -1.
       const gapLength = 4
       const gapDrop = 1
       const gapForward = new Vector3(Math.sin(heading), 0, Math.cos(heading)).scale(gapLength)
       currentPos = currentPos.add(gapForward)
       currentPos.y -= gapDrop
 
-      // Landing pad before basin
       currentPos = this.addStraightRamp(currentPos, heading, 4, 3, 0, gridMat)
 
-      // 5. Target (Goal)
       this.createBasin(currentPos, gridMat)
   }
 
   // --- Track: The Singularity Well ---
   private createSingularityWell(): void {
-      const wellMat = this.getTrackMaterial("#9900FF") // Deep Purple
-      let currentPos = new Vector3(0, 25, 0) // Start high
-      let heading = 0 // North (+Z)
+      const wellMat = this.getTrackMaterial("#9900FF")
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
 
-      // 1. Event Injection
-      // Straight, Length 12, Incline -15 deg (Down), Width 6
       const injectLen = 12
-      const injectIncline = (15 * Math.PI) / 180 // Positive for Down
+      const injectIncline = (15 * Math.PI) / 180
       currentPos = this.addStraightRamp(currentPos, heading, 6, injectLen, injectIncline, wellMat)
 
-      // 2. The Outer Rim (Horizon)
-      // Radius 14, Angle 180, Incline -5 deg, Wall 4.0
-      // Banking? "Tilt inward". Left turn -> Bank Left (-Z?).
-      // Let's assume standard banking of 15 degrees (0.26 rad) for effect.
       const rimRadius = 14
-      const rimAngle = Math.PI // 180 deg
+      const rimAngle = Math.PI
       const rimIncline = (5 * Math.PI) / 180
-      const rimBank = - (15 * Math.PI) / 180 // Bank Left
+      const rimBank = - (15 * Math.PI) / 180
 
       currentPos = this.addCurvedRamp(currentPos, heading, rimRadius, rimAngle, rimIncline, 6, 4.0, wellMat, 20, rimBank)
       heading += rimAngle
 
-      // 3. Transfer Orbit (Gap)
-      // Length 4, Drop 2
       const gapLength = 4
       const gapDrop = 2
       const gapForward = new Vector3(Math.sin(heading), 0, Math.cos(heading)).scale(gapLength)
       currentPos = currentPos.add(gapForward)
       currentPos.y -= gapDrop
 
-      // Landing Platform for Gap
-      // Small straight section to land on before next curve
       currentPos = this.addStraightRamp(currentPos, heading, 6, 4, 0, wellMat)
 
-      // 4. The Accretion Disk
-      // Radius 8, Angle 270, Incline -10 deg, Wall 1.0
-      // Bank steeper: 25 degrees.
       const diskRadius = 8
       const diskAngle = (270 * Math.PI) / 180
       const diskIncline = (10 * Math.PI) / 180
@@ -415,96 +353,51 @@ export class AdventureMode {
       currentPos = this.addCurvedRamp(currentPos, heading, diskRadius, diskAngle, diskIncline, 6, 1.0, wellMat, 20, diskBank)
       heading += diskAngle
 
-      // 5. The Singularity (Goal)
       this.createBasin(currentPos, wellMat)
   }
 
   // --- Track: The Glitch Spire ---
   private createGlitchSpireTrack(): void {
-      const glitchMat = this.getTrackMaterial("#FF00FF") // Magenta
-      let currentPos = new Vector3(0, 10, 0) // Mid-level start
-      let heading = 0 // North (+Z)
+      const glitchMat = this.getTrackMaterial("#FF00FF")
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
 
-      // 1. The Uplink (Ascent)
-      // Straight, Length 15, Incline 20 degrees (Upward = Negative Incline in addStraightRamp?), Width 4, Wall 1.0
-      // Note: addStraightRamp 'inclineRad' is positive for Downward slope (pitch down).
-      // So Upward = Negative angle.
       const uplinkLen = 15
       const uplinkIncline = - (20 * Math.PI) / 180
 
-      // Since addStraightRamp currently does not support walls, we might need to rely on the default box.
-      // But PLAN.md says WallHeight 1.0.
-      // The other tracks use addCurvedRamp for walls, or just flat ramps.
-      // I'll stick to addStraightRamp for now and maybe add walls manually if needed,
-      // or just assume "Low safety" means the 0.5 height of the ramp itself is the curb?
-      // Actually, createDescentTrack uses addStraightRamp and then assumes 6 width is safe.
-      // I will create the ramp. The player needs to be careful.
       currentPos = this.addStraightRamp(currentPos, heading, 4, uplinkLen, uplinkIncline, glitchMat)
 
-      // 2. The Packet Loss (Gap)
-      // Gap Length 6, Target Elevation -4 (Drop)
       const gapLength = 6
       const gapDrop = 4
       const gapForward = new Vector3(Math.sin(heading), 0, Math.cos(heading)).scale(gapLength)
       currentPos = currentPos.add(gapForward)
       currentPos.y -= gapDrop
 
-      // Landing Platform
       currentPos = this.addStraightRamp(currentPos, heading, 4, 3, 0, glitchMat)
 
-      // 3. The Jitter Turn (Chicane)
-      // Land -> Turn Right 90 -> Forward 5 -> Turn Left 90 -> Forward 5.
-      // Width 3. WallHeight 0.0.
-
-      // Turn Right 90.
       heading += Math.PI / 2
-
-      // Forward 5
       currentPos = this.addStraightRamp(currentPos, heading, 3, 5, 0, glitchMat)
-
-      // Turn Left 90
       heading -= Math.PI / 2
-
-      // Forward 5
       currentPos = this.addStraightRamp(currentPos, heading, 3, 5, 0, glitchMat)
 
-      // 4. The Stack Overflow (Vertical Crossover)
-      // Curved Ramp (Spiral Down), Radius 8, Angle 360, Incline -10 deg (Down = Positive).
-      // Note: "Down" usually means positive incline in my logic here (pitch down).
-      // PLAN says "Incline -10 deg". In Descent track, Incline -20 was Down.
-      // Wait. In Descent Track: `dropIncline = (20 * PI) / 180` (Positive number passed)
-      // And the comment said "Incline: -20 degrees (Down)".
-      // So in `addStraightRamp` logic, Positive `inclineRad` makes `vDrop` positive, so `y` decreases.
-      // So Positive Angle = Down.
-      // So if PLAN says -10 deg but implies "Spiral Down", I should use +10 deg in my function.
       const spiralRadius = 8
-      const spiralAngle = 2 * Math.PI // 360 deg
-      const spiralIncline = (10 * Math.PI) / 180 // Downward
-
-      // WallHeight 0.0? PLAN doesn't specify wall height for spiral, but says "Visual knot".
-      // Let's give it a small wall since it's a long spiral.
-      // Actually, PLAN for Glitch Spire says: "The Jitter Turn... WallHeight 0.0".
-      // Doesn't explicitly say for Stack Overflow. I'll add 0.5 for safety.
+      const spiralAngle = 2 * Math.PI
+      const spiralIncline = (10 * Math.PI) / 180
 
       currentPos = this.addCurvedRamp(currentPos, heading, spiralRadius, spiralAngle, spiralIncline, 3, 0.5, glitchMat, 30)
       heading += spiralAngle
 
-      // 5. System Restore (Goal)
       this.createBasin(currentPos, glitchMat)
   }
 
   // --- Track: The Retro-Wave Hills ---
   private createRetroWaveHills(): void {
-      const retroMat = this.getTrackMaterial("#FF8800") // Orange
-      let currentPos = new Vector3(0, 5, 0)
-      let heading = 0 // North (+Z)
+      const retroMat = this.getTrackMaterial("#FF8800")
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
 
-      // 1. The Fade In
-      // Straight, Length 10, Incline 0, Width 6
       currentPos = this.addStraightRamp(currentPos, heading, 6, 10, 0, retroMat)
 
-      // 2. The Modulation (The Hills)
-      // Hill 1: Rise (8u, -15°) -> Fall (8u, +15°)
       const hillLen = 8
       const rise1Incline = - (15 * Math.PI) / 180
       const fall1Incline = (15 * Math.PI) / 180
@@ -512,52 +405,25 @@ export class AdventureMode {
       currentPos = this.addStraightRamp(currentPos, heading, 6, hillLen, rise1Incline, retroMat)
       currentPos = this.addStraightRamp(currentPos, heading, 6, hillLen, fall1Incline, retroMat)
 
-      // Hill 2: Rise (8u, -20°) -> Fall (8u, +20°)
       const rise2Incline = - (20 * Math.PI) / 180
       const fall2Incline = (20 * Math.PI) / 180
 
       currentPos = this.addStraightRamp(currentPos, heading, 6, hillLen, rise2Incline, retroMat)
       currentPos = this.addStraightRamp(currentPos, heading, 6, hillLen, fall2Incline, retroMat)
 
-      // 3. The Carrier Wave (Banked Turn)
-      // Radius 12, Angle 180, Incline 0, Banking -15 deg (Inward Tilt)
-      // Turn is 180 degrees. Let's assume standard "Right" or "Left"?
-      // PLAN doesn't specify direction, but usually turns are continuations.
-      // Let's do a Left Turn (Standard positive angle in my addCurvedRamp seems to be left? No wait.)
-      // My addCurvedRamp:
-      // currentHeading += (segmentAngle / 2)
-      // forward = sin(heading), cos(heading).
-      // If segmentAngle is Positive, heading Increases.
-      // North (0) -> +PI/2 (Right/East).
-      // So Positive Angle = Right Turn.
-      // To "Bank Inward" on a Right Turn, we need to tilt Right.
-      // Rotation Z: +Z roll tilts Left (CCW around Z). -Z roll tilts Right (CW around Z).
-      // So for Right Turn, Banking should be Negative.
-      // PLAN says Banking: -15 degrees.
-      // Matches Right Turn.
-
       const turnRadius = 12
-      const turnAngle = Math.PI // 180
+      const turnAngle = Math.PI
       const turnIncline = 0
       const banking = - (15 * Math.PI) / 180
 
       currentPos = this.addCurvedRamp(currentPos, heading, turnRadius, turnAngle, turnIncline, 6, 2.0, retroMat, 20, banking)
       heading += turnAngle
 
-      // 4. The High Pass Filter (The Jump)
-      // Straight, Length 12, Incline -25 deg (Steep Ramp Up), Width 4
       const jumpLen = 12
       const jumpIncline = - (25 * Math.PI) / 180
 
-      // Add a small flat lead-in to settle the ball before the jump? Not specified, stick to plan.
-      // We need to calculate the release point carefully.
-      // addStraightRamp returns the end position of the ramp mesh (top surface center).
-
-      // Store start of jump to calculate trajectory if needed, but we just place the bucket.
       currentPos = this.addStraightRamp(currentPos, heading, 4, jumpLen, jumpIncline, retroMat)
 
-      // 5. The Sunset (Goal)
-      // Location: 15 units forward, 5 units up from jump release.
       const jumpForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
       const goalDist = 15
       const goalHeight = 5
@@ -565,120 +431,88 @@ export class AdventureMode {
       const goalPos = currentPos.add(jumpForward.scale(goalDist))
       goalPos.y += goalHeight
 
-      // Create goal basin at calculated position
       this.createBasin(goalPos, retroMat)
   }
 
   // --- Track: The Chrono-Core ---
   private createChronoCore(): void {
-      const chronoMat = this.getTrackMaterial("#FFD700") // Gold
-      let currentPos = new Vector3(0, 15, 0)
-      const heading = 0 // North (+Z)
+      const chronoMat = this.getTrackMaterial("#FFD700")
+      let currentPos = this.currentStartPos.clone()
+      const heading = 0
 
-      // 1. The Escapement (Entry)
-      // Straight, Length 10, Incline -10 deg (Down), Width 5
       const entryLen = 10
-      const entryIncline = (10 * Math.PI) / 180 // Positive for Down
+      const entryIncline = (10 * Math.PI) / 180
       currentPos = this.addStraightRamp(currentPos, heading, 5, entryLen, entryIncline, chronoMat)
 
-      // 2. Gear One (Minute Hand)
-      // Radius 8, CW 30 deg/sec
       const gear1Radius = 8
       const gear1Speed = (30 * Math.PI) / 180
-      const gear1AngVel = -gear1Speed // CW = -Y
+      const gear1AngVel = -gear1Speed
 
       const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
-      // Drop slightly so ball falls onto gear
       currentPos.y -= 1.0
-      // Move center forward so we land on the edge
       const gear1Center = currentPos.add(forward.scale(gear1Radius + 1))
 
       this.createRotatingPlatform(gear1Center, gear1Radius, gear1AngVel, chronoMat)
 
-      // Update position to the "Far Side" of the gear for the bridge
       currentPos = gear1Center.add(forward.scale(gear1Radius))
-
-      // 3. The Transfer Bar (Bridge)
-      // Straight, Length 12, Width 3, Flat.
       currentPos = this.addStraightRamp(currentPos, heading, 3, 12, 0, chronoMat)
 
-      // 4. Gear Two (Hour Hand)
-      // Radius 10, CCW 20 deg/sec.
       const gear2Radius = 10
       const gear2Speed = (20 * Math.PI) / 180
-      const gear2AngVel = gear2Speed // CCW = +Y
+      const gear2AngVel = gear2Speed
 
       const gear2Center = currentPos.add(forward.scale(gear2Radius + 0.5))
-
-      // Add "Teeth" to this one
       this.createRotatingPlatform(gear2Center, gear2Radius, gear2AngVel, chronoMat, true)
 
-      // 5. The Mainspring (Goal)
       const goalPos = gear2Center.clone()
       goalPos.y += 4.0
 
-      // Access Ramp: Static Jump Ramp at the far edge, pointing back to center
       const jumpRampPos = gear2Center.add(forward.scale(gear2Radius - 2))
-      // Rotate heading 180 to face center
       const jumpHeading = heading + Math.PI
 
       this.addStraightRamp(jumpRampPos, jumpHeading, 4, 4, -(30 * Math.PI)/180, chronoMat)
-
-      // Goal Bucket
       this.createBasin(goalPos, chronoMat)
   }
 
   // --- Track: The Hyper-Drift ---
   private createHyperDriftTrack(): void {
-      const driftMat = this.getTrackMaterial("#00FFFF") // Cyan
-      let currentPos = new Vector3(0, 15, 0)
-      let heading = 0 // North (+Z)
+      const driftMat = this.getTrackMaterial("#00FFFF")
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
 
-      // 1. Gravity Injection (Launch)
-      // Straight, Length 15, Incline -20 deg (Down), Width 8
       const launchLen = 15
-      const launchIncline = (20 * Math.PI) / 180 // Positive for Down
+      const launchIncline = (20 * Math.PI) / 180
       currentPos = this.addStraightRamp(currentPos, heading, 8, launchLen, launchIncline, driftMat)
 
-      // 2. Alpha Turn (Drift Left)
-      // Radius 15, Angle 90 (Left = -90), Incline -5 deg (Down), Bank Left (-30 in PLAN -> +30 Z)
       const alphaRadius = 15
-      const alphaAngle = -Math.PI / 2 // Left
+      const alphaAngle = -Math.PI / 2
       const alphaIncline = (5 * Math.PI) / 180
-      const alphaBank = (30 * Math.PI) / 180 // Bank Left = +Z
+      const alphaBank = (30 * Math.PI) / 180
 
       currentPos = this.addCurvedRamp(currentPos, heading, alphaRadius, alphaAngle, alphaIncline, 8, 2.0, driftMat, 20, alphaBank)
       heading += alphaAngle
 
-      // 3. Beta Turn (Drift Right - S-Curve)
-      // Radius 15, Angle 90 (Right = +90), Incline -5 deg, Bank Right (+30 in PLAN? "Inward" -> -30 Z)
       const betaRadius = 15
-      const betaAngle = Math.PI / 2 // Right
+      const betaAngle = Math.PI / 2
       const betaIncline = (5 * Math.PI) / 180
-      const betaBank = -(30 * Math.PI) / 180 // Bank Right = -Z
+      const betaBank = -(30 * Math.PI) / 180
 
       currentPos = this.addCurvedRamp(currentPos, heading, betaRadius, betaAngle, betaIncline, 8, 2.0, driftMat, 20, betaBank)
       heading += betaAngle
 
-      // 4. The Corkscrew (Inversion)
-      // Radius 10, Angle 360 (Right), Incline -10 deg, Bank Right 45
       const corkRadius = 10
-      const corkAngle = 2 * Math.PI // Right 360
+      const corkAngle = 2 * Math.PI
       const corkIncline = (10 * Math.PI) / 180
       const corkBank = -(45 * Math.PI) / 180
 
       currentPos = this.addCurvedRamp(currentPos, heading, corkRadius, corkAngle, corkIncline, 8, 2.0, driftMat, 30, corkBank)
       heading += corkAngle
 
-      // 5. Nitro Jump (Goal Approach)
-      // Straight, Length 10, Incline 30 deg (Up -> Negative), Width 6
       const jumpLen = 10
-      const jumpIncline = -(30 * Math.PI) / 180 // Up
+      const jumpIncline = -(30 * Math.PI) / 180
 
       currentPos = this.addStraightRamp(currentPos, heading, 6, jumpLen, jumpIncline, driftMat)
 
-      // 6. Finish Line (Goal)
-      // Location: At the end of the jump trajectory.
       const jumpForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
       const goalDist = 15
       const goalHeight = 8
@@ -687,6 +521,197 @@ export class AdventureMode {
       goalPos.y += goalHeight
 
       this.createBasin(goalPos, driftMat)
+  }
+
+  // --- Track: The Pachinko Spire ---
+  private createPachinkoSpireTrack(): void {
+    const spireMat = this.getTrackMaterial("#FFFFFF") // Silver/Chrome
+    let currentPos = this.currentStartPos.clone()
+    let heading = 0 // North
+
+    // 1. The Drop Gate
+    // 5 units, -45 degrees (Steep Down)
+    const dropLen = 5
+    const dropIncline = (45 * Math.PI) / 180
+    currentPos = this.addStraightRamp(currentPos, heading, 6, dropLen, dropIncline, spireMat)
+
+    // 2. The Pin Field (Main Body)
+    // 30 units, -75 degrees (Very Steep)
+    // Width 12
+    const mainLen = 30
+    const mainIncline = (75 * Math.PI) / 180
+    const mainWidth = 12
+
+    // Capture start of main segment for pin placement
+    const mainStartPos = currentPos.clone()
+
+    currentPos = this.addStraightRamp(currentPos, heading, mainWidth, mainLen, mainIncline, spireMat)
+
+    // Helper to calculate position on the ramp surface
+    // Forward Vector along the ramp
+    const forwardVec = new Vector3(0, -Math.sin(mainIncline), Math.cos(mainIncline))
+    // Right Vector
+    const rightVec = new Vector3(1, 0, 0)
+
+    // Normal Vector (for pin rotation axis)
+    // Ramp Surface Normal = (0, cos(75), sin(75))
+    const normalVec = new Vector3(0, Math.cos(mainIncline), Math.sin(mainIncline))
+
+    // Pin Grid Generation
+    const pinSpacing = 2.0
+    const rows = Math.floor(mainLen / pinSpacing) - 1
+
+    // Need to handle physics manually for pins
+    if (this.world) {
+        for (let r = 1; r <= rows; r++) {
+            const dist = r * pinSpacing
+            // Staggered offsets
+            const isEven = r % 2 === 0
+            const xOffsets = isEven ? [-4, -2, 0, 2, 4] : [-3, -1, 1, 3]
+
+            for (const xOff of xOffsets) {
+                // Position on ramp
+                const pinPos = mainStartPos.add(forwardVec.scale(dist)).add(rightVec.scale(xOff))
+                // Raise slightly so it sits on surface (surface is at pinPos roughly, but box has height 0.5)
+                // Box center is at -0.25 (half height) relative to surface? No, addStraightRamp centers box.
+                // We should push out by Normal * 0.25 (ramp half height) + Pin Half Height.
+                // Pin Height = 0.5?
+
+                const pinHeight = 0.5
+                const surfaceOffset = normalVec.scale(0.25 + pinHeight/2)
+                const finalPos = pinPos.add(surfaceOffset)
+
+                const pin = MeshBuilder.CreateCylinder("pin", { diameter: 0.3, height: pinHeight }, this.scene)
+                pin.position.copyFrom(finalPos)
+                // Align rotation with Ramp Normal (Y-up cylinder needs to point along Normal)
+                // Default Cylinder is Y-up. We want Y to be Normal.
+                // Normal is (0, cos, sin).
+                // Rotation Axis: Cross(Y, Normal). Angle: acos(Dot(Y, Normal)).
+                // Normal is roughly Z-ish/Y-ish.
+                // Or simpler: Rotate X by Incline?
+                // Flat Ramp (0 deg): Normal (0,1,0). Cylinder Y (0,1,0). Rot X = 0.
+                // Ramp 90 deg: Normal (0,0,1). Cylinder Y needs to be (0,0,1). Rot X = 90.
+                // Ramp 75 deg: Rot X = 75.
+                pin.rotation.x = mainIncline
+                pin.material = spireMat
+                this.adventureTrack.push(pin)
+
+                // Physics
+                const q = Quaternion.FromEulerAngles(pin.rotation.x, pin.rotation.y, pin.rotation.z)
+                const body = this.world.createRigidBody(
+                    this.rapier.RigidBodyDesc.fixed()
+                        .setTranslation(finalPos.x, finalPos.y, finalPos.z)
+                        .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+                )
+                this.world.createCollider(
+                    this.rapier.ColliderDesc.cylinder(pinHeight/2, 0.15).setRestitution(0.6),
+                    body
+                )
+                this.adventureBodies.push(body)
+            }
+        }
+    }
+
+    // 3. The Mills (Rotating Platforms)
+    // Distance ~15 units down (Halfway)
+    const millDist = 15
+    const millRadius = 3
+    const millOffset = 3.5 // X offset
+
+    const createMill = (xDir: number, speedDir: number) => {
+         const posOnRamp = mainStartPos.add(forwardVec.scale(millDist)).add(rightVec.scale(xDir * millOffset))
+         // Flush with surface
+         const millPos = posOnRamp.add(normalVec.scale(0.1)) // Slightly embedded/flush
+
+         // Visual
+         const mill = MeshBuilder.CreateCylinder("mill", { diameter: millRadius*2, height: 0.2 }, this.scene)
+         mill.position.copyFrom(millPos)
+         mill.rotation.x = mainIncline
+         mill.material = spireMat
+         this.adventureTrack.push(mill)
+
+         // Physics
+         if (this.world) {
+             const bodyDesc = this.rapier.RigidBodyDesc.kinematicVelocityBased()
+                 .setTranslation(millPos.x, millPos.y, millPos.z)
+
+             // Initial Rotation
+             const q = Quaternion.FromEulerAngles(mainIncline, 0, 0)
+             bodyDesc.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+
+             const body = this.world.createRigidBody(bodyDesc)
+
+             // Angular Velocity: Must be along the local Y axis (Normal)
+             // Global AngVel vector
+             const angSpeed = 2.0 * speedDir
+             const angVel = normalVec.scale(angSpeed)
+             body.setAngvel({ x: angVel.x, y: angVel.y, z: angVel.z }, true)
+
+             this.world.createCollider(
+                 this.rapier.ColliderDesc.cylinder(0.1, millRadius).setFriction(1.0),
+                 body
+             )
+             this.adventureBodies.push(body)
+             this.kinematicBindings.push({ body, mesh: mill })
+         }
+    }
+
+    createMill(-1, 1) // Left, CW (relative to normal?)
+    createMill(1, -1) // Right, CCW
+
+    // 4. Catch Basins
+    // At the bottom of the 30 unit ramp.
+    const bottomPos = mainStartPos.add(forwardVec.scale(mainLen))
+    // Drop down to create a landing zone? Or just place them there.
+
+    const basinY = bottomPos.y - 2
+    const basinZ = bottomPos.z
+
+    // Center Goal
+    this.createBasin(new Vector3(0, basinY, basinZ), spireMat)
+
+    // Side Resets (Left and Right)
+    // Make them look like basins but function as teleporters
+    const createResetBasin = (x: number) => {
+        const pos = new Vector3(x, basinY, basinZ)
+
+        // 1. Visual & Physical Floor (So ball doesn't ghost through)
+        // Use logic similar to createBasin: Solid floor + Walls
+        const basin = MeshBuilder.CreateBox("resetBasin", { width: 4, height: 1, depth: 4 }, this.scene)
+        basin.position.copyFrom(pos)
+        basin.material = spireMat
+        this.adventureTrack.push(basin)
+
+        if (this.world) {
+            // Solid Floor Body
+            const body = this.world.createRigidBody(
+                this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
+            )
+            // Collider must match visual box (Width 4, Height 1, Depth 4)
+            this.world.createCollider(
+                this.rapier.ColliderDesc.cuboid(2, 0.5, 2),
+                body
+            )
+            this.adventureBodies.push(body)
+
+            // 2. Sensor (Trigger) - Placed just above the floor
+            // So when ball lands ON the solid floor, it triggers the sensor.
+            const sensorPos = pos.clone()
+            sensorPos.y += 0.75 // Just above surface
+
+            const sensorBody = this.world.createRigidBody(
+                this.rapier.RigidBodyDesc.fixed().setTranslation(sensorPos.x, sensorPos.y, sensorPos.z)
+            )
+            this.world.createCollider(
+                this.rapier.ColliderDesc.cuboid(1.8, 0.25, 1.8).setSensor(true),
+                sensorBody
+            )
+            this.resetSensors.push(sensorBody)
+        }
+    }
+
+    createResetBasin(-6)
+    createResetBasin(6)
   }
 
   // --- Primitive Builders ---
@@ -727,11 +752,6 @@ export class AdventureMode {
       box.position.copyFrom(center)
       box.rotation.y = heading
       box.rotation.x = inclineRad // Babylon +X rotation tilts the nose down/up depending on orientation.
-      // Checked: +X rotation tilts top-towards-camera (if looking at Z).
-      // If we are heading 0 (+Z), +X rotation tilts the "far" end down?
-      // Actually usually +X is "Looking Down" (pitch down).
-      // If flat is (0,0,1). Rot X (90) -> (0,-1,0).
-      // So yes, +X rotation = Downward slope.
       
       box.material = material
       this.adventureTrack.push(box)
@@ -770,63 +790,30 @@ export class AdventureMode {
       if (!this.world) return startPos
 
       const segmentAngle = totalAngle / segments
-      // Arc length for this segment on the circle
       const arcLength = radius * Math.abs(segmentAngle)
-
-      // Straight-line length (Chord) for the segment mesh
       const chordLen = 2 * radius * Math.sin(Math.abs(segmentAngle) / 2)
-
-      // Vertical drop for this segment
-      // The path travels 'arcLength' distance along the slope.
-      // So vertical drop is based on arcLength? Or do we treat the chord as the slope path?
-      // Usually "incline" is relative to the path traveled.
-      // Let's use arcLength for slope calculation to be consistent with "travel distance".
       const segmentDrop = arcLength * Math.sin(inclineRad)
-
-      // The box length should roughly match the chord.
-      // If we tilt it, the horizontal projection of the chord shrinks slightly, but for small angles negligible.
-      // Let's use chordLen as the mesh depth.
 
       let currentHeading = startHeading
       let currentP = startPos.clone()
 
       for (let i = 0; i < Math.abs(segments); i++) {
-          // Move heading to the middle of the chord direction
           currentHeading += (segmentAngle / 2)
 
-          // Calculate center position
           const forward = new Vector3(Math.sin(currentHeading), 0, Math.cos(currentHeading))
           const center = currentP.add(forward.scale(chordLen / 2))
           center.y -= segmentDrop / 2
 
           const box = MeshBuilder.CreateBox("curveSeg", { width, height: 0.5, depth: chordLen }, this.scene)
           box.position.copyFrom(center)
-          // Rotation Order:
-          // 1. Bank (Z) - Roll
-          // 2. Incline (X) - Pitch
-          // 3. Heading (Y) - Yaw
-          // However, Babylon Euler order is YXZ (Yaw, Pitch, Roll) or similar.
-          // We can use Quaternion to be precise.
-          // Roll (Banking): Z axis. Pitch (Incline): X axis. Yaw (Heading): Y axis.
-          // We want Banking to be "local" to the ramp surface?
-          // Usually Banking is rotation around the Z axis (Forward).
-          // Incline is rotation around X axis (Right).
-          // Heading is rotation around Y axis (Up).
 
           box.rotation.x = inclineRad
           box.rotation.y = currentHeading
           box.rotation.z = bankingAngle
 
-          // Re-calculate visual rotation using quaternion to ensure order is applied correctly if needed,
-          // but Babylon .rotation property applies YXZ order by default.
-          // Let's explicitly check if we need Quaternion for correct banking.
-          // If we bank, we want the "Right" vector to dip.
-          // If we Pitch (incline), we want the "Forward" vector to dip.
-
           box.material = material
           this.adventureTrack.push(box)
 
-          // Physics
           const q = Quaternion.FromEulerAngles(box.rotation.x, box.rotation.y, box.rotation.z)
           const body = this.world.createRigidBody(
               this.rapier.RigidBodyDesc.fixed()
@@ -839,16 +826,13 @@ export class AdventureMode {
           )
           this.adventureBodies.push(body)
 
-          // Walls
           if (wallHeight > 0) {
               this.createWall(center, currentHeading, chordLen, width, wallHeight, inclineRad, material)
           }
 
-          // Advance Position
           currentP = currentP.add(forward.scale(chordLen))
           currentP.y -= segmentDrop
 
-          // Complete the turn for this segment
           currentHeading += (segmentAngle / 2)
       }
 
@@ -871,7 +855,6 @@ export class AdventureMode {
       offsets.forEach(offset => {
           const wall = MeshBuilder.CreateBox("wall", { width: 0.5, height: height, depth: length }, this.scene)
 
-          // Right vector relative to heading
           const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
           const wallPos = center.add(right.scale(offset))
           wallPos.y += height / 2
@@ -911,7 +894,6 @@ export class AdventureMode {
       cylinder.material = material
       this.adventureTrack.push(cylinder)
 
-      // Physics: Kinematic Velocity Based
       const bodyDesc = this.rapier.RigidBodyDesc.kinematicVelocityBased()
           .setTranslation(center.x, center.y, center.z)
 
@@ -919,45 +901,35 @@ export class AdventureMode {
       body.setAngvel({ x: 0, y: angVelY, z: 0 }, true)
 
       const colliderDesc = this.rapier.ColliderDesc.cylinder(thickness / 2, radius)
-          .setFriction(1.0) // High friction as per plan
+          .setFriction(1.0)
 
       this.world.createCollider(colliderDesc, body)
       this.adventureBodies.push(body)
 
-      // Sync Binding
       this.kinematicBindings.push({ body, mesh: cylinder })
 
-      // Teeth (Optional)
       if (hasTeeth) {
         const toothCount = 12
         const angleStep = (2 * Math.PI) / toothCount
 
         for (let i = 0; i < toothCount; i++) {
-             // Leave every other spot open
              if (i % 2 !== 0) continue
 
              const angle = i * angleStep
-             // Local position relative to center
              const tx = Math.sin(angle) * (radius - 0.25)
              const tz = Math.cos(angle) * (radius - 0.25)
 
-             // Collider (Relative to Body center)
              const toothCollider = this.rapier.ColliderDesc.cuboid(0.5, 0.5, 1.0)
                  .setTranslation(tx, 0.5 + 0.25, tz)
                  .setRotation( { w: Math.cos(angle/2), x: 0, y: Math.sin(angle/2), z: 0 } )
 
              this.world.createCollider(toothCollider, body)
 
-             // Visual Tooth (Parented to Cylinder)
              const tooth = MeshBuilder.CreateBox("tooth", { width: 1, height: 1, depth: 2 }, this.scene)
              tooth.parent = cylinder
              tooth.position.set(tx, 0.5 + 0.25, tz)
-             tooth.rotation.y = angle // Relative to parent
+             tooth.rotation.y = angle
              tooth.material = material
-
-             // No need to push tooth to adventureTrack if parent is there?
-             // Actually, parent.dispose() disposes children.
-             // But we might want to track it anyway if we detach later, but parenting is safe.
         }
       }
   }
