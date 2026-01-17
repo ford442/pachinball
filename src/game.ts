@@ -725,6 +725,8 @@ export class Game {
           this.nextAdventureTrack = AdventureTrackType.CHRONO_CORE;
       } else if (track === AdventureTrackType.CHRONO_CORE) {
           this.nextAdventureTrack = AdventureTrackType.HYPER_DRIFT;
+      } else if (track === AdventureTrackType.HYPER_DRIFT) {
+          this.nextAdventureTrack = AdventureTrackType.PACHINKO_SPIRE;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       }
