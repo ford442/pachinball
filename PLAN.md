@@ -517,3 +517,36 @@ A giant, glowing vertical board. The camera looks down (or sideways?). The ball 
 *   `boardIncline` = 75.0
 *   `pinBounciness` = 0.6
 *   `boardColor` = "#FFFFFF" (Silver/Chrome)
+
+## 18. Adventure Track: "The Orbital Junkyard"
+A chaotic, zero-G simulation where the player must navigate through a dense field of static debris. Unlike the clean lines of other tracks, this level is messy and cluttered, requiring fine control to avoid getting stuck or bouncing into the void.
+
+### A. Concept
+A floating graveyard of old satellites and space rocks. The path is not a clean ramp but a wide, slightly sloped field littered with static geometric obstacles.
+
+### B. Layout Definition
+1.  **Launch Tube:**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 8 units
+    *   Incline: -10 degrees
+    *   Width: 4 units
+    *   Visual: "Tunnel" rings.
+2.  **The Debris Field:**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 25 units
+    *   Incline: -5 degrees (Gentle Slope)
+    *   Width: 10 units (Wide)
+    *   Feature: "Space Junk" - 20-30 static obstacles (cubes, tetrahedrons) placed randomly on the surface.
+    *   Walls: Low (0.5) and broken (gaps).
+3.  **The Crusher (Hazard):**
+    *   Type: `ROTATING_PLATFORM` (Vertical orientation?) or just a narrow gap.
+    *   Let's use a "Choke Point".
+    *   Two large static blocks creating a narrow 2-unit wide gap in the center.
+4.  **Escape Pod (Goal):**
+    *   Type: `BUCKET`
+    *   Location: At the end of the debris field.
+
+### C. Technical Variables
+*   `debrisDensity` = 1.0 (Obstacles per unit area)
+*   `debrisScale` = 0.5 to 1.5 (Random size variance)
+*   `junkColor` = "#888888" (Grey/Rusty)
