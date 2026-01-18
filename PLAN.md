@@ -550,3 +550,52 @@ A floating graveyard of old satellites and space rocks. The path is not a clean 
 *   `debrisDensity` = 1.0 (Obstacles per unit area)
 *   `debrisScale` = 0.5 to 1.5 (Random size variance)
 *   `junkColor` = "#888888" (Grey/Rusty)
+
+## 19. Adventure Track: "The Firewall Breach"
+A kinetic, destructible environment where the player must smash through physical barriers to progress. Unlike the static obstacles of the Junkyard, these barriers are dynamic physics objects that react to impact.
+
+### A. Concept
+A security tunnel filled with "Data Blocks" (Crates). The ball acts as a battering ram. The player must build enough speed on the entry ramp to scatter the lightweight debris, then find the weak points in the heavier "Firewall" panels.
+
+### B. Layout Definition
+      [Entry Ramp]
+           \
+            \  (Steep Drop -25°)
+             \
+    [Zone 1: Debris]      [Chicane]      [Zone 2: Heavy Wall]    [Goal]
+    +--------------+    +-----------+    +------------------+    +----+
+    | . . . . . .  | -> |  |     |  | -> |    [###] [###]   | -> | () |
+    | . . . . . .  |    |  |     |  |    |    [###] [###]   |    +----+
+    +--------------+    +-----------+    +------------------+
+
+1.  **Packet Stream (Launch):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 20 units
+    *   Incline: -25 degrees (Steep drop for max speed)
+    *   Width: 6 units
+2.  **Security Layer 1 (Debris Field):**
+    *   Type: `STRAIGHT_RAMP` (Flat)
+    *   Length: 15 units
+    *   Width: 8 units
+    *   Feature: "Data Blocks" - A 4x5 grid of small, lightweight dynamic boxes (Mass 0.5) stacked loosely.
+    *   Visuals: Blue semi-transparent cubes.
+3.  **The Chicane (Filter):**
+    *   Type: `CURVED_RAMP` (S-Bend)
+    *   Radius: 10 units
+    *   Angle: 90 degrees Left then 90 degrees Right.
+    *   Feature: Static pillars forcing the ball to realign and lose some speed, increasing the challenge for the next wall.
+4.  **Security Layer 2 (The Heavy Wall):**
+    *   Type: `STRAIGHT_RAMP` (Flat)
+    *   Length: 10 units
+    *   Feature: "Firewall Panels" - 3 large, heavy dynamic blocks (Mass 5.0) placed side-by-side, blocking the path.
+    *   Mechanic: They are heavy but not fixed. A high-speed impact is required to push them off the edge.
+5.  **Root Access (Goal):**
+    *   Type: `BUCKET`
+    *   Location: Behind Layer 2.
+
+### C. Technical Variables
+*   `blockMassLight` = 0.5
+*   `blockMassHeavy` = 5.0
+*   `wallFriction` = 0.1 (Low friction floor to help sliding)
+*   `firewallColor` = "#FF4400" (Orange/Red)
+*   `debrisColor` = "#0088FF" (Cyan/Blue)
