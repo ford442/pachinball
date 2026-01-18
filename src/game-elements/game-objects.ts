@@ -145,8 +145,8 @@ export class GameObjects {
 
     // LCD Screen Effect: Make the texture emissive so it glows like a screen
     groundMat.emissiveTexture = groundMat.diffuseTexture
-    // Use Very Dark Grey to prevent washout/glare while keeping the glow
-    groundMat.emissiveColor = Color3.FromHexString("#050505")
+    // Use Moderate Blue-Grey to simulate a lit LCD screen (black pixels are never truly black)
+    groundMat.emissiveColor = Color3.FromHexString("#222233")
 
     // Remove external light influence (Diffuse) to prevent washout
     groundMat.diffuseColor = Color3.Black()
