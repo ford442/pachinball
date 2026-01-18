@@ -23,6 +23,7 @@ export enum AdventureTrackType {
   CHRONO_CORE = 'CHRONO_CORE',
   HYPER_DRIFT = 'HYPER_DRIFT',
   PACHINKO_SPIRE = 'PACHINKO_SPIRE',
+  ORBITAL_JUNKYARD = 'ORBITAL_JUNKYARD',
 }
 
 interface KinematicBinding {
@@ -141,6 +142,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.PACHINKO_SPIRE) {
         this.currentStartPos = new Vector3(0, 30, 0)
         this.createPachinkoSpireTrack()
+    } else if (trackType === AdventureTrackType.ORBITAL_JUNKYARD) {
+        this.currentStartPos = new Vector3(0, 15, 0)
+        this.createOrbitalJunkyardTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -527,7 +531,7 @@ export class AdventureMode {
   private createPachinkoSpireTrack(): void {
     const spireMat = this.getTrackMaterial("#FFFFFF") // Silver/Chrome
     let currentPos = this.currentStartPos.clone()
-    let heading = 0 // North
+    const heading = 0 // North
 
     // 1. The Drop Gate
     // 5 units, -45 degrees (Steep Down)
@@ -712,6 +716,146 @@ export class AdventureMode {
 
     createResetBasin(-6)
     createResetBasin(6)
+  }
+
+  // --- Track: The Orbital Junkyard ---
+  private createOrbitalJunkyardTrack(): void {
+      const junkMat = this.getTrackMaterial("#888888") // Grey/Rusty
+      let currentPos = this.currentStartPos.clone()
+      const heading = 0
+
+      // 1. Launch Tube
+      // Length 8, Incline -10 deg, Width 4
+      const launchLen = 8
+      const launchIncline = (10 * Math.PI) / 180
+      currentPos = this.addStraightRamp(currentPos, heading, 4, launchLen, launchIncline, junkMat)
+
+      // 2. The Debris Field
+      // Length 25, Incline -5 deg, Width 10
+      const debrisLen = 25
+      const debrisIncline = (5 * Math.PI) / 180
+      const debrisWidth = 10
+
+      // Capture start of debris field for object placement
+      const debrisStartPos = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, debrisWidth, debrisLen, debrisIncline, junkMat)
+
+      // 3. Debris Objects (Space Junk)
+      if (this.world) {
+          const debrisCount = 25
+          const forwardVec = new Vector3(0, -Math.sin(debrisIncline), Math.cos(debrisIncline))
+          const rightVec = new Vector3(1, 0, 0)
+          const normalVec = new Vector3(0, Math.cos(debrisIncline), Math.sin(debrisIncline))
+
+          for (let i = 0; i < debrisCount; i++) {
+              // Random position along the ramp
+              // Keep it somewhat centered but messy.
+              // Avoid the very start and very end to prevent blocking entry/exit totally.
+              const dist = 2 + Math.random() * (debrisLen - 6)
+              const offset = (Math.random() - 0.5) * (debrisWidth - 2) // Keep inside walls
+
+              const debrisPosOnSurface = debrisStartPos.add(forwardVec.scale(dist)).add(rightVec.scale(offset))
+
+              // Random Type: Box or Tetrahedron (Polyhedron)
+              const type = Math.random() > 0.5 ? 'box' : 'tetra'
+              const scale = 0.5 + Math.random() * 1.0 // 0.5 to 1.5
+
+              let mesh: Mesh
+              let colliderDesc: RAPIER.ColliderDesc
+
+              // Raise slightly above surface based on scale
+              const finalPos = debrisPosOnSurface.add(normalVec.scale(scale * 0.5))
+
+              if (type === 'box') {
+                  mesh = MeshBuilder.CreateBox("junkBox", { size: scale }, this.scene)
+                  colliderDesc = this.rapier.ColliderDesc.cuboid(scale / 2, scale / 2, scale / 2)
+              } else {
+                  mesh = MeshBuilder.CreatePolyhedron("junkTetra", { type: 0, size: scale * 0.6 }, this.scene)
+                  // Approx collider for tetra - use a ball or small cuboid for simplicity or convex hull if expensive
+                  // Using Cuboid for performance stability
+                  colliderDesc = this.rapier.ColliderDesc.cuboid(scale / 3, scale / 3, scale / 3)
+              }
+
+              mesh.position.copyFrom(finalPos)
+              // Random Rotation
+              mesh.rotation.x = Math.random() * Math.PI
+              mesh.rotation.y = Math.random() * Math.PI
+              mesh.rotation.z = Math.random() * Math.PI
+              mesh.material = junkMat
+              this.adventureTrack.push(mesh)
+
+              const q = Quaternion.FromEulerAngles(mesh.rotation.x, mesh.rotation.y, mesh.rotation.z)
+              const body = this.world.createRigidBody(
+                  this.rapier.RigidBodyDesc.fixed()
+                      .setTranslation(finalPos.x, finalPos.y, finalPos.z)
+                      .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+              )
+              this.world.createCollider(colliderDesc, body)
+              this.adventureBodies.push(body)
+          }
+      }
+
+      // 4. The Crusher (Choke Point)
+      // Two large blocks creating a narrow gap
+      // Located near the end of the debris field or just after?
+      // "The Crusher (Hazard): ... Two large static blocks creating a narrow 2-unit wide gap"
+      // Let's place it at the end of the debris ramp segment, effectively acting as the gate to the goal.
+
+      // We need to add these blocks MANUALLY because addStraightRamp doesn't support custom obstacles inside it easily.
+      // We can place them relative to 'currentPos' (which is the end of the debris ramp).
+      // Or place them ON the debris ramp near the end.
+
+      // Let's place them just before currentPos.
+      const crusherDistFromEnd = 2
+      const forwardVec = new Vector3(0, -Math.sin(debrisIncline), Math.cos(debrisIncline))
+      const rightVec = new Vector3(1, 0, 0)
+      const normalVec = new Vector3(0, Math.cos(debrisIncline), Math.sin(debrisIncline))
+
+      const crusherCenterPos = debrisStartPos.add(forwardVec.scale(debrisLen - crusherDistFromEnd))
+      const gapWidth = 2
+      const blockWidth = (debrisWidth - gapWidth) / 2 // (10 - 2) / 2 = 4
+      const blockHeight = 2
+      const blockDepth = 2
+
+      const createCrusherBlock = (direction: number) => { // -1 Left, 1 Right
+          const offset = direction * (gapWidth/2 + blockWidth/2) // 1 + 2 = 3
+          const pos = crusherCenterPos.add(rightVec.scale(offset)).add(normalVec.scale(blockHeight/2))
+
+          const box = MeshBuilder.CreateBox("crusherBlock", { width: blockWidth, height: blockHeight, depth: blockDepth }, this.scene)
+          box.position.copyFrom(pos)
+          box.rotation.x = debrisIncline
+          box.material = junkMat
+          this.adventureTrack.push(box)
+
+          if (this.world) {
+               const q = Quaternion.FromEulerAngles(box.rotation.x, box.rotation.y, box.rotation.z)
+               const body = this.world.createRigidBody(
+                   this.rapier.RigidBodyDesc.fixed()
+                       .setTranslation(pos.x, pos.y, pos.z)
+                       .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+               )
+               this.world.createCollider(
+                   this.rapier.ColliderDesc.cuboid(blockWidth/2, blockHeight/2, blockDepth/2),
+                   body
+               )
+               this.adventureBodies.push(body)
+          }
+      }
+
+      createCrusherBlock(-1)
+      createCrusherBlock(1)
+
+      // 5. Escape Pod (Goal)
+      // Just after the debris ramp ends.
+      // currentPos is the end of the debris ramp.
+      // Drop slightly into a basin.
+
+      const goalPos = currentPos.clone()
+      goalPos.y -= 2 // Drop down
+      goalPos.z += 2 // Move forward slightly
+
+      this.createBasin(goalPos, junkMat)
   }
 
   // --- Primitive Builders ---

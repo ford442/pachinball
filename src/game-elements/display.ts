@@ -239,7 +239,7 @@ export class DisplaySystem {
     return this.displayState
   }
 
-  // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
+
   update(dt: number, jackpotPhase: number = 0): void {
     this.displayTransitionTimer += dt
     
