@@ -9,6 +9,9 @@ import {
   Plane,
   StandardMaterial,
   Quaternion,
+  PostProcess,
+  Effect,
+  Texture,
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import type { Engine } from '@babylonjs/core/Engines/engine'
@@ -35,6 +38,10 @@ import {
   PrismCoreState,
 } from './game-elements'
 import { GameConfig } from './config'
+import { scanlinePixelShader } from './shaders/scanline'
+
+// Register the shader
+Effect.ShadersStore["scanlineFragmentShader"] = scanlinePixelShader.fragment
 
 export class Game {
   private readonly engine: Engine | WebGPUEngine
@@ -148,6 +155,21 @@ export class Game {
       this.bloomPipeline.bloomEnabled = true
       this.bloomPipeline.bloomKernel = 64
       this.bloomPipeline.bloomWeight = 0.4
+    }
+
+    // Add LCD Scanline Overlay
+    const scanline = new PostProcess(
+        "scanline",
+        "scanline",
+        ["uTime"],
+        null,
+        1.0,
+        camera,
+        Texture.BILINEAR_SAMPLINGMODE,
+        this.engine
+    )
+    scanline.onApply = (effect) => {
+        effect.setFloat("uTime", performance.now() * 0.001)
     }
 
     new HemisphericLight('light', new Vector3(0.3, 1, 0.3), this.scene)

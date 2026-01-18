@@ -145,9 +145,11 @@ export class GameObjects {
 
     // LCD Screen Effect: Make the texture emissive so it glows like a screen
     groundMat.emissiveTexture = groundMat.diffuseTexture
-    groundMat.emissiveColor = Color3.White()
+    // Use Dark Grey to prevent washout/glare while keeping the glow
+    groundMat.emissiveColor = Color3.FromHexString("#222222")
 
-    groundMat.specularColor = new Color3(0.5, 0.5, 0.5)
+    // Remove specular highlights to avoid "plastic" glare
+    groundMat.specularColor = Color3.Black()
     groundMat.reflectionTexture = mirrorTexture
 
     const ground = MeshBuilder.CreateGround('ground', { width: GameConfig.table.width, height: GameConfig.table.height }, this.scene) as Mesh
