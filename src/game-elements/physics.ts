@@ -13,7 +13,11 @@ export class PhysicsSystem {
     if (this.rapier) return
     this.rapier = await import('@dimforge/rapier3d-compat')
     await (this.rapier.init as unknown as () => Promise<void>)()
-    this.world = new this.rapier.World(new this.rapier.Vector3(GRAVITY.x, GRAVITY.y, GRAVITY.z))
+
+    // Updated: Pass a single object with gravity property
+    const gravity = { x: GRAVITY.x, y: GRAVITY.y, z: GRAVITY.z }
+    this.world = new this.rapier.World(gravity)
+
     this.eventQueue = new this.rapier.EventQueue(true)
   }
 

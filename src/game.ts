@@ -42,6 +42,7 @@ import { scanlinePixelShader } from './shaders/scanline'
 
 // Register the shader
 Effect.ShadersStore["scanlineFragmentShader"] = scanlinePixelShader.fragment
+Effect.ShadersStore["scanlinePixelShader"] = scanlinePixelShader.fragment
 
 export class Game {
   private readonly engine: Engine | WebGPUEngine

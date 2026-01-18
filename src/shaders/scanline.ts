@@ -18,13 +18,10 @@ export const scanlinePixelShader = {
         // 2. Vignette
         // Darken the corners to simulate a CRT/curved screen
         float dist = distance(vUV, vec2(0.5, 0.5));
-        float vignette = smoothstep(1.0, 0.4, dist);
+        // correct smoothstep usage: edge0 < edge1
+        // we want 1.0 at center (dist=0) and 0.0 at corners (dist=0.7)
+        float vignette = 1.0 - smoothstep(0.3, 0.8, dist);
         color *= vignette;
-
-        // 3. Subtle LCD Grid (Vertical lines)
-        // float gridCount = 1000.0;
-        // float grid = sin(vUV.x * gridCount) * 0.05;
-        // color -= grid;
 
         gl_FragColor = vec4(color, 1.0);
     }
