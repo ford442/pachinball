@@ -12,7 +12,7 @@ export const scanlinePixelShader = {
         // 1. Scanlines
         // A high frequency sine wave along the Y axis
         float scanlineCount = 800.0;
-        float scanlineIntensity = 0.15;
+        float scanlineIntensity = 0.25;
 
         // Use sine wave to create alternating light/dark bands
         // Range [-1, 1] -> [0.85, 1.0] for multiplicative
@@ -25,9 +25,6 @@ export const scanlinePixelShader = {
         // Darken the corners to simulate a CRT/curved screen
         float dist = distance(vUV, vec2(0.5, 0.5));
         float vignette = 1.0 - smoothstep(0.4, 0.9, dist);
-
-        // Boost brightness slightly to compensate for scanline darkening
-        color *= 1.2;
 
         color *= vignette;
 
