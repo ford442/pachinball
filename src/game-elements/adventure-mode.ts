@@ -24,6 +24,7 @@ export enum AdventureTrackType {
   HYPER_DRIFT = 'HYPER_DRIFT',
   PACHINKO_SPIRE = 'PACHINKO_SPIRE',
   ORBITAL_JUNKYARD = 'ORBITAL_JUNKYARD',
+  FIREWALL_BREACH = 'FIREWALL_BREACH',
 }
 
 interface KinematicBinding {
@@ -145,6 +146,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.ORBITAL_JUNKYARD) {
         this.currentStartPos = new Vector3(0, 15, 0)
         this.createOrbitalJunkyardTrack()
+    } else if (trackType === AdventureTrackType.FIREWALL_BREACH) {
+        this.currentStartPos = new Vector3(0, 25, 0)
+        this.createFirewallBreachTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -856,6 +860,151 @@ export class AdventureMode {
       goalPos.z += 2 // Move forward slightly
 
       this.createBasin(goalPos, junkMat)
+  }
+
+  // --- Track: The Firewall Breach ---
+  private createFirewallBreachTrack(): void {
+      const wallMat = this.getTrackMaterial("#FF4400") // Orange/Red
+      const debrisMat = this.getTrackMaterial("#0088FF") // Cyan/Blue
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+
+      // 1. Packet Stream (Launch)
+      // Length 20, Incline -25 deg (Steep Drop)
+      const launchLen = 20
+      const launchIncline = (25 * Math.PI) / 180
+      currentPos = this.addStraightRamp(currentPos, heading, 6, launchLen, launchIncline, wallMat)
+
+      // 2. Security Layer 1 (Debris Field)
+      // Flat, Length 15, Width 8
+      const debrisLen = 15
+      const debrisWidth = 8
+
+      const debrisStartPos = currentPos.clone()
+      currentPos = this.addStraightRamp(currentPos, heading, debrisWidth, debrisLen, 0, wallMat)
+
+      // Add Data Blocks (Dynamic Debris)
+      // 4x5 grid of small dynamic boxes
+      if (this.world) {
+          const rows = 5
+          const cols = 4
+          const spacing = 1.5
+          const startX = -(cols - 1) * spacing / 2
+          const startZ = 2.0 // Offset from start of ramp
+
+          const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+          const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+
+          for (let r = 0; r < rows; r++) {
+              for (let c = 0; c < cols; c++) {
+                  const xOffset = startX + c * spacing
+                  const zOffset = startZ + r * spacing
+
+                  const blockPos = debrisStartPos
+                      .add(forward.scale(zOffset))
+                      .add(right.scale(xOffset))
+
+                  // Raise slightly
+                  blockPos.y += 0.5
+
+                  this.createDynamicBlock(blockPos, 1.0, 0.5, debrisMat) // Mass 0.5
+              }
+          }
+      }
+
+      // 3. The Chicane (Filter)
+      // S-Bend: 90 Left, 90 Right
+      const turnRadius = 10
+      const turnAngle = Math.PI / 2
+
+      // Turn Left
+      currentPos = this.addCurvedRamp(currentPos, heading, turnRadius, turnAngle, 0, 8, 1.0, wallMat, 15, 0)
+      heading -= turnAngle
+
+      // Turn Right
+      currentPos = this.addCurvedRamp(currentPos, heading, turnRadius, turnAngle, 0, 8, 1.0, wallMat, 15, 0)
+      heading += turnAngle
+
+      // 4. Security Layer 2 (The Heavy Wall)
+      // Flat, Length 10
+      const wallLen = 10
+      const wallStartPos = currentPos.clone()
+      currentPos = this.addStraightRamp(currentPos, heading, 8, wallLen, 0, wallMat)
+
+      // Add Firewall Panels (Heavy Blocks)
+      // 3 large blocks side-by-side
+      if (this.world) {
+          const blockCount = 3
+          const blockSize = 2.5
+          const spacing = 2.6
+          const startX = -(blockCount - 1) * spacing / 2
+          const zOffset = 5.0 // Middle of the ramp
+
+          const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+          const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+
+          for (let i = 0; i < blockCount; i++) {
+              const xOffset = startX + i * spacing
+              const blockPos = wallStartPos
+                  .add(forward.scale(zOffset))
+                  .add(right.scale(xOffset))
+
+              blockPos.y += blockSize / 2
+
+              this.createDynamicBlock(blockPos, blockSize, 5.0, wallMat) // Mass 5.0
+          }
+      }
+
+      // 5. Root Access (Goal)
+      const goalPos = currentPos.clone()
+      goalPos.y -= 2
+      goalPos.z += 2
+
+      this.createBasin(goalPos, wallMat)
+  }
+
+  private createDynamicBlock(pos: Vector3, size: number, mass: number, material: StandardMaterial): void {
+      if (!this.world) return
+
+      const box = MeshBuilder.CreateBox("dynBlock", { size }, this.scene)
+      box.position.copyFrom(pos)
+      box.material = material
+      this.adventureTrack.push(box)
+
+      const bodyDesc = this.rapier.RigidBodyDesc.dynamic()
+          .setTranslation(pos.x, pos.y, pos.z)
+
+      const body = this.world.createRigidBody(bodyDesc)
+
+      // Calculate density based on mass and volume to achieve desired mass
+      // Volume = size^3
+      // Density = Mass / Volume
+      const volume = size * size * size
+      const density = mass / volume
+
+      this.world.createCollider(
+          this.rapier.ColliderDesc.cuboid(size / 2, size / 2, size / 2)
+            .setDensity(density)
+            .setFriction(0.5)
+            .setRestitution(0.2),
+          body
+      )
+      this.adventureBodies.push(body)
+
+      // Need to sync this dynamic body to mesh
+      // We can reuse the kinematicBindings array since it just maps body->mesh in update()
+      // although the name implies kinematic, the update loop logic is generic:
+      // "Sync kinematic bodies to visuals... pos = body.translation()..."
+      // So checking update():
+      /*
+        for (const binding of this.kinematicBindings) {
+            if (!binding.body || !binding.mesh) continue
+            const pos = binding.body.translation()
+            ...
+        }
+      */
+      // Yes, this works for dynamic bodies too.
+      this.kinematicBindings.push({ body, mesh: box })
   }
 
   // --- Primitive Builders ---
