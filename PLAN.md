@@ -599,3 +599,44 @@ A security tunnel filled with "Data Blocks" (Crates). The ball acts as a batteri
 *   `wallFriction` = 0.1 (Low friction floor to help sliding)
 *   `firewallColor` = "#FF4400" (Orange/Red)
 *   `debrisColor` = "#0088FF" (Cyan/Blue)
+
+## 20. Adventure Track: "The CPU Core"
+A hardware-themed track that simulates navigating the intricate pathways of a motherboard. The player must traverse data buses, bypass logic gates, and survive the high-speed cooling fan to reach the central processor.
+
+### A. Concept
+A flat, geometric "City of Circuits" floating in a dark void. The path is defined by gold traces on a green PCB background. The main hazard is the "Cooling Fan", a high-speed rotating platform that can fling the ball into the void if not timed correctly.
+
+### B. Layout Definition
+1.  **The Front Side Bus (Entry):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: 0 degrees (Flat)
+    *   Width: 6 units (Wide)
+    *   WallHeight: 1.0
+2.  **The Logic Gate (Chicane):**
+    *   Type: `STRAIGHT_RAMP` x 3
+    *   Sequence: Forward 5 -> Left 90 (Sharp) -> Forward 5 -> Right 90 (Sharp) -> Forward 5.
+    *   Width: 3 units (Narrow)
+    *   WallHeight: 0.0 (No walls - Precision required)
+3.  **The Heatsink (Hazard):**
+    *   Type: `ROTATING_PLATFORM`
+    *   Radius: 8 units
+    *   Rotation: Clockwise (90 deg/sec - Fast)
+    *   Feature: "Fan Blades" (Teeth) - 4 large blades that act as sweeping walls.
+4.  **The Thermal Bridge:**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 10 units
+    *   Incline: 0 degrees
+    *   Width: 2 units (Very Narrow)
+    *   Connection: From the edge of the Fan to the Die.
+5.  **The Processor Die (Goal):**
+    *   Type: `BUCKET`
+    *   Location: At the end of the bridge.
+    *   Visual: Square "Chip" socket.
+
+### C. Technical Variables
+*   `fanSpeed` = 1.5 (Radians per second)
+*   `pcbColor` = "#004400" (Dark Green)
+*   `traceColor` = "#FFD700" (Gold)
+*   `busWidth` = 6.0
+*   `bridgeWidth` = 2.0
