@@ -752,6 +752,10 @@ export class Game {
           this.nextAdventureTrack = AdventureTrackType.PACHINKO_SPIRE;
       } else if (track === AdventureTrackType.PACHINKO_SPIRE) {
           this.nextAdventureTrack = AdventureTrackType.ORBITAL_JUNKYARD;
+      } else if (track === AdventureTrackType.ORBITAL_JUNKYARD) {
+          this.nextAdventureTrack = AdventureTrackType.FIREWALL_BREACH;
+      } else if (track === AdventureTrackType.FIREWALL_BREACH) {
+          this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       }
