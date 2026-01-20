@@ -640,3 +640,43 @@ A flat, geometric "City of Circuits" floating in a dark void. The path is define
 *   `traceColor` = "#FFD700" (Gold)
 *   `busWidth` = 6.0
 *   `bridgeWidth` = 2.0
+
+## 21. Adventure Track: "The Cryo-Chamber"
+A frozen, frictionless expanse where momentum is king. The ball slides effortlessly, making braking impossible. Precision is required to navigate the "Slalom" gates without sliding off the narrow "Ice Bridge".
+
+### A. Concept
+A low-friction environment using an "Ice" aesthetic (Cyan/White, High Specular). The challenge is not speed generation but speed *control* and directional steering on slippery surfaces.
+
+### B. Layout Definition
+1.  **Flash Freeze (Entry):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: -20 degrees (Down)
+    *   Width: 6 units
+    *   Friction: 0.0 (Zero Friction)
+2.  **The Slalom (Chicane):**
+    *   Type: `CURVED_RAMP` x 3 (Connected)
+    *   Sequence: Left 45 -> Right 90 -> Left 45.
+    *   Radius: 10 units
+    *   Feature: "Ice Pillars" (Static Cylinders) placed at the apex of each turn to force tight lines.
+3.  **The Ice Bridge (Hazard):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 12 units
+    *   Width: 2.5 units (Narrow)
+    *   WallHeight: 0.0 (No Walls)
+    *   Note: Banking is critical here.
+4.  **The Avalanche (Descent):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 10 units
+    *   Angle: 180 degrees
+    *   Incline: -15 degrees
+    *   Banking: -20 degrees (Steep Inward Tilt)
+5.  **Absolute Zero (Goal):**
+    *   Type: `BUCKET`
+    *   Location: At the bottom of the spiral.
+
+### C. Technical Variables
+*   `iceFriction` = 0.001 (Near zero)
+*   `iceColor` = "#A5F2F3" (Ice Blue)
+*   `pillarCount` = 6
+*   `bridgeWidth` = 2.5
