@@ -25,6 +25,7 @@ export enum AdventureTrackType {
   PACHINKO_SPIRE = 'PACHINKO_SPIRE',
   ORBITAL_JUNKYARD = 'ORBITAL_JUNKYARD',
   FIREWALL_BREACH = 'FIREWALL_BREACH',
+  CPU_CORE = 'CPU_CORE',
 }
 
 interface KinematicBinding {
@@ -149,6 +150,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.FIREWALL_BREACH) {
         this.currentStartPos = new Vector3(0, 25, 0)
         this.createFirewallBreachTrack()
+    } else if (trackType === AdventureTrackType.CPU_CORE) {
+        this.currentStartPos = new Vector3(0, 15, 0)
+        this.createCpuCoreTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -1253,5 +1257,153 @@ export class AdventureMode {
       sensor
     )
     this.adventureSensor = sensor
+  }
+
+  // --- Track: The CPU Core ---
+  private createCpuCoreTrack(): void {
+      // Colors: PCB Green and Gold Traces
+      const pcbMat = this.getTrackMaterial("#004400") // Dark Green
+      const traceMat = this.getTrackMaterial("#FFD700") // Gold
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+
+      // 1. The Front Side Bus (Entry)
+      // Flat, Wide (6), Length 15
+      const entryLen = 15
+      currentPos = this.addStraightRamp(currentPos, heading, 6, entryLen, 0, pcbMat)
+
+      // 2. The Logic Gate (Chicane)
+      // Narrow (3), Zig-Zag
+      const gateWidth = 3
+      const gateLen = 5
+
+      // Forward 5
+      currentPos = this.addStraightRamp(currentPos, heading, gateWidth, gateLen, 0, traceMat)
+
+      // Left 90
+      heading -= Math.PI / 2
+      // Because we turned 90 degrees abruptly, we need to adjust start pos for the next ramp
+      // addStraightRamp starts from 'currentPos'. If we turn, we continue from that point.
+      // But visually, a sharp turn might look weird without a corner piece.
+      // addStraightRamp returns the END of the segment.
+      // If we simply rotate heading, the next segment starts from the end of previous one, but rotated.
+      // That works for sharp turns.
+
+      // Forward 5
+      currentPos = this.addStraightRamp(currentPos, heading, gateWidth, gateLen, 0, traceMat)
+
+      // Right 90 (Back to original heading)
+      heading += Math.PI / 2
+      // Forward 5
+      currentPos = this.addStraightRamp(currentPos, heading, gateWidth, gateLen, 0, traceMat)
+
+      // 3. The Heatsink (Hazard)
+      // Rotating Platform, Radius 8, Fast (90 deg/sec)
+      // Needs Fan Blades
+      const fanRadius = 8
+      const fanSpeed = 1.5 // Radians/sec (~86 deg/sec)
+
+      const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+
+      // Drop slightly or stay flat? Plan says flat.
+      // Move center forward so we land on the edge
+      const fanCenter = currentPos.add(forward.scale(fanRadius + 1))
+
+      // We need to implement a custom rotating platform with blades
+      // Reuse createRotatingPlatform but add blade logic?
+      // Or just write it here custom.
+
+      this.createRotatingPlatform(fanCenter, fanRadius, -fanSpeed, pcbMat, false) // Base
+
+      // Add Fan Blades separately attached to the same kinematic body?
+      // createRotatingPlatform creates a body. We can't easily attach more colliders to it from outside without modifying it.
+      // Let's modify createRotatingPlatform to support "Fan Blades" or do it manually here.
+
+      // Manual implementation for Heatsink Fan
+      if (this.world) {
+          // We already created the base platform above.
+          // Let's find the last body added (which is the platform)
+          const fanBody = this.adventureBodies[this.adventureBodies.length - 1]
+
+          // Add 4 Blades
+          const bladeCount = 4
+          const bladeLength = fanRadius - 1
+          const bladeHeight = 1.5
+          const bladeThickness = 0.5
+
+          for (let i = 0; i < bladeCount; i++) {
+              const angle = (i * Math.PI * 2) / bladeCount
+
+              // Visual Blade
+              const blade = MeshBuilder.CreateBox("fanBlade", { width: bladeThickness, height: bladeHeight, depth: bladeLength }, this.scene)
+              // Position relative to center?
+              // We need to parent it to the visual mesh of the platform?
+              // The platform mesh is in this.kinematicBindings
+              const binding = this.kinematicBindings.find(b => b.body === fanBody)
+              if (binding) {
+                  blade.parent = binding.mesh
+                  // Local position: Offset from center
+                  blade.position.set(0, bladeHeight/2, bladeLength/2)
+                  // Rotate around Y center?
+                  // We want them radiating out.
+                  // If we set position to (0,0, L/2) and then rotate the PARENT (Pivot), that works.
+                  // But here we are attaching to the spinning platform.
+
+                  // Easier: Create the blade at the correct local position/rotation
+                  // TransformNode as pivot?
+                  // Babylon parenting handles visual rotation.
+
+                  // Local position:
+                  const r = bladeLength / 2
+                  const lx = Math.sin(angle) * r
+                  const lz = Math.cos(angle) * r
+
+                  blade.position.set(lx, bladeHeight/2, lz)
+                  blade.rotation.y = angle
+                  blade.material = traceMat
+
+                  // Physics Collider
+                  // Must be attached to the kinematic body
+                  // Collider Position is Relative to Body Center (which is fanCenter)
+                  // So we use the same offsets as visual
+
+                  const colRot = Quaternion.FromEulerAngles(0, angle, 0)
+
+                  const colliderDesc = this.rapier.ColliderDesc.cuboid(bladeThickness/2, bladeHeight/2, bladeLength/2)
+                      .setTranslation(lx, bladeHeight/2 + 0.25, lz) // +0.25 for half platform thickness
+                      .setRotation({ x: colRot.x, y: colRot.y, z: colRot.z, w: colRot.w })
+
+                  this.world.createCollider(colliderDesc, fanBody)
+              }
+          }
+      }
+
+      // 4. The Thermal Bridge
+      // Narrow (2), Length 10
+      // Connects from fan edge to goal
+
+      // Current logical position is fanCenter.
+      // We need to start the bridge at the far edge of the fan.
+      const bridgeStart = fanCenter.add(forward.scale(fanRadius))
+      const bridgeLen = 10
+      const bridgeWidth = 2.0
+
+      // Update currentPos to bridgeStart
+      // addStraightRamp calculates center based on startPos.
+      const bridgeEnd = this.addStraightRamp(bridgeStart, heading, bridgeWidth, bridgeLen, 0, traceMat)
+
+      // 5. The Processor Die (Goal)
+      const goalPos = bridgeEnd.clone()
+      goalPos.z += 4 // Move into basin
+      // goalPos.y -= 1 // Drop slightly?
+
+      this.createBasin(goalPos, pcbMat)
+
+      // Visual: CPU Socket?
+      const socket = MeshBuilder.CreateBox("cpuSocket", { width: 4, height: 0.2, depth: 4 }, this.scene)
+      socket.position.copyFrom(goalPos)
+      socket.position.y += 0.5 // Sit on floor
+      socket.material = traceMat
+      this.adventureTrack.push(socket)
   }
 }

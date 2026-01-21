@@ -755,6 +755,8 @@ export class Game {
       } else if (track === AdventureTrackType.ORBITAL_JUNKYARD) {
           this.nextAdventureTrack = AdventureTrackType.FIREWALL_BREACH;
       } else if (track === AdventureTrackType.FIREWALL_BREACH) {
+          this.nextAdventureTrack = AdventureTrackType.CPU_CORE;
+      } else if (track === AdventureTrackType.CPU_CORE) {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
