@@ -680,3 +680,42 @@ A low-friction environment using an "Ice" aesthetic (Cyan/White, High Specular).
 *   `iceColor` = "#A5F2F3" (Ice Blue)
 *   `pillarCount` = 6
 *   `bridgeWidth` = 2.5
+
+## 22. Adventure Track: "The Bio-Hazard Lab"
+A toxic waste processing facility where the environment itself is the enemy. The ball must navigate high-speed centrifuges and narrow pipelines without falling into the radioactive sludge.
+
+### A. Concept
+A neon-green industrial zone. The "Sludge" is a visual hazard (and potentially sticky physics surface). The core mechanic is the "Centrifuge", a high-speed rotating ring that acts as a gravity well, flinging the ball outward if it doesn't maintain speed.
+
+### B. Layout Definition
+1.  **The Sludge Chute (Entry):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: -20 degrees (Steep Drop)
+    *   Width: 6 units
+    *   Friction: 0.1 (Slippery)
+2.  **The Centrifuge (Hazard):**
+    *   Type: `ROTATING_PLATFORM`
+    *   Radius: 10 units
+    *   Rotation: Counter-Clockwise (High Speed: 3.0 rad/s)
+    *   Feature: "Containment Wall" - Outer rim wall is only 0.5 units high. High speed risks flying over.
+3.  **The Pipeline (Tunnel):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 12 units
+    *   Width: 2.5 units (Very Narrow)
+    *   WallHeight: 4.0 (Full Tube effect)
+    *   Incline: 0 degrees
+4.  **The Mixing Vats (Chicane):**
+    *   Type: `CURVED_RAMP` (S-Bend)
+    *   Radius: 8 units
+    *   Angle: 90 Left then 90 Right
+    *   Feature: Gaps in the floor ("Open Vats") requiring velocity to cross.
+5.  **Containment Unit (Goal):**
+    *   Type: `BUCKET`
+    *   Location: At the end of the chicane.
+
+### C. Technical Variables
+*   `hazardColor` = "#39FF14" (Lime Green)
+*   `warningColor` = "#FFFF00" (Yellow)
+*   `sludgeFriction` = 0.05
+*   `centrifugeSpeed` = 3.0
