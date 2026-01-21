@@ -757,6 +757,8 @@ export class Game {
       } else if (track === AdventureTrackType.FIREWALL_BREACH) {
           this.nextAdventureTrack = AdventureTrackType.CPU_CORE;
       } else if (track === AdventureTrackType.CPU_CORE) {
+          this.nextAdventureTrack = AdventureTrackType.BIO_HAZARD_LAB;
+      } else if (track === AdventureTrackType.BIO_HAZARD_LAB) {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
