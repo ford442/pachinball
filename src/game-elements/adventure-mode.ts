@@ -26,6 +26,7 @@ export enum AdventureTrackType {
   ORBITAL_JUNKYARD = 'ORBITAL_JUNKYARD',
   FIREWALL_BREACH = 'FIREWALL_BREACH',
   CPU_CORE = 'CPU_CORE',
+  BIO_HAZARD_LAB = 'BIO_HAZARD_LAB',
 }
 
 interface KinematicBinding {
@@ -153,6 +154,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.CPU_CORE) {
         this.currentStartPos = new Vector3(0, 15, 0)
         this.createCpuCoreTrack()
+    } else if (trackType === AdventureTrackType.BIO_HAZARD_LAB) {
+        this.currentStartPos = new Vector3(0, 20, 0)
+        this.createBioHazardLabTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -1029,7 +1033,9 @@ export class AdventureMode {
       width: number,
       length: number,
       inclineRad: number,
-      material: StandardMaterial
+      material: StandardMaterial,
+      wallHeight: number = 0,
+      friction: number = 0.5
   ): Vector3 {
       if (!this.world) return startPos
 
@@ -1061,10 +1067,14 @@ export class AdventureMode {
               .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
       )
       this.world.createCollider(
-          this.rapier.ColliderDesc.cuboid(width / 2, 0.25, length / 2),
+          this.rapier.ColliderDesc.cuboid(width / 2, 0.25, length / 2).setFriction(friction),
           body
       )
       this.adventureBodies.push(body)
+
+      if (wallHeight > 0) {
+          this.createWall(center, heading, length, width, wallHeight, inclineRad, material, friction)
+      }
 
       // Return End Position
       const endPos = startPos.add(forward.scale(hLen))
@@ -1082,7 +1092,8 @@ export class AdventureMode {
       wallHeight: number,
       material: StandardMaterial,
       segments: number = 20,
-      bankingAngle: number = 0
+      bankingAngle: number = 0,
+      friction: number = 0.5
   ): Vector3 {
       if (!this.world) return startPos
 
@@ -1118,13 +1129,13 @@ export class AdventureMode {
                   .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
           )
           this.world.createCollider(
-              this.rapier.ColliderDesc.cuboid(width / 2, 0.25, chordLen / 2),
+              this.rapier.ColliderDesc.cuboid(width / 2, 0.25, chordLen / 2).setFriction(friction),
               body
           )
           this.adventureBodies.push(body)
 
           if (wallHeight > 0) {
-              this.createWall(center, currentHeading, chordLen, width, wallHeight, inclineRad, material)
+              this.createWall(center, currentHeading, chordLen, width, wallHeight, inclineRad, material, friction)
           }
 
           currentP = currentP.add(forward.scale(chordLen))
@@ -1143,7 +1154,8 @@ export class AdventureMode {
       trackWidth: number,
       height: number,
       inclineRad: number,
-      mat: StandardMaterial
+      mat: StandardMaterial,
+      friction: number = 0.5
   ) {
       if (!this.world) return
 
@@ -1169,7 +1181,7 @@ export class AdventureMode {
                   .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
           )
           this.world.createCollider(
-              this.rapier.ColliderDesc.cuboid(0.25, height / 2, length / 2),
+              this.rapier.ColliderDesc.cuboid(0.25, height / 2, length / 2).setFriction(friction),
               body
           )
           this.adventureBodies.push(body)
@@ -1405,5 +1417,170 @@ export class AdventureMode {
       socket.position.y += 0.5 // Sit on floor
       socket.material = traceMat
       this.adventureTrack.push(socket)
+  }
+
+  // --- Track: The Bio-Hazard Lab ---
+  private createBioHazardLabTrack(): void {
+      const hazardMat = this.getTrackMaterial("#39FF14") // Lime Green
+      const warningMat = this.getTrackMaterial("#FFFF00") // Yellow
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+
+      // 1. The Sludge Chute (Entry)
+      // Length 15, Incline -20 deg, Width 6, Friction 0.1
+      const chuteLen = 15
+      const chuteIncline = (20 * Math.PI) / 180
+      const sludgeFriction = 0.1
+
+      // WallHeight 0.5 to keep ball in initially
+      currentPos = this.addStraightRamp(currentPos, heading, 6, chuteLen, chuteIncline, hazardMat, 1.0, sludgeFriction)
+
+      // 2. The Centrifuge (Hazard)
+      // Radius 10, Rotation CCW 3.0 rad/s
+      const centrifugeRadius = 10
+      const centrifugeSpeed = 3.0 // Rad/s
+
+      const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+
+      // Move center so we enter tangentially or radially?
+      // Usually ramp leads to edge.
+      // Let's drop the ball onto the edge.
+      const centrifugeCenter = currentPos.add(forward.scale(centrifugeRadius + 1))
+      centrifugeCenter.y -= 2.0 // Drop into it
+
+      // Create Platform
+      this.createRotatingPlatform(centrifugeCenter, centrifugeRadius, centrifugeSpeed, hazardMat)
+
+      // Add Containment Wall (Rotating with platform)
+      // We need to access the body created by createRotatingPlatform to attach the wall collider
+      // It's the last added body.
+      if (this.world && this.adventureBodies.length > 0) {
+          const platformBody = this.adventureBodies[this.adventureBodies.length - 1]
+          const wallHeight = 0.5
+          const wallThickness = 0.5
+
+          // Visual Wall (Tube)
+          // Actually, let's use a Tube describing the ring, or just a cylinder with hollow logic?
+          // Simplest is a Cylinder with 'arc' but we need 360.
+          // Let's use CreateTorus
+          const torus = MeshBuilder.CreateTorus("centrifugeWall", {
+              diameter: centrifugeRadius * 2,
+              thickness: wallThickness,
+              tessellation: 32
+          }, this.scene)
+
+          // Torus is created lying flat? No, usually standing.
+          // We need it flat.
+
+          // But wait, parenting to the kinematic mesh (cylinder)
+          const binding = this.kinematicBindings.find(b => b.body === platformBody)
+          if (binding) {
+             torus.parent = binding.mesh
+             torus.position.set(0, wallHeight/2, 0)
+             torus.material = warningMat
+
+             // The collider needs to be a hollow cylinder or multiple cuboids approximating a ring.
+             // Rapier doesn't have a hollow cylinder collider.
+             // We must use compound cuboids.
+             const segments = 16
+             const angleStep = (Math.PI * 2) / segments
+
+             for (let i=0; i<segments; i++) {
+                 const angle = i * angleStep
+                 const cx = Math.sin(angle) * centrifugeRadius
+                 const cz = Math.cos(angle) * centrifugeRadius
+
+                 const colRot = Quaternion.FromEulerAngles(0, angle, 0)
+
+                 // Arc length approx = radius * step
+                 const arcLen = centrifugeRadius * angleStep
+
+                 const colliderDesc = this.rapier.ColliderDesc.cuboid(wallThickness/2, wallHeight/2, arcLen/2 + 0.2) // +0.2 overlap
+                    .setTranslation(cx, wallHeight/2 + 0.25, cz) // +0.25 relative to platform center (floor is 0.5 thick)
+                    .setRotation({ x: colRot.x, y: colRot.y, z: colRot.z, w: colRot.w })
+
+                 this.world.createCollider(colliderDesc, platformBody)
+             }
+          }
+      }
+
+      // Update currentPos to exit the centrifuge
+      // We entered at 'entry' (approx). We exit at 'exit'.
+      // Let's say we exit 180 degrees from entry? Or 90?
+      // Since it's spinning fast CCW, ball will be flung out.
+      // We need a gap in the wall? "Outer rim wall is only 0.5 units high. High speed risks flying over."
+      // The intention is the ball FLIES OVER the wall due to centripetal force.
+      // So we place the next track section slightly lower and outward.
+
+      const exitDir = heading // Continue straight?
+      // Or maybe to the right?
+      // Let's continue forward.
+      const exitForward = new Vector3(Math.sin(exitDir), 0, Math.cos(exitDir))
+      const exitPos = centrifugeCenter.add(exitForward.scale(centrifugeRadius + 2))
+      exitPos.y -= 1.0 // Drop
+
+      currentPos = exitPos
+
+      // 3. The Pipeline (Tunnel)
+      // Length 12, Width 2.5, WallHeight 4.0, Incline 0
+      const pipeLen = 12
+      const pipeWidth = 2.5
+      const pipeHeight = 4.0
+
+      // Add a catch basin/funnel to ensure ball enters pipe?
+      // Or just a wider entry ramp.
+      // Let's add a small funnel ramp first.
+      currentPos = this.addStraightRamp(currentPos, heading, 6, 4, 0, warningMat, 2.0)
+
+      currentPos = this.addStraightRamp(currentPos, heading, pipeWidth, pipeLen, 0, hazardMat, pipeHeight)
+
+      // 4. The Mixing Vats (Chicane)
+      // S-Bend: 90 Left, 90 Right. Radius 8. Gaps.
+      const turnRadius = 8
+      const turnAngle = Math.PI / 2
+
+      // Turn Left 90
+      // Split into 2 segments with gap
+      // 45 deg -> Gap -> 45 deg
+      const halfAngle = turnAngle / 2
+
+      // Part 1
+      currentPos = this.addCurvedRamp(currentPos, heading, turnRadius, -halfAngle, 0, 4, 1.0, hazardMat, 10, 0, 0.1)
+      heading -= halfAngle
+
+      // GAP
+      const gapLen = 2.0
+      // Visual Gap: Just move currentPos
+      const gapForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      // Tangent is perpendicular to radius... addCurvedRamp returns end pos.
+      // Heading is updated to tangent at end.
+      currentPos = currentPos.add(gapForward.scale(gapLen))
+
+      // Part 2
+      currentPos = this.addCurvedRamp(currentPos, heading, turnRadius, -halfAngle, 0, 4, 1.0, hazardMat, 10, 0, 0.1)
+      heading -= halfAngle
+
+      // Straight buffer
+      currentPos = this.addStraightRamp(currentPos, heading, 4, 3, 0, warningMat)
+
+      // Turn Right 90
+      // Part 1
+      currentPos = this.addCurvedRamp(currentPos, heading, turnRadius, halfAngle, 0, 4, 1.0, hazardMat, 10, 0, 0.1)
+      heading += halfAngle
+
+      // GAP
+      const gapForward2 = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      currentPos = currentPos.add(gapForward2.scale(gapLen))
+
+      // Part 2
+      currentPos = this.addCurvedRamp(currentPos, heading, turnRadius, halfAngle, 0, 4, 1.0, hazardMat, 10, 0, 0.1)
+      heading += halfAngle
+
+      // 5. Containment Unit (Goal)
+      const goalPos = currentPos.clone()
+      goalPos.y -= 2
+      goalPos.z += 2
+
+      this.createBasin(goalPos, hazardMat)
   }
 }
