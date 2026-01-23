@@ -28,6 +28,7 @@ export enum AdventureTrackType {
   CPU_CORE = 'CPU_CORE',
   BIO_HAZARD_LAB = 'BIO_HAZARD_LAB',
   GRAVITY_FORGE = 'GRAVITY_FORGE',
+  TIDAL_NEXUS = 'TIDAL_NEXUS',
 }
 
 interface KinematicBinding {
@@ -212,6 +213,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.GRAVITY_FORGE) {
         this.currentStartPos = new Vector3(0, 20, 0)
         this.createGravityForgeTrack()
+    } else if (trackType === AdventureTrackType.TIDAL_NEXUS) {
+        this.currentStartPos = new Vector3(0, 25, 0)
+        this.createTidalNexusTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -1932,5 +1936,256 @@ export class AdventureMode {
       // createBasin pushes to adventureTrack.
       const basinMesh = this.adventureTrack[this.adventureTrack.length - 1]
       if (basinMesh) basinMesh.material = waterMat
+  }
+
+  // --- Track: The Tidal Nexus ---
+  private createTidalNexusTrack(): void {
+      const waterMat = this.getTrackMaterial("#0066FF") // Deep Sky Blue
+      const foamMat = this.getTrackMaterial("#E0FFFF") // Light Cyan
+
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+
+      // 1. The Spillway (Injection)
+      // Length 15, Incline -20 deg, Width 6, Conveyor Force +8.0 Z
+      const spillLen = 15
+      const spillIncline = (20 * Math.PI) / 180
+
+      // Save start for conveyor
+      const spillStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, 6, spillLen, spillIncline, waterMat)
+
+      if (this.world) {
+          // Conveyor Logic
+          const hLen = spillLen * Math.cos(spillIncline)
+          const vDrop = spillLen * Math.sin(spillIncline)
+          const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+          const center = spillStart.add(forward.scale(hLen / 2))
+          center.y -= vDrop / 2
+          center.y += 0.5 // Just above floor
+
+          const sensorBody = this.world.createRigidBody(
+              this.rapier.RigidBodyDesc.fixed().setTranslation(center.x, center.y, center.z)
+          )
+          const q = Quaternion.FromEulerAngles(spillIncline, heading, 0)
+          sensorBody.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
+
+          this.world.createCollider(
+              this.rapier.ColliderDesc.cuboid(3, 1, spillLen / 2).setSensor(true),
+              sensorBody
+          )
+
+          // Force: +8.0 Z relative to ramp.
+          // World Force Vector
+          // Gravity Forge used 50.0 for "+5.0". So 8.0 -> 80.0?
+          // Let's try 60.0.
+          const forceDir = new Vector3(
+              Math.sin(heading) * Math.cos(spillIncline),
+              -Math.sin(spillIncline),
+              Math.cos(heading) * Math.cos(spillIncline)
+          )
+          this.conveyorZones.push({
+              sensor: sensorBody,
+              force: forceDir.scale(60.0)
+          })
+      }
+
+      // 2. The Turbine (Hazard)
+      // Rotating Platform, Radius 8, CW 1.5 rad/s.
+      // 4 Paddle Wheels.
+      const turbineRadius = 8
+      const turbineSpeed = 1.5 // CW => Negative Y rotation? Usually +Y is CCW. So -1.5.
+
+      const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const turbineCenter = currentPos.add(forward.scale(turbineRadius + 1))
+      // turbineCenter.y -= 1.0 // Drop slightly?
+
+      // Reuse CreateRotatingPlatform for base
+      this.createRotatingPlatform(turbineCenter, turbineRadius, -turbineSpeed, waterMat)
+
+      // Add Paddles
+      if (this.world) {
+          const platformBody = this.adventureBodies[this.adventureBodies.length - 1]
+          const paddleCount = 4
+          const paddleLen = turbineRadius - 1
+          const paddleHeight = 1.5
+          const paddleThick = 0.5
+
+          for (let i = 0; i < paddleCount; i++) {
+              const angle = (i * Math.PI * 2) / paddleCount
+
+              // Visual
+              const paddle = MeshBuilder.CreateBox("paddle", { width: paddleThick, height: paddleHeight, depth: paddleLen }, this.scene)
+              // Attach to platform mesh
+              const binding = this.kinematicBindings.find(b => b.body === platformBody)
+              if (binding) {
+                  paddle.parent = binding.mesh
+
+                  // Local pos
+                  const r = paddleLen / 2
+                  const lx = Math.sin(angle) * r
+                  const lz = Math.cos(angle) * r
+
+                  paddle.position.set(lx, paddleHeight/2, lz)
+                  paddle.rotation.y = angle
+                  paddle.material = foamMat
+              }
+
+              // Collider
+              const colRot = Quaternion.FromEulerAngles(0, angle, 0)
+              const colliderDesc = this.rapier.ColliderDesc.cuboid(paddleThick/2, paddleHeight/2, paddleLen/2)
+                  .setTranslation(
+                       Math.sin(angle) * paddleLen/2,
+                       paddleHeight/2 + 0.25,
+                       Math.cos(angle) * paddleLen/2
+                  )
+                  .setRotation({ x: colRot.x, y: colRot.y, z: colRot.z, w: colRot.w })
+
+              this.world.createCollider(colliderDesc, platformBody)
+          }
+      }
+
+      // Exit Turbine
+      // Assuming straight exit
+      const turbineExit = turbineCenter.add(forward.scale(turbineRadius))
+      currentPos = turbineExit
+
+      // 3. The Riptide (Turn)
+      // Radius 12, Angle 180, Incline -5 deg, Banking -10 deg (Inward).
+      // "Cross-Current" pushes Outward.
+      const ripRadius = 12
+      const ripAngle = Math.PI // 180
+      const ripIncline = (5 * Math.PI) / 180
+      const ripBank = -(10 * Math.PI) / 180
+
+      const ripStart = currentPos.clone()
+
+      // Create Visuals/Physics
+      currentPos = this.addCurvedRamp(currentPos, heading, ripRadius, ripAngle, ripIncline, 8, 2.0, waterMat, 20, ripBank)
+
+      // Create Cross-Current Sensors
+      // Iterate segments again manually
+      if (this.world) {
+          const segments = 20
+          const segmentAngle = ripAngle / segments
+          const arcLength = ripRadius * segmentAngle
+          const chordLen = 2 * ripRadius * Math.sin(segmentAngle / 2)
+          const segmentDrop = arcLength * Math.sin(ripIncline)
+
+          let curH = heading
+          let curP = ripStart.clone()
+
+          for (let i = 0; i < segments; i++) {
+              curH += (segmentAngle / 2)
+
+              const segForward = new Vector3(Math.sin(curH), 0, Math.cos(curH))
+              const center = curP.add(segForward.scale(chordLen / 2))
+              center.y -= segmentDrop / 2
+              center.y += 0.5 // Above floor
+
+              // Sensor
+              const sensorBody = this.world.createRigidBody(
+                  this.rapier.RigidBodyDesc.fixed().setTranslation(center.x, center.y, center.z)
+              )
+              const q = Quaternion.FromEulerAngles(ripIncline, curH, ripBank)
+              sensorBody.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
+
+              this.world.createCollider(
+                  this.rapier.ColliderDesc.cuboid(4, 1, chordLen / 2).setSensor(true),
+                  sensorBody
+              )
+
+              // Force: Outward (Right relative to forward)
+              // Forward is (sin(H), 0, cos(H)). Right is (cos(H), 0, -sin(H)).
+              // Ignoring vertical tilt for simple outward push.
+              const outwardDir = new Vector3(Math.cos(curH), 0, -Math.sin(curH))
+
+              this.conveyorZones.push({
+                  sensor: sensorBody,
+                  force: outwardDir.scale(40.0) // Strong push
+              })
+
+              curP = curP.add(segForward.scale(chordLen))
+              curP.y -= segmentDrop
+              curH += (segmentAngle / 2)
+          }
+      }
+      heading += ripAngle
+
+      // 4. The Wave Pool (Chicane)
+      // Straight Ramp, Length 20, Width 8.
+      // 5 rows of kinematic boxes moving in sine wave.
+      const poolLen = 20
+      const poolWidth = 8
+
+      const poolStart = currentPos.clone()
+      currentPos = this.addStraightRamp(currentPos, heading, poolWidth, poolLen, 0, waterMat)
+
+      if (this.world) {
+          const rows = 5
+          const rowSpacing = 3.0
+          const startDist = 3.0
+          const boxWidth = poolWidth - 1
+          const boxDepth = 2.0
+          const boxHeight = 1.0
+
+          const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+
+          for (let i = 0; i < rows; i++) {
+              const dist = startDist + i * rowSpacing
+              const pos = poolStart.add(forward.scale(dist))
+
+              // Sine Wave: sin(t + z).
+              // z here is distance along track or world z?
+              // "sin(t + z)". Let's use 'dist' as phase offset.
+              // Amplitude 1.5.
+              // Base Y: Floor level.
+              // We want it to rise out of floor?
+              // Floor is at pos.y.
+              // Let's set Base Y such that it peaks at Floor + Amp/2?
+              // Or just moves up and down through floor.
+
+              const basePos = pos.clone()
+              basePos.y -= 0.5 // Start partially submerged
+
+              const box = MeshBuilder.CreateBox("waveBox", { width: boxWidth, height: boxHeight, depth: boxDepth }, this.scene)
+              box.position.copyFrom(basePos)
+              box.rotation.y = heading
+              box.material = foamMat
+              this.adventureTrack.push(box)
+
+              const q = Quaternion.FromEulerAngles(0, heading, 0)
+              const body = this.world.createRigidBody(
+                  this.rapier.RigidBodyDesc.kinematicPositionBased()
+                      .setTranslation(basePos.x, basePos.y, basePos.z)
+                      .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+              )
+              this.world.createCollider(
+                  this.rapier.ColliderDesc.cuboid(boxWidth/2, boxHeight/2, boxDepth/2),
+                  body
+              )
+              this.adventureBodies.push(body)
+
+              this.animatedObstacles.push({
+                  body,
+                  mesh: box,
+                  type: 'PISTON', // Reuse piston logic
+                  basePos,
+                  frequency: 3.0, // Speed of wave
+                  amplitude: 1.5,
+                  phase: dist * 0.5 // Phase shift based on distance
+              })
+          }
+      }
+
+      // 5. The Abyssal Drop (Goal)
+      // Steep waterfall drop?
+      // Just a bucket at bottom.
+      const goalPos = currentPos.clone()
+      goalPos.y -= 4
+      goalPos.z += 4
+
+      this.createBasin(goalPos, waterMat)
   }
 }
