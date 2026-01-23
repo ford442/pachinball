@@ -766,3 +766,45 @@ A rust-and-steel factory floating in the void. The "Floor" is often moving (conv
 *   `forgeColor` = "#FF4500" (Molten Orange)
 *   `steelColor` = "#333333" (Dark Steel)
 *   `rustColor` = "#8B4513" (Rust)
+
+## 24. Adventure Track: "The Tidal Nexus"
+A hydro-dynamic level focusing on fluid forces. The ball is not just subject to gravity, but to strong "Currents" (Conveyor Forces) that push and pull it. The environment is a stylized cyber-ocean.
+
+### A. Concept
+A series of aqueducts and reservoirs floating in a deep blue void. The "Water" is simulated by low-friction blue surfaces with invisible conveyor sensors applying directional force.
+
+### B. Layout Definition
+1.  **The Spillway (Injection):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: -20 degrees (Down)
+    *   Width: 6 units
+    *   Feature: "Rapids" - Conveyor Force (+8.0 Z) accelerates the ball beyond normal gravity.
+2.  **The Turbine (Hazard):**
+    *   Type: `ROTATING_PLATFORM`
+    *   Radius: 8 units
+    *   Rotation: Clockwise (1.5 rad/s)
+    *   Feature: "Paddle Wheels" - 4 rotating walls that sweep across the platform.
+3.  **The Riptide (Turn):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 12 units
+    *   Angle: 180 degrees
+    *   Incline: -5 degrees
+    *   Banking: -10 degrees (Inward)
+    *   Feature: "Cross-Current" - Conveyor Force pushes *Outward* (Towards the wall), fighting the banking.
+4.  **The Wave Pool (Chicane):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 20 units
+    *   Width: 8 units
+    *   Feature: "Tidal Pistons" - 5 rows of kinematic boxes moving in a sine-wave pattern (`sin(t + z)`), creating a rippling floor.
+5.  **The Abyssal Drop (Goal):**
+    *   Type: `BUCKET`
+    *   Location: At the bottom of a steep waterfall drop.
+    *   Visual: Deep Blue fog/glow.
+
+### C. Technical Variables
+*   `currentStrength` = 8.0
+*   `waterFriction` = 0.1
+*   `waterColor` = "#0066FF" (Deep Sky Blue)
+*   `foamColor` = "#E0FFFF" (Light Cyan)
+*   `waveAmplitude` = 1.5
