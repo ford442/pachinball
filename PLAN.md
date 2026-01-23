@@ -719,3 +719,50 @@ A neon-green industrial zone. The "Sludge" is a visual hazard (and potentially s
 *   `warningColor` = "#FFFF00" (Yellow)
 *   `sludgeFriction` = 0.05
 *   `centrifugeSpeed` = 3.0
+
+## 23. Adventure Track: "The Gravity Forge"
+A heavy industrial zone where raw data is forged into hardened packets. The environment is dominated by crushing pistons, conveyor belts, and molten data streams. Unlike the speed of the Descent or the precision of the Grid, this track is about *timing* and surviving heavy machinery.
+
+### A. Concept
+A rust-and-steel factory floating in the void. The "Floor" is often moving (conveyor belts). The main hazards are massive hydraulic pistons that crush anything in their path.
+
+### B. Layout Definition
+1.  **The Feed Chute (Entry):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 12 units
+    *   Incline: -30 degrees (Steep Drop)
+    *   Width: 6 units
+    *   Feature: "Conveyor Floor" - Texture scrolls downwards, and physics applies a constant forward impulse (Force +5.0 Z).
+2.  **The Crusher Line (Hazard):**
+    *   Type: `STRAIGHT_RAMP` (Flat)
+    *   Length: 20 units
+    *   Width: 8 units
+    *   Feature: "Hydraulic Pistons" - 3 Large Kinematic Boxes (Width 6, Depth 3, Height 4) suspended above the track.
+    *   Motion: Vertical Sinusoidal (`y = 2.0 + sin(t * freq) * 2.0`).
+    *   Timing: Staggered (0.0, 1.5, 3.0 sec offsets).
+    *   Mechanic: The pistons slam down to the floor (Gap 0.2). If the ball is underneath, it is crushed (Reset).
+3.  **The Slag Bridge (Chicane):**
+    *   Type: `CURVED_RAMP` (S-Bend)
+    *   Radius: 10 units
+    *   Angle: 90 Left then 90 Right.
+    *   Incline: 0 degrees.
+    *   Width: 2 units (Very Narrow Beam).
+    *   WallHeight: 0.0 (No Walls).
+    *   Visual: The floor is a grate; below is a glowing orange "Molten Data" pool.
+4.  **The Centrifugal Caster (Turn):**
+    *   Type: `ROTATING_PLATFORM`
+    *   Radius: 10 units.
+    *   Rotation: High Speed (2.0 rad/s).
+    *   WallHeight: 3.0 (To keep ball in).
+    *   Exit: A 30-degree gap in the wall that aligns with the goal ramp once per rotation.
+5.  **The Quenching Tank (Goal):**
+    *   Type: `BUCKET`
+    *   Location: 5 units below the Caster exit.
+    *   Visual: Blue liquid surface with steam particles.
+
+### C. Technical Variables
+*   `pistonFreq` = 1.0 (Hz)
+*   `conveyorSpeed` = 5.0
+*   `forgeColor` = "#FF4500" (Molten Orange)
+*   `steelColor` = "#333333" (Dark Steel)
+*   `rustColor` = "#8B4513" (Rust)
