@@ -533,7 +533,8 @@ export class Game {
     }
 
     // Sync Adventure Mode Kinematics
-    this.adventureMode?.update()
+    const currentBallBodies = this.ballManager?.getBallBodies() || []
+    this.adventureMode?.update(dt, currentBallBodies)
 
     this.gameObjects?.updateBumpers(dt)
     this.gameObjects?.updateTargets(dt)
@@ -759,6 +760,8 @@ export class Game {
       } else if (track === AdventureTrackType.CPU_CORE) {
           this.nextAdventureTrack = AdventureTrackType.BIO_HAZARD_LAB;
       } else if (track === AdventureTrackType.BIO_HAZARD_LAB) {
+          this.nextAdventureTrack = AdventureTrackType.GRAVITY_FORGE;
+      } else if (track === AdventureTrackType.GRAVITY_FORGE) {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
