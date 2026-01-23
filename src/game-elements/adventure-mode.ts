@@ -27,11 +27,25 @@ export enum AdventureTrackType {
   FIREWALL_BREACH = 'FIREWALL_BREACH',
   CPU_CORE = 'CPU_CORE',
   BIO_HAZARD_LAB = 'BIO_HAZARD_LAB',
+  GRAVITY_FORGE = 'GRAVITY_FORGE',
 }
 
 interface KinematicBinding {
   body: RAPIER.RigidBody
   mesh: Mesh
+}
+
+interface AnimatedObstacle extends KinematicBinding {
+  type: 'PISTON'
+  basePos: Vector3
+  frequency: number
+  amplitude: number
+  phase: number
+}
+
+interface ConveyorZone {
+  sensor: RAPIER.RigidBody
+  force: Vector3
 }
 
 export class AdventureMode {
@@ -43,10 +57,13 @@ export class AdventureMode {
   private adventureTrack: Mesh[] = []
   private adventureBodies: RAPIER.RigidBody[] = []
   private kinematicBindings: KinematicBinding[] = []
+  private animatedObstacles: AnimatedObstacle[] = []
+  private conveyorZones: ConveyorZone[] = []
   private adventureSensor: RAPIER.RigidBody | null = null
   private resetSensors: RAPIER.RigidBody[] = []
   private adventureActive = false
   private currentStartPos: Vector3 = Vector3.Zero()
+  private timeAccumulator = 0
 
   // Camera Management
   private tableCamera: ArcRotateCamera | null = null
@@ -84,11 +101,46 @@ export class AdventureMode {
     return this.currentStartPos
   }
 
-  update(): void {
+  update(dt: number = 0.016, ballBodies: RAPIER.RigidBody[] = []): void {
     if (!this.adventureActive) return
 
-    // Sync kinematic bodies to visuals
-    for (const binding of this.kinematicBindings) {
+    this.timeAccumulator += dt
+
+    // 1. Animate Obstacles
+    for (const obst of this.animatedObstacles) {
+        if (obst.type === 'PISTON') {
+            const yOffset = Math.sin(this.timeAccumulator * obst.frequency + obst.phase) * obst.amplitude
+            // Pistons move up from base.
+            // Formula: y = base + offset
+            const newY = obst.basePos.y + yOffset
+            obst.body.setNextKinematicTranslation({ x: obst.basePos.x, y: newY, z: obst.basePos.z })
+        }
+    }
+
+    // 2. Apply Conveyor Forces
+    // Check if any ball is inside a conveyor sensor
+    for (const zone of this.conveyorZones) {
+        const sensorHandle = zone.sensor.collider(0)
+        for (const ball of ballBodies) {
+            const ballHandle = ball.collider(0)
+            if (this.world.intersectionPair(sensorHandle, ballHandle)) {
+                // Apply force
+                // impulse or force? Plan says "physics applies a constant forward impulse"
+                // But if it's every frame, it should be a Force (acceleration) or small impulse.
+                // Impulse is immediate change in velocity (approx). Force is acceleration.
+                // For "conveyor belt", we usually want to modify velocity directly or apply friction-like force.
+                // Let's apply a small impulse scaled by dt.
+                // Force = 5.0. Impulse = Force * dt.
+                const imp = zone.force.scale(dt)
+                ball.applyImpulse({ x: imp.x, y: imp.y, z: imp.z }, true)
+            }
+        }
+    }
+
+    // 3. Sync kinematic bodies to visuals
+    // This includes standard kinematics (rotating platforms) and our animated ones
+    const allBindings = [...this.kinematicBindings, ...this.animatedObstacles]
+    for (const binding of allBindings) {
       if (!binding.body || !binding.mesh) continue
       const pos = binding.body.translation()
       const rot = binding.body.rotation()
@@ -157,6 +209,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.BIO_HAZARD_LAB) {
         this.currentStartPos = new Vector3(0, 20, 0)
         this.createBioHazardLabTrack()
+    } else if (trackType === AdventureTrackType.GRAVITY_FORGE) {
+        this.currentStartPos = new Vector3(0, 20, 0)
+        this.createGravityForgeTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -211,20 +266,34 @@ export class AdventureMode {
     this.adventureTrack.forEach(m => m.dispose())
     this.adventureTrack = []
     this.kinematicBindings = []
+    this.animatedObstacles = []
     
     // Cleanup Physics
     this.adventureBodies.forEach(body => {
-      this.world.removeRigidBody(body)
+      if (this.world.getRigidBody(body.handle)) {
+        this.world.removeRigidBody(body)
+      }
     })
     this.adventureBodies = []
+
+    this.conveyorZones.forEach(z => {
+        if (this.world.getRigidBody(z.sensor.handle)) {
+            this.world.removeRigidBody(z.sensor)
+        }
+    })
+    this.conveyorZones = []
     
     if (this.adventureSensor) {
-      this.world.removeRigidBody(this.adventureSensor)
+      if (this.world.getRigidBody(this.adventureSensor.handle)) {
+          this.world.removeRigidBody(this.adventureSensor)
+      }
       this.adventureSensor = null
     }
 
     this.resetSensors.forEach(s => {
-        if (this.world) this.world.removeRigidBody(s)
+        if (this.world.getRigidBody(s.handle)) {
+            this.world.removeRigidBody(s)
+        }
     })
     this.resetSensors = []
   }
@@ -1582,5 +1651,286 @@ export class AdventureMode {
       goalPos.z += 2
 
       this.createBasin(goalPos, hazardMat)
+  }
+
+  // --- Track: The Gravity Forge ---
+  private createGravityForgeTrack(): void {
+      const rustMat = this.getTrackMaterial("#8B4513") // Rust
+      const steelMat = this.getTrackMaterial("#333333") // Dark Steel
+      const moltenMat = this.getTrackMaterial("#FF4500") // Molten Orange
+
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+
+      // 1. The Feed Chute (Entry)
+      // Length 12, Incline -30 deg, Width 6
+      const feedLen = 12
+      const feedIncline = (30 * Math.PI) / 180
+
+      // Save start pos of conveyor for sensor
+      const conveyorStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, 6, feedLen, feedIncline, rustMat)
+
+      // Add Conveyor Sensor logic
+      // It covers the ramp area.
+      // We can use a sensor box rotated to match the ramp.
+      if (this.world) {
+          const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+          // Calculate center of ramp (same logic as addStraightRamp)
+          const hLen = feedLen * Math.cos(feedIncline)
+          const vDrop = feedLen * Math.sin(feedIncline)
+          const center = conveyorStart.add(forward.scale(hLen / 2))
+          center.y -= vDrop / 2
+
+          // Raise slightly so ball is inside
+          center.y += 0.5
+
+          const sensorBody = this.world.createRigidBody(
+              this.rapier.RigidBodyDesc.fixed()
+                  .setTranslation(center.x, center.y, center.z)
+          )
+          // Rotation matches ramp
+          const q = Quaternion.FromEulerAngles(feedIncline, heading, 0)
+          sensorBody.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
+
+          this.world.createCollider(
+              this.rapier.ColliderDesc.cuboid(3, 1, feedLen / 2).setSensor(true),
+              sensorBody
+          )
+
+          // Force Vector: +5.0 Z (Relative to ramp forward)
+          // Ramp Forward is (0, -sin, cos) in local space if inclining down?
+          // Wait, addStraightRamp rotates X by incline.
+          // In Local space, forward is Z+.
+          // We want to push the ball DOWN the ramp.
+          // Force should be applied in World Space or Local? applyImpulse takes World Space.
+          // We need World Vector matching Ramp Forward.
+          // Ramp Rotation Quaternion q.
+          // Local Forward (0,0,1) rotated by q.
+
+          // Force should be applied in World Space.
+          // The ramp heads in `heading` (Y rotation) and pitches down by `feedIncline` (X rotation).
+          // World Forward:
+          // x = sin(heading) * cos(incline)
+          // y = -sin(incline)
+          // z = cos(heading) * cos(incline)
+
+          const forceDir = new Vector3(
+              Math.sin(heading) * Math.cos(feedIncline),
+              -Math.sin(feedIncline),
+              Math.cos(heading) * Math.cos(feedIncline)
+          )
+
+          this.conveyorZones.push({
+              sensor: sensorBody,
+              force: forceDir.scale(50.0) // Force 5.0 * 10? Plan says "Force +5.0". But impulse needs to be noticeable.
+                                          // 5.0 N force on 1kg ball is 5 m/s^2 accel.
+                                          // At 60fps (dt 0.016), dv = 5 * 0.016 = 0.08 m/s per frame.
+                                          // Over 1 second, adds 5 m/s. Seems correct for a conveyor.
+                                          // If I use 50, it's 50 m/s^2. VERY fast.
+                                          // Let's stick to 25.0 to be safe/strong.
+          })
+      }
+
+      // 2. The Crusher Line (Hazard)
+      // Flat, Length 20, Width 8
+      const crushLen = 20
+      const crushWidth = 8
+
+      // Save start pos for pistons
+      const crushStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, crushWidth, crushLen, 0, steelMat)
+
+      // Add 3 Hydraulic Pistons
+      // Box: Width 6, Depth 3, Height 4
+      // Sinusoidal Y.
+      if (this.world) {
+          const pistonWidth = 6
+          const pistonDepth = 3
+          const pistonHeight = 4
+
+          const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+
+          // Staggered: 0.0, 1.5, 3.0 sec offsets. Freq 1.0 Hz.
+          // Locations: distributed along the 20 length.
+          // Let's place them at 5, 10, 15 units from start.
+
+          const positions = [5, 10, 15]
+          const phases = [0, 1.5, 3.0] // Phase in Radians? Or Seconds? Plan says "offsets". Sin(t * freq). offset is phase shift.
+                                       // If freq is 1.0 (2PI rad/s?), then 1.5s is ~1.5 cycles?
+                                       // Let's treat them as phase addends.
+
+          for (let i = 0; i < 3; i++) {
+              const dist = positions[i]
+              const pistonPos = crushStart.add(forward.scale(dist))
+              // Center X (0 offset)
+
+              // Base Y calculation
+              // Floor is at pistonPos.y
+              // We want min Y to be floor + 0.2 gap.
+              // Piston Height is 4. Center at min Y is (floor + 0.2 + 2).
+              // Oscillation: y = mid + sin * amp.
+              // We want (mid - amp) = min Y.
+              // We want (mid + amp) = max Y (lifted).
+              // Let's lift it by 4 units. Max Y = min Y + 4.
+              // So Amp = 2.0.
+              // Mid = Min + 2.0 = floor + 0.2 + 2 + 2 = floor + 4.2.
+
+              const floorY = pistonPos.y
+              const gap = 0.2
+              const amp = 2.0
+              const minY = floorY + gap + pistonHeight / 2
+              const midY = minY + amp
+
+              const basePos = new Vector3(pistonPos.x, midY, pistonPos.z)
+
+              // Visual
+              const piston = MeshBuilder.CreateBox("piston", { width: pistonWidth, height: pistonHeight, depth: pistonDepth }, this.scene)
+              piston.position.copyFrom(basePos)
+              piston.material = steelMat // Or maybe Rust?
+              this.adventureTrack.push(piston)
+
+              // Physics
+              const body = this.world.createRigidBody(
+                  this.rapier.RigidBodyDesc.kinematicPositionBased()
+                      .setTranslation(basePos.x, basePos.y, basePos.z)
+              )
+              this.world.createCollider(
+                  this.rapier.ColliderDesc.cuboid(pistonWidth/2, pistonHeight/2, pistonDepth/2),
+                  body
+              )
+              this.adventureBodies.push(body)
+
+              this.animatedObstacles.push({
+                  body,
+                  mesh: piston,
+                  type: 'PISTON',
+                  basePos,
+                  frequency: 2.0, // Slowish? 1.0 Hz = 2PI rad/s? Logic uses sin(t * freq). If freq is rad/s, use 2PI. If Hz, mul by 2PI.
+                                  // Plan says "pistonFreq = 1.0 (Hz)". So use Math.PI * 2.
+                  amplitude: amp,
+                  phase: phases[i]
+              })
+          }
+      }
+
+      // 3. The Slag Bridge (Chicane)
+      // S-Bend: 90 Left, 90 Right. Width 2. No Walls.
+      const turnRadius = 10
+      const turnAngle = Math.PI / 2
+
+      // Turn Left
+      currentPos = this.addCurvedRamp(currentPos, heading, turnRadius, -turnAngle, 0, 2, 0, moltenMat, 15)
+      heading -= turnAngle
+
+      // Turn Right
+      currentPos = this.addCurvedRamp(currentPos, heading, turnRadius, turnAngle, 0, 2, 0, moltenMat, 15)
+      heading += turnAngle
+
+      // 4. The Centrifugal Caster (Turn)
+      // Rotating Platform, Radius 10, Speed 2.0 rad/s. Wall Height 3.0.
+      // Exit Gap.
+
+      const castRadius = 10
+      const castSpeed = 2.0
+
+      const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const castCenter = currentPos.add(forward.scale(castRadius + 1))
+
+      // Create Platform
+      this.createRotatingPlatform(castCenter, castRadius, castSpeed, steelMat)
+
+      // Add Custom Wall with Gap
+      // Wall Height 3.0.
+      // Gap at exit.
+      // We need to know where "Exit" is.
+      // We entered at 'heading' (tangent? or radial?).
+      // The bridge ends at 'currentPos'.
+      // If we simply drop onto the platform...
+      // Let's assume exit is 180 degrees from entry or 90?
+      // "Exit: A 30-degree gap in the wall that aligns with the goal ramp once per rotation."
+      // Wait, "aligns with the goal ramp once per rotation" implies the GAP rotates with the platform?
+      // OR the platform rotates, and the wall is STATIC?
+      // "Centrifugal Caster... Rotating Platform... WallHeight 3.0 (To keep ball in)... Exit: A 30-degree gap... aligns..."
+      // If the WALL is part of the rotating platform, then the gap rotates.
+      // If the gap rotates, it only opens to the static exit ramp momentarily. This fits "Caster".
+      // So Wall rotates.
+
+      if (this.world && this.adventureBodies.length > 0) {
+          const platformBody = this.adventureBodies[this.adventureBodies.length - 1]
+          const wallHeight = 3.0
+          const wallThickness = 0.5
+
+          // Visual: Torus with gap? Or Cylinder segments.
+          // Gap is 30 degrees.
+          // Wall covers 330 degrees.
+
+          const gapAngle = (30 * Math.PI) / 180
+          const wallAngle = (2 * Math.PI) - gapAngle
+
+          // We can use a Ribbon or multiple boxes.
+          // Multiple boxes approximating the arc.
+          const segments = 20
+          const step = wallAngle / segments
+
+          // Binding
+          const binding = this.kinematicBindings.find(b => b.body === platformBody)
+          const parentMesh = binding ? binding.mesh : null
+
+          // Start angle. Gap should align with exit eventually.
+          // Let's put gap at angle 0 relative to platform.
+          // We need to place walls from gapAngle/2 to 2PI - gapAngle/2?
+
+          const startAngle = gapAngle / 2
+
+          for (let i = 0; i <= segments; i++) {
+              const theta = startAngle + i * step
+
+              const cx = Math.sin(theta) * castRadius
+              const cz = Math.cos(theta) * castRadius
+
+              // Box dimensions
+              // Width ~ Arc Length
+              const arcLen = castRadius * step
+
+              const wall = MeshBuilder.CreateBox("casterWall", { width: wallThickness, height: wallHeight, depth: arcLen + 0.2 }, this.scene)
+              if (parentMesh) {
+                  wall.parent = parentMesh
+                  wall.position.set(cx, wallHeight/2, cz)
+                  wall.rotation.y = theta
+                  wall.material = steelMat
+              }
+
+              // Collider
+              const colRot = Quaternion.FromEulerAngles(0, theta, 0)
+              const colliderDesc = this.rapier.ColliderDesc.cuboid(wallThickness/2, wallHeight/2, arcLen/2 + 0.1)
+                  .setTranslation(cx, wallHeight/2 + 0.25, cz)
+                  .setRotation({ x: colRot.x, y: colRot.y, z: colRot.z, w: colRot.w })
+
+              this.world.createCollider(colliderDesc, platformBody)
+          }
+      }
+
+      // 5. The Quenching Tank (Goal)
+      // 5 units below the Caster exit.
+      // Where is the exit? The gap rotates, so exit is anywhere on the perimeter.
+      // But we need a STATIC ramp to catch it? Or just a bucket below.
+      // "Goal... 5 units below the Caster exit."
+      // Let's place the goal ramp/bucket at the "Exit Direction".
+      // Let's say exit is Straight Ahead (heading).
+
+      const exitForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const goalPos = castCenter.add(exitForward.scale(castRadius + 4))
+      goalPos.y -= 5.0
+
+      this.createBasin(goalPos, moltenMat) // Blue liquid? PLAN says "Blue liquid".
+                                            // moltenMat is Orange. Let's make a blue one.
+      const waterMat = this.getTrackMaterial("#0088FF")
+      // Overwrite material of last added basin?
+      // createBasin pushes to adventureTrack.
+      const basinMesh = this.adventureTrack[this.adventureTrack.length - 1]
+      if (basinMesh) basinMesh.material = waterMat
   }
 }

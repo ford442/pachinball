@@ -720,7 +720,7 @@ A neon-green industrial zone. The "Sludge" is a visual hazard (and potentially s
 *   `sludgeFriction` = 0.05
 *   `centrifugeSpeed` = 3.0
 
-## 23. Adventure Track: "The Gravity Forge"
+## 23. Adventure Track: "The Gravity Forge" [IMPLEMENTED]
 A heavy industrial zone where raw data is forged into hardened packets. The environment is dominated by crushing pistons, conveyor belts, and molten data streams. Unlike the speed of the Descent or the precision of the Grid, this track is about *timing* and surviving heavy machinery.
 
 ### A. Concept
