@@ -762,6 +762,8 @@ export class Game {
       } else if (track === AdventureTrackType.BIO_HAZARD_LAB) {
           this.nextAdventureTrack = AdventureTrackType.GRAVITY_FORGE;
       } else if (track === AdventureTrackType.GRAVITY_FORGE) {
+          this.nextAdventureTrack = AdventureTrackType.TIDAL_NEXUS;
+      } else if (track === AdventureTrackType.TIDAL_NEXUS) {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
