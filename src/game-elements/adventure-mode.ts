@@ -29,6 +29,7 @@ export enum AdventureTrackType {
   BIO_HAZARD_LAB = 'BIO_HAZARD_LAB',
   GRAVITY_FORGE = 'GRAVITY_FORGE',
   TIDAL_NEXUS = 'TIDAL_NEXUS',
+  DIGITAL_ZEN_GARDEN = 'DIGITAL_ZEN_GARDEN',
 }
 
 interface KinematicBinding {
@@ -216,6 +217,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.TIDAL_NEXUS) {
         this.currentStartPos = new Vector3(0, 25, 0)
         this.createTidalNexusTrack()
+    } else if (trackType === AdventureTrackType.DIGITAL_ZEN_GARDEN) {
+        this.currentStartPos = new Vector3(0, 20, 0)
+        this.createDigitalZenGardenTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -2187,5 +2191,147 @@ export class AdventureMode {
       goalPos.z += 4
 
       this.createBasin(goalPos, waterMat)
+  }
+
+  // --- Track: The Digital Zen Garden ---
+  private createDigitalZenGardenTrack(): void {
+      const gardenMat = this.getTrackMaterial("#FFFFFF") // White
+      const accentMat = this.getTrackMaterial("#FF69B4") // Hot Pink
+      const sandFriction = 0.8
+      const waterFriction = 0.1
+
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+
+      // 1. The Raked Path (Entry)
+      // Length 15, Incline -15 deg, Width 8, Friction 0.8
+      const entryLen = 15
+      const entryIncline = (15 * Math.PI) / 180
+      currentPos = this.addStraightRamp(currentPos, heading, 8, entryLen, entryIncline, gardenMat, 1.0, sandFriction)
+
+      // 2. The Rock Garden (Obstacles)
+      // Flat, Length 20, Width 12
+      const rockLen = 20
+      const rockWidth = 12
+      const rockStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, rockWidth, rockLen, 0, gardenMat, 0.5, sandFriction)
+
+      // Add 3 Large Static Geospheres
+      if (this.world) {
+          const rockRadius = 2.0
+          const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+          const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+
+          // Triangular Formation: One Central, Two Flankers
+          const positions = [
+              { z: 12, x: 0 },
+              { z: 6, x: -3.5 },
+              { z: 6, x: 3.5 }
+          ]
+
+          positions.forEach(pos => {
+              const rockPos = rockStart
+                  .add(forward.scale(pos.z))
+                  .add(right.scale(pos.x))
+
+              // Embed slightly
+              rockPos.y += rockRadius * 0.6
+
+              const rock = MeshBuilder.CreateSphere("zenRock", { diameter: rockRadius * 2, segments: 4 }, this.scene)
+              rock.position.copyFrom(rockPos)
+              rock.material = accentMat
+              this.adventureTrack.push(rock)
+
+              // Physics
+              const body = this.world.createRigidBody(
+                  this.rapier.RigidBodyDesc.fixed().setTranslation(rockPos.x, rockPos.y, rockPos.z)
+              )
+              this.world.createCollider(
+                  this.rapier.ColliderDesc.ball(rockRadius).setRestitution(0.2),
+                  body
+              )
+              this.adventureBodies.push(body)
+          })
+      }
+
+      // 3. The Stream Crossing (Hazard)
+      // Curve Radius 15, Angle 90, Incline 0, Friction 0.1
+      // Conveyor Force +3.0 X (Towards outer edge)
+      const streamRadius = 15
+      const streamAngle = Math.PI / 2
+
+      const streamStart = currentPos.clone()
+      const streamStartHeading = heading
+
+      currentPos = this.addCurvedRamp(currentPos, heading, streamRadius, streamAngle, 0, 8, 1.0, gardenMat, 20, 0, waterFriction)
+
+      // Add Cross Current
+      if (this.world) {
+          const segments = 10
+          const segAngle = streamAngle / segments
+          const chordLen = 2 * streamRadius * Math.sin(segAngle/2)
+
+          let curH = streamStartHeading
+          let curP = streamStart.clone()
+
+          for (let i=0; i<segments; i++) {
+               curH += segAngle / 2
+               const forward = new Vector3(Math.sin(curH), 0, Math.cos(curH))
+               const center = curP.add(forward.scale(chordLen / 2))
+               center.y += 0.5
+
+               const sensor = this.world.createRigidBody(
+                   this.rapier.RigidBodyDesc.fixed().setTranslation(center.x, center.y, center.z)
+               )
+               const q = Quaternion.FromEulerAngles(0, curH, 0)
+               sensor.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
+
+               this.world.createCollider(
+                   this.rapier.ColliderDesc.cuboid(4, 1, chordLen/2).setSensor(true),
+                   sensor
+               )
+
+               // Force: Towards Outer Edge (Left relative to forward in a Right turn)
+               const leftDir = new Vector3(-Math.cos(curH), 0, Math.sin(curH))
+
+               this.conveyorZones.push({
+                   sensor,
+                   force: leftDir.scale(30.0)
+               })
+
+               curP = curP.add(forward.scale(chordLen))
+               curH += segAngle / 2
+          }
+      }
+      heading += streamAngle
+
+      // 4. The Moon Bridge (Vertical Arch)
+      // Length 10, Width 3, WallHeight 1.0. Parabolic.
+      const bridgeLen = 10
+      const segments = 10
+      const segLen = bridgeLen / segments
+      const bridgeWidth = 3
+
+      for (let i=0; i<segments; i++) {
+          const x0 = i * segLen
+          const x1 = (i + 1) * segLen
+          const xm = (x0 + x1) / 2
+
+          // Parabola: y = -0.12 * (x - 5)^2 + 3
+          // Slope at xm: dy/dx = -0.24 * (xm - 5)
+          const slope = -0.24 * (xm - 5)
+          const incline = -Math.atan(slope)
+
+          const meshLen = Math.sqrt(1 + slope * slope) * segLen
+
+          currentPos = this.addStraightRamp(currentPos, heading, bridgeWidth, meshLen, incline, accentMat, 1.0, sandFriction)
+      }
+
+      // 5. The Lotus Shrine (Goal)
+      const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const goalPos = currentPos.add(forward.scale(4))
+
+      this.createBasin(goalPos, accentMat)
   }
 }
