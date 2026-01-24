@@ -808,3 +808,49 @@ A series of aqueducts and reservoirs floating in a deep blue void. The "Water" i
 *   `waterColor` = "#0066FF" (Deep Sky Blue)
 *   `foamColor` = "#E0FFFF" (Light Cyan)
 *   `waveAmplitude` = 1.5
+
+## 25. Adventure Track: "The Digital Zen Garden"
+A serene, high-friction track emphasizing precision rolling over speed. The aesthetic combines stark white "gravel" grids with neon cherry-blossom pink accents.
+
+### A. Concept
+A minimalist sanctuary in the void. The ball rolls heavily on "raked sand" surfaces (high friction), requiring deliberate force. The hazards are static "Data Rocks" and a flowing "Stream" of data.
+
+### B. Layout Definition
+1.  **The Raked Path (Entry):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: -15 degrees
+    *   Width: 8 units
+    *   Friction: 0.8 (High drag - simulates sand/gravel)
+    *   Visual: Texture scrolling slowly backward to simulate raking.
+2.  **The Rock Garden (Obstacles):**
+    *   Type: `STRAIGHT_RAMP` (Flat)
+    *   Length: 20 units
+    *   Width: 12 units (Wide)
+    *   Feature: "Meditative Stones" - 3 Large Static Geospheres (Radius 2.0) positioned to block direct paths.
+    *   Layout: Triangular formation (One central, two flankers).
+3.  **The Stream Crossing (Hazard):**
+    *   Type: `CURVED_RAMP` (Gentle Turn)
+    *   Radius: 15 units
+    *   Angle: 90 degrees
+    *   Incline: 0 degrees
+    *   Friction: 0.1 (Slippery "Water")
+    *   Feature: "Current" - Conveyor Force (+3.0 X) pushing towards the outer edge (The Waterfall).
+4.  **The Moon Bridge (Vertical Arch):**
+    *   Type: `STRAIGHT_RAMP` (Modified)
+    *   Length: 10 units
+    *   Width: 3 units (Narrow)
+    *   Shape: Parabolic Arch (Rise 3 units then Fall 3 units).
+    *   WallHeight: 1.0 (Low rails).
+5.  **The Lotus Shrine (Goal):**
+    *   Type: `BUCKET`
+    *   Location: Floating just beyond the bridge.
+    *   Visual: Blooming holographic flower.
+
+### C. Technical Variables
+*   `sandFriction` = 0.8
+*   `waterFriction` = 0.1
+*   `currentForce` = 3.0
+*   `gardenColor` = "#FFFFFF" (White)
+*   `accentColor` = "#FF69B4" (Hot Pink)
+*   `rockScale` = 2.0
