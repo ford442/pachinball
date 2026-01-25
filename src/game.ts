@@ -12,6 +12,7 @@ import {
   PostProcess,
   Effect,
   Texture,
+  Viewport,
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import type { Engine } from '@babylonjs/core/Engines/engine'
@@ -122,17 +123,15 @@ export class Game {
     }
     this.updateHUD()
 
-    // --- UPDATED CAMERA: Orthographic Cabinet View ---
-    // 1. Position camera directly above (Beta = 0)
-    // 2. Use Orthographic mode to remove perspective distortion
-    // Target changed to (0, 0, 5) to center the table vertically
+    // --- SPLIT-SCREEN SETUP ---
+    // Lower half: Orthographic Cabinet View (top-down)
     const camera = new ArcRotateCamera('camera', -Math.PI / 2, 0, 40, new Vector3(0, 0, 5), this.scene)
 
     // Enable Orthographic Mode
     camera.mode = ArcRotateCamera.ORTHOGRAPHIC_CAMERA
 
     // Define the View Frustum (Visible Area)
-    // We add a little padding to the table dimensions so it fits nicely
+    // Add padding to ensure table edges don't touch viewport boundaries
     const pWidth = GameConfig.table.width + 4
     const pHeight = GameConfig.table.height + 4
 
@@ -142,36 +141,60 @@ export class Game {
     camera.orthoLeft = -pWidth / 2
     camera.orthoRight = pWidth / 2
 
-    // LOCKED: We do NOT attach control. This forces the "Under Glass" perspective.
-    // camera.attachControl(canvas, true)
+    // Set viewport to lower half of screen (x, y, width, height)
+    camera.viewport = new Viewport(0, 0, 1, 0.5)
 
     // Restrict movement so users don't accidentally rotate out of the flat view
     camera.lowerBetaLimit = 0
     camera.upperBetaLimit = 0
     camera.lowerRadiusLimit = 20
     camera.upperRadiusLimit = 60
+
+    // Upper half: Backbox frontal view
+    // Position camera to view the backbox from the front
+    // Backbox is at (0.75, 8, 21.5), so position camera in front of it
+    const backboxCamera = new ArcRotateCamera(
+      'backboxCamera', 
+      0,                    // Alpha: 0 = looking along positive Z axis
+      Math.PI / 2.5,        // Beta: slight angle from horizontal
+      35,                   // Radius: distance from target
+      new Vector3(0.75, 8, 21.5), // Target: backbox position
+      this.scene
+    )
+
+    // Set viewport to upper half of screen
+    backboxCamera.viewport = new Viewport(0, 0.5, 1, 0.5)
+
+    // Make both cameras active
+    this.scene.activeCameras = [camera, backboxCamera]
     
-    this.bloomPipeline = new DefaultRenderingPipeline('pachinbloom', true, this.scene, [camera])
+    this.bloomPipeline = new DefaultRenderingPipeline('pachinbloom', true, this.scene, [camera, backboxCamera])
     if (this.bloomPipeline) {
       this.bloomPipeline.bloomEnabled = true
       this.bloomPipeline.bloomKernel = 64
       this.bloomPipeline.bloomWeight = 0.4
     }
 
-    // Add LCD Scanline Overlay
-    const scanline = new PostProcess(
-        "scanline",
+    // Add LCD Scanline Overlay to both cameras
+    const createScanlineEffect = (name: string, cam: ArcRotateCamera) => {
+      const effect = new PostProcess(
+        name,
         "scanline",
         ["uTime"],
         null,
         1.0,
-        camera,
+        cam,
         Texture.BILINEAR_SAMPLINGMODE,
         this.engine
-    )
-    scanline.onApply = (effect) => {
+      )
+      effect.onApply = (effect) => {
         effect.setFloat("uTime", performance.now() * 0.001)
+      }
+      return effect
     }
+
+    createScanlineEffect("scanline", camera)
+    createScanlineEffect("scanline2", backboxCamera)
 
     new HemisphericLight('light', new Vector3(0.3, 1, 0.3), this.scene)
 
