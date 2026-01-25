@@ -854,3 +854,37 @@ A minimalist sanctuary in the void. The ball rolls heavily on "raked sand" surfa
 *   `gardenColor` = "#FFFFFF" (White)
 *   `accentColor` = "#FF69B4" (Hot Pink)
 *   `rockScale` = 2.0
+
+## 26. The "Gauss-Cannon" Feeder System
+To balance the playfield and provide a recovery mechanic on the lower-left side, we introduce a kinetic launcher.
+
+### A. Mechanic: The Auto-Turret
+A mounted electromagnetic railgun located on the lower-left wall.
+1.  **Catch:** Catches balls draining down the left outlane or specifically targeted shots.
+2.  **Aim:** The turret pivots automatically, sweeping the upper playfield.
+3.  **Fire:** Launches the ball at high velocity.
+
+### B. Logic State Machine
+1.  **IDLE:** Breech open, sweeping slowly (visuals only).
+2.  **LOAD:**
+    *   Trigger: Ball enters `gaussIntakeRadius`.
+    *   Action: Physics -> Kinematic. Ball moves to "Breech" position.
+    *   Visual: Charging coils glow (Orange/Blue).
+3.  **AIM (Oscillation):**
+    *   Action: Cannon rotates between `minAngle` and `maxAngle`.
+    *   Duration: 2.0s (Player can time this?).
+4.  **FIRE:**
+    *   Trigger: Timer expires OR Player hits Action Key.
+    *   Action: Apply Impulse.
+    *   Visual: Muzzle flash, chromatic aberration shockwave.
+5.  **COOLDOWN:**
+    *   Action: Ignore collisions.
+
+### C. Technical Specification
+*   **Position:** `gaussPosition` = `{ x: -12.0, y: 0.5, z: -8.0 }`.
+*   **Intake Radius:** 1.0 units.
+*   **Physics:**
+    *   `muzzleVelocity` = 30.0.
+    *   `minAngle` = 30 degrees (Towards Center).
+    *   `maxAngle` = 60 degrees (Towards Upper Right).
+    *   `sweepSpeed` = 1.0 (Radians/sec).
