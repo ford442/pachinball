@@ -391,7 +391,7 @@ export class Game {
     cab.position.set(0.75, -3, 5)
     cab.material = cabinetMat
 
-    this.display.createBackbox(new Vector3(0.75, 8, 21.5))
+    this.display.createBackbox(new Vector3(0.75, 15, 30))
     this.effects.createCabinetLighting()
 
     this.gameObjects.createDeathZone()
