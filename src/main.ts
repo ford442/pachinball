@@ -10,7 +10,7 @@ async function bootstrap(): Promise<void> {
 
   const engine = (await createEngine(canvas)) as Engine | WebGPUEngine
   const game = new Game(engine)
-  await game.init(canvas)
+  await game.init()
 
   if (import.meta.hot) {
     import.meta.hot.dispose(() => {
