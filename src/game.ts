@@ -152,13 +152,13 @@ export class Game {
 
     // Upper half: Backbox frontal view
     // Position camera to view the backbox from the front
-    // Backbox is at (0.75, 8, 21.5), so position camera in front of it
+    // Backbox is at (0.75, 15, 30), so position camera in front of it
     const backboxCamera = new ArcRotateCamera(
-      'backboxCamera', 
-      0,                    // Alpha: 0 = looking along positive Z axis
-      Math.PI / 2.5,        // Beta: slight angle from horizontal
-      35,                   // Radius: distance from target
-      new Vector3(0.75, 8, 21.5), // Target: backbox position
+      'backboxCamera',
+      0, // Alpha: 0 = looking along positive Z axis
+      Math.PI / 2.5, // Beta: slight angle from horizontal
+      50, // Radius: distance from target
+      new Vector3(0.75, 15, 30), // Target: backbox position
       this.scene
     )
 
@@ -381,7 +381,7 @@ export class Game {
     cab.position.set(0.75, -3, 5)
     cab.material = cabinetMat
 
-    this.display.createBackbox(new Vector3(0.75, 8, 21.5))
+    this.display.createBackbox(new Vector3(0.75, 15, 30))
     this.effects.createCabinetLighting()
 
     this.gameObjects.createDeathZone()
