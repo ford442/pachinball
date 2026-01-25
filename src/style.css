@@ -1,171 +1,176 @@
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
 
-* {
-  box-sizing: border-box;
+:root {
+  /* Cabinet sizing – scales with viewport height */
+  --cabinet-width: 60vh;      /* width of the whole unit */
+  --cabinet-height: 95vh;     /* height of the whole unit */
+  --split-perc: 0.4;          /* top screen = 40% of height */
+  --bezel-height: 12px;       /* visual separator thickness */
 }
 
-:root,
+/* Body – dark “arcade room” */
 body {
   margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  background: #000;
-  color: #e0faff;
-  font-family: 'Orbitron', 'Segoe UI', sans-serif;
-}
-
-body {
-  position: relative;
-  overflow: hidden;
-}
-
-#pachinball-canvas {
-  width: 100vw;
-  height: 100vh;
-  display: block;
-  touch-action: none;
-}
-
-#hud {
-  position: fixed;
-  top: 24px;
-  left: 24px;
+  background: #050505;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  pointer-events: none;
-}
-
-.hud-item {
-  padding: 8px 16px;
-  border-left: 4px solid #00d9ff;
-  background: rgba(0, 20, 40, 0.6);
-  backdrop-filter: blur(8px);
-  color: #00d9ff;
-  font-weight: 700;
-  font-size: 1.2rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  box-shadow: 0 0 10px rgba(0, 217, 255, 0.2);
-  clip-path: polygon(0 0, 100% 0, 95% 100%, 0% 100%);
-  text-shadow: 0 0 5px rgba(0, 217, 255, 0.6);
-}
-
-.hud-item span {
-  color: #fff;
-  text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
-}
-
-/* Combo HUD styling */
-#combo {
-  border-left: 4px solid #ff0055;
-  background: linear-gradient(90deg, rgba(255, 0, 85, 0.2), rgba(0,0,0,0));
-  color: #ff0055;
-  text-shadow: 0 0 8px rgba(255, 0, 85, 0.8);
-}
-
-#tilt {
-  border-left: 4px solid #ff2200;
-  background: rgba(40, 0, 0, 0.8);
-  color: #ff2200;
-  font-weight: 900;
-  animation: tiltBlink 0.2s infinite alternate;
-}
-
-@keyframes tiltBlink {
-  from { opacity: 0.8; }
-  to { opacity: 1; text-shadow: 0 0 15px red; }
-}
-
-/* subtle animation when combo gets updated */
-@keyframes comboPulse {
-  0% { transform: scale(1); filter: brightness(1); }
-  30% { transform: scale(1.1); filter: brightness(1.5); }
-  100% { transform: scale(1); filter: brightness(1); }
-}
-
-#combo.pulse {
-  animation: comboPulse 300ms ease-out 1;
-}
-
-.overlay {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
   justify-content: center;
   align-items: center;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Orbitron', sans-serif;
+  color: #00d9ff;
+}
+
+/* CABINET CONTAINER */
+#game-cabinet {
+  position: relative;
+  width: var(--cabinet-width);
+  height: var(--cabinet-height);
+  background: #000;                     /* glass‑like interior */
+  border: 4px solid #333;               /* outer bezel */
+  border-radius: 10px;
+  box-shadow: 0 0 50px rgba(0, 217, 255, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* CANVAS – fills the whole cabinet, sits *behind* UI layers */
+#pachinball-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;               /* behind everything */
+  outline: none;
+}
+
+/* UI OVERLAYS – transparent so the canvas shows through */
+#machine-head,
+#ball-table {
+  position: relative;
+  width: 100%;
+  background: transparent;   /* crucial – do NOT hide canvas */
+  pointer-events: none;      /* let mouse events fall through to canvas */
   z-index: 10;
 }
 
-.overlay.hidden {
-  display: none;
+/* Height split – matches the viewport split set in code */
+#machine-head { height: calc(100% * var(--split-perc)); }
+#ball-table   { height: calc(100% * (1 - var(--split-perc))); }
+
+/* BEZEL / DIVIDER – opaque “physical” separator */
+#cabinet-divider {
+  height: var(--bezel-height);
+  background: #222;
+  border-top: 2px solid #444;
+  border-bottom: 2px solid #111;
+  z-index: 20;
 }
 
+/* HUD – simple overlay that lives on top of the canvas */
+#hud {
+  position: absolute;
+  top: calc(100% * var(--split-perc) + var(--bezel-height) + 8px);
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.hud-item {
+  padding: 4px 8px;
+  background: rgba(0, 20, 40, 0.5);
+  border-left: 3px solid #00d9ff;
+  color: #00d9ff;
+  font-size: 0.9rem;
+  text-shadow: 0 0 5px rgba(0,217,255,.6);
+  backdrop-filter: blur(4px);
+}
+.hud-item span { color: #fff; }
+
+/* Combo/Tilt Specifics */
+#combo { border-left-color: #ff0055; color: #ff0055; }
+#tilt { border-left-color: #ff2200; color: #ff2200; animation: tiltBlink 0.2s infinite alternate; }
+@keyframes tiltBlink { from { opacity: 0.8; } to { opacity: 1; text-shadow: 0 0 15px red; } }
+
+/* OVERLAY MENUS */
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  z-index: 30;
+}
+.hidden { display: none !important; }
+
+h1 {
+  font-size: 3rem;
+  color: transparent;
+  -webkit-text-stroke: 1px #00d9ff;
+  font-style: italic;
+  margin-bottom: 1rem;
+}
+.screen {
+  background: rgba(0,20,30,.9);
+  border: 2px solid #00d9ff;
+  padding: 2rem;
+  text-align: center;
+  min-width: 280px;
+}
+h2 { color: #ff0055; margin-bottom: 1rem; }
+p { margin-bottom: 1rem; opacity: 0.9; }
+
+button {
+  margin-top: 1rem;
+  padding: 10px 30px;
+  background: transparent;
+  border: 2px solid #00d9ff;
+  color: #00d9ff;
+  font-family: 'Orbitron';
+  cursor: pointer;
+  text-transform: uppercase;
+  font-weight: 700;
+  transition: all 0.2s;
+}
+button:hover {
+  background: #00d9ff;
+  color: #000;
+  box-shadow: 0 0 20px rgba(0, 217, 255, 0.4);
+}
+
+/* CONTROLS HINT */
 #controls-hint {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
-  padding: 10px 20px;
-  border-radius: 0;
-  border: 1px solid rgba(0, 217, 255, 0.3);
-  background: rgba(0, 10, 20, 0.7);
-  backdrop-filter: blur(4px);
-  color: #00d9ff;
-  font-size: 0.8rem;
+  bottom: 10px;
+  width: 100%;
+  text-align: center;
+  color: #555;
+  font-size: .8rem;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  z-index: 9;
-  pointer-events: none;
 }
 
-/* Responsive adjustments */
-@media (max-width: 640px) {
-  #hud { left: 12px; top: 12px; }
-  .hud-item { font-size: 0.9rem; padding: 6px 12px; }
-  #controls-hint { font-size: 0.7rem; right: 10px; bottom: 10px; padding: 8px 12px; }
-  h1 { font-size: 2.5rem }
-}
-
-/* Touch control panel */
+/* Touch controls (mobile) */
 #touch-controls {
-  position: fixed;
+  position: absolute;
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 20px;
   display: flex;
-  gap: 24px;
-  align-items: center;
-  z-index: 12;
-  pointer-events: auto;
+  gap: 20px;
+  z-index: 60;
 }
 .touch-btn {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  border: 2px solid rgba(0,217,255,0.4);
-  background: rgba(0,20,40,0.6);
-  color: #00d9ff;
-  font-size: 1.5rem;
-  backdrop-filter: blur(4px);
-  box-shadow: 0 0 15px rgba(0,217,255,0.2);
-  transition: all 0.1s ease;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: rgba(0, 20, 40, 0.5); border: 2px solid rgba(0,217,255,0.4);
+  color: #00d9ff; font-size: 1.2rem;
 }
-.touch-btn:active {
-  transform: scale(0.92);
-  background: rgba(0,217,255,0.2);
-  box-shadow: 0 0 25px rgba(0,217,255,0.6);
-  border-color: #fff;
-  color: #fff;
-}
-
-@media (min-width: 680px) {
-  /* hide touch controls on desktop */
-  #touch-controls { display: none; }
-}
+@media (min-width: 680px) { #touch-controls { display: none; } }
 
 .toast {
   position: fixed;
@@ -191,71 +196,3 @@ body {
 }
 .toast.hidden { display: none; opacity: 0 }
 .toast.show { display: block; opacity: 1; transform: translateX(-50%) translateY(-10px) }
-
-.screen {
-  text-align: center;
-  padding: 3rem;
-  background: rgba(5, 5, 10, 0.9);
-  border: 2px solid #00d9ff;
-  box-shadow: 0 0 50px rgba(0, 217, 255, 0.15), inset 0 0 20px rgba(0, 217, 255, 0.1);
-  min-width: 320px;
-  clip-path: polygon(10% 0, 100% 0, 100% 90%, 90% 100%, 0 100%, 0 10%);
-}
-
-.screen.hidden {
-  display: none;
-}
-
-h1 {
-  font-size: 4rem;
-  margin-bottom: 2rem;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: transparent;
-  -webkit-text-stroke: 2px #00d9ff;
-  text-shadow: 0 0 20px rgba(0, 217, 255, 0.5);
-  font-weight: 900;
-  font-style: italic;
-}
-
-h2 {
-  font-size: 2.5rem;
-  margin-bottom: 1.5rem;
-  color: #ff0055;
-  text-shadow: 0 0 10px rgba(255, 0, 85, 0.6);
-  text-transform: uppercase;
-}
-
-p {
-  font-size: 1.1rem;
-  margin-bottom: 1.5rem;
-  opacity: 0.9;
-  letter-spacing: 1px;
-}
-
-button {
-  background: transparent;
-  color: #00d9ff;
-  border: 2px solid #00d9ff;
-  padding: 16px 48px;
-  font-size: 1.2rem;
-  font-weight: 900;
-  font-family: 'Orbitron', sans-serif;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 0 10px rgba(0, 217, 255, 0.1);
-  margin-top: 1rem;
-}
-
-button:hover {
-  background: #00d9ff;
-  color: #000;
-  box-shadow: 0 0 30px rgba(0, 217, 255, 0.6);
-  transform: scale(1.05);
-}
-
-button:active {
-  transform: scale(0.98);
-}

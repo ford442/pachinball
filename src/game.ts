@@ -12,7 +12,7 @@ import {
   PostProcess,
   Effect,
   Texture,
-  Viewport,
+  Viewport // <--- Added Viewport import
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import type { Engine } from '@babylonjs/core/Engines/engine'
@@ -77,7 +77,7 @@ export class Game {
   private powerupTimer = 0
   private tiltActive = false
   
-  // UI
+  // UI References
   private scoreElement: HTMLElement | null = null
   private livesElement: HTMLElement | null = null
   private comboElement: HTMLElement | null = null
@@ -93,7 +93,7 @@ export class Game {
     this.physics = new PhysicsSystem()
   }
 
-  async init(_canvas: HTMLCanvasElement): Promise<void> {
+  async init(): Promise<void> {
     if ('initAsync' in this.engine) {
       await this.engine.initAsync()
     }
@@ -123,81 +123,91 @@ export class Game {
     }
     this.updateHUD()
 
-    // --- SPLIT-SCREEN SETUP ---
-    // Lower half: Orthographic Cabinet View (top-down)
-    const camera = new ArcRotateCamera('camera', -Math.PI / 2, 0, 40, new Vector3(0, 0, 5), this.scene)
+    // -----------------------------------------------------------------
+    // 2️⃣ DUAL‑CAMERA SETUP (TOP = Machine Head, BOTTOM = Ball Table)
+    // -----------------------------------------------------------------
 
-    // Enable Orthographic Mode
-    camera.mode = ArcRotateCamera.ORTHOGRAPHIC_CAMERA
-
-    // Define the View Frustum (Visible Area)
-    // Add padding to ensure table edges don't touch viewport boundaries
-    const pWidth = GameConfig.table.width + 4
-    const pHeight = GameConfig.table.height + 4
-
-    // Set boundaries (Top, Bottom, Left, Right)
-    camera.orthoTop = pHeight / 2
-    camera.orthoBottom = -pHeight / 2
-    camera.orthoLeft = -pWidth / 2
-    camera.orthoRight = pWidth / 2
-
-    // Set viewport to lower half of screen (x, y, width, height)
-    camera.viewport = new Viewport(0, 0, 1, 0.5)
-
-    // Restrict movement so users don't accidentally rotate out of the flat view
-    camera.lowerBetaLimit = 0
-    camera.upperBetaLimit = 0
-    camera.lowerRadiusLimit = 20
-    camera.upperRadiusLimit = 60
-
-    // Upper half: Backbox frontal view
-    // Position camera to view the backbox from the front
-    // Backbox is at (0.75, 8, 21.5), so position camera in front of it
-    const backboxCamera = new ArcRotateCamera(
-      'backboxCamera', 
-      0,                    // Alpha: 0 = looking along positive Z axis
-      Math.PI / 2.5,        // Beta: slight angle from horizontal
-      35,                   // Radius: distance from target
-      new Vector3(0.75, 8, 21.5), // Target: backbox position
+    // ---- TABLE CAMERA (bottom 60% of the screen) --------------------
+    const tableCam = new ArcRotateCamera(
+      'tableCam',
+      -Math.PI / 2,               // alpha (horizontal)
+      0,                          // beta (vertical - top down)
+      40,                         // radius
+      new Vector3(0, 0, 0),       // target
       this.scene
     )
+    tableCam.mode = ArcRotateCamera.ORTHOGRAPHIC_CAMERA
 
-    // Set viewport to upper half of screen
-    backboxCamera.viewport = new Viewport(0, 0.5, 1, 0.5)
+    // Viewport: x, y, width, height – y = 0 starts at the *bottom* of the canvas
+    tableCam.viewport = new Viewport(0, 0, 1, 0.6) // 60% height
 
-    // Make both cameras active
-    this.scene.activeCameras = [camera, backboxCamera]
+    // Orthographic bounds – tweak to fit your table size
+    const tableScale = 18
+    tableCam.orthoTop    =  tableScale * 0.6
+    tableCam.orthoBottom = -tableScale * 0.6
+    tableCam.orthoLeft   = -tableScale / 2
+    tableCam.orthoRight  =  tableScale / 2
+
+    // ---- HEAD CAMERA (top 40% of the screen) ------------------------
+    const headCam = new ArcRotateCamera(
+      'headCam',
+      -Math.PI / 2,
+      Math.PI / 2,
+      25,
+      new Vector3(0.75, 8, 21.5), // Matches your display.ts target
+      this.scene
+    )
+    headCam.mode = ArcRotateCamera.ORTHOGRAPHIC_CAMERA
+
+    // Viewport: starts at y = 0.6 (i.e. after the bottom 60%)
+    headCam.viewport = new Viewport(0, 0.6, 1, 0.4) // 40% height
+
+    // Orthographic bounds for the backbox
+    const headScale = 24
+    headCam.orthoTop    =  headScale * 0.2
+    headCam.orthoBottom = -headScale * 0.2
+    headCam.orthoLeft   = -headScale / 2
+    headCam.orthoRight  =  headScale / 2
+
+    // Register both cameras as the *active* set for the scene
+    this.scene.activeCameras = [tableCam, headCam]
+
+    // -----------------------------------------------------------------
+    // 3️⃣ POST‑PROCESS PIPELINES (bloom + scanlines)
+    // -----------------------------------------------------------------
     
-    this.bloomPipeline = new DefaultRenderingPipeline('pachinbloom', true, this.scene, [camera, backboxCamera])
+    // Bloom – applied to *both* viewports
+    this.bloomPipeline = new DefaultRenderingPipeline(
+      'pachinbloom',
+      true,
+      this.scene,
+      [tableCam, headCam]
+    )
     if (this.bloomPipeline) {
       this.bloomPipeline.bloomEnabled = true
       this.bloomPipeline.bloomKernel = 64
       this.bloomPipeline.bloomWeight = 0.4
     }
 
-    // Add LCD Scanline Overlay to both cameras
-    const createScanlineEffect = (name: string, cam: ArcRotateCamera) => {
-      const effect = new PostProcess(
-        name,
+    // Scanline effect – only on the head camera
+    const scanline = new PostProcess(
+        "scanline",
         "scanline",
         ["uTime"],
         null,
         1.0,
-        cam,
+        headCam, // Only attached to head camera!
         Texture.BILINEAR_SAMPLINGMODE,
         this.engine
-      )
-      effect.onApply = (effect) => {
+    )
+    scanline.onApply = (effect) => {
         effect.setFloat("uTime", performance.now() * 0.001)
-      }
-      return effect
     }
 
-    createScanlineEffect("scanline", camera)
-    createScanlineEffect("scanline2", backboxCamera)
-
+    // Basic Lighting
     new HemisphericLight('light', new Vector3(0.3, 1, 0.3), this.scene)
 
+    // Initialize Game Logic and Physics
     await this.physics.init()
     this.buildScene()
 
@@ -336,7 +346,7 @@ export class Game {
     }
 
     // [NEW] LINK ADVENTURE EVENTS TO DISPLAY SYSTEM
-    this.adventureMode.setEventListener((event, _data) => {
+    this.adventureMode.setEventListener((event) => {
       console.log(`Adventure Event: ${event}`)
 
       switch (event) {
@@ -738,7 +748,7 @@ export class Game {
     if (!this.adventureMode || !this.scene) return
     
     const ballBody = this.ballManager?.getBallBody()
-    const camera = this.scene.activeCamera as ArcRotateCamera
+    const camera = this.scene.activeCamera as ArcRotateCamera // Note: This might pick the first camera if multiple are active
     const bindings = this.gameObjects?.getBindings() || []
     const ballMesh = bindings.find(b => b.rigidBody === ballBody)?.mesh
     
