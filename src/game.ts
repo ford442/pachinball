@@ -37,6 +37,8 @@ import {
   NanoLoomState,
   PrismCoreFeeder,
   PrismCoreState,
+  GaussCannonFeeder,
+  GaussCannonState,
 } from './game-elements'
 import { GameConfig } from './config'
 import { scanlinePixelShader } from './shaders/scanline'
@@ -59,6 +61,7 @@ export class Game {
   private magSpinFeeder: MagSpinFeeder | null = null
   private nanoLoomFeeder: NanoLoomFeeder | null = null
   private prismCoreFeeder: PrismCoreFeeder | null = null
+  private gaussCannon: GaussCannonFeeder | null = null
   private inputHandler: InputHandler | null = null
   
   // Rendering
@@ -345,6 +348,22 @@ export class Game {
         }
     }
 
+    this.gaussCannon = new GaussCannonFeeder(this.scene, world, rapier, GameConfig.gaussCannon)
+    this.gaussCannon.onStateChange = (state) => {
+      switch (state) {
+        case GaussCannonState.LOAD:
+          this.effects?.playBeep(300)
+          break
+        case GaussCannonState.AIM:
+          this.effects?.playBeep(600) // Rising pitch?
+          break
+        case GaussCannonState.FIRE:
+          this.effects?.playBeep(2000) // Laser shot
+          this.effects?.spawnShardBurst(this.gaussCannon?.getPosition() || Vector3.Zero())
+          break
+      }
+    }
+
     // [NEW] LINK ADVENTURE EVENTS TO DISPLAY SYSTEM
     this.adventureMode.setEventListener((event) => {
       console.log(`Adventure Event: ${event}`)
@@ -585,6 +604,11 @@ export class Game {
     if (this.prismCoreFeeder) {
         const ballBodies = this.ballManager?.getBallBodies() || []
         this.prismCoreFeeder.update(dt, ballBodies)
+    }
+
+    if (this.gaussCannon) {
+        const ballBodies = this.ballManager?.getBallBodies() || []
+        this.gaussCannon.update(dt, ballBodies)
     }
 
     this.ballManager?.updateCaughtBalls(dt, () => {
