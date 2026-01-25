@@ -30,6 +30,15 @@ export const GameConfig = {
     ejectForce: 20.0,
     ejectSpread: 45 // degrees
   },
+  gaussCannon: {
+    gaussPosition: { x: -12.0, y: 0.5, z: -8.0 },
+    intakeRadius: 1.0,
+    muzzleVelocity: 30.0,
+    minAngle: 30, // degrees
+    maxAngle: 60, // degrees
+    sweepSpeed: 1.0, // radians/sec
+    cooldown: 2.0 // seconds
+  },
   visuals: {
     enableParticles: true,
     enableTrails: true,
