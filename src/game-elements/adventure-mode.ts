@@ -30,6 +30,7 @@ export enum AdventureTrackType {
   GRAVITY_FORGE = 'GRAVITY_FORGE',
   TIDAL_NEXUS = 'TIDAL_NEXUS',
   DIGITAL_ZEN_GARDEN = 'DIGITAL_ZEN_GARDEN',
+  SYNTHWAVE_SURF = 'SYNTHWAVE_SURF',
 }
 
 interface KinematicBinding {
@@ -220,6 +221,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.DIGITAL_ZEN_GARDEN) {
         this.currentStartPos = new Vector3(0, 20, 0)
         this.createDigitalZenGardenTrack()
+    } else if (trackType === AdventureTrackType.SYNTHWAVE_SURF) {
+        this.currentStartPos = new Vector3(0, 20, 0)
+        this.createSynthwaveSurfTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -2333,5 +2337,165 @@ export class AdventureMode {
       const goalPos = currentPos.add(forward.scale(4))
 
       this.createBasin(goalPos, accentMat)
+  }
+
+  // --- Track: The Synthwave Surf ---
+  private createSynthwaveSurfTrack(): void {
+      const floorMat = this.getTrackMaterial("#110022") // Dark Purple
+      const gridMat = this.getTrackMaterial("#00FFFF") // Cyan
+      const barMat1 = this.getTrackMaterial("#00FF00") // Green
+      const barMat2 = this.getTrackMaterial("#FF0000") // Red
+
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+
+      // 1. The Bass Drop (Entry)
+      // Length 15, Incline -25 deg, Width 8
+      const dropLen = 15
+      const dropIncline = (25 * Math.PI) / 180
+
+      currentPos = this.addStraightRamp(currentPos, heading, 8, dropLen, dropIncline, floorMat)
+
+      // Visual: Pulsing Chevrons?
+      // Can simulate with some static meshes for now or just rely on floorMat.
+
+      // 2. The Equalizer (Hazard)
+      // Flat, Length 20, Width 10.
+      const eqLen = 20
+      const eqWidth = 10
+      const eqStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, eqWidth, eqLen, 0, floorMat)
+
+      // EQ Bars (Pistons)
+      // 5 Rows of 4 Pistons.
+      if (this.world) {
+          const rows = 5
+          const cols = 4
+          const rowSpacing = 3.0
+          const colSpacing = 2.0
+          const pistonWidth = 1.5
+          const pistonHeight = 3.0
+          const pistonDepth = 1.5
+
+          const startZ = 2.0 // From start of segment
+          const startX = -((cols - 1) * colSpacing) / 2
+
+          const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+          const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+
+          for (let r = 0; r < rows; r++) {
+              for (let c = 0; c < cols; c++) {
+                   const zOffset = startZ + r * rowSpacing
+                   const xOffset = startX + c * colSpacing
+
+                   const pistonPos = eqStart.add(forward.scale(zOffset)).add(right.scale(xOffset))
+
+                   // Base Pos: Floor level?
+                   // "They rise and fall... y = abs(sin(t + x))"
+                   // We want them to block path when up.
+                   // Start with top flush with floor?
+                   // Or fully below?
+                   // Let's have base Y such that min Y is flush with floor, max Y is 3.0 above.
+                   // Amplitude 1.5. Midpoint = Floor + 1.5.
+                   // y = mid + amp * sin.
+                   // Min = floor. Max = floor + 3.
+
+                   const basePos = pistonPos.clone()
+                   basePos.y += pistonHeight / 2 // Center of box when flush
+                   // But we want to animate it.
+                   // The animate loop uses: y = basePos.y + offset.
+                   // Offset is +/- amp.
+                   // So basePos.y needs to be the MIDPOINT of the oscillation.
+                   // Midpoint = Floor + 1.5 (half max height).
+                   // Center of box at midpoint = (Floor + 1.5).
+
+                   const oscBaseY = pistonPos.y + pistonHeight / 2 // Floor + 1.5
+
+                   // Reset basePos for animation center
+                   const animBasePos = new Vector3(pistonPos.x, oscBaseY - pistonHeight/2, pistonPos.z)
+                   // Wait, my logic in update():
+                   // const newY = obst.basePos.y + yOffset
+                   // If amplitude is 1.5, range is [base-1.5, base+1.5].
+                   // If base is Floor + 1.5. Range is [Floor, Floor + 3.0]. Correct.
+                   // Center of box is at Y. Box bottom is Y - 1.5.
+                   // At Floor: Center = Floor. Bottom = Floor - 1.5. Top = Floor + 1.5.
+                   // At Floor+3: Center = Floor+3. Bottom = Floor+1.5. Top = Floor+4.5.
+                   // So it rises OUT of floor?
+                   // "Navigate the troughs".
+                   // If it's 0 to 3, it blocks.
+                   // If it's -3 to 0, it's clear.
+                   // abs(sin) is 0 to 1.
+                   // We want 0 to Max Height.
+                   // Update logic uses simple sin.
+                   // Let's adjust Phase/Freq.
+                   // Use abs(sin) logic? update() currently supports sin.
+                   // Let's stick to sin. Range [-1, 1].
+                   // We want it to go from Flush (0 height above floor) to Full (3 height).
+                   // Center oscillates.
+
+                   const box = MeshBuilder.CreateBox("eqPiston", { width: pistonWidth, height: pistonHeight, depth: pistonDepth }, this.scene)
+                   box.position.copyFrom(animBasePos)
+                   box.rotation.y = heading
+                   // Gradient color: Green to Red. Use row index.
+                   box.material = (r % 2 === 0) ? barMat1 : barMat2
+                   this.adventureTrack.push(box)
+
+                   const q = Quaternion.FromEulerAngles(0, heading, 0)
+                   const body = this.world.createRigidBody(
+                       this.rapier.RigidBodyDesc.kinematicPositionBased()
+                           .setTranslation(animBasePos.x, animBasePos.y, animBasePos.z)
+                           .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+                   )
+                   this.world.createCollider(
+                       this.rapier.ColliderDesc.cuboid(pistonWidth/2, pistonHeight/2, pistonDepth/2),
+                       body
+                   )
+                   this.adventureBodies.push(body)
+
+                   this.animatedObstacles.push({
+                       body,
+                       mesh: box,
+                       type: 'PISTON',
+                       basePos: animBasePos,
+                       frequency: 4.0, // bpm 120 -> 2 Hz? let's make it fast.
+                       amplitude: 1.5,
+                       // Phase based on X + T?
+                       // We can pass phase as xOffset.
+                       phase: xOffset * 0.5 + r * 1.0
+                   })
+              }
+          }
+      }
+
+      // 3. The High-Pass Filter (Turn)
+      // Radius 12, Angle 180, Incline +5 deg (Uphill), Banking -15 deg
+      const turnRadius = 12
+      const turnAngle = Math.PI
+      const turnIncline = -(5 * Math.PI) / 180 // Negative is Uphill?
+      // Wait, in addStraightRamp: vDrop = length * sin(incline).
+      // positive incline -> vDrop positive -> y goes down.
+      // So negative incline -> vDrop negative -> y goes up. Correct.
+      const turnBank = -(15 * Math.PI) / 180
+
+      currentPos = this.addCurvedRamp(currentPos, heading, turnRadius, turnAngle, turnIncline, 8, 2.0, gridMat, 20, turnBank)
+      heading += turnAngle
+
+      // 4. The Sub-Woofer (Goal Approach)
+      // Spiral 360, Incline -15 deg (Down), Banking -30 deg
+      const spiralRadius = 6
+      const spiralAngle = 2 * Math.PI
+      const spiralIncline = (15 * Math.PI) / 180 // Down
+      const spiralBank = -(30 * Math.PI) / 180
+
+      currentPos = this.addCurvedRamp(currentPos, heading, spiralRadius, spiralAngle, spiralIncline, 8, 2.0, floorMat, 30, spiralBank)
+      heading += spiralAngle
+
+      // 5. The Mic Drop (Goal)
+      const goalPos = currentPos.clone()
+      goalPos.y -= 2
+      goalPos.z += 2
+
+      this.createBasin(goalPos, gridMat)
   }
 }
