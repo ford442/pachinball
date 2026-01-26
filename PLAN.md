@@ -888,3 +888,58 @@ A mounted electromagnetic railgun located on the lower-left wall.
     *   `minAngle` = 30 degrees (Towards Center).
     *   `maxAngle` = 60 degrees (Towards Upper Right).
     *   `sweepSpeed` = 1.0 (Radians/sec).
+
+## 27. Adventure Track: "The Synthwave Surf"
+A rhythmic, musical track where the environment pulses to the beat. The obstacles are audio visualizations brought to life.
+
+### A. Concept
+A neon highway shaped like an audio waveform. The key mechanic is timing: the "Equalizer" pistons block and clear paths rhythmically.
+
+### B. Layout Definition
+      [The Bass Drop]
+           \
+            \ (Steep -25°)
+             \
+    [The Equalizer]       [High-Pass Turn]      [Sub-Woofer]
+    +-------------+       /              \       /   \
+    | || || || || | ---> |                | ->  | (O) |
+    | || || || || |      |                |      \   /
+    +-------------+       \              /        ---
+    (Pistons Wave)         --------------
+
+1.  **The Bass Drop (Entry):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: -25 degrees
+    *   Width: 8 units
+    *   Visual: Pulsing "Chevron" arrows on the floor.
+2.  **The Equalizer (Hazard):**
+    *   Type: `STRAIGHT_RAMP` (Flat)
+    *   Length: 20 units
+    *   Width: 10 units
+    *   Feature: "EQ Bars" - 5 Rows of 4 Pistons (Width 1.5, Height 3.0) across the track.
+    *   Pattern: They rise and fall in a "Spectrum Analyzer" wave pattern (`y = abs(sin(t + x))`).
+    *   Note: The ball must navigate the "troughs" of the wave.
+3.  **The High-Pass Filter (Turn):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 12 units
+    *   Angle: 180 degrees
+    *   Incline: 5 degrees (Uphill)
+    *   Banking: -15 degrees (Inward)
+    *   Visual: The floor texture is a frequency grid.
+4.  **The Sub-Woofer (Goal Approach):**
+    *   Type: `CURVED_RAMP` (Spiral)
+    *   Radius: 6 units
+    *   Angle: 360 degrees
+    *   Incline: -15 degrees (Down)
+    *   Banking: -30 degrees (Steep Inward)
+    *   Visual: "Speaker Cone" texture.
+5.  **The Mic Drop (Goal):**
+    *   Type: `BUCKET`
+    *   Location: At the bottom of the spiral.
+
+### C. Technical Variables
+*   `bpm` = 120 (Controls piston speed)
+*   `barColor` = "#00FF00" to "#FF0000" (Gradient)
+*   `floorColor` = "#110022" (Dark Purple)
+*   `gridColor` = "#00FFFF" (Cyan)
