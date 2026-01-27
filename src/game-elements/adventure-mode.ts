@@ -31,6 +31,13 @@ export enum AdventureTrackType {
   TIDAL_NEXUS = 'TIDAL_NEXUS',
   DIGITAL_ZEN_GARDEN = 'DIGITAL_ZEN_GARDEN',
   SYNTHWAVE_SURF = 'SYNTHWAVE_SURF',
+  SOLAR_FLARE = 'SOLAR_FLARE',
+}
+
+interface GravityWell {
+  sensor: RAPIER.RigidBody
+  center: Vector3
+  strength: number
 }
 
 interface KinematicBinding {
@@ -62,6 +69,7 @@ export class AdventureMode {
   private kinematicBindings: KinematicBinding[] = []
   private animatedObstacles: AnimatedObstacle[] = []
   private conveyorZones: ConveyorZone[] = []
+  private gravityWells: GravityWell[] = []
   private adventureSensor: RAPIER.RigidBody | null = null
   private resetSensors: RAPIER.RigidBody[] = []
   private adventureActive = false
@@ -127,20 +135,28 @@ export class AdventureMode {
         for (const ball of ballBodies) {
             const ballHandle = ball.collider(0)
             if (this.world.intersectionPair(sensorHandle, ballHandle)) {
-                // Apply force
-                // impulse or force? Plan says "physics applies a constant forward impulse"
-                // But if it's every frame, it should be a Force (acceleration) or small impulse.
-                // Impulse is immediate change in velocity (approx). Force is acceleration.
-                // For "conveyor belt", we usually want to modify velocity directly or apply friction-like force.
-                // Let's apply a small impulse scaled by dt.
-                // Force = 5.0. Impulse = Force * dt.
                 const imp = zone.force.scale(dt)
                 ball.applyImpulse({ x: imp.x, y: imp.y, z: imp.z }, true)
             }
         }
     }
 
-    // 3. Sync kinematic bodies to visuals
+    // 3. Apply Gravity Wells
+    for (const well of this.gravityWells) {
+        const sensorHandle = well.sensor.collider(0)
+        for (const ball of ballBodies) {
+            const ballHandle = ball.collider(0)
+            if (this.world.intersectionPair(sensorHandle, ballHandle)) {
+                // Direction towards center
+                const ballPos = ball.translation()
+                const dir = well.center.subtract(new Vector3(ballPos.x, ballPos.y, ballPos.z)).normalize()
+                const imp = dir.scale(well.strength * dt)
+                ball.applyImpulse({ x: imp.x, y: imp.y, z: imp.z }, true)
+            }
+        }
+    }
+
+    // 4. Sync kinematic bodies to visuals
     // This includes standard kinematics (rotating platforms) and our animated ones
     const allBindings = [...this.kinematicBindings, ...this.animatedObstacles]
     for (const binding of allBindings) {
@@ -224,6 +240,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.SYNTHWAVE_SURF) {
         this.currentStartPos = new Vector3(0, 20, 0)
         this.createSynthwaveSurfTrack()
+    } else if (trackType === AdventureTrackType.SOLAR_FLARE) {
+        this.currentStartPos = new Vector3(0, 20, 0)
+        this.createSolarFlareTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -294,6 +313,13 @@ export class AdventureMode {
         }
     })
     this.conveyorZones = []
+
+    this.gravityWells.forEach(w => {
+        if (this.world.getRigidBody(w.sensor.handle)) {
+            this.world.removeRigidBody(w.sensor)
+        }
+    })
+    this.gravityWells = []
     
     if (this.adventureSensor) {
       if (this.world.getRigidBody(this.adventureSensor.handle)) {
@@ -2497,5 +2523,206 @@ export class AdventureMode {
       goalPos.z += 2
 
       this.createBasin(goalPos, gridMat)
+  }
+
+  // --- Track: The Solar Flare ---
+  private createSolarFlareTrack(): void {
+      const plasmaMat = this.getTrackMaterial("#FF4500") // Orange Red
+      const coreMat = this.getTrackMaterial("#FFFF00") // Yellow
+
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+
+      // 1. Coronal Mass Ejection (Launch)
+      // Length 15, Incline -20 deg, Width 6
+      const launchLen = 15
+      const launchIncline = (20 * Math.PI) / 180
+      const launchStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, 6, launchLen, launchIncline, plasmaMat)
+
+      // Plasma Boost: Conveyor Force +10.0 Z (relative to ramp)
+      if (this.world) {
+          const hLen = launchLen * Math.cos(launchIncline)
+          const vDrop = launchLen * Math.sin(launchIncline)
+          const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+          const center = launchStart.add(forward.scale(hLen / 2))
+          center.y -= vDrop / 2
+          center.y += 0.5
+
+          const sensor = this.world.createRigidBody(
+              this.rapier.RigidBodyDesc.fixed().setTranslation(center.x, center.y, center.z)
+          )
+          const q = Quaternion.FromEulerAngles(launchIncline, heading, 0)
+          sensor.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
+
+          this.world.createCollider(
+              this.rapier.ColliderDesc.cuboid(3, 1, launchLen / 2).setSensor(true),
+              sensor
+          )
+
+          // Force Vector: 10.0 * 10 = 100.0? Based on previous 60.0 for 8.0.
+          // Let's try 80.0
+          const forceDir = new Vector3(
+              Math.sin(heading) * Math.cos(launchIncline),
+              -Math.sin(launchIncline),
+              Math.cos(heading) * Math.cos(launchIncline)
+          )
+          this.conveyorZones.push({
+              sensor,
+              force: forceDir.scale(80.0)
+          })
+      }
+
+      // 2. The Prominence (Vertical Arch)
+      // Parabolic Arch: Rise 8 units, Fall 8 units. Length 20.
+      const archLen = 20
+      const segments = 10
+      const segLen = archLen / segments
+      const archWidth = 4
+
+      // Parabola y = -a * x^2 + h
+      // Starts at x=0, y=0. Ends at x=20, y=0??
+      // "Rise 8 units, Fall 8 units".
+      // Let's model as y = -0.08 * (x - 10)^2 + 8.
+      // x=0 -> y = -0.08 * 100 + 8 = 0.
+      // x=10 -> y=8.
+      // x=20 -> y=0.
+      // Slope dy/dx = -0.16 * (x - 10).
+
+      for (let i = 0; i < segments; i++) {
+          const x0 = i * segLen
+          const x1 = (i + 1) * segLen
+          const xm = (x0 + x1) / 2
+
+          const slope = -0.16 * (xm - 10)
+          const incline = -Math.atan(slope)
+          const meshLen = Math.sqrt(1 + slope * slope) * segLen
+
+          currentPos = this.addStraightRamp(currentPos, heading, archWidth, meshLen, incline, plasmaMat, 0.5)
+      }
+
+      // 3. The Sunspot Field (Hazard)
+      // Flat, Length 25, Width 12
+      const fieldLen = 25
+      const fieldWidth = 12
+      const fieldStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, fieldWidth, fieldLen, 0, plasmaMat)
+
+      // Gravity Wells
+      if (this.world) {
+          const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+          const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+          const wellStrength = 40.0 // Plan says 10.0. Boost for effect?
+
+          // Positions
+          const positions = [
+             { z: 5, x: -3 },
+             { z: 12, x: 3 },
+             { z: 20, x: 0 }
+          ]
+
+          positions.forEach(p => {
+              const wellPos = fieldStart.add(forward.scale(p.z)).add(right.scale(p.x))
+              wellPos.y += 0.5
+
+              // Visual: Swirling Vortex? Use cylinder for now.
+              const vortex = MeshBuilder.CreateCylinder("vortex", { diameter: 4, height: 0.1 }, this.scene)
+              vortex.position.copyFrom(wellPos)
+              vortex.material = coreMat // Yellow center
+              this.adventureTrack.push(vortex)
+
+              // Sensor
+              const sensor = this.world.createRigidBody(
+                  this.rapier.RigidBodyDesc.fixed().setTranslation(wellPos.x, wellPos.y, wellPos.z)
+              )
+              this.world.createCollider(
+                  this.rapier.ColliderDesc.cylinder(1.0, 3.0).setSensor(true),
+                  sensor
+              )
+
+              this.gravityWells.push({
+                  sensor,
+                  center: wellPos,
+                  strength: wellStrength
+              })
+          })
+      }
+
+      // 4. The Solar Wind (Cross-Force)
+      // Curve Radius 15, Angle 180, Incline 0.
+      // Continuous Lateral Force (+5.0 X)
+      const windRadius = 15
+      const windAngle = Math.PI
+      const windStart = currentPos.clone()
+      const windStartHeading = heading
+
+      currentPos = this.addCurvedRamp(currentPos, heading, windRadius, windAngle, 0, 8, 1.0, plasmaMat, 20, 0)
+
+      // Add Solar Wind Sensors
+      if (this.world) {
+          const segments = 10
+          const segAngle = windAngle / segments
+          const chordLen = 2 * windRadius * Math.sin(segAngle/2)
+
+          let curH = windStartHeading
+          let curP = windStart.clone()
+
+          for (let i = 0; i < segments; i++) {
+               curH += segAngle / 2
+               const forward = new Vector3(Math.sin(curH), 0, Math.cos(curH))
+               const center = curP.add(forward.scale(chordLen / 2))
+               center.y += 0.5
+
+               const sensor = this.world.createRigidBody(
+                   this.rapier.RigidBodyDesc.fixed().setTranslation(center.x, center.y, center.z)
+               )
+               const q = Quaternion.FromEulerAngles(0, curH, 0)
+               sensor.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
+
+               this.world.createCollider(
+                   this.rapier.ColliderDesc.cuboid(4, 1, chordLen/2).setSensor(true),
+                   sensor
+               )
+
+               // Force: Lateral (+5.0 X Global?).
+               // Plan: "Continuous Lateral Force (+5.0 X) pushing the ball towards the outer edge."
+               // If we are turning Right (implied by addCurvedRamp default direction?), outer edge is Left?
+               // addCurvedRamp logic:
+               // forward = (sin(H), 0, cos(H))
+               // If H starts at 0 (North), turns to PI (South).
+               // It turns RIGHT if currentHeading += positive.
+               // So outer edge is LEFT (-X local).
+               // +5.0 X Global is Right.
+               // Let's use Global +5.0 X.
+
+               const windForce = new Vector3(50.0, 0, 0) // Scaled
+
+               this.conveyorZones.push({
+                   sensor,
+                   force: windForce
+               })
+
+               curP = curP.add(forward.scale(chordLen))
+               curH += segAngle / 2
+          }
+      }
+      heading += windAngle
+
+      // 5. Fusion Core (Goal)
+      // Bucket in Dyson Ring structure
+      const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const goalPos = currentPos.add(forward.scale(4))
+
+      this.createBasin(goalPos, coreMat)
+
+      // Visual: Dyson Ring
+      const ring = MeshBuilder.CreateTorus("dysonRing", { diameter: 8, thickness: 1.0, tessellation: 32 }, this.scene)
+      ring.position.copyFrom(goalPos)
+      ring.position.y += 2
+      ring.rotation.x = Math.PI / 2
+      ring.material = coreMat
+      this.adventureTrack.push(ring)
   }
 }
