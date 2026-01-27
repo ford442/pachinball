@@ -823,6 +823,8 @@ export class Game {
       } else if (track === AdventureTrackType.TIDAL_NEXUS) {
           this.nextAdventureTrack = AdventureTrackType.DIGITAL_ZEN_GARDEN;
       } else if (track === AdventureTrackType.DIGITAL_ZEN_GARDEN) {
+          this.nextAdventureTrack = AdventureTrackType.SYNTHWAVE_SURF;
+      } else if (track === AdventureTrackType.SYNTHWAVE_SURF) {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
