@@ -943,3 +943,49 @@ A neon highway shaped like an audio waveform. The key mechanic is timing: the "E
 *   `barColor` = "#00FF00" to "#FF0000" (Gradient)
 *   `floorColor` = "#110022" (Dark Purple)
 *   `gridColor` = "#00FFFF" (Cyan)
+
+## 28. Adventure Track: "The Solar Flare"
+A blazing journey across the surface of a star. The environment is hostile, with "Solar Wind" pushing the ball off-course and "Magnetic Loops" defying gravity. The aesthetic is blindingly bright (Orange/Yellow) with plasma shockwaves.
+
+### A. Concept
+A high-energy, high-risk track. The "Solar Wind" forces the player to fight against lateral movement, while the "Sunspot Fields" act as reverse bumpers (gravity wells) that trap the ball.
+
+### B. Layout Definition
+1.  **Coronal Mass Ejection (Launch):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: -20 degrees (Down)
+    *   Width: 6 units
+    *   Feature: "Plasma Boost" - Conveyor Force (+10.0 Z) for extreme acceleration.
+2.  **The Prominence (Vertical Arch):**
+    *   Type: `STRAIGHT_RAMP` (Modified)
+    *   Length: 20 units
+    *   Width: 4 units
+    *   Shape: Parabolic Arch (Rise 8 units, Fall 8 units).
+    *   WallHeight: 0.5 (Low - Risk of falling).
+    *   Visual: Glowing magnetic field lines.
+3.  **The Sunspot Field (Hazard):**
+    *   Type: `STRAIGHT_RAMP` (Flat)
+    *   Length: 25 units
+    *   Width: 12 units
+    *   Feature: "Gravity Wells" - 3 Large Sensor Zones.
+    *   Mechanic: If ball enters, apply force towards center of zone (Pulling it into a trap).
+    *   Visual: Dark, swirling vortices on the surface.
+4.  **The Solar Wind (Cross-Force):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 15 units
+    *   Angle: 180 degrees
+    *   Incline: 0 degrees
+    *   Feature: "Solar Wind" - Continuous Lateral Force (+5.0 X) pushing the ball towards the outer edge.
+    *   Banking: 0 degrees (No help from banking).
+5.  **Fusion Core (Goal):**
+    *   Type: `BUCKET`
+    *   Location: Center of a "Dyson Ring" structure.
+    *   Visual: Blinding White Sphere.
+
+### C. Technical Variables
+*   `windStrength` = 5.0
+*   `plasmaColor` = "#FF4500" (Orange Red)
+*   `coreColor` = "#FFFF00" (Yellow)
+*   `gravityWellStrength` = 10.0
+*   `flareIntensity` = 1.2
