@@ -989,3 +989,45 @@ A high-energy, high-risk track. The "Solar Wind" forces the player to fight agai
 *   `coreColor` = "#FFFF00" (Yellow)
 *   `gravityWellStrength` = 10.0
 *   `flareIntensity` = 1.2
+
+## 29. Adventure Track: "The Prism Pathway"
+A delicate, optical track made of refracting glass and hard light. The ball must navigate through "Fiber Optic" tubes and avoid the sweeping "Laser Beams".
+
+### A. Concept
+A crystalline environment where the floor is transparent glass. The main hazards are "Laser Arrays" - moving red beams (cylinders) that act as solid walls or resets. The aesthetic is Cyan (Glass) and Magenta (Laser).
+
+### B. Layout Definition
+1.  **The Fiber Injection (Entry):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: -20 degrees
+    *   Width: 4 units
+    *   Visual: Semi-transparent tube.
+2.  **The Refractor Field (Obstacles):**
+    *   Type: `STRAIGHT_RAMP` (Flat)
+    *   Length: 20 units
+    *   Width: 10 units
+    *   Feature: "Prism Bumpers" - 5 Triangular Static Prisms (Triangular Prism Mesh).
+    *   Layout: Scattered to deflect the ball.
+3.  **The Laser Gauntlet (Hazard):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 25 units
+    *   Width: 8 units
+    *   Feature: "Sweeping Lasers" - 3 Kinematic Cylinders (Thin, Red).
+    *   Motion: Moving side-to-side (X-axis) across the track.
+    *   Mechanic: They are physical walls; getting hit pushes you off.
+4.  **The Spectrum Loop (Vertical):**
+    *   Type: `CURVED_RAMP` (Spiral Up)
+    *   Radius: 8 units
+    *   Angle: 360 degrees
+    *   Incline: 10 degrees
+    *   Banking: 20 degrees
+5.  **The White Light (Goal):**
+    *   Type: `BUCKET`
+    *   Location: At the top of the spiral.
+    *   Visual: Glowing White Sphere.
+
+### C. Technical Variables
+*   `glassColor` = "#E0FFFF" (Cyan)
+*   `laserColor` = "#FF00FF" (Magenta)
+*   `prismReflectivity` = 0.8
