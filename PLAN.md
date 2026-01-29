@@ -1031,3 +1031,42 @@ A crystalline environment where the floor is transparent glass. The main hazards
 *   `glassColor` = "#E0FFFF" (Cyan)
 *   `laserColor` = "#FF00FF" (Magenta)
 *   `prismReflectivity` = 0.8
+
+## 30. Adventure Track: "The Magnetic Storage"
+A high-speed, rotation-heavy track inside a massive hard drive. The player must navigate a spinning platter and avoid the sweeping actuator arm to reach the data cache.
+
+### A. Concept
+A dark, metallic environment. The floor is a spinning disk ("The Platter"). A massive mechanical arm ("The Actuator") sweeps back and forth, acting as a dynamic wall/hammer.
+
+### B. Layout Definition
+1.  **The Write Head (Injection):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 12 units
+    *   Incline: -25 degrees (Steep Entry)
+    *   Width: 6 units
+    *   Visual: "Laser" emitter texture.
+2.  **The Platter (Main Stage):**
+    *   Type: `ROTATING_PLATFORM`
+    *   Radius: 12 units
+    *   Rotation: Counter-Clockwise (2.5 rad/s - Fast)
+    *   Friction: 0.1 (Slightly slippery)
+    *   WallHeight: 2.0 (To keep ball in, except at exit)
+3.  **The Actuator Arm (Hazard):**
+    *   Type: `ROTATING_OSCILLATOR` (New Feature Req)
+    *   Pivot Location: Outside the platter edge.
+    *   Arm Length: 10 units
+    *   Motion: Rotates back and forth (Sweeps 45 degrees).
+    *   Frequency: 0.5 Hz
+4.  **Bad Sectors (Obstacles):**
+    *   Type: `STATIC` (Attached to Platter)
+    *   Feature: 3 Cubes placed on the platter surface that rotate with it.
+5.  **The Data Cache (Goal):**
+    *   Type: `BUCKET`
+    *   Location: 5 units off the "West" edge of the platter (Tangential exit).
+
+### C. Technical Variables
+*   `platterSpeed` = 2.5
+*   `armFrequency` = 0.5
+*   `armSweepAngle` = 45 degrees
+*   `storageColor` = "#222222" (Dark Chrome)
+*   `laserColor` = "#FF0000" (Red)
