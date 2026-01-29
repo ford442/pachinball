@@ -12,7 +12,7 @@ import {
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 // Event callback signature for communicating with Game.ts
-export type AdventureCallback = (event: string, data?: any) => void
+export type AdventureCallback = (event: string, data?: unknown) => void
 
 export enum AdventureTrackType {
   NEON_HELIX = 'NEON_HELIX',
@@ -34,6 +34,7 @@ export enum AdventureTrackType {
   SYNTHWAVE_SURF = 'SYNTHWAVE_SURF',
   SOLAR_FLARE = 'SOLAR_FLARE',
   PRISM_PATHWAY = 'PRISM_PATHWAY',
+  MAGNETIC_STORAGE = 'MAGNETIC_STORAGE',
 }
 
 interface GravityWell {
@@ -48,8 +49,9 @@ interface KinematicBinding {
 }
 
 interface AnimatedObstacle extends KinematicBinding {
-  type: 'PISTON' | 'OSCILLATOR'
+  type: 'PISTON' | 'OSCILLATOR' | 'ROTATING_OSCILLATOR'
   basePos: Vector3
+  baseRot?: Quaternion
   frequency: number
   amplitude: number
   phase: number
@@ -135,6 +137,13 @@ export class AdventureMode {
             const move = axis.scale(offset)
             const newPos = obst.basePos.add(move)
             obst.body.setNextKinematicTranslation({ x: newPos.x, y: newPos.y, z: newPos.z })
+        } else if (obst.type === 'ROTATING_OSCILLATOR') {
+            const angle = Math.sin(this.timeAccumulator * obst.frequency + obst.phase) * obst.amplitude
+            const axis = obst.axis || new Vector3(0, 1, 0)
+            const baseRot = obst.baseRot || new Quaternion()
+            const offsetRot = Quaternion.RotationAxis(axis, angle)
+            const newRot = baseRot.multiply(offsetRot)
+            obst.body.setNextKinematicRotation({ x: newRot.x, y: newRot.y, z: newRot.z, w: newRot.w })
         }
     }
 
@@ -256,6 +265,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.PRISM_PATHWAY) {
         this.currentStartPos = new Vector3(0, 20, 0)
         this.createPrismPathwayTrack()
+    } else if (trackType === AdventureTrackType.MAGNETIC_STORAGE) {
+        this.currentStartPos = new Vector3(0, 20, 0)
+        this.createMagneticStorageTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -1314,6 +1326,130 @@ export class AdventureMode {
       const whiteMat = this.getTrackMaterial("#FFFFFF")
       goalLight.material = whiteMat
       this.adventureTrack.push(goalLight)
+  }
+
+  // --- Track: The Magnetic Storage ---
+  private createMagneticStorageTrack(): void {
+      const storageMat = this.getTrackMaterial("#222222") // Dark Chrome
+      const laserMat = this.getTrackMaterial("#FF0000") // Red
+
+      let currentPos = this.currentStartPos.clone()
+      const heading = 0
+
+      // 1. The Write Head (Injection)
+      // Length 12, Incline -25 deg, Width 6
+      const entryLen = 12
+      const entryIncline = (25 * Math.PI) / 180
+      currentPos = this.addStraightRamp(currentPos, heading, 6, entryLen, entryIncline, storageMat)
+
+      // 2. The Platter (Main Stage)
+      // Radius 12, CCW 2.5 rad/s, Friction 0.1
+      const platterRadius = 12
+      const platterSpeed = 2.5 // CCW = Positive Y? usually.
+
+      const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const platterCenter = currentPos.add(forward.scale(platterRadius + 1))
+      // Drop slightly onto it?
+      platterCenter.y -= 1.0
+
+      this.createRotatingPlatform(platterCenter, platterRadius, platterSpeed, storageMat)
+
+      // 3. Bad Sectors (Obstacles)
+      // 3 Cubes attached to platter.
+      if (this.world && this.adventureBodies.length > 0) {
+          const platterBody = this.adventureBodies[this.adventureBodies.length - 1]
+          const binding = this.kinematicBindings.find(b => b.body === platterBody)
+
+          const positions = [
+              { r: 6, angle: 0 },
+              { r: 9, angle: (120 * Math.PI) / 180 },
+              { r: 4, angle: (240 * Math.PI) / 180 }
+          ]
+
+          positions.forEach(p => {
+               // Visual
+               const size = 2.0
+               const box = MeshBuilder.CreateBox("badSector", { size }, this.scene)
+               if (binding) {
+                   box.parent = binding.mesh
+                   const lx = Math.sin(p.angle) * p.r
+                   const lz = Math.cos(p.angle) * p.r
+                   box.position.set(lx, size/2 + 0.25, lz) // 0.25 is half platform thickness
+                   box.rotation.y = p.angle
+                   box.material = laserMat
+               }
+
+               // Collider
+               const lx = Math.sin(p.angle) * p.r
+               const lz = Math.cos(p.angle) * p.r
+               const colRot = Quaternion.FromEulerAngles(0, p.angle, 0)
+
+               this.world.createCollider(
+                   this.rapier.ColliderDesc.cuboid(size/2, size/2, size/2)
+                       .setTranslation(lx, size/2 + 0.25, lz)
+                       .setRotation({ x: colRot.x, y: colRot.y, z: colRot.z, w: colRot.w }),
+                   platterBody
+               )
+          })
+      }
+
+      // 4. The Actuator Arm (Hazard)
+      // Pivot Outside. Length 10. Sweep 45 deg.
+      const pivotDist = 16
+      const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+      // Place to the Left
+      const pivotPos = platterCenter.add(right.scale(-pivotDist))
+      pivotPos.y += 2.0 // Hover above
+
+      const armLength = 10
+      const armWidth = 1.0
+      const armHeight = 1.0
+
+      if (this.world) {
+          const pivotMesh = MeshBuilder.CreateSphere("actuatorPivot", { diameter: 2 }, this.scene)
+          pivotMesh.position.copyFrom(pivotPos)
+          pivotMesh.material = storageMat
+          this.adventureTrack.push(pivotMesh)
+
+          const armBox = MeshBuilder.CreateBox("actuatorArm", { width: armLength, height: armHeight, depth: armWidth }, this.scene)
+          armBox.parent = pivotMesh
+          // Arm extends towards center (Right).
+          armBox.position.set(armLength/2, 0, 0)
+          armBox.material = storageMat
+
+          // Physics Body at Pivot
+          const bodyDesc = this.rapier.RigidBodyDesc.kinematicPositionBased()
+               .setTranslation(pivotPos.x, pivotPos.y, pivotPos.z)
+          const body = this.world.createRigidBody(bodyDesc)
+
+          // Collider relative to Body (Pivot)
+          // Center at (Length/2, 0, 0)
+          this.world.createCollider(
+              this.rapier.ColliderDesc.cuboid(armLength/2, armHeight/2, armWidth/2)
+                  .setTranslation(armLength/2, 0, 0),
+              body
+          )
+          this.adventureBodies.push(body)
+
+          this.animatedObstacles.push({
+              body,
+              mesh: pivotMesh,
+              type: 'ROTATING_OSCILLATOR',
+              basePos: pivotPos,
+              baseRot: new Quaternion(), // Identity
+              frequency: Math.PI, // 0.5 Hz * 2PI
+              amplitude: Math.PI / 4,
+              phase: 0,
+              axis: new Vector3(0, 1, 0)
+          })
+      }
+
+      // 5. The Data Cache (Goal)
+      // 5 units off "West" edge.
+      const goalPos = platterCenter.add(right.scale(-platterRadius - 6))
+      goalPos.y -= 2.0
+
+      this.createBasin(goalPos, storageMat)
   }
 
   // --- Primitive Builders ---
