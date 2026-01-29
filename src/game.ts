@@ -829,6 +829,8 @@ export class Game {
       } else if (track === AdventureTrackType.SOLAR_FLARE) {
           this.nextAdventureTrack = AdventureTrackType.PRISM_PATHWAY;
       } else if (track === AdventureTrackType.PRISM_PATHWAY) {
+          this.nextAdventureTrack = AdventureTrackType.MAGNETIC_STORAGE;
+      } else if (track === AdventureTrackType.MAGNETIC_STORAGE) {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
