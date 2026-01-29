@@ -7,6 +7,7 @@ import {
   Quaternion,
   ArcRotateCamera,
   Mesh,
+  VertexBuffer,
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
@@ -32,6 +33,7 @@ export enum AdventureTrackType {
   DIGITAL_ZEN_GARDEN = 'DIGITAL_ZEN_GARDEN',
   SYNTHWAVE_SURF = 'SYNTHWAVE_SURF',
   SOLAR_FLARE = 'SOLAR_FLARE',
+  PRISM_PATHWAY = 'PRISM_PATHWAY',
 }
 
 interface GravityWell {
@@ -46,11 +48,12 @@ interface KinematicBinding {
 }
 
 interface AnimatedObstacle extends KinematicBinding {
-  type: 'PISTON'
+  type: 'PISTON' | 'OSCILLATOR'
   basePos: Vector3
   frequency: number
   amplitude: number
   phase: number
+  axis?: Vector3
 }
 
 interface ConveyorZone {
@@ -65,6 +68,7 @@ export class AdventureMode {
 
   // State Management
   private adventureTrack: Mesh[] = []
+  private materials: StandardMaterial[] = []
   private adventureBodies: RAPIER.RigidBody[] = []
   private kinematicBindings: KinematicBinding[] = []
   private animatedObstacles: AnimatedObstacle[] = []
@@ -125,6 +129,12 @@ export class AdventureMode {
             // Formula: y = base + offset
             const newY = obst.basePos.y + yOffset
             obst.body.setNextKinematicTranslation({ x: obst.basePos.x, y: newY, z: obst.basePos.z })
+        } else if (obst.type === 'OSCILLATOR') {
+            const offset = Math.sin(this.timeAccumulator * obst.frequency + obst.phase) * obst.amplitude
+            const axis = obst.axis || new Vector3(0, 1, 0)
+            const move = axis.scale(offset)
+            const newPos = obst.basePos.add(move)
+            obst.body.setNextKinematicTranslation({ x: newPos.x, y: newPos.y, z: newPos.z })
         }
     }
 
@@ -243,6 +253,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.SOLAR_FLARE) {
         this.currentStartPos = new Vector3(0, 20, 0)
         this.createSolarFlareTrack()
+    } else if (trackType === AdventureTrackType.PRISM_PATHWAY) {
+        this.currentStartPos = new Vector3(0, 20, 0)
+        this.createPrismPathwayTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -296,6 +309,8 @@ export class AdventureMode {
     // Cleanup Visuals
     this.adventureTrack.forEach(m => m.dispose())
     this.adventureTrack = []
+    this.materials.forEach(m => m.dispose())
+    this.materials = []
     this.kinematicBindings = []
     this.animatedObstacles = []
     
@@ -343,6 +358,7 @@ export class AdventureMode {
       mat.diffuseColor = Color3.Black()
       mat.alpha = 0.6
       mat.wireframe = true
+      this.materials.push(mat)
       return mat
   }
 
@@ -1120,6 +1136,184 @@ export class AdventureMode {
       */
       // Yes, this works for dynamic bodies too.
       this.kinematicBindings.push({ body, mesh: box })
+  }
+
+  // --- Track: The Prism Pathway ---
+  private createPrismPathwayTrack(): void {
+      const glassMat = this.getTrackMaterial("#E0FFFF") // Cyan
+      const laserMat = this.getTrackMaterial("#FF00FF") // Magenta
+
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+
+      // 1. The Fiber Injection (Entry)
+      // Length 15, Incline -20 deg, Width 4
+      const entryLen = 15
+      const entryIncline = (20 * Math.PI) / 180 // Down
+      currentPos = this.addStraightRamp(currentPos, heading, 4, entryLen, entryIncline, glassMat)
+
+      // 2. The Refractor Field (Obstacles)
+      // Flat, Length 20, Width 10. Static Prisms.
+      const fieldLen = 20
+      const fieldWidth = 10
+      const fieldStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, fieldWidth, fieldLen, 0, glassMat)
+
+      if (this.world) {
+          const prismCount = 5
+          const prismHeight = 1.5
+          const prismRadius = 0.5 // Diameter 1.0
+
+          const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+          const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+
+          for (let i = 0; i < prismCount; i++) {
+               // Scatter logic
+               const dist = 3 + Math.random() * (fieldLen - 6)
+               const offset = (Math.random() - 0.5) * (fieldWidth - 2)
+
+               const pos = fieldStart.add(forward.scale(dist)).add(right.scale(offset))
+               pos.y += prismHeight / 2 // Sit on floor (floor y is roughly constant if flat)
+
+               // Prism Mesh
+               const prism = MeshBuilder.CreateCylinder("prism", { diameter: prismRadius * 2, height: prismHeight, tessellation: 3 }, this.scene)
+               prism.position.copyFrom(pos)
+               // Random Rotation
+               prism.rotation.y = Math.random() * Math.PI * 2
+               prism.material = glassMat // Or maybe separate prism material
+               this.adventureTrack.push(prism)
+
+               // Physics
+               // Use Convex Hull for accurate triangular collision
+               const positions = prism.getVerticesData(VertexBuffer.PositionKind)
+               if (positions) {
+                   const q = Quaternion.FromEulerAngles(0, prism.rotation.y, 0)
+                   const body = this.world.createRigidBody(
+                       this.rapier.RigidBodyDesc.fixed()
+                           .setTranslation(pos.x, pos.y, pos.z)
+                           .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+                   )
+
+                   // Convex Hull expects a Float32Array of vertices
+                   const vertices = new Float32Array(positions)
+                   const hull = this.rapier.ColliderDesc.convexHull(vertices)
+
+                   if (hull) {
+                       hull.setRestitution(0.8) // High bounce
+                       this.world.createCollider(hull, body)
+                       this.adventureBodies.push(body)
+                   }
+               }
+          }
+      }
+
+      // 3. The Laser Gauntlet (Hazard)
+      // Flat, Length 25, Width 8. Sweeping Lasers.
+      const gauntletLen = 25
+      const gauntletWidth = 8
+      const gauntletStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, gauntletWidth, gauntletLen, 0, glassMat)
+
+      if (this.world) {
+          const laserCount = 3
+          const laserHeight = 2.0
+          const laserRadius = 0.2 // Thin
+          const spacing = gauntletLen / (laserCount + 1)
+
+          const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+          const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+
+          for (let i = 0; i < laserCount; i++) {
+              const dist = spacing * (i + 1)
+              const basePos = gauntletStart.add(forward.scale(dist))
+              // Center Y
+              basePos.y += laserHeight / 2
+
+              // Visual
+              const laser = MeshBuilder.CreateCylinder("laser", { diameter: laserRadius * 2, height: laserHeight }, this.scene)
+              laser.position.copyFrom(basePos)
+              laser.material = laserMat
+              // Emissive glow? laserMat is already emissive magenta.
+              this.adventureTrack.push(laser)
+
+              // Physics
+              // Kinematic Position Based
+              const body = this.world.createRigidBody(
+                   this.rapier.RigidBodyDesc.kinematicPositionBased()
+                       .setTranslation(basePos.x, basePos.y, basePos.z)
+              )
+              this.world.createCollider(
+                  this.rapier.ColliderDesc.cylinder(laserHeight/2, laserRadius),
+                  body
+              )
+              this.adventureBodies.push(body)
+
+              // Animation: Side-to-Side
+              // Axis is 'right' vector.
+              // Amplitude: Width is 8. Half width 4. Keep inside -> Amp 3.0?
+              // Frequency: Vary slightly?
+              const freq = 1.5 + i * 0.5
+              const phase = i * 1.0
+
+              this.animatedObstacles.push({
+                  body,
+                  mesh: laser,
+                  type: 'OSCILLATOR',
+                  basePos: basePos,
+                  frequency: freq,
+                  amplitude: 3.0,
+                  phase: phase,
+                  axis: right
+              })
+          }
+      }
+
+      // 4. The Spectrum Loop (Vertical)
+      // Spiral Up. Radius 8, Angle 360, Incline 10 (Up), Banking 20.
+      const loopRadius = 8
+      const loopAngle = 2 * Math.PI
+      const loopIncline = -(10 * Math.PI) / 180 // Negative for Up in my helper logic (vDrop negative)
+      const loopBank = (20 * Math.PI) / 180 // Inward banking? Positive?
+                                            // Helper: bankingAngle is rotation.z
+                                            // Left turn (heading increases).
+                                            // To bank inward (left), we need Z rotation...
+                                            // Standard Babylon: +Z rotation rolls CCW around Z.
+                                            // If heading is 0 (North), +Z roll tilts Left side Up? No.
+                                            // Right Hand Rule on Z axis (pointing South?).
+                                            // Let's assume helper handles local banking relative to heading.
+                                            // Helper: box.rotation.z = bankingAngle.
+                                            // If box is rotated Y by heading.
+                                            // Local Z axis is... Forward? No, Box dimensions: Width=X, Height=Y, Depth=Z.
+                                            // Wait, addCurvedRamp creates box width=width, height=0.5, depth=chordLen.
+                                            // box.rotation.y = heading.
+                                            // box.rotation.x = incline.
+                                            // box.rotation.z = banking.
+                                            // In Babylon, rotation order is usually YXZ or ZXY? Default is YXZ?
+                                            // If YXZ: Rotate Y (Heading), then X (Pitch), then Z (Roll).
+                                            // Pitch is local X. Roll is local Z.
+                                            // Since Depth is Z, Roll around Z axis is "Barrel Roll".
+                                            // That's what we want for banking.
+                                            // Positive Z roll -> Left side Down, Right side Up? Or CCW.
+                                            // Let's stick to positive 20.
+
+      currentPos = this.addCurvedRamp(currentPos, heading, loopRadius, loopAngle, loopIncline, 8, 2.0, glassMat, 30, loopBank)
+      heading += loopAngle
+
+      // 5. The White Light (Goal)
+      // Bucket at top.
+      const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const goalPos = currentPos.add(forward.scale(4))
+
+      this.createBasin(goalPos, glassMat) // Cyan/White
+      // Add a glowing sphere?
+      const goalLight = MeshBuilder.CreateSphere("goalLight", { diameter: 2 }, this.scene)
+      goalLight.position.copyFrom(goalPos)
+      goalLight.position.y += 2
+      const whiteMat = this.getTrackMaterial("#FFFFFF")
+      goalLight.material = whiteMat
+      this.adventureTrack.push(goalLight)
   }
 
   // --- Primitive Builders ---
