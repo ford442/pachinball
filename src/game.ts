@@ -39,6 +39,8 @@ import {
   PrismCoreState,
   GaussCannonFeeder,
   GaussCannonState,
+  QuantumTunnelFeeder,
+  QuantumTunnelState,
 } from './game-elements'
 import { GameConfig } from './config'
 import { scanlinePixelShader } from './shaders/scanline'
@@ -62,6 +64,7 @@ export class Game {
   private nanoLoomFeeder: NanoLoomFeeder | null = null
   private prismCoreFeeder: PrismCoreFeeder | null = null
   private gaussCannon: GaussCannonFeeder | null = null
+  private quantumTunnel: QuantumTunnelFeeder | null = null
   private inputHandler: InputHandler | null = null
   
   // Rendering
@@ -364,6 +367,19 @@ export class Game {
       }
     }
 
+    this.quantumTunnel = new QuantumTunnelFeeder(this.scene, world, rapier, GameConfig.quantumTunnel)
+    this.quantumTunnel.onStateChange = (state) => {
+      switch (state) {
+        case QuantumTunnelState.CAPTURE:
+          this.effects?.playBeep(200) // Deep sound
+          break
+        case QuantumTunnelState.EJECT:
+          this.effects?.playBeep(2000) // High pitch
+          this.effects?.spawnShardBurst(this.quantumTunnel?.getPosition() || Vector3.Zero())
+          break
+      }
+    }
+
     // [NEW] LINK ADVENTURE EVENTS TO DISPLAY SYSTEM
     this.adventureMode.setEventListener((event) => {
       console.log(`Adventure Event: ${event}`)
@@ -609,6 +625,11 @@ export class Game {
     if (this.gaussCannon) {
         const ballBodies = this.ballManager?.getBallBodies() || []
         this.gaussCannon.update(dt, ballBodies)
+    }
+
+    if (this.quantumTunnel) {
+        const ballBodies = this.ballManager?.getBallBodies() || []
+        this.quantumTunnel.update(dt, ballBodies)
     }
 
     this.ballManager?.updateCaughtBalls(dt, () => {
