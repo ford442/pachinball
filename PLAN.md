@@ -1070,3 +1070,37 @@ A dark, metallic environment. The floor is a spinning disk ("The Platter"). A ma
 *   `armSweepAngle` = 45 degrees
 *   `storageColor` = "#222222" (Dark Chrome)
 *   `laserColor` = "#FF0000" (Red)
+
+## 31. The "Quantum Tunnel" Feeder System
+To provide a strategic "Save" or "Attack" vector from the Right Wall, we introduce a spatial bypass system.
+
+### A. Mechanic: The Spatial Bypass
+A pair of linked portals that transport the ball instantly across the table.
+1.  **Input (Event Horizon):** Located on the mid-Right Wall. Catches balls.
+2.  **Transport:** Ball disappears into the wall (Dematerialize).
+3.  **Output (White Hole):** Located on the mid-Left Wall. Ejects ball at high velocity.
+
+### B. Logic State Machine
+1.  **IDLE:** Portals act as passive visual elements (Swirling particles).
+2.  **CAPTURE:**
+    *   Trigger: Ball enters `tunnelInputRadius`.
+    *   Action: Physics -> Kinematic. Shrink ball to zero scale.
+    *   Visual: "Implosion" effect (Black/Purple).
+3.  **TRANSPORT:**
+    *   Action: Wait `transportDelay` (0.5s).
+    *   Visual: Output portal charges up (White/Cyan).
+4.  **EJECT:**
+    *   Trigger: Delay expires.
+    *   Action: Move ball to `outputPosition`. Restore scale. Physics -> Dynamic.
+    *   Force: Apply massive impulse towards Center Targets.
+    *   Visual: "Explosion" shockwave.
+5.  **COOLDOWN:**
+    *   Action: Disable Input sensor for 2.0s.
+
+### C. Technical Specification
+*   **Input Position:** `tunnelInputPos` = `{ x: 11.5, y: 0.5, z: 0.0 }` (Right Wall).
+*   **Output Position:** `tunnelOutputPos` = `{ x: -11.5, y: 0.5, z: 0.0 }` (Left Wall).
+*   **Physics:**
+    *   `ejectImpulse` = 25.0
+    *   `transportDelay` = 0.5s
+*   **Visuals:** Requires `ShaderMaterial` for the portal surface (Swirling UVs).
