@@ -1104,3 +1104,42 @@ A pair of linked portals that transport the ball instantly across the table.
     *   `ejectImpulse` = 25.0
     *   `transportDelay` = 0.5s
 *   **Visuals:** Requires `ShaderMaterial` for the portal surface (Swirling UVs).
+
+## 32. Adventure Track: "The Neural Network"
+A bio-digital hybrid track simulating the pathways of a cybernetic brain. The player must navigate branching "Dendrite" paths and time their jumps across pulsing "Synapse" gaps.
+
+### A. Concept
+A white, sterile environment with glowing red veins. The geometry is tubular and organic. The key mechanic is the "Split Decision" where the track divides, offering risk/reward choices.
+
+### B. Layout Definition
+1.  **The Stimulus (Injection):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 12 units
+    *   Incline: -25 degrees (Steep Drop)
+    *   Width: 6 units
+    *   Visual: "Nerve Impulse" texture (white with red lightning).
+2.  **The Axon Terminal (Branching Path):**
+    *   Type: `SPLIT_RAMP` (New Concept or simulated with 2 Curved Ramps)
+    *   *Path A (Left):* "The Myelin Sheath" - Fast, narrow (width 2), no walls. High risk, high speed.
+    *   *Path B (Right):* "The Grey Matter" - Slow, wide (width 6), full of "Cell Body" obstacles (static spheres).
+    *   *Implementation:* Use two parallel `CURVED_RAMP` segments that diverge and then reconnect.
+3.  **The Synaptic Gap (Hazard):**
+    *   Type: `GAP`
+    *   Length: 6 units
+    *   Feature: "Neurotransmitter Bridge" - A Kinematic Platform that scales from 0 to 1 repeatedly (`sin(t)`).
+    *   Mechanic: You must time the jump when the bridge is visible/solid.
+4.  **The Dendrite Forest (Chicane):**
+    *   Type: `STRAIGHT_RAMP` (Flat)
+    *   Length: 20 units
+    *   Width: 10 units
+    *   Feature: "Cilia Field" - 50 thin vertical cylinders (radius 0.1, height 2.0).
+    *   Physics: High linear damping in this zone (Simulating fluid resistance).
+5.  **The Soma (Goal):**
+    *   Type: `BUCKET`
+    *   Location: Center of a crater-like depression.
+
+### C. Technical Variables
+*   `pulseFrequency` = 1.0 (Hz)
+*   `networkColor` = "#FFFFFF" (White)
+*   `veinColor` = "#FF0000" (Red)
+*   `dampingFactor` = 2.0 (For the forest)
