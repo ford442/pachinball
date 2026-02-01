@@ -190,7 +190,7 @@ export class Game {
     const canvasHeight = this.engine.getRenderHeight()
 
     // Table render target (bottom 60% of screen)
-    const tableWidth = Math.floor(canvasWidth * 1.0)  // Full width
+    const tableWidth = Math.floor(canvasWidth)  // Full width
     const tableHeight = Math.floor(canvasHeight * 0.6) // 60% height
     this.tableRenderTarget = new RenderTargetTexture(
       'tableRenderTarget',
@@ -211,7 +211,7 @@ export class Game {
     this.tableRenderTarget.renderList = null // Render all scene meshes
 
     // Head render target (top 40% of screen)
-    const headWidth = Math.floor(canvasWidth * 1.0)   // Full width
+    const headWidth = Math.floor(canvasWidth)   // Full width
     const headHeight = Math.floor(canvasHeight * 0.4) // 40% height
     this.headRenderTarget = new RenderTargetTexture(
       'headRenderTarget',
