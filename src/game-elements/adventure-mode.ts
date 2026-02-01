@@ -36,12 +36,18 @@ export enum AdventureTrackType {
   SOLAR_FLARE = 'SOLAR_FLARE',
   PRISM_PATHWAY = 'PRISM_PATHWAY',
   MAGNETIC_STORAGE = 'MAGNETIC_STORAGE',
+  NEURAL_NETWORK = 'NEURAL_NETWORK',
 }
 
 interface GravityWell {
   sensor: RAPIER.RigidBody
   center: Vector3
   strength: number
+}
+
+interface DampingZone {
+  sensor: RAPIER.RigidBody
+  damping: number
 }
 
 interface KinematicBinding {
@@ -77,6 +83,7 @@ export class AdventureMode {
   private animatedObstacles: AnimatedObstacle[] = []
   private conveyorZones: ConveyorZone[] = []
   private gravityWells: GravityWell[] = []
+  private dampingZones: DampingZone[] = []
   private adventureSensor: RAPIER.RigidBody | null = null
   private resetSensors: RAPIER.RigidBody[] = []
   private adventureActive = false
@@ -176,7 +183,26 @@ export class AdventureMode {
         }
     }
 
-    // 4. Sync kinematic bodies to visuals
+    // 4. Apply Damping Zones
+    for (const zone of this.dampingZones) {
+        const sensorHandle = zone.sensor.collider(0)
+        for (const ball of ballBodies) {
+            const ballHandle = ball.collider(0)
+            if (this.world.intersectionPair(sensorHandle, ballHandle)) {
+                // F = -v * k
+                const vel = ball.linvel()
+                const force = {
+                    x: -vel.x * zone.damping,
+                    y: -vel.y * zone.damping,
+                    z: -vel.z * zone.damping
+                }
+                // Apply as Impulse: F * dt
+                ball.applyImpulse({ x: force.x * dt, y: force.y * dt, z: force.z * dt }, true)
+            }
+        }
+    }
+
+    // 5. Sync kinematic bodies to visuals
     // This includes standard kinematics (rotating platforms) and our animated ones
     const allBindings = [...this.kinematicBindings, ...this.animatedObstacles]
     for (const binding of allBindings) {
@@ -272,6 +298,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.MAGNETIC_STORAGE) {
         this.currentStartPos = new Vector3(0, 20, 0)
         this.createMagneticStorageTrack()
+    } else if (trackType === AdventureTrackType.NEURAL_NETWORK) {
+        this.currentStartPos = new Vector3(0, 20, 0)
+        this.createNeuralNetworkTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -351,6 +380,13 @@ export class AdventureMode {
         }
     })
     this.gravityWells = []
+
+    this.dampingZones.forEach(z => {
+        if (this.world.getRigidBody(z.sensor.handle)) {
+            this.world.removeRigidBody(z.sensor)
+        }
+    })
+    this.dampingZones = []
     
     if (this.adventureSensor) {
       if (this.world.getRigidBody(this.adventureSensor.handle)) {
@@ -1454,6 +1490,186 @@ export class AdventureMode {
       goalPos.y -= 2.0
 
       this.createBasin(goalPos, storageMat)
+  }
+
+  // --- Track: The Neural Network ---
+  private createNeuralNetworkTrack(): void {
+      const netMat = this.getTrackMaterial("#FFFFFF") // White
+      const veinMat = this.getTrackMaterial("#FF0000") // Red
+
+      let currentPos = this.currentStartPos.clone()
+      const heading = 0
+
+      // 1. The Stimulus (Injection)
+      // Length 12, Incline -25 deg, Width 6
+      const stimLen = 12
+      const stimIncline = (25 * Math.PI) / 180
+      currentPos = this.addStraightRamp(currentPos, heading, 6, stimLen, stimIncline, netMat)
+
+      // 2. The Axon Terminal (Branching Path)
+      const forkStart = currentPos.clone()
+      const forkHeading = heading
+
+      // Left Path
+      let leftPos = forkStart.clone()
+      let leftHeading = forkHeading
+      // Curve Left 45
+      leftPos = this.addCurvedRamp(leftPos, leftHeading, 10, Math.PI/4, 0, 2, 0, veinMat, 10)
+      leftHeading -= Math.PI/4
+      // Straight
+      leftPos = this.addStraightRamp(leftPos, leftHeading, 2, 5, 0, veinMat)
+      // Curve Right 45 (Reconnect direction)
+      leftPos = this.addCurvedRamp(leftPos, leftHeading, 10, -Math.PI/4, 0, 2, 0, veinMat, 10)
+      leftHeading += Math.PI/4
+
+      // Right Path
+      let rightPos = forkStart.clone()
+      let rightHeading = forkHeading
+      // Curve Right 45
+      rightPos = this.addCurvedRamp(rightPos, rightHeading, 10, -Math.PI/4, 0, 6, 1.0, netMat, 10)
+      rightHeading += Math.PI/4
+      // Straight with Obstacles
+      const rightStraightStart = rightPos.clone()
+      rightPos = this.addStraightRamp(rightPos, rightHeading, 6, 5, 0, netMat)
+      // Add Obstacles (Cell Bodies)
+      if (this.world) {
+           const rockRadius = 0.5
+           const rockPos = rightStraightStart.add(new Vector3(Math.sin(rightHeading), 0, Math.cos(rightHeading)).scale(2.5))
+           rockPos.y += 0.5
+           const rock = MeshBuilder.CreateSphere("cellBody", { diameter: rockRadius * 2 }, this.scene)
+           rock.position.copyFrom(rockPos)
+           rock.material = veinMat
+           this.adventureTrack.push(rock)
+           const body = this.world.createRigidBody(
+               this.rapier.RigidBodyDesc.fixed().setTranslation(rockPos.x, rockPos.y, rockPos.z)
+           )
+           this.world.createCollider(
+               this.rapier.ColliderDesc.ball(rockRadius),
+               body
+           )
+           this.adventureBodies.push(body)
+      }
+      // Curve Left 45 (Reconnect)
+      rightPos = this.addCurvedRamp(rightPos, rightHeading, 10, Math.PI/4, 0, 6, 1.0, netMat, 10)
+      rightHeading -= Math.PI/4
+
+      // Converge
+      const convergePos = leftPos.add(rightPos).scale(0.5)
+      currentPos = convergePos
+
+      // 3. The Synaptic Gap (Hazard)
+      const gapLen = 6
+      const gapStart = currentPos.clone()
+      const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+
+      // Move currentPos to other side of gap
+      currentPos = currentPos.add(forward.scale(gapLen))
+
+      // Bridge in middle
+      if (this.world) {
+          const bridgeWidth = 4
+          const bridgeLen = 4 // Slightly shorter than gap
+          const bridgeHeight = 1.0
+
+          const bridgeCenter = gapStart.add(forward.scale(gapLen / 2))
+          // Base Y: Submerged (-2) -> Surface (0)
+          const surfaceY = gapStart.y
+          const submergedY = surfaceY - 2.0
+          const midY = (surfaceY + submergedY) / 2
+          const amp = (surfaceY - submergedY) / 2 // 1.0
+
+          const basePos = new Vector3(bridgeCenter.x, midY, bridgeCenter.z) // Center of oscillation
+
+          const box = MeshBuilder.CreateBox("synapseBridge", { width: bridgeWidth, height: bridgeHeight, depth: bridgeLen }, this.scene)
+          box.position.copyFrom(basePos)
+          box.rotation.y = heading
+          box.material = veinMat
+          this.adventureTrack.push(box)
+
+          const q = Quaternion.FromEulerAngles(0, heading, 0)
+          const body = this.world.createRigidBody(
+              this.rapier.RigidBodyDesc.kinematicPositionBased()
+                  .setTranslation(basePos.x, basePos.y, basePos.z)
+                  .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+          )
+          this.world.createCollider(
+              this.rapier.ColliderDesc.cuboid(bridgeWidth/2, bridgeHeight/2, bridgeLen/2),
+              body
+          )
+          this.adventureBodies.push(body)
+
+          this.animatedObstacles.push({
+              body,
+              mesh: box,
+              type: 'PISTON',
+              basePos,
+              frequency: 2.0, // 1 Hz approx
+              amplitude: amp,
+              phase: 0
+          })
+      }
+
+      // 4. The Dendrite Forest (Chicane)
+      const forestLen = 20
+      const forestWidth = 10
+      const forestStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, forestWidth, forestLen, 0, netMat)
+
+      if (this.world) {
+          // Damping Zone
+          const hLen = forestLen
+          const center = forestStart.add(forward.scale(hLen / 2))
+          center.y += 0.5
+
+          const sensor = this.world.createRigidBody(
+              this.rapier.RigidBodyDesc.fixed().setTranslation(center.x, center.y, center.z)
+          )
+          const q = Quaternion.FromEulerAngles(0, heading, 0)
+          sensor.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
+
+          this.world.createCollider(
+              this.rapier.ColliderDesc.cuboid(forestWidth/2, 1, forestLen/2).setSensor(true),
+              sensor
+          )
+
+          this.dampingZones.push({
+              sensor,
+              damping: 2.0
+          })
+
+          // Cilia Field
+          const ciliaCount = 50
+          const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+
+          for (let i=0; i<ciliaCount; i++) {
+               const dist = Math.random() * (forestLen - 2) + 1
+               const offset = (Math.random() - 0.5) * (forestWidth - 1)
+               const pos = forestStart.add(forward.scale(dist)).add(right.scale(offset))
+               pos.y += 1.0 // Height 2.0, center at 1.0
+
+               const cilia = MeshBuilder.CreateCylinder("cilia", { diameter: 0.2, height: 2.0 }, this.scene)
+               cilia.position.copyFrom(pos)
+               cilia.material = veinMat
+               this.adventureTrack.push(cilia)
+
+               const body = this.world.createRigidBody(
+                   this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
+               )
+               this.world.createCollider(
+                   this.rapier.ColliderDesc.cylinder(1.0, 0.1),
+                   body
+               )
+               this.adventureBodies.push(body)
+          }
+      }
+
+      // 5. The Soma (Goal)
+      const goalPos = currentPos.clone()
+      goalPos.y -= 2
+      goalPos.z += 2
+
+      this.createBasin(goalPos, netMat)
   }
 
   // --- Primitive Builders ---
