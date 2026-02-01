@@ -1143,3 +1143,54 @@ A white, sterile environment with glowing red veins. The geometry is tubular and
 *   `networkColor` = "#FFFFFF" (White)
 *   `veinColor` = "#FF0000" (Red)
 *   `dampingFactor` = 2.0 (For the forest)
+
+## 33. Adventure Track: "The Neon Stronghold"
+A digital fortress inspired by medieval sieges. The player must breach the gatehouse, cross the moat, and ascend the keep.
+
+### A. Concept
+A dark, imposing structure with neon-blue highlights. The track emphasizes timing (Portcullis gates) and precision jumps (Drawbridge).
+
+### B. Layout Definition
+      [Approach] -> [Drawbridge] -> [Gatehouse] -> [Courtyard] -> [The Keep]
+         \             /            |  |  |         (O)          /
+          \           /             |  |  |        /   \        /
+           \         /              |  |  |        \   /       | (Goal)
+                                   (Gates)
+
+1.  **The Approach:**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: -10 degrees (Down)
+    *   Width: 6 units
+2.  **The Drawbridge (The Moat):**
+    *   Type: `GAP`
+    *   Length: 6 units
+    *   TargetElevation: +2 units (Jump Up to Gatehouse)
+    *   Visual: Holographic "Water" below.
+3.  **The Gatehouse (Hazards):**
+    *   Type: `STRAIGHT_RAMP` (Flat)
+    *   Length: 18 units
+    *   Width: 4 units (Narrow)
+    *   Feature: "Portcullis Gates" - 3 Kinematic Boxes blocking the path.
+    *   Motion: Vertical reciprocating (`sin(t)`).
+    *   Timing: Staggered to require a "Stop-and-Go" or perfect rhythm.
+4.  **The Courtyard (Battle):**
+    *   Type: `ROTATING_PLATFORM`
+    *   Radius: 10 units
+    *   Rotation: Slow Clockwise (0.5 rad/s)
+    *   Feature: "Turrets" - 2 Static Cylinders rotating with the platform.
+5.  **The Keep (Ascent):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 8 units
+    *   Angle: 270 degrees
+    *   Incline: 20 degrees (Steep Up)
+    *   WallHeight: 2.0
+6.  **The Throne (Goal):**
+    *   Type: `BUCKET`
+    *   Location: Top of the Keep.
+
+### C. Technical Variables
+*   `gateFrequency` = 1.0
+*   `strongholdColor` = "#2F2F2F" (Dark Stone)
+*   `neonAccent` = "#0088FF" (Electric Blue)
+*   `drawbridgeLength` = 6.0
