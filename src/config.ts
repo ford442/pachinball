@@ -39,6 +39,14 @@ export const GameConfig = {
     sweepSpeed: 1.0, // radians/sec
     cooldown: 2.0 // seconds
   },
+  quantumTunnel: {
+    inputPosition: { x: 11.5, y: 0.5, z: 0.0 },
+    outputPosition: { x: -11.5, y: 0.5, z: 0.0 },
+    inputRadius: 1.2,
+    ejectImpulse: 25.0,
+    transportDelay: 0.5,
+    cooldown: 2.0
+  },
   visuals: {
     enableParticles: true,
     enableTrails: true,
