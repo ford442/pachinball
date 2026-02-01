@@ -27,6 +27,7 @@ export enum AdventureTrackType {
   ORBITAL_JUNKYARD = 'ORBITAL_JUNKYARD',
   FIREWALL_BREACH = 'FIREWALL_BREACH',
   CPU_CORE = 'CPU_CORE',
+  CRYO_CHAMBER = 'CRYO_CHAMBER',
   BIO_HAZARD_LAB = 'BIO_HAZARD_LAB',
   GRAVITY_FORGE = 'GRAVITY_FORGE',
   TIDAL_NEXUS = 'TIDAL_NEXUS',
@@ -244,6 +245,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.CPU_CORE) {
         this.currentStartPos = new Vector3(0, 15, 0)
         this.createCpuCoreTrack()
+    } else if (trackType === AdventureTrackType.CRYO_CHAMBER) {
+        this.currentStartPos = new Vector3(0, 20, 0)
+        this.createCryoChamberTrack()
     } else if (trackType === AdventureTrackType.BIO_HAZARD_LAB) {
         this.currentStartPos = new Vector3(0, 20, 0)
         this.createBioHazardLabTrack()
@@ -1854,6 +1858,84 @@ export class AdventureMode {
       socket.position.y += 0.5 // Sit on floor
       socket.material = traceMat
       this.adventureTrack.push(socket)
+  }
+
+  // --- Track: The Cryo-Chamber ---
+  private createCryoChamberTrack(): void {
+      const iceMat = this.getTrackMaterial("#A5F2F3") // Ice Blue
+      const pillarMat = this.getTrackMaterial("#FFFFFF") // White/Ice
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+      const iceFriction = 0.001 // Frictionless
+
+      // 1. Flash Freeze (Entry)
+      // Length 15, Incline -20 deg, Width 6, Friction 0.0
+      const entryLen = 15
+      const entryIncline = (20 * Math.PI) / 180
+      currentPos = this.addStraightRamp(currentPos, heading, 6, entryLen, entryIncline, iceMat, 1.0, iceFriction)
+
+      // 2. The Slalom (Chicane)
+      // Curved Ramp x 3. Left 45 -> Right 90 -> Left 45. Radius 10.
+      const slalomRadius = 10
+      const turn45 = Math.PI / 4
+      const turn90 = Math.PI / 2
+
+      // Part 1: Left 45
+      currentPos = this.addCurvedRamp(currentPos, heading, slalomRadius, -turn45, 0, 8, 1.0, iceMat, 10, 0, iceFriction)
+      heading -= turn45
+      // Pillar at Apex (Start of next?)
+      this.createStaticCylinder(currentPos, 1.0, 3.0, pillarMat)
+
+      // Part 2: Right 90
+      currentPos = this.addCurvedRamp(currentPos, heading, slalomRadius, turn90, 0, 8, 1.0, iceMat, 15, 0, iceFriction)
+      heading += turn90
+      // Pillar at Apex
+      this.createStaticCylinder(currentPos, 1.0, 3.0, pillarMat)
+
+      // Part 3: Left 45
+      currentPos = this.addCurvedRamp(currentPos, heading, slalomRadius, -turn45, 0, 8, 1.0, iceMat, 10, 0, iceFriction)
+      heading -= turn45
+
+      // 3. The Ice Bridge (Hazard)
+      // Straight, Length 12, Width 2.5, WallHeight 0.0
+      const bridgeLen = 12
+      const bridgeWidth = 2.5
+      currentPos = this.addStraightRamp(currentPos, heading, bridgeWidth, bridgeLen, 0, iceMat, 0.0, iceFriction)
+
+      // 4. The Avalanche (Descent)
+      // Curved Ramp, Radius 10, Angle 180, Incline -15 deg, Banking -20 deg (Inward)
+      const avRadius = 10
+      const avAngle = Math.PI
+      const avIncline = (15 * Math.PI) / 180
+      const avBank = -(20 * Math.PI) / 180
+
+      currentPos = this.addCurvedRamp(currentPos, heading, avRadius, avAngle, avIncline, 8, 2.0, iceMat, 20, avBank, iceFriction)
+      heading += avAngle
+
+      // 5. Absolute Zero (Goal)
+      const goalPos = currentPos.clone()
+      goalPos.y -= 2
+      goalPos.z += 2
+      this.createBasin(goalPos, iceMat)
+  }
+
+  private createStaticCylinder(pos: Vector3, diameter: number, height: number, material: StandardMaterial): void {
+      if (!this.world) return
+
+      const mesh = MeshBuilder.CreateCylinder("staticPillar", { diameter, height }, this.scene)
+      mesh.position.copyFrom(pos)
+      mesh.position.y += height / 2 // Sit on floor (approx)
+      mesh.material = material
+      this.adventureTrack.push(mesh)
+
+      const body = this.world.createRigidBody(
+          this.rapier.RigidBodyDesc.fixed().setTranslation(mesh.position.x, mesh.position.y, mesh.position.z)
+      )
+      this.world.createCollider(
+          this.rapier.ColliderDesc.cylinder(height / 2, diameter / 2),
+          body
+      )
+      this.adventureBodies.push(body)
   }
 
   // --- Track: The Bio-Hazard Lab ---
