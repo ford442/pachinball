@@ -12,7 +12,8 @@ import {
   PostProcess,
   Effect,
   Texture,
-  Viewport // <--- Added Viewport import
+  Viewport,
+  RenderTargetTexture // <--- Added for render-to-texture support
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import type { Engine } from '@babylonjs/core/Engines/engine'
@@ -70,6 +71,8 @@ export class Game {
   // Rendering
   private bloomPipeline: DefaultRenderingPipeline | null = null
   private mirrorTexture: MirrorTexture | null = null
+  private tableRenderTarget: RenderTargetTexture | null = null
+  private headRenderTarget: RenderTargetTexture | null = null
   
   // Game State
   private ready = false
@@ -177,6 +180,56 @@ export class Game {
 
     // Register both cameras as the *active* set for the scene
     this.scene.activeCameras = [tableCam, headCam]
+
+    // -----------------------------------------------------------------
+    // 2.5️⃣ RENDER TARGET TEXTURES (for future 3D cabinet view)
+    // -----------------------------------------------------------------
+    // Create render targets that match the viewport dimensions.
+    // The table camera uses 60% of the height, head camera uses 40%.
+    const canvasWidth = this.engine.getRenderWidth()
+    const canvasHeight = this.engine.getRenderHeight()
+
+    // Table render target (bottom 60% of screen)
+    const tableWidth = Math.floor(canvasWidth * 1.0)  // Full width
+    const tableHeight = Math.floor(canvasHeight * 0.6) // 60% height
+    this.tableRenderTarget = new RenderTargetTexture(
+      'tableRenderTarget',
+      { width: tableWidth, height: tableHeight },
+      this.scene,
+      false, // generateMipMaps
+      true,  // doNotChangeAspectRatio
+      undefined, // type
+      false, // isCube
+      undefined, // samplingMode
+      true,  // generateDepthBuffer
+      false, // generateStencilBuffer
+      false, // isMulti
+      undefined, // format
+      false  // delayAllocation
+    )
+    this.tableRenderTarget.activeCamera = tableCam
+    this.tableRenderTarget.renderList = null // Render all scene meshes
+
+    // Head render target (top 40% of screen)
+    const headWidth = Math.floor(canvasWidth * 1.0)   // Full width
+    const headHeight = Math.floor(canvasHeight * 0.4) // 40% height
+    this.headRenderTarget = new RenderTargetTexture(
+      'headRenderTarget',
+      { width: headWidth, height: headHeight },
+      this.scene,
+      false, // generateMipMaps
+      true,  // doNotChangeAspectRatio
+      undefined, // type
+      false, // isCube
+      undefined, // samplingMode
+      true,  // generateDepthBuffer
+      false, // generateStencilBuffer
+      false, // isMulti
+      undefined, // format
+      false  // delayAllocation
+    )
+    this.headRenderTarget.activeCamera = headCam
+    this.headRenderTarget.renderList = null // Render all scene meshes
 
     // -----------------------------------------------------------------
     // 3️⃣ POST‑PROCESS PIPELINES (bloom + scanlines)
