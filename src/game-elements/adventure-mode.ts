@@ -37,6 +37,7 @@ export enum AdventureTrackType {
   PRISM_PATHWAY = 'PRISM_PATHWAY',
   MAGNETIC_STORAGE = 'MAGNETIC_STORAGE',
   NEURAL_NETWORK = 'NEURAL_NETWORK',
+  NEON_STRONGHOLD = 'NEON_STRONGHOLD',
 }
 
 interface GravityWell {
@@ -301,6 +302,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.NEURAL_NETWORK) {
         this.currentStartPos = new Vector3(0, 20, 0)
         this.createNeuralNetworkTrack()
+    } else if (trackType === AdventureTrackType.NEON_STRONGHOLD) {
+        this.currentStartPos = new Vector3(0, 20, 0)
+        this.createNeonStrongholdTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -1670,6 +1674,167 @@ export class AdventureMode {
       goalPos.z += 2
 
       this.createBasin(goalPos, netMat)
+  }
+
+  // --- Track: The Neon Stronghold ---
+  private createNeonStrongholdTrack(): void {
+      const stoneMat = this.getTrackMaterial("#2F2F2F") // Dark Stone
+      const neonMat = this.getTrackMaterial("#0088FF") // Electric Blue
+
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+
+      // 1. The Approach
+      // Length 15, Incline -10 deg, Width 6
+      const approachLen = 15
+      const approachIncline = (10 * Math.PI) / 180
+      currentPos = this.addStraightRamp(currentPos, heading, 6, approachLen, approachIncline, stoneMat)
+
+      // 2. The Drawbridge (The Moat)
+      // Gap Length 6. Target Elevation +2 relative to launch.
+      const moatLen = 6
+      const jumpHeight = 2.0
+
+      // Visual Water below
+      const waterPos = currentPos.clone()
+      waterPos.y -= 3.0
+      const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      // Center of water box
+      const waterCenter = waterPos.add(forward.scale(moatLen / 2))
+
+      if (this.world) {
+           const water = MeshBuilder.CreateBox("moatWater", { width: 10, height: 1, depth: moatLen }, this.scene)
+           water.position.copyFrom(waterCenter)
+           water.material = neonMat // Holographic water
+           this.adventureTrack.push(water)
+      }
+
+      // Move currentPos across gap and up
+      currentPos = currentPos.add(forward.scale(moatLen))
+      currentPos.y += jumpHeight
+
+      // 3. The Gatehouse (Hazards)
+      // Flat, Length 18, Width 4.
+      const gatehouseLen = 18
+      const gatehouseWidth = 4
+      const gatehouseStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, gatehouseWidth, gatehouseLen, 0, stoneMat, 2.0)
+
+      // Portcullis Gates
+      if (this.world) {
+          const gateCount = 3
+          const gateSpacing = 4.0 // Spread them out
+          const startDist = 3.0
+
+          const gateWidth = gatehouseWidth
+          const gateHeight = 3.0
+          const gateDepth = 0.5
+
+          for (let i = 0; i < gateCount; i++) {
+               const dist = startDist + i * gateSpacing
+               const pos = gatehouseStart.add(forward.scale(dist))
+
+               // Center Y Oscillation
+               const floorY = pos.y
+               const midY = floorY + gateHeight/2 + 1.25
+               const amp = 1.25
+
+               const basePos = new Vector3(pos.x, midY, pos.z)
+
+               const gate = MeshBuilder.CreateBox("portcullis", { width: gateWidth, height: gateHeight, depth: gateDepth }, this.scene)
+               gate.position.copyFrom(basePos)
+               gate.rotation.y = heading
+               gate.material = neonMat // Neon Bars
+               this.adventureTrack.push(gate)
+
+               const q = Quaternion.FromEulerAngles(0, heading, 0)
+               const body = this.world.createRigidBody(
+                   this.rapier.RigidBodyDesc.kinematicPositionBased()
+                       .setTranslation(basePos.x, basePos.y, basePos.z)
+                       .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+               )
+               this.world.createCollider(
+                   this.rapier.ColliderDesc.cuboid(gateWidth/2, gateHeight/2, gateDepth/2),
+                   body
+               )
+               this.adventureBodies.push(body)
+
+               this.animatedObstacles.push({
+                   body,
+                   mesh: gate,
+                   type: 'PISTON',
+                   basePos,
+                   frequency: 2.0, // 1 Hz
+                   amplitude: amp,
+                   phase: i * 1.5 // Staggered
+               })
+          }
+      }
+
+      // 4. The Courtyard (Battle)
+      // Rotating Platform, Radius 10, 0.5 rad/s.
+      const courtRadius = 10
+      const courtSpeed = 0.5 // Slow
+
+      const courtCenter = currentPos.add(forward.scale(courtRadius + 1))
+
+      this.createRotatingPlatform(courtCenter, courtRadius, courtSpeed, stoneMat)
+
+      // Turrets (Static on Platform -> Kinematic Children)
+      if (this.world && this.adventureBodies.length > 0) {
+          const platformBody = this.adventureBodies[this.adventureBodies.length - 1]
+          const turretCount = 2
+          const turretDist = 6.0
+
+          for (let i = 0; i < turretCount; i++) {
+              const angle = i * Math.PI // Opposite sides
+
+              const turretHeight = 2.0
+              const turretRadius = 1.0
+
+              // Visual
+              const turret = MeshBuilder.CreateCylinder("turret", { diameter: turretRadius*2, height: turretHeight }, this.scene)
+
+              const binding = this.kinematicBindings.find(b => b.body === platformBody)
+              if (binding) {
+                  turret.parent = binding.mesh
+                  const cx = Math.sin(angle) * turretDist
+                  const cz = Math.cos(angle) * turretDist
+
+                  turret.position.set(cx, turretHeight/2 + 0.25, cz)
+                  turret.material = neonMat
+
+                  // Collider
+                  const colliderDesc = this.rapier.ColliderDesc.cylinder(turretHeight/2, turretRadius)
+                      .setTranslation(cx, turretHeight/2 + 0.25, cz)
+
+                  this.world.createCollider(colliderDesc, platformBody)
+              }
+          }
+      }
+
+      // 5. The Keep (Ascent)
+      // Curved Ramp, Radius 8, Angle 270, Incline 20 (Up).
+      const keepRadius = 8
+      const keepAngle = (270 * Math.PI) / 180
+      const keepIncline = -(20 * Math.PI) / 180 // Up
+
+      // Start Keep ramp from edge of courtyard
+      const keepStart = courtCenter.add(forward.scale(courtRadius + 1))
+      currentPos = keepStart
+      // Heading is still 0 (North)
+
+      currentPos = this.addCurvedRamp(currentPos, heading, keepRadius, keepAngle, keepIncline, 6, 2.0, stoneMat, 20)
+      heading += keepAngle
+
+      // 6. The Throne (Goal)
+      const goalPos = currentPos.clone()
+      goalPos.y -= 1 // Basin floor
+      const goalForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const finalGoalPos = goalPos.add(goalForward.scale(4))
+
+      this.createBasin(finalGoalPos, neonMat)
   }
 
   // --- Primitive Builders ---
