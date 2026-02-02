@@ -1194,3 +1194,51 @@ A dark, imposing structure with neon-blue highlights. The track emphasizes timin
 *   `strongholdColor` = "#2F2F2F" (Dark Stone)
 *   `neonAccent` = "#0088FF" (Electric Blue)
 *   `drawbridgeLength` = 6.0
+
+## 34. Adventure Track: "The Casino Heist"
+A glamorous, high-stakes track set on a giant casino table. Unlike the industrial or sci-fi tracks, this level focuses on "Luck" mechanics (randomized bouncers) and precise timing through spinning hazards.
+
+### A. Concept
+A neon-lit casino floor floating in the void. The "Red Carpet" ramp leads to a maze of Poker Chips. The central feature is "The Roulette Wheel", a massive rotating platform that can fling the ball into "The House Edge" (pits) or towards the goal.
+
+### B. Layout Definition
+      [Red Carpet] -> [Chip Maze] -> [Roulette Wheel] -> [Slot Gates] -> [The Vault]
+          \              :  :            ( O )             | | |           ( $ )
+           \             :..:           /     \            | | |
+            \                          \       /           | | |
+                                        -------
+
+1.  **The High Roller (Entry):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: -15 degrees (Gentle Descent)
+    *   Width: 8 units
+    *   Visual: "Velvet Rope" railings and red felt floor.
+2.  **The Chip Stack Maze (Obstacles):**
+    *   Type: `STRAIGHT_RAMP` (Flat)
+    *   Length: 20 units
+    *   Width: 12 units
+    *   Feature: "Poker Stacks" - 10-15 Static Cylinders (Radius 1.0, Height var) arranged in a semi-random pattern.
+    *   Mechanic: High Bounciness (Restitution 0.8) to simulate plastic chips.
+3.  **The Roulette Wheel (Hazard):**
+    *   Type: `ROTATING_PLATFORM`
+    *   Radius: 12 units
+    *   Rotation: Counter-Clockwise (Variable Speed: 0.5 to 2.0 rad/s).
+    *   Feature: "The Zero Pockets" - 2 Gaps in the floor of the wheel (Sensor Zones).
+    *   Mechanic: Falling into a pocket teleports you back to start (Bad Luck).
+4.  **The Slots (Chicane):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 12 units
+    *   Feature: "Reel Gates" - 3 Kinematic Walls (Width 8, Height 4).
+    *   Motion: They slide up and down independently (Randomized).
+    *   Visual: Neon "7", "Cherry", "Bar" glowing on them.
+5.  **The Vault (Goal):**
+    *   Type: `BUCKET`
+    *   Location: Inside an open bank vault door.
+
+### C. Technical Variables
+*   `feltColor` = "#880000" (Dark Red)
+*   `chipColors` = ["#FF0000", "#0000FF", "#000000", "#FFFFFF"]
+*   `goldColor` = "#FFD700"
+*   `rouletteSpeed` = 1.5
+*   `reelRadius` = 3.0
