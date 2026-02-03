@@ -1242,3 +1242,42 @@ A neon-lit casino floor floating in the void. The "Red Carpet" ramp leads to a m
 *   `goldColor` = "#FFD700"
 *   `rouletteSpeed` = 1.5
 *   `reelRadius` = 3.0
+
+## 35. Adventure Track: "The Tesla Tower"
+A vertical ascension track themed around high-voltage electricity. The player must ride "Mag-Rails" (accelerator strips) and navigate through a "Faraday Cage" of arcing hazards.
+
+### A. Concept
+A dark, stormy tower. The path is illuminated by arcing electricity. The key mechanic is the "Mag-Rail", which provides necessary speed to clear gaps but makes steering sensitive.
+
+### B. Layout Definition
+1.  **The Induction Coil (Entry):**
+    *   Type: `CURVED_RAMP` (Spiral Down)
+    *   Radius: 10 units
+    *   Angle: 360 degrees
+    *   Incline: 15 degrees
+    *   Feature: "Mag-Rail" - Conveyor Force (+20.0 Tangential) to simulate super-speed.
+2.  **The Spark Gap (Jump):**
+    *   Type: `GAP`
+    *   Length: 8 units
+    *   TargetElevation: -2 units relative to launch.
+    *   Visual: "Lightning Arc" bridging the gap.
+3.  **The Step-Down Transformer (Chicane):**
+    *   Type: `STRAIGHT_RAMP` x 3 (Zig-Zag)
+    *   Width: 4 units (Narrow)
+    *   Walls: None (High Risk)
+    *   Feature: "Arc Pylons" - Static pillars at corners that repel the ball (Force Field).
+4.  **The Faraday Cage (Arena):**
+    *   Type: `STRAIGHT_RAMP` (Flat Platform)
+    *   Width: 12 units
+    *   Length: 12 units
+    *   Feature: "Ball Lightning" - 3 Kinematic Spheres moving randomly.
+    *   Mechanic: They are highly bouncy (Restitution 1.2).
+5.  **Grounding Rod (Goal):**
+    *   Type: `BUCKET`
+    *   Location: At the center of a copper ring.
+
+### C. Technical Variables
+*   `railSpeed` = 20.0
+*   `lightningColor` = "#00DDFF" (Electric Blue)
+*   `coilColor` = "#CD7F32" (Copper)
+*   `pylonRepelForce` = 10.0
