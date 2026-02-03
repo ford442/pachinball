@@ -909,6 +909,8 @@ export class Game {
       } else if (track === AdventureTrackType.MAGNETIC_STORAGE) {
           this.nextAdventureTrack = AdventureTrackType.NEURAL_NETWORK;
       } else if (track === AdventureTrackType.NEURAL_NETWORK) {
+          this.nextAdventureTrack = AdventureTrackType.NEON_STRONGHOLD;
+      } else if (track === AdventureTrackType.NEON_STRONGHOLD) {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
