@@ -911,6 +911,8 @@ export class Game {
       } else if (track === AdventureTrackType.NEURAL_NETWORK) {
           this.nextAdventureTrack = AdventureTrackType.NEON_STRONGHOLD;
       } else if (track === AdventureTrackType.NEON_STRONGHOLD) {
+          this.nextAdventureTrack = AdventureTrackType.CASINO_HEIST;
+      } else if (track === AdventureTrackType.CASINO_HEIST) {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
