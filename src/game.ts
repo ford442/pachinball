@@ -913,6 +913,8 @@ export class Game {
       } else if (track === AdventureTrackType.NEON_STRONGHOLD) {
           this.nextAdventureTrack = AdventureTrackType.CASINO_HEIST;
       } else if (track === AdventureTrackType.CASINO_HEIST) {
+          this.nextAdventureTrack = AdventureTrackType.TESLA_TOWER;
+      } else if (track === AdventureTrackType.TESLA_TOWER) {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
