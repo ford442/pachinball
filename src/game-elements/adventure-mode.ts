@@ -38,6 +38,7 @@ export enum AdventureTrackType {
   MAGNETIC_STORAGE = 'MAGNETIC_STORAGE',
   NEURAL_NETWORK = 'NEURAL_NETWORK',
   NEON_STRONGHOLD = 'NEON_STRONGHOLD',
+  CASINO_HEIST = 'CASINO_HEIST',
 }
 
 interface GravityWell {
@@ -305,6 +306,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.NEON_STRONGHOLD) {
         this.currentStartPos = new Vector3(0, 20, 0)
         this.createNeonStrongholdTrack()
+    } else if (trackType === AdventureTrackType.CASINO_HEIST) {
+        this.currentStartPos = new Vector3(0, 20, 0)
+        this.createCasinoHeistTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -1835,6 +1839,186 @@ export class AdventureMode {
       const finalGoalPos = goalPos.add(goalForward.scale(4))
 
       this.createBasin(finalGoalPos, neonMat)
+  }
+
+  // --- Track: The Casino Heist ---
+  private createCasinoHeistTrack(): void {
+      const feltMat = this.getTrackMaterial("#880000") // Dark Red
+      const goldMat = this.getTrackMaterial("#FFD700") // Gold
+      const chipMatRed = this.getTrackMaterial("#FF0000")
+      const chipMatBlue = this.getTrackMaterial("#0000FF")
+      const chipMatBlack = this.getTrackMaterial("#111111")
+      const chipMatWhite = this.getTrackMaterial("#FFFFFF")
+      const chipMats = [chipMatRed, chipMatBlue, chipMatBlack, chipMatWhite]
+
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+
+      // 1. The High Roller (Entry)
+      // Length 15, Incline -15 deg, Width 8
+      const entryLen = 15
+      const entryIncline = (15 * Math.PI) / 180
+      currentPos = this.addStraightRamp(currentPos, heading, 8, entryLen, entryIncline, feltMat)
+
+      // 2. The Chip Stack Maze (Obstacles)
+      // Flat, Length 20, Width 12
+      const mazeLen = 20
+      const mazeWidth = 12
+      const mazeStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, mazeWidth, mazeLen, 0, feltMat)
+
+      if (this.world) {
+          const chipCount = 15
+          const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+          const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+
+          for (let i = 0; i < chipCount; i++) {
+              const dist = 2 + Math.random() * (mazeLen - 4)
+              const offset = (Math.random() - 0.5) * (mazeWidth - 2)
+
+              const pos = mazeStart.add(forward.scale(dist)).add(right.scale(offset))
+              // Stack height? "Stacks". Let's vary height.
+              const stackHeight = 0.5 + Math.random() * 1.5
+              const chipRadius = 1.0
+
+              pos.y += stackHeight / 2 // Sit on floor
+
+              const chip = MeshBuilder.CreateCylinder("pokerChip", { diameter: chipRadius * 2, height: stackHeight }, this.scene)
+              chip.position.copyFrom(pos)
+              chip.material = chipMats[Math.floor(Math.random() * chipMats.length)]
+              this.adventureTrack.push(chip)
+
+              const body = this.world.createRigidBody(
+                  this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
+              )
+              this.world.createCollider(
+                  this.rapier.ColliderDesc.cylinder(stackHeight / 2, chipRadius).setRestitution(0.8),
+                  body
+              )
+              this.adventureBodies.push(body)
+          }
+      }
+
+      // 3. The Roulette Wheel (Hazard)
+      // Rotating Platform, Radius 12, Speed Variable (1.5 rad/s)
+      const wheelRadius = 12
+      const wheelSpeed = 1.5 // CCW
+
+      const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const wheelCenter = currentPos.add(forward.scale(wheelRadius + 1))
+
+      this.createRotatingPlatform(wheelCenter, wheelRadius, wheelSpeed, feltMat)
+
+      // Zero Pockets (Sensors)
+      // 2 Gaps. Attached to platform via separate kinematic body with same velocity
+      if (this.world) {
+          const pocketCount = 2
+          const pocketAngleStep = Math.PI // 180 degrees apart
+
+          // Create a kinematic body for sensors that mimics the platform rotation
+          const sensorBodyDesc = this.rapier.RigidBodyDesc.kinematicVelocityBased()
+              .setTranslation(wheelCenter.x, wheelCenter.y, wheelCenter.z)
+          const sensorBody = this.world.createRigidBody(sensorBodyDesc)
+          sensorBody.setAngvel({ x: 0, y: wheelSpeed, z: 0 }, true)
+
+          this.resetSensors.push(sensorBody)
+          this.adventureBodies.push(sensorBody)
+
+          // Add sensor shapes
+          for (let i = 0; i < pocketCount; i++) {
+              const angle = i * pocketAngleStep
+              const r = wheelRadius * 0.7 // Mid-radius
+
+              const lx = Math.sin(angle) * r
+              const lz = Math.cos(angle) * r
+
+              const sensorShape = this.rapier.ColliderDesc.cylinder(0.5, 1.0)
+                  .setTranslation(lx, 0.5, lz)
+                  .setSensor(true)
+
+              this.world.createCollider(sensorShape, sensorBody)
+
+              // Visual Marker
+              const marker = MeshBuilder.CreateCylinder("zeroPocket", { diameter: 2, height: 0.1 }, this.scene)
+              // We need to parent this to the platform mesh to rotate visually
+              // The platform mesh is the last one in kinematicBindings
+              if (this.kinematicBindings.length > 0) {
+                  const platformBinding = this.kinematicBindings[this.kinematicBindings.length - 1]
+                  marker.parent = platformBinding.mesh
+                  marker.position.set(lx, 0.55, lz)
+                  marker.material = chipMatBlack
+              }
+          }
+      }
+
+      // 4. The Slots (Chicane)
+      // Length 12, Width 8
+      // 3 Kinematic Walls (Reel Gates).
+      const slotLen = 12
+      const slotWidth = 8
+
+      const wheelExit = wheelCenter.add(forward.scale(wheelRadius + 1))
+      currentPos = wheelExit
+      const slotStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, slotWidth, slotLen, 0, feltMat)
+
+      if (this.world) {
+          const gateCount = 3
+          const gateWidth = slotWidth
+          const gateHeight = 4.0
+          const gateDepth = 0.5
+          const spacing = 3.0
+
+          for (let i = 0; i < gateCount; i++) {
+               const dist = 2.0 + i * spacing
+               const pos = slotStart.add(forward.scale(dist))
+
+               // Random motion
+               const amp = 2.5
+               const phase = Math.random() * Math.PI * 2
+               const freq = 1.0 + Math.random() // Random speed
+
+               const floorY = pos.y
+               const basePos = new Vector3(pos.x, floorY, pos.z)
+
+               const gate = MeshBuilder.CreateBox("slotGate", { width: gateWidth, height: gateHeight, depth: gateDepth }, this.scene)
+               gate.position.copyFrom(basePos)
+               gate.rotation.y = heading
+               gate.material = goldMat
+               this.adventureTrack.push(gate)
+
+               const q = Quaternion.FromEulerAngles(0, heading, 0)
+               const body = this.world.createRigidBody(
+                   this.rapier.RigidBodyDesc.kinematicPositionBased()
+                       .setTranslation(basePos.x, basePos.y, basePos.z)
+                       .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+               )
+               this.world.createCollider(
+                   this.rapier.ColliderDesc.cuboid(gateWidth/2, gateHeight/2, gateDepth/2),
+                   body
+               )
+               this.adventureBodies.push(body)
+
+               this.animatedObstacles.push({
+                   body,
+                   mesh: gate,
+                   type: 'PISTON',
+                   basePos,
+                   frequency: freq * 3.0,
+                   amplitude: amp,
+                   phase
+               })
+          }
+      }
+
+      // 5. The Vault (Goal)
+      const goalPos = currentPos.clone()
+      goalPos.y -= 2
+      goalPos.z += 2
+
+      this.createBasin(goalPos, goldMat)
   }
 
   // --- Primitive Builders ---
