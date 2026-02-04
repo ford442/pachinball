@@ -39,6 +39,7 @@ export enum AdventureTrackType {
   NEURAL_NETWORK = 'NEURAL_NETWORK',
   NEON_STRONGHOLD = 'NEON_STRONGHOLD',
   CASINO_HEIST = 'CASINO_HEIST',
+  TESLA_TOWER = 'TESLA_TOWER',
 }
 
 interface GravityWell {
@@ -309,6 +310,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.CASINO_HEIST) {
         this.currentStartPos = new Vector3(0, 20, 0)
         this.createCasinoHeistTrack()
+    } else if (trackType === AdventureTrackType.TESLA_TOWER) {
+        this.currentStartPos = new Vector3(0, 20, 0)
+        this.createTeslaTowerTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -3701,5 +3705,207 @@ export class AdventureMode {
       ring.rotation.x = Math.PI / 2
       ring.material = coreMat
       this.adventureTrack.push(ring)
+  }
+
+  // --- Track: The Tesla Tower ---
+  private createTeslaTowerTrack(): void {
+      const coilMat = this.getTrackMaterial("#CD7F32") // Copper
+      const lightningMat = this.getTrackMaterial("#00DDFF") // Electric Blue
+
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+
+      // 1. The Induction Coil (Entry)
+      // Curved Ramp (Spiral Down). Radius 10, Angle 360, Incline 15.
+      // Mag-Rail: Tangential Force +20.0.
+      const coilRadius = 10
+      const coilAngle = 2 * Math.PI
+      const coilIncline = (15 * Math.PI) / 180
+
+      const coilStart = currentPos.clone()
+      const coilStartHeading = heading
+
+      currentPos = this.addCurvedRamp(currentPos, heading, coilRadius, coilAngle, coilIncline, 8, 2.0, coilMat, 30)
+
+      // Mag-Rail Sensors
+      if (this.world) {
+          const segments = 20
+          const segAngle = coilAngle / segments
+          const chordLen = 2 * coilRadius * Math.sin(segAngle/2)
+          const drop = chordLen * Math.sin(coilIncline) // Approx segment drop
+
+          let curH = coilStartHeading
+          let curP = coilStart.clone()
+
+          for (let i = 0; i < segments; i++) {
+               curH += segAngle / 2
+               const forward = new Vector3(Math.sin(curH), 0, Math.cos(curH))
+               const center = curP.add(forward.scale(chordLen / 2))
+               center.y -= drop / 2
+               center.y += 0.5 // Above floor
+
+               const sensor = this.world.createRigidBody(
+                   this.rapier.RigidBodyDesc.fixed().setTranslation(center.x, center.y, center.z)
+               )
+               const q = Quaternion.FromEulerAngles(coilIncline, curH, 0)
+               sensor.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
+
+               this.world.createCollider(
+                   this.rapier.ColliderDesc.cuboid(4, 1, chordLen/2).setSensor(true),
+                   sensor
+               )
+
+               // Tangential Force: Forward vector
+               // Force +20.0 Tangential.
+               // Since ramp is forward, tangential is forward.
+               const forceVec = new Vector3(Math.sin(curH), -Math.sin(coilIncline), Math.cos(curH)).normalize().scale(200.0) // 20.0 * 10
+
+               this.conveyorZones.push({
+                   sensor,
+                   force: forceVec
+               })
+
+               curP = curP.add(forward.scale(chordLen))
+               curP.y -= drop
+               curH += segAngle / 2
+          }
+      }
+      heading += coilAngle
+
+      // 2. The Spark Gap (Jump)
+      // Gap Length 8. Drop 2.
+      const gapLen = 8
+      const gapDrop = 2
+
+      const gapForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const gapStart = currentPos.clone()
+
+      // Visual Arc
+      const arcPoints = [
+          gapStart,
+          gapStart.add(gapForward.scale(gapLen)).subtract(new Vector3(0, gapDrop, 0))
+      ]
+      // Just draw a tube or something?
+      const arc = MeshBuilder.CreateTube("sparkArc", { path: arcPoints, radius: 0.2 }, this.scene)
+      arc.material = lightningMat
+      this.adventureTrack.push(arc)
+
+      // Move Pos
+      currentPos = currentPos.add(gapForward.scale(gapLen))
+      currentPos.y -= gapDrop
+
+      // 3. The Step-Down Transformer (Chicane)
+      // Zig-Zag x 3. Width 4. No Walls.
+      // Arc Pylons at corners.
+      const zigLen = 6
+      const zigWidth = 4
+
+      currentPos = this.addStraightRamp(currentPos, heading, zigWidth, zigLen, 0, coilMat)
+
+      // Pylon 1 (Turn Left)
+      this.createArcPylon(currentPos, lightningMat)
+      heading -= Math.PI / 2
+
+      currentPos = this.addStraightRamp(currentPos, heading, zigWidth, zigLen, 0, coilMat)
+
+      // Pylon 2 (Turn Right)
+      this.createArcPylon(currentPos, lightningMat)
+      heading += Math.PI / 2
+
+      currentPos = this.addStraightRamp(currentPos, heading, zigWidth, zigLen, 0, coilMat)
+
+      // 4. The Faraday Cage (Arena)
+      // Flat 12x12.
+      const cageSize = 12
+      const cageStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, cageSize, cageSize, 0, coilMat)
+
+      // Ball Lightning
+      // 3 Kinematic Spheres moving randomly?
+      // "Kinematic Spheres moving randomly".
+      // Let's create bouncy spheres that move.
+      if (this.world) {
+          const sphereRadius = 1.0
+          const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+          const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+
+          for (let i = 0; i < 3; i++) {
+               const offsetZ = 2 + Math.random() * (cageSize - 4)
+               const offsetX = (Math.random() - 0.5) * (cageSize - 4)
+
+               const pos = cageStart.add(forward.scale(offsetZ)).add(right.scale(offsetX))
+               pos.y += 2.0
+
+               const sphere = MeshBuilder.CreateSphere("ballLightning", { diameter: sphereRadius * 2 }, this.scene)
+               sphere.position.copyFrom(pos)
+               sphere.material = lightningMat
+               this.adventureTrack.push(sphere)
+
+               const body = this.world.createRigidBody(
+                   this.rapier.RigidBodyDesc.kinematicVelocityBased()
+                       .setTranslation(pos.x, pos.y, pos.z)
+               )
+               this.world.createCollider(
+                   this.rapier.ColliderDesc.ball(sphereRadius).setRestitution(1.2),
+                   body
+               )
+               this.adventureBodies.push(body)
+               this.kinematicBindings.push({ body, mesh: sphere })
+
+               this.animatedObstacles.push({
+                   body,
+                   mesh: sphere,
+                   type: 'OSCILLATOR',
+                   basePos: pos,
+                   frequency: 0.5 + Math.random(),
+                   amplitude: 3.0,
+                   axis: right, // Move left-right
+                   phase: Math.random() * Math.PI
+               })
+          }
+      }
+
+      // 5. Grounding Rod (Goal)
+      const goalForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const goalPos = currentPos.add(goalForward.scale(4))
+
+      this.createBasin(goalPos, coilMat)
+  }
+
+  private createArcPylon(pos: Vector3, mat: StandardMaterial): void {
+      if (!this.world) return
+
+      // Visual
+      const pylon = MeshBuilder.CreateCylinder("pylon", { diameter: 1.0, height: 3.0 }, this.scene)
+      pylon.position.copyFrom(pos)
+      pylon.position.y += 1.5
+      pylon.material = mat
+      this.adventureTrack.push(pylon)
+
+      // Physics (Static)
+      const body = this.world.createRigidBody(
+          this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y + 1.5, pos.z)
+      )
+      this.world.createCollider(
+          this.rapier.ColliderDesc.cylinder(1.5, 0.5),
+          body
+      )
+      this.adventureBodies.push(body)
+
+      // Repulsive Gravity Well
+      const sensor = this.world.createRigidBody(
+          this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y + 1.5, pos.z)
+      )
+      this.world.createCollider(
+          this.rapier.ColliderDesc.ball(3.0).setSensor(true),
+          sensor
+      )
+
+      this.gravityWells.push({
+          sensor,
+          center: pos,
+          strength: -50.0 // Repel
+      })
   }
 }
