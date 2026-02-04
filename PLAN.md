@@ -1281,3 +1281,44 @@ A dark, stormy tower. The path is illuminated by arcing electricity. The key mec
 *   `lightningColor` = "#00DDFF" (Electric Blue)
 *   `coilColor` = "#CD7F32" (Copper)
 *   `pylonRepelForce` = 10.0
+
+## 36. Adventure Track: "The Neon Skyline"
+A verticality-focused track where the player leaps between rooftop helipads. The key mechanic is using "Vent Fans" (Air Updrafts) to scale vertical distances.
+
+### A. Concept
+A city in the clouds. The track consists of disconnected "Rooftop" platforms. Falling means death. The path is not continuous; you must jump using powerful air vents.
+
+### B. Layout Definition
+1.  **The Rooftop Run (Entry):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: -10 degrees
+    *   Width: 6 units
+    *   Visual: Concrete texture with yellow hazard stripes.
+2.  **The Vent Jump (Mechanic):**
+    *   Type: `GAP`
+    *   Length: 5 units
+    *   TargetElevation: +5 units (High Jump)
+    *   Feature: "Updraft Fan" - A Sensor Zone in the gap applying +25.0 Y Force.
+    *   Mechanic: The ball must hit the fan to be lofted to the next platform.
+3.  **The Skyscraper (Platform):**
+    *   Type: `STRAIGHT_RAMP` (Flat)
+    *   Length: 15 units
+    *   Width: 10 units
+    *   Feature: "AC Units" - Static Cube obstacles creating a maze.
+4.  **The Billboard (Wall Ride):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 12 units
+    *   Angle: 90 degrees
+    *   Incline: 0 degrees
+    *   Banking: -45 degrees (Extreme banking to ride the wall)
+    *   Visual: Glowing Holographic Ad Surface.
+5.  **The Penthouse Landing (Goal):**
+    *   Type: `BUCKET`
+    *   Location: On a luxury balcony at the end of the curve.
+
+### C. Technical Variables
+*   `updraftStrength` = 25.0
+*   `windColor` = "#AAFFFF" (White/Cyan)
+*   `skylineColor` = "#111122" (Dark Blue)
+*   `billboardGlow` = 1.5
