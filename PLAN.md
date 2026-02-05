@@ -1322,3 +1322,61 @@ A city in the clouds. The track consists of disconnected "Rooftop" platforms. Fa
 *   `windColor` = "#AAFFFF" (White/Cyan)
 *   `skylineColor` = "#111122" (Dark Blue)
 *   `billboardGlow` = 1.5
+
+## 37. Adventure Track: "The Polychrome Void"
+A puzzle-platformer track where the ball's "Color State" determines which platforms are solid. The player must navigate through "Chroma Gates" to switch layers and traverse the void. This introduces Collision Filtering mechanics.
+
+### A. Concept
+A stark white void populated by floating platforms of pure Red, Green, and Blue light. The ball starts as "Neutral" (White) but passes through gates that dye it a specific color.
+*   **Mechanic:** If Ball Color == Platform Color, the platform is Solid. Otherwise, it is a Ghost (Pass-through).
+*   **Goal:** Reach the Whiteout singularity by correctly switching colors to match the path ahead.
+
+### B. Layout Definition
+1.  **Monochrome Injection (Entry):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 10 units
+    *   Incline: -15 degrees
+    *   Width: 6 units
+    *   Color: White (Neutral - Collides with everything).
+2.  **The Red Shift (Gate):**
+    *   Type: `SENSOR_GATE`
+    *   Visual: Glowing Red Field.
+    *   Action: Sets Ball Collision Group to `RED`.
+3.  **Crimson Walkway (Filter):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Width: 4 units
+    *   Feature: The floor is Red.
+    *   Trap: Floating Blue blocks (Ghost obstacles) that distract but don't collide.
+4.  **The Green Filter (Gate):**
+    *   Type: `SENSOR_GATE` (Mid-Air Jump)
+    *   Location: At the end of the Crimson Walkway (Jump required).
+    *   Action: Sets Ball Collision Group to `GREEN`.
+5.  **Emerald Isles (Platforming):**
+    *   Type: `ISLAND_HOP` (Static Boxes)
+    *   Layout: 5 Platforms spaced 3 units apart.
+    *   Colors: Green (Solid), Red (Ghost).
+    *   Mechanic: The player must aim for the Green platforms. Landing on a Red one means falling through to the void (Reset).
+6.  **The Blue Shift (Gate):**
+    *   Type: `SENSOR_GATE`
+    *   Action: Sets Ball Collision Group to `BLUE`.
+7.  **Sapphire Spiral (Ascent):**
+    *   Type: `CURVED_RAMP`
+    *   Radius: 10 units
+    *   Angle: 360 degrees
+    *   Incline: 10 degrees (Up)
+    *   Feature: The ramp is Blue.
+    *   Hazard: "Blue Lasers" (Kinematic Bars) sweeping the track. They are Solid (Obstacles).
+    *   Visual Distraction: Static Red Pillars (Ghost) intersecting the path.
+8.  **Whiteout (Goal):**
+    *   Type: `BUCKET`
+    *   Action: Restores Neutral state.
+
+### C. Technical Variables
+*   `collisionGroupRed` = 0x0002
+*   `collisionGroupGreen` = 0x0004
+*   `collisionGroupBlue` = 0x0008
+*   `gateColorRed` = "#FF0000"
+*   `gateColorGreen` = "#00FF00"
+*   `gateColorBlue` = "#0000FF"
+*   `voidColor` = "#FFFFFF" (Background clear color, if possible, or Fog)
