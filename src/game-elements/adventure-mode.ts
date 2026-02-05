@@ -40,6 +40,7 @@ export enum AdventureTrackType {
   NEON_STRONGHOLD = 'NEON_STRONGHOLD',
   CASINO_HEIST = 'CASINO_HEIST',
   TESLA_TOWER = 'TESLA_TOWER',
+  NEON_SKYLINE = 'NEON_SKYLINE',
 }
 
 interface GravityWell {
@@ -313,6 +314,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.TESLA_TOWER) {
         this.currentStartPos = new Vector3(0, 20, 0)
         this.createTeslaTowerTrack()
+    } else if (trackType === AdventureTrackType.NEON_SKYLINE) {
+        this.currentStartPos = new Vector3(0, 20, 0)
+        this.createNeonSkylineTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -3871,6 +3875,116 @@ export class AdventureMode {
       const goalPos = currentPos.add(goalForward.scale(4))
 
       this.createBasin(goalPos, coilMat)
+  }
+
+  // --- Track: The Neon Skyline ---
+  private createNeonSkylineTrack(): void {
+      const skylineMat = this.getTrackMaterial("#111122") // Dark Blue
+      const windMat = this.getTrackMaterial("#AAFFFF") // White/Cyan
+
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+
+      // 1. The Rooftop Run (Entry)
+      // Length 15, Incline -10 deg, Width 6
+      const entryLen = 15
+      const entryIncline = (10 * Math.PI) / 180
+      currentPos = this.addStraightRamp(currentPos, heading, 6, entryLen, entryIncline, skylineMat)
+
+      // 2. The Vent Jump (Mechanic)
+      // Gap Length 5. Target Elev +5.
+      const gapLen = 5
+      const jumpHeight = 5.0
+
+      const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const gapStart = currentPos.clone()
+
+      // Updraft Fan Sensor
+      if (this.world) {
+          const center = gapStart.add(forward.scale(gapLen / 2))
+          // Center Y is below gap usually? Or in the gap.
+          // Let's place it slightly below where the ball launches.
+          center.y -= 2.0
+
+          // Visual Fan
+          const fan = MeshBuilder.CreateCylinder("ventFan", { diameter: 4, height: 0.5 }, this.scene)
+          fan.position.copyFrom(center)
+          fan.material = windMat
+          this.adventureTrack.push(fan)
+
+          const sensor = this.world.createRigidBody(
+              this.rapier.RigidBodyDesc.fixed().setTranslation(center.x, center.y + 1.0, center.z)
+          )
+          this.world.createCollider(
+              this.rapier.ColliderDesc.cylinder(3.0, 2.5).setSensor(true),
+              sensor
+          )
+
+          // Force: +25.0 Y. Scaled by 10 like others?
+          // Gravity Forge: +5.0 -> 25.0 impulse? No, I used 50.0 there.
+          // Tidal Nexus: +8.0 -> 60.0.
+          // Neon Skyline: +25.0.
+          // Let's try 250.0. This is a HUGE jump (+5 elevation).
+          this.conveyorZones.push({
+              sensor,
+              force: new Vector3(0, 250.0, 0)
+          })
+      }
+
+      // Move Pos
+      currentPos = currentPos.add(forward.scale(gapLen))
+      currentPos.y += jumpHeight
+
+      // 3. The Skyscraper (Platform)
+      // Flat, Length 15, Width 10.
+      const skyLen = 15
+      const skyWidth = 10
+      const skyStart = currentPos.clone()
+
+      currentPos = this.addStraightRamp(currentPos, heading, skyWidth, skyLen, 0, skylineMat)
+
+      // AC Units (Maze)
+      if (this.world) {
+          const unitCount = 6
+          const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+
+          for (let i = 0; i < unitCount; i++) {
+               const dist = 2 + Math.random() * (skyLen - 4)
+               const offset = (Math.random() - 0.5) * (skyWidth - 2)
+
+               const pos = skyStart.add(forward.scale(dist)).add(right.scale(offset))
+               pos.y += 1.0
+
+               const ac = MeshBuilder.CreateBox("acUnit", { size: 2 }, this.scene)
+               ac.position.copyFrom(pos)
+               ac.material = skylineMat
+               this.adventureTrack.push(ac)
+
+               const body = this.world.createRigidBody(
+                   this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
+               )
+               this.world.createCollider(
+                   this.rapier.ColliderDesc.cuboid(1, 1, 1),
+                   body
+               )
+               this.adventureBodies.push(body)
+          }
+      }
+
+      // 4. The Billboard (Wall Ride)
+      // Curved Ramp. Radius 12, Angle 90, Incline 0, Banking -45.
+      const boardRadius = 12
+      const boardAngle = Math.PI / 2
+      const boardBank = -(45 * Math.PI) / 180
+
+      currentPos = this.addCurvedRamp(currentPos, heading, boardRadius, boardAngle, 0, 8, 2.0, windMat, 20, boardBank)
+      heading += boardAngle
+
+      // 5. The Penthouse Landing (Goal)
+      const goalForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const goalPos = currentPos.add(goalForward.scale(4))
+
+      this.createBasin(goalPos, skylineMat)
   }
 
   private createArcPylon(pos: Vector3, mat: StandardMaterial): void {
