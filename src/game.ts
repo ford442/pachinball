@@ -137,25 +137,33 @@ export class Game {
     // -----------------------------------------------------------------
 
     // ---- TABLE CAMERA (bottom 60% of the screen) --------------------
+    // Perspective camera with tilted angle for 3D depth perception
     const tableCam = new ArcRotateCamera(
       'tableCam',
-      -Math.PI / 2,               // alpha (horizontal)
-      0,                          // beta (vertical - top down)
-      40,                         // radius
-      new Vector3(0, 0, 0),       // target
+      -Math.PI / 2,               // alpha (horizontal - looking from front)
+      Math.PI / 4,                // beta (tilted ~45 degrees for player's perspective)
+      35,                         // radius (distance from target)
+      new Vector3(0, 0, 5),       // target (table center, offset to z=5 where table is positioned)
       this.scene
     )
-    tableCam.mode = ArcRotateCamera.ORTHOGRAPHIC_CAMERA
+    // Use perspective mode for better 3D effect (default is perspective)
+    tableCam.mode = ArcRotateCamera.PERSPECTIVE_CAMERA
+    tableCam.fov = 0.8 // Narrower FOV (~46°) for cleaner framing of the table
 
     // Viewport: x, y, width, height – y = 0 starts at the *bottom* of the canvas
     tableCam.viewport = new Viewport(0, 0, 1, 0.6) // 60% height
 
-    // Orthographic bounds – tweak to fit your table size
-    const tableScale = 18
-    tableCam.orthoTop    =  tableScale * 0.6
-    tableCam.orthoBottom = -tableScale * 0.6
-    tableCam.orthoLeft   = -tableScale / 2
-    tableCam.orthoRight  =  tableScale / 2
+    // Enable player camera controls for looking around the table
+    tableCam.attachControl(this.engine.getRenderingCanvas(), true)
+    
+    // Limit camera movement to prevent seeing behind the table
+    tableCam.lowerBetaLimit = Math.PI / 8    // Don't go too horizontal
+    tableCam.upperBetaLimit = Math.PI / 2.5  // Don't go past top-down
+    tableCam.lowerRadiusLimit = 20           // Minimum zoom
+    tableCam.upperRadiusLimit = 50           // Maximum zoom out
+    // Restrict horizontal rotation to 180° arc on the player-facing side
+    tableCam.lowerAlphaLimit = -Math.PI      // Left limit
+    tableCam.upperAlphaLimit = 0             // Right limit (player always faces table)
 
     // ---- HEAD CAMERA (top 40% of the screen) ------------------------
     const headCam = new ArcRotateCamera(
@@ -244,8 +252,9 @@ export class Game {
     )
     if (this.bloomPipeline) {
       this.bloomPipeline.bloomEnabled = true
-      this.bloomPipeline.bloomKernel = 64
-      this.bloomPipeline.bloomWeight = 0.4
+      this.bloomPipeline.bloomKernel = 32          // Reduced from 64 for less spread
+      this.bloomPipeline.bloomWeight = 0.2         // Reduced from 0.4 to minimize glare
+      this.bloomPipeline.bloomThreshold = 0.8      // Only bloom very bright areas
     }
 
     // Scanline effect – only on the head camera
@@ -263,8 +272,9 @@ export class Game {
         effect.setFloat("uTime", performance.now() * 0.001)
     }
 
-    // Basic Lighting
-    new HemisphericLight('light', new Vector3(0.3, 1, 0.3), this.scene)
+    // Basic Lighting - reduced intensity to minimize glare on table
+    const mainLight = new HemisphericLight('light', new Vector3(0.3, 1, 0.3), this.scene)
+    mainLight.intensity = 0.7  // Reduced from default 1.0
 
     // Initialize Game Logic and Physics
     await this.physics.init()
