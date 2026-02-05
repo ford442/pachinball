@@ -143,12 +143,12 @@ export class Game {
       -Math.PI / 2,               // alpha (horizontal - looking from front)
       Math.PI / 4,                // beta (tilted ~45 degrees for player's perspective)
       35,                         // radius (distance from target)
-      new Vector3(0, 0, 5),       // target (center of table)
+      new Vector3(0, 0, 5),       // target (table center, offset to z=5 where table is positioned)
       this.scene
     )
     // Use perspective mode for better 3D effect (default is perspective)
     tableCam.mode = ArcRotateCamera.PERSPECTIVE_CAMERA
-    tableCam.fov = 0.8 // Slightly narrow FOV for cleaner view
+    tableCam.fov = 0.8 // Narrower FOV (~46°) for cleaner framing of the table
 
     // Viewport: x, y, width, height – y = 0 starts at the *bottom* of the canvas
     tableCam.viewport = new Viewport(0, 0, 1, 0.6) // 60% height
@@ -161,8 +161,9 @@ export class Game {
     tableCam.upperBetaLimit = Math.PI / 2.5  // Don't go past top-down
     tableCam.lowerRadiusLimit = 20           // Minimum zoom
     tableCam.upperRadiusLimit = 50           // Maximum zoom out
-    tableCam.lowerAlphaLimit = -Math.PI      // Limit horizontal rotation
-    tableCam.upperAlphaLimit = 0             // Keep looking from player side
+    // Restrict horizontal rotation to 180° arc on the player-facing side
+    tableCam.lowerAlphaLimit = -Math.PI      // Left limit
+    tableCam.upperAlphaLimit = 0             // Right limit (player always faces table)
 
     // ---- HEAD CAMERA (top 40% of the screen) ------------------------
     const headCam = new ArcRotateCamera(
