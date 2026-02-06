@@ -41,7 +41,18 @@ export enum AdventureTrackType {
   CASINO_HEIST = 'CASINO_HEIST',
   TESLA_TOWER = 'TESLA_TOWER',
   NEON_SKYLINE = 'NEON_SKYLINE',
+  POLYCHROME_VOID = 'POLYCHROME_VOID',
 }
+
+const GROUP_UNIVERSAL = 0x0001
+const GROUP_RED = 0x0002
+const GROUP_GREEN = 0x0004
+const GROUP_BLUE = 0x0008
+
+const MASK_ALL = 0xFFFF
+const MASK_RED = GROUP_UNIVERSAL | GROUP_RED
+const MASK_GREEN = GROUP_UNIVERSAL | GROUP_GREEN
+const MASK_BLUE = GROUP_UNIVERSAL | GROUP_BLUE
 
 interface GravityWell {
   sensor: RAPIER.RigidBody
@@ -74,6 +85,11 @@ interface ConveyorZone {
   force: Vector3
 }
 
+interface ChromaGate {
+  sensor: RAPIER.RigidBody
+  colorType: 'RED' | 'GREEN' | 'BLUE'
+}
+
 export class AdventureMode {
   private scene: Scene
   private world: RAPIER.World
@@ -88,11 +104,13 @@ export class AdventureMode {
   private conveyorZones: ConveyorZone[] = []
   private gravityWells: GravityWell[] = []
   private dampingZones: DampingZone[] = []
+  private chromaGates: ChromaGate[] = []
   private adventureSensor: RAPIER.RigidBody | null = null
   private resetSensors: RAPIER.RigidBody[] = []
   private adventureActive = false
   private currentStartPos: Vector3 = Vector3.Zero()
   private timeAccumulator = 0
+  private currentBallMesh: Mesh | null = null
 
   // Camera Management
   private tableCamera: ArcRotateCamera | null = null
@@ -206,7 +224,18 @@ export class AdventureMode {
         }
     }
 
-    // 5. Sync kinematic bodies to visuals
+    // 5. Apply Chroma Gates
+    for (const gate of this.chromaGates) {
+        const sensorHandle = gate.sensor.collider(0)
+        for (const ball of ballBodies) {
+            const ballHandle = ball.collider(0)
+            if (this.world.intersectionPair(sensorHandle, ballHandle)) {
+                this.setBallColorState(ball, gate.colorType)
+            }
+        }
+    }
+
+    // 6. Sync kinematic bodies to visuals
     // This includes standard kinematics (rotating platforms) and our animated ones
     const allBindings = [...this.kinematicBindings, ...this.animatedObstacles]
     for (const binding of allBindings) {
@@ -317,6 +346,9 @@ export class AdventureMode {
     } else if (trackType === AdventureTrackType.NEON_SKYLINE) {
         this.currentStartPos = new Vector3(0, 20, 0)
         this.createNeonSkylineTrack()
+    } else if (trackType === AdventureTrackType.POLYCHROME_VOID) {
+        this.currentStartPos = new Vector3(0, 20, 0)
+        this.createPolychromeVoidTrack()
     } else {
         this.currentStartPos = new Vector3(0, 2, 8) // Helix default
         this.createHelixTrack()
@@ -329,6 +361,7 @@ export class AdventureMode {
     
     // Store original camera to restore later
     this.tableCamera = currentCamera
+    this.currentBallMesh = ballMesh || null
 
     // Create new RPG-style Isometric Camera
     // For Pachinko Spire, maybe a different angle?
@@ -367,6 +400,8 @@ export class AdventureMode {
       this.followCamera = null
     }
     
+    this.currentBallMesh = null
+
     // Cleanup Visuals
     this.adventureTrack.forEach(m => m.dispose())
     this.adventureTrack = []
@@ -417,6 +452,13 @@ export class AdventureMode {
         }
     })
     this.resetSensors = []
+
+    this.chromaGates.forEach(g => {
+        if (this.world.getRigidBody(g.sensor.handle)) {
+            this.world.removeRigidBody(g.sensor)
+        }
+    })
+    this.chromaGates = []
   }
 
   // --- Shared Helper for Materials ---
@@ -4021,5 +4063,227 @@ export class AdventureMode {
           center: pos,
           strength: -50.0 // Repel
       })
+  }
+
+  // --- Track: The Polychrome Void ---
+  private createPolychromeVoidTrack(): void {
+      const whiteMat = this.getTrackMaterial("#FFFFFF")
+      const redMat = this.getTrackMaterial("#FF0000")
+      const greenMat = this.getTrackMaterial("#00FF00")
+      const blueMat = this.getTrackMaterial("#0000FF")
+
+      let currentPos = this.currentStartPos.clone()
+      let heading = 0
+
+      // 1. Monochrome Injection (Entry)
+      // White. Group Universal.
+      const entryLen = 10
+      const entryIncline = (15 * Math.PI) / 180
+      currentPos = this.addStraightRamp(currentPos, heading, 6, entryLen, entryIncline, whiteMat, 0, 0.5)
+
+      // 2. The Red Shift (Gate)
+      const gatePos = currentPos.clone()
+      gatePos.y += 1.0
+      this.createChromaGate(gatePos, 'RED')
+
+      // 3. Crimson Walkway (Filter)
+      const crimLen = 15
+      const crimWidth = 4
+      const crimStart = currentPos.clone()
+
+      // Create Red Floor manually to set Group
+      const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const crimCenter = crimStart.add(forward.scale(crimLen / 2))
+      // Flat (Incline 0)
+      const floor = MeshBuilder.CreateBox("crimsonFloor", { width: crimWidth, height: 0.5, depth: crimLen }, this.scene)
+      floor.position.copyFrom(crimCenter)
+      floor.rotation.y = heading
+      floor.material = redMat
+      this.adventureTrack.push(floor)
+
+      if (this.world) {
+          const body = this.world.createRigidBody(
+              this.rapier.RigidBodyDesc.fixed().setTranslation(crimCenter.x, crimCenter.y, crimCenter.z)
+          )
+          const q = Quaternion.FromEulerAngles(0, heading, 0)
+          body.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
+
+          const collider = this.rapier.ColliderDesc.cuboid(crimWidth/2, 0.25, crimLen/2)
+          // Set Group: Red
+          // Interaction Groups: (Member << 16) | Filter
+          const groups = (GROUP_RED << 16) | MASK_ALL
+          collider.setCollisionGroups(groups)
+
+          this.world.createCollider(collider, body)
+          this.adventureBodies.push(body)
+      }
+
+      // Add Blue Ghosts (Obstacles)
+      if (this.world) {
+          const ghostCount = 5
+          for (let i=0; i<ghostCount; i++) {
+              const dist = 3 + i * 2.5
+              const offset = (Math.random() - 0.5) * (crimWidth - 1)
+              const pos = crimStart.add(forward.scale(dist))
+              const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+              const ghostPos = pos.add(right.scale(offset))
+              ghostPos.y += 0.5
+
+              const ghost = MeshBuilder.CreateBox("blueGhost", { size: 1.0 }, this.scene)
+              ghost.position.copyFrom(ghostPos)
+              ghost.material = blueMat
+              this.adventureTrack.push(ghost)
+
+              const body = this.world.createRigidBody(
+                  this.rapier.RigidBodyDesc.fixed().setTranslation(ghostPos.x, ghostPos.y, ghostPos.z)
+              )
+              const collider = this.rapier.ColliderDesc.cuboid(0.5, 0.5, 0.5)
+              // Group: Blue
+              const groups = (GROUP_BLUE << 16) | MASK_ALL
+              collider.setCollisionGroups(groups)
+
+              this.world.createCollider(collider, body)
+              this.adventureBodies.push(body)
+          }
+      }
+
+      currentPos = crimStart.add(forward.scale(crimLen))
+
+      // 4. The Green Filter (Gate)
+      const jumpGap = 4
+      currentPos = currentPos.add(forward.scale(jumpGap))
+      // Gate in air
+      const greenGatePos = currentPos.clone()
+      greenGatePos.y += 2.0 // High
+      this.createChromaGate(greenGatePos, 'GREEN')
+
+      // 5. Emerald Isles (Platforming)
+      const isleCount = 5
+      const isleSpacing = 3
+      const isleSize = 2
+
+      for (let i=0; i<isleCount; i++) {
+          currentPos = currentPos.add(forward.scale(isleSpacing))
+
+          const offset = 1.5
+          const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+
+          // Randomize left/right
+          const greenLeft = Math.random() > 0.5
+
+          const p1Pos = currentPos.add(right.scale(-offset))
+          const p2Pos = currentPos.add(right.scale(offset))
+
+          const createIsle = (pos: Vector3, color: 'GREEN' | 'RED') => {
+              const mat = color === 'GREEN' ? greenMat : redMat
+              const grp = color === 'GREEN' ? GROUP_GREEN : GROUP_RED
+
+              const box = MeshBuilder.CreateBox("isle", { width: isleSize, height: 0.5, depth: isleSize }, this.scene)
+              box.position.copyFrom(pos)
+              box.material = mat
+              this.adventureTrack.push(box)
+
+              if (this.world) {
+                  const body = this.world.createRigidBody(
+                      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
+                  )
+                  const col = this.rapier.ColliderDesc.cuboid(isleSize/2, 0.25, isleSize/2)
+                  col.setCollisionGroups((grp << 16) | MASK_ALL)
+                  this.world.createCollider(col, body)
+                  this.adventureBodies.push(body)
+              }
+          }
+
+          createIsle(p1Pos, greenLeft ? 'GREEN' : 'RED')
+          createIsle(p2Pos, greenLeft ? 'RED' : 'GREEN')
+      }
+
+      // 6. The Blue Shift (Gate)
+      currentPos = currentPos.add(forward.scale(isleSpacing))
+      this.createChromaGate(currentPos, 'BLUE')
+
+      // 7. Sapphire Spiral (Ascent)
+      const spiralRadius = 10
+      const spiralAngle = 2 * Math.PI
+      const spiralIncline = -(10 * Math.PI) / 180 // Up
+
+      // const spiralStart = currentPos.clone()
+      currentPos = this.addCurvedRamp(currentPos, heading, spiralRadius, spiralAngle, spiralIncline, 6, 1.0, blueMat, 20)
+
+      // if (this.world) {
+      //     // Add Red Ghosts along the spiral (Approximate)
+      // }
+      heading += spiralAngle
+
+      // 8. Whiteout (Goal)
+      const goalForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+      const goalPos = currentPos.add(goalForward.scale(4))
+
+      this.createBasin(goalPos, whiteMat)
+  }
+
+  private createChromaGate(pos: Vector3, color: 'RED' | 'GREEN' | 'BLUE'): void {
+      if (!this.world) return
+
+      // Visual
+      const gateMat = this.getTrackMaterial(color === 'RED' ? "#FF0000" : color === 'GREEN' ? "#00FF00" : "#0000FF")
+      const gate = MeshBuilder.CreateTorus("gate", { diameter: 4, thickness: 0.2 }, this.scene)
+      gate.position.copyFrom(pos)
+      gate.rotation.x = Math.PI / 2
+      gate.material = gateMat
+      this.adventureTrack.push(gate)
+
+      // Sensor
+      const sensor = this.world.createRigidBody(
+          this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
+      )
+      this.world.createCollider(
+          this.rapier.ColliderDesc.cylinder(0.5, 2.0).setSensor(true),
+          sensor
+      )
+
+      this.chromaGates.push({ sensor, colorType: color })
+  }
+
+  private setBallColorState(ball: RAPIER.RigidBody, color: 'RED' | 'GREEN' | 'BLUE'): void {
+      const collider = ball.collider(0)
+      if (!collider) return
+
+      let groups = 0
+      let matColor = Color3.White()
+
+      switch (color) {
+          case 'RED':
+              groups = (GROUP_UNIVERSAL << 16) | MASK_RED // Member: Universal (so others see me), Filter: MASK_RED
+              // Wait, earlier I said Ball Filter decides what IT sees.
+              // "MASK_RED" = "UNIVERSAL | RED".
+              // So if Ball Filter = MASK_RED, it sees Universal and Red objects.
+              // Ball Membership: If I set it to Universal, then Red Objects (Filter: ALL) will see Ball.
+              // Blue Objects (Filter: ALL) will see Ball.
+              // But Ball Filter (MASK_RED) will NOT see Blue Objects (Group Blue).
+              // So collision logic: Pair exists if (FilterA & MemberB) && (FilterB & MemberA).
+              // Ball Filter (Red|Univ) & Blue Object Member (Blue) = 0.
+              // So they don't collide. Correct.
+              matColor = Color3.Red()
+              break
+          case 'GREEN':
+              groups = (GROUP_UNIVERSAL << 16) | MASK_GREEN
+              matColor = Color3.Green()
+              break
+          case 'BLUE':
+              groups = (GROUP_UNIVERSAL << 16) | MASK_BLUE
+              matColor = Color3.Blue()
+              break
+      }
+
+      collider.setCollisionGroups(groups)
+
+      if (this.currentBallMesh) {
+          const mat = this.currentBallMesh.material as StandardMaterial
+          if (mat) {
+              mat.emissiveColor = matColor
+              mat.diffuseColor = matColor
+          }
+      }
   }
 }
