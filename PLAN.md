@@ -1380,3 +1380,46 @@ A stark white void populated by floating platforms of pure Red, Green, and Blue 
 *   `gateColorGreen` = "#00FF00"
 *   `gateColorBlue` = "#0000FF"
 *   `voidColor` = "#FFFFFF" (Background clear color, if possible, or Fog)
+
+## 38. Adventure Track: "The Recursive Table"
+A meta-level designed as a tribute to classic pinball. The ball enters a miniature pinball table floating in the void, complete with working (automated) flippers and bumpers.
+
+### A. Concept
+A "Table within a Table". The player is shrunk down (thematically) to play a mini-pinball game. The goal is to hit the "Jackpot" ramp to exit.
+
+### B. Layout Definition
+1.  **The Plunger Lane (Entry):**
+    *   Type: `STRAIGHT_RAMP`
+    *   Length: 15 units
+    *   Incline: -10 degrees
+    *   Width: 3 units (Narrow channel)
+    *   WallHeight: 1.0
+2.  **The Playfield (Arena):**
+    *   Type: `STRAIGHT_RAMP` (Flat, Tilted slightly down)
+    *   Length: 20 units
+    *   Width: 12 units
+    *   Incline: -5 degrees (Standard Pinball Slope)
+    *   Feature: "Pop Bumpers" - 3 Static Cylinders (Radius 1.5) arranged in a triangle at the top. High Bounciness (1.5).
+3.  **The Slingshots (Hazards):**
+    *   Type: `STATIC` (Triangular Prisms)
+    *   Location: Lower third, sides.
+    *   Mechanic: High restitution to fling ball sideways.
+4.  **The Ghost Flippers (Defense):**
+    *   Type: `ROTATING_OSCILLATOR`
+    *   Location: Bottom center gap.
+    *   Motion: They flip up and down automatically every 1.0s.
+    *   Mechanic: They act as a gate. Timing is key to pass *between* them or bounce *off* them.
+5.  **The Jackpot Ramp (Goal):**
+    *   Type: `CURVED_RAMP`
+    *   Location: Top center (behind bumpers).
+    *   Radius: 5 units
+    *   Angle: 180 degrees (U-Turn)
+    *   Incline: 10 degrees (Up)
+    *   Goal: Bucket at the end of the ramp.
+
+### C. Technical Variables
+*   `tableSlope` = 5.0 (degrees)
+*   `bumperBounciness` = 1.5
+*   `flipperRate` = 1.0 (Hz)
+*   `tableColor` = "#111111" (Black Wood)
+*   `neonTrim` = "#FF00FF" (Magenta)
