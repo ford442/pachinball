@@ -927,6 +927,8 @@ export class Game {
       } else if (track === AdventureTrackType.TESLA_TOWER) {
           this.nextAdventureTrack = AdventureTrackType.NEON_SKYLINE;
       } else if (track === AdventureTrackType.NEON_SKYLINE) {
+          this.nextAdventureTrack = AdventureTrackType.POLYCHROME_VOID;
+      } else if (track === AdventureTrackType.POLYCHROME_VOID) {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
       } else {
           this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
