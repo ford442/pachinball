@@ -10,6 +10,8 @@ export class InputHandler {
   private onReset: () => void
   private onStart: () => void
   private onAdventureToggle: () => void
+  private onTrackNext?: () => void
+  private onTrackPrev?: () => void
   private onJackpotTrigger?: () => void
   private getState: () => GameState
   private getTiltActive: () => boolean
@@ -25,6 +27,8 @@ export class InputHandler {
       onReset: () => void
       onStart: () => void
       onAdventureToggle: () => void
+      onTrackNext?: () => void
+      onTrackPrev?: () => void
       onJackpotTrigger?: () => void
       getState: () => GameState
       getTiltActive: () => boolean
@@ -39,6 +43,8 @@ export class InputHandler {
     this.onReset = handlers.onReset
     this.onStart = handlers.onStart
     this.onAdventureToggle = handlers.onAdventureToggle
+    this.onTrackNext = handlers.onTrackNext
+    this.onTrackPrev = handlers.onTrackPrev
     this.onJackpotTrigger = handlers.onJackpotTrigger
     this.getState = handlers.getState
     this.getTiltActive = handlers.getTiltActive
@@ -98,6 +104,14 @@ export class InputHandler {
     
     if (event.code === 'KeyH') {
       this.onAdventureToggle()
+    }
+
+    if (event.code === 'BracketRight' && this.onTrackNext) {
+      this.onTrackNext()
+    }
+
+    if (event.code === 'BracketLeft' && this.onTrackPrev) {
+      this.onTrackPrev()
     }
 
     if (event.code === 'KeyJ' && this.onJackpotTrigger) {

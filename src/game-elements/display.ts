@@ -26,6 +26,9 @@ export class DisplaySystem {
   private displayState: DisplayState = DisplayState.IDLE
   private displayTransitionTimer = 0
   private currentStoryText: string = "LINK ESTABLISHED" // Story text buffer
+  private currentTrackName: string = ""
+  private trackProgress: number = 0
+  private trackTransitionAlpha: number = 1.0
   
   // Layers
   private backboxLayers: {
@@ -199,6 +202,12 @@ export class DisplaySystem {
     this.updateOverlay() // Force immediate redraw
   }
 
+  setTrackInfo(trackName: string, progress: number = 0): void {
+    this.currentTrackName = trackName
+    this.trackProgress = Math.max(0, Math.min(1, progress))
+    this.trackTransitionAlpha = 0
+  }
+
   setDisplayState(newState: DisplayState): void {
     this.displayState = newState
     this.displayTransitionTimer = 0
@@ -242,6 +251,11 @@ export class DisplaySystem {
 
   update(dt: number, jackpotPhase: number = 0): void {
     this.displayTransitionTimer += dt
+
+    // Animate track transition fade-in
+    if (this.trackTransitionAlpha < 1.0) {
+      this.trackTransitionAlpha = Math.min(1.0, this.trackTransitionAlpha + dt * 2.5)
+    }
     
     if (this.shaderMaterial) {
       this.shaderMaterial.setFloat("time", performance.now() * 0.001)
@@ -431,9 +445,10 @@ export class DisplaySystem {
 
     if (this.displayState === DisplayState.ADVENTURE) {
       // Adventure Mode HUD
+      const alpha = this.trackTransitionAlpha
 
       // 1. Live Feed Box
-      ctx.strokeStyle = "rgba(0, 255, 0, 0.5)"
+      ctx.strokeStyle = `rgba(0, 255, 0, ${0.5 * alpha})`
       ctx.lineWidth = 4
       ctx.strokeRect(40, 40, w-80, h-160)
 
@@ -444,15 +459,43 @@ export class DisplaySystem {
         ctx.fillStyle = "white"; ctx.font = "20px Orbitron"; ctx.fillText("LIVE", 80, 66)
       }
 
-      // 3. Story Text (Mission Objectives)
-      ctx.fillStyle = "#ccffcc"
+      // 3. Track Name (top center)
+      if (this.currentTrackName) {
+        ctx.fillStyle = `rgba(0, 255, 255, ${alpha})`
+        ctx.font = "bold 24px Orbitron"
+        ctx.textAlign = "center"
+        ctx.shadowBlur = 12; ctx.shadowColor = "#00ffff"
+        ctx.fillText(this.currentTrackName, w/2, 80)
+        ctx.shadowBlur = 0
+      }
+
+      // 4. Progress Bar
+      if (this.trackProgress > 0) {
+        const barX = 60
+        const barY = 100
+        const barW = w - 120
+        const barH = 8
+        ctx.fillStyle = `rgba(0, 255, 0, ${0.2 * alpha})`
+        ctx.fillRect(barX, barY, barW, barH)
+        ctx.fillStyle = `rgba(0, 255, 255, ${0.8 * alpha})`
+        ctx.fillRect(barX, barY, barW * this.trackProgress, barH)
+      }
+
+      // 5. Track Switch Hint
+      ctx.fillStyle = `rgba(100, 255, 100, ${0.4 * alpha})`
+      ctx.font = "14px Orbitron"
+      ctx.textAlign = "right"
+      ctx.fillText("[ ] SWITCH TRACK", w - 50, 66)
+
+      // 6. Story Text (Mission Objectives)
+      ctx.fillStyle = `rgba(204, 255, 204, ${alpha})`
       ctx.font = "28px Orbitron"
       ctx.textAlign = "center"
       ctx.shadowBlur = 10; ctx.shadowColor = "#00ff00"
       ctx.fillText(this.currentStoryText, w/2, h - 60)
 
-      // 4. Data Stream Deco
-      ctx.fillStyle = "rgba(0, 255, 0, 0.2)"
+      // 7. Data Stream Deco
+      ctx.fillStyle = `rgba(0, 255, 0, ${0.2 * alpha})`
       ctx.fillRect(40, h-40, (Math.sin(time)*0.5+0.5) * (w-80), 5)
 
       ctx.shadowBlur = 0 // Reset
