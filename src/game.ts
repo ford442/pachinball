@@ -291,6 +291,8 @@ export class Game {
         onReset: () => this.resetBall(),
         onStart: () => this.startGame(),
         onAdventureToggle: () => this.toggleAdventure(),
+        onTrackNext: () => this.cycleAdventureTrack(1),
+        onTrackPrev: () => this.cycleAdventureTrack(-1),
         onJackpotTrigger: () => this.triggerJackpot(),
         getState: () => this.state,
         getTiltActive: () => this.tiltActive,
@@ -444,17 +446,21 @@ export class Game {
     }
 
     // [NEW] LINK ADVENTURE EVENTS TO DISPLAY SYSTEM
-    this.adventureMode.setEventListener((event) => {
+    this.adventureMode.setEventListener((event, data) => {
       console.log(`Adventure Event: ${event}`)
 
       switch (event) {
-        case 'START':
+        case 'START': {
           // Switch display to Mission Mode
           this.display?.setDisplayState(DisplayState.ADVENTURE)
-          this.display?.setStoryText("SECTOR 7: THE DESCENT")
+          const trackType = data as AdventureTrackType | undefined
+          const trackName = trackType ? this.getTrackDisplayName(trackType) : 'UNKNOWN SECTOR'
+          this.display?.setTrackInfo(trackName)
+          this.display?.setStoryText(`ENTERING: ${trackName}`)
           // Set mood lighting
           this.effects?.setLightingMode('reach', 0.5)
           break
+        }
 
         case 'END':
           // Return to Pinball Mode
@@ -849,14 +855,66 @@ export class Game {
     }
   }
 
+  // Ordered list of adventure tracks for cycling
+  private static readonly TRACK_ORDER: AdventureTrackType[] = [
+    AdventureTrackType.NEON_HELIX,
+    AdventureTrackType.CYBER_CORE,
+    AdventureTrackType.QUANTUM_GRID,
+    AdventureTrackType.SINGULARITY_WELL,
+    AdventureTrackType.GLITCH_SPIRE,
+    AdventureTrackType.RETRO_WAVE_HILLS,
+    AdventureTrackType.CHRONO_CORE,
+    AdventureTrackType.HYPER_DRIFT,
+    AdventureTrackType.PACHINKO_SPIRE,
+    AdventureTrackType.ORBITAL_JUNKYARD,
+    AdventureTrackType.FIREWALL_BREACH,
+    AdventureTrackType.CPU_CORE,
+    AdventureTrackType.CRYO_CHAMBER,
+    AdventureTrackType.BIO_HAZARD_LAB,
+    AdventureTrackType.GRAVITY_FORGE,
+    AdventureTrackType.TIDAL_NEXUS,
+    AdventureTrackType.DIGITAL_ZEN_GARDEN,
+    AdventureTrackType.SYNTHWAVE_SURF,
+    AdventureTrackType.SOLAR_FLARE,
+    AdventureTrackType.PRISM_PATHWAY,
+    AdventureTrackType.MAGNETIC_STORAGE,
+    AdventureTrackType.NEURAL_NETWORK,
+    AdventureTrackType.NEON_STRONGHOLD,
+    AdventureTrackType.CASINO_HEIST,
+    AdventureTrackType.TESLA_TOWER,
+    AdventureTrackType.NEON_SKYLINE,
+    AdventureTrackType.POLYCHROME_VOID,
+  ]
+
   // Cycling variable for adventure tracks
   private nextAdventureTrack: AdventureTrackType = AdventureTrackType.NEON_HELIX;
+
+  private getTrackDisplayName(track: AdventureTrackType): string {
+    return track.replace(/_/g, ' ')
+  }
+
+  private cycleAdventureTrack(direction: number): void {
+    if (!this.adventureMode?.isActive()) return
+
+    const currentIndex = Game.TRACK_ORDER.indexOf(this.nextAdventureTrack)
+    // nextAdventureTrack was already advanced past current, so go back one to find current
+    const prevIndex = (currentIndex - 1 + Game.TRACK_ORDER.length) % Game.TRACK_ORDER.length
+    const newIndex = (prevIndex + direction + Game.TRACK_ORDER.length) % Game.TRACK_ORDER.length
+    const newTrack = Game.TRACK_ORDER[newIndex]
+
+    // Set nextAdventureTrack so startAdventureMode picks it up
+    this.nextAdventureTrack = newTrack
+
+    // End current track and start new one
+    this.endAdventureMode()
+    this.startAdventureMode()
+  }
 
   private startAdventureMode(): void {
     if (!this.adventureMode || !this.scene) return
     
     const ballBody = this.ballManager?.getBallBody()
-    const camera = this.scene.activeCamera as ArcRotateCamera // Note: This might pick the first camera if multiple are active
+    const camera = this.scene.activeCamera as ArcRotateCamera
     const bindings = this.gameObjects?.getBindings() || []
     const ballMesh = bindings.find(b => b.rigidBody === ballBody)?.mesh
     
@@ -864,75 +922,23 @@ export class Game {
       const pinballMeshes = this.gameObjects?.getPinballMeshes() || []
       pinballMeshes.forEach(m => m.setEnabled(false))
       
-      // Cycle through tracks
-      // Order: NEON_HELIX -> CYBER_CORE -> QUANTUM_GRID -> NEON_HELIX
       const track = this.nextAdventureTrack
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.adventureMode.start(ballBody, camera, ballMesh as any, track)
       
+      const trackName = this.getTrackDisplayName(track)
       if (this.scoreElement) {
-        this.scoreElement.innerText = `HOLO-DECK: ${track.replace('_', ' ')}`
+        this.scoreElement.innerText = `HOLO-DECK: ${trackName}`
       }
 
-      // Prepare next track
-      if (track === AdventureTrackType.NEON_HELIX) {
-          this.nextAdventureTrack = AdventureTrackType.CYBER_CORE;
-      } else if (track === AdventureTrackType.CYBER_CORE) {
-          this.nextAdventureTrack = AdventureTrackType.QUANTUM_GRID;
-      } else if (track === AdventureTrackType.QUANTUM_GRID) {
-          this.nextAdventureTrack = AdventureTrackType.SINGULARITY_WELL;
-      } else if (track === AdventureTrackType.SINGULARITY_WELL) {
-          this.nextAdventureTrack = AdventureTrackType.GLITCH_SPIRE;
-      } else if (track === AdventureTrackType.GLITCH_SPIRE) {
-          this.nextAdventureTrack = AdventureTrackType.RETRO_WAVE_HILLS;
-      } else if (track === AdventureTrackType.RETRO_WAVE_HILLS) {
-          this.nextAdventureTrack = AdventureTrackType.CHRONO_CORE;
-      } else if (track === AdventureTrackType.CHRONO_CORE) {
-          this.nextAdventureTrack = AdventureTrackType.HYPER_DRIFT;
-      } else if (track === AdventureTrackType.HYPER_DRIFT) {
-          this.nextAdventureTrack = AdventureTrackType.PACHINKO_SPIRE;
-      } else if (track === AdventureTrackType.PACHINKO_SPIRE) {
-          this.nextAdventureTrack = AdventureTrackType.ORBITAL_JUNKYARD;
-      } else if (track === AdventureTrackType.ORBITAL_JUNKYARD) {
-          this.nextAdventureTrack = AdventureTrackType.FIREWALL_BREACH;
-      } else if (track === AdventureTrackType.FIREWALL_BREACH) {
-          this.nextAdventureTrack = AdventureTrackType.CPU_CORE;
-      } else if (track === AdventureTrackType.CPU_CORE) {
-          this.nextAdventureTrack = AdventureTrackType.CRYO_CHAMBER;
-      } else if (track === AdventureTrackType.CRYO_CHAMBER) {
-          this.nextAdventureTrack = AdventureTrackType.BIO_HAZARD_LAB;
-      } else if (track === AdventureTrackType.BIO_HAZARD_LAB) {
-          this.nextAdventureTrack = AdventureTrackType.GRAVITY_FORGE;
-      } else if (track === AdventureTrackType.GRAVITY_FORGE) {
-          this.nextAdventureTrack = AdventureTrackType.TIDAL_NEXUS;
-      } else if (track === AdventureTrackType.TIDAL_NEXUS) {
-          this.nextAdventureTrack = AdventureTrackType.DIGITAL_ZEN_GARDEN;
-      } else if (track === AdventureTrackType.DIGITAL_ZEN_GARDEN) {
-          this.nextAdventureTrack = AdventureTrackType.SYNTHWAVE_SURF;
-      } else if (track === AdventureTrackType.SYNTHWAVE_SURF) {
-          this.nextAdventureTrack = AdventureTrackType.SOLAR_FLARE;
-      } else if (track === AdventureTrackType.SOLAR_FLARE) {
-          this.nextAdventureTrack = AdventureTrackType.PRISM_PATHWAY;
-      } else if (track === AdventureTrackType.PRISM_PATHWAY) {
-          this.nextAdventureTrack = AdventureTrackType.MAGNETIC_STORAGE;
-      } else if (track === AdventureTrackType.MAGNETIC_STORAGE) {
-          this.nextAdventureTrack = AdventureTrackType.NEURAL_NETWORK;
-      } else if (track === AdventureTrackType.NEURAL_NETWORK) {
-          this.nextAdventureTrack = AdventureTrackType.NEON_STRONGHOLD;
-      } else if (track === AdventureTrackType.NEON_STRONGHOLD) {
-          this.nextAdventureTrack = AdventureTrackType.CASINO_HEIST;
-      } else if (track === AdventureTrackType.CASINO_HEIST) {
-          this.nextAdventureTrack = AdventureTrackType.TESLA_TOWER;
-      } else if (track === AdventureTrackType.TESLA_TOWER) {
-          this.nextAdventureTrack = AdventureTrackType.NEON_SKYLINE;
-      } else if (track === AdventureTrackType.NEON_SKYLINE) {
-          this.nextAdventureTrack = AdventureTrackType.POLYCHROME_VOID;
-      } else if (track === AdventureTrackType.POLYCHROME_VOID) {
-          this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
-      } else {
-          this.nextAdventureTrack = AdventureTrackType.NEON_HELIX;
-      }
+      // Update head screen with track info
+      this.display?.setTrackInfo(trackName)
+      this.display?.setStoryText(`SECTOR: ${trackName}`)
+
+      // Advance to next track for next activation
+      const currentIndex = Game.TRACK_ORDER.indexOf(track)
+      this.nextAdventureTrack = Game.TRACK_ORDER[(currentIndex + 1) % Game.TRACK_ORDER.length]
     }
   }
 
