@@ -478,6 +478,17 @@ export class GameObjects {
       }
     }
 
+    // Barrier walls at the left and right edges of the pachinko pin grid
+    // to block the open gutter areas and prevent lateral ball drift.
+    const barrierMat = new StandardMaterial("pachinkoBarrierMat", this.scene)
+    barrierMat.diffuseColor = Color3.Black()
+    barrierMat.emissiveColor = Color3.FromHexString("#00eeff")
+    barrierMat.alpha = 0.3
+
+    const barrierH = GameConfig.table.wallHeight
+    this.createWall(new Vector3(center.x - width / 2, barrierH, center.z), new Vector3(0.2, 5, height), barrierMat)
+    this.createWall(new Vector3(center.x + width / 2, barrierH, center.z), new Vector3(0.2, 5, height), barrierMat)
+
     const catcher = MeshBuilder.CreateTorus("catcher", { diameter: 2.5, thickness: 0.2 }, this.scene)
     catcher.position.set(center.x, 0.2, center.z)
 
