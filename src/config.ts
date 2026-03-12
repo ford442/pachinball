@@ -103,6 +103,39 @@ export const GameConfig = {
   flipper: {
     // REMOVED: strength (Legacy/Unused) - We use table.flipperStrength now
     damping: 1000,
+  },
+
+  // Backbox display configuration
+  backbox: {
+    // PATH PRIORITY: Video > Image > Reels (procedural)
+    // If video is configured and loads, it takes precedence
+    // If video fails, falls back to image
+    // If image fails or not configured, falls back to reels
+    
+    // Path to looped attract video (relative to public/)
+    // Set to '' to disable video and use image or reels
+    // Example: '/backbox/attract.mp4' loads public/backbox/attract.mp4
+    // Supported formats: mp4, webm (mp4 recommended for compatibility)
+    attractVideoPath: '/backbox/attract.mp4',
+    
+    // If true, video replaces reels completely (reels hidden when video plays)
+    // If false, video overlays reels (reels visible behind video)
+    videoReplacesReels: true,
+    
+    // Path to static attract image (relative to public/)
+    // Used as fallback if video fails or isn't configured
+    // Set to '' to disable image and use reels only
+    attractImagePath: '/backbox/attract.png',
+    
+    // Opacity of the image layer (0.0 = invisible, 1.0 = fully opaque)
+    // Lower values let the animated grid/reels show through
+    imageOpacity: 0.85,
+    
+    // Blend mode for image: 'normal' | 'additive' | 'multiply'
+    // 'normal' - standard alpha blending
+    // 'additive' - brightens, good for neon/dark images  
+    // 'multiply' - darkens, good for light images
+    imageBlendMode: 'normal' as const,
   }
 }
 

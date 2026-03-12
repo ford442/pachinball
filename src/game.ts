@@ -13,7 +13,10 @@ import {
   Effect,
   Texture,
   Viewport,
-  RenderTargetTexture // <--- Added for render-to-texture support
+  RenderTargetTexture,
+  DirectionalLight,
+  PointLight,
+  ShadowGenerator
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import type { Engine } from '@babylonjs/core/Engines/engine'
@@ -42,6 +45,8 @@ import {
   GaussCannonState,
   QuantumTunnelFeeder,
   QuantumTunnelState,
+  getMaterialLibrary,
+  resetMaterialLibrary,
 } from './game-elements'
 import { GameConfig } from './config'
 import { scanlinePixelShader } from './shaders/scanline'
@@ -73,6 +78,7 @@ export class Game {
   private mirrorTexture: MirrorTexture | null = null
   private tableRenderTarget: RenderTargetTexture | null = null
   private headRenderTarget: RenderTargetTexture | null = null
+  private shadowGenerator: ShadowGenerator | null = null
   
   // Game State
   private ready = false
@@ -137,18 +143,24 @@ export class Game {
     // -----------------------------------------------------------------
 
     // ---- TABLE CAMERA (bottom 60% of the screen) --------------------
-    // Perspective camera with tilted angle for 3D depth perception
+    // TUNING RATIONALE:
+    // - Lower FOV (0.65 vs 0.8): Creates more telephoto, dramatic perspective
+    //   that enhances depth perception through stronger perspective convergence
+    // - Lower beta (PI/3.5 vs PI/4): More side-angle view, less top-down,
+    //   makes table feel deeper and shows off the 3D cabinet structure
+    // - Closer radius (32 vs 35): Brings camera in for more intimacy with playfield
+    // - Target shifted to z=2: Focuses on flipper area where action happens,
+    //   while still showing upper playfield
     const tableCam = new ArcRotateCamera(
       'tableCam',
-      -Math.PI / 2,               // alpha (horizontal - looking from front)
-      Math.PI / 4,                // beta (tilted ~45 degrees for player's perspective)
-      35,                         // radius (distance from target)
-      new Vector3(0, 0, 5),       // target (table center, offset to z=5 where table is positioned)
+      -Math.PI / 2,               // alpha: front-facing
+      Math.PI / 3.5,              // beta: ~51° tilt (was 45°) - more side view
+      32,                         // radius: closer for immersion (was 35)
+      new Vector3(0, 0, 2),       // target: shifted toward flippers (was z=5)
       this.scene
     )
-    // Use perspective mode for better 3D effect (default is perspective)
     tableCam.mode = ArcRotateCamera.PERSPECTIVE_CAMERA
-    tableCam.fov = 0.8 // Narrower FOV (~46°) for cleaner framing of the table
+    tableCam.fov = 0.65           // Narrower FOV (~37°) for dramatic perspective
 
     // Viewport: x, y, width, height – y = 0 starts at the *bottom* of the canvas
     tableCam.viewport = new Viewport(0, 0, 1, 0.6) // 60% height
@@ -156,14 +168,18 @@ export class Game {
     // Enable player camera controls for looking around the table
     tableCam.attachControl(this.engine.getRenderingCanvas(), true)
     
-    // Limit camera movement to prevent seeing behind the table
-    tableCam.lowerBetaLimit = Math.PI / 8    // Don't go too horizontal
-    tableCam.upperBetaLimit = Math.PI / 2.5  // Don't go past top-down
-    tableCam.lowerRadiusLimit = 20           // Minimum zoom
-    tableCam.upperRadiusLimit = 50           // Maximum zoom out
+    // Adjusted limits for new camera angle
+    tableCam.lowerBetaLimit = Math.PI / 6     // Don't go too horizontal (30°)
+    tableCam.upperBetaLimit = Math.PI / 2.2   // Don't go past top-down
+    tableCam.lowerRadiusLimit = 22            // Closer zoom minimum
+    tableCam.upperRadiusLimit = 45            // Tighter max zoom
     // Restrict horizontal rotation to 180° arc on the player-facing side
-    tableCam.lowerAlphaLimit = -Math.PI      // Left limit
-    tableCam.upperAlphaLimit = 0             // Right limit (player always faces table)
+    tableCam.lowerAlphaLimit = -Math.PI       // Left limit
+    tableCam.upperAlphaLimit = 0              // Right limit (player always faces table)
+    
+    // Add subtle camera inertia for smooth feel
+    tableCam.inertia = 0.85
+    tableCam.wheelPrecision = 50
 
     // ---- HEAD CAMERA (top 40% of the screen) ------------------------
     const headCam = new ArcRotateCamera(
@@ -252,9 +268,23 @@ export class Game {
     )
     if (this.bloomPipeline) {
       this.bloomPipeline.bloomEnabled = true
-      this.bloomPipeline.bloomKernel = 32          // Reduced from 64 for less spread
-      this.bloomPipeline.bloomWeight = 0.2         // Reduced from 0.4 to minimize glare
-      this.bloomPipeline.bloomThreshold = 0.8      // Only bloom very bright areas
+      // Adjusted bloom for dramatic lighting:
+      // - Larger kernel for softer, more atmospheric glow
+      // - Lower threshold to catch more highlights with new key light
+      // - Balanced weight for visible but not overwhelming bloom
+      this.bloomPipeline.bloomKernel = 48          // Softer spread
+      this.bloomPipeline.bloomWeight = 0.25        // Slightly stronger for drama
+      this.bloomPipeline.bloomThreshold = 0.7      // Catch more highlights
+      
+      // Tone mapping for better contrast range
+      // Reinhard tone mapping preserves highlight detail with strong key light
+      this.bloomPipeline.imageProcessing.toneMappingEnabled = true
+      this.bloomPipeline.imageProcessing.toneMappingType = 
+        DefaultRenderingPipeline.TONEMAPPING_REINHARD
+      
+      // Contrast adjustment for more punch
+      this.bloomPipeline.imageProcessing.contrast = 1.1
+      this.bloomPipeline.imageProcessing.exposure = 1.0
     }
 
     // Scanline effect – only on the head camera
@@ -272,9 +302,62 @@ export class Game {
         effect.setFloat("uTime", performance.now() * 0.001)
     }
 
-    // Basic Lighting - reduced intensity to minimize glare on table
-    const mainLight = new HemisphericLight('light', new Vector3(0.3, 1, 0.3), this.scene)
-    mainLight.intensity = 0.7  // Reduced from default 1.0
+    // ================================================================
+    // DRAMATIC LIGHTING SETUP
+    // ================================================================
+    // RATIONALE: Creating depth through contrast and shadow
+    // 
+    // 1. KEY LIGHT (Main source, warm, from front-left)
+    //    - High intensity for strong highlights on ball/pins
+    //    - Enabled shadows for depth cues
+    //    - Positioned to create long shadows toward back-right
+    //
+    // 2. FILL LIGHT (Hemisphere, reduced intensity)
+    //    - Lower intensity to maintain contrast
+    //    - Dark ground color for richer shadows
+    //
+    // 3. RIM LIGHT (Back light, cool, high intensity)
+    //    - Strong edge definition on objects
+    //    - Separates elements from background
+    //
+    // 4. BOUNCE LIGHT (Subtle fill from below)
+    //    - Simulates light reflecting off playfield
+    //    - Softens harsh shadows under bumpers
+    
+    // Environment lighting for PBR materials
+    this.setupEnvironmentLighting()
+    
+    // FILL LIGHT (Hemisphere) - Reduced for more contrast
+    const hemiLight = new HemisphericLight('hemiLight', new Vector3(0.2, 1, 0.1), this.scene)
+    hemiLight.intensity = 0.25                    // Reduced from 0.4 for more contrast
+    hemiLight.diffuse = new Color3(0.7, 0.8, 0.95) // Cooler fill
+    hemiLight.groundColor = new Color3(0.05, 0.05, 0.08) // Darker ground
+    
+    // KEY LIGHT - Main directional with shadows
+    const keyLight = new DirectionalLight('keyLight', new Vector3(-0.6, -0.8, 0.2), this.scene)
+    keyLight.intensity = 1.2                      // Stronger key for drama
+    keyLight.diffuse = new Color3(1.0, 0.92, 0.85) // Warm white
+    keyLight.position = new Vector3(-15, 25, -15)
+    
+    // Enable shadows for depth perception
+    // Shadow map size: 2048 for quality, blur for softness
+    const shadowGenerator = new ShadowGenerator(2048, keyLight)
+    shadowGenerator.useBlurExponentialShadowMap = true
+    shadowGenerator.blurKernel = 32
+    shadowGenerator.setDarkness(0.4)              // Not pure black shadows
+    this.shadowGenerator = shadowGenerator        // Store for meshes to register
+    
+    // RIM LIGHT - Strong back light for edge definition
+    const rimLight = new DirectionalLight('rimLight', new Vector3(0.2, -0.3, 0.9), this.scene)
+    rimLight.intensity = 0.8                      // Stronger for edge glow
+    rimLight.diffuse = new Color3(0.5, 0.75, 1.0) // Cool blue rim
+    rimLight.position = new Vector3(5, 12, -25)
+    
+    // BOUNCE LIGHT - Subtle fill from playfield reflection
+    const bounceLight = new PointLight('bounceLight', new Vector3(0, -2, 5), this.scene)
+    bounceLight.intensity = 0.3
+    bounceLight.diffuse = new Color3(0.6, 0.5, 0.8) // Purple-tinted from playfield
+    bounceLight.range = 20
 
     // Initialize Game Logic and Physics
     await this.physics.init()
@@ -321,11 +404,56 @@ export class Game {
     this.setGameState(GameState.MENU)
   }
 
+  private setupEnvironmentLighting(): void {
+    // Use MaterialLibrary to load environment texture
+    const matLib = getMaterialLibrary(this.scene)
+    matLib.loadEnvironmentTexture()
+  }
+
+  private createEnhancedCabinet(): void {
+    const matLib = getMaterialLibrary(this.scene)
+    const cabinetY = -2.5
+    
+    // Use MaterialLibrary for consistent materials
+    const cabinetMat = matLib.getCabinetMaterial()
+    const sidePanelMat = matLib.getSidePanelMaterial()
+
+    // Main cabinet body
+    const cab = MeshBuilder.CreateBox("cabinet", { width: 26, height: 3, depth: 36 }, this.scene)
+    cab.position.set(0.75, cabinetY, 5)
+    cab.material = cabinetMat
+
+    // Left side panel
+    const leftPanel = MeshBuilder.CreateBox("leftPanel", { width: 1, height: 4, depth: 38 }, this.scene)
+    leftPanel.position.set(-12.5, cabinetY + 0.5, 5)
+    leftPanel.material = sidePanelMat
+
+    // Right side panel  
+    const rightPanel = MeshBuilder.CreateBox("rightPanel", { width: 1, height: 4, depth: 38 }, this.scene)
+    rightPanel.position.set(13.5, cabinetY + 0.5, 5)
+    rightPanel.material = sidePanelMat
+
+    // Front bezel/glass edge with accent glow
+    const bezelMat = new StandardMaterial("bezelMat", this.scene)
+    bezelMat.diffuseColor = Color3.Black()
+    bezelMat.emissiveColor = Color3.FromHexString("#ff0055").scale(0.2)
+    
+    const bezel = MeshBuilder.CreateBox("bezel", { width: 24, height: 0.5, depth: 1 }, this.scene)
+    bezel.position.set(0.75, cabinetY + 1.5, -12.5)
+    bezel.material = bezelMat
+
+    // Add to mirror render list if available
+    if (this.mirrorTexture?.renderList) {
+      this.mirrorTexture.renderList.push(cab, leftPanel, rightPanel, bezel)
+    }
+  }
+
   dispose(): void {
     if (this.inputHandler) {
       window.removeEventListener('keydown', this.inputHandler.handleKeyDown)
       window.removeEventListener('keyup', this.inputHandler.handleKeyUp)
     }
+    resetMaterialLibrary()
     this.scene?.dispose()
     this.physics.dispose()
     this.ready = false
@@ -337,13 +465,14 @@ export class Game {
     const rapier = this.physics.getRapier()
     if (!world || !rapier) throw new Error('Physics not ready')
 
-    // Skybox
-    const skybox = MeshBuilder.CreateBox("skybox", { size: 100.0 }, this.scene)
+    // Enhanced Skybox with subtle gradient effect
+    const skybox = MeshBuilder.CreateBox("skybox", { size: 200.0 }, this.scene)
     const skyboxMaterial = new StandardMaterial("skyBox", this.scene)
     skyboxMaterial.backFaceCulling = false
     skyboxMaterial.diffuseColor = new Color3(0, 0, 0)
     skyboxMaterial.specularColor = new Color3(0, 0, 0)
-    skyboxMaterial.emissiveColor = new Color3(0.01, 0.01, 0.02)
+    // Slightly warmer dark tone for better contrast with neon
+    skyboxMaterial.emissiveColor = new Color3(0.015, 0.012, 0.02)
     skybox.material = skyboxMaterial
 
     // Mirror texture
@@ -478,25 +607,18 @@ export class Game {
     // Build game objects
     this.gameObjects.createGround(this.mirrorTexture)
     this.gameObjects.createWalls()
-    
-    // 2. Build the new "Decorations"
     this.gameObjects.createCabinetDecoration()
 
-    // 3. Register materials with Effects System
-    const plasticMat = this.scene.getMaterialByName("plasticMat") as StandardMaterial
-    if (plasticMat && this.effects) {
-      this.effects.registerDecorativeMaterial(plasticMat)
-    }
-
-    // Cabinet
-    const cabinetMat = new StandardMaterial("cabinetMat", this.scene)
-    cabinetMat.diffuseColor = Color3.FromHexString("#111111")
-    const cab = MeshBuilder.CreateBox("cabinet", { width: 26, height: 4, depth: 36 }, this.scene)
-    cab.position.set(0.75, -3, 5)
-    cab.material = cabinetMat
+    // Enhanced Cabinet with side panels for depth
+    this.createEnhancedCabinet()
 
     this.display.createBackbox(new Vector3(0.75, 15, 30))
     this.effects.createCabinetLighting()
+
+    // Register decorative materials for fever/reach effects
+    const matLib = getMaterialLibrary(this.scene)
+    const plasticMat = matLib.getNeonBumperMaterial('#FF0055')
+    this.effects.registerDecorativeMaterial(plasticMat)
 
     this.gameObjects.createDeathZone()
     
@@ -507,6 +629,37 @@ export class Game {
     this.gameObjects.createPachinkoField(new Vector3(0, 0.5, 12), 14, 8)
     this.gameObjects.createBumpers()
     this.gameObjects.createSlingshots()
+    
+    // Register shadows after all meshes created (including ball)
+    this.registerShadowCasters()
+  }
+
+  /**
+   * Register important gameplay meshes for shadow casting/receiving
+   * RATIONALE: Shadows provide critical depth cues for:
+   * - Ball position relative to playfield
+   * - Height of bumpers and obstacles
+   * - Cabinet scale and structure
+   */
+  private registerShadowCasters(): void {
+    if (!this.shadowGenerator || !this.gameObjects) return
+
+    // Get all pinball meshes from GameObjects
+    const pinballMeshes = this.gameObjects.getPinballMeshes()
+    
+    // Register gameplay-critical meshes for shadows
+    for (const mesh of pinballMeshes) {
+      // Skip transparent/emissive-only meshes
+      if (mesh.name.includes('holo') || mesh.name.includes('glass')) continue
+      
+      this.shadowGenerator.addShadowCaster(mesh, true)
+    }
+
+    // Ground receives shadows but doesn't cast
+    const ground = this.scene.getMeshByName('ground')
+    if (ground) {
+      ground.receiveShadows = true
+    }
   }
 
   private setGameState(newState: GameState): void {

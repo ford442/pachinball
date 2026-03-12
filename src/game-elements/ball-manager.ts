@@ -3,6 +3,7 @@ import {
   Vector3,
   Scene,
   StandardMaterial,
+  PBRMaterial,
   Color3,
   TrailMesh,
 } from '@babylonjs/core'
@@ -10,6 +11,7 @@ import type { Mesh, MirrorTexture } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
 import type { PhysicsBinding, CaughtBall } from './types'
+import { getMaterialLibrary } from './material-library'
 
 export class BallManager {
   private scene: Scene
@@ -20,6 +22,7 @@ export class BallManager {
   private caughtBalls: CaughtBall[] = []
   private mirrorTexture: MirrorTexture | null = null
   private bindings: PhysicsBinding[] = []
+  private matLib = getMaterialLibrary(this.scene)
 
   constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER, bindings: PhysicsBinding[]) {
     this.scene = scene
@@ -43,9 +46,8 @@ export class BallManager {
   }
 
   createMainBall(): RAPIER.RigidBody {
-    const ballMat = new StandardMaterial('ballMat', this.scene)
-    ballMat.diffuseColor = Color3.White()
-    ballMat.emissiveColor = new Color3(0.2, 0.2, 0.2)
+    // Use MaterialLibrary for chrome ball
+    const ballMat = this.matLib.getChromeBallMaterial()
 
     const diameter = GameConfig.ball.radius * 2
     const ball = MeshBuilder.CreateSphere('ball', { diameter: diameter }, this.scene) as Mesh
@@ -100,9 +102,7 @@ export class BallManager {
       // Offset slightly to avoid stacking
       b.position.set(spawn.x + (Math.random() - 0.5), spawn.y + (i * 2), spawn.z)
       
-      const mat = new StandardMaterial("xbMat", this.scene)
-      mat.diffuseColor = Color3.Green()
-      b.material = mat
+      b.material = this.matLib.getExtraBallMaterial()
 
       const body = this.world.createRigidBody(
         this.rapier.RigidBodyDesc.dynamic()
@@ -132,8 +132,7 @@ export class BallManager {
     const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
 
     if (this.ballBodies.length === 0) {
-      const mat = new StandardMaterial("ballMat", this.scene)
-      mat.emissiveColor = new Color3(0.2, 0.2, 0.2)
+      const mat = this.matLib.getChromeBallMaterial()
       
       const b = MeshBuilder.CreateSphere("ball", { diameter: GameConfig.ball.radius * 2 }, this.scene) as Mesh
       b.material = mat
@@ -205,8 +204,9 @@ export class BallManager {
     this.caughtBalls.push({ body: ball, targetPos: targetPos.clone(), timer: duration })
     
     const mesh = this.bindings.find(b => b.rigidBody === ball)?.mesh as Mesh
-    if (mesh && mesh.material && mesh.material instanceof StandardMaterial) {
-      (mesh.material as StandardMaterial).emissiveColor = new Color3(1, 0, 0)
+    if (mesh && mesh.material) {
+      // PBRMaterial also has emissiveColor
+      (mesh.material as PBRMaterial).emissiveColor = new Color3(1, 0, 0)
     }
   }
 
@@ -226,8 +226,8 @@ export class BallManager {
         catchData.body.setBodyType(this.rapier.RigidBodyType.Dynamic, true)
         
         const mesh = this.bindings.find(b => b.rigidBody === catchData.body)?.mesh as Mesh
-        if (mesh && mesh.material && mesh.material instanceof StandardMaterial) {
-          (mesh.material as StandardMaterial).emissiveColor = new Color3(0.2, 0.2, 0.2)
+        if (mesh && mesh.material) {
+          (mesh.material as PBRMaterial).emissiveColor = new Color3(0.2, 0.2, 0.2)
         }
         
         catchData.body.applyImpulse({ x: (Math.random() - 0.5) * 5, y: 5, z: 5 }, true)

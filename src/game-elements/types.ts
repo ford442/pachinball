@@ -1,4 +1,4 @@
-import type { TransformNode, Mesh, StandardMaterial, PointLight } from '@babylonjs/core'
+import type { TransformNode, Mesh, StandardMaterial, PBRMaterial, PointLight } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export interface PhysicsBinding {
@@ -31,7 +31,7 @@ export enum DisplayState {
 
 export interface CabinetLight {
   mesh: Mesh
-  material: StandardMaterial
+  material: StandardMaterial | PBRMaterial
   pointLight: PointLight
 }
 
@@ -39,7 +39,7 @@ export interface ShardParticle {
   mesh: Mesh
   vel: import('@babylonjs/core').Vector3
   life: number
-  material: StandardMaterial
+  material: StandardMaterial | PBRMaterial
 }
 
 export interface CaughtBall {

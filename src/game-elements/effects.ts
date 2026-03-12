@@ -3,6 +3,7 @@ import {
   Vector3,
   Scene,
   StandardMaterial,
+  PBRMaterial,
   Color3,
   PointLight,
   Texture,
@@ -34,7 +35,7 @@ export class EffectsSystem {
   private bloomEnergy = 0
   private shards: ShardParticle[] = []
   private cabinetLights: CabinetLight[] = []
-  private decorativeLights: StandardMaterial[] = []
+  private decorativeLights: (StandardMaterial | PBRMaterial)[] = []
   private lightingMode: 'normal' | 'hit' | 'fever' | 'reach' = 'normal'
   private lightingTimer = 0
 
@@ -58,18 +59,47 @@ export class EffectsSystem {
    * Call this to register the "Plastic" materials created in GameObjects
    * so they can react to Fever/Reach modes.
    */
-  registerDecorativeMaterial(mat: StandardMaterial): void {
+  registerDecorativeMaterial(mat: StandardMaterial | PBRMaterial): void {
       this.decorativeLights.push(mat)
   }
 
   createCabinetLighting(): void {
-    const stripPositions = [
-      { pos: new Vector3(-12.5, 2, 5), size: new Vector3(0.3, 3, 30) },
-      { pos: new Vector3(13.5, 2, 5), size: new Vector3(0.3, 3, 30) },
-      { pos: new Vector3(0.75, 6, 5), size: new Vector3(24, 0.3, 30) },
+    // Enhanced LED strips with better positioning and intensity
+    const stripConfigs = [
+      { 
+        pos: new Vector3(-12.5, 1.5, 5), 
+        size: new Vector3(0.2, 2.5, 32),
+        color: "#00aaff",
+        intensity: 0.8
+      },
+      { 
+        pos: new Vector3(13.5, 1.5, 5), 
+        size: new Vector3(0.2, 2.5, 32),
+        color: "#00aaff",
+        intensity: 0.8
+      },
+      { 
+        pos: new Vector3(0.75, 5.5, 5), 
+        size: new Vector3(26, 0.2, 32),
+        color: "#ff00aa",
+        intensity: 0.6
+      },
+      // Additional lower accent strips
+      {
+        pos: new Vector3(-12.5, -1, 5),
+        size: new Vector3(0.3, 0.1, 32),
+        color: "#8800ff",
+        intensity: 0.4
+      },
+      {
+        pos: new Vector3(13.5, -1, 5),
+        size: new Vector3(0.3, 0.1, 32),
+        color: "#8800ff",
+        intensity: 0.4
+      }
     ]
     
-    stripPositions.forEach((config, idx) => {
+    stripConfigs.forEach((config, idx) => {
       const strip = MeshBuilder.CreateBox(
         `ledStrip${idx}`,
         { width: config.size.x, height: config.size.y, depth: config.size.z },
@@ -78,14 +108,16 @@ export class EffectsSystem {
       strip.position.copyFrom(config.pos)
       
       const mat = new StandardMaterial(`ledStripMat${idx}`, this.scene)
-      mat.emissiveColor = Color3.FromHexString("#00aaff")
-      mat.alpha = 0.6
+      mat.emissiveColor = Color3.FromHexString(config.color)
+      mat.alpha = Math.min(0.8, config.intensity)
       strip.material = mat
       
       const light = new PointLight(`stripLight${idx}`, config.pos, this.scene)
-      light.diffuse = Color3.FromHexString("#00aaff")
-      light.intensity = 0.5
-      light.range = 15
+      light.diffuse = Color3.FromHexString(config.color)
+      light.intensity = config.intensity
+      light.range = 12
+      // Reduce shadow casting for performance
+      light.shadowEnabled = false
       
       this.cabinetLights.push({ mesh: strip, material: mat, pointLight: light })
     })
@@ -224,9 +256,12 @@ export class EffectsSystem {
             }
             case 'normal':
             default: {
-              const breath = 0.5 + Math.sin(time + idx * 0.5) * 0.3
-              targetColor = Color3.FromHexString("#00aaff").scale(breath)
-              intensity = 0.5 + breath * 0.2
+              // Slower, more subtle breathing
+              const breath = 0.6 + Math.sin(time * 0.7 + idx * 0.8) * 0.2
+              // Vary color slightly between cyan and blue
+              const hue = 0.5 + Math.sin(time * 0.3 + idx) * 0.05
+              targetColor = Color3.FromHSV(hue * 360, 0.8, 1.0).scale(breath)
+              intensity = 0.4 + breath * 0.3
               break
             }
           }

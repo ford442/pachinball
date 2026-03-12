@@ -3,11 +3,11 @@ import {
   Vector3,
   Scene,
   StandardMaterial,
+  PBRMaterial,
   Color3,
   Color4,
   Quaternion,
   Texture,
-  DynamicTexture,
   MirrorTexture,
   Scalar,
   Animation,
@@ -18,6 +18,7 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { GameConfigType } from '../config'
 import type { PhysicsBinding, BumperVisual } from './types'
 import { GameConfig } from '../config'
+import { getMaterialLibrary } from './material-library'
 
 export class GameObjects {
   private scene: Scene
@@ -38,7 +39,8 @@ export class GameObjects {
 
   private bumperParticles: ParticleSystem[] = []
   private particleTexture: Texture
-  private mirrorTexture: MirrorTexture | null = null // Store reference
+  private mirrorTexture: MirrorTexture | null = null
+  private matLib = getMaterialLibrary(this.scene)
 
   constructor(
     scene: Scene,
@@ -55,72 +57,69 @@ export class GameObjects {
   }
 
   createCabinetDecoration(): void {
-    const chromeMat = new StandardMaterial("chromeMat", this.scene)
-    chromeMat.diffuseColor = new Color3(0.1, 0.1, 0.1)
-    chromeMat.specularColor = new Color3(1, 1, 1)
-    chromeMat.roughness = 0.2
+    // Use MaterialLibrary for consistent materials
+    const chromeMat = this.matLib.getChromeMaterial()
+    const plasticMat = this.matLib.getNeonBumperMaterial('#FF0055') // Use as accent plastic
+    const brushedMetalMat = this.matLib.getBrushedMetalMaterial()
+    const glassTubeMat = this.matLib.getGlassTubeMaterial()
+    const blackPlasticMat = this.matLib.getBlackPlasticMaterial()
 
-    const plasticMat = new StandardMaterial("plasticMat", this.scene)
-    plasticMat.diffuseColor = Color3.FromHexString("#FF0055")
-    plasticMat.emissiveColor = Color3.FromHexString("#440011")
-    plasticMat.alpha = 0.9
-
+    // Enhanced ball tray with metallic finish
     const trayWidth = 16
-    const tray = MeshBuilder.CreateBox("ashtray", { width: trayWidth, height: 1.5, depth: 4 }, this.scene)
-    tray.position.set(0, -2, -14)
-    tray.material = chromeMat
+    const tray = MeshBuilder.CreateBox("ashtray", { width: trayWidth, height: 1.2, depth: 4 }, this.scene)
+    tray.position.set(0, -2.2, -14)
+    tray.material = brushedMetalMat
 
-    for(let i=0; i<30; i++) {
-      const dummyBall = MeshBuilder.CreateSphere(`dummyBall_${i}`, { diameter: 0.8 }, this.scene)
-      const x = Scalar.RandomRange(-trayWidth/2 + 1, trayWidth/2 - 1)
-      const z = Scalar.RandomRange(-1.5, 1.5)
-      dummyBall.position.set(x, 0.5, z).addInPlace(tray.position)
+    // Random chrome balls with better distribution
+    for(let i=0; i<25; i++) {
+      const dummyBall = MeshBuilder.CreateSphere(`dummyBall_${i}`, { diameter: 0.7 + Math.random() * 0.2 }, this.scene)
+      const x = Scalar.RandomRange(-trayWidth/2 + 1.5, trayWidth/2 - 1.5)
+      const z = Scalar.RandomRange(-1.2, 1.2)
+      const y = Scalar.RandomRange(0.3, 0.6)
+      dummyBall.position.set(x, y, z).addInPlace(tray.position)
       dummyBall.material = chromeMat
     }
 
-    const panel = MeshBuilder.CreateBox("controlPanel", { width: 8, height: 2, depth: 3 }, this.scene)
-    panel.position.set(10, -1, -12)
+    // Enhanced control panel
+    const panel = MeshBuilder.CreateBox("controlPanel", { width: 8, height: 1.8, depth: 3 }, this.scene)
+    panel.position.set(10, -1.2, -12)
     panel.rotation.x = 0.2
-    const panelMat = new StandardMaterial("blackPlastic", this.scene)
-    panelMat.diffuseColor = Color3.Black()
-    panel.material = panelMat
+    panel.material = blackPlasticMat
 
-    const btn = MeshBuilder.CreateCylinder("blastBtn", { diameter: 1.5, height: 0.5 }, this.scene)
+    // LED button with glow
+    const btn = MeshBuilder.CreateCylinder("blastBtn", { diameter: 1.2, height: 0.3 }, this.scene)
     btn.position.set(0, 1, 0)
     btn.parent = panel
     const btnMat = new StandardMaterial("btnMat", this.scene)
-    btnMat.diffuseColor = Color3.Red()
-    btnMat.emissiveColor = Color3.Red().scale(0.4)
+    btnMat.diffuseColor = Color3.FromHexString("#ff0044")
+    btnMat.emissiveColor = Color3.FromHexString("#ff0044").scale(0.8)
     btn.material = btnMat
 
+    // Decorative wing rails with better geometry
     const path = [
       new Vector3(0, 0, 0),
-      new Vector3(1, 2, 0),
-      new Vector3(0, 4, 1),
-      new Vector3(-1, 6, 0)
+      new Vector3(0.8, 2, 0),
+      new Vector3(0.2, 4, 0.5),
+      new Vector3(-0.5, 6, 0)
     ]
 
-    const leftWing = MeshBuilder.CreateTube("wingL", { path, radius: 0.5, sideOrientation: 2 }, this.scene)
-    leftWing.position.set(-14, 2, 0)
+    const leftWing = MeshBuilder.CreateTube("wingL", { path, radius: 0.4, sideOrientation: 2 }, this.scene)
+    leftWing.position.set(-13.5, 1.5, 0)
     leftWing.material = plasticMat
 
-    const rightWing = MeshBuilder.CreateTube("wingR", { path, radius: 0.5, sideOrientation: 2 }, this.scene)
-    rightWing.position.set(14, 2, 0)
+    const rightWing = MeshBuilder.CreateTube("wingR", { path, radius: 0.4, sideOrientation: 2 }, this.scene)
+    rightWing.position.set(14.5, 1.5, 0)
     rightWing.scaling.x = -1
     rightWing.material = plasticMat
 
-    const tubeMat = new StandardMaterial("glass", this.scene)
-    tubeMat.alpha = 0.3
-    tubeMat.diffuseColor = Color3.White()
-    tubeMat.backFaceCulling = false
-
-    const feedTube = MeshBuilder.CreateCylinder("feedTube", { height: 15, diameter: 1.2 }, this.scene)
+    const feedTube = MeshBuilder.CreateCylinder("feedTube", { height: 15, diameter: 1.0, tessellation: 16 }, this.scene)
     feedTube.position.set(-12, 5, 5)
-    feedTube.material = tubeMat
+    feedTube.material = glassTubeMat
 
+    // Animated balls in tube
     const ballCount = 5
     for(let i=0; i<ballCount; i++) {
-      const dropBall = MeshBuilder.CreateSphere(`dropBall_${i}`, { diameter: 0.7 }, this.scene)
+      const dropBall = MeshBuilder.CreateSphere(`dropBall_${i}`, { diameter: 0.6 }, this.scene)
       dropBall.position.set(0, 6 - (i*3), 0)
       dropBall.parent = feedTube
       dropBall.material = chromeMat
@@ -134,29 +133,37 @@ export class GameObjects {
       dropBall.animations.push(anim)
       this.scene.beginAnimation(dropBall, 0, 60, true, 1.0 + (i * 0.1))
     }
+
+    // Add side rails for depth perception
+    this.createSideRails(brushedMetalMat, plasticMat)
+  }
+
+  private createSideRails(metalMat: PBRMaterial, accentMat: PBRMaterial): void {
+    // Left side rail
+    const leftRail = MeshBuilder.CreateBox("leftRail", { width: 0.5, height: 1, depth: 30 }, this.scene)
+    leftRail.position.set(-12, -0.5, 5)
+    leftRail.material = metalMat
+
+    // Right side rail  
+    const rightRail = MeshBuilder.CreateBox("rightRail", { width: 0.5, height: 1, depth: 30 }, this.scene)
+    rightRail.position.set(13, -0.5, 5)
+    rightRail.material = metalMat
+
+    // Accent strips on rails
+    const leftAccent = MeshBuilder.CreateBox("leftAccent", { width: 0.6, height: 0.1, depth: 28 }, this.scene)
+    leftAccent.position.set(-12, 0.1, 5)
+    leftAccent.material = accentMat
+
+    const rightAccent = MeshBuilder.CreateBox("rightAccent", { width: 0.6, height: 0.1, depth: 28 }, this.scene)
+    rightAccent.position.set(13, 0.1, 5)
+    rightAccent.material = accentMat
   }
 
   createGround(mirrorTexture: MirrorTexture): void {
-    this.mirrorTexture = mirrorTexture // Store for later use
-    const groundMat = new StandardMaterial('groundMat', this.scene)
-    groundMat.diffuseTexture = this.createGridTexture()
-    ;(groundMat.diffuseTexture as Texture).uScale = 4
-    ;(groundMat.diffuseTexture as Texture).vScale = 8
-
-    // LCD Screen Effect: Make the texture emissive so it glows like a screen
-    groundMat.emissiveTexture = groundMat.diffuseTexture
-    // FIX: Set to Black to prevent "milky/washed out" look
-    groundMat.emissiveColor = Color3.Black()
-
-    // Remove external light influence (Diffuse) to prevent washout
-    groundMat.diffuseColor = Color3.Black()
-
-    // FIX: Reduce alpha to prevent "solid plastic" look, simulating dark glass
-    groundMat.alpha = 0.85
-
-    // Remove specular highlights to avoid "plastic" glare
-    groundMat.specularColor = Color3.Black()
-    // groundMat.reflectionTexture = mirrorTexture // REMOVED: LCD screens are not mirrors
+    this.mirrorTexture = mirrorTexture
+    
+    // Use MaterialLibrary for playfield material
+    const groundMat = this.matLib.getPlayfieldMaterial()
 
     const ground = MeshBuilder.CreateGround('ground', { width: GameConfig.table.width, height: GameConfig.table.height }, this.scene) as Mesh
     ground.position.set(0, -1, 5)
@@ -170,11 +177,8 @@ export class GameObjects {
   }
 
   createWalls(): void {
-    const wallMat = new StandardMaterial('wallMat', this.scene)
-    wallMat.diffuseColor = Color3.Black()
-    wallMat.emissiveColor = Color3.FromHexString("#00eeff")
-    wallMat.alpha = 0.3
-
+    // Use MaterialLibrary for smoked glass walls
+    const wallMat = this.matLib.getSmokedGlassMaterial()
     const wallH = GameConfig.table.wallHeight
 
     // 1. Outer Walls
@@ -209,8 +213,7 @@ export class GameObjects {
     const wedgeSize = GameConfig.table.wedgeSize
     const thickness = GameConfig.table.wedgeThickness
 
-    const wedgeMat = new StandardMaterial("wedgeMat", this.scene)
-    wedgeMat.diffuseColor = new Color3(0.2, 0.2, 0.2)
+    const wedgeMat = this.matLib.getBrushedMetalMaterial()
 
     // Calculate diagonal width
     const diagWidth = Math.sqrt(2 * (wedgeSize * wedgeSize))
@@ -276,11 +279,7 @@ export class GameObjects {
   }
 
   createFlippers(): { left: RAPIER.ImpulseJoint; right: RAPIER.ImpulseJoint } {
-    const flipperMat = new StandardMaterial('flipperMat', this.scene)
-    flipperMat.diffuseColor = Color3.Yellow()
-    flipperMat.emissiveColor = Color3.FromHexString("#aa6600")
-    flipperMat.specularColor = Color3.White()
-    flipperMat.specularPower = 64
+    const flipperMat = this.matLib.getNeonFlipperMaterial()
 
     const make = (pos: Vector3, right: boolean): RAPIER.RevoluteImpulseJoint => {
       const mesh = MeshBuilder.CreateBox("flipper", { width: 3.5, depth: 0.5, height: 0.5 }, this.scene) as Mesh
@@ -338,12 +337,11 @@ export class GameObjects {
 
   createBumpers(): void {
     const make = (x: number, z: number, colorHex: string) => {
-      const bumper = MeshBuilder.CreateSphere("bump", { diameter: 0.8 }, this.scene) as Mesh
+      const bumper = MeshBuilder.CreateSphere("bump", { diameter: 0.9, segments: 32 }, this.scene) as Mesh
       bumper.position.set(x, 0.5, z)
       
-      const mat = new StandardMaterial("bMat", this.scene)
-      mat.emissiveColor = Color3.FromHexString(colorHex)
-      mat.diffuseColor = Color3.FromHexString(colorHex).scale(0.5)
+      // Use MaterialLibrary for neon bumper
+      const mat = this.matLib.getNeonBumperMaterial(colorHex)
       bumper.material = mat
 
       // --- REFINED HOLOGRAM PILLAR (Section 4) ---
@@ -351,20 +349,16 @@ export class GameObjects {
       const holoInner = MeshBuilder.CreateCylinder("holoInner", { diameter: 0.6, height: 2.5, tessellation: 12 }, this.scene)
       holoInner.position.set(x, 1.8, z)
       
-      const innerMat = new StandardMaterial("holoInnerMat", this.scene)
-      innerMat.wireframe = true
-      innerMat.emissiveColor = Color3.FromHexString(colorHex).scale(1.2)
-      innerMat.alpha = 0.5
+      // Hologram materials from MaterialLibrary
+      const innerMat = this.matLib.getHologramMaterial(colorHex, true)
       holoInner.material = innerMat
 
       // Outer shell (Faint, wider)
-      const holoOuter = MeshBuilder.CreateCylinder("holoOuter", { diameter: 1.0, height: 3.5, tessellation: 8 }, this.scene)
+      const holoOuter = MeshBuilder.CreateCylinder("holoOuter", { diameter: 1.2, height: 4.0, tessellation: 12 }, this.scene)
       holoOuter.position.set(x, 2.0, z)
 
-      const outerMat = new StandardMaterial("holoOuterMat", this.scene)
-      outerMat.wireframe = true
-      outerMat.emissiveColor = Color3.White() // Techy contrast
-      outerMat.alpha = 0.2
+      const outerMat = this.matLib.getHologramMaterial('#FFFFFF', true)
+      outerMat.alpha = 0.25
       holoOuter.material = outerMat
 
       // Parent outer to inner so we can reference one "hologram" group if needed,
@@ -432,19 +426,8 @@ export class GameObjects {
   }
 
   createPachinkoField(center: Vector3, width: number, height: number): void {
-    // --- REFINED METALLIC NAILS (Section 4) ---
-    const pinMat = new StandardMaterial("pinMat", this.scene)
-    pinMat.diffuseColor = Color3.FromHexString("#888888") // Darker base
-    pinMat.specularColor = Color3.White()
-    pinMat.specularPower = 64 // Sharp highlight
-    pinMat.emissiveColor = Color3.Black() // No emission for physical look
-    pinMat.alpha = 1.0
-
-    // Add reflection if mirror texture is available
-    if (this.mirrorTexture) {
-        pinMat.reflectionTexture = this.mirrorTexture
-        pinMat.roughness = 0.4 // Chrome-like
-    }
+    // Use MaterialLibrary for metallic pins
+    const pinMat = this.matLib.getPinMaterial()
 
     const rows = 6
     const cols = 9
@@ -492,10 +475,7 @@ export class GameObjects {
     const catcher = MeshBuilder.CreateTorus("catcher", { diameter: 2.5, thickness: 0.2 }, this.scene)
     catcher.position.set(center.x, 0.2, center.z)
 
-    const catcherMat = new StandardMaterial("catcherMat", this.scene)
-    catcherMat.emissiveColor = Color3.FromHexString("#ff00aa")
-    catcherMat.alpha = 0.8
-    catcher.material = catcherMat
+    catcher.material = this.matLib.getCatcherMaterial()
 
     const catchBody = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.fixed().setTranslation(center.x, 0.2, center.z)
@@ -515,9 +495,7 @@ export class GameObjects {
   }
 
   createSlingshots(): void {
-    const slingMat = new StandardMaterial('slingMat', this.scene)
-    slingMat.emissiveColor = Color3.White()
-    slingMat.alpha = 0.7
+    const slingMat = this.matLib.getNeonSlingshotMaterial()
 
     this.createSlingshot(new Vector3(-6.5, 0, -3), -Math.PI / 6, slingMat)
     this.createSlingshot(new Vector3(6.5, 0, -3), Math.PI / 6, slingMat)
@@ -608,7 +586,7 @@ export class GameObjects {
     })
   }
 
-  private createWall(pos: Vector3, size: Vector3, mat: StandardMaterial): void {
+  private createWall(pos: Vector3, size: Vector3, mat: StandardMaterial | PBRMaterial): void {
     const w = MeshBuilder.CreateBox("w", { width: size.x, height: size.y * 2, depth: size.z }, this.scene)
     w.position.copyFrom(pos)
     w.material = mat
@@ -626,7 +604,7 @@ export class GameObjects {
     this.pinballMeshes.push(w)
   }
 
-  private createSlingshot(pos: Vector3, rot: number, mat: StandardMaterial): void {
+  private createSlingshot(pos: Vector3, rot: number, mat: StandardMaterial | PBRMaterial): void {
     const mesh = MeshBuilder.CreateBox("sling", { width: 0.5, height: 2, depth: 4 }, this.scene)
     mesh.rotation.y = rot
     mesh.position.copyFrom(pos)
@@ -651,34 +629,10 @@ export class GameObjects {
     this.pinballMeshes.push(mesh)
   }
 
+  // Grid texture is now generated by MaterialLibrary
+  // This method is kept for backward compatibility if needed elsewhere
   private createGridTexture(): Texture {
-    const dynamicTexture = new DynamicTexture('gridTexture', 512, this.scene, true)
-    dynamicTexture.hasAlpha = true
-    const ctx = dynamicTexture.getContext()
-    const size = 512
-
-    ctx.fillStyle = '#050510'
-    ctx.fillRect(0, 0, size, size)
-    ctx.lineWidth = 3
-    ctx.strokeStyle = '#aa00ff'
-    ctx.shadowBlur = 10
-    ctx.shadowColor = '#d000ff'
-
-    const step = size / 8
-    for (let i = 0; i <= size; i += step) {
-      ctx.beginPath()
-      ctx.moveTo(i, 0)
-      ctx.lineTo(i, size)
-      ctx.stroke()
-      ctx.beginPath()
-      ctx.moveTo(0, i)
-      ctx.lineTo(size, i)
-      ctx.stroke()
-    }
-
-    ctx.strokeRect(0, 0, size, size)
-    dynamicTexture.update()
-    return dynamicTexture
+    return this.matLib['createGridTexture']()
   }
 
   getBindings(): PhysicsBinding[] {

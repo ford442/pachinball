@@ -6,12 +6,14 @@ import {
   Color3,
   DynamicTexture,
   Texture,
+  VideoTexture,
   ShaderMaterial,
   ShaderLanguage,
 } from '@babylonjs/core'
 import { numberScrollShader } from '../shaders/numberScroll'
 import { jackpotOverlayShader } from '../shaders/jackpotOverlay'
 import { DisplayState } from './types'
+import { GameConfig } from '../config'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import type { Mesh } from '@babylonjs/core'
@@ -30,12 +32,25 @@ export class DisplaySystem {
   private trackProgress: number = 0
   private trackTransitionAlpha: number = 1.0
   
-  // Layers
+  // Layers (from back to front)
   private backboxLayers: {
-    background: Mesh | null
-    mainDisplay: Mesh | null
-    overlay: Mesh | null
-  } = { background: null, mainDisplay: null, overlay: null }
+    mainDisplay: Mesh | null   // LAYER 0: Reels/slots (deepest)
+    video: Mesh | null         // LAYER 1: Looped video (optional, replaces or overlays reels)
+    image: Mesh | null         // LAYER 2: Static attract image (optional)
+    background: Mesh | null    // LAYER 3: Animated grid (middle)
+    overlay: Mesh | null       // LAYER 4: UI overlay (closest)
+  } = { mainDisplay: null, video: null, image: null, background: null, overlay: null }
+  
+  // Image layer state
+  private imageTexture: Texture | null = null
+  private imageMaterial: StandardMaterial | null = null
+  private hasImageLoaded = false
+  
+  // Video layer state
+  private videoTexture: VideoTexture | null = null
+  private videoMaterial: StandardMaterial | null = null
+  private hasVideoLoaded = false
+  private isVideoPlaying = false
 
   // Shader materials
   private shaderMaterial: ShaderMaterial | null = null
@@ -70,7 +85,24 @@ export class DisplaySystem {
     frameMat.roughness = 0.5
     frame.material = frameMat
 
-    // LAYER 1: PHYSICAL REELS (Deepest)
+    // MEDIA LAYERS: VIDEO (priority) or IMAGE (fallback) or REELS (default)
+    // Priority: Video > Image > Reels (procedural fallback)
+    // Only one media layer shows at a time for clean visual hierarchy
+    
+    // Try video first - if it loads, it becomes the primary display
+    // If video fails or isn't configured, try static image
+    // If neither, fall back to reels/slots
+    const videoCreated = this.createVideoLayer(pos)
+    
+    if (!videoCreated) {
+      // No video - try static image
+      this.createImageLayer(pos)
+      // Image creation is non-blocking, reels will show behind if image fails
+    }
+    // If video is playing, we may still want reels as a subtle background
+    // This is handled in the video creation based on opacity settings
+
+    // LAYER: PHYSICAL REELS (Deepest, behind video/image if media present)
     if (this.useWGSL) {
       console.log("Initializing WGSL Reels")
       const gap = 7
@@ -119,7 +151,8 @@ export class DisplaySystem {
       this.backboxLayers.mainDisplay = mainDisplay
     }
 
-    // LAYER 2: TRANSPARENT VIDEO SCREEN (Middle)
+    // LAYER 2: TRANSPARENT GRID SCREEN (Middle)
+    // Visible behind image if image has transparency
     const bgLayer = MeshBuilder.CreatePlane("backboxBg", { width: 20, height: 12 }, this.scene)
     bgLayer.position.copyFrom(pos)
     bgLayer.position.z -= 0.8 // Middle layer
@@ -196,6 +229,324 @@ export class DisplaySystem {
     this.backboxLayers.overlay = overlay
   }
 
+  /**
+   * Create the static image layer for attract mode
+   * Falls back to no layer if image is not configured or fails to load
+   */
+  private createImageLayer(pos: Vector3): void {
+    const imagePath = GameConfig.backbox.attractImagePath
+    const opacity = GameConfig.backbox.imageOpacity
+    
+    // Skip if no image configured
+    if (!imagePath || imagePath.trim() === '') {
+      console.log('DisplaySystem: No attract image configured')
+      return
+    }
+    
+    // Create image mesh
+    const imagePlane = MeshBuilder.CreatePlane("backboxImage", { width: 20, height: 12 }, this.scene)
+    imagePlane.position.copyFrom(pos)
+    // Position between reels (z-0.5) and grid (z-0.8)
+    imagePlane.position.z -= 0.65
+    imagePlane.rotation.y = Math.PI
+    
+    // Create material with texture
+    const mat = new StandardMaterial("backboxImageMat", this.scene)
+    
+    // Load texture
+    const texture = new Texture(imagePath, this.scene, true, false)
+    
+    // Handle load success/failure
+    texture.onLoadObservable.add(() => {
+      console.log(`DisplaySystem: Loaded attract image from ${imagePath}`)
+      this.hasImageLoaded = true
+      
+      // Configure blend mode
+      const blendMode = GameConfig.backbox.imageBlendMode
+      switch (blendMode) {
+        case 'additive':
+          mat.emissiveColor = Color3.White()
+          mat.disableLighting = true
+          break
+        case 'multiply':
+          // Multiply effect through diffuse
+          mat.diffuseColor = new Color3(opacity, opacity, opacity)
+          break
+        case 'normal':
+        default:
+          mat.diffuseTexture = texture
+          mat.emissiveTexture = texture
+          mat.emissiveColor = new Color3(opacity, opacity, opacity)
+          mat.diffuseColor = new Color3(opacity, opacity, opacity)
+          break
+      }
+    })
+    
+    texture.onErrorObservable.add(() => {
+      console.warn(`DisplaySystem: Failed to load attract image from ${imagePath}, using fallback`)
+      // Dispose failed mesh
+      imagePlane.dispose()
+      mat.dispose()
+      this.imageTexture = null
+      this.imageMaterial = null
+    })
+    
+    mat.alpha = opacity
+    mat.backFaceCulling = false
+    mat.diffuseTexture = texture
+    
+    imagePlane.material = mat
+    this.backboxLayers.image = imagePlane
+    this.imageTexture = texture
+    this.imageMaterial = mat
+  }
+
+  /**
+   * Update image opacity at runtime
+   * @param opacity 0.0 to 1.0
+   */
+  setImageOpacity(opacity: number): void {
+    if (!this.imageMaterial || !this.backboxLayers.image) return
+    
+    const clamped = Math.max(0, Math.min(1, opacity))
+    this.imageMaterial.alpha = clamped
+    
+    // Update emissive to match
+    if (GameConfig.backbox.imageBlendMode === 'normal') {
+      this.imageMaterial.emissiveColor = new Color3(clamped, clamped, clamped)
+      this.imageMaterial.diffuseColor = new Color3(clamped, clamped, clamped)
+    }
+  }
+
+  /**
+   * Toggle image visibility
+   */
+  setImageVisible(visible: boolean): void {
+    if (this.backboxLayers.image) {
+      this.backboxLayers.image.isVisible = visible
+    }
+  }
+
+  // ============================================================================
+  // VIDEO LAYER IMPLEMENTATION
+  // ============================================================================
+  
+  /**
+   * Create the video layer for attract mode
+   * Uses BabylonJS VideoTexture for hardware-accelerated playback
+   * 
+   * ARCHITECTURE:
+   * - Video plays on a plane mesh positioned in the backbox layer stack
+   * - Autoplay with mute is required for modern browser compatibility
+   * - If autoplay is blocked, falls back to image or reels
+   * - Scanline/overlay effects still apply on top
+   * 
+   * @param pos Center position of the backbox
+   * @returns true if video layer was created and is attempting to play
+   */
+  private createVideoLayer(pos: Vector3): boolean {
+    const videoPath = GameConfig.backbox.attractVideoPath
+    
+    // Skip if no video configured
+    if (!videoPath || videoPath.trim() === '') {
+      console.log('DisplaySystem: No attract video configured')
+      return false
+    }
+    
+    console.log(`DisplaySystem: Attempting to load video from ${videoPath}`)
+    
+    // Create video element with required attributes for autoplay
+    // muted + playsinline are required for mobile autoplay
+    const videoElement = document.createElement('video')
+    videoElement.src = videoPath
+    videoElement.loop = true
+    videoElement.muted = true
+    videoElement.playsInline = true
+    videoElement.crossOrigin = 'anonymous'
+    videoElement.preload = 'auto'
+    
+    // Style to hide off-screen if needed (Babylon manages this, but good for safety)
+    videoElement.style.display = 'none'
+    document.body.appendChild(videoElement)
+    
+    // Create the video texture
+    // autoPlay: false - we'll handle play manually to catch errors
+    // loop: true - handled by video element
+    let videoTexture: VideoTexture
+    try {
+      videoTexture = new VideoTexture(
+        'backboxVideoTex',
+        videoElement,
+        this.scene,
+        false,  // autoPlay - we'll handle manually
+        true,   // loop
+        VideoTexture.TRILINEAR_SAMPLINGMODE,
+        {
+          autoPlay: false,
+          autoUpdateTexture: true,
+          poster: ''
+        }
+      )
+    } catch (err) {
+      console.warn('DisplaySystem: Failed to create VideoTexture:', err)
+      videoElement.remove()
+      return false
+    }
+    
+    // Create mesh for video display
+    // Aspect ratio: VideoTexture maintains aspect ratio automatically
+    // We use a plane that fills the backbox (20x12 units)
+    const videoPlane = MeshBuilder.CreatePlane("backboxVideo", { width: 20, height: 12 }, this.scene)
+    videoPlane.position.copyFrom(pos)
+    // Position between reels (z-0.5) and grid (z-0.8)
+    // If we want video to replace reels entirely, use z-0.55
+    // If we want video over reels, use z-0.6
+    videoPlane.position.z -= 0.55
+    videoPlane.rotation.y = Math.PI  // Face the camera
+    
+    // Create material with video texture
+    const mat = new StandardMaterial("backboxVideoMat", this.scene)
+    mat.diffuseTexture = videoTexture
+    mat.emissiveTexture = videoTexture
+    mat.emissiveColor = Color3.White()
+    mat.backFaceCulling = false
+    mat.disableLighting = true  // Video provides its own light
+    
+    videoPlane.material = mat
+    
+    // Store references
+    this.backboxLayers.video = videoPlane
+    this.videoTexture = videoTexture
+    this.videoMaterial = mat
+    
+    // Handle video events for graceful fallback
+    videoElement.addEventListener('canplay', () => {
+      console.log('DisplaySystem: Video can play, attempting autoplay')
+      
+      // Attempt autoplay
+      videoElement.play().then(() => {
+        console.log('DisplaySystem: Video autoplay succeeded')
+        this.hasVideoLoaded = true
+        this.isVideoPlaying = true
+        
+        // If video is primary display, hide reels to avoid double image
+        if (GameConfig.backbox.videoReplacesReels && this.backboxLayers.mainDisplay) {
+          this.backboxLayers.mainDisplay.isVisible = false
+        }
+      }).catch((err) => {
+        console.warn('DisplaySystem: Video autoplay blocked:', err)
+        // Browser blocked autoplay - fall back to image or reels
+        this.handleVideoAutoplayBlocked(videoElement, videoPlane, mat)
+      })
+    })
+    
+    videoElement.addEventListener('error', () => {
+      console.warn(`DisplaySystem: Video failed to load from ${videoPath}`)
+      this.handleVideoError(videoElement, videoPlane, mat)
+    })
+    
+    // Timeout fallback - if video doesn't load in 3 seconds, proceed without it
+    setTimeout(() => {
+      if (!this.hasVideoLoaded && !this.isVideoPlaying) {
+        console.warn('DisplaySystem: Video load timeout, falling back')
+        this.handleVideoError(videoElement, videoPlane, mat)
+      }
+    }, 3000)
+    
+    return true
+  }
+  
+  /**
+   * Handle browser autoplay restrictions
+   * Disposes video layer and falls back to image or reels
+   */
+  private handleVideoAutoplayBlocked(
+    videoElement: HTMLVideoElement,
+    videoPlane: Mesh,
+    mat: StandardMaterial
+  ): void {
+    // Clean up video resources
+    videoElement.pause()
+    videoElement.remove()
+    
+    // Dispose Babylon objects
+    videoPlane.dispose()
+    mat.dispose()
+    this.videoTexture?.dispose()
+    
+    this.backboxLayers.video = null
+    this.videoTexture = null
+    this.videoMaterial = null
+    this.hasVideoLoaded = false
+    
+    console.log('DisplaySystem: Video autoplay blocked, falling back to image/reels')
+  }
+  
+  /**
+   * Handle video load errors (file missing, format unsupported, etc)
+   */
+  private handleVideoError(
+    videoElement: HTMLVideoElement,
+    videoPlane: Mesh,
+    mat: StandardMaterial
+  ): void {
+    videoElement.remove()
+    videoPlane.dispose()
+    mat.dispose()
+    this.videoTexture?.dispose()
+    
+    this.backboxLayers.video = null
+    this.videoTexture = null
+    this.videoMaterial = null
+    this.hasVideoLoaded = false
+    
+    console.log('DisplaySystem: Video error, falling back to image/reels')
+  }
+  
+  /**
+   * Control video playback
+   */
+  playVideo(): void {
+    if (this.videoTexture?.video) {
+      this.videoTexture.video.play().catch(() => {
+        console.warn('DisplaySystem: Video play blocked')
+      })
+      this.isVideoPlaying = true
+    }
+  }
+  
+  pauseVideo(): void {
+    if (this.videoTexture?.video) {
+      this.videoTexture.video.pause()
+      this.isVideoPlaying = false
+    }
+  }
+  
+  /**
+   * Set video opacity
+   * @param opacity 0.0 to 1.0
+   */
+  setVideoOpacity(opacity: number): void {
+    if (!this.videoMaterial || !this.backboxLayers.video) return
+    const clamped = Math.max(0, Math.min(1, opacity))
+    this.videoMaterial.alpha = clamped
+    this.videoMaterial.emissiveColor = new Color3(clamped, clamped, clamped)
+  }
+  
+  /**
+   * Toggle video visibility
+   */
+  setVideoVisible(visible: boolean): void {
+    if (this.backboxLayers.video) {
+      this.backboxLayers.video.isVisible = visible
+      
+      // Also toggle reels visibility if video replaces them
+      if (GameConfig.backbox.videoReplacesReels && this.backboxLayers.mainDisplay) {
+        this.backboxLayers.mainDisplay.isVisible = !visible
+      }
+    }
+  }
+  
   // Method to update story text
   setStoryText(text: string): void {
     this.currentStoryText = text
