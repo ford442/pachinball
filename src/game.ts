@@ -279,8 +279,8 @@ export class Game {
       // Tone mapping for better contrast range
       // Reinhard tone mapping preserves highlight detail with strong key light
       this.bloomPipeline.imageProcessing.toneMappingEnabled = true
-      this.bloomPipeline.imageProcessing.toneMappingType = 
-        DefaultRenderingPipeline.TONEMAPPING_REINHARD
+      // Use standard tone mapping (Reinhard value is 2)
+      this.bloomPipeline.imageProcessing.toneMappingType = 2
       
       // Contrast adjustment for more punch
       this.bloomPipeline.imageProcessing.contrast = 1.1
@@ -406,11 +406,13 @@ export class Game {
 
   private setupEnvironmentLighting(): void {
     // Use MaterialLibrary to load environment texture
+    if (!this.scene) return
     const matLib = getMaterialLibrary(this.scene)
     matLib.loadEnvironmentTexture()
   }
 
   private createEnhancedCabinet(): void {
+    if (!this.scene) return
     const matLib = getMaterialLibrary(this.scene)
     const cabinetY = -2.5
     
@@ -434,6 +436,7 @@ export class Game {
     rightPanel.material = sidePanelMat
 
     // Front bezel/glass edge with accent glow
+    if (!this.scene) return
     const bezelMat = new StandardMaterial("bezelMat", this.scene)
     bezelMat.diffuseColor = Color3.Black()
     bezelMat.emissiveColor = Color3.FromHexString("#ff0055").scale(0.2)
@@ -605,7 +608,7 @@ export class Game {
     })
 
     // Build game objects
-    this.gameObjects.createGround(this.mirrorTexture)
+    this.gameObjects.createGround()
     this.gameObjects.createWalls()
     this.gameObjects.createCabinetDecoration()
 
@@ -616,6 +619,7 @@ export class Game {
     this.effects.createCabinetLighting()
 
     // Register decorative materials for fever/reach effects
+    if (!this.scene) return
     const matLib = getMaterialLibrary(this.scene)
     const plasticMat = matLib.getNeonBumperMaterial('#FF0055')
     this.effects.registerDecorativeMaterial(plasticMat)
@@ -656,9 +660,11 @@ export class Game {
     }
 
     // Ground receives shadows but doesn't cast
-    const ground = this.scene.getMeshByName('ground')
-    if (ground) {
-      ground.receiveShadows = true
+    if (this.scene) {
+      const ground = this.scene.getMeshByName('ground')
+      if (ground) {
+        ground.receiveShadows = true
+      }
     }
   }
 

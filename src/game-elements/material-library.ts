@@ -18,12 +18,12 @@ import {
 } from '@babylonjs/core'
 
 export interface TextureSet {
-  albedo?: string
-  normal?: string
-  roughness?: string
-  metallic?: string
-  emissive?: string
-  ao?: string
+  albedo?: Texture | null
+  normal?: Texture | null
+  roughness?: Texture | null
+  metallic?: Texture | null
+  emissive?: Texture | null
+  ao?: Texture | null
 }
 
 export class MaterialLibrary {
@@ -72,25 +72,30 @@ export class MaterialLibrary {
     const textures = this.loadTextureSet('playfield')
     
     if (textures.albedo) {
-      mat.albedoTexture = textures.albedo
-      mat.albedoTexture.uScale = 4
-      mat.albedoTexture.vScale = 8
+      const tex = textures.albedo
+      tex.uScale = 4
+      tex.vScale = 8
+      mat.albedoTexture = tex
     } else {
       // Procedural grid fallback
-      mat.albedoTexture = this.createGridTexture()
-      mat.albedoTexture.uScale = 4
-      mat.albedoTexture.vScale = 8
+      const tex = this.createGridTexture()
+      tex.uScale = 4
+      tex.vScale = 8
+      mat.albedoTexture = tex
     }
     
-    if (textures.normal) mat.normalTexture = textures.normal
-    if (textures.roughness) mat.roughnessTexture = textures.roughness
-    if (textures.metallic) mat.metallicTexture = textures.metallic
+    // PBRMaterial uses bumpTexture for normal maps
+    if (textures.normal) mat.bumpTexture = textures.normal
+    
+    // Emissive texture for glow
     if (textures.emissive) {
       mat.emissiveTexture = textures.emissive
       mat.emissiveColor = Color3.White()
     } else {
       mat.emissiveColor = Color3.FromHexString('#6600ff').scale(0.4)
     }
+    
+    // AO texture
     if (textures.ao) mat.ambientTexture = textures.ao
 
     // PBR settings for dark polished playfield
@@ -140,12 +145,6 @@ export class MaterialLibrary {
     mat.metallic = 0.9
     mat.roughness = 0.4
     mat.albedoColor = new Color3(0.15, 0.15, 0.18)
-    
-    // Try anisotropic texture if available
-    const roughnessTex = this.tryLoadTexture('brushed_metal_roughness.png')
-    if (roughnessTex) {
-      mat.roughnessTexture = roughnessTex
-    }
     
     this.materialCache.set(cacheKey, mat)
     return mat
@@ -420,10 +419,6 @@ export class MaterialLibrary {
 
     try {
       const tex = new Texture(fullPath, this.scene)
-      tex.onErrorObservable.add(() => {
-        // Texture failed to load - remove from cache
-        this.textureCache.delete(fullPath)
-      })
       this.textureCache.set(fullPath, tex)
       return tex
     } catch {

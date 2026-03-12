@@ -10,7 +10,7 @@ import {
 import type { Mesh, MirrorTexture } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
-import type { PhysicsBinding, CaughtBall } from './types'
+import type { PhysicsBinding } from './types'
 import { getMaterialLibrary } from './material-library'
 
 export class BallManager {
@@ -19,16 +19,18 @@ export class BallManager {
   private rapier: typeof RAPIER
   private ballBody: RAPIER.RigidBody | null = null
   private ballBodies: RAPIER.RigidBody[] = []
-  private caughtBalls: CaughtBall[] = []
+  private caughtBalls: Array<{ body: RAPIER.RigidBody; targetPos: Vector3; timer: number }> = []
+  // Note: CaughtBall type from './types' has the same shape
   private mirrorTexture: MirrorTexture | null = null
   private bindings: PhysicsBinding[] = []
-  private matLib = getMaterialLibrary(this.scene)
+  private matLib: ReturnType<typeof getMaterialLibrary>
 
   constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER, bindings: PhysicsBinding[]) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
     this.bindings = bindings
+    this.matLib = getMaterialLibrary(scene)
   }
 
   setMirrorTexture(texture: MirrorTexture): void {

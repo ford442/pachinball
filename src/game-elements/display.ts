@@ -42,9 +42,7 @@ export class DisplaySystem {
   } = { mainDisplay: null, video: null, image: null, background: null, overlay: null }
   
   // Image layer state
-  private imageTexture: Texture | null = null
   private imageMaterial: StandardMaterial | null = null
-  private hasImageLoaded = false
   
   // Video layer state
   private videoTexture: VideoTexture | null = null
@@ -259,37 +257,39 @@ export class DisplaySystem {
     // Handle load success/failure
     texture.onLoadObservable.add(() => {
       console.log(`DisplaySystem: Loaded attract image from ${imagePath}`)
-      this.hasImageLoaded = true
       
-      // Configure blend mode
-      const blendMode = GameConfig.backbox.imageBlendMode
-      switch (blendMode) {
-        case 'additive':
-          mat.emissiveColor = Color3.White()
-          mat.disableLighting = true
-          break
-        case 'multiply':
-          // Multiply effect through diffuse
-          mat.diffuseColor = new Color3(opacity, opacity, opacity)
-          break
-        case 'normal':
-        default:
-          mat.diffuseTexture = texture
-          mat.emissiveTexture = texture
-          mat.emissiveColor = new Color3(opacity, opacity, opacity)
-          mat.diffuseColor = new Color3(opacity, opacity, opacity)
-          break
+      // Configure blend mode - cast to string for comparison
+      const blendMode = GameConfig.backbox.imageBlendMode as string
+      if (blendMode === 'additive') {
+        mat.emissiveColor = Color3.White()
+        mat.disableLighting = true
+      } else if (blendMode === 'multiply') {
+        // Multiply effect through diffuse
+        mat.diffuseColor = new Color3(opacity, opacity, opacity)
+      } else {
+        // Normal blend mode (default)
+        mat.diffuseTexture = texture
+        mat.emissiveTexture = texture
+        mat.emissiveColor = new Color3(opacity, opacity, opacity)
+        mat.diffuseColor = new Color3(opacity, opacity, opacity)
       }
     })
     
-    texture.onErrorObservable.add(() => {
+    // Handle texture load error
+    const handleTextureError = () => {
       console.warn(`DisplaySystem: Failed to load attract image from ${imagePath}, using fallback`)
       // Dispose failed mesh
       imagePlane.dispose()
       mat.dispose()
-      this.imageTexture = null
       this.imageMaterial = null
-    })
+    }
+    
+    // Use a simple timeout to check if texture loaded
+    setTimeout(() => {
+      if (!texture.isReady()) {
+        handleTextureError()
+      }
+    }, 5000)
     
     mat.alpha = opacity
     mat.backFaceCulling = false
@@ -297,7 +297,6 @@ export class DisplaySystem {
     
     imagePlane.material = mat
     this.backboxLayers.image = imagePlane
-    this.imageTexture = texture
     this.imageMaterial = mat
   }
 
