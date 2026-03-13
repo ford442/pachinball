@@ -1423,3 +1423,168 @@ A "Table within a Table". The player is shrunk down (thematically) to play a min
 *   `flipperRate` = 1.0 (Hz)
 *   `tableColor` = "#111111" (Black Wood)
 *   `neonTrim` = "#FF00FF" (Magenta)
+
+
+## 35. Enhanced Slot Machine System
+
+A comprehensive slot machine mini-game integrated into the backbox display, featuring variable spins, jackpot detection, sound effects, and intermittent activation.
+
+### A. Overview
+
+The slot machine activates intermittently during gameplay, providing an additional layer of excitement and scoring opportunities. It features 3 reels with 6 symbols each, variable spin speeds, and multiple winning combinations.
+
+### B. Activation Modes
+
+The slot machine supports multiple activation strategies:
+
+1. **ALWAYS**: Activates every time the REACH state is triggered
+2. **CHANCE**: 30% random chance on REACH state (default)
+3. **SCORE**: Activates every 10,000 points scored
+4. **HYBRID**: Combination of score threshold + chance (default)
+
+### C. Symbol Set
+
+- **7️⃣ (Seven)**: Jackpot symbol - highest value
+- **💎 (Diamond)**: High value, 5x multiplier
+- **🔔 (Bell)**: Medium value, 3x multiplier  
+- **🍒 (Cherry)**: Low value, 2x multiplier
+- **🍇 (Grape)**: Standard symbol
+- **⭐ (Star)**: Standard symbol
+
+### D. Winning Combinations
+
+| Combination | Symbols Required | Multiplier | Jackpot? |
+|-------------|------------------|------------|----------|
+| Triple Seven | 3x 7️⃣ | 10x | YES |
+| Diamond Rush | 3x 💎 | 5x | No |
+| Lucky Bells | 3x 🔔 | 3x | No |
+| Cherry Pick | 3x 🍒 | 2x | No |
+| Double Seven | 2x 7️⃣ | 2x | No |
+| Near Miss | 2x 7️⃣ + any | - | Triggers near-miss effect |
+
+### E. Variable Spin System
+
+Each spin has randomized parameters:
+
+- **Duration**: 1-3 seconds (randomized per spin)
+- **Reel Speeds**: Base speed ± variance (different per reel)
+- **Stop Delays**: Staggered stopping (0s, 0.2s, 0.4s)
+- **Reel Configuration**:
+  - Reel 1: Base 8, Variance ±2
+  - Reel 2: Base 10, Variance ±3  
+  - Reel 3: Base 6, Variance ±1.5
+
+### F. Audio Integration
+
+Sound effects synchronized with reel events:
+
+- **Spin Start**: Rising sawtooth wave (200Hz → 800Hz)
+- **Reel Stop**: Mechanical click sound (frequency varies by reel)
+- **Small Win**: Ascending C-major arpeggio
+- **Jackpot**: Fanfare with drum roll + victory chord
+- **Near Miss**: Descending "aww" sound
+
+### G. Lighting Integration
+
+Cabinet lights sync with slot state:
+
+- **Spinning**: Rapid rainbow chase effect (5Hz)
+- **Stopping**: White flash + gold settle
+- **Win**: Pulsing gold animation
+- **Jackpot**: Intense strobing rainbow (10Hz burst)
+
+### H. Technical Architecture
+
+**Type Definitions** (`types.ts`):
+```typescript
+enum SlotActivationMode { ALWAYS, CHANCE, SCORE, HYBRID }
+enum SlotSpinState { IDLE, STARTING, SPINNING, STOPPING, STOPPED, JACKPOT }
+interface SlotMachineConfig { activationMode, chancePercent, scoreThreshold, ... }
+interface SlotMachineState { spinState, reelSpeeds, finalSymbols, ... }
+```
+
+**DisplaySystem Integration** (`display.ts`):
+- `shouldActivateSlotMachine(score)` - Check activation conditions
+- `startSlotSpin()` - Initiate a new spin
+- `updateSlotMachine(dt)` - Update spin state each frame
+- `checkWinCombination()` - Validate results after stop
+- `setSlotEventCallback()` - Hook for sound/lighting effects
+
+**EffectsSystem Integration** (`effects.ts`):
+- `playSlotSpinStart()` - Rising pitch effect
+- `playReelStop(index)` - Mechanical click
+- `playSlotWin(multiplier)` - Arpeggio
+- `playSlotJackpot()` - Fanfare
+- `playNearMiss()` - Descending tone
+- `setSlotLightingMode()` - Cabinet light control
+- `updateSlotLighting(dt)` - Per-frame light updates
+
+**Game Integration** (`game.ts`):
+```typescript
+// Setup callback during initialization
+this.display.setSlotEventCallback((event, data) => {
+  switch(event) {
+    case 'spin-start': this.effects.playSlotSpinStart(); break;
+    case 'jackpot': this.triggerJackpot(); break;
+    // ... etc
+  }
+})
+
+// Try activation on target hit
+this.tryActivateSlotMachine()
+```
+
+### I. Event System
+
+The slot machine emits typed events:
+
+- `spin-start` - Spin initiated with duration/speeds
+- `spin-stop` - All reels beginning to stop
+- `reel-stop` - Individual reel stopped with symbol
+- `win` - Winning combination detected
+- `jackpot` - Jackpot combination hit
+- `near-miss` - Two jackpot symbols (almost won)
+- `activation-chance` - Slot activated
+- `activation-denied` - Activation conditions not met
+
+### J. Scoring Integration
+
+Slot wins contribute to overall score:
+- Small wins: `multiplier × 100` points
+- Jackpot: Triggers main jackpot sequence + 100,000 points
+- Near misses: No points, but dramatic effect
+
+### K. Rendering Compatibility
+
+Both WGSL and Canvas rendering paths supported:
+- WGSL: Shader material with `uOffset` and `uSpeed` uniforms
+- Canvas: Dynamic texture with symbol rendering
+- Symbol alignment: Smooth snapping to grid positions
+
+### L. Configuration Example
+
+```typescript
+const slotConfig: SlotMachineConfig = {
+  activationMode: SlotActivationMode.HYBRID,
+  chancePercent: 0.3,        // 30% chance
+  scoreThreshold: 10000,     // Every 10k points
+  minSpinDuration: 1.0,      // 1-3 second spins
+  maxSpinDuration: 3.0,
+  reels: [
+    { baseSpeed: 8, speedVariance: 2, stopDelay: 0 },
+    { baseSpeed: 10, speedVariance: 3, stopDelay: 0.2 },
+    { baseSpeed: 6, speedVariance: 1.5, stopDelay: 0.4 },
+  ],
+  winCombinations: [...],
+  enableSounds: true,
+  enableLightEffects: true,
+}
+```
+
+### M. Future Enhancements
+
+- Per-track slot themes in adventure mode
+- Progressive jackpot accumulation
+- Symbol-specific particle effects
+- Multi-line win detection
+- Bonus mini-games on specific combinations

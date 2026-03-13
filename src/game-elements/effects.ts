@@ -12,6 +12,14 @@ import {
 import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import type { Mesh } from '@babylonjs/core'
 import type { CabinetLight, ShardParticle } from './types'
+import {
+  PALETTE,
+  INTENSITY,
+  STATE_COLORS,
+  color,
+  emissive,
+  pulse,
+} from './visual-language'
 
 export function createSharedParticleTexture(scene: Scene): DynamicTexture {
     const size = 64
@@ -64,38 +72,38 @@ export class EffectsSystem {
   }
 
   createCabinetLighting(): void {
-    // Enhanced LED strips with better positioning and intensity
+    // Unified LED strips using Visual Language palette
     const stripConfigs = [
       { 
         pos: new Vector3(-12.5, 1.5, 5), 
         size: new Vector3(0.2, 2.5, 32),
-        color: "#00aaff",
-        intensity: 0.8
+        color: PALETTE.CYAN,
+        intensity: INTENSITY.NORMAL
       },
       { 
         pos: new Vector3(13.5, 1.5, 5), 
         size: new Vector3(0.2, 2.5, 32),
-        color: "#00aaff",
-        intensity: 0.8
+        color: PALETTE.CYAN,
+        intensity: INTENSITY.NORMAL
       },
       { 
         pos: new Vector3(0.75, 5.5, 5), 
         size: new Vector3(26, 0.2, 32),
-        color: "#ff00aa",
-        intensity: 0.6
+        color: PALETTE.MAGENTA,
+        intensity: INTENSITY.AMBIENT
       },
-      // Additional lower accent strips
+      // Lower accent strips - unified purple
       {
         pos: new Vector3(-12.5, -1, 5),
         size: new Vector3(0.3, 0.1, 32),
-        color: "#8800ff",
-        intensity: 0.4
+        color: PALETTE.PURPLE,
+        intensity: INTENSITY.AMBIENT
       },
       {
         pos: new Vector3(13.5, -1, 5),
         size: new Vector3(0.3, 0.1, 32),
-        color: "#8800ff",
-        intensity: 0.4
+        color: PALETTE.PURPLE,
+        intensity: INTENSITY.AMBIENT
       }
     ]
     
@@ -108,28 +116,28 @@ export class EffectsSystem {
       strip.position.copyFrom(config.pos)
       
       const mat = new StandardMaterial(`ledStripMat${idx}`, this.scene)
-      mat.emissiveColor = Color3.FromHexString(config.color)
+      mat.emissiveColor = emissive(config.color, config.intensity)
       mat.alpha = Math.min(0.8, config.intensity)
       strip.material = mat
       
       const light = new PointLight(`stripLight${idx}`, config.pos, this.scene)
-      light.diffuse = Color3.FromHexString(config.color)
+      light.diffuse = color(config.color)
       light.intensity = config.intensity
       light.range = 12
-      // Reduce shadow casting for performance
       light.shadowEnabled = false
       
       this.cabinetLights.push({ mesh: strip, material: mat, pointLight: light })
     })
   }
 
-  spawnShardBurst(pos: Vector3): void {
+  spawnShardBurst(pos: Vector3, colorHex?: string): void {
+    const burstColor = colorHex || PALETTE.CYAN
     for (let i = 0; i < 8; i++) {
       const m = MeshBuilder.CreateBox("s", { size: 0.15 }, this.scene) as Mesh
       m.position.copyFrom(pos)
       
       const mat = new StandardMaterial("sm", this.scene)
-      mat.emissiveColor = Color3.Teal()
+      mat.emissiveColor = emissive(burstColor, INTENSITY.FLASH)
       m.material = mat
       
       const vel = new Vector3(Math.random() - 0.5, Math.random() + 1, Math.random() - 0.5).scale(5)
@@ -217,54 +225,53 @@ export class EffectsSystem {
     
     this.cabinetLights.forEach((light, idx) => {
       let targetColor: Color3
-      let intensity = 0.5
+      let intensity = INTENSITY.NORMAL
       
-      // Override logic for Jackpot
+      // Unified state-based lighting using Visual Language
       if (this.isJackpotActive) {
-          if (this.jackpotPhase === 1) {
-              // Rapid Red Pulsing (4Hz)
-              const pulse = Math.sin(time * 25.0) * 0.5 + 0.5
-              targetColor = new Color3(1.0, 0.0, 0.0).scale(pulse)
-              intensity = 2.0
-          } else if (this.jackpotPhase === 2) {
-              // Strobing White/Gold (10Hz)
-              const strobe = Math.sin(time * 60.0) > 0 ? 1.0 : 0.0
-              targetColor = new Color3(1.0, 0.8, 0.0).scale(strobe)
-              intensity = 3.0
-          } else {
-              // Rainbow Wave
-              const hue = (time * 0.5 + idx * 0.1) % 1
-              targetColor = Color3.FromHSV(hue * 360, 1.0, 1.0)
-              intensity = 2.0
-          }
+        if (this.jackpotPhase === 1) {
+          // Breach: Pulsing alert red
+          const p = pulse(time, 4, 0.2, 1.0)
+          targetColor = emissive(STATE_COLORS.REACH, p * INTENSITY.FLASH)
+          intensity = INTENSITY.FLASH
+        } else if (this.jackpotPhase === 2) {
+          // Critical: Strobing gold
+          const strobe = Math.sin(time * 60) > 0 ? 1.0 : 0.0
+          targetColor = emissive(PALETTE.GOLD, strobe * INTENSITY.BURST)
+          intensity = INTENSITY.BURST
+        } else {
+          // Meltdown: Rainbow wave
+          const hue = (time * 0.5 + idx * 0.1) % 1
+          targetColor = Color3.FromHSV(hue * 360, 1.0, 1.0).scale(INTENSITY.HIGH)
+          intensity = INTENSITY.HIGH
+        }
       } else {
-          switch (this.lightingMode) {
-            case 'hit':
-              targetColor = Color3.White()
-              intensity = 2.0
-              break
-            case 'reach':
-              // Pulsing Red
-              targetColor = new Color3(1.0, 0.0, 0.2)
-              intensity = 1.0 + Math.sin(time * 15) * 0.8
-              break
-            case 'fever': {
-              const hue = (time * 2 + idx * 0.3) % 1
-              targetColor = Color3.FromHSV(hue * 360, 0.8, 1.0)
-              intensity = 1.5 + Math.sin(time * 10) * 0.5
-              break
-            }
-            case 'normal':
-            default: {
-              // Slower, more subtle breathing
-              const breath = 0.6 + Math.sin(time * 0.7 + idx * 0.8) * 0.2
-              // Vary color slightly between cyan and blue
-              const hue = 0.5 + Math.sin(time * 0.3 + idx) * 0.05
-              targetColor = Color3.FromHSV(hue * 360, 0.8, 1.0).scale(breath)
-              intensity = 0.4 + breath * 0.3
-              break
-            }
+        switch (this.lightingMode) {
+          case 'hit':
+            targetColor = emissive(PALETTE.WHITE, INTENSITY.FLASH)
+            intensity = INTENSITY.FLASH
+            break
+          case 'reach':
+            // Pulsing alert
+            targetColor = emissive(STATE_COLORS.REACH, pulse(time, 2, 0.3, INTENSITY.HIGH))
+            intensity = INTENSITY.HIGH
+            break
+          case 'fever': {
+            // Rainbow pulse
+            const hue = (time * 2 + idx * 0.3) % 1
+            targetColor = Color3.FromHSV(hue * 360, 0.8, 1.0)
+            intensity = INTENSITY.HIGH + Math.sin(time * 10) * 0.5
+            break
           }
+          case 'normal':
+          default: {
+            // Breathing cyan - unified idle state
+            const breath = pulse(time, 0.7, INTENSITY.AMBIENT, INTENSITY.NORMAL)
+            targetColor = emissive(PALETTE.CYAN, breath)
+            intensity = breath
+            break
+          }
+        }
       }
       
       light.material.emissiveColor = Color3.Lerp(light.material.emissiveColor, targetColor, dt * 10)
@@ -272,30 +279,26 @@ export class EffectsSystem {
       light.pointLight.intensity = intensity
     })
 
-    // Update Plastics
+    // Update decorative materials (plastics) with unified colors
     this.decorativeLights.forEach(mat => {
       if (this.isJackpotActive) {
-          if (this.jackpotPhase === 3) {
-             const r = Math.sin(time * 10) * 0.5 + 0.5
-             const g = Math.sin(time * 10 + 2) * 0.5 + 0.5
-             const b = Math.sin(time * 10 + 4) * 0.5 + 0.5
-             mat.emissiveColor.set(r, g, b)
-          } else {
-             mat.emissiveColor.set(1.0, 0.0, 0.0) // Red alert
-          }
+        if (this.jackpotPhase === 3) {
+          // Rainbow meltdown
+          const hue = (time * 2) % 1
+          mat.emissiveColor = Color3.FromHSV(hue * 360, 1.0, INTENSITY.HIGH)
+        } else {
+          // Red alert
+          mat.emissiveColor = emissive(STATE_COLORS.REACH, INTENSITY.HIGH)
+        }
       } else if (this.lightingMode === 'fever') {
-        // Rainbow pulse
-        const r = Math.sin(time * 5) * 0.5 + 0.5
-        const g = Math.sin(time * 5 + 2) * 0.5 + 0.5
-        const b = Math.sin(time * 5 + 4) * 0.5 + 0.5
-        mat.emissiveColor.set(r, g, b)
+        // Gold fever
+        mat.emissiveColor = emissive(PALETTE.GOLD, pulse(time, 2, INTENSITY.NORMAL, INTENSITY.HIGH))
       } else if (this.lightingMode === 'reach') {
-        // Red Alert pulse
-        const val = (Math.sin(time * 10) * 0.5 + 0.5)
-        mat.emissiveColor.set(val, 0, 0)
+        // Alert pulse
+        mat.emissiveColor = emissive(STATE_COLORS.REACH, pulse(time, 5, 0.3, INTENSITY.HIGH))
       } else {
-        // Idle Blue/Pink glow
-        mat.emissiveColor.set(0.2, 0.0, 0.1)
+        // Idle magenta tint
+        mat.emissiveColor = emissive(PALETTE.MAGENTA, INTENSITY.AMBIENT)
       }
     })
   }
@@ -318,6 +321,225 @@ export class EffectsSystem {
     
     g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.1)
     o.stop(this.audioCtx.currentTime + 0.1)
+  }
+
+  // ============================================================================
+  // SLOT MACHINE SOUND EFFECTS
+  // ============================================================================
+
+  /**
+   * Play slot machine spin start sound
+   */
+  playSlotSpinStart(): void {
+    if (!this.audioCtx) return
+    
+    // Rising pitch effect
+    const o = this.audioCtx.createOscillator()
+    const g = this.audioCtx.createGain()
+    
+    o.type = 'sawtooth'
+    o.frequency.setValueAtTime(200, this.audioCtx.currentTime)
+    o.frequency.exponentialRampToValueAtTime(800, this.audioCtx.currentTime + 0.3)
+    
+    g.gain.setValueAtTime(0.3, this.audioCtx.currentTime)
+    g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.5)
+    
+    o.connect(g)
+    g.connect(this.audioCtx.destination)
+    o.start()
+    o.stop(this.audioCtx.currentTime + 0.5)
+  }
+
+  /**
+   * Play reel stop sound (mechanical click)
+   */
+  playReelStop(reelIndex: number): void {
+    if (!this.audioCtx) return
+    
+    const baseFreq = 400 + (reelIndex * 100)
+    const o = this.audioCtx.createOscillator()
+    const g = this.audioCtx.createGain()
+    
+    o.type = 'square'
+    o.frequency.setValueAtTime(baseFreq, this.audioCtx.currentTime)
+    o.frequency.exponentialRampToValueAtTime(baseFreq * 0.5, this.audioCtx.currentTime + 0.05)
+    
+    g.gain.setValueAtTime(0.2, this.audioCtx.currentTime)
+    g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.1)
+    
+    o.connect(g)
+    g.connect(this.audioCtx.destination)
+    o.start()
+    o.stop(this.audioCtx.currentTime + 0.1)
+  }
+
+  /**
+   * Play slot win sound (small win)
+   */
+  playSlotWin(multiplier: number): void {
+    if (!this.audioCtx) return
+    
+    // Happy ascending arpeggio
+    const notes = [523.25, 659.25, 783.99, 1046.50] // C major chord
+    const duration = 0.1 * multiplier
+    
+    notes.forEach((freq, i) => {
+      setTimeout(() => {
+        const o = this.audioCtx!.createOscillator()
+        const g = this.audioCtx!.createGain()
+        
+        o.type = 'sine'
+        o.frequency.value = freq
+        
+        g.gain.setValueAtTime(0.3, this.audioCtx!.currentTime)
+        g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx!.currentTime + duration)
+        
+        o.connect(g)
+        g.connect(this.audioCtx!.destination)
+        o.start()
+        o.stop(this.audioCtx!.currentTime + duration)
+      }, i * 100)
+    })
+  }
+
+  /**
+   * Play slot jackpot sound (big win)
+   */
+  playSlotJackpot(): void {
+    if (!this.audioCtx) return
+    
+    // Fanfare effect
+    const now = this.audioCtx.currentTime
+    
+    // Low drum roll
+    for (let i = 0; i < 8; i++) {
+      const o = this.audioCtx.createOscillator()
+      const g = this.audioCtx.createGain()
+      
+      o.type = 'sawtooth'
+      o.frequency.value = 100 + Math.random() * 50
+      
+      g.gain.setValueAtTime(0.2, now + i * 0.1)
+      g.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.1 + 0.08)
+      
+      o.connect(g)
+      g.connect(this.audioCtx.destination)
+      o.start(now + i * 0.1)
+      o.stop(now + i * 0.1 + 0.1)
+    }
+    
+    // Victory chord
+    setTimeout(() => {
+      const chord = [523.25, 659.25, 783.99, 1046.50] // C major
+      chord.forEach((freq, i) => {
+        const o = this.audioCtx!.createOscillator()
+        const g = this.audioCtx!.createGain()
+        
+        o.type = i === 0 ? 'sawtooth' : 'sine'
+        o.frequency.value = freq * 2 // Octave up
+        
+        g.gain.setValueAtTime(i === 0 ? 0.4 : 0.2, this.audioCtx!.currentTime)
+        g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx!.currentTime + 1.5)
+        
+        o.connect(g)
+        g.connect(this.audioCtx!.destination)
+        o.start()
+        o.stop(this.audioCtx!.currentTime + 1.5)
+      })
+    }, 800)
+  }
+
+  /**
+   * Play near miss sound (close to jackpot)
+   */
+  playNearMiss(): void {
+    if (!this.audioCtx) return
+    
+    const o = this.audioCtx.createOscillator()
+    const g = this.audioCtx.createGain()
+    
+    // Descending "aww" sound
+    o.type = 'sine'
+    o.frequency.setValueAtTime(400, this.audioCtx.currentTime)
+    o.frequency.exponentialRampToValueAtTime(200, this.audioCtx.currentTime + 0.3)
+    
+    g.gain.setValueAtTime(0.3, this.audioCtx.currentTime)
+    g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.3)
+    
+    o.connect(g)
+    g.connect(this.audioCtx.destination)
+    o.start()
+    o.stop(this.audioCtx.currentTime + 0.3)
+  }
+
+  // ============================================================================
+  // SLOT MACHINE LIGHTING EFFECTS
+  // ============================================================================
+
+  private slotLightMode: 'idle' | 'spin' | 'stop' | 'win' | 'jackpot' = 'idle'
+  private slotLightTimer = 0
+
+  /**
+   * Set lighting mode for slot machine effects
+   */
+  setSlotLightingMode(mode: 'idle' | 'spin' | 'stop' | 'win' | 'jackpot'): void {
+    this.slotLightMode = mode
+    this.slotLightTimer = 0
+  }
+
+  /**
+   * Update slot machine specific lighting
+   * Call this from the main update loop
+   */
+  updateSlotLighting(dt: number): void {
+    if (this.slotLightMode === 'idle') return
+    
+    this.slotLightTimer += dt
+    const time = performance.now() * 0.001
+    
+    this.cabinetLights.forEach((light, idx) => {
+      let targetColor: Color3
+      let intensity = INTENSITY.NORMAL
+      
+      switch (this.slotLightMode) {
+        case 'spin': {
+          // Rapid rainbow chase
+          const hue = (time * 5 + idx * 0.3) % 1
+          targetColor = Color3.FromHSV(hue * 360, 1.0, 1.0)
+          intensity = INTENSITY.HIGH
+          break
+        }
+          
+        case 'stop': {
+          // Quick flash white
+          const flash = Math.sin(time * 20) > 0
+          targetColor = flash ? Color3.White() : emissive(PALETTE.GOLD, INTENSITY.AMBIENT)
+          intensity = flash ? INTENSITY.FLASH : INTENSITY.NORMAL
+          break
+        }
+          
+        case 'win':
+          // Pulsing gold
+          targetColor = emissive(PALETTE.GOLD, pulse(time, 3, INTENSITY.NORMAL, INTENSITY.HIGH))
+          intensity = INTENSITY.HIGH
+          break
+          
+        case 'jackpot': {
+          // Intense strobing rainbow
+          const jackpotHue = (time * 10 + idx * 0.2) % 1
+          targetColor = Color3.FromHSV(jackpotHue * 360, 1.0, 1.0)
+          intensity = INTENSITY.BURST
+          break
+        }
+          
+        default:
+          targetColor = emissive(PALETTE.CYAN, INTENSITY.NORMAL)
+      }
+      
+      light.material.emissiveColor = Color3.Lerp(light.material.emissiveColor, targetColor, dt * 15)
+      light.pointLight.diffuse = light.material.emissiveColor
+      light.pointLight.intensity = intensity
+    })
   }
 
   getAudioContext(): AudioContext | null {

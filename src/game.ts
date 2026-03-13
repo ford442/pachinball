@@ -47,6 +47,12 @@ import {
   QuantumTunnelState,
   getMaterialLibrary,
   resetMaterialLibrary,
+  PALETTE,
+  SURFACES,
+  INTENSITY,
+  LIGHTING,
+  color,
+  emissive,
 } from './game-elements'
 import { GameConfig } from './config'
 import { scanlinePixelShader } from './shaders/scanline'
@@ -114,7 +120,7 @@ export class Game {
     }
 
     this.scene = new Scene(this.engine)
-    this.scene.clearColor = Color3.FromHexString("#050505").toColor4(1)
+    this.scene.clearColor = color(SURFACES.VOID).toColor4(1)
 
     // UI Bindings
     this.scoreElement = document.getElementById('score')
@@ -327,36 +333,35 @@ export class Game {
     // Environment lighting for PBR materials
     this.setupEnvironmentLighting()
     
-    // FILL LIGHT (Hemisphere) - Reduced for more contrast
+    // FILL LIGHT (Hemisphere) - Unified cool ambient
     const hemiLight = new HemisphericLight('hemiLight', new Vector3(0.2, 1, 0.1), this.scene)
-    hemiLight.intensity = 0.25                    // Reduced from 0.4 for more contrast
-    hemiLight.diffuse = new Color3(0.7, 0.8, 0.95) // Cooler fill
-    hemiLight.groundColor = new Color3(0.05, 0.05, 0.08) // Darker ground
+    hemiLight.intensity = LIGHTING.FILL.intensity
+    hemiLight.diffuse = color(LIGHTING.FILL.color)
+    hemiLight.groundColor = color(SURFACES.VOID)
     
     // KEY LIGHT - Main directional with shadows
     const keyLight = new DirectionalLight('keyLight', new Vector3(-0.6, -0.8, 0.2), this.scene)
-    keyLight.intensity = 1.2                      // Stronger key for drama
-    keyLight.diffuse = new Color3(1.0, 0.92, 0.85) // Warm white
+    keyLight.intensity = LIGHTING.KEY.intensity
+    keyLight.diffuse = color(LIGHTING.KEY.color)
     keyLight.position = new Vector3(-15, 25, -15)
     
     // Enable shadows for depth perception
-    // Shadow map size: 2048 for quality, blur for softness
     const shadowGenerator = new ShadowGenerator(2048, keyLight)
     shadowGenerator.useBlurExponentialShadowMap = true
     shadowGenerator.blurKernel = 32
-    shadowGenerator.setDarkness(0.4)              // Not pure black shadows
-    this.shadowGenerator = shadowGenerator        // Store for meshes to register
+    shadowGenerator.setDarkness(0.4)
+    this.shadowGenerator = shadowGenerator
     
     // RIM LIGHT - Strong back light for edge definition
     const rimLight = new DirectionalLight('rimLight', new Vector3(0.2, -0.3, 0.9), this.scene)
-    rimLight.intensity = 0.8                      // Stronger for edge glow
-    rimLight.diffuse = new Color3(0.5, 0.75, 1.0) // Cool blue rim
+    rimLight.intensity = LIGHTING.RIM.intensity
+    rimLight.diffuse = color(LIGHTING.RIM.color)
     rimLight.position = new Vector3(5, 12, -25)
     
     // BOUNCE LIGHT - Subtle fill from playfield reflection
     const bounceLight = new PointLight('bounceLight', new Vector3(0, -2, 5), this.scene)
-    bounceLight.intensity = 0.3
-    bounceLight.diffuse = new Color3(0.6, 0.5, 0.8) // Purple-tinted from playfield
+    bounceLight.intensity = LIGHTING.BOUNCE.intensity
+    bounceLight.diffuse = color(LIGHTING.BOUNCE.color)
     bounceLight.range = 20
 
     // Initialize Game Logic and Physics
@@ -419,35 +424,136 @@ export class Game {
     // Use MaterialLibrary for consistent materials
     const cabinetMat = matLib.getCabinetMaterial()
     const sidePanelMat = matLib.getSidePanelMaterial()
+    const chromeMat = matLib.getChromeMaterial()
+    const accentMat = matLib.getNeonBumperMaterial('#00d9ff')
 
-    // Main cabinet body
-    const cab = MeshBuilder.CreateBox("cabinet", { width: 26, height: 3, depth: 36 }, this.scene)
-    cab.position.set(0.75, cabinetY, 5)
+    // ================================================================
+    // LAYER 1: CABINET BASE (Thicker, more substantial foundation)
+    // ================================================================
+    
+    // Main cabinet body - increased height for more depth perception
+    const cab = MeshBuilder.CreateBox("cabinet", { width: 27, height: 4, depth: 38 }, this.scene)
+    cab.position.set(0.75, cabinetY - 0.5, 5)
     cab.material = cabinetMat
 
-    // Left side panel
-    const leftPanel = MeshBuilder.CreateBox("leftPanel", { width: 1, height: 4, depth: 38 }, this.scene)
-    leftPanel.position.set(-12.5, cabinetY + 0.5, 5)
+    // Cabinet feet - raises the machine off the "floor"
+    const createFoot = (x: number, z: number) => {
+      const foot = MeshBuilder.CreateBox(`foot_${x}_${z}`, { width: 3, height: 1.5, depth: 3 }, this.scene)
+      foot.position.set(x, cabinetY - 3.2, z)
+      foot.material = chromeMat
+      return foot
+    }
+    createFoot(-10, -10)
+    createFoot(11, -10)
+    createFoot(-10, 18)
+    createFoot(11, 18)
+
+    // ================================================================
+    // LAYER 2: SIDEWALLS (Multi-layer for depth)
+    // ================================================================
+    
+    // Outer side panels - main thickness
+    const leftPanel = MeshBuilder.CreateBox("leftPanel", { width: 1.5, height: 5, depth: 40 }, this.scene)
+    leftPanel.position.set(-13, cabinetY + 0.5, 5)
     leftPanel.material = sidePanelMat
 
-    // Right side panel  
-    const rightPanel = MeshBuilder.CreateBox("rightPanel", { width: 1, height: 4, depth: 38 }, this.scene)
-    rightPanel.position.set(13.5, cabinetY + 0.5, 5)
+    const rightPanel = MeshBuilder.CreateBox("rightPanel", { width: 1.5, height: 5, depth: 40 }, this.scene)
+    rightPanel.position.set(14, cabinetY + 0.5, 5)
     rightPanel.material = sidePanelMat
 
-    // Front bezel/glass edge with accent glow
-    if (!this.scene) return
+    // Inner trim strips - chrome accent that catches light
+    const leftTrim = MeshBuilder.CreateBox("leftTrim", { width: 0.3, height: 4.5, depth: 38 }, this.scene)
+    leftTrim.position.set(-12.1, cabinetY + 0.5, 5)
+    leftTrim.material = chromeMat
+
+    const rightTrim = MeshBuilder.CreateBox("rightTrim", { width: 0.3, height: 4.5, depth: 38 }, this.scene)
+    rightTrim.position.set(13.1, cabinetY + 0.5, 5)
+    rightTrim.material = chromeMat
+
+    // LED accent strips along side panel tops
+    const leftLED = MeshBuilder.CreateBox("leftLED", { width: 0.2, height: 0.1, depth: 36 }, this.scene)
+    leftLED.position.set(-13, cabinetY + 3, 5)
+    leftLED.material = accentMat
+
+    const rightLED = MeshBuilder.CreateBox("rightLED", { width: 0.2, height: 0.1, depth: 36 }, this.scene)
+    rightLED.position.set(14, cabinetY + 3, 5)
+    rightLED.material = accentMat
+
+    // ================================================================
+    // LAYER 3: FRONT APRON & BEZEL (Depth separation from playfield)
+    // ================================================================
+    
+    // Front apron - raised area below the glass
+    const apron = MeshBuilder.CreateBox("apron", { width: 24, height: 2, depth: 3 }, this.scene)
+    apron.position.set(0.75, cabinetY + 0.5, -14)
+    apron.material = sidePanelMat
+
+    // Apron top accent strip
+    const apronTrim = MeshBuilder.CreateBox("apronTrim", { width: 23, height: 0.2, depth: 0.3 }, this.scene)
+    apronTrim.position.set(0.75, cabinetY + 1.6, -12.6)
+    apronTrim.material = accentMat
+
+    // Front bezel/glass edge with unified magenta accent
     const bezelMat = new StandardMaterial("bezelMat", this.scene)
     bezelMat.diffuseColor = Color3.Black()
-    bezelMat.emissiveColor = Color3.FromHexString("#ff0055").scale(0.2)
+    bezelMat.emissiveColor = emissive(PALETTE.MAGENTA, INTENSITY.AMBIENT)
     
-    const bezel = MeshBuilder.CreateBox("bezel", { width: 24, height: 0.5, depth: 1 }, this.scene)
-    bezel.position.set(0.75, cabinetY + 1.5, -12.5)
+    const bezel = MeshBuilder.CreateBox("bezel", { width: 26, height: 0.8, depth: 1.2 }, this.scene)
+    bezel.position.set(0.75, cabinetY + 2.2, -12.8)
     bezel.material = bezelMat
+
+    // Glass edge highlight (thin chrome strip)
+    const glassEdge = MeshBuilder.CreateBox("glassEdge", { width: 25, height: 0.05, depth: 0.8 }, this.scene)
+    glassEdge.position.set(0.75, cabinetY + 2.6, -12.8)
+    glassEdge.material = chromeMat
+
+    // ================================================================
+    // LAYER 4: BACKBOX CONNECTION (Where table meets head)
+    // ================================================================
+    
+    // Back wall that supports the backbox - creates visual separation
+    const backWall = MeshBuilder.CreateBox("backWall", { width: 27, height: 6, depth: 2 }, this.scene)
+    backWall.position.set(0.75, cabinetY + 1, 22)
+    backWall.material = cabinetMat
+
+    // Hinge/connection detail - metal brackets
+    const leftHinge = MeshBuilder.CreateBox("leftHinge", { width: 1, height: 3, depth: 1 }, this.scene)
+    leftHinge.position.set(-11, cabinetY + 2, 21.5)
+    leftHinge.material = chromeMat
+
+    const rightHinge = MeshBuilder.CreateBox("rightHinge", { width: 1, height: 3, depth: 1 }, this.scene)
+    rightHinge.position.set(12.5, cabinetY + 2, 21.5)
+    rightHinge.material = chromeMat
+
+    // ================================================================
+    // LAYER 5: PLUNGER LANE SIDING (Right side control area)
+    // ================================================================
+    
+    // Plunger lane outer wall - creates the "control panel" side
+    const plungerWall = MeshBuilder.CreateBox("plungerWall", { width: 2, height: 3, depth: 25 }, this.scene)
+    plungerWall.position.set(12, cabinetY + 0.5, -2)
+    plungerWall.material = sidePanelMat
+
+    // Plunger lane top trim
+    const plungerTrim = MeshBuilder.CreateBox("plungerTrim", { width: 1.5, height: 0.2, depth: 24 }, this.scene)
+    plungerTrim.position.set(12, cabinetY + 2, -2)
+    plungerTrim.material = chromeMat
 
     // Add to mirror render list if available
     if (this.mirrorTexture?.renderList) {
-      this.mirrorTexture.renderList.push(cab, leftPanel, rightPanel, bezel)
+      this.mirrorTexture.renderList.push(
+        cab, leftPanel, rightPanel, leftTrim, rightTrim,
+        apron, bezel, glassEdge, backWall, leftHinge, rightHinge,
+        plungerWall, plungerTrim, leftLED, rightLED, apronTrim
+      )
+    }
+
+    // Add all cabinet meshes to shadow casters for depth
+    if (this.shadowGenerator) {
+      [cab, leftPanel, rightPanel, leftTrim, rightTrim, 
+       apron, bezel, backWall, plungerWall].forEach(mesh => {
+        this.shadowGenerator?.addShadowCaster(mesh)
+      })
     }
   }
 
@@ -472,10 +578,10 @@ export class Game {
     const skybox = MeshBuilder.CreateBox("skybox", { size: 200.0 }, this.scene)
     const skyboxMaterial = new StandardMaterial("skyBox", this.scene)
     skyboxMaterial.backFaceCulling = false
-    skyboxMaterial.diffuseColor = new Color3(0, 0, 0)
-    skyboxMaterial.specularColor = new Color3(0, 0, 0)
-    // Slightly warmer dark tone for better contrast with neon
-    skyboxMaterial.emissiveColor = new Color3(0.015, 0.012, 0.02)
+    skyboxMaterial.diffuseColor = Color3.Black()
+    skyboxMaterial.specularColor = Color3.Black()
+    // Unified ambient glow using palette
+    skyboxMaterial.emissiveColor = emissive(PALETTE.AMBIENT, INTENSITY.AMBIENT)
     skybox.material = skyboxMaterial
 
     // Mirror texture
@@ -486,6 +592,9 @@ export class Game {
     // Initialize systems
     this.effects = new EffectsSystem(this.scene, this.bloomPipeline)
     this.display = new DisplaySystem(this.scene, this.engine)
+    
+    // Setup slot machine event callback
+    this.setupSlotMachineCallbacks()
 
     const particleTexture = this.effects.createParticleTexture()
     this.gameObjects = new GameObjects(this.scene, world, rapier, GameConfig, particleTexture)
@@ -867,6 +976,7 @@ export class Game {
     this.effects?.updateShards(dt)
     this.effects?.updateBloom(dt)
     this.effects?.updateCabinetLighting(dt)
+    this.effects?.updateSlotLighting(dt)
 
     // Pass Jackpot Phase to display
     const jackpotPhase = this.effects?.jackpotPhase || 0
@@ -952,7 +1062,10 @@ export class Game {
         this.ballManager?.spawnExtraBalls(1)
         this.updateHUD()
         this.display?.setDisplayState(DisplayState.REACH)
-        this.effects?.setLightingMode('reach', 3.0) // Changed from 'fever' to 'reach' to match state
+        this.effects?.setLightingMode('reach', 3.0)
+        
+        // Try to activate slot machine (intermittent activation)
+        this.tryActivateSlotMachine()
       }
     }
   }
@@ -1011,6 +1124,86 @@ export class Game {
         this.comboCount = 0
         this.updateHUD()
       }
+    }
+  }
+
+  // ============================================================================
+  // SLOT MACHINE SETUP
+  // ============================================================================
+
+  private setupSlotMachineCallbacks(): void {
+    if (!this.display) return
+
+    // Configure slot machine for hybrid activation (30% chance every 10,000 points)
+    this.display.configureSlotMachine({
+      activationMode: 'hybrid' as import('./game-elements/types').SlotActivationMode,
+      chancePercent: 0.3,
+      scoreThreshold: 10000,
+      enableSounds: true,
+      enableLightEffects: true,
+    })
+
+    // Setup event callback
+    this.display.setSlotEventCallback((event, data) => {
+      switch (event) {
+        case 'spin-start':
+          this.effects?.playSlotSpinStart()
+          this.effects?.setSlotLightingMode('spin')
+          console.log('[Slot] Spin started:', data)
+          break
+          
+        case 'reel-stop': {
+          const reelData = data as { reel: number; symbol: string }
+          this.effects?.playReelStop(reelData.reel)
+          if (reelData.reel === 2) { // Last reel
+            this.effects?.setSlotLightingMode('stop')
+          }
+          break
+        }
+          
+        case 'win': {
+          const winData = data as { combination: { name: string; multiplier: number }; score: number }
+          this.effects?.playSlotWin(winData.combination.multiplier)
+          this.effects?.setSlotLightingMode('win')
+          this.score += winData.score
+          this.updateHUD()
+          console.log(`[Slot] Win: ${winData.combination.name} - ${winData.score} points`)
+          break
+        }
+          
+        case 'jackpot': {
+          const jackpotData = data as { combination: { name: string }; score: number }
+          this.effects?.playSlotJackpot()
+          this.effects?.setSlotLightingMode('jackpot')
+          this.triggerJackpot()
+          console.log(`[Slot] JACKPOT! ${jackpotData.score} points`)
+          break
+        }
+          
+        case 'near-miss':
+          this.effects?.playNearMiss()
+          console.log('[Slot] Near miss!')
+          break
+          
+        case 'activation-chance':
+          console.log('[Slot] Activated:', data)
+          break
+          
+        case 'activation-denied':
+          console.log('[Slot] Activation denied:', data)
+          break
+      }
+    })
+  }
+
+  /**
+   * Try to activate slot machine on target hit
+   */
+  private tryActivateSlotMachine(): void {
+    if (!this.display) return
+    
+    if (this.display.shouldActivateSlotMachine(this.score)) {
+      this.display.startSlotSpin()
     }
   }
 

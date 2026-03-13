@@ -94,6 +94,60 @@ export class GameObjects {
     btnMat.emissiveColor = Color3.FromHexString("#ff0044").scale(0.8)
     btn.material = btnMat
 
+    // ================================================================
+    // PLUNGER/SHOOTER ROD ASSEMBLY
+    // ================================================================
+    
+    // Shooter housing (the metal tube)
+    const shooterHousing = MeshBuilder.CreateCylinder("shooterHousing", { 
+      diameter: 1.2, 
+      height: 6,
+      tessellation: 16 
+    }, this.scene)
+    shooterHousing.rotation.x = Math.PI / 2
+    shooterHousing.position.set(10.5, -0.2, -10)
+    shooterHousing.material = chromeMat
+
+    // Shooter rod (the plunger)
+    const shooterRod = MeshBuilder.CreateCylinder("shooterRod", { 
+      diameter: 0.4, 
+      height: 5,
+      tessellation: 12 
+    }, this.scene)
+    shooterRod.rotation.x = Math.PI / 2
+    shooterRod.position.set(10.5, -0.2, -10)
+    const rodMat = new StandardMaterial("rodMat", this.scene)
+    rodMat.diffuseColor = new Color3(0.7, 0.7, 0.8)
+    rodMat.specularColor = new Color3(1, 1, 1)
+    shooterRod.material = rodMat
+
+    // Plunger handle (knob at the end)
+    const plungerKnob = MeshBuilder.CreateCylinder("plungerKnob", { 
+      diameter: 1.5, 
+      height: 0.8,
+      tessellation: 16 
+    }, this.scene)
+    plungerKnob.rotation.x = Math.PI / 2
+    plungerKnob.position.set(10.5, -0.2, -13)
+    plungerKnob.material = blackPlasticMat
+
+    // Shooter spring (coiled detail)
+    const spring = MeshBuilder.CreateTorus("shooterSpring", { 
+      diameter: 0.8, 
+      thickness: 0.15,
+      tessellation: 16 
+    }, this.scene)
+    spring.position.set(10.5, -0.2, -11.5)
+    spring.rotation.x = Math.PI / 2
+    const springMat = new StandardMaterial("springMat", this.scene)
+    springMat.diffuseColor = new Color3(0.5, 0.5, 0.6)
+    spring.material = springMat
+
+    // Plunger lane guide rail (the wall the ball rides against)
+    const laneGuide = MeshBuilder.CreateBox("laneGuide", { width: 0.3, height: 1.5, depth: 12 }, this.scene)
+    laneGuide.position.set(8.2, -0.3, -8)
+    laneGuide.material = chromeMat
+
     // Decorative wing rails with better geometry
     const path = [
       new Vector3(0, 0, 0),
@@ -138,24 +192,73 @@ export class GameObjects {
   }
 
   private createSideRails(metalMat: PBRMaterial, accentMat: PBRMaterial): void {
-    // Left side rail
-    const leftRail = MeshBuilder.CreateBox("leftRail", { width: 0.5, height: 1, depth: 30 }, this.scene)
-    leftRail.position.set(-12, -0.5, 5)
+    // ================================================================
+    // RAISED PLAYFIELD RAILS - Multi-layer profile for depth
+    // ================================================================
+    
+    // Main rail bodies - taller for better silhouette
+    const leftRail = MeshBuilder.CreateBox("leftRail", { width: 1.2, height: 1.5, depth: 32 }, this.scene)
+    leftRail.position.set(-12.3, -0.2, 5)
     leftRail.material = metalMat
+    this.pinballMeshes.push(leftRail)
 
-    // Right side rail  
-    const rightRail = MeshBuilder.CreateBox("rightRail", { width: 0.5, height: 1, depth: 30 }, this.scene)
-    rightRail.position.set(13, -0.5, 5)
+    const rightRail = MeshBuilder.CreateBox("rightRail", { width: 1.2, height: 1.5, depth: 32 }, this.scene)
+    rightRail.position.set(13.3, -0.2, 5)
     rightRail.material = metalMat
+    this.pinballMeshes.push(rightRail)
 
-    // Accent strips on rails
-    const leftAccent = MeshBuilder.CreateBox("leftAccent", { width: 0.6, height: 0.1, depth: 28 }, this.scene)
-    leftAccent.position.set(-12, 0.1, 5)
-    leftAccent.material = accentMat
+    // Top rail surface - where ball contacts
+    const leftRailTop = MeshBuilder.CreateBox("leftRailTop", { width: 0.8, height: 0.2, depth: 31 }, this.scene)
+    leftRailTop.position.set(-12.1, 0.55, 5)
+    leftRailTop.material = metalMat
+    this.pinballMeshes.push(leftRailTop)
 
-    const rightAccent = MeshBuilder.CreateBox("rightAccent", { width: 0.6, height: 0.1, depth: 28 }, this.scene)
-    rightAccent.position.set(13, 0.1, 5)
-    rightAccent.material = accentMat
+    const rightRailTop = MeshBuilder.CreateBox("rightRailTop", { width: 0.8, height: 0.2, depth: 31 }, this.scene)
+    rightRailTop.position.set(13.1, 0.55, 5)
+    rightRailTop.material = metalMat
+    this.pinballMeshes.push(rightRailTop)
+
+    // LED accent strips on inner rail face
+    const leftLED = MeshBuilder.CreateBox("leftRailLED", { width: 0.1, height: 0.15, depth: 30 }, this.scene)
+    leftLED.position.set(-11.7, 0.3, 5)
+    leftLED.material = accentMat
+
+    const rightLED = MeshBuilder.CreateBox("rightRailLED", { width: 0.1, height: 0.15, depth: 30 }, this.scene)
+    rightLED.position.set(12.7, 0.3, 5)
+    rightLED.material = accentMat
+
+    // ================================================================
+    // PLUNGER LANE RAILS - Raised walls for the shooter lane
+    // ================================================================
+    
+    // Inner plunger lane wall
+    const plungerInner = MeshBuilder.CreateBox("plungerInner", { width: 0.4, height: 2, depth: 20 }, this.scene)
+    plungerInner.position.set(8.5, 0, -5)
+    plungerInner.material = metalMat
+    this.pinballMeshes.push(plungerInner)
+
+    // Plunger lane LED strip
+    const plungerLED = MeshBuilder.CreateBox("plungerLED", { width: 0.1, height: 0.1, depth: 18 }, this.scene)
+    plungerLED.position.set(8.3, 0.8, -5)
+    plungerLED.material = accentMat
+
+    // ================================================================
+    // FLIPPER AREA RAILS - Curved guides near flippers
+    // ================================================================
+    
+    // Left flipper rail (angled)
+    const leftFlipperRail = MeshBuilder.CreateBox("leftFlipperRail", { width: 0.6, height: 1.2, depth: 8 }, this.scene)
+    leftFlipperRail.position.set(-7, -0.3, -8)
+    leftFlipperRail.rotation.y = -0.3
+    leftFlipperRail.material = metalMat
+    this.pinballMeshes.push(leftFlipperRail)
+
+    // Right flipper rail (angled)
+    const rightFlipperRail = MeshBuilder.CreateBox("rightFlipperRail", { width: 0.6, height: 1.2, depth: 8 }, this.scene)
+    rightFlipperRail.position.set(8.5, -0.3, -8)
+    rightFlipperRail.rotation.y = 0.3
+    rightFlipperRail.material = metalMat
+    this.pinballMeshes.push(rightFlipperRail)
   }
 
   createGround(): void {

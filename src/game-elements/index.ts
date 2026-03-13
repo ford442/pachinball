@@ -1,4 +1,6 @@
 export * from './types'
+export * from './display-config'
+export * from './visual-language'
 export { PhysicsSystem } from './physics'
 export { InputHandler } from './input'
 export { DisplaySystem } from './display'

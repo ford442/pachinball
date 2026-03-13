@@ -1,10 +1,8 @@
 /**
- * Material Library - Centralized PBR Material System
+ * Material Library - Unified PBR Material System
  * 
- * Provides categorized materials for the pinball table with:
- * - Clear material categories (Playfield, Metal, Glass, Plastic, Neon)
- * - Texture asset support with procedural fallbacks
- * - Consistent cyber/neon aesthetic
+ * Provides categorized materials using the Visual Language System
+ * for consistent cyber/neon aesthetic across all game objects.
  */
 
 import {
@@ -12,10 +10,22 @@ import {
   StandardMaterial,
   PBRMaterial,
   Texture,
-  Color3,
   DynamicTexture,
   CubeTexture,
+  Color3,
 } from '@babylonjs/core'
+import {
+  PALETTE,
+  SURFACES,
+  INTENSITY,
+  ROUGHNESS,
+  METALLIC,
+  CLEARCOAT,
+  CATEGORIES,
+  color,
+  emissive,
+  stateEmissive,
+} from './visual-language'
 
 export interface TextureSet {
   albedo?: Texture | null
@@ -31,373 +41,323 @@ export class MaterialLibrary {
   private textureCache: Map<string, Texture> = new Map()
   private materialCache: Map<string, StandardMaterial | PBRMaterial> = new Map()
   
-  // Texture asset paths (checked at runtime, fallbacks used if missing)
   private textureBasePath = '/textures'
   
   constructor(scene: Scene) {
     this.scene = scene
   }
 
-  /**
-   * Load environment texture if available
-   */
   loadEnvironmentTexture(): void {
     try {
       const envPath = `${this.textureBasePath}/environment.env`
       const envTexture = CubeTexture.CreateFromPrefilteredData(envPath, this.scene)
       this.scene.environmentTexture = envTexture
       this.scene.environmentIntensity = 0.6
-      console.log('MaterialLibrary: Environment texture loaded')
     } catch {
-      console.log('MaterialLibrary: No environment.env found, using procedural lighting')
       this.scene.environmentIntensity = 0.4
     }
   }
 
-  /**
-   * ============================================================================
-   * CATEGORY 1: PLAYFIELD SURFACE
-   * Dark polished surface with grid pattern
-   * ============================================================================
-   */
-  getPlayfieldMaterial(): PBRMaterial {
-    const cacheKey = 'playfield'
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as PBRMaterial
-    }
-
-    const mat = new PBRMaterial('playfieldMat', this.scene)
-    
-    // Try to load texture set, fallback to procedural
-    const textures = this.loadTextureSet('playfield')
-    
-    if (textures.albedo) {
-      const tex = textures.albedo
-      tex.uScale = 4
-      tex.vScale = 8
-      mat.albedoTexture = tex
-    } else {
-      // Procedural grid fallback
-      const tex = this.createGridTexture()
-      tex.uScale = 4
-      tex.vScale = 8
-      mat.albedoTexture = tex
-    }
-    
-    // PBRMaterial uses bumpTexture for normal maps
-    if (textures.normal) mat.bumpTexture = textures.normal
-    
-    // Emissive texture for glow
-    if (textures.emissive) {
-      mat.emissiveTexture = textures.emissive
-      mat.emissiveColor = Color3.White()
-    } else {
-      mat.emissiveColor = Color3.FromHexString('#6600ff').scale(0.4)
-    }
-    
-    // AO texture
-    if (textures.ao) mat.ambientTexture = textures.ao
-
-    // PBR settings for dark polished playfield
-    mat.albedoColor = new Color3(0.8, 0.8, 0.9)
-    mat.metallic = 0.3
-    mat.roughness = 0.25
-    mat.alpha = 0.92
-    
-    // Clear coat for "glass over display" look
-    mat.clearCoat.isEnabled = true
-    mat.clearCoat.intensity = 0.4
-    mat.clearCoat.roughness = 0.1
-
-    this.materialCache.set(cacheKey, mat)
-    return mat
-  }
-
-  /**
-   * ============================================================================
-   * CATEGORY 2: METAL TRIM / RAILS
-   * Chrome and brushed metal surfaces
-   * ============================================================================
-   */
-  getChromeMaterial(): PBRMaterial {
-    const cacheKey = 'chrome'
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as PBRMaterial
-    }
-
-    const mat = new PBRMaterial('chromeMat', this.scene)
-    mat.metallic = 1.0
-    mat.roughness = 0.15
-    mat.albedoColor = new Color3(0.9, 0.9, 0.95)
-    mat.environmentIntensity = 1.0
-    
-    this.materialCache.set(cacheKey, mat)
-    return mat
-  }
-
-  getBrushedMetalMaterial(): PBRMaterial {
-    const cacheKey = 'brushedMetal'
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as PBRMaterial
-    }
-
-    const mat = new PBRMaterial('brushedMetalMat', this.scene)
-    mat.metallic = 0.9
-    mat.roughness = 0.4
-    mat.albedoColor = new Color3(0.15, 0.15, 0.18)
-    
-    this.materialCache.set(cacheKey, mat)
-    return mat
-  }
-
-  getPinMaterial(): PBRMaterial {
-    const cacheKey = 'pin'
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as PBRMaterial
-    }
-
-    const mat = new PBRMaterial('pinMat', this.scene)
-    mat.albedoColor = Color3.FromHexString('#aaaaaa')
-    mat.metallic = 1.0
-    mat.roughness = 0.25
-    mat.clearCoat.isEnabled = true
-    mat.clearCoat.intensity = 0.3
-    
-    this.materialCache.set(cacheKey, mat)
-    return mat
-  }
-
-  /**
-   * ============================================================================
-   * CATEGORY 3: SMOKED GLASS / TRANSPARENT BARRIERS
-   * Semi-transparent glass walls and tubes
-   * ============================================================================
-   */
-  getSmokedGlassMaterial(): PBRMaterial {
-    const cacheKey = 'smokedGlass'
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as PBRMaterial
-    }
-
-    const mat = new PBRMaterial('smokedGlassMat', this.scene)
-    mat.albedoColor = Color3.FromHexString('#001122')
-    mat.emissiveColor = Color3.FromHexString('#00eeff').scale(0.3)
-    mat.metallic = 0.1
-    mat.roughness = 0.2
-    mat.alpha = 0.35
-    mat.indexOfRefraction = 1.4
-    mat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND
-    
-    this.materialCache.set(cacheKey, mat)
-    return mat
-  }
-
-  getGlassTubeMaterial(): PBRMaterial {
-    const cacheKey = 'glassTube'
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as PBRMaterial
-    }
-
-    const mat = new PBRMaterial('glassTubeMat', this.scene)
-    mat.alpha = 0.25
-    mat.albedoColor = Color3.White()
-    mat.metallic = 0.0
-    mat.roughness = 0.1
-    mat.indexOfRefraction = 1.5
-    mat.clearCoat.isEnabled = true
-    mat.clearCoat.intensity = 1.0
-    mat.backFaceCulling = false
-    
-    this.materialCache.set(cacheKey, mat)
-    return mat
-  }
-
-  /**
-   * ============================================================================
-   * CATEGORY 4: BLACK PLASTIC CASING
-   * Cabinet, panels, non-reflective dark surfaces
-   * ============================================================================
-   */
-  getBlackPlasticMaterial(): PBRMaterial {
-    const cacheKey = 'blackPlastic'
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as PBRMaterial
-    }
-
-    const mat = new PBRMaterial('blackPlasticMat', this.scene)
-    mat.albedoColor = Color3.FromHexString('#080808')
-    mat.metallic = 0.2
-    mat.roughness = 0.6
-    
-    this.materialCache.set(cacheKey, mat)
-    return mat
-  }
+  // ============================================================================
+  // CATEGORY 1: STRUCTURAL SURFACES
+  // ============================================================================
 
   getCabinetMaterial(): StandardMaterial {
-    const cacheKey = 'cabinet'
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as StandardMaterial
-    }
-
-    // Cabinet uses StandardMaterial - doesn't need PBR complexity
-    const mat = new StandardMaterial('cabinetMat', this.scene)
-    mat.diffuseColor = Color3.FromHexString('#0a0a0a')
-    mat.specularColor = new Color3(0.1, 0.1, 0.1)
-    
-    this.materialCache.set(cacheKey, mat)
-    return mat
+    return this.getCachedStandard('cabinet', () => {
+      const mat = new StandardMaterial('cabinetMat', this.scene)
+      mat.diffuseColor = color(SURFACES.DARK)
+      mat.specularColor = new Color3(0.1, 0.1, 0.1)
+      return mat
+    })
   }
 
   getSidePanelMaterial(): StandardMaterial {
-    const cacheKey = 'sidePanel'
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as StandardMaterial
-    }
-
-    const mat = new StandardMaterial('sidePanelMat', this.scene)
-    mat.diffuseColor = Color3.FromHexString('#050505')
-    mat.emissiveColor = Color3.FromHexString('#001133').scale(0.3)
-    mat.alpha = 0.9
-    
-    this.materialCache.set(cacheKey, mat)
-    return mat
+    return this.getCachedStandard('sidePanel', () => {
+      const mat = new StandardMaterial('sidePanelMat', this.scene)
+      mat.diffuseColor = color(SURFACES.VOID)
+      mat.emissiveColor = emissive(PALETTE.AMBIENT, INTENSITY.AMBIENT)
+      mat.alpha = 0.9
+      return mat
+    })
   }
 
-  /**
-   * ============================================================================
-   * CATEGORY 5: EMISSIVE NEON INSERTS
-   * Glowing elements, bumpers, targets
-   * ============================================================================
-   */
-  getNeonBumperMaterial(baseColor: string): PBRMaterial {
-    const cacheKey = `bumper_${baseColor}`
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as PBRMaterial
-    }
+  getBlackPlasticMaterial(): PBRMaterial {
+    return this.getCachedPBR('blackPlastic', () => {
+      const mat = new PBRMaterial('blackPlasticMat', this.scene)
+      mat.albedoColor = color(SURFACES.DARK)
+      mat.metallic = METALLIC.LOW
+      mat.roughness = ROUGHNESS.MATTE
+      return mat
+    })
+  }
 
-    const mat = new PBRMaterial(`bumperMat_${baseColor}`, this.scene)
-    mat.albedoColor = Color3.FromHexString(baseColor).scale(0.3)
-    mat.emissiveColor = Color3.FromHexString(baseColor)
-    mat.metallic = 0.4
-    mat.roughness = 0.4
-    
-    this.materialCache.set(cacheKey, mat)
-    return mat
+  // ============================================================================
+  // CATEGORY 2: METALLIC SURFACES
+  // ============================================================================
+
+  getChromeMaterial(): PBRMaterial {
+    return this.getCachedPBR('chrome', () => {
+      const mat = new PBRMaterial('chromeMat', this.scene)
+      mat.albedoColor = color(SURFACES.METAL_LIGHT)
+      mat.metallic = METALLIC.FULL
+      mat.roughness = ROUGHNESS.POLISHED
+      mat.environmentIntensity = 1.0
+      return mat
+    })
+  }
+
+  getBrushedMetalMaterial(): PBRMaterial {
+    return this.getCachedPBR('brushedMetal', () => {
+      const mat = new PBRMaterial('brushedMetalMat', this.scene)
+      mat.albedoColor = color(SURFACES.METAL_DARK)
+      mat.metallic = METALLIC.HIGH
+      mat.roughness = ROUGHNESS.SATIN
+      return mat
+    })
+  }
+
+  getPinMaterial(): PBRMaterial {
+    return this.getCachedPBR('pin', () => {
+      const mat = new PBRMaterial('pinMat', this.scene)
+      mat.albedoColor = color(SURFACES.METAL_LIGHT)
+      mat.metallic = METALLIC.FULL
+      mat.roughness = ROUGHNESS.SMOOTH
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 0.3
+      return mat
+    })
+  }
+
+  // ============================================================================
+  // CATEGORY 3: PLAYFIELD
+  // ============================================================================
+
+  getPlayfieldMaterial(): PBRMaterial {
+    return this.getCachedPBR('playfield', () => {
+      const mat = new PBRMaterial('playfieldMat', this.scene)
+      
+      const textures = this.loadTextureSet('playfield')
+      
+      if (textures.albedo) {
+        textures.albedo.uScale = 4
+        textures.albedo.vScale = 8
+        mat.albedoTexture = textures.albedo
+      } else {
+        const tex = this.createGridTexture()
+        tex.uScale = 4
+        tex.vScale = 8
+        mat.albedoTexture = tex
+      }
+      
+      if (textures.normal) mat.bumpTexture = textures.normal
+      if (textures.emissive) {
+        mat.emissiveTexture = textures.emissive
+        mat.emissiveColor = Color3.White()
+      } else {
+        mat.emissiveColor = emissive(PALETTE.PURPLE, INTENSITY.AMBIENT)
+      }
+      if (textures.ao) mat.ambientTexture = textures.ao
+
+      mat.albedoColor = new Color3(0.8, 0.8, 0.9)
+      mat.metallic = METALLIC.MID
+      mat.roughness = ROUGHNESS.SMOOTH
+      mat.alpha = 0.92
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = CLEARCOAT.SCREEN.intensity
+      mat.clearCoat.roughness = CLEARCOAT.SCREEN.roughness
+
+      return mat
+    })
+  }
+
+  // ============================================================================
+  // CATEGORY 4: GLASS/TRANSPARENT
+  // ============================================================================
+
+  getSmokedGlassMaterial(): PBRMaterial {
+    return this.getCachedPBR('smokedGlass', () => {
+      const mat = new PBRMaterial('smokedGlassMat', this.scene)
+      mat.albedoColor = color(SURFACES.GLASS)
+      mat.emissiveColor = emissive(PALETTE.CYAN, INTENSITY.AMBIENT)
+      mat.metallic = METALLIC.LOW
+      mat.roughness = ROUGHNESS.SMOOTH
+      mat.alpha = CATEGORIES.GLASS.alpha!
+      mat.indexOfRefraction = CATEGORIES.GLASS.ior!
+      mat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND
+      return mat
+    })
+  }
+
+  getGlassTubeMaterial(): PBRMaterial {
+    return this.getCachedPBR('glassTube', () => {
+      const mat = new PBRMaterial('glassTubeMat', this.scene)
+      mat.alpha = 0.25
+      mat.albedoColor = Color3.White()
+      mat.metallic = METALLIC.NON_METAL
+      mat.roughness = ROUGHNESS.MIRROR
+      mat.indexOfRefraction = 1.5
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = CLEARCOAT.GLASS.intensity
+      mat.backFaceCulling = false
+      return mat
+    })
+  }
+
+  // ============================================================================
+  // CATEGORY 5: INTERACTIVE/NEON ELEMENTS
+  // ============================================================================
+
+  getNeonBumperMaterial(baseColor?: string): PBRMaterial {
+    const colorHex = baseColor || PALETTE.CYAN
+    const cacheKey = `bumper_${colorHex}`
+    return this.getCachedPBR(cacheKey, () => {
+      const mat = new PBRMaterial(`bumperMat_${colorHex}`, this.scene)
+      mat.albedoColor = color(colorHex).scale(0.3)
+      mat.emissiveColor = emissive(colorHex, INTENSITY.ACTIVE)
+      mat.metallic = METALLIC.MID
+      mat.roughness = ROUGHNESS.SATIN
+      return mat
+    })
   }
 
   getNeonFlipperMaterial(): PBRMaterial {
-    const cacheKey = 'flipper'
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as PBRMaterial
-    }
-
-    const mat = new PBRMaterial('flipperMat', this.scene)
-    mat.albedoColor = Color3.FromHexString('#ffcc00')
-    mat.emissiveColor = Color3.FromHexString('#ff8800').scale(0.3)
-    mat.metallic = 0.6
-    mat.roughness = 0.35
-    mat.clearCoat.isEnabled = true
-    mat.clearCoat.intensity = 0.4
-    
-    this.materialCache.set(cacheKey, mat)
-    return mat
+    return this.getCachedPBR('flipper', () => {
+      const mat = new PBRMaterial('flipperMat', this.scene)
+      mat.albedoColor = color(PALETTE.GOLD)
+      mat.emissiveColor = emissive('#ff8800', INTENSITY.AMBIENT)
+      mat.metallic = METALLIC.MID
+      mat.roughness = ROUGHNESS.SATIN
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = CLEARCOAT.POLISHED.intensity
+      return mat
+    })
   }
 
   getNeonSlingshotMaterial(): PBRMaterial {
-    const cacheKey = 'slingshot'
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as PBRMaterial
-    }
-
-    const mat = new PBRMaterial('slingshotMat', this.scene)
-    mat.albedoColor = Color3.White()
-    mat.emissiveColor = Color3.White()
-    mat.emissiveIntensity = 0.6
-    mat.metallic = 0.3
-    mat.roughness = 0.4
-    mat.alpha = 0.75
-    
-    this.materialCache.set(cacheKey, mat)
-    return mat
-  }
-
-  getHologramMaterial(colorHex: string, wireframe: boolean = true): StandardMaterial {
-    const cacheKey = `hologram_${colorHex}_${wireframe}`
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as StandardMaterial
-    }
-
-    const mat = new StandardMaterial(`hologramMat_${colorHex}`, this.scene)
-    mat.wireframe = wireframe
-    mat.emissiveColor = Color3.FromHexString(colorHex).scale(1.5)
-    mat.alpha = wireframe ? 0.5 : 0.3
-    
-    this.materialCache.set(cacheKey, mat)
-    return mat
+    return this.getCachedPBR('slingshot', () => {
+      const mat = new PBRMaterial('slingshotMat', this.scene)
+      mat.albedoColor = Color3.White()
+      mat.emissiveColor = Color3.White()
+      mat.emissiveIntensity = INTENSITY.NORMAL
+      mat.metallic = METALLIC.MID
+      mat.roughness = ROUGHNESS.SATIN
+      mat.alpha = 0.75
+      return mat
+    })
   }
 
   getCatcherMaterial(): PBRMaterial {
-    const cacheKey = 'catcher'
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as PBRMaterial
-    }
-
-    const mat = new PBRMaterial('catcherMat', this.scene)
-    mat.albedoColor = Color3.FromHexString('#ff00aa').scale(0.2)
-    mat.emissiveColor = Color3.FromHexString('#ff00aa')
-    mat.emissiveIntensity = 0.8
-    mat.metallic = 0.5
-    mat.roughness = 0.3
-    mat.alpha = 0.85
-    
-    this.materialCache.set(cacheKey, mat)
-    return mat
+    return this.getCachedPBR('catcher', () => {
+      const mat = new PBRMaterial('catcherMat', this.scene)
+      mat.albedoColor = color(PALETTE.MAGENTA).scale(0.2)
+      mat.emissiveColor = emissive(PALETTE.MAGENTA, INTENSITY.ACTIVE)
+      mat.metallic = METALLIC.MID
+      mat.roughness = ROUGHNESS.SMOOTH
+      mat.alpha = 0.85
+      return mat
+    })
   }
 
-  /**
-   * ============================================================================
-   * CATEGORY 6: BALL MATERIALS
-   * Chrome ball and special variants
-   * ============================================================================
-   */
-  getChromeBallMaterial(): PBRMaterial {
-    const cacheKey = 'chromeBall'
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as PBRMaterial
-    }
+  // ============================================================================
+  // CATEGORY 6: ENERGY/HOLOGRAM
+  // ============================================================================
 
-    const mat = new PBRMaterial('ballMat', this.scene)
-    mat.albedoColor = new Color3(0.95, 0.95, 0.98)
-    mat.metallic = 1.0
-    mat.roughness = 0.12
-    mat.clearCoat.isEnabled = true
-    mat.clearCoat.intensity = 1.0
-    mat.environmentIntensity = 1.2
-    
-    this.materialCache.set(cacheKey, mat)
-    return mat
+  getHologramMaterial(colorHex?: string, wireframe: boolean = true): StandardMaterial {
+    const baseColor = colorHex || PALETTE.CYAN
+    const cacheKey = `hologram_${baseColor}_${wireframe}`
+    return this.getCachedStandard(cacheKey, () => {
+      const mat = new StandardMaterial(`hologramMat_${baseColor}`, this.scene)
+      mat.wireframe = wireframe
+      mat.emissiveColor = emissive(baseColor, INTENSITY.HIGH)
+      mat.alpha = wireframe ? 0.5 : 0.3
+      return mat
+    })
+  }
+
+  getEnergyMaterial(colorHex?: string): PBRMaterial {
+    const baseColor = colorHex || PALETTE.CYAN
+    const cacheKey = `energy_${baseColor}`
+    return this.getCachedPBR(cacheKey, () => {
+      const mat = new PBRMaterial(`energyMat_${baseColor}`, this.scene)
+      mat.albedoColor = Color3.Black()
+      mat.emissiveColor = emissive(baseColor, INTENSITY.HIGH)
+      mat.metallic = METALLIC.FULL
+      mat.roughness = ROUGHNESS.MIRROR
+      return mat
+    })
+  }
+
+  // ============================================================================
+  // CATEGORY 7: BALL MATERIALS
+  // ============================================================================
+
+  getChromeBallMaterial(): PBRMaterial {
+    return this.getCachedPBR('chromeBall', () => {
+      const mat = new PBRMaterial('ballMat', this.scene)
+      mat.albedoColor = new Color3(0.95, 0.95, 0.98)
+      mat.metallic = METALLIC.FULL
+      mat.roughness = ROUGHNESS.POLISHED
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = CLEARCOAT.GLASS.intensity
+      mat.environmentIntensity = 1.2
+      return mat
+    })
   }
 
   getExtraBallMaterial(): PBRMaterial {
-    const cacheKey = 'extraBall'
-    if (this.materialCache.has(cacheKey)) {
-      return this.materialCache.get(cacheKey) as PBRMaterial
-    }
+    return this.getCachedPBR('extraBall', () => {
+      const mat = new PBRMaterial('xbMat', this.scene)
+      mat.albedoColor = color(PALETTE.MATRIX)
+      mat.metallic = METALLIC.HIGH
+      mat.roughness = ROUGHNESS.POLISHED
+      return mat
+    })
+  }
 
-    const mat = new PBRMaterial('xbMat', this.scene)
-    mat.albedoColor = Color3.FromHexString('#00ff44')
-    mat.metallic = 0.9
-    mat.roughness = 0.15
-    
-    this.materialCache.set(cacheKey, mat)
+  // ============================================================================
+  // CATEGORY 8: STATE-BASED MATERIALS
+  // ============================================================================
+
+  getStateBumperMaterial(state: 'IDLE' | 'REACH' | 'FEVER' | 'JACKPOT'): PBRMaterial {
+    return this.getNeonBumperMaterial(stateEmissive(state).toHexString())
+  }
+
+  getAlertMaterial(): PBRMaterial {
+    return this.getCachedPBR('alert', () => {
+      const mat = new PBRMaterial('alertMat', this.scene)
+      mat.albedoColor = color(PALETTE.ALERT).scale(0.3)
+      mat.emissiveColor = emissive(PALETTE.ALERT, INTENSITY.HIGH)
+      mat.metallic = METALLIC.MID
+      mat.roughness = ROUGHNESS.SATIN
+      return mat
+    })
+  }
+
+  // ============================================================================
+  // UTILITY METHODS
+  // ============================================================================
+
+  private getCachedStandard(
+    key: string,
+    factory: () => StandardMaterial
+  ): StandardMaterial {
+    if (this.materialCache.has(key)) {
+      return this.materialCache.get(key) as StandardMaterial
+    }
+    const mat = factory()
+    this.materialCache.set(key, mat)
     return mat
   }
 
-  /**
-   * ============================================================================
-   * UTILITY METHODS
-   * ============================================================================
-   */
+  private getCachedPBR(key: string, factory: () => PBRMaterial): PBRMaterial {
+    if (this.materialCache.has(key)) {
+      return this.materialCache.get(key) as PBRMaterial
+    }
+    const mat = factory()
+    this.materialCache.set(key, mat)
+    return mat
+  }
+
   private loadTextureSet(name: string): TextureSet {
     return {
       albedo: this.tryLoadTexture(`${name}_albedo.png`),
@@ -411,12 +371,9 @@ export class MaterialLibrary {
 
   private tryLoadTexture(path: string): Texture | null {
     const fullPath = `${this.textureBasePath}/${path}`
-    
-    // Check cache first
     if (this.textureCache.has(fullPath)) {
       return this.textureCache.get(fullPath)!
     }
-
     try {
       const tex = new Texture(fullPath, this.scene)
       this.textureCache.set(fullPath, tex)
@@ -439,17 +396,17 @@ export class MaterialLibrary {
 
     // Dark background with subtle gradient
     const gradient = ctx.createLinearGradient(0, 0, 0, size)
-    gradient.addColorStop(0, '#080818')
+    gradient.addColorStop(0, SURFACES.PLAYFIELD)
     gradient.addColorStop(0.5, '#050510')
-    gradient.addColorStop(1, '#080818')
+    gradient.addColorStop(1, SURFACES.PLAYFIELD)
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, size, size)
 
-    // Main grid lines
+    // Main grid lines - unified purple
     ctx.lineWidth = 2
-    ctx.strokeStyle = '#8800ff'
+    ctx.strokeStyle = PALETTE.PURPLE
     ctx.shadowBlur = 15
-    ctx.shadowColor = '#aa00ff'
+    ctx.shadowColor = PALETTE.PURPLE
 
     const step = size / 8
     for (let i = 0; i <= size; i += step) {
@@ -480,11 +437,11 @@ export class MaterialLibrary {
       ctx.stroke()
     }
 
-    // Border highlight
+    // Border highlight - cyan accent
     ctx.lineWidth = 4
-    ctx.strokeStyle = '#aa00ff'
+    ctx.strokeStyle = PALETTE.CYAN
     ctx.shadowBlur = 20
-    ctx.shadowColor = '#d000ff'
+    ctx.shadowColor = PALETTE.CYAN
     ctx.strokeRect(0, 0, size, size)
 
     dynamicTexture.update()
@@ -492,16 +449,10 @@ export class MaterialLibrary {
     return dynamicTexture
   }
 
-  /**
-   * Get material by name (for dynamic updates)
-   */
   getMaterial(name: string): StandardMaterial | PBRMaterial | null {
     return this.materialCache.get(name) || null
   }
 
-  /**
-   * Clear all materials and textures
-   */
   dispose(): void {
     this.materialCache.forEach(mat => mat.dispose())
     this.materialCache.clear()
