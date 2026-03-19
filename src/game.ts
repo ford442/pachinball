@@ -992,6 +992,7 @@ export class Game {
     this.effects?.updateBloom(dt)
     this.effects?.updateCabinetLighting(dt)
     this.effects?.updateSlotLighting(dt)
+    this.ballManager?.updateTrailEffects(dt)
 
     // Pass Jackpot Phase to display
     const jackpotPhase = this.effects?.jackpotPhase || 0
