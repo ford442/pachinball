@@ -42,6 +42,10 @@ export class GaussCannonFeeder {
   private caughtBall: RAPIER.RigidBody | null = null
   private physicsBody: RAPIER.RigidBody | null = null
 
+  // Follow-through animation: Barrel recoil with spring physics
+  private barrelRecoilOffset: number = 0
+  private barrelRecoilVelocity: number = 0
+
   // Callback to allow Game to play sounds/effects
   public onStateChange: ((state: GaussCannonState) => void) | null = null
 
@@ -204,6 +208,21 @@ export class GaussCannonFeeder {
 
          // Actually, let's just rotate the mesh around the Y axis.
          this.barrelMesh.rotation.y = -rad + Math.PI/2 // Adjust as needed to align with world
+    }
+
+    // Follow-through: Barrel recoil spring physics (visual-only)
+    if (this.barrelMesh && (this.barrelRecoilOffset !== 0 || this.barrelRecoilVelocity !== 0)) {
+      const springStrength = 20.0
+      const damping = 0.7
+      const targetOffset = 0
+
+      const force = (targetOffset - this.barrelRecoilOffset) * springStrength
+      this.barrelRecoilVelocity += force * dt
+      this.barrelRecoilVelocity *= (1 - damping * dt)
+      this.barrelRecoilOffset += this.barrelRecoilVelocity * dt
+
+      // Apply recoil along local Y (barrel axis)
+      this.barrelMesh.position.y = 1.0 - this.barrelRecoilOffset
     }
   }
 
@@ -370,6 +389,9 @@ export class GaussCannonFeeder {
 
     this.caughtBall.applyImpulse({ x: force.x, y: force.y, z: force.z }, true)
     this.caughtBall = null
+
+    // Follow-through: Barrel recoil kickback
+    this.barrelRecoilVelocity = 0.5
 
     // Flash effect
     if (this.light) {

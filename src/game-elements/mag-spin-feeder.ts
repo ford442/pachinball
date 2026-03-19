@@ -38,6 +38,11 @@ export class MagSpinFeeder {
   private caughtBall: RAPIER.RigidBody | null = null
   private physicsBody: RAPIER.RigidBody | null = null
 
+  // Follow-through animation: Ring momentum with angular velocity
+  private ringAngularVelocity: number = 0
+  private readonly RING_SPIN_ACCEL = 40
+  private readonly RING_FRICTION = 2.0
+
   // Callback to allow Game to play sounds/effects
   public onStateChange: ((state: MagSpinState) => void) | null = null
 
@@ -165,13 +170,15 @@ export class MagSpinFeeder {
   update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
     this.timer -= dt
 
-    // Update Visuals
+    // Update Visuals - Follow-through: Ring momentum with angular velocity
+    const targetSpeed = this.state === MagSpinState.SPIN ? 20 : 1
+    this.ringAngularVelocity = Scalar.Lerp(
+      this.ringAngularVelocity,
+      targetSpeed,
+      dt * (this.state === MagSpinState.SPIN ? 2.0 : 0.5)
+    )
     if (this.ringMesh) {
-      if (this.state === MagSpinState.SPIN) {
-        this.ringMesh.rotation.y += dt * 20
-      } else {
-        this.ringMesh.rotation.y += dt * 1
-      }
+      this.ringMesh.rotation.y += dt * this.ringAngularVelocity
     }
 
     // State Machine

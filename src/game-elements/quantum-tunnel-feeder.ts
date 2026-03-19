@@ -4,7 +4,8 @@ import {
   Scene,
   Vector3,
   StandardMaterial,
-  Color3
+  Color3,
+  Scalar
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { GameConfigType } from '../config'
@@ -32,6 +33,11 @@ export class QuantumTunnelFeeder {
   private state: QuantumTunnelState = QuantumTunnelState.IDLE
   private stateTimer: number = 0
   private capturedBall: RAPIER.RigidBody | null = null
+
+  // Follow-through animation: Smooth portal spin acceleration
+  private portalSpinSpeed: number = 0
+  private readonly PORTAL_SPIN_IDLE = 1.0
+  private readonly PORTAL_SPIN_CAPTURE = 8.0
 
   public onStateChange: QuantumTunnelCallback | null = null
 
@@ -99,9 +105,14 @@ export class QuantumTunnelFeeder {
   public update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
     this.stateTimer += dt
 
-    // Portal Animation (Spinning visuals)
-    this.inputMesh.rotation.z += dt * 1.0
-    this.outputMesh.rotation.z -= dt * 1.0
+    // Portal Animation (Spinning visuals) - Follow-through: Smooth spin acceleration
+    const targetSpeed = this.state === QuantumTunnelState.CAPTURE
+      ? this.PORTAL_SPIN_CAPTURE
+      : this.PORTAL_SPIN_IDLE
+    this.portalSpinSpeed = Scalar.Lerp(this.portalSpinSpeed, targetSpeed, dt * 3.0)
+
+    this.inputMesh.rotation.z += dt * this.portalSpinSpeed
+    this.outputMesh.rotation.z -= dt * this.portalSpinSpeed * 0.7
 
     switch (this.state) {
       case QuantumTunnelState.IDLE:
