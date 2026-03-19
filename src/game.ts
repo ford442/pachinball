@@ -147,6 +147,15 @@ export class Game {
     }
     this.updateHUD()
 
+    // Check for reduced motion preference
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) {
+      GameConfig.camera.reducedMotion = true
+      GameConfig.camera.shakeIntensity = 0
+      GameConfig.visuals.enableParticles = false
+      console.log('[Accessibility] Reduced motion mode enabled')
+    }
+
     // -----------------------------------------------------------------
     // 2️⃣ DUAL‑CAMERA SETUP (TOP = Machine Head, BOTTOM = Ball Table)
     // -----------------------------------------------------------------
@@ -1054,7 +1063,7 @@ export class Game {
             }
           } else {
             this.gameObjects?.activateBumperHit(bump)
-            this.cameraShakeIntensity = 0.15 // Subtle shake
+            this.cameraShakeIntensity = GameConfig.camera.shakeIntensity
             this.score += (10 * (Math.floor(this.comboCount / 3) + 1))
             this.comboCount++
             this.comboTimer = 1.5

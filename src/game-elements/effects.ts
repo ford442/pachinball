@@ -253,7 +253,7 @@ export class EffectsSystem {
           intensity = INTENSITY.FLASH
         } else if (this.jackpotPhase === 2) {
           // Critical: Strobing gold
-          const strobe = Math.sin(time * 60) > 0 ? 1.0 : 0.0
+          const strobe = (Math.sin(time * Math.PI * 4) + 1) * 0.5 // 2Hz smooth pulse
           targetColor = emissive(PALETTE.GOLD, strobe * INTENSITY.BURST)
           intensity = INTENSITY.BURST
         } else {

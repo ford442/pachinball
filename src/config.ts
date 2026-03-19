@@ -105,6 +105,19 @@ export const GameConfig = {
     damping: 1000,
   },
 
+  camera: {
+    shakeIntensity: 0.08,
+    reducedMotion: false,
+    maxShakeIntensity: 0.10, // Hard safety limit
+    safeFlashFrequency: 3,   // Hz
+  },
+
+  accessibility: {
+    photosensitiveMode: false, // Disables all flashing
+    highContrast: false,
+    largeText: false
+  },
+
   // Backbox display configuration
   backbox: {
     // PATH PRIORITY: Video > Image > Reels (procedural)
