@@ -54,7 +54,7 @@ import {
   color,
   emissive,
 } from './game-elements'
-import { GameConfig } from './config'
+import { GameConfig, EffectsConfig } from './config'
 import { scanlinePixelShader } from './shaders/scanline'
 
 // Register the shader
@@ -85,6 +85,7 @@ export class Game {
   private tableRenderTarget: RenderTargetTexture | null = null
   private headRenderTarget: RenderTargetTexture | null = null
   private shadowGenerator: ShadowGenerator | null = null
+  private tableCam: ArcRotateCamera | null = null
   
   // Game State
   private ready = false
@@ -168,6 +169,7 @@ export class Game {
       new Vector3(0, 0, 2),       // target: shifted toward flippers (was z=5)
       this.scene
     )
+    this.tableCam = tableCam  // Store reference for effects
     tableCam.mode = ArcRotateCamera.PERSPECTIVE_CAMERA
     tableCam.fov = 0.65           // Narrower FOV (~37°) for dramatic perspective
 
@@ -729,6 +731,11 @@ export class Game {
 
     this.display.createBackbox(new Vector3(0.75, 15, 30))
     this.effects.createCabinetLighting()
+    
+    // Register camera for screen shake effects
+    if (this.tableCam) {
+      this.effects.registerCamera(this.tableCam)
+    }
 
     // Register decorative materials for fever/reach effects
     if (!this.scene) return
@@ -988,11 +995,10 @@ export class Game {
       this.effects?.playBeep(440)
     })
     
-    this.effects?.updateShards(dt)
-    this.effects?.updateBloom(dt)
-    this.effects?.updateCabinetLighting(dt)
-    this.effects?.updateSlotLighting(dt)
-    this.ballManager?.updateTrailEffects(dt)
+    // Enhanced effects update with fever trail support
+    const ballBodies = this.ballManager?.getBallBodies() || []
+    const isFever = this.effects?.currentLightingMode === 'fever'
+    this.effects?.update(dt, ballBodies, isFever)
 
     // Pass Jackpot Phase to display
     const jackpotPhase = this.effects?.jackpotPhase || 0
@@ -1058,8 +1064,8 @@ export class Game {
             this.score += (10 * (Math.floor(this.comboCount / 3) + 1))
             this.comboCount++
             this.comboTimer = 1.5
-            this.effects?.spawnShardBurst(vis.mesh.position)
-            this.effects?.setBloomEnergy(2.0)
+            // Use enhanced bumper impact with screen shake and ripple rings
+            this.effects?.spawnEnhancedBumperImpact(vis.mesh.position, 'medium')
             this.effects?.playBeep(400 + Math.random() * 200)
             this.updateHUD()
             this.effects?.setLightingMode('hit', 0.2)
