@@ -1,4 +1,4 @@
-import type { TransformNode, Mesh, StandardMaterial, PBRMaterial, PointLight } from '@babylonjs/core'
+import type { TransformNode, Mesh, StandardMaterial, PBRMaterial, PointLight, Color3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export interface PhysicsBinding {
@@ -12,6 +12,12 @@ export interface BumperVisual {
   hologram?: Mesh
   hitTime: number
   sweep: number
+  /** Target emissive color for smooth interpolation */
+  targetEmissive?: Color3
+  /** Current interpolated emissive color */
+  currentEmissive?: Color3
+  /** Flash timer for state entry white flash */
+  flashTimer?: number
 }
 
 export enum GameState {

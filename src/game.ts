@@ -48,6 +48,7 @@ import {
   QuantumTunnelState,
   getMaterialLibrary,
   resetMaterialLibrary,
+  detectQualityTier,
   SettingsManager,
   PALETTE,
   SURFACES,
@@ -434,6 +435,10 @@ export class Game {
     // Use MaterialLibrary to load environment texture
     if (!this.scene) return
     const matLib = getMaterialLibrary(this.scene)
+
+    // Detect hardware quality tier and configure material library
+    matLib.qualityTier = detectQualityTier(this.engine)
+
     matLib.loadEnvironmentTexture()
   }
 

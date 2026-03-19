@@ -11,7 +11,6 @@ import {
   Scalar,
   Animation,
   ParticleSystem,
-  PointLight,
 } from '@babylonjs/core'
 import type { Mesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
@@ -19,6 +18,14 @@ import type { GameConfigType } from '../config'
 import type { PhysicsBinding, BumperVisual } from './types'
 import { GameConfig } from '../config'
 import { getMaterialLibrary } from './material-library'
+import {
+  PALETTE,
+  INTENSITY,
+  STATE_PROFILES,
+  color,
+  emissive,
+  stateEmissive,
+} from './visual-language'
 
 export class GameObjects {
   private scene: Scene
@@ -499,7 +506,17 @@ export class GameObjects {
 
       this.bindings.push({ mesh: bumper, rigidBody: body })
       this.bumperBodies.push(body)
-      this.bumperVisuals.push({ mesh: bumper, body: body, hologram: holoInner, hitTime: 0, sweep: Math.random() })
+      const initialEmissive = emissive(colorHex, INTENSITY.ACTIVE)
+      this.bumperVisuals.push({
+        mesh: bumper,
+        body: body,
+        hologram: holoInner,
+        hitTime: 0,
+        sweep: Math.random(),
+        targetEmissive: initialEmissive.clone(),
+        currentEmissive: initialEmissive.clone(),
+        flashTimer: 0,
+      })
       this.pinballMeshes.push(bumper)
       this.pinballMeshes.push(holoInner)
       this.pinballMeshes.push(holoOuter)
@@ -617,6 +634,23 @@ export class GameObjects {
     const time = performance.now() * 0.001
 
     this.bumperVisuals.forEach((vis, index) => {
+      const mat = vis.mesh.material as PBRMaterial
+
+      // ---- Smooth emissive interpolation (lerp toward target) ----
+      if (vis.currentEmissive && vis.targetEmissive) {
+        Color3.LerpToRef(vis.currentEmissive, vis.targetEmissive, dt * 5, vis.currentEmissive)
+
+        // State entry flash - brief white flash on state transition
+        if (vis.flashTimer && vis.flashTimer > 0) {
+          vis.flashTimer -= dt
+          const flashIntensity = vis.flashTimer / 0.1
+          const flashColor = vis.currentEmissive.add(color(PALETTE.WHITE).scale(flashIntensity * INTENSITY.BURST))
+          mat.emissiveColor = flashColor
+        } else {
+          mat.emissiveColor = vis.currentEmissive
+        }
+      }
+
       // Rotate the inner hologram
       if (vis.hologram) {
         vis.hologram.rotation.y += dt * 1.5
@@ -627,6 +661,17 @@ export class GameObjects {
         if (child) {
             child.rotation.y -= dt * 3.0
         }
+
+        // Hologram state sync - sync hologram emissive with bumper target
+        if (vis.targetEmissive && vis.hologram.material) {
+          const holoMat = vis.hologram.material as StandardMaterial
+          Color3.LerpToRef(
+            holoMat.emissiveColor,
+            vis.targetEmissive.scale(1.2),
+            dt * 8,
+            holoMat.emissiveColor
+          )
+        }
       }
 
       if (vis.hitTime > 0) {
@@ -635,10 +680,16 @@ export class GameObjects {
         const bouncePhase = Math.sin((1 - vis.hitTime / 0.2) * Math.PI)
         const s = 1 + bouncePhase * 0.4 // Peak at 1.4x scale
         vis.mesh.scaling.set(s, s, s)
-        
+
         // Add slight squash in Y during peak stretch
         if (vis.hitTime > 0.1) {
           vis.mesh.scaling.y = 1 - bouncePhase * 0.2
+        }
+
+        // Hit energy pulse - brief white flash on impact
+        if (vis.currentEmissive) {
+          const flashIntensity = INTENSITY.BURST * (vis.hitTime / 0.2)
+          mat.emissiveColor = vis.currentEmissive.add(color(PALETTE.WHITE).scale(flashIntensity))
         }
 
         if (vis.hologram) {
@@ -685,6 +736,27 @@ export class GameObjects {
     if (vis) {
       vis.hitTime = 0.2
     }
+  }
+
+  /**
+   * Set bumper state with smooth emissive transition and entry flash.
+   * Also applies state-specific roughness/metallic profiles.
+   */
+  setBumperState(state: 'IDLE' | 'REACH' | 'FEVER' | 'JACKPOT' | 'ADVENTURE'): void {
+    const targetColor = stateEmissive(state, INTENSITY.ACTIVE)
+    const profile = STATE_PROFILES[state]
+
+    this.bumperVisuals.forEach(vis => {
+      vis.targetEmissive = targetColor.clone()
+      vis.flashTimer = 0.1 // Trigger state entry flash
+
+      // Apply state-specific surface properties
+      const mat = vis.mesh.material as PBRMaterial
+      if (profile) {
+        mat.roughness = profile.roughness
+        mat.metallic = profile.metallic
+      }
+    })
   }
 
   deactivateTarget(body: RAPIER.RigidBody): boolean {
