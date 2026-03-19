@@ -153,7 +153,46 @@ export const CLEARCOAT = {
   GLASS: { enabled: true, intensity: 1.0, roughness: 0.1 },
   POLISHED: { enabled: true, intensity: 0.4, roughness: 0.1 },
   SCREEN: { enabled: true, intensity: 0.4, roughness: 0.1 },
+  PIN: { enabled: true, intensity: 0.3, roughness: 0.15 },
+  PLAYFIELD: { enabled: true, intensity: 0.4, roughness: 0.1 },
+  WAXED: { enabled: true, intensity: 0.5, roughness: 0.05 },
 } as const
+
+// ============================================================================
+// QUALITY TIERS - Hardware-adaptive material quality
+// ============================================================================
+
+export enum QualityTier {
+  LOW = 'low',
+  MEDIUM = 'medium',
+  HIGH = 'high',
+}
+
+/** Per-tier environment intensity scaling */
+export const TIER_ENV_INTENSITY: Record<QualityTier, number> = {
+  [QualityTier.LOW]: 0.0,
+  [QualityTier.MEDIUM]: 0.6,
+  [QualityTier.HIGH]: 1.2,
+}
+
+/** Per-tier procedural texture resolution */
+export const TIER_TEXTURE_SIZE: Record<QualityTier, number> = {
+  [QualityTier.LOW]: 256,
+  [QualityTier.MEDIUM]: 512,
+  [QualityTier.HIGH]: 1024,
+}
+
+// ============================================================================
+// STATE MATERIAL PROFILES - Animate surface properties per state
+// ============================================================================
+
+export const STATE_PROFILES: Record<string, { emissive: number; roughness: number; metallic: number }> = {
+  IDLE: { emissive: 0.5, roughness: 0.4, metallic: 0.5 },
+  REACH: { emissive: 1.0, roughness: 0.6, metallic: 0.3 },
+  FEVER: { emissive: 1.5, roughness: 0.1, metallic: 0.9 },
+  JACKPOT: { emissive: 2.0, roughness: 0.05, metallic: 1.0 },
+  ADVENTURE: { emissive: 1.0, roughness: 0.3, metallic: 0.6 },
+}
 
 // ============================================================================
 // CATEGORY DEFINITIONS - Visual hierarchy

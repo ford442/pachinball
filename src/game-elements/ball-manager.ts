@@ -28,6 +28,13 @@ export class BallManager {
   private trails: Map<RAPIER.RigidBody, TrailMesh> = new Map()
   private trailMaterials: Map<TrailMesh, StandardMaterial> = new Map()
 
+  /** Track ball positions for stuck detection */
+  private ballStuckTimers: Map<RAPIER.RigidBody, { lastPos: { x: number; y: number; z: number }; stuckTime: number }> = new Map()
+  /** Threshold: if ball moves less than this per second, it may be stuck */
+  private static readonly STUCK_VELOCITY_THRESHOLD = 0.1
+  /** Time before a stuck ball is auto-reset */
+  private static readonly STUCK_TIMEOUT = 5.0
+
   constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER, bindings: PhysicsBinding[]) {
     this.scene = scene
     this.world = world
@@ -65,8 +72,11 @@ export class BallManager {
       this.rapier.RigidBodyDesc.dynamic()
         .setTranslation(spawn.x, spawn.y, spawn.z)
         .setCcdEnabled(true)
+        .setCanSleep(true)        // Ball sleep: idle balls cost ~0 CPU
+        .setLinearDamping(0.05)   // OP-3: Natural roll decay
+        .setAngularDamping(0.1)   // OP-3: Spin decay
     )
-    
+
     const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
 
     this.world.createCollider(
@@ -75,7 +85,7 @@ export class BallManager {
         .setFriction(GameConfig.ball.friction)
         .setDensity(density)
         .setActiveEvents(
-          this.rapier.ActiveEvents.COLLISION_EVENTS | 
+          this.rapier.ActiveEvents.COLLISION_EVENTS |
           this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS
         ),
       ballBody
@@ -128,8 +138,11 @@ export class BallManager {
         this.rapier.RigidBodyDesc.dynamic()
           .setTranslation(b.position.x, b.position.y, b.position.z)
           .setCcdEnabled(true)
+          .setCanSleep(true)
+          .setLinearDamping(0.05)
+          .setAngularDamping(0.1)
       )
-      
+
       this.world.createCollider(
         this.rapier.ColliderDesc.ball(GameConfig.ball.radius)
           .setRestitution(GameConfig.ball.restitution)
@@ -246,9 +259,11 @@ export class BallManager {
 
       const current = catchData.body.translation()
       const target = catchData.targetPos
-      const nextX = current.x + (target.x - current.x) * 5 * dt
-      const nextY = current.y + (target.y - current.y) * 5 * dt
-      const nextZ = current.z + (target.z - current.z) * 5 * dt
+      // Improved kinematic following: exponential decay for frame-rate independence
+      const lerpFactor = 1 - Math.exp(-5 * dt)
+      const nextX = current.x + (target.x - current.x) * lerpFactor
+      const nextY = current.y + (target.y - current.y) * lerpFactor
+      const nextZ = current.z + (target.z - current.z) * lerpFactor
       catchData.body.setNextKinematicTranslation({ x: nextX, y: nextY, z: nextZ })
 
       if (catchData.timer <= 0) {
@@ -286,12 +301,12 @@ export class BallManager {
     for (const [body, trail] of this.trails) {
       const vel = body.linvel()
       const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z)
-      
+
       // Modulate trail width by speed
       const baseWidth = body === this.ballBody ? GameConfig.ball.radius * 0.6 : GameConfig.ball.radius * 0.4
       const speedFactor = Math.min(speed / 20, 2.0) // Cap at 2x
       trail.width = baseWidth * (0.5 + speedFactor * 0.5)
-      
+
       // Modulate color by speed (cyan -> magenta)
       const mat = this.trailMaterials.get(trail)
       if (mat) {
@@ -303,5 +318,51 @@ export class BallManager {
         )
       }
     }
+  }
+
+  /**
+   * Detect stuck balls and out-of-bounds balls.
+   * Stuck balls are auto-reset after STUCK_TIMEOUT seconds.
+   * Out-of-bounds balls are immediately respawned.
+   */
+  updateStuckDetection(dt: number): RAPIER.RigidBody[] {
+    const stuckBalls: RAPIER.RigidBody[] = []
+
+    for (const body of this.ballBodies) {
+      if (body.isSleeping()) continue
+
+      const pos = body.translation()
+      const vel = body.linvel()
+      const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z)
+
+      // Out-of-bounds detection: immediate reset
+      if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y) || !Number.isFinite(pos.z) ||
+          Math.abs(pos.x) > 50 || Math.abs(pos.y) > 50 || Math.abs(pos.z) > 50) {
+        stuckBalls.push(body)
+        this.ballStuckTimers.delete(body)
+        continue
+      }
+
+      // Stuck detection: low velocity for extended time
+      let tracker = this.ballStuckTimers.get(body)
+      if (!tracker) {
+        tracker = { lastPos: { x: pos.x, y: pos.y, z: pos.z }, stuckTime: 0 }
+        this.ballStuckTimers.set(body, tracker)
+      }
+
+      if (speed < BallManager.STUCK_VELOCITY_THRESHOLD) {
+        tracker.stuckTime += dt
+        if (tracker.stuckTime >= BallManager.STUCK_TIMEOUT) {
+          stuckBalls.push(body)
+          tracker.stuckTime = 0
+        }
+      } else {
+        tracker.stuckTime = 0
+      }
+
+      tracker.lastPos = { x: pos.x, y: pos.y, z: pos.z }
+    }
+
+    return stuckBalls
   }
 }

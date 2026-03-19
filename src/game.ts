@@ -48,6 +48,7 @@ import {
   QuantumTunnelState,
   getMaterialLibrary,
   resetMaterialLibrary,
+  detectQualityTier,
   SettingsManager,
   PALETTE,
   SURFACES,
@@ -434,6 +435,10 @@ export class Game {
     // Use MaterialLibrary to load environment texture
     if (!this.scene) return
     const matLib = getMaterialLibrary(this.scene)
+
+    // Detect hardware quality tier and configure material library
+    matLib.qualityTier = detectQualityTier(this.engine)
+
     matLib.loadEnvironmentTexture()
   }
 
@@ -763,7 +768,10 @@ export class Game {
     this.gameObjects.createPachinkoField(new Vector3(0, 0.5, 12), 14, 8)
     this.gameObjects.createBumpers()
     this.gameObjects.createSlingshots()
-    
+
+    // Build handle caches for O(1) collision lookups
+    this.rebuildHandleCaches()
+
     // Register shadows after all meshes created (including ball)
     this.registerShadowCasters()
   }
@@ -937,25 +945,88 @@ export class Game {
     }
   }
 
+  /** Collision debounce: track last collision time per body pair */
+  private lastCollisionTime: Map<string, number> = new Map()
+  private static readonly COLLISION_DEBOUNCE_MS = 16
+
+  /** Body handle cache for O(1) collision lookups */
+  private bumperHandleSet: Set<number> = new Set()
+  private targetHandleSet: Set<number> = new Set()
+  private ballHandleSet: Set<number> = new Set()
+  private deathZoneHandle: number = -1
+  private adventureSensorHandle: number = -1
+
+  /** Rebuild body handle caches after object creation */
+  private rebuildHandleCaches(): void {
+    this.bumperHandleSet.clear()
+    this.targetHandleSet.clear()
+    this.ballHandleSet.clear()
+
+    for (const b of (this.gameObjects?.getBumperBodies() || [])) {
+      this.bumperHandleSet.add(b.handle)
+    }
+    for (const b of (this.gameObjects?.getTargetBodies() || [])) {
+      this.targetHandleSet.add(b.handle)
+    }
+    for (const b of (this.ballManager?.getBallBodies() || [])) {
+      this.ballHandleSet.add(b.handle)
+    }
+
+    const dz = this.gameObjects?.getDeathZoneBody()
+    this.deathZoneHandle = dz ? dz.handle : -1
+
+    const sensor = this.adventureMode?.getSensor()
+    this.adventureSensorHandle = sensor ? sensor.handle : -1
+  }
+
   private stepPhysics(): void {
     if (this.state !== GameState.PLAYING) return
-    
-    const dt = this.engine.getDeltaTime() / 1000
-    
-    this.physics.step((h1, h2, start) => {
+
+    const rawDt = this.engine.getDeltaTime() / 1000
+
+    // Fixed timestep physics with accumulator
+    this.physics.step(rawDt, (h1, h2, start) => {
       if (!start) return
+
+      // Collision debounce: skip rapid repeat collisions on same pair
+      const pairKey = h1 < h2 ? `${h1}_${h2}` : `${h2}_${h1}`
+      const now = performance.now()
+      const lastTime = this.lastCollisionTime.get(pairKey) || 0
+      if (now - lastTime < Game.COLLISION_DEBOUNCE_MS) return
+      this.lastCollisionTime.set(pairKey, now)
+
+      // Skip static-static collisions
+      const world = this.physics.getWorld()
+      if (world) {
+        const b1 = world.getRigidBody(h1)
+        const b2 = world.getRigidBody(h2)
+        if (b1?.isFixed() && b2?.isFixed()) return
+      }
+
       this.processCollision(h1, h2)
     })
 
-    // Sync physics to visual meshes
+    // Use clamped dt for visual/gameplay updates
+    const dt = Math.min(rawDt, 1 / 30)
+
+    // Selective mesh sync: skip static/sleeping/unmoved bodies
     const bindings = this.gameObjects?.getBindings() || []
     for (const binding of bindings) {
       const body = binding.rigidBody
       const mesh = binding.mesh
       if (!body || !mesh) continue
 
+      // Skip fixed bodies (walls, bumpers, etc.) - they never move
+      if (body.isFixed()) continue
+      // Skip sleeping bodies - they haven't moved
+      if (body.isSleeping()) continue
+
       const pos = body.translation()
       const rot = body.rotation()
+
+      // Defensive: validate physics values before assignment
+      if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y) || !Number.isFinite(pos.z)) continue
+      if (Math.abs(pos.x) > 100 || Math.abs(pos.y) > 100 || Math.abs(pos.z) > 100) continue
 
       mesh.position.set(pos.x, pos.y, pos.z)
 
@@ -1036,6 +1107,21 @@ export class Game {
     this.effects?.updateSlotLighting(dt)
     this.ballManager?.updateTrailEffects(dt)
 
+    // Stuck ball detection: auto-reset balls that are stuck or out-of-bounds
+    const stuckBalls = this.ballManager?.updateStuckDetection(dt) || []
+    for (const stuckBall of stuckBalls) {
+      if (stuckBall === this.ballManager?.getBallBody()) {
+        this.ballManager?.resetBall()
+      } else {
+        this.ballManager?.removeBall(stuckBall)
+      }
+    }
+
+    // Refresh handle caches when ball count changes
+    if (stuckBalls.length > 0) {
+      this.rebuildHandleCaches()
+    }
+
     // Pass Jackpot Phase to display
     const jackpotPhase = this.effects?.jackpotPhase || 0
     this.display?.update(dt, jackpotPhase)
@@ -1056,38 +1142,40 @@ export class Game {
   private processCollision(h1: number, h2: number): void {
     const world = this.physics.getWorld()
     if (!world) return
-    
+
+    // Validate handles
+    if (h1 === 0 || h2 === 0 || h1 === h2) return
+
     const b1 = world.getRigidBody(h1)
     const b2 = world.getRigidBody(h2)
     if (!b1 || !b2) return
 
-    // Adventure mode sensor
-    const adventureSensor = this.adventureMode?.getSensor()
-    if (adventureSensor && (b1 === adventureSensor || b2 === adventureSensor)) {
+    // Adventure mode sensor (O(1) handle check)
+    if (this.adventureSensorHandle >= 0 && (h1 === this.adventureSensorHandle || h2 === this.adventureSensorHandle)) {
       this.endAdventureMode()
       return
     }
 
-    // Death zone
-    const deathZone = this.gameObjects?.getDeathZoneBody()
-    if (deathZone && (b1 === deathZone || b2 === deathZone)) {
-      const ball = b1 === deathZone ? b2 : b1
+    // Death zone (O(1) handle check)
+    if (this.deathZoneHandle >= 0 && (h1 === this.deathZoneHandle || h2 === this.deathZoneHandle)) {
+      const ball = (h1 === this.deathZoneHandle) ? b2 : b1
       this.handleBallLoss(ball)
       return
     }
 
-    // Bumper collision
-    const bumperBodies = this.gameObjects?.getBumperBodies() || []
-    const bump = bumperBodies.find(b => b === b1 || b === b2)
-    if (bump) {
-      const ballBody = (bump === b1) ? b2 : b1
-      const ballBodies = this.ballManager?.getBallBodies() || []
-      
-      if (ballBodies.includes(ballBody)) {
+    // Bumper collision (O(1) Set lookup instead of O(N) array find)
+    const h1IsBumper = this.bumperHandleSet.has(h1)
+    const h2IsBumper = this.bumperHandleSet.has(h2)
+    if (h1IsBumper || h2IsBumper) {
+      const bump = h1IsBumper ? b1 : b2
+      const ballBody = h1IsBumper ? b2 : b1
+      const ballHandle = h1IsBumper ? h2 : h1
+
+      if (this.ballHandleSet.has(ballHandle)) {
         const ballPos = ballBody.translation()
         const bumperVisuals = this.gameObjects?.getBumperVisuals() || []
         const vis = bumperVisuals.find(v => v.body === bump)
-        
+
         if (vis) {
           if (ballPos.y > 1.5) {
             if (this.display?.getDisplayState() === DisplayState.IDLE) {
@@ -1111,10 +1199,11 @@ export class Game {
       }
     }
 
-    // Target collision
-    const targetBodies = this.gameObjects?.getTargetBodies() || []
-    const tgt = targetBodies.find(b => b === b1 || b === b2)
-    if (tgt) {
+    // Target collision (O(1) Set lookup)
+    const h1IsTarget = this.targetHandleSet.has(h1)
+    const h2IsTarget = this.targetHandleSet.has(h2)
+    if (h1IsTarget || h2IsTarget) {
+      const tgt = h1IsTarget ? b1 : b2
       if (this.gameObjects?.deactivateTarget(tgt)) {
         this.score += 100
         this.effects?.playBeep(1200)
@@ -1122,7 +1211,10 @@ export class Game {
         this.updateHUD()
         this.display?.setDisplayState(DisplayState.REACH)
         this.effects?.setLightingMode('reach', 3.0)
-        
+
+        // Rebuild handle caches since new balls were spawned
+        this.rebuildHandleCaches()
+
         // Try to activate slot machine (intermittent activation)
         this.tryActivateSlotMachine()
       }
