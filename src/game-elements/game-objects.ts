@@ -789,7 +789,7 @@ export class GameObjects {
     )
     this.world.createCollider(
       this.rapier.ColliderDesc.cuboid(size.x / 2, size.y, size.z / 2)
-        .setFriction(0.3),
+        .setFriction(0.1),  // OP-4: Unified wall friction (matches ball)
       b
     )
     
