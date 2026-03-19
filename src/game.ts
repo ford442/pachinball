@@ -133,7 +133,7 @@ export class Game {
     if (!GameConfig.camera.reducedMotion) {
       this.scene.fogMode = Scene.FOGMODE_EXP2
       this.scene.fogDensity = 0.02
-      this.scene.fogColor = this.scene.clearColor
+      this.scene.fogColor = color(SURFACES.VOID)
     }
 
     // UI Bindings
@@ -790,8 +790,7 @@ export class Game {
     if (!GameConfig.camera.reducedMotion) {
       // Contact hardening for better depth cues
       this.shadowGenerator.useContactHardeningShadow = true
-      this.shadowGenerator.contactHardeningLightSizeU = 1.5
-      this.shadowGenerator.contactHardeningLightSizeV = 1.5
+      this.shadowGenerator.contactHardeningLightSizeUVRatio = 1.5
     }
 
     // Get all pinball meshes from GameObjects
@@ -1039,7 +1038,7 @@ export class Game {
 
     // Apply camera shake to table camera
     if (this.cameraShakeIntensity > 0 && this.scene) {
-      const tableCam = this.scene.activeCameras?.[0] as ArcRotateCamera
+      const tableCam = this.scene?.activeCameras?.[0] as ArcRotateCamera
       if (tableCam) {
         const shakeX = (Math.random() - 0.5) * this.cameraShakeIntensity
         const shakeY = (Math.random() - 0.5) * this.cameraShakeIntensity * 0.5

@@ -297,17 +297,13 @@ export class BallManager {
     return this.ballBodies.length > 0
   }
 
-  updateTrailEffects(dt: number): void {
+  updateTrailEffects(_dt: number): void {
     for (const [body, trail] of this.trails) {
       const vel = body.linvel()
       const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z)
 
-      // Modulate trail width by speed
-      const baseWidth = body === this.ballBody ? GameConfig.ball.radius * 0.6 : GameConfig.ball.radius * 0.4
-      const speedFactor = Math.min(speed / 20, 2.0) // Cap at 2x
-      trail.width = baseWidth * (0.5 + speedFactor * 0.5)
-
-      // Modulate color by speed (cyan -> magenta)
+      // Modulate trail color by speed (cyan -> magenta)
+      // Note: TrailMesh width is not dynamically adjustable in Babylon.js
       const mat = this.trailMaterials.get(trail)
       if (mat) {
         const t = Math.min(speed / 30, 1.0)

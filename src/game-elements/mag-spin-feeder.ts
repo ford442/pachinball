@@ -40,8 +40,6 @@ export class MagSpinFeeder {
 
   // Follow-through animation: Ring momentum with angular velocity
   private ringAngularVelocity: number = 0
-  private readonly RING_SPIN_ACCEL = 40
-  private readonly RING_FRICTION = 2.0
 
   // Callback to allow Game to play sounds/effects
   public onStateChange: ((state: MagSpinState) => void) | null = null
