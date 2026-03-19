@@ -619,12 +619,21 @@ export class GameObjects {
 
       if (vis.hitTime > 0) {
         vis.hitTime -= dt
-        const s = 1 + (vis.hitTime * 2)
+        // Elastic bounce instead of linear
+        const bouncePhase = Math.sin((1 - vis.hitTime / 0.2) * Math.PI)
+        const s = 1 + bouncePhase * 0.4 // Peak at 1.4x scale
         vis.mesh.scaling.set(s, s, s)
+        
+        // Add slight squash in Y during peak stretch
+        if (vis.hitTime > 0.1) {
+          vis.mesh.scaling.y = 1 - bouncePhase * 0.2
+        }
 
         if (vis.hologram) {
-          vis.hologram.scaling.set(1, 1 + vis.hitTime, 1)
-          vis.hologram.material!.alpha = 0.8
+          // Hologram counter-pulse
+          const holoS = 1 + (0.2 - vis.hitTime) * 2 // Inverse timing
+          vis.hologram.scaling.set(1, 1 + holoS * 0.3, 1)
+          vis.hologram.material!.alpha = 0.8 + bouncePhase * 0.2
         }
 
         if (this.config.visuals.enableParticles && this.bumperParticles[index]) {

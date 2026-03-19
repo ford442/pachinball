@@ -24,6 +24,8 @@ export class BallManager {
   private mirrorTexture: MirrorTexture | null = null
   private bindings: PhysicsBinding[] = []
   private matLib: ReturnType<typeof getMaterialLibrary>
+  private trails: Map<RAPIER.RigidBody, TrailMesh> = new Map()
+  private trailMaterials: Map<TrailMesh, StandardMaterial> = new Map()
 
   constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER, bindings: PhysicsBinding[]) {
     this.scene = scene
@@ -92,6 +94,12 @@ export class BallManager {
     trailMat.emissiveColor = Color3.FromHexString("#00ffff")
     trail.material = trailMat
 
+    // Store for velocity-based updates
+    if (this.ballBody) {
+      this.trails.set(this.ballBody, trail)
+      this.trailMaterials.set(trail, trailMat)
+    }
+
     return ballBody
   }
 
@@ -127,6 +135,15 @@ export class BallManager {
       if (this.mirrorTexture?.renderList) {
         this.mirrorTexture.renderList.push(b)
       }
+
+      // Add velocity-based trail for extra balls
+      const trailWidth = GameConfig.ball.radius * 0.4
+      const trail = new TrailMesh(`trail_${i}`, b, this.scene, trailWidth, 15, true)
+      const trailMat = new StandardMaterial(`trailMat_${i}`, this.scene)
+      trailMat.emissiveColor = Color3.FromHexString("#00ffff")
+      trail.material = trailMat
+      this.trails.set(body, trail)
+      this.trailMaterials.set(trail, trailMat)
     }
   }
 
@@ -253,5 +270,28 @@ export class BallManager {
 
   hasBalls(): boolean {
     return this.ballBodies.length > 0
+  }
+
+  updateTrailEffects(dt: number): void {
+    for (const [body, trail] of this.trails) {
+      const vel = body.linvel()
+      const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z)
+      
+      // Modulate trail width by speed
+      const baseWidth = body === this.ballBody ? GameConfig.ball.radius * 0.6 : GameConfig.ball.radius * 0.4
+      const speedFactor = Math.min(speed / 20, 2.0) // Cap at 2x
+      trail.width = baseWidth * (0.5 + speedFactor * 0.5)
+      
+      // Modulate color by speed (cyan -> magenta)
+      const mat = this.trailMaterials.get(trail)
+      if (mat) {
+        const t = Math.min(speed / 30, 1.0)
+        mat.emissiveColor = Color3.Lerp(
+          Color3.FromHexString("#00ffff"), // Cyan
+          Color3.FromHexString("#ff00ff"), // Magenta
+          t
+        )
+      }
+    }
   }
 }

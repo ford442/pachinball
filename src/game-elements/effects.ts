@@ -46,6 +46,7 @@ export class EffectsSystem {
   private decorativeLights: (StandardMaterial | PBRMaterial)[] = []
   private lightingMode: 'normal' | 'hit' | 'fever' | 'reach' = 'normal'
   private lightingTimer = 0
+  private hitFlashIntensity: number = 0
 
   // Jackpot Variables
   public jackpotTimer = 0
@@ -141,7 +142,13 @@ export class EffectsSystem {
       m.material = mat
       
       const vel = new Vector3(Math.random() - 0.5, Math.random() + 1, Math.random() - 0.5).scale(5)
-      this.shards.push({ mesh: m, vel, life: 1.0, material: mat })
+      // Add rotation velocity
+      const rotVel = new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).scale(10)
+      // Random initial scale
+      const initialScale = 0.8 + Math.random() * 0.4
+      m.scaling.setAll(initialScale)
+      
+      this.shards.push({ mesh: m, vel, rotVel, life: 1.0, maxLife: 1.0, initialScale, material: mat })
     }
   }
 
@@ -156,8 +163,18 @@ export class EffectsSystem {
         continue
       }
       
+      // Update position
       s.mesh.position.addInPlace(s.vel.scale(dt))
       s.vel.y -= 9.8 * dt
+      s.vel.scaleInPlace(0.98) // Air drag
+      
+      // Update rotation
+      s.mesh.rotation.addInPlace(s.rotVel.scale(dt))
+      
+      // Scale and alpha based on life
+      const lifeNorm = s.life / s.maxLife
+      s.material.alpha = lifeNorm * 0.8
+      s.mesh.scaling.setAll(s.initialScale * (0.3 + lifeNorm * 0.7))
     }
   }
 
@@ -247,10 +264,14 @@ export class EffectsSystem {
         }
       } else {
         switch (this.lightingMode) {
-          case 'hit':
-            targetColor = emissive(PALETTE.WHITE, INTENSITY.FLASH)
-            intensity = INTENSITY.FLASH
+          case 'hit': {
+            // Decay flash over time
+            this.hitFlashIntensity = Math.max(0, this.hitFlashIntensity - dt * 5)
+            const flashBoost = 1 + this.hitFlashIntensity * 2
+            targetColor = emissive(PALETTE.WHITE, INTENSITY.FLASH * flashBoost)
+            intensity = INTENSITY.FLASH * flashBoost
             break
+          }
           case 'reach':
             // Pulsing alert
             targetColor = emissive(STATE_COLORS.REACH, pulse(time, 2, 0.3, INTENSITY.HIGH))
@@ -306,6 +327,9 @@ export class EffectsSystem {
   setLightingMode(mode: 'normal' | 'hit' | 'fever' | 'reach', duration: number = 0): void {
     this.lightingMode = mode
     this.lightingTimer = duration
+    if (mode === 'hit') {
+      this.hitFlashIntensity = 1.0
+    }
   }
 
   playBeep(freq: number): void {

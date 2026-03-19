@@ -34,8 +34,11 @@ export interface CabinetLight {
 export interface ShardParticle {
   mesh: Mesh
   vel: import('@babylonjs/core').Vector3
+  rotVel: import('@babylonjs/core').Vector3
   life: number
+  maxLife: number
   material: StandardMaterial | PBRMaterial
+  initialScale: number
 }
 
 export interface CaughtBall {

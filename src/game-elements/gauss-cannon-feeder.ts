@@ -39,6 +39,9 @@ export class GaussCannonFeeder {
   private currentAngle: number = 0
   private aimDirection: number = 1
 
+  // Coil stretch animation
+  private coilPulsePhase: number = 0
+
   private caughtBall: RAPIER.RigidBody | null = null
   private physicsBody: RAPIER.RigidBody | null = null
 
@@ -173,6 +176,20 @@ export class GaussCannonFeeder {
         this.animateAim(dt)
         if (this.timer <= 0) {
             this.setState(GaussCannonState.FIRE)
+        }
+        // Coil stretch animation during AIM state
+        if (this.barrelMesh) {
+          this.coilPulsePhase += dt * 10
+          const chargeProgress = 1 - (this.timer / 2.0) // 0 to 1 during aim
+          const stretch = 1.0 + Math.sin(this.coilPulsePhase) * 0.15 * chargeProgress
+          
+          this.barrelMesh.getChildren().forEach((child) => {
+            if (child instanceof Mesh && child.name.includes("gaussCoil")) {
+              child.scaling.y = stretch
+              child.scaling.x = 1.0 / Math.sqrt(stretch)
+              child.scaling.z = 1.0 / Math.sqrt(stretch)
+            }
+          })
         }
         break
 

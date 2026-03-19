@@ -98,6 +98,9 @@ export class Game {
   private powerupTimer = 0
   private tiltActive = false
   
+  private cameraShakeIntensity: number = 0
+  private cameraShakeDecay: number = 5.0
+  
   // UI References
   private scoreElement: HTMLElement | null = null
   private livesElement: HTMLElement | null = null
@@ -937,6 +940,18 @@ export class Game {
       }
     }
 
+    // Apply camera shake to table camera
+    if (this.cameraShakeIntensity > 0 && this.scene) {
+      const tableCam = this.scene.activeCameras?.[0] as ArcRotateCamera
+      if (tableCam) {
+        const shakeX = (Math.random() - 0.5) * this.cameraShakeIntensity
+        const shakeY = (Math.random() - 0.5) * this.cameraShakeIntensity * 0.5
+        tableCam.target.x += shakeX
+        tableCam.target.y += shakeY
+      }
+      this.cameraShakeIntensity = Math.max(0, this.cameraShakeIntensity - dt * this.cameraShakeDecay)
+    }
+
     // Sync Adventure Mode Kinematics
     const currentBallBodies = this.ballManager?.getBallBodies() || []
     this.adventureMode?.update(dt, currentBallBodies)
@@ -1038,6 +1053,7 @@ export class Game {
             }
           } else {
             this.gameObjects?.activateBumperHit(bump)
+            this.cameraShakeIntensity = 0.15 // Subtle shake
             this.score += (10 * (Math.floor(this.comboCount / 3) + 1))
             this.comboCount++
             this.comboTimer = 1.5
