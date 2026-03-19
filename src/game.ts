@@ -16,7 +16,8 @@ import {
   RenderTargetTexture,
   DirectionalLight,
   PointLight,
-  ShadowGenerator
+  ShadowGenerator,
+  Scalar
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import type { Engine } from '@babylonjs/core/Engines/engine'
@@ -100,6 +101,7 @@ export class Game {
   
   private cameraShakeIntensity: number = 0
   private cameraShakeDecay: number = 5.0
+  private targetOffset: Vector3 = Vector3.Zero()
   
   // UI References
   private scoreElement: HTMLElement | null = null
@@ -124,6 +126,13 @@ export class Game {
 
     this.scene = new Scene(this.engine)
     this.scene.clearColor = color(SURFACES.VOID).toColor4(1)
+
+    // Atmospheric fog for depth layering (disabled in reduced motion mode)
+    if (!GameConfig.camera.reducedMotion) {
+      this.scene.fogMode = Scene.FOGMODE_EXP2
+      this.scene.fogDensity = 0.02
+      this.scene.fogColor = this.scene.clearColor
+    }
 
     // UI Bindings
     this.scoreElement = document.getElementById('score')
@@ -769,6 +778,14 @@ export class Game {
   private registerShadowCasters(): void {
     if (!this.shadowGenerator || !this.gameObjects) return
 
+    // Enhanced shadow quality for better depth cues (disabled in reduced motion mode)
+    if (!GameConfig.camera.reducedMotion) {
+      // Contact hardening for better depth cues
+      this.shadowGenerator.useContactHardeningShadow = true
+      this.shadowGenerator.contactHardeningLightSizeU = 1.5
+      this.shadowGenerator.contactHardeningLightSizeV = 1.5
+    }
+
     // Get all pinball meshes from GameObjects
     const pinballMeshes = this.gameObjects.getPinballMeshes()
     
@@ -959,6 +976,22 @@ export class Game {
         tableCam.target.y += shakeY
       }
       this.cameraShakeIntensity = Math.max(0, this.cameraShakeIntensity - dt * this.cameraShakeDecay)
+    }
+
+    // Subtle target drift toward ball for better framing (only in reduced motion = false)
+    if (!GameConfig.camera.reducedMotion && this.ballManager?.getBallBody()) {
+      const ballPos = this.ballManager.getBallBody()!.translation()
+      const targetX = Math.max(-5, Math.min(5, ballPos.x)) // Clamp to safe range
+      const targetZ = Math.max(-2, Math.min(8, ballPos.z))
+      
+      this.targetOffset.x = Scalar.Lerp(this.targetOffset.x, targetX * 0.3, dt * 2)
+      this.targetOffset.z = Scalar.Lerp(this.targetOffset.z, (targetZ - 2) * 0.2, dt * 2)
+      
+      const tableCam = this.scene.activeCameras?.[0] as ArcRotateCamera
+      if (tableCam) {
+        tableCam.target.x = this.targetOffset.x
+        tableCam.target.z = 2 + this.targetOffset.z
+      }
     }
 
     // Sync Adventure Mode Kinematics

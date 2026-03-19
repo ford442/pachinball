@@ -11,6 +11,7 @@ import {
   Scalar,
   Animation,
   ParticleSystem,
+  PointLight,
 } from '@babylonjs/core'
 import type { Mesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
@@ -274,6 +275,17 @@ export class GameObjects {
     )
     this.world.createCollider(this.rapier.ColliderDesc.cuboid(GameConfig.table.width/2, 0.1, GameConfig.table.height/2), groundBody)
     this.bindings.push({ mesh: ground, rigidBody: groundBody })
+
+    // Flipper zone visibility enhancement (disabled in reduced motion mode)
+    if (!GameConfig.camera.reducedMotion) {
+      const flipperGlow = MeshBuilder.CreateGround("flipperGlow", { width: 10, height: 6 }, this.scene)
+      flipperGlow.position.set(0, -0.95, -7)
+      const glowMat = new StandardMaterial("flipperGlowMat", this.scene)
+      glowMat.diffuseColor = Color3.Black()
+      glowMat.emissiveColor = Color3.FromHexString("#001133")
+      glowMat.alpha = 0.3
+      flipperGlow.material = glowMat
+    }
   }
 
   createWalls(): void {

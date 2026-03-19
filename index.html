@@ -37,6 +37,7 @@
           <p>Left/Right Arrow to Flip</p>
           <p>Space to Launch</p>
           <button id="start-btn">Start Game</button>
+          <button id="settings-btn">Settings</button>
         </div>
         <div id="game-over-screen" class="screen hidden">
           <h2>Game Over</h2>
@@ -50,6 +51,34 @@
         <div class="screen">
           <h2>Paused</h2>
           <p>Press <strong>P</strong> to resume</p>
+        </div>
+      </div>
+
+      <div id="settings-overlay" class="overlay hidden">
+        <div class="settings-panel">
+          <h2>Accessibility Settings</h2>
+          
+          <label class="setting-row">
+            <input type="checkbox" id="reduced-motion">
+            <span>Reduced Motion</span>
+            <small>Disables camera shake and smooth animations</small>
+          </label>
+          
+          <label class="setting-row">
+            <input type="checkbox" id="photosensitive-mode">
+            <span>Photosensitive Mode</span>
+            <small>Removes all flashing and strobe effects</small>
+          </label>
+          
+          <label class="setting-row range-row">
+            <span>Camera Shake</span>
+            <input type="range" id="shake-intensity" min="0" max="0.10" step="0.01">
+          </label>
+          
+          <div class="settings-buttons">
+            <button id="save-settings">Save</button>
+            <button id="close-settings">Cancel</button>
+          </div>
         </div>
       </div>
 

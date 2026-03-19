@@ -6,6 +6,7 @@ import {
   PBRMaterial,
   Color3,
   TrailMesh,
+  PointLight,
 } from '@babylonjs/core'
 import type { Mesh, MirrorTexture } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
@@ -86,6 +87,15 @@ export class BallManager {
     
     if (this.mirrorTexture?.renderList) {
       this.mirrorTexture.renderList.push(ball)
+    }
+
+    // Add subtle point light for ball visibility (disabled in reduced motion mode)
+    if (!GameConfig.camera.reducedMotion) {
+      const ballLight = new PointLight("ballLight", Vector3.Zero(), this.scene)
+      ballLight.parent = ball
+      ballLight.diffuse = Color3.FromHexString("#00ffff")
+      ballLight.intensity = 0.3
+      ballLight.range = 5
     }
 
     const trailWidth = GameConfig.ball.radius * 0.6
