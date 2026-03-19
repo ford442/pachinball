@@ -196,3 +196,95 @@ button:hover {
 }
 .toast.hidden { display: none; opacity: 0 }
 .toast.show { display: block; opacity: 1; transform: translateX(-50%) translateY(-10px) }
+
+/* SETTINGS OVERLAY */
+#settings-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+#settings-overlay.hidden {
+  display: none !important;
+}
+
+.settings-panel {
+  background: rgba(0, 20, 30, 0.95);
+  padding: 2rem;
+  border-radius: 8px;
+  min-width: 320px;
+  max-width: 400px;
+  color: #00d9ff;
+  border: 2px solid #00d9ff;
+  box-shadow: 0 0 30px rgba(0, 217, 255, 0.2);
+}
+
+.settings-panel h2 {
+  margin: 0 0 1.5rem 0;
+  color: #ff0055;
+  text-align: center;
+  font-size: 1.5rem;
+}
+
+.setting-row {
+  display: flex;
+  flex-direction: column;
+  margin: 1.25rem 0;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.setting-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #00d9ff;
+  cursor: pointer;
+}
+
+.setting-row span {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #fff;
+}
+
+.setting-row small {
+  color: #888;
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
+.range-row {
+  gap: 0.75rem;
+}
+
+.range-row input[type="range"] {
+  width: 100%;
+  accent-color: #00d9ff;
+  cursor: pointer;
+}
+
+.settings-buttons {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  justify-content: center;
+}
+
+.settings-buttons button {
+  margin-top: 0;
+  flex: 1;
+}
+
+#close-settings {
+  border-color: #888;
+  color: #888;
+}
+
+#close-settings:hover {
+  background: #888;
+  color: #000;
+}

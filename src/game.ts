@@ -48,6 +48,7 @@ import {
   QuantumTunnelState,
   getMaterialLibrary,
   resetMaterialLibrary,
+  SettingsManager,
   PALETTE,
   SURFACES,
   INTENSITY,
@@ -156,14 +157,13 @@ export class Game {
     }
     this.updateHUD()
 
-    // Check for reduced motion preference
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (prefersReducedMotion) {
-      GameConfig.camera.reducedMotion = true
-      GameConfig.camera.shakeIntensity = 0
-      GameConfig.visuals.enableParticles = false
-      console.log('[Accessibility] Reduced motion mode enabled')
-    }
+    // Load and apply settings
+    const settings = SettingsManager.load()
+    SettingsManager.applyToConfig(settings)
+    console.log('[Accessibility] Settings loaded:', settings)
+
+    // Setup settings UI
+    this.setupSettingsUI()
 
     // -----------------------------------------------------------------
     // 2️⃣ DUAL‑CAMERA SETUP (TOP = Machine Head, BOTTOM = Ball Table)
@@ -1362,5 +1362,59 @@ export class Game {
     this.adventureMode.end()
     this.resetBall()
     this.updateHUD()
+  }
+
+  // ============================================================================
+  // SETTINGS UI
+  // ============================================================================
+
+  private setupSettingsUI(): void {
+    const settingsBtn = document.getElementById('settings-btn')
+    const settingsOverlay = document.getElementById('settings-overlay')
+    const closeBtn = document.getElementById('close-settings')
+    const saveBtn = document.getElementById('save-settings')
+    
+    settingsBtn?.addEventListener('click', () => {
+      settingsOverlay?.classList.remove('hidden')
+      this.loadSettingsIntoUI()
+    })
+    
+    closeBtn?.addEventListener('click', () => {
+      settingsOverlay?.classList.add('hidden')
+    })
+    
+    saveBtn?.addEventListener('click', () => {
+      this.saveSettingsFromUI()
+      settingsOverlay?.classList.add('hidden')
+    })
+  }
+
+  private loadSettingsIntoUI(): void {
+    const settings = SettingsManager.load()
+    const reducedMotionCheckbox = document.getElementById('reduced-motion') as HTMLInputElement
+    const photosensitiveCheckbox = document.getElementById('photosensitive-mode') as HTMLInputElement
+    const shakeSlider = document.getElementById('shake-intensity') as HTMLInputElement
+    
+    if (reducedMotionCheckbox) reducedMotionCheckbox.checked = settings.reducedMotion
+    if (photosensitiveCheckbox) photosensitiveCheckbox.checked = settings.photosensitiveMode
+    if (shakeSlider) shakeSlider.value = String(settings.shakeIntensity)
+  }
+
+  private saveSettingsFromUI(): void {
+    const reducedMotionCheckbox = document.getElementById('reduced-motion') as HTMLInputElement
+    const photosensitiveCheckbox = document.getElementById('photosensitive-mode') as HTMLInputElement
+    const shakeSlider = document.getElementById('shake-intensity') as HTMLInputElement
+    
+    const newSettings = {
+      reducedMotion: reducedMotionCheckbox?.checked ?? false,
+      photosensitiveMode: photosensitiveCheckbox?.checked ?? false,
+      shakeIntensity: parseFloat(shakeSlider?.value ?? '0.08'),
+      enableFog: true,
+      enableShadows: true
+    }
+    
+    SettingsManager.save(newSettings)
+    SettingsManager.applyToConfig(newSettings)
+    console.log('[Accessibility] Settings saved:', newSettings)
   }
 }
