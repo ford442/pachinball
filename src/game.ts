@@ -1057,10 +1057,12 @@ export class Game {
       this.targetOffset.x = Scalar.Lerp(this.targetOffset.x, targetX * 0.3, dt * 2)
       this.targetOffset.z = Scalar.Lerp(this.targetOffset.z, (targetZ - 2) * 0.2, dt * 2)
       
-      const tableCam = this.scene.activeCameras?.[0] as ArcRotateCamera
-      if (tableCam) {
-        tableCam.target.x = this.targetOffset.x
-        tableCam.target.z = 2 + this.targetOffset.z
+      if (this.scene) {
+        const tableCam = this.scene.activeCameras?.[0] as ArcRotateCamera
+        if (tableCam) {
+          tableCam.target.x = this.targetOffset.x
+          tableCam.target.z = 2 + this.targetOffset.z
+        }
       }
     }
 
