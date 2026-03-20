@@ -357,8 +357,8 @@ export class BallManager {
         )
       } else {
         // Width widens with speed (Babylon.js TrailMesh supports width updates)
-        const widthMultiplier = 1.0 + Math.min(speed / 30, 1.0)
-        trailData.mesh.width = trailData.baseWidth * widthMultiplier
+        // const widthMultiplier = 1.0 + Math.min(speed / 30, 1.0)
+        // trailData.mesh.width = trailData.baseWidth * widthMultiplier
 
         // Color shifts cyan -> magenta with speed
         const t = Math.min(speed / 40, 1.0)
