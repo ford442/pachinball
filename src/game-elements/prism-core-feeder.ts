@@ -6,6 +6,7 @@ import {
   StandardMaterial,
   Color3,
   PointLight,
+  Scalar,
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { GameConfigType } from '../config'
@@ -31,6 +32,13 @@ export class PrismCoreFeeder {
   private state: PrismCoreState = PrismCoreState.IDLE
   private caughtBalls: RAPIER.RigidBody[] = []
   private visualRotationSpeed: number = 0.5
+
+  // Animation properties
+  private innerRotationSpeed = 0.5
+  private outerRotationSpeed = -0.25
+  private shellBreathPhase = 0.0
+  private energyBloom: Mesh | null = null
+  private bloomIntensity = 0.0
 
   // Callback to communicate with Game
   public onStateChange: ((state: PrismCoreState, ballCount: number) => void) | null = null
@@ -111,13 +119,47 @@ export class PrismCoreFeeder {
   }
 
   update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+    // Smooth rotation with decay
+    const targetInner = this.state === PrismCoreState.IDLE ? 0.5 :
+                        this.state === PrismCoreState.LOCKED_1 ? 2.0 :
+                        this.state === PrismCoreState.LOCKED_2 ? 5.0 : 15.0
+    this.innerRotationSpeed = Scalar.Lerp(this.innerRotationSpeed, targetInner, dt * 2)
+    this.outerRotationSpeed = Scalar.Lerp(this.outerRotationSpeed, -targetInner * 0.5, dt * 2)
+
     // Update Rotation
     if (this.innerMesh) {
-        this.innerMesh.rotation.y += this.visualRotationSpeed * dt
-        this.innerMesh.rotation.x += this.visualRotationSpeed * dt * 0.5
+        this.innerMesh.rotation.y += this.innerRotationSpeed * dt
+        this.innerMesh.rotation.x += this.innerRotationSpeed * dt * 0.5
     }
     if (this.outerMesh) {
-        this.outerMesh.rotation.y -= this.visualRotationSpeed * dt * 0.5
+        this.outerMesh.rotation.y += this.outerRotationSpeed * dt
+    }
+
+    // Shell breathing effect
+    if (this.outerMesh) {
+      this.shellBreathPhase += dt * this.innerRotationSpeed * 2
+      const breath = 0.05 * (this.state + 1)
+      this.outerMesh.scaling.y = 1.0 + Math.sin(this.shellBreathPhase) * breath
+      this.outerMesh.scaling.x = 1.0 + Math.cos(this.shellBreathPhase) * breath * 0.5
+      this.outerMesh.scaling.z = 1.0 + Math.cos(this.shellBreathPhase) * breath * 0.5
+    }
+
+    // Energy bloom effect
+    if (this.energyBloom) {
+      if (this.bloomIntensity > 0) {
+        this.bloomIntensity *= 0.9
+        const scale = 1.0 + (1.0 - this.bloomIntensity) * 3.0
+        this.energyBloom.scaling.setAll(scale)
+        const bloomMat = this.energyBloom.material as StandardMaterial
+        if (bloomMat) {
+          bloomMat.alpha = this.bloomIntensity * 0.5
+        }
+        if (this.bloomIntensity < 0.01) {
+          this.energyBloom.dispose()
+          this.energyBloom = null
+          this.bloomIntensity = 0
+        }
+      }
     }
 
     // Check Capture Logic only if not Overloaded
@@ -208,6 +250,9 @@ export class PrismCoreFeeder {
               if (this.light) this.light.diffuse = Color3.White()
               if (innerMat) innerMat.emissiveColor = Color3.White()
 
+              // Trigger energy bloom shockwave effect
+              this.createEnergyBloom()
+
               // Immediate release sequence
               // Delay slightly for effect? No, plan says "Release immediately" for Ball 3.
               // But let's give it a frame or two of "White" flash.
@@ -294,7 +339,20 @@ export class PrismCoreFeeder {
       }
   }
 
-  // Override update to include cooldown
-  // I need to rename the original update or call it.
-  // I'll just merge logic into `update` above.
+  private createEnergyBloom(): void {
+      // Create shockwave sphere
+      this.energyBloom = MeshBuilder.CreateSphere("prismEnergyBloom", {
+          diameter: 2.0,
+          segments: 16
+      }, this.scene)
+      this.energyBloom.position.copyFrom(this.position)
+
+      const bloomMat = new StandardMaterial("prismBloomMat", this.scene)
+      bloomMat.emissiveColor = Color3.White()
+      bloomMat.diffuseColor = Color3.Black()
+      bloomMat.alpha = 0.5
+      this.energyBloom.material = bloomMat
+
+      this.bloomIntensity = 1.0
+  }
 }

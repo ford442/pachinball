@@ -27,6 +27,10 @@ export class BallManager {
   private matLib: ReturnType<typeof getMaterialLibrary>
   private trails: Map<RAPIER.RigidBody, TrailMesh> = new Map()
   private trailMaterials: Map<TrailMesh, StandardMaterial> = new Map()
+  private ballTrails: Map<
+    RAPIER.RigidBody,
+    { mesh: TrailMesh; material: StandardMaterial; baseWidth: number; isFading: boolean }
+  > = new Map()
 
   /** Track ball positions for stuck detection */
   private ballStuckTimers: Map<RAPIER.RigidBody, { lastPos: { x: number; y: number; z: number }; stuckTime: number }> = new Map()
@@ -45,6 +49,10 @@ export class BallManager {
 
   setMirrorTexture(texture: MirrorTexture): void {
     this.mirrorTexture = texture
+  }
+
+  getBindings(): PhysicsBinding[] {
+    return this.bindings
   }
 
   /**
@@ -118,6 +126,12 @@ export class BallManager {
     if (this.ballBody) {
       this.trails.set(this.ballBody, trail)
       this.trailMaterials.set(trail, trailMat)
+      this.ballTrails.set(this.ballBody, {
+        mesh: trail,
+        material: trailMat,
+        baseWidth: trailWidth,
+        isFading: false,
+      })
     }
 
     return ballBody
@@ -167,6 +181,12 @@ export class BallManager {
       trail.material = trailMat
       this.trails.set(body, trail)
       this.trailMaterials.set(trail, trailMat)
+      this.ballTrails.set(body, {
+        mesh: trail,
+        material: trailMat,
+        baseWidth: trailWidth,
+        isFading: false,
+      })
     }
   }
 
@@ -215,12 +235,21 @@ export class BallManager {
     if (idx !== -1) {
       this.world.removeRigidBody(body)
       this.ballBodies.splice(idx, 1)
-      
+
       const bIdx = this.bindings.findIndex(b => b.rigidBody === body)
       if (bIdx !== -1) {
         this.bindings[bIdx].mesh.dispose()
         this.bindings.splice(bIdx, 1)
       }
+
+      // Clean up trail data
+      const trail = this.trails.get(body)
+      if (trail) {
+        this.trailMaterials.delete(trail)
+        trail.dispose()
+        this.trails.delete(body)
+      }
+      this.ballTrails.delete(body)
     }
   }
 
@@ -244,11 +273,17 @@ export class BallManager {
   activateHologramCatch(ball: RAPIER.RigidBody, targetPos: Vector3, duration: number): void {
     ball.setBodyType(this.rapier.RigidBodyType.KinematicPositionBased, true)
     this.caughtBalls.push({ body: ball, targetPos: targetPos.clone(), timer: duration })
-    
+
     const mesh = this.bindings.find(b => b.rigidBody === ball)?.mesh as Mesh
     if (mesh && mesh.material) {
       // PBRMaterial also has emissiveColor
       (mesh.material as PBRMaterial).emissiveColor = new Color3(1, 0, 0)
+    }
+
+    // Mark trail for fade effect
+    const trailData = this.ballTrails.get(ball)
+    if (trailData) {
+      trailData.isFading = true
     }
   }
 
@@ -268,12 +303,19 @@ export class BallManager {
 
       if (catchData.timer <= 0) {
         catchData.body.setBodyType(this.rapier.RigidBodyType.Dynamic, true)
-        
+
         const mesh = this.bindings.find(b => b.rigidBody === catchData.body)?.mesh as Mesh
         if (mesh && mesh.material) {
           (mesh.material as PBRMaterial).emissiveColor = new Color3(0.2, 0.2, 0.2)
         }
-        
+
+        // Reset trail fade state
+        const trailData = this.ballTrails.get(catchData.body)
+        if (trailData) {
+          trailData.isFading = false
+          trailData.material.alpha = 1.0
+        }
+
         catchData.body.applyImpulse({ x: (Math.random() - 0.5) * 5, y: 5, z: 5 }, true)
         onRelease(catchData.body)
         this.caughtBalls.splice(i, 1)
@@ -298,20 +340,29 @@ export class BallManager {
   }
 
   updateTrailEffects(): void {
-    for (const [body, trail] of this.trails) {
+    const cyan = Color3.FromHexString("#00ffff")
+    const magenta = Color3.FromHexString("#ff00ff")
+
+    for (const [body, trailData] of this.ballTrails) {
       const vel = body.linvel()
       const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z)
 
-      // Modulate trail color by speed (cyan -> magenta)
-      // Note: TrailMesh width is not dynamically adjustable in Babylon.js
-      const mat = this.trailMaterials.get(trail)
-      if (mat) {
-        const t = Math.min(speed / 30, 1.0)
-        mat.emissiveColor = Color3.Lerp(
-          Color3.FromHexString("#00ffff"), // Cyan
-          Color3.FromHexString("#ff00ff"), // Magenta
-          t
+      if (trailData.isFading) {
+        // Fade trail when ball is hologram-caught
+        trailData.material.alpha = Math.max(0, trailData.material.alpha - 0.05)
+        trailData.material.emissiveColor = Color3.Lerp(
+          trailData.material.emissiveColor,
+          Color3.Black(),
+          0.1
         )
+      } else {
+        // Width widens with speed (Babylon.js TrailMesh supports width updates)
+        const widthMultiplier = 1.0 + Math.min(speed / 30, 1.0)
+        trailData.mesh.width = trailData.baseWidth * widthMultiplier
+
+        // Color shifts cyan -> magenta with speed
+        const t = Math.min(speed / 40, 1.0)
+        trailData.material.emissiveColor = Color3.Lerp(cyan, magenta, t)
       }
     }
   }

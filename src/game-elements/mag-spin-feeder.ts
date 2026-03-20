@@ -39,6 +39,7 @@ export class MagSpinFeeder {
 
   // Follow-through animation: Ring momentum with angular velocity
   private ringAngularVelocity: number = 0
+  private releaseShakeIntensity: number = 0
 
   // Callback to allow Game to play sounds/effects
   public onStateChange: ((state: MagSpinState) => void) | null = null
@@ -176,6 +177,18 @@ export class MagSpinFeeder {
     )
     if (this.ringMesh) {
       this.ringMesh.rotation.y += dt * this.ringAngularVelocity
+    }
+
+    // Follow-through animation: Release vibration on ball release
+    if (this.releaseShakeIntensity > 0 && this.ringMesh) {
+      const shakeX = (Math.random() - 0.5) * this.releaseShakeIntensity
+      const shakeZ = (Math.random() - 0.5) * this.releaseShakeIntensity
+      this.ringMesh.position.x = this.position.x + shakeX
+      this.ringMesh.position.z = this.position.z + shakeZ
+      this.releaseShakeIntensity *= 0.9 // Decay
+    } else if (this.ringMesh) {
+      this.ringMesh.position.copyFrom(this.position)
+      this.ringMesh.position.y += 0.5
     }
 
     // State Machine
@@ -329,5 +342,7 @@ export class MagSpinFeeder {
 
     this.caughtBall.applyImpulse({ x: force.x, y: force.y, z: force.z }, true)
     this.caughtBall = null
+
+    this.releaseShakeIntensity = 0.5 // Trigger vibration
   }
 }

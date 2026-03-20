@@ -522,29 +522,20 @@ export class GameObjects {
       this.bindings.push({ mesh: bumper, rigidBody: body })
       this.bumperBodies.push(body)
       const initialEmissive = emissive(colorHex, INTENSITY.ACTIVE)
-      this.bumperVisuals.push({
-        mesh: bumper,
-        body: body,
-        hologram: holoInner,
-        hitTime: 0,
-        sweep: Math.random(),
-        targetEmissive: initialEmissive.clone(),
-        currentEmissive: initialEmissive.clone(),
-        flashTimer: 0,
-      })
-      this.pinballMeshes.push(bumper)
-      this.pinballMeshes.push(holoInner)
-      this.pinballMeshes.push(holoOuter)
-
-      // Particle System
+      // Create particle system with bumper-matched colors
+      let ps: ParticleSystem | undefined
       if (this.config.visuals.enableParticles) {
-        const ps = new ParticleSystem(`bumperParticles_${x}_${z}`, 50, this.scene)
+        ps = new ParticleSystem(`bumperParticles_${x}_${z}`, 50, this.scene)
         ps.particleTexture = this.particleTexture
         ps.emitter = bumper
         ps.minEmitBox = new Vector3(-0.5, 0, -0.5)
         ps.maxEmitBox = new Vector3(0.5, 0, 0.5)
-        ps.color1 = new Color4(1, 0.5, 0, 1)
-        ps.color2 = new Color4(1, 0, 1, 1)
+        
+        // Set particle colors from bumper color
+        const baseColor = color(colorHex)
+        ps.color1 = Color4.FromColor3(baseColor, 1)
+        ps.color2 = Color4.FromColor3(baseColor.scale(0.7), 0.5)
+        
         ps.minSize = 0.1
         ps.maxSize = 0.3
         ps.minLifeTime = 0.1
@@ -562,6 +553,23 @@ export class GameObjects {
         ps.stop()
         this.bumperParticles.push(ps)
       }
+
+      this.bumperVisuals.push({
+        mesh: bumper,
+        body: body,
+        hologram: holoInner,
+        hitTime: 0,
+        sweep: Math.random(),
+        targetEmissive: initialEmissive.clone(),
+        currentEmissive: initialEmissive.clone(),
+        flashTimer: 0,
+        color: colorHex,
+        particles: ps,
+      })
+      this.pinballMeshes.push(bumper)
+      this.pinballMeshes.push(holoInner)
+      this.pinballMeshes.push(holoOuter)
+
     }
 
     make(0, 8, "#ff00aa")
@@ -648,7 +656,7 @@ export class GameObjects {
   updateBumpers(dt: number): void {
     const time = performance.now() * 0.001
 
-    this.bumperVisuals.forEach((vis, index) => {
+    this.bumperVisuals.forEach((vis) => {
       const mat = vis.mesh.material as PBRMaterial
 
       // ---- Smooth emissive interpolation (lerp toward target) ----
@@ -714,8 +722,8 @@ export class GameObjects {
           vis.hologram.material!.alpha = 0.8 + bouncePhase * 0.2
         }
 
-        if (this.config.visuals.enableParticles && this.bumperParticles[index]) {
-          this.bumperParticles[index].start()
+        if (this.config.visuals.enableParticles && vis.particles) {
+          vis.particles.start()
         }
       } else {
         vis.mesh.scaling.set(1, 1, 1)
@@ -724,8 +732,8 @@ export class GameObjects {
           vis.hologram.material!.alpha = 0.5
         }
 
-        if (this.bumperParticles[index] && this.bumperParticles[index].isStarted()) {
-          this.bumperParticles[index].stop()
+        if (vis.particles && vis.particles.isStarted()) {
+          vis.particles.stop()
         }
       }
     })
@@ -746,16 +754,25 @@ export class GameObjects {
     }
   }
 
-  activateBumperHit(body: RAPIER.RigidBody): void {
+  activateBumperHit(body: RAPIER.RigidBody, impactVelocity: number = 10): void {
     const vis = this.bumperVisuals.find(v => v.body === body)
     if (vis) {
       vis.hitTime = 0.2
+      
+      // Scale particle burst by impact velocity
+      if (vis.particles) {
+        const intensity = Math.min(impactVelocity / 20, 2.0)
+        vis.particles.emitRate = 100 * intensity
+        vis.particles.targetStopDuration = 0.1 * intensity
+        vis.particles.start()
+      }
     }
   }
 
   /**
    * Set bumper state with smooth emissive transition and entry flash.
    * Also applies state-specific roughness/metallic profiles.
+   * Updates particle colors to match state color.
    */
   setBumperState(state: 'IDLE' | 'REACH' | 'FEVER' | 'JACKPOT' | 'ADVENTURE'): void {
     const targetColor = stateEmissive(state, INTENSITY.ACTIVE)
@@ -770,6 +787,12 @@ export class GameObjects {
       if (profile) {
         mat.roughness = profile.roughness
         mat.metallic = profile.metallic
+      }
+
+      // Update particle colors to match state
+      if (vis.particles) {
+        vis.particles.color1 = Color4.FromColor3(targetColor, 1)
+        vis.particles.color2 = Color4.FromColor3(targetColor.scale(0.7), 0.5)
       }
     })
   }

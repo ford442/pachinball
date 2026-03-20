@@ -18,6 +18,10 @@ export interface BumperVisual {
   currentEmissive?: Color3
   /** Flash timer for state entry white flash */
   flashTimer?: number
+  /** Bumper base color for particle matching */
+  color?: string
+  /** Particle system reference for this bumper */
+  particles?: import('@babylonjs/core').ParticleSystem
 }
 
 export enum GameState {
@@ -40,11 +44,11 @@ export interface CabinetLight {
 export interface ShardParticle {
   mesh: Mesh
   vel: import('@babylonjs/core').Vector3
-  rotVel: import('@babylonjs/core').Vector3
+  rotVel: import('@babylonjs/core').Vector3        // Angular velocity for tumbling
   life: number
-  maxLife: number
+  maxLife: number        // For normalized life calculations
   material: StandardMaterial | PBRMaterial
-  initialScale: number
+  initialScale: number   // Size variation (0.8-1.2x)
 }
 
 export interface CaughtBall {

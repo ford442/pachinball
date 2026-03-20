@@ -4,6 +4,7 @@ import {
   Color4,
   HemisphericLight,
   MeshBuilder,
+  Mesh,
   Scene,
   Vector3,
   MirrorTexture,
@@ -37,6 +38,7 @@ import {
   EffectsSystem,
   GameObjects,
   BallManager,
+  BallAnimator,
   AdventureMode,
   AdventureTrackType,
   MagSpinFeeder,
@@ -77,6 +79,7 @@ export class Game {
   private effects: EffectsSystem | null = null
   private gameObjects: GameObjects | null = null
   private ballManager: BallManager | null = null
+  private ballAnimator: BallAnimator | null = null
   private adventureMode: AdventureMode | null = null
   private magSpinFeeder: MagSpinFeeder | null = null
   private nanoLoomFeeder: NanoLoomFeeder | null = null
@@ -110,8 +113,6 @@ export class Game {
   private powerupTimer = 0
   private tiltActive = false
   
-  private cameraShakeIntensity: number = 0
-  private cameraShakeDecay: number = 5.0
   private targetOffset: Vector3 = Vector3.Zero()
   
   // UI References
@@ -443,6 +444,9 @@ export class Game {
     await this.physics.init()
     await this.buildSceneStaged()
 
+    // Initialize ball animator for squash-and-stretch effects
+    this.ballAnimator = new BallAnimator(this.scene)
+
     // Initialize input handler
     this.inputHandler = new InputHandler(
       {
@@ -674,11 +678,15 @@ export class Game {
       this.shadowGenerator = null
     }
 
-    // 5. Effects system
+    // 5. Ball animator
+    this.ballAnimator?.dispose()
+    this.ballAnimator = null
+
+    // 6. Effects system
     this.effects?.dispose()
     this.effects = null
 
-    // 6. Now safe to dispose scene
+    // 7. Now safe to dispose scene
     resetMaterialLibrary()
     this.scene?.dispose()
     this.scene = null
@@ -800,6 +808,7 @@ export class Game {
     // Register camera for screen shake effects (needed for gameplay feedback)
     if (this.tableCam && this.effects) {
       this.effects.registerCamera(this.tableCam)
+      this.effects.registerTableCamera(this.tableCam)
     }
   }
 
@@ -940,6 +949,7 @@ export class Game {
                 this.effects?.playBeep(2000)
                 this.effects?.startJackpotSequence() // Optional: sync with Jackpot
                 this.display?.setStoryText("MULTIBALL ENGAGED")
+                this.effects?.addCameraShake(0.5)
                 this.effects?.spawnShardBurst(this.prismCoreFeeder?.getPosition() || Vector3.Zero())
                 break
         }
@@ -1245,17 +1255,7 @@ export class Game {
       }
     }
 
-    // Apply camera shake to table camera
-    if (this.cameraShakeIntensity > 0 && this.scene) {
-      const tableCam = this.scene?.activeCameras?.[0] as ArcRotateCamera
-      if (tableCam) {
-        const shakeX = (Math.random() - 0.5) * this.cameraShakeIntensity
-        const shakeY = (Math.random() - 0.5) * this.cameraShakeIntensity * 0.5
-        tableCam.target.x += shakeX
-        tableCam.target.y += shakeY
-      }
-      this.cameraShakeIntensity = Math.max(0, this.cameraShakeIntensity - dt * this.cameraShakeDecay)
-    }
+    // Camera shake is now handled by EffectsSystem.updateCameraShake()
 
     // Subtle target drift toward ball for better framing (only in reduced motion = false)
     if (!GameConfig.camera.reducedMotion && this.ballManager?.getBallBody()) {
@@ -1402,6 +1402,22 @@ export class Game {
         const vis = bumperVisuals.find(v => v.body === bump)
 
         if (vis) {
+          // Trigger ball squash-and-stretch animation on impact
+          const ballMesh = this.getBallMeshForBody(ballBody)
+          if (ballMesh && this.ballAnimator) {
+            const velocity = ballBody.linvel()
+            const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
+            const impactIntensity = Math.min(speed / 20, 1.0)
+            // Calculate impact normal (from bumper to ball)
+            const bumperPos = vis.mesh.position
+            const impactNormal = new Vector3(
+              ballPos.x - bumperPos.x,
+              ballPos.y - bumperPos.y,
+              ballPos.z - bumperPos.z
+            ).normalize()
+            this.ballAnimator.animateBallImpact(ballMesh, impactNormal, impactIntensity)
+          }
+
           if (ballPos.y > 1.5) {
             if (this.display?.getDisplayState() === DisplayState.IDLE) {
               this.activateHologramCatch(ballBody, bump)
@@ -1409,12 +1425,14 @@ export class Game {
             }
           } else {
             this.gameObjects?.activateBumperHit(bump)
-            this.cameraShakeIntensity = GameConfig.camera.shakeIntensity
+            this.effects?.addCameraShake(0.3)
             this.score += (10 * (Math.floor(this.comboCount / 3) + 1))
             this.comboCount++
             this.comboTimer = 1.5
             // Use enhanced bumper impact with screen shake and ripple rings
             this.effects?.spawnEnhancedBumperImpact(vis.mesh.position, 'medium')
+            // Spawn animated impact ring effect
+            this.effects?.spawnImpactRing(vis.mesh.position, new Vector3(0, 1, 0), PALETTE.CYAN)
             this.effects?.playBeep(400 + Math.random() * 200)
             this.updateHUD()
             this.effects?.setLightingMode('hit', 0.2)
@@ -1429,6 +1447,20 @@ export class Game {
     const h2IsTarget = this.targetHandleSet.has(h2)
     if (h1IsTarget || h2IsTarget) {
       const tgt = h1IsTarget ? b1 : b2
+      const ballBody = h1IsTarget ? b2 : b1
+      const ballHandle = h1IsTarget ? h2 : h1
+
+      if (this.ballHandleSet.has(ballHandle)) {
+        // Trigger ball squash animation on target hit
+        const ballMesh = this.getBallMeshForBody(ballBody)
+        if (ballMesh && this.ballAnimator) {
+          const velocity = ballBody.linvel()
+          const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
+          const impactIntensity = Math.min(speed / 20, 1.0)
+          this.ballAnimator.animateSimpleImpact(ballMesh, impactIntensity)
+        }
+      }
+
       if (this.gameObjects?.deactivateTarget(tgt)) {
         this.score += 100
         this.effects?.playBeep(1200)
@@ -1445,6 +1477,20 @@ export class Game {
         this.tryActivateSlotMachine()
       }
     }
+  }
+
+  /**
+   * Get the Babylon mesh associated with a physics body
+   */
+  private getBallMeshForBody(body: RAPIER.RigidBody): Mesh | null {
+    // Check gameObjects bindings first
+    const gameObjectBinding = this.gameObjects?.getBindings().find(b => b.rigidBody === body)
+    if (gameObjectBinding) {
+      return gameObjectBinding.mesh as Mesh
+    }
+    // Then check ballManager bindings
+    const ballManagerBinding = this.ballManager?.getBindings().find(b => b.rigidBody === body)
+    return ballManagerBinding?.mesh as Mesh || null
   }
 
   private activateHologramCatch(ball: RAPIER.RigidBody, bumper: RAPIER.RigidBody): void {

@@ -35,9 +35,14 @@ export class QuantumTunnelFeeder {
   private capturedBall: RAPIER.RigidBody | null = null
 
   // Follow-through animation: Smooth portal spin acceleration
-  private portalSpinSpeed: number = 0
+  private inputSpinSpeed = 1.0
+  private outputSpinSpeed = -1.0
+  private portalStretch = 0.0
+  private ejectRecoil = 0.0
   private readonly PORTAL_SPIN_IDLE = 1.0
-  private readonly PORTAL_SPIN_CAPTURE = 8.0
+  private readonly PORTAL_SPIN_CAPTURE = 5.0
+  private readonly PORTAL_SPIN_TRANSPORT = 8.0
+  private readonly PORTAL_SPIN_EJECT = 10.0
 
   public onStateChange: QuantumTunnelCallback | null = null
 
@@ -106,13 +111,36 @@ export class QuantumTunnelFeeder {
     this.stateTimer += dt
 
     // Portal Animation (Spinning visuals) - Follow-through: Smooth spin acceleration
-    const targetSpeed = this.state === QuantumTunnelState.CAPTURE
-      ? this.PORTAL_SPIN_CAPTURE
-      : this.PORTAL_SPIN_IDLE
-    this.portalSpinSpeed = Scalar.Lerp(this.portalSpinSpeed, targetSpeed, dt * 3.0)
+    const targetSpeed = this.state === QuantumTunnelState.IDLE ? this.PORTAL_SPIN_IDLE :
+                        this.state === QuantumTunnelState.CAPTURE ? this.PORTAL_SPIN_CAPTURE :
+                        this.state === QuantumTunnelState.TRANSPORT ? this.PORTAL_SPIN_TRANSPORT : this.PORTAL_SPIN_EJECT
+    this.inputSpinSpeed = Scalar.Lerp(this.inputSpinSpeed, targetSpeed, dt * 5.0)
+    this.outputSpinSpeed = Scalar.Lerp(this.outputSpinSpeed, -targetSpeed * 0.8, dt * 5.0)
+    this.inputMesh.rotation.z += dt * this.inputSpinSpeed
+    this.outputMesh.rotation.z += dt * this.outputSpinSpeed
 
-    this.inputMesh.rotation.z += dt * this.portalSpinSpeed
-    this.outputMesh.rotation.z -= dt * this.portalSpinSpeed * 0.7
+    // Portal distortion during TRANSPORT
+    if (this.state === QuantumTunnelState.TRANSPORT) {
+      const progress = Math.min(this.stateTimer / this.config.transportDelay, 1.0)
+      this.portalStretch = Math.sin(progress * Math.PI) * 0.3
+      this.inputMesh.scaling.z = 1.0 + this.portalStretch
+      this.inputMesh.scaling.x = 1.0 - this.portalStretch * 0.3
+      this.inputMesh.scaling.y = 1.0 - this.portalStretch * 0.3
+    } else {
+      // Reset scaling when not in transport
+      this.inputMesh.scaling.setAll(1.0)
+      this.portalStretch = 0.0
+    }
+
+    // Eject recoil recovery
+    if (this.ejectRecoil > 0) {
+      this.outputMesh.position.x = this.config.outputPosition.x - this.ejectRecoil
+      this.ejectRecoil *= 0.8
+      if (this.ejectRecoil < 0.01) {
+        this.ejectRecoil = 0
+        this.outputMesh.position.x = this.config.outputPosition.x
+      }
+    }
 
     switch (this.state) {
       case QuantumTunnelState.IDLE:
@@ -233,6 +261,9 @@ export class QuantumTunnelFeeder {
 
     // 5. Flash Output
     this.setPortalEmissive(this.outputMesh, new Color3(1, 1, 1))
+
+    // 6. Trigger eject recoil
+    this.ejectRecoil = 0.5
 
     this.transitionTo(QuantumTunnelState.COOLDOWN)
   }

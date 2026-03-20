@@ -38,6 +38,7 @@ export class NanoLoomFeeder {
   private timer: number = 0
 
   private caughtBall: RAPIER.RigidBody | null = null
+  private pinActivationProgress = 0
 
   // Physics Handles
   private frameBody: RAPIER.RigidBody | null = null
@@ -206,6 +207,8 @@ export class NanoLoomFeeder {
     switch (this.state) {
         case NanoLoomState.IDLE:
             this.checkIntake(ballBodies)
+            // Reset pins when not in LIFT state
+            this.resetPins()
             break
 
         case NanoLoomState.LIFT:
@@ -232,6 +235,28 @@ export class NanoLoomFeeder {
                 const nextZ = Scalar.Lerp(currentPos.z, targetPos.z, dt * 5)
 
                 this.caughtBall.setNextKinematicTranslation({ x: nextX, y: nextY, z: nextZ })
+
+                // Pin activation wave - follows ball height as it rises
+                const progress = (currentPos.y - this.intakePosition.y) / this.config.height
+                this.pinActivationProgress = progress
+
+                // Activate pins near ball height
+                const ballRow = Math.floor((this.config.height / 2 - (currentPos.y - this.position.y)) / this.config.pinSpacing)
+
+                this.pins.forEach((pin, index) => {
+                    const row = Math.floor(index / this.config.pinCols)
+                    const distanceFromActive = Math.abs(row - ballRow)
+
+                    if (distanceFromActive < 2) {
+                        const activation = 1.0 - (distanceFromActive / 2)
+                        pin.scaling.setAll(1.0 + activation * 0.5)
+                        ;(pin.material as StandardMaterial).emissiveColor =
+                          Color3.FromHexString("#00ff00").scale(0.5 + activation * 0.5)
+                    } else {
+                        pin.scaling.setAll(1.0)
+                        ;(pin.material as StandardMaterial).emissiveColor = Color3.FromHexString("#00ff00")
+                    }
+                })
             }
             break
 
@@ -245,6 +270,8 @@ export class NanoLoomFeeder {
                     this.setState(NanoLoomState.EJECT)
                 }
             }
+            // Reset pins when not in LIFT state
+            this.resetPins()
             break
 
         case NanoLoomState.EJECT:
@@ -254,6 +281,8 @@ export class NanoLoomFeeder {
              if (this.timer <= 0) {
                  this.setState(NanoLoomState.IDLE)
              }
+             // Reset pins when not in LIFT state
+             this.resetPins()
              break
     }
   }
@@ -278,6 +307,14 @@ export class NanoLoomFeeder {
       this.caughtBall = body
       body.setBodyType(this.rapier.RigidBodyType.KinematicPositionBased, true)
       this.setState(NanoLoomState.LIFT)
+  }
+
+  private resetPins(): void {
+    this.pins.forEach(pin => {
+      pin.scaling.setAll(1.0)
+      ;(pin.material as StandardMaterial).emissiveColor = Color3.FromHexString("#00ff00")
+    })
+    this.pinActivationProgress = 0
   }
 
   private setState(newState: NanoLoomState): void {

@@ -49,6 +49,9 @@ export class GaussCannonFeeder {
   private barrelRecoilOffset: number = 0
   private barrelRecoilVelocity: number = 0
 
+  // Vibration effect during charge and fire
+  private vibrationIntensity: number = 0
+
   // Callback to allow Game to play sounds/effects
   public onStateChange: ((state: GaussCannonState) => void) | null = null
 
@@ -241,6 +244,13 @@ export class GaussCannonFeeder {
       // Apply recoil along local Y (barrel axis)
       this.barrelMesh.position.y = 1.0 - this.barrelRecoilOffset
     }
+
+    // Vibration effect (visual-only)
+    if (this.vibrationIntensity > 0 && this.barrelMesh) {
+      this.barrelMesh.position.x = (Math.random() - 0.5) * this.vibrationIntensity
+      this.barrelMesh.position.z = (Math.random() - 0.5) * this.vibrationIntensity
+      this.vibrationIntensity *= 0.95 // Decay
+    }
   }
 
   private animateIdle(dt: number): void {
@@ -349,6 +359,7 @@ export class GaussCannonFeeder {
 
       case GaussCannonState.AIM:
         this.timer = 2.0 // Aim duration
+        this.vibrationIntensity = 0.02 // Subtle charging vibration
         this.setCoilColor(Color3.FromHexString("#FFA500"))
         if (this.light) {
             this.light.diffuse = Color3.FromHexString("#FFA500")
@@ -407,8 +418,9 @@ export class GaussCannonFeeder {
     this.caughtBall.applyImpulse({ x: force.x, y: force.y, z: force.z }, true)
     this.caughtBall = null
 
-    // Follow-through: Barrel recoil kickback
+    // Follow-through: Barrel recoil kickback and vibration
     this.barrelRecoilVelocity = 0.5
+    this.vibrationIntensity = 0.3 // Strong vibration on fire
 
     // Flash effect
     if (this.light) {

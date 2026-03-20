@@ -10,6 +10,8 @@ import {
   Texture,
   DynamicTexture,
   Mesh,
+  Animation,
+  ArcRotateCamera,
 } from '@babylonjs/core'
 import type { DirectionalLight } from '@babylonjs/core'
 import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
@@ -112,6 +114,10 @@ export class EffectsSystem {
   // Ripple rings
   private rippleRings: RippleRing[] = []
 
+  // Impact rings (Animation-based, max 5 at once)
+  private activeImpactRings = 0
+  private readonly maxImpactRings = 5
+
   // Performance tracking
   private lastFpsCheck = 0
   private consecutiveLowFps = 0
@@ -119,9 +125,52 @@ export class EffectsSystem {
 
   // Camera reference for screen shake
   private cameraRef: { position: Vector3 } | null = null
+  private tableCam: ArcRotateCamera | null = null
+
+  // Camera shake state
+  private cameraShakeIntensity = 0
+  private cameraShakeDecay = 5.0
 
   registerCamera(camera: { position: Vector3 }): void {
     this.cameraRef = camera
+  }
+
+  /**
+   * Register the table camera for camera shake effects
+   * This applies shake to the target (preserves user control)
+   */
+  registerTableCamera(camera: ArcRotateCamera): void {
+    this.tableCam = camera
+  }
+
+  /**
+   * Add camera shake intensity (accumulates up to max 1.0)
+   * @param intensity - Amount of shake to add (0.0 - 1.0)
+   */
+  addCameraShake(intensity: number): void {
+    this.cameraShakeIntensity = Math.min(this.cameraShakeIntensity + intensity, 1.0)
+  }
+
+  /**
+   * Update camera shake - call from main update loop
+   * Applies shake to camera target with decay over time
+   * @param dt - Delta time in seconds
+   */
+  updateCameraShake(dt: number): void {
+    if (this.cameraShakeIntensity <= 0 || !this.tableCam) return
+
+    const shake = this.cameraShakeIntensity * 0.1
+    const rx = (Math.random() - 0.5) * shake
+    const ry = (Math.random() - 0.5) * shake
+    const rz = (Math.random() - 0.5) * shake
+
+    // Apply to target, not position (preserves user control)
+    this.tableCam.target.addInPlace(new Vector3(rx, ry, rz))
+
+    this.cameraShakeIntensity -= dt * this.cameraShakeDecay
+    if (this.cameraShakeIntensity < 0) {
+      this.cameraShakeIntensity = 0
+    }
   }
 
   constructor(scene: Scene, bloomPipeline: DefaultRenderingPipeline | null) {
@@ -307,6 +356,91 @@ export class EffectsSystem {
       
       this.shards.push({ mesh: m, vel, rotVel, life: 1.0, maxLife: 1.0, initialScale, material: mat })
     }
+  }
+
+  /**
+   * Spawn an expanding impact ring effect on collision
+   * Uses Babylon.js Animation for smooth scale and fade
+   * Limited to 5 rings at once for performance
+   */
+  spawnImpactRing(position: Vector3, normal: Vector3, color: string): void {
+    // Enforce max concurrent rings limit
+    if (this.activeImpactRings >= this.maxImpactRings) {
+      return
+    }
+
+    this.activeImpactRings++
+
+    // Create torus mesh for the ring
+    const ring = MeshBuilder.CreateTorus(
+      'impactRing',
+      {
+        diameter: 0.5,
+        thickness: 0.05,
+        tessellation: 32,
+      },
+      this.scene
+    )
+
+    // Position and orient the ring
+    ring.position = position.clone()
+    // Orient ring perpendicular to the normal (flat against surface)
+    ring.lookAt(position.add(normal))
+
+    // Create emissive material
+    const mat = new StandardMaterial('ringMat', this.scene)
+    mat.emissiveColor = Color3.FromHexString(color)
+    mat.alpha = 0.8
+    mat.disableLighting = true
+    ring.material = mat
+
+    // Create scale animation (expand from 1x to 5x)
+    const scaleAnim = new Animation(
+      'ringScale',
+      'scaling',
+      60, // fps
+      Animation.ANIMATIONTYPE_VECTOR3,
+      Animation.ANIMATIONLOOPMODE_CONSTANT
+    )
+
+    const scaleKeys = [
+      { frame: 0, value: new Vector3(1, 1, 1) },
+      { frame: 20, value: new Vector3(5, 5, 1) },
+    ]
+    scaleAnim.setKeys(scaleKeys)
+
+    // Create fade animation (alpha 0.8 -> 0)
+    const fadeAnim = new Animation(
+      'ringFade',
+      'material.alpha',
+      60, // fps
+      Animation.ANIMATIONTYPE_FLOAT,
+      Animation.ANIMATIONLOOPMODE_CONSTANT
+    )
+
+    const fadeKeys = [
+      { frame: 0, value: 0.8 },
+      { frame: 20, value: 0 },
+    ]
+    fadeAnim.setKeys(fadeKeys)
+
+    // Attach animations to ring
+    ring.animations = [scaleAnim, fadeAnim]
+
+    // Start animation with cleanup callback
+    this.scene.beginAnimation(
+      ring,
+      0,
+      20,
+      false, // don't loop
+      1, // speed ratio
+      () => {
+        // Cleanup: dispose mesh and material after animation completes
+        ring.dispose()
+        mat.dispose()
+        this.activeImpactRings--
+      }
+    )
   }
 
   updateShards(dt: number): void {
@@ -1221,5 +1355,8 @@ export class EffectsSystem {
       this.updateFeverTrails(ballBodies, isFever, dt)
     }
     this.updateTransitionFlash(dt)
+    
+    // Camera shake (target-based, preserves user control)
+    this.updateCameraShake(dt)
   }
 }
