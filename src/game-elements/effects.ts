@@ -5,10 +5,12 @@ import {
   StandardMaterial,
   PBRMaterial,
   Color3,
+  Color4,
   PointLight,
   Texture,
   DynamicTexture,
 } from '@babylonjs/core'
+import type { DirectionalLight } from '@babylonjs/core'
 import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import type { Mesh } from '@babylonjs/core'
 import type { CabinetLight, ShardParticle } from './types'
@@ -16,6 +18,10 @@ import {
   PALETTE,
   INTENSITY,
   STATE_COLORS,
+  TEMPERATURE,
+  LIGHTING_STATES,
+  FOG_STATES,
+  LIGHTING,
   color,
   emissive,
   pulse,
@@ -48,6 +54,19 @@ export class EffectsSystem {
   private lightingTimer = 0
   private hitFlashIntensity: number = 0
 
+  // Scene lights for state-based animation
+  private keyLight: DirectionalLight | null = null
+  private rimLight: DirectionalLight | null = null
+  private bounceLight: PointLight | null = null
+
+  // Atmosphere state tracking
+  private currentAtmosphereState: string = 'IDLE'
+  private targetFogDensity: number = 0.005
+  private targetFogColor: Color3 = color('#080818')
+  private targetKeyColor: Color3 = color(TEMPERATURE.NORMAL)
+  private targetRimIntensity: number = LIGHTING.RIM.intensity
+  private targetRimColor: Color3 = color('#80bfff')
+
   // Jackpot Variables
   public jackpotTimer = 0
   public isJackpotActive = false
@@ -61,6 +80,92 @@ export class EffectsSystem {
       this.audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
     } catch {
       this.audioCtx = null
+    }
+  }
+
+  /**
+   * Register scene lights for state-based animation (temperature, intensity, rim drama)
+   */
+  registerSceneLights(keyLight: DirectionalLight, rimLight: DirectionalLight, bounceLight: PointLight): void {
+    this.keyLight = keyLight
+    this.rimLight = rimLight
+    this.bounceLight = bounceLight
+  }
+
+  /**
+   * Set the atmosphere state — drives fog, light temperature, rim drama
+   */
+  setAtmosphereState(state: string): void {
+    if (state === this.currentAtmosphereState) return
+    this.currentAtmosphereState = state
+
+    // Fog targets
+    const fogState = FOG_STATES[state] || FOG_STATES['IDLE']
+    this.targetFogDensity = fogState.density
+    this.targetFogColor = color(fogState.color)
+
+    // Light temperature target
+    const tempColor = TEMPERATURE[state as keyof typeof TEMPERATURE] || TEMPERATURE.NORMAL
+    this.targetKeyColor = color(tempColor)
+
+    // Rim light drama targets
+    const lightState = LIGHTING_STATES[state] || LIGHTING_STATES['IDLE']
+    this.targetRimIntensity = lightState.rim
+    this.targetRimColor = color(lightState.rimColor)
+  }
+
+  /**
+   * Smooth atmosphere transitions: fog, light temperature, rim drama, bounce proximity, breathing clear color
+   */
+  updateAtmosphere(dt: number, ballPos?: Vector3): void {
+    const lerpSpeed = dt * 2 // Smooth 0.5s transitions
+    const time = performance.now() * 0.001
+
+    // 1. State-based fog density & color (smooth lerp)
+    if (this.scene.fogMode !== 0) {
+      this.scene.fogDensity += (this.targetFogDensity - this.scene.fogDensity) * lerpSpeed
+      this.scene.fogColor.r += (this.targetFogColor.r - this.scene.fogColor.r) * lerpSpeed
+      this.scene.fogColor.g += (this.targetFogColor.g - this.scene.fogColor.g) * lerpSpeed
+      this.scene.fogColor.b += (this.targetFogColor.b - this.scene.fogColor.b) * lerpSpeed
+    }
+
+    // 2. Light temperature shift on key light
+    if (this.keyLight) {
+      this.keyLight.diffuse.r += (this.targetKeyColor.r - this.keyLight.diffuse.r) * lerpSpeed
+      this.keyLight.diffuse.g += (this.targetKeyColor.g - this.keyLight.diffuse.g) * lerpSpeed
+      this.keyLight.diffuse.b += (this.targetKeyColor.b - this.keyLight.diffuse.b) * lerpSpeed
+
+      // Apply state-based key light intensity
+      const lightState = LIGHTING_STATES[this.currentAtmosphereState] || LIGHTING_STATES['IDLE']
+      this.keyLight.intensity += (lightState.key - this.keyLight.intensity) * lerpSpeed
+    }
+
+    // 3. Rim light drama: intensity and color modulation per state
+    if (this.rimLight) {
+      this.rimLight.intensity += (this.targetRimIntensity - this.rimLight.intensity) * lerpSpeed
+      this.rimLight.diffuse.r += (this.targetRimColor.r - this.rimLight.diffuse.r) * lerpSpeed
+      this.rimLight.diffuse.g += (this.targetRimColor.g - this.rimLight.diffuse.g) * lerpSpeed
+      this.rimLight.diffuse.b += (this.targetRimColor.b - this.rimLight.diffuse.b) * lerpSpeed
+    }
+
+    // 4. Bounce light proximity response: brighter when ball is near
+    if (this.bounceLight && ballPos) {
+      const distToBounce = Vector3.Distance(ballPos, this.bounceLight.position)
+      const proximityBoost = Math.max(0, 1 - distToBounce / 15) * 0.4
+      const targetIntensity = LIGHTING.BOUNCE.intensity + proximityBoost
+      this.bounceLight.intensity += (targetIntensity - this.bounceLight.intensity) * dt * 5
+    }
+
+    // 5. Breathing clear color: subtle pulsing in idle state
+    if (this.currentAtmosphereState === 'IDLE' || this.currentAtmosphereState === 'normal') {
+      const breath = pulse(time, 0.25, 0.92, 1.0)
+      const base = this.scene.clearColor
+      this.scene.clearColor = new Color4(
+        base.r * breath,
+        base.g * breath,
+        base.b * breath,
+        base.a
+      )
     }
   }
 

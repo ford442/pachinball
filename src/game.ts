@@ -1,6 +1,7 @@
 import {
   ArcRotateCamera,
   Color3,
+  Color4,
   HemisphericLight,
   MeshBuilder,
   Scene,
@@ -20,6 +21,8 @@ import {
   Scalar
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
+import { DepthOfFieldEffectBlurLevel } from '@babylonjs/core/PostProcesses/depthOfFieldEffect'
+import { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { Nullable } from '@babylonjs/core/types'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
@@ -88,6 +91,11 @@ export class Game {
   private tableRenderTarget: RenderTargetTexture | null = null
   private headRenderTarget: RenderTargetTexture | null = null
   private shadowGenerator: ShadowGenerator | null = null
+
+  // Scene lights (stored for state-based animation)
+  private keyLight: DirectionalLight | null = null
+  private rimLight: DirectionalLight | null = null
+  private bounceLight: PointLight | null = null
   
   // Game State
   private ready = false
@@ -130,10 +138,11 @@ export class Game {
     this.scene.clearColor = color(SURFACES.VOID).toColor4(1)
 
     // Atmospheric fog for depth layering (disabled in reduced motion mode)
+    // State-based fog density/color is animated in EffectsSystem.updateAtmosphere()
     if (!GameConfig.camera.reducedMotion) {
       this.scene.fogMode = Scene.FOGMODE_EXP2
-      this.scene.fogDensity = 0.02
-      this.scene.fogColor = this.scene.clearColor
+      this.scene.fogDensity = 0.005
+      this.scene.fogColor = color('#080818')
     }
 
     // UI Bindings
@@ -295,24 +304,60 @@ export class Game {
       [tableCam, headCam]
     )
     if (this.bloomPipeline) {
+      // Bloom - richer glow hierarchy
       this.bloomPipeline.bloomEnabled = true
-      // Adjusted bloom for dramatic lighting:
-      // - Larger kernel for softer, more atmospheric glow
-      // - Lower threshold to catch more highlights with new key light
-      // - Balanced weight for visible but not overwhelming bloom
-      this.bloomPipeline.bloomKernel = 48          // Softer spread
-      this.bloomPipeline.bloomWeight = 0.25        // Slightly stronger for drama
-      this.bloomPipeline.bloomThreshold = 0.7      // Catch more highlights
-      
-      // Tone mapping for better contrast range
-      // Reinhard tone mapping preserves highlight detail with strong key light
+      this.bloomPipeline.bloomKernel = 64           // Wider kernel for atmospheric spread
+      this.bloomPipeline.bloomScale = 0.5           // Richer glow
+      this.bloomPipeline.bloomWeight = 0.25
+      this.bloomPipeline.bloomThreshold = 0.7
+
+      // FXAA - clean edges on thin pins, zero risk
+      this.bloomPipeline.fxaaEnabled = true
+
+      // ACES/Hable filmic tone mapping - better highlight preservation
       this.bloomPipeline.imageProcessing.toneMappingEnabled = true
-      // Use standard tone mapping (Reinhard value is 2)
-      this.bloomPipeline.imageProcessing.toneMappingType = 2
-      
-      // Contrast adjustment for more punch
+      this.bloomPipeline.imageProcessing.toneMappingType = 3  // Hable/ACES
       this.bloomPipeline.imageProcessing.contrast = 1.1
       this.bloomPipeline.imageProcessing.exposure = 1.0
+
+      // Vignette - natural focus guidance toward center
+      this.bloomPipeline.imageProcessing.vignetteEnabled = true
+      this.bloomPipeline.imageProcessing.vignetteWeight = 0.4
+      this.bloomPipeline.imageProcessing.vignetteColor = new Color4(0, 0, 0, 0)
+
+      // Subtle color temperature shift for cohesive warm mood
+      this.bloomPipeline.imageProcessing.colorCurvesEnabled = true
+      if (this.bloomPipeline.imageProcessing.colorCurves) {
+        this.bloomPipeline.imageProcessing.colorCurves.globalHue = 5
+        this.bloomPipeline.imageProcessing.colorCurves.globalSaturation = 15
+      }
+
+      // Sharpening - restore edge definition lost to bloom blur
+      this.bloomPipeline.sharpenEnabled = true
+      this.bloomPipeline.sharpen.edgeAmount = 0.3
+
+      // Depth of Field - subtle cinematic depth hierarchy (table camera only)
+      if (!GameConfig.camera.reducedMotion) {
+        this.bloomPipeline.depthOfFieldEnabled = true
+        this.bloomPipeline.depthOfField.focusDistance = 2500
+        this.bloomPipeline.depthOfField.fStop = 2.4
+        this.bloomPipeline.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Low
+      }
+    }
+
+    // SSAO - Screen-Space Ambient Occlusion for contact shadows and depth cues
+    if (!GameConfig.camera.reducedMotion) {
+      const ssao = new SSAO2RenderingPipeline('ssao', this.scene, {
+        ssaoRatio: 0.5,
+        blurRatio: 0.5,
+      })
+      ssao.radius = 1.5
+      ssao.totalStrength = 0.6
+      ssao.base = 0.5
+      ssao.samples = 16
+      ssao.maxZ = 50
+      ssao.minZAspect = 0.5
+      this.scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline('ssao', [tableCam, headCam])
     }
 
     // Scanline effect – only on the head camera
@@ -366,25 +411,31 @@ export class Game {
     keyLight.intensity = LIGHTING.KEY.intensity
     keyLight.diffuse = color(LIGHTING.KEY.color)
     keyLight.position = new Vector3(-15, 25, -15)
-    
+    this.keyLight = keyLight
+
     // Enable shadows for depth perception
     const shadowGenerator = new ShadowGenerator(2048, keyLight)
     shadowGenerator.useBlurExponentialShadowMap = true
-    shadowGenerator.blurKernel = 32
-    shadowGenerator.setDarkness(0.4)
+    shadowGenerator.blurKernel = 28           // Sharper contact shadows
+    shadowGenerator.setDarkness(0.3)          // Stronger contrast depth separation
+    // Shadow bias tuning - eliminates acne and peter-panning
+    shadowGenerator.bias = 0.0005
+    shadowGenerator.normalBias = 0.02
     this.shadowGenerator = shadowGenerator
-    
+
     // RIM LIGHT - Strong back light for edge definition
     const rimLight = new DirectionalLight('rimLight', new Vector3(0.2, -0.3, 0.9), this.scene)
     rimLight.intensity = LIGHTING.RIM.intensity
     rimLight.diffuse = color(LIGHTING.RIM.color)
     rimLight.position = new Vector3(5, 12, -25)
-    
+    this.rimLight = rimLight
+
     // BOUNCE LIGHT - Subtle fill from playfield reflection
     const bounceLight = new PointLight('bounceLight', new Vector3(0, -2, 5), this.scene)
     bounceLight.intensity = LIGHTING.BOUNCE.intensity
     bounceLight.diffuse = color(LIGHTING.BOUNCE.color)
     bounceLight.range = 20
+    this.bounceLight = bounceLight
 
     // Initialize Game Logic and Physics
     await this.physics.init()
@@ -617,6 +668,10 @@ export class Game {
 
     // Initialize systems
     this.effects = new EffectsSystem(this.scene, this.bloomPipeline)
+    // Register scene lights for state-based atmosphere animation
+    if (this.keyLight && this.rimLight && this.bounceLight) {
+      this.effects.registerSceneLights(this.keyLight, this.rimLight, this.bounceLight)
+    }
     this.display = new DisplaySystem(this.scene, this.engine)
     
     // Setup slot machine event callback
@@ -726,6 +781,7 @@ export class Game {
           this.display?.setStoryText(`ENTERING: ${trackName}`)
           // Set mood lighting
           this.effects?.setLightingMode('reach', 0.5)
+          this.effects?.setAtmosphereState('ADVENTURE')
           break
         }
 
@@ -733,6 +789,7 @@ export class Game {
           // Return to Pinball Mode
           this.display?.setDisplayState(DisplayState.IDLE)
           this.effects?.setLightingMode('normal', 1.0)
+          this.effects?.setAtmosphereState('IDLE')
           this.effects?.playBeep(440) // Transition sound
 
           // Bonus Points
@@ -790,18 +847,26 @@ export class Game {
     if (!GameConfig.camera.reducedMotion) {
       // Contact hardening for better depth cues
       this.shadowGenerator.useContactHardeningShadow = true
-      this.shadowGenerator.contactHardeningLightSizeU = 1.5
-      this.shadowGenerator.contactHardeningLightSizeV = 1.5
+      this.shadowGenerator.contactHardeningLightSizeUVRatio = 0.05
     }
+
+    // Shadow frustum optimization
+    this.shadowGenerator.frustumEdgeFalloff = 1.0
 
     // Get all pinball meshes from GameObjects
     const pinballMeshes = this.gameObjects.getPinballMeshes()
-    
+
     // Register gameplay-critical meshes for shadows
     for (const mesh of pinballMeshes) {
       // Skip transparent/emissive-only meshes
       if (mesh.name.includes('holo') || mesh.name.includes('glass')) continue
-      
+
+      // Cull pin shadows: too small, add noise. Only receive shadows.
+      if (mesh.name.includes('pin')) {
+        mesh.receiveShadows = true
+        continue
+      }
+
       this.shadowGenerator.addShadowCaster(mesh, true)
     }
 
@@ -930,6 +995,7 @@ export class Game {
       console.log("JACKPOT TRIGGERED!")
 
       this.effects?.startJackpotSequence()
+      this.effects?.setAtmosphereState('JACKPOT')
       this.display?.setDisplayState(DisplayState.JACKPOT)
 
       // Bonus Score
@@ -1105,6 +1171,16 @@ export class Game {
     this.effects?.updateBloom(dt)
     this.effects?.updateCabinetLighting(dt)
     this.effects?.updateSlotLighting(dt)
+
+    // State-based atmosphere: fog, light temperature, rim drama, bounce proximity
+    {
+      const ballBody = this.ballManager?.getBallBody()
+      const ballPos = ballBody ? (() => {
+        const t = ballBody.translation()
+        return new Vector3(t.x, t.y, t.z)
+      })() : undefined
+      this.effects?.updateAtmosphere(dt, ballPos)
+    }
     this.ballManager?.updateTrailEffects(dt)
 
     // Stuck ball detection: auto-reset balls that are stuck or out-of-bounds
@@ -1126,9 +1202,10 @@ export class Game {
     const jackpotPhase = this.effects?.jackpotPhase || 0
     this.display?.update(dt, jackpotPhase)
 
-    // Sync State: If effects system says jackpot is over, revert display
+    // Sync State: If effects system says jackpot is over, revert display and atmosphere
     if (this.effects && !this.effects.isJackpotActive && this.display?.getDisplayState() === DisplayState.JACKPOT) {
         this.display.setDisplayState(DisplayState.IDLE)
+        this.effects.setAtmosphereState('IDLE')
     }
     
     this.updateCombo(dt)
@@ -1211,6 +1288,7 @@ export class Game {
         this.updateHUD()
         this.display?.setDisplayState(DisplayState.REACH)
         this.effects?.setLightingMode('reach', 3.0)
+        this.effects?.setAtmosphereState('REACH')
 
         // Rebuild handle caches since new balls were spawned
         this.rebuildHandleCaches()
