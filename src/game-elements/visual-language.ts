@@ -392,25 +392,62 @@ export const LIGHTING = {
     color: '#fff4e6',
     intensity: 1.2,
   },
-  
+
   /** Fill light - cool ambient */
   FILL: {
     color: '#b3c8e6',
     intensity: 0.25,
   },
-  
+
   /** Rim light - cool edge definition */
   RIM: {
     color: '#80bfff',
     intensity: 0.8,
   },
-  
+
   /** Bounce light - subtle fill from playfield */
   BOUNCE: {
     color: PALETTE.PURPLE,
     intensity: 0.3,
   },
 } as const
+
+// ============================================================================
+// LIGHT TEMPERATURE - Color temperature presets per game state
+// ============================================================================
+
+/** Key light color temperatures for emotional state shifts */
+export const TEMPERATURE = {
+  NORMAL: '#fff4e6',   // Warm 3200K - neutral gameplay
+  FEVER:  '#ffddaa',   // Warmer 2700K - energized intensity
+  REACH:  '#e6f4ff',   // Cool 6500K - tense alertness
+  JACKPOT: '#ffcccc',  // Warm red - triumphant warmth
+  ADVENTURE: '#ccffee', // Teal - otherworldly exploration
+} as const
+
+// ============================================================================
+// LIGHTING STATES - Per-state intensity profiles for key/fill/rim lights
+// ============================================================================
+
+export const LIGHTING_STATES: Record<string, { key: number; fill: number; rim: number; rimColor: string }> = {
+  IDLE:      { key: 1.2,  fill: 0.25, rim: 0.8,  rimColor: '#80bfff' },
+  REACH:     { key: 1.0,  fill: 0.15, rim: 1.6,  rimColor: '#ff4400' },
+  FEVER:     { key: 1.4,  fill: 0.30, rim: 1.2,  rimColor: '#ffd700' },
+  JACKPOT:   { key: 1.5,  fill: 0.40, rim: 1.8,  rimColor: '#ff00aa' },
+  ADVENTURE: { key: 1.1,  fill: 0.20, rim: 1.0,  rimColor: '#00ff44' },
+}
+
+// ============================================================================
+// FOG STATES - Per-state fog parameters for atmospheric depth
+// ============================================================================
+
+export const FOG_STATES: Record<string, { density: number; color: string }> = {
+  IDLE:      { density: 0.005, color: '#080818' },
+  REACH:     { density: 0.008, color: '#1a0500' },
+  FEVER:     { density: 0.006, color: '#1a1000' },
+  JACKPOT:   { density: 0.010, color: '#1a0010' },
+  ADVENTURE: { density: 0.004, color: '#001a08' },
+}
 
 // ============================================================================
 // ADVENTURE MODE - Track-specific visual themes
