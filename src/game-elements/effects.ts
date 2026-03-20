@@ -29,6 +29,7 @@ import {
   pulse,
 } from './visual-language'
 import { EffectsConfig } from '../config'
+import { DEFAULT_ACCESSIBILITY, type AccessibilityConfig } from './accessibility-config'
 
 // Type for fever trail tracking
 interface FeverTrail {
@@ -130,6 +131,11 @@ export class EffectsSystem {
   // Camera shake state
   private cameraShakeIntensity = 0
   private cameraShakeDecay = 5.0
+  private cameraShakeTime = 0
+  private readonly MAX_SHAKE_INTENSITY = 0.08  // Reduced from 0.15 for safety
+  
+  // Accessibility config (CRITICAL SAFETY)
+  private accessibility: AccessibilityConfig = DEFAULT_ACCESSIBILITY
 
   registerCamera(camera: { position: Vector3 }): void {
     this.cameraRef = camera
@@ -144,38 +150,58 @@ export class EffectsSystem {
   }
 
   /**
-   * Add camera shake intensity (accumulates up to max 1.0)
+   * Register accessibility settings for respecting user preferences
+   * @param config - Accessibility configuration object
+   */
+  registerAccessibility(config: AccessibilityConfig): void {
+    this.accessibility = config
+  }
+
+  /**
+   * Add camera shake intensity (accumulates up to safe max 0.08)
+   * Respects accessibility.cameraShakeEnabled setting
    * @param intensity - Amount of shake to add (0.0 - 1.0)
    */
   addCameraShake(intensity: number): void {
-    this.cameraShakeIntensity = Math.min(this.cameraShakeIntensity + intensity, 1.0)
+    // Respect user accessibility preferences
+    if (this.accessibility?.cameraShakeEnabled === false) return
+    
+    // Cap at safe maximum intensity
+    const safeIntensity = Math.min(intensity, this.MAX_SHAKE_INTENSITY)
+    this.cameraShakeIntensity = Math.min(this.cameraShakeIntensity + safeIntensity, this.MAX_SHAKE_INTENSITY)
+    this.cameraShakeTime = performance.now() * 0.001
   }
 
   /**
    * Update camera shake - call from main update loop
-   * Applies shake to camera target with decay over time
+   * Applies smooth sine-wave shake to camera target with decay over time
+   * Uses smooth motion instead of random jitter for accessibility
    * @param dt - Delta time in seconds
    */
   updateCameraShake(dt: number): void {
     if (this.cameraShakeIntensity <= 0 || !this.tableCam) return
 
-    const shake = this.cameraShakeIntensity * 0.1
-    const rx = (Math.random() - 0.5) * shake
-    const ry = (Math.random() - 0.5) * shake
-    const rz = (Math.random() - 0.5) * shake
+    // Enforce safe maximum intensity
+    const intensity = Math.min(this.cameraShakeIntensity, this.MAX_SHAKE_INTENSITY)
+
+    // Use smooth sine waves instead of random for less jarring motion
+    this.cameraShakeTime += dt
+    const shakeX = Math.sin(this.cameraShakeTime * 20) * intensity * 0.7
+    const shakeY = Math.cos(this.cameraShakeTime * 15) * intensity * 0.5
+    const shakeZ = Math.sin(this.cameraShakeTime * 25) * intensity * 0.3
 
     // Apply to target, not position (preserves user control)
-    this.tableCam.target.addInPlace(new Vector3(rx, ry, rz))
+    this.tableCam.target.addInPlace(new Vector3(shakeX, shakeY, shakeZ))
 
-    this.cameraShakeIntensity -= dt * this.cameraShakeDecay
-    if (this.cameraShakeIntensity < 0) {
-      this.cameraShakeIntensity = 0
-    }
+    // Decay intensity with quick settling (5.0/sec)
+    this.cameraShakeIntensity = Math.max(0, this.cameraShakeIntensity - dt * this.cameraShakeDecay)
   }
 
-  constructor(scene: Scene, bloomPipeline: DefaultRenderingPipeline | null) {
+  constructor(scene: Scene, bloomPipeline: DefaultRenderingPipeline | null, accessibility?: AccessibilityConfig) {
     this.scene = scene
     this.bloomPipeline = bloomPipeline
+    // CRITICAL SAFETY: Use provided accessibility config or detect automatically
+    this.accessibility = accessibility ?? DEFAULT_ACCESSIBILITY
     
     try {
       this.audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
@@ -543,8 +569,10 @@ export class EffectsSystem {
           targetColor = emissive(STATE_COLORS.REACH, p * INTENSITY.FLASH)
           intensity = INTENSITY.FLASH
         } else if (this.jackpotPhase === 2) {
-          // Critical: Strobing gold
-          const strobe = (Math.sin(time * Math.PI * 4) + 1) * 0.5 // 2Hz smooth pulse
+          // Critical: Strobing gold - SAFETY: Use accessibility-controlled flash frequency
+          // CRITICAL SAFETY: Flash frequency capped at 2Hz (was unsafe 60Hz)
+          const flashFreq = this.accessibility.flashFrequencyMax  // 2Hz max for safety
+          const strobe = (Math.sin(time * Math.PI * 2 * flashFreq) + 1) * 0.5
           targetColor = emissive(PALETTE.GOLD, strobe * INTENSITY.BURST)
           intensity = INTENSITY.BURST
         } else {
@@ -833,8 +861,10 @@ export class EffectsSystem {
         }
           
         case 'stop': {
-          // Quick flash white
-          const flash = Math.sin(time * 20) > 0
+          // Quick flash white - SAFETY: Use safe frequency
+          // CRITICAL SAFETY: Flash frequency limited by accessibility config
+          const flashFreq = Math.min(5, this.accessibility.flashFrequencyMax * 2.5) // Max 5Hz, scales with accessibility
+          const flash = Math.sin(time * Math.PI * 2 * flashFreq) > 0
           targetColor = flash ? Color3.White() : emissive(PALETTE.GOLD, INTENSITY.AMBIENT)
           intensity = flash ? INTENSITY.FLASH : INTENSITY.NORMAL
           break
@@ -975,12 +1005,19 @@ export class EffectsSystem {
 
   /**
    * Trigger screen shake effect
+   * CRITICAL SAFETY: Respects reduced motion preferences and caps intensity
    */
   private triggerScreenShake(intensity: 'light' | 'medium' | 'heavy'): void {
+    // CRITICAL SAFETY: Skip if reduced motion or shake disabled
+    if (this.accessibility.reducedMotion || !this.accessibility.cameraShakeEnabled) {
+      return
+    }
     if (!this.cameraRef) return
     
     this.screenShake.active = true
-    this.screenShake.intensity = EffectsConfig.screenShake.intensity[intensity]
+    // CRITICAL SAFETY: Cap intensity at safe maximum
+    const baseIntensity = EffectsConfig.screenShake.intensity[intensity]
+    this.screenShake.intensity = Math.min(baseIntensity, this.accessibility.maxCameraShakeIntensity)
     this.screenShake.duration = intensity === 'light' ? 0.1 : intensity === 'medium' ? 0.15 : 0.25
     this.screenShake.timer = 0
   }

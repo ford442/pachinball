@@ -6,6 +6,7 @@ import {
   StandardMaterial,
   Quaternion,
   Color3,
+  Scalar,
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { AdventureModeTracksB } from './adventure-mode-tracks-b'
@@ -24,7 +25,148 @@ import {
 } from './adventure-mode-builder'
 import type { AdventureCallback } from './adventure-mode-builder'
 
+/**
+ * Camera preset configuration for adventure mode tracks.
+ * Defines all camera parameters for track-specific visibility and cinematic feel.
+ */
+export interface CameraPreset {
+  alpha: number
+  beta: number
+  radius: number
+  fov: number
+  lookAheadTime: number
+  trackingSmoothing: number
+  speedRadiusFactor: number
+  speedFOVFactor: number
+  maxRadiusExtension: number
+  minBeta: number
+  maxBeta: number
+  minRadius: number
+  maxRadius: number
+}
+
+/**
+ * Track-specific camera presets for optimal visibility and cinematic feel.
+ * Each preset is tuned for the specific track geometry and gameplay style.
+ */
+export const CAMERA_PRESETS: Record<string, CameraPreset> = {
+  /** NEON_HELIX: Balanced isometric view for the classic helix descent */
+  NEON_HELIX: {
+    alpha: -Math.PI / 2,
+    beta: 0.96, // 55°
+    radius: 16,
+    fov: 0.75,
+    lookAheadTime: 0.35,
+    trackingSmoothing: 7.0,
+    speedRadiusFactor: 0.25,
+    speedFOVFactor: 0.008,
+    maxRadiusExtension: 8,
+    minBeta: 0.7,
+    maxBeta: 1.22,
+    minRadius: 10,
+    maxRadius: 35,
+  },
+  /** CYBER_CORE: Steeper angle for vertical descent sections */
+  CYBER_CORE: {
+    alpha: -Math.PI / 2,
+    beta: 1.13, // 65°
+    radius: 14,
+    fov: 0.8,
+    lookAheadTime: 0.25,
+    trackingSmoothing: 9.0,
+    speedRadiusFactor: 0.35,
+    speedFOVFactor: 0.012,
+    maxRadiusExtension: 10,
+    minBeta: 0.87,
+    maxBeta: 1.31,
+    minRadius: 10,
+    maxRadius: 35,
+  },
+  /** QUANTUM_GRID: Wider FOV for maze navigation */
+  QUANTUM_GRID: {
+    alpha: -Math.PI / 2,
+    beta: 1.22, // 70°
+    radius: 18,
+    fov: 0.85,
+    lookAheadTime: 0.4,
+    trackingSmoothing: 6.0,
+    speedRadiusFactor: 0.15,
+    speedFOVFactor: 0.005,
+    maxRadiusExtension: 4,
+    minBeta: 1.05,
+    maxBeta: 1.4,
+    minRadius: 14,
+    maxRadius: 35,
+  },
+  /** SINGULARITY_WELL: Tighter view for gravitational challenge */
+  SINGULARITY_WELL: {
+    alpha: -Math.PI / 2,
+    beta: 1.05, // 60°
+    radius: 15,
+    fov: 0.78,
+    lookAheadTime: 0.3,
+    trackingSmoothing: 8.0,
+    speedRadiusFactor: 0.3,
+    speedFOVFactor: 0.01,
+    maxRadiusExtension: 6,
+    minBeta: 0.79,
+    maxBeta: 1.31,
+    minRadius: 10,
+    maxRadius: 35,
+  },
+  /** GLITCH_SPIRE: Dynamic view for chaotic environment */
+  GLITCH_SPIRE: {
+    alpha: -Math.PI / 2,
+    beta: 1.0, // 57°
+    radius: 17,
+    fov: 0.82,
+    lookAheadTime: 0.32,
+    trackingSmoothing: 7.5,
+    speedRadiusFactor: 0.28,
+    speedFOVFactor: 0.009,
+    maxRadiusExtension: 7,
+    minBeta: 0.75,
+    maxBeta: 1.26,
+    minRadius: 11,
+    maxRadius: 35,
+  },
+  /** PACHINKO_SPIRE: Top-down view for vertical pachinko board */
+  PACHINKO_SPIRE: {
+    alpha: -Math.PI / 2,
+    beta: 1.26, // 72°
+    radius: 20,
+    fov: 0.9,
+    lookAheadTime: 0.2,
+    trackingSmoothing: 10.0,
+    speedRadiusFactor: 0.1,
+    speedFOVFactor: 0.003,
+    maxRadiusExtension: 5,
+    minBeta: 1.13,
+    maxBeta: 1.45,
+    minRadius: 15,
+    maxRadius: 40,
+  },
+  /** DEFAULT: Fallback preset for tracks without specific tuning */
+  DEFAULT: {
+    alpha: -Math.PI / 2,
+    beta: Math.PI / 3,
+    radius: 14,
+    fov: 0.8,
+    lookAheadTime: 0.3,
+    trackingSmoothing: 7.0,
+    speedRadiusFactor: 0.2,
+    speedFOVFactor: 0.01,
+    maxRadiusExtension: 8,
+    minBeta: 0.5,
+    maxBeta: 1.3,
+    minRadius: 8,
+    maxRadius: 35,
+  },
+}
+
 export class AdventureMode extends AdventureModeTracksB {
+  /** Current camera preset for active track */
+  protected currentCameraPreset: CameraPreset = CAMERA_PRESETS.DEFAULT
   /**
    * Registers a callback listener to handle story events in the main Game class.
    */
@@ -52,6 +194,11 @@ export class AdventureMode extends AdventureModeTracksB {
     if (!this.adventureActive) return
 
     this.timeAccumulator += dt
+
+    // Camera update
+    if (this.followCamera && ballBodies.length > 0 && this.currentCameraPreset) {
+      this.updateCinematicCamera(ballBodies[0], dt)
+    }
 
     // 1. Animate Obstacles
     for (const obst of this.animatedObstacles) {
@@ -149,6 +296,75 @@ export class AdventureMode extends AdventureModeTracksB {
         binding.mesh.rotationQuaternion.set(rot.x, rot.y, rot.z, rot.w)
       }
     }
+  }
+
+  private updateCinematicCamera(ballBody: RAPIER.RigidBody, dt: number): void {
+    if (!this.followCamera || !this.currentCameraPreset) return
+
+    const preset = this.currentCameraPreset
+    const ballPos = ballBody.translation()
+    const velocity = ballBody.linvel()
+    const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
+
+    // 1. Speed-based radius
+    const speedFactor = Math.min(speed / 30, 1)
+    const targetRadius = preset.radius + (speedFactor * preset.speedRadiusFactor * 30)
+
+    // 2. Look-ahead targeting
+    const horizontalSpeed = Math.sqrt(velocity.x ** 2 + velocity.z ** 2)
+    const lookAheadDist = horizontalSpeed * preset.lookAheadTime
+
+    let velocityDir = { x: 0, z: 0 }
+    if (horizontalSpeed > 0.1) {
+      velocityDir = {
+        x: velocity.x / horizontalSpeed,
+        z: velocity.z / horizontalSpeed
+      }
+    }
+
+    const lookAheadPos = new Vector3(
+      ballPos.x + velocityDir.x * lookAheadDist,
+      ballPos.y,
+      ballPos.z + velocityDir.z * lookAheadDist
+    )
+
+    // Blend between ball position and look-ahead
+    const lookAheadBlend = Math.min(speed / 10, 0.5)
+    const targetPosition = new Vector3(
+      ballPos.x + (lookAheadPos.x - ballPos.x) * lookAheadBlend,
+      ballPos.y + (lookAheadPos.y - ballPos.y) * lookAheadBlend * 0.3,
+      ballPos.z + (lookAheadPos.z - ballPos.z) * lookAheadBlend
+    )
+
+    // 3. Apply with smoothing
+    const smoothing = preset.trackingSmoothing * dt
+
+    // Position smoothing
+    this.followCamera.target = new Vector3(
+      this.followCamera.target.x + (targetPosition.x - this.followCamera.target.x) * smoothing,
+      this.followCamera.target.y + (targetPosition.y - this.followCamera.target.y) * smoothing,
+      this.followCamera.target.z + (targetPosition.z - this.followCamera.target.z) * smoothing
+    )
+
+    // Radius smoothing with clamping
+    const radiusDelta = (targetRadius - this.followCamera.radius) * (preset.trackingSmoothing * 0.4 * dt)
+    this.followCamera.radius = Scalar.Clamp(
+      this.followCamera.radius + radiusDelta,
+      preset.minRadius,
+      Math.min(preset.maxRadius, preset.radius + preset.maxRadiusExtension)
+    )
+
+    // FOV smoothing
+    const targetFOV = preset.fov + (speedFactor * preset.speedFOVFactor * 30)
+    const fovDelta = (targetFOV - this.followCamera.fov) * (preset.trackingSmoothing * 0.3 * dt)
+    this.followCamera.fov = Scalar.Clamp(
+      this.followCamera.fov + fovDelta,
+      preset.fov - 0.3,  // Max change from base
+      preset.fov + 0.3
+    )
+
+    // Safety: clamp beta
+    this.followCamera.beta = Scalar.Clamp(this.followCamera.beta, preset.minBeta, preset.maxBeta)
   }
 
   /**
@@ -263,21 +479,28 @@ export class AdventureMode extends AdventureModeTracksB {
     this.tableCamera = currentCamera
     this.currentBallMesh = ballMesh || null
 
-    // Create new RPG-style Isometric Camera
-    // For Pachinko Spire, maybe a different angle?
-    // Plan says "Camera looks down (or sideways?)".
-    // Default ISO is fine, but maybe steeper pitch?
+    // Load track-specific camera preset
+    const presetKey = trackType as string
+    this.currentCameraPreset = CAMERA_PRESETS[presetKey] || CAMERA_PRESETS.DEFAULT
+    const preset = this.currentCameraPreset
 
-    this.followCamera = new ArcRotateCamera("isoCam", -Math.PI / 2, Math.PI / 3, 14, Vector3.Zero(), this.scene)
+    // Create new RPG-style Isometric Camera with preset configuration
+    this.followCamera = new ArcRotateCamera(
+      'adventureCam',
+      preset.alpha,
+      preset.beta,
+      preset.radius,
+      Vector3.Zero(),
+      this.scene
+    )
 
-    if (trackType === AdventureTrackType.PACHINKO_SPIRE) {
-        // Look more directly at the board
-        this.followCamera.beta = Math.PI / 2.5
-        this.followCamera.radius = 20
-    }
+    // Apply preset camera settings
+    this.followCamera.fov = preset.fov
+    this.followCamera.lowerRadiusLimit = preset.minRadius
+    this.followCamera.upperRadiusLimit = preset.maxRadius
+    this.followCamera.lowerBetaLimit = preset.minBeta
+    this.followCamera.upperBetaLimit = preset.maxBeta
 
-    this.followCamera.lowerRadiusLimit = 8
-    this.followCamera.upperRadiusLimit = 35
     this.followCamera.attachControl(this.scene.getEngine().getRenderingCanvas(), true)
     
     if (ballMesh) {
@@ -301,6 +524,7 @@ export class AdventureMode extends AdventureModeTracksB {
     }
     
     this.currentBallMesh = null
+    this.currentCameraPreset = null
 
     // Cleanup Visuals
     this.adventureTrack.forEach(m => m.dispose())

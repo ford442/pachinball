@@ -19,7 +19,6 @@ import {
   DirectionalLight,
   PointLight,
   ShadowGenerator,
-  Scalar
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import { DepthOfFieldEffectBlurLevel } from '@babylonjs/core/PostProcesses/depthOfFieldEffect'
@@ -51,6 +50,8 @@ import {
   GaussCannonState,
   QuantumTunnelFeeder,
   QuantumTunnelState,
+  CameraController,
+  CameraMode,
   getMaterialLibrary,
   resetMaterialLibrary,
   detectQualityTier,
@@ -61,6 +62,8 @@ import {
   LIGHTING,
   color,
   emissive,
+  detectAccessibility,
+  type AccessibilityConfig,
 } from './game-elements'
 import { GameConfig } from './config'
 import { scanlinePixelShader } from './shaders/scanline'
@@ -87,6 +90,7 @@ export class Game {
   private gaussCannon: GaussCannonFeeder | null = null
   private quantumTunnel: QuantumTunnelFeeder | null = null
   private inputHandler: InputHandler | null = null
+  private cameraController: CameraController | null = null
   
   // Rendering
   private bloomPipeline: DefaultRenderingPipeline | null = null
@@ -113,8 +117,6 @@ export class Game {
   private powerupTimer = 0
   private tiltActive = false
   
-  private targetOffset: Vector3 = Vector3.Zero()
-  
   // UI References
   private scoreElement: HTMLElement | null = null
   private livesElement: HTMLElement | null = null
@@ -125,6 +127,9 @@ export class Game {
   private gameOverScreen: HTMLElement | null = null
   private pauseOverlay: HTMLElement | null = null
   private finalScoreElement: HTMLElement | null = null
+
+  // Accessibility Configuration (CRITICAL SAFETY)
+  private accessibility: AccessibilityConfig = detectAccessibility()
 
   constructor(engine: Engine | WebGPUEngine, preloadedRapier?: typeof RAPIER) {
     this.engine = engine
@@ -139,12 +144,16 @@ export class Game {
     this.scene = new Scene(this.engine)
     this.scene.clearColor = color(SURFACES.VOID).toColor4(1)
 
-    // Atmospheric fog for depth layering (disabled in reduced motion mode)
-    // State-based fog density/color is animated in EffectsSystem.updateAtmosphere()
-    if (!GameConfig.camera.reducedMotion) {
+    // === CAMERA ENHANCEMENT: Atmospheric Depth ===
+    // Exponential fog for upper playfield separation - subtle depth layering
+    // Disabled for users with reduced motion preference (accessibility)
+    if (!this.accessibility?.reducedMotion) {
       this.scene.fogMode = Scene.FOGMODE_EXP2
-      this.scene.fogDensity = 0.005
-      this.scene.fogColor = color('#080818')
+      this.scene.fogColor = Color3.FromHexString('#050510')  // Match void color for seamless blending
+      this.scene.fogDensity = 0.015
+    } else {
+      // Disable fog for reduced motion preference
+      this.scene.fogMode = Scene.FOGMODE_NONE
     }
 
     // UI Bindings
@@ -172,7 +181,10 @@ export class Game {
     // Load and apply settings
     const settings = SettingsManager.load()
     SettingsManager.applyToConfig(settings)
-    console.log('[Accessibility] Settings loaded:', settings)
+    
+    // CRITICAL SAFETY: Initialize accessibility with system detection
+    this.accessibility = detectAccessibility()
+    console.log('[Accessibility] Settings loaded:', settings, 'Accessibility:', this.accessibility)
 
     // Setup settings UI
     this.setupSettingsUI()
@@ -722,7 +734,8 @@ export class Game {
     this.mirrorTexture.level = 0.6
 
     // Initialize core systems needed for all phases
-    this.effects = new EffectsSystem(this.scene, this.bloomPipeline)
+    // CRITICAL SAFETY: Pass accessibility config to effects system
+    this.effects = new EffectsSystem(this.scene, this.bloomPipeline, this.accessibility)
     // Register scene lights for state-based atmosphere animation
     if (this.keyLight && this.rimLight && this.bounceLight) {
       this.effects.registerSceneLights(this.keyLight, this.rimLight, this.bounceLight)
@@ -809,6 +822,11 @@ export class Game {
     if (this.tableCam && this.effects) {
       this.effects.registerCamera(this.tableCam)
       this.effects.registerTableCamera(this.tableCam)
+    }
+
+    // Initialize camera controller for dynamic framing
+    if (this.tableCam) {
+      this.cameraController = new CameraController(this.tableCam)
     }
   }
 
@@ -1072,6 +1090,48 @@ export class Game {
     }
   }
 
+  /**
+   * Determine the current camera mode based on game state and ball situation
+   */
+  private getCameraMode(): CameraMode {
+    // Adventure mode takes priority
+    if (this.adventureMode?.isActive()) {
+      return CameraMode.ADVENTURE
+    }
+
+    // Jackpot mode when jackpot is active
+    if (this.effects?.isJackpotActive) {
+      return CameraMode.JACKPOT
+    }
+
+    // Check ball count for multiball
+    const ballCount = this.ballManager?.getBallBodies().length || 0
+    if (ballCount > 1) {
+      return CameraMode.MULTIBALL
+    }
+
+    // Get ball position for zone-based modes
+    const ballBody = this.ballManager?.getBallBody()
+    if (!ballBody) {
+      return CameraMode.IDLE
+    }
+
+    const ballPos = ballBody.translation()
+
+    // Upper playfield focus
+    if (ballPos.z < -8) {
+      return CameraMode.UPPER_PLAY
+    }
+
+    // Flipper ready mode when ball is near plunger or waiting
+    if (ballPos.z > 5 || Math.abs(ballPos.x) > 8) {
+      return CameraMode.FLIPPER_READY
+    }
+
+    // Default to idle/center framing
+    return CameraMode.IDLE
+  }
+
   private startGame(): void {
     this.score = 0
     this.lives = 3
@@ -1257,22 +1317,19 @@ export class Game {
 
     // Camera shake is now handled by EffectsSystem.updateCameraShake()
 
-    // Subtle target drift toward ball for better framing (only in reduced motion = false)
-    if (!GameConfig.camera.reducedMotion && this.ballManager?.getBallBody()) {
-      const ballPos = this.ballManager.getBallBody()!.translation()
-      const targetX = Math.max(-5, Math.min(5, ballPos.x)) // Clamp to safe range
-      const targetZ = Math.max(-2, Math.min(8, ballPos.z))
+    // Dynamic camera targeting with rule-of-thirds framing
+    if (!GameConfig.camera.reducedMotion && this.cameraController && this.ballManager?.getBallBody()) {
+      const ballBody = this.ballManager.getBallBody()!
+      const pos = ballBody.translation()
+      const vel = ballBody.linvel()
+      const cameraMode = this.getCameraMode()
       
-      this.targetOffset.x = Scalar.Lerp(this.targetOffset.x, targetX * 0.3, dt * 2)
-      this.targetOffset.z = Scalar.Lerp(this.targetOffset.z, (targetZ - 2) * 0.2, dt * 2)
-      
-      if (this.scene) {
-        const tableCam = this.scene.activeCameras?.[0] as ArcRotateCamera
-        if (tableCam) {
-          tableCam.target.x = this.targetOffset.x
-          tableCam.target.z = 2 + this.targetOffset.z
-        }
-      }
+      this.cameraController.update(
+        dt,
+        new Vector3(pos.x, pos.y, pos.z),
+        new Vector3(vel.x, vel.y, vel.z),
+        cameraMode
+      )
     }
 
     // Sync Adventure Mode Kinematics
