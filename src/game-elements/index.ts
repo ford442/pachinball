@@ -24,3 +24,5 @@ export {
   REDUCED_MOTION_CONFIG,
   type AccessibilityConfig
 } from './accessibility-config'
+export { HapticManager, type HapticConfig } from './haptics'
+export { GamepadManager, type GamepadConfig, type GamepadState } from './gamepad'

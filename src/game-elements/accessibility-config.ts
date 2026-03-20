@@ -20,6 +20,10 @@ export interface AccessibilityConfig {
   effectIntensity: number
   /** Maximum camera shake intensity (safety cap at 0.08) */
   maxCameraShakeIntensity: number
+  /** Whether haptic feedback is enabled */
+  hapticsEnabled: boolean
+  /** Haptic intensity multiplier (0.0 to 2.0) */
+  hapticIntensity: number
 }
 
 /** Default accessibility settings for typical users */
@@ -29,7 +33,9 @@ export const DEFAULT_ACCESSIBILITY: AccessibilityConfig = {
   flashFrequencyMax: 2,  // CRITICAL: Capped at 2Hz for seizure safety
   scanlineIntensity: 0.25,
   effectIntensity: 1.0,
-  maxCameraShakeIntensity: 0.08  // CRITICAL: Capped at 0.08 for motion safety
+  maxCameraShakeIntensity: 0.08,  // CRITICAL: Capped at 0.08 for motion safety
+  hapticsEnabled: true,
+  hapticIntensity: 1.0
 }
 
 /** Accessibility settings for users who prefer reduced motion */
@@ -39,7 +45,9 @@ export const REDUCED_MOTION_CONFIG: AccessibilityConfig = {
   flashFrequencyMax: 1,  // Even slower flashes in reduced motion mode
   scanlineIntensity: 0.0,  // Disable scanlines
   effectIntensity: 0.3,   // Reduce all effects
-  maxCameraShakeIntensity: 0.0  // Disable shake entirely
+  maxCameraShakeIntensity: 0.0,  // Disable shake entirely
+  hapticsEnabled: false,  // Disabled for reduced motion
+  hapticIntensity: 0.5
 }
 
 /**

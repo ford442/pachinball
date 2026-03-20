@@ -63,7 +63,9 @@ import {
   color,
   emissive,
   detectAccessibility,
+  HapticManager,
   type AccessibilityConfig,
+  type InputFrame,
 } from './game-elements'
 import { GameConfig } from './config'
 import { scanlinePixelShader } from './shaders/scanline'
@@ -91,6 +93,7 @@ export class Game {
   private quantumTunnel: QuantumTunnelFeeder | null = null
   private inputHandler: InputHandler | null = null
   private cameraController: CameraController | null = null
+  private hapticManager: HapticManager | null = null
   
   // Rendering
   private bloomPipeline: DefaultRenderingPipeline | null = null
@@ -117,6 +120,17 @@ export class Game {
   private powerupTimer = 0
   private tiltActive = false
   
+  // Plunger Charge State
+  private plungerChargeLevel = 0
+
+  // Nudge State
+  private nudgeState = {
+    tiltWarnings: 0,
+    lastNudgeTime: 0,
+    tiltActive: false,
+    tiltWarningActive: false
+  }
+  
   // UI References
   private scoreElement: HTMLElement | null = null
   private livesElement: HTMLElement | null = null
@@ -127,6 +141,10 @@ export class Game {
   private gameOverScreen: HTMLElement | null = null
   private pauseOverlay: HTMLElement | null = null
   private finalScoreElement: HTMLElement | null = null
+
+  // Debug UI
+  private inputLatencyOverlay: HTMLElement | null = null
+  private showDebugUI = false
 
   // Accessibility Configuration (CRITICAL SAFETY)
   private accessibility: AccessibilityConfig = detectAccessibility()
@@ -185,6 +203,12 @@ export class Game {
     // CRITICAL SAFETY: Initialize accessibility with system detection
     this.accessibility = detectAccessibility()
     console.log('[Accessibility] Settings loaded:', settings, 'Accessibility:', this.accessibility)
+
+    // Initialize haptic manager
+    this.hapticManager = new HapticManager({
+      enabled: this.accessibility.hapticsEnabled,
+      intensity: this.accessibility.hapticIntensity
+    })
 
     // Setup settings UI
     this.setupSettingsUI()
@@ -459,12 +483,15 @@ export class Game {
     // Initialize ball animator for squash-and-stretch effects
     this.ballAnimator = new BallAnimator(this.scene)
 
-    // Initialize input handler
+    // Initialize input handler with plunger charge support
     this.inputHandler = new InputHandler(
       {
         onFlipperLeft: (pressed) => this.handleFlipperLeft(pressed),
         onFlipperRight: (pressed) => this.handleFlipperRight(pressed),
         onPlunger: () => this.handlePlunger(),
+        onPlungerChargeStart: () => this.startPlungerCharge(),
+        onPlungerChargeRelease: (chargeLevel) => this.releasePlungerCharge(chargeLevel),
+        onPlungerChargeUpdate: (chargeLevel) => this.updatePlungerCharge(chargeLevel),
         onNudge: (direction) => this.applyNudge(direction),
         onPause: () => this.togglePause(),
         onReset: () => this.resetBall(),
@@ -478,6 +505,19 @@ export class Game {
       },
       this.physics.getRapier()
     )
+    
+    // Configure plunger charge parameters from GameConfig
+    this.inputHandler.configurePlungerCharge({
+      maxChargeTime: GameConfig.plunger.maxChargeTime,
+      minImpulse: GameConfig.plunger.minImpulse,
+      maxImpulse: GameConfig.plunger.maxImpulse
+    })
+    
+    // Initialize gamepad support
+    this.inputHandler.setupGamepad({
+      deadZone: 0.15,
+      vibrationEnabled: !this.accessibility.reducedMotion
+    })
 
     const touchLeftBtn = document.getElementById('touch-left')
     const touchRightBtn = document.getElementById('touch-right')
@@ -490,12 +530,20 @@ export class Game {
     })
     
     this.engine.runRenderLoop(() => {
+      this.updateLatencyDisplay()
       this.scene?.render()
     })
 
     window.addEventListener('keydown', this.inputHandler.handleKeyDown)
     window.addEventListener('keyup', this.inputHandler.handleKeyUp)
-    
+
+    // Enable latency tracking in dev mode (check URL parameter)
+    this.showDebugUI = new URLSearchParams(window.location.search).has('debug')
+    if (this.showDebugUI) {
+      this.inputHandler.enableLatencyTracking(true)
+      this.setupLatencyOverlay()
+    }
+
     this.ready = true
     this.setGameState(GameState.MENU)
   }
@@ -1155,6 +1203,7 @@ export class Game {
     if (!this.ready || this.state !== GameState.PLAYING) return
     if (this.tiltActive && pressed) {
       this.effects?.playBeep(220)
+      this.hapticManager?.tiltWarning()
       return
     }
     
@@ -1166,12 +1215,18 @@ export class Game {
       const angle = pressed ? -Math.PI / 6 : Math.PI / 4
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
     }
+    
+    // Haptic feedback on flipper activation
+    if (pressed) {
+      this.hapticManager?.flipper()
+    }
   }
 
   private handleFlipperRight(pressed: boolean): void {
     if (!this.ready || this.state !== GameState.PLAYING) return
     if (this.tiltActive && pressed) {
       this.effects?.playBeep(220)
+      this.hapticManager?.tiltWarning()
       return
     }
     
@@ -1183,23 +1238,180 @@ export class Game {
       const angle = pressed ? Math.PI / 6 : -Math.PI / 4
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
     }
+    
+    // Haptic feedback on flipper activation
+    if (pressed) {
+      this.hapticManager?.flipper()
+    }
   }
 
   private handlePlunger(): void {
+    // Plunger is now handled by releasePlungerCharge with charge level
+    // This method is kept for backwards compatibility with input frame processing
     const rapier = this.physics.getRapier()
     const ballBody = this.ballManager?.getBallBody()
     if (!ballBody || !rapier) return
     
     const pos = ballBody.translation()
     if (pos.x > 8 && pos.z < -4) {
-      // Use config for impulse
-      ballBody.applyImpulse(new rapier.Vector3(0, 0, GameConfig.plunger.impulse), true)
+      // Calculate impulse based on charge level (fallback to full impulse if no charge)
+      const chargeRatio = this.plungerChargeLevel
+      const impulseMagnitude = GameConfig.plunger.minImpulse + 
+        (GameConfig.plunger.maxImpulse - GameConfig.plunger.minImpulse) * chargeRatio
+      
+      ballBody.applyImpulse(new rapier.Vector3(0, 0, impulseMagnitude), true)
+      
+      // Haptic feedback - stronger for more charge
+      const hapticIntensity = 30 + Math.floor(chargeRatio * 40)
+      this.hapticManager?.trigger([hapticIntensity, 10, Math.floor(hapticIntensity / 2)])
+      
+      // Visual feedback - camera shake based on charge
+      if (!this.accessibility.reducedMotion && this.effects) {
+        const shakeIntensity = 0.02 + chargeRatio * 0.04
+        this.effects.addCameraShake(shakeIntensity)
+      }
+      
+      // Reset charge state
+      this.plungerChargeLevel = 0
+    }
+  }
+  
+  /**
+   * Called when plunger charge starts (button pressed)
+   */
+  private startPlungerCharge(): void {
+    this.plungerChargeLevel = 0
+    
+    // Initial haptic feedback to indicate charge started
+    this.hapticManager?.trigger([20, 5])
+  }
+  
+  /**
+   * Called each frame while plunger is held to update charge level
+   */
+  private updatePlungerCharge(chargeLevel: number): void {
+    this.plungerChargeLevel = chargeLevel
+    
+    // Update visual feedback - animate plunger pullback
+    this.updatePlungerVisual(chargeLevel)
+    
+    // Progressive haptic feedback as charge builds
+    if (chargeLevel > 0.25 && chargeLevel < 0.3) {
+      this.hapticManager?.trigger([15])
+    } else if (chargeLevel > 0.5 && chargeLevel < 0.55) {
+      this.hapticManager?.trigger([25])
+    } else if (chargeLevel > 0.75 && chargeLevel < 0.8) {
+      this.hapticManager?.trigger([35])
+    } else if (chargeLevel >= 1.0 && Math.floor(performance.now() / 100) % 10 === 0) {
+      // Pulse at max charge
+      this.hapticManager?.trigger([40, 5])
+    }
+  }
+  
+  /**
+   * Called when plunger is released
+   */
+  private releasePlungerCharge(chargeLevel: number): void {
+    this.plungerChargeLevel = chargeLevel
+    // The actual impulse is applied in handlePlunger() which is called after this
+  }
+  
+  /**
+   * Update plunger visual - pull back the rod and knob based on charge level
+   */
+  private updatePlungerVisual(chargeLevel: number): void {
+    if (!this.scene) return
+    
+    // Find plunger meshes
+    const shooterRod = this.scene.getMeshByName('shooterRod')
+    const plungerKnob = this.scene.getMeshByName('plungerKnob')
+    
+    if (shooterRod && plungerKnob) {
+      // Pull back based on charge level (max pullback from config)
+      const maxPullback = GameConfig.plunger.maxPullbackDistance
+      const pullback = chargeLevel * maxPullback
+      
+      // Original positions
+      const rodBaseZ = -10
+      const knobBaseZ = -13
+      
+      // Apply pullback (negative Z direction)
+      shooterRod.position.z = rodBaseZ - pullback
+      plungerKnob.position.z = knobBaseZ - pullback
     }
   }
 
-  private applyNudge(direction: RAPIER.Vector3): void {
-    // Stub for nudge functionality
-    void direction
+  private applyNudge(direction: { x: number; y: number; z: number }): void {
+    if (this.nudgeState.tiltActive) {
+      this.hapticManager?.tiltWarning()
+      return
+    }
+    
+    const rapier = this.physics.getRapier()
+    const ballBody = this.ballManager?.getBallBody()
+    if (!ballBody || !rapier) return
+    
+    // Track tilt warnings - warn if nudging too frequently
+    const now = performance.now()
+    if (now - this.nudgeState.lastNudgeTime < 500) {
+      this.nudgeState.tiltWarnings++
+      if (this.nudgeState.tiltWarnings >= GameConfig.nudge.maxTiltWarnings) {
+        this.triggerTilt()
+        return
+      }
+    }
+    this.nudgeState.lastNudgeTime = now
+    
+    // Apply impulse with vertical boost for realistic nudge feel
+    const impulse = new rapier.Vector3(
+      direction.x * GameConfig.nudge.force,
+      GameConfig.nudge.verticalBoost,
+      direction.z * GameConfig.nudge.force
+    )
+    ballBody.applyImpulse(impulse, true)
+    
+    // Haptic feedback
+    const nudgeDirection = direction.x > 0 ? 'right' : direction.x < 0 ? 'left' : 'up'
+    this.hapticManager?.nudge(nudgeDirection)
+    
+    // Visual feedback (subtle screen shake) - skip if reduced motion
+    if (!this.accessibility.reducedMotion) {
+      this.effects?.addCameraShake(0.03)
+    }
+  }
+
+  private triggerTilt(): void {
+    this.nudgeState.tiltActive = true
+    this.nudgeState.tiltWarningActive = false
+    this.tiltActive = true
+    
+    // Visual tilt warning - flash bloom
+    this.effects?.setBloomEnergy(3.0)
+    setTimeout(() => this.effects?.setBloomEnergy(1.0), 1000)
+    
+    // Audio warning
+    this.effects?.playBeep(150) // Low warning tone
+    
+    // Haptic warning
+    this.hapticManager?.tiltWarning()
+    
+    // Reset after delay
+    setTimeout(() => {
+      this.nudgeState.tiltActive = false
+      this.nudgeState.tiltWarnings = 0
+      this.tiltActive = false
+    }, GameConfig.nudge.tiltPenaltyTime)
+  }
+
+  /**
+   * Reset tilt warnings slowly over time
+   * Called from stepPhysics to decay warnings when nudging stops
+   */
+  private updateTiltDecay(dt: number): void {
+    const now = performance.now()
+    if (now - this.nudgeState.lastNudgeTime > GameConfig.nudge.tiltDecayTime && this.nudgeState.tiltWarnings > 0) {
+      this.nudgeState.tiltWarnings = Math.max(0, this.nudgeState.tiltWarnings - dt)
+    }
   }
 
   private triggerJackpot(): void {
@@ -1257,7 +1469,46 @@ export class Game {
     this.adventureSensorHandle = sensor ? sensor.handle : -1
   }
 
+  /**
+   * Apply a single input frame to the game state
+   * Called at the start of stepPhysics() for frame-aligned input processing
+   */
+  private applyInputFrame(frame: InputFrame): void {
+    // Apply flipper inputs only if state changed
+    if (frame.flipperLeft !== null) {
+      this.handleFlipperLeft(frame.flipperLeft)
+    }
+    if (frame.flipperRight !== null) {
+      this.handleFlipperRight(frame.flipperRight)
+    }
+    
+    // Apply plunger (one-shot trigger)
+    if (frame.plunger) {
+      this.handlePlunger()
+    }
+    
+    // Apply nudge if present
+    if (frame.nudge) {
+      const rapier = this.physics.getRapier()
+      if (rapier) {
+        this.applyNudge(new rapier.Vector3(frame.nudge.x, frame.nudge.y, frame.nudge.z))
+      }
+    }
+  }
+
   private stepPhysics(): void {
+    // Poll gamepad input each frame
+    this.inputHandler?.pollGamepad()
+    
+    // Update plunger charge while held
+    this.inputHandler?.updatePlungerCharge()
+    
+    // Process buffered inputs at start of physics step for consistent latency
+    const inputFrame = this.inputHandler?.processBufferedInputs()
+    if (inputFrame) {
+      this.applyInputFrame(inputFrame)
+    }
+    
     if (this.state !== GameState.PLAYING) return
 
     const rawDt = this.engine.getDeltaTime() / 1000
@@ -1414,6 +1665,7 @@ export class Game {
     }
     
     this.updateCombo(dt)
+    this.updateTiltDecay(dt)
     
     if (this.powerupActive) {
       this.powerupTimer -= dt
@@ -1493,6 +1745,12 @@ export class Game {
             this.effects?.playBeep(400 + Math.random() * 200)
             this.updateHUD()
             this.effects?.setLightingMode('hit', 0.2)
+            
+            // Haptic feedback on bumper hit - intensity based on ball velocity
+            const velocity = ballBody.linvel()
+            const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
+            this.hapticManager?.bumper(speed)
+            
             return
           }
         }
@@ -1566,6 +1824,9 @@ export class Game {
     
     this.comboCount = 0
     this.ballManager?.removeBall(body)
+    
+    // Haptic feedback on ball loss
+    this.hapticManager?.ballLost()
     
     const ballBody = this.ballManager?.getBallBody()
     if (body === ballBody) {
@@ -1825,7 +2086,7 @@ export class Game {
     const reducedMotionCheckbox = document.getElementById('reduced-motion') as HTMLInputElement
     const photosensitiveCheckbox = document.getElementById('photosensitive-mode') as HTMLInputElement
     const shakeSlider = document.getElementById('shake-intensity') as HTMLInputElement
-    
+
     const newSettings = {
       reducedMotion: reducedMotionCheckbox?.checked ?? false,
       photosensitiveMode: photosensitiveCheckbox?.checked ?? false,
@@ -1833,9 +2094,59 @@ export class Game {
       enableFog: true,
       enableShadows: true
     }
-    
+
     SettingsManager.save(newSettings)
     SettingsManager.applyToConfig(newSettings)
     console.log('[Accessibility] Settings saved:', newSettings)
+  }
+
+  // ============================================================================
+  // LATENCY OVERLAY (Debug Mode)
+  // ============================================================================
+
+  private setupLatencyOverlay(): void {
+    if (!this.showDebugUI) return
+
+    // Create simple HTML overlay for latency display
+    this.inputLatencyOverlay = document.createElement('div')
+    this.inputLatencyOverlay.id = 'latency-overlay'
+    this.inputLatencyOverlay.style.cssText = `
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #00ff00;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      z-index: 1000;
+      pointer-events: none;
+      border: 1px solid #00ff00;
+    `
+    this.inputLatencyOverlay.textContent = 'Input: -- ms'
+    document.body.appendChild(this.inputLatencyOverlay)
+  }
+
+  private updateLatencyDisplay(): void {
+    if (!this.inputLatencyOverlay || !this.showDebugUI) return
+
+    const report = this.inputHandler?.getLatencyReport()
+    if (report) {
+      this.inputLatencyOverlay.textContent =
+        `Input: ${report.avg.toFixed(1)}ms (P95: ${report.p95.toFixed(1)}ms)`
+
+      // Color code based on latency
+      if (report.avg > 20) {
+        this.inputLatencyOverlay.style.color = '#ff0000' // Red
+        this.inputLatencyOverlay.style.borderColor = '#ff0000'
+      } else if (report.avg > 10) {
+        this.inputLatencyOverlay.style.color = '#ffff00' // Yellow
+        this.inputLatencyOverlay.style.borderColor = '#ffff00'
+      } else {
+        this.inputLatencyOverlay.style.color = '#00ff00' // Green
+        this.inputLatencyOverlay.style.borderColor = '#00ff00'
+      }
+    }
   }
 }

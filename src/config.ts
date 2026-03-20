@@ -169,7 +169,24 @@ export const GameConfig = {
   },
 
   plunger: {
+    /** @deprecated Use minImpulse/maxImpulse for analog charge instead */
     impulse: 22,
+    /** Max charge time in milliseconds to reach full power */
+    maxChargeTime: 1500,
+    /** Minimum impulse magnitude (instant tap) */
+    minImpulse: 10,
+    /** Maximum impulse magnitude (full charge) */
+    maxImpulse: 35,
+    /** Visual pullback distance for plunger animation */
+    maxPullbackDistance: 2.0,
+  },
+
+  nudge: {
+    force: 0.6,           // Base nudge force
+    verticalBoost: 0.3,   // Slight upward component
+    maxTiltWarnings: 3,   // Warnings before tilt
+    tiltDecayTime: 2000,  // Milliseconds to decay warning
+    tiltPenaltyTime: 3000, // Milliseconds tilt stays active
   },
 
   flipper: {

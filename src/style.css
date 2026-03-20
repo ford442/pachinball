@@ -43,6 +43,10 @@ body {
   height: 100%;
   z-index: 0;               /* behind everything */
   outline: none;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* UI OVERLAYS – transparent so the canvas shows through */
@@ -169,6 +173,8 @@ button:hover {
   width: 56px; height: 56px; border-radius: 50%;
   background: rgba(0, 20, 40, 0.5); border: 2px solid rgba(0,217,255,0.4);
   color: #00d9ff; font-size: 1.2rem;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 @media (min-width: 680px) { #touch-controls { display: none; } }
 

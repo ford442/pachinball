@@ -169,3 +169,87 @@ export type SlotEventType =
   | 'near-miss'
   | 'activation-chance'
   | 'activation-denied'
+
+// ============================================================================
+// INPUT BUFFERING TYPES
+// ============================================================================
+
+/** Input frame for buffered input processing
+ * 
+ * This structure aligns input events with physics frames to eliminate
+ * jitter (±16ms) and prevent dropped inputs. Each field represents
+ * the input state change for a single frame.
+ */
+export interface InputFrame {
+  /** Left flipper state change - null means no change from previous frame */
+  flipperLeft: boolean | null
+  /** Right flipper state change - null means no change from previous frame */
+  flipperRight: boolean | null
+  /** Plunger trigger (true = fired this frame) */
+  plunger: boolean
+  /** Nudge direction vector - null means no nudge this frame */
+  nudge: { x: number; y: number; z: number } | null
+  /** Source of the nudge (for tracking/debugging) */
+  nudgeSource?: 'keyboard' | 'orientation' | 'touch'
+  /** Timestamp when this input frame was processed */
+  timestamp: number
+}
+
+/** Partial input frame for accumulating inputs during a frame */
+export type PendingInputFrame = Partial<Omit<InputFrame, 'timestamp'>> & { timestamp?: number }
+
+// ============================================================================
+// LATENCY TRACKING TYPES
+// ============================================================================
+
+/** Latency metrics for input-to-response timing */
+export interface LatencyMetrics {
+  /** Array of latency samples in milliseconds */
+  samples: number[]
+  /** Last time a report was generated (ms) */
+  lastReportTime: number
+  /** Maximum number of samples to keep */
+  maxSamples: number
+  /** Whether latency tracking is enabled */
+  enabled: boolean
+}
+
+/** Latency report with statistics */
+export interface LatencyReport {
+  /** Average latency in milliseconds */
+  avg: number
+  /** Minimum latency in milliseconds */
+  min: number
+  /** Maximum latency in milliseconds */
+  max: number
+  /** 95th percentile latency in milliseconds */
+  p95: number
+  /** Number of samples in the report */
+  sampleCount: number
+}
+
+// ============================================================================
+// PLUNGER CHARGE TYPES
+// ============================================================================
+
+/** Plunger charge state for analog skill-based control */
+export interface PlungerChargeState {
+  /** Whether the plunger is currently being held/charged */
+  isHeld: boolean
+  /** Timestamp when charge started (ms) */
+  chargeStartTime: number
+  /** Current charge level 0.0 to 1.0 */
+  chargeLevel: number
+  /** Max charge time in milliseconds */
+  maxChargeTime: number
+  /** Minimum impulse magnitude */
+  minImpulse: number
+  /** Maximum impulse magnitude */
+  maxImpulse: number
+}
+
+/** Plunger input events */
+export type PlungerInputEvent = 
+  | { type: 'start' }
+  | { type: 'release' }
+  | { type: 'update'; chargeLevel: number }
