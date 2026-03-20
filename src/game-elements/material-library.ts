@@ -68,7 +68,7 @@ export class MaterialLibrary {
   private textureCache: Map<string, Texture> = new Map()
   private materialCache: Map<string, StandardMaterial | PBRMaterial> = new Map()
 
-  private textureBasePath = '/textures'
+  private textureBasePath = './textures'
   private _qualityTier: QualityTier = QualityTier.HIGH
 
   constructor(scene: Scene) {

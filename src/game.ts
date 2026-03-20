@@ -125,9 +125,9 @@ export class Game {
   private pauseOverlay: HTMLElement | null = null
   private finalScoreElement: HTMLElement | null = null
 
-  constructor(engine: Engine | WebGPUEngine) {
+  constructor(engine: Engine | WebGPUEngine, preloadedRapier?: typeof RAPIER) {
     this.engine = engine
-    this.physics = new PhysicsSystem()
+    this.physics = new PhysicsSystem(preloadedRapier)
   }
 
   async init(): Promise<void> {
@@ -641,6 +641,11 @@ export class Game {
       window.removeEventListener('keydown', this.inputHandler.handleKeyDown)
       window.removeEventListener('keyup', this.inputHandler.handleKeyUp)
     }
+    this.tableRenderTarget?.dispose()
+    this.headRenderTarget?.dispose()
+    this.mirrorTexture?.dispose()
+    this.bloomPipeline?.dispose()
+    this.effects?.dispose()
     resetMaterialLibrary()
     this.scene?.dispose()
     this.physics.dispose()

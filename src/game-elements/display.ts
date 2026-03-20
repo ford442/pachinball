@@ -222,21 +222,22 @@ export class DisplaySystem {
   // ============================================================================
 
   createBackbox(pos: Vector3): void {
-    // Screen content Z-depth (inside the recessed display area)
     const screenZ = pos.z + 0.5
     
-    // Create all visual layers
+    // Create reels immediately (procedural - fast)
     this.createReelsLayer(pos, screenZ)
     this.createShaderLayer(pos, screenZ)
-    this.createVideoLayer(pos, screenZ)
-    this.createImageLayer(pos, screenZ)
     this.createOverlayLayer(pos, screenZ)
-    
-    // Create physical frame
     this.createFrameStructure(pos)
     
     // Apply initial visibility based on config
     this.applyLayerVisibility(this.currentState.mediaConfig)
+    
+    // DEFER: Video/Image load after gameplay starts
+    requestAnimationFrame(() => {
+      this.createVideoLayer(pos, screenZ)
+      this.createImageLayer(pos, screenZ)
+    })
   }
 
   private createFrameStructure(pos: Vector3): void {
@@ -395,6 +396,25 @@ export class DisplaySystem {
     this.shaderMaterial = cyberShader
     bgLayer.material = cyberShader
     this.layers.shader = bgLayer
+  }
+
+  private disposeVideoLayer(): void {
+    if (this.videoTexture?.video) {
+      const videoEl = this.videoTexture.video as HTMLVideoElement
+      videoEl.pause()
+      videoEl.src = ''
+      videoEl.load() // Force resource release
+      videoEl.remove() // Remove from DOM
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(this.videoTexture as any).video = null
+    }
+    this.videoTexture?.dispose()
+    this.videoMaterial?.dispose()
+    this.layers.video?.dispose()
+    this.videoTexture = null
+    this.videoMaterial = null
+    this.layers.video = null
+    this.layerState.video = { loaded: false, playing: false, error: false }
   }
 
   private createVideoLayer(pos: Vector3, screenZ: number): void {
@@ -1363,16 +1383,6 @@ export class DisplaySystem {
   // ============================================================================
   // CLEANUP
   // ============================================================================
-
-  private disposeVideoLayer(): void {
-    this.videoTexture?.dispose()
-    this.layers.video?.dispose()
-    this.videoMaterial?.dispose()
-    this.layers.video = null
-    this.videoTexture = null
-    this.videoMaterial = null
-    this.layerState.video = { loaded: false, playing: false, error: true }
-  }
 
   dispose(): void {
     this.disposeVideoLayer()

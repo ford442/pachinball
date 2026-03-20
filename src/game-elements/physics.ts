@@ -18,10 +18,22 @@ export class PhysicsSystem {
   /** Accumulator for fixed timestep */
   private accumulator = 0
 
+  constructor(preloadedRapier?: typeof RAPIER) {
+    // If Rapier was preloaded in parallel with engine creation, use it directly.
+    // This avoids redundant WASM fetch/compilation and reduces total init time.
+    if (preloadedRapier) {
+      this.rapier = preloadedRapier
+    }
+  }
+
   async init(): Promise<void> {
-    if (this.rapier) return
-    this.rapier = await import('@dimforge/rapier3d-compat')
-    await (this.rapier.init as unknown as () => Promise<void>)()
+    if (this.rapier && this.world) return
+    
+    // Fallback: load Rapier here if not preloaded (backward compatibility)
+    if (!this.rapier) {
+      this.rapier = await import('@dimforge/rapier3d-compat')
+      await (this.rapier.init as unknown as () => Promise<void>)()
+    }
 
     // Updated: Pass a single object with gravity property
     const gravity = { x: GRAVITY.x, y: GRAVITY.y, z: GRAVITY.z }

@@ -734,6 +734,31 @@ export class EffectsSystem {
     return this.audioCtx
   }
 
+  dispose(): void {
+    if (this.audioCtx && this.audioCtx.state !== 'closed') {
+      this.audioCtx.close().catch(() => {})
+    }
+    // Clear all effects
+    this.clearFeverTrails()
+    this.shards.forEach(s => {
+      s.mesh.dispose()
+      s.material.dispose()
+    })
+    this.shards = []
+    this.rippleRings.forEach(r => {
+      r.mesh.dispose()
+      r.material.dispose()
+    })
+    this.rippleRings = []
+    this.cabinetLights.forEach(l => {
+      l.mesh.dispose()
+      l.pointLight.dispose()
+    })
+    this.cabinetLights = []
+    this.transitionFlashOverlay?.dispose()
+    this.transitionFlashMat?.dispose()
+  }
+
   createParticleTexture(): Texture {
     return createSharedParticleTexture(this.scene)
   }

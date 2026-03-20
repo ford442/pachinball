@@ -3,14 +3,42 @@ import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import './style.css'
 import { Game } from './game'
+import type * as RAPIER from '@dimforge/rapier3d-compat'
+
+/**
+ * Preload physics WASM in parallel with engine creation.
+ * This overlaps the WASM fetch with engine initialization for faster startup.
+ * @returns Promise that resolves with the initialized Rapier module
+ */
+async function preloadPhysics(): Promise<typeof RAPIER> {
+  const rapier = await import('@dimforge/rapier3d-compat')
+  await (rapier.init as unknown as () => Promise<void>)()
+  return rapier
+}
 
 async function bootstrap(): Promise<void> {
   const canvas = document.getElementById('pachinball-canvas') as HTMLCanvasElement | null
   if (!canvas) throw new Error('Canvas element not found')
 
-  const engine = (await createEngine(canvas)) as Engine | WebGPUEngine
-  const game = new Game(engine)
+  console.time('[Bootstrap] Total initialization')
+  console.time('[Bootstrap] Engine + Physics parallel init')
+
+  // Parallelize engine creation and physics WASM loading
+  // This reduces total load time by overlapping network fetch (WASM) with GPU initialization
+  const [engine, preloadedRapier] = await Promise.all([
+    createEngine(canvas),
+    preloadPhysics()
+  ]) as [Engine | WebGPUEngine, typeof RAPIER]
+
+  console.timeEnd('[Bootstrap] Engine + Physics parallel init')
+  console.time('[Bootstrap] Game init')
+
+  const game = new Game(engine, preloadedRapier)
   await game.init()
+
+  console.timeEnd('[Bootstrap] Game init')
+  console.timeEnd('[Bootstrap] Total initialization')
+  console.log('[Bootstrap] Physics WASM preloading completed successfully')
 
   if (import.meta.hot) {
     import.meta.hot.dispose(() => {

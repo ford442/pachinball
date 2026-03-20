@@ -201,7 +201,7 @@ export const GameConfig = {
     // Set to '' to disable video and use image or reels
     // Example: '/backbox/attract.mp4' loads public/backbox/attract.mp4
     // Supported formats: mp4, webm (mp4 recommended for compatibility)
-    attractVideoPath: '/backbox/attract.mp4',
+    attractVideoPath: './backbox/attract.mp4',
     
     // If true, video replaces reels completely (reels hidden when video plays)
     // If false, video overlays reels (reels visible behind video)
@@ -210,7 +210,7 @@ export const GameConfig = {
     // Path to static attract image (relative to public/)
     // Used as fallback if video fails or isn't configured
     // Set to '' to disable image and use reels only
-    attractImagePath: '/backbox/attract.png',
+    attractImagePath: './backbox/attract.png',
     
     // Opacity of the image layer (0.0 = invisible, 1.0 = fully opaque)
     // Lower values let the animated grid/reels show through
