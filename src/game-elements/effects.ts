@@ -9,11 +9,10 @@ import {
   PointLight,
   Texture,
   DynamicTexture,
-  Quaternion,
+  Mesh,
 } from '@babylonjs/core'
 import type { DirectionalLight } from '@babylonjs/core'
 import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
-import type { Mesh } from '@babylonjs/core'
 import type { CabinetLight, ShardParticle } from './types'
 import {
   PALETTE,
@@ -1074,7 +1073,7 @@ export class EffectsSystem {
    * Trigger a state transition flash effect
    */
   triggerStateTransitionFlash(
-    fromState: 'normal' | 'hit' | 'fever' | 'reach',
+    _fromState: 'normal' | 'hit' | 'fever' | 'reach',
     toState: 'normal' | 'hit' | 'fever' | 'reach'
   ): void {
     if (!this.areEnhancedEffectsEnabled() || !EffectsConfig.enableStateTransitionFlashes) return

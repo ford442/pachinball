@@ -60,7 +60,7 @@ import {
   color,
   emissive,
 } from './game-elements'
-import { GameConfig, EffectsConfig } from './config'
+import { GameConfig } from './config'
 import { scanlinePixelShader } from './shaders/scanline'
 
 // Register the shader
