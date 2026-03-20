@@ -29,6 +29,8 @@ export class NanoLoomFeeder {
   private intakePosition: Vector3
 
   // Visuals
+  private _frameMesh: Mesh | null = null
+  private _intakeMesh: Mesh | null = null
   private pins: Mesh[] = []
   private light: PointLight | null = null
 
@@ -74,7 +76,7 @@ export class NanoLoomFeeder {
     frameMat.emissiveColor = Color3.FromHexString("#001111")
     frameMat.alpha = 0.3
     frame.material = frameMat
-    this.frameMesh = frame
+    this._frameMesh = frame
 
     // 2. Intake Tube
     const intake = MeshBuilder.CreateCylinder("nanoIntake", {
@@ -89,7 +91,7 @@ export class NanoLoomFeeder {
     intakeMat.emissiveColor = Color3.FromHexString("#00ffff")
     intakeMat.alpha = 0.5
     intake.material = intakeMat
-    this.intakeMesh = intake
+    this._intakeMesh = intake
 
     // 3. Pins (The Hex Grid)
     const pinMat = new StandardMaterial("nanoPinMat", this.scene)

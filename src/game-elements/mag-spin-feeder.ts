@@ -27,6 +27,7 @@ export class MagSpinFeeder {
   private config: GameConfigType['magSpin']
 
   private position: Vector3
+  private _mesh: Mesh | null = null
   private ringMesh: Mesh | null = null
   private light: PointLight | null = null
 
@@ -81,7 +82,7 @@ export class MagSpinFeeder {
     wellMat.backFaceCulling = false // Visible from inside
     well.material = wellMat
 
-    this.mesh = well
+    this._mesh = well
 
     // Floor
     const floor = MeshBuilder.CreateCylinder("magSpinFloor", {
