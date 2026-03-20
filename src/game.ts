@@ -1325,7 +1325,7 @@ export class Game {
       })() : undefined
       this.effects?.updateAtmosphere(dt, ballPos)
     }
-    this.ballManager?.updateTrailEffects(dt)
+    this.ballManager?.updateTrailEffects()
     // Enhanced effects update with fever trail support
     const ballBodies = this.ballManager?.getBallBodies() || []
     const isFever = this.effects?.currentLightingMode === 'fever'
