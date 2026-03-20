@@ -120,6 +120,10 @@ export class EffectsSystem {
   // Camera reference for screen shake
   private cameraRef: { position: Vector3 } | null = null
 
+  registerCamera(camera: { position: Vector3 }): void {
+    this.cameraRef = camera
+  }
+
   constructor(scene: Scene, bloomPipeline: DefaultRenderingPipeline | null) {
     this.scene = scene
     this.bloomPipeline = bloomPipeline
