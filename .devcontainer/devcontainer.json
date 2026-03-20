@@ -1,0 +1,22 @@
+{
+  "name": "Kimi + Wolfram Workspace",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "remoteUser": "root",
+  "forwardPorts": [3000, 8000],
+  
+  // This explicitly passes your secure secret from the host platform into the container
+  "remoteEnv": {
+    "WOLFRAM_TOKEN": "${localEnv:WOLFRAM_TOKEN}"
+  },
+
+  // This runs automatically after the container is built but before you are given terminal access
+  "postCreateCommand": "curl -L code.kimi.com/install.sh | bash && kimi mcp add --transport http wolfram https://services.wolfram.com/api/mcp --header \"Authorization: Bearer ${WOLFRAM_TOKEN}\"",
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}
