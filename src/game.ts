@@ -60,7 +60,7 @@ import {
   color,
   emissive,
 } from './game-elements'
-import { GameConfig } from './config'
+import { GameConfig, EffectsConfig } from './config'
 import { scanlinePixelShader } from './shaders/scanline'
 
 // Register the shader
@@ -96,6 +96,7 @@ export class Game {
   private keyLight: DirectionalLight | null = null
   private rimLight: DirectionalLight | null = null
   private bounceLight: PointLight | null = null
+  private tableCam: ArcRotateCamera | null = null
   
   // Game State
   private ready = false
@@ -196,6 +197,7 @@ export class Game {
       new Vector3(0, 0, 2),       // target: shifted toward flippers (was z=5)
       this.scene
     )
+    this.tableCam = tableCam  // Store reference for effects
     tableCam.mode = ArcRotateCamera.PERSPECTIVE_CAMERA
     tableCam.fov = 0.65           // Narrower FOV (~37°) for dramatic perspective
 
@@ -809,6 +811,11 @@ export class Game {
 
     this.display.createBackbox(new Vector3(0.75, 15, 30))
     this.effects.createCabinetLighting()
+    
+    // Register camera for screen shake effects
+    if (this.tableCam) {
+      this.effects.registerCamera(this.tableCam)
+    }
 
     // Register decorative materials for fever/reach effects
     if (!this.scene) return
@@ -1105,7 +1112,7 @@ export class Game {
 
     // Apply camera shake to table camera
     if (this.cameraShakeIntensity > 0 && this.scene) {
-      const tableCam = this.scene.activeCameras?.[0] as ArcRotateCamera
+      const tableCam = this.scene?.activeCameras?.[0] as ArcRotateCamera
       if (tableCam) {
         const shakeX = (Math.random() - 0.5) * this.cameraShakeIntensity
         const shakeY = (Math.random() - 0.5) * this.cameraShakeIntensity * 0.5
@@ -1124,10 +1131,12 @@ export class Game {
       this.targetOffset.x = Scalar.Lerp(this.targetOffset.x, targetX * 0.3, dt * 2)
       this.targetOffset.z = Scalar.Lerp(this.targetOffset.z, (targetZ - 2) * 0.2, dt * 2)
       
-      const tableCam = this.scene.activeCameras?.[0] as ArcRotateCamera
-      if (tableCam) {
-        tableCam.target.x = this.targetOffset.x
-        tableCam.target.z = 2 + this.targetOffset.z
+      if (this.scene) {
+        const tableCam = this.scene.activeCameras?.[0] as ArcRotateCamera
+        if (tableCam) {
+          tableCam.target.x = this.targetOffset.x
+          tableCam.target.z = 2 + this.targetOffset.z
+        }
       }
     }
 
@@ -1182,6 +1191,10 @@ export class Game {
       this.effects?.updateAtmosphere(dt, ballPos)
     }
     this.ballManager?.updateTrailEffects(dt)
+    // Enhanced effects update with fever trail support
+    const ballBodies = this.ballManager?.getBallBodies() || []
+    const isFever = this.effects?.currentLightingMode === 'fever'
+    this.effects?.update(dt, ballBodies, isFever)
 
     // Stuck ball detection: auto-reset balls that are stuck or out-of-bounds
     const stuckBalls = this.ballManager?.updateStuckDetection(dt) || []
@@ -1265,8 +1278,8 @@ export class Game {
             this.score += (10 * (Math.floor(this.comboCount / 3) + 1))
             this.comboCount++
             this.comboTimer = 1.5
-            this.effects?.spawnShardBurst(vis.mesh.position)
-            this.effects?.setBloomEnergy(2.0)
+            // Use enhanced bumper impact with screen shake and ripple rings
+            this.effects?.spawnEnhancedBumperImpact(vis.mesh.position, 'medium')
             this.effects?.playBeep(400 + Math.random() * 200)
             this.updateHUD()
             this.effects?.setLightingMode('hit', 0.2)
