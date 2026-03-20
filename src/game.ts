@@ -441,7 +441,7 @@ export class Game {
 
     // Initialize Game Logic and Physics
     await this.physics.init()
-    this.buildScene()
+    await this.buildSceneStaged()
 
     // Initialize input handler
     this.inputHandler = new InputHandler(
@@ -641,22 +641,62 @@ export class Game {
       window.removeEventListener('keydown', this.inputHandler.handleKeyDown)
       window.removeEventListener('keyup', this.inputHandler.handleKeyUp)
     }
-    this.tableRenderTarget?.dispose()
-    this.headRenderTarget?.dispose()
-    this.mirrorTexture?.dispose()
-    this.bloomPipeline?.dispose()
+
+    // === EXPLICIT RENDER TARGET CLEANUP ===
+    // Dispose in reverse order of creation to avoid dangling references
+
+    // 1. Post-process pipelines first
+    if (this.bloomPipeline) {
+      this.bloomPipeline.dispose()
+      this.bloomPipeline = null
+    }
+
+    // 2. Mirror texture
+    if (this.mirrorTexture) {
+      this.mirrorTexture.dispose()
+      this.mirrorTexture = null
+    }
+
+    // 3. Render target textures
+    if (this.tableRenderTarget) {
+      this.tableRenderTarget.dispose()
+      this.tableRenderTarget = null
+    }
+
+    if (this.headRenderTarget) {
+      this.headRenderTarget.dispose()
+      this.headRenderTarget = null
+    }
+
+    // 4. Shadow generator
+    if (this.shadowGenerator) {
+      this.shadowGenerator.dispose()
+      this.shadowGenerator = null
+    }
+
+    // 5. Effects system
     this.effects?.dispose()
+    this.effects = null
+
+    // 6. Now safe to dispose scene
     resetMaterialLibrary()
     this.scene?.dispose()
+    this.scene = null
+
     this.physics.dispose()
     this.ready = false
+
+    console.log('[Game] Disposed all resources')
   }
 
-  private buildScene(): void {
+  private async buildSceneStaged(): Promise<void> {
     if (!this.scene) throw new Error('Scene not ready')
     const world = this.physics.getWorld()
     const rapier = this.physics.getRapier()
     if (!world || !rapier) throw new Error('Physics not ready')
+
+    // Show loading state
+    this.showLoadingState(true)
 
     // Enhanced Skybox with subtle gradient effect
     const skybox = MeshBuilder.CreateBox("skybox", { size: 200.0 }, this.scene)
@@ -673,7 +713,7 @@ export class Game {
     this.mirrorTexture.mirrorPlane = new Plane(0, -1, 0, -1.01)
     this.mirrorTexture.level = 0.6
 
-    // Initialize systems
+    // Initialize core systems needed for all phases
     this.effects = new EffectsSystem(this.scene, this.bloomPipeline)
     // Register scene lights for state-based atmosphere animation
     if (this.keyLight && this.rimLight && this.bounceLight) {
@@ -689,90 +729,8 @@ export class Game {
     this.ballManager = new BallManager(this.scene, world, rapier, this.gameObjects.getBindings())
     this.adventureMode = new AdventureMode(this.scene, world, rapier)
 
-    this.magSpinFeeder = new MagSpinFeeder(this.scene, world, rapier, GameConfig.magSpin)
-    this.magSpinFeeder.onStateChange = (state) => {
-      switch (state) {
-        case MagSpinState.CATCH:
-          this.effects?.playBeep(300)
-          break
-        case MagSpinState.SPIN:
-          this.effects?.playBeep(600)
-          break
-        case MagSpinState.RELEASE:
-          this.effects?.playBeep(1200)
-          this.effects?.spawnShardBurst(this.magSpinFeeder?.getPosition() || new Vector3(0, 0, 0))
-          this.effects?.setBloomEnergy(2.0)
-          break
-      }
-    }
-
-    this.nanoLoomFeeder = new NanoLoomFeeder(this.scene, world, rapier, GameConfig.nanoLoom)
-    this.nanoLoomFeeder.onStateChange = (state, position) => {
-        switch (state) {
-            case NanoLoomState.LIFT:
-                this.effects?.playBeep(800)
-                break
-            case NanoLoomState.WEAVE:
-                this.effects?.playBeep(1000)
-                break
-            case NanoLoomState.EJECT:
-                this.effects?.playBeep(1200)
-                if (position) {
-                  this.effects?.spawnShardBurst(position)
-                }
-                break
-        }
-    }
-
-    this.prismCoreFeeder = new PrismCoreFeeder(this.scene, world, rapier, GameConfig.prismCore)
-    this.prismCoreFeeder.onStateChange = (state, count) => {
-        switch (state) {
-            case PrismCoreState.LOCKED_1:
-            case PrismCoreState.LOCKED_2:
-                this.effects?.playBeep(1500)
-                this.display?.setStoryText(`CORE LOCK: ${count}/3`)
-                this.effects?.spawnShardBurst(this.prismCoreFeeder?.getPosition() || Vector3.Zero())
-                // Spawn a replacement ball at the plunger so play continues
-                this.ballManager?.spawnExtraBalls(1, new Vector3(8.5, 0.5, -9)) // Plunger lane approx
-                break
-
-            case PrismCoreState.OVERLOAD:
-                this.effects?.playBeep(2000)
-                this.effects?.startJackpotSequence() // Optional: sync with Jackpot
-                this.display?.setStoryText("MULTIBALL ENGAGED")
-                this.effects?.spawnShardBurst(this.prismCoreFeeder?.getPosition() || Vector3.Zero())
-                break
-        }
-    }
-
-    this.gaussCannon = new GaussCannonFeeder(this.scene, world, rapier, GameConfig.gaussCannon)
-    this.gaussCannon.onStateChange = (state) => {
-      switch (state) {
-        case GaussCannonState.LOAD:
-          this.effects?.playBeep(300)
-          break
-        case GaussCannonState.AIM:
-          this.effects?.playBeep(600) // Rising pitch?
-          break
-        case GaussCannonState.FIRE:
-          this.effects?.playBeep(2000) // Laser shot
-          this.effects?.spawnShardBurst(this.gaussCannon?.getPosition() || Vector3.Zero())
-          break
-      }
-    }
-
-    this.quantumTunnel = new QuantumTunnelFeeder(this.scene, world, rapier, GameConfig.quantumTunnel)
-    this.quantumTunnel.onStateChange = (state) => {
-      switch (state) {
-        case QuantumTunnelState.CAPTURE:
-          this.effects?.playBeep(200) // Deep sound
-          break
-        case QuantumTunnelState.EJECT:
-          this.effects?.playBeep(2000) // High pitch
-          this.effects?.spawnShardBurst(this.quantumTunnel?.getPosition() || Vector3.Zero())
-          break
-      }
-    }
+    // Setup feeder event handlers
+    this.setupFeederEventHandlers()
 
     // [NEW] LINK ADVENTURE EVENTS TO DISPLAY SYSTEM
     this.adventureMode.setEventListener((event, data) => {
@@ -806,43 +764,215 @@ export class Game {
       }
     })
 
-    // Build game objects
+    // === STAGE 1: CRITICAL (immediate - <50ms) ===
+    // Absolute minimum for gameplay - player can start NOW
+    this.buildCriticalScene()
+    this.ready = true  // Player can start NOW
+    this.showLoadingState(false, 'gameplay')
+
+    // === STAGE 2: GAMEPLAY (async - yield between) ===
+    // Important but not blocking - yield to allow rendering
+    await this.yieldFrame()
+    this.buildGameplayScene()
+    this.showLoadingState(false, 'cosmetic')
+
+    // === STAGE 3: COSMETIC (idle callback) ===
+    // Visual polish - lowest priority, only when browser is idle
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => this.buildCosmeticScene(), { timeout: 500 })
+    } else {
+      setTimeout(() => this.buildCosmeticScene(), 100)
+    }
+  }
+
+  private buildCriticalScene(): void {
+    if (!this.gameObjects || !this.ballManager) return
+
+    // Absolute minimum for gameplay - these MUST be available immediately
     this.gameObjects.createGround()
     this.gameObjects.createWalls()
-    this.gameObjects.createCabinetDecoration()
+    this.gameObjects.createFlippers()
+    if (this.mirrorTexture) {
+      this.ballManager.setMirrorTexture(this.mirrorTexture)
+    }
+    this.ballManager.createMainBall()
 
-    // Enhanced Cabinet with side panels for depth
+    // Register camera for screen shake effects (needed for gameplay feedback)
+    if (this.tableCam && this.effects) {
+      this.effects.registerCamera(this.tableCam)
+    }
+  }
+
+  private buildGameplayScene(): void {
+    if (!this.gameObjects || !this.ballManager || !this.display || !this.effects) return
+
+    // Important but not blocking - these enhance gameplay but aren't needed immediately
+    this.gameObjects.createDeathZone()
+    this.gameObjects.createBumpers()
+    this.gameObjects.createSlingshots()
+    this.gameObjects.createPachinkoField(new Vector3(0, 0.5, 12), 14, 8)
+
+    // Build handle caches for O(1) collision lookups
+    this.rebuildHandleCaches()
+  }
+
+  private buildCosmeticScene(): void {
+    if (!this.gameObjects || !this.display || !this.effects || !this.scene) return
+
+    // Visual polish - lowest priority
+    this.gameObjects.createCabinetDecoration()
     this.createEnhancedCabinet()
 
     this.display.createBackbox(new Vector3(0.75, 15, 30))
     this.effects.createCabinetLighting()
-    
-    // Register camera for screen shake effects
-    if (this.tableCam) {
-      this.effects.registerCamera(this.tableCam)
-    }
 
     // Register decorative materials for fever/reach effects
-    if (!this.scene) return
     const matLib = getMaterialLibrary(this.scene)
     const plasticMat = matLib.getNeonBumperMaterial('#FF0055')
     this.effects.registerDecorativeMaterial(plasticMat)
 
-    this.gameObjects.createDeathZone()
-    
-    this.ballManager.setMirrorTexture(this.mirrorTexture)
-    this.ballManager.createMainBall()
-
-    this.gameObjects.createFlippers()
-    this.gameObjects.createPachinkoField(new Vector3(0, 0.5, 12), 14, 8)
-    this.gameObjects.createBumpers()
-    this.gameObjects.createSlingshots()
-
-    // Build handle caches for O(1) collision lookups
-    this.rebuildHandleCaches()
-
-    // Register shadows after all meshes created (including ball)
+    // Register shadows after all meshes created
     this.registerShadowCasters()
+
+    // Hide loading indicator completely
+    this.showLoadingState(false)
+  }
+
+  private yieldFrame(): Promise<void> {
+    return new Promise(resolve => requestAnimationFrame(() => resolve()))
+  }
+
+  private showLoadingState(show: boolean, phase?: 'gameplay' | 'cosmetic'): void {
+    // Create or get loading overlay
+    let loadingOverlay = document.getElementById('loading-overlay')
+    
+    if (show) {
+      if (!loadingOverlay) {
+        loadingOverlay = document.createElement('div')
+        loadingOverlay.id = 'loading-overlay'
+        loadingOverlay.style.cssText = `
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background: rgba(0, 0, 0, 0.8);
+          color: #00d9ff;
+          padding: 20px 40px;
+          border-radius: 8px;
+          font-family: monospace;
+          font-size: 16px;
+          z-index: 1000;
+          pointer-events: none;
+          border: 1px solid #00d9ff;
+          box-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
+        `
+        document.body.appendChild(loadingOverlay)
+      }
+      loadingOverlay.textContent = 'LOADING...'
+      loadingOverlay.style.display = 'block'
+    } else if (loadingOverlay) {
+      if (phase === 'gameplay') {
+        loadingOverlay.textContent = 'LOADING GAMEPLAY...'
+      } else if (phase === 'cosmetic') {
+        loadingOverlay.textContent = 'LOADING POLISH...'
+      } else {
+        // Fade out and remove
+        loadingOverlay.style.transition = 'opacity 0.5s'
+        loadingOverlay.style.opacity = '0'
+        setTimeout(() => {
+          loadingOverlay?.remove()
+        }, 500)
+      }
+    }
+  }
+
+  private setupFeederEventHandlers(): void {
+    if (!this.effects || !this.ballManager) return
+
+    this.magSpinFeeder = new MagSpinFeeder(this.scene!, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.magSpin)
+    this.magSpinFeeder.onStateChange = (state) => {
+      switch (state) {
+        case MagSpinState.CATCH:
+          this.effects?.playBeep(300)
+          break
+        case MagSpinState.SPIN:
+          this.effects?.playBeep(600)
+          break
+        case MagSpinState.RELEASE:
+          this.effects?.playBeep(1200)
+          this.effects?.spawnShardBurst(this.magSpinFeeder?.getPosition() || new Vector3(0, 0, 0))
+          this.effects?.setBloomEnergy(2.0)
+          break
+      }
+    }
+
+    this.nanoLoomFeeder = new NanoLoomFeeder(this.scene!, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.nanoLoom)
+    this.nanoLoomFeeder.onStateChange = (state, position) => {
+        switch (state) {
+            case NanoLoomState.LIFT:
+                this.effects?.playBeep(800)
+                break
+            case NanoLoomState.WEAVE:
+                this.effects?.playBeep(1000)
+                break
+            case NanoLoomState.EJECT:
+                this.effects?.playBeep(1200)
+                if (position) {
+                  this.effects?.spawnShardBurst(position)
+                }
+                break
+        }
+    }
+
+    this.prismCoreFeeder = new PrismCoreFeeder(this.scene!, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.prismCore)
+    this.prismCoreFeeder.onStateChange = (state, count) => {
+        switch (state) {
+            case PrismCoreState.LOCKED_1:
+            case PrismCoreState.LOCKED_2:
+                this.effects?.playBeep(1500)
+                this.display?.setStoryText(`CORE LOCK: ${count}/3`)
+                this.effects?.spawnShardBurst(this.prismCoreFeeder?.getPosition() || Vector3.Zero())
+                // Spawn a replacement ball at the plunger so play continues
+                this.ballManager?.spawnExtraBalls(1, new Vector3(8.5, 0.5, -9)) // Plunger lane approx
+                break
+
+            case PrismCoreState.OVERLOAD:
+                this.effects?.playBeep(2000)
+                this.effects?.startJackpotSequence() // Optional: sync with Jackpot
+                this.display?.setStoryText("MULTIBALL ENGAGED")
+                this.effects?.spawnShardBurst(this.prismCoreFeeder?.getPosition() || Vector3.Zero())
+                break
+        }
+    }
+
+    this.gaussCannon = new GaussCannonFeeder(this.scene!, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.gaussCannon)
+    this.gaussCannon.onStateChange = (state) => {
+      switch (state) {
+        case GaussCannonState.LOAD:
+          this.effects?.playBeep(300)
+          break
+        case GaussCannonState.AIM:
+          this.effects?.playBeep(600) // Rising pitch?
+          break
+        case GaussCannonState.FIRE:
+          this.effects?.playBeep(2000) // Laser shot
+          this.effects?.spawnShardBurst(this.gaussCannon?.getPosition() || Vector3.Zero())
+          break
+      }
+    }
+
+    this.quantumTunnel = new QuantumTunnelFeeder(this.scene!, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.quantumTunnel)
+    this.quantumTunnel.onStateChange = (state) => {
+      switch (state) {
+        case QuantumTunnelState.CAPTURE:
+          this.effects?.playBeep(200) // Deep sound
+          break
+        case QuantumTunnelState.EJECT:
+          this.effects?.playBeep(2000) // High pitch
+          this.effects?.spawnShardBurst(this.quantumTunnel?.getPosition() || Vector3.Zero())
+          break
+      }
+    }
   }
 
   /**

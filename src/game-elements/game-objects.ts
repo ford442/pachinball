@@ -456,8 +456,23 @@ export class GameObjects {
 
   createBumpers(): void {
     const make = (x: number, z: number, colorHex: string) => {
-      const bumper = MeshBuilder.CreateSphere("bump", { diameter: 0.9, segments: 32 }, this.scene) as Mesh
-      bumper.position.set(x, 0.5, z)
+      // Create high detail master mesh (LOD level 0)
+      const bumperHigh = MeshBuilder.CreateSphere("bump_high", { diameter: 0.9, segments: 32 }, this.scene) as Mesh
+      bumperHigh.position.set(x, 0.5, z)
+      
+      // Create medium detail LOD mesh
+      const bumperMedium = MeshBuilder.CreateSphere("bump_med", { diameter: 0.9, segments: 16 }, this.scene) as Mesh
+      
+      // Create low detail LOD mesh
+      const bumperLow = MeshBuilder.CreateSphere("bump_low", { diameter: 0.9, segments: 8 }, this.scene) as Mesh
+      
+      // Set up LOD levels - use bumperHigh as the master mesh
+      bumperHigh.addLODLevel(15, bumperMedium)  // Switch to medium at 15 units
+      bumperHigh.addLODLevel(30, bumperLow)     // Switch to low at 30 units
+      bumperHigh.addLODLevel(50, null)          // Cull beyond 50 units
+      
+      // Use high detail mesh for physics/visuals (it's the LOD master)
+      const bumper = bumperHigh
       
       // Use MaterialLibrary for neon bumper
       const mat = this.matLib.getNeonBumperMaterial(colorHex)

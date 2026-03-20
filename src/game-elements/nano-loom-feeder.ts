@@ -29,9 +29,7 @@ export class NanoLoomFeeder {
   private intakePosition: Vector3
 
   // Visuals
-  // @ts-ignore
   private frameMesh: Mesh | null = null
-  // @ts-ignore
   private intakeMesh: Mesh | null = null
   private pins: Mesh[] = []
   private light: PointLight | null = null

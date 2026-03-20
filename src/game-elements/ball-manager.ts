@@ -297,7 +297,7 @@ export class BallManager {
     return this.ballBodies.length > 0
   }
 
-  updateTrailEffects(_dt: number): void {
+  updateTrailEffects(): void {
     for (const [body, trail] of this.trails) {
       const vel = body.linvel()
       const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z)

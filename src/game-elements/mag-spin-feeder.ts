@@ -27,7 +27,6 @@ export class MagSpinFeeder {
   private config: GameConfigType['magSpin']
 
   private position: Vector3
-  // @ts-ignore
   private mesh: Mesh | null = null
   private ringMesh: Mesh | null = null
   private light: PointLight | null = null
