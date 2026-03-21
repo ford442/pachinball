@@ -33,10 +33,10 @@ export class InputHandler {
   private onPlungerChargeUpdate: (chargeLevel: number) => void
   
   // These callbacks are invoked via applyInputFrame in game.ts
-  private onFlipperLeft: (pressed: boolean) => void
-  private onFlipperRight: (pressed: boolean) => void
-  private onPlunger: () => void
-  private onNudge: (direction: { x: number; y: number; z: number }) => void
+  public onFlipperLeft: (pressed: boolean) => void
+  public onFlipperRight: (pressed: boolean) => void
+  public onPlunger: () => void
+  public onNudge: (direction: { x: number; y: number; z: number }) => void
   private onPause: () => void
   private onReset: () => void
   private onStart: () => void

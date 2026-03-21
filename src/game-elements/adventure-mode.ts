@@ -166,7 +166,7 @@ export const CAMERA_PRESETS: Record<string, CameraPreset> = {
 
 export class AdventureMode extends AdventureModeTracksB {
   /** Current camera preset for active track */
-  protected currentCameraPreset: CameraPreset = CAMERA_PRESETS.DEFAULT
+  protected currentCameraPreset: CameraPreset | null = CAMERA_PRESETS.DEFAULT
   /**
    * Registers a callback listener to handle story events in the main Game class.
    */
