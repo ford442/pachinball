@@ -35,3 +35,4 @@ export {
   type TableMapConfig,
 } from '../shaders/lcd-table'
 export { SoundSystem, getSoundSystem, resetSoundSystem, type SampleCategory, type MapId } from './sound-system'
+export { MapSystem, getMapSystem, resetMapSystem, type DynamicMapConfig } from './map-system'

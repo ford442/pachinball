@@ -24,6 +24,9 @@ export const lcdTablePixelShader = {
     uniform float uSubpixelIntensity;
     uniform float uGlowIntensity;
     uniform float uMapBlend;
+    uniform float uFlashIntensity;    // Phosphor flash on map switch
+    uniform float uRippleIntensity;   // Screen ripple on map switch
+    uniform float uRippleTime;        // Ripple animation time
     
     // RGB subpixel pattern
     vec3 subpixelPattern(vec2 uv, vec3 color) {
@@ -90,8 +93,20 @@ export const lcdTablePixelShader = {
       return pattern;
     }
     
+    // Screen ripple distortion
+    vec2 applyRipple(vec2 uv, float intensity, float time) {
+      if (intensity <= 0.0) return uv;
+      vec2 centered = uv - 0.5;
+      float dist = length(centered);
+      float ripple = sin(dist * 30.0 - time * 15.0) * intensity * 0.03;
+      ripple *= smoothstep(0.5, 0.0, dist); // Fade at edges
+      return uv + normalize(centered + 0.001) * ripple;
+    }
+    
     void main(void) {
-      vec2 curvedUV = applyCurvature(vUV);
+      // Apply ripple distortion to UV
+      vec2 rippledUV = applyRipple(vUV, uRippleIntensity, uRippleTime);
+      vec2 curvedUV = applyCurvature(rippledUV);
       
       // Sample base texture or generate procedural pattern
       vec3 baseColor = texture2D(textureSampler, curvedUV).rgb;
@@ -115,6 +130,14 @@ export const lcdTablePixelShader = {
       // Add phosphor glow
       color = phosphorGlow(color, uGlowIntensity);
       
+      // Phosphor flash effect (bright flash on map switch)
+      if (uFlashIntensity > 0.0) {
+        vec3 flashColor = vec3(0.95, 0.95, 1.0); // Slight blue-white flash
+        color = mix(color, flashColor, uFlashIntensity * 0.6);
+        // Boost glow during flash
+        color = phosphorGlow(color, uGlowIntensity * (1.0 + uFlashIntensity));
+      }
+      
       // Vignette (darker corners like real LCD)
       float dist = distance(curvedUV, vec2(0.5));
       float vignette = 1.0 - smoothstep(0.4, 0.8, dist) * 0.3;
@@ -132,15 +155,7 @@ export const lcdTablePixelShader = {
  * LCD Table Map Definitions
  * Each map defines the visual theme for the LCD playfield
  */
-export type TableMapType = 
-  | 'neon-helix'
-  | 'cyber-core' 
-  | 'quantum-grid'
-  | 'singularity-well'
-  | 'glitch-spire'
-  | 'matrix-core'
-  | 'cyan-void'
-  | 'magenta-dream'
+export type TableMapType = string
 
 export interface TableMapConfig {
   name: string
@@ -154,7 +169,7 @@ export interface TableMapConfig {
   animationSpeed: number
 }
 
-export const TABLE_MAPS: Record<TableMapType, TableMapConfig> = {
+export const TABLE_MAPS: Record<string, TableMapConfig> = {
   'neon-helix': {
     name: 'Neon Helix',
     baseColor: '#00d9ff',
@@ -246,6 +261,13 @@ export const TABLE_MAPS: Record<TableMapType, TableMapConfig> = {
 }
 
 /**
+ * Register a dynamic map at runtime (e.g. fetched from backend).
+ */
+export function registerMap(id: string, config: TableMapConfig): void {
+  TABLE_MAPS[id] = config
+}
+
+/**
  * LCD Table State Manager
  * Handles map switching and shader parameter updates
  */
@@ -255,7 +277,13 @@ export class LCDTableState {
   private _blendFactor: number = 0.0
   private _isTransitioning: boolean = false
   private _transitionTime: number = 0.0
-  private _transitionDuration: number = 0.5 // seconds
+  private _transitionDuration: number = 0.6 // seconds - buttery smooth
+  
+  // Flash and ripple effects
+  private _flashIntensity: number = 0.0
+  private _rippleIntensity: number = 0.0
+  private _rippleTime: number = 0.0
+  private _effectTime: number = 0.0
   
   // Shader uniform callbacks
   private _uniformCallbacks: Map<string, (value: number | string | Color3) => void> = new Map()
@@ -268,8 +296,26 @@ export class LCDTableState {
     return this._isTransitioning
   }
   
+  get flashIntensity(): number {
+    return this._flashIntensity
+  }
+  
+  get rippleIntensity(): number {
+    return this._rippleIntensity
+  }
+  
   /**
-   * Switch to a new map with smooth transition
+   * Trigger flash + ripple effect manually (for button presses, etc.)
+   */
+  triggerFeedbackEffect(): void {
+    this._flashIntensity = 0.5 // Half intensity for feedback
+    this._rippleIntensity = 0.7
+    this._rippleTime = 0.0
+    this._effectTime = 0.0
+  }
+  
+  /**
+   * Switch to a new map with smooth transition + flash/ripple effects
    */
   switchMap(newMap: TableMapType): void {
     if (newMap === this._currentMap || this._isTransitioning) return
@@ -279,14 +325,40 @@ export class LCDTableState {
     this._transitionTime = 0.0
     this._blendFactor = 0.0
     
+    // Trigger flash and ripple effects
+    this._flashIntensity = 1.0
+    this._rippleIntensity = 1.0
+    this._rippleTime = 0.0
+    this._effectTime = 0.0
+    
     console.log(`[LCDTable] Switching map: ${this._currentMap} -> ${newMap}`)
   }
   
   /**
-   * Update transition animation
+   * Update transition animation (flash + ripple + cross-fade)
    */
   update(deltaTime: number): void {
-    if (!this._isTransitioning) return
+    // Always update effects time for smooth animation
+    this._effectTime += deltaTime
+    
+    // Animate flash (quick fade out over 0.3s)
+    if (this._flashIntensity > 0.0) {
+      this._flashIntensity = Math.max(0.0, 1.0 - (this._effectTime / 0.3))
+    }
+    
+    // Animate ripple (fade out over 0.5s)
+    if (this._rippleIntensity > 0.0) {
+      this._rippleIntensity = Math.max(0.0, 1.0 - (this._effectTime / 0.5))
+      this._rippleTime += deltaTime
+    }
+    
+    if (!this._isTransitioning) {
+      // Still update effects even if not transitioning
+      if (this._flashIntensity > 0.0 || this._rippleIntensity > 0.0) {
+        this.updateShaderUniforms(0.0)
+      }
+      return
+    }
     
     this._transitionTime += deltaTime
     this._blendFactor = Math.min(this._transitionTime / this._transitionDuration, 1.0)
@@ -358,6 +430,15 @@ export class LCDTableState {
           break
         case 'uMapBlend':
           callback(blend)
+          break
+        case 'uFlashIntensity':
+          callback(this._flashIntensity)
+          break
+        case 'uRippleIntensity':
+          callback(this._rippleIntensity)
+          break
+        case 'uRippleTime':
+          callback(this._rippleTime)
           break
       }
     })
