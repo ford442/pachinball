@@ -26,3 +26,10 @@ export {
 } from './accessibility-config'
 export { HapticManager, type HapticConfig } from './haptics'
 export { GamepadManager, type GamepadConfig, type GamepadState } from './gamepad'
+export {
+  lcdTablePixelShader,
+  TABLE_MAPS,
+  LCDTableState,
+  type TableMapType,
+  type TableMapConfig,
+} from '../shaders/lcd-table'
