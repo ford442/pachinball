@@ -238,6 +238,19 @@ export const GameConfig = {
     // 'additive' - brightens, good for neon/dark images  
     // 'multiply' - darkens, good for light images
     imageBlendMode: 'normal' as const,
+
+    // State-specific video clips that play on game events
+    // Set to '' to disable state-specific video and use attract/default
+    jackpotVideoPath: './backbox/jackpot.mp4',
+    feverVideoPath: './backbox/fever.mp4',
+    reachVideoPath: './backbox/reach.mp4',
+    adventureVideoPath: './backbox/adventure.mp4',
+
+    // State-specific image fallbacks
+    jackpotImagePath: './backbox/jackpot.png',
+    feverImagePath: './backbox/fever.png',
+    reachImagePath: './backbox/reach.png',
+    adventureImagePath: './backbox/adventure.png',
   }
 }
 

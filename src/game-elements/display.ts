@@ -98,6 +98,14 @@ export class DisplaySystem {
     video: { loaded: false, playing: false, error: false },
     image: { loaded: false, error: false },
   }
+
+  // Backbox position cache (for reactive layer reloads)
+  private backboxPos: Vector3 | null = null
+  private backboxScreenZ = 0
+
+  // Currently loaded media paths (to detect state changes)
+  private currentVideoPath = ''
+  private currentImagePath = ''
   
   // Timers
   private stateTimer = 0
@@ -223,6 +231,10 @@ export class DisplaySystem {
 
   createBackbox(pos: Vector3): void {
     const screenZ = pos.z + 0.5
+
+    // Cache position for reactive reloads on state change
+    this.backboxPos = pos
+    this.backboxScreenZ = screenZ
     
     // Create reels immediately (procedural - fast)
     this.createReelsLayer(pos, screenZ)
@@ -417,6 +429,15 @@ export class DisplaySystem {
     this.layerState.video = { loaded: false, playing: false, error: false }
   }
 
+  private disposeImageLayer(): void {
+    this.imageMaterial?.diffuseTexture?.dispose()
+    this.imageMaterial?.dispose()
+    this.layers.image?.dispose()
+    this.layers.image = null
+    this.imageMaterial = null
+    this.layerState.image = { loaded: false, error: false }
+  }
+
   private createVideoLayer(pos: Vector3, screenZ: number): void {
     const config = this.currentState.mediaConfig
     if (!config.videoPath || this.config.mode === DisplayMode.SHADER_ONLY) {
@@ -479,10 +500,12 @@ export class DisplaySystem {
         console.log('[Display] Video playing')
         this.layerState.video.loaded = true
         this.layerState.video.playing = true
+        this.applyLayerVisibility(this.currentState.mediaConfig)
       }).catch(() => {
-        console.warn('[Display] Autoplay blocked')
+        console.warn('[Display] Video autoplay blocked')
         this.layerState.video.error = true
         this.disposeVideoLayer()
+        this.applyLayerVisibility(this.currentState.mediaConfig)
       })
     })
 
@@ -490,15 +513,17 @@ export class DisplaySystem {
       console.warn('[Display] Video failed to load')
       this.layerState.video.error = true
       this.disposeVideoLayer()
+      this.applyLayerVisibility(this.currentState.mediaConfig)
     })
 
     // Timeout fallback
     const timeout = this.config.videoSettings?.loadTimeout ?? 5000
     setTimeout(() => {
-      if (!this.layerState.video.loaded) {
+      if (!this.layerState.video.loaded && !this.layerState.video.error) {
         console.warn('[Display] Video load timeout')
         this.layerState.video.error = true
         this.disposeVideoLayer()
+        this.applyLayerVisibility(this.currentState.mediaConfig)
       }
     }, timeout)
   }
@@ -662,18 +687,41 @@ export class DisplaySystem {
       this.layers.shader.isVisible = config.showShaderBackground !== false
     }
 
-    // Video visibility - check if we need to load/unload
-    const wantsVideo = !!(config.videoPath && config.videoPath.trim() !== '')
-    if (wantsVideo && !this.layers.video && !this.layerState.video.loaded) {
-      // Video requested but not loaded - need to recreate (handled by state change)
-    } else if (this.layers.video) {
+    const newVideoPath = (config.videoPath || '').trim()
+    const newImagePath = (config.imagePath || '').trim()
+
+    // Video layer: reload if path changed
+    if (newVideoPath !== this.currentVideoPath) {
+      this.currentVideoPath = newVideoPath
+      if (this.layers.video || this.videoTexture) {
+        this.disposeVideoLayer()
+      }
+      if (newVideoPath && this.backboxPos) {
+        this.createVideoLayer(this.backboxPos, this.backboxScreenZ)
+      }
+    }
+
+    // Image layer: reload if path changed
+    if (newImagePath !== this.currentImagePath) {
+      this.currentImagePath = newImagePath
+      if (this.layers.image || this.imageMaterial) {
+        this.disposeImageLayer()
+      }
+      if (newImagePath && this.backboxPos) {
+        this.createImageLayer(this.backboxPos, this.backboxScreenZ)
+      }
+    }
+
+    // Video visibility
+    const wantsVideo = newVideoPath !== ''
+    if (this.layers.video) {
       this.layers.video.isVisible = wantsVideo && this.layerState.video.playing
     }
 
     // Image visibility
     if (this.layers.image) {
-      const wantsImage = !!(config.imagePath && config.imagePath.trim() !== '')
-      this.layers.image.isVisible = wantsImage && this.layerState.image.loaded
+      const wantsImage = newImagePath !== ''
+      this.layers.image.isVisible = wantsImage && this.layerState.image.loaded && (!this.layerState.video.playing || this.config.mode === DisplayMode.HYBRID)
     }
 
     // Apply opacity

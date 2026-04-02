@@ -68,6 +68,7 @@ import {
   type InputFrame,
 } from './game-elements'
 import { GameConfig } from './config'
+import { DisplayMode, type DisplayConfig } from './game-elements/display-config'
 import { scanlinePixelShader } from './shaders/scanline'
 
 // Register the shader
@@ -788,7 +789,61 @@ export class Game {
     if (this.keyLight && this.rimLight && this.bounceLight) {
       this.effects.registerSceneLights(this.keyLight, this.rimLight, this.bounceLight)
     }
-    this.display = new DisplaySystem(this.scene, this.engine)
+    // Build display config with state-specific media from GameConfig
+    const displayConfig: DisplayConfig = {
+      mode: GameConfig.backbox.attractVideoPath ? DisplayMode.VIDEO : DisplayMode.SHADER_ONLY,
+      defaultMedia: {
+        videoPath: GameConfig.backbox.attractVideoPath,
+        imagePath: GameConfig.backbox.attractImagePath,
+        showShaderBackground: true,
+        showReels: !GameConfig.backbox.videoReplacesReels,
+        opacity: GameConfig.backbox.imageOpacity ?? 0.85,
+      },
+      stateMedia: {
+        [DisplayState.JACKPOT]: {
+          videoPath: GameConfig.backbox.jackpotVideoPath || GameConfig.backbox.attractVideoPath,
+          imagePath: GameConfig.backbox.jackpotImagePath || GameConfig.backbox.attractImagePath,
+          showShaderBackground: true,
+          showReels: false,
+          shaderParams: { speed: 20.0, color: '#ff00ff' },
+        },
+        [DisplayState.FEVER]: {
+          videoPath: GameConfig.backbox.feverVideoPath || GameConfig.backbox.attractVideoPath,
+          imagePath: GameConfig.backbox.feverImagePath || GameConfig.backbox.attractImagePath,
+          showShaderBackground: true,
+          showReels: true,
+          shaderParams: { speed: 10.0, color: '#ffd700' },
+        },
+        [DisplayState.REACH]: {
+          videoPath: GameConfig.backbox.reachVideoPath || GameConfig.backbox.attractVideoPath,
+          imagePath: GameConfig.backbox.reachImagePath || GameConfig.backbox.attractImagePath,
+          showShaderBackground: true,
+          showReels: true,
+          shaderParams: { speed: 5.0, color: '#ff0055' },
+        },
+        [DisplayState.ADVENTURE]: {
+          videoPath: GameConfig.backbox.adventureVideoPath || GameConfig.backbox.attractVideoPath,
+          imagePath: GameConfig.backbox.adventureImagePath || GameConfig.backbox.attractImagePath,
+          showShaderBackground: true,
+          showReels: false,
+          shaderParams: { speed: 1.0, color: '#00aa00' },
+        },
+      },
+      imageSettings: {
+        blendMode: GameConfig.backbox.imageBlendMode ?? 'normal',
+        defaultOpacity: GameConfig.backbox.imageOpacity ?? 0.85,
+      },
+      videoSettings: {
+        loop: true,
+        muted: true,
+        loadTimeout: 5000,
+      },
+      transitions: {
+        fadeDuration: 0.3,
+        animateShaderParams: true,
+      },
+    }
+    this.display = new DisplaySystem(this.scene, this.engine, displayConfig)
     
     // Setup slot machine event callback
     this.setupSlotMachineCallbacks()
