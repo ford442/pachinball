@@ -2684,46 +2684,90 @@ export class Game {
     }
   }
 
+
   /**
    * Set up the on-screen LCD-style map selector buttons.
+   * Fetches dynamic maps from the backend and builds the UI.
    * Clicking a button triggers smooth map switch with satisfying feedback.
    */
-  private setupMapSelector(): void {
+  private async setupMapSelector(): Promise<void> {
     const selector = document.getElementById('map-selector')
     if (!selector) return
 
-    const buttons = selector.querySelectorAll('.map-btn')
-    buttons.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const mapName = (btn as HTMLElement).dataset.map as TableMapType
-        if (mapName && mapName !== this.currentTableMap) {
-          // Animate button press
-          this.animateMapButtonPress(btn as HTMLElement)
-          
-          // Trigger LCD feedback effect
-          this.lcdTableState.triggerFeedbackEffect()
-          
-          // Switch map
-          this.switchTableMap(mapName)
-        }
-      })
-    })
+    // Fetch dynamic maps from backend and register them
+    await this.mapSystem.fetchMaps()
+    for (const map of this.mapSystem.getAllMaps()) {
+      if (!TABLE_MAPS[map.id]) {
+        registerMap(map.id, map)
+      }
+    }
+
+    // Build the dynamic map selector UI
+    this.buildMapSelectorUI(selector)
 
     // Set initial highlight
     this.updateMapSelectorUI()
   }
 
   /**
+   * Build the map selector buttons dynamically from fetched maps.
+   */
+  private buildMapSelectorUI(selector: HTMLElement): void {
+    // Clear existing buttons (keep the hint)
+    const existingButtons = selector.querySelectorAll('.map-btn, .map-refresh')
+    existingButtons.forEach((el) => el.remove())
+
+    const maps = this.mapSystem.getAllMaps()
+    let buttonIndex = 1
+
+    for (const map of maps) {
+      const btn = document.createElement('button')
+      btn.className = 'map-btn'
+      btn.dataset.map = map.id
+      btn.title = map.name
+      btn.textContent = String(buttonIndex)
+      btn.addEventListener('click', () => {
+        if (map.id !== this.currentTableMap) {
+          this.animateMapButtonPress(btn)
+          this.lcdTableState.triggerFeedbackEffect()
+          this.switchTableMap(map.id as TableMapType)
+        }
+      })
+      selector.appendChild(btn)
+      buttonIndex++
+    }
+
+    // Add refresh button (small circular icon)
+    const refreshBtn = document.createElement('button')
+    refreshBtn.className = 'map-btn map-refresh'
+    refreshBtn.title = 'Refresh Maps'
+    refreshBtn.textContent = '↻'
+    refreshBtn.addEventListener('click', async () => {
+      refreshBtn.classList.add('spinning')
+      await this.mapSystem.refresh()
+      for (const map of this.mapSystem.getAllMaps()) {
+        if (!TABLE_MAPS[map.id]) {
+          registerMap(map.id, map)
+        }
+      }
+      this.buildMapSelectorUI(selector)
+      this.updateMapSelectorUI()
+      refreshBtn.classList.remove('spinning')
+    })
+    selector.appendChild(refreshBtn)
+  }
+
+  /**
    * Animate map button press with scale + glow burst
    */
   private animateMapButtonPress(btn: HTMLElement): void {
-    const config = TABLE_MAPS[this.currentTableMap]
+    const config = this.mapSystem.getMap(this.currentTableMap) || TABLE_MAPS[this.currentTableMap]
     const accentColor = config ? config.baseColor : '#00d9ff'
-    
+
     // Apply press animation
     btn.style.transform = 'scale(0.85)'
     btn.style.transition = 'transform 0.1s ease, box-shadow 0.1s ease'
-    
+
     // Add glow burst
     btn.style.boxShadow = `
       0 0 20px ${accentColor},
@@ -2731,7 +2775,7 @@ export class Game {
       0 0 60px ${accentColor},
       inset 0 0 20px rgba(255, 255, 255, 0.5)
     `
-    
+
     // Release animation
     setTimeout(() => {
       btn.style.transform = 'scale(1.05)'
@@ -2740,7 +2784,7 @@ export class Game {
         0 0 30px ${accentColor},
         inset 0 0 10px rgba(255, 255, 255, 0.3)
       `
-      
+
       setTimeout(() => {
         btn.style.transform = ''
         btn.style.boxShadow = ''
@@ -2758,7 +2802,7 @@ export class Game {
     if (!selector) return
 
     const currentMap = this.currentTableMap
-    const mapConfig = TABLE_MAPS[currentMap]
+    const mapConfig = this.mapSystem.getMap(currentMap) || TABLE_MAPS[currentMap]
     const accentColor = mapConfig ? mapConfig.baseColor : '#00d9ff'
 
     // Update CSS custom property for the panel glow
@@ -2767,6 +2811,7 @@ export class Game {
     // Update active button state
     const buttons = selector.querySelectorAll('.map-btn')
     buttons.forEach((btn) => {
+      if (btn.classList.contains('map-refresh')) return
       const mapName = (btn as HTMLElement).dataset.map
       if (mapName === currentMap) {
         btn.classList.add('active')
