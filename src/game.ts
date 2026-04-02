@@ -81,7 +81,7 @@ Effect.ShadersStore["lcdTablePixelShader"] = lcdTablePixelShader.fragment
 export class Game {
   private readonly engine: Engine | WebGPUEngine
   private scene: Nullable<Scene> = null
-  
+
   // Game Systems
   private physics: PhysicsSystem
   private display: DisplaySystem | null = null
@@ -98,7 +98,7 @@ export class Game {
   private inputHandler: InputHandler | null = null
   private cameraController: CameraController | null = null
   private hapticManager: HapticManager | null = null
-  
+
   // Rendering
   private bloomPipeline: DefaultRenderingPipeline | null = null
   private mirrorTexture: MirrorTexture | null = null
@@ -111,7 +111,7 @@ export class Game {
   private rimLight: DirectionalLight | null = null
   private bounceLight: PointLight | null = null
   private tableCam: ArcRotateCamera | null = null
-  
+
   // Game State
   private ready = false
   private state: GameState = GameState.MENU
@@ -123,7 +123,7 @@ export class Game {
   private powerupActive = false
   private powerupTimer = 0
   private tiltActive = false
-  
+
   // Plunger Charge State
   private plungerChargeLevel = 0
 
@@ -134,7 +134,7 @@ export class Game {
     tiltActive: false,
     tiltWarningActive: false
   }
-  
+
   // UI References
   private scoreElement: HTMLElement | null = null
   private livesElement: HTMLElement | null = null
@@ -150,6 +150,11 @@ export class Game {
   private lcdTableState: LCDTableState = new LCDTableState()
   private lcdTablePostProcess: PostProcess | null = null
   private currentTableMap: TableMapType = 'neon-helix'
+
+  // Room Environment
+  private roomMeshes: Mesh[] = []
+  private cabinetNeonLights: PointLight[] = []
+  private ambientRoomLight: HemisphericLight | null = null
 
   // Debug UI
   private inputLatencyOverlay: HTMLElement | null = null
@@ -208,7 +213,7 @@ export class Game {
     // Load and apply settings
     const settings = SettingsManager.load()
     SettingsManager.applyToConfig(settings)
-    
+
     // CRITICAL SAFETY: Initialize accessibility with system detection
     this.accessibility = detectAccessibility()
     console.log('[Accessibility] Settings loaded:', settings, 'Accessibility:', this.accessibility)
@@ -223,7 +228,7 @@ export class Game {
     this.setupSettingsUI()
 
     // -----------------------------------------------------------------
-    // 2️⃣ DUAL‑CAMERA SETUP (TOP = Machine Head, BOTTOM = Ball Table)
+    // 2️⃣ DUAL-CAMERA SETUP (TOP = Machine Head, BOTTOM = Ball Table)
     // -----------------------------------------------------------------
 
     // ---- TABLE CAMERA (bottom 60% of the screen) --------------------
@@ -247,12 +252,12 @@ export class Game {
     tableCam.mode = ArcRotateCamera.PERSPECTIVE_CAMERA
     tableCam.fov = 0.65           // Narrower FOV (~37°) for dramatic perspective
 
-    // Viewport: x, y, width, height – y = 0 starts at the *bottom* of the canvas
+    // Viewport: x, y, width, height - y = 0 starts at the *bottom* of the canvas
     tableCam.viewport = new Viewport(0, 0, 1, 0.6) // 60% height
 
     // Enable player camera controls for looking around the table
     tableCam.attachControl(this.engine.getRenderingCanvas(), true)
-    
+
     // Adjusted limits for new camera angle
     tableCam.lowerBetaLimit = Math.PI / 6     // Don't go too horizontal (30°)
     tableCam.upperBetaLimit = Math.PI / 2.2   // Don't go past top-down
@@ -261,7 +266,7 @@ export class Game {
     // Restrict horizontal rotation to 180° arc on the player-facing side
     tableCam.lowerAlphaLimit = -Math.PI       // Left limit
     tableCam.upperAlphaLimit = 0              // Right limit (player always faces table)
-    
+
     // Add subtle camera inertia for smooth feel
     tableCam.inertia = 0.85
     tableCam.wheelPrecision = 50
@@ -341,10 +346,10 @@ export class Game {
     this.headRenderTarget.renderList = null // Render all scene meshes
 
     // -----------------------------------------------------------------
-    // 3️⃣ POST‑PROCESS PIPELINES (bloom + scanlines)
+    // 3️⃣ POST-PROCESS PIPELINES (bloom + scanlines)
     // -----------------------------------------------------------------
-    
-    // Bloom – applied to *both* viewports
+
+    // Bloom - applied to *both* viewports
     this.bloomPipeline = new DefaultRenderingPipeline(
       'pachinbloom',
       true,
@@ -408,7 +413,7 @@ export class Game {
       this.scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline('ssao', [tableCam, headCam])
     }
 
-    // Scanline effect – only on the head camera
+    // Scanline effect - only on the head camera
     const scanline = new PostProcess(
         "scanline",
         "scanline",
@@ -427,7 +432,7 @@ export class Game {
     // DRAMATIC LIGHTING SETUP
     // ================================================================
     // RATIONALE: Creating depth through contrast and shadow
-    // 
+    //
     // 1. KEY LIGHT (Main source, warm, from front-left)
     //    - High intensity for strong highlights on ball/pins
     //    - Enabled shadows for depth cues
@@ -444,16 +449,16 @@ export class Game {
     // 4. BOUNCE LIGHT (Subtle fill from below)
     //    - Simulates light reflecting off playfield
     //    - Softens harsh shadows under bumpers
-    
+
     // Environment lighting for PBR materials
     this.setupEnvironmentLighting()
-    
+
     // FILL LIGHT (Hemisphere) - Unified cool ambient
     const hemiLight = new HemisphericLight('hemiLight', new Vector3(0.2, 1, 0.1), this.scene)
     hemiLight.intensity = LIGHTING.FILL.intensity
     hemiLight.diffuse = color(LIGHTING.FILL.color)
     hemiLight.groundColor = color(SURFACES.VOID)
-    
+
     // KEY LIGHT - Main directional with shadows
     const keyLight = new DirectionalLight('keyLight', new Vector3(-0.6, -0.8, 0.2), this.scene)
     keyLight.intensity = LIGHTING.KEY.intensity
@@ -514,14 +519,14 @@ export class Game {
       },
       this.physics.getRapier()
     )
-    
+
     // Configure plunger charge parameters from GameConfig
     this.inputHandler.configurePlungerCharge({
       maxChargeTime: GameConfig.plunger.maxChargeTime,
       minImpulse: GameConfig.plunger.minImpulse,
       maxImpulse: GameConfig.plunger.maxImpulse
     })
-    
+
     // Initialize gamepad support
     this.inputHandler.setupGamepad({
       deadZone: 0.15,
@@ -537,7 +542,7 @@ export class Game {
     this.scene.onBeforeRenderObservable.add(() => {
       this.stepPhysics()
     })
-    
+
     this.engine.runRenderLoop(() => {
       this.updateLatencyDisplay()
       this.scene?.render()
@@ -596,7 +601,7 @@ export class Game {
     if (!this.scene) return
     const matLib = getMaterialLibrary(this.scene)
     const cabinetY = -2.5
-    
+
     // Use MaterialLibrary for consistent materials
     const cabinetMat = matLib.getCabinetMaterial()
     const sidePanelMat = matLib.getSidePanelMaterial()
@@ -606,7 +611,7 @@ export class Game {
     // ================================================================
     // LAYER 1: CABINET BASE (Thicker, more substantial foundation)
     // ================================================================
-    
+
     // Main cabinet body - increased height for more depth perception
     const cab = MeshBuilder.CreateBox("cabinet", { width: 27, height: 4, depth: 38 }, this.scene)
     cab.position.set(0.75, cabinetY - 0.5, 5)
@@ -627,7 +632,7 @@ export class Game {
     // ================================================================
     // LAYER 2: SIDEWALLS (Multi-layer for depth)
     // ================================================================
-    
+
     // Outer side panels - main thickness
     const leftPanel = MeshBuilder.CreateBox("leftPanel", { width: 1.5, height: 5, depth: 40 }, this.scene)
     leftPanel.position.set(-13, cabinetY + 0.5, 5)
@@ -658,7 +663,7 @@ export class Game {
     // ================================================================
     // LAYER 3: FRONT APRON & BEZEL (Depth separation from playfield)
     // ================================================================
-    
+
     // Front apron - raised area below the glass
     const apron = MeshBuilder.CreateBox("apron", { width: 24, height: 2, depth: 3 }, this.scene)
     apron.position.set(0.75, cabinetY + 0.5, -14)
@@ -673,7 +678,7 @@ export class Game {
     const bezelMat = new StandardMaterial("bezelMat", this.scene)
     bezelMat.diffuseColor = Color3.Black()
     bezelMat.emissiveColor = emissive(PALETTE.MAGENTA, INTENSITY.AMBIENT)
-    
+
     const bezel = MeshBuilder.CreateBox("bezel", { width: 26, height: 0.8, depth: 1.2 }, this.scene)
     bezel.position.set(0.75, cabinetY + 2.2, -12.8)
     bezel.material = bezelMat
@@ -686,7 +691,7 @@ export class Game {
     // ================================================================
     // LAYER 4: BACKBOX CONNECTION (Where table meets head)
     // ================================================================
-    
+
     // Back wall that supports the backbox - creates visual separation
     const backWall = MeshBuilder.CreateBox("backWall", { width: 27, height: 6, depth: 2 }, this.scene)
     backWall.position.set(0.75, cabinetY + 1, 22)
@@ -704,7 +709,7 @@ export class Game {
     // ================================================================
     // LAYER 5: PLUNGER LANE SIDING (Right side control area)
     // ================================================================
-    
+
     // Plunger lane outer wall - creates the "control panel" side
     const plungerWall = MeshBuilder.CreateBox("plungerWall", { width: 2, height: 3, depth: 25 }, this.scene)
     plungerWall.position.set(12, cabinetY + 0.5, -2)
@@ -726,10 +731,125 @@ export class Game {
 
     // Add all cabinet meshes to shadow casters for depth
     if (this.shadowGenerator) {
-      [cab, leftPanel, rightPanel, leftTrim, rightTrim, 
+      [cab, leftPanel, rightPanel, leftTrim, rightTrim,
        apron, bezel, backWall, plungerWall].forEach(mesh => {
         this.shadowGenerator?.addShadowCaster(mesh)
       })
+    }
+  }
+
+  // ============================================================================
+  // ROOM ENVIRONMENT - Dark arcade atmosphere
+  // ============================================================================
+
+  private createDarkRoomEnvironment(): void {
+    if (!this.scene) return
+
+    // === DARK FLOOR ===
+    // Large floor plane with subtle reflection
+    const floor = MeshBuilder.CreateGround('roomFloor', { width: 100, height: 100 }, this.scene)
+    floor.position.y = -8
+    const floorMat = new StandardMaterial('floorMat', this.scene)
+    floorMat.diffuseColor = Color3.FromHexString('#0a0a0a')
+    floorMat.specularColor = Color3.FromHexString('#111111')
+    floorMat.roughness = 0.8
+    floor.material = floorMat
+    this.roomMeshes.push(floor)
+
+    // === BACK WALL ===
+    // Dark wall behind the cabinet for depth
+    const backWall = MeshBuilder.CreatePlane('roomBackWall', { width: 80, height: 40 }, this.scene)
+    backWall.position.set(0, 10, 30)
+    backWall.rotation.x = Math.PI
+    const wallMat = new StandardMaterial('wallMat', this.scene)
+    wallMat.diffuseColor = Color3.FromHexString('#050505')
+    wallMat.roughness = 1.0
+    backWall.material = wallMat
+    this.roomMeshes.push(backWall)
+
+    // === SIDE WALLS (subtle, low) ===
+    const leftWall = MeshBuilder.CreatePlane('roomLeftWall', { width: 60, height: 30 }, this.scene)
+    leftWall.position.set(-50, 5, 0)
+    leftWall.rotation.y = Math.PI / 2
+    leftWall.material = wallMat
+    this.roomMeshes.push(leftWall)
+
+    const rightWall = MeshBuilder.CreatePlane('roomRightWall', { width: 60, height: 30 }, this.scene)
+    rightWall.position.set(50, 5, 0)
+    rightWall.rotation.y = -Math.PI / 2
+    rightWall.material = wallMat
+    this.roomMeshes.push(rightWall)
+
+    // === AMBIENT ROOM LIGHTING ===
+    // Very dim hemisphere light for base visibility
+    this.ambientRoomLight = new HemisphericLight('roomAmbient', new Vector3(0, 1, 0), this.scene)
+    this.ambientRoomLight.intensity = 0.1
+    this.ambientRoomLight.diffuse = Color3.FromHexString('#1a1a2e')
+    this.ambientRoomLight.groundColor = Color3.FromHexString('#050505')
+
+    // === CABINET NEON ACCENT LIGHTS ===
+    // These will react to map colors
+    this.createCabinetNeonLights()
+
+    console.log('[Game] Dark room environment created')
+  }
+
+  private createCabinetNeonLights(): void {
+    if (!this.scene) return
+
+    // Side cabinet glow lights
+    const leftNeon = new PointLight('leftNeon', new Vector3(-15, 2, 5), this.scene)
+    leftNeon.intensity = 0.8
+    leftNeon.diffuse = Color3.FromHexString(PALETTE.CYAN)
+    leftNeon.range = 15
+    this.cabinetNeonLights.push(leftNeon)
+
+    const rightNeon = new PointLight('rightNeon', new Vector3(16, 2, 5), this.scene)
+    rightNeon.intensity = 0.8
+    rightNeon.diffuse = Color3.FromHexString(PALETTE.MAGENTA)
+    rightNeon.range = 15
+    this.cabinetNeonLights.push(rightNeon)
+
+    // Back cabinet rim light
+    const backNeon = new PointLight('backNeon', new Vector3(0, 5, -15), this.scene)
+    backNeon.intensity = 0.5
+    backNeon.diffuse = Color3.FromHexString(PALETTE.PURPLE)
+    backNeon.range = 20
+    this.cabinetNeonLights.push(backNeon)
+
+    // Under-cabinet glow (illuminates floor)
+    const underNeon = new PointLight('underNeon', new Vector3(0, -4, 5), this.scene)
+    underNeon.intensity = 0.6
+    underNeon.diffuse = Color3.FromHexString(PALETTE.CYAN)
+    underNeon.range = 12
+    this.cabinetNeonLights.push(underNeon)
+  }
+
+  /**
+   * Update cabinet neon lights based on current map color
+   */
+  private updateCabinetLightingForMap(): void {
+    const config = TABLE_MAPS[this.currentTableMap]
+    if (!config || this.cabinetNeonLights.length === 0) return
+
+    const baseColor = Color3.FromHexString(config.baseColor)
+    const accentColor = Color3.FromHexString(config.accentColor)
+
+    // Left side = base color
+    if (this.cabinetNeonLights[0]) {
+      this.cabinetNeonLights[0].diffuse = baseColor
+    }
+    // Right side = accent color
+    if (this.cabinetNeonLights[1]) {
+      this.cabinetNeonLights[1].diffuse = accentColor
+    }
+    // Back = blend of both
+    if (this.cabinetNeonLights[2]) {
+      this.cabinetNeonLights[2].diffuse = Color3.Lerp(baseColor, accentColor, 0.5)
+    }
+    // Under = base color with slight intensity pulse
+    if (this.cabinetNeonLights[3]) {
+      this.cabinetNeonLights[3].diffuse = baseColor
     }
   }
 
@@ -876,7 +996,7 @@ export class Game {
       },
     }
     this.display = new DisplaySystem(this.scene, this.engine, displayConfig)
-    
+
     // Setup slot machine event callback
     this.setupSlotMachineCallbacks()
 
@@ -1036,6 +1156,7 @@ export class Game {
     // Visual polish - lowest priority
     this.gameObjects.createCabinetDecoration()
     this.createEnhancedCabinet()
+    this.createDarkRoomEnvironment()
 
     this.display.createBackbox(new Vector3(0.75, 15, 30))
     this.effects.createCabinetLighting()
@@ -1074,6 +1195,9 @@ export class Game {
     const matLib = getMaterialLibrary(this.scene!)
     const config = TABLE_MAPS[mapName]
     matLib.updateLCDTableEmissive(config.baseColor, config.glowIntensity)
+
+    // Update cabinet neon lights to match map
+    this.updateCabinetLightingForMap()
 
     // Update display with map info
     this.display?.setStoryText(`MAP: ${config.name.toUpperCase()}`)
@@ -1143,7 +1267,7 @@ export class Game {
   private showLoadingState(show: boolean, phase?: 'gameplay' | 'cosmetic'): void {
     // Create or get loading overlay
     let loadingOverlay = document.getElementById('loading-overlay')
-    
+
     if (show) {
       if (!loadingOverlay) {
         loadingOverlay = document.createElement('div')
@@ -1429,7 +1553,7 @@ export class Game {
       this.hapticManager?.tiltWarning()
       return
     }
-    
+
     const joint = this.gameObjects?.getFlipperJoints().left
     if (joint) {
       // UPDATED: Use Config values
@@ -1438,7 +1562,7 @@ export class Game {
       const angle = pressed ? -Math.PI / 6 : Math.PI / 4
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
     }
-    
+
     // Haptic feedback on flipper activation
     if (pressed) {
       this.hapticManager?.flipper()
@@ -1452,7 +1576,7 @@ export class Game {
       this.hapticManager?.tiltWarning()
       return
     }
-    
+
     const joint = this.gameObjects?.getFlipperJoints().right
     if (joint) {
       // UPDATED: Use Config values
@@ -1461,7 +1585,7 @@ export class Game {
       const angle = pressed ? Math.PI / 6 : -Math.PI / 4
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
     }
-    
+
     // Haptic feedback on flipper activation
     if (pressed) {
       this.hapticManager?.flipper()
@@ -1474,50 +1598,50 @@ export class Game {
     const rapier = this.physics.getRapier()
     const ballBody = this.ballManager?.getBallBody()
     if (!ballBody || !rapier) return
-    
+
     const pos = ballBody.translation()
     if (pos.x > 8 && pos.z < -4) {
       // Calculate impulse based on charge level (fallback to full impulse if no charge)
       const chargeRatio = this.plungerChargeLevel
-      const impulseMagnitude = GameConfig.plunger.minImpulse + 
+      const impulseMagnitude = GameConfig.plunger.minImpulse +
         (GameConfig.plunger.maxImpulse - GameConfig.plunger.minImpulse) * chargeRatio
-      
+
       ballBody.applyImpulse(new rapier.Vector3(0, 0, impulseMagnitude), true)
-      
+
       // Haptic feedback - stronger for more charge
       const hapticIntensity = 30 + Math.floor(chargeRatio * 40)
       this.hapticManager?.trigger([hapticIntensity, 10, Math.floor(hapticIntensity / 2)])
-      
+
       // Visual feedback - camera shake based on charge
       if (!this.accessibility.reducedMotion && this.effects) {
         const shakeIntensity = 0.02 + chargeRatio * 0.04
         this.effects.addCameraShake(shakeIntensity)
       }
-      
+
       // Reset charge state
       this.plungerChargeLevel = 0
     }
   }
-  
+
   /**
    * Called when plunger charge starts (button pressed)
    */
   private startPlungerCharge(): void {
     this.plungerChargeLevel = 0
-    
+
     // Initial haptic feedback to indicate charge started
     this.hapticManager?.trigger([20, 5])
   }
-  
+
   /**
    * Called each frame while plunger is held to update charge level
    */
   private updatePlungerCharge(chargeLevel: number): void {
     this.plungerChargeLevel = chargeLevel
-    
+
     // Update visual feedback - animate plunger pullback
     this.updatePlungerVisual(chargeLevel)
-    
+
     // Progressive haptic feedback as charge builds
     if (chargeLevel > 0.25 && chargeLevel < 0.3) {
       this.hapticManager?.trigger([15])
@@ -1530,7 +1654,7 @@ export class Game {
       this.hapticManager?.trigger([40, 5])
     }
   }
-  
+
   /**
    * Called when plunger is released
    */
@@ -1538,26 +1662,26 @@ export class Game {
     this.plungerChargeLevel = chargeLevel
     // The actual impulse is applied in handlePlunger() which is called after this
   }
-  
+
   /**
    * Update plunger visual - pull back the rod and knob based on charge level
    */
   private updatePlungerVisual(chargeLevel: number): void {
     if (!this.scene) return
-    
+
     // Find plunger meshes
     const shooterRod = this.scene.getMeshByName('shooterRod')
     const plungerKnob = this.scene.getMeshByName('plungerKnob')
-    
+
     if (shooterRod && plungerKnob) {
       // Pull back based on charge level (max pullback from config)
       const maxPullback = GameConfig.plunger.maxPullbackDistance
       const pullback = chargeLevel * maxPullback
-      
+
       // Original positions
       const rodBaseZ = -10
       const knobBaseZ = -13
-      
+
       // Apply pullback (negative Z direction)
       shooterRod.position.z = rodBaseZ - pullback
       plungerKnob.position.z = knobBaseZ - pullback
@@ -1569,11 +1693,11 @@ export class Game {
       this.hapticManager?.tiltWarning()
       return
     }
-    
+
     const rapier = this.physics.getRapier()
     const ballBody = this.ballManager?.getBallBody()
     if (!ballBody || !rapier) return
-    
+
     // Track tilt warnings - warn if nudging too frequently
     const now = performance.now()
     if (now - this.nudgeState.lastNudgeTime < 500) {
@@ -1584,7 +1708,7 @@ export class Game {
       }
     }
     this.nudgeState.lastNudgeTime = now
-    
+
     // Apply impulse with vertical boost for realistic nudge feel
     const impulse = new rapier.Vector3(
       direction.x * GameConfig.nudge.force,
@@ -1592,11 +1716,11 @@ export class Game {
       direction.z * GameConfig.nudge.force
     )
     ballBody.applyImpulse(impulse, true)
-    
+
     // Haptic feedback
     const nudgeDirection = direction.x > 0 ? 'right' : direction.x < 0 ? 'left' : 'up'
     this.hapticManager?.nudge(nudgeDirection)
-    
+
     // Visual feedback (subtle screen shake) - skip if reduced motion
     if (!this.accessibility.reducedMotion) {
       this.effects?.addCameraShake(0.03)
@@ -1607,17 +1731,17 @@ export class Game {
     this.nudgeState.tiltActive = true
     this.nudgeState.tiltWarningActive = false
     this.tiltActive = true
-    
+
     // Visual tilt warning - flash bloom
     this.effects?.setBloomEnergy(3.0)
     setTimeout(() => this.effects?.setBloomEnergy(1.0), 1000)
-    
+
     // Audio warning
     this.effects?.playBeep(150) // Low warning tone
-    
+
     // Haptic warning
     this.hapticManager?.tiltWarning()
-    
+
     // Reset after delay
     setTimeout(() => {
       this.nudgeState.tiltActive = false
@@ -1704,12 +1828,12 @@ export class Game {
     if (frame.flipperRight !== null) {
       this.handleFlipperRight(frame.flipperRight)
     }
-    
+
     // Apply plunger (one-shot trigger)
     if (frame.plunger) {
       this.handlePlunger()
     }
-    
+
     // Apply nudge if present
     if (frame.nudge) {
       const rapier = this.physics.getRapier()
@@ -1722,16 +1846,16 @@ export class Game {
   private stepPhysics(): void {
     // Poll gamepad input each frame
     this.inputHandler?.pollGamepad()
-    
+
     // Update plunger charge while held
     this.inputHandler?.updatePlungerCharge()
-    
+
     // Process buffered inputs at start of physics step for consistent latency
     const inputFrame = this.inputHandler?.processBufferedInputs()
     if (inputFrame) {
       this.applyInputFrame(inputFrame)
     }
-    
+
     if (this.state !== GameState.PLAYING) return
 
     const rawDt = this.engine.getDeltaTime() / 1000
@@ -1797,7 +1921,7 @@ export class Game {
       const pos = ballBody.translation()
       const vel = ballBody.linvel()
       const cameraMode = this.getCameraMode()
-      
+
       this.cameraController.update(
         dt,
         new Vector3(pos.x, pos.y, pos.z),
@@ -1812,7 +1936,7 @@ export class Game {
 
     this.gameObjects?.updateBumpers(dt)
     this.gameObjects?.updateTargets(dt)
-    
+
     if (this.magSpinFeeder) {
       const ballBodies = this.ballManager?.getBallBodies() || []
       this.magSpinFeeder.update(dt, ballBodies)
@@ -1841,7 +1965,7 @@ export class Game {
     this.ballManager?.updateCaughtBalls(dt, () => {
       this.effects?.playBeep(440)
     })
-    
+
     this.effects?.updateShards(dt)
     this.effects?.updateBloom(dt)
     this.effects?.updateCabinetLighting(dt)
@@ -1889,10 +2013,10 @@ export class Game {
         this.display.setDisplayState(DisplayState.IDLE)
         this.effects.setAtmosphereState('IDLE')
     }
-    
+
     this.updateCombo(dt)
     this.updateTiltDecay(dt)
-    
+
     if (this.powerupActive) {
       this.powerupTimer -= dt
       if (this.powerupTimer <= 0) this.powerupActive = false
@@ -1971,12 +2095,12 @@ export class Game {
             this.effects?.playBeep(400 + Math.random() * 200)
             this.updateHUD()
             this.effects?.setLightingMode('hit', 0.2)
-            
+
             // Haptic feedback on bumper hit - intensity based on ball velocity
             const velocity = ballBody.linvel()
             const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
             this.hapticManager?.bumper(speed)
-            
+
             return
           }
         }
@@ -2038,7 +2162,7 @@ export class Game {
     const bumperVisuals = this.gameObjects?.getBumperVisuals() || []
     const visual = bumperVisuals.find(v => v.body === bumper)
     if (!visual || !visual.hologram) return
-    
+
     this.ballManager?.activateHologramCatch(ball, visual.hologram.position, 4.0)
     this.effects?.playBeep(880)
     this.display?.setDisplayState(DisplayState.REACH)
@@ -2047,13 +2171,13 @@ export class Game {
 
   private handleBallLoss(body: RAPIER.RigidBody): void {
     if (this.state !== GameState.PLAYING) return
-    
+
     this.comboCount = 0
     this.ballManager?.removeBall(body)
-    
+
     // Haptic feedback on ball loss
     this.hapticManager?.ballLost()
-    
+
     const ballBody = this.ballManager?.getBallBody()
     if (body === ballBody) {
       const ballBodies = this.ballManager?.getBallBodies() || []
@@ -2068,7 +2192,7 @@ export class Game {
         }
       }
     }
-    
+
     this.updateHUD()
   }
 
@@ -2118,7 +2242,7 @@ export class Game {
           this.effects?.setSlotLightingMode('spin')
           console.log('[Slot] Spin started:', data)
           break
-          
+
         case 'reel-stop': {
           const reelData = data as { reel: number; symbol: string }
           this.effects?.playReelStop(reelData.reel)
@@ -2127,7 +2251,7 @@ export class Game {
           }
           break
         }
-          
+
         case 'win': {
           const winData = data as { combination: { name: string; multiplier: number }; score: number }
           this.effects?.playSlotWin(winData.combination.multiplier)
@@ -2137,7 +2261,7 @@ export class Game {
           console.log(`[Slot] Win: ${winData.combination.name} - ${winData.score} points`)
           break
         }
-          
+
         case 'jackpot': {
           const jackpotData = data as { combination: { name: string }; score: number }
           this.effects?.playSlotJackpot()
@@ -2146,16 +2270,16 @@ export class Game {
           console.log(`[Slot] JACKPOT! ${jackpotData.score} points`)
           break
         }
-          
+
         case 'near-miss':
           this.effects?.playNearMiss()
           console.log('[Slot] Near miss!')
           break
-          
+
         case 'activation-chance':
           console.log('[Slot] Activated:', data)
           break
-          
+
         case 'activation-denied':
           console.log('[Slot] Activation denied:', data)
           break
@@ -2168,7 +2292,7 @@ export class Game {
    */
   private tryActivateSlotMachine(): void {
     if (!this.display) return
-    
+
     if (this.display.shouldActivateSlotMachine(this.score)) {
       this.display.startSlotSpin()
     }
@@ -2231,21 +2355,21 @@ export class Game {
 
   private startAdventureMode(): void {
     if (!this.adventureMode || !this.scene) return
-    
+
     const ballBody = this.ballManager?.getBallBody()
     const camera = this.scene.activeCamera as ArcRotateCamera
     const bindings = this.gameObjects?.getBindings() || []
     const ballMesh = bindings.find(b => b.rigidBody === ballBody)?.mesh
-    
+
     if (ballBody && camera) {
       const pinballMeshes = this.gameObjects?.getPinballMeshes() || []
       pinballMeshes.forEach(m => m.setEnabled(false))
-      
+
       const track = this.nextAdventureTrack
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.adventureMode.start(ballBody, camera, ballMesh as any, track)
-      
+
       const trackName = this.getTrackDisplayName(track)
       if (this.scoreElement) {
         this.scoreElement.innerText = `HOLO-DECK: ${trackName}`
@@ -2263,10 +2387,10 @@ export class Game {
 
   private endAdventureMode(): void {
     if (!this.adventureMode) return
-    
+
     const pinballMeshes = this.gameObjects?.getPinballMeshes() || []
     pinballMeshes.forEach(m => m.setEnabled(true))
-    
+
     this.adventureMode.end()
     this.resetBall()
     this.updateHUD()
@@ -2281,16 +2405,16 @@ export class Game {
     const settingsOverlay = document.getElementById('settings-overlay')
     const closeBtn = document.getElementById('close-settings')
     const saveBtn = document.getElementById('save-settings')
-    
+
     settingsBtn?.addEventListener('click', () => {
       settingsOverlay?.classList.remove('hidden')
       this.loadSettingsIntoUI()
     })
-    
+
     closeBtn?.addEventListener('click', () => {
       settingsOverlay?.classList.add('hidden')
     })
-    
+
     saveBtn?.addEventListener('click', () => {
       this.saveSettingsFromUI()
       settingsOverlay?.classList.add('hidden')
@@ -2302,7 +2426,7 @@ export class Game {
     const reducedMotionCheckbox = document.getElementById('reduced-motion') as HTMLInputElement
     const photosensitiveCheckbox = document.getElementById('photosensitive-mode') as HTMLInputElement
     const shakeSlider = document.getElementById('shake-intensity') as HTMLInputElement
-    
+
     if (reducedMotionCheckbox) reducedMotionCheckbox.checked = settings.reducedMotion
     if (photosensitiveCheckbox) photosensitiveCheckbox.checked = settings.photosensitiveMode
     if (shakeSlider) shakeSlider.value = String(settings.shakeIntensity)
