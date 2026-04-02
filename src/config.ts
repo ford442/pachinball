@@ -125,9 +125,9 @@ export const GameConfig = {
     particleIntensity: 1.0
   },
   physics: {
-    ballRestitution: 0.7,
-    ballFriction: 0.1,
-    bumperRestitution: 1.5,
+    ballRestitution: 0.78,
+    ballFriction: 0.12,
+    bumperRestitution: 0.85,
     // REMOVED: flipperPower (Legacy/Unused)
     gravity: { x: 0, y: -9.81, z: -5.0 }
   },

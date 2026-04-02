@@ -1152,8 +1152,9 @@ export class Game {
     this.gameObjects.createDeathZone()
     this.gameObjects.createBumpers()
     this.gameObjects.createSlingshots()
-    this.gameObjects.createPachinkoField(new Vector3(0, 0.5, 12), 14, 10)
+    this.gameObjects.createPachinkoField()
     this.gameObjects.createFlipperRamps()
+    this.gameObjects.createDrainRails()
 
     // Build handle caches for O(1) collision lookups
     this.rebuildHandleCaches()

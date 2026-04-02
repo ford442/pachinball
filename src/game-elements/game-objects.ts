@@ -676,6 +676,132 @@ export class GameObjects {
     createWedge("wedgeTR", trX, trZ, Math.PI / 4) // -45 degrees
   }
 
+  /**
+   * Creates strong side rails that run from the upper playfield down to the flippers.
+   * These physically block the ball from draining down the left/right gutters.
+   */
+  createDrainRails(): void {
+    const railMat = this.matLib.getBrushedMetalMaterial()
+    const railHeight = 1.2
+    const railThick = 0.4
+
+    // Left rail - curves inward toward the left flipper
+    const leftRailPath = [
+      new Vector3(-10, railHeight / 2, 20),    // Top wall junction
+      new Vector3(-10, railHeight / 2, 10),    // Upper playfield
+      new Vector3(-9.5, railHeight / 2, 0),    // Mid playfield
+      new Vector3(-8, railHeight / 2, -6),     // Above flipper
+      new Vector3(-5.5, railHeight / 2, -9)    // Ends near left flipper
+    ]
+
+    const leftRail = MeshBuilder.CreateTube("leftSideRail", {
+      path: leftRailPath,
+      radius: 0.18,
+      sideOrientation: 2
+    }, this.scene)
+    leftRail.material = railMat
+    this.pinballMeshes.push(leftRail)
+
+    // Physics colliders for left rail
+    for (let i = 0; i < leftRailPath.length - 1; i++) {
+      const start = leftRailPath[i]
+      const end = leftRailPath[i + 1]
+      const mid = Vector3.Center(start, end)
+      const direction = end.subtract(start)
+      const length = direction.length()
+      const angle = Math.atan2(direction.x, direction.z)
+
+      const railBody = this.world.createRigidBody(
+        this.rapier.RigidBodyDesc.fixed()
+          .setTranslation(mid.x, mid.y, mid.z)
+          .setRotation(new this.rapier.Quaternion(0, Math.sin(angle * 0.5), 0, Math.cos(angle * 0.5)))
+      )
+      this.world.createCollider(
+        this.rapier.ColliderDesc.cuboid(railThick / 2, railHeight / 2, length / 2)
+          .setRestitution(0.5)
+          .setFriction(0.1),
+        railBody
+      )
+    }
+
+    // Right rail - curves inward toward the right flipper
+    const rightRailPath = [
+      new Vector3(11.5, railHeight / 2, 20),   // Top wall junction
+      new Vector3(11.5, railHeight / 2, 10),   // Upper playfield
+      new Vector3(11, railHeight / 2, 0),      // Mid playfield
+      new Vector3(9.5, railHeight / 2, -6),    // Above flipper
+      new Vector3(7, railHeight / 2, -9)       // Ends near right flipper
+    ]
+
+    const rightRail = MeshBuilder.CreateTube("rightSideRail", {
+      path: rightRailPath,
+      radius: 0.18,
+      sideOrientation: 2
+    }, this.scene)
+    rightRail.material = railMat
+    this.pinballMeshes.push(rightRail)
+
+    // Physics colliders for right rail
+    for (let i = 0; i < rightRailPath.length - 1; i++) {
+      const start = rightRailPath[i]
+      const end = rightRailPath[i + 1]
+      const mid = Vector3.Center(start, end)
+      const direction = end.subtract(start)
+      const length = direction.length()
+      const angle = Math.atan2(direction.x, direction.z)
+
+      const railBody = this.world.createRigidBody(
+        this.rapier.RigidBodyDesc.fixed()
+          .setTranslation(mid.x, mid.y, mid.z)
+          .setRotation(new this.rapier.Quaternion(0, Math.sin(angle * 0.5), 0, Math.cos(angle * 0.5)))
+      )
+      this.world.createCollider(
+        this.rapier.ColliderDesc.cuboid(railThick / 2, railHeight / 2, length / 2)
+          .setRestitution(0.5)
+          .setFriction(0.1),
+        railBody
+      )
+    }
+
+    // Lower guard rails - small walls just above the flippers to catch side bounces
+    const guardMat = this.matLib.getChromeMaterial()
+    const leftGuard = MeshBuilder.CreateBox("leftGuard", { width: 0.3, height: 0.8, depth: 3 }, this.scene)
+    leftGuard.position.set(-4.5, 0.4, -10)
+    leftGuard.rotation.y = -Math.PI / 8
+    leftGuard.material = guardMat
+    this.pinballMeshes.push(leftGuard)
+
+    const lgBody = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed()
+        .setTranslation(-4.5, 0.4, -10)
+        .setRotation(new this.rapier.Quaternion(0, Math.sin(-Math.PI / 16), 0, Math.cos(-Math.PI / 16)))
+    )
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(0.15, 0.4, 1.5)
+        .setRestitution(0.6)
+        .setFriction(0.1),
+      lgBody
+    )
+
+    const rightGuard = MeshBuilder.CreateBox("rightGuard", { width: 0.3, height: 0.8, depth: 3 }, this.scene)
+    rightGuard.position.set(6, 0.4, -10)
+    rightGuard.rotation.y = Math.PI / 8
+    rightGuard.material = guardMat
+    this.pinballMeshes.push(rightGuard)
+
+    const rgBody = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed()
+        .setTranslation(6, 0.4, -10)
+        .setRotation(new this.rapier.Quaternion(0, Math.sin(Math.PI / 16), 0, Math.cos(Math.PI / 16)))
+    )
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(0.15, 0.4, 1.5)
+        .setRestitution(0.6)
+        .setFriction(0.1),
+      rgBody
+    )
+  }
+
   createDeathZone(): void {
     this.deathZoneBody = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.fixed().setTranslation(0, -2, -14)
@@ -804,7 +930,7 @@ export class GameObjects {
       
       this.world.createCollider(
         this.rapier.ColliderDesc.ball(0.4 * scale)
-          .setRestitution(this.config.physics.bumperRestitution)
+          .setRestitution(0.85)
           .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
         body
       )
@@ -880,15 +1006,18 @@ export class GameObjects {
     make(3, 0, "#ffaa00", 0.9)
     // Far upper bumper
     make(0, 14, "#00ff88", 0.85)
+    // Side deflector bumper - prevents direct side drains from upper playfield
+    make(-6, 10, "#ff4400", 1.0)
   }
 
-  createPachinkoField(center: Vector3, width: number, height: number): void {
+  createPachinkoField(center: Vector3 = new Vector3(0, 0.5, 6), width: number = 24, height: number = 22): void {
     // Use MaterialLibrary for metallic pins
     const pinMat = this.matLib.getPinMaterial()
 
     // Dense pachinko grid: 10 rows, staggered columns for chaotic ball paths
+    // Covering the upper 2/3 of the playfield to keep the ball bouncing
     const rows = 10
-    const cols = 11
+    const cols = 13
     const spacingX = width / cols
     const spacingZ = height / rows
 
@@ -897,7 +1026,8 @@ export class GameObjects {
       for (let c = 0; c < cols; c++) {
         const x = center.x - (width / 2) + c * spacingX + offsetX
         const z = center.z - (height / 2) + r * spacingZ
-        if (Math.abs(x) < 2 && Math.abs(z - center.z) < 2) continue
+        // Skip center area for the main catcher/target
+        if (Math.abs(x) < 2.5 && Math.abs(z - center.z) < 2.5) continue
 
         // Use slightly smaller diameter for more precision look
         const pin = MeshBuilder.CreateCylinder(`pin_${r}_${c}`, { diameter: 0.18, height: 1.5, tessellation: 12 }, this.scene)
@@ -909,7 +1039,7 @@ export class GameObjects {
         )
         this.world.createCollider(
           this.rapier.ColliderDesc.cylinder(0.75, 0.09) // Thin collider for pachinko-style pins
-            .setRestitution(0.6)  // Slightly bouncy pins
+            .setRestitution(0.65)  // Slightly bouncy pins
             .setFriction(0.1),    // Low friction for smooth ball motion
           body
         )
@@ -919,17 +1049,7 @@ export class GameObjects {
       }
     }
 
-    // Barrier walls at the left and right edges of the pachinko pin grid
-    // to block the open gutter areas and prevent lateral ball drift.
-    const barrierMat = new StandardMaterial("pachinkoBarrierMat", this.scene)
-    barrierMat.diffuseColor = Color3.Black()
-    barrierMat.emissiveColor = Color3.FromHexString("#00eeff")
-    barrierMat.alpha = 0.3
-
-    const barrierH = GameConfig.table.wallHeight
-    this.createWall(new Vector3(center.x - width / 2, barrierH, center.z), new Vector3(0.2, 5, height), barrierMat)
-    this.createWall(new Vector3(center.x + width / 2, barrierH, center.z), new Vector3(0.2, 5, height), barrierMat)
-
+    // Catcher in the center of the pachinko field
     const catcher = MeshBuilder.CreateTorus("catcher", { diameter: 2.5, thickness: 0.2 }, this.scene)
     catcher.position.set(center.x, 0.2, center.z)
 
