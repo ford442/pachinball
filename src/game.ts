@@ -113,6 +113,9 @@ export class Game {
   private rimLight: DirectionalLight | null = null
   private bounceLight: PointLight | null = null
   private tableCam: ArcRotateCamera | null = null
+  
+  // Mouse tracking handler for cleanup
+  private _mouseMoveHandler: ((e: MouseEvent) => void) | null = null
 
   // Game State
   private ready = false
@@ -230,133 +233,93 @@ export class Game {
     this.setupSettingsUI()
 
     // -----------------------------------------------------------------
-    // 2️⃣ DUAL-CAMERA SETUP (TOP = Machine Head, BOTTOM = Ball Table)
+    // 2️⃣ IMMERSIVE 3D CAMERA - Full cabinet view with mouse head-tracking
     // -----------------------------------------------------------------
-
-    // ---- TABLE CAMERA (bottom 60% of the screen) --------------------
-    // TUNING RATIONALE:
-    // - Lower FOV (0.65 vs 0.8): Creates more telephoto, dramatic perspective
-    //   that enhances depth perception through stronger perspective convergence
-    // - Lower beta (PI/3.5 vs PI/4): More side-angle view, less top-down,
-    //   makes table feel deeper and shows off the 3D cabinet structure
-    // - Closer radius (32 vs 35): Brings camera in for more intimacy with playfield
-    // - Target shifted to z=2: Focuses on flipper area where action happens,
-    //   while still showing upper playfield
-    const tableCam = new ArcRotateCamera(
-      'tableCam',
-      -Math.PI / 2,               // alpha: front-facing
-      Math.PI / 3.5,              // beta: ~51° tilt (was 45°) - more side view
-      32,                         // radius: closer for immersion (was 35)
-      new Vector3(0, 0, 2),       // target: shifted toward flippers (was z=5)
+    
+    // Create room environment (floor and back wall)
+    this.createRoomEnvironment()
+    
+    // ---- IMMERSIVE CABINET CAMERA --------------------
+    // Shows the entire machine from a player's eye position
+    // with smooth mouse tracking like Noah's dice roller
+    const canvas = this.engine.getRenderingCanvas()
+    
+    // Default "player's eye" position - frames the whole machine nicely
+    // Positioned slightly above and angled down to see full cabinet
+    const immersiveCam = new ArcRotateCamera(
+      'immersiveCam',
+      -Math.PI / 2,               // alpha: front-facing (will be adjusted by mouse)
+      Math.PI / 2.8,              // beta: ~64° tilt - sees cabinet from above
+      42,                         // radius: far enough to see full cabinet
+      new Vector3(0, 5, 5),       // target: centered on cabinet middle
       this.scene
     )
-    this.tableCam = tableCam  // Store reference for effects
-    tableCam.mode = ArcRotateCamera.PERSPECTIVE_CAMERA
-    tableCam.fov = 0.65           // Narrower FOV (~37°) for dramatic perspective
-
-    // Viewport: x, y, width, height - y = 0 starts at the *bottom* of the canvas
-    tableCam.viewport = new Viewport(0, 0, 1, 0.6) // 60% height
-
-    // Enable player camera controls for looking around the table
-    tableCam.attachControl(this.engine.getRenderingCanvas(), true)
-
-    // Adjusted limits for new camera angle
-    tableCam.lowerBetaLimit = Math.PI / 6     // Don't go too horizontal (30°)
-    tableCam.upperBetaLimit = Math.PI / 2.2   // Don't go past top-down
-    tableCam.lowerRadiusLimit = 22            // Closer zoom minimum
-    tableCam.upperRadiusLimit = 45            // Tighter max zoom
-    // Restrict horizontal rotation to 180° arc on the player-facing side
-    tableCam.lowerAlphaLimit = -Math.PI       // Left limit
-    tableCam.upperAlphaLimit = 0              // Right limit (player always faces table)
-
-    // Add subtle camera inertia for smooth feel
-    tableCam.inertia = 0.85
-    tableCam.wheelPrecision = 50
-
-    // ---- HEAD CAMERA (top 40% of the screen) ------------------------
-    const headCam = new ArcRotateCamera(
-      'headCam',
-      -Math.PI / 2,
-      Math.PI / 2,
-      25,
-      new Vector3(0.75, 8, 21.5), // Matches your display.ts target
-      this.scene
-    )
-    headCam.mode = ArcRotateCamera.ORTHOGRAPHIC_CAMERA
-
-    // Viewport: starts at y = 0.6 (i.e. after the bottom 60%)
-    headCam.viewport = new Viewport(0, 0.6, 1, 0.4) // 40% height
-
-    // Orthographic bounds for the backbox
-    const headScale = 24
-    headCam.orthoTop    =  headScale * 0.2
-    headCam.orthoBottom = -headScale * 0.2
-    headCam.orthoLeft   = -headScale / 2
-    headCam.orthoRight  =  headScale / 2
-
-    // Register both cameras as the *active* set for the scene
-    this.scene.activeCameras = [tableCam, headCam]
-
-    // -----------------------------------------------------------------
-    // 2.5️⃣ RENDER TARGET TEXTURES (for future 3D cabinet view)
-    // -----------------------------------------------------------------
-    // Create render targets that match the viewport dimensions.
-    // The table camera uses 60% of the height, head camera uses 40%.
-    const canvasWidth = this.engine.getRenderWidth()
-    const canvasHeight = this.engine.getRenderHeight()
-
-    // Table render target (bottom 60% of screen)
-    const tableWidth = Math.floor(canvasWidth)  // Full width
-    const tableHeight = Math.floor(canvasHeight * 0.6) // 60% height
-    this.tableRenderTarget = new RenderTargetTexture(
-      'tableRenderTarget',
-      { width: tableWidth, height: tableHeight },
-      this.scene,
-      false, // generateMipMaps
-      true,  // doNotChangeAspectRatio
-      undefined, // type
-      false, // isCube
-      undefined, // samplingMode
-      true,  // generateDepthBuffer
-      false, // generateStencilBuffer
-      false, // isMulti
-      undefined, // format
-      false  // delayAllocation
-    )
-    this.tableRenderTarget.activeCamera = tableCam
-    this.tableRenderTarget.renderList = null // Render all scene meshes
-
-    // Head render target (top 40% of screen)
-    const headWidth = Math.floor(canvasWidth)   // Full width
-    const headHeight = Math.floor(canvasHeight * 0.4) // 40% height
-    this.headRenderTarget = new RenderTargetTexture(
-      'headRenderTarget',
-      { width: headWidth, height: headHeight },
-      this.scene,
-      false, // generateMipMaps
-      true,  // doNotChangeAspectRatio
-      undefined, // type
-      false, // isCube
-      undefined, // samplingMode
-      true,  // generateDepthBuffer
-      false, // generateStencilBuffer
-      false, // isMulti
-      undefined, // format
-      false  // delayAllocation
-    )
-    this.headRenderTarget.activeCamera = headCam
-    this.headRenderTarget.renderList = null // Render all scene meshes
+    this.tableCam = immersiveCam  // Keep reference for compatibility
+    immersiveCam.mode = ArcRotateCamera.PERSPECTIVE_CAMERA
+    immersiveCam.fov = 0.55       // Moderate FOV for natural perspective
+    
+    // Full viewport - single camera shows entire cabinet
+    immersiveCam.viewport = new Viewport(0, 0, 1, 1)
+    
+    // Limits to prevent seeing "behind" the room
+    immersiveCam.lowerBetaLimit = Math.PI / 4      // Don't go too low
+    immersiveCam.upperBetaLimit = Math.PI / 2.2    // Don't go past top-down
+    immersiveCam.lowerRadiusLimit = 30             // Don't zoom too close
+    immersiveCam.upperRadiusLimit = 60             // Don't zoom too far
+    
+    // Store base position for mouse tracking
+    const baseAlpha = -Math.PI / 2
+    const baseBeta = Math.PI / 2.8
+    
+    // Mouse tracking state (like dice roller head/eye tracking)
+    const mouseState = { x: 0.5, y: 0.5, targetX: 0.5, targetY: 0.5 }
+    const smoothSpeed = 0.08  // Lerp factor - smooth but responsive
+    const lookRange = 0.25    // How much the camera can rotate (radians)
+    
+    // Mouse move handler for smooth head-tracking
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!canvas) return
+      const rect = canvas.getBoundingClientRect()
+      // Normalize mouse position to 0-1 range, centered at 0.5
+      mouseState.targetX = (e.clientX - rect.left) / rect.width
+      mouseState.targetY = (e.clientY - rect.top) / rect.height
+    }
+    
+    // Add mouse tracking
+    canvas?.addEventListener('mousemove', handleMouseMove)
+    
+    // Store handler for cleanup
+    this._mouseMoveHandler = handleMouseMove
+    
+    // Before render: smooth lerp camera position (like dice roller)
+    this.scene.onBeforeRenderObservable.add(() => {
+      // Smooth lerp toward target mouse position
+      mouseState.x += (mouseState.targetX - mouseState.x) * smoothSpeed
+      mouseState.y += (mouseState.targetY - mouseState.y) * smoothSpeed
+      
+      // Calculate camera offset based on mouse position
+      // Mouse at left (0) -> look left, Mouse at right (1) -> look right
+      const offsetX = (mouseState.x - 0.5) * lookRange * 2  // -lookRange to +lookRange
+      const offsetY = (mouseState.y - 0.5) * lookRange * 0.8  // Less vertical movement
+      
+      // Apply smooth rotation to camera
+      immersiveCam.alpha = baseAlpha + offsetX
+      immersiveCam.beta = baseBeta + offsetY
+    })
+    
+    // Single active camera
+    this.scene.activeCamera = immersiveCam
 
     // -----------------------------------------------------------------
     // 3️⃣ POST-PROCESS PIPELINES (bloom + scanlines)
     // -----------------------------------------------------------------
 
-    // Bloom - applied to *both* viewports
+    // Bloom - applied to immersive camera
     this.bloomPipeline = new DefaultRenderingPipeline(
       'pachinbloom',
       true,
       this.scene,
-      [tableCam, headCam]
+      [immersiveCam]
     )
     if (this.bloomPipeline) {
       // Bloom - richer glow hierarchy
@@ -412,17 +375,17 @@ export class Game {
       ssao.samples = 16
       ssao.maxZ = 50
       ssao.minZAspect = 0.5
-      this.scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline('ssao', [tableCam, headCam])
+      this.scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline('ssao', [immersiveCam])
     }
 
-    // Scanline effect - only on the head camera
+    // Scanline effect - applied to immersive camera
     const scanline = new PostProcess(
         "scanline",
         "scanline",
         ["uTime"],
         null,
         1.0,
-        headCam, // Only attached to head camera!
+        immersiveCam,
         Texture.BILINEAR_SAMPLINGMODE,
         this.engine
     )
@@ -743,6 +706,39 @@ export class Game {
   // ============================================================================
   // ROOM ENVIRONMENT - Dark arcade atmosphere
   // ============================================================================
+  
+  private createRoomEnvironment(): void {
+    if (!this.scene) return
+    
+    // === DARK ARCADE FLOOR ===
+    // Large floor plane that the cabinet sits on
+    const floor = MeshBuilder.CreateGround('arcadeFloor', { width: 120, height: 120 }, this.scene)
+    floor.position.y = -5
+    const floorMat = new StandardMaterial('arcadeFloorMat', this.scene)
+    floorMat.diffuseColor = Color3.FromHexString('#08080c')
+    floorMat.specularColor = Color3.FromHexString('#151520')
+    floorMat.roughness = 0.9
+    floor.material = floorMat
+    
+    // === BACK WALL ===
+    // Dark wall behind the cabinet for depth perception
+    const backWall = MeshBuilder.CreatePlane('arcadeBackWall', { width: 100, height: 50 }, this.scene)
+    backWall.position.set(0, 12, 40)
+    backWall.rotation.x = Math.PI
+    const wallMat = new StandardMaterial('arcadeWallMat', this.scene)
+    wallMat.diffuseColor = Color3.FromHexString('#050508')
+    wallMat.roughness = 1.0
+    backWall.material = wallMat
+    
+    // === AMBIENT ROOM GLOW ===
+    // Subtle blue glow behind the machine (like arcade ambiance)
+    const ambientGlow = new HemisphericLight('ambientGlow', new Vector3(0, 1, -1), this.scene)
+    ambientGlow.intensity = 0.15
+    ambientGlow.diffuse = Color3.FromHexString('#1a1a3e')
+    ambientGlow.groundColor = Color3.FromHexString('#0a0a12')
+    
+    console.log('[Game] Room environment created for immersive camera')
+  }
 
   private createDarkRoomEnvironment(): void {
     if (!this.scene) return
@@ -859,6 +855,11 @@ export class Game {
     if (this.inputHandler) {
       window.removeEventListener('keydown', this.inputHandler.handleKeyDown)
       window.removeEventListener('keyup', this.inputHandler.handleKeyUp)
+    }
+    
+    // Clean up mouse tracking handler
+    if (this._mouseMoveHandler) {
+      this.engine.getRenderingCanvas()?.removeEventListener('mousemove', this._mouseMoveHandler)
     }
 
     // === EXPLICIT RENDER TARGET CLEANUP ===
