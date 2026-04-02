@@ -160,8 +160,10 @@ export const GameConfig = {
   ball: {
     radius: 0.25,
     mass: 1.0,
-    friction: 0.1,    // Low friction is critical for the "steel ball" feel
-    restitution: 0.7, // Bounciness
+    friction: 0.1,         // Low friction is critical for the "steel ball" feel
+    restitution: 0.82,     // Higher bounciness for better playfield action (0.75-0.85 range)
+    linearDamping: 0.08,   // Natural roll decay for realistic ball motion
+    angularDamping: 0.15,  // Spin decay for realistic ball rotation
     // Plain Objects for Spawn Points
     spawnMain: { x: 10.5, y: 0.5, z: -9 },
     spawnPachinko: { x: 0, y: 5, z: -10 }, // Ported from original
