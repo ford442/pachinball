@@ -9,10 +9,16 @@
   --bezel-height: 12px;       /* visual separator thickness */
 }
 
-/* Body – dark “arcade room” */
+/* Body – dark "arcade room" with floor/wall gradient */
 body {
   margin: 0;
-  background: #050505;
+  background: 
+    linear-gradient(180deg, 
+      #0a0a12 0%, 
+      #151520 40%, 
+      #0d0d15 70%,
+      #050508 100%
+    );
   display: flex;
   justify-content: center;
   align-items: center;
@@ -20,6 +26,42 @@ body {
   overflow: hidden;
   font-family: 'Orbitron', sans-serif;
   color: #00d9ff;
+  perspective: 1000px;
+}
+
+/* Room floor effect */
+body::before {
+  content: '';
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: 
+    linear-gradient(0deg, 
+      rgba(0,20,40,0.4) 0%, 
+      transparent 100%
+    );
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Ambient glow behind machine */
+body::after {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120vh;
+  height: 120vh;
+  background: radial-gradient(circle, 
+    rgba(0,100,150,0.08) 0%, 
+    rgba(0,50,80,0.03) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: -1;
 }
 
 /* CABINET CONTAINER */
@@ -30,10 +72,13 @@ body {
   background: #000;                     /* glass‑like interior */
   border: 4px solid #333;               /* outer bezel */
   border-radius: 10px;
-  box-shadow: 0 0 50px rgba(0, 217, 255, 0.1);
+  box-shadow: 
+    0 0 50px rgba(0, 217, 255, 0.1),
+    0 20px 60px rgba(0,0,0,0.5);        /* floor shadow */
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  transform-style: preserve-3d;
 }
 
 /* CANVAS – fills the whole cabinet, sits *behind* UI layers */
@@ -64,7 +109,7 @@ body {
 #machine-head { height: calc(100% * var(--split-perc)); }
 #ball-table   { height: calc(100% * (1 - var(--split-perc))); }
 
-/* BEZEL / DIVIDER – opaque “physical” separator */
+/* BEZEL / DIVIDER – opaque "physical" separator */
 #cabinet-divider {
   height: var(--bezel-height);
   background: #222;
