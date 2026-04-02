@@ -19,7 +19,6 @@ import {
   DirectionalLight,
   PointLight,
   ShadowGenerator,
-  DynamicTexture,
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import { DepthOfFieldEffectBlurLevel } from '@babylonjs/core/PostProcesses/depthOfFieldEffect'
@@ -150,6 +149,10 @@ export class Game {
   private lcdTableState: LCDTableState = new LCDTableState()
   private lcdTablePostProcess: PostProcess | null = null
   private currentTableMap: TableMapType = 'neon-helix'
+
+  // Debug UI
+  private inputLatencyOverlay: HTMLElement | null = null
+  private showDebugUI = false
 
   // Accessibility Configuration (CRITICAL SAFETY)
   private accessibility: AccessibilityConfig = detectAccessibility()
@@ -927,14 +930,18 @@ export class Game {
     ground.material = lcdMat
 
     // Create physics body for the ground (keep colliders on top)
-    const groundBody = this.physics.getWorld()?.createRigidBody(
-      this.physics.getRapier().RigidBodyDesc.fixed().setTranslation(0, -1, 5)
-    )
-    if (groundBody) {
-      this.physics.getWorld()?.createCollider(
-        this.physics.getRapier().ColliderDesc.cuboid(GameConfig.table.width/2, 0.1, GameConfig.table.height/2),
-        groundBody
+    const physicsWorld = this.physics.getWorld()
+    const rapier = this.physics.getRapier()
+    if (physicsWorld && rapier) {
+      const groundBody = physicsWorld.createRigidBody(
+        rapier.RigidBodyDesc.fixed().setTranslation(0, -1, 5)
       )
+      if (groundBody) {
+        physicsWorld.createCollider(
+          rapier.ColliderDesc.cuboid(GameConfig.table.width/2, 0.1, GameConfig.table.height/2),
+          groundBody
+        )
+      }
     }
 
     // Register for shadow receiving
@@ -1076,6 +1083,8 @@ export class Game {
     const b = parseInt(clean.substring(4, 6), 16) / 255
     return new Color3(r, g, b)
   }
+
+  private showLoadingState(show: boolean, phase?: 'gameplay' | 'cosmetic'): void {
     // Create or get loading overlay
     let loadingOverlay = document.getElementById('loading-overlay')
     
