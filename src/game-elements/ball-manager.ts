@@ -81,8 +81,8 @@ export class BallManager {
         .setTranslation(spawn.x, spawn.y, spawn.z)
         .setCcdEnabled(true)
         .setCanSleep(true)        // Ball sleep: idle balls cost ~0 CPU
-        .setLinearDamping(0.05)   // OP-3: Natural roll decay
-        .setAngularDamping(0.1)   // OP-3: Spin decay
+        .setLinearDamping(GameConfig.ball.linearDamping)   // Natural roll decay
+        .setAngularDamping(GameConfig.ball.angularDamping) // Spin decay
     )
 
     const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
@@ -153,8 +153,8 @@ export class BallManager {
           .setTranslation(b.position.x, b.position.y, b.position.z)
           .setCcdEnabled(true)
           .setCanSleep(true)
-          .setLinearDamping(0.05)
-          .setAngularDamping(0.1)
+          .setLinearDamping(GameConfig.ball.linearDamping)
+          .setAngularDamping(GameConfig.ball.angularDamping)
       )
 
       this.world.createCollider(

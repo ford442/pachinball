@@ -201,7 +201,7 @@ export class GameObjects {
 
   private createSideRails(metalMat: PBRMaterial, accentMat: PBRMaterial): void {
     // ================================================================
-    // RAISED PLAYFIELD RAILS - Multi-layer profile for depth
+    // RAISED PLAYFIELD RAILS - Multi-layer profile with PHYSICS COLLIDERS
     // ================================================================
     
     // Main rail bodies - taller for better silhouette
@@ -236,6 +236,34 @@ export class GameObjects {
     rightLED.material = accentMat
 
     // ================================================================
+    // SIDE RAIL PHYSICS COLLIDERS - Prevent ball escape
+    // ================================================================
+    
+    // Left side rail collider
+    const leftRailBody = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed().setTranslation(-11.8, 0.5, 5)
+    )
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(0.4, 0.75, 16)
+        .setRestitution(0.3)
+        .setFriction(0.1),
+      leftRailBody
+    )
+    this.bindings.push({ mesh: leftRail, rigidBody: leftRailBody })
+
+    // Right side rail collider
+    const rightRailBody = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed().setTranslation(12.8, 0.5, 5)
+    )
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(0.4, 0.75, 16)
+        .setRestitution(0.3)
+        .setFriction(0.1),
+      rightRailBody
+    )
+    this.bindings.push({ mesh: rightRail, rigidBody: rightRailBody })
+
+    // ================================================================
     // PLUNGER LANE RAILS - Raised walls for the shooter lane
     // ================================================================
     
@@ -251,22 +279,50 @@ export class GameObjects {
     plungerLED.material = accentMat
 
     // ================================================================
-    // FLIPPER AREA RAILS - Curved guides near flippers
+    // FLIPPER AREA RAILS - Curved guides near flippers with PHYSICS
     // ================================================================
     
-    // Left flipper rail (angled)
+    // Left flipper rail (angled) - visual
     const leftFlipperRail = MeshBuilder.CreateBox("leftFlipperRail", { width: 0.6, height: 1.2, depth: 8 }, this.scene)
     leftFlipperRail.position.set(-7, -0.3, -8)
     leftFlipperRail.rotation.y = -0.3
     leftFlipperRail.material = metalMat
     this.pinballMeshes.push(leftFlipperRail)
 
-    // Right flipper rail (angled)
+    // Left flipper rail physics
+    const leftFlipperRailBody = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed()
+        .setTranslation(-7, 0.3, -8)
+        .setRotation(new this.rapier.Quaternion(0, Math.sin(-0.15), 0, Math.cos(-0.15)))
+    )
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(0.3, 0.6, 4)
+        .setRestitution(0.4)
+        .setFriction(0.1),
+      leftFlipperRailBody
+    )
+    this.bindings.push({ mesh: leftFlipperRail, rigidBody: leftFlipperRailBody })
+
+    // Right flipper rail (angled) - visual
     const rightFlipperRail = MeshBuilder.CreateBox("rightFlipperRail", { width: 0.6, height: 1.2, depth: 8 }, this.scene)
     rightFlipperRail.position.set(8.5, -0.3, -8)
     rightFlipperRail.rotation.y = 0.3
     rightFlipperRail.material = metalMat
     this.pinballMeshes.push(rightFlipperRail)
+
+    // Right flipper rail physics
+    const rightFlipperRailBody = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed()
+        .setTranslation(8.5, 0.3, -8)
+        .setRotation(new this.rapier.Quaternion(0, Math.sin(0.15), 0, Math.cos(0.15)))
+    )
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(0.3, 0.6, 4)
+        .setRestitution(0.4)
+        .setFriction(0.1),
+      rightFlipperRailBody
+    )
+    this.bindings.push({ mesh: rightFlipperRail, rigidBody: rightFlipperRailBody })
   }
 
   createGround(): void {
@@ -292,6 +348,202 @@ export class GameObjects {
       glowMat.emissiveColor = Color3.FromHexString("#001133")
       glowMat.alpha = 0.3
       flipperGlow.material = glowMat
+    }
+  }
+
+  /**
+   * Creates gentle ramps and curves in the lower half that funnel the ball toward the flippers.
+   * These guides prevent instant side drains and keep the ball in play longer.
+   */
+  createFlipperRamps(): void {
+    const rampMat = this.matLib.getBrushedMetalMaterial()
+    
+    // ================================================================
+    // LEFT FLIPPER FUNNEL - Curved guide from left wall to left flipper
+    // ================================================================
+    
+    // Create a curved tube that guides balls from the left side toward the left flipper
+    const leftRampPath = [
+      new Vector3(-9, 0.3, -2),   // Start near left wall, mid-table
+      new Vector3(-7, 0.25, -4),  // Curve inward
+      new Vector3(-5.5, 0.2, -6), // Approach left flipper
+      new Vector3(-4.5, 0.15, -7) // End at left flipper
+    ]
+    
+    const leftRamp = MeshBuilder.CreateTube("leftFlipperRamp", {
+      path: leftRampPath,
+      radius: 0.15,
+      sideOrientation: 2
+    }, this.scene)
+    leftRamp.material = rampMat
+    this.pinballMeshes.push(leftRamp)
+    
+    // Physics collider for left ramp (series of small boxes along the path)
+    for (let i = 0; i < leftRampPath.length - 1; i++) {
+      const start = leftRampPath[i]
+      const end = leftRampPath[i + 1]
+      const mid = Vector3.Center(start, end)
+      const direction = end.subtract(start)
+      const length = direction.length()
+      const angle = Math.atan2(direction.x, direction.z)
+      
+      const rampBody = this.world.createRigidBody(
+        this.rapier.RigidBodyDesc.fixed()
+          .setTranslation(mid.x, mid.y + 0.1, mid.z)
+          .setRotation(new this.rapier.Quaternion(0, Math.sin(angle * 0.5), 0, Math.cos(angle * 0.5)))
+      )
+      this.world.createCollider(
+        this.rapier.ColliderDesc.cuboid(0.15, 0.1, length / 2)
+          .setRestitution(0.3)
+          .setFriction(0.1),
+        rampBody
+      )
+    }
+    
+    // ================================================================
+    // RIGHT FLIPPER FUNNEL - Curved guide from right wall to right flipper
+    // ================================================================
+    
+    const rightRampPath = [
+      new Vector3(10, 0.3, -2),   // Start near right wall, mid-table
+      new Vector3(8, 0.25, -4),   // Curve inward
+      new Vector3(6.5, 0.2, -6),  // Approach right flipper
+      new Vector3(4.5, 0.15, -7)  // End at right flipper
+    ]
+    
+    const rightRamp = MeshBuilder.CreateTube("rightFlipperRamp", {
+      path: rightRampPath,
+      radius: 0.15,
+      sideOrientation: 2
+    }, this.scene)
+    rightRamp.material = rampMat
+    this.pinballMeshes.push(rightRamp)
+    
+    // Physics collider for right ramp
+    for (let i = 0; i < rightRampPath.length - 1; i++) {
+      const start = rightRampPath[i]
+      const end = rightRampPath[i + 1]
+      const mid = Vector3.Center(start, end)
+      const direction = end.subtract(start)
+      const length = direction.length()
+      const angle = Math.atan2(direction.x, direction.z)
+      
+      const rampBody = this.world.createRigidBody(
+        this.rapier.RigidBodyDesc.fixed()
+          .setTranslation(mid.x, mid.y + 0.1, mid.z)
+          .setRotation(new this.rapier.Quaternion(0, Math.sin(angle * 0.5), 0, Math.cos(angle * 0.5)))
+      )
+      this.world.createCollider(
+        this.rapier.ColliderDesc.cuboid(0.15, 0.1, length / 2)
+          .setRestitution(0.3)
+          .setFriction(0.1),
+        rampBody
+      )
+    }
+    
+    // ================================================================
+    // CENTER RAMP - Divides the lower playfield and creates interesting bounces
+    // ================================================================
+    
+    const centerRampPath = [
+      new Vector3(-2, 0.2, -3),   // Left side
+      new Vector3(0, 0.25, -4),   // Center peak
+      new Vector3(2, 0.2, -3)     // Right side
+    ]
+    
+    const centerRamp = MeshBuilder.CreateTube("centerRamp", {
+      path: centerRampPath,
+      radius: 0.12,
+      sideOrientation: 2
+    }, this.scene)
+    centerRamp.material = rampMat
+    this.pinballMeshes.push(centerRamp)
+    
+    // Physics for center ramp
+    const centerRampBody = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed().setTranslation(0, 0.25, -4)
+    )
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(2.5, 0.1, 0.5)
+        .setRestitution(0.4)
+        .setFriction(0.1),
+      centerRampBody
+    )
+    
+    // ================================================================
+    // UPPER DEFLECTOR RAILS - Prevent straight-down drains from upper playfield
+    // ================================================================
+    
+    // Left upper deflector - guides balls from upper left toward center
+    const leftDeflectorPath = [
+      new Vector3(-6, 0.3, 2),
+      new Vector3(-4, 0.25, 0),
+      new Vector3(-2, 0.2, -2)
+    ]
+    
+    const leftDeflector = MeshBuilder.CreateTube("leftDeflector", {
+      path: leftDeflectorPath,
+      radius: 0.12,
+      sideOrientation: 2
+    }, this.scene)
+    leftDeflector.material = rampMat
+    this.pinballMeshes.push(leftDeflector)
+    
+    for (let i = 0; i < leftDeflectorPath.length - 1; i++) {
+      const start = leftDeflectorPath[i]
+      const end = leftDeflectorPath[i + 1]
+      const mid = Vector3.Center(start, end)
+      const direction = end.subtract(start)
+      const length = direction.length()
+      const angle = Math.atan2(direction.x, direction.z)
+      
+      const deflectorBody = this.world.createRigidBody(
+        this.rapier.RigidBodyDesc.fixed()
+          .setTranslation(mid.x, mid.y + 0.08, mid.z)
+          .setRotation(new this.rapier.Quaternion(0, Math.sin(angle * 0.5), 0, Math.cos(angle * 0.5)))
+      )
+      this.world.createCollider(
+        this.rapier.ColliderDesc.cuboid(0.12, 0.08, length / 2)
+          .setRestitution(0.35)
+          .setFriction(0.1),
+        deflectorBody
+      )
+    }
+    
+    // Right upper deflector - guides balls from upper right toward center
+    const rightDeflectorPath = [
+      new Vector3(7, 0.3, 2),
+      new Vector3(5, 0.25, 0),
+      new Vector3(3, 0.2, -2)
+    ]
+    
+    const rightDeflector = MeshBuilder.CreateTube("rightDeflector", {
+      path: rightDeflectorPath,
+      radius: 0.12,
+      sideOrientation: 2
+    }, this.scene)
+    rightDeflector.material = rampMat
+    this.pinballMeshes.push(rightDeflector)
+    
+    for (let i = 0; i < rightDeflectorPath.length - 1; i++) {
+      const start = rightDeflectorPath[i]
+      const end = rightDeflectorPath[i + 1]
+      const mid = Vector3.Center(start, end)
+      const direction = end.subtract(start)
+      const length = direction.length()
+      const angle = Math.atan2(direction.x, direction.z)
+      
+      const deflectorBody = this.world.createRigidBody(
+        this.rapier.RigidBodyDesc.fixed()
+          .setTranslation(mid.x, mid.y + 0.08, mid.z)
+          .setRotation(new this.rapier.Quaternion(0, Math.sin(angle * 0.5), 0, Math.cos(angle * 0.5)))
+      )
+      this.world.createCollider(
+        this.rapier.ColliderDesc.cuboid(0.12, 0.08, length / 2)
+          .setRestitution(0.35)
+          .setFriction(0.1),
+        deflectorBody
+      )
     }
   }
 
@@ -455,16 +707,16 @@ export class GameObjects {
   }
 
   createBumpers(): void {
-    const make = (x: number, z: number, colorHex: string) => {
+    const make = (x: number, z: number, colorHex: string, scale: number = 1.0) => {
       // Create high detail master mesh (LOD level 0)
-      const bumperHigh = MeshBuilder.CreateSphere("bump_high", { diameter: 0.9, segments: 32 }, this.scene) as Mesh
+      const bumperHigh = MeshBuilder.CreateSphere("bump_high", { diameter: 0.9 * scale, segments: 32 }, this.scene) as Mesh
       bumperHigh.position.set(x, 0.5, z)
       
       // Create medium detail LOD mesh
-      const bumperMedium = MeshBuilder.CreateSphere("bump_med", { diameter: 0.9, segments: 16 }, this.scene) as Mesh
+      const bumperMedium = MeshBuilder.CreateSphere("bump_med", { diameter: 0.9 * scale, segments: 16 }, this.scene) as Mesh
       
       // Create low detail LOD mesh
-      const bumperLow = MeshBuilder.CreateSphere("bump_low", { diameter: 0.9, segments: 8 }, this.scene) as Mesh
+      const bumperLow = MeshBuilder.CreateSphere("bump_low", { diameter: 0.9 * scale, segments: 8 }, this.scene) as Mesh
       
       // Set up LOD levels - use bumperHigh as the master mesh
       bumperHigh.addLODLevel(15, bumperMedium)  // Switch to medium at 15 units
@@ -505,7 +757,7 @@ export class GameObjects {
       )
       
       this.world.createCollider(
-        this.rapier.ColliderDesc.ball(0.4)
+        this.rapier.ColliderDesc.ball(0.4 * scale)
           .setRestitution(this.config.physics.bumperRestitution)
           .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
         body
@@ -572,17 +824,25 @@ export class GameObjects {
 
     }
 
-    make(0, 8, "#ff00aa")
-    make(-4, 4, "#00aaff")
-    make(4, 4, "#00aaff")
+    // Main center bumper (larger)
+    make(0, 8, "#ff00aa", 1.2)
+    // Upper side bumpers
+    make(-4, 4, "#00aaff", 1.0)
+    make(4, 4, "#00aaff", 1.0)
+    // Lower bumpers - funnel toward flippers
+    make(-3, 0, "#ffaa00", 0.9)
+    make(3, 0, "#ffaa00", 0.9)
+    // Far upper bumper
+    make(0, 14, "#00ff88", 0.85)
   }
 
   createPachinkoField(center: Vector3, width: number, height: number): void {
     // Use MaterialLibrary for metallic pins
     const pinMat = this.matLib.getPinMaterial()
 
-    const rows = 6
-    const cols = 9
+    // Dense pachinko grid: 10 rows, staggered columns for chaotic ball paths
+    const rows = 10
+    const cols = 11
     const spacingX = width / cols
     const spacingZ = height / rows
 
@@ -594,7 +854,7 @@ export class GameObjects {
         if (Math.abs(x) < 2 && Math.abs(z - center.z) < 2) continue
 
         // Use slightly smaller diameter for more precision look
-        const pin = MeshBuilder.CreateCylinder(`pin_${r}_${c}`, { diameter: 0.2, height: 1.5, tessellation: 12 }, this.scene)
+        const pin = MeshBuilder.CreateCylinder(`pin_${r}_${c}`, { diameter: 0.18, height: 1.5, tessellation: 12 }, this.scene)
         pin.position.set(x, 0.5, z)
         pin.material = pinMat
 
@@ -602,9 +862,9 @@ export class GameObjects {
           this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.5, z)
         )
         this.world.createCollider(
-          this.rapier.ColliderDesc.cylinder(0.75, 0.1) // Match visual radius closely (0.1 = dia 0.2)
-            .setRestitution(0.5)
-            .setFriction(0.1),
+          this.rapier.ColliderDesc.cylinder(0.75, 0.09) // Thin collider for pachinko-style pins
+            .setRestitution(0.6)  // Slightly bouncy pins
+            .setFriction(0.1),    // Low friction for smooth ball motion
           body
         )
 
