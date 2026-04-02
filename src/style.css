@@ -1,9 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
 
 :root {
-  /* Cabinet sizing – scales with viewport height */
-  --cabinet-width: 60vh;      /* width of the whole unit */
-  --cabinet-height: 95vh;     /* height of the whole unit */
+  /* Cabinet sizing – 1:1.1 aspect ratio for immersive 3D view */
+  --cabinet-size: min(85vh, 85vw);  /* square-ish container */
+  --cabinet-width: var(--cabinet-size);
+  --cabinet-height: calc(var(--cabinet-size) * 1.1);
   --split-perc: 0.4;          /* top screen = 40% of height */
   --bezel-height: 12px;       /* visual separator thickness */
 }

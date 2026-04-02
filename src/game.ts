@@ -36,6 +36,7 @@ import {
   DisplaySystem,
   EffectsSystem,
   GameObjects,
+  CabinetBuilder,
   BallManager,
   BallAnimator,
   AdventureMode,
@@ -88,6 +89,7 @@ export class Game {
   private effects: EffectsSystem | null = null
   private gameObjects: GameObjects | null = null
   private ballManager: BallManager | null = null
+  private cabinetBuilder: CabinetBuilder | null = null
   private ballAnimator: BallAnimator | null = null
   private adventureMode: AdventureMode | null = null
   private magSpinFeeder: MagSpinFeeder | null = null
@@ -944,6 +946,12 @@ export class Game {
   private buildCriticalScene(): void {
     if (!this.gameObjects || !this.ballManager) return
 
+    // Build the full 3D arcade cabinet around the playfield
+    if (this.scene) {
+      this.cabinetBuilder = new CabinetBuilder(this.scene)
+      this.cabinetBuilder.buildCabinet()
+    }
+
     // Use LCD table material instead of regular playfield
     this.createLCDPlayfield()
 
@@ -1074,6 +1082,9 @@ export class Game {
     const matLib = getMaterialLibrary(this.scene!)
     const config = TABLE_MAPS[mapName]
     matLib.updateLCDTableEmissive(config.baseColor, config.glowIntensity)
+
+    // Update cabinet neon trim and interior lights to match map
+    this.cabinetBuilder?.setThemeFromMap(mapName)
 
     // Update display with map info
     this.display?.setStoryText(`MAP: ${config.name.toUpperCase()}`)
