@@ -335,6 +335,126 @@ export class MaterialLibrary {
   }
 
   // ============================================================================
+  // CATEGORY 3b: LCD TABLE PLAYFIELD (Glowing phosphor display)
+  // ============================================================================
+
+  private _lcdTableMaterial: PBRMaterial | null = null
+  private _lcdEmissiveTexture: DynamicTexture | null = null
+
+  /**
+   * Get the LCD table material - glowing phosphor display with scanlines
+   * This replaces the transparent glass playfield with an emissive LCD screen
+   */
+  getLCDTableMaterial(): PBRMaterial {
+    if (this._lcdTableMaterial) {
+      return this._lcdTableMaterial
+    }
+
+    const mat = new PBRMaterial('lcdTableMat', this.scene)
+
+    // High emissive for LCD glow effect
+    mat.emissiveColor = emissive(PALETTE.CYAN, INTENSITY.HIGH)
+    mat.emissiveIntensity = 1.5
+
+    // Create LCD grid texture for emissive channel
+    const lcdTexture = this.createLCDGridTexture()
+    mat.emissiveTexture = lcdTexture
+    this._lcdEmissiveTexture = lcdTexture
+
+    // Low specular + micro-surface for LCD feel (matte plastic/glass surface)
+    mat.metallic = METALLIC.LOW
+    mat.roughness = ROUGHNESS.SATIN
+    mat.microSurface = 0.3
+
+    // Dark albedo - the LCD emits light, doesn't reflect it
+    mat.albedoColor = new Color3(0.02, 0.02, 0.03)
+
+    // No transparency - this is a solid LCD panel
+    mat.alpha = 1.0
+    mat.environmentIntensity = 0.2
+
+    // Clear coat for glass-like surface protection
+    this.applyClearCoat(mat, { enabled: true, intensity: 0.3, roughness: 0.1 })
+
+    this._lcdTableMaterial = mat
+    return mat
+  }
+
+  /**
+   * Update the LCD table emissive color (for map switching)
+   */
+  updateLCDTableEmissive(baseColor: string, intensity: number = INTENSITY.HIGH): void {
+    if (this._lcdTableMaterial) {
+      this._lcdTableMaterial.emissiveColor = emissive(baseColor, intensity)
+    }
+    // Regenerate the LCD texture with new colors
+    if (this._lcdEmissiveTexture) {
+      this.updateLCDGridTexture(this._lcdEmissiveTexture, baseColor)
+    }
+  }
+
+  /**
+   * Create a procedural LCD grid texture with scanlines
+   */
+  private createLCDGridTexture(): DynamicTexture {
+    const size = Math.min(1024, this.textureSize * 2)
+    const tex = new DynamicTexture('lcdGridTexture', size, this.scene, true)
+    this.updateLCDGridTexture(tex, PALETTE.CYAN)
+    return tex
+  }
+
+  /**
+   * Update LCD grid texture with specific color theme
+   */
+  private updateLCDGridTexture(tex: DynamicTexture, accentColor: string): void {
+    const ctx = tex.getContext()
+    const size = tex.getSize().width
+
+    // Fill with deep black background
+    ctx.fillStyle = '#000000'
+    ctx.fillRect(0, 0, size, size)
+
+    // Parse accent color
+    const color = accentColor.replace('#', '')
+    const r = parseInt(color.substring(0, 2), 16)
+    const g = parseInt(color.substring(2, 4), 16)
+    const b = parseInt(color.substring(4, 6), 16)
+
+    // Draw pixel grid pattern
+    const gridSize = size / 64
+    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.15)`
+    ctx.lineWidth = 1
+
+    for (let i = 0; i <= 64; i++) {
+      const pos = i * gridSize
+      ctx.beginPath()
+      ctx.moveTo(pos, 0)
+      ctx.lineTo(pos, size)
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(0, pos)
+      ctx.lineTo(size, pos)
+      ctx.stroke()
+    }
+
+    // Draw scanlines
+    for (let i = 0; i < size; i += 2) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
+      ctx.fillRect(0, i, size, 1)
+    }
+
+    // Add subtle phosphor glow pattern
+    const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2)
+    gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.1)`)
+    gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, 0.05)`)
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)')
+    ctx.fillStyle = gradient
+    ctx.fillRect(0, 0, size, size)
+
+    tex.update()
+  }
+
+  // ============================================================================
   // CATEGORY 4: GLASS/TRANSPARENT
   // ============================================================================
 

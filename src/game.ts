@@ -70,10 +70,13 @@ import {
 import { GameConfig } from './config'
 import { DisplayMode, type DisplayConfig } from './game-elements/display-config'
 import { scanlinePixelShader } from './shaders/scanline'
+import { lcdTablePixelShader, TABLE_MAPS, type TableMapType, LCDTableState } from './shaders/lcd-table'
 
-// Register the shader
+// Register the shaders
 Effect.ShadersStore["scanlineFragmentShader"] = scanlinePixelShader.fragment
 Effect.ShadersStore["scanlinePixelShader"] = scanlinePixelShader.fragment
+Effect.ShadersStore["lcdTableFragmentShader"] = lcdTablePixelShader.fragment
+Effect.ShadersStore["lcdTablePixelShader"] = lcdTablePixelShader.fragment
 
 export class Game {
   private readonly engine: Engine | WebGPUEngine
@@ -142,6 +145,11 @@ export class Game {
   private gameOverScreen: HTMLElement | null = null
   private pauseOverlay: HTMLElement | null = null
   private finalScoreElement: HTMLElement | null = null
+
+  // LCD Table State
+  private lcdTableState: LCDTableState = new LCDTableState()
+  private lcdTablePostProcess: PostProcess | null = null
+  private currentTableMap: TableMapType = 'neon-helix'
 
   // Debug UI
   private inputLatencyOverlay: HTMLElement | null = null
@@ -538,6 +546,30 @@ export class Game {
     window.addEventListener('keydown', this.inputHandler.handleKeyDown)
     window.addEventListener('keyup', this.inputHandler.handleKeyUp)
 
+    // Map switching keyboard shortcuts (number keys 1-8)
+    const mapKeys: Record<string, TableMapType> = {
+      'Digit1': 'neon-helix',
+      'Digit2': 'cyber-core',
+      'Digit3': 'quantum-grid',
+      'Digit4': 'singularity-well',
+      'Digit5': 'glitch-spire',
+      'Digit6': 'matrix-core',
+      'Digit7': 'cyan-void',
+      'Digit8': 'magenta-dream',
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (mapKeys[e.code] && this.state === GameState.PLAYING) {
+        e.preventDefault()
+        this.switchTableMap(mapKeys[e.code])
+      }
+      // 'M' key to cycle maps
+      if (e.code === 'KeyM' && this.state === GameState.PLAYING) {
+        e.preventDefault()
+        this.cycleTableMap()
+      }
+    })
+
     // Enable latency tracking in dev mode (check URL parameter)
     this.showDebugUI = new URLSearchParams(window.location.search).has('debug')
     if (this.showDebugUI) {
@@ -912,8 +944,13 @@ export class Game {
   private buildCriticalScene(): void {
     if (!this.gameObjects || !this.ballManager) return
 
-    // Absolute minimum for gameplay - these MUST be available immediately
-    this.gameObjects.createGround()
+    // Use LCD table material instead of regular playfield
+    this.createLCDPlayfield()
+
+    // Initialize LCD post-process effect
+    this.initLCDTablePostProcess()
+
+    // Create walls and other critical elements
     this.gameObjects.createWalls()
     this.gameObjects.createFlippers()
     if (this.mirrorTexture) {
@@ -931,6 +968,52 @@ export class Game {
     if (this.tableCam) {
       this.cameraController = new CameraController(this.tableCam)
     }
+  }
+
+  /**
+   * Create the LCD playfield surface - glowing phosphor display
+   */
+  private createLCDPlayfield(): void {
+    if (!this.scene) return
+
+    const matLib = getMaterialLibrary(this.scene)
+    const lcdMat = matLib.getLCDTableMaterial()
+
+    // Create the LCD playfield ground
+    const ground = MeshBuilder.CreateGround('lcdGround', { width: GameConfig.table.width, height: GameConfig.table.height }, this.scene) as Mesh
+    ground.position.set(0, -1, 5)
+    ground.material = lcdMat
+
+    // Create physics body for the ground (keep colliders on top)
+    const physicsWorld = this.physics.getWorld()
+    const rapier = this.physics.getRapier()
+    if (physicsWorld && rapier) {
+      const groundBody = physicsWorld.createRigidBody(
+        rapier.RigidBodyDesc.fixed().setTranslation(0, -1, 5)
+      )
+      if (groundBody) {
+        physicsWorld.createCollider(
+          rapier.ColliderDesc.cuboid(GameConfig.table.width/2, 0.1, GameConfig.table.height/2),
+          groundBody
+        )
+      }
+    }
+
+    // Register for shadow receiving
+    ground.receiveShadows = true
+
+    // Add flipper zone glow enhancement (disabled in reduced motion mode)
+    if (!GameConfig.camera.reducedMotion) {
+      const flipperGlow = MeshBuilder.CreateGround("flipperGlow", { width: 10, height: 6 }, this.scene)
+      flipperGlow.position.set(0, -0.95, -7)
+      const glowMat = new StandardMaterial("flipperGlowMat", this.scene)
+      glowMat.diffuseColor = Color3.Black()
+      glowMat.emissiveColor = Color3.FromHexString("#001133")
+      glowMat.alpha = 0.3
+      flipperGlow.material = glowMat
+    }
+
+    console.log('[Game] LCD playfield created')
   }
 
   private buildGameplayScene(): void {
@@ -970,6 +1053,90 @@ export class Game {
 
   private yieldFrame(): Promise<void> {
     return new Promise(resolve => requestAnimationFrame(() => resolve()))
+  }
+
+  /**
+   * Switch the LCD table to a different map/theme
+   * @param mapName - The map to switch to (e.g., 'neon-helix', 'cyber-core')
+   */
+  switchTableMap(mapName: TableMapType): void {
+    if (!TABLE_MAPS[mapName]) {
+      console.warn(`[Game] Unknown table map: ${mapName}`)
+      return
+    }
+
+    console.log(`[Game] Switching table map to: ${mapName}`)
+    this.currentTableMap = mapName
+    this.lcdTableState.switchMap(mapName)
+
+    // Update the material library's LCD material
+    const matLib = getMaterialLibrary(this.scene!)
+    const config = TABLE_MAPS[mapName]
+    matLib.updateLCDTableEmissive(config.baseColor, config.glowIntensity)
+
+    // Update display with map info
+    this.display?.setStoryText(`MAP: ${config.name.toUpperCase()}`)
+  }
+
+  /**
+   * Cycle to the next table map
+   */
+  cycleTableMap(): void {
+    const maps = Object.keys(TABLE_MAPS) as TableMapType[]
+    const currentIndex = maps.indexOf(this.currentTableMap)
+    const nextIndex = (currentIndex + 1) % maps.length
+    this.switchTableMap(maps[nextIndex])
+  }
+
+  private initLCDTablePostProcess(): void {
+    if (!this.scene || !this.tableCam) return
+
+    // Create LCD table post-process effect
+    this.lcdTablePostProcess = new PostProcess(
+      'lcdTable',
+      'lcdTable',
+      [
+        'uBaseColor',
+        'uAccentColor',
+        'uScanlineIntensity',
+        'uPixelGridIntensity',
+        'uSubpixelIntensity',
+        'uGlowIntensity',
+        'uMapBlend',
+        'uTime'
+      ],
+      null,
+      1.0,
+      this.tableCam,
+      Texture.BILINEAR_SAMPLINGMODE,
+      this.engine
+    )
+
+    // Set up uniform updates
+    this.lcdTablePostProcess.onApply = (effect) => {
+      const config = this.lcdTableState.getCurrentConfig()
+      const baseColor = this.hexToColor3(config.baseColor)
+      const accentColor = this.hexToColor3(config.accentColor)
+
+      effect.setColor3('uBaseColor', baseColor)
+      effect.setColor3('uAccentColor', accentColor)
+      effect.setFloat('uScanlineIntensity', config.scanlineIntensity)
+      effect.setFloat('uPixelGridIntensity', config.pixelGridIntensity)
+      effect.setFloat('uSubpixelIntensity', config.subpixelIntensity)
+      effect.setFloat('uGlowIntensity', config.glowIntensity)
+      effect.setFloat('uMapBlend', 0.5)
+      effect.setFloat('uTime', performance.now() * 0.001)
+    }
+
+    console.log('[Game] LCD table post-process initialized')
+  }
+
+  private hexToColor3(hex: string): Color3 {
+    const clean = hex.replace('#', '')
+    const r = parseInt(clean.substring(0, 2), 16) / 255
+    const g = parseInt(clean.substring(2, 4), 16) / 255
+    const b = parseInt(clean.substring(4, 6), 16) / 255
+    return new Color3(r, g, b)
   }
 
   private showLoadingState(show: boolean, phase?: 'gameplay' | 'cosmetic'): void {
@@ -1678,6 +1845,9 @@ export class Game {
     this.effects?.updateBloom(dt)
     this.effects?.updateCabinetLighting(dt)
     this.effects?.updateSlotLighting(dt)
+
+    // Update LCD table state for map transitions
+    this.lcdTableState.update(dt)
 
     // State-based atmosphere: fog, light temperature, rim drama, bounce proximity
     {
