@@ -1060,7 +1060,7 @@ export class Game {
    * Switch the LCD table to a different map/theme
    * @param mapName - The map to switch to (e.g., 'neon-helix', 'cyber-core')
    */
-  switchTableMap(mapName: TableMapType): void {
+  public switchTableMap(mapName: TableMapType): void {
     if (!TABLE_MAPS[mapName]) {
       console.warn(`[Game] Unknown table map: ${mapName}`)
       return
@@ -1082,7 +1082,7 @@ export class Game {
   /**
    * Cycle to the next table map
    */
-  cycleTableMap(): void {
+  public cycleTableMap(): void {
     const maps = Object.keys(TABLE_MAPS) as TableMapType[]
     const currentIndex = maps.indexOf(this.currentTableMap)
     const nextIndex = (currentIndex + 1) % maps.length
