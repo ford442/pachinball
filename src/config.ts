@@ -160,8 +160,8 @@ export const GameConfig = {
   ball: {
     radius: 0.25,
     mass: 1.0,
-    friction: 0.1,         // Low friction is critical for the "steel ball" feel
-    restitution: 0.82,     // Higher bounciness for better playfield action (0.75-0.85 range)
+    friction: 0.12,        // Slightly higher friction for better control
+    restitution: 0.78,     // Balanced bounciness (0.75-0.85 range)
     linearDamping: 0.08,   // Natural roll decay for realistic ball motion
     angularDamping: 0.15,  // Spin decay for realistic ball rotation
     // Plain Objects for Spawn Points

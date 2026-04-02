@@ -236,32 +236,76 @@ export class GameObjects {
     rightLED.material = accentMat
 
     // ================================================================
-    // SIDE RAIL PHYSICS COLLIDERS - Prevent ball escape
+    // SIDE RAIL PHYSICS COLLIDERS - Strong barriers to prevent ball escape
     // ================================================================
     
-    // Left side rail collider
+    // Left side rail collider - TALL and THICK to block balls
     const leftRailBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(-11.8, 0.5, 5)
+      this.rapier.RigidBodyDesc.fixed().setTranslation(-11.8, 0.8, 5)
     )
     this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(0.4, 0.75, 16)
-        .setRestitution(0.3)
+      this.rapier.ColliderDesc.cuboid(0.6, 1.2, 16)
+        .setRestitution(0.5)
         .setFriction(0.1),
       leftRailBody
     )
     this.bindings.push({ mesh: leftRail, rigidBody: leftRailBody })
 
-    // Right side rail collider
+    // Right side rail collider - TALL and THICK to block balls
     const rightRailBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(12.8, 0.5, 5)
+      this.rapier.RigidBodyDesc.fixed().setTranslation(12.8, 0.8, 5)
     )
     this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(0.4, 0.75, 16)
-        .setRestitution(0.3)
+      this.rapier.ColliderDesc.cuboid(0.6, 1.2, 16)
+        .setRestitution(0.5)
         .setFriction(0.1),
       rightRailBody
     )
     this.bindings.push({ mesh: rightRail, rigidBody: rightRailBody })
+    
+    // ================================================================
+    // OUTLANE BLOCKERS - Prevent balls from draining down the sides
+    // ================================================================
+    
+    // Left outlane blocker - angled wall that bounces ball back to flipper area
+    const leftOutlaneBlocker = MeshBuilder.CreateBox("leftOutlaneBlocker", { width: 0.4, height: 1.5, depth: 6 }, this.scene)
+    leftOutlaneBlocker.position.set(-9.5, 0.3, -10)
+    leftOutlaneBlocker.rotation.y = 0.4
+    leftOutlaneBlocker.material = metalMat
+    this.pinballMeshes.push(leftOutlaneBlocker)
+    
+    const leftOutlaneBody = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed()
+        .setTranslation(-9.5, 0.3, -10)
+        .setRotation(new this.rapier.Quaternion(0, Math.sin(0.2), 0, Math.cos(0.2)))
+    )
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(0.2, 0.75, 3)
+        .setRestitution(0.6)
+        .setFriction(0.1),
+      leftOutlaneBody
+    )
+    this.bindings.push({ mesh: leftOutlaneBlocker, rigidBody: leftOutlaneBody })
+    
+    // Right outlane blocker - angled wall that bounces ball back to flipper area
+    const rightOutlaneBlocker = MeshBuilder.CreateBox("rightOutlaneBlocker", { width: 0.4, height: 1.5, depth: 6 }, this.scene)
+    rightOutlaneBlocker.position.set(11, 0.3, -10)
+    rightOutlaneBlocker.rotation.y = -0.4
+    rightOutlaneBlocker.material = metalMat
+    this.pinballMeshes.push(rightOutlaneBlocker)
+    
+    const rightOutlaneBody = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed()
+        .setTranslation(11, 0.3, -10)
+        .setRotation(new this.rapier.Quaternion(0, Math.sin(-0.2), 0, Math.cos(-0.2)))
+    )
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(0.2, 0.75, 3)
+        .setRestitution(0.6)
+        .setFriction(0.1),
+      rightOutlaneBody
+    )
+    this.bindings.push({ mesh: rightOutlaneBlocker, rigidBody: rightOutlaneBody })
 
     // ================================================================
     // PLUNGER LANE RAILS - Raised walls for the shooter lane
@@ -364,10 +408,11 @@ export class GameObjects {
     
     // Create a curved tube that guides balls from the left side toward the left flipper
     const leftRampPath = [
-      new Vector3(-9, 0.3, -2),   // Start near left wall, mid-table
-      new Vector3(-7, 0.25, -4),  // Curve inward
-      new Vector3(-5.5, 0.2, -6), // Approach left flipper
-      new Vector3(-4.5, 0.15, -7) // End at left flipper
+      new Vector3(-10, 0.4, 0),   // Start near left wall, upper-mid table
+      new Vector3(-8.5, 0.35, -2), // Curve inward
+      new Vector3(-7, 0.3, -4),   // Mid approach
+      new Vector3(-5.5, 0.25, -6), // Near flipper
+      new Vector3(-4, 0.2, -7.5)  // End at left flipper
     ]
     
     const leftRamp = MeshBuilder.CreateTube("leftFlipperRamp", {
@@ -389,12 +434,12 @@ export class GameObjects {
       
       const rampBody = this.world.createRigidBody(
         this.rapier.RigidBodyDesc.fixed()
-          .setTranslation(mid.x, mid.y + 0.1, mid.z)
+          .setTranslation(mid.x, mid.y + 0.15, mid.z)
           .setRotation(new this.rapier.Quaternion(0, Math.sin(angle * 0.5), 0, Math.cos(angle * 0.5)))
       )
       this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(0.15, 0.1, length / 2)
-          .setRestitution(0.3)
+        this.rapier.ColliderDesc.cuboid(0.2, 0.15, length / 2)
+          .setRestitution(0.4)
           .setFriction(0.1),
         rampBody
       )
@@ -405,10 +450,11 @@ export class GameObjects {
     // ================================================================
     
     const rightRampPath = [
-      new Vector3(10, 0.3, -2),   // Start near right wall, mid-table
-      new Vector3(8, 0.25, -4),   // Curve inward
-      new Vector3(6.5, 0.2, -6),  // Approach right flipper
-      new Vector3(4.5, 0.15, -7)  // End at right flipper
+      new Vector3(11, 0.4, 0),    // Start near right wall, upper-mid table
+      new Vector3(9.5, 0.35, -2), // Curve inward
+      new Vector3(8, 0.3, -4),    // Mid approach
+      new Vector3(6.5, 0.25, -6), // Near flipper
+      new Vector3(5, 0.2, -7.5)   // End at right flipper
     ]
     
     const rightRamp = MeshBuilder.CreateTube("rightFlipperRamp", {
@@ -430,12 +476,12 @@ export class GameObjects {
       
       const rampBody = this.world.createRigidBody(
         this.rapier.RigidBodyDesc.fixed()
-          .setTranslation(mid.x, mid.y + 0.1, mid.z)
+          .setTranslation(mid.x, mid.y + 0.15, mid.z)
           .setRotation(new this.rapier.Quaternion(0, Math.sin(angle * 0.5), 0, Math.cos(angle * 0.5)))
       )
       this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(0.15, 0.1, length / 2)
-          .setRestitution(0.3)
+        this.rapier.ColliderDesc.cuboid(0.2, 0.15, length / 2)
+          .setRestitution(0.4)
           .setFriction(0.1),
         rampBody
       )
