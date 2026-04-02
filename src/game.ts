@@ -232,6 +232,9 @@ export class Game {
     // Setup settings UI
     this.setupSettingsUI()
 
+    // Setup on-screen map selector
+    this.setupMapSelector()
+
     // -----------------------------------------------------------------
     // 2️⃣ IMMERSIVE 3D CAMERA - Full cabinet view with mouse head-tracking
     // -----------------------------------------------------------------
@@ -1213,6 +1216,9 @@ export class Game {
 
     // Update display with map info
     this.display?.setStoryText(`MAP: ${config.name.toUpperCase()}`)
+
+    // Update on-screen map selector highlight
+    this.updateMapSelectorUI()
   }
 
   /**
@@ -2510,5 +2516,54 @@ export class Game {
         this.inputLatencyOverlay.style.borderColor = '#00ff00'
       }
     }
+  }
+
+  /**
+   * Set up the on-screen LCD-style map selector buttons.
+   * Clicking a button instantly switches the table map.
+   */
+  private setupMapSelector(): void {
+    const selector = document.getElementById('map-selector')
+    if (!selector) return
+
+    const buttons = selector.querySelectorAll('.map-btn')
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const mapName = (btn as HTMLElement).dataset.map as TableMapType
+        if (mapName) {
+          this.switchTableMap(mapName)
+        }
+      })
+    })
+
+    // Set initial highlight
+    this.updateMapSelectorUI()
+  }
+
+  /**
+   * Update the map selector UI to highlight the current map
+   * and sync the CSS accent color to the current LCD theme.
+   */
+  private updateMapSelectorUI(): void {
+    const selector = document.getElementById('map-selector')
+    if (!selector) return
+
+    const currentMap = this.currentTableMap
+    const mapConfig = TABLE_MAPS[currentMap]
+    const accentColor = mapConfig ? mapConfig.baseColor : '#00d9ff'
+
+    // Update CSS custom property for the panel glow
+    selector.style.setProperty('--map-accent', accentColor)
+
+    // Update active button state
+    const buttons = selector.querySelectorAll('.map-btn')
+    buttons.forEach((btn) => {
+      const mapName = (btn as HTMLElement).dataset.map
+      if (mapName === currentMap) {
+        btn.classList.add('active')
+      } else {
+        btn.classList.remove('active')
+      }
+    })
   }
 }

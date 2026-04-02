@@ -340,3 +340,121 @@ button:hover {
   background: #888;
   color: #000;
 }
+
+/* ========================================================================
+   MAP SELECTOR - Floating LCD-style panel
+   ======================================================================== */
+
+#map-selector {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 10px;
+  background: rgba(0, 10, 20, 0.75);
+  border: 1px solid rgba(0, 217, 255, 0.35);
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+  z-index: 50;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 4px 20px rgba(0, 0, 0, 0.4),
+    inset 0 0 20px rgba(0, 217, 255, 0.05);
+  /* Scanline overlay */
+  overflow: hidden;
+}
+
+#map-selector::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15) 0px,
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.6;
+}
+
+.map-hint {
+  grid-column: span 4;
+  text-align: center;
+  font-size: 0.55rem;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  padding-bottom: 4px;
+  pointer-events: none;
+}
+
+.map-btn {
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 217, 255, 0.25);
+  border-radius: 3px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.15s ease;
+  position: relative;
+  /* Subpixel RGB phosphor simulation */
+  text-shadow:
+    -0.5px 0 0 rgba(255, 0, 0, 0.35),
+    0.5px 0 0 rgba(0, 255, 0, 0.35),
+    0 0 2px rgba(0, 100, 255, 0.4);
+}
+
+.map-btn:hover {
+  background: rgba(0, 217, 255, 0.12);
+  border-color: rgba(0, 217, 255, 0.55);
+  color: #fff;
+  box-shadow:
+    0 0 8px rgba(0, 217, 255, 0.25),
+    inset 0 0 10px rgba(0, 217, 255, 0.08);
+}
+
+.map-btn:active {
+  transform: scale(0.96);
+}
+
+/* Active map - phosphor glow */
+.map-btn.active {
+  color: #000;
+  background: var(--map-accent, #00d9ff);
+  border-color: var(--map-accent, #00d9ff);
+  text-shadow: none;
+  box-shadow:
+    0 0 10px var(--map-accent, #00d9ff),
+    0 0 20px var(--map-accent, #00d9ff),
+    inset 0 0 8px rgba(255, 255, 255, 0.4);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 480px) {
+  #map-selector {
+    bottom: 10px;
+    right: 10px;
+    padding: 8px;
+    gap: 5px;
+  }
+  .map-btn {
+    width: 28px;
+    height: 26px;
+    font-size: 0.65rem;
+  }
+  .map-hint {
+    font-size: 0.5rem;
+  }
+}
