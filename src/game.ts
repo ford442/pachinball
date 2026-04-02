@@ -65,8 +65,10 @@ import {
   emissive,
   detectAccessibility,
   HapticManager,
+  getSoundSystem,
   type AccessibilityConfig,
   type InputFrame,
+  type MapId,
 } from './game-elements'
 import { GameConfig } from './config'
 import { DisplayMode, type DisplayConfig } from './game-elements/display-config'
@@ -100,6 +102,7 @@ export class Game {
   private inputHandler: InputHandler | null = null
   private cameraController: CameraController | null = null
   private hapticManager: HapticManager | null = null
+  private soundSystem = getSoundSystem()
 
   // Rendering
   private bloomPipeline: DefaultRenderingPipeline | null = null
@@ -1213,6 +1216,19 @@ export class Game {
     this.cabinetBuilder?.setThemeFromMap(mapName)
     // Update ambient cabinet neon lights to match map
     this.updateCabinetLightingForMap()
+    
+    // Switch music track for this map
+    const mapToMusicId: Record<TableMapType, MapId> = {
+      'neon-helix': '1',
+      'cyber-core': '2',
+      'quantum-grid': '3',
+      'singularity-well': '4',
+      'glitch-spire': '5',
+      'matrix-core': '6',
+      'cyan-void': '7',
+      'magenta-dream': '8'
+    }
+    this.soundSystem.playMapMusic(mapToMusicId[mapName])
 
     // Update display with map info
     this.display?.setStoryText(`MAP: ${config.name.toUpperCase()}`)
@@ -1545,7 +1561,7 @@ export class Game {
     return CameraMode.IDLE
   }
 
-  private startGame(): void {
+  private async startGame(): Promise<void> {
     this.score = 0
     this.lives = 3
     this.comboCount = 0
@@ -1556,6 +1572,14 @@ export class Game {
     this.ballManager?.removeExtraBalls()
     this.updateHUD()
     this.resetBall()
+    
+    // Initialize sound system on user interaction
+    await this.soundSystem.init()
+    await this.soundSystem.resume()
+    
+    // Play map music (default to map 1)
+    this.soundSystem.playMapMusic('1')
+    
     this.setGameState(GameState.PLAYING)
   }
 
@@ -1584,6 +1608,8 @@ export class Game {
     // Haptic feedback on flipper activation
     if (pressed) {
       this.hapticManager?.flipper()
+      // Play flipper sound
+      this.soundSystem.playSample('flipper')
     }
   }
 
@@ -1607,6 +1633,8 @@ export class Game {
     // Haptic feedback on flipper activation
     if (pressed) {
       this.hapticManager?.flipper()
+      // Play flipper sound
+      this.soundSystem.playSample('flipper')
     }
   }
 
@@ -1636,6 +1664,9 @@ export class Game {
         this.effects.addCameraShake(shakeIntensity)
       }
 
+      // Play launch sound
+      this.soundSystem.playSample('launch')
+      
       // Reset charge state
       this.plungerChargeLevel = 0
     }
@@ -1786,6 +1817,9 @@ export class Game {
       this.effects?.startJackpotSequence()
       this.effects?.setAtmosphereState('JACKPOT')
       this.display?.setDisplayState(DisplayState.JACKPOT)
+      
+      // Trigger jackpot audio
+      this.soundSystem.triggerJackpotAudio()
 
       // Bonus Score
       this.score += 100000
@@ -2118,6 +2152,9 @@ export class Game {
             const velocity = ballBody.linvel()
             const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
             this.hapticManager?.bumper(speed)
+            
+            // Play bumper sound
+            this.soundSystem.playSample('bumper', vis.mesh.position)
 
             return
           }
@@ -2195,6 +2232,9 @@ export class Game {
 
     // Haptic feedback on ball loss
     this.hapticManager?.ballLost()
+    
+    // Play drain sound
+    this.soundSystem.playSample('drain')
 
     const ballBody = this.ballManager?.getBallBody()
     if (body === ballBody) {
@@ -2444,16 +2484,35 @@ export class Game {
     const reducedMotionCheckbox = document.getElementById('reduced-motion') as HTMLInputElement
     const photosensitiveCheckbox = document.getElementById('photosensitive-mode') as HTMLInputElement
     const shakeSlider = document.getElementById('shake-intensity') as HTMLInputElement
+    
+    // Audio settings
+    const masterVolumeSlider = document.getElementById('master-volume') as HTMLInputElement
+    const musicVolumeSlider = document.getElementById('music-volume') as HTMLInputElement
+    const sfxVolumeSlider = document.getElementById('sfx-volume') as HTMLInputElement
+    const muteCheckbox = document.getElementById('mute-audio') as HTMLInputElement
 
     if (reducedMotionCheckbox) reducedMotionCheckbox.checked = settings.reducedMotion
     if (photosensitiveCheckbox) photosensitiveCheckbox.checked = settings.photosensitiveMode
     if (shakeSlider) shakeSlider.value = String(settings.shakeIntensity)
+    
+    // Load audio settings
+    const volumeSettings = this.soundSystem.getVolumeSettings()
+    if (masterVolumeSlider) masterVolumeSlider.value = String(volumeSettings.master)
+    if (musicVolumeSlider) musicVolumeSlider.value = String(volumeSettings.music)
+    if (sfxVolumeSlider) sfxVolumeSlider.value = String(volumeSettings.sfx)
+    if (muteCheckbox) muteCheckbox.checked = volumeSettings.muted
   }
 
   private saveSettingsFromUI(): void {
     const reducedMotionCheckbox = document.getElementById('reduced-motion') as HTMLInputElement
     const photosensitiveCheckbox = document.getElementById('photosensitive-mode') as HTMLInputElement
     const shakeSlider = document.getElementById('shake-intensity') as HTMLInputElement
+    
+    // Audio settings
+    const masterVolumeSlider = document.getElementById('master-volume') as HTMLInputElement
+    const musicVolumeSlider = document.getElementById('music-volume') as HTMLInputElement
+    const sfxVolumeSlider = document.getElementById('sfx-volume') as HTMLInputElement
+    const muteCheckbox = document.getElementById('mute-audio') as HTMLInputElement
 
     const newSettings = {
       reducedMotion: reducedMotionCheckbox?.checked ?? false,
@@ -2466,6 +2525,20 @@ export class Game {
     SettingsManager.save(newSettings)
     SettingsManager.applyToConfig(newSettings)
     console.log('[Accessibility] Settings saved:', newSettings)
+    
+    // Apply audio settings
+    if (masterVolumeSlider) {
+      this.soundSystem.setMasterVolume(parseFloat(masterVolumeSlider.value))
+    }
+    if (musicVolumeSlider) {
+      this.soundSystem.setMusicVolume(parseFloat(musicVolumeSlider.value))
+    }
+    if (sfxVolumeSlider) {
+      this.soundSystem.setSfxVolume(parseFloat(sfxVolumeSlider.value))
+    }
+    if (muteCheckbox && muteCheckbox.checked !== this.soundSystem.getVolumeSettings().muted) {
+      this.soundSystem.toggleMute()
+    }
   }
 
   // ============================================================================
