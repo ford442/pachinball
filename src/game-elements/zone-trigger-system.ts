@@ -73,7 +73,6 @@ export class ZoneTriggerSystem {
     this.currentZoneId = null
     this.previousZoneId = null
     this.zoneEntryPosition = null
-    this.zoneExitPosition = null
     
     // Pre-calculate zone bounds from scenario zones
     for (const zone of scenario.zones) {
@@ -210,7 +209,7 @@ export class ZoneTriggerSystem {
   /**
    * Handle zone exit
    */
-  private handleZoneExit(toZone: ScenarioZone | null, exitPosition: Vector3): void {
+  private handleZoneExit(toZone: ScenarioZone | null, _exitPosition: Vector3): void {
     if (!this.currentZoneId) return
     
     const exitingZone = this.activeZones.get(this.currentZoneId)

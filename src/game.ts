@@ -2453,7 +2453,7 @@ export class Game {
       onZoneEnter: (zone, fromZone, isMajor) => {
         this.handleScenarioZoneEnter(zone, fromZone, isMajor)
       },
-      onZoneExit: (zone, toZone) => {
+      onZoneExit: () => {
         // Optional: handle zone exit effects
       },
       onZoneProgress: (_zone, _progress) => {
@@ -2483,7 +2483,7 @@ export class Game {
    */
   private handleScenarioZoneEnter(
     zone: ScenarioZone,
-    fromZone: ScenarioZone | null,
+    _fromZone: ScenarioZone | null,
     isMajor: boolean
   ): void {
     console.log(`[Game] Entered zone: ${zone.name} (${isMajor ? 'MAJOR' : 'minor'})`)
@@ -2690,7 +2690,6 @@ export class Game {
   public cycleScenario(direction: 1 | -1 = 1): void {
     const scenarios = ['samurai-realm', 'cyber-noir', 'quantum-dream', 'movie-gangster', 'fantasy-realm']
     const currentIndex = scenarios.findIndex(id => {
-      const current = this.zoneTriggerSystem?.getCurrentZoneId()
       return this.zoneTriggerSystem?.getAllZones()[0]?.id?.startsWith(id.split('-')[0])
     })
     

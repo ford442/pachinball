@@ -1007,7 +1007,8 @@ export interface ZoneTrigger {
   minZ: number
   maxZ: number
   mechanicType: 'gate' | 'magnet' | 'spinner' | 'jumppad' | 'pegs'
-  config: Partial<PathMechanicConfig>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  config: any
   /** Optional callback when this trigger zone is entered */
   onEnter?: () => void
   /** Optional callback when this trigger zone is exited */
