@@ -71,7 +71,6 @@ import {
   getNameEntryDialog,
   type AccessibilityConfig,
   type InputFrame,
-  type MapId,
 } from './game-elements'
 import { GameConfig } from './config'
 import { DisplayMode, type DisplayConfig } from './game-elements/display-config'
@@ -165,7 +164,9 @@ export class Game {
   private currentTableMap: TableMapType = 'neon-helix'
 
   // Map System (dynamic backend maps)
-  private mapSystem = getMapSystem()
+  private mapSystem = getMapSystem(
+    window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : 'https://test.1ink.us/api'
+  )
 
   // Room Environment
   private roomMeshes: Mesh[] = []
@@ -530,22 +531,15 @@ export class Game {
     window.addEventListener('keydown', this.inputHandler.handleKeyDown)
     window.addEventListener('keyup', this.inputHandler.handleKeyUp)
 
-    // Map switching keyboard shortcuts (number keys 1-8)
-    const mapKeys: Record<string, TableMapType> = {
-      'Digit1': 'neon-helix',
-      'Digit2': 'cyber-core',
-      'Digit3': 'quantum-grid',
-      'Digit4': 'singularity-well',
-      'Digit5': 'glitch-spire',
-      'Digit6': 'matrix-core',
-      'Digit7': 'cyan-void',
-      'Digit8': 'magenta-dream',
-    }
-
+    // Dynamic map switching keyboard shortcuts (Digit1-9 map to available maps)
     window.addEventListener('keydown', (e) => {
-      if (mapKeys[e.code] && this.state === GameState.PLAYING) {
-        e.preventDefault()
-        this.switchTableMap(mapKeys[e.code])
+      if (e.code.startsWith('Digit') && this.state === GameState.PLAYING) {
+        const index = parseInt(e.code.replace('Digit', ''), 10) - 1
+        const maps = this.mapSystem.getMapIds()
+        if (index >= 0 && index < maps.length) {
+          e.preventDefault()
+          this.switchTableMap(maps[index])
+        }
       }
       // 'M' key to cycle maps
       if (e.code === 'KeyM' && this.state === GameState.PLAYING) {
@@ -1214,7 +1208,7 @@ export class Game {
    * Switch the LCD table to a different map/theme
    * @param mapName - The map to switch to (e.g., 'neon-helix', 'cyber-core')
    */
-  public switchTableMap(mapName: TableMapType): void {
+  public switchTableMap(mapName: string): void {
     // Ensure the map exists in the runtime registry (hardcoded or dynamic)
     const mapConfig = this.mapSystem.getMap(mapName) || TABLE_MAPS[mapName]
     if (!mapConfig) {
@@ -1242,7 +1236,7 @@ export class Game {
     
     // Switch music track for this map (use dynamic trackId or legacy mapping)
     const musicId = (mapConfig as { musicTrackId?: string }).musicTrackId || this.mapSystem.inferMusicTrackId(mapName)
-    this.soundSystem.playMapMusic(musicId as MapId)
+    this.soundSystem.playMapMusic(musicId)
 
     // Update display with map info
     this.display?.setStoryText(`MAP: ${mapConfig.name.toUpperCase()}`)
@@ -1344,7 +1338,7 @@ export class Game {
     const maps = this.mapSystem.getMapIds()
     const currentIndex = maps.indexOf(this.currentTableMap)
     const nextIndex = (currentIndex + 1) % maps.length
-    this.switchTableMap(maps[nextIndex] as TableMapType)
+    this.switchTableMap(maps[nextIndex])
   }
 
   private initLCDTablePostProcess(): void {
@@ -2758,8 +2752,11 @@ export class Game {
     const selector = document.getElementById('map-selector')
     if (!selector) return
 
-    // Fetch dynamic maps from backend and register them
-    await this.mapSystem.fetchAll()
+    // Fetch dynamic maps and music from backend in parallel
+    await Promise.all([
+      this.mapSystem.fetchAll(),
+      this.soundSystem.fetchMusicTracks(),
+    ])
     for (const map of this.mapSystem.getAllMaps()) {
       if (!TABLE_MAPS[map.id]) {
         registerMap(map.id, map)
@@ -2777,8 +2774,8 @@ export class Game {
    * Build the map selector buttons dynamically from fetched maps.
    */
   private buildMapSelectorUI(selector: HTMLElement): void {
-    // Clear existing buttons (keep the hint)
-    const existingButtons = selector.querySelectorAll('.map-btn, .map-refresh')
+    // Clear existing dynamic elements
+    const existingButtons = selector.querySelectorAll('.map-btn, .map-refresh, .map-add-hint')
     existingButtons.forEach((el) => el.remove())
 
     const maps = this.mapSystem.getAllMaps()
@@ -2794,7 +2791,7 @@ export class Game {
         if (map.id !== this.currentTableMap) {
           this.animateMapButtonPress(btn)
           this.lcdTableState.triggerFeedbackEffect()
-          this.switchTableMap(map.id as TableMapType)
+          this.switchTableMap(map.id)
         }
       })
       selector.appendChild(btn)
@@ -2804,11 +2801,14 @@ export class Game {
     // Add refresh button (small circular icon)
     const refreshBtn = document.createElement('button')
     refreshBtn.className = 'map-btn map-refresh'
-    refreshBtn.title = 'Refresh Maps'
+    refreshBtn.title = 'Refresh Content'
     refreshBtn.textContent = '↻'
     refreshBtn.addEventListener('click', async () => {
       refreshBtn.classList.add('spinning')
-      await this.mapSystem.refresh()
+      await Promise.all([
+        this.mapSystem.refresh(),
+        this.soundSystem.fetchMusicTracks(),
+      ])
       for (const map of this.mapSystem.getAllMaps()) {
         if (!TABLE_MAPS[map.id]) {
           registerMap(map.id, map)
@@ -2819,6 +2819,27 @@ export class Game {
       refreshBtn.classList.remove('spinning')
     })
     selector.appendChild(refreshBtn)
+
+    // Add "Add New Map" hint pointing to storage_manager admin
+    const addHint = document.createElement('a')
+    addHint.className = 'map-add-hint'
+    addHint.href = 'https://test.1ink.us/admin'
+    addHint.target = '_blank'
+    addHint.title = 'Upload new maps & music in storage_manager'
+    addHint.textContent = '+ Add New Map'
+    addHint.style.cssText = `
+      display: block;
+      margin-top: 6px;
+      font-size: 10px;
+      color: var(--map-accent, #00d9ff);
+      text-decoration: none;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+      text-align: center;
+    `
+    addHint.addEventListener('mouseenter', () => { addHint.style.opacity = '1' })
+    addHint.addEventListener('mouseleave', () => { addHint.style.opacity = '0.7' })
+    selector.appendChild(addHint)
   }
 
   /**
