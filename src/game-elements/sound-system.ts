@@ -10,11 +10,10 @@
  */
 
 import { Vector3 } from '@babylonjs/core'
+import { API_BASE } from '../config'
 
-// Storage manager API base URL (auto-detect local vs production)
-const STORAGE_API_BASE = (typeof window !== 'undefined' && window.location.hostname === 'localhost')
-  ? 'http://localhost:8000/api'
-  : 'https://test.1ink.us/api'
+// Storage manager API base URL
+const STORAGE_API_BASE = API_BASE
 
 // Audio categories for samples
 export type SampleCategory = 'peg' | 'bumper' | 'flipper' | 'jackpot' | 'fever' | 'launch' | 'drain'

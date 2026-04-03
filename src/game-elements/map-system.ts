@@ -6,10 +6,9 @@
  */
 
 import { TABLE_MAPS, type TableMapConfig, type TableMapType } from '../shaders/lcd-table'
+import { API_BASE } from '../config'
 
-const DEFAULT_API_BASE = (typeof window !== 'undefined' && window.location.hostname === 'localhost') 
-  ? 'http://localhost:8000/api'
-  : 'https://test.1ink.us/api'
+const DEFAULT_API_BASE = API_BASE
 
 export interface DynamicMapConfig extends TableMapConfig {
   id: string
@@ -95,6 +94,8 @@ export class MapSystem {
           musicTrackId: map.musicTrackId || map.id,
           shaderUrl: map.shaderUrl,
           adventureGoals: Array.isArray(map.adventureGoals) ? map.adventureGoals : undefined,
+          mode: map.mode || 'fixed',
+          worldLength: map.worldLength || 200,
         })
       }
 

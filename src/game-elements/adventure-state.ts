@@ -12,6 +12,7 @@
 
 import type { DisplaySystem } from './display'
 import type { TableMapType } from '../shaders/lcd-table'
+import { API_BASE } from '../config'
 
 export type GoalType = 'hit-pegs' | 'survive-time' | 'reach-score' | 'collect-items' | 'no-drain'
 
@@ -63,7 +64,7 @@ export interface AdventureProgress {
 }
 
 const STORAGE_KEY = 'pachinball_adventure_progress'
-const API_ENDPOINT = '/api/adventure/progress'
+const API_ENDPOINT = `${API_BASE}/adventure/progress`
 
 // Level reward definitions - maps level ID to unlockable reward
 export const LEVEL_REWARDS: Record<string, UnlockableReward> = {

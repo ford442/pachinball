@@ -115,3 +115,12 @@ export {
   type ZoneTriggerCallback,
   type ActiveZone,
 } from './zone-trigger-system'
+export {
+  DynamicWorld,
+  getDynamicWorld,
+  resetDynamicWorld,
+  type WorldMode,
+  type WorldZone,
+  type DynamicWorldConfig,
+  type ZoneMechanic,
+} from './dynamic-world'

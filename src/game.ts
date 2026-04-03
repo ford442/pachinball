@@ -76,13 +76,14 @@ import {
   getTransitionShakeIntensity,
   ZoneTriggerSystem,
   getScenario,
+  getDynamicWorld,
   type ZoneConfig,
   type AccessibilityConfig,
   type InputFrame,
   type DynamicScenario,
   type ScenarioZone,
 } from './game-elements'
-import { GameConfig } from './config'
+import { GameConfig, API_BASE } from './config'
 import { DisplayMode, type DisplayConfig } from './game-elements/display-config'
 import { scanlinePixelShader } from './shaders/scanline'
 import { lcdTablePixelShader, TABLE_MAPS, type TableMapType, LCDTableState, registerMap } from './shaders/lcd-table'
@@ -175,15 +176,16 @@ export class Game {
   private currentTableMap: TableMapType = 'neon-helix'
 
   // Map System (dynamic backend maps)
-  private mapSystem = getMapSystem(
-    window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : 'https://test.1ink.us/api'
-  )
+  private mapSystem = getMapSystem(API_BASE)
 
   // Adventure Mode State (level goals, progression)
   private adventureState = getAdventureState()
 
   // Level Select Screen
   private levelSelectScreen: ReturnType<typeof getLevelSelectScreen> | null = null
+
+  // Dynamic World (scrolling adventure mode)
+  private dynamicWorld: ReturnType<typeof getDynamicWorld> | null = null
 
   // Room Environment
   private roomMeshes: Mesh[] = []
@@ -1057,6 +1059,9 @@ export class Game {
     }
     this.display = new DisplaySystem(this.scene, this.engine, displayConfig)
 
+    // Initialize Dynamic World for scrolling adventure mode
+    this.dynamicWorld = getDynamicWorld(this.scene, this.tableCam!, this.display, this.soundSystem)
+
     // Setup Adventure State with display integration
     this.adventureState.setDisplay(this.display)
     this.adventureState.onLevelCompleteCallback((level) => {
@@ -1341,6 +1346,15 @@ export class Game {
 
     // Update on-screen map selector highlight
     this.updateMapSelectorUI()
+
+    // Configure Dynamic World mode based on map config
+    const mapMode = mapConfig.mode || 'fixed'
+    this.dynamicWorld?.setMode(mapMode)
+    
+    if (mapMode === 'dynamic' && mapConfig.worldLength) {
+      // Initialize dynamic zones for this map
+      this.initializeDynamicZones(mapName, mapConfig)
+    }
   }
 
   // ============================================================================
@@ -1467,6 +1481,75 @@ export class Game {
     const currentIndex = types.indexOf(this.currentCabinetType)
     const nextIndex = (currentIndex + 1) % types.length
     this.loadCabinetPreset(types[nextIndex])
+  }
+
+  /**
+   * Initialize dynamic zones for scrolling adventure mode
+   */
+  private initializeDynamicZones(mapName: string, mapConfig: typeof TABLE_MAPS[string]): void {
+    if (!this.dynamicWorld) return
+
+    const worldLength = mapConfig.worldLength || 200
+    const zones = this.createZonesForMap(mapName, worldLength)
+    
+    this.dynamicWorld.initialize(zones)
+    console.log(`[Game] Initialized dynamic world with ${zones.length} zones`)
+  }
+
+  /**
+   * Create zone configuration for a map
+   */
+  private createZonesForMap(mapName: string, worldLength: number): import('./game-elements').WorldZone[] {
+    const zoneCount = 4
+    const zoneLength = worldLength / zoneCount
+    const zones: import('./game-elements').WorldZone[] = []
+
+    for (let i = 0; i < zoneCount; i++) {
+      const startZ = i * zoneLength
+      const endZ = (i + 1) * zoneLength
+      
+      // Generate zone colors based on map theme
+      const hue = (i * 60) % 360
+      const baseColor = `hsl(${hue}, 80%, 50%)`
+      
+      zones.push({
+        id: `${mapName}-zone-${i}`,
+        name: `Sector ${String.fromCharCode(65 + i)}`,
+        startZ,
+        endZ,
+        mapType: mapName,
+        mapConfig: {
+          baseColor,
+          accentColor: `hsl(${(hue + 30) % 360}, 80%, 70%)`,
+          glowIntensity: 1.0 + i * 0.2,
+        },
+        storyText: `Entering Sector ${String.fromCharCode(65 + i)}...`,
+        spawnMechanics: this.generateZoneMechanics(i, startZ, endZ),
+      })
+    }
+
+    return zones
+  }
+
+  /**
+   * Generate mechanics for a zone
+   */
+  private generateZoneMechanics(zoneIndex: number, startZ: number, endZ: number): import('./game-elements').ZoneMechanic[] {
+    const mechanics: import('./game-elements').ZoneMechanic[] = []
+    const count = 3 + zoneIndex
+
+    for (let i = 0; i < count; i++) {
+      const z = startZ + (endZ - startZ) * ((i + 1) / (count + 1))
+      const x = (Math.random() - 0.5) * 8
+      
+      const types: Array<'bumper' | 'target' | 'collectible'> = ['bumper', 'target', 'collectible']
+      mechanics.push({
+        type: types[Math.floor(Math.random() * types.length)],
+        position: new Vector3(x, 0.5, -z),
+      })
+    }
+
+    return mechanics
   }
 
   /**
@@ -2761,6 +2844,13 @@ export class Game {
         new Vector3(vel.x, vel.y, vel.z),
         cameraMode
       )
+    }
+
+    // Dynamic World update (scrolling adventure mode)
+    if (this.dynamicWorld && this.ballManager?.getBallBody()) {
+      const ballBody = this.ballManager.getBallBody()!
+      const pos = ballBody.translation()
+      this.dynamicWorld.update(new Vector3(pos.x, pos.y, pos.z), dt)
     }
 
     // Sync Adventure Mode Kinematics
