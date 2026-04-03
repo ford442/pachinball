@@ -18,6 +18,13 @@ export {
 export { BallManager } from './ball-manager'
 export { AdventureMode, AdventureTrackType, CAMERA_PRESETS, type CameraPreset } from './adventure-mode'
 export {
+  ZONE_REGISTRY,
+  getZoneConfig,
+  isMajorTransition,
+  getTransitionShakeIntensity,
+  type ZoneConfig,
+} from './zone-registry'
+export {
   AdventureState,
   getAdventureState,
   resetAdventureState,

@@ -72,6 +72,10 @@ import {
   getNameEntryDialog,
   getAdventureState,
   getLevelSelectScreen,
+  getZoneConfig,
+  isMajorTransition,
+  getTransitionShakeIntensity,
+  type ZoneConfig,
   type AccessibilityConfig,
   type InputFrame,
 } from './game-elements'
@@ -1093,6 +1097,18 @@ export class Game {
           this.score += 5000
           this.updateHUD()
           break
+          
+        case 'ZONE_ENTER': {
+          // Handle zone transition in Dynamic Adventure Mode
+          const zoneData = data as { 
+            zone: AdventureTrackType
+            previousZone: AdventureTrackType | null
+            isMajor: boolean 
+            ballPosition?: Vector3
+          }
+          this.handleZoneTransition(zoneData.zone, zoneData.previousZone, zoneData.isMajor)
+          break
+        }
       }
     })
 

@@ -167,11 +167,30 @@ export const CAMERA_PRESETS: Record<string, CameraPreset> = {
 export class AdventureMode extends AdventureModeTracksB {
   /** Current camera preset for active track */
   protected currentCameraPreset: CameraPreset | null = CAMERA_PRESETS.DEFAULT
+  /** Current zone/track type for zone transition detection */
+  private currentZone: AdventureTrackType | null = null
+  /** Previous zone for transition intensity calculation */
+  private previousZone: AdventureTrackType | null = null
+  
   /**
    * Registers a callback listener to handle story events in the main Game class.
    */
   setEventListener(callback: AdventureCallback): void {
     this.onEvent = callback
+  }
+  
+  /**
+   * Get current zone/track type
+   */
+  getCurrentZone(): AdventureTrackType | null {
+    return this.currentZone
+  }
+  
+  /**
+   * Get previous zone (for transition effects)
+   */
+  getPreviousZone(): AdventureTrackType | null {
+    return this.previousZone
   }
 
   isActive(): boolean {
@@ -383,8 +402,19 @@ export class AdventureMode extends AdventureModeTracksB {
     if (this.adventureActive) return
     this.adventureActive = true
 
+    // Track zone transition
+    this.previousZone = this.currentZone
+    this.currentZone = trackType
+
     // Notify the Game class to update the Display
     if (this.onEvent) this.onEvent('START', trackType)
+    
+    // Emit zone enter event for initial zone
+    if (this.onEvent) this.onEvent('ZONE_ENTER', { 
+      zone: trackType, 
+      previousZone: this.previousZone,
+      isMajor: true // First entry is always major
+    })
 
     // Set Start Position based on Track
     if (trackType === AdventureTrackType.CYBER_CORE) {
@@ -508,6 +538,90 @@ export class AdventureMode extends AdventureModeTracksB {
     }
     
     this.scene.activeCamera = this.followCamera
+  }
+
+  /**
+   * Switch to a new zone in Dynamic Adventure Mode (scrolling world).
+   * This triggers zone transition effects: backbox video, lighting, music, screen shake.
+   * 
+   * @param newZone - The zone type to switch to
+   * @param ballPosition - Optional ball position for zone entry point
+   * @returns true if zone was switched, false if already in that zone
+   */
+  switchZone(newZone: AdventureTrackType, ballPosition?: Vector3): boolean {
+    if (!this.adventureActive) {
+      console.warn('[AdventureMode] Cannot switch zone: adventure not active')
+      return false
+    }
+    
+    if (this.currentZone === newZone) {
+      return false // Already in this zone
+    }
+    
+    // Track zone transition
+    this.previousZone = this.currentZone
+    this.currentZone = newZone
+    
+    // Update camera preset for new zone
+    const presetKey = newZone as string
+    this.currentCameraPreset = CAMERA_PRESETS[presetKey] || CAMERA_PRESETS.DEFAULT
+    
+    // Notify Game class of zone transition
+    if (this.onEvent) {
+      this.onEvent('ZONE_ENTER', {
+        zone: newZone,
+        previousZone: this.previousZone,
+        isMajor: this.isMajorZoneTransition(this.previousZone, newZone),
+        ballPosition: ballPosition,
+      })
+    }
+    
+    console.log(`[AdventureMode] Zone switched: ${this.previousZone} -> ${newZone}`)
+    return true
+  }
+  
+  /**
+   * Determine if a zone transition is "major" (triggers stronger effects)
+   * Major transitions are between thematically different zones
+   */
+  private isMajorZoneTransition(from: AdventureTrackType | null, to: AdventureTrackType): boolean {
+    if (!from) return true // First entry is always major
+    
+    // Define major transition groups
+    const dangerZones = [
+      AdventureTrackType.SINGULARITY_WELL,
+      AdventureTrackType.FIREWALL_BREACH,
+      AdventureTrackType.GLITCH_SPIRE,
+      AdventureTrackType.SOLAR_FLARE,
+    ]
+    
+    const calmZones = [
+      AdventureTrackType.DIGITAL_ZEN_GARDEN,
+      AdventureTrackType.SYNTHWAVE_SURF,
+      AdventureTrackType.RETRO_WAVE_HILLS,
+    ]
+    
+    const techZones = [
+      AdventureTrackType.CYBER_CORE,
+      AdventureTrackType.CPU_CORE,
+      AdventureTrackType.NEURAL_NETWORK,
+      AdventureTrackType.MAGNETIC_STORAGE,
+    ]
+    
+    // Transition between different categories is major
+    const fromDanger = dangerZones.includes(from)
+    const toDanger = dangerZones.includes(to)
+    const fromCalm = calmZones.includes(from)
+    const toCalm = calmZones.includes(to)
+    const fromTech = techZones.includes(from)
+    const toTech = techZones.includes(to)
+    
+    // Major if switching between categories
+    if (fromDanger !== toDanger) return true
+    if (fromCalm !== toCalm) return true
+    if (fromTech !== toTech) return true
+    
+    return false
   }
 
   end(): void {

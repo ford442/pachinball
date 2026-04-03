@@ -146,6 +146,18 @@ export class EffectsSystem {
     originalColor: new Color4(0, 0, 0, 0),
     originalBlendMode: 0,
   }
+  
+  // Screen pulse state for zone transitions
+  private screenPulse = {
+    active: false,
+    timer: 0,
+    duration: 0.5,
+    intensity: 1.0,
+    color: new Color3(1, 1, 1),
+  }
+  
+  // LCD post-process reference for screen effects
+  private lcdPostProcess: { flashIntensity: number } | null = null
 
   registerCamera(camera: { position: Vector3 }): void {
     this.cameraRef = camera
@@ -157,6 +169,13 @@ export class EffectsSystem {
    */
   registerTableCamera(camera: ArcRotateCamera): void {
     this.tableCam = camera
+  }
+  
+  /**
+   * Register LCD post-process for screen pulse effects
+   */
+  registerLCDPostProcess(postProcess: { flashIntensity: number }): void {
+    this.lcdPostProcess = postProcess
   }
 
   /**
@@ -207,6 +226,36 @@ export class EffectsSystem {
     const c = Color3.FromHexString(colorHex)
     ip.vignetteColor = new Color4(c.r, c.g, c.b, 1)
     ip.vignetteWeight = 1.5
+  }
+  
+  /**
+   * Trigger a screen pulse effect for zone transitions
+   * Creates a bright flash that fades out
+   * @param colorHex - Pulse color
+   * @param intensity - Pulse intensity (0-1)
+   * @param durationMs - Duration in milliseconds
+   */
+  triggerScreenPulse(colorHex = '#ffffff', intensity = 0.8, durationMs = 400): void {
+    // LCD post-process flash (if available)
+    if (this.lcdPostProcess) {
+      this.lcdPostProcess.flashIntensity = intensity
+    }
+    
+    // Bloom pipeline flash (if available)
+    if (this.bloomPipeline?.imageProcessing) {
+      this.screenPulse.active = true
+      this.screenPulse.timer = 0
+      this.screenPulse.duration = durationMs / 1000
+      this.screenPulse.intensity = intensity
+      this.screenPulse.color = Color3.FromHexString(colorHex)
+      
+      // Boost exposure temporarily
+      const ip = this.bloomPipeline.imageProcessing
+      ip.exposure = 1.0 + intensity * 0.5
+    }
+    
+    // Also trigger vignette flash for cabinet feel
+    this.flashVignette(colorHex, durationMs)
   }
 
   private updateVignetteFlash(dt: number): void {

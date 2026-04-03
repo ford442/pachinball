@@ -33,6 +33,7 @@ import {
 } from '@babylonjs/core'
 import { numberScrollShader } from '../shaders/numberScroll'
 import { jackpotOverlayShader } from '../shaders/jackpotOverlay'
+import { crtEffectShader, CRT_PRESETS, type CRTEffectParams } from '../shaders/crt-effect'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import type { Mesh } from '@babylonjs/core'
@@ -122,9 +123,10 @@ export class DisplaySystem {
     reels: Mesh | null
     shader: Mesh | null
     video: Mesh | null
+    crtEffect: Mesh | null
     image: Mesh | null
     overlay: Mesh | null
-  } = { reels: null, shader: null, video: null, image: null, overlay: null }
+  } = { reels: null, shader: null, video: null, crtEffect: null, image: null, overlay: null }
   
   // Materials
   private reelMaterials: ShaderMaterial[] = []
@@ -135,6 +137,7 @@ export class DisplaySystem {
   private standardOverlayMat: StandardMaterial | null = null
   private videoMaterial: StandardMaterial | null = null
   private imageMaterial: StandardMaterial | null = null
+  private crtMaterial: ShaderMaterial | null = null
   
   // Textures
   private overlayTexture: DynamicTexture | null = null
@@ -147,6 +150,11 @@ export class DisplaySystem {
   private slotSpeeds = [0, 0, 0]
   private slotMode = 0
   private slotStopTimer = 0
+  
+  // CRT Effect state
+  private crtEffectActive = false
+  private crtEffectTime = 0
+  private crtEffectParams: CRTEffectParams = CRT_PRESETS.STORY
   
   // ============================================================================
   // ENHANCED SLOT MACHINE SYSTEM
@@ -249,6 +257,7 @@ export class DisplaySystem {
     requestAnimationFrame(() => {
       this.createVideoLayer(pos, screenZ)
       this.createImageLayer(pos, screenZ)
+      this.createCRTEffectLayer(pos, screenZ)
     })
   }
 
@@ -586,6 +595,42 @@ export class DisplaySystem {
     this.imageMaterial = mat
   }
 
+  /**
+   * Create CRT effect layer that sits on top of video for retro monitor look
+   */
+  private createCRTEffectLayer(pos: Vector3, screenZ: number): void {
+    // Create a full-screen quad for CRT post-processing effect
+    const crtPlane = MeshBuilder.CreatePlane('backboxCRTEffect', { width: 20, height: 12 }, this.scene)
+    crtPlane.position.set(pos.x, pos.y, screenZ - 0.25)
+    crtPlane.rotation.y = Math.PI
+    crtPlane.isVisible = false // Hidden by default
+
+    // Create CRT shader material
+    const crtMat = new ShaderMaterial('crtMat', this.scene, {
+      vertexSource: crtEffectShader.vertex,
+      fragmentSource: crtEffectShader.fragment,
+    }, {
+      attributes: ['position', 'uv'],
+      uniforms: ['worldViewProjection', 'uTime', 'uScanlineIntensity', 'uCurvature', 'uVignette', 'uChromaticAberration', 'uGlow', 'uNoise', 'uFlicker'],
+      samplers: ['textureSampler'],
+      needAlphaBlending: false,
+    })
+
+    // Set default params
+    crtMat.setFloat('uTime', 0)
+    crtMat.setFloat('uScanlineIntensity', this.crtEffectParams.scanlineIntensity)
+    crtMat.setFloat('uCurvature', this.crtEffectParams.curvature)
+    crtMat.setFloat('uVignette', this.crtEffectParams.vignette)
+    crtMat.setFloat('uChromaticAberration', this.crtEffectParams.chromaticAberration)
+    crtMat.setFloat('uGlow', this.crtEffectParams.glow)
+    crtMat.setFloat('uNoise', this.crtEffectParams.noise)
+    crtMat.setFloat('uFlicker', this.crtEffectParams.flicker)
+
+    crtPlane.material = crtMat
+    this.layers.crtEffect = crtPlane
+    this.crtMaterial = crtMat
+  }
+
   private createOverlayLayer(pos: Vector3, screenZ: number): void {
     const overlay = MeshBuilder.CreatePlane('backboxOverlay', { width: 20, height: 12 }, this.scene)
     overlay.position.set(pos.x, pos.y, screenZ - 0.05)
@@ -811,6 +856,65 @@ export class DisplaySystem {
     }
   }
 
+  /**
+   * Show zone entry story with video and CRT effect
+   * Called when entering a new zone in Dynamic Adventure Mode
+   */
+  showZoneStory(zoneName: string, storyText: string, videoUrl?: string, enableCRT = true): void {
+    console.log(`[Display] Zone entry: ${zoneName}`)
+    
+    // Update story text
+    this.currentStoryText = storyText
+    this.currentTrackName = zoneName
+    this.trackTransitionAlpha = 0
+    
+    // Load and play video if provided
+    if (videoUrl) {
+      this.loadAndPlayVideo(videoUrl)
+    }
+    
+    // Enable/disable CRT effect
+    this.setCRTEffectEnabled(enableCRT)
+    
+    // Trigger flash effect
+    this.triggerCRTFlash()
+    
+    // Update overlay
+    this.updateOverlay()
+  }
+
+  /**
+   * Enable/disable CRT effect overlay
+   */
+  setCRTEffectEnabled(enabled: boolean): void {
+    this.crtEffectActive = enabled
+    if (this.layers.crtEffect) {
+      this.layers.crtEffect.isVisible = enabled
+    }
+    
+    // When CRT is enabled on video, we need to use the video texture in the CRT shader
+    if (enabled && this.crtMaterial && this.videoTexture) {
+      this.crtMaterial.setTexture('textureSampler', this.videoTexture)
+    }
+  }
+
+  /**
+   * Set CRT effect parameters
+   */
+  setCRTEffectParams(params: Partial<CRTEffectParams>): void {
+    this.crtEffectParams = { ...this.crtEffectParams, ...params }
+    
+    if (this.crtMaterial) {
+      this.crtMaterial.setFloat('uScanlineIntensity', this.crtEffectParams.scanlineIntensity)
+      this.crtMaterial.setFloat('uCurvature', this.crtEffectParams.curvature)
+      this.crtMaterial.setFloat('uVignette', this.crtEffectParams.vignette)
+      this.crtMaterial.setFloat('uChromaticAberration', this.crtEffectParams.chromaticAberration)
+      this.crtMaterial.setFloat('uGlow', this.crtEffectParams.glow)
+      this.crtMaterial.setFloat('uNoise', this.crtEffectParams.noise)
+      this.crtMaterial.setFloat('uFlicker', this.crtEffectParams.flicker)
+    }
+  }
+
   setTrackInfo(trackName: string, progress = 0): void {
     this.currentTrackName = trackName
     this.trackProgress = Math.max(0, Math.min(1, progress))
@@ -848,6 +952,12 @@ export class DisplaySystem {
     // Update jackpot shader
     if (this.currentState.displayState === DisplayState.JACKPOT) {
       this.updateJackpotShader()
+    }
+
+    // Update CRT effect shader
+    if (this.crtEffectActive && this.crtMaterial) {
+      this.crtEffectTime += dt
+      this.crtMaterial.setFloat('uTime', this.crtEffectTime)
     }
 
     // Update enhanced slot machine
