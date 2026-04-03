@@ -135,6 +135,7 @@ export class Game {
   
   // Mouse tracking handler for cleanup
   private _mouseMoveHandler: ((e: MouseEvent) => void) | null = null
+  private _resizeObserver: ResizeObserver | null = null
 
   // Game State
   private ready = false
@@ -550,6 +551,12 @@ export class Game {
       this.scene?.render()
     })
 
+    // Setup ResizeObserver for canvas resize handling
+    this.setupResizeObserver()
+
+    // Fix DPR handling to use rounded value
+    this.setupDPRHandling()
+
     window.addEventListener('keydown', this.inputHandler.handleKeyDown)
     window.addEventListener('keyup', this.inputHandler.handleKeyUp)
 
@@ -906,6 +913,56 @@ export class Game {
     }
   }
 
+  /**
+   * Setup ResizeObserver to handle canvas size changes
+   * Calls engine.resize() when the canvas container changes size
+   */
+  private setupResizeObserver(): void {
+    const canvas = this.engine.getRenderingCanvas()
+    if (!canvas) return
+
+    // Use ResizeObserver to detect canvas container size changes
+    this._resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        // Only resize if dimensions actually changed
+        const { width, height } = entry.contentRect
+        if (width > 0 && height > 0) {
+          this.engine.resize()
+          console.log(`[Game] Canvas resized: ${Math.round(width)}x${Math.round(height)}`)
+        }
+      }
+    })
+
+    this._resizeObserver.observe(canvas)
+    console.log('[Game] ResizeObserver initialized')
+  }
+
+  /**
+   * Setup proper DPR handling with Math.round()
+   * Prevents fractional pixel ratios that cause rendering issues
+   */
+  private setupDPRHandling(): void {
+    const canvas = this.engine.getRenderingCanvas()
+    if (!canvas) return
+
+    // Get the rounded DPR value
+    const dpr = Math.round(window.devicePixelRatio || 1)
+    
+    // Apply the rounded DPR to the canvas if needed
+    if (canvas.width !== canvas.clientWidth * dpr || 
+        canvas.height !== canvas.clientHeight * dpr) {
+      this.engine.resize()
+    }
+
+    // Listen for DPR changes (e.g., moving between monitors with different DPRs)
+    const mediaQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
+    mediaQuery.addEventListener('change', () => {
+      const newDpr = Math.round(window.devicePixelRatio || 1)
+      console.log(`[Game] DPR changed: ${newDpr}`)
+      this.engine.resize()
+    })
+  }
+
   dispose(): void {
     if (this.inputHandler) {
       window.removeEventListener('keydown', this.inputHandler.handleKeyDown)
@@ -915,6 +972,12 @@ export class Game {
     // Clean up mouse tracking handler
     if (this._mouseMoveHandler) {
       this.engine.getRenderingCanvas()?.removeEventListener('mousemove', this._mouseMoveHandler)
+    }
+    
+    // Clean up ResizeObserver
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect()
+      this._resizeObserver = null
     }
     
     // Stop leaderboard auto-refresh

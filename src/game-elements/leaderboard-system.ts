@@ -46,6 +46,13 @@ export class LeaderboardSystem {
   private scoreList: HTMLElement | null = null
   private isVisible = false
 
+  // Exponential backoff for failed requests
+  private consecutiveFailures = 0
+  private readonly MAX_RETRIES = 5
+  private readonly BASE_RETRY_DELAY = 5000 // 5 seconds
+  private currentRetryDelay = this.BASE_RETRY_DELAY
+  private backoffTimer: number | null = null
+
   constructor() {
     this.createOverlay()
   }
@@ -64,6 +71,8 @@ export class LeaderboardSystem {
    */
   start(): void {
     this.stop() // Clear existing timer
+    this.consecutiveFailures = 0
+    this.currentRetryDelay = this.BASE_RETRY_DELAY
     this.refresh()
     
     this.refreshTimer = window.setInterval(() => {
@@ -79,12 +88,24 @@ export class LeaderboardSystem {
       clearInterval(this.refreshTimer)
       this.refreshTimer = null
     }
+    if (this.backoffTimer) {
+      clearTimeout(this.backoffTimer)
+      this.backoffTimer = null
+    }
+    this.consecutiveFailures = 0
+    this.currentRetryDelay = this.BASE_RETRY_DELAY
   }
 
   /**
    * Fetch latest scores from backend
+   * Uses exponential backoff on failures, stops after MAX_RETRIES
    */
   async refresh(force = false): Promise<void> {
+    // Stop trying after max retries (unless forced)
+    if (!force && this.consecutiveFailures >= this.MAX_RETRIES) {
+      return
+    }
+
     // Throttle refreshes
     const now = Date.now()
     if (!force && now - this.lastRefresh < 5000) return
@@ -107,13 +128,46 @@ export class LeaderboardSystem {
       this.scores = data.scores || []
       this.lastRefresh = now
       
+      // Reset failure count on success
+      this.consecutiveFailures = 0
+      this.currentRetryDelay = this.BASE_RETRY_DELAY
+      
       this.updateUI()
       console.log(`[Leaderboard] Refreshed: ${this.scores.length} scores`)
     } catch (err) {
-      console.warn('[Leaderboard] Refresh failed:', err)
+      this.consecutiveFailures++
+      console.warn(`[Leaderboard] Refresh failed (${this.consecutiveFailures}/${this.MAX_RETRIES}):`, err)
+      
+      if (this.consecutiveFailures >= this.MAX_RETRIES) {
+        console.error('[Leaderboard] Max retries exceeded. Stopping auto-refresh.')
+        this.stop()
+        this.showErrorState()
+      } else {
+        // Schedule retry with exponential backoff
+        this.currentRetryDelay = Math.min(this.currentRetryDelay * 2, 60000) // Max 60s
+        console.log(`[Leaderboard] Retrying in ${this.currentRetryDelay}ms...`)
+        
+        if (this.backoffTimer) clearTimeout(this.backoffTimer)
+        this.backoffTimer = window.setTimeout(() => {
+          this.refresh(true)
+        }, this.currentRetryDelay)
+      }
     } finally {
       this.isRefreshing = false
     }
+  }
+
+  /**
+   * Show error state in UI when max retries exceeded
+   */
+  private showErrorState(): void {
+    if (!this.scoreList) return
+    this.scoreList.innerHTML = `
+      <div class="leaderboard-empty" style="color: #ff6666;">
+        CONNECTION FAILED<br>
+        <span style="font-size: 0.6rem; opacity: 0.7;">Refresh to retry</span>
+      </div>
+    `
   }
 
   /**
