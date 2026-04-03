@@ -7,7 +7,9 @@
 
 import { TABLE_MAPS, type TableMapConfig, type TableMapType } from '../shaders/lcd-table'
 
-const DEFAULT_API_BASE = 'http://localhost:8000/api'
+const DEFAULT_API_BASE = (typeof window !== 'undefined' && window.location.hostname === 'localhost') 
+  ? 'http://localhost:8000/api'
+  : 'https://test.1ink.us/api'
 
 export interface DynamicMapConfig extends TableMapConfig {
   id: string

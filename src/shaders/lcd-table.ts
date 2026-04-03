@@ -14,7 +14,6 @@ export const lcdTablePixelShader = {
   fragment: `
     precision highp float;
     varying vec2 vUV;
-    varying vec3 vPosition;
     uniform sampler2D textureSampler;
     uniform vec3 uBaseColor;
     uniform vec3 uAccentColor;
@@ -162,11 +161,8 @@ export const lcdTablePixelShader = {
       // Apply subpixel RGB pattern
       vec3 subpixel = subpixelPattern(curvedUV, baseColor);
 
-      // Apply pixel grid
-      float grid = pixelGrid(curvedUV);
-
-      // Apply fine LCD cell grid
-      float grid = lcdCellGrid(curvedUV);
+      // Apply pixel grid and fine LCD cell grid
+      float grid = pixelGrid(curvedUV) * lcdCellGrid(curvedUV);
 
       // Apply soft scanlines
       float scan = scanlines(curvedUV);
