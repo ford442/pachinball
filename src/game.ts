@@ -69,6 +69,7 @@ import {
   getMapSystem,
   getLeaderboardSystem,
   getNameEntryDialog,
+  getAdventureState,
   type AccessibilityConfig,
   type InputFrame,
 } from './game-elements'
@@ -167,6 +168,9 @@ export class Game {
   private mapSystem = getMapSystem(
     window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : 'https://test.1ink.us/api'
   )
+
+  // Adventure Mode State (level goals, progression)
+  private adventureState = getAdventureState()
 
   // Room Environment
   private roomMeshes: Mesh[] = []
@@ -1017,6 +1021,23 @@ export class Game {
     }
     this.display = new DisplaySystem(this.scene, this.engine, displayConfig)
 
+    // Setup Adventure State with display integration
+    this.adventureState.setDisplay(this.display)
+    this.adventureState.onLevelCompleteCallback((level) => {
+      console.log(`[Game] Level complete: ${level.name}`)
+      // Auto-switch to next map if available
+      if (level.rewards.unlockMap) {
+        setTimeout(() => {
+          this.switchTableMap(level.rewards.unlockMap!)
+        }, 3000) // Wait for story video
+      }
+    })
+    this.adventureState.onGoalUpdateCallback((goals) => {
+      // Update display with goal progress
+      const goalText = goals.map(g => `${g.description}: ${g.current}/${g.target}`).join('\n')
+      this.display?.setStoryText(goalText)
+    })
+
     // Setup slot machine event callback
     this.setupSlotMachineCallbacks()
 
@@ -1243,6 +1264,12 @@ export class Game {
 
     // Show map name popup with CRT effect
     this.showMapNamePopup(mapConfig.name, mapConfig.baseColor)
+
+    // Adventure Mode: Auto-start level for this map
+    const levelForMap = this.adventureState.getAllLevels().find(l => l.mapType === mapName)
+    if (levelForMap && this.adventureState.isMapUnlocked(mapName)) {
+      this.adventureState.startLevel(levelForMap.id)
+    }
 
     // Update on-screen map selector highlight
     this.updateMapSelectorUI()
@@ -2133,6 +2160,9 @@ export class Game {
     // Update LCD table state for map transitions
     this.lcdTableState.update(dt)
 
+    // Adventure Mode: Track survival time
+    this.adventureState.updateGoal('survive-time', dt)
+
     // State-based atmosphere: fog, light temperature, rim drama, bounce proximity
     {
       const ballBody = this.ballManager?.getBallBody()
@@ -2255,6 +2285,9 @@ export class Game {
             this.updateHUD()
             this.effects?.setLightingMode('hit', 0.2)
 
+            // Adventure Mode: Track peg hits
+            this.adventureState.updateGoal('hit-pegs', 1)
+
             // Haptic feedback on bumper hit - intensity based on ball velocity
             const velocity = ballBody.linvel()
             const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
@@ -2371,6 +2404,9 @@ export class Game {
     if (this.livesElement) this.livesElement.textContent = String(this.lives)
     if (this.comboElement) this.comboElement.textContent = this.comboCount > 1 ? `Combo ${this.comboCount}` : ""
     if (this.bestHudElement) this.bestHudElement.textContent = String(this.bestScore)
+    
+    // Adventure Mode: Track score progress
+    this.adventureState.setGoalProgress('reach-score', this.score)
   }
 
   private updateCombo(dt: number): void {

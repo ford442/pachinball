@@ -783,6 +783,34 @@ export class DisplaySystem {
     this.updateOverlay()
   }
 
+  /**
+   * Load and play a story video from URL
+   */
+  loadAndPlayVideo(url: string): void {
+    if (this.videoTexture?.video) {
+      const videoEl = this.videoTexture.video as HTMLVideoElement
+      videoEl.src = url
+      videoEl.load()
+      this.playVideo()
+    }
+  }
+
+  /**
+   * Trigger CRT flash effect on the backbox
+   */
+  triggerCRTFlash(): void {
+    // Flash the overlay white then fade back
+    if (this.standardOverlayMat) {
+      const originalColor = this.standardOverlayMat.emissiveColor.clone()
+      this.standardOverlayMat.emissiveColor = new Color3(1, 1, 1)
+      setTimeout(() => {
+        if (this.standardOverlayMat) {
+          this.standardOverlayMat.emissiveColor = originalColor
+        }
+      }, 100)
+    }
+  }
+
   setTrackInfo(trackName: string, progress = 0): void {
     this.currentTrackName = trackName
     this.trackProgress = Math.max(0, Math.min(1, progress))

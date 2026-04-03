@@ -10,6 +10,16 @@ export { GameObjects } from './game-objects'
 export { CabinetBuilder } from './cabinet'
 export { BallManager } from './ball-manager'
 export { AdventureMode, AdventureTrackType, CAMERA_PRESETS, type CameraPreset } from './adventure-mode'
+export {
+  AdventureState,
+  getAdventureState,
+  resetAdventureState,
+  ADVENTURE_LEVELS,
+  type GoalType,
+  type LevelGoal,
+  type AdventureLevel,
+  type AdventureProgress,
+} from './adventure-state'
 export { MagSpinFeeder, MagSpinState } from './mag-spin-feeder'
 export { NanoLoomFeeder, NanoLoomState } from './nano-loom-feeder'
 export { PrismCoreFeeder, PrismCoreState } from './prism-core-feeder'
