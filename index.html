@@ -119,13 +119,40 @@
         </div>
       </div>
 
+      <!-- Mobile Touch Controls - Arcade Style Flipper Buttons -->
       <div id="touch-controls">
-        <button class="touch-btn" id="touch-left">◀</button>
-        <div style="display:flex;flex-direction:column;gap:8px;align-items:center;">
-          <button class="touch-btn" id="touch-plunger">⬤</button>
-          <button class="touch-btn" id="touch-nudge">Nudge</button>
+        <!-- Left Flipper Button -->
+        <button class="flipper-btn flipper-left" id="touch-left" aria-label="Left Flipper">
+          <div class="flipper-glow"></div>
+          <div class="flipper-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </div>
+          <span class="flipper-label">LEFT</span>
+        </button>
+        
+        <!-- Center Controls (Plunger + Nudge) -->
+        <div class="center-controls">
+          <button class="touch-btn touch-plunger" id="touch-plunger" aria-label="Launch Ball">
+            <div class="plunger-glow"></div>
+            <div class="plunger-icon">⬤</div>
+          </button>
+          <button class="touch-btn touch-nudge" id="touch-nudge" aria-label="Nudge Table">
+            <div class="nudge-icon">⚡</div>
+          </button>
         </div>
-        <button class="touch-btn" id="touch-right">▶</button>
+        
+        <!-- Right Flipper Button -->
+        <button class="flipper-btn flipper-right" id="touch-right" aria-label="Right Flipper">
+          <div class="flipper-glow"></div>
+          <div class="flipper-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </div>
+          <span class="flipper-label">RIGHT</span>
+        </button>
       </div>
 
       <div id="map-selector">
