@@ -61,3 +61,12 @@ export {
   resetLevelSelectScreen,
   type LevelSelectConfig,
 } from './level-select-screen'
+export {
+  DynamicWorld,
+  getDynamicWorld,
+  resetDynamicWorld,
+  type WorldMode,
+  type WorldZone,
+  type DynamicWorldConfig,
+  type ZoneMechanic,
+} from './dynamic-world'

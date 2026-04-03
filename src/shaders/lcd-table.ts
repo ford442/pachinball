@@ -202,6 +202,7 @@ export const lcdTablePixelShader = {
  * Each map defines the visual theme for the LCD playfield
  */
 export type TableMapType = string
+export type WorldMode = 'fixed' | 'dynamic'
 
 export interface TableMapConfig {
   name: string
@@ -216,6 +217,8 @@ export interface TableMapConfig {
   musicTrackId?: string
   shaderUrl?: string
   adventureGoals?: string[]
+  mode?: WorldMode       // 'fixed' (default) or 'dynamic' scrolling world
+  worldLength?: number   // Total length of dynamic world (if mode is 'dynamic')
 }
 
 export const TABLE_MAPS: Record<string, TableMapConfig> = {

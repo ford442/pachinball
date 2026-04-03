@@ -94,6 +94,8 @@ export class MapSystem {
           musicTrackId: map.musicTrackId || map.id,
           shaderUrl: map.shaderUrl,
           adventureGoals: Array.isArray(map.adventureGoals) ? map.adventureGoals : undefined,
+          mode: map.mode || 'fixed',
+          worldLength: map.worldLength || 200,
         })
       }
 
