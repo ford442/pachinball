@@ -1253,6 +1253,9 @@ export class Game {
     // Update ball and flipper materials to react to new map color
     this.ballManager?.updateBallMaterialColor(mapConfig.baseColor)
     matLib.updateFlipperMaterialEmissive(mapConfig.baseColor)
+    matLib.updatePinMaterialEmissive(mapConfig.baseColor)
+    matLib.updateBrushedMetalMaterialEmissive(mapConfig.baseColor)
+    matLib.updateChromeMaterialEmissive(mapConfig.baseColor)
 
     // Update 3D cabinet mesh neon trim and interior lights to match map
     this.cabinetBuilder?.setThemeFromMap(mapName)

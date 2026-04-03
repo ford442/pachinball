@@ -326,6 +326,50 @@ export class MaterialLibrary {
     })
   }
 
+  /**
+   * Enhanced rail material - smooth curved metal with map-reactive accent
+   */
+  getEnhancedRailMaterial(mapColorHex: string = '#00d9ff'): PBRMaterial {
+    const cacheKey = `enhancedRail_${mapColorHex}`
+    return this.getCachedPBR(cacheKey, () => {
+      const mat = new PBRMaterial('enhancedRailMat', this.scene)
+      
+      // Polished steel base
+      mat.albedoColor = new Color3(0.75, 0.78, 0.82)
+      mat.metallic = 0.95
+      mat.roughness = 0.2
+      mat.environmentIntensity = 1.0
+      
+      // Map-reactive rim light accent
+      const mapColor = color(mapColorHex)
+      mat.emissiveColor = mapColor.scale(0.1)
+      mat.emissiveIntensity = 0.3
+      
+      // Polished clear coat
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 0.7
+      mat.clearCoat.roughness = 0.15
+      
+      // Anisotropy for brushed metal look along rail length
+      if (this._qualityTier !== QualityTier.LOW) {
+        mat.anisotropy.isEnabled = true
+        mat.anisotropy.intensity = 0.6
+        mat.anisotropy.direction.x = 1 // Horizontal streaks along rail
+        mat.anisotropy.direction.y = 0
+      }
+
+      return mat
+    })
+  }
+
+  /**
+   * Update rail material with new map color
+   */
+  updateRailMaterialColor(mat: PBRMaterial, mapColorHex: string): void {
+    const mapColor = color(mapColorHex)
+    mat.emissiveColor = mapColor.scale(0.1)
+  }
+
   getPinMaterial(): PBRMaterial {
     return this.getCachedPBR('pin', () => {
       const mat = new PBRMaterial('pinMat', this.scene)
@@ -346,6 +390,74 @@ export class MaterialLibrary {
 
       return mat
     })
+  }
+
+  /**
+   * Update cached pin material emissive color for map reactivity
+   */
+  updatePinMaterialEmissive(mapColorHex: string): void {
+    const mat = this.materialCache.get('pin') as PBRMaterial | undefined
+    if (mat) {
+      mat.emissiveColor = color(mapColorHex).scale(0.25)
+      mat.emissiveIntensity = 0.4
+    }
+  }
+
+  /**
+   * Update cached brushed metal material emissive color for map reactivity
+   */
+  updateBrushedMetalMaterialEmissive(mapColorHex: string): void {
+    const mat = this.materialCache.get('brushedMetal') as PBRMaterial | undefined
+    if (mat) {
+      mat.emissiveColor = color(mapColorHex).scale(0.15)
+    }
+  }
+
+  /**
+   * Update cached chrome material emissive color for map reactivity
+   */
+  updateChromeMaterialEmissive(mapColorHex: string): void {
+    const mat = this.materialCache.get('chrome') as PBRMaterial | undefined
+    if (mat) {
+      mat.emissiveColor = color(mapColorHex).scale(0.12)
+    }
+  }
+
+  /**
+   * Enhanced peg material with map-reactive emissive tips
+   * Used for pachinko field pins
+   */
+  getEnhancedPinMaterial(mapColorHex: string = '#00d9ff'): PBRMaterial {
+    const cacheKey = `enhancedPin_${mapColorHex}`
+    return this.getCachedPBR(cacheKey, () => {
+      const mat = new PBRMaterial('enhancedPinMat', this.scene)
+      
+      // Chrome base
+      mat.albedoColor = new Color3(0.9, 0.9, 0.92)
+      mat.metallic = 1.0
+      mat.roughness = 0.2
+      mat.environmentIntensity = 1.2
+      
+      // Map-reactive tip glow
+      const mapColor = color(mapColorHex)
+      mat.emissiveColor = mapColor.scale(0.3)
+      mat.emissiveIntensity = 0.5
+      
+      // Polished clear coat
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 0.8
+      mat.clearCoat.roughness = 0.15
+
+      return mat
+    })
+  }
+
+  /**
+   * Update pin material with new map color
+   */
+  updatePinMaterialColor(mat: PBRMaterial, mapColorHex: string): void {
+    const mapColor = color(mapColorHex)
+    mat.emissiveColor = mapColor.scale(0.3)
   }
 
   // ============================================================================
@@ -593,6 +705,75 @@ export class MaterialLibrary {
 
       return mat
     })
+  }
+
+  /**
+   * Enhanced bumper body material - organic rounded look with subsurface scattering
+   */
+  getEnhancedBumperBodyMaterial(baseColor: string): PBRMaterial {
+    const cacheKey = `enhancedBumperBody_${baseColor}`
+    return this.getCachedPBR(cacheKey, () => {
+      const mat = new PBRMaterial(`enhancedBumperBody_${baseColor}`, this.scene)
+      const base = color(baseColor)
+      
+      // Deep saturated base color
+      mat.albedoColor = base.scale(0.4)
+      mat.metallic = 0.3
+      mat.roughness = 0.25
+      mat.environmentIntensity = 0.7
+      
+      // Strong emissive for neon glow
+      mat.emissiveColor = emissive(baseColor, INTENSITY.HIGH)
+      mat.emissiveIntensity = 1.0
+      
+      // Subsurface scattering for organic look
+      if (this._qualityTier === QualityTier.HIGH) {
+        mat.subSurface.isScatteringEnabled = true
+        // tintColor is the available property in this Babylon.js version
+        mat.subSurface.tintColor = base
+      }
+      
+      // Clear coat for polished top
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 0.5
+      mat.clearCoat.roughness = 0.2
+
+      return mat
+    })
+  }
+
+  /**
+   * Enhanced bumper ring material - deeper emissive ring around bumper
+   */
+  getEnhancedBumperRingMaterial(baseColor: string): PBRMaterial {
+    const cacheKey = `enhancedBumperRing_${baseColor}`
+    return this.getCachedPBR(cacheKey, () => {
+      const mat = new PBRMaterial(`enhancedBumperRing_${baseColor}`, this.scene)
+      
+      // Dark base, strong emissive
+      mat.albedoColor = new Color3(0.1, 0.1, 0.1)
+      mat.metallic = 0.8
+      mat.roughness = 0.3
+      
+      // Deep emissive ring
+      mat.emissiveColor = emissive(baseColor, INTENSITY.BURST)
+      mat.emissiveIntensity = 2.0
+      mat.environmentIntensity = 0.5
+
+      return mat
+    })
+  }
+
+  /**
+   * Bumpers: update all materials with new map color
+   */
+  updateBumperMaterialColor(bodyMat: PBRMaterial, ringMat: PBRMaterial, mapColorHex: string): void {
+    const mapColor = color(mapColorHex)
+    bodyMat.emissiveColor = emissive(mapColorHex, INTENSITY.HIGH)
+    if (bodyMat.subSurface.isScatteringEnabled) {
+      bodyMat.subSurface.tintColor = mapColor
+    }
+    ringMat.emissiveColor = emissive(mapColorHex, INTENSITY.BURST)
   }
 
   getNeonFlipperMaterial(): PBRMaterial {

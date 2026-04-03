@@ -764,11 +764,14 @@ export class GameObjects {
       )
     }
 
-    // Lower guard rails - small walls just above the flippers to catch side bounces
+    // Lower guard rails - smooth cylindrical guards above flippers
     const guardMat = this.matLib.getChromeMaterial()
-    const leftGuard = MeshBuilder.CreateBox("leftGuard", { width: 0.3, height: 0.8, depth: 3 }, this.scene)
+    
+    // Left guard - round tube profile
+    const leftGuard = MeshBuilder.CreateCylinder("leftGuard", { diameter: 0.26, height: 3, tessellation: 14 }, this.scene)
     leftGuard.position.set(-4.5, 0.4, -10)
-    leftGuard.rotation.y = -Math.PI / 8
+    leftGuard.rotation.x = Math.PI / 2
+    leftGuard.rotation.z = -Math.PI / 8
     leftGuard.material = guardMat
     this.pinballMeshes.push(leftGuard)
 
@@ -784,9 +787,11 @@ export class GameObjects {
       lgBody
     )
 
-    const rightGuard = MeshBuilder.CreateBox("rightGuard", { width: 0.3, height: 0.8, depth: 3 }, this.scene)
+    // Right guard - round tube profile
+    const rightGuard = MeshBuilder.CreateCylinder("rightGuard", { diameter: 0.26, height: 3, tessellation: 14 }, this.scene)
     rightGuard.position.set(6, 0.4, -10)
-    rightGuard.rotation.y = Math.PI / 8
+    rightGuard.rotation.x = Math.PI / 2
+    rightGuard.rotation.z = Math.PI / 8
     rightGuard.material = guardMat
     this.pinballMeshes.push(rightGuard)
 
@@ -1004,48 +1009,58 @@ export class GameObjects {
 
   createBumpers(): void {
     const make = (x: number, z: number, colorHex: string, scale: number = 1.0) => {
-      // Create high detail master mesh (LOD level 0)
+      // ================================================================
+      // ORGANIC BUMPER BODY - Flattened sphere with LOD
+      // ================================================================
       const bumperHigh = MeshBuilder.CreateSphere("bump_high", { diameter: 0.9 * scale, segments: 32 }, this.scene) as Mesh
       bumperHigh.position.set(x, 0.5, z)
+      bumperHigh.scaling = new Vector3(1, 0.7, 1)
       
-      // Create medium detail LOD mesh
       const bumperMedium = MeshBuilder.CreateSphere("bump_med", { diameter: 0.9 * scale, segments: 16 }, this.scene) as Mesh
+      bumperMedium.scaling = new Vector3(1, 0.7, 1)
       
-      // Create low detail LOD mesh
       const bumperLow = MeshBuilder.CreateSphere("bump_low", { diameter: 0.9 * scale, segments: 8 }, this.scene) as Mesh
+      bumperLow.scaling = new Vector3(1, 0.7, 1)
       
-      // Set up LOD levels - use bumperHigh as the master mesh
-      bumperHigh.addLODLevel(15, bumperMedium)  // Switch to medium at 15 units
-      bumperHigh.addLODLevel(30, bumperLow)     // Switch to low at 30 units
-      bumperHigh.addLODLevel(50, null)          // Cull beyond 50 units
+      bumperHigh.addLODLevel(15, bumperMedium)
+      bumperHigh.addLODLevel(30, bumperLow)
+      bumperHigh.addLODLevel(50, null)
       
-      // Use high detail mesh for physics/visuals (it's the LOD master)
       const bumper = bumperHigh
-      
-      // Use MaterialLibrary for neon bumper
       const mat = this.matLib.getNeonBumperMaterial(colorHex)
       bumper.material = mat
 
-      // --- REFINED HOLOGRAM PILLAR (Section 4) ---
-      // Inner core (Dense)
-      const holoInner = MeshBuilder.CreateCylinder("holoInner", { diameter: 0.6, height: 2.5, tessellation: 12 }, this.scene)
+      // ================================================================
+      // BUMPER CAP - Subtle beveled top
+      // ================================================================
+      const bumperCap = MeshBuilder.CreateSphere("bump_cap", { diameter: 0.55 * scale, segments: 16 }, this.scene) as Mesh
+      bumperCap.position.set(x, 0.5 + 0.22 * scale, z)
+      bumperCap.scaling = new Vector3(1, 0.35, 1)
+      bumperCap.material = mat
+
+      // ================================================================
+      // DEEP EMISSIVE RING - Torus around equator
+      // ================================================================
+      const bumperRing = MeshBuilder.CreateTorus("bump_ring", { diameter: 0.78 * scale, thickness: 0.045 * scale, tessellation: 24 }, this.scene) as Mesh
+      bumperRing.position.set(x, 0.5, z)
+      bumperRing.rotation.x = Math.PI / 2
+      const ringMat = this.matLib.getNeonBumperMaterial(colorHex)
+      ringMat.emissiveIntensity = 1.4
+      bumperRing.material = ringMat
+
+      // --- REFINED HOLOGRAM PILLAR (tapered for organic look) ---
+      const holoInner = MeshBuilder.CreateCylinder("holoInner", { diameterTop: 0.35, diameterBottom: 0.65, height: 2.5, tessellation: 12 }, this.scene)
       holoInner.position.set(x, 1.8, z)
       
-      // Hologram materials from MaterialLibrary
       const innerMat = this.matLib.getHologramMaterial(colorHex, true)
       holoInner.material = innerMat
 
-      // Outer shell (Faint, wider)
-      const holoOuter = MeshBuilder.CreateCylinder("holoOuter", { diameter: 1.2, height: 4.0, tessellation: 12 }, this.scene)
+      const holoOuter = MeshBuilder.CreateCylinder("holoOuter", { diameterTop: 0.9, diameterBottom: 1.4, height: 4.0, tessellation: 12 }, this.scene)
       holoOuter.position.set(x, 2.0, z)
 
       const outerMat = this.matLib.getHologramMaterial('#FFFFFF', true)
       outerMat.alpha = 0.25
       holoOuter.material = outerMat
-
-      // Parent outer to inner so we can reference one "hologram" group if needed,
-      // but BumperVisual expects a single 'hologram' mesh.
-      // We'll set 'holoInner' as the main ref, and parent outer to it for joint animation.
       holoOuter.parent = holoInner
 
       const body = this.world.createRigidBody(
@@ -1070,7 +1085,6 @@ export class GameObjects {
       this.bindings.push({ mesh: bumper, rigidBody: body })
       this.bumperBodies.push(body)
       const initialEmissive = emissive(colorHex, INTENSITY.ACTIVE)
-      // Create particle system with bumper-matched colors
       let ps: ParticleSystem | undefined
       if (this.config.visuals.enableParticles) {
         ps = new ParticleSystem(`bumperParticles_${x}_${z}`, 50, this.scene)
@@ -1079,7 +1093,6 @@ export class GameObjects {
         ps.minEmitBox = new Vector3(-0.5, 0, -0.5)
         ps.maxEmitBox = new Vector3(0.5, 0, 0.5)
         
-        // Set particle colors from bumper color
         const baseColor = color(colorHex)
         ps.color1 = Color4.FromColor3(baseColor, 1)
         ps.color2 = Color4.FromColor3(baseColor.scale(0.7), 0.5)
@@ -1114,10 +1127,7 @@ export class GameObjects {
         color: colorHex,
         particles: ps,
       })
-      this.pinballMeshes.push(bumper)
-      this.pinballMeshes.push(holoInner)
-      this.pinballMeshes.push(holoOuter)
-
+      this.pinballMeshes.push(bumper, bumperCap, bumperRing, holoInner, holoOuter)
     }
 
     // Main center bumper (larger)
@@ -1135,8 +1145,8 @@ export class GameObjects {
   }
 
   createPachinkoField(center: Vector3 = new Vector3(0, 0.5, 6), width: number = 24, height: number = 22): void {
-    // Use MaterialLibrary for metallic pins
-    const pinMat = this.matLib.getPinMaterial()
+    // Enhanced peg material with map-reactive emissive tips
+    const pinMat = this.matLib.getEnhancedPinMaterial()
 
     // Dense pachinko grid: 10 rows, staggered columns for chaotic ball paths
     // Covering the upper 2/3 of the playfield to keep the ball bouncing
@@ -1153,23 +1163,58 @@ export class GameObjects {
         // Skip center area for the main catcher/target
         if (Math.abs(x) < 2.5 && Math.abs(z - center.z) < 2.5) continue
 
-        // Use slightly smaller diameter for more precision look
-        const pin = MeshBuilder.CreateCylinder(`pin_${r}_${c}`, { diameter: 0.18, height: 1.5, tessellation: 12 }, this.scene)
-        pin.position.set(x, 0.5, z)
+        const pegHeight = 1.5
+        const baseRadius = 0.12
+        const topRadius = 0.06
+        
+        // ================================================================
+        // ENHANCED PEG - Tapered cylinder with rounded top and base bevel
+        // ================================================================
+        
+        // Main tapered body
+        const pin = MeshBuilder.CreateCylinder(`pin_${r}_${c}`, { 
+          diameterTop: topRadius * 2, 
+          diameterBottom: baseRadius * 2,
+          height: pegHeight,
+          tessellation: 12 
+        }, this.scene)
+        pin.position.set(x, 0.4, z)
         pin.material = pinMat
+        
+        // Rounded top cap (hemisphere for smooth ball contact)
+        const pinCap = MeshBuilder.CreateSphere(`pinCap_${r}_${c}`, { 
+          diameter: topRadius * 2.2,
+          slice: 0.5,
+          segments: 10
+        }, this.scene)
+        pinCap.position.set(x, 0.4 + pegHeight / 2 - 0.02, z)
+        pinCap.material = pinMat
+        
+        // Base bevel ring for visual polish
+        const pinBevel = MeshBuilder.CreateTorus(`pinBevel_${r}_${c}`, {
+          diameter: baseRadius * 2.3,
+          thickness: 0.025,
+          tessellation: 10
+        }, this.scene)
+        pinBevel.position.set(x, 0.4 - pegHeight / 2 + 0.03, z)
+        pinBevel.rotation.x = Math.PI / 2
+        pinBevel.material = pinMat
 
         const body = this.world.createRigidBody(
-          this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.5, z)
+          this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.4, z)
         )
+        
+        // Thin collider matching tapered shape (average radius)
+        const avgRadius = (baseRadius + topRadius) / 2
         this.world.createCollider(
-          this.rapier.ColliderDesc.cylinder(0.75, 0.09) // Thin collider for pachinko-style pins
-            .setRestitution(0.65)  // Slightly bouncy pins
-            .setFriction(0.1),    // Low friction for smooth ball motion
+          this.rapier.ColliderDesc.cylinder(pegHeight / 2, avgRadius)
+            .setRestitution(0.65)
+            .setFriction(0.1),
           body
         )
 
         this.bindings.push({ mesh: pin, rigidBody: body })
-        this.pinballMeshes.push(pin)
+        this.pinballMeshes.push(pin, pinCap, pinBevel)
       }
     }
 
