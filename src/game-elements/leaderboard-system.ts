@@ -138,21 +138,27 @@ export class LeaderboardSystem {
       params.append('adventure_level', this.currentAdventureLevel)
     }
 
-    const data = await apiFetch<{ scores: LeaderboardEntry[] }>(`/leaderboard?${params}`)
-    if (data) {
+    try {
+      const data = await apiFetch<{ scores: LeaderboardEntry[] }>(`/leaderboard?${params}`)
+      
+      if (!data) {
+        throw new Error('No data returned from API')
+      }
+      
       this.scores = data.scores || []
       this.lastRefresh = now
-      this.consecutiveFailures = 0 // Reset on success
+      
+      // Reset failure count on success
+      this.consecutiveFailures = 0
+      
       this.updateUI()
       console.log(`[Leaderboard] Refreshed: ${this.scores.length} scores`)
-    } else {
-      // Increment failure count and cap at max
-      this.consecutiveFailures = Math.min(this.consecutiveFailures + 1, this.maxRetries)
-      console.warn(`[Leaderboard] Refresh failed, backing off (failures: ${this.consecutiveFailures})`)
-
-      // If max retries reached, pause polling temporarily
+    } catch (err) {
+      this.consecutiveFailures++
+      console.warn(`[Leaderboard] Refresh failed (${this.consecutiveFailures}/${this.maxRetries}):`, err)
+      
       if (this.consecutiveFailures >= this.maxRetries) {
-        console.error('[Leaderboard] Max retries reached, pausing polling for 5 minutes')
+        console.error('[Leaderboard] Max retries exceeded. Pausing polling for 5 minutes.')
         this.pause()
         setTimeout(() => {
           console.log('[Leaderboard] Resuming polling after pause')
@@ -160,9 +166,9 @@ export class LeaderboardSystem {
           this.resume()
         }, 300000) // 5 minutes
       }
+    } finally {
+      this.isRefreshing = false
     }
-
-    this.isRefreshing = false
   }
 
   /**
@@ -174,270 +180,142 @@ export class LeaderboardSystem {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(score)
+        body: JSON.stringify(score),
       }
     )
-
-    if (result) {
-      // Refresh to show new score
-      await this.refresh(true)
-      return result
+    
+    if (!result) {
+      return { success: false, message: 'Failed to submit score' }
     }
-
-    return { success: false, message: 'Failed to submit score' }
+    
+    // Refresh after submission
+    this.refresh(true)
+    return result
   }
 
   /**
-   * Check if a score would rank on the leaderboard
+   * Get player's rank for current map
    */
-  async checkRank(score: number): Promise<number> {
+  async getPlayerRank(score: number): Promise<number | null> {
     const params = new URLSearchParams()
-    params.append('score', String(score))
     params.append('map_id', this.currentMapId)
+    params.append('score', score.toString())
     if (this.currentAdventureLevel) {
       params.append('adventure_level', this.currentAdventureLevel)
     }
 
     const data = await apiFetch<{ rank: number }>(`/leaderboard/player-rank?${params}`)
-    return data?.rank ?? 999
+    return data?.rank ?? null
   }
 
   /**
-   * Show the leaderboard overlay
+   * Check player's rank for current map (alias for getPlayerRank)
    */
-  show(): void {
+  async checkRank(score: number): Promise<number | null> {
+    return this.getPlayerRank(score)
+  }
+
+  /**
+   * Toggle leaderboard visibility
+   */
+  toggle(): void {
+    this.isVisible = !this.isVisible
     if (this.overlay) {
-      this.overlay.classList.remove('hidden')
-      this.isVisible = true
+      this.overlay.style.display = this.isVisible ? 'block' : 'none'
+    }
+    if (this.isVisible) {
       this.refresh()
     }
   }
 
   /**
-   * Hide the leaderboard overlay
+   * Show the leaderboard
+   */
+  show(): void {
+    this.isVisible = true
+    if (this.overlay) {
+      this.overlay.style.display = 'block'
+    }
+    this.refresh()
+  }
+
+  /**
+   * Hide the leaderboard
    */
   hide(): void {
+    this.isVisible = false
     if (this.overlay) {
-      this.overlay.classList.add('hidden')
-      this.isVisible = false
+      this.overlay.style.display = 'none'
     }
   }
 
   /**
-   * Toggle visibility
-   */
-  toggle(): void {
-    if (this.isVisible) {
-      this.hide()
-    } else {
-      this.show()
-    }
-  }
-
-  /**
-   * Get current scores
-   */
-  getScores(): LeaderboardEntry[] {
-    return this.scores
-  }
-
-  /**
-   * Create the leaderboard overlay UI
+   * Create the leaderboard UI overlay
    */
   private createOverlay(): void {
-    // Check if already exists
-    if (document.getElementById('leaderboard-overlay')) return
-
     const overlay = document.createElement('div')
     overlay.id = 'leaderboard-overlay'
-    overlay.className = 'hidden'
-    overlay.innerHTML = `
-      <div class="leaderboard-panel">
-        <div class="leaderboard-header">
-          <span class="leaderboard-title">HIGH SCORES</span>
-          <span class="leaderboard-close">×</span>
-        </div>
-        <div class="leaderboard-content">
-          <div class="leaderboard-map">MAP: <span class="map-name">NEON HELIX</span></div>
-          <div class="leaderboard-list"></div>
-        </div>
-        <div class="leaderboard-footer">
-          <span class="refresh-indicator">●</span>
-          <span>AUTO-REFRESH</span>
-        </div>
-      </div>
+    overlay.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 400px;
+      max-height: 80vh;
+      background: rgba(0, 0, 0, 0.9);
+      border: 2px solid #00ff88;
+      border-radius: 8px;
+      padding: 20px;
+      font-family: 'Courier New', monospace;
+      color: #00ff88;
+      display: none;
+      z-index: 1000;
+      overflow-y: auto;
+      box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
     `
 
-    // Add styles
-    const style = document.createElement('style')
-    style.textContent = `
-      #leaderboard-overlay {
-        position: absolute;
-        top: 16px;
-        right: 16px;
-        z-index: 40;
-        font-family: 'Orbitron', monospace;
-      }
-
-      #leaderboard-overlay.hidden {
-        display: none;
-      }
-
-      .leaderboard-panel {
-        background: rgba(0, 10, 20, 0.9);
-        border: 2px solid var(--map-accent, #00d9ff);
-        border-radius: 4px;
-        padding: 12px;
-        min-width: 220px;
-        box-shadow:
-          0 0 20px rgba(0, 217, 255, 0.3),
-          inset 0 0 30px rgba(0, 217, 255, 0.05);
-        backdrop-filter: blur(4px);
-      }
-
-      .leaderboard-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid rgba(0, 217, 255, 0.3);
-      }
-
-      .leaderboard-title {
-        font-size: 0.85rem;
-        font-weight: 700;
-        color: var(--map-accent, #00d9ff);
-        letter-spacing: 2px;
-        text-shadow: 0 0 8px var(--map-accent, #00d9ff);
-      }
-
-      .leaderboard-close {
-        font-size: 1.2rem;
-        color: rgba(255, 255, 255, 0.6);
-        cursor: pointer;
-        padding: 0 4px;
-        transition: color 0.2s;
-      }
-
-      .leaderboard-close:hover {
-        color: #ff0055;
-      }
-
-      .leaderboard-map {
-        font-size: 0.65rem;
-        color: rgba(255, 255, 255, 0.5);
-        margin-bottom: 8px;
-        letter-spacing: 1px;
-      }
-
-      .leaderboard-map .map-name {
-        color: var(--map-accent, #00d9ff);
-      }
-
-      .leaderboard-list {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      .leaderboard-entry {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 4px 6px;
-        font-size: 0.75rem;
-        background: rgba(0, 0, 0, 0.3);
-        border-radius: 2px;
-        transition: background 0.2s;
-      }
-
-      .leaderboard-entry:hover {
-        background: rgba(0, 217, 255, 0.1);
-      }
-
-      .leaderboard-entry.top-3 {
-        background: rgba(255, 200, 0, 0.15);
-        border-left: 2px solid #ffc800;
-      }
-
-      .leaderboard-entry.is-player {
-        background: rgba(0, 217, 255, 0.2);
-        border-left: 2px solid #00d9ff;
-        animation: playerPulse 1s ease-in-out infinite;
-      }
-
-      @keyframes playerPulse {
-        0%, 100% { box-shadow: 0 0 5px rgba(0, 217, 255, 0.3); }
-        50% { box-shadow: 0 0 15px rgba(0, 217, 255, 0.6); }
-      }
-
-      .entry-rank {
-        width: 20px;
-        text-align: center;
-        font-weight: 700;
-        color: rgba(255, 255, 255, 0.6);
-      }
-
-      .leaderboard-entry.top-3 .entry-rank {
-        color: #ffc800;
-        text-shadow: 0 0 8px #ffc800;
-      }
-
-      .entry-name {
-        flex: 1;
-        color: #fff;
-        font-weight: 600;
-        letter-spacing: 1px;
-      }
-
-      .entry-score {
-        color: var(--map-accent, #00d9ff);
-        font-weight: 700;
-        font-family: monospace;
-        font-size: 0.8rem;
-      }
-
-      .leaderboard-footer {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        margin-top: 10px;
-        padding-top: 8px;
-        border-top: 1px solid rgba(0, 217, 255, 0.2);
-        font-size: 0.55rem;
-        color: rgba(255, 255, 255, 0.4);
-        letter-spacing: 1px;
-      }
-
-      .refresh-indicator {
-        color: #00ff44;
-        animation: blink 2s infinite;
-      }
-
-      @keyframes blink {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.3; }
-      }
-
-      .leaderboard-empty {
-        text-align: center;
-        padding: 20px;
-        color: rgba(255, 255, 255, 0.4);
-        font-size: 0.7rem;
-      }
+    const title = document.createElement('h2')
+    title.textContent = 'HIGH SCORES'
+    title.style.cssText = `
+      margin: 0 0 15px 0;
+      text-align: center;
+      font-size: 24px;
+      text-shadow: 0 0 10px #00ff88;
+      letter-spacing: 3px;
     `
+    overlay.appendChild(title)
 
-    document.head.appendChild(style)
+    const scoreList = document.createElement('div')
+    scoreList.id = 'leaderboard-scores'
+    overlay.appendChild(scoreList)
+
+    const closeBtn = document.createElement('button')
+    closeBtn.textContent = 'CLOSE'
+    closeBtn.style.cssText = `
+      display: block;
+      margin: 15px auto 0;
+      padding: 8px 20px;
+      background: transparent;
+      border: 1px solid #00ff88;
+      color: #00ff88;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 14px;
+    `
+    closeBtn.onmouseenter = () => {
+      closeBtn.style.background = '#00ff88'
+      closeBtn.style.color = '#000'
+    }
+    closeBtn.onmouseleave = () => {
+      closeBtn.style.background = 'transparent'
+      closeBtn.style.color = '#00ff88'
+    }
+    closeBtn.onclick = () => this.hide()
+    overlay.appendChild(closeBtn)
+
     document.body.appendChild(overlay)
-
-    // Close button
-    const closeBtn = overlay.querySelector('.leaderboard-close')
-    closeBtn?.addEventListener('click', () => this.hide())
-
     this.overlay = overlay
-    this.scoreList = overlay.querySelector('.leaderboard-list')
+    this.scoreList = scoreList
   }
 
   /**
@@ -446,49 +324,41 @@ export class LeaderboardSystem {
   private updateUI(): void {
     if (!this.scoreList) return
 
-    // Update map name
-    const mapNameEl = this.overlay?.querySelector('.map-name')
-    if (mapNameEl) {
-      mapNameEl.textContent = this.currentMapId.replace('-', ' ').toUpperCase()
-    }
-
-    // Clear list
-    this.scoreList.innerHTML = ''
-
     if (this.scores.length === 0) {
-      this.scoreList.innerHTML = '<div class="leaderboard-empty">NO SCORES</div>'
+      this.scoreList.innerHTML = '<div style="text-align: center; padding: 20px;">No scores yet</div>'
       return
     }
 
-    // Add entries
-    this.scores.forEach((entry) => {
-      const row = document.createElement('div')
-      row.className = 'leaderboard-entry'
-      if (entry.rank <= 3) row.classList.add('top-3')
-
-      row.innerHTML = `
-        <span class="entry-rank">${entry.rank}</span>
-        <span class="entry-name">${this.escapeHtml(entry.name)}</span>
-        <span class="entry-score">${entry.score.toLocaleString()}</span>
+    const html = this.scores
+      .map(
+        (entry, index) => `
+        <div style="
+          display: flex;
+          justify-content: space-between;
+          padding: 8px;
+          margin: 4px 0;
+          background: ${index % 2 === 0 ? 'rgba(0, 255, 136, 0.1)' : 'transparent'};
+          border-left: 3px solid ${index < 3 ? '#ffd700' : '#00ff88'};
+        ">
+          <span>${entry.rank}. ${entry.name}</span>
+          <span style="font-weight: bold;">${entry.score.toLocaleString()}</span>
+        </div>
       `
+      )
+      .join('')
 
-      this.scoreList!.appendChild(row)
-    })
-  }
-
-  private escapeHtml(text: string): string {
-    const div = document.createElement('div')
-    div.textContent = text
-    return div.innerHTML
+    this.scoreList.innerHTML = html
   }
 
   /**
-   * Dispose and cleanup
+   * Clean up resources
    */
   dispose(): void {
     this.stop()
-    this.overlay?.remove()
-    this.overlay = null
+    if (this.overlay) {
+      this.overlay.remove()
+      this.overlay = null
+    }
     this.scoreList = null
   }
 }
@@ -504,8 +374,6 @@ export function getLeaderboardSystem(): LeaderboardSystem {
 }
 
 export function resetLeaderboardSystem(): void {
-  if (leaderboardInstance) {
-    leaderboardInstance.dispose()
-    leaderboardInstance = null
-  }
+  leaderboardInstance?.dispose()
+  leaderboardInstance = null
 }

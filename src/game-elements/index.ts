@@ -18,6 +18,13 @@ export {
 export { BallManager } from './ball-manager'
 export { AdventureMode, AdventureTrackType, CAMERA_PRESETS, type CameraPreset } from './adventure-mode'
 export {
+  ZONE_REGISTRY,
+  getZoneConfig,
+  isMajorTransition,
+  getTransitionShakeIntensity,
+  type ZoneConfig,
+} from './zone-registry'
+export {
   AdventureState,
   getAdventureState,
   resetAdventureState,
@@ -61,6 +68,53 @@ export {
   resetLevelSelectScreen,
   type LevelSelectConfig,
 } from './level-select-screen'
+export {
+  PathMechanic,
+  MovingGate,
+  GateState,
+  MagneticField,
+  SpinnerLauncher,
+  JumpPad,
+  ReactivePegCluster,
+  PegState,
+  PathMechanicsManager,
+  type PathMechanicConfig,
+  type MovingGateConfig,
+  type MagneticFieldConfig,
+  type SpinnerLauncherConfig,
+  type JumpPadConfig,
+  type ReactivePegClusterConfig,
+  type ZoneTrigger,
+  type PathMechanicsCallbacks,
+} from './path-mechanics'
+export {
+  SAMURAI_REALM_SCENARIO,
+  CYBER_NOIR_SCENARIO,
+  QUANTUM_DREAM_SCENARIO,
+  MOVIE_GANGSTER_SCENARIO,
+  FANTASY_REALM_SCENARIO,
+  DYNAMIC_SCENARIOS,
+  getScenario,
+  getAllScenarios,
+  getScenarioIds,
+  toggleGameMode,
+  setScenario,
+  createDefaultModeState,
+  completeTransition,
+  type DynamicScenario,
+  type ScenarioZone,
+  type GameMode,
+  type ModeToggleState,
+} from './dynamic-scenarios'
+export {
+  ZoneTriggerSystem,
+  createZoneBounds,
+  areZonesAdjacent,
+  getZoneTransitionType,
+  type ZoneBounds,
+  type ZoneTriggerCallback,
+  type ActiveZone,
+} from './zone-trigger-system'
 export {
   DynamicWorld,
   getDynamicWorld,

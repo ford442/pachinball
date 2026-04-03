@@ -72,9 +72,16 @@ import {
   getNameEntryDialog,
   getAdventureState,
   getLevelSelectScreen,
+  getZoneConfig,
+  getTransitionShakeIntensity,
+  ZoneTriggerSystem,
+  getScenario,
   getDynamicWorld,
+  type ZoneConfig,
   type AccessibilityConfig,
   type InputFrame,
+  type DynamicScenario,
+  type ScenarioZone,
 } from './game-elements'
 import { GameConfig, API_BASE } from './config'
 import { DisplayMode, type DisplayConfig } from './game-elements/display-config'
@@ -100,6 +107,7 @@ export class Game {
   private currentCabinetType: CabinetType = 'classic'
   private ballAnimator: BallAnimator | null = null
   private adventureMode: AdventureMode | null = null
+  private zoneTriggerSystem: ZoneTriggerSystem | null = null
   private magSpinFeeder: MagSpinFeeder | null = null
   private nanoLoomFeeder: NanoLoomFeeder | null = null
   private prismCoreFeeder: PrismCoreFeeder | null = null
@@ -127,6 +135,7 @@ export class Game {
   
   // Mouse tracking handler for cleanup
   private _mouseMoveHandler: ((e: MouseEvent) => void) | null = null
+  private _resizeObserver: ResizeObserver | null = null
 
   // Game State
   private ready = false
@@ -188,8 +197,14 @@ export class Game {
   private inputLatencyOverlay: HTMLElement | null = null
   private showDebugUI = false
 
+  // Scanline intensity
+  private scanlineIntensity = 0.12
+
   // Accessibility Configuration (CRITICAL SAFETY)
   private accessibility: AccessibilityConfig = detectAccessibility()
+
+  // Dynamic Adventure Mode State
+  private gameMode: 'fixed' | 'dynamic' = 'fixed'
 
   constructor(engine: Engine | WebGPUEngine, preloadedRapier?: typeof RAPIER) {
     this.engine = engine
@@ -408,15 +423,17 @@ export class Game {
     const scanline = new PostProcess(
         "scanline",
         "scanline",
-        ["uTime"],
+        ["uTime", "uScanlineIntensity"],
         null,
         1.0,
         immersiveCam,
         Texture.BILINEAR_SAMPLINGMODE,
         this.engine
     )
+    this.scanlineIntensity = SettingsManager.load().scanlineIntensity
     scanline.onApply = (effect) => {
         effect.setFloat("uTime", performance.now() * 0.001)
+        effect.setFloat("uScanlineIntensity", this.scanlineIntensity)
     }
 
     // ================================================================
@@ -539,6 +556,12 @@ export class Game {
       this.scene?.render()
     })
 
+    // Setup ResizeObserver for canvas resize handling
+    this.setupResizeObserver()
+
+    // Fix DPR handling to use rounded value
+    this.setupDPRHandling()
+
     window.addEventListener('keydown', this.inputHandler.handleKeyDown)
     window.addEventListener('keyup', this.inputHandler.handleKeyUp)
 
@@ -571,6 +594,16 @@ export class Game {
       if (e.code === 'KeyB') {
         e.preventDefault()
         this.leaderboardSystem.toggle()
+      }
+      // 'D' key to toggle Dynamic/Fixed mode
+      if (e.code === 'KeyD') {
+        e.preventDefault()
+        this.toggleDynamicMode()
+      }
+      // 'S' key to cycle scenarios in Dynamic Mode
+      if (e.code === 'KeyS' && this.gameMode === 'dynamic') {
+        e.preventDefault()
+        this.cycleScenario()
       }
     })
 
@@ -885,6 +918,56 @@ export class Game {
     }
   }
 
+  /**
+   * Setup ResizeObserver to handle canvas size changes
+   * Calls engine.resize() when the canvas container changes size
+   */
+  private setupResizeObserver(): void {
+    const canvas = this.engine.getRenderingCanvas()
+    if (!canvas) return
+
+    // Use ResizeObserver to detect canvas container size changes
+    this._resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        // Only resize if dimensions actually changed
+        const { width, height } = entry.contentRect
+        if (width > 0 && height > 0) {
+          this.engine.resize()
+          console.log(`[Game] Canvas resized: ${Math.round(width)}x${Math.round(height)}`)
+        }
+      }
+    })
+
+    this._resizeObserver.observe(canvas)
+    console.log('[Game] ResizeObserver initialized')
+  }
+
+  /**
+   * Setup proper DPR handling with Math.round()
+   * Prevents fractional pixel ratios that cause rendering issues
+   */
+  private setupDPRHandling(): void {
+    const canvas = this.engine.getRenderingCanvas()
+    if (!canvas) return
+
+    // Get the rounded DPR value
+    const dpr = Math.round(window.devicePixelRatio || 1)
+    
+    // Apply the rounded DPR to the canvas if needed
+    if (canvas.width !== canvas.clientWidth * dpr || 
+        canvas.height !== canvas.clientHeight * dpr) {
+      this.engine.resize()
+    }
+
+    // Listen for DPR changes (e.g., moving between monitors with different DPRs)
+    const mediaQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
+    mediaQuery.addEventListener('change', () => {
+      const newDpr = Math.round(window.devicePixelRatio || 1)
+      console.log(`[Game] DPR changed: ${newDpr}`)
+      this.engine.resize()
+    })
+  }
+
   dispose(): void {
     if (this.inputHandler) {
       window.removeEventListener('keydown', this.inputHandler.handleKeyDown)
@@ -894,6 +977,12 @@ export class Game {
     // Clean up mouse tracking handler
     if (this._mouseMoveHandler) {
       this.engine.getRenderingCanvas()?.removeEventListener('mousemove', this._mouseMoveHandler)
+    }
+    
+    // Clean up ResizeObserver
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect()
+      this._resizeObserver = null
     }
     
     // Stop leaderboard auto-refresh
@@ -1098,6 +1187,18 @@ export class Game {
           this.score += 5000
           this.updateHUD()
           break
+          
+        case 'ZONE_ENTER': {
+          // Handle zone transition in Dynamic Adventure Mode
+          const zoneData = data as { 
+            zone: AdventureTrackType
+            previousZone: AdventureTrackType | null
+            isMajor: boolean 
+            ballPosition?: Vector3
+          }
+          this.handleZoneTransition(zoneData.zone, zoneData.previousZone, zoneData.isMajor)
+          break
+        }
       }
     })
 
@@ -1321,6 +1422,94 @@ export class Game {
     if (mapMode === 'dynamic' && mapConfig.worldLength) {
       // Initialize dynamic zones for this map
       this.initializeDynamicZones(mapName, mapConfig)
+    }
+  }
+
+  // ============================================================================
+  // ZONE TRANSITIONS - Dynamic Adventure Mode
+  // ============================================================================
+
+  /**
+   * Handle zone transition in Dynamic Adventure Mode
+   * Updates backbox, lighting, music, and triggers effects
+   */
+  private handleZoneTransition(
+    zone: AdventureTrackType, 
+    previousZone: AdventureTrackType | null,
+    isMajor: boolean
+  ): void {
+    console.log(`[Game] Zone transition: ${previousZone} -> ${zone} (${isMajor ? 'MAJOR' : 'minor'})`)
+    
+    // Get zone configuration
+    const zoneConfig = getZoneConfig(zone)
+    
+    // 1. Update backbox with zone story video and CRT effect
+    this.display?.showZoneStory(
+      zoneConfig.name,
+      zoneConfig.storyText,
+      zoneConfig.videoUrl,
+      true // Enable CRT effect
+    )
+    
+    // 2. Update cabinet neon and interior lights
+    this.updateCabinetLightingForZone(zoneConfig)
+    
+    // 3. Update ball material color
+    this.ballManager?.updateBallMaterialColor(zoneConfig.primaryColor)
+    
+    // 4. Cross-fade music to zone track
+    this.soundSystem.playMapMusic(zoneConfig.musicTrackId)
+    
+    // 5. Trigger screen pulse + cabinet shake (major transitions get stronger effects)
+    const shakeIntensity = getTransitionShakeIntensity(previousZone, zone)
+    const pulseColor = zoneConfig.primaryColor
+    
+    if (isMajor) {
+      // Major transition: strong shake + bright pulse
+      this.effects?.addCameraShake(shakeIntensity)
+      this.effects?.triggerScreenPulse(pulseColor, 0.8, 500)
+      
+      // Also flash the LCD table
+      this.lcdTableState.triggerFeedbackEffect()
+    } else {
+      // Minor transition: subtle shake + gentle pulse
+      this.effects?.addCameraShake(shakeIntensity * 0.5)
+      this.effects?.triggerScreenPulse(pulseColor, 0.4, 300)
+    }
+    
+    // 6. Update material library for zone colors
+    const matLib = getMaterialLibrary(this.scene!)
+    matLib.updateLCDTableEmissive(zoneConfig.primaryColor, zoneConfig.glowIntensity)
+    matLib.updateFlipperMaterialEmissive(zoneConfig.primaryColor)
+    
+    // 7. Haptic feedback if enabled
+    if (isMajor && this.hapticManager) {
+      this.hapticManager.jackpot() // Strong celebration pattern for zone entry
+    }
+  }
+  
+  /**
+   * Update cabinet lighting for zone colors
+   */
+  private updateCabinetLightingForZone(zoneConfig: ZoneConfig): void {
+    if (this.cabinetNeonLights.length === 0) return
+    
+    const primaryColor = Color3.FromHexString(zoneConfig.primaryColor)
+    const accentColor = Color3.FromHexString(zoneConfig.accentColor)
+    const interiorColor = Color3.FromHexString(zoneConfig.interiorColor)
+    
+    // Left side = primary, Right side = accent, Under = interior
+    if (this.cabinetNeonLights[0]) {
+      this.cabinetNeonLights[0].diffuse = primaryColor
+      this.cabinetNeonLights[0].specular = primaryColor
+    }
+    if (this.cabinetNeonLights[1]) {
+      this.cabinetNeonLights[1].diffuse = accentColor
+      this.cabinetNeonLights[1].specular = accentColor
+    }
+    if (this.cabinetNeonLights[2]) {
+      this.cabinetNeonLights[2].diffuse = interiorColor
+      this.cabinetNeonLights[2].specular = interiorColor
     }
   }
 
@@ -2216,6 +2405,366 @@ export class Game {
     this.levelSelectScreen.toggle()
   }
 
+  /**
+   * Toggle between Fixed and Dynamic Adventure Mode
+   * Press 'D' key to switch modes
+   */
+  private toggleDynamicMode(): void {
+    const newMode = this.gameMode === 'fixed' ? 'dynamic' : 'fixed'
+    this.gameMode = newMode
+    
+    console.log(`[Game] Switched to ${newMode.toUpperCase()} mode`)
+    
+    // Show mode switch notification
+    this.showModeSwitchPopup(newMode)
+    
+    if (newMode === 'dynamic') {
+      // Enable dynamic mode - initialize with default scenario
+      this.startDynamicMode()
+    } else {
+      // Return to fixed mode
+      this.stopDynamicMode()
+    }
+  }
+  
+  /**
+   * Show mode switch popup notification
+   */
+  private showModeSwitchPopup(mode: 'fixed' | 'dynamic'): void {
+    const existing = document.getElementById('mode-switch-popup')
+    if (existing) existing.remove()
+    
+    const popup = document.createElement('div')
+    popup.id = 'mode-switch-popup'
+    popup.textContent = mode === 'dynamic' ? '⚡ DYNAMIC MODE' : '📍 FIXED MODE'
+    popup.style.cssText = `
+      position: absolute;
+      top: 20%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 2rem;
+      font-weight: 900;
+      color: ${mode === 'dynamic' ? '#00ff88' : '#00d9ff'};
+      text-shadow: 
+        0 0 10px currentColor,
+        0 0 20px currentColor,
+        0 0 40px currentColor;
+      pointer-events: none;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      letter-spacing: 4px;
+    `
+    
+    document.body.appendChild(popup)
+    
+    // Animate in
+    requestAnimationFrame(() => {
+      popup.style.opacity = '1'
+    })
+    
+    // Remove after delay
+    setTimeout(() => {
+      popup.style.opacity = '0'
+      setTimeout(() => popup.remove(), 300)
+    }, 2000)
+  }
+  
+  /**
+   * Start Dynamic Adventure Mode with specified scenario
+   * NOTE: This is a stub - full scenario system not yet implemented
+   */
+  private startDynamicMode(): void {
+    console.log('[Game] Starting Dynamic Mode with Zone System')
+    
+    // Initialize Zone Trigger System
+    this.zoneTriggerSystem = new ZoneTriggerSystem(false)
+    
+    // Load default scenario (samurai-realm)
+    const scenario = getScenario('samurai-realm')
+    if (scenario) {
+      this.loadScenario(scenario)
+    }
+    
+    // Show zone system active indicator
+    this.showZoneSystemPopup('ZONE SYSTEM ACTIVE')
+  }
+  
+  /**
+   * Stop Dynamic Mode and return to fixed mode
+   */
+  private stopDynamicMode(): void {
+    console.log('[Game] Stopping Dynamic Mode')
+    
+    // Dispose zone trigger system
+    this.zoneTriggerSystem?.dispose()
+    this.zoneTriggerSystem = null
+    
+    // Reset to default table map
+    this.switchTableMap('neon-helix')
+  }
+  
+  /**
+   * Load a dynamic scenario with zone support
+   */
+  private loadScenario(scenario: DynamicScenario): void {
+    if (!this.zoneTriggerSystem) return
+    
+    console.log(`[Game] Loading scenario: ${scenario.name}`)
+    
+    // Load scenario into zone trigger system
+    this.zoneTriggerSystem.loadScenario(scenario)
+    
+    // Set up zone change callback
+    this.zoneTriggerSystem.setCallback({
+      onZoneEnter: (zone, fromZone, isMajor) => {
+        this.handleScenarioZoneEnter(zone, fromZone, isMajor)
+      },
+      onZoneExit: () => {
+        // Optional: handle zone exit effects
+      },
+      onZoneProgress: () => {
+        // Optional: update progress indicators
+      }
+    })
+    
+    // Apply scenario global lighting
+    this.applyScenarioLighting(scenario.globalLighting)
+    
+    // Switch to first zone's map configuration
+    if (scenario.zones.length > 0) {
+      this.applyZoneMapConfig(scenario.zones[0])
+    }
+    
+    // Show scenario intro
+    this.display?.showZoneStory(
+      scenario.name,
+      scenario.description,
+      scenario.zones[0]?.videoUrl,
+      true
+    )
+  }
+  
+  /**
+   * Handle entering a new zone in a scenario
+   */
+  private handleScenarioZoneEnter(
+    zone: ScenarioZone,
+    _fromZone: ScenarioZone | null,
+    isMajor: boolean
+  ): void {
+    console.log(`[Game] Entered zone: ${zone.name} (${isMajor ? 'MAJOR' : 'minor'})`)
+    
+    // Update display with zone story
+    this.display?.showZoneStory(
+      zone.name,
+      zone.storyText,
+      zone.videoUrl,
+      true
+    )
+    
+    // Apply zone map configuration
+    this.applyZoneMapConfig(zone)
+    
+    // Update ball trail color
+    if (this.ballManager) {
+      const scenario = this.zoneTriggerSystem?.getAllZones()[0]?.id 
+        ? getScenario('samurai-realm')
+        : null
+      if (scenario) {
+        this.ballManager.updateBallMaterialColor(scenario.ballTrailColor)
+      }
+    }
+    
+    // Cross-fade music to zone track
+    this.soundSystem.playMapMusic(zone.musicTrack)
+    
+    // Trigger effects
+    if (isMajor) {
+      this.effects?.addCameraShake(0.5)
+      this.effects?.triggerScreenPulse(zone.mapConfig.baseColor, 0.8, 500)
+      this.lcdTableState.triggerFeedbackEffect()
+    } else {
+      this.effects?.addCameraShake(0.25)
+      this.effects?.triggerScreenPulse(zone.mapConfig.baseColor, 0.4, 300)
+    }
+    
+    // Haptic feedback
+    if (isMajor && this.hapticManager) {
+      this.hapticManager.jackpot()
+    }
+  }
+  
+  /**
+   * Apply zone map configuration to the table
+   */
+  private applyZoneMapConfig(zone: ScenarioZone): void {
+    const config = zone.mapConfig
+    
+    // Update LCD table shader
+    const matLib = getMaterialLibrary(this.scene!)
+    matLib.updateLCDTableEmissive(config.baseColor, config.glowIntensity)
+    matLib.updateFlipperMaterialEmissive(config.baseColor)
+    matLib.updatePinMaterialEmissive(config.accentColor)
+    
+    // Update cabinet neon lights
+    this.updateCabinetNeonForZone(config.baseColor, config.accentColor)
+    
+    // Update LCD post-process
+    this.lcdTableState.updateFromMapConfig({
+      baseColor: config.baseColor,
+      accentColor: config.accentColor,
+      scanlineIntensity: config.scanlineIntensity,
+      glowIntensity: config.glowIntensity,
+      animationSpeed: config.animationSpeed,
+    })
+  }
+  
+  /**
+   * Update cabinet neon lights for zone colors
+   */
+  private updateCabinetNeonForZone(baseColor: string, accentColor: string): void {
+    if (this.cabinetNeonLights.length === 0) return
+    
+    const base = Color3.FromHexString(baseColor)
+    const accent = Color3.FromHexString(accentColor)
+    
+    if (this.cabinetNeonLights[0]) {
+      this.cabinetNeonLights[0].diffuse = base
+    }
+    if (this.cabinetNeonLights[1]) {
+      this.cabinetNeonLights[1].diffuse = accent
+    }
+    if (this.cabinetNeonLights[2]) {
+      this.cabinetNeonLights[2].diffuse = Color3.Lerp(base, accent, 0.5)
+    }
+  }
+  
+  /**
+   * Apply scenario global lighting
+   */
+  private applyScenarioLighting(lighting: {
+    ambientColor: string
+    keyLightColor: string
+    rimLightColor: string
+  }): void {
+    // Update scene lights
+    if (this.keyLight) {
+      this.keyLight.diffuse = Color3.FromHexString(lighting.keyLightColor)
+    }
+    if (this.rimLight) {
+      this.rimLight.diffuse = Color3.FromHexString(lighting.rimLightColor)
+    }
+    if (this.scene) {
+      const hemiLight = this.scene.getLightByName('hemiLight') as HemisphericLight
+      if (hemiLight) {
+        hemiLight.diffuse = Color3.FromHexString(lighting.ambientColor)
+      }
+    }
+  }
+  
+  /**
+   * Show zone system popup notification
+   */
+  private showZoneSystemPopup(message: string): void {
+    const existing = document.getElementById('zone-system-popup')
+    if (existing) existing.remove()
+    
+    const popup = document.createElement('div')
+    popup.id = 'zone-system-popup'
+    popup.innerHTML = `
+      <div style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 4px;">DYNAMIC MODE</div>
+      <div>${message}</div>
+    `
+    popup.style.cssText = `
+      position: absolute;
+      top: 25%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #00ff88;
+      text-align: center;
+      text-shadow: 0 0 10px #00ff88, 0 0 20px #00ff88;
+      pointer-events: none;
+      z-index: 100;
+      opacity: 0;
+      animation: zonePopupFade 2s ease-out forwards;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 16px 32px;
+      border-radius: 8px;
+      border: 1px solid #00ff88;
+    `
+    
+    const style = document.createElement('style')
+    style.textContent = `
+      @keyframes zonePopupFade {
+        0% { opacity: 0; transform: translate(-50%, -40%); }
+        20% { opacity: 1; transform: translate(-50%, -50%); }
+        80% { opacity: 1; transform: translate(-50%, -50%); }
+        100% { opacity: 0; transform: translate(-50%, -60%); }
+      }
+    `
+    document.head.appendChild(style)
+    document.body.appendChild(popup)
+    
+    setTimeout(() => {
+      popup.remove()
+      style.remove()
+    }, 2000)
+  }
+  
+  /**
+   * Switch to a different scenario
+   */
+  public switchScenario(scenarioId: string): void {
+    const scenario = getScenario(scenarioId)
+    if (scenario) {
+      this.loadScenario(scenario)
+      this.showScenarioSwitchPopup(scenario.name)
+    }
+  }
+  
+  /**
+   * Show scenario switch popup
+   */
+  private showScenarioSwitchPopup(name: string): void {
+    const popup = document.createElement('div')
+    popup.style.cssText = `
+      position: absolute;
+      top: 30%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #ffd700;
+      text-align: center;
+      text-shadow: 0 0 10px #ffd700;
+      pointer-events: none;
+      z-index: 100;
+      animation: fadeInOut 2s ease-out forwards;
+    `
+    popup.textContent = `SCENARIO: ${name.toUpperCase()}`
+    document.body.appendChild(popup)
+    setTimeout(() => popup.remove(), 2000)
+  }
+  
+  /**
+   * Cycle through available scenarios
+   */
+  public cycleScenario(direction: 1 | -1 = 1): void {
+    const scenarios = ['samurai-realm', 'cyber-noir', 'quantum-dream', 'movie-gangster', 'fantasy-realm']
+    const currentIndex = scenarios.findIndex(id => {
+      return this.zoneTriggerSystem?.getAllZones()[0]?.id?.startsWith(id.split('-')[0])
+    })
+    
+    const nextIndex = (Math.max(0, currentIndex) + direction + scenarios.length) % scenarios.length
+    this.switchScenario(scenarios[nextIndex])
+  }
+
   /** Collision debounce: track last collision time per body pair */
   private lastCollisionTime: Map<string, number> = new Map()
   private static readonly COLLISION_DEBOUNCE_MS = 16
@@ -2374,6 +2923,9 @@ export class Game {
     // Sync Adventure Mode Kinematics
     const currentBallBodies = this.ballManager?.getBallBodies() || []
     this.adventureMode?.update(dt, currentBallBodies)
+    
+    // Update Zone Trigger System (Dynamic Mode)
+    this.zoneTriggerSystem?.update(currentBallBodies)
 
     this.gameObjects?.updateBumpers(dt)
     this.gameObjects?.updateTargets(dt)
@@ -2414,6 +2966,12 @@ export class Game {
 
     // Update LCD table state for map transitions
     this.lcdTableState.update(dt)
+
+    // Update Zone Trigger System for Dynamic Adventure Mode
+    if (this.zoneTriggerSystem) {
+      const ballBodies = this.ballManager?.getBallBodies() || []
+      this.zoneTriggerSystem.update(ballBodies)
+    }
 
     // Adventure Mode: Track survival time
     this.adventureState.updateGoal('survive-time', dt)
@@ -2775,8 +3333,8 @@ export class Game {
     // Check if score ranks on leaderboard
     const rank = await this.leaderboardSystem.checkRank(this.score)
     
-    // Only prompt for name if score is in top 100
-    if (rank > 100) {
+    // Only prompt for name if score is in top 100 (or if rank check failed)
+    if (rank === null || rank > 100) {
       console.log('[Leaderboard] Score not in top 100')
       return
     }
@@ -3010,6 +3568,7 @@ export class Game {
     const reducedMotionCheckbox = document.getElementById('reduced-motion') as HTMLInputElement
     const photosensitiveCheckbox = document.getElementById('photosensitive-mode') as HTMLInputElement
     const shakeSlider = document.getElementById('shake-intensity') as HTMLInputElement
+    const scanlineSlider = document.getElementById('scanline-intensity') as HTMLInputElement
     
     // Audio settings
     const masterVolumeSlider = document.getElementById('master-volume') as HTMLInputElement
@@ -3020,6 +3579,14 @@ export class Game {
     if (reducedMotionCheckbox) reducedMotionCheckbox.checked = settings.reducedMotion
     if (photosensitiveCheckbox) photosensitiveCheckbox.checked = settings.photosensitiveMode
     if (shakeSlider) shakeSlider.value = String(settings.shakeIntensity)
+    if (scanlineSlider) {
+      scanlineSlider.value = String(settings.scanlineIntensity)
+      const span = scanlineSlider.parentElement?.querySelector('span')
+      if (span) span.setAttribute('data-value', String(settings.scanlineIntensity))
+    }
+    
+    // Apply photosensitive mode to LCD table
+    this.lcdTableState.setPhotosensitiveMode(settings.photosensitiveMode)
     
     // Load audio settings
     const volumeSettings = this.soundSystem.getVolumeSettings()
@@ -3033,6 +3600,7 @@ export class Game {
     const reducedMotionCheckbox = document.getElementById('reduced-motion') as HTMLInputElement
     const photosensitiveCheckbox = document.getElementById('photosensitive-mode') as HTMLInputElement
     const shakeSlider = document.getElementById('shake-intensity') as HTMLInputElement
+    const scanlineSlider = document.getElementById('scanline-intensity') as HTMLInputElement
     
     // Audio settings
     const masterVolumeSlider = document.getElementById('master-volume') as HTMLInputElement
@@ -3044,13 +3612,18 @@ export class Game {
       reducedMotion: reducedMotionCheckbox?.checked ?? false,
       photosensitiveMode: photosensitiveCheckbox?.checked ?? false,
       shakeIntensity: parseFloat(shakeSlider?.value ?? '0.08'),
+      scanlineIntensity: parseFloat(scanlineSlider?.value ?? '0.12'),
       enableFog: true,
       enableShadows: true
     }
 
     SettingsManager.save(newSettings)
     SettingsManager.applyToConfig(newSettings)
+    this.scanlineIntensity = newSettings.scanlineIntensity
     console.log('[Accessibility] Settings saved:', newSettings)
+    
+    // Apply photosensitive mode to LCD table
+    this.lcdTableState.setPhotosensitiveMode(newSettings.photosensitiveMode)
     
     // Apply audio settings
     if (masterVolumeSlider) {

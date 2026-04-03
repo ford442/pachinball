@@ -7,6 +7,10 @@
   --cabinet-height: calc(var(--cabinet-size) * 1.1);
   --split-perc: 0.4;          /* top screen = 40% of height */
   --bezel-height: 12px;       /* visual separator thickness */
+  
+  /* Safe area insets for mobile devices */
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --touch-controls-height: 140px;
 }
 
 /* Body – dark "arcade room" with floor/wall gradient */
@@ -88,6 +92,8 @@ body::after {
   width: 100%;
   height: 100%;
   z-index: 0;               /* behind everything */
+  
+  box-sizing: border-box;
   outline: none;
   touch-action: none;
   -webkit-touch-callout: none;
@@ -103,6 +109,21 @@ body::after {
   background: transparent;   /* crucial – do NOT hide canvas */
   pointer-events: none;      /* let mouse events fall through to canvas */
   z-index: 10;
+}
+
+/* Machine-head mask - subtle bottom fade to prevent playfield bleed */
+#machine-head::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 80%,
+    rgba(5, 5, 8, 0.5) 100%
+  );
+  pointer-events: none;
+  z-index: 11;
 }
 
 /* Height split – matches the viewport split set in code */
@@ -219,7 +240,8 @@ button:hover {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  padding: 0 20px 20px 20px;
+  /* Add safe-area-inset-bottom for notched devices */
+  padding: 0 20px calc(20px + env(safe-area-inset-bottom, 0px)) 20px;
   z-index: 60;
   pointer-events: none; /* Allow touches to pass through container gaps */
 }
@@ -541,6 +563,25 @@ button:hover {
 /* ===================================================================
    RESPONSIVE - Show/hide based on screen size
    =================================================================== */
+
+/* Mobile: shrink cabinet to leave room for touch controls + safe area */
+@media (max-width: 768px) {
+  :root {
+    --cabinet-size: min(calc(85vh - var(--touch-controls-height) - var(--safe-area-bottom)), 85vw);
+  }
+}
+
+@media (min-width: 480px) and (max-width: 768px) {
+  :root { --touch-controls-height: 160px; }
+}
+
+@media (max-width: 359px) {
+  :root { --touch-controls-height: 120px; }
+}
+
+@media (max-height: 500px) and (max-width: 768px) {
+  :root { --touch-controls-height: 100px; }
+}
 
 /* Hide on larger screens (desktop) */
 @media (min-width: 769px) {

@@ -337,6 +337,10 @@ export class LCDTableState {
   private _rippleTime: number = 0.0
   private _effectTime: number = 0.0
 
+  // Photosensitive mode - reduces flashing effects
+  private _photosensitiveMode: boolean = false
+  private _scanlineIntensityMultiplier: number = 1.0
+
   // Shader uniform callbacks
   private _uniformCallbacks: Map<string, (value: number | string | Color3) => void> = new Map()
 
@@ -357,11 +361,57 @@ export class LCDTableState {
   }
 
   /**
+   * Enable/disable photosensitive mode
+   * When enabled, reduces scanline intensity and flashing effects
+   */
+  setPhotosensitiveMode(enabled: boolean): void {
+    this._photosensitiveMode = enabled
+    this._scanlineIntensityMultiplier = enabled ? 0.3 : 1.0
+    
+    // Update uniforms immediately if callbacks are registered
+    const scanlineCallback = this._uniformCallbacks.get('uScanlineIntensity')
+    if (scanlineCallback) {
+      const config = this.getCurrentConfig()
+      scanlineCallback(config.scanlineIntensity * this._scanlineIntensityMultiplier)
+    }
+  }
+
+  /**
    * Trigger flash + ripple effect manually (for button presses, etc.)
    */
   triggerFeedbackEffect(): void {
-    this._flashIntensity = 0.5 // Half intensity for feedback
-    this._rippleIntensity = 0.7
+    // Reduce flash intensity in photosensitive mode
+    this._flashIntensity = this._photosensitiveMode ? 0.15 : 0.5
+    this._rippleIntensity = this._photosensitiveMode ? 0.3 : 0.7
+    this._rippleTime = 0.0
+    this._effectTime = 0.0
+  }
+
+  /**
+   * Update from a dynamic map config (for zone transitions)
+   */
+  updateFromMapConfig(config: Partial<TableMapConfig>): void {
+    // Create a temporary map entry with updated values
+    const current = TABLE_MAPS[this._currentMap]
+    const updatedConfig: TableMapConfig = {
+      ...current,
+      ...config,
+    }
+    
+    // Register the updated config
+    const tempMapId = `${this._currentMap}_temp` as TableMapType
+    TABLE_MAPS[tempMapId] = updatedConfig
+    
+    // Switch to temp map with shorter transition
+    this._targetMap = tempMapId
+    this._isTransitioning = true
+    this._transitionTime = 0.0
+    this._transitionDuration = 0.3 // Faster for zone transitions
+    this._blendFactor = 0.0
+    
+    // Subtle flash effect (reduced in photosensitive mode)
+    this._flashIntensity = this._photosensitiveMode ? 0.2 : 0.6
+    this._rippleIntensity = this._photosensitiveMode ? 0.15 : 0.4
     this._rippleTime = 0.0
     this._effectTime = 0.0
   }
@@ -377,9 +427,9 @@ export class LCDTableState {
     this._transitionTime = 0.0
     this._blendFactor = 0.0
 
-    // Trigger flash and ripple effects
-    this._flashIntensity = 1.0
-    this._rippleIntensity = 1.0
+    // Trigger flash and ripple effects (reduced in photosensitive mode)
+    this._flashIntensity = this._photosensitiveMode ? 0.3 : 1.0
+    this._rippleIntensity = this._photosensitiveMode ? 0.4 : 1.0
     this._rippleTime = 0.0
     this._effectTime = 0.0
 
@@ -469,7 +519,8 @@ export class LCDTableState {
           callback(config[name as keyof TableMapConfig] as string)
           break
         case 'uScanlineIntensity':
-          callback(config.scanlineIntensity)
+          // Apply photosensitive mode multiplier to reduce scanline intensity
+          callback(config.scanlineIntensity * this._scanlineIntensityMultiplier)
           break
         case 'uPixelGridIntensity':
           callback(config.pixelGridIntensity)
