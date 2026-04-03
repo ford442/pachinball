@@ -305,10 +305,7 @@ export class CabinetBuilder {
 
     // Add preset-specific decorative details
     if (type === 'classic') {
-      const matLib = getMaterialLibrary(this.scene)
-      const bodyMat = this.getBodyMaterial(preset.bodyMaterial, matLib)
-      const trimMat = this.getTrimMaterial(preset.trimMaterial, matLib)
-      this.buildClassicDetails(preset, bodyMat, trimMat)
+      this.buildClassicDetails(preset)
     }
 
     console.log(`[Cabinet] Loaded preset: ${preset.name}`)
@@ -408,7 +405,7 @@ export class CabinetBuilder {
     // ========================================================================
     // 5. BACKBOX (marquee area)
     // ========================================================================
-    this.buildBackbox(preset, bodyMat, trimMat, neonMat)
+    this.buildBackbox(preset, bodyMat, trimMat)
 
     // ========================================================================
     // 5b. VERTICAL CABINET DETAILS (if applicable)
@@ -448,9 +445,7 @@ export class CabinetBuilder {
    * decorative coin-door trim, and warm light bars.
    */
   private buildClassicDetails(
-    preset: CabinetPreset,
-    _bodyMat: StandardMaterial | PBRMaterial,
-    _trimMat: StandardMaterial | PBRMaterial
+    preset: CabinetPreset
   ): void {
     const matLib = getMaterialLibrary(this.scene)
     const halfW = preset.width / 2
@@ -860,8 +855,7 @@ export class CabinetBuilder {
   private buildBackbox(
     preset: CabinetPreset,
     bodyMat: StandardMaterial | PBRMaterial,
-    trimMat: StandardMaterial | PBRMaterial,
-    _neonMat: PBRMaterial
+    trimMat: StandardMaterial | PBRMaterial
   ): void {
     const bbWidth = preset.width + 2
     const bbHeight = preset.backboxHeight
