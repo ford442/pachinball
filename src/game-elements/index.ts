@@ -8,6 +8,12 @@ export { DisplaySystem } from './display'
 export { EffectsSystem } from './effects'
 export { GameObjects } from './game-objects'
 export { CabinetBuilder } from './cabinet'
+export { 
+  CabinetPresetBuilder, 
+  CABINET_PRESETS,
+  type CabinetPresetType,
+  type CabinetPresetConfig 
+} from './cabinet-presets'
 export { BallManager } from './ball-manager'
 export { AdventureMode, AdventureTrackType, CAMERA_PRESETS, type CameraPreset } from './adventure-mode'
 export {

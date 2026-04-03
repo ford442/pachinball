@@ -958,6 +958,84 @@ button:hover {
   .map-hint {
     font-size: 0.5rem;
   }
+  
+  #cabinet-selector {
+    bottom: 10px;
+    right: 140px;
+    padding: 6px 8px;
+  }
+}
+
+/* ========================================================================
+   CABINET SELECTOR - Dropdown for cabinet presets
+   ======================================================================== */
+
+#cabinet-selector {
+  position: absolute;
+  bottom: 16px;
+  right: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: rgba(0, 10, 20, 0.75);
+  border: 1px solid rgba(0, 217, 255, 0.35);
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+  z-index: 50;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 4px 20px rgba(0, 0, 0, 0.4),
+    inset 0 0 20px rgba(0, 217, 255, 0.05);
+}
+
+.cabinet-hint {
+  font-size: 0.55rem;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+#cabinet-dropdown {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #00d9ff;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(0, 217, 255, 0.4);
+  border-radius: 4px;
+  padding: 6px 24px 6px 10px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2300d9ff' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: all 0.2s ease;
+  min-width: 90px;
+}
+
+#cabinet-dropdown:hover {
+  background: rgba(0, 217, 255, 0.15);
+  border-color: rgba(0, 217, 255, 0.7);
+  box-shadow:
+    0 0 12px rgba(0, 217, 255, 0.25),
+    inset 0 0 10px rgba(0, 217, 255, 0.1);
+}
+
+#cabinet-dropdown:focus {
+  outline: none;
+  border-color: #00d9ff;
+  box-shadow: 0 0 15px rgba(0, 217, 255, 0.4);
+}
+
+#cabinet-dropdown option {
+  background: #0a0a12;
+  color: #00d9ff;
+  font-family: 'Orbitron', sans-serif;
+  padding: 8px;
 }
 
 /* Adventure Mode HUD */

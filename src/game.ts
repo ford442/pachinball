@@ -36,7 +36,7 @@ import {
   DisplaySystem,
   EffectsSystem,
   GameObjects,
-  CabinetBuilder,
+  CabinetPresetBuilder,
   BallManager,
   BallAnimator,
   AdventureMode,
@@ -72,6 +72,7 @@ import {
   getAdventureState,
   type AccessibilityConfig,
   type InputFrame,
+  type CabinetPresetType,
 } from './game-elements'
 import { GameConfig } from './config'
 import { DisplayMode, type DisplayConfig } from './game-elements/display-config'
@@ -94,7 +95,8 @@ export class Game {
   private effects: EffectsSystem | null = null
   private gameObjects: GameObjects | null = null
   private ballManager: BallManager | null = null
-  private cabinetBuilder: CabinetBuilder | null = null
+  private cabinetBuilder: CabinetPresetBuilder | null = null
+  private currentCabinetPreset: CabinetPresetType = 'classic'
   private ballAnimator: BallAnimator | null = null
   private adventureMode: AdventureMode | null = null
   private magSpinFeeder: MagSpinFeeder | null = null
@@ -250,6 +252,9 @@ export class Game {
 
     // Setup on-screen map selector (async: fetches dynamic maps from backend)
     await this.setupMapSelector()
+    
+    // Setup cabinet preset selector UI
+    this.setupCabinetSelector()
 
     // -----------------------------------------------------------------
     // 2️⃣ IMMERSIVE 3D CAMERA - Full cabinet view with mouse head-tracking
@@ -554,6 +559,11 @@ export class Game {
       if (e.code === 'KeyL') {
         e.preventDefault()
         this.leaderboardSystem.toggle()
+      }
+      // 'C' key to cycle cabinet presets
+      if (e.code === 'KeyC') {
+        e.preventDefault()
+        this.cycleCabinetPreset()
       }
     })
 
@@ -1107,7 +1117,7 @@ export class Game {
 
     // Build the full 3D arcade cabinet around the playfield
     if (this.scene) {
-      this.cabinetBuilder = new CabinetBuilder(this.scene)
+      this.cabinetBuilder = new CabinetPresetBuilder(this.scene, this.currentCabinetPreset)
       this.cabinetBuilder.buildCabinet()
     }
 
@@ -1373,6 +1383,37 @@ export class Game {
     const currentIndex = maps.indexOf(this.currentTableMap)
     const nextIndex = (currentIndex + 1) % maps.length
     this.switchTableMap(maps[nextIndex])
+  }
+
+  /**
+   * Switch to a specific cabinet preset
+   * @param preset - The preset type ('classic' | 'neo' | 'vertical')
+   */
+  public switchCabinetPreset(preset: CabinetPresetType): void {
+    if (!this.cabinetBuilder) return
+    
+    console.log(`[Game] Switching cabinet preset to: ${preset}`)
+    this.currentCabinetPreset = preset
+    this.cabinetBuilder.switchPreset(preset)
+    
+    // Re-apply current map theme to update neon colors
+    this.cabinetBuilder.setThemeFromMap(this.currentTableMap)
+    
+    // Update UI dropdown
+    const dropdown = document.getElementById('cabinet-dropdown') as HTMLSelectElement | null
+    if (dropdown) {
+      dropdown.value = preset
+    }
+  }
+
+  /**
+   * Cycle to the next cabinet preset
+   */
+  public cycleCabinetPreset(): void {
+    const presets: CabinetPresetType[] = ['classic', 'neo', 'vertical']
+    const currentIndex = presets.indexOf(this.currentCabinetPreset)
+    const nextIndex = (currentIndex + 1) % presets.length
+    this.switchCabinetPreset(presets[nextIndex])
   }
 
   private initLCDTablePostProcess(): void {
@@ -3002,6 +3043,26 @@ export class Game {
         btn.classList.add('active')
       } else {
         btn.classList.remove('active')
+      }
+    })
+  }
+
+  /**
+   * Set up the cabinet preset selector dropdown.
+   * Initializes the dropdown with available presets and handles changes.
+   */
+  private setupCabinetSelector(): void {
+    const dropdown = document.getElementById('cabinet-dropdown') as HTMLSelectElement | null
+    if (!dropdown) return
+
+    // Set initial value
+    dropdown.value = this.currentCabinetPreset
+
+    // Handle change events
+    dropdown.addEventListener('change', (e) => {
+      const preset = (e.target as HTMLSelectElement).value as CabinetPresetType
+      if (preset !== this.currentCabinetPreset) {
+        this.switchCabinetPreset(preset)
       }
     })
   }
