@@ -1955,6 +1955,12 @@ export class Game {
       // Trigger jackpot audio
       this.soundSystem.triggerJackpotAudio()
 
+      // Secret cabinet shake + vignette flash on jackpot
+      if (!this.accessibility.reducedMotion) {
+        const mapColor = TABLE_MAPS[this.currentTableMap]?.baseColor || '#ff00ff'
+        this.effects?.triggerCabinetShake('jackpot', mapColor)
+      }
+
       // Bonus Score
       this.score += 100000
       this.updateHUD()
@@ -2292,7 +2298,13 @@ export class Game {
             const velocity = ballBody.linvel()
             const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
             this.hapticManager?.bumper(speed)
-            
+
+            // Secret cabinet shake on big bumper hits
+            if (speed > 12) {
+              const mapColor = TABLE_MAPS[this.currentTableMap]?.baseColor || '#00d9ff'
+              this.effects?.triggerCabinetShake('heavy', mapColor)
+            }
+
             // Play bumper sound
             this.soundSystem.playSample('bumper', vis.mesh.position)
 
