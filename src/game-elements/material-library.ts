@@ -139,15 +139,20 @@ export class MaterialLibrary {
     try {
       const envTexture = CubeTexture.CreateFromPrefilteredData(envPath, this.scene)
 
+      // Set up load handling for the texture
+      envTexture.onLoadObservable.add(() => {
+        console.log('[MaterialLibrary] Environment texture loaded and cached')
+      })
+
       // Cache for reuse
       this.textureCache.set(envPath, envTexture)
 
       this.scene.environmentTexture = envTexture
       this.scene.environmentIntensity = TIER_ENV_INTENSITY[this._qualityTier]
-
-      console.log('[MaterialLibrary] Environment texture loaded and cached')
     } catch (err) {
       console.warn('[MaterialLibrary] Failed to load environment texture:', err)
+      // Fallback: disable environment lighting
+      this.scene.environmentTexture = null
       this.scene.environmentIntensity = Math.min(0.4, TIER_ENV_INTENSITY[this._qualityTier])
     }
   }

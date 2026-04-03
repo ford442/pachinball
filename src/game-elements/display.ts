@@ -420,22 +420,36 @@ export class DisplaySystem {
   }
 
   private disposeVideoLayer(): void {
-    if (this.videoTexture?.video) {
-      const videoEl = this.videoTexture.video as HTMLVideoElement
-      videoEl.pause()
-      videoEl.src = ''
-      videoEl.load() // Force resource release
-      videoEl.remove() // Remove from DOM
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(this.videoTexture as any).video = null
+    try {
+      if (this.videoTexture?.video) {
+        const videoEl = this.videoTexture.video as HTMLVideoElement
+        try {
+          videoEl.pause()
+          videoEl.src = ''
+          videoEl.load() // Force resource release
+        } catch {
+          // Ignore video element errors during cleanup
+        }
+        try {
+          videoEl.remove() // Remove from DOM
+        } catch {
+          // Ignore DOM removal errors
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(this.videoTexture as any).video = null
+      }
+      this.videoTexture?.dispose()
+      this.videoMaterial?.dispose()
+      this.layers.video?.dispose()
+    } catch (err) {
+      console.warn('[Display] Error during video layer disposal:', err)
+    } finally {
+      // Always reset state even if disposal fails
+      this.videoTexture = null
+      this.videoMaterial = null
+      this.layers.video = null
+      this.layerState.video = { loaded: false, playing: false, error: false }
     }
-    this.videoTexture?.dispose()
-    this.videoMaterial?.dispose()
-    this.layers.video?.dispose()
-    this.videoTexture = null
-    this.videoMaterial = null
-    this.layers.video = null
-    this.layerState.video = { loaded: false, playing: false, error: false }
   }
 
   private disposeImageLayer(): void {
@@ -830,13 +844,26 @@ export class DisplaySystem {
 
   /**
    * Load and play a story video from URL
+   * Gracefully handles missing videos by logging a warning and continuing
    */
   loadAndPlayVideo(url: string): void {
+    if (!url) {
+      console.log('[Display] No video URL provided, skipping video playback')
+      return
+    }
+    
     if (this.videoTexture?.video) {
-      const videoEl = this.videoTexture.video as HTMLVideoElement
-      videoEl.src = url
-      videoEl.load()
-      this.playVideo()
+      try {
+        const videoEl = this.videoTexture.video as HTMLVideoElement
+        videoEl.src = url
+        videoEl.load()
+        this.playVideo()
+      } catch (err) {
+        console.warn('[Display] Failed to load video:', url, err)
+        // Continue without video - game should not crash
+      }
+    } else {
+      console.log('[Display] Video texture not available, skipping video playback')
     }
   }
 
