@@ -1,26 +1,37 @@
 /**
  * Map System - Dynamic LCD table map loader
  *
- * Fetches map configurations from the storage_manager backend.
+ * Fetches map configurations and music tracks from the storage_manager backend.
  * Merges hardcoded fallback maps with dynamically uploaded shader-maps.
  */
 
 import { TABLE_MAPS, type TableMapConfig, type TableMapType } from '../shaders/lcd-table'
 
-const STORAGE_API_BASE = 'http://localhost:8000/api'
+const DEFAULT_API_BASE = 'http://localhost:8000/api'
 
 export interface DynamicMapConfig extends TableMapConfig {
   id: string
-  musicTrackId?: string
-  shaderUrl?: string
+}
+
+export interface MusicTrack {
+  id: string
+  title: string
+  artist: string
+  url: string
+  duration: number
+  map_id?: string
 }
 
 export class MapSystem {
+  private apiBase: string
   private maps: Map<string, DynamicMapConfig> = new Map()
+  private musicTracks: MusicTrack[] = []
   private loaded = false
   private loadPromise: Promise<void> | null = null
 
-  constructor() {
+  constructor(apiBase?: string) {
+    this.apiBase = apiBase || DEFAULT_API_BASE
+
     // Seed with hardcoded fallback maps
     const hardcoded: TableMapType[] = Object.keys(TABLE_MAPS) as TableMapType[]
     for (const id of hardcoded) {
@@ -33,29 +44,39 @@ export class MapSystem {
     }
   }
 
-  /**
-   * Fetch dynamic maps from the backend.
-   * Falls back to hardcoded maps if the backend is unreachable.
-   */
-  async fetchMaps(): Promise<void> {
+  async fetchAll(): Promise<void> {
     if (this.loadPromise) return this.loadPromise
     this.loadPromise = this.doFetch()
     return this.loadPromise
   }
 
   private async doFetch(): Promise<void> {
+    // Fetch maps and music in parallel
+    const [mapsOk, musicOk] = await Promise.all([
+      this.fetchMaps(),
+      this.fetchMusic(),
+    ])
+    this.loaded = mapsOk
+    if (mapsOk) {
+      console.log(`[MapSystem] Loaded ${this.maps.size} maps`)
+    }
+    if (musicOk) {
+      console.log(`[MapSystem] Loaded ${this.musicTracks.length} music tracks`)
+    }
+  }
+
+  private async fetchMaps(): Promise<boolean> {
     try {
-      const response = await fetch(`${STORAGE_API_BASE}/maps`)
+      const response = await fetch(`${this.apiBase}/maps`)
       if (!response.ok) {
-        console.warn('[MapSystem] Backend unavailable, using hardcoded maps')
-        return
+        console.warn('[MapSystem] Backend maps unavailable, using hardcoded maps')
+        return false
       }
 
       const data = await response.json()
       const dynamicMaps: DynamicMapConfig[] = data.maps || []
 
       for (const map of dynamicMaps) {
-        // Validate required fields
         if (!map.id || !map.name) continue
 
         this.maps.set(map.id, {
@@ -71,48 +92,66 @@ export class MapSystem {
           id: map.id,
           musicTrackId: map.musicTrackId || map.id,
           shaderUrl: map.shaderUrl,
+          adventureGoals: Array.isArray(map.adventureGoals) ? map.adventureGoals : undefined,
         })
       }
 
-      this.loaded = true
-      console.log(`[MapSystem] Loaded ${dynamicMaps.length} dynamic maps`)
+      return true
     } catch (err) {
       console.warn('[MapSystem] Failed to fetch maps:', err)
+      return false
     }
   }
 
-  /**
-   * Re-fetch maps from the backend and update the registry.
-   */
-  async refresh(): Promise<void> {
-    this.loadPromise = null
-    await this.fetchMaps()
+  private async fetchMusic(): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.apiBase}/music`)
+      if (!response.ok) {
+        console.warn('[MapSystem] Backend music unavailable')
+        return false
+      }
+      const data = await response.json()
+      this.musicTracks = data.tracks || []
+      return true
+    } catch (err) {
+      console.warn('[MapSystem] Failed to fetch music:', err)
+      return false
+    }
   }
 
-  /**
-   * Get a map configuration by ID.
-   */
+  async refresh(): Promise<void> {
+    // Clear dynamic entries but keep hardcoded fallbacks
+    const hardcoded = Object.keys(TABLE_MAPS)
+    for (const id of this.maps.keys()) {
+      if (!hardcoded.includes(id)) {
+        this.maps.delete(id)
+      }
+    }
+    this.musicTracks = []
+    this.loadPromise = null
+    await this.fetchAll()
+  }
+
   getMap(id: string): DynamicMapConfig | undefined {
     return this.maps.get(id)
   }
 
-  /**
-   * Get all available map IDs.
-   */
   getMapIds(): string[] {
     return Array.from(this.maps.keys())
   }
 
-  /**
-   * Get all map configurations.
-   */
   getAllMaps(): DynamicMapConfig[] {
     return Array.from(this.maps.values())
   }
 
-  /**
-   * Check if maps have been fetched from the backend.
-   */
+  getMusicTracks(): MusicTrack[] {
+    return [...this.musicTracks]
+  }
+
+  getMusicTrackForMap(mapId: string): MusicTrack | undefined {
+    return this.musicTracks.find((t) => t.map_id === mapId)
+  }
+
   get isLoaded(): boolean {
     return this.loaded
   }
@@ -134,9 +173,9 @@ export class MapSystem {
 
 let mapSystemInstance: MapSystem | null = null
 
-export function getMapSystem(): MapSystem {
+export function getMapSystem(apiBase?: string): MapSystem {
   if (!mapSystemInstance) {
-    mapSystemInstance = new MapSystem()
+    mapSystemInstance = new MapSystem(apiBase)
   }
   return mapSystemInstance
 }

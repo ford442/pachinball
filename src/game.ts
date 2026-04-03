@@ -67,6 +67,8 @@ import {
   HapticManager,
   getSoundSystem,
   getMapSystem,
+  getLeaderboardSystem,
+  getNameEntryDialog,
   type AccessibilityConfig,
   type InputFrame,
   type MapId,
@@ -104,6 +106,8 @@ export class Game {
   private cameraController: CameraController | null = null
   private hapticManager: HapticManager | null = null
   private soundSystem = getSoundSystem()
+  private leaderboardSystem = getLeaderboardSystem()
+  private nameEntryDialog = getNameEntryDialog()
 
   // Rendering
   private bloomPipeline: DefaultRenderingPipeline | null = null
@@ -548,6 +552,11 @@ export class Game {
         e.preventDefault()
         this.cycleTableMap()
       }
+      // 'L' key to toggle leaderboard
+      if (e.code === 'KeyL') {
+        e.preventDefault()
+        this.leaderboardSystem.toggle()
+      }
     })
 
     // Enable latency tracking in dev mode (check URL parameter)
@@ -871,6 +880,10 @@ export class Game {
     if (this._mouseMoveHandler) {
       this.engine.getRenderingCanvas()?.removeEventListener('mousemove', this._mouseMoveHandler)
     }
+    
+    // Stop leaderboard auto-refresh
+    this.leaderboardSystem.stop()
+    this.leaderboardSystem.dispose()
 
     // === EXPLICIT RENDER TARGET CLEANUP ===
     // Dispose in reverse order of creation to avoid dangling references
@@ -1608,6 +1621,9 @@ export class Game {
           }
         }
         this.updateHUD()
+        
+        // Handle leaderboard submission
+        this.handleGameOverLeaderboard()
         break
     }
   }
@@ -1672,6 +1688,10 @@ export class Game {
     
     // Play map music (default to map 1)
     this.soundSystem.playMapMusic('1')
+    
+    // Start leaderboard auto-refresh
+    this.leaderboardSystem.setContext(this.currentTableMap)
+    this.leaderboardSystem.start()
     
     this.setGameState(GameState.PLAYING)
   }
@@ -2370,6 +2390,50 @@ export class Game {
   }
 
   // ============================================================================
+  // LEADERBOARD - Game Over Score Submission
+  // ============================================================================
+  
+  private async handleGameOverLeaderboard(): Promise<void> {
+    // Only submit if score is significant
+    if (this.score < 1000) {
+      console.log('[Leaderboard] Score too low for submission')
+      return
+    }
+    
+    // Update leaderboard context
+    this.leaderboardSystem.setContext(this.currentTableMap)
+    
+    // Check if score ranks on leaderboard
+    const rank = await this.leaderboardSystem.checkRank(this.score)
+    
+    // Only prompt for name if score is in top 100
+    if (rank > 100) {
+      console.log('[Leaderboard] Score not in top 100')
+      return
+    }
+    
+    // Show name entry dialog
+    const result = await this.nameEntryDialog.show(this.score, rank)
+    
+    if (result.submitted && result.name) {
+      // Submit score
+      const submitResult = await this.leaderboardSystem.submitScore({
+        name: result.name,
+        score: this.score,
+        map_id: this.currentTableMap,
+        balls: 1, // TODO: track actual balls used
+        combo_max: this.comboCount
+      })
+      
+      if (submitResult.success) {
+        console.log(`[Leaderboard] Score submitted! Rank #${submitResult.rank}`)
+        // Show leaderboard
+        this.leaderboardSystem.show()
+      }
+    }
+  }
+
+  // ============================================================================
   // SLOT MACHINE SETUP
   // ============================================================================
 
@@ -2695,7 +2759,7 @@ export class Game {
     if (!selector) return
 
     // Fetch dynamic maps from backend and register them
-    await this.mapSystem.fetchMaps()
+    await this.mapSystem.fetchAll()
     for (const map of this.mapSystem.getAllMaps()) {
       if (!TABLE_MAPS[map.id]) {
         registerMap(map.id, map)

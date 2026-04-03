@@ -167,6 +167,9 @@ export interface TableMapConfig {
   glowIntensity: number
   backgroundPattern: 'hex' | 'grid' | 'circuit' | 'data-flow' | 'none'
   animationSpeed: number
+  musicTrackId?: string
+  shaderUrl?: string
+  adventureGoals?: string[]
 }
 
 export const TABLE_MAPS: Record<string, TableMapConfig> = {

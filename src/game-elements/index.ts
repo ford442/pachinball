@@ -35,4 +35,6 @@ export {
   type TableMapConfig,
 } from '../shaders/lcd-table'
 export { SoundSystem, getSoundSystem, resetSoundSystem, type SampleCategory, type MapId } from './sound-system'
+export { LeaderboardSystem, getLeaderboardSystem, resetLeaderboardSystem, type LeaderboardEntry, type ScoreSubmission } from './leaderboard-system'
+export { NameEntryDialog, getNameEntryDialog, type NameEntryResult } from './name-entry-dialog'
 export { MapSystem, getMapSystem, resetMapSystem, type DynamicMapConfig } from './map-system'

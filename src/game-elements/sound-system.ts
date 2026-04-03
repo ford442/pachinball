@@ -16,8 +16,8 @@ const STORAGE_API_BASE = 'http://localhost:8000/api'
 // Audio categories for samples
 export type SampleCategory = 'peg' | 'bumper' | 'flipper' | 'jackpot' | 'fever' | 'launch' | 'drain'
 
-// Map IDs for music tracks
-export type MapId = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | 'M'
+// Map IDs for music tracks (dynamic — any string allowed)
+export type MapId = string
 
 interface SampleMetadata {
   id: string
@@ -55,6 +55,7 @@ export class SoundSystem {
   private currentMusicSource: AudioBufferSourceNode | null = null
   private currentMusicBuffer: AudioBuffer | null = null
   private currentTrackId: string | null = null
+  private musicCache: Map<string, MusicTrack> = new Map()
   
   // Spatial audio nodes
   private spatialPanner: PannerNode | null = null
@@ -246,43 +247,67 @@ export class SoundSystem {
   }
 
   /**
+   * Pre-fetch and cache all music tracks from backend
+   */
+  async fetchMusicTracks(): Promise<void> {
+    try {
+      const response = await fetch(`${STORAGE_API_BASE}/music`)
+      if (!response.ok) throw new Error('Failed to fetch music')
+      const data = await response.json()
+      const tracks: MusicTrack[] = data.tracks || []
+      this.musicCache.clear()
+      for (const track of tracks) {
+        this.musicCache.set(track.id, track)
+      }
+    } catch (err) {
+      console.warn('[SoundSystem] Failed to fetch music tracks:', err)
+    }
+  }
+
+  /**
    * Play music for a specific map
    */
   async playMapMusic(mapId: MapId): Promise<void> {
     if (!this.isInitialized || !this.audioContext || !this.musicGain) return
-    
+
     try {
       // Stop current music
       this.stopMusic()
-      
-      // Fetch music for this map
-      const response = await fetch(`${STORAGE_API_BASE}/music?map_id=${mapId}`)
-      if (!response.ok) throw new Error('Failed to fetch music')
-      
-      const data = await response.json()
-      const tracks: MusicTrack[] = data.tracks || []
-      
-      if (tracks.length === 0) {
-        console.warn(`[SoundSystem] No music for map: ${mapId}`)
-        return
+
+      // Try cache first, then fetch
+      let track: MusicTrack | undefined
+      for (const t of this.musicCache.values()) {
+        if (t.map_id === mapId) {
+          track = t
+          break
+        }
       }
-      
-      // Use first track (or could randomize)
-      const track = tracks[0]
-      
-      // Load track if not cached
+
+      if (!track) {
+        const response = await fetch(`${STORAGE_API_BASE}/music?map_id=${mapId}`)
+        if (!response.ok) throw new Error('Failed to fetch music')
+        const data = await response.json()
+        const tracks: MusicTrack[] = data.tracks || []
+        if (tracks.length === 0) {
+          console.warn(`[SoundSystem] No music for map: ${mapId}`)
+          return
+        }
+        track = tracks[0]
+      }
+
+      // Load track if not cached in memory buffer
       if (this.currentTrackId !== track.id) {
         const audioResponse = await fetch(track.url)
         if (!audioResponse.ok) throw new Error(`Failed to fetch ${track.id}`)
-        
+
         const arrayBuffer = await audioResponse.arrayBuffer()
         this.currentMusicBuffer = await this.audioContext.decodeAudioData(arrayBuffer)
         this.currentTrackId = track.id
       }
-      
+
       // Play
       this.playMusicBuffer()
-      
+
       console.log(`[SoundSystem] Playing music: ${track.title}`)
     } catch (err) {
       console.warn('[SoundSystem] Failed to play music:', err)
