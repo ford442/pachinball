@@ -10,7 +10,7 @@
  */
 
 import { Vector3 } from '@babylonjs/core'
-import { API_BASE } from '../config'
+import { API_BASE, apiFetch } from '../config'
 
 // Storage manager API base URL
 const STORAGE_API_BASE = API_BASE
@@ -318,17 +318,12 @@ export class SoundSystem {
    * Pre-fetch and cache all music tracks from backend
    */
   async fetchMusicTracks(): Promise<void> {
-    try {
-      const response = await fetch(`${STORAGE_API_BASE}/music`)
-      if (!response.ok) throw new Error('Failed to fetch music')
-      const data = await response.json()
-      const tracks: MusicTrack[] = data.tracks || []
+    const data = await apiFetch<{ tracks: MusicTrack[] }>('/music')
+    if (data) {
       this.musicCache.clear()
-      for (const track of tracks) {
+      for (const track of data.tracks || []) {
         this.musicCache.set(track.id, track)
       }
-    } catch (err) {
-      console.warn('[SoundSystem] Failed to fetch music tracks:', err)
     }
   }
 
@@ -349,10 +344,8 @@ export class SoundSystem {
       }
 
       if (!track) {
-        const response = await fetch(`${STORAGE_API_BASE}/music?map_id=${mapId}`)
-        if (!response.ok) throw new Error('Failed to fetch music')
-        const data = await response.json()
-        const tracks: MusicTrack[] = data.tracks || []
+        const data = await apiFetch<{ tracks: MusicTrack[] }>(`/music?map_id=${mapId}`)
+        const tracks = data?.tracks || []
         if (tracks.length === 0) {
           console.warn(`[SoundSystem] No music for map: ${mapId}`)
           return

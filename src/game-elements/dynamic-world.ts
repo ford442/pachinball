@@ -1,6 +1,6 @@
 /**
  * Dynamic World System - Free-ranging scrolling adventure mode
- * 
+ *
  * Transforms the fixed pinball table into a scrolling journey where:
  * - The camera follows the ball smoothly through changing environments
  * - Zone triggers activate as the ball progresses, evolving:
@@ -8,7 +8,7 @@
  *   - Backbox video and story
  *   - Music tracks
  *   - Interactive mechanics (bumpers, targets, etc.)
- * 
+ *
  * Architecture:
  * - World scrolls vertically (negative Z direction)
  * - Zones are defined by Z-position ranges
@@ -77,14 +77,14 @@ export class DynamicWorld {
   private display: DisplaySystem
   private sound: SoundSystem
   private config: DynamicWorldConfig
-  
+
   // State
   private currentZone: WorldZone | null = null
   private ballProgress = 0
   private cameraTargetZ = 0
   private activeMechanics: Mesh[] = []
   private zoneLights: PointLight[] = []
-  
+
   // Visual feedback
   private zoneTransitionActive = false
   private zoneTransitionTime = 0
@@ -125,7 +125,7 @@ export class DynamicWorld {
     // Smooth camera following with lookahead
     const targetZ = ballPos.z - this.config.cameraLookahead
     this.cameraTargetZ += (targetZ - this.cameraTargetZ) * this.config.cameraSmoothing
-    
+
     // Update camera target
     this.camera.target.z = this.cameraTargetZ
 
@@ -138,9 +138,9 @@ export class DynamicWorld {
    */
   private checkZoneTransitions(ballPos: Vector3, deltaTime: number): void {
     const zone = this.getZoneAtPosition(ballPos.z)
-    
+
     if (zone && zone.id !== this.currentZone?.id) {
-      this.enterZone(zone)
+      this.enterZone(zone).catch(console.error)
     }
 
     // Handle transition animation
@@ -159,7 +159,7 @@ export class DynamicWorld {
   private getZoneAtPosition(z: number): WorldZone | null {
     // In dynamic mode, Z is negative as we travel "up" the world
     const progress = Math.abs(z)
-    
+
     for (const zone of this.config.zones) {
       if (progress >= zone.startZ && progress < zone.endZ) {
         return zone
@@ -171,7 +171,7 @@ export class DynamicWorld {
   /**
    * Enter a new zone - trigger all transitions
    */
-  private enterZone(zone: WorldZone): void {
+  private async enterZone(zone: WorldZone): Promise<void> {
     console.log(`[DynamicWorld] Entering zone: ${zone.name}`)
     this.currentZone = zone
     this.zoneTransitionActive = true
@@ -250,7 +250,7 @@ export class DynamicWorld {
       this.scene
     )
     bumper.position = pos
-    
+
     const mat = new StandardMaterial('bumperMat', this.scene)
     mat.emissiveColor = color('#ff6600')
     bumper.material = mat
@@ -272,7 +272,7 @@ export class DynamicWorld {
       this.scene
     )
     target.position = pos
-    
+
     const mat = new StandardMaterial('targetMat', this.scene)
     mat.emissiveColor = color('#00ff88')
     target.material = mat
@@ -287,7 +287,7 @@ export class DynamicWorld {
       this.scene
     )
     collectible.position = pos.add(new Vector3(0, 1, 0))
-    
+
     const mat = new StandardMaterial('collectibleMat', this.scene)
     mat.emissiveColor = color('#ff00ff')
     collectible.material = mat
@@ -321,7 +321,7 @@ export class DynamicWorld {
    */
   setMode(mode: WorldMode): void {
     if (this.config.mode === mode) return
-    
+
     console.log(`[DynamicWorld] Switching to ${mode} mode`)
     this.config.mode = mode
 

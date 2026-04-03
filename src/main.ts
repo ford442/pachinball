@@ -40,12 +40,42 @@ async function bootstrap(): Promise<void> {
   console.timeEnd('[Bootstrap] Total initialization')
   console.log('[Bootstrap] Physics WASM preloading completed successfully')
 
+  // Setup canvas resize handling
+  setupResizeHandler(canvas, engine)
+
   if (import.meta.hot) {
     import.meta.hot.dispose(() => {
       game.dispose()
       engine.dispose()
     })
   }
+}
+
+/**
+ * Setup resize handling for the canvas
+ */
+function setupResizeHandler(canvas: HTMLCanvasElement, engine: Engine | WebGPUEngine): void {
+  // Use ResizeObserver for proper canvas resize detection
+  const resizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.target === canvas) {
+        // Debounce resize calls
+        requestAnimationFrame(() => {
+          engine.resize()
+          console.log('[Resize] Canvas resized:', canvas.width, 'x', canvas.height)
+        })
+      }
+    }
+  })
+
+  resizeObserver.observe(canvas)
+
+  // Fallback to window resize event
+  window.addEventListener('resize', () => {
+    engine.resize()
+  })
+
+  console.log('[Resize] ResizeObserver setup complete')
 }
 
 async function createEngine(canvas: HTMLCanvasElement): Promise<Engine | WebGPUEngine> {

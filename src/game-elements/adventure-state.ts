@@ -12,7 +12,7 @@
 
 import type { DisplaySystem } from './display'
 import type { TableMapType } from '../shaders/lcd-table'
-import { API_BASE } from '../config'
+import { apiFetch } from '../config'
 
 export type GoalType = 'hit-pegs' | 'survive-time' | 'reach-score' | 'collect-items' | 'no-drain'
 
@@ -64,7 +64,7 @@ export interface AdventureProgress {
 }
 
 const STORAGE_KEY = 'pachinball_adventure_progress'
-const API_ENDPOINT = `${API_BASE}/adventure/progress`
+// API endpoint defined in config.ts
 
 // Level reward definitions - maps level ID to unlockable reward
 export const LEVEL_REWARDS: Record<string, UnlockableReward> = {
@@ -706,21 +706,19 @@ export class AdventureState {
    * Sync progress to backend
    */
   async syncToBackend(): Promise<void> {
-    try {
-      const response = await fetch(API_ENDPOINT, {
+    const result = await apiFetch<AdventureProgress>(
+      '/adventure/progress',
+      {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(this.progress),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
       }
-
+    )
+    
+    if (result) {
       console.log('[AdventureState] Progress synced to backend')
-    } catch (e) {
-      // Silently fail - local storage is primary
-      console.warn('[AdventureState] Backend sync failed:', e)
+    } else {
+      console.warn('[AdventureState] Backend sync failed')
     }
   }
 
@@ -728,19 +726,12 @@ export class AdventureState {
    * Fetch progress from backend
    */
   async fetchFromBackend(): Promise<void> {
-    try {
-      const response = await fetch(API_ENDPOINT)
-      if (response.ok) {
-        const backendProgress = await response.json()
-        // Merge with local (prefer backend if newer)
-        if (backendProgress.lastPlayed > this.progress.lastPlayed) {
-          this.progress = { ...this.progress, ...backendProgress }
-          this.saveProgress()
-          console.log('[AdventureState] Progress loaded from backend')
-        }
-      }
-    } catch (e) {
-      console.warn('[AdventureState] Backend fetch failed:', e)
+    const backendProgress = await apiFetch<AdventureProgress>('/adventure/progress')
+    
+    if (backendProgress && backendProgress.lastPlayed > this.progress.lastPlayed) {
+      this.progress = { ...this.progress, ...backendProgress }
+      this.saveProgress()
+      console.log('[AdventureState] Progress loaded from backend')
     }
   }
 
