@@ -202,39 +202,68 @@ export class GameObjects {
 
   private createSideRails(metalMat: PBRMaterial, accentMat: PBRMaterial): void {
     // ================================================================
-    // RAISED PLAYFIELD RAILS - Multi-layer profile with PHYSICS COLLIDERS
+    // SMOOTH CURVED RAILS - CreateTube for organic flowing profile
     // ================================================================
     
-    // Main rail bodies - taller for better silhouette
-    const leftRail = MeshBuilder.CreateBox("leftRail", { width: 1.2, height: 1.5, depth: 32 }, this.scene)
-    leftRail.position.set(-12.3, -0.2, 5)
-    leftRail.material = metalMat
+    // Enhanced rail material with map-reactive accent
+    const railMat = this.matLib.getEnhancedRailMaterial()
+    
+    // Left rail path - smooth curve along playfield edge
+    const leftRailPath = [
+      new Vector3(-12, 0.5, -11),  // Bottom near flippers
+      new Vector3(-12, 0.5, -5),   // Mid lower
+      new Vector3(-12, 0.5, 5),    // Center
+      new Vector3(-12, 0.5, 15),   // Mid upper
+      new Vector3(-12, 0.5, 21)    // Top
+    ]
+    
+    // Create smooth curved left rail using CreateTube
+    const leftRail = MeshBuilder.CreateTube("leftRail", {
+      path: leftRailPath,
+      radius: 0.35,
+      tessellation: 32,
+      cap: 2,
+      sideOrientation: 2
+    }, this.scene)
+    leftRail.material = railMat
     this.pinballMeshes.push(leftRail)
-
-    const rightRail = MeshBuilder.CreateBox("rightRail", { width: 1.2, height: 1.5, depth: 32 }, this.scene)
-    rightRail.position.set(13.3, -0.2, 5)
-    rightRail.material = metalMat
+    
+    // Right rail path - smooth curve along playfield edge
+    const rightRailPath = [
+      new Vector3(13, 0.5, -11),   // Bottom near flippers
+      new Vector3(13, 0.5, -5),    // Mid lower
+      new Vector3(13, 0.5, 5),     // Center
+      new Vector3(13, 0.5, 15),    // Mid upper
+      new Vector3(13, 0.5, 21)     // Top
+    ]
+    
+    // Create smooth curved right rail using CreateTube
+    const rightRail = MeshBuilder.CreateTube("rightRail", {
+      path: rightRailPath,
+      radius: 0.35,
+      tessellation: 32,
+      cap: 2,
+      sideOrientation: 2
+    }, this.scene)
+    rightRail.material = railMat
     this.pinballMeshes.push(rightRail)
-
-    // Top rail surface - where ball contacts
-    const leftRailTop = MeshBuilder.CreateBox("leftRailTop", { width: 0.8, height: 0.2, depth: 31 }, this.scene)
-    leftRailTop.position.set(-12.1, 0.55, 5)
-    leftRailTop.material = metalMat
-    this.pinballMeshes.push(leftRailTop)
-
-    const rightRailTop = MeshBuilder.CreateBox("rightRailTop", { width: 0.8, height: 0.2, depth: 31 }, this.scene)
-    rightRailTop.position.set(13.1, 0.55, 5)
-    rightRailTop.material = metalMat
-    this.pinballMeshes.push(rightRailTop)
-
-    // LED accent strips on inner rail face
-    const leftLED = MeshBuilder.CreateBox("leftRailLED", { width: 0.1, height: 0.15, depth: 30 }, this.scene)
-    leftLED.position.set(-11.7, 0.3, 5)
-    leftLED.material = accentMat
-
-    const rightLED = MeshBuilder.CreateBox("rightRailLED", { width: 0.1, height: 0.15, depth: 30 }, this.scene)
-    rightLED.position.set(12.7, 0.3, 5)
-    rightLED.material = accentMat
+    
+    // Rail accent lines - thin glowing strips along rails
+    const leftAccentPath = leftRailPath.map(p => new Vector3(p.x + 0.25, p.y - 0.1, p.z))
+    const leftAccent = MeshBuilder.CreateTube("leftRailAccent", {
+      path: leftAccentPath,
+      radius: 0.08,
+      tessellation: 16
+    }, this.scene)
+    leftAccent.material = accentMat
+    
+    const rightAccentPath = rightRailPath.map(p => new Vector3(p.x - 0.25, p.y - 0.1, p.z))
+    const rightAccent = MeshBuilder.CreateTube("rightRailAccent", {
+      path: rightAccentPath,
+      radius: 0.08,
+      tessellation: 16
+    }, this.scene)
+    rightAccent.material = accentMat
 
     // ================================================================
     // SIDE RAIL PHYSICS COLLIDERS - Strong barriers to prevent ball escape
@@ -1027,8 +1056,10 @@ export class GameObjects {
       bumperHigh.addLODLevel(50, null)
       
       const bumper = bumperHigh
-      const mat = this.matLib.getNeonBumperMaterial(colorHex)
-      bumper.material = mat
+      
+      // Use enhanced bumper materials with map-reactive glow
+      const bodyMat = this.matLib.getEnhancedBumperBodyMaterial(colorHex)
+      bumper.material = bodyMat
 
       // ================================================================
       // BUMPER CAP - Subtle beveled top
@@ -1036,16 +1067,21 @@ export class GameObjects {
       const bumperCap = MeshBuilder.CreateSphere("bump_cap", { diameter: 0.55 * scale, segments: 16 }, this.scene) as Mesh
       bumperCap.position.set(x, 0.5 + 0.22 * scale, z)
       bumperCap.scaling = new Vector3(1, 0.35, 1)
-      bumperCap.material = mat
+      bumperCap.material = bodyMat
 
       // ================================================================
       // DEEP EMISSIVE RING - Torus around equator
       // ================================================================
-      const bumperRing = MeshBuilder.CreateTorus("bump_ring", { diameter: 0.78 * scale, thickness: 0.045 * scale, tessellation: 24 }, this.scene) as Mesh
-      bumperRing.position.set(x, 0.5, z)
+      const bumperRing = MeshBuilder.CreateTorus("bump_ring", { 
+        diameter: 0.78 * scale, 
+        thickness: 0.055 * scale, 
+        tessellation: 24 
+      }, this.scene) as Mesh
+      bumperRing.position.set(x, 0.38 * scale, z)
       bumperRing.rotation.x = Math.PI / 2
-      const ringMat = this.matLib.getNeonBumperMaterial(colorHex)
-      ringMat.emissiveIntensity = 1.4
+      
+      // Use enhanced ring material with deeper emissive
+      const ringMat = this.matLib.getEnhancedBumperRingMaterial(colorHex)
       bumperRing.material = ringMat
 
       // --- REFINED HOLOGRAM PILLAR (tapered for organic look) ---
