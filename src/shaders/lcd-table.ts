@@ -364,6 +364,35 @@ export class LCDTableState {
   }
 
   /**
+   * Update from a dynamic map config (for zone transitions)
+   */
+  updateFromMapConfig(config: Partial<TableMapConfig>): void {
+    // Create a temporary map entry with updated values
+    const current = TABLE_MAPS[this._currentMap]
+    const updatedConfig: TableMapConfig = {
+      ...current,
+      ...config,
+    }
+    
+    // Register the updated config
+    const tempMapId = `${this._currentMap}_temp` as TableMapType
+    TABLE_MAPS[tempMapId] = updatedConfig
+    
+    // Switch to temp map with shorter transition
+    this._targetMap = tempMapId
+    this._isTransitioning = true
+    this._transitionTime = 0.0
+    this._transitionDuration = 0.3 // Faster for zone transitions
+    this._blendFactor = 0.0
+    
+    // Subtle flash effect
+    this._flashIntensity = 0.6
+    this._rippleIntensity = 0.4
+    this._rippleTime = 0.0
+    this._effectTime = 0.0
+  }
+
+  /**
    * Switch to a new map with smooth transition + flash/ripple effects
    */
   switchMap(newMap: TableMapType): void {

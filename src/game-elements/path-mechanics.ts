@@ -1008,6 +1008,19 @@ export interface ZoneTrigger {
   maxZ: number
   mechanicType: 'gate' | 'magnet' | 'spinner' | 'jumppad' | 'pegs'
   config: Partial<PathMechanicConfig>
+  /** Optional callback when this trigger zone is entered */
+  onEnter?: () => void
+  /** Optional callback when this trigger zone is exited */
+  onExit?: () => void
+}
+
+export interface PathMechanicsCallbacks {
+  /** Called when ball enters any mechanic zone */
+  onZoneEnter?: (zoneId: string, mechanicType: string) => void
+  /** Called when ball exits any mechanic zone */
+  onZoneExit?: (zoneId: string, mechanicType: string) => void
+  /** Called when a mechanic is triggered (e.g., ball hits jumppad) */
+  onMechanicTrigger?: (mechanicType: string, position: Vector3) => void
 }
 
 export class PathMechanicsManager {
@@ -1019,11 +1032,16 @@ export class PathMechanicsManager {
   private activeZones: Set<string> = new Set()
   private mapBaseColor = '#00d9ff'
   private mapAccentColor = '#ff00ff'
+  private callbacks: PathMechanicsCallbacks = {}
 
   constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
+  }
+
+  setCallbacks(callbacks: PathMechanicsCallbacks): void {
+    this.callbacks = callbacks
   }
 
   setZoneTriggers(triggers: ZoneTrigger[]): void {
@@ -1050,10 +1068,18 @@ export class PathMechanicsManager {
         // Entered zone - spawn mechanic
         this.spawnMechanic(zoneId, trigger)
         this.activeZones.add(zoneId)
+        
+        // Trigger callbacks
+        trigger.onEnter?.()
+        this.callbacks.onZoneEnter?.(zoneId, trigger.mechanicType)
       } else if (!isInZone && this.activeZones.has(zoneId)) {
         // Left zone - despawn mechanic
         this.despawnMechanic(zoneId)
         this.activeZones.delete(zoneId)
+        
+        // Trigger callbacks
+        trigger.onExit?.()
+        this.callbacks.onZoneExit?.(zoneId, trigger.mechanicType)
       }
     }
 

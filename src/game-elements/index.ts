@@ -85,4 +85,33 @@ export {
   type JumpPadConfig,
   type ReactivePegClusterConfig,
   type ZoneTrigger,
+  type PathMechanicsCallbacks,
 } from './path-mechanics'
+export {
+  SAMURAI_REALM_SCENARIO,
+  CYBER_NOIR_SCENARIO,
+  QUANTUM_DREAM_SCENARIO,
+  MOVIE_GANGSTER_SCENARIO,
+  FANTASY_REALM_SCENARIO,
+  DYNAMIC_SCENARIOS,
+  getScenario,
+  getAllScenarios,
+  getScenarioIds,
+  toggleGameMode,
+  setScenario,
+  createDefaultModeState,
+  completeTransition,
+  type DynamicScenario,
+  type ScenarioZone,
+  type GameMode,
+  type ModeToggleState,
+} from './dynamic-scenarios'
+export {
+  ZoneTriggerSystem,
+  createZoneBounds,
+  areZonesAdjacent,
+  getZoneTransitionType,
+  type ZoneBounds,
+  type ZoneTriggerCallback,
+  type ActiveZone,
+} from './zone-trigger-system'
