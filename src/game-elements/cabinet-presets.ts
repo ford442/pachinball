@@ -261,6 +261,161 @@ export class CabinetPresetBuilder {
     
     // Classic details: engraved logo plate
     this.createLogoPlate(trimMat, panelZ, pfHalfD, sideThick)
+    
+    // NEW: Richer Classic details
+    this.createClassicDetails(bodyMat, trimMat, neonMat, halfW, halfD, panelZ, pfHalfD, sideThick)
+  }
+
+  /**
+   * NEW: Classic-specific sculpted decorations
+   * - Engraved side art plates
+   * - Brass speaker grilles
+   * - Decorative coin-door trim
+   * - Extra warm light bars
+   */
+  private createClassicDetails(
+    bodyMat: Material,
+    trimMat: Material,
+    neonMat: Material,
+    halfW: number,
+    halfD: number,
+    panelZ: number,
+    pfHalfD: number,
+    sideThick: number
+  ): void {
+    // Engraved side art plates (simulated with thin boxes slightly offset from side panels)
+    const plateWidth = 4
+    const plateHeight = 10
+    const plateDepth = 0.1
+    
+    for (const side of [-1, 1]) {
+      // Main art plate
+      const plate = MeshBuilder.CreateBox(
+        `cabinetArtPlate${side > 0 ? 'Right' : 'Left'}`,
+        { width: plateWidth, height: plateHeight, depth: plateDepth },
+        this.scene
+      )
+      plate.position.set(
+        side * (halfW + sideThick / 2 + 0.1),
+        this.config.sideHeight / 2,
+        panelZ
+      )
+      plate.material = trimMat as StandardMaterial
+      plate.parent = this.rootNode
+      this.cabinetMeshes.push(plate)
+      
+      // Decorative border frame around plate
+      const frameThickness = 0.3
+      const frameDepth = 0.15
+      
+      // Top frame
+      const topFrame = MeshBuilder.CreateBox(
+        `cabinetPlateFrameTop${side > 0 ? 'Right' : 'Left'}`,
+        { width: plateWidth + frameThickness * 2, height: frameThickness, depth: frameDepth },
+        this.scene
+      )
+      topFrame.position.set(
+        side * (halfW + sideThick / 2 + 0.12),
+        this.config.sideHeight / 2 + plateHeight / 2 + frameThickness / 2,
+        panelZ
+      )
+      topFrame.material = bodyMat as StandardMaterial
+      topFrame.parent = this.rootNode
+      this.cabinetMeshes.push(topFrame)
+      
+      // Bottom frame
+      const bottomFrame = MeshBuilder.CreateBox(
+        `cabinetPlateFrameBottom${side > 0 ? 'Right' : 'Left'}`,
+        { width: plateWidth + frameThickness * 2, height: frameThickness, depth: frameDepth },
+        this.scene
+      )
+      bottomFrame.position.set(
+        side * (halfW + sideThick / 2 + 0.12),
+        this.config.sideHeight / 2 - plateHeight / 2 - frameThickness / 2,
+        panelZ
+      )
+      bottomFrame.material = bodyMat as StandardMaterial
+      bottomFrame.parent = this.rootNode
+      this.cabinetMeshes.push(bottomFrame)
+    }
+    
+    // Brass speaker grilles on backbox sides
+    const grilleSize = 5
+    const grilleDepth = 0.3
+    
+    for (const side of [-1, 1]) {
+      const grille = MeshBuilder.CreateBox(
+        `cabinetBrassGrille${side > 0 ? 'Right' : 'Left'}`,
+        { width: grilleDepth, height: grilleSize, depth: grilleSize },
+        this.scene
+      )
+      grille.position.set(
+        side * (halfW + sideThick / 2 + grilleDepth / 2),
+        this.config.sideHeight - 4,
+        this.config.backboxZ - 2
+      )
+      grille.material = trimMat as StandardMaterial
+      grille.parent = this.rootNode
+      this.cabinetMeshes.push(grille)
+      
+      // Grille mesh pattern (small horizontal slits)
+      for (let i = 0; i < 12; i++) {
+        const slit = MeshBuilder.CreateBox(
+          `cabinetGrilleSlit${side}_${i}`,
+          { width: grilleDepth + 0.1, height: 0.15, depth: grilleSize * 0.7 },
+          this.scene
+        )
+        slit.position.set(
+          side * (halfW + sideThick / 2 + grilleDepth / 2),
+          this.config.sideHeight - 6 + i * 0.7,
+          this.config.backboxZ - 2
+        )
+        slit.material = bodyMat as StandardMaterial
+        slit.parent = this.rootNode
+        this.cabinetMeshes.push(slit)
+      }
+    }
+    
+    // Decorative coin door trim (ornate border around coin door)
+    const coinDoorZ = panelZ - pfHalfD - sideThick / 2 - 0.8
+    const trimPositions = [
+      { x: 0, y: -3.5, w: 10, h: 0.3 },    // Top
+      { x: 0, y: -8.5, w: 10, h: 0.3 },    // Bottom
+      { x: -4, y: -6, w: 0.3, h: 6 },      // Left
+      { x: 4, y: -6, w: 0.3, h: 6 },       // Right
+    ]
+    
+    for (const pos of trimPositions) {
+      const trim = MeshBuilder.CreateBox(
+        `cabinetCoinTrim${pos.x}_${pos.y}`,
+        { width: pos.w, height: pos.h, depth: 0.4 },
+        this.scene
+      )
+      trim.position.set(pos.x, pos.y, coinDoorZ)
+      trim.material = trimMat as StandardMaterial
+      trim.parent = this.rootNode
+      this.cabinetMeshes.push(trim)
+    }
+    
+    // Extra warm light bars under the cabinet (glows with neon color)
+    const barLength = this.config.width * 0.6
+    const barWidth = 0.4
+    
+    for (let i = 0; i < 3; i++) {
+      const lightBar = MeshBuilder.CreateBox(
+        `cabinetWarmLightBar${i}`,
+        { width: barLength, height: 0.2, depth: barWidth },
+        this.scene
+      )
+      lightBar.position.set(
+        0,
+        -4,
+        panelZ - halfD / 2 + i * (halfD / 2)
+      )
+      lightBar.material = neonMat as StandardMaterial
+      lightBar.parent = this.rootNode
+      this.neonMeshes.push(lightBar)
+    }
   }
 
   /**
@@ -304,6 +459,215 @@ export class CabinetPresetBuilder {
     
     // Angled light bars
     this.createLightBars(neonMat, halfW, panelZ)
+    
+    // NEW: Neo-specific aggressive details
+    this.createNeoDetails(bodyMat, trimMat, neonMat, halfW, halfD, panelZ, pfHalfD, sideThick)
+  }
+
+  /**
+   * NEW: Neo-specific sculpted decorations
+   * - Sharp angular engravings
+   * - Glowing edge accents
+   * - Blacked-out speaker grilles with neon outlines
+   */
+  private createNeoDetails(
+    _bodyMat: Material,
+    trimMat: Material,
+    neonMat: Material,
+    halfW: number,
+    halfD: number,
+    panelZ: number,
+    pfHalfD: number,
+    sideThick: number
+  ): void {
+    // Sharp angular engravings on side panels (triangular prisms)
+    const engravingCount = 4
+    
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < engravingCount; i++) {
+        // Triangular engraving pointing upward (aggressive)
+        const triangle = MeshBuilder.CreateCylinder(
+          `cabinetNeoEngrave${side}_${i}`,
+          { diameterTop: 0, diameterBottom: 3, height: 0.15, tessellation: 3 },
+          this.scene
+        )
+        triangle.position.set(
+          side * (halfW + sideThick / 2 + 0.15),
+          this.config.sideHeight / 2 - 5 + i * 5,
+          panelZ - halfD / 2 + i * (halfD / engravingCount)
+        )
+        triangle.rotation.x = -Math.PI / 2
+        triangle.rotation.z = side * Math.PI / 2
+        triangle.material = trimMat as StandardMaterial
+        triangle.parent = this.rootNode
+        this.cabinetMeshes.push(triangle)
+      }
+    }
+    
+    // Glowing edge accents on all cabinet corners
+    const edgeLength = this.config.sideHeight * 0.8
+    const edgeGlowSize = 0.15
+    
+    for (const side of [-1, 1]) {
+      // Front vertical edges
+      const frontEdge = MeshBuilder.CreateBox(
+        `cabinetNeoEdgeFront${side > 0 ? 'Right' : 'Left'}`,
+        { width: edgeGlowSize, height: edgeLength, depth: edgeGlowSize },
+        this.scene
+      )
+      frontEdge.position.set(
+        side * halfW,
+        this.config.sideHeight / 2 - 2,
+        panelZ - halfD + 1
+      )
+      frontEdge.material = neonMat as StandardMaterial
+      frontEdge.parent = this.rootNode
+      this.neonMeshes.push(frontEdge)
+      
+      // Back vertical edges
+      const backEdge = MeshBuilder.CreateBox(
+        `cabinetNeoEdgeBack${side > 0 ? 'Right' : 'Left'}`,
+        { width: edgeGlowSize, height: edgeLength, depth: edgeGlowSize },
+        this.scene
+      )
+      backEdge.position.set(
+        side * halfW,
+        this.config.sideHeight / 2 - 2,
+        panelZ + halfD - 1
+      )
+      backEdge.material = neonMat as StandardMaterial
+      backEdge.parent = this.rootNode
+      this.neonMeshes.push(backEdge)
+    }
+    
+    // Horizontal top edge glow
+    const topEdgeFront = MeshBuilder.CreateBox(
+      'cabinetNeoTopEdgeFront',
+      { width: this.config.width, height: edgeGlowSize, depth: edgeGlowSize },
+      this.scene
+    )
+    topEdgeFront.position.set(0, this.config.sideHeight - 1, panelZ - halfD + 1)
+    topEdgeFront.material = neonMat as StandardMaterial
+    topEdgeFront.parent = this.rootNode
+    this.neonMeshes.push(topEdgeFront)
+    
+    const topEdgeBack = MeshBuilder.CreateBox(
+      'cabinetNeoTopEdgeBack',
+      { width: this.config.width, height: edgeGlowSize, depth: edgeGlowSize },
+      this.scene
+    )
+    topEdgeBack.position.set(0, this.config.sideHeight - 1, panelZ + halfD - 1)
+    topEdgeBack.material = neonMat as StandardMaterial
+    topEdgeBack.parent = this.rootNode
+    this.neonMeshes.push(topEdgeBack)
+    
+    // Blacked-out speaker grilles with neon outlines
+    const grilleWidth = 6
+    const grilleHeight = 8
+    const grilleDepth = 0.4
+    
+    for (const side of [-1, 1]) {
+      // Main black grille backing
+      const grille = MeshBuilder.CreateBox(
+        `cabinetNeoGrille${side > 0 ? 'Right' : 'Left'}`,
+        { width: grilleDepth, height: grilleHeight, depth: grilleWidth },
+        this.scene
+      )
+      grille.position.set(
+        side * (halfW + sideThick / 2 + grilleDepth / 2),
+        this.config.sideHeight - 5,
+        this.config.backboxZ - 2
+      )
+      // Black material - create a new one
+      const blackMat = new StandardMaterial(`neoGrilleBlack${side}`, this.scene)
+      blackMat.diffuseColor = new Color3(0.02, 0.02, 0.02)
+      blackMat.specularColor = new Color3(0.1, 0.1, 0.1)
+      grille.material = blackMat
+      grille.parent = this.rootNode
+      this.cabinetMeshes.push(grille)
+      
+      // Neon outline border
+      const outlineThickness = 0.2
+      const outlineDepth = 0.1
+      
+      // Top neon border
+      const topBorder = MeshBuilder.CreateBox(
+        `cabinetNeoGrilleTop${side}`,
+        { width: outlineDepth, height: outlineThickness, depth: grilleWidth + outlineThickness * 2 },
+        this.scene
+      )
+      topBorder.position.set(
+        side * (halfW + sideThick / 2 + grilleDepth + 0.05),
+        this.config.sideHeight - 5 + grilleHeight / 2 + outlineThickness / 2,
+        this.config.backboxZ - 2
+      )
+      topBorder.material = neonMat as StandardMaterial
+      topBorder.parent = this.rootNode
+      this.neonMeshes.push(topBorder)
+      
+      // Bottom neon border
+      const bottomBorder = MeshBuilder.CreateBox(
+        `cabinetNeoGrilleBottom${side}`,
+        { width: outlineDepth, height: outlineThickness, depth: grilleWidth + outlineThickness * 2 },
+        this.scene
+      )
+      bottomBorder.position.set(
+        side * (halfW + sideThick / 2 + grilleDepth + 0.05),
+        this.config.sideHeight - 5 - grilleHeight / 2 - outlineThickness / 2,
+        this.config.backboxZ - 2
+      )
+      bottomBorder.material = neonMat as StandardMaterial
+      bottomBorder.parent = this.rootNode
+      this.neonMeshes.push(bottomBorder)
+      
+      // Left neon border
+      const leftBorder = MeshBuilder.CreateBox(
+        `cabinetNeoGrilleLeft${side}`,
+        { width: outlineDepth, height: grilleHeight, depth: outlineThickness },
+        this.scene
+      )
+      leftBorder.position.set(
+        side * (halfW + sideThick / 2 + grilleDepth + 0.05),
+        this.config.sideHeight - 5,
+        this.config.backboxZ - 2 - grilleWidth / 2 - outlineThickness / 2
+      )
+      leftBorder.material = neonMat as StandardMaterial
+      leftBorder.parent = this.rootNode
+      this.neonMeshes.push(leftBorder)
+      
+      // Right neon border
+      const rightBorder = MeshBuilder.CreateBox(
+        `cabinetNeoGrilleRight${side}`,
+        { width: outlineDepth, height: grilleHeight, depth: outlineThickness },
+        this.scene
+      )
+      rightBorder.position.set(
+        side * (halfW + sideThick / 2 + grilleDepth + 0.05),
+        this.config.sideHeight - 5,
+        this.config.backboxZ - 2 + grilleWidth / 2 + outlineThickness / 2
+      )
+      rightBorder.material = neonMat as StandardMaterial
+      rightBorder.parent = this.rootNode
+      this.neonMeshes.push(rightBorder)
+    }
+    
+    // Aggressive front vent accents with neon glow
+    const ventCount = 5
+    for (let i = 0; i < ventCount; i++) {
+      const ventGlow = MeshBuilder.CreateBox(
+        `cabinetNeoVentGlow${i}`,
+        { width: 2, height: 0.15, depth: 0.3 },
+        this.scene
+      )
+      ventGlow.position.set(
+        -4 + i * 2,
+        -5,
+        panelZ - pfHalfD - sideThick / 2 - 0.5
+      )
+      ventGlow.material = neonMat as StandardMaterial
+      ventGlow.parent = this.rootNode
+      this.neonMeshes.push(ventGlow)
+    }
   }
 
   /**
@@ -347,6 +711,184 @@ export class CabinetPresetBuilder {
     
     // Extra: Speaker grilles
     this.createSpeakerGrilles(trimMat, halfW, panelZ)
+    
+    // NEW: Vertical-specific sculpted decorations
+    this.createVerticalDetails(bodyMat, trimMat, neonMat, halfW, halfD, panelZ, pfHalfD, sideThick)
+  }
+
+  /**
+   * NEW: Vertical-specific sculpted decorations
+   * - Tall vertical light bars
+   * - Speaker grilles on the sides
+   * - Circuit-board style engravings on backbox
+   */
+  private createVerticalDetails(
+    bodyMat: Material,
+    trimMat: Material,
+    neonMat: Material,
+    halfW: number,
+    halfD: number,
+    panelZ: number,
+    _pfHalfD: number,
+    sideThick: number
+  ): void {
+    // Tall vertical light bars on each side (signature Vertical feature)
+    const barHeight = this.config.sideHeight * 0.7
+    const barWidth = 0.6
+    const barDepth = 0.3
+    
+    for (const side of [-1, 1]) {
+      // Main light bar
+      const lightBar = MeshBuilder.CreateBox(
+        `cabinetVerticalLightBar${side > 0 ? 'Right' : 'Left'}`,
+        { width: barWidth, height: barHeight, depth: barDepth },
+        this.scene
+      )
+      lightBar.position.set(
+        side * (halfW + sideThick / 2 + barDepth / 2 + 0.1),
+        this.config.sideHeight / 2 - 2,
+        panelZ - halfD / 3
+      )
+      lightBar.material = neonMat as StandardMaterial
+      lightBar.parent = this.rootNode
+      this.neonMeshes.push(lightBar)
+      
+      // Segmented dividers for light bar
+      for (let i = 0; i < 8; i++) {
+        const segment = MeshBuilder.CreateBox(
+          `cabinetVerticalSegment${side}_${i}`,
+          { width: barWidth + 0.1, height: barHeight / 10, depth: barDepth + 0.05 },
+          this.scene
+        )
+        segment.position.set(
+          side * (halfW + sideThick / 2 + barDepth / 2 + 0.1),
+          this.config.sideHeight / 2 - 2 - barHeight / 2 + i * (barHeight / 7.5) + 1,
+          panelZ - halfD / 3
+        )
+        segment.material = trimMat as StandardMaterial
+        segment.parent = this.rootNode
+        this.cabinetMeshes.push(segment)
+      }
+    }
+    
+    // Side-mounted speaker grilles (tall and narrow)
+    const sideGrilleHeight = 12
+    const sideGrilleWidth = 3
+    const grilleDepth = 0.3
+    
+    for (const side of [-1, 1]) {
+      // Main grille backing
+      const grille = MeshBuilder.CreateBox(
+        `cabinetVerticalSideGrille${side > 0 ? 'Right' : 'Left'}`,
+        { width: grilleDepth, height: sideGrilleHeight, depth: sideGrilleWidth },
+        this.scene
+      )
+      grille.position.set(
+        side * (halfW + sideThick / 2 + grilleDepth / 2),
+        this.config.sideHeight / 2,
+        panelZ + halfD / 3
+      )
+      grille.material = bodyMat as StandardMaterial
+      grille.parent = this.rootNode
+      this.cabinetMeshes.push(grille)
+      
+      // Vertical grille lines
+      for (let i = 0; i < 15; i++) {
+        const line = MeshBuilder.CreateBox(
+          `cabinetVerticalGrilleLine${side}_${i}`,
+          { width: grilleDepth + 0.05, height: sideGrilleHeight * 0.8, depth: 0.08 },
+          this.scene
+        )
+        line.position.set(
+          side * (halfW + sideThick / 2 + grilleDepth / 2),
+          this.config.sideHeight / 2,
+          panelZ + halfD / 3 - sideGrilleWidth / 2 + 0.4 + i * 0.4
+        )
+        line.material = trimMat as StandardMaterial
+        line.parent = this.rootNode
+        this.cabinetMeshes.push(line)
+      }
+    }
+    
+    // Circuit-board style engravings on backbox
+    const cbWidth = 20
+    const lineThickness = 0.15
+    const lineDepth = 0.1
+    
+    // Circuit pattern lines
+    const circuitLines = [
+      // Horizontal trunk lines
+      { x: 0, y: 2, w: cbWidth, h: lineThickness },
+      { x: 0, y: -2, w: cbWidth, h: lineThickness },
+      { x: 0, y: 0, w: cbWidth * 0.6, h: lineThickness },
+      // Vertical branch lines
+      { x: -6, y: 0, w: lineThickness, h: 6 },
+      { x: 6, y: 0, w: lineThickness, h: 6 },
+      { x: -3, y: 1, w: lineThickness, h: 4 },
+      { x: 3, y: -1, w: lineThickness, h: 4 },
+    ]
+    
+    for (let i = 0; i < circuitLines.length; i++) {
+      const line = circuitLines[i]
+      const trace = MeshBuilder.CreateBox(
+        `cabinetCircuitTrace${i}`,
+        { width: line.w, height: line.h, depth: lineDepth },
+        this.scene
+      )
+      trace.position.set(
+        line.x,
+        this.config.sideHeight - 3 + line.y,
+        panelZ + halfD + sideThick / 2 + 0.1
+      )
+      trace.material = trimMat as StandardMaterial
+      trace.parent = this.rootNode
+      this.cabinetMeshes.push(trace)
+    }
+    
+    // Circuit nodes (glowing dots at intersections)
+    const nodePositions = [
+      { x: -6, y: 2 },
+      { x: -6, y: -2 },
+      { x: 6, y: 2 },
+      { x: 6, y: -2 },
+      { x: -3, y: 0 },
+      { x: 3, y: 0 },
+      { x: 0, y: 2 },
+      { x: 0, y: -2 },
+    ]
+    
+    for (let i = 0; i < nodePositions.length; i++) {
+      const node = MeshBuilder.CreateSphere(
+        `cabinetCircuitNode${i}`,
+        { diameter: 0.4 },
+        this.scene
+      )
+      node.position.set(
+        nodePositions[i].x,
+        this.config.sideHeight - 3 + nodePositions[i].y,
+        panelZ + halfD + sideThick / 2 + 0.15
+      )
+      node.material = neonMat as StandardMaterial
+      node.parent = this.rootNode
+      this.neonMeshes.push(node)
+    }
+    
+    // Extended backbox accent strips
+    for (const side of [-1, 1]) {
+      const accent = MeshBuilder.CreateBox(
+        `cabinetVerticalAccent${side > 0 ? 'Right' : 'Left'}`,
+        { width: 1, height: this.config.sideHeight - 4, depth: 0.3 },
+        this.scene
+      )
+      accent.position.set(
+        side * (halfW - 2),
+        this.config.sideHeight / 2 - 2,
+        panelZ + halfD + sideThick / 2 + 0.2
+      )
+      accent.material = trimMat as StandardMaterial
+      accent.parent = this.rootNode
+      this.cabinetMeshes.push(accent)
+    }
   }
 
   // ====================================================================
@@ -1020,6 +1562,7 @@ export class CabinetPresetBuilder {
       }
     }
   }
+
 
   // ====================================================================
   // PUBLIC API
