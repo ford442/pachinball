@@ -2456,7 +2456,7 @@ export class Game {
       onZoneExit: () => {
         // Optional: handle zone exit effects
       },
-      onZoneProgress: (_zone, _progress) => {
+      onZoneProgress: () => {
         // Optional: update progress indicators
       }
     })
@@ -3511,6 +3511,9 @@ export class Game {
     if (photosensitiveCheckbox) photosensitiveCheckbox.checked = settings.photosensitiveMode
     if (shakeSlider) shakeSlider.value = String(settings.shakeIntensity)
     
+    // Apply photosensitive mode to LCD table
+    this.lcdTableState.setPhotosensitiveMode(settings.photosensitiveMode)
+    
     // Load audio settings
     const volumeSettings = this.soundSystem.getVolumeSettings()
     if (masterVolumeSlider) masterVolumeSlider.value = String(volumeSettings.master)
@@ -3541,6 +3544,9 @@ export class Game {
     SettingsManager.save(newSettings)
     SettingsManager.applyToConfig(newSettings)
     console.log('[Accessibility] Settings saved:', newSettings)
+    
+    // Apply photosensitive mode to LCD table
+    this.lcdTableState.setPhotosensitiveMode(newSettings.photosensitiveMode)
     
     // Apply audio settings
     if (masterVolumeSlider) {

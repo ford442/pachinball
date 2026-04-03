@@ -127,7 +127,7 @@ export class ZoneTriggerSystem {
       this.handleZoneTransition(containingZone, ballPos)
     } else if (!containingZone && this.currentZoneId) {
       // Ball left all zones (in transition area)
-      this.handleZoneExit(null, ballPos)
+      this.handleZoneExit(null)
     }
     
     // Update progress within current zone
@@ -181,7 +181,7 @@ export class ZoneTriggerSystem {
     if (this.currentZoneId) {
       const previousZone = this.activeZones.get(this.currentZoneId)
       if (previousZone) {
-        this.handleZoneExit(newZone.zone, entryPosition)
+        this.handleZoneExit(newZone.zone)
       }
     }
     
@@ -209,7 +209,7 @@ export class ZoneTriggerSystem {
   /**
    * Handle zone exit
    */
-  private handleZoneExit(toZone: ScenarioZone | null, _exitPosition: Vector3): void {
+  private handleZoneExit(toZone: ScenarioZone | null): void {
     if (!this.currentZoneId) return
     
     const exitingZone = this.activeZones.get(this.currentZoneId)

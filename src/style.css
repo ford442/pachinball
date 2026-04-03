@@ -7,6 +7,10 @@
   --cabinet-height: calc(var(--cabinet-size) * 1.1);
   --split-perc: 0.4;          /* top screen = 40% of height */
   --bezel-height: 12px;       /* visual separator thickness */
+  
+  /* Safe area insets for mobile devices */
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --touch-controls-height: 140px;
 }
 
 /* Body – dark "arcade room" with floor/wall gradient */
@@ -88,6 +92,10 @@ body::after {
   width: 100%;
   height: 100%;
   z-index: 0;               /* behind everything */
+  
+  /* Bottom padding for touch controls - ensure flippers are visible above buttons */
+  padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
   outline: none;
   touch-action: none;
   -webkit-touch-callout: none;
@@ -103,6 +111,21 @@ body::after {
   background: transparent;   /* crucial – do NOT hide canvas */
   pointer-events: none;      /* let mouse events fall through to canvas */
   z-index: 10;
+}
+
+/* Machine-head mask - hides playfield content showing through in backbox area */
+#machine-head::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(5, 5, 8, 0.95) 0%,
+    rgba(5, 5, 8, 0.7) 60%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 11;
 }
 
 /* Height split – matches the viewport split set in code */
@@ -219,7 +242,8 @@ button:hover {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  padding: 0 20px 20px 20px;
+  /* Add safe-area-inset-bottom for notched devices */
+  padding: 0 20px calc(20px + env(safe-area-inset-bottom, 0px)) 20px;
   z-index: 60;
   pointer-events: none; /* Allow touches to pass through container gaps */
 }
