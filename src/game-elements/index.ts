@@ -61,3 +61,21 @@ export {
   resetLevelSelectScreen,
   type LevelSelectConfig,
 } from './level-select-screen'
+export {
+  PathMechanic,
+  MovingGate,
+  GateState,
+  MagneticField,
+  SpinnerLauncher,
+  JumpPad,
+  ReactivePegCluster,
+  PegState,
+  PathMechanicsManager,
+  type PathMechanicConfig,
+  type MovingGateConfig,
+  type MagneticFieldConfig,
+  type SpinnerLauncherConfig,
+  type JumpPadConfig,
+  type ReactivePegClusterConfig,
+  type ZoneTrigger,
+} from './path-mechanics'
