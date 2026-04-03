@@ -529,3 +529,134 @@ button:hover {
     font-size: 0.5rem;
   }
 }
+
+/* Adventure Mode HUD */
+#adventure-hud {
+  position: absolute;
+  bottom: 80px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid #00d9ff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  min-width: 200px;
+  box-shadow: 
+    0 0 20px rgba(0, 217, 255, 0.3),
+    inset 0 0 30px rgba(0, 217, 255, 0.05);
+  font-family: 'Orbitron', sans-serif;
+  z-index: 100;
+  transition: opacity 0.3s ease;
+}
+
+#adventure-hud.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.adventure-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #00d9ff;
+  margin-bottom: 4px;
+  opacity: 0.8;
+}
+
+.adventure-level {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+  text-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+}
+
+.adventure-goals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.adventure-goal {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  background: rgba(0, 217, 255, 0.1);
+  border-radius: 4px;
+  border-left: 3px solid #00d9ff;
+}
+
+.adventure-goal.completed {
+  border-left-color: #00ff88;
+  background: rgba(0, 255, 136, 0.1);
+}
+
+.adventure-goal-text {
+  color: #ccc;
+}
+
+.adventure-goal.completed .adventure-goal-text {
+  color: #00ff88;
+  text-decoration: line-through;
+}
+
+.adventure-goal-progress {
+  color: #00d9ff;
+  font-weight: 700;
+  font-size: 0.7rem;
+}
+
+.adventure-goal.completed .adventure-goal-progress {
+  color: #00ff88;
+}
+
+.adventure-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00d9ff, #00ff88);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+}
+
+.progress-text {
+  font-size: 0.75rem;
+  color: #00d9ff;
+  font-weight: 700;
+  min-width: 35px;
+  text-align: right;
+}
+
+/* Mobile responsiveness for adventure HUD */
+@media (max-width: 480px) {
+  #adventure-hud {
+    bottom: 70px;
+    left: 10px;
+    right: 10px;
+    min-width: unset;
+    padding: 10px 12px;
+  }
+  
+  .adventure-level {
+    font-size: 0.8rem;
+  }
+  
+  .adventure-goal {
+    font-size: 0.7rem;
+  }
+}
