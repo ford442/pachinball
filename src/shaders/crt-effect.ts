@@ -139,7 +139,7 @@ export interface CRTEffectParams {
 export const CRT_PRESETS = {
   /** Subtle modern CRT look */
   MODERN: {
-    scanlineIntensity: 0.3,
+    scanlineIntensity: 0.2,
     curvature: 0.02,
     vignette: 0.3,
     chromaticAberration: 0.2,
@@ -161,7 +161,7 @@ export const CRT_PRESETS = {
   
   /** Subtle effect for story videos */
   STORY: {
-    scanlineIntensity: 0.25,
+    scanlineIntensity: 0.15,
     curvature: 0.03,
     vignette: 0.25,
     chromaticAberration: 0.15,

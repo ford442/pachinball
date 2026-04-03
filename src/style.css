@@ -93,8 +93,6 @@ body::after {
   height: 100%;
   z-index: 0;               /* behind everything */
   
-  /* Bottom padding for touch controls - ensure flippers are visible above buttons */
-  padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
   outline: none;
   touch-action: none;
@@ -113,16 +111,16 @@ body::after {
   z-index: 10;
 }
 
-/* Machine-head mask - hides playfield content showing through in backbox area */
+/* Machine-head mask - subtle bottom fade to prevent playfield bleed */
 #machine-head::after {
   content: '';
   position: absolute;
   inset: 0;
   background: linear-gradient(
     180deg,
-    rgba(5, 5, 8, 0.95) 0%,
-    rgba(5, 5, 8, 0.7) 60%,
-    transparent 100%
+    transparent 0%,
+    transparent 80%,
+    rgba(5, 5, 8, 0.5) 100%
   );
   pointer-events: none;
   z-index: 11;
@@ -565,6 +563,25 @@ button:hover {
 /* ===================================================================
    RESPONSIVE - Show/hide based on screen size
    =================================================================== */
+
+/* Mobile: shrink cabinet to leave room for touch controls + safe area */
+@media (max-width: 768px) {
+  :root {
+    --cabinet-size: min(calc(85vh - var(--touch-controls-height) - var(--safe-area-bottom)), 85vw);
+  }
+}
+
+@media (min-width: 480px) and (max-width: 768px) {
+  :root { --touch-controls-height: 160px; }
+}
+
+@media (max-width: 359px) {
+  :root { --touch-controls-height: 120px; }
+}
+
+@media (max-height: 500px) and (max-width: 768px) {
+  :root { --touch-controls-height: 100px; }
+}
 
 /* Hide on larger screens (desktop) */
 @media (min-width: 769px) {

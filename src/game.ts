@@ -197,6 +197,9 @@ export class Game {
   private inputLatencyOverlay: HTMLElement | null = null
   private showDebugUI = false
 
+  // Scanline intensity
+  private scanlineIntensity = 0.12
+
   // Accessibility Configuration (CRITICAL SAFETY)
   private accessibility: AccessibilityConfig = detectAccessibility()
 
@@ -420,15 +423,17 @@ export class Game {
     const scanline = new PostProcess(
         "scanline",
         "scanline",
-        ["uTime"],
+        ["uTime", "uScanlineIntensity"],
         null,
         1.0,
         immersiveCam,
         Texture.BILINEAR_SAMPLINGMODE,
         this.engine
     )
+    this.scanlineIntensity = SettingsManager.load().scanlineIntensity
     scanline.onApply = (effect) => {
         effect.setFloat("uTime", performance.now() * 0.001)
+        effect.setFloat("uScanlineIntensity", this.scanlineIntensity)
     }
 
     // ================================================================
@@ -3563,6 +3568,7 @@ export class Game {
     const reducedMotionCheckbox = document.getElementById('reduced-motion') as HTMLInputElement
     const photosensitiveCheckbox = document.getElementById('photosensitive-mode') as HTMLInputElement
     const shakeSlider = document.getElementById('shake-intensity') as HTMLInputElement
+    const scanlineSlider = document.getElementById('scanline-intensity') as HTMLInputElement
     
     // Audio settings
     const masterVolumeSlider = document.getElementById('master-volume') as HTMLInputElement
@@ -3573,6 +3579,11 @@ export class Game {
     if (reducedMotionCheckbox) reducedMotionCheckbox.checked = settings.reducedMotion
     if (photosensitiveCheckbox) photosensitiveCheckbox.checked = settings.photosensitiveMode
     if (shakeSlider) shakeSlider.value = String(settings.shakeIntensity)
+    if (scanlineSlider) {
+      scanlineSlider.value = String(settings.scanlineIntensity)
+      const span = scanlineSlider.parentElement?.querySelector('span')
+      if (span) span.setAttribute('data-value', String(settings.scanlineIntensity))
+    }
     
     // Apply photosensitive mode to LCD table
     this.lcdTableState.setPhotosensitiveMode(settings.photosensitiveMode)
@@ -3589,6 +3600,7 @@ export class Game {
     const reducedMotionCheckbox = document.getElementById('reduced-motion') as HTMLInputElement
     const photosensitiveCheckbox = document.getElementById('photosensitive-mode') as HTMLInputElement
     const shakeSlider = document.getElementById('shake-intensity') as HTMLInputElement
+    const scanlineSlider = document.getElementById('scanline-intensity') as HTMLInputElement
     
     // Audio settings
     const masterVolumeSlider = document.getElementById('master-volume') as HTMLInputElement
@@ -3600,12 +3612,14 @@ export class Game {
       reducedMotion: reducedMotionCheckbox?.checked ?? false,
       photosensitiveMode: photosensitiveCheckbox?.checked ?? false,
       shakeIntensity: parseFloat(shakeSlider?.value ?? '0.08'),
+      scanlineIntensity: parseFloat(scanlineSlider?.value ?? '0.12'),
       enableFog: true,
       enableShadows: true
     }
 
     SettingsManager.save(newSettings)
     SettingsManager.applyToConfig(newSettings)
+    this.scanlineIntensity = newSettings.scanlineIntensity
     console.log('[Accessibility] Settings saved:', newSettings)
     
     // Apply photosensitive mode to LCD table
