@@ -36,7 +36,8 @@ import {
   DisplaySystem,
   EffectsSystem,
   GameObjects,
-  CabinetBuilder,
+  getCabinetBuilder,
+  type CabinetType,
   BallManager,
   BallAnimator,
   AdventureMode,
@@ -94,7 +95,7 @@ export class Game {
   private effects: EffectsSystem | null = null
   private gameObjects: GameObjects | null = null
   private ballManager: BallManager | null = null
-  private cabinetBuilder: CabinetBuilder | null = null
+  private currentCabinetType: CabinetType = 'classic'
   private ballAnimator: BallAnimator | null = null
   private adventureMode: AdventureMode | null = null
   private magSpinFeeder: MagSpinFeeder | null = null
@@ -549,6 +550,11 @@ export class Game {
       if (e.code === 'KeyM' && this.state === GameState.PLAYING) {
         e.preventDefault()
         this.cycleTableMap()
+      }
+      // 'C' key to cycle cabinet presets
+      if (e.code === 'KeyC') {
+        e.preventDefault()
+        this.cycleCabinetPreset()
       }
       // 'L' key to toggle leaderboard
       if (e.code === 'KeyL') {
@@ -1107,8 +1113,8 @@ export class Game {
 
     // Build the full 3D arcade cabinet around the playfield
     if (this.scene) {
-      this.cabinetBuilder = new CabinetBuilder(this.scene)
-      this.cabinetBuilder.buildCabinet()
+      const cabinetBuilder = getCabinetBuilder(this.scene)
+      cabinetBuilder.loadCabinetPreset(this.currentCabinetType)
     }
 
     // Use LCD table material instead of regular playfield
@@ -1251,7 +1257,8 @@ export class Game {
     matLib.updateLCDTableEmissive(mapConfig.baseColor, mapConfig.glowIntensity)
 
     // Update 3D cabinet mesh neon trim and interior lights to match map
-    this.cabinetBuilder?.setThemeFromMap(mapName)
+    const cabinetBuilder = getCabinetBuilder(this.scene!)
+    cabinetBuilder.setThemeFromMap(mapName)
     // Update ambient cabinet neon lights to match map
     this.updateCabinetLightingForMap()
     
@@ -1273,6 +1280,109 @@ export class Game {
 
     // Update on-screen map selector highlight
     this.updateMapSelectorUI()
+  }
+
+  // ============================================================================
+  // CABINET PRESETS - Swappable machine shapes
+  // ============================================================================
+
+  /**
+   * Load a cabinet preset and rebuild the cabinet.
+   * @param type - The cabinet preset type ('classic', 'neo', 'vertical', 'wide')
+   */
+  public loadCabinetPreset(type: CabinetType): void {
+    if (!this.scene) return
+
+    this.currentCabinetType = type
+    const cabinetBuilder = getCabinetBuilder(this.scene)
+    cabinetBuilder.loadCabinetPreset(type)
+
+    // Show cabinet name popup
+    const presetNames: Record<CabinetType, string> = {
+      classic: 'Classic Pinball',
+      neo: 'Neo Arcade',
+      vertical: 'Vertical Shooter',
+      wide: 'Deluxe Wide',
+    }
+    this.showCabinetPopup(presetNames[type])
+
+    // Update UI
+    this.updateCabinetSelectorUI()
+  }
+
+  /**
+   * Cycle to the next cabinet preset.
+   */
+  public cycleCabinetPreset(): void {
+    const types: CabinetType[] = ['classic', 'neo', 'vertical', 'wide']
+    const currentIndex = types.indexOf(this.currentCabinetType)
+    const nextIndex = (currentIndex + 1) % types.length
+    this.loadCabinetPreset(types[nextIndex])
+  }
+
+  /**
+   * Show a cabinet change popup.
+   */
+  private showCabinetPopup(name: string): void {
+    const existing = document.getElementById('cabinet-popup')
+    if (existing) existing.remove()
+
+    const popup = document.createElement('div')
+    popup.id = 'cabinet-popup'
+    popup.innerHTML = `
+      <div style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 4px;">CABINET</div>
+      <div>${name}</div>
+    `
+    popup.style.cssText = `
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #ffffff;
+      text-align: center;
+      text-shadow: 0 0 20px rgba(255,255,255,0.5);
+      pointer-events: none;
+      z-index: 100;
+      opacity: 0;
+      animation: cabinetPopupFade 1.5s ease-out forwards;
+      background: rgba(0,0,0,0.7);
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.2);
+    `
+
+    const style = document.createElement('style')
+    style.textContent = `
+      @keyframes cabinetPopupFade {
+        0% { opacity: 0; transform: translate(-50%, -40%); }
+        20% { opacity: 1; transform: translate(-50%, -50%); }
+        80% { opacity: 1; transform: translate(-50%, -50%); }
+        100% { opacity: 0; transform: translate(-50%, -60%); }
+      }
+    `
+    document.head.appendChild(style)
+    document.body.appendChild(popup)
+
+    setTimeout(() => {
+      popup.remove()
+      style.remove()
+    }, 1500)
+  }
+
+  /**
+   * Update the cabinet selector UI to show current preset.
+   */
+  private updateCabinetSelectorUI(): void {
+    const buttons = document.querySelectorAll('.cabinet-btn')
+    buttons.forEach(btn => {
+      btn.classList.remove('active')
+      if (btn.getAttribute('data-cabinet') === this.currentCabinetType) {
+        btn.classList.add('active')
+      }
+    })
   }
 
   /**
@@ -2921,6 +3031,30 @@ export class Game {
     addHint.addEventListener('mouseenter', () => { addHint.style.opacity = '1' })
     addHint.addEventListener('mouseleave', () => { addHint.style.opacity = '0.7' })
     selector.appendChild(addHint)
+
+    // Set up cabinet selector
+    this.setupCabinetSelector()
+  }
+
+  /**
+   * Set up the cabinet selector buttons.
+   */
+  private setupCabinetSelector(): void {
+    const selector = document.getElementById('cabinet-selector')
+    if (!selector) return
+
+    const buttons = selector.querySelectorAll('.cabinet-btn')
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const cabinetType = btn.getAttribute('data-cabinet') as CabinetType
+        if (cabinetType) {
+          this.loadCabinetPreset(cabinetType)
+        }
+      })
+    })
+
+    // Set initial active state
+    this.updateCabinetSelectorUI()
   }
 
   /**

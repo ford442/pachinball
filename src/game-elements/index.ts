@@ -7,7 +7,14 @@ export { InputHandler } from './input'
 export { DisplaySystem } from './display'
 export { EffectsSystem } from './effects'
 export { GameObjects } from './game-objects'
-export { CabinetBuilder } from './cabinet'
+export {
+  CabinetBuilder,
+  getCabinetBuilder,
+  resetCabinetBuilder,
+  CABINET_PRESETS,
+  type CabinetType,
+  type CabinetPreset,
+} from './cabinet-builder'
 export { BallManager } from './ball-manager'
 export { AdventureMode, AdventureTrackType, CAMERA_PRESETS, type CameraPreset } from './adventure-mode'
 export {

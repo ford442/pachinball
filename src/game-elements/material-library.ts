@@ -326,6 +326,116 @@ export class MaterialLibrary {
     })
   }
 
+  // ============================================================================
+  // CABINET PRESET MATERIALS
+  // ============================================================================
+
+  getMatteBlackMaterial(): PBRMaterial {
+    return this.getCachedPBR('matteBlack', () => {
+      const mat = new PBRMaterial('matteBlackMat', this.scene)
+      mat.albedoColor = new Color3(0.05, 0.05, 0.06)
+      mat.metallic = 0.1
+      mat.roughness = 0.9
+      mat.environmentIntensity = 0.3
+      return mat
+    })
+  }
+
+  getGlossBlackMaterial(): PBRMaterial {
+    return this.getCachedPBR('glossBlack', () => {
+      const mat = new PBRMaterial('glossBlackMat', this.scene)
+      mat.albedoColor = new Color3(0.02, 0.02, 0.03)
+      mat.metallic = 0.3
+      mat.roughness = 0.2
+      mat.environmentIntensity = 1.0
+      this.applyClearCoat(mat, { enabled: true, intensity: 0.8, roughness: 0.1 })
+      return mat
+    })
+  }
+
+  getBlackMetalMaterial(): PBRMaterial {
+    return this.getCachedPBR('blackMetal', () => {
+      const mat = new PBRMaterial('blackMetalMat', this.scene)
+      mat.albedoColor = new Color3(0.08, 0.08, 0.1)
+      mat.metallic = 0.9
+      mat.roughness = 0.4
+      mat.environmentIntensity = 0.7
+      return mat
+    })
+  }
+
+  getCarbonFiberMaterial(): PBRMaterial {
+    return this.getCachedPBR('carbonFiber', () => {
+      const mat = new PBRMaterial('carbonFiberMat', this.scene)
+      mat.albedoColor = new Color3(0.1, 0.1, 0.12)
+      mat.metallic = 0.4
+      mat.roughness = 0.3
+      mat.environmentIntensity = 0.5
+
+      // Create carbon fiber weave texture
+      const weaveTex = this.createCarbonFiberTexture()
+      mat.bumpTexture = weaveTex
+      mat.bumpTexture.level = 0.3
+
+      return mat
+    })
+  }
+
+  private createCarbonFiberTexture(): Texture {
+    const size = 512
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')!
+
+    // Dark background
+    ctx.fillStyle = '#1a1a1a'
+    ctx.fillRect(0, 0, size, size)
+
+    // Diagonal weave pattern
+    ctx.strokeStyle = '#333'
+    ctx.lineWidth = 2
+    const step = 16
+
+    for (let i = -size; i < size * 2; i += step) {
+      ctx.beginPath()
+      ctx.moveTo(i, 0)
+      ctx.lineTo(i + size, size)
+      ctx.stroke()
+
+      ctx.beginPath()
+      ctx.moveTo(i + size, 0)
+      ctx.lineTo(i, size)
+      ctx.stroke()
+    }
+
+    const tex = new DynamicTexture('carbonFiberTex', size, this.scene)
+    tex.update()
+    return tex
+  }
+
+  getGoldMaterial(): PBRMaterial {
+    return this.getCachedPBR('gold', () => {
+      const mat = new PBRMaterial('goldMat', this.scene)
+      mat.albedoColor = new Color3(1.0, 0.84, 0.0)
+      mat.metallic = 1.0
+      mat.roughness = 0.15
+      mat.environmentIntensity = 1.2
+      return mat
+    })
+  }
+
+  getCopperMaterial(): PBRMaterial {
+    return this.getCachedPBR('copper', () => {
+      const mat = new PBRMaterial('copperMat', this.scene)
+      mat.albedoColor = new Color3(0.72, 0.45, 0.2)
+      mat.metallic = 1.0
+      mat.roughness = 0.25
+      mat.environmentIntensity = 1.0
+      return mat
+    })
+  }
+
   getPinMaterial(): PBRMaterial {
     return this.getCachedPBR('pin', () => {
       const mat = new PBRMaterial('pinMat', this.scene)
