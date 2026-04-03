@@ -1,11 +1,12 @@
 /**
- * Adventure State - Level Goals, Progression & Story System
+ * Adventure State - Level Goals, Progression, Story System & Unlockable Rewards
  * 
  * Manages adventure mode progression:
  * - Level goals (hit pegs, survive time, reach score)
  * - Story sequences on level complete
  * - Progress persistence (localStorage + backend)
  * - Map unlocking
+ * - Unlockable rewards system (ball trails, neon patterns, skins)
  * - Backbox video/text integration
  */
 
@@ -14,12 +15,23 @@ import type { TableMapType } from '../shaders/lcd-table'
 
 export type GoalType = 'hit-pegs' | 'survive-time' | 'reach-score' | 'collect-items' | 'no-drain'
 
+export type RewardType = 'ball-trail' | 'neon-pattern' | 'skin'
+
 export interface LevelGoal {
   id: string
   type: GoalType
   target: number
   current: number
+  completed: boolean
   description: string
+}
+
+export interface UnlockableReward {
+  id: string
+  name: string
+  type: RewardType
+  unlockedAt: string
+  equipped: boolean
 }
 
 export interface AdventureLevel {
@@ -35,6 +47,7 @@ export interface AdventureLevel {
   rewards: {
     scoreMultiplier: number
     unlockMap?: TableMapType
+    unlockRewardId?: string
   }
 }
 
@@ -43,6 +56,7 @@ export interface AdventureProgress {
   currentMap: TableMapType
   completedLevels: string[]
   unlockedMaps: TableMapType[]
+  unlockedRewards: UnlockableReward[]
   totalScore: number
   bestScores: Record<string, number>
   lastPlayed: string
@@ -51,6 +65,66 @@ export interface AdventureProgress {
 const STORAGE_KEY = 'pachinball_adventure_progress'
 const API_ENDPOINT = '/api/adventure/progress'
 
+// Level reward definitions - maps level ID to unlockable reward
+export const LEVEL_REWARDS: Record<string, UnlockableReward> = {
+  'level-1-neon': {
+    id: 'neon-trail',
+    name: 'Neon Trail',
+    type: 'ball-trail',
+    unlockedAt: '',
+    equipped: false,
+  },
+  'level-2-cyber': {
+    id: 'cyber-pattern',
+    name: 'Cyber Pattern',
+    type: 'neon-pattern',
+    unlockedAt: '',
+    equipped: false,
+  },
+  'level-3-quantum': {
+    id: 'quantum-skin',
+    name: 'Quantum Skin',
+    type: 'skin',
+    unlockedAt: '',
+    equipped: false,
+  },
+  'level-4-singularity': {
+    id: 'singularity-trail',
+    name: 'Singularity Trail',
+    type: 'ball-trail',
+    unlockedAt: '',
+    equipped: false,
+  },
+  'level-5-glitch': {
+    id: 'glitch-pattern',
+    name: 'Glitch Pattern',
+    type: 'neon-pattern',
+    unlockedAt: '',
+    equipped: false,
+  },
+  'level-6-matrix': {
+    id: 'matrix-skin',
+    name: 'Matrix Skin',
+    type: 'skin',
+    unlockedAt: '',
+    equipped: false,
+  },
+  'level-7-cyan': {
+    id: 'cyan-trail',
+    name: 'Cyan Energy Trail',
+    type: 'ball-trail',
+    unlockedAt: '',
+    equipped: false,
+  },
+  'level-8-magenta': {
+    id: 'master-pattern',
+    name: 'Master Neon',
+    type: 'neon-pattern',
+    unlockedAt: '',
+    equipped: false,
+  },
+}
+
 // Define all adventure levels
 export const ADVENTURE_LEVELS: AdventureLevel[] = [
   {
@@ -58,17 +132,18 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
     name: 'Neon Awakening',
     mapType: 'neon-helix',
     goals: [
-      { id: 'g1-1', type: 'hit-pegs', target: 30, current: 0, description: 'Hit 30 pegs' },
-      { id: 'g1-2', type: 'reach-score', target: 5000, current: 0, description: 'Score 5,000 points' },
+      { id: 'g1-1', type: 'hit-pegs', target: 30, current: 0, completed: false, description: 'Hit 30 pegs' },
+      { id: 'g1-2', type: 'reach-score', target: 5000, current: 0, completed: false, description: 'Score 5,000 points' },
     ],
     story: {
-      intro: 'The Nexus awakens...',
-      complete: 'First light achieved. The Cascade awaits.',
+      intro: `The neon-soaked streets of Sector 7 fade as you jack into the Nexus.\n"Welcome, initiator," a synthetic voice whispers through your neural link.\n"The Cascade awaits your first move. Feel the pulse of the machine."\nYour consciousness expands into a realm of glowing circuits and endless possibility.`,
+      complete: `The first node pulses bright, bathing you in electric blue.\n"First light achieved," the voice acknowledges, almost impressed.\n"The Cascade recognizes your potential. Cyber pathways opening."\nYou have taken your first step into the digital pantheon.`,
       videoUrl: '/videos/story/level1-complete.mp4',
     },
     rewards: {
       scoreMultiplier: 1.1,
       unlockMap: 'cyber-core',
+      unlockRewardId: 'neon-trail',
     },
   },
   {
@@ -76,18 +151,19 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
     name: 'Cyber Infiltration',
     mapType: 'cyber-core',
     goals: [
-      { id: 'g2-1', type: 'survive-time', target: 60, current: 0, description: 'Survive 60 seconds' },
-      { id: 'g2-2', type: 'hit-pegs', target: 50, current: 0, description: 'Hit 50 pegs' },
-      { id: 'g2-3', type: 'reach-score', target: 10000, current: 0, description: 'Score 10,000 points' },
+      { id: 'g2-1', type: 'survive-time', target: 60, current: 0, completed: false, description: 'Survive 60 seconds' },
+      { id: 'g2-2', type: 'hit-pegs', target: 50, current: 0, completed: false, description: 'Hit 50 pegs' },
+      { id: 'g2-3', type: 'reach-score', target: 10000, current: 0, completed: false, description: 'Score 10,000 points' },
     ],
     story: {
-      intro: 'Breaching the firewall...',
-      complete: 'Access granted. Quantum pathways opening.',
+      intro: `Firewalls blaze crimson as you breach the Cyber Core's outer perimeter.\n"Unauthorized access detected," drones a security daemon.\n"Prove your worth, or be purged from the system."\nThe digital architecture shifts around you, testing your resolve.`,
+      complete: `The firewall crumbles, dissolving into streams of golden data.\n"Access granted," the daemon concedes, stepping aside.\n"Quantum pathways opening. You may proceed where few have tread."\nThe Core recognizes you as one of its own.`,
       videoUrl: '/videos/story/level2-complete.mp4',
     },
     rewards: {
       scoreMultiplier: 1.2,
       unlockMap: 'quantum-grid',
+      unlockRewardId: 'cyber-pattern',
     },
   },
   {
@@ -95,17 +171,18 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
     name: 'Quantum Entanglement',
     mapType: 'quantum-grid',
     goals: [
-      { id: 'g3-1', type: 'collect-items', target: 10, current: 0, description: 'Collect 10 quantum orbs' },
-      { id: 'g3-2', type: 'reach-score', target: 15000, current: 0, description: 'Score 15,000 points' },
+      { id: 'g3-1', type: 'collect-items', target: 10, current: 0, completed: false, description: 'Collect 10 quantum orbs' },
+      { id: 'g3-2', type: 'reach-score', target: 15000, current: 0, completed: false, description: 'Score 15,000 points' },
     ],
     story: {
-      intro: 'Reality destabilizes...',
-      complete: 'Quantum state collapsed. Singularity approaches.',
+      intro: `Reality destabilizes as you step into the Quantum Grid.\nHere, probability itself becomes tangible, shimmering in iridescent hues.\n"Observation collapses the wave," echoes from everywhere and nowhere.\nYou exist in superposition—every possible you, walking every possible path.`,
+      complete: `The quantum state collapses into brilliant coherence.\nAll possibilities converge to this singular triumph.\n"Singularity approaches," the void whispers.\nYou have touched the fabric of existence itself.`,
       videoUrl: '/videos/story/level3-complete.mp4',
     },
     rewards: {
       scoreMultiplier: 1.3,
       unlockMap: 'singularity-well',
+      unlockRewardId: 'quantum-skin',
     },
   },
   {
@@ -113,17 +190,18 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
     name: 'Event Horizon',
     mapType: 'singularity-well',
     goals: [
-      { id: 'g4-1', type: 'no-drain', target: 1, current: 0, description: 'Complete without draining' },
-      { id: 'g4-2', type: 'reach-score', target: 25000, current: 0, description: 'Score 25,000 points' },
+      { id: 'g4-1', type: 'no-drain', target: 1, current: 0, completed: false, description: 'Complete without draining' },
+      { id: 'g4-2', type: 'reach-score', target: 25000, current: 0, completed: false, description: 'Score 25,000 points' },
     ],
     story: {
-      intro: 'Gravity becomes infinite...',
-      complete: 'You have touched the void. All maps unlocked.',
+      intro: `Gravity becomes infinite at the edge of the Singularity Well.\nLight bends, time dilates, and the void gazes back at you.\n"Many have reached this threshold," the darkness murmurs.\n"Few have returned. What secrets do you seek in the abyss?"`,
+      complete: `You emerge from the event horizon transformed, bearing secrets of the void.\n"You have touched the darkness and lived," the system acknowledges.\n"All maps unlocked. The Cascade is yours to traverse."\nThe black hole's power now flows through your digital veins.`,
       videoUrl: '/videos/story/level4-complete.mp4',
     },
     rewards: {
       scoreMultiplier: 1.5,
       unlockMap: 'glitch-spire',
+      unlockRewardId: 'singularity-trail',
     },
   },
   {
@@ -131,17 +209,18 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
     name: 'System Corruption',
     mapType: 'glitch-spire',
     goals: [
-      { id: 'g5-1', type: 'survive-time', target: 120, current: 0, description: 'Survive 120 seconds' },
-      { id: 'g5-2', type: 'hit-pegs', target: 100, current: 0, description: 'Hit 100 pegs' },
-      { id: 'g5-3', type: 'reach-score', target: 50000, current: 0, description: 'Score 50,000 points' },
+      { id: 'g5-1', type: 'survive-time', target: 120, current: 0, completed: false, description: 'Survive 120 seconds' },
+      { id: 'g5-2', type: 'hit-pegs', target: 100, current: 0, completed: false, description: 'Hit 100 pegs' },
+      { id: 'g5-3', type: 'reach-score', target: 50000, current: 0, completed: false, description: 'Score 50,000 points' },
     ],
     story: {
-      intro: 'Reality fragments...',
-      complete: 'The system is yours. Master of the Cascade.',
+      intro: `Reality fragments within the Glitch Spire.\nCorrupted code rains like digital ash, and the architecture rebels against itself.\n"ERROR: REALITY NOT FOUND," screams across your HUD.\nTo survive here, you must become the glitch—embrace the corruption.`,
+      complete: `The chaos bends to your will, stabilizing into impossible patterns.\n"The system is yours," whispers the corrupted AI.\n"Master of the Cascade, ruler of broken code."\nYou have turned corruption into art, chaos into power.`,
     },
     rewards: {
       scoreMultiplier: 2.0,
       unlockMap: 'matrix-core',
+      unlockRewardId: 'glitch-pattern',
     },
   },
   // Additional levels for remaining maps
@@ -150,16 +229,17 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
     name: 'Digital Rain',
     mapType: 'matrix-core',
     goals: [
-      { id: 'g6-1', type: 'collect-items', target: 20, current: 0, description: 'Collect 20 data shards' },
-      { id: 'g6-2', type: 'reach-score', target: 75000, current: 0, description: 'Score 75,000 points' },
+      { id: 'g6-1', type: 'collect-items', target: 20, current: 0, completed: false, description: 'Collect 20 data shards' },
+      { id: 'g6-2', type: 'reach-score', target: 75000, current: 0, completed: false, description: 'Score 75,000 points' },
     ],
     story: {
-      intro: 'The code reveals itself...',
-      complete: 'You see the Matrix. True mastery achieved.',
+      intro: `Green cascades of code envelop you in the Matrix Core.\nThe truth reveals itself in streams of ancient programming.\n"Wake up," echoes from a thousand awakened minds.\nYou see through the illusion—reality is merely a construct waiting to be rewritten.`,
+      complete: `The code parts before you like a curtain, revealing the source.\n"You see the Matrix," the collective consciousness intones.\n"True mastery achieved. Reality bends to your perception."\nYou are now both the player and the game.`,
     },
     rewards: {
       scoreMultiplier: 2.5,
       unlockMap: 'cyan-void',
+      unlockRewardId: 'matrix-skin',
     },
   },
   {
@@ -167,16 +247,17 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
     name: 'Void Tranquility',
     mapType: 'cyan-void',
     goals: [
-      { id: 'g7-1', type: 'survive-time', target: 180, current: 0, description: 'Survive 3 minutes' },
-      { id: 'g7-2', type: 'no-drain', target: 1, current: 0, description: 'Perfect run - no drains' },
+      { id: 'g7-1', type: 'survive-time', target: 180, current: 0, completed: false, description: 'Survive 3 minutes' },
+      { id: 'g7-2', type: 'no-drain', target: 1, current: 0, completed: false, description: 'Perfect run - no drains' },
     ],
     story: {
-      intro: 'Embrace the emptiness...',
-      complete: 'Peace through precision. Enlightenment awaits.',
+      intro: `Embrace the emptiness of the Cyan Void.\nHere, in perfect silence, the noise of the Cascade fades to nothing.\n"Let go," the void suggests—not a command, but an invitation.\nIn this nothingness, find everything. In stillness, find true power.`,
+      complete: `Perfection achieved through absolute focus.\n"Peace through precision," the void acknowledges softly.\n"Enlightenment awaits in the Final Dream."\nYou have mastered yourself, and thus mastered the game.`,
     },
     rewards: {
       scoreMultiplier: 3.0,
       unlockMap: 'magenta-dream',
+      unlockRewardId: 'cyan-trail',
     },
   },
   {
@@ -184,16 +265,17 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
     name: 'Final Dream',
     mapType: 'magenta-dream',
     goals: [
-      { id: 'g8-1', type: 'reach-score', target: 100000, current: 0, description: 'Score 100,000 points' },
-      { id: 'g8-2', type: 'hit-pegs', target: 200, current: 0, description: 'Hit 200 pegs' },
-      { id: 'g8-3', type: 'no-drain', target: 1, current: 0, description: 'Legendary: No drains' },
+      { id: 'g8-1', type: 'reach-score', target: 100000, current: 0, completed: false, description: 'Score 100,000 points' },
+      { id: 'g8-2', type: 'hit-pegs', target: 200, current: 0, completed: false, description: 'Hit 200 pegs' },
+      { id: 'g8-3', type: 'no-drain', target: 1, current: 0, completed: false, description: 'Legendary: No drains' },
     ],
     story: {
-      intro: 'The ultimate challenge...',
-      complete: 'You are the Nexus. The Cascade bows to you.',
+      intro: `The ultimate challenge awaits in the Magenta Dream.\nAll paths converge here, in this culmination of the Cascade.\n"One final test," the Nexus whispers, its voice now familiar as your own.\nBecome legend, or be forgotten in the static.`,
+      complete: `Golden light erupts as you transcend the final challenge.\n"You are the Nexus," the Cascade itself declares.\n"The game bows to you. You are eternal."\nYour name will echo through the digital realms forever.`,
     },
     rewards: {
       scoreMultiplier: 5.0,
+      unlockRewardId: 'master-pattern',
     },
   },
 ]
@@ -287,7 +369,10 @@ export class AdventureState {
     this.levelStartTime = performance.now()
     
     // Reset goal progress
-    level.goals.forEach(goal => goal.current = 0)
+    level.goals.forEach(goal => {
+      goal.current = 0
+      goal.completed = false
+    })
     
     this.progress.currentLevel = levelId
     this.progress.currentMap = level.mapType
@@ -311,6 +396,12 @@ export class AdventureState {
       const oldCurrent = goal.current
       goal.current = Math.min(goal.current + amount, goal.target)
       
+      // Check if goal just completed
+      if (goal.current >= goal.target && !goal.completed) {
+        goal.completed = true
+        console.log(`[AdventureState] Goal completed: ${goal.description}`)
+      }
+      
       if (goal.current !== oldCurrent) {
         console.log(`[AdventureState] Goal progress: ${goal.description} - ${goal.current}/${goal.target}`)
       }
@@ -333,6 +424,11 @@ export class AdventureState {
     const goals = this.currentLevel.goals.filter(g => g.type === goalType)
     goals.forEach(goal => {
       goal.current = Math.max(goal.current, value)
+      // Update completed status
+      if (goal.current >= goal.target && !goal.completed) {
+        goal.completed = true
+        console.log(`[AdventureState] Goal completed: ${goal.description}`)
+      }
     })
 
     this.onGoalUpdate?.(this.currentLevel.goals)
@@ -347,7 +443,7 @@ export class AdventureState {
    */
   checkLevelComplete(): boolean {
     if (!this.currentLevel) return false
-    return this.currentLevel.goals.every(goal => goal.current >= goal.target)
+    return this.currentLevel.goals.every(goal => goal.completed)
   }
 
   /**
@@ -379,6 +475,11 @@ export class AdventureState {
         this.progress.unlockedMaps.push(level.rewards.unlockMap)
         console.log(`[AdventureState] Unlocked map: ${level.rewards.unlockMap}`)
       }
+    }
+
+    // Unlock reward for this level
+    if (level.rewards.unlockRewardId) {
+      this.unlockReward(level.rewards.unlockRewardId)
     }
 
     this.saveProgress()
@@ -419,7 +520,7 @@ export class AdventureState {
    */
   private calculateLevelScore(level: AdventureLevel): number {
     const baseScore = 1000
-    const goalBonus = level.goals.reduce((sum, g) => sum + (g.current >= g.target ? 500 : 0), 0)
+    const goalBonus = level.goals.reduce((sum, g) => sum + (g.completed ? 500 : 0), 0)
     const timeBonus = Math.max(0, 300 - Math.floor((performance.now() - this.levelStartTime) / 1000)) * 10
     const multiplier = level.rewards.scoreMultiplier
 
@@ -447,9 +548,115 @@ export class AdventureState {
     this.currentLevel = null
   }
 
-  // ========================================================================
+  // =======================================================================
+  // REWARD SYSTEM
+  // =======================================================================
+
+  /**
+   * Unlock a reward by ID
+   */
+  unlockReward(rewardId: string): boolean {
+    // Check if already unlocked
+    if (this.progress.unlockedRewards.some(r => r.id === rewardId)) {
+      console.log(`[AdventureState] Reward already unlocked: ${rewardId}`)
+      return false
+    }
+
+    // Find reward definition
+    const rewardDef = Object.values(LEVEL_REWARDS).find(r => r.id === rewardId)
+    if (!rewardDef) {
+      console.warn(`[AdventureState] Unknown reward: ${rewardId}`)
+      return false
+    }
+
+    // Add to unlocked rewards
+    const unlockedReward: UnlockableReward = {
+      ...rewardDef,
+      unlockedAt: new Date().toISOString(),
+      equipped: false,
+    }
+    this.progress.unlockedRewards.push(unlockedReward)
+    this.saveProgress()
+
+    console.log(`[AdventureState] Unlocked reward: ${rewardDef.name} (${rewardDef.type})`)
+    return true
+  }
+
+  /**
+   * Equip a reward by ID
+   */
+  equipReward(rewardId: string): boolean {
+    const reward = this.progress.unlockedRewards.find(r => r.id === rewardId)
+    if (!reward) {
+      console.warn(`[AdventureState] Cannot equip - reward not unlocked: ${rewardId}`)
+      return false
+    }
+
+    // Unequip any other reward of the same type
+    this.progress.unlockedRewards.forEach(r => {
+      if (r.type === reward.type && r.id !== rewardId) {
+        r.equipped = false
+      }
+    })
+
+    // Equip this reward
+    reward.equipped = true
+    this.saveProgress()
+
+    console.log(`[AdventureState] Equipped reward: ${reward.name}`)
+    return true
+  }
+
+  /**
+   * Get the equipped reward of a specific type
+   */
+  getEquippedReward(type: RewardType): UnlockableReward | null {
+    return this.progress.unlockedRewards.find(r => r.type === type && r.equipped) || null
+  }
+
+  /**
+   * Get all unlocked rewards
+   */
+  getUnlockedRewards(): UnlockableReward[] {
+    return [...this.progress.unlockedRewards]
+  }
+
+  // =======================================================================
+  // PROGRESS & COMPLETION
+  // =======================================================================
+
+  /**
+   * Get completion percentage for a level (0-100)
+   */
+  getCompletionPercent(levelId: string): number {
+    const level = ADVENTURE_LEVELS.find(l => l.id === levelId)
+    if (!level) return 0
+
+    // If level is completed, return 100
+    if (this.progress.completedLevels.includes(levelId)) {
+      return 100
+    }
+
+    // If this is the current level, calculate based on goals
+    if (this.currentLevel?.id === levelId) {
+      const totalGoals = level.goals.length
+      if (totalGoals === 0) return 0
+
+      const partialProgress = level.goals.reduce((sum, g) => {
+        if (g.completed) return sum + 1
+        return sum + (g.current / g.target)
+      }, 0)
+
+      return Math.min(100, Math.floor((partialProgress / totalGoals) * 100))
+    }
+
+    // Level not started
+    return 0
+  }
+
+  // =======================================================================
   // STORAGE & PERSISTENCE
-  // ========================================================================
+  // =======================================================================
 
   private loadProgress(): AdventureProgress {
     try {
@@ -462,6 +669,7 @@ export class AdventureState {
           currentMap: parsed.currentMap || 'neon-helix',
           completedLevels: parsed.completedLevels || [],
           unlockedMaps: parsed.unlockedMaps || ['neon-helix'],
+          unlockedRewards: parsed.unlockedRewards || [],
           totalScore: parsed.totalScore || 0,
           bestScores: parsed.bestScores || {},
           lastPlayed: parsed.lastPlayed || new Date().toISOString(),
@@ -477,6 +685,7 @@ export class AdventureState {
       currentMap: 'neon-helix',
       completedLevels: [],
       unlockedMaps: ['neon-helix'],
+      unlockedRewards: [],
       totalScore: 0,
       bestScores: {},
       lastPlayed: new Date().toISOString(),
@@ -535,6 +744,17 @@ export class AdventureState {
   }
 
   /**
+   * Get overall completion percentage across all levels
+   */
+  getOverallCompletionPercent(): number {
+    const totalLevels = ADVENTURE_LEVELS.length
+    if (totalLevels === 0) return 0
+    
+    const completedCount = this.progress.completedLevels.length
+    return (completedCount / totalLevels) * 100
+  }
+
+  /**
    * Reset all progress
    */
   resetProgress(): void {
@@ -543,6 +763,7 @@ export class AdventureState {
       currentMap: 'neon-helix',
       completedLevels: [],
       unlockedMaps: ['neon-helix'],
+      unlockedRewards: [],
       totalScore: 0,
       bestScores: {},
       lastPlayed: new Date().toISOString(),

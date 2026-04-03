@@ -71,6 +71,7 @@ import {
   getLeaderboardSystem,
   getNameEntryDialog,
   getAdventureState,
+  getLevelSelectScreen,
   type AccessibilityConfig,
   type InputFrame,
 } from './game-elements'
@@ -172,6 +173,9 @@ export class Game {
 
   // Adventure Mode State (level goals, progression)
   private adventureState = getAdventureState()
+
+  // Level Select Screen
+  private levelSelectScreen: ReturnType<typeof getLevelSelectScreen> | null = null
 
   // Room Environment
   private roomMeshes: Mesh[] = []
@@ -556,8 +560,13 @@ export class Game {
         e.preventDefault()
         this.cycleCabinetPreset()
       }
-      // 'L' key to toggle leaderboard
+      // 'L' key to toggle level select screen
       if (e.code === 'KeyL') {
+        e.preventDefault()
+        this.toggleLevelSelect()
+      }
+      // 'B' key to toggle leaderboard
+      if (e.code === 'KeyB') {
         e.preventDefault()
         this.leaderboardSystem.toggle()
       }
@@ -1131,6 +1140,9 @@ export class Game {
     }
     this.ballManager.createMainBall()
 
+    // Apply equipped rewards to the ball
+    this.applyEquippedRewards()
+
     // Register camera for screen shake effects (needed for gameplay feedback)
     if (this.tableCam && this.effects) {
       this.effects.registerCamera(this.tableCam)
@@ -1256,6 +1268,13 @@ export class Game {
     const matLib = getMaterialLibrary(this.scene!)
     matLib.updateLCDTableEmissive(mapConfig.baseColor, mapConfig.glowIntensity)
 
+    // Update ball and flipper materials to react to new map color
+    this.ballManager?.updateBallMaterialColor(mapConfig.baseColor)
+    matLib.updateFlipperMaterialEmissive(mapConfig.baseColor)
+    matLib.updatePinMaterialEmissive(mapConfig.baseColor)
+    matLib.updateBrushedMetalMaterialEmissive(mapConfig.baseColor)
+    matLib.updateChromeMaterialEmissive(mapConfig.baseColor)
+
     // Update 3D cabinet mesh neon trim and interior lights to match map
     const cabinetBuilder = getCabinetBuilder(this.scene!)
     cabinetBuilder.setThemeFromMap(mapName)
@@ -1276,6 +1295,15 @@ export class Game {
     const levelForMap = this.adventureState.getAllLevels().find(l => l.mapType === mapName)
     if (levelForMap && this.adventureState.isMapUnlocked(mapName)) {
       this.adventureState.startLevel(levelForMap.id)
+      // Show intro story text in backbox
+      if (levelForMap.story?.intro) {
+        this.display?.setStoryText(levelForMap.story.intro)
+      }
+    }
+
+    // Update level select screen progress if visible
+    if (this.levelSelectScreen?.isShowing()) {
+      this.levelSelectScreen.updateProgress()
     }
 
     // Update on-screen map selector highlight
@@ -2065,6 +2093,12 @@ export class Game {
       // Trigger jackpot audio
       this.soundSystem.triggerJackpotAudio()
 
+      // Secret cabinet shake + vignette flash on jackpot
+      if (!this.accessibility.reducedMotion) {
+        const mapColor = TABLE_MAPS[this.currentTableMap]?.baseColor || '#ff00ff'
+        this.effects?.triggerCabinetShake('jackpot', mapColor)
+      }
+
       // Bonus Score
       this.score += 100000
       this.updateHUD()
@@ -2076,6 +2110,27 @@ export class Game {
     } else {
       this.startAdventureMode()
     }
+  }
+
+  /**
+   * Toggle the level select screen
+   */
+  private toggleLevelSelect(): void {
+    if (!this.levelSelectScreen) {
+      this.levelSelectScreen = getLevelSelectScreen(
+        {
+          onLevelSelect: (level, mapType) => {
+            this.switchTableMap(mapType)
+            this.adventureState.startLevel(level.id)
+          },
+          onClose: () => {
+            // Screen closed callback
+          },
+        },
+        this.adventureState
+      )
+    }
+    this.levelSelectScreen.toggle()
   }
 
   /** Collision debounce: track last collision time per body pair */
@@ -2402,7 +2457,13 @@ export class Game {
             const velocity = ballBody.linvel()
             const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
             this.hapticManager?.bumper(speed)
-            
+
+            // Secret cabinet shake on big bumper hits
+            if (speed > 12) {
+              const mapColor = TABLE_MAPS[this.currentTableMap]?.baseColor || '#00d9ff'
+              this.effects?.triggerCabinetShake('heavy', mapColor)
+            }
+
             // Play bumper sound
             this.soundSystem.playSample('bumper', vis.mesh.position)
 
@@ -2506,7 +2567,24 @@ export class Game {
 
   private resetBall(): void {
     this.ballManager?.resetBall()
+    this.applyEquippedRewards()
     this.updateHUD()
+  }
+
+  /**
+   * Apply equipped rewards (ball trail, skin) when spawning ball
+   */
+  private applyEquippedRewards(): void {
+    const ballTrailReward = this.adventureState.getEquippedReward('ball-trail')
+    const skinReward = this.adventureState.getEquippedReward('skin')
+
+    if (ballTrailReward) {
+      this.ballManager?.applyBallTrail(ballTrailReward.id)
+    }
+
+    if (skinReward) {
+      this.ballManager?.applyBallSkin(skinReward.id)
+    }
   }
 
   private updateHUD(): void {
@@ -2562,6 +2640,22 @@ export class Game {
     const progressText = document.getElementById('adventure-progress-text')
     if (progressFill) progressFill.style.width = `${overallPercent}%`
     if (progressText) progressText.textContent = `${overallPercent}%`
+
+    // Show completion % badge if rewards are unlocked
+    const completionPercent = this.adventureState.getOverallCompletionPercent()
+    const hasRewards = completionPercent > 0
+    
+    // Add reward badge to HUD if not already present
+    let rewardBadge = hudEl.querySelector('.adventure-reward-badge') as HTMLElement
+    if (hasRewards && !rewardBadge) {
+      rewardBadge = document.createElement('div')
+      rewardBadge.className = 'adventure-reward-badge'
+      rewardBadge.textContent = '🏆'
+      rewardBadge.title = `${Math.round(completionPercent)}% Complete - Rewards Unlocked!`
+      hudEl.appendChild(rewardBadge)
+    } else if (rewardBadge) {
+      rewardBadge.title = `${Math.round(completionPercent)}% Complete - Rewards Unlocked!`
+    }
   }
 
   private updateCombo(dt: number): void {
@@ -3034,6 +3128,9 @@ export class Game {
 
     // Set up cabinet selector
     this.setupCabinetSelector()
+
+    // Set up levels selector
+    this.setupLevelsSelector()
   }
 
   /**
@@ -3055,6 +3152,18 @@ export class Game {
 
     // Set initial active state
     this.updateCabinetSelectorUI()
+  }
+
+  /**
+   * Set up the levels selector button.
+   */
+  private setupLevelsSelector(): void {
+    const levelsBtn = document.getElementById('levels-btn')
+    if (!levelsBtn) return
+
+    levelsBtn.addEventListener('click', () => {
+      this.toggleLevelSelect()
+    })
   }
 
   /**

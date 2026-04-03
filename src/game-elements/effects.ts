@@ -137,6 +137,16 @@ export class EffectsSystem {
   // Accessibility config (CRITICAL SAFETY)
   private accessibility: AccessibilityConfig = DEFAULT_ACCESSIBILITY
 
+  // Vignette flash state for cabinet-shake secret bonus
+  private vignetteFlash = {
+    active: false,
+    timer: 0,
+    duration: 0.3,
+    originalWeight: 0.4,
+    originalColor: new Color4(0, 0, 0, 0),
+    originalBlendMode: 0,
+  }
+
   registerCamera(camera: { position: Vector3 }): void {
     this.cameraRef = camera
   }
@@ -170,6 +180,53 @@ export class EffectsSystem {
     const safeIntensity = Math.min(intensity, this.MAX_SHAKE_INTENSITY)
     this.cameraShakeIntensity = Math.min(this.cameraShakeIntensity + safeIntensity, this.MAX_SHAKE_INTENSITY)
     this.cameraShakeTime = performance.now() * 0.001
+  }
+
+  /**
+   * Flash the screen vignette briefly (secret cabinet-shake bonus)
+   * @param colorHex - Accent color for the flash
+   * @param durationMs - Flash duration in milliseconds
+   */
+  flashVignette(colorHex: string, durationMs = 300): void {
+    if (!this.bloomPipeline?.imageProcessing) return
+    const ip = this.bloomPipeline.imageProcessing
+
+    if (!this.vignetteFlash.active) {
+      this.vignetteFlash.originalWeight = ip.vignetteWeight
+      this.vignetteFlash.originalColor = ip.vignetteColor.clone()
+      this.vignetteFlash.originalBlendMode = ip.vignetteBlendMode
+    }
+
+    this.vignetteFlash.active = true
+    this.vignetteFlash.timer = 0
+    this.vignetteFlash.duration = durationMs / 1000
+
+    ip.vignetteEnabled = true
+    ip.vignetteBlendMode = 1 // Additive
+
+    const c = Color3.FromHexString(colorHex)
+    ip.vignetteColor = new Color4(c.r, c.g, c.b, 1)
+    ip.vignetteWeight = 1.5
+  }
+
+  private updateVignetteFlash(dt: number): void {
+    if (!this.vignetteFlash.active || !this.bloomPipeline?.imageProcessing) return
+
+    this.vignetteFlash.timer += dt
+    const progress = this.vignetteFlash.timer / this.vignetteFlash.duration
+
+    if (progress >= 1) {
+      const ip = this.bloomPipeline.imageProcessing
+      ip.vignetteWeight = this.vignetteFlash.originalWeight
+      ip.vignetteColor = this.vignetteFlash.originalColor
+      ip.vignetteBlendMode = this.vignetteFlash.originalBlendMode
+      this.vignetteFlash.active = false
+      return
+    }
+
+    const fade = 1 - progress
+    this.bloomPipeline.imageProcessing.vignetteWeight =
+      this.vignetteFlash.originalWeight + (1.5 - this.vignetteFlash.originalWeight) * fade
   }
 
   /**
@@ -1004,6 +1061,36 @@ export class EffectsSystem {
   }
 
   /**
+   * Secret Bonus: Cabinet Shake - combines camera shake + vignette flash
+   * Triggered on big bumper hits and jackpots
+   * CRITICAL SAFETY: Respects reduced motion preferences
+   */
+  triggerCabinetShake(intensity: 'light' | 'medium' | 'heavy' | 'jackpot' = 'medium', color?: string): void {
+    // CRITICAL SAFETY: Skip if reduced motion or shake disabled
+    if (this.accessibility.reducedMotion || !this.accessibility.cameraShakeEnabled) {
+      return
+    }
+    
+    // Map intensity to shake values
+    const shakeIntensity = {
+      light: 0.02,
+      medium: 0.04,
+      heavy: 0.06,
+      jackpot: 0.08
+    }[intensity]
+    
+    // Add camera shake
+    this.addCameraShake(shakeIntensity)
+    
+    // Flash vignette with color
+    const flashColor = color || (intensity === 'jackpot' ? '#ff0088' : '#00d9ff')
+    const flashDuration = intensity === 'jackpot' ? 500 : intensity === 'heavy' ? 300 : 200
+    this.flashVignette(flashColor, flashDuration)
+    
+    console.log(`[Effects] Cabinet shake triggered: ${intensity}`)
+  }
+
+  /**
    * Trigger screen shake effect
    * CRITICAL SAFETY: Respects reduced motion preferences and caps intensity
    */
@@ -1392,7 +1479,8 @@ export class EffectsSystem {
       this.updateFeverTrails(ballBodies, isFever, dt)
     }
     this.updateTransitionFlash(dt)
-    
+    this.updateVignetteFlash(dt)
+
     // Camera shake (target-based, preserves user control)
     this.updateCameraShake(dt)
   }

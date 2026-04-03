@@ -508,43 +508,99 @@ export class InputHandler {
   ): void {
     if (!this.rapier) return
 
+    // Helper to add/remove active class for visual feedback
+    const setActive = (btn: HTMLElement | null, active: boolean) => {
+      if (btn) {
+        if (active) {
+          btn.classList.add('active')
+        } else {
+          btn.classList.remove('active')
+        }
+      }
+    }
+
     // Left flipper touch
     leftBtn?.addEventListener('touchstart', (e) => {
       e.preventDefault()
       if (this.getTiltActive()) return
+      setActive(leftBtn, true)
       this.queueInput('flipperLeft', true)
     }, { passive: false })
 
     leftBtn?.addEventListener('touchend', (e) => {
       e.preventDefault()
+      setActive(leftBtn, false)
       this.queueInput('flipperLeft', false)
     }, { passive: false })
 
     leftBtn?.addEventListener('touchcancel', (e) => {
       e.preventDefault()
+      setActive(leftBtn, false)
       this.queueInput('flipperLeft', false)
     }, { passive: false })
+
+    // Also handle mouse events for desktop testing of touch controls
+    leftBtn?.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      if (this.getTiltActive()) return
+      setActive(leftBtn, true)
+      this.queueInput('flipperLeft', true)
+    })
+
+    leftBtn?.addEventListener('mouseup', (e) => {
+      e.preventDefault()
+      setActive(leftBtn, false)
+      this.queueInput('flipperLeft', false)
+    })
+
+    leftBtn?.addEventListener('mouseleave', () => {
+      setActive(leftBtn, false)
+      this.queueInput('flipperLeft', false)
+    })
 
     // Right flipper touch
     rightBtn?.addEventListener('touchstart', (e) => {
       e.preventDefault()
       if (this.getTiltActive()) return
+      setActive(rightBtn, true)
       this.queueInput('flipperRight', true)
     }, { passive: false })
 
     rightBtn?.addEventListener('touchend', (e) => {
       e.preventDefault()
+      setActive(rightBtn, false)
       this.queueInput('flipperRight', false)
     }, { passive: false })
 
     rightBtn?.addEventListener('touchcancel', (e) => {
       e.preventDefault()
+      setActive(rightBtn, false)
       this.queueInput('flipperRight', false)
     }, { passive: false })
+
+    // Mouse events for right flipper
+    rightBtn?.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      if (this.getTiltActive()) return
+      setActive(rightBtn, true)
+      this.queueInput('flipperRight', true)
+    })
+
+    rightBtn?.addEventListener('mouseup', (e) => {
+      e.preventDefault()
+      setActive(rightBtn, false)
+      this.queueInput('flipperRight', false)
+    })
+
+    rightBtn?.addEventListener('mouseleave', () => {
+      setActive(rightBtn, false)
+      this.queueInput('flipperRight', false)
+    })
 
     // Plunger touch with charge support
     plungerBtn?.addEventListener('touchstart', (e) => {
       e.preventDefault()
+      setActive(plungerBtn, true)
       if (!this.plungerChargeState.isHeld) {
         this.startPlungerCharge()
       }
@@ -552,6 +608,7 @@ export class InputHandler {
 
     plungerBtn?.addEventListener('touchend', (e) => {
       e.preventDefault()
+      setActive(plungerBtn, false)
       if (this.plungerChargeState.isHeld) {
         this.releasePlungerCharge()
         this.queueInput('plunger', true)
@@ -560,6 +617,7 @@ export class InputHandler {
 
     plungerBtn?.addEventListener('touchcancel', (e) => {
       e.preventDefault()
+      setActive(plungerBtn, false)
       if (this.plungerChargeState.isHeld) {
         // Cancel charge without firing on touch cancel
         this.plungerChargeState.isHeld = false
@@ -567,18 +625,66 @@ export class InputHandler {
       }
     }, { passive: false })
 
+    // Mouse events for plunger
+    plungerBtn?.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      setActive(plungerBtn, true)
+      if (!this.plungerChargeState.isHeld) {
+        this.startPlungerCharge()
+      }
+    })
+
+    plungerBtn?.addEventListener('mouseup', (e) => {
+      e.preventDefault()
+      setActive(plungerBtn, false)
+      if (this.plungerChargeState.isHeld) {
+        this.releasePlungerCharge()
+        this.queueInput('plunger', true)
+      }
+    })
+
+    plungerBtn?.addEventListener('mouseleave', () => {
+      setActive(plungerBtn, false)
+      if (this.plungerChargeState.isHeld) {
+        this.plungerChargeState.isHeld = false
+        this.plungerChargeState.chargeLevel = 0
+      }
+    })
+
     // Nudge touch (trigger action - queues once per press)
     nudgeBtn?.addEventListener('touchstart', (e) => {
       e.preventDefault()
+      setActive(nudgeBtn, true)
       this.queueInput('nudge', { x: 0, y: 0, z: 1 })
+      // Auto-remove active class after short delay for nudge
+      setTimeout(() => setActive(nudgeBtn, false), 150)
     }, { passive: false })
 
     nudgeBtn?.addEventListener('touchend', (e) => {
       e.preventDefault()
+      setActive(nudgeBtn, false)
     }, { passive: false })
 
     nudgeBtn?.addEventListener('touchcancel', (e) => {
       e.preventDefault()
+      setActive(nudgeBtn, false)
     }, { passive: false })
+
+    // Mouse events for nudge
+    nudgeBtn?.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      setActive(nudgeBtn, true)
+      this.queueInput('nudge', { x: 0, y: 0, z: 1 })
+      setTimeout(() => setActive(nudgeBtn, false), 150)
+    })
+
+    nudgeBtn?.addEventListener('mouseup', (e) => {
+      e.preventDefault()
+      setActive(nudgeBtn, false)
+    })
+
+    nudgeBtn?.addEventListener('mouseleave', () => {
+      setActive(nudgeBtn, false)
+    })
   }
 }
