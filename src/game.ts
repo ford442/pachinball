@@ -75,7 +75,7 @@ import {
   type AccessibilityConfig,
   type InputFrame,
 } from './game-elements'
-import { GameConfig } from './config'
+import { GameConfig, API_BASE } from './config'
 import { DisplayMode, type DisplayConfig } from './game-elements/display-config'
 import { scanlinePixelShader } from './shaders/scanline'
 import { lcdTablePixelShader, TABLE_MAPS, type TableMapType, LCDTableState, registerMap } from './shaders/lcd-table'
@@ -167,9 +167,7 @@ export class Game {
   private currentTableMap: TableMapType = 'neon-helix'
 
   // Map System (dynamic backend maps)
-  private mapSystem = getMapSystem(
-    window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : 'https://test.1ink.us/api'
-  )
+  private mapSystem = getMapSystem(API_BASE)
 
   // Adventure Mode State (level goals, progression)
   private adventureState = getAdventureState()

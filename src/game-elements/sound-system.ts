@@ -10,9 +10,10 @@
  */
 
 import { Vector3 } from '@babylonjs/core'
+import { API_BASE } from '../config'
 
 // Storage manager API base URL
-const STORAGE_API_BASE = 'http://localhost:8000/api'
+const STORAGE_API_BASE = API_BASE
 
 // Audio categories for samples
 export type SampleCategory = 'peg' | 'bumper' | 'flipper' | 'jackpot' | 'fever' | 'launch' | 'drain'

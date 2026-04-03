@@ -3,6 +3,32 @@
 // Pure config - no Babylon.js dependencies
 
 /**
+ * API Configuration - Backend storage manager URL
+ * Uses production URL in production builds, localhost in development
+ */
+export const API_BASE = import.meta.env.PROD 
+  ? 'https://test.1ink.us:8000/api'
+  : 'http://localhost:8000/api'
+
+/**
+ * Helper to make API calls with automatic fallback handling
+ */
+export async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T | null> {
+  try {
+    const url = `${API_BASE}${endpoint}`
+    const response = await fetch(url, options)
+    if (!response.ok) {
+      console.warn(`[API] ${endpoint} returned ${response.status}`)
+      return null
+    }
+    return await response.json() as T
+  } catch (err) {
+    console.warn(`[API] Failed to fetch ${endpoint}:`, err)
+    return null
+  }
+}
+
+/**
  * Effects Configuration - Feature flags and performance settings
  * for visual effect enhancements. All new effects are opt-in and
  * can be disabled for performance or compatibility.

@@ -6,8 +6,9 @@
  */
 
 import { TABLE_MAPS, type TableMapConfig, type TableMapType } from '../shaders/lcd-table'
+import { API_BASE } from '../config'
 
-const DEFAULT_API_BASE = 'http://localhost:8000/api'
+const DEFAULT_API_BASE = API_BASE
 
 export interface DynamicMapConfig extends TableMapConfig {
   id: string

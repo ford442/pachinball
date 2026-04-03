@@ -7,8 +7,10 @@
  * - Filtered by current map + adventure level
  */
 
+import { API_BASE } from '../config'
+
 // Storage manager API base URL
-const STORAGE_API_BASE = 'http://localhost:8000/api'
+const STORAGE_API_BASE = API_BASE
 
 export interface LeaderboardEntry {
   rank: number
