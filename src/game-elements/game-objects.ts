@@ -11,6 +11,7 @@ import {
   Scalar,
   Animation,
   ParticleSystem,
+  TransformNode,
 } from '@babylonjs/core'
 import type { Mesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
@@ -822,17 +823,118 @@ export class GameObjects {
   }
 
   createFlippers(): { left: RAPIER.ImpulseJoint; right: RAPIER.ImpulseJoint } {
-    const flipperMat = this.matLib.getNeonFlipperMaterial()
+    const flipperMat = this.matLib.getEnhancedFlipperMaterial()
+    const pivotMat = this.matLib.getFlipperPivotMaterial()
 
     const make = (pos: Vector3, right: boolean): RAPIER.RevoluteImpulseJoint => {
-      const mesh = MeshBuilder.CreateBox("flipper", { width: 3.5, depth: 0.5, height: 0.5 }, this.scene) as Mesh
-      mesh.material = flipperMat
+      const isRight = right
+      const flipperLength = 3.5
+      const flipperWidth = 0.5
+      const flipperHeight = 0.6
       
-      const flipperEnd = MeshBuilder.CreateSphere("flipperEnd", { diameter: 0.6 }, this.scene)
-      flipperEnd.position.x = right ? 1.5 : -1.5
-      flipperEnd.parent = mesh
-      flipperEnd.material = flipperMat
+      // Create parent node for the flipper assembly
+      const flipperRoot = new TransformNode("flipperRoot", this.scene)
+      flipperRoot.position.copyFrom(pos)
+      
+      // ================================================================
+      // FLIPPER BLADE - Main paddle with curved end
+      // ================================================================
+      
+      // Main blade body - tapered box for angled top surface
+      const bladeMesh = MeshBuilder.CreateBox("flipperBlade", { 
+        width: flipperLength - 0.4,  // Slightly shorter to make room for rounded tip
+        depth: flipperWidth, 
+        height: flipperHeight 
+      }, this.scene) as Mesh
+      
+      // Offset blade so pivot is at the base
+      bladeMesh.position.x = isRight ? (flipperLength - 0.4) / 2 : -(flipperLength - 0.4) / 2
+      bladeMesh.position.y = 0
+      bladeMesh.rotation.x = 0.15 // Slight upward angle for better ball contact
+      bladeMesh.parent = flipperRoot
+      bladeMesh.material = flipperMat
+      
+      // Rounded flipper tip (curved end) - smooth sphere collision
+      const tipMesh = MeshBuilder.CreateSphere("flipperTip", { 
+        diameter: flipperWidth * 1.2,
+        segments: 16 
+      }, this.scene) as Mesh
+      tipMesh.position.x = isRight ? flipperLength - 0.3 : -(flipperLength - 0.3)
+      tipMesh.position.y = 0.05
+      tipMesh.position.z = 0
+      tipMesh.parent = flipperRoot
+      tipMesh.material = flipperMat
+      
+      // Side bevels - angled edges for visual detail
+      const bevelLeft = MeshBuilder.CreateBox("flipperBevelL", {
+        width: flipperLength - 0.6,
+        depth: 0.1,
+        height: flipperHeight - 0.1
+      }, this.scene) as Mesh
+      bevelLeft.position.x = bladeMesh.position.x
+      bevelLeft.position.z = flipperWidth / 2
+      bevelLeft.position.y = 0.05
+      bevelLeft.rotation.x = 0.15
+      bevelLeft.parent = flipperRoot
+      bevelLeft.material = flipperMat
+      
+      const bevelRight = MeshBuilder.CreateBox("flipperBevelR", {
+        width: flipperLength - 0.6,
+        depth: 0.1,
+        height: flipperHeight - 0.1
+      }, this.scene) as Mesh
+      bevelRight.position.x = bladeMesh.position.x
+      bevelRight.position.z = -flipperWidth / 2
+      bevelRight.position.y = 0.05
+      bevelRight.rotation.x = 0.15
+      bevelRight.parent = flipperRoot
+      bevelRight.material = flipperMat
 
+      // ================================================================
+      // PIVOT ASSEMBLY - Detailed pivot visualization
+      // ================================================================
+      
+      // Main pivot cylinder
+      const pivotCyl = MeshBuilder.CreateCylinder("flipperPivot", {
+        diameter: 0.8,
+        height: 0.9,
+        tessellation: 16
+      }, this.scene) as Mesh
+      pivotCyl.rotation.x = Math.PI / 2
+      pivotCyl.position.x = isRight ? 1.5 : -1.5
+      pivotCyl.position.y = -0.1
+      pivotCyl.parent = flipperRoot
+      pivotCyl.material = pivotMat
+      
+      // Pivot cap (top)
+      const pivotCap = MeshBuilder.CreateCylinder("flipperPivotCap", {
+        diameter: 0.6,
+        height: 0.15,
+        tessellation: 16
+      }, this.scene) as Mesh
+      pivotCap.rotation.x = Math.PI / 2
+      pivotCap.position.x = isRight ? 1.5 : -1.5
+      pivotCap.position.y = -0.1
+      pivotCap.position.z = 0.4
+      pivotCap.parent = flipperRoot
+      pivotCap.material = pivotMat
+      
+      // Pivot ring detail
+      const pivotRing = MeshBuilder.CreateTorus("flipperPivotRing", {
+        diameter: 0.9,
+        thickness: 0.08,
+        tessellation: 16
+      }, this.scene) as Mesh
+      pivotRing.position.x = isRight ? 1.5 : -1.5
+      pivotRing.position.y = -0.1
+      pivotRing.position.z = 0
+      pivotRing.parent = flipperRoot
+      pivotRing.material = pivotMat
+
+      // ================================================================
+      // PHYSICS BODY - Simplified collider matching visual shape
+      // ================================================================
+      
       const body = this.world.createRigidBody(
         this.rapier.RigidBodyDesc.dynamic()
           .setTranslation(pos.x, pos.y, pos.z)
@@ -840,30 +942,52 @@ export class GameObjects {
           .setAngularDamping(2)
           .setCcdEnabled(true)
       )
-      this.world.createCollider(this.rapier.ColliderDesc.cuboid(1.75, 0.25, 0.25), body)
-      this.bindings.push({ mesh, rigidBody: body })
-      this.pinballMeshes.push(mesh)
-      this.pinballMeshes.push(flipperEnd)
+      
+      // Main blade collider (box)
+      const colliderOffset = isRight ? (flipperLength - 0.4) / 2 : -(flipperLength - 0.4) / 2
+      this.world.createCollider(
+        this.rapier.ColliderDesc.cuboid((flipperLength - 0.4) / 2, 0.3, 0.25)
+          .setTranslation(colliderOffset, 0, 0),
+        body
+      )
+      
+      // Rounded tip collider (ball)
+      const tipOffset = isRight ? flipperLength - 0.3 : -(flipperLength - 0.3)
+      this.world.createCollider(
+        this.rapier.ColliderDesc.ball(0.3)
+          .setTranslation(tipOffset, 0.05, 0)
+          .setRestitution(0.3),
+        body
+      )
+      
+      // Register binding with root mesh
+      this.bindings.push({ mesh: flipperRoot as unknown as Mesh, rigidBody: body })
+      this.pinballMeshes.push(bladeMesh, tipMesh, bevelLeft, bevelRight)
+      this.pinballMeshes.push(pivotCyl, pivotCap, pivotRing)
+      
+      // ================================================================
+      // PIVOT JOINT - Revolute joint with limits
+      // ================================================================
       
       const anchor = this.world.createRigidBody(
         this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
       )
       
-      const pX = right ? 1.5 : -1.5
+      const pX = isRight ? 1.5 : -1.5
       const jParams = this.rapier.JointData.revolute(
         new this.rapier.Vector3(pX, 0, 0),
         new this.rapier.Vector3(pX, 0, 0),
         new this.rapier.Vector3(0, 1, 0)
       )
       jParams.limitsEnabled = true
-      jParams.limits = right ? [-Math.PI / 4, Math.PI / 6] : [-Math.PI / 6, Math.PI / 4]
+      jParams.limits = isRight ? [-Math.PI / 4, Math.PI / 6] : [-Math.PI / 6, Math.PI / 4]
       
       const joint = this.world.createImpulseJoint(jParams, anchor, body, true) as RAPIER.RevoluteImpulseJoint
 
       joint.configureMotorPosition(
-        right ? -Math.PI / 4 : Math.PI / 4,
-        GameConfig.table.flipperStrength, // Use config
-        GameConfig.flipper.damping // Use config if available, but keeping original literal for now as it wasn't specified in new config for damping inside createFlippers logic fully
+        isRight ? -Math.PI / 4 : Math.PI / 4,
+        GameConfig.table.flipperStrength,
+        GameConfig.flipper.damping
       )
       
       return joint

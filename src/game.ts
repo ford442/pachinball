@@ -1250,6 +1250,10 @@ export class Game {
     const matLib = getMaterialLibrary(this.scene!)
     matLib.updateLCDTableEmissive(mapConfig.baseColor, mapConfig.glowIntensity)
 
+    // Update ball and flipper materials to react to new map color
+    this.ballManager?.updateBallMaterialColor(mapConfig.baseColor)
+    matLib.updateFlipperMaterialEmissive(mapConfig.baseColor)
+
     // Update 3D cabinet mesh neon trim and interior lights to match map
     this.cabinetBuilder?.setThemeFromMap(mapName)
     // Update ambient cabinet neon lights to match map

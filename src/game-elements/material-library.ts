@@ -617,6 +617,87 @@ export class MaterialLibrary {
     })
   }
 
+  /**
+   * Enhanced flipper material - Wood core with metal plating
+   * Classic pinball aesthetic with modern PBR
+   */
+  getEnhancedFlipperMaterial(): PBRMaterial {
+    return this.getCachedPBR('enhancedFlipper', () => {
+      const mat = new PBRMaterial('enhancedFlipperMat', this.scene)
+      
+      // Base: warm wood tone (like classic pinball)
+      mat.albedoColor = new Color3(0.4, 0.25, 0.15)
+      
+      // Metal plating on striking surface
+      mat.metallic = 0.4
+      mat.roughness = 0.35
+      
+      // Medium-high environment reflection
+      mat.environmentIntensity = 0.8
+      
+      // Polished clear coat for the "playing surface"
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 0.6
+      mat.clearCoat.roughness = 0.2
+      
+      // Subtle emissive edge glow (neon accent)
+      mat.emissiveColor = emissive('#ff6600', 0.2)
+      mat.emissiveIntensity = 0.4
+
+      // Anisotropy for brushed metal look on striking surface
+      if (this._qualityTier === QualityTier.HIGH) {
+        mat.anisotropy.isEnabled = true
+        mat.anisotropy.intensity = 0.3
+        mat.anisotropy.direction.x = 1
+        mat.anisotropy.direction.y = 0
+      }
+
+      return mat
+    })
+  }
+
+  /**
+   * Flipper pivot material - Brushed metal mechanical look
+   */
+  getFlipperPivotMaterial(): PBRMaterial {
+    return this.getCachedPBR('flipperPivot', () => {
+      const mat = new PBRMaterial('flipperPivotMat', this.scene)
+      
+      // Steel/silver metal
+      mat.albedoColor = new Color3(0.7, 0.72, 0.75)
+      mat.metallic = 0.95
+      mat.roughness = 0.25
+      
+      // High environment reflection for metal
+      mat.environmentIntensity = 1.0
+      
+      // Subtle clear coat for machined metal look
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 0.4
+      mat.clearCoat.roughness = 0.3
+
+      // Anisotropy for brushed metal
+      if (this._qualityTier === QualityTier.HIGH) {
+        mat.anisotropy.isEnabled = true
+        mat.anisotropy.intensity = 0.5
+        mat.anisotropy.direction.x = 0
+        mat.anisotropy.direction.y = 1
+      }
+
+      return mat
+    })
+  }
+
+  /**
+   * Update flipper emissive color to match current LCD map
+   */
+  updateFlipperMaterialEmissive(mapColorHex: string): void {
+    const mat = this.materialCache.get('enhancedFlipper') as PBRMaterial | undefined
+    if (mat) {
+      mat.emissiveColor = emissive(mapColorHex, 0.25)
+    }
+  }
+
   getNeonSlingshotMaterial(): PBRMaterial {
     return this.getCachedPBR('slingshot', () => {
       const mat = new PBRMaterial('slingshotMat', this.scene)
@@ -715,6 +796,60 @@ export class MaterialLibrary {
 
       return mat
     })
+  }
+
+  /**
+   * Enhanced chrome ball with map-reactive emissive glow
+   * Creates a glass/metallic hybrid that reacts to the current LCD map color
+   */
+  getEnhancedChromeBallMaterial(mapColorHex: string = '#00d9ff'): PBRMaterial {
+    const cacheKey = `enhancedBall_${mapColorHex}`
+    return this.getCachedPBR(cacheKey, () => {
+      const mat = new PBRMaterial('enhancedBallMat', this.scene)
+      
+      // Base: near-white chrome
+      mat.albedoColor = new Color3(0.98, 0.98, 1.0)
+      mat.metallic = 1.0
+      mat.roughness = 0.15
+      
+      // High environment intensity for reflections
+      mat.environmentIntensity = 1.8
+      
+      // Clear coat for glass-like surface
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 1.0
+      mat.clearCoat.roughness = 0.1
+      
+      // Map-reactive emissive tint (subtle inner glow)
+      const mapColor = color(mapColorHex)
+      mat.emissiveColor = mapColor.scale(0.15)
+      mat.emissiveIntensity = 0.3
+      
+      // Subsurface scattering for translucency effect
+      if (this._qualityTier === QualityTier.HIGH) {
+        mat.subSurface.isRefractionEnabled = true
+        mat.subSurface.indexOfRefraction = 1.5
+        mat.subSurface.tintColor = mapColor
+        
+        // Micro-roughness for surface detail
+        const microRoughness = this.createMicroRoughnessTexture()
+        mat.bumpTexture = microRoughness
+        mat.bumpTexture.level = 0.02
+      }
+
+      return mat
+    })
+  }
+
+  /**
+   * Update ball material with new map color
+   */
+  updateBallMaterialColor(mat: PBRMaterial, mapColorHex: string): void {
+    const mapColor = color(mapColorHex)
+    mat.emissiveColor = mapColor.scale(0.15)
+    if (mat.subSurface.isRefractionEnabled) {
+      mat.subSurface.tintColor = mapColor
+    }
   }
 
   getExtraBallMaterial(): PBRMaterial {
