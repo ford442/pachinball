@@ -31,6 +31,8 @@ export class PrismCoreFeeder {
 
   private state: PrismCoreState = PrismCoreState.IDLE
   private caughtBalls: RAPIER.RigidBody[] = []
+  public visualRotationSpeed: number = 0.5
+
   // Animation properties
   private innerRotationSpeed = 0.5
   private outerRotationSpeed = -0.25

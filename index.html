@@ -30,6 +30,20 @@
         <div class="hud-item">Lives: <span id="lives">3</span></div>
       </div>
 
+      <div id="adventure-hud" class="hidden">
+        <div class="adventure-title">Adventure Mode</div>
+        <div class="adventure-level" id="adventure-level-name">Level 1</div>
+        <div class="adventure-goals" id="adventure-goals">
+          <!-- Goals populated dynamically -->
+        </div>
+        <div class="adventure-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" id="adventure-progress-fill" style="width: 0%"></div>
+          </div>
+          <span class="progress-text" id="adventure-progress-text">0%</span>
+        </div>
+      </div>
+
       <div id="menu-overlay" class="overlay">
         <h1>NEXUS</h1>
         <div id="start-screen" class="screen">
@@ -56,7 +70,7 @@
 
       <div id="settings-overlay" class="overlay hidden">
         <div class="settings-panel">
-          <h2>Accessibility Settings</h2>
+          <h2>Settings</h2>
           
           <label class="setting-row">
             <input type="checkbox" id="reduced-motion">
@@ -75,6 +89,34 @@
             <input type="range" id="shake-intensity" min="0" max="0.10" step="0.01">
           </label>
           
+          <label class="setting-row range-row">
+            <span>CRT Scanline Intensity</span>
+            <input type="range" id="scanline-intensity" min="0" max="0.5" step="0.01" value="0.12">
+          </label>
+          
+          <h3 style="margin-top: 1.5rem; color: #00d9ff; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">Audio</h3>
+          
+          <label class="setting-row range-row">
+            <span>Master Volume</span>
+            <input type="range" id="master-volume" min="0" max="1" step="0.05" value="0.8">
+          </label>
+          
+          <label class="setting-row range-row">
+            <span>Music Volume</span>
+            <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.6">
+          </label>
+          
+          <label class="setting-row range-row">
+            <span>SFX Volume</span>
+            <input type="range" id="sfx-volume" min="0" max="1" step="0.05" value="0.9">
+          </label>
+          
+          <label class="setting-row">
+            <input type="checkbox" id="mute-audio">
+            <span>Mute All</span>
+            <small>Temporarily silence all audio</small>
+          </label>
+          
           <div class="settings-buttons">
             <button id="save-settings">Save</button>
             <button id="close-settings">Cancel</button>
@@ -82,13 +124,64 @@
         </div>
       </div>
 
+      <!-- Mobile Touch Controls - Arcade Style Flipper Buttons -->
       <div id="touch-controls">
-        <button class="touch-btn" id="touch-left">◀</button>
-        <div style="display:flex;flex-direction:column;gap:8px;align-items:center;">
-          <button class="touch-btn" id="touch-plunger">⬤</button>
-          <button class="touch-btn" id="touch-nudge">Nudge</button>
+        <!-- Left Flipper Button -->
+        <button class="flipper-btn flipper-left" id="touch-left" aria-label="Left Flipper">
+          <div class="flipper-glow"></div>
+          <div class="flipper-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </div>
+          <span class="flipper-label">LEFT</span>
+        </button>
+        
+        <!-- Center Controls (Plunger + Nudge) -->
+        <div class="center-controls">
+          <button class="touch-btn touch-plunger" id="touch-plunger" aria-label="Launch Ball">
+            <div class="plunger-glow"></div>
+            <div class="plunger-icon">⬤</div>
+          </button>
+          <button class="touch-btn touch-nudge" id="touch-nudge" aria-label="Nudge Table">
+            <div class="nudge-icon">⚡</div>
+          </button>
         </div>
-        <button class="touch-btn" id="touch-right">▶</button>
+        
+        <!-- Right Flipper Button -->
+        <button class="flipper-btn flipper-right" id="touch-right" aria-label="Right Flipper">
+          <div class="flipper-glow"></div>
+          <div class="flipper-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </div>
+          <span class="flipper-label">RIGHT</span>
+        </button>
+      </div>
+
+      <div id="map-selector">
+        <div class="map-hint" title="Press M to cycle">M</div>
+        <button class="map-btn" data-map="neon-helix" title="Neon Helix">1</button>
+        <button class="map-btn" data-map="cyber-core" title="Cyber Core">2</button>
+        <button class="map-btn" data-map="quantum-grid" title="Quantum Grid">3</button>
+        <button class="map-btn" data-map="singularity-well" title="Singularity Well">4</button>
+        <button class="map-btn" data-map="glitch-spire" title="Glitch Spire">5</button>
+        <button class="map-btn" data-map="matrix-core" title="Matrix Core">6</button>
+        <button class="map-btn" data-map="cyan-void" title="Cyan Void">7</button>
+        <button class="map-btn" data-map="magenta-dream" title="Magenta Dream">8</button>
+      </div>
+
+      <div id="cabinet-selector">
+        <div class="cabinet-hint" title="Press C to cycle">C</div>
+        <button class="cabinet-btn active" data-cabinet="classic" title="Classic Pinball">Classic</button>
+        <button class="cabinet-btn" data-cabinet="neo" title="Neo Arcade">Neo</button>
+        <button class="cabinet-btn" data-cabinet="vertical" title="Vertical Shooter">Vertical</button>
+      </div>
+
+      <div id="levels-selector">
+        <div class="levels-hint" title="Press L for levels">L</div>
+        <button class="levels-btn" id="levels-btn" title="Select Level">Levels</button>
       </div>
 
     </div>

@@ -29,7 +29,8 @@ export class NanoLoomFeeder {
   private intakePosition: Vector3
 
   // Visuals
-
+  public _frameMesh: Mesh | null = null
+  public _intakeMesh: Mesh | null = null
   private pins: Mesh[] = []
   private light: PointLight | null = null
 
@@ -37,6 +38,8 @@ export class NanoLoomFeeder {
   private timer: number = 0
 
   private caughtBall: RAPIER.RigidBody | null = null
+  public pinActivationProgress = 0
+
   // Physics Handles
   private frameBody: RAPIER.RigidBody | null = null
 

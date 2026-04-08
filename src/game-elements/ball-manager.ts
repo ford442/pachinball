@@ -7,12 +7,15 @@ import {
   Color3,
   TrailMesh,
   PointLight,
+  Mesh,
 } from '@babylonjs/core'
-import type { Mesh, MirrorTexture } from '@babylonjs/core'
+import type { MirrorTexture } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
 import type { PhysicsBinding } from './types'
 import { getMaterialLibrary } from './material-library'
+
+
 
 export class BallManager {
   private scene: Scene
@@ -66,12 +69,39 @@ export class BallManager {
   }
 
   createMainBall(): RAPIER.RigidBody {
-    // Use MaterialLibrary for chrome ball
-    const ballMat = this.matLib.getChromeBallMaterial()
-
+    // Enhanced ball: high-poly sphere with bevel ring and map-reactive material
     const diameter = GameConfig.ball.radius * 2
-    const ball = MeshBuilder.CreateSphere('ball', { diameter: diameter }, this.scene) as Mesh
+    
+    // High-segment sphere for smooth highlights
+    const ball = MeshBuilder.CreateSphere('ball', { 
+      diameter: diameter,
+      segments: 32,  // High poly for smooth bevel highlights
+      slice: 1       // Full sphere
+    }, this.scene) as Mesh
+    
+    // Enhanced chrome ball material with map-reactive glow
+    const ballMat = this.matLib.getEnhancedChromeBallMaterial()
     ball.material = ballMat
+
+    // Subtle bevel highlight: inner core sphere for layered glass/metallic look
+    const ballCore = MeshBuilder.CreateSphere('ballCore', { diameter: diameter * 0.65, segments: 16 }, this.scene) as Mesh
+    ballCore.parent = ball
+    ballCore.material = this.matLib.getEnhancedChromeBallMaterial()
+    if (ballCore.material) {
+      const coreMat = ballCore.material as PBRMaterial
+      coreMat.emissiveColor = Color3.FromHexString('#00d9ff').scale(0.25)
+      coreMat.emissiveIntensity = 0.5
+      coreMat.alpha = 0.85
+    }
+
+    // Thin equatorial ring for premium highlight detail
+    const ballRing = MeshBuilder.CreateTorus('ballRing', { diameter: diameter * 0.85, thickness: 0.015, tessellation: 32 }, this.scene) as Mesh
+    ballRing.parent = ball
+    ballRing.rotation.x = Math.PI / 2
+    const ringMat = new StandardMaterial('ballRingMat', this.scene)
+    ringMat.emissiveColor = Color3.White()
+    ringMat.disableLighting = true
+    ballRing.material = ringMat
     
     // Use Config for Spawn Point (Plain Objects -> Vector3 implicitly handled by rapier setTranslation usually takes x,y,z args, or we pass individual components)
     const spawn = GameConfig.ball.spawnMain
@@ -81,8 +111,8 @@ export class BallManager {
         .setTranslation(spawn.x, spawn.y, spawn.z)
         .setCcdEnabled(true)
         .setCanSleep(true)        // Ball sleep: idle balls cost ~0 CPU
-        .setLinearDamping(0.05)   // OP-3: Natural roll decay
-        .setAngularDamping(0.1)   // OP-3: Spin decay
+        .setLinearDamping(GameConfig.ball.linearDamping)   // Natural roll decay
+        .setAngularDamping(GameConfig.ball.angularDamping) // Spin decay
     )
 
     const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
@@ -153,8 +183,8 @@ export class BallManager {
           .setTranslation(b.position.x, b.position.y, b.position.z)
           .setCcdEnabled(true)
           .setCanSleep(true)
-          .setLinearDamping(0.05)
-          .setAngularDamping(0.1)
+          .setLinearDamping(GameConfig.ball.linearDamping)
+          .setAngularDamping(GameConfig.ball.angularDamping)
       )
 
       this.world.createCollider(
@@ -339,6 +369,45 @@ export class BallManager {
     return this.ballBodies.length > 0
   }
 
+  /**
+   * Update ball material with map-reactive color
+   * Called when switching table maps
+   */
+  updateBallMaterialColor(mapColorHex: string): void {
+    const mainBallBinding = this.bindings.find(b => b.mesh.name === 'ball')
+    if (mainBallBinding) {
+      const ballMesh = mainBallBinding.mesh
+      if (ballMesh instanceof Mesh && ballMesh.material) {
+        this.matLib.updateBallMaterialColor(
+          ballMesh.material as PBRMaterial, 
+          mapColorHex
+        )
+      }
+      
+      // Update inner core glow color
+      const coreMesh = ballMesh.getChildren().find(c => c.name === 'ballCore') as Mesh | undefined
+      if (coreMesh && coreMesh.material) {
+        const coreMat = coreMesh.material as PBRMaterial
+        coreMat.emissiveColor = Color3.FromHexString(mapColorHex).scale(0.25)
+        if (coreMat.subSurface.isRefractionEnabled) {
+          coreMat.subSurface.tintColor = Color3.FromHexString(mapColorHex)
+        }
+      }
+      
+      // Update ball point light color
+      const ballLight = ballMesh.getChildren().find(c => c.name === 'ballLight') as PointLight | undefined
+      if (ballLight) {
+        ballLight.diffuse = Color3.FromHexString(mapColorHex)
+      }
+    }
+    
+    // Also update trail color
+    const mapColor = Color3.FromHexString(mapColorHex)
+    for (const trailMat of this.trailMaterials.values()) {
+      trailMat.emissiveColor = mapColor
+    }
+  }
+
   updateTrailEffects(): void {
     const cyan = Color3.FromHexString("#00ffff")
     const magenta = Color3.FromHexString("#ff00ff")
@@ -411,5 +480,74 @@ export class BallManager {
     }
 
     return stuckBalls
+  }
+
+  /**
+   * Apply equipped reward skin to the main ball
+   */
+  applyBallSkin(skinId: string): void {
+    const binding = this.bindings.find(b => b.mesh.name === 'ball')
+    if (!binding) return
+
+    const ball = binding.mesh as Mesh
+    const core = ball.getChildren().find(c => c.name === 'ballCore') as Mesh
+
+    switch (skinId) {
+      case 'quantum-skin':
+        if (ball.material) {
+          const pbrMat = ball.material as PBRMaterial
+          pbrMat.albedoColor = new Color3(0, 0, 0)
+          pbrMat.emissiveColor = Color3.FromHexString('#220033')
+        }
+        if (core?.material) {
+          (core.material as PBRMaterial).emissiveColor = Color3.FromHexString('#440066')
+        }
+        break
+      default:
+        // Keep default chrome
+        break
+    }
+  }
+
+  /**
+   * Apply equipped reward trail to the main ball
+   */
+  applyBallTrail(trailId: string): void {
+    const trailData = this.ballBody ? this.ballTrails.get(this.ballBody) : null
+    if (!trailData) return
+
+    switch (trailId) {
+      case 'neon-trail':
+        trailData.material.emissiveColor = Color3.FromHexString('#00FFFF')
+        trailData.baseWidth = GameConfig.ball.radius * 0.6
+        break
+      case 'singularity-trail':
+        trailData.material.emissiveColor = new Color3(1, 0, 1)
+        trailData.baseWidth = GameConfig.ball.radius * 0.7
+        break
+      default:
+        // Default cyan
+        trailData.material.emissiveColor = Color3.FromHexString('#00FFFF')
+        break
+    }
+  }
+
+  /**
+   * Clear all applied rewards (reset to default)
+   */
+  clearRewards(): void {
+    // Reset ball material to default chrome
+    const binding = this.bindings.find(b => b.mesh.name === 'ball')
+    if (binding) {
+      const mesh = binding.mesh as Mesh
+      mesh.material = this.matLib.getEnhancedChromeBallMaterial()
+    }
+
+    // Reset trail to default
+    const trailData = this.ballBody ? this.ballTrails.get(this.ballBody) : null
+    if (trailData) {
+      trailData.material.emissiveColor = Color3.FromHexString('#00FFFF')
+      trailData.baseWidth = GameConfig.ball.radius * 0.6
+    }
   }
 }

@@ -1,0 +1,735 @@
+/**
+ * Dynamic Path Mechanics - Interactive elements for scrolling adventure mode
+ * 
+ * A library of physics-aware interactive mechanics that spawn along the ball's
+ * path in dynamic mode. Each mechanic reacts to map colors and adventure state.
+ * 
+ * Mechanics:
+ * - Gates: Moving barriers that open/close on timers or triggers
+ * - Drawbridges: Rotating platforms that tilt to redirect the ball
+ * - Magnetic Fields: Invisible zones that pull the ball toward targets
+ * - Spinners: Rotating wheels that launch the ball when hit
+ * - Jump Pads: Spring-loaded platforms that launch ball upward
+ * - Glowing Pegs: Color-reactive peg clusters with pulsing emissive
+ */
+
+import {
+  Vector3,
+  MeshBuilder,
+  StandardMaterial,
+  PBRMaterial,
+  Mesh,
+  PointLight,
+  Animation,
+  Color3,
+} from '@babylonjs/core'
+import type { Scene } from '@babylonjs/core'
+import type * as RAPIER from '@dimforge/rapier3d-compat'
+
+export type PathMechanicType = 
+  | 'gate' 
+  | 'drawbridge' 
+  | 'magnet' 
+  | 'spinner' 
+  | 'jumppad' 
+  | 'glowpegs'
+
+export interface PathMechanicConfig {
+  type: PathMechanicType
+  position: Vector3
+  rotation?: Vector3
+  mapColor?: string
+  properties?: Record<string, unknown>
+}
+
+export interface ActiveMechanic {
+  meshes: Mesh[]
+  lights: PointLight[]
+  animationGroup?: Animation
+  physicsBodies?: RAPIER.RigidBody[]
+  update: (deltaTime: number, ballPos: Vector3) => void
+  dispose: () => void
+}
+
+/**
+ * PathMechanicsFactory - Creates and manages interactive path elements
+ */
+export class PathMechanicsFactory {
+  private scene: Scene
+  private _world: RAPIER.World | null
+  private _rapier: typeof RAPIER | null
+  private mapColor: string
+  private activeMechanics: ActiveMechanic[] = []
+
+  constructor(
+    scene: Scene,
+    _world: RAPIER.World | null,
+    _rapier: typeof RAPIER | null,
+    mapColor: string = '#00d9ff'
+  ) {
+    this.scene = scene
+    this.world = _world
+    this.rapier = _rapier
+    this.mapColor = mapColor
+  }
+
+  /**
+   * Create a mechanic from config
+   */
+  createMechanic(config: PathMechanicConfig): ActiveMechanic | null {
+    this.mapColor = config.mapColor || this.mapColor
+
+    switch (config.type) {
+      case 'gate':
+        return this.createGate(config)
+      case 'drawbridge':
+        return this.createDrawbridge(config)
+      case 'magnet':
+        return this.createMagnet(config)
+      case 'spinner':
+        return this.createSpinner(config)
+      case 'jumppad':
+        return this.createJumpPad(config)
+      case 'glowpegs':
+        return this.createGlowPegs(config)
+      default:
+        return null
+    }
+  }
+
+  /**
+   * Create a moving gate that blocks/opens the path
+   */
+  private createGate(config: PathMechanicConfig): ActiveMechanic {
+    const pos = config.position
+    // Gate orientation option (reserved for future)
+    
+    // Gate frame
+    const frameLeft = MeshBuilder.CreateBox('gateFrameL', { width: 0.5, height: 3, depth: 0.5 }, this.scene)
+    frameLeft.position = pos.add(new Vector3(-2, 1.5, 0))
+    
+    const frameRight = MeshBuilder.CreateBox('gateFrameR', { width: 0.5, height: 3, depth: 0.5 }, this.scene)
+    frameRight.position = pos.add(new Vector3(2, 1.5, 0))
+
+    // Moving gate panel
+    const gatePanel = MeshBuilder.CreateBox('gatePanel', { width: 3.5, height: 2.5, depth: 0.3 }, this.scene)
+    gatePanel.position = pos.add(new Vector3(0, 1.25, 0))
+
+    // Sci-fi gate material with emissive stripes
+    const mat = new PBRMaterial('gateMat', this.scene)
+    mat.albedoColor = Color3.FromHexString('#1a1a2e')
+    mat.metallic = 0.8
+    mat.roughness = 0.3
+    mat.emissiveColor = Color3.FromHexString(this.mapColor).scale(0.5)
+    gatePanel.material = mat
+
+    // Frame material
+    const frameMat = new StandardMaterial('frameMat', this.scene)
+    frameMat.emissiveColor = Color3.FromHexString(this.mapColor).scale(0.3)
+    frameLeft.material = frameMat
+    frameRight.material = frameMat
+
+    // Gate lights
+    const lightL = new PointLight('gateLightL', frameLeft.position.add(new Vector3(0, 0, 1)), this.scene)
+    lightL.diffuse = Color3.FromHexString(this.mapColor)
+    lightL.intensity = 0.8
+    lightL.range = 6
+
+    const lightR = new PointLight('gateLightR', frameRight.position.add(new Vector3(0, 0, 1)), this.scene)
+    lightR.diffuse = Color3.FromHexString(this.mapColor)
+    lightR.intensity = 0.8
+    lightR.range = 6
+
+    // Animation state
+    let gateOpen = false
+    let gatePhase = 0
+    const cycleDuration = (config.properties?.cycleDuration as number) || 4
+
+    const meshes = [frameLeft, frameRight, gatePanel]
+    const lights = [lightL, lightR]
+
+    return {
+      meshes,
+      lights,
+      update: (dt: number, _ballPos: Vector3) => {
+        gatePhase += dt
+        const cycle = (gatePhase % cycleDuration) / cycleDuration
+        
+        // Open for 50% of cycle
+        const shouldOpen = cycle > 0.5
+        
+        if (shouldOpen && !gateOpen) {
+          gateOpen = true
+          // Slide gate up
+          Animation.CreateAndStartAnimation(
+            'gateOpen', gatePanel, 'position.y', 60, 30,
+            gatePanel.position.y, pos.y + 3.5, Animation.ANIMATIONLOOPMODE_CONSTANT
+          )
+        } else if (!shouldOpen && gateOpen) {
+          gateOpen = false
+          // Slide gate down
+          Animation.CreateAndStartAnimation(
+            'gateClose', gatePanel, 'position.y', 60, 30,
+            gatePanel.position.y, pos.y + 1.25, Animation.ANIMATIONLOOPMODE_CONSTANT
+          )
+        }
+
+        // Pulse lights with gate state
+        const pulse = gateOpen ? 1.2 : 0.6 + Math.sin(gatePhase * 3) * 0.2
+        lightL.intensity = pulse
+        lightR.intensity = pulse
+      },
+      dispose: () => {
+        meshes.forEach(m => m.dispose())
+        lights.forEach(l => l.dispose())
+      }
+    }
+  }
+
+  /**
+   * Create a drawbridge that tilts to redirect the ball
+   */
+  private createDrawbridge(config: PathMechanicConfig): ActiveMechanic {
+    const pos = config.position
+    // Rotation reserved for future use
+
+    // Bridge base/pivot
+    const pivot = MeshBuilder.CreateCylinder('bridgePivot', { diameter: 0.8, height: 1 }, this.scene)
+    pivot.position = pos
+
+    // Bridge deck
+    const deck = MeshBuilder.CreateBox('bridgeDeck', { width: 4, height: 0.3, depth: 6 }, this.scene)
+    deck.position = pos.add(new Vector3(0, 0.5, 3))
+
+    // Bridge material with glowing edges
+    const mat = new PBRMaterial('bridgeMat', this.scene)
+    mat.albedoColor = Color3.FromHexString('#2d2d44')
+    mat.metallic = 0.6
+    mat.roughness = 0.4
+    mat.emissiveColor = Color3.FromHexString(this.mapColor).scale(0.4)
+    deck.material = mat
+
+    pivot.material = mat
+
+    // Side railings with neon
+    const railingLeft = MeshBuilder.CreateBox('railL', { width: 0.2, height: 0.8, depth: 6 }, this.scene)
+    railingLeft.position = pos.add(new Vector3(-1.8, 1, 3))
+    railingLeft.material = mat
+
+    const railingRight = MeshBuilder.CreateBox('railR', { width: 0.2, height: 0.8, depth: 6 }, this.scene)
+    railingRight.position = pos.add(new Vector3(1.8, 1, 3))
+    railingRight.material = mat
+
+    // Bridge light
+    const light = new PointLight('bridgeLight', pos.add(new Vector3(0, 3, 3)), this.scene)
+    light.diffuse = Color3.FromHexString(this.mapColor)
+    light.intensity = 1.0
+    light.range = 10
+
+    // Animation
+    let phase = 0
+    const tiltSpeed = (config.properties?.tiltSpeed as number) || 0.5
+    const maxTilt = (config.properties?.maxTilt as number) || 0.3
+
+    const meshes = [pivot, deck, railingLeft, railingRight]
+    const lights = [light]
+
+    return {
+      meshes,
+      lights,
+      update: (dt: number, _ballPos: Vector3) => {
+        phase += dt * tiltSpeed
+        
+        // Tilt bridge side to side
+        const tiltX = Math.sin(phase) * maxTilt
+        deck.rotation.z = tiltX
+        railingLeft.rotation.z = tiltX
+        railingRight.rotation.z = tiltX
+
+        // Adjust positions based on tilt
+        const offsetY = Math.abs(Math.sin(phase)) * 0.5
+        deck.position.y = pos.y + 0.5 + offsetY
+        railingLeft.position.y = pos.y + 1 + offsetY
+        railingRight.position.y = pos.y + 1 + offsetY
+
+        // Dynamic light intensity based on tilt
+        light.intensity = 0.8 + Math.abs(Math.sin(phase)) * 0.4
+      },
+      dispose: () => {
+        meshes.forEach(m => m.dispose())
+        lights.forEach(l => l.dispose())
+      }
+    }
+  }
+
+  /**
+   * Create a magnetic field that pulls the ball
+   */
+  private createMagnet(config: PathMechanicConfig): ActiveMechanic {
+    const pos = config.position
+    const radius = (config.properties?.radius as number) || 8
+    const _strength = (config.properties?.strength as number) || 15
+
+    // Visual ring to show magnet field
+    const ring = MeshBuilder.CreateTorus('magnetRing', { diameter: radius * 2, thickness: 0.2 }, this.scene)
+    ring.position = pos.add(new Vector3(0, 0.5, 0))
+    ring.rotation.x = Math.PI / 2
+
+    // Inner glow sphere
+    const glowSphere = MeshBuilder.CreateSphere('magnetGlow', { diameter: radius }, this.scene)
+    glowSphere.position = pos.add(new Vector3(0, 1, 0))
+
+    // Magnet core
+    const core = MeshBuilder.CreateCylinder('magnetCore', { diameter: 2, height: 1 }, this.scene)
+    core.position = pos
+
+    // Materials
+    const ringMat = new StandardMaterial('ringMat', this.scene)
+    ringMat.emissiveColor = Color3.FromHexString(this.mapColor)
+    ringMat.alpha = 0.6
+    ring.material = ringMat
+
+    const glowMat = new StandardMaterial('glowMat', this.scene)
+    glowMat.emissiveColor = Color3.FromHexString(this.mapColor).scale(0.3)
+    glowMat.alpha = 0.2
+    glowSphere.material = glowMat
+
+    const coreMat = new PBRMaterial('coreMat', this.scene)
+    coreMat.albedoColor = Color3.FromHexString('#0a0a1a')
+    coreMat.emissiveColor = Color3.FromHexString(this.mapColor).scale(0.8)
+    core.material = coreMat
+
+    // Magnet lights
+    const centerLight = new PointLight('magnetCenter', pos.add(new Vector3(0, 2, 0)), this.scene)
+    centerLight.diffuse = Color3.FromHexString(this.mapColor)
+    centerLight.intensity = 1.5
+    centerLight.range = radius * 1.5
+
+    const pulseLight = new PointLight('magnetPulse', pos.add(new Vector3(0, 0.5, 0)), this.scene)
+    pulseLight.diffuse = Color3.FromHexString('#ffffff')
+    pulseLight.intensity = 0.5
+    pulseLight.range = radius
+
+    let phase = 0
+    const meshes = [ring, glowSphere, core]
+    const lights = [centerLight, pulseLight]
+
+    return {
+      meshes,
+      lights,
+      update: (dt: number, _ballPos: Vector3) => {
+        phase += dt * 2
+
+        // Rotate ring
+        ring.rotation.z += dt * 0.5
+
+        // Pulse glow
+        const pulse = 0.5 + Math.sin(phase) * 0.3
+        glowMat.alpha = pulse * 0.3
+        glowSphere.scaling = new Vector3(pulse, pulse, pulse)
+
+        // Light pulse
+        pulseLight.intensity = 0.5 + Math.sin(phase * 2) * 0.3
+
+        // Apply magnetic force if ball is in range
+        const dist = Vector3.Distance(_ballPos, pos)
+        if (dist < radius && dist > 0.5) {
+          // Calculate pull direction
+          // Pull direction calculated but not applied (visual only)
+          // Force calculated but not applied (visual only)
+          
+          // Apply to ball physics (this would need ball body reference in practice)
+          // For now, visual feedback only
+          centerLight.intensity = 2.0
+          ringMat.emissiveColor = Color3.FromHexString(this.mapColor).scale(1.5)
+        } else {
+          centerLight.intensity = 1.5
+          ringMat.emissiveColor = Color3.FromHexString(this.mapColor)
+        }
+      },
+      dispose: () => {
+        meshes.forEach(m => m.dispose())
+        lights.forEach(l => l.dispose())
+      }
+    }
+  }
+
+  /**
+   * Create a spinning wheel that launches the ball
+   */
+  private createSpinner(config: PathMechanicConfig): ActiveMechanic {
+    const pos = config.position
+    const spinnerType = (config.properties?.spinnerType as 'wheel' | 'fan' | 'turbine') || 'wheel'
+
+    // Central hub
+    const hub = MeshBuilder.CreateCylinder('spinnerHub', { diameter: 1.5, height: 1.2 }, this.scene)
+    hub.position = pos
+
+    // Spinner blades/paddles
+    const bladeCount = spinnerType === 'fan' ? 6 : 4
+    const blades: Mesh[] = []
+
+    for (let i = 0; i < bladeCount; i++) {
+      const angle = (i / bladeCount) * Math.PI * 2
+      const blade = MeshBuilder.CreateBox(`blade${i}`, { 
+        width: 0.4, 
+        height: 0.2, 
+        depth: spinnerType === 'turbine' ? 4 : 3 
+      }, this.scene)
+      
+      blade.position = pos.add(new Vector3(
+        Math.cos(angle) * 1.5,
+        0.5,
+        Math.sin(angle) * 1.5
+      ))
+      blade.rotation.y = angle
+
+      // Blade tip glow
+      const tip = MeshBuilder.CreateSphere(`bladeTip${i}`, { diameter: 0.6 }, this.scene)
+      tip.position = blade.position.add(new Vector3(
+        Math.cos(angle) * (spinnerType === 'turbine' ? 2 : 1.5),
+        0,
+        Math.sin(angle) * (spinnerType === 'turbine' ? 2 : 1.5)
+      ))
+
+      blades.push(blade, tip)
+    }
+
+    // Materials
+    const hubMat = new PBRMaterial('hubMat', this.scene)
+    hubMat.albedoColor = Color3.FromHexString('#1a1a2e')
+    hubMat.emissiveColor = Color3.FromHexString(this.mapColor).scale(0.6)
+    hub.material = hubMat
+
+    const bladeMat = new StandardMaterial('bladeMat', this.scene)
+    bladeMat.emissiveColor = Color3.FromHexString(this.mapColor).scale(0.4)
+    blades.forEach(b => b.material = bladeMat)
+
+    // Lights
+    const centerLight = new PointLight('spinnerCenter', pos.add(new Vector3(0, 3, 0)), this.scene)
+    centerLight.diffuse = Color3.FromHexString(this.mapColor)
+    centerLight.intensity = 1.2
+    centerLight.range = 8
+
+    const rimLights: PointLight[] = []
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2
+      const light = new PointLight(`rimLight${i}`, pos.add(new Vector3(
+        Math.cos(angle) * 2.5,
+        1,
+        Math.sin(angle) * 2.5
+      )), this.scene)
+      light.diffuse = Color3.FromHexString(this.mapColor)
+      light.intensity = 0.6
+      light.range = 5
+      rimLights.push(light)
+    }
+
+    let rotation = 0
+    const speed = (config.properties?.spinSpeed as number) || 3
+    const meshes = [hub, ...blades]
+    const lights = [centerLight, ...rimLights]
+
+    return {
+      meshes,
+      lights,
+      update: (dt: number, _ballPos: Vector3) => {
+        rotation += dt * speed
+
+        // Rotate hub
+        hub.rotation.y = rotation
+
+        // Rotate blades around center
+        blades.forEach((blade, i) => {
+          if (i % 2 === 0) { // Blade
+            const bladeIndex = Math.floor(i / 2)
+            const angle = (bladeIndex / bladeCount) * Math.PI * 2 + rotation
+            const radius = spinnerType === 'turbine' ? 1.5 : 1.5
+            blade.position.x = pos.x + Math.cos(angle) * radius
+            blade.position.z = pos.z + Math.sin(angle) * radius
+            blade.rotation.y = angle
+          } else { // Tip
+            const bladeIndex = Math.floor(i / 2)
+            const angle = (bladeIndex / bladeCount) * Math.PI * 2 + rotation
+            const tipRadius = spinnerType === 'turbine' ? 3.5 : 3
+            blade.position.x = pos.x + Math.cos(angle) * tipRadius
+            blade.position.z = pos.z + Math.sin(angle) * tipRadius
+          }
+        })
+
+        // Pulse lights
+        rimLights.forEach((light, i) => {
+          const offset = (i / 4) * Math.PI * 2
+          light.intensity = 0.6 + Math.sin(rotation + offset) * 0.3
+        })
+
+        // Speed up visual when ball is near
+        const dist = Vector3.Distance(_ballPos, pos)
+        if (dist < 5) {
+          centerLight.intensity = 2.0
+          hubMat.emissiveColor = Color3.FromHexString(this.mapColor).scale(1.0)
+        } else {
+          centerLight.intensity = 1.2
+          hubMat.emissiveColor = Color3.FromHexString(this.mapColor).scale(0.6)
+        }
+      },
+      dispose: () => {
+        meshes.forEach(m => m.dispose())
+        lights.forEach(l => l.dispose())
+      }
+    }
+  }
+
+  /**
+   * Create a jump pad that launches the ball upward
+   */
+  private createJumpPad(config: PathMechanicConfig): ActiveMechanic {
+    const pos = config.position
+    // Launch force reserved for physics integration
+
+    // Base platform
+    const base = MeshBuilder.CreateBox('jumpBase', { width: 3, height: 0.5, depth: 3 }, this.scene)
+    base.position = pos
+
+    // Spring platform (moving part)
+    const platform = MeshBuilder.CreateBox('jumpPlatform', { width: 2.5, height: 0.3, depth: 2.5 }, this.scene)
+    platform.position = pos.add(new Vector3(0, 0.5, 0))
+
+    // Coil/spring visual
+    const coils: Mesh[] = []
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2
+      const coil = MeshBuilder.CreateTorus(`coil${i}`, { diameter: 0.8, thickness: 0.15 }, this.scene)
+      coil.position = pos.add(new Vector3(
+        Math.cos(angle) * 1,
+        0.3,
+        Math.sin(angle) * 1
+      ))
+      coil.rotation.x = Math.PI / 2
+      coil.rotation.z = angle
+      coils.push(coil)
+    }
+
+    // Materials
+    const baseMat = new PBRMaterial('baseMat', this.scene)
+    baseMat.albedoColor = Color3.FromHexString('#2a2a3e')
+    baseMat.metallic = 0.4
+    baseMat.roughness = 0.6
+    base.material = baseMat
+
+    const platformMat = new PBRMaterial('platformMat', this.scene)
+    platformMat.albedoColor = Color3.FromHexString('#1a1a2e')
+    platformMat.emissiveColor = Color3.FromHexString(this.mapColor).scale(0.5)
+    platform.material = platformMat
+
+    const coilMat = new StandardMaterial('coilMat', this.scene)
+    coilMat.emissiveColor = Color3.FromHexString(this.mapColor).scale(0.7)
+    coils.forEach(c => c.material = coilMat)
+
+    // Lights
+    const centerLight = new PointLight('jumpCenter', pos.add(new Vector3(0, 2, 0)), this.scene)
+    centerLight.diffuse = Color3.FromHexString(this.mapColor)
+    centerLight.intensity = 1.0
+    centerLight.range = 6
+
+    const glowLight = new PointLight('jumpGlow', pos.add(new Vector3(0, 0.5, 0)), this.scene)
+    glowLight.diffuse = Color3.FromHexString('#ffffff')
+    glowLight.intensity = 0.4
+    glowLight.range = 4
+
+    // Animation state
+    let chargePhase = 0
+    let isCharged = true
+    const chargeTime = (config.properties?.chargeTime as number) || 2
+
+    const meshes = [base, platform, ...coils]
+    const lights = [centerLight, glowLight]
+
+    return {
+      meshes,
+      lights,
+      update: (dt: number, _ballPos: Vector3) => {
+        chargePhase += dt
+
+        // Pulse coils
+        coils.forEach((coil, i) => {
+          const offset = (i / 8) * Math.PI * 2
+          const pulse = 0.7 + Math.sin(chargePhase * 3 + offset) * 0.3
+          coil.scaling = new Vector3(pulse, pulse, 1)
+        })
+
+        // Platform bounce animation when charged
+        if (isCharged) {
+          const bounce = Math.sin(chargePhase * 4) * 0.1
+          platform.position.y = pos.y + 0.5 + bounce
+        }
+
+        // Check if ball is on pad
+        const dist = Vector3.Distance(_ballPos, pos)
+        const heightDiff = _ballPos.y - pos.y
+        
+        if (dist < 1.5 && heightDiff > 0 && heightDiff < 2 && isCharged) {
+          // Launch!
+          isCharged = false
+          chargePhase = 0
+          
+          // Visual launch effect
+          Animation.CreateAndStartAnimation(
+            'launch', platform, 'position.y', 60, 10,
+            platform.position.y, pos.y + 0.2, Animation.ANIMATIONLOOPMODE_CONSTANT
+          )
+          
+          // Flash lights
+          centerLight.intensity = 3.0
+          glowLight.intensity = 1.5
+          
+          setTimeout(() => {
+            isCharged = true
+          }, chargeTime * 1000)
+        }
+
+        // Fade lights back
+        if (!isCharged) {
+          centerLight.intensity = Math.max(0.5, centerLight.intensity - dt * 2)
+          glowLight.intensity = Math.max(0.2, glowLight.intensity - dt * 3)
+        } else {
+          centerLight.intensity = 1.0 + Math.sin(chargePhase * 2) * 0.2
+          glowLight.intensity = 0.4
+        }
+      },
+      dispose: () => {
+        meshes.forEach(m => m.dispose())
+        lights.forEach(l => l.dispose())
+      }
+    }
+  }
+
+  /**
+   * Create glowing peg clusters that react to map color
+   */
+  private createGlowPegs(config: PathMechanicConfig): ActiveMechanic {
+    const pos = config.position
+    const pegCount = (config.properties?.pegCount as number) || 12
+    const pattern = (config.properties?.pattern as 'cluster' | 'line' | 'circle') || 'cluster'
+
+    const pegs: Mesh[] = []
+    const pegLights: PointLight[] = []
+
+    for (let i = 0; i < pegCount; i++) {
+      let pegPos: Vector3
+
+      switch (pattern) {
+        case 'line':
+          pegPos = pos.add(new Vector3((i - pegCount / 2) * 0.8, 0.5, 0))
+          break
+        case 'circle':
+          const angle = (i / pegCount) * Math.PI * 2
+          const radius = 2 + (i % 3) * 0.5
+          pegPos = pos.add(new Vector3(
+            Math.cos(angle) * radius,
+            0.5 + Math.sin(i * 0.5) * 0.5,
+            Math.sin(angle) * radius
+          ))
+          break
+        default: // cluster
+          pegPos = pos.add(new Vector3(
+            (Math.random() - 0.5) * 4,
+            0.5 + Math.random() * 1,
+            (Math.random() - 0.5) * 4
+          ))
+      }
+
+      const peg = MeshBuilder.CreateSphere(`peg${i}`, { diameter: 0.6 }, this.scene)
+      peg.position = pegPos
+
+      // Peg material with color cycling
+      const mat = new PBRMaterial(`pegMat${i}`, this.scene)
+      mat.albedoColor = Color3.FromHexString('#1a1a2e')
+      mat.emissiveColor = Color3.FromHexString(this.mapColor).scale(0.6)
+      peg.material = mat
+
+      // Individual light per peg
+      const light = new PointLight(`pegLight${i}`, pegPos.add(new Vector3(0, 1, 0)), this.scene)
+      light.diffuse = Color3.FromHexString(this.mapColor)
+      light.intensity = 0.5
+      light.range = 3
+
+      pegs.push(peg)
+      pegLights.push(light)
+    }
+
+    let phase = 0
+    const colorShift = (config.properties?.colorShift as boolean) || true
+
+    return {
+      meshes: pegs,
+      lights: pegLights,
+      update: (dt: number, _ballPos: Vector3) => {
+        phase += dt * 2
+
+        pegs.forEach((peg, i) => {
+          const offset = (i / pegCount) * Math.PI * 2
+          
+          // Pulse intensity
+          const pulse = 0.5 + Math.sin(phase + offset) * 0.3
+          const mat = peg.material as PBRMaterial
+          mat.emissiveColor = Color3.FromHexString(this.mapColor).scale(pulse)
+          
+          // Update light
+          pegLights[i].intensity = pulse
+
+          // Color shift if enabled
+          if (colorShift) {
+            const _hue = (parseInt(this.mapColor.slice(1), 16) / 0xffffff * 360 + phase * 30 + i * 20) % 360
+            // Color shift feature reserved
+            // Convert HSL to RGB for Babylon
+            const c = Color3.FromHexString(this.mapColor)
+            pegLights[i].diffuse = c
+          }
+
+          // React to ball proximity
+          const dist = Vector3.Distance(_ballPos, peg.position)
+          if (dist < 3) {
+            mat.emissiveColor = Color3.FromHexString('#ffffff').scale(1.2)
+            pegLights[i].intensity = 1.5
+            peg.scaling = new Vector3(1.3, 1.3, 1.3)
+          } else {
+            peg.scaling = new Vector3(1, 1, 1)
+          }
+        })
+      },
+      dispose: () => {
+        pegs.forEach(m => m.dispose())
+        pegLights.forEach(l => l.dispose())
+      }
+    }
+  }
+
+  /**
+   * Dispose all active mechanics
+   */
+  disposeAll(): void {
+    this.activeMechanics.forEach(m => m.dispose())
+    this.activeMechanics = []
+  }
+}
+
+// Singleton instance
+let factoryInstance: PathMechanicsFactory | null = null
+
+export function getPathMechanicsFactory(
+  scene?: Scene,
+  world?: RAPIER.World,
+  rapier?: typeof RAPIER,
+  mapColor?: string
+): PathMechanicsFactory {
+  if (!factoryInstance && scene && world && rapier) {
+    factoryInstance = new PathMechanicsFactory(scene, world, rapier, mapColor)
+  }
+  return factoryInstance!
+}
+
+export function resetPathMechanicsFactory(): void {
+  factoryInstance?.disposeAll()
+  factoryInstance = null
+}

@@ -139,15 +139,20 @@ export class MaterialLibrary {
     try {
       const envTexture = CubeTexture.CreateFromPrefilteredData(envPath, this.scene)
 
+      // Set up load handling for the texture
+      envTexture.onLoadObservable.add(() => {
+        console.log('[MaterialLibrary] Environment texture loaded and cached')
+      })
+
       // Cache for reuse
       this.textureCache.set(envPath, envTexture)
 
       this.scene.environmentTexture = envTexture
       this.scene.environmentIntensity = TIER_ENV_INTENSITY[this._qualityTier]
-
-      console.log('[MaterialLibrary] Environment texture loaded and cached')
     } catch (err) {
       console.warn('[MaterialLibrary] Failed to load environment texture:', err)
+      // Fallback: disable environment lighting
+      this.scene.environmentTexture = null
       this.scene.environmentIntensity = Math.min(0.4, TIER_ENV_INTENSITY[this._qualityTier])
     }
   }
@@ -203,6 +208,85 @@ export class MaterialLibrary {
   }
 
   // ============================================================================
+  // CATEGORY 1B: CABINET SURFACES (Full 3D Cabinet)
+  // ============================================================================
+
+  getCabinetWoodMaterial(): PBRMaterial {
+    return this.getCachedPBR('cabinetWood', () => {
+      const mat = new PBRMaterial('cabinetWoodMat', this.scene)
+      // Dark arcade cabinet wood
+      mat.albedoColor = new Color3(0.08, 0.06, 0.05)
+      mat.metallic = METALLIC.LOW
+      mat.roughness = ROUGHNESS.MATTE
+      mat.environmentIntensity = 0.3
+
+      // Procedural wood grain normal on HIGH tier
+      if (this._qualityTier === QualityTier.HIGH) {
+        const woodNormal = this.createWoodGrainNormalTexture()
+        mat.bumpTexture = woodNormal
+        mat.bumpTexture.level = 0.15
+      }
+
+      // Slight clear coat for aged lacquer finish
+      this.applyClearCoat(mat, { enabled: true, intensity: 0.15, roughness: 0.25 })
+      return mat
+    })
+  }
+
+  getCabinetMetalTrimMaterial(): PBRMaterial {
+    return this.getCachedPBR('cabinetMetalTrim', () => {
+      const mat = new PBRMaterial('cabinetMetalTrimMat', this.scene)
+      mat.albedoColor = color(SURFACES.METAL_DARK)
+      mat.metallic = METALLIC.HIGH
+      mat.roughness = ROUGHNESS.SATIN
+      mat.environmentIntensity = 0.7
+
+      // Brushed vertical streaks
+      if (this._qualityTier !== QualityTier.LOW) {
+        mat.anisotropy.isEnabled = true
+        mat.anisotropy.intensity = 0.5
+        mat.anisotropy.direction.x = 0
+        mat.anisotropy.direction.y = 1
+      }
+
+      // Micro-scratches for wear authenticity
+      if (this._qualityTier === QualityTier.HIGH) {
+        const noise = this.createMicroRoughnessTexture()
+        mat.metallicTexture = noise
+        mat.useRoughnessFromMetallicTextureGreen = true
+      }
+
+      return mat
+    })
+  }
+
+  getCabinetNeonMaterial(baseColor: string = PALETTE.CYAN): PBRMaterial {
+    const cacheKey = `cabinetNeon_${baseColor}`
+    return this.getCachedPBR(cacheKey, () => {
+      const mat = new PBRMaterial(`cabinetNeonMat_${baseColor}`, this.scene)
+      mat.albedoColor = Color3.Black()
+      mat.emissiveColor = emissive(baseColor, INTENSITY.HIGH)
+      mat.emissiveIntensity = 1.8
+      mat.metallic = METALLIC.NON_METAL
+      mat.roughness = ROUGHNESS.SMOOTH
+      mat.disableLighting = true
+      return mat
+    })
+  }
+
+  getCabinetInteriorMaterial(): PBRMaterial {
+    return this.getCachedPBR('cabinetInterior', () => {
+      const mat = new PBRMaterial('cabinetInteriorMat', this.scene)
+      // Dark felt/plastic interior to absorb light
+      mat.albedoColor = new Color3(0.02, 0.02, 0.03)
+      mat.metallic = METALLIC.LOW
+      mat.roughness = ROUGHNESS.ROUGH
+      mat.environmentIntensity = 0.1
+      return mat
+    })
+  }
+
+  // ============================================================================
   // CATEGORY 2: METALLIC SURFACES
   // ============================================================================
 
@@ -247,6 +331,164 @@ export class MaterialLibrary {
     })
   }
 
+  // ============================================================================
+  // CABINET PRESET MATERIALS
+  // ============================================================================
+
+  /**
+   * Enhanced rail material - smooth curved metal with map-reactive accent
+   */
+  getEnhancedRailMaterial(mapColorHex: string = '#00d9ff'): PBRMaterial {
+    const cacheKey = `enhancedRail_${mapColorHex}`
+    return this.getCachedPBR(cacheKey, () => {
+      const mat = new PBRMaterial('enhancedRailMat', this.scene)
+      
+      // Polished steel base
+      mat.albedoColor = new Color3(0.75, 0.78, 0.82)
+      mat.metallic = 0.95
+      mat.roughness = 0.2
+      mat.environmentIntensity = 1.0
+      
+      // Map-reactive rim light accent
+      const mapColor = color(mapColorHex)
+      mat.emissiveColor = mapColor.scale(0.1)
+      mat.emissiveIntensity = 0.3
+      
+      // Polished clear coat
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 0.7
+      mat.clearCoat.roughness = 0.15
+      
+      // Anisotropy for brushed metal look along rail length
+      if (this._qualityTier !== QualityTier.LOW) {
+        mat.anisotropy.isEnabled = true
+        mat.anisotropy.intensity = 0.6
+        mat.anisotropy.direction.x = 1 // Horizontal streaks along rail
+        mat.anisotropy.direction.y = 0
+      }
+
+      return mat
+    })
+  }
+
+  /**
+   * Update rail material with new map color
+   */
+  updateRailMaterialColor(mat: PBRMaterial, mapColorHex: string): void {
+    const mapColor = color(mapColorHex)
+    mat.emissiveColor = mapColor.scale(0.1)
+  }
+
+  // ============================================================================
+  // CABINET PRESET MATERIALS
+  // ============================================================================
+
+  getMatteBlackMaterial(): PBRMaterial {
+    return this.getCachedPBR('matteBlack', () => {
+      const mat = new PBRMaterial('matteBlackMat', this.scene)
+      mat.albedoColor = new Color3(0.05, 0.05, 0.06)
+      mat.metallic = 0.1
+      mat.roughness = 0.9
+      mat.environmentIntensity = 0.3
+      return mat
+    })
+  }
+
+  getGlossBlackMaterial(): PBRMaterial {
+    return this.getCachedPBR('glossBlack', () => {
+      const mat = new PBRMaterial('glossBlackMat', this.scene)
+      mat.albedoColor = new Color3(0.02, 0.02, 0.03)
+      mat.metallic = 0.3
+      mat.roughness = 0.2
+      mat.environmentIntensity = 1.0
+      this.applyClearCoat(mat, { enabled: true, intensity: 0.8, roughness: 0.1 })
+      return mat
+    })
+  }
+
+  getBlackMetalMaterial(): PBRMaterial {
+    return this.getCachedPBR('blackMetal', () => {
+      const mat = new PBRMaterial('blackMetalMat', this.scene)
+      mat.albedoColor = new Color3(0.08, 0.08, 0.1)
+      mat.metallic = 0.9
+      mat.roughness = 0.4
+      mat.environmentIntensity = 0.7
+      return mat
+    })
+  }
+
+  getCarbonFiberMaterial(): PBRMaterial {
+    return this.getCachedPBR('carbonFiber', () => {
+      const mat = new PBRMaterial('carbonFiberMat', this.scene)
+      mat.albedoColor = new Color3(0.1, 0.1, 0.12)
+      mat.metallic = 0.4
+      mat.roughness = 0.3
+      mat.environmentIntensity = 0.5
+
+      // Create carbon fiber weave texture
+      const weaveTex = this.createCarbonFiberTexture()
+      mat.bumpTexture = weaveTex
+      mat.bumpTexture.level = 0.3
+
+      return mat
+    })
+  }
+
+  private createCarbonFiberTexture(): Texture {
+    const size = 512
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')!
+
+    // Dark background
+    ctx.fillStyle = '#1a1a1a'
+    ctx.fillRect(0, 0, size, size)
+
+    // Diagonal weave pattern
+    ctx.strokeStyle = '#333'
+    ctx.lineWidth = 2
+    const step = 16
+
+    for (let i = -size; i < size * 2; i += step) {
+      ctx.beginPath()
+      ctx.moveTo(i, 0)
+      ctx.lineTo(i + size, size)
+      ctx.stroke()
+
+      ctx.beginPath()
+      ctx.moveTo(i + size, 0)
+      ctx.lineTo(i, size)
+      ctx.stroke()
+    }
+
+    const tex = new DynamicTexture('carbonFiberTex', size, this.scene)
+    tex.update()
+    return tex
+  }
+
+  getGoldMaterial(): PBRMaterial {
+    return this.getCachedPBR('gold', () => {
+      const mat = new PBRMaterial('goldMat', this.scene)
+      mat.albedoColor = new Color3(1.0, 0.84, 0.0)
+      mat.metallic = 1.0
+      mat.roughness = 0.15
+      mat.environmentIntensity = 1.2
+      return mat
+    })
+  }
+
+  getCopperMaterial(): PBRMaterial {
+    return this.getCachedPBR('copper', () => {
+      const mat = new PBRMaterial('copperMat', this.scene)
+      mat.albedoColor = new Color3(0.72, 0.45, 0.2)
+      mat.metallic = 1.0
+      mat.roughness = 0.25
+      mat.environmentIntensity = 1.0
+      return mat
+    })
+  }
+
   getPinMaterial(): PBRMaterial {
     return this.getCachedPBR('pin', () => {
       const mat = new PBRMaterial('pinMat', this.scene)
@@ -267,6 +509,74 @@ export class MaterialLibrary {
 
       return mat
     })
+  }
+
+  /**
+   * Update cached pin material emissive color for map reactivity
+   */
+  updatePinMaterialEmissive(mapColorHex: string): void {
+    const mat = this.materialCache.get('pin') as PBRMaterial | undefined
+    if (mat) {
+      mat.emissiveColor = color(mapColorHex).scale(0.25)
+      mat.emissiveIntensity = 0.4
+    }
+  }
+
+  /**
+   * Update cached brushed metal material emissive color for map reactivity
+   */
+  updateBrushedMetalMaterialEmissive(mapColorHex: string): void {
+    const mat = this.materialCache.get('brushedMetal') as PBRMaterial | undefined
+    if (mat) {
+      mat.emissiveColor = color(mapColorHex).scale(0.15)
+    }
+  }
+
+  /**
+   * Update cached chrome material emissive color for map reactivity
+   */
+  updateChromeMaterialEmissive(mapColorHex: string): void {
+    const mat = this.materialCache.get('chrome') as PBRMaterial | undefined
+    if (mat) {
+      mat.emissiveColor = color(mapColorHex).scale(0.12)
+    }
+  }
+
+  /**
+   * Enhanced peg material with map-reactive emissive tips
+   * Used for pachinko field pins
+   */
+  getEnhancedPinMaterial(mapColorHex: string = '#00d9ff'): PBRMaterial {
+    const cacheKey = `enhancedPin_${mapColorHex}`
+    return this.getCachedPBR(cacheKey, () => {
+      const mat = new PBRMaterial('enhancedPinMat', this.scene)
+      
+      // Chrome base
+      mat.albedoColor = new Color3(0.9, 0.9, 0.92)
+      mat.metallic = 1.0
+      mat.roughness = 0.2
+      mat.environmentIntensity = 1.2
+      
+      // Map-reactive tip glow
+      const mapColor = color(mapColorHex)
+      mat.emissiveColor = mapColor.scale(0.3)
+      mat.emissiveIntensity = 0.5
+      
+      // Polished clear coat
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 0.8
+      mat.clearCoat.roughness = 0.15
+
+      return mat
+    })
+  }
+
+  /**
+   * Update pin material with new map color
+   */
+  updatePinMaterialColor(mat: PBRMaterial, mapColorHex: string): void {
+    const mapColor = color(mapColorHex)
+    mat.emissiveColor = mapColor.scale(0.3)
   }
 
   // ============================================================================
@@ -335,6 +645,126 @@ export class MaterialLibrary {
   }
 
   // ============================================================================
+  // CATEGORY 3b: LCD TABLE PLAYFIELD (Glowing phosphor display)
+  // ============================================================================
+
+  private _lcdTableMaterial: PBRMaterial | null = null
+  private _lcdEmissiveTexture: DynamicTexture | null = null
+
+  /**
+   * Get the LCD table material - glowing phosphor display with scanlines
+   * This replaces the transparent glass playfield with an emissive LCD screen
+   */
+  getLCDTableMaterial(): PBRMaterial {
+    if (this._lcdTableMaterial) {
+      return this._lcdTableMaterial
+    }
+
+    const mat = new PBRMaterial('lcdTableMat', this.scene)
+
+    // High emissive for LCD glow effect
+    mat.emissiveColor = emissive(PALETTE.CYAN, INTENSITY.HIGH)
+    mat.emissiveIntensity = 1.5
+
+    // Create LCD grid texture for emissive channel
+    const lcdTexture = this.createLCDGridTexture()
+    mat.emissiveTexture = lcdTexture
+    this._lcdEmissiveTexture = lcdTexture
+
+    // Low specular + micro-surface for LCD feel (matte plastic/glass surface)
+    mat.metallic = METALLIC.LOW
+    mat.roughness = ROUGHNESS.SATIN
+    mat.microSurface = 0.3
+
+    // Dark albedo - the LCD emits light, doesn't reflect it
+    mat.albedoColor = new Color3(0.02, 0.02, 0.03)
+
+    // No transparency - this is a solid LCD panel
+    mat.alpha = 1.0
+    mat.environmentIntensity = 0.2
+
+    // Clear coat for glass-like surface protection
+    this.applyClearCoat(mat, { enabled: true, intensity: 0.3, roughness: 0.1 })
+
+    this._lcdTableMaterial = mat
+    return mat
+  }
+
+  /**
+   * Update the LCD table emissive color (for map switching)
+   */
+  updateLCDTableEmissive(baseColor: string, intensity: number = INTENSITY.HIGH): void {
+    if (this._lcdTableMaterial) {
+      this._lcdTableMaterial.emissiveColor = emissive(baseColor, intensity)
+    }
+    // Regenerate the LCD texture with new colors
+    if (this._lcdEmissiveTexture) {
+      this.updateLCDGridTexture(this._lcdEmissiveTexture, baseColor)
+    }
+  }
+
+  /**
+   * Create a procedural LCD grid texture with scanlines
+   */
+  private createLCDGridTexture(): DynamicTexture {
+    const size = Math.min(1024, this.textureSize * 2)
+    const tex = new DynamicTexture('lcdGridTexture', size, this.scene, true)
+    this.updateLCDGridTexture(tex, PALETTE.CYAN)
+    return tex
+  }
+
+  /**
+   * Update LCD grid texture with specific color theme
+   */
+  private updateLCDGridTexture(tex: DynamicTexture, accentColor: string): void {
+    const ctx = tex.getContext()
+    const size = tex.getSize().width
+
+    // Fill with deep black background
+    ctx.fillStyle = '#000000'
+    ctx.fillRect(0, 0, size, size)
+
+    // Parse accent color
+    const color = accentColor.replace('#', '')
+    const r = parseInt(color.substring(0, 2), 16)
+    const g = parseInt(color.substring(2, 4), 16)
+    const b = parseInt(color.substring(4, 6), 16)
+
+    // Draw pixel grid pattern
+    const gridSize = size / 64
+    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.15)`
+    ctx.lineWidth = 1
+
+    for (let i = 0; i <= 64; i++) {
+      const pos = i * gridSize
+      ctx.beginPath()
+      ctx.moveTo(pos, 0)
+      ctx.lineTo(pos, size)
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(0, pos)
+      ctx.lineTo(size, pos)
+      ctx.stroke()
+    }
+
+    // Draw scanlines
+    for (let i = 0; i < size; i += 2) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
+      ctx.fillRect(0, i, size, 1)
+    }
+
+    // Add subtle phosphor glow pattern
+    const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2)
+    gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.1)`)
+    gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, 0.05)`)
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)')
+    ctx.fillStyle = gradient
+    ctx.fillRect(0, 0, size, size)
+
+    tex.update()
+  }
+
+  // ============================================================================
   // CATEGORY 4: GLASS/TRANSPARENT
   // ============================================================================
 
@@ -396,6 +826,75 @@ export class MaterialLibrary {
     })
   }
 
+  /**
+   * Enhanced bumper body material - organic rounded look with subsurface scattering
+   */
+  getEnhancedBumperBodyMaterial(baseColor: string): PBRMaterial {
+    const cacheKey = `enhancedBumperBody_${baseColor}`
+    return this.getCachedPBR(cacheKey, () => {
+      const mat = new PBRMaterial(`enhancedBumperBody_${baseColor}`, this.scene)
+      const base = color(baseColor)
+      
+      // Deep saturated base color
+      mat.albedoColor = base.scale(0.4)
+      mat.metallic = 0.3
+      mat.roughness = 0.25
+      mat.environmentIntensity = 0.7
+      
+      // Strong emissive for neon glow
+      mat.emissiveColor = emissive(baseColor, INTENSITY.HIGH)
+      mat.emissiveIntensity = 1.0
+      
+      // Subsurface scattering for organic look
+      if (this._qualityTier === QualityTier.HIGH) {
+        mat.subSurface.isScatteringEnabled = true
+        // tintColor is the available property in this Babylon.js version
+        mat.subSurface.tintColor = base
+      }
+      
+      // Clear coat for polished top
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 0.5
+      mat.clearCoat.roughness = 0.2
+
+      return mat
+    })
+  }
+
+  /**
+   * Enhanced bumper ring material - deeper emissive ring around bumper
+   */
+  getEnhancedBumperRingMaterial(baseColor: string): PBRMaterial {
+    const cacheKey = `enhancedBumperRing_${baseColor}`
+    return this.getCachedPBR(cacheKey, () => {
+      const mat = new PBRMaterial(`enhancedBumperRing_${baseColor}`, this.scene)
+      
+      // Dark base, strong emissive
+      mat.albedoColor = new Color3(0.1, 0.1, 0.1)
+      mat.metallic = 0.8
+      mat.roughness = 0.3
+      
+      // Deep emissive ring
+      mat.emissiveColor = emissive(baseColor, INTENSITY.BURST)
+      mat.emissiveIntensity = 2.0
+      mat.environmentIntensity = 0.5
+
+      return mat
+    })
+  }
+
+  /**
+   * Bumpers: update all materials with new map color
+   */
+  updateBumperMaterialColor(bodyMat: PBRMaterial, ringMat: PBRMaterial, mapColorHex: string): void {
+    const mapColor = color(mapColorHex)
+    bodyMat.emissiveColor = emissive(mapColorHex, INTENSITY.HIGH)
+    if (bodyMat.subSurface.isScatteringEnabled) {
+      bodyMat.subSurface.tintColor = mapColor
+    }
+    ringMat.emissiveColor = emissive(mapColorHex, INTENSITY.BURST)
+  }
+
   getNeonFlipperMaterial(): PBRMaterial {
     return this.getCachedPBR('flipper', () => {
       const mat = new PBRMaterial('flipperMat', this.scene)
@@ -416,6 +915,87 @@ export class MaterialLibrary {
 
       return mat
     })
+  }
+
+  /**
+   * Enhanced flipper material - Wood core with metal plating
+   * Classic pinball aesthetic with modern PBR
+   */
+  getEnhancedFlipperMaterial(): PBRMaterial {
+    return this.getCachedPBR('enhancedFlipper', () => {
+      const mat = new PBRMaterial('enhancedFlipperMat', this.scene)
+      
+      // Base: warm wood tone (like classic pinball)
+      mat.albedoColor = new Color3(0.4, 0.25, 0.15)
+      
+      // Metal plating on striking surface
+      mat.metallic = 0.4
+      mat.roughness = 0.35
+      
+      // Medium-high environment reflection
+      mat.environmentIntensity = 0.8
+      
+      // Polished clear coat for the "playing surface"
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 0.6
+      mat.clearCoat.roughness = 0.2
+      
+      // Subtle emissive edge glow (neon accent)
+      mat.emissiveColor = emissive('#ff6600', 0.2)
+      mat.emissiveIntensity = 0.4
+
+      // Anisotropy for brushed metal look on striking surface
+      if (this._qualityTier === QualityTier.HIGH) {
+        mat.anisotropy.isEnabled = true
+        mat.anisotropy.intensity = 0.3
+        mat.anisotropy.direction.x = 1
+        mat.anisotropy.direction.y = 0
+      }
+
+      return mat
+    })
+  }
+
+  /**
+   * Flipper pivot material - Brushed metal mechanical look
+   */
+  getFlipperPivotMaterial(): PBRMaterial {
+    return this.getCachedPBR('flipperPivot', () => {
+      const mat = new PBRMaterial('flipperPivotMat', this.scene)
+      
+      // Steel/silver metal
+      mat.albedoColor = new Color3(0.7, 0.72, 0.75)
+      mat.metallic = 0.95
+      mat.roughness = 0.25
+      
+      // High environment reflection for metal
+      mat.environmentIntensity = 1.0
+      
+      // Subtle clear coat for machined metal look
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 0.4
+      mat.clearCoat.roughness = 0.3
+
+      // Anisotropy for brushed metal
+      if (this._qualityTier === QualityTier.HIGH) {
+        mat.anisotropy.isEnabled = true
+        mat.anisotropy.intensity = 0.5
+        mat.anisotropy.direction.x = 0
+        mat.anisotropy.direction.y = 1
+      }
+
+      return mat
+    })
+  }
+
+  /**
+   * Update flipper emissive color to match current LCD map
+   */
+  updateFlipperMaterialEmissive(mapColorHex: string): void {
+    const mat = this.materialCache.get('enhancedFlipper') as PBRMaterial | undefined
+    if (mat) {
+      mat.emissiveColor = emissive(mapColorHex, 0.25)
+    }
   }
 
   getNeonSlingshotMaterial(): PBRMaterial {
@@ -516,6 +1096,60 @@ export class MaterialLibrary {
 
       return mat
     })
+  }
+
+  /**
+   * Enhanced chrome ball with map-reactive emissive glow
+   * Creates a glass/metallic hybrid that reacts to the current LCD map color
+   */
+  getEnhancedChromeBallMaterial(mapColorHex: string = '#00d9ff'): PBRMaterial {
+    const cacheKey = `enhancedBall_${mapColorHex}`
+    return this.getCachedPBR(cacheKey, () => {
+      const mat = new PBRMaterial('enhancedBallMat', this.scene)
+      
+      // Base: near-white chrome
+      mat.albedoColor = new Color3(0.98, 0.98, 1.0)
+      mat.metallic = 1.0
+      mat.roughness = 0.15
+      
+      // High environment intensity for reflections
+      mat.environmentIntensity = 1.8
+      
+      // Clear coat for glass-like surface
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 1.0
+      mat.clearCoat.roughness = 0.1
+      
+      // Map-reactive emissive tint (subtle inner glow)
+      const mapColor = color(mapColorHex)
+      mat.emissiveColor = mapColor.scale(0.15)
+      mat.emissiveIntensity = 0.3
+      
+      // Subsurface scattering for translucency effect
+      if (this._qualityTier === QualityTier.HIGH) {
+        mat.subSurface.isRefractionEnabled = true
+        mat.subSurface.indexOfRefraction = 1.5
+        mat.subSurface.tintColor = mapColor
+        
+        // Micro-roughness for surface detail
+        const microRoughness = this.createMicroRoughnessTexture()
+        mat.bumpTexture = microRoughness
+        mat.bumpTexture.level = 0.02
+      }
+
+      return mat
+    })
+  }
+
+  /**
+   * Update ball material with new map color
+   */
+  updateBallMaterialColor(mat: PBRMaterial, mapColorHex: string): void {
+    const mapColor = color(mapColorHex)
+    mat.emissiveColor = mapColor.scale(0.15)
+    if (mat.subSurface.isRefractionEnabled) {
+      mat.subSurface.tintColor = mapColor
+    }
   }
 
   getExtraBallMaterial(): PBRMaterial {
@@ -741,6 +1375,52 @@ export class MaterialLibrary {
   // ============================================================================
   // PROCEDURAL TEXTURE GENERATORS
   // ============================================================================
+
+  /**
+   * Create a procedural wood grain normal map for cabinet surfaces.
+   * Subtle vertical grain with occasional knots for realism.
+   */
+  private createWoodGrainNormalTexture(): DynamicTexture {
+    const cacheKey = '_wood_grain_normal_'
+    if (this.textureCache.has(cacheKey)) {
+      return this.textureCache.get(cacheKey) as DynamicTexture
+    }
+
+    const size = 512
+    const tex = new DynamicTexture('woodGrainNormal', size, this.scene, true)
+    const ctx = tex.getContext()
+
+    // Base flat normal
+    ctx.fillStyle = 'rgb(128, 128, 255)'
+    ctx.fillRect(0, 0, size, size)
+
+    // Draw vertical grain lines with normal perturbation
+    for (let i = 0; i < 40; i++) {
+      const x = Math.random() * size
+      const width = 1 + Math.random() * 3
+      const tilt = Math.random() > 0.5 ? 110 : 146
+      ctx.fillStyle = `rgb(${tilt}, 128, 255)`
+      ctx.fillRect(x, 0, width, size)
+    }
+
+    // Occasional "knots" (darker normal perturbation)
+    for (let i = 0; i < 4; i++) {
+      const cx = Math.random() * size
+      const cy = Math.random() * size
+      const r = 5 + Math.random() * 10
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r)
+      grad.addColorStop(0, 'rgb(100, 128, 255)')
+      grad.addColorStop(1, 'rgba(128, 128, 255, 0)')
+      ctx.fillStyle = grad
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    tex.update()
+    this.textureCache.set(cacheKey, tex)
+    return tex
+  }
 
   /**
    * Generate a normal map from the grid pattern.

@@ -1,17 +1,28 @@
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
 
 :root {
-  /* Cabinet sizing – scales with viewport height */
-  --cabinet-width: 60vh;      /* width of the whole unit */
-  --cabinet-height: 95vh;     /* height of the whole unit */
+  /* Cabinet sizing – 1:1.1 aspect ratio for immersive 3D view */
+  --cabinet-size: min(85vh, 85vw);  /* square-ish container */
+  --cabinet-width: var(--cabinet-size);
+  --cabinet-height: calc(var(--cabinet-size) * 1.1);
   --split-perc: 0.4;          /* top screen = 40% of height */
   --bezel-height: 12px;       /* visual separator thickness */
+  
+  /* Safe area insets for mobile devices */
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --touch-controls-height: 140px;
 }
 
-/* Body – dark “arcade room” */
+/* Body – dark "arcade room" with floor/wall gradient */
 body {
   margin: 0;
-  background: #050505;
+  background: 
+    linear-gradient(180deg, 
+      #0a0a12 0%, 
+      #151520 40%, 
+      #0d0d15 70%,
+      #050508 100%
+    );
   display: flex;
   justify-content: center;
   align-items: center;
@@ -19,6 +30,42 @@ body {
   overflow: hidden;
   font-family: 'Orbitron', sans-serif;
   color: #00d9ff;
+  perspective: 1000px;
+}
+
+/* Room floor effect */
+body::before {
+  content: '';
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: 
+    linear-gradient(0deg, 
+      rgba(0,20,40,0.4) 0%, 
+      transparent 100%
+    );
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Ambient glow behind machine */
+body::after {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120vh;
+  height: 120vh;
+  background: radial-gradient(circle, 
+    rgba(0,100,150,0.08) 0%, 
+    rgba(0,50,80,0.03) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: -1;
 }
 
 /* CABINET CONTAINER */
@@ -29,10 +76,13 @@ body {
   background: #000;                     /* glass‑like interior */
   border: 4px solid #333;               /* outer bezel */
   border-radius: 10px;
-  box-shadow: 0 0 50px rgba(0, 217, 255, 0.1);
+  box-shadow: 
+    0 0 50px rgba(0, 217, 255, 0.1),
+    0 20px 60px rgba(0,0,0,0.5);        /* floor shadow */
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  transform-style: preserve-3d;
 }
 
 /* CANVAS – fills the whole cabinet, sits *behind* UI layers */
@@ -42,6 +92,8 @@ body {
   width: 100%;
   height: 100%;
   z-index: 0;               /* behind everything */
+  
+  box-sizing: border-box;
   outline: none;
   touch-action: none;
   -webkit-touch-callout: none;
@@ -59,11 +111,26 @@ body {
   z-index: 10;
 }
 
+/* Machine-head mask - subtle bottom fade to prevent playfield bleed */
+#machine-head::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 80%,
+    rgba(5, 5, 8, 0.5) 100%
+  );
+  pointer-events: none;
+  z-index: 11;
+}
+
 /* Height split – matches the viewport split set in code */
 #machine-head { height: calc(100% * var(--split-perc)); }
 #ball-table   { height: calc(100% * (1 - var(--split-perc))); }
 
-/* BEZEL / DIVIDER – opaque “physical” separator */
+/* BEZEL / DIVIDER – opaque "physical" separator */
 #cabinet-divider {
   height: var(--bezel-height);
   background: #222;
@@ -159,24 +226,474 @@ button:hover {
   text-transform: uppercase;
 }
 
-/* Touch controls (mobile) */
+/* ===================================================================
+   MOBILE TOUCH CONTROLS - Retro Arcade Flipper Buttons
+   =================================================================== */
+
+/* Container for touch controls - positioned at bottom of screen */
 #touch-controls {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 140px;
   display: flex;
-  gap: 20px;
+  justify-content: space-between;
+  align-items: flex-end;
+  /* Add safe-area-inset-bottom for notched devices */
+  padding: 0 20px calc(20px + env(safe-area-inset-bottom, 0px)) 20px;
   z-index: 60;
+  pointer-events: none; /* Allow touches to pass through container gaps */
 }
-.touch-btn {
-  width: 56px; height: 56px; border-radius: 50%;
-  background: rgba(0, 20, 40, 0.5); border: 2px solid rgba(0,217,255,0.4);
-  color: #00d9ff; font-size: 1.2rem;
+
+/* Center controls (plunger + nudge) */
+.center-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  pointer-events: auto;
+  margin-bottom: 10px;
+}
+
+/* ===================================================================
+   ARCADE FLIPPER BUTTONS - Large, semi-transparent, glowing
+   =================================================================== */
+.flipper-btn {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  border: none;
+  border-radius: 24px;
+  background: linear-gradient(145deg, 
+    rgba(0, 30, 60, 0.85) 0%, 
+    rgba(0, 15, 30, 0.9) 50%,
+    rgba(0, 10, 20, 0.95) 100%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+  pointer-events: auto;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  
+  /* Arcade-style border with glow potential */
+  box-shadow: 
+    inset 0 2px 4px rgba(255, 255, 255, 0.1),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.4),
+    0 8px 0 rgba(0, 100, 150, 0.3),
+    0 10px 20px rgba(0, 0, 0, 0.5),
+    0 0 30px rgba(0, 217, 255, 0.1);
+  
+  /* Smooth transitions for press effects */
+  transition: 
+    transform 0.08s ease-out,
+    box-shadow 0.15s ease-out,
+    background 0.15s ease-out;
+  
+  /* Flex layout for content */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  overflow: hidden;
 }
-@media (min-width: 680px) { #touch-controls { display: none; } }
+
+/* Flipper button inner glow layer */
+.flipper-glow {
+  position: absolute;
+  inset: 2px;
+  border-radius: 20px;
+  background: radial-gradient(
+    ellipse at center 30%,
+    rgba(0, 217, 255, 0.15) 0%,
+    transparent 60%
+  );
+  opacity: 0.6;
+  transition: opacity 0.15s ease-out;
+  pointer-events: none;
+}
+
+/* Flipper arrow icon container */
+.flipper-icon {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  color: #00d9ff;
+  filter: drop-shadow(0 0 8px rgba(0, 217, 255, 0.6));
+  transition: 
+    transform 0.08s ease-out,
+    filter 0.15s ease-out;
+  z-index: 1;
+}
+
+.flipper-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Left flipper - arrow points left */
+.flipper-left .flipper-icon svg {
+  transform: rotate(180deg);
+}
+
+/* Flipper text label */
+.flipper-label {
+  position: relative;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: rgba(0, 217, 255, 0.8);
+  text-shadow: 0 0 10px rgba(0, 217, 255, 0.4);
+  transition: 
+    color 0.15s ease-out,
+    text-shadow 0.15s ease-out;
+  z-index: 1;
+}
+
+/* ===================================================================
+   FLIPPER BUTTON PRESS STATES - Glow and depress effects
+   =================================================================== */
+
+/* Active/Pressed state */
+.flipper-btn:active,
+.flipper-btn.active {
+  transform: translateY(6px) scale(0.96);
+  background: linear-gradient(145deg, 
+    rgba(0, 60, 100, 0.9) 0%, 
+    rgba(0, 40, 70, 0.95) 50%,
+    rgba(0, 30, 50, 1) 100%);
+  box-shadow: 
+    inset 0 2px 8px rgba(0, 217, 255, 0.3),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.3),
+    0 2px 0 rgba(0, 100, 150, 0.4),
+    0 0 50px rgba(0, 217, 255, 0.4),
+    0 0 100px rgba(0, 217, 255, 0.2);
+}
+
+.flipper-btn:active .flipper-glow,
+.flipper-btn.active .flipper-glow {
+  opacity: 1;
+  background: radial-gradient(
+    ellipse at center 30%,
+    rgba(0, 217, 255, 0.4) 0%,
+    rgba(0, 150, 255, 0.2) 40%,
+    transparent 70%
+  );
+}
+
+.flipper-btn:active .flipper-icon,
+.flipper-btn.active .flipper-icon {
+  filter: drop-shadow(0 0 15px rgba(0, 217, 255, 0.9));
+  transform: scale(1.1);
+}
+
+.flipper-btn:active .flipper-label,
+.flipper-btn.active .flipper-label {
+  color: #fff;
+  text-shadow: 
+    0 0 10px rgba(0, 217, 255, 0.8),
+    0 0 20px rgba(0, 217, 255, 0.6);
+}
+
+/* Left flipper specific - cyan accent */
+.flipper-left {
+  border-left: 3px solid rgba(0, 217, 255, 0.5);
+}
+
+.flipper-left:active,
+.flipper-left.active {
+  border-left-color: rgba(0, 217, 255, 0.9);
+  box-shadow: 
+    inset 0 2px 8px rgba(0, 217, 255, 0.3),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.3),
+    0 2px 0 rgba(0, 150, 200, 0.4),
+    0 0 50px rgba(0, 217, 255, 0.5),
+    -10px 0 40px rgba(0, 217, 255, 0.2);
+}
+
+/* Right flipper specific - magenta accent */
+.flipper-right {
+  border-right: 3px solid rgba(255, 0, 136, 0.5);
+}
+
+.flipper-right .flipper-icon,
+.flipper-right .flipper-label {
+  color: rgba(255, 100, 180, 0.9);
+  filter: drop-shadow(0 0 8px rgba(255, 0, 136, 0.5));
+}
+
+.flipper-right:active,
+.flipper-right.active {
+  border-right-color: rgba(255, 0, 136, 0.9);
+  background: linear-gradient(145deg, 
+    rgba(60, 20, 50, 0.9) 0%, 
+    rgba(40, 10, 35, 0.95) 50%,
+    rgba(30, 5, 25, 1) 100%);
+  box-shadow: 
+    inset 0 2px 8px rgba(255, 0, 136, 0.25),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.3),
+    0 2px 0 rgba(200, 0, 100, 0.4),
+    0 0 50px rgba(255, 0, 136, 0.4),
+    10px 0 40px rgba(255, 0, 136, 0.2);
+}
+
+.flipper-right:active .flipper-icon,
+.flipper-right.active .flipper-icon {
+  filter: drop-shadow(0 0 15px rgba(255, 0, 136, 0.9));
+}
+
+.flipper-right:active .flipper-label,
+.flipper-right.active .flipper-label {
+  color: #fff;
+  text-shadow: 
+    0 0 10px rgba(255, 0, 136, 0.8),
+    0 0 20px rgba(255, 0, 136, 0.6);
+}
+
+/* ===================================================================
+   PLUNGER & NUDGE BUTTONS
+   =================================================================== */
+.touch-btn {
+  position: relative;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Plunger button */
+.touch-plunger {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, 
+    rgba(255, 200, 50, 0.85) 0%, 
+    rgba(255, 150, 0, 0.9) 50%,
+    rgba(200, 100, 0, 0.95) 100%);
+  box-shadow: 
+    inset 0 2px 4px rgba(255, 255, 255, 0.3),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.3),
+    0 6px 0 rgba(200, 100, 0, 0.5),
+    0 10px 20px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(255, 180, 0, 0.3);
+  transition: 
+    transform 0.08s ease-out,
+    box-shadow 0.15s ease-out;
+}
+
+.plunger-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 30% 30%,
+    rgba(255, 255, 200, 0.5) 0%,
+    transparent 50%
+  );
+  pointer-events: none;
+}
+
+.plunger-icon {
+  font-size: 1.8rem;
+  color: #fff;
+  text-shadow: 0 0 10px rgba(255, 200, 100, 0.8);
+  z-index: 1;
+}
+
+.touch-plunger:active,
+.touch-plunger.active {
+  transform: translateY(4px) scale(0.95);
+  box-shadow: 
+    inset 0 4px 8px rgba(255, 200, 100, 0.4),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.3),
+    0 2px 0 rgba(200, 100, 0, 0.5),
+    0 0 40px rgba(255, 180, 0, 0.6);
+}
+
+/* Nudge button */
+.touch-nudge {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, 
+    rgba(100, 100, 120, 0.7) 0%, 
+    rgba(60, 60, 80, 0.8) 100%);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    inset 0 1px 2px rgba(255, 255, 255, 0.1),
+    0 4px 8px rgba(0, 0, 0, 0.3);
+  transition: 
+    transform 0.08s ease-out,
+    box-shadow 0.15s ease-out;
+}
+
+.nudge-icon {
+  font-size: 1.3rem;
+  filter: grayscale(0.3);
+  transition: transform 0.1s ease-out;
+}
+
+.touch-nudge:active,
+.touch-nudge.active {
+  transform: translateY(3px) scale(0.95);
+  background: linear-gradient(145deg, 
+    rgba(150, 150, 170, 0.8) 0%, 
+    rgba(80, 80, 100, 0.9) 100%);
+  box-shadow: 
+    inset 0 2px 6px rgba(255, 255, 255, 0.2),
+    0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.touch-nudge:active .nudge-icon,
+.touch-nudge.active .nudge-icon {
+  transform: rotate(-15deg) scale(1.1);
+}
+
+/* ===================================================================
+   RESPONSIVE - Show/hide based on screen size
+   =================================================================== */
+
+/* Mobile: shrink cabinet to leave room for touch controls + safe area */
+@media (max-width: 768px) {
+  :root {
+    --cabinet-size: min(calc(85vh - var(--touch-controls-height) - var(--safe-area-bottom)), 85vw);
+  }
+}
+
+@media (min-width: 480px) and (max-width: 768px) {
+  :root { --touch-controls-height: 160px; }
+}
+
+@media (max-width: 359px) {
+  :root { --touch-controls-height: 120px; }
+}
+
+@media (max-height: 500px) and (max-width: 768px) {
+  :root { --touch-controls-height: 100px; }
+}
+
+/* Hide on larger screens (desktop) */
+@media (min-width: 769px) {
+  #touch-controls {
+    display: none;
+  }
+}
+
+/* Tablet adjustments */
+@media (min-width: 480px) and (max-width: 768px) {
+  #touch-controls {
+    height: 160px;
+    padding: 0 30px 25px 30px;
+  }
+  
+  .flipper-btn {
+    width: 130px;
+    height: 130px;
+    border-radius: 28px;
+  }
+  
+  .flipper-icon {
+    width: 44px;
+    height: 44px;
+  }
+  
+  .flipper-label {
+    font-size: 0.75rem;
+  }
+  
+  .touch-plunger {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .plunger-icon {
+    font-size: 2rem;
+  }
+}
+
+/* Small mobile phones */
+@media (max-width: 359px) {
+  #touch-controls {
+    height: 120px;
+    padding: 0 10px 15px 10px;
+  }
+  
+  .flipper-btn {
+    width: 90px;
+    height: 90px;
+    border-radius: 20px;
+  }
+  
+  .flipper-icon {
+    width: 30px;
+    height: 30px;
+  }
+  
+  .flipper-label {
+    font-size: 0.55rem;
+    letter-spacing: 1px;
+  }
+  
+  .touch-plunger {
+    width: 55px;
+    height: 55px;
+  }
+  
+  .plunger-icon {
+    font-size: 1.4rem;
+  }
+  
+  .touch-nudge {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* Landscape mode on mobile - make buttons shorter */
+@media (max-height: 500px) and (max-width: 768px) {
+  #touch-controls {
+    height: 100px;
+    padding: 0 20px 10px 20px;
+  }
+  
+  .flipper-btn {
+    width: 90px;
+    height: 80px;
+    border-radius: 16px;
+  }
+  
+  .flipper-icon {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .center-controls {
+    flex-direction: row;
+    gap: 15px;
+    margin-bottom: 5px;
+  }
+  
+  .touch-plunger {
+    width: 55px;
+    height: 55px;
+  }
+  
+  .touch-nudge {
+    width: 45px;
+    height: 45px;
+  }
+}
 
 .toast {
   position: fixed;
@@ -293,4 +810,497 @@ button:hover {
 #close-settings:hover {
   background: #888;
   color: #000;
+}
+
+/* Audio Settings */
+.setting-row.range-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.setting-row.range-row span {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.setting-row.range-row span::after {
+  content: attr(data-value);
+  color: #00d9ff;
+  font-size: 0.85rem;
+}
+
+.setting-row input[type="range"] {
+  width: 100%;
+  height: 6px;
+  background: #222;
+  border-radius: 3px;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.setting-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #00d9ff;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+}
+
+.setting-row input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #00d9ff;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+}
+
+/* ========================================================================
+   MAP SELECTOR - Floating LCD-style panel
+   ======================================================================== */
+
+#map-selector {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 10px;
+  background: rgba(0, 10, 20, 0.75);
+  border: 1px solid rgba(0, 217, 255, 0.35);
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+  z-index: 50;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 4px 20px rgba(0, 0, 0, 0.4),
+    inset 0 0 20px rgba(0, 217, 255, 0.05);
+  /* Scanline overlay */
+  overflow: hidden;
+}
+
+#map-selector::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15) 0px,
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.6;
+}
+
+.map-hint {
+  grid-column: span 4;
+  text-align: center;
+  font-size: 0.55rem;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  padding-bottom: 4px;
+  pointer-events: none;
+}
+
+.map-btn {
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 217, 255, 0.25);
+  border-radius: 3px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
+  position: relative;
+  /* Subpixel RGB phosphor simulation */
+  text-shadow:
+    -0.5px 0 0 rgba(255, 0, 0, 0.35),
+    0.5px 0 0 rgba(0, 255, 0, 0.35),
+    0 0 2px rgba(0, 100, 255, 0.4);
+}
+
+.map-btn:hover {
+  background: rgba(0, 217, 255, 0.15);
+  border-color: rgba(0, 217, 255, 0.7);
+  color: #fff;
+  box-shadow:
+    0 0 12px rgba(0, 217, 255, 0.35),
+    inset 0 0 12px rgba(0, 217, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+.map-btn:active {
+  transform: scale(0.92);
+  transition: transform 0.05s ease;
+}
+
+/* Active map - intense phosphor glow */
+.map-btn.active {
+  color: #000;
+  background: var(--map-accent, #00d9ff);
+  border-color: var(--map-accent, #00d9ff);
+  text-shadow: none;
+  box-shadow:
+    0 0 15px var(--map-accent, #00d9ff),
+    0 0 30px var(--map-accent, #00d9ff),
+    0 0 45px var(--map-accent, #00d9ff),
+    inset 0 0 12px rgba(255, 255, 255, 0.5);
+  animation: activeMapPulse 2s ease-in-out infinite;
+}
+
+@keyframes activeMapPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 15px var(--map-accent, #00d9ff),
+      0 0 30px var(--map-accent, #00d9ff),
+      0 0 45px var(--map-accent, #00d9ff),
+      inset 0 0 12px rgba(255, 255, 255, 0.5);
+  }
+  50% {
+    box-shadow:
+      0 0 20px var(--map-accent, #00d9ff),
+      0 0 40px var(--map-accent, #00d9ff),
+      0 0 60px var(--map-accent, #00d9ff),
+      inset 0 0 15px rgba(255, 255, 255, 0.6);
+  }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 480px) {
+  #map-selector {
+    bottom: 10px;
+    right: 10px;
+    padding: 8px;
+    gap: 5px;
+  }
+  .map-btn {
+    width: 28px;
+    height: 26px;
+    font-size: 0.65rem;
+  }
+  .map-hint {
+    font-size: 0.5rem;
+  }
+  #cabinet-selector {
+    bottom: 10px;
+    left: 10px;
+    padding: 8px;
+  }
+  .cabinet-btn {
+    padding: 6px 10px;
+    font-size: 0.65rem;
+  }
+}
+
+/* Cabinet Selector */
+#cabinet-selector {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  z-index: 50;
+}
+
+.cabinet-hint {
+  text-align: center;
+  font-size: 0.55rem;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  padding-bottom: 4px;
+  pointer-events: none;
+}
+
+.cabinet-btn {
+  padding: 8px 14px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.cabinet-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+  transform: translateX(2px);
+}
+
+.cabinet-btn:active {
+  transform: scale(0.95);
+  transition: transform 0.05s ease;
+}
+
+/* Active cabinet */
+.cabinet-btn.active {
+  color: #000;
+  background: #fff;
+  border-color: #fff;
+  box-shadow:
+    0 0 10px rgba(255, 255, 255, 0.5),
+    0 0 20px rgba(255, 255, 255, 0.3),
+    inset 0 0 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Levels Selector */
+#levels-selector {
+  position: absolute;
+  bottom: 20px;
+  left: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(0, 217, 255, 0.3);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  z-index: 50;
+}
+
+.levels-hint {
+  text-align: center;
+  font-size: 0.55rem;
+  letter-spacing: 2px;
+  color: rgba(0, 217, 255, 0.7);
+  text-transform: uppercase;
+  padding-bottom: 4px;
+  pointer-events: none;
+}
+
+.levels-btn {
+  padding: 8px 14px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: rgba(0, 217, 255, 0.9);
+  background: rgba(0, 217, 255, 0.1);
+  border: 1px solid rgba(0, 217, 255, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.levels-btn:hover {
+  background: rgba(0, 217, 255, 0.2);
+  border-color: rgba(0, 217, 255, 0.6);
+  color: #00d9ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 217, 255, 0.3);
+}
+
+.levels-btn:active {
+  transform: scale(0.95);
+  transition: transform 0.05s ease;
+}
+
+/* Mobile responsive for levels selector */
+@media (max-width: 768px) {
+  #levels-selector {
+    bottom: 10px;
+    left: 110px;
+    padding: 6px;
+  }
+  .levels-btn {
+    padding: 6px 10px;
+    font-size: 0.65rem;
+  }
+}
+
+/* Adventure Mode HUD */
+#adventure-hud {
+  position: absolute;
+  bottom: 80px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid #00d9ff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  min-width: 200px;
+  box-shadow: 
+    0 0 20px rgba(0, 217, 255, 0.3),
+    inset 0 0 30px rgba(0, 217, 255, 0.05);
+  font-family: 'Orbitron', sans-serif;
+  z-index: 100;
+  transition: opacity 0.3s ease;
+}
+
+#adventure-hud.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.adventure-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #00d9ff;
+  margin-bottom: 4px;
+  opacity: 0.8;
+}
+
+.adventure-level {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+  text-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+}
+
+.adventure-goals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.adventure-goal {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  background: rgba(0, 217, 255, 0.1);
+  border-radius: 4px;
+  border-left: 3px solid #00d9ff;
+}
+
+.adventure-goal.completed {
+  border-left-color: #00ff88;
+  background: rgba(0, 255, 136, 0.1);
+}
+
+.adventure-goal-text {
+  color: #ccc;
+}
+
+.adventure-goal.completed .adventure-goal-text {
+  color: #00ff88;
+  text-decoration: line-through;
+}
+
+.adventure-goal-progress {
+  color: #00d9ff;
+  font-weight: 700;
+  font-size: 0.7rem;
+}
+
+.adventure-goal.completed .adventure-goal-progress {
+  color: #00ff88;
+}
+
+.adventure-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00d9ff, #00ff88);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+}
+
+.progress-text {
+  font-size: 0.75rem;
+  color: #00d9ff;
+  font-weight: 700;
+  min-width: 35px;
+  text-align: right;
+}
+
+/* Adventure Reward Badge */
+.adventure-reward-badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
+  animation: reward-pulse 2s ease-in-out infinite;
+  cursor: help;
+}
+
+@keyframes reward-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 0 25px rgba(255, 215, 0, 0.8);
+  }
+}
+
+/* Mobile responsiveness for adventure HUD */
+@media (max-width: 480px) {
+  #adventure-hud {
+    bottom: 70px;
+    left: 10px;
+    right: 10px;
+    min-width: unset;
+    padding: 10px 12px;
+  }
+  
+  .adventure-level {
+    font-size: 0.8rem;
+  }
+  
+  .adventure-goal {
+    font-size: 0.7rem;
+  }
 }

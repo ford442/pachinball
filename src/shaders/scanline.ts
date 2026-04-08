@@ -5,6 +5,7 @@ export const scanlinePixelShader = {
     varying vec2 vUV;
     uniform sampler2D textureSampler;
     uniform float uTime;
+    uniform float uScanlineIntensity;
 
     void main(void) {
         // 1. Chromatic Aberration - RGB channel offset for retro CRT look
@@ -19,9 +20,8 @@ export const scanlinePixelShader = {
 
         // 2. Scanlines
         float scanlineCount = 800.0;
-        float scanlineIntensity = 0.25;
         float scanline = sin(vUV.y * scanlineCount);
-        float lineFactor = 1.0 - (scanlineIntensity * 0.5 * (scanline + 1.0));
+        float lineFactor = 1.0 - (uScanlineIntensity * 0.5 * (scanline + 1.0));
         color *= lineFactor;
 
         // 3. Subtle Film Grain - adds texture and avoids clinical perfection

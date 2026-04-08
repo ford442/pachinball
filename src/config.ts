@@ -3,6 +3,57 @@
 // Pure config - no Babylon.js dependencies
 
 /**
+ * API Configuration - Backend storage manager URL
+ * Uses production URL in production builds, localhost in development
+ */
+export const API_BASE = import.meta.env.PROD 
+  ? 'https://test.1ink.us:8000/api'
+  : 'http://localhost:8000/api'
+
+/**
+ * Helper to make API calls with exponential backoff retry logic
+ */
+export async function apiFetch<T>(
+  endpoint: string, 
+  options?: RequestInit,
+  retries = 3
+): Promise<T | null> {
+  let lastError: Error | null = null
+  
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const url = `${API_BASE}${endpoint}`
+      const response = await fetch(url, options)
+      
+      if (response.ok) {
+        return await response.json() as T
+      }
+      
+      // Don't retry 4xx errors (client errors)
+      if (response.status >= 400 && response.status < 500) {
+        console.warn(`[API] ${endpoint} returned ${response.status} (no retry)`)
+        return null
+      }
+      
+      console.warn(`[API] ${endpoint} returned ${response.status} (attempt ${attempt + 1}/${retries})`)
+      
+    } catch (err) {
+      lastError = err as Error
+      console.warn(`[API] Failed to fetch ${endpoint} (attempt ${attempt + 1}/${retries}):`, err)
+    }
+    
+    // Exponential backoff: wait 2^attempt * 100ms (100ms, 200ms, 400ms)
+    if (attempt < retries - 1) {
+      const delay = Math.pow(2, attempt) * 100
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+  }
+  
+  console.error(`[API] Max retries exceeded for ${endpoint}:`, lastError)
+  return null
+}
+
+/**
  * Effects Configuration - Feature flags and performance settings
  * for visual effect enhancements. All new effects are opt-in and
  * can be disabled for performance or compatibility.
@@ -125,9 +176,9 @@ export const GameConfig = {
     particleIntensity: 1.0
   },
   physics: {
-    ballRestitution: 0.7,
-    ballFriction: 0.1,
-    bumperRestitution: 1.5,
+    ballRestitution: 0.78,
+    ballFriction: 0.12,
+    bumperRestitution: 0.85,
     // REMOVED: flipperPower (Legacy/Unused)
     gravity: { x: 0, y: -9.81, z: -5.0 }
   },
@@ -160,8 +211,10 @@ export const GameConfig = {
   ball: {
     radius: 0.25,
     mass: 1.0,
-    friction: 0.1,    // Low friction is critical for the "steel ball" feel
-    restitution: 0.7, // Bounciness
+    friction: 0.12,        // Slightly higher friction for better control
+    restitution: 0.78,     // Balanced bounciness (0.75-0.85 range)
+    linearDamping: 0.08,   // Natural roll decay for realistic ball motion
+    angularDamping: 0.15,  // Spin decay for realistic ball rotation
     // Plain Objects for Spawn Points
     spawnMain: { x: 10.5, y: 0.5, z: -9 },
     spawnPachinko: { x: 0, y: 5, z: -10 }, // Ported from original
@@ -238,6 +291,19 @@ export const GameConfig = {
     // 'additive' - brightens, good for neon/dark images  
     // 'multiply' - darkens, good for light images
     imageBlendMode: 'normal' as const,
+
+    // State-specific video clips that play on game events
+    // Set to '' to disable state-specific video and use attract/default
+    jackpotVideoPath: './backbox/jackpot.mp4',
+    feverVideoPath: './backbox/fever.mp4',
+    reachVideoPath: './backbox/reach.mp4',
+    adventureVideoPath: './backbox/adventure.mp4',
+
+    // State-specific image fallbacks
+    jackpotImagePath: './backbox/jackpot.png',
+    feverImagePath: './backbox/fever.png',
+    reachImagePath: './backbox/reach.png',
+    adventureImagePath: './backbox/adventure.png',
   }
 }
 
