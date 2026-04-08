@@ -77,8 +77,6 @@ export class NanoLoomFeeder {
     frameMat.emissiveColor = Color3.FromHexString("#001111")
     frameMat.alpha = 0.3
     frame.material = frameMat
-    this._frameMesh = frame
-
     // 2. Intake Tube
     const intake = MeshBuilder.CreateCylinder("nanoIntake", {
       diameter: 1.2,
@@ -92,8 +90,6 @@ export class NanoLoomFeeder {
     intakeMat.emissiveColor = Color3.FromHexString("#00ffff")
     intakeMat.alpha = 0.5
     intake.material = intakeMat
-    this._intakeMesh = intake
-
     // 3. Pins (The Hex Grid)
     const pinMat = new StandardMaterial("nanoPinMat", this.scene)
     pinMat.emissiveColor = Color3.FromHexString("#00ff00")
@@ -238,8 +234,6 @@ export class NanoLoomFeeder {
 
                 // Pin activation wave - follows ball height as it rises
                 const progress = (currentPos.y - this.intakePosition.y) / this.config.height
-                this.pinActivationProgress = progress
-
                 // Activate pins near ball height
                 const ballRow = Math.floor((this.config.height / 2 - (currentPos.y - this.position.y)) / this.config.pinSpacing)
 
@@ -314,7 +308,6 @@ export class NanoLoomFeeder {
       pin.scaling.setAll(1.0)
       ;(pin.material as StandardMaterial).emissiveColor = Color3.FromHexString("#00ff00")
     })
-    this.pinActivationProgress = 0
   }
 
   private setState(newState: NanoLoomState): void {

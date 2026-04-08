@@ -83,8 +83,6 @@ export class MagSpinFeeder {
     wellMat.backFaceCulling = false // Visible from inside
     well.material = wellMat
 
-    this._mesh = well
-
     // Floor
     const floor = MeshBuilder.CreateCylinder("magSpinFloor", {
       diameter: 3.5,

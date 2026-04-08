@@ -228,25 +228,21 @@ export class PrismCoreFeeder {
 
       switch (newState) {
           case PrismCoreState.IDLE:
-              this.visualRotationSpeed = 0.5
               if (this.light) this.light.diffuse = Color3.Green()
               if (innerMat) innerMat.emissiveColor = Color3.Green()
               break
 
           case PrismCoreState.LOCKED_1:
-              this.visualRotationSpeed = 2.0
               if (this.light) this.light.diffuse = Color3.Yellow()
               if (innerMat) innerMat.emissiveColor = Color3.Yellow()
               break
 
           case PrismCoreState.LOCKED_2:
-              this.visualRotationSpeed = 5.0
               if (this.light) this.light.diffuse = Color3.Red()
               if (innerMat) innerMat.emissiveColor = Color3.Red()
               break
 
           case PrismCoreState.OVERLOAD:
-              this.visualRotationSpeed = 10.0
               if (this.light) this.light.diffuse = Color3.White()
               if (innerMat) innerMat.emissiveColor = Color3.White()
 
