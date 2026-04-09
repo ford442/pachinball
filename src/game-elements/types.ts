@@ -253,3 +253,28 @@ export type PlungerInputEvent =
   | { type: 'start' }
   | { type: 'release' }
   | { type: 'update'; chargeLevel: number }
+
+// ============================================================================
+// BALL TYPE SYSTEM
+// ============================================================================
+
+// Re-export BallType and BallTierConfig from config.ts for convenience
+export { BallType, type BallTierConfig } from '../config'
+
+/**
+ * BallData interface
+ * Tracks ball type, spawn time, and accumulated points for each ball
+ * Used by BallManager for multiball and gold ball tracking
+ */
+export interface BallData {
+  /** Ball type (standard, gold_plated, solid_gold) */
+  type: import('../config').BallType
+  /** Timestamp when the ball was spawned (ms) */
+  spawnTime: number
+  /** Accumulated points for this ball */
+  points: number
+  /** Babylon.js mesh reference (optional, for tracking) */
+  mesh?: Mesh
+  /** Rapier rigid body reference (optional, for tracking) */
+  rigidBody?: RAPIER.RigidBody
+}

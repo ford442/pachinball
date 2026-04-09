@@ -5,15 +5,19 @@ import {
   StandardMaterial,
   PBRMaterial,
   Color3,
+  Color4,
   TrailMesh,
   PointLight,
   Mesh,
+  ParticleSystem,
+  Texture,
 } from '@babylonjs/core'
 import type { MirrorTexture } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
-import { GameConfig } from '../config'
-import type { PhysicsBinding } from './types'
-import { getMaterialLibrary } from './material-library'
+import { GameConfig, BallType, BALL_TIERS } from '../config'
+import type { PhysicsBinding, BallData } from './types'
+import { getMaterialLibrary } from '../materials'
+import { getSoundSystem } from './sound-system'
 
 
 
@@ -34,6 +38,9 @@ export class BallManager {
     RAPIER.RigidBody,
     { mesh: TrailMesh; material: StandardMaterial; baseWidth: number; isFading: boolean }
   > = new Map()
+  private ballDataMap: Map<RAPIER.RigidBody, BallData> = new Map()
+  private goldBallCount = 0
+  private onGoldBallCollected?: (type: BallType, points: number) => void
 
   /** Track ball positions for stuck detection */
   private ballStuckTimers: Map<RAPIER.RigidBody, { lastPos: { x: number; y: number; z: number }; stuckTime: number }> = new Map()
@@ -261,6 +268,9 @@ export class BallManager {
   }
 
   removeBall(body: RAPIER.RigidBody): void {
+    // Clean up ball data
+    this.ballDataMap.delete(body)
+    
     const idx = this.ballBodies.indexOf(body)
     if (idx !== -1) {
       this.world.removeRigidBody(body)
@@ -549,5 +559,280 @@ export class BallManager {
       trailData.material.emissiveColor = Color3.FromHexString('#00FFFF')
       trailData.baseWidth = GameConfig.ball.radius * 0.6
     }
+  }
+
+  /**
+   * Play visual effect when a gold ball spawns
+   */
+  private playSpawnEffect(position: Vector3, type: BallType): void {
+    if (type === BallType.STANDARD) return
+
+    const isSolidGold = type === BallType.SOLID_GOLD
+
+    // Create particle system for spawn burst
+    const particleSystem = new ParticleSystem(
+      `spawnEffect_${type}_${Date.now()}`,
+      isSolidGold ? 50 : 20,
+      this.scene
+    )
+
+    // Particle texture (use circle or create simple)
+    particleSystem.particleTexture = this.createParticleTexture(isSolidGold ? '#ffb700' : '#ffd700')
+
+    // Emitter position
+    particleSystem.emitter = position
+
+    // Particle colors
+    if (isSolidGold) {
+      particleSystem.color1 = new Color4(1, 0.76, 0.15, 1)   // Rich gold
+      particleSystem.color2 = new Color4(1, 0.9, 0.4, 1)     // Lighter gold
+      particleSystem.colorDead = new Color4(1, 0.7, 0, 0)    // Fade to transparent
+    } else {
+      particleSystem.color1 = new Color4(0.95, 0.87, 0.65, 1) // Light gold
+      particleSystem.color2 = new Color4(1, 0.95, 0.8, 1)     // Even lighter
+      particleSystem.colorDead = new Color4(0.9, 0.8, 0.5, 0) // Fade out
+    }
+
+    // Size
+    particleSystem.minSize = 0.05
+    particleSystem.maxSize = isSolidGold ? 0.2 : 0.1
+
+    // Lifetime
+    particleSystem.minLifeTime = 0.3
+    particleSystem.maxLifeTime = isSolidGold ? 1.0 : 0.6
+
+    // Emission
+    particleSystem.emitRate = isSolidGold ? 100 : 50
+    particleSystem.targetStopDuration = isSolidGold ? 0.3 : 0.2
+
+    // Direction and speed
+    particleSystem.direction1 = new Vector3(-1, 1, -1)
+    particleSystem.direction2 = new Vector3(1, 1, 1)
+    particleSystem.minEmitPower = 1
+    particleSystem.maxEmitPower = isSolidGold ? 5 : 3
+    particleSystem.updateSpeed = 0.02
+
+    // Gravity
+    particleSystem.gravity = new Vector3(0, -2, 0)
+
+    // Start and auto-cleanup
+    particleSystem.start()
+
+    // Stop emission after burst
+    setTimeout(() => {
+      particleSystem.stop()
+      // Dispose after particles die
+      setTimeout(() => {
+        particleSystem.dispose()
+      }, 1500)
+    }, isSolidGold ? 300 : 200)
+  }
+
+  /**
+   * Create a simple circular particle texture
+   */
+  private createParticleTexture(colorHex: string): Texture {
+    const size = 64
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')!
+
+    // Draw circle
+    ctx.beginPath()
+    ctx.arc(size/2, size/2, size/2 - 2, 0, Math.PI * 2)
+    ctx.fillStyle = colorHex
+    ctx.fill()
+
+    // Add glow
+    const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2)
+    gradient.addColorStop(0, colorHex)
+    gradient.addColorStop(0.5, colorHex + '80')
+    gradient.addColorStop(1, colorHex + '00')
+    ctx.fillStyle = gradient
+    ctx.fill()
+
+    const texture = new Texture(
+      canvas.toDataURL(),
+      this.scene
+    )
+    return texture
+  }
+
+  /**
+   * Create a ball with specific type
+   */
+  createBallOfType(type: BallType, position?: Vector3, playEffect = false): RAPIER.RigidBody {
+    const config = BALL_TIERS[type]
+    const spawnPos = position || GameConfig.ball.spawnMain
+
+    // Create mesh based on type
+    const diameter = GameConfig.ball.radius * 2
+    const ball = MeshBuilder.CreateSphere(`ball_${type}`, {
+      diameter,
+      segments: 32,
+      slice: 1
+    }, this.scene) as Mesh
+
+    // Apply material based on type
+    ball.material = this.getMaterialForType(type)
+
+    // Create physics body
+    const body = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.dynamic()
+        .setTranslation(spawnPos.x, spawnPos.y, spawnPos.z)
+        .setCcdEnabled(true)
+        .setCanSleep(true)
+        .setLinearDamping(GameConfig.ball.linearDamping)
+        .setAngularDamping(GameConfig.ball.angularDamping)
+    )
+
+    const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
+
+    this.world.createCollider(
+      this.rapier.ColliderDesc.ball(GameConfig.ball.radius)
+        .setRestitution(GameConfig.ball.restitution)
+        .setFriction(GameConfig.ball.friction)
+        .setDensity(density)
+        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
+      body
+    )
+
+    // Store ball data
+    const ballData: BallData = {
+      type,
+      spawnTime: performance.now(),
+      points: config.basePoints,
+      mesh: ball,
+      rigidBody: body
+    }
+
+    this.ballDataMap.set(body, ballData)
+    this.bindings.push({ mesh: ball, rigidBody: body })
+    this.ballBodies.push(body)
+
+    // Add trail with type-specific color
+    this.addTrailForBall(body, config.trailColor)
+
+    // Play effect if requested
+    if (playEffect && type !== BallType.STANDARD) {
+      const effectPos = position || GameConfig.ball.spawnMain
+      this.playSpawnEffect(new Vector3(effectPos.x, effectPos.y, effectPos.z), type)
+    }
+
+    return body
+  }
+
+  /**
+   * Get material for ball type
+   */
+  private getMaterialForType(type: BallType): PBRMaterial {
+    switch (type) {
+      case BallType.GOLD_PLATED:
+        return this.matLib.getGoldPlatedBallMaterial()
+      case BallType.SOLID_GOLD:
+        return this.matLib.getSolidGoldBallMaterial()
+      default:
+        return this.matLib.getEnhancedChromeBallMaterial()
+    }
+  }
+
+  /**
+   * Add trail for a ball with specific color
+   */
+  private addTrailForBall(body: RAPIER.RigidBody, colorHex: string): void {
+    const binding = this.bindings.find(b => b.rigidBody === body)
+    if (!binding) return
+
+    const trailWidth = GameConfig.ball.radius * 0.6
+    const trail = new TrailMesh(`trail_${body.handle}`, binding.mesh, this.scene, trailWidth, 20, true)
+    const trailMat = new StandardMaterial(`trailMat_${body.handle}`, this.scene)
+    trailMat.emissiveColor = Color3.FromHexString(colorHex)
+    trail.material = trailMat
+
+    this.trails.set(body, trail)
+    this.trailMaterials.set(trail, trailMat)
+    this.ballTrails.set(body, {
+      mesh: trail,
+      material: trailMat,
+      baseWidth: trailWidth,
+      isFading: false,
+    })
+  }
+
+  /**
+   * Get ball type for a body
+   */
+  getBallType(body: RAPIER.RigidBody): BallType {
+    return this.ballDataMap.get(body)?.type || BallType.STANDARD
+  }
+
+  /**
+   * Get ball data for a body
+   */
+  getBallData(body: RAPIER.RigidBody): BallData | undefined {
+    return this.ballDataMap.get(body)
+  }
+
+  /**
+   * Mark a ball as collected (when it drains)
+   */
+  collectBall(body: RAPIER.RigidBody): { type: BallType; points: number } | null {
+    const data = this.ballDataMap.get(body)
+    if (!data) return null
+
+    // Update gold ball counter
+    if (data.type !== BallType.STANDARD) {
+      this.goldBallCount++
+    }
+
+    // Trigger callback if registered
+    this.onGoldBallCollected?.(data.type, data.points)
+
+    return { type: data.type, points: data.points }
+  }
+
+  /**
+   * Set callback for gold ball collection
+   */
+  setOnGoldBallCollected(callback: (type: BallType, points: number) => void): void {
+    this.onGoldBallCollected = callback
+  }
+
+  /**
+   * Get total gold balls collected
+   */
+  getGoldBallCount(): number {
+    return this.goldBallCount
+  }
+
+  /**
+   * Spawn a random ball with weighted probability
+   */
+  spawnRandomBall(position?: Vector3): RAPIER.RigidBody {
+    const rand = Math.random()
+    let cumulative = 0
+
+    for (const [typeKey, config] of Object.entries(BALL_TIERS)) {
+      cumulative += config.spawnWeight
+      if (rand <= cumulative) {
+        const type = typeKey as BallType
+        const spawnPos = position || GameConfig.ball.spawnMain
+
+        // Create the ball
+        const body = this.createBallOfType(type, position)
+
+        // Play spawn effect for gold balls
+        if (type !== BallType.STANDARD) {
+          this.playSpawnEffect(new Vector3(spawnPos.x, spawnPos.y, spawnPos.z), type)
+          const soundSystem = getSoundSystem()
+          soundSystem.playGoldBallSpawn(type)
+        }
+
+        return body
+      }
+    }
+
+    return this.createMainBall()  // Fallback
   }
 }

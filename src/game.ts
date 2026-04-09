@@ -32,7 +32,6 @@ import {
   GameState,
   DisplayState,
   PhysicsSystem,
-  InputHandler,
   DisplaySystem,
   EffectsSystem,
   GameObjects,
@@ -43,15 +42,10 @@ import {
   AdventureMode,
   AdventureTrackType,
   MagSpinFeeder,
-  MagSpinState,
   NanoLoomFeeder,
-  NanoLoomState,
   PrismCoreFeeder,
-  PrismCoreState,
   GaussCannonFeeder,
-  GaussCannonState,
   QuantumTunnelFeeder,
-  QuantumTunnelState,
   CameraController,
   CameraMode,
   getMaterialLibrary,
@@ -73,20 +67,25 @@ import {
   getAdventureState,
   getLevelSelectScreen,
   getZoneConfig,
-  getTransitionShakeIntensity,
   ZoneTriggerSystem,
   getScenario,
   getDynamicWorld,
-  type ZoneConfig,
   type AccessibilityConfig,
   type InputFrame,
   type DynamicScenario,
   type ScenarioZone,
 } from './game-elements'
-import { GameConfig, API_BASE } from './config'
+import { BallStackVisual } from './game-elements/ball-stack-visual'
+import { GameStateManager } from './game/game-state'
+import { GameInputManager } from './game/game-input'
+import { TableMapManager } from './game/game-maps'
+import { CabinetManager } from './game/game-cabinet'
+import { GameUIManager } from './game/game-ui'
+import { AdventureManager } from './game/game-adventure'
+import { GameConfig, API_BASE, BallType } from './config'
 import { DisplayMode, type DisplayConfig } from './game-elements/display-config'
 import { scanlinePixelShader } from './shaders/scanline'
-import { lcdTablePixelShader, TABLE_MAPS, type TableMapType, LCDTableState, registerMap } from './shaders/lcd-table'
+import { lcdTablePixelShader, TABLE_MAPS, registerMap } from './shaders/lcd-table'
 
 // Register the shaders
 Effect.ShadersStore["scanlineFragmentShader"] = scanlinePixelShader.fragment
@@ -104,7 +103,6 @@ export class Game {
   private effects: EffectsSystem | null = null
   private gameObjects: GameObjects | null = null
   private ballManager: BallManager | null = null
-  private currentCabinetType: CabinetType = 'classic'
   private ballAnimator: BallAnimator | null = null
   private adventureMode: AdventureMode | null = null
   private zoneTriggerSystem: ZoneTriggerSystem | null = null
@@ -113,8 +111,13 @@ export class Game {
   private prismCoreFeeder: PrismCoreFeeder | null = null
   private gaussCannon: GaussCannonFeeder | null = null
   private quantumTunnel: QuantumTunnelFeeder | null = null
-  private inputHandler: InputHandler | null = null
+  private inputManager: GameInputManager | null = null
   private cameraController: CameraController | null = null
+  private mapManager: TableMapManager | null = null
+  private cabinetManager: CabinetManager | null = null
+  private uiManager: GameUIManager | null = null
+  private adventureManager: AdventureManager | null = null
+  private debugHUD: DebugHUD | null = null
   private hapticManager: HapticManager | null = null
   private soundSystem = getSoundSystem()
   private leaderboardSystem = getLeaderboardSystem()
@@ -139,12 +142,14 @@ export class Game {
 
   // Game State
   private ready = false
-  private state: GameState = GameState.MENU
+  private stateManager!: GameStateManager
   private score = 0
   private lives = 3
   private bestScore = 0
   private comboCount = 0
   private comboTimer = 0
+  private goldBallStack: Array<{ type: BallType; timestamp: number }> = []
+  private maxStackDisplay = 10
   private powerupActive = false
   private powerupTimer = 0
   private tiltActive = false
@@ -171,10 +176,8 @@ export class Game {
   private pauseOverlay: HTMLElement | null = null
   private finalScoreElement: HTMLElement | null = null
 
-  // LCD Table State
-  private lcdTableState: LCDTableState = new LCDTableState()
+  // LCD Table State (managed by TableMapManager)
   private lcdTablePostProcess: PostProcess | null = null
-  private currentTableMap: TableMapType = 'neon-helix'
 
   // Map System (dynamic backend maps)
   private mapSystem = getMapSystem(API_BASE)
@@ -188,6 +191,9 @@ export class Game {
   // Dynamic World (scrolling adventure mode)
   private dynamicWorld: ReturnType<typeof getDynamicWorld> | null = null
 
+  // Ball Stack Visual
+  private ballStackVisual: BallStackVisual | null = null
+
   // Room Environment
   private roomMeshes: Mesh[] = []
   private cabinetNeonLights: PointLight[] = []
@@ -196,6 +202,11 @@ export class Game {
   // Debug UI
   private inputLatencyOverlay: HTMLElement | null = null
   private showDebugUI = false
+
+  // Frame time monitoring
+  private frameTimeHistory: number[] = []
+  private lastFrameTime = 0
+  private hudUpdatePending = false
 
   // Scanline intensity
   private scanlineIntensity = 0.12
@@ -238,6 +249,9 @@ export class Game {
     this.pauseOverlay = document.getElementById('pause-overlay')
     this.comboElement = document.getElementById('combo')
     this.bestHudElement = document.getElementById('best')
+
+    // Initialize UI Manager
+    this.uiManager = new GameUIManager(this.scene)
     this.startScreen = document.getElementById('start-screen')
     this.gameOverScreen = document.getElementById('game-over-screen')
     this.finalScoreElement = document.getElementById('final-score')
@@ -505,38 +519,48 @@ export class Game {
     // Initialize ball animator for squash-and-stretch effects
     this.ballAnimator = new BallAnimator(this.scene)
 
-    // Initialize input handler with plunger charge support
-    this.inputHandler = new InputHandler(
-      {
-        onFlipperLeft: (pressed) => this.handleFlipperLeft(pressed),
-        onFlipperRight: (pressed) => this.handleFlipperRight(pressed),
-        onPlunger: () => this.handlePlunger(),
-        onPlungerChargeStart: () => this.startPlungerCharge(),
-        onPlungerChargeRelease: (chargeLevel) => this.releasePlungerCharge(chargeLevel),
-        onPlungerChargeUpdate: (chargeLevel) => this.updatePlungerCharge(chargeLevel),
-        onNudge: (direction) => this.applyNudge(direction),
-        onPause: () => this.togglePause(),
-        onReset: () => this.resetBall(),
-        onStart: () => this.startGame(),
-        onAdventureToggle: () => this.toggleAdventure(),
-        onTrackNext: () => this.cycleAdventureTrack(1),
-        onTrackPrev: () => this.cycleAdventureTrack(-1),
-        onJackpotTrigger: () => this.triggerJackpot(),
-        getState: () => this.state,
-        getTiltActive: () => this.tiltActive,
+    // Initialize input manager with all callbacks
+    this.inputManager = new GameInputManager(this.scene, this.physics, {
+      onFlipperLeft: (pressed) => this.handleFlipperLeft(pressed),
+      onFlipperRight: (pressed) => this.handleFlipperRight(pressed),
+      onPlunger: () => this.handlePlunger(),
+      onPlungerChargeStart: () => this.startPlungerCharge(),
+      onPlungerChargeRelease: (chargeLevel) => this.releasePlungerCharge(chargeLevel),
+      onPlungerChargeUpdate: (chargeLevel) => this.updatePlungerCharge(chargeLevel),
+      onNudge: (direction) => this.applyNudge(direction),
+      onPause: () => this.togglePause(),
+      onReset: () => this.resetBall(),
+      onStart: () => this.startGame(),
+      onAdventureToggle: () => this.toggleAdventure(),
+      onTrackNext: () => this.cycleAdventureTrack(1),
+      onTrackPrev: () => this.cycleAdventureTrack(-1),
+      onJackpotTrigger: () => this.triggerJackpot(),
+      onDebugHUD: () => this.debugHUD?.toggle(),
+      onMapSwitch: (index) => {
+        const maps = this.mapManager?.getMapSystem().getMapIds() || []
+        if (index >= 0 && index < maps.length) {
+          this.mapManager?.switchTableMap(maps[index])
+        }
       },
-      this.physics.getRapier()
-    )
+      onMapCycle: () => this.mapManager?.cycleTableMap(),
+      onCabinetCycle: () => this.cabinetManager?.cycleCabinetPreset(),
+      onLevelSelectToggle: () => this.toggleLevelSelect(),
+      onLeaderboardToggle: () => this.leaderboardSystem.toggle(),
+      onDynamicModeToggle: () => this.toggleDynamicMode(),
+      onScenarioCycle: () => this.cycleScenario(),
+      getState: () => this.stateManager.getState(),
+      getTiltActive: () => this.tiltActive,
+    })
 
     // Configure plunger charge parameters from GameConfig
-    this.inputHandler.configurePlungerCharge({
+    this.inputManager.configurePlungerCharge({
       maxChargeTime: GameConfig.plunger.maxChargeTime,
       minImpulse: GameConfig.plunger.minImpulse,
       maxImpulse: GameConfig.plunger.maxImpulse
     })
 
     // Initialize gamepad support
-    this.inputHandler.setupGamepad({
+    this.inputManager.setupGamepad({
       deadZone: 0.15,
       vibrationEnabled: !this.accessibility.reducedMotion
     })
@@ -545,13 +569,14 @@ export class Game {
     const touchRightBtn = document.getElementById('touch-right')
     const touchPlungerBtn = document.getElementById('touch-plunger')
     const touchNudgeBtn = document.getElementById('touch-nudge')
-    this.inputHandler.setupTouchControls(touchLeftBtn, touchRightBtn, touchPlungerBtn, touchNudgeBtn)
+    this.inputManager.setupTouchControls(touchLeftBtn, touchRightBtn, touchPlungerBtn, touchNudgeBtn)
 
     this.scene.onBeforeRenderObservable.add(() => {
       this.stepPhysics()
     })
 
     this.engine.runRenderLoop(() => {
+      this.monitorFrameTime()
       this.updateLatencyDisplay()
       this.scene?.render()
     })
@@ -562,60 +587,80 @@ export class Game {
     // Fix DPR handling to use rounded value
     this.setupDPRHandling()
 
-    window.addEventListener('keydown', this.inputHandler.handleKeyDown)
-    window.addEventListener('keyup', this.inputHandler.handleKeyUp)
-
-    // Dynamic map switching keyboard shortcuts (Digit1-9 map to available maps)
-    window.addEventListener('keydown', (e) => {
-      if (e.code.startsWith('Digit') && this.state === GameState.PLAYING) {
-        const index = parseInt(e.code.replace('Digit', ''), 10) - 1
-        const maps = this.mapSystem.getMapIds()
-        if (index >= 0 && index < maps.length) {
-          e.preventDefault()
-          this.switchTableMap(maps[index])
-        }
-      }
-      // 'M' key to cycle maps
-      if (e.code === 'KeyM' && this.state === GameState.PLAYING) {
-        e.preventDefault()
-        this.cycleTableMap()
-      }
-      // 'C' key to cycle cabinet presets
-      if (e.code === 'KeyC') {
-        e.preventDefault()
-        this.cycleCabinetPreset()
-      }
-      // 'L' key to toggle level select screen
-      if (e.code === 'KeyL') {
-        e.preventDefault()
-        this.toggleLevelSelect()
-      }
-      // 'B' key to toggle leaderboard
-      if (e.code === 'KeyB') {
-        e.preventDefault()
-        this.leaderboardSystem.toggle()
-      }
-      // 'D' key to toggle Dynamic/Fixed mode
-      if (e.code === 'KeyD') {
-        e.preventDefault()
-        this.toggleDynamicMode()
-      }
-      // 'S' key to cycle scenarios in Dynamic Mode
-      if (e.code === 'KeyS' && this.gameMode === 'dynamic') {
-        e.preventDefault()
-        this.cycleScenario()
-      }
-    })
-
     // Enable latency tracking in dev mode (check URL parameter)
     this.showDebugUI = new URLSearchParams(window.location.search).has('debug')
     if (this.showDebugUI) {
-      this.inputHandler.enableLatencyTracking(true)
+      this.inputManager?.enableLatencyTracking(true)
       this.setupLatencyOverlay()
     }
 
     this.ready = true
-    this.setGameState(GameState.MENU)
+    this.stateManager = new GameStateManager({
+      onStateChange: (oldState, newState) => {
+        console.log(`[Game] State changed: ${GameState[oldState]} -> ${GameState[newState]}`)
+      }
+    })
+    this.stateManager.setSystems(this.effects, this.display)
+
+    // Initialize adventure manager
+    this.adventureManager = new AdventureManager(
+      this.scene!,
+      this.physics,
+      this.stateManager,
+      this.uiManager!,
+      {
+        effects: this.effects,
+        display: this.display,
+        ballManager: this.ballManager,
+        soundSystem: this.soundSystem,
+      },
+      {
+        onZoneEnter: (_zone, config, isMajor) => {
+          // Use primary color for environment effects
+          void _zone
+          this.effects?.updateEnvironmentColor?.(config.primaryColor)
+          if (isMajor && this.hapticManager) {
+            this.hapticManager.jackpot()
+          }
+        },
+        onScoreAward: (points, reason) => {
+          this.score += points
+          this.queueHUDUpdate()
+          this.uiManager?.showMessage(`${reason}: +${points}`, 1000)
+        },
+        onAdventureEnd: () => {
+          this.score += 5000
+          this.queueHUDUpdate()
+          this.effects?.startJackpotSequence()
+        },
+      }
+    )
+
+    // Initialize map manager
+    this.mapManager = new TableMapManager(this.scene!, {
+      onMapChange: (_type, config) => {
+        // Update ball and material colors
+        this.ballManager?.updateBallMaterialColor(config.baseColor)
+        const matLib = getMaterialLibrary(this.scene!)
+        matLib.updateFlipperMaterialEmissive(config.baseColor)
+        matLib.updatePinMaterialEmissive(config.baseColor)
+        matLib.updateBrushedMetalMaterialEmissive(config.baseColor)
+        matLib.updateChromeMaterialEmissive(config.baseColor)
+        // Update cabinet lighting
+        this.updateCabinetLightingForMap()
+      },
+      onPopupShow: (name, color) => this.showMapNamePopup(name, color),
+      onMapSelectorUpdate: () => this.updateMapSelectorUI(),
+    })
+    this.mapManager.setBloomPipeline()
+
+    // Initialize cabinet manager
+    this.cabinetManager = new CabinetManager(this.scene!, {
+      onPopupShow: (name) => this.showCabinetPopup(name),
+      onUISelect: () => this.updateCabinetSelectorUI(),
+    })
+
+    this.stateManager.setState(GameState.MENU)
   }
 
   private setupEnvironmentLighting(): void {
@@ -894,7 +939,7 @@ export class Game {
    * Update cabinet neon lights based on current map color
    */
   private updateCabinetLightingForMap(): void {
-    const config = TABLE_MAPS[this.currentTableMap]
+    const config = TABLE_MAPS[this.mapManager?.getCurrentMap() || 'neon-helix']
     if (!config || this.cabinetNeonLights.length === 0) return
 
     const baseColor = Color3.FromHexString(config.baseColor)
@@ -969,10 +1014,9 @@ export class Game {
   }
 
   dispose(): void {
-    if (this.inputHandler) {
-      window.removeEventListener('keydown', this.inputHandler.handleKeyDown)
-      window.removeEventListener('keyup', this.inputHandler.handleKeyUp)
-    }
+    this.inputManager?.dispose()
+    this.uiManager?.dispose()
+    this.adventureManager?.dispose()
     
     // Clean up mouse tracking handler
     if (this._mouseMoveHandler) {
@@ -1024,6 +1068,10 @@ export class Game {
     // 5. Ball animator
     this.ballAnimator?.dispose()
     this.ballAnimator = null
+
+    // 5.5. Ball stack visual
+    this.ballStackVisual?.dispose()
+    this.ballStackVisual = null
 
     // 6. Effects system
     this.effects?.dispose()
@@ -1127,8 +1175,14 @@ export class Game {
     }
     this.display = new DisplaySystem(this.scene, this.engine, displayConfig)
 
+    // Initialize debug HUD
+    this.debugHUD = new DebugHUD()
+
     // Initialize Dynamic World for scrolling adventure mode
     this.dynamicWorld = getDynamicWorld(this.scene, this.tableCam!, this.display, this.soundSystem)
+
+    // Initialize ball stack visual
+    this.ballStackVisual = new BallStackVisual(this.scene)
 
     // Setup Adventure State with display integration
     this.adventureState.setDisplay(this.display)
@@ -1153,6 +1207,12 @@ export class Game {
     const particleTexture = this.effects.createParticleTexture()
     this.gameObjects = new GameObjects(this.scene, world, rapier, GameConfig, particleTexture)
     this.ballManager = new BallManager(this.scene, world, rapier, this.gameObjects.getBindings())
+    
+    // Set up gold ball collection callback
+    this.ballManager.setOnGoldBallCollected((type, points) => {
+      console.log(`[Game] Gold ball collected: ${type}, points: ${points}`)
+    })
+    
     this.adventureMode = new AdventureMode(this.scene, world, rapier)
 
     // Setup feeder event handlers
@@ -1164,9 +1224,12 @@ export class Game {
 
       switch (event) {
         case 'START': {
+          const trackType = data as AdventureTrackType | undefined
+          // Delegate to AdventureManager
+          this.adventureManager?.startAdventure(trackType)
+          
           // Switch display to Mission Mode
           this.display?.setDisplayState(DisplayState.ADVENTURE)
-          const trackType = data as AdventureTrackType | undefined
           const trackName = trackType ? this.getTrackDisplayName(trackType) : 'UNKNOWN SECTOR'
           this.display?.setTrackInfo(trackName)
           this.display?.setStoryText(`ENTERING: ${trackName}`)
@@ -1177,15 +1240,14 @@ export class Game {
         }
 
         case 'END':
+          // Delegate to AdventureManager
+          this.adventureManager?.endAdventure()
+          
           // Return to Pinball Mode
           this.display?.setDisplayState(DisplayState.IDLE)
           this.effects?.setLightingMode('normal', 1.0)
           this.effects?.setAtmosphereState('IDLE')
           this.effects?.playBeep(440) // Transition sound
-
-          // Bonus Points
-          this.score += 5000
-          this.updateHUD()
           break
           
         case 'ZONE_ENTER': {
@@ -1229,7 +1291,7 @@ export class Game {
     // Build the full 3D arcade cabinet around the playfield
     if (this.scene) {
       const cabinetBuilder = getCabinetBuilder(this.scene)
-      cabinetBuilder.loadCabinetPreset(this.currentCabinetType)
+      cabinetBuilder.loadCabinetPreset(this.cabinetManager?.getCurrentType() || 'classic')
     }
 
     // Use LCD table material instead of regular playfield
@@ -1354,54 +1416,28 @@ export class Game {
    * @param mapName - The map to switch to (e.g., 'neon-helix', 'cyber-core')
    */
   public switchTableMap(mapName: string): void {
-    // Ensure the map exists in the runtime registry (hardcoded or dynamic)
-    const mapConfig = this.mapSystem.getMap(mapName) || TABLE_MAPS[mapName]
+    const mapConfig = this.mapManager?.getMapSystem().getMap(mapName) || TABLE_MAPS[mapName]
     if (!mapConfig) {
       console.warn(`[Game] Unknown table map: ${mapName}`)
       return
     }
 
-    // Register into TABLE_MAPS if it came from MapSystem (ensures LCDTableState can find it)
-    if (!TABLE_MAPS[mapName]) {
-      registerMap(mapName, mapConfig)
+    // Delegate to map manager
+    this.mapManager?.switchTableMap(mapName)
+
+    // Handle game-specific logic
+    const musicId = (mapConfig as { musicTrackId?: string }).musicTrackId || this.mapManager?.getMapSystem().inferMusicTrackId(mapName) || '1'
+    if (musicId) {
+      this.soundSystem.playMapMusic(musicId)
     }
-
-    console.log(`[Game] Switching table map to: ${mapName}`)
-    this.currentTableMap = mapName
-    this.lcdTableState.switchMap(mapName)
-
-    // Update the material library's LCD material
-    const matLib = getMaterialLibrary(this.scene!)
-    matLib.updateLCDTableEmissive(mapConfig.baseColor, mapConfig.glowIntensity)
-
-    // Update ball and flipper materials to react to new map color
-    this.ballManager?.updateBallMaterialColor(mapConfig.baseColor)
-    matLib.updateFlipperMaterialEmissive(mapConfig.baseColor)
-    matLib.updatePinMaterialEmissive(mapConfig.baseColor)
-    matLib.updateBrushedMetalMaterialEmissive(mapConfig.baseColor)
-    matLib.updateChromeMaterialEmissive(mapConfig.baseColor)
-
-    // Update 3D cabinet mesh neon trim and interior lights to match map
-    const cabinetBuilder = getCabinetBuilder(this.scene!)
-    cabinetBuilder.setThemeFromMap(mapName)
-    // Update ambient cabinet neon lights to match map
-    this.updateCabinetLightingForMap()
-    
-    // Switch music track for this map (use dynamic trackId or legacy mapping)
-    const musicId = (mapConfig as { musicTrackId?: string }).musicTrackId || this.mapSystem.inferMusicTrackId(mapName)
-    this.soundSystem.playMapMusic(musicId)
 
     // Update display with map info
     this.display?.setStoryText(`MAP: ${mapConfig.name.toUpperCase()}`)
-
-    // Show map name popup with CRT effect
-    this.showMapNamePopup(mapConfig.name, mapConfig.baseColor)
 
     // Adventure Mode: Auto-start level for this map
     const levelForMap = this.adventureState.getAllLevels().find(l => l.mapType === mapName)
     if (levelForMap && this.adventureState.isMapUnlocked(mapName)) {
       this.adventureState.startLevel(levelForMap.id)
-      // Show intro story text in backbox
       if (levelForMap.story?.intro) {
         this.display?.setStoryText(levelForMap.story.intro)
       }
@@ -1412,15 +1448,11 @@ export class Game {
       this.levelSelectScreen.updateProgress()
     }
 
-    // Update on-screen map selector highlight
-    this.updateMapSelectorUI()
-
     // Configure Dynamic World mode based on map config
     const mapMode = mapConfig.mode || 'fixed'
     this.dynamicWorld?.setMode(mapMode)
     
     if (mapMode === 'dynamic' && mapConfig.worldLength) {
-      // Initialize dynamic zones for this map
       this.initializeDynamicZones(mapName, mapConfig)
     }
   }
@@ -1431,86 +1463,37 @@ export class Game {
 
   /**
    * Handle zone transition in Dynamic Adventure Mode
-   * Updates backbox, lighting, music, and triggers effects
+   * Delegates to AdventureManager
    */
   private handleZoneTransition(
     zone: AdventureTrackType, 
     previousZone: AdventureTrackType | null,
     isMajor: boolean
   ): void {
-    console.log(`[Game] Zone transition: ${previousZone} -> ${zone} (${isMajor ? 'MAJOR' : 'minor'})`)
+    this.adventureManager?.handleZoneTransition(zone, previousZone, isMajor)
     
-    // Get zone configuration
-    const zoneConfig = getZoneConfig(zone)
-    
-    // 1. Update backbox with zone story video and CRT effect
-    this.display?.showZoneStory(
-      zoneConfig.name,
-      zoneConfig.storyText,
-      zoneConfig.videoUrl,
-      true // Enable CRT effect
-    )
-    
-    // 2. Update cabinet neon and interior lights
-    this.updateCabinetLightingForZone(zoneConfig)
-    
-    // 3. Update ball material color
-    this.ballManager?.updateBallMaterialColor(zoneConfig.primaryColor)
-    
-    // 4. Cross-fade music to zone track
-    this.soundSystem.playMapMusic(zoneConfig.musicTrackId)
-    
-    // 5. Trigger screen pulse + cabinet shake (major transitions get stronger effects)
-    const shakeIntensity = getTransitionShakeIntensity(previousZone, zone)
-    const pulseColor = zoneConfig.primaryColor
-    
+    // Additional game-specific effects for major transitions
     if (isMajor) {
-      // Major transition: strong shake + bright pulse
-      this.effects?.addCameraShake(shakeIntensity)
-      this.effects?.triggerScreenPulse(pulseColor, 0.8, 500)
+      // Flash the LCD table
+      this.mapManager?.getLCDTableState().triggerFeedbackEffect()
       
-      // Also flash the LCD table
-      this.lcdTableState.triggerFeedbackEffect()
-    } else {
-      // Minor transition: subtle shake + gentle pulse
-      this.effects?.addCameraShake(shakeIntensity * 0.5)
-      this.effects?.triggerScreenPulse(pulseColor, 0.4, 300)
-    }
-    
-    // 6. Update material library for zone colors
-    const matLib = getMaterialLibrary(this.scene!)
-    matLib.updateLCDTableEmissive(zoneConfig.primaryColor, zoneConfig.glowIntensity)
-    matLib.updateFlipperMaterialEmissive(zoneConfig.primaryColor)
-    
-    // 7. Haptic feedback if enabled
-    if (isMajor && this.hapticManager) {
-      this.hapticManager.jackpot() // Strong celebration pattern for zone entry
+      // Update material library for zone colors
+      const currentZoneConfig = getZoneConfig(zone)
+      const matLib = getMaterialLibrary(this.scene!)
+      matLib.updateLCDTableEmissive(currentZoneConfig.primaryColor, currentZoneConfig.glowIntensity)
+      matLib.updateFlipperMaterialEmissive(currentZoneConfig.primaryColor)
     }
   }
   
   /**
    * Update cabinet lighting for zone colors
+   * Delegates to AdventureManager
    */
-  private updateCabinetLightingForZone(zoneConfig: ZoneConfig): void {
-    if (this.cabinetNeonLights.length === 0) return
-    
-    const primaryColor = Color3.FromHexString(zoneConfig.primaryColor)
-    const accentColor = Color3.FromHexString(zoneConfig.accentColor)
-    const interiorColor = Color3.FromHexString(zoneConfig.interiorColor)
-    
-    // Left side = primary, Right side = accent, Under = interior
-    if (this.cabinetNeonLights[0]) {
-      this.cabinetNeonLights[0].diffuse = primaryColor
-      this.cabinetNeonLights[0].specular = primaryColor
-    }
-    if (this.cabinetNeonLights[1]) {
-      this.cabinetNeonLights[1].diffuse = accentColor
-      this.cabinetNeonLights[1].specular = accentColor
-    }
-    if (this.cabinetNeonLights[2]) {
-      this.cabinetNeonLights[2].diffuse = interiorColor
-      this.cabinetNeonLights[2].specular = interiorColor
-    }
+  private updateCabinetLightingForZone(): void {
+    // Set cabinet lights reference if not already set
+    this.adventureManager?.setCabinetLights(this.cabinetNeonLights)
+    // The actual lighting update is handled within handleZoneTransition
+    // This method is kept for backward compatibility with map change callbacks
   }
 
   // ============================================================================
@@ -1522,33 +1505,14 @@ export class Game {
    * @param type - The cabinet preset type ('classic', 'neo', 'vertical', 'wide')
    */
   public loadCabinetPreset(type: CabinetType): void {
-    if (!this.scene) return
-
-    this.currentCabinetType = type
-    const cabinetBuilder = getCabinetBuilder(this.scene)
-    cabinetBuilder.loadCabinetPreset(type)
-
-    // Show cabinet name popup
-    const presetNames: Record<CabinetType, string> = {
-      classic: 'Classic Pinball',
-      neo: 'Neo Arcade',
-      vertical: 'Vertical Shooter',
-      wide: 'Deluxe Wide',
-    }
-    this.showCabinetPopup(presetNames[type])
-
-    // Update UI
-    this.updateCabinetSelectorUI()
+    this.cabinetManager?.loadCabinetPreset(type)
   }
 
   /**
    * Cycle to the next cabinet preset.
    */
   public cycleCabinetPreset(): void {
-    const types: CabinetType[] = ['classic', 'neo', 'vertical', 'wide']
-    const currentIndex = types.indexOf(this.currentCabinetType)
-    const nextIndex = (currentIndex + 1) % types.length
-    this.loadCabinetPreset(types[nextIndex])
+    this.cabinetManager?.cycleCabinetPreset()
   }
 
   /**
@@ -1624,52 +1588,7 @@ export class Game {
    * Show a cabinet change popup.
    */
   private showCabinetPopup(name: string): void {
-    const existing = document.getElementById('cabinet-popup')
-    if (existing) existing.remove()
-
-    const popup = document.createElement('div')
-    popup.id = 'cabinet-popup'
-    popup.innerHTML = `
-      <div style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 4px;">CABINET</div>
-      <div>${name}</div>
-    `
-    popup.style.cssText = `
-      position: absolute;
-      top: 40%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-family: 'Orbitron', sans-serif;
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: #ffffff;
-      text-align: center;
-      text-shadow: 0 0 20px rgba(255,255,255,0.5);
-      pointer-events: none;
-      z-index: 100;
-      opacity: 0;
-      animation: cabinetPopupFade 1.5s ease-out forwards;
-      background: rgba(0,0,0,0.7);
-      padding: 12px 24px;
-      border-radius: 8px;
-      border: 1px solid rgba(255,255,255,0.2);
-    `
-
-    const style = document.createElement('style')
-    style.textContent = `
-      @keyframes cabinetPopupFade {
-        0% { opacity: 0; transform: translate(-50%, -40%); }
-        20% { opacity: 1; transform: translate(-50%, -50%); }
-        80% { opacity: 1; transform: translate(-50%, -50%); }
-        100% { opacity: 0; transform: translate(-50%, -60%); }
-      }
-    `
-    document.head.appendChild(style)
-    document.body.appendChild(popup)
-
-    setTimeout(() => {
-      popup.remove()
-      style.remove()
-    }, 1500)
+    this.uiManager?.showCabinetPopup(name)
   }
 
   /**
@@ -1679,7 +1598,7 @@ export class Game {
     const buttons = document.querySelectorAll('.cabinet-btn')
     buttons.forEach(btn => {
       btn.classList.remove('active')
-      if (btn.getAttribute('data-cabinet') === this.currentCabinetType) {
+      if (btn.getAttribute('data-cabinet') === this.cabinetManager?.getCurrentType()) {
         btn.classList.add('active')
       }
     })
@@ -1689,93 +1608,14 @@ export class Game {
    * Show a floating map name popup with CRT distortion effect
    */
   private showMapNamePopup(name: string, color: string): void {
-    // Remove existing popup if any
-    const existing = document.getElementById('map-name-popup')
-    if (existing) existing.remove()
-
-    // Create popup element
-    const popup = document.createElement('div')
-    popup.id = 'map-name-popup'
-    popup.textContent = name
-    popup.style.cssText = `
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) scale(0.8);
-      font-family: 'Orbitron', sans-serif;
-      font-size: 2.5rem;
-      font-weight: 900;
-      color: ${color};
-      text-shadow: 
-        0 0 10px ${color},
-        0 0 20px ${color},
-        0 0 40px ${color},
-        2px 0 0 rgba(255,0,0,0.3),
-        -2px 0 0 rgba(0,255,255,0.3);
-      pointer-events: none;
-      z-index: 100;
-      opacity: 0;
-      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-      letter-spacing: 4px;
-      text-transform: uppercase;
-      animation: mapPopupCRT 2s ease-out forwards;
-    `
-
-    // Add CRT keyframe animation
-    const style = document.createElement('style')
-    style.textContent = `
-      @keyframes mapPopupCRT {
-        0% {
-          opacity: 0;
-          transform: translate(-50%, -50%) scale(0.6);
-          filter: blur(10px) brightness(3);
-        }
-        15% {
-          opacity: 1;
-          transform: translate(-50%, -50%) scale(1.1);
-          filter: blur(0) brightness(1.5);
-        }
-        25% {
-          transform: translate(-50%, -50%) scale(1);
-          filter: blur(0) brightness(1);
-        }
-        80% {
-          opacity: 1;
-          transform: translate(-50%, -50%) scale(1);
-        }
-        100% {
-          opacity: 0;
-          transform: translate(-50%, -40%) scale(0.95);
-        }
-      }
-    `
-    document.head.appendChild(style)
-
-    // Add to game cabinet
-    const cabinet = document.getElementById('game-cabinet')
-    cabinet?.appendChild(popup)
-
-    // Animate in
-    requestAnimationFrame(() => {
-      popup.style.opacity = '1'
-      popup.style.transform = 'translate(-50%, -50%) scale(1)'
-    })
-
-    // Remove after animation
-    setTimeout(() => {
-      popup.remove()
-      style.remove()
-    }, 2000)
+    this.uiManager?.showMapNamePopup(name, color)
   }
 
   /**
    * Cycle to the next table map
    */
   public cycleTableMap(): void {
-    const maps = this.mapSystem.getMapIds()
-    const currentIndex = maps.indexOf(this.currentTableMap)
-    const nextIndex = (currentIndex + 1) % maps.length
-    this.switchTableMap(maps[nextIndex])
+    this.mapManager?.cycleTableMap()
   }
 
   private initLCDTablePostProcess(): void {
@@ -1807,7 +1647,8 @@ export class Game {
 
     // Set up uniform updates
     this.lcdTablePostProcess.onApply = (effect) => {
-      const config = this.lcdTableState.getCurrentConfig()
+      const config = this.mapManager?.getLCDTableState().getCurrentConfig()
+      if (!config) return
       const baseColor = this.hexToColor3(config.baseColor)
       const accentColor = this.hexToColor3(config.accentColor)
 
@@ -1819,8 +1660,8 @@ export class Game {
       effect.setFloat('uGlowIntensity', config.glowIntensity)
       effect.setFloat('uMapBlend', 0.5)
       effect.setFloat('uTime', performance.now() * 0.001)
-      effect.setFloat('uFlashIntensity', this.lcdTableState.flashIntensity)
-      effect.setFloat('uRippleIntensity', this.lcdTableState.rippleIntensity)
+      effect.setFloat('uFlashIntensity', this.mapManager?.getLCDTableState().flashIntensity || 0)
+      effect.setFloat('uRippleIntensity', this.mapManager?.getLCDTableState().rippleIntensity || 0)
       effect.setFloat('uRippleTime', performance.now() * 0.001)
     }
 
@@ -1836,137 +1677,38 @@ export class Game {
   }
 
   private showLoadingState(show: boolean, phase?: 'gameplay' | 'cosmetic'): void {
-    // Create or get loading overlay
-    let loadingOverlay = document.getElementById('loading-overlay')
-
-    if (show) {
-      if (!loadingOverlay) {
-        loadingOverlay = document.createElement('div')
-        loadingOverlay.id = 'loading-overlay'
-        loadingOverlay.style.cssText = `
-          position: fixed;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          background: rgba(0, 0, 0, 0.8);
-          color: #00d9ff;
-          padding: 20px 40px;
-          border-radius: 8px;
-          font-family: monospace;
-          font-size: 16px;
-          z-index: 1000;
-          pointer-events: none;
-          border: 1px solid #00d9ff;
-          box-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
-        `
-        document.body.appendChild(loadingOverlay)
-      }
-      loadingOverlay.textContent = 'LOADING...'
-      loadingOverlay.style.display = 'block'
-    } else if (loadingOverlay) {
-      if (phase === 'gameplay') {
-        loadingOverlay.textContent = 'LOADING GAMEPLAY...'
-      } else if (phase === 'cosmetic') {
-        loadingOverlay.textContent = 'LOADING POLISH...'
-      } else {
-        // Fade out and remove
-        loadingOverlay.style.transition = 'opacity 0.5s'
-        loadingOverlay.style.opacity = '0'
-        setTimeout(() => {
-          loadingOverlay?.remove()
-        }, 500)
-      }
-    }
+    this.uiManager?.showLoadingState(show, phase)
   }
 
   private setupFeederEventHandlers(): void {
     if (!this.effects || !this.ballManager) return
 
+    // Create feeder instances
     this.magSpinFeeder = new MagSpinFeeder(this.scene!, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.magSpin)
-    this.magSpinFeeder.onStateChange = (state) => {
-      switch (state) {
-        case MagSpinState.CATCH:
-          this.effects?.playBeep(300)
-          break
-        case MagSpinState.SPIN:
-          this.effects?.playBeep(600)
-          break
-        case MagSpinState.RELEASE:
-          this.effects?.playBeep(1200)
-          this.effects?.spawnShardBurst(this.magSpinFeeder?.getPosition() || new Vector3(0, 0, 0))
-          this.effects?.setBloomEnergy(2.0)
-          break
-      }
-    }
-
     this.nanoLoomFeeder = new NanoLoomFeeder(this.scene!, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.nanoLoom)
-    this.nanoLoomFeeder.onStateChange = (state, position) => {
-        switch (state) {
-            case NanoLoomState.LIFT:
-                this.effects?.playBeep(800)
-                break
-            case NanoLoomState.WEAVE:
-                this.effects?.playBeep(1000)
-                break
-            case NanoLoomState.EJECT:
-                this.effects?.playBeep(1200)
-                if (position) {
-                  this.effects?.spawnShardBurst(position)
-                }
-                break
-        }
-    }
-
     this.prismCoreFeeder = new PrismCoreFeeder(this.scene!, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.prismCore)
-    this.prismCoreFeeder.onStateChange = (state, count) => {
-        switch (state) {
-            case PrismCoreState.LOCKED_1:
-            case PrismCoreState.LOCKED_2:
-                this.effects?.playBeep(1500)
-                this.display?.setStoryText(`CORE LOCK: ${count}/3`)
-                this.effects?.spawnShardBurst(this.prismCoreFeeder?.getPosition() || Vector3.Zero())
-                // Spawn a replacement ball at the plunger so play continues
-                this.ballManager?.spawnExtraBalls(1, new Vector3(8.5, 0.5, -9)) // Plunger lane approx
-                break
-
-            case PrismCoreState.OVERLOAD:
-                this.effects?.playBeep(2000)
-                this.effects?.startJackpotSequence() // Optional: sync with Jackpot
-                this.display?.setStoryText("MULTIBALL ENGAGED")
-                this.effects?.addCameraShake(0.5)
-                this.effects?.spawnShardBurst(this.prismCoreFeeder?.getPosition() || Vector3.Zero())
-                break
-        }
-    }
-
     this.gaussCannon = new GaussCannonFeeder(this.scene!, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.gaussCannon)
-    this.gaussCannon.onStateChange = (state) => {
-      switch (state) {
-        case GaussCannonState.LOAD:
-          this.effects?.playBeep(300)
-          break
-        case GaussCannonState.AIM:
-          this.effects?.playBeep(600) // Rising pitch?
-          break
-        case GaussCannonState.FIRE:
-          this.effects?.playBeep(2000) // Laser shot
-          this.effects?.spawnShardBurst(this.gaussCannon?.getPosition() || Vector3.Zero())
-          break
-      }
-    }
-
     this.quantumTunnel = new QuantumTunnelFeeder(this.scene!, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.quantumTunnel)
-    this.quantumTunnel.onStateChange = (state) => {
-      switch (state) {
-        case QuantumTunnelState.CAPTURE:
-          this.effects?.playBeep(200) // Deep sound
-          break
-        case QuantumTunnelState.EJECT:
-          this.effects?.playBeep(2000) // High pitch
-          this.effects?.spawnShardBurst(this.quantumTunnel?.getPosition() || Vector3.Zero())
-          break
-      }
-    }
+
+    // Set feeders on AdventureManager and let it handle events
+    this.adventureManager?.setFeeders({
+      magSpin: this.magSpinFeeder,
+      nanoLoom: this.nanoLoomFeeder,
+      prismCore: this.prismCoreFeeder,
+      gaussCannon: this.gaussCannon,
+      quantumTunnel: this.quantumTunnel,
+    })
+
+    // Update AdventureManager systems reference with current state
+    this.adventureManager?.updateSystems({
+      effects: this.effects,
+      display: this.display,
+      ballManager: this.ballManager,
+      soundSystem: this.soundSystem,
+    })
+
+    // Delegate event handler setup to AdventureManager
+    this.adventureManager?.setupFeederEventHandlers()
   }
 
   /**
@@ -1989,22 +1731,38 @@ export class Game {
     // Shadow frustum optimization
     this.shadowGenerator.frustumEdgeFalloff = 1.0
 
+    // PERFORMANCE: Limit shadow casters to prevent GPU overload
+    const MAX_SHADOW_CASTERS = 20
+
     // Get all pinball meshes from GameObjects
     const pinballMeshes = this.gameObjects.getPinballMeshes()
 
-    // Register gameplay-critical meshes for shadows
-    for (const mesh of pinballMeshes) {
-      // Skip transparent/emissive-only meshes
-      if (mesh.name.includes('holo') || mesh.name.includes('glass')) continue
+    // Filter and prioritize shadow casters
+    const shadowCasters = pinballMeshes
+      .filter(mesh => {
+        // Skip transparent/emissive-only meshes
+        if (mesh.name.includes('holo') || mesh.name.includes('glass')) return false
+        // Skip pins (too small, add noise)
+        if (mesh.name.includes('pin')) {
+          mesh.receiveShadows = true
+          return false
+        }
+        return true
+      })
+      // Prioritize balls and flippers (most important for gameplay depth cues)
+      .sort((a, b) => {
+        const aPriority = a.name.includes('ball') ? 2 : a.name.includes('flipper') ? 1 : 0
+        const bPriority = b.name.includes('ball') ? 2 : b.name.includes('flipper') ? 1 : 0
+        return bPriority - aPriority
+      })
+      .slice(0, MAX_SHADOW_CASTERS)
 
-      // Cull pin shadows: too small, add noise. Only receive shadows.
-      if (mesh.name.includes('pin')) {
-        mesh.receiveShadows = true
-        continue
-      }
-
+    // Register limited shadow casters
+    for (const mesh of shadowCasters) {
       this.shadowGenerator.addShadowCaster(mesh, true)
     }
+
+    console.log(`[Performance] Shadow casters limited: ${shadowCasters.length}/${pinballMeshes.length}`)
 
     // Ground receives shadows but doesn't cast
     if (this.scene) {
@@ -2016,7 +1774,9 @@ export class Game {
   }
 
   private setGameState(newState: GameState): void {
-    this.state = newState
+    this.stateManager.setState(newState)
+    
+    // UI updates that depend on state
     if (this.menuOverlay) this.menuOverlay.classList.remove('hidden')
     if (this.pauseOverlay) this.pauseOverlay.classList.add('hidden')
     if (this.startScreen) this.startScreen.classList.add('hidden')
@@ -2121,7 +1881,7 @@ export class Game {
     this.soundSystem.playMapMusic('1')
     
     // Start leaderboard auto-refresh
-    this.leaderboardSystem.setContext(this.currentTableMap)
+    this.leaderboardSystem.setContext(this.mapManager?.getCurrentMap() || 'neon-helix')
     this.leaderboardSystem.start()
     
     this.setGameState(GameState.PLAYING)
@@ -2129,11 +1889,13 @@ export class Game {
 
   private togglePause(): void {
     if (!this.ready) return
-    this.setGameState(this.state === GameState.PLAYING ? GameState.PAUSED : GameState.PLAYING)
+    this.stateManager.togglePause()
+    // Apply UI changes based on new state
+    this.setGameState(this.stateManager.getState())
   }
 
   private handleFlipperLeft(pressed: boolean): void {
-    if (!this.ready || this.state !== GameState.PLAYING) return
+    if (!this.ready || !this.stateManager.isPlaying()) return
     if (this.tiltActive && pressed) {
       this.effects?.playBeep(220)
       this.hapticManager?.tiltWarning()
@@ -2158,7 +1920,7 @@ export class Game {
   }
 
   private handleFlipperRight(pressed: boolean): void {
-    if (!this.ready || this.state !== GameState.PLAYING) return
+    if (!this.ready || !this.stateManager.isPlaying()) return
     if (this.tiltActive && pressed) {
       this.effects?.playBeep(220)
       this.hapticManager?.tiltWarning()
@@ -2355,7 +2117,7 @@ export class Game {
   }
 
   private triggerJackpot(): void {
-      if (this.state !== GameState.PLAYING) return
+      if (!this.stateManager.isPlaying()) return
       console.log("JACKPOT TRIGGERED!")
 
       this.effects?.startJackpotSequence()
@@ -2367,13 +2129,13 @@ export class Game {
 
       // Secret cabinet shake + vignette flash on jackpot
       if (!this.accessibility.reducedMotion) {
-        const mapColor = TABLE_MAPS[this.currentTableMap]?.baseColor || '#ff00ff'
+        const mapColor = TABLE_MAPS[this.mapManager?.getCurrentMap() || 'neon-helix']?.baseColor || '#ff00ff'
         this.effects?.triggerCabinetShake('jackpot', mapColor)
       }
 
       // Bonus Score
       this.score += 100000
-      this.updateHUD()
+      this.queueHUDUpdate()
   }
 
   private toggleAdventure(): void {
@@ -2584,7 +2346,7 @@ export class Game {
     if (isMajor) {
       this.effects?.addCameraShake(0.5)
       this.effects?.triggerScreenPulse(zone.mapConfig.baseColor, 0.8, 500)
-      this.lcdTableState.triggerFeedbackEffect()
+      this.mapManager?.getLCDTableState().triggerFeedbackEffect()
     } else {
       this.effects?.addCameraShake(0.25)
       this.effects?.triggerScreenPulse(zone.mapConfig.baseColor, 0.4, 300)
@@ -2612,7 +2374,7 @@ export class Game {
     this.updateCabinetNeonForZone(config.baseColor, config.accentColor)
     
     // Update LCD post-process
-    this.lcdTableState.updateFromMapConfig({
+    this.mapManager?.getLCDTableState().updateFromMapConfig({
       baseColor: config.baseColor,
       accentColor: config.accentColor,
       scanlineIntensity: config.scanlineIntensity,
@@ -2827,19 +2589,16 @@ export class Game {
   }
 
   private stepPhysics(): void {
-    // Poll gamepad input each frame
-    this.inputHandler?.pollGamepad()
-
-    // Update plunger charge while held
-    this.inputHandler?.updatePlungerCharge()
+    // Update input manager (polls gamepad, updates plunger charge)
+    this.inputManager?.update()
 
     // Process buffered inputs at start of physics step for consistent latency
-    const inputFrame = this.inputHandler?.processBufferedInputs()
+    const inputFrame = this.inputManager?.processBufferedInputs()
     if (inputFrame) {
       this.applyInputFrame(inputFrame)
     }
 
-    if (this.state !== GameState.PLAYING) return
+    if (!this.stateManager.isPlaying()) return
 
     const rawDt = this.engine.getDeltaTime() / 1000
 
@@ -2920,6 +2679,25 @@ export class Game {
       this.dynamicWorld.update(new Vector3(pos.x, pos.y, pos.z), dt)
     }
 
+    // Update debug HUD if visible
+    if (this.debugHUD && this.stateManager.isPlaying()) {
+      this.debugHUD.updatePanel('Game State', {
+        state: GameState[this.stateManager.getState()],
+        score: this.score,
+        lives: this.lives,
+        combo: this.comboCount
+      })
+
+      this.debugHUD.updatePanel('Balls', {
+        count: this.ballManager?.getBallBodies().length || 0,
+        goldCollected: this.ballManager?.getGoldBallCount?.() || 0
+      })
+
+      this.debugHUD.updatePanel('Physics', {
+        bodies: this.physics?.getWorld()?.bodies.len() || 0
+      })
+    }
+
     // Sync Adventure Mode Kinematics
     const currentBallBodies = this.ballManager?.getBallBodies() || []
     this.adventureMode?.update(dt, currentBallBodies)
@@ -2965,7 +2743,7 @@ export class Game {
     this.effects?.updateSlotLighting(dt)
 
     // Update LCD table state for map transitions
-    this.lcdTableState.update(dt)
+    this.mapManager?.update(dt)
 
     // Update Zone Trigger System for Dynamic Adventure Mode
     if (this.zoneTriggerSystem) {
@@ -3095,7 +2873,7 @@ export class Game {
             // Spawn animated impact ring effect
             this.effects?.spawnImpactRing(vis.mesh.position, new Vector3(0, 1, 0), PALETTE.CYAN)
             this.effects?.playBeep(400 + Math.random() * 200)
-            this.updateHUD()
+            this.queueHUDUpdate()
             this.effects?.setLightingMode('hit', 0.2)
 
             // Adventure Mode: Track peg hits
@@ -3108,7 +2886,7 @@ export class Game {
 
             // Secret cabinet shake on big bumper hits
             if (speed > 12) {
-              const mapColor = TABLE_MAPS[this.currentTableMap]?.baseColor || '#00d9ff'
+              const mapColor = TABLE_MAPS[this.mapManager?.getCurrentMap() || 'neon-helix']?.baseColor || '#00d9ff'
               this.effects?.triggerCabinetShake('heavy', mapColor)
             }
 
@@ -3144,7 +2922,7 @@ export class Game {
         this.score += 100
         this.effects?.playBeep(1200)
         this.ballManager?.spawnExtraBalls(1)
-        this.updateHUD()
+        this.queueHUDUpdate()
         this.display?.setDisplayState(DisplayState.REACH)
         this.effects?.setLightingMode('reach', 3.0)
         this.effects?.setAtmosphereState('REACH')
@@ -3184,9 +2962,43 @@ export class Game {
   }
 
   private handleBallLoss(body: RAPIER.RigidBody): void {
-    if (this.state !== GameState.PLAYING) return
+    if (!this.stateManager.isPlaying()) return
 
     this.comboCount = 0
+    
+    // Check if this was a gold ball before removing
+    const collected = this.ballManager?.collectBall(body)
+    
+    if (collected && collected.type !== BallType.STANDARD) {
+      // Play collection sound
+      this.soundSystem.playGoldBallCollect(collected.type)
+
+      // Add to visual stack
+      this.ballStackVisual?.addBall(collected.type)
+
+      // Add to stack
+      this.goldBallStack.push({
+        type: collected.type,
+        timestamp: performance.now()
+      })
+      
+      // Bonus points
+      this.score += collected.points
+      
+      // Trigger effects
+      if (collected.type === BallType.SOLID_GOLD) {
+        this.effects?.startJackpotSequence()
+        this.display?.setDisplayState(DisplayState.JACKPOT)
+        this.hapticManager?.jackpot()
+      } else {
+        this.effects?.setBloomEnergy(1.5)
+      }
+      
+      // Update UI
+      this.updateGoldBallDisplay()
+    }
+    
+    // Remove the ball
     this.ballManager?.removeBall(body)
 
     // Haptic feedback on ball loss
@@ -3210,13 +3022,23 @@ export class Game {
       }
     }
 
-    this.updateHUD()
+    this.queueHUDUpdate()
+  }
+
+  /**
+   * Update or create the gold ball counter UI
+   */
+  private updateGoldBallDisplay(): void {
+    // Count by type
+    const goldPlated = this.goldBallStack.filter(b => b.type === BallType.GOLD_PLATED).length
+    const solidGold = this.goldBallStack.filter(b => b.type === BallType.SOLID_GOLD).length
+    this.uiManager?.updateGoldBallDisplay(goldPlated, solidGold)
   }
 
   private resetBall(): void {
     this.ballManager?.resetBall()
     this.applyEquippedRewards()
-    this.updateHUD()
+    this.queueHUDUpdate()
   }
 
   /**
@@ -3236,74 +3058,39 @@ export class Game {
   }
 
   private updateHUD(): void {
-    if (this.scoreElement) this.scoreElement.textContent = String(this.score)
-    if (this.livesElement) this.livesElement.textContent = String(this.lives)
-    if (this.comboElement) this.comboElement.textContent = this.comboCount > 1 ? `Combo ${this.comboCount}` : ""
-    if (this.bestHudElement) this.bestHudElement.textContent = String(this.bestScore)
-    
+    // Update main HUD
+    this.uiManager?.updateHUD({
+      score: this.score,
+      lives: this.lives,
+      combo: this.comboCount,
+      bestScore: this.bestScore
+    })
+
     // Adventure Mode: Track score progress
     this.adventureState.setGoalProgress('reach-score', this.score)
-    
+
     // Update adventure HUD
     this.updateAdventureHUD()
   }
 
   private updateAdventureHUD(): void {
     const level = this.adventureState.getCurrentLevel()
-    const hudEl = document.getElementById('adventure-hud')
-    if (!hudEl) return
-    
     if (!level) {
-      hudEl.classList.add('hidden')
+      this.uiManager?.hideAdventureHUD()
       return
     }
-    
-    hudEl.classList.remove('hidden')
-    
-    // Update level name
-    const levelNameEl = document.getElementById('adventure-level-name')
-    if (levelNameEl) levelNameEl.textContent = level.name
-    
-    // Update goals
-    const goalsEl = document.getElementById('adventure-goals')
-    if (goalsEl) {
-      goalsEl.innerHTML = level.goals.map(goal => {
-        const completed = goal.current >= goal.target
-        const percent = Math.min(100, Math.round((goal.current / goal.target) * 100))
-        return `
-          <div class="adventure-goal ${completed ? 'completed' : ''}">
-            <span class="adventure-goal-text">${goal.description}</span>
-            <span class="adventure-goal-progress">${percent}%</span>
-          </div>
-        `
-      }).join('')
-    }
-    
-    // Update overall progress
-    const totalGoals = level.goals.length
-    const completedGoals = level.goals.filter(g => g.current >= g.target).length
-    const overallPercent = Math.round((completedGoals / totalGoals) * 100)
-    
-    const progressFill = document.getElementById('adventure-progress-fill')
-    const progressText = document.getElementById('adventure-progress-text')
-    if (progressFill) progressFill.style.width = `${overallPercent}%`
-    if (progressText) progressText.textContent = `${overallPercent}%`
 
-    // Show completion % badge if rewards are unlocked
-    const completionPercent = this.adventureState.getOverallCompletionPercent()
-    const hasRewards = completionPercent > 0
-    
-    // Add reward badge to HUD if not already present
-    let rewardBadge = hudEl.querySelector('.adventure-reward-badge') as HTMLElement
-    if (hasRewards && !rewardBadge) {
-      rewardBadge = document.createElement('div')
-      rewardBadge.className = 'adventure-reward-badge'
-      rewardBadge.textContent = '🏆'
-      rewardBadge.title = `${Math.round(completionPercent)}% Complete - Rewards Unlocked!`
-      hudEl.appendChild(rewardBadge)
-    } else if (rewardBadge) {
-      rewardBadge.title = `${Math.round(completionPercent)}% Complete - Rewards Unlocked!`
-    }
+    this.uiManager?.updateAdventureHUD(
+      {
+        name: level.name,
+        goals: level.goals.map(g => ({
+          description: g.description,
+          current: g.current,
+          target: g.target
+        }))
+      },
+      this.adventureState.getOverallCompletionPercent()
+    )
   }
 
   private updateCombo(dt: number): void {
@@ -3311,7 +3098,7 @@ export class Game {
       this.comboTimer -= dt
       if (this.comboTimer <= 0) {
         this.comboCount = 0
-        this.updateHUD()
+        this.queueHUDUpdate()
       }
     }
   }
@@ -3328,7 +3115,7 @@ export class Game {
     }
     
     // Update leaderboard context
-    this.leaderboardSystem.setContext(this.currentTableMap)
+    this.leaderboardSystem.setContext(this.mapManager?.getCurrentMap() || 'neon-helix')
     
     // Check if score ranks on leaderboard
     const rank = await this.leaderboardSystem.checkRank(this.score)
@@ -3347,7 +3134,7 @@ export class Game {
       const submitResult = await this.leaderboardSystem.submitScore({
         name: result.name,
         score: this.score,
-        map_id: this.currentTableMap,
+        map_id: this.mapManager?.getCurrentMap() || 'neon-helix',
         balls: 1, // TODO: track actual balls used
         combo_max: this.comboCount
       })
@@ -3399,7 +3186,7 @@ export class Game {
           this.effects?.playSlotWin(winData.combination.multiplier)
           this.effects?.setSlotLightingMode('win')
           this.score += winData.score
-          this.updateHUD()
+          this.queueHUDUpdate()
           console.log(`[Slot] Win: ${winData.combination.name} - ${winData.score} points`)
           break
         }
@@ -3535,7 +3322,7 @@ export class Game {
 
     this.adventureMode.end()
     this.resetBall()
-    this.updateHUD()
+    this.queueHUDUpdate()
   }
 
   // ============================================================================
@@ -3586,7 +3373,7 @@ export class Game {
     }
     
     // Apply photosensitive mode to LCD table
-    this.lcdTableState.setPhotosensitiveMode(settings.photosensitiveMode)
+    this.mapManager?.getLCDTableState().setPhotosensitiveMode(settings.photosensitiveMode)
     
     // Load audio settings
     const volumeSettings = this.soundSystem.getVolumeSettings()
@@ -3623,7 +3410,7 @@ export class Game {
     console.log('[Accessibility] Settings saved:', newSettings)
     
     // Apply photosensitive mode to LCD table
-    this.lcdTableState.setPhotosensitiveMode(newSettings.photosensitiveMode)
+    this.mapManager?.getLCDTableState().setPhotosensitiveMode(newSettings.photosensitiveMode)
     
     // Apply audio settings
     if (masterVolumeSlider) {
@@ -3671,7 +3458,7 @@ export class Game {
   private updateLatencyDisplay(): void {
     if (!this.inputLatencyOverlay || !this.showDebugUI) return
 
-    const report = this.inputHandler?.getLatencyReport()
+    const report = this.inputManager?.getLatencyReport()
     if (report) {
       this.inputLatencyOverlay.textContent =
         `Input: ${report.avg.toFixed(1)}ms (P95: ${report.p95.toFixed(1)}ms)`
@@ -3736,9 +3523,9 @@ export class Game {
       btn.title = map.name
       btn.textContent = String(buttonIndex)
       btn.addEventListener('click', () => {
-        if (map.id !== this.currentTableMap) {
+        if (map.id !== this.mapManager?.getCurrentMap()) {
           this.animateMapButtonPress(btn)
-          this.lcdTableState.triggerFeedbackEffect()
+          this.mapManager?.getLCDTableState().triggerFeedbackEffect()
           this.switchTableMap(map.id)
         }
       })
@@ -3833,7 +3620,7 @@ export class Game {
    * Animate map button press with scale + glow burst
    */
   private animateMapButtonPress(btn: HTMLElement): void {
-    const config = this.mapSystem.getMap(this.currentTableMap) || TABLE_MAPS[this.currentTableMap]
+    const config = this.mapManager?.getMapSystem().getMap(this.mapManager?.getCurrentMap() || 'neon-helix') || TABLE_MAPS[this.mapManager?.getCurrentMap() || 'neon-helix']
     const accentColor = config ? config.baseColor : '#00d9ff'
 
     // Apply press animation
@@ -3873,7 +3660,7 @@ export class Game {
     const selector = document.getElementById('map-selector')
     if (!selector) return
 
-    const currentMap = this.currentTableMap
+    const currentMap = this.mapManager?.getCurrentMap() || 'neon-helix'
     const mapConfig = this.mapSystem.getMap(currentMap) || TABLE_MAPS[currentMap]
     const accentColor = mapConfig ? mapConfig.baseColor : '#00d9ff'
 

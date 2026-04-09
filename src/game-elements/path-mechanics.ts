@@ -25,7 +25,7 @@ import {
   TransformNode,
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
-import { getMaterialLibrary } from './material-library'
+import { getMaterialLibrary } from '../materials'
 import { color } from './visual-language'
 
 // =============================================================================

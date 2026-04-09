@@ -10,7 +10,7 @@
  */
 
 import { Vector3 } from '@babylonjs/core'
-import { API_BASE, apiFetch } from '../config'
+import { API_BASE, apiFetch, BallType } from '../config'
 
 // Storage manager API base URL
 const STORAGE_API_BASE = API_BASE
@@ -152,6 +152,9 @@ export class SoundSystem {
       
       // Load samples from storage manager
       await this.loadSamples()
+      
+      // Load gold ball sounds (with synthesized fallback)
+      await this.loadGoldBallSounds()
       
       this.isInitialized = true
       console.log('[SoundSystem] Initialized successfully')
@@ -564,6 +567,144 @@ export class SoundSystem {
    */
   get isReady(): boolean {
     return this.isInitialized
+  }
+
+  /**
+   * Play sound when a gold ball spawns
+   */
+  playGoldBallSpawn(type: BallType): void {
+    if (type === BallType.STANDARD) return
+
+    const soundName = type === BallType.SOLID_GOLD
+      ? 'solid-gold-spawn'
+      : 'gold-plated-spawn'
+
+    this.play(soundName)
+  }
+
+  /**
+   * Play sound when a gold ball is collected
+   */
+  playGoldBallCollect(type: BallType): void {
+    if (type === BallType.STANDARD) return
+
+    const soundName = type === BallType.SOLID_GOLD
+      ? 'solid-gold-collect'
+      : 'gold-plated-collect'
+
+    this.play(soundName)
+  }
+
+  /**
+   * Play a named sound (used for synthesized sounds)
+   */
+  private play(name: string): void {
+    if (!this.isInitialized || !this.audioContext || !this.sfxGain) return
+    if (this.isMuted) return
+
+    const sound = this.synthesizedSounds.get(name)
+    if (sound) {
+      sound.play()
+    }
+  }
+
+  // Map to store synthesized sounds
+  private synthesizedSounds: Map<string, { play: () => void }> = new Map()
+
+  private async loadGoldBallSounds(): Promise<void> {
+    // Try to load actual sound files
+    const soundFiles = [
+      { name: 'gold-plated-spawn', url: './sounds/gold-spawn.mp3' },
+      { name: 'solid-gold-spawn', url: './sounds/solid-gold-spawn.mp3' },
+      { name: 'gold-plated-collect', url: './sounds/gold-collect.mp3' },
+      { name: 'solid-gold-collect', url: './sounds/solid-gold-collect.mp3' }
+    ]
+
+    for (const { name, url } of soundFiles) {
+      try {
+        await this.loadSoundFile(name, url)
+      } catch {
+        // If file doesn't exist, create synthesized version
+        this.createSynthesizedSound(name)
+      }
+    }
+  }
+
+  private async loadSoundFile(name: string, url: string): Promise<void> {
+    if (!this.audioContext) return
+
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`Failed to fetch ${name}`)
+
+    const arrayBuffer = await response.arrayBuffer()
+    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer)
+
+    // Store as playable sound
+    this.synthesizedSounds.set(name, {
+      play: () => {
+        const source = this.audioContext!.createBufferSource()
+        source.buffer = audioBuffer
+        const gain = this.audioContext!.createGain()
+        gain.gain.value = this.sfxVolume
+        source.connect(gain)
+        gain.connect(this.sfxGain!)
+        source.start(0)
+      }
+    })
+  }
+
+  /**
+   * Create a synthesized sound as fallback
+   */
+  private createSynthesizedSound(name: string): void {
+    // Use Web Audio API to create synthesized sounds
+    const audioContext = this.audioContext
+    if (!audioContext) return
+
+    // Store as a playable sound
+    this.synthesizedSounds.set(name, {
+      play: () => {
+        const osc = audioContext.createOscillator()
+        const gain = audioContext.createGain()
+
+        if (name.includes('solid-gold')) {
+          // Higher pitch for solid gold
+          if (name.includes('spawn')) {
+            // Spawn: rising pitch effect
+            osc.frequency.setValueAtTime(880, audioContext.currentTime)
+            osc.frequency.exponentialRampToValueAtTime(1760, audioContext.currentTime + 0.1)
+            gain.gain.setValueAtTime(0.3, audioContext.currentTime)
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
+          } else {
+            // Collect: longer, more dramatic
+            osc.frequency.setValueAtTime(880, audioContext.currentTime)
+            osc.frequency.exponentialRampToValueAtTime(1760, audioContext.currentTime + 0.1)
+            gain.gain.setValueAtTime(0.3, audioContext.currentTime)
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
+          }
+        } else {
+          // Gold-plated: lower pitch
+          if (name.includes('spawn')) {
+            // Spawn: quick rising pitch
+            osc.frequency.setValueAtTime(523.25, audioContext.currentTime)
+            osc.frequency.exponentialRampToValueAtTime(1046.5, audioContext.currentTime + 0.1)
+            gain.gain.setValueAtTime(0.2, audioContext.currentTime)
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
+          } else {
+            // Collect: quick collect sound
+            osc.frequency.setValueAtTime(523.25, audioContext.currentTime)
+            osc.frequency.exponentialRampToValueAtTime(1046.5, audioContext.currentTime + 0.1)
+            gain.gain.setValueAtTime(0.2, audioContext.currentTime)
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
+          }
+        }
+
+        osc.connect(gain)
+        gain.connect(this.sfxGain!)
+        osc.start()
+        osc.stop(audioContext.currentTime + 0.6)
+      }
+    })
   }
 
   /**

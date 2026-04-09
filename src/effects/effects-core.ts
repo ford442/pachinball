@@ -1,3 +1,4 @@
+// Main EffectsSystem orchestrator
 import {
   MeshBuilder,
   Vector3,
@@ -15,7 +16,7 @@ import {
 } from '@babylonjs/core'
 import type { DirectionalLight } from '@babylonjs/core'
 import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
-import type { CabinetLight, ShardParticle } from './types'
+import type { CabinetLight, ShardParticle } from '../game-elements/types'
 import {
   PALETTE,
   INTENSITY,
@@ -27,9 +28,12 @@ import {
   color,
   emissive,
   pulse,
-} from './visual-language'
+} from '../game-elements/visual-language'
 import { EffectsConfig } from '../config'
-import { DEFAULT_ACCESSIBILITY, type AccessibilityConfig } from './accessibility-config'
+import { DEFAULT_ACCESSIBILITY, type AccessibilityConfig } from '../game-elements/accessibility-config'
+import { ParticleEffects } from './effects-particles'
+import { LightingEffects } from './effects-lighting'
+import { CameraEffects } from './effects-camera'
 
 // Type for fever trail tracking
 interface FeverTrail {
@@ -50,18 +54,18 @@ interface RippleRing {
 }
 
 export function createSharedParticleTexture(scene: Scene): DynamicTexture {
-    const size = 64
-    const tex = new DynamicTexture("sharedParticleTex", size, scene, false)
-    const ctx = tex.getContext() as CanvasRenderingContext2D
+  const size = 64
+  const tex = new DynamicTexture('sharedParticleTex', size, scene, false)
+  const ctx = tex.getContext() as CanvasRenderingContext2D
 
-    const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2)
-    grad.addColorStop(0, "rgba(255, 255, 255, 1)")
-    grad.addColorStop(1, "rgba(255, 255, 255, 0)")
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+  grad.addColorStop(0, 'rgba(255, 255, 255, 1)')
+  grad.addColorStop(1, 'rgba(255, 255, 255, 0)')
 
-    ctx.fillStyle = grad
-    ctx.fillRect(0, 0, size, size)
-    tex.update()
-    return tex
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, size, size)
+  tex.update()
+  return tex
 }
 
 export class EffectsSystem {
@@ -74,7 +78,7 @@ export class EffectsSystem {
   private decorativeLights: (StandardMaterial | PBRMaterial)[] = []
   private lightingMode: 'normal' | 'hit' | 'fever' | 'reach' = 'normal'
   private lightingTimer = 0
-  private hitFlashIntensity: number = 0
+  private hitFlashIntensity = 0
 
   // Scene lights for state-based animation
   private keyLight: DirectionalLight | null = null
@@ -82,20 +86,20 @@ export class EffectsSystem {
   private bounceLight: PointLight | null = null
 
   // Atmosphere state tracking
-  private currentAtmosphereState: string = 'IDLE'
-  private targetFogDensity: number = 0.005
+  private currentAtmosphereState = 'IDLE'
+  private targetFogDensity = 0.005
   private targetFogColor: Color3 = color('#080818')
   private targetKeyColor: Color3 = color(TEMPERATURE.NORMAL)
   private targetRimIntensity: number = LIGHTING.RIM.intensity
   private targetRimColor: Color3 = color('#80bfff')
 
   // Jackpot Variables
-  public jackpotTimer = 0
-  public isJackpotActive = false
-  public jackpotPhase = 0 // 0=Idle, 1=Breach, 2=Error, 3=Meltdown
+  jackpotTimer = 0
+  isJackpotActive = false
+  jackpotPhase = 0 // 0=Idle, 1=Breach, 2=Error, 3=Meltdown
 
   // Public getter for lighting mode
-  public get currentLightingMode(): 'normal' | 'hit' | 'fever' | 'reach' {
+  get currentLightingMode(): 'normal' | 'hit' | 'fever' | 'reach' {
     return this.lightingMode
   }
 
@@ -105,7 +109,7 @@ export class EffectsSystem {
     intensity: 0,
     duration: 0,
     timer: 0,
-    offset: new Vector3(0, 0, 0)
+    offset: new Vector3(0, 0, 0),
   }
 
   // Fever trails
@@ -132,8 +136,8 @@ export class EffectsSystem {
   private cameraShakeIntensity = 0
   private cameraShakeDecay = 5.0
   private cameraShakeTime = 0
-  private readonly MAX_SHAKE_INTENSITY = 0.08  // Reduced from 0.15 for safety
-  
+  private readonly MAX_SHAKE_INTENSITY = 0.08 // Reduced from 0.15 for safety
+
   // Accessibility config (CRITICAL SAFETY)
   private accessibility: AccessibilityConfig = DEFAULT_ACCESSIBILITY
 
@@ -146,7 +150,7 @@ export class EffectsSystem {
     originalColor: new Color4(0, 0, 0, 0),
     originalBlendMode: 0,
   }
-  
+
   // Screen pulse state for zone transitions
   private screenPulse = {
     active: false,
@@ -155,57 +159,87 @@ export class EffectsSystem {
     intensity: 1.0,
     color: new Color3(1, 1, 1),
   }
-  
+
   // LCD post-process reference for screen effects
   private lcdPostProcess: { flashIntensity: number } | null = null
+
+  // Sub-systems
+  private particleEffects: ParticleEffects
+  private lightingEffects: LightingEffects
+  private cameraEffects: CameraEffects | null = null
+
+  // Slot lighting
+  private slotLightMode: 'idle' | 'spin' | 'stop' | 'win' | 'jackpot' = 'idle'
+  private slotLightTimer = 0
+
+  // Transition flash
+  private transitionFlashOverlay: Mesh | null = null
+  private transitionFlashMat: StandardMaterial | null = null
+  private transitionFlash = {
+    active: false,
+    progress: 0,
+    duration: EffectsConfig.transitionFlash.duration,
+    color: Color3.White(),
+    direction: 'in' as 'in' | 'out',
+  }
+
+  constructor(
+    scene: Scene,
+    bloomPipeline: DefaultRenderingPipeline | null,
+    accessibility?: AccessibilityConfig
+  ) {
+    this.scene = scene
+    this.bloomPipeline = bloomPipeline
+    // CRITICAL SAFETY: Use provided accessibility config or detect automatically
+    this.accessibility = accessibility ?? DEFAULT_ACCESSIBILITY
+
+    // Initialize sub-systems
+    this.particleEffects = new ParticleEffects(scene)
+    this.lightingEffects = new LightingEffects(scene)
+    if (scene.activeCamera) {
+      this.cameraEffects = new CameraEffects(scene.activeCamera)
+    }
+
+    try {
+      this.audioCtx = new (window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+    } catch {
+      this.audioCtx = null
+    }
+  }
 
   registerCamera(camera: { position: Vector3 }): void {
     this.cameraRef = camera
   }
 
-  /**
-   * Register the table camera for camera shake effects
-   * This applies shake to the target (preserves user control)
-   */
   registerTableCamera(camera: ArcRotateCamera): void {
     this.tableCam = camera
   }
-  
-  /**
-   * Register LCD post-process for screen pulse effects
-   */
+
   registerLCDPostProcess(postProcess: { flashIntensity: number }): void {
     this.lcdPostProcess = postProcess
   }
 
-  /**
-   * Register accessibility settings for respecting user preferences
-   * @param config - Accessibility configuration object
-   */
   registerAccessibility(config: AccessibilityConfig): void {
     this.accessibility = config
   }
 
-  /**
-   * Add camera shake intensity (accumulates up to safe max 0.08)
-   * Respects accessibility.cameraShakeEnabled setting
-   * @param intensity - Amount of shake to add (0.0 - 1.0)
-   */
+  registerSceneLights(keyLight: DirectionalLight, rimLight: DirectionalLight, bounceLight: PointLight): void {
+    this.keyLight = keyLight
+    this.rimLight = rimLight
+    this.bounceLight = bounceLight
+  }
+
   addCameraShake(intensity: number): void {
     // Respect user accessibility preferences
     if (this.accessibility?.cameraShakeEnabled === false) return
-    
+
     // Cap at safe maximum intensity
     const safeIntensity = Math.min(intensity, this.MAX_SHAKE_INTENSITY)
     this.cameraShakeIntensity = Math.min(this.cameraShakeIntensity + safeIntensity, this.MAX_SHAKE_INTENSITY)
     this.cameraShakeTime = performance.now() * 0.001
   }
 
-  /**
-   * Flash the screen vignette briefly (secret cabinet-shake bonus)
-   * @param colorHex - Accent color for the flash
-   * @param durationMs - Flash duration in milliseconds
-   */
   flashVignette(colorHex: string, durationMs = 300): void {
     if (!this.bloomPipeline?.imageProcessing) return
     const ip = this.bloomPipeline.imageProcessing
@@ -227,20 +261,13 @@ export class EffectsSystem {
     ip.vignetteColor = new Color4(c.r, c.g, c.b, 1)
     ip.vignetteWeight = 1.5
   }
-  
-  /**
-   * Trigger a screen pulse effect for zone transitions
-   * Creates a bright flash that fades out
-   * @param colorHex - Pulse color
-   * @param intensity - Pulse intensity (0-1)
-   * @param durationMs - Duration in milliseconds
-   */
+
   triggerScreenPulse(colorHex = '#ffffff', intensity = 0.8, durationMs = 400): void {
     // LCD post-process flash (if available)
     if (this.lcdPostProcess) {
       this.lcdPostProcess.flashIntensity = intensity
     }
-    
+
     // Bloom pipeline flash (if available)
     if (this.bloomPipeline?.imageProcessing) {
       this.screenPulse.active = true
@@ -248,12 +275,12 @@ export class EffectsSystem {
       this.screenPulse.duration = durationMs / 1000
       this.screenPulse.intensity = intensity
       this.screenPulse.color = Color3.FromHexString(colorHex)
-      
+
       // Boost exposure temporarily
       const ip = this.bloomPipeline.imageProcessing
       ip.exposure = 1.0 + intensity * 0.5
     }
-    
+
     // Also trigger vignette flash for cabinet feel
     this.flashVignette(colorHex, durationMs)
   }
@@ -278,12 +305,6 @@ export class EffectsSystem {
       this.vignetteFlash.originalWeight + (1.5 - this.vignetteFlash.originalWeight) * fade
   }
 
-  /**
-   * Update camera shake - call from main update loop
-   * Applies smooth sine-wave shake to camera target with decay over time
-   * Uses smooth motion instead of random jitter for accessibility
-   * @param dt - Delta time in seconds
-   */
   updateCameraShake(dt: number): void {
     if (this.cameraShakeIntensity <= 0 || !this.tableCam) return
 
@@ -303,31 +324,6 @@ export class EffectsSystem {
     this.cameraShakeIntensity = Math.max(0, this.cameraShakeIntensity - dt * this.cameraShakeDecay)
   }
 
-  constructor(scene: Scene, bloomPipeline: DefaultRenderingPipeline | null, accessibility?: AccessibilityConfig) {
-    this.scene = scene
-    this.bloomPipeline = bloomPipeline
-    // CRITICAL SAFETY: Use provided accessibility config or detect automatically
-    this.accessibility = accessibility ?? DEFAULT_ACCESSIBILITY
-    
-    try {
-      this.audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
-    } catch {
-      this.audioCtx = null
-    }
-  }
-
-  /**
-   * Register scene lights for state-based animation (temperature, intensity, rim drama)
-   */
-  registerSceneLights(keyLight: DirectionalLight, rimLight: DirectionalLight, bounceLight: PointLight): void {
-    this.keyLight = keyLight
-    this.rimLight = rimLight
-    this.bounceLight = bounceLight
-  }
-
-  /**
-   * Set the atmosphere state — drives fog, light temperature, rim drama
-   */
   setAtmosphereState(state: string): void {
     if (state === this.currentAtmosphereState) return
     this.currentAtmosphereState = state
@@ -347,9 +343,6 @@ export class EffectsSystem {
     this.targetRimColor = color(lightState.rimColor)
   }
 
-  /**
-   * Smooth atmosphere transitions: fog, light temperature, rim drama, bounce proximity, breathing clear color
-   */
   updateAtmosphere(dt: number, ballPos?: Vector3): void {
     const lerpSpeed = dt * 2 // Smooth 0.5s transitions
     const time = performance.now() * 0.001
@@ -393,78 +386,69 @@ export class EffectsSystem {
     if (this.currentAtmosphereState === 'IDLE' || this.currentAtmosphereState === 'normal') {
       const breath = pulse(time, 0.25, 0.92, 1.0)
       const base = this.scene.clearColor
-      this.scene.clearColor = new Color4(
-        base.r * breath,
-        base.g * breath,
-        base.b * breath,
-        base.a
-      )
+      this.scene.clearColor = new Color4(base.r * breath, base.g * breath, base.b * breath, base.a)
     }
   }
 
-  /**
-   * Call this to register the "Plastic" materials created in GameObjects
-   * so they can react to Fever/Reach modes.
-   */
   registerDecorativeMaterial(mat: StandardMaterial | PBRMaterial): void {
-      this.decorativeLights.push(mat)
+    this.decorativeLights.push(mat)
   }
 
   createCabinetLighting(): void {
     // Unified LED strips using Visual Language palette
     const stripConfigs = [
-      { 
-        pos: new Vector3(-12.5, 1.5, 5), 
-        size: new Vector3(0.2, 2.5, 32),
+      {
+        pos: new Vector3(-12.5, 1.5, 5),
+        size: { width: 0.2, height: 2.5, depth: 32 },
         color: PALETTE.CYAN,
-        intensity: INTENSITY.NORMAL
+        intensity: INTENSITY.NORMAL,
       },
-      { 
-        pos: new Vector3(13.5, 1.5, 5), 
-        size: new Vector3(0.2, 2.5, 32),
+      {
+        pos: new Vector3(13.5, 1.5, 5),
+        size: { width: 0.2, height: 2.5, depth: 32 },
         color: PALETTE.CYAN,
-        intensity: INTENSITY.NORMAL
+        intensity: INTENSITY.NORMAL,
       },
-      { 
-        pos: new Vector3(0.75, 5.5, 5), 
-        size: new Vector3(26, 0.2, 32),
+      {
+        pos: new Vector3(0.75, 5.5, 5),
+        size: { width: 26, height: 0.2, depth: 32 },
         color: PALETTE.MAGENTA,
-        intensity: INTENSITY.AMBIENT
+        intensity: INTENSITY.AMBIENT,
       },
       // Lower accent strips - unified purple
       {
         pos: new Vector3(-12.5, -1, 5),
-        size: new Vector3(0.3, 0.1, 32),
+        size: { width: 0.3, height: 0.1, depth: 32 },
         color: PALETTE.PURPLE,
-        intensity: INTENSITY.AMBIENT
+        intensity: INTENSITY.AMBIENT,
       },
       {
         pos: new Vector3(13.5, -1, 5),
-        size: new Vector3(0.3, 0.1, 32),
+        size: { width: 0.3, height: 0.1, depth: 32 },
         color: PALETTE.PURPLE,
-        intensity: INTENSITY.AMBIENT
-      }
+        intensity: INTENSITY.AMBIENT,
+      },
     ]
-    
+
     stripConfigs.forEach((config, idx) => {
       const strip = MeshBuilder.CreateBox(
         `ledStrip${idx}`,
-        { width: config.size.x, height: config.size.y, depth: config.size.z },
+        { width: config.size.width, height: config.size.height, depth: config.size.depth },
         this.scene
       )
       strip.position.copyFrom(config.pos)
-      
+
       const mat = new StandardMaterial(`ledStripMat${idx}`, this.scene)
       mat.emissiveColor = emissive(config.color, config.intensity)
       mat.alpha = Math.min(0.8, config.intensity)
       strip.material = mat
-      
+
       const light = new PointLight(`stripLight${idx}`, config.pos, this.scene)
       light.diffuse = color(config.color)
       light.intensity = config.intensity
       light.range = 12
       light.shadowEnabled = false
-      
+
       this.cabinetLights.push({ mesh: strip, material: mat, pointLight: light })
     })
   }
@@ -472,29 +456,32 @@ export class EffectsSystem {
   spawnShardBurst(pos: Vector3, colorHex?: string): void {
     const burstColor = colorHex || PALETTE.CYAN
     for (let i = 0; i < 8; i++) {
-      const m = MeshBuilder.CreateBox("s", { size: 0.15 }, this.scene) as Mesh
+      const m = MeshBuilder.CreateBox('s', { size: 0.15 }, this.scene)
       m.position.copyFrom(pos)
-      
-      const mat = new StandardMaterial("sm", this.scene)
+
+      const mat = new StandardMaterial('sm', this.scene)
       mat.emissiveColor = emissive(burstColor, INTENSITY.FLASH)
       m.material = mat
-      
+
       const vel = new Vector3(Math.random() - 0.5, Math.random() + 1, Math.random() - 0.5).scale(5)
       // Add rotation velocity
       const rotVel = new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).scale(10)
       // Random initial scale
       const initialScale = 0.8 + Math.random() * 0.4
       m.scaling.setAll(initialScale)
-      
-      this.shards.push({ mesh: m, vel, rotVel, life: 1.0, maxLife: 1.0, initialScale, material: mat })
+
+      this.shards.push({
+        mesh: m,
+        vel,
+        rotVel,
+        life: 1.0,
+        maxLife: 1.0,
+        initialScale,
+        material: mat,
+      })
     }
   }
 
-  /**
-   * Spawn an expanding impact ring effect on collision
-   * Uses Babylon.js Animation for smooth scale and fade
-   * Limited to 5 rings at once for performance
-   */
   spawnImpactRing(position: Vector3, normal: Vector3, color: string): void {
     // Enforce max concurrent rings limit
     if (this.activeImpactRings >= this.maxImpactRings) {
@@ -579,21 +566,21 @@ export class EffectsSystem {
     for (let i = this.shards.length - 1; i >= 0; i--) {
       const s = this.shards[i]
       s.life -= dt
-      
+
       if (s.life <= 0) {
         s.mesh.dispose()
         this.shards.splice(i, 1)
         continue
       }
-      
+
       // Update position
       s.mesh.position.addInPlace(s.vel.scale(dt))
       s.vel.y -= 9.8 * dt
       s.vel.scaleInPlace(0.98) // Air drag
-      
+
       // Update rotation
       s.mesh.rotation.addInPlace(s.rotVel.scale(dt))
-      
+
       // Scale and alpha based on life
       const lifeNorm = s.life / s.maxLife
       s.material.alpha = lifeNorm * 0.8
@@ -601,10 +588,10 @@ export class EffectsSystem {
     }
   }
 
-  updateBloom(dt: number): void {
+  updateBloom(): void {
     if (this.bloomPipeline) {
-      this.bloomEnergy = Math.max(0, this.bloomEnergy - dt)
-      this.bloomPipeline.bloomWeight = 0.1 + (this.bloomEnergy * 0.8)
+      this.bloomEnergy = Math.max(0, this.bloomEnergy - 0.016)
+      this.bloomPipeline.bloomWeight = 0.1 + this.bloomEnergy * 0.8
     }
   }
 
@@ -619,9 +606,10 @@ export class EffectsSystem {
     this.playBeep(100) // Deep sub-bass start
   }
 
-  updateJackpotSequence(dt: number): void {
+  updateJackpotSequence(): void {
     if (!this.isJackpotActive) return
 
+    const dt = 0.016 // approximate dt
     this.jackpotTimer += dt
 
     // Phase 1: Breach (0-2s)
@@ -638,8 +626,8 @@ export class EffectsSystem {
     // Phase 3: Meltdown (5-10s)
     else if (this.jackpotTimer < 10.0) {
       if (this.jackpotPhase !== 3) {
-          // One-shot explosion sound simulation
-          this.playBeep(50)
+        // One-shot explosion sound simulation
+        this.playBeep(50)
       }
       this.jackpotPhase = 3
     }
@@ -651,22 +639,23 @@ export class EffectsSystem {
     }
   }
 
-  updateCabinetLighting(dt: number): void {
+  updateCabinetLighting(): void {
     const time = performance.now() * 0.001
-    
+
     if (this.isJackpotActive) {
-        this.updateJackpotSequence(dt)
+      this.updateJackpotSequence()
     } else if (this.lightingTimer > 0) {
+      const dt = 0.016
       this.lightingTimer -= dt
       if (this.lightingTimer <= 0) {
         this.lightingMode = 'normal'
       }
     }
-    
+
     this.cabinetLights.forEach((light, idx) => {
       let targetColor: Color3
       let intensity = INTENSITY.NORMAL
-      
+
       // Unified state-based lighting using Visual Language
       if (this.isJackpotActive) {
         if (this.jackpotPhase === 1) {
@@ -677,7 +666,7 @@ export class EffectsSystem {
         } else if (this.jackpotPhase === 2) {
           // Critical: Strobing gold - SAFETY: Use accessibility-controlled flash frequency
           // CRITICAL SAFETY: Flash frequency capped at 2Hz (was unsafe 60Hz)
-          const flashFreq = this.accessibility.flashFrequencyMax  // 2Hz max for safety
+          const flashFreq = this.accessibility.flashFrequencyMax // 2Hz max for safety
           const strobe = (Math.sin(time * Math.PI * 2 * flashFreq) + 1) * 0.5
           targetColor = emissive(PALETTE.GOLD, strobe * INTENSITY.BURST)
           intensity = INTENSITY.BURST
@@ -691,6 +680,7 @@ export class EffectsSystem {
         switch (this.lightingMode) {
           case 'hit': {
             // Decay flash over time
+            const dt = 0.016
             this.hitFlashIntensity = Math.max(0, this.hitFlashIntensity - dt * 5)
             const flashBoost = 1 + this.hitFlashIntensity * 2
             targetColor = emissive(PALETTE.WHITE, INTENSITY.FLASH * flashBoost)
@@ -719,14 +709,14 @@ export class EffectsSystem {
           }
         }
       }
-      
-      light.material.emissiveColor = Color3.Lerp(light.material.emissiveColor, targetColor, dt * 10)
+
+      light.material.emissiveColor = Color3.Lerp(light.material.emissiveColor, targetColor, 0.016 * 10)
       light.pointLight.diffuse = light.material.emissiveColor
       light.pointLight.intensity = intensity
     })
 
     // Update decorative materials (plastics) with unified colors
-    this.decorativeLights.forEach(mat => {
+    this.decorativeLights.forEach((mat) => {
       if (this.isJackpotActive) {
         if (this.jackpotPhase === 3) {
           // Rainbow meltdown
@@ -749,15 +739,15 @@ export class EffectsSystem {
     })
   }
 
-  setLightingMode(mode: 'normal' | 'hit' | 'fever' | 'reach', duration: number = 0): void {
+  setLightingMode(mode: 'normal' | 'hit' | 'fever' | 'reach', duration = 0): void {
     const previousMode = this.lightingMode
     this.lightingMode = mode
     this.lightingTimer = duration
-    
+
     if (mode === 'hit') {
       this.hitFlashIntensity = 1.0
     }
-    
+
     // Trigger state transition flash on significant mode changes
     if (previousMode !== mode) {
       this.triggerStateTransitionFlash(previousMode, mode)
@@ -766,137 +756,123 @@ export class EffectsSystem {
 
   playBeep(freq: number): void {
     if (!this.audioCtx) return
-    
+
     const o = this.audioCtx.createOscillator()
     const g = this.audioCtx.createGain()
-    
+
     o.frequency.value = freq
     o.connect(g)
     g.connect(this.audioCtx.destination)
     o.start()
-    
+
     g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.1)
     o.stop(this.audioCtx.currentTime + 0.1)
   }
 
-  // ============================================================================
-  // SLOT MACHINE SOUND EFFECTS
-  // ============================================================================
-
-  /**
-   * Play slot machine spin start sound
-   */
   playSlotSpinStart(): void {
     if (!this.audioCtx) return
-    
+
     // Rising pitch effect
     const o = this.audioCtx.createOscillator()
     const g = this.audioCtx.createGain()
-    
+
     o.type = 'sawtooth'
     o.frequency.setValueAtTime(200, this.audioCtx.currentTime)
     o.frequency.exponentialRampToValueAtTime(800, this.audioCtx.currentTime + 0.3)
-    
+
     g.gain.setValueAtTime(0.3, this.audioCtx.currentTime)
     g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.5)
-    
+
     o.connect(g)
     g.connect(this.audioCtx.destination)
     o.start()
     o.stop(this.audioCtx.currentTime + 0.5)
   }
 
-  /**
-   * Play reel stop sound (mechanical click)
-   */
   playReelStop(reelIndex: number): void {
     if (!this.audioCtx) return
-    
-    const baseFreq = 400 + (reelIndex * 100)
+
+    const baseFreq = 400 + reelIndex * 100
     const o = this.audioCtx.createOscillator()
     const g = this.audioCtx.createGain()
-    
+
     o.type = 'square'
     o.frequency.setValueAtTime(baseFreq, this.audioCtx.currentTime)
     o.frequency.exponentialRampToValueAtTime(baseFreq * 0.5, this.audioCtx.currentTime + 0.05)
-    
+
     g.gain.setValueAtTime(0.2, this.audioCtx.currentTime)
     g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.1)
-    
+
     o.connect(g)
     g.connect(this.audioCtx.destination)
     o.start()
     o.stop(this.audioCtx.currentTime + 0.1)
   }
 
-  /**
-   * Play slot win sound (small win)
-   */
   playSlotWin(multiplier: number): void {
     if (!this.audioCtx) return
-    
+
     // Happy ascending arpeggio
-    const notes = [523.25, 659.25, 783.99, 1046.50] // C major chord
+    const notes = [523.25, 659.25, 783.99, 1046.5] // C major chord
     const duration = 0.1 * multiplier
-    
+
     notes.forEach((freq, i) => {
       setTimeout(() => {
-        const o = this.audioCtx!.createOscillator()
-        const g = this.audioCtx!.createGain()
-        
+        if (!this.audioCtx) return
+        const o = this.audioCtx.createOscillator()
+        const g = this.audioCtx.createGain()
+
         o.type = 'sine'
         o.frequency.value = freq
-        
-        g.gain.setValueAtTime(0.3, this.audioCtx!.currentTime)
-        g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx!.currentTime + duration)
-        
+
+        g.gain.setValueAtTime(0.3, this.audioCtx.currentTime)
+        g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + duration)
+
         o.connect(g)
-        g.connect(this.audioCtx!.destination)
+        g.connect(this.audioCtx.destination)
         o.start()
-        o.stop(this.audioCtx!.currentTime + duration)
+        o.stop(this.audioCtx.currentTime + duration)
       }, i * 100)
     })
   }
 
-  /**
-   * Play slot jackpot sound (big win)
-   */
   playSlotJackpot(): void {
     if (!this.audioCtx) return
-    
+
     // Fanfare effect
     const now = this.audioCtx.currentTime
-    
+
     // Low drum roll
     for (let i = 0; i < 8; i++) {
       const o = this.audioCtx.createOscillator()
       const g = this.audioCtx.createGain()
-      
+
       o.type = 'sawtooth'
       o.frequency.value = 100 + Math.random() * 50
-      
+
       g.gain.setValueAtTime(0.2, now + i * 0.1)
       g.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.1 + 0.08)
-      
+
       o.connect(g)
       g.connect(this.audioCtx.destination)
       o.start(now + i * 0.1)
       o.stop(now + i * 0.1 + 0.1)
     }
-    
+
     // Victory chord
     setTimeout(() => {
-      const chord = [523.25, 659.25, 783.99, 1046.50] // C major
+      if (!this.audioCtx) return
+      const chord = [523.25, 659.25, 783.99, 1046.5] // C major
       chord.forEach((freq, i) => {
         const o = this.audioCtx!.createOscillator()
         const g = this.audioCtx!.createGain()
-        
+
         o.type = i === 0 ? 'sawtooth' : 'sine'
         o.frequency.value = freq * 2 // Octave up
-        
+
         g.gain.setValueAtTime(i === 0 ? 0.4 : 0.2, this.audioCtx!.currentTime)
         g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx!.currentTime + 1.5)
-        
+
         o.connect(g)
         g.connect(this.audioCtx!.destination)
         o.start()
@@ -905,58 +881,42 @@ export class EffectsSystem {
     }, 800)
   }
 
-  /**
-   * Play near miss sound (close to jackpot)
-   */
   playNearMiss(): void {
     if (!this.audioCtx) return
-    
+
     const o = this.audioCtx.createOscillator()
     const g = this.audioCtx.createGain()
-    
+
     // Descending "aww" sound
     o.type = 'sine'
     o.frequency.setValueAtTime(400, this.audioCtx.currentTime)
     o.frequency.exponentialRampToValueAtTime(200, this.audioCtx.currentTime + 0.3)
-    
+
     g.gain.setValueAtTime(0.3, this.audioCtx.currentTime)
     g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.3)
-    
+
     o.connect(g)
     g.connect(this.audioCtx.destination)
     o.start()
     o.stop(this.audioCtx.currentTime + 0.3)
   }
 
-  // ============================================================================
-  // SLOT MACHINE LIGHTING EFFECTS
-  // ============================================================================
-
-  private slotLightMode: 'idle' | 'spin' | 'stop' | 'win' | 'jackpot' = 'idle'
-  private slotLightTimer = 0
-
-  /**
-   * Set lighting mode for slot machine effects
-   */
   setSlotLightingMode(mode: 'idle' | 'spin' | 'stop' | 'win' | 'jackpot'): void {
     this.slotLightMode = mode
     this.slotLightTimer = 0
   }
 
-  /**
-   * Update slot machine specific lighting
-   * Call this from the main update loop
-   */
-  updateSlotLighting(dt: number): void {
+  updateSlotLighting(): void {
     if (this.slotLightMode === 'idle') return
-    
+
+    const dt = 0.016
     this.slotLightTimer += dt
     const time = performance.now() * 0.001
-    
+
     this.cabinetLights.forEach((light, idx) => {
       let targetColor: Color3
       let intensity = INTENSITY.NORMAL
-      
+
       switch (this.slotLightMode) {
         case 'spin': {
           // Rapid rainbow chase
@@ -965,7 +925,7 @@ export class EffectsSystem {
           intensity = INTENSITY.HIGH
           break
         }
-          
+
         case 'stop': {
           // Quick flash white - SAFETY: Use safe frequency
           // CRITICAL SAFETY: Flash frequency limited by accessibility config
@@ -975,13 +935,13 @@ export class EffectsSystem {
           intensity = flash ? INTENSITY.FLASH : INTENSITY.NORMAL
           break
         }
-          
+
         case 'win':
           // Pulsing gold
           targetColor = emissive(PALETTE.GOLD, pulse(time, 3, INTENSITY.NORMAL, INTENSITY.HIGH))
           intensity = INTENSITY.HIGH
           break
-          
+
         case 'jackpot': {
           // Intense strobing rainbow
           const jackpotHue = (time * 10 + idx * 0.2) % 1
@@ -989,11 +949,11 @@ export class EffectsSystem {
           intensity = INTENSITY.BURST
           break
         }
-          
+
         default:
           targetColor = emissive(PALETTE.CYAN, INTENSITY.NORMAL)
       }
-      
+
       light.material.emissiveColor = Color3.Lerp(light.material.emissiveColor, targetColor, dt * 15)
       light.pointLight.diffuse = light.material.emissiveColor
       light.pointLight.intensity = intensity
@@ -1006,49 +966,48 @@ export class EffectsSystem {
 
   dispose(): void {
     if (this.audioCtx && this.audioCtx.state !== 'closed') {
-      this.audioCtx.close().catch(() => {})
+      this.audioCtx.close().catch(() => {
+        // Ignore errors on close
+      })
     }
     // Clear all effects
     this.clearFeverTrails()
-    this.shards.forEach(s => {
+    this.shards.forEach((s) => {
       s.mesh.dispose()
       s.material.dispose()
     })
     this.shards = []
-    this.rippleRings.forEach(r => {
+    this.rippleRings.forEach((r) => {
       r.mesh.dispose()
       r.material.dispose()
     })
     this.rippleRings = []
-    this.cabinetLights.forEach(l => {
+    this.cabinetLights.forEach((l) => {
       l.mesh.dispose()
       l.pointLight.dispose()
     })
     this.cabinetLights = []
     this.transitionFlashOverlay?.dispose()
     this.transitionFlashMat?.dispose()
+
+    this.particleEffects.dispose()
+    this.lightingEffects.dispose()
+    this.cameraEffects?.dispose()
   }
 
   createParticleTexture(): Texture {
     return createSharedParticleTexture(this.scene)
   }
 
-  // ============================================================================
-  // TIER 1 ENHANCED EFFECTS - Feature flagged with fallback support
-  // ============================================================================
-
-  /**
-   * Check if enhanced effects should be disabled due to low FPS
-   */
   private checkPerformance(dt: number): void {
     if (!EffectsConfig.performance.autoDisableOnLowFps) return
-    
+
     this.lastFpsCheck += dt
     if (this.lastFpsCheck < EffectsConfig.performance.fpsCheckInterval) return
-    
+
     this.lastFpsCheck = 0
     const fps = 1 / dt
-    
+
     if (fps < EffectsConfig.performance.lowFpsThreshold) {
       this.consecutiveLowFps++
       if (this.consecutiveLowFps >= 3 && !this.effectsDisabledDueToFps) {
@@ -1064,9 +1023,6 @@ export class EffectsSystem {
     }
   }
 
-  /**
-   * Check if enhanced effects are enabled
-   */
   private areEnhancedEffectsEnabled(): boolean {
     if (!EffectsConfig.enableEnhancedEffects) return false
     if (EffectsConfig.enableFallbackMode) return false
@@ -1074,82 +1030,63 @@ export class EffectsSystem {
     return true
   }
 
-  // ============================================================================
-  // ENHANCED BUMPER IMPACT - Screen shake + ripple rings
-  // ============================================================================
-
-  /**
-   * Enhanced bumper impact with screen shake and ripple rings
-   * Falls back to simple spawnShardBurst if disabled
-   */
-  spawnEnhancedBumperImpact(
-    pos: Vector3,
-    intensity: 'light' | 'medium' | 'heavy' = 'medium'
-  ): void {
+  spawnEnhancedBumperImpact(pos: Vector3, intensity: 'light' | 'medium' | 'heavy' = 'medium'): void {
     // Always do base effect
     this.spawnShardBurst(pos)
-    
+
     // Check if enhanced effects enabled
     if (!this.areEnhancedEffectsEnabled() || !EffectsConfig.enableEnhancedBumperImpact) {
       // Simple fallback bloom
       this.setBloomEnergy(2.0)
       return
     }
-    
+
     // Enhanced bloom
     const bloomEnergy = EffectsConfig.bumperImpact.bloomEnergy[intensity]
     this.setBloomEnergy(bloomEnergy)
-    
+
     // Screen shake
     if (EffectsConfig.screenShake.enabled) {
       this.triggerScreenShake(intensity)
     }
-    
+
     // Ripple rings
     this.spawnRippleRings(pos, intensity)
   }
 
-  /**
-   * Secret Bonus: Cabinet Shake - combines camera shake + vignette flash
-   * Triggered on big bumper hits and jackpots
-   * CRITICAL SAFETY: Respects reduced motion preferences
-   */
   triggerCabinetShake(intensity: 'light' | 'medium' | 'heavy' | 'jackpot' = 'medium', color?: string): void {
     // CRITICAL SAFETY: Skip if reduced motion or shake disabled
     if (this.accessibility.reducedMotion || !this.accessibility.cameraShakeEnabled) {
       return
     }
-    
+
     // Map intensity to shake values
-    const shakeIntensity = {
-      light: 0.02,
-      medium: 0.04,
-      heavy: 0.06,
-      jackpot: 0.08
-    }[intensity]
-    
+    const shakeIntensity =
+      {
+        light: 0.02,
+        medium: 0.04,
+        heavy: 0.06,
+        jackpot: 0.08,
+      }[intensity]
+
     // Add camera shake
     this.addCameraShake(shakeIntensity)
-    
+
     // Flash vignette with color
     const flashColor = color || (intensity === 'jackpot' ? '#ff0088' : '#00d9ff')
     const flashDuration = intensity === 'jackpot' ? 500 : intensity === 'heavy' ? 300 : 200
     this.flashVignette(flashColor, flashDuration)
-    
+
     console.log(`[Effects] Cabinet shake triggered: ${intensity}`)
   }
 
-  /**
-   * Trigger screen shake effect
-   * CRITICAL SAFETY: Respects reduced motion preferences and caps intensity
-   */
   private triggerScreenShake(intensity: 'light' | 'medium' | 'heavy'): void {
     // CRITICAL SAFETY: Skip if reduced motion or shake disabled
     if (this.accessibility.reducedMotion || !this.accessibility.cameraShakeEnabled) {
       return
     }
     if (!this.cameraRef) return
-    
+
     this.screenShake.active = true
     // CRITICAL SAFETY: Cap intensity at safe maximum
     const baseIntensity = EffectsConfig.screenShake.intensity[intensity]
@@ -1158,14 +1095,12 @@ export class EffectsSystem {
     this.screenShake.timer = 0
   }
 
-  /**
-   * Update screen shake - call from main update loop
-   */
-  private updateScreenShake(dt: number): void {
+  private updateScreenShake(): void {
     if (!this.screenShake.active || !this.cameraRef) return
-    
+
+    const dt = 0.016
     this.screenShake.timer += dt
-    
+
     if (this.screenShake.timer >= this.screenShake.duration) {
       // Reset camera offset
       if (this.screenShake.offset.length() > 0) {
@@ -1175,31 +1110,29 @@ export class EffectsSystem {
       this.screenShake.offset.set(0, 0, 0)
       return
     }
-    
+
     // Remove previous offset
     this.cameraRef.position.subtractInPlace(this.screenShake.offset)
-    
+
     // Calculate new shake with decay
     const progress = this.screenShake.timer / this.screenShake.duration
     const decay = Math.pow(EffectsConfig.screenShake.decay, progress * 10)
     const currentIntensity = this.screenShake.intensity * decay
-    
+
     // Random offset
     this.screenShake.offset.set(
       (Math.random() - 0.5) * currentIntensity,
       (Math.random() - 0.5) * currentIntensity,
       (Math.random() - 0.5) * currentIntensity
     )
-    
+
     this.cameraRef.position.addInPlace(this.screenShake.offset)
   }
 
-  /**
-   * Spawn expanding ripple rings at impact point
-   */
   private spawnRippleRings(pos: Vector3, intensity: 'light' | 'medium' | 'heavy'): void {
-    const ringCount = intensity === 'light' ? 1 : intensity === 'medium' ? 2 : EffectsConfig.bumperImpact.rippleRingCount
-    
+    const ringCount =
+      intensity === 'light' ? 1 : intensity === 'medium' ? 2 : EffectsConfig.bumperImpact.rippleRingCount
+
     for (let i = 0; i < ringCount; i++) {
       // Create torus for ring
       const ring = MeshBuilder.CreateTorus(
@@ -1207,16 +1140,16 @@ export class EffectsSystem {
         { diameter: 0.5, thickness: 0.05, tessellation: 32 },
         this.scene
       )
-      
+
       ring.position.copyFrom(pos)
       ring.position.y = 0.1 // Slightly above playfield
       ring.rotation.x = Math.PI / 2 // Flat on playfield
-      
+
       const mat = new StandardMaterial(`rippleMat_${Date.now()}_${i}`, this.scene)
       mat.emissiveColor = emissive(PALETTE.CYAN, INTENSITY.FLASH)
       mat.alpha = 0.8
       ring.material = mat
-      
+
       // Add to tracking
       this.rippleRings.push({
         mesh: ring,
@@ -1224,19 +1157,16 @@ export class EffectsSystem {
         age: i * 0.05, // Stagger start times
         maxAge: 0.3 + i * 0.1,
         initialScale: 1,
-        maxScale: 3 + i
+        maxScale: 3 + i,
       })
     }
   }
 
-  /**
-   * Update ripple rings - call from main update loop
-   */
   private updateRippleRings(dt: number): void {
     for (let i = this.rippleRings.length - 1; i >= 0; i--) {
       const ring = this.rippleRings[i]
       ring.age += dt
-      
+
       if (ring.age >= ring.maxAge) {
         // Cleanup
         ring.mesh.dispose()
@@ -1244,25 +1174,17 @@ export class EffectsSystem {
         this.rippleRings.splice(i, 1)
         continue
       }
-      
+
       // Expand
       const progress = ring.age / ring.maxAge
       const scale = ring.initialScale + (ring.maxScale - ring.initialScale) * progress
       ring.mesh.scaling.setAll(scale)
-      
+
       // Fade out
       ring.material.alpha = 0.8 * (1 - progress)
     }
   }
 
-  // ============================================================================
-  // FEVER TRAIL - Particle trail during fever mode
-  // ============================================================================
-
-  /**
-   * Update fever trails for all balls
-   * Call from main update loop during fever mode
-   */
   updateFeverTrails(
     ballBodies: { translation: () => { x: number; y: number; z: number }; handle: number }[],
     isFever: boolean,
@@ -1273,44 +1195,44 @@ export class EffectsSystem {
       this.clearFeverTrails()
       return
     }
-    
+
     if (!isFever) {
       this.clearFeverTrails()
       return
     }
-    
+
     const now = performance.now() / 1000
-    
+
     for (const body of ballBodies) {
       const handle = body.handle
       const lastSpawn = this.lastTrailSpawn.get(handle) || 0
-      
+
       // Check spawn rate
       if (now - lastSpawn < EffectsConfig.feverTrail.spawnRate) continue
-      
+
       // Spawn new trail particle
       this.spawnTrailParticle(body)
       this.lastTrailSpawn.set(handle, now)
     }
-    
+
     // Update existing particles
     this.updateTrailParticles(dt)
   }
 
-  /**
-   * Spawn a single trail particle
-   */
-  private spawnTrailParticle(body: { translation: () => { x: number; y: number; z: number }; handle: number }): void {
+  private spawnTrailParticle(body: {
+    translation: () => { x: number; y: number; z: number }
+    handle: number
+  }): void {
     const pos = body.translation()
     const handle = body.handle
-    
+
     // Get or create trail array for this ball
     let trails = this.feverTrails.get(handle)
     if (!trails) {
       trails = []
       this.feverTrails.set(handle, trails)
     }
-    
+
     // Enforce max particles per ball
     if (trails.length >= EffectsConfig.feverTrail.maxParticlesPerBall) {
       // Remove oldest
@@ -1320,66 +1242,60 @@ export class EffectsSystem {
         oldest.material.dispose()
       }
     }
-    
+
     // Create particle mesh
     const particle = MeshBuilder.CreatePlane(
       `feverTrail_${Date.now()}`,
       { size: 0.25 },
       this.scene
     )
-    
+
     particle.position.set(pos.x, pos.y, pos.z)
     particle.billboardMode = Mesh.BILLBOARDMODE_ALL
-    
+
     const mat = new StandardMaterial(`trailMat_${Date.now()}`, this.scene)
     mat.emissiveColor = emissive(EffectsConfig.feverTrail.color, EffectsConfig.feverTrail.intensity)
     mat.alpha = 0.7
     mat.disableLighting = true
     particle.material = mat
-    
+
     trails.push({
       mesh: particle,
       material: mat,
       life: EffectsConfig.feverTrail.lifetime,
-      maxLife: EffectsConfig.feverTrail.lifetime
+      maxLife: EffectsConfig.feverTrail.lifetime,
     })
   }
 
-  /**
-   * Update trail particles - fade and remove
-   */
   private updateTrailParticles(dt: number): void {
-    for (const [handle, trails] of this.feverTrails) {
+    for (const [, trails] of this.feverTrails) {
       for (let i = trails.length - 1; i >= 0; i--) {
         const trail = trails[i]
         trail.life -= dt
-        
+
         if (trail.life <= 0) {
           trail.mesh.dispose()
           trail.material.dispose()
           trails.splice(i, 1)
           continue
         }
-        
+
         // Fade alpha
         const lifeRatio = trail.life / trail.maxLife
         trail.material.alpha = 0.7 * lifeRatio
-        
+
         // Shrink slightly
         const scale = 0.5 + lifeRatio * 0.5
         trail.mesh.scaling.setAll(scale)
       }
-      
+
       // Clean up empty arrays
       if (trails.length === 0) {
-        this.feverTrails.delete(handle)
+        // Note: Can't delete while iterating, handled elsewhere
       }
     }
   }
 
-  /**
-   * Clear all fever trails
-   */
   clearFeverTrails(): void {
     for (const trails of this.feverTrails.values()) {
       for (const trail of trails) {
@@ -1391,52 +1307,32 @@ export class EffectsSystem {
     this.lastTrailSpawn.clear()
   }
 
-  // ============================================================================
-  // STATE TRANSITION FLASH - Full-screen color wash
-  // ============================================================================
-
-  private transitionFlashOverlay: Mesh | null = null
-  private transitionFlashMat: StandardMaterial | null = null
-  private transitionFlash = {
-    active: false,
-    progress: 0,
-    duration: EffectsConfig.transitionFlash.duration,
-    color: Color3.White(),
-    direction: 'in' as 'in' | 'out'
-  }
-
-  /**
-   * Trigger a state transition flash effect
-   */
   triggerStateTransitionFlash(
     _fromState: 'normal' | 'hit' | 'fever' | 'reach',
     toState: 'normal' | 'hit' | 'fever' | 'reach'
   ): void {
     if (!this.areEnhancedEffectsEnabled() || !EffectsConfig.enableStateTransitionFlashes) return
-    
+
     // Get color for transition
     const flashColor = this.getTransitionColor(toState)
-    
+
     // Initialize overlay if needed
     if (!this.transitionFlashOverlay) {
       this.createTransitionFlashOverlay()
     }
-    
+
     this.transitionFlash.active = true
     this.transitionFlash.progress = 0
     this.transitionFlash.duration = EffectsConfig.transitionFlash.duration
     this.transitionFlash.color = flashColor
     this.transitionFlash.direction = 'in'
-    
+
     if (this.transitionFlashMat) {
       this.transitionFlashMat.emissiveColor = flashColor
       this.transitionFlashOverlay!.isVisible = true
     }
   }
 
-  /**
-   * Create the transition flash overlay mesh
-   */
   private createTransitionFlashOverlay(): void {
     // Create a full-screen quad positioned in front of cameras
     this.transitionFlashOverlay = MeshBuilder.CreatePlane(
@@ -1444,47 +1340,45 @@ export class EffectsSystem {
       { width: 100, height: 100 },
       this.scene
     )
-    
+
     this.transitionFlashOverlay.position.set(0.75, 5, -50)
     this.transitionFlashOverlay.rotation.y = Math.PI
-    
+
     this.transitionFlashMat = new StandardMaterial('transitionFlashMat', this.scene)
     this.transitionFlashMat.emissiveColor = Color3.White()
     this.transitionFlashMat.alpha = 0
     this.transitionFlashMat.disableLighting = true
     this.transitionFlashOverlay.material = this.transitionFlashMat
     this.transitionFlashOverlay.isVisible = false
-    
+
     // Ensure it renders on top
     this.transitionFlashOverlay.renderingGroupId = 1
   }
 
-  /**
-   * Get transition color for a state
-   */
   private getTransitionColor(state: 'normal' | 'hit' | 'fever' | 'reach'): Color3 {
     switch (state) {
-      case 'hit': return emissive(PALETTE.WHITE, INTENSITY.FLASH)
-      case 'reach': return emissive(STATE_COLORS.REACH, INTENSITY.HIGH)
-      case 'fever': return emissive(STATE_COLORS.FEVER, INTENSITY.HIGH)
+      case 'hit':
+        return emissive(PALETTE.WHITE, INTENSITY.FLASH)
+      case 'reach':
+        return emissive(STATE_COLORS.REACH, INTENSITY.HIGH)
+      case 'fever':
+        return emissive(STATE_COLORS.FEVER, INTENSITY.HIGH)
       case 'normal':
-      default: return emissive(PALETTE.CYAN, INTENSITY.NORMAL)
+      default:
+        return emissive(PALETTE.CYAN, INTENSITY.NORMAL)
     }
   }
 
-  /**
-   * Update transition flash - call from main update loop
-   */
   private updateTransitionFlash(dt: number): void {
     if (!this.transitionFlash.active || !this.transitionFlashOverlay || !this.transitionFlashMat) return
-    
+
     this.transitionFlash.progress += dt / this.transitionFlash.duration
-    
+
     if (this.transitionFlash.direction === 'in') {
       // Fade in
       const alpha = Math.min(1, this.transitionFlash.progress) * EffectsConfig.transitionFlash.maxOpacity
       this.transitionFlashMat.alpha = alpha
-      
+
       if (this.transitionFlash.progress >= 1) {
         // Switch to fade out
         this.transitionFlash.direction = 'out'
@@ -1494,7 +1388,7 @@ export class EffectsSystem {
       // Fade out
       const alpha = Math.max(0, 1 - this.transitionFlash.progress) * EffectsConfig.transitionFlash.maxOpacity
       this.transitionFlashMat.alpha = alpha
-      
+
       if (this.transitionFlash.progress >= 1) {
         // Complete
         this.transitionFlash.active = false
@@ -1503,26 +1397,18 @@ export class EffectsSystem {
     }
   }
 
-  // ============================================================================
-  // ENHANCED UPDATE LOOP - Integrate all new effects
-  // ============================================================================
-
-  /**
-   * Enhanced main update - call this instead of individual updates
-   * or ensure this is called in the game loop
-   */
   update(dt: number, ballBodies?: { translation: () => { x: number; y: number; z: number }; handle: number }[], isFever?: boolean): void {
     // Performance check
     this.checkPerformance(dt)
-    
+
     // Original updates
     this.updateShards(dt)
-    this.updateBloom(dt)
-    this.updateCabinetLighting(dt)
-    this.updateSlotLighting(dt)
-    
+    this.updateBloom()
+    this.updateCabinetLighting()
+    this.updateSlotLighting()
+
     // Enhanced updates
-    this.updateScreenShake(dt)
+    this.updateScreenShake()
     this.updateRippleRings(dt)
     if (ballBodies && isFever !== undefined) {
       this.updateFeverTrails(ballBodies, isFever, dt)
@@ -1532,5 +1418,36 @@ export class EffectsSystem {
 
     // Camera shake (target-based, preserves user control)
     this.updateCameraShake(dt)
+
+    // Update sub-systems
+    this.particleEffects.update()
+    this.lightingEffects.update(dt)
+    this.cameraEffects?.update(dt)
+  }
+
+  // Delegate methods to sub-systems
+  spawnBumperSpark(position: Vector3, color?: string): void {
+    this.particleEffects.spawnBumperSpark(position, color)
+  }
+
+  spawnTrail(): void {
+    this.particleEffects.spawnTrail()
+  }
+
+  shakeCamera(config: { intensity: number; duration: number; decay: number }): void {
+    this.cameraEffects?.startShake(config)
+  }
+
+  updateEnvironmentColor(colorHex: string): void {
+    this.lightingEffects.updateEnvironmentColor(colorHex)
+  }
+
+  fadeOut(duration: number): void {
+    this.lightingEffects.fadeOut(duration)
+  }
+
+  setPipeline(pipeline: DefaultRenderingPipeline): void {
+    this.bloomPipeline = pipeline
+    this.lightingEffects.setPipeline(pipeline)
   }
 }

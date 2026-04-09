@@ -79,11 +79,17 @@ function setupResizeHandler(canvas: HTMLCanvasElement, engine: Engine | WebGPUEn
 }
 
 async function createEngine(canvas: HTMLCanvasElement): Promise<Engine | WebGPUEngine> {
+  const engineOptions = {
+    antialias: true,
+    preserveDrawingBuffer: true,
+    stencil: true
+  }
+  
   try {
-    return (await EngineFactory.CreateAsync(canvas, {})) as WebGPUEngine
+    return (await EngineFactory.CreateAsync(canvas, { ...engineOptions })) as WebGPUEngine
   } catch (err) {
     console.warn('WebGPU init failed, using WebGL fallback', err)
-    return (await EngineFactory.CreateAsync(canvas, { disableWebGPU: true })) as Engine
+    return (await EngineFactory.CreateAsync(canvas, { disableWebGPU: true, ...engineOptions })) as Engine
   }
 }
 

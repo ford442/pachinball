@@ -10,7 +10,7 @@
  * - Backbox video/text integration
  */
 
-import type { DisplaySystem } from './display'
+import type { DisplaySystem } from '../display'
 import type { TableMapType } from '../shaders/lcd-table'
 import { apiFetch } from '../config'
 

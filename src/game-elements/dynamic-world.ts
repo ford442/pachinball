@@ -27,7 +27,7 @@ import {
 } from '@babylonjs/core'
 import type { Scene } from '@babylonjs/core'
 import type { TableMapType, TableMapConfig } from '../shaders/lcd-table'
-import type { DisplaySystem } from './display'
+import type { DisplaySystem } from '../display'
 import type { SoundSystem } from './sound-system'
 import { color } from './visual-language'
 
