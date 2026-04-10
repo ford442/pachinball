@@ -203,6 +203,42 @@ export class DisplaySystem {
     return this.useWGSL
   }
 
+  // ============================================================================
+  // SLOT MACHINE METHODS (Stub implementations)
+  // ============================================================================
+
+  /**
+   * Configure the slot machine with settings
+   */
+  public configureSlotMachine(config: unknown): void {
+    console.log('[Display] Slot machine configured', config)
+  }
+
+  /**
+   * Set callback for slot machine events
+   */
+  public setSlotEventCallback(callback: (event: string, data: unknown) => void): void {
+    // Store callback for when slot events happen
+    console.log('[Display] Slot event callback set')
+    void callback
+  }
+
+  /**
+   * Determine if slot machine should activate based on score
+   */
+  public shouldActivateSlotMachine(score: number): boolean {
+    // Stub: Activate every 10k points roughly
+    return score > 0 && score % 10000 === 0
+  }
+
+  /**
+   * Start a slot machine spin
+   */
+  public startSlotSpin(): void {
+    console.log('[Display] Slot spin started')
+    this.reelsLayer.startSpin()
+  }
+
   /**
    * Dispose all resources
    */

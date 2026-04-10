@@ -16,15 +16,15 @@ export class GameStateManager {
   private state: GameState = GameState.MENU
   private previousState: GameState = GameState.MENU
   private config: StateManagerConfig
-  private effects: EffectsSystem | null = null
+  // private effects: EffectsSystem | null = null // UNUSED
   private display: DisplaySystem | null = null
 
   constructor(config: StateManagerConfig = {}) {
     this.config = config
   }
 
-  setSystems(effects: EffectsSystem | null, display: DisplaySystem | null): void {
-    this.effects = effects
+  setSystems(_effects: EffectsSystem | null, display: DisplaySystem | null): void {
+    // this.effects = effects // UNUSED
     this.display = display
   }
 

@@ -97,7 +97,7 @@ import { CabinetManager } from './game/game-cabinet'
 import { GameUIManager } from './game/game-ui'
 import { AdventureManager } from './game/game-adventure'
 import { GameConfig, API_BASE, BallType } from './config'
-import { DisplayMode, type DisplayConfig } from './game-elements/display-config'
+import { DisplayMode, type DisplayConfig } from './display/display-types'
 import { scanlinePixelShader } from './shaders/scanline'
 import { lcdTablePixelShader, TABLE_MAPS, registerMap } from './shaders/lcd-table'
 
@@ -131,7 +131,7 @@ export class Game {
   private cabinetManager: CabinetManager | null = null
   private uiManager: GameUIManager | null = null
   private adventureManager: AdventureManager | null = null
-  private debugHUD: DebugHUD | null = null
+  // private debugHUD: DebugHUD | null = null // DISABLED for now
   private hapticManager: HapticManager | null = null
   private soundSystem = getSoundSystem()
   private leaderboardSystem = getLeaderboardSystem()
@@ -163,7 +163,7 @@ export class Game {
   private comboCount = 0
   private comboTimer = 0
   private goldBallStack: Array<{ type: BallType; timestamp: number }> = []
-  private maxStackDisplay = 10
+  // private maxStackDisplay = 10 // UNUSED
   private powerupActive = false
   private powerupTimer = 0
   private tiltActive = false
@@ -181,9 +181,9 @@ export class Game {
 
   // UI References
   private scoreElement: HTMLElement | null = null
-  private livesElement: HTMLElement | null = null
-  private comboElement: HTMLElement | null = null
-  private bestHudElement: HTMLElement | null = null
+  // private _livesElement: HTMLElement | null = null // UNUSED - re-enable when HUD needs these
+  // private _comboElement: HTMLElement | null = null // UNUSED
+  // private _bestHudElement: HTMLElement | null = null // UNUSED
   private menuOverlay: HTMLElement | null = null
   private startScreen: HTMLElement | null = null
   private gameOverScreen: HTMLElement | null = null
@@ -217,10 +217,10 @@ export class Game {
   private inputLatencyOverlay: HTMLElement | null = null
   private showDebugUI = false
 
-  // Frame time monitoring
-  private frameTimeHistory: number[] = []
-  private lastFrameTime = 0
-  private hudUpdatePending = false
+  // Frame time monitoring - DISABLED
+  // private frameTimeHistory: number[] = []
+  // private lastFrameTime = 0
+  // private hudUpdatePending = false
 
   // Scanline intensity
   private scanlineIntensity = 0.12
@@ -258,11 +258,11 @@ export class Game {
 
     // UI Bindings
     this.scoreElement = document.getElementById('score')
-    this.livesElement = document.getElementById('lives')
+    // this._livesElement = document.getElementById('lives') // UNUSED
     this.menuOverlay = document.getElementById('menu-overlay')
     this.pauseOverlay = document.getElementById('pause-overlay')
-    this.comboElement = document.getElementById('combo')
-    this.bestHudElement = document.getElementById('best')
+    // this._comboElement = document.getElementById('combo') // UNUSED
+    // this._bestHudElement = document.getElementById('best') // UNUSED
 
     // Initialize UI Manager
     this.uiManager = new GameUIManager(this.scene)
@@ -549,7 +549,9 @@ export class Game {
       onTrackNext: () => this.cycleAdventureTrack(1),
       onTrackPrev: () => this.cycleAdventureTrack(-1),
       onJackpotTrigger: () => this.triggerJackpot(),
-      onDebugHUD: () => this.debugHUD?.toggle(),
+      onDebugHUD: () => {
+        // this.debugHUD?.toggle() // DISABLED
+      },
       onMapSwitch: (index) => {
         const maps = this.mapManager?.getMapSystem().getMapIds() || []
         if (index >= 0 && index < maps.length) {
@@ -590,7 +592,7 @@ export class Game {
     })
 
     this.engine.runRenderLoop(() => {
-      this.monitorFrameTime()
+      // this.monitorFrameTime() // TODO: Implement or remove
       this.updateLatencyDisplay()
       this.scene?.render()
     })
@@ -639,12 +641,12 @@ export class Game {
         },
         onScoreAward: (points, reason) => {
           this.score += points
-          this.queueHUDUpdate()
+          this.updateHUD()
           this.uiManager?.showMessage(`${reason}: +${points}`, 1000)
         },
         onAdventureEnd: () => {
           this.score += 5000
-          this.queueHUDUpdate()
+          this.updateHUD()
           this.effects?.startJackpotSequence()
         },
       }
@@ -1135,62 +1137,15 @@ export class Game {
     }
     // Build display config with state-specific media from GameConfig
     const displayConfig: DisplayConfig = {
-      mode: GameConfig.backbox.attractVideoPath ? DisplayMode.VIDEO : DisplayMode.SHADER_ONLY,
-      defaultMedia: {
-        videoPath: GameConfig.backbox.attractVideoPath,
-        imagePath: GameConfig.backbox.attractImagePath,
-        showShaderBackground: true,
-        showReels: !GameConfig.backbox.videoReplacesReels,
-        opacity: GameConfig.backbox.imageOpacity ?? 0.85,
-      },
-      stateMedia: {
-        [DisplayState.JACKPOT]: {
-          videoPath: GameConfig.backbox.jackpotVideoPath || GameConfig.backbox.attractVideoPath,
-          imagePath: GameConfig.backbox.jackpotImagePath || GameConfig.backbox.attractImagePath,
-          showShaderBackground: true,
-          showReels: false,
-          shaderParams: { speed: 20.0, color: '#ff00ff' },
-        },
-        [DisplayState.FEVER]: {
-          videoPath: GameConfig.backbox.feverVideoPath || GameConfig.backbox.attractVideoPath,
-          imagePath: GameConfig.backbox.feverImagePath || GameConfig.backbox.attractImagePath,
-          showShaderBackground: true,
-          showReels: true,
-          shaderParams: { speed: 10.0, color: '#ffd700' },
-        },
-        [DisplayState.REACH]: {
-          videoPath: GameConfig.backbox.reachVideoPath || GameConfig.backbox.attractVideoPath,
-          imagePath: GameConfig.backbox.reachImagePath || GameConfig.backbox.attractImagePath,
-          showShaderBackground: true,
-          showReels: true,
-          shaderParams: { speed: 5.0, color: '#ff0055' },
-        },
-        [DisplayState.ADVENTURE]: {
-          videoPath: GameConfig.backbox.adventureVideoPath || GameConfig.backbox.attractVideoPath,
-          imagePath: GameConfig.backbox.adventureImagePath || GameConfig.backbox.attractImagePath,
-          showShaderBackground: true,
-          showReels: false,
-          shaderParams: { speed: 1.0, color: '#00aa00' },
-        },
-      },
-      imageSettings: {
-        blendMode: GameConfig.backbox.imageBlendMode ?? 'normal',
-        defaultOpacity: GameConfig.backbox.imageOpacity ?? 0.85,
-      },
-      videoSettings: {
-        loop: true,
-        muted: true,
-        loadTimeout: 5000,
-      },
-      transitions: {
-        fadeDuration: 0.3,
-        animateShaderParams: true,
-      },
+      mode: GameConfig.backbox.attractVideoPath ? DisplayMode.VIDEO_ONLY : DisplayMode.SHADER_ONLY,
+      width: 20,
+      height: 12,
+      resolution: 512,
     }
     this.display = new DisplaySystem(this.scene, this.engine, displayConfig)
 
-    // Initialize debug HUD
-    this.debugHUD = new DebugHUD()
+    // Initialize debug HUD - DISABLED for now
+    // this.debugHUD = new DebugHUD()
 
     // Initialize Dynamic World for scrolling adventure mode
     this.dynamicWorld = getDynamicWorld(this.scene, this.tableCam!, this.display, this.soundSystem)
@@ -1218,8 +1173,8 @@ export class Game {
     // Setup slot machine event callback
     this.setupSlotMachineCallbacks()
 
-    const particleTexture = this.effects.createParticleTexture()
-    this.gameObjects = new GameObjects(this.scene, world, rapier, GameConfig, particleTexture)
+    // const particleTexture = this.effects.createParticleTexture() // UNUSED
+    this.gameObjects = new GameObjects(this.scene, world, rapier, GameConfig)
     this.ballManager = new BallManager(this.scene, world, rapier, this.gameObjects.getBindings())
     
     // Set up gold ball collection callback
@@ -1503,12 +1458,12 @@ export class Game {
    * Update cabinet lighting for zone colors
    * Delegates to AdventureManager
    */
-  private updateCabinetLightingForZone(): void {
-    // Set cabinet lights reference if not already set
-    this.adventureManager?.setCabinetLights(this.cabinetNeonLights)
-    // The actual lighting update is handled within handleZoneTransition
-    // This method is kept for backward compatibility with map change callbacks
-  }
+  // UNUSED - kept for backward compatibility
+  // private updateCabinetLightingForZone(): void {
+  //   // Set cabinet lights reference if not already set
+  //   this.adventureManager?.setCabinetLights(this.cabinetNeonLights)
+  //   // The actual lighting update is handled within handleZoneTransition
+  // }
 
   // ============================================================================
   // CABINET PRESETS - Swappable machine shapes
@@ -2149,7 +2104,7 @@ export class Game {
 
       // Bonus Score
       this.score += 100000
-      this.queueHUDUpdate()
+      this.updateHUD()
   }
 
   private toggleAdventure(): void {
@@ -2693,24 +2648,24 @@ export class Game {
       this.dynamicWorld.update(new Vector3(pos.x, pos.y, pos.z), dt)
     }
 
-    // Update debug HUD if visible
-    if (this.debugHUD && this.stateManager.isPlaying()) {
-      this.debugHUD.updatePanel('Game State', {
-        state: GameState[this.stateManager.getState()],
-        score: this.score,
-        lives: this.lives,
-        combo: this.comboCount
-      })
-
-      this.debugHUD.updatePanel('Balls', {
-        count: this.ballManager?.getBallBodies().length || 0,
-        goldCollected: this.ballManager?.getGoldBallCount?.() || 0
-      })
-
-      this.debugHUD.updatePanel('Physics', {
-        bodies: this.physics?.getWorld()?.bodies.len() || 0
-      })
-    }
+    // Update debug HUD if visible - DISABLED
+    // if (this.debugHUD && this.stateManager.isPlaying()) {
+    //   this.debugHUD.updatePanel('Game State', {
+    //     state: GameState[this.stateManager.getState()],
+    //     score: this.score,
+    //     lives: this.lives,
+    //     combo: this.comboCount
+    //   })
+    //
+    //   this.debugHUD.updatePanel('Balls', {
+    //     count: this.ballManager?.getBallBodies().length || 0,
+    //     goldCollected: this.ballManager?.getGoldBallCount?.() || 0
+    //   })
+    //
+    //   this.debugHUD.updatePanel('Physics', {
+    //     bodies: this.physics?.getWorld()?.bodies.len() || 0
+    //   })
+    // }
 
     // Sync Adventure Mode Kinematics
     const currentBallBodies = this.ballManager?.getBallBodies() || []
@@ -2752,9 +2707,9 @@ export class Game {
     })
 
     this.effects?.updateShards(dt)
-    this.effects?.updateBloom(dt)
-    this.effects?.updateCabinetLighting(dt)
-    this.effects?.updateSlotLighting(dt)
+    this.effects?.updateBloom()
+    this.effects?.updateCabinetLighting()
+    this.effects?.updateSlotLighting()
 
     // Update LCD table state for map transitions
     this.mapManager?.update(dt)
@@ -2887,7 +2842,7 @@ export class Game {
             // Spawn animated impact ring effect
             this.effects?.spawnImpactRing(vis.mesh.position, new Vector3(0, 1, 0), PALETTE.CYAN)
             this.effects?.playBeep(400 + Math.random() * 200)
-            this.queueHUDUpdate()
+            this.updateHUD()
             this.effects?.setLightingMode('hit', 0.2)
 
             // Adventure Mode: Track peg hits
@@ -2936,7 +2891,7 @@ export class Game {
         this.score += 100
         this.effects?.playBeep(1200)
         this.ballManager?.spawnExtraBalls(1)
-        this.queueHUDUpdate()
+        this.updateHUD()
         this.display?.setDisplayState(DisplayState.REACH)
         this.effects?.setLightingMode('reach', 3.0)
         this.effects?.setAtmosphereState('REACH')
@@ -3036,7 +2991,7 @@ export class Game {
       }
     }
 
-    this.queueHUDUpdate()
+    this.updateHUD()
   }
 
   /**
@@ -3052,7 +3007,7 @@ export class Game {
   private resetBall(): void {
     this.ballManager?.resetBall()
     this.applyEquippedRewards()
-    this.queueHUDUpdate()
+    this.updateHUD()
   }
 
   /**
@@ -3112,7 +3067,7 @@ export class Game {
       this.comboTimer -= dt
       if (this.comboTimer <= 0) {
         this.comboCount = 0
-        this.queueHUDUpdate()
+        this.updateHUD()
       }
     }
   }
@@ -3200,7 +3155,7 @@ export class Game {
           this.effects?.playSlotWin(winData.combination.multiplier)
           this.effects?.setSlotLightingMode('win')
           this.score += winData.score
-          this.queueHUDUpdate()
+          this.updateHUD()
           console.log(`[Slot] Win: ${winData.combination.name} - ${winData.score} points`)
           break
         }
@@ -3336,7 +3291,7 @@ export class Game {
 
     this.adventureMode.end()
     this.resetBall()
-    this.queueHUDUpdate()
+    this.updateHUD()
   }
 
   // ============================================================================

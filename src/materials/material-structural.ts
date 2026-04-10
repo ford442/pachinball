@@ -2,8 +2,10 @@
  * Structural Materials - Cabinet, playfield, and structural surface materials
  */
 
-import { PBRMaterial, StandardMaterial, Color3, DynamicTexture } from '@babylonjs/core'
-import { MaterialLibraryBase } from './material-core'
+import { PBRMaterial, StandardMaterial, Color3, DynamicTexture, Texture } from '@babylonjs/core'
+
+// TextureSet is imported from material-core
+import { MaterialLibraryBase, type TextureSet } from './material-core'
 import {
   PALETTE,
   SURFACES,

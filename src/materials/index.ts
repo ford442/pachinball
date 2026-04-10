@@ -16,6 +16,10 @@ export {
   detectQualityTier,
 } from './material-core'
 
+// Import QualityTier from visual-language (where it's defined)
+import { QualityTier } from '../game-elements/visual-language'
+export { QualityTier }
+
 // Export specialized material classes
 export { BallMaterials } from './material-ball'
 export { MetallicMaterials } from './material-metallic'
@@ -52,7 +56,7 @@ export class MaterialLibrary extends MaterialLibraryBase {
   }
 
   /** Override quality tier setter to sync across all modules */
-  override set qualityTier(tier) {
+  override set qualityTier(tier: QualityTier | any) {
     this._qualityTier = tier
     this.syncQualityTier()
   }

@@ -32,7 +32,7 @@ export interface AdventureLevel {
 }
 
 export class GameUIManager {
-  private _scene: Scene
+  // private _scene: Scene // UNUSED
   private activePopups: Map<string, HTMLElement> = new Map()
   private hudElements: Map<string, HTMLElement> = new Map()
   private goldBallCounter: HTMLElement | null = null
@@ -45,7 +45,8 @@ export class GameUIManager {
   private bestHudElement: HTMLElement | null = null
 
   constructor(scene: Scene) {
-    this._scene = scene
+    // this._scene = scene // UNUSED
+    void scene
     this.bindHUDElements()
   }
 

@@ -233,7 +233,7 @@ export class NanoLoomFeeder {
                 this.caughtBall.setNextKinematicTranslation({ x: nextX, y: nextY, z: nextZ })
 
                 // Pin activation wave - follows ball height as it rises
-                const progress = (currentPos.y - this.intakePosition.y) / this.config.height
+                // const progress = (currentPos.y - this.intakePosition.y) / this.config.height
                 // Activate pins near ball height
                 const ballRow = Math.floor((this.config.height / 2 - (currentPos.y - this.position.y)) / this.config.pinSpacing)
 
