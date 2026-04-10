@@ -522,7 +522,10 @@ export class AdventureState {
 
     // Play story video if available (resolve against ASSET_BASE)
     if (level.story.videoUrl) {
-      this.display?.loadAndPlayVideo(resolveVideoUrl(level.story.videoUrl))
+      const resolvedUrl = resolveVideoUrl(level.story.videoUrl)
+      if (resolvedUrl) {
+        this.display?.loadAndPlayVideo(resolvedUrl)
+      }
     }
 
     // Trigger CRT flash effect
