@@ -98,11 +98,26 @@ export const BALL_TIERS: Record<BallType, BallTierConfig> = {
 
 /**
  * API Configuration - Backend storage manager URL
- * Uses production URL in production builds, localhost in development
+ * Uses storage.noahcohn.com as the canonical backend
  */
-export const API_BASE = import.meta.env.PROD 
-  ? 'https://test.1ink.us:8000/api'
-  : 'http://localhost:8000/api'
+const DEV_API_BASE = 'http://localhost:8000/api'
+const PROD_API_BASE = 'https://storage.noahcohn.com/api'
+const DEV_ASSET_BASE = 'http://localhost:8000'
+const PROD_ASSET_BASE = 'https://storage.noahcohn.com'
+
+/**
+ * API Base URL for backend API calls
+ * Allow VITE_API_URL override, otherwise use prod/dev logic
+ */
+export const API_BASE = import.meta.env.VITE_API_URL as string | undefined
+  || (import.meta.env.PROD ? PROD_API_BASE : DEV_API_BASE)
+
+/**
+ * Asset Base URL for static files (videos, images, shaders)
+ * Allow VITE_ASSET_URL override, otherwise use prod/dev logic
+ */
+export const ASSET_BASE = import.meta.env.VITE_ASSET_URL as string | undefined
+  || (import.meta.env.PROD ? PROD_ASSET_BASE : DEV_ASSET_BASE)
 
 /**
  * Helper to make API calls with exponential backoff retry logic
@@ -361,20 +376,24 @@ export const GameConfig = {
     // If video fails, falls back to image
     // If image fails or not configured, falls back to reels
     
-    // Path to looped attract video (relative to public/)
+    // Path to looped attract video (can be relative or absolute URL)
     // Set to '' to disable video and use image or reels
-    // Example: '/backbox/attract.mp4' loads public/backbox/attract.mp4
     // Supported formats: mp4, webm (mp4 recommended for compatibility)
-    attractVideoPath: './backbox/attract.mp4',
+    // Uses ASSET_BASE for remote assets or local paths for bundled files
+    get attractVideoPath(): string {
+      return `${ASSET_BASE}/pachinball/backbox/attract.mp4`
+    },
     
     // If true, video replaces reels completely (reels hidden when video plays)
     // If false, video overlays reels (reels visible behind video)
     videoReplacesReels: true,
     
-    // Path to static attract image (relative to public/)
+    // Path to static attract image (can be relative or absolute URL)
     // Used as fallback if video fails or isn't configured
     // Set to '' to disable image and use reels only
-    attractImagePath: './backbox/attract.png',
+    get attractImagePath(): string {
+      return `${ASSET_BASE}/pachinball/backbox/attract.png`
+    },
     
     // Opacity of the image layer (0.0 = invisible, 1.0 = fully opaque)
     // Lower values let the animated grid/reels show through
@@ -388,16 +407,32 @@ export const GameConfig = {
 
     // State-specific video clips that play on game events
     // Set to '' to disable state-specific video and use attract/default
-    jackpotVideoPath: './backbox/jackpot.mp4',
-    feverVideoPath: './backbox/fever.mp4',
-    reachVideoPath: './backbox/reach.mp4',
-    adventureVideoPath: './backbox/adventure.mp4',
+    get jackpotVideoPath(): string {
+      return `${ASSET_BASE}/pachinball/backbox/jackpot.mp4`
+    },
+    get feverVideoPath(): string {
+      return `${ASSET_BASE}/pachinball/backbox/fever.mp4`
+    },
+    get reachVideoPath(): string {
+      return `${ASSET_BASE}/pachinball/backbox/reach.mp4`
+    },
+    get adventureVideoPath(): string {
+      return `${ASSET_BASE}/pachinball/backbox/adventure.mp4`
+    },
 
     // State-specific image fallbacks
-    jackpotImagePath: './backbox/jackpot.png',
-    feverImagePath: './backbox/fever.png',
-    reachImagePath: './backbox/reach.png',
-    adventureImagePath: './backbox/adventure.png',
+    get jackpotImagePath(): string {
+      return `${ASSET_BASE}/pachinball/backbox/jackpot.png`
+    },
+    get feverImagePath(): string {
+      return `${ASSET_BASE}/pachinball/backbox/fever.png`
+    },
+    get reachImagePath(): string {
+      return `${ASSET_BASE}/pachinball/backbox/reach.png`
+    },
+    get adventureImagePath(): string {
+      return `${ASSET_BASE}/pachinball/backbox/adventure.png`
+    },
   }
 }
 

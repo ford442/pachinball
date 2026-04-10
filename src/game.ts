@@ -75,6 +75,20 @@ import {
   type DynamicScenario,
   type ScenarioZone,
 } from './game-elements'
+import { ASSET_BASE } from './config'
+
+/**
+ * Helper to resolve video URLs against ASSET_BASE
+ * If the URL is already absolute (starts with http), returns as-is
+ * Otherwise, prepends ASSET_BASE to make it a full URL
+ */
+function resolveVideoUrl(videoPath: string | undefined): string | undefined {
+  if (!videoPath) return undefined
+  if (videoPath.startsWith('http')) return videoPath
+  const cleanPath = videoPath.startsWith('/') ? videoPath.slice(1) : videoPath
+  return `${ASSET_BASE}/${cleanPath}`
+}
+
 import { BallStackVisual } from './game-elements/ball-stack-visual'
 import { GameStateManager } from './game/game-state'
 import { GameInputManager } from './game/game-input'
@@ -2299,11 +2313,11 @@ export class Game {
       this.applyZoneMapConfig(scenario.zones[0])
     }
     
-    // Show scenario intro
+    // Show scenario intro (resolve video URL against ASSET_BASE)
     this.display?.showZoneStory(
       scenario.name,
       scenario.description,
-      scenario.zones[0]?.videoUrl,
+      resolveVideoUrl(scenario.zones[0]?.videoUrl),
       true
     )
   }
@@ -2318,11 +2332,11 @@ export class Game {
   ): void {
     console.log(`[Game] Entered zone: ${zone.name} (${isMajor ? 'MAJOR' : 'minor'})`)
     
-    // Update display with zone story
+    // Update display with zone story (resolve video URL against ASSET_BASE)
     this.display?.showZoneStory(
       zone.name,
       zone.storyText,
-      zone.videoUrl,
+      resolveVideoUrl(zone.videoUrl),
       true
     )
     
@@ -3558,7 +3572,7 @@ export class Game {
     // Add "Add New Map" hint pointing to storage_manager admin
     const addHint = document.createElement('a')
     addHint.className = 'map-add-hint'
-    addHint.href = 'https://test.1ink.us/admin'
+    addHint.href = 'https://storage.noahcohn.com/admin'
     addHint.target = '_blank'
     addHint.title = 'Upload new maps & music in storage_manager'
     addHint.textContent = '+ Add New Map'

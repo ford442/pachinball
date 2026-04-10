@@ -12,7 +12,20 @@
 
 import type { DisplaySystem } from '../display'
 import type { TableMapType } from '../shaders/lcd-table'
-import { apiFetch } from '../config'
+import { apiFetch, ASSET_BASE } from '../config'
+
+/**
+ * Helper to resolve video URLs against ASSET_BASE
+ * If the URL is already absolute (starts with http), returns as-is
+ * Otherwise, prepends ASSET_BASE to make it a full URL
+ */
+function resolveVideoUrl(videoPath: string | undefined): string | undefined {
+  if (!videoPath) return undefined
+  if (videoPath.startsWith('http')) return videoPath
+  // Remove leading slash if present, then prepend ASSET_BASE
+  const cleanPath = videoPath.startsWith('/') ? videoPath.slice(1) : videoPath
+  return `${ASSET_BASE}/${cleanPath}`
+}
 
 export type GoalType = 'hit-pegs' | 'survive-time' | 'reach-score' | 'collect-items' | 'no-drain'
 
@@ -507,9 +520,9 @@ export class AdventureState {
     // Show completion text
     this.display?.setStoryText(`LEVEL COMPLETE\n${level.name}\n${level.story.complete}`)
 
-    // Play story video if available
+    // Play story video if available (resolve against ASSET_BASE)
     if (level.story.videoUrl) {
-      this.display?.loadAndPlayVideo(level.story.videoUrl)
+      this.display?.loadAndPlayVideo(resolveVideoUrl(level.story.videoUrl))
     }
 
     // Trigger CRT flash effect

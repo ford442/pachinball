@@ -9,6 +9,20 @@
  */
 
 import { AdventureTrackType } from './adventure-mode-builder'
+import { ASSET_BASE } from '../config'
+
+/**
+ * Helper to resolve video URLs against ASSET_BASE
+ * If the URL is already absolute (starts with http), returns as-is
+ * Otherwise, prepends ASSET_BASE to make it a full URL
+ */
+function resolveVideoUrl(videoPath: string | undefined): string | undefined {
+  if (!videoPath) return undefined
+  if (videoPath.startsWith('http')) return videoPath
+  // Remove leading slash if present, then prepend ASSET_BASE
+  const cleanPath = videoPath.startsWith('/') ? videoPath.slice(1) : videoPath
+  return `${ASSET_BASE}/${cleanPath}`
+}
 
 export interface ZoneConfig {
   /** Zone identifier */
@@ -366,9 +380,14 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
 
 /**
  * Get zone configuration by track type
+ * Returns config with videoUrl resolved against ASSET_BASE
  */
 export function getZoneConfig(trackType: AdventureTrackType): ZoneConfig {
-  return ZONE_REGISTRY[trackType]
+  const config = ZONE_REGISTRY[trackType]
+  return {
+    ...config,
+    videoUrl: resolveVideoUrl(config.videoUrl)
+  }
 }
 
 /**
