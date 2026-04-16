@@ -1,61 +1,289 @@
 # AGENTS.md
 
-## Project Context
-**Pachinball** is a browser-based hybrid arcade game combining **Pinball mechanics** (flippers, bumpers) with **Pachinko physics** (vertical pins, balls) and a **Slot Machine** meta-game.
+## 1. Project Overview
 
-**Tech Stack:**
-* **Engine:** Babylon.js (`@babylonjs/core`)
-* **Physics:** Rapier (`@dimforge/rapier3d-compat`)
-* **Language:** TypeScript
-* **Build:** Vite
-* **Shaders:** WGSL (WebGPU) with Canvas fallback.
+**Pachinball** (marketed as *Nexus Cascade*) is a browser-based hybrid arcade game that fuses:
+- **Pinball mechanics** — flippers, bumpers, slingshots
+- **Pachinko physics** — vertical pins, gravity-driven ball paths
+- **Slot-machine meta-game** — backbox reels, jackpot states, fever modes
+- **Adventure mode** — cinematic "holo-deck" tracks with dynamic obstacles and zone progression
 
-## Key Directives & Architecture
+### Technology Stack
+- **Engine:** Babylon.js (`@babylonjs/core`)
+- **Physics:** Rapier 3D WASM (`@dimforge/rapier3d-compat`)
+- **Language:** TypeScript (ES2022, strict mode)
+- **Build Tool:** Vite
+- **Shaders:** WGSL (WebGPU) with Canvas2D fallback; custom GLSL-style pixel shaders (scanline, lcd-table)
+- **Testing:** Playwright (`@playwright/test`)
+- **Linting:** ESLint 9 with `typescript-eslint`
 
-### 1. Modularity (Strict Enforcement)
-The project has been refactored to prevent `game.ts` from becoming a monolith. You **MUST** place logic in `src/game-elements/` according to its responsibility:
+### Rendering Pipeline
+- **WebGPU-first:** `EngineFactory.CreateAsync` attempts WebGPU; falls back to WebGL automatically.
+- **Post-processing:** Bloom (`DefaultRenderingPipeline`), SSAO (`SSAO2RenderingPipeline`), depth of field, scanlines, and filmic tone mapping (Hable/ACES).
+- **Shadows:** Blur exponential shadow maps with tuned bias/normal bias.
 
-* **`game-objects.ts`:** Static or interactive elements (Flippers, Bumpers, Walls, Pins).
-* **`ball-manager.ts`:** Ball lifecycle (Spawning, Multiball, Resetting, Catching). *Do not put ball physics config here; keep that in physics init.*
-* **`display.ts`:** The "Backbox" logic (Slot machine reels, Score display, LED matrix).
-* **`effects.ts`:** Particle systems (shards), Bloom, and Audio triggers.
-* **`physics.ts`:** The Rapier world initialization and global stepping loop.
-* **`adventure-mode.ts`:** The specific logic for the "Holo-deck" adventure sub-game.
+---
 
-### 2. Physics (Rapier + Babylon)
-* **Asynchronous Init:** Rapier is initialized asynchronously (`@dimforge/rapier3d-compat`). Ensure initialization is complete before creating bodies.
-* **Coupling:** We sync visual meshes (Babylon) with rigid bodies (Rapier).
-* **Collision Handling:** Use the event handlers set up in `physics.ts`. Do not use Babylon's built-in collision engine; strictly use Rapier.
+## 2. Build, Test & Development Commands
 
-### 3. The Display System (Hybrid)
-The "Backbox" display uses a hybrid approach:
-* **WebGPU (WGSL):** Used for the slot machine reels (`shaders/numberScroll.ts`, `shaders/jackpotOverlay.ts`) when available.
-* **Fallback:** Uses standard Canvas2D textures if WebGPU is absent.
-* **Action:** When editing display logic, check `display.ts` first. If editing visual style, check the WGSL shaders in `src/shaders/`.
+```bash
+# Start local dev server (http://localhost:5173)
+npm run dev
 
-### 4. Game State
-* States are defined in `src/game-elements/types.ts` (e.g., `GameState.IDLE`, `GameState.PLAYING`).
-* The Slot Machine has its own state (`DisplayState.IDLE`, `DisplayState.REACH`, `DisplayState.FEVER`).
+# Type-check + production build (outputs to dist/)
+npm run build
 
-## Directory Map
-* **`src/`**: Entry point (`main.ts`, `game.ts`).
-* **`src/game-elements/`**: Core logic modules.
-* **`src/shaders/`**: WGSL shader code for the display.
-* **`public/`**: Assets (Textures, Sounds, Models).
-* **`concept/`**: Design reference images.
+# Lint the entire codebase
+npm run lint
 
-## Available Tools & Commands
+# Type-check only
+npx tsc -b
 
-### Development
-* **Start Server:** `npm run dev` (Vite)
-* **Lint:** `npm run lint` (ESLint)
-* **Type Check:** `tsc -b`
+# Preview the production build locally
+npm run preview
 
-### Deployment
-* **Script:** `python3 deploy.py`
-* **Process:** Builds the project (`npm run build`) and uploads the `dist/` folder via SFTP.
+# Run Playwright E2E tests
+npx playwright test
+```
 
-## Common Pitfalls
-1.  **Monolith Creep:** Do not add 50 lines of bumper logic to `game.ts`. Add it to `game-objects.ts` and call it from `game.ts`.
-2.  **Physics Imports:** Ensure you import from `@dimforge/rapier3d-compat`, not the native rapier package.
-3.  **Asset Loading:** Babylon.js loads assets asynchronously. Ensure meshes are loaded before attempting to attach physics bodies.
+---
+
+## 3. Directory & Module Map
+
+Every major subdirectory exposes a barrel file (`index.ts`). Import through the barrel rather than deep-path imports when possible.
+
+### Entry Points
+- **`src/main.ts`** — Bootstrap. Creates the Babylon engine in parallel with Rapier WASM preloading, then instantiates and initializes `Game`.
+- **`src/game.ts`** — Main orchestrator class. Coordinates all subsystems, scene setup, lighting, cameras, and the render loop. **Keep it lean; do not dump feature logic here.**
+- **`src/config.ts`** — Pure configuration (no Babylon dependencies). Contains API bases, ball spawn weights, gameplay constants, effects feature flags, and backbox media paths.
+
+### Core Logic Modules
+
+#### `src/game-elements/` — Low-level game systems
+| File / Sub-module | Responsibility |
+|-------------------|----------------|
+| `physics.ts` | Rapier world initialization, fixed timestep, collision event queue. |
+| `types.ts` | Shared enums/interfaces: `GameState`, `DisplayState`, `PhysicsBinding`, `InputFrame`, ball types, slot machine types. |
+| `ball-manager.ts` | Ball lifecycle: spawning, multiball, resetting, loss detection, gold-ball stack tracking. |
+| `ball-animator.ts` | Squash-and-stretch visual effects for balls. |
+| `input.ts` | Core keyboard/touch input, input buffering, latency tracking, plunger charge logic. |
+| `settings.ts` | LocalStorage-backed settings (shake intensity, scanlines, audio). |
+| `accessibility-config.ts` | **Safety-critical.** Detects `prefers-reduced-motion`, photosensitive mode, haptic preferences. |
+| `haptics.ts` | Haptic feedback manager (vibration patterns). |
+| `gamepad.ts` | Gamepad polling + vibration. |
+| `sound-system.ts` | Simple synthesized audio beeps/SFX. |
+| `map-system.ts` | Dynamic backend map fetching. |
+| `leaderboard-system.ts` | Score submission + leaderboard UI. |
+| `name-entry-dialog.ts` | High-score name entry UI. |
+| `level-select-screen.ts` | Adventure level select overlay. |
+| `zone-registry.ts` | Adventure zone configurations and transition metadata. |
+| `zone-trigger-system.ts` | AABB zone entry/exit detection. |
+| `dynamic-scenarios.ts` | Scenario definitions for dynamic/fixed mode toggling. |
+| `dynamic-world.ts` | Scrolling world generation for dynamic adventure mode. |
+| `camera-controller.ts` | Camera modes, soft follow, framing zones. |
+| Various `*-feeder.ts` | Specialized table toys: `mag-spin-feeder`, `nano-loom-feeder`, `prism-core-feeder`, `gauss-cannon-feeder`, `quantum-tunnel-feeder`. |
+
+#### `src/game/` — High-level managers (barrel: `src/game/index.ts`)
+| File | Responsibility |
+|------|----------------|
+| `game-state.ts` | `GameStateManager` — state transitions (MENU → PLAYING → PAUSED → GAME_OVER). |
+| `game-input.ts` | `GameInputManager` — wraps `InputHandler` and adds game-level shortcuts (map switch, cabinet cycle, level select, etc.). |
+| `game-maps.ts` | `TableMapManager` — LCD table map switching, shader registration. |
+| `game-cabinet.ts` | `CabinetManager` — cabinet preset cycling (classic, neo, vertical, wide). |
+| `game-ui.ts` | `GameUIManager` — HUD popups, messages, toast notifications. |
+| `game-adventure.ts` | `AdventureManager` — orchestrates adventure mode start/stop, zone callbacks, score awards. |
+
+#### `src/display/` — Backbox display system (barrel: `src/display/index.ts`)
+Replaces the old monolithic `display.ts`.
+- **`display-core.ts`** — Main `DisplaySystem` class.
+- **`display-reels.ts`** — Slot-machine reel animation (Canvas2D fallback).
+- **`display-shader.ts`** — WGSL shader reel layer (WebGPU path).
+- **`display-video.ts`** — HTMLVideoElement layer for attract/jackpot/fever/reach/adventure clips.
+- **`display-types.ts`** — Enums and interfaces (`DisplayState`, `DisplayMode`, CRT presets).
+
+#### `src/effects/` — Visual & audio effects (barrel: `src/effects/index.ts`)
+- **`effects-core.ts`** — `EffectsSystem`: bloom spikes, screen shake, jackpot sequences.
+- **`effects-particles.ts`** — Shard burst particle systems.
+- **`effects-lighting.ts`** — Environment color shifts, light animations.
+- **`effects-camera.ts`** — Camera shake, trauma/decay logic.
+
+#### `src/objects/` — Scene object builders (barrel: `src/objects/index.ts`)
+- **`object-core.ts`** — `GameObjects` class: ground, table bounds, slingshots, targets.
+- **`object-flippers.ts`** — Flipper mesh + rigid body construction.
+- **`object-bumpers.ts`** — Bumper geometry, holograms, collision bodies.
+- **`object-walls.ts`** — Wall and lane-guide builders.
+- **`object-rails.ts`** — Rail and ramp builders.
+- **`object-pachinko.ts`** — Pachinko pin field generation.
+- **`object-decoration.ts`** — Cabinet trim, LEDs, decorative meshes.
+
+#### `src/materials/` — Unified PBR Material System (barrel: `src/materials/index.ts`)
+`MaterialLibrary` is a singleton (created via `getMaterialLibrary(scene)`). It delegates to:
+- **`material-core.ts`** — Base class, texture loading, quality-tier detection.
+- **`material-ball.ts`** — Chrome, gold-plated, solid-gold ball materials.
+- **`material-metallic.ts`** — Chrome, brushed metal, carbon fiber, pin, rail materials.
+- **`material-interactive.ts`** — Neon bumpers, flippers, slingshots, energy beams, holograms.
+- **`material-structural.ts`** — Cabinet wood, plastic, playfield, LCD table materials.
+
+#### `src/shaders/` — Shader code
+- **`numberScroll.ts`** / **`jackpotOverlay.ts`** — WGSL shaders for WebGPU reel rendering.
+- **`scanline.ts`** — Custom pixel shader for CRT scanlines.
+- **`lcd-table.ts`** — Custom pixel shader for LCD table-surface maps (registers maps like *neon-helix*, *cyber-core*, etc.).
+
+#### `src/adventure/` — Adventure mode tracks (barrel: `src/adventure/index.ts`)
+- **`adventure-mode.ts`** — Main adventure orchestrator.
+- **`track-builder.ts`** — Generic track construction helpers.
+- **`camera-presets.ts`** — Cinematic camera angles.
+- **`tracks/*.ts`** — 25+ individual track builders (e.g., `neon-helix`, `cyber-core`, `quantum-grid`, `glitch-spire`, `prism-pathway`, `tesla-tower`, etc.).
+
+#### `src/cabinet/` — Cabinet presets (barrel: `src/cabinet/index.ts`)
+- **`cabinet-builder.ts`** — Factory / orchestrator.
+- **`cabinet-classic.ts`** / **`cabinet-neo.ts`** / **`cabinet-vertical.ts`** / **`cabinet-wide.ts`** — Individual preset geometries.
+
+---
+
+## 4. Architecture Principles
+
+### 4.1 Strict Modularity — No Monolith Creep
+`game.ts` is intentionally the orchestrator, **not** the dumping ground. When adding a feature:
+1. Identify the correct module (display, effects, objects, materials, adventure, etc.).
+2. Implement the feature there.
+3. Expose a clean public API (class or function).
+4. Wire it into `game.ts` with a minimal call.
+
+**Bad:** Adding 50 lines of bumper logic directly into `game.ts`.  
+**Good:** Extending `object-bumpers.ts` or `effects-particles.ts`, then calling it from `game.ts`.
+
+### 4.2 Physics — Rapier Only
+- Import Rapier **exclusively** from `@dimforge/rapier3d-compat`.
+- `PhysicsSystem` initializes the WASM asynchronously and runs a **fixed timestep** with an accumulator (`FIXED_TIMESTEP = 1/60`).
+- Collision events are drained from `RAPIER.EventQueue` inside `PhysicsSystem.step()`.
+- **Never** use Babylon's built-in collision or physics engine for gameplay logic.
+
+### 4.3 Display System — Hybrid WebGPU / Canvas2D
+- **Primary path:** WebGPU WGSL shaders (`display-shader.ts`) for slot reels and jackpot overlays.
+- **Fallback path:** Standard Canvas2D textures (`display-reels.ts`) when WebGPU is unavailable.
+- Backbox media hierarchy: **Video** > **Image** > **Procedural reels**.
+- State-specific media paths (attract, jackpot, fever, reach, adventure) are configured in `src/config.ts` under `GameConfig.backbox`.
+
+### 4.4 Config Purity
+`src/config.ts` must **not** import Babylon.js. It contains:
+- Numeric gameplay constants (gravity, flipper strength, ball radius).
+- Color strings / feature flags (`EffectsConfig`).
+- API/asset base URLs (`API_BASE`, `ASSET_BASE`).
+- Helper `apiFetch<T>()` with exponential backoff retry logic.
+
+### 4.5 Accessibility & Safety (CRITICAL)
+`detectAccessibility()` reads system preferences and impacts:
+- **Reduced motion** → disables camera shake, SSAO, depth of field, fog.
+- **Photosensitive mode** → removes all flashing / strobe effects.
+- **Haptics** → scales or disables vibration.
+
+When adding any screen flash, shake, or rapid strobe, **always** gate it behind these flags.
+
+### 4.6 Quality Tiering
+`detectQualityTier(engine)` returns a `QualityTier` (`LOW`, `MEDIUM`, `HIGH`, `ULTRA`).
+- Used by `MaterialLibrary` to choose texture resolution / compression.
+- Used by `game.ts` to toggle post-processing features (SSAO, DoF, bloom scale).
+
+---
+
+## 5. Code Style & Conventions
+
+### Visual Language System
+The project uses a unified cyber/neon design system defined in `src/game-elements/visual-language.ts` and documented in `src/game-elements/VISUAL_LANGUAGE.md`.
+
+**Always use these instead of hardcoding hex colors or random intensity values:**
+```typescript
+import { PALETTE, SURFACES, INTENSITY, STATE_COLORS, color, emissive, pulse } from './visual-language'
+
+// Good
+mat.emissiveColor = emissive(PALETTE.CYAN, INTENSITY.HIGH)
+
+// Bad
+mat.emissiveColor = Color3.FromHexString('#00aaff') // inconsistent
+```
+
+### TypeScript Strictness
+- `strict: true`, `noUnusedLocals: true`, `noUnusedParameters: true`.
+- Clean up unused imports and variables before finishing.
+- Use `verbatimModuleSyntax: true` — prefer `import type` when only importing types.
+
+### Barrel Files
+Major modules export an `index.ts`. When consuming a sibling module, prefer the barrel import:
+```typescript
+// Good
+import { PhysicsSystem, BallManager } from './game-elements'
+
+// Acceptable for deep internal files
+import { FlipperBuilder } from './objects/object-flippers'
+```
+
+### Singleton Management Pattern
+Several systems use `getXxx()` / `resetXxx()` singleton helpers (e.g., `getMaterialLibrary(scene)`, `resetMaterialLibrary()`). This ensures:
+- One instance per scene lifecycle
+- Clean disposal on hot-reload / restart
+
+---
+
+## 6. Testing Strategy
+
+- **Framework:** Playwright (`playwright.config.ts`)
+- **Base URL:** `http://localhost:5173`
+- **Browser:** Desktop Chrome (single project)
+- **Test location:** `tests/`
+- **Current test:** `tests/verify_prism_core.spec.ts` — smoke test that boots the game, clicks **Start Game**, waits for scene init, and takes a verification screenshot.
+
+**Workflow for adding tests:**
+1. Ensure `npm run dev` is running.
+2. Write `.spec.ts` files in `tests/`.
+3. Run with `npx playwright test`.
+
+---
+
+## 7. Deployment
+
+**Command:** `python3 deploy.py`
+
+**What it does:**
+1. Assumes `dist/` already exists (run `npm run build` first if missing).
+2. Uses `paramiko` to open an SFTP connection.
+3. Recursively uploads `dist/` to the remote server path.
+
+**Important:** `deploy.py` contains hardcoded credentials. Do not modify or expose its contents unnecessarily.
+
+---
+
+## 8. Security Considerations
+
+| File | Sensitivity | Guidance |
+|------|-------------|----------|
+| `deploy.py` | **High** | Contains hardcoded SFTP password. Avoid logging or sharing. |
+| `.env.production` | **High** | Blocked from read access by security policy. Do not paste contents into chat. |
+| `src/config.ts` | Medium | Exposes prod API base (`storage.noahcohn.com`) and asset paths. Safe to reference, not to abuse. |
+
+When making changes that touch authentication, API keys, or asset URLs, use `import.meta.env.VITE_API_URL` / `VITE_ASSET_URL` overrides rather than hardcoding new secrets.
+
+---
+
+## 9. Common Pitfalls
+
+1. **Monolith Creep in `game.ts`**  
+   Do not add large blocks of object creation or physics logic to `game.ts`. Use `src/objects/`, `src/game-elements/`, or `src/effects/` instead.
+
+2. **Wrong Rapier Import**  
+   Always import from `@dimforge/rapier3d-compat`. The native `@dimforge/rapier3d` package will break in the browser.
+
+3. **Asset Loading Race Conditions**  
+   Babylon loads meshes/textures asynchronously. Ensure assets are fully loaded before attaching Rapier rigid bodies.
+
+4. **Hardcoding Colors / Intensities**  
+   Use the Visual Language System (`PALETTE`, `INTENSITY`, `emissive()`). Hardcoded hex values create visual inconsistency.
+
+5. **Ignoring Accessibility Flags**  
+   Camera shake, flashing lights, and fog must respect `accessibility.reducedMotion` and `accessibility.photosensitiveMode`. Check these flags before enabling any intense visual effect.
+
+6. **Forgetting Barrel Exports**  
+   If you create a new public class/module, add it to the relevant `index.ts` so other parts of the codebase can import it cleanly.
+
+7. **Disposing Physics World Improperly**  
+   `PhysicsSystem.dispose()` calls `world.free()`. Make sure this happens on teardown to avoid WASM memory leaks.
