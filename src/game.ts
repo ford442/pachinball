@@ -25,6 +25,8 @@ import { DepthOfFieldEffectBlurLevel } from '@babylonjs/core/PostProcesses/depth
 import { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline'
 import { SSRRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssrRenderingPipeline'
 import { MotionBlurPostProcess } from '@babylonjs/core/PostProcesses/motionBlurPostProcess'
+import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation'
+import { EngineInstrumentation } from '@babylonjs/core/Instrumentation/engineInstrumentation'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { Nullable } from '@babylonjs/core/types'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
@@ -74,6 +76,7 @@ import {
   getScenario,
   getDynamicWorld,
   DebugHUD,
+  type DebugSnapshot,
   type AccessibilityConfig,
   type InputFrame,
   type DynamicScenario,
@@ -224,6 +227,11 @@ export class Game {
   // Debug UI
   private inputLatencyOverlay: HTMLElement | null = null
   private showDebugUI = false
+  private readonly debugHUDQueryEnabled = window.location.search.includes('debug=1')
+  private sceneInstrumentation: SceneInstrumentation | null = null
+  private engineInstrumentation: EngineInstrumentation | null = null
+  private debugHUDEnabledInSettings = false
+  private adventureModeStartMs: number | null = null
 
   // Frame time monitoring - DISABLED
   // private frameTimeHistory: number[] = []
@@ -291,6 +299,7 @@ export class Game {
 
     // Load and apply settings
     const settings = SettingsManager.load()
+    this.debugHUDEnabledInSettings = settings.enableDebugHUD
     SettingsManager.applyToConfig(settings)
 
     // CRITICAL SAFETY: Initialize accessibility with system detection
@@ -305,6 +314,7 @@ export class Game {
 
     // Setup settings UI
     this.setupSettingsUI()
+    this.updateDeveloperSettingsVisibility()
 
     // Setup on-screen map selector (async: fetches dynamic maps from backend)
     await this.setupMapSelector()
@@ -589,7 +599,10 @@ export class Game {
       onTrackNext: () => this.cycleAdventureTrack(1),
       onTrackPrev: () => this.cycleAdventureTrack(-1),
       onJackpotTrigger: () => this.triggerJackpot(),
-      onDebugHUD: () => this.debugHUD?.toggle(),
+      onDebugHUD: () => {
+        if (!this.isDebugHUDKeyboardEnabled()) return
+        this.debugHUD?.toggle()
+      },
       onMapSwitch: (index) => {
         const maps = this.mapManager?.getMapSystem().getMapIds() || []
         if (index >= 0 && index < maps.length) {
@@ -1070,6 +1083,9 @@ export class Game {
 
   dispose(): void {
     this.inputManager?.dispose()
+    this.debugHUD?.dispose()
+    this.debugHUD = null
+    this.disposeDebugInstrumentation()
     this.uiManager?.dispose()
     this.adventureManager?.dispose()
     
@@ -1180,7 +1196,13 @@ export class Game {
     this.display = new DisplaySystem(this.scene, this.engine, displayConfig)
 
     // Initialize debug HUD
-    this.debugHUD = new DebugHUD()
+    this.debugHUD = new DebugHUD({
+      onVisibilityChange: (visible) => this.handleDebugHUDVisibilityChange(visible),
+    })
+    this.debugHUD.setUpdateCadenceHz(4)
+    if (this.debugHUDEnabledInSettings && this.isDebugHUDAvailable()) {
+      this.debugHUD.show()
+    }
 
     // Initialize Dynamic World for scrolling adventure mode
     this.dynamicWorld = getDynamicWorld(this.scene, this.tableCam!, this.display, this.soundSystem)
@@ -2536,6 +2558,7 @@ export class Game {
   /** Collision debounce: track last collision time per body pair */
   private lastCollisionTime: Map<string, number> = new Map()
   private static readonly COLLISION_DEBOUNCE_MS = 16
+  private static readonly DEBUG_COMBO_MULTIPLIER_STEP = 3
 
   /** Body handle cache for O(1) collision lookups */
   private bumperHandleSet: Set<number> = new Set()
@@ -2685,21 +2708,8 @@ export class Game {
       this.dynamicWorld.update(new Vector3(pos.x, pos.y, pos.z), dt)
     }
 
-    if (this.debugHUD && this.stateManager.isPlaying()) {
-      this.debugHUD.updatePanel('Game State', {
-        state: this.stateManager.getState(),
-        display: this.display?.getDisplayState() ?? 'none',
-        score: this.score,
-      })
-      this.debugHUD.updatePanel('Balls', {
-        active: this.ballManager?.getBallBodies().length ?? 0,
-        goldStack: this.goldBallStack.length,
-        sessionGold: this.sessionGoldBalls,
-      })
-      this.debugHUD.updatePanel('Physics', {
-        step: this.physics.getStepCount(),
-        bodies: this.physics.getWorld().bodies.len(),
-      })
+    if (this.debugHUD?.isHUDVisible() && this.stateManager.isPlaying()) {
+      this.debugHUD.update(this.buildDebugSnapshot(rawDt))
     }
 
     // Sync Adventure Mode Kinematics
@@ -3335,6 +3345,7 @@ export class Game {
       if (this.scoreElement) {
         this.scoreElement.innerText = `HOLO-DECK: ${trackName}`
       }
+      this.adventureModeStartMs = performance.now()
 
       // Update head screen with track info
       this.display?.setTrackInfo(trackName)
@@ -3353,8 +3364,87 @@ export class Game {
     pinballMeshes.forEach(m => m.setEnabled(true))
 
     this.adventureMode.end()
+    this.adventureModeStartMs = null
     this.resetBall()
     this.updateHUD()
+  }
+
+  private isDebugHUDAvailable(): boolean {
+    return import.meta.env.DEV || this.debugHUDQueryEnabled
+  }
+
+  private isDebugHUDKeyboardEnabled(): boolean {
+    return this.isDebugHUDAvailable()
+  }
+
+  private handleDebugHUDVisibilityChange(visible: boolean): void {
+    if (visible) {
+      this.initializeDebugInstrumentation()
+      return
+    }
+    this.disposeDebugInstrumentation()
+  }
+
+  private initializeDebugInstrumentation(): void {
+    if (!this.scene) return
+    if (!this.sceneInstrumentation) {
+      this.sceneInstrumentation = new SceneInstrumentation(this.scene)
+      this.sceneInstrumentation.captureActiveMeshesEvaluationTime = false
+      this.sceneInstrumentation.captureRenderTargetsRenderTime = false
+      this.sceneInstrumentation.captureFrameTime = true
+      this.sceneInstrumentation.captureInterFrameTime = false
+    }
+
+    if (!this.engineInstrumentation) {
+      this.engineInstrumentation = new EngineInstrumentation(this.engine)
+      this.engineInstrumentation.captureGPUFrameTime = false
+      this.engineInstrumentation.captureShaderCompilationTime = false
+    }
+  }
+
+  private disposeDebugInstrumentation(): void {
+    this.sceneInstrumentation?.dispose()
+    this.sceneInstrumentation = null
+    this.engineInstrumentation?.dispose()
+    this.engineInstrumentation = null
+  }
+
+  private buildDebugSnapshot(rawDt: number): DebugSnapshot {
+    const gameState = GameState[this.stateManager.getState()] ?? 'UNKNOWN'
+    const displayState = this.display?.getDisplayState() ?? 'none'
+    // Babylon does not expose a stable public draw-call counter on all engine types,
+    // so diagnostics read the internal perf counter if present.
+    const drawCallsCounter = (this.engine as unknown as { _drawCalls?: { current?: number } })._drawCalls
+    const adventureTrack = this.adventureMode?.getCurrentZone()
+    const activeZoneId = this.zoneTriggerSystem?.getCurrentZoneId()
+    const dynamicZoneLabel = activeZoneId ?? this.dynamicWorld?.getCurrentZoneInfo()?.name ?? null
+    const multiplier = Math.floor(this.comboCount / Game.DEBUG_COMBO_MULTIPLIER_STEP) + 1
+    const isAdventureActive = this.adventureMode?.isActive() ?? false
+    const adventureTimeMs = isAdventureActive && this.adventureModeStartMs !== null
+      ? performance.now() - this.adventureModeStartMs
+      : null
+
+    return {
+      gameState,
+      displayState,
+      score: this.score,
+      multiplier,
+      lives: this.lives,
+      adventureTrack: adventureTrack ? this.getTrackDisplayName(adventureTrack) : null,
+      fps: this.scene?.getEngine().getFps() ?? 0,
+      drawCalls: drawCallsCounter?.current ?? 0,
+      frameTimeMs: rawDt * 1000,
+      activeBodies: this.physics.getWorld().bodies.len(),
+      physicsStepMs: rawDt * 1000,
+      adventureTimeMs,
+      dynamicZoneState: dynamicZoneLabel,
+    }
+  }
+
+  private updateDeveloperSettingsVisibility(): void {
+    const developerSection = document.getElementById('developer-settings')
+    if (!developerSection) return
+    developerSection.classList.toggle('hidden', !this.isDebugHUDAvailable())
   }
 
   // ============================================================================
@@ -3368,6 +3458,7 @@ export class Game {
     const saveBtn = document.getElementById('save-settings')
 
     settingsBtn?.addEventListener('click', () => {
+      this.updateDeveloperSettingsVisibility()
       settingsOverlay?.classList.remove('hidden')
       this.loadSettingsIntoUI()
     })
@@ -3388,6 +3479,7 @@ export class Game {
     const photosensitiveCheckbox = document.getElementById('photosensitive-mode') as HTMLInputElement
     const shakeSlider = document.getElementById('shake-intensity') as HTMLInputElement
     const scanlineSlider = document.getElementById('scanline-intensity') as HTMLInputElement
+    const debugHUDCheckbox = document.getElementById('enable-debug-hud') as HTMLInputElement
     
     // Audio settings
     const masterVolumeSlider = document.getElementById('master-volume') as HTMLInputElement
@@ -3403,6 +3495,7 @@ export class Game {
       const span = scanlineSlider.parentElement?.querySelector('span')
       if (span) span.setAttribute('data-value', String(settings.scanlineIntensity))
     }
+    if (debugHUDCheckbox) debugHUDCheckbox.checked = settings.enableDebugHUD
     
     // Apply photosensitive mode to LCD table
     this.mapManager?.getLCDTableState().setPhotosensitiveMode(settings.photosensitiveMode)
@@ -3420,6 +3513,7 @@ export class Game {
     const photosensitiveCheckbox = document.getElementById('photosensitive-mode') as HTMLInputElement
     const shakeSlider = document.getElementById('shake-intensity') as HTMLInputElement
     const scanlineSlider = document.getElementById('scanline-intensity') as HTMLInputElement
+    const debugHUDCheckbox = document.getElementById('enable-debug-hud') as HTMLInputElement
     
     // Audio settings
     const masterVolumeSlider = document.getElementById('master-volume') as HTMLInputElement
@@ -3432,14 +3526,22 @@ export class Game {
       photosensitiveMode: photosensitiveCheckbox?.checked ?? false,
       shakeIntensity: parseFloat(shakeSlider?.value ?? '0.08'),
       scanlineIntensity: parseFloat(scanlineSlider?.value ?? '0.12'),
+      enableDebugHUD: debugHUDCheckbox?.checked ?? false,
       enableFog: true,
       enableShadows: true
     }
 
     SettingsManager.save(newSettings)
     SettingsManager.applyToConfig(newSettings)
+    this.debugHUDEnabledInSettings = newSettings.enableDebugHUD
     this.scanlineIntensity = newSettings.scanlineIntensity
     console.log('[Accessibility] Settings saved:', newSettings)
+
+    if (this.debugHUDEnabledInSettings && this.isDebugHUDAvailable()) {
+      this.debugHUD?.show()
+    } else {
+      this.debugHUD?.hide()
+    }
     
     // Apply photosensitive mode to LCD table
     this.mapManager?.getLCDTableState().setPhotosensitiveMode(newSettings.photosensitiveMode)

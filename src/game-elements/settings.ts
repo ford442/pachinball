@@ -7,6 +7,7 @@ export interface CameraSettings {
   enableFog: boolean
   enableShadows: boolean
   scanlineIntensity: number
+  enableDebugHUD: boolean
 }
 
 export class SettingsManager {
@@ -19,7 +20,8 @@ export class SettingsManager {
       photosensitiveMode: false,
       enableFog: true,
       enableShadows: true,
-      scanlineIntensity: 0.12
+      scanlineIntensity: 0.12,
+      enableDebugHUD: false,
     }
     
     try {
