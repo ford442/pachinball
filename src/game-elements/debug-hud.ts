@@ -102,7 +102,10 @@ export class DebugHUD {
   }
 
   setUpdateCadenceHz(hz: number): void {
-    if (!Number.isFinite(hz) || hz <= 0) return
+    if (!Number.isFinite(hz) || hz <= 0) {
+      console.warn(`[DebugHUD] Invalid update cadence: ${hz}`)
+      return
+    }
     this.updateCadenceMs = 1000 / hz
   }
 
@@ -114,7 +117,7 @@ export class DebugHUD {
       mode: snapshot.displayState,
       lives: snapshot.lives,
       score: snapshot.score,
-      multiplier: `${snapshot.multiplier.toFixed(2)}x`,
+      multiplier: `${Math.round(snapshot.multiplier)}x`,
       track: snapshot.adventureTrack ?? 'none',
     })
 

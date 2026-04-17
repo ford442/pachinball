@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('Verify Prism Core Visuals', async ({ page }) => {
+test('Verify Prism Core Visuals', async ({ page }, testInfo) => {
   test.setTimeout(60_000);
 
   // 1. Go to the game
@@ -26,5 +26,5 @@ test('Verify Prism Core Visuals', async ({ page }) => {
   await expect(debugHud).toBeHidden();
 
   // 5. Take a screenshot of the entire game view
-  await page.screenshot({ path: 'test-results/prism-core.png' });
+  await page.screenshot({ path: testInfo.outputPath('prism-core.png') });
 });

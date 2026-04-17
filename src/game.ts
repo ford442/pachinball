@@ -2558,6 +2558,7 @@ export class Game {
   /** Collision debounce: track last collision time per body pair */
   private lastCollisionTime: Map<string, number> = new Map()
   private static readonly COLLISION_DEBOUNCE_MS = 16
+  private static readonly DEBUG_COMBO_MULTIPLIER_STEP = 3
 
   /** Body handle cache for O(1) collision lookups */
   private bumperHandleSet: Set<number> = new Set()
@@ -3411,11 +3412,13 @@ export class Game {
   private buildDebugSnapshot(rawDt: number): DebugSnapshot {
     const gameState = GameState[this.stateManager.getState()] ?? 'UNKNOWN'
     const displayState = this.display?.getDisplayState() ?? 'none'
+    // Babylon does not expose a stable public draw-call counter on all engine types,
+    // so diagnostics read the internal perf counter if present.
     const drawCallsCounter = (this.engine as unknown as { _drawCalls?: { current?: number } })._drawCalls
     const adventureTrack = this.adventureMode?.getCurrentZone()
     const activeZoneId = this.zoneTriggerSystem?.getCurrentZoneId()
     const dynamicZoneLabel = activeZoneId ?? this.dynamicWorld?.getCurrentZoneInfo()?.name ?? null
-    const multiplier = Math.floor(this.comboCount / 3) + 1
+    const multiplier = Math.floor(this.comboCount / Game.DEBUG_COMBO_MULTIPLIER_STEP) + 1
     const isAdventureActive = this.adventureMode?.isActive() ?? false
     const adventureTimeMs = isAdventureActive && this.adventureModeStartMs !== null
       ? performance.now() - this.adventureModeStartMs
