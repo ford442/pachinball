@@ -337,13 +337,13 @@ export class Game {
       'immersiveCam',
       -Math.PI / 2,               // alpha: front-facing (will be adjusted by mouse)
       Math.PI / 2.8,              // beta: ~64° tilt - sees cabinet from above
-      42,                         // radius: far enough to see full cabinet
+      48,                         // radius: far enough to see full cabinet including plunger
       new Vector3(0, 5, 5),       // target: centered on cabinet middle
       this.scene
     )
     this.tableCam = immersiveCam  // Keep reference for compatibility
     immersiveCam.mode = ArcRotateCamera.PERSPECTIVE_CAMERA
-    immersiveCam.fov = 0.55       // Moderate FOV for natural perspective
+    immersiveCam.fov = 0.65       // Wider FOV to frame the full cabinet width
     
     // Full viewport - single camera shows entire cabinet
     immersiveCam.viewport = new Viewport(0, 0, 1, 1)
@@ -351,7 +351,7 @@ export class Game {
     // Limits to prevent seeing "behind" the room
     immersiveCam.lowerBetaLimit = Math.PI / 4      // Don't go too low
     immersiveCam.upperBetaLimit = Math.PI / 2.2    // Don't go past top-down
-    immersiveCam.lowerRadiusLimit = 30             // Don't zoom too close
+    immersiveCam.lowerRadiusLimit = 36             // Don't zoom too close
     immersiveCam.upperRadiusLimit = 60             // Don't zoom too far
     
     // Store base position for mouse tracking

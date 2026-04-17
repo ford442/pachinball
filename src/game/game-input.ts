@@ -76,6 +76,10 @@ export class GameInputManager {
 
     // Setup additional keyboard listeners for game-level shortcuts
     this.setupGameKeyboardShortcuts()
+
+    // Register core gameplay keyboard input (flippers, plunger, nudge)
+    window.addEventListener('keydown', this.inputHandler.handleKeyDown)
+    window.addEventListener('keyup', this.inputHandler.handleKeyUp)
   }
 
   /**
@@ -270,6 +274,8 @@ export class GameInputManager {
     window.removeEventListener('keydown', this.handleGameKeyDown)
     window.removeEventListener('keyup', this.handleGameKeyUp)
 
-    // Note: InputHandler doesn't have a dispose method, cleanup is handled by removing event listeners
+    // Remove core gameplay keyboard listeners
+    window.removeEventListener('keydown', this.inputHandler.handleKeyDown)
+    window.removeEventListener('keyup', this.inputHandler.handleKeyUp)
   }
 }
