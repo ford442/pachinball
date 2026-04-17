@@ -4,7 +4,8 @@ import {
   Mesh, 
   MeshBuilder, 
   Vector3, 
-  PBRMaterial
+  PBRMaterial,
+  Color3
 } from '@babylonjs/core'
 import { BallType } from '../config'
 import { getMaterialLibrary } from '../materials'
@@ -34,6 +35,8 @@ export class BallStackVisual {
     
     this.stackRoot = new TransformNode('ballStackRoot', scene)
     this.stackRoot.position = this.config.position
+    // Face the arc toward the player
+    this.stackRoot.rotation.y = Math.PI / 6
   }
 
   /**
@@ -61,13 +64,12 @@ export class BallStackVisual {
       this.config.ballScale
     )
 
-    // Position in stack with slight randomness
+    // Position in horizontal arc meter
     const stackIndex = this.balls.length
-    const yOffset = stackIndex * this.config.ballScale * 0.8
-    const randomX = (Math.random() - 0.5) * 0.1
-    const randomZ = (Math.random() - 0.5) * 0.1
-    
-    ball.position = new Vector3(randomX, yOffset, randomZ)
+    const spacing = this.config.ballScale * 0.9
+    const arcX = stackIndex * spacing
+    const arcY = Math.sin(stackIndex * 0.3) * this.config.ballScale * 0.3
+    ball.position = new Vector3(arcX, arcY, 0)
     ball.parent = this.stackRoot
 
     // Add slight rotation for visual interest
@@ -77,13 +79,17 @@ export class BallStackVisual {
       Math.random() * Math.PI
     )
 
-    // Animate in (scale up)
+    // Threshold pulse for high counts (8+)
+    const isNearJackpot = this.balls.length >= 7
     ball.scaling = new Vector3(0, 0, 0)
-    this.animateBallIn(ball)
+    this.animateBallIn(ball, isNearJackpot)
+    if (isNearJackpot) {
+      this.flashBallEmissive(ball)
+    }
 
     this.balls.push({ mesh: ball, type })
     
-    // Re-sort so solid gold is on top
+    // Re-sort so solid gold is at the front (right end) of the arc
     this.reorderStack()
   }
 
@@ -98,17 +104,46 @@ export class BallStackVisual {
     }
   }
 
-  private animateBallIn(ball: Mesh): void {
-    // Simple scale-up animation
+  private animateBallIn(ball: Mesh, exaggerated = false): void {
+    // Scale-up animation with optional exaggerated pop for threshold moments
     let frame = 0
+    const overshoot = exaggerated ? 1.6 : 1.0
+    const duration = exaggerated ? 20 : 10
     const animate = () => {
       frame++
-      const progress = Math.min(frame / 10, 1)
-      const scale = this.config.ballScale * this.easeOutBack(progress)
+      const progress = Math.min(frame / duration, 1)
+      const baseScale = this.config.ballScale * this.easeOutBack(progress)
+      const scale = baseScale * (1 + Math.sin(progress * Math.PI) * (overshoot - 1))
       ball.scaling = new Vector3(scale, scale, scale)
       
       if (progress < 1) {
         requestAnimationFrame(animate)
+      } else {
+        ball.scaling = new Vector3(this.config.ballScale, this.config.ballScale, this.config.ballScale)
+      }
+    }
+    animate()
+  }
+
+  private flashBallEmissive(ball: Mesh): void {
+    const mat = ball.material as PBRMaterial
+    if (!mat) return
+    const originalEmissive = mat.emissiveColor.clone()
+    const originalIntensity = mat.emissiveIntensity
+    mat.emissiveColor = new Color3(1, 0.9, 0.4)
+    mat.emissiveIntensity = 1.5
+
+    let frame = 0
+    const animate = () => {
+      frame++
+      const progress = Math.min(frame / 30, 1)
+      mat.emissiveColor = Color3.Lerp(new Color3(1, 0.9, 0.4), originalEmissive, progress)
+      mat.emissiveIntensity = originalIntensity + (1.5 - originalIntensity) * (1 - progress)
+      if (progress < 1) {
+        requestAnimationFrame(animate)
+      } else {
+        mat.emissiveColor = originalEmissive
+        mat.emissiveIntensity = originalIntensity
       }
     }
     animate()
@@ -121,14 +156,18 @@ export class BallStackVisual {
   }
 
   private reorderStack(): void {
-    // Sort: STANDARD first, then GOLD_PLATED, then SOLID_GOLD on top
+    // Sort: STANDARD first (left), then GOLD_PLATED, then SOLID_GOLD at front (right)
     const typeOrder = { [BallType.STANDARD]: 0, [BallType.GOLD_PLATED]: 1, [BallType.SOLID_GOLD]: 2 }
     this.balls.sort((a, b) => typeOrder[a.type] - typeOrder[b.type])
     
-    // Update positions
+    // Update positions along the horizontal arc
     this.balls.forEach((ball, index) => {
-      const yOffset = index * this.config.ballScale * 0.8
-      ball.mesh.position.y = yOffset
+      const spacing = this.config.ballScale * 0.9
+      const arcX = index * spacing
+      const arcY = Math.sin(index * 0.3) * this.config.ballScale * 0.3
+      ball.mesh.position.x = arcX
+      ball.mesh.position.y = arcY
+      ball.mesh.position.z = 0
     })
   }
 

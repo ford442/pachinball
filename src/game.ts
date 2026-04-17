@@ -163,6 +163,7 @@ export class Game {
   private comboCount = 0
   private comboTimer = 0
   private goldBallStack: Array<{ type: BallType; timestamp: number }> = []
+  private sessionGoldBalls = 0
   // private maxStackDisplay = 10 // UNUSED
   private powerupActive = false
   private powerupTimer = 0
@@ -1835,6 +1836,8 @@ export class Game {
     this.lives = 3
     this.comboCount = 0
     this.comboTimer = 0
+    this.goldBallStack = []
+    this.ballStackVisual?.clear()
     this.gameObjects?.resetTargets()
     this.powerupActive = false
     this.powerupTimer = 0
@@ -2950,13 +2953,19 @@ export class Game {
         type: collected.type,
         timestamp: performance.now()
       })
+
+      // Track session total
+      this.sessionGoldBalls++
       
       // Bonus points
       this.score += collected.points
+
+      // Show floating points feedback
+      this.uiManager?.showMessage(`+${collected.points}`, 1500)
       
       // Trigger effects
       if (collected.type === BallType.SOLID_GOLD) {
-        this.effects?.startJackpotSequence()
+        this.effects?.startSolidGoldPulse()
         this.display?.setDisplayState(DisplayState.JACKPOT)
         this.hapticManager?.jackpot()
       } else {
@@ -3002,6 +3011,28 @@ export class Game {
     const goldPlated = this.goldBallStack.filter(b => b.type === BallType.GOLD_PLATED).length
     const solidGold = this.goldBallStack.filter(b => b.type === BallType.SOLID_GOLD).length
     this.uiManager?.updateGoldBallDisplay(goldPlated, solidGold)
+
+    // Also update a small session badge if it exists
+    let sessionBadge = document.getElementById('gold-session-badge')
+    if (!sessionBadge) {
+      sessionBadge = document.createElement('div')
+      sessionBadge.id = 'gold-session-badge'
+      sessionBadge.style.cssText = `
+        position: absolute;
+        top: 60px;
+        right: 110px;
+        background: rgba(0,0,0,0.6);
+        border: 1px solid #ffb700;
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-family: 'Orbitron', sans-serif;
+        color: #ffb700;
+        font-size: 12px;
+        z-index: 50;
+      `
+      document.getElementById('game-cabinet')?.appendChild(sessionBadge)
+    }
+    sessionBadge.textContent = `SESSION: ${this.sessionGoldBalls}`
   }
 
   private resetBall(): void {

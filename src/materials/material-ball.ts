@@ -127,10 +127,17 @@ export class BallMaterials extends MaterialLibraryBase {
       mat.emissiveColor = new Color3(0.3, 0.25, 0.1)
       mat.emissiveIntensity = 0.2
 
-      // Clear coat for shine
-      mat.clearCoat.isEnabled = true
-      mat.clearCoat.intensity = 0.6
-      mat.clearCoat.roughness = 0.1
+      // Clear coat for shine (skipped on LOW tier)
+      this.applyClearCoat(mat, { enabled: true, intensity: 0.6, roughness: 0.1 })
+
+      // Iridescence for premium look on HIGH tier only
+      if (this._qualityTier === QualityTier.HIGH) {
+        mat.iridescence.isEnabled = true
+        mat.iridescence.intensity = 0.3
+        mat.iridescence.indexOfRefraction = 1.4
+        mat.iridescence.minimumThickness = 200
+        mat.iridescence.maximumThickness = 400
+      }
 
       return mat
     })
@@ -153,10 +160,17 @@ export class BallMaterials extends MaterialLibraryBase {
       mat.emissiveColor = new Color3(0.4, 0.3, 0.05)
       mat.emissiveIntensity = 0.3
 
-      // Strong clear coat for premium look
-      mat.clearCoat.isEnabled = true
-      mat.clearCoat.intensity = 0.8
-      mat.clearCoat.roughness = 0.08
+      // Strong clear coat for premium look (skipped on LOW tier)
+      this.applyClearCoat(mat, { enabled: true, intensity: 0.8, roughness: 0.08 })
+
+      // Rich iridescence on HIGH tier only
+      if (this._qualityTier === QualityTier.HIGH) {
+        mat.iridescence.isEnabled = true
+        mat.iridescence.intensity = 0.5
+        mat.iridescence.indexOfRefraction = 1.5
+        mat.iridescence.minimumThickness = 300
+        mat.iridescence.maximumThickness = 600
+      }
 
       return mat
     })

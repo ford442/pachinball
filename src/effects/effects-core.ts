@@ -98,6 +98,11 @@ export class EffectsSystem {
   isJackpotActive = false
   jackpotPhase = 0 // 0=Idle, 1=Breach, 2=Error, 3=Meltdown
 
+  // Solid Gold Pulse Variables
+  private isSolidGoldPulseActive = false
+  private solidGoldPulseTimer = 0
+  private readonly SOLID_GOLD_PULSE_DURATION = 1.5
+
   // Public getter for lighting mode
   get currentLightingMode(): 'normal' | 'hit' | 'fever' | 'reach' {
     return this.lightingMode
@@ -639,11 +644,40 @@ export class EffectsSystem {
     }
   }
 
+  startSolidGoldPulse(): void {
+    this.isSolidGoldPulseActive = true
+    this.solidGoldPulseTimer = 0
+    this.bloomEnergy = 2.5
+    this.playBeep(1200)
+
+    // Vignette flash (smooth, not strobe — safe for photosensitive users)
+    this.flashVignette(PALETTE.GOLD, 600)
+
+    // Camera shake (respect reduced motion)
+    if (!this.accessibility.reducedMotion) {
+      this.addCameraShake(0.04)
+    }
+  }
+
+  private updateSolidGoldPulse(dt: number): void {
+    if (!this.isSolidGoldPulseActive) return
+
+    this.solidGoldPulseTimer += dt
+    this.bloomEnergy = Math.max(0, 2.5 * (1 - this.solidGoldPulseTimer / this.SOLID_GOLD_PULSE_DURATION))
+
+    if (this.solidGoldPulseTimer >= this.SOLID_GOLD_PULSE_DURATION) {
+      this.isSolidGoldPulseActive = false
+      this.solidGoldPulseTimer = 0
+    }
+  }
+
   updateCabinetLighting(): void {
     const time = performance.now() * 0.001
 
     if (this.isJackpotActive) {
       this.updateJackpotSequence()
+    } else if (this.isSolidGoldPulseActive) {
+      this.updateSolidGoldPulse(0.016)
     } else if (this.lightingTimer > 0) {
       const dt = 0.016
       this.lightingTimer -= dt
@@ -676,6 +710,14 @@ export class EffectsSystem {
           targetColor = Color3.FromHSV(hue * 360, 1.0, 1.0).scale(INTENSITY.HIGH)
           intensity = INTENSITY.HIGH
         }
+      } else if (this.isSolidGoldPulseActive) {
+        // Solid Gold Pulse: warm gold → magenta fade
+        const progress = this.solidGoldPulseTimer / this.SOLID_GOLD_PULSE_DURATION
+        const fade = 1 - progress
+        const goldColor = emissive(PALETTE.GOLD, INTENSITY.HIGH * fade)
+        const magentaColor = emissive(PALETTE.MAGENTA, INTENSITY.HIGH * fade * 0.6)
+        targetColor = Color3.Lerp(goldColor, magentaColor, Math.sin(progress * Math.PI))
+        intensity = INTENSITY.HIGH * fade
       } else {
         switch (this.lightingMode) {
           case 'hit': {
@@ -726,6 +768,10 @@ export class EffectsSystem {
           // Red alert
           mat.emissiveColor = emissive(STATE_COLORS.REACH, INTENSITY.HIGH)
         }
+      } else if (this.isSolidGoldPulseActive) {
+        const progress = this.solidGoldPulseTimer / this.SOLID_GOLD_PULSE_DURATION
+        const fade = 1 - progress
+        mat.emissiveColor = emissive(PALETTE.GOLD, INTENSITY.HIGH * fade)
       } else if (this.lightingMode === 'fever') {
         // Gold fever
         mat.emissiveColor = emissive(PALETTE.GOLD, pulse(time, 2, INTENSITY.NORMAL, INTENSITY.HIGH))
