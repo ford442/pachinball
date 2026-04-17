@@ -127,4 +127,4 @@ export {
   type DynamicWorldConfig,
   type ZoneMechanic,
 } from './dynamic-world'
-export { DebugHUD } from './debug-hud'
+export { DebugHUD, type DebugSnapshot } from './debug-hud'
