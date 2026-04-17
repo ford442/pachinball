@@ -71,7 +71,7 @@ export class FlipperBuilder {
       // Rounded flipper tip (curved end) - smooth sphere collision
       const tipMesh = MeshBuilder.CreateSphere('flipperTip', {
         diameter: flipperWidth * 1.2,
-        segments: 16
+        segments: 32
       }, this.scene) as Mesh
       tipMesh.position.x = isRight ? flipperLength - 0.3 : -(flipperLength - 0.3)
       tipMesh.position.y = 0.05
@@ -112,7 +112,7 @@ export class FlipperBuilder {
       const pivotCyl = MeshBuilder.CreateCylinder('flipperPivot', {
         diameter: 0.8,
         height: 0.9,
-        tessellation: 16
+        tessellation: 32
       }, this.scene) as Mesh
       pivotCyl.rotation.x = Math.PI / 2
       pivotCyl.position.x = isRight ? 1.5 : -1.5
@@ -124,7 +124,7 @@ export class FlipperBuilder {
       const pivotCap = MeshBuilder.CreateCylinder('flipperPivotCap', {
         diameter: 0.6,
         height: 0.15,
-        tessellation: 16
+        tessellation: 32
       }, this.scene) as Mesh
       pivotCap.rotation.x = Math.PI / 2
       pivotCap.position.x = isRight ? 1.5 : -1.5
@@ -137,7 +137,7 @@ export class FlipperBuilder {
       const pivotRing = MeshBuilder.CreateTorus('flipperPivotRing', {
         diameter: 0.9,
         thickness: 0.08,
-        tessellation: 16
+        tessellation: 32
       }, this.scene) as Mesh
       pivotRing.position.x = isRight ? 1.5 : -1.5
       pivotRing.position.y = -0.1

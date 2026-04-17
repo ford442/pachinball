@@ -9,6 +9,7 @@ import {
   Vector3,
   Scene,
   StandardMaterial,
+  PBRMaterial,
   Color3,
   Quaternion,
   Mesh,
@@ -37,7 +38,7 @@ export abstract class TrackBuilder {
 
   // State Management
   protected adventureTrack: Mesh[] = []
-  protected materials: StandardMaterial[] = []
+  protected materials: (StandardMaterial | PBRMaterial)[] = []
   protected adventureBodies: RAPIER.RigidBody[] = []
   protected kinematicBindings: KinematicBinding[] = []
   protected animatedObstacles: AnimatedObstacle[] = []
@@ -107,6 +108,26 @@ export abstract class TrackBuilder {
     return mat
   }
 
+  /**
+   * Get a PBR track material with emissive glow and clear coat.
+   * Use this for tracks that should look more physically realistic.
+   */
+  protected getTrackPBRMaterial(colorHex: string): PBRMaterial {
+    const mat = new PBRMaterial("trackPBRMat", this.scene)
+    mat.albedoColor = Color3.Black()
+    mat.emissiveColor = Color3.FromHexString(colorHex)
+    mat.emissiveIntensity = 1.2
+    mat.metallic = 0.8
+    mat.roughness = 0.2
+    mat.alpha = 0.85
+    mat.wireframe = true
+    mat.clearCoat.isEnabled = true
+    mat.clearCoat.intensity = 0.4
+    mat.clearCoat.roughness = 0.2
+    this.materials.push(mat)
+    return mat
+  }
+
   // --- Primitive Builders ---
 
   /**
@@ -127,7 +148,7 @@ export abstract class TrackBuilder {
     width: number,
     length: number,
     inclineRad: number,
-    material: StandardMaterial,
+    material: StandardMaterial | PBRMaterial,
     wallHeight: number = 0,
     friction: number = 0.5
   ): Vector3 {
@@ -186,8 +207,8 @@ export abstract class TrackBuilder {
     inclineRad: number,
     width: number,
     wallHeight: number,
-    material: StandardMaterial,
-    segments: number = 20,
+    material: StandardMaterial | PBRMaterial,
+    segments: number = 48,
     bankingAngle: number = 0,
     friction: number = 0.5
   ): Vector3 {
@@ -253,7 +274,7 @@ export abstract class TrackBuilder {
     trackWidth: number,
     height: number,
     inclineRad: number,
-    mat: StandardMaterial,
+    mat: StandardMaterial | PBRMaterial,
     friction: number = 0.5
   ) {
     if (!this.world) return
@@ -294,7 +315,7 @@ export abstract class TrackBuilder {
     center: Vector3,
     radius: number,
     angVelY: number,
-    material: StandardMaterial,
+    material: StandardMaterial | PBRMaterial,
     hasTeeth: boolean = false
   ): void {
     if (!this.world) return
@@ -513,11 +534,15 @@ export abstract class TrackBuilder {
     collider.setCollisionGroups(groups)
 
     if (this.currentBallMesh) {
-      const mat = this.currentBallMesh.material as StandardMaterial
+      const mat = this.currentBallMesh.material as StandardMaterial | PBRMaterial
       if (mat) {
         const matColor = color === 'RED' ? Color3.Red() : color === 'GREEN' ? Color3.Green() : Color3.Blue()
         mat.emissiveColor = matColor
-        mat.diffuseColor = matColor
+        if ('diffuseColor' in mat) {
+          mat.diffuseColor = matColor
+        } else if ('albedoColor' in mat) {
+          mat.albedoColor = matColor
+        }
       }
     }
   }

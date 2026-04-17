@@ -1,4 +1,4 @@
-import { Scene, Vector3, MeshBuilder, Mesh, Color4, ParticleSystem, PBRMaterial, StandardMaterial, Color3 } from '@babylonjs/core'
+import { Scene, Vector3, MeshBuilder, Mesh, Color4, ParticleSystem, PBRMaterial, Color3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
 import { getMaterialLibrary } from '../materials'
@@ -78,7 +78,7 @@ export class BumperBuilder {
       const bumperRing = MeshBuilder.CreateTorus('bump_ring', {
         diameter: 0.78 * scale,
         thickness: 0.055 * scale,
-        tessellation: 24
+        tessellation: 48
       }, this.scene) as Mesh
       bumperRing.position.set(x, 0.38 * scale, z)
       bumperRing.rotation.x = Math.PI / 2
@@ -88,13 +88,13 @@ export class BumperBuilder {
       bumperRing.material = ringMat
 
       // --- REFINED HOLOGRAM PILLAR (tapered for organic look) ---
-      const holoInner = MeshBuilder.CreateCylinder('holoInner', { diameterTop: 0.35, diameterBottom: 0.65, height: 2.5, tessellation: 12 }, this.scene)
+      const holoInner = MeshBuilder.CreateCylinder('holoInner', { diameterTop: 0.35, diameterBottom: 0.65, height: 2.5, tessellation: 24 }, this.scene)
       holoInner.position.set(x, 1.8, z)
 
       const innerMat = this.matLib.getHologramMaterial(colorHex, true)
       holoInner.material = innerMat
 
-      const holoOuter = MeshBuilder.CreateCylinder('holoOuter', { diameterTop: 0.9, diameterBottom: 1.4, height: 4.0, tessellation: 12 }, this.scene)
+      const holoOuter = MeshBuilder.CreateCylinder('holoOuter', { diameterTop: 0.9, diameterBottom: 1.4, height: 4.0, tessellation: 24 }, this.scene)
       holoOuter.position.set(x, 2.0, z)
 
       const outerMat = this.matLib.getHologramMaterial('#FFFFFF', true)
@@ -225,7 +225,7 @@ export class BumperBuilder {
 
         // Hologram state sync - sync hologram emissive with bumper target
         if (vis.targetEmissive && vis.hologram.material) {
-          const holoMat = vis.hologram.material as StandardMaterial
+          const holoMat = vis.hologram.material as PBRMaterial
           Color3.LerpToRef(
             holoMat.emissiveColor,
             vis.targetEmissive.scale(1.2),

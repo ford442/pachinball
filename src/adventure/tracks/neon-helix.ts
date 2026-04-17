@@ -8,7 +8,7 @@ import { Vector3 } from '@babylonjs/core'
 import type { TrackBuilder } from '../track-builder'
 
 export function buildNeonHelix(builder: TrackBuilder): void {
-  const holoMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#00ffff")
+  const holoMat = (builder as unknown as { getTrackPBRMaterial: (hex: string) => import('@babylonjs/core').PBRMaterial }).getTrackPBRMaterial("#00ffff")
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   let currentPos = currentStartPos.clone()
   let heading = Math.PI

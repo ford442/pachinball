@@ -14,6 +14,7 @@ export class PhysicsSystem {
   private rapier: typeof RAPIER | null = null
   private world: RAPIER.World | null = null
   private eventQueue: RAPIER.EventQueue | null = null
+  private stepCount = 0
 
   /** Accumulator for fixed timestep */
   private accumulator = 0
@@ -46,8 +47,12 @@ export class PhysicsSystem {
     this.eventQueue = new this.rapier.EventQueue(true)
   }
 
-  getWorld(): RAPIER.World | null {
-    return this.world
+  getWorld(): RAPIER.World {
+    return this.world!
+  }
+
+  getStepCount(): number {
+    return this.stepCount
   }
 
   getRapier(): typeof RAPIER | null {
@@ -80,6 +85,7 @@ export class PhysicsSystem {
     while (this.accumulator >= FIXED_TIMESTEP) {
       this.world.timestep = FIXED_TIMESTEP
       this.world.step(this.eventQueue)
+      this.stepCount++
       this.eventQueue.drainCollisionEvents(callback)
       this.accumulator -= FIXED_TIMESTEP
     }

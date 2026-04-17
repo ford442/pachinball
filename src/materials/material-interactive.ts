@@ -3,7 +3,7 @@
  * Bumpers, flippers, slingshots, buttons, energy effects, etc.
  */
 
-import { PBRMaterial, StandardMaterial, Color3 } from '@babylonjs/core'
+import { PBRMaterial, Color3 } from '@babylonjs/core'
 import { MaterialLibraryBase } from './material-core'
 import {
   PALETTE,
@@ -301,14 +301,29 @@ export class InteractiveMaterials extends MaterialLibraryBase {
   // ENERGY/HOLOGRAM MATERIALS
   // ============================================================================
 
-  getHologramMaterial(colorHex?: string, wireframe: boolean = true): StandardMaterial {
+  getHologramMaterial(colorHex?: string, wireframe: boolean = true): PBRMaterial {
     const baseColor = colorHex || PALETTE.CYAN
     const cacheKey = `hologram_${baseColor}_${wireframe}`
-    return this.getCachedStandard(cacheKey, () => {
-      const mat = new StandardMaterial(`hologramMat_${baseColor}`, this.scene)
+    return this.getCachedPBR(cacheKey, () => {
+      const mat = new PBRMaterial(`hologramMat_${baseColor}`, this.scene)
       mat.wireframe = wireframe
+      mat.albedoColor = Color3.Black()
       mat.emissiveColor = emissive(baseColor, INTENSITY.HIGH)
+      mat.emissiveIntensity = 1.2
       mat.alpha = wireframe ? 0.5 : 0.3
+      mat.metallic = METALLIC.FULL
+      mat.roughness = ROUGHNESS.MIRROR
+      mat.environmentIntensity = 1.0
+
+      // Iridescence for rainbow interference sci-fi hologram effect
+      if (this._qualityTier === QualityTier.HIGH) {
+        mat.iridescence.isEnabled = true
+        mat.iridescence.intensity = 0.8
+        mat.iridescence.indexOfRefraction = 1.3
+        mat.iridescence.minimumThickness = 100
+        mat.iridescence.maximumThickness = 400
+      }
+
       return mat
     })
   }

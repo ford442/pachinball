@@ -5,21 +5,19 @@
  * Extracted and refactored from display.ts for modularity.
  */
 
-import { MeshBuilder, Vector3, type Scene } from '@babylonjs/core'
+import { MeshBuilder, Vector3, type Scene, TransformNode } from '@babylonjs/core'
 import type { Engine, WebGPUEngine } from '@babylonjs/core'
 
-import { DisplayMode, DisplayState, type DisplayConfig } from './display-types'
+import {
+  DisplayState,
+  type DisplayConfig,
+  DEFAULT_DISPLAY_CONFIG,
+  getStateConfig,
+} from '../game-elements/display-config'
 import { DisplayShaderLayer } from './display-shader'
 import { DisplayReelsLayer } from './display-reels'
 import { DisplayVideoLayer } from './display-video'
-
-// Default display configuration
-const DEFAULT_CONFIG: DisplayConfig = {
-  mode: DisplayMode.HYBRID,
-  width: 20,
-  height: 12,
-  resolution: 512,
-}
+import { DisplayImageLayer } from './display-image'
 
 export class DisplaySystem {
   private scene: Scene
@@ -30,6 +28,7 @@ export class DisplaySystem {
   private shaderLayer: DisplayShaderLayer
   private reelsLayer: DisplayReelsLayer
   private videoLayer: DisplayVideoLayer
+  private imageLayer: DisplayImageLayer
 
   // State
   private currentState: DisplayState = DisplayState.IDLE
@@ -45,18 +44,19 @@ export class DisplaySystem {
     config?: Partial<DisplayConfig>
   ) {
     this.scene = scene
-    this.config = { ...DEFAULT_CONFIG, ...config }
+    this.config = { ...DEFAULT_DISPLAY_CONFIG, ...config }
 
     // Detect WebGPU/WGSL support
     this.useWGSL =
       engine.getClassName() === 'WebGPUEngine' ||
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (engine as any).isWebGPU === true
+      (engine as unknown as { isWebGPU: boolean }).isWebGPU === true
 
     // Initialize layer managers
     this.shaderLayer = new DisplayShaderLayer(scene, this.config)
     this.reelsLayer = new DisplayReelsLayer(scene, this.config)
     this.videoLayer = new DisplayVideoLayer(scene, this.config)
+    this.imageLayer = new DisplayImageLayer(scene, this.config)
   }
 
   /**
@@ -67,7 +67,11 @@ export class DisplaySystem {
     // Use void expression to suppress "declared but never read" warning
     void this.backboxPosition
 
-    // Create the main display plane
+    // Create root transform node for the backbox hierarchy
+    const backboxRoot = new TransformNode('backboxRoot', this.scene)
+    backboxRoot.position = position.clone()
+
+    // Create the main display plane (kept for visual reference)
     const displayPlane = MeshBuilder.CreatePlane(
       'display',
       {
@@ -76,15 +80,16 @@ export class DisplaySystem {
       },
       this.scene
     )
-
-    // Position in the backbox
-    displayPlane.position = position.clone()
+    displayPlane.parent = backboxRoot
     displayPlane.position.z += 0.5
     displayPlane.rotation.y = Math.PI
 
-    // Create multi-material or layered approach
-    // The individual layers handle their own mesh creation
+    // Attach layer meshes to the backbox root
+    this.shaderLayer.createLayer(backboxRoot)
     this.shaderLayer.setCRTEffectEnabled(false)
+    this.reelsLayer.createLayer(backboxRoot, this.config)
+    this.videoLayer.createLayer(backboxRoot, this.config)
+    this.imageLayer.createLayer(backboxRoot, this.config)
   }
 
   /**
@@ -109,6 +114,41 @@ export class DisplaySystem {
     console.log(`[Display] State change: ${this.currentState} -> ${state}`)
     this.currentState = state
     this.jackpotPhase = jackpotPhase
+
+    const media = getStateConfig(this.config, state)
+
+    // Shader background visibility
+    this.shaderLayer.setBackgroundVisible(media.showShaderBackground ?? true)
+
+    // Reels visibility
+    this.reelsLayer.setVisible(media.showReels ?? true)
+
+    // Shader params
+    if (media.shaderParams) {
+      this.shaderLayer.setShaderParams(media.shaderParams)
+    }
+
+    // Video layer
+    if (media.videoPath) {
+      this.videoLayer.loadVideo(media.videoPath)
+      this.videoLayer.setVisible(true)
+    } else {
+      this.videoLayer.setVisible(false)
+    }
+
+    // Image layer
+    if (media.imagePath) {
+      this.imageLayer.loadImage(media.imagePath, media.opacity ?? 1.0)
+      this.imageLayer.setVisible(true)
+    } else {
+      this.imageLayer.setVisible(false)
+    }
+
+    // Fallback: if no video and no image, ensure shader/reels are visible
+    if (!media.videoPath && !media.imagePath) {
+      this.shaderLayer.setBackgroundVisible(true)
+      this.reelsLayer.setVisible(true)
+    }
 
     // Notify layers of state change
     this.shaderLayer.onStateChange(state)
@@ -246,5 +286,6 @@ export class DisplaySystem {
     this.shaderLayer.dispose()
     this.reelsLayer.dispose()
     this.videoLayer.dispose()
+    this.imageLayer.dispose()
   }
 }

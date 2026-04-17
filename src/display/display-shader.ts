@@ -5,37 +5,34 @@
  * Extracted from display.ts for modularity.
  */
 
-import { ShaderMaterial, Color3, MeshBuilder, type Mesh, type Scene } from '@babylonjs/core'
+import { ShaderMaterial, Color3, MeshBuilder, type Mesh, type Scene, type TransformNode, DynamicTexture } from '@babylonjs/core'
 import { DisplayState, type DisplayConfig, CRT_PRESETS, type CRTEffectParams } from './display-types'
 import { crtEffectShader } from '../shaders/crt-effect'
+import { jackpotOverlayShader } from '../shaders/jackpotOverlay'
 
 export class DisplayShaderLayer {
   private scene: Scene
+  private config: DisplayConfig
   private material: ShaderMaterial | null = null
   private crtMaterial: ShaderMaterial | null = null
+  private jackpotMaterial: ShaderMaterial | null = null
   private backgroundMesh: Mesh | null = null
   private crtMesh: Mesh | null = null
+  private jackpotMesh: Mesh | null = null
   private time = 0
   private crtEffectActive = false
   private crtEffectParams: CRTEffectParams = CRT_PRESETS.STORY
 
   constructor(scene: Scene, config: DisplayConfig) {
     this.scene = scene
-    this.createBackgroundShader(config)
-    this.createCRTEffectLayer(config)
+    this.config = config
+    this.createBackgroundMaterial()
+    this.createCRTMaterial()
+    this.createJackpotMaterial()
   }
 
-  private createBackgroundShader(config: DisplayConfig): void {
-    // Create background plane
-    this.backgroundMesh = MeshBuilder.CreatePlane(
-      'shaderBg',
-      { width: config.width, height: config.height },
-      this.scene
-    )
-    this.backgroundMesh.position.z = -0.5
-    this.backgroundMesh.rotation.y = Math.PI
-
-    // Create cyber grid shader
+  private createBackgroundMaterial(): void {
+    // Create cyber grid shader material
     const cyberShader = new ShaderMaterial(
       'cyberBg',
       this.scene,
@@ -73,22 +70,13 @@ export class DisplayShaderLayer {
       }
     )
 
+    cyberShader.setFloat('speed', 0.5)
+    cyberShader.setColor3('colorTint', Color3.FromHexString('#00ffd9'))
     this.material = cyberShader
-    this.backgroundMesh.material = cyberShader
   }
 
-  private createCRTEffectLayer(config: DisplayConfig): void {
-    // Create CRT effect plane (hidden by default)
-    this.crtMesh = MeshBuilder.CreatePlane(
-      'crtEffect',
-      { width: config.width, height: config.height },
-      this.scene
-    )
-    this.crtMesh.position.z = -0.25
-    this.crtMesh.rotation.y = Math.PI
-    this.crtMesh.isVisible = false
-
-    // Create CRT shader material
+  private createCRTMaterial(): void {
+    // Create CRT shader material (mesh created in createLayer)
     const crtMat = new ShaderMaterial(
       'crtMat',
       this.scene,
@@ -124,42 +112,97 @@ export class DisplayShaderLayer {
     crtMat.setFloat('uNoise', this.crtEffectParams.noise)
     crtMat.setFloat('uFlicker', this.crtEffectParams.flicker)
 
-    this.crtMesh.material = crtMat
     this.crtMaterial = crtMat
+  }
+
+  private createJackpotMaterial(): void {
+    // Create a base dynamic texture for the jackpot overlay shader
+    const baseTex = new DynamicTexture('jackpotBase', 512, this.scene, true)
+    const ctx = baseTex.getContext()
+    ctx.fillStyle = '#050505'
+    ctx.fillRect(0, 0, 512, 512)
+    baseTex.update()
+
+    const jackpotMat = new ShaderMaterial(
+      'jackpotMat',
+      this.scene,
+      {
+        vertexSource: jackpotOverlayShader.vertex,
+        fragmentSource: jackpotOverlayShader.fragment,
+      },
+      {
+        attributes: ['position', 'uv'],
+        uniforms: [
+          'worldViewProjection',
+          'uTime',
+          'uPhase',
+          'uCrackProgress',
+          'uShockwaveRadius',
+          'uGlitchIntensity',
+        ],
+        samplers: ['myTexture'],
+        needAlphaBlending: true,
+      }
+    )
+
+    jackpotMat.setTexture('myTexture', baseTex)
+    jackpotMat.setFloat('uTime', 0)
+    jackpotMat.setInt('uPhase', 0)
+    jackpotMat.setFloat('uCrackProgress', 0)
+    jackpotMat.setFloat('uShockwaveRadius', 0)
+    jackpotMat.setFloat('uGlitchIntensity', 0)
+
+    this.jackpotMaterial = jackpotMat
+  }
+
+  /**
+   * Create shader meshes parented to the given root node.
+   * This fixes orphaned meshes by attaching them to the backbox hierarchy.
+   */
+  createLayer(parent: TransformNode): void {
+    this.backgroundMesh?.dispose()
+    this.crtMesh?.dispose()
+    this.jackpotMesh?.dispose()
+
+    this.backgroundMesh = MeshBuilder.CreatePlane(
+      'shaderBg',
+      { width: this.config.width, height: this.config.height },
+      this.scene
+    )
+    this.backgroundMesh.parent = parent
+    this.backgroundMesh.position.z = -0.5
+    this.backgroundMesh.rotation.y = Math.PI
+    this.backgroundMesh.material = this.material
+
+    this.crtMesh = MeshBuilder.CreatePlane(
+      'crtEffect',
+      { width: this.config.width, height: this.config.height },
+      this.scene
+    )
+    this.crtMesh.parent = parent
+    this.crtMesh.position.z = -0.25
+    this.crtMesh.rotation.y = Math.PI
+    this.crtMesh.isVisible = this.crtEffectActive
+    this.crtMesh.material = this.crtMaterial
+
+    this.jackpotMesh = MeshBuilder.CreatePlane(
+      'jackpotOverlay',
+      { width: this.config.width, height: this.config.height },
+      this.scene
+    )
+    this.jackpotMesh.parent = parent
+    this.jackpotMesh.position.z = -0.15
+    this.jackpotMesh.rotation.y = Math.PI
+    this.jackpotMesh.isVisible = false
+    this.jackpotMesh.material = this.jackpotMaterial
   }
 
   update(dt: number, state: DisplayState, jackpotPhase: number): void {
     this.time += dt
 
-    // Update background shader
+    // Update background shader time
     if (this.material) {
       this.material.setFloat('time', this.time)
-
-      // State-specific colors
-      let speed = 0.5
-      let color = '#00ffd9'
-
-      switch (state) {
-        case DisplayState.REACH:
-          speed = 5.0
-          color = '#ff0055'
-          break
-        case DisplayState.FEVER:
-          speed = 10.0
-          color = '#ffd700'
-          break
-        case DisplayState.JACKPOT:
-          speed = 20.0
-          color = '#ff00ff'
-          break
-        case DisplayState.ADVENTURE:
-          speed = 1.0
-          color = '#00aa00'
-          break
-      }
-
-      this.material.setFloat('speed', speed)
-      this.material.setColor3('colorTint', Color3.FromHexString(color))
     }
 
     // Update CRT effect shader
@@ -168,25 +211,32 @@ export class DisplayShaderLayer {
     }
 
     // Jackpot effects
-    if (state === DisplayState.JACKPOT && this.material) {
-      let glitch = 0
-      let crack = 0
-      let shock = 0
+    if (this.jackpotMaterial && this.jackpotMesh) {
+      const isJackpot = state === DisplayState.JACKPOT
+      this.jackpotMesh.isVisible = isJackpot
 
-      if (jackpotPhase === 1) {
-        glitch = 0.1
-        crack = Math.min(1, this.time * 0.5)
-      } else if (jackpotPhase === 2) {
-        glitch = 0.5
-        crack = 1
-      } else if (jackpotPhase === 3) {
-        shock = (this.time - 5) * 0.5
+      if (isJackpot) {
+        let phase = 0
+        let crack = 0.0
+        let shock = 0.0
+
+        if (jackpotPhase === 1) {
+          phase = 1
+          crack = Math.min(1.0, this.time * 0.5)
+        } else if (jackpotPhase === 2) {
+          phase = 2
+          crack = 1.0
+        } else if (jackpotPhase === 3) {
+          phase = 3
+          shock = Math.max(0.0, (this.time - 5.0) * 0.5)
+        }
+
+        this.jackpotMaterial.setFloat('uTime', this.time)
+        this.jackpotMaterial.setInt('uPhase', phase)
+        this.jackpotMaterial.setFloat('uCrackProgress', crack)
+        this.jackpotMaterial.setFloat('uShockwaveRadius', shock)
+        this.jackpotMaterial.setFloat('uGlitchIntensity', phase === 2 ? 0.5 : (phase === 1 ? 0.1 : 0.0))
       }
-
-      // These would be set if using a jackpot-specific shader
-      void glitch
-      void crack
-      void shock
     }
   }
 
@@ -194,6 +244,15 @@ export class DisplayShaderLayer {
     // Handle state-specific shader changes
     if (_state === DisplayState.JACKPOT) {
       // Intensify effects for jackpot
+    }
+  }
+
+  /**
+   * Show or hide the shader background mesh
+   */
+  setBackgroundVisible(visible: boolean): void {
+    if (this.backgroundMesh) {
+      this.backgroundMesh.isVisible = visible
     }
   }
 
@@ -224,6 +283,20 @@ export class DisplayShaderLayer {
     }
   }
 
+  /**
+   * Update shader background parameters (speed and color)
+   */
+  setShaderParams(params?: { speed?: number; color?: string }): void {
+    if (this.material) {
+      if (params?.speed !== undefined) {
+        this.material.setFloat('speed', params.speed)
+      }
+      if (params?.color !== undefined) {
+        this.material.setColor3('colorTint', Color3.FromHexString(params.color))
+      }
+    }
+  }
+
   getMaterial(): ShaderMaterial | null {
     return this.material
   }
@@ -235,11 +308,15 @@ export class DisplayShaderLayer {
   dispose(): void {
     this.material?.dispose()
     this.crtMaterial?.dispose()
+    this.jackpotMaterial?.dispose()
     this.backgroundMesh?.dispose()
     this.crtMesh?.dispose()
+    this.jackpotMesh?.dispose()
     this.material = null
     this.crtMaterial = null
+    this.jackpotMaterial = null
     this.backgroundMesh = null
     this.crtMesh = null
+    this.jackpotMesh = null
   }
 }

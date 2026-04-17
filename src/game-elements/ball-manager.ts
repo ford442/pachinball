@@ -179,7 +179,7 @@ export class BallManager {
     const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
 
     for (let i = 0; i < count; i++) {
-      const b = MeshBuilder.CreateSphere("xb", { diameter: GameConfig.ball.radius * 2 }, this.scene) as Mesh
+      const b = MeshBuilder.CreateSphere("xb", { diameter: GameConfig.ball.radius * 2, segments: 32 }, this.scene) as Mesh
       // Offset slightly to avoid stacking
       b.position.set(spawn.x + (Math.random() - 0.5), spawn.y + (i * 2), spawn.z)
       
@@ -233,7 +233,7 @@ export class BallManager {
     if (this.ballBodies.length === 0) {
       const mat = this.matLib.getChromeBallMaterial()
       
-      const b = MeshBuilder.CreateSphere("ball", { diameter: GameConfig.ball.radius * 2 }, this.scene) as Mesh
+      const b = MeshBuilder.CreateSphere("ball", { diameter: GameConfig.ball.radius * 2, segments: 32 }, this.scene) as Mesh
       b.material = mat
       
       const spawn = GameConfig.ball.spawnMain

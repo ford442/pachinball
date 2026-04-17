@@ -9,7 +9,7 @@ import type { TrackBuilder } from '../track-builder'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildPrismPathway(builder: TrackBuilder): void {
-  const glassMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#E0FFFF")
+  const glassMat = (builder as unknown as { getTrackPBRMaterial: (hex: string) => import('@babylonjs/core').PBRMaterial }).getTrackPBRMaterial("#E0FFFF")
   const laserMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#FF00FF")
   const whiteMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#FFFFFF")
 

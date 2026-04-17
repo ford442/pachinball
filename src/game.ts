@@ -23,6 +23,8 @@ import {
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import { DepthOfFieldEffectBlurLevel } from '@babylonjs/core/PostProcesses/depthOfFieldEffect'
 import { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline'
+import { SSRRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssrRenderingPipeline'
+import { MotionBlurPostProcess } from '@babylonjs/core/PostProcesses/motionBlurPostProcess'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { Nullable } from '@babylonjs/core/types'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
@@ -51,6 +53,7 @@ import {
   getMaterialLibrary,
   resetMaterialLibrary,
   detectQualityTier,
+  QualityTier,
   SettingsManager,
   PALETTE,
   SURFACES,
@@ -70,6 +73,7 @@ import {
   ZoneTriggerSystem,
   getScenario,
   getDynamicWorld,
+  DebugHUD,
   type AccessibilityConfig,
   type InputFrame,
   type DynamicScenario,
@@ -97,7 +101,7 @@ import { CabinetManager } from './game/game-cabinet'
 import { GameUIManager } from './game/game-ui'
 import { AdventureManager } from './game/game-adventure'
 import { GameConfig, API_BASE, BallType } from './config'
-import { DisplayMode, type DisplayConfig } from './display/display-types'
+import { adaptLegacyConfig, type DisplayConfig } from './game-elements/display-config'
 import { scanlinePixelShader } from './shaders/scanline'
 import { lcdTablePixelShader, TABLE_MAPS, registerMap } from './shaders/lcd-table'
 
@@ -131,7 +135,7 @@ export class Game {
   private cabinetManager: CabinetManager | null = null
   private uiManager: GameUIManager | null = null
   private adventureManager: AdventureManager | null = null
-  // private debugHUD: DebugHUD | null = null // DISABLED for now
+  private debugHUD: DebugHUD | null = null
   private hapticManager: HapticManager | null = null
   private soundSystem = getSoundSystem()
   private leaderboardSystem = getLeaderboardSystem()
@@ -193,6 +197,9 @@ export class Game {
 
   // LCD Table State (managed by TableMapManager)
   private lcdTablePostProcess: PostProcess | null = null
+
+  // Quality tier for rendering decisions
+  private qualityTier: QualityTier = QualityTier.MEDIUM
 
   // Map System (dynamic backend maps)
   private mapSystem = getMapSystem(API_BASE)
@@ -429,23 +436,49 @@ export class Game {
         this.bloomPipeline.depthOfFieldEnabled = true
         this.bloomPipeline.depthOfField.focusDistance = 2500
         this.bloomPipeline.depthOfField.fStop = 2.4
-        this.bloomPipeline.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Low
+        this.bloomPipeline.depthOfFieldBlurLevel =
+          this.qualityTier === QualityTier.HIGH
+            ? DepthOfFieldEffectBlurLevel.High
+            : DepthOfFieldEffectBlurLevel.Low
       }
+
+      // Bloom pipeline stays on default rendering path
+      // (SSR and motion blur use standalone post-processes in this Babylon version)
     }
 
     // SSAO - Screen-Space Ambient Occlusion for contact shadows and depth cues
     if (!GameConfig.camera.reducedMotion) {
+      const isHigh = this.qualityTier === QualityTier.HIGH
       const ssao = new SSAO2RenderingPipeline('ssao', this.scene, {
-        ssaoRatio: 0.5,
-        blurRatio: 0.5,
+        ssaoRatio: isHigh ? 1.0 : 0.5,
+        blurRatio: isHigh ? 1.0 : 0.5,
       })
       ssao.radius = 1.5
       ssao.totalStrength = 0.6
       ssao.base = 0.5
-      ssao.samples = 16
+      ssao.samples = isHigh ? 32 : 16
       ssao.maxZ = 50
       ssao.minZAspect = 0.5
       this.scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline('ssao', [immersiveCam])
+    }
+
+    // SSR - Screen Space Reflections for playfield/cabinet chrome on HIGH tier
+    if (this.qualityTier === QualityTier.HIGH && !GameConfig.camera.reducedMotion) {
+      const ssr = new SSRRenderingPipeline('ssr', this.scene, [immersiveCam])
+      ssr.step = 0.5              // Conservative step for neon playfield
+      ssr.reflectionSpecularFalloffExponent = 3
+      ssr.strength = 0.6          // Subtle reflection boost
+      ssr.thickness = 0.1
+      ssr.selfCollisionNumSkip = 1
+      ssr.enableSmoothReflections = true
+      ssr.enableAutomaticThicknessComputation = true
+    }
+
+    // Motion blur - very subtle for fast ball motion on HIGH tier
+    if (this.qualityTier === QualityTier.HIGH && !GameConfig.camera.reducedMotion) {
+      const motionBlur = new MotionBlurPostProcess('motionBlur', this.scene, 1.0, immersiveCam)
+      motionBlur.motionStrength = 0.15
+      motionBlur.motionBlurSamples = 16
     }
 
     // Scanline effect - applied to immersive camera
@@ -504,13 +537,19 @@ export class Game {
     this.keyLight = keyLight
 
     // Enable shadows for depth perception
-    const shadowGenerator = new ShadowGenerator(2048, keyLight)
+    const shadowMapSize = this.qualityTier === QualityTier.HIGH ? 4096 : 2048
+    const shadowGenerator = new ShadowGenerator(shadowMapSize, keyLight)
     shadowGenerator.useBlurExponentialShadowMap = true
     shadowGenerator.blurKernel = 28           // Sharper contact shadows
     shadowGenerator.setDarkness(0.3)          // Stronger contrast depth separation
     // Shadow bias tuning - eliminates acne and peter-panning
     shadowGenerator.bias = 0.0005
     shadowGenerator.normalBias = 0.02
+    // PCSS high-quality filtering on HIGH tier
+    if (this.qualityTier === QualityTier.HIGH) {
+      shadowGenerator.usePercentageCloserFiltering = true
+      shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_HIGH
+    }
     this.shadowGenerator = shadowGenerator
 
     // RIM LIGHT - Strong back light for edge definition
@@ -550,9 +589,7 @@ export class Game {
       onTrackNext: () => this.cycleAdventureTrack(1),
       onTrackPrev: () => this.cycleAdventureTrack(-1),
       onJackpotTrigger: () => this.triggerJackpot(),
-      onDebugHUD: () => {
-        // this.debugHUD?.toggle() // DISABLED
-      },
+      onDebugHUD: () => this.debugHUD?.toggle(),
       onMapSwitch: (index) => {
         const maps = this.mapManager?.getMapSystem().getMapIds() || []
         if (index >= 0 && index < maps.length) {
@@ -686,7 +723,8 @@ export class Game {
     const matLib = getMaterialLibrary(this.scene)
 
     // Detect hardware quality tier and configure material library
-    matLib.qualityTier = detectQualityTier(this.engine)
+    this.qualityTier = detectQualityTier(this.engine)
+    matLib.qualityTier = this.qualityTier
 
     matLib.loadEnvironmentTexture()
   }
@@ -1125,7 +1163,8 @@ export class Game {
     skybox.material = skyboxMaterial
 
     // Mirror texture
-    this.mirrorTexture = new MirrorTexture("mirror", 1024, this.scene, true)
+    const mirrorSize = this.qualityTier === QualityTier.HIGH ? 2048 : 1024
+    this.mirrorTexture = new MirrorTexture("mirror", mirrorSize, this.scene, true)
     this.mirrorTexture.mirrorPlane = new Plane(0, -1, 0, -1.01)
     this.mirrorTexture.level = 0.6
 
@@ -1137,16 +1176,11 @@ export class Game {
       this.effects.registerSceneLights(this.keyLight, this.rimLight, this.bounceLight)
     }
     // Build display config with state-specific media from GameConfig
-    const displayConfig: DisplayConfig = {
-      mode: GameConfig.backbox.attractVideoPath ? DisplayMode.VIDEO_ONLY : DisplayMode.SHADER_ONLY,
-      width: 20,
-      height: 12,
-      resolution: 512,
-    }
+    const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
     this.display = new DisplaySystem(this.scene, this.engine, displayConfig)
 
-    // Initialize debug HUD - DISABLED for now
-    // this.debugHUD = new DebugHUD()
+    // Initialize debug HUD
+    this.debugHUD = new DebugHUD()
 
     // Initialize Dynamic World for scrolling adventure mode
     this.dynamicWorld = getDynamicWorld(this.scene, this.tableCam!, this.display, this.soundSystem)
@@ -2651,24 +2685,22 @@ export class Game {
       this.dynamicWorld.update(new Vector3(pos.x, pos.y, pos.z), dt)
     }
 
-    // Update debug HUD if visible - DISABLED
-    // if (this.debugHUD && this.stateManager.isPlaying()) {
-    //   this.debugHUD.updatePanel('Game State', {
-    //     state: GameState[this.stateManager.getState()],
-    //     score: this.score,
-    //     lives: this.lives,
-    //     combo: this.comboCount
-    //   })
-    //
-    //   this.debugHUD.updatePanel('Balls', {
-    //     count: this.ballManager?.getBallBodies().length || 0,
-    //     goldCollected: this.ballManager?.getGoldBallCount?.() || 0
-    //   })
-    //
-    //   this.debugHUD.updatePanel('Physics', {
-    //     bodies: this.physics?.getWorld()?.bodies.len() || 0
-    //   })
-    // }
+    if (this.debugHUD && this.stateManager.isPlaying()) {
+      this.debugHUD.updatePanel('Game State', {
+        state: this.stateManager.getState(),
+        display: this.display?.getDisplayState() ?? 'none',
+        score: this.score,
+      })
+      this.debugHUD.updatePanel('Balls', {
+        active: this.ballManager?.getBallBodies().length ?? 0,
+        goldStack: this.goldBallStack.length,
+        sessionGold: this.sessionGoldBalls,
+      })
+      this.debugHUD.updatePanel('Physics', {
+        step: this.physics.getStepCount(),
+        bodies: this.physics.getWorld().bodies.len(),
+      })
+    }
 
     // Sync Adventure Mode Kinematics
     const currentBallBodies = this.ballManager?.getBallBodies() || []

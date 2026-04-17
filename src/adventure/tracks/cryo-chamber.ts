@@ -8,7 +8,7 @@ import { Vector3 } from '@babylonjs/core'
 import type { TrackBuilder } from '../track-builder'
 
 export function buildCryoChamber(builder: TrackBuilder): void {
-  const iceMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#A5F2F3")
+  const iceMat = (builder as unknown as { getTrackPBRMaterial: (hex: string) => import('@babylonjs/core').PBRMaterial }).getTrackPBRMaterial("#A5F2F3")
   const pillarMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#FFFFFF")
 
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos

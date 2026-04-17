@@ -113,6 +113,13 @@ export const lcdTablePixelShader = {
       return color + phosphor * intensity;
     }
 
+    // Blue-noise dithering to eliminate banding in smooth gradients
+    float dither(vec2 uv) {
+      // Interleaved gradient noise (IGD) - approximates blue noise
+      float d = fract(52.9829189 * fract(dot(uv, vec2(0.06711056, 0.00583715))));
+      return (d - 0.5) / 255.0;
+    }
+
     // Map pattern generation (procedural backgrounds)
     vec3 generateMapPattern(vec2 uv, float blend) {
       vec3 pattern = vec3(0.0);
@@ -191,6 +198,9 @@ export const lcdTablePixelShader = {
 
       // Very subtle accent color overlay
       color = mix(color, uAccentColor * color * 1.1, 0.1);
+
+      // Apply blue-noise dithering to reduce banding
+      color += vec3(dither(vUV));
 
       gl_FragColor = vec4(color, 1.0);
     }

@@ -106,6 +106,15 @@ export interface StateMediaConfig {
 export interface DisplayConfig {
   /** Base display mode */
   mode: DisplayMode;
+
+  /** Physical width of the backbox display */
+  width: number;
+
+  /** Physical height of the backbox display */
+  height: number;
+
+  /** Texture resolution */
+  resolution: number;
   
   /** 
    * Default media configuration (IDLE state and fallback)
@@ -158,6 +167,9 @@ export interface DisplayConfig {
  */
 export const DEFAULT_DISPLAY_CONFIG: DisplayConfig = {
   mode: DisplayMode.SHADER_ONLY,
+  width: 20,
+  height: 12,
+  resolution: 512,
   defaultMedia: {
     videoPath: '',
     imagePath: '',
@@ -226,6 +238,9 @@ export function adaptLegacyConfig(legacyConfig: {
   
   return {
     mode,
+    width: 20,
+    height: 12,
+    resolution: 512,
     defaultMedia: {
       videoPath: legacyConfig.attractVideoPath || '',
       imagePath: legacyConfig.attractImagePath || '',

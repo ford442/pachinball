@@ -1,12 +1,19 @@
 /**
  * Display Video Layer
- * 
+ *
  * Handles video playback with NULL FIX for safe disposal.
  * Extracted from display.ts for modularity.
  */
 
-import { VideoTexture, Texture } from '@babylonjs/core'
-import type { Scene } from '@babylonjs/core'
+import {
+  VideoTexture,
+  Texture,
+  MeshBuilder,
+  StandardMaterial,
+  Color3,
+  TransformNode,
+} from '@babylonjs/core'
+import type { Scene, Mesh } from '@babylonjs/core'
 import { DisplayState, type DisplayConfig } from './display-types'
 
 export class DisplayVideoLayer {
@@ -14,6 +21,7 @@ export class DisplayVideoLayer {
   private videoTexture: VideoTexture | null = null
   private videoElement: HTMLVideoElement | null = null
   private loaded = false
+  private mesh: Mesh | null = null
 
   constructor(
     scene: Scene,
@@ -23,13 +31,24 @@ export class DisplayVideoLayer {
     this.scene = scene
   }
 
+  createLayer(parent: TransformNode, config: DisplayConfig): void {
+    this.mesh = MeshBuilder.CreatePlane(
+      'displayVideo',
+      { width: config.width ?? 20, height: config.height ?? 12 },
+      this.scene
+    )
+    this.mesh.parent = parent
+    this.mesh.rotation.y = Math.PI
+    this.mesh.position.z = 0.1 // slightly in front of shader background
+  }
+
   /**
    * Load a video from URL
    * NULL FIX: Properly handles cleanup before loading new video
    */
   loadVideo(url: string): void {
     // NULL FIX: Clean up any existing video first
-    this.dispose()
+    this.disposeVideo()
 
     try {
       this.videoElement = document.createElement('video')
@@ -57,6 +76,14 @@ export class DisplayVideoLayer {
         this.videoElement?.play().catch(() => {
           console.warn('[DisplayVideo] Autoplay blocked')
         })
+
+        if (this.mesh) {
+          const mat = new StandardMaterial('videoMat', this.scene)
+          mat.diffuseTexture = this.videoTexture
+          mat.emissiveColor = Color3.White()
+          mat.disableLighting = true
+          this.mesh.material = mat
+        }
       }
 
       this.videoElement.onerror = () => {
@@ -96,36 +123,57 @@ export class DisplayVideoLayer {
     return this.videoTexture
   }
 
+  setVisible(visible: boolean): void {
+    if (this.mesh) {
+      this.mesh.isVisible = visible
+    }
+  }
+
   /**
-   * NULL FIX - Safe disposal with proper null checks
-   * Prevents errors during cleanup by checking element existence
+   * NULL FIX - Safe disposal of video resources only
+   * Preserves the display mesh for layer reuse
    */
-  dispose(): void {
+  private disposeVideo(): void {
     try {
-      // NULL FIX: Check element exists before removing listeners
       if (this.videoElement) {
-        // Safe pause - use optional chaining
         this.videoElement.pause?.()
         this.videoElement.src = ''
         this.videoElement.load?.()
-
-        // Remove from DOM safely
         try {
           this.videoElement.remove?.()
         } catch {
           // Ignore removal errors
         }
       }
-
-      // Dispose texture
       this.videoTexture?.dispose()
+      // Clear mesh material so it doesn't reference disposed texture
+      if (this.mesh) {
+        this.mesh.material = null
+      }
     } catch (err) {
-      console.warn('[DisplayVideo] Error during cleanup:', err)
+      console.warn('[DisplayVideo] Error during video cleanup:', err)
     } finally {
-      // ALWAYS null out references to prevent memory leaks
       this.videoTexture = null
       this.videoElement = null
       this.loaded = false
+    }
+  }
+
+  /**
+   * NULL FIX - Safe disposal with proper null checks
+   * Prevents errors during cleanup by checking element existence
+   */
+  dispose(): void {
+    this.disposeVideo()
+    try {
+      if (this.mesh) {
+        this.mesh.material?.dispose()
+        this.mesh.dispose()
+      }
+    } catch (err) {
+      console.warn('[DisplayVideo] Error during cleanup:', err)
+    } finally {
+      this.mesh = null
     }
   }
 }

@@ -69,36 +69,45 @@ export class PachinkoBuilder {
 
         // ================================================================
         // ENHANCED PEG - Tapered cylinder with rounded top and base bevel
+        // With LOD for performance (HIGH detail → MED → LOW → culled)
         // ================================================================
 
-        // Main tapered body
-        const pin = MeshBuilder.CreateCylinder(`pin_${r}_${c}`, {
-          diameterTop: topRadius * 2,
-          diameterBottom: baseRadius * 2,
-          height: pegHeight,
-          tessellation: 12
-        }, this.scene)
-        pin.position.set(x, 0.4, z)
-        pin.material = pinMat
+        const createPinLOD = (suffix: string, tess: number, capSeg: number, bevelTess: number): Mesh => {
+          const pinLod = MeshBuilder.CreateCylinder(`pin_${suffix}_${r}_${c}`, {
+            diameterTop: topRadius * 2,
+            diameterBottom: baseRadius * 2,
+            height: pegHeight,
+            tessellation: tess
+          }, this.scene) as Mesh
 
-        // Rounded top cap
-        const pinCap = MeshBuilder.CreateSphere(`pinCap_${r}_${c}`, {
-          diameter: topRadius * 2.2,
-          slice: 0.5,
-          segments: 10
-        }, this.scene)
-        pinCap.position.set(x, 0.4 + pegHeight / 2 - 0.02, z)
-        pinCap.material = pinMat
+          const capLod = MeshBuilder.CreateSphere(`pinCap_${suffix}_${r}_${c}`, {
+            diameter: topRadius * 2.2,
+            slice: 0.5,
+            segments: capSeg
+          }, this.scene) as Mesh
+          capLod.position.y = pegHeight / 2 - 0.02
 
-        // Base bevel ring for visual polish
-        const pinBevel = MeshBuilder.CreateTorus(`pinBevel_${r}_${c}`, {
-          diameter: baseRadius * 2.3,
-          thickness: 0.025,
-          tessellation: 10
-        }, this.scene)
-        pinBevel.position.set(x, 0.4 - pegHeight / 2 + 0.03, z)
-        pinBevel.rotation.x = Math.PI / 2
-        pinBevel.material = pinMat
+          const bevelLod = MeshBuilder.CreateTorus(`pinBevel_${suffix}_${r}_${c}`, {
+            diameter: baseRadius * 2.3,
+            thickness: 0.025,
+            tessellation: bevelTess
+          }, this.scene) as Mesh
+          bevelLod.position.y = -pegHeight / 2 + 0.03
+          bevelLod.rotation.x = Math.PI / 2
+
+          const merged = Mesh.MergeMeshes([pinLod, capLod, bevelLod], true, true, undefined, false, true)
+          merged!.position.set(x, 0.4, z)
+          merged!.material = pinMat
+          return merged!
+        }
+
+        const pinHigh = createPinLOD('high', 12, 10, 10)
+        const pinMed = createPinLOD('med', 8, 6, 8)
+        const pinLow = createPinLOD('low', 6, 4, 6)
+
+        pinHigh.addLODLevel(12, pinMed)
+        pinHigh.addLODLevel(25, pinLow)
+        pinHigh.addLODLevel(50, null)
 
         const body = this.world.createRigidBody(
           this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.4, z)
@@ -113,9 +122,9 @@ export class PachinkoBuilder {
           body
         )
 
-        bindings.push({ mesh: pin, rigidBody: body })
-        meshes.push(pin, pinCap, pinBevel)
-        pins.push(pin)
+        bindings.push({ mesh: pinHigh, rigidBody: body })
+        meshes.push(pinHigh, pinMed, pinLow)
+        pins.push(pinHigh)
       }
     }
 

@@ -66,6 +66,33 @@ export const crtEffectShader = {
       return 1.0 - smoothstep(0.3, 0.9, dist) * intensity;
     }
     
+    // Shadow mask / aperture grille
+    vec3 shadowMask(vec2 uv, float intensity) {
+      float maskCount = 320.0;
+      float x = fract(uv.x * maskCount);
+      
+      // Triad of RGB subpixels
+      float rMask = smoothstep(0.0, 0.33, x) * (1.0 - smoothstep(0.33, 0.66, x));
+      float gMask = smoothstep(0.33, 0.66, x) * (1.0 - smoothstep(0.66, 1.0, x));
+      float bMask = smoothstep(0.66, 1.0, x) * (1.0 - smoothstep(1.0, 1.33, x));
+      
+      // Wrap-around for b channel
+      bMask += smoothstep(0.0, 0.33, x) * (1.0 - smoothstep(0.33, 0.66, x));
+      
+      vec3 mask = vec3(
+        mix(1.0, rMask, intensity),
+        mix(1.0, gMask, intensity),
+        mix(1.0, bMask, intensity)
+      );
+      
+      // Very fine vertical grille bars
+      float y = fract(uv.y * maskCount * 0.75);
+      float yMask = 1.0 - (step(0.92, y) * intensity * 0.5);
+      mask *= yMask;
+      
+      return mask;
+    }
+    
     void main(void) {
       vec2 curvedUV = applyCurvature(vUV, uCurvature);
       
@@ -83,6 +110,10 @@ export const crtEffectShader = {
       
       // Apply phosphor glow (brightness boost)
       color = color * (1.0 + uGlow * 0.3) + color * color * uGlow * 0.5;
+      
+      // Apply shadow mask / aperture grille
+      vec3 mask = shadowMask(curvedUV, 0.4);
+      color *= mask;
       
       // Apply scanlines
       float scan = scanlines(curvedUV, uScanlineIntensity);

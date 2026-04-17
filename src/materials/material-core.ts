@@ -223,11 +223,11 @@ export class MaterialLibraryBase {
       // Use packed ORM texture - 66% VRAM reduction
       return {
         albedo: this.tryLoadTexture(`${name}_albedo.png`, { 
-          anisotropicLevel: 4, 
+          anisotropicLevel: this._qualityTier === QualityTier.HIGH ? 16 : 8, 
           format: 'albedo' 
         }),
         normal: this.tryLoadTexture(`${name}_normal.png`, { 
-          anisotropicLevel: 4, 
+          anisotropicLevel: this._qualityTier === QualityTier.HIGH ? 16 : 8, 
           format: 'normal' 
         }),
         orm,

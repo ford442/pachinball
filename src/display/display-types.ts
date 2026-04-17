@@ -6,27 +6,10 @@
  */
 
 import type { Mesh, StandardMaterial, ShaderMaterial, Texture, VideoTexture } from '@babylonjs/core'
+import type { DisplayState } from '../game-elements/display-config'
 
-/** Display mode - controls the base media pipeline */
-export enum DisplayMode {
-  /** Procedural reels + shader grid only (no external media) */
-  SHADER_ONLY = 'shader_only',
-  /** Static image over shader background */
-  REELS_ONLY = 'reels_only',
-  /** Looping video (optionally over shader background) */
-  VIDEO_ONLY = 'video_only',
-  /** All layers active - video/image + shader + reels */
-  HYBRID = 'hybrid',
-}
-
-/** Display states that can trigger different media */
-export enum DisplayState {
-  IDLE = 'idle',
-  REACH = 'reach',
-  FEVER = 'fever',
-  JACKPOT = 'jackpot',
-  ADVENTURE = 'adventure',
-}
+// Re-export canonical definitions from game-elements/display-config
+export { DisplayMode, DisplayState, type DisplayConfig } from '../game-elements/display-config'
 
 /** A display layer with its associated resources */
 export interface DisplayLayer {
@@ -35,14 +18,6 @@ export interface DisplayLayer {
   texture?: Texture | VideoTexture
   visible: boolean
   zIndex: number
-}
-
-/** Main display configuration */
-export interface DisplayConfig {
-  mode: DisplayMode
-  width: number
-  height: number
-  resolution: number
 }
 
 /** Slot reel state */

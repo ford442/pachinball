@@ -162,8 +162,11 @@ export class MetallicMaterials extends MaterialLibraryBase {
       ctx.stroke()
     }
 
-    const tex = new DynamicTexture('carbonFiberTex', size, this.scene)
+    const tex = new DynamicTexture('carbonFiberTex', size, this.scene, true)
+    const texCtx = tex.getContext()
+    texCtx.drawImage(canvas, 0, 0)
     tex.update()
+    this.textureCache.set('carbonFiberTex', tex)
     return tex
   }
 

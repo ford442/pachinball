@@ -216,7 +216,7 @@ export class MaterialLibrary extends MaterialLibraryBase {
     return this.interactiveMats.getGlassTubeMaterial()
   }
 
-  getHologramMaterial(colorHex?: string, wireframe?: boolean): StandardMaterial {
+  getHologramMaterial(colorHex?: string, wireframe?: boolean): PBRMaterial {
     return this.interactiveMats.getHologramMaterial(colorHex, wireframe)
   }
 
