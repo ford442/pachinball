@@ -1,0 +1,129 @@
+[    1968ms] [WARNING] No available adapters. @ http://localhost:5174/:0
+[    2050ms] [LOG] BJS - [04:11:26]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5174/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=1240883a:44
+[    2069ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5174/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=1240883a:2449
+[    2096ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 153.47216796875 ms @ http://localhost:5174/src/main.ts?t=1776478236847:17
+[    2147ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5174/src/game.ts?t=1776478236847:242
+[    2288ms] [LOG] [MapSystem] Loaded 8 maps @ http://localhost:5174/src/game-elements/map-system.ts:30
+[    2288ms] [LOG] [MapSystem] Loaded 3 music tracks @ http://localhost:5174/src/game-elements/map-system.ts:33
+[    2295ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5174/src/game.ts?t=1776478236847:662
+[    2335ms] [LOG] [Display] Slot machine configured {activationMode: hybrid, chancePercent: 0.3, scoreThreshold: 10000, enableSounds: true, enableLightEffects: true} @ http://localhost:5174/src/display/display-core.ts:180
+[    2336ms] [LOG] [Display] Slot event callback set @ http://localhost:5174/src/display/display-core.ts:186
+[    2427ms] [LOG] [Cabinet] Built Classic Pinball cabinet @ http://localhost:5174/src/cabinet/cabinet-builder.ts:114
+[    2428ms] [LOG] [Cabinet] Loaded preset: Classic Pinball @ http://localhost:5174/src/cabinet/cabinet-builder.ts:64
+[    2470ms] [LOG] [Game] LCD playfield created @ http://localhost:5174/src/game.ts?t=1776478236847:978
+[    2471ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5174/src/game.ts?t=1776478236847:1208
+[    3439ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5174/src/game-elements/input.ts:81
+[    3440ms] [LOG] [Game] ResizeObserver initialized @ http://localhost:5174/src/game.ts?t=1776478236847:760
+[    3443ms] [TIMEEND] [Bootstrap] Game init: 1346.80810546875 ms @ http://localhost:5174/src/main.ts?t=1776478236847:21
+[    3443ms] [TIMEEND] [Bootstrap] Total initialization: 1500.723876953125 ms @ http://localhost:5174/src/main.ts?t=1776478236847:22
+[    3443ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5174/src/main.ts?t=1776478236847:23
+[    3443ms] [LOG] [Resize] ResizeObserver setup complete @ http://localhost:5174/src/main.ts?t=1776478236847:47
+[    3444ms] [LOG] [Game] Canvas resized: 419x461 @ http://localhost:5174/src/game.ts?t=1776478236847:755
+[    3604ms] [LOG] [Resize] Canvas resized: 419 x 461 @ http://localhost:5174/src/main.ts?t=1776478236847:38
+[    4795ms] [LOG] [Game] Dark room environment created @ http://localhost:5174/src/game.ts?t=1776478236847:697
+[    4841ms] [LOG] [Performance] Shadow casters limited: 20/444 @ http://localhost:5174/src/game.ts?t=1776478236847:1273
+[   19788ms] [LOG] [PlungerDiag] keydown Space state 0 isHeld false @ http://localhost:5174/src/game-elements/input.ts:318
+[   22136ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/peg-1.mp3:0
+[   22137ms] [WARNING] [SoundSystem] Failed to load sample peg-1: Error: Failed to fetch peg-1
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   22972ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/peg-2.mp3:0
+[   22972ms] [WARNING] [SoundSystem] Failed to load sample peg-2: Error: Failed to fetch peg-2
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   23878ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/peg-3.mp3:0
+[   23879ms] [WARNING] [SoundSystem] Failed to load sample peg-3: Error: Failed to fetch peg-3
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   24698ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/bumper-1.mp3:0
+[   24699ms] [WARNING] [SoundSystem] Failed to load sample bumper-1: Error: Failed to fetch bumper-1
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   25496ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/bumper-2.mp3:0
+[   25496ms] [WARNING] [SoundSystem] Failed to load sample bumper-2: Error: Failed to fetch bumper-2
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   26281ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/bumper-3.mp3:0
+[   26282ms] [WARNING] [SoundSystem] Failed to load sample bumper-3: Error: Failed to fetch bumper-3
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   27058ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/flipper-1.mp3:0
+[   27058ms] [WARNING] [SoundSystem] Failed to load sample flipper-1: Error: Failed to fetch flipper-1
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   27917ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/flipper-2.mp3:0
+[   27917ms] [WARNING] [SoundSystem] Failed to load sample flipper-2: Error: Failed to fetch flipper-2
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   28700ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/jackpot-1.mp3:0
+[   28700ms] [WARNING] [SoundSystem] Failed to load sample jackpot-1: Error: Failed to fetch jackpot-1
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   29511ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/fever-1.mp3:0
+[   29512ms] [WARNING] [SoundSystem] Failed to load sample fever-1: Error: Failed to fetch fever-1
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   30320ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/launch-1.mp3:0
+[   30320ms] [WARNING] [SoundSystem] Failed to load sample launch-1: Error: Failed to fetch launch-1
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   31183ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/drain-1.mp3:0
+[   31184ms] [WARNING] [SoundSystem] Failed to load sample drain-1: Error: Failed to fetch drain-1
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   31184ms] [LOG] [SoundSystem] Loaded 12 samples @ http://localhost:5174/src/game-elements/sound-system.ts:146
+[   43853ms] [LOG] [SoundSystem] Initialized successfully @ http://localhost:5174/src/game-elements/sound-system.ts:86
+[   43855ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[   43856ms] [LOG] [Game] State changed: MENU -> PLAYING @ http://localhost:5174/src/game.ts?t=1776478236847:472
+[   43857ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[   45021ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/music/track-1-neon.mp3:0
+[   45022ms] [WARNING] [SoundSystem] Failed to play music: Error: Failed to fetch track-1-neon
+    at SoundSystem.playMapMusic (http://localhost:5174/src/game-elements/sound-system.ts:250:38) @ http://localhost:5174/src/game-elements/sound-system.ts:331
+[   45022ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/music/track-1-neon.mp3:0
+[   45022ms] [WARNING] [SoundSystem] Failed to play music: Error: Failed to fetch track-1-neon
+    at SoundSystem.playMapMusic (http://localhost:5174/src/game-elements/sound-system.ts:250:38) @ http://localhost:5174/src/game-elements/sound-system.ts:331
+[   47014ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[   77742ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[   77742ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  112670ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  112671ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  145535ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  145535ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  179547ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  179548ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  190811ms] [WARNING] No available adapters. @ http://localhost:5174/:0
+[  190895ms] [LOG] BJS - [04:14:35]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5174/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=1240883a:44
+[  190916ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5174/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=1240883a:2449
+[  190953ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 161.305908203125 ms @ http://localhost:5174/src/main.ts?t=1776478472171:17
+[  190968ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5174/src/game.ts?t=1776478472171:242
+[  191071ms] [LOG] [MapSystem] Loaded 8 maps @ http://localhost:5174/src/game-elements/map-system.ts:30
+[  191071ms] [LOG] [MapSystem] Loaded 3 music tracks @ http://localhost:5174/src/game-elements/map-system.ts:33
+[  191082ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5174/src/game.ts?t=1776478472171:662
+[  191136ms] [LOG] [Display] Slot machine configured {activationMode: hybrid, chancePercent: 0.3, scoreThreshold: 10000, enableSounds: true, enableLightEffects: true} @ http://localhost:5174/src/display/display-core.ts:180
+[  191138ms] [LOG] [Display] Slot event callback set @ http://localhost:5174/src/display/display-core.ts:186
+[  191225ms] [LOG] [Cabinet] Built Classic Pinball cabinet @ http://localhost:5174/src/cabinet/cabinet-builder.ts:114
+[  191225ms] [LOG] [Cabinet] Loaded preset: Classic Pinball @ http://localhost:5174/src/cabinet/cabinet-builder.ts:64
+[  191267ms] [LOG] [Game] LCD playfield created @ http://localhost:5174/src/game.ts?t=1776478472171:978
+[  191267ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5174/src/game.ts?t=1776478472171:1208
+[  192137ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5174/src/game-elements/input.ts:81
+[  192137ms] [LOG] [Game] ResizeObserver initialized @ http://localhost:5174/src/game.ts?t=1776478472171:760
+[  192141ms] [TIMEEND] [Bootstrap] Game init: 1187.539794921875 ms @ http://localhost:5174/src/main.ts?t=1776478472171:21
+[  192141ms] [TIMEEND] [Bootstrap] Total initialization: 1349.474853515625 ms @ http://localhost:5174/src/main.ts?t=1776478472171:22
+[  192142ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5174/src/main.ts?t=1776478472171:23
+[  192143ms] [LOG] [Resize] ResizeObserver setup complete @ http://localhost:5174/src/main.ts?t=1776478472171:47
+[  192144ms] [LOG] [Game] Canvas resized: 419x461 @ http://localhost:5174/src/game.ts?t=1776478472171:755
+[  192259ms] [LOG] [Resize] Canvas resized: 419 x 461 @ http://localhost:5174/src/main.ts?t=1776478472171:38
+[  193310ms] [LOG] [Game] Dark room environment created @ http://localhost:5174/src/game.ts?t=1776478472171:697
+[  193348ms] [LOG] [Performance] Shadow casters limited: 20/444 @ http://localhost:5174/src/game.ts?t=1776478472171:1273

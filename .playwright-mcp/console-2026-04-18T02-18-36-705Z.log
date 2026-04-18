@@ -1,0 +1,398 @@
+[    1072ms] [WARNING] No available adapters. @ http://localhost:5174/:0
+[    1122ms] [LOG] BJS - [04:18:37]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5174/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=1240883a:44
+[    1150ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5174/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=1240883a:2449
+[    1163ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 160.016845703125 ms @ http://localhost:5174/src/main.ts?t=1776478710334:17
+[    1168ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5174/src/game.ts?t=1776478710334:242
+[    1244ms] [LOG] [MapSystem] Loaded 8 maps @ http://localhost:5174/src/game-elements/map-system.ts:30
+[    1244ms] [LOG] [MapSystem] Loaded 3 music tracks @ http://localhost:5174/src/game-elements/map-system.ts:33
+[    1252ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5174/src/game.ts?t=1776478710334:662
+[    1299ms] [LOG] [Display] Slot machine configured {activationMode: hybrid, chancePercent: 0.3, scoreThreshold: 10000, enableSounds: true, enableLightEffects: true} @ http://localhost:5174/src/display/display-core.ts:180
+[    1301ms] [LOG] [Display] Slot event callback set @ http://localhost:5174/src/display/display-core.ts:186
+[    1383ms] [LOG] [Cabinet] Built Classic Pinball cabinet @ http://localhost:5174/src/cabinet/cabinet-builder.ts:114
+[    1383ms] [LOG] [Cabinet] Loaded preset: Classic Pinball @ http://localhost:5174/src/cabinet/cabinet-builder.ts:64
+[    1425ms] [LOG] [Game] LCD playfield created @ http://localhost:5174/src/game.ts?t=1776478710334:978
+[    1426ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5174/src/game.ts?t=1776478710334:1208
+[    2214ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5174/src/game-elements/input.ts:81
+[    2215ms] [LOG] [Game] ResizeObserver initialized @ http://localhost:5174/src/game.ts?t=1776478710334:760
+[    2219ms] [TIMEEND] [Bootstrap] Game init: 1055.972900390625 ms @ http://localhost:5174/src/main.ts?t=1776478710334:21
+[    2220ms] [TIMEEND] [Bootstrap] Total initialization: 1216.42578125 ms @ http://localhost:5174/src/main.ts?t=1776478710334:22
+[    2220ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5174/src/main.ts?t=1776478710334:23
+[    2220ms] [LOG] [Resize] ResizeObserver setup complete @ http://localhost:5174/src/main.ts?t=1776478710334:47
+[    2221ms] [LOG] [Game] Canvas resized: 419x461 @ http://localhost:5174/src/game.ts?t=1776478710334:755
+[    2334ms] [LOG] [Resize] Canvas resized: 419 x 461 @ http://localhost:5174/src/main.ts?t=1776478710334:38
+[    3854ms] [LOG] [Game] Dark room environment created @ http://localhost:5174/src/game.ts?t=1776478710334:697
+[    3915ms] [LOG] [Performance] Shadow casters limited: 20/444 @ http://localhost:5174/src/game.ts?t=1776478710334:1273
+[   19119ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[   19120ms] [LOG] [Game] State changed: MENU -> PLAYING @ http://localhost:5174/src/game.ts?t=1776478710334:472
+[   21863ms] [LOG] [PlungerDiag] keydown Space state 2 isHeld false @ http://localhost:5174/src/game-elements/input.ts:318
+[   21863ms] [LOG] [PlungerDiag] starting plunger charge @ http://localhost:5174/src/game-elements/input.ts:343
+[   22633ms] [LOG] [PlungerDiag] keyup Space isHeld true @ http://localhost:5174/src/game-elements/input.ts:378
+[   22634ms] [LOG] [PlungerDiag] released charge level 0.0010666666825612386 @ http://localhost:5174/src/game-elements/input.ts:381
+[   22634ms] [LOG] [PlungerDiag] queued plunger=true @ http://localhost:5174/src/game-elements/input.ts:383
+[   22635ms] [LOG] [PlungerDiag] processBufferedInputs -> plunger=true @ http://localhost:5174/src/game-elements/input.ts:265
+[   22636ms] [LOG] [PlungerDiag] applyInputFrame -> handlePlunger @ http://localhost:5174/src/game.ts?t=1776478710334:1906
+[   22636ms] [LOG] [PlungerDiag] handlePlunger ballBody? true rapier? true @ http://localhost:5174/src/game.ts?t=1776478710334:1417
+[   22636ms] [LOG] [PlungerDiag] ball pos 10.215747833251953 0.4310576319694519 -9.155316352844238 charge 0.0010666666825612386 @ http://localhost:5174/src/game.ts?t=1776478710334:1420
+[   22636ms] [LOG] [PlungerDiag] applying impulse 10.026666667064031 @ http://localhost:5174/src/game.ts?t=1776478710334:1424
+[   22637ms] [LOG] [PlungerDiag] velocity before 3.5064107350990525e-7 -1.3001859188079834 -0.6626846194267273 @ http://localhost:5174/src/game.ts?t=1776478710334:1426
+[   22637ms] [LOG] [PlungerDiag] velocity after 3.5064107350990525e-7 -1.3001859188079834 9.363982200622559 @ http://localhost:5174/src/game.ts?t=1776478710334:1429
+[   22637ms] [LOG] [PlungerDiag] impulse applied @ http://localhost:5174/src/game.ts?t=1776478710334:1430
+[   23401ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[   24359ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/peg-1.mp3:0
+[   24359ms] [WARNING] [SoundSystem] Failed to load sample peg-1: Error: Failed to fetch peg-1
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   25742ms] [LOG] [PlungerDiag] ball pos after 1s 9.905097007751465 0.2687695324420929 -8.575600624084473 @ http://localhost:5174/src/game.ts?t=1776478710334:1435
+[   25742ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/peg-2.mp3:0
+[   25743ms] [WARNING] [SoundSystem] Failed to load sample peg-2: Error: Failed to fetch peg-2
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   26697ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/peg-3.mp3:0
+[   26698ms] [WARNING] [SoundSystem] Failed to load sample peg-3: Error: Failed to fetch peg-3
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   27630ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/bumper-1.mp3:0
+[   27630ms] [WARNING] [SoundSystem] Failed to load sample bumper-1: Error: Failed to fetch bumper-1
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   28486ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/bumper-2.mp3:0
+[   28487ms] [WARNING] [SoundSystem] Failed to load sample bumper-2: Error: Failed to fetch bumper-2
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   29441ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/bumper-3.mp3:0
+[   29448ms] [WARNING] [SoundSystem] Failed to load sample bumper-3: Error: Failed to fetch bumper-3
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   30362ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/flipper-1.mp3:0
+[   30362ms] [WARNING] [SoundSystem] Failed to load sample flipper-1: Error: Failed to fetch flipper-1
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   31246ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/flipper-2.mp3:0
+[   31247ms] [WARNING] [SoundSystem] Failed to load sample flipper-2: Error: Failed to fetch flipper-2
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   32060ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/jackpot-1.mp3:0
+[   32060ms] [WARNING] [SoundSystem] Failed to load sample jackpot-1: Error: Failed to fetch jackpot-1
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   32840ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/fever-1.mp3:0
+[   32840ms] [WARNING] [SoundSystem] Failed to load sample fever-1: Error: Failed to fetch fever-1
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   33671ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/launch-1.mp3:0
+[   33671ms] [WARNING] [SoundSystem] Failed to load sample launch-1: Error: Failed to fetch launch-1
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   34482ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ https://storage.noahcohn.com/files/audio/samples/drain-1.mp3:0
+[   34483ms] [WARNING] [SoundSystem] Failed to load sample drain-1: Error: Failed to fetch drain-1
+    at SoundSystem.loadSampleBuffer (http://localhost:5174/src/game-elements/sound-system.ts:160:31)
+    at async SoundSystem.loadSamples (http://localhost:5174/src/game-elements/sound-system.ts:144:11)
+    at async SoundSystem.doInit (http://localhost:5174/src/game-elements/sound-system.ts:84:7) @ http://localhost:5174/src/game-elements/sound-system.ts:167
+[   34483ms] [LOG] [SoundSystem] Loaded 12 samples @ http://localhost:5174/src/game-elements/sound-system.ts:146
+[   47681ms] [LOG] [SoundSystem] Initialized successfully @ http://localhost:5174/src/game-elements/sound-system.ts:86
+[   53292ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[   53293ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[   88402ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[   88402ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  121997ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  121998ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  155291ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  155291ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  177339ms] [WARNING] [Effects] Low FPS detected, disabling enhanced effects @ http://localhost:5174/src/effects/effects-core.ts:798
+[  188091ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  188091ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  222068ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  222068ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  255637ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  255637ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  289518ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  289519ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  323133ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  323134ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  356134ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  356135ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  390882ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  390882ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  424018ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  424018ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  458446ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  458446ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  492268ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  492268ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  525725ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  525726ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  559438ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  559439ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  593484ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  593485ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  626949ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  626949ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  660368ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  660368ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  693370ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  693371ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  727561ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  727561ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  761256ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  761257ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  795222ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  795224ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  828710ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  828710ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  862431ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  862432ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  896135ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  896136ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  930356ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  930357ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  964105ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  964106ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[  997686ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[  997687ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[ 1031238ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[ 1031239ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[ 1064923ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[ 1064923ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[ 1098661ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[ 1098661ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[ 1132243ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[ 1132243ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[ 1166359ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[ 1166360ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[ 1200481ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[ 1200482ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[ 1234015ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[ 1234015ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[ 1267235ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[ 1267236ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[ 1300767ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[ 1300767ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[ 1334525ms] [LOG] [Leaderboard] Refreshed: 3 scores @ http://localhost:5174/src/game-elements/leaderboard-system.ts:103
+[ 1334526ms] [LOG] [Leaderboard] Next refresh in 30s (failures: 0) @ http://localhost:5174/src/game-elements/leaderboard-system.ts:55
+[ 1350325ms] [WARNING] No available adapters. @ http://localhost:5174/:0
+[ 1350445ms] [LOG] BJS - [04:41:07]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5174/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=1240883a:44
+[ 1350484ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5174/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=1240883a:2449
+[ 1350500ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 218.41796875 ms @ http://localhost:5174/src/main.ts?t=1776480062437:17
+[ 1350508ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5174/src/game.ts?t=1776480062437:242
+[ 1350613ms] [LOG] [MapSystem] Loaded 8 maps @ http://localhost:5174/src/game-elements/map-system.ts:30
+[ 1350614ms] [LOG] [MapSystem] Loaded 3 music tracks @ http://localhost:5174/src/game-elements/map-system.ts:33
+[ 1350624ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5174/src/game.ts?t=1776480062437:662
+[ 1350693ms] [LOG] [Display] Slot machine configured {activationMode: hybrid, chancePercent: 0.3, scoreThreshold: 10000, enableSounds: true, enableLightEffects: true} @ http://localhost:5174/src/display/display-core.ts:180
+[ 1350694ms] [LOG] [Display] Slot event callback set @ http://localhost:5174/src/display/display-core.ts:186
+[ 1350802ms] [LOG] [Cabinet] Built Classic Pinball cabinet @ http://localhost:5174/src/cabinet/cabinet-builder.ts:114
+[ 1350802ms] [LOG] [Cabinet] Loaded preset: Classic Pinball @ http://localhost:5174/src/cabinet/cabinet-builder.ts:64
+[ 1350845ms] [LOG] [Game] LCD playfield created @ http://localhost:5174/src/game.ts?t=1776480062437:978
+[ 1350846ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5174/src/game.ts?t=1776480062437:1208
+[ 1351823ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5174/src/game-elements/input.ts:81
+[ 1351824ms] [LOG] [Game] ResizeObserver initialized @ http://localhost:5174/src/game.ts?t=1776480062437:760
+[ 1351828ms] [TIMEEND] [Bootstrap] Game init: 1327.551025390625 ms @ http://localhost:5174/src/main.ts?t=1776480062437:21
+[ 1351828ms] [TIMEEND] [Bootstrap] Total initialization: 1546.473876953125 ms @ http://localhost:5174/src/main.ts?t=1776480062437:22
+[ 1351828ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5174/src/main.ts?t=1776480062437:23
+[ 1351829ms] [LOG] [Resize] ResizeObserver setup complete @ http://localhost:5174/src/main.ts?t=1776480062437:47
+[ 1351830ms] [LOG] [Game] Canvas resized: 419x461 @ http://localhost:5174/src/game.ts?t=1776480062437:755
+[ 1351951ms] [LOG] [Resize] Canvas resized: 419 x 461 @ http://localhost:5174/src/main.ts?t=1776480062437:38
+[ 1353174ms] [LOG] [Game] Dark room environment created @ http://localhost:5174/src/game.ts?t=1776480062437:697
+[ 1353213ms] [LOG] [Performance] Shadow casters limited: 20/444 @ http://localhost:5174/src/game.ts?t=1776480062437:1273
+[ 2589651ms] [WARNING] No available adapters. @ http://localhost:5174/:0
+[ 2589721ms] [LOG] BJS - [05:01:46]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5174/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=1240883a:44
+[ 2589736ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5174/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=1240883a:2449
+[ 2589772ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 159.6279296875 ms @ http://localhost:5174/src/main.ts?t=1776481302409:17
+[ 2589779ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5174/src/game.ts?t=1776480062437:242
+[ 2589890ms] [LOG] [MapSystem] Loaded 8 maps @ http://localhost:5174/src/game-elements/map-system.ts:30
+[ 2589890ms] [LOG] [MapSystem] Loaded 3 music tracks @ http://localhost:5174/src/game-elements/map-system.ts:33
+[ 2589904ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5174/src/game.ts?t=1776480062437:662
+[ 2589974ms] [LOG] [Display] Slot machine configured {activationMode: hybrid, chancePercent: 0.3, scoreThreshold: 10000, enableSounds: true, enableLightEffects: true} @ http://localhost:5174/src/display/display-core.ts:180
+[ 2589976ms] [LOG] [Display] Slot event callback set @ http://localhost:5174/src/display/display-core.ts:186
+[ 2590081ms] [LOG] [Cabinet] Built Classic Pinball cabinet @ http://localhost:5174/src/cabinet/cabinet-builder.ts:114
+[ 2590081ms] [LOG] [Cabinet] Loaded preset: Classic Pinball @ http://localhost:5174/src/cabinet/cabinet-builder.ts:64
+[ 2590139ms] [LOG] [Game] LCD playfield created @ http://localhost:5174/src/game.ts?t=1776480062437:978
+[ 2590140ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5174/src/game.ts?t=1776480062437:1208
+[ 2591110ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5174/src/game-elements/input.ts:81
+[ 2591111ms] [LOG] [Game] ResizeObserver initialized @ http://localhost:5174/src/game.ts?t=1776480062437:760
+[ 2591116ms] [TIMEEND] [Bootstrap] Game init: 1343.475830078125 ms @ http://localhost:5174/src/main.ts?t=1776481302409:22
+[ 2591116ms] [TIMEEND] [Bootstrap] Total initialization: 1503.489990234375 ms @ http://localhost:5174/src/main.ts?t=1776481302409:23
+[ 2591116ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5174/src/main.ts?t=1776481302409:24
+[ 2591116ms] [LOG] [Resize] ResizeObserver setup complete @ http://localhost:5174/src/main.ts?t=1776481302409:48
+[ 2591117ms] [LOG] [Game] Canvas resized: 419x461 @ http://localhost:5174/src/game.ts?t=1776480062437:755
+[ 2591251ms] [LOG] [Resize] Canvas resized: 419 x 461 @ http://localhost:5174/src/main.ts?t=1776481302409:39
+[ 2592747ms] [LOG] [Game] Dark room environment created @ http://localhost:5174/src/game.ts?t=1776480062437:697
+[ 2592793ms] [LOG] [Performance] Shadow casters limited: 20/444 @ http://localhost:5174/src/game.ts?t=1776480062437:1273
+[ 3397701ms] [WARNING] No available adapters. @ http://localhost:5174/:0
+[ 3397781ms] [LOG] BJS - [05:15:14]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5174/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=1240883a:44
+[ 3397836ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5174/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=1240883a:2449
+[ 3397854ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 175.22900390625 ms @ http://localhost:5174/src/main.ts?t=1776482111055:17
+[ 3397862ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5174/src/game.ts?t=1776482111055:242
+[ 3398661ms] [LOG] [MapSystem] Loaded 8 maps @ http://localhost:5174/src/game-elements/map-system.ts:30
+[ 3398661ms] [LOG] [MapSystem] Loaded 3 music tracks @ http://localhost:5174/src/game-elements/map-system.ts:33
+[ 3398682ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5174/src/game.ts?t=1776482111055:662
+[ 3398812ms] [LOG] [Display] Slot machine configured {activationMode: hybrid, chancePercent: 0.3, scoreThreshold: 10000, enableSounds: true, enableLightEffects: true} @ http://localhost:5174/src/display/display-core.ts:180
+[ 3398814ms] [LOG] [Display] Slot event callback set @ http://localhost:5174/src/display/display-core.ts:186
+[ 3398907ms] [LOG] [Cabinet] Built Classic Pinball cabinet @ http://localhost:5174/src/cabinet/cabinet-builder.ts:114
+[ 3398907ms] [LOG] [Cabinet] Loaded preset: Classic Pinball @ http://localhost:5174/src/cabinet/cabinet-builder.ts:64
+[ 3398947ms] [LOG] [Game] LCD playfield created @ http://localhost:5174/src/game.ts?t=1776482111055:978
+[ 3398947ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5174/src/game.ts?t=1776482111055:1208
+[ 3399822ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5174/src/game-elements/input.ts?t=1776482111055:81
+[ 3399823ms] [LOG] [Game] ResizeObserver initialized @ http://localhost:5174/src/game.ts?t=1776482111055:760
+[ 3399827ms] [TIMEEND] [Bootstrap] Game init: 1972.109130859375 ms @ http://localhost:5174/src/main.ts?t=1776482111055:22
+[ 3399827ms] [TIMEEND] [Bootstrap] Total initialization: 2147.760986328125 ms @ http://localhost:5174/src/main.ts?t=1776482111055:23
+[ 3399827ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5174/src/main.ts?t=1776482111055:24
+[ 3399827ms] [LOG] [Resize] ResizeObserver setup complete @ http://localhost:5174/src/main.ts?t=1776482111055:48
+[ 3399828ms] [LOG] [Game] Canvas resized: 419x461 @ http://localhost:5174/src/game.ts?t=1776482111055:755
+[ 3399977ms] [LOG] [Resize] Canvas resized: 419 x 461 @ http://localhost:5174/src/main.ts?t=1776482111055:39
+[ 3400946ms] [LOG] [Game] Dark room environment created @ http://localhost:5174/src/game.ts?t=1776482111055:697
+[ 3401000ms] [LOG] [Performance] Shadow casters limited: 20/444 @ http://localhost:5174/src/game.ts?t=1776482111055:1273
+[ 3415629ms] [WARNING] No available adapters. @ http://localhost:5174/:0
+[ 3415718ms] [LOG] BJS - [05:15:32]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5174/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=1240883a:44
+[ 3415731ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5174/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=1240883a:2449
+[ 3415755ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 143.8798828125 ms @ http://localhost:5174/src/main.ts?t=1776482124335:17
+[ 3415762ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5174/src/game.ts?t=1776482124335:242
+[ 3415835ms] [LOG] [MapSystem] Loaded 8 maps @ http://localhost:5174/src/game-elements/map-system.ts:30
+[ 3415836ms] [LOG] [MapSystem] Loaded 3 music tracks @ http://localhost:5174/src/game-elements/map-system.ts:33
+[ 3415843ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5174/src/game.ts?t=1776482124335:662
+[ 3415889ms] [LOG] [Display] Slot machine configured {activationMode: hybrid, chancePercent: 0.3, scoreThreshold: 10000, enableSounds: true, enableLightEffects: true} @ http://localhost:5174/src/display/display-core.ts:180
+[ 3415890ms] [LOG] [Display] Slot event callback set @ http://localhost:5174/src/display/display-core.ts:186
+[ 3415973ms] [LOG] [Cabinet] Built Classic Pinball cabinet @ http://localhost:5174/src/cabinet/cabinet-builder.ts:114
+[ 3415974ms] [LOG] [Cabinet] Loaded preset: Classic Pinball @ http://localhost:5174/src/cabinet/cabinet-builder.ts:64
+[ 3416023ms] [LOG] [Game] LCD playfield created @ http://localhost:5174/src/game.ts?t=1776482124335:978
+[ 3416024ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5174/src/game.ts?t=1776482124335:1208
+[ 3416944ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5174/src/game-elements/input.ts?t=1776482111055:81
+[ 3416945ms] [LOG] [Game] ResizeObserver initialized @ http://localhost:5174/src/game.ts?t=1776482124335:760
+[ 3416948ms] [TIMEEND] [Bootstrap] Game init: 1192.52001953125 ms @ http://localhost:5174/src/main.ts?t=1776482124335:22
+[ 3416948ms] [TIMEEND] [Bootstrap] Total initialization: 1337.06396484375 ms @ http://localhost:5174/src/main.ts?t=1776482124335:23
+[ 3416948ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5174/src/main.ts?t=1776482124335:24
+[ 3416948ms] [LOG] [Resize] ResizeObserver setup complete @ http://localhost:5174/src/main.ts?t=1776482124335:48
+[ 3416949ms] [LOG] [Game] Canvas resized: 419x461 @ http://localhost:5174/src/game.ts?t=1776482124335:755
+[ 3417062ms] [LOG] [Resize] Canvas resized: 419 x 461 @ http://localhost:5174/src/main.ts?t=1776482124335:39
+[ 3418507ms] [LOG] [Game] Dark room environment created @ http://localhost:5174/src/game.ts?t=1776482124335:697
+[ 3418557ms] [LOG] [Performance] Shadow casters limited: 20/444 @ http://localhost:5174/src/game.ts?t=1776482124335:1273
+[ 3436265ms] [WARNING] No available adapters. @ http://localhost:5174/:0
+[ 3436351ms] [LOG] BJS - [05:15:53]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5174/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=1240883a:44
+[ 3436398ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5174/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=1240883a:2449
+[ 3436411ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 165.25 ms @ http://localhost:5174/src/main.ts?t=1776482141476:17
+[ 3436420ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5174/src/game.ts?t=1776482141476:242
+[ 3436486ms] [LOG] [MapSystem] Loaded 8 maps @ http://localhost:5174/src/game-elements/map-system.ts:30
+[ 3436486ms] [LOG] [MapSystem] Loaded 3 music tracks @ http://localhost:5174/src/game-elements/map-system.ts:33
+[ 3436501ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5174/src/game.ts?t=1776482141476:662
+[ 3436557ms] [LOG] [Display] Slot machine configured {activationMode: hybrid, chancePercent: 0.3, scoreThreshold: 10000, enableSounds: true, enableLightEffects: true} @ http://localhost:5174/src/display/display-core.ts:180
+[ 3436560ms] [LOG] [Display] Slot event callback set @ http://localhost:5174/src/display/display-core.ts:186
+[ 3436681ms] [LOG] [Cabinet] Built Classic Pinball cabinet @ http://localhost:5174/src/cabinet/cabinet-builder.ts:114
+[ 3436682ms] [LOG] [Cabinet] Loaded preset: Classic Pinball @ http://localhost:5174/src/cabinet/cabinet-builder.ts:64
+[ 3436723ms] [LOG] [Game] LCD playfield created @ http://localhost:5174/src/game.ts?t=1776482141476:978
+[ 3436724ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5174/src/game.ts?t=1776482141476:1208
+[ 3437517ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5174/src/game-elements/input.ts?t=1776482111055:81
+[ 3437517ms] [LOG] [Game] ResizeObserver initialized @ http://localhost:5174/src/game.ts?t=1776482141476:760
+[ 3437521ms] [TIMEEND] [Bootstrap] Game init: 1109.220947265625 ms @ http://localhost:5174/src/main.ts?t=1776482141476:22
+[ 3437521ms] [TIMEEND] [Bootstrap] Total initialization: 1274.843994140625 ms @ http://localhost:5174/src/main.ts?t=1776482141476:23
+[ 3437521ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5174/src/main.ts?t=1776482141476:24
+[ 3437521ms] [LOG] [Resize] ResizeObserver setup complete @ http://localhost:5174/src/main.ts?t=1776482141476:48
+[ 3437522ms] [LOG] [Game] Canvas resized: 419x461 @ http://localhost:5174/src/game.ts?t=1776482141476:755
+[ 3437735ms] [LOG] [Resize] Canvas resized: 419 x 461 @ http://localhost:5174/src/main.ts?t=1776482141476:39
+[ 3439135ms] [LOG] [Game] Dark room environment created @ http://localhost:5174/src/game.ts?t=1776482141476:697
+[ 3439178ms] [LOG] [Performance] Shadow casters limited: 20/444 @ http://localhost:5174/src/game.ts?t=1776482141476:1273
+[ 3546320ms] [WARNING] No available adapters. @ http://localhost:5174/:0
+[ 3546391ms] [LOG] BJS - [05:17:43]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5174/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=1240883a:44
+[ 3546406ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5174/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=1240883a:2449
+[ 3546440ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 145.52099609375 ms @ http://localhost:5174/src/main.ts?t=1776482259496:17
+[ 3546447ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5174/src/game.ts?t=1776482259496:242
+[ 3546739ms] [LOG] [MapSystem] Loaded 8 maps @ http://localhost:5174/src/game-elements/map-system.ts:30
+[ 3546739ms] [LOG] [MapSystem] Loaded 3 music tracks @ http://localhost:5174/src/game-elements/map-system.ts:33
+[ 3546750ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5174/src/game.ts?t=1776482259496:662
+[ 3546817ms] [LOG] [Display] Slot machine configured {activationMode: hybrid, chancePercent: 0.3, scoreThreshold: 10000, enableSounds: true, enableLightEffects: true} @ http://localhost:5174/src/display/display-core.ts:180
+[ 3546819ms] [LOG] [Display] Slot event callback set @ http://localhost:5174/src/display/display-core.ts:186
+[ 3546916ms] [LOG] [Cabinet] Built Classic Pinball cabinet @ http://localhost:5174/src/cabinet/cabinet-builder.ts:114
+[ 3546917ms] [LOG] [Cabinet] Loaded preset: Classic Pinball @ http://localhost:5174/src/cabinet/cabinet-builder.ts:64
+[ 3546985ms] [LOG] [Game] LCD playfield created @ http://localhost:5174/src/game.ts?t=1776482259496:978
+[ 3546986ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5174/src/game.ts?t=1776482259496:1208
+[ 3548005ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5174/src/game-elements/input.ts?t=1776482111055:81
+[ 3548005ms] [LOG] [Game] ResizeObserver initialized @ http://localhost:5174/src/game.ts?t=1776482259496:760
+[ 3548010ms] [TIMEEND] [Bootstrap] Game init: 1568.927001953125 ms @ http://localhost:5174/src/main.ts?t=1776482259496:22
+[ 3548010ms] [TIMEEND] [Bootstrap] Total initialization: 1714.837890625 ms @ http://localhost:5174/src/main.ts?t=1776482259496:23
+[ 3548010ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5174/src/main.ts?t=1776482259496:24
+[ 3548010ms] [LOG] [Resize] ResizeObserver setup complete @ http://localhost:5174/src/main.ts?t=1776482259496:48
+[ 3548011ms] [LOG] [Game] Canvas resized: 419x461 @ http://localhost:5174/src/game.ts?t=1776482259496:755
+[ 3548133ms] [LOG] [Resize] Canvas resized: 419 x 461 @ http://localhost:5174/src/main.ts?t=1776482259496:39
+[ 3549605ms] [LOG] [Game] Dark room environment created @ http://localhost:5174/src/game.ts?t=1776482259496:697
+[ 3549647ms] [LOG] [Performance] Shadow casters limited: 20/444 @ http://localhost:5174/src/game.ts?t=1776482259496:1273
+[ 3551799ms] [WARNING] No available adapters. @ http://localhost:5174/:0
+[ 3551847ms] [LOG] BJS - [05:17:48]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5174/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=1240883a:44
+[ 3551871ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5174/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=1240883a:2449
+[ 3551880ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 96.25390625 ms @ http://localhost:5174/src/main.ts?t=1776482265024:17
+[ 3551886ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5174/src/game.ts?t=1776482265024:242
+[ 3551938ms] [LOG] [MapSystem] Loaded 8 maps @ http://localhost:5174/src/game-elements/map-system.ts:30
+[ 3551938ms] [LOG] [MapSystem] Loaded 3 music tracks @ http://localhost:5174/src/game-elements/map-system.ts:33
+[ 3551947ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5174/src/game.ts?t=1776482265024:662
+[ 3551982ms] [LOG] [Display] Slot machine configured {activationMode: hybrid, chancePercent: 0.3, scoreThreshold: 10000, enableSounds: true, enableLightEffects: true} @ http://localhost:5174/src/display/display-core.ts:180
+[ 3551984ms] [LOG] [Display] Slot event callback set @ http://localhost:5174/src/display/display-core.ts:186
+[ 3552051ms] [LOG] [Cabinet] Built Classic Pinball cabinet @ http://localhost:5174/src/cabinet/cabinet-builder.ts:114
+[ 3552051ms] [LOG] [Cabinet] Loaded preset: Classic Pinball @ http://localhost:5174/src/cabinet/cabinet-builder.ts:64
+[ 3552089ms] [LOG] [Game] LCD playfield created @ http://localhost:5174/src/game.ts?t=1776482265024:978
+[ 3552090ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5174/src/game.ts?t=1776482265024:1208
+[ 3552805ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5174/src/game-elements/input.ts?t=1776482265024:81
+[ 3552806ms] [LOG] [Game] ResizeObserver initialized @ http://localhost:5174/src/game.ts?t=1776482265024:760
+[ 3552808ms] [TIMEEND] [Bootstrap] Game init: 927.52294921875 ms @ http://localhost:5174/src/main.ts?t=1776482265024:22
+[ 3552808ms] [TIMEEND] [Bootstrap] Total initialization: 1024.14306640625 ms @ http://localhost:5174/src/main.ts?t=1776482265024:23
+[ 3552808ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5174/src/main.ts?t=1776482265024:24
+[ 3552808ms] [LOG] [Resize] ResizeObserver setup complete @ http://localhost:5174/src/main.ts?t=1776482265024:48
+[ 3552809ms] [LOG] [Game] Canvas resized: 419x461 @ http://localhost:5174/src/game.ts?t=1776482265024:755
+[ 3552941ms] [LOG] [Resize] Canvas resized: 419 x 461 @ http://localhost:5174/src/main.ts?t=1776482265024:39
+[ 3554260ms] [LOG] [Game] Dark room environment created @ http://localhost:5174/src/game.ts?t=1776482265024:697
+[ 3554314ms] [LOG] [Performance] Shadow casters limited: 20/444 @ http://localhost:5174/src/game.ts?t=1776482265024:1273
+[ 3557675ms] [WARNING] No available adapters. @ http://localhost:5174/:0
+[ 3557732ms] [LOG] BJS - [05:17:54]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5174/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=1240883a:44
+[ 3557760ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5174/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=1240883a:2449
+[ 3557769ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 109.97119140625 ms @ http://localhost:5174/src/main.ts?t=1776482271271:17
+[ 3557774ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5174/src/game.ts?t=1776482271271:242
+[ 3557855ms] [LOG] [MapSystem] Loaded 8 maps @ http://localhost:5174/src/game-elements/map-system.ts:30
+[ 3557855ms] [LOG] [MapSystem] Loaded 3 music tracks @ http://localhost:5174/src/game-elements/map-system.ts:33
+[ 3557862ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5174/src/game.ts?t=1776482271271:662
+[ 3557906ms] [LOG] [Display] Slot machine configured {activationMode: hybrid, chancePercent: 0.3, scoreThreshold: 10000, enableSounds: true, enableLightEffects: true} @ http://localhost:5174/src/display/display-core.ts:180
+[ 3557908ms] [LOG] [Display] Slot event callback set @ http://localhost:5174/src/display/display-core.ts:186
+[ 3557979ms] [LOG] [Cabinet] Built Classic Pinball cabinet @ http://localhost:5174/src/cabinet/cabinet-builder.ts:114
+[ 3557979ms] [LOG] [Cabinet] Loaded preset: Classic Pinball @ http://localhost:5174/src/cabinet/cabinet-builder.ts:64
+[ 3558013ms] [LOG] [Game] LCD playfield created @ http://localhost:5174/src/game.ts?t=1776482271271:978
+[ 3558014ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5174/src/game.ts?t=1776482271271:1208
+[ 3558739ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5174/src/game-elements/input.ts?t=1776482271271:81
+[ 3558740ms] [LOG] [Game] ResizeObserver initialized @ http://localhost:5174/src/game.ts?t=1776482271271:760
+[ 3558742ms] [TIMEEND] [Bootstrap] Game init: 972.968994140625 ms @ http://localhost:5174/src/main.ts?t=1776482271271:22
+[ 3558742ms] [TIMEEND] [Bootstrap] Total initialization: 1083.320068359375 ms @ http://localhost:5174/src/main.ts?t=1776482271271:23
+[ 3558742ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5174/src/main.ts?t=1776482271271:24
+[ 3558742ms] [LOG] [Resize] ResizeObserver setup complete @ http://localhost:5174/src/main.ts?t=1776482271271:48
+[ 3558743ms] [LOG] [Game] Canvas resized: 419x461 @ http://localhost:5174/src/game.ts?t=1776482271271:755
+[ 3558871ms] [LOG] [Resize] Canvas resized: 419 x 461 @ http://localhost:5174/src/main.ts?t=1776482271271:39
+[ 3560045ms] [LOG] [Game] Dark room environment created @ http://localhost:5174/src/game.ts?t=1776482271271:697
+[ 3560089ms] [LOG] [Performance] Shadow casters limited: 20/444 @ http://localhost:5174/src/game.ts?t=1776482271271:1273
+[ 3583446ms] [WARNING] No available adapters. @ http://localhost:5174/:0
+[ 3583551ms] [LOG] BJS - [05:18:20]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5174/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=1240883a:44
+[ 3583616ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5174/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=1240883a:2449
+[ 3583647ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 230.89892578125 ms @ http://localhost:5174/src/main.ts?t=1776482295975:17
+[ 3583659ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5174/src/game.ts?t=1776482295975:242
+[ 3583782ms] [LOG] [MapSystem] Loaded 8 maps @ http://localhost:5174/src/game-elements/map-system.ts:30
+[ 3583783ms] [LOG] [MapSystem] Loaded 3 music tracks @ http://localhost:5174/src/game-elements/map-system.ts:33
+[ 3583791ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5174/src/game.ts?t=1776482295975:662
+[ 3583853ms] [LOG] [Display] Slot machine configured {activationMode: hybrid, chancePercent: 0.3, scoreThreshold: 10000, enableSounds: true, enableLightEffects: true} @ http://localhost:5174/src/display/display-core.ts:180
+[ 3583855ms] [LOG] [Display] Slot event callback set @ http://localhost:5174/src/display/display-core.ts:186
+[ 3583960ms] [LOG] [Cabinet] Built Classic Pinball cabinet @ http://localhost:5174/src/cabinet/cabinet-builder.ts:114
+[ 3583960ms] [LOG] [Cabinet] Loaded preset: Classic Pinball @ http://localhost:5174/src/cabinet/cabinet-builder.ts:64
+[ 3584035ms] [LOG] [Game] LCD playfield created @ http://localhost:5174/src/game.ts?t=1776482295975:978
+[ 3584036ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5174/src/game.ts?t=1776482295975:1208
+[ 3585178ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5174/src/game-elements/input.ts?t=1776482295975:81
+[ 3585179ms] [LOG] [Game] ResizeObserver initialized @ http://localhost:5174/src/game.ts?t=1776482295975:760
+[ 3585183ms] [TIMEEND] [Bootstrap] Game init: 1535.674072265625 ms @ http://localhost:5174/src/main.ts?t=1776482295975:22
+[ 3585183ms] [TIMEEND] [Bootstrap] Total initialization: 1767.094970703125 ms @ http://localhost:5174/src/main.ts?t=1776482295975:23
+[ 3585183ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5174/src/main.ts?t=1776482295975:24
+[ 3585183ms] [LOG] [Resize] ResizeObserver setup complete @ http://localhost:5174/src/main.ts?t=1776482295975:48
+[ 3585184ms] [LOG] [Game] Canvas resized: 419x461 @ http://localhost:5174/src/game.ts?t=1776482295975:755
+[ 3585397ms] [LOG] [Resize] Canvas resized: 419 x 461 @ http://localhost:5174/src/main.ts?t=1776482295975:39
+[ 3586564ms] [LOG] [Game] Dark room environment created @ http://localhost:5174/src/game.ts?t=1776482295975:697
+[ 3586609ms] [LOG] [Performance] Shadow casters limited: 20/444 @ http://localhost:5174/src/game.ts?t=1776482295975:1273

@@ -36,6 +36,9 @@ async function bootstrap(): Promise<void> {
   const game = new Game(engine, preloadedRapier)
   await game.init()
 
+  // Expose for Playwright tests
+  ;(window as unknown as Record<string, unknown>).game = game
+
   console.timeEnd('[Bootstrap] Game init')
   console.timeEnd('[Bootstrap] Total initialization')
   console.log('[Bootstrap] Physics WASM preloading completed successfully')

@@ -262,18 +262,21 @@ export class DecorationBuilder {
     leftOutlaneBlocker.material = metalMat
     this.pinballMeshes.push(leftOutlaneBlocker)
 
-    const leftOutlaneBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed()
-        .setTranslation(-9.5, 0.3, -10)
-        .setRotation(new this.rapier.Quaternion(0, Math.sin(0.2), 0, Math.cos(0.2)))
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(0.2, 0.75, 3)
-        .setRestitution(0.6)
-        .setFriction(0.1),
-      leftOutlaneBody
-    )
-    this.bindings.push({ mesh: leftOutlaneBlocker, rigidBody: leftOutlaneBody })
+    // DISABLED: leftOutlaneBlocker physics collider overlaps the left outer wall
+    // and is positioned in the plunger lane area instead of near the flippers.
+    // Visual mesh kept; physics body removed pending redesign.
+    // const leftOutlaneBody = this.world.createRigidBody(
+    //   this.rapier.RigidBodyDesc.fixed()
+    //     .setTranslation(-9.5, 0.3, -10)
+    //     .setRotation(new this.rapier.Quaternion(0, Math.sin(0.2), 0, Math.cos(0.2)))
+    // )
+    // this.world.createCollider(
+    //   this.rapier.ColliderDesc.cuboid(0.2, 0.75, 3)
+    //     .setRestitution(0.6)
+    //     .setFriction(0.1),
+    //   leftOutlaneBody
+    // )
+    // this.bindings.push({ mesh: leftOutlaneBlocker, rigidBody: leftOutlaneBody })
 
     // Right outlane blocker
     const rightOutlaneBlocker = MeshBuilder.CreateBox('rightOutlaneBlocker', { width: 0.4, height: 1.5, depth: 6 }, this.scene)
@@ -282,18 +285,21 @@ export class DecorationBuilder {
     rightOutlaneBlocker.material = metalMat
     this.pinballMeshes.push(rightOutlaneBlocker)
 
-    const rightOutlaneBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed()
-        .setTranslation(11, 0.3, -10)
-        .setRotation(new this.rapier.Quaternion(0, Math.sin(-0.2), 0, Math.cos(-0.2)))
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(0.2, 0.75, 3)
-        .setRestitution(0.6)
-        .setFriction(0.1),
-      rightOutlaneBody
-    )
-    this.bindings.push({ mesh: rightOutlaneBlocker, rigidBody: rightOutlaneBody })
+    // DISABLED: rightOutlaneBlocker physics collider was overlapping plunger lane,
+    // causing ball to get stuck / experience massive friction on launch.
+    // Visual mesh is kept; physics body removed pending redesign.
+    // const rightOutlaneBody = this.world.createRigidBody(
+    //   this.rapier.RigidBodyDesc.fixed()
+    //     .setTranslation(11, 0.3, -10)
+    //     .setRotation(new this.rapier.Quaternion(0, Math.sin(-0.2), 0, Math.cos(-0.2)))
+    // )
+    // this.world.createCollider(
+    //   this.rapier.ColliderDesc.cuboid(0.2, 0.75, 3)
+    //     .setRestitution(0.6)
+    //     .setFriction(0.1),
+    //   rightOutlaneBody
+    // )
+    // this.bindings.push({ mesh: rightOutlaneBlocker, rigidBody: rightOutlaneBody })
 
     // ================================================================
     // PLUNGER LANE RAILS
