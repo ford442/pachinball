@@ -28,6 +28,10 @@ export class GameStateManager {
     this.display = display
   }
 
+  setDisplaySystem(display: DisplaySystem | null): void {
+    this.display = display
+  }
+
   getState(): GameState {
     return this.state
   }

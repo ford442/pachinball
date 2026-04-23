@@ -1194,6 +1194,7 @@ export class Game {
     // Build display config with state-specific media from GameConfig
     const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
     this.display = new DisplaySystem(this.scene, this.engine, displayConfig)
+    this.stateManager.setDisplaySystem(this.display)
 
     // Initialize debug HUD
     this.debugHUD = new DebugHUD({
@@ -2882,6 +2883,13 @@ export class Game {
             this.score += (10 * (Math.floor(this.comboCount / 3) + 1))
             this.comboCount++
             this.comboTimer = 1.5
+
+            // FEVER mode: sustained rapid bumper chain
+            if (this.comboCount >= 10 && this.display?.getDisplayState() === DisplayState.IDLE) {
+              this.display?.setDisplayState(DisplayState.FEVER)
+              this.effects?.setLightingMode('fever', 0)
+            }
+
             // Use enhanced bumper impact with screen shake and ripple rings
             this.effects?.spawnEnhancedBumperImpact(vis.mesh.position, 'medium')
             // Spawn animated impact ring effect
@@ -2979,7 +2987,11 @@ export class Game {
     if (!this.stateManager.isPlaying()) return
 
     this.comboCount = 0
-    
+    if (this.display?.getDisplayState() === DisplayState.FEVER) {
+      this.display?.setDisplayState(DisplayState.IDLE)
+      this.effects?.setLightingMode('normal', 0)
+    }
+
     // Check if this was a gold ball before removing
     const collected = this.ballManager?.collectBall(body)
     
@@ -3141,6 +3153,10 @@ export class Game {
       if (this.comboTimer <= 0) {
         this.comboCount = 0
         this.updateHUD()
+        if (this.display?.getDisplayState() === DisplayState.FEVER) {
+          this.display?.setDisplayState(DisplayState.IDLE)
+          this.effects?.setLightingMode('normal', 0)
+        }
       }
     }
   }
