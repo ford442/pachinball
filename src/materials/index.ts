@@ -56,7 +56,7 @@ export class MaterialLibrary extends MaterialLibraryBase {
   }
 
   /** Override quality tier setter to sync across all modules */
-  override set qualityTier(tier: QualityTier | any) {
+  override set qualityTier(tier: QualityTier) {
     this._qualityTier = tier
     this.syncQualityTier()
   }

@@ -227,6 +227,7 @@ export class MovingGate extends PathMechanic {
     )
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   update(dt: number, _ballBodies: RAPIER.RigidBody[]): void {
     if (!this.isSpawned || !this.physicsBody) return
 
@@ -934,7 +935,7 @@ export class ReactivePegCluster extends PathMechanic {
           }
           break
 
-        case PegState.ACTIVE:
+        case PegState.ACTIVE: {
           // Glowing, pulsing
           const pulse = 2 + Math.sin(this.pulseTime * 2 + i) * 0.5
           light.intensity = pulse
@@ -944,6 +945,7 @@ export class ReactivePegCluster extends PathMechanic {
           const targetScale = 1 + this.pegHits[i] * 0.1
           peg.scaling.y = Scalar.Lerp(peg.scaling.y, targetScale, dt * 10)
           break
+        }
       }
     }
   }

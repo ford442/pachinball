@@ -27,6 +27,7 @@ export class MapSystem {
   private loaded = false
   private loadPromise: Promise<void> | null = null
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   constructor(_apiBase?: string) {
     // apiBase parameter kept for API compatibility but we use API_BASE from config
 
