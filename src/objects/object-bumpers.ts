@@ -1,6 +1,5 @@
-import { Scene, Vector3, MeshBuilder, Mesh, Color4, ParticleSystem, PBRMaterial, Color3 } from '@babylonjs/core'
+import { Scene, Vector3, MeshBuilder, Mesh, StandardMaterial, PBRMaterial, Color3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
-import { GameConfig } from '../config'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding, BumperVisual } from '../game-elements/types'
 import { INTENSITY, STATE_PROFILES, PALETTE, color, emissive, stateEmissive } from '../game-elements/visual-language'
@@ -9,20 +8,16 @@ export class BumperBuilder {
   private scene: Scene
   private world: RAPIER.World
   private rapier: typeof RAPIER
-  private config: typeof GameConfig
   private matLib: ReturnType<typeof getMaterialLibrary>
-  private bumperParticles: ParticleSystem[] = []
 
   constructor(
     scene: Scene,
     world: RAPIER.World,
     rapier: typeof RAPIER,
-    config: typeof GameConfig
   ) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
-    this.config = config
     this.matLib = getMaterialLibrary(scene)
   }
 
@@ -38,7 +33,6 @@ export class BumperBuilder {
     const bumperBodies: RAPIER.RigidBody[] = []
     const bumperVisuals: BumperVisual[] = []
     const meshes: Mesh[] = []
-    const particleTexture = this.getParticleTexture()
 
     const make = (x: number, z: number, colorHex: string, scale: number = 1.0) => {
       // ================================================================
@@ -102,6 +96,21 @@ export class BumperBuilder {
       holoOuter.material = outerMat
       holoOuter.parent = holoInner
 
+      // Thin wireframe hologram ring floating above bumper
+      const wireframeRing = MeshBuilder.CreateTorus('bump_wireframe', {
+        diameter: 0.6 * scale,
+        thickness: 0.008 * scale,
+        tessellation: 32
+      }, this.scene) as Mesh
+      wireframeRing.position.set(x, 0.9 * scale, z)
+      wireframeRing.rotation.x = Math.PI / 2
+
+      const wfMat = new StandardMaterial('bumpWireframeMat', this.scene)
+      wfMat.emissiveColor = Color3.FromHexString(colorHex)
+      wfMat.disableLighting = true
+      wfMat.wireframe = true
+      wireframeRing.material = wfMat
+
       const body = this.world.createRigidBody(
         this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.5, z)
       )
@@ -124,35 +133,6 @@ export class BumperBuilder {
       bindings.push({ mesh: bumper, rigidBody: body })
       bumperBodies.push(body)
       const initialEmissive = emissive(colorHex, INTENSITY.ACTIVE)
-      let ps: ParticleSystem | undefined
-      if (this.config.visuals.enableParticles && particleTexture) {
-        ps = new ParticleSystem(`bumperParticles_${x}_${z}`, 50, this.scene)
-        ps.particleTexture = particleTexture
-        ps.emitter = bumper
-        ps.minEmitBox = new Vector3(-0.5, 0, -0.5)
-        ps.maxEmitBox = new Vector3(0.5, 0, 0.5)
-
-        const baseColor = color(colorHex)
-        ps.color1 = Color4.FromColor3(baseColor, 1)
-        ps.color2 = Color4.FromColor3(baseColor.scale(0.7), 0.5)
-
-        ps.minSize = 0.1
-        ps.maxSize = 0.3
-        ps.minLifeTime = 0.1
-        ps.maxLifeTime = 0.3
-        ps.emitRate = 100
-        ps.blendMode = ParticleSystem.BLENDMODE_ONEONE
-        ps.gravity = new Vector3(0, -9.81, 0)
-        ps.direction1 = new Vector3(-1, 1, -1)
-        ps.direction2 = new Vector3(1, 1, 1)
-        ps.minAngularSpeed = 0
-        ps.maxAngularSpeed = Math.PI
-        ps.minEmitPower = 2
-        ps.maxEmitPower = 5
-        ps.updateSpeed = 0.01
-        ps.stop()
-        this.bumperParticles.push(ps)
-      }
 
       bumperVisuals.push({
         mesh: bumper,
@@ -164,9 +144,9 @@ export class BumperBuilder {
         currentEmissive: initialEmissive.clone(),
         flashTimer: 0,
         color: colorHex,
-        particles: ps,
+        wireframeRing: wireframeRing,
       })
-      meshes.push(bumper, bumperCap, bumperRing, holoInner, holoOuter)
+      meshes.push(bumper, bumperCap, bumperRing, holoInner, holoOuter, wireframeRing)
     }
 
     // Main center bumper (larger)
@@ -235,6 +215,11 @@ export class BumperBuilder {
         }
       }
 
+      // Rotate wireframe ring slowly
+      if (vis.wireframeRing) {
+        vis.wireframeRing.rotation.z += dt * 0.8
+      }
+
       if (vis.hitTime > 0) {
         vis.hitTime -= dt
         // Elastic bounce instead of linear
@@ -259,19 +244,11 @@ export class BumperBuilder {
           vis.hologram.scaling.set(1, 1 + holoS * 0.3, 1)
           vis.hologram.material!.alpha = 0.8 + bouncePhase * 0.2
         }
-
-        if (this.config.visuals.enableParticles && vis.particles) {
-          vis.particles.start()
-        }
       } else {
         vis.mesh.scaling.set(1, 1, 1)
         if (vis.hologram) {
           vis.hologram.scaling.set(1, 1, 1)
           vis.hologram.material!.alpha = 0.5
-        }
-
-        if (vis.particles && vis.particles.isStarted()) {
-          vis.particles.stop()
         }
       }
     })
@@ -292,22 +269,27 @@ export class BumperBuilder {
         mat.metallic = profile.metallic
       }
 
-      // Update particle colors to match state
-      if (vis.particles) {
-        vis.particles.color1 = Color4.FromColor3(targetColor, 1)
-        vis.particles.color2 = Color4.FromColor3(targetColor.scale(0.7), 0.5)
+      // Update wireframe ring color to match state
+      if (vis.wireframeRing?.material) {
+        (vis.wireframeRing.material as StandardMaterial).emissiveColor = targetColor
       }
     })
   }
 
-  dispose(): void {
-    this.bumperParticles.forEach(ps => ps.dispose())
-    this.bumperParticles = []
+  /**
+   * Update bumper wireframe ring colors to match the current map theme.
+   */
+  updateBumperColors(mapColorHex: string, bumperVisuals: BumperVisual[]): void {
+    const col = Color3.FromHexString(mapColorHex)
+    bumperVisuals.forEach(vis => {
+      if (vis.wireframeRing?.material) {
+        (vis.wireframeRing.material as StandardMaterial).emissiveColor = col
+      }
+      vis.color = mapColorHex
+    })
   }
 
-  private getParticleTexture() {
-    // Try to get particle texture from scene textures
-    const texture = this.scene.textures.find(t => t.name === 'particleTexture')
-    return texture || null
+  dispose(): void {
+    // Nothing to dispose — particles are now managed by EffectsSystem pool
   }
 }

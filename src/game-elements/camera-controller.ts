@@ -10,6 +10,7 @@ export enum CameraMode {
   UPPER_PLAY,
   JACKPOT,
   ADVENTURE,
+  BALL_FOLLOW,
 }
 
 /**
@@ -249,6 +250,10 @@ export class CameraController {
       case CameraMode.ADVENTURE:
         // Follow ball more closely in adventure mode
         return new Vector3(ballPos.x * 0.5, 0, ballPos.z * 0.3)
+
+      case CameraMode.BALL_FOLLOW:
+        // Chase cam: close ball follow with slight lead
+        return new Vector3(ballPos.x * 0.7, 0, ballPos.z * 0.6)
 
       default:
         return new Vector3(0, 0, 2)

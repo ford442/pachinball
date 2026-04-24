@@ -18,6 +18,7 @@ import { GameConfig, BallType, BALL_TIERS } from '../config'
 import type { PhysicsBinding, BallData } from './types'
 import { getMaterialLibrary } from '../materials'
 import { getSoundSystem } from './sound-system'
+import { pulse } from './visual-language'
 
 
 
@@ -41,6 +42,7 @@ export class BallManager {
   private ballDataMap: Map<RAPIER.RigidBody, BallData> = new Map()
   private goldBallCount = 0
   private onGoldBallCollected?: (type: BallType, points: number) => void
+  private glowTime = 0
 
   /** Track ball positions for stuck detection */
   private ballStuckTimers: Map<RAPIER.RigidBody, { lastPos: { x: number; y: number; z: number }; stuckTime: number }> = new Map()
@@ -231,7 +233,7 @@ export class BallManager {
     const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
 
     if (this.ballBodies.length === 0) {
-      const mat = this.matLib.getChromeBallMaterial()
+      const mat = this.matLib.getEnhancedChromeBallMaterial()
       
       const b = MeshBuilder.CreateSphere("ball", { diameter: GameConfig.ball.radius * 2, segments: 32 }, this.scene) as Mesh
       b.material = mat
@@ -416,6 +418,20 @@ export class BallManager {
     for (const trailMat of this.trailMaterials.values()) {
       trailMat.emissiveColor = mapColor
     }
+  }
+
+  /**
+   * Update gentle pulsing emissive glow on gold ball materials.
+   * Called once per frame from the game loop.
+   */
+  updateGoldBallGlow(dt: number): void {
+    this.glowTime += dt
+    const goldPlated = this.matLib.getGoldPlatedBallMaterial()
+    const solidGold = this.matLib.getSolidGoldBallMaterial()
+    // Gentle slow pulse: 0.5 Hz = 2-second period
+    goldPlated.emissiveIntensity = pulse(this.glowTime, 0.5, 0.15, 0.35)
+    // Slightly slower and stronger for solid gold
+    solidGold.emissiveIntensity = pulse(this.glowTime, 0.4, 0.25, 0.55)
   }
 
   updateTrailEffects(): void {

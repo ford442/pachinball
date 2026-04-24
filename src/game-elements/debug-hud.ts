@@ -16,6 +16,7 @@ export interface DebugSnapshot {
   physicsStepMs: number
   adventureTimeMs: number | null
   dynamicZoneState: string | null
+  performanceTier: string
 }
 
 interface PanelRow {
@@ -130,6 +131,7 @@ export class DebugHUD {
       fps: snapshot.fps.toFixed(1),
       drawCalls: snapshot.drawCalls,
       'frame ms': snapshot.frameTimeMs.toFixed(2),
+      tier: snapshot.performanceTier,
     })
 
     this.updatePanel('Mode timers', {

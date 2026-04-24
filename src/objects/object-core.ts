@@ -57,7 +57,7 @@ export class GameObjects {
     this.config = config
 
     this.flipperBuilder = new FlipperBuilder(scene, world, rapier, config)
-    this.bumperBuilder = new BumperBuilder(scene, world, rapier, config)
+    this.bumperBuilder = new BumperBuilder(scene, world, rapier)
     this.wallBuilder = new WallBuilder(scene, world, rapier, config)
     this.railBuilder = new RailBuilder(scene, world, rapier, config)
     this.pachinkoBuilder = new PachinkoBuilder(scene, world, rapier, config)
@@ -182,23 +182,19 @@ export class GameObjects {
     }
   }
 
-  activateBumperHit(body: RAPIER.RigidBody, impactVelocity: number = 10): void {
+  activateBumperHit(body: RAPIER.RigidBody): void {
     const vis = this.bumperVisuals.find(v => v.body === body)
     if (vis) {
       vis.hitTime = 0.2
-      
-      // Scale particle burst by impact velocity
-      if (vis.particles) {
-        const intensity = Math.min(impactVelocity / 20, 2.0)
-        vis.particles.emitRate = 100 * intensity
-        vis.particles.targetStopDuration = 0.1 * intensity
-        vis.particles.start()
-      }
     }
   }
 
   setBumperState(state: 'IDLE' | 'REACH' | 'FEVER' | 'JACKPOT' | 'ADVENTURE'): void {
     this.bumperBuilder.setBumperState(state, this.bumperVisuals)
+  }
+
+  updateBumperColors(mapColorHex: string): void {
+    this.bumperBuilder.updateBumperColors(mapColorHex, this.bumperVisuals)
   }
 
   deactivateTarget(body: RAPIER.RigidBody): boolean {

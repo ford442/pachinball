@@ -161,6 +161,11 @@ export class Game {
   private _mouseMoveHandler: ((e: MouseEvent) => void) | null = null
   private _resizeObserver: ResizeObserver | null = null
 
+  // Camera follow mode (LAYOUT-01)
+  private isCameraFollowMode = false
+  private cameraFollowTransition = 0
+  private cameraFollowTransitionSpeed = 3.0
+
   // Game State
   private ready = false
   private stateManager!: GameStateManager
@@ -360,7 +365,7 @@ export class Game {
     
     // Mouse tracking state (like dice roller head/eye tracking)
     const mouseState = { x: 0.5, y: 0.5, targetX: 0.5, targetY: 0.5 }
-    const smoothSpeed = 0.08  // Lerp factor - smooth but responsive
+    const smoothSpeed = 0.12  // Lerp factor - smooth but responsive (bumped from 0.08)
     const lookRange = 0.25    // How much the camera can rotate (radians)
     
     // Mouse move handler for smooth head-tracking
@@ -383,15 +388,40 @@ export class Game {
       // Smooth lerp toward target mouse position
       mouseState.x += (mouseState.targetX - mouseState.x) * smoothSpeed
       mouseState.y += (mouseState.targetY - mouseState.y) * smoothSpeed
-      
-      // Calculate camera offset based on mouse position
-      // Mouse at left (0) -> look left, Mouse at right (1) -> look right
-      const offsetX = (mouseState.x - 0.5) * lookRange * 2  // -lookRange to +lookRange
-      const offsetY = (mouseState.y - 0.5) * lookRange * 0.8  // Less vertical movement
-      
-      // Apply smooth rotation to camera
-      immersiveCam.alpha = baseAlpha + offsetX
-      immersiveCam.beta = baseBeta + offsetY
+
+      // Camera follow mode transition (LAYOUT-01)
+      const dt = this.engine.getDeltaTime() / 1000
+      if (this.isCameraFollowMode) {
+        this.cameraFollowTransition = Math.min(1, this.cameraFollowTransition + dt * this.cameraFollowTransitionSpeed)
+      } else {
+        this.cameraFollowTransition = Math.max(0, this.cameraFollowTransition - dt * this.cameraFollowTransitionSpeed)
+      }
+
+      if (this.cameraFollowTransition > 0 && this.tableCam) {
+        const t = this.cameraFollowTransition
+        const ease = t * t * (3 - 2 * t) // smoothstep easing
+
+        // Radius: 48 → 30
+        this.tableCam.radius = 48 + (30 - 48) * ease
+        // Beta: π/2.8 → 0.55 (more top-down)
+        this.tableCam.beta = (Math.PI / 2.8) + (0.55 - Math.PI / 2.8) * ease
+        // Relax radius limits during transition
+        this.tableCam.lowerRadiusLimit = 36 + (22 - 36) * ease
+
+        // In follow mode, suppress mouse influence
+        mouseState.targetX = 0.5
+        mouseState.targetY = 0.5
+      } else if (this.tableCam) {
+        // Restore limits when fully in cabinet mode
+        this.tableCam.lowerRadiusLimit = 36
+        this.tableCam.upperRadiusLimit = 60
+
+        // Normal mouse tracking
+        const offsetX = (mouseState.x - 0.5) * lookRange * 2
+        const offsetY = (mouseState.y - 0.5) * lookRange * 0.8
+        immersiveCam.alpha = baseAlpha + offsetX
+        immersiveCam.beta = baseBeta + offsetY
+      }
     })
     
     // Single active camera
@@ -440,6 +470,18 @@ export class Game {
       // Sharpening - restore edge definition lost to bloom blur
       this.bloomPipeline.sharpenEnabled = true
       this.bloomPipeline.sharpen.edgeAmount = 0.3
+
+      // Bloom quality tiering based on GPU capability
+      if (this.qualityTier === QualityTier.LOW) {
+        this.bloomPipeline.bloomKernel = 16
+        this.bloomPipeline.bloomScale = 0.2
+        this.bloomPipeline.bloomWeight = 0.12
+        this.bloomPipeline.sharpenEnabled = false
+      } else if (this.qualityTier === QualityTier.MEDIUM) {
+        this.bloomPipeline.bloomKernel = 32
+        this.bloomPipeline.bloomScale = 0.35
+        this.bloomPipeline.bloomWeight = 0.18
+      }
 
       // Depth of Field - subtle cinematic depth hierarchy (table camera only)
       if (!GameConfig.camera.reducedMotion) {
@@ -611,6 +653,7 @@ export class Game {
       },
       onMapCycle: () => this.mapManager?.cycleTableMap(),
       onCabinetCycle: () => this.cabinetManager?.cycleCabinetPreset(),
+      onCameraToggle: () => this.toggleCameraMode(),
       onLevelSelectToggle: () => this.toggleLevelSelect(),
       onLeaderboardToggle: () => this.leaderboardSystem.toggle(),
       onDynamicModeToggle: () => this.toggleDynamicMode(),
@@ -713,7 +756,10 @@ export class Game {
         matLib.updatePinMaterialEmissive(config.baseColor)
         matLib.updateBrushedMetalMaterialEmissive(config.baseColor)
         matLib.updateChromeMaterialEmissive(config.baseColor)
+        // Update bumper wireframe ring colors
+        this.gameObjects?.updateBumperColors(config.baseColor)
         // Update cabinet lighting
+        this.effects?.setCabinetColor(config.baseColor)
         this.updateCabinetLightingForMap()
       },
       onPopupShow: (name, color) => this.showMapNamePopup(name, color),
@@ -1029,6 +1075,9 @@ export class Game {
     if (this.cabinetNeonLights[3]) {
       this.cabinetNeonLights[3].diffuse = baseColor
     }
+
+    // Sync EffectsSystem LED strip base color
+    this.effects?.setCabinetColor(config.baseColor)
   }
 
   /**
@@ -1402,6 +1451,7 @@ export class Game {
     // Important but not blocking - these enhance gameplay but aren't needed immediately
     this.gameObjects.createDeathZone()
     this.gameObjects.createBumpers()
+    this.effects?.initBumperSparkPool(12)
     this.gameObjects.createSlingshots()
     this.gameObjects.createPachinkoField()
     this.gameObjects.createFlipperRamps()
@@ -2217,6 +2267,15 @@ export class Game {
       this.stopDynamicMode()
     }
   }
+
+  /**
+   * Toggle between cabinet view and ball-follow chase cam
+   * Press 'C' key to switch modes
+   */
+  private toggleCameraMode(): void {
+    this.isCameraFollowMode = !this.isCameraFollowMode
+    console.log(`[Camera] Follow mode: ${this.isCameraFollowMode}`)
+  }
   
   /**
    * Show mode switch popup notification
@@ -2692,7 +2751,7 @@ export class Game {
       const ballBody = this.ballManager.getBallBody()!
       const pos = ballBody.translation()
       const vel = ballBody.linvel()
-      const cameraMode = this.getCameraMode()
+      const cameraMode = this.isCameraFollowMode ? CameraMode.BALL_FOLLOW : this.getCameraMode()
 
       this.cameraController.update(
         dt,
@@ -2700,6 +2759,12 @@ export class Game {
         new Vector3(vel.x, vel.y, vel.z),
         cameraMode
       )
+
+      // Apply vertical offset for follow mode (LAYOUT-01)
+      if (this.isCameraFollowMode && this.tableCam) {
+        const targetY = pos.y + 2.5
+        this.tableCam.target.y += (targetY - this.tableCam.target.y) * dt * 5
+      }
     }
 
     // Dynamic World update (scrolling adventure mode)
@@ -2779,6 +2844,7 @@ export class Game {
       this.effects?.updateAtmosphere(dt, ballPos)
     }
     this.ballManager?.updateTrailEffects()
+    this.ballManager?.updateGoldBallGlow(dt)
     // Enhanced effects update with fever trail support
     const ballBodies = this.ballManager?.getBallBodies() || []
     const isFever = this.effects?.currentLightingMode === 'fever'
@@ -2892,6 +2958,8 @@ export class Game {
 
             // Use enhanced bumper impact with screen shake and ripple rings
             this.effects?.spawnEnhancedBumperImpact(vis.mesh.position, 'medium')
+            // Spawn pooled neon spark burst
+            this.effects?.spawnBumperSpark(vis.mesh.position, vis.color || PALETTE.CYAN)
             // Spawn animated impact ring effect
             this.effects?.spawnImpactRing(vis.mesh.position, new Vector3(0, 1, 0), PALETTE.CYAN)
             this.effects?.playBeep(400 + Math.random() * 200)
@@ -3454,6 +3522,7 @@ export class Game {
       physicsStepMs: rawDt * 1000,
       adventureTimeMs,
       dynamicZoneState: dynamicZoneLabel,
+      performanceTier: this.effects?.getRuntimePerformanceTier() || 'high',
     }
   }
 

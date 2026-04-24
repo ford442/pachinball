@@ -11,6 +11,7 @@ import {
   CLEARCOAT,
   QualityTier,
   color,
+  emissive,
 } from '../game-elements/visual-language'
 
 export class BallMaterials extends MaterialLibraryBase {
@@ -46,8 +47,8 @@ export class BallMaterials extends MaterialLibraryBase {
       
       // Base: near-white chrome
       mat.albedoColor = new Color3(0.98, 0.98, 1.0)
-      mat.metallic = 1.0
-      mat.roughness = 0.15
+      mat.metallic = METALLIC.FULL
+      mat.roughness = this._qualityTier === QualityTier.HIGH ? ROUGHNESS.MIRROR : ROUGHNESS.POLISHED
       
       // High environment intensity for reflections
       mat.environmentIntensity = 1.8
@@ -123,8 +124,8 @@ export class BallMaterials extends MaterialLibraryBase {
       mat.roughness = 0.15  // Lower for polished look
       mat.environmentIntensity = 1.3  // Higher reflectivity
 
-      // Subtle specular highlights
-      mat.emissiveColor = new Color3(0.3, 0.25, 0.1)
+      // Subtle gold emissive for premium glow (pulsed by BallManager)
+      mat.emissiveColor = emissive(PALETTE.GOLD, 0.2)
       mat.emissiveIntensity = 0.2
 
       // Clear coat for shine (skipped on LOW tier)
@@ -156,8 +157,8 @@ export class BallMaterials extends MaterialLibraryBase {
       mat.roughness = 0.12  // Controlled for precious metal look
       mat.environmentIntensity = 1.5  // Strong reflectivity
 
-      // Warm light response
-      mat.emissiveColor = new Color3(0.4, 0.3, 0.05)
+      // Rich gold emissive for premium glow (pulsed by BallManager)
+      mat.emissiveColor = emissive(PALETTE.GOLD, 0.3)
       mat.emissiveIntensity = 0.3
 
       // Strong clear coat for premium look (skipped on LOW tier)

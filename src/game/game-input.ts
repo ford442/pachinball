@@ -21,6 +21,7 @@ export interface InputConfig {
   onMapSwitch?: (mapIndex: number) => void
   onMapCycle?: () => void
   onCabinetCycle?: () => void
+  onCameraToggle?: () => void
   onLevelSelectToggle?: () => void
   onLeaderboardToggle?: () => void
   onDynamicModeToggle?: () => void
@@ -116,8 +117,15 @@ export class GameInputManager {
       return
     }
 
-    // 'C' key to cycle cabinet presets
-    if (e.code === 'KeyC') {
+    // 'C' key to toggle camera follow mode
+    if (e.code === 'KeyC' && isPlaying) {
+      e.preventDefault()
+      this.config.onCameraToggle?.()
+      return
+    }
+
+    // 'V' key to cycle cabinet presets
+    if (e.code === 'KeyV') {
       e.preventDefault()
       this.config.onCabinetCycle?.()
       return

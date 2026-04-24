@@ -28,6 +28,7 @@ import {
   color,
   emissive,
   pulse,
+  lerpColor,
 } from '../game-elements/visual-language'
 import { EffectsConfig } from '../config'
 import { DEFAULT_ACCESSIBILITY, type AccessibilityConfig } from '../game-elements/accessibility-config'
@@ -76,6 +77,7 @@ export class EffectsSystem {
   private shards: ShardParticle[] = []
   private cabinetLights: CabinetLight[] = []
   private decorativeLights: (StandardMaterial | PBRMaterial)[] = []
+  private currentCabinetColor: string = PALETTE.CYAN
   private lightingMode: 'normal' | 'hit' | 'fever' | 'reach' = 'normal'
   private lightingTimer = 0
   private hitFlashIntensity = 0
@@ -128,10 +130,10 @@ export class EffectsSystem {
   private activeImpactRings = 0
   private readonly maxImpactRings = 5
 
-  // Performance tracking
+  // Performance tracking — runtime adaptive tiering
   private lastFpsCheck = 0
-  private consecutiveLowFps = 0
-  private effectsDisabledDueToFps = false
+  private fpsTrendCounter = 0
+  private runtimePerformanceTier: 'high' | 'medium' | 'low' = 'high'
 
   // Camera reference for screen shake
   private cameraRef: { position: Vector3 } | null = null
@@ -211,6 +213,10 @@ export class EffectsSystem {
     } catch {
       this.audioCtx = null
     }
+  }
+
+  setCabinetColor(colorHex: string): void {
+    this.currentCabinetColor = colorHex
   }
 
   registerCamera(camera: { position: Vector3 }): void {
@@ -400,37 +406,53 @@ export class EffectsSystem {
   }
 
   createCabinetLighting(): void {
-    // Unified LED strips using Visual Language palette
+    const baseColor = this.currentCabinetColor
+    const accentColor = lerpColor(baseColor, PALETTE.WHITE, 0.3).toHexString()
+
+    // Unified LED strips using current map theme color
     const stripConfigs = [
       {
         pos: new Vector3(-12.5, 1.5, 5),
         size: { width: 0.2, height: 2.5, depth: 32 },
-        color: PALETTE.CYAN,
+        color: baseColor,
         intensity: INTENSITY.NORMAL,
       },
       {
         pos: new Vector3(13.5, 1.5, 5),
         size: { width: 0.2, height: 2.5, depth: 32 },
-        color: PALETTE.CYAN,
+        color: baseColor,
         intensity: INTENSITY.NORMAL,
       },
       {
         pos: new Vector3(0.75, 5.5, 5),
         size: { width: 26, height: 0.2, depth: 32 },
-        color: PALETTE.MAGENTA,
+        color: accentColor,
         intensity: INTENSITY.AMBIENT,
       },
-      // Lower accent strips - unified purple
+      // Lower accent strips
       {
         pos: new Vector3(-12.5, -1, 5),
         size: { width: 0.3, height: 0.1, depth: 32 },
-        color: PALETTE.PURPLE,
+        color: accentColor,
         intensity: INTENSITY.AMBIENT,
       },
       {
         pos: new Vector3(13.5, -1, 5),
         size: { width: 0.3, height: 0.1, depth: 32 },
-        color: PALETTE.PURPLE,
+        color: accentColor,
+        intensity: INTENSITY.AMBIENT,
+      },
+      // Backbox edge strips
+      {
+        pos: new Vector3(0, 8, 28),
+        size: { width: 28, height: 0.15, depth: 0.15 },
+        color: baseColor,
+        intensity: INTENSITY.NORMAL,
+      },
+      {
+        pos: new Vector3(0, 8, 22),
+        size: { width: 28, height: 0.15, depth: 0.15 },
+        color: accentColor,
         intensity: INTENSITY.AMBIENT,
       },
     ]
@@ -448,10 +470,13 @@ export class EffectsSystem {
       mat.alpha = Math.min(0.8, config.intensity)
       strip.material = mat
 
-      const light = new PointLight(`stripLight${idx}`, config.pos, this.scene)
+      // Offset light slightly inward for better playfield coverage
+      const lightPos = config.pos.clone()
+      lightPos.x *= 0.8
+      const light = new PointLight(`stripLight${idx}`, lightPos, this.scene)
       light.diffuse = color(config.color)
       light.intensity = config.intensity
-      light.range = 12
+      light.range = 20
       light.shadowEnabled = false
 
       this.cabinetLights.push({ mesh: strip, material: mat, pointLight: light })
@@ -725,7 +750,8 @@ export class EffectsSystem {
             const dt = 0.016
             this.hitFlashIntensity = Math.max(0, this.hitFlashIntensity - dt * 5)
             const flashBoost = 1 + this.hitFlashIntensity * 2
-            targetColor = emissive(PALETTE.WHITE, INTENSITY.FLASH * flashBoost)
+            const flashColor = lerpColor(this.currentCabinetColor, PALETTE.WHITE, 0.5).toHexString()
+            targetColor = emissive(flashColor, INTENSITY.FLASH * flashBoost)
             intensity = INTENSITY.FLASH * flashBoost
             break
           }
@@ -743,9 +769,9 @@ export class EffectsSystem {
           }
           case 'normal':
           default: {
-            // Breathing cyan - unified idle state
+            // Breathing current map color - unified idle state
             const breath = pulse(time, 0.7, INTENSITY.AMBIENT, INTENSITY.NORMAL)
-            targetColor = emissive(PALETTE.CYAN, breath)
+            targetColor = emissive(this.currentCabinetColor, breath)
             intensity = breath
             break
           }
@@ -1052,27 +1078,58 @@ export class EffectsSystem {
     if (this.lastFpsCheck < EffectsConfig.performance.fpsCheckInterval) return
 
     this.lastFpsCheck = 0
-    const fps = 1 / dt
+    const fps = this.scene.getEngine().getFps()
+    const targetTier = fps < 40 ? 'low' : fps < 55 ? 'medium' : 'high'
 
-    if (fps < EffectsConfig.performance.lowFpsThreshold) {
-      this.consecutiveLowFps++
-      if (this.consecutiveLowFps >= 3 && !this.effectsDisabledDueToFps) {
-        console.warn('[Effects] Low FPS detected, disabling enhanced effects')
-        this.effectsDisabledDueToFps = true
-      }
-    } else {
-      this.consecutiveLowFps = Math.max(0, this.consecutiveLowFps - 1)
-      if (this.consecutiveLowFps === 0 && this.effectsDisabledDueToFps) {
-        console.log('[Effects] FPS recovered, re-enabling enhanced effects')
-        this.effectsDisabledDueToFps = false
-      }
+    if (targetTier === this.runtimePerformanceTier) {
+      this.fpsTrendCounter = 0
+      return
     }
+
+    this.fpsTrendCounter++
+    if (this.fpsTrendCounter >= 3) {
+      this.setRuntimePerformanceTier(targetTier)
+      this.fpsTrendCounter = 0
+      console.log(
+        `[Performance] Runtime tier changed → ${this.runtimePerformanceTier} (FPS: ${fps.toFixed(1)})`
+      )
+    }
+  }
+
+  private setRuntimePerformanceTier(tier: 'high' | 'medium' | 'low'): void {
+    this.runtimePerformanceTier = tier
+    this.applyPerformanceTier()
+  }
+
+  private applyPerformanceTier(): void {
+    if (!this.bloomPipeline) return
+    switch (this.runtimePerformanceTier) {
+      case 'high':
+        this.bloomPipeline.bloomWeight = 0.25
+        this.bloomPipeline.bloomScale = 0.5
+        this.particleEffects.setMaxParticles(100)
+        break
+      case 'medium':
+        this.bloomPipeline.bloomWeight = 0.15
+        this.bloomPipeline.bloomScale = 0.3
+        this.particleEffects.setMaxParticles(60)
+        break
+      case 'low':
+        this.bloomPipeline.bloomWeight = 0.08
+        this.bloomPipeline.bloomScale = 0.15
+        this.particleEffects.setMaxParticles(30)
+        break
+    }
+  }
+
+  getRuntimePerformanceTier(): 'high' | 'medium' | 'low' {
+    return this.runtimePerformanceTier
   }
 
   private areEnhancedEffectsEnabled(): boolean {
     if (!EffectsConfig.enableEnhancedEffects) return false
     if (EffectsConfig.enableFallbackMode) return false
-    if (this.effectsDisabledDueToFps) return false
+    if (this.runtimePerformanceTier === 'low') return false
     return true
   }
 
@@ -1472,6 +1529,10 @@ export class EffectsSystem {
   }
 
   // Delegate methods to sub-systems
+  initBumperSparkPool(size: number = 12): void {
+    this.particleEffects.initBumperSparkPool(size)
+  }
+
   spawnBumperSpark(position: Vector3, color?: string): void {
     this.particleEffects.spawnBumperSpark(position, color)
   }

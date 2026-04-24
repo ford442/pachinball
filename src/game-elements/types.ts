@@ -20,8 +20,8 @@ export interface BumperVisual {
   flashTimer?: number
   /** Bumper base color for particle matching */
   color?: string
-  /** Particle system reference for this bumper */
-  particles?: import('@babylonjs/core').ParticleSystem
+  /** Thin wireframe hologram ring floating above the bumper */
+  wireframeRing?: Mesh
 }
 
 export enum GameState {
