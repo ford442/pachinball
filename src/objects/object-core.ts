@@ -1,5 +1,5 @@
 // Main GameObjects orchestrator
-import { Scene, Vector3, Mesh, MeshBuilder, TransformNode, StandardMaterial, Color3 } from '@babylonjs/core'
+import { Scene, Vector3, Mesh, AbstractMesh, MeshBuilder, TransformNode, StandardMaterial, Color3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
 import type { PhysicsBinding, BumperVisual } from '../game-elements/types'
@@ -26,7 +26,7 @@ export class GameObjects {
   private flipperLeftJoint: RAPIER.ImpulseJoint | null = null
   private flipperRightJoint: RAPIER.ImpulseJoint | null = null
   private deathZoneBody: RAPIER.RigidBody | null = null
-  private pinballMeshes: Mesh[] = []
+  private pinballMeshes: AbstractMesh[] = []
 
   // Sub-builders
   private flipperBuilder: FlipperBuilder
@@ -244,7 +244,7 @@ export class GameObjects {
     }
   }
 
-  getPinballMeshes(): Mesh[] {
+  getPinballMeshes(): AbstractMesh[] {
     return this.pinballMeshes
   }
 

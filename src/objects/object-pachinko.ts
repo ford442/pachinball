@@ -1,4 +1,4 @@
-import { Scene, Vector3, MeshBuilder, Mesh } from '@babylonjs/core'
+import { Scene, Vector3, MeshBuilder, Mesh, AbstractMesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
 import { getMaterialLibrary } from '../materials'
@@ -35,16 +35,16 @@ export class PachinkoBuilder {
     targetMeshes: Mesh[]
     targetActive: boolean[]
     targetRespawnTimer: number[]
-    meshes: Mesh[]
-    pins: Mesh[]
+    meshes: AbstractMesh[]
+    pins: AbstractMesh[]
   } {
     const bindings: PhysicsBinding[] = []
     const targetBodies: RAPIER.RigidBody[] = []
     const targetMeshes: Mesh[] = []
     const targetActive: boolean[] = []
     const targetRespawnTimer: number[] = []
-    const meshes: Mesh[] = []
-    const pins: Mesh[] = []
+    const meshes: AbstractMesh[] = []
+    const pins: AbstractMesh[] = []
 
     // Enhanced peg material with map-reactive emissive tips
     const pinMat = this.matLib.getEnhancedPinMaterial()
@@ -55,6 +55,60 @@ export class PachinkoBuilder {
     const spacingX = width / cols
     const spacingZ = height / rows
 
+    const pegHeight = 1.5
+    const baseRadius = 0.12
+    const topRadius = 0.06
+    const avgRadius = (baseRadius + topRadius) / 2
+
+    // ================================================================
+    // INSTANCED PINS – create 3 LOD template meshes once, then
+    // stamp instances for every grid position.  All instances share
+    // the same vertex buffer → O(LOD_levels) draw-calls instead of
+    // O(pin_count).
+    // ================================================================
+
+    const buildTemplate = (suffix: string, tess: number, capSeg: number, bevelTess: number): Mesh => {
+      const cyl = MeshBuilder.CreateCylinder(`pinT_${suffix}`, {
+        diameterTop: topRadius * 2,
+        diameterBottom: baseRadius * 2,
+        height: pegHeight,
+        tessellation: tess,
+      }, this.scene) as Mesh
+
+      const cap = MeshBuilder.CreateSphere(`pinCapT_${suffix}`, {
+        diameter: topRadius * 2.2,
+        slice: 0.5,
+        segments: capSeg,
+      }, this.scene) as Mesh
+      cap.position.y = pegHeight / 2 - 0.02
+
+      const bevel = MeshBuilder.CreateTorus(`pinBevelT_${suffix}`, {
+        diameter: baseRadius * 2.3,
+        thickness: 0.025,
+        tessellation: bevelTess,
+      }, this.scene) as Mesh
+      bevel.position.y = -pegHeight / 2 + 0.03
+      bevel.rotation.x = Math.PI / 2
+
+      // Merge sub-meshes into a single draw-call-efficient mesh at origin
+      const merged = Mesh.MergeMeshes([cyl, cap, bevel], true, true, undefined, false, true)!
+      merged.material = pinMat
+      merged.isPickable = false
+      merged.isVisible = false  // template is hidden; instances render
+      return merged
+    }
+
+    const pinHigh = buildTemplate('high', 12, 10, 10)
+    const pinMed  = buildTemplate('med',   8,  6,  8)
+    const pinLow  = buildTemplate('low',   6,  4,  6)
+
+    pinHigh.addLODLevel(12, pinMed)
+    pinHigh.addLODLevel(25, pinLow)
+    pinHigh.addLODLevel(50, null)
+
+    // Track templates so they are disposed and toggled with the scene
+    meshes.push(pinHigh, pinMed, pinLow)
+
     for (let r = 0; r < rows; r++) {
       const offsetX = (r % 2 === 0) ? 0 : spacingX / 2
       for (let c = 0; c < cols; c++) {
@@ -63,58 +117,17 @@ export class PachinkoBuilder {
         // Skip center area for the main catcher/target
         if (Math.abs(x) < 2.5 && Math.abs(z - center.z) < 2.5) continue
 
-        const pegHeight = 1.5
-        const baseRadius = 0.12
-        const topRadius = 0.06
-
-        // ================================================================
-        // ENHANCED PEG - Tapered cylinder with rounded top and base bevel
-        // With LOD for performance (HIGH detail → MED → LOW → culled)
-        // ================================================================
-
-        const createPinLOD = (suffix: string, tess: number, capSeg: number, bevelTess: number): Mesh => {
-          const pinLod = MeshBuilder.CreateCylinder(`pin_${suffix}_${r}_${c}`, {
-            diameterTop: topRadius * 2,
-            diameterBottom: baseRadius * 2,
-            height: pegHeight,
-            tessellation: tess
-          }, this.scene) as Mesh
-
-          const capLod = MeshBuilder.CreateSphere(`pinCap_${suffix}_${r}_${c}`, {
-            diameter: topRadius * 2.2,
-            slice: 0.5,
-            segments: capSeg
-          }, this.scene) as Mesh
-          capLod.position.y = pegHeight / 2 - 0.02
-
-          const bevelLod = MeshBuilder.CreateTorus(`pinBevel_${suffix}_${r}_${c}`, {
-            diameter: baseRadius * 2.3,
-            thickness: 0.025,
-            tessellation: bevelTess
-          }, this.scene) as Mesh
-          bevelLod.position.y = -pegHeight / 2 + 0.03
-          bevelLod.rotation.x = Math.PI / 2
-
-          const merged = Mesh.MergeMeshes([pinLod, capLod, bevelLod], true, true, undefined, false, true)
-          merged!.position.set(x, 0.4, z)
-          merged!.material = pinMat
-          return merged!
-        }
-
-        const pinHigh = createPinLOD('high', 12, 10, 10)
-        const pinMed = createPinLOD('med', 8, 6, 8)
-        const pinLow = createPinLOD('low', 6, 4, 6)
-
-        pinHigh.addLODLevel(12, pinMed)
-        pinHigh.addLODLevel(25, pinLow)
-        pinHigh.addLODLevel(50, null)
+        // Instance inherits geometry + LOD from template; each instance
+        // gets its own world transform but shares one vertex buffer.
+        const inst = pinHigh.createInstance(`pin_${r}_${c}`)
+        inst.position.set(x, 0.4, z)
+        inst.isPickable = false
+        // Static object: lock the world matrix in GPU memory
+        inst.freezeWorldMatrix()
 
         const body = this.world.createRigidBody(
           this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.4, z)
         )
-
-        // Thin collider matching tapered shape
-        const avgRadius = (baseRadius + topRadius) / 2
         this.world.createCollider(
           this.rapier.ColliderDesc.cylinder(pegHeight / 2, avgRadius)
             .setRestitution(0.65)
@@ -122,9 +135,11 @@ export class PachinkoBuilder {
           body
         )
 
-        bindings.push({ mesh: pinHigh, rigidBody: body })
-        meshes.push(pinHigh, pinMed, pinLow)
-        pins.push(pinHigh)
+        // Fixed bodies are skipped in the physics-sync loop; the binding
+        // is kept only so the body is reachable via getBindings() if needed.
+        bindings.push({ mesh: inst, rigidBody: body })
+        meshes.push(inst)
+        pins.push(inst)
       }
     }
 
