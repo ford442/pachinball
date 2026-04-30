@@ -87,11 +87,6 @@ export const jackpotOverlayShader = {
 
         // PHASE 2: CRITICAL ERROR (Hex Shield Peel + Strobing)
         if (uPhase == 2) {
-           // Hexagon Pattern
-           vec2 r = vUV * 20.0;
-           r.x *= 1.15470053839;
-           float isHex = step(mod(r.x + r.y, 2.0), 1.0);
-
            // "Peel" effect: Pixels discard if inside the expanding radius
            if (distFromCenter < (uTime * 0.5 - 1.0)) { // Expanding hole
               // White blinding light underneath
@@ -103,7 +98,6 @@ export const jackpotOverlayShader = {
                   finalColor += vec3(0.2, 0.2, 0.0);
               }
            }
-           isHex; // suppress unused variable
         }
 
         // PHASE 3: MELTDOWN (Shockwaves + Rainbow)

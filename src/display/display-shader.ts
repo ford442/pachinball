@@ -219,7 +219,8 @@ export class DisplayShaderLayer {
     this.jackpotAttached = false
 
     this.jackpotPostProcess.onApply = (effect) => {
-      effect.setTexture('myTexture', this.jackpotBaseTex!)
+      if (!this.jackpotBaseTex) return
+      effect.setTexture('myTexture', this.jackpotBaseTex)
       effect.setFloat('uTime', this.time)
       effect.setInt('uPhase', this.jackpotState.phase)
       effect.setFloat('uCrackProgress', this.jackpotState.crack)
