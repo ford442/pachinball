@@ -27,6 +27,7 @@ import { SSRRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeli
 import { MotionBlurPostProcess } from '@babylonjs/core/PostProcesses/motionBlurPostProcess'
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation'
 import { EngineInstrumentation } from '@babylonjs/core/Instrumentation/engineInstrumentation'
+import { SceneOptimizer, SceneOptimizerOptions } from '@babylonjs/core/Misc/sceneOptimizer'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { Nullable } from '@babylonjs/core/types'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
@@ -152,6 +153,7 @@ export class Game {
 
   // Rendering
   private bloomPipeline: DefaultRenderingPipeline | null = null
+  private sceneOptimizer: SceneOptimizer | null = null
   private mirrorTexture: MirrorTexture | null = null
   private tableRenderTarget: RenderTargetTexture | null = null
   private headRenderTarget: RenderTargetTexture | null = null
@@ -704,6 +706,11 @@ export class Game {
     // Fix DPR handling to use rounded value
     this.setupDPRHandling()
 
+    // Adaptive quality optimizer: if the frame-rate drops below 55 fps the
+    // optimizer progressively relaxes expensive settings (shadows → SSAO →
+    // post-processes → hardware scaling) until the target is met again.
+    this.setupSceneOptimizer()
+
     // Enable latency tracking in dev mode (check URL parameter)
     this.showDebugUI = new URLSearchParams(window.location.search).has('debug')
     if (this.showDebugUI) {
@@ -1139,7 +1146,27 @@ export class Game {
     })
   }
 
+  private setupSceneOptimizer(): void {
+    if (!this.scene) return
+
+    // Target 55 fps; check every 2 s before degrading.
+    // ModerateDegradationAllowed progressively disables: render targets →
+    // shadows → particles → post-processes → hardware scaling.
+    const options = SceneOptimizerOptions.ModerateDegradationAllowed(55)
+    this.sceneOptimizer = new SceneOptimizer(this.scene, options)
+    this.sceneOptimizer.onSuccessObservable.add(() => {
+      console.log('[SceneOptimizer] Target FPS reached – optimizations applied')
+    })
+    this.sceneOptimizer.onFailureObservable.add(() => {
+      console.warn('[SceneOptimizer] Could not reach target FPS after all optimizations')
+    })
+    this.sceneOptimizer.start()
+    console.log('[SceneOptimizer] Adaptive quality optimizer started (target: 55 fps)')
+  }
+
   dispose(): void {
+    this.sceneOptimizer?.dispose()
+    this.sceneOptimizer = null
     this.inputManager?.dispose()
     this.debugHUD?.dispose()
     this.debugHUD = null

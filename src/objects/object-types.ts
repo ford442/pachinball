@@ -1,5 +1,5 @@
 // Types and interfaces for game objects
-import type { Mesh, Vector3, TransformNode } from '@babylonjs/core'
+import type { Mesh, AbstractMesh, Vector3, TransformNode } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export interface FlipperConfig {
@@ -34,7 +34,7 @@ export interface GameObjectRefs {
   bumpers: Map<string, Mesh>
   walls: Mesh[]
   rails: Mesh[]
-  pins: Mesh[]
+  pins: AbstractMesh[]
 }
 
 export interface FlipperVisuals {
