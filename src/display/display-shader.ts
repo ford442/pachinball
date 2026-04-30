@@ -1,38 +1,108 @@
 /**
  * Display Shader Layer
- * 
+ *
  * Handles shader background and effects.
  * Extracted from display.ts for modularity.
+ *
+ * Architecture
+ * ─────────────
+ * • backgroundMesh  – a 3-D plane anchored in the backbox hierarchy; renders the
+ *                     animated cyber-grid via ShaderMaterial (world-space object).
+ * • crtPostProcess  – full-screen PostProcess that applies the CRT effect to the
+ *                     rendered scene texture; replaces the old crtMesh plane.
+ * • jackpotPostProcess – full-screen PostProcess that composites jackpot overlay
+ *                        effects on top of the scene; replaces the old jackpotMesh.
+ *
+ * Benefits vs. three overlapping planes
+ * ─────────────────────────────────────
+ * • One draw-call per effect instead of three full-screen rasterisations.
+ * • No world/view/projection matrix upload for CRT/jackpot (handled by Babylon).
+ * • Zero overdraw from extra blend passes on the background.
+ * • Toggle via camera.attachPostProcess / detachPostProcess – no geometry churn.
  */
 
-import { ShaderMaterial, Color3, MeshBuilder, type Mesh, type Scene, type TransformNode, DynamicTexture } from '@babylonjs/core'
+import {
+  Effect,
+  PostProcess,
+  ShaderMaterial,
+  Color3,
+  MeshBuilder,
+  Texture,
+  DynamicTexture,
+  type Camera,
+  type Mesh,
+  type Scene,
+  type TransformNode,
+} from '@babylonjs/core'
 import { DisplayState, type DisplayConfig, CRT_PRESETS, type CRTEffectParams } from './display-types'
 import { crtEffectShader } from '../shaders/crt-effect'
-import { jackpotOverlayShader } from '../shaders/jackpotOverlay'
+import { jackpotOverlayPostProcessFragment } from '../shaders/jackpotOverlay'
+
+// ─── Register PostProcess fragment shaders once at module load ────────────────
+// Babylon resolves the shader by looking up "<name>FragmentShader" in the store.
+Effect.ShadersStore['crtEffectFragmentShader'] = crtEffectShader.fragment
+Effect.ShadersStore['jackpotOverlayFragmentShader'] = jackpotOverlayPostProcessFragment
+
+// ─── Private type for jackpot phase state ────────────────────────────────────
+interface JackpotPhaseState {
+  phase: number
+  crack: number
+  shock: number
+  glitch: number
+}
 
 export class DisplayShaderLayer {
   private scene: Scene
   private config: DisplayConfig
+
+  // Background – remains a 3-D plane inside the backbox hierarchy
   private material: ShaderMaterial | null = null
-  private crtMaterial: ShaderMaterial | null = null
-  private jackpotMaterial: ShaderMaterial | null = null
   private backgroundMesh: Mesh | null = null
-  private crtMesh: Mesh | null = null
-  private jackpotMesh: Mesh | null = null
+
+  // CRT and jackpot are now full-screen PostProcesses
+  private crtPostProcess: PostProcess | null = null
+  private jackpotPostProcess: PostProcess | null = null
+  private jackpotBaseTex: DynamicTexture | null = null
+
+  // Track whether each PostProcess is currently attached to the camera
+  private crtAttached = false
+  private jackpotAttached = false
+
   private time = 0
   private crtEffectActive = false
   private crtEffectParams: CRTEffectParams = CRT_PRESETS.STORY
+
+  // Cached jackpot phase state – updated in update(), read in onApply
+  private jackpotState: JackpotPhaseState = { phase: 0, crack: 0, shock: 0, glitch: 0 }
 
   constructor(scene: Scene, config: DisplayConfig) {
     this.scene = scene
     this.config = config
     this.createBackgroundMaterial()
-    this.createCRTMaterial()
-    this.createJackpotMaterial()
+    // PostProcesses are created in createLayer() once an active camera exists
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ──────────────────────────────────────────────────────────────────────────
+  private getCamera(): Camera | null {
+    return this.scene.activeCamera
+  }
+
+  private attachPP(pp: PostProcess): void {
+    const cam = this.getCamera()
+    if (cam) cam.attachPostProcess(pp)
+  }
+
+  private detachPP(pp: PostProcess): void {
+    const cam = this.getCamera()
+    if (cam) cam.detachPostProcess(pp)
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Background – ShaderMaterial plane (world-space, part of backbox hierarchy)
+  // ──────────────────────────────────────────────────────────────────────────
   private createBackgroundMaterial(): void {
-    // Create cyber grid shader material
     const cyberShader = new ShaderMaterial(
       'cyberBg',
       this.scene,
@@ -48,6 +118,7 @@ export class DisplayShaderLayer {
           }
         `,
         fragmentSource: `
+          precision highp float;
           uniform float time;
           uniform float speed;
           uniform vec3 colorTint;
@@ -70,99 +141,104 @@ export class DisplayShaderLayer {
       }
     )
 
+    // Static uniforms – set once, never touched in update()
     cyberShader.setFloat('speed', 0.5)
     cyberShader.setColor3('colorTint', Color3.FromHexString('#00ffd9'))
     this.material = cyberShader
   }
 
-  private createCRTMaterial(): void {
-    // Create CRT shader material (mesh created in createLayer)
-    const crtMat = new ShaderMaterial(
-      'crtMat',
-      this.scene,
-      {
-        vertexSource: crtEffectShader.vertex,
-        fragmentSource: crtEffectShader.fragment,
-      },
-      {
-        attributes: ['position', 'uv'],
-        uniforms: [
-          'worldViewProjection',
-          'uTime',
-          'uScanlineIntensity',
-          'uCurvature',
-          'uVignette',
-          'uChromaticAberration',
-          'uGlow',
-          'uNoise',
-          'uFlicker',
-        ],
-        samplers: ['textureSampler'],
-        needAlphaBlending: false,
-      }
+  // ──────────────────────────────────────────────────────────────────────────
+  // CRT PostProcess
+  // ──────────────────────────────────────────────────────────────────────────
+  private createCRTPostProcess(): void {
+    const camera = this.getCamera()
+    if (!camera) return
+
+    this.crtPostProcess?.dispose()
+
+    // Create with null camera so we control when it is attached
+    this.crtPostProcess = new PostProcess(
+      'crtPP',
+      'crtEffect',
+      ['uTime', 'uScanlineIntensity', 'uCurvature', 'uVignette', 'uChromaticAberration', 'uGlow', 'uNoise', 'uFlicker'],
+      null, // textureSampler is auto-provided by Babylon
+      1.0,
+      null, // manually attached below
+      Texture.BILINEAR_SAMPLINGMODE,
+      this.scene.getEngine()
     )
 
-    // Set default params
-    crtMat.setFloat('uTime', 0)
-    crtMat.setFloat('uScanlineIntensity', this.crtEffectParams.scanlineIntensity)
-    crtMat.setFloat('uCurvature', this.crtEffectParams.curvature)
-    crtMat.setFloat('uVignette', this.crtEffectParams.vignette)
-    crtMat.setFloat('uChromaticAberration', this.crtEffectParams.chromaticAberration)
-    crtMat.setFloat('uGlow', this.crtEffectParams.glow)
-    crtMat.setFloat('uNoise', this.crtEffectParams.noise)
-    crtMat.setFloat('uFlicker', this.crtEffectParams.flicker)
+    this.crtPostProcess.onApply = (effect) => {
+      const p = this.crtEffectParams
+      effect.setFloat('uTime', this.time)
+      effect.setFloat('uScanlineIntensity', p.scanlineIntensity)
+      effect.setFloat('uCurvature', p.curvature)
+      effect.setFloat('uVignette', p.vignette)
+      effect.setFloat('uChromaticAberration', p.chromaticAberration)
+      effect.setFloat('uGlow', p.glow)
+      effect.setFloat('uNoise', p.noise)
+      effect.setFloat('uFlicker', p.flicker)
+    }
 
-    this.crtMaterial = crtMat
+    // Attach only if CRT was already requested active
+    if (this.crtEffectActive) {
+      camera.attachPostProcess(this.crtPostProcess)
+      this.crtAttached = true
+    } else {
+      this.crtAttached = false
+    }
   }
 
-  private createJackpotMaterial(): void {
-    // Create a base dynamic texture for the jackpot overlay shader
-    const baseTex = new DynamicTexture('jackpotBase', 512, this.scene, true)
-    const ctx = baseTex.getContext()
+  // ──────────────────────────────────────────────────────────────────────────
+  // Jackpot PostProcess
+  // ──────────────────────────────────────────────────────────────────────────
+  private createJackpotPostProcess(): void {
+    if (!this.getCamera()) return
+
+    // 256×256 is plenty for the procedural crack/shockwave patterns
+    this.jackpotBaseTex?.dispose()
+    this.jackpotBaseTex = new DynamicTexture('jackpotBase', 256, this.scene, true)
+    const ctx = this.jackpotBaseTex.getContext()
     ctx.fillStyle = '#050505'
-    ctx.fillRect(0, 0, 512, 512)
-    baseTex.update()
+    ctx.fillRect(0, 0, 256, 256)
+    this.jackpotBaseTex.update()
 
-    const jackpotMat = new ShaderMaterial(
-      'jackpotMat',
-      this.scene,
-      {
-        vertexSource: jackpotOverlayShader.vertex,
-        fragmentSource: jackpotOverlayShader.fragment,
-      },
-      {
-        attributes: ['position', 'uv'],
-        uniforms: [
-          'worldViewProjection',
-          'uTime',
-          'uPhase',
-          'uCrackProgress',
-          'uShockwaveRadius',
-          'uGlitchIntensity',
-        ],
-        samplers: ['myTexture'],
-        needAlphaBlending: true,
-      }
+    this.jackpotPostProcess?.dispose()
+
+    // Create with null camera – attached only when the jackpot state is active
+    this.jackpotPostProcess = new PostProcess(
+      'jackpotPP',
+      'jackpotOverlay',
+      ['uTime', 'uPhase', 'uCrackProgress', 'uShockwaveRadius', 'uGlitchIntensity'],
+      ['myTexture'],
+      1.0,
+      null, // manually attached when jackpot becomes active
+      Texture.BILINEAR_SAMPLINGMODE,
+      this.scene.getEngine()
     )
+    this.jackpotAttached = false
 
-    jackpotMat.setTexture('myTexture', baseTex)
-    jackpotMat.setFloat('uTime', 0)
-    jackpotMat.setInt('uPhase', 0)
-    jackpotMat.setFloat('uCrackProgress', 0)
-    jackpotMat.setFloat('uShockwaveRadius', 0)
-    jackpotMat.setFloat('uGlitchIntensity', 0)
-
-    this.jackpotMaterial = jackpotMat
+    this.jackpotPostProcess.onApply = (effect) => {
+      effect.setTexture('myTexture', this.jackpotBaseTex!)
+      effect.setFloat('uTime', this.time)
+      effect.setInt('uPhase', this.jackpotState.phase)
+      effect.setFloat('uCrackProgress', this.jackpotState.crack)
+      effect.setFloat('uShockwaveRadius', this.jackpotState.shock)
+      effect.setFloat('uGlitchIntensity', this.jackpotState.glitch)
+    }
   }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Public API
+  // ──────────────────────────────────────────────────────────────────────────
 
   /**
-   * Create shader meshes parented to the given root node.
-   * This fixes orphaned meshes by attaching them to the backbox hierarchy.
+   * Create the background mesh and post-process effects, parented to the given
+   * root node.  Must be called after the scene has an active camera.
    */
   createLayer(parent: TransformNode): void {
+    // Rebuild only the background mesh (PostProcesses live on the camera)
     this.backgroundMesh?.dispose()
-    this.crtMesh?.dispose()
-    this.jackpotMesh?.dispose()
 
     this.backgroundMesh = MeshBuilder.CreatePlane(
       'shaderBg',
@@ -173,82 +249,66 @@ export class DisplayShaderLayer {
     this.backgroundMesh.position.z = -0.5
     this.backgroundMesh.rotation.y = Math.PI
     this.backgroundMesh.material = this.material
+    // Static mesh optimisations
+    this.backgroundMesh.isPickable = false
+    this.backgroundMesh.freezeWorldMatrix()
 
-    this.crtMesh = MeshBuilder.CreatePlane(
-      'crtEffect',
-      { width: this.config.width, height: this.config.height },
-      this.scene
-    )
-    this.crtMesh.parent = parent
-    this.crtMesh.position.z = -0.25
-    this.crtMesh.rotation.y = Math.PI
-    this.crtMesh.isVisible = this.crtEffectActive
-    this.crtMesh.material = this.crtMaterial
-
-    this.jackpotMesh = MeshBuilder.CreatePlane(
-      'jackpotOverlay',
-      { width: this.config.width, height: this.config.height },
-      this.scene
-    )
-    this.jackpotMesh.parent = parent
-    this.jackpotMesh.position.z = -0.15
-    this.jackpotMesh.rotation.y = Math.PI
-    this.jackpotMesh.isVisible = false
-    this.jackpotMesh.material = this.jackpotMaterial
+    // Build (or rebuild) the PostProcesses now that a camera is available
+    this.createCRTPostProcess()
+    this.createJackpotPostProcess()
   }
 
   update(dt: number, state: DisplayState, jackpotPhase: number): void {
     this.time += dt
 
-    // Update background shader time
+    // Only `time` changes each frame for the background
     if (this.material) {
       this.material.setFloat('time', this.time)
     }
 
-    // Update CRT effect shader
-    if (this.crtEffectActive && this.crtMaterial) {
-      this.crtMaterial.setFloat('uTime', this.time)
+    // Jackpot PostProcess – attach/detach only on state transitions
+    const isJackpot = state === DisplayState.JACKPOT
+    if (isJackpot !== this.jackpotAttached && this.jackpotPostProcess) {
+      if (isJackpot) {
+        this.attachPP(this.jackpotPostProcess)
+      } else {
+        this.detachPP(this.jackpotPostProcess)
+      }
+      this.jackpotAttached = isJackpot
     }
 
-    // Jackpot effects
-    if (this.jackpotMaterial && this.jackpotMesh) {
-      const isJackpot = state === DisplayState.JACKPOT
-      this.jackpotMesh.isVisible = isJackpot
+    if (isJackpot) {
+      let phase = 0
+      let crack = 0.0
+      let shock = 0.0
 
-      if (isJackpot) {
-        let phase = 0
-        let crack = 0.0
-        let shock = 0.0
+      if (jackpotPhase === 1) {
+        phase = 1
+        crack = Math.min(1.0, this.time * 0.5)
+      } else if (jackpotPhase === 2) {
+        phase = 2
+        crack = 1.0
+      } else if (jackpotPhase === 3) {
+        phase = 3
+        shock = Math.max(0.0, (this.time - 5.0) * 0.5)
+      }
 
-        if (jackpotPhase === 1) {
-          phase = 1
-          crack = Math.min(1.0, this.time * 0.5)
-        } else if (jackpotPhase === 2) {
-          phase = 2
-          crack = 1.0
-        } else if (jackpotPhase === 3) {
-          phase = 3
-          shock = Math.max(0.0, (this.time - 5.0) * 0.5)
-        }
-
-        this.jackpotMaterial.setFloat('uTime', this.time)
-        this.jackpotMaterial.setInt('uPhase', phase)
-        this.jackpotMaterial.setFloat('uCrackProgress', crack)
-        this.jackpotMaterial.setFloat('uShockwaveRadius', shock)
-        this.jackpotMaterial.setFloat('uGlitchIntensity', phase === 2 ? 0.5 : (phase === 1 ? 0.1 : 0.0))
+      this.jackpotState = {
+        phase,
+        crack,
+        shock,
+        glitch: phase === 2 ? 0.5 : phase === 1 ? 0.1 : 0.0,
       }
     }
   }
 
   onStateChange(_state: DisplayState): void {
-    // Handle state-specific shader changes
-    if (_state === DisplayState.JACKPOT) {
-      // Intensify effects for jackpot
-    }
+    void _state
+    // Reserved for future state-specific shader changes
   }
 
   /**
-   * Show or hide the shader background mesh
+   * Show or hide the shader background mesh.
    */
   setBackgroundVisible(visible: boolean): void {
     if (this.backgroundMesh) {
@@ -257,34 +317,33 @@ export class DisplayShaderLayer {
   }
 
   /**
-   * Enable/disable CRT effect overlay
+   * Enable or disable the CRT PostProcess.
    */
   setCRTEffectEnabled(enabled: boolean): void {
+    if (this.crtEffectActive === enabled) return
     this.crtEffectActive = enabled
-    if (this.crtMesh) {
-      this.crtMesh.isVisible = enabled
+
+    if (!this.crtPostProcess) return
+
+    if (enabled && !this.crtAttached) {
+      this.attachPP(this.crtPostProcess)
+      this.crtAttached = true
+    } else if (!enabled && this.crtAttached) {
+      this.detachPP(this.crtPostProcess)
+      this.crtAttached = false
     }
   }
 
   /**
-   * Set CRT effect parameters
+   * Update CRT parameters.  The new values are picked up automatically by
+   * the PostProcess onApply callback on the next frame.
    */
   setCRTEffectParams(params: Partial<CRTEffectParams>): void {
     this.crtEffectParams = { ...this.crtEffectParams, ...params }
-
-    if (this.crtMaterial) {
-      this.crtMaterial.setFloat('uScanlineIntensity', this.crtEffectParams.scanlineIntensity)
-      this.crtMaterial.setFloat('uCurvature', this.crtEffectParams.curvature)
-      this.crtMaterial.setFloat('uVignette', this.crtEffectParams.vignette)
-      this.crtMaterial.setFloat('uChromaticAberration', this.crtEffectParams.chromaticAberration)
-      this.crtMaterial.setFloat('uGlow', this.crtEffectParams.glow)
-      this.crtMaterial.setFloat('uNoise', this.crtEffectParams.noise)
-      this.crtMaterial.setFloat('uFlicker', this.crtEffectParams.flicker)
-    }
   }
 
   /**
-   * Update shader background parameters (speed and color)
+   * Update shader background speed and/or colour tint.
    */
   setShaderParams(params?: { speed?: number; color?: string }): void {
     if (this.material) {
@@ -301,22 +360,28 @@ export class DisplayShaderLayer {
     return this.material
   }
 
-  getCRTMaterial(): ShaderMaterial | null {
-    return this.crtMaterial
-  }
-
   dispose(): void {
+    // Detach before disposing to avoid camera pipeline errors
+    if (this.crtPostProcess && this.crtAttached) {
+      this.detachPP(this.crtPostProcess)
+      this.crtAttached = false
+    }
+    if (this.jackpotPostProcess && this.jackpotAttached) {
+      this.detachPP(this.jackpotPostProcess)
+      this.jackpotAttached = false
+    }
+
     this.material?.dispose()
-    this.crtMaterial?.dispose()
-    this.jackpotMaterial?.dispose()
     this.backgroundMesh?.dispose()
-    this.crtMesh?.dispose()
-    this.jackpotMesh?.dispose()
+    this.crtPostProcess?.dispose()
+    this.jackpotPostProcess?.dispose()
+    this.jackpotBaseTex?.dispose()
     this.material = null
-    this.crtMaterial = null
-    this.jackpotMaterial = null
     this.backgroundMesh = null
-    this.crtMesh = null
-    this.jackpotMesh = null
+    this.crtPostProcess = null
+    this.jackpotPostProcess = null
+    this.jackpotBaseTex = null
   }
 }
+
+
