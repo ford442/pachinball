@@ -81,6 +81,14 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 | `dynamic-scenarios.ts` | Scenario definitions for dynamic/fixed mode toggling. |
 | `dynamic-world.ts` | Scrolling world generation for dynamic adventure mode. |
 | `camera-controller.ts` | Camera modes, soft follow, framing zones. |
+| `path-mechanics.ts` | Dynamic adventure interactive elements: gates, magnets, launch pads, jump pads. |
+| `ball-stack-visual.ts` | Visual stack of reserve balls (gold-ball tracking). |
+| `debug-hud.ts` | Development overlay for runtime state monitoring (FPS, physics, performance tier). |
+| `display-config.ts` | Display system configuration: modes, states, blend modes, media playlists. |
+| `adventure-state.ts` | Level goals, progression, story system, unlockable rewards, map unlocking. |
+| `adventure-mode.ts` | Legacy adventure orchestrator (being phased out in favor of `src/adventure/`). |
+| `adventure-mode-builder.ts` | Legacy adventure track builder. |
+| `adventure-mode-tracks-a.ts` / `adventure-mode-tracks-b.ts` | Legacy track data files. |
 | Various `*-feeder.ts` | Specialized table toys: `mag-spin-feeder`, `nano-loom-feeder`, `prism-core-feeder`, `gauss-cannon-feeder`, `quantum-tunnel-feeder`. |
 
 #### `src/game/` — High-level managers (barrel: `src/game/index.ts`)
@@ -99,6 +107,7 @@ Replaces the old monolithic `display.ts`.
 - **`display-reels.ts`** — Slot-machine reel animation (Canvas2D fallback).
 - **`display-shader.ts`** — WGSL shader reel layer (WebGPU path).
 - **`display-video.ts`** — HTMLVideoElement layer for attract/jackpot/fever/reach/adventure clips.
+- **`display-image.ts`** — Static image display layer for the backbox.
 - **`display-types.ts`** — Enums and interfaces (`DisplayState`, `DisplayMode`, CRT presets).
 
 #### `src/effects/` — Visual & audio effects (barrel: `src/effects/index.ts`)
@@ -106,6 +115,7 @@ Replaces the old monolithic `display.ts`.
 - **`effects-particles.ts`** — Shard burst particle systems.
 - **`effects-lighting.ts`** — Environment color shifts, light animations.
 - **`effects-camera.ts`** — Camera shake, trauma/decay logic.
+- **`effects-types.ts`** — Effect types and interfaces (`EffectType`, `ParticleConfig`, `ScreenShakeConfig`).
 
 #### `src/objects/` — Scene object builders (barrel: `src/objects/index.ts`)
 - **`object-core.ts`** — `GameObjects` class: ground, table bounds, slingshots, targets.
@@ -115,6 +125,7 @@ Replaces the old monolithic `display.ts`.
 - **`object-rails.ts`** — Rail and ramp builders.
 - **`object-pachinko.ts`** — Pachinko pin field generation.
 - **`object-decoration.ts`** — Cabinet trim, LEDs, decorative meshes.
+- **`object-types.ts`** — Types and interfaces for game objects (FlipperConfig, BumperConfig, WallConfig, etc.).
 
 #### `src/materials/` — Unified PBR Material System (barrel: `src/materials/index.ts`)
 `MaterialLibrary` is a singleton (created via `getMaterialLibrary(scene)`). It delegates to:
@@ -128,16 +139,20 @@ Replaces the old monolithic `display.ts`.
 - **`numberScroll.ts`** / **`jackpotOverlay.ts`** — WGSL shaders for WebGPU reel rendering.
 - **`scanline.ts`** — Custom pixel shader for CRT scanlines.
 - **`lcd-table.ts`** — Custom pixel shader for LCD table-surface maps (registers maps like *neon-helix*, *cyber-core*, etc.).
+- **`crt-effect.ts`** — Retro CRT monitor effect shader (curvature, chromatic aberration, vignette, phosphor glow).
+- **`index.ts`** — Shader barrel file.
 
 #### `src/adventure/` — Adventure mode tracks (barrel: `src/adventure/index.ts`)
 - **`adventure-mode.ts`** — Main adventure orchestrator.
 - **`track-builder.ts`** — Generic track construction helpers.
 - **`camera-presets.ts`** — Cinematic camera angles.
+- **`adventure-types.ts`** — Adventure mode types and interfaces (`AdventureTrackType`, `AdventureCallback`).
 - **`tracks/*.ts`** — 25+ individual track builders (e.g., `neon-helix`, `cyber-core`, `quantum-grid`, `glitch-spire`, `prism-pathway`, `tesla-tower`, etc.).
 
 #### `src/cabinet/` — Cabinet presets (barrel: `src/cabinet/index.ts`)
 - **`cabinet-builder.ts`** — Factory / orchestrator.
 - **`cabinet-classic.ts`** / **`cabinet-neo.ts`** / **`cabinet-vertical.ts`** / **`cabinet-wide.ts`** — Individual preset geometries.
+- **`cabinet-types.ts`** — Shared type definitions (`CabinetType`, `CabinetPreset`).
 
 ---
 
@@ -227,16 +242,19 @@ Several systems use `getXxx()` / `resetXxx()` singleton helpers (e.g., `getMater
 
 ## 6. Testing Strategy
 
-- **Framework:** Playwright (`playwright.config.ts`)
+- **Framework:** Playwright (`playwright.config.ts`) + Vitest (`vitest`)
 - **Base URL:** `http://localhost:5173`
 - **Browser:** Desktop Chrome (single project)
 - **Test location:** `tests/`
-- **Current test:** `tests/verify_prism_core.spec.ts` — smoke test that boots the game, clicks **Start Game**, waits for scene init, and takes a verification screenshot.
+- **E2E test:** `tests/verify_prism_core.spec.ts` — smoke test that boots the game, clicks **Start Game**, waits for scene init, and takes a verification screenshot.
+- **Unit tests:** `tests/ball-manager.test.ts` — BallManager logic tests (Vitest).
 
 **Workflow for adding tests:**
 1. Ensure `npm run dev` is running.
-2. Write `.spec.ts` files in `tests/`.
-3. Run with `npx playwright test`.
+2. Write `.spec.ts` files in `tests/` for Playwright E2E tests.
+3. Write `.test.ts` files in `tests/` for Vitest unit tests.
+4. Run E2E tests with `npx playwright test`.
+5. Run unit tests with `npm test` (alias for `vitest run`).
 
 ---
 
