@@ -18,6 +18,7 @@ import { DisplayShaderLayer } from './display-shader'
 import { DisplayReelsLayer } from './display-reels'
 import { DisplayVideoLayer } from './display-video'
 import { DisplayImageLayer } from './display-image'
+import type { EventBus } from '../game/event-bus'
 
 export class DisplaySystem {
   private scene: Scene
@@ -277,6 +278,16 @@ export class DisplaySystem {
   public startSlotSpin(): void {
     console.log('[Display] Slot spin started')
     this.reelsLayer.startSpin()
+  }
+
+  /**
+   * Subscribe to event bus events.
+   * DisplaySystem self-manages display state changes via the `display:set` event.
+   */
+  subscribeToEvents(bus: EventBus): void {
+    bus.on('display:set', (state: DisplayState) => {
+      this.setDisplayState(state)
+    })
   }
 
   /**

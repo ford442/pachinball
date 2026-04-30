@@ -1,6 +1,7 @@
 import { GameState, DisplayState } from '../game-elements/types'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
+import { EventBus } from './event-bus'
 
 export interface StateManagerConfig {
   onStateChange?: (oldState: GameState, newState: GameState) => void
@@ -16,20 +17,24 @@ export class GameStateManager {
   private state: GameState = GameState.MENU
   private previousState: GameState = GameState.MENU
   private config: StateManagerConfig
-  // private effects: EffectsSystem | null = null // UNUSED
-  private display: DisplaySystem | null = null
+  private eventBus: EventBus | null = null
 
   constructor(config: StateManagerConfig = {}) {
     this.config = config
   }
 
-  setSystems(_effects: EffectsSystem | null, display: DisplaySystem | null): void {
-    // this.effects = effects // UNUSED
-    this.display = display
+  setEventBus(eventBus: EventBus): void {
+    this.eventBus = eventBus
   }
 
-  setDisplaySystem(display: DisplaySystem | null): void {
-    this.display = display
+  /** @deprecated Systems now subscribe via EventBus; kept for backward compat */
+  setSystems(_effects: EffectsSystem | null, _display: DisplaySystem | null): void {
+    // no-op: DisplaySystem now self-manages via EventBus subscription
+  }
+
+  /** @deprecated Use EventBus subscription instead; kept for backward compat */
+  setDisplaySystem(_display: DisplaySystem | null): void {
+    // no-op: DisplaySystem now self-manages via EventBus subscription
   }
 
   getState(): GameState {
@@ -69,27 +74,35 @@ export class GameStateManager {
   private handleStateTransition(oldState: GameState, newState: GameState): void {
     switch (newState) {
       case GameState.MENU:
-        this.display?.setDisplayState(DisplayState.IDLE)
+        this.eventBus?.emit('menu:enter')
+        this.eventBus?.emit('display:set', DisplayState.IDLE)
         this.config.onMenuEnter?.()
         break
 
       case GameState.PLAYING:
         if (oldState === GameState.MENU) {
+          this.eventBus?.emit('game:start')
           this.config.onGameStart?.()
         } else if (oldState === GameState.PAUSED) {
+          this.eventBus?.emit('game:resume')
           this.config.onResume?.()
         }
         break
 
       case GameState.PAUSED:
+        this.eventBus?.emit('game:pause')
         this.config.onPause?.()
         break
 
       case GameState.GAME_OVER:
-        this.display?.setDisplayState(DisplayState.IDLE)
+        this.eventBus?.emit('game:over')
+        this.eventBus?.emit('display:set', DisplayState.IDLE)
         this.config.onGameOver?.()
         break
     }
+
+    // Emit generic state change event for instrumentation / logging
+    this.eventBus?.emit('state:change', { oldState, newState })
   }
 
   togglePause(): void {

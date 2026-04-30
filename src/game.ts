@@ -98,6 +98,7 @@ function resolveVideoUrl(videoPath: string | undefined): string | undefined {
 
 import { BallStackVisual } from './game-elements/ball-stack-visual'
 import { GameStateManager } from './game/game-state'
+import { EventBus } from './game/event-bus'
 import { GameInputManager } from './game/game-input'
 import { TableMapManager } from './game/game-maps'
 import { CabinetManager } from './game/game-cabinet'
@@ -169,6 +170,7 @@ export class Game {
   // Game State
   private ready = false
   private stateManager!: GameStateManager
+  private eventBus!: EventBus
   private score = 0
   private lives = 3
   private bestScore = 0
@@ -705,11 +707,13 @@ export class Game {
     }
 
     this.ready = true
+    this.eventBus = new EventBus()
     this.stateManager = new GameStateManager({
       onStateChange: (oldState, newState) => {
         console.log(`[Game] State changed: ${GameState[oldState]} -> ${GameState[newState]}`)
       }
     })
+    this.stateManager.setEventBus(this.eventBus)
     this.stateManager.setSystems(this.effects, this.display)
 
     // Initialize adventure manager
@@ -1243,6 +1247,7 @@ export class Game {
     // Build display config with state-specific media from GameConfig
     const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
     this.display = new DisplaySystem(this.scene, this.engine, displayConfig)
+    this.display.subscribeToEvents(this.eventBus)
     this.stateManager.setDisplaySystem(this.display)
 
     // Initialize debug HUD
@@ -1305,7 +1310,8 @@ export class Game {
           this.adventureManager?.startAdventure(trackType)
           
           // Switch display to Mission Mode
-          this.display?.setDisplayState(DisplayState.ADVENTURE)
+          this.eventBus.emit('adventure:start')
+          this.eventBus.emit('display:set', DisplayState.ADVENTURE)
           const trackName = trackType ? this.getTrackDisplayName(trackType) : 'UNKNOWN SECTOR'
           this.display?.setTrackInfo(trackName)
           this.display?.setStoryText(`ENTERING: ${trackName}`)
@@ -1320,7 +1326,8 @@ export class Game {
           this.adventureManager?.endAdventure()
           
           // Return to Pinball Mode
-          this.display?.setDisplayState(DisplayState.IDLE)
+          this.eventBus.emit('adventure:end')
+          this.eventBus.emit('display:set', DisplayState.IDLE)
           this.effects?.setLightingMode('normal', 1.0)
           this.effects?.setAtmosphereState('IDLE')
           this.effects?.playBeep(440) // Transition sound
@@ -2201,7 +2208,8 @@ export class Game {
 
       this.effects?.startJackpotSequence()
       this.effects?.setAtmosphereState('JACKPOT')
-      this.display?.setDisplayState(DisplayState.JACKPOT)
+      this.eventBus.emit('jackpot:start')
+      this.eventBus.emit('display:set', DisplayState.JACKPOT)
       
       // Trigger jackpot audio
       this.soundSystem.triggerJackpotAudio()
@@ -2871,7 +2879,8 @@ export class Game {
 
     // Sync State: If effects system says jackpot is over, revert display and atmosphere
     if (this.effects && !this.effects.isJackpotActive && this.display?.getDisplayState() === DisplayState.JACKPOT) {
-        this.display.setDisplayState(DisplayState.IDLE)
+        this.eventBus.emit('jackpot:end')
+        this.eventBus.emit('display:set', DisplayState.IDLE)
         this.effects.setAtmosphereState('IDLE')
     }
 
@@ -2952,7 +2961,8 @@ export class Game {
 
             // FEVER mode: sustained rapid bumper chain
             if (this.comboCount >= 10 && this.display?.getDisplayState() === DisplayState.IDLE) {
-              this.display?.setDisplayState(DisplayState.FEVER)
+              this.eventBus.emit('fever:start')
+              this.eventBus.emit('display:set', DisplayState.FEVER)
               this.effects?.setLightingMode('fever', 0)
             }
 
@@ -3013,7 +3023,8 @@ export class Game {
         this.effects?.playBeep(1200)
         this.ballManager?.spawnExtraBalls(1)
         this.updateHUD()
-        this.display?.setDisplayState(DisplayState.REACH)
+        this.eventBus.emit('reach:start')
+        this.eventBus.emit('display:set', DisplayState.REACH)
         this.effects?.setLightingMode('reach', 3.0)
         this.effects?.setAtmosphereState('REACH')
 
@@ -3047,7 +3058,8 @@ export class Game {
 
     this.ballManager?.activateHologramCatch(ball, visual.hologram.position, 4.0)
     this.effects?.playBeep(880)
-    this.display?.setDisplayState(DisplayState.REACH)
+    this.eventBus.emit('reach:start')
+    this.eventBus.emit('display:set', DisplayState.REACH)
     this.effects?.setLightingMode('reach', 4.0) // Add Reach lighting
   }
 
@@ -3056,7 +3068,8 @@ export class Game {
 
     this.comboCount = 0
     if (this.display?.getDisplayState() === DisplayState.FEVER) {
-      this.display?.setDisplayState(DisplayState.IDLE)
+      this.eventBus.emit('fever:end')
+      this.eventBus.emit('display:set', DisplayState.IDLE)
       this.effects?.setLightingMode('normal', 0)
     }
 
@@ -3088,7 +3101,8 @@ export class Game {
       // Trigger effects
       if (collected.type === BallType.SOLID_GOLD) {
         this.effects?.startSolidGoldPulse()
-        this.display?.setDisplayState(DisplayState.JACKPOT)
+        this.eventBus.emit('jackpot:start')
+        this.eventBus.emit('display:set', DisplayState.JACKPOT)
         this.hapticManager?.jackpot()
       } else {
         this.effects?.setBloomEnergy(1.5)
@@ -3222,7 +3236,8 @@ export class Game {
         this.comboCount = 0
         this.updateHUD()
         if (this.display?.getDisplayState() === DisplayState.FEVER) {
-          this.display?.setDisplayState(DisplayState.IDLE)
+          this.eventBus.emit('fever:end')
+          this.eventBus.emit('display:set', DisplayState.IDLE)
           this.effects?.setLightingMode('normal', 0)
         }
       }

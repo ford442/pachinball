@@ -9,6 +9,7 @@
  */
 
 export { GameStateManager } from './game-state'
+export { EventBus, type PachinballEventMap, type PachinballEventName, type PachinballEventHandler } from './event-bus'
 export { GameInputManager } from './game-input'
 export {
   TableMapManager,
