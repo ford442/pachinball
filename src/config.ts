@@ -233,6 +233,44 @@ export const EffectsConfig = {
   }
 } as const
 
+export interface GameTuning {
+  scoring: {
+    bumperHitBase: number
+    targetHitBase: number
+    jackpotBonus: number
+    adventureEndBonus: number
+  }
+  combo: {
+    feverThreshold: number
+    expirySeconds: number
+    multiplierDivisor: number
+  }
+  timing: {
+    nudgeCooldownMs: number
+    storyVideoWaitMs: number
+    tiltBloomResetMs: number
+  }
+}
+
+export const GAME_TUNING = {
+  scoring: {
+    bumperHitBase: 10,
+    targetHitBase: 100,
+    jackpotBonus: 100000,
+    adventureEndBonus: 5000,
+  },
+  combo: {
+    feverThreshold: 10,
+    expirySeconds: 1.5,
+    multiplierDivisor: 3,
+  },
+  timing: {
+    nudgeCooldownMs: 500,
+    storyVideoWaitMs: 3000,
+    tiltBloomResetMs: 1000,
+  },
+} as const satisfies GameTuning
+
 export const GameConfig = {
   magSpin: {
     // Moved to Upper Right (between Pachinko Field and Wall)

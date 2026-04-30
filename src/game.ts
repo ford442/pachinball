@@ -104,7 +104,7 @@ import { TableMapManager } from './game/game-maps'
 import { CabinetManager } from './game/game-cabinet'
 import { GameUIManager } from './game/game-ui'
 import { AdventureManager } from './game/game-adventure'
-import { GameConfig, API_BASE, BallType } from './config'
+import { GameConfig, GAME_TUNING, API_BASE, BallType } from './config'
 import { adaptLegacyConfig, type DisplayConfig } from './game-elements/display-config'
 import { scanlinePixelShader } from './shaders/scanline'
 import { lcdTablePixelShader, TABLE_MAPS, registerMap } from './shaders/lcd-table'
@@ -114,6 +114,11 @@ Effect.ShadersStore["scanlineFragmentShader"] = scanlinePixelShader.fragment
 Effect.ShadersStore["scanlinePixelShader"] = scanlinePixelShader.fragment
 Effect.ShadersStore["lcdTableFragmentShader"] = lcdTablePixelShader.fragment
 Effect.ShadersStore["lcdTablePixelShader"] = lcdTablePixelShader.fragment
+
+const FlipperPhysics = {
+  restAngleRad: Math.PI / 4,    // rad - resting (up) position
+  activeAngleRad: Math.PI / 6,  // rad - fired (down) position
+} as const
 
 export class Game {
   private readonly engine: Engine | WebGPUEngine
@@ -743,7 +748,7 @@ export class Game {
           this.uiManager?.showMessage(`${reason}: +${points}`, 1000)
         },
         onAdventureEnd: () => {
-          this.score += 5000
+          this.score += GAME_TUNING.scoring.adventureEndBonus
           this.updateHUD()
           this.effects?.startJackpotSequence()
         },
@@ -1273,7 +1278,7 @@ export class Game {
       if (level.rewards.unlockMap) {
         setTimeout(() => {
           this.switchTableMap(level.rewards.unlockMap!)
-        }, 3000) // Wait for story video
+        }, GAME_TUNING.timing.storyVideoWaitMs) // Wait for story video
       }
     })
     this.adventureState.onGoalUpdateCallback((goals) => {
@@ -1993,7 +1998,7 @@ export class Game {
       // UPDATED: Use Config values
       const stiffness = GameConfig.table.flipperStrength
       const damping = GameConfig.flipper.damping
-      const angle = pressed ? -Math.PI / 6 : Math.PI / 4
+      const angle = pressed ? -FlipperPhysics.activeAngleRad : FlipperPhysics.restAngleRad
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
     }
 
@@ -2018,7 +2023,7 @@ export class Game {
       // UPDATED: Use Config values
       const stiffness = GameConfig.table.flipperStrength
       const damping = GameConfig.flipper.damping
-      const angle = pressed ? Math.PI / 6 : -Math.PI / 4
+      const angle = pressed ? FlipperPhysics.activeAngleRad : -FlipperPhysics.restAngleRad
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
     }
 
@@ -2141,7 +2146,7 @@ export class Game {
 
     // Track tilt warnings - warn if nudging too frequently
     const now = performance.now()
-    if (now - this.nudgeState.lastNudgeTime < 500) {
+    if (now - this.nudgeState.lastNudgeTime < GAME_TUNING.timing.nudgeCooldownMs) {
       this.nudgeState.tiltWarnings++
       if (this.nudgeState.tiltWarnings >= GameConfig.nudge.maxTiltWarnings) {
         this.triggerTilt()
@@ -2175,7 +2180,7 @@ export class Game {
 
     // Visual tilt warning - flash bloom
     this.effects?.setBloomEnergy(3.0)
-    setTimeout(() => this.effects?.setBloomEnergy(1.0), 1000)
+    setTimeout(() => this.effects?.setBloomEnergy(1.0), GAME_TUNING.timing.tiltBloomResetMs)
 
     // Audio warning
     this.effects?.playBeep(150) // Low warning tone
@@ -2221,7 +2226,7 @@ export class Game {
       }
 
       // Bonus Score
-      this.score += 100000
+      this.score += GAME_TUNING.scoring.jackpotBonus
       this.updateHUD()
   }
 
@@ -2955,12 +2960,12 @@ export class Game {
           } else {
             this.gameObjects?.activateBumperHit(bump)
             this.effects?.addCameraShake(0.3)
-            this.score += (10 * (Math.floor(this.comboCount / 3) + 1))
+            this.score += (GAME_TUNING.scoring.bumperHitBase * (Math.floor(this.comboCount / GAME_TUNING.combo.multiplierDivisor) + 1))
             this.comboCount++
-            this.comboTimer = 1.5
+            this.comboTimer = GAME_TUNING.combo.expirySeconds
 
             // FEVER mode: sustained rapid bumper chain
-            if (this.comboCount >= 10 && this.display?.getDisplayState() === DisplayState.IDLE) {
+            if (this.comboCount >= GAME_TUNING.combo.feverThreshold && this.display?.getDisplayState() === DisplayState.IDLE) {
               this.eventBus.emit('fever:start')
               this.eventBus.emit('display:set', DisplayState.FEVER)
               this.effects?.setLightingMode('fever', 0)
@@ -3019,7 +3024,7 @@ export class Game {
       }
 
       if (this.gameObjects?.deactivateTarget(tgt)) {
-        this.score += 100
+        this.score += GAME_TUNING.scoring.targetHitBase
         this.effects?.playBeep(1200)
         this.ballManager?.spawnExtraBalls(1)
         this.updateHUD()
