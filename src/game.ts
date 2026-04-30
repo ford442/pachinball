@@ -10,6 +10,7 @@ import {
   MirrorTexture,
   Plane,
   StandardMaterial,
+  PBRMaterial,
   Quaternion,
   PostProcess,
   Effect,
@@ -19,6 +20,9 @@ import {
   DirectionalLight,
   PointLight,
   ShadowGenerator,
+  Animation,
+  DynamicTexture,
+  GlowLayer,
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import { DepthOfFieldEffectBlurLevel } from '@babylonjs/core/PostProcesses/depthOfFieldEffect'
@@ -866,6 +870,47 @@ export class Game {
     rightLED.material = accentMat
 
     // ================================================================
+    // LAYER 2b: SIDE PANEL EMISSIVE INLAY (Decorative gradient overlay)
+    // ================================================================
+    const createSideInlay = (xPos: number, rotY: number, name: string) => {
+      const inlay = MeshBuilder.CreatePlane(name, { width: 38, height: 4.5 }, this.scene!)
+      inlay.position.set(xPos, cabinetY + 0.5, 5)
+      inlay.rotation.y = rotY
+
+      const inlayMat = new StandardMaterial(`${name}Mat`, this.scene!)
+      inlayMat.backFaceCulling = false
+
+      if (this.qualityTier === QualityTier.HIGH) {
+        // Gradient DynamicTexture: deep purple bottom → cyan top
+        const tex = new DynamicTexture(`${name}Tex`, { width: 64, height: 256 }, this.scene!, false)
+        const ctx = tex.getContext() as CanvasRenderingContext2D
+        const grad = ctx.createLinearGradient(0, 256, 0, 0)
+        grad.addColorStop(0, '#1a0044')
+        grad.addColorStop(1, '#00aaff')
+        ctx.fillStyle = grad
+        ctx.fillRect(0, 0, 64, 256)
+        tex.update()
+        inlayMat.emissiveTexture = tex
+        inlayMat.emissiveColor = Color3.White()
+        inlayMat.alpha = 0.6
+        inlayMat.disableLighting = true
+      } else {
+        // LOW tier: flat dark blue emissive, no texture
+        inlayMat.emissiveColor = new Color3(0.05, 0.1, 0.3)
+        inlayMat.alpha = 0.6
+        inlayMat.disableLighting = true
+      }
+
+      inlay.material = inlayMat
+      return inlay
+    }
+
+    // Position flush against interior wall faces
+    // leftPanel spans x=[-13.75, -12.25], rightPanel spans x=[13.25, 14.75]
+    createSideInlay(-12.24, Math.PI / 2, 'leftInlay')
+    createSideInlay(13.24, -Math.PI / 2, 'rightInlay')
+
+    // ================================================================
     // LAYER 3: FRONT APRON & BEZEL (Depth separation from playfield)
     // ================================================================
 
@@ -941,6 +986,136 @@ export class Game {
         this.shadowGenerator?.addShadowCaster(mesh)
       })
     }
+  }
+
+  // ============================================================================
+  // DECORATIVE GEOMETRY — Bumper rings, guide pins, cabinet inlay
+  // ============================================================================
+
+  /**
+   * Add neon halo torus rings around each bumper.
+   * Rings pulse on QualityTier.HIGH, flat emissive on LOW.
+   * No physics bodies — purely visual.
+   */
+  private createBumperNeonRings(): void {
+    if (!this.scene || !this.gameObjects) return
+
+    const bumperVisuals = this.gameObjects.getBumperVisuals()
+    if (!bumperVisuals.length) return
+
+    // Ensure GlowLayer exists on HIGH tier
+    let glowLayer = this.scene.getGlowLayerByName('glow')
+    if (!glowLayer && this.qualityTier === QualityTier.HIGH) {
+      glowLayer = new GlowLayer('glow', this.scene)
+      glowLayer.intensity = 0.4
+    }
+
+    bumperVisuals.forEach((vis, i) => {
+      const bbox = vis.mesh.getBoundingInfo().boundingBox
+      const radiusXZ = bbox.extendSize.x
+      const radiusY = bbox.extendSize.y
+
+      const ring = MeshBuilder.CreateTorus(
+        `bumperNeon_${i}`,
+        {
+          diameter: radiusXZ * 2 + 0.08,
+          thickness: 0.02,
+          tessellation: 32,
+        },
+        this.scene!
+      )
+      ring.position.set(vis.mesh.position.x, vis.mesh.position.y + radiusY, vis.mesh.position.z)
+      ring.rotation.x = Math.PI / 2
+
+      const mat = new StandardMaterial(`bumperNeonMat_${i}`, this.scene!)
+      const baseColor = Color3.FromHexString(vis.color || '#00d9ff')
+      mat.emissiveColor = baseColor
+      mat.disableLighting = true
+      mat.backFaceCulling = false
+      ring.material = mat
+
+      if (this.qualityTier === QualityTier.HIGH) {
+        // Pulse animation: intensity 0.6 → 1.0 over 1.2s cycle
+        const anim = new Animation(
+          `bumperNeonPulse_${i}`,
+          'material.emissiveColor',
+          60,
+          Animation.ANIMATIONTYPE_COLOR3,
+          Animation.ANIMATIONLOOPMODE_CYCLE
+        )
+        const keys = [
+          { frame: 0, value: baseColor.scale(0.6) },
+          { frame: 36, value: baseColor.scale(1.0) },
+          { frame: 72, value: baseColor.scale(0.6) },
+        ]
+        anim.setKeys(keys)
+        ring.animations = [anim]
+        this.scene!.beginAnimation(ring, 0, 72, true)
+
+        // Add to GlowLayer if available
+        glowLayer?.addIncludedOnlyMesh(ring)
+      } else {
+        // LOW tier: flat emissive at 0.7 intensity
+        mat.emissiveColor = baseColor.scale(0.7)
+      }
+    })
+  }
+
+  /**
+   * Place 12 small chrome sphere pins in the lower playfield as decoration.
+   * Merged into a single mesh for one draw call. No physics bodies.
+   */
+  private createDecorativeGuidePins(): void {
+    if (!this.scene) return
+
+    const pinPositions: [number, number, number][] = [
+      [-2, 0.04, -2],
+      [2, 0.04, -2],
+      [-5, 0.04, 0],
+      [5, 0.04, 0],
+      [-1, 0.04, 2],
+      [1, 0.04, 2],
+      [-3, 0.04, -5],
+      [3, 0.04, -5],
+      [0, 0.04, -4],
+      [-4, 0.04, 3],
+      [4, 0.04, 3],
+      [0, 0.04, 0],
+    ]
+
+    const pinMeshes: Mesh[] = []
+
+    for (let i = 0; i < pinPositions.length; i++) {
+      const [x, y, z] = pinPositions[i]
+      const pin = MeshBuilder.CreateSphere(
+        `guidePin_${i}`,
+        { diameter: 0.08, segments: 8 },
+        this.scene
+      )
+      pin.position.set(x, y, z)
+      pinMeshes.push(pin)
+    }
+
+    if (pinMeshes.length === 0) return
+
+    // Merge all pins into a single mesh
+    const mergedPin = Mesh.MergeMeshes(pinMeshes, true, true, undefined, false, true)
+    if (!mergedPin) return
+    mergedPin.name = 'guidePinsMerged'
+
+    const mat = new PBRMaterial('guidePinMat', this.scene)
+    mat.albedoColor = Color3.FromHexString('#222222')
+    mat.metallic = 1.0
+    mat.roughness = 0.15
+    mat.environmentIntensity = 1.0
+
+    if (this.qualityTier === QualityTier.HIGH) {
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 1.0
+      mat.clearCoat.roughness = 0.05
+    }
+
+    mergedPin.material = mat
   }
 
   // ============================================================================
@@ -1468,6 +1643,7 @@ export class Game {
     // Important but not blocking - these enhance gameplay but aren't needed immediately
     this.gameObjects.createDeathZone()
     this.gameObjects.createBumpers()
+    this.createBumperNeonRings()
     this.effects?.initBumperSparkPool(12)
     this.gameObjects.createSlingshots()
     this.gameObjects.createPachinkoField()
@@ -1484,6 +1660,7 @@ export class Game {
     // Visual polish - lowest priority
     this.gameObjects.createCabinetDecoration()
     this.createEnhancedCabinet()
+    this.createDecorativeGuidePins()
     this.createDarkRoomEnvironment()
 
     this.display.createBackbox(new Vector3(0.75, 15, 30))
