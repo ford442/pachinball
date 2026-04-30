@@ -1,22 +1,24 @@
 # Pachinball — Weekly Plan
 
 ## Today's focus
-**2026-04-23 — Backbox Display System: Game↔Display State Sync & FEVER Layer (New Idea mode)**
-Wire `GameStateManager` transitions to automatically drive `DisplaySystem.setDisplayState()`, trigger the currently-silent `DisplayState.FEVER` from its correct game event, and verify all 4 display layers (video/image/shader/reels) respond correctly to every state. The scaffold is complete; the binding is the gap.
+**2026-04-30 — Event Bus Architecture: Replace callback map in `GameStateManager` with a typed pub/sub event bus**
+Wire a lightweight, fully-typed `EventBus` that lets `DisplaySystem`, `EffectsSystem`, and audio subscribe to game events rather than receiving direct calls from `game.ts`. This closes the remaining architectural gap left by last week's backbox sync work and removes the scatter of `this.display?.setDisplayState(...)` call sites from `game.ts`.
 
 ## Ideas
-- [in progress — 2026-04-23] Backbox display state synchronization — `GameStateManager` state transitions don't auto-drive `DisplaySystem`; `DisplayState.FEVER` is configured but never triggered in `game.ts`. Wire the two systems, close the FEVER gap, verify per-state layer overrides end-to-end.
-- [ ] Event bus architecture — Replace the callback map in `GameStateManager` and scattered direct calls in `game.ts` with a lightweight typed event bus. Decouples display/effects/audio/scoring from the central game loop before the next feature layer.
-- [ ] BallManager unit tests + config extraction — Add Vitest for pure-TS unit tests of BallManager type assignment, scoring bonuses, and drain lifecycle. Simultaneously extract remaining magic numbers from `game.ts` into `config.ts`.
+- [done — 2026-04-30] Backbox display state synchronization — FEVER triggered (combo>=10), REACH/JACKPOT/IDLE/ADVENTURE wired; GameStateManager drives IDLE on MENU/GAME_OVER. Full auto-sync folded into Event Bus task below.
+- [done — 2026-04-30] BallManager unit tests — Vitest installed, 10 tests passing (PR #122). Config extraction piece carried to Backlog.
+- [in progress — 2026-04-30] Event bus architecture — Replace the callback map in `GameStateManager` and scattered direct calls in `game.ts` with a lightweight typed event bus. Decouples display/effects/audio/scoring from the central game loop before the next feature layer.
+- [ ] Playwright smoke tests for backbox display states — verify each `DisplayState` transition (IDLE → FEVER, IDLE → JACKPOT, JACKPOT → IDLE) triggers the correct layer activation via `getDisplayState()` assertion.
 
 ## Backlog
-- [ ] Formal game state machine + event bus — `GameStateManager` in `src/game/game-state.ts` exists with callbacks but no event bus. Effects field is commented out as UNUSED. Full subscriber-based wiring deferred.
-- [ ] Gameplay tuning/config extraction — migrate remaining magic numbers (bumper force, flipper impulse, scoring thresholds) into `config.ts`.
-- [ ] Backbox display system — scaffold complete (~1292 lines, 7 files in `src/display/`); ADVENTURE/IDLE/JACKPOT/REACH manually wired in `game.ts` (8 call sites); FEVER dark; `GameStateManager`↔`DisplaySystem` auto-sync missing. **Active today.**
-- [ ] Unit test coverage for BallManager type assignment, scoring, and drain lifecycle. No Vitest installed; only Playwright smoke test (`tests/verify_prism_core.spec.ts`) exists.
-- [ ] Audit reports in repo root (PHYSICS_*, LIGHTING_*, MATERIAL_*, INPUT_*, CAMERA_*) — triage which still reflect current code vs. stale.
+- [ ] Config extraction — migrate remaining magic numbers (bumper force, flipper impulse, combo thresholds, scoring values) from `game.ts` into `config.ts`. Partially deferred from BallManager unit tests + config idea.
+- [ ] Formal game state machine — `GameStateManager` in `src/game/game-state.ts` has callbacks but no event bus. Effects field commented out as UNUSED. Full subscriber-based wiring is today's task.
+- [ ] Audit reports in repo root (PHYSICS_*, LIGHTING_*, MATERIAL_*, INPUT_*, CAMERA_*) — triage which still reflect current code vs. stale. No one has looked at these since March.
+- [ ] Unit test coverage gap — Playwright smoke test (`tests/verify_prism_core.spec.ts`) + BallManager Vitest tests exist; display system, effects, and GameStateManager have zero test coverage.
 
 ## Done
+- 2026-04-30: **Backbox Display System — Game↔Display state sync & FEVER layer** substantially complete. FEVER trigger wired (combo>=10, line 2954 `game.ts`). REACH/JACKPOT/ADVENTURE/IDLE all have call sites. GameStateManager drives IDLE on MENU/GAME_OVER transitions. Full architectural auto-sync promoted to Event Bus task (today).
+- 2026-04-30: **BallManager Vitest unit tests** — 10 tests, all passing, Vitest installed (PR #122 merged 2026-04-30). Config extraction deferred to Backlog.
 - 2026-04-23: **Debug HUD overlay** marked done (PR #118 merged 2026-04-17). Re-enabled and modernized: snapshot boundary, throttled updates, developer settings toggle. Files: `src/game-elements/debug-hud.ts`, `src/game.ts`, `index.html`.
 - 2026-04-17: **Gold Pachinko Balls polish complete.**
   - `src/materials/material-ball.ts` — clear coat and iridescence gated by `QualityTier.HIGH`; LOW tier retains gold read.
@@ -31,9 +33,9 @@ Wire `GameStateManager` transitions to automatically drive `DisplaySystem.setDis
 - 2026-02-25 (PR #106): Adventure track switching + dual-screen display integration.
 
 ## Last run
-Date: 2026-04-23
-Mode: New Idea
-Focus: Backbox Display System — Game↔Display state sync, FEVER layer completion
+Date: 2026-04-30
+Mode: User Idea
+Focus: Event Bus Architecture — typed pub/sub replacing `GameStateManager` callback map and scattered `game.ts` display call sites
 Outcome: (fill in at end of day)
 
 ---
