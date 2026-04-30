@@ -746,11 +746,15 @@ export class Game {
           this.score += points
           this.updateHUD()
           this.uiManager?.showMessage(`${reason}: +${points}`, 1000)
+          const pos = this.getBallPosition()
+          if (pos) this.effects?.spawnFloatingNumber(points, pos)
         },
         onAdventureEnd: () => {
           this.score += GAME_TUNING.scoring.adventureEndBonus
           this.updateHUD()
           this.effects?.startJackpotSequence()
+          const pos = this.getBallPosition()
+          if (pos) this.effects?.spawnFloatingNumber(GAME_TUNING.scoring.adventureEndBonus, pos)
         },
       }
     )
@@ -793,6 +797,7 @@ export class Game {
     // Detect hardware quality tier and configure material library
     this.qualityTier = detectQualityTier(this.engine)
     matLib.qualityTier = this.qualityTier
+    this.effects?.setQualityTier(this.qualityTier)
 
     matLib.loadEnvironmentTexture()
   }
@@ -2228,6 +2233,8 @@ export class Game {
       // Bonus Score
       this.score += GAME_TUNING.scoring.jackpotBonus
       this.updateHUD()
+      const pos = this.getBallPosition()
+      if (pos) this.effects?.spawnFloatingNumber(GAME_TUNING.scoring.jackpotBonus, pos)
   }
 
   private toggleAdventure(): void {
@@ -2863,6 +2870,17 @@ export class Game {
     const isFever = this.effects?.currentLightingMode === 'fever'
     this.effects?.update(dt, ballBodies, isFever)
 
+    // Update ball particle trails
+    const trailInfos = ballBodies
+      .map((body) => {
+        const binding = this.ballManager?.getBindings().find((b) => b.rigidBody === body)
+        const mesh = binding?.mesh as Mesh | undefined
+        const type = this.ballManager?.getBallType(body) || BallType.STANDARD
+        return mesh ? { body, mesh, type } : null
+      })
+      .filter((info): info is NonNullable<typeof info> => info !== null)
+    this.effects?.updateTrails(trailInfos)
+
     // Stuck ball detection: auto-reset balls that are stuck or out-of-bounds
     const stuckBalls = this.ballManager?.updateStuckDetection(dt) || []
     for (const stuckBall of stuckBalls) {
@@ -2960,7 +2978,8 @@ export class Game {
           } else {
             this.gameObjects?.activateBumperHit(bump)
             this.effects?.addCameraShake(0.3)
-            this.score += (GAME_TUNING.scoring.bumperHitBase * (Math.floor(this.comboCount / GAME_TUNING.combo.multiplierDivisor) + 1))
+            const bumperPoints = GAME_TUNING.scoring.bumperHitBase * (Math.floor(this.comboCount / GAME_TUNING.combo.multiplierDivisor) + 1)
+            this.score += bumperPoints
             this.comboCount++
             this.comboTimer = GAME_TUNING.combo.expirySeconds
 
@@ -2977,6 +2996,9 @@ export class Game {
             this.effects?.spawnBumperSpark(vis.mesh.position, vis.color || PALETTE.CYAN)
             // Spawn animated impact ring effect
             this.effects?.spawnImpactRing(vis.mesh.position, new Vector3(0, 1, 0), PALETTE.CYAN)
+            // Trigger radial impact flash burst
+            this.effects?.triggerImpactFlash(vis.mesh.position, 1.0, vis.color || '#44aaff')
+            this.effects?.spawnFloatingNumber(bumperPoints, new Vector3(ballPos.x, ballPos.y, ballPos.z))
             this.effects?.playBeep(400 + Math.random() * 200)
             this.updateHUD()
             this.effects?.setLightingMode('hit', 0.2)
@@ -3025,6 +3047,7 @@ export class Game {
 
       if (this.gameObjects?.deactivateTarget(tgt)) {
         this.score += GAME_TUNING.scoring.targetHitBase
+        this.effects?.spawnFloatingNumber(GAME_TUNING.scoring.targetHitBase, new Vector3(ballBody.translation().x, ballBody.translation().y, ballBody.translation().z))
         this.effects?.playBeep(1200)
         this.ballManager?.spawnExtraBalls(1)
         this.updateHUD()
@@ -3054,6 +3077,13 @@ export class Game {
     // Then check ballManager bindings
     const ballManagerBinding = this.ballManager?.getBindings().find(b => b.rigidBody === body)
     return ballManagerBinding?.mesh as Mesh || null
+  }
+
+  private getBallPosition(): Vector3 | null {
+    const body = this.ballManager?.getBallBody()
+    if (!body) return null
+    const t = body.translation()
+    return new Vector3(t.x, t.y, t.z)
   }
 
   private activateHologramCatch(ball: RAPIER.RigidBody, bumper: RAPIER.RigidBody): void {
@@ -3099,6 +3129,8 @@ export class Game {
       
       // Bonus points
       this.score += collected.points
+      const collectPos = new Vector3(body.translation().x, body.translation().y, body.translation().z)
+      this.effects?.spawnFloatingNumber(collected.points, collectPos)
 
       // Show floating points feedback
       this.uiManager?.showMessage(`+${collected.points}`, 1500)
@@ -3333,6 +3365,8 @@ export class Game {
           this.effects?.setSlotLightingMode('win')
           this.score += winData.score
           this.updateHUD()
+          const pos = this.getBallPosition()
+          if (pos) this.effects?.spawnFloatingNumber(winData.score, pos)
           console.log(`[Slot] Win: ${winData.combination.name} - ${winData.score} points`)
           break
         }

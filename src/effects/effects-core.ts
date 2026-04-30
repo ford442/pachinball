@@ -13,6 +13,7 @@ import {
   Mesh,
   Animation,
   ArcRotateCamera,
+  ParticleSystem,
 } from '@babylonjs/core'
 import type { DirectionalLight } from '@babylonjs/core'
 import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
@@ -29,8 +30,10 @@ import {
   emissive,
   pulse,
   lerpColor,
+  QualityTier,
 } from '../game-elements/visual-language'
-import { EffectsConfig } from '../config'
+import { EffectsConfig, BallType } from '../config'
+import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { DEFAULT_ACCESSIBILITY, type AccessibilityConfig } from '../game-elements/accessibility-config'
 import { ParticleEffects } from './effects-particles'
 import { LightingEffects } from './effects-lighting'
@@ -126,6 +129,10 @@ export class EffectsSystem {
   // Ripple rings
   private rippleRings: RippleRing[] = []
 
+  // Floating 3D score numbers (max 8 at once)
+  private floatingNumbers: Mesh[] = []
+  private readonly maxFloatingNumbers = 8
+
   // Impact rings (Animation-based, max 5 at once)
   private activeImpactRings = 0
   private readonly maxImpactRings = 5
@@ -178,6 +185,24 @@ export class EffectsSystem {
   // Slot lighting
   private slotLightMode: 'idle' | 'spin' | 'stop' | 'win' | 'jackpot' = 'idle'
   private slotLightTimer = 0
+
+  // Ball particle trails
+  private ballTrails: Map<
+    number,
+    {
+      system: ParticleSystem
+      body: RAPIER.RigidBody
+      mesh: Mesh
+      type: BallType
+    }
+  > = new Map()
+
+  // Impact flash pooled particle system
+  private impactFlashPool: ParticleSystem | null = null
+  private impactFlashPoolInited = false
+
+  // Quality tier for effect gating
+  private qualityTier: QualityTier = QualityTier.HIGH
 
   // Transition flash
   private transitionFlashOverlay: Mesh | null = null
@@ -1541,6 +1566,136 @@ export class EffectsSystem {
     this.particleEffects.spawnTrail()
   }
 
+  /**
+   * Spawn an animated 3D floating score number at a world position.
+   * Uses a DynamicTexture on a billboard plane. Self-disposes on completion.
+   * Respects a max pool of 8 simultaneous numbers to prevent spam.
+   */
+  spawnFloatingNumber(value: number, worldPosition: Vector3): void {
+    // Pool cap: skip if too many active
+    if (this.floatingNumbers.length >= this.maxFloatingNumbers) {
+      return
+    }
+
+    // Determine color tier
+    let colorHex: string
+    let useEmissive = false
+    if (value < 100) {
+      colorHex = '#ffffff'
+    } else if (value < 500) {
+      colorHex = '#ffdd00'
+    } else if (value < 1000) {
+      colorHex = '#ff8800'
+    } else {
+      colorHex = '#ffd700'
+      useEmissive = true
+    }
+
+    const text = `+${value}`
+    const color = Color3.FromHexString(colorHex)
+
+    // Create dynamic texture with the score text
+    const textureWidth = 256
+    const textureHeight = 128
+    const dynamicTexture = new DynamicTexture(
+      `floatingNumberTex_${text}`,
+      { width: textureWidth, height: textureHeight },
+      this.scene,
+      false
+    )
+    const ctx = dynamicTexture.getContext() as CanvasRenderingContext2D
+    ctx.clearRect(0, 0, textureWidth, textureHeight)
+
+    // Draw text centered
+    ctx.font = 'bold 72px sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = colorHex
+    ctx.fillText(text, textureWidth / 2, textureHeight / 2)
+
+    // Add a subtle outline for readability against any background
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'
+    ctx.lineWidth = 4
+    ctx.strokeText(text, textureWidth / 2, textureHeight / 2)
+
+    dynamicTexture.update()
+
+    // Create billboard plane mesh
+    const plane = MeshBuilder.CreatePlane(
+      `floatingNumber_${text}`,
+      { width: 1.5, height: 0.75 },
+      this.scene
+    )
+    plane.position.copyFrom(worldPosition)
+    plane.billboardMode = Mesh.BILLBOARDMODE_ALL
+
+    // Create material
+    const mat = new StandardMaterial(`floatingNumberMat_${text}`, this.scene)
+    mat.diffuseTexture = dynamicTexture
+    mat.emissiveColor = useEmissive ? color : Color3.Black()
+    mat.specularColor = Color3.Black()
+    mat.disableLighting = true
+    mat.useAlphaFromDiffuseTexture = true
+    mat.backFaceCulling = false
+    plane.material = mat
+
+    // Track active floating number
+    this.floatingNumbers.push(plane)
+
+    // Animation constants (60 fps baseline)
+    const totalFrames = 48 // 800ms
+    const fadeStartFrame = 30 // fade starts at 500ms
+    const fps = 60
+
+    // Position animation: float upward 1.5 units
+    const positionAnim = new Animation(
+      'floatingNumberPosition',
+      'position.y',
+      fps,
+      Animation.ANIMATIONTYPE_FLOAT,
+      Animation.ANIMATIONLOOPMODE_CONSTANT
+    )
+    positionAnim.setKeys([
+      { frame: 0, value: worldPosition.y },
+      { frame: totalFrames, value: worldPosition.y + 1.5 },
+    ])
+
+    // Alpha animation: hold 1.0 then fade 1.0 -> 0.0 over last 300ms
+    const alphaAnim = new Animation(
+      'floatingNumberAlpha',
+      'material.alpha',
+      fps,
+      Animation.ANIMATIONTYPE_FLOAT,
+      Animation.ANIMATIONLOOPMODE_CONSTANT
+    )
+    alphaAnim.setKeys([
+      { frame: 0, value: 1.0 },
+      { frame: fadeStartFrame, value: 1.0 },
+      { frame: totalFrames, value: 0.0 },
+    ])
+
+    plane.animations = [positionAnim, alphaAnim]
+
+    // Start animation with cleanup callback
+    this.scene.beginAnimation(
+      plane,
+      0,
+      totalFrames,
+      false,
+      1.0,
+      () => {
+        // Remove from tracking
+        const idx = this.floatingNumbers.indexOf(plane)
+        if (idx !== -1) {
+          this.floatingNumbers.splice(idx, 1)
+        }
+        // Dispose mesh and material (texture disposed with material)
+        plane.dispose()
+        mat.dispose()
+      }
+    )
+  }
+
   shakeCamera(config: { intensity: number; duration: number; decay: number }): void {
     this.cameraEffects?.startShake(config)
   }
@@ -1556,5 +1711,184 @@ export class EffectsSystem {
   setPipeline(pipeline: DefaultRenderingPipeline): void {
     this.bloomPipeline = pipeline
     this.lightingEffects.setPipeline(pipeline)
+  }
+
+  setQualityTier(tier: QualityTier): void {
+    this.qualityTier = tier
+  }
+
+  /**
+   * Add a particle trail for a ball.
+   * Creates a ParticleSystem attached to the ball mesh as emitter.
+   */
+  addBallTrail(body: RAPIER.RigidBody, mesh: Mesh, ballType: BallType): void {
+    if (this.ballTrails.has(body.handle)) return
+
+    const ps = new ParticleSystem(`ballTrail_${body.handle}`, 100, this.scene)
+    ps.emitter = mesh
+
+    // Trail colors by ball type
+    if (ballType === BallType.GOLD_PLATED || ballType === BallType.SOLID_GOLD) {
+      ps.color1 = new Color4(1, 0.85, 0.4, 1)
+      ps.color2 = new Color4(1, 0.7, 0.2, 1)
+      ps.colorDead = new Color4(1, 0.6, 0, 0)
+    } else {
+      ps.color1 = new Color4(0.9, 0.95, 1, 1)
+      ps.color2 = new Color4(0.7, 0.85, 1, 1)
+      ps.colorDead = new Color4(0.5, 0.7, 1, 0)
+    }
+
+    ps.minSize = 0.04
+    ps.maxSize = 0.04
+    ps.minLifeTime = 0.15
+    ps.maxLifeTime = 0.15
+    ps.emitRate = 0
+    ps.blendMode = ParticleSystem.BLENDMODE_ADD
+    ps.gravity = Vector3.Zero()
+    ps.direction1 = new Vector3(0, 0, 0)
+    ps.direction2 = new Vector3(0, 0, 0)
+    ps.minEmitPower = 0
+    ps.maxEmitPower = 0
+    ps.updateSpeed = 0.016
+
+    ps.start()
+    this.ballTrails.set(body.handle, { system: ps, body, mesh, type: ballType })
+  }
+
+  /**
+   * Remove a ball's particle trail and dispose the ParticleSystem.
+   */
+  removeBallTrail(body: RAPIER.RigidBody): void {
+    const trail = this.ballTrails.get(body.handle)
+    if (!trail) return
+    trail.system.stop()
+    trail.system.dispose()
+    this.ballTrails.delete(body.handle)
+  }
+
+  /**
+   * Sync ball trails with current ball list, update emit rates per velocity.
+   * Call once per frame from the game loop.
+   */
+  updateTrails(
+    balls: { body: RAPIER.RigidBody; mesh: Mesh; type: BallType }[]
+  ): void {
+    // Quality tier gating: disable trails entirely on LOW
+    if (this.qualityTier === QualityTier.LOW) {
+      // Clean up any existing trails
+      for (const trail of this.ballTrails.values()) {
+        trail.system.stop()
+        trail.system.dispose()
+      }
+      this.ballTrails.clear()
+      return
+    }
+
+    const activeHandles = new Set<number>()
+
+    for (const ball of balls) {
+      activeHandles.add(ball.body.handle)
+
+      if (!this.ballTrails.has(ball.body.handle)) {
+        this.addBallTrail(ball.body, ball.mesh, ball.type)
+      }
+
+      const trail = this.ballTrails.get(ball.body.handle)
+      if (!trail) continue
+
+      // Update emit rate based on velocity magnitude
+      const vel = ball.body.linvel()
+      const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z)
+
+      if (speed < 1.0) {
+        trail.system.emitRate = 0
+      } else if (speed > 5.0) {
+        trail.system.emitRate = 60
+      } else {
+        // Linear interpolation between 0 and 60
+        trail.system.emitRate = ((speed - 1.0) / 4.0) * 60
+      }
+    }
+
+    // Remove trails for balls that are no longer active
+    for (const [handle, trail] of this.ballTrails) {
+      if (!activeHandles.has(handle)) {
+        trail.system.stop()
+        trail.system.dispose()
+        this.ballTrails.delete(handle)
+      }
+    }
+  }
+
+  /**
+   * Trigger a radial impact flash burst at a world position.
+   * Uses a single pooled ParticleSystem with manualEmitCount.
+   * On LOW quality tier, reduces particle count to 10.
+   */
+  triggerImpactFlash(worldPosition: Vector3, intensity: number, colorHex = '#44aaff'): void {
+    if (!this.impactFlashPoolInited) {
+      this.initImpactFlashPool()
+    }
+    if (!this.impactFlashPool) return
+
+    const ps = this.impactFlashPool
+    ps.emitter = worldPosition
+
+    // Determine particle count based on intensity and quality tier
+    let count: number
+    if (this.qualityTier === QualityTier.LOW) {
+      count = 10
+    } else {
+      count = intensity >= 1.0 ? 60 : 25
+    }
+
+    // Colors: bright white core fading to accent color
+    const accent = Color4.FromHexString(colorHex + 'FF')
+    ps.color1 = new Color4(1, 1, 1, 1)
+    ps.color2 = accent
+    ps.colorDead = new Color4(accent.r, accent.g, accent.b, 0)
+
+    ps.manualEmitCount = count
+    ps.start()
+
+    // Stop emission after burst; particles live only 0.1s
+    setTimeout(() => {
+      ps.stop()
+    }, 100)
+  }
+
+  private initImpactFlashPool(): void {
+    if (this.impactFlashPoolInited) return
+    this.impactFlashPoolInited = true
+
+    const ps = new ParticleSystem('impactFlashPool', 100, this.scene)
+
+    // Create a simple radial gradient particle texture
+    const size = 64
+    const tex = new DynamicTexture('impactFlashTex', size, this.scene, false)
+    const ctx = tex.getContext() as CanvasRenderingContext2D
+    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+    grad.addColorStop(0, 'rgba(255, 255, 255, 1)')
+    grad.addColorStop(0.5, 'rgba(255, 255, 255, 0.5)')
+    grad.addColorStop(1, 'rgba(255, 255, 255, 0)')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, size, size)
+    tex.update()
+    ps.particleTexture = tex
+
+    ps.minSize = 0.05
+    ps.maxSize = 0.15
+    ps.minLifeTime = 0.1
+    ps.maxLifeTime = 0.1
+    ps.emitRate = 0
+    ps.blendMode = ParticleSystem.BLENDMODE_ADD
+    ps.gravity = Vector3.Zero()
+    ps.direction1 = new Vector3(-1, -1, -1)
+    ps.direction2 = new Vector3(1, 1, 1)
+    ps.minEmitPower = 2
+    ps.maxEmitPower = 4
+    ps.updateSpeed = 0.016
+
+    this.impactFlashPool = ps
   }
 }
