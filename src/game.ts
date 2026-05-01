@@ -631,6 +631,15 @@ export class Game {
     bounceLight.range = 20
     this.bounceLight = bounceLight
 
+    // Initialize Event Bus and State Manager before building the scene
+    this.eventBus = new EventBus()
+    this.stateManager = new GameStateManager({
+      onStateChange: (oldState, newState) => {
+        console.log(`[Game] State changed: ${GameState[oldState]} -> ${GameState[newState]}`)
+      }
+    })
+    this.stateManager.setEventBus(this.eventBus)
+
     // Initialize Game Logic and Physics
     await this.physics.init()
     await this.buildSceneStaged()
@@ -723,13 +732,6 @@ export class Game {
     }
 
     this.ready = true
-    this.eventBus = new EventBus()
-    this.stateManager = new GameStateManager({
-      onStateChange: (oldState, newState) => {
-        console.log(`[Game] State changed: ${GameState[oldState]} -> ${GameState[newState]}`)
-      }
-    })
-    this.stateManager.setEventBus(this.eventBus)
     this.stateManager.setSystems(this.effects, this.display)
 
     // Initialize adventure manager
