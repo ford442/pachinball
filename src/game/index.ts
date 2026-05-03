@@ -31,3 +31,18 @@ export {
   type AdventureManagerConfig,
   type AdventureManagerSystems,
 } from './game-adventure'
+
+// New helper managers extracted from game.ts
+export { GameRenderer, type RendererHost } from './game-renderer'
+export { GameCabinetBuilder, type CabinetBuilderHost } from './game-cabinet-builder'
+export { GameSceneBuilder, type SceneBuilderHost } from './game-scene-builder'
+export { GamePhysicsController, type PhysicsHost } from './game-physics-controller'
+export { GameInputActions, type InputActionsHost } from './game-input-actions'
+export { GameScenario, type ScenarioHost } from './game-scenario'
+export { GameSlotAdventure, type SlotAdventureHost } from './game-slot-adventure'
+export { GameSettingsUI, type SettingsUIHost } from './game-settings-ui'
+export { GameDebug, type DebugHost } from './game-debug'
+export { GameLifecycle, type LifecycleHost } from './game-lifecycle'
+export { GameHUD, type HUDHost } from './game-hud'
+export { GameMapCabinet, type MapCabinetHost } from './game-map-cabinet'
+export { hexToColor3, resolveVideoUrl } from './game-utils'
