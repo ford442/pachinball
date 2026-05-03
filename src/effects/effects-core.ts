@@ -38,6 +38,7 @@ import { DEFAULT_ACCESSIBILITY, type AccessibilityConfig } from '../game-element
 import { ParticleEffects } from './effects-particles'
 import { LightingEffects } from './effects-lighting'
 import { CameraEffects } from './effects-camera'
+import { AudioEffects } from './effects-audio'
 
 // Type for fever trail tracking
 interface FeverTrail {
@@ -75,6 +76,7 @@ export function createSharedParticleTexture(scene: Scene): DynamicTexture {
 export class EffectsSystem {
   private scene: Scene
   private audioCtx: AudioContext | null = null
+  private audioEffects: AudioEffects | null = null
   private bloomPipeline: DefaultRenderingPipeline | null = null
   private bloomEnergy = 0
   private shards: ShardParticle[] = []
@@ -237,6 +239,10 @@ export class EffectsSystem {
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
     } catch {
       this.audioCtx = null
+    }
+
+    if (this.audioCtx) {
+      this.audioEffects = new AudioEffects(this.audioCtx)
     }
   }
 
@@ -852,150 +858,27 @@ export class EffectsSystem {
   }
 
   playBeep(freq: number): void {
-    if (!this.audioCtx) return
-
-    const o = this.audioCtx.createOscillator()
-    const g = this.audioCtx.createGain()
-
-    o.frequency.value = freq
-    o.connect(g)
-    g.connect(this.audioCtx.destination)
-    o.start()
-
-    g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.1)
-    o.stop(this.audioCtx.currentTime + 0.1)
+    this.audioEffects?.playBeep(freq)
   }
 
   playSlotSpinStart(): void {
-    if (!this.audioCtx) return
-
-    // Rising pitch effect
-    const o = this.audioCtx.createOscillator()
-    const g = this.audioCtx.createGain()
-
-    o.type = 'sawtooth'
-    o.frequency.setValueAtTime(200, this.audioCtx.currentTime)
-    o.frequency.exponentialRampToValueAtTime(800, this.audioCtx.currentTime + 0.3)
-
-    g.gain.setValueAtTime(0.3, this.audioCtx.currentTime)
-    g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.5)
-
-    o.connect(g)
-    g.connect(this.audioCtx.destination)
-    o.start()
-    o.stop(this.audioCtx.currentTime + 0.5)
+    this.audioEffects?.playSlotSpinStart()
   }
 
   playReelStop(reelIndex: number): void {
-    if (!this.audioCtx) return
-
-    const baseFreq = 400 + reelIndex * 100
-    const o = this.audioCtx.createOscillator()
-    const g = this.audioCtx.createGain()
-
-    o.type = 'square'
-    o.frequency.setValueAtTime(baseFreq, this.audioCtx.currentTime)
-    o.frequency.exponentialRampToValueAtTime(baseFreq * 0.5, this.audioCtx.currentTime + 0.05)
-
-    g.gain.setValueAtTime(0.2, this.audioCtx.currentTime)
-    g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.1)
-
-    o.connect(g)
-    g.connect(this.audioCtx.destination)
-    o.start()
-    o.stop(this.audioCtx.currentTime + 0.1)
+    this.audioEffects?.playReelStop(reelIndex)
   }
 
   playSlotWin(multiplier: number): void {
-    if (!this.audioCtx) return
-
-    // Happy ascending arpeggio
-    const notes = [523.25, 659.25, 783.99, 1046.5] // C major chord
-    const duration = 0.1 * multiplier
-
-    notes.forEach((freq, i) => {
-      setTimeout(() => {
-        if (!this.audioCtx) return
-        const o = this.audioCtx.createOscillator()
-        const g = this.audioCtx.createGain()
-
-        o.type = 'sine'
-        o.frequency.value = freq
-
-        g.gain.setValueAtTime(0.3, this.audioCtx.currentTime)
-        g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + duration)
-
-        o.connect(g)
-        g.connect(this.audioCtx.destination)
-        o.start()
-        o.stop(this.audioCtx.currentTime + duration)
-      }, i * 100)
-    })
+    this.audioEffects?.playSlotWin(multiplier)
   }
 
   playSlotJackpot(): void {
-    if (!this.audioCtx) return
-
-    // Fanfare effect
-    const now = this.audioCtx.currentTime
-
-    // Low drum roll
-    for (let i = 0; i < 8; i++) {
-      const o = this.audioCtx.createOscillator()
-      const g = this.audioCtx.createGain()
-
-      o.type = 'sawtooth'
-      o.frequency.value = 100 + Math.random() * 50
-
-      g.gain.setValueAtTime(0.2, now + i * 0.1)
-      g.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.1 + 0.08)
-
-      o.connect(g)
-      g.connect(this.audioCtx.destination)
-      o.start(now + i * 0.1)
-      o.stop(now + i * 0.1 + 0.1)
-    }
-
-    // Victory chord
-    setTimeout(() => {
-      if (!this.audioCtx) return
-      const chord = [523.25, 659.25, 783.99, 1046.5] // C major
-      chord.forEach((freq, i) => {
-        const o = this.audioCtx!.createOscillator()
-        const g = this.audioCtx!.createGain()
-
-        o.type = i === 0 ? 'sawtooth' : 'sine'
-        o.frequency.value = freq * 2 // Octave up
-
-        g.gain.setValueAtTime(i === 0 ? 0.4 : 0.2, this.audioCtx!.currentTime)
-        g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx!.currentTime + 1.5)
-
-        o.connect(g)
-        g.connect(this.audioCtx!.destination)
-        o.start()
-        o.stop(this.audioCtx!.currentTime + 1.5)
-      })
-    }, 800)
+    this.audioEffects?.playSlotJackpot()
   }
 
   playNearMiss(): void {
-    if (!this.audioCtx) return
-
-    const o = this.audioCtx.createOscillator()
-    const g = this.audioCtx.createGain()
-
-    // Descending "aww" sound
-    o.type = 'sine'
-    o.frequency.setValueAtTime(400, this.audioCtx.currentTime)
-    o.frequency.exponentialRampToValueAtTime(200, this.audioCtx.currentTime + 0.3)
-
-    g.gain.setValueAtTime(0.3, this.audioCtx.currentTime)
-    g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.3)
-
-    o.connect(g)
-    g.connect(this.audioCtx.destination)
-    o.start()
-    o.stop(this.audioCtx.currentTime + 0.3)
+    this.audioEffects?.playNearMiss()
   }
 
   setSlotLightingMode(mode: 'idle' | 'spin' | 'stop' | 'win' | 'jackpot'): void {
