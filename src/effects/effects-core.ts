@@ -39,14 +39,10 @@ import { ParticleEffects } from './effects-particles'
 import { LightingEffects } from './effects-lighting'
 import { CameraEffects } from './effects-camera'
 import { AudioEffects } from './effects-audio'
-
-// Type for fever trail tracking
-interface FeverTrail {
-  mesh: Mesh
-  material: StandardMaterial
-  life: number
-  maxLife: number
-}
+import { ShardEffects } from './effects-shards'
+import { TrailEffects } from './effects-trails'
+import { FloatingNumberEffects } from './effects-floating'
+import { RipplesEffects } from './effects-ripples'
 
 // Type for ripple ring tracking
 interface RippleRing {
@@ -58,20 +54,6 @@ interface RippleRing {
   maxScale: number
 }
 
-export function createSharedParticleTexture(scene: Scene): DynamicTexture {
-  const size = 64
-  const tex = new DynamicTexture('sharedParticleTex', size, scene, false)
-  const ctx = tex.getContext() as CanvasRenderingContext2D
-
-  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
-  grad.addColorStop(0, 'rgba(255, 255, 255, 1)')
-  grad.addColorStop(1, 'rgba(255, 255, 255, 0)')
-
-  ctx.fillStyle = grad
-  ctx.fillRect(0, 0, size, size)
-  tex.update()
-  return tex
-}
 
 export class EffectsSystem {
   private scene: Scene
@@ -124,19 +106,15 @@ export class EffectsSystem {
     offset: new Vector3(0, 0, 0),
   }
 
-  // Fever trails
-  private feverTrails: Map<number, FeverTrail[]> = new Map()
-  private lastTrailSpawn: Map<number, number> = new Map()
+  // Sub-systems: trail and floating effects
+  private trailEffects: TrailEffects | null = null
+  private floatingEffects: FloatingNumberEffects | null = null
 
   // Ripple rings
   private rippleRings: RippleRing[] = []
 
-  // Floating 3D score numbers (max 8 at once)
-  private floatingNumbers: Mesh[] = []
-  private readonly maxFloatingNumbers = 8
-
   // Impact rings (Animation-based, max 5 at once)
-  private activeImpactRings = 0
+
   private readonly maxImpactRings = 5
 
   // Performance tracking — runtime adaptive tiering
@@ -183,21 +161,13 @@ export class EffectsSystem {
   private particleEffects: ParticleEffects
   private lightingEffects: LightingEffects
   private cameraEffects: CameraEffects | null = null
+  private shardEffects: ShardEffects | null = null
 
   // Slot lighting
   private slotLightMode: 'idle' | 'spin' | 'stop' | 'win' | 'jackpot' = 'idle'
   private slotLightTimer = 0
 
-  // Ball particle trails
-  private ballTrails: Map<
-    number,
-    {
-      system: ParticleSystem
-      body: RAPIER.RigidBody
-      mesh: Mesh
-      type: BallType
-    }
-  > = new Map()
+  // Ball particle trails delegated to TrailEffects
 
   // Impact flash pooled particle system
   private impactFlashPool: ParticleSystem | null = null
@@ -233,6 +203,10 @@ export class EffectsSystem {
     if (scene.activeCamera) {
       this.cameraEffects = new CameraEffects(scene.activeCamera)
     }
+    this.shardEffects = new ShardEffects(scene, this.shards, this.maxImpactRings)
+    this.trailEffects = new TrailEffects(scene)
+    this.floatingEffects = new FloatingNumberEffects(scene)
+    this.ripplesEffects = new RipplesEffects(scene)
 
     try {
       this.audioCtx = new (window.AudioContext ||
@@ -515,138 +489,15 @@ export class EffectsSystem {
   }
 
   spawnShardBurst(pos: Vector3, colorHex?: string): void {
-    const burstColor = colorHex || PALETTE.CYAN
-    for (let i = 0; i < 8; i++) {
-      const m = MeshBuilder.CreateBox('s', { size: 0.15 }, this.scene)
-      m.position.copyFrom(pos)
-
-      const mat = new StandardMaterial('sm', this.scene)
-      mat.emissiveColor = emissive(burstColor, INTENSITY.FLASH)
-      m.material = mat
-
-      const vel = new Vector3(Math.random() - 0.5, Math.random() + 1, Math.random() - 0.5).scale(5)
-      // Add rotation velocity
-      const rotVel = new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).scale(10)
-      // Random initial scale
-      const initialScale = 0.8 + Math.random() * 0.4
-      m.scaling.setAll(initialScale)
-
-      this.shards.push({
-        mesh: m,
-        vel,
-        rotVel,
-        life: 1.0,
-        maxLife: 1.0,
-        initialScale,
-        material: mat,
-      })
-    }
+    this.shardEffects?.spawnShardBurst(pos, colorHex)
   }
 
   spawnImpactRing(position: Vector3, normal: Vector3, color: string): void {
-    // Enforce max concurrent rings limit
-    if (this.activeImpactRings >= this.maxImpactRings) {
-      return
-    }
-
-    this.activeImpactRings++
-
-    // Create torus mesh for the ring
-    const ring = MeshBuilder.CreateTorus(
-      'impactRing',
-      {
-        diameter: 0.5,
-        thickness: 0.05,
-        tessellation: 32,
-      },
-      this.scene
-    )
-
-    // Position and orient the ring
-    ring.position = position.clone()
-    // Orient ring perpendicular to the normal (flat against surface)
-    ring.lookAt(position.add(normal))
-
-    // Create emissive material
-    const mat = new StandardMaterial('ringMat', this.scene)
-    mat.emissiveColor = Color3.FromHexString(color)
-    mat.alpha = 0.8
-    mat.disableLighting = true
-    ring.material = mat
-
-    // Create scale animation (expand from 1x to 5x)
-    const scaleAnim = new Animation(
-      'ringScale',
-      'scaling',
-      60, // fps
-      Animation.ANIMATIONTYPE_VECTOR3,
-      Animation.ANIMATIONLOOPMODE_CONSTANT
-    )
-
-    const scaleKeys = [
-      { frame: 0, value: new Vector3(1, 1, 1) },
-      { frame: 20, value: new Vector3(5, 5, 1) },
-    ]
-    scaleAnim.setKeys(scaleKeys)
-
-    // Create fade animation (alpha 0.8 -> 0)
-    const fadeAnim = new Animation(
-      'ringFade',
-      'material.alpha',
-      60, // fps
-      Animation.ANIMATIONTYPE_FLOAT,
-      Animation.ANIMATIONLOOPMODE_CONSTANT
-    )
-
-    const fadeKeys = [
-      { frame: 0, value: 0.8 },
-      { frame: 20, value: 0 },
-    ]
-    fadeAnim.setKeys(fadeKeys)
-
-    // Attach animations to ring
-    ring.animations = [scaleAnim, fadeAnim]
-
-    // Start animation with cleanup callback
-    this.scene.beginAnimation(
-      ring,
-      0,
-      20,
-      false, // don't loop
-      1, // speed ratio
-      () => {
-        // Cleanup: dispose mesh and material after animation completes
-        ring.dispose()
-        mat.dispose()
-        this.activeImpactRings--
-      }
-    )
+    this.shardEffects?.spawnImpactRing(position, normal, color)
   }
 
   updateShards(dt: number): void {
-    for (let i = this.shards.length - 1; i >= 0; i--) {
-      const s = this.shards[i]
-      s.life -= dt
-
-      if (s.life <= 0) {
-        s.mesh.dispose()
-        this.shards.splice(i, 1)
-        continue
-      }
-
-      // Update position
-      s.mesh.position.addInPlace(s.vel.scale(dt))
-      s.vel.y -= 9.8 * dt
-      s.vel.scaleInPlace(0.98) // Air drag
-
-      // Update rotation
-      s.mesh.rotation.addInPlace(s.rotVel.scale(dt))
-
-      // Scale and alpha based on life
-      const lifeNorm = s.life / s.maxLife
-      s.material.alpha = lifeNorm * 0.8
-      s.mesh.scaling.setAll(s.initialScale * (0.3 + lifeNorm * 0.7))
-    }
+    this.shardEffects?.updateShards(dt)
   }
 
   updateBloom(): void {
@@ -1141,59 +992,11 @@ export class EffectsSystem {
   }
 
   private spawnRippleRings(pos: Vector3, intensity: 'light' | 'medium' | 'heavy'): void {
-    const ringCount =
-      intensity === 'light' ? 1 : intensity === 'medium' ? 2 : EffectsConfig.bumperImpact.rippleRingCount
-
-    for (let i = 0; i < ringCount; i++) {
-      // Create torus for ring
-      const ring = MeshBuilder.CreateTorus(
-        `rippleRing_${Date.now()}_${i}`,
-        { diameter: 0.5, thickness: 0.05, tessellation: 32 },
-        this.scene
-      )
-
-      ring.position.copyFrom(pos)
-      ring.position.y = 0.1 // Slightly above playfield
-      ring.rotation.x = Math.PI / 2 // Flat on playfield
-
-      const mat = new StandardMaterial(`rippleMat_${Date.now()}_${i}`, this.scene)
-      mat.emissiveColor = emissive(PALETTE.CYAN, INTENSITY.FLASH)
-      mat.alpha = 0.8
-      ring.material = mat
-
-      // Add to tracking
-      this.rippleRings.push({
-        mesh: ring,
-        material: mat,
-        age: i * 0.05, // Stagger start times
-        maxAge: 0.3 + i * 0.1,
-        initialScale: 1,
-        maxScale: 3 + i,
-      })
-    }
+    this.ripplesEffects?.spawnRippleRings(pos, intensity)
   }
 
   private updateRippleRings(dt: number): void {
-    for (let i = this.rippleRings.length - 1; i >= 0; i--) {
-      const ring = this.rippleRings[i]
-      ring.age += dt
-
-      if (ring.age >= ring.maxAge) {
-        // Cleanup
-        ring.mesh.dispose()
-        ring.material.dispose()
-        this.rippleRings.splice(i, 1)
-        continue
-      }
-
-      // Expand
-      const progress = ring.age / ring.maxAge
-      const scale = ring.initialScale + (ring.maxScale - ring.initialScale) * progress
-      ring.mesh.scaling.setAll(scale)
-
-      // Fade out
-      ring.material.alpha = 0.8 * (1 - progress)
-    }
+    this.ripplesEffects?.updateRippleRings(dt)
   }
 
   updateFeverTrails(
@@ -1201,122 +1004,18 @@ export class EffectsSystem {
     isFever: boolean,
     dt: number
   ): void {
-    // Check if enabled
+    if (!this.trailEffects) return
+
+    // Gating is preserved here (accessibility + feature flag)
     if (!this.areEnhancedEffectsEnabled() || !EffectsConfig.enableFeverTrail) {
-      this.clearFeverTrails()
+      this.trailEffects.clearFeverTrails()
       return
     }
 
-    if (!isFever) {
-      this.clearFeverTrails()
-      return
-    }
-
-    const now = performance.now() / 1000
-
-    for (const body of ballBodies) {
-      const handle = body.handle
-      const lastSpawn = this.lastTrailSpawn.get(handle) || 0
-
-      // Check spawn rate
-      if (now - lastSpawn < EffectsConfig.feverTrail.spawnRate) continue
-
-      // Spawn new trail particle
-      this.spawnTrailParticle(body)
-      this.lastTrailSpawn.set(handle, now)
-    }
-
-    // Update existing particles
-    this.updateTrailParticles(dt)
+    this.trailEffects.updateFeverTrails(ballBodies, isFever, dt)
   }
 
-  private spawnTrailParticle(body: {
-    translation: () => { x: number; y: number; z: number }
-    handle: number
-  }): void {
-    const pos = body.translation()
-    const handle = body.handle
-
-    // Get or create trail array for this ball
-    let trails = this.feverTrails.get(handle)
-    if (!trails) {
-      trails = []
-      this.feverTrails.set(handle, trails)
-    }
-
-    // Enforce max particles per ball
-    if (trails.length >= EffectsConfig.feverTrail.maxParticlesPerBall) {
-      // Remove oldest
-      const oldest = trails.shift()
-      if (oldest) {
-        oldest.mesh.dispose()
-        oldest.material.dispose()
-      }
-    }
-
-    // Create particle mesh
-    const particle = MeshBuilder.CreatePlane(
-      `feverTrail_${Date.now()}`,
-      { size: 0.25 },
-      this.scene
-    )
-
-    particle.position.set(pos.x, pos.y, pos.z)
-    particle.billboardMode = Mesh.BILLBOARDMODE_ALL
-
-    const mat = new StandardMaterial(`trailMat_${Date.now()}`, this.scene)
-    mat.emissiveColor = emissive(EffectsConfig.feverTrail.color, EffectsConfig.feverTrail.intensity)
-    mat.alpha = 0.7
-    mat.disableLighting = true
-    particle.material = mat
-
-    trails.push({
-      mesh: particle,
-      material: mat,
-      life: EffectsConfig.feverTrail.lifetime,
-      maxLife: EffectsConfig.feverTrail.lifetime,
-    })
-  }
-
-  private updateTrailParticles(dt: number): void {
-    for (const [, trails] of this.feverTrails) {
-      for (let i = trails.length - 1; i >= 0; i--) {
-        const trail = trails[i]
-        trail.life -= dt
-
-        if (trail.life <= 0) {
-          trail.mesh.dispose()
-          trail.material.dispose()
-          trails.splice(i, 1)
-          continue
-        }
-
-        // Fade alpha
-        const lifeRatio = trail.life / trail.maxLife
-        trail.material.alpha = 0.7 * lifeRatio
-
-        // Shrink slightly
-        const scale = 0.5 + lifeRatio * 0.5
-        trail.mesh.scaling.setAll(scale)
-      }
-
-      // Clean up empty arrays
-      if (trails.length === 0) {
-        // Note: Can't delete while iterating, handled elsewhere
-      }
-    }
-  }
-
-  clearFeverTrails(): void {
-    for (const trails of this.feverTrails.values()) {
-      for (const trail of trails) {
-        trail.mesh.dispose()
-        trail.material.dispose()
-      }
-    }
-    this.feverTrails.clear()
-    this.lastTrailSpawn.clear()
-  }
+  // Fever trail logic delegated to TrailEffects
 
   triggerStateTransitionFlash(
     _fromState: 'normal' | 'hit' | 'fever' | 'reach',
@@ -1455,128 +1154,7 @@ export class EffectsSystem {
    * Respects a max pool of 8 simultaneous numbers to prevent spam.
    */
   spawnFloatingNumber(value: number, worldPosition: Vector3): void {
-    // Pool cap: skip if too many active
-    if (this.floatingNumbers.length >= this.maxFloatingNumbers) {
-      return
-    }
-
-    // Determine color tier
-    let colorHex: string
-    let useEmissive = false
-    if (value < 100) {
-      colorHex = '#ffffff'
-    } else if (value < 500) {
-      colorHex = '#ffdd00'
-    } else if (value < 1000) {
-      colorHex = '#ff8800'
-    } else {
-      colorHex = '#ffd700'
-      useEmissive = true
-    }
-
-    const text = `+${value}`
-    const color = Color3.FromHexString(colorHex)
-
-    // Create dynamic texture with the score text
-    const textureWidth = 256
-    const textureHeight = 128
-    const dynamicTexture = new DynamicTexture(
-      `floatingNumberTex_${text}`,
-      { width: textureWidth, height: textureHeight },
-      this.scene,
-      false
-    )
-    const ctx = dynamicTexture.getContext() as CanvasRenderingContext2D
-    ctx.clearRect(0, 0, textureWidth, textureHeight)
-
-    // Draw text centered
-    ctx.font = 'bold 72px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillStyle = colorHex
-    ctx.fillText(text, textureWidth / 2, textureHeight / 2)
-
-    // Add a subtle outline for readability against any background
-    ctx.strokeStyle = 'rgba(0,0,0,0.6)'
-    ctx.lineWidth = 4
-    ctx.strokeText(text, textureWidth / 2, textureHeight / 2)
-
-    dynamicTexture.update()
-
-    // Create billboard plane mesh
-    const plane = MeshBuilder.CreatePlane(
-      `floatingNumber_${text}`,
-      { width: 1.5, height: 0.75 },
-      this.scene
-    )
-    plane.position.copyFrom(worldPosition)
-    plane.billboardMode = Mesh.BILLBOARDMODE_ALL
-
-    // Create material
-    const mat = new StandardMaterial(`floatingNumberMat_${text}`, this.scene)
-    mat.diffuseTexture = dynamicTexture
-    mat.emissiveColor = useEmissive ? color : Color3.Black()
-    mat.specularColor = Color3.Black()
-    mat.disableLighting = true
-    mat.useAlphaFromDiffuseTexture = true
-    mat.backFaceCulling = false
-    plane.material = mat
-
-    // Track active floating number
-    this.floatingNumbers.push(plane)
-
-    // Animation constants (60 fps baseline)
-    const totalFrames = 48 // 800ms
-    const fadeStartFrame = 30 // fade starts at 500ms
-    const fps = 60
-
-    // Position animation: float upward 1.5 units
-    const positionAnim = new Animation(
-      'floatingNumberPosition',
-      'position.y',
-      fps,
-      Animation.ANIMATIONTYPE_FLOAT,
-      Animation.ANIMATIONLOOPMODE_CONSTANT
-    )
-    positionAnim.setKeys([
-      { frame: 0, value: worldPosition.y },
-      { frame: totalFrames, value: worldPosition.y + 1.5 },
-    ])
-
-    // Alpha animation: hold 1.0 then fade 1.0 -> 0.0 over last 300ms
-    const alphaAnim = new Animation(
-      'floatingNumberAlpha',
-      'material.alpha',
-      fps,
-      Animation.ANIMATIONTYPE_FLOAT,
-      Animation.ANIMATIONLOOPMODE_CONSTANT
-    )
-    alphaAnim.setKeys([
-      { frame: 0, value: 1.0 },
-      { frame: fadeStartFrame, value: 1.0 },
-      { frame: totalFrames, value: 0.0 },
-    ])
-
-    plane.animations = [positionAnim, alphaAnim]
-
-    // Start animation with cleanup callback
-    this.scene.beginAnimation(
-      plane,
-      0,
-      totalFrames,
-      false,
-      1.0,
-      () => {
-        // Remove from tracking
-        const idx = this.floatingNumbers.indexOf(plane)
-        if (idx !== -1) {
-          this.floatingNumbers.splice(idx, 1)
-        }
-        // Dispose mesh and material (texture disposed with material)
-        plane.dispose()
-        mat.dispose()
-      }
-    )
+    this.floatingEffects?.spawnFloatingNumber(value, worldPosition)
   }
 
   shakeCamera(config: { intensity: number; duration: number; decay: number }): void {
@@ -1600,107 +1178,23 @@ export class EffectsSystem {
     this.qualityTier = tier
   }
 
-  /**
-   * Add a particle trail for a ball.
-   * Creates a ParticleSystem attached to the ball mesh as emitter.
-   */
   addBallTrail(body: RAPIER.RigidBody, mesh: Mesh, ballType: BallType): void {
-    if (this.ballTrails.has(body.handle)) return
-
-    const ps = new ParticleSystem(`ballTrail_${body.handle}`, 100, this.scene)
-    ps.emitter = mesh
-
-    // Trail colors by ball type
-    if (ballType === BallType.GOLD_PLATED || ballType === BallType.SOLID_GOLD) {
-      ps.color1 = new Color4(1, 0.85, 0.4, 1)
-      ps.color2 = new Color4(1, 0.7, 0.2, 1)
-      ps.colorDead = new Color4(1, 0.6, 0, 0)
-    } else {
-      ps.color1 = new Color4(0.9, 0.95, 1, 1)
-      ps.color2 = new Color4(0.7, 0.85, 1, 1)
-      ps.colorDead = new Color4(0.5, 0.7, 1, 0)
-    }
-
-    ps.minSize = 0.04
-    ps.maxSize = 0.04
-    ps.minLifeTime = 0.15
-    ps.maxLifeTime = 0.15
-    ps.emitRate = 0
-    ps.blendMode = ParticleSystem.BLENDMODE_ADD
-    ps.gravity = Vector3.Zero()
-    ps.direction1 = new Vector3(0, 0, 0)
-    ps.direction2 = new Vector3(0, 0, 0)
-    ps.minEmitPower = 0
-    ps.maxEmitPower = 0
-    ps.updateSpeed = 0.016
-
-    ps.start()
-    this.ballTrails.set(body.handle, { system: ps, body, mesh, type: ballType })
+    this.trailEffects?.addBallTrail(body, mesh, ballType)
   }
 
   /**
-   * Remove a ball's particle trail and dispose the ParticleSystem.
+   * Remove a ball's particle trail (delegated)
    */
   removeBallTrail(body: RAPIER.RigidBody): void {
-    const trail = this.ballTrails.get(body.handle)
-    if (!trail) return
-    trail.system.stop()
-    trail.system.dispose()
-    this.ballTrails.delete(body.handle)
+    this.trailEffects?.removeBallTrail(body)
   }
 
   /**
    * Sync ball trails with current ball list, update emit rates per velocity.
    * Call once per frame from the game loop.
    */
-  updateTrails(
-    balls: { body: RAPIER.RigidBody; mesh: Mesh; type: BallType }[]
-  ): void {
-    // Quality tier gating: disable trails entirely on LOW
-    if (this.qualityTier === QualityTier.LOW) {
-      // Clean up any existing trails
-      for (const trail of this.ballTrails.values()) {
-        trail.system.stop()
-        trail.system.dispose()
-      }
-      this.ballTrails.clear()
-      return
-    }
-
-    const activeHandles = new Set<number>()
-
-    for (const ball of balls) {
-      activeHandles.add(ball.body.handle)
-
-      if (!this.ballTrails.has(ball.body.handle)) {
-        this.addBallTrail(ball.body, ball.mesh, ball.type)
-      }
-
-      const trail = this.ballTrails.get(ball.body.handle)
-      if (!trail) continue
-
-      // Update emit rate based on velocity magnitude
-      const vel = ball.body.linvel()
-      const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z)
-
-      if (speed < 1.0) {
-        trail.system.emitRate = 0
-      } else if (speed > 5.0) {
-        trail.system.emitRate = 60
-      } else {
-        // Linear interpolation between 0 and 60
-        trail.system.emitRate = ((speed - 1.0) / 4.0) * 60
-      }
-    }
-
-    // Remove trails for balls that are no longer active
-    for (const [handle, trail] of this.ballTrails) {
-      if (!activeHandles.has(handle)) {
-        trail.system.stop()
-        trail.system.dispose()
-        this.ballTrails.delete(handle)
-      }
-    }
+  updateTrails(balls: { body: RAPIER.RigidBody; mesh: Mesh; type: BallType }[]): void {
+    this.trailEffects?.updateTrails(balls, this.qualityTier)
   }
 
   /**
