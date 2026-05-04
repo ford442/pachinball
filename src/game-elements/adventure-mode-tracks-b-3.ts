@@ -45,7 +45,6 @@ export function createNeonSkylineTrackImpl(host: any): void {
     { offset: new Vector3(2, 0, 12), diameter: 1.8, height: 8 },
   ]
 
-  const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
   buildings.forEach(building => {
     const pos = currentPos.add(building.offset)
     host.createStaticCylinder(pos, building.diameter, building.height, skyMat)
