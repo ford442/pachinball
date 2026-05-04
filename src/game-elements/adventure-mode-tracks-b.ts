@@ -1,6 +1,7 @@
 import { AdventureModeTracksA } from './adventure-mode-tracks-a'
 import { createCpuCoreTrackImpl, createCryoChamberTrackImpl, createBioHazardLabTrackImpl } from './adventure-mode-tracks-b-1'
 import { createGravityForgeTrackImpl, createTidalNexusTrackImpl, createDigitalZenGardenTrackImpl, createSynthwaveSurfTrackImpl, createSolarFlareTrackImpl } from './adventure-mode-tracks-b-2'
+import { createTeslaTowerTrackImpl, createNeonSkylineTrackImpl } from './adventure-mode-tracks-b-3'
 
 export abstract class AdventureModeTracksB extends AdventureModeTracksA {
   protected createCpuCoreTrack(): void { createCpuCoreTrackImpl(this) }
@@ -11,4 +12,6 @@ export abstract class AdventureModeTracksB extends AdventureModeTracksA {
   protected createDigitalZenGardenTrack(): void { createDigitalZenGardenTrackImpl(this) }
   protected createSynthwaveSurfTrack(): void { createSynthwaveSurfTrackImpl(this) }
   protected createSolarFlareTrack(): void { createSolarFlareTrackImpl(this) }
+  protected createTeslaTowerTrack(): void { createTeslaTowerTrackImpl(this) }
+  protected createNeonSkylineTrack(): void { createNeonSkylineTrackImpl(this) }
 }
