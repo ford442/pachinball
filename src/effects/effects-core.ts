@@ -9,27 +9,20 @@ import {
   Color4,
   PointLight,
   Texture,
-  DynamicTexture,
   Mesh,
-  Animation,
   ArcRotateCamera,
-  ParticleSystem,
 } from '@babylonjs/core'
 import type { DirectionalLight } from '@babylonjs/core'
 import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import type { CabinetLight, ShardParticle } from '../game-elements/types'
 import {
   PALETTE,
-  INTENSITY,
-  STATE_COLORS,
   TEMPERATURE,
-  LIGHTING_STATES,
   FOG_STATES,
+  LIGHTING_STATES,
   LIGHTING,
   color,
-  emissive,
   pulse,
-  lerpColor,
   QualityTier,
 } from '../game-elements/visual-language'
 import { EffectsConfig, BallType } from '../config'
@@ -43,16 +36,10 @@ import { ShardEffects } from './effects-shards'
 import { TrailEffects } from './effects-trails'
 import { FloatingNumberEffects } from './effects-floating'
 import { RipplesEffects } from './effects-ripples'
+import { createSharedParticleTexture } from './effects-utils'
+import { createCabinetLighting, updateCabinetLighting, updateSlotLighting, getTransitionColor } from './effects-cabinet'
+import { ImpactEffects } from './effects-impact'
 
-// Type for ripple ring tracking
-interface RippleRing {
-  mesh: Mesh
-  material: StandardMaterial
-  age: number
-  maxAge: number
-  initialScale: number
-  maxScale: number
-}
 
 
 export class EffectsSystem {
@@ -109,9 +96,7 @@ export class EffectsSystem {
   // Sub-systems: trail and floating effects
   private trailEffects: TrailEffects | null = null
   private floatingEffects: FloatingNumberEffects | null = null
-
-  // Ripple rings
-  private rippleRings: RippleRing[] = []
+  private ripplesEffects: RipplesEffects | null = null
 
   // Impact rings (Animation-based, max 5 at once)
 
@@ -169,9 +154,8 @@ export class EffectsSystem {
 
   // Ball particle trails delegated to TrailEffects
 
-  // Impact flash pooled particle system
-  private impactFlashPool: ParticleSystem | null = null
-  private impactFlashPoolInited = false
+  // Impact flash delegated to ImpactEffects
+  private impactEffects: ImpactEffects | null = null
 
   // Quality tier for effect gating
   private qualityTier: QualityTier = QualityTier.HIGH
@@ -207,6 +191,7 @@ export class EffectsSystem {
     this.trailEffects = new TrailEffects(scene)
     this.floatingEffects = new FloatingNumberEffects(scene)
     this.ripplesEffects = new RipplesEffects(scene)
+    this.impactEffects = new ImpactEffects(scene)
 
     try {
       this.audioCtx = new (window.AudioContext ||
@@ -411,81 +396,8 @@ export class EffectsSystem {
   }
 
   createCabinetLighting(): void {
-    const baseColor = this.currentCabinetColor
-    const accentColor = lerpColor(baseColor, PALETTE.WHITE, 0.3).toHexString()
-
-    // Unified LED strips using current map theme color
-    const stripConfigs = [
-      {
-        pos: new Vector3(-12.5, 1.5, 5),
-        size: { width: 0.2, height: 2.5, depth: 32 },
-        color: baseColor,
-        intensity: INTENSITY.NORMAL,
-      },
-      {
-        pos: new Vector3(13.5, 1.5, 5),
-        size: { width: 0.2, height: 2.5, depth: 32 },
-        color: baseColor,
-        intensity: INTENSITY.NORMAL,
-      },
-      {
-        pos: new Vector3(0.75, 5.5, 5),
-        size: { width: 26, height: 0.2, depth: 32 },
-        color: accentColor,
-        intensity: INTENSITY.AMBIENT,
-      },
-      // Lower accent strips
-      {
-        pos: new Vector3(-12.5, -1, 5),
-        size: { width: 0.3, height: 0.1, depth: 32 },
-        color: accentColor,
-        intensity: INTENSITY.AMBIENT,
-      },
-      {
-        pos: new Vector3(13.5, -1, 5),
-        size: { width: 0.3, height: 0.1, depth: 32 },
-        color: accentColor,
-        intensity: INTENSITY.AMBIENT,
-      },
-      // Backbox edge strips
-      {
-        pos: new Vector3(0, 8, 28),
-        size: { width: 28, height: 0.15, depth: 0.15 },
-        color: baseColor,
-        intensity: INTENSITY.NORMAL,
-      },
-      {
-        pos: new Vector3(0, 8, 22),
-        size: { width: 28, height: 0.15, depth: 0.15 },
-        color: accentColor,
-        intensity: INTENSITY.AMBIENT,
-      },
-    ]
-
-    stripConfigs.forEach((config, idx) => {
-      const strip = MeshBuilder.CreateBox(
-        `ledStrip${idx}`,
-        { width: config.size.width, height: config.size.height, depth: config.size.depth },
-        this.scene
-      )
-      strip.position.copyFrom(config.pos)
-
-      const mat = new StandardMaterial(`ledStripMat${idx}`, this.scene)
-      mat.emissiveColor = emissive(config.color, config.intensity)
-      mat.alpha = Math.min(0.8, config.intensity)
-      strip.material = mat
-
-      // Offset light slightly inward for better playfield coverage
-      const lightPos = config.pos.clone()
-      lightPos.x *= 0.8
-      const light = new PointLight(`stripLight${idx}`, lightPos, this.scene)
-      light.diffuse = color(config.color)
-      light.intensity = config.intensity
-      light.range = 20
-      light.shadowEnabled = false
-
-      this.cabinetLights.push({ mesh: strip, material: mat, pointLight: light })
-    })
+    // Delegate heavy cabinet lighting construction to effects-cabinet helper
+    createCabinetLighting(this.scene, this.cabinetLights, this.currentCabinetColor)
   }
 
   spawnShardBurst(pos: Vector3, colorHex?: string): void {
@@ -579,118 +491,31 @@ export class EffectsSystem {
   }
 
   updateCabinetLighting(): void {
-    const time = performance.now() * 0.001
-
-    if (this.isJackpotActive) {
-      this.updateJackpotSequence()
-    } else if (this.isSolidGoldPulseActive) {
-      this.updateSolidGoldPulse(0.016)
-    } else if (this.lightingTimer > 0) {
-      const dt = 0.016
-      this.lightingTimer -= dt
-      if (this.lightingTimer <= 0) {
-        this.lightingMode = 'normal'
-      }
+    // Delegate heavy update logic to effects-cabinet helper, passing a mutable state object
+    const state = {
+      cabinetLights: this.cabinetLights,
+      decorativeLights: this.decorativeLights,
+      currentCabinetColor: this.currentCabinetColor,
+      lightingMode: this.lightingMode,
+      lightingTimer: this.lightingTimer,
+      hitFlashIntensity: this.hitFlashIntensity,
+      isJackpotActive: this.isJackpotActive,
+      jackpotPhase: this.jackpotPhase,
+      isSolidGoldPulseActive: this.isSolidGoldPulseActive,
+      solidGoldPulseTimer: this.solidGoldPulseTimer,
+      slotLightMode: this.slotLightMode,
+      slotLightTimer: this.slotLightTimer,
+      accessibility: this.accessibility,
+      scene: this.scene,
     }
 
-    this.cabinetLights.forEach((light, idx) => {
-      let targetColor: Color3
-      let intensity = INTENSITY.NORMAL
+    updateCabinetLighting(state as any)
 
-      // Unified state-based lighting using Visual Language
-      if (this.isJackpotActive) {
-        if (this.jackpotPhase === 1) {
-          // Breach: Pulsing alert red
-          const p = pulse(time, 4, 0.2, 1.0)
-          targetColor = emissive(STATE_COLORS.REACH, p * INTENSITY.FLASH)
-          intensity = INTENSITY.FLASH
-        } else if (this.jackpotPhase === 2) {
-          // Critical: Strobing gold - SAFETY: Use accessibility-controlled flash frequency
-          // CRITICAL SAFETY: Flash frequency capped at 2Hz (was unsafe 60Hz)
-          const flashFreq = this.accessibility.flashFrequencyMax // 2Hz max for safety
-          const strobe = (Math.sin(time * Math.PI * 2 * flashFreq) + 1) * 0.5
-          targetColor = emissive(PALETTE.GOLD, strobe * INTENSITY.BURST)
-          intensity = INTENSITY.BURST
-        } else {
-          // Meltdown: Rainbow wave
-          const hue = (time * 0.5 + idx * 0.1) % 1
-          targetColor = Color3.FromHSV(hue * 360, 1.0, 1.0).scale(INTENSITY.HIGH)
-          intensity = INTENSITY.HIGH
-        }
-      } else if (this.isSolidGoldPulseActive) {
-        // Solid Gold Pulse: warm gold → magenta fade
-        const progress = this.solidGoldPulseTimer / this.SOLID_GOLD_PULSE_DURATION
-        const fade = 1 - progress
-        const goldColor = emissive(PALETTE.GOLD, INTENSITY.HIGH * fade)
-        const magentaColor = emissive(PALETTE.MAGENTA, INTENSITY.HIGH * fade * 0.6)
-        targetColor = Color3.Lerp(goldColor, magentaColor, Math.sin(progress * Math.PI))
-        intensity = INTENSITY.HIGH * fade
-      } else {
-        switch (this.lightingMode) {
-          case 'hit': {
-            // Decay flash over time
-            const dt = 0.016
-            this.hitFlashIntensity = Math.max(0, this.hitFlashIntensity - dt * 5)
-            const flashBoost = 1 + this.hitFlashIntensity * 2
-            const flashColor = lerpColor(this.currentCabinetColor, PALETTE.WHITE, 0.5).toHexString()
-            targetColor = emissive(flashColor, INTENSITY.FLASH * flashBoost)
-            intensity = INTENSITY.FLASH * flashBoost
-            break
-          }
-          case 'reach':
-            // Pulsing alert
-            targetColor = emissive(STATE_COLORS.REACH, pulse(time, 2, 0.3, INTENSITY.HIGH))
-            intensity = INTENSITY.HIGH
-            break
-          case 'fever': {
-            // Rainbow pulse
-            const hue = (time * 2 + idx * 0.3) % 1
-            targetColor = Color3.FromHSV(hue * 360, 0.8, 1.0)
-            intensity = INTENSITY.HIGH + Math.sin(time * 10) * 0.5
-            break
-          }
-          case 'normal':
-          default: {
-            // Breathing current map color - unified idle state
-            const breath = pulse(time, 0.7, INTENSITY.AMBIENT, INTENSITY.NORMAL)
-            targetColor = emissive(this.currentCabinetColor, breath)
-            intensity = breath
-            break
-          }
-        }
-      }
-
-      light.material.emissiveColor = Color3.Lerp(light.material.emissiveColor, targetColor, 0.016 * 10)
-      light.pointLight.diffuse = light.material.emissiveColor
-      light.pointLight.intensity = intensity
-    })
-
-    // Update decorative materials (plastics) with unified colors
-    this.decorativeLights.forEach((mat) => {
-      if (this.isJackpotActive) {
-        if (this.jackpotPhase === 3) {
-          // Rainbow meltdown
-          const hue = (time * 2) % 1
-          mat.emissiveColor = Color3.FromHSV(hue * 360, 1.0, INTENSITY.HIGH)
-        } else {
-          // Red alert
-          mat.emissiveColor = emissive(STATE_COLORS.REACH, INTENSITY.HIGH)
-        }
-      } else if (this.isSolidGoldPulseActive) {
-        const progress = this.solidGoldPulseTimer / this.SOLID_GOLD_PULSE_DURATION
-        const fade = 1 - progress
-        mat.emissiveColor = emissive(PALETTE.GOLD, INTENSITY.HIGH * fade)
-      } else if (this.lightingMode === 'fever') {
-        // Gold fever
-        mat.emissiveColor = emissive(PALETTE.GOLD, pulse(time, 2, INTENSITY.NORMAL, INTENSITY.HIGH))
-      } else if (this.lightingMode === 'reach') {
-        // Alert pulse
-        mat.emissiveColor = emissive(STATE_COLORS.REACH, pulse(time, 5, 0.3, INTENSITY.HIGH))
-      } else {
-        // Idle magenta tint
-        mat.emissiveColor = emissive(PALETTE.MAGENTA, INTENSITY.AMBIENT)
-      }
-    })
+    // Sync back any mutated state fields
+    this.lightingMode = state.lightingMode
+    this.lightingTimer = state.lightingTimer
+    this.hitFlashIntensity = state.hitFlashIntensity
+    this.slotLightTimer = state.slotLightTimer
   }
 
   setLightingMode(mode: 'normal' | 'hit' | 'fever' | 'reach', duration = 0): void {
@@ -738,57 +563,25 @@ export class EffectsSystem {
   }
 
   updateSlotLighting(): void {
-    if (this.slotLightMode === 'idle') return
-
-    const dt = 0.016
-    this.slotLightTimer += dt
-    const time = performance.now() * 0.001
-
-    this.cabinetLights.forEach((light, idx) => {
-      let targetColor: Color3
-      let intensity = INTENSITY.NORMAL
-
-      switch (this.slotLightMode) {
-        case 'spin': {
-          // Rapid rainbow chase
-          const hue = (time * 5 + idx * 0.3) % 1
-          targetColor = Color3.FromHSV(hue * 360, 1.0, 1.0)
-          intensity = INTENSITY.HIGH
-          break
-        }
-
-        case 'stop': {
-          // Quick flash white - SAFETY: Use safe frequency
-          // CRITICAL SAFETY: Flash frequency limited by accessibility config
-          const flashFreq = Math.min(5, this.accessibility.flashFrequencyMax * 2.5) // Max 5Hz, scales with accessibility
-          const flash = Math.sin(time * Math.PI * 2 * flashFreq) > 0
-          targetColor = flash ? Color3.White() : emissive(PALETTE.GOLD, INTENSITY.AMBIENT)
-          intensity = flash ? INTENSITY.FLASH : INTENSITY.NORMAL
-          break
-        }
-
-        case 'win':
-          // Pulsing gold
-          targetColor = emissive(PALETTE.GOLD, pulse(time, 3, INTENSITY.NORMAL, INTENSITY.HIGH))
-          intensity = INTENSITY.HIGH
-          break
-
-        case 'jackpot': {
-          // Intense strobing rainbow
-          const jackpotHue = (time * 10 + idx * 0.2) % 1
-          targetColor = Color3.FromHSV(jackpotHue * 360, 1.0, 1.0)
-          intensity = INTENSITY.BURST
-          break
-        }
-
-        default:
-          targetColor = emissive(PALETTE.CYAN, INTENSITY.NORMAL)
-      }
-
-      light.material.emissiveColor = Color3.Lerp(light.material.emissiveColor, targetColor, dt * 15)
-      light.pointLight.diffuse = light.material.emissiveColor
-      light.pointLight.intensity = intensity
-    })
+    // delegate to helper
+    const state = {
+      cabinetLights: this.cabinetLights,
+      decorativeLights: this.decorativeLights,
+      currentCabinetColor: this.currentCabinetColor,
+      lightingMode: this.lightingMode,
+      lightingTimer: this.lightingTimer,
+      hitFlashIntensity: this.hitFlashIntensity,
+      isJackpotActive: this.isJackpotActive,
+      jackpotPhase: this.jackpotPhase,
+      isSolidGoldPulseActive: this.isSolidGoldPulseActive,
+      solidGoldPulseTimer: this.solidGoldPulseTimer,
+      slotLightMode: this.slotLightMode,
+      slotLightTimer: this.slotLightTimer,
+      accessibility: this.accessibility,
+      scene: this.scene,
+    }
+    updateSlotLighting(state as any)
+    this.slotLightTimer = state.slotLightTimer
   }
 
   getAudioContext(): AudioContext | null {
@@ -802,17 +595,13 @@ export class EffectsSystem {
       })
     }
     // Clear all effects
-    this.clearFeverTrails()
+    this.trailEffects?.clearFeverTrails()
     this.shards.forEach((s) => {
       s.mesh.dispose()
       s.material.dispose()
     })
     this.shards = []
-    this.rippleRings.forEach((r) => {
-      r.mesh.dispose()
-      r.material.dispose()
-    })
-    this.rippleRings = []
+    this.ripplesEffects?.clear()
     this.cabinetLights.forEach((l) => {
       l.mesh.dispose()
       l.pointLight.dispose()
@@ -824,6 +613,7 @@ export class EffectsSystem {
     this.particleEffects.dispose()
     this.lightingEffects.dispose()
     this.cameraEffects?.dispose()
+    this.impactEffects?.dispose()
   }
 
   createParticleTexture(): Texture {
@@ -1024,7 +814,7 @@ export class EffectsSystem {
     if (!this.areEnhancedEffectsEnabled() || !EffectsConfig.enableStateTransitionFlashes) return
 
     // Get color for transition
-    const flashColor = this.getTransitionColor(toState)
+    const flashColor = getTransitionColor(toState)
 
     // Initialize overlay if needed
     if (!this.transitionFlashOverlay) {
@@ -1065,20 +855,6 @@ export class EffectsSystem {
     this.transitionFlashOverlay.renderingGroupId = 1
   }
 
-  private getTransitionColor(state: 'normal' | 'hit' | 'fever' | 'reach'): Color3 {
-    switch (state) {
-      case 'hit':
-        return emissive(PALETTE.WHITE, INTENSITY.FLASH)
-      case 'reach':
-        return emissive(STATE_COLORS.REACH, INTENSITY.HIGH)
-      case 'fever':
-        return emissive(STATE_COLORS.FEVER, INTENSITY.HIGH)
-      case 'normal':
-      default:
-        return emissive(PALETTE.CYAN, INTENSITY.NORMAL)
-    }
-  }
-
   private updateTransitionFlash(dt: number): void {
     if (!this.transitionFlash.active || !this.transitionFlashOverlay || !this.transitionFlashMat) return
 
@@ -1114,6 +890,8 @@ export class EffectsSystem {
     // Original updates
     this.updateShards(dt)
     this.updateBloom()
+    // Solid gold pulse timing (keeps bloom curve in sync)
+    this.updateSolidGoldPulse(dt)
     this.updateCabinetLighting()
     this.updateSlotLighting()
 
@@ -1203,69 +981,8 @@ export class EffectsSystem {
    * On LOW quality tier, reduces particle count to 10.
    */
   triggerImpactFlash(worldPosition: Vector3, intensity: number, colorHex = '#44aaff'): void {
-    if (!this.impactFlashPoolInited) {
-      this.initImpactFlashPool()
-    }
-    if (!this.impactFlashPool) return
-
-    const ps = this.impactFlashPool
-    ps.emitter = worldPosition
-
-    // Determine particle count based on intensity and quality tier
-    let count: number
-    if (this.qualityTier === QualityTier.LOW) {
-      count = 10
-    } else {
-      count = intensity >= 1.0 ? 60 : 25
-    }
-
-    // Colors: bright white core fading to accent color
-    const accent = Color4.FromHexString(colorHex + 'FF')
-    ps.color1 = new Color4(1, 1, 1, 1)
-    ps.color2 = accent
-    ps.colorDead = new Color4(accent.r, accent.g, accent.b, 0)
-
-    ps.manualEmitCount = count
-    ps.start()
-
-    // Stop emission after burst; particles live only 0.1s
-    setTimeout(() => {
-      ps.stop()
-    }, 100)
+    // Delegate to ImpactEffects
+    this.impactEffects?.triggerImpactFlash(worldPosition, intensity, colorHex)
   }
 
-  private initImpactFlashPool(): void {
-    if (this.impactFlashPoolInited) return
-    this.impactFlashPoolInited = true
-
-    const ps = new ParticleSystem('impactFlashPool', 100, this.scene)
-
-    // Create a simple radial gradient particle texture
-    const size = 64
-    const tex = new DynamicTexture('impactFlashTex', size, this.scene, false)
-    const ctx = tex.getContext() as CanvasRenderingContext2D
-    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
-    grad.addColorStop(0, 'rgba(255, 255, 255, 1)')
-    grad.addColorStop(0.5, 'rgba(255, 255, 255, 0.5)')
-    grad.addColorStop(1, 'rgba(255, 255, 255, 0)')
-    ctx.fillStyle = grad
-    ctx.fillRect(0, 0, size, size)
-    tex.update()
-    ps.particleTexture = tex
-
-    ps.minSize = 0.05
-    ps.maxSize = 0.15
-    ps.minLifeTime = 0.1
-    ps.maxLifeTime = 0.1
-    ps.emitRate = 0
-    ps.blendMode = ParticleSystem.BLENDMODE_ADD
-    ps.gravity = Vector3.Zero()
-    ps.direction1 = new Vector3(-1, -1, -1)
-    ps.direction2 = new Vector3(1, 1, 1)
-    ps.minEmitPower = 2
-    ps.maxEmitPower = 4
-    ps.updateSpeed = 0.016
-
-    this.impactFlashPool = ps
-  }
 }

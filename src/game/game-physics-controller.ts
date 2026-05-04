@@ -18,6 +18,7 @@ import type { GameStateManager } from './game-state'
 import type { EventBus } from './event-bus'
 import type { AdventureState } from '../game-elements/adventure-state'
 import type { AdventureManager } from './game-adventure'
+import type { AdventureMode } from '../adventure'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
 import type { CameraController } from '../game-elements/camera-controller'
 import type { MagSpinFeeder } from '../game-elements/mag-spin-feeder'
@@ -46,6 +47,7 @@ export interface PhysicsHost {
   readonly mapManager: import('./game-maps').TableMapManager | null
   readonly uiManager: import('./game-ui').GameUIManager | null
   readonly adventureState: AdventureState
+  readonly adventureMode: AdventureMode | null
   adventureManager: AdventureManager | null
   readonly zoneTriggerSystem: ZoneTriggerSystem | null
   readonly cameraController: CameraController | null

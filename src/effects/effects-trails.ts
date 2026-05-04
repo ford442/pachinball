@@ -1,7 +1,7 @@
 import { MeshBuilder, Vector3, StandardMaterial, Mesh, ParticleSystem, Color4, Scene } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { EffectsConfig, BallType } from '../config'
-import { emissive, PALETTE, QualityTier } from '../game-elements/visual-language'
+import { emissive, QualityTier } from '../game-elements/visual-language'
 
 interface FeverTrail {
   mesh: Mesh

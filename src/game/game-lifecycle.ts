@@ -46,6 +46,7 @@ export interface LifecycleHost {
   scoreElement: HTMLElement | null
 
   score: number
+  bestScore: number
   lives: number
   comboCount: number
   comboTimer: number

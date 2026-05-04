@@ -1,15 +1,11 @@
 import { MeshBuilder, Vector3, StandardMaterial, Mesh, Animation, Scene, DynamicTexture, Color3 } from '@babylonjs/core'
-import { createSharedParticleTexture } from './effects-utils'
 
 export class FloatingNumberEffects {
   private scene: Scene
   private floatingNumbers: Mesh[] = []
   private readonly maxFloatingNumbers = 8
-  private sharedTex: DynamicTexture
-
   constructor(scene: Scene) {
     this.scene = scene
-    this.sharedTex = createSharedParticleTexture(scene)
   }
 
   spawnFloatingNumber(value: number, worldPosition: Vector3): void {

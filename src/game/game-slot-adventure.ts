@@ -10,8 +10,7 @@ import type { GameObjects } from '../objects'
 import type { AdventureMode } from '../adventure'
 import { AdventureTrackType } from '../adventure'
 import type { EventBus } from './event-bus'
-import { DisplayState } from '../game-elements'
-import { GAME_TUNING } from '../config'
+
 import type { TableMapManager } from './game-maps'
 
 export interface SlotAdventureHost {
@@ -73,7 +72,7 @@ export class GameSlotAdventure {
   }
 
   setupSlotMachineCallbacks(): void {
-    const { display, effects, score, mapManager } = this.host
+    const { display, effects } = this.host
     if (!display) return
 
     display.configureSlotMachine({

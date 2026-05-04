@@ -11,9 +11,9 @@ import type { DisplaySystem } from '../display'
 import type { GameObjects } from '../objects'
 import type { BallManager } from '../game-elements/ball-manager'
 import type { CameraController } from '../game-elements/camera-controller'
-import type { GameStateManager } from './game-state'
 import type { AdventureMode } from '../adventure'
-import type { AdventureManager } from './game-adventure'
+
+declare const require: any
 import type { GameUIManager } from './game-ui'
 import { getMaterialLibrary } from '../materials'
 import { getCabinetBuilder } from '../cabinet'
@@ -41,7 +41,7 @@ export class GameSceneBuilder {
   }
 
   buildCriticalScene(): void {
-    const { scene, gameObjects, ballManager, tableCam, effects, adventureMode, cameraController, adventureManager } = this.host
+    const { scene, gameObjects, ballManager, tableCam, effects } = this.host
     if (!gameObjects || !ballManager) return
 
     if (scene) {

@@ -18,9 +18,11 @@ import { resolveVideoUrl } from './game-utils'
 import { TABLE_MAPS } from '../shaders/lcd-table'
 import type { DynamicScenario, ScenarioZone, WorldZone, ZoneMechanic } from '../game-elements'
 
+declare const require: any
+
 export interface ScenarioHost {
   readonly scene: Scene | null
-  readonly zoneTriggerSystem: ZoneTriggerSystem | null
+  zoneTriggerSystem: ZoneTriggerSystem | null
   readonly display: DisplaySystem | null
   readonly effects: EffectsSystem | null
   readonly ballManager: BallManager | null

@@ -36,7 +36,6 @@ import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 
 import {
   SURFACES,
-  INTENSITY,
   LIGHTING,
   color,
   detectQualityTier,
