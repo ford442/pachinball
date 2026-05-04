@@ -1,4 +1,4 @@
-import { MeshBuilder, Vector3 } from '@babylonjs/core'
+import { Vector3 } from '@babylonjs/core'
 
 // Implementation helpers for AdventureModeTracksB (part 3)
 
@@ -12,8 +12,7 @@ export function createTeslaTowerTrackImpl(host: any): void {
   const entryIncline = (14 * Math.PI) / 180
   currentPos = host.addStraightRamp(currentPos, heading, 6, entryLen, entryIncline, towerMat)
 
-  const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
-  const towerBasePos = currentPos.add(forward.scale(5))
+  const towerBasePos = currentPos.add(new Vector3(Math.sin(heading), 0, Math.cos(heading)).scale(5))
   host.createStaticCylinder(towerBasePos, 3.0, 10.0, coilMat)
 
   const spiralRadius = 12
