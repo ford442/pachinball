@@ -247,7 +247,6 @@ export class Game {
     } catch {
       // Ignore localStorage errors
     }
-    this.updateHUD()
 
     const settings = SettingsManager.load()
     this.debugHUDEnabledInSettings = settings.enableDebugHUD
@@ -280,6 +279,7 @@ export class Game {
     this.lifecycle = new GameLifecycle(this as unknown as LifecycleHost)
     this.hud = new GameHUD(this as unknown as HUDHost)
     this.mapCabinet = new GameMapCabinet(this as unknown as MapCabinetHost)
+    this.updateHUD()
     this.physicsController = new GamePhysicsController(this as unknown as PhysicsHost)
 
     this.settingsUI.setupSettingsUI()

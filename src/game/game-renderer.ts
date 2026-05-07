@@ -44,11 +44,14 @@ import {
 } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
 import { scanlinePixelShader } from '../shaders/scanline'
+import { lcdTablePixelShader } from '../shaders/lcd-table'
 import { GameConfig } from '../config'
 
 // Register shaders once at module load
 Effect.ShadersStore['scanlineFragmentShader'] = scanlinePixelShader.fragment
 Effect.ShadersStore['scanlinePixelShader'] = scanlinePixelShader.fragment
+Effect.ShadersStore['lcdTableFragmentShader'] = lcdTablePixelShader.fragment
+Effect.ShadersStore['lcdTablePixelShader'] = lcdTablePixelShader.fragment
 
 export interface RendererHost {
   readonly engine: Engine | WebGPUEngine

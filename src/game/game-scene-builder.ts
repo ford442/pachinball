@@ -10,10 +10,9 @@ import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { GameObjects } from '../objects'
 import type { BallManager } from '../game-elements/ball-manager'
-import type { CameraController } from '../game-elements/camera-controller'
 import type { AdventureMode } from '../adventure'
+import { CameraController } from '../game-elements'
 
-declare const require: any
 import type { GameUIManager } from './game-ui'
 import { getMaterialLibrary } from '../materials'
 import { getCabinetBuilder } from '../cabinet'
@@ -65,8 +64,7 @@ export class GameSceneBuilder {
     }
 
     if (tableCam) {
-      const { CameraController: CC } = require('../game-elements') as typeof import('../game-elements')
-      this.host.cameraController = new CC(tableCam)
+      this.host.cameraController = new CameraController(tableCam)
     }
   }
 
