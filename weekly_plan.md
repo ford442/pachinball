@@ -1,22 +1,25 @@
 # Pachinball — Weekly Plan
 
 ## Today's focus
-**2026-04-30 — Event Bus Architecture: Replace callback map in `GameStateManager` with a typed pub/sub event bus**
-Wire a lightweight, fully-typed `EventBus` that lets `DisplaySystem`, `EffectsSystem`, and audio subscribe to game events rather than receiving direct calls from `game.ts`. This closes the remaining architectural gap left by last week's backbox sync work and removes the scatter of `this.display?.setDisplayState(...)` call sites from `game.ts`.
+**2026-05-07 — Playwright Smoke Tests: Verify every `DisplayState` transition via `window.game`**
+Add `tests/display-states.spec.ts` covering every `DisplayState` transition (IDLE → FEVER, IDLE → REACH, IDLE → JACKPOT, IDLE → ADVENTURE, and return paths). Tests drive transitions via `window.game.eventBus.emit()` and assert on `window.game.display.getDisplayState()`. This closes the last open Ideas item and provides a permanent regression harness for the display/event-bus system.
 
 ## Ideas
 - [done — 2026-04-30] Backbox display state synchronization — FEVER triggered (combo>=10), REACH/JACKPOT/IDLE/ADVENTURE wired; GameStateManager drives IDLE on MENU/GAME_OVER. Full auto-sync folded into Event Bus task below.
 - [done — 2026-04-30] BallManager unit tests — Vitest installed, 10 tests passing (PR #122). Config extraction piece carried to Backlog.
-- [in progress — 2026-04-30] Event bus architecture — Replace the callback map in `GameStateManager` and scattered direct calls in `game.ts` with a lightweight typed event bus. Decouples display/effects/audio/scoring from the central game loop before the next feature layer.
-- [ ] Playwright smoke tests for backbox display states — verify each `DisplayState` transition (IDLE → FEVER, IDLE → JACKPOT, JACKPOT → IDLE) triggers the correct layer activation via `getDisplayState()` assertion.
+- [done — 2026-05-07] Event bus architecture — Replace the callback map in `GameStateManager` and scattered direct calls in `game.ts` with a lightweight typed event bus. Decouples display/effects/audio/scoring from the central game loop before the next feature layer.
+- [in progress — 2026-05-07] Playwright smoke tests for backbox display states — verify each `DisplayState` transition (IDLE → FEVER, IDLE → JACKPOT, JACKPOT → IDLE) triggers the correct layer activation via `getDisplayState()` assertion.
 
 ## Backlog
-- [ ] Config extraction — migrate remaining magic numbers (bumper force, flipper impulse, combo thresholds, scoring values) from `game.ts` into `config.ts`. Partially deferred from BallManager unit tests + config idea.
-- [ ] Formal game state machine — `GameStateManager` in `src/game/game-state.ts` has callbacks but no event bus. Effects field commented out as UNUSED. Full subscriber-based wiring is today's task.
-- [ ] Audit reports in repo root (PHYSICS_*, LIGHTING_*, MATERIAL_*, INPUT_*, CAMERA_*) — triage which still reflect current code vs. stale. No one has looked at these since March.
-- [ ] Unit test coverage gap — Playwright smoke test (`tests/verify_prism_core.spec.ts`) + BallManager Vitest tests exist; display system, effects, and GameStateManager have zero test coverage.
+- [ ] Config extraction — migrate remaining magic numbers (bumper force, flipper impulse, combo thresholds, scoring values) from `game.ts` into `config.ts`. PR #127 extracted a first pass; granular gameplay constants remain.
+- [ ] Audit reports triage — docs/ now has all audit reports (PHYSICS_*, LIGHTING_*, MATERIAL_*, INPUT_*, CAMERA_*). Triage which still reflect current code vs. stale/outdated. No review since March.
+- [ ] Vitest unit tests for `EventBus` and `GameStateManager` — event bus and state manager have zero Vitest coverage; the event-driven architecture introduced 2026-04-30 warrants isolated unit tests separate from Playwright E2E.
+- [ ] Sound system EventBus integration — `SoundSystem` is still triggered by direct calls from `game.ts`; wire it to subscribe to `game:start`, `game:over`, `fever:start`, `jackpot:start` events via the EventBus.
 
 ## Done
+- 2026-05-07: **Event Bus Architecture** complete. `src/game/event-bus.ts` created (typed pub/sub, no deps). `GameStateManager` emits typed lifecycle + display events. `DisplaySystem.subscribeToEvents()` self-manages state. All 10 `setDisplayState` call sites in `game.ts` replaced with `eventBus.emit('display:set', ...)`. Gameplay events (`fever:start/end`, `jackpot:start/end`, `reach:start`, `adventure:start/end`) emitted at correct trigger sites. `npx tsc -b` clean, `npm run build` passes.
+- 2026-05-07: **3D floating score numbers, ball trails, impact flashes** (swarm iterations 6–7). `EffectsSystem.spawnFloatingNumber()` — DynamicTexture billboard, color-coded by value tier, pool of 8. Ball trails (`addBallTrail`, `removeBallTrail`, `updateTrails`) with velocity-proportional emit rate; disabled on LOW tier. `triggerImpactFlash()` pooled radial burst. Wired into game loop and all 7 score sites.
+- 2026-05-07: **Decorative 3D geometry** (swarm iteration 8). Bumper neon rings (torus + pulsing animation on HIGH), chrome guide-pin merged mesh (1 draw call), cabinet side panel inlay (DynamicTexture gradient on HIGH / flat emissive on LOW).
 - 2026-04-30: **Backbox Display System — Game↔Display state sync & FEVER layer** substantially complete. FEVER trigger wired (combo>=10, line 2954 `game.ts`). REACH/JACKPOT/ADVENTURE/IDLE all have call sites. GameStateManager drives IDLE on MENU/GAME_OVER transitions. Full architectural auto-sync promoted to Event Bus task (today).
 - 2026-04-30: **BallManager Vitest unit tests** — 10 tests, all passing, Vitest installed (PR #122 merged 2026-04-30). Config extraction deferred to Backlog.
 - 2026-04-23: **Debug HUD overlay** marked done (PR #118 merged 2026-04-17). Re-enabled and modernized: snapshot boundary, throttled updates, developer settings toggle. Files: `src/game-elements/debug-hud.ts`, `src/game.ts`, `index.html`.
@@ -36,7 +39,7 @@ Wire a lightweight, fully-typed `EventBus` that lets `DisplaySystem`, `EffectsSy
 Date: 2026-04-30
 Mode: User Idea
 Focus: Event Bus Architecture — typed pub/sub replacing `GameStateManager` callback map and scattered `game.ts` display call sites
-Outcome: (fill in at end of day)
+Outcome: Full success + overrun. Event bus complete in iteration 5 (0 TS errors, build clean). Swarm continued through iterations 6–8: 3D floating score numbers, ball trails/impact flashes, and decorative bumper rings + guide pins + cabinet inlays. All merged. Docs moved to docs/ in a housekeeping commit (78c0a85). One Ideas item remains: Playwright smoke tests.
 
 ---
 
