@@ -282,11 +282,14 @@ export class Game {
 
     this.settingsUI.setupSettingsUI()
     this.debugHelper.updateDeveloperSettingsVisibility()
+
+    // Initialize SoundSystem early (needed by setupMapSelector); EventBus wiring happens later
+    this.soundSystem = getSoundSystem()
     await this.settingsUI.setupMapSelector()
 
     // Event Bus and State Manager
     this.eventBus = new EventBus()
-    this.soundSystem = getSoundSystem(this.eventBus)
+    getSoundSystem(this.eventBus)
     this.stateManager = new GameStateManager({
       onStateChange: (oldState, newState) => {
         console.log(`[Game] State changed: ${GameState[oldState]} -> ${GameState[newState]}`)

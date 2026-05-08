@@ -139,12 +139,16 @@
 
 ## Quick Wins (≤30 min each)
 
-1. **Physics contact skin** — add `contactSkin = 0.005` in `physics.ts`.
-2. **Shadow bias tuning** — set `shadowGenerator.bias = 0.0005` / `normalBias = 0.02` in `game.ts`.
-3. **CSS touch-action** — add `touch-action: manipulation` to `#game-container` in `index.html` or CSS.
-4. **Non-QWERTY key fix** — map flipper keys to `ArrowLeft`/`ArrowRight` as fallbacks in `input.ts`.
-5. **Pin collar details** — add `CreateCylinder` collar rings in `object-pachinko.ts`.
-6. **Wall friction unification** — read `GameConfig.ball.friction` when creating wall bodies.
+**Completed 2026-05-07:**
+1. ✅ **Physics contact skin** — added `contactSkin = 0.005` in `physics.ts`.
+2. ✅ **Wall friction unification** — `object-walls.ts` now uses `GameConfig.ball.friction` instead of hardcoded `0.1`.
+3. ✅ **Shadow bias tuning** — already present in `game-renderer.ts` (`bias = 0.0005`, `normalBias = 0.02`).
+4. ✅ **CSS touch-action** — already present in `style.css` (multiple `touch-action: manipulation` rules).
+5. ✅ **Non-QWERTY key fix** — already present in `input.ts` (`ArrowLeft`/`ArrowRight` fallbacks alongside `KeyZ`/`Slash`).
+
+**Still open:**
+6. **Pin collar details** — add `CreateCylinder` collar rings in `object-pachinko.ts`.
+7. **Cabinet light exclusion lists** — exclude non-cabinet meshes from LED PointLights.
 
 ---
 
