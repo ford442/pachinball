@@ -17,12 +17,13 @@ Add `tests/display-states.spec.ts` covering every `DisplayState` transition (IDL
 - [ ] Hologram fresnel rim effect.
 
 ## Next Sprint Ideas (May 9+)
-- [in progress] Performance profiling — physics step timing, render loop optimization
-- Adventure track polish — more cinematic camera transitions
+- Reactive cabinet lighting — premium RGB LED effects (in progress)
 - Input buffering improvements — rapid press handling
 - Mobile touch controls — on-screen flipper buttons
+- Backbox screen border lighting — glow sync with DisplayState
 
 ## Done
+- 2026-05-08: **Reactive Cabinet Lighting (Bonus Feature)** — Premium RGB LED-style effects for immersive gameplay. Created `CabinetLighting` system with 5 pooled PointLights (4 edge + 1 under-cabinet). Color-coded state responses: IDLE→deep blue, FEVER→gold/orange, JACKPOT→bright cyan, REACH→magenta, ADVENTURE→purple+cyan. Smooth color transitions (3 transitions/sec), pulsing animation (sine wave), and event-driven bursts on fever/jackpot/adventure. EventBus integration for reactive feedback. QualityTier support. Performant (5 lights total). All 51 Vitest tests passing.
 - 2026-05-08: **Adventure Track Polish (Priority 3)** — Cinematic camera transitions with easing. Created `camera-easing.ts` with 6+ easing functions (linear, easeInOutCubic, easeOutCubic, easeOutQuad, easeInOutElastic, easeOutBack). Added camera transition state tracking (`cameraTransitionTime`, `cameraTransitionDuration = 0.8s`). Enhanced camera smoothing in `updateCamera()` to apply easing during track entry—starts at 50% smoothing, ramps to 100% over 0.8s via easeOutCubic. Reset transition timer on track entry (`start()`) and zone switches (`switchZone()`). Fine-tuned `trackingSmoothing` in camera presets (5.5–8.0) for better responsiveness. All 51 Vitest tests passing.
 - 2026-05-08: **Performance Profiling (Priority 2)** — Lightweight real-time performance monitoring. Created `PerformanceMonitor` class tracking FPS, frame time, physics step time, render time, draw calls, and active bodies. Integrated into game loop with `frameStart()`, `physicsStart()`, `physicsEnd()`, `frameEnd()` calls. Added keyboard shortcut (P) to toggle performance monitoring. When enabled, metrics display in debug HUD (` key to show). Optional console logging via `localStorage.setItem('debug:perf-log', 'true')`. Added `getActiveBodyCount()` to `PhysicsSystem`. Metrics buffered over ~1 second for smooth averaging. All 51 Vitest tests passing.
 - 2026-05-08: **Modern Screen Enhancement (Priority 1)** — Modern LCD/OLED aesthetic for backbox display. Added `MODERN_LCD` preset with soft grid lines, gentle bloom, minimal vignette, and zero chromatic aberration. Enhanced CRT shader with improved bloom algorithm for bright elements and modern color grading (saturation boost, warm tone, contrast via S-curve). Enabled modern LCD effect by default. Added keyboard shortcut (T) to cycle between presets (MODERN_LCD → RETRO → STORY → OFF). Created `setCRTEffectParams()` method in `DisplaySystem`. All 51 Vitest tests passing.
