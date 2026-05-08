@@ -181,6 +181,44 @@ export const PACHINKO_SPIRE_GOALS: AdventureGoal[] = [
 ]
 
 /**
+ * Goals for SINGULARITY_WELL track - Extreme gravity challenge
+ */
+export const SINGULARITY_WELL_GOALS: AdventureGoal[] = [
+  createGoal(
+    'well-score',
+    'Reach 150,000 Points',
+    'Master the singularity and achieve maximum score',
+    'score-based',
+    150000,
+    10000
+  ),
+  createGoal(
+    'well-gold',
+    'Collect 15 Gold Balls',
+    'Find all 15 rare gold balls in the gravity well',
+    'collection-based',
+    15,
+    8000
+  ),
+  createGoal(
+    'well-survive',
+    'Survive 90 Seconds',
+    'Maintain perfect control for 90 seconds against gravity',
+    'survival',
+    90,
+    10000
+  ),
+  createGoal(
+    'well-combo',
+    'Build 10 Hit Combo',
+    'Land 10 consecutive bumper hits without missing',
+    'combo-based',
+    10,
+    6000
+  )
+]
+
+/**
  * Get goals for a specific track
  */
 export function getGoalsForTrack(trackId: string): AdventureGoal[] {
@@ -189,7 +227,45 @@ export function getGoalsForTrack(trackId: string): AdventureGoal[] {
     'CYBER_CORE': CYBER_CORE_GOALS,
     'QUANTUM_GRID': QUANTUM_GRID_GOALS,
     'PACHINKO_SPIRE': PACHINKO_SPIRE_GOALS,
-    // Additional tracks can be added here
+    'SINGULARITY_WELL': SINGULARITY_WELL_GOALS,
+  }
+
+  // Default goals for any unlisted track
+  if (!(trackId in goalsMap)) {
+    return [
+      createGoal(
+        `${trackId.toLowerCase()}-score`,
+        'Reach 50,000 Points',
+        'Accumulate 50,000 points on this track',
+        'score-based',
+        50000,
+        5000
+      ),
+      createGoal(
+        `${trackId.toLowerCase()}-gold`,
+        'Collect 5 Gold Balls',
+        'Find 5 gold balls on this track',
+        'collection-based',
+        5,
+        3000
+      ),
+      createGoal(
+        `${trackId.toLowerCase()}-survive`,
+        'Survive 30 Seconds',
+        'Keep the ball in play for 30 seconds',
+        'survival',
+        30,
+        3000
+      ),
+      createGoal(
+        `${trackId.toLowerCase()}-combo`,
+        'Build 3 Hit Combo',
+        'Land 3 consecutive bumper hits',
+        'combo-based',
+        3,
+        2000
+      ),
+    ]
   }
 
   return goalsMap[trackId] ?? []
