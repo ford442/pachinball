@@ -332,6 +332,13 @@ export class InteractiveMaterials extends MaterialLibraryBase {
         mat.iridescence.maximumThickness = 400
       }
 
+      // Fresnel rim glow: sheen creates grazing-angle brightness (MEDIUM+)
+      if (this._qualityTier !== QualityTier.LOW) {
+        mat.sheen.isEnabled = true
+        mat.sheen.intensity = 1.5
+        mat.sheen.color = emissive(baseColor, INTENSITY.HIGH)
+      }
+
       return mat
     })
   }

@@ -200,16 +200,35 @@ export class DisplayReelsLayer {
       }
 
       if (reel.stopping) {
-        // Decelerate
-        reel.speed *= 0.95
-        if (reel.speed < 0.1) {
-          reel.speed = 0
+        if (reel.speed > 3.0) {
+          // Friction deceleration phase
+          reel.speed *= 0.96
+        } else {
+          // Elastic settle: spring toward target symbol with overshoot
+          const targetIndex = reel.symbols.indexOf(reel.targetSymbol)
+          const targetPos = targetIndex / reel.symbols.length
+          const currentFrac = ((reel.position % 1) + 1) % 1
+          let delta = targetPos - currentFrac
+          if (delta > 0.5) delta -= 1
+          if (delta < -0.5) delta += 1
+
+          const stiffness = 100
+          const damping = 5
+          const accel = stiffness * delta - damping * reel.speed
+          reel.speed += accel * dt
+
+          // Snap when close enough
+          if (Math.abs(delta) < 0.002 && Math.abs(reel.speed) < 0.05) {
+            reel.speed = 0
+            reel.position = Math.floor(reel.position) + targetPos
+          }
         }
       }
 
       // Update position
       reel.position += reel.speed * dt
-      reel.position %= 1 // Wrap around
+      reel.position %= 1
+      if (reel.position < 0) reel.position += 1
     }
 
     // Check if all stopped
@@ -227,6 +246,12 @@ export class DisplayReelsLayer {
 
     if (allMatch) {
       console.log('[Reels] WIN:', symbols[0])
+    }
+  }
+
+  updateParallax(time: number): void {
+    if (this.mesh) {
+      this.mesh.position.z = 0.2 + Math.sin(time * 0.5 + 1.0) * 0.03
     }
   }
 

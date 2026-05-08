@@ -100,6 +100,12 @@ export class DisplaySystem {
     this.globalTime += dt
     this.jackpotPhase = jackpotPhase ?? 0
 
+    // Parallax Z-axis breathing per layer (subtle depth oscillation)
+    this.shaderLayer.updateParallax(this.globalTime)
+    this.reelsLayer.updateParallax(this.globalTime)
+    this.videoLayer.updateParallax(this.globalTime)
+    this.imageLayer.updateParallax(this.globalTime)
+
     // Update all layers
     this.shaderLayer.update(dt, this.currentState, this.jackpotPhase)
     this.reelsLayer.update(dt, this.currentState)

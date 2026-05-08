@@ -24,11 +24,16 @@ export const scanlinePixelShader = {
         float lineFactor = 1.0 - (uScanlineIntensity * 0.5 * (scanline + 1.0));
         color *= lineFactor;
 
-        // 3. Subtle Film Grain - adds texture and avoids clinical perfection
+        // 3. Temporal Flicker - subtle CRT phosphor refresh brightness variation
+        float flicker = sin(uTime * 60.0) * 0.5 + 0.5;
+        float flickerAmount = 0.015 * flicker;
+        color *= (1.0 - flickerAmount);
+
+        // 4. Subtle Film Grain - adds texture and avoids clinical perfection
         float grain = fract(sin(dot(vUV + uTime * 0.1, vec2(127.1, 311.7))) * 43758.5453);
         color += (grain - 0.5) * 0.025;
 
-        // 4. Vignette - darken corners for CRT/curved screen effect
+        // 5. Vignette - darken corners for CRT/curved screen effect
         float dist = distance(vUV, vec2(0.5, 0.5));
         float vignette = 1.0 - smoothstep(0.4, 0.9, dist);
         color *= vignette;
