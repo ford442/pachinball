@@ -249,6 +249,8 @@ export interface GameTuning {
     nudgeCooldownMs: number
     storyVideoWaitMs: number
     tiltBloomResetMs: number
+    idleCallbackTimeoutMs: number
+    cosmeticFallbackDelayMs: number
   }
 }
 
@@ -268,6 +270,8 @@ export const GAME_TUNING = {
     nudgeCooldownMs: 500,
     storyVideoWaitMs: 3000,
     tiltBloomResetMs: 1000,
+    idleCallbackTimeoutMs: 500,
+    cosmeticFallbackDelayMs: 100,
   },
 } as const satisfies GameTuning
 
@@ -320,7 +324,15 @@ export const GameConfig = {
   visuals: {
     enableParticles: true,
     enableTrails: true,
-    particleIntensity: 1.0
+    particleIntensity: 1.0,
+    cameraFollowTransitionSpeed: 3.0,
+    scanlineIntensity: 0.12,
+    fogDensity: 0.015,
+    mirrorSizeHigh: 2048,
+    mirrorSizeMedium: 1024,
+    mirrorTextureLevel: 0.6,
+    skyboxSize: 200.0,
+    uMapBlend: 0.5,
   },
   physics: {
     ballRestitution: 0.78,

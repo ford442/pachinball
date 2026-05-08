@@ -11,6 +11,7 @@
 
 import { Vector3 } from '@babylonjs/core'
 import { API_BASE, apiFetch, BallType } from '../config'
+import type { EventBus } from '../game/event-bus'
 
 // Storage manager API base URL
 const STORAGE_API_BASE = API_BASE
@@ -85,6 +86,16 @@ export class SoundSystem {
   // Loading state
   private isInitialized = false
   private loadPromise: Promise<void> | null = null
+
+  // EventBus subscriptions
+  private eventBusUnsubscribers: Array<() => void> = []
+
+  /**
+   * Register an EventBus unsubscribe function for cleanup
+   */
+  addEventBusUnsubscriber(unsub: () => void): void {
+    this.eventBusUnsubscribers.push(unsub)
+  }
 
   constructor() {
     // Initialize maps for categories
@@ -708,9 +719,34 @@ export class SoundSystem {
   }
 
   /**
+   * Play a short synthesized beep at the given frequency
+   */
+  playBeep(freq: number): void {
+    if (!this.isInitialized || !this.audioContext || !this.sfxGain) return
+    if (this.isMuted) return
+
+    const o = this.audioContext.createOscillator()
+    const g = this.audioContext.createGain()
+
+    o.frequency.value = freq
+    o.connect(g)
+    g.connect(this.sfxGain)
+    o.start()
+
+    g.gain.exponentialRampToValueAtTime(0.0001, this.audioContext.currentTime + 0.1)
+    o.stop(this.audioContext.currentTime + 0.1)
+  }
+
+  /**
    * Dispose and cleanup
    */
   dispose(): void {
+    // Unsubscribe from EventBus
+    for (const unsub of this.eventBusUnsubscribers) {
+      try { unsub() } catch { /* ignore */ }
+    }
+    this.eventBusUnsubscribers = []
+
     this.stopMusic()
     
     if (this.humOscillator) {
@@ -735,10 +771,55 @@ export class SoundSystem {
 // Singleton instance
 let soundSystemInstance: SoundSystem | null = null
 
-export function getSoundSystem(): SoundSystem {
+export function getSoundSystem(eventBus?: EventBus): SoundSystem {
   if (!soundSystemInstance) {
     soundSystemInstance = new SoundSystem()
   }
+
+  if (eventBus) {
+    // === EventBus-driven sound integration ===
+    const ss = soundSystemInstance
+
+    ss.addEventBusUnsubscriber(
+      eventBus.on('game:start', () => {
+        ss.playSample('launch', undefined, 0.8)
+      })
+    )
+
+    ss.addEventBusUnsubscriber(
+      eventBus.on('game:over', () => {
+        ss.playSample('drain', undefined, 0.8)
+      })
+    )
+
+    ss.addEventBusUnsubscriber(
+      eventBus.on('fever:start', () => {
+        ss.triggerFeverAudio()
+      })
+    )
+
+    ss.addEventBusUnsubscriber(
+      eventBus.on('jackpot:start', () => {
+        ss.triggerJackpotAudio()
+      })
+    )
+
+    ss.addEventBusUnsubscriber(
+      eventBus.on('adventure:end', () => {
+        ss.playBeep(440)
+      })
+    )
+
+    ss.addEventBusUnsubscriber(
+      eventBus.on('display:set', (state) => {
+        // Optional state-specific audio layers
+        if (state === 'fever') {
+          ss.triggerFeverAudio()
+        }
+      })
+    )
+  }
+
   return soundSystemInstance
 }
 
