@@ -1,12 +1,15 @@
-import { Scene, MeshBuilder, Mesh, TransformNode, Color3, StandardMaterial } from '@babylonjs/core'
+import { Scene, MeshBuilder, Mesh, TransformNode, Color3, StandardMaterial, Vector3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { PALETTE } from '../game-elements/visual-language'
+import type { EventBus } from '../game/event-bus'
+import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
 
 export interface BallTrapState {
   mesh: Mesh
   body: RAPIER.RigidBody
+  id: string
   trapGate: Mesh
   caughtBall: RAPIER.RigidBody | null
   holdTimer: number
@@ -20,6 +23,8 @@ export class BallTrapBuilder {
   private world: RAPIER.World
   private rapier: typeof RAPIER
   private matLib: ReturnType<typeof getMaterialLibrary>
+  private eventBus: ObstacleEventBusIntegration | null = null
+  private trapCounter: number = 0
 
   constructor(
     scene: Scene,
@@ -30,6 +35,13 @@ export class BallTrapBuilder {
     this.world = world
     this.rapier = rapier
     this.matLib = getMaterialLibrary(scene)
+  }
+
+  /**
+   * Set EventBus for emitting trap events
+   */
+  setEventBus(eventBus: EventBus | null): void {
+    this.eventBus = eventBus ? new ObstacleEventBusIntegration(eventBus) : null
   }
 
   createBallTrap(
@@ -106,9 +118,12 @@ export class BallTrapBuilder {
       body
     )
 
+    const trapId = `trap-${this.trapCounter++}`
+
     const state: BallTrapState = {
       mesh: trapEntrance,
       body,
+      id: trapId,
       trapGate,
       caughtBall: null,
       holdTimer: 0,
@@ -146,6 +161,11 @@ export class BallTrapBuilder {
         state.trapGate.scaling.y = 0.1
       }
 
+      // Emit release event (after hold duration expires)
+      if (this.eventBus) {
+        this.eventBus.emitPlaySound('trap-release-timeout')
+      }
+
       return releasedBall
     }
 
@@ -155,7 +175,7 @@ export class BallTrapBuilder {
   /**
    * Catch a ball in the trap
    */
-  catchBall(state: BallTrapState, ball: RAPIER.RigidBody): void {
+  catchBall(state: BallTrapState, ball: RAPIER.RigidBody, ballPosition?: Vector3): void {
     if (!state.caughtBall) {
       state.caughtBall = ball
       state.holdTimer = 0
@@ -169,13 +189,26 @@ export class BallTrapBuilder {
       // Stop ball motion
       ball.setLinvel(new this.rapier.Vector3(0, -0.5, 0), true)
       ball.setAngvel(new this.rapier.Vector3(0, 0, 0), true)
+
+      // Emit EventBus events
+      if (this.eventBus) {
+        const pos = ballPosition ?? state.mesh.getAbsolutePosition()
+        this.eventBus.emitTrapBallCaptured(state.id, 'ball-caught', {
+          x: pos.x,
+          y: pos.y,
+          z: pos.z
+        })
+        this.eventBus.emitPointsAwarded(50, 'ball-trapped')
+        this.eventBus.emitPlaySound('trap-catch')
+        this.eventBus.emitFlashEffect(0.3, '#ff00ff', 0.2)
+      }
     }
   }
 
   /**
    * Release ball with boosted velocity
    */
-  releaseBallWithBoost(_state: BallTrapState, ball: RAPIER.RigidBody): void {
+  releaseBallWithBoost(state: BallTrapState, ball: RAPIER.RigidBody): void {
     const boostForce = 15.0
     const boostVelocity = new this.rapier.Vector3(
       (Math.random() - 0.5) * boostForce,
@@ -184,5 +217,18 @@ export class BallTrapBuilder {
     )
 
     ball.setLinvel(boostVelocity, true)
+
+    // Emit EventBus events
+    if (this.eventBus) {
+      this.eventBus.emitTrapBallReleased(state.id, 'ball-released', {
+        x: boostVelocity.x,
+        y: boostVelocity.y,
+        z: boostVelocity.z
+      })
+      this.eventBus.emitPointsAwarded(100, 'ball-released')
+      this.eventBus.emitPlaySound('trap-release')
+      this.eventBus.emitFlashEffect(0.4, '#ffff00', 0.3)
+      this.eventBus.emitBloomEffect(0.5, 0.5)
+    }
   }
 }

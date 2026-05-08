@@ -1,15 +1,19 @@
-import { Scene, MeshBuilder, Mesh, TransformNode } from '@babylonjs/core'
+import { Scene, MeshBuilder, Mesh, TransformNode, Vector3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { PALETTE } from '../game-elements/visual-language'
+import type { EventBus } from '../game/event-bus'
+import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
 
 export interface SpinnerBumperVisual {
   mesh: Mesh
   body: RAPIER.RigidBody
+  id: string
   rotationSpeed: number
   targetRotationSpeed: number
   angularVelocity: number
+  totalRotations: number
 }
 
 export class SpinnerBumperBuilder {
@@ -17,6 +21,8 @@ export class SpinnerBumperBuilder {
   private world: RAPIER.World
   private rapier: typeof RAPIER
   private matLib: ReturnType<typeof getMaterialLibrary>
+  private eventBus: ObstacleEventBusIntegration | null = null
+  private spinnerCounter: number = 0
 
   constructor(
     scene: Scene,
@@ -27,6 +33,13 @@ export class SpinnerBumperBuilder {
     this.world = world
     this.rapier = rapier
     this.matLib = getMaterialLibrary(scene)
+  }
+
+  /**
+   * Set EventBus for emitting spinner events
+   */
+  setEventBus(eventBus: EventBus | null): void {
+    this.eventBus = eventBus ? new ObstacleEventBusIntegration(eventBus) : null
   }
 
   createSpinnerBumper(
@@ -94,12 +107,16 @@ export class SpinnerBumperBuilder {
       body
     )
 
+    const spinnerId = `spinner-${this.spinnerCounter++}`
+
     const visual: SpinnerBumperVisual = {
       mesh: spinnerMesh,
       body,
+      id: spinnerId,
       rotationSpeed: 0,
       targetRotationSpeed: 0,
-      angularVelocity: 0
+      angularVelocity: 0,
+      totalRotations: 0
     }
 
     bindings.push({ mesh: spinnerRoot as unknown as Mesh, rigidBody: body })
@@ -132,15 +149,47 @@ export class SpinnerBumperBuilder {
     // Apply rotation to mesh
     if (visual.mesh) {
       visual.mesh.rotation.y += visual.rotationSpeed * dt
+
+      // Track full rotations and emit event when complete
+      const prevRotations = visual.totalRotations
+      visual.totalRotations += (visual.rotationSpeed * dt) / (Math.PI * 2)
+      const completedRotations = Math.floor(visual.totalRotations) - Math.floor(prevRotations)
+
+      if (completedRotations > 0 && this.eventBus) {
+        this.eventBus.emitSpinnerFullRotation(visual.id, completedRotations)
+      }
+
+      // Emit rotation progress event
+      if (this.eventBus && visual.rotationSpeed !== 0) {
+        const rotationProgress = (visual.mesh.rotation.y % (Math.PI * 2)) / (Math.PI * 2)
+        this.eventBus.emitSpinnerRotation(visual.id, Math.abs(visual.rotationSpeed), rotationProgress)
+      }
     }
   }
 
   /**
    * Trigger spinner when hit by ball
    */
-  triggerSpin(visual: SpinnerBumperVisual, impactForce: number): void {
+  triggerSpin(visual: SpinnerBumperVisual, impactForce: number, ballPosition?: Vector3): void {
     // Impact force determines spin intensity
     const spinIntensity = Math.min(impactForce / 20, 1.0)
     visual.targetRotationSpeed = 15.0 * spinIntensity * (Math.random() < 0.5 ? 1 : -1)
+
+    // Emit hit event
+    if (this.eventBus) {
+      const pos = ballPosition ?? visual.mesh.getAbsolutePosition()
+      this.eventBus.emitSpinnerHit(visual.id, {
+        x: pos.x,
+        y: pos.y,
+        z: pos.z
+      }, impactForce)
+
+      // Award points for spinner hit
+      this.eventBus.emitPointsAwarded(100, 'spinner-hit')
+
+      // Play sound and visual effect
+      this.eventBus.emitPlaySound('bump-spinner')
+      this.eventBus.emitFlashEffect(0.4, '#00ffff', 0.2)
+    }
   }
 }
