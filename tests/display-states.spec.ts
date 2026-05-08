@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 
+// NOTE: Each test bootstraps the full game (Babylon.js + Rapier WASM + WebGPU/WebGL).
+// In resource-constrained/headless environments this can take 30–40 s per test.
+// The full suite of 10 tests may take 5–8 minutes. Increase workers or run
+// selectively if CI time is a concern.
 test.setTimeout(180_000);
 
 test.beforeEach(async ({ page }) => {

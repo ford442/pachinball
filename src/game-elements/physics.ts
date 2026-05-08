@@ -44,6 +44,10 @@ export class PhysicsSystem {
     this.world.integrationParameters.numSolverIterations = 8
     this.world.integrationParameters.numAdditionalFrictionIterations = 4
 
+    // OP-5: Contact skin to reduce micro-bouncing
+    // @ts-expect-error contactSkin is available in this Rapier version but not fully typed
+    this.world.integrationParameters.contactSkin = 0.005
+
     this.eventQueue = new this.rapier.EventQueue(true)
   }
 
