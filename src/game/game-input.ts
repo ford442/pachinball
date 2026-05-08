@@ -27,6 +27,7 @@ export interface InputConfig {
   onDynamicModeToggle?: () => void
   onScenarioCycle?: () => void
   onCRTPresetCycle?: () => void
+  onPerfMonitorToggle?: () => void
   getState?: () => import('../game-elements/types').GameState
   getTiltActive?: () => boolean
 }
@@ -164,6 +165,13 @@ export class GameInputManager {
     if (e.code === 'KeyT') {
       e.preventDefault()
       this.config.onCRTPresetCycle?.()
+      return
+    }
+
+    // 'P' key to toggle performance monitor
+    if (e.code === 'KeyP') {
+      e.preventDefault()
+      this.config.onPerfMonitorToggle?.()
       return
     }
 

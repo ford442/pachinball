@@ -68,6 +68,16 @@ export class PhysicsSystem {
   }
 
   /**
+   * Get count of active rigid bodies in the world
+   */
+  getActiveBodyCount(): number {
+    if (!this.world) return 0
+    let count = 0
+    this.world.bodies.forEach(() => count++)
+    return count
+  }
+
+  /**
    * Fixed timestep physics step with accumulator.
    * Ensures deterministic physics regardless of frame rate.
    * @param rawDt - Raw delta time in seconds from the engine

@@ -128,3 +128,4 @@ export {
   type ZoneMechanic,
 } from './dynamic-world'
 export { DebugHUD, type DebugSnapshot } from './debug-hud'
+export { PerformanceMonitor, type PerformanceMetrics } from './performance-monitor'

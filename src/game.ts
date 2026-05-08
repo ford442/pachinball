@@ -63,6 +63,7 @@ import {
   ZoneTriggerSystem,
   getDynamicWorld,
   DebugHUD,
+  PerformanceMonitor,
   type AccessibilityConfig,
 } from './game-elements'
 import { BallStackVisual } from './game-elements/ball-stack-visual'
@@ -116,6 +117,7 @@ export class Game {
   uiManager: GameUIManager | null = null
   adventureManager: AdventureManager | null = null
   debugHUD: DebugHUD | null = null
+  performanceMonitor = new PerformanceMonitor()
   hapticManager: HapticManager | null = null
   soundSystem!: SoundSystem
   leaderboardSystem = getLeaderboardSystem()
@@ -338,6 +340,7 @@ export class Game {
       onDynamicModeToggle: () => this.scenarioManager.toggleDynamicMode(),
       onScenarioCycle: () => this.scenarioManager.cycleScenario(),
       onCRTPresetCycle: () => this.cycleCRTPreset(),
+      onPerfMonitorToggle: () => this.togglePerformanceMonitor(),
       getState: () => this.stateManager.getState(),
       getTiltActive: () => this.tiltActive,
     })
@@ -360,12 +363,43 @@ export class Game {
     this.inputManager.setupTouchControls(touchLeftBtn, touchRightBtn, touchPlungerBtn, touchNudgeBtn)
 
     this.scene.onBeforeRenderObservable.add(() => {
+      this.performanceMonitor.frameStart()
+      this.performanceMonitor.physicsStart()
       this.physicsController.stepPhysics(this.inputManager, this.inputActions)
+      this.performanceMonitor.physicsEnd()
     })
 
     this.engine.runRenderLoop(() => {
       this.settingsUI.updateLatencyDisplay(this.inputManager || undefined)
       this.scene?.render()
+      // Update performance metrics
+      // drawCalls is not directly exposed; use 0 as placeholder
+      this.performanceMonitor.updateEngineMetrics(
+        0,
+        this.physics.getActiveBodyCount()
+      )
+      this.performanceMonitor.frameEnd()
+
+      // Update debug HUD with performance metrics if enabled
+      if (this.performanceMonitor.isEnabled() && this.debugHUD) {
+        const metrics = this.performanceMonitor.getMetrics()
+        this.debugHUD.update({
+          gameState: this.stateManager.getState().toString(),
+          displayState: this.display?.getDisplayState().toString() || 'n/a',
+          score: this.score,
+          multiplier: 1.0,
+          lives: this.lives,
+          adventureTrack: null,
+          fps: metrics.fps,
+          drawCalls: metrics.drawCalls,
+          frameTimeMs: metrics.frameTimeMs,
+          activeBodies: metrics.activeBodies,
+          physicsStepMs: metrics.physicsStepMs,
+          adventureTimeMs: null,
+          dynamicZoneState: 'n/a',
+          performanceTier: 'n/a',
+        })
+      }
     })
 
     this.showDebugUI = new URLSearchParams(window.location.search).has('debug')
@@ -755,6 +789,12 @@ export class Game {
 
     // Cycle to next preset
     this.crtPresetIndex = (this.crtPresetIndex + 1) % this.crtPresets.length
+  }
+
+  togglePerformanceMonitor(): void {
+    const enabled = !this.performanceMonitor.isEnabled()
+    this.performanceMonitor.setEnabled(enabled)
+    console.log(`[PerfMonitor] ${enabled ? 'Enabled' : 'Disabled'}`)
   }
   cycleAdventureTrack(direction: number): void { this.slotAdventure.cycleAdventureTrack(direction) }
   startAdventureMode(): void { this.slotAdventure.startAdventureMode() }
