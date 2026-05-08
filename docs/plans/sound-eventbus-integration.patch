@@ -1,0 +1,69 @@
+# Sound System EventBus Integration Patch
+# Apply with: git apply docs/plans/sound-eventbus-integration.patch
+# Or manually copy the changes below.
+
+diff --git a/src/game.ts b/src/game.ts
+index abc1234..def5678 100644
+--- a/src/game.ts
++++ b/src/game.ts
+@@ -XXX,7 +XXX,7 @@ export class Game {
+   // ... other properties
+   private soundSystem: any;  // or proper type from getSoundSystem
+
+   constructor(...) {
+     ...
+-    this.soundSystem = getSoundSystem();
++    this.soundSystem = getSoundSystem(this.eventBus);  // Pass EventBus for subscription-based integration
+   }
+
+   // In the adventure END case (around line ~XXX):
+   case 'END':
+     this.adventureManager?.endAdventure()
+     this.eventBus.emit('adventure:end')
+     this.eventBus.emit('display:set', DisplayState.IDLE)
+     this.effects?.setLightingMode('normal', 1.0)
+     this.effects?.setAtmosphereState('IDLE')
+-    this.effects?.playBeep(440)   // REMOVED - now handled via EventBus in SoundSystem
++    // Sound handled reactively via EventBus 'adventure:end' subscription
+     break
+
+diff --git a/src/game/sound.ts b/src/game/sound.ts   # (or wherever getSoundSystem / SoundSystem lives)
+index 9876543..3210cba 100644
+--- a/src/game/sound.ts
++++ b/src/game/sound.ts
+@@ -1,10 +1,35 @@
++import type { EventBus } from './event-bus'  # adjust path as needed
++import type { PachinballEventMap } from './event-bus'
+
+ export function getSoundSystem(eventBus?: EventBus) {
+-  const soundSystem = new SoundSystem();
++  const soundSystem = new SoundSystem();
+
++  if (eventBus) {
++    # === EventBus-driven sound integration (new) ===
++    eventBus.on('game:start', () => soundSystem.playStartJingle());
++    eventBus.on('game:over', () => soundSystem.playGameOver());
++    eventBus.on('fever:start', () => soundSystem.playFeverTheme());
++    eventBus.on('jackpot:start', () => soundSystem.playJackpotFanfare());
++    eventBus.on('adventure:end', () => soundSystem.playBeep(440));  # was direct call
++    # Add more as needed: 'reach:start', etc.
++
++    # Optional: also subscribe effects for layered audio
++    eventBus.on('display:set', (state) => {
++      if (state === 'fever') soundSystem.playFeverLayer();
++    });
++  }
+
+   return soundSystem;
+ }
+
++# Example SoundSystem class skeleton (expand existing implementation)
++class SoundSystem {
++  playStartJingle() { /* ... */ }
++  playGameOver() { /* ... */ }
++  playFeverTheme() { /* ... */ }
++  playJackpotFanfare() { /* ... */ }
++  playBeep(freq: number) { /* existing beep implementation */ }
++  playFeverLayer() { /* ... */ }
++  # ... rest of existing methods
++}
