@@ -303,6 +303,12 @@ export class DisplayShaderLayer {
     }
   }
 
+  updateParallax(time: number): void {
+    if (this.backgroundMesh) {
+      this.backgroundMesh.position.z = -0.5 + Math.sin(time * 0.3) * 0.02
+    }
+  }
+
   onStateChange(_state: DisplayState): void {
     void _state
     // Reserved for future state-specific shader changes

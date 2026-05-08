@@ -33,6 +33,12 @@ export class DisplayImageLayer {
     this.mesh.position.z = 0.15
   }
 
+  updateParallax(time: number): void {
+    if (this.mesh) {
+      this.mesh.position.z = 0.15 + Math.sin(time * 0.6 + 3.0) * 0.035
+    }
+  }
+
   loadImage(path: string, opacity?: number, blendMode?: ImageBlendMode): void {
     // Clean up existing resources first
     if (this.texture) {

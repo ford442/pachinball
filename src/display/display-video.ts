@@ -104,6 +104,12 @@ export class DisplayVideoLayer {
     }
   }
 
+  updateParallax(time: number): void {
+    if (this.mesh) {
+      this.mesh.position.z = 0.1 + Math.sin(time * 0.4 + 2.0) * 0.025
+    }
+  }
+
   update(): void {
     // Video updates automatically via VideoTexture
   }
