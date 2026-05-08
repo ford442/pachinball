@@ -401,6 +401,14 @@ export class GamePhysicsController {
             const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
             this.host.hapticManager?.bumper(speed)
 
+            // Apply advanced spin transfer on bumper collision
+            const impactNormal = new Vector3(
+              ballPos.x - vis.mesh.position.x,
+              ballPos.y - vis.mesh.position.y,
+              ballPos.z - vis.mesh.position.z
+            ).normalize()
+            this.applySpinTransfer(ballBody, impactNormal, speed)
+
             if (speed > 12) {
               const mapColor = TABLE_MAPS[this.host.mapManager?.getCurrentMap() || 'neon-helix']?.baseColor || '#00d9ff'
               this.host.effects?.triggerCabinetShake('heavy', mapColor)
@@ -425,20 +433,24 @@ export class GamePhysicsController {
         const speed = Math.sqrt(ballVel.x ** 2 + ballVel.y ** 2 + ballVel.z ** 2)
         const impactIntensity = Math.min(speed / 15, 1.0)
 
+        const flipperPos = flipperBody.translation()
+        const ballPos = ballBody.translation()
+        const collisionNormal = new Vector3(
+          ballPos.x - flipperPos.x,
+          ballPos.y - flipperPos.y,
+          ballPos.z - flipperPos.z
+        ).normalize()
+
         const ballMesh = this.getBallMeshForBody(ballBody)
         if (ballMesh && this.host.ballAnimator) {
-          const flipperPos = flipperBody.translation()
-          const ballPos = ballBody.translation()
-          const collisionNormal = new Vector3(
-            ballPos.x - flipperPos.x,
-            ballPos.y - flipperPos.y,
-            ballPos.z - flipperPos.z
-          ).normalize()
           this.host.ballAnimator.animateBallImpact(ballMesh, collisionNormal, impactIntensity * 0.7)
         }
 
         this.host.hapticManager?.flipper()
         this.host.effects?.playBeep(880 + Math.random() * 200)
+
+        // Apply advanced spin transfer on flipper collision
+        this.applySpinTransfer(ballBody, collisionNormal, speed)
       }
     }
 
@@ -624,6 +636,33 @@ export class GamePhysicsController {
         }
       }
     }
+  }
+
+  private applySpinTransfer(ball: RAPIER.RigidBody, collisionNormal: Vector3, contactSpeed: number): void {
+    // Apply spin based on collision normal and ball velocity
+    // Creates "English" effect where angled hits produce side spin
+    const rapier = this.host.physics.getRapier()
+    if (!rapier) return
+
+    const spinFactor = GameConfig.physics.spinTransferFactor * Math.min(contactSpeed / 10, 1.0)
+    const angvel = ball.angvel()
+
+    // Apply spin perpendicular to collision normal and velocity direction
+    const tangent = new Vector3(
+      collisionNormal.z,
+      0,
+      -collisionNormal.x
+    ).normalize()
+
+    const spinAmount = spinFactor * GameConfig.physics.englishSpinAmount
+    ball.setAngvel(
+      new rapier.Vector3(
+        angvel.x + tangent.x * spinAmount,
+        angvel.y,
+        angvel.z + tangent.z * spinAmount
+      ),
+      true
+    )
   }
 }
 

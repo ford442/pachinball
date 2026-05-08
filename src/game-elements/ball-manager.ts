@@ -714,7 +714,7 @@ export class BallManager {
     const restitution = isGoldPlated ? GameConfig.ball.restitution + 0.02 : GameConfig.ball.restitution
     const friction = isGoldPlated ? GameConfig.ball.friction * 0.95 : GameConfig.ball.friction
 
-    this.world.createCollider(
+    const collider = this.world.createCollider(
       this.rapier.ColliderDesc.ball(GameConfig.ball.radius)
         .setRestitution(restitution)
         .setFriction(friction)
@@ -722,6 +722,9 @@ export class BallManager {
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       body
     )
+
+    // Enhanced ball physics: better restitution coefficients and spin response
+    collider.setRestitutionCombineRule(this.rapier.CoefficientCombineRule.Max)
 
     // Store ball data
     const ballData: BallData = {
