@@ -1,0 +1,146 @@
+import { Scene, MeshBuilder, Mesh, TransformNode } from '@babylonjs/core'
+import type * as RAPIER from '@dimforge/rapier3d-compat'
+import { getMaterialLibrary } from '../materials'
+import type { PhysicsBinding } from '../game-elements/types'
+import { PALETTE } from '../game-elements/visual-language'
+
+export interface SpinnerBumperVisual {
+  mesh: Mesh
+  body: RAPIER.RigidBody
+  rotationSpeed: number
+  targetRotationSpeed: number
+  angularVelocity: number
+}
+
+export class SpinnerBumperBuilder {
+  private scene: Scene
+  private world: RAPIER.World
+  private rapier: typeof RAPIER
+  private matLib: ReturnType<typeof getMaterialLibrary>
+
+  constructor(
+    scene: Scene,
+    world: RAPIER.World,
+    rapier: typeof RAPIER,
+  ) {
+    this.scene = scene
+    this.world = world
+    this.rapier = rapier
+    this.matLib = getMaterialLibrary(scene)
+  }
+
+  createSpinnerBumper(
+    x: number,
+    z: number,
+    colorHex: string = PALETTE.CYAN,
+    scale: number = 1.0
+  ): { mesh: Mesh; body: RAPIER.RigidBody; visual: SpinnerBumperVisual; bindings: PhysicsBinding[] } {
+    const bindings: PhysicsBinding[] = []
+
+    // Create root for the spinner assembly
+    const spinnerRoot = new TransformNode('spinnerRoot', this.scene)
+    spinnerRoot.position.set(x, 0.5, z)
+
+    // Main rotating disc
+    const spinnerMesh = MeshBuilder.CreateCylinder('spinnerDisc', {
+      diameter: 1.2 * scale,
+      height: 0.3,
+      tessellation: 32
+    }, this.scene) as Mesh
+
+    spinnerMesh.parent = spinnerRoot
+    spinnerMesh.material = this.matLib.getEnhancedBumperBodyMaterial(colorHex)
+
+    // Decorative rim
+    const rimMesh = MeshBuilder.CreateTorus('spinnerRim', {
+      diameter: 1.4 * scale,
+      thickness: 0.06 * scale,
+      tessellation: 32
+    }, this.scene) as Mesh
+
+    rimMesh.parent = spinnerRoot
+    rimMesh.material = this.matLib.getEnhancedBumperRingMaterial(colorHex)
+
+    // Rotating paddles/fins (3 evenly spaced)
+    const paddleCount = 3
+    const paddleMat = this.matLib.getEnhancedBumperBodyMaterial(colorHex)
+
+    for (let i = 0; i < paddleCount; i++) {
+      const angle = (Math.PI * 2 / paddleCount) * i
+      const paddle = MeshBuilder.CreateBox('spinnerPaddle', {
+        width: 0.3 * scale,
+        depth: 0.5 * scale,
+        height: 0.15 * scale
+      }, this.scene) as Mesh
+
+      paddle.rotation.z = angle
+      paddle.position.x = Math.cos(angle) * 0.4 * scale
+      paddle.position.z = Math.sin(angle) * 0.4 * scale
+      paddle.parent = spinnerRoot
+      paddle.material = paddleMat
+    }
+
+    // Physics body - disc shape
+    const body = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.5, z)
+    )
+
+    // Main collision disc
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cylinder(0.15, 0.6 * scale)
+        .setRestitution(0.88)
+        .setFriction(0.05)
+        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
+      body
+    )
+
+    const visual: SpinnerBumperVisual = {
+      mesh: spinnerMesh,
+      body,
+      rotationSpeed: 0,
+      targetRotationSpeed: 0,
+      angularVelocity: 0
+    }
+
+    bindings.push({ mesh: spinnerRoot as unknown as Mesh, rigidBody: body })
+
+    return {
+      mesh: spinnerMesh,
+      body,
+      visual,
+      bindings
+    }
+  }
+
+  /**
+   * Update spinner rotation each frame
+   */
+  updateSpinner(visual: SpinnerBumperVisual, dt: number): void {
+    // Smoothly accelerate rotation toward target
+    const accelerationRate = 25.0
+    visual.rotationSpeed += (visual.targetRotationSpeed - visual.rotationSpeed) * accelerationRate * dt
+
+    // Apply friction/deceleration when not actively spinning
+    const decelerationRate = 8.0
+    if (visual.targetRotationSpeed === 0) {
+      visual.rotationSpeed *= Math.exp(-decelerationRate * dt)
+    }
+
+    // Clamp speed
+    visual.rotationSpeed = Math.max(-20, Math.min(20, visual.rotationSpeed))
+
+    // Apply rotation to mesh
+    if (visual.mesh) {
+      visual.mesh.rotation.y += visual.rotationSpeed * dt
+    }
+  }
+
+  /**
+   * Trigger spinner when hit by ball
+   */
+  triggerSpin(visual: SpinnerBumperVisual, impactForce: number): void {
+    // Impact force determines spin intensity
+    const spinIntensity = Math.min(impactForce / 20, 1.0)
+    visual.targetRotationSpeed = 15.0 * spinIntensity * (Math.random() < 0.5 ? 1 : -1)
+  }
+}
