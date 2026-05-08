@@ -67,6 +67,7 @@ import {
   type AccessibilityConfig,
 } from './game-elements'
 import { BallStackVisual } from './game-elements/ball-stack-visual'
+import { CabinetLighting } from './effects/cabinet-lighting'
 import { GameStateManager } from './game/game-state'
 import { EventBus } from './game/event-bus'
 import { GameInputManager } from './game/game-input'
@@ -100,6 +101,7 @@ export class Game {
   private physics: PhysicsSystem
   private display: DisplaySystem | null = null
   private effects: EffectsSystem | null = null
+  private cabinetLighting: CabinetLighting | null = null
   private gameObjects: GameObjects | null = null
   private ballManager: BallManager | null = null
   private ballAnimator: BallAnimator | null = null
@@ -372,6 +374,8 @@ export class Game {
     this.engine.runRenderLoop(() => {
       this.settingsUI.updateLatencyDisplay(this.inputManager || undefined)
       this.scene?.render()
+      // Update reactive cabinet lighting
+      this.cabinetLighting?.update(this.engine.getDeltaTime() / 1000)
       // Update performance metrics
       // drawCalls is not directly exposed; use 0 as placeholder
       this.performanceMonitor.updateEngineMetrics(
@@ -501,6 +505,15 @@ export class Game {
     this.display = new DisplaySystem(this.scene, this.engine, displayConfig)
     this.display.subscribeToEvents(this.eventBus)
     this.stateManager.setDisplaySystem(this.display)
+
+    // Initialize reactive cabinet lighting
+    this.cabinetLighting = new CabinetLighting(this.scene, {
+      enableEdgeLighting: true,
+      enableUnderCabinetGlow: true,
+      enableScreenBorder: false, // TODO: implement screen border
+      qualityTier: this.qualityTier,
+    })
+    this.cabinetLighting.subscribeToEvents(this.eventBus)
 
     this.debugHUD = new DebugHUD({
       onVisibilityChange: (visible) => this.debugHelper.handleDebugHUDVisibilityChange(visible),
@@ -651,6 +664,8 @@ export class Game {
   dispose(): void {
     this.sceneOptimizer?.dispose()
     this.sceneOptimizer = null
+    this.cabinetLighting?.dispose()
+    this.cabinetLighting = null
     this.inputManager?.dispose()
     this.debugHUD?.dispose()
     this.debugHUD = null
