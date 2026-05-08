@@ -3,10 +3,13 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { PALETTE } from '../game-elements/visual-language'
+import type { EventBus } from '../game/event-bus'
+import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
 
 export interface LauncherState {
   mesh: Mesh
   body: RAPIER.RigidBody
+  id: string
   chargeMesh: Mesh
   isCharging: boolean
   chargeLevel: number
@@ -24,6 +27,8 @@ export class LauncherBuilder {
   private world: RAPIER.World
   private rapier: typeof RAPIER
   private matLib: ReturnType<typeof getMaterialLibrary>
+  private eventBus: ObstacleEventBusIntegration | null = null
+  private launcherCounter: number = 0
 
   constructor(
     scene: Scene,
@@ -34,6 +39,13 @@ export class LauncherBuilder {
     this.world = world
     this.rapier = rapier
     this.matLib = getMaterialLibrary(scene)
+  }
+
+  /**
+   * Set EventBus for emitting launcher events
+   */
+  setEventBus(eventBus: EventBus | null): void {
+    this.eventBus = eventBus ? new ObstacleEventBusIntegration(eventBus) : null
   }
 
   /**
@@ -104,9 +116,12 @@ export class LauncherBuilder {
       z: directionZ / dirMagnitude
     }
 
+    const launcherId = `launcher-${this.launcherCounter++}`
+
     const state: LauncherState = {
       mesh: launcherMesh,
       body,
+      id: launcherId,
       chargeMesh,
       isCharging: false,
       chargeLevel: 0,
@@ -163,6 +178,11 @@ export class LauncherBuilder {
           mat.emissiveColor.scaleToRef(intensity, mat.emissiveColor)
         }
       }
+
+      // Emit charge event
+      if (this.eventBus) {
+        this.eventBus.emitLauncherCharged(state.id, state.chargeLevel)
+      }
     }
   }
 
@@ -182,12 +202,22 @@ export class LauncherBuilder {
     state.chargeLevel = 0
     state.cooldownTimer = state.cooldownDuration
 
+    const forceVec = {
+      x: state.direction.x * force,
+      y: state.direction.y * force,
+      z: state.direction.z * force
+    }
+
+    // Emit fire event
+    if (this.eventBus) {
+      this.eventBus.emitLauncherFired(state.id, 'ball-id', forceVec, chargeRatio)
+      this.eventBus.emitPointsAwarded(50, 'launcher-fired')
+      this.eventBus.emitPlaySound('launcher-fire')
+      this.eventBus.emitFlashEffect(0.5, '#0099ff', 0.2)
+    }
+
     return {
-      force: {
-        x: state.direction.x * force,
-        y: state.direction.y * force,
-        z: state.direction.z * force
-      },
+      force: forceVec,
       wasCharged: chargeRatio > 0.5
     }
   }
@@ -199,10 +229,20 @@ export class LauncherBuilder {
     const actualForce = state.minForce + (state.maxForce - state.minForce) * force
     state.cooldownTimer = state.cooldownDuration
 
-    return {
+    const forceVec = {
       x: state.direction.x * actualForce,
       y: state.direction.y * actualForce,
       z: state.direction.z * actualForce
     }
+
+    // Emit trigger event
+    if (this.eventBus) {
+      this.eventBus.emitLauncherTriggered(state.id, 'ball-id')
+      this.eventBus.emitPointsAwarded(75, 'launcher-triggered')
+      this.eventBus.emitPlaySound('launcher-trigger')
+      this.eventBus.emitFlashEffect(0.6, '#00ff99', 0.3)
+    }
+
+    return forceVec
   }
 }
