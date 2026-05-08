@@ -379,6 +379,29 @@ export class GameCabinetBuilder {
     cabinetNeonLights.push(underNeon)
   }
 
+  /**
+   * Exclude non-cabinet meshes from cabinet neon lights to prevent light bleed
+   * into the playfield and balls.
+   */
+  updateCabinetLightExclusions(): void {
+    const { scene, cabinetNeonLights } = this.host
+    if (!scene || cabinetNeonLights.length === 0) return
+
+    const excludedNames = ['lcdGround', 'flipperGlow']
+    const excludedMeshes = scene.meshes.filter(m => {
+      if (!m) return false
+      return excludedNames.some(name => m.name.includes(name)) || m.name.startsWith('ball')
+    })
+
+    for (const light of cabinetNeonLights) {
+      for (const mesh of excludedMeshes) {
+        light.excludedMeshes.push(mesh)
+      }
+    }
+
+    console.log(`[GameCabinetBuilder] Excluded ${excludedMeshes.length} meshes from cabinet neon lights`)
+  }
+
   updateCabinetLightingForMap(): void {
     const { mapManager, cabinetNeonLights, effects } = this.host
     const config = TABLE_MAPS[mapManager?.getCurrentMap() || 'neon-helix']

@@ -537,6 +537,7 @@ export class Game {
     })
 
     this.sceneBuilder.buildCriticalScene()
+    this.cabinetBuilder.updateCabinetLightExclusions()
     this.initLCDTablePostProcess()
     this.ready = true
     this.uiManager?.showLoadingState(false, 'gameplay')

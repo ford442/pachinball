@@ -276,6 +276,14 @@ export class InteractiveMaterials extends MaterialLibraryBase {
       mat.indexOfRefraction = CATEGORIES.GLASS.ior!
       mat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND
       mat.environmentIntensity = 0.4
+
+      // Subsurface refraction for realistic glass distortion (HIGH tier only)
+      if (this._qualityTier === QualityTier.HIGH) {
+        mat.subSurface.isRefractionEnabled = true
+        mat.subSurface.refractionIntensity = 0.8
+        mat.subSurface.tintColor = color(SURFACES.GLASS)
+      }
+
       return mat
     })
   }
