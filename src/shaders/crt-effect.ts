@@ -108,14 +108,20 @@ export const crtEffectShader = {
       float b = texture2D(textureSampler, curvedUV - vec2(uChromaticAberration * 0.01, 0.0)).b;
       vec3 color = vec3(r, g, b);
       
-      // Apply phosphor glow (brightness boost)
-      color = color * (1.0 + uGlow * 0.3) + color * color * uGlow * 0.5;
-      
-      // Apply shadow mask / aperture grille
-      vec3 mask = shadowMask(curvedUV, 0.4);
+      // Modern bloom/glow for bright elements
+      if (uGlow > 0.0) {
+        float brightness = (color.r + color.g + color.b) / 3.0;
+        if (brightness > 0.5) {
+          color += color * brightness * uGlow * 0.8;
+        }
+        color = color * (1.0 + uGlow * 0.2);
+      }
+
+      // Apply shadow mask / aperture grille (very subtle for modern look)
+      vec3 mask = shadowMask(curvedUV, 0.15);
       color *= mask;
-      
-      // Apply scanlines
+
+      // Apply scanlines (soft for modern screens)
       float scan = scanlines(curvedUV, uScanlineIntensity);
       color *= scan;
       
@@ -135,10 +141,21 @@ export const crtEffectShader = {
         color *= flicker;
       }
       
-      // Slight green tint for vintage CRT feel
-      color.g *= 1.05;
+      // Modern color grading for LCD/OLED vibrancy
+      float luminance = dot(color, vec3(0.299, 0.587, 0.114));
+
+      // Enhance saturation slightly for modern screens
+      vec3 desaturated = vec3(luminance);
+      color = mix(desaturated, color, 1.15); // 15% saturation boost
+
+      // Modern color tone: neutral-to-slightly-warm
+      color.r *= 1.02;
+      color.g *= 1.0;
       color.b *= 0.98;
-      
+
+      // Contrast enhancement via S-curve
+      color = pow(color, vec3(0.95)) + pow(color, vec3(2.1)) * 0.05;
+
       gl_FragColor = vec4(color, 1.0);
     }
   `
@@ -168,6 +185,17 @@ export interface CRTEffectParams {
  * Preset CRT configurations
  */
 export const CRT_PRESETS = {
+  /** Modern LCD/OLED screen look – premium and sleek */
+  MODERN_LCD: {
+    scanlineIntensity: 0.05,
+    curvature: 0.0,
+    vignette: 0.1,
+    chromaticAberration: 0.0,
+    glow: 0.6,
+    noise: 0.0,
+    flicker: 0.0,
+  } as CRTEffectParams,
+
   /** Subtle modern CRT look */
   MODERN: {
     scanlineIntensity: 0.2,
@@ -178,7 +206,7 @@ export const CRT_PRESETS = {
     noise: 0.02,
     flicker: 0.01,
   } as CRTEffectParams,
-  
+
   /** Strong retro CRT look */
   RETRO: {
     scanlineIntensity: 0.6,
@@ -189,7 +217,7 @@ export const CRT_PRESETS = {
     noise: 0.05,
     flicker: 0.03,
   } as CRTEffectParams,
-  
+
   /** Subtle effect for story videos */
   STORY: {
     scanlineIntensity: 0.15,
@@ -200,7 +228,7 @@ export const CRT_PRESETS = {
     noise: 0.01,
     flicker: 0.005,
   } as CRTEffectParams,
-  
+
   /** Off/no effect */
   OFF: {
     scanlineIntensity: 0.0,

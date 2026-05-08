@@ -17,12 +17,13 @@ Add `tests/display-states.spec.ts` covering every `DisplayState` transition (IDL
 - [ ] Hologram fresnel rim effect.
 
 ## Next Sprint Ideas (May 9+)
-- Performance profiling — physics step timing, render loop optimization
+- [in progress] Performance profiling — physics step timing, render loop optimization
 - Adventure track polish — more cinematic camera transitions
 - Input buffering improvements — rapid press handling
 - Mobile touch controls — on-screen flipper buttons
 
 ## Done
+- 2026-05-08: **Modern Screen Enhancement (Priority 1)** — Modern LCD/OLED aesthetic for backbox display. Added `MODERN_LCD` preset with soft grid lines, gentle bloom, minimal vignette, and zero chromatic aberration. Enhanced CRT shader with improved bloom algorithm for bright elements and modern color grading (saturation boost, warm tone, contrast via S-curve). Enabled modern LCD effect by default. Added keyboard shortcut (T) to cycle between presets (MODERN_LCD → RETRO → STORY → OFF). Created `setCRTEffectParams()` method in `DisplaySystem`. All 51 Vitest tests passing.
 - 2026-05-07: **Sound System EventBus Integration** complete. `getSoundSystem(eventBus?)` now subscribes to `game:start`, `game:over`, `fever:start`, `jackpot:start`, `adventure:end`, and `display:set`. Added `SoundSystem.playBeep(freq)` for synthesized EventBus-driven beeps. Removed last direct `this.effects?.playBeep(440)` call from `game.ts` adventure END handler. All audio is now reactive via EventBus. `npx tsc -b` clean, `npm run build` passes, 51 Vitest tests green.
 - 2026-05-07: **Config Extraction (second pass)** complete. Migrated remaining magic numbers from `game.ts` into `config.ts`: `cameraFollowTransitionSpeed`, `fogDensity`, `mirrorSize` (HIGH/MEDIUM), `mirrorTextureLevel`, `skyboxSize`, `uMapBlend`, `idleCallbackTimeoutMs`, `cosmeticFallbackDelayMs`. Removed unused `scanlineIntensity` class property. `npx tsc -b` clean.
 - 2026-05-07: **Audit Reports Triage** complete. Reviewed 6 key audits (`PHYSICS_*`, `LIGHTING_*`, `MATERIAL_*`, `RENDERING_*`, `CAMERA_*`, `INPUT_*`). Created `docs/AUDIT_TRIAGE_2026-05-07.md` with implemented/partial/stale/open categorization, summary table, quick-win list, and re-audit recommendations. Physics ~60 %, Lighting ~70 %, Material ~80 %, Rendering ~50 % (with stale paths), Camera ~55 %, Input ~60 % implemented.

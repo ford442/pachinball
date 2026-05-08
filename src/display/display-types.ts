@@ -87,6 +87,15 @@ export interface CRTEffectParams {
 
 /** Default CRT preset for story mode */
 export const CRT_PRESETS: Record<string, CRTEffectParams> = {
+  MODERN_LCD: {
+    scanlineIntensity: 0.05,
+    curvature: 0.0,
+    vignette: 0.1,
+    chromaticAberration: 0.0,
+    glow: 0.6,
+    noise: 0.0,
+    flicker: 0.0,
+  },
   STORY: {
     scanlineIntensity: 0.3,
     curvature: 0.02,

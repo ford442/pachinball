@@ -26,6 +26,7 @@ export interface InputConfig {
   onLeaderboardToggle?: () => void
   onDynamicModeToggle?: () => void
   onScenarioCycle?: () => void
+  onCRTPresetCycle?: () => void
   getState?: () => import('../game-elements/types').GameState
   getTiltActive?: () => boolean
 }
@@ -156,6 +157,13 @@ export class GameInputManager {
     if (e.code === 'KeyS') {
       e.preventDefault()
       this.config.onScenarioCycle?.()
+      return
+    }
+
+    // 'T' key to cycle CRT presets (modern LCD, retro, story, off)
+    if (e.code === 'KeyT') {
+      e.preventDefault()
+      this.config.onCRTPresetCycle?.()
       return
     }
 

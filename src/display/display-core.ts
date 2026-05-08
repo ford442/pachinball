@@ -87,7 +87,8 @@ export class DisplaySystem {
 
     // Attach layer meshes to the backbox root
     this.shaderLayer.createLayer(backboxRoot)
-    this.shaderLayer.setCRTEffectEnabled(false)
+    // Enable modern LCD effect for premium display appearance
+    this.shaderLayer.setCRTEffectEnabled(true)
     this.reelsLayer.createLayer(backboxRoot, this.config)
     this.videoLayer.createLayer(backboxRoot, this.config)
     this.imageLayer.createLayer(backboxRoot, this.config)
@@ -189,6 +190,21 @@ export class DisplaySystem {
    */
   setCRTEffectEnabled(enabled: boolean): void {
     this.shaderLayer.setCRTEffectEnabled(enabled)
+  }
+
+  /**
+   * Set CRT effect parameters
+   */
+  setCRTEffectParams(params: Partial<{
+    scanlineIntensity: number
+    curvature: number
+    vignette: number
+    chromaticAberration: number
+    glow: number
+    noise: number
+    flicker: number
+  }>): void {
+    this.shaderLayer.setCRTEffectParams(params)
   }
 
   /**

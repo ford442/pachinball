@@ -70,7 +70,7 @@ export class DisplayShaderLayer {
 
   private time = 0
   private crtEffectActive = false
-  private crtEffectParams: CRTEffectParams = CRT_PRESETS.STORY
+  private crtEffectParams: CRTEffectParams = CRT_PRESETS.MODERN_LCD
 
   // Cached jackpot phase state – updated in update(), read in onApply
   private jackpotState: JackpotPhaseState = { phase: 0, crack: 0, shock: 0, glitch: 0 }

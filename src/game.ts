@@ -337,6 +337,7 @@ export class Game {
       onLeaderboardToggle: () => this.leaderboardSystem.toggle(),
       onDynamicModeToggle: () => this.scenarioManager.toggleDynamicMode(),
       onScenarioCycle: () => this.scenarioManager.cycleScenario(),
+      onCRTPresetCycle: () => this.cycleCRTPreset(),
       getState: () => this.stateManager.getState(),
       getTiltActive: () => this.tiltActive,
     })
@@ -736,6 +737,25 @@ export class Game {
   }
 
   toggleCameraMode(): void { this.isCameraFollowMode = !this.isCameraFollowMode }
+
+  private crtPresetIndex = 0
+  private crtPresets = [
+    { name: 'MODERN_LCD', params: { scanlineIntensity: 0.05, curvature: 0.0, vignette: 0.1, chromaticAberration: 0.0, glow: 0.6, noise: 0.0, flicker: 0.0 } },
+    { name: 'RETRO', params: { scanlineIntensity: 0.6, curvature: 0.05, vignette: 0.5, chromaticAberration: 0.5, glow: 0.6, noise: 0.05, flicker: 0.03 } },
+    { name: 'STORY', params: { scanlineIntensity: 0.15, curvature: 0.03, vignette: 0.25, chromaticAberration: 0.15, glow: 0.35, noise: 0.01, flicker: 0.005 } },
+    { name: 'OFF', params: { scanlineIntensity: 0.0, curvature: 0.0, vignette: 0.0, chromaticAberration: 0.0, glow: 0.0, noise: 0.0, flicker: 0.0 } }
+  ]
+
+  cycleCRTPreset(): void {
+    const preset = this.crtPresets[this.crtPresetIndex]
+    console.log(`[CRT] Preset: ${preset.name}`)
+
+    this.display?.setCRTEffectEnabled(preset.name !== 'OFF')
+    this.display?.setCRTEffectParams(preset.params)
+
+    // Cycle to next preset
+    this.crtPresetIndex = (this.crtPresetIndex + 1) % this.crtPresets.length
+  }
   cycleAdventureTrack(direction: number): void { this.slotAdventure.cycleAdventureTrack(direction) }
   startAdventureMode(): void { this.slotAdventure.startAdventureMode() }
 
