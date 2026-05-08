@@ -2,7 +2,28 @@
 
 **Pachinball** - Babylon.js Pinball Game
 **Audit Date:** 2026-03-19
+**Last Updated:** 2026-05-08
 **Scope:** Rendering pipeline, shaders, geometry, materials, post-processing, and display systems
+
+---
+
+## Status as of May 2026
+
+**Architecture Changes Since March 2026:**
+- **Display system** was split from monolithic `src/game-elements/display.ts` into `src/display/` (display-core.ts, display-reels.ts, display-shader.ts, display-video.ts, display-image.ts).
+- **Effects system** moved from `src/game-elements/effects.ts` to `src/effects/` (effects-core.ts, effects-particles.ts, effects-trails.ts, effects-lighting.ts, effects-camera.ts).
+- **Materials** moved from `src/game-elements/material-library.ts` to `src/materials/` (material-core.ts, material-ball.ts, material-metallic.ts, material-interactive.ts, material-structural.ts).
+- **Game objects** moved from `src/game-elements/game-objects.ts` to `src/objects/` (object-core.ts, object-flippers.ts, object-bumpers.ts, object-walls.ts, object-rails.ts, object-pachinko.ts, object-decoration.ts).
+- **EventBus** introduced (May 2026) — display/effects/audio state changes are now event-driven.
+
+**Implemented Since Audit:**
+- ✅ Ball Motion Trails (`src/effects/effects-trails.ts`)
+- ✅ Enhanced Shard Particles (`src/effects/effects-particles.ts`)
+- ✅ Bumper Emissive Pulse / Neon Rings (`src/objects/object-bumpers.ts`)
+- ✅ Brushed Metal Anisotropy (`src/materials/material-metallic.ts`)
+- ✅ Playfield Fog (`src/game.ts` — `GameConfig.visuals.fogDensity`)
+- ✅ Clear Coat / Iridescence (`src/materials/material-ball.ts`, gated by `QualityTier`)
+- ✅ Quality Tiering (`detectQualityTier()`, used across materials, effects, trails)
 
 ---
 
@@ -20,16 +41,16 @@ This audit identifies **35+ opportunities** to safely enhance perceived geometri
 | Post-Process Stack | 2 | 6+ |
 
 ### Top 10 Safest, Highest-Impact Improvements
-1. **Cyber Grid Atmospheric Glow** - Add flowing data particles, vignette (display.ts)
-2. **Ball Motion Trails** - TrailMesh following ball trajectory (effects.ts)
-3. **Enhanced Canvas Fallback** - Gradient symbols, glow effects for non-WebGPU users (display.ts)
-4. **CRT Scanline Enhancement** - Temporal flicker, chromatic aberration (scanline.ts)
-5. **Pin Collar Details** - Small rings at pin bases for manufacturing detail (game-objects.ts)
-6. **Bumper Emissive Pulse** - Idle animation for "alive" feel (game-objects.ts)
-7. **Playfield Normal Map** - Procedural surface imperfections (material-library.ts)
-8. **Parallax Display Layers** - Subtle Z-axis breathing per layer (display.ts)
-9. **Enhanced Shard Particles** - Textured, rotating debris (effects.ts)
-10. **Flipper Detail Enhancement** - Grip texture, raised edge rails (game-objects.ts)
+1. **Cyber Grid Atmospheric Glow** - Add flowing data particles, vignette (`src/display/display-shader.ts`)
+2. **Ball Motion Trails** - TrailMesh following ball trajectory (`src/effects/effects-trails.ts`) — ✅ **IMPLEMENTED**
+3. **Enhanced Canvas Fallback** - Gradient symbols, glow effects for non-WebGPU users (`src/display/display-reels.ts`)
+4. **CRT Scanline Enhancement** - Temporal flicker, chromatic aberration (`src/shaders/scanline.ts`)
+5. **Pin Collar Details** - Small rings at pin bases for manufacturing detail (`src/objects/object-pachinko.ts`)
+6. **Bumper Emissive Pulse** - Idle animation for "alive" feel (`src/objects/object-bumpers.ts`) — ✅ **IMPLEMENTED**
+7. **Playfield Normal Map** - Procedural surface imperfections (`src/materials/material-structural.ts`)
+8. **Parallax Display Layers** - Subtle Z-axis breathing per layer (`src/display/display-core.ts`)
+9. **Enhanced Shard Particles** - Textured, rotating debris (`src/effects/effects-particles.ts`) — ✅ **IMPLEMENTED**
+10. **Flipper Detail Enhancement** - Grip texture, raised edge rails (`src/objects/object-flippers.ts`)
 
 ---
 
@@ -59,7 +80,7 @@ This audit identifies **35+ opportunities** to safely enhance perceived geometri
 - **Effort:** 25 min
 
 **3. Atmospheric Glow on Cyber Grid Background**
-- **File:** `src/game-elements/display.ts` (createShaderLayer)
+- **File:** `src/display/display-shader.ts` (createShaderLayer)
 - **Change:** Add data flow particles, vignette darkening, circuit traces
 - **Visual Gain:** Motion detail (flowing particles) + visual depth (vignette)
 - **Risk:** Low - GLSL only, same shader runs both paths
@@ -80,7 +101,7 @@ This audit identifies **35+ opportunities** to safely enhance perceived geometri
 #### 🔥 HIGH PRIORITY
 
 **4. Pin Collar Details**
-- **File:** `src/game-elements/game-objects.ts` (createPachinkoField)
+- **File:** `src/objects/object-pachinko.ts` (createPachinkoField)
 - **Change:** Add small collar rings at pin bases
 ```typescript
 const collar = MeshBuilder.CreateCylinder(`pinCollar_${r}_${c}`, { 
@@ -93,14 +114,14 @@ collar.position.set(x, 0.1, z)
 - **Effort:** 15 min
 
 **5. Beveled Cabinet Edges**
-- **File:** `src/game.ts` (createEnhancedCabinet)
+- **File:** `src/game.ts` (createEnhancedCabinet via `GameCabinetBuilder`)
 - **Change:** Add thin chrome bevel strips at key cabinet edges
 - **Visual Gain:** Catches rim light, defines silhouette, professional finish
 - **Risk:** Low - purely visual (+6 thin boxes)
 - **Effort:** 20 min
 
 **6. Flipper Detail Enhancement**
-- **File:** `src/game-elements/game-objects.ts` (createFlippers)
+- **File:** `src/objects/object-flippers.ts` (createFlippers)
 - **Change:** Add segmented grip texture and raised edge rail
 - **Visual Gain:** Better ball control visualization, mechanical authenticity
 - **Risk:** Low - decorative only, no physics change
@@ -109,7 +130,7 @@ collar.position.set(x, 0.1, z)
 #### ⚡ MEDIUM PRIORITY
 
 **7. Bumper Ring Grooves**
-- **File:** `src/game-elements/game-objects.ts` (createBumpers)
+- **File:** `src/objects/object-bumpers.ts` (createBumpers)
 - **Change:** Add concentric torus rings for classic bumper aesthetic
 - **Visual Gain:** Classic pinball look, better specular highlights
 - **Risk:** Low - visual only (+9 tori)
@@ -124,39 +145,26 @@ collar.position.set(x, 0.1, z)
 - **Tone Mapping:** Reinhard with contrast 1.1
 - **Shadows:** 2048px blur exponential
 - **Particles:** CPU-driven mesh shards (basic boxes)
-- **No temporal effects:** No motion blur, trails, or velocity-based visuals
+- **Trails:** ✅ TrailMesh system with velocity-proportional emit rate (`src/effects/effects-trails.ts`)
 
 ### Key Opportunities
 
 #### 🔥 HIGH PRIORITY
 
 **8. Ball Motion Trails**
-- **File:** `src/game-elements/ball-manager.ts` or `game-objects.ts`
-- **Change:** Add TrailMesh following ball with fading opacity
-```typescript
-const trail = new TrailMesh("ballTrail", ballMesh, scene, 0.15, 20, true)
-trail.material.emissiveColor = new Color3(0.4, 0.8, 1.0)
-trail.material.alpha = 0.6
-```
+- **File:** `src/effects/effects-trails.ts`
+- **Status:** ✅ **IMPLEMENTED** — TrailMesh following ball with fading opacity, gated by `QualityTier.LOW`
 - **Visual Gain:** Perceived speed, trajectory readability
-- **Risk:** Low - single trail mesh, ~20 segments
-- **Effort:** 30 min
+- **Risk:** Low
 
 **9. Enhanced Shard Particles**
-- **File:** `src/game-elements/effects.ts` (spawnShardBurst)
-- **Change:** Use existing particle texture, add variable size + rotation
-```typescript
-// Variable size shards
-const size = 0.08 + Math.random() * 0.12
-// Add rotation velocity
-const rotVel = new Vector3(Math.random() * 10, Math.random() * 10, Math.random() * 10)
-```
+- **File:** `src/effects/effects-particles.ts` (spawnShardBurst)
+- **Status:** ✅ **IMPLEMENTED** — Textured, rotating debris with variable size
 - **Visual Gain:** Richness, energy, visual clarity of impacts
-- **Risk:** Low - same mesh count, better materials
-- **Effort:** 45 min
+- **Risk:** Low
 
 **10. Bumper Burst Effects**
-- **File:** `src/game-elements/effects.ts`
+- **File:** `src/effects/effects-core.ts`
 - **Change:** Add expanding ring + bloom flash on bumper hits
 - **Visual Gain:** Feedback clarity, energy, satisfaction
 - **Risk:** Low - event-triggered, short duration
@@ -165,23 +173,17 @@ const rotVel = new Vector3(Math.random() * 10, Math.random() * 10, Math.random()
 #### ⚡ MEDIUM PRIORITY
 
 **11. Chromatic Aberration (Head Camera)**
-- **File:** `src/game.ts` (post-process section)
+- **File:** `src/game.ts` (post-process section via `GameRenderer`)
 - **Change:** Add RGB channel separation at screen edges
 - **Visual Gain:** Visual depth, retro CRT aesthetic
 - **Risk:** Low - single pass, simple offset
 - **Effort:** 30 min
 
 **12. Subtle Playfield Fog**
-- **File:** `src/game.ts` (lighting setup)
-- **Change:** Add exponential fog starting at back of table
-```typescript
-scene.fogMode = Scene.FOGMODE_EXP2
-scene.fogDensity = 0.015
-scene.fogColor = new Color3(0.02, 0.02, 0.04)
-```
+- **File:** `src/game.ts` (lighting setup via `GameRenderer`)
+- **Status:** ✅ **IMPLEMENTED** — `GameConfig.visuals.fogDensity` with `reducedMotion` gating
 - **Visual Gain:** Depth perception, atmospheric immersion
 - **Risk:** Medium - must not obscure gameplay
-- **Effort:** 20 min
 
 ---
 
@@ -192,13 +194,14 @@ scene.fogColor = new Color3(0.02, 0.02, 0.04)
 - **Environment map** support with intensity 0.6
 - **Clear coat** used strategically (pins, playfield, glass, ball)
 - **Material caching** prevents duplicate creation
+- **Advanced PBR:** ✅ Anisotropy, sheen, iridescence, clear-coat gated by `QualityTier`
 
 ### Key Opportunities
 
 #### 🔥 HIGH PRIORITY
 
 **13. Playfield Normal Map**
-- **File:** `src/game-elements/material-library.ts`
+- **File:** `src/materials/material-structural.ts`
 - **Change:** Add procedural normal map for surface imperfections
 ```typescript
 private createPlayfieldNormalTexture(): DynamicTexture {
@@ -211,7 +214,7 @@ private createPlayfieldNormalTexture(): DynamicTexture {
 - **Effort:** 15 min
 
 **14. Glass Refraction Enhancement**
-- **File:** `src/game-elements/material-library.ts` (getSmokedGlassMaterial)
+- **File:** `src/materials/material-structural.ts` (getSmokedGlassMaterial)
 - **Change:** Enable subsurface refraction for realistic glass
 ```typescript
 mat.subSurface.isRefractionEnabled = true
@@ -222,31 +225,21 @@ mat.subSurface.refractionIntensity = 0.8
 - **Effort:** 6 lines
 
 **15. Bumper Emissive Pulse Animation**
-- **File:** `src/game-elements/game-objects.ts` (updateBumpers)
-- **Change:** Time-based emissive intensity pulsing for "alive" feel
-```typescript
-const pulseIntensity = 0.5 + Math.sin(time * 3 + index) * 0.2
-baseColor.emissiveIntensity = pulseIntensity
-```
+- **File:** `src/objects/object-bumpers.ts` (updateBumpers)
+- **Status:** ✅ **IMPLEMENTED** — Neon rings with pulse animation on `QualityTier.HIGH`
 - **Visual Gain:** Motion detail - energetic even when idle
-- **Risk:** Low - cosmetic animation only
-- **Effort:** 10 lines
+- **Risk:** Low
 
 #### ⚡ MEDIUM PRIORITY
 
 **16. Brushed Metal Anisotropy**
-- **File:** `src/game-elements/material-library.ts` (getBrushedMetalMaterial)
-- **Change:** Add anisotropic reflections for brushed appearance
-```typescript
-mat.anisotropy.isEnabled = true
-mat.anisotropy.intensity = 0.5
-```
+- **File:** `src/materials/material-metallic.ts` (getBrushedMetalMaterial)
+- **Status:** ✅ **IMPLEMENTED** — Anisotropic reflections for brushed appearance
 - **Visual Gain:** Geometric richness - elongated highlights
-- **Risk:** Low - PBR-only feature, gracefully ignored otherwise
-- **Effort:** 4 lines
+- **Risk:** Low
 
 **17. Hologram Fresnel/Rim Effect**
-- **File:** `src/game-elements/material-library.ts` (getHologramMaterial)
+- **File:** `src/materials/material-interactive.ts` (getHologramMaterial)
 - **Change:** Add fresnel-based rim lighting for "projected" look
 ```typescript
 mat.emissiveFresnel = true
@@ -266,13 +259,14 @@ mat.emissiveFresnelParameters.power = 2.0
 - **Dual path:** WGSL shaders (WebGPU) or Canvas2D fallback
 - **Display states:** IDLE, REACH, FEVER, JACKPOT, ADVENTURE
 - **Jackpot shader:** 3-phase effects (Breach, Error, Meltdown)
+- **Event-driven:** `DisplaySystem.subscribeToEvents()` reacts to `display:set` events via `EventBus`
 
 ### Key Opportunities
 
 #### 🔥 HIGH PRIORITY
 
 **18. Enhanced Canvas Fallback Rendering**
-- **File:** `src/game-elements/display.ts` (drawSlots)
+- **File:** `src/display/display-reels.ts` (drawSlots)
 - **Change:** Add gradient fills, glow effects, symbol backgrounds
 ```typescript
 // Gradient background for symbol
@@ -285,7 +279,7 @@ grad.addColorStop(1, isWinning ? '#ff4400' : '#000')
 - **Effort:** 30 min
 
 **19. Parallax Depth Layering**
-- **File:** `src/game-elements/display.ts` (update)
+- **File:** `src/display/display-core.ts` (update)
 - **Change:** Add subtle Z-axis animation based on game state intensity
 ```typescript
 // Layer 0 (Reels) - subtle breathing
@@ -296,7 +290,7 @@ this.layers.reels.position.z = this.baseZ.reels + Math.sin(time * 2) * 0.05 * in
 - **Effort:** 15 min
 
 **20. Richer State Overlay Effects**
-- **File:** `src/game-elements/display.ts` (drawReachOverlay, drawFeverOverlay, etc.)
+- **File:** `src/display/display-core.ts` (drawReachOverlay, drawFeverOverlay, etc.)
 - **Change:** Add animated borders, gradient text, corner accents
 ```typescript
 // Animated hexagon frame
@@ -310,7 +304,7 @@ ctx.strokeStyle = `rgba(255, 0, 85, ${0.5 + pulse * 0.5})`
 #### ⚡ MEDIUM PRIORITY
 
 **21. Reel Stop "Bounce" Physics**
-- **File:** `src/game-elements/display.ts` (updateWGSLReels)
+- **File:** `src/display/display-shader.ts` (updateWGSLReels)
 - **Change:** Add overshoot and elastic settle for mechanical feel
 ```typescript
 // Spring physics for satisfying settle
@@ -323,7 +317,7 @@ const accel = diff * springK - this.reelVelocity[i] * damping
 - **Effort:** 30 min
 
 **22. Particle Burst Integration**
-- **File:** `src/game-elements/display.ts`
+- **File:** `src/display/display-core.ts`
 - **Change:** Add Canvas-based particle bursts for wins, state changes
 ```typescript
 interface DisplayParticle { x, y, vx, vy, life, color, size }
@@ -338,46 +332,46 @@ interface DisplayParticle { x, y, vx, vy, life, color, size }
 ## Implementation Roadmap
 
 ### Phase 1: Immediate Wins (Week 1)
-| Priority | Opportunity | File | Effort |
-|----------|-------------|------|--------|
-| 1 | Enhanced Canvas Fallback | display.ts | 30 min |
-| 2 | Atmospheric Grid Glow | display.ts | 30 min |
-| 3 | Pin Collar Details | game-objects.ts | 15 min |
-| 4 | Beveled Cabinet Edges | game.ts | 20 min |
-| 5 | CRT Scanline Enhancement | scanline.ts | 20 min |
+| Priority | Opportunity | File | Effort | Status |
+|----------|-------------|------|--------|--------|
+| 1 | Enhanced Canvas Fallback | display-reels.ts | 30 min | Open |
+| 2 | Atmospheric Grid Glow | display-shader.ts | 30 min | Open |
+| 3 | Pin Collar Details | object-pachinko.ts | 15 min | Open |
+| 4 | Beveled Cabinet Edges | cabinet-builder.ts | 20 min | Open |
+| 5 | CRT Scanline Enhancement | scanline.ts | 20 min | Open |
 
 **Phase 1 Expected Impact:** Visual polish for all users, especially Canvas fallback (~30-50% of users)
 
 ### Phase 2: Motion & Feedback (Week 2)
-| Priority | Opportunity | File | Effort |
-|----------|-------------|------|--------|
-| 6 | Ball Motion Trails | ball-manager.ts | 30 min |
-| 7 | Enhanced Shard Particles | effects.ts | 45 min |
-| 8 | Bumper Burst Effects | effects.ts | 1 hr |
-| 9 | Bumper Emissive Pulse | game-objects.ts | 15 min |
-| 10 | Reel Stop Bounce | display.ts | 30 min |
+| Priority | Opportunity | File | Effort | Status |
+|----------|-------------|------|--------|--------|
+| 6 | Ball Motion Trails | effects-trails.ts | 30 min | ✅ Done |
+| 7 | Enhanced Shard Particles | effects-particles.ts | 45 min | ✅ Done |
+| 8 | Bumper Burst Effects | effects-core.ts | 1 hr | Open |
+| 9 | Bumper Emissive Pulse | object-bumpers.ts | 15 min | ✅ Done |
+| 10 | Reel Stop Bounce | display-shader.ts | 30 min | Open |
 
 **Phase 2 Expected Impact:** Better gameplay feedback, perceived speed, and interactivity
 
 ### Phase 3: Depth & Richness (Week 3)
-| Priority | Opportunity | File | Effort |
-|----------|-------------|------|--------|
-| 11 | Playfield Normal Map | material-library.ts | 15 min |
-| 12 | Parallax Display Layers | display.ts | 15 min |
-| 13 | Glass Refraction | material-library.ts | 10 min |
-| 14 | Flipper Detail Enhancement | game-objects.ts | 20 min |
-| 15 | Chromatic Aberration | game.ts | 30 min |
+| Priority | Opportunity | File | Effort | Status |
+|----------|-------------|------|--------|--------|
+| 11 | Playfield Normal Map | material-structural.ts | 15 min | Open |
+| 12 | Parallax Display Layers | display-core.ts | 15 min | Open |
+| 13 | Glass Refraction | material-structural.ts | 10 min | Open |
+| 14 | Flipper Detail Enhancement | object-flippers.ts | 20 min | Open |
+| 15 | Chromatic Aberration | game.ts (GameRenderer) | 30 min | Open |
 
 **Phase 3 Expected Impact:** Geometric richness, visual depth, premium feel
 
 ### Phase 4: Advanced Features (Week 4)
-| Priority | Opportunity | File | Effort |
-|----------|-------------|------|--------|
-| 16 | Brushed Metal Anisotropy | material-library.ts | 10 min |
-| 17 | Hologram Fresnel | material-library.ts | 15 min |
-| 18 | Playfield Fog | game.ts | 20 min |
-| 19 | Particle Display Bursts | display.ts | 1 hr |
-| 20 | State Overlay Polish | display.ts | 1 hr |
+| Priority | Opportunity | File | Effort | Status |
+|----------|-------------|------|--------|--------|
+| 16 | Brushed Metal Anisotropy | material-metallic.ts | 10 min | ✅ Done |
+| 17 | Hologram Fresnel | material-interactive.ts | 15 min | Open |
+| 18 | Playfield Fog | game.ts (GameRenderer) | 20 min | ✅ Done |
+| 19 | Particle Display Bursts | display-core.ts | 1 hr | Open |
+| 20 | State Overlay Polish | display-core.ts | 1 hr | Open |
 
 **Phase 4 Expected Impact:** Professional polish, distinct visual identity per state
 
@@ -419,19 +413,28 @@ The Canvas fallback (for browsers without WebGPU) benefits from:
 ## Files Requiring Changes
 
 ### High-Priority Files (Phase 1-2)
-- `src/game-elements/display.ts` - 8 opportunities
-- `src/game-elements/effects.ts` - 5 opportunities
-- `src/game-elements/game-objects.ts` - 6 opportunities
-- `src/game-elements/material-library.ts` - 6 opportunities
-- `src/game.ts` - 5 opportunities
+- `src/display/display-core.ts` - 8 opportunities
+- `src/display/display-reels.ts` - 3 opportunities
+- `src/display/display-shader.ts` - 3 opportunities
+- `src/effects/effects-core.ts` - 5 opportunities
+- `src/effects/effects-particles.ts` - 1 opportunity (done)
+- `src/effects/effects-trails.ts` - 1 opportunity (done)
+- `src/objects/object-core.ts` - 2 opportunities
+- `src/objects/object-pachinko.ts` - 1 opportunity
+- `src/objects/object-bumpers.ts` - 2 opportunities (1 done)
+- `src/objects/object-flippers.ts` - 1 opportunity
+- `src/materials/material-structural.ts` - 3 opportunities
+- `src/materials/material-metallic.ts` - 1 opportunity (done)
+- `src/materials/material-interactive.ts` - 1 opportunity
+- `src/game.ts` / `src/game/game-renderer.ts` - 3 opportunities (1 done)
 - `src/shaders/scanline.ts` - 2 opportunities
 
 ### Estimated Total Effort
 - **Phase 1:** 2 hours
-- **Phase 2:** 3 hours
+- **Phase 2:** 3 hours (1.5 hr remaining)
 - **Phase 3:** 2 hours
-- **Phase 4:** 3 hours
-- **Total:** ~10 hours of implementation time
+- **Phase 4:** 3 hours (1.5 hr remaining)
+- **Total:** ~10 hours of implementation time (~6 hours remaining)
 
 ---
 
@@ -442,20 +445,21 @@ The Pachinball rendering pipeline has a **solid foundation** with good architect
 ### Recommended Starting Points
 1. **Enhanced Canvas Fallback** (O1) - Immediately improves experience for ~30-50% of users
 2. **Atmospheric Grid Glow** (O3) - Isolated change with immediate visual impact
-3. **Ball Motion Trails** (O8) - High gameplay value, low risk
+3. **Ball Motion Trails** (O8) - High gameplay value, low risk — ✅ Done
 4. **Pin Collar Details** (O4) - Instant manufacturing detail across 48 instances
 
 ### Success Metrics
 After implementation, the game should exhibit:
+- [x] Ball trajectory is readable via motion trails
+- [x] Bumpers pulse with life even when idle
+- [x] PBR surfaces show anisotropic highlight detail
 - [ ] Canvas fallback users see rich symbol rendering with glow
-- [ ] Ball trajectory is readable via motion trails
 - [ ] Cabinet catches light on beveled edges
-- [ ] Bumpers pulse with life even when idle
 - [ ] State transitions feel distinct and polished
 - [ ] PBR surfaces show subtle normal map detail
 - [ ] Display layers have subtle parallax depth
 
 ---
 
-*Report generated by Agent Swarm Audit*
-*Auditors: Shader Pipeline, Geometry & Meshes, Post-Processing & Effects, Materials & PBR, Display System*
+*Report generated by Agent Swarm Audit*  
+*Updated 2026-05-08 to reflect current file structure and implemented features*

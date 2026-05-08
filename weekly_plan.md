@@ -11,18 +11,29 @@ Add `tests/display-states.spec.ts` covering every `DisplayState` transition (IDL
 - [done — 2026-05-07] Playwright smoke tests for backbox display states — verify each `DisplayState` transition (IDLE → FEVER, IDLE → JACKPOT, JACKPOT → IDLE) triggers the correct layer activation via `getDisplayState()` assertion.
 
 ## Backlog
-- [ ] Stuck-ball detection — automatic reset when ball is stationary > 5 s (from `PHYSICS_AUDIT_MASTER.md`).
-- [ ] Bounce light proximity response — ball-distance modulation for `bounceLight` intensity (from `LIGHTING_SHADOW_PP_AUDIT_REPORT.md`).
-- [ ] Cabinet light exclusion lists — exclude non-cabinet meshes from LED PointLights (from `LIGHTING_SHADOW_PP_AUDIT_REPORT.md`).
-- [ ] Rendering audit refresh — rewrite `RENDERING_AUDIT_REPORT.md` to reference `src/display/` and `src/materials/` instead of deleted `src/game-elements/display.ts`.
-- [ ] Pin collar details + flipper grip texture — low-poly manufacturing detail (from `RENDERING_AUDIT_REPORT.md`).
-- [ ] Playwright CI optimization — game init is ~30–40 s per test; consider shared page context or selective runs to reduce suite time from ~6 min to <2 min.
+- [ ] Bounce light proximity response — ball-distance modulation for `bounceLight` intensity.
+- [ ] Cabinet light exclusion lists — exclude non-cabinet meshes from LED PointLights.
+- [ ] Playwright CI optimization — game init is ~30–40 s per test; consider shared page context or selective runs.
+- [ ] Bumper burst effects — expanding ring + bloom flash on bumper hits.
+- [ ] Playfield normal map — procedural surface imperfections.
+- [ ] Glass refraction enhancement — subsurface refraction for smoked glass.
+- [ ] Cabinet beveled edges — thin chrome strips at key cabinet edges.
+
+## Next Sprint Ideas (May 9+)
+- CRT scanline enhancement (temporal flicker + chromatic aberration)
+- Parallax display layers (Z-axis breathing per layer)
+- Reel stop bounce physics (overshoot + elastic settle)
+- Hologram fresnel rim effect
 
 ## Done
 - 2026-05-07: **Sound System EventBus Integration** complete. `getSoundSystem(eventBus?)` now subscribes to `game:start`, `game:over`, `fever:start`, `jackpot:start`, `adventure:end`, and `display:set`. Added `SoundSystem.playBeep(freq)` for synthesized EventBus-driven beeps. Removed last direct `this.effects?.playBeep(440)` call from `game.ts` adventure END handler. All audio is now reactive via EventBus. `npx tsc -b` clean, `npm run build` passes, 51 Vitest tests green.
 - 2026-05-07: **Config Extraction (second pass)** complete. Migrated remaining magic numbers from `game.ts` into `config.ts`: `cameraFollowTransitionSpeed`, `fogDensity`, `mirrorSize` (HIGH/MEDIUM), `mirrorTextureLevel`, `skyboxSize`, `uMapBlend`, `idleCallbackTimeoutMs`, `cosmeticFallbackDelayMs`. Removed unused `scanlineIntensity` class property. `npx tsc -b` clean.
 - 2026-05-07: **Audit Reports Triage** complete. Reviewed 6 key audits (`PHYSICS_*`, `LIGHTING_*`, `MATERIAL_*`, `RENDERING_*`, `CAMERA_*`, `INPUT_*`). Created `docs/AUDIT_TRIAGE_2026-05-07.md` with implemented/partial/stale/open categorization, summary table, quick-win list, and re-audit recommendations. Physics ~60 %, Lighting ~70 %, Material ~80 %, Rendering ~50 % (with stale paths), Camera ~55 %, Input ~60 % implemented.
 - 2026-05-07: **Event Bus Architecture** complete. `src/game/event-bus.ts` created (typed pub/sub, no deps). `GameStateManager` emits typed lifecycle + display events. `DisplaySystem.subscribeToEvents()` self-manages state. All 10 `setDisplayState` call sites in `game.ts` replaced with `eventBus.emit('display:set', ...)`. Gameplay events (`fever:start/end`, `jackpot:start/end`, `reach:start`, `adventure:start/end`) emitted at correct trigger sites. `npx tsc -b` clean, `npm run build` passes.
+- 2026-05-08: **May 8 Sprint** — Closed remaining high-priority backlog items:
+  - **Stuck-ball detection** — Already fully implemented in `BallManager.updateStuckDetection()` (velocity threshold 0.1, timeout 5.0 s, out-of-bounds detection). Wired into `game-physics-controller.ts`. No code change needed; verified existing logic.
+  - **Rendering audit refresh** — Rewrote `docs/RENDERING_AUDIT_REPORT.md` to reference current file structure (`src/display/`, `src/materials/`, `src/effects/`, `src/objects/`). Added "Status as of May 2026" section marking implemented features (trails, particles, bumper pulse, anisotropy, fog, clear-coat). Removed all references to deleted `src/game-elements/display.ts` and `src/game-elements/material-library.ts`.
+  - **Pin collar + flipper grip** — Already implemented. Pachinko pins have base bevel torus rings (`object-pachinko.ts` lines 85–91). Flippers have side bevels, pivot caps, and pivot ring details (`object-flippers.ts` lines 82–146).
 - 2026-05-07: **Quick Wins (Audit Triage)** — Implemented 3 items discovered during triage:
   - Wall friction unification: `object-walls.ts` now reads `GameConfig.ball.friction` instead of hardcoded `0.1`.
   - Physics contact skin: `game-elements/physics.ts` sets `integrationParameters.contactSkin = 0.005` (OP-5 from PHYSICS audit).
