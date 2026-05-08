@@ -16,6 +16,7 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { TrackBuilder } from './track-builder'
 import { CAMERA_PRESETS } from './camera-presets'
 import { AdventureTrackType, type AdventureCallback, type CameraPreset } from './adventure-types'
+import { CameraEasing } from './camera-easing'
 
 // Import all track builders
 import { buildNeonHelix } from './tracks/neon-helix'
@@ -60,6 +61,10 @@ export class AdventureMode extends TrackBuilder {
   /** Camera management */
   private tableCamera: ArcRotateCamera | null = null
   private followCamera: ArcRotateCamera | null = null
+
+  /** Camera transition state for cinematic polish */
+  private cameraTransitionTime = 0
+  private cameraTransitionDuration = 0.8 // seconds for smooth entry
 
   /**
    * Get current zone/track type
@@ -217,8 +222,16 @@ export class AdventureMode extends TrackBuilder {
       ballPos.z + (lookAheadPos.z - ballPos.z) * lookAheadBlend
     )
 
-    // Apply with smoothing
-    const smoothing = preset.trackingSmoothing * dt
+    // Update transition time for cinematic entry
+    if (this.cameraTransitionTime < this.cameraTransitionDuration) {
+      this.cameraTransitionTime += dt
+    }
+
+    // Apply smoothing with easing during transition
+    const baseSmoothing = preset.trackingSmoothing * dt
+    const transitionAlpha = Math.min(1, this.cameraTransitionTime / this.cameraTransitionDuration)
+    const easeInFactor = CameraEasing.easeOutCubic(transitionAlpha)
+    const smoothing = baseSmoothing * (0.5 + easeInFactor * 0.5) // Start at 50% smoothing, reach 100%
 
     this.followCamera.target = new Vector3(
       this.followCamera.target.x + (targetPosition.x - this.followCamera.target.x) * smoothing,
@@ -226,6 +239,7 @@ export class AdventureMode extends TrackBuilder {
       this.followCamera.target.z + (targetPosition.z - this.followCamera.target.z) * smoothing
     )
 
+    // Eased radius transition with responsive tracking
     const radiusDelta = (targetRadius - this.followCamera.radius) * (preset.trackingSmoothing * 0.4 * dt)
     this.followCamera.radius = Scalar.Clamp(
       this.followCamera.radius + radiusDelta,
@@ -233,6 +247,7 @@ export class AdventureMode extends TrackBuilder {
       Math.min(preset.maxRadius, preset.radius + preset.maxRadiusExtension)
     )
 
+    // Smooth FOV transitions with easing
     const targetFOV = preset.fov + (speedFactor * preset.speedFOVFactor * 30)
     const fovDelta = (targetFOV - this.followCamera.fov) * (preset.trackingSmoothing * 0.3 * dt)
     this.followCamera.fov = Scalar.Clamp(
@@ -259,6 +274,9 @@ export class AdventureMode extends TrackBuilder {
     // Track zone transition
     this.previousZone = this.currentZone
     this.currentZone = trackType
+
+    // Reset camera transition timer for cinematic entry
+    this.cameraTransitionTime = 0
 
     // Notify the Game class to update the Display
     if (this.onEvent) this.onEvent('START', trackType)
@@ -444,6 +462,9 @@ export class AdventureMode extends TrackBuilder {
 
     this.previousZone = this.currentZone
     this.currentZone = newZone
+
+    // Reset camera transition timer for smooth zone switch
+    this.cameraTransitionTime = 0
 
     this.currentCameraPreset = CAMERA_PRESETS[newZone as string] || CAMERA_PRESETS.DEFAULT
 

@@ -18,7 +18,7 @@ export const CAMERA_PRESETS: Record<string, CameraPreset> = {
     radius: 16,
     fov: 0.75,
     lookAheadTime: 0.35,
-    trackingSmoothing: 7.0,
+    trackingSmoothing: 6.5, // Slightly smoother for cinematic feel
     speedRadiusFactor: 0.25,
     speedFOVFactor: 0.008,
     maxRadiusExtension: 8,
@@ -34,7 +34,7 @@ export const CAMERA_PRESETS: Record<string, CameraPreset> = {
     radius: 14,
     fov: 0.8,
     lookAheadTime: 0.25,
-    trackingSmoothing: 9.0,
+    trackingSmoothing: 8.0, // Improved smoothing for better tracking
     speedRadiusFactor: 0.35,
     speedFOVFactor: 0.012,
     maxRadiusExtension: 10,
@@ -50,7 +50,7 @@ export const CAMERA_PRESETS: Record<string, CameraPreset> = {
     radius: 18,
     fov: 0.85,
     lookAheadTime: 0.4,
-    trackingSmoothing: 6.0,
+    trackingSmoothing: 5.5, // Faster response for maze navigation
     speedRadiusFactor: 0.15,
     speedFOVFactor: 0.005,
     maxRadiusExtension: 4,
@@ -66,7 +66,7 @@ export const CAMERA_PRESETS: Record<string, CameraPreset> = {
     radius: 15,
     fov: 0.78,
     lookAheadTime: 0.3,
-    trackingSmoothing: 8.0,
+    trackingSmoothing: 7.5, // Balanced smoothing
     speedRadiusFactor: 0.3,
     speedFOVFactor: 0.01,
     maxRadiusExtension: 6,
@@ -82,7 +82,7 @@ export const CAMERA_PRESETS: Record<string, CameraPreset> = {
     radius: 17,
     fov: 0.82,
     lookAheadTime: 0.32,
-    trackingSmoothing: 7.5,
+    trackingSmoothing: 7.0, // Improved tracking for chaotic environment
     speedRadiusFactor: 0.28,
     speedFOVFactor: 0.009,
     maxRadiusExtension: 7,
