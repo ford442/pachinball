@@ -1,0 +1,208 @@
+import { Scene, MeshBuilder, Mesh, TransformNode } from '@babylonjs/core'
+import type * as RAPIER from '@dimforge/rapier3d-compat'
+import { getMaterialLibrary } from '../materials'
+import type { PhysicsBinding } from '../game-elements/types'
+import { PALETTE } from '../game-elements/visual-language'
+
+export interface LauncherState {
+  mesh: Mesh
+  body: RAPIER.RigidBody
+  chargeMesh: Mesh
+  isCharging: boolean
+  chargeLevel: number
+  maxChargeTime: number
+  cooldownTimer: number
+  cooldownDuration: number
+  direction: { x: number; y: number; z: number }
+  minForce: number
+  maxForce: number
+  launcherColor: string
+}
+
+export class LauncherBuilder {
+  private scene: Scene
+  private world: RAPIER.World
+  private rapier: typeof RAPIER
+  private matLib: ReturnType<typeof getMaterialLibrary>
+
+  constructor(
+    scene: Scene,
+    world: RAPIER.World,
+    rapier: typeof RAPIER,
+  ) {
+    this.scene = scene
+    this.world = world
+    this.rapier = rapier
+    this.matLib = getMaterialLibrary(scene)
+  }
+
+  /**
+   * Create a launcher mechanism
+   */
+  createLauncher(
+    x: number,
+    z: number,
+    colorHex: string = PALETTE.CYAN,
+    scale: number = 1.0,
+    directionX: number = 0,
+    directionY: number = 1,
+    directionZ: number = 0
+  ): { state: LauncherState; bindings: PhysicsBinding[] } {
+    const bindings: PhysicsBinding[] = []
+
+    const launcherRoot = new TransformNode('launcherRoot', this.scene)
+    launcherRoot.position.set(x, 0.5, z)
+
+    // Main launcher body (box)
+    const launcherMesh = MeshBuilder.CreateBox('launcherBody', {
+      width: 0.6 * scale,
+      height: 0.8 * scale,
+      depth: 0.4 * scale
+    }, this.scene) as Mesh
+
+    launcherMesh.parent = launcherRoot
+    launcherMesh.material = this.matLib.getEnhancedBumperBodyMaterial(colorHex)
+
+    // Charge indicator (glowing sphere that grows)
+    const chargeMesh = MeshBuilder.CreateSphere('launcherCharge', {
+      diameter: 0.3 * scale,
+      segments: 16
+    }, this.scene) as Mesh
+
+    chargeMesh.position.y = 0.5 * scale
+    chargeMesh.parent = launcherRoot
+    chargeMesh.material = this.matLib.getEnhancedBumperRingMaterial(colorHex)
+
+    // Rim accent
+    const rimMesh = MeshBuilder.CreateTorus('launcherRim', {
+      diameter: 0.8 * scale,
+      thickness: 0.06 * scale,
+      tessellation: 24
+    }, this.scene) as Mesh
+
+    rimMesh.parent = launcherRoot
+    rimMesh.material = this.matLib.getEnhancedBumperRingMaterial(colorHex)
+
+    // Physics body
+    const body = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.5, z)
+    )
+
+    // Launcher trigger zone (sensor)
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(0.3 * scale, 0.4 * scale, 0.2 * scale)
+        .setSensor(true)
+        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
+      body
+    )
+
+    // Normalize direction
+    const dirMagnitude = Math.sqrt(directionX * directionX + directionY * directionY + directionZ * directionZ)
+    const normalizedDirection = {
+      x: directionX / dirMagnitude,
+      y: directionY / dirMagnitude,
+      z: directionZ / dirMagnitude
+    }
+
+    const state: LauncherState = {
+      mesh: launcherMesh,
+      body,
+      chargeMesh,
+      isCharging: false,
+      chargeLevel: 0,
+      maxChargeTime: 1.5, // 1.5 seconds to full charge
+      cooldownTimer: 0,
+      cooldownDuration: 0.5, // 0.5 second cooldown
+      direction: normalizedDirection,
+      minForce: 15.0,
+      maxForce: 40.0,
+      launcherColor: colorHex
+    }
+
+    bindings.push({ mesh: launcherRoot as unknown as Mesh, rigidBody: body })
+
+    return { state, bindings }
+  }
+
+  /**
+   * Start charging the launcher
+   */
+  startCharge(state: LauncherState): void {
+    if (state.cooldownTimer <= 0) {
+      state.isCharging = true
+      state.chargeLevel = 0
+    }
+  }
+
+  /**
+   * Update launcher charging animation
+   */
+  updateLauncher(state: LauncherState, dt: number): void {
+    // Update cooldown
+    if (state.cooldownTimer > 0) {
+      state.cooldownTimer -= dt
+    }
+
+    // Update charging
+    if (state.isCharging) {
+      state.chargeLevel += dt / state.maxChargeTime
+      state.chargeLevel = Math.min(state.chargeLevel, 1.0)
+
+      // Visual feedback: grow charge indicator
+      if (state.chargeMesh) {
+        state.chargeMesh.scaling.set(
+          1.0 + state.chargeLevel * 0.5,
+          1.0 + state.chargeLevel * 0.5,
+          1.0 + state.chargeLevel * 0.5
+        )
+
+        // Brighten with charge
+        const mat = state.chargeMesh.material as any
+        if (mat && mat.emissiveColor) {
+          const intensity = 0.5 + state.chargeLevel * 0.5
+          mat.emissiveColor.scaleToRef(intensity, mat.emissiveColor)
+        }
+      }
+    }
+  }
+
+  /**
+   * Fire the launcher, returns the force to apply
+   */
+  fireLauncher(state: LauncherState): { force: { x: number; y: number; z: number }; wasCharged: boolean } {
+    const chargeRatio = state.isCharging ? state.chargeLevel : 1.0
+    const force = state.minForce + (state.maxForce - state.minForce) * chargeRatio
+
+    // Reset charge indicator
+    if (state.chargeMesh) {
+      state.chargeMesh.scaling.set(1, 1, 1)
+    }
+
+    state.isCharging = false
+    state.chargeLevel = 0
+    state.cooldownTimer = state.cooldownDuration
+
+    return {
+      force: {
+        x: state.direction.x * force,
+        y: state.direction.y * force,
+        z: state.direction.z * force
+      },
+      wasCharged: chargeRatio > 0.5
+    }
+  }
+
+  /**
+   * Trigger launcher immediately with full force
+   */
+  triggerLauncher(state: LauncherState, force: number = 1.0): { x: number; y: number; z: number } {
+    const actualForce = state.minForce + (state.maxForce - state.minForce) * force
+    state.cooldownTimer = state.cooldownDuration
+
+    return {
+      x: state.direction.x * actualForce,
+      y: state.direction.y * actualForce,
+      z: state.direction.z * actualForce
+    }
+  }
+}
