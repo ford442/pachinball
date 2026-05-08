@@ -54,6 +54,7 @@ import {
   detectAccessibility,
   HapticManager,
   getSoundSystem,
+  SoundSystem,
   getMapSystem,
   getLeaderboardSystem,
   getNameEntryDialog,
@@ -116,7 +117,7 @@ export class Game {
   adventureManager: AdventureManager | null = null
   debugHUD: DebugHUD | null = null
   hapticManager: HapticManager | null = null
-  soundSystem = getSoundSystem()
+  soundSystem!: SoundSystem
   leaderboardSystem = getLeaderboardSystem()
   nameEntryDialog = getNameEntryDialog()
 
@@ -151,7 +152,7 @@ export class Game {
   nudgeState = { tiltWarnings: 0, lastNudgeTime: 0, tiltActive: false, tiltWarningActive: false }
   isCameraFollowMode = false
   cameraFollowTransition = 0
-  readonly cameraFollowTransitionSpeed = 3.0
+  readonly cameraFollowTransitionSpeed = GameConfig.visuals.cameraFollowTransitionSpeed
 
   // UI References
   scoreElement: HTMLElement | null = null
@@ -184,9 +185,6 @@ export class Game {
   readonly debugHUDQueryEnabled = window.location.search.includes('debug=1')
   debugHUDEnabledInSettings = false
   adventureModeStartMs: number | null = null
-
-  // Scanline
-  scanlineIntensity = 0.12
 
   // Accessibility
   accessibility: AccessibilityConfig = detectAccessibility()
@@ -224,7 +222,7 @@ export class Game {
     if (!this.accessibility?.reducedMotion) {
       this.scene.fogMode = Scene.FOGMODE_EXP2
       this.scene.fogColor = Color3.FromHexString('#050510')
-      this.scene.fogDensity = 0.015
+      this.scene.fogDensity = GameConfig.visuals.fogDensity
     } else {
       this.scene.fogMode = Scene.FOGMODE_NONE
     }
@@ -288,6 +286,7 @@ export class Game {
 
     // Event Bus and State Manager
     this.eventBus = new EventBus()
+    this.soundSystem = getSoundSystem(this.eventBus)
     this.stateManager = new GameStateManager({
       onStateChange: (oldState, newState) => {
         console.log(`[Game] State changed: ${GameState[oldState]} -> ${GameState[newState]}`)
@@ -443,7 +442,7 @@ export class Game {
 
     this.uiManager?.showLoadingState(true)
 
-    const skybox = MeshBuilder.CreateBox('skybox', { size: 200.0 }, this.scene)
+    const skybox = MeshBuilder.CreateBox('skybox', { size: GameConfig.visuals.skyboxSize }, this.scene)
     const skyboxMaterial = new StandardMaterial('skyBox', this.scene)
     skyboxMaterial.backFaceCulling = false
     skyboxMaterial.diffuseColor = Color3.Black()
@@ -451,10 +450,10 @@ export class Game {
     skyboxMaterial.emissiveColor = emissive(PALETTE.AMBIENT, INTENSITY.AMBIENT)
     skybox.material = skyboxMaterial
 
-    const mirrorSize = this.qualityTier === QualityTier.HIGH ? 2048 : 1024
+    const mirrorSize = this.qualityTier === QualityTier.HIGH ? GameConfig.visuals.mirrorSizeHigh : GameConfig.visuals.mirrorSizeMedium
     this.mirrorTexture = new MirrorTexture('mirror', mirrorSize, this.scene, true)
     this.mirrorTexture.mirrorPlane = new Plane(0, -1, 0, -1.01)
-    this.mirrorTexture.level = 0.6
+    this.mirrorTexture.level = GameConfig.visuals.mirrorTextureLevel
 
     this.effects = new EffectsSystem(this.scene, this.bloomPipeline, this.accessibility)
     if (this.keyLight && this.rimLight && this.bounceLight) {
@@ -519,7 +518,7 @@ export class Game {
           this.eventBus.emit('display:set', DisplayState.IDLE)
           this.effects?.setLightingMode('normal', 1.0)
           this.effects?.setAtmosphereState('IDLE')
-          this.effects?.playBeep(440)
+          // Sound handled reactively via EventBus 'adventure:end' subscription
           break
         case 'ZONE_ENTER': {
           const zoneData = data as {
@@ -545,9 +544,9 @@ export class Game {
     this.uiManager?.showLoadingState(false, 'cosmetic')
 
     if ('requestIdleCallback' in window) {
-      requestIdleCallback(() => this.sceneBuilder.buildCosmeticScene(), { timeout: 500 })
+      requestIdleCallback(() => this.sceneBuilder.buildCosmeticScene(), { timeout: GAME_TUNING.timing.idleCallbackTimeoutMs })
     } else {
-      setTimeout(() => this.sceneBuilder.buildCosmeticScene(), 100)
+      setTimeout(() => this.sceneBuilder.buildCosmeticScene(), GAME_TUNING.timing.cosmeticFallbackDelayMs)
     }
   }
 
@@ -601,7 +600,7 @@ export class Game {
       effect.setFloat('uPixelGridIntensity', config.pixelGridIntensity)
       effect.setFloat('uSubpixelIntensity', config.subpixelIntensity)
       effect.setFloat('uGlowIntensity', config.glowIntensity)
-      effect.setFloat('uMapBlend', 0.5)
+      effect.setFloat('uMapBlend', GameConfig.visuals.uMapBlend)
       effect.setFloat('uTime', performance.now() * 0.001)
       effect.setFloat('uFlashIntensity', this.mapManager?.getLCDTableState().flashIntensity || 0)
       effect.setFloat('uRippleIntensity', this.mapManager?.getLCDTableState().rippleIntensity || 0)
