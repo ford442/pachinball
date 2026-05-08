@@ -303,6 +303,9 @@ export class GamePhysicsController {
       this.rebuildHandleCaches()
     }
 
+    // Update small gold ball lifetimes (cleanup expired)
+    this.host.ballManager?.updateSmallGoldBallLifetimes(dt)
+
     const jackpotPhase = this.host.effects?.jackpotPhase || 0
     this.host.display?.update(dt, jackpotPhase)
 

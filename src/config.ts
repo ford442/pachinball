@@ -392,6 +392,34 @@ export const GameConfig = {
     spawnDrop: { x: 0, y: 5, z: 8 },
   },
 
+  smallGoldBalls: {
+    // Enable small gold ball swarms instead of single heavy balls
+    enabled: true,
+    // Number of small balls to spawn per gold ball trigger
+    swarmSize: 4,
+    // Size multiplier for small balls (0.0–1.0 of normal ball size)
+    sizeMultiplier: 0.5,
+    // Mass multiplier (lighter for more chaotic behavior)
+    massMultiplier: 0.35,
+    // Physics for small gold balls
+    restitution: 0.92,     // Bouncier than regular balls
+    friction: 0.08,        // Lower friction for faster movement
+    linearDamping: 0.05,   // Less damping for longer flights
+    angularDamping: 0.10,  // Less spin decay
+    // Spawn spread velocity range (m/s)
+    spawnVelocityMin: 3.0,
+    spawnVelocityMax: 8.0,
+    // Lifetime before auto-despawn (seconds)
+    lifetime: 15.0,
+    // Maximum concurrent swarms (safety limit)
+    maxConcurrentBalls: 20,
+    // Points per small ball
+    basePoints: 300,
+    // Bonus multiplier if all collected quickly
+    quickCollectBonusWindow: 5.0, // seconds
+    quickCollectMultiplier: 1.5,
+  },
+
   plunger: {
     /** @deprecated Use minImpulse/maxImpulse for analog charge instead */
     impulse: 22,
