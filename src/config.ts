@@ -337,7 +337,7 @@ export const GameConfig = {
   physics: {
     ballRestitution: 0.78,
     ballFriction: 0.12,
-    bumperRestitution: 0.85,
+    bumperRestitution: 0.92, // Increased for snappier bounce and "pop"
     // REMOVED: flipperPower (Legacy/Unused)
     gravity: { x: 0, y: -9.81, z: -5.0 }
   },

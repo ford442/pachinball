@@ -693,22 +693,31 @@ export class BallManager {
     // Apply material based on type
     ball.material = this.getMaterialForType(type)
 
+    // Gold balls feel heavier with more bounce
+    const isSolidGold = type === BallType.SOLID_GOLD
+    const isGoldPlated = type === BallType.GOLD_PLATED
+    const mass = isSolidGold ? GameConfig.ball.mass * 1.15 : (isGoldPlated ? GameConfig.ball.mass * 1.08 : GameConfig.ball.mass)
+    const linearDamp = isGoldPlated ? GameConfig.ball.linearDamping * 0.92 : GameConfig.ball.linearDamping
+    const angularDamp = isGoldPlated ? GameConfig.ball.angularDamping * 0.88 : GameConfig.ball.angularDamping
+
     // Create physics body
     const body = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.dynamic()
         .setTranslation(spawnPos.x, spawnPos.y, spawnPos.z)
         .setCcdEnabled(true)
         .setCanSleep(true)
-        .setLinearDamping(GameConfig.ball.linearDamping)
-        .setAngularDamping(GameConfig.ball.angularDamping)
+        .setLinearDamping(linearDamp)
+        .setAngularDamping(angularDamp)
     )
 
-    const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
+    const density = this.getDensityForMass(mass, GameConfig.ball.radius)
+    const restitution = isGoldPlated ? GameConfig.ball.restitution + 0.02 : GameConfig.ball.restitution
+    const friction = isGoldPlated ? GameConfig.ball.friction * 0.95 : GameConfig.ball.friction
 
     this.world.createCollider(
       this.rapier.ColliderDesc.ball(GameConfig.ball.radius)
-        .setRestitution(GameConfig.ball.restitution)
-        .setFriction(GameConfig.ball.friction)
+        .setRestitution(restitution)
+        .setFriction(friction)
         .setDensity(density)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       body

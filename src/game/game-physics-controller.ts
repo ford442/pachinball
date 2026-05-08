@@ -93,6 +93,7 @@ export class GamePhysicsController {
   private bumperHandleSet: Set<number> = new Set()
   private targetHandleSet: Set<number> = new Set()
   private ballHandleSet: Set<number> = new Set()
+  private flipperHandleSet: Set<number> = new Set()
   private deathZoneHandle: number = -1
   private adventureSensorHandle: number = -1
   private static readonly COLLISION_DEBOUNCE_MS = 16
@@ -105,6 +106,7 @@ export class GamePhysicsController {
     this.bumperHandleSet.clear()
     this.targetHandleSet.clear()
     this.ballHandleSet.clear()
+    this.flipperHandleSet.clear()
 
     for (const b of (this.host.gameObjects?.getBumperBodies() || [])) {
       this.bumperHandleSet.add(b.handle)
@@ -114,6 +116,11 @@ export class GamePhysicsController {
     }
     for (const b of (this.host.ballManager?.getBallBodies() || [])) {
       this.ballHandleSet.add(b.handle)
+    }
+
+    const flippers = this.host.gameObjects?.getAllFlippers() || new Map()
+    for (const flipper of flippers.values()) {
+      this.flipperHandleSet.add(flipper.body.handle)
     }
 
     const dz = this.host.gameObjects?.getDeathZoneBody()
@@ -403,6 +410,35 @@ export class GamePhysicsController {
             return
           }
         }
+      }
+    }
+
+    const h1IsFlipper = this.flipperHandleSet.has(h1)
+    const h2IsFlipper = this.flipperHandleSet.has(h2)
+    if (h1IsFlipper || h2IsFlipper) {
+      const flipperBody = h1IsFlipper ? b1 : b2
+      const ballBody = h1IsFlipper ? b2 : b1
+      const ballHandle = h1IsFlipper ? h2 : h1
+
+      if (this.ballHandleSet.has(ballHandle)) {
+        const ballVel = ballBody.linvel()
+        const speed = Math.sqrt(ballVel.x ** 2 + ballVel.y ** 2 + ballVel.z ** 2)
+        const impactIntensity = Math.min(speed / 15, 1.0)
+
+        const ballMesh = this.getBallMeshForBody(ballBody)
+        if (ballMesh && this.host.ballAnimator) {
+          const flipperPos = flipperBody.translation()
+          const ballPos = ballBody.translation()
+          const collisionNormal = new Vector3(
+            ballPos.x - flipperPos.x,
+            ballPos.y - flipperPos.y,
+            ballPos.z - flipperPos.z
+          ).normalize()
+          this.host.ballAnimator.animateBallImpact(ballMesh, collisionNormal, impactIntensity * 0.7)
+        }
+
+        this.host.hapticManager?.flipper()
+        this.host.effects?.playBeep(880 + Math.random() * 200)
       }
     }
 
