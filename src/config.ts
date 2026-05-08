@@ -337,7 +337,19 @@ export const GameConfig = {
   physics: {
     ballRestitution: 0.78,
     ballFriction: 0.12,
-    bumperRestitution: 0.85,
+    bumperRestitution: 0.92, // Increased for snappier bounce and "pop"
+    // Surface-specific physics for advanced ball mechanics
+    surfaces: {
+      bumper: { restitution: 0.95, friction: 0.05 }, // High bounce, low grip
+      flipper: { restitution: 0.88, friction: 0.1 },  // Controlled energy return
+      wall: { restitution: 0.82, friction: 0.15 },    // Medium bounce, some grip
+      playfield: { restitution: 0.72, friction: 0.18 }, // Low bounce, higher grip
+      rail: { restitution: 0.85, friction: 0.08 },    // Smooth guidance
+    },
+    // Spin physics
+    spinTransferFactor: 0.35, // How much collision applies spin (0-1)
+    spinDecayFactor: 0.12,   // How quickly spin decays over time
+    englishSpinAmount: 0.08, // Side spin from angled hits (radians/sec)
     // REMOVED: flipperPower (Legacy/Unused)
     gravity: { x: 0, y: -9.81, z: -5.0 }
   },
@@ -378,6 +390,34 @@ export const GameConfig = {
     spawnMain: { x: 10.5, y: 0.5, z: -9 },
     spawnPachinko: { x: 0, y: 5, z: -10 }, // Ported from original
     spawnDrop: { x: 0, y: 5, z: 8 },
+  },
+
+  smallGoldBalls: {
+    // Enable small gold ball swarms instead of single heavy balls
+    enabled: true,
+    // Number of small balls to spawn per gold ball trigger
+    swarmSize: 4,
+    // Size multiplier for small balls (0.0–1.0 of normal ball size)
+    sizeMultiplier: 0.5,
+    // Mass multiplier (lighter for more chaotic behavior)
+    massMultiplier: 0.35,
+    // Physics for small gold balls
+    restitution: 0.92,     // Bouncier than regular balls
+    friction: 0.08,        // Lower friction for faster movement
+    linearDamping: 0.05,   // Less damping for longer flights
+    angularDamping: 0.10,  // Less spin decay
+    // Spawn spread velocity range (m/s)
+    spawnVelocityMin: 3.0,
+    spawnVelocityMax: 8.0,
+    // Lifetime before auto-despawn (seconds)
+    lifetime: 15.0,
+    // Maximum concurrent swarms (safety limit)
+    maxConcurrentBalls: 20,
+    // Points per small ball
+    basePoints: 300,
+    // Bonus multiplier if all collected quickly
+    quickCollectBonusWindow: 5.0, // seconds
+    quickCollectMultiplier: 1.5,
   },
 
   plunger: {

@@ -44,6 +44,10 @@ export class BallManager {
   private onGoldBallCollected?: (type: BallType, points: number) => void
   private glowTime = 0
 
+  /** Small gold balls swarm tracking */
+  private smallGoldBallLifetimes: Map<RAPIER.RigidBody, number> = new Map()
+  private smallGoldBallSpawnTime: Map<RAPIER.RigidBody, number> = new Map()
+
   /** Track ball positions for stuck detection */
   private ballStuckTimers: Map<RAPIER.RigidBody, { lastPos: { x: number; y: number; z: number }; stuckTime: number }> = new Map()
   /** Threshold: if ball moves less than this per second, it may be stuck */
@@ -463,6 +467,30 @@ export class BallManager {
   }
 
   /**
+   * Update small gold ball lifetimes and cleanup
+   */
+  updateSmallGoldBallLifetimes(dt: number): void {
+    const toRemove: RAPIER.RigidBody[] = []
+
+    for (const [body, lifetime] of this.smallGoldBallLifetimes) {
+      const remaining = lifetime - dt
+      this.smallGoldBallLifetimes.set(body, remaining)
+
+      // Remove if expired or out of bounds
+      const pos = body.translation()
+      if (remaining <= 0 || Math.abs(pos.y) > 50) {
+        toRemove.push(body)
+      }
+    }
+
+    for (const body of toRemove) {
+      this.removeBall(body)
+      this.smallGoldBallLifetimes.delete(body)
+      this.smallGoldBallSpawnTime.delete(body)
+    }
+  }
+
+  /**
    * Detect stuck balls and out-of-bounds balls.
    * Stuck balls are auto-reset after STUCK_TIMEOUT seconds.
    * Out-of-bounds balls are immediately respawned.
@@ -693,26 +721,38 @@ export class BallManager {
     // Apply material based on type
     ball.material = this.getMaterialForType(type)
 
+    // Gold balls feel heavier with more bounce
+    const isSolidGold = type === BallType.SOLID_GOLD
+    const isGoldPlated = type === BallType.GOLD_PLATED
+    const mass = isSolidGold ? GameConfig.ball.mass * 1.15 : (isGoldPlated ? GameConfig.ball.mass * 1.08 : GameConfig.ball.mass)
+    const linearDamp = isGoldPlated ? GameConfig.ball.linearDamping * 0.92 : GameConfig.ball.linearDamping
+    const angularDamp = isGoldPlated ? GameConfig.ball.angularDamping * 0.88 : GameConfig.ball.angularDamping
+
     // Create physics body
     const body = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.dynamic()
         .setTranslation(spawnPos.x, spawnPos.y, spawnPos.z)
         .setCcdEnabled(true)
         .setCanSleep(true)
-        .setLinearDamping(GameConfig.ball.linearDamping)
-        .setAngularDamping(GameConfig.ball.angularDamping)
+        .setLinearDamping(linearDamp)
+        .setAngularDamping(angularDamp)
     )
 
-    const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
+    const density = this.getDensityForMass(mass, GameConfig.ball.radius)
+    const restitution = isGoldPlated ? GameConfig.ball.restitution + 0.02 : GameConfig.ball.restitution
+    const friction = isGoldPlated ? GameConfig.ball.friction * 0.95 : GameConfig.ball.friction
 
-    this.world.createCollider(
+    const collider = this.world.createCollider(
       this.rapier.ColliderDesc.ball(GameConfig.ball.radius)
-        .setRestitution(GameConfig.ball.restitution)
-        .setFriction(GameConfig.ball.friction)
+        .setRestitution(restitution)
+        .setFriction(friction)
         .setDensity(density)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       body
     )
+
+    // Enhanced ball physics: better restitution coefficients and spin response
+    collider.setRestitutionCombineRule(this.rapier.CoefficientCombineRule.Max)
 
     // Store ball data
     const ballData: BallData = {
@@ -737,6 +777,97 @@ export class BallManager {
     }
 
     return body
+  }
+
+  /**
+   * Spawn a swarm of small gold balls instead of single heavy gold ball
+   * Creates chaotic, bouncy behavior for more exciting gameplay
+   */
+  spawnSmallGoldBallSwarm(position?: Vector3, baseType: BallType = BallType.GOLD_PLATED): RAPIER.RigidBody[] {
+    if (!GameConfig.smallGoldBalls.enabled) {
+      return []
+    }
+
+    const spawnPos = position || GameConfig.ball.spawnMain
+    const spawnedBodies: RAPIER.RigidBody[] = []
+    const cfg = GameConfig.smallGoldBalls
+
+    // Check concurrent limit
+    const smallGoldCount = Array.from(this.smallGoldBallLifetimes.keys()).length
+    if (smallGoldCount >= cfg.maxConcurrentBalls) {
+      return []
+    }
+
+    const swarmCount = Math.min(cfg.swarmSize, cfg.maxConcurrentBalls - smallGoldCount)
+    const smallRadius = GameConfig.ball.radius * cfg.sizeMultiplier
+    const smallMass = GameConfig.ball.mass * cfg.massMultiplier
+
+    for (let i = 0; i < swarmCount; i++) {
+      // Create small gold mesh
+      const ball = MeshBuilder.CreateSphere(`smallGoldBall_${baseType}_${i}`, {
+        diameter: smallRadius * 2,
+        segments: 24,
+        slice: 1
+      }, this.scene) as Mesh
+
+      // Use bright gold material with strong emissive
+      ball.material = this.matLib.getSolidGoldBallMaterial()
+
+      // Create physics body with chaotic velocity spread
+      const angleSpread = (Math.PI * 2 / swarmCount) * i + (Math.random() - 0.5) * 0.3
+      const speedVariation = cfg.spawnVelocityMin + Math.random() * (cfg.spawnVelocityMax - cfg.spawnVelocityMin)
+      const velocity = new this.rapier.Vector3(
+        Math.cos(angleSpread) * speedVariation,
+        2.0 + Math.random() * 1.5,
+        Math.sin(angleSpread) * speedVariation
+      )
+
+      const body = this.world.createRigidBody(
+        this.rapier.RigidBodyDesc.dynamic()
+          .setTranslation(spawnPos.x + (Math.random() - 0.5) * 0.5, spawnPos.y, spawnPos.z + (Math.random() - 0.5) * 0.5)
+          .setCcdEnabled(true)
+          .setCanSleep(true)
+          .setLinearDamping(cfg.linearDamping)
+          .setAngularDamping(cfg.angularDamping)
+      )
+
+      // Set initial velocity for chaotic spread
+      body.setLinvel(velocity, true)
+
+      const density = this.getDensityForMass(smallMass, smallRadius)
+      this.world.createCollider(
+        this.rapier.ColliderDesc.ball(smallRadius)
+          .setRestitution(cfg.restitution)
+          .setFriction(cfg.friction)
+          .setDensity(density)
+          .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
+        body
+      )
+
+      // Store as small gold ball variant with points
+      const ballData: BallData = {
+        type: baseType,
+        spawnTime: performance.now(),
+        points: cfg.basePoints,
+        mesh: ball,
+        rigidBody: body
+      }
+
+      this.ballDataMap.set(body, ballData)
+      this.bindings.push({ mesh: ball, rigidBody: body })
+      this.ballBodies.push(body)
+
+      // Track lifetime
+      this.smallGoldBallLifetimes.set(body, cfg.lifetime)
+      this.smallGoldBallSpawnTime.set(body, performance.now())
+
+      // Bright gold trail
+      this.addTrailForBall(body, '#ffdd00')
+
+      spawnedBodies.push(body)
+    }
+
+    return spawnedBodies
   }
 
   /**

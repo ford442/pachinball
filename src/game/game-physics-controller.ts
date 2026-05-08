@@ -93,6 +93,7 @@ export class GamePhysicsController {
   private bumperHandleSet: Set<number> = new Set()
   private targetHandleSet: Set<number> = new Set()
   private ballHandleSet: Set<number> = new Set()
+  private flipperHandleSet: Set<number> = new Set()
   private deathZoneHandle: number = -1
   private adventureSensorHandle: number = -1
   private static readonly COLLISION_DEBOUNCE_MS = 16
@@ -105,6 +106,7 @@ export class GamePhysicsController {
     this.bumperHandleSet.clear()
     this.targetHandleSet.clear()
     this.ballHandleSet.clear()
+    this.flipperHandleSet.clear()
 
     for (const b of (this.host.gameObjects?.getBumperBodies() || [])) {
       this.bumperHandleSet.add(b.handle)
@@ -114,6 +116,11 @@ export class GamePhysicsController {
     }
     for (const b of (this.host.ballManager?.getBallBodies() || [])) {
       this.ballHandleSet.add(b.handle)
+    }
+
+    const flippers = this.host.gameObjects?.getAllFlippers() || new Map()
+    for (const flipper of flippers.values()) {
+      this.flipperHandleSet.add(flipper.body.handle)
     }
 
     const dz = this.host.gameObjects?.getDeathZoneBody()
@@ -296,6 +303,9 @@ export class GamePhysicsController {
       this.rebuildHandleCaches()
     }
 
+    // Update small gold ball lifetimes (cleanup expired)
+    this.host.ballManager?.updateSmallGoldBallLifetimes(dt)
+
     const jackpotPhase = this.host.effects?.jackpotPhase || 0
     this.host.display?.update(dt, jackpotPhase)
 
@@ -394,6 +404,14 @@ export class GamePhysicsController {
             const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
             this.host.hapticManager?.bumper(speed)
 
+            // Apply advanced spin transfer on bumper collision
+            const impactNormal = new Vector3(
+              ballPos.x - vis.mesh.position.x,
+              ballPos.y - vis.mesh.position.y,
+              ballPos.z - vis.mesh.position.z
+            ).normalize()
+            this.applySpinTransfer(ballBody, impactNormal, speed)
+
             if (speed > 12) {
               const mapColor = TABLE_MAPS[this.host.mapManager?.getCurrentMap() || 'neon-helix']?.baseColor || '#00d9ff'
               this.host.effects?.triggerCabinetShake('heavy', mapColor)
@@ -403,6 +421,39 @@ export class GamePhysicsController {
             return
           }
         }
+      }
+    }
+
+    const h1IsFlipper = this.flipperHandleSet.has(h1)
+    const h2IsFlipper = this.flipperHandleSet.has(h2)
+    if (h1IsFlipper || h2IsFlipper) {
+      const flipperBody = h1IsFlipper ? b1 : b2
+      const ballBody = h1IsFlipper ? b2 : b1
+      const ballHandle = h1IsFlipper ? h2 : h1
+
+      if (this.ballHandleSet.has(ballHandle)) {
+        const ballVel = ballBody.linvel()
+        const speed = Math.sqrt(ballVel.x ** 2 + ballVel.y ** 2 + ballVel.z ** 2)
+        const impactIntensity = Math.min(speed / 15, 1.0)
+
+        const flipperPos = flipperBody.translation()
+        const ballPos = ballBody.translation()
+        const collisionNormal = new Vector3(
+          ballPos.x - flipperPos.x,
+          ballPos.y - flipperPos.y,
+          ballPos.z - flipperPos.z
+        ).normalize()
+
+        const ballMesh = this.getBallMeshForBody(ballBody)
+        if (ballMesh && this.host.ballAnimator) {
+          this.host.ballAnimator.animateBallImpact(ballMesh, collisionNormal, impactIntensity * 0.7)
+        }
+
+        this.host.hapticManager?.flipper()
+        this.host.effects?.playBeep(880 + Math.random() * 200)
+
+        // Apply advanced spin transfer on flipper collision
+        this.applySpinTransfer(ballBody, collisionNormal, speed)
       }
     }
 
@@ -588,6 +639,33 @@ export class GamePhysicsController {
         }
       }
     }
+  }
+
+  private applySpinTransfer(ball: RAPIER.RigidBody, collisionNormal: Vector3, contactSpeed: number): void {
+    // Apply spin based on collision normal and ball velocity
+    // Creates "English" effect where angled hits produce side spin
+    const rapier = this.host.physics.getRapier()
+    if (!rapier) return
+
+    const spinFactor = GameConfig.physics.spinTransferFactor * Math.min(contactSpeed / 10, 1.0)
+    const angvel = ball.angvel()
+
+    // Apply spin perpendicular to collision normal and velocity direction
+    const tangent = new Vector3(
+      collisionNormal.z,
+      0,
+      -collisionNormal.x
+    ).normalize()
+
+    const spinAmount = spinFactor * GameConfig.physics.englishSpinAmount
+    ball.setAngvel(
+      new rapier.Vector3(
+        angvel.x + tangent.x * spinAmount,
+        angvel.y,
+        angvel.z + tangent.z * spinAmount
+      ),
+      true
+    )
   }
 }
 

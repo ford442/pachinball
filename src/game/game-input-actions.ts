@@ -14,7 +14,8 @@ import type { AccessibilityConfig } from '../game-elements'
 
 const FlipperPhysics = {
   restAngleRad: Math.PI / 4,
-  activeAngleRad: Math.PI / 6,
+  activeAngleRad: Math.PI / 8, // Snappier 22.5° for more powerful feel
+  kickVariationFactor: 0.15, // Extra impulse variation
 } as const
 
 export interface InputActionsHost {
@@ -32,9 +33,13 @@ export interface InputActionsHost {
 
 export class GameInputActions {
   private readonly host: InputActionsHost
+  private flipperLeftHoldTime = 0
+  private flipperRightHoldTime = 0
+  private lastFrameTime = 0
 
   constructor(host: InputActionsHost) {
     this.host = host
+    this.lastFrameTime = performance.now()
   }
 
   handleFlipperLeft(pressed: boolean): void {
@@ -45,10 +50,25 @@ export class GameInputActions {
       hapticManager?.tiltWarning()
       return
     }
+
+    const now = performance.now()
+    const dt = (now - this.lastFrameTime) / 1000
+    this.lastFrameTime = now
+
+    if (pressed) {
+      this.flipperLeftHoldTime += dt
+    } else {
+      this.flipperLeftHoldTime = 0
+    }
+
     const joint = gameObjects?.getFlipperJoints().left
     if (joint) {
-      const stiffness = GameConfig.table.flipperStrength
-      const damping = GameConfig.flipper.damping
+      const holdFactor = Math.min(this.flipperLeftHoldTime / 0.3, 1.0)
+      const stiffnessMultiplier = pressed ? (1.0 + holdFactor * 0.3) : 0.8
+      const dampingMultiplier = pressed ? (0.9 + holdFactor * 0.1) : 1.1
+
+      const stiffness = GameConfig.table.flipperStrength * stiffnessMultiplier
+      const damping = GameConfig.flipper.damping * dampingMultiplier
       const angle = pressed ? -FlipperPhysics.activeAngleRad : FlipperPhysics.restAngleRad
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
     }
@@ -66,10 +86,25 @@ export class GameInputActions {
       hapticManager?.tiltWarning()
       return
     }
+
+    const now = performance.now()
+    const dt = (now - this.lastFrameTime) / 1000
+    this.lastFrameTime = now
+
+    if (pressed) {
+      this.flipperRightHoldTime += dt
+    } else {
+      this.flipperRightHoldTime = 0
+    }
+
     const joint = gameObjects?.getFlipperJoints().right
     if (joint) {
-      const stiffness = GameConfig.table.flipperStrength
-      const damping = GameConfig.flipper.damping
+      const holdFactor = Math.min(this.flipperRightHoldTime / 0.3, 1.0)
+      const stiffnessMultiplier = pressed ? (1.0 + holdFactor * 0.3) : 0.8
+      const dampingMultiplier = pressed ? (0.9 + holdFactor * 0.1) : 1.1
+
+      const stiffness = GameConfig.table.flipperStrength * stiffnessMultiplier
+      const damping = GameConfig.flipper.damping * dampingMultiplier
       const angle = pressed ? FlipperPhysics.activeAngleRad : -FlipperPhysics.restAngleRad
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
     }
