@@ -42,7 +42,6 @@ export class GameSettingsUI {
     const saveBtn = document.getElementById('save-settings')
 
     settingsBtn?.addEventListener('click', () => {
-      this.host.isDebugHUDAvailable()
       settingsOverlay?.classList.remove('hidden')
       this.loadSettingsIntoUI()
     })
