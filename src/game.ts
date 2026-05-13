@@ -240,8 +240,8 @@ export class Game {
     this.gameOverScreen = document.getElementById('game-over-screen')
     this.finalScoreElement = document.getElementById('final-score')
 
-    document.getElementById('start-btn')?.addEventListener('click', () => this.startGame())
-    document.getElementById('restart-btn')?.addEventListener('click', () => this.startGame())
+    document.getElementById('start-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
+    document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
 
     try {
       const v = localStorage.getItem('pachinball.best')
@@ -302,7 +302,12 @@ export class Game {
     this.stateManager.setEventBus(this.eventBus)
 
     await this.physics.init()
-    await this.buildSceneStaged()
+    try {
+      await this.buildSceneStaged()
+    } catch (error) {
+      console.error('[Game] Failed to build staged scene:', error)
+      throw error
+    }
 
     this.ballAnimator = new BallAnimator(this.scene)
 
