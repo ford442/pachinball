@@ -1,8 +1,8 @@
 # Pachinball — Weekly Plan
 
 ## Today's focus
-**2026-05-08 — Physics Optimization Sprint: Flipper & Ball Mechanics**
-Comprehensive physics improvements across flipper response, ball behavior, and collision handling. Implemented hold-time-based variable flipper strength, spin transfer mechanics, surface-specific physics, and gold ball differentiation. Advanced flipper mechanics with improved collision response. All systems integrate with EventBus and respect QualityTier.
+**2026-05-14 — Fix First: Restore Build + Adventure-Mode Integration Audit**
+`node_modules` is absent — build and test runner are both non-functional. Primary task: `npm install`, verify clean build, run full test suite, then audit the rapid adventure-mode feature dump (drop targets, spinner bumpers, ball traps, moving gates, launchers, goal/cinematic systems) for integration completeness, TypeScript hygiene, and EventBus wiring. Close Issue #131 once tests confirm ≥ 51 passing.
 
 ## Ideas
 - [done — 2026-04-30] Backbox display state synchronization — FEVER triggered (combo>=10), REACH/JACKPOT/IDLE/ADVENTURE wired; GameStateManager drives IDLE on MENU/GAME_OVER. Full auto-sync folded into Event Bus task below.
@@ -11,13 +11,14 @@ Comprehensive physics improvements across flipper response, ball behavior, and c
 - [done — 2026-05-07] Playwright smoke tests for backbox display states — verify each `DisplayState` transition (IDLE → FEVER, IDLE → JACKPOT, JACKPOT → IDLE) triggers the correct layer activation via `getDisplayState()` assertion.
 
 ## Backlog
+- [ ] Adventure-mode integration audit — verify all new obstacle types (spinners, ball traps, launchers, moving gates) are wired into scoring, zone triggers, and EventBus; check for missing `dispose()` paths and memory leaks.
+- [ ] Close GitHub Issue #131 — EventBus/GameStateManager Vitest tests (Done section says 51 passing; issue still open on GitHub).
 - [ ] CRT scanline enhancement — temporal flicker + chromatic aberration.
 - [ ] Parallax display layers — Z-axis breathing per layer.
 - [ ] Reel stop bounce physics — overshoot + elastic settle.
 - [ ] Hologram fresnel rim effect.
 
 ## Next Sprint Ideas (May 9+)
-- Reactive cabinet lighting — premium RGB LED effects (in progress)
 - Input buffering improvements — rapid press handling
 - Mobile touch controls — on-screen flipper buttons
 - Backbox screen border lighting — glow sync with DisplayState
@@ -72,10 +73,10 @@ Comprehensive physics improvements across flipper response, ball behavior, and c
 - 2026-02-25 (PR #106): Adventure track switching + dual-screen display integration.
 
 ## Last run
-Date: 2026-04-30
-Mode: User Idea
-Focus: Event Bus Architecture — typed pub/sub replacing `GameStateManager` callback map and scattered `game.ts` display call sites
-Outcome: Full success + overrun. Event bus complete in iteration 5 (0 TS errors, build clean). Swarm continued through iterations 6–8: 3D floating score numbers, ball trails/impact flashes, and decorative bumper rings + guide pins + cabinet inlays. All merged. Docs moved to docs/ in a housekeeping commit (78c0a85). One Ideas item remains: Playwright smoke tests.
+Date: 2026-05-14
+Mode: Fix First
+Focus: Restore build (missing node_modules) + adventure-mode integration audit post rapid May 7–8 feature dump
+Outcome: (fill in at end of day)
 
 ---
 
