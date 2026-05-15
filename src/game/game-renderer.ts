@@ -91,7 +91,7 @@ export class GameRenderer {
 
   /** Create immersive cabinet camera with mouse head-tracking. */
   setupCamera(): void {
-    const { engine, scene, tableCam } = this.host
+    const { engine, scene } = this.host
     if (!scene) return
 
     const canvas = engine.getRenderingCanvas()
@@ -100,8 +100,8 @@ export class GameRenderer {
       'immersiveCam',
       -Math.PI / 2,
       Math.PI / 2.8,
-      48,
-      new Vector3(0, 5, 5),
+      32,
+      new Vector3(0, 0, -5),
       scene
     )
     this.host.tableCam = immersiveCam
@@ -110,8 +110,8 @@ export class GameRenderer {
     immersiveCam.viewport = new Viewport(0, 0, 1, 1)
     immersiveCam.lowerBetaLimit = Math.PI / 4
     immersiveCam.upperBetaLimit = Math.PI / 2.2
-    immersiveCam.lowerRadiusLimit = 36
-    immersiveCam.upperRadiusLimit = 60
+    immersiveCam.lowerRadiusLimit = 22
+    immersiveCam.upperRadiusLimit = 45
 
     const baseAlpha = -Math.PI / 2
     const baseBeta = Math.PI / 2.8
@@ -144,17 +144,18 @@ export class GameRenderer {
         )
       }
 
-      if (this.host.cameraFollowTransition > 0 && tableCam) {
+      const currentTableCam = this.host.tableCam
+      if (this.host.cameraFollowTransition > 0 && currentTableCam) {
         const t = this.host.cameraFollowTransition
         const ease = t * t * (3 - 2 * t)
-        tableCam.radius = 48 + (30 - 48) * ease
-        tableCam.beta = Math.PI / 2.8 + (0.55 - Math.PI / 2.8) * ease
-        tableCam.lowerRadiusLimit = 36 + (22 - 36) * ease
+        currentTableCam.radius = 32 + (20 - 32) * ease
+        currentTableCam.beta = Math.PI / 2.8 + (0.55 - Math.PI / 2.8) * ease
+        currentTableCam.lowerRadiusLimit = 36 + (22 - 36) * ease
         mouseState.targetX = 0.5
         mouseState.targetY = 0.5
-      } else if (tableCam) {
-        tableCam.lowerRadiusLimit = 36
-        tableCam.upperRadiusLimit = 60
+      } else if (currentTableCam) {
+        currentTableCam.lowerRadiusLimit = 36
+        currentTableCam.upperRadiusLimit = 60
         const offsetX = (mouseState.x - 0.5) * lookRange * 2
         const offsetY = (mouseState.y - 0.5) * lookRange * 0.8
         immersiveCam.alpha = baseAlpha + offsetX
@@ -218,8 +219,19 @@ export class GameRenderer {
           : DepthOfFieldEffectBlurLevel.Low
     }
 
+    // Skip MRT-based post-processes when running on SwiftShader to avoid
+    // GL_INVALID_OPERATION: Active draw buffers with missing fragment shader outputs
+    const isSwiftShader = (() => {
+      const gl = (this.host.engine as any)._gl as WebGLRenderingContext | null
+      if (!gl) return false
+      const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
+      if (!debugInfo) return false
+      const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) as string
+      return renderer?.toLowerCase().includes('swiftshader') ?? false
+    })()
+
     // SSAO
-    if (!GameConfig.camera.reducedMotion) {
+    if (!isSwiftShader && !GameConfig.camera.reducedMotion) {
       const isHigh = qualityTier === QualityTier.HIGH
       const ssao = new SSAO2RenderingPipeline('ssao', scene, {
         ssaoRatio: isHigh ? 1.0 : 0.5,
@@ -235,7 +247,7 @@ export class GameRenderer {
     }
 
     // SSR
-    if (qualityTier === QualityTier.HIGH && !GameConfig.camera.reducedMotion) {
+    if (!isSwiftShader && qualityTier === QualityTier.HIGH && !GameConfig.camera.reducedMotion) {
       const ssr = new SSRRenderingPipeline('ssr', scene, [tableCam])
       ssr.step = 0.5
       ssr.reflectionSpecularFalloffExponent = 3
@@ -247,7 +259,7 @@ export class GameRenderer {
     }
 
     // Motion blur
-    if (qualityTier === QualityTier.HIGH && !GameConfig.camera.reducedMotion) {
+    if (!isSwiftShader && qualityTier === QualityTier.HIGH && !GameConfig.camera.reducedMotion) {
       const motionBlur = new MotionBlurPostProcess('motionBlur', scene, 1.0, tableCam)
       motionBlur.motionStrength = 0.15
       motionBlur.motionBlurSamples = 16

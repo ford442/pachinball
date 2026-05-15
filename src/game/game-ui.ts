@@ -204,7 +204,7 @@ export class GameUIManager {
   /**
    * Show or hide the loading state overlay
    */
-  showLoadingState(show: boolean, phase?: 'gameplay' | 'cosmetic'): void {
+  showLoadingState(show: boolean, _phase?: 'gameplay' | 'cosmetic'): void {
     if (show) {
       if (!this.loadingOverlay) {
         this.loadingOverlay = document.createElement('div')
@@ -230,19 +230,13 @@ export class GameUIManager {
       this.loadingOverlay.textContent = 'LOADING...'
       this.loadingOverlay.style.display = 'block'
     } else if (this.loadingOverlay) {
-      if (phase === 'gameplay') {
-        this.loadingOverlay.textContent = 'LOADING GAMEPLAY...'
-      } else if (phase === 'cosmetic') {
-        this.loadingOverlay.textContent = 'LOADING POLISH...'
-      } else {
-        // Fade out and remove
-        this.loadingOverlay.style.transition = 'opacity 0.5s'
-        this.loadingOverlay.style.opacity = '0'
-        setTimeout(() => {
-          this.loadingOverlay?.remove()
-          this.loadingOverlay = null
-        }, 500)
-      }
+      // Fade out and remove
+      this.loadingOverlay.style.transition = 'opacity 0.5s'
+      this.loadingOverlay.style.opacity = '0'
+      setTimeout(() => {
+        this.loadingOverlay?.remove()
+        this.loadingOverlay = null
+      }, 500)
     }
   }
 

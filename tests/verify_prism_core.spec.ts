@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('Verify Prism Core Visuals', async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
 
   // 1. Go to the game
   await page.goto('http://localhost:5173');

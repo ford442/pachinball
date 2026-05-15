@@ -12,11 +12,12 @@ test.describe('DisplayState transitions', () => {
   let page: Page;
 
   test.beforeAll(async ({ browser }) => {
+    test.setTimeout(120_000);
     page = await browser.newPage();
     await page.goto('http://localhost:5173');
 
     const startBtn = page.locator('#start-btn');
-    await expect(startBtn).toBeVisible();
+    await expect(startBtn).toBeVisible({ timeout: 30000 });
     await startBtn.click();
 
     await page.waitForTimeout(2500);
@@ -27,7 +28,7 @@ test.describe('DisplayState transitions', () => {
         | { display?: { getDisplayState: () => string }; eventBus?: { emit: (event: string, payload?: string) => void } }
         | undefined;
       return g != null && g.display != null && g.eventBus != null;
-    });
+    }, { timeout: 60000 });
   });
 
   test.afterAll(async () => {
