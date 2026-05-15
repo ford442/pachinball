@@ -5,7 +5,7 @@
  * Extracted and refactored from display.ts for modularity.
  */
 
-import { MeshBuilder, Vector3, type Scene, TransformNode } from '@babylonjs/core'
+import { MeshBuilder, Vector3, type Scene, type Mesh, TransformNode } from '@babylonjs/core'
 import type { Engine, WebGPUEngine } from '@babylonjs/core'
 
 import {
@@ -14,22 +14,33 @@ import {
   DEFAULT_DISPLAY_CONFIG,
   getStateConfig,
 } from '../game-elements/display-config'
+import { QualityTier } from '../game-elements/visual-language'
+import {
+  type AccessibilityConfig,
+  detectAccessibility,
+} from '../game-elements/accessibility-config'
 import { DisplayShaderLayer } from './display-shader'
 import { DisplayReelsLayer } from './display-reels'
 import { DisplayVideoLayer } from './display-video'
 import { DisplayImageLayer } from './display-image'
+import { BackboxBorderGlow } from './display-border-glow'
 import type { EventBus } from '../game/event-bus'
 
 export class DisplaySystem {
   private scene: Scene
   private config: DisplayConfig
   private useWGSL = false
+  private qualityTier: QualityTier = QualityTier.MEDIUM
+  private accessibility: AccessibilityConfig
 
   // Layer managers
   private shaderLayer: DisplayShaderLayer
   private reelsLayer: DisplayReelsLayer
   private videoLayer: DisplayVideoLayer
   private imageLayer: DisplayImageLayer
+
+  // Border glow
+  private borderGlow: BackboxBorderGlow | null = null
 
   // State
   private currentState: DisplayState = DisplayState.IDLE
@@ -42,10 +53,14 @@ export class DisplaySystem {
   constructor(
     scene: Scene,
     engine: Engine | WebGPUEngine,
-    config?: Partial<DisplayConfig>
+    config?: Partial<DisplayConfig>,
+    qualityTier?: QualityTier,
+    accessibility?: AccessibilityConfig
   ) {
     this.scene = scene
     this.config = { ...DEFAULT_DISPLAY_CONFIG, ...config }
+    this.qualityTier = qualityTier ?? QualityTier.MEDIUM
+    this.accessibility = accessibility ?? detectAccessibility()
 
     // Detect WebGPU/WGSL support
     this.useWGSL =
@@ -92,6 +107,13 @@ export class DisplaySystem {
     this.reelsLayer.createLayer(backboxRoot, this.config)
     this.videoLayer.createLayer(backboxRoot, this.config)
     this.imageLayer.createLayer(backboxRoot, this.config)
+
+    // Initialise border glow on the cabinet backbox mesh (built by cabinet preset).
+    // The mesh is named 'cabinetBackbox' in all four cabinet presets.
+    const backboxMesh = this.scene.getMeshByName('cabinetBackbox') as Mesh | null
+    this.borderGlow = new BackboxBorderGlow(backboxMesh, this.scene, this.qualityTier, this.accessibility)
+    // Apply the current state immediately so the glow colour is correct from the start.
+    this.borderGlow.onDisplaySet(this.currentState)
   }
 
   /**
@@ -111,6 +133,9 @@ export class DisplaySystem {
     this.shaderLayer.update(dt, this.currentState, this.jackpotPhase)
     this.reelsLayer.update(dt, this.currentState)
     this.videoLayer.update()
+
+    // Border glow animation
+    this.borderGlow?.update(dt)
   }
 
   /**
@@ -162,6 +187,9 @@ export class DisplaySystem {
     this.shaderLayer.onStateChange(state)
     this.reelsLayer.onStateChange(state)
     this.videoLayer.onStateChange(state)
+
+    // Notify border glow of state change
+    this.borderGlow?.onDisplaySet(state)
   }
 
   /**
@@ -316,6 +344,7 @@ export class DisplaySystem {
    * Dispose all resources
    */
   dispose(): void {
+    this.borderGlow?.dispose()
     this.shaderLayer.dispose()
     this.reelsLayer.dispose()
     this.videoLayer.dispose()
