@@ -19,20 +19,20 @@
 import { Color3, GlowLayer, StandardMaterial, PBRMaterial } from '@babylonjs/core'
 import type { Mesh, Scene } from '@babylonjs/core'
 import type { DisplayState } from '../game-elements/types'
-import { QualityTier } from '../game-elements/visual-language'
+import { QualityTier, PALETTE, INTENSITY, emissive } from '../game-elements/visual-language'
 import { type AccessibilityConfig, DEFAULT_ACCESSIBILITY } from '../game-elements/accessibility-config'
 
-/** Emissive colour targets per DisplayState string value */
+/** Emissive colour targets per DisplayState string value, using the Visual Language System */
 const BORDER_STATE_COLORS: Record<string, Color3> = {
-  idle:      new Color3(0.15, 0.15, 0.18),
-  reach:     new Color3(1.0,  0.6,  0.0),
-  fever:     new Color3(1.0,  0.8,  0.0),
-  jackpot:   new Color3(1.0,  1.0,  1.0),  // strobe base — white
-  adventure: new Color3(0.6,  0.0,  0.8),
+  idle:      new Color3(0.15, 0.15, 0.18),         // dim neutral (no exact PALETTE match)
+  reach:     emissive(PALETTE.ALERT, INTENSITY.HIGH),
+  fever:     emissive(PALETTE.GOLD, INTENSITY.HIGH),
+  jackpot:   Color3.White(),                         // strobe base — white flash
+  adventure: emissive(PALETTE.PURPLE, INTENSITY.ACTIVE),
 }
 
-/** Cyan settle colour after jackpot strobe */
-const JACKPOT_SETTLE = new Color3(0.0, 0.8, 1.0)
+/** Cyan settle colour after jackpot strobe — uses the Visual Language System */
+const JACKPOT_SETTLE: Color3 = emissive(PALETTE.CYAN, INTENSITY.HIGH)
 
 /**
  * Shared emissive-colour interface covering both StandardMaterial and
@@ -54,6 +54,8 @@ export class BackboxBorderGlow {
   private _strobeTimer: number = 0
   private readonly _strobePhases: number = 6  // 6 half-cycles = 3 flashes
   private _pulseTime: number = 0
+  /** Current display state — used for pulse decisions without fragile RGB comparisons */
+  private _displayState: string = 'idle'
   /** Half-period in seconds for jackpot strobe, capped to accessibility limit */
   private _strobeHalfPeriod: number = 0.25  // 2 Hz default (safety cap)
   /** Whether jackpot strobe is suppressed by accessibility settings */
@@ -101,9 +103,11 @@ export class BackboxBorderGlow {
 
   /** Notify of a new DisplayState. Call whenever the display state changes. */
   onDisplaySet(state: DisplayState): void {
-    const color = BORDER_STATE_COLORS[state as string] ?? Color3.Black()
+    const stateStr = state as string
+    this._displayState = stateStr
+    const color = BORDER_STATE_COLORS[stateStr] ?? Color3.Black()
     this._targetColor = color.clone()
-    this._strobeActive = !this._strobeDisabled && (state as string) === 'jackpot'
+    this._strobeActive = !this._strobeDisabled && stateStr === 'jackpot'
     this._strobeTimer = 0
     this._pulseTime = 0
     this._lerpSpeed = this._strobeActive ? 12.0 : 2.5
@@ -127,10 +131,9 @@ export class BackboxBorderGlow {
       return
     }
 
-    // Pulse on REACH and FEVER states
-    const t = this._targetColor
-    const isReach = t.r > 0.9 && t.g > 0.5 && t.b < 0.1
-    const isFever = t.r > 0.9 && t.g > 0.7 && t.b < 0.1
+    // Pulse on REACH and FEVER states — compared via stored state string, not RGB values
+    const isReach = this._displayState === 'reach'
+    const isFever = this._displayState === 'fever'
     let intensityScale = 1.0
     if (isReach) intensityScale = 0.5 + 0.5 * Math.sin(this._pulseTime * Math.PI * 4)  // 2 Hz
     if (isFever) intensityScale = 0.8 + 0.2 * Math.sin(this._pulseTime * Math.PI * 8)  // 4 Hz
