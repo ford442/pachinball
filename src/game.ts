@@ -90,7 +90,7 @@ import { TableMapManager } from './game/game-maps'
 import { CabinetManager } from './game/game-cabinet'
 import { GameUIManager } from './game/game-ui'
 import { AdventureManager } from './game/game-adventure'
-import { GameConfig, GAME_TUNING, API_BASE, BallType } from './config'
+import { GameConfig, GAME_TUNING, BallType } from './config'
 import { adaptLegacyConfig, type DisplayConfig } from './game-elements/display-config'
 import { TABLE_MAPS } from './shaders/lcd-table'
 
@@ -205,7 +205,7 @@ export class Game {
   private qualityTier: QualityTier = QualityTier.MEDIUM
 
   // Map / Adventure
-  mapSystem = getMapSystem(API_BASE)
+  mapSystem = getMapSystem()
   adventureState = getAdventureState()
   levelSelectScreen: ReturnType<typeof getLevelSelectScreen> | null = null
   dynamicWorld: ReturnType<typeof getDynamicWorld> | null = null

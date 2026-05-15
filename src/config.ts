@@ -121,44 +121,15 @@ export const ASSET_BASE = import.meta.env.VITE_ASSET_URL as string | undefined
 
 /**
  * Helper to make API calls with exponential backoff retry logic
+ *
+ * NOTE: Backend is disabled. Pachinball runs fully offline.
+ * All callers should fall back to hardcoded/local data.
  */
 export async function apiFetch<T>(
-  endpoint: string, 
-  options?: RequestInit,
-  retries = 3
+  _endpoint: string,
+  _options?: RequestInit,
+  _retries = 3
 ): Promise<T | null> {
-  let lastError: Error | null = null
-  
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      const url = `${API_BASE}${endpoint}`
-      const response = await fetch(url, options)
-      
-      if (response.ok) {
-        return await response.json() as T
-      }
-      
-      // Don't retry 4xx errors (client errors)
-      if (response.status >= 400 && response.status < 500) {
-        console.warn(`[API] ${endpoint} returned ${response.status} (no retry)`)
-        return null
-      }
-      
-      console.warn(`[API] ${endpoint} returned ${response.status} (attempt ${attempt + 1}/${retries})`)
-      
-    } catch (err) {
-      lastError = err as Error
-      console.warn(`[API] Failed to fetch ${endpoint} (attempt ${attempt + 1}/${retries}):`, err)
-    }
-    
-    // Exponential backoff: wait 2^attempt * 100ms (100ms, 200ms, 400ms)
-    if (attempt < retries - 1) {
-      const delay = Math.pow(2, attempt) * 100
-      await new Promise(resolve => setTimeout(resolve, delay))
-    }
-  }
-  
-  console.error(`[API] Max retries exceeded for ${endpoint}:`, lastError)
   return null
 }
 

@@ -22,7 +22,7 @@ import {
 import { getMapSystem } from '../game-elements/map-system'
 import { getMaterialLibrary } from '../materials'
 import { getCabinetBuilder } from '../cabinet'
-import { API_BASE } from '../config'
+
 
 export interface MapManagerConfig {
   onMapChange?: (mapType: TableMapType, config: TableMapConfig) => void
@@ -38,7 +38,7 @@ export class TableMapManager {
   private lcdTableState: LCDTableState
   private lcdTablePostProcess: PostProcess | null = null
   // Note: bloomPipeline is set but currently unused - reserved for future map-specific bloom effects
-  private mapSystem = getMapSystem(API_BASE)
+  private mapSystem = getMapSystem()
   private engine: import('@babylonjs/core').AbstractEngine
 
   constructor(scene: Scene, config: MapManagerConfig = {}) {

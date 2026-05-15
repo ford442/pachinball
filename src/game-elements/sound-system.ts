@@ -10,11 +10,8 @@
  */
 
 import { Vector3 } from '@babylonjs/core'
-import { API_BASE, apiFetch, BallType } from '../config'
+import { BallType } from '../config'
 import type { EventBus } from '../game/event-bus'
-
-// Storage manager API base URL
-const STORAGE_API_BASE = API_BASE
 
 // Audio categories for samples
 export type SampleCategory = 'peg' | 'bumper' | 'flipper' | 'jackpot' | 'fever' | 'launch' | 'drain'
@@ -161,9 +158,6 @@ export class SoundSystem {
       
       // Note: Ambient hum started after audio context is resumed
       
-      // Load samples from storage manager
-      await this.loadSamples()
-      
       // Load gold ball sounds (with synthesized fallback)
       await this.loadGoldBallSounds()
       
@@ -225,58 +219,6 @@ export class SoundSystem {
   }
 
   /**
-   * Load all samples from the storage manager API
-   */
-  private async loadSamples(): Promise<void> {
-    try {
-      const response = await fetch(`${STORAGE_API_BASE}/samples`)
-      if (!response.ok) throw new Error('Failed to fetch samples')
-      
-      const data = await response.json()
-      const samples: SampleMetadata[] = data.samples || []
-      
-      // Group samples by category
-      for (const sample of samples) {
-        const category = sample.category as SampleCategory
-        if (this.samplesByCategory.has(category)) {
-          this.samplesByCategory.get(category)!.push(sample.id)
-          
-          // Load and cache the audio buffer
-          await this.loadSampleBuffer(sample)
-        }
-      }
-      
-      console.log(`[SoundSystem] Loaded ${samples.length} samples`)
-    } catch (err) {
-      console.warn('[SoundSystem] Failed to load samples:', err)
-      // Continue without samples - game still works
-    }
-  }
-
-  /**
-   * Load a single sample buffer
-   */
-  private async loadSampleBuffer(metadata: SampleMetadata): Promise<void> {
-    if (!this.audioContext) return
-    if (this.sampleCache.has(metadata.id)) return
-    
-    try {
-      const response = await fetch(metadata.url)
-      if (!response.ok) throw new Error(`Failed to fetch ${metadata.id}`)
-      
-      const arrayBuffer = await response.arrayBuffer()
-      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer)
-      
-      this.sampleCache.set(metadata.id, {
-        buffer: audioBuffer,
-        metadata
-      })
-    } catch (err) {
-      console.warn(`[SoundSystem] Failed to load sample ${metadata.id}:`, err)
-    }
-  }
-
-  /**
    * Play a random sample from a category
    */
   playSample(category: SampleCategory, position?: Vector3, volume = 1.0): void {
@@ -330,15 +272,11 @@ export class SoundSystem {
 
   /**
    * Pre-fetch and cache all music tracks from backend
+   *
+   * NOTE: Backend is disabled. This is a no-op.
    */
   async fetchMusicTracks(): Promise<void> {
-    const data = await apiFetch<{ tracks: MusicTrack[] }>('/music')
-    if (data) {
-      this.musicCache.clear()
-      for (const track of data.tracks || []) {
-        this.musicCache.set(track.id, track)
-      }
-    }
+    // No backend — music tracks are not available
   }
 
   /**
@@ -358,13 +296,8 @@ export class SoundSystem {
       }
 
       if (!track) {
-        const data = await apiFetch<{ tracks: MusicTrack[] }>(`/music?map_id=${mapId}`)
-        const tracks = data?.tracks || []
-        if (tracks.length === 0) {
-          console.warn(`[SoundSystem] No music for map: ${mapId}`)
-          return
-        }
-        track = tracks[0]
+        console.warn(`[SoundSystem] No music for map: ${mapId}`)
+        return
       }
 
       // Load track if not cached in memory buffer

@@ -6,7 +6,6 @@
  */
 
 import { TABLE_MAPS, type TableMapConfig, type TableMapType } from '../shaders/lcd-table'
-import { apiFetch } from '../config'
 
 export interface DynamicMapConfig extends TableMapConfig {
   id: string
@@ -27,10 +26,7 @@ export class MapSystem {
   private loaded = false
   private loadPromise: Promise<void> | null = null
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  constructor(_apiBase?: string) {
-    // apiBase parameter kept for API compatibility but we use API_BASE from config
-
+  constructor() {
     // Seed with hardcoded fallback maps
     const hardcoded: TableMapType[] = Object.keys(TABLE_MAPS) as TableMapType[]
     for (const id of hardcoded) {
@@ -50,65 +46,9 @@ export class MapSystem {
   }
 
   private async doFetch(): Promise<void> {
-    // Fetch maps and music in parallel
-    const [mapsOk, musicOk] = await Promise.all([
-      this.fetchMaps(),
-      this.fetchMusic(),
-    ])
-    this.loaded = mapsOk
-    if (mapsOk) {
-      console.log(`[MapSystem] Loaded ${this.maps.size} maps`)
-    }
-    if (musicOk) {
-      console.log(`[MapSystem] Loaded ${this.musicTracks.length} music tracks`)
-    }
-  }
-
-  private async fetchMaps(): Promise<boolean> {
-    const data = await apiFetch<{ maps: DynamicMapConfig[] }>('/maps')
-    
-    if (!data) {
-      console.warn('[MapSystem] Backend maps unavailable, using hardcoded maps')
-      return false
-    }
-
-    const dynamicMaps: DynamicMapConfig[] = data.maps || []
-
-    for (const map of dynamicMaps) {
-      if (!map.id || !map.name) continue
-
-      this.maps.set(map.id, {
-        name: map.name,
-        baseColor: map.baseColor || '#00d9ff',
-        accentColor: map.accentColor || '#ffffff',
-        scanlineIntensity: Number.isFinite(map.scanlineIntensity) ? map.scanlineIntensity : 0.25,
-        pixelGridIntensity: Number.isFinite(map.pixelGridIntensity) ? map.pixelGridIntensity : 0.8,
-        subpixelIntensity: Number.isFinite(map.subpixelIntensity) ? map.subpixelIntensity : 0.6,
-        glowIntensity: Number.isFinite(map.glowIntensity) ? map.glowIntensity : 1.0,
-        backgroundPattern: (map.backgroundPattern as TableMapConfig['backgroundPattern']) || 'hex',
-        animationSpeed: Number.isFinite(map.animationSpeed) ? map.animationSpeed : 0.5,
-        id: map.id,
-        musicTrackId: map.musicTrackId || map.id,
-        shaderUrl: map.shaderUrl,
-        adventureGoals: Array.isArray(map.adventureGoals) ? map.adventureGoals : undefined,
-        mode: map.mode || 'fixed',
-        worldLength: map.worldLength || 200,
-      })
-    }
-
-    return true
-  }
-
-  private async fetchMusic(): Promise<boolean> {
-    const data = await apiFetch<{ tracks: MusicTrack[] }>('/music')
-    
-    if (!data) {
-      console.warn('[MapSystem] Backend music unavailable')
-      return false
-    }
-    
-    this.musicTracks = data.tracks || []
-    return true
+    // Hardcoded maps only — no backend
+    this.loaded = true
+    console.log(`[MapSystem] Loaded ${this.maps.size} hardcoded maps`)
   }
 
   async refresh(): Promise<void> {
@@ -165,9 +105,9 @@ export class MapSystem {
 
 let mapSystemInstance: MapSystem | null = null
 
-export function getMapSystem(apiBase?: string): MapSystem {
+export function getMapSystem(): MapSystem {
   if (!mapSystemInstance) {
-    mapSystemInstance = new MapSystem(apiBase)
+    mapSystemInstance = new MapSystem()
   }
   return mapSystemInstance
 }
