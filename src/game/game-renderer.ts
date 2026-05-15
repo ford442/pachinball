@@ -167,6 +167,7 @@ export class GameRenderer {
     })
 
     scene.activeCamera = immersiveCam
+    scene.activeCameras = [immersiveCam]
   }
 
   /** Setup bloom, FXAA, tone-mapping, DoF, and scanlines. */
