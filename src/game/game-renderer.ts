@@ -82,6 +82,8 @@ export class GameRenderer {
   private _resizeObserver: ResizeObserver | null = null
   private _sceneOptimizer: SceneOptimizer | null = null
   private _scanlinePostProcess: PostProcess | null = null
+  private _lastResizeWidth = 0
+  private _lastResizeHeight = 0
 
   constructor(host: RendererHost) {
     this.host = host
@@ -364,7 +366,15 @@ export class GameRenderer {
     this._resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect
-        if (width > 0 && height > 0) {
+        // Guard: skip if size is zero or hasn't meaningfully changed (> 1px threshold).
+        // engine.resize() writes canvas.width/height which can mutate CSS layout size on
+        // canvases without explicit CSS dimensions, re-triggering this observer infinitely.
+        if (
+          width > 0 && height > 0 &&
+          (Math.abs(width - this._lastResizeWidth) > 1 || Math.abs(height - this._lastResizeHeight) > 1)
+        ) {
+          this._lastResizeWidth = width
+          this._lastResizeHeight = height
           this.host.engine.resize()
           console.log(`[GameRenderer] Canvas resized: ${Math.round(width)}x${Math.round(height)}`)
         }
