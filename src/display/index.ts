@@ -25,6 +25,7 @@ export {
 
 // Core system
 export { DisplaySystem } from './display-core'
+export { BackboxBorderGlow } from './display-border-glow'
 
 // Layer managers
 export { DisplayShaderLayer } from './display-shader'

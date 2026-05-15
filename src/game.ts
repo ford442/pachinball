@@ -560,7 +560,7 @@ export class Game {
       this.effects.registerSceneLights(this.keyLight, this.rimLight, this.bounceLight)
     }
     const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
-    this.display = new DisplaySystem(this.scene, this.engine, displayConfig)
+    this.display = new DisplaySystem(this.scene, this.engine, displayConfig, this.qualityTier, this.accessibility)
     this.display.subscribeToEvents(this.eventBus)
     this.stateManager.setDisplaySystem(this.display)
 
