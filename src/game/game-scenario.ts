@@ -12,13 +12,11 @@ import type { HapticManager } from '../game-elements/haptics'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
 import type { AdventureManager } from './game-adventure'
 import type { TableMapManager } from './game-maps'
-import { getScenario } from '../game-elements'
+import { getScenario, getZoneConfig, ZoneTriggerSystem as ZoneTriggerSystemClass } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
 import { resolveVideoUrl } from './game-utils'
 import { TABLE_MAPS } from '../shaders/lcd-table'
 import type { DynamicScenario, ScenarioZone, WorldZone, ZoneMechanic } from '../game-elements'
-
-declare const require: any
 
 export interface ScenarioHost {
   readonly scene: Scene | null
@@ -86,8 +84,7 @@ export class GameScenario {
 
   startDynamicMode(): void {
     console.log('[Game] Starting Dynamic Mode with Zone System')
-    const ZT = require('../game-elements') as typeof import('../game-elements')
-    this.host.zoneTriggerSystem = new ZT.ZoneTriggerSystem(false)
+    this.host.zoneTriggerSystem = new ZoneTriggerSystemClass(false)
     const scenario = getScenario('samurai-realm')
     if (scenario) {
       this.loadScenario(scenario)
@@ -320,8 +317,7 @@ export class GameScenario {
     this.host.adventureManager?.handleZoneTransition(zone, previousZone, isMajor)
     if (isMajor) {
       this.host.mapManager?.getLCDTableState().triggerFeedbackEffect()
-      const ZT = require('../game-elements') as typeof import('../game-elements')
-      const currentZoneConfig = ZT.getZoneConfig(zone)
+      const currentZoneConfig = getZoneConfig(zone)
       if (this.host.scene) {
         const matLib = getMaterialLibrary(this.host.scene)
         matLib.updateLCDTableEmissive(currentZoneConfig.primaryColor, currentZoneConfig.glowIntensity)
