@@ -95,18 +95,21 @@ export const crtEffectShader = {
     
     void main(void) {
       vec2 curvedUV = applyCurvature(vUV, uCurvature);
-      
+
+      // Sample before any non-uniform branch: WGSL (WebGPU) requires textureSample to be
+      // called in uniform control flow. The bounds-check below contains a per-fragment early
+      // return, which would make all subsequent textureSample calls non-uniform. Sampling
+      // first is safe — out-of-bounds fragments discard the result immediately after.
+      float r = texture2D(textureSampler, curvedUV + vec2(uChromaticAberration * 0.01, 0.0)).r;
+      float g = texture2D(textureSampler, curvedUV).g;
+      float b = texture2D(textureSampler, curvedUV - vec2(uChromaticAberration * 0.01, 0.0)).b;
+      vec3 color = vec3(r, g, b);
+
       // Discard if outside screen bounds (for curvature)
       if (curvedUV.x < 0.0 || curvedUV.x > 1.0 || curvedUV.y < 0.0 || curvedUV.y > 1.0) {
         gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
         return;
       }
-      
-      // Chromatic aberration (RGB shift)
-      float r = texture2D(textureSampler, curvedUV + vec2(uChromaticAberration * 0.01, 0.0)).r;
-      float g = texture2D(textureSampler, curvedUV).g;
-      float b = texture2D(textureSampler, curvedUV - vec2(uChromaticAberration * 0.01, 0.0)).b;
-      vec3 color = vec3(r, g, b);
       
       // Modern bloom/glow for bright elements
       if (uGlow > 0.0) {
