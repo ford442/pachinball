@@ -59,28 +59,14 @@ async function bootstrap(): Promise<void> {
 /**
  * Setup resize handling for the canvas
  */
-function setupResizeHandler(canvas: HTMLCanvasElement, engine: Engine | WebGPUEngine): void {
-  // Use ResizeObserver for proper canvas resize detection
-  const resizeObserver = new ResizeObserver((entries) => {
-    for (const entry of entries) {
-      if (entry.target === canvas) {
-        // Debounce resize calls
-        requestAnimationFrame(() => {
-          engine.resize()
-          console.log('[Resize] Canvas resized:', canvas.width, 'x', canvas.height)
-        })
-      }
-    }
-  })
-
-  resizeObserver.observe(canvas)
-
-  // Fallback to window resize event
+function setupResizeHandler(_canvas: HTMLCanvasElement, engine: Engine | WebGPUEngine): void {
+  // ResizeObserver is owned by GameRenderer (game-renderer.ts:setupResizeObserver).
+  // A second observer on the same canvas created an infinite resize loop: engine.resize()
+  // mutates canvas.width/height, which triggers the observer again on each call.
+  // Window resize is kept as a lightweight fallback for cases the element observer misses.
   window.addEventListener('resize', () => {
     engine.resize()
   })
-
-  console.log('[Resize] ResizeObserver setup complete')
 }
 
 /**
