@@ -606,91 +606,95 @@ export class Game {
     })
     this.adventureMode = new AdventureMode(this.scene, world, rapier)
 
-    // Initialize ZoneTriggerSystem if not already present
-    if (!this.zoneTriggerSystem) {
-      this.zoneTriggerSystem = new ZoneTriggerSystem(this.debugHUDQueryEnabled)
-    }
-
-    // Initialize new obstacle builders
-    this.spinnerBuilder = new SpinnerBumperBuilder(this.scene, world, rapier, this.qualityTier)
-    this.spinnerBuilder.setEventBus(this.eventBus)
-    this.spinnerBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
-
-    this.ballTrapBuilder = new BallTrapBuilder(this.scene, world, rapier, this.qualityTier)
-    this.ballTrapBuilder.setEventBus(this.eventBus)
-    this.ballTrapBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
-
-    this.launcherBuilder = new LauncherBuilder(this.scene, world, rapier, this.qualityTier)
-    this.launcherBuilder.setEventBus(this.eventBus)
-    this.launcherBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
-
-    this.movingGateBuilder = new MovingGateBuilder(this.scene, world, rapier, this.qualityTier)
-    this.movingGateBuilder.setEventBus(this.eventBus)
-    this.movingGateBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
-
-    // Create sample obstacles
-    const spinner = this.spinnerBuilder.createSpinnerBumper(5, 10, '#00ffff', 1.0)
-    this.spinnerVisuals.push(spinner.visual)
-
-    const trap = this.ballTrapBuilder.createBallTrap(-5, 10, '#ff00ff', 1.0)
-    this.trapStates.push(trap.state)
-
-    const launcher = this.launcherBuilder.createLauncher(2, 16, '#00ff88', 1.0)
-    this.launcherStates.push(launcher.state)
-
-    const gate = this.movingGateBuilder.createMovingGate(-2, 16, '#ffaa00', 1.0, 'slide', 2.0, 1.5)
-    this.gateStates.push(gate.state)
-
-    // Initialize new adventure systems
-    this.adventureGoalTracker = new AdventureGoalTracker()
-    this.adventureGoalTracker.setEventBus(this.eventBus)
-
-    this.adventureCinematicSystem = new AdventureCinematicSystem()
-    this.adventureCinematicSystem.setCamera(this.tableCam!)
-    this.adventureCinematicTriggers = new AdventureCinematicTriggers(this.adventureCinematicSystem)
-    this.adventureCinematicTriggers.setEventBus(this.eventBus)
-    this.adventureCinematicTriggers.setGoalTracker(this.adventureGoalTracker)
-
-    this.adventureUIStateManager = new AdventureUIStateManager()
-    this.adventureUIStateManager.setEventBus(this.eventBus)
-
-    this.adventureTrackProgression = new AdventureTrackProgression()
-
-    this.adventureMode.setEventListener((event, data) => {
-      console.log(`Adventure Event: ${event}`)
-      switch (event) {
-        case 'START': {
-          const trackType = data as AdventureTrackType | undefined
-          this.adventureManager?.startAdventure(trackType)
-          this.eventBus.emit('adventure:start')
-          this.eventBus.emit('display:set', DisplayState.ADVENTURE)
-          const trackName = trackType ? this.slotAdventure.getTrackDisplayName(trackType) : 'UNKNOWN SECTOR'
-          this.display?.setTrackInfo(trackName)
-          this.display?.setStoryText(`ENTERING: ${trackName}`)
-          this.effects?.setLightingMode('reach', 0.5)
-          this.effects?.setAtmosphereState('ADVENTURE')
-          break
-        }
-        case 'END':
-          this.adventureManager?.endAdventure()
-          this.eventBus.emit('adventure:end')
-          this.eventBus.emit('display:set', DisplayState.IDLE)
-          this.effects?.setLightingMode('normal', 1.0)
-          this.effects?.setAtmosphereState('IDLE')
-          // Sound handled reactively via EventBus 'adventure:end' subscription
-          break
-        case 'ZONE_ENTER': {
-          const zoneData = data as {
-            zone: AdventureTrackType
-            previousZone: AdventureTrackType | null
-            isMajor: boolean
-            ballPosition?: Vector3
-          }
-          this.scenarioManager.handleZoneTransition(zoneData.zone, zoneData.previousZone, zoneData.isMajor)
-          break
-        }
+    try {
+      // Initialize ZoneTriggerSystem if not already present
+      if (!this.zoneTriggerSystem) {
+        this.zoneTriggerSystem = new ZoneTriggerSystem(this.debugHUDQueryEnabled)
       }
-    })
+
+      // Initialize new obstacle builders
+      this.spinnerBuilder = new SpinnerBumperBuilder(this.scene, world, rapier, this.qualityTier)
+      this.spinnerBuilder.setEventBus(this.eventBus)
+      this.spinnerBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
+
+      this.ballTrapBuilder = new BallTrapBuilder(this.scene, world, rapier, this.qualityTier)
+      this.ballTrapBuilder.setEventBus(this.eventBus)
+      this.ballTrapBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
+
+      this.launcherBuilder = new LauncherBuilder(this.scene, world, rapier, this.qualityTier)
+      this.launcherBuilder.setEventBus(this.eventBus)
+      this.launcherBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
+
+      this.movingGateBuilder = new MovingGateBuilder(this.scene, world, rapier, this.qualityTier)
+      this.movingGateBuilder.setEventBus(this.eventBus)
+      this.movingGateBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
+
+      // Create sample obstacles
+      const spinner = this.spinnerBuilder.createSpinnerBumper(5, 10, '#00ffff', 1.0)
+      this.spinnerVisuals.push(spinner.visual)
+
+      const trap = this.ballTrapBuilder.createBallTrap(-5, 10, '#ff00ff', 1.0)
+      this.trapStates.push(trap.state)
+
+      const launcher = this.launcherBuilder.createLauncher(2, 16, '#00ff88', 1.0)
+      this.launcherStates.push(launcher.state)
+
+      const gate = this.movingGateBuilder.createMovingGate(-2, 16, '#ffaa00', 1.0, 'slide', 2.0, 1.5)
+      this.gateStates.push(gate.state)
+
+      // Initialize new adventure systems
+      this.adventureGoalTracker = new AdventureGoalTracker()
+      this.adventureGoalTracker.setEventBus(this.eventBus)
+
+      this.adventureCinematicSystem = new AdventureCinematicSystem()
+      this.adventureCinematicSystem.setCamera(this.tableCam!)
+      this.adventureCinematicTriggers = new AdventureCinematicTriggers(this.adventureCinematicSystem)
+      this.adventureCinematicTriggers.setEventBus(this.eventBus)
+      this.adventureCinematicTriggers.setGoalTracker(this.adventureGoalTracker)
+
+      this.adventureUIStateManager = new AdventureUIStateManager()
+      this.adventureUIStateManager.setEventBus(this.eventBus)
+
+      this.adventureTrackProgression = new AdventureTrackProgression()
+
+      this.adventureMode.setEventListener((event, data) => {
+        console.log(`Adventure Event: ${event}`)
+        switch (event) {
+          case 'START': {
+            const trackType = data as AdventureTrackType | undefined
+            this.adventureManager?.startAdventure(trackType)
+            this.eventBus.emit('adventure:start')
+            this.eventBus.emit('display:set', DisplayState.ADVENTURE)
+            const trackName = trackType ? this.slotAdventure.getTrackDisplayName(trackType) : 'UNKNOWN SECTOR'
+            this.display?.setTrackInfo(trackName)
+            this.display?.setStoryText(`ENTERING: ${trackName}`)
+            this.effects?.setLightingMode('reach', 0.5)
+            this.effects?.setAtmosphereState('ADVENTURE')
+            break
+          }
+          case 'END':
+            this.adventureManager?.endAdventure()
+            this.eventBus.emit('adventure:end')
+            this.eventBus.emit('display:set', DisplayState.IDLE)
+            this.effects?.setLightingMode('normal', 1.0)
+            this.effects?.setAtmosphereState('IDLE')
+            // Sound handled reactively via EventBus 'adventure:end' subscription
+            break
+          case 'ZONE_ENTER': {
+            const zoneData = data as {
+              zone: AdventureTrackType
+              previousZone: AdventureTrackType | null
+              isMajor: boolean
+              ballPosition?: Vector3
+            }
+            this.scenarioManager.handleZoneTransition(zoneData.zone, zoneData.previousZone, zoneData.isMajor)
+            break
+          }
+        }
+      })
+    } catch (error) {
+      console.warn('[Game] Optional obstacle/adventure systems failed to initialize; continuing with core scene:', error)
+    }
 
     this.sceneBuilder.buildCriticalScene()
     this.cabinetBuilder.updateCabinetLightExclusions()
