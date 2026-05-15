@@ -129,3 +129,21 @@ export {
 } from './dynamic-world'
 export { DebugHUD, type DebugSnapshot } from './debug-hud'
 export { PerformanceMonitor, type PerformanceMetrics } from './performance-monitor'
+
+// Adventure goal & progression systems
+export { AdventureGoalSystem } from './adventure-goal-system'
+export { AdventureGoalTracker } from './adventure-goal-tracker'
+export { AdventureCinematicSystem } from './adventure-cinematic-system'
+export { AdventureCinematicTriggers } from './adventure-cinematic-triggers'
+export { AdventureUIStateManager } from './adventure-ui-state'
+export { AdventureTrackProgression } from './adventure-track-progression'
+export {
+  getGoalsForTrack,
+  getCompletionPercentage,
+  getTotalReward,
+  cloneGoals,
+} from './adventure-track-goals'
+
+// EventBus integration shims
+export { ObstacleEventBusIntegration } from './obstacle-eventbus-integration'
+export { AdventureEventBusIntegration } from './adventure-eventbus-integration'

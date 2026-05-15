@@ -3,6 +3,8 @@
  * Manages track-specific goals and progression tracking
  */
 
+import type { EventBus } from '../game/event-bus'
+
 export type GoalType = 'score-based' | 'collection-based' | 'survival' | 'combo-based' | 'hit-all'
 
 export interface AdventureGoal {
@@ -28,6 +30,8 @@ export class AdventureGoalSystem {
   private onGoalProgress: ((goal: AdventureGoal) => void) | null = null
   private onGoalComplete: ((goal: AdventureGoal) => void) | null = null
   private onAllGoalsComplete: (() => void) | null = null
+  private eventBus: EventBus | null = null
+  private unsubscribers: (() => void)[] = []
 
   /**
    * Initialize goals for a specific track
@@ -39,6 +43,26 @@ export class AdventureGoalSystem {
       completedCount: 0,
       allComplete: false
     }
+  }
+
+  /**
+   * Set EventBus and subscribe to lifecycle events
+   */
+  setEventBus(eventBus: EventBus): void {
+    this.clearEventBus()
+    this.eventBus = eventBus
+    this.unsubscribers.push(
+      eventBus.on('game:over', () => this.reset()),
+      eventBus.on('adventure:end', () => this.reset())
+    )
+  }
+
+  private clearEventBus(): void {
+    for (const unsub of this.unsubscribers) {
+      unsub()
+    }
+    this.unsubscribers = []
+    this.eventBus = null
   }
 
   /**
@@ -58,6 +82,14 @@ export class AdventureGoalSystem {
       this.tracker.completedCount++
       this.onGoalComplete?.(goal)
 
+      // Emit completion event
+      this.eventBus?.emit('goal:completed', {
+        goalId: goal.id,
+        trackId: this.tracker.trackId,
+        title: goal.title,
+        reward: goal.reward
+      })
+
       // Check if all goals are complete
       if (this.tracker.completedCount === this.tracker.goals.length) {
         this.tracker.allComplete = true
@@ -66,6 +98,16 @@ export class AdventureGoalSystem {
     }
 
     this.onGoalProgress?.(goal)
+
+    // Emit progress event
+    this.eventBus?.emit('goal:progress', {
+      goalId: goal.id,
+      trackId: this.tracker.trackId,
+      current: goal.current,
+      target: goal.target,
+      progress: Math.min(goal.current / goal.target, 1.0),
+      title: goal.title
+    })
   }
 
   /**
@@ -147,5 +189,16 @@ export class AdventureGoalSystem {
    */
   reset(): void {
     this.tracker = null
+  }
+
+  /**
+   * Clean up callbacks and state
+   */
+  dispose(): void {
+    this.clearEventBus()
+    this.tracker = null
+    this.onGoalProgress = null
+    this.onGoalComplete = null
+    this.onAllGoalsComplete = null
   }
 }

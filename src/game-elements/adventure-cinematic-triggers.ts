@@ -3,6 +3,7 @@
  * Automatically triggers cinematic moments on game events
  */
 
+import type { EventBus } from '../game/event-bus'
 import { AdventureCinematicSystem } from './adventure-cinematic-system'
 import type { AdventureGoalTracker } from './adventure-goal-tracker'
 
@@ -31,8 +32,41 @@ export class AdventureCinematicTriggers {
     lastJackpotScore: 0
   }
 
+  private unsubscribers: (() => void)[] = []
+
   constructor(cinematicSystem: AdventureCinematicSystem) {
     this.cinematics = cinematicSystem
+  }
+
+  /**
+   * Set EventBus and subscribe to lifecycle events
+   */
+  setEventBus(eventBus: EventBus): void {
+    this.clearEventBus()
+    this.unsubscribers.push(
+      eventBus.on('adventure:start', () => {
+        this.trackState.trackStarted = false
+        this.trackState.completedGoalsCount = 0
+      }),
+      eventBus.on('game:over', () => this.reset()),
+      eventBus.on('goal:completed', (payload) => {
+        if (this.config.goalCompleteEnabled && !this.cinematics.isPlaying()) {
+          this.cinematics.playGoalComplete(payload.title)
+        }
+      }),
+      eventBus.on('jackpot:start', () => {
+        if (this.config.jackpotEnabled && !this.cinematics.isPlaying()) {
+          this.cinematics.playJackpot(1000)
+        }
+      })
+    )
+  }
+
+  private clearEventBus(): void {
+    for (const unsub of this.unsubscribers) {
+      unsub()
+    }
+    this.unsubscribers = []
   }
 
   /**
@@ -131,5 +165,14 @@ export class AdventureCinematicTriggers {
    */
   isPlayingCinematic(): boolean {
     return this.cinematics.isPlaying()
+  }
+
+  /**
+   * Clean up references
+   */
+  dispose(): void {
+    this.clearEventBus()
+    this.goalTracker = null
+    this.reset()
   }
 }

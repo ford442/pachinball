@@ -235,4 +235,11 @@ export class AdventureTrackProgression {
       totalRewardsEarned: 0
     }
   }
+
+  /**
+   * Clean up (no-op for pure state, provided for consistency)
+   */
+  dispose(): void {
+    this.reset()
+  }
 }

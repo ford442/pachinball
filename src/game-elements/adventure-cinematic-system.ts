@@ -336,4 +336,16 @@ export class AdventureCinematicSystem {
   private lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t
   }
+
+  /**
+   * Clean up camera reference and callbacks
+   */
+  dispose(): void {
+    this.camera = null
+    this.activeSequence = null
+    this.startCameraState = null
+    this.cinematicCallbacks = {}
+    this.isActive = false
+    this.sequenceProgress = 0
+  }
 }

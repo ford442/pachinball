@@ -2,9 +2,10 @@ import { Scene, MeshBuilder, Mesh, TransformNode, Vector3 } from '@babylonjs/cor
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
-import { PALETTE } from '../game-elements/visual-language'
+import { PALETTE, QualityTier } from '../game-elements/visual-language'
 import type { EventBus } from '../game/event-bus'
 import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
+import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
 
 export interface SpinnerBumperVisual {
   mesh: Mesh
@@ -22,17 +23,24 @@ export class SpinnerBumperBuilder {
   private rapier: typeof RAPIER
   private matLib: ReturnType<typeof getMaterialLibrary>
   private eventBus: ObstacleEventBusIntegration | null = null
+  private zoneTriggerSystem: ZoneTriggerSystem | null = null
   private spinnerCounter: number = 0
+  private meshes: Mesh[] = []
+  private bodies: RAPIER.RigidBody[] = []
+  private qualityTier: QualityTier
+  private registeredZoneIds: string[] = []
 
   constructor(
     scene: Scene,
     world: RAPIER.World,
     rapier: typeof RAPIER,
+    qualityTier: QualityTier = QualityTier.MEDIUM,
   ) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
     this.matLib = getMaterialLibrary(scene)
+    this.qualityTier = qualityTier
   }
 
   /**
@@ -40,6 +48,13 @@ export class SpinnerBumperBuilder {
    */
   setEventBus(eventBus: EventBus | null): void {
     this.eventBus = eventBus ? new ObstacleEventBusIntegration(eventBus) : null
+  }
+
+  /**
+   * Set ZoneTriggerSystem for registering spinner hitbox regions
+   */
+  setZoneTriggerSystem(zoneTriggerSystem: ZoneTriggerSystem | null): void {
+    this.zoneTriggerSystem = zoneTriggerSystem
   }
 
   createSpinnerBumper(
@@ -58,24 +73,27 @@ export class SpinnerBumperBuilder {
     const spinnerMesh = MeshBuilder.CreateCylinder('spinnerDisc', {
       diameter: 1.2 * scale,
       height: 0.3,
-      tessellation: 32
+      tessellation: this.qualityTier === QualityTier.LOW ? 12 : 32
     }, this.scene) as Mesh
 
     spinnerMesh.parent = spinnerRoot
     spinnerMesh.material = this.matLib.getEnhancedBumperBodyMaterial(colorHex)
 
-    // Decorative rim
-    const rimMesh = MeshBuilder.CreateTorus('spinnerRim', {
-      diameter: 1.4 * scale,
-      thickness: 0.06 * scale,
-      tessellation: 32
-    }, this.scene) as Mesh
+    // Decorative rim (skip on LOW quality)
+    let rimMesh: Mesh | null = null
+    if (this.qualityTier !== QualityTier.LOW) {
+      rimMesh = MeshBuilder.CreateTorus('spinnerRim', {
+        diameter: 1.4 * scale,
+        thickness: 0.06 * scale,
+        tessellation: this.qualityTier === QualityTier.HIGH ? 32 : 16
+      }, this.scene) as Mesh
 
-    rimMesh.parent = spinnerRoot
-    rimMesh.material = this.matLib.getEnhancedBumperRingMaterial(colorHex)
+      rimMesh.parent = spinnerRoot
+      rimMesh.material = this.matLib.getEnhancedBumperRingMaterial(colorHex)
+    }
 
-    // Rotating paddles/fins (3 evenly spaced)
-    const paddleCount = 3
+    // Rotating paddles/fins (3 evenly spaced) — skip on LOW quality
+    const paddleCount = this.qualityTier === QualityTier.LOW ? 2 : 3
     const paddleMat = this.matLib.getEnhancedBumperBodyMaterial(colorHex)
 
     for (let i = 0; i < paddleCount; i++) {
@@ -91,6 +109,7 @@ export class SpinnerBumperBuilder {
       paddle.position.z = Math.sin(angle) * 0.4 * scale
       paddle.parent = spinnerRoot
       paddle.material = paddleMat
+      this.meshes.push(paddle)
     }
 
     // Physics body - disc shape
@@ -120,6 +139,24 @@ export class SpinnerBumperBuilder {
     }
 
     bindings.push({ mesh: spinnerRoot as unknown as Mesh, rigidBody: body })
+
+    this.meshes.push(spinnerMesh)
+    if (rimMesh) this.meshes.push(rimMesh)
+    this.bodies.push(body)
+
+    // Register with ZoneTriggerSystem
+    if (this.zoneTriggerSystem) {
+      const zoneId = `spinner-zone-${spinnerId}`
+      this.zoneTriggerSystem.registerObstacleZone(zoneId, {
+        minX: x - 0.7 * scale,
+        maxX: x + 0.7 * scale,
+        minZ: z - 0.7 * scale,
+        maxZ: z + 0.7 * scale,
+        minY: 0,
+        maxY: 1.0 * scale,
+      }, { color: colorHex, type: 'spinner' })
+      this.registeredZoneIds.push(zoneId)
+    }
 
     return {
       mesh: spinnerMesh,
@@ -191,5 +228,30 @@ export class SpinnerBumperBuilder {
       this.eventBus.emitPlaySound('bump-spinner')
       this.eventBus.emitFlashEffect(0.4, '#00ffff', 0.2)
     }
+  }
+
+  /**
+   * Clean up all meshes and physics bodies created by this builder
+   */
+  dispose(): void {
+    for (const mesh of this.meshes) {
+      if (!mesh.isDisposed()) {
+        mesh.dispose()
+      }
+    }
+    this.meshes = []
+
+    for (const body of this.bodies) {
+      this.world.removeRigidBody(body)
+    }
+    this.bodies = []
+
+    for (const zoneId of this.registeredZoneIds) {
+      this.zoneTriggerSystem?.unregisterObstacleZone(zoneId)
+    }
+    this.registeredZoneIds = []
+
+    this.eventBus = null
+    this.zoneTriggerSystem = null
   }
 }

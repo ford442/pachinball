@@ -65,6 +65,59 @@ export class ZoneTriggerSystem {
   }
 
   /**
+   * Register an ad-hoc obstacle zone (not part of a loaded scenario)
+   */
+  registerObstacleZone(id: string, bounds: ZoneBounds, metadata?: Record<string, unknown>): void {
+    const syntheticZone: ScenarioZone = {
+      id,
+      name: id,
+      position: { x: (bounds.minX + bounds.maxX) / 2, z: (bounds.minZ + bounds.maxZ) / 2 },
+      width: bounds.maxX - bounds.minX,
+      depth: bounds.maxZ - bounds.minZ,
+      mapConfig: {
+        baseColor: (metadata?.['color'] as string) || '#ffffff',
+        accentColor: '#000000',
+        backgroundPattern: 'hex',
+        scanlineIntensity: 0.1,
+        glowIntensity: 0.3,
+        animationSpeed: 0,
+      },
+      mechanics: [],
+      storyText: `Obstacle zone: ${id}`,
+      musicTrack: 'default',
+    }
+
+    this.activeZones.set(id, {
+      zone: syntheticZone,
+      bounds,
+      entryTime: 0,
+      entryPosition: Vector3.Zero(),
+    })
+
+    if (this.debug) {
+      console.log(`[ZoneTriggerSystem] Registered obstacle zone: ${id}`)
+    }
+  }
+
+  /**
+   * Unregister an obstacle zone
+   */
+  unregisterObstacleZone(id: string): void {
+    if (this.activeZones.has(id)) {
+      this.activeZones.delete(id)
+      if (this.currentZoneId === id) {
+        this.currentZoneId = null
+      }
+      if (this.previousZoneId === id) {
+        this.previousZoneId = null
+      }
+      if (this.debug) {
+        console.log(`[ZoneTriggerSystem] Unregistered obstacle zone: ${id}`)
+      }
+    }
+  }
+
+  /**
    * Load a scenario and initialize zone detection
    */
   loadScenario(scenario: DynamicScenario): void {

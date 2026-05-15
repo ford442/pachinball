@@ -2,9 +2,10 @@ import { Scene, MeshBuilder, Mesh, TransformNode, Color3, StandardMaterial, Vect
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
-import { PALETTE } from '../game-elements/visual-language'
+import { PALETTE, QualityTier } from '../game-elements/visual-language'
 import type { EventBus } from '../game/event-bus'
 import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
+import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
 
 export interface BallTrapState {
   mesh: Mesh
@@ -24,17 +25,24 @@ export class BallTrapBuilder {
   private rapier: typeof RAPIER
   private matLib: ReturnType<typeof getMaterialLibrary>
   private eventBus: ObstacleEventBusIntegration | null = null
+  private zoneTriggerSystem: ZoneTriggerSystem | null = null
   private trapCounter: number = 0
+  private meshes: Mesh[] = []
+  private bodies: RAPIER.RigidBody[] = []
+  private qualityTier: QualityTier
+  private registeredZoneIds: string[] = []
 
   constructor(
     scene: Scene,
     world: RAPIER.World,
     rapier: typeof RAPIER,
+    qualityTier: QualityTier = QualityTier.MEDIUM,
   ) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
     this.matLib = getMaterialLibrary(scene)
+    this.qualityTier = qualityTier
   }
 
   /**
@@ -42,6 +50,13 @@ export class BallTrapBuilder {
    */
   setEventBus(eventBus: EventBus | null): void {
     this.eventBus = eventBus ? new ObstacleEventBusIntegration(eventBus) : null
+  }
+
+  /**
+   * Set ZoneTriggerSystem for registering trap hitbox regions
+   */
+  setZoneTriggerSystem(zoneTriggerSystem: ZoneTriggerSystem | null): void {
+    this.zoneTriggerSystem = zoneTriggerSystem
   }
 
   createBallTrap(
@@ -59,7 +74,7 @@ export class BallTrapBuilder {
     const trapEntrance = MeshBuilder.CreateCylinder('trapCone', {
       diameter: 1.2 * scale,
       height: 0.4,
-      tessellation: 16
+      tessellation: this.qualityTier === QualityTier.LOW ? 8 : 16
     }, this.scene) as Mesh
 
     // Taper the cylinder for funnel effect via scaling
@@ -68,15 +83,18 @@ export class BallTrapBuilder {
     trapEntrance.parent = trapRoot
     trapEntrance.material = this.matLib.getEnhancedBumperBodyMaterial(colorHex)
 
-    // Trap chamber (visible but won't contain ball, physics handles that)
-    const trapChamber = MeshBuilder.CreateSphere('trapChamber', {
-      diameter: 0.9 * scale,
-      segments: 16
-    }, this.scene) as Mesh
+    // Trap chamber (visible but won't contain ball, physics handles that) — skip on LOW
+    let trapChamber: Mesh | null = null
+    if (this.qualityTier !== QualityTier.LOW) {
+      trapChamber = MeshBuilder.CreateSphere('trapChamber', {
+        diameter: 0.9 * scale,
+        segments: this.qualityTier === QualityTier.HIGH ? 16 : 8
+      }, this.scene) as Mesh
 
-    trapChamber.position.y = -0.3 * scale
-    trapChamber.parent = trapRoot
-    trapChamber.material = this.matLib.getEnhancedBumperBodyMaterial(colorHex)
+      trapChamber.position.y = -0.3 * scale
+      trapChamber.parent = trapRoot
+      trapChamber.material = this.matLib.getEnhancedBumperBodyMaterial(colorHex)
+    }
 
     // Gate that opens to release ball
     const gateWidth = 0.5 * scale
@@ -133,6 +151,24 @@ export class BallTrapBuilder {
     }
 
     bindings.push({ mesh: trapRoot as unknown as Mesh, rigidBody: body })
+
+    this.meshes.push(trapEntrance, trapGate)
+    if (trapChamber) this.meshes.push(trapChamber)
+    this.bodies.push(body)
+
+    // Register with ZoneTriggerSystem
+    if (this.zoneTriggerSystem) {
+      const zoneId = `trap-zone-${trapId}`
+      this.zoneTriggerSystem.registerObstacleZone(zoneId, {
+        minX: x - 0.65 * scale,
+        maxX: x + 0.65 * scale,
+        minZ: z - 0.65 * scale,
+        maxZ: z + 0.65 * scale,
+        minY: 0,
+        maxY: 1.0 * scale,
+      }, { color: colorHex, type: 'trap' })
+      this.registeredZoneIds.push(zoneId)
+    }
 
     return { state, bindings }
   }
@@ -230,5 +266,30 @@ export class BallTrapBuilder {
       this.eventBus.emitFlashEffect(0.4, '#ffff00', 0.3)
       this.eventBus.emitBloomEffect(0.5, 0.5)
     }
+  }
+
+  /**
+   * Clean up all meshes and physics bodies created by this builder
+   */
+  dispose(): void {
+    for (const mesh of this.meshes) {
+      if (!mesh.isDisposed()) {
+        mesh.dispose()
+      }
+    }
+    this.meshes = []
+
+    for (const body of this.bodies) {
+      this.world.removeRigidBody(body)
+    }
+    this.bodies = []
+
+    for (const zoneId of this.registeredZoneIds) {
+      this.zoneTriggerSystem?.unregisterObstacleZone(zoneId)
+    }
+    this.registeredZoneIds = []
+
+    this.eventBus = null
+    this.zoneTriggerSystem = null
   }
 }

@@ -3,6 +3,7 @@
  * Integrates goal system with ball manager, physics, and game events
  */
 
+import type { EventBus } from '../game/event-bus'
 import { AdventureGoalSystem } from './adventure-goal-system'
 import { getGoalsForTrack } from './adventure-track-goals'
 
@@ -18,8 +19,40 @@ export class AdventureGoalTracker {
   private currentCombo: number = 0
   private readonly COMBO_TIMEOUT = 2.0
 
+  private unsubscribers: (() => void)[] = []
+
   constructor() {
     this.goalSystem = new AdventureGoalSystem()
+  }
+
+  /**
+   * Set EventBus and subscribe to gameplay events
+   */
+  setEventBus(eventBus: EventBus): void {
+    this.clearEventBus()
+    this.goalSystem.setEventBus(eventBus)
+
+    this.unsubscribers.push(
+      eventBus.on('bumper:spinner:hit', () => this.trackBumperHit()),
+      eventBus.on('trap:ball:captured', () => this.trackBumperHit()),
+      eventBus.on('gate:triggered', () => this.triggerGate(1)),
+      eventBus.on('points:awarded', (payload) => {
+        this.updateScore(payload.amount)
+      }),
+      eventBus.on('adventure:start', () => {
+        if (this.currentTrackId) {
+          this.initializeTrack(this.currentTrackId)
+        }
+      }),
+      eventBus.on('game:over', () => this.reset())
+    )
+  }
+
+  private clearEventBus(): void {
+    for (const unsub of this.unsubscribers) {
+      unsub()
+    }
+    this.unsubscribers = []
   }
 
   /**
@@ -172,5 +205,19 @@ export class AdventureGoalTracker {
     this.goldBallsCollected = 0
     this.timeElapsed = 0
     this.currentCombo = 0
+  }
+
+  /**
+   * Clean up resources
+   */
+  dispose(): void {
+    this.clearEventBus()
+    this.goalSystem.dispose()
+    this.currentTrackId = ''
+    this.bumpersHitCount = 0
+    this.goldBallsCollected = 0
+    this.timeElapsed = 0
+    this.currentCombo = 0
+    this.lastComboTime = 0
   }
 }

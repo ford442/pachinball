@@ -65,7 +65,22 @@ import {
   DebugHUD,
   PerformanceMonitor,
   type AccessibilityConfig,
+  AdventureGoalTracker,
+  AdventureCinematicSystem,
+  AdventureCinematicTriggers,
+  AdventureUIStateManager,
+  AdventureTrackProgression,
 } from './game-elements'
+import {
+  SpinnerBumperBuilder,
+  type SpinnerBumperVisual,
+  BallTrapBuilder,
+  type BallTrapState,
+  LauncherBuilder,
+  type LauncherState,
+  MovingGateBuilder,
+  type MovingGateState,
+} from './objects'
 import { BallStackVisual } from './game-elements/ball-stack-visual'
 import { CabinetLighting } from './effects/cabinet-lighting'
 import { GameStateManager } from './game/game-state'
@@ -124,6 +139,23 @@ export class Game {
   soundSystem!: SoundSystem
   leaderboardSystem = getLeaderboardSystem()
   nameEntryDialog = getNameEntryDialog()
+
+  // New obstacle builders
+  private spinnerBuilder: SpinnerBumperBuilder | null = null
+  private ballTrapBuilder: BallTrapBuilder | null = null
+  private launcherBuilder: LauncherBuilder | null = null
+  private movingGateBuilder: MovingGateBuilder | null = null
+  private spinnerVisuals: SpinnerBumperVisual[] = []
+  private trapStates: BallTrapState[] = []
+  private launcherStates: LauncherState[] = []
+  private gateStates: MovingGateState[] = []
+
+  // New adventure systems
+  private adventureGoalTracker: AdventureGoalTracker | null = null
+  private adventureCinematicSystem: AdventureCinematicSystem | null = null
+  private adventureCinematicTriggers: AdventureCinematicTriggers | null = null
+  private adventureUIStateManager: AdventureUIStateManager | null = null
+  private adventureTrackProgression: AdventureTrackProgression | null = null
 
   // Rendering
   private bloomPipeline: DefaultRenderingPipeline | null = null
@@ -380,7 +412,28 @@ export class Game {
       this.settingsUI.updateLatencyDisplay(this.inputManager || undefined)
       this.scene?.render()
       // Update reactive cabinet lighting
-      this.cabinetLighting?.update(this.engine.getDeltaTime() / 1000)
+      const dt = this.engine.getDeltaTime() / 1000
+      this.cabinetLighting?.update(dt)
+
+      // Update new obstacles
+      for (const visual of this.spinnerVisuals) {
+        this.spinnerBuilder?.updateSpinner(visual, dt)
+      }
+      for (const state of this.trapStates) {
+        this.ballTrapBuilder?.updateTrap(state, dt)
+      }
+      for (const state of this.launcherStates) {
+        this.launcherBuilder?.updateLauncher(state, dt)
+      }
+      for (const state of this.gateStates) {
+        this.movingGateBuilder?.updateGate(state, dt)
+      }
+
+      // Update adventure systems
+      this.adventureCinematicSystem?.update(dt)
+      this.adventureCinematicTriggers?.update()
+      this.adventureUIStateManager?.updateAnimations(dt)
+
       // Update performance metrics
       // drawCalls is not directly exposed; use 0 as placeholder
       this.performanceMonitor.updateEngineMetrics(
@@ -398,7 +451,7 @@ export class Game {
           score: this.score,
           multiplier: 1.0,
           lives: this.lives,
-          adventureTrack: null,
+          adventureTrack: this.adventureTrackProgression?.getCurrentTrack() ?? null,
           fps: metrics.fps,
           drawCalls: metrics.drawCalls,
           frameTimeMs: metrics.frameTimeMs,
@@ -553,6 +606,56 @@ export class Game {
     })
     this.adventureMode = new AdventureMode(this.scene, world, rapier)
 
+    // Initialize ZoneTriggerSystem if not already present
+    if (!this.zoneTriggerSystem) {
+      this.zoneTriggerSystem = new ZoneTriggerSystem(this.debugHUDQueryEnabled)
+    }
+
+    // Initialize new obstacle builders
+    this.spinnerBuilder = new SpinnerBumperBuilder(this.scene, world, rapier, this.qualityTier)
+    this.spinnerBuilder.setEventBus(this.eventBus)
+    this.spinnerBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
+
+    this.ballTrapBuilder = new BallTrapBuilder(this.scene, world, rapier, this.qualityTier)
+    this.ballTrapBuilder.setEventBus(this.eventBus)
+    this.ballTrapBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
+
+    this.launcherBuilder = new LauncherBuilder(this.scene, world, rapier, this.qualityTier)
+    this.launcherBuilder.setEventBus(this.eventBus)
+    this.launcherBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
+
+    this.movingGateBuilder = new MovingGateBuilder(this.scene, world, rapier, this.qualityTier)
+    this.movingGateBuilder.setEventBus(this.eventBus)
+    this.movingGateBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
+
+    // Create sample obstacles
+    const spinner = this.spinnerBuilder.createSpinnerBumper(5, 10, '#00ffff', 1.0)
+    this.spinnerVisuals.push(spinner.visual)
+
+    const trap = this.ballTrapBuilder.createBallTrap(-5, 10, '#ff00ff', 1.0)
+    this.trapStates.push(trap.state)
+
+    const launcher = this.launcherBuilder.createLauncher(2, 16, '#00ff88', 1.0)
+    this.launcherStates.push(launcher.state)
+
+    const gate = this.movingGateBuilder.createMovingGate(-2, 16, '#ffaa00', 1.0, 'slide', 2.0, 1.5)
+    this.gateStates.push(gate.state)
+
+    // Initialize new adventure systems
+    this.adventureGoalTracker = new AdventureGoalTracker()
+    this.adventureGoalTracker.setEventBus(this.eventBus)
+
+    this.adventureCinematicSystem = new AdventureCinematicSystem()
+    this.adventureCinematicSystem.setCamera(this.tableCam!)
+    this.adventureCinematicTriggers = new AdventureCinematicTriggers(this.adventureCinematicSystem)
+    this.adventureCinematicTriggers.setEventBus(this.eventBus)
+    this.adventureCinematicTriggers.setGoalTracker(this.adventureGoalTracker)
+
+    this.adventureUIStateManager = new AdventureUIStateManager()
+    this.adventureUIStateManager.setEventBus(this.eventBus)
+
+    this.adventureTrackProgression = new AdventureTrackProgression()
+
     this.adventureMode.setEventListener((event, data) => {
       console.log(`Adventure Event: ${event}`)
       switch (event) {
@@ -706,6 +809,32 @@ export class Game {
     this.ballStackVisual = null
     this.effects?.dispose()
     this.effects = null
+
+    // Dispose new obstacle builders
+    this.spinnerBuilder?.dispose()
+    this.spinnerBuilder = null
+    this.ballTrapBuilder?.dispose()
+    this.ballTrapBuilder = null
+    this.launcherBuilder?.dispose()
+    this.launcherBuilder = null
+    this.movingGateBuilder?.dispose()
+    this.movingGateBuilder = null
+    this.spinnerVisuals = []
+    this.trapStates = []
+    this.launcherStates = []
+    this.gateStates = []
+
+    // Dispose new adventure systems
+    this.adventureGoalTracker?.dispose()
+    this.adventureGoalTracker = null
+    this.adventureCinematicTriggers?.dispose()
+    this.adventureCinematicTriggers = null
+    this.adventureCinematicSystem?.dispose()
+    this.adventureCinematicSystem = null
+    this.adventureUIStateManager?.dispose()
+    this.adventureUIStateManager = null
+    this.adventureTrackProgression = null
+
     resetMaterialLibrary()
     this.scene?.dispose()
     this.scene = null

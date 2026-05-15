@@ -3,6 +3,7 @@
  * Manages UI state and feedback display for adventure mode
  */
 
+import type { EventBus } from '../game/event-bus'
 import type { AdventureGoal } from './adventure-goal-system'
 
 export interface GoalUIElement {
@@ -41,6 +42,45 @@ export class AdventureUIStateManager {
   }
 
   private animationTimers: Map<string, number> = new Map()
+  private unsubscribers: (() => void)[] = []
+
+  /**
+   * Set EventBus and subscribe to lifecycle events
+   */
+  setEventBus(eventBus: EventBus): void {
+    this.clearEventBus()
+    this.unsubscribers.push(
+      eventBus.on('adventure:start', () => {
+        this.toggleGoalsPanel(true)
+        this.toggleTrackInfo(true)
+      }),
+      eventBus.on('adventure:end', () => {
+        this.toggleGoalsPanel(false)
+        this.toggleTrackInfo(false)
+        this.hideCinematicOverlay()
+      }),
+      eventBus.on('game:over', () => {
+        this.toggleGoalsPanel(false)
+        this.hideCinematicOverlay()
+      }),
+      eventBus.on('cinematic:started', (payload) => {
+        this.showCinematicOverlay(payload.cinematicType, undefined, payload.duration)
+      }),
+      eventBus.on('cinematic:finished', () => {
+        this.hideCinematicOverlay()
+      }),
+      eventBus.on('goal:completed', (payload) => {
+        this.showCinematicOverlay('GOAL COMPLETE!', payload.title, 1.5)
+      })
+    )
+  }
+
+  private clearEventBus(): void {
+    for (const unsub of this.unsubscribers) {
+      unsub()
+    }
+    this.unsubscribers = []
+  }
 
   /**
    * Update goal UI elements from goal data
@@ -238,5 +278,14 @@ export class AdventureUIStateManager {
       completed: this.state.goalElements.filter(e => e.completed).length,
       total: this.state.goalElements.length
     }
+  }
+
+  /**
+   * Clean up timers and state
+   */
+  dispose(): void {
+    this.clearEventBus()
+    this.animationTimers.clear()
+    this.reset()
   }
 }

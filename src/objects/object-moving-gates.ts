@@ -2,7 +2,10 @@ import { Scene, MeshBuilder, Mesh, TransformNode, Vector3 } from '@babylonjs/cor
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
-import { PALETTE } from '../game-elements/visual-language'
+import { PALETTE, QualityTier } from '../game-elements/visual-language'
+import type { EventBus } from '../game/event-bus'
+import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
+import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
 
 export type GateAnimationType = 'slide' | 'rotate' | 'lift'
 
@@ -29,16 +32,38 @@ export class MovingGateBuilder {
   private world: RAPIER.World
   private rapier: typeof RAPIER
   private matLib: ReturnType<typeof getMaterialLibrary>
+  private eventBus: ObstacleEventBusIntegration | null = null
+  private zoneTriggerSystem: ZoneTriggerSystem | null = null
+  private meshes: Mesh[] = []
+  private bodies: RAPIER.RigidBody[] = []
+  private qualityTier: QualityTier
+  private registeredZoneIds: string[] = []
 
   constructor(
     scene: Scene,
     world: RAPIER.World,
     rapier: typeof RAPIER,
+    qualityTier: QualityTier = QualityTier.MEDIUM,
   ) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
     this.matLib = getMaterialLibrary(scene)
+    this.qualityTier = qualityTier
+  }
+
+  /**
+   * Set EventBus for emitting gate events
+   */
+  setEventBus(eventBus: EventBus | null): void {
+    this.eventBus = eventBus ? new ObstacleEventBusIntegration(eventBus) : null
+  }
+
+  /**
+   * Set ZoneTriggerSystem for registering gate hitbox regions
+   */
+  setZoneTriggerSystem(zoneTriggerSystem: ZoneTriggerSystem | null): void {
+    this.zoneTriggerSystem = zoneTriggerSystem
   }
 
   /**
@@ -68,15 +93,20 @@ export class MovingGateBuilder {
     gateMesh.parent = gateRoot
     gateMesh.material = this.matLib.getEnhancedBumperBodyMaterial(colorHex)
 
-    // Collision mesh (updates with animation)
-    const collideMesh = MeshBuilder.CreateBox('gateCollider', {
-      width: width * scale,
-      height: height * scale,
-      depth: 0.2 * scale
-    }, this.scene) as Mesh
+    // Collision mesh (updates with animation) — skip visible collision mesh on LOW, use gateMesh directly
+    let collideMesh: Mesh
+    if (this.qualityTier === QualityTier.LOW) {
+      collideMesh = gateMesh
+    } else {
+      collideMesh = MeshBuilder.CreateBox('gateCollider', {
+        width: width * scale,
+        height: height * scale,
+        depth: 0.2 * scale
+      }, this.scene) as Mesh
 
-    collideMesh.parent = gateRoot
-    collideMesh.isVisible = false
+      collideMesh.parent = gateRoot
+      collideMesh.isVisible = false
+    }
 
     // Physics body - gate barrier
     const body = this.world.createRigidBody(
@@ -113,6 +143,24 @@ export class MovingGateBuilder {
 
     bindings.push({ mesh: gateRoot as unknown as Mesh, rigidBody: body })
 
+    this.meshes.push(gateMesh)
+    if (collideMesh !== gateMesh) this.meshes.push(collideMesh)
+    this.bodies.push(body)
+
+    // Register with ZoneTriggerSystem
+    if (this.zoneTriggerSystem) {
+      const zoneId = `gate-zone-${body.handle.toString()}`
+      this.zoneTriggerSystem.registerObstacleZone(zoneId, {
+        minX: x - (width * scale) / 2,
+        maxX: x + (width * scale) / 2,
+        minZ: z - 0.15 * scale,
+        maxZ: z + 0.15 * scale,
+        minY: 0,
+        maxY: height * scale,
+      }, { color: colorHex, type: 'gate' })
+      this.registeredZoneIds.push(zoneId)
+    }
+
     return { state, bindings }
   }
 
@@ -124,6 +172,15 @@ export class MovingGateBuilder {
     state.openTimer = 0
     state.openDuration = 3.0 // Stay open for 3 seconds
 
+    // Emit events
+    if (this.eventBus) {
+      const pos = state.mesh.getAbsolutePosition()
+      this.eventBus.emitGateOpened(state.body.handle.toString(), state.openDuration)
+      this.eventBus.emitGateStateChanged(state.body.handle.toString(), true)
+      this.eventBus.emitPointsAwarded(25, 'gate-opened', { x: pos.x, y: pos.y, z: pos.z })
+      this.eventBus.emitPlaySound('gate-open')
+    }
+
     // Animate opening
     this.animateGateOpening(state, duration)
   }
@@ -134,6 +191,12 @@ export class MovingGateBuilder {
   closeGate(state: MovingGateState, duration: number = 0.5): void {
     state.isOpen = false
     state.animationProgress = 0
+
+    // Emit events
+    if (this.eventBus) {
+      this.eventBus.emitGateClosed(state.body.handle.toString())
+      this.eventBus.emitGateStateChanged(state.body.handle.toString(), false)
+    }
 
     // Animate closing
     this.animateGateClosing(state, duration)
@@ -215,5 +278,30 @@ export class MovingGateBuilder {
         this.closeGate(state, 0.5)
       }
     }
+  }
+
+  /**
+   * Clean up all meshes and physics bodies created by this builder
+   */
+  dispose(): void {
+    for (const mesh of this.meshes) {
+      if (!mesh.isDisposed()) {
+        mesh.dispose()
+      }
+    }
+    this.meshes = []
+
+    for (const body of this.bodies) {
+      this.world.removeRigidBody(body)
+    }
+    this.bodies = []
+
+    for (const zoneId of this.registeredZoneIds) {
+      this.zoneTriggerSystem?.unregisterObstacleZone(zoneId)
+    }
+    this.registeredZoneIds = []
+
+    this.eventBus = null
+    this.zoneTriggerSystem = null
   }
 }
