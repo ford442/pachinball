@@ -126,9 +126,10 @@ export const ASSET_BASE = import.meta.env.VITE_ASSET_URL as string | undefined
  * All callers should fall back to hardcoded/local data.
  */
 export async function apiFetch<T>(
-  _endpoint: string,
-  _options?: RequestInit,
-  _retries = 3
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _endpoint?: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _options?: RequestInit
 ): Promise<T | null> {
   return null
 }

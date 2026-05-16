@@ -165,6 +165,7 @@ export class GameSlotAdventure {
       pinballMeshes.forEach(m => m.setEnabled(false))
 
       const track = this.nextAdventureTrack
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.host.adventureMode.start(ballBody, camera, ballMesh as any, track)
 
       const trackName = this.getTrackDisplayName(track)

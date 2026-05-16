@@ -141,6 +141,7 @@ describe('EventBus', () => {
     it('listener calling off() on itself does not skip remaining listeners in the same emit', () => {
       const results: string[] = []
       let unsub!: () => void
+      // eslint-disable-next-line prefer-const
       unsub = bus.on('menu:enter', () => {
         unsub()
         results.push('first')

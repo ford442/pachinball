@@ -95,6 +95,7 @@ export class GameScenario {
   stopDynamicMode(): void {
     console.log('[Game] Stopping Dynamic Mode')
     this.host.zoneTriggerSystem?.dispose()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(this.host as any).zoneTriggerSystem = null
     this.host.switchTableMap('neon-helix')
   }

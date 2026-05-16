@@ -1,6 +1,4 @@
 import { GameState, DisplayState } from '../game-elements/types'
-import type { EffectsSystem } from '../effects'
-import type { DisplaySystem } from '../display'
 import { EventBus } from './event-bus'
 
 export interface StateManagerConfig {
@@ -28,12 +26,20 @@ export class GameStateManager {
   }
 
   /** @deprecated Systems now subscribe via EventBus; kept for backward compat */
-  setSystems(_effects: EffectsSystem | null, _display: DisplaySystem | null): void {
+  setSystems(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _effects?: { dispose?(): void } | null,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _display?: { dispose?(): void } | null
+  ): void {
     // no-op: DisplaySystem now self-manages via EventBus subscription
   }
 
   /** @deprecated Use EventBus subscription instead; kept for backward compat */
-  setDisplaySystem(_display: DisplaySystem | null): void {
+  setDisplaySystem(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _display?: { dispose?(): void } | null
+  ): void {
     // no-op: DisplaySystem now self-manages via EventBus subscription
   }
 

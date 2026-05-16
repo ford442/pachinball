@@ -208,6 +208,7 @@ export class LauncherBuilder {
         )
 
         // Brighten with charge
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const mat = state.chargeMesh.material as any
         if (mat && mat.emissiveColor) {
           const intensity = 0.5 + state.chargeLevel * 0.5

@@ -37,7 +37,7 @@ import { TrailEffects } from './effects-trails'
 import { FloatingNumberEffects } from './effects-floating'
 import { RipplesEffects } from './effects-ripples'
 import { createSharedParticleTexture } from './effects-utils'
-import { createCabinetLighting, updateCabinetLighting, updateSlotLighting, getTransitionColor } from './effects-cabinet'
+import { createCabinetLighting, updateCabinetLighting, updateSlotLighting, getTransitionColor, type CabinetState } from './effects-cabinet'
 import { ImpactEffects } from './effects-impact'
 
 
@@ -492,7 +492,7 @@ export class EffectsSystem {
 
   updateCabinetLighting(): void {
     // Delegate heavy update logic to effects-cabinet helper, passing a mutable state object
-    const state = {
+    const state: CabinetState = {
       cabinetLights: this.cabinetLights,
       decorativeLights: this.decorativeLights,
       currentCabinetColor: this.currentCabinetColor,
@@ -509,7 +509,7 @@ export class EffectsSystem {
       scene: this.scene,
     }
 
-    updateCabinetLighting(state as any)
+    updateCabinetLighting(state)
 
     // Sync back any mutated state fields
     this.lightingMode = state.lightingMode
@@ -564,7 +564,7 @@ export class EffectsSystem {
 
   updateSlotLighting(): void {
     // delegate to helper
-    const state = {
+    const state: CabinetState = {
       cabinetLights: this.cabinetLights,
       decorativeLights: this.decorativeLights,
       currentCabinetColor: this.currentCabinetColor,
@@ -580,7 +580,7 @@ export class EffectsSystem {
       accessibility: this.accessibility,
       scene: this.scene,
     }
-    updateSlotLighting(state as any)
+    updateSlotLighting(state)
     this.slotLightTimer = state.slotLightTimer
   }
 

@@ -2,6 +2,7 @@ import { Vector3 } from '@babylonjs/core'
 
 // Implementation helpers for AdventureModeTracksB (part 3)
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createTeslaTowerTrackImpl(host: any): void {
   const towerMat = host.getTrackMaterial('#22EEFF')
   const coilMat = host.getTrackMaterial('#FFA500')
@@ -29,6 +30,7 @@ export function createTeslaTowerTrackImpl(host: any): void {
   host.createBasin(goalPos, towerMat)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createNeonSkylineTrackImpl(host: any): void {
   const skyMat = host.getTrackMaterial('#FF00FF')
   const neonMat = host.getTrackMaterial('#00FFFF')

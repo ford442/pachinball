@@ -76,7 +76,9 @@ export class ImpactEffects {
       this.impactFlashPool.stop()
       try {
         this.impactFlashPool.dispose()
-      } catch {}
+      } catch {
+        // Ignore disposal errors
+      }
       this.impactFlashPool = null
     }
   }
