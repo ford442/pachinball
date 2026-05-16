@@ -265,7 +265,7 @@ describe('BackboxBorderGlow', () => {
       expect(em.b).toBe(1)
     })
 
-    it('JACKPOT strobe resolves to a non-black settle colour', () => {
+    it('JACKPOT strobe resolves to a non-black settle color', () => {
       const mesh = makeMesh()
       const glow = new BackboxBorderGlow(mesh as never, {} as never, QualityTier.MEDIUM, DEFAULT_ACCESSIBILITY)
       glow.onDisplaySet(DisplayState.JACKPOT)
