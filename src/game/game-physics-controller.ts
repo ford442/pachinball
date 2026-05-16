@@ -160,6 +160,29 @@ export class GamePhysicsController {
       this.applyInputFrame(inputFrame)
     }
 
+    // Mesh sync runs unconditionally so dynamic bodies (ball, flippers) appear at their
+    // physics-body positions even during MENU state before the game starts.
+    const bindings = this.host.gameObjects?.getBindings() || []
+    for (const binding of bindings) {
+      const body = binding.rigidBody
+      const mesh = binding.mesh
+      if (!body || !mesh) continue
+      if (body.isFixed()) continue
+      if (body.isSleeping()) continue
+
+      const pos = body.translation()
+      const rot = body.rotation()
+      if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y) || !Number.isFinite(pos.z)) continue
+      if (Math.abs(pos.x) > 100 || Math.abs(pos.y) > 100 || Math.abs(pos.z) > 100) continue
+
+      mesh.position.set(pos.x, pos.y, pos.z)
+      if (!mesh.rotationQuaternion) {
+        mesh.rotationQuaternion = new Quaternion(rot.x, rot.y, rot.z, rot.w)
+      } else {
+        mesh.rotationQuaternion.set(rot.x, rot.y, rot.z, rot.w)
+      }
+    }
+
     if (!this.host.stateManager.isPlaying()) return
 
     const rawDt = this.host.engine.getDeltaTime() / 1000
@@ -183,28 +206,6 @@ export class GamePhysicsController {
     })
 
     const dt = Math.min(rawDt, 1 / 30)
-
-    // Mesh sync
-    const bindings = this.host.gameObjects?.getBindings() || []
-    for (const binding of bindings) {
-      const body = binding.rigidBody
-      const mesh = binding.mesh
-      if (!body || !mesh) continue
-      if (body.isFixed()) continue
-      if (body.isSleeping()) continue
-
-      const pos = body.translation()
-      const rot = body.rotation()
-      if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y) || !Number.isFinite(pos.z)) continue
-      if (Math.abs(pos.x) > 100 || Math.abs(pos.y) > 100 || Math.abs(pos.z) > 100) continue
-
-      mesh.position.set(pos.x, pos.y, pos.z)
-      if (!mesh.rotationQuaternion) {
-        mesh.rotationQuaternion = new Quaternion(rot.x, rot.y, rot.z, rot.w)
-      } else {
-        mesh.rotationQuaternion.set(rot.x, rot.y, rot.z, rot.w)
-      }
-    }
 
     // Camera controller
     if (!GameConfig.camera.reducedMotion && this.host.cameraController && this.host.ballManager?.getBallBody()) {

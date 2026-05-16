@@ -597,7 +597,6 @@ export class Game {
     })
 
     this.slotAdventure.setupSlotMachineCallbacks()
-    this.setupFeederEventHandlers()
 
     this.gameObjects = new GameObjects(this.scene, world, rapier, GameConfig)
     this.ballManager = new BallManager(this.scene, world, rapier, this.gameObjects.getBindings())
@@ -605,6 +604,9 @@ export class Game {
       console.log(`[Game] Gold ball collected: ${type}, points: ${points}`)
     })
     this.adventureMode = new AdventureMode(this.scene, world, rapier)
+
+    // setupFeederEventHandlers must run after both gameObjects and ballManager are ready
+    this.setupFeederEventHandlers()
 
     try {
       // Initialize ZoneTriggerSystem if not already present

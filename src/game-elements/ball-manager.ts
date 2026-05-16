@@ -119,6 +119,9 @@ export class BallManager {
     // Use Config for Spawn Point (Plain Objects -> Vector3 implicitly handled by rapier setTranslation usually takes x,y,z args, or we pass individual components)
     const spawn = GameConfig.ball.spawnMain
 
+    // Position mesh at spawn point immediately so it is visible before physics syncs
+    ball.position.set(spawn.x, spawn.y, spawn.z)
+
     const ballBody = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.dynamic()
         .setTranslation(spawn.x, spawn.y, spawn.z)
