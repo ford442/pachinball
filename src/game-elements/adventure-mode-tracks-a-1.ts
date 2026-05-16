@@ -2,6 +2,7 @@ import { MeshBuilder, Vector3, Quaternion } from '@babylonjs/core'
 
 // Implementation helpers for AdventureModeTracksA (part 1)
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createHyperDriftTrackImpl(host: any): void {
   const driftMat = host.getTrackMaterial("#00FFFF")
   let currentPos = host.currentStartPos.clone()
@@ -50,6 +51,7 @@ export function createHyperDriftTrackImpl(host: any): void {
   host.createBasin(goalPos, driftMat)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createPachinkoSpireTrackImpl(host: any): void {
   const spireMat = host.getTrackMaterial("#FFFFFF") // Silver/Chrome
   let currentPos = host.currentStartPos.clone()
@@ -186,6 +188,7 @@ export function createPachinkoSpireTrackImpl(host: any): void {
   createResetBasin(6)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createOrbitalJunkyardTrackImpl(host: any): void {
   const junkMat = host.getTrackMaterial("#888888")
   let currentPos = host.currentStartPos.clone()
@@ -214,7 +217,9 @@ export function createOrbitalJunkyardTrackImpl(host: any): void {
       const debrisPosOnSurface = debrisStartPos.add(forwardVec.scale(dist)).add(rightVec.scale(offset))
       const type = Math.random() > 0.5 ? 'box' : 'tetra'
       const scale = 0.5 + Math.random() * 1.0
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let mesh: any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let colliderDesc: any
       const finalPos = debrisPosOnSurface.add(normalVec.scale(scale * 0.5))
 
@@ -288,6 +293,7 @@ export function createOrbitalJunkyardTrackImpl(host: any): void {
   host.createBasin(goalPos, junkMat)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createFirewallBreachTrackImpl(host: any): void {
   const wallMat = host.getTrackMaterial("#FF4400")
   const debrisMat = host.getTrackMaterial("#0088FF")
@@ -357,6 +363,7 @@ export function createFirewallBreachTrackImpl(host: any): void {
   host.createBasin(goalPos, wallMat)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createPrismPathwayTrackImpl(host: any): void {
   const glassMat = host.getTrackMaterial("#E0FFFF")
   const laserMat = host.getTrackMaterial("#FF00FF")

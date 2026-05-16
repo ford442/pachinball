@@ -205,7 +205,8 @@ export class MovingGateBuilder {
   /**
    * Animate gate opening based on type
    */
-  private animateGateOpening(state: MovingGateState, _duration: number): void {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private animateGateOpening(state: MovingGateState, _duration?: number): void {
     if (state.animationType === 'slide') {
       // Slide gate up/down based on axis
       let targetX = state.basePosition.x
@@ -240,7 +241,8 @@ export class MovingGateBuilder {
   /**
    * Animate gate closing
    */
-  private animateGateClosing(state: MovingGateState, _duration: number): void {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private animateGateClosing(state: MovingGateState, _duration?: number): void {
     // Reset to base position/rotation
     const root = state.mesh.parent as TransformNode
     if (root) {

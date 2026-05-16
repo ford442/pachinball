@@ -2,6 +2,7 @@ import { MeshBuilder, Vector3, Quaternion } from '@babylonjs/core'
 
 // Implementation helpers for AdventureModeTracksA (part 2)
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createMagneticStorageTrackImpl(host: any): void {
   const storageMat = host.getTrackMaterial("#222222")
   const laserMat = host.getTrackMaterial("#FF0000")
@@ -23,6 +24,7 @@ export function createMagneticStorageTrackImpl(host: any): void {
 
   if (host.world && host.adventureBodies.length > 0) {
     const platterBody = host.adventureBodies[host.adventureBodies.length - 1]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const binding = host.kinematicBindings.find((b: any) => b.body === platterBody)
     const positions = [
       { r: 6, angle: 0 },
@@ -30,6 +32,7 @@ export function createMagneticStorageTrackImpl(host: any): void {
       { r: 4, angle: (240 * Math.PI) / 180 }
     ]
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     positions.forEach((p: any) => {
       const size = 2.0
       const box = MeshBuilder.CreateBox("badSector", { size }, host.scene)
@@ -104,6 +107,7 @@ export function createMagneticStorageTrackImpl(host: any): void {
   host.createBasin(goalPos, storageMat)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createNeuralNetworkTrackImpl(host: any): void {
   const netMat = host.getTrackMaterial("#FFFFFF")
   const veinMat = host.getTrackMaterial("#FF0000")
@@ -217,6 +221,7 @@ export function createNeuralNetworkTrackImpl(host: any): void {
   host.createBasin(goalPos, netMat)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createNeonStrongholdTrackImpl(host: any): void {
   const stoneMat = host.getTrackMaterial("#2F2F2F")
   const neonMat = host.getTrackMaterial("#0088FF")
@@ -291,6 +296,7 @@ export function createNeonStrongholdTrackImpl(host: any): void {
       const turretHeight = 2.0
       const turretRadius = 1.0
       const turret = MeshBuilder.CreateCylinder("turret", { diameter: turretRadius * 2, height: turretHeight }, host.scene)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const binding = host.kinematicBindings.find((b: any) => b.body === platformBody)
       if (binding) {
         turret.parent = binding.mesh
@@ -319,6 +325,7 @@ export function createNeonStrongholdTrackImpl(host: any): void {
   host.createBasin(finalGoalPos, neonMat)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createCasinoHeistTrackImpl(host: any): void {
   const feltMat = host.getTrackMaterial("#880000")
   const goldMat = host.getTrackMaterial("#FFD700")

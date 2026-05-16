@@ -116,6 +116,7 @@ export class GameInputActions {
 
   handlePlunger(): void {
     const rapier = this.host.physics.getRapier()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ballBody = (this.host as any).ballManager?.getBallBody?.()
     if (!ballBody || !rapier) return
 

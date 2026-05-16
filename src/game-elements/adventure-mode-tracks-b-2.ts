@@ -2,13 +2,14 @@ import { MeshBuilder, Vector3, Quaternion } from '@babylonjs/core'
 
 // Implementation helpers for AdventureModeTracksB (part 2)
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createGravityForgeTrackImpl(host: any): void {
   const rustMat = host.getTrackMaterial("#8B4513")
   const steelMat = host.getTrackMaterial("#333333")
   const moltenMat = host.getTrackMaterial("#FF4500")
 
   let currentPos = host.currentStartPos.clone()
-  let heading = 0
+  const heading = 0
 
   const feedLen = 12
   const feedIncline = (30 * Math.PI) / 180
@@ -92,6 +93,7 @@ export function createGravityForgeTrackImpl(host: any): void {
   host.createBasin(goalPos, moltenMat)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createTidalNexusTrackImpl(host: any): void {
   const waterMat = host.getTrackMaterial("#0066FF")
   const foamMat = host.getTrackMaterial("#E0FFFF")
@@ -135,6 +137,7 @@ export function createTidalNexusTrackImpl(host: any): void {
     for (let i = 0; i < paddleCount; i++) {
       const angle = (i * Math.PI * 2) / paddleCount
       const paddle = MeshBuilder.CreateBox("paddle", { width: paddleThick, height: paddleHeight, depth: paddleLen }, host.scene)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const binding = host.kinematicBindings.find((b: any) => b.body === platformBody)
       if (binding) {
         paddle.parent = binding.mesh
@@ -229,6 +232,7 @@ export function createTidalNexusTrackImpl(host: any): void {
   host.createBasin(goalPos, waterMat)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createDigitalZenGardenTrackImpl(host: any): void {
   const gardenMat = host.getTrackMaterial("#FFFFFF")
   const accentMat = host.getTrackMaterial("#FF69B4")
@@ -312,6 +316,7 @@ export function createDigitalZenGardenTrackImpl(host: any): void {
   host.createBasin(goalPos, accentMat)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createSynthwaveSurfTrackImpl(host: any): void {
   const floorMat = host.getTrackMaterial("#110022")
   const gridMat = host.getTrackMaterial("#00FFFF")
@@ -382,6 +387,7 @@ export function createSynthwaveSurfTrackImpl(host: any): void {
   host.createBasin(goalPos, gridMat)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createSolarFlareTrackImpl(host: any): void {
   const plasmaMat = host.getTrackMaterial("#FF4500")
   const coreMat = host.getTrackMaterial("#FFFF00")

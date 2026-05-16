@@ -43,6 +43,7 @@ async function bootstrap(): Promise<void> {
 
   // Expose visibility diagnostic helper
   ;(window as unknown as Record<string, unknown>).runVisibilityDiagnostic = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const game = (window as unknown as Record<string, unknown>).game as any
     if (!game) {
       console.error('Game not loaded')
@@ -65,12 +66,14 @@ async function bootstrap(): Promise<void> {
     console.log('alpha/beta/radius:', cam.alpha, cam.beta, cam.radius)
     console.log('fov:', cam.fov, 'minZ:', cam.minZ, 'maxZ:', cam.maxZ)
     console.log('viewport:', cam.viewport)
-    console.log('activeCameras:', scene.activeCameras?.map((c: any) => c.name))
+    console.log('activeCameras:', scene.activeCameras?.map((c: unknown) => (c as { name?: string }).name))
 
     console.log('=== MESHES (count:', scene.meshes.length, ') ===')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const interesting = scene.meshes.filter((m: any) =>
       /flipper|ball|bumper|wall|pin|playfield|lcd|cabinet/i.test(m.name)
     )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     console.table(interesting.map((m: any) => ({
       name: m.name,
       enabled: m.isEnabled(),
@@ -86,6 +89,7 @@ async function bootstrap(): Promise<void> {
     })))
 
     console.log('=== LIGHTS ===')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     console.table(scene.lights.map((l: any) => ({
       name: l.name, type: l.getClassName(), intensity: l.intensity, enabled: l.isEnabled()
     })))

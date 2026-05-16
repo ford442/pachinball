@@ -229,6 +229,7 @@ export class GameRenderer {
     // Skip MRT-based post-processes when running on SwiftShader to avoid
     // GL_INVALID_OPERATION: Active draw buffers with missing fragment shader outputs
     const isSwiftShader = (() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const gl = (this.host.engine as any)._gl as WebGLRenderingContext | null
       if (!gl) return false
       const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')

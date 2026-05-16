@@ -788,16 +788,27 @@ export class Game {
     this.uiManager?.dispose()
     this.adventureManager?.dispose()
     this.renderer?.dispose()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.cabinetBuilder = null as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.sceneBuilder = null as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.physicsController = null as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.inputActions = null as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.scenarioManager = null as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.slotAdventure = null as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.settingsUI = null as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.debugHelper = null as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.lifecycle = null as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.hud = null as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.mapCabinet = null as any
     this.leaderboardSystem.stop()
     this.leaderboardSystem.dispose()

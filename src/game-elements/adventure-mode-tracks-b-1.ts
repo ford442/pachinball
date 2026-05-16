@@ -2,6 +2,7 @@ import { MeshBuilder, Vector3, Quaternion } from '@babylonjs/core'
 
 // Implementation helpers for AdventureModeTracksB (part 1)
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createCpuCoreTrackImpl(host: any): void {
   const pcbMat = host.getTrackMaterial("#004400")
   const traceMat = host.getTrackMaterial("#FFD700")
@@ -36,6 +37,7 @@ export function createCpuCoreTrackImpl(host: any): void {
     for (let i = 0; i < bladeCount; i++) {
       const angle = (i * Math.PI * 2) / bladeCount
       const blade = MeshBuilder.CreateBox("fanBlade", { width: bladeThickness, height: bladeHeight, depth: bladeLength }, host.scene)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const binding = host.kinematicBindings.find((b: any) => b.body === fanBody)
       if (binding) {
         blade.parent = binding.mesh
@@ -71,6 +73,7 @@ export function createCpuCoreTrackImpl(host: any): void {
   host.adventureTrack.push(socket)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createCryoChamberTrackImpl(host: any): void {
   const iceMat = host.getTrackMaterial("#A5F2F3")
   const pillarMat = host.getTrackMaterial("#FFFFFF")
@@ -113,6 +116,7 @@ export function createCryoChamberTrackImpl(host: any): void {
   host.createBasin(goalPos, iceMat)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createBioHazardLabTrackImpl(host: any): void {
   const hazardMat = host.getTrackMaterial("#39FF14")
   const warningMat = host.getTrackMaterial("#FFFF00")
@@ -136,6 +140,7 @@ export function createBioHazardLabTrackImpl(host: any): void {
     const wallHeight = 0.5
     const wallThickness = 0.5
     const torus = MeshBuilder.CreateTorus("centrifugeWall", { diameter: centrifugeRadius * 2, thickness: wallThickness, tessellation: 32 }, host.scene)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const binding = host.kinematicBindings.find((b: any) => b.body === platformBody)
     if (binding) {
       torus.parent = binding.mesh

@@ -204,6 +204,7 @@ export class GameUIManager {
   /**
    * Show or hide the loading state overlay
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   showLoadingState(show: boolean, _phase?: 'gameplay' | 'cosmetic'): void {
     if (show) {
       if (!this.loadingOverlay) {
