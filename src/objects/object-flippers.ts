@@ -204,6 +204,8 @@ export class FlipperBuilder {
         GameConfig.flipper.damping
       )
 
+      flippers.set(isRight ? 'right' : 'left', { mesh: flipperRoot, body, joint })
+
       return joint
     }
 

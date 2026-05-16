@@ -538,6 +538,7 @@ export class AdventureMode extends AdventureModeTracksB {
     }
     
     this.scene.activeCamera = this.followCamera
+    this.scene.activeCameras = [this.followCamera]
   }
 
   /**
@@ -633,6 +634,7 @@ export class AdventureMode extends AdventureModeTracksB {
     // Restore Table Camera
     if (this.tableCamera) {
       this.scene.activeCamera = this.tableCamera
+      this.scene.activeCameras = [this.tableCamera]
       this.followCamera?.dispose()
       this.followCamera = null
     }

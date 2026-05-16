@@ -41,6 +41,60 @@ async function bootstrap(): Promise<void> {
   // Expose for Playwright tests
   ;(window as unknown as Record<string, unknown>).game = game
 
+  // Expose visibility diagnostic helper
+  ;(window as unknown as Record<string, unknown>).runVisibilityDiagnostic = () => {
+    const g = (window as unknown as Record<string, unknown>).game as {
+      scene?: import('@babylonjs/core').Scene
+      engine?: import('@babylonjs/core').Engine
+    } | undefined
+    if (!g?.scene) {
+      console.error('Game not loaded')
+      return
+    }
+    const scene = g.scene
+    const cam = scene.activeCamera
+    if (!cam) {
+      console.error('No active camera')
+      return
+    }
+    console.log('=== CAMERA ===')
+    console.log('position:', (cam as any).position?.asArray?.() || (cam as any).position)
+    console.log('target:', (cam as any).target?.asArray?.() || (cam as any).target)
+    console.log('alpha/beta/radius:', (cam as any).alpha, (cam as any).beta, (cam as any).radius)
+    console.log('fov:', cam.fov, 'minZ:', (cam as any).minZ, 'maxZ:', (cam as any).maxZ)
+    console.log('viewport:', cam.viewport)
+    console.log('activeCameras:', scene.activeCameras?.map((c: any) => c.name))
+
+    console.log('=== MESHES (count:', scene.meshes.length, ') ===')
+    const interesting = scene.meshes.filter((m: any) =>
+      /flipper|ball|bumper|wall|pin|playfield|lcd|cabinet/i.test(m.name)
+    )
+    console.table(interesting.map((m: any) => ({
+      name: m.name,
+      enabled: m.isEnabled(),
+      visible: m.isVisible,
+      visibility: m.visibility,
+      inFrustum: cam.isInFrustum(m),
+      x: m.position.x.toFixed(2),
+      y: m.position.y.toFixed(2),
+      z: m.position.z.toFixed(2),
+      material: m.material?.name || '(none)',
+      alpha: m.material?.alpha,
+      parent: m.parent?.name || '(none)',
+    })))
+
+    console.log('=== LIGHTS ===')
+    console.table(scene.lights.map((l: any) => ({
+      name: l.name, type: l.getClassName(), intensity: l.intensity, enabled: l.isEnabled()
+    })))
+
+    console.log('=== RENDER STATS ===')
+    console.log('engine fps:', g.engine?.getFps().toFixed(1))
+    console.log('render width × height:', g.engine?.getRenderWidth(), '×', g.engine?.getRenderHeight())
+    console.log('hardware scaling:', g.engine?.getHardwareScalingLevel())
+    console.log('canvas client:', g.engine?.getRenderingCanvas()?.clientWidth, '×', g.engine?.getRenderingCanvas()?.clientHeight)
+  }
+
   console.timeEnd('[Bootstrap] Game init')
   console.timeEnd('[Bootstrap] Total initialization')
   console.log('[Bootstrap] Physics WASM preloading completed successfully')

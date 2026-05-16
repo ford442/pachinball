@@ -58,6 +58,19 @@ export class GameSceneBuilder {
     }
     ballManager.createMainBall()
 
+    // Defensive build-phase logging
+    if (scene) {
+      const flipperMeshes = scene.meshes.filter(m => /flipper/i.test(m.name))
+      const ballMeshes = scene.meshes.filter(m => /^ball$/i.test(m.name))
+      console.log(`[GameSceneBuilder] Critical scene built: ${flipperMeshes.length} flipper meshes, ${ballMeshes.length} main ball meshes`)
+      if (flipperMeshes.length === 0) {
+        console.warn('[GameSceneBuilder] WARNING: No flipper meshes found in scene after createFlippers()')
+      }
+      if (ballMeshes.length === 0) {
+        console.warn('[GameSceneBuilder] WARNING: No main ball mesh found in scene after createMainBall()')
+      }
+    }
+
     if (tableCam && effects) {
       effects.registerCamera(tableCam)
       effects.registerTableCamera(tableCam)
