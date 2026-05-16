@@ -65,7 +65,6 @@ export class DisplaySystem {
     // Detect WebGPU/WGSL support
     this.useWGSL =
       engine.getClassName() === 'WebGPUEngine' ||
-       
       (engine as unknown as { isWebGPU: boolean }).isWebGPU === true
 
     // Initialize layer managers
