@@ -536,7 +536,7 @@ export class AdventureMode extends AdventureModeTracksB {
     if (ballMesh) {
       this.followCamera.lockedTarget = ballMesh
     }
-    
+
     this.scene.activeCamera = this.followCamera
     this.scene.activeCameras = [this.followCamera]
   }
