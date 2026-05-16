@@ -132,10 +132,6 @@ export class GameRenderer {
 
     scene.onBeforeRenderObservable.add(() => {
       const dt = engine.getDeltaTime() / 1000
-      // Read tableCam from host on every frame — at setupCamera() time, host.tableCam
-      // was still null when destructured locally, so this must be live-read or the
-      // mouse-look + follow-mode branches never execute.
-      const tableCam = this.host.tableCam
       if (this.host.isCameraFollowMode) {
         this.host.cameraFollowTransition = Math.min(
           1,
