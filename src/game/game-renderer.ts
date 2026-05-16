@@ -175,6 +175,12 @@ export class GameRenderer {
     const { scene, tableCam, qualityTier } = this.host
     if (!scene || !tableCam) return
 
+    // Debug: skip all post-processing via URL flag
+    if (new URLSearchParams(window.location.search).has('nopp')) {
+      console.log('[GameRenderer] Post-processing disabled via ?nopp=1')
+      return
+    }
+
     const bloom = new DefaultRenderingPipeline('pachinbloom', true, scene, [tableCam])
     this.host.bloomPipeline = bloom
 
@@ -423,6 +429,12 @@ export class GameRenderer {
   setupSceneOptimizer(): void {
     const { scene } = this.host
     if (!scene) return
+
+    // Debug: disable scene optimizer via URL flag
+    if (new URLSearchParams(window.location.search).has('noopt')) {
+      console.log('[GameRenderer] SceneOptimizer disabled via ?noopt=1')
+      return
+    }
 
     const options = SceneOptimizerOptions.ModerateDegradationAllowed(55)
     this._sceneOptimizer = new SceneOptimizer(scene, options)

@@ -698,7 +698,11 @@ export class Game {
 
     this.sceneBuilder.buildCriticalScene()
     this.cabinetBuilder.updateCabinetLightExclusions()
-    this.initLCDTablePostProcess()
+    try {
+      this.initLCDTablePostProcess()
+    } catch (err) {
+      console.warn('[Game] LCD table post-process failed to initialize, continuing without it:', err)
+    }
     this.ready = true
     this.uiManager?.showLoadingState(false, 'gameplay')
 

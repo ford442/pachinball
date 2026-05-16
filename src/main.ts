@@ -43,25 +43,27 @@ async function bootstrap(): Promise<void> {
 
   // Expose visibility diagnostic helper
   ;(window as unknown as Record<string, unknown>).runVisibilityDiagnostic = () => {
-    const g = (window as unknown as Record<string, unknown>).game as {
-      scene?: import('@babylonjs/core').Scene
-      engine?: import('@babylonjs/core').Engine
-    } | undefined
-    if (!g?.scene) {
+    const game = (window as unknown as Record<string, unknown>).game as any
+    if (!game) {
       console.error('Game not loaded')
       return
     }
-    const scene = g.scene
+    const scene = game.scene
+    const engine = game.engine
+    if (!scene) {
+      console.error('Scene not ready')
+      return
+    }
     const cam = scene.activeCamera
     if (!cam) {
       console.error('No active camera')
       return
     }
     console.log('=== CAMERA ===')
-    console.log('position:', (cam as any).position?.asArray?.() || (cam as any).position)
-    console.log('target:', (cam as any).target?.asArray?.() || (cam as any).target)
-    console.log('alpha/beta/radius:', (cam as any).alpha, (cam as any).beta, (cam as any).radius)
-    console.log('fov:', cam.fov, 'minZ:', (cam as any).minZ, 'maxZ:', (cam as any).maxZ)
+    console.log('position:', cam.position?.asArray?.() || cam.position)
+    console.log('target:', cam.target?.asArray?.() || cam.target)
+    console.log('alpha/beta/radius:', cam.alpha, cam.beta, cam.radius)
+    console.log('fov:', cam.fov, 'minZ:', cam.minZ, 'maxZ:', cam.maxZ)
     console.log('viewport:', cam.viewport)
     console.log('activeCameras:', scene.activeCameras?.map((c: any) => c.name))
 
@@ -89,10 +91,11 @@ async function bootstrap(): Promise<void> {
     })))
 
     console.log('=== RENDER STATS ===')
-    console.log('engine fps:', g.engine?.getFps().toFixed(1))
-    console.log('render width × height:', g.engine?.getRenderWidth(), '×', g.engine?.getRenderHeight())
-    console.log('hardware scaling:', g.engine?.getHardwareScalingLevel())
-    console.log('canvas client:', g.engine?.getRenderingCanvas()?.clientWidth, '×', g.engine?.getRenderingCanvas()?.clientHeight)
+    console.log('engine fps:', engine?.getFps().toFixed(1))
+    console.log('render width × height:', engine?.getRenderWidth(), '×', engine?.getRenderHeight())
+    console.log('hardware scaling:', engine?.getHardwareScalingLevel())
+    console.log('canvas client:', engine?.getRenderingCanvas()?.clientWidth, '×', engine?.getRenderingCanvas()?.clientHeight)
+    console.log('=== DIAGNOSTIC COMPLETE ===')
   }
 
   console.timeEnd('[Bootstrap] Game init')
