@@ -530,7 +530,7 @@ export class Game {
       })
     }, true)
 
-    this.stateManager.setState(GameState.MENU)
+    this.lifecycle.setGameState(GameState.MENU)
   }
 
   private async buildSceneStaged(): Promise<void> {
