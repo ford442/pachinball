@@ -107,6 +107,7 @@ import { GameLifecycle, type LifecycleHost } from './game/game-lifecycle'
 import { GameHUD, type HUDHost } from './game/game-hud'
 import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
 import { hexToColor3 } from './game/game-utils'
+import { StepDebugger } from './game-elements/step-debugger'
 
 export class Game {
   private readonly engine: Engine | WebGPUEngine
@@ -542,109 +543,116 @@ export class Game {
 
     this.uiManager?.showLoadingState(true)
 
-    const skybox = MeshBuilder.CreateBox('skybox', { size: GameConfig.visuals.skyboxSize }, this.scene)
-    const skyboxMaterial = new StandardMaterial('skyBox', this.scene)
-    skyboxMaterial.backFaceCulling = false
-    skyboxMaterial.diffuseColor = Color3.Black()
-    skyboxMaterial.specularColor = Color3.Black()
-    skyboxMaterial.emissiveColor = emissive(PALETTE.AMBIENT, INTENSITY.AMBIENT)
-    skybox.material = skyboxMaterial
+    const dbg = new StepDebugger()
 
-    const mirrorSize = this.qualityTier === QualityTier.HIGH ? GameConfig.visuals.mirrorSizeHigh : GameConfig.visuals.mirrorSizeMedium
-    this.mirrorTexture = new MirrorTexture('mirror', mirrorSize, this.scene, true)
-    this.mirrorTexture.mirrorPlane = new Plane(0, -1, 0, -1.01)
-    this.mirrorTexture.level = GameConfig.visuals.mirrorTextureLevel
+    dbg.step('Skybox + Mirror Texture', () => {
+      const skybox = MeshBuilder.CreateBox('skybox', { size: GameConfig.visuals.skyboxSize }, this.scene!)
+      const skyboxMaterial = new StandardMaterial('skyBox', this.scene!)
+      skyboxMaterial.backFaceCulling = false
+      skyboxMaterial.diffuseColor = Color3.Black()
+      skyboxMaterial.specularColor = Color3.Black()
+      skyboxMaterial.emissiveColor = emissive(PALETTE.AMBIENT, INTENSITY.AMBIENT)
+      skybox.material = skyboxMaterial
 
-    this.effects = new EffectsSystem(this.scene, this.bloomPipeline, this.accessibility)
-    if (this.keyLight && this.rimLight && this.bounceLight) {
-      this.effects.registerSceneLights(this.keyLight, this.rimLight, this.bounceLight)
-    }
-    const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
-    this.display = new DisplaySystem(this.scene, this.engine, displayConfig, this.qualityTier, this.accessibility)
-    this.display.subscribeToEvents(this.eventBus)
-    this.stateManager.setDisplaySystem(this.display)
-
-    // Initialize reactive cabinet lighting
-    this.cabinetLighting = new CabinetLighting(this.scene, {
-      enableEdgeLighting: true,
-      enableUnderCabinetGlow: true,
-      enableScreenBorder: false, // TODO: implement screen border
-      qualityTier: this.qualityTier,
+      const mirrorSize = this.qualityTier === QualityTier.HIGH ? GameConfig.visuals.mirrorSizeHigh : GameConfig.visuals.mirrorSizeMedium
+      this.mirrorTexture = new MirrorTexture('mirror', mirrorSize, this.scene!, true)
+      this.mirrorTexture.mirrorPlane = new Plane(0, -1, 0, -1.01)
+      this.mirrorTexture.level = GameConfig.visuals.mirrorTextureLevel
     })
-    this.cabinetLighting.subscribeToEvents(this.eventBus)
 
-    this.debugHUD = new DebugHUD({
-      onVisibilityChange: (visible) => this.debugHelper.handleDebugHUDVisibilityChange(visible),
-    })
-    this.debugHUD.setUpdateCadenceHz(4)
-    if (this.debugHUDEnabledInSettings && this.debugHelper.isDebugHUDAvailable()) {
-      this.debugHUD.show()
-    }
-
-    this.dynamicWorld = getDynamicWorld(this.scene, this.tableCam!, this.display, this.soundSystem)
-    this.ballStackVisual = new BallStackVisual(this.scene)
-
-    this.adventureState.setDisplay(this.display)
-    this.adventureState.onLevelCompleteCallback((level) => {
-      console.log(`[Game] Level complete: ${level.name}`)
-      if (level.rewards.unlockMap) {
-        setTimeout(() => { this.mapCabinet.switchTableMap(level.rewards.unlockMap!) }, GAME_TUNING.timing.storyVideoWaitMs)
+    dbg.step('Effects System (bloom / lighting)', () => {
+      this.effects = new EffectsSystem(this.scene!, this.bloomPipeline, this.accessibility)
+      if (this.keyLight && this.rimLight && this.bounceLight) {
+        this.effects.registerSceneLights(this.keyLight, this.rimLight, this.bounceLight)
       }
     })
-    this.adventureState.onGoalUpdateCallback((goals) => {
-      const goalText = goals.map(g => `${g.description}: ${g.current}/${g.target}`).join('\n')
-      this.display?.setStoryText(goalText)
+
+    dbg.step('Display System — CRT / backbox shaders', () => {
+      const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
+      this.display = new DisplaySystem(this.scene!, this.engine, displayConfig, this.qualityTier, this.accessibility)
+      this.display.subscribeToEvents(this.eventBus)
+      this.stateManager.setDisplaySystem(this.display)
     })
 
-    this.slotAdventure.setupSlotMachineCallbacks()
-
-    this.gameObjects = new GameObjects(this.scene, world, rapier, GameConfig)
-    this.ballManager = new BallManager(this.scene, world, rapier, this.gameObjects.getBindings())
-    this.ballManager.setOnGoldBallCollected((type, points) => {
-      console.log(`[Game] Gold ball collected: ${type}, points: ${points}`)
+    dbg.step('Cabinet Lighting', () => {
+      this.cabinetLighting = new CabinetLighting(this.scene!, {
+        enableEdgeLighting: true,
+        enableUnderCabinetGlow: true,
+        enableScreenBorder: false,
+        qualityTier: this.qualityTier,
+      })
+      this.cabinetLighting.subscribeToEvents(this.eventBus)
     })
-    this.adventureMode = new AdventureMode(this.scene, world, rapier)
 
-    // setupFeederEventHandlers must run after both gameObjects and ballManager are ready
-    this.setupFeederEventHandlers()
+    dbg.step('Debug HUD + World State', () => {
+      this.debugHUD = new DebugHUD({
+        onVisibilityChange: (visible) => this.debugHelper.handleDebugHUDVisibilityChange(visible),
+      })
+      this.debugHUD.setUpdateCadenceHz(4)
+      if (this.debugHUDEnabledInSettings && this.debugHelper.isDebugHUDAvailable()) {
+        this.debugHUD.show()
+      }
 
-    try {
-      // Initialize ZoneTriggerSystem if not already present
+      this.dynamicWorld = getDynamicWorld(this.scene!, this.tableCam!, this.display!, this.soundSystem)
+      this.ballStackVisual = new BallStackVisual(this.scene!)
+
+      this.adventureState.setDisplay(this.display!)
+      this.adventureState.onLevelCompleteCallback((level) => {
+        console.log(`[Game] Level complete: ${level.name}`)
+        if (level.rewards.unlockMap) {
+          setTimeout(() => { this.mapCabinet.switchTableMap(level.rewards.unlockMap!) }, GAME_TUNING.timing.storyVideoWaitMs)
+        }
+      })
+      this.adventureState.onGoalUpdateCallback((goals) => {
+        const goalText = goals.map(g => `${g.description}: ${g.current}/${g.target}`).join('\n')
+        this.display?.setStoryText(goalText)
+      })
+
+      this.slotAdventure.setupSlotMachineCallbacks()
+    })
+
+    dbg.step('Game Objects + Ball Manager', () => {
+      this.gameObjects = new GameObjects(this.scene!, world!, rapier!, GameConfig)
+      this.ballManager = new BallManager(this.scene!, world!, rapier!, this.gameObjects.getBindings())
+      this.ballManager.setOnGoldBallCollected((type, points) => {
+        console.log(`[Game] Gold ball collected: ${type}, points: ${points}`)
+      })
+      this.adventureMode = new AdventureMode(this.scene!, world!, rapier!)
+      this.setupFeederEventHandlers()
+    })
+
+    dbg.step('Obstacle Builders (spinner / trap / launcher / gate)', () => {
       if (!this.zoneTriggerSystem) {
         this.zoneTriggerSystem = new ZoneTriggerSystem(this.debugHUDQueryEnabled)
       }
 
-      // Initialize new obstacle builders
-      this.spinnerBuilder = new SpinnerBumperBuilder(this.scene, world, rapier, this.qualityTier)
+      this.spinnerBuilder = new SpinnerBumperBuilder(this.scene!, world!, rapier!, this.qualityTier)
       this.spinnerBuilder.setEventBus(this.eventBus)
       this.spinnerBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
 
-      this.ballTrapBuilder = new BallTrapBuilder(this.scene, world, rapier, this.qualityTier)
+      this.ballTrapBuilder = new BallTrapBuilder(this.scene!, world!, rapier!, this.qualityTier)
       this.ballTrapBuilder.setEventBus(this.eventBus)
       this.ballTrapBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
 
-      this.launcherBuilder = new LauncherBuilder(this.scene, world, rapier, this.qualityTier)
+      this.launcherBuilder = new LauncherBuilder(this.scene!, world!, rapier!, this.qualityTier)
       this.launcherBuilder.setEventBus(this.eventBus)
       this.launcherBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
 
-      this.movingGateBuilder = new MovingGateBuilder(this.scene, world, rapier, this.qualityTier)
+      this.movingGateBuilder = new MovingGateBuilder(this.scene!, world!, rapier!, this.qualityTier)
       this.movingGateBuilder.setEventBus(this.eventBus)
       this.movingGateBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
 
-      // Create sample obstacles
       const spinner = this.spinnerBuilder.createSpinnerBumper(5, 10, '#00ffff', 1.0)
       this.spinnerVisuals.push(spinner.visual)
-
       const trap = this.ballTrapBuilder.createBallTrap(-5, 10, '#ff00ff', 1.0)
       this.trapStates.push(trap.state)
-
       const launcher = this.launcherBuilder.createLauncher(2, 16, '#00ff88', 1.0)
       this.launcherStates.push(launcher.state)
-
       const gate = this.movingGateBuilder.createMovingGate(-2, 16, '#ffaa00', 1.0, 'slide', 2.0, 1.5)
       this.gateStates.push(gate.state)
+    })
 
-      // Initialize new adventure systems
+    dbg.step('Adventure Systems', () => {
       this.adventureGoalTracker = new AdventureGoalTracker()
       this.adventureGoalTracker.setEventBus(this.eventBus)
 
@@ -659,7 +667,7 @@ export class Game {
 
       this.adventureTrackProgression = new AdventureTrackProgression()
 
-      this.adventureMode.setEventListener((event, data) => {
+      this.adventureMode?.setEventListener((event, data) => {
         console.log(`Adventure Event: ${event}`)
         switch (event) {
           case 'START': {
@@ -680,7 +688,6 @@ export class Game {
             this.eventBus.emit('display:set', DisplayState.IDLE)
             this.effects?.setLightingMode('normal', 1.0)
             this.effects?.setAtmosphereState('IDLE')
-            // Sound handled reactively via EventBus 'adventure:end' subscription
             break
           case 'ZONE_ENTER': {
             const zoneData = data as {
@@ -694,29 +701,38 @@ export class Game {
           }
         }
       })
-    } catch (error) {
-      console.warn('[Game] Optional obstacle/adventure systems failed to initialize; continuing with core scene:', error)
-    }
+    })
 
-    this.sceneBuilder.buildCriticalScene()
-    this.cabinetBuilder.updateCabinetLightExclusions()
-    try {
+    dbg.step('Build Critical Scene (cabinet, flippers, camera)', () => {
+      this.sceneBuilder.buildCriticalScene()
+      this.cabinetBuilder.updateCabinetLightExclusions()
+    })
+
+    dbg.step('LCD Table PostProcess shader', () => {
       this.initLCDTablePostProcess()
-    } catch (err) {
-      console.warn('[Game] LCD table post-process failed to initialize, continuing without it:', err)
-    }
-    this.ready = true
-    this.uiManager?.showLoadingState(false, 'gameplay')
+    })
 
-    await this.sceneBuilder.yieldFrame()
-    this.sceneBuilder.buildGameplayScene()
-    this.physicsController.rebuildHandleCaches()
-    this.uiManager?.showLoadingState(false, 'cosmetic')
+    dbg.step('Mark Ready + Build Gameplay Scene', async () => {
+      this.ready = true
+      this.uiManager?.showLoadingState(false, 'gameplay')
+      await this.sceneBuilder.yieldFrame()
+      this.sceneBuilder.buildGameplayScene()
+      this.physicsController.rebuildHandleCaches()
+      this.uiManager?.showLoadingState(false, 'cosmetic')
+    })
 
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(() => this.sceneBuilder.buildCosmeticScene(), { timeout: GAME_TUNING.timing.idleCallbackTimeoutMs })
-    } else {
-      setTimeout(() => this.sceneBuilder.buildCosmeticScene(), GAME_TUNING.timing.cosmeticFallbackDelayMs)
+    dbg.step('Build Cosmetic Scene (idle callback)', () => {
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => this.sceneBuilder.buildCosmeticScene(), { timeout: GAME_TUNING.timing.idleCallbackTimeoutMs })
+      } else {
+        setTimeout(() => this.sceneBuilder.buildCosmeticScene(), GAME_TUNING.timing.cosmeticFallbackDelayMs)
+      }
+    })
+
+    try {
+      await dbg.run()
+    } catch (error) {
+      console.warn('[Game] Scene build encountered an error; game may be partially initialized:', error)
     }
   }
 
