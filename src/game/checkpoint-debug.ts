@@ -65,6 +65,7 @@ export class CheckpointDebugController {
   private readonly locationRef: Pick<Location, 'pathname' | 'hash'> | null
   private readonly historyRef: Pick<History, 'replaceState'> | null
   private readonly searchParams: URLSearchParams
+  private gpuLogEl: HTMLElement | null = null
 
   constructor(options: CheckpointDebugControllerOptions = {}) {
     const search = options.search ?? (typeof window !== 'undefined' ? window.location.search : '')
@@ -88,6 +89,7 @@ export class CheckpointDebugController {
 
     if (this.debugEnabled) {
       this.createPanel()
+      this.listenForGPUErrors()
     }
   }
 
@@ -324,6 +326,50 @@ export class CheckpointDebugController {
       return typeof localStorage !== 'undefined' ? localStorage : null
     } catch {
       return null
+    }
+  }
+
+  private appendGPULog(msg: string): void {
+    if (!this.documentRef) return
+    if (!this.gpuLogEl) {
+      const el = this.documentRef.createElement('div')
+      el.style.cssText = [
+        'margin-top:8px',
+        'max-height:120px',
+        'overflow:auto',
+        'background:rgba(80,0,0,0.55)',
+        'border:1px solid rgba(255,80,80,0.5)',
+        'border-radius:4px',
+        'padding:4px 6px',
+        'font-size:11px',
+        'color:#ff9090',
+        'word-break:break-all',
+      ].join(';')
+      const panel = this.documentRef.getElementById('checkpoint-debug-panel')
+      panel?.appendChild(el)
+      this.gpuLogEl = el
+    }
+    const line = this.documentRef.createElement('div')
+    line.textContent = msg
+    this.gpuLogEl.appendChild(line)
+    this.gpuLogEl.scrollTop = this.gpuLogEl.scrollHeight
+  }
+
+  private listenForGPUErrors(): void {
+    if (typeof window === 'undefined') return
+    window.addEventListener('error', (e) => {
+      const msg = e.message ?? ''
+      if (/wgsl|webgpu|shader|GPUValidation/i.test(msg)) {
+        this.appendGPULog(`GPU: ${msg.slice(0, 200)}`)
+      }
+    })
+    const origError = console.error.bind(console)
+    console.error = (...args: unknown[]) => {
+      origError(...args)
+      const msg = args.map((a) => String(a)).join(' ')
+      if (/wgsl|WebGPU|ShaderModule|GPUValidation/i.test(msg)) {
+        this.appendGPULog(`GPU: ${msg.slice(0, 200)}`)
+      }
     }
   }
 }
