@@ -143,11 +143,11 @@ export class ParticleEffects {
 
   private getParticleTexture(): Texture {
     // Create or return cached particle texture
-    return new Texture('assets/particle.png', this.scene)
+    return new Texture((import.meta.env.BASE_URL as string) + 'assets/particle.png', this.scene)
   }
 
   private getShardTexture(): Texture {
-    return new Texture('assets/shard.png', this.scene)
+    return new Texture((import.meta.env.BASE_URL as string) + 'assets/shard.png', this.scene)
   }
 
   update(): void {
