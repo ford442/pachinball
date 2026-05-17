@@ -107,7 +107,7 @@ import { GameLifecycle, type LifecycleHost } from './game/game-lifecycle'
 import { GameHUD, type HUDHost } from './game/game-hud'
 import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
 import { hexToColor3 } from './game/game-utils'
-import { StepDebugger } from './game-elements/step-debugger'
+import { CheckpointDebugController, type DebugStageKey } from './game/checkpoint-debug'
 
 export class Game {
   private readonly engine: Engine | WebGPUEngine
@@ -242,6 +242,8 @@ export class Game {
   private lifecycle!: GameLifecycle
   private hud!: GameHUD
   private mapCabinet!: GameMapCabinet
+  private checkpointDebug = new CheckpointDebugController()
+  private cosmeticSceneBuilt = false
 
   constructor(engine: Engine | WebGPUEngine, preloadedRapier?: typeof RAPIER) {
     this.engine = engine
@@ -253,301 +255,295 @@ export class Game {
       await this.engine.initAsync()
     }
 
-    this.scene = new Scene(this.engine)
-    this.scene.clearColor = color(SURFACES.VOID).toColor4(1)
+    const scene = new Scene(this.engine)
+    this.scene = scene
+    scene.clearColor = color(SURFACES.VOID).toColor4(1)
 
     if (!this.accessibility?.reducedMotion) {
-      this.scene.fogMode = Scene.FOGMODE_EXP2
-      this.scene.fogColor = Color3.FromHexString('#050510')
-      this.scene.fogDensity = GameConfig.visuals.fogDensity
+      scene.fogMode = Scene.FOGMODE_EXP2
+      scene.fogColor = Color3.FromHexString('#050510')
+      scene.fogDensity = GameConfig.visuals.fogDensity
     } else {
-      this.scene.fogMode = Scene.FOGMODE_NONE
+      scene.fogMode = Scene.FOGMODE_NONE
     }
 
-    // UI Bindings
-    this.scoreElement = document.getElementById('score')
-    this.menuOverlay = document.getElementById('menu-overlay')
-    this.pauseOverlay = document.getElementById('pause-overlay')
-    this.uiManager = new GameUIManager(this.scene)
-    this.startScreen = document.getElementById('start-screen')
-    this.gameOverScreen = document.getElementById('game-over-screen')
-    this.finalScoreElement = document.getElementById('final-score')
+    this.checkpointDebug = new CheckpointDebugController()
 
-    document.getElementById('start-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
-    document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
+    await this.runCheckpointStage('settings_ui', async () => {
+      this.scoreElement = document.getElementById('score')
+      this.menuOverlay = document.getElementById('menu-overlay')
+      this.pauseOverlay = document.getElementById('pause-overlay')
+      this.uiManager = new GameUIManager(scene)
+      this.startScreen = document.getElementById('start-screen')
+      this.gameOverScreen = document.getElementById('game-over-screen')
+      this.finalScoreElement = document.getElementById('final-score')
 
-    try {
-      const v = localStorage.getItem('pachinball.best')
-      if (v) this.bestScore = Math.max(0, parseInt(v, 10) || 0)
-    } catch {
-      // Ignore localStorage errors
-    }
+      document.getElementById('start-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
+      document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
 
-    const settings = SettingsManager.load()
-    this.debugHUDEnabledInSettings = settings.enableDebugHUD
-    SettingsManager.applyToConfig(settings)
-    this.accessibility = detectAccessibility()
-    console.log('[Accessibility] Settings loaded:', settings, 'Accessibility:', this.accessibility)
+      try {
+        const v = localStorage.getItem('pachinball.best')
+        if (v) this.bestScore = Math.max(0, parseInt(v, 10) || 0)
+      } catch {
+        // Ignore localStorage errors
+      }
 
-    this.hapticManager = new HapticManager({
-      enabled: this.accessibility.hapticsEnabled,
-      intensity: this.accessibility.hapticIntensity,
+      const settings = SettingsManager.load()
+      this.debugHUDEnabledInSettings = settings.enableDebugHUD
+      SettingsManager.applyToConfig(settings)
+      this.accessibility = detectAccessibility()
+      console.log('[Accessibility] Settings loaded:', settings, 'Accessibility:', this.accessibility)
+
+      this.hapticManager = new HapticManager({
+        enabled: this.accessibility.hapticsEnabled,
+        intensity: this.accessibility.hapticIntensity,
+      })
     })
 
-    // Initialize helpers
-    this.renderer = new GameRenderer(this as unknown as RendererHost)
-    this.renderer.setupCamera()
-    this.renderer.setupPostProcessing()
-    this.renderer.setupLighting()
-    this.renderer.createRoomEnvironment()
-    this.renderer.setupResizeObserver()
-    this.renderer.setupDPRHandling()
-    this.renderer.setupSceneOptimizer()
-
-    this.cabinetBuilder = new GameCabinetBuilder(this as unknown as CabinetBuilderHost)
-    this.sceneBuilder = new GameSceneBuilder(this as unknown as SceneBuilderHost)
-    this.inputActions = new GameInputActions(this as unknown as InputActionsHost)
-    this.scenarioManager = new GameScenario(this as unknown as ScenarioHost)
-    this.slotAdventure = new GameSlotAdventure(this as unknown as SlotAdventureHost)
-    this.settingsUI = new GameSettingsUI(this as unknown as SettingsUIHost)
-    this.debugHelper = new GameDebug(this as unknown as DebugHost)
-    this.lifecycle = new GameLifecycle(this as unknown as LifecycleHost)
-    this.hud = new GameHUD(this as unknown as HUDHost)
-    this.mapCabinet = new GameMapCabinet(this as unknown as MapCabinetHost)
-    this.updateHUD()
-    this.physicsController = new GamePhysicsController(this as unknown as PhysicsHost)
-
-    this.settingsUI.setupSettingsUI()
-    this.debugHelper.updateDeveloperSettingsVisibility()
-
-    // Initialize SoundSystem early (needed by setupMapSelector); EventBus wiring happens later
-    this.soundSystem = getSoundSystem()
-    await this.settingsUI.setupMapSelector()
-
-    // Event Bus and State Manager
-    this.eventBus = new EventBus()
-    getSoundSystem(this.eventBus)
-    this.stateManager = new GameStateManager({
-      onStateChange: (oldState, newState) => {
-        console.log(`[Game] State changed: ${GameState[oldState]} -> ${GameState[newState]}`)
-      },
+    await this.runCheckpointStage('render_bootstrap', () => {
+      this.renderer = new GameRenderer(this as unknown as RendererHost)
+      this.renderer.setupCamera()
+      this.renderer.setupPostProcessing()
+      this.renderer.setupLighting()
+      this.renderer.createRoomEnvironment()
+      this.renderer.setupResizeObserver()
+      this.renderer.setupDPRHandling()
+      this.renderer.setupSceneOptimizer()
     })
-    this.stateManager.setEventBus(this.eventBus)
 
-    await this.physics.init()
-    try {
-      await this.buildSceneStaged()
-    } catch (error) {
-      console.error('[Game] Failed to build staged scene:', error)
-      throw error
-    }
+    await this.runCheckpointStage('core_helpers', () => {
+      this.cabinetBuilder = new GameCabinetBuilder(this as unknown as CabinetBuilderHost)
+      this.sceneBuilder = new GameSceneBuilder(this as unknown as SceneBuilderHost)
+      this.inputActions = new GameInputActions(this as unknown as InputActionsHost)
+      this.scenarioManager = new GameScenario(this as unknown as ScenarioHost)
+      this.slotAdventure = new GameSlotAdventure(this as unknown as SlotAdventureHost)
+      this.settingsUI = new GameSettingsUI(this as unknown as SettingsUIHost)
+      this.debugHelper = new GameDebug(this as unknown as DebugHost)
+      this.lifecycle = new GameLifecycle(this as unknown as LifecycleHost)
+      this.hud = new GameHUD(this as unknown as HUDHost)
+      this.mapCabinet = new GameMapCabinet(this as unknown as MapCabinetHost)
+      this.updateHUD()
+      this.physicsController = new GamePhysicsController(this as unknown as PhysicsHost)
 
-    this.ballAnimator = new BallAnimator(this.scene)
+      this.settingsUI.setupSettingsUI()
+      this.debugHelper.updateDeveloperSettingsVisibility()
+    })
 
-    this.inputManager = new GameInputManager(this.scene, this.physics, {
-      onFlipperLeft: (pressed) => this.inputActions.handleFlipperLeft(pressed),
-      onFlipperRight: (pressed) => this.inputActions.handleFlipperRight(pressed),
-      onPlunger: () => this.inputActions.handlePlunger(),
-      onPlungerChargeStart: () => this.inputActions.startPlungerCharge(),
-      onPlungerChargeRelease: (chargeLevel) => this.inputActions.releasePlungerCharge(chargeLevel),
-      onPlungerChargeUpdate: (chargeLevel) => {
-        this.inputActions.updatePlungerCharge(chargeLevel)
-        this.inputActions.updatePlungerVisual(this.scene, chargeLevel)
-      },
-      onNudge: (direction) => this.physicsController.applyNudge(direction),
-      onPause: () => this.lifecycle.togglePause(),
-      onReset: () => this.lifecycle.resetBall(),
-      onStart: () => this.lifecycle.startGame(),
-      onAdventureToggle: () => this.toggleAdventure(),
-      onTrackNext: () => this.slotAdventure.cycleAdventureTrack(1),
-      onTrackPrev: () => this.slotAdventure.cycleAdventureTrack(-1),
-      onJackpotTrigger: () => this.lifecycle.triggerJackpot(),
-      onDebugHUD: () => {
-        if (!this.debugHelper.isDebugHUDKeyboardEnabled()) return
-        this.debugHUD?.toggle()
-      },
-      onMapSwitch: (index) => {
-        const maps = this.mapManager?.getMapSystem().getMapIds() || []
-        if (index >= 0 && index < maps.length) {
-          this.mapManager?.switchTableMap(maps[index])
+    await this.runCheckpointStage('state_setup', async () => {
+      this.soundSystem = getSoundSystem()
+      await this.settingsUI.setupMapSelector()
+
+      this.eventBus = new EventBus()
+      getSoundSystem(this.eventBus)
+      this.stateManager = new GameStateManager({
+        onStateChange: (oldState, newState) => {
+          console.log(`[Game] State changed: ${GameState[oldState]} -> ${GameState[newState]}`)
+        },
+      })
+      this.stateManager.setEventBus(this.eventBus)
+    })
+
+    await this.runCheckpointStage('physics', () => this.physics.init())
+    await this.buildSceneStaged()
+
+    this.ballAnimator = new BallAnimator(scene)
+
+    await this.runCheckpointStage('input_runtime', () => {
+      this.inputManager = new GameInputManager(scene, this.physics, {
+        onFlipperLeft: (pressed) => this.inputActions.handleFlipperLeft(pressed),
+        onFlipperRight: (pressed) => this.inputActions.handleFlipperRight(pressed),
+        onPlunger: () => this.inputActions.handlePlunger(),
+        onPlungerChargeStart: () => this.inputActions.startPlungerCharge(),
+        onPlungerChargeRelease: (chargeLevel) => this.inputActions.releasePlungerCharge(chargeLevel),
+        onPlungerChargeUpdate: (chargeLevel) => {
+          this.inputActions.updatePlungerCharge(chargeLevel)
+          this.inputActions.updatePlungerVisual(scene, chargeLevel)
+        },
+        onNudge: (direction) => this.physicsController.applyNudge(direction),
+        onPause: () => this.lifecycle.togglePause(),
+        onReset: () => this.lifecycle.resetBall(),
+        onStart: () => this.lifecycle.startGame(),
+        onAdventureToggle: () => this.toggleAdventure(),
+        onTrackNext: () => this.slotAdventure.cycleAdventureTrack(1),
+        onTrackPrev: () => this.slotAdventure.cycleAdventureTrack(-1),
+        onJackpotTrigger: () => this.lifecycle.triggerJackpot(),
+        onDebugHUD: () => {
+          if (!this.debugHelper.isDebugHUDKeyboardEnabled()) return
+          this.debugHUD?.toggle()
+        },
+        onMapSwitch: (index) => {
+          const maps = this.mapManager?.getMapSystem().getMapIds() || []
+          if (index >= 0 && index < maps.length) {
+            this.mapManager?.switchTableMap(maps[index])
+          }
+        },
+        onMapCycle: () => this.mapManager?.cycleTableMap(),
+        onCabinetCycle: () => this.cabinetManager?.cycleCabinetPreset(),
+        onCameraToggle: () => { this.isCameraFollowMode = !this.isCameraFollowMode },
+        onLevelSelectToggle: () => this.toggleLevelSelect(),
+        onLeaderboardToggle: () => this.leaderboardSystem.toggle(),
+        onDynamicModeToggle: () => this.scenarioManager.toggleDynamicMode(),
+        onScenarioCycle: () => this.scenarioManager.cycleScenario(),
+        onCRTPresetCycle: () => this.cycleCRTPreset(),
+        onPerfMonitorToggle: () => this.togglePerformanceMonitor(),
+        getState: () => this.stateManager.getState(),
+        getTiltActive: () => this.tiltActive,
+      })
+
+      this.inputManager.configurePlungerCharge({
+        maxChargeTime: GameConfig.plunger.maxChargeTime,
+        minImpulse: GameConfig.plunger.minImpulse,
+        maxImpulse: GameConfig.plunger.maxImpulse,
+      })
+
+      this.inputManager.setupGamepad({
+        deadZone: 0.15,
+        vibrationEnabled: !this.accessibility.reducedMotion,
+      })
+
+      const touchLeftBtn = document.getElementById('touch-left')
+      const touchRightBtn = document.getElementById('touch-right')
+      const touchPlungerBtn = document.getElementById('touch-plunger')
+      const touchNudgeBtn = document.getElementById('touch-nudge')
+      this.inputManager.setupTouchControls(touchLeftBtn, touchRightBtn, touchPlungerBtn, touchNudgeBtn)
+
+      scene.onBeforeRenderObservable.add(() => {
+        this.performanceMonitor.frameStart()
+        this.performanceMonitor.physicsStart()
+        this.physicsController.stepPhysics(this.inputManager, this.inputActions)
+        this.performanceMonitor.physicsEnd()
+      })
+
+      this.engine.runRenderLoop(() => {
+        this.settingsUI.updateLatencyDisplay(this.inputManager || undefined)
+        this.scene?.render()
+        const dt = this.engine.getDeltaTime() / 1000
+        this.cabinetLighting?.update(dt)
+
+        for (const visual of this.spinnerVisuals) {
+          this.spinnerBuilder?.updateSpinner(visual, dt)
         }
-      },
-      onMapCycle: () => this.mapManager?.cycleTableMap(),
-      onCabinetCycle: () => this.cabinetManager?.cycleCabinetPreset(),
-      onCameraToggle: () => { this.isCameraFollowMode = !this.isCameraFollowMode },
-      onLevelSelectToggle: () => this.toggleLevelSelect(),
-      onLeaderboardToggle: () => this.leaderboardSystem.toggle(),
-      onDynamicModeToggle: () => this.scenarioManager.toggleDynamicMode(),
-      onScenarioCycle: () => this.scenarioManager.cycleScenario(),
-      onCRTPresetCycle: () => this.cycleCRTPreset(),
-      onPerfMonitorToggle: () => this.togglePerformanceMonitor(),
-      getState: () => this.stateManager.getState(),
-      getTiltActive: () => this.tiltActive,
-    })
+        for (const state of this.trapStates) {
+          this.ballTrapBuilder?.updateTrap(state, dt)
+        }
+        for (const state of this.launcherStates) {
+          this.launcherBuilder?.updateLauncher(state, dt)
+        }
+        for (const state of this.gateStates) {
+          this.movingGateBuilder?.updateGate(state, dt)
+        }
 
-    this.inputManager.configurePlungerCharge({
-      maxChargeTime: GameConfig.plunger.maxChargeTime,
-      minImpulse: GameConfig.plunger.minImpulse,
-      maxImpulse: GameConfig.plunger.maxImpulse,
-    })
+        this.adventureCinematicSystem?.update(dt)
+        this.adventureCinematicTriggers?.update()
+        this.adventureUIStateManager?.updateAnimations(dt)
 
-    this.inputManager.setupGamepad({
-      deadZone: 0.15,
-      vibrationEnabled: !this.accessibility.reducedMotion,
-    })
+        this.performanceMonitor.updateEngineMetrics(0, this.physics.getActiveBodyCount())
+        this.performanceMonitor.frameEnd()
 
-    const touchLeftBtn = document.getElementById('touch-left')
-    const touchRightBtn = document.getElementById('touch-right')
-    const touchPlungerBtn = document.getElementById('touch-plunger')
-    const touchNudgeBtn = document.getElementById('touch-nudge')
-    this.inputManager.setupTouchControls(touchLeftBtn, touchRightBtn, touchPlungerBtn, touchNudgeBtn)
+        if (this.performanceMonitor.isEnabled() && this.debugHUD) {
+          const metrics = this.performanceMonitor.getMetrics()
+          this.debugHUD.update({
+            gameState: this.stateManager.getState().toString(),
+            displayState: this.display?.getDisplayState().toString() || 'n/a',
+            score: this.score,
+            multiplier: 1.0,
+            lives: this.lives,
+            adventureTrack: this.adventureTrackProgression?.getCurrentTrack() ?? null,
+            fps: metrics.fps,
+            drawCalls: metrics.drawCalls,
+            frameTimeMs: metrics.frameTimeMs,
+            activeBodies: metrics.activeBodies,
+            physicsStepMs: metrics.physicsStepMs,
+            adventureTimeMs: null,
+            dynamicZoneState: 'n/a',
+            performanceTier: 'n/a',
+          })
+        }
+      })
 
-    this.scene.onBeforeRenderObservable.add(() => {
-      this.performanceMonitor.frameStart()
-      this.performanceMonitor.physicsStart()
-      this.physicsController.stepPhysics(this.inputManager, this.inputActions)
-      this.performanceMonitor.physicsEnd()
-    })
-
-    this.engine.runRenderLoop(() => {
-      this.settingsUI.updateLatencyDisplay(this.inputManager || undefined)
-      this.scene?.render()
-      // Update reactive cabinet lighting
-      const dt = this.engine.getDeltaTime() / 1000
-      this.cabinetLighting?.update(dt)
-
-      // Update new obstacles
-      for (const visual of this.spinnerVisuals) {
-        this.spinnerBuilder?.updateSpinner(visual, dt)
-      }
-      for (const state of this.trapStates) {
-        this.ballTrapBuilder?.updateTrap(state, dt)
-      }
-      for (const state of this.launcherStates) {
-        this.launcherBuilder?.updateLauncher(state, dt)
-      }
-      for (const state of this.gateStates) {
-        this.movingGateBuilder?.updateGate(state, dt)
-      }
-
-      // Update adventure systems
-      this.adventureCinematicSystem?.update(dt)
-      this.adventureCinematicTriggers?.update()
-      this.adventureUIStateManager?.updateAnimations(dt)
-
-      // Update performance metrics
-      // drawCalls is not directly exposed; use 0 as placeholder
-      this.performanceMonitor.updateEngineMetrics(
-        0,
-        this.physics.getActiveBodyCount()
-      )
-      this.performanceMonitor.frameEnd()
-
-      // Update debug HUD with performance metrics if enabled
-      if (this.performanceMonitor.isEnabled() && this.debugHUD) {
-        const metrics = this.performanceMonitor.getMetrics()
-        this.debugHUD.update({
-          gameState: this.stateManager.getState().toString(),
-          displayState: this.display?.getDisplayState().toString() || 'n/a',
-          score: this.score,
-          multiplier: 1.0,
-          lives: this.lives,
-          adventureTrack: this.adventureTrackProgression?.getCurrentTrack() ?? null,
-          fps: metrics.fps,
-          drawCalls: metrics.drawCalls,
-          frameTimeMs: metrics.frameTimeMs,
-          activeBodies: metrics.activeBodies,
-          physicsStepMs: metrics.physicsStepMs,
-          adventureTimeMs: null,
-          dynamicZoneState: 'n/a',
-          performanceTier: 'n/a',
-        })
+      this.showDebugUI = new URLSearchParams(window.location.search).has('debug')
+      if (this.showDebugUI) {
+        this.inputManager?.enableLatencyTracking(true)
+        this.settingsUI.setupLatencyOverlay()
       }
     })
-
-    this.showDebugUI = new URLSearchParams(window.location.search).has('debug')
-    if (this.showDebugUI) {
-      this.inputManager?.enableLatencyTracking(true)
-      this.settingsUI.setupLatencyOverlay()
-    }
 
     this.ready = true
     this.stateManager.setSystems(this.effects, this.display)
 
-    // Initialize adventure manager
-    this.adventureManager = new AdventureManager(
-      this.scene!,
-      this.physics,
-      this.stateManager,
-      this.uiManager!,
-      {
-        effects: this.effects,
-        display: this.display,
-        ballManager: this.ballManager,
-        soundSystem: this.soundSystem,
-      },
-      {
-        onZoneEnter: (_zone, config, isMajor) => {
-          this.effects?.updateEnvironmentColor?.(config.primaryColor)
-          if (isMajor && this.hapticManager) {
-            this.hapticManager.jackpot()
-          }
+    await this.runCheckpointStage('managers_postinit', () => {
+      this.adventureManager = new AdventureManager(
+        this.scene!,
+        this.physics,
+        this.stateManager,
+        this.uiManager!,
+        {
+          effects: this.effects,
+          display: this.display,
+          ballManager: this.ballManager,
+          soundSystem: this.soundSystem,
         },
-        onScoreAward: (points, reason) => {
-          this.score += points
-          this.updateHUD()
-          this.uiManager?.showMessage(`${reason}: +${points}`, 1000)
-          const pos = this.physicsController.getBallPosition()
-          if (pos) this.effects?.spawnFloatingNumber(points, pos)
+        {
+          onZoneEnter: (_zone, config, isMajor) => {
+            this.effects?.updateEnvironmentColor?.(config.primaryColor)
+            if (isMajor && this.hapticManager) {
+              this.hapticManager.jackpot()
+            }
+          },
+          onScoreAward: (points, reason) => {
+            this.score += points
+            this.updateHUD()
+            this.uiManager?.showMessage(`${reason}: +${points}`, 1000)
+            const pos = this.physicsController.getBallPosition()
+            if (pos) this.effects?.spawnFloatingNumber(points, pos)
+          },
+          onAdventureEnd: () => {
+            this.score += GAME_TUNING.scoring.adventureEndBonus
+            this.updateHUD()
+            this.effects?.startJackpotSequence()
+            const pos = this.physicsController.getBallPosition()
+            if (pos) this.effects?.spawnFloatingNumber(GAME_TUNING.scoring.adventureEndBonus, pos)
+          },
+        }
+      )
+
+      this.mapManager = new TableMapManager(this.scene!, {
+        onMapChange: (_type, config) => {
+          this.ballManager?.updateBallMaterialColor(config.baseColor)
+          const matLib = getMaterialLibrary(this.scene!)
+          matLib.updateFlipperMaterialEmissive(config.baseColor)
+          matLib.updatePinMaterialEmissive(config.baseColor)
+          matLib.updateBrushedMetalMaterialEmissive(config.baseColor)
+          matLib.updateChromeMaterialEmissive(config.baseColor)
+          this.gameObjects?.updateBumperColors(config.baseColor)
+          this.effects?.setCabinetColor(config.baseColor)
+          this.cabinetBuilder.updateCabinetLightingForMap()
         },
-        onAdventureEnd: () => {
-          this.score += GAME_TUNING.scoring.adventureEndBonus
-          this.updateHUD()
-          this.effects?.startJackpotSequence()
-          const pos = this.physicsController.getBallPosition()
-          if (pos) this.effects?.spawnFloatingNumber(GAME_TUNING.scoring.adventureEndBonus, pos)
-        },
-      }
-    )
+        onPopupShow: (name, color) => this.mapCabinet.showMapNamePopup(name, color),
+        onMapSelectorUpdate: () => this.settingsUI.updateMapSelectorUI(),
+      })
+      this.mapManager.setBloomPipeline()
 
-    this.mapManager = new TableMapManager(this.scene!, {
-      onMapChange: (_type, config) => {
-        this.ballManager?.updateBallMaterialColor(config.baseColor)
-        const matLib = getMaterialLibrary(this.scene!)
-        matLib.updateFlipperMaterialEmissive(config.baseColor)
-        matLib.updatePinMaterialEmissive(config.baseColor)
-        matLib.updateBrushedMetalMaterialEmissive(config.baseColor)
-        matLib.updateChromeMaterialEmissive(config.baseColor)
-        this.gameObjects?.updateBumperColors(config.baseColor)
-        this.effects?.setCabinetColor(config.baseColor)
-        this.cabinetBuilder.updateCabinetLightingForMap()
-      },
-      onPopupShow: (name, color) => this.mapCabinet.showMapNamePopup(name, color),
-      onMapSelectorUpdate: () => this.settingsUI.updateMapSelectorUI(),
-    })
-    this.mapManager.setBloomPipeline()
+      this.cabinetManager = new CabinetManager(this.scene!, {
+        onPopupShow: (name) => this.mapCabinet.showCabinetPopup(name),
+        onUISelect: () => this.mapCabinet.updateCabinetSelectorUI(),
+      })
+    }, true)
 
-    this.cabinetManager = new CabinetManager(this.scene!, {
-      onPopupShow: (name) => this.mapCabinet.showCabinetPopup(name),
-      onUISelect: () => this.mapCabinet.updateCabinetSelectorUI(),
-    })
-
-    this.stateManager.setState(GameState.MENU)
+    this.lifecycle.setGameState(GameState.MENU)
   }
 
   private async buildSceneStaged(): Promise<void> {
     if (!this.scene) throw new Error('Scene not ready')
+    const scene = this.scene
     const world = this.physics.getWorld()
     const rapier = this.physics.getRapier()
     if (!world || !rapier) throw new Error('Physics not ready')
 
     this.uiManager?.showLoadingState(true)
-
-    const dbg = new StepDebugger()
-
-    dbg.step('Skybox + Mirror Texture', () => {
-      const skybox = MeshBuilder.CreateBox('skybox', { size: GameConfig.visuals.skyboxSize }, this.scene!)
-      const skyboxMaterial = new StandardMaterial('skyBox', this.scene!)
+    await this.runCheckpointStage('scene_rendering', () => {
+      const skybox = MeshBuilder.CreateBox('skybox', { size: GameConfig.visuals.skyboxSize }, scene)
+      const skyboxMaterial = new StandardMaterial('skyBox', scene)
       skyboxMaterial.backFaceCulling = false
       skyboxMaterial.diffuseColor = Color3.Black()
       skyboxMaterial.specularColor = Color3.Black()
@@ -555,36 +551,27 @@ export class Game {
       skybox.material = skyboxMaterial
 
       const mirrorSize = this.qualityTier === QualityTier.HIGH ? GameConfig.visuals.mirrorSizeHigh : GameConfig.visuals.mirrorSizeMedium
-      this.mirrorTexture = new MirrorTexture('mirror', mirrorSize, this.scene!, true)
+      this.mirrorTexture = new MirrorTexture('mirror', mirrorSize, scene, true)
       this.mirrorTexture.mirrorPlane = new Plane(0, -1, 0, -1.01)
       this.mirrorTexture.level = GameConfig.visuals.mirrorTextureLevel
-    })
 
-    dbg.step('Effects System (bloom / lighting)', () => {
-      this.effects = new EffectsSystem(this.scene!, this.bloomPipeline, this.accessibility)
+      this.effects = new EffectsSystem(scene, this.bloomPipeline, this.accessibility)
       if (this.keyLight && this.rimLight && this.bounceLight) {
         this.effects.registerSceneLights(this.keyLight, this.rimLight, this.bounceLight)
       }
-    })
-
-    dbg.step('Display System — CRT / backbox shaders', () => {
       const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
-      this.display = new DisplaySystem(this.scene!, this.engine, displayConfig, this.qualityTier, this.accessibility)
+      this.display = new DisplaySystem(scene, this.engine, displayConfig, this.qualityTier, this.accessibility)
       this.display.subscribeToEvents(this.eventBus)
       this.stateManager.setDisplaySystem(this.display)
-    })
 
-    dbg.step('Cabinet Lighting', () => {
-      this.cabinetLighting = new CabinetLighting(this.scene!, {
+      this.cabinetLighting = new CabinetLighting(scene, {
         enableEdgeLighting: true,
         enableUnderCabinetGlow: true,
-        enableScreenBorder: false,
+        enableScreenBorder: false, // TODO: implement screen border
         qualityTier: this.qualityTier,
       })
       this.cabinetLighting.subscribeToEvents(this.eventBus)
-    })
 
-    dbg.step('Debug HUD + World State', () => {
       this.debugHUD = new DebugHUD({
         onVisibilityChange: (visible) => this.debugHelper.handleDebugHUDVisibilityChange(visible),
       })
@@ -593,10 +580,10 @@ export class Game {
         this.debugHUD.show()
       }
 
-      this.dynamicWorld = getDynamicWorld(this.scene!, this.tableCam!, this.display!, this.soundSystem)
-      this.ballStackVisual = new BallStackVisual(this.scene!)
+      this.dynamicWorld = getDynamicWorld(scene, this.tableCam!, this.display, this.soundSystem)
+      this.ballStackVisual = new BallStackVisual(scene)
 
-      this.adventureState.setDisplay(this.display!)
+      this.adventureState.setDisplay(this.display)
       this.adventureState.onLevelCompleteCallback((level) => {
         console.log(`[Game] Level complete: ${level.name}`)
         if (level.rewards.unlockMap) {
@@ -609,50 +596,64 @@ export class Game {
       })
 
       this.slotAdventure.setupSlotMachineCallbacks()
+      this.checkpointDebug.registerToggleHandler('scene_lcd_post', (enabled) => {
+        if (enabled) {
+          this.initLCDTablePostProcess()
+          return
+        }
+        this.lcdTablePostProcess?.dispose()
+        this.lcdTablePostProcess = null
+      })
+      this.checkpointDebug.registerToggleHandler('scene_cosmetic', (enabled) => {
+        if (!enabled || this.cosmeticSceneBuilt) return
+        this.scheduleCosmeticSceneBuild()
+      })
     })
 
-    dbg.step('Game Objects + Ball Manager', () => {
-      this.gameObjects = new GameObjects(this.scene!, world!, rapier!, GameConfig)
-      this.ballManager = new BallManager(this.scene!, world!, rapier!, this.gameObjects.getBindings())
+    await this.runCheckpointStage('scene_gameplay', () => {
+      this.gameObjects = new GameObjects(scene, world, rapier, GameConfig)
+      this.ballManager = new BallManager(scene, world, rapier, this.gameObjects.getBindings())
       this.ballManager.setOnGoldBallCollected((type, points) => {
         console.log(`[Game] Gold ball collected: ${type}, points: ${points}`)
       })
-      this.adventureMode = new AdventureMode(this.scene!, world!, rapier!)
+      this.adventureMode = new AdventureMode(scene, world, rapier)
+
       this.setupFeederEventHandlers()
     })
 
-    dbg.step('Obstacle Builders (spinner / trap / launcher / gate)', () => {
+    await this.runCheckpointStage('scene_optional', () => {
       if (!this.zoneTriggerSystem) {
         this.zoneTriggerSystem = new ZoneTriggerSystem(this.debugHUDQueryEnabled)
       }
 
-      this.spinnerBuilder = new SpinnerBumperBuilder(this.scene!, world!, rapier!, this.qualityTier)
+      this.spinnerBuilder = new SpinnerBumperBuilder(scene, world, rapier, this.qualityTier)
       this.spinnerBuilder.setEventBus(this.eventBus)
       this.spinnerBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
 
-      this.ballTrapBuilder = new BallTrapBuilder(this.scene!, world!, rapier!, this.qualityTier)
+      this.ballTrapBuilder = new BallTrapBuilder(scene, world, rapier, this.qualityTier)
       this.ballTrapBuilder.setEventBus(this.eventBus)
       this.ballTrapBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
 
-      this.launcherBuilder = new LauncherBuilder(this.scene!, world!, rapier!, this.qualityTier)
+      this.launcherBuilder = new LauncherBuilder(scene, world, rapier, this.qualityTier)
       this.launcherBuilder.setEventBus(this.eventBus)
       this.launcherBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
 
-      this.movingGateBuilder = new MovingGateBuilder(this.scene!, world!, rapier!, this.qualityTier)
+      this.movingGateBuilder = new MovingGateBuilder(scene, world, rapier, this.qualityTier)
       this.movingGateBuilder.setEventBus(this.eventBus)
       this.movingGateBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
 
       const spinner = this.spinnerBuilder.createSpinnerBumper(5, 10, '#00ffff', 1.0)
       this.spinnerVisuals.push(spinner.visual)
+
       const trap = this.ballTrapBuilder.createBallTrap(-5, 10, '#ff00ff', 1.0)
       this.trapStates.push(trap.state)
+
       const launcher = this.launcherBuilder.createLauncher(2, 16, '#00ff88', 1.0)
       this.launcherStates.push(launcher.state)
+
       const gate = this.movingGateBuilder.createMovingGate(-2, 16, '#ffaa00', 1.0, 'slide', 2.0, 1.5)
       this.gateStates.push(gate.state)
-    })
 
-    dbg.step('Adventure Systems', () => {
       this.adventureGoalTracker = new AdventureGoalTracker()
       this.adventureGoalTracker.setEventBus(this.eventBus)
 
@@ -701,38 +702,65 @@ export class Game {
           }
         }
       })
-    })
+    }, true)
 
-    dbg.step('Build Critical Scene (cabinet, flippers, camera)', () => {
+    await this.runCheckpointStage('scene_critical', () => {
       this.sceneBuilder.buildCriticalScene()
       this.cabinetBuilder.updateCabinetLightExclusions()
     })
+    await this.runCheckpointStage('scene_lcd_post', () => this.initLCDTablePostProcess(), true)
+    this.ready = true
+    this.uiManager?.showLoadingState(false, 'gameplay')
 
-    dbg.step('LCD Table PostProcess shader', () => {
-      this.initLCDTablePostProcess()
-    })
-
-    dbg.step('Mark Ready + Build Gameplay Scene', async () => {
-      this.ready = true
-      this.uiManager?.showLoadingState(false, 'gameplay')
+    await this.runCheckpointStage('scene_gameplay_build', async () => {
       await this.sceneBuilder.yieldFrame()
       this.sceneBuilder.buildGameplayScene()
       this.physicsController.rebuildHandleCaches()
       this.uiManager?.showLoadingState(false, 'cosmetic')
     })
+    this.scheduleCosmeticSceneBuild()
+  }
 
-    dbg.step('Build Cosmetic Scene (idle callback)', () => {
-      if ('requestIdleCallback' in window) {
-        requestIdleCallback(() => this.sceneBuilder.buildCosmeticScene(), { timeout: GAME_TUNING.timing.idleCallbackTimeoutMs })
-      } else {
-        setTimeout(() => this.sceneBuilder.buildCosmeticScene(), GAME_TUNING.timing.cosmeticFallbackDelayMs)
-      }
-    })
-
+  private async runCheckpointStage(
+    stage: DebugStageKey,
+    init: () => void | Promise<void>,
+    optional = false,
+  ): Promise<boolean> {
+    if (!this.checkpointDebug.isStageEnabled(stage)) {
+      this.checkpointDebug.markStageSkipped(stage)
+      return false
+    }
     try {
-      await dbg.run()
+      await this.checkpointDebug.runStage(stage, init)
+      return true
     } catch (error) {
-      console.warn('[Game] Scene build encountered an error; game may be partially initialized:', error)
+      if (optional) {
+        console.warn(`[Game] Optional stage "${stage}" failed; continuing`, error)
+        return false
+      }
+      throw error
+    }
+  }
+
+  private scheduleCosmeticSceneBuild(): void {
+    if (!this.checkpointDebug.isStageEnabled('scene_cosmetic')) {
+      this.checkpointDebug.markStageSkipped('scene_cosmetic')
+      return
+    }
+    if (this.cosmeticSceneBuilt) {
+      return
+    }
+    const buildCosmetic = () => {
+      if (this.cosmeticSceneBuilt) return
+      void this.runCheckpointStage('scene_cosmetic', () => {
+        this.sceneBuilder.buildCosmeticScene()
+        this.cosmeticSceneBuilt = true
+      }, true)
+    }
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(buildCosmetic, { timeout: GAME_TUNING.timing.idleCallbackTimeoutMs })
+    } else {
+      setTimeout(buildCosmetic, GAME_TUNING.timing.cosmeticFallbackDelayMs)
     }
   }
 
