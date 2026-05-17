@@ -96,27 +96,26 @@ export const crtEffectShader = {
     void main(void) {
       vec2 curvedUV = applyCurvature(vUV, uCurvature);
 
-      // Sample before any non-uniform branch: WGSL (WebGPU) requires textureSample to be
-      // called in uniform control flow. The bounds-check below contains a per-fragment early
-      // return, which would make all subsequent textureSample calls non-uniform. Sampling
-      // first is safe — out-of-bounds fragments discard the result immediately after.
-      float r = texture2D(textureSampler, curvedUV + vec2(uChromaticAberration * 0.01, 0.0)).r;
-      float g = texture2D(textureSampler, curvedUV).g;
-      float b = texture2D(textureSampler, curvedUV - vec2(uChromaticAberration * 0.01, 0.0)).b;
+      // WebGPU (WGSL) requires textureSample to be called in uniform control flow —
+      // i.e. unconditionally, without any preceding branch on a per-fragment value.
+      // Clamping the UV keeps sampling in-bounds; the inBounds mask below blacks out
+      // fragments that fall outside the curved screen area without using a branch.
+      vec2 sampledUV = clamp(curvedUV, 0.0, 1.0);
+      float r = texture2D(textureSampler, sampledUV + vec2(uChromaticAberration * 0.01, 0.0)).r;
+      float g = texture2D(textureSampler, sampledUV).g;
+      float b = texture2D(textureSampler, sampledUV - vec2(uChromaticAberration * 0.01, 0.0)).b;
       vec3 color = vec3(r, g, b);
 
-      // Discard if outside screen bounds (for curvature)
-      if (curvedUV.x < 0.0 || curvedUV.x > 1.0 || curvedUV.y < 0.0 || curvedUV.y > 1.0) {
-        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-        return;
-      }
-      
-      // Modern bloom/glow for bright elements
+      // Branchless out-of-bounds mask: 1.0 inside screen, 0.0 outside.
+      // step(a,b) = 1 when b >= a; all four conditions must pass.
+      float inBounds = step(0.0, curvedUV.x) * step(curvedUV.x, 1.0)
+                     * step(0.0, curvedUV.y) * step(curvedUV.y, 1.0);
+
+      // Modern bloom/glow (uGlow is uniform so this branch is uniform control flow)
       if (uGlow > 0.0) {
         float brightness = (color.r + color.g + color.b) / 3.0;
-        if (brightness > 0.5) {
-          color += color * brightness * uGlow * 0.8;
-        }
+        // Branchless bright-pixel boost via step instead of if (brightness > 0.5)
+        color += color * brightness * uGlow * 0.8 * step(0.5, brightness);
         color = color * (1.0 + uGlow * 0.2);
       }
 
@@ -127,23 +126,23 @@ export const crtEffectShader = {
       // Apply scanlines (soft for modern screens)
       float scan = scanlines(curvedUV, uScanlineIntensity);
       color *= scan;
-      
+
       // Apply vignette
       float vig = vignette(curvedUV, uVignette);
       color *= vig;
-      
-      // Add subtle noise/static
+
+      // Add subtle noise/static (uNoise is uniform — branch is fine)
       if (uNoise > 0.0) {
         float noise = rand(curvedUV + uTime) * uNoise;
         color += noise;
       }
-      
-      // Add occasional flicker
+
+      // Add occasional flicker (uFlicker is uniform — branch is fine)
       if (uFlicker > 0.0) {
         float flicker = 1.0 - (rand(vec2(uTime * 10.0, 0.0)) * uFlicker * 0.1);
         color *= flicker;
       }
-      
+
       // Modern color grading for LCD/OLED vibrancy
       float luminance = dot(color, vec3(0.299, 0.587, 0.114));
 
@@ -159,7 +158,8 @@ export const crtEffectShader = {
       // Contrast enhancement via S-curve
       color = pow(color, vec3(0.95)) + pow(color, vec3(2.1)) * 0.05;
 
-      gl_FragColor = vec4(color, 1.0);
+      // Apply out-of-bounds mask: black outside the curved screen area
+      gl_FragColor = vec4(color * inBounds, 1.0);
     }
   `
 }
