@@ -155,14 +155,14 @@ export const jackpotOverlayPostProcessFragment = `
     }
 
     void main(void) {
-        // UV glitch distortion replaces vertex displacement from the mesh-based variant
+        // WebGPU (WGSL) requires textureSample in uniform control flow.
+        // Compute glitch offset branchlessly so texture2D is always called
+        // unconditionally; step() replaces the per-fragment if-branches.
         vec2 uv = vUV;
-        if (uGlitchIntensity > 0.0) {
-            float noiseVal = rand(vec2(uTime, uv.y * 10.0));
-            if (noiseVal > 0.9) {
-                uv.x += (rand(vec2(uv.x * 10.0, uTime)) - 0.5) * uGlitchIntensity * 0.02;
-            }
-        }
+        float noiseVal    = rand(vec2(uTime, uv.y * 10.0));
+        float glitchShift = (rand(vec2(uv.x * 10.0, uTime)) - 0.5) * uGlitchIntensity * 0.02;
+        // Apply shift only when noiseVal > 0.9 AND uGlitchIntensity > 0 (both branchless)
+        uv.x += glitchShift * step(0.9, noiseVal) * step(0.001, uGlitchIntensity);
 
         vec4 sceneColor = texture2D(textureSampler, uv);
         vec4 baseColor  = texture2D(myTexture, uv);
