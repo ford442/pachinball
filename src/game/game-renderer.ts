@@ -181,6 +181,17 @@ export class GameRenderer {
       return
     }
 
+    // Opt-in to the full DefaultRenderingPipeline via ?fullpp=1.
+    // The default pipeline ran HDR rendering with ACES tone-mapping, DoF
+    // (focusDistance 2500 — far past the table), vignette and color curves;
+    // on top of the lcdTable/crtPP/scanline post-processes the compounded
+    // effect was so dim the table was invisible. Skip it to keep the
+    // playfield readable.
+    if (!new URLSearchParams(window.location.search).has('fullpp')) {
+      console.log('[GameRenderer] Default lite mode: no DefaultRenderingPipeline; enable full pipeline with ?fullpp=1')
+      return
+    }
+
     const bloom = new DefaultRenderingPipeline('pachinbloom', true, scene, [tableCam])
     this.host.bloomPipeline = bloom
 
