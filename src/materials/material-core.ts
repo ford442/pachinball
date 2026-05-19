@@ -133,23 +133,6 @@ export class MaterialLibraryBase {
         console.log('[MaterialLibrary] Environment texture loaded and cached')
       })
 
-      // Guard against empty/corrupt files that never become ready
-      const timeoutId = setTimeout(() => {
-        if (!envTexture.isReady() || envTexture.getSize().width === 0) {
-          console.warn('[MaterialLibrary] Environment texture not ready after timeout, using CDN fallback')
-          if (this.scene.environmentTexture === envTexture) {
-            this.scene.environmentTexture = null
-          }
-          this.textureCache.delete(envPath)
-          envTexture.dispose()
-          this.loadFallbackEnvironmentTexture(envPath)
-        }
-      }, 500)
-
-      envTexture.onLoadObservable.add(() => {
-        clearTimeout(timeoutId)
-      })
-
       // Cache for reuse
       this.textureCache.set(envPath, envTexture)
 
@@ -157,28 +140,6 @@ export class MaterialLibraryBase {
       this.scene.environmentIntensity = TIER_ENV_INTENSITY[this._qualityTier]
     } catch (err) {
       console.warn('[MaterialLibrary] Failed to load environment texture:', err)
-      this.loadFallbackEnvironmentTexture(envPath)
-    }
-  }
-
-  /**
-   * Load a proper prefiltered environment texture from Babylon.js CDN.
-   * Unlike RawCubeTexture, this provides correct mipmaps for PBR IBL
-   * so metallic materials don't render black.
-   */
-  private loadFallbackEnvironmentTexture(cacheKey: string): void {
-    const cdnUrl = 'https://assets.babylonjs.com/environments/environmentSpecular.env'
-    try {
-      const fallback = CubeTexture.CreateFromPrefilteredData(cdnUrl, this.scene)
-      fallback.name = 'fallbackEnv'
-      fallback.onLoadObservable.add(() => {
-        console.log('[MaterialLibrary] CDN fallback environment texture loaded')
-      })
-      this.textureCache.set(cacheKey, fallback)
-      this.scene.environmentTexture = fallback
-      this.scene.environmentIntensity = TIER_ENV_INTENSITY[this._qualityTier]
-    } catch (err) {
-      console.warn('[MaterialLibrary] Failed to load CDN fallback environment texture:', err)
       this.scene.environmentTexture = null
       this.scene.environmentIntensity = Math.min(0.4, TIER_ENV_INTENSITY[this._qualityTier])
     }
