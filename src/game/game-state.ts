@@ -1,3 +1,4 @@
+import { Engine } from '@babylonjs/core'
 import { GameState, DisplayState } from '../game-elements/types'
 import { EventBus } from './event-bus'
 
@@ -92,6 +93,23 @@ export class GameStateManager {
         } else if (oldState === GameState.PAUSED) {
           this.eventBus?.emit('game:resume')
           this.config.onResume?.()
+        }
+        // Hide the main menu overlay when the game starts
+        {
+          const startScreen = document.getElementById('startScreen')
+          if (startScreen) {
+            startScreen.classList.add('hidden')
+          }
+        }
+        // Wake up the audio engine to satisfy browser autoplay policies
+        {
+          const audioEngine = Engine.audioEngine
+          if (audioEngine && audioEngine.audioContext) {
+            const audioContext = audioEngine.audioContext
+            if (audioContext.state === 'suspended') {
+              void audioContext.resume()
+            }
+          }
         }
         break
 

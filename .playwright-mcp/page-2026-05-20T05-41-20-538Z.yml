@@ -1,0 +1,8 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic:
+      - generic: "Score: 0"
+      - generic: "0"
+      - generic: "Balls: 1"
+      - generic: "Lives: 3"
+  - generic [ref=e13]: "Controls — Left/Right: Flippers | Space: Launch | P: Pause | R: Reset"

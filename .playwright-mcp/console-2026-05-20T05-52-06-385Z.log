@@ -1,0 +1,17 @@
+[    2012ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5173/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=cf036441:2449
+[  408523ms] [WARNING] No available adapters. @ http://localhost:5173/:0
+[  408588ms] [WARNING] WebGPU init failed, using WebGL fallback Error: WebGL not supported
+    at new _ThinEngine (http://localhost:5173/node_modules/.vite/deps/chunk-YHLOUTTQ.js?v=cf036441:362:15)
+    at new _Engine (http://localhost:5173/node_modules/.vite/deps/chunk-KA42Z6KG.js?v=cf036441:2813:5)
+    at EngineFactory.CreateAsync (http://localhost:5173/node_modules/.vite/deps/chunk-BHDXY7C3.js?v=cf036441:12137:14)
+    at async createEngine (http://localhost:5173/src/main.ts:113:12)
+    at async Promise.all (index 0)
+    at async bootstrap (http://localhost:5173/src/main.ts:14:37) @ http://localhost:5173/src/main.ts:114
+[  408675ms] [WARNING] No available adapters. @ http://localhost:5173/:0
+[  408677ms] [ERROR] Failed to bootstrap game Error: WebGL not supported
+    at new _ThinEngine (http://localhost:5173/node_modules/.vite/deps/chunk-YHLOUTTQ.js?v=cf036441:362:15)
+    at new _Engine (http://localhost:5173/node_modules/.vite/deps/chunk-KA42Z6KG.js?v=cf036441:2813:5)
+    at EngineFactory.CreateAsync (http://localhost:5173/node_modules/.vite/deps/chunk-BHDXY7C3.js?v=cf036441:12137:14)
+    at async createEngine (http://localhost:5173/src/main.ts:116:12)
+    at async Promise.all (index 0)
+    at async bootstrap (http://localhost:5173/src/main.ts:14:37) @ http://localhost:5173/src/main.ts:119

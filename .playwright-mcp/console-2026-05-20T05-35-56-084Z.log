@@ -1,0 +1,125 @@
+[    2785ms] [WARNING] No available adapters. @ http://localhost:5173/:0
+[    3029ms] [LOG] BJS - [07:35:59]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5173/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=5b563c04:44
+[    3070ms] [WARNING] [.WebGL-0x69401bb4400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels @ http://localhost:5173/:0
+[    3146ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5173/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=d197f637:2449
+[    3158ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 420.97216796875 ms @ http://localhost:5173/src/main.ts:17
+[    3189ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5173/src/game.ts:184
+[    3213ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5173/src/game.ts:530
+[    3291ms] [LOG] [MaterialLibrary] Environment texture loaded and cached @ http://localhost:5173/src/game-elements/material-library.ts:78
+[    3563ms] [LOG] [Cabinet] Full 3D arcade cabinet built @ http://localhost:5173/src/game-elements/cabinet.ts:212
+[    3627ms] [LOG] [Game] LCD playfield created @ http://localhost:5173/src/game.ts:820
+[    3627ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5173/src/game.ts:910
+[    3904ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5173/src/game-elements/input.ts:81
+[    3905ms] [TIMEEND] [Bootstrap] Game init: 747.13720703125 ms @ http://localhost:5173/src/main.ts:21
+[    3905ms] [TIMEEND] [Bootstrap] Total initialization: 1168.406982421875 ms @ http://localhost:5173/src/main.ts:22
+[    3905ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5173/src/main.ts:23
+[    4224ms] [ERROR] BJS - [07:36:00]: Not a babylon environment map @ http://localhost:5173/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=5b563c04:44
+[    6389ms] [WARNING] [.WebGL-0x69401bb4400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels @ http://localhost:5173/:0
+[    6662ms] [LOG] [Game] Dark room environment created @ http://localhost:5173/src/game.ts:565
+[    6718ms] [LOG] [Display] Loading video: ./backbox/attract.mp4 @ http://localhost:5173/src/game-elements/display.ts:315
+[    6751ms] [LOG] [Display] Loading image: ./backbox/attract.png @ http://localhost:5173/src/game-elements/display.ts:391
+[    6949ms] [LOG] [Display] Loading video: ./backbox/attract.mp4 @ http://localhost:5173/src/game-elements/display.ts:315
+[    6954ms] [LOG] [Display] Loading image: ./backbox/attract.png @ http://localhost:5173/src/game-elements/display.ts:391
+[    7868ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/backbox/attract.png:0
+[    7869ms] [WARNING] [.WebGL-0x69401bb4400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels @ http://localhost:5173/:0
+[    7870ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5173/@vite/client:864
+[    7900ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/backbox/attract.mp4:0
+[    7902ms] [WARNING] [.WebGL-0x69401bb4400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat) @ http://localhost:5173/:0
+[    8660ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/backbox/attract.mp4:0
+[    9295ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js:0
+[    9296ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/node_modules/.vite/deps/pbr.fragment-6NUL7XEP.js:0
+[    9726ms] [WARNING] [Display] Video failed to load @ http://localhost:5173/src/game-elements/display.ts:369
+[    9735ms] TypeError: Cannot read properties of null (reading 'removeEventListener')
+    at _VideoTexture.dispose (http://localhost:5173/node_modules/.vite/deps/@babylonjs_core.js?v=0ed37668:92015:16)
+    at DisplaySystem.disposeVideoLayer (http://localhost:5173/src/game-elements/display.ts:294:24)
+    at HTMLVideoElement.<anonymous> (http://localhost:5173/src/game-elements/display.ts:372:12)
+[   10587ms] Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js
+[   10588ms] Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js
+[   10588ms] Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js
+[   10588ms] Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js
+[   10588ms] Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js
+[   10588ms] Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js
+[   10591ms] Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js
+[   10591ms] Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js
+[   10591ms] Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js
+[   10591ms] Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js
+[   10591ms] Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js
+[   10591ms] Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js
+[   10591ms] Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js
+[   11131ms] [WARNING] [Display] Video failed to load @ http://localhost:5173/src/game-elements/display.ts:369
+[   11137ms] TypeError: Cannot read properties of null (reading 'removeEventListener')
+    at _VideoTexture.dispose (http://localhost:5173/node_modules/.vite/deps/@babylonjs_core.js?v=0ed37668:92015:16)
+    at DisplaySystem.disposeVideoLayer (http://localhost:5173/src/game-elements/display.ts:294:24)
+    at HTMLVideoElement.<anonymous> (http://localhost:5173/src/game-elements/display.ts:372:12)
+[   53228ms] Failed to fetch dynamically imported module: http://localhost:5173/node_modules/.vite/deps/pbr.vertex-KYWEPOTJ.js
+[   61754ms] [WARNING] No available adapters. @ http://localhost:5173/:0
+[   62007ms] [LOG] BJS - [07:36:58]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5173/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=5e8024a9:44
+[   62102ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5173/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=5e8024a9:2449
+[   62132ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 437.696044921875 ms @ http://localhost:5173/src/main.ts:17
+[   62140ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5173/src/game.ts:184
+[   62156ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5173/src/game.ts:530
+[   62220ms] [LOG] [MaterialLibrary] Environment texture loaded and cached @ http://localhost:5173/src/game-elements/material-library.ts:78
+[   62369ms] [LOG] [Cabinet] Full 3D arcade cabinet built @ http://localhost:5173/src/game-elements/cabinet.ts:212
+[   62417ms] [LOG] [Game] LCD playfield created @ http://localhost:5173/src/game.ts:820
+[   62417ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5173/src/game.ts:910
+[   62700ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5173/src/game-elements/input.ts:81
+[   62701ms] [TIMEEND] [Bootstrap] Game init: 568.98291015625 ms @ http://localhost:5173/src/main.ts:21
+[   62701ms] [TIMEEND] [Bootstrap] Total initialization: 1006.9931640625 ms @ http://localhost:5173/src/main.ts:22
+[   62701ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5173/src/main.ts:23
+[   65249ms] [LOG] [Game] Dark room environment created @ http://localhost:5173/src/game.ts:565
+[   65268ms] [LOG] [Display] Loading video: ./backbox/attract.mp4 @ http://localhost:5173/src/game-elements/display.ts:315
+[   65273ms] [LOG] [Display] Loading image: ./backbox/attract.png @ http://localhost:5173/src/game-elements/display.ts:391
+[   65425ms] [LOG] [Display] Loading video: ./backbox/attract.mp4 @ http://localhost:5173/src/game-elements/display.ts:315
+[   65428ms] [LOG] [Display] Loading image: ./backbox/attract.png @ http://localhost:5173/src/game-elements/display.ts:391
+[   66212ms] [ERROR] BJS - [07:37:02]: Not a babylon environment map @ http://localhost:5173/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=5e8024a9:44
+[   76789ms] [WARNING] [Display] Video load timeout @ http://localhost:5173/src/game-elements/display.ts:377
+[   76808ms] TypeError: Cannot read properties of null (reading 'removeEventListener')
+    at _VideoTexture.dispose (http://localhost:5173/node_modules/.vite/deps/@babylonjs_core.js?v=5e8024a9:92015:16)
+    at DisplaySystem.disposeVideoLayer (http://localhost:5173/src/game-elements/display.ts:294:24)
+    at http://localhost:5173/src/game-elements/display.ts:380:14
+[   77509ms] [WARNING] [Display] Video failed to load @ http://localhost:5173/src/game-elements/display.ts:369
+[   77518ms] TypeError: Cannot read properties of null (reading 'removeEventListener')
+    at _VideoTexture.dispose (http://localhost:5173/node_modules/.vite/deps/@babylonjs_core.js?v=5e8024a9:92015:16)
+    at DisplaySystem.disposeVideoLayer (http://localhost:5173/src/game-elements/display.ts:294:24)
+    at HTMLVideoElement.<anonymous> (http://localhost:5173/src/game-elements/display.ts:372:12)
+[   78225ms] [WARNING] [Display] Video failed to load @ http://localhost:5173/src/game-elements/display.ts:369
+[   78227ms] TypeError: Cannot read properties of null (reading 'removeEventListener')
+    at _VideoTexture.dispose (http://localhost:5173/node_modules/.vite/deps/@babylonjs_core.js?v=5e8024a9:92015:16)
+    at DisplaySystem.disposeVideoLayer (http://localhost:5173/src/game-elements/display.ts:294:24)
+    at HTMLVideoElement.<anonymous> (http://localhost:5173/src/game-elements/display.ts:372:12)
+[   85254ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5173/@vite/client:864
+[  100010ms] [WARNING] No available adapters. @ http://localhost:5173/:0
+[  100115ms] [LOG] BJS - [07:37:36]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5173/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=5e8024a9:44
+[  100165ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5173/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=5e8024a9:2449
+[  100206ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 415.681884765625 ms @ http://localhost:5173/src/main.ts:17
+[  100211ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5173/src/game.ts:184
+[  100219ms] [LOG] [Game] Room environment created for immersive camera @ http://localhost:5173/src/game.ts:530
+[  100246ms] [LOG] [MaterialLibrary] Environment texture loaded and cached @ http://localhost:5173/src/game-elements/material-library.ts:78
+[  100356ms] [LOG] [Cabinet] Full 3D arcade cabinet built @ http://localhost:5173/src/game-elements/cabinet.ts:212
+[  100424ms] [LOG] [Game] LCD playfield created @ http://localhost:5173/src/game.ts:820
+[  100425ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5173/src/game.ts:910
+[  100664ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5173/src/game-elements/input.ts:81
+[  100665ms] [TIMEEND] [Bootstrap] Game init: 458.587890625 ms @ http://localhost:5173/src/main.ts:21
+[  100665ms] [TIMEEND] [Bootstrap] Total initialization: 874.6171875 ms @ http://localhost:5173/src/main.ts:22
+[  100665ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5173/src/main.ts:23
+[  101967ms] [ERROR] BJS - [07:37:38]: Not a babylon environment map @ http://localhost:5173/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=5e8024a9:44
+[  102195ms] [LOG] [Game] Dark room environment created @ http://localhost:5173/src/game.ts:565
+[  102206ms] [LOG] [Display] Loading video: ./backbox/attract.mp4 @ http://localhost:5173/src/game-elements/display.ts:315
+[  102210ms] [LOG] [Display] Loading image: ./backbox/attract.png @ http://localhost:5173/src/game-elements/display.ts:391
+[  102347ms] [LOG] [Display] Loading video: ./backbox/attract.mp4 @ http://localhost:5173/src/game-elements/display.ts:315
+[  102351ms] [LOG] [Display] Loading image: ./backbox/attract.png @ http://localhost:5173/src/game-elements/display.ts:391
+[  110690ms] [WARNING] [Display] Video failed to load @ http://localhost:5173/src/game-elements/display.ts:369
+[  110700ms] TypeError: Cannot read properties of null (reading 'removeEventListener')
+    at _VideoTexture.dispose (http://localhost:5173/node_modules/.vite/deps/@babylonjs_core.js?v=5e8024a9:92015:16)
+    at DisplaySystem.disposeVideoLayer (http://localhost:5173/src/game-elements/display.ts:294:24)
+    at HTMLVideoElement.<anonymous> (http://localhost:5173/src/game-elements/display.ts:372:12)
+[  110699ms] [WARNING] [Display] Video failed to load @ http://localhost:5173/src/game-elements/display.ts:369
+[  110707ms] TypeError: Cannot read properties of null (reading 'removeEventListener')
+    at _VideoTexture.dispose (http://localhost:5173/node_modules/.vite/deps/@babylonjs_core.js?v=5e8024a9:92015:16)
+    at DisplaySystem.disposeVideoLayer (http://localhost:5173/src/game-elements/display.ts:294:24)
+    at HTMLVideoElement.<anonymous> (http://localhost:5173/src/game-elements/display.ts:372:12)
+[  112890ms] [WARNING] [Display] Video failed to load @ http://localhost:5173/src/game-elements/display.ts:369
+[  112893ms] TypeError: Cannot read properties of null (reading 'removeEventListener')
+    at _VideoTexture.dispose (http://localhost:5173/node_modules/.vite/deps/@babylonjs_core.js?v=5e8024a9:92015:16)
+    at DisplaySystem.disposeVideoLayer (http://localhost:5173/src/game-elements/display.ts:294:24)
+    at HTMLVideoElement.<anonymous> (http://localhost:5173/src/game-elements/display.ts:372:12)
