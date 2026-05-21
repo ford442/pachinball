@@ -107,6 +107,7 @@ import { GameLifecycle, type LifecycleHost } from './game/game-lifecycle'
 import { GameHUD, type HUDHost } from './game/game-hud'
 import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
 import { hexToColor3 } from './game/game-utils'
+import { CRTPresetManager } from './game/game-crt'
 import { CheckpointDebugController, type DebugStageKey } from './game/checkpoint-debug'
 
 export class Game {
@@ -201,6 +202,9 @@ export class Game {
 
   // LCD Table
   private lcdTablePostProcess: PostProcess | null = null
+
+  // CRT Presets
+  private crtPresetManager = new CRTPresetManager()
 
   // Quality tier
   private qualityTier: QualityTier = QualityTier.MEDIUM
@@ -384,7 +388,7 @@ export class Game {
         onLeaderboardToggle: () => this.leaderboardSystem.toggle(),
         onDynamicModeToggle: () => this.scenarioManager.toggleDynamicMode(),
         onScenarioCycle: () => this.scenarioManager.cycleScenario(),
-        onCRTPresetCycle: () => this.cycleCRTPreset(),
+        onCRTPresetCycle: () => this.crtPresetManager.cycle(),
         onPerfMonitorToggle: () => this.togglePerformanceMonitor(),
         getState: () => this.stateManager.getState(),
         getTiltActive: () => this.tiltActive,
@@ -562,6 +566,7 @@ export class Game {
       const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
       this.display = new DisplaySystem(scene, this.engine, displayConfig, this.qualityTier, this.accessibility)
       this.display.subscribeToEvents(this.eventBus)
+      this.crtPresetManager.setDisplay(this.display)
       this.stateManager.setDisplaySystem(this.display)
 
       this.cabinetLighting = new CabinetLighting(scene, {
@@ -985,25 +990,6 @@ export class Game {
   }
 
   toggleCameraMode(): void { this.isCameraFollowMode = !this.isCameraFollowMode }
-
-  private crtPresetIndex = 0
-  private crtPresets = [
-    { name: 'MODERN_LCD', params: { scanlineIntensity: 0.05, curvature: 0.0, vignette: 0.1, chromaticAberration: 0.0, glow: 0.6, noise: 0.0, flicker: 0.0 } },
-    { name: 'RETRO', params: { scanlineIntensity: 0.6, curvature: 0.05, vignette: 0.5, chromaticAberration: 0.5, glow: 0.6, noise: 0.05, flicker: 0.03 } },
-    { name: 'STORY', params: { scanlineIntensity: 0.15, curvature: 0.03, vignette: 0.25, chromaticAberration: 0.15, glow: 0.35, noise: 0.01, flicker: 0.005 } },
-    { name: 'OFF', params: { scanlineIntensity: 0.0, curvature: 0.0, vignette: 0.0, chromaticAberration: 0.0, glow: 0.0, noise: 0.0, flicker: 0.0 } }
-  ]
-
-  cycleCRTPreset(): void {
-    const preset = this.crtPresets[this.crtPresetIndex]
-    console.log(`[CRT] Preset: ${preset.name}`)
-
-    this.display?.setCRTEffectEnabled(preset.name !== 'OFF')
-    this.display?.setCRTEffectParams(preset.params)
-
-    // Cycle to next preset
-    this.crtPresetIndex = (this.crtPresetIndex + 1) % this.crtPresets.length
-  }
 
   togglePerformanceMonitor(): void {
     const enabled = !this.performanceMonitor.isEnabled()
