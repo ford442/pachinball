@@ -211,7 +211,7 @@ export class StructuralMaterials extends MaterialLibraryBase {
         mat.emissiveTexture = textures.emissive
         mat.emissiveColor = Color3.White()
       } else {
-        mat.emissiveColor = emissive(PALETTE.PURPLE, INTENSITY.AMBIENT)
+        mat.emissiveColor = emissive(PALETTE.PURPLE, INTENSITY.NORMAL)
       }
       // Apply ORM (packed) or separate textures for AO/Roughness/Metallic
       this.applyORMTextures(mat, textures, 4, 8)
@@ -338,7 +338,7 @@ export class StructuralMaterials extends MaterialLibraryBase {
     // Dark background with subtle gradient
     const gradient = ctx.createLinearGradient(0, 0, 0, size)
     gradient.addColorStop(0, SURFACES.PLAYFIELD)
-    gradient.addColorStop(0.5, '#050510')
+    gradient.addColorStop(0.5, SURFACES.PLAYFIELD_DEEP)
     gradient.addColorStop(1, SURFACES.PLAYFIELD)
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, size, size)

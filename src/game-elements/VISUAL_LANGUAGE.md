@@ -45,7 +45,8 @@ import {
 | **Dark** | `#0a0a0a` | Cabinet panels |
 | **Metal Dark** | `#151515` | Brushed metal, rails |
 | **Metal Light** | `#888888` | Chrome, polished |
-| **Playfield** | `#080818` | Table surface (blue tint) |
+| **Playfield** | `#0a0a2a` | Table surface (dark blue, visible against black bg) |
+| **Playfield Deep** | `#07071a` | Deeper playfield variant for gradient depth |
 | **Glass** | `#001122` | Smoked glass, barriers |
 
 ## Intensity Levels
