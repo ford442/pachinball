@@ -29,6 +29,8 @@ export class BallTrapBuilder {
   private trapCounter: number = 0
   private meshes: Mesh[] = []
   private bodies: RAPIER.RigidBody[] = []
+  private nodes: TransformNode[] = []
+  private materials: StandardMaterial[] = []
   private qualityTier: QualityTier
   private registeredZoneIds: string[] = []
 
@@ -69,6 +71,7 @@ export class BallTrapBuilder {
 
     const trapRoot = new TransformNode('ballTrapRoot', this.scene)
     trapRoot.position.set(x, 0.5, z)
+    this.nodes.push(trapRoot)
 
     // Trap entrance (funnel-like using scaled cylinder)
     const trapEntrance = MeshBuilder.CreateCylinder('trapCone', {
@@ -112,6 +115,7 @@ export class BallTrapBuilder {
     gateMat.emissiveColor = Color3.FromHexString(colorHex)
     gateMat.alpha = 0.6
     trapGate.material = gateMat
+    this.materials.push(gateMat)
 
     // Physics body - trap chamber (sensor)
     const body = this.world.createRigidBody(
@@ -269,6 +273,13 @@ export class BallTrapBuilder {
   }
 
   /**
+   * Return all Rapier rigid bodies created by this builder.
+   */
+  getBodies(): RAPIER.RigidBody[] {
+    return this.bodies
+  }
+
+  /**
    * Clean up all meshes and physics bodies created by this builder
    */
   dispose(): void {
@@ -283,6 +294,18 @@ export class BallTrapBuilder {
       this.world.removeRigidBody(body)
     }
     this.bodies = []
+
+    for (const mat of this.materials) {
+      mat.dispose()
+    }
+    this.materials = []
+
+    for (const node of this.nodes) {
+      if (!node.isDisposed()) {
+        node.dispose(true) // doNotRecurse — children already disposed above
+      }
+    }
+    this.nodes = []
 
     for (const zoneId of this.registeredZoneIds) {
       this.zoneTriggerSystem?.unregisterObstacleZone(zoneId)

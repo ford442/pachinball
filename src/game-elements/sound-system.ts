@@ -898,6 +898,27 @@ export function getSoundSystem(eventBus?: EventBus): SoundSystem {
         }
       })
     )
+
+    // Route generic 'sound:play' events from obstacle builders to SoundSystem
+    ss.addEventBusUnsubscriber(
+      eventBus.on('sound:play', ({ soundKey }) => {
+        // Map obstacle sound keys to known sample categories where possible.
+        // Unknown keys are a no-op — obstacle audio is best-effort in this path.
+        const categoryMap: Record<string, string> = {
+          'trap-catch': 'bumper',
+          'trap-release': 'bumper',
+          'trap-release-timeout': 'bumper',
+          'bump-spinner': 'bumper',
+          'launcher-fire': 'launch',
+          'launcher-trigger': 'launch',
+          'gate-open': 'bumper',
+        }
+        const category = categoryMap[soundKey]
+        if (category) {
+          ss.playSample(category as Parameters<typeof ss.playSample>[0])
+        }
+      })
+    )
   }
 
   return soundSystemInstance

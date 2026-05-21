@@ -27,6 +27,7 @@ import type { PrismCoreFeeder } from '../game-elements/prism-core-feeder'
 import type { GaussCannonFeeder } from '../game-elements/gauss-cannon-feeder'
 import type { QuantumTunnelFeeder } from '../game-elements/quantum-tunnel-feeder'
 import type { InputFrame } from '../game-elements'
+import type { SpinnerBumperBuilder, SpinnerBumperVisual, BallTrapBuilder, BallTrapState, LauncherBuilder, LauncherState, MovingGateBuilder, MovingGateState } from '../objects'
 import { BallType, GAME_TUNING, GameConfig, PhysicsConfig } from '../config'
 import { DisplayState } from '../game-elements'
 import { TABLE_MAPS } from '../shaders/lcd-table'
@@ -59,6 +60,20 @@ export interface PhysicsHost {
   readonly quantumTunnel: QuantumTunnelFeeder | null
   readonly tableCam: import('@babylonjs/core').TargetCamera | null
   readonly accessibility: import('../game-elements').AccessibilityConfig
+
+  /**
+   * Obstacle builders — used to retrieve body lists for collision-handle caching
+   * and to dispatch builder-specific hit reactions (spin, catch, fire, open).
+   */
+  readonly spinnerBuilder: SpinnerBumperBuilder | null
+  readonly ballTrapBuilder: BallTrapBuilder | null
+  readonly launcherBuilder: LauncherBuilder | null
+  readonly movingGateBuilder: MovingGateBuilder | null
+  /** Live visual/state records for each obstacle instance (created by the builders above). */
+  readonly spinnerVisuals: SpinnerBumperVisual[]
+  readonly trapStates: BallTrapState[]
+  readonly launcherStates: LauncherState[]
+  readonly gateStates: MovingGateState[]
 
   score: number
   comboCount: number
@@ -94,12 +109,52 @@ export class GamePhysicsController {
   private targetHandleSet: Set<number> = new Set()
   private ballHandleSet: Set<number> = new Set()
   private flipperHandleSet: Set<number> = new Set()
+  private trapHandleSet: Set<number> = new Set()
+  private gateHandleSet: Set<number> = new Set()
+  private launcherHandleSet: Set<number> = new Set()
+  private spinnerHandleSet: Set<number> = new Set()
   private deathZoneHandle: number = -1
   private adventureSensorHandle: number = -1
   private static readonly COLLISION_DEBOUNCE_MS = 16
+  private eventBusUnsubscribers: Array<() => void> = []
 
   constructor(host: PhysicsHost) {
     this.host = host
+
+    // Subscribe to 'points:awarded' from new obstacle builders so their scores
+    // are reflected in the game score alongside legacy direct mutations.
+    this.eventBusUnsubscribers.push(
+      host.eventBus.on('points:awarded', (data) => {
+        this.host.score += data.amount * (data.multiplier ?? 1)
+        this.host.updateHUD()
+      })
+    )
+
+    // Route 'effect:flash' to EffectsSystem (respects accessibility guards internally)
+    this.eventBusUnsubscribers.push(
+      host.eventBus.on('effect:flash', (data) => {
+        if (data.color) {
+          this.host.effects?.flashVignette(data.color, data.duration * 1000)
+        }
+      })
+    )
+
+    // Route 'effect:shake' to EffectsSystem
+    this.eventBusUnsubscribers.push(
+      host.eventBus.on('effect:shake', (data) => {
+        if (!this.host.accessibility.reducedMotion) {
+          this.host.effects?.addCameraShake(data.amount)
+        }
+      })
+    )
+  }
+
+  /** Clean up EventBus subscriptions. Must be called when the controller is torn down. */
+  dispose(): void {
+    for (const unsub of this.eventBusUnsubscribers) {
+      unsub()
+    }
+    this.eventBusUnsubscribers = []
   }
 
   rebuildHandleCaches(): void {
@@ -107,6 +162,10 @@ export class GamePhysicsController {
     this.targetHandleSet.clear()
     this.ballHandleSet.clear()
     this.flipperHandleSet.clear()
+    this.trapHandleSet.clear()
+    this.gateHandleSet.clear()
+    this.launcherHandleSet.clear()
+    this.spinnerHandleSet.clear()
 
     for (const b of (this.host.gameObjects?.getBumperBodies() || [])) {
       this.bumperHandleSet.add(b.handle)
@@ -121,6 +180,19 @@ export class GamePhysicsController {
     const flippers = this.host.gameObjects?.getAllFlippers() || new Map()
     for (const flipper of flippers.values()) {
       this.flipperHandleSet.add(flipper.body.handle)
+    }
+
+    for (const b of (this.host.ballTrapBuilder?.getBodies() || [])) {
+      this.trapHandleSet.add(b.handle)
+    }
+    for (const b of (this.host.movingGateBuilder?.getBodies() || [])) {
+      this.gateHandleSet.add(b.handle)
+    }
+    for (const b of (this.host.launcherBuilder?.getBodies() || [])) {
+      this.launcherHandleSet.add(b.handle)
+    }
+    for (const b of (this.host.spinnerBuilder?.getBodies() || [])) {
+      this.spinnerHandleSet.add(b.handle)
     }
 
     const dz = this.host.gameObjects?.getDeathZoneBody()
@@ -488,6 +560,77 @@ export class GamePhysicsController {
         this.rebuildHandleCaches()
         this.host.tryActivateSlotMachine()
       }
+    }
+
+    // --- New obstacle collision dispatch ---
+
+    const h1IsSpinner = this.spinnerHandleSet.has(h1)
+    const h2IsSpinner = this.spinnerHandleSet.has(h2)
+    if (h1IsSpinner || h2IsSpinner) {
+      const obstacleBody = h1IsSpinner ? b1 : b2
+      const ballBody = h1IsSpinner ? b2 : b1
+      const ballHandle = h1IsSpinner ? h2 : h1
+      if (this.ballHandleSet.has(ballHandle)) {
+        const vel = ballBody.linvel()
+        const impactForce = Math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)
+        const visual = this.host.spinnerVisuals.find(v => v.body === obstacleBody)
+        if (visual) {
+          const ballPos = ballBody.translation()
+          this.host.spinnerBuilder?.triggerSpin(visual, impactForce, new Vector3(ballPos.x, ballPos.y, ballPos.z))
+        }
+      }
+      return
+    }
+
+    const h1IsTrap = this.trapHandleSet.has(h1)
+    const h2IsTrap = this.trapHandleSet.has(h2)
+    if (h1IsTrap || h2IsTrap) {
+      const obstacleBody = h1IsTrap ? b1 : b2
+      const ballBody = h1IsTrap ? b2 : b1
+      const ballHandle = h1IsTrap ? h2 : h1
+      if (this.ballHandleSet.has(ballHandle)) {
+        const state = this.host.trapStates.find(s => s.body === obstacleBody)
+        if (state && state.isOpen && !state.caughtBall) {
+          const ballPos = ballBody.translation()
+          this.host.ballTrapBuilder?.catchBall(state, ballBody, new Vector3(ballPos.x, ballPos.y, ballPos.z))
+        }
+      }
+      return
+    }
+
+    const h1IsLauncher = this.launcherHandleSet.has(h1)
+    const h2IsLauncher = this.launcherHandleSet.has(h2)
+    if (h1IsLauncher || h2IsLauncher) {
+      const obstacleBody = h1IsLauncher ? b1 : b2
+      const ballBody = h1IsLauncher ? b2 : b1
+      const ballHandle = h1IsLauncher ? h2 : h1
+      if (this.ballHandleSet.has(ballHandle)) {
+        const state = this.host.launcherStates.find(s => s.body === obstacleBody)
+        if (state && state.cooldownTimer <= 0) {
+          const forceVec = this.host.launcherBuilder?.triggerLauncher(state, 1.0)
+          if (forceVec) {
+            const rapier = this.host.physics.getRapier()
+            if (rapier) {
+              ballBody.applyImpulse(new rapier.Vector3(forceVec.x, forceVec.y, forceVec.z), true)
+            }
+          }
+        }
+      }
+      return
+    }
+
+    const h1IsGate = this.gateHandleSet.has(h1)
+    const h2IsGate = this.gateHandleSet.has(h2)
+    if (h1IsGate || h2IsGate) {
+      const obstacleBody = h1IsGate ? b1 : b2
+      const ballHandle = h1IsGate ? h2 : h1
+      if (this.ballHandleSet.has(ballHandle)) {
+        const state = this.host.gateStates.find(s => s.body === obstacleBody)
+        if (state && !state.isOpen) {
+          this.host.movingGateBuilder?.openGate(state)
+        }
+      }
+      return
     }
   }
 
