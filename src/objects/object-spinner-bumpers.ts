@@ -27,6 +27,7 @@ export class SpinnerBumperBuilder {
   private spinnerCounter: number = 0
   private meshes: Mesh[] = []
   private bodies: RAPIER.RigidBody[] = []
+  private nodes: TransformNode[] = []
   private qualityTier: QualityTier
   private registeredZoneIds: string[] = []
 
@@ -68,6 +69,7 @@ export class SpinnerBumperBuilder {
     // Create root for the spinner assembly
     const spinnerRoot = new TransformNode('spinnerRoot', this.scene)
     spinnerRoot.position.set(x, 0.5, z)
+    this.nodes.push(spinnerRoot)
 
     // Main rotating disc
     const spinnerMesh = MeshBuilder.CreateCylinder('spinnerDisc', {
@@ -231,6 +233,13 @@ export class SpinnerBumperBuilder {
   }
 
   /**
+   * Return all Rapier rigid bodies created by this builder.
+   */
+  getBodies(): RAPIER.RigidBody[] {
+    return this.bodies
+  }
+
+  /**
    * Clean up all meshes and physics bodies created by this builder
    */
   dispose(): void {
@@ -245,6 +254,13 @@ export class SpinnerBumperBuilder {
       this.world.removeRigidBody(body)
     }
     this.bodies = []
+
+    for (const node of this.nodes) {
+      if (!node.isDisposed()) {
+        node.dispose(true) // doNotRecurse — children already disposed above
+      }
+    }
+    this.nodes = []
 
     for (const zoneId of this.registeredZoneIds) {
       this.zoneTriggerSystem?.unregisterObstacleZone(zoneId)

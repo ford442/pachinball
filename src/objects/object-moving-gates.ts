@@ -36,6 +36,7 @@ export class MovingGateBuilder {
   private zoneTriggerSystem: ZoneTriggerSystem | null = null
   private meshes: Mesh[] = []
   private bodies: RAPIER.RigidBody[] = []
+  private nodes: TransformNode[] = []
   private qualityTier: QualityTier
   private registeredZoneIds: string[] = []
 
@@ -82,6 +83,7 @@ export class MovingGateBuilder {
 
     const gateRoot = new TransformNode('gateRoot', this.scene)
     gateRoot.position.set(x, 0.75 * scale, z)
+    this.nodes.push(gateRoot)
 
     // Main gate mesh (wall/barrier)
     const gateMesh = MeshBuilder.CreateBox('gateMesh', {
@@ -283,6 +285,13 @@ export class MovingGateBuilder {
   }
 
   /**
+   * Return all Rapier rigid bodies created by this builder.
+   */
+  getBodies(): RAPIER.RigidBody[] {
+    return this.bodies
+  }
+
+  /**
    * Clean up all meshes and physics bodies created by this builder
    */
   dispose(): void {
@@ -297,6 +306,13 @@ export class MovingGateBuilder {
       this.world.removeRigidBody(body)
     }
     this.bodies = []
+
+    for (const node of this.nodes) {
+      if (!node.isDisposed()) {
+        node.dispose(true) // doNotRecurse — children already disposed above
+      }
+    }
+    this.nodes = []
 
     for (const zoneId of this.registeredZoneIds) {
       this.zoneTriggerSystem?.unregisterObstacleZone(zoneId)

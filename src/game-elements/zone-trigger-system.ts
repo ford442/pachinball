@@ -163,7 +163,7 @@ export class ZoneTriggerSystem {
    * Call this every frame from the game loop
    */
   update(ballBodies: RAPIER.RigidBody[]): void {
-    if (!this.scenario || this.activeZones.size === 0 || ballBodies.length === 0) {
+    if (this.activeZones.size === 0 || ballBodies.length === 0) {
       return
     }
     
