@@ -27,7 +27,7 @@ import type { PrismCoreFeeder } from '../game-elements/prism-core-feeder'
 import type { GaussCannonFeeder } from '../game-elements/gauss-cannon-feeder'
 import type { QuantumTunnelFeeder } from '../game-elements/quantum-tunnel-feeder'
 import type { InputFrame } from '../game-elements'
-import { BallType, GAME_TUNING, GameConfig } from '../config'
+import { BallType, GAME_TUNING, GameConfig, PhysicsConfig } from '../config'
 import { DisplayState } from '../game-elements'
 import { TABLE_MAPS } from '../shaders/lcd-table'
 import { PALETTE, CameraMode } from '../game-elements'
@@ -591,9 +591,9 @@ export class GamePhysicsController {
     this.host.nudgeState.lastNudgeTime = now
 
     const impulse = new rapier.Vector3(
-      direction.x * GameConfig.nudge.force,
-      GameConfig.nudge.verticalBoost,
-      direction.z * GameConfig.nudge.force
+      direction.x * PhysicsConfig.nudge.force,
+      PhysicsConfig.nudge.verticalBoost,
+      direction.z * PhysicsConfig.nudge.force
     )
     ballBody.applyImpulse(impulse, true)
 
@@ -648,7 +648,7 @@ export class GamePhysicsController {
     const rapier = this.host.physics.getRapier()
     if (!rapier) return
 
-    const spinFactor = GameConfig.physics.spinTransferFactor * Math.min(contactSpeed / 10, 1.0)
+    const spinFactor = PhysicsConfig.global.spinTransferFactor * Math.min(contactSpeed / 10, 1.0)
     const angvel = ball.angvel()
 
     // Apply spin perpendicular to collision normal and velocity direction
@@ -658,7 +658,7 @@ export class GamePhysicsController {
       -collisionNormal.x
     ).normalize()
 
-    const spinAmount = spinFactor * GameConfig.physics.englishSpinAmount
+    const spinAmount = spinFactor * PhysicsConfig.global.englishSpinAmount
     ball.setAngvel(
       new rapier.Vector3(
         angvel.x + tangent.x * spinAmount,

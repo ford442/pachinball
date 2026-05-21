@@ -1,6 +1,6 @@
 import { Scene, Vector3, MeshBuilder, Mesh, TransformNode } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
-import { GameConfig } from '../config'
+import { GameConfig, PhysicsConfig } from '../config'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 
@@ -199,9 +199,9 @@ export class FlipperBuilder {
       const joint = this.world.createImpulseJoint(jParams, anchor, body, true) as RAPIER.RevoluteImpulseJoint
 
       joint.configureMotorPosition(
-        isRight ? -Math.PI / 4 : Math.PI / 4,
-        GameConfig.table.flipperStrength,
-        GameConfig.flipper.damping
+        isRight ? -PhysicsConfig.flipper.restAngleRad : PhysicsConfig.flipper.restAngleRad,
+        PhysicsConfig.flipper.stiffness,
+        PhysicsConfig.flipper.damping
       )
 
       flippers.set(isRight ? 'right' : 'left', { mesh: flipperRoot, body, joint })
