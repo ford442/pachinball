@@ -435,12 +435,12 @@ export class InputHandler {
 
     if (this.getState() !== GameState.PLAYING) return
 
-    if (event.code === 'ArrowLeft' || event.code === 'KeyZ') {
+    if (event.code === 'ShiftLeft' || event.code === 'KeyZ') {
       if (this.getTiltActive()) return
       this.queueInput('flipperLeft', true)
     }
 
-    if (event.code === 'ArrowRight' || event.code === 'Slash') {
+    if (event.code === 'ShiftRight' || event.code === 'Slash') {
       if (this.getTiltActive()) return
       this.queueInput('flipperRight', true)
     }
@@ -485,11 +485,11 @@ export class InputHandler {
   handleKeyUp = (event: KeyboardEvent): void => {
     if (!this.rapier || this.getState() !== GameState.PLAYING) return
 
-    if (event.code === 'ArrowLeft' || event.code === 'KeyZ') {
+    if (event.code === 'ShiftLeft' || event.code === 'KeyZ') {
       this.queueInput('flipperLeft', false)
     }
 
-    if (event.code === 'ArrowRight' || event.code === 'Slash') {
+    if (event.code === 'ShiftRight' || event.code === 'Slash') {
       this.queueInput('flipperRight', false)
     }
     
