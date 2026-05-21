@@ -12,20 +12,8 @@
 
 import type { DisplaySystem } from '../display'
 import type { TableMapType } from '../shaders/lcd-table'
-import { apiFetch, ASSET_BASE } from '../config'
-
-/**
- * Helper to resolve video URLs against ASSET_BASE
- * If the URL is already absolute (starts with http), returns as-is
- * Otherwise, prepends ASSET_BASE to make it a full URL
- */
-function resolveVideoUrl(videoPath: string | undefined): string | undefined {
-  if (!videoPath) return undefined
-  if (videoPath.startsWith('http')) return videoPath
-  // Remove leading slash if present, then prepend ASSET_BASE
-  const cleanPath = videoPath.startsWith('/') ? videoPath.slice(1) : videoPath
-  return `${ASSET_BASE}/${cleanPath}`
-}
+import { apiFetch } from '../config'
+import { resolveVideoUrl } from '../game/game-utils'
 
 export type GoalType = 'hit-pegs' | 'survive-time' | 'reach-score' | 'collect-items' | 'no-drain'
 
@@ -152,7 +140,7 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
     story: {
       intro: `The neon-soaked streets of Sector 7 fade as you jack into the Nexus.\n"Welcome, initiator," a synthetic voice whispers through your neural link.\n"The Cascade awaits your first move. Feel the pulse of the machine."\nYour consciousness expands into a realm of glowing circuits and endless possibility.`,
       complete: `The first node pulses bright, bathing you in electric blue.\n"First light achieved," the voice acknowledges, almost impressed.\n"The Cascade recognizes your potential. Cyber pathways opening."\nYou have taken your first step into the digital pantheon.`,
-      videoUrl: '/videos/story/level1-complete.mp4',
+      videoUrl: 'videos/story/level1-complete.mp4',
     },
     rewards: {
       scoreMultiplier: 1.1,
@@ -172,7 +160,7 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
     story: {
       intro: `Firewalls blaze crimson as you breach the Cyber Core's outer perimeter.\n"Unauthorized access detected," drones a security daemon.\n"Prove your worth, or be purged from the system."\nThe digital architecture shifts around you, testing your resolve.`,
       complete: `The firewall crumbles, dissolving into streams of golden data.\n"Access granted," the daemon concedes, stepping aside.\n"Quantum pathways opening. You may proceed where few have tread."\nThe Core recognizes you as one of its own.`,
-      videoUrl: '/videos/story/level2-complete.mp4',
+      videoUrl: 'videos/story/level2-complete.mp4',
     },
     rewards: {
       scoreMultiplier: 1.2,
@@ -191,7 +179,7 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
     story: {
       intro: `Reality destabilizes as you step into the Quantum Grid.\nHere, probability itself becomes tangible, shimmering in iridescent hues.\n"Observation collapses the wave," echoes from everywhere and nowhere.\nYou exist in superposition—every possible you, walking every possible path.`,
       complete: `The quantum state collapses into brilliant coherence.\nAll possibilities converge to this singular triumph.\n"Singularity approaches," the void whispers.\nYou have touched the fabric of existence itself.`,
-      videoUrl: '/videos/story/level3-complete.mp4',
+      videoUrl: 'videos/story/level3-complete.mp4',
     },
     rewards: {
       scoreMultiplier: 1.3,
@@ -210,7 +198,7 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
     story: {
       intro: `Gravity becomes infinite at the edge of the Singularity Well.\nLight bends, time dilates, and the void gazes back at you.\n"Many have reached this threshold," the darkness murmurs.\n"Few have returned. What secrets do you seek in the abyss?"`,
       complete: `You emerge from the event horizon transformed, bearing secrets of the void.\n"You have touched the darkness and lived," the system acknowledges.\n"All maps unlocked. The Cascade is yours to traverse."\nThe black hole's power now flows through your digital veins.`,
-      videoUrl: '/videos/story/level4-complete.mp4',
+      videoUrl: 'videos/story/level4-complete.mp4',
     },
     rewards: {
       scoreMultiplier: 1.5,
@@ -520,7 +508,7 @@ export class AdventureState {
     // Show completion text
     this.display?.setStoryText(`LEVEL COMPLETE\n${level.name}\n${level.story.complete}`)
 
-    // Play story video if available (resolve against ASSET_BASE)
+    // Play story video if available (resolve for subdirectory deployment)
     if (level.story.videoUrl) {
       const resolvedUrl = resolveVideoUrl(level.story.videoUrl)
       if (resolvedUrl) {

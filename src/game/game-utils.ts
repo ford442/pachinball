@@ -1,14 +1,16 @@
 import { Color3 } from '@babylonjs/core'
-import { ASSET_BASE } from '../config'
 
 /**
- * Resolve video URLs against ASSET_BASE.
+ * Resolve video URLs for Vite subdirectory deployment.
+ * Prepends import.meta.env.BASE_URL so assets load correctly under any base path.
+ * Absolute URLs (http...) are returned as-is.
  */
 export function resolveVideoUrl(videoPath: string | undefined): string | undefined {
   if (!videoPath) return undefined
   if (videoPath.startsWith('http')) return videoPath
+  const base = (import.meta.env.BASE_URL as string) || '/'
   const cleanPath = videoPath.startsWith('/') ? videoPath.slice(1) : videoPath
-  return `${ASSET_BASE}/${cleanPath}`
+  return `${base}${cleanPath}`
 }
 
 /**

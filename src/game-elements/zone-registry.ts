@@ -9,20 +9,7 @@
  */
 
 import { AdventureTrackType } from './adventure-mode-builder'
-import { ASSET_BASE } from '../config'
-
-/**
- * Helper to resolve video URLs against ASSET_BASE
- * If the URL is already absolute (starts with http), returns as-is
- * Otherwise, prepends ASSET_BASE to make it a full URL
- */
-function resolveVideoUrl(videoPath: string | undefined): string | undefined {
-  if (!videoPath) return undefined
-  if (videoPath.startsWith('http')) return videoPath
-  // Remove leading slash if present, then prepend ASSET_BASE
-  const cleanPath = videoPath.startsWith('/') ? videoPath.slice(1) : videoPath
-  return `${ASSET_BASE}/${cleanPath}`
-}
+import { resolveVideoUrl } from '../game/game-utils'
 
 export interface ZoneConfig {
   /** Zone identifier */
@@ -56,7 +43,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.NEON_HELIX,
     name: 'Neon Helix',
     storyText: 'ENTERING: NEON HELIX\n\nThe spiral descent begins...',
-    videoUrl: '/videos/zones/neon_helix_intro.mp4',
+    videoUrl: 'videos/zones/neon_helix_intro.mp4',
     musicTrackId: 'neon-helix',
     primaryColor: '#00d9ff',
     accentColor: '#ff00aa',
@@ -68,7 +55,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.CYBER_CORE,
     name: 'Cyber Core',
     storyText: 'ENTERING: CYBER CORE\n\nDescending into the digital depths...',
-    videoUrl: '/videos/zones/cyber_core_intro.mp4',
+    videoUrl: 'videos/zones/cyber_core_intro.mp4',
     musicTrackId: 'cyber-core',
     primaryColor: '#8800ff',
     accentColor: '#00d9ff',
@@ -80,7 +67,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.QUANTUM_GRID,
     name: 'Quantum Grid',
     storyText: 'ENTERING: QUANTUM GRID\n\nNavigate the probability maze...',
-    videoUrl: '/videos/zones/quantum_grid_intro.mp4',
+    videoUrl: 'videos/zones/quantum_grid_intro.mp4',
     musicTrackId: 'quantum-grid',
     primaryColor: '#00ff44',
     accentColor: '#ffffff',
@@ -92,7 +79,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.SINGULARITY_WELL,
     name: 'Singularity Well',
     storyText: 'WARNING: GRAVITY ANOMALY\n\nApproaching event horizon...',
-    videoUrl: '/videos/zones/singularity_intro.mp4',
+    videoUrl: 'videos/zones/singularity_intro.mp4',
     musicTrackId: 'singularity-well',
     primaryColor: '#ff4400',
     accentColor: '#ff0000',
@@ -104,7 +91,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.GLITCH_SPIRE,
     name: 'Glitch Spire',
     storyText: 'ALERT: REALITY UNSTABLE\n\nGlitch corruption detected...',
-    videoUrl: '/videos/zones/glitch_spire_intro.mp4',
+    videoUrl: 'videos/zones/glitch_spire_intro.mp4',
     musicTrackId: 'glitch-spire',
     primaryColor: '#ff00aa',
     accentColor: '#ffffff',
@@ -116,7 +103,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.RETRO_WAVE_HILLS,
     name: 'Retro Wave Hills',
     storyText: 'ENTERING: RETRO WAVE\n\nCruise the neon sunset...',
-    videoUrl: '/videos/zones/retrowave_intro.mp4',
+    videoUrl: 'videos/zones/retrowave_intro.mp4',
     musicTrackId: 'retrowave-hills',
     primaryColor: '#ff66aa',
     accentColor: '#00ccff',
@@ -128,7 +115,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.CHRONO_CORE,
     name: 'Chrono Core',
     storyText: 'TEMPORAL ANOMALY\n\nTime flows differently here...',
-    videoUrl: '/videos/zones/chrono_intro.mp4',
+    videoUrl: 'videos/zones/chrono_intro.mp4',
     musicTrackId: 'chrono-core',
     primaryColor: '#00ffcc',
     accentColor: '#ff6600',
@@ -140,7 +127,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.HYPER_DRIFT,
     name: 'Hyper Drift',
     storyText: 'HYPER VELOCITY\n\nHold on tight...',
-    videoUrl: '/videos/zones/hyper_drift_intro.mp4',
+    videoUrl: 'videos/zones/hyper_drift_intro.mp4',
     musicTrackId: 'hyper-drift',
     primaryColor: '#66ffff',
     accentColor: '#ff3366',
@@ -152,7 +139,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.PACHINKO_SPIRE,
     name: 'Pachinko Spire',
     storyText: 'ENTERING: PACHINKO SPIRE\n\nThe vertical descent awaits...',
-    videoUrl: '/videos/zones/pachinko_spire_intro.mp4',
+    videoUrl: 'videos/zones/pachinko_spire_intro.mp4',
     musicTrackId: 'pachinko-spire',
     primaryColor: '#ffcc00',
     accentColor: '#ff2244',
@@ -164,7 +151,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.ORBITAL_JUNKYARD,
     name: 'Orbital Junkyard',
     storyText: 'ORBITAL DEBRIS FIELD\n\nNavigate the scrap sector...',
-    videoUrl: '/videos/zones/junkyard_intro.mp4',
+    videoUrl: 'videos/zones/junkyard_intro.mp4',
     musicTrackId: 'orbital-junkyard',
     primaryColor: '#aaaaaa',
     accentColor: '#ff6600',
@@ -176,7 +163,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.FIREWALL_BREACH,
     name: 'Firewall Breach',
     storyText: 'WARNING: SECURITY BREACH\n\nIntrusion detected...',
-    videoUrl: '/videos/zones/firewall_intro.mp4',
+    videoUrl: 'videos/zones/firewall_intro.mp4',
     musicTrackId: 'firewall-breach',
     primaryColor: '#ff0000',
     accentColor: '#ffaa00',
@@ -188,7 +175,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.CPU_CORE,
     name: 'CPU Core',
     storyText: 'ENTERING: CPU CORE\n\nThe central processor awaits...',
-    videoUrl: '/videos/zones/cpu_intro.mp4',
+    videoUrl: 'videos/zones/cpu_intro.mp4',
     musicTrackId: 'cpu-core',
     primaryColor: '#00ff00',
     accentColor: '#88ff00',
@@ -200,7 +187,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.CRYO_CHAMBER,
     name: 'Cryo Chamber',
     storyText: 'CRYOGENIC ZONE\n\nTemperature dropping...',
-    videoUrl: '/videos/zones/cryo_intro.mp4',
+    videoUrl: 'videos/zones/cryo_intro.mp4',
     musicTrackId: 'cryo-chamber',
     primaryColor: '#00ccff',
     accentColor: '#ffffff',
@@ -212,7 +199,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.BIO_HAZARD_LAB,
     name: 'Bio Hazard Lab',
     storyText: 'BIOHAZARD WARNING\n\nToxic materials present...',
-    videoUrl: '/videos/zones/biohazard_intro.mp4',
+    videoUrl: 'videos/zones/biohazard_intro.mp4',
     musicTrackId: 'bio-hazard',
     primaryColor: '#44ff00',
     accentColor: '#ffcc00',
@@ -224,7 +211,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.GRAVITY_FORGE,
     name: 'Gravity Forge',
     storyText: 'GRAVITY FORGE\n\nHeavy industry sector...',
-    videoUrl: '/videos/zones/forge_intro.mp4',
+    videoUrl: 'videos/zones/forge_intro.mp4',
     musicTrackId: 'gravity-forge',
     primaryColor: '#ff6600',
     accentColor: '#ffcc00',
@@ -236,7 +223,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.TIDAL_NEXUS,
     name: 'Tidal Nexus',
     storyText: 'TIDAL NEXUS\n\nFlow with the current...',
-    videoUrl: '/videos/zones/tidal_intro.mp4',
+    videoUrl: 'videos/zones/tidal_intro.mp4',
     musicTrackId: 'tidal-nexus',
     primaryColor: '#0088ff',
     accentColor: '#00ffcc',
@@ -248,7 +235,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.DIGITAL_ZEN_GARDEN,
     name: 'Digital Zen Garden',
     storyText: 'ZEN GARDEN\n\nFind your center...',
-    videoUrl: '/videos/zones/zen_intro.mp4',
+    videoUrl: 'videos/zones/zen_intro.mp4',
     musicTrackId: 'zen-garden',
     primaryColor: '#88ffaa',
     accentColor: '#ff88aa',
@@ -260,7 +247,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.SYNTHWAVE_SURF,
     name: 'Synthwave Surf',
     storyText: 'SURF THE WAVES\n\nCatch the perfect break...',
-    videoUrl: '/videos/zones/surf_intro.mp4',
+    videoUrl: 'videos/zones/surf_intro.mp4',
     musicTrackId: 'synthwave-surf',
     primaryColor: '#ff88cc',
     accentColor: '#00ddff',
@@ -272,7 +259,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.SOLAR_FLARE,
     name: 'Solar Flare',
     storyText: 'WARNING: SOLAR FLARE\n\nRadiation levels high...',
-    videoUrl: '/videos/zones/solar_intro.mp4',
+    videoUrl: 'videos/zones/solar_intro.mp4',
     musicTrackId: 'solar-flare',
     primaryColor: '#ffaa00',
     accentColor: '#ff4400',
@@ -284,7 +271,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.PRISM_PATHWAY,
     name: 'Prism Pathway',
     storyText: 'PRISM PATHWAY\n\nLight refracts infinitely...',
-    videoUrl: '/videos/zones/prism_intro.mp4',
+    videoUrl: 'videos/zones/prism_intro.mp4',
     musicTrackId: 'prism-path',
     primaryColor: '#ff00ff',
     accentColor: '#00ffff',
@@ -296,7 +283,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.MAGNETIC_STORAGE,
     name: 'Magnetic Storage',
     storyText: 'MAGNETIC STORAGE\n\nData streams flowing...',
-    videoUrl: '/videos/zones/magnetic_intro.mp4',
+    videoUrl: 'videos/zones/magnetic_intro.mp4',
     musicTrackId: 'magnetic',
     primaryColor: '#aa44ff',
     accentColor: '#00ff88',
@@ -308,7 +295,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.NEURAL_NETWORK,
     name: 'Neural Network',
     storyText: 'NEURAL NETWORK\n\nSynaptic pathways active...',
-    videoUrl: '/videos/zones/neural_intro.mp4',
+    videoUrl: 'videos/zones/neural_intro.mp4',
     musicTrackId: 'neural',
     primaryColor: '#ff66aa',
     accentColor: '#aa66ff',
@@ -320,7 +307,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.NEON_STRONGHOLD,
     name: 'Neon Stronghold',
     storyText: 'NEON STRONGHOLD\n\nThe fortress awaits...',
-    videoUrl: '/videos/zones/stronghold_intro.mp4',
+    videoUrl: 'videos/zones/stronghold_intro.mp4',
     musicTrackId: 'stronghold',
     primaryColor: '#00aaff',
     accentColor: '#ff00cc',
@@ -332,7 +319,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.CASINO_HEIST,
     name: 'Casino Heist',
     storyText: 'CASINO HEIST\n\nHigh stakes ahead...',
-    videoUrl: '/videos/zones/casino_intro.mp4',
+    videoUrl: 'videos/zones/casino_intro.mp4',
     musicTrackId: 'casino',
     primaryColor: '#ffcc00',
     accentColor: '#ff0044',
@@ -344,7 +331,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.TESLA_TOWER,
     name: 'Tesla Tower',
     storyText: 'TESLA TOWER\n\nHigh voltage zone...',
-    videoUrl: '/videos/zones/tesla_intro.mp4',
+    videoUrl: 'videos/zones/tesla_intro.mp4',
     musicTrackId: 'tesla',
     primaryColor: '#aa66ff',
     accentColor: '#00ffff',
@@ -356,7 +343,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.NEON_SKYLINE,
     name: 'Neon Skyline',
     storyText: 'NEON SKYLINE\n\nThe city never sleeps...',
-    videoUrl: '/videos/zones/skyline_intro.mp4',
+    videoUrl: 'videos/zones/skyline_intro.mp4',
     musicTrackId: 'skyline',
     primaryColor: '#0088ff',
     accentColor: '#ff00aa',
@@ -368,7 +355,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     id: AdventureTrackType.POLYCHROME_VOID,
     name: 'Polychrome Void',
     storyText: 'THE POLYCHROME VOID\n\nBeyond the spectrum...',
-    videoUrl: '/videos/zones/polychrome_intro.mp4',
+    videoUrl: 'videos/zones/polychrome_intro.mp4',
     musicTrackId: 'polychrome',
     primaryColor: '#ffffff',
     accentColor: '#ff00ff',
@@ -380,7 +367,7 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
 
 /**
  * Get zone configuration by track type
- * Returns config with videoUrl resolved against ASSET_BASE
+ * Returns config with videoUrl resolved for subdirectory deployment
  */
 export function getZoneConfig(trackType: AdventureTrackType): ZoneConfig {
   const config = ZONE_REGISTRY[trackType]
