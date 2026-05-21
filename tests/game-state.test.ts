@@ -1,4 +1,6 @@
 /**
+ * @vitest-environment happy-dom
+ *
  * Unit tests for GameStateManager
  *
  * GameStateManager, EventBus, GameState, and DisplayState are all pure
