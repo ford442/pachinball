@@ -156,12 +156,21 @@ export class SoundSystem {
       this.spatialPanner.rolloffFactor = 1
       this.spatialPanner.connect(this.sfxGain)
       
-      // Note: Ambient hum started after audio context is resumed
+    // Create synthesized placeholder sounds so every category has at least one sample
+      this.createSynthesizedGameSounds()
       
-      // Load gold ball sounds (with synthesized fallback)
-      await this.loadGoldBallSounds()
-      
+      // Mark initialization as complete early so playSample() can work
+      // while gold-ball sounds load in the background.
       this.isInitialized = true
+      console.log('[SoundSystem] Core audio ready — gold ball sounds loading in background')
+      
+      // Load gold ball sounds (with synthesized fallback) — non-blocking
+      this.loadGoldBallSounds().catch(err => {
+        console.warn('[SoundSystem] Gold ball sound loading failed:', err)
+      })
+      
+      // Start ambient hum immediately
+      this.startAmbientHum()
       console.log('[SoundSystem] Initialized successfully')
     } catch (err) {
       console.error('[SoundSystem] Initialization failed:', err)
@@ -595,6 +604,143 @@ export class SoundSystem {
         source.start(0)
       }
     })
+  }
+
+  /**
+   * Create synthesized placeholder sounds for all game categories.
+   * Called during init so playSample() never finds an empty category.
+   */
+  private createSynthesizedGameSounds(): void {
+    if (!this.audioContext) return
+
+    const categories: { cat: SampleCategory; duration: number; fn: (ctx: AudioContext, duration: number) => AudioBuffer }[] = [
+      {
+        cat: 'launch',
+        duration: 0.4,
+        fn: (ctx, d) => {
+          const sr = ctx.sampleRate
+          const buf = ctx.createBuffer(1, Math.floor(sr * d), sr)
+          const data = buf.getChannelData(0)
+          for (let i = 0; i < data.length; i++) {
+            const t = i / sr
+            const env = Math.max(0, 1 - t / d)
+            const freq = 200 + t * 800
+            data[i] = Math.sin(2 * Math.PI * freq * t) * env * 0.4
+          }
+          return buf
+        },
+      },
+      {
+        cat: 'flipper',
+        duration: 0.08,
+        fn: (ctx, d) => {
+          const sr = ctx.sampleRate
+          const buf = ctx.createBuffer(1, Math.floor(sr * d), sr)
+          const data = buf.getChannelData(0)
+          for (let i = 0; i < data.length; i++) {
+            const t = i / sr
+            const env = t < 0.01 ? t / 0.01 : Math.max(0, 1 - (t - 0.01) / (d - 0.01))
+            data[i] = (Math.random() * 2 - 1) * env * 0.5
+          }
+          return buf
+        },
+      },
+      {
+        cat: 'bumper',
+        duration: 0.25,
+        fn: (ctx, d) => {
+          const sr = ctx.sampleRate
+          const buf = ctx.createBuffer(1, Math.floor(sr * d), sr)
+          const data = buf.getChannelData(0)
+          for (let i = 0; i < data.length; i++) {
+            const t = i / sr
+            const env = Math.exp(-t * 20)
+            data[i] = (Math.sin(2 * Math.PI * 440 * t) + Math.sin(2 * Math.PI * 660 * t)) * env * 0.35
+          }
+          return buf
+        },
+      },
+      {
+        cat: 'peg',
+        duration: 0.06,
+        fn: (ctx, d) => {
+          const sr = ctx.sampleRate
+          const buf = ctx.createBuffer(1, Math.floor(sr * d), sr)
+          const data = buf.getChannelData(0)
+          for (let i = 0; i < data.length; i++) {
+            const t = i / sr
+            const env = Math.max(0, 1 - t / d)
+            data[i] = (Math.random() * 2 - 1) * env * 0.3
+          }
+          return buf
+        },
+      },
+      {
+        cat: 'drain',
+        duration: 0.5,
+        fn: (ctx, d) => {
+          const sr = ctx.sampleRate
+          const buf = ctx.createBuffer(1, Math.floor(sr * d), sr)
+          const data = buf.getChannelData(0)
+          for (let i = 0; i < data.length; i++) {
+            const t = i / sr
+            const env = Math.max(0, 1 - t / d)
+            const freq = 300 - t * 200
+            data[i] = Math.sin(2 * Math.PI * Math.max(50, freq) * t) * env * 0.4
+          }
+          return buf
+        },
+      },
+      {
+        cat: 'jackpot',
+        duration: 0.6,
+        fn: (ctx, d) => {
+          const sr = ctx.sampleRate
+          const buf = ctx.createBuffer(1, Math.floor(sr * d), sr)
+          const data = buf.getChannelData(0)
+          for (let i = 0; i < data.length; i++) {
+            const t = i / sr
+            const env = Math.max(0, 1 - t / d)
+            data[i] = (
+              Math.sin(2 * Math.PI * 523 * t) +
+              Math.sin(2 * Math.PI * 659 * t) +
+              Math.sin(2 * Math.PI * 784 * t)
+            ) * env * 0.25
+          }
+          return buf
+        },
+      },
+      {
+        cat: 'fever',
+        duration: 0.3,
+        fn: (ctx, d) => {
+          const sr = ctx.sampleRate
+          const buf = ctx.createBuffer(1, Math.floor(sr * d), sr)
+          const data = buf.getChannelData(0)
+          for (let i = 0; i < data.length; i++) {
+            const t = i / sr
+            const env = Math.max(0, 1 - t / d)
+            const freq = 600 + Math.sin(t * 30) * 100
+            data[i] = Math.sin(2 * Math.PI * freq * t) * env * 0.35
+          }
+          return buf
+        },
+      },
+    ]
+
+    for (const { cat, duration, fn } of categories) {
+      const id = `synth-${cat}`
+      const buffer = fn(this.audioContext, duration)
+      this.sampleCache.set(id, {
+        buffer,
+        metadata: { id, name: id, url: '', category: cat, duration },
+      })
+      const list = this.samplesByCategory.get(cat) ?? []
+      list.push(id)
+      this.samplesByCategory.set(cat, list)
+    }
+
+    console.log('[SoundSystem] Synthesized game sounds created')
   }
 
   /**

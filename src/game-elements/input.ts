@@ -428,6 +428,7 @@ export class InputHandler {
     }
 
     if ((event.code === 'Space' || event.code === 'Enter') && this.getState() === GameState.MENU) {
+      event.preventDefault()
       this.onStart()
       return
     }
@@ -445,7 +446,8 @@ export class InputHandler {
     }
 
     if (event.code === 'Space' || event.code === 'Enter') {
-      // Start plunger charge on key down
+      // Start plunger charge on key down — prevent page scroll on Space
+      event.preventDefault()
       if (!this.plungerChargeState.isHeld) {
         this.startPlungerCharge()
       }

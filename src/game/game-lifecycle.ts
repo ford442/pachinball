@@ -152,12 +152,33 @@ export class GameLifecycle {
     this.host.updateHUD()
     this.host.resetBall()
 
-    await this.host.soundSystem.init()
-    await this.host.soundSystem.resume()
-    this.host.soundSystem.playMapMusic('1')
+    // Fire audio init in background — never block game start on it.
+    // AudioContext.resume() can hang in headless/automated contexts
+    // where the browser doesn't recognise the click as a trusted gesture.
+    void this.initAudioInBackground()
 
     // Leaderboard context is set by the caller (Game)
     this.host.setGameState(GameState.PLAYING)
+  }
+
+  private async initAudioInBackground(): Promise<void> {
+    try {
+      await Promise.race([
+        this.host.soundSystem.init(),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error('Audio init timeout')), 5000)
+        ),
+      ])
+      // Resume may need a user gesture; if it fails we still have synth sounds ready
+      try {
+        await this.host.soundSystem.resume()
+      } catch (resumeErr) {
+        console.warn('[GameLifecycle] Audio resume failed (needs user gesture):', resumeErr)
+      }
+      this.host.soundSystem.playMapMusic('1')
+    } catch (err) {
+      console.warn('[GameLifecycle] Audio init failed or timed out, continuing without sound:', err)
+    }
   }
 
   togglePause(): void {
