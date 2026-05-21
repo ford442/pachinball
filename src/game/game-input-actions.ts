@@ -9,7 +9,7 @@ import type { HapticManager } from '../game-elements/haptics'
 import type { SoundSystem } from '../game-elements/sound-system'
 import type { EffectsSystem } from '../effects'
 import type { GameStateManager } from './game-state'
-import { GameConfig } from '../config'
+import { GameConfig, PhysicsConfig } from '../config'
 import type { AccessibilityConfig } from '../game-elements'
 
 export interface InputActionsHost {
@@ -61,9 +61,9 @@ export class GameInputActions {
       const stiffnessMultiplier = pressed ? (1.0 + holdFactor * 0.3) : 0.8
       const dampingMultiplier = pressed ? (0.9 + holdFactor * 0.1) : 1.1
 
-      const stiffness = GameConfig.table.flipperStrength * stiffnessMultiplier
-      const damping = GameConfig.flipper.damping * dampingMultiplier
-      const angle = pressed ? -GameConfig.flipper.activeAngle : GameConfig.flipper.restAngle
+      const stiffness = PhysicsConfig.flipper.stiffness * stiffnessMultiplier
+      const damping = PhysicsConfig.flipper.damping * dampingMultiplier
+      const angle = pressed ? -PhysicsConfig.flipper.activeAngleRad : PhysicsConfig.flipper.restAngleRad
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
     }
     if (pressed) {
@@ -97,9 +97,9 @@ export class GameInputActions {
       const stiffnessMultiplier = pressed ? (1.0 + holdFactor * 0.3) : 0.8
       const dampingMultiplier = pressed ? (0.9 + holdFactor * 0.1) : 1.1
 
-      const stiffness = GameConfig.table.flipperStrength * stiffnessMultiplier
-      const damping = GameConfig.flipper.damping * dampingMultiplier
-      const angle = pressed ? GameConfig.flipper.activeAngle : -GameConfig.flipper.restAngle
+      const stiffness = PhysicsConfig.flipper.stiffness * stiffnessMultiplier
+      const damping = PhysicsConfig.flipper.damping * dampingMultiplier
+      const angle = pressed ? PhysicsConfig.flipper.activeAngleRad : -PhysicsConfig.flipper.restAngleRad
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
     }
     if (pressed) {
@@ -117,8 +117,8 @@ export class GameInputActions {
     const pos = ballBody.translation()
     if (pos.x > 8 && pos.z < -4) {
       const chargeRatio = this.host.plungerChargeLevel
-      const impulseMagnitude = GameConfig.plunger.minImpulse +
-        (GameConfig.plunger.maxImpulse - GameConfig.plunger.minImpulse) * chargeRatio
+      const impulseMagnitude = PhysicsConfig.plunger.minImpulse +
+        (PhysicsConfig.plunger.maxImpulse - PhysicsConfig.plunger.minImpulse) * chargeRatio
 
       ballBody.applyImpulse(new rapier.Vector3(0, 0, impulseMagnitude), true)
 

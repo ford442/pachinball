@@ -505,3 +505,61 @@ export const GameConfig = {
 }
 
 export type GameConfigType = typeof GameConfig
+
+/**
+ * PhysicsConfig — Centralized physics tunables extracted from game.ts monolith
+ * All scalar values; Vector3 construction stays in implementation files
+ */
+export const PhysicsConfig = {
+  global: {
+    gravity: { x: 0, y: -9.81, z: -5.0 },
+    spinTransferFactor: 0.35,
+    spinDecayFactor: 0.12,
+    englishSpinAmount: 0.08,
+  },
+  ball: {
+    radius: 0.25,
+    mass: 1.0,
+    restitution: 0.78,
+    friction: 0.12,
+    linearDamping: 0.08,
+    angularDamping: 0.15,
+    resetImpulse: { x: 0, y: 0, z: 2.5 },
+  },
+  flipper: {
+    stiffness: 25000,
+    damping: 1000,
+    restAngleRad: Math.PI / 4,
+    activeAngleRad: Math.PI / 8,
+    kickVariation: 0.15,
+    holdTimeDivisor: 0.3,
+    leftLimits: [-Math.PI / 6, Math.PI / 4] as [number, number],
+    rightLimits: [-Math.PI / 4, Math.PI / 6] as [number, number],
+  },
+  bumper: {
+    restitution: 0.92,
+  },
+  plunger: {
+    minImpulse: 10,
+    maxImpulse: 35,
+    maxChargeTimeMs: 1500,
+  },
+  nudge: {
+    force: 0.6,
+    verticalBoost: 0.3,
+    vectorLeft: { x: -0.6, y: 0, z: 0.3 },
+    vectorRight: { x: 0.6, y: 0, z: 0.3 },
+    vectorForward: { x: 0, y: 0, z: 0.8 },
+  },
+  input: {
+    gamepadDeadZone: 0.15,
+    nudgeThreshold: 0.5,
+    nudgeDeltaThreshold: 0.2,
+  },
+  toys: {
+    gateAmplitude: 2.0,
+    gateSpeed: 1.5,
+  },
+} as const
+
+export type PhysicsConfigType = typeof PhysicsConfig
