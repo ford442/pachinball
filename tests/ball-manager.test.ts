@@ -165,6 +165,33 @@ function makeFakeWorld() {
   }
 }
 
+/** Creates a fake rigid body with transform/velocity/impulse tracking. */
+function makeFakeBody() {
+  const translation = { x: 0, y: 0, z: 0 }
+  const linvel = { x: 0, y: 0, z: 0 }
+  const angvel = { x: 0, y: 0, z: 0 }
+  const impulses: Array<{ x: number; y: number; z: number }> = []
+  return {
+    handle: 999,
+    translation: () => ({ ...translation }),
+    linvel: () => ({ ...linvel }),
+    angvel: () => ({ ...angvel }),
+    setTranslation: vi.fn().mockImplementation((v: { x: number; y: number; z: number }, _wake: boolean) => {
+      translation.x = v.x; translation.y = v.y; translation.z = v.z
+    }),
+    setLinvel: vi.fn().mockImplementation((v: { x: number; y: number; z: number }, _wake: boolean) => {
+      linvel.x = v.x; linvel.y = v.y; linvel.z = v.z
+    }),
+    setAngvel: vi.fn().mockImplementation((v: { x: number; y: number; z: number }, _wake: boolean) => {
+      angvel.x = v.x; angvel.y = v.y; angvel.z = v.z
+    }),
+    applyImpulse: vi.fn().mockImplementation((v: { x: number; y: number; z: number }, _wake: boolean) => {
+      impulses.push({ x: v.x, y: v.y, z: v.z })
+    }),
+    getImpulses: () => impulses,
+  }
+}
+
 /** Minimal fake Rapier namespace (the second and third BallManager ctor args). */
 function makeFakeRapier() {
   return {
@@ -172,9 +199,10 @@ function makeFakeRapier() {
     ColliderDesc: { ball: vi.fn().mockImplementation(makeDescBuilder) },
     ActiveEvents: { COLLISION_EVENTS: 1, CONTACT_FORCE_EVENTS: 2 },
     RigidBodyType: { Dynamic: 0, KinematicPositionBased: 1 },
-    Vector3: vi.fn().mockImplementation(
-      (x: number, y: number, z: number) => ({ x, y, z })
-    ) as unknown as typeof import('@dimforge/rapier3d-compat').Vector3,
+    Vector3: vi.fn().mockImplementation(function (this: { x: number; y: number; z: number }, x: number, y: number, z: number) {
+      this.x = x; this.y = y; this.z = z
+      return this
+    }) as unknown as typeof import('@dimforge/rapier3d-compat').Vector3,
   }
 }
 
@@ -356,6 +384,80 @@ describe('BallManager', () => {
 
       expect(result).toBeNull()
       expect(cb).not.toHaveBeenCalled()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // 6. resetBall translation + impulse
+  // -------------------------------------------------------------------------
+  describe('resetBall', () => {
+    it('sets translation to spawn point and zeros velocity when ball exists', () => {
+      const manager = makeManager()
+      const fakeBody = makeFakeBody()
+
+      // Inject a pre-existing ball
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).ballBodies = [fakeBody]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).ballBody = fakeBody
+
+      manager.resetBall()
+
+      // Translation should be set to spawnMain
+      expect(fakeBody.setTranslation).toHaveBeenCalledTimes(1)
+      const setTranslationArg = (fakeBody.setTranslation as ReturnType<typeof vi.fn>).mock.calls[0][0]
+      expect(setTranslationArg.x).toBeDefined()
+      expect(setTranslationArg.y).toBeDefined()
+      expect(setTranslationArg.z).toBeDefined()
+
+      // Linear and angular velocity zeroed
+      expect(fakeBody.setLinvel).toHaveBeenCalledTimes(1)
+      expect(fakeBody.setAngvel).toHaveBeenCalledTimes(1)
+
+      const zeroVel = (fakeBody.setLinvel as ReturnType<typeof vi.fn>).mock.calls[0][0]
+      expect(zeroVel.x).toBe(0)
+      expect(zeroVel.y).toBe(0)
+      expect(zeroVel.z).toBe(0)
+
+      const zeroAng = (fakeBody.setAngvel as ReturnType<typeof vi.fn>).mock.calls[0][0]
+      expect(zeroAng.x).toBe(0)
+      expect(zeroAng.y).toBe(0)
+      expect(zeroAng.z).toBe(0)
+    })
+
+    it('applies a gentle upward impulse on reset', () => {
+      const manager = makeManager()
+      const fakeBody = makeFakeBody()
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).ballBodies = [fakeBody]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).ballBody = fakeBody
+
+      manager.resetBall()
+
+      expect(fakeBody.applyImpulse).toHaveBeenCalledTimes(1)
+      const impulseArg = (fakeBody.applyImpulse as ReturnType<typeof vi.fn>).mock.calls[0][0]
+      expect(impulseArg.x).toBe(0)
+      expect(impulseArg.y).toBe(0)
+      expect(impulseArg.z).toBeGreaterThan(0)
+    })
+
+    it('creates a new ball when none exists', () => {
+      const manager = makeManager()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const world = (manager as any).world
+
+      manager.resetBall()
+
+      expect(world.createRigidBody).toHaveBeenCalledTimes(1)
+      expect(world.createCollider).toHaveBeenCalledTimes(1)
+
+      // After creation, ballBody and ballBodies should be populated
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((manager as any).ballBodies.length).toBe(1)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((manager as any).ballBody).not.toBeNull()
     })
   })
 })

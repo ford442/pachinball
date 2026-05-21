@@ -1,0 +1,62 @@
+[    2016ms] [WARNING] No available adapters. @ http://localhost:5173/:0
+[    2141ms] [LOG] BJS - [09:36:40]: Babylon.js v7.54.3 - WebGL2 @ http://localhost:5173/node_modules/.vite/deps/chunk-OJJXGLTO.js?v=cf036441:44
+[    2200ms] [WARNING] using deprecated parameters for the initialization function; pass a single object instead @ http://localhost:5173/node_modules/.vite/deps/@dimforge_rapier3d-compat.js?v=cf036441:2449
+[    2240ms] [TIMEEND] [Bootstrap] Engine + Physics parallel init: 272.534912109375 ms @ http://localhost:5173/src/main.ts:17
+[    2247ms] [LOG] [StageDebug] settings_ui ⏳ start @ http://localhost:5173/src/game/checkpoint-debug.ts:105
+[    2247ms] [LOG] [Accessibility] Settings loaded: {reducedMotion: false, shakeIntensity: 0.08, photosensitiveMode: false, enableFog: true, enableShadows: true} Accessibility: {reducedMotion: false, cameraShakeEnabled: true, flashFrequencyMax: 2, scanlineIntensity: 0.25, effectIntensity: 1} @ http://localhost:5173/src/game.ts:263
+[    2248ms] [LOG] [StageDebug] settings_ui ✓ 1.0ms @ http://localhost:5173/src/game/checkpoint-debug.ts:111
+[    2248ms] [LOG] [StageDebug] render_bootstrap ⏳ start @ http://localhost:5173/src/game/checkpoint-debug.ts:105
+[    2250ms] [LOG] [GameRenderer] Default lite mode: no DefaultRenderingPipeline; enable full pipeline with ?fullpp=1 @ http://localhost:5173/src/game/game-renderer.ts:132
+[    2268ms] [LOG] [GameRenderer] Room environment created @ http://localhost:5173/src/game/game-renderer.ts:293
+[    2269ms] [LOG] [GameRenderer] ResizeObserver initialized @ http://localhost:5173/src/game/game-renderer.ts:311
+[    2276ms] [LOG] [SceneOptimizer] Adaptive quality optimizer started (target: 55 fps) @ http://localhost:5173/src/game/game-renderer.ts:345
+[    2276ms] [LOG] [StageDebug] render_bootstrap ✓ 28.3ms @ http://localhost:5173/src/game/checkpoint-debug.ts:111
+[    2276ms] [LOG] [StageDebug] core_helpers ⏳ start @ http://localhost:5173/src/game/checkpoint-debug.ts:105
+[    2277ms] [LOG] [StageDebug] core_helpers ✓ 0.4ms @ http://localhost:5173/src/game/checkpoint-debug.ts:111
+[    2277ms] [LOG] [StageDebug] state_setup ⏳ start @ http://localhost:5173/src/game/checkpoint-debug.ts:105
+[    2277ms] [LOG] [MapSystem] Loaded 8 hardcoded maps @ http://localhost:5173/src/game-elements/map-system.ts:24
+[    2278ms] [LOG] [StageDebug] state_setup ✓ 1.1ms @ http://localhost:5173/src/game/checkpoint-debug.ts:111
+[    2278ms] [LOG] [StageDebug] physics ⏳ start @ http://localhost:5173/src/game/checkpoint-debug.ts:105
+[    2279ms] [LOG] [StageDebug] physics ✓ 1.0ms @ http://localhost:5173/src/game/checkpoint-debug.ts:111
+[    2279ms] [LOG] [StageDebug] scene_rendering ⏳ start @ http://localhost:5173/src/game/checkpoint-debug.ts:105
+[    2309ms] [LOG] [Display] Slot machine configured {activationMode: hybrid, chancePercent: 0.3, scoreThreshold: 10000, enableSounds: true, enableLightEffects: true} @ http://localhost:5173/src/display/display-core.ts:205
+[    2309ms] [LOG] [Display] Slot event callback set @ http://localhost:5173/src/display/display-core.ts:211
+[    2309ms] [LOG] [StageDebug] scene_rendering ✓ 29.7ms @ http://localhost:5173/src/game/checkpoint-debug.ts:111
+[    2309ms] [LOG] [StageDebug] scene_gameplay ⏳ start @ http://localhost:5173/src/game/checkpoint-debug.ts:105
+[    2412ms] [LOG] [StageDebug] scene_gameplay ✓ 103.0ms @ http://localhost:5173/src/game/checkpoint-debug.ts:111
+[    2413ms] [LOG] [StageDebug] scene_optional ⏳ start @ http://localhost:5173/src/game/checkpoint-debug.ts:105
+[    2481ms] [LOG] [StageDebug] scene_optional ✓ 67.8ms @ http://localhost:5173/src/game/checkpoint-debug.ts:111
+[    2481ms] [LOG] [StageDebug] scene_critical ⏳ start @ http://localhost:5173/src/game/checkpoint-debug.ts:105
+[    2585ms] [LOG] [Cabinet] Built Classic Pinball cabinet @ http://localhost:5173/src/cabinet/cabinet-builder.ts:114
+[    2585ms] [LOG] [Cabinet] Loaded preset: Classic Pinball @ http://localhost:5173/src/cabinet/cabinet-builder.ts:64
+[    2655ms] [LOG] [GameSceneBuilder] LCD playfield created @ http://localhost:5173/src/game/game-scene-builder.ts:74
+[    2730ms] [LOG] [GameSceneBuilder] Critical scene built: 15 flipper meshes, 1 main ball meshes @ http://localhost:5173/src/game/game-scene-builder.ts:27
+[    2731ms] [LOG] [StageDebug] scene_critical ✓ 249.6ms @ http://localhost:5173/src/game/checkpoint-debug.ts:111
+[    2731ms] [LOG] [StageDebug] scene_lcd_post ⏳ start @ http://localhost:5173/src/game/checkpoint-debug.ts:105
+[    2732ms] [LOG] [Game] LCD table post-process initialized @ http://localhost:5173/src/game.ts:741
+[    2732ms] [LOG] [StageDebug] scene_lcd_post ✓ 1.3ms @ http://localhost:5173/src/game/checkpoint-debug.ts:111
+[    2732ms] [LOG] [StageDebug] scene_gameplay_build ⏳ start @ http://localhost:5173/src/game/checkpoint-debug.ts:105
+[    2953ms] [LOG] [StageDebug] scene_gameplay_build ✓ 220.7ms @ http://localhost:5173/src/game/checkpoint-debug.ts:111
+[    2954ms] [LOG] [StageDebug] input_runtime ⏳ start @ http://localhost:5173/src/game/checkpoint-debug.ts:105
+[    2955ms] [LOG] [Input] Gamepad support enabled @ http://localhost:5173/src/game-elements/input.ts:81
+[    2955ms] [LOG] [StageDebug] input_runtime ✓ 1.6ms @ http://localhost:5173/src/game/checkpoint-debug.ts:111
+[    2956ms] [LOG] [StageDebug] managers_postinit ⏳ start @ http://localhost:5173/src/game/checkpoint-debug.ts:105
+[    2956ms] [LOG] [StageDebug] managers_postinit ✓ 0.4ms @ http://localhost:5173/src/game/checkpoint-debug.ts:111
+[    2956ms] [TIMEEND] [Bootstrap] Game init: 716.194091796875 ms @ http://localhost:5173/src/main.ts:78
+[    2956ms] [TIMEEND] [Bootstrap] Total initialization: 989.037841796875 ms @ http://localhost:5173/src/main.ts:79
+[    2956ms] [LOG] [Bootstrap] Physics WASM preloading completed successfully @ http://localhost:5173/src/main.ts:80
+[    2960ms] [LOG] [GameRenderer] Canvas resized: 419x461 @ http://localhost:5173/src/game/game-renderer.ts:306
+[    3920ms] [LOG] [StageDebug] scene_cosmetic ⏳ start @ http://localhost:5173/src/game/checkpoint-debug.ts:105
+[    4222ms] [LOG] [StageDebug] scene_cosmetic ✓ 301.7ms @ http://localhost:5173/src/game/checkpoint-debug.ts:111
+[    5223ms] [LOG] [MaterialLibrary] Environment texture loaded and cached @ http://localhost:5173/src/materials/material-core.ts:66
+[   39274ms] [LOG] [SoundSystem] Synthesized game sounds created @ http://localhost:5173/src/game-elements/sound-system.ts:590
+[   39274ms] [LOG] [SoundSystem] Core audio ready — gold ball sounds loading in background @ http://localhost:5173/src/game-elements/sound-system.ts:92
+[   39281ms] [LOG] [SoundSystem] Initialized successfully @ http://localhost:5173/src/game-elements/sound-system.ts:97
+[   39281ms] [LOG] [Game] State changed: MENU -> PLAYING @ http://localhost:5173/src/game.ts:302
+[   39282ms] [WARNING] [SoundSystem] No music for map: 1 @ http://localhost:5173/src/game-elements/sound-system.ts:198
+[   71654ms] [LOG] [PerfMonitor] Enabled. Press T to cycle CRT, ` for debug HUD, localStorage debug:perf-log=true for console logs @ http://localhost:5173/src/game-elements/performance-monitor.ts:81
+[   71654ms] [LOG] [PerfMonitor] Enabled @ http://localhost:5173/src/game.ts:948
+[   71654ms] [LOG] [Game] State changed: PLAYING -> PAUSED @ http://localhost:5173/src/game.ts:302
+[  120966ms] [LOG] [PerfMonitor] Disabled @ http://localhost:5173/src/game.ts:948
+[  120967ms] [LOG] [Game] State changed: PAUSED -> PLAYING @ http://localhost:5173/src/game.ts:302
+[  150103ms] [LOG] [Performance] Runtime tier changed → low (FPS: 2.9) @ http://localhost:5173/src/effects/effects-core.ts:489
