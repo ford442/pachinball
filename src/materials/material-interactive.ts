@@ -13,6 +13,7 @@ import {
   ROUGHNESS,
   CLEARCOAT,
   CATEGORIES,
+  FEEDER_STYLES,
   QualityTier,
   color,
   emissive,
@@ -123,7 +124,7 @@ export class InteractiveMaterials extends MaterialLibraryBase {
     return this.getCachedPBR('flipper', () => {
       const mat = new PBRMaterial('flipperMat', this.scene)
       mat.albedoColor = color(PALETTE.GOLD)
-      mat.emissiveColor = emissive('#ff8800', INTENSITY.AMBIENT)
+      mat.emissiveColor = emissive(FEEDER_STYLES.GAUSS_CANNON.base, INTENSITY.AMBIENT)
       mat.metallic = METALLIC.MID
       mat.roughness = ROUGHNESS.SATIN
       mat.environmentIntensity = 0.7
@@ -165,7 +166,7 @@ export class InteractiveMaterials extends MaterialLibraryBase {
       mat.clearCoat.roughness = 0.2
       
       // Subtle emissive edge glow (neon accent)
-      mat.emissiveColor = emissive('#ff6600', 0.2)
+      mat.emissiveColor = emissive('#ff6600', INTENSITY.AMBIENT)
       mat.emissiveIntensity = 0.4
 
       // Anisotropy for brushed metal look on striking surface

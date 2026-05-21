@@ -26,6 +26,7 @@ import {
   QualityTier,
   TIER_ENV_INTENSITY,
   TIER_TEXTURE_SIZE,
+  ROUGHNESS,
 } from '../game-elements/visual-language'
 
 export interface TextureSet {
@@ -190,7 +191,7 @@ export class MaterialLibraryBase {
     const ctx = tex.getContext()
 
     // Base smooth metal in green channel (POLISHED = 0.05)
-    const baseVal = Math.round(0.05 * 255)
+    const baseVal = Math.round(ROUGHNESS.POLISHED * 255)
     ctx.fillStyle = `rgb(0, ${baseVal}, 0)`
     ctx.fillRect(0, 0, size, size)
 
@@ -411,3 +412,4 @@ export class MaterialLibraryBase {
     console.groupEnd()
   }
 }
+

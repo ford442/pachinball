@@ -121,7 +121,7 @@ export class StructuralMaterials extends MaterialLibraryBase {
     return this.getCachedPBR('cabinetInterior', () => {
       const mat = new PBRMaterial('cabinetInteriorMat', this.scene)
       // Dark felt/plastic interior to absorb light
-      mat.albedoColor = new Color3(0.02, 0.02, 0.03)
+      mat.albedoColor = color(SURFACES.VOID)
       mat.metallic = METALLIC.LOW
       mat.roughness = ROUGHNESS.ROUGH
       mat.environmentIntensity = 0.1
@@ -423,7 +423,7 @@ export class StructuralMaterials extends MaterialLibraryBase {
     mat.microSurface = 0.3
 
     // Dark albedo - the LCD emits light, doesn't reflect it
-    mat.albedoColor = new Color3(0.02, 0.02, 0.03)
+    mat.albedoColor = color(SURFACES.VOID)
 
     // No transparency - this is a solid LCD panel
     mat.alpha = 1.0
