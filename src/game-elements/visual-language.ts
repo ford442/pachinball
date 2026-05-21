@@ -58,8 +58,11 @@ export const SURFACES = {
   /** Medium grey - chrome, polished metal */
   METAL_LIGHT: '#888888',
   
-  /** Playfield base - dark with slight blue tint */
-  PLAYFIELD: '#080818',
+  /** Playfield base - dark blue tint, visible against black background */
+  PLAYFIELD: '#0a0a2a',
+
+  /** Playfield deep - slightly darker variant for gradient depth on table surface */
+  PLAYFIELD_DEEP: '#07071a',
   
   /** Glass/smoked surfaces */
   GLASS: '#001122',
