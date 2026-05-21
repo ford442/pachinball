@@ -186,6 +186,29 @@ describe("EventBus 'points:awarded' scoring chain", () => {
     bus.emit('points:awarded', { amount: 999, source: 'test' })
     expect(score).toBe(100) // unchanged after unsubscribe
   })
+
+  it("EventBus subscriptions established in constructor are released on dispose()", () => {
+    // Simulate the GamePhysicsController subscribe+dispose pattern:
+    // constructor subscribes, dispose() calls unsub functions.
+    const bus = new EventBus()
+
+    let score = 0
+    const unsubscribers: Array<() => void> = []
+    unsubscribers.push(
+      bus.on('points:awarded', (data) => {
+        score += data.amount * (data.multiplier ?? 1)
+      })
+    )
+
+    bus.emit('points:awarded', { amount: 50, source: 'trap-catch' })
+    expect(score).toBe(50)
+
+    // simulate dispose()
+    for (const unsub of unsubscribers) unsub()
+
+    bus.emit('points:awarded', { amount: 999, source: 'after-dispose' })
+    expect(score).toBe(50) // no change — listener was removed
+  })
 })
 
 // ---------------------------------------------------------------------------

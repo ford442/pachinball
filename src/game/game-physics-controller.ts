@@ -61,11 +61,15 @@ export interface PhysicsHost {
   readonly tableCam: import('@babylonjs/core').TargetCamera | null
   readonly accessibility: import('../game-elements').AccessibilityConfig
 
-  // Obstacle builders (new obstacle types)
+  /**
+   * Obstacle builders — used to retrieve body lists for collision-handle caching
+   * and to dispatch builder-specific hit reactions (spin, catch, fire, open).
+   */
   readonly spinnerBuilder: SpinnerBumperBuilder | null
   readonly ballTrapBuilder: BallTrapBuilder | null
   readonly launcherBuilder: LauncherBuilder | null
   readonly movingGateBuilder: MovingGateBuilder | null
+  /** Live visual/state records for each obstacle instance (created by the builders above). */
   readonly spinnerVisuals: SpinnerBumperVisual[]
   readonly trapStates: BallTrapState[]
   readonly launcherStates: LauncherState[]
@@ -145,7 +149,7 @@ export class GamePhysicsController {
     )
   }
 
-  /** Clean up EventBus subscriptions. */
+  /** Clean up EventBus subscriptions. Must be called when the controller is torn down. */
   dispose(): void {
     for (const unsub of this.eventBusUnsubscribers) {
       unsub()
