@@ -1,29 +1,34 @@
 # Pachinball — Weekly Plan
 
 ## Today's focus
-**2026-05-14 — Fix First: Restore Build + Adventure-Mode Integration Audit**
-`node_modules` is absent — build and test runner are both non-functional. Primary task: `npm install`, verify clean build, run full test suite, then audit the rapid adventure-mode feature dump (drop targets, spinner bumpers, ball traps, moving gates, launchers, goal/cinematic systems) for integration completeness, TypeScript hygiene, and EventBus wiring. Close Issue #131 once tests confirm ≥ 51 passing.
+**2026-05-21 — New Idea: Multi-Layer Parallax Breathing + Reel Spring Refinement**
+`src/display/display-reels.ts` has a working spring-settle for reels (stiffness=100, damping=5) and a single-layer `updateParallax()` — but only the ReelsLayer uses it. ImageLayer, VideoLayer, and ShaderLayer have no parallax call; `display-core.ts` only calls `reelsLayer.updateParallax()`. Task: (1) Add `updateParallax(time: number)` to each display layer with staggered phase offsets so all layers breathe independently; (2) tune the reel spring constants and snap threshold for a more perceptible, satisfying settle. Pure `src/display/` scope.
 
 ## Ideas
 - [done — 2026-04-30] Backbox display state synchronization — FEVER triggered (combo>=10), REACH/JACKPOT/IDLE/ADVENTURE wired; GameStateManager drives IDLE on MENU/GAME_OVER. Full auto-sync folded into Event Bus task below.
 - [done — 2026-04-30] BallManager unit tests — Vitest installed, 10 tests passing (PR #122). Config extraction piece carried to Backlog.
 - [done — 2026-05-07] Event bus architecture — Replace the callback map in `GameStateManager` and scattered direct calls in `game.ts` with a lightweight typed event bus. Decouples display/effects/audio/scoring from the central game loop before the next feature layer.
 - [done — 2026-05-07] Playwright smoke tests for backbox display states — verify each `DisplayState` transition (IDLE → FEVER, IDLE → JACKPOT, JACKPOT → IDLE) triggers the correct layer activation via `getDisplayState()` assertion.
+- [in progress — 2026-05-21] Multi-layer parallax breathing + reel spring refinement (see Today's focus above)
+- [ ] Adventure-mode obstacle lifecycle audit — walk all new obstacle types (ball traps, moving gates, spinners, launchers), verify `dispose()` chains clean up physics + meshes + EventBus subscriptions, confirm zone-trigger scoring wiring is complete. Files: `src/game-elements/adventure-*.ts`, `src/objects/object-ball-traps.ts`, `src/objects/object-moving-gates.ts`, `src/game-elements/obstacle-eventbus-integration.ts`.
+- [ ] Hologram fresnel rim + FEVER pulse — apply a fresnel rim glow to the backbox border and to gold ball interactions during FEVER state; shader work in `src/effects/` + material hooks.
 
 ## Backlog
-- [ ] Adventure-mode integration audit — verify all new obstacle types (spinners, ball traps, launchers, moving gates) are wired into scoring, zone triggers, and EventBus; check for missing `dispose()` paths and memory leaks.
-- [ ] Close GitHub Issue #131 — EventBus/GameStateManager Vitest tests (Done section says 51 passing; issue still open on GitHub).
-- [ ] CRT scanline enhancement — temporal flicker + chromatic aberration.
-- [ ] Parallax display layers — Z-axis breathing per layer.
-- [ ] Reel stop bounce physics — overshoot + elastic settle.
-- [ ] Hologram fresnel rim effect.
+- [ ] Adventure-mode integration audit — see also Ideas above; Copilot-track via GitHub issue.
+- [ ] CRT scanline enhancement — temporal flicker already in `src/shaders/scanline.ts` (line 27–30); remaining gap is per-preset intensity tuning and a UI toggle. Low priority.
+- [ ] Parallax display layers (folded into Today's focus).
+- [ ] Reel stop bounce physics (folded into Today's focus — spring exists, needs tuning).
+- [ ] Hologram fresnel rim effect (promoted to Ideas above).
 
 ## Next Sprint Ideas (May 9+)
-- Input buffering improvements — rapid press handling
-- Mobile touch controls — on-screen flipper buttons
-- Backbox screen border lighting — glow sync with DisplayState
+- [done — 2026-05-21] Input buffering improvements — `queueInput` / `PendingInputFrame` system fully implemented in `src/game-elements/input.ts` (lines 10, 126–206, 331–493).
+- [done — 2026-05-21] Mobile touch controls — HTML buttons (index.html L137–162), CSS (style.css L232–546), and event handlers (input.ts L525–670) all live.
+- [done — 2026-05-21] Backbox screen border lighting — `BackboxBorderGlow` implemented and tested (PR #138 + PR #147).
 
 ## Done
+- 2026-05-21: **Input buffering** — `queueInput` / `PendingInputFrame` frame-aligned input queue implemented in `input.ts` lines 10–493. Covers keyboard, gamepad, and touch with consistent frame-boundary processing.
+- 2026-05-21: **Mobile touch controls** — Full on-screen flipper/plunger/nudge button set in `index.html` (L137–162), styled in `style.css` (L232–546), event-wired in `input.ts` (L525–670). Safe-area insets + `touch-action: manipulation` for low-latency response.
+- 2026-05-21: **Backbox screen border lighting** — `BackboxBorderGlow` (`src/display/display-border-glow.ts`, 157 lines) with DisplayState-reactive emissive animation. Unit tests added (PR #147). BackboxBorderGlow merged via PR #138.
 - 2026-05-08: **Advanced Ball Physics: Spin Mechanics & Surface Behavior** — Comprehensive ball physics system with spin transfer, surface-specific behaviors, and gold ball differentiation. Implemented `applySpinTransfer()` method applying "English" (side spin) from angled collisions. Added surface-specific configs (bumper/flipper/wall/playfield/rail) with unique restitution/friction pairs. Enhanced collision handlers for bumper and flipper interactions with spin transfer. Gold balls now have differentiated mass (1.08–1.15×), damping, and restitution. Rapier `CoefficientCombineRule.Max` for better restitution handling. All 51 Vitest tests passing.
 - 2026-05-08: **Advanced Flipper Mechanics: Hold-Time Response & Collision Handling** — Dynamic flipper strength based on button hold duration (ramp up over 0.3s). Reduced active angle from π/6 to π/8 (30° to 22.5°) for snappier feel. Added flipper-ball collision detection with impact feedback and spin transfer. Hold-time multipliers: stiffness × (1.0 + holdFactor × 0.3), damping × (0.9 + holdFactor × 0.1). Enhanced collision response with better haptic/audio feedback. All 51 Vitest tests passing.
 - 2026-05-08: **Physics Optimizations: Flipper Snap & Ball Differentiation** — Core physics tuning for improved gameplay feel. Snappier flipper active angle (π/8 vs π/6). Increased bumper restitution from 0.85 to 0.92 for more "pop". Differentiated ball physics: gold-plated +8% mass/-8% damping/+2% restitution/-5% friction; solid gold +15% mass. Added `kickVariationFactor` for future impulse-based improvements. Bumper restitution now uses config value. All 51 Vitest tests passing.
@@ -73,10 +78,17 @@
 - 2026-02-25 (PR #106): Adventure track switching + dual-screen display integration.
 
 ## Last run
-Date: 2026-05-14
-Mode: Fix First
-Focus: Restore build (missing node_modules) + adventure-mode integration audit post rapid May 7–8 feature dump
+Date: 2026-05-21
+Mode: New Idea
+Focus: Multi-layer parallax breathing (all display layers, staggered phase) + reel spring refinement
 Outcome: (fill in at end of day)
+
+---
+
+### Prior run — 2026-05-14
+Mode: Fix First
+Focus: Restore build (missing node_modules) + adventure-mode integration audit
+Outcome: Build restored. Major monolith reduction shipped (PR #158 — `buildSceneStaged` → `GameSystemsInitializer`; `game.ts` −505/+0 lines). Physics tunables migrated to `PhysicsConfig` (PR #158). `FlipperPhysics` constants extracted. Visual Language System applied to effects + materials (PRs #155/#156). Flipper visibility regression diagnosed and fixed (PR #159 — mesh visibility and color correction). Adventure-mode audit remains open (in Backlog + promoted to Ideas for future kimi-cli run). All 51+ Vitest tests passing. Issue #131 not explicitly confirmed closed — verify.
 
 ---
 
