@@ -35,7 +35,8 @@ export class DisplayImageLayer {
 
   updateParallax(time: number): void {
     if (this.mesh) {
-      this.mesh.position.z = 0.15 + Math.sin(time * 0.6 + 3.0) * 0.035
+      // Period 2.0 s, amplitude 0.05, phase π
+      this.mesh.position.z = 0.15 + Math.sin(time * (2 * Math.PI / 2.0) + Math.PI) * 0.05
     }
   }
 

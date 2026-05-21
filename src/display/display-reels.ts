@@ -200,9 +200,17 @@ export class DisplayReelsLayer {
       }
 
       if (reel.stopping) {
-        if (reel.speed > 3.0) {
+        // Spring constants extracted for tuning visibility of overshoot
+        const FRICTION_DECEL_FACTOR = 0.96
+        const SPRING_SPEED_CUTOFF = 3.0
+        const SETTLE_STIFFNESS = 90
+        const SETTLE_DAMPING = 4.0
+        const SNAP_POSITION_THRESHOLD = 0.005
+        const SNAP_SPEED_THRESHOLD = 0.08
+
+        if (reel.speed > SPRING_SPEED_CUTOFF) {
           // Friction deceleration phase
-          reel.speed *= 0.96
+          reel.speed *= FRICTION_DECEL_FACTOR
         } else {
           // Elastic settle: spring toward target symbol with overshoot
           const targetIndex = reel.symbols.indexOf(reel.targetSymbol)
@@ -212,13 +220,11 @@ export class DisplayReelsLayer {
           if (delta > 0.5) delta -= 1
           if (delta < -0.5) delta += 1
 
-          const stiffness = 100
-          const damping = 5
-          const accel = stiffness * delta - damping * reel.speed
+          const accel = SETTLE_STIFFNESS * delta - SETTLE_DAMPING * reel.speed
           reel.speed += accel * dt
 
-          // Snap when close enough
-          if (Math.abs(delta) < 0.002 && Math.abs(reel.speed) < 0.05) {
+          // Snap when close enough after visible oscillation
+          if (Math.abs(delta) < SNAP_POSITION_THRESHOLD && Math.abs(reel.speed) < SNAP_SPEED_THRESHOLD) {
             reel.speed = 0
             reel.position = Math.floor(reel.position) + targetPos
           }
@@ -251,7 +257,8 @@ export class DisplayReelsLayer {
 
   updateParallax(time: number): void {
     if (this.mesh) {
-      this.mesh.position.z = 0.2 + Math.sin(time * 0.5 + 1.0) * 0.03
+      // Period 3.5 s, amplitude 0.03, phase π/2
+      this.mesh.position.z = 0.2 + Math.sin(time * (2 * Math.PI / 3.5) + Math.PI / 2) * 0.03
     }
   }
 

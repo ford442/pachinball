@@ -106,7 +106,8 @@ export class DisplayVideoLayer {
 
   updateParallax(time: number): void {
     if (this.mesh) {
-      this.mesh.position.z = 0.1 + Math.sin(time * 0.4 + 2.0) * 0.025
+      // Period 3.0 s, amplitude 0.04, phase 3π/4
+      this.mesh.position.z = 0.1 + Math.sin(time * (2 * Math.PI / 3.0) + (3 * Math.PI) / 4) * 0.04
     }
   }
 

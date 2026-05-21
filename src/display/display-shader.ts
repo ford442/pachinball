@@ -305,7 +305,8 @@ export class DisplayShaderLayer {
 
   updateParallax(time: number): void {
     if (this.backgroundMesh) {
-      this.backgroundMesh.position.z = -0.5 + Math.sin(time * 0.3) * 0.02
+      // Period 4.5 s, amplitude 0.02, phase π/4
+      this.backgroundMesh.position.z = -0.5 + Math.sin(time * (2 * Math.PI / 4.5) + Math.PI / 4) * 0.02
     }
   }
 
