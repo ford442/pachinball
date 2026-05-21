@@ -10,7 +10,7 @@ import {
   PointLight,
   Texture,
   Mesh,
-  ArcRotateCamera,
+  TargetCamera,
 } from '@babylonjs/core'
 import type { DirectionalLight } from '@babylonjs/core'
 import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
@@ -110,7 +110,7 @@ export class EffectsSystem {
 
   // Camera reference for screen shake
   private cameraRef: { position: Vector3 } | null = null
-  private tableCam: ArcRotateCamera | null = null
+  private tableCam: TargetCamera | null = null
 
   // Camera shake state
   private cameraShakeIntensity = 0
@@ -214,7 +214,7 @@ export class EffectsSystem {
     this.cameraRef = camera
   }
 
-  registerTableCamera(camera: ArcRotateCamera): void {
+  registerTableCamera(camera: TargetCamera): void {
     this.tableCam = camera
   }
 

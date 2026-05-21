@@ -5,7 +5,8 @@
  */
 
 import {
-  ArcRotateCamera,
+  FreeCamera,
+  TargetCamera,
   Color3,
   Color4,
   HemisphericLight,
@@ -17,7 +18,6 @@ import {
   PostProcess,
   Effect,
   Texture,
-  Viewport,
   RenderTargetTexture,
   DirectionalLight,
   PointLight,
@@ -61,7 +61,7 @@ export interface RendererHost {
   isCameraFollowMode: boolean
   cameraFollowTransition: number
   readonly cameraFollowTransitionSpeed: number
-  tableCam: ArcRotateCamera | null
+  tableCam: TargetCamera | null
   bloomPipeline: DefaultRenderingPipeline | null
   shadowGenerator: ShadowGenerator | null
   mirrorTexture: MirrorTexture | null
@@ -78,7 +78,6 @@ export interface RendererHost {
 
 export class GameRenderer {
   private readonly host: RendererHost
-  private _mouseMoveHandler: ((e: MouseEvent) => void) | null = null
   private _resizeObserver: ResizeObserver | null = null
   private _sceneOptimizer: SceneOptimizer | null = null
   private _scanlinePostProcess: PostProcess | null = null
@@ -89,85 +88,18 @@ export class GameRenderer {
     this.host = host
   }
 
-  /** Create immersive cabinet camera with mouse head-tracking. */
+  /** Create locked cabinet camera for physical VPin playfield LCD. */
   setupCamera(): void {
-    const { engine, scene } = this.host
+    const { scene } = this.host
     if (!scene) return
 
-    const canvas = engine.getRenderingCanvas()
+    const camera = new FreeCamera('cabinetCamera', new Vector3(0, 18, -22), scene)
+    camera.setTarget(new Vector3(0, 0, 5))
+    camera.fov = 0.8
 
-    const immersiveCam = new ArcRotateCamera(
-      'immersiveCam',
-      -Math.PI / 2,
-      Math.PI / 2.8,
-      32,
-      new Vector3(0, 0, -5),
-      scene
-    )
-    this.host.tableCam = immersiveCam
-    immersiveCam.mode = ArcRotateCamera.PERSPECTIVE_CAMERA
-    immersiveCam.fov = 0.65
-    immersiveCam.viewport = new Viewport(0, 0, 1, 1)
-    immersiveCam.lowerBetaLimit = Math.PI / 4
-    immersiveCam.upperBetaLimit = Math.PI / 2.2
-    immersiveCam.lowerRadiusLimit = 22
-    immersiveCam.upperRadiusLimit = 45
-
-    const baseAlpha = -Math.PI / 2
-    const baseBeta = Math.PI / 2.8
-
-    const mouseState = { x: 0.5, y: 0.5, targetX: 0.5, targetY: 0.5 }
-    const smoothSpeed = 0.12
-    const lookRange = 0.25
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!canvas) return
-      const rect = canvas.getBoundingClientRect()
-      mouseState.targetX = (e.clientX - rect.left) / rect.width
-      mouseState.targetY = (e.clientY - rect.top) / rect.height
-    }
-
-    canvas?.addEventListener('mousemove', handleMouseMove)
-    this._mouseMoveHandler = handleMouseMove
-
-    scene.onBeforeRenderObservable.add(() => {
-      const dt = engine.getDeltaTime() / 1000
-      if (this.host.isCameraFollowMode) {
-        this.host.cameraFollowTransition = Math.min(
-          1,
-          this.host.cameraFollowTransition + dt * this.host.cameraFollowTransitionSpeed
-        )
-      } else {
-        this.host.cameraFollowTransition = Math.max(
-          0,
-          this.host.cameraFollowTransition - dt * this.host.cameraFollowTransitionSpeed
-        )
-      }
-
-      const currentTableCam = this.host.tableCam
-      if (this.host.cameraFollowTransition > 0 && currentTableCam) {
-        const t = this.host.cameraFollowTransition
-        const ease = t * t * (3 - 2 * t)
-        currentTableCam.radius = 32 + (20 - 32) * ease
-        currentTableCam.beta = Math.PI / 2.8 + (0.55 - Math.PI / 2.8) * ease
-        currentTableCam.lowerRadiusLimit = 36 + (22 - 36) * ease
-        mouseState.targetX = 0.5
-        mouseState.targetY = 0.5
-      } else if (currentTableCam) {
-        currentTableCam.lowerRadiusLimit = 36
-        currentTableCam.upperRadiusLimit = 60
-        const offsetX = (mouseState.x - 0.5) * lookRange * 2
-        const offsetY = (mouseState.y - 0.5) * lookRange * 0.8
-        immersiveCam.alpha = baseAlpha + offsetX
-        immersiveCam.beta = baseBeta + offsetY
-      }
-
-      mouseState.x += (mouseState.targetX - mouseState.x) * smoothSpeed
-      mouseState.y += (mouseState.targetY - mouseState.y) * smoothSpeed
-    })
-
-    scene.activeCamera = immersiveCam
-    scene.activeCameras = [immersiveCam]
+    this.host.tableCam = camera
+    scene.activeCamera = camera
+    scene.activeCameras = [camera]
   }
 
   /** Setup bloom, FXAA, tone-mapping, DoF, and scanlines. */
@@ -488,11 +420,6 @@ export class GameRenderer {
   dispose(): void {
     this._sceneOptimizer?.dispose()
     this._sceneOptimizer = null
-
-    if (this._mouseMoveHandler) {
-      this.host.engine.getRenderingCanvas()?.removeEventListener('mousemove', this._mouseMoveHandler)
-      this._mouseMoveHandler = null
-    }
 
     if (this._resizeObserver) {
       this._resizeObserver.disconnect()

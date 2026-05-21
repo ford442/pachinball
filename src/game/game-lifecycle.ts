@@ -35,7 +35,7 @@ export interface LifecycleHost {
   readonly mapManager: TableMapManager | null
   readonly uiManager: GameUIManager | null
   readonly scene: Scene | null
-  readonly tableCam: import('@babylonjs/core').ArcRotateCamera | null
+  readonly tableCam: import('@babylonjs/core').TargetCamera | null
   readonly accessibility: import('../game-elements').AccessibilityConfig
 
   startScreen: HTMLElement | null

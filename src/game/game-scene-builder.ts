@@ -3,7 +3,7 @@
  */
 
 import { MeshBuilder, Mesh, Vector3, Scene, StandardMaterial, Color3 } from '@babylonjs/core'
-import type { ArcRotateCamera } from '@babylonjs/core'
+import type { TargetCamera } from '@babylonjs/core'
 
 import type { PhysicsSystem } from '../game-elements/physics'
 import type { EffectsSystem } from '../effects'
@@ -25,7 +25,7 @@ export interface SceneBuilderHost {
   display: DisplaySystem | null
   gameObjects: GameObjects | null
   ballManager: BallManager | null
-  tableCam: ArcRotateCamera | null
+  tableCam: TargetCamera | null
   cameraController: CameraController | null
   adventureMode: AdventureMode | null
   mirrorTexture: import('@babylonjs/core').MirrorTexture | null

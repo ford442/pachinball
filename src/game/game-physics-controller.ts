@@ -57,7 +57,7 @@ export interface PhysicsHost {
   readonly prismCoreFeeder: PrismCoreFeeder | null
   readonly gaussCannon: GaussCannonFeeder | null
   readonly quantumTunnel: QuantumTunnelFeeder | null
-  readonly tableCam: import('@babylonjs/core').ArcRotateCamera | null
+  readonly tableCam: import('@babylonjs/core').TargetCamera | null
   readonly accessibility: import('../game-elements').AccessibilityConfig
 
   score: number

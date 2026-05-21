@@ -1,4 +1,4 @@
-import { ArcRotateCamera, Vector3, Scalar } from '@babylonjs/core'
+import { TargetCamera, Vector3, Scalar } from '@babylonjs/core'
 
 /**
  * Camera modes for different gameplay situations
@@ -75,7 +75,7 @@ export const DEFAULT_SOFT_FOLLOW: SoftFollowConfig = {
  * - Velocity prediction for leading the ball
  */
 export class CameraController {
-  private tableCam: ArcRotateCamera
+  private tableCam: TargetCamera
   private currentTarget = new Vector3(0, 0, 2)
   private currentMode = CameraMode.IDLE
   private softFollowConfig: SoftFollowConfig
@@ -83,7 +83,7 @@ export class CameraController {
   private velocityEstimate = new Vector3(0, 0, 0)
 
   constructor(
-    tableCam: ArcRotateCamera,
+    tableCam: TargetCamera,
     softFollowConfig: Partial<SoftFollowConfig> = {}
   ) {
     this.tableCam = tableCam

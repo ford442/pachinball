@@ -1,13 +1,11 @@
 import {
-  ArcRotateCamera,
+  TargetCamera,
   Color3,
   HemisphericLight,
   Mesh,
   Scene,
   Vector3,
   MirrorTexture,
-  PostProcess,
-  Texture,
   RenderTargetTexture,
   DirectionalLight,
   PointLight,
@@ -37,8 +35,6 @@ import {
   QuantumTunnelFeeder,
   CameraController,
   CameraMode,
-  getMaterialLibrary,
-  resetMaterialLibrary,
   QualityTier,
   SettingsManager,
   SURFACES,
@@ -97,10 +93,9 @@ import { GameSettingsUI, type SettingsUIHost } from './game/game-settings-ui'
 import { GameDebug, type DebugHost } from './game/game-debug'
 import { GameLifecycle, type LifecycleHost } from './game/game-lifecycle'
 import { GameSystemsInitializer } from './game/game-systems-init'
+import { GameDisposer } from './game/game-disposer'
 import { GameHUD, type HUDHost } from './game/game-hud'
 import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
-import { hexToColor3 } from './game/game-utils'
-import { CRTPresetManager } from './game/game-crt'
 import { CheckpointDebugController, type DebugStageKey } from './game/checkpoint-debug'
 
 export class Game {
@@ -114,7 +109,7 @@ export class Game {
   cabinetLighting: CabinetLighting | null = null
   gameObjects: GameObjects | null = null
   ballManager: BallManager | null = null
-  private ballAnimator: BallAnimator | null = null
+  ballAnimator: BallAnimator | null = null
   adventureMode: AdventureMode | null = null
   zoneTriggerSystem: ZoneTriggerSystem | null = null
   private magSpinFeeder: MagSpinFeeder | null = null
@@ -122,7 +117,7 @@ export class Game {
   private prismCoreFeeder: PrismCoreFeeder | null = null
   private gaussCannon: GaussCannonFeeder | null = null
   private quantumTunnel: QuantumTunnelFeeder | null = null
-  private inputManager: GameInputManager | null = null
+  inputManager: GameInputManager | null = null
   cameraController: CameraController | null = null
   mapManager: TableMapManager | null = null
   cabinetManager: CabinetManager | null = null
@@ -154,17 +149,17 @@ export class Game {
 
   // Rendering
   bloomPipeline: DefaultRenderingPipeline | null = null
-  private sceneOptimizer: SceneOptimizer | null = null
+  sceneOptimizer: SceneOptimizer | null = null
   mirrorTexture: MirrorTexture | null = null
-  private tableRenderTarget: RenderTargetTexture | null = null
-  private headRenderTarget: RenderTargetTexture | null = null
-  private shadowGenerator: ShadowGenerator | null = null
+  tableRenderTarget: RenderTargetTexture | null = null
+  headRenderTarget: RenderTargetTexture | null = null
+  shadowGenerator: ShadowGenerator | null = null
 
   // Scene lights
   keyLight: DirectionalLight | null = null
   rimLight: DirectionalLight | null = null
   bounceLight: PointLight | null = null
-  tableCam: ArcRotateCamera | null = null
+  tableCam: TargetCamera | null = null
 
   // Game State
   ready = false
@@ -192,12 +187,6 @@ export class Game {
   gameOverScreen: HTMLElement | null = null
   pauseOverlay: HTMLElement | null = null
   finalScoreElement: HTMLElement | null = null
-
-  // LCD Table
-  lcdTablePostProcess: PostProcess | null = null
-
-  // CRT Presets
-  crtPresetManager = new CRTPresetManager()
 
   // Quality tier
   qualityTier: QualityTier = QualityTier.MEDIUM
@@ -227,18 +216,19 @@ export class Game {
   gameMode: 'fixed' | 'dynamic' = 'fixed'
 
   // Helpers
-  private renderer!: GameRenderer
+  renderer!: GameRenderer
   cabinetBuilder!: GameCabinetBuilder
   sceneBuilder!: GameSceneBuilder
   private systemsInitializer!: GameSystemsInitializer
+  disposer!: GameDisposer
   physicsController!: GamePhysicsController
-  private inputActions!: GameInputActions
+  inputActions!: GameInputActions
   scenarioManager!: GameScenario
   slotAdventure!: GameSlotAdventure
-  private settingsUI!: GameSettingsUI
+  settingsUI!: GameSettingsUI
   debugHelper!: GameDebug
-  private lifecycle!: GameLifecycle
-  private hud!: GameHUD
+  lifecycle!: GameLifecycle
+  hud!: GameHUD
   mapCabinet!: GameMapCabinet
   checkpointDebug = new CheckpointDebugController()
   cosmeticSceneBuilt = false
@@ -343,6 +333,7 @@ export class Game {
 
     await this.runCheckpointStage('physics', () => this.physics.init())
     this.systemsInitializer = new GameSystemsInitializer(this)
+    this.disposer = new GameDisposer(this)
     await this.systemsInitializer.initAll()
 
     this.ballAnimator = new BallAnimator(scene)
@@ -383,7 +374,6 @@ export class Game {
         onLeaderboardToggle: () => this.leaderboardSystem.toggle(),
         onDynamicModeToggle: () => this.scenarioManager.toggleDynamicMode(),
         onScenarioCycle: () => this.scenarioManager.cycleScenario(),
-        onCRTPresetCycle: () => this.crtPresetManager.cycle(),
         onPerfMonitorToggle: () => this.togglePerformanceMonitor(),
         getState: () => this.stateManager.getState(),
         getTiltActive: () => this.tiltActive,
@@ -470,64 +460,7 @@ export class Game {
     this.ready = true
     this.stateManager.setSystems(this.effects, this.display)
 
-    await this.runCheckpointStage('managers_postinit', () => {
-      this.adventureManager = new AdventureManager(
-        this.scene!,
-        this.physics,
-        this.stateManager,
-        this.uiManager!,
-        {
-          effects: this.effects,
-          display: this.display,
-          ballManager: this.ballManager,
-          soundSystem: this.soundSystem,
-        },
-        {
-          onZoneEnter: (_zone, config, isMajor) => {
-            this.effects?.updateEnvironmentColor?.(config.primaryColor)
-            if (isMajor && this.hapticManager) {
-              this.hapticManager.jackpot()
-            }
-          },
-          onScoreAward: (points, reason) => {
-            this.score += points
-            this.updateHUD()
-            this.uiManager?.showMessage(`${reason}: +${points}`, 1000)
-            const pos = this.physicsController.getBallPosition()
-            if (pos) this.effects?.spawnFloatingNumber(points, pos)
-          },
-          onAdventureEnd: () => {
-            this.score += GAME_TUNING.scoring.adventureEndBonus
-            this.updateHUD()
-            this.effects?.startJackpotSequence()
-            const pos = this.physicsController.getBallPosition()
-            if (pos) this.effects?.spawnFloatingNumber(GAME_TUNING.scoring.adventureEndBonus, pos)
-          },
-        }
-      )
-
-      this.mapManager = new TableMapManager(this.scene!, {
-        onMapChange: (_type, config) => {
-          this.ballManager?.updateBallMaterialColor(config.baseColor)
-          const matLib = getMaterialLibrary(this.scene!)
-          matLib.updateFlipperMaterialEmissive(config.baseColor)
-          matLib.updatePinMaterialEmissive(config.baseColor)
-          matLib.updateBrushedMetalMaterialEmissive(config.baseColor)
-          matLib.updateChromeMaterialEmissive(config.baseColor)
-          this.gameObjects?.updateBumperColors(config.baseColor)
-          this.effects?.setCabinetColor(config.baseColor)
-          this.cabinetBuilder.updateCabinetLightingForMap()
-        },
-        onPopupShow: (name, color) => this.mapCabinet.showMapNamePopup(name, color),
-        onMapSelectorUpdate: () => this.settingsUI.updateMapSelectorUI(),
-      })
-      this.mapManager.setBloomPipeline()
-
-      this.cabinetManager = new CabinetManager(this.scene!, {
-        onPopupShow: (name) => this.mapCabinet.showCabinetPopup(name),
-        onUISelect: () => this.mapCabinet.updateCabinetSelectorUI(),
-      })
-    }, true)
+    await this.systemsInitializer.postInitManagers()
 
     this.lifecycle.setGameState(GameState.MENU)
   }
@@ -599,125 +532,8 @@ export class Game {
     this.adventureManager?.setupFeederEventHandlers()
   }
 
-  public initLCDTablePostProcess(): void {
-    if (!this.scene || !this.tableCam) return
-    this.lcdTablePostProcess = new PostProcess(
-      'lcdTable',
-      'lcdTable',
-      [
-        'uBaseColor', 'uAccentColor', 'uScanlineIntensity', 'uPixelGridIntensity',
-        'uSubpixelIntensity', 'uGlowIntensity', 'uMapBlend', 'uTime',
-        'uFlashIntensity', 'uRippleIntensity', 'uRippleTime',
-      ],
-      null,
-      1.0,
-      this.tableCam,
-      Texture.BILINEAR_SAMPLINGMODE,
-      this.engine
-    )
-    this.lcdTablePostProcess.onApply = (effect) => {
-      const config = this.mapManager?.getLCDTableState().getCurrentConfig()
-      if (!config) return
-      const baseColor = hexToColor3(config.baseColor)
-      const accentColor = hexToColor3(config.accentColor)
-      effect.setColor3('uBaseColor', baseColor)
-      effect.setColor3('uAccentColor', accentColor)
-      effect.setFloat('uScanlineIntensity', config.scanlineIntensity)
-      effect.setFloat('uPixelGridIntensity', config.pixelGridIntensity)
-      effect.setFloat('uSubpixelIntensity', config.subpixelIntensity)
-      effect.setFloat('uGlowIntensity', config.glowIntensity)
-      effect.setFloat('uMapBlend', GameConfig.visuals.uMapBlend)
-      effect.setFloat('uTime', performance.now() * 0.001)
-      effect.setFloat('uFlashIntensity', this.mapManager?.getLCDTableState().flashIntensity || 0)
-      effect.setFloat('uRippleIntensity', this.mapManager?.getLCDTableState().rippleIntensity || 0)
-      effect.setFloat('uRippleTime', performance.now() * 0.001)
-    }
-    console.log('[Game] LCD table post-process initialized')
-  }
-
   dispose(): void {
-    this.sceneOptimizer?.dispose()
-    this.sceneOptimizer = null
-    this.cabinetLighting?.dispose()
-    this.cabinetLighting = null
-    this.inputManager?.dispose()
-    this.debugHUD?.dispose()
-    this.debugHUD = null
-    this.uiManager?.dispose()
-    this.adventureManager?.dispose()
-    this.renderer?.dispose()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.cabinetBuilder = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.sceneBuilder = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.physicsController = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.inputActions = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.scenarioManager = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.slotAdventure = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.settingsUI = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.debugHelper = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.lifecycle = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.hud = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.mapCabinet = null as any
-    this.leaderboardSystem.stop()
-    this.leaderboardSystem.dispose()
-    this.bloomPipeline?.dispose()
-    this.bloomPipeline = null
-    this.mirrorTexture?.dispose()
-    this.mirrorTexture = null
-    this.tableRenderTarget?.dispose()
-    this.tableRenderTarget = null
-    this.headRenderTarget?.dispose()
-    this.headRenderTarget = null
-    this.shadowGenerator?.dispose()
-    this.shadowGenerator = null
-    this.ballAnimator?.dispose()
-    this.ballAnimator = null
-    this.ballStackVisual?.dispose()
-    this.ballStackVisual = null
-    this.effects?.dispose()
-    this.effects = null
-
-    // Dispose new obstacle builders
-    this.spinnerBuilder?.dispose()
-    this.spinnerBuilder = null
-    this.ballTrapBuilder?.dispose()
-    this.ballTrapBuilder = null
-    this.launcherBuilder?.dispose()
-    this.launcherBuilder = null
-    this.movingGateBuilder?.dispose()
-    this.movingGateBuilder = null
-    this.spinnerVisuals = []
-    this.trapStates = []
-    this.launcherStates = []
-    this.gateStates = []
-
-    // Dispose new adventure systems
-    this.adventureGoalTracker?.dispose()
-    this.adventureGoalTracker = null
-    this.adventureCinematicTriggers?.dispose()
-    this.adventureCinematicTriggers = null
-    this.adventureCinematicSystem?.dispose()
-    this.adventureCinematicSystem = null
-    this.adventureUIStateManager?.dispose()
-    this.adventureUIStateManager = null
-    this.adventureTrackProgression = null
-
-    resetMaterialLibrary()
-    this.scene?.dispose()
-    this.scene = null
-    this.physics.dispose()
-    this.ready = false
-    console.log('[Game] Disposed all resources')
+    this.disposer.disposeAll()
   }
 
   // --------------------------------------------------------------------------

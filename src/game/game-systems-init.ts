@@ -12,9 +12,11 @@ import {
   MirrorTexture,
   Plane,
   Vector3,
+  ArcRotateCamera,
 } from '@babylonjs/core'
 
 import { GameConfig, GAME_TUNING } from '../config'
+import { getMaterialLibrary } from '../materials'
 import { adaptLegacyConfig, type DisplayConfig } from '../game-elements/display-config'
 import {
   QualityTier,
@@ -45,6 +47,10 @@ import {
   LauncherBuilder,
   MovingGateBuilder,
 } from '../objects'
+
+import { AdventureManager } from './game-adventure'
+import { TableMapManager } from './game-maps'
+import { CabinetManager } from './game-cabinet'
 
 import type { Game } from '../game'
 
@@ -80,7 +86,6 @@ export class GameSystemsInitializer {
       const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
       this.game.display = new DisplaySystem(scene, this.game.engine, displayConfig, this.game.qualityTier, this.game.accessibility)
       this.game.display.subscribeToEvents(this.game.eventBus)
-      this.game.crtPresetManager.setDisplay(this.game.display)
       this.game.stateManager.setDisplaySystem(this.game.display)
 
       this.game.cabinetLighting = new CabinetLighting(scene, {
@@ -115,14 +120,6 @@ export class GameSystemsInitializer {
       })
 
       this.game.slotAdventure.setupSlotMachineCallbacks()
-      this.game.checkpointDebug.registerToggleHandler('scene_lcd_post', (enabled) => {
-        if (enabled) {
-          this.game.initLCDTablePostProcess()
-          return
-        }
-        this.game.lcdTablePostProcess?.dispose()
-        this.game.lcdTablePostProcess = null
-      })
       this.game.checkpointDebug.registerToggleHandler('scene_cosmetic', (enabled) => {
         if (!enabled || this.game.cosmeticSceneBuilt) return
         this.game.scheduleCosmeticSceneBuild()
@@ -177,7 +174,7 @@ export class GameSystemsInitializer {
       this.game.adventureGoalTracker.setEventBus(this.game.eventBus)
 
       this.game.adventureCinematicSystem = new AdventureCinematicSystem()
-      this.game.adventureCinematicSystem.setCamera(this.game.tableCam!)
+      this.game.adventureCinematicSystem.setCamera(this.game.tableCam as ArcRotateCamera)
       this.game.adventureCinematicTriggers = new AdventureCinematicTriggers(this.game.adventureCinematicSystem)
       this.game.adventureCinematicTriggers.setEventBus(this.game.eventBus)
       this.game.adventureCinematicTriggers.setGoalTracker(this.game.adventureGoalTracker)
@@ -227,7 +224,6 @@ export class GameSystemsInitializer {
       this.game.sceneBuilder.buildCriticalScene()
       this.game.cabinetBuilder.updateCabinetLightExclusions()
     })
-    await this.game.runCheckpointStage('scene_lcd_post', () => this.game.initLCDTablePostProcess(), true)
     this.game.ready = true
     this.game.uiManager?.showLoadingState(false, 'gameplay')
 
@@ -238,5 +234,68 @@ export class GameSystemsInitializer {
       this.game.uiManager?.showLoadingState(false, 'cosmetic')
     })
     this.game.scheduleCosmeticSceneBuild()
+  }
+
+  public async postInitManagers(): Promise<void> {
+    const g = this.game
+
+    await g.runCheckpointStage('managers_postinit', () => {
+      g.adventureManager = new AdventureManager(
+        g.scene!,
+        g.physics,
+        g.stateManager,
+        g.uiManager!,
+        {
+          effects: g.effects,
+          display: g.display,
+          ballManager: g.ballManager,
+          soundSystem: g.soundSystem,
+        },
+        {
+          onZoneEnter: (_zone, config, isMajor) => {
+            g.effects?.updateEnvironmentColor?.(config.primaryColor)
+            if (isMajor && g.hapticManager) {
+              g.hapticManager.jackpot()
+            }
+          },
+          onScoreAward: (points, reason) => {
+            g.score += points
+            g.updateHUD()
+            g.uiManager?.showMessage(`${reason}: +${points}`, 1000)
+            const pos = g.physicsController.getBallPosition()
+            if (pos) g.effects?.spawnFloatingNumber(points, pos)
+          },
+          onAdventureEnd: () => {
+            g.score += GAME_TUNING.scoring.adventureEndBonus
+            g.updateHUD()
+            g.effects?.startJackpotSequence()
+            const pos = g.physicsController.getBallPosition()
+            if (pos) g.effects?.spawnFloatingNumber(GAME_TUNING.scoring.adventureEndBonus, pos)
+          },
+        }
+      )
+
+      g.mapManager = new TableMapManager(g.scene!, {
+        onMapChange: (_type, config) => {
+          g.ballManager?.updateBallMaterialColor(config.baseColor)
+          const matLib = getMaterialLibrary(g.scene!)
+          matLib.updateFlipperMaterialEmissive(config.baseColor)
+          matLib.updatePinMaterialEmissive(config.baseColor)
+          matLib.updateBrushedMetalMaterialEmissive(config.baseColor)
+          matLib.updateChromeMaterialEmissive(config.baseColor)
+          g.gameObjects?.updateBumperColors(config.baseColor)
+          g.effects?.setCabinetColor(config.baseColor)
+          g.cabinetBuilder.updateCabinetLightingForMap()
+        },
+        onPopupShow: (name, color) => g.mapCabinet.showMapNamePopup(name, color),
+        onMapSelectorUpdate: () => g.settingsUI.updateMapSelectorUI(),
+      })
+      g.mapManager.setBloomPipeline()
+
+      g.cabinetManager = new CabinetManager(g.scene!, {
+        onPopupShow: (name) => g.mapCabinet.showCabinetPopup(name),
+        onUISelect: () => g.mapCabinet.updateCabinetSelectorUI(),
+      })
+    }, true)
   }
 }

@@ -18,7 +18,7 @@
 
 import {
   Vector3,
-  ArcRotateCamera,
+  TargetCamera,
   Color3,
   MeshBuilder,
   StandardMaterial,
@@ -73,7 +73,7 @@ export const DEFAULT_DYNAMIC_CONFIG: DynamicWorldConfig = {
  */
 export class DynamicWorld {
   private scene: Scene
-  private camera: ArcRotateCamera
+  private camera: TargetCamera
   private display: DisplaySystem
   private sound: SoundSystem
   private config: DynamicWorldConfig
@@ -91,7 +91,7 @@ export class DynamicWorld {
 
   constructor(
     scene: Scene,
-    camera: ArcRotateCamera,
+    camera: TargetCamera,
     display: DisplaySystem,
     sound: SoundSystem,
     config?: Partial<DynamicWorldConfig>
@@ -367,7 +367,7 @@ let dynamicWorldInstance: DynamicWorld | null = null
 
 export function getDynamicWorld(
   scene?: Scene,
-  camera?: ArcRotateCamera,
+  camera?: TargetCamera,
   display?: DisplaySystem,
   sound?: SoundSystem
 ): DynamicWorld {
