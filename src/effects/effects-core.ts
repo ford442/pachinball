@@ -17,6 +17,7 @@ import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/Ren
 import type { CabinetLight, ShardParticle } from '../game-elements/types'
 import {
   PALETTE,
+  SURFACES,
   TEMPERATURE,
   FOG_STATES,
   LIGHTING_STATES,
@@ -64,10 +65,10 @@ export class EffectsSystem {
   // Atmosphere state tracking
   private currentAtmosphereState = 'IDLE'
   private targetFogDensity = 0.005
-  private targetFogColor: Color3 = color('#080818')
+  private targetFogColor: Color3 = color(SURFACES.PLAYFIELD)
   private targetKeyColor: Color3 = color(TEMPERATURE.NORMAL)
   private targetRimIntensity: number = LIGHTING.RIM.intensity
-  private targetRimColor: Color3 = color('#80bfff')
+  private targetRimColor: Color3 = color(LIGHTING.RIM.color)
 
   // Jackpot Variables
   jackpotTimer = 0
@@ -263,7 +264,7 @@ export class EffectsSystem {
     ip.vignetteWeight = 1.5
   }
 
-  triggerScreenPulse(colorHex = '#ffffff', intensity = 0.8, durationMs = 400): void {
+  triggerScreenPulse(colorHex: string = PALETTE.WHITE, intensity = 0.8, durationMs = 400): void {
     // LCD post-process flash (if available)
     if (this.lcdPostProcess) {
       this.lcdPostProcess.flashIntensity = intensity
@@ -725,7 +726,7 @@ export class EffectsSystem {
     this.addCameraShake(shakeIntensity)
 
     // Flash vignette with color
-    const flashColor = color || (intensity === 'jackpot' ? '#ff0088' : '#00d9ff')
+    const flashColor = color || (intensity === 'jackpot' ? '#ff0088' : PALETTE.CYAN)
     const flashDuration = intensity === 'jackpot' ? 500 : intensity === 'heavy' ? 300 : 200
     this.flashVignette(flashColor, flashDuration)
 
