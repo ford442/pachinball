@@ -145,6 +145,12 @@ export class BallManager {
       ballBody
     )
 
+    // Zero any residual velocity and give a gentle "pop" so the ball rolls up
+    // the plunger lane slightly before settling — makes the spawn visible to player
+    ballBody.setLinvel(new this.rapier.Vector3(0, 0, 0), true)
+    ballBody.setAngvel(new this.rapier.Vector3(0, 0, 0), true)
+    ballBody.applyImpulse(new this.rapier.Vector3(0, 0, 2.5), true)
+
     this.bindings.push({ mesh: ball, rigidBody: ballBody })
     this.ballBody = ballBody
     this.ballBodies.push(ballBody)
@@ -273,6 +279,8 @@ export class BallManager {
       this.ballBody!.setTranslation(new this.rapier.Vector3(spawn.x, spawn.y, spawn.z), true)
       this.ballBody!.setLinvel(new this.rapier.Vector3(0, 0, 0), true)
       this.ballBody!.setAngvel(new this.rapier.Vector3(0, 0, 0), true)
+      // Gentle pop on reset so player notices the ball reappearing in the lane
+      this.ballBody!.applyImpulse(new this.rapier.Vector3(0, 0, 2.5), true)
     }
   }
 
