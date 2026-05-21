@@ -83,19 +83,19 @@ export interface StateMediaConfig {
  * const config: DisplayConfig = {
  *   mode: DisplayMode.HYBRID,
  *   defaultMedia: {
- *     videoPath: '/backbox/attract-loop.mp4',
- *     imagePath: '/backbox/attract-fallback.png',
+ *     videoPath: 'backbox/attract-loop.mp4',
+ *     imagePath: 'backbox/attract-fallback.png',
  *     showShaderBackground: true,
  *     showReels: false,
  *   },
  *   stateMedia: {
  *     [DisplayState.JACKPOT]: {
- *       videoPath: '/backbox/jackpot-explosion.mp4',
+ *       videoPath: 'backbox/jackpot-explosion.mp4',
  *       showShaderBackground: false,
  *       shaderParams: { speed: 20, color: '#ff00ff' },
  *     },
  *     [DisplayState.ADVENTURE]: {
- *       imagePath: '/backbox/adventure-overlay.png',
+ *       imagePath: 'backbox/adventure-overlay.png',
  *       showReels: false,
  *       shaderParams: { speed: 1, color: '#00aa00' },
  *     },

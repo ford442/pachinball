@@ -146,7 +146,7 @@ export const SAMURAI_REALM_SCENARIO: DynamicScenario = {
         },
       ],
       storyText: 'The pagoda gates stand before you... prove your honor.',
-      videoUrl: '/backbox/samurai-gates.mp4',
+      videoUrl: 'backbox/samurai-gates.mp4',
       musicTrack: 'samurai-action',
     },
     {
@@ -307,7 +307,7 @@ export const CYBER_NOIR_SCENARIO: DynamicScenario = {
         },
       ],
       storyText: 'Neon signs flicker... someone is watching.',
-      videoUrl: '/backbox/noir-alley.mp4',
+      videoUrl: 'backbox/noir-alley.mp4',
       musicTrack: 'noir-tension',
     },
     {
@@ -468,7 +468,7 @@ export const QUANTUM_DREAM_SCENARIO: DynamicScenario = {
         },
       ],
       storyText: 'Probability collapses... choose your path wisely.',
-      videoUrl: '/backbox/quantum-waves.mp4',
+      videoUrl: 'backbox/quantum-waves.mp4',
       musicTrack: 'quantum-tension',
     },
     {
@@ -580,7 +580,7 @@ export const MOVIE_GANGSTER_SCENARIO: DynamicScenario = {
         },
       ],
       storyText: 'The speakeasy door creaks open... the password is luck.',
-      videoUrl: '/backbox/speakeasy_intro.mp4',
+      videoUrl: 'backbox/speakeasy_intro.mp4',
       musicTrack: 'noir-jazz',
     },
     {
@@ -621,7 +621,7 @@ export const MOVIE_GANGSTER_SCENARIO: DynamicScenario = {
         },
       ],
       storyText: 'Footsteps echo in the alley... watch your back.',
-      videoUrl: '/backbox/alley_chase.mp4',
+      videoUrl: 'backbox/alley_chase.mp4',
       musicTrack: 'noir-tension',
     },
     {
@@ -675,7 +675,7 @@ export const MOVIE_GANGSTER_SCENARIO: DynamicScenario = {
         },
       ],
       storyText: 'The vault awaits... crack it open or walk away.',
-      videoUrl: '/backbox/vault_crack.mp4',
+      videoUrl: 'backbox/vault_crack.mp4',
       musicTrack: 'noir-climax',
     },
   ],
@@ -735,7 +735,7 @@ export const FANTASY_REALM_SCENARIO: DynamicScenario = {
         },
       ],
       storyText: 'The crystals hum with ancient magic... listen closely.',
-      videoUrl: '/backbox/crystal_cave.mp4',
+      videoUrl: 'backbox/crystal_cave.mp4',
       musicTrack: 'fantasy-mystical',
     },
     {
@@ -786,7 +786,7 @@ export const FANTASY_REALM_SCENARIO: DynamicScenario = {
         },
       ],
       storyText: 'Fairies dance between the trees... catch them if you can.',
-      videoUrl: '/backbox/enchanted_forest.mp4',
+      videoUrl: 'backbox/enchanted_forest.mp4',
       musicTrack: 'fantasy-whimsical',
     },
     {
@@ -839,7 +839,7 @@ export const FANTASY_REALM_SCENARIO: DynamicScenario = {
         },
       ],
       storyText: 'The dragon awakens... brave the flames for treasure!',
-      videoUrl: '/backbox/dragon_lair.mp4',
+      videoUrl: 'backbox/dragon_lair.mp4',
       musicTrack: 'fantasy-epic',
     },
   ],
