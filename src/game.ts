@@ -2,13 +2,10 @@ import {
   ArcRotateCamera,
   Color3,
   HemisphericLight,
-  MeshBuilder,
   Mesh,
   Scene,
   Vector3,
   MirrorTexture,
-  Plane,
-  StandardMaterial,
   PostProcess,
   Texture,
   RenderTargetTexture,
@@ -25,7 +22,6 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 import {
   GameState,
-  DisplayState,
   PhysicsSystem,
   DisplaySystem,
   EffectsSystem,
@@ -34,7 +30,6 @@ import {
   BallManager,
   BallAnimator,
   AdventureMode,
-  AdventureTrackType,
   MagSpinFeeder,
   NanoLoomFeeder,
   PrismCoreFeeder,
@@ -46,11 +41,8 @@ import {
   resetMaterialLibrary,
   QualityTier,
   SettingsManager,
-  PALETTE,
   SURFACES,
-  INTENSITY,
   color,
-  emissive,
   detectAccessibility,
   HapticManager,
   getSoundSystem,
@@ -91,7 +83,7 @@ import { CabinetManager } from './game/game-cabinet'
 import { GameUIManager } from './game/game-ui'
 import { AdventureManager } from './game/game-adventure'
 import { GameConfig, GAME_TUNING, BallType } from './config'
-import { adaptLegacyConfig, type DisplayConfig } from './game-elements/display-config'
+
 import { TABLE_MAPS } from './shaders/lcd-table'
 
 import { GameRenderer, type RendererHost } from './game/game-renderer'
@@ -104,6 +96,7 @@ import { GameSlotAdventure, type SlotAdventureHost } from './game/game-slot-adve
 import { GameSettingsUI, type SettingsUIHost } from './game/game-settings-ui'
 import { GameDebug, type DebugHost } from './game/game-debug'
 import { GameLifecycle, type LifecycleHost } from './game/game-lifecycle'
+import { GameSystemsInitializer } from './game/game-systems-init'
 import { GameHUD, type HUDHost } from './game/game-hud'
 import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
 import { hexToColor3 } from './game/game-utils'
@@ -111,18 +104,18 @@ import { CRTPresetManager } from './game/game-crt'
 import { CheckpointDebugController, type DebugStageKey } from './game/checkpoint-debug'
 
 export class Game {
-  private readonly engine: Engine | WebGPUEngine
-  private scene: Nullable<Scene> = null
+  readonly engine: Engine | WebGPUEngine
+  scene: Nullable<Scene> = null
 
   // Game Systems
-  private physics: PhysicsSystem
-  private display: DisplaySystem | null = null
-  private effects: EffectsSystem | null = null
-  private cabinetLighting: CabinetLighting | null = null
-  private gameObjects: GameObjects | null = null
-  private ballManager: BallManager | null = null
+  physics: PhysicsSystem
+  display: DisplaySystem | null = null
+  effects: EffectsSystem | null = null
+  cabinetLighting: CabinetLighting | null = null
+  gameObjects: GameObjects | null = null
+  ballManager: BallManager | null = null
   private ballAnimator: BallAnimator | null = null
-  private adventureMode: AdventureMode | null = null
+  adventureMode: AdventureMode | null = null
   zoneTriggerSystem: ZoneTriggerSystem | null = null
   private magSpinFeeder: MagSpinFeeder | null = null
   private nanoLoomFeeder: NanoLoomFeeder | null = null
@@ -143,39 +136,39 @@ export class Game {
   nameEntryDialog = getNameEntryDialog()
 
   // New obstacle builders
-  private spinnerBuilder: SpinnerBumperBuilder | null = null
-  private ballTrapBuilder: BallTrapBuilder | null = null
-  private launcherBuilder: LauncherBuilder | null = null
-  private movingGateBuilder: MovingGateBuilder | null = null
-  private spinnerVisuals: SpinnerBumperVisual[] = []
-  private trapStates: BallTrapState[] = []
-  private launcherStates: LauncherState[] = []
-  private gateStates: MovingGateState[] = []
+  spinnerBuilder: SpinnerBumperBuilder | null = null
+  ballTrapBuilder: BallTrapBuilder | null = null
+  launcherBuilder: LauncherBuilder | null = null
+  movingGateBuilder: MovingGateBuilder | null = null
+  spinnerVisuals: SpinnerBumperVisual[] = []
+  trapStates: BallTrapState[] = []
+  launcherStates: LauncherState[] = []
+  gateStates: MovingGateState[] = []
 
   // New adventure systems
-  private adventureGoalTracker: AdventureGoalTracker | null = null
-  private adventureCinematicSystem: AdventureCinematicSystem | null = null
-  private adventureCinematicTriggers: AdventureCinematicTriggers | null = null
-  private adventureUIStateManager: AdventureUIStateManager | null = null
-  private adventureTrackProgression: AdventureTrackProgression | null = null
+  adventureGoalTracker: AdventureGoalTracker | null = null
+  adventureCinematicSystem: AdventureCinematicSystem | null = null
+  adventureCinematicTriggers: AdventureCinematicTriggers | null = null
+  adventureUIStateManager: AdventureUIStateManager | null = null
+  adventureTrackProgression: AdventureTrackProgression | null = null
 
   // Rendering
-  private bloomPipeline: DefaultRenderingPipeline | null = null
+  bloomPipeline: DefaultRenderingPipeline | null = null
   private sceneOptimizer: SceneOptimizer | null = null
-  private mirrorTexture: MirrorTexture | null = null
+  mirrorTexture: MirrorTexture | null = null
   private tableRenderTarget: RenderTargetTexture | null = null
   private headRenderTarget: RenderTargetTexture | null = null
   private shadowGenerator: ShadowGenerator | null = null
 
   // Scene lights
-  private keyLight: DirectionalLight | null = null
-  private rimLight: DirectionalLight | null = null
-  private bounceLight: PointLight | null = null
-  private tableCam: ArcRotateCamera | null = null
+  keyLight: DirectionalLight | null = null
+  rimLight: DirectionalLight | null = null
+  bounceLight: PointLight | null = null
+  tableCam: ArcRotateCamera | null = null
 
   // Game State
   ready = false
-  private stateManager!: GameStateManager
+  stateManager!: GameStateManager
   eventBus!: EventBus
   score = 0
   lives = 3
@@ -201,13 +194,13 @@ export class Game {
   finalScoreElement: HTMLElement | null = null
 
   // LCD Table
-  private lcdTablePostProcess: PostProcess | null = null
+  lcdTablePostProcess: PostProcess | null = null
 
   // CRT Presets
-  private crtPresetManager = new CRTPresetManager()
+  crtPresetManager = new CRTPresetManager()
 
   // Quality tier
-  private qualityTier: QualityTier = QualityTier.MEDIUM
+  qualityTier: QualityTier = QualityTier.MEDIUM
 
   // Map / Adventure
   mapSystem = getMapSystem()
@@ -235,19 +228,20 @@ export class Game {
 
   // Helpers
   private renderer!: GameRenderer
-  private cabinetBuilder!: GameCabinetBuilder
-  private sceneBuilder!: GameSceneBuilder
-  private physicsController!: GamePhysicsController
+  cabinetBuilder!: GameCabinetBuilder
+  sceneBuilder!: GameSceneBuilder
+  private systemsInitializer!: GameSystemsInitializer
+  physicsController!: GamePhysicsController
   private inputActions!: GameInputActions
-  private scenarioManager!: GameScenario
-  private slotAdventure!: GameSlotAdventure
+  scenarioManager!: GameScenario
+  slotAdventure!: GameSlotAdventure
   private settingsUI!: GameSettingsUI
-  private debugHelper!: GameDebug
+  debugHelper!: GameDebug
   private lifecycle!: GameLifecycle
   private hud!: GameHUD
-  private mapCabinet!: GameMapCabinet
-  private checkpointDebug = new CheckpointDebugController()
-  private cosmeticSceneBuilt = false
+  mapCabinet!: GameMapCabinet
+  checkpointDebug = new CheckpointDebugController()
+  cosmeticSceneBuilt = false
 
   constructor(engine: Engine | WebGPUEngine, preloadedRapier?: typeof RAPIER) {
     this.engine = engine
@@ -348,7 +342,8 @@ export class Game {
     })
 
     await this.runCheckpointStage('physics', () => this.physics.init())
-    await this.buildSceneStaged()
+    this.systemsInitializer = new GameSystemsInitializer(this)
+    await this.systemsInitializer.initAll()
 
     this.ballAnimator = new BallAnimator(scene)
 
@@ -537,196 +532,8 @@ export class Game {
     this.lifecycle.setGameState(GameState.MENU)
   }
 
-  private async buildSceneStaged(): Promise<void> {
-    if (!this.scene) throw new Error('Scene not ready')
-    const scene = this.scene
-    const world = this.physics.getWorld()
-    const rapier = this.physics.getRapier()
-    if (!world || !rapier) throw new Error('Physics not ready')
 
-    this.uiManager?.showLoadingState(true)
-    await this.runCheckpointStage('scene_rendering', () => {
-      const skybox = MeshBuilder.CreateBox('skybox', { size: GameConfig.visuals.skyboxSize }, scene)
-      const skyboxMaterial = new StandardMaterial('skyBox', scene)
-      skyboxMaterial.backFaceCulling = false
-      skyboxMaterial.diffuseColor = Color3.Black()
-      skyboxMaterial.specularColor = Color3.Black()
-      skyboxMaterial.emissiveColor = emissive(PALETTE.AMBIENT, INTENSITY.AMBIENT)
-      skybox.material = skyboxMaterial
-
-      const mirrorSize = this.qualityTier === QualityTier.HIGH ? GameConfig.visuals.mirrorSizeHigh : GameConfig.visuals.mirrorSizeMedium
-      this.mirrorTexture = new MirrorTexture('mirror', mirrorSize, scene, true)
-      this.mirrorTexture.mirrorPlane = new Plane(0, -1, 0, -1.01)
-      this.mirrorTexture.level = GameConfig.visuals.mirrorTextureLevel
-
-      this.effects = new EffectsSystem(scene, this.bloomPipeline, this.accessibility)
-      if (this.keyLight && this.rimLight && this.bounceLight) {
-        this.effects.registerSceneLights(this.keyLight, this.rimLight, this.bounceLight)
-      }
-      const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
-      this.display = new DisplaySystem(scene, this.engine, displayConfig, this.qualityTier, this.accessibility)
-      this.display.subscribeToEvents(this.eventBus)
-      this.crtPresetManager.setDisplay(this.display)
-      this.stateManager.setDisplaySystem(this.display)
-
-      this.cabinetLighting = new CabinetLighting(scene, {
-        enableEdgeLighting: true,
-        enableUnderCabinetGlow: true,
-        enableScreenBorder: false, // TODO: implement screen border
-        qualityTier: this.qualityTier,
-      })
-      this.cabinetLighting.subscribeToEvents(this.eventBus)
-
-      this.debugHUD = new DebugHUD({
-        onVisibilityChange: (visible) => this.debugHelper.handleDebugHUDVisibilityChange(visible),
-      })
-      this.debugHUD.setUpdateCadenceHz(4)
-      if (this.debugHUDEnabledInSettings && this.debugHelper.isDebugHUDAvailable()) {
-        this.debugHUD.show()
-      }
-
-      this.dynamicWorld = getDynamicWorld(scene, this.tableCam!, this.display, this.soundSystem)
-      this.ballStackVisual = new BallStackVisual(scene)
-
-      this.adventureState.setDisplay(this.display)
-      this.adventureState.onLevelCompleteCallback((level) => {
-        console.log(`[Game] Level complete: ${level.name}`)
-        if (level.rewards.unlockMap) {
-          setTimeout(() => { this.mapCabinet.switchTableMap(level.rewards.unlockMap!) }, GAME_TUNING.timing.storyVideoWaitMs)
-        }
-      })
-      this.adventureState.onGoalUpdateCallback((goals) => {
-        const goalText = goals.map(g => `${g.description}: ${g.current}/${g.target}`).join('\n')
-        this.display?.setStoryText(goalText)
-      })
-
-      this.slotAdventure.setupSlotMachineCallbacks()
-      this.checkpointDebug.registerToggleHandler('scene_lcd_post', (enabled) => {
-        if (enabled) {
-          this.initLCDTablePostProcess()
-          return
-        }
-        this.lcdTablePostProcess?.dispose()
-        this.lcdTablePostProcess = null
-      })
-      this.checkpointDebug.registerToggleHandler('scene_cosmetic', (enabled) => {
-        if (!enabled || this.cosmeticSceneBuilt) return
-        this.scheduleCosmeticSceneBuild()
-      })
-    })
-
-    await this.runCheckpointStage('scene_gameplay', () => {
-      this.gameObjects = new GameObjects(scene, world, rapier, GameConfig)
-      this.ballManager = new BallManager(scene, world, rapier, this.gameObjects.getBindings())
-      this.ballManager.setOnGoldBallCollected((type, points) => {
-        console.log(`[Game] Gold ball collected: ${type}, points: ${points}`)
-      })
-      this.adventureMode = new AdventureMode(scene, world, rapier)
-
-      this.setupFeederEventHandlers()
-    })
-
-    await this.runCheckpointStage('scene_optional', () => {
-      if (!this.zoneTriggerSystem) {
-        this.zoneTriggerSystem = new ZoneTriggerSystem(this.debugHUDQueryEnabled)
-      }
-
-      this.spinnerBuilder = new SpinnerBumperBuilder(scene, world, rapier, this.qualityTier)
-      this.spinnerBuilder.setEventBus(this.eventBus)
-      this.spinnerBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
-
-      this.ballTrapBuilder = new BallTrapBuilder(scene, world, rapier, this.qualityTier)
-      this.ballTrapBuilder.setEventBus(this.eventBus)
-      this.ballTrapBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
-
-      this.launcherBuilder = new LauncherBuilder(scene, world, rapier, this.qualityTier)
-      this.launcherBuilder.setEventBus(this.eventBus)
-      this.launcherBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
-
-      this.movingGateBuilder = new MovingGateBuilder(scene, world, rapier, this.qualityTier)
-      this.movingGateBuilder.setEventBus(this.eventBus)
-      this.movingGateBuilder.setZoneTriggerSystem(this.zoneTriggerSystem)
-
-      const spinner = this.spinnerBuilder.createSpinnerBumper(5, 10, '#00ffff', 1.0)
-      this.spinnerVisuals.push(spinner.visual)
-
-      const trap = this.ballTrapBuilder.createBallTrap(-5, 10, '#ff00ff', 1.0)
-      this.trapStates.push(trap.state)
-
-      const launcher = this.launcherBuilder.createLauncher(2, 16, '#00ff88', 1.0)
-      this.launcherStates.push(launcher.state)
-
-      const gate = this.movingGateBuilder.createMovingGate(-2, 16, '#ffaa00', 1.0, 'slide', 2.0, 1.5)
-      this.gateStates.push(gate.state)
-
-      this.adventureGoalTracker = new AdventureGoalTracker()
-      this.adventureGoalTracker.setEventBus(this.eventBus)
-
-      this.adventureCinematicSystem = new AdventureCinematicSystem()
-      this.adventureCinematicSystem.setCamera(this.tableCam!)
-      this.adventureCinematicTriggers = new AdventureCinematicTriggers(this.adventureCinematicSystem)
-      this.adventureCinematicTriggers.setEventBus(this.eventBus)
-      this.adventureCinematicTriggers.setGoalTracker(this.adventureGoalTracker)
-
-      this.adventureUIStateManager = new AdventureUIStateManager()
-      this.adventureUIStateManager.setEventBus(this.eventBus)
-
-      this.adventureTrackProgression = new AdventureTrackProgression()
-
-      this.adventureMode?.setEventListener((event, data) => {
-        console.log(`Adventure Event: ${event}`)
-        switch (event) {
-          case 'START': {
-            const trackType = data as AdventureTrackType | undefined
-            this.adventureManager?.startAdventure(trackType)
-            this.eventBus.emit('adventure:start')
-            this.eventBus.emit('display:set', DisplayState.ADVENTURE)
-            const trackName = trackType ? this.slotAdventure.getTrackDisplayName(trackType) : 'UNKNOWN SECTOR'
-            this.display?.setTrackInfo(trackName)
-            this.display?.setStoryText(`ENTERING: ${trackName}`)
-            this.effects?.setLightingMode('reach', 0.5)
-            this.effects?.setAtmosphereState('ADVENTURE')
-            break
-          }
-          case 'END':
-            this.adventureManager?.endAdventure()
-            this.eventBus.emit('adventure:end')
-            this.eventBus.emit('display:set', DisplayState.IDLE)
-            this.effects?.setLightingMode('normal', 1.0)
-            this.effects?.setAtmosphereState('IDLE')
-            break
-          case 'ZONE_ENTER': {
-            const zoneData = data as {
-              zone: AdventureTrackType
-              previousZone: AdventureTrackType | null
-              isMajor: boolean
-              ballPosition?: Vector3
-            }
-            this.scenarioManager.handleZoneTransition(zoneData.zone, zoneData.previousZone, zoneData.isMajor)
-            break
-          }
-        }
-      })
-    }, true)
-
-    await this.runCheckpointStage('scene_critical', () => {
-      this.sceneBuilder.buildCriticalScene()
-      this.cabinetBuilder.updateCabinetLightExclusions()
-    })
-    await this.runCheckpointStage('scene_lcd_post', () => this.initLCDTablePostProcess(), true)
-    this.ready = true
-    this.uiManager?.showLoadingState(false, 'gameplay')
-
-    await this.runCheckpointStage('scene_gameplay_build', async () => {
-      await this.sceneBuilder.yieldFrame()
-      this.sceneBuilder.buildGameplayScene()
-      this.physicsController.rebuildHandleCaches()
-      this.uiManager?.showLoadingState(false, 'cosmetic')
-    })
-    this.scheduleCosmeticSceneBuild()
-  }
-
-  private async runCheckpointStage(
+  public async runCheckpointStage(
     stage: DebugStageKey,
     init: () => void | Promise<void>,
     optional = false,
@@ -747,7 +554,7 @@ export class Game {
     }
   }
 
-  private scheduleCosmeticSceneBuild(): void {
+  public scheduleCosmeticSceneBuild(): void {
     if (!this.checkpointDebug.isStageEnabled('scene_cosmetic')) {
       this.checkpointDebug.markStageSkipped('scene_cosmetic')
       return
@@ -769,7 +576,7 @@ export class Game {
     }
   }
 
-  private setupFeederEventHandlers(): void {
+  public setupFeederEventHandlers(): void {
     if (!this.effects || !this.ballManager || !this.scene) return
     this.magSpinFeeder = new MagSpinFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.magSpin)
     this.nanoLoomFeeder = new NanoLoomFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.nanoLoom)
@@ -792,7 +599,7 @@ export class Game {
     this.adventureManager?.setupFeederEventHandlers()
   }
 
-  private initLCDTablePostProcess(): void {
+  public initLCDTablePostProcess(): void {
     if (!this.scene || !this.tableCam) return
     this.lcdTablePostProcess = new PostProcess(
       'lcdTable',

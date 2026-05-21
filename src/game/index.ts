@@ -43,6 +43,7 @@ export { GameSlotAdventure, type SlotAdventureHost } from './game-slot-adventure
 export { GameSettingsUI, type SettingsUIHost } from './game-settings-ui'
 export { GameDebug, type DebugHost } from './game-debug'
 export { GameLifecycle, type LifecycleHost } from './game-lifecycle'
+export { GameSystemsInitializer } from './game-systems-init'
 export { GameHUD, type HUDHost } from './game-hud'
 export { GameMapCabinet, type MapCabinetHost } from './game-map-cabinet'
 export { hexToColor3, resolveVideoUrl } from './game-utils'
