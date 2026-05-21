@@ -1,4 +1,5 @@
 import { Scene, Vector3, ParticleSystem, Color4, Texture } from '@babylonjs/core'
+import { PALETTE } from '../game-elements/visual-language'
 
 export class ParticleEffects {
   private scene: Scene
@@ -43,7 +44,7 @@ export class ParticleEffects {
     }
   }
 
-  spawnBumperSpark(position: Vector3, color = '#00d9ff'): void {
+  spawnBumperSpark(position: Vector3, color: string = PALETTE.CYAN): void {
     if (!this.poolInited) {
       this.initBumperSparkPool(12)
     }

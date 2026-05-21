@@ -8,7 +8,7 @@
 import { Color3, PointLight, Vector3, type Scene } from '@babylonjs/core'
 import type { EventBus } from '../game/event-bus'
 import { DisplayState } from '../game-elements/display-config'
-import { QualityTier } from '../game-elements/visual-language'
+import { PALETTE, color, QualityTier } from '../game-elements/visual-language'
 
 export interface CabinetLightingConfig {
   enableEdgeLighting: boolean
@@ -165,7 +165,7 @@ export class CabinetLighting {
         break
 
       case DisplayState.JACKPOT:
-        edgeColor = new Color3(0.0, 1.0, 1.0) // Bright cyan
+        edgeColor = color(PALETTE.CYAN) // Bright cyan
         edgeIntensity = 1.0
         underColor = new Color3(0.0, 0.8, 1.0)
         underIntensity = 0.8
@@ -179,7 +179,7 @@ export class CabinetLighting {
         break
 
       case DisplayState.ADVENTURE:
-        edgeColor = new Color3(0.6, 0.2, 1.0) // Rich purple
+        edgeColor = color(PALETTE.PURPLE) // Rich purple
         edgeIntensity = 0.8
         underColor = new Color3(0.2, 0.8, 1.0) // Cyan accent
         underIntensity = 0.4
