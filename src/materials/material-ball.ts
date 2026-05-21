@@ -9,6 +9,7 @@ import {
   METALLIC,
   ROUGHNESS,
   CLEARCOAT,
+  INTENSITY,
   QualityTier,
   color,
   emissive,
@@ -40,7 +41,7 @@ export class BallMaterials extends MaterialLibraryBase {
    * Enhanced chrome ball with map-reactive emissive glow
    * Creates a glass/metallic hybrid that reacts to the current LCD map color
    */
-  getEnhancedChromeBallMaterial(mapColorHex: string = '#00d9ff'): PBRMaterial {
+  getEnhancedChromeBallMaterial(mapColorHex: string = PALETTE.CYAN): PBRMaterial {
     const cacheKey = `enhancedBall_${mapColorHex}`
     return this.getCachedPBR(cacheKey, () => {
       const mat = new PBRMaterial('enhancedBallMat', this.scene)
@@ -125,7 +126,7 @@ export class BallMaterials extends MaterialLibraryBase {
       mat.environmentIntensity = 1.3  // Higher reflectivity
 
       // Subtle gold emissive for premium glow (pulsed by BallManager)
-      mat.emissiveColor = emissive(PALETTE.GOLD, 0.2)
+      mat.emissiveColor = emissive(PALETTE.GOLD, INTENSITY.AMBIENT)
       mat.emissiveIntensity = 0.2
 
       // Clear coat for shine (skipped on LOW tier)

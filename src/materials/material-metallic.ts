@@ -5,6 +5,7 @@
 import { PBRMaterial, Color3, DynamicTexture } from '@babylonjs/core'
 import { MaterialLibraryBase } from './material-core'
 import {
+  PALETTE,
   SURFACES,
   METALLIC,
   ROUGHNESS,
@@ -97,7 +98,7 @@ export class MetallicMaterials extends MaterialLibraryBase {
   getGlossBlackMaterial(): PBRMaterial {
     return this.getCachedPBR('glossBlack', () => {
       const mat = new PBRMaterial('glossBlackMat', this.scene)
-      mat.albedoColor = new Color3(0.02, 0.02, 0.03)
+      mat.albedoColor = color(SURFACES.VOID)
       mat.metallic = 0.3
       mat.roughness = 0.2
       mat.environmentIntensity = 1.0
@@ -173,7 +174,7 @@ export class MetallicMaterials extends MaterialLibraryBase {
   getGoldMaterial(): PBRMaterial {
     return this.getCachedPBR('gold', () => {
       const mat = new PBRMaterial('goldMat', this.scene)
-      mat.albedoColor = new Color3(1.0, 0.84, 0.0)
+      mat.albedoColor = color(PALETTE.GOLD)
       mat.metallic = 1.0
       mat.roughness = 0.15
       mat.environmentIntensity = 1.2
@@ -233,7 +234,7 @@ export class MetallicMaterials extends MaterialLibraryBase {
    * Enhanced peg material with map-reactive emissive tips
    * Used for pachinko field pins
    */
-  getEnhancedPinMaterial(mapColorHex: string = '#00d9ff'): PBRMaterial {
+  getEnhancedPinMaterial(mapColorHex: string = PALETTE.CYAN): PBRMaterial {
     const cacheKey = `enhancedPin_${mapColorHex}`
     return this.getCachedPBR(cacheKey, () => {
       const mat = new PBRMaterial('enhancedPinMat', this.scene)
@@ -273,7 +274,7 @@ export class MetallicMaterials extends MaterialLibraryBase {
   /**
    * Enhanced rail material - smooth curved metal with map-reactive accent
    */
-  getEnhancedRailMaterial(mapColorHex: string = '#00d9ff'): PBRMaterial {
+  getEnhancedRailMaterial(mapColorHex: string = PALETTE.CYAN): PBRMaterial {
     const cacheKey = `enhancedRail_${mapColorHex}`
     return this.getCachedPBR(cacheKey, () => {
       const mat = new PBRMaterial('enhancedRailMat', this.scene)
