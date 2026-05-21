@@ -12,12 +12,6 @@ import type { GameStateManager } from './game-state'
 import { GameConfig } from '../config'
 import type { AccessibilityConfig } from '../game-elements'
 
-const FlipperPhysics = {
-  restAngleRad: Math.PI / 4,
-  activeAngleRad: Math.PI / 8, // Snappier 22.5° for more powerful feel
-  kickVariationFactor: 0.15, // Extra impulse variation
-} as const
-
 export interface InputActionsHost {
   readonly physics: PhysicsSystem
   readonly gameObjects: GameObjects | null
@@ -69,7 +63,7 @@ export class GameInputActions {
 
       const stiffness = GameConfig.table.flipperStrength * stiffnessMultiplier
       const damping = GameConfig.flipper.damping * dampingMultiplier
-      const angle = pressed ? -FlipperPhysics.activeAngleRad : FlipperPhysics.restAngleRad
+      const angle = pressed ? -GameConfig.flipper.activeAngle : GameConfig.flipper.restAngle
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
     }
     if (pressed) {
@@ -105,7 +99,7 @@ export class GameInputActions {
 
       const stiffness = GameConfig.table.flipperStrength * stiffnessMultiplier
       const damping = GameConfig.flipper.damping * dampingMultiplier
-      const angle = pressed ? FlipperPhysics.activeAngleRad : -FlipperPhysics.restAngleRad
+      const angle = pressed ? GameConfig.flipper.activeAngle : -GameConfig.flipper.restAngle
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
     }
     if (pressed) {

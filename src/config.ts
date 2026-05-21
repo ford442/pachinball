@@ -414,7 +414,13 @@ export const GameConfig = {
   },
 
   flipper: {
-    // REMOVED: strength (Legacy/Unused) - We use table.flipperStrength now
+// Flipper physics tuning — extracted from game-input-actions.ts
+    // Motor angles (radians)
+    restAngle: Math.PI / 4,        // 45° — flipper at rest
+    activeAngle: Math.PI / 8,      // 22.5° — flipper raised
+    // Impulse variation on hit
+    kickVariation: 0.15,
+    // Damping for motor control
     damping: 1000,
   },
 
