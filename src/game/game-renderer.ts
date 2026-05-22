@@ -77,16 +77,15 @@ export class GameRenderer {
   private _lastResizeHeight = 0
 
   // Bloom kick decay state
-  private _bloomBaseWeight = 0.25
-  private _bloomKickAmount = 0
-  private _bloomKickTimer = 0
+  private _currentBloomKick = 0
   private _bloomKickDuration = 0
+  private _bloomKickTimer = 0
 
   // Camera shake decay state
-  private _shakeIntensity = 0
-  private _shakeTimer = 0
+  private _currentShakeIntensity = 0
   private _shakeDuration = 0
-  private _baseCameraPosition = new Vector3(0, 16, -21)
+  private _shakeTimer = 0
+  private readonly _baseCameraPosition: Vector3 = new Vector3(0, 16, -21)
 
   // EventBus unsub handles
   private _unsubBloom: (() => void) | null = null
@@ -225,26 +224,21 @@ export class GameRenderer {
       motionBlur.motionBlurSamples = 16
     }
 
-    // Capture baseline bloom weight for kick decay
-    this._bloomBaseWeight = bloom.bloomWeight
-
     // EventBus subscriptions — bloom kick and camera shake
     const { eventBus } = this.host
     if (eventBus) {
       this._unsubBloom = eventBus.on('effect:bloom', ({ intensity, duration }) => {
         if (!bloomSafe) return
-        this._bloomKickAmount = Math.max(this._bloomKickAmount, intensity)
+        this._currentBloomKick = intensity
         this._bloomKickDuration = duration ?? 0.4
         this._bloomKickTimer = this._bloomKickDuration
       })
 
       this._unsubShake = eventBus.on('effect:shake', ({ amount, duration }) => {
-        const shakeEnabled = accessibility?.cameraShakeEnabled ?? true
-        if (!shakeEnabled || reducedMotion) return
-        const maxIntensity = accessibility?.maxCameraShakeIntensity ?? 1.0
-        const clamped = Math.min(amount, maxIntensity)
+        if (accessibility?.cameraShakeEnabled === false || reducedMotion) return
+        const clamped = Math.min(amount, accessibility?.maxCameraShakeIntensity ?? 0.08)
         if (clamped <= 0) return
-        this._shakeIntensity = Math.max(this._shakeIntensity, clamped)
+        this._currentShakeIntensity = clamped
         this._shakeDuration = duration ?? 0.3
         this._shakeTimer = this._shakeDuration
       })
@@ -254,29 +248,31 @@ export class GameRenderer {
     scene.onBeforeRenderObservable.add(() => {
       const dt = scene.getEngine().getDeltaTime() * 0.001
 
-      // Bloom kick decay
+      // Global bloom spike decay
       if (this._bloomKickTimer > 0 && this.host.bloomPipeline) {
         this._bloomKickTimer -= dt
-        const t = Math.max(this._bloomKickTimer / this._bloomKickDuration, 0)
-        this.host.bloomPipeline.bloomWeight = this._bloomBaseWeight + this._bloomKickAmount * t
-        if (this._bloomKickTimer <= 0) {
-          this._bloomKickTimer = 0
-          this.host.bloomPipeline.bloomWeight = this._bloomBaseWeight
-        }
+        const progress = Math.max(0, this._bloomKickTimer / this._bloomKickDuration)
+        const baselineWeight = 0.25 * (this.host.accessibility?.effectIntensity ?? 1.0)
+        this.host.bloomPipeline.bloomWeight = baselineWeight + this._currentBloomKick * progress
       }
 
-      // Camera shake decay
+      // High-frequency camera shake displacements
       if (this._shakeTimer > 0 && this.host.tableCam) {
         this._shakeTimer -= dt
-        const t = Math.max(this._shakeTimer / this._shakeDuration, 0)
-        const amp = this._shakeIntensity * t * 0.15
-        const cam = this.host.tableCam
-        cam.position.x = this._baseCameraPosition.x + (Math.random() - 0.5) * amp
-        cam.position.y = this._baseCameraPosition.y + (Math.random() - 0.5) * amp * 0.5
-        cam.position.z = this._baseCameraPosition.z + (Math.random() - 0.5) * amp * 0.3
+        const progress = Math.max(0, this._shakeTimer / this._shakeDuration)
+        const currentPower = this._currentShakeIntensity * progress
+
+        const offsetX = (Math.random() * 2 - 1) * currentPower
+        const offsetY = (Math.random() * 2 - 1) * currentPower
+
+        this.host.tableCam.position.set(
+          this._baseCameraPosition.x + offsetX,
+          this._baseCameraPosition.y + offsetY,
+          this._baseCameraPosition.z
+        )
+
         if (this._shakeTimer <= 0) {
-          this._shakeTimer = 0
-          cam.position.copyFrom(this._baseCameraPosition)
+          this.host.tableCam.position.copyFrom(this._baseCameraPosition)
         }
       }
     })
