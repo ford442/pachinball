@@ -37,6 +37,7 @@ import {
   LIGHTING,
   color,
   detectQualityTier,
+  INTENSITY,
   QualityTier,
   type AccessibilityConfig,
 } from '../game-elements'
@@ -115,8 +116,8 @@ export class GameRenderer {
     bloom.bloomEnabled = true
     bloom.bloomKernel = 64
     bloom.bloomScale = 0.5
-    bloom.bloomWeight = reducedMotion ? 0.15 : 0.4
-    bloom.bloomThreshold = 0.6
+    bloom.bloomWeight = reducedMotion ? 0.15 : 0.25 * INTENSITY.ACTIVE
+    bloom.bloomThreshold = 0.75
     bloom.fxaaEnabled = true
     bloom.imageProcessing.toneMappingEnabled = true
     bloom.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES
