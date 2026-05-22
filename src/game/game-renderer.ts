@@ -21,6 +21,7 @@ import {
   ShadowGenerator,
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
+import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration'
 import { DepthOfFieldEffectBlurLevel } from '@babylonjs/core/PostProcesses/depthOfFieldEffect'
 import { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline'
 import { SSRRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssrRenderingPipeline'
@@ -101,31 +102,27 @@ export class GameRenderer {
       return
     }
 
-    // Opt-in to the full DefaultRenderingPipeline via ?fullpp=1.
-    // The default pipeline ran HDR rendering with ACES tone-mapping, DoF
-    // (focusDistance 2500 — far past the table), vignette and color curves;
-    // on top of the lcdTable/crtPP/scanline post-processes the compounded
-    // effect was so dim the table was invisible. Skip it to keep the
-    // playfield readable.
-    if (!new URLSearchParams(window.location.search).has('fullpp')) {
-      console.log('[GameRenderer] Default lite mode: no DefaultRenderingPipeline; enable full pipeline with ?fullpp=1')
-      return
-    }
+    // IBL is wired up by setupEnvironmentLighting() via matLib.loadEnvironmentTexture(),
+    // which calls CubeTexture.CreateFromPrefilteredData('textures/environment.env', scene)
+    // and assigns it to scene.environmentTexture. PBR materials (ball, flippers, rails)
+    // sample from that map so they get real reflections — here we layer the cinematic
+    // ACES tonemap + bloom on top.
 
+    const reducedMotion = GameConfig.camera.reducedMotion
     const bloom = new DefaultRenderingPipeline('pachinbloom', true, scene, [tableCam])
     this.host.bloomPipeline = bloom
 
     bloom.bloomEnabled = true
     bloom.bloomKernel = 64
     bloom.bloomScale = 0.5
-    bloom.bloomWeight = 0.25
-    bloom.bloomThreshold = 0.7
+    bloom.bloomWeight = reducedMotion ? 0.15 : 0.4
+    bloom.bloomThreshold = 0.6
     bloom.fxaaEnabled = true
     bloom.imageProcessing.toneMappingEnabled = true
-    bloom.imageProcessing.toneMappingType = 3 // Hable/ACES
+    bloom.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES
     bloom.imageProcessing.contrast = 1.1
     bloom.imageProcessing.exposure = 1.0
-    bloom.imageProcessing.vignetteEnabled = true
+    bloom.imageProcessing.vignetteEnabled = !reducedMotion
     bloom.imageProcessing.vignetteWeight = 0.4
     bloom.imageProcessing.vignetteColor = new Color4(0, 0, 0, 0)
     bloom.imageProcessing.colorCurvesEnabled = true
@@ -133,18 +130,18 @@ export class GameRenderer {
       bloom.imageProcessing.colorCurves.globalHue = 5
       bloom.imageProcessing.colorCurves.globalSaturation = 15
     }
-    bloom.sharpenEnabled = true
+    bloom.sharpenEnabled = !reducedMotion
     bloom.sharpen.edgeAmount = 0.3
 
     if (qualityTier === QualityTier.LOW) {
       bloom.bloomKernel = 16
       bloom.bloomScale = 0.2
-      bloom.bloomWeight = 0.12
+      bloom.bloomWeight = Math.min(bloom.bloomWeight, 0.12)
       bloom.sharpenEnabled = false
     } else if (qualityTier === QualityTier.MEDIUM) {
       bloom.bloomKernel = 32
       bloom.bloomScale = 0.35
-      bloom.bloomWeight = 0.18
+      bloom.bloomWeight = Math.min(bloom.bloomWeight, 0.25)
     }
 
     if (!GameConfig.camera.reducedMotion) {
