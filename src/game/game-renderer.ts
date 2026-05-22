@@ -15,9 +15,6 @@ import {
   Vector3,
   MirrorTexture,
   StandardMaterial,
-  PostProcess,
-  Effect,
-  Texture,
   RenderTargetTexture,
   DirectionalLight,
   PointLight,
@@ -43,15 +40,7 @@ import {
   type AccessibilityConfig,
 } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
-import { scanlinePixelShader } from '../shaders/scanline'
-import { lcdTablePixelShader } from '../shaders/lcd-table'
 import { GameConfig } from '../config'
-
-// Register shaders once at module load
-Effect.ShadersStore['scanlineFragmentShader'] = scanlinePixelShader.fragment
-Effect.ShadersStore['scanlinePixelShader'] = scanlinePixelShader.fragment
-Effect.ShadersStore['lcdTableFragmentShader'] = lcdTablePixelShader.fragment
-Effect.ShadersStore['lcdTablePixelShader'] = lcdTablePixelShader.fragment
 
 export interface RendererHost {
   readonly engine: Engine | WebGPUEngine
@@ -80,7 +69,6 @@ export class GameRenderer {
   private readonly host: RendererHost
   private _resizeObserver: ResizeObserver | null = null
   private _sceneOptimizer: SceneOptimizer | null = null
-  private _scanlinePostProcess: PostProcess | null = null
   private _lastResizeWidth = 0
   private _lastResizeHeight = 0
 
@@ -214,23 +202,6 @@ export class GameRenderer {
       const motionBlur = new MotionBlurPostProcess('motionBlur', scene, 1.0, tableCam)
       motionBlur.motionStrength = 0.15
       motionBlur.motionBlurSamples = 16
-    }
-
-    // Scanlines
-    const scanline = new PostProcess(
-      'scanline',
-      'scanline',
-      ['uTime', 'uScanlineIntensity'],
-      null,
-      1.0,
-      tableCam,
-      Texture.BILINEAR_SAMPLINGMODE,
-      this.host.engine
-    )
-    this._scanlinePostProcess = scanline
-    scanline.onApply = (effect) => {
-      effect.setFloat('uTime', performance.now() * 0.001)
-      effect.setFloat('uScanlineIntensity', this.host.scanlineIntensity)
     }
   }
 
@@ -440,8 +411,5 @@ export class GameRenderer {
 
     this.host.shadowGenerator?.dispose()
     this.host.shadowGenerator = null
-
-    this._scanlinePostProcess?.dispose()
-    this._scanlinePostProcess = null
   }
 }
