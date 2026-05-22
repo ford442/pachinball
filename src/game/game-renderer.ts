@@ -109,14 +109,19 @@ export class GameRenderer {
     // sample from that map so they get real reflections — here we layer the cinematic
     // ACES tonemap + bloom on top.
 
-    const reducedMotion = GameConfig.camera.reducedMotion
+    const { accessibility } = this.host
+    const reducedMotion = accessibility?.reducedMotion ?? GameConfig.camera.reducedMotion
+    const effectIntensity = accessibility?.effectIntensity ?? 1.0
+
     const bloom = new DefaultRenderingPipeline('pachinbloom', true, scene, [tableCam])
     this.host.bloomPipeline = bloom
 
-    bloom.bloomEnabled = true
+    const bloomSafe = !reducedMotion && effectIntensity > 0
+    const baseWeight = 0.25
+    bloom.bloomEnabled = bloomSafe
     bloom.bloomKernel = 64
     bloom.bloomScale = 0.5
-    bloom.bloomWeight = reducedMotion ? 0.15 : 0.25 * INTENSITY.ACTIVE
+    bloom.bloomWeight = baseWeight * effectIntensity * INTENSITY.ACTIVE
     bloom.bloomThreshold = 0.75
     bloom.fxaaEnabled = true
     bloom.imageProcessing.toneMappingEnabled = true
