@@ -435,22 +435,35 @@ export class InputHandler {
 
     if (this.getState() !== GameState.PLAYING) return
 
-    if (event.code === 'ShiftLeft' || event.code === 'KeyZ') {
+    if (event.code === 'ShiftLeft') {
       if (this.getTiltActive()) return
       this.queueInput('flipperLeft', true)
     }
 
-    if (event.code === 'ShiftRight' || event.code === 'Slash') {
+    if (event.code === 'ShiftRight') {
       if (this.getTiltActive()) return
       this.queueInput('flipperRight', true)
     }
 
-    if (event.code === 'Space' || event.code === 'Enter') {
-      // Start plunger charge on key down — prevent page scroll on Space
+    if (event.code === 'Enter') {
+      // Start plunger charge on key down
       event.preventDefault()
       if (!this.plungerChargeState.isHeld) {
         this.startPlungerCharge()
       }
+    }
+
+    if (event.code === 'KeyZ') {
+      this.queueInput('nudge', { x: -0.6, y: 0, z: 0.3 })
+    }
+
+    if (event.code === 'Slash') {
+      this.queueInput('nudge', { x: 0.6, y: 0, z: 0.3 })
+    }
+
+    if (event.code === 'Space') {
+      event.preventDefault()
+      this.queueInput('nudge', { x: 0, y: 0, z: 0.8 })
     }
 
     if (event.code === 'KeyQ') {
@@ -485,15 +498,15 @@ export class InputHandler {
   handleKeyUp = (event: KeyboardEvent): void => {
     if (!this.rapier || this.getState() !== GameState.PLAYING) return
 
-    if (event.code === 'ShiftLeft' || event.code === 'KeyZ') {
+    if (event.code === 'ShiftLeft') {
       this.queueInput('flipperLeft', false)
     }
 
-    if (event.code === 'ShiftRight' || event.code === 'Slash') {
+    if (event.code === 'ShiftRight') {
       this.queueInput('flipperRight', false)
     }
-    
-    if (event.code === 'Space' || event.code === 'Enter') {
+
+    if (event.code === 'Enter') {
       // Release plunger on key up
       if (this.plungerChargeState.isHeld) {
         this.releasePlungerCharge()
