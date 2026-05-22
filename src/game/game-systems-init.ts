@@ -13,6 +13,7 @@ import {
   Plane,
   Vector3,
   ArcRotateCamera,
+  AbstractMesh,
 } from '@babylonjs/core'
 
 import { GameConfig, GAME_TUNING } from '../config'
@@ -173,15 +174,28 @@ export class GameSystemsInitializer {
       // Reparent advanced obstacle visuals into the tilted playfield group so they
       // sit flush with the inclined cabinet face and cast accurate shadows.
       const playfieldGroup = this.game.playfieldGroup
+      const obstacleMeshes = [
+        ...spinner.bindings.map(b => b.mesh),
+        ...trap.bindings.map(b => b.mesh),
+        ...launcher.bindings.map(b => b.mesh),
+        ...gate.bindings.map(b => b.mesh),
+      ]
+
       if (playfieldGroup) {
-        const obstacleMeshes = [
-          ...spinner.bindings.map(b => b.mesh),
-          ...trap.bindings.map(b => b.mesh),
-          ...launcher.bindings.map(b => b.mesh),
-          ...gate.bindings.map(b => b.mesh),
-        ]
         for (const mesh of obstacleMeshes) {
           if (mesh && !mesh.parent) mesh.parent = playfieldGroup
+        }
+      }
+
+      const shadowGenerator = this.game.shadowGenerator
+      if (shadowGenerator) {
+        for (const root of obstacleMeshes) {
+          if (!root) continue
+          if (root instanceof AbstractMesh) {
+            shadowGenerator.addShadowCaster(root, true)
+          } else {
+            for (const child of root.getChildMeshes()) shadowGenerator.addShadowCaster(child, false)
+          }
         }
       }
 

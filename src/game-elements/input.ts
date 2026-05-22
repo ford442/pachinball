@@ -466,18 +466,6 @@ export class InputHandler {
       this.queueInput('nudge', { x: 0, y: 0, z: 0.8 })
     }
 
-    if (event.code === 'KeyQ') {
-      this.queueInput('nudge', { x: -0.6, y: 0, z: 0.3 })
-    }
-
-    if (event.code === 'KeyE') {
-      this.queueInput('nudge', { x: 0.6, y: 0, z: 0.3 })
-    }
-
-    if (event.code === 'KeyW') {
-      this.queueInput('nudge', { x: 0, y: 0, z: 0.8 })
-    }
-
     if (event.code === 'KeyH') {
       this.onAdventureToggle()
     }
