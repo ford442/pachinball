@@ -40,8 +40,8 @@ export class GameSceneBuilder {
   }
 
   buildCriticalScene(): void {
-    const { scene, gameObjects, ballManager, tableCam, effects } = this.host
-    if (!gameObjects || !ballManager) return
+    const { scene, gameObjects, ballManager, tableCam, effects, display } = this.host
+    if (!gameObjects || !ballManager || !display) return
 
     if (scene) {
       const cabinetBuilder = getCabinetBuilder(scene)
@@ -50,6 +50,8 @@ export class GameSceneBuilder {
     }
 
     this.createLCDPlayfield()
+
+    display.createBackbox(new Vector3(0, 15, 30))
 
     gameObjects.createWalls()
     gameObjects.createFlippers()
@@ -135,12 +137,11 @@ export class GameSceneBuilder {
   }
 
   buildCosmeticScene(): void {
-    const { gameObjects, display, effects, scene } = this.host
-    if (!gameObjects || !display || !effects || !scene) return
+    const { gameObjects, effects, scene } = this.host
+    if (!gameObjects || !effects || !scene) return
 
     gameObjects.createCabinetDecoration()
 
-    display.createBackbox(new Vector3(0.75, 15, 30))
     effects.createCabinetLighting()
 
     const matLib = getMaterialLibrary(scene)

@@ -81,9 +81,9 @@ export class GameRenderer {
     const { scene } = this.host
     if (!scene) return
 
-    const camera = new FreeCamera('cabinetCamera', new Vector3(0, 18, -22), scene)
-    camera.setTarget(new Vector3(0, 0, 5))
-    camera.fov = 0.8
+    const camera = new FreeCamera('cabinetCamera', new Vector3(0, 16, -21), scene)
+    camera.setTarget(new Vector3(0, 2, 6))
+    camera.fov = 0.85
 
     this.host.tableCam = camera
     scene.activeCamera = camera
