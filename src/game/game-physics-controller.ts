@@ -699,6 +699,7 @@ export class GamePhysicsController {
     this.host.ballManager?.removeBall(body)
     this.host.hapticManager?.ballLost()
     this.host.soundSystem.playSample('drain')
+    this.host.display?.triggerDrainReaction()
 
     const ballBody = this.host.ballManager?.getBallBody()
     if (body === ballBody) {
