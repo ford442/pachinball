@@ -170,6 +170,21 @@ export class GameSystemsInitializer {
       const gate = this.game.movingGateBuilder.createMovingGate(-2, 16, '#ffaa00', 1.0, 'slide', 2.0, 1.5)
       this.game.gateStates.push(gate.state)
 
+      // Reparent advanced obstacle visuals into the tilted playfield group so they
+      // sit flush with the inclined cabinet face and cast accurate shadows.
+      const playfieldGroup = this.game.playfieldGroup
+      if (playfieldGroup) {
+        const obstacleMeshes = [
+          ...spinner.bindings.map(b => b.mesh),
+          ...trap.bindings.map(b => b.mesh),
+          ...launcher.bindings.map(b => b.mesh),
+          ...gate.bindings.map(b => b.mesh),
+        ]
+        for (const mesh of obstacleMeshes) {
+          if (mesh && !mesh.parent) mesh.parent = playfieldGroup
+        }
+      }
+
       this.game.adventureGoalTracker = new AdventureGoalTracker()
       this.game.adventureGoalTracker.setEventBus(this.game.eventBus)
 

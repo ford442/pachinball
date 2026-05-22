@@ -30,12 +30,12 @@ export interface SceneBuilderHost {
   adventureMode: AdventureMode | null
   mirrorTexture: import('@babylonjs/core').MirrorTexture | null
   shadowGenerator: ShadowGenerator | null
+  playfieldGroup: TransformNode | null
   uiManager: GameUIManager | null
 }
 
 export class GameSceneBuilder {
   private readonly host: SceneBuilderHost
-  private playfieldGroup: TransformNode | null = null
 
   constructor(host: SceneBuilderHost) {
     this.host = host
@@ -48,8 +48,8 @@ export class GameSceneBuilder {
     // Root container for all playfield visuals — pitched so the far end rises toward
     // the backbox. Rapier physics stay flat; gravity provides the slope simulation.
     const playfieldGroup = new TransformNode('playfieldGroup', scene)
-    playfieldGroup.rotation.x = Tools.ToRadians(-18.0)
-    this.playfieldGroup = playfieldGroup
+    playfieldGroup.rotation.x = Tools.ToRadians(18.0)
+    this.host.playfieldGroup = playfieldGroup
 
     if (scene) {
       const cabinetBuilder = getCabinetBuilder(scene)
@@ -133,13 +133,13 @@ export class GameSceneBuilder {
 
     ground.receiveShadows = true
     this.host.shadowGenerator?.addShadowCaster(ground, false)
-    if (this.playfieldGroup) ground.parent = this.playfieldGroup
+    if (this.host.playfieldGroup) ground.parent = this.host.playfieldGroup
 
     if (!GameConfig.camera.reducedMotion) {
       const flipperGlow = MeshBuilder.CreateGround('flipperGlow', { width: 10, height: 6 }, scene)
       flipperGlow.position.set(0, -0.95, -7)
       flipperGlow.receiveShadows = true
-      if (this.playfieldGroup) flipperGlow.parent = this.playfieldGroup
+      if (this.host.playfieldGroup) flipperGlow.parent = this.host.playfieldGroup
       const glowMat = new StandardMaterial('flipperGlowMat', scene)
       glowMat.diffuseColor = new Color3(0, 0, 0)
       glowMat.emissiveColor = new Color3(0, 0.07, 0.2)
@@ -172,8 +172,8 @@ export class GameSceneBuilder {
     }
 
     // Reparent all new obstacle meshes into the tilted visual group
-    if (this.playfieldGroup) {
-      const pg = this.playfieldGroup
+    if (this.host.playfieldGroup) {
+      const pg = this.host.playfieldGroup
       scene.meshes
         .filter(m => !beforeGameplay.has(m.uniqueId) && !m.parent)
         .forEach(m => { m.parent = pg })
