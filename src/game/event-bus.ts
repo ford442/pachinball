@@ -8,6 +8,7 @@
 
 import type { DisplayState } from '../game-elements/display-config'
 import type { GameState } from '../game-elements/types'
+import type { WasmContactEvent } from '../wasm/wasm-types'
 
 /**
  * Typed event map for all Pachinball game events.
@@ -200,6 +201,14 @@ export interface PachinballEventMap {
     toIntensity: number
     duration: number
   }
+
+  // C++ WASM physics engine events
+  /** Fired once per contact pair per physics step by WasmPhysicsEngine. */
+  'wasm:physics:contact': WasmContactEvent
+  /** Fired when the WasmPhysicsEngine WASM module has loaded and the world is ready. */
+  'wasm:physics:ready': void
+  /** Fired when the WasmPhysicsEngine encounters a fatal load error. */
+  'wasm:physics:error': { message: string }
 }
 
 /** Event name derived from the event map keys */
