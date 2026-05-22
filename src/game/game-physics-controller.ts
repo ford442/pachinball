@@ -406,231 +406,234 @@ export class GamePhysicsController {
     const b2 = world.getRigidBody(h2)
     if (!b1 || !b2) return
 
+    // Pre-flight guards — special non-obstacle handles
     if (this.adventureSensorHandle >= 0 && (h1 === this.adventureSensorHandle || h2 === this.adventureSensorHandle)) {
       this.host.endAdventureMode()
       return
     }
 
     if (this.deathZoneHandle >= 0 && (h1 === this.deathZoneHandle || h2 === this.deathZoneHandle)) {
-      const ball = h1 === this.deathZoneHandle ? b2 : b1
-      this.handleBallLoss(ball)
+      this.handleBallLoss(h1 === this.deathZoneHandle ? b2 : b1)
       return
     }
 
+    // Collision type dispatch — each branch resolves obstacle/ball bodies then delegates
     const h1IsBumper = this.bumperHandleSet.has(h1)
     const h2IsBumper = this.bumperHandleSet.has(h2)
     if (h1IsBumper || h2IsBumper) {
-      const bump = h1IsBumper ? b1 : b2
-      const ballBody = h1IsBumper ? b2 : b1
-      const ballHandle = h1IsBumper ? h2 : h1
-
-      if (this.ballHandleSet.has(ballHandle)) {
-        const ballPos = ballBody.translation()
-        const bumperVisuals = this.host.gameObjects?.getBumperVisuals() || []
-        const vis = bumperVisuals.find(v => v.body === bump)
-
-        if (vis) {
-          const ballMesh = this.getBallMeshForBody(ballBody)
-          if (ballMesh && this.host.ballAnimator) {
-            const velocity = ballBody.linvel()
-            const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
-            const impactIntensity = Math.min(speed / 20, 1.0)
-            const bumperPos = vis.mesh.position
-            const impactNormal = new Vector3(
-              ballPos.x - bumperPos.x,
-              ballPos.y - bumperPos.y,
-              ballPos.z - bumperPos.z
-            ).normalize()
-            this.host.ballAnimator.animateBallImpact(ballMesh, impactNormal, impactIntensity)
-          }
-
-          if (ballPos.y > 1.5) {
-            if (this.host.display?.getDisplayState() === DisplayState.IDLE) {
-              this.activateHologramCatch(ballBody, bump)
-              return
-            }
-          } else {
-            this.host.gameObjects?.activateBumperHit(bump)
-            this.host.effects?.addCameraShake(0.3)
-            const bumperPoints = GAME_TUNING.scoring.bumperHitBase * (Math.floor(this.host.comboCount / GAME_TUNING.combo.multiplierDivisor) + 1)
-            this.host.score += bumperPoints
-            this.host.comboCount++
-            this.host.comboTimer = GAME_TUNING.combo.expirySeconds
-
-            if (this.host.comboCount >= GAME_TUNING.combo.feverThreshold && this.host.display?.getDisplayState() === DisplayState.IDLE) {
-              this.host.eventBus.emit('fever:start')
-              this.host.eventBus.emit('display:set', DisplayState.FEVER)
-              this.host.effects?.setLightingMode('fever', 0)
-            }
-
-            this.host.effects?.spawnEnhancedBumperImpact(vis.mesh.position, 'medium')
-            this.host.effects?.spawnBumperSpark(vis.mesh.position, vis.color || PALETTE.CYAN)
-            this.host.effects?.spawnImpactRing(vis.mesh.position, new Vector3(0, 1, 0), PALETTE.CYAN)
-            this.host.effects?.triggerImpactFlash(vis.mesh.position, 1.0, vis.color || '#44aaff')
-            this.host.effects?.spawnFloatingNumber(bumperPoints, new Vector3(ballPos.x, ballPos.y, ballPos.z))
-            this.host.effects?.playBeep(400 + Math.random() * 200)
-            this.host.updateHUD()
-            this.host.effects?.setLightingMode('hit', 0.2)
-            this.host.adventureState.updateGoal('hit-pegs', 1)
-
-            const velocity = ballBody.linvel()
-            const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
-            this.host.hapticManager?.bumper(speed)
-
-            // Apply advanced spin transfer on bumper collision
-            const impactNormal = new Vector3(
-              ballPos.x - vis.mesh.position.x,
-              ballPos.y - vis.mesh.position.y,
-              ballPos.z - vis.mesh.position.z
-            ).normalize()
-            this.applySpinTransfer(ballBody, impactNormal, speed)
-
-            if (speed > 12) {
-              const mapColor = TABLE_MAPS[this.host.mapManager?.getCurrentMap() || 'neon-helix']?.baseColor || '#00d9ff'
-              this.host.effects?.triggerCabinetShake('heavy', mapColor)
-            }
-
-            this.host.soundSystem.playSample('bumper', vis.mesh.position)
-            return
-          }
-        }
-      }
+      this.handleBumperCollision(h1IsBumper ? b1 : b2, h1IsBumper ? b2 : b1, h1IsBumper ? h2 : h1)
+      return
     }
 
     const h1IsFlipper = this.flipperHandleSet.has(h1)
     const h2IsFlipper = this.flipperHandleSet.has(h2)
     if (h1IsFlipper || h2IsFlipper) {
-      const flipperBody = h1IsFlipper ? b1 : b2
-      const ballBody = h1IsFlipper ? b2 : b1
-      const ballHandle = h1IsFlipper ? h2 : h1
-
-      if (this.ballHandleSet.has(ballHandle)) {
-        const ballVel = ballBody.linvel()
-        const speed = Math.sqrt(ballVel.x ** 2 + ballVel.y ** 2 + ballVel.z ** 2)
-        const impactIntensity = Math.min(speed / 15, 1.0)
-
-        const flipperPos = flipperBody.translation()
-        const ballPos = ballBody.translation()
-        const collisionNormal = new Vector3(
-          ballPos.x - flipperPos.x,
-          ballPos.y - flipperPos.y,
-          ballPos.z - flipperPos.z
-        ).normalize()
-
-        const ballMesh = this.getBallMeshForBody(ballBody)
-        if (ballMesh && this.host.ballAnimator) {
-          this.host.ballAnimator.animateBallImpact(ballMesh, collisionNormal, impactIntensity * 0.7)
-        }
-
-        this.host.hapticManager?.flipper()
-        this.host.effects?.playBeep(880 + Math.random() * 200)
-
-        // Apply advanced spin transfer on flipper collision
-        this.applySpinTransfer(ballBody, collisionNormal, speed)
-      }
+      this.handleFlipperCollision(h1IsFlipper ? b1 : b2, h1IsFlipper ? b2 : b1, h1IsFlipper ? h2 : h1)
+      return
     }
 
     const h1IsTarget = this.targetHandleSet.has(h1)
     const h2IsTarget = this.targetHandleSet.has(h2)
     if (h1IsTarget || h2IsTarget) {
-      const tgt = h1IsTarget ? b1 : b2
-      const ballBody = h1IsTarget ? b2 : b1
-      const ballHandle = h1IsTarget ? h2 : h1
-
-      if (this.ballHandleSet.has(ballHandle)) {
-        const ballMesh = this.getBallMeshForBody(ballBody)
-        if (ballMesh && this.host.ballAnimator) {
-          const velocity = ballBody.linvel()
-          const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
-          const impactIntensity = Math.min(speed / 20, 1.0)
-          this.host.ballAnimator.animateSimpleImpact(ballMesh, impactIntensity)
-        }
-      }
-
-      if (this.host.gameObjects?.deactivateTarget(tgt)) {
-        this.host.score += GAME_TUNING.scoring.targetHitBase
-        this.host.effects?.spawnFloatingNumber(GAME_TUNING.scoring.targetHitBase, new Vector3(ballBody.translation().x, ballBody.translation().y, ballBody.translation().z))
-        this.host.effects?.playBeep(1200)
-        this.host.ballManager?.spawnExtraBalls(1)
-        this.host.updateHUD()
-        this.host.eventBus.emit('reach:start')
-        this.host.eventBus.emit('display:set', DisplayState.REACH)
-        this.host.effects?.setLightingMode('reach', 3.0)
-        this.host.effects?.setAtmosphereState('REACH')
-        this.rebuildHandleCaches()
-        this.host.tryActivateSlotMachine()
-      }
+      this.handleTargetCollision(h1IsTarget ? b1 : b2, h1IsTarget ? b2 : b1, h1IsTarget ? h2 : h1)
+      return
     }
-
-    // --- New obstacle collision dispatch ---
 
     const h1IsSpinner = this.spinnerHandleSet.has(h1)
     const h2IsSpinner = this.spinnerHandleSet.has(h2)
     if (h1IsSpinner || h2IsSpinner) {
-      const obstacleBody = h1IsSpinner ? b1 : b2
-      const ballBody = h1IsSpinner ? b2 : b1
-      const ballHandle = h1IsSpinner ? h2 : h1
-      if (this.ballHandleSet.has(ballHandle)) {
-        const vel = ballBody.linvel()
-        const impactForce = Math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)
-        const visual = this.host.spinnerVisuals.find(v => v.body === obstacleBody)
-        if (visual) {
-          const ballPos = ballBody.translation()
-          this.host.spinnerBuilder?.triggerSpin(visual, impactForce, new Vector3(ballPos.x, ballPos.y, ballPos.z))
-        }
-      }
+      this.handleSpinnerCollision(h1IsSpinner ? b1 : b2, h1IsSpinner ? b2 : b1, h1IsSpinner ? h2 : h1)
       return
     }
 
     const h1IsTrap = this.trapHandleSet.has(h1)
     const h2IsTrap = this.trapHandleSet.has(h2)
     if (h1IsTrap || h2IsTrap) {
-      const obstacleBody = h1IsTrap ? b1 : b2
-      const ballBody = h1IsTrap ? b2 : b1
-      const ballHandle = h1IsTrap ? h2 : h1
-      if (this.ballHandleSet.has(ballHandle)) {
-        const state = this.host.trapStates.find(s => s.body === obstacleBody)
-        if (state && state.isOpen && !state.caughtBall) {
-          const ballPos = ballBody.translation()
-          this.host.ballTrapBuilder?.catchBall(state, ballBody, new Vector3(ballPos.x, ballPos.y, ballPos.z))
-        }
-      }
+      this.handleBallTrapCollision(h1IsTrap ? b1 : b2, h1IsTrap ? b2 : b1, h1IsTrap ? h2 : h1)
       return
     }
 
     const h1IsLauncher = this.launcherHandleSet.has(h1)
     const h2IsLauncher = this.launcherHandleSet.has(h2)
     if (h1IsLauncher || h2IsLauncher) {
-      const obstacleBody = h1IsLauncher ? b1 : b2
-      const ballBody = h1IsLauncher ? b2 : b1
-      const ballHandle = h1IsLauncher ? h2 : h1
-      if (this.ballHandleSet.has(ballHandle)) {
-        const state = this.host.launcherStates.find(s => s.body === obstacleBody)
-        if (state && state.cooldownTimer <= 0) {
-          const forceVec = this.host.launcherBuilder?.triggerLauncher(state, 1.0)
-          if (forceVec) {
-            const rapier = this.host.physics.getRapier()
-            if (rapier) {
-              ballBody.applyImpulse(new rapier.Vector3(forceVec.x, forceVec.y, forceVec.z), true)
-            }
-          }
-        }
-      }
+      this.handleLauncherCollision(h1IsLauncher ? b1 : b2, h1IsLauncher ? b2 : b1, h1IsLauncher ? h2 : h1)
       return
     }
 
     const h1IsGate = this.gateHandleSet.has(h1)
     const h2IsGate = this.gateHandleSet.has(h2)
     if (h1IsGate || h2IsGate) {
-      const obstacleBody = h1IsGate ? b1 : b2
-      const ballHandle = h1IsGate ? h2 : h1
-      if (this.ballHandleSet.has(ballHandle)) {
-        const state = this.host.gateStates.find(s => s.body === obstacleBody)
-        if (state && !state.isOpen) {
-          this.host.movingGateBuilder?.openGate(state)
-        }
+      this.handleGateCollision(h1IsGate ? b1 : b2, h1IsGate ? h2 : h1)
+      return
+    }
+  }
+
+  private handleBumperCollision(bump: RAPIER.RigidBody, ballBody: RAPIER.RigidBody, ballHandle: number): void {
+    if (!this.ballHandleSet.has(ballHandle)) return
+
+    const ballPos = ballBody.translation()
+    const bumperVisuals = this.host.gameObjects?.getBumperVisuals() || []
+    const vis = bumperVisuals.find(v => v.body === bump)
+    if (!vis) return
+
+    const ballMesh = this.getBallMeshForBody(ballBody)
+    if (ballMesh && this.host.ballAnimator) {
+      const velocity = ballBody.linvel()
+      const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
+      const impactIntensity = Math.min(speed / 20, 1.0)
+      const bumperPos = vis.mesh.position
+      const impactNormal = new Vector3(
+        ballPos.x - bumperPos.x,
+        ballPos.y - bumperPos.y,
+        ballPos.z - bumperPos.z
+      ).normalize()
+      this.host.ballAnimator.animateBallImpact(ballMesh, impactNormal, impactIntensity)
+    }
+
+    if (ballPos.y > 1.5) {
+      if (this.host.display?.getDisplayState() === DisplayState.IDLE) {
+        this.activateHologramCatch(ballBody, bump)
       }
       return
+    }
+
+    this.host.gameObjects?.activateBumperHit(bump)
+    this.host.effects?.addCameraShake(0.3)
+    const bumperPoints = GAME_TUNING.scoring.bumperHitBase * (Math.floor(this.host.comboCount / GAME_TUNING.combo.multiplierDivisor) + 1)
+    this.host.score += bumperPoints
+    this.host.comboCount++
+    this.host.comboTimer = GAME_TUNING.combo.expirySeconds
+
+    if (this.host.comboCount >= GAME_TUNING.combo.feverThreshold && this.host.display?.getDisplayState() === DisplayState.IDLE) {
+      this.host.eventBus.emit('fever:start')
+      this.host.eventBus.emit('display:set', DisplayState.FEVER)
+      this.host.effects?.setLightingMode('fever', 0)
+    }
+
+    this.host.effects?.spawnEnhancedBumperImpact(vis.mesh.position, 'medium')
+    this.host.effects?.spawnBumperSpark(vis.mesh.position, vis.color || PALETTE.CYAN)
+    this.host.effects?.spawnImpactRing(vis.mesh.position, new Vector3(0, 1, 0), PALETTE.CYAN)
+    this.host.effects?.triggerImpactFlash(vis.mesh.position, 1.0, vis.color || '#44aaff')
+    this.host.effects?.spawnFloatingNumber(bumperPoints, new Vector3(ballPos.x, ballPos.y, ballPos.z))
+    this.host.effects?.playBeep(400 + Math.random() * 200)
+    this.host.updateHUD()
+    this.host.effects?.setLightingMode('hit', 0.2)
+    this.host.adventureState.updateGoal('hit-pegs', 1)
+
+    const velocity = ballBody.linvel()
+    const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
+    this.host.hapticManager?.bumper(speed)
+
+    const impactNormal = new Vector3(
+      ballPos.x - vis.mesh.position.x,
+      ballPos.y - vis.mesh.position.y,
+      ballPos.z - vis.mesh.position.z
+    ).normalize()
+    this.applySpinTransfer(ballBody, impactNormal, speed)
+
+    if (speed > 12) {
+      const mapColor = TABLE_MAPS[this.host.mapManager?.getCurrentMap() || 'neon-helix']?.baseColor || '#00d9ff'
+      this.host.effects?.triggerCabinetShake('heavy', mapColor)
+    }
+
+    this.host.soundSystem.playSample('bumper', vis.mesh.position)
+  }
+
+  private handleFlipperCollision(flipperBody: RAPIER.RigidBody, ballBody: RAPIER.RigidBody, ballHandle: number): void {
+    if (!this.ballHandleSet.has(ballHandle)) return
+
+    const ballVel = ballBody.linvel()
+    const speed = Math.sqrt(ballVel.x ** 2 + ballVel.y ** 2 + ballVel.z ** 2)
+    const impactIntensity = Math.min(speed / 15, 1.0)
+
+    const flipperPos = flipperBody.translation()
+    const ballPos = ballBody.translation()
+    const collisionNormal = new Vector3(
+      ballPos.x - flipperPos.x,
+      ballPos.y - flipperPos.y,
+      ballPos.z - flipperPos.z
+    ).normalize()
+
+    const ballMesh = this.getBallMeshForBody(ballBody)
+    if (ballMesh && this.host.ballAnimator) {
+      this.host.ballAnimator.animateBallImpact(ballMesh, collisionNormal, impactIntensity * 0.7)
+    }
+
+    this.host.hapticManager?.flipper()
+    this.host.effects?.playBeep(880 + Math.random() * 200)
+    this.applySpinTransfer(ballBody, collisionNormal, speed)
+  }
+
+  private handleTargetCollision(tgt: RAPIER.RigidBody, ballBody: RAPIER.RigidBody, ballHandle: number): void {
+    if (this.ballHandleSet.has(ballHandle)) {
+      const ballMesh = this.getBallMeshForBody(ballBody)
+      if (ballMesh && this.host.ballAnimator) {
+        const velocity = ballBody.linvel()
+        const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
+        const impactIntensity = Math.min(speed / 20, 1.0)
+        this.host.ballAnimator.animateSimpleImpact(ballMesh, impactIntensity)
+      }
+    }
+
+    if (this.host.gameObjects?.deactivateTarget(tgt)) {
+      const ballPos = ballBody.translation()
+      this.host.score += GAME_TUNING.scoring.targetHitBase
+      this.host.effects?.spawnFloatingNumber(GAME_TUNING.scoring.targetHitBase, new Vector3(ballPos.x, ballPos.y, ballPos.z))
+      this.host.effects?.playBeep(1200)
+      this.host.ballManager?.spawnExtraBalls(1)
+      this.host.updateHUD()
+      this.host.eventBus.emit('reach:start')
+      this.host.eventBus.emit('display:set', DisplayState.REACH)
+      this.host.effects?.setLightingMode('reach', 3.0)
+      this.host.effects?.setAtmosphereState('REACH')
+      this.rebuildHandleCaches()
+      this.host.tryActivateSlotMachine()
+    }
+  }
+
+  private handleSpinnerCollision(obstacleBody: RAPIER.RigidBody, ballBody: RAPIER.RigidBody, ballHandle: number): void {
+    if (!this.ballHandleSet.has(ballHandle)) return
+
+    const vel = ballBody.linvel()
+    const impactForce = Math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)
+    const visual = this.host.spinnerVisuals.find(v => v.body === obstacleBody)
+    if (visual) {
+      const ballPos = ballBody.translation()
+      this.host.spinnerBuilder?.triggerSpin(visual, impactForce, new Vector3(ballPos.x, ballPos.y, ballPos.z))
+    }
+  }
+
+  private handleBallTrapCollision(obstacleBody: RAPIER.RigidBody, ballBody: RAPIER.RigidBody, ballHandle: number): void {
+    if (!this.ballHandleSet.has(ballHandle)) return
+
+    const state = this.host.trapStates.find(s => s.body === obstacleBody)
+    if (state && state.isOpen && !state.caughtBall) {
+      const ballPos = ballBody.translation()
+      this.host.ballTrapBuilder?.catchBall(state, ballBody, new Vector3(ballPos.x, ballPos.y, ballPos.z))
+    }
+  }
+
+  private handleLauncherCollision(obstacleBody: RAPIER.RigidBody, ballBody: RAPIER.RigidBody, ballHandle: number): void {
+    if (!this.ballHandleSet.has(ballHandle)) return
+
+    const state = this.host.launcherStates.find(s => s.body === obstacleBody)
+    if (state && state.cooldownTimer <= 0) {
+      const forceVec = this.host.launcherBuilder?.triggerLauncher(state, 1.0)
+      if (forceVec) {
+        const rapier = this.host.physics.getRapier()
+        if (rapier) {
+          ballBody.applyImpulse(new rapier.Vector3(forceVec.x, forceVec.y, forceVec.z), true)
+        }
+      }
+    }
+  }
+
+  private handleGateCollision(obstacleBody: RAPIER.RigidBody, ballHandle: number): void {
+    if (!this.ballHandleSet.has(ballHandle)) return
+
+    const state = this.host.gateStates.find(s => s.body === obstacleBody)
+    if (state && !state.isOpen) {
+      this.host.movingGateBuilder?.openGate(state)
     }
   }
 
