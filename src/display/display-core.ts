@@ -101,8 +101,8 @@ export class DisplaySystem {
 
     // Attach layer meshes to the backbox root
     this.shaderLayer.createLayer(backboxRoot)
-    // Enable modern LCD effect for premium display appearance
-    this.shaderLayer.setCRTEffectEnabled(true)
+    // Disable CRT curve/scanlines — virtual backbox is a crisp modern LCD
+    this.shaderLayer.setCRTEffectEnabled(false)
     this.reelsLayer.createLayer(backboxRoot, this.config)
     this.videoLayer.createLayer(backboxRoot, this.config)
     this.imageLayer.createLayer(backboxRoot, this.config)

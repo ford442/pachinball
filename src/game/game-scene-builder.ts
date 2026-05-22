@@ -2,7 +2,7 @@
  * Game Scene Builder — Staged scene construction helpers.
  */
 
-import { MeshBuilder, Mesh, Vector3, Scene, StandardMaterial, Color3 } from '@babylonjs/core'
+import { MeshBuilder, Mesh, Vector3, Scene, StandardMaterial, Color3, Tools } from '@babylonjs/core'
 import type { TargetCamera } from '@babylonjs/core'
 
 import type { PhysicsSystem } from '../game-elements/physics'
@@ -51,7 +51,7 @@ export class GameSceneBuilder {
 
     this.createLCDPlayfield()
 
-    display.createBackbox(new Vector3(0, 15, 30))
+    display.createBackbox(new Vector3(0, 13.5, 26.5))
 
     gameObjects.createWalls()
     gameObjects.createFlippers()
@@ -92,6 +92,7 @@ export class GameSceneBuilder {
 
     const ground = MeshBuilder.CreateGround('lcdGround', { width: GameConfig.table.width, height: GameConfig.table.height }, scene) as Mesh
     ground.position.set(0, -1, 5)
+    ground.rotation.x = Tools.ToRadians(6.5)
     ground.material = lcdMat
 
     const physicsWorld = physics.getWorld()
@@ -113,6 +114,7 @@ export class GameSceneBuilder {
     if (!GameConfig.camera.reducedMotion) {
       const flipperGlow = MeshBuilder.CreateGround('flipperGlow', { width: 10, height: 6 }, scene)
       flipperGlow.position.set(0, -0.95, -7)
+      flipperGlow.rotation.x = Tools.ToRadians(6.5)
       const glowMat = new StandardMaterial('flipperGlowMat', scene)
       glowMat.diffuseColor = new Color3(0, 0, 0)
       glowMat.emissiveColor = new Color3(0, 0.07, 0.2)
