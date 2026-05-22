@@ -57,6 +57,14 @@ export class DisplaySystem {
   private storyText = ''
   private trackText = ''
 
+  // Drain / ball-lost flash mode state machine
+  private _displayMode: 'normal' | 'drain' = 'normal'
+  private _drainTimer = 0
+  private _flashCycleTime = 0
+  private _currentSplashIndex = 0
+  private _splashImages: HTMLImageElement[] = []
+  private _drainDirty = false
+
   constructor(
     scene: Scene,
     engine: Engine | WebGPUEngine,
@@ -122,6 +130,7 @@ export class DisplaySystem {
     this.borderGlow.onDisplaySet(this.currentState)
 
     this.createTextOverlay(backboxRoot)
+    this._preloadSplashImages()
   }
 
   private createTextOverlay(parent: TransformNode): void {
@@ -152,11 +161,85 @@ export class DisplaySystem {
     this.redrawTextOverlay()
   }
 
+  private _preloadSplashImages(): void {
+    const paths = ['/assets/backbox/splash1.png', '/assets/backbox/splash2.png']
+    for (const path of paths) {
+      const img = new Image()
+      img.onerror = () => console.warn(`[Display] Failed to load splash image: ${path}`)
+      img.src = path
+      this._splashImages.push(img)
+    }
+  }
+
+  /**
+   * Trigger the "Drain / Ball Lost" display reaction.
+   * Call this from the physics loop when a ball enters the drain zone.
+   */
+  public triggerDrainReaction(): void {
+    this._displayMode = 'drain'
+    this._drainTimer = 2.0
+    this._flashCycleTime = 0
+    this._currentSplashIndex = 0
+    this._drainDirty = true
+    this.redrawTextOverlay()
+  }
+
   private redrawTextOverlay(): void {
     if (!this.textTexture) return
     const ctx = this.textTexture.getContext() as CanvasRenderingContext2D
     const canvas = ctx.canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    if (this._displayMode === 'drain') {
+      const photosafe = this.accessibility.reducedMotion || this.accessibility.flashFrequencyMax <= 1
+
+      // Draw cycling splash image (if loaded) — skip cycling in photosafe mode
+      const splashIdx = photosafe ? 0 : this._currentSplashIndex
+      const img = this._splashImages[splashIdx]
+      if (img?.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      } else {
+        // Fallback solid background when image is not yet loaded
+        ctx.fillStyle = splashIdx === 0 ? '#14003c' : '#3c0014'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+      }
+
+      // Neon pulse box + "BALL LOST" — alpha/glow driven by sine wave on _flashCycleTime.
+      // In photosensitive/reduced-motion mode, use static alpha/glow instead.
+      const pulse = photosafe ? 0.5 : (Math.sin(this._flashCycleTime * Math.PI * 4) + 1) / 2
+      const alpha = 0.55 + pulse * 0.45
+      const glow = photosafe ? 12 : 8 + pulse * 40
+
+      const cx = canvas.width / 2
+      const cy = canvas.height / 2
+      const boxW = canvas.width * 0.78
+      const boxH = canvas.height * 0.30
+
+      // Glowing border box
+      ctx.save()
+      ctx.strokeStyle = `rgba(255, 40, 40, ${alpha})`
+      ctx.lineWidth = 6
+      ctx.shadowColor = `rgba(255, 0, 0, ${alpha})`
+      ctx.shadowBlur = glow
+      ctx.strokeRect(cx - boxW / 2, cy - boxH / 2, boxW, boxH)
+      ctx.restore()
+
+      // "BALL LOST" text
+      ctx.save()
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`
+      ctx.font = 'bold 96px "Courier New", monospace'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.shadowColor = `rgba(255, 60, 60, ${alpha})`
+      ctx.shadowBlur = glow
+      ctx.fillText('BALL LOST', cx, cy)
+      ctx.restore()
+
+      this.textTexture.update(false)
+      return
+    }
+
+    // Normal mode
 
     if (this.storyText) {
       ctx.fillStyle = '#7fe9ff'
@@ -226,6 +309,28 @@ export class DisplaySystem {
 
     // Border glow animation
     this.borderGlow?.update(dt)
+
+    // Drain mode: tick timer, cycle splash, animate overlay, then restore normal mode
+    if (this._displayMode === 'drain') {
+      this._drainTimer -= dt
+      this._flashCycleTime += dt
+      const newIndex = Math.floor(this._flashCycleTime / 0.3) % 2
+      if (newIndex !== this._currentSplashIndex) {
+        this._currentSplashIndex = newIndex
+        this._drainDirty = true
+      }
+      // Always mark dirty on first call so the initial frame renders
+      if (this._drainDirty) {
+        this._drainDirty = false
+        this.redrawTextOverlay()
+      }
+      if (this._drainTimer <= 0) {
+        this._displayMode = 'normal'
+        this._drainTimer = 0
+        this._flashCycleTime = 0
+        this.redrawTextOverlay()
+      }
+    }
   }
 
   /**
