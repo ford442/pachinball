@@ -430,7 +430,7 @@ export class StructuralMaterials extends MaterialLibraryBase {
     mat.environmentIntensity = 0.2
 
     // Clear coat for glass-like surface protection
-    this.applyClearCoat(mat, { enabled: true, intensity: 0.3, roughness: 0.1 })
+    this.applyClearCoat(mat, { enabled: true, intensity: 0.85, roughness: 0.11 })
 
     this._lcdTableMaterial = mat
     return mat

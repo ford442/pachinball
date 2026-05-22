@@ -15,15 +15,13 @@ import {
   Vector3,
   MirrorTexture,
   StandardMaterial,
-  PostProcess,
-  Effect,
-  Texture,
   RenderTargetTexture,
   DirectionalLight,
   PointLight,
   ShadowGenerator,
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
+import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration'
 import { DepthOfFieldEffectBlurLevel } from '@babylonjs/core/PostProcesses/depthOfFieldEffect'
 import { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline'
 import { SSRRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssrRenderingPipeline'
@@ -39,19 +37,13 @@ import {
   LIGHTING,
   color,
   detectQualityTier,
+  INTENSITY,
   QualityTier,
   type AccessibilityConfig,
 } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
-import { scanlinePixelShader } from '../shaders/scanline'
-import { lcdTablePixelShader } from '../shaders/lcd-table'
 import { GameConfig } from '../config'
-
-// Register shaders once at module load
-Effect.ShadersStore['scanlineFragmentShader'] = scanlinePixelShader.fragment
-Effect.ShadersStore['scanlinePixelShader'] = scanlinePixelShader.fragment
-Effect.ShadersStore['lcdTableFragmentShader'] = lcdTablePixelShader.fragment
-Effect.ShadersStore['lcdTablePixelShader'] = lcdTablePixelShader.fragment
+import type { EventBus } from './event-bus'
 
 export interface RendererHost {
   readonly engine: Engine | WebGPUEngine
@@ -74,15 +66,30 @@ export interface RendererHost {
   showDebugUI: boolean
   sceneInstrumentation: SceneInstrumentation | null
   engineInstrumentation: EngineInstrumentation | null
+  eventBus?: EventBus
 }
 
 export class GameRenderer {
   private readonly host: RendererHost
   private _resizeObserver: ResizeObserver | null = null
   private _sceneOptimizer: SceneOptimizer | null = null
-  private _scanlinePostProcess: PostProcess | null = null
   private _lastResizeWidth = 0
   private _lastResizeHeight = 0
+
+  // Bloom kick decay state
+  private _currentBloomKick = 0
+  private _bloomKickDuration = 0
+  private _bloomKickTimer = 0
+
+  // Camera shake decay state
+  private _currentShakeIntensity = 0
+  private _shakeDuration = 0
+  private _shakeTimer = 0
+  private readonly _baseCameraPosition: Vector3 = new Vector3(0, 16, -21)
+
+  // EventBus unsub handles
+  private _unsubBloom: (() => void) | null = null
+  private _unsubShake: (() => void) | null = null
 
   constructor(host: RendererHost) {
     this.host = host
@@ -93,9 +100,9 @@ export class GameRenderer {
     const { scene } = this.host
     if (!scene) return
 
-    const camera = new FreeCamera('cabinetCamera', new Vector3(0, 18, -22), scene)
-    camera.setTarget(new Vector3(0, 0, 5))
-    camera.fov = 0.8
+    const camera = new FreeCamera('cabinetCamera', new Vector3(0, 16, -21), scene)
+    camera.setTarget(new Vector3(0, 2, 6))
+    camera.fov = 0.85
 
     this.host.tableCam = camera
     scene.activeCamera = camera
@@ -113,31 +120,32 @@ export class GameRenderer {
       return
     }
 
-    // Opt-in to the full DefaultRenderingPipeline via ?fullpp=1.
-    // The default pipeline ran HDR rendering with ACES tone-mapping, DoF
-    // (focusDistance 2500 — far past the table), vignette and color curves;
-    // on top of the lcdTable/crtPP/scanline post-processes the compounded
-    // effect was so dim the table was invisible. Skip it to keep the
-    // playfield readable.
-    if (!new URLSearchParams(window.location.search).has('fullpp')) {
-      console.log('[GameRenderer] Default lite mode: no DefaultRenderingPipeline; enable full pipeline with ?fullpp=1')
-      return
-    }
+    // IBL is wired up by setupEnvironmentLighting() via matLib.loadEnvironmentTexture(),
+    // which calls CubeTexture.CreateFromPrefilteredData('textures/environment.env', scene)
+    // and assigns it to scene.environmentTexture. PBR materials (ball, flippers, rails)
+    // sample from that map so they get real reflections — here we layer the cinematic
+    // ACES tonemap + bloom on top.
+
+    const { accessibility } = this.host
+    const reducedMotion = accessibility?.reducedMotion ?? GameConfig.camera.reducedMotion
+    const effectIntensity = accessibility?.effectIntensity ?? 1.0
 
     const bloom = new DefaultRenderingPipeline('pachinbloom', true, scene, [tableCam])
     this.host.bloomPipeline = bloom
 
-    bloom.bloomEnabled = true
+    const bloomSafe = !reducedMotion && effectIntensity > 0
+    const baseWeight = 0.25
+    bloom.bloomEnabled = bloomSafe
     bloom.bloomKernel = 64
     bloom.bloomScale = 0.5
-    bloom.bloomWeight = 0.25
-    bloom.bloomThreshold = 0.7
+    bloom.bloomWeight = baseWeight * effectIntensity * INTENSITY.ACTIVE
+    bloom.bloomThreshold = 0.75
     bloom.fxaaEnabled = true
     bloom.imageProcessing.toneMappingEnabled = true
-    bloom.imageProcessing.toneMappingType = 3 // Hable/ACES
+    bloom.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES
     bloom.imageProcessing.contrast = 1.1
     bloom.imageProcessing.exposure = 1.0
-    bloom.imageProcessing.vignetteEnabled = true
+    bloom.imageProcessing.vignetteEnabled = !reducedMotion
     bloom.imageProcessing.vignetteWeight = 0.4
     bloom.imageProcessing.vignetteColor = new Color4(0, 0, 0, 0)
     bloom.imageProcessing.colorCurvesEnabled = true
@@ -145,18 +153,18 @@ export class GameRenderer {
       bloom.imageProcessing.colorCurves.globalHue = 5
       bloom.imageProcessing.colorCurves.globalSaturation = 15
     }
-    bloom.sharpenEnabled = true
+    bloom.sharpenEnabled = !reducedMotion
     bloom.sharpen.edgeAmount = 0.3
 
     if (qualityTier === QualityTier.LOW) {
       bloom.bloomKernel = 16
       bloom.bloomScale = 0.2
-      bloom.bloomWeight = 0.12
+      bloom.bloomWeight = Math.min(bloom.bloomWeight, 0.12)
       bloom.sharpenEnabled = false
     } else if (qualityTier === QualityTier.MEDIUM) {
       bloom.bloomKernel = 32
       bloom.bloomScale = 0.35
-      bloom.bloomWeight = 0.18
+      bloom.bloomWeight = Math.min(bloom.bloomWeight, 0.25)
     }
 
     if (!GameConfig.camera.reducedMotion) {
@@ -216,22 +224,58 @@ export class GameRenderer {
       motionBlur.motionBlurSamples = 16
     }
 
-    // Scanlines
-    const scanline = new PostProcess(
-      'scanline',
-      'scanline',
-      ['uTime', 'uScanlineIntensity'],
-      null,
-      1.0,
-      tableCam,
-      Texture.BILINEAR_SAMPLINGMODE,
-      this.host.engine
-    )
-    this._scanlinePostProcess = scanline
-    scanline.onApply = (effect) => {
-      effect.setFloat('uTime', performance.now() * 0.001)
-      effect.setFloat('uScanlineIntensity', this.host.scanlineIntensity)
+    // EventBus subscriptions — bloom kick and camera shake
+    const { eventBus } = this.host
+    if (eventBus) {
+      this._unsubBloom = eventBus.on('effect:bloom', ({ intensity, duration }) => {
+        if (!bloomSafe) return
+        this._currentBloomKick = intensity
+        this._bloomKickDuration = duration ?? 0.4
+        this._bloomKickTimer = this._bloomKickDuration
+      })
+
+      this._unsubShake = eventBus.on('effect:shake', ({ amount, duration }) => {
+        if (accessibility?.cameraShakeEnabled === false || reducedMotion) return
+        const clamped = Math.min(amount, accessibility?.maxCameraShakeIntensity ?? 0.08)
+        if (clamped <= 0) return
+        this._currentShakeIntensity = clamped
+        this._shakeDuration = duration ?? 0.3
+        this._shakeTimer = this._shakeDuration
+      })
     }
+
+    // Per-frame decay for bloom kick and camera shake
+    scene.onBeforeRenderObservable.add(() => {
+      const dt = scene.getEngine().getDeltaTime() * 0.001
+
+      // Global bloom spike decay
+      if (this._bloomKickTimer > 0 && this.host.bloomPipeline) {
+        this._bloomKickTimer -= dt
+        const progress = Math.max(0, this._bloomKickTimer / this._bloomKickDuration)
+        const baselineWeight = 0.25 * (this.host.accessibility?.effectIntensity ?? 1.0)
+        this.host.bloomPipeline.bloomWeight = baselineWeight + this._currentBloomKick * progress
+      }
+
+      // High-frequency camera shake displacements
+      if (this._shakeTimer > 0 && this.host.tableCam) {
+        this._shakeTimer -= dt
+        const progress = Math.max(0, this._shakeTimer / this._shakeDuration)
+        const currentPower = this._currentShakeIntensity * progress
+
+        const offsetX = (Math.random() * 2 - 1) * currentPower
+        const offsetY = (Math.random() * 2 - 1) * currentPower
+
+        this.host.tableCam.position.set(
+          this._baseCameraPosition.x + offsetX,
+          this._baseCameraPosition.y + offsetY,
+          this._baseCameraPosition.z
+        )
+
+        if (this._shakeTimer <= 0) {
+          this.host.tableCam.position.copyFrom(this._baseCameraPosition)
+        }
+      }
+    })
   }
 
   /** Setup key, rim, bounce, and fill lights + shadow generator. */
@@ -418,6 +462,11 @@ export class GameRenderer {
   }
 
   dispose(): void {
+    this._unsubBloom?.()
+    this._unsubBloom = null
+    this._unsubShake?.()
+    this._unsubShake = null
+
     this._sceneOptimizer?.dispose()
     this._sceneOptimizer = null
 
@@ -440,8 +489,5 @@ export class GameRenderer {
 
     this.host.shadowGenerator?.dispose()
     this.host.shadowGenerator = null
-
-    this._scanlinePostProcess?.dispose()
-    this._scanlinePostProcess = null
   }
 }

@@ -1,8 +1,8 @@
-import { Scene, MeshBuilder, Mesh, TransformNode, Vector3 } from '@babylonjs/core'
+import { Scene, MeshBuilder, Mesh, PBRMaterial, TransformNode, Vector3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
-import { PALETTE, QualityTier } from '../game-elements/visual-language'
+import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
 import type { EventBus } from '../game/event-bus'
 import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
@@ -25,6 +25,7 @@ export interface MovingGateState {
   slideAxis: 'x' | 'y' | 'z'
   slideDistance: number
   gateColor: string
+  hitTime: number
 }
 
 export class MovingGateBuilder {
@@ -39,6 +40,7 @@ export class MovingGateBuilder {
   private nodes: TransformNode[] = []
   private qualityTier: QualityTier
   private registeredZoneIds: string[] = []
+  private effectIntensity = 1.0
 
   constructor(
     scene: Scene,
@@ -65,6 +67,11 @@ export class MovingGateBuilder {
    */
   setZoneTriggerSystem(zoneTriggerSystem: ZoneTriggerSystem | null): void {
     this.zoneTriggerSystem = zoneTriggerSystem
+  }
+
+  /** Accessibility effectIntensity multiplier (0..1). Clamps hit-flash luminance. */
+  setEffectIntensity(value: number): void {
+    this.effectIntensity = Math.max(0, Math.min(1, value))
   }
 
   /**
@@ -140,7 +147,8 @@ export class MovingGateBuilder {
       baseRotation: baseRot,
       slideAxis: 'y',
       slideDistance: 1.5 * scale,
-      gateColor: colorHex
+      gateColor: colorHex,
+      hitTime: 0,
     }
 
     bindings.push({ mesh: gateRoot as unknown as Mesh, rigidBody: body })
@@ -173,6 +181,7 @@ export class MovingGateBuilder {
     state.isOpen = true
     state.openTimer = 0
     state.openDuration = 3.0 // Stay open for 3 seconds
+    state.hitTime = 0.2
 
     // Emit events
     if (this.eventBus) {
@@ -257,6 +266,21 @@ export class MovingGateBuilder {
    * Update gate animation and timing
    */
   updateGate(state: MovingGateState, dt: number): void {
+    // Hit-flash decay over the gate panel material
+    if (state.hitTime > 0) {
+      state.hitTime -= dt
+      const mat = state.mesh.material as PBRMaterial | null
+      if (mat) {
+        if (state.hitTime > 0) {
+          const flash = INTENSITY.BURST * (state.hitTime / 0.2) * this.effectIntensity
+          mat.emissiveColor = emissive(state.gateColor, INTENSITY.NORMAL).add(color(PALETTE.WHITE).scale(flash))
+        } else {
+          state.hitTime = 0
+          mat.emissiveColor = emissive(state.gateColor, INTENSITY.ACTIVE)
+        }
+      }
+    }
+
     const root = state.mesh.parent as TransformNode
     if (!root) return
 

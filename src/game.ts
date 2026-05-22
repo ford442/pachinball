@@ -10,6 +10,7 @@ import {
   DirectionalLight,
   PointLight,
   ShadowGenerator,
+  TransformNode,
 } from '@babylonjs/core'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import { SceneOptimizer } from '@babylonjs/core/Misc/sceneOptimizer'
@@ -154,6 +155,7 @@ export class Game {
   tableRenderTarget: RenderTargetTexture | null = null
   headRenderTarget: RenderTargetTexture | null = null
   shadowGenerator: ShadowGenerator | null = null
+  playfieldGroup: TransformNode | null = null
 
   // Scene lights
   keyLight: DirectionalLight | null = null

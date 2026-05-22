@@ -2,7 +2,7 @@
  * Game Scene Builder — Staged scene construction helpers.
  */
 
-import { MeshBuilder, Mesh, Vector3, Scene, StandardMaterial, Color3 } from '@babylonjs/core'
+import { MeshBuilder, Mesh, Vector3, Scene, StandardMaterial, Color3, ShadowGenerator, TransformNode, Tools } from '@babylonjs/core'
 import type { TargetCamera } from '@babylonjs/core'
 
 import type { PhysicsSystem } from '../game-elements/physics'
@@ -29,6 +29,8 @@ export interface SceneBuilderHost {
   cameraController: CameraController | null
   adventureMode: AdventureMode | null
   mirrorTexture: import('@babylonjs/core').MirrorTexture | null
+  shadowGenerator: ShadowGenerator | null
+  playfieldGroup: TransformNode | null
   uiManager: GameUIManager | null
 }
 
@@ -40,8 +42,14 @@ export class GameSceneBuilder {
   }
 
   buildCriticalScene(): void {
-    const { scene, gameObjects, ballManager, tableCam, effects } = this.host
-    if (!gameObjects || !ballManager) return
+    const { scene, gameObjects, ballManager, tableCam, effects, display } = this.host
+    if (!gameObjects || !ballManager || !display) return
+
+    // Root container for all playfield visuals — pitched so the far end rises toward
+    // the backbox. Rapier physics stay flat; gravity provides the slope simulation.
+    const playfieldGroup = new TransformNode('playfieldGroup', scene)
+    playfieldGroup.rotation.x = Tools.ToRadians(18.0)
+    this.host.playfieldGroup = playfieldGroup
 
     if (scene) {
       const cabinetBuilder = getCabinetBuilder(scene)
@@ -49,7 +57,12 @@ export class GameSceneBuilder {
       cabinetBuilder.loadCabinetPreset('classic')
     }
 
-    this.createLCDPlayfield()
+    this.createLCDPlayfield()   // ground + flipperGlow are parented to playfieldGroup inside
+
+    display.createBackbox(new Vector3(0, 13.5, 26.5))
+
+    // Snapshot mesh IDs after cabinet + backbox so those hierarchies are not reparented
+    const beforeStructure = new Set(scene.meshes.map(m => m.uniqueId))
 
     gameObjects.createWalls()
     gameObjects.createFlippers()
@@ -57,6 +70,12 @@ export class GameSceneBuilder {
       ballManager.setMirrorTexture(this.host.mirrorTexture)
     }
     ballManager.createMainBall()
+
+    // Reparent walls + flippers into the tilted visual group.
+    // Ball is excluded — its position is overwritten each frame from Rapier world coords.
+    scene.meshes
+      .filter(m => !beforeStructure.has(m.uniqueId) && !m.parent && !/^ball$/i.test(m.name))
+      .forEach(m => { m.parent = playfieldGroup })
 
     // Defensive build-phase logging
     if (scene) {
@@ -68,6 +87,12 @@ export class GameSceneBuilder {
       }
       if (ballMeshes.length === 0) {
         console.warn('[GameSceneBuilder] WARNING: No main ball mesh found in scene after createMainBall()')
+      }
+
+      const shadowGenerator = this.host.shadowGenerator
+      if (shadowGenerator) {
+        for (const mesh of flipperMeshes) shadowGenerator.addShadowCaster(mesh, true)
+        for (const mesh of ballMeshes) shadowGenerator.addShadowCaster(mesh, true)
       }
     }
 
@@ -107,10 +132,14 @@ export class GameSceneBuilder {
     }
 
     ground.receiveShadows = true
+    this.host.shadowGenerator?.addShadowCaster(ground, false)
+    if (this.host.playfieldGroup) ground.parent = this.host.playfieldGroup
 
     if (!GameConfig.camera.reducedMotion) {
       const flipperGlow = MeshBuilder.CreateGround('flipperGlow', { width: 10, height: 6 }, scene)
       flipperGlow.position.set(0, -0.95, -7)
+      flipperGlow.receiveShadows = true
+      if (this.host.playfieldGroup) flipperGlow.parent = this.host.playfieldGroup
       const glowMat = new StandardMaterial('flipperGlowMat', scene)
       glowMat.diffuseColor = new Color3(0, 0, 0)
       glowMat.emissiveColor = new Color3(0, 0.07, 0.2)
@@ -122,8 +151,11 @@ export class GameSceneBuilder {
   }
 
   buildGameplayScene(): void {
-    const { gameObjects, ballManager, display, effects } = this.host
+    const { scene, gameObjects, ballManager, display, effects } = this.host
     if (!gameObjects || !ballManager || !display || !effects) return
+
+    // Snapshot before gameplay obstacles are built so we can reparent them to playfieldGroup
+    const beforeGameplay = new Set(scene.meshes.map(m => m.uniqueId))
 
     gameObjects.createDeathZone()
     gameObjects.createBumpers()
@@ -132,15 +164,28 @@ export class GameSceneBuilder {
     gameObjects.createPachinkoField()
     gameObjects.createFlipperRamps()
     gameObjects.createDrainRails()
+
+    const shadowGenerator = this.host.shadowGenerator
+    if (shadowGenerator) {
+      const gameplayMeshes = scene.meshes.filter(m => /bumper|slingshot/i.test(m.name))
+      for (const mesh of gameplayMeshes) shadowGenerator.addShadowCaster(mesh, true)
+    }
+
+    // Reparent all new obstacle meshes into the tilted visual group
+    if (this.host.playfieldGroup) {
+      const pg = this.host.playfieldGroup
+      scene.meshes
+        .filter(m => !beforeGameplay.has(m.uniqueId) && !m.parent)
+        .forEach(m => { m.parent = pg })
+    }
   }
 
   buildCosmeticScene(): void {
-    const { gameObjects, display, effects, scene } = this.host
-    if (!gameObjects || !display || !effects || !scene) return
+    const { gameObjects, effects, scene } = this.host
+    if (!gameObjects || !effects || !scene) return
 
     gameObjects.createCabinetDecoration()
 
-    display.createBackbox(new Vector3(0.75, 15, 30))
     effects.createCabinetLighting()
 
     const matLib = getMaterialLibrary(scene)

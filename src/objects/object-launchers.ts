@@ -1,8 +1,8 @@
-import { Scene, MeshBuilder, Mesh, TransformNode } from '@babylonjs/core'
+import { Scene, MeshBuilder, Mesh, PBRMaterial, TransformNode } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
-import { PALETTE, QualityTier } from '../game-elements/visual-language'
+import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
 import type { EventBus } from '../game/event-bus'
 import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
@@ -21,6 +21,7 @@ export interface LauncherState {
   minForce: number
   maxForce: number
   launcherColor: string
+  hitTime: number
 }
 
 export class LauncherBuilder {
@@ -36,6 +37,7 @@ export class LauncherBuilder {
   private nodes: TransformNode[] = []
   private qualityTier: QualityTier
   private registeredZoneIds: string[] = []
+  private effectIntensity = 1.0
 
   constructor(
     scene: Scene,
@@ -62,6 +64,11 @@ export class LauncherBuilder {
    */
   setZoneTriggerSystem(zoneTriggerSystem: ZoneTriggerSystem | null): void {
     this.zoneTriggerSystem = zoneTriggerSystem
+  }
+
+  /** Accessibility effectIntensity multiplier (0..1). Clamps hit-flash luminance. */
+  setEffectIntensity(value: number): void {
+    this.effectIntensity = Math.max(0, Math.min(1, value))
   }
 
   /**
@@ -151,7 +158,8 @@ export class LauncherBuilder {
       direction: normalizedDirection,
       minForce: 15.0,
       maxForce: 40.0,
-      launcherColor: colorHex
+      launcherColor: colorHex,
+      hitTime: 0,
     }
 
     bindings.push({ mesh: launcherRoot as unknown as Mesh, rigidBody: body })
@@ -191,6 +199,21 @@ export class LauncherBuilder {
    * Update launcher charging animation
    */
   updateLauncher(state: LauncherState, dt: number): void {
+    // Hit-flash decay over the launcher body material
+    if (state.hitTime > 0) {
+      state.hitTime -= dt
+      const mat = state.mesh.material as PBRMaterial | null
+      if (mat) {
+        if (state.hitTime > 0) {
+          const flash = INTENSITY.BURST * (state.hitTime / 0.2) * this.effectIntensity
+          mat.emissiveColor = emissive(state.launcherColor, INTENSITY.NORMAL).add(color(PALETTE.WHITE).scale(flash))
+        } else {
+          state.hitTime = 0
+          mat.emissiveColor = emissive(state.launcherColor, INTENSITY.ACTIVE)
+        }
+      }
+    }
+
     // Update cooldown
     if (state.cooldownTimer > 0) {
       state.cooldownTimer -= dt
@@ -229,6 +252,7 @@ export class LauncherBuilder {
    * Fire the launcher, returns the force to apply
    */
   fireLauncher(state: LauncherState): { force: { x: number; y: number; z: number }; wasCharged: boolean } {
+    state.hitTime = 0.2
     const chargeRatio = state.isCharging ? state.chargeLevel : 1.0
     const force = state.minForce + (state.maxForce - state.minForce) * chargeRatio
 
@@ -265,6 +289,7 @@ export class LauncherBuilder {
    * Trigger launcher immediately with full force
    */
   triggerLauncher(state: LauncherState, force: number = 1.0): { x: number; y: number; z: number } {
+    state.hitTime = 0.2
     const actualForce = state.minForce + (state.maxForce - state.minForce) * force
     state.cooldownTimer = state.cooldownDuration
 
