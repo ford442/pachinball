@@ -311,7 +311,6 @@ export class Game {
       this.hud = new GameHUD(this as unknown as HUDHost)
       this.mapCabinet = new GameMapCabinet(this as unknown as MapCabinetHost)
       this.updateHUD()
-      this.physicsController = new GamePhysicsController(this as unknown as PhysicsHost)
 
       this.settingsUI.setupSettingsUI()
       this.debugHelper.updateDeveloperSettingsVisibility()
@@ -329,6 +328,7 @@ export class Game {
         },
       })
       this.stateManager.setEventBus(this.eventBus)
+      this.physicsController = new GamePhysicsController(this as unknown as PhysicsHost)
     })
 
     await this.runCheckpointStage('physics', () => this.physics.init())
