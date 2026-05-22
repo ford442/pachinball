@@ -143,21 +143,27 @@ export class GameSystemsInitializer {
         this.game.zoneTriggerSystem = new ZoneTriggerSystem(this.game.debugHUDQueryEnabled)
       }
 
+      const effectIntensity = this.game.accessibility?.effectIntensity ?? 1.0
+
       this.game.spinnerBuilder = new SpinnerBumperBuilder(scene, world, rapier, this.game.qualityTier)
       this.game.spinnerBuilder.setEventBus(this.game.eventBus)
       this.game.spinnerBuilder.setZoneTriggerSystem(this.game.zoneTriggerSystem)
+      this.game.spinnerBuilder.setEffectIntensity(effectIntensity)
 
       this.game.ballTrapBuilder = new BallTrapBuilder(scene, world, rapier, this.game.qualityTier)
       this.game.ballTrapBuilder.setEventBus(this.game.eventBus)
       this.game.ballTrapBuilder.setZoneTriggerSystem(this.game.zoneTriggerSystem)
+      this.game.ballTrapBuilder.setEffectIntensity(effectIntensity)
 
       this.game.launcherBuilder = new LauncherBuilder(scene, world, rapier, this.game.qualityTier)
       this.game.launcherBuilder.setEventBus(this.game.eventBus)
       this.game.launcherBuilder.setZoneTriggerSystem(this.game.zoneTriggerSystem)
+      this.game.launcherBuilder.setEffectIntensity(effectIntensity)
 
       this.game.movingGateBuilder = new MovingGateBuilder(scene, world, rapier, this.game.qualityTier)
       this.game.movingGateBuilder.setEventBus(this.game.eventBus)
       this.game.movingGateBuilder.setZoneTriggerSystem(this.game.zoneTriggerSystem)
+      this.game.movingGateBuilder.setEffectIntensity(effectIntensity)
 
       const spinner = this.game.spinnerBuilder.createSpinnerBumper(5, 10, '#00ffff', 1.0)
       this.game.spinnerVisuals.push(spinner.visual)
