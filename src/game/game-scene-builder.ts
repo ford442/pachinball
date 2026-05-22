@@ -72,6 +72,12 @@ export class GameSceneBuilder {
       if (ballMeshes.length === 0) {
         console.warn('[GameSceneBuilder] WARNING: No main ball mesh found in scene after createMainBall()')
       }
+
+      const shadowGenerator = this.host.shadowGenerator
+      if (shadowGenerator) {
+        for (const mesh of flipperMeshes) shadowGenerator.addShadowCaster(mesh, true)
+        for (const mesh of ballMeshes) shadowGenerator.addShadowCaster(mesh, true)
+      }
     }
 
     if (tableCam && effects) {
@@ -137,6 +143,12 @@ export class GameSceneBuilder {
     gameObjects.createPachinkoField()
     gameObjects.createFlipperRamps()
     gameObjects.createDrainRails()
+
+    const shadowGenerator = this.host.shadowGenerator
+    if (shadowGenerator) {
+      const gameplayMeshes = this.host.scene.meshes.filter(m => /bumper|slingshot/i.test(m.name))
+      for (const mesh of gameplayMeshes) shadowGenerator.addShadowCaster(mesh, true)
+    }
   }
 
   buildCosmeticScene(): void {

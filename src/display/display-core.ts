@@ -5,7 +5,7 @@
  * Extracted and refactored from display.ts for modularity.
  */
 
-import { MeshBuilder, Vector3, type Scene, type Mesh, TransformNode } from '@babylonjs/core'
+import { MeshBuilder, Vector3, DynamicTexture, StandardMaterial, Color3, type Scene, type Mesh, TransformNode } from '@babylonjs/core'
 import type { Engine, WebGPUEngine } from '@babylonjs/core'
 
 import {
@@ -49,6 +49,13 @@ export class DisplaySystem {
 
   // Backbox position (kept for future use)
   private backboxPosition: Vector3 | null = null
+
+  // Live text overlay (story + track info) rendered onto the backbox
+  private textMesh: Mesh | null = null
+  private textTexture: DynamicTexture | null = null
+  private textMaterial: StandardMaterial | null = null
+  private storyText = ''
+  private trackText = ''
 
   constructor(
     scene: Scene,
@@ -113,6 +120,90 @@ export class DisplaySystem {
     this.borderGlow = new BackboxBorderGlow(backboxMesh, this.scene, this.qualityTier, this.accessibility)
     // Apply the current state immediately so the glow colour is correct from the start.
     this.borderGlow.onDisplaySet(this.currentState)
+
+    this.createTextOverlay(backboxRoot)
+  }
+
+  private createTextOverlay(parent: TransformNode): void {
+    const w = this.config.width
+    const h = this.config.height
+    const texW = 1024
+    const texH = Math.round(texW * (h / w))
+
+    this.textTexture = new DynamicTexture('displayTextTex', { width: texW, height: texH }, this.scene, false)
+    this.textTexture.hasAlpha = true
+
+    const mat = new StandardMaterial('displayTextMat', this.scene)
+    mat.diffuseTexture = this.textTexture
+    mat.opacityTexture = this.textTexture
+    mat.emissiveTexture = this.textTexture
+    mat.emissiveColor = Color3.White()
+    mat.disableLighting = true
+    mat.backFaceCulling = false
+    this.textMaterial = mat
+
+    const plane = MeshBuilder.CreatePlane('displayText', { width: w, height: h }, this.scene)
+    plane.parent = parent
+    plane.rotation.y = Math.PI
+    plane.position.z = 0.25
+    plane.material = mat
+    this.textMesh = plane
+
+    this.redrawTextOverlay()
+  }
+
+  private redrawTextOverlay(): void {
+    if (!this.textTexture) return
+    const ctx = this.textTexture.getContext() as CanvasRenderingContext2D
+    const canvas = ctx.canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    if (this.storyText) {
+      ctx.fillStyle = '#7fe9ff'
+      ctx.font = 'bold 56px "Courier New", monospace'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.shadowColor = '#00bfff'
+      ctx.shadowBlur = 18
+      this.wrapText(ctx, this.storyText, canvas.width / 2, canvas.height * 0.4, canvas.width * 0.9, 64)
+    }
+
+    if (this.trackText) {
+      ctx.shadowBlur = 10
+      ctx.fillStyle = '#ffe16a'
+      ctx.font = 'bold 40px "Courier New", monospace'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(this.trackText, canvas.width / 2, canvas.height * 0.82)
+    }
+
+    this.textTexture.update(false)
+  }
+
+  private wrapText(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    x: number,
+    y: number,
+    maxWidth: number,
+    lineHeight: number
+  ): void {
+    const words = text.split(/\s+/)
+    const lines: string[] = []
+    let line = ''
+    for (const word of words) {
+      const test = line ? `${line} ${word}` : word
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line)
+        line = word
+      } else {
+        line = test
+      }
+    }
+    if (line) lines.push(line)
+
+    const startY = y - ((lines.length - 1) * lineHeight) / 2
+    lines.forEach((l, i) => ctx.fillText(l, x, startY + i * lineHeight))
   }
 
   /**
@@ -249,7 +340,8 @@ export class DisplaySystem {
    * Set story text for adventure mode
    */
   setStoryText(text: string): void {
-    console.log('[Display] Story text:', text)
+    this.storyText = text
+    this.redrawTextOverlay()
   }
 
   /**
@@ -283,7 +375,10 @@ export class DisplaySystem {
    * Set track info for adventure mode
    */
   setTrackInfo(trackName: string, progress = 0): void {
-    console.log(`[Display] Track: ${trackName}, Progress: ${progress}`)
+    const pct = Math.max(0, Math.min(1, progress))
+    const bar = '█'.repeat(Math.round(pct * 10)).padEnd(10, '░')
+    this.trackText = `♪ ${trackName}  [${bar}]`
+    this.redrawTextOverlay()
   }
 
   /**
@@ -348,5 +443,11 @@ export class DisplaySystem {
     this.reelsLayer.dispose()
     this.videoLayer.dispose()
     this.imageLayer.dispose()
+    this.textTexture?.dispose()
+    this.textMaterial?.dispose()
+    this.textMesh?.dispose()
+    this.textTexture = null
+    this.textMaterial = null
+    this.textMesh = null
   }
 }
