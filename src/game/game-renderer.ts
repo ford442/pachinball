@@ -43,6 +43,7 @@ import {
 } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
 import { GameConfig } from '../config'
+import type { EventBus } from './event-bus'
 
 export interface RendererHost {
   readonly engine: Engine | WebGPUEngine
@@ -65,6 +66,7 @@ export interface RendererHost {
   showDebugUI: boolean
   sceneInstrumentation: SceneInstrumentation | null
   engineInstrumentation: EngineInstrumentation | null
+  eventBus?: EventBus
 }
 
 export class GameRenderer {
@@ -73,6 +75,22 @@ export class GameRenderer {
   private _sceneOptimizer: SceneOptimizer | null = null
   private _lastResizeWidth = 0
   private _lastResizeHeight = 0
+
+  // Bloom kick decay state
+  private _bloomBaseWeight = 0.25
+  private _bloomKickAmount = 0
+  private _bloomKickTimer = 0
+  private _bloomKickDuration = 0
+
+  // Camera shake decay state
+  private _shakeIntensity = 0
+  private _shakeTimer = 0
+  private _shakeDuration = 0
+  private _baseCameraPosition = new Vector3(0, 16, -21)
+
+  // EventBus unsub handles
+  private _unsubBloom: (() => void) | null = null
+  private _unsubShake: (() => void) | null = null
 
   constructor(host: RendererHost) {
     this.host = host
@@ -206,6 +224,62 @@ export class GameRenderer {
       motionBlur.motionStrength = 0.15
       motionBlur.motionBlurSamples = 16
     }
+
+    // Capture baseline bloom weight for kick decay
+    this._bloomBaseWeight = bloom.bloomWeight
+
+    // EventBus subscriptions — bloom kick and camera shake
+    const { eventBus } = this.host
+    if (eventBus) {
+      this._unsubBloom = eventBus.on('effect:bloom', ({ intensity, duration }) => {
+        if (!bloomSafe) return
+        this._bloomKickAmount = Math.max(this._bloomKickAmount, intensity)
+        this._bloomKickDuration = duration ?? 0.4
+        this._bloomKickTimer = this._bloomKickDuration
+      })
+
+      this._unsubShake = eventBus.on('effect:shake', ({ amount, duration }) => {
+        const shakeEnabled = accessibility?.cameraShakeEnabled ?? true
+        if (!shakeEnabled || reducedMotion) return
+        const maxIntensity = accessibility?.maxCameraShakeIntensity ?? 1.0
+        const clamped = Math.min(amount, maxIntensity)
+        if (clamped <= 0) return
+        this._shakeIntensity = Math.max(this._shakeIntensity, clamped)
+        this._shakeDuration = duration ?? 0.3
+        this._shakeTimer = this._shakeDuration
+      })
+    }
+
+    // Per-frame decay for bloom kick and camera shake
+    scene.onBeforeRenderObservable.add(() => {
+      const dt = scene.getEngine().getDeltaTime() * 0.001
+
+      // Bloom kick decay
+      if (this._bloomKickTimer > 0 && this.host.bloomPipeline) {
+        this._bloomKickTimer -= dt
+        const t = Math.max(this._bloomKickTimer / this._bloomKickDuration, 0)
+        this.host.bloomPipeline.bloomWeight = this._bloomBaseWeight + this._bloomKickAmount * t
+        if (this._bloomKickTimer <= 0) {
+          this._bloomKickTimer = 0
+          this.host.bloomPipeline.bloomWeight = this._bloomBaseWeight
+        }
+      }
+
+      // Camera shake decay
+      if (this._shakeTimer > 0 && this.host.tableCam) {
+        this._shakeTimer -= dt
+        const t = Math.max(this._shakeTimer / this._shakeDuration, 0)
+        const amp = this._shakeIntensity * t * 0.15
+        const cam = this.host.tableCam
+        cam.position.x = this._baseCameraPosition.x + (Math.random() - 0.5) * amp
+        cam.position.y = this._baseCameraPosition.y + (Math.random() - 0.5) * amp * 0.5
+        cam.position.z = this._baseCameraPosition.z + (Math.random() - 0.5) * amp * 0.3
+        if (this._shakeTimer <= 0) {
+          this._shakeTimer = 0
+          cam.position.copyFrom(this._baseCameraPosition)
+        }
+      }
+    })
   }
 
   /** Setup key, rim, bounce, and fill lights + shadow generator. */
@@ -392,6 +466,11 @@ export class GameRenderer {
   }
 
   dispose(): void {
+    this._unsubBloom?.()
+    this._unsubBloom = null
+    this._unsubShake?.()
+    this._unsubShake = null
+
     this._sceneOptimizer?.dispose()
     this._sceneOptimizer = null
 
