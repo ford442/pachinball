@@ -1,8 +1,8 @@
-import { Scene, MeshBuilder, Mesh, TransformNode, Color3, StandardMaterial, Vector3 } from '@babylonjs/core'
+import { Scene, MeshBuilder, Mesh, PBRMaterial, TransformNode, Color3, StandardMaterial, Vector3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
-import { PALETTE, QualityTier } from '../game-elements/visual-language'
+import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
 import type { EventBus } from '../game/event-bus'
 import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
@@ -17,6 +17,7 @@ export interface BallTrapState {
   holdDuration: number
   isOpen: boolean
   trapColor: string
+  hitTime: number
 }
 
 export class BallTrapBuilder {
@@ -33,6 +34,7 @@ export class BallTrapBuilder {
   private materials: StandardMaterial[] = []
   private qualityTier: QualityTier
   private registeredZoneIds: string[] = []
+  private effectIntensity = 1.0
 
   constructor(
     scene: Scene,
@@ -59,6 +61,11 @@ export class BallTrapBuilder {
    */
   setZoneTriggerSystem(zoneTriggerSystem: ZoneTriggerSystem | null): void {
     this.zoneTriggerSystem = zoneTriggerSystem
+  }
+
+  /** Accessibility effectIntensity multiplier (0..1). Clamps hit-flash luminance. */
+  setEffectIntensity(value: number): void {
+    this.effectIntensity = Math.max(0, Math.min(1, value))
   }
 
   createBallTrap(
@@ -151,7 +158,8 @@ export class BallTrapBuilder {
       holdTimer: 0,
       holdDuration: 2.0, // Hold for 2 seconds
       isOpen: true,
-      trapColor: colorHex
+      trapColor: colorHex,
+      hitTime: 0,
     }
 
     bindings.push({ mesh: trapRoot as unknown as Mesh, rigidBody: body })
@@ -181,6 +189,21 @@ export class BallTrapBuilder {
    * Update trap state (release timing)
    */
   updateTrap(state: BallTrapState, dt: number): RAPIER.RigidBody | null {
+    // Hit-flash decay over the trap entrance material
+    if (state.hitTime > 0) {
+      state.hitTime -= dt
+      const mat = state.mesh.material as PBRMaterial | null
+      if (mat) {
+        if (state.hitTime > 0) {
+          const flash = INTENSITY.BURST * (state.hitTime / 0.2) * this.effectIntensity
+          mat.emissiveColor = emissive(state.trapColor, INTENSITY.NORMAL).add(color(PALETTE.WHITE).scale(flash))
+        } else {
+          state.hitTime = 0
+          mat.emissiveColor = emissive(state.trapColor, INTENSITY.ACTIVE)
+        }
+      }
+    }
+
     if (!state.caughtBall) {
       state.holdTimer = 0
       return null
@@ -220,6 +243,7 @@ export class BallTrapBuilder {
       state.caughtBall = ball
       state.holdTimer = 0
       state.isOpen = false
+      state.hitTime = 0.2
 
       // Close the gate visually
       if (state.trapGate) {
@@ -249,6 +273,7 @@ export class BallTrapBuilder {
    * Release ball with boosted velocity
    */
   releaseBallWithBoost(state: BallTrapState, ball: RAPIER.RigidBody): void {
+    state.hitTime = 0.2
     const boostForce = 15.0
     const boostVelocity = new this.rapier.Vector3(
       (Math.random() - 0.5) * boostForce,

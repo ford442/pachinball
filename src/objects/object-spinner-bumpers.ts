@@ -1,8 +1,8 @@
-import { Scene, MeshBuilder, Mesh, TransformNode, Vector3 } from '@babylonjs/core'
+import { Scene, MeshBuilder, Mesh, PBRMaterial, TransformNode, Vector3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
-import { PALETTE, QualityTier } from '../game-elements/visual-language'
+import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
 import type { EventBus } from '../game/event-bus'
 import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
@@ -15,6 +15,8 @@ export interface SpinnerBumperVisual {
   targetRotationSpeed: number
   angularVelocity: number
   totalRotations: number
+  hitTime: number
+  color: string
 }
 
 export class SpinnerBumperBuilder {
@@ -30,6 +32,7 @@ export class SpinnerBumperBuilder {
   private nodes: TransformNode[] = []
   private qualityTier: QualityTier
   private registeredZoneIds: string[] = []
+  private effectIntensity = 1.0
 
   constructor(
     scene: Scene,
@@ -56,6 +59,11 @@ export class SpinnerBumperBuilder {
    */
   setZoneTriggerSystem(zoneTriggerSystem: ZoneTriggerSystem | null): void {
     this.zoneTriggerSystem = zoneTriggerSystem
+  }
+
+  /** Accessibility effectIntensity multiplier (0..1). Clamps hit-flash luminance. */
+  setEffectIntensity(value: number): void {
+    this.effectIntensity = Math.max(0, Math.min(1, value))
   }
 
   createSpinnerBumper(
@@ -137,7 +145,9 @@ export class SpinnerBumperBuilder {
       rotationSpeed: 0,
       targetRotationSpeed: 0,
       angularVelocity: 0,
-      totalRotations: 0
+      totalRotations: 0,
+      hitTime: 0,
+      color: colorHex,
     }
 
     bindings.push({ mesh: spinnerRoot as unknown as Mesh, rigidBody: body })
@@ -172,6 +182,21 @@ export class SpinnerBumperBuilder {
    * Update spinner rotation each frame
    */
   updateSpinner(visual: SpinnerBumperVisual, dt: number): void {
+    // Hit flash decay — additive white-hot pulse over the base emissive
+    if (visual.hitTime > 0) {
+      visual.hitTime -= dt
+      const mat = visual.mesh.material as PBRMaterial | null
+      if (mat) {
+        if (visual.hitTime > 0) {
+          const flash = INTENSITY.BURST * (visual.hitTime / 0.2) * this.effectIntensity
+          mat.emissiveColor = emissive(visual.color, INTENSITY.NORMAL).add(color(PALETTE.WHITE).scale(flash))
+        } else {
+          visual.hitTime = 0
+          mat.emissiveColor = emissive(visual.color, INTENSITY.ACTIVE)
+        }
+      }
+    }
+
     // Smoothly accelerate rotation toward target
     const accelerationRate = 25.0
     visual.rotationSpeed += (visual.targetRotationSpeed - visual.rotationSpeed) * accelerationRate * dt
@@ -210,6 +235,8 @@ export class SpinnerBumperBuilder {
    * Trigger spinner when hit by ball
    */
   triggerSpin(visual: SpinnerBumperVisual, impactForce: number, ballPosition?: Vector3): void {
+    visual.hitTime = 0.2
+
     // Impact force determines spin intensity
     const spinIntensity = Math.min(impactForce / 20, 1.0)
     visual.targetRotationSpeed = 15.0 * spinIntensity * (Math.random() < 0.5 ? 1 : -1)
