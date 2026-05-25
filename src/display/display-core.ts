@@ -63,7 +63,6 @@ export class DisplaySystem {
   private _flashCycleTime = 0
   private _currentSplashIndex = 0
   private _splashImages: HTMLImageElement[] = []
-  private _drainDirty = false
 
   constructor(
     scene: Scene,
@@ -180,8 +179,15 @@ export class DisplaySystem {
     this._drainTimer = 2.0
     this._flashCycleTime = 0
     this._currentSplashIndex = 0
-    this._drainDirty = true
     this.redrawTextOverlay()
+  }
+
+  /**
+   * Returns true while the drain/ball-lost animated overlay is active.
+   * Useful for callers that need to suppress other UI updates during the sequence.
+   */
+  public isDrainReactionActive(): boolean {
+    return this._displayMode === 'drain'
   }
 
   private redrawTextOverlay(): void {
@@ -191,7 +197,7 @@ export class DisplaySystem {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
     if (this._displayMode === 'drain') {
-      const photosafe = this.accessibility.reducedMotion || this.accessibility.flashFrequencyMax <= 1
+      const photosafe = this.isPhotosafeMode()
 
       // Draw cycling splash image (if loaded) — skip cycling in photosafe mode
       const splashIdx = photosafe ? 0 : this._currentSplashIndex
@@ -315,13 +321,10 @@ export class DisplaySystem {
       this._drainTimer -= dt
       this._flashCycleTime += dt
       const newIndex = Math.floor(this._flashCycleTime / 0.3) % 2
-      if (newIndex !== this._currentSplashIndex) {
+      // Normal mode: redraw every frame for smooth neon-pulse animation.
+      // Photosafe mode: redraw only when the splash image switches (~3 Hz is enough for a static frame).
+      if (!this.isPhotosafeMode() || newIndex !== this._currentSplashIndex) {
         this._currentSplashIndex = newIndex
-        this._drainDirty = true
-      }
-      // Always mark dirty on first call so the initial frame renders
-      if (this._drainDirty) {
-        this._drainDirty = false
         this.redrawTextOverlay()
       }
       if (this._drainTimer <= 0) {
@@ -331,6 +334,11 @@ export class DisplaySystem {
         this.redrawTextOverlay()
       }
     }
+  }
+
+  /** Returns true when reduced motion or a low flash-frequency cap is requested. */
+  private isPhotosafeMode(): boolean {
+    return this.accessibility.reducedMotion || this.accessibility.flashFrequencyMax <= 1
   }
 
   /**
