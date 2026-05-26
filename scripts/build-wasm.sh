@@ -25,6 +25,7 @@
 # =============================================================================
 
 set -euo pipefail
+source /content/buil*/emsdk/emsdk_env.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
