@@ -238,6 +238,8 @@ export class DynamicWorld {
         return this.createTarget(mechanic.position)
       case 'collectible':
         return this.createCollectible(mechanic.position)
+      case 'portal':
+        return this.createPortal(mechanic.position, mechanic.properties)
       default:
         return null
     }
@@ -299,6 +301,41 @@ export class DynamicWorld {
     })
 
     return collectible
+  }
+
+  private createPortal(pos: Vector3, properties?: Record<string, unknown>): Mesh {
+    const kind = properties?.['kind'] === 'timeout' ? 'timeout' : 'success'
+    const ringColor = kind === 'success' ? '#00d9ff' : '#ff4400'
+    const coreColor = kind === 'success' ? '#ffd700' : '#aa2244'
+
+    const portal = MeshBuilder.CreateTorus(
+      'zonePortal',
+      { diameter: 4.2, thickness: 0.5, tessellation: 48 },
+      this.scene
+    )
+    portal.position = pos
+    portal.rotation.x = Math.PI / 2
+
+    const portalMat = new StandardMaterial('zonePortalMat', this.scene)
+    portalMat.diffuseColor = Color3.Black()
+    portalMat.emissiveColor = color(ringColor).scale(1.2)
+    portal.material = portalMat
+
+    const core = MeshBuilder.CreateDisc(
+      'zonePortalCore',
+      { radius: 1.6, tessellation: 48 },
+      this.scene
+    )
+    core.parent = portal
+    core.position.z = -0.1
+
+    const coreMat = new StandardMaterial('zonePortalCoreMat', this.scene)
+    coreMat.diffuseColor = Color3.Black()
+    coreMat.emissiveColor = color(coreColor).scale(0.75)
+    coreMat.alpha = 0.72
+    core.material = coreMat
+
+    return portal
   }
 
   /**

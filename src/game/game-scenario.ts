@@ -307,6 +307,15 @@ export class GameScenario {
         position: new Vector3(x, 0.5, -z),
       })
     }
+
+    if (zoneIndex >= 3) {
+      mechanics.push({
+        type: 'portal',
+        position: new Vector3(0, 1.2, -endZ + 6),
+        properties: { kind: 'success' },
+      })
+    }
+
     return mechanics
   }
 

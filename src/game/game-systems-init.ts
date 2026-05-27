@@ -52,6 +52,7 @@ import {
 import { AdventureManager } from './game-adventure'
 import { TableMapManager } from './game-maps'
 import { CabinetManager } from './game-cabinet'
+import { isAdventureTrackType } from '../adventure'
 
 import type { Game } from '../game'
 
@@ -219,6 +220,10 @@ export class GameSystemsInitializer {
 
       this.game.adventureTrackProgression = new AdventureTrackProgression()
 
+      // Integration plan:
+      // 1) Supervisor emits `portal:open` with track + result kind.
+      // 2) AdventureMode activates a dormant physical portal sensor/mesh.
+      // 3) On entry, AdventureMode teleports + switchZone and emits `portal:entered`.
       this.game.adventureMode?.setEventListener((event, data) => {
         console.log(`Adventure Event: ${event}`)
         switch (event) {
@@ -251,7 +256,75 @@ export class GameSystemsInitializer {
             this.game.scenarioManager.handleZoneTransition(zoneData.zone, zoneData.previousZone, zoneData.isMajor)
             break
           }
+          case 'PORTAL_ACTIVATED': {
+            const portalData = data as {
+              trackId: AdventureTrackType
+              kind: 'success' | 'timeout'
+              mode: 'STATIONARY_TABLE' | 'EXTENDED_MAP'
+            }
+            this.game.display?.setStoryText(
+              portalData.kind === 'success'
+                ? `EXIT PORTAL ONLINE: ${portalData.trackId.replace(/_/g, ' ')}`
+                : `EMERGENCY EXIT ONLINE: ${portalData.trackId.replace(/_/g, ' ')}`
+            )
+            this.game.eventBus.emit('effect:bloom', {
+              intensity: portalData.kind === 'success' ? 1.35 : 1.05,
+              duration: 0.65,
+            })
+            this.game.eventBus.emit('effect:flash', {
+              color: portalData.kind === 'success' ? '#00d9ff' : '#ff4400',
+              intensity: portalData.kind === 'success' ? 0.9 : 0.7,
+              duration: 0.45,
+            })
+            break
+          }
+          case 'PORTAL_ENTERED': {
+            const portalData = data as {
+              id: string
+              trackId: AdventureTrackType
+              nextTrack: AdventureTrackType
+              kind: 'success' | 'timeout'
+              position: Vector3
+              teleportPosition: Vector3
+            }
+            this.game.display?.setStoryText(`WORMHOLE JUMP: ${portalData.nextTrack.replace(/_/g, ' ')}`)
+            this.game.eventBus.emit('portal:entered', {
+              id: portalData.id,
+              trackId: portalData.trackId,
+              nextTrack: portalData.nextTrack,
+              kind: portalData.kind,
+              position: {
+                x: portalData.position.x,
+                y: portalData.position.y,
+                z: portalData.position.z,
+              },
+              teleportPosition: {
+                x: portalData.teleportPosition.x,
+                y: portalData.teleportPosition.y,
+                z: portalData.teleportPosition.z,
+              },
+            })
+            break
+          }
         }
+      })
+
+      this.game.eventBus.on('portal:open', ({ trackId, kind, mode }) => {
+        const activeZone = this.game.adventureMode?.getCurrentZone()
+        const resolvedTrack = isAdventureTrackType(trackId)
+          ? trackId
+          : (activeZone || AdventureTrackType.NEON_HELIX)
+
+        const resolvedMode = mode || (this.game.gameMode === 'dynamic' ? 'EXTENDED_MAP' : 'STATIONARY_TABLE')
+        this.game.adventureMode?.activateExitPortal(resolvedTrack, kind, resolvedMode)
+      })
+
+      this.game.eventBus.on('track:completed', ({ trackId }) => {
+        this.game.eventBus.emit('portal:open', {
+          trackId,
+          kind: 'success',
+          mode: this.game.gameMode === 'dynamic' ? 'EXTENDED_MAP' : 'STATIONARY_TABLE',
+        })
       })
     }, true)
 
