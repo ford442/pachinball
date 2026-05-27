@@ -147,6 +147,7 @@ export class AdventureProgressionSupervisor {
     this.eventBus.emit('portal:open', {
       kind,
       trackId: this.activeTrackId,
+      mode: this.activeTrackInfo?.modeType,
       multiplier: this.activeMultiplier,
       timeRemaining: this.timeRemaining,
     })

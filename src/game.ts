@@ -432,6 +432,18 @@ export class Game {
         this.adventureGoalTracker?.update(dt)
         this.adventureProgressionSupervisor?.update(dt, this.score)
 
+        // Drive the HUD countdown timer from the supervisor state
+        if (this.adventureProgressionSupervisor && this.adventureProgressionSupervisor.getTimeRemaining() > 0) {
+          const trackId = this.adventureTrackProgression?.getCurrentTrack()
+          const trackInfo = trackId ? this.adventureTrackProgression?.getTrackInfo(trackId) : null
+          if (trackInfo) {
+            this.uiManager?.updateCountdownTimer(
+              this.adventureProgressionSupervisor.getTimeRemaining(),
+              trackInfo.timeLimitSeconds,
+            )
+          }
+        }
+
         this.performanceMonitor.updateEngineMetrics(0, this.physics.getActiveBodyCount())
         this.performanceMonitor.frameEnd()
 
