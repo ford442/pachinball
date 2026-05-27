@@ -45,10 +45,26 @@ export class GameUIManager {
   private comboElement: HTMLElement | null = null
   private bestHudElement: HTMLElement | null = null
 
+  /**
+   * Cached result of the `prefers-reduced-motion` media query.
+   * Updated whenever the OS preference changes so we don't re-query the DOM
+   * on every animation frame inside updateCountdownTimer.
+   */
+  private prefersReducedMotion = false
+
   constructor(scene: Scene) {
     // this._scene = scene // UNUSED
     void scene
     this.bindHUDElements()
+    this.initReducedMotionListener()
+  }
+
+  /** Set up a one-time media-query listener so the cached value stays fresh. */
+  private initReducedMotionListener(): void {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    this.prefersReducedMotion = mq.matches
+    mq.addEventListener('change', (e) => { this.prefersReducedMotion = e.matches })
   }
 
   /**
@@ -451,10 +467,7 @@ export class GameUIManager {
 
     // Pulse animation when critically low (ratio === 0 means timer expired — no need to pulse).
     // Suppressed when the user has opted in to reduced motion.
-    const prefersReducedMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (!prefersReducedMotion && ratio > 0 && ratio <= 0.15) {
+    if (!this.prefersReducedMotion && ratio > 0 && ratio <= 0.15) {
       timerEl.style.animation = 'campaignTimerPulse 0.6s ease-in-out infinite'
       this.ensureTimerPulseKeyframe()
     } else {

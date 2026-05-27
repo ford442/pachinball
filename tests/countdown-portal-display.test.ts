@@ -206,12 +206,14 @@ describe('TIMER_COLORS visual-language tokens', () => {
     expect(TIMER_COLORS.ESCAPE).toMatch(/^#[0-9a-fA-F]{6}$/)
   })
 
-  it('SAFE is visually "green" (green channel dominant)', () => {
+  it('SAFE is visually "green" (green channel dominant over both red and blue)', () => {
     // #00ff88 → R=0, G=255, B=136
     const hex = TIMER_COLORS.SAFE.slice(1)
     const r = parseInt(hex.slice(0, 2), 16)
     const g = parseInt(hex.slice(2, 4), 16)
+    const b = parseInt(hex.slice(4, 6), 16)
     expect(g).toBeGreaterThan(r)
+    expect(g).toBeGreaterThan(b)
   })
 
   it('DANGER is visually "red" (red channel dominant)', () => {

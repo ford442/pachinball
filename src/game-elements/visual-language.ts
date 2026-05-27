@@ -140,11 +140,11 @@ export const STATE_SHADER_COLORS = {
 export const TIMER_COLORS = {
   /** > 50 % remaining — all clear, bright green */
   SAFE:    '#00ff88',
-  /** 20–50 % remaining — proceed with caution, yellow */
+  /** 30–50 % remaining — proceed with caution, yellow */
   CAUTION: '#ffe600',
-  /** 10–20 % remaining — warning, orange */
+  /** 15–30 % remaining — warning, orange */
   WARNING: '#ff8800',
-  /** < 10 % remaining — critical danger, deep red (also pulses) */
+  /** < 15 % remaining — critical danger, deep red (also pulses) */
   DANGER:  '#ff2200',
   /** Portal-open accent — cyan */
   PORTAL:  PALETTE.CYAN,
