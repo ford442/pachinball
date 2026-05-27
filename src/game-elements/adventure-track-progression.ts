@@ -9,6 +9,8 @@ export interface TrackInfo {
   description: string
   difficulty: 'easy' | 'medium' | 'hard' | 'expert'
   recommendedScore: number
+  timeLimitSeconds: number
+  timeoutPenaltyMultiplier: number
   unlockedBy?: string // Track ID that must be completed to unlock this
   theme: string
 }
@@ -29,6 +31,8 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     description: 'A classic descent through spiraling neon light. Perfect for beginners.',
     difficulty: 'easy',
     recommendedScore: 50000,
+    timeLimitSeconds: 120,
+    timeoutPenaltyMultiplier: 0.7,
     theme: 'cyber-neon'
   },
   'CYBER_CORE': {
@@ -37,6 +41,8 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     description: 'Fast-paced vertical descent through a digital core. Requires precision timing.',
     difficulty: 'medium',
     recommendedScore: 75000,
+    timeLimitSeconds: 120,
+    timeoutPenaltyMultiplier: 0.7,
     unlockedBy: 'NEON_HELIX',
     theme: 'digital'
   },
@@ -46,6 +52,8 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     description: 'Navigate a complex maze of quantum pathways. The ultimate puzzle challenge.',
     difficulty: 'hard',
     recommendedScore: 100000,
+    timeLimitSeconds: 135,
+    timeoutPenaltyMultiplier: 0.65,
     unlockedBy: 'CYBER_CORE',
     theme: 'quantum'
   },
@@ -55,6 +63,8 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     description: 'Bounce through a classic pin field tower. High-risk, high-reward gameplay.',
     difficulty: 'hard',
     recommendedScore: 65000,
+    timeLimitSeconds: 120,
+    timeoutPenaltyMultiplier: 0.7,
     unlockedBy: 'NEON_HELIX',
     theme: 'retro'
   },
@@ -64,6 +74,8 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     description: 'Enter a black hole. Gravity pulls everything inward. Expert only.',
     difficulty: 'expert',
     recommendedScore: 120000,
+    timeLimitSeconds: 150,
+    timeoutPenaltyMultiplier: 0.6,
     unlockedBy: 'QUANTUM_GRID',
     theme: 'cosmic'
   }

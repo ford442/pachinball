@@ -33,6 +33,7 @@ import {
   AdventureCinematicTriggers,
   AdventureUIStateManager,
   AdventureTrackProgression,
+  AdventureProgressionSupervisor,
   DisplayState,
   DisplaySystem,
   EffectsSystem,
@@ -218,12 +219,19 @@ export class GameSystemsInitializer {
       this.game.adventureUIStateManager.setEventBus(this.game.eventBus)
 
       this.game.adventureTrackProgression = new AdventureTrackProgression()
+      this.game.adventureProgressionSupervisor = new AdventureProgressionSupervisor(
+        this.game.eventBus,
+        this.game.adventureTrackProgression,
+        {
+          isAdventureModeActive: () => this.game.adventureMode?.isActive() ?? false,
+        },
+      )
 
       this.game.adventureMode?.setEventListener((event, data) => {
         console.log(`Adventure Event: ${event}`)
         switch (event) {
           case 'START': {
-            const trackType = data as AdventureTrackType | undefined
+            const trackType = (data as AdventureTrackType | undefined) ?? this.game.adventureTrackProgression?.getCurrentTrack()
             this.game.adventureManager?.startAdventure(trackType)
             this.game.eventBus.emit('adventure:start')
             this.game.eventBus.emit('display:set', DisplayState.ADVENTURE)
@@ -232,6 +240,11 @@ export class GameSystemsInitializer {
             this.game.display?.setStoryText(`ENTERING: ${trackName}`)
             this.game.effects?.setLightingMode('reach', 0.5)
             this.game.effects?.setAtmosphereState('ADVENTURE')
+            if (trackType) {
+              this.game.adventureTrackProgression?.setCurrentTrack(trackType)
+              this.game.adventureGoalTracker?.initializeTrack(trackType)
+              this.game.adventureProgressionSupervisor?.startTrack(trackType, this.game.score)
+            }
             break
           }
           case 'END':
@@ -240,6 +253,7 @@ export class GameSystemsInitializer {
             this.game.eventBus.emit('display:set', DisplayState.IDLE)
             this.game.effects?.setLightingMode('normal', 1.0)
             this.game.effects?.setAtmosphereState('IDLE')
+            this.game.adventureProgressionSupervisor?.reset()
             break
           case 'ZONE_ENTER': {
             const zoneData = data as {

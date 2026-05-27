@@ -140,9 +140,35 @@ export interface PachinballEventMap {
     totalReward: number
     duration: number
   }
+  'track:goal-reached': {
+    trackId: string
+    scoreDelta: number
+    recommendedScore: number
+    timeRemaining: number
+  }
+  'track:timeout': {
+    trackId: string
+    multiplier: number
+    timeLimitSeconds: number
+    elapsedSeconds: number
+  }
   'track:unlocked': {
     trackId: string
     name: string
+  }
+  'portal:open': {
+    kind: 'success' | 'timeout'
+    trackId: string
+    multiplier: number
+    timeRemaining: number
+  }
+  'portal:entered': {
+    kind: 'success' | 'timeout'
+    trackId: string
+    finalScore: number
+    goldBalls: number
+    multiplier: number
+    totalReward: number
   }
 
   // Cinematic events
