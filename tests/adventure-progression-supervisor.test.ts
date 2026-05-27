@@ -1,7 +1,67 @@
 import { describe, it, expect } from 'vitest'
 import { EventBus } from '../src/game/event-bus'
-import { AdventureTrackProgression } from '../src/game-elements/adventure-track-progression'
+import { AdventureTrackProgression, TRACK_CATALOG } from '../src/game-elements/adventure-track-progression'
 import { AdventureProgressionSupervisor } from '../src/game-elements/adventure-progression-supervisor'
+
+// ─── TRACK_CATALOG / modeType tests ──────────────────────────────────────────
+
+describe('TRACK_CATALOG modeType alternation', () => {
+  it('every track has a modeType field', () => {
+    for (const track of Object.values(TRACK_CATALOG)) {
+      expect(['EXTENDED_MAP', 'STATIONARY_TABLE']).toContain(track.modeType)
+    }
+  })
+
+  it('NEON_HELIX starts with EXTENDED_MAP (position A)', () => {
+    expect(TRACK_CATALOG['NEON_HELIX'].modeType).toBe('EXTENDED_MAP')
+  })
+
+  it('CYBER_CORE is STATIONARY_TABLE (position B)', () => {
+    expect(TRACK_CATALOG['CYBER_CORE'].modeType).toBe('STATIONARY_TABLE')
+  })
+
+  it('QUANTUM_GRID is EXTENDED_MAP (position A)', () => {
+    expect(TRACK_CATALOG['QUANTUM_GRID'].modeType).toBe('EXTENDED_MAP')
+  })
+
+  it('PACHINKO_SPIRE is STATIONARY_TABLE (position B, parallel branch)', () => {
+    expect(TRACK_CATALOG['PACHINKO_SPIRE'].modeType).toBe('STATIONARY_TABLE')
+  })
+
+  it('SINGULARITY_WELL is STATIONARY_TABLE (position B)', () => {
+    expect(TRACK_CATALOG['SINGULARITY_WELL'].modeType).toBe('STATIONARY_TABLE')
+  })
+
+  it('timeLimitSeconds is in the 90–180 s range for all tracks', () => {
+    for (const track of Object.values(TRACK_CATALOG)) {
+      expect(track.timeLimitSeconds).toBeGreaterThanOrEqual(90)
+      expect(track.timeLimitSeconds).toBeLessThanOrEqual(180)
+    }
+  })
+
+  it('timeoutPenaltyMultiplier is in the 0.35–0.6 range for all tracks', () => {
+    for (const track of Object.values(TRACK_CATALOG)) {
+      expect(track.timeoutPenaltyMultiplier).toBeGreaterThanOrEqual(0.35)
+      expect(track.timeoutPenaltyMultiplier).toBeLessThanOrEqual(0.6)
+    }
+  })
+
+  it('portal:open event includes the track modeType', () => {
+    const bus = new EventBus()
+    const progression = new AdventureTrackProgression()
+    const supervisor = new AdventureProgressionSupervisor(bus, progression)
+
+    let portalMode: string | undefined
+    bus.on('portal:open', (payload) => { portalMode = payload.mode })
+
+    supervisor.startTrack('NEON_HELIX', 0)
+    supervisor.update(1, 60000) // exceeds recommendedScore (50 000)
+
+    expect(portalMode).toBe('EXTENDED_MAP')
+  })
+})
+
+// ─── AdventureProgressionSupervisor tests ────────────────────────────────────
 
 describe('AdventureProgressionSupervisor', () => {
   it('resolves success, opens portal, and completes track with multiplier rewards', () => {
@@ -36,7 +96,7 @@ describe('AdventureProgressionSupervisor', () => {
     expect(advanced).toEqual(['CYBER_CORE'])
   })
 
-  it('resolves timeout and applies timeout penalty multiplier', () => {
+  it('resolves timeout and applies the track timeoutPenaltyMultiplier', () => {
     const bus = new EventBus()
     const progression = new AdventureTrackProgression()
     const supervisor = new AdventureProgressionSupervisor(bus, progression)
@@ -44,16 +104,20 @@ describe('AdventureProgressionSupervisor', () => {
     let timeoutFired = false
     bus.on('track:timeout', () => { timeoutFired = true })
 
+    // NEON_HELIX: timeLimitSeconds=120, timeoutPenaltyMultiplier=0.55
+    const neonHelixInfo = TRACK_CATALOG['NEON_HELIX']
     supervisor.startTrack('NEON_HELIX', 200)
-    supervisor.update(200, 1200)
+    supervisor.update(neonHelixInfo.timeLimitSeconds + 1, 1200) // force timeout
 
     expect(timeoutFired).toBe(true)
     expect(supervisor.isPortalOpen()).toBe(true)
-    expect(supervisor.getActiveMultiplier()).toBe(0.7)
+    expect(supervisor.getActiveMultiplier()).toBe(neonHelixInfo.timeoutPenaltyMultiplier)
 
     supervisor.onPortalEntered(1200, 1)
     expect(progression.isTrackCompleted('NEON_HELIX')).toBe(true)
-    expect(progression.getStats().totalRewardsEarned).toBe(700)
+    // totalReward = Math.round((1200 - 200) * timeoutPenaltyMultiplier)
+    const expectedReward = Math.round(1000 * neonHelixInfo.timeoutPenaltyMultiplier)
+    expect(progression.getStats().totalRewardsEarned).toBe(expectedReward)
     expect(progression.getStats().goldBallsCollected).toBe(1)
   })
 
@@ -62,19 +126,22 @@ describe('AdventureProgressionSupervisor', () => {
     const progression = new AdventureTrackProgression()
     const supervisor = new AdventureProgressionSupervisor(bus, progression)
 
+    const neonHelixInfo = TRACK_CATALOG['NEON_HELIX']
     supervisor.startTrack('NEON_HELIX', 5000)
     const initialRemaining = supervisor.getTimeRemaining()
+    expect(initialRemaining).toBe(neonHelixInfo.timeLimitSeconds)
 
-    supervisor.update(-1, 5000) // ignored
+    supervisor.update(-1, 5000) // negative dt is clamped/ignored
     expect(supervisor.getTimeRemaining()).toBe(initialRemaining)
 
     supervisor.update(1, 5000)
     expect(supervisor.getProgress()).toBeGreaterThan(0)
     expect(supervisor.isPortalOpen()).toBe(false)
 
-    supervisor.update(999, 5000)
+    // Advance past the full time limit
+    supervisor.update(neonHelixInfo.timeLimitSeconds + 100, 5000)
     expect(supervisor.isPortalOpen()).toBe(true)
-    expect(supervisor.getActiveMultiplier()).toBe(0.7)
+    expect(supervisor.getActiveMultiplier()).toBe(neonHelixInfo.timeoutPenaltyMultiplier)
   })
 
   it('gracefully no-ops when adventure mode is inactive', () => {

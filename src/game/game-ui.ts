@@ -388,6 +388,186 @@ export class GameUIManager {
     }
   }
 
+  // ==================== COUNTDOWN TIMER ====================
+
+  /**
+   * Update (or create) the campaign countdown timer HUD element.
+   *
+   * The timer color shifts from green → yellow → orange → red as time runs out:
+   *   > 50 %: green   (#00d9ff → #00ff88)
+   *   30–50 %: yellow (#ffe600)
+   *   15–30 %: orange (#ff8800)
+   *   < 15 %: red     (#ff2200)  — also pulses to signal urgency
+   *
+   * @param secondsRemaining  Seconds left on the current track timer.
+   * @param timeLimitSeconds  Total time limit for the current track.
+   */
+  updateCountdownTimer(secondsRemaining: number, timeLimitSeconds: number): void {
+    let timerEl = document.getElementById('campaign-countdown-timer')
+    if (!timerEl) {
+      timerEl = document.createElement('div')
+      timerEl.id = 'campaign-countdown-timer'
+      timerEl.style.cssText = `
+        position: absolute;
+        top: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-family: 'Orbitron', monospace;
+        font-size: 1.4rem;
+        font-weight: 700;
+        letter-spacing: 2px;
+        padding: 4px 14px;
+        border-radius: 6px;
+        background: rgba(0,0,0,0.65);
+        border: 1px solid currentColor;
+        pointer-events: none;
+        z-index: 60;
+        transition: color 0.4s ease;
+        text-shadow: 0 0 8px currentColor;
+      `
+      document.getElementById('game-cabinet')?.appendChild(timerEl)
+    }
+
+    const ratio = timeLimitSeconds > 0 ? secondsRemaining / timeLimitSeconds : 0
+    const mins = Math.floor(secondsRemaining / 60)
+    const secs = Math.floor(secondsRemaining % 60)
+    const display = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+
+    let color: string
+    if (ratio > 0.5) {
+      color = '#00ff88'
+    } else if (ratio > 0.3) {
+      color = '#ffe600'
+    } else if (ratio > 0.15) {
+      color = '#ff8800'
+    } else {
+      color = '#ff2200'
+    }
+
+    timerEl.textContent = `⏱ ${display}`
+    timerEl.style.color = color
+    timerEl.style.borderColor = color
+
+    // Pulse animation when critically low (ratio === 0 means timer expired — no need to pulse)
+    if (ratio > 0 && ratio <= 0.15) {
+      timerEl.style.animation = 'campaignTimerPulse 0.6s ease-in-out infinite'
+      this.ensureTimerPulseKeyframe()
+    } else {
+      timerEl.style.animation = ''
+    }
+  }
+
+  /** Ensure the timer-pulse @keyframes rule exists exactly once in the document. */
+  private ensureTimerPulseKeyframe(): void {
+    if (document.getElementById('campaign-timer-pulse-style')) return
+    const style = document.createElement('style')
+    style.id = 'campaign-timer-pulse-style'
+    style.textContent = `
+      @keyframes campaignTimerPulse {
+        0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+        50%       { opacity: 0.6; transform: translateX(-50%) scale(1.06); }
+      }
+    `
+    document.head.appendChild(style)
+  }
+
+  /**
+   * Hide (remove) the countdown timer HUD element.
+   * Call this when a track ends or adventure mode exits.
+   */
+  hideCountdownTimer(): void {
+    document.getElementById('campaign-countdown-timer')?.remove()
+  }
+
+  // ==================== PORTAL OVERLAY ====================
+
+  /**
+   * Show a fullscreen overlay announcing a portal event.
+   *
+   * @param kind      'success' → "PORTAL OPEN"; 'timeout' → "TIME OUT — ESCAPE"
+   * @param trackId   Track identifier shown in the subtitle line.
+   * @param autoDismissMs  Auto-hide after this many ms (default 3500).
+   */
+  showPortalOverlay(kind: 'success' | 'timeout', trackId: string, autoDismissMs = 3500): void {
+    this.hidePortalOverlay()
+
+    const overlay = document.createElement('div')
+    overlay.id = 'campaign-portal-overlay'
+
+    const isSuccess = kind === 'success'
+    const headline = isSuccess ? 'PORTAL OPEN' : 'TIME OUT — ESCAPE'
+    const subtitle = trackId.replace(/_/g, ' ')
+    const accentColor = isSuccess ? '#00d9ff' : '#ff4400'
+    const subColor = isSuccess ? '#aaffee' : '#ffaa88'
+
+    overlay.innerHTML = `
+      <div class="cpo-headline" style="
+        font-family: 'Orbitron', monospace;
+        font-size: clamp(1.8rem, 5vw, 3.2rem);
+        font-weight: 900;
+        letter-spacing: 6px;
+        text-transform: uppercase;
+        color: ${accentColor};
+        text-shadow: 0 0 18px ${accentColor}, 0 0 40px ${accentColor},
+                     2px 0 0 rgba(255,0,0,0.25), -2px 0 0 rgba(0,255,255,0.25);
+      ">${headline}</div>
+      <div class="cpo-subtitle" style="
+        margin-top: 10px;
+        font-family: 'Orbitron', monospace;
+        font-size: clamp(0.9rem, 2vw, 1.3rem);
+        letter-spacing: 3px;
+        color: ${subColor};
+        opacity: 0.85;
+      ">${subtitle}</div>
+    `
+    overlay.style.cssText = `
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 200;
+      animation: cpoFadeIn 0.35s ease-out forwards;
+    `
+
+    // Inject shared keyframe animations once (no color values — those are inline)
+    if (!document.getElementById('campaign-portal-overlay-style')) {
+      const style = document.createElement('style')
+      style.id = 'campaign-portal-overlay-style'
+      style.textContent = `
+        @keyframes cpoFadeIn {
+          from { opacity: 0; transform: scale(0.92); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+        @keyframes cpoFadeOut {
+          from { opacity: 1; }
+          to   { opacity: 0; }
+        }
+      `
+      document.head.appendChild(style)
+    }
+
+    document.getElementById('game-cabinet')?.appendChild(overlay)
+    this.activePopups.set('portal-overlay', overlay)
+
+    setTimeout(() => this.hidePortalOverlay(), autoDismissMs)
+  }
+
+  /**
+   * Immediately remove the portal overlay (if present).
+   */
+  hidePortalOverlay(): void {
+    const existing = document.getElementById('campaign-portal-overlay')
+    if (!existing) return
+    existing.style.animation = 'cpoFadeOut 0.3s ease-in forwards'
+    setTimeout(() => {
+      existing.remove()
+      this.activePopups.delete('portal-overlay')
+    }, 300)
+  }
+
   // ==================== CLEANUP ====================
 
   dispose(): void {
@@ -404,6 +584,10 @@ export class GameUIManager {
     // Remove gold ball counter
     this.goldBallCounter?.remove()
     this.goldBallCounter = null
+
+    // Remove campaign-specific HUD elements
+    this.hideCountdownTimer()
+    this.hidePortalOverlay()
 
     // Hide loading state
     if (this.loadingOverlay) {

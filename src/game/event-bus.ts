@@ -35,18 +35,44 @@ export interface PachinballEventMap {
   'reach:end': void
   'adventure:start': void
   'adventure:end': void
+  /**
+   * Fired when a campaign exit portal becomes active (either flawless success or timeout escape).
+   * Consumers (AdventureMode, HUD, display) react to this to show the portal and overlay.
+   */
   'portal:open': {
     trackId: string
     kind: 'success' | 'timeout'
+    /** modeType of the track that just opened the portal. */
     mode?: 'STATIONARY_TABLE' | 'EXTENDED_MAP'
+    /** Reward multiplier for the portal transition (1+ on success, <1 on timeout). */
+    multiplier?: number
+    /** Seconds remaining on the track timer when the portal opened. */
+    timeRemaining?: number
   }
+  /**
+   * Fired when the ball physically enters an exit portal.
+   * Spatial fields (id, nextTrack, position, teleportPosition) come from AdventureMode.
+   * Reward fields (finalScore, goldBalls, multiplier, totalReward) come from the supervisor.
+   */
   'portal:entered': {
-    id: string
-    trackId: string
-    nextTrack: string
     kind: 'success' | 'timeout'
-    position: { x: number; y: number; z: number }
-    teleportPosition: { x: number; y: number; z: number }
+    trackId: string
+    /** Unique portal instance id (set by AdventureMode). */
+    id?: string
+    /** Next track identifier (set by AdventureMode). */
+    nextTrack?: string
+    /** World position of the portal (set by AdventureMode). */
+    position?: { x: number; y: number; z: number }
+    /** Spawn position in the next track (set by AdventureMode). */
+    teleportPosition?: { x: number; y: number; z: number }
+    /** Player's score at the moment of entry (set by supervisor). */
+    finalScore?: number
+    /** Gold balls collected during the track (set by supervisor). */
+    goldBalls?: number
+    /** Effective reward multiplier (set by supervisor). */
+    multiplier?: number
+    /** Total reward after applying multiplier (set by supervisor). */
+    totalReward?: number
   }
 
   // Generic state change (for backward-compat logging / instrumentation)
@@ -168,20 +194,6 @@ export interface PachinballEventMap {
   'track:unlocked': {
     trackId: string
     name: string
-  }
-  'portal:open': {
-    kind: 'success' | 'timeout'
-    trackId: string
-    multiplier: number
-    timeRemaining: number
-  }
-  'portal:entered': {
-    kind: 'success' | 'timeout'
-    trackId: string
-    finalScore: number
-    goldBalls: number
-    multiplier: number
-    totalReward: number
   }
 
   // Cinematic events

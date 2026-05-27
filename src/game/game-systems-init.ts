@@ -331,6 +331,10 @@ export class GameSystemsInitializer {
         const resolvedTrack = this.resolvePortalTrack(trackId)
         const resolvedMode = mode || (this.game.gameMode === 'dynamic' ? 'EXTENDED_MAP' : 'STATIONARY_TABLE')
         this.game.adventureMode?.activateExitPortal(resolvedTrack, kind, resolvedMode)
+        // Show the portal overlay on the HUD
+        this.game.uiManager?.showPortalOverlay(kind, trackId)
+        // The countdown timer is no longer needed once the portal is open
+        this.game.uiManager?.hideCountdownTimer()
       })
 
       this.game.eventBus.on('track:completed', ({ trackId }) => {
@@ -339,6 +343,12 @@ export class GameSystemsInitializer {
           kind: 'success',
           mode: this.game.gameMode === 'dynamic' ? 'EXTENDED_MAP' : 'STATIONARY_TABLE',
         })
+      })
+
+      // Hide countdown when adventure ends cleanly (END event resets supervisor)
+      this.game.eventBus.on('adventure:end', () => {
+        this.game.uiManager?.hideCountdownTimer()
+        this.game.uiManager?.hidePortalOverlay()
       })
     }, true)
 

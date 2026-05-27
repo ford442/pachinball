@@ -3,13 +3,21 @@
  * Manages track progression, unlocking, and difficulty progression
  */
 
+/** Campaign mode type — alternates A/B across the progression sequence. */
+export type TrackModeType = 'EXTENDED_MAP' | 'STATIONARY_TABLE'
+
 export interface TrackInfo {
   id: string
   name: string
   description: string
   difficulty: 'easy' | 'medium' | 'hard' | 'expert'
+  /** Mode type: EXTENDED_MAP (scrolling 3D landscape) or STATIONARY_TABLE (classic pinball arena). */
+  modeType: TrackModeType
   recommendedScore: number
+  /** Time limit in seconds for this stage. Range: 90–180 s. */
   timeLimitSeconds: number
+  /** Score multiplier applied when the timer expires before the goal is met.
+   *  Actual catalog values span 0.40–0.55 within the allowed 0.35–0.6 design range. */
   timeoutPenaltyMultiplier: number
   unlockedBy?: string // Track ID that must be completed to unlock this
   theme: string
@@ -24,15 +32,27 @@ export interface ProgressionState {
   totalRewardsEarned: number
 }
 
+/**
+ * Campaign track catalog — 5 core stages with alternating A/B modeType pattern:
+ *   A (EXTENDED_MAP) → B (STATIONARY_TABLE) → A → B → A
+ *
+ * Campaign sequence (by unlock depth):
+ *   1. NEON_HELIX          — A — EXTENDED_MAP
+ *   2. CYBER_CORE          — B — STATIONARY_TABLE
+ *   2. PACHINKO_SPIRE      — B — STATIONARY_TABLE (parallel branch from NEON_HELIX)
+ *   3. QUANTUM_GRID        — A — EXTENDED_MAP
+ *   4. SINGULARITY_WELL    — B — STATIONARY_TABLE
+ */
 export const TRACK_CATALOG: Record<string, TrackInfo> = {
   'NEON_HELIX': {
     id: 'NEON_HELIX',
     name: 'Neon Helix',
     description: 'A classic descent through spiraling neon light. Perfect for beginners.',
     difficulty: 'easy',
+    modeType: 'EXTENDED_MAP',
     recommendedScore: 50000,
     timeLimitSeconds: 120,
-    timeoutPenaltyMultiplier: 0.7,
+    timeoutPenaltyMultiplier: 0.55,
     theme: 'cyber-neon'
   },
   'CYBER_CORE': {
@@ -40,9 +60,10 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     name: 'Cyber Core',
     description: 'Fast-paced vertical descent through a digital core. Requires precision timing.',
     difficulty: 'medium',
+    modeType: 'STATIONARY_TABLE',
     recommendedScore: 75000,
     timeLimitSeconds: 120,
-    timeoutPenaltyMultiplier: 0.7,
+    timeoutPenaltyMultiplier: 0.50,
     unlockedBy: 'NEON_HELIX',
     theme: 'digital'
   },
@@ -51,9 +72,10 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     name: 'Quantum Grid',
     description: 'Navigate a complex maze of quantum pathways. The ultimate puzzle challenge.',
     difficulty: 'hard',
+    modeType: 'EXTENDED_MAP',
     recommendedScore: 100000,
-    timeLimitSeconds: 135,
-    timeoutPenaltyMultiplier: 0.65,
+    timeLimitSeconds: 150,
+    timeoutPenaltyMultiplier: 0.45,
     unlockedBy: 'CYBER_CORE',
     theme: 'quantum'
   },
@@ -62,9 +84,10 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     name: 'Pachinko Spire',
     description: 'Bounce through a classic pin field tower. High-risk, high-reward gameplay.',
     difficulty: 'hard',
+    modeType: 'STATIONARY_TABLE',
     recommendedScore: 65000,
-    timeLimitSeconds: 120,
-    timeoutPenaltyMultiplier: 0.7,
+    timeLimitSeconds: 130,
+    timeoutPenaltyMultiplier: 0.50,
     unlockedBy: 'NEON_HELIX',
     theme: 'retro'
   },
@@ -73,9 +96,10 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     name: 'Singularity Well',
     description: 'Enter a black hole. Gravity pulls everything inward. Expert only.',
     difficulty: 'expert',
+    modeType: 'STATIONARY_TABLE',
     recommendedScore: 120000,
-    timeLimitSeconds: 150,
-    timeoutPenaltyMultiplier: 0.6,
+    timeLimitSeconds: 180,
+    timeoutPenaltyMultiplier: 0.40,
     unlockedBy: 'QUANTUM_GRID',
     theme: 'cosmic'
   }
