@@ -321,11 +321,10 @@ export class GameSystemsInitializer {
             )
             // Immediately start the next track if the adventure campaign continues.
             if (portalData.nextTrack && this.game.adventureMode?.isActive()) {
-              const nextTrack = portalData.nextTrack
-              this.game.adventureTrackProgression?.setCurrentTrack(nextTrack)
-              this.game.adventureGoalTracker?.initializeTrack(nextTrack)
-              this.game.adventureProgressionSupervisor?.startTrack(nextTrack, this.game.score)
-              const trackName = this.game.slotAdventure.getTrackDisplayName(nextTrack)
+              this.game.adventureTrackProgression?.setCurrentTrack(portalData.nextTrack)
+              this.game.adventureGoalTracker?.initializeTrack(portalData.nextTrack)
+              this.game.adventureProgressionSupervisor?.startTrack(portalData.nextTrack, this.game.score)
+              const trackName = this.game.slotAdventure.getTrackDisplayName(portalData.nextTrack)
               this.game.display?.setTrackInfo(trackName)
               this.game.display?.setStoryText(`ENTERING: ${trackName}`)
             }
@@ -370,13 +369,10 @@ export class GameSystemsInitializer {
         this.game.display?.triggerCRTFlash()
       })
 
-      this.game.eventBus.on('track:completed', ({ trackId: _trackId }) => {
-        // The supervisor already emitted 'portal:open' via resolveOutcome() when the
-        // score goal was hit. Re-emitting here would re-activate a portal that was
-        // already used, so this handler is intentionally a no-op kept only for future
-        // instrumentation (e.g. analytics, achievements).
-        void _trackId
-      })
+      // Note: 'track:completed' is emitted by the supervisor inside onPortalEntered().
+      // The old subscription that re-emitted 'portal:open' here was removed because
+      // the supervisor already emits 'portal:open' via resolveOutcome() when the score
+      // goal is hit — reactivating the portal after entry would be incorrect.
 
       // Hide countdown when adventure ends cleanly (END event resets supervisor)
       this.game.eventBus.on('adventure:end', () => {
