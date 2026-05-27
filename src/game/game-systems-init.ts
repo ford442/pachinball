@@ -337,6 +337,15 @@ export class GameSystemsInitializer {
         this.game.uiManager?.showPortalOverlay(kind, trackId)
         // The countdown timer is no longer needed once the portal is open
         this.game.uiManager?.hideCountdownTimer()
+        // Backbox display: dramatic portal announcement + state switch
+        if (kind === 'success') {
+          this.game.display?.setStoryText('PORTAL OPEN\nSHOOT TO ADVANCE')
+          this.game.eventBus.emit('display:set', DisplayState.PORTAL_OPEN)
+        } else {
+          this.game.display?.setStoryText('TIME OUT — EMERGENCY ESCAPE\nPENALIZED ADVANCE')
+          this.game.eventBus.emit('display:set', DisplayState.ESCAPE)
+        }
+        this.game.display?.triggerCRTFlash()
       })
 
       this.game.eventBus.on('track:completed', ({ trackId }) => {
