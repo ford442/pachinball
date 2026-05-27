@@ -11,12 +11,16 @@ import {
   Mesh,
   Quaternion,
   Scalar,
+  StandardMaterial,
+  Color3,
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { TrackBuilder } from './track-builder'
 import { CAMERA_PRESETS } from './camera-presets'
 import { AdventureTrackType, type AdventureCallback, type CameraPreset } from './adventure-types'
 import { CameraEasing } from './camera-easing'
+import { getNextAdventureTrack, getTrackStartAnchor } from './portal-routing'
+import { PALETTE } from '../game-elements/visual-language'
 
 // Import all track builders
 import { buildNeonHelix } from './tracks/neon-helix'
@@ -50,6 +54,24 @@ import { buildPolychromeVoid } from './tracks/polychrome-void'
 export { AdventureTrackType, CAMERA_PRESETS }
 export type { AdventureCallback, CameraPreset }
 
+type ExitPortalKind = 'success' | 'timeout'
+type ExitPortalWorldMode = 'STATIONARY_TABLE' | 'EXTENDED_MAP'
+
+interface ActiveExitPortal {
+  id: string
+  trackId: AdventureTrackType
+  kind: ExitPortalKind
+  mode: ExitPortalWorldMode
+  root: Mesh
+  core: Mesh
+  sensor: RAPIER.RigidBody
+  ringMaterial: StandardMaterial
+  coreMaterial: StandardMaterial
+  ringBase: Color3
+  coreBase: Color3
+  animationTime: number
+}
+
 export class AdventureMode extends TrackBuilder {
   /** Current camera preset for active track */
   protected currentCameraPreset: CameraPreset | null = CAMERA_PRESETS.DEFAULT
@@ -65,6 +87,7 @@ export class AdventureMode extends TrackBuilder {
   /** Camera transition state for cinematic polish */
   private cameraTransitionTime = 0
   private cameraTransitionDuration = 0.8 // seconds for smooth entry
+  private exitPortal: ActiveExitPortal | null = null
 
   /**
    * Get current zone/track type
@@ -87,6 +110,7 @@ export class AdventureMode extends TrackBuilder {
     if (!this.adventureActive) return
 
     this.timeAccumulator += dt
+    this.updateExitPortal(dt, ballBodies)
 
     // Camera update
     if (this.followCamera && ballBodies.length > 0 && this.currentCameraPreset) {
@@ -257,6 +281,117 @@ export class AdventureMode extends TrackBuilder {
     )
 
     this.followCamera.beta = Scalar.Clamp(this.followCamera.beta, preset.minBeta, preset.maxBeta)
+  }
+
+  activateExitPortal(
+    trackId: AdventureTrackType,
+    kind: ExitPortalKind,
+    mode: ExitPortalWorldMode = 'STATIONARY_TABLE'
+  ): boolean {
+    if (!this.adventureActive) {
+      return false
+    }
+
+    this.deactivateExitPortal()
+
+    const position = this.getExitPortalPosition(trackId, mode)
+    const isSuccess = kind === 'success'
+    const ringHex = isSuccess ? PALETTE.CYAN : PALETTE.ALERT
+    const coreHex = isSuccess ? PALETTE.GOLD : PALETTE.MAGENTA
+    const portalRadius = mode === 'EXTENDED_MAP' ? 2.6 : 2.1
+    const portalDepth = mode === 'EXTENDED_MAP' ? 1.0 : 0.8
+
+    const portalParts = this.createExitPortal(position, ringHex, coreHex, portalRadius, portalDepth)
+
+    this.exitPortal = {
+      id: `${trackId}-exit-portal`,
+      trackId,
+      kind,
+      mode,
+      root: portalParts.root,
+      core: portalParts.core,
+      sensor: portalParts.sensor,
+      ringMaterial: portalParts.ringMaterial,
+      coreMaterial: portalParts.coreMaterial,
+      ringBase: Color3.FromHexString(ringHex),
+      coreBase: Color3.FromHexString(coreHex),
+      animationTime: 0,
+    }
+
+    this.onEvent?.('PORTAL_ACTIVATED', {
+      id: this.exitPortal.id,
+      trackId,
+      kind,
+      mode,
+      position,
+    })
+
+    return true
+  }
+
+  deactivateExitPortal(): void {
+    if (!this.exitPortal) return
+
+    const portal = this.exitPortal
+    this.exitPortal = null
+
+    portal.root.dispose()
+
+    this.world.removeRigidBody(portal.sensor)
+  }
+
+  private getExitPortalPosition(trackId: AdventureTrackType, mode: ExitPortalWorldMode): Vector3 {
+    const anchor = getTrackStartAnchor(trackId)
+    const zOffset = mode === 'EXTENDED_MAP' ? 95 : 55
+    const yOffset = mode === 'EXTENDED_MAP' ? 2.2 : 1.4
+    return new Vector3(anchor.x, anchor.y + yOffset, anchor.z + zOffset)
+  }
+
+  private updateExitPortal(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+    const portal = this.exitPortal
+    if (!portal) return
+
+    portal.animationTime += dt
+    portal.root.rotation.z += dt * (portal.kind === 'success' ? 2.5 : 3.5)
+
+    const pulse = 0.85 + Math.sin(portal.animationTime * (portal.kind === 'success' ? 6.0 : 8.0)) * 0.25
+    portal.ringBase.scaleToRef(1.2 * pulse, portal.ringMaterial.emissiveColor)
+    portal.coreBase.scaleToRef(0.85 * pulse, portal.coreMaterial.emissiveColor)
+
+    const sensorCollider = portal.sensor.collider(0)
+    if (!sensorCollider) return
+
+    const isAnyBallInside = ballBodies.some((candidateBall) => {
+      const ballCollider = candidateBall.collider(0)
+      return !!ballCollider && this.world.intersectionPair(sensorCollider, ballCollider)
+    })
+    if (!isAnyBallInside) return
+
+    const nextTrack = getNextAdventureTrack(portal.trackId)
+    const teleportPos = getTrackStartAnchor(nextTrack)
+
+    for (const [index, ballBody] of ballBodies.entries()) {
+      const lateralOffset = index * 0.35
+      ballBody.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      ballBody.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      ballBody.setTranslation({
+        x: teleportPos.x + lateralOffset,
+        y: teleportPos.y,
+        z: teleportPos.z,
+      }, true)
+    }
+
+    this.onEvent?.('PORTAL_ENTERED', {
+      id: portal.id,
+      trackId: portal.trackId,
+      nextTrack,
+      kind: portal.kind,
+      position: portal.root.position.clone(),
+      teleportPosition: teleportPos.clone(),
+    })
+
+    this.deactivateExitPortal()
+    this.switchZone(nextTrack, teleportPos)
   }
 
   /**
@@ -461,6 +596,8 @@ export class AdventureMode extends TrackBuilder {
       return false
     }
 
+    this.deactivateExitPortal()
+
     this.previousZone = this.currentZone
     this.currentZone = newZone
 
@@ -528,6 +665,7 @@ export class AdventureMode extends TrackBuilder {
   end(): void {
     if (!this.adventureActive) return
     this.adventureActive = false
+    this.deactivateExitPortal()
 
     if (this.onEvent) this.onEvent('END')
 

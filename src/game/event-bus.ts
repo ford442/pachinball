@@ -35,6 +35,19 @@ export interface PachinballEventMap {
   'reach:end': void
   'adventure:start': void
   'adventure:end': void
+  'portal:open': {
+    trackId: string
+    kind: 'success' | 'timeout'
+    mode?: 'STATIONARY_TABLE' | 'EXTENDED_MAP'
+  }
+  'portal:entered': {
+    id: string
+    trackId: string
+    nextTrack: string
+    kind: 'success' | 'timeout'
+    position: { x: number; y: number; z: number }
+    teleportPosition: { x: number; y: number; z: number }
+  }
 
   // Generic state change (for backward-compat logging / instrumentation)
   'state:change': { oldState: GameState; newState: GameState }

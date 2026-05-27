@@ -30,6 +30,7 @@ import {
   MASK_GREEN,
   MASK_BLUE,
 } from './adventure-types'
+import { INTENSITY, emissive } from '../game-elements/visual-language'
 
 export abstract class TrackBuilder {
   protected scene: Scene
@@ -544,6 +545,69 @@ export abstract class TrackBuilder {
           mat.albedoColor = matColor
         }
       }
+    }
+  }
+
+  protected createExitPortal(
+    position: Vector3,
+    ringColorHex: string,
+    coreColorHex: string,
+    radius: number = 2.1,
+    depth: number = 0.8
+  ): {
+    root: Mesh
+    core: Mesh
+    ringMaterial: StandardMaterial
+    coreMaterial: StandardMaterial
+    sensor: RAPIER.RigidBody
+  } {
+    const ring = MeshBuilder.CreateTorus(
+      'exitPortalRing',
+      { diameter: radius * 2, thickness: 0.45, tessellation: 48 },
+      this.scene
+    )
+    ring.position.copyFrom(position)
+    ring.rotation.x = Math.PI / 2
+
+    const core = MeshBuilder.CreateDisc(
+      'exitPortalCore',
+      { radius: radius * 0.82, tessellation: 48 },
+      this.scene
+    )
+    core.parent = ring
+    core.position.z = -0.08
+
+    const ringMaterial = new StandardMaterial('exitPortalRingMat', this.scene)
+    ringMaterial.diffuseColor = Color3.Black()
+    ringMaterial.emissiveColor = emissive(ringColorHex, INTENSITY.HIGH)
+    ring.material = ringMaterial
+
+    const coreMaterial = new StandardMaterial('exitPortalCoreMat', this.scene)
+    coreMaterial.diffuseColor = Color3.Black()
+    coreMaterial.emissiveColor = emissive(coreColorHex, INTENSITY.ACTIVE)
+    coreMaterial.alpha = 0.72
+    core.material = coreMaterial
+
+    this.adventureTrack.push(ring, core)
+    this.materials.push(ringMaterial, coreMaterial)
+
+    const sensor = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z)
+    )
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cylinder(depth, radius * 0.9)
+        .setSensor(true)
+        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
+      sensor
+    )
+    this.adventureBodies.push(sensor)
+
+    return {
+      root: ring,
+      core,
+      ringMaterial,
+      coreMaterial,
+      sensor,
     }
   }
 }

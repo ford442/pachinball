@@ -35,6 +35,13 @@ export type {
   ChromaGate,
 } from './adventure-types'
 
+export {
+  ADVENTURE_TRACK_SEQUENCE,
+  getNextAdventureTrack,
+  getTrackStartAnchor,
+  isAdventureTrackType,
+} from './portal-routing'
+
 // Track builders
 export { buildNeonHelix } from './tracks/neon-helix'
 export { buildCyberCore } from './tracks/cyber-core'
