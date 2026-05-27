@@ -1,5 +1,5 @@
 import type { EventBus } from '../game/event-bus'
-import { TRACK_CATALOG, type TrackInfo, type AdventureTrackProgression } from './adventure-track-progression'
+import { type TrackInfo, type AdventureTrackProgression } from './adventure-track-progression'
 
 export interface AdventureProgressionSupervisorCallbacks {
   isAdventureModeActive?: () => boolean
@@ -154,13 +154,11 @@ export class AdventureProgressionSupervisor {
   }
 
   private advanceToNextTrack(): void {
-    const nextTrack = Object.values(TRACK_CATALOG).find((track) =>
-      this.progression.isTrackUnlocked(track.id) && !this.progression.isTrackCompleted(track.id)
-    )
-    if (nextTrack) {
-      this.progression.setCurrentTrack(nextTrack.id)
+    const nextTrackId = this.progression.getNextTrackId()
+    if (nextTrackId) {
+      this.progression.setCurrentTrack(nextTrackId)
     }
-    this.callbacks.onTrackAdvanced?.(nextTrack?.id ?? null)
+    this.callbacks.onTrackAdvanced?.(nextTrackId)
   }
 
   private isAdventureModeActive(): boolean {
