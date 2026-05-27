@@ -239,7 +239,11 @@ export class GameSystemsInitializer {
         this.game.eventBus,
         this.game.adventureTrackProgression,
         {
-          isAdventureModeActive: () => this.game.adventureMode?.isActive() ?? false,
+          // Pause the supervisor when the game is paused or over so phantom
+          // timeouts cannot fire while the game is not in the PLAYING state.
+          isAdventureModeActive: () =>
+            (this.game.adventureMode?.isActive() ?? false) &&
+            this.game.stateManager.isPlaying(),
         },
       )
 
@@ -308,6 +312,23 @@ export class GameSystemsInitializer {
           case 'PORTAL_ENTERED': {
             const portalData = data as PortalEnteredEventData
             this.game.display?.setStoryText(`WORMHOLE JUMP: ${portalData.nextTrack.replace(/_/g, ' ')}`)
+            // Finalize the completed track through the supervisor.
+            // This records the result in progression, emits 'portal:entered' (reward fields),
+            // 'track:completed', and resets the supervisor ready for the next track.
+            this.game.adventureProgressionSupervisor?.onPortalEntered(
+              this.game.score,
+              this.game.sessionGoldBalls,
+            )
+            // Immediately start the next track if the adventure campaign continues.
+            if (portalData.nextTrack && this.game.adventureMode?.isActive()) {
+              this.game.adventureTrackProgression?.setCurrentTrack(portalData.nextTrack)
+              this.game.adventureGoalTracker?.initializeTrack(portalData.nextTrack)
+              this.game.adventureProgressionSupervisor?.startTrack(portalData.nextTrack, this.game.score)
+              const trackName = this.game.slotAdventure.getTrackDisplayName(portalData.nextTrack)
+              this.game.display?.setTrackInfo(trackName)
+              this.game.display?.setStoryText(`ENTERING: ${trackName}`)
+            }
+            // Also emit the spatial fields so portal/teleport consumers have location data.
             this.game.eventBus.emit('portal:entered', {
               id: portalData.id,
               trackId: portalData.trackId,
@@ -348,16 +369,21 @@ export class GameSystemsInitializer {
         this.game.display?.triggerCRTFlash()
       })
 
-      this.game.eventBus.on('track:completed', ({ trackId }) => {
-        this.game.eventBus.emit('portal:open', {
-          trackId,
-          kind: 'success',
-          mode: this.game.gameMode === 'dynamic' ? 'EXTENDED_MAP' : 'STATIONARY_TABLE',
-        })
-      })
+      // Note: 'track:completed' is emitted by the supervisor inside onPortalEntered().
+      // The old subscription that re-emitted 'portal:open' here was removed because
+      // the supervisor already emits 'portal:open' via resolveOutcome() when the score
+      // goal is hit — reactivating the portal after entry would be incorrect.
 
       // Hide countdown when adventure ends cleanly (END event resets supervisor)
       this.game.eventBus.on('adventure:end', () => {
+        this.game.uiManager?.hideCountdownTimer()
+        this.game.uiManager?.hidePortalOverlay()
+      })
+
+      // Reset the supervisor on game over so the timer cannot keep running in the
+      // background and stale track state cannot leak into the next game session.
+      this.game.eventBus.on('game:over', () => {
+        this.game.adventureProgressionSupervisor?.reset()
         this.game.uiManager?.hideCountdownTimer()
         this.game.uiManager?.hidePortalOverlay()
       })

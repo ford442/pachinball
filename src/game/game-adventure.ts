@@ -343,10 +343,10 @@ export class AdventureManager {
   // ==================== UTILITY ====================
 
   update(dt: number): void {
-    // Update any adventure-mode specific logic
+    // Campaign time and score supervision is owned by AdventureProgressionSupervisor
+    // (ticked each frame in the main renderLoop via game.adventureProgressionSupervisor.update).
+    // This stub is kept for any future AdventureManager-specific per-frame logic.
     if (this.adventureActive) {
-      // Check for timeout, update progress, etc.
-      // dt is available for time-based updates
       void dt
     }
   }
