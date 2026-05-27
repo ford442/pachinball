@@ -25,6 +25,10 @@ export enum DisplayState {
   FEVER = 'fever',
   ADVENTURE = 'adventure',
   JACKPOT = 'jackpot',
+  /** Exit portal is live — success path. Cyan wormhole treatment. */
+  PORTAL_OPEN = 'portal_open',
+  /** Time-out escape portal. Redder, urgent treatment. */
+  ESCAPE = 'escape',
 }
 
 /** Blend modes for image layers */
@@ -201,6 +205,16 @@ export const DEFAULT_DISPLAY_CONFIG: DisplayConfig = {
       showShaderBackground: true,
       showReels: false,
       shaderParams: { speed: 1.0, color: '#00aa00' },
+    },
+    [DisplayState.PORTAL_OPEN]: {
+      showShaderBackground: true,
+      showReels: false,
+      shaderParams: { speed: 18.0, color: '#00d9ff' },
+    },
+    [DisplayState.ESCAPE]: {
+      showShaderBackground: true,
+      showReels: false,
+      shaderParams: { speed: 10.0, color: '#ff4400' },
     },
   },
   imageSettings: {

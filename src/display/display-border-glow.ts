@@ -24,11 +24,13 @@ import { type AccessibilityConfig, DEFAULT_ACCESSIBILITY } from '../game-element
 
 /** Emissive colour targets per DisplayState string value, using the Visual Language System */
 const BORDER_STATE_COLORS: Record<string, Color3> = {
-  idle:      new Color3(0.15, 0.15, 0.18),         // dim neutral (no exact PALETTE match)
-  reach:     emissive(PALETTE.ALERT, INTENSITY.HIGH),
-  fever:     emissive(PALETTE.GOLD, INTENSITY.HIGH),
-  jackpot:   Color3.White(),                         // strobe base — white flash
-  adventure: emissive(PALETTE.PURPLE, INTENSITY.ACTIVE),
+  idle:        new Color3(0.15, 0.15, 0.18),         // dim neutral (no exact PALETTE match)
+  reach:       emissive(PALETTE.ALERT, INTENSITY.HIGH),
+  fever:       emissive(PALETTE.GOLD, INTENSITY.HIGH),
+  jackpot:     Color3.White(),                         // strobe base — white flash
+  adventure:   emissive(PALETTE.PURPLE, INTENSITY.ACTIVE),
+  portal_open: emissive(PALETTE.CYAN, INTENSITY.BURST), // wormhole cyan burst
+  escape:      emissive(PALETTE.ALERT, INTENSITY.HIGH),  // urgent orange-red
 }
 
 /** Cyan settle colour after jackpot strobe — uses the Visual Language System */

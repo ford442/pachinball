@@ -128,6 +128,31 @@ export const STATE_SHADER_COLORS = {
 } as const
 
 // ============================================================================
+// TIMER COLORS - Countdown timer warning states
+// ============================================================================
+
+/**
+ * Hex color tokens for the HUD campaign countdown timer.
+ * Color shifts from SAFE → CAUTION → WARNING → DANGER as time runs out.
+ * Used by GameUIManager.updateCountdownTimer and any system that mirrors the
+ * timer state (e.g. cabinet neon, backbox shader tint).
+ */
+export const TIMER_COLORS = {
+  /** > 50 % remaining — all clear, bright green */
+  SAFE:    '#00ff88',
+  /** 20–50 % remaining — proceed with caution, yellow */
+  CAUTION: '#ffe600',
+  /** 10–20 % remaining — warning, orange */
+  WARNING: '#ff8800',
+  /** < 10 % remaining — critical danger, deep red (also pulses) */
+  DANGER:  '#ff2200',
+  /** Portal-open accent — cyan */
+  PORTAL:  PALETTE.CYAN,
+  /** Escape/timeout accent — alert orange-red */
+  ESCAPE:  PALETTE.ALERT,
+} as const
+
+// ============================================================================
 // MATERIAL PRESETS - Standardized PBR values
 // ============================================================================
 

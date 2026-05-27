@@ -1,5 +1,6 @@
 // src/game/game-ui.ts
 import type { Scene } from '@babylonjs/core'
+import { TIMER_COLORS } from '../game-elements/visual-language'
 
 export interface PopupConfig {
   duration?: number
@@ -435,21 +436,25 @@ export class GameUIManager {
 
     let color: string
     if (ratio > 0.5) {
-      color = '#00ff88'
+      color = TIMER_COLORS.SAFE
     } else if (ratio > 0.3) {
-      color = '#ffe600'
+      color = TIMER_COLORS.CAUTION
     } else if (ratio > 0.15) {
-      color = '#ff8800'
+      color = TIMER_COLORS.WARNING
     } else {
-      color = '#ff2200'
+      color = TIMER_COLORS.DANGER
     }
 
     timerEl.textContent = `⏱ ${display}`
     timerEl.style.color = color
     timerEl.style.borderColor = color
 
-    // Pulse animation when critically low (ratio === 0 means timer expired — no need to pulse)
-    if (ratio > 0 && ratio <= 0.15) {
+    // Pulse animation when critically low (ratio === 0 means timer expired — no need to pulse).
+    // Suppressed when the user has opted in to reduced motion.
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (!prefersReducedMotion && ratio > 0 && ratio <= 0.15) {
       timerEl.style.animation = 'campaignTimerPulse 0.6s ease-in-out infinite'
       this.ensureTimerPulseKeyframe()
     } else {
