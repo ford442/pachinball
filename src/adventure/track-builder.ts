@@ -30,6 +30,7 @@ import {
   MASK_GREEN,
   MASK_BLUE,
 } from './adventure-types'
+import { INTENSITY, emissive } from '../game-elements/visual-language'
 
 export abstract class TrackBuilder {
   protected scene: Scene
@@ -578,12 +579,12 @@ export abstract class TrackBuilder {
 
     const ringMaterial = new StandardMaterial('exitPortalRingMat', this.scene)
     ringMaterial.diffuseColor = Color3.Black()
-    ringMaterial.emissiveColor = Color3.FromHexString(ringColorHex).scale(1.4)
+    ringMaterial.emissiveColor = emissive(ringColorHex, INTENSITY.HIGH)
     ring.material = ringMaterial
 
     const coreMaterial = new StandardMaterial('exitPortalCoreMat', this.scene)
     coreMaterial.diffuseColor = Color3.Black()
-    coreMaterial.emissiveColor = Color3.FromHexString(coreColorHex).scale(0.8)
+    coreMaterial.emissiveColor = emissive(coreColorHex, INTENSITY.ACTIVE)
     coreMaterial.alpha = 0.72
     core.material = coreMaterial
 

@@ -29,7 +29,7 @@ import type { Scene } from '@babylonjs/core'
 import type { TableMapType, TableMapConfig } from '../shaders/lcd-table'
 import type { DisplaySystem } from '../display'
 import type { SoundSystem } from './sound-system'
-import { color } from './visual-language'
+import { PALETTE, color } from './visual-language'
 
 export type WorldMode = 'fixed' | 'dynamic'
 
@@ -50,6 +50,10 @@ export interface ZoneMechanic {
   type: 'bumper' | 'target' | 'ramp' | 'portal' | 'collectible'
   position: Vector3
   properties?: Record<string, unknown>
+}
+
+interface PortalMechanicProperties {
+  kind?: 'success' | 'timeout'
 }
 
 export interface DynamicWorldConfig {
@@ -239,7 +243,7 @@ export class DynamicWorld {
       case 'collectible':
         return this.createCollectible(mechanic.position)
       case 'portal':
-        return this.createPortal(mechanic.position, mechanic.properties)
+        return this.createPortal(mechanic.position, mechanic.properties as PortalMechanicProperties | undefined)
       default:
         return null
     }
@@ -303,10 +307,10 @@ export class DynamicWorld {
     return collectible
   }
 
-  private createPortal(pos: Vector3, properties?: Record<string, unknown>): Mesh {
-    const kind = properties?.['kind'] === 'timeout' ? 'timeout' : 'success'
-    const ringColor = kind === 'success' ? '#00d9ff' : '#ff4400'
-    const coreColor = kind === 'success' ? '#ffd700' : '#aa2244'
+  private createPortal(pos: Vector3, properties?: PortalMechanicProperties): Mesh {
+    const kind = properties?.kind === 'timeout' ? 'timeout' : 'success'
+    const ringColor = kind === 'success' ? PALETTE.CYAN : PALETTE.ALERT
+    const coreColor = kind === 'success' ? PALETTE.GOLD : PALETTE.MAGENTA
 
     const portal = MeshBuilder.CreateTorus(
       'zonePortal',

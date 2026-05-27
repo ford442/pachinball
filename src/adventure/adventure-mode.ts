@@ -20,6 +20,7 @@ import { CAMERA_PRESETS } from './camera-presets'
 import { AdventureTrackType, type AdventureCallback, type CameraPreset } from './adventure-types'
 import { CameraEasing } from './camera-easing'
 import { getNextAdventureTrack, getTrackStartAnchor } from './portal-routing'
+import { PALETTE } from '../game-elements/visual-language'
 
 // Import all track builders
 import { buildNeonHelix } from './tracks/neon-helix'
@@ -295,8 +296,8 @@ export class AdventureMode extends TrackBuilder {
 
     const position = this.getExitPortalPosition(trackId, mode)
     const isSuccess = kind === 'success'
-    const ringHex = isSuccess ? '#00d9ff' : '#ff4400'
-    const coreHex = isSuccess ? '#ffd700' : '#aa2244'
+    const ringHex = isSuccess ? PALETTE.CYAN : PALETTE.ALERT
+    const coreHex = isSuccess ? PALETTE.GOLD : PALETTE.MAGENTA
     const portalRadius = mode === 'EXTENDED_MAP' ? 2.6 : 2.1
     const portalDepth = mode === 'EXTENDED_MAP' ? 1.0 : 0.8
 
@@ -336,9 +337,7 @@ export class AdventureMode extends TrackBuilder {
 
     portal.root.dispose()
 
-    if (this.world.getRigidBody(portal.sensor.handle)) {
-      this.world.removeRigidBody(portal.sensor)
-    }
+    this.world.removeRigidBody(portal.sensor)
   }
 
   private getExitPortalPosition(trackId: AdventureTrackType, mode: ExitPortalWorldMode): Vector3 {
@@ -356,31 +355,38 @@ export class AdventureMode extends TrackBuilder {
     portal.root.rotation.z += dt * (portal.kind === 'success' ? 2.5 : 3.5)
 
     const pulse = 0.85 + Math.sin(portal.animationTime * (portal.kind === 'success' ? 6.0 : 8.0)) * 0.25
-    portal.ringMaterial.emissiveColor = portal.ringBase.scale(1.2 * pulse)
-    portal.coreMaterial.emissiveColor = portal.coreBase.scale(0.85 * pulse)
-
-    const ball = ballBodies[0]
-    if (!ball) return
+    portal.ringBase.scaleToRef(1.2 * pulse, portal.ringMaterial.emissiveColor)
+    portal.coreBase.scaleToRef(0.85 * pulse, portal.coreMaterial.emissiveColor)
 
     const sensorCollider = portal.sensor.collider(0)
-    const ballCollider = ball.collider(0)
-    if (!sensorCollider || !ballCollider) return
+    if (!sensorCollider) return
 
-    if (!this.world.intersectionPair(sensorCollider, ballCollider)) return
+    const isAnyBallInside = ballBodies.some((candidateBall) => {
+      const ballCollider = candidateBall.collider(0)
+      return !!ballCollider && this.world.intersectionPair(sensorCollider, ballCollider)
+    })
+    if (!isAnyBallInside) return
 
     const nextTrack = getNextAdventureTrack(portal.trackId)
     const teleportPos = getTrackStartAnchor(nextTrack)
 
-    ball.setLinvel({ x: 0, y: 0, z: 0 }, true)
-    ball.setAngvel({ x: 0, y: 0, z: 0 }, true)
-    ball.setTranslation({ x: teleportPos.x, y: teleportPos.y, z: teleportPos.z }, true)
+    for (const [index, ballBody] of ballBodies.entries()) {
+      const lateralOffset = index * 0.35
+      ballBody.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      ballBody.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      ballBody.setTranslation({
+        x: teleportPos.x + lateralOffset,
+        y: teleportPos.y,
+        z: teleportPos.z,
+      }, true)
+    }
 
     this.onEvent?.('PORTAL_ENTERED', {
       id: portal.id,
       trackId: portal.trackId,
       nextTrack,
       kind: portal.kind,
-      position: new Vector3(portal.root.position.x, portal.root.position.y, portal.root.position.z),
+      position: portal.root.position.clone(),
       teleportPosition: teleportPos.clone(),
     })
 

@@ -56,6 +56,21 @@ import { isAdventureTrackType } from '../adventure'
 
 import type { Game } from '../game'
 
+interface PortalActivatedEventData {
+  trackId: AdventureTrackType
+  kind: 'success' | 'timeout'
+  mode: 'STATIONARY_TABLE' | 'EXTENDED_MAP'
+}
+
+interface PortalEnteredEventData {
+  id: string
+  trackId: AdventureTrackType
+  nextTrack: AdventureTrackType
+  kind: 'success' | 'timeout'
+  position: Vector3
+  teleportPosition: Vector3
+}
+
 export class GameSystemsInitializer {
   constructor(private game: Game) {}
 
@@ -257,11 +272,7 @@ export class GameSystemsInitializer {
             break
           }
           case 'PORTAL_ACTIVATED': {
-            const portalData = data as {
-              trackId: AdventureTrackType
-              kind: 'success' | 'timeout'
-              mode: 'STATIONARY_TABLE' | 'EXTENDED_MAP'
-            }
+            const portalData = data as PortalActivatedEventData
             this.game.display?.setStoryText(
               portalData.kind === 'success'
                 ? `EXIT PORTAL ONLINE: ${portalData.trackId.replace(/_/g, ' ')}`
@@ -279,14 +290,7 @@ export class GameSystemsInitializer {
             break
           }
           case 'PORTAL_ENTERED': {
-            const portalData = data as {
-              id: string
-              trackId: AdventureTrackType
-              nextTrack: AdventureTrackType
-              kind: 'success' | 'timeout'
-              position: Vector3
-              teleportPosition: Vector3
-            }
+            const portalData = data as PortalEnteredEventData
             this.game.display?.setStoryText(`WORMHOLE JUMP: ${portalData.nextTrack.replace(/_/g, ' ')}`)
             this.game.eventBus.emit('portal:entered', {
               id: portalData.id,
@@ -310,11 +314,7 @@ export class GameSystemsInitializer {
       })
 
       this.game.eventBus.on('portal:open', ({ trackId, kind, mode }) => {
-        const activeZone = this.game.adventureMode?.getCurrentZone()
-        const resolvedTrack = isAdventureTrackType(trackId)
-          ? trackId
-          : (activeZone || AdventureTrackType.NEON_HELIX)
-
+        const resolvedTrack = this.resolvePortalTrack(trackId)
         const resolvedMode = mode || (this.game.gameMode === 'dynamic' ? 'EXTENDED_MAP' : 'STATIONARY_TABLE')
         this.game.adventureMode?.activateExitPortal(resolvedTrack, kind, resolvedMode)
       })
@@ -342,6 +342,19 @@ export class GameSystemsInitializer {
       this.game.uiManager?.showLoadingState(false, 'cosmetic')
     })
     this.game.scheduleCosmeticSceneBuild()
+  }
+
+  private resolvePortalTrack(trackId: string): AdventureTrackType {
+    if (isAdventureTrackType(trackId)) {
+      return trackId
+    }
+
+    const activeZone = this.game.adventureMode?.getCurrentZone()
+    if (activeZone && isAdventureTrackType(activeZone)) {
+      return activeZone
+    }
+
+    return AdventureTrackType.NEON_HELIX
   }
 
   public async postInitManagers(): Promise<void> {

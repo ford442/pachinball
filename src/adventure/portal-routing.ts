@@ -68,7 +68,7 @@ export function getNextAdventureTrack(track: AdventureTrackType): AdventureTrack
 }
 
 export function getTrackStartAnchor(track: AdventureTrackType): Vector3 {
-  return TRACK_START_ANCHORS[track]?.clone() ?? TRACK_START_ANCHORS[AdventureTrackType.NEON_HELIX].clone()
+  return TRACK_START_ANCHORS[track].clone()
 }
 
 export function isAdventureTrackType(value: string): value is AdventureTrackType {
