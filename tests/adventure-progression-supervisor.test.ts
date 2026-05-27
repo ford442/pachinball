@@ -46,7 +46,7 @@ describe('TRACK_CATALOG modeType alternation', () => {
     }
   })
 
-  it('uses the expected mode/time/penalty values while keeping recommendedScore targets unchanged', () => {
+  it('uses the expected mode/time/penalty/recommendedScore values', () => {
     expect(TRACK_CATALOG['NEON_HELIX']).toMatchObject({ modeType: 'EXTENDED_MAP', timeLimitSeconds: 120, timeoutPenaltyMultiplier: 0.55, recommendedScore: 50000 })
     expect(TRACK_CATALOG['CYBER_CORE']).toMatchObject({ modeType: 'STATIONARY_TABLE', timeLimitSeconds: 90, timeoutPenaltyMultiplier: 0.45, recommendedScore: 75000 })
     expect(TRACK_CATALOG['QUANTUM_GRID']).toMatchObject({ modeType: 'EXTENDED_MAP', timeLimitSeconds: 150, timeoutPenaltyMultiplier: 0.50, recommendedScore: 100000 })
