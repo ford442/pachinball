@@ -15,3 +15,7 @@ npm run dev
 ```
 
 Open http://localhost:5173/ and press **Space** to flip the paddle. Hit the bumpers to score points! Press **R** to reset the ball and score.
+
+## Campaign Mode
+
+The recommended progression path is the alternating A/B campaign system (`EXTENDED_MAP` <-> `STATIONARY_TABLE`) driven by `AdventureTrackProgression` + `AdventureProgressionSupervisor`. See `docs/ADVENTURE_CAMPAIGN.md`.

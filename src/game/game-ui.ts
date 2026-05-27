@@ -519,7 +519,7 @@ export class GameUIManager {
     const subColor = isSuccess ? '#aaffee' : '#ffaa88'
 
     overlay.innerHTML = `
-      <div class="cpo-headline" style="
+      <div class="cpo-headline" data-testid="campaign-portal-headline" style="
         font-family: 'Orbitron', monospace;
         font-size: clamp(1.8rem, 5vw, 3.2rem);
         font-weight: 900;

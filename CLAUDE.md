@@ -47,6 +47,10 @@ Balls are spawned by `BallManager` according to the weighted distribution in `co
 
 Unit tests (`tests/`) run in a Node environment via Vitest. Babylon.js and Rapier are fully mocked — do not import real engine code inside test files. Playwright E2E tests launch the full Vite dev server and access `window.game` for assertions; see `tests/verify_prism_core.spec.ts` for the pattern.
 
+### Campaign progression docs
+
+Use `docs/ADVENTURE_CAMPAIGN.md` for the current A/B alternating campaign model and portal lifecycle. `AdventureTrackProgression` + `AdventureProgressionSupervisor` are the campaign source of truth; `AdventureState` remains legacy/free-form progression.
+
 ### WebGPU / shader authoring
 
 Shaders in `src/shaders/` use Babylon.js `ShaderMaterial`. `display-shader.ts` targets WebGPU (WGSL); all shaders have a WebGL/canvas fallback path. Check for `engine.isWebGPU` before using WebGPU-only features.
