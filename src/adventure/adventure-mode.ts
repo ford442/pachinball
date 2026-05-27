@@ -21,6 +21,7 @@ import { AdventureTrackType, type AdventureCallback, type CameraPreset } from '.
 import { CameraEasing } from './camera-easing'
 import { getNextAdventureTrack, getTrackStartAnchor } from './portal-routing'
 import { PALETTE } from '../game-elements/visual-language'
+import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
 
 // Import all track builders
 import { buildNeonHelix } from './tracks/neon-helix'
@@ -341,6 +342,11 @@ export class AdventureMode extends TrackBuilder {
   }
 
   private getExitPortalPosition(trackId: AdventureTrackType, mode: ExitPortalWorldMode): Vector3 {
+    // Use the builder-declared position when available (set by addExitPortal())
+    if (this.portalPosition) {
+      return this.portalPosition.clone()
+    }
+    // Fallback: generic formula relative to the track start anchor
     const anchor = getTrackStartAnchor(trackId)
     const zOffset = mode === 'EXTENDED_MAP' ? 95 : 55
     const yOffset = mode === 'EXTENDED_MAP' ? 2.2 : 1.4
@@ -471,6 +477,10 @@ export class AdventureMode extends TrackBuilder {
    * Build the specified track
    */
   private buildTrack(trackType: AdventureTrackType): void {
+    // Reset per-track state so each builder starts fresh
+    this.portalPosition = null
+    this.currentTrackInfo = TRACK_CATALOG[trackType] ?? null
+
     switch (trackType) {
       case AdventureTrackType.CYBER_CORE:
         this.currentStartPos = new Vector3(0, 20, 0)

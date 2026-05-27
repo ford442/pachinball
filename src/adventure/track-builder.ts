@@ -30,6 +30,7 @@ import {
   MASK_GREEN,
   MASK_BLUE,
 } from './adventure-types'
+import type { TrackInfo } from '../game-elements/adventure-track-progression'
 import { INTENSITY, emissive } from '../game-elements/visual-language'
 
 export abstract class TrackBuilder {
@@ -53,6 +54,16 @@ export abstract class TrackBuilder {
   protected currentStartPos: Vector3 = Vector3.Zero()
   protected timeAccumulator = 0
   protected currentBallMesh: Mesh | null = null
+
+  /** Campaign catalog info for the currently active track; null for free-roam. */
+  protected currentTrackInfo: TrackInfo | null = null
+
+  /**
+   * Builder-defined exit portal position, stored by addExitPortal().
+   * AdventureMode.activateExitPortal() will use this when set, falling back
+   * to a generic formula when null.
+   */
+  protected portalPosition: Vector3 | null = null
 
   // Communication
   protected onEvent: AdventureCallback | null = null
@@ -509,6 +520,27 @@ export abstract class TrackBuilder {
       center: pos,
       strength: -50.0 // Repel
     })
+  }
+
+  /**
+   * Declare the canonical exit portal position for this track.
+   *
+   * Call this from within a track builder function to record where the exit
+   * portal should appear when the campaign supervisor activates it (on goal
+   * completion or timer expiry). The position is consumed by
+   * AdventureMode.activateExitPortal(), which falls back to a generic formula
+   * when no position has been registered.
+   *
+   * @param position        World-space position of the portal centre.
+   * @param _rotation       Optional orientation (reserved, not yet used).
+   * @param _isActiveInitially  Reserved for future dormant portal visuals.
+   */
+  protected addExitPortal(
+    position: Vector3,
+    _rotation?: Quaternion,
+    _isActiveInitially = false
+  ): void {
+    this.portalPosition = position.clone()
   }
 
   /**

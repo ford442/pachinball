@@ -6,6 +6,7 @@
 
 import type { Vector3, Quaternion, Mesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { TrackInfo } from '../game-elements/adventure-track-progression'
 
 // Event callback signature for communicating with Game.ts
 export type AdventureCallback = (event: string, data?: unknown) => void
@@ -158,6 +159,8 @@ export interface TrackBuilderContext {
   world: RAPIER.World
   rapier: typeof RAPIER
   currentStartPos: Vector3
+  /** Track metadata from the campaign catalog, or null for free-roam tracks. */
+  currentTrackInfo: TrackInfo | null
   adventureTrack: import('@babylonjs/core').Mesh[]
   materials: import('@babylonjs/core').StandardMaterial[]
   adventureBodies: RAPIER.RigidBody[]
@@ -215,4 +218,13 @@ export interface TrackBuilderContext {
   ) => void
   createChromaGate: (pos: Vector3, color: 'RED' | 'GREEN' | 'BLUE') => void
   createArcPylon: (pos: Vector3, mat: import('@babylonjs/core').StandardMaterial) => void
+  /**
+   * Declare the exit portal position for this track.
+   * The portal is activated by AdventureMode.activateExitPortal() when the
+   * supervisor signals success or timeout.
+   * @param position   World-space position of the portal centre.
+   * @param rotation   Optional orientation (defaults to facing +Z).
+   * @param isActiveInitially  Reserved for future use (dormant placeholders).
+   */
+  addExitPortal: (position: Vector3, rotation?: Quaternion, isActiveInitially?: boolean) => void
 }
