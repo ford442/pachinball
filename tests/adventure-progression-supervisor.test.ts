@@ -51,7 +51,7 @@ describe('TRACK_CATALOG modeType alternation', () => {
     const progression = new AdventureTrackProgression()
     const supervisor = new AdventureProgressionSupervisor(bus, progression)
 
-    let portalMode: string | undefined = undefined
+    let portalMode: string | undefined
     bus.on('portal:open', (payload) => { portalMode = payload.mode })
 
     supervisor.startTrack('NEON_HELIX', 0)

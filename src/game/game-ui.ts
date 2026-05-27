@@ -448,8 +448,8 @@ export class GameUIManager {
     timerEl.style.color = color
     timerEl.style.borderColor = color
 
-    // Pulse animation when critically low
-    if (ratio <= 0.15 && ratio > 0) {
+    // Pulse animation when critically low (ratio === 0 means timer expired — no need to pulse)
+    if (ratio > 0 && ratio <= 0.15) {
       timerEl.style.animation = 'campaignTimerPulse 0.6s ease-in-out infinite'
       this.ensureTimerPulseKeyframe()
     } else {
@@ -501,8 +501,24 @@ export class GameUIManager {
     const subColor = isSuccess ? '#aaffee' : '#ffaa88'
 
     overlay.innerHTML = `
-      <div class="cpo-headline">${headline}</div>
-      <div class="cpo-subtitle">${subtitle}</div>
+      <div class="cpo-headline" style="
+        font-family: 'Orbitron', monospace;
+        font-size: clamp(1.8rem, 5vw, 3.2rem);
+        font-weight: 900;
+        letter-spacing: 6px;
+        text-transform: uppercase;
+        color: ${accentColor};
+        text-shadow: 0 0 18px ${accentColor}, 0 0 40px ${accentColor},
+                     2px 0 0 rgba(255,0,0,0.25), -2px 0 0 rgba(0,255,255,0.25);
+      ">${headline}</div>
+      <div class="cpo-subtitle" style="
+        margin-top: 10px;
+        font-family: 'Orbitron', monospace;
+        font-size: clamp(0.9rem, 2vw, 1.3rem);
+        letter-spacing: 3px;
+        color: ${subColor};
+        opacity: 0.85;
+      ">${subtitle}</div>
     `
     overlay.style.cssText = `
       position: absolute;
@@ -516,7 +532,7 @@ export class GameUIManager {
       animation: cpoFadeIn 0.35s ease-out forwards;
     `
 
-    // Inject scoped styles once
+    // Inject shared keyframe animations once (no color values — those are inline)
     if (!document.getElementById('campaign-portal-overlay-style')) {
       const style = document.createElement('style')
       style.id = 'campaign-portal-overlay-style'
@@ -528,27 +544,6 @@ export class GameUIManager {
         @keyframes cpoFadeOut {
           from { opacity: 1; }
           to   { opacity: 0; }
-        }
-        #campaign-portal-overlay .cpo-headline {
-          font-family: 'Orbitron', monospace;
-          font-size: clamp(1.8rem, 5vw, 3.2rem);
-          font-weight: 900;
-          letter-spacing: 6px;
-          text-transform: uppercase;
-          color: ${accentColor};
-          text-shadow:
-            0 0 18px ${accentColor},
-            0 0 40px ${accentColor},
-            2px 0 0 rgba(255,0,0,0.25),
-            -2px 0 0 rgba(0,255,255,0.25);
-        }
-        #campaign-portal-overlay .cpo-subtitle {
-          margin-top: 10px;
-          font-family: 'Orbitron', monospace;
-          font-size: clamp(0.9rem, 2vw, 1.3rem);
-          letter-spacing: 3px;
-          color: ${subColor};
-          opacity: 0.85;
         }
       `
       document.head.appendChild(style)

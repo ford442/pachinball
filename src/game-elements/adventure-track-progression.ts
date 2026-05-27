@@ -16,7 +16,8 @@ export interface TrackInfo {
   recommendedScore: number
   /** Time limit in seconds for this stage. Range: 90–180 s. */
   timeLimitSeconds: number
-  /** Score multiplier applied when the timer expires before the goal is met (0.35–0.6). */
+  /** Score multiplier applied when the timer expires before the goal is met.
+   *  Actual catalog values span 0.40–0.55 within the allowed 0.35–0.6 design range. */
   timeoutPenaltyMultiplier: number
   unlockedBy?: string // Track ID that must be completed to unlock this
   theme: string
