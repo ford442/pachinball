@@ -3,12 +3,40 @@ import { test, expect, type Page } from '@playwright/test'
 test.setTimeout(180_000)
 test.describe.configure({ mode: 'serial' })
 
+interface TestAdventureMode {
+  isActive: () => boolean
+  onEvent?: (event: string, data?: unknown) => void
+}
+
+interface TestGame {
+  score: number
+  display?: { storyText?: string }
+  adventureMode?: TestAdventureMode
+  endAdventureMode: () => void
+  startAdventureMode: () => void
+  adventureProgressionSupervisor?: {
+    startTrack: (trackId: string, initialScore?: number) => void
+    update: (dt: number, currentScore: number) => void
+    getActiveMultiplier?: () => number
+  }
+  adventureTrackProgression?: {
+    getCurrentTrack?: () => string
+    isTrackCompleted: (trackId: string) => boolean
+    getTrackInfo?: (trackId: string) => { timeLimitSeconds: number } | null
+    getStats?: () => { totalRewardsEarned: number }
+  }
+  uiManager?: {
+    updateCountdownTimer: (remaining: number, limit: number) => void
+    hideCountdownTimer: () => void
+    prefersReducedMotion?: boolean
+  }
+}
+
 async function bootGame(page: Page): Promise<void> {
   await page.goto('http://localhost:5173')
   const startBtn = page.locator('#start-btn')
   await expect(startBtn).toBeVisible({ timeout: 30_000 })
   await startBtn.click()
-  await page.waitForTimeout(2500)
   await page.waitForFunction(() => {
     const g = (window as unknown as Record<string, unknown>).game as
       | { eventBus?: unknown; adventureProgressionSupervisor?: unknown; adventureTrackProgression?: unknown }
@@ -31,21 +59,7 @@ test.describe('Campaign progression E2E', () => {
 
   test('A -> B -> A success flow with portal entry advancement', async () => {
     const result = await page.evaluate(() => {
-      const g = (window as unknown as Record<string, unknown>).game as {
-        score: number
-        display?: { storyText?: string }
-        adventureMode?: { isActive: () => boolean; onEvent?: (event: string, data?: unknown) => void }
-        endAdventureMode: () => void
-        startAdventureMode: () => void
-        adventureProgressionSupervisor?: {
-          startTrack: (trackId: string, initialScore?: number) => void
-          update: (dt: number, currentScore: number) => void
-        }
-        adventureTrackProgression?: {
-          getCurrentTrack: () => string
-          isTrackCompleted: (trackId: string) => boolean
-        }
-      }
+      const g = (window as unknown as Record<string, unknown>).game as TestGame
 
       if (g.adventureMode?.isActive()) g.endAdventureMode()
       g.startAdventureMode()
@@ -57,7 +71,7 @@ test.describe('Campaign progression E2E', () => {
         throw new Error('Campaign systems are not initialized')
       }
 
-      const runSuccessPortal = (trackId: string, nextTrack: string, score: number) => {
+      const simulateSuccessPortalEntry = (trackId: string, nextTrack: string, score: number) => {
         g.score = score
         supervisor.startTrack(trackId, 0)
         supervisor.update(0.1, score)
@@ -85,11 +99,11 @@ test.describe('Campaign progression E2E', () => {
       })
 
       // CYBER_CORE (B) -> QUANTUM_GRID (A)
-      runSuccessPortal('CYBER_CORE', 'QUANTUM_GRID', 140_000)
+      simulateSuccessPortalEntry('CYBER_CORE', 'QUANTUM_GRID', 140_000)
 
       return {
         firstPortalMessage,
-        currentTrack: progression.getCurrentTrack(),
+        currentTrack: progression.getCurrentTrack?.() ?? null,
         neonCompleted: progression.isTrackCompleted('NEON_HELIX'),
         cyberCompleted: progression.isTrackCompleted('CYBER_CORE'),
       }
@@ -103,23 +117,7 @@ test.describe('Campaign progression E2E', () => {
 
   test('timeout path opens emergency portal and applies penalized advance messaging', async () => {
     const result = await page.evaluate(() => {
-      const g = (window as unknown as Record<string, unknown>).game as {
-        score: number
-        display?: { storyText?: string }
-        adventureMode?: { isActive: () => boolean; onEvent?: (event: string, data?: unknown) => void }
-        endAdventureMode: () => void
-        startAdventureMode: () => void
-        adventureProgressionSupervisor?: {
-          startTrack: (trackId: string, initialScore?: number) => void
-          update: (dt: number, currentScore: number) => void
-          getActiveMultiplier: () => number
-        }
-        adventureTrackProgression?: {
-          getTrackInfo: (trackId: string) => { timeLimitSeconds: number } | null
-          isTrackCompleted: (trackId: string) => boolean
-          getStats: () => { totalRewardsEarned: number }
-        }
-      }
+      const g = (window as unknown as Record<string, unknown>).game as TestGame
 
       if (g.adventureMode?.isActive()) g.endAdventureMode()
       g.startAdventureMode()
@@ -131,14 +129,14 @@ test.describe('Campaign progression E2E', () => {
         throw new Error('Campaign systems are not initialized')
       }
 
-      const limit = progression.getTrackInfo('NEON_HELIX')?.timeLimitSeconds ?? 120
+      const limit = progression.getTrackInfo?.('NEON_HELIX')?.timeLimitSeconds ?? 120
       g.score = 1_000
       supervisor.startTrack('NEON_HELIX', 1_000)
       supervisor.update(limit + 1, 1_000)
 
       const storyText = g.display?.storyText ?? ''
-      const overlayText = document.querySelector('#campaign-portal-overlay .cpo-headline')?.textContent ?? ''
-      const timeoutMultiplier = supervisor.getActiveMultiplier()
+      const overlayText = document.querySelector('#campaign-portal-overlay [data-testid="campaign-portal-headline"]')?.textContent ?? ''
+      const timeoutMultiplier = supervisor.getActiveMultiplier?.() ?? 1
 
       callback('PORTAL_ENTERED', {
         id: 'NEON_HELIX-exit-portal',
@@ -154,7 +152,7 @@ test.describe('Campaign progression E2E', () => {
         storyText,
         overlayText,
         completed: progression.isTrackCompleted('NEON_HELIX'),
-        totalRewardsEarned: progression.getStats().totalRewardsEarned,
+        totalRewardsEarned: progression.getStats?.().totalRewardsEarned ?? 0,
       }
     })
 
@@ -167,13 +165,7 @@ test.describe('Campaign progression E2E', () => {
 
   test('countdown HUD shows urgency colors and respects reduced-motion pulse suppression', async () => {
     const timerState = await page.evaluate(() => {
-      const g = (window as unknown as Record<string, unknown>).game as {
-        uiManager?: {
-          updateCountdownTimer: (remaining: number, limit: number) => void
-          hideCountdownTimer: () => void
-          prefersReducedMotion?: boolean
-        }
-      }
+      const g = (window as unknown as Record<string, unknown>).game as TestGame
       const ui = g.uiManager
       if (!ui) throw new Error('UI manager not available')
 

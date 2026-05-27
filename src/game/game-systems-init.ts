@@ -293,7 +293,7 @@ export class GameSystemsInitializer {
           }
           case 'PORTAL_ACTIVATED': {
             const portalData = data as PortalActivatedEventData
-            const shouldUseFlashes = !this.game.accessibility.reducedMotion && this.game.accessibility.flashFrequencyMax > 1
+            const shouldUseFlashes = this.shouldUseFlashEffects()
             this.game.display?.setStoryText(
               portalData.kind === 'success'
                 ? `EXIT PORTAL ONLINE: ${portalData.trackId.replace(/_/g, ' ')}`
@@ -353,7 +353,7 @@ export class GameSystemsInitializer {
       this.game.eventBus.on('portal:open', ({ trackId, kind, mode }) => {
         const resolvedTrack = this.resolvePortalTrack(trackId)
         const resolvedMode = mode || (this.game.gameMode === 'dynamic' ? 'EXTENDED_MAP' : 'STATIONARY_TABLE')
-        const shouldUseFlashes = !this.game.accessibility.reducedMotion && this.game.accessibility.flashFrequencyMax > 1
+        const shouldUseFlashes = this.shouldUseFlashEffects()
         this.game.adventureMode?.activateExitPortal(resolvedTrack, kind, resolvedMode)
         // Register the portal sensor handle so the collision dispatcher skips it.
         // Portal contact is detected via intersectionPair queries; Rapier collision
@@ -426,6 +426,12 @@ export class GameSystemsInitializer {
     }
 
     return AdventureTrackType.NEON_HELIX
+  }
+
+  private shouldUseFlashEffects(): boolean {
+    // Gate rapid flash effects behind both reduced-motion and safety threshold
+    // preferences so portal transitions stay accessible.
+    return !this.game.accessibility.reducedMotion && this.game.accessibility.flashFrequencyMax > 1
   }
 
   public async postInitManagers(): Promise<void> {
