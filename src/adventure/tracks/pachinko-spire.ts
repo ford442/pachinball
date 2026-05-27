@@ -1,16 +1,21 @@
 /**
  * Pachinko Spire Track
- * 
- * A vertical pachinko-style track with pins and rotating mills.
+ *
+ * STATIONARY_TABLE — a vertical pachinko-style arena with a dense pin field,
+ * contra-rotating mills, side reset basins, and an exit portal above the
+ * central catch basin.
  */
 
 import { Vector3, MeshBuilder, Quaternion } from '@babylonjs/core'
 import type { TrackBuilder } from '../track-builder'
+import type { TrackInfo } from '../../game-elements/adventure-track-progression'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildPachinkoSpire(builder: TrackBuilder): void {
   const spireMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#FFFFFF")
+  const accentMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#ffdd00")
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
+  const currentTrackInfo = (builder as unknown as { currentTrackInfo: TrackInfo | null }).currentTrackInfo
   const scene = (builder as unknown as { scene: import('@babylonjs/core').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
   const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
@@ -18,6 +23,8 @@ export function buildPachinkoSpire(builder: TrackBuilder): void {
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
   const kinematicBindings = (builder as unknown as { kinematicBindings: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core').Mesh }[] }).kinematicBindings
   const resetSensors = (builder as unknown as { resetSensors: RAPIER.RigidBody[] }).resetSensors
+
+  const modeType = currentTrackInfo?.modeType ?? 'STATIONARY_TABLE'
 
   let currentPos = currentStartPos.clone()
   const heading = 0
@@ -117,7 +124,28 @@ export function buildPachinkoSpire(builder: TrackBuilder): void {
     const basinY = bottomPos.y - 2
     const basinZ = bottomPos.z
 
-    ;(builder as unknown as { createBasin: (...args: unknown[]) => void }).createBasin(new Vector3(0, basinY, basinZ), spireMat)
+    if (modeType === 'STATIONARY_TABLE') {
+      // Extra bumper ring above the central basin for a denser arena feel
+      const bumperRingY = basinY + 2
+      const bumperRingRadius = 4
+      const bumperCount = 6
+      for (let i = 0; i < bumperCount; i++) {
+        const angle = (i / bumperCount) * Math.PI * 2
+        const bx = Math.cos(angle) * bumperRingRadius
+        const bz = basinZ + Math.sin(angle) * bumperRingRadius
+        ;(builder as unknown as { createStaticCylinder: (...args: unknown[]) => void }).createStaticCylinder(
+          new Vector3(bx, bumperRingY, bz),
+          0.7, 1.0, accentMat
+        )
+      }
+    }
+
+    // Central catch basin — the goal for STATIONARY_TABLE
+    const centralBasinPos = new Vector3(0, basinY, basinZ)
+    ;(builder as unknown as { addExitPortal: (pos: Vector3) => void }).addExitPortal(
+      new Vector3(centralBasinPos.x, centralBasinPos.y + 1.6, centralBasinPos.z)
+    )
+    ;(builder as unknown as { createBasin: (...args: unknown[]) => void }).createBasin(centralBasinPos, spireMat)
 
     const createResetBasin = (x: number) => {
       const pos = new Vector3(x, basinY, basinZ)
