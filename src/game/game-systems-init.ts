@@ -251,7 +251,9 @@ export class GameSystemsInitializer {
         console.log(`Adventure Event: ${event}`)
         switch (event) {
           case 'START': {
-            const trackType = (data as AdventureTrackType | undefined) ?? this.game.adventureTrackProgression?.getCurrentTrack()
+            const currentTrack = this.game.adventureTrackProgression?.getCurrentTrack()
+            const fallbackTrackType = currentTrack && isAdventureTrackType(currentTrack) ? currentTrack : undefined
+            const trackType = (data as AdventureTrackType | undefined) ?? fallbackTrackType
             this.game.adventureManager?.startAdventure(trackType)
             this.game.eventBus.emit('adventure:start')
             this.game.eventBus.emit('display:set', DisplayState.ADVENTURE)

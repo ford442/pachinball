@@ -28,13 +28,13 @@ describe('TRACK_CATALOG modeType alternation', () => {
     expect(TRACK_CATALOG['PACHINKO_SPIRE'].modeType).toBe('STATIONARY_TABLE')
   })
 
-  it('SINGULARITY_WELL is STATIONARY_TABLE (position B)', () => {
-    expect(TRACK_CATALOG['SINGULARITY_WELL'].modeType).toBe('STATIONARY_TABLE')
+  it('SINGULARITY_WELL is EXTENDED_MAP (position A)', () => {
+    expect(TRACK_CATALOG['SINGULARITY_WELL'].modeType).toBe('EXTENDED_MAP')
   })
 
-  it('timeLimitSeconds is in the 90–180 s range for all tracks', () => {
+  it('timeLimitSeconds is in the 75–180 s range for all tracks', () => {
     for (const track of Object.values(TRACK_CATALOG)) {
-      expect(track.timeLimitSeconds).toBeGreaterThanOrEqual(90)
+      expect(track.timeLimitSeconds).toBeGreaterThanOrEqual(75)
       expect(track.timeLimitSeconds).toBeLessThanOrEqual(180)
     }
   })
@@ -44,6 +44,14 @@ describe('TRACK_CATALOG modeType alternation', () => {
       expect(track.timeoutPenaltyMultiplier).toBeGreaterThanOrEqual(0.35)
       expect(track.timeoutPenaltyMultiplier).toBeLessThanOrEqual(0.6)
     }
+  })
+
+  it('uses the expected mode/time/penalty values while keeping recommendedScore targets unchanged', () => {
+    expect(TRACK_CATALOG['NEON_HELIX']).toMatchObject({ modeType: 'EXTENDED_MAP', timeLimitSeconds: 120, timeoutPenaltyMultiplier: 0.55, recommendedScore: 50000 })
+    expect(TRACK_CATALOG['CYBER_CORE']).toMatchObject({ modeType: 'STATIONARY_TABLE', timeLimitSeconds: 90, timeoutPenaltyMultiplier: 0.45, recommendedScore: 75000 })
+    expect(TRACK_CATALOG['QUANTUM_GRID']).toMatchObject({ modeType: 'EXTENDED_MAP', timeLimitSeconds: 150, timeoutPenaltyMultiplier: 0.50, recommendedScore: 100000 })
+    expect(TRACK_CATALOG['PACHINKO_SPIRE']).toMatchObject({ modeType: 'STATIONARY_TABLE', timeLimitSeconds: 75, timeoutPenaltyMultiplier: 0.40, recommendedScore: 65000 })
+    expect(TRACK_CATALOG['SINGULARITY_WELL']).toMatchObject({ modeType: 'EXTENDED_MAP', timeLimitSeconds: 180, timeoutPenaltyMultiplier: 0.35, recommendedScore: 120000 })
   })
 
   it('portal:open event includes the track modeType', () => {
@@ -64,6 +72,16 @@ describe('TRACK_CATALOG modeType alternation', () => {
 // ─── AdventureProgressionSupervisor tests ────────────────────────────────────
 
 describe('AdventureProgressionSupervisor', () => {
+  it('exposes current track info and next track helper accessors', () => {
+    const progression = new AdventureTrackProgression()
+
+    expect(progression.getCurrentTrackInfo()?.id).toBe('NEON_HELIX')
+    expect(progression.getNextTrackId()).toBe('NEON_HELIX')
+
+    progression.completeTrack('NEON_HELIX', 50000, 0, 0)
+    expect(progression.getNextTrackId()).toBe('CYBER_CORE')
+  })
+
   it('resolves success, opens portal, and completes track with multiplier rewards', () => {
     const bus = new EventBus()
     const progression = new AdventureTrackProgression()

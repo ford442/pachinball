@@ -14,10 +14,10 @@ export interface TrackInfo {
   /** Mode type: EXTENDED_MAP (scrolling 3D landscape) or STATIONARY_TABLE (classic pinball arena). */
   modeType: TrackModeType
   recommendedScore: number
-  /** Time limit in seconds for this stage. Range: 90–180 s. */
+  /** Time limit in seconds for this stage. */
   timeLimitSeconds: number
   /** Score multiplier applied when the timer expires before the goal is met.
-   *  Actual catalog values span 0.40–0.55 within the allowed 0.35–0.6 design range. */
+   *  Typical catalog values span 0.35–0.60. */
   timeoutPenaltyMultiplier: number
   unlockedBy?: string // Track ID that must be completed to unlock this
   theme: string
@@ -41,7 +41,7 @@ export interface ProgressionState {
  *   2. CYBER_CORE          — B — STATIONARY_TABLE
  *   2. PACHINKO_SPIRE      — B — STATIONARY_TABLE (parallel branch from NEON_HELIX)
  *   3. QUANTUM_GRID        — A — EXTENDED_MAP
- *   4. SINGULARITY_WELL    — B — STATIONARY_TABLE
+ *   4. SINGULARITY_WELL    — A — EXTENDED_MAP
  */
 export const TRACK_CATALOG: Record<string, TrackInfo> = {
   'NEON_HELIX': {
@@ -62,8 +62,8 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     difficulty: 'medium',
     modeType: 'STATIONARY_TABLE',
     recommendedScore: 75000,
-    timeLimitSeconds: 120,
-    timeoutPenaltyMultiplier: 0.50,
+    timeLimitSeconds: 90,
+    timeoutPenaltyMultiplier: 0.45,
     unlockedBy: 'NEON_HELIX',
     theme: 'digital'
   },
@@ -75,7 +75,7 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     modeType: 'EXTENDED_MAP',
     recommendedScore: 100000,
     timeLimitSeconds: 150,
-    timeoutPenaltyMultiplier: 0.45,
+    timeoutPenaltyMultiplier: 0.50,
     unlockedBy: 'CYBER_CORE',
     theme: 'quantum'
   },
@@ -86,8 +86,8 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     difficulty: 'hard',
     modeType: 'STATIONARY_TABLE',
     recommendedScore: 65000,
-    timeLimitSeconds: 130,
-    timeoutPenaltyMultiplier: 0.50,
+    timeLimitSeconds: 75,
+    timeoutPenaltyMultiplier: 0.40,
     unlockedBy: 'NEON_HELIX',
     theme: 'retro'
   },
@@ -96,10 +96,10 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     name: 'Singularity Well',
     description: 'Enter a black hole. Gravity pulls everything inward. Expert only.',
     difficulty: 'expert',
-    modeType: 'STATIONARY_TABLE',
+    modeType: 'EXTENDED_MAP',
     recommendedScore: 120000,
     timeLimitSeconds: 180,
-    timeoutPenaltyMultiplier: 0.40,
+    timeoutPenaltyMultiplier: 0.35,
     unlockedBy: 'QUANTUM_GRID',
     theme: 'cosmic'
   }
@@ -218,6 +218,23 @@ export class AdventureTrackProgression {
    */
   getCurrentTrack(): string {
     return this.state.currentTrack
+  }
+
+  /**
+   * Get current track info
+   */
+  getCurrentTrackInfo(): TrackInfo | null {
+    return this.getTrackInfo(this.state.currentTrack)
+  }
+
+  /**
+   * Get next unlocked, uncompleted track id
+   */
+  getNextTrackId(): string | null {
+    const nextTrack = Object.values(TRACK_CATALOG).find((track) =>
+      this.isTrackUnlocked(track.id) && !this.isTrackCompleted(track.id)
+    )
+    return nextTrack?.id ?? null
   }
 
   /**
