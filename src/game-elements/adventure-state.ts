@@ -127,7 +127,13 @@ export const LEVEL_REWARDS: Record<string, UnlockableReward> = {
   },
 }
 
-// Define all adventure levels
+/**
+ * Legacy free-form adventure level list.
+ *
+ * Campaign progression truth now lives in AdventureTrackProgression +
+ * AdventureProgressionSupervisor (A/B alternating track system). Keep this list
+ * isolated for legacy level-select/reward flows only.
+ */
 export const ADVENTURE_LEVELS: AdventureLevel[] = [
   {
     id: 'level-1-neon',
@@ -282,6 +288,10 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
   },
 ]
 
+/**
+ * @deprecated Legacy progression store for free-form level goals/rewards.
+ * Use AdventureTrackProgression + AdventureProgressionSupervisor for campaign.
+ */
 export class AdventureState {
   private progress: AdventureProgress
   private currentLevel: AdventureLevel | null = null

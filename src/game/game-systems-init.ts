@@ -293,6 +293,7 @@ export class GameSystemsInitializer {
           }
           case 'PORTAL_ACTIVATED': {
             const portalData = data as PortalActivatedEventData
+            const shouldUseFlashes = !this.game.accessibility.reducedMotion && this.game.accessibility.flashFrequencyMax > 1
             this.game.display?.setStoryText(
               portalData.kind === 'success'
                 ? `EXIT PORTAL ONLINE: ${portalData.trackId.replace(/_/g, ' ')}`
@@ -302,16 +303,22 @@ export class GameSystemsInitializer {
               intensity: portalData.kind === 'success' ? 1.35 : 1.05,
               duration: 0.65,
             })
-            this.game.eventBus.emit('effect:flash', {
-              color: portalData.kind === 'success' ? '#00d9ff' : '#ff4400',
-              intensity: portalData.kind === 'success' ? 0.9 : 0.7,
-              duration: 0.45,
+            if (shouldUseFlashes) {
+              this.game.eventBus.emit('effect:flash', {
+                color: portalData.kind === 'success' ? '#00d9ff' : '#ff4400',
+                intensity: portalData.kind === 'success' ? 0.9 : 0.7,
+                duration: 0.45,
+              })
+            }
+            this.game.eventBus.emit('sound:play', {
+              soundKey: portalData.kind === 'success' ? 'portal-open-success' : 'portal-open-timeout',
             })
             break
           }
           case 'PORTAL_ENTERED': {
             const portalData = data as PortalEnteredEventData
             this.game.display?.setStoryText(`WORMHOLE JUMP: ${portalData.nextTrack.replace(/_/g, ' ')}`)
+            this.game.eventBus.emit('sound:play', { soundKey: 'portal-enter' })
             // Finalize the completed track through the supervisor.
             // Pass spatial context so the supervisor can merge it into the single
             // 'portal:entered' EventBus emission — no second emission needed here.
@@ -346,6 +353,7 @@ export class GameSystemsInitializer {
       this.game.eventBus.on('portal:open', ({ trackId, kind, mode }) => {
         const resolvedTrack = this.resolvePortalTrack(trackId)
         const resolvedMode = mode || (this.game.gameMode === 'dynamic' ? 'EXTENDED_MAP' : 'STATIONARY_TABLE')
+        const shouldUseFlashes = !this.game.accessibility.reducedMotion && this.game.accessibility.flashFrequencyMax > 1
         this.game.adventureMode?.activateExitPortal(resolvedTrack, kind, resolvedMode)
         // Register the portal sensor handle so the collision dispatcher skips it.
         // Portal contact is detected via intersectionPair queries; Rapier collision
@@ -360,11 +368,15 @@ export class GameSystemsInitializer {
         if (kind === 'success') {
           this.game.display?.setStoryText('PORTAL OPEN\nSHOOT TO ADVANCE')
           this.game.eventBus.emit('display:set', DisplayState.PORTAL_OPEN)
+          this.game.uiManager?.showMessage('Portal open — advance now!', 2000)
         } else {
-          this.game.display?.setStoryText('TIME OUT — EMERGENCY ESCAPE\nPENALIZED ADVANCE')
+          this.game.display?.setStoryText('TIME OUT — EMERGENCY ESCAPE\nREWARD PENALTY ACTIVE')
           this.game.eventBus.emit('display:set', DisplayState.ESCAPE)
+          this.game.uiManager?.showMessage('Time out! Enter the portal to continue (reduced rewards).', 2400)
         }
-        this.game.display?.triggerCRTFlash()
+        if (shouldUseFlashes) {
+          this.game.display?.triggerCRTFlash()
+        }
       })
 
       // Note: 'track:completed' is emitted by the supervisor inside onPortalEntered().

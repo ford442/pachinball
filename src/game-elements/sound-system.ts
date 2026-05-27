@@ -912,6 +912,9 @@ export function getSoundSystem(eventBus?: EventBus): SoundSystem {
           'launcher-fire': 'launch',
           'launcher-trigger': 'launch',
           'gate-open': 'bumper',
+          'portal-open-success': 'jackpot',
+          'portal-open-timeout': 'drain',
+          'portal-enter': 'launch',
         }
         const category = categoryMap[soundKey]
         if (category) {
