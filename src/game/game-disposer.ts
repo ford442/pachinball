@@ -92,6 +92,8 @@ export class GameDisposer {
     this.game.adventureUIStateManager?.dispose()
     this.game.adventureUIStateManager = null
     this.game.adventureTrackProgression = null
+    this.game.adventureProgressionSupervisor?.reset()
+    this.game.adventureProgressionSupervisor = null
 
     resetMaterialLibrary()
     this.game.scene?.dispose()

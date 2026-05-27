@@ -59,6 +59,7 @@ import {
   AdventureCinematicTriggers,
   AdventureUIStateManager,
   AdventureTrackProgression,
+  AdventureProgressionSupervisor,
 } from './game-elements'
 import {
   SpinnerBumperBuilder,
@@ -147,6 +148,7 @@ export class Game {
   adventureCinematicTriggers: AdventureCinematicTriggers | null = null
   adventureUIStateManager: AdventureUIStateManager | null = null
   adventureTrackProgression: AdventureTrackProgression | null = null
+  adventureProgressionSupervisor: AdventureProgressionSupervisor | null = null
 
   // Rendering
   bloomPipeline: DefaultRenderingPipeline | null = null
@@ -427,6 +429,8 @@ export class Game {
         this.adventureCinematicSystem?.update(dt)
         this.adventureCinematicTriggers?.update()
         this.adventureUIStateManager?.updateAnimations(dt)
+        this.adventureGoalTracker?.update(dt)
+        this.adventureProgressionSupervisor?.update(dt, this.score)
 
         this.performanceMonitor.updateEngineMetrics(0, this.physics.getActiveBodyCount())
         this.performanceMonitor.frameEnd()
@@ -445,7 +449,9 @@ export class Game {
             frameTimeMs: metrics.frameTimeMs,
             activeBodies: metrics.activeBodies,
             physicsStepMs: metrics.physicsStepMs,
-            adventureTimeMs: null,
+            adventureTimeMs: this.adventureProgressionSupervisor
+              ? Math.round(this.adventureProgressionSupervisor.getTimeRemaining() * 1000)
+              : null,
             dynamicZoneState: 'n/a',
             performanceTier: 'n/a',
           })

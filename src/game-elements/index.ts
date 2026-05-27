@@ -137,6 +137,7 @@ export { AdventureCinematicSystem } from './adventure-cinematic-system'
 export { AdventureCinematicTriggers } from './adventure-cinematic-triggers'
 export { AdventureUIStateManager } from './adventure-ui-state'
 export { AdventureTrackProgression } from './adventure-track-progression'
+export { AdventureProgressionSupervisor } from './adventure-progression-supervisor'
 export {
   getGoalsForTrack,
   getCompletionPercentage,
