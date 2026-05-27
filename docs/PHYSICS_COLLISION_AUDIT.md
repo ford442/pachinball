@@ -426,3 +426,96 @@ checkBallClusters(): void {
 ## Summary
 
 The current collision system is functional but lacks optimization and precision features. The **fixed timestep** is the highest-value, lowest-risk improvement that should be implemented immediately. **Collision groups** and **handle caching** provide measurable performance benefits with minimal risk. Contact force integration and spatial queries add polish and precision. Predictive features (raycasts, shape casts) are nice-to-have but not critical for core gameplay.
+
+---
+
+## 4. Exit-Portal Collision Routing (Issue #171 — Added 2026-05-27)
+
+### 4.1 Current Collision Routing Overview
+
+All Rapier physics events flow through a single path:
+
+```
+WasmPhysicsEngine (C++ / native/) → postMessage 'wasm:physics:contact'
+  → EventBus.emit('wasm:physics:contact', { h1, h2, started })
+    → GamePhysicsController.processCollision(h1, h2)
+      → handle-set routing:
+          portalSensorHandleSet  → skip (return early) ← NEW
+          adventureSensorHandle  → endAdventureMode()
+          deathZoneHandle        → handleBallLoss()
+          bumperHandleSet        → handleBumperHit()
+          spinnerHandleSet       → handleSpinnerHit()
+          gateHandleSet          → handleGateHit()
+          trapHandleSet          → handleTrapHit()
+          launcherHandleSet      → handleLauncherHit()
+```
+
+`ZoneTriggerSystem` is driven per-frame by `Game.renderLoop()` using
+AABB queries (`isPositionInZone`), independently of the Rapier event stream.
+
+### 4.2 Exit Portal — Design Decisions
+
+**Detection method:** `AdventureMode.updateExitPortal()` calls
+`world.intersectionPair(sensorCollider, ballCollider)` every frame.
+This is an _explicit query_, not an event callback.  Rapier's collision
+events for the sensor are therefore redundant and must be suppressed.
+
+**Why not collision events?**  The sensor is created with
+`.setSensor(true).setActiveEvents(COLLISION_EVENTS)` so Rapier _would_
+emit contact events — but the existing poll-based approach in
+`updateExitPortal()` was in place first and provides the per-frame
+debounce logic needed for reliable single-entry detection.  Migrating
+to pure event callbacks is possible but is a bigger refactor outside
+this issue's scope.
+
+**Portal zone id convention:**  `<trackId>-exit-portal`
+(e.g. `NEON_HELIX-exit-portal`).
+
+### 4.3 Changes Made (Issue #171)
+
+| Component | Change |
+|-----------|--------|
+| `GamePhysicsController` | Added `portalSensorHandleSet: Set<number>`, `registerPortalSensor(handle)`, `unregisterPortalSensor(handle)`.  Early-exit guard added at top of `processCollision()` so portal sensor handles never reach the bumper/trap/gate dispatch. |
+| `game-systems-init.ts` | `portal:open` handler registers the portal handle with `physicsController.registerPortalSensor()` after `activateExitPortal()`.  `PORTAL_ENTERED` handler unregisters the handle and passes a `PortalSpatialContext` to `supervisor.onPortalEntered()` — the second, duplicate `portal:entered` EventBus emission was removed. |
+| `AdventureProgressionSupervisor` | `onPortalEntered()` extended to accept optional `PortalSpatialContext`; the spatial fields are spread into the single merged `portal:entered` emission, ensuring exactly one event per entry. |
+| `AdventureMode` | Added `getPortalSensorHandle(): number` to expose `exitPortal.sensor.handle` without leaking the `ActiveExitPortal` type. |
+| `ZoneTriggerSystem` | Added optional `onPortalContact` to `ZoneTriggerCallback`; added `portalZoneKinds: Map<string, 'success' | 'timeout'>`, `registerPortalZone()`, `unregisterPortalZone()` methods; `handleZoneTransition()` fires `onPortalContact` when the entered zone is a portal zone. `dispose()` clears the map. |
+| `game-elements/index.ts` | Exports `PortalSpatialContext` interface. |
+
+### 4.4 Event Flow for a Successful Portal Entry
+
+```
+[Timer tick] supervisor.update()  — score threshold exceeded
+  → supervisor.resolveOutcome('success')
+    → EventBus.emit('portal:open', { trackId, kind:'success', mode })
+
+[game-systems-init] 'portal:open' handler
+  → adventureMode.activateExitPortal(...)
+  → physicsController.registerPortalSensor(adventureMode.getPortalSensorHandle())
+
+[Each frame] adventureMode.updateExitPortal()
+  → world.intersectionPair(sensor, ball) === true
+    → adventureMode fires callback: onEvent('PORTAL_ENTERED', { id, trackId, nextTrack, ... })
+
+[game-systems-init] PORTAL_ENTERED case
+  → physicsController.unregisterPortalSensor(handle)
+  → supervisor.onPortalEntered(score, goldBalls, spatialContext)
+      → progression.completeTrack(...)
+      → EventBus.emit('portal:entered', { ...rewardFields, ...spatialContext })   ← single emission
+      → EventBus.emit('track:completed', ...)
+      → supervisor.advanceToNextTrack()
+      → supervisor.reset()
+```
+
+### 4.5 Race Safety
+
+* `registerPortalSensor` / `unregisterPortalSensor` are synchronous Set
+  operations — no async risk.
+* `rebuildHandleCaches()` intentionally does **not** clear
+  `portalSensorHandleSet`: portals can be active when caches are rebuilt
+  (e.g. on dynamic map reload) so clearing would lose the guard.
+* `unregisterPortalSensor` is called from the `PORTAL_ENTERED` handler
+  _before_ `onPortalEntered()` updates supervisor state, ensuring the
+  guard is removed only after the entry is fully processed.
+* Double-entry protection lives in `AdventureMode.updateExitPortal()` via
+  `this.exitPortal = null` after `deactivateExitPortal()`.

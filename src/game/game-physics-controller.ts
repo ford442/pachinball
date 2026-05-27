@@ -115,6 +115,10 @@ export class GamePhysicsController {
   private spinnerHandleSet: Set<number> = new Set()
   private deathZoneHandle: number = -1
   private adventureSensorHandle: number = -1
+  /** Handles of active exit-portal sensor bodies; collisions are silently skipped
+   *  in the dispatcher since portal contact is detected via intersectionPair queries
+   *  inside AdventureMode.updateExitPortal(). */
+  private portalSensorHandleSet: Set<number> = new Set()
   private static readonly COLLISION_DEBOUNCE_MS = 16
   private eventBusUnsubscribers: Array<() => void> = []
 
@@ -199,6 +203,31 @@ export class GamePhysicsController {
     this.deathZoneHandle = dz ? dz.handle : -1
 
     this.adventureSensorHandle = -1
+    // Portal sensor handles are registered/unregistered dynamically via
+    // registerPortalSensor / unregisterPortalSensor and are intentionally NOT
+    // reset here — portals may already be active when the cache is rebuilt.
+  }
+
+  /**
+   * Register an exit-portal sensor body handle so the collision dispatcher
+   * can skip it cleanly.  Portal contact is detected by intersectionPair
+   * queries inside AdventureMode.updateExitPortal(); Rapier collision events
+   * for the sensor body are redundant and must not reach other handlers.
+   *
+   * Call this immediately after AdventureMode.activateExitPortal() succeeds.
+   */
+  registerPortalSensor(handle: number): void {
+    if (handle >= 0) {
+      this.portalSensorHandleSet.add(handle)
+    }
+  }
+
+  /**
+   * Unregister a portal sensor handle when the portal is deactivated.
+   * Safe to call with -1 or an unknown handle (no-op).
+   */
+  unregisterPortalSensor(handle: number): void {
+    this.portalSensorHandleSet.delete(handle)
   }
 
   applyInputFrame(frame: InputFrame): void {
@@ -407,6 +436,12 @@ export class GamePhysicsController {
     if (!b1 || !b2) return
 
     // Pre-flight guards — special non-obstacle handles
+    // Exit-portal sensors: contact is handled by intersectionPair queries in
+    // AdventureMode.updateExitPortal(); skip here to avoid misrouting.
+    if (this.portalSensorHandleSet.has(h1) || this.portalSensorHandleSet.has(h2)) {
+      return
+    }
+
     if (this.adventureSensorHandle >= 0 && (h1 === this.adventureSensorHandle || h2 === this.adventureSensorHandle)) {
       this.host.endAdventureMode()
       return

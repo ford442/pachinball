@@ -29,6 +29,16 @@ export interface ZoneTriggerCallback {
   onZoneEnter: (zone: ScenarioZone, fromZone: ScenarioZone | null, isMajor: boolean) => void
   onZoneExit?: (zone: ScenarioZone, toZone: ScenarioZone | null) => void
   onZoneProgress?: (zone: ScenarioZone, progress: number) => void
+  /**
+   * Fired when the ball enters the AABB region of a registered exit-portal zone.
+   * This is a convenience extension of `onZoneEnter` that carries typed portal
+   * metadata.  Fired at most once per portal-zone entry (debounced with the
+   * standard zone-transition timer).
+   *
+   * @param portalId   The portal zone id (e.g. `NEON_HELIX-exit-portal`).
+   * @param kind       Whether this is a success or timeout portal.
+   */
+  onPortalContact?: (portalId: string, kind: 'success' | 'timeout') => void
 }
 
 export interface ActiveZone {
@@ -57,6 +67,9 @@ export class ZoneTriggerSystem {
   // Callbacks
   private callback: ZoneTriggerCallback | null = null
   
+  /** Maps portal zone ids → kind so handleZoneTransition can fire onPortalContact. */
+  private portalZoneKinds: Map<string, 'success' | 'timeout'> = new Map()
+
   // Debug mode
   private debug = false
 
@@ -114,6 +127,39 @@ export class ZoneTriggerSystem {
       if (this.debug) {
         console.log(`[ZoneTriggerSystem] Unregistered obstacle zone: ${id}`)
       }
+    }
+  }
+
+  /**
+   * Register an exit-portal AABB zone so that `onPortalContact` is fired when
+   * the ball enters it.  Internally delegates to `registerObstacleZone` and
+   * records the kind so `handleZoneTransition` can route it correctly.
+   *
+   * Convention: portal zone ids follow the pattern `<trackId>-exit-portal`
+   * (e.g. `NEON_HELIX-exit-portal`).
+   *
+   * @param id     Unique portal zone id.
+   * @param bounds AABB bounding box of the portal sensor.
+   * @param kind   `'success'` when the portal is lit for a win,
+   *               `'timeout'` when it is the escape portal on time-up.
+   */
+  registerPortalZone(id: string, bounds: ZoneBounds, kind: 'success' | 'timeout'): void {
+    this.registerObstacleZone(id, bounds, { portalKind: kind })
+    this.portalZoneKinds.set(id, kind)
+    if (this.debug) {
+      console.log(`[ZoneTriggerSystem] Registered portal zone: ${id} (${kind})`)
+    }
+  }
+
+  /**
+   * Unregister a portal zone and remove its kind mapping.  Safe to call if
+   * the zone was never registered.
+   */
+  unregisterPortalZone(id: string): void {
+    this.unregisterObstacleZone(id)
+    this.portalZoneKinds.delete(id)
+    if (this.debug) {
+      console.log(`[ZoneTriggerSystem] Unregistered portal zone: ${id}`)
     }
   }
 
@@ -257,6 +303,12 @@ export class ZoneTriggerSystem {
     
     // Trigger callback
     this.callback?.onZoneEnter(newZone.zone, previousZone, isMajor)
+
+    // If the entered zone is a portal zone, fire the typed portal callback as well
+    const portalKind = this.portalZoneKinds.get(newZone.zone.id)
+    if (portalKind !== undefined) {
+      this.callback?.onPortalContact?.(newZone.zone.id, portalKind)
+    }
   }
 
   /**
@@ -419,6 +471,7 @@ export class ZoneTriggerSystem {
    */
   dispose(): void {
     this.activeZones.clear()
+    this.portalZoneKinds.clear()
     this.scenario = null
     this.callback = null
     this.reset()
