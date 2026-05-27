@@ -142,7 +142,7 @@ export {
   type TrackInfo,
   type TrackModeType,
 } from './adventure-track-progression'
-export { AdventureProgressionSupervisor } from './adventure-progression-supervisor'
+export { AdventureProgressionSupervisor, type PortalSpatialContext } from './adventure-progression-supervisor'
 export {
   getGoalsForTrack,
   getCompletionPercentage,

@@ -91,6 +91,15 @@ export class AdventureMode extends TrackBuilder {
   private exitPortal: ActiveExitPortal | null = null
 
   /**
+   * Return the Rapier body handle of the active exit portal sensor, or -1 when
+   * no portal is currently active.  Callers use this to register/unregister the
+   * handle with GamePhysicsController so the collision dispatcher skips it.
+   */
+  getPortalSensorHandle(): number {
+    return this.exitPortal?.sensor.handle ?? -1
+  }
+
+  /**
    * Get current zone/track type
    */
   getCurrentZone(): AdventureTrackType | null {

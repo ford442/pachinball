@@ -313,12 +313,22 @@ export class GameSystemsInitializer {
             const portalData = data as PortalEnteredEventData
             this.game.display?.setStoryText(`WORMHOLE JUMP: ${portalData.nextTrack.replace(/_/g, ' ')}`)
             // Finalize the completed track through the supervisor.
-            // This records the result in progression, emits 'portal:entered' (reward fields),
-            // 'track:completed', and resets the supervisor ready for the next track.
+            // Pass spatial context so the supervisor can merge it into the single
+            // 'portal:entered' EventBus emission — no second emission needed here.
             this.game.adventureProgressionSupervisor?.onPortalEntered(
               this.game.score,
               this.game.sessionGoldBalls,
+              {
+                id: portalData.id,
+                nextTrack: portalData.nextTrack,
+                position: portalData.position,
+                teleportPosition: portalData.teleportPosition,
+              },
             )
+            // Unregister the portal sensor so the collision dispatcher stops
+            // silently skipping events for this (now inactive) body handle.
+            const enteredHandle = this.game.adventureMode?.getPortalSensorHandle() ?? -1
+            this.game.physicsController?.unregisterPortalSensor(enteredHandle)
             // Immediately start the next track if the adventure campaign continues.
             if (portalData.nextTrack && this.game.adventureMode?.isActive()) {
               this.game.adventureTrackProgression?.setCurrentTrack(portalData.nextTrack)
@@ -328,23 +338,6 @@ export class GameSystemsInitializer {
               this.game.display?.setTrackInfo(trackName)
               this.game.display?.setStoryText(`ENTERING: ${trackName}`)
             }
-            // Also emit the spatial fields so portal/teleport consumers have location data.
-            this.game.eventBus.emit('portal:entered', {
-              id: portalData.id,
-              trackId: portalData.trackId,
-              nextTrack: portalData.nextTrack,
-              kind: portalData.kind,
-              position: {
-                x: portalData.position.x,
-                y: portalData.position.y,
-                z: portalData.position.z,
-              },
-              teleportPosition: {
-                x: portalData.teleportPosition.x,
-                y: portalData.teleportPosition.y,
-                z: portalData.teleportPosition.z,
-              },
-            })
             break
           }
         }
@@ -354,6 +347,11 @@ export class GameSystemsInitializer {
         const resolvedTrack = this.resolvePortalTrack(trackId)
         const resolvedMode = mode || (this.game.gameMode === 'dynamic' ? 'EXTENDED_MAP' : 'STATIONARY_TABLE')
         this.game.adventureMode?.activateExitPortal(resolvedTrack, kind, resolvedMode)
+        // Register the portal sensor handle so the collision dispatcher skips it.
+        // Portal contact is detected via intersectionPair queries; Rapier collision
+        // events for the sensor body must not reach other handlers.
+        const openedHandle = this.game.adventureMode?.getPortalSensorHandle() ?? -1
+        this.game.physicsController?.registerPortalSensor(openedHandle)
         // Show the portal overlay on the HUD
         this.game.uiManager?.showPortalOverlay(kind, trackId)
         // The countdown timer is no longer needed once the portal is open

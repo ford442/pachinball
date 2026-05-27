@@ -7,6 +7,23 @@ export interface AdventureProgressionSupervisorCallbacks {
   onTrackAdvanced?: (nextTrackId: string | null) => void
 }
 
+/**
+ * Optional spatial/navigation context supplied by AdventureMode when the ball
+ * physically enters the exit portal.  These fields are merged into the single
+ * `portal:entered` EventBus emission so downstream systems receive all data
+ * (reward *and* spatial) in one event instead of two.
+ */
+export interface PortalSpatialContext {
+  /** Unique portal instance id (e.g. `NEON_HELIX-exit-portal`). */
+  id?: string
+  /** Track to transition to after the portal. */
+  nextTrack?: string
+  /** World-space portal centre position. */
+  position?: { x: number; y: number; z: number }
+  /** Spawn position in the destination track. */
+  teleportPosition?: { x: number; y: number; z: number }
+}
+
 type PortalKind = 'success' | 'timeout'
 
 export class AdventureProgressionSupervisor {
@@ -101,7 +118,20 @@ export class AdventureProgressionSupervisor {
     return this.activeMultiplier
   }
 
-  onPortalEntered(finalScore: number, goldBalls: number): void {
+  /**
+   * Called exactly once per portal entry by the game orchestrator.
+   *
+   * Merges reward fields (computed here) with optional spatial context supplied
+   * by AdventureMode so that exactly **one** `portal:entered` event is emitted
+   * carrying the full payload.  Callers must NOT emit a second `portal:entered`
+   * after calling this method.
+   *
+   * @param finalScore   Player's total score at the moment of entry.
+   * @param goldBalls    Gold balls collected during the active track.
+   * @param spatial      Optional navigation context from AdventureMode
+   *                     (id, nextTrack, position, teleportPosition).
+   */
+  onPortalEntered(finalScore: number, goldBalls: number, spatial?: PortalSpatialContext): void {
     if (!this.portalOpen || !this.activeTrackId || !this.activeTrackInfo || !this.portalKind) return
 
     const baseReward = Math.max(0, finalScore - this.baselineScore)
@@ -115,6 +145,8 @@ export class AdventureProgressionSupervisor {
       goldBalls,
       multiplier: this.activeMultiplier,
       totalReward,
+      // Spatial/navigation fields supplied by AdventureMode (optional)
+      ...spatial,
     })
     this.eventBus.emit('track:completed', {
       trackId: this.activeTrackId,
