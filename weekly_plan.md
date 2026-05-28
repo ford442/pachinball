@@ -1,24 +1,22 @@
 # Pachinball — Weekly Plan
 
 ## Today's focus
-**2026-05-21 — New Idea: Multi-Layer Parallax Breathing + Reel Spring Refinement**
-`src/display/display-reels.ts` has a working spring-settle for reels (stiffness=100, damping=5) and a single-layer `updateParallax()` — but only the ReelsLayer uses it. ImageLayer, VideoLayer, and ShaderLayer have no parallax call; `display-core.ts` only calls `reelsLayer.updateParallax()`. Task: (1) Add `updateParallax(time: number)` to each display layer with staggered phase offsets so all layers breathe independently; (2) tune the reel spring constants and snap threshold for a more perceptible, satisfying settle. Pure `src/display/` scope.
+**2026-05-28 — User Idea: Adventure-Mode Obstacle Lifecycle Audit**
+Six Copilot campaign PRs (#183–#188) just landed (AlternatingA/B progression, `AdventureProgressionSupervisor`, HUD countdown, portal de-dup, e2e tests). Before the next feature layer, audit the full lifecycle chain: verify `ZoneTriggerSystem.dispose()` clears EventBus subscriptions + physics sensors, confirm `AdventureTrackProgression.dispose()` cascades to child obstacles, audit track-switch teardown path, and verify zone-trigger scoring wiring is complete for all obstacle types (spinners, ball traps, launchers, moving gates). Scope: `src/game-elements/zone-trigger-system.ts`, `src/game-elements/adventure-*.ts`, `src/objects/object-ball-traps.ts`, `src/objects/object-moving-gates.ts`, `src/objects/object-spinner-bumpers.ts`, `src/objects/object-launchers.ts`, `src/game-elements/obstacle-eventbus-integration.ts`.
 
 ## Ideas
 - [done — 2026-04-30] Backbox display state synchronization — FEVER triggered (combo>=10), REACH/JACKPOT/IDLE/ADVENTURE wired; GameStateManager drives IDLE on MENU/GAME_OVER. Full auto-sync folded into Event Bus task below.
 - [done — 2026-04-30] BallManager unit tests — Vitest installed, 10 tests passing (PR #122). Config extraction piece carried to Backlog.
 - [done — 2026-05-07] Event bus architecture — Replace the callback map in `GameStateManager` and scattered direct calls in `game.ts` with a lightweight typed event bus. Decouples display/effects/audio/scoring from the central game loop before the next feature layer.
 - [done — 2026-05-07] Playwright smoke tests for backbox display states — verify each `DisplayState` transition (IDLE → FEVER, IDLE → JACKPOT, JACKPOT → IDLE) triggers the correct layer activation via `getDisplayState()` assertion.
-- [in progress — 2026-05-21] Multi-layer parallax breathing + reel spring refinement (see Today's focus above)
-- [ ] Adventure-mode obstacle lifecycle audit — walk all new obstacle types (ball traps, moving gates, spinners, launchers), verify `dispose()` chains clean up physics + meshes + EventBus subscriptions, confirm zone-trigger scoring wiring is complete. Files: `src/game-elements/adventure-*.ts`, `src/objects/object-ball-traps.ts`, `src/objects/object-moving-gates.ts`, `src/game-elements/obstacle-eventbus-integration.ts`.
+- [done — 2026-05-28] Multi-layer parallax breathing + reel spring refinement — all 4 display layers have `updateParallax()` with staggered phases (π/2, π/4, 3π/4, π); `display-core.ts` wired all four. Spring refined: stiffness=90, damping=4.0, named constants extracted.
+- [in progress — 2026-05-28] Adventure-mode obstacle lifecycle audit — walk all new obstacle types (ball traps, moving gates, spinners, launchers), verify `dispose()` chains clean up physics + meshes + EventBus subscriptions, confirm zone-trigger scoring wiring is complete. Files: `src/game-elements/adventure-*.ts`, `src/objects/object-ball-traps.ts`, `src/objects/object-moving-gates.ts`, `src/objects/object-spinner-bumpers.ts`, `src/game-elements/obstacle-eventbus-integration.ts`.
 - [ ] Hologram fresnel rim + FEVER pulse — apply a fresnel rim glow to the backbox border and to gold ball interactions during FEVER state; shader work in `src/effects/` + material hooks.
 
 ## Backlog
-- [ ] Adventure-mode integration audit — see also Ideas above; Copilot-track via GitHub issue.
 - [ ] CRT scanline enhancement — temporal flicker already in `src/shaders/scanline.ts` (line 27–30); remaining gap is per-preset intensity tuning and a UI toggle. Low priority.
-- [ ] Parallax display layers (folded into Today's focus).
-- [ ] Reel stop bounce physics (folded into Today's focus — spring exists, needs tuning).
-- [ ] Hologram fresnel rim effect (promoted to Ideas above).
+- [ ] Hologram fresnel rim effect (in Ideas above — next after obstacle audit).
+- [ ] Verify issue #131 closed (flipper visibility regression from PR #159 — not explicitly confirmed closed; check before next Copilot PR in that area).
 
 ## Next Sprint Ideas (May 9+)
 - [done — 2026-05-21] Input buffering improvements — `queueInput` / `PendingInputFrame` system fully implemented in `src/game-elements/input.ts` (lines 10, 126–206, 331–493).
@@ -26,6 +24,7 @@
 - [done — 2026-05-21] Backbox screen border lighting — `BackboxBorderGlow` implemented and tested (PR #138 + PR #147).
 
 ## Done
+- 2026-05-28: **Multi-layer parallax breathing + reel spring refinement** — all 4 display layers (`display-reels`, `display-image`, `display-video`, `display-shader`) have `updateParallax(time)` with staggered phase offsets (π/2, π/4, 3π/4, π) and independent periods (3.5 s, 2.0 s, 3.0 s, 4.5 s). `display-core.ts` calls all four each frame. Spring refined: stiffness 90, damping 4.0, snap thresholds named as constants.
 - 2026-05-21: **Input buffering** — `queueInput` / `PendingInputFrame` frame-aligned input queue implemented in `input.ts` lines 10–493. Covers keyboard, gamepad, and touch with consistent frame-boundary processing.
 - 2026-05-21: **Mobile touch controls** — Full on-screen flipper/plunger/nudge button set in `index.html` (L137–162), styled in `style.css` (L232–546), event-wired in `input.ts` (L525–670). Safe-area insets + `touch-action: manipulation` for low-latency response.
 - 2026-05-21: **Backbox screen border lighting** — `BackboxBorderGlow` (`src/display/display-border-glow.ts`, 157 lines) with DisplayState-reactive emissive animation. Unit tests added (PR #147). BackboxBorderGlow merged via PR #138.
@@ -78,10 +77,18 @@
 - 2026-02-25 (PR #106): Adventure track switching + dual-screen display integration.
 
 ## Last run
+Date: 2026-05-28
+Mode: User Idea
+Focus: Adventure-mode obstacle lifecycle audit
+Outcome: (fill in at end of day)
+
+---
+
+### Prior run — 2026-05-21
 Date: 2026-05-21
 Mode: New Idea
 Focus: Multi-layer parallax breathing (all display layers, staggered phase) + reel spring refinement
-Outcome: (fill in at end of day)
+Outcome: Done. All 4 display layers have `updateParallax()` with staggered phase offsets; `display-core.ts` wired all four. Spring constants refined (stiffness=90, damping=4.0, named). Meanwhile six Copilot campaign PRs landed (#183–#188): AlternatingA/B progression, AdventureProgressionSupervisor wired, HUD countdown, portal collision de-dup, portal/obstacle e2e tests.
 
 ---
 
