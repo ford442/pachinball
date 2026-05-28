@@ -452,6 +452,27 @@ export class ZoneTriggerSystem {
   }
 
   /**
+   * Clear all obstacle zones registered via registerObstacleZone / registerPortalZone
+   * without destroying the scenario-loaded zones.
+   */
+  clearObstacleZones(): void {
+    // Remove obstacle zones (ids that are not in the current scenario)
+    const scenarioZoneIds = new Set(this.scenario?.zones.map(z => z.id) ?? [])
+    for (const id of this.activeZones.keys()) {
+      if (!scenarioZoneIds.has(id)) {
+        this.activeZones.delete(id)
+      }
+    }
+    this.portalZoneKinds.clear()
+    if (this.currentZoneId && !this.activeZones.has(this.currentZoneId)) {
+      this.currentZoneId = null
+    }
+    if (this.previousZoneId && !this.activeZones.has(this.previousZoneId)) {
+      this.previousZoneId = null
+    }
+  }
+
+  /**
    * Reset the zone system
    */
   reset(): void {

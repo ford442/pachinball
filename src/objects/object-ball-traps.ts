@@ -226,6 +226,11 @@ export class BallTrapBuilder {
 
       // Emit release event (after hold duration expires)
       if (this.eventBus) {
+        const pos = state.mesh.getAbsolutePosition()
+        this.eventBus.emitTrapBallReleased(state.id, 'ball-released', {
+          x: 0, y: 0, z: 0
+        })
+        this.eventBus.emitPointsAwarded(100, 'ball-released-timeout', { x: pos.x, y: pos.y, z: pos.z })
         this.eventBus.emitPlaySound('trap-release-timeout')
       }
 

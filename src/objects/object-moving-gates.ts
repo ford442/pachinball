@@ -186,6 +186,7 @@ export class MovingGateBuilder {
     // Emit events
     if (this.eventBus) {
       const pos = state.mesh.getAbsolutePosition()
+      this.eventBus.emitGateTriggered(state.body.handle.toString(), { x: pos.x, y: pos.y, z: pos.z })
       this.eventBus.emitGateOpened(state.body.handle.toString(), state.openDuration)
       this.eventBus.emitGateStateChanged(state.body.handle.toString(), true)
       this.eventBus.emitPointsAwarded(25, 'gate-opened', { x: pos.x, y: pos.y, z: pos.z })

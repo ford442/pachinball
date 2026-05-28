@@ -171,6 +171,14 @@ export class AdventureProgressionSupervisor {
     this.activeMultiplier = 1
   }
 
+  /**
+   * Clean up resources (alias for reset; provided for consistency with
+   * other supervisor classes).
+   */
+  dispose(): void {
+    this.reset()
+  }
+
   private resolveOutcome(kind: PortalKind): void {
     if (!this.activeTrackId) return
     this.hasResolvedOutcome = true

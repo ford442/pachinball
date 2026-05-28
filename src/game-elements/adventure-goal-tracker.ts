@@ -35,6 +35,7 @@ export class AdventureGoalTracker {
     this.unsubscribers.push(
       eventBus.on('bumper:spinner:hit', () => this.trackBumperHit()),
       eventBus.on('trap:ball:captured', () => this.trackBumperHit()),
+      eventBus.on('trap:ball:released', () => this.trackBumperHit()),
       eventBus.on('gate:triggered', () => this.triggerGate(1)),
       eventBus.on('points:awarded', (payload) => {
         this.updateScore(payload.amount)
