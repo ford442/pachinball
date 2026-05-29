@@ -181,7 +181,21 @@ export class DisplayShaderLayer {
     )
 
     this.crtPostProcess.onApply = (effect) => {
-      if (!this.warnedMissingScanlineUniform && !effect.isUniform(SCANLINE_UNIFORM)) {
+      const hasScanlineUniform = (() => {
+        const effectWithGuards = effect as Effect & {
+          isUniform?: (name: string) => boolean
+          getUniform?: (name: string) => unknown
+        }
+        if (typeof effectWithGuards.isUniform === 'function') {
+          return effectWithGuards.isUniform(SCANLINE_UNIFORM)
+        }
+        if (typeof effectWithGuards.getUniform === 'function') {
+          return Boolean(effectWithGuards.getUniform(SCANLINE_UNIFORM))
+        }
+        return true
+      })()
+
+      if (!this.warnedMissingScanlineUniform && !hasScanlineUniform) {
         console.warn(`[CRT] Uniform ${SCANLINE_UNIFORM} missing — shader source may be out of sync`)
         this.warnedMissingScanlineUniform = true
       }
@@ -422,4 +436,3 @@ export class DisplayShaderLayer {
     this.jackpotBaseTex = null
   }
 }
-
