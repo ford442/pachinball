@@ -104,6 +104,7 @@ export class GameSystemsInitializer {
       const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
       this.game.display = new DisplaySystem(scene, this.game.engine, displayConfig, this.game.qualityTier, this.game.accessibility)
       this.game.display.subscribeToEvents(this.game.eventBus)
+      this.game.display.setEffectsSystem(this.game.effects)
       this.game.stateManager.setDisplaySystem(this.game.display)
 
       this.game.cabinetLighting = new CabinetLighting(scene, {
@@ -150,6 +151,11 @@ export class GameSystemsInitializer {
       this.game.ballManager.setOnGoldBallCollected((type, points) => {
         console.log(`[Game] Gold ball collected: ${type}, points: ${points}`)
       })
+      // Wire fresnel rim event subscriptions (fever:start / fever:end → gold ball rims)
+      if (this.game.effects) {
+        this.game.effects.setEventBus(this.game.eventBus)
+        this.game.effects.setBallMeshProvider(this.game.ballManager)
+      }
       this.game.adventureMode = new AdventureMode(scene, world, rapier)
 
       this.game.setupFeederEventHandlers()
