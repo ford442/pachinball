@@ -39,6 +39,7 @@ import {
   detectQualityTier,
   INTENSITY,
   QualityTier,
+  PALETTE,
   type AccessibilityConfig,
 } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
@@ -362,7 +363,134 @@ export class GameRenderer {
     ambientGlow.diffuse = Color3.FromHexString('#1a1a3e')
     ambientGlow.groundColor = Color3.FromHexString('#0a0a12')
 
-    console.log('[GameRenderer] Room environment created')
+    // ========================================================================
+    // NEXUS CASCADE — DRAMATIC ARCADE ENVIRONMENT
+    // Makes the entire cabinet feel like it belongs in a legendary 2025 cyber-arcade.
+    // All elements are pure emissive geometry — zero performance or physics cost.
+    // Layered to interact gorgeously with ACES tonemap + heavy bloom.
+    // ========================================================================
+
+    // --------------------------------------------------------------------
+    // MULTI-LAYER CABINET UNDERGLOW (the machine looks like it's hovering on pure neon)
+    // --------------------------------------------------------------------
+    // Deep base wash (cyan)
+    const underBase = MeshBuilder.CreateBox('underBase', { width: 36, height: 0.18, depth: 49 }, scene)
+    underBase.position.set(0.75, -5.05, 5)
+    const ubMat = new StandardMaterial('underBaseMat', scene)
+    ubMat.diffuseColor = Color3.Black()
+    ubMat.emissiveColor = color(PALETTE.CYAN).scale(0.18)
+    ubMat.disableLighting = true
+    underBase.material = ubMat
+
+    // Hot inner core (magenta — gives the signature "premium machine" bloom kick)
+    const underCore = MeshBuilder.CreateBox('underCore', { width: 26, height: 0.09, depth: 38 }, scene)
+    underCore.position.set(0.75, -4.95, 5)
+    const ucMat = new StandardMaterial('underCoreMat', scene)
+    ucMat.diffuseColor = Color3.Black()
+    ucMat.emissiveColor = color(PALETTE.MAGENTA).scale(0.55)
+    ucMat.disableLighting = true
+    ucMat.alpha = 0.9
+    underCore.material = ucMat
+
+    // Gold edge "plasma" trim (very thin, high intensity)
+    const underEdge = MeshBuilder.CreateBox('underEdge', { width: 38, height: 0.05, depth: 51 }, scene)
+    underEdge.position.set(0.75, -4.88, 5)
+    const ueMat = new StandardMaterial('underEdgeMat', scene)
+    ueMat.diffuseColor = Color3.Black()
+    ueMat.emissiveColor = color(PALETTE.GOLD).scale(0.75)
+    ueMat.disableLighting = true
+    underEdge.material = ueMat
+
+    // Side floor "spill" washes (classic arcade footlight feel)
+    const leftSpill = MeshBuilder.CreateBox('spillL', { width: 1.6, height: 0.07, depth: 42 }, scene)
+    leftSpill.position.set(-14.2, -4.55, 5)
+    const spillLMat = new StandardMaterial('spillLMat', scene)
+    spillLMat.diffuseColor = Color3.Black()
+    spillLMat.emissiveColor = color(PALETTE.CYAN).scale(0.35)
+    spillLMat.disableLighting = true
+    leftSpill.material = spillLMat
+
+    const rightSpill = MeshBuilder.CreateBox('spillR', { width: 1.6, height: 0.07, depth: 42 }, scene)
+    rightSpill.position.set(15.7, -4.55, 5)
+    const spillRMat = new StandardMaterial('spillRMat', scene)
+    spillRMat.diffuseColor = Color3.Black()
+    spillRMat.emissiveColor = color(PALETTE.MAGENTA).scale(0.32)
+    spillRMat.disableLighting = true
+    rightSpill.material = spillRMat
+
+    // --------------------------------------------------------------------
+    // VERTICAL ARCADE PILLARS (the cabinet is framed by the environment)
+    // --------------------------------------------------------------------
+    const pillarMat = new StandardMaterial('arcadePillarMat', scene)
+    pillarMat.diffuseColor = Color3.Black()
+    pillarMat.emissiveColor = color(PALETTE.CYAN).scale(0.65)
+    pillarMat.disableLighting = true
+
+    const pillarPositions = [
+      new Vector3(-22, 4, -18), new Vector3(22, 4, -18),
+      new Vector3(-22, 4, 28),  new Vector3(22, 4, 28),
+      new Vector3(-22, 9, 8),   new Vector3(22, 9, 8)
+    ]
+    pillarPositions.forEach((pos, i) => {
+      const p = MeshBuilder.CreateCylinder(`arcadePillar${i}`, { height: 18, diameter: 0.9, tessellation: 6 }, scene)
+      p.position = pos
+      p.material = pillarMat
+      // Subtle inner core for extra bloom depth
+      const core = MeshBuilder.CreateCylinder(`pillarCore${i}`, { height: 18.2, diameter: 0.35 }, scene)
+      core.position = pos
+      core.material = new StandardMaterial(`pillarCoreMat${i}`, scene)
+      ;(core.material as StandardMaterial).emissiveColor = color(PALETTE.MAGENTA).scale(0.4)
+      ;(core.material as StandardMaterial).disableLighting = true
+    })
+
+    // --------------------------------------------------------------------
+    // CEILING NEON TUBES (classic dark arcade atmosphere)
+    // --------------------------------------------------------------------
+    const ceilingMat = new StandardMaterial('ceilingNeonMat', scene)
+    ceilingMat.diffuseColor = Color3.Black()
+    ceilingMat.emissiveColor = color(PALETTE.GOLD).scale(0.5)
+    ceilingMat.disableLighting = true
+
+    for (let i = 0; i < 3; i++) {
+      const tube = MeshBuilder.CreateCylinder(`ceilingTube${i}`, { height: 28, diameter: 0.22, tessellation: 5 }, scene)
+      tube.rotation.x = Math.PI / 2
+      tube.position.set(-14 + i * 14, 17, 6)
+      tube.material = ceilingMat
+    }
+
+    // --------------------------------------------------------------------
+    // BACK WALL CYBER MOTIFS (the machine lives inside a living digital world)
+    // --------------------------------------------------------------------
+    // Large faint grid "window" behind the cabinet
+    const gridPanel = MeshBuilder.CreatePlane('backGrid', { width: 42, height: 22 }, scene)
+    gridPanel.position.set(0, 13, 39.4)
+    gridPanel.rotation.x = Math.PI
+    const gridMat = new StandardMaterial('backGridMat', scene)
+    gridMat.diffuseColor = Color3.FromHexString('#0a0a18')
+    gridMat.emissiveColor = color(PALETTE.PURPLE).scale(0.25)
+    gridMat.disableLighting = true
+    gridPanel.material = gridMat
+
+    // Vertical data "waterfall" lines on the back wall
+    for (let i = 0; i < 7; i++) {
+      const line = MeshBuilder.CreateBox(`dataFall${i}`, { width: 0.18, height: 19, depth: 0.06 }, scene)
+      line.position.set(-15 + i * 5.2, 11, 39.5)
+      const dlMat = new StandardMaterial(`dataFallMat${i}`, scene)
+      dlMat.emissiveColor = color(i % 2 ? PALETTE.CYAN : PALETTE.MAGENTA).scale(0.55)
+      dlMat.disableLighting = true
+      line.material = dlMat
+    }
+
+    // Signature "NEXUS" style back-wall logo accent (abstract geometric)
+    const logo = MeshBuilder.CreateTorus('backLogo', { diameter: 7, thickness: 0.25, tessellation: 24 }, scene)
+    logo.position.set(0, 18, 39.3)
+    logo.rotation.x = Math.PI
+    const logoMat = new StandardMaterial('backLogoMat', scene)
+    logoMat.emissiveColor = color(PALETTE.GOLD).scale(0.85)
+    logoMat.disableLighting = true
+    logo.material = logoMat
+
+    console.log('[GameRenderer] Nexus Cascade arcade environment created — cabinet now feels legendary')
   }
 
   /** Setup ResizeObserver for canvas resize handling. */

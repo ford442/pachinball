@@ -4,7 +4,7 @@ export { BumperBuilder } from './object-bumpers'
 export { WallBuilder } from './object-walls'
 export { RailBuilder } from './object-rails'
 export { PachinkoBuilder } from './object-pachinko'
-export { DecorationBuilder } from './object-decoration'
+export { DecorationBuilder, DecorationFactory, createNeonDecal, applyTableDecorations } from './object-decoration'
 
 // New obstacle systems
 export { SpinnerBumperBuilder } from './object-spinner-bumpers'

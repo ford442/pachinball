@@ -9,6 +9,7 @@ import type { PhysicsSystem } from '../game-elements/physics'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { GameObjects } from '../objects'
+import { applyTableDecorations } from '../objects'
 import type { BallManager } from '../game-elements/ball-manager'
 import type { AdventureMode } from '../adventure'
 import { CameraController } from '../game-elements'
@@ -58,6 +59,20 @@ export class GameSceneBuilder {
     }
 
     this.createLCDPlayfield()   // ground + flipperGlow are parented to playfieldGroup inside
+
+    // ========================================================================
+    // NEXUS CASCADE — PREMIUM CYBER-NEON PLAYFIELD DECORATION
+    // ========================================================================
+    // One-shot visual upgrade that turns the table from prototype to high-end
+    // arcade cabinet. Uses Decal API + pure emissive geometry. Everything is
+    // parented under playfieldGroup so it perfectly follows the +18° tilt.
+    // ZERO physics bodies. Called right after the LCD ground is created.
+    if (this.host.playfieldGroup) {
+      const ground = scene.getMeshByName('lcdGround') as Mesh | null
+      if (ground) {
+        applyTableDecorations(scene, ground, this.host.playfieldGroup)
+      }
+    }
 
     display.createBackbox(new Vector3(0, 13.5, 26.5))
 
