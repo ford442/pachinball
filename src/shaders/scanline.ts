@@ -1,5 +1,13 @@
 export const SCANLINE_UNIFORM = 'uScanlineIntensity' as const
 
+export function computeEffectiveScanlineIntensity(
+  presetBase: number,
+  scanlineWeight: number,
+  accessibilityFactor: number
+): number {
+  return Math.min(1, Math.max(0, presetBase * scanlineWeight * accessibilityFactor))
+}
+
 export const scanlinePixelShader = {
   name: "scanline",
   fragment: `

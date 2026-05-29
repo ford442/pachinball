@@ -19,7 +19,7 @@ import {
   LCDTableState,
   registerMap,
 } from '../shaders/lcd-table'
-import { SCANLINE_UNIFORM } from '../shaders/scanline'
+import { SCANLINE_UNIFORM, computeEffectiveScanlineIntensity } from '../shaders/scanline'
 import { SettingsManager } from '../game-elements/settings'
 import { getMapSystem } from '../game-elements/map-system'
 import { getMaterialLibrary } from '../materials'
@@ -176,9 +176,10 @@ export class TableMapManager {
 
       effect.setColor3('uBaseColor', baseColor)
       effect.setColor3('uAccentColor', accentColor)
-      const effectiveScanlineIntensity = Math.min(
-        1,
-        Math.max(0, config.scanlineIntensity * this.scanlineWeight * this.lcdTableState.getScanlineIntensityMultiplier())
+      const effectiveScanlineIntensity = computeEffectiveScanlineIntensity(
+        config.scanlineIntensity,
+        this.scanlineWeight,
+        this.lcdTableState.getScanlineIntensityMultiplier()
       )
       effect.setFloat(SCANLINE_UNIFORM, effectiveScanlineIntensity)
       effect.setFloat('uPixelGridIntensity', config.pixelGridIntensity)

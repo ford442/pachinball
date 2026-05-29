@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { CRT_PRESETS } from '../src/display/display-types'
-import { computeEffectiveScanlineIntensity } from '../src/display/display-shader'
+import { computeEffectiveScanlineIntensity } from '../src/shaders/scanline'
 
 describe('scanline configuration source of truth', () => {
   it('keeps canonical preset ordering and non-negative intensities', () => {

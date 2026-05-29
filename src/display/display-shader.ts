@@ -37,7 +37,7 @@ import {
 import { DisplayState, type DisplayConfig, CRT_PRESETS, type CRTEffectParams } from './display-types'
 import { crtEffectShader } from '../shaders/crt-effect'
 import { jackpotOverlayPostProcessFragment } from '../shaders/jackpotOverlay'
-import { SCANLINE_UNIFORM } from '../shaders/scanline'
+import { SCANLINE_UNIFORM, computeEffectiveScanlineIntensity } from '../shaders/scanline'
 
 // ─── Register PostProcess fragment shaders once at module load ────────────────
 // Babylon resolves the shader by looking up "<name>FragmentShader" in the store.
@@ -50,14 +50,6 @@ interface JackpotPhaseState {
   crack: number
   shock: number
   glitch: number
-}
-
-export function computeEffectiveScanlineIntensity(
-  presetBase: number,
-  scanlineWeight: number,
-  accessibilityFactor: number
-): number {
-  return Math.min(1, Math.max(0, presetBase * scanlineWeight * accessibilityFactor))
 }
 
 export class DisplayShaderLayer {
