@@ -18,7 +18,7 @@
 import { MaterialPluginBase, PBRMaterial, Color3, ShaderLanguage } from '@babylonjs/core'
 import type { UniformBuffer, MaterialDefines } from '@babylonjs/core'
 
-/** Phase frequency for the rim pulse (radians per second). ≈3.5 Hz — slightly offset from BackboxBorderGlow's 4 Hz. */
+/** Phase frequency for the rim pulse (radians per second). 3.5 Hz — deliberately offset from BackboxBorderGlow's 4 Hz to produce a gradual shimmer beat rather than a synchronised pulse. */
 export const FRESNEL_RIM_PHASE_FREQ = Math.PI * 7
 
 export class FresnelRimMaterialPlugin extends MaterialPluginBase {

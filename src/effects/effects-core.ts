@@ -1089,9 +1089,12 @@ export class EffectsSystem {
 
     // Disable the plugin only if no remaining handle still uses it
     let stillUsed = false
-    this.activeRims.forEach((h) => {
-      if (h.plugin === handle.plugin) stillUsed = true
-    })
+    for (const h of this.activeRims.values()) {
+      if (h.plugin === handle.plugin) {
+        stillUsed = true
+        break
+      }
+    }
     if (!stillUsed) {
       handle.plugin.rimIntensity = 0
       handle.plugin.isEnabled = false

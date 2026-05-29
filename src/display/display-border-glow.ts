@@ -18,7 +18,7 @@
 
 import { Color3, GlowLayer, StandardMaterial, PBRMaterial } from '@babylonjs/core'
 import type { Mesh, Scene } from '@babylonjs/core'
-import type { DisplayState } from '../game-elements/types'
+import { DisplayState } from '../game-elements/display-config'
 import { QualityTier, PALETTE, INTENSITY, emissive, STATE_COLORS } from '../game-elements/visual-language'
 import { type AccessibilityConfig, DEFAULT_ACCESSIBILITY } from '../game-elements/accessibility-config'
 import type { EffectsSystem } from '../effects/effects-core'
@@ -121,13 +121,13 @@ export class BackboxBorderGlow {
   /** Notify of a new DisplayState. Call whenever the display state changes. */
   onDisplaySet(state: DisplayState): void {
     const stateStr = state as string
-    const wasFever = this._displayState === 'fever'
-    const willBeFever = stateStr === 'fever'
+    const wasFever = this._displayState === DisplayState.FEVER
+    const willBeFever = state === DisplayState.FEVER
 
     this._displayState = stateStr
     const col = BORDER_STATE_COLORS[stateStr] ?? Color3.Black()
     this._targetColor = col.clone()
-    this._strobeActive = !this._strobeDisabled && stateStr === 'jackpot'
+    this._strobeActive = !this._strobeDisabled && state === DisplayState.JACKPOT
     this._strobeTimer = 0
     this._pulseTime = 0
     this._lerpSpeed = this._strobeActive ? 12.0 : 2.5
@@ -165,8 +165,8 @@ export class BackboxBorderGlow {
     }
 
     // Pulse on REACH and FEVER states — compared via stored state string, not RGB values
-    const isReach = this._displayState === 'reach'
-    const isFever = this._displayState === 'fever'
+    const isReach = this._displayState === DisplayState.REACH
+    const isFever = this._displayState === DisplayState.FEVER
     let intensityScale = 1.0
     if (isReach) intensityScale = 0.5 + 0.5 * Math.sin(this._pulseTime * Math.PI * 4)  // 2 Hz
     if (isFever) intensityScale = 0.8 + 0.2 * Math.sin(this._pulseTime * Math.PI * 8)  // 4 Hz
