@@ -1,8 +1,8 @@
 # Pachinball — Weekly Plan
 
 ## Today's focus
-**2026-05-28 — User Idea: Adventure-Mode Obstacle Lifecycle Audit**
-Six Copilot campaign PRs (#183–#188) just landed (AlternatingA/B progression, `AdventureProgressionSupervisor`, HUD countdown, portal de-dup, e2e tests). Before the next feature layer, audit the full lifecycle chain: verify `ZoneTriggerSystem.dispose()` clears EventBus subscriptions + physics sensors, confirm `AdventureTrackProgression.dispose()` cascades to child obstacles, audit track-switch teardown path, and verify zone-trigger scoring wiring is complete for all obstacle types (spinners, ball traps, launchers, moving gates). Scope: `src/game-elements/zone-trigger-system.ts`, `src/game-elements/adventure-*.ts`, `src/objects/object-ball-traps.ts`, `src/objects/object-moving-gates.ts`, `src/objects/object-spinner-bumpers.ts`, `src/objects/object-launchers.ts`, `src/game-elements/obstacle-eventbus-integration.ts`.
+**2026-05-29 — Fix First: Wire the adventure track-switch teardown + rebuild path**
+Last week's obstacle-lifecycle audit landed cleanly (commit `c287a31`, +16 tests) but explicitly handed off a glaring follow-up: the campaign track-switch path is a no-op for geometry. The `PORTAL_ENTERED` handler in `game-systems-init.ts:324` advances progression state (`setCurrentTrack` / `initializeTrack` / `startTrack`) and updates HUD text, but **never tears down the old track geometry/physics and never builds the new track**. Confirmed root cause: `AdventureProgressionSupervisor` is constructed at `game-systems-init.ts:244` with only an `isAdventureModeActive` callback — the `onTrackAdvanced` callback is unwired, so `advanceToNextTrack()` (supervisor L201) calls a no-op. Also documented in `.swarm-state.md`: `AdventureCinematicTriggers.onTrackStart()` is never called on switch and `AdventureUIStateManager.reset()` is never called on switch, leaving stale goal elements + skipped cinematics. Fix the orchestrator wiring so a portal jump actually rebuilds the playfield. Scope: `src/game/game-systems-init.ts`, `src/game/game-slot-adventure.ts`, `src/game-elements/adventure-progression-supervisor.ts`, `src/game-elements/adventure-mode.ts`, `src/game-elements/adventure-cinematic-triggers.ts`, `src/game-elements/adventure-ui-state-manager.ts`.
 
 ## Ideas
 - [done — 2026-04-30] Backbox display state synchronization — FEVER triggered (combo>=10), REACH/JACKPOT/IDLE/ADVENTURE wired; GameStateManager drives IDLE on MENU/GAME_OVER. Full auto-sync folded into Event Bus task below.
@@ -10,13 +10,15 @@ Six Copilot campaign PRs (#183–#188) just landed (AlternatingA/B progression, 
 - [done — 2026-05-07] Event bus architecture — Replace the callback map in `GameStateManager` and scattered direct calls in `game.ts` with a lightweight typed event bus. Decouples display/effects/audio/scoring from the central game loop before the next feature layer.
 - [done — 2026-05-07] Playwright smoke tests for backbox display states — verify each `DisplayState` transition (IDLE → FEVER, IDLE → JACKPOT, JACKPOT → IDLE) triggers the correct layer activation via `getDisplayState()` assertion.
 - [done — 2026-05-28] Multi-layer parallax breathing + reel spring refinement — all 4 display layers have `updateParallax()` with staggered phases (π/2, π/4, 3π/4, π); `display-core.ts` wired all four. Spring refined: stiffness=90, damping=4.0, named constants extracted.
-- [in progress — 2026-05-28] Adventure-mode obstacle lifecycle audit — walk all new obstacle types (ball traps, moving gates, spinners, launchers), verify `dispose()` chains clean up physics + meshes + EventBus subscriptions, confirm zone-trigger scoring wiring is complete. Files: `src/game-elements/adventure-*.ts`, `src/objects/object-ball-traps.ts`, `src/objects/object-moving-gates.ts`, `src/objects/object-spinner-bumpers.ts`, `src/game-elements/obstacle-eventbus-integration.ts`.
-- [ ] Hologram fresnel rim + FEVER pulse — apply a fresnel rim glow to the backbox border and to gold ball interactions during FEVER state; shader work in `src/effects/` + material hooks.
+- [done — 2026-05-29] Adventure-mode obstacle lifecycle audit — completed in commit `c287a31` (+16 tests): fixed trap timeout release scoring, `gate:triggered` emission, goal-tracker wiring, `clearObstacleZones()`, supervisor `dispose()` alias. Two orchestrator gaps surfaced and promoted to today's Fix First focus (track-switch rebuild) + Backlog (cinematic/UI reset on switch).
+- [done — 2026-05-29] Hologram fresnel rim + FEVER pulse — landed via PR #192 (view-dependent fresnel rim glow on backbox border + gold balls during FEVER).
 
 ## Backlog
-- [ ] CRT scanline enhancement — temporal flicker already in `src/shaders/scanline.ts` (line 27–30); remaining gap is per-preset intensity tuning and a UI toggle. Low priority.
-- [ ] Hologram fresnel rim effect (in Ideas above — next after obstacle audit).
+- [ ] CRT scanline enhancement — temporal flicker already in `src/shaders/scanline.ts` (line 27–30); remaining gap is per-preset intensity tuning and a UI toggle. Low priority. **(Today's Copilot issue — section B.)**
+- [ ] 8 failing `tests/input-handler.test.ts` cases (stale key-binding refs) — fix is in flight on open **draft PR #193** (`claude/eloquent-cannon-JWB2j`, post-campaign hygiene pass; also resets `adventureTrackProgression` in `startAdventureMode()`). Review + merge, don't duplicate.
+- [ ] Adventure track-switch follow-ups (after today's geometry-rebuild wiring): `AdventureCinematicTriggers.onTrackStart(trackName)` is never called on switch; `AdventureUIStateManager.reset()` is never called on switch (stale goal elements). Fold into today's Fix First if scope allows, else carry forward.
 - [ ] Verify issue #131 closed (flipper visibility regression from PR #159 — not explicitly confirmed closed; check before next Copilot PR in that area).
+- [ ] `main` is stale (last commit 2026-05-16); all recent work lives on feature/codespace branches. Decide on a consolidation/merge-to-main pass.
 
 ## Next Sprint Ideas (May 9+)
 - [done — 2026-05-21] Input buffering improvements — `queueInput` / `PendingInputFrame` system fully implemented in `src/game-elements/input.ts` (lines 10, 126–206, 331–493).
@@ -24,6 +26,8 @@ Six Copilot campaign PRs (#183–#188) just landed (AlternatingA/B progression, 
 - [done — 2026-05-21] Backbox screen border lighting — `BackboxBorderGlow` implemented and tested (PR #138 + PR #147).
 
 ## Done
+- 2026-05-29: **Adventure-mode obstacle lifecycle audit** — landed via commit `c287a31` ("Fix all 5 obstacle lifecycle audit bugs + add 16 targeted tests") and `20ba192` (hit-flash emissive bursts). Verified in code: `trap:ball:released` + `points:awarded` on timeout release (`object-ball-traps.ts`), `gate:triggered` emission (`object-moving-gates.ts`), goal-tracker wiring (`adventure-goal-tracker.ts:38-39`), `ZoneTriggerSystem.clearObstacleZones()` (`zone-trigger-system.ts:458`), supervisor `dispose()` alias. Full scoring-wiring matrix verified (spinner/trap/launcher/gate all → `points:awarded` → `GamePhysicsController`). Audit notes in `.swarm-state.md`. Two orchestrator gaps surfaced → today's Fix First + Backlog.
+- 2026-05-29: **Hologram fresnel rim + FEVER pulse** — PR #192 merged. View-dependent fresnel rim glow on the backbox border and on gold balls during FEVER state.
 - 2026-05-28: **Multi-layer parallax breathing + reel spring refinement** — all 4 display layers (`display-reels`, `display-image`, `display-video`, `display-shader`) have `updateParallax(time)` with staggered phase offsets (π/2, π/4, 3π/4, π) and independent periods (3.5 s, 2.0 s, 3.0 s, 4.5 s). `display-core.ts` calls all four each frame. Spring refined: stiffness 90, damping 4.0, snap thresholds named as constants.
 - 2026-05-21: **Input buffering** — `queueInput` / `PendingInputFrame` frame-aligned input queue implemented in `input.ts` lines 10–493. Covers keyboard, gamepad, and touch with consistent frame-boundary processing.
 - 2026-05-21: **Mobile touch controls** — Full on-screen flipper/plunger/nudge button set in `index.html` (L137–162), styled in `style.css` (L232–546), event-wired in `input.ts` (L525–670). Safe-area insets + `touch-action: manipulation` for low-latency response.
@@ -77,10 +81,18 @@ Six Copilot campaign PRs (#183–#188) just landed (AlternatingA/B progression, 
 - 2026-02-25 (PR #106): Adventure track switching + dual-screen display integration.
 
 ## Last run
+Date: 2026-05-29
+Mode: Fix First
+Focus: Wire the adventure track-switch teardown + rebuild path (orchestrator gap surfaced by last week's obstacle-lifecycle audit)
+Outcome: (fill in at end of day)
+
+---
+
+### Prior run — 2026-05-28
 Date: 2026-05-28
 Mode: User Idea
 Focus: Adventure-mode obstacle lifecycle audit
-Outcome: (fill in at end of day)
+Outcome: Done. Audit completed and landed (commit `c287a31`, +16 tests; `20ba192` hit-flash). All five obstacle scoring/EventBus bugs fixed; scoring-wiring matrix verified end-to-end. Surfaced two orchestrator gaps the audit's file scope couldn't touch: (1) track-switch never rebuilds geometry (`onTrackAdvanced` unwired) → promoted to 2026-05-29 Fix First; (2) cinematic `onTrackStart` + UI `reset()` not called on switch → Backlog. Separately, fresnel rim idea shipped (PR #192); 8 `input-handler` test failures still open (fix in flight on draft PR #193).
 
 ---
 
