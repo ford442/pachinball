@@ -6,7 +6,7 @@ export interface CameraSettings {
   photosensitiveMode: boolean
   enableFog: boolean
   enableShadows: boolean
-  scanlineIntensity: number
+  scanlineWeight: number
   enableDebugHUD: boolean
 }
 
@@ -20,14 +20,21 @@ export class SettingsManager {
       photosensitiveMode: false,
       enableFog: true,
       enableShadows: true,
-      scanlineIntensity: 0.12,
+      scanlineWeight: 1.0,
       enableDebugHUD: false,
     }
     
     try {
       const saved = localStorage.getItem(this.STORAGE_KEY)
       if (saved) {
-        return { ...defaults, ...JSON.parse(saved) }
+        const parsed = JSON.parse(saved) as Partial<CameraSettings> & { scanlineIntensity?: number }
+        const migratedScanlineWeight =
+          typeof parsed.scanlineWeight === 'number'
+            ? parsed.scanlineWeight
+            : typeof parsed.scanlineIntensity === 'number'
+              ? parsed.scanlineIntensity
+              : defaults.scanlineWeight
+        return { ...defaults, ...parsed, scanlineWeight: migratedScanlineWeight }
       }
     } catch {
       // Ignore localStorage errors

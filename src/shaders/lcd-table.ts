@@ -9,6 +9,8 @@
  * - Phosphor bloom glow
  */
 
+import { SCANLINE_UNIFORM } from './scanline'
+
 export const lcdTablePixelShader = {
   name: "lcdTable",
   fragment: `
@@ -370,6 +372,10 @@ export class LCDTableState {
     return this._rippleIntensity
   }
 
+  getScanlineIntensityMultiplier(): number {
+    return this._scanlineIntensityMultiplier
+  }
+
   /**
    * Enable/disable photosensitive mode
    * When enabled, reduces scanline intensity and flashing effects
@@ -379,7 +385,7 @@ export class LCDTableState {
     this._scanlineIntensityMultiplier = enabled ? 0.3 : 1.0
     
     // Update uniforms immediately if callbacks are registered
-    const scanlineCallback = this._uniformCallbacks.get('uScanlineIntensity')
+    const scanlineCallback = this._uniformCallbacks.get(SCANLINE_UNIFORM)
     if (scanlineCallback) {
       const config = this.getCurrentConfig()
       scanlineCallback(config.scanlineIntensity * this._scanlineIntensityMultiplier)
@@ -528,7 +534,7 @@ export class LCDTableState {
         case 'uAccentColor':
           callback(config[name as keyof TableMapConfig] as string)
           break
-        case 'uScanlineIntensity':
+        case SCANLINE_UNIFORM:
           // Apply photosensitive mode multiplier to reduce scanline intensity
           callback(config.scanlineIntensity * this._scanlineIntensityMultiplier)
           break

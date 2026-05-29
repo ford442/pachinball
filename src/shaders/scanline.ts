@@ -1,3 +1,5 @@
+export const SCANLINE_UNIFORM = 'uScanlineIntensity' as const
+
 export const scanlinePixelShader = {
   name: "scanline",
   fragment: `

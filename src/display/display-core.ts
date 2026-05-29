@@ -24,6 +24,7 @@ import { DisplayReelsLayer } from './display-reels'
 import { DisplayVideoLayer } from './display-video'
 import { DisplayImageLayer } from './display-image'
 import { BackboxBorderGlow } from './display-border-glow'
+import type { CRTEffectParams } from './display-types'
 import type { EventBus } from '../game/event-bus'
 import type { EffectsSystem } from '../effects/effects-core'
 
@@ -87,6 +88,7 @@ export class DisplaySystem {
 
     // Initialize layer managers
     this.shaderLayer = new DisplayShaderLayer(scene, this.config)
+    this.shaderLayer.setAccessibilityScanlineFactor?.(this.accessibility.scanlineIntensity)
     this.reelsLayer = new DisplayReelsLayer(scene, this.config)
     this.videoLayer = new DisplayVideoLayer(scene, this.config)
     this.imageLayer = new DisplayImageLayer(scene, this.config)
@@ -443,16 +445,12 @@ export class DisplaySystem {
   /**
    * Set CRT effect parameters
    */
-  setCRTEffectParams(params: Partial<{
-    scanlineIntensity: number
-    curvature: number
-    vignette: number
-    chromaticAberration: number
-    glow: number
-    noise: number
-    flicker: number
-  }>): void {
+  setCRTEffectParams(params: Partial<CRTEffectParams>): void {
     this.shaderLayer.setCRTEffectParams(params)
+  }
+
+  setScanlineWeight(weight: number): void {
+    this.shaderLayer.setScanlineWeight(weight)
   }
 
   /**
