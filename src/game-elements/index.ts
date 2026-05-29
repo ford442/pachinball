@@ -2,7 +2,7 @@ export * from './types'
 export * from './display-config'
 export * from './visual-language'
 export { PhysicsSystem } from './physics'
-export { SettingsManager, type CameraSettings } from './settings'
+export { SettingsManager, type GameSettings } from './settings'
 export { InputHandler } from './input'
 // Display system re-exported from new location
 export { DisplaySystem } from '../display'
