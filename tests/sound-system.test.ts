@@ -17,7 +17,6 @@ describe('SoundSystem', () => {
   describe('createSynthesizedGameSounds', () => {
     it('creates all 7 sample categories with valid AudioBuffers', () => {
       // Mock Web Audio API
-      const mockBuffers = new Map<string, AudioBuffer>()
       const mockCreateBuffer = vi.fn().mockImplementation((
         numberOfChannels: number,
         length: number,

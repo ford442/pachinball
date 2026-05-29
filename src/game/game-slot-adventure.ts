@@ -9,6 +9,7 @@ import type { BallManager } from '../game-elements/ball-manager'
 import type { GameObjects } from '../objects'
 import type { AdventureMode } from '../adventure'
 import { AdventureTrackType } from '../adventure'
+import type { AdventureTrackProgression } from '../game-elements/adventure-track-progression'
 import type { EventBus } from './event-bus'
 
 import type { TableMapManager } from './game-maps'
@@ -19,6 +20,7 @@ export interface SlotAdventureHost {
   readonly eventBus: EventBus
   readonly ballManager: BallManager | null
   readonly adventureMode: AdventureMode | null
+  readonly adventureTrackProgression: AdventureTrackProgression | null
   readonly gameObjects: GameObjects | null
   readonly mapManager: TableMapManager | null
   readonly scene: Scene | null
@@ -155,6 +157,8 @@ export class GameSlotAdventure {
 
   startAdventureMode(): void {
     if (!this.host.adventureMode || !this.host.scene) return
+    // Reset accumulated campaign stats so each run starts from zero.
+    this.host.adventureTrackProgression?.reset()
     const ballBody = this.host.ballManager?.getBallBody()
     const camera = this.host.scene.activeCamera as import('@babylonjs/core').ArcRotateCamera
     const bindings = this.host.gameObjects?.getBindings() || []

@@ -27,7 +27,7 @@ export class DisplayReelsLayer {
 
   constructor(
     scene: Scene,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     _config: DisplayConfig
   ) {
     this.scene = scene
@@ -179,7 +179,7 @@ export class DisplayReelsLayer {
 
   update(
     dt: number,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     _state: DisplayState
   ): void {
     if (!this.spinning) {

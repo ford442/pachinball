@@ -112,7 +112,7 @@ export class MovingGate extends PathMechanic {
     )
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   update(dt: number, _ballBodies: RAPIER.RigidBody[]): void {
     if (!this.isSpawned || !this.physicsBody) return
 

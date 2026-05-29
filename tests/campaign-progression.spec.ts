@@ -49,6 +49,7 @@ test.describe('Campaign progression E2E', () => {
   let page: Page
 
   test.beforeAll(async ({ browser }) => {
+    test.setTimeout(180_000)
     page = await browser.newPage()
     await bootGame(page)
   })

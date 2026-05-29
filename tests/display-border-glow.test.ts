@@ -85,7 +85,7 @@ const hoisted = vi.hoisted(() => {
   return { FC3, glowInst, GlowLayerCtor, clones, StdMat, PBRMat }
 })
 
-const { FC3, glowInst, GlowLayerCtor, clones, StdMat, PBRMat } = hoisted
+const { glowInst, GlowLayerCtor, clones, StdMat } = hoisted
 
 // Expose QualityTier as a plain object — mirrors the real enum values
 const QualityTier = { LOW: 'low', MEDIUM: 'medium', HIGH: 'high', ULTRA: 'ultra' } as const
@@ -229,7 +229,7 @@ describe('BackboxBorderGlow', () => {
       const glow = new BackboxBorderGlow(mesh as never, {} as never, QualityTier.MEDIUM, DEFAULT_ACCESSIBILITY)
       glow.onDisplaySet(DisplayState.REACH)
       for (let i = 0; i < 60; i++) glow.update(0.016)
-      const em = clones[0].emissiveColor as InstanceType<typeof FC3>
+      const em = clones[0].emissiveColor as InstanceType<typeof hoisted.FC3>
       expect(em.r + em.g + em.b).toBeGreaterThan(0)
     })
 
@@ -240,14 +240,14 @@ describe('BackboxBorderGlow', () => {
       glow.onDisplaySet(DisplayState.IDLE)
       for (let i = 0; i < 60; i++) glow.update(0.016)
       const idleSum = (() => {
-        const em = clones[0].emissiveColor as InstanceType<typeof FC3>
+        const em = clones[0].emissiveColor as InstanceType<typeof hoisted.FC3>
         return em.r + em.g + em.b
       })()
 
       glow.onDisplaySet(DisplayState.FEVER)
       for (let i = 0; i < 60; i++) glow.update(0.016)
       const feverSum = (() => {
-        const em = clones[0].emissiveColor as InstanceType<typeof FC3>
+        const em = clones[0].emissiveColor as InstanceType<typeof hoisted.FC3>
         return em.r + em.g + em.b
       })()
 
@@ -259,7 +259,7 @@ describe('BackboxBorderGlow', () => {
       const glow = new BackboxBorderGlow(mesh as never, {} as never, QualityTier.MEDIUM, DEFAULT_ACCESSIBILITY)
       glow.onDisplaySet(DisplayState.JACKPOT)
       glow.update(0.001)   // tiny dt — stays within first strobe half-cycle
-      const em = clones[0].emissiveColor as InstanceType<typeof FC3>
+      const em = clones[0].emissiveColor as InstanceType<typeof hoisted.FC3>
       expect(em.r).toBe(1)
       expect(em.g).toBe(1)
       expect(em.b).toBe(1)
@@ -271,7 +271,7 @@ describe('BackboxBorderGlow', () => {
       glow.onDisplaySet(DisplayState.JACKPOT)
       // 6 phases × 0.25 s half-period = 1.5 s total strobe, plus extra lerp time
       for (let i = 0; i < 200; i++) glow.update(0.016)
-      const em = clones[0].emissiveColor as InstanceType<typeof FC3>
+      const em = clones[0].emissiveColor as InstanceType<typeof hoisted.FC3>
       // Cyan settle: green + blue component should be significant
       expect(em.g + em.b).toBeGreaterThan(0)
     })
@@ -281,7 +281,7 @@ describe('BackboxBorderGlow', () => {
       const glow = new BackboxBorderGlow(mesh as never, {} as never, QualityTier.MEDIUM, REDUCED_MOTION)
       glow.onDisplaySet(DisplayState.JACKPOT)
       glow.update(0.001)
-      const em = clones[0].emissiveColor as InstanceType<typeof FC3>
+      const em = clones[0].emissiveColor as InstanceType<typeof hoisted.FC3>
       // Without strobe the color is still lerping from black — should not be (1,1,1)
       expect(em.r).not.toBe(1)
     })
@@ -291,7 +291,7 @@ describe('BackboxBorderGlow', () => {
       const glow = new BackboxBorderGlow(mesh as never, {} as never, QualityTier.MEDIUM, DEFAULT_ACCESSIBILITY)
       glow.onDisplaySet(DisplayState.ADVENTURE)
       for (let i = 0; i < 60; i++) glow.update(0.016)
-      const em = clones[0].emissiveColor as InstanceType<typeof FC3>
+      const em = clones[0].emissiveColor as InstanceType<typeof hoisted.FC3>
       expect(em.r + em.g + em.b).toBeGreaterThan(0)
     })
 
@@ -310,9 +310,9 @@ describe('BackboxBorderGlow', () => {
       const glow = new BackboxBorderGlow(mesh as never, {} as never, QualityTier.MEDIUM, DEFAULT_ACCESSIBILITY)
       glow.onDisplaySet(DisplayState.ADVENTURE)
       glow.update(0.001)
-      const early = (clones[0].emissiveColor as InstanceType<typeof FC3>).r
+      const early = (clones[0].emissiveColor as InstanceType<typeof hoisted.FC3>).r
       glow.update(0.5)
-      const later = (clones[0].emissiveColor as InstanceType<typeof FC3>).r
+      const later = (clones[0].emissiveColor as InstanceType<typeof hoisted.FC3>).r
       // After a larger dt the channel should be at least as close to target
       expect(Math.abs(later)).toBeGreaterThanOrEqual(Math.abs(early))
     })
