@@ -679,6 +679,61 @@ export class AdventureMode extends TrackBuilder {
   }
 
   /**
+   * Switch to a new track while keeping adventure mode active.
+   * Tears down the old track's geometry and physics, builds the new track,
+   * and resets the camera transition for a cinematic entry.
+   */
+  switchToTrack(newZone: AdventureTrackType): boolean {
+    if (!this.adventureActive) {
+      console.warn('[AdventureMode] Cannot switch track: adventure not active')
+      return false
+    }
+
+    this.deactivateExitPortal()
+
+    const zoneChanged = this.currentZone !== newZone
+    if (zoneChanged) {
+      this.previousZone = this.currentZone
+      this.currentZone = newZone
+    }
+
+    // Reset camera transition timer for cinematic entry
+    this.cameraTransitionTime = 0
+
+    this.currentCameraPreset = CAMERA_PRESETS[newZone as string] || CAMERA_PRESETS.DEFAULT
+
+    // Tear down old track geometry and physics
+    this.clearTrack()
+
+    // Build new track
+    this.buildTrack(newZone)
+
+    // Update follow-camera preset without recreating the camera
+    if (this.followCamera && this.currentCameraPreset) {
+      const preset = this.currentCameraPreset
+      this.followCamera.alpha = preset.alpha
+      this.followCamera.beta = preset.beta
+      this.followCamera.radius = preset.radius
+      this.followCamera.fov = preset.fov
+      this.followCamera.lowerRadiusLimit = preset.minRadius
+      this.followCamera.upperRadiusLimit = preset.maxRadius
+      this.followCamera.lowerBetaLimit = preset.minBeta
+      this.followCamera.upperBetaLimit = preset.maxBeta
+    }
+
+    if (zoneChanged && this.onEvent) {
+      this.onEvent('ZONE_ENTER', {
+        zone: newZone,
+        previousZone: this.previousZone,
+        isMajor: this.isMajorZoneTransition(this.previousZone, newZone),
+      })
+    }
+
+    console.log(`[AdventureMode] Track switched: ${this.previousZone} -> ${newZone}`)
+    return true
+  }
+
+  /**
    * End adventure mode and cleanup
    */
   end(): void {
@@ -699,6 +754,14 @@ export class AdventureMode extends TrackBuilder {
     this.currentBallMesh = null
     this.currentCameraPreset = null
 
+    this.clearTrack()
+  }
+
+  /**
+   * Dispose all track-specific geometry and physics bodies.
+   * Called by both switchToTrack() and end().
+   */
+  private clearTrack(): void {
     // Cleanup Visuals
     this.adventureTrack.forEach(m => m.dispose())
     this.adventureTrack = []

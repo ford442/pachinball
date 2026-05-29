@@ -137,10 +137,15 @@ export class AdventureProgressionSupervisor {
     const baseReward = Math.max(0, finalScore - this.baselineScore)
     const totalReward = Math.round(baseReward * this.activeMultiplier)
 
-    this.progression.completeTrack(this.activeTrackId, finalScore, goldBalls, totalReward)
+    // Capture state before reset so events carry the correct track context.
+    const portalKind = this.portalKind
+    const activeTrackId = this.activeTrackId
+    const elapsedTime = this.elapsedTime
+
+    this.progression.completeTrack(activeTrackId, finalScore, goldBalls, totalReward)
     this.eventBus.emit('portal:entered', {
-      kind: this.portalKind,
-      trackId: this.activeTrackId,
+      kind: portalKind,
+      trackId: activeTrackId,
       finalScore,
       goldBalls,
       multiplier: this.activeMultiplier,
@@ -149,13 +154,16 @@ export class AdventureProgressionSupervisor {
       ...spatial,
     })
     this.eventBus.emit('track:completed', {
-      trackId: this.activeTrackId,
+      trackId: activeTrackId,
       totalReward,
-      duration: this.elapsedTime,
+      duration: elapsedTime,
     })
 
-    this.advanceToNextTrack()
+    // Reset supervisor state before advancing so that the onTrackAdvanced
+    // callback can safely call startTrack() for the next track without
+    // having it overwritten by the reset that follows.
     this.reset()
+    this.advanceToNextTrack()
   }
 
   reset(): void {

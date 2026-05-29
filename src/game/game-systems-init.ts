@@ -250,6 +250,13 @@ export class GameSystemsInitializer {
           isAdventureModeActive: () =>
             (this.game.adventureMode?.isActive() ?? false) &&
             this.game.stateManager.isPlaying(),
+          // When the campaign advances to the next track, tear down the old
+          // playfield and build the new one via the slot-adventure orchestrator.
+          onTrackAdvanced: (nextTrackId) => {
+            if (nextTrackId) {
+              this.game.slotAdventure.switchToTrack(nextTrackId)
+            }
+          },
         },
       )
 
@@ -326,8 +333,9 @@ export class GameSystemsInitializer {
             this.game.display?.setStoryText(`WORMHOLE JUMP: ${portalData.nextTrack.replace(/_/g, ' ')}`)
             this.game.eventBus.emit('sound:play', { soundKey: 'portal-enter' })
             // Finalize the completed track through the supervisor.
-            // Pass spatial context so the supervisor can merge it into the single
-            // 'portal:entered' EventBus emission — no second emission needed here.
+            // The supervisor's onTrackAdvanced callback (wired above) will drive
+            // teardown of the old track, build of the new track, cinematic start,
+            // and UI reset via slotAdventure.switchToTrack().
             this.game.adventureProgressionSupervisor?.onPortalEntered(
               this.game.score,
               this.game.sessionGoldBalls,
@@ -342,15 +350,6 @@ export class GameSystemsInitializer {
             // silently skipping events for this (now inactive) body handle.
             const enteredHandle = this.game.adventureMode?.getPortalSensorHandle() ?? -1
             this.game.physicsController?.unregisterPortalSensor(enteredHandle)
-            // Immediately start the next track if the adventure campaign continues.
-            if (portalData.nextTrack && this.game.adventureMode?.isActive()) {
-              this.game.adventureTrackProgression?.setCurrentTrack(portalData.nextTrack)
-              this.game.adventureGoalTracker?.initializeTrack(portalData.nextTrack)
-              this.game.adventureProgressionSupervisor?.startTrack(portalData.nextTrack, this.game.score)
-              const trackName = this.game.slotAdventure.getTrackDisplayName(portalData.nextTrack)
-              this.game.display?.setTrackInfo(trackName)
-              this.game.display?.setStoryText(`ENTERING: ${trackName}`)
-            }
             break
           }
         }

@@ -162,6 +162,39 @@ describe('AdventureProgressionSupervisor', () => {
     expect(supervisor.getActiveMultiplier()).toBe(neonHelixInfo.timeoutPenaltyMultiplier)
   })
 
+  it('calls onTrackAdvanced after reset so startTrack can safely be used in the callback', () => {
+    const bus = new EventBus()
+    const progression = new AdventureTrackProgression()
+
+    let callbackState: { portalOpen: boolean; activeTrackId: string | null } | null = null
+    const supervisorWithCallback = new AdventureProgressionSupervisor(bus, progression, {
+      onTrackAdvanced: () => {
+        callbackState = {
+          portalOpen: supervisorWithCallback.isPortalOpen(),
+          activeTrackId: (supervisorWithCallback as unknown as { activeTrackId: string | null }).activeTrackId,
+        }
+        // It must be safe to call startTrack() here without it being
+        // overwritten by a subsequent reset().
+        supervisorWithCallback.startTrack('CYBER_CORE', 5000)
+      },
+    })
+
+    supervisorWithCallback.startTrack('NEON_HELIX', 1000)
+    supervisorWithCallback.update(1, 52000)
+    expect(supervisorWithCallback.isPortalOpen()).toBe(true)
+
+    supervisorWithCallback.onPortalEntered(61000, 2)
+
+    // Callback should have been invoked after reset, so supervisor state
+    // was clean at that moment.
+    expect(callbackState).not.toBeNull()
+    expect(callbackState!.portalOpen).toBe(false)
+    expect(callbackState!.activeTrackId).toBeNull()
+
+    // And startTrack() called from inside the callback should have stuck.
+    expect(supervisorWithCallback.getTimeRemaining()).toBeGreaterThan(0)
+  })
+
   it('gracefully no-ops when adventure mode is inactive', () => {
     const bus = new EventBus()
     const progression = new AdventureTrackProgression()

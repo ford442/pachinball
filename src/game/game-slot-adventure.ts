@@ -10,6 +10,10 @@ import type { GameObjects } from '../objects'
 import type { AdventureMode } from '../adventure'
 import { AdventureTrackType } from '../adventure'
 import type { EventBus } from './event-bus'
+import type { AdventureCinematicTriggers } from '../game-elements/adventure-cinematic-triggers'
+import type { AdventureUIStateManager } from '../game-elements/adventure-ui-state'
+import type { AdventureGoalTracker } from '../game-elements/adventure-goal-tracker'
+import type { AdventureProgressionSupervisor } from '../game-elements/adventure-progression-supervisor'
 
 import type { TableMapManager } from './game-maps'
 
@@ -25,6 +29,12 @@ export interface SlotAdventureHost {
 
   scoreElement: HTMLElement | null
   score: number
+
+  // Optional adventure orchestration systems (populated after init)
+  readonly adventureCinematicTriggers: AdventureCinematicTriggers | null
+  readonly adventureUIStateManager: AdventureUIStateManager | null
+  readonly adventureGoalTracker: AdventureGoalTracker | null
+  readonly adventureProgressionSupervisor: AdventureProgressionSupervisor | null
 
   updateHUD(): void
   getBallPosition(): import('@babylonjs/core').Vector3 | null
@@ -179,6 +189,37 @@ export class GameSlotAdventure {
       const currentIndex = GameSlotAdventure.TRACK_ORDER.indexOf(track)
       this.nextAdventureTrack = GameSlotAdventure.TRACK_ORDER[(currentIndex + 1) % GameSlotAdventure.TRACK_ORDER.length]
     }
+  }
+
+  switchToTrack(trackId: string): void {
+    if (!this.host.adventureMode || !this.host.scene) return
+    if (!this.host.adventureMode.isActive()) return
+
+    const trackType = trackId as AdventureTrackType
+    if (!Object.values(AdventureTrackType).includes(trackType)) {
+      console.warn(`[GameSlotAdventure] Invalid track id: ${trackId}`)
+      return
+    }
+
+    const success = this.host.adventureMode.switchToTrack(trackType)
+    if (!success) return
+
+    const trackName = this.getTrackDisplayName(trackType)
+
+    // Fire track-start cinematic and reset goal UI
+    this.host.adventureCinematicTriggers?.onTrackStart(trackName)
+    this.host.adventureUIStateManager?.reset()
+
+    // Re-initialize goal tracking and supervisor timer for the new track
+    this.host.adventureGoalTracker?.initializeTrack(trackType)
+    this.host.adventureProgressionSupervisor?.startTrack(trackType, this.host.score)
+
+    // Update HUD overlays
+    if (this.host.scoreElement) {
+      this.host.scoreElement.innerText = `HOLO-DECK: ${trackName}`
+    }
+    this.host.display?.setTrackInfo(trackName)
+    this.host.display?.setStoryText(`ENTERING: ${trackName}`)
   }
 
   endAdventureMode(): void {
