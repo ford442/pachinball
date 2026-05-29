@@ -192,7 +192,7 @@ export class DisplayShaderLayer {
         if (typeof effectWithGuards.getUniform === 'function') {
           return Boolean(effectWithGuards.getUniform(SCANLINE_UNIFORM))
         }
-        return true
+        return false
       })()
 
       if (!this.warnedMissingScanlineUniform && !hasScanlineUniform) {

@@ -114,9 +114,7 @@ export class GameSettingsUI {
     SettingsManager.save(newSettings)
     SettingsManager.applyToConfig(newSettings)
     this.host.debugHUDEnabledInSettings = newSettings.enableDebugHUD
-    this.host.scanlineWeight = newSettings.scanlineWeight
-    this.host.setScanlineWeight?.(newSettings.scanlineWeight)
-    this.host.mapManager?.setScanlineWeight(newSettings.scanlineWeight)
+    this.applyScanlineWeight(newSettings.scanlineWeight)
     console.log('[Accessibility] Settings saved:', newSettings)
 
     if (this.host.debugHUDEnabledInSettings && this.host.isDebugHUDAvailable()) {
@@ -163,12 +161,16 @@ export class GameSettingsUI {
 
     scanlineSlider.addEventListener('input', () => {
       const value = Math.min(1, Math.max(0, parseFloat(scanlineSlider.value || '1')))
-      this.host.scanlineWeight = value
-      this.host.setScanlineWeight?.(value)
-      this.host.mapManager?.setScanlineWeight(value)
+      this.applyScanlineWeight(value)
       const span = scanlineSlider.parentElement?.querySelector('span')
       if (span) span.setAttribute('data-value', String(value))
     })
+  }
+
+  private applyScanlineWeight(value: number): void {
+    this.host.scanlineWeight = value
+    this.host.setScanlineWeight?.(value)
+    this.host.mapManager?.setScanlineWeight(value)
   }
 
   updateLatencyDisplay(inputManager?: { getLatencyReport: () => { avg: number; p95: number } | null }): void {
