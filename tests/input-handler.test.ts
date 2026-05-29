@@ -52,10 +52,10 @@ describe('InputHandler', () => {
       expect(frame.flipperLeft).toBe(true)
     })
 
-    it('queues flipperLeft when KeyZ is pressed', () => {
+    it('does not queue flipperLeft when KeyZ is pressed (KeyZ is nudge-left)', () => {
       handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'KeyZ' }))
       const frame = handler.processBufferedInputs()
-      expect(frame.flipperLeft).toBe(true)
+      expect(frame.flipperLeft).toBeNull()
     })
 
     it('queues flipperRight when ShiftRight is pressed', () => {
@@ -64,10 +64,10 @@ describe('InputHandler', () => {
       expect(frame.flipperRight).toBe(true)
     })
 
-    it('queues flipperRight when Slash is pressed', () => {
+    it('does not queue flipperRight when Slash is pressed (Slash is nudge-right)', () => {
       handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Slash' }))
       const frame = handler.processBufferedInputs()
-      expect(frame.flipperRight).toBe(true)
+      expect(frame.flipperRight).toBeNull()
     })
 
     it('does not queue flipper inputs when tilt is active', () => {
@@ -90,20 +90,20 @@ describe('InputHandler', () => {
       expect(callbacks.onStart).toHaveBeenCalledTimes(1)
     })
 
-    it('queues nudge with correct direction for KeyQ', () => {
-      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'KeyQ' }))
+    it('queues nudge with correct direction for KeyZ', () => {
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'KeyZ' }))
       const frame = handler.processBufferedInputs()
       expect(frame.nudge).toEqual({ x: -0.6, y: 0, z: 0.3 })
     })
 
-    it('queues nudge with correct direction for KeyE', () => {
-      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'KeyE' }))
+    it('queues nudge with correct direction for Slash', () => {
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Slash' }))
       const frame = handler.processBufferedInputs()
       expect(frame.nudge).toEqual({ x: 0.6, y: 0, z: 0.3 })
     })
 
-    it('queues nudge with correct direction for KeyW', () => {
-      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'KeyW' }))
+    it('queues nudge with correct direction for Space', () => {
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Space' }))
       const frame = handler.processBufferedInputs()
       expect(frame.nudge).toEqual({ x: 0, y: 0, z: 0.8 })
     })
@@ -137,23 +137,22 @@ describe('InputHandler', () => {
       expect(frame.flipperRight).toBe(false)
     })
 
-    it('queues flipperLeft=false when KeyZ is released', () => {
+    it('does not queue flipper on KeyZ release (KeyZ is nudge-left)', () => {
       handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'KeyZ' }))
       const frame = handler.processBufferedInputs()
-      expect(frame.flipperLeft).toBe(false)
+      expect(frame.flipperLeft).toBeNull()
     })
 
-    it('queues flipperRight=false when Slash is released', () => {
+    it('does not queue flipper on Slash release (Slash is nudge-right)', () => {
       handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Slash' }))
       const frame = handler.processBufferedInputs()
-      expect(frame.flipperRight).toBe(false)
+      expect(frame.flipperRight).toBeNull()
     })
 
-    it('queues plunger=true when Space is released while held', () => {
-      // First press Space to start charge
-      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Space' }))
-      // Then release
-      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Space' }))
+    it('queues plunger=true when Enter is released while held', () => {
+      // Enter keydown starts plunger charge; Enter keyup releases and queues plunger
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Enter' }))
+      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Enter' }))
       const frame = handler.processBufferedInputs()
       expect(frame.plunger).toBe(true)
     })

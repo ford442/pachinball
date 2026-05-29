@@ -28,9 +28,9 @@ export class GameStateManager {
 
   /** @deprecated Systems now subscribe via EventBus; kept for backward compat */
   setSystems(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     _effects?: { dispose?(): void } | null,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     _display?: { dispose?(): void } | null
   ): void {
     // no-op: DisplaySystem now self-manages via EventBus subscription
@@ -38,7 +38,7 @@ export class GameStateManager {
 
   /** @deprecated Use EventBus subscription instead; kept for backward compat */
   setDisplaySystem(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     _display?: { dispose?(): void } | null
   ): void {
     // no-op: DisplaySystem now self-manages via EventBus subscription

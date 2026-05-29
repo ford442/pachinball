@@ -221,7 +221,7 @@ export class GameUIManager {
   /**
    * Show or hide the loading state overlay
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   showLoadingState(show: boolean, _phase?: 'gameplay' | 'cosmetic'): void {
     if (show) {
       if (!this.loadingOverlay) {
@@ -439,7 +439,6 @@ export class GameUIManager {
         border: 1px solid currentColor;
         pointer-events: none;
         z-index: 60;
-        transition: color 0.4s ease;
         text-shadow: 0 0 8px currentColor;
       `
       document.getElementById('game-cabinet')?.appendChild(timerEl)
@@ -507,7 +506,14 @@ export class GameUIManager {
    * @param autoDismissMs  Auto-hide after this many ms (default 3500).
    */
   showPortalOverlay(kind: 'success' | 'timeout', trackId: string, autoDismissMs = 3500): void {
-    this.hidePortalOverlay()
+    // Synchronously remove any existing overlay so the new one is unambiguously
+    // the only #campaign-portal-overlay in the DOM (avoids duplicate-id querySelector
+    // ambiguity when called before the prior async fade-out completes).
+    const existingOverlay = document.getElementById('campaign-portal-overlay')
+    if (existingOverlay) {
+      existingOverlay.remove()
+      this.activePopups.delete('portal-overlay')
+    }
 
     const overlay = document.createElement('div')
     overlay.id = 'campaign-portal-overlay'

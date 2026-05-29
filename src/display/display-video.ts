@@ -25,7 +25,7 @@ export class DisplayVideoLayer {
 
   constructor(
     scene: Scene,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     _config: DisplayConfig
   ) {
     this.scene = scene
@@ -116,7 +116,7 @@ export class DisplayVideoLayer {
   }
 
   onStateChange(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     _state: DisplayState
   ): void {
     // Pause/play based on state if needed

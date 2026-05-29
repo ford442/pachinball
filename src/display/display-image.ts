@@ -16,7 +16,7 @@ export class DisplayImageLayer {
 
   constructor(
     scene: Scene,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     _config: DisplayConfig
   ) {
     this.scene = scene

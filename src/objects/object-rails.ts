@@ -14,7 +14,7 @@ export class RailBuilder {
     scene: Scene,
     world: RAPIER.World,
     rapier: typeof RAPIER,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     _config: typeof GameConfig
   ) {
     this.scene = scene
