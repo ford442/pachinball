@@ -12,7 +12,7 @@ import {
   Mesh,
   TargetCamera,
 } from '@babylonjs/core'
-import type { DirectionalLight } from '@babylonjs/core'
+import type { AbstractMesh, DirectionalLight } from '@babylonjs/core'
 import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import type { CabinetLight, ShardParticle } from '../game-elements/types'
 import {
@@ -25,6 +25,8 @@ import {
   color,
   pulse,
   QualityTier,
+  STATE_COLORS,
+  INTENSITY,
 } from '../game-elements/visual-language'
 import { EffectsConfig, BallType } from '../config'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
@@ -40,8 +42,16 @@ import { RipplesEffects } from './effects-ripples'
 import { createSharedParticleTexture } from './effects-utils'
 import { createCabinetLighting, updateCabinetLighting, updateSlotLighting, getTransitionColor, type CabinetState } from './effects-cabinet'
 import { ImpactEffects } from './effects-impact'
+import { FresnelRimMaterialPlugin, FRESNEL_RIM_PHASE_FREQ } from './fresnel-rim-plugin'
+import type { EventBus } from '../game/event-bus'
+import type { BallManager } from '../game-elements/ball-manager'
 
-
+/** Per-mesh rim tracking handle. */
+interface RimHandle {
+  plugin: FresnelRimMaterialPlugin
+  phase: number
+  peakIntensity: number
+}
 
 export class EffectsSystem {
   private scene: Scene
@@ -160,6 +170,12 @@ export class EffectsSystem {
 
   // Quality tier for effect gating
   private qualityTier: QualityTier = QualityTier.HIGH
+
+  // Fresnel rim effect tracking
+  private activeRims = new Map<AbstractMesh, RimHandle>()
+  private _rimEventUnsubscribers: Array<() => void> = []
+  // Pre-allocated Color3 for FEVER rim colour (avoid per-call allocation)
+  private readonly _feverRimColor: Color3 = Color3.FromHexString(STATE_COLORS.FEVER)
 
   // Transition flash
   private transitionFlashOverlay: Mesh | null = null
@@ -595,6 +611,17 @@ export class EffectsSystem {
         // Ignore errors on close
       })
     }
+    // Unsubscribe event bus listeners
+    for (const unsub of this._rimEventUnsubscribers) unsub()
+    this._rimEventUnsubscribers = []
+
+    // Disable and clear all fresnel rim handles
+    this.activeRims.forEach((handle) => {
+      handle.plugin.rimIntensity = 0
+      handle.plugin.isEnabled = false
+    })
+    this.activeRims.clear()
+
     // Clear all effects
     this.trailEffects?.clearFeverTrails()
     this.shards.forEach((s) => {
@@ -908,6 +935,14 @@ export class EffectsSystem {
     // Camera shake (target-based, preserves user control)
     this.updateCameraShake(dt)
 
+    // Advance fresnel rim pulses (no allocations: forEach + direct uniform writes)
+    if (this.activeRims.size > 0) {
+      this.activeRims.forEach((handle) => {
+        handle.phase += dt * FRESNEL_RIM_PHASE_FREQ
+        handle.plugin.rimIntensity = ((Math.sin(handle.phase) + 1) * 0.5) * handle.peakIntensity
+      })
+    }
+
     // Update sub-systems
     this.particleEffects.update()
     this.lightingEffects.update(dt)
@@ -955,6 +990,115 @@ export class EffectsSystem {
 
   setQualityTier(tier: QualityTier): void {
     this.qualityTier = tier
+  }
+
+  /**
+   * Wire the event bus so EffectsSystem can subscribe to fever:start / fever:end.
+   * Call once after both EffectsSystem and BallManager are ready.
+   */
+  setEventBus(eventBus: EventBus): void {
+    // Unsubscribe any previous listeners (idempotent re-wiring)
+    for (const unsub of this._rimEventUnsubscribers) unsub()
+    this._rimEventUnsubscribers = []
+
+    this._rimEventUnsubscribers.push(
+      eventBus.on('fever:start', () => {
+        if (!this._ballMeshProvider) return
+        for (const ballType of [BallType.GOLD_PLATED, BallType.SOLID_GOLD]) {
+          const meshes = this._ballMeshProvider.getBallMeshesByType(ballType)
+          for (const mesh of meshes) {
+            this.setFresnelRimEffect(mesh, this._feverRimColor, INTENSITY.FLASH)
+          }
+        }
+      }),
+      eventBus.on('fever:end', () => {
+        if (!this._ballMeshProvider) return
+        for (const ballType of [BallType.GOLD_PLATED, BallType.SOLID_GOLD]) {
+          const meshes = this._ballMeshProvider.getBallMeshesByType(ballType)
+          for (const mesh of meshes) {
+            this.clearFresnelRimEffect(mesh)
+          }
+        }
+      }),
+    )
+  }
+
+  private _ballMeshProvider: Pick<BallManager, 'getBallMeshesByType'> | null = null
+
+  /**
+   * Wire the ball-mesh provider so EffectsSystem can look up gold ball meshes.
+   * Call once after BallManager is ready.
+   */
+  setBallMeshProvider(provider: Pick<BallManager, 'getBallMeshesByType'>): void {
+    this._ballMeshProvider = provider
+  }
+
+  /**
+   * Attach a pulsing fresnel rim to `mesh`'s PBRMaterial.
+   * - No-op on LOW quality tier.
+   * - No-op if the material is not PBRMaterial.
+   * - Idempotent: updating color/intensity on an already-tracked mesh does NOT
+   *   reset the pulse phase (prevents "pop" on double fever:start).
+   * - Registers an onDisposeObservable listener so a mesh collected mid-FEVER
+   *   cannot leak a stale RimHandle.
+   */
+  setFresnelRimEffect(mesh: AbstractMesh, rimColor: Color3, peakIntensity: number): void {
+    if (this.qualityTier === QualityTier.LOW) return
+    if (!(mesh.material instanceof PBRMaterial)) return
+
+    const mat = mesh.material
+
+    const existing = this.activeRims.get(mesh)
+    if (existing) {
+      // Update color and intensity without resetting phase (no pop on re-enter)
+      existing.plugin.rimColor.r = rimColor.r
+      existing.plugin.rimColor.g = rimColor.g
+      existing.plugin.rimColor.b = rimColor.b
+      existing.peakIntensity = peakIntensity
+      return
+    }
+
+    // Reuse an existing plugin on the material (shared-material case — all gold
+    // balls share one PBRMaterial instance, so the plugin already exists after
+    // the first ball is processed).
+    let plugin = mat.pluginManager?.getPlugin<FresnelRimMaterialPlugin>('FresnelRim') ?? null
+    if (!plugin) {
+      plugin = new FresnelRimMaterialPlugin(mat)
+    }
+    plugin.rimColor.r = rimColor.r
+    plugin.rimColor.g = rimColor.g
+    plugin.rimColor.b = rimColor.b
+    plugin.isEnabled = true
+
+    const handle: RimHandle = { plugin, phase: 0, peakIntensity }
+    this.activeRims.set(mesh, handle)
+
+    // Auto-cleanup if the mesh is disposed mid-FEVER
+    mesh.onDisposeObservable.addOnce(() => this.clearFresnelRimEffect(mesh))
+  }
+
+  /**
+   * Disable and remove the fresnel rim for `mesh`.
+   * Only disables the underlying plugin when no other tracked mesh shares it
+   * (reference-count guard for shared-material gold balls).
+   */
+  clearFresnelRimEffect(mesh: AbstractMesh): void {
+    const handle = this.activeRims.get(mesh)
+    if (!handle) return
+    this.activeRims.delete(mesh)
+
+    // Disable the plugin only if no remaining handle still uses it
+    let stillUsed = false
+    for (const h of this.activeRims.values()) {
+      if (h.plugin === handle.plugin) {
+        stillUsed = true
+        break
+      }
+    }
+    if (!stillUsed) {
+      handle.plugin.rimIntensity = 0
+      handle.plugin.isEnabled = false
+    }
   }
 
   addBallTrail(body: RAPIER.RigidBody, mesh: Mesh, ballType: BallType): void {

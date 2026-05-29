@@ -120,6 +120,13 @@ vi.mock('../src/game-elements/visual-language', () => ({
     HIGH: 1.0,
     CRITICAL: 1.5,
   },
+  STATE_COLORS: {
+    IDLE: '#00d9ff',
+    REACH: '#ff4400',
+    FEVER: '#ffd700',
+    JACKPOT: '#ff00aa',
+    ADVENTURE: '#00ff41',
+  },
   emissive(hexColor: string, intensity: number) {
     const base = hoisted.FC3.FromHexString(hexColor)
     return new hoisted.FC3(base.r * intensity, base.g * intensity, base.b * intensity)

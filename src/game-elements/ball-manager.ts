@@ -926,6 +926,21 @@ export class BallManager {
   }
 
   /**
+   * Return all active ball meshes whose type matches `type`.
+   * Used by EffectsSystem to apply/clear fresnel rim effects on gold balls during FEVER.
+   */
+  getBallMeshesByType(type: BallType): Mesh[] {
+    const result: Mesh[] = []
+    for (const binding of this.bindings) {
+      const data = this.ballDataMap.get(binding.rigidBody)
+      if (data?.type === type) {
+        result.push(binding.mesh as Mesh)
+      }
+    }
+    return result
+  }
+
+  /**
    * Get ball data for a body
    */
   getBallData(body: RAPIER.RigidBody): BallData | undefined {

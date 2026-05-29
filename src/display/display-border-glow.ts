@@ -18,9 +18,10 @@
 
 import { Color3, GlowLayer, StandardMaterial, PBRMaterial } from '@babylonjs/core'
 import type { Mesh, Scene } from '@babylonjs/core'
-import type { DisplayState } from '../game-elements/types'
-import { QualityTier, PALETTE, INTENSITY, emissive } from '../game-elements/visual-language'
+import { DisplayState } from '../game-elements/display-config'
+import { QualityTier, PALETTE, INTENSITY, emissive, STATE_COLORS } from '../game-elements/visual-language'
 import { type AccessibilityConfig, DEFAULT_ACCESSIBILITY } from '../game-elements/accessibility-config'
+import type { EffectsSystem } from '../effects/effects-core'
 
 /** Emissive colour targets per DisplayState string value, using the Visual Language System */
 const BORDER_STATE_COLORS: Record<string, Color3> = {
@@ -63,6 +64,12 @@ export class BackboxBorderGlow {
   /** Whether jackpot strobe is suppressed by accessibility settings */
   private _strobeDisabled: boolean = false
 
+  // Fresnel rim support
+  private _backboxMesh: Mesh | null = null
+  private _effectsSystem: EffectsSystem | null = null
+  /** Pre-allocated Color3 for the FEVER rim colour (no per-frame allocation). */
+  private readonly _feverRimColor: Color3 = Color3.FromHexString(STATE_COLORS.FEVER)
+
   constructor(
     backboxMesh: Mesh | null,
     scene: Scene,
@@ -70,6 +77,9 @@ export class BackboxBorderGlow {
     accessibility: AccessibilityConfig = DEFAULT_ACCESSIBILITY,
   ) {
     if (qualityTier === QualityTier.LOW || !backboxMesh) return
+
+    // Store for fresnel rim integration (used in onDisplaySet if EffectsSystem is set)
+    this._backboxMesh = backboxMesh
 
     const sourceMat = backboxMesh.material
     if (!sourceMat) return
@@ -103,16 +113,37 @@ export class BackboxBorderGlow {
     }
   }
 
+  /** Wire an EffectsSystem to enable the fresnel rim effect during FEVER. */
+  setEffectsSystem(effects: EffectsSystem): void {
+    this._effectsSystem = effects
+  }
+
   /** Notify of a new DisplayState. Call whenever the display state changes. */
   onDisplaySet(state: DisplayState): void {
     const stateStr = state as string
+    const wasFever = this._displayState === DisplayState.FEVER
+    const willBeFever = state === DisplayState.FEVER
+
     this._displayState = stateStr
-    const color = BORDER_STATE_COLORS[stateStr] ?? Color3.Black()
-    this._targetColor = color.clone()
-    this._strobeActive = !this._strobeDisabled && stateStr === 'jackpot'
+    const col = BORDER_STATE_COLORS[stateStr] ?? Color3.Black()
+    this._targetColor = col.clone()
+    this._strobeActive = !this._strobeDisabled && state === DisplayState.JACKPOT
     this._strobeTimer = 0
     this._pulseTime = 0
     this._lerpSpeed = this._strobeActive ? 12.0 : 2.5
+
+    // Fresnel rim: enable on entering FEVER, disable on leaving FEVER
+    if (this._effectsSystem && this._backboxMesh) {
+      if (willBeFever && !wasFever) {
+        this._effectsSystem.setFresnelRimEffect(
+          this._backboxMesh,
+          this._feverRimColor,
+          INTENSITY.HIGH,
+        )
+      } else if (!willBeFever && wasFever) {
+        this._effectsSystem.clearFresnelRimEffect(this._backboxMesh)
+      }
+    }
   }
 
   /** Call once per frame with the elapsed time in seconds. */
@@ -134,8 +165,8 @@ export class BackboxBorderGlow {
     }
 
     // Pulse on REACH and FEVER states — compared via stored state string, not RGB values
-    const isReach = this._displayState === 'reach'
-    const isFever = this._displayState === 'fever'
+    const isReach = this._displayState === DisplayState.REACH
+    const isFever = this._displayState === DisplayState.FEVER
     let intensityScale = 1.0
     if (isReach) intensityScale = 0.5 + 0.5 * Math.sin(this._pulseTime * Math.PI * 4)  // 2 Hz
     if (isFever) intensityScale = 0.8 + 0.2 * Math.sin(this._pulseTime * Math.PI * 8)  // 4 Hz
@@ -151,6 +182,10 @@ export class BackboxBorderGlow {
 
   /** Dispose GlowLayer and owned material clone. */
   dispose(): void {
+    // Clear rim before disposal so the plugin is cleanly disabled
+    if (this._effectsSystem && this._backboxMesh) {
+      this._effectsSystem.clearFresnelRimEffect(this._backboxMesh)
+    }
     this._glowLayer?.dispose()
     this._glowLayer = null
     this._ownedMaterial?.dispose()  // class owns this clone — must dispose explicitly

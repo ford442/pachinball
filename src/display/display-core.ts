@@ -25,6 +25,7 @@ import { DisplayVideoLayer } from './display-video'
 import { DisplayImageLayer } from './display-image'
 import { BackboxBorderGlow } from './display-border-glow'
 import type { EventBus } from '../game/event-bus'
+import type { EffectsSystem } from '../effects/effects-core'
 
 export class DisplaySystem {
   private scene: Scene
@@ -41,6 +42,9 @@ export class DisplaySystem {
 
   // Border glow
   private borderGlow: BackboxBorderGlow | null = null
+
+  // EffectsSystem reference for fresnel rim wiring
+  private _effectsSystem: EffectsSystem | null = null
 
   // State
   private currentState: DisplayState = DisplayState.IDLE
@@ -125,11 +129,24 @@ export class DisplaySystem {
     // The mesh is named 'cabinetBackbox' in all four cabinet presets.
     const backboxMesh = this.scene.getMeshByName('cabinetBackbox') as Mesh | null
     this.borderGlow = new BackboxBorderGlow(backboxMesh, this.scene, this.qualityTier, this.accessibility)
+    // Wire EffectsSystem if already set (set in scene_rendering before createBackbox runs)
+    if (this._effectsSystem) {
+      this.borderGlow.setEffectsSystem(this._effectsSystem)
+    }
     // Apply the current state immediately so the glow colour is correct from the start.
     this.borderGlow.onDisplaySet(this.currentState)
 
     this.createTextOverlay(backboxRoot)
     this._preloadSplashImages()
+  }
+
+  /** Wire an EffectsSystem for the fresnel rim glow during FEVER. */
+  setEffectsSystem(effects: EffectsSystem): void {
+    this._effectsSystem = effects
+    // If borderGlow already exists (late wiring), propagate immediately.
+    if (this.borderGlow) {
+      this.borderGlow.setEffectsSystem(effects)
+    }
   }
 
   private createTextOverlay(parent: TransformNode): void {
