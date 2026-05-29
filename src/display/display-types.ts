@@ -85,8 +85,10 @@ export interface CRTEffectParams {
   flicker: number
 }
 
+export type CRTPresetName = 'MODERN_LCD' | 'STORY' | 'RETRO' | 'SUBTLE' | 'OFF'
+
 /** Default CRT preset for story mode */
-export const CRT_PRESETS: Record<string, CRTEffectParams> = {
+export const CRT_PRESETS: Record<CRTPresetName, CRTEffectParams> = {
   MODERN_LCD: {
     scanlineIntensity: 0.05,
     curvature: 0.0,
@@ -122,5 +124,14 @@ export const CRT_PRESETS: Record<string, CRTEffectParams> = {
     glow: 0.15,
     noise: 0.05,
     flicker: 0.02,
+  },
+  OFF: {
+    scanlineIntensity: 0.0,
+    curvature: 0.0,
+    vignette: 0.0,
+    chromaticAberration: 0.0,
+    glow: 0.0,
+    noise: 0.0,
+    flicker: 0.0,
   },
 }

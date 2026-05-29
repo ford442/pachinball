@@ -17,11 +17,12 @@ export interface SettingsUIHost {
   readonly debugHUD: DebugHUD | null
   readonly scene: Scene | null
 
-  scanlineIntensity: number
+  scanlineWeight: number
   debugHUDEnabledInSettings: boolean
   showDebugUI: boolean
 
   isDebugHUDAvailable(): boolean
+  setScanlineWeight?(weight: number): void
   switchTableMap(mapName: string): void
   loadCabinetPreset(type: import('./game-cabinet').CabinetType): void
   toggleLevelSelect(): void
@@ -54,6 +55,8 @@ export class GameSettingsUI {
       this.saveSettingsFromUI()
       settingsOverlay?.classList.add('hidden')
     })
+
+    this.setupScanlineSliderLiveUpdate()
   }
 
   private loadSettingsIntoUI(): void {
@@ -72,9 +75,9 @@ export class GameSettingsUI {
     if (photosensitiveCheckbox) photosensitiveCheckbox.checked = settings.photosensitiveMode
     if (shakeSlider) shakeSlider.value = String(settings.shakeIntensity)
     if (scanlineSlider) {
-      scanlineSlider.value = String(settings.scanlineIntensity)
+      scanlineSlider.value = String(settings.scanlineWeight)
       const span = scanlineSlider.parentElement?.querySelector('span')
-      if (span) span.setAttribute('data-value', String(settings.scanlineIntensity))
+      if (span) span.setAttribute('data-value', String(settings.scanlineWeight))
     }
     if (debugHUDCheckbox) debugHUDCheckbox.checked = settings.enableDebugHUD
 
@@ -102,7 +105,7 @@ export class GameSettingsUI {
       reducedMotion: reducedMotionCheckbox?.checked ?? false,
       photosensitiveMode: photosensitiveCheckbox?.checked ?? false,
       shakeIntensity: parseFloat(shakeSlider?.value ?? '0.08'),
-      scanlineIntensity: parseFloat(scanlineSlider?.value ?? '0.12'),
+      scanlineWeight: parseFloat(scanlineSlider?.value ?? '1'),
       enableDebugHUD: debugHUDCheckbox?.checked ?? false,
       enableFog: true,
       enableShadows: true,
@@ -111,7 +114,7 @@ export class GameSettingsUI {
     SettingsManager.save(newSettings)
     SettingsManager.applyToConfig(newSettings)
     this.host.debugHUDEnabledInSettings = newSettings.enableDebugHUD
-    this.host.scanlineIntensity = newSettings.scanlineIntensity
+    this.applyScanlineWeight(newSettings.scanlineWeight)
     console.log('[Accessibility] Settings saved:', newSettings)
 
     if (this.host.debugHUDEnabledInSettings && this.host.isDebugHUDAvailable()) {
@@ -150,6 +153,24 @@ export class GameSettingsUI {
     `
     this.inputLatencyOverlay.textContent = 'Input: -- ms'
     document.body.appendChild(this.inputLatencyOverlay)
+  }
+
+  private setupScanlineSliderLiveUpdate(): void {
+    const scanlineSlider = document.getElementById('scanline-intensity') as HTMLInputElement | null
+    if (!scanlineSlider) return
+
+    scanlineSlider.addEventListener('input', () => {
+      const value = Math.min(1, Math.max(0, parseFloat(scanlineSlider.value || '1')))
+      this.applyScanlineWeight(value)
+      const span = scanlineSlider.parentElement?.querySelector('span')
+      if (span) span.setAttribute('data-value', String(value))
+    })
+  }
+
+  private applyScanlineWeight(value: number): void {
+    this.host.scanlineWeight = value
+    this.host.setScanlineWeight?.(value)
+    this.host.mapManager?.setScanlineWeight(value)
   }
 
   updateLatencyDisplay(inputManager?: { getLatencyReport: () => { avg: number; p95: number } | null }): void {

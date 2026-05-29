@@ -8,6 +8,4 @@ export {
 } from './lcd-table'
 export {
   crtEffectShader,
-  CRT_PRESETS,
-  type CRTEffectParams,
 } from './crt-effect'

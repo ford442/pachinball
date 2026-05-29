@@ -19,6 +19,8 @@ import {
   LCDTableState,
   registerMap,
 } from '../shaders/lcd-table'
+import { SCANLINE_UNIFORM, computeEffectiveScanlineIntensity } from '../shaders/scanline'
+import { SettingsManager } from '../game-elements/settings'
 import { getMapSystem } from '../game-elements/map-system'
 import { getMaterialLibrary } from '../materials'
 import { getCabinetBuilder } from '../cabinet'
@@ -40,12 +42,14 @@ export class TableMapManager {
   // Note: bloomPipeline is set but currently unused - reserved for future map-specific bloom effects
   private mapSystem = getMapSystem()
   private engine: import('@babylonjs/core').AbstractEngine
+  private scanlineWeight: number
 
   constructor(scene: Scene, config: MapManagerConfig = {}) {
     this.scene = scene
     this.config = config
     this.lcdTableState = new LCDTableState()
     this.engine = scene.getEngine() as import('@babylonjs/core').AbstractEngine
+    this.scanlineWeight = SettingsManager.load().scanlineWeight
   }
 
   setBloomPipeline(): void {
@@ -147,7 +151,7 @@ export class TableMapManager {
       [
         'uBaseColor',
         'uAccentColor',
-        'uScanlineIntensity',
+        SCANLINE_UNIFORM,
         'uPixelGridIntensity',
         'uSubpixelIntensity',
         'uGlowIntensity',
@@ -172,7 +176,12 @@ export class TableMapManager {
 
       effect.setColor3('uBaseColor', baseColor)
       effect.setColor3('uAccentColor', accentColor)
-      effect.setFloat('uScanlineIntensity', config.scanlineIntensity)
+      const effectiveScanlineIntensity = computeEffectiveScanlineIntensity(
+        config.scanlineIntensity,
+        this.scanlineWeight,
+        this.lcdTableState.getScanlineIntensityMultiplier()
+      )
+      effect.setFloat(SCANLINE_UNIFORM, effectiveScanlineIntensity)
       effect.setFloat('uPixelGridIntensity', config.pixelGridIntensity)
       effect.setFloat('uSubpixelIntensity', config.subpixelIntensity)
       effect.setFloat('uGlowIntensity', config.glowIntensity)
@@ -193,6 +202,10 @@ export class TableMapManager {
    */
   update(dt: number): void {
     this.lcdTableState.update(dt)
+  }
+
+  setScanlineWeight(weight: number): void {
+    this.scanlineWeight = Math.min(1, Math.max(0, weight))
   }
 
   private hexToColor3(hex: string): Color3 {

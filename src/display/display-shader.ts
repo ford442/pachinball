@@ -37,6 +37,7 @@ import {
 import { DisplayState, type DisplayConfig, CRT_PRESETS, type CRTEffectParams } from './display-types'
 import { crtEffectShader } from '../shaders/crt-effect'
 import { jackpotOverlayPostProcessFragment } from '../shaders/jackpotOverlay'
+import { SCANLINE_UNIFORM, computeEffectiveScanlineIntensity } from '../shaders/scanline'
 
 // ─── Register PostProcess fragment shaders once at module load ────────────────
 // Babylon resolves the shader by looking up "<name>FragmentShader" in the store.
@@ -71,6 +72,9 @@ export class DisplayShaderLayer {
   private time = 0
   private crtEffectActive = false
   private crtEffectParams: CRTEffectParams = CRT_PRESETS.MODERN_LCD
+  private scanlineWeight = 1.0
+  private accessibilityScanlineFactor = 1.0
+  private warnedMissingScanlineUniform = false
 
   // Cached jackpot phase state – updated in update(), read in onApply
   private jackpotState: JackpotPhaseState = { phase: 0, crack: 0, shock: 0, glitch: 0 }
@@ -160,7 +164,7 @@ export class DisplayShaderLayer {
     this.crtPostProcess = new PostProcess(
       'crtPP',
       'crtEffect',
-      ['uTime', 'uScanlineIntensity', 'uCurvature', 'uVignette', 'uChromaticAberration', 'uGlow', 'uNoise', 'uFlicker'],
+      ['uTime', SCANLINE_UNIFORM, 'uCurvature', 'uVignette', 'uChromaticAberration', 'uGlow', 'uNoise', 'uFlicker'],
       null, // textureSampler is auto-provided by Babylon
       1.0,
       null, // manually attached below
@@ -169,9 +173,34 @@ export class DisplayShaderLayer {
     )
 
     this.crtPostProcess.onApply = (effect) => {
+      const hasScanlineUniform = (() => {
+        const effectWithGuards = effect as Effect & {
+          isUniform?: (name: string) => boolean
+          getUniform?: (name: string) => unknown
+        }
+        if (typeof effectWithGuards.isUniform === 'function') {
+          return effectWithGuards.isUniform(SCANLINE_UNIFORM)
+        }
+        if (typeof effectWithGuards.getUniform === 'function') {
+          return Boolean(effectWithGuards.getUniform(SCANLINE_UNIFORM))
+        }
+        return false
+      })()
+
+      if (!this.warnedMissingScanlineUniform && !hasScanlineUniform) {
+        console.warn(`[CRT] Uniform ${SCANLINE_UNIFORM} missing — shader source may be out of sync`)
+        this.warnedMissingScanlineUniform = true
+      }
+
       const p = this.crtEffectParams
+      const scanlineIntensity = computeEffectiveScanlineIntensity(
+        p.scanlineIntensity,
+        this.scanlineWeight,
+        this.accessibilityScanlineFactor
+      )
+
       effect.setFloat('uTime', this.time)
-      effect.setFloat('uScanlineIntensity', p.scanlineIntensity)
+      effect.setFloat(SCANLINE_UNIFORM, scanlineIntensity)
       effect.setFloat('uCurvature', p.curvature)
       effect.setFloat('uVignette', p.vignette)
       effect.setFloat('uChromaticAberration', p.chromaticAberration)
@@ -350,6 +379,14 @@ export class DisplayShaderLayer {
     this.crtEffectParams = { ...this.crtEffectParams, ...params }
   }
 
+  setScanlineWeight(weight: number): void {
+    this.scanlineWeight = Math.min(1, Math.max(0, weight))
+  }
+
+  setAccessibilityScanlineFactor(factor: number): void {
+    this.accessibilityScanlineFactor = Math.min(1, Math.max(0, factor))
+  }
+
   /**
    * Update shader background speed and/or colour tint.
    */
@@ -391,5 +428,3 @@ export class DisplayShaderLayer {
     this.jackpotBaseTex = null
   }
 }
-
-
