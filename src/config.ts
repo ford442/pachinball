@@ -535,6 +535,8 @@ export const PhysicsConfig = {
     holdTimeDivisor: 0.3,
     leftLimits: [-Math.PI / 6, Math.PI / 4] as [number, number],
     rightLimits: [-Math.PI / 4, Math.PI / 6] as [number, number],
+    restitution: 0.88,
+    friction: 0.1,
   },
   bumper: {
     restitution: 0.92,

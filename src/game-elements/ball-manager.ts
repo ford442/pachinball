@@ -140,6 +140,7 @@ export class BallManager {
         .setFriction(GameConfig.ball.friction)
         .setDensity(density)
         .setCollisionGroups(COLLISION_GROUP_PRESETS.BALL)
+        .setContactForceEventThreshold(0.5)
         .setActiveEvents(
           this.rapier.ActiveEvents.COLLISION_EVENTS |
           this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS
@@ -217,7 +218,10 @@ export class BallManager {
           .setFriction(GameConfig.ball.friction)
           .setDensity(density)
           .setCollisionGroups(COLLISION_GROUP_PRESETS.BALL)
-          .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
+          .setActiveEvents(
+            this.rapier.ActiveEvents.COLLISION_EVENTS |
+            this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS
+          ),
         body
       )
 
@@ -267,7 +271,10 @@ export class BallManager {
           .setFriction(GameConfig.ball.friction)
           .setDensity(density)
           .setCollisionGroups(COLLISION_GROUP_PRESETS.BALL)
-          .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
+          .setActiveEvents(
+            this.rapier.ActiveEvents.COLLISION_EVENTS |
+            this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS
+          ),
         body
       )
 
@@ -763,7 +770,10 @@ export class BallManager {
         .setFriction(friction)
         .setDensity(density)
         .setCollisionGroups(COLLISION_GROUP_PRESETS.BALL)
-        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
+        .setActiveEvents(
+          this.rapier.ActiveEvents.COLLISION_EVENTS |
+          this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS
+        ),
       body
     )
 
