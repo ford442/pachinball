@@ -99,6 +99,7 @@ import { GameDisposer } from './game/game-disposer'
 import { GameHUD, type HUDHost } from './game/game-hud'
 import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
 import { CheckpointDebugController, type DebugStageKey } from './game/checkpoint-debug'
+import { FreeMapTestMode } from './game/free-map-test-mode'
 
 export class Game {
   readonly engine: Engine | WebGPUEngine
@@ -234,6 +235,7 @@ export class Game {
   lifecycle!: GameLifecycle
   hud!: GameHUD
   mapCabinet!: GameMapCabinet
+  freeMapTestMode: FreeMapTestMode | null = null
   checkpointDebug = new CheckpointDebugController()
   cosmeticSceneBuilt = false
 
@@ -383,6 +385,7 @@ export class Game {
         onDynamicModeToggle: () => this.scenarioManager.toggleDynamicMode(),
         onScenarioCycle: () => this.scenarioManager.cycleScenario(),
         onPerfMonitorToggle: () => this.togglePerformanceMonitor(),
+        onFreeMapTestToggle: () => this.toggleFreeMapTestMode(),
         getState: () => this.stateManager.getState(),
         getTiltActive: () => this.tiltActive,
       })
@@ -644,6 +647,24 @@ export class Game {
     this.performanceMonitor.setEnabled(enabled)
     console.log(`[PerfMonitor] ${enabled ? 'Enabled' : 'Disabled'}`)
   }
+
+  toggleFreeMapTestMode(): void {
+    if (!this.freeMapTestMode) {
+      this.freeMapTestMode = new FreeMapTestMode(
+        {
+          adventureMode: this.adventureMode,
+          ballManager: this.ballManager,
+          ensureAdventureActive: () => this.slotAdventure.startAdventureMode(),
+          resetBall: () => this.resetBall(),
+        },
+        {
+          onMessage: (msg) => this.showMessage(msg, 3000),
+        }
+      )
+    }
+    this.freeMapTestMode.toggle()
+  }
+
   cycleAdventureTrack(direction: number): void { this.slotAdventure.cycleAdventureTrack(direction) }
   startAdventureMode(): void { this.slotAdventure.startAdventureMode() }
 

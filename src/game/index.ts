@@ -48,3 +48,7 @@ export { GameDisposer } from './game-disposer'
 export { GameHUD, type HUDHost } from './game-hud'
 export { GameMapCabinet, type MapCabinetHost } from './game-map-cabinet'
 export { hexToColor3, resolveVideoUrl } from './game-utils'
+
+export { getMapRegistry, getMapConfigById, getMapsByLayout, resetMapRegistry, type MapConfig } from './map-registry'
+export { LevelLoader, type LevelLoaderDeps, type LoadResult } from './level-loader'
+export { FreeMapTestMode, type FreeMapTestModeConfig } from './free-map-test-mode'
