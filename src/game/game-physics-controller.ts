@@ -257,7 +257,7 @@ export class GamePhysicsController {
 
   stepPhysics(
     inputManager: { update: () => void; processBufferedInputs: () => InputFrame | null } | null,
-    inputActions: { handleFlipperLeft: (p: boolean) => void; handleFlipperRight: (p: boolean) => void; handlePlunger: () => void } | null
+    inputActions: { handleFlipperLeft: (p: boolean) => void; handleFlipperRight: (p: boolean) => void; handlePlunger: () => void; updatePlungerFrame?: (dt: number) => void } | null
   ): void {
     inputManager?.update()
     const inputFrame = inputManager?.processBufferedInputs()
@@ -294,6 +294,9 @@ export class GamePhysicsController {
     if (!this.host.stateManager.isPlaying()) return
 
     const rawDt = this.host.engine.getDeltaTime() / 1000
+    // Advance plunger spring animation each frame (before physics step so kinematic body
+    // is at the correct position when Rapier integrates contacts).
+    inputActions?.updatePlungerFrame?.(Math.min(rawDt, 1 / 30))
 
     this.host.physics.step(rawDt, (h1, h2, start) => {
       if (!start) return

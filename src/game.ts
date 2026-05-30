@@ -343,14 +343,13 @@ export class Game {
     this.ballAnimator = new BallAnimator(scene)
 
     await this.runCheckpointStage('input_runtime', () => {
+      // Provide scene reference so the per-frame plunger animation can find meshes by name
+      this.inputActions.setScene(scene)
       this.inputManager = new GameInputManager(scene, this.physics, {
         onFlipperLeft: (pressed) => this.inputActions.handleFlipperLeft(pressed),
         onFlipperRight: (pressed) => this.inputActions.handleFlipperRight(pressed),
         onPlunger: () => {
-          const launched = this.inputActions.handlePlunger()
-          if (launched) {
-            this.inputActions.resetPlungerVisual(scene)
-          }
+          this.inputActions.handlePlunger()
         },
         onPlungerChargeStart: () => this.inputActions.startPlungerCharge(),
         onPlungerChargeRelease: (chargeLevel) => this.inputActions.releasePlungerCharge(chargeLevel),
@@ -603,10 +602,7 @@ export class Game {
   handleFlipperLeft(pressed: boolean): void { this.inputActions.handleFlipperLeft(pressed) }
   handleFlipperRight(pressed: boolean): void { this.inputActions.handleFlipperRight(pressed) }
   handlePlunger(): void {
-    const launched = this.inputActions.handlePlunger()
-    if (launched) {
-      this.inputActions.resetPlungerVisual(this.scene ?? null)
-    }
+    this.inputActions.handlePlunger()
   }
   startPlungerCharge(): void { this.inputActions.startPlungerCharge() }
   updatePlungerCharge(chargeLevel: number): void { this.inputActions.updatePlungerCharge(chargeLevel) }

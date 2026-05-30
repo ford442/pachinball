@@ -398,11 +398,17 @@ export const GameConfig = {
     /** Max charge time in milliseconds to reach full power */
     maxChargeTime: 1500,
     /** Minimum impulse magnitude (instant tap) */
-    minImpulse: 10,
+    minImpulse: 12,
     /** Maximum impulse magnitude (full charge) */
-    maxImpulse: 35,
+    maxImpulse: 38,
     /** Visual pullback distance for plunger animation */
     maxPullbackDistance: 2.0,
+    /** How far past rest the plunger overshoots on release (visual spring effect, world units) */
+    launchForwardDistance: 0.5,
+    /** Duration of plunger spring-forward animation in seconds */
+    launchAnimDuration: 0.07,
+    /** Duration of plunger return-to-rest animation in seconds */
+    returnAnimDuration: 0.18,
   },
 
   nudge: {
