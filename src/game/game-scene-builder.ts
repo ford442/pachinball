@@ -173,6 +173,7 @@ export class GameSceneBuilder {
     const beforeGameplay = new Set(scene.meshes.map(m => m.uniqueId))
 
     gameObjects.createDeathZone()
+    gameObjects.createPlungerBody()
     gameObjects.createBumpers()
     effects.initBumperSparkPool(12)
     gameObjects.createSlingshots()
