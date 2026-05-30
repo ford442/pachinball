@@ -235,6 +235,17 @@ export class InputHandler {
   }
 
   /**
+   * Cancel any in-progress plunger charge and discard a queued launch.
+   */
+  cancelPlungerCharge(): void {
+    this.plungerChargeState.isHeld = false
+    this.plungerChargeState.chargeStartTime = 0
+    this.plungerChargeState.chargeLevel = 0
+    this.pendingInputs.plunger = false
+    this.onPlungerChargeUpdate(0)
+  }
+
+  /**
    * Enable or disable latency tracking
    */
   enableLatencyTracking(enabled: boolean): void {

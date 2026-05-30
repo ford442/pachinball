@@ -93,6 +93,7 @@ export interface PhysicsHost {
 
   updateHUD(): void
   resetBall(): void
+  handlePrimaryBallDrain(): boolean
   triggerJackpot(): void
   tryActivateSlotMachine(): void
   rebuildHandleCaches(): void
@@ -788,11 +789,17 @@ export class GamePhysicsController {
       if (ballBodies.length > 0) {
         this.host.ballManager?.setBallBody(ballBodies[0])
       } else {
-        this.host.lives--
-        if (this.host.lives > 0) {
-          this.host.resetBall()
+        if (this.host.handlePrimaryBallDrain()) {
+          // Free-map test mode fully handles the drain by loading the next layout
+          // and respawning a fresh launch-ready ball, so no life loss applies here.
+          this.host.updateHUD()
         } else {
-          this.host.setGameState(3) // GameState.GAME_OVER
+          this.host.lives--
+          if (this.host.lives > 0) {
+            this.host.resetBall()
+          } else {
+            this.host.setGameState(3) // GameState.GAME_OVER
+          }
         }
       }
     }
@@ -897,5 +904,3 @@ export class GamePhysicsController {
     )
   }
 }
-
-

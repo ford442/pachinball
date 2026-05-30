@@ -4,6 +4,7 @@
  * Activation: Ctrl+Shift+M (or programmatically via activate())
  * While active:
  *   - PageUp / PageDown cycle through all available layouts
+ *   - Drain automatically advances to the next layout for fast iteration
  *   - On-screen HUD indicator shows current track + mode status
  *   - Each switch cleanly disposes prior physics bodies before loading new track
  *
@@ -55,8 +56,8 @@ export class FreeMapTestMode {
     this.updateHUD()
 
     this.config.onStatusChange?.(true, this.getCurrentMapConfig())
-    this.config.onMessage?.('[TEST MODE] Free Map Test Mode activated — PageUp/PageDown to cycle')
-    console.log('[FreeMapTestMode] Activated. Use PageUp/PageDown to cycle maps.')
+    this.config.onMessage?.('[TEST MODE] Free Map Test Mode activated — PageUp/PageDown or drain to advance')
+    console.log('[FreeMapTestMode] Activated. Use PageUp/PageDown or drain to cycle maps.')
   }
 
   /**
@@ -102,6 +103,15 @@ export class FreeMapTestMode {
     const registry = getMapRegistry()
     this.currentIndex = (this.currentIndex - 1 + registry.length) % registry.length
     this.loadCurrentMap()
+  }
+
+  /**
+   * Advance to the next map after a drain for rapid layout testing.
+   */
+  advanceAfterDrain(): boolean {
+    if (!this.active) return false
+    this.cycleNext()
+    return true
   }
 
   /**
@@ -208,6 +218,7 @@ export class FreeMapTestMode {
       z-index: 10000;
       pointer-events: none;
       backdrop-filter: blur(4px);
+      white-space: pre-line;
     `
     document.body.appendChild(this.hudElement)
   }
@@ -227,7 +238,7 @@ export class FreeMapTestMode {
     const total = registry.length
 
     this.hudElement.textContent = config
-      ? `TEST MODE | ${config.displayName} [${config.layoutType}] | ${idx}/${total}`
-      : `TEST MODE | No maps`
+      ? `TEST MODE | ${config.displayName} [${config.layoutType}] | ${idx}/${total}\nDrain / PgDn: Next  •  PgUp: Prev`
+      : 'TEST MODE | No maps'
   }
 }

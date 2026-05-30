@@ -312,11 +312,45 @@ export class GameInputActions {
   }
 
   /**
-   * Reset plunger visual to rest position.
-   * @deprecated The launch animation is now driven by updatePlungerFrame(); this method is kept
-   * for API compatibility but is intentionally empty.
+   * Reset the plunger charge/animation state to an exact launch-ready rest position.
    */
-  resetPlungerVisual(_scene: import('@babylonjs/core').Scene | null): void {
-    // No-op: smooth reset is handled by the plungerLaunchState machine in updatePlungerFrame().
+  resetPlungerState(): void {
+    this.plungerLaunchState.phase = 'idle'
+    this.plungerLaunchState.progress = 0
+    this.plungerLaunchState.startZ = 0
+    this.plungerLaunchState.strikeZ = 0
+    this.host.plungerChargeLevel = 0
+
+    const scene = this.scene
+    const shooterRod = scene?.getMeshByName('shooterRod')
+    const plungerKnob = scene?.getMeshByName('plungerKnob')
+    const gameObjects = this.host.gameObjects
+    const rapier = this.host.physics.getRapier()
+    const plungerBody = gameObjects?.getPlungerBody?.()
+    const restZ = gameObjects?.getPlungerRestZ() ?? -9.8
+
+    if (shooterRod) shooterRod.position.z = GameInputActions.ROD_BASE_Z
+    if (plungerKnob) plungerKnob.position.z = GameInputActions.KNOB_BASE_Z
+    if (plungerBody && rapier) {
+      plungerBody.setNextKinematicTranslation(
+        new rapier.Vector3(GameInputActions.PLUNGER_X, GameInputActions.PLUNGER_Y, restZ)
+      )
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mat = shooterRod?.material as any
+    if (mat && mat.emissiveColor) {
+      mat.emissiveColor.copyFrom(emissive(PALETTE.CYAN, 0))
+    }
+  }
+
+  /**
+   * Reset the plunger to a launch-ready rest position.
+   */
+  resetPlungerVisual(scene: import('@babylonjs/core').Scene | null): void {
+    if (scene) {
+      this.scene = scene
+    }
+    this.resetPlungerState()
   }
 }

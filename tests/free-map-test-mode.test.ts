@@ -217,6 +217,23 @@ describe('FreeMapTestMode', () => {
     expect(success).toBe(false)
   })
 
+  it('advanceAfterDrain cycles to the next map while active', () => {
+    testMode.activate()
+    const first = testMode.getCurrentMapConfig()
+
+    const advanced = testMode.advanceAfterDrain()
+
+    expect(advanced).toBe(true)
+    expect(testMode.getCurrentMapConfig()?.id).not.toBe(first?.id)
+  })
+
+  it('announces the drain advance hint when activated', () => {
+    testMode.activate()
+    expect(onMessage).toHaveBeenCalledWith(
+      expect.stringContaining('PageUp/PageDown or drain to advance')
+    )
+  })
+
   it('does not cycle when inactive', () => {
     testMode.cycleNext()
     // switchToTrack should not be called since mode is inactive

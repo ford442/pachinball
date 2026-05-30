@@ -361,7 +361,7 @@ export class Game {
         },
         onNudge: (direction) => this.physicsController.applyNudge(direction),
         onPause: () => this.lifecycle.togglePause(),
-        onReset: () => this.lifecycle.resetBall(),
+        onReset: () => this.resetBall(),
         onStart: () => this.lifecycle.startGame(),
         onAdventureToggle: () => this.toggleAdventure(),
         onTrackNext: () => this.slotAdventure.cycleAdventureTrack(1),
@@ -583,7 +583,25 @@ export class Game {
   setGameState(state: GameState): void { this.lifecycle.setGameState(state) }
   getCameraMode(): CameraMode { return this.lifecycle.getCameraMode() }
   togglePause(): void { this.lifecycle.togglePause() }
-  resetBall(): void { this.ballManager?.resetBall(); this.applyEquippedRewards(); this.updateHUD() }
+  /**
+   * Reset the current run to a clean launch-ready state without changing the active mode/track.
+   * This clears transient plunger input/animation state, collapses multiball back to one ball,
+   * then respawns a fresh ball in the shooter lane and reapplies mode rewards.
+   */
+  resetBall(): void {
+    this.inputManager?.cancelPlungerCharge()
+    this.inputActions.resetPlungerState()
+    this.ballManager?.removeExtraBalls()
+    this.ballManager?.resetBall()
+    this.applyEquippedRewards()
+    this.updateHUD()
+  }
+  handlePrimaryBallDrain(): boolean {
+    if (this.freeMapTestMode?.isActive()) {
+      return this.freeMapTestMode.advanceAfterDrain()
+    }
+    return false
+  }
   triggerJackpot(): void { this.lifecycle.triggerJackpot() }
   updateHUD(): void { this.hud.updateHUD() }
   updateGoldBallDisplay(): void { this.hud.updateGoldBallDisplay() }

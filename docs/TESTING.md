@@ -29,6 +29,7 @@ game.freeMapTestMode?.loadById('CYBER_CORE')
 | **Ctrl+Shift+M** | Toggle test mode on/off |
 | **PageDown** | Cycle to next track |
 | **PageUp** | Cycle to previous track |
+| **Drain** | Auto-advance to the next track and respawn launch-ready |
 
 Standard gameplay controls (flippers, plunger, nudge) remain active during test mode.
 
@@ -63,7 +64,7 @@ The test mode is built on three modules:
 
 3. **`src/game/free-map-test-mode.ts`** — `FreeMapTestMode` class that provides:
    - Activation/deactivation lifecycle
-   - Keyboard shortcut registration (PageUp/PageDown)
+   - Keyboard shortcut registration (PageUp/PageDown) plus drain-to-advance flow
    - HUD indicator management
    - Registry cycling logic
 

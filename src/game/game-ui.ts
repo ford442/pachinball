@@ -11,6 +11,7 @@ export interface PopupConfig {
 export interface HUDData {
   score: number
   lives: number
+  ballsInPlay?: number
   combo?: number
   maxCombo?: number
   bestScore?: number
@@ -42,6 +43,7 @@ export class GameUIManager {
   // HUD element references (bound from game.ts UI bindings)
   private scoreElement: HTMLElement | null = null
   private livesElement: HTMLElement | null = null
+  private ballsElement: HTMLElement | null = null
   private comboElement: HTMLElement | null = null
   private bestHudElement: HTMLElement | null = null
 
@@ -73,6 +75,7 @@ export class GameUIManager {
   private bindHUDElements(): void {
     this.scoreElement = document.getElementById('score')
     this.livesElement = document.getElementById('lives')
+    this.ballsElement = document.getElementById('balls')
     this.comboElement = document.getElementById('combo')
     this.bestHudElement = document.getElementById('best')
   }
@@ -266,6 +269,7 @@ export class GameUIManager {
   updateHUD(data: HUDData): void {
     if (this.scoreElement) this.scoreElement.textContent = String(data.score)
     if (this.livesElement) this.livesElement.textContent = String(data.lives)
+    if (this.ballsElement && data.ballsInPlay !== undefined) this.ballsElement.textContent = String(data.ballsInPlay)
     if (this.comboElement) this.comboElement.textContent = data.combo && data.combo > 1 ? `Combo ${data.combo}` : ''
     if (this.bestHudElement && data.bestScore !== undefined) {
       this.bestHudElement.textContent = String(data.bestScore)
