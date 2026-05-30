@@ -108,11 +108,11 @@ export class GameInputActions {
     }
   }
 
-  handlePlunger(): void {
+  handlePlunger(): boolean {
     const rapier = this.host.physics.getRapier()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ballBody = (this.host as any).ballManager?.getBallBody?.()
-    if (!ballBody || !rapier) return
+    if (!ballBody || !rapier) return false
 
     const pos = ballBody.translation()
     if (pos.x > 8 && pos.z < -4) {
@@ -120,6 +120,27 @@ export class GameInputActions {
       const impulseMagnitude = PhysicsConfig.plunger.minImpulse +
         (PhysicsConfig.plunger.maxImpulse - PhysicsConfig.plunger.minImpulse) * chargeRatio
 
+      // Move kinematic plunger body forward to strike position
+      const gameObjects = this.host.gameObjects
+      const plungerBody = gameObjects?.getPlungerBody?.()
+      if (plungerBody) {
+        const restZ = gameObjects!.getPlungerRestZ()
+        // Strike: move plunger forward past rest (overshoot for physical contact)
+        const strikeZ = restZ + 1.5 + chargeRatio * 1.0
+        plungerBody.setNextKinematicTranslation(
+          new rapier.Vector3(10.5, 0.5, strikeZ)
+        )
+        // Schedule return to rest position after strike
+        setTimeout(() => {
+          if (plungerBody.isValid()) {
+            plungerBody.setNextKinematicTranslation(
+              new rapier.Vector3(10.5, 0.5, restZ)
+            )
+          }
+        }, 80)
+      }
+
+      // Also apply direct impulse for reliable launch
       ballBody.applyImpulse(new rapier.Vector3(0, 0, impulseMagnitude), true)
 
       const hapticIntensity = 30 + Math.floor(chargeRatio * 40)
@@ -132,7 +153,9 @@ export class GameInputActions {
 
       this.host.soundSystem.playSample('launch')
       this.host.plungerChargeLevel = 0
+      return true
     }
+    return false
   }
 
   startPlungerCharge(): void {
@@ -168,6 +191,43 @@ export class GameInputActions {
       const knobBaseZ = -13
       shooterRod.position.z = rodBaseZ - pullback
       plungerKnob.position.z = knobBaseZ - pullback
+    }
+
+    // Sync kinematic plunger body position during charge
+    const gameObjects = this.host.gameObjects
+    const plungerBody = gameObjects?.getPlungerBody?.()
+    if (plungerBody) {
+      const rapier = this.host.physics.getRapier()
+      if (rapier) {
+        const restZ = gameObjects!.getPlungerRestZ()
+        const maxPullback = GameConfig.plunger.maxPullbackDistance
+        const pullback = chargeLevel * maxPullback
+        plungerBody.setNextKinematicTranslation(
+          new rapier.Vector3(10.5, 0.5, restZ - pullback)
+        )
+      }
+    }
+  }
+
+  /**
+   * Reset plunger visual to rest position (called after launch completes)
+   */
+  resetPlungerVisual(scene: import('@babylonjs/core').Scene | null): void {
+    if (!scene) return
+    const shooterRod = scene.getMeshByName('shooterRod')
+    const plungerKnob = scene.getMeshByName('plungerKnob')
+    if (shooterRod && plungerKnob) {
+      const rodBaseZ = -10
+      const knobBaseZ = -13
+      // Animate forward briefly (strike), then return to rest
+      shooterRod.position.z = rodBaseZ + 1.0
+      plungerKnob.position.z = knobBaseZ + 1.0
+      setTimeout(() => {
+        if (shooterRod && plungerKnob) {
+          shooterRod.position.z = rodBaseZ
+          plungerKnob.position.z = knobBaseZ
+        }
+      }, 100)
     }
   }
 }

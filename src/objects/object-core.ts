@@ -27,6 +27,8 @@ export class GameObjects {
   private flipperLeftJoint: RAPIER.ImpulseJoint | null = null
   private flipperRightJoint: RAPIER.ImpulseJoint | null = null
   private deathZoneBody: RAPIER.RigidBody | null = null
+  private plungerBody: RAPIER.RigidBody | null = null
+  private plungerRestZ = -7.5
   private pinballMeshes: AbstractMesh[] = []
 
   // Sub-builders
@@ -115,6 +117,35 @@ export class GameObjects {
     deathMat.emissiveColor = Color3.Red()
     deathMat.alpha = 0.2
     deathZoneVis.material = deathMat
+  }
+
+  /**
+   * Create a kinematic plunger body that physically strikes the ball on launch.
+   * The plunger tip sits at x=10.5, y=0.5, z=plungerRestZ (aligned with ball spawn lane).
+   * During charge, it pulls back (z decreases). On release, it snaps forward to strike.
+   */
+  createPlungerBody(): void {
+    // Plunger tip rests just behind the ball spawn (ball spawns at z=-9)
+    this.plungerRestZ = -9.8
+    this.plungerBody = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.kinematicPositionBased()
+        .setTranslation(10.5, 0.5, this.plungerRestZ)
+    )
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(0.3, 0.3, 0.4)
+        .setRestitution(0.9)
+        .setFriction(0.1)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
+      this.plungerBody
+    )
+  }
+
+  getPlungerBody(): RAPIER.RigidBody | null {
+    return this.plungerBody
+  }
+
+  getPlungerRestZ(): number {
+    return this.plungerRestZ
   }
 
   createFlippers(): { left: RAPIER.ImpulseJoint; right: RAPIER.ImpulseJoint } {

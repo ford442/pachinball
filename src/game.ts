@@ -346,7 +346,12 @@ export class Game {
       this.inputManager = new GameInputManager(scene, this.physics, {
         onFlipperLeft: (pressed) => this.inputActions.handleFlipperLeft(pressed),
         onFlipperRight: (pressed) => this.inputActions.handleFlipperRight(pressed),
-        onPlunger: () => this.inputActions.handlePlunger(),
+        onPlunger: () => {
+          const launched = this.inputActions.handlePlunger()
+          if (launched) {
+            this.inputActions.resetPlungerVisual(scene)
+          }
+        },
         onPlungerChargeStart: () => this.inputActions.startPlungerCharge(),
         onPlungerChargeRelease: (chargeLevel) => this.inputActions.releasePlungerCharge(chargeLevel),
         onPlungerChargeUpdate: (chargeLevel) => {
@@ -597,7 +602,12 @@ export class Game {
 
   handleFlipperLeft(pressed: boolean): void { this.inputActions.handleFlipperLeft(pressed) }
   handleFlipperRight(pressed: boolean): void { this.inputActions.handleFlipperRight(pressed) }
-  handlePlunger(): void { this.inputActions.handlePlunger() }
+  handlePlunger(): void {
+    const launched = this.inputActions.handlePlunger()
+    if (launched) {
+      this.inputActions.resetPlungerVisual(this.scene ?? null)
+    }
+  }
   startPlungerCharge(): void { this.inputActions.startPlungerCharge() }
   updatePlungerCharge(chargeLevel: number): void { this.inputActions.updatePlungerCharge(chargeLevel) }
   releasePlungerCharge(chargeLevel: number): void { this.inputActions.releasePlungerCharge(chargeLevel) }
