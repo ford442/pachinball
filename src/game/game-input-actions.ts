@@ -137,7 +137,7 @@ export class GameInputActions {
               new rapier.Vector3(10.5, 0.5, restZ)
             )
           }
-        }, 80)
+        }, 100)
       }
 
       // Also apply direct impulse for reliable launch

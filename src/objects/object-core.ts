@@ -28,7 +28,7 @@ export class GameObjects {
   private flipperRightJoint: RAPIER.ImpulseJoint | null = null
   private deathZoneBody: RAPIER.RigidBody | null = null
   private plungerBody: RAPIER.RigidBody | null = null
-  private plungerRestZ = -7.5
+  private plungerRestZ = -9.8
   private pinballMeshes: AbstractMesh[] = []
 
   // Sub-builders
@@ -126,7 +126,6 @@ export class GameObjects {
    */
   createPlungerBody(): void {
     // Plunger tip rests just behind the ball spawn (ball spawns at z=-9)
-    this.plungerRestZ = -9.8
     this.plungerBody = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.kinematicPositionBased()
         .setTranslation(10.5, 0.5, this.plungerRestZ)
