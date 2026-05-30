@@ -25,6 +25,7 @@ describe('InputHandler', () => {
     onFlipperLeft: vi.fn(),
     onFlipperRight: vi.fn(),
     onPlunger: vi.fn(),
+    onPlungerChargeUpdate: vi.fn(),
     onNudge: vi.fn(),
     onPause: vi.fn(),
     onReset: vi.fn(),
@@ -156,5 +157,16 @@ describe('InputHandler', () => {
       const frame = handler.processBufferedInputs()
       expect(frame.plunger).toBe(true)
     })
+  })
+
+  it('cancelPlungerCharge clears held charge and queued launch state', () => {
+    handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Enter' }))
+
+    handler.cancelPlungerCharge()
+
+    expect(handler.isPlungerHeld()).toBe(false)
+    expect(handler.getPlungerChargeState().chargeLevel).toBe(0)
+    expect(handler.processBufferedInputs().plunger).toBe(false)
+    expect(callbacks.onPlungerChargeUpdate).toHaveBeenCalledWith(0)
   })
 })

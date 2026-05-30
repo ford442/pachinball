@@ -93,6 +93,7 @@ export interface PhysicsHost {
 
   updateHUD(): void
   resetBall(): void
+  handlePrimaryBallDrain(): boolean
   triggerJackpot(): void
   tryActivateSlotMachine(): void
   rebuildHandleCaches(): void
@@ -788,11 +789,15 @@ export class GamePhysicsController {
       if (ballBodies.length > 0) {
         this.host.ballManager?.setBallBody(ballBodies[0])
       } else {
-        this.host.lives--
-        if (this.host.lives > 0) {
-          this.host.resetBall()
+        if (this.host.handlePrimaryBallDrain()) {
+          this.host.updateHUD()
         } else {
-          this.host.setGameState(3) // GameState.GAME_OVER
+          this.host.lives--
+          if (this.host.lives > 0) {
+            this.host.resetBall()
+          } else {
+            this.host.setGameState(3) // GameState.GAME_OVER
+          }
         }
       }
     }
@@ -897,5 +902,4 @@ export class GamePhysicsController {
     )
   }
 }
-
 

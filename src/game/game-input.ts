@@ -298,6 +298,10 @@ export class GameInputManager {
     return this.inputHandler.getPlungerChargeState()
   }
 
+  cancelPlungerCharge(): void {
+    this.inputHandler.cancelPlungerCharge()
+  }
+
   /**
    * Dispose all input handlers and clean up
    */

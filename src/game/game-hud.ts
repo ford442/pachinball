@@ -42,7 +42,13 @@ export class GameHUD {
 
   updateHUD(): void {
     const { uiManager, score, lives, comboCount, bestScore } = this.host
-    uiManager?.updateHUD({ score, lives, combo: comboCount, bestScore })
+    uiManager?.updateHUD({
+      score,
+      lives,
+      ballsInPlay: this.host.ballManager?.getBallBodies().length ?? 0,
+      combo: comboCount,
+      bestScore,
+    })
     this.host.adventureState.setGoalProgress('reach-score', score)
     this.updateAdventureHUD()
   }
