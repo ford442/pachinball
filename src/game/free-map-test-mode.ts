@@ -227,7 +227,7 @@ export class FreeMapTestMode {
     const total = registry.length
 
     this.hudElement.textContent = config
-      ? `🗺️ TEST MODE | ${config.displayName} [${config.layoutType}] | ${idx}/${total}`
-      : `🗺️ TEST MODE | No maps`
+      ? `TEST MODE | ${config.displayName} [${config.layoutType}] | ${idx}/${total}`
+      : `TEST MODE | No maps`
   }
 }

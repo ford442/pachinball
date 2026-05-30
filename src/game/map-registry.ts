@@ -56,8 +56,7 @@ function modeTypeToLayout(modeType?: TrackModeType): 'extended' | 'stationary' {
 }
 
 function formatTrackId(id: string): string {
-  return id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).toLowerCase()
-    .replace(/\b\w/g, c => c.toUpperCase())
+  return id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
 /** Singleton registry instance, lazily built. */
