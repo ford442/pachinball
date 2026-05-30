@@ -583,6 +583,11 @@ export class Game {
   setGameState(state: GameState): void { this.lifecycle.setGameState(state) }
   getCameraMode(): CameraMode { return this.lifecycle.getCameraMode() }
   togglePause(): void { this.lifecycle.togglePause() }
+  /**
+   * Reset the current run to a clean launch-ready state without changing the active mode/track.
+   * This clears transient plunger input/animation state, collapses multiball back to one ball,
+   * then respawns a fresh ball in the shooter lane and reapplies mode rewards.
+   */
   resetBall(): void {
     this.inputManager?.cancelPlungerCharge()
     this.inputActions.resetPlungerState()

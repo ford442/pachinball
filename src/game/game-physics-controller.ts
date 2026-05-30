@@ -790,6 +790,8 @@ export class GamePhysicsController {
         this.host.ballManager?.setBallBody(ballBodies[0])
       } else {
         if (this.host.handlePrimaryBallDrain()) {
+          // Free-map test mode fully handles the drain by loading the next layout
+          // and respawning a fresh launch-ready ball, so no life loss applies here.
           this.host.updateHUD()
         } else {
           this.host.lives--
@@ -902,4 +904,3 @@ export class GamePhysicsController {
     )
   }
 }
-

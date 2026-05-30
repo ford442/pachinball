@@ -345,7 +345,7 @@ export class GameInputActions {
   }
 
   /**
-   * Reset plunger visual to rest position.
+   * Reset the plunger to a launch-ready rest position.
    */
   resetPlungerVisual(scene: import('@babylonjs/core').Scene | null): void {
     if (scene) {
