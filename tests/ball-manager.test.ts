@@ -148,7 +148,7 @@ function makeDescBuilder(): Record<string, () => Record<string, unknown>> {
   for (const method of [
     'setTranslation', 'setCcdEnabled', 'setCanSleep',
     'setLinearDamping', 'setAngularDamping',
-    'setRestitution', 'setFriction', 'setDensity', 'setActiveEvents',
+    'setRestitution', 'setFriction', 'setDensity', 'setCollisionGroups', 'setActiveEvents',
   ]) {
     obj[method] = () => obj
   }

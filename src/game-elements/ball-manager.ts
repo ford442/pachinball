@@ -18,6 +18,7 @@ import { GameConfig, BallType, BALL_TIERS } from '../config'
 import type { PhysicsBinding, BallData } from './types'
 import { getMaterialLibrary } from '../materials'
 import { getSoundSystem } from './sound-system'
+import { COLLISION_GROUP_PRESETS } from './physics'
 import { pulse } from './visual-language'
 
 
@@ -138,6 +139,7 @@ export class BallManager {
         .setRestitution(GameConfig.ball.restitution)
         .setFriction(GameConfig.ball.friction)
         .setDensity(density)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.BALL)
         .setActiveEvents(
           this.rapier.ActiveEvents.COLLISION_EVENTS |
           this.rapier.ActiveEvents.CONTACT_FORCE_EVENTS
@@ -214,6 +216,7 @@ export class BallManager {
           .setRestitution(GameConfig.ball.restitution)
           .setFriction(GameConfig.ball.friction)
           .setDensity(density)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.BALL)
           .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
         body
       )
@@ -263,6 +266,7 @@ export class BallManager {
           .setRestitution(GameConfig.ball.restitution)
           .setFriction(GameConfig.ball.friction)
           .setDensity(density)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.BALL)
           .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
         body
       )
@@ -758,6 +762,7 @@ export class BallManager {
         .setRestitution(restitution)
         .setFriction(friction)
         .setDensity(density)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.BALL)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       body
     )
