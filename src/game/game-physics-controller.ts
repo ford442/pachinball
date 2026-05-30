@@ -13,6 +13,7 @@ import type { GameObjects } from '../objects'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { SoundSystem } from '../game-elements/sound-system'
+import type { BumperVisual } from '../game-elements/types'
 import type { HapticManager } from '../game-elements/haptics'
 import type { GameStateManager } from './game-state'
 import type { EventBus } from './event-bus'
@@ -113,7 +114,7 @@ export class GamePhysicsController {
   private gateHandleSet: Set<number> = new Set()
   private launcherHandleSet: Set<number> = new Set()
   private spinnerHandleSet: Set<number> = new Set()
-  private bumperVisualMap: Map<number, import('../game-elements/types').BumperVisual> = new Map()
+  private bumperVisualMap: Map<number, BumperVisual> = new Map()
   private deathZoneHandle: number = -1
   private adventureSensorHandle: number = -1
   /** Handles of active exit-portal sensor bodies; collisions are silently skipped
