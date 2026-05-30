@@ -505,28 +505,39 @@ export class GamePhysicsController {
     }
   }
 
+  /** Minimum contact force to trigger visual effects */
+  private static readonly CONTACT_FORCE_THRESHOLD = 5
+  /** Force value used to normalize intensity to 0-1 range */
+  private static readonly CONTACT_FORCE_MAX = 50
+  /** Minimum force for camera shake */
+  private static readonly HARD_IMPACT_THRESHOLD = 30
+  /** Bloom energy multiplier for force-based effects */
+  private static readonly BLOOM_FORCE_SCALE = 2
+  /** Camera shake multiplier for force-based effects */
+  private static readonly SHAKE_FORCE_SCALE = 0.5
+
   /**
    * Process contact force events for force-proportional effects.
    * Stronger hits produce bigger visual feedback (bloom, camera shake).
    */
   private processContactForce(h1: number, h2: number, maxForce: number): void {
     // Ignore gentle contacts below threshold
-    if (maxForce < 5) return
+    if (maxForce < GamePhysicsController.CONTACT_FORCE_THRESHOLD) return
 
-    // Only apply force-based effects for ball-bumper or ball-wall contacts
+    // Only apply force-based effects for ball contacts
     const h1IsBall = this.ballHandleSet.has(h1)
     const h2IsBall = this.ballHandleSet.has(h2)
     if (!h1IsBall && !h2IsBall) return
 
     // Normalize intensity (0-1) based on force magnitude
-    const intensity = Math.min(maxForce / 50, 1.0)
+    const intensity = Math.min(maxForce / GamePhysicsController.CONTACT_FORCE_MAX, 1.0)
 
     // Bloom energy scales with impact force
-    this.host.effects?.setBloomEnergy(intensity * 2)
+    this.host.effects?.setBloomEnergy(intensity * GamePhysicsController.BLOOM_FORCE_SCALE)
 
     // Hard impacts trigger camera shake
-    if (maxForce > 30) {
-      this.host.effects?.addCameraShake(intensity * 0.5)
+    if (maxForce > GamePhysicsController.HARD_IMPACT_THRESHOLD) {
+      this.host.effects?.addCameraShake(intensity * GamePhysicsController.SHAKE_FORCE_SCALE)
     }
   }
 
