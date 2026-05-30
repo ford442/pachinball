@@ -28,6 +28,7 @@ export interface InputConfig {
   onScenarioCycle?: () => void
   onCRTPresetCycle?: () => void
   onPerfMonitorToggle?: () => void
+  onFreeMapTestToggle?: () => void
   getState?: () => import('../game-elements/types').GameState
   getTiltActive?: () => boolean
 }
@@ -97,6 +98,13 @@ export class GameInputManager {
     // Prevent duplicate handling for held keys
     if (this.gameKeysPressed.has(e.code)) return
     this.gameKeysPressed.add(e.code)
+
+    // Ctrl+Shift+M to toggle Free Map Test Mode
+    if (e.ctrlKey && e.shiftKey && e.code === 'KeyM') {
+      e.preventDefault()
+      this.config.onFreeMapTestToggle?.()
+      return
+    }
 
     // Get state from config for state-dependent shortcuts
     const gameState = this.config.getState?.()
