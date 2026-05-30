@@ -39,6 +39,8 @@ export class WallBuilder {
     )
     this.world.createCollider(
       this.rapier.ColliderDesc.cuboid(GameConfig.table.width / 2, 0.1, GameConfig.table.height / 2)
+        .setRestitution(GameConfig.physics.surfaces.playfield.restitution)
+        .setFriction(GameConfig.physics.surfaces.playfield.friction)
         .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
       groundBody
     )

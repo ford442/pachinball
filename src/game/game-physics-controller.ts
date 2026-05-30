@@ -113,6 +113,7 @@ export class GamePhysicsController {
   private gateHandleSet: Set<number> = new Set()
   private launcherHandleSet: Set<number> = new Set()
   private spinnerHandleSet: Set<number> = new Set()
+  private bumperVisualMap: Map<number, import('../game-elements/types').BumperVisual> = new Map()
   private deathZoneHandle: number = -1
   private adventureSensorHandle: number = -1
   /** Handles of active exit-portal sensor bodies; collisions are silently skipped
@@ -170,9 +171,14 @@ export class GamePhysicsController {
     this.gateHandleSet.clear()
     this.launcherHandleSet.clear()
     this.spinnerHandleSet.clear()
+    this.bumperVisualMap.clear()
 
     for (const b of (this.host.gameObjects?.getBumperBodies() || [])) {
       this.bumperHandleSet.add(b.handle)
+    }
+    // Build O(1) bumper visual lookup keyed by body handle
+    for (const vis of (this.host.gameObjects?.getBumperVisuals() || [])) {
+      this.bumperVisualMap.set(vis.body.handle, vis)
     }
     for (const b of (this.host.gameObjects?.getTargetBodies() || [])) {
       this.targetHandleSet.add(b.handle)
@@ -545,8 +551,7 @@ export class GamePhysicsController {
     if (!this.ballHandleSet.has(ballHandle)) return
 
     const ballPos = ballBody.translation()
-    const bumperVisuals = this.host.gameObjects?.getBumperVisuals() || []
-    const vis = bumperVisuals.find(v => v.body === bump)
+    const vis = this.bumperVisualMap.get(bump.handle)
     if (!vis) return
 
     const ballMesh = this.getBallMeshForBody(ballBody)
@@ -727,8 +732,7 @@ export class GamePhysicsController {
   }
 
   private activateHologramCatch(ball: RAPIER.RigidBody, bumper: RAPIER.RigidBody): void {
-    const bumperVisuals = this.host.gameObjects?.getBumperVisuals() || []
-    const visual = bumperVisuals.find(v => v.body === bumper)
+    const visual = this.bumperVisualMap.get(bumper.handle)
     if (!visual || !visual.hologram) return
     this.host.ballManager?.activateHologramCatch(ball, visual.hologram.position, 4.0)
     this.host.effects?.playBeep(880)

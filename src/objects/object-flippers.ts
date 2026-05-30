@@ -3,6 +3,7 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig, PhysicsConfig } from '../config'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
+import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 
 export class FlipperBuilder {
   private scene: Scene
@@ -161,7 +162,10 @@ export class FlipperBuilder {
       const colliderOffset = isRight ? (flipperLength - 0.4) / 2 : -(flipperLength - 0.4) / 2
       this.world.createCollider(
         this.rapier.ColliderDesc.cuboid((flipperLength - 0.4) / 2, 0.3, 0.25)
-          .setTranslation(colliderOffset, 0, 0),
+          .setTranslation(colliderOffset, 0, 0)
+          .setRestitution(PhysicsConfig.flipper.restitution)
+          .setFriction(PhysicsConfig.flipper.friction)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.FLIPPER),
         body
       )
 
@@ -170,7 +174,9 @@ export class FlipperBuilder {
       this.world.createCollider(
         this.rapier.ColliderDesc.ball(0.3)
           .setTranslation(tipOffset, 0.05, 0)
-          .setRestitution(0.3),
+          .setRestitution(PhysicsConfig.flipper.restitution)
+          .setFriction(PhysicsConfig.flipper.friction)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.FLIPPER),
         body
       )
 

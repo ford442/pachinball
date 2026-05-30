@@ -90,6 +90,39 @@ describe('Physics Collision Groups', () => {
     // Wall's filter includes Ball's membership
     expect(wallFilter & ballMembership).toBeTruthy()
   })
+
+  it('FLIPPER preset only collides with balls', () => {
+    const flipperGroup = COLLISION_GROUP_PRESETS.FLIPPER
+    const membership = (flipperGroup >>> 16) & 0xFFFF
+    const filter = flipperGroup & 0xFFFF
+
+    expect(membership).toBe(CollisionGroups.FLIPPER)
+    expect(filter).toBe(CollisionGroups.BALL)
+  })
+
+  it('Ball-Flipper collision groups are reciprocal', () => {
+    const ballFilter = COLLISION_GROUP_PRESETS.BALL & 0xFFFF
+    const flipperMembership = (COLLISION_GROUP_PRESETS.FLIPPER >>> 16) & 0xFFFF
+    const flipperFilter = COLLISION_GROUP_PRESETS.FLIPPER & 0xFFFF
+    const ballMembership = (COLLISION_GROUP_PRESETS.BALL >>> 16) & 0xFFFF
+
+    // Ball's filter includes Flipper's membership
+    expect(ballFilter & flipperMembership).toBeTruthy()
+    // Flipper's filter includes Ball's membership
+    expect(flipperFilter & ballMembership).toBeTruthy()
+  })
+
+  it('Ball-Bumper collision groups are reciprocal', () => {
+    const ballFilter = COLLISION_GROUP_PRESETS.BALL & 0xFFFF
+    const bumperMembership = (COLLISION_GROUP_PRESETS.BUMPER >>> 16) & 0xFFFF
+    const bumperFilter = COLLISION_GROUP_PRESETS.BUMPER & 0xFFFF
+    const ballMembership = (COLLISION_GROUP_PRESETS.BALL >>> 16) & 0xFFFF
+
+    // Ball's filter includes Bumper's membership
+    expect(ballFilter & bumperMembership).toBeTruthy()
+    // Bumper's filter includes Ball's membership
+    expect(bumperFilter & ballMembership).toBeTruthy()
+  })
 })
 
 describe('Physics Constants', () => {
