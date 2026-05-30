@@ -4,6 +4,7 @@ import { getMaterialLibrary } from '../materials'
 import { PhysicsConfig } from '../config'
 import type { PhysicsBinding, BumperVisual } from '../game-elements/types'
 import { INTENSITY, STATE_PROFILES, PALETTE, color, emissive, stateEmissive } from '../game-elements/visual-language'
+import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 
 export class BumperBuilder {
   private scene: Scene
@@ -119,6 +120,7 @@ export class BumperBuilder {
       this.world.createCollider(
         this.rapier.ColliderDesc.ball(0.4 * scale)
           .setRestitution(PhysicsConfig.bumper.restitution)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.BUMPER)
           .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
         body
       )
@@ -127,6 +129,7 @@ export class BumperBuilder {
         this.rapier.ColliderDesc.cylinder(1.5, 0.5)
           .setSensor(true)
           .setTranslation(0, 2.0, 0)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.SENSOR)
           .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
         body
       )

@@ -3,6 +3,7 @@ import { Scene, Vector3, Mesh, AbstractMesh, MeshBuilder, TransformNode, Standar
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
 import type { PhysicsBinding, BumperVisual } from '../game-elements/types'
+import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { FlipperBuilder } from './object-flippers'
 import { BumperBuilder } from './object-bumpers'
 import { WallBuilder } from './object-walls'
@@ -103,6 +104,7 @@ export class GameObjects {
     this.world.createCollider(
       this.rapier.ColliderDesc.cuboid(20, 2, 2)
         .setSensor(true)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.SENSOR)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       this.deathZoneBody
     )

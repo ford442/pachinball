@@ -304,6 +304,8 @@ export class GamePhysicsController {
       }
 
       this.processCollision(h1, h2)
+    }, (h1, h2, maxForce) => {
+      this.processContactForce(h1, h2, maxForce)
     })
 
     const dt = Math.min(rawDt, 1 / 30)
@@ -500,6 +502,31 @@ export class GamePhysicsController {
     if (h1IsGate || h2IsGate) {
       this.handleGateCollision(h1IsGate ? b1 : b2, h1IsGate ? h2 : h1)
       return
+    }
+  }
+
+  /**
+   * Process contact force events for force-proportional effects.
+   * Stronger hits produce bigger visual feedback (bloom, camera shake).
+   */
+  private processContactForce(h1: number, h2: number, maxForce: number): void {
+    // Ignore gentle contacts below threshold
+    if (maxForce < 5) return
+
+    // Only apply force-based effects for ball-bumper or ball-wall contacts
+    const h1IsBall = this.ballHandleSet.has(h1)
+    const h2IsBall = this.ballHandleSet.has(h2)
+    if (!h1IsBall && !h2IsBall) return
+
+    // Normalize intensity (0-1) based on force magnitude
+    const intensity = Math.min(maxForce / 50, 1.0)
+
+    // Bloom energy scales with impact force
+    this.host.effects?.setBloomEnergy(intensity * 2)
+
+    // Hard impacts trigger camera shake
+    if (maxForce > 30) {
+      this.host.effects?.addCameraShake(intensity * 0.5)
     }
   }
 

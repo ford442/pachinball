@@ -3,6 +3,7 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding, BumperVisual } from '../game-elements/types'
+import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 
 export class WallBuilder {
   private scene: Scene
@@ -36,7 +37,11 @@ export class WallBuilder {
     const groundBody = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.fixed().setTranslation(0, -1, 5)
     )
-    this.world.createCollider(this.rapier.ColliderDesc.cuboid(GameConfig.table.width / 2, 0.1, GameConfig.table.height / 2), groundBody)
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(GameConfig.table.width / 2, 0.1, GameConfig.table.height / 2)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
+      groundBody
+    )
 
     const binding: PhysicsBinding = { mesh: ground, rigidBody: groundBody }
 
@@ -116,7 +121,8 @@ export class WallBuilder {
 
       this.world.createCollider(
         this.rapier.ColliderDesc.cuboid(diagWidth / 2, height / 2, thickness / 2)
-          .setRestitution(0.5),
+          .setRestitution(0.5)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
         body
       )
 
@@ -151,7 +157,8 @@ export class WallBuilder {
     )
     this.world.createCollider(
       this.rapier.ColliderDesc.cuboid(size.x / 2, size.y, size.z / 2)
-        .setFriction(GameConfig.ball.friction),
+        .setFriction(GameConfig.ball.friction)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
       b
     )
 
@@ -201,6 +208,7 @@ export class WallBuilder {
     this.world.createCollider(
       this.rapier.ColliderDesc.cuboid(0.25, 1, 2)
         .setRestitution(1.5)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.BUMPER)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       b
     )
