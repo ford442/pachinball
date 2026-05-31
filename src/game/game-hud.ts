@@ -47,6 +47,7 @@ export class GameHUD {
       lives,
       ballsInPlay: this.host.ballManager?.getBallBodies().length ?? 0,
       combo: comboCount,
+      scoreMultiplier: this.host.ballManager?.getChainStats().scoreMultiplier ?? 1,
       bestScore,
     })
     this.host.adventureState.setGoalProgress('reach-score', score)

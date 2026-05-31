@@ -34,6 +34,9 @@ import {
   AdventureUIStateManager,
   AdventureTrackProgression,
   AdventureProgressionSupervisor,
+  initializeTrackThemingSystem,
+  initializeCampaignRewardsManager,
+  getScoringBreakdownManager,
   DisplayState,
   DisplaySystem,
   EffectsSystem,
@@ -157,6 +160,7 @@ export class GameSystemsInitializer {
         this.game.effects.setBallMeshProvider(this.game.ballManager)
       }
       this.game.adventureMode = new AdventureMode(scene, world, rapier)
+      this.game.adventureMode.setAccessibilityConfig(this.game.accessibility)
 
       this.game.setupFeederEventHandlers()
     })
@@ -259,6 +263,15 @@ export class GameSystemsInitializer {
           },
         },
       )
+      const campaignRewards = initializeCampaignRewardsManager(this.game.adventureTrackProgression)
+      campaignRewards.configureAppliers({
+        applyBallSkin: (skinId) => this.game.ballManager?.applyBallSkin(skinId),
+        applyCabinetTheme: (themeId) => this.game.cabinetBuilder.applyCampaignCabinetTheme(themeId),
+        applyBackboxTint: (_tintId) => {
+          // Future-proof hook for a dedicated backbox tint pipeline.
+        },
+      })
+      campaignRewards.applyEquippedRewards()
 
       // Integration plan:
       // 1) Supervisor emits `portal:open` with track + result kind.
@@ -388,6 +401,24 @@ export class GameSystemsInitializer {
       // The old subscription that re-emitted 'portal:open' here was removed because
       // the supervisor already emits 'portal:open' via resolveOutcome() when the score
       // goal is hit — reactivating the portal after entry would be incorrect.
+      this.game.eventBus.on('track:completed', ({ totalReward }) => {
+        const scoringBreakdown = getScoringBreakdownManager()
+        const rewardResult = campaignRewards.applyTrackReward(totalReward)
+        this.game.uiManager?.showRewardToast(
+          totalReward,
+          rewardResult.totalShards,
+          rewardResult.newlyUnlocked.map((reward) => reward.name),
+        )
+        const bestDelta = Math.max(0, this.game.score - this.game.bestScore)
+        this.game.uiManager?.showScoringBreakdown(scoringBreakdown.getSnapshot(), {
+          finalScore: this.game.score,
+          bestScore: this.game.bestScore,
+          bestDelta,
+          rewardShards: totalReward,
+          autoDismissMs: 6000,
+        })
+        scoringBreakdown.reset()
+      })
 
       // Hide countdown when adventure ends cleanly (END event resets supervisor)
       this.game.eventBus.on('adventure:end', () => {
@@ -463,6 +494,7 @@ export class GameSystemsInitializer {
           },
           onScoreAward: (points, reason) => {
             g.score += points
+            getScoringBreakdownManager().recordScore(points, 'adventure-goal-award')
             g.updateHUD()
             g.uiManager?.showMessage(`${reason}: +${points}`, 1000)
             const pos = g.physicsController.getBallPosition()
@@ -470,6 +502,7 @@ export class GameSystemsInitializer {
           },
           onAdventureEnd: () => {
             g.score += GAME_TUNING.scoring.adventureEndBonus
+            getScoringBreakdownManager().recordScore(GAME_TUNING.scoring.adventureEndBonus, 'adventure-end-bonus')
             g.updateHUD()
             g.effects?.startJackpotSequence()
             const pos = g.physicsController.getBallPosition()
@@ -494,6 +527,23 @@ export class GameSystemsInitializer {
         onMapSelectorUpdate: () => g.settingsUI.updateMapSelectorUI(),
       })
       g.mapManager.setBloomPipeline()
+
+      const trackThemingSystem = initializeTrackThemingSystem({
+        gameObjects: g.gameObjects,
+        ballManager: g.ballManager,
+        spinnerVisuals: g.spinnerVisuals,
+        gateStates: g.gateStates,
+        cabinetNeonLights: g.cabinetNeonLights,
+        display: g.display,
+        effects: g.effects,
+        mapManager: g.mapManager,
+        qualityTier: g.qualityTier,
+        scene: g.scene!,
+      })
+      g.scene?.onBeforeRenderObservable.add(() => {
+        const activeTrack = g.adventureMode?.getCurrentZone() ?? null
+        trackThemingSystem.update(activeTrack)
+      })
 
       g.cabinetManager = new CabinetManager(g.scene!, {
         onPopupShow: (name) => g.mapCabinet.showCabinetPopup(name),

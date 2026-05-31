@@ -27,12 +27,13 @@ import type { NanoLoomFeeder } from '../game-elements/nano-loom-feeder'
 import type { PrismCoreFeeder } from '../game-elements/prism-core-feeder'
 import type { GaussCannonFeeder } from '../game-elements/gauss-cannon-feeder'
 import type { QuantumTunnelFeeder } from '../game-elements/quantum-tunnel-feeder'
-import type { InputFrame } from '../game-elements'
+import { ComboSystem, getScoringBreakdownManager, type ComboHitType, type InputFrame } from '../game-elements'
 import type { SpinnerBumperBuilder, SpinnerBumperVisual, BallTrapBuilder, BallTrapState, LauncherBuilder, LauncherState, MovingGateBuilder, MovingGateState } from '../objects'
 import { BallType, GAME_TUNING, GameConfig, PhysicsConfig } from '../config'
 import { DisplayState } from '../game-elements'
 import { TABLE_MAPS } from '../shaders/lcd-table'
 import { PALETTE, CameraMode } from '../game-elements'
+import type { QualityTier } from '../game-elements/visual-language'
 
 export interface PhysicsHost {
   readonly engine: import('@babylonjs/core').Engine | import('@babylonjs/core').WebGPUEngine
@@ -61,6 +62,7 @@ export interface PhysicsHost {
   readonly quantumTunnel: QuantumTunnelFeeder | null
   readonly tableCam: import('@babylonjs/core').TargetCamera | null
   readonly accessibility: import('../game-elements').AccessibilityConfig
+  readonly qualityTier: QualityTier
 
   /**
    * Obstacle builders — used to retrieve body lists for collision-handle caching
@@ -102,6 +104,7 @@ export interface PhysicsHost {
   setGameState(state: import('../game-elements').GameState): void
   endAdventureMode(): void
   getBallPosition(): Vector3 | null
+  getCameraMode(): CameraMode
 }
 
 export class GamePhysicsController {
@@ -124,15 +127,39 @@ export class GamePhysicsController {
   private portalSensorHandleSet: Set<number> = new Set()
   private static readonly COLLISION_DEBOUNCE_MS = 16
   private eventBusUnsubscribers: Array<() => void> = []
+  private readonly comboSystem: ComboSystem
+  private readonly scoringBreakdown = getScoringBreakdownManager()
 
   constructor(host: PhysicsHost) {
     this.host = host
+    this.comboSystem = new ComboSystem({
+      expirySeconds: GAME_TUNING.combo.expirySeconds,
+      chainWindowSeconds: GAME_TUNING.combo.chainWindowSeconds,
+      chainDistinctThreshold: GAME_TUNING.combo.chainDistinctThreshold,
+      chainMultiplier: GAME_TUNING.combo.chainMultiplier,
+      chainCooldownSeconds: GAME_TUNING.combo.chainCooldownSeconds,
+      namedChains: GAME_TUNING.combo.namedChains.map((chain) => ({
+        ...chain,
+        sequence: chain.sequence as ComboHitType[],
+      })),
+    })
 
     // Subscribe to 'points:awarded' from new obstacle builders so their scores
     // are reflected in the game score alongside legacy direct mutations.
     this.eventBusUnsubscribers.push(
       host.eventBus.on('points:awarded', (data) => {
-        this.host.score += data.amount * (data.multiplier ?? 1)
+        const effectiveMultiplier = (data.multiplier ?? 1) * this.getActiveScoreMultiplier()
+        const awardedPoints = Math.round(data.amount * effectiveMultiplier)
+        this.host.score += awardedPoints
+        this.scoringBreakdown.recordScore(awardedPoints, data.source)
+        if (effectiveMultiplier > 1) {
+          this.host.eventBus.emit('score:multiplier', {
+            basePoints: data.amount,
+            awardedPoints,
+            multiplier: effectiveMultiplier,
+            source: data.source,
+          })
+        }
         this.host.updateHUD()
       })
     )
@@ -152,6 +179,13 @@ export class GamePhysicsController {
         if (!this.host.accessibility.reducedMotion) {
           this.host.effects?.addCameraShake(data.amount)
         }
+      })
+    )
+
+    this.eventBusUnsubscribers.push(
+      host.eventBus.on('jackpot:start', () => {
+        if (!this.host.stateManager.isPlaying()) return
+        this.startChainMultiball('jackpot', 3)
       })
     )
   }
@@ -322,12 +356,28 @@ export class GamePhysicsController {
     const dt = Math.min(rawDt, 1 / 30)
 
     // Camera controller
-    if (!GameConfig.camera.reducedMotion && this.host.cameraController && this.host.ballManager?.getBallBody()) {
+    if (this.host.cameraController && this.host.ballManager?.getBallBody()) {
       const ballBody = this.host.ballManager.getBallBody()!
       const pos = ballBody.translation()
       const vel = ballBody.linvel()
-      const cameraMode = this.host.isCameraFollowMode ? CameraMode.BALL_FOLLOW : CameraMode.IDLE
-      this.host.cameraController.update(dt, new Vector3(pos.x, pos.y, pos.z), new Vector3(vel.x, vel.y, vel.z), cameraMode)
+      const lifecycleMode = this.host.getCameraMode()
+      const cameraMode = this.host.isCameraFollowMode ? CameraMode.BALL_FOLLOW : lifecycleMode
+
+      if (cameraMode === CameraMode.ADVENTURE) {
+        this.host.cameraController.resetDynamicState()
+      } else {
+        this.host.cameraController.update(
+          dt,
+          new Vector3(pos.x, pos.y, pos.z),
+          new Vector3(vel.x, vel.y, vel.z),
+          cameraMode,
+          {
+            reducedMotion: this.host.accessibility.reducedMotion,
+            photosensitiveMode: this.host.accessibility.maxCameraShakeIntensity <= 0,
+            qualityTier: this.host.qualityTier,
+          }
+        )
+      }
       if (this.host.isCameraFollowMode && this.host.tableCam) {
         const targetY = pos.y + 2.5
         this.host.tableCam.target.y += (targetY - this.host.tableCam.target.y) * dt * 5
@@ -545,6 +595,7 @@ export class GamePhysicsController {
 
     // Bloom energy scales with impact force
     this.host.effects?.setBloomEnergy(intensity * GamePhysicsController.BLOOM_FORCE_SCALE)
+    this.host.soundSystem.playImpact('peg', intensity * 18)
 
     // Hard impacts trigger camera shake
     if (maxForce > GamePhysicsController.HARD_IMPACT_THRESHOLD) {
@@ -582,25 +633,36 @@ export class GamePhysicsController {
 
     this.host.gameObjects?.activateBumperHit(bump)
     this.host.effects?.addCameraShake(0.3)
-    const bumperPoints = GAME_TUNING.scoring.bumperHitBase * (Math.floor(this.host.comboCount / GAME_TUNING.combo.multiplierDivisor) + 1)
-    this.host.score += bumperPoints
-    this.host.comboCount++
-    this.host.comboTimer = GAME_TUNING.combo.expirySeconds
+    const comboResult = this.comboSystem.registerBumperHit(this.nowSeconds())
+    this.syncComboSnapshot()
+    this.emitComboProgressEvent(comboResult.event)
+    this.emitComboChainEvent(comboResult.chain)
 
-    if (this.host.comboCount >= GAME_TUNING.combo.feverThreshold && this.host.display?.getDisplayState() === DisplayState.IDLE) {
+    const bumperBasePoints = GAME_TUNING.scoring.bumperHitBase * (Math.floor(comboResult.comboCount / GAME_TUNING.combo.multiplierDivisor) + 1)
+    const chainAdjustedBase = Math.round(bumperBasePoints * comboResult.chain.chainMultiplier)
+    this.awardScore(
+      chainAdjustedBase,
+      'bumper-hit',
+      new Vector3(ballPos.x, ballPos.y, ballPos.z)
+    )
+    if (comboResult.chain.bonusPoints > 0) {
+      this.awardScore(comboResult.chain.bonusPoints, 'combo-chain-bonus', new Vector3(ballPos.x, ballPos.y, ballPos.z))
+    }
+
+    if (comboResult.comboCount >= GAME_TUNING.combo.feverThreshold && this.host.display?.getDisplayState() === DisplayState.IDLE) {
       this.host.eventBus.emit('fever:start')
       this.host.eventBus.emit('display:set', DisplayState.FEVER)
       this.host.effects?.setLightingMode('fever', 0)
     }
 
-    this.host.effects?.spawnEnhancedBumperImpact(vis.mesh.position, 'medium')
+    const impactTier = this.getComboImpactTier()
+    this.host.effects?.spawnEnhancedBumperImpact(vis.mesh.position, impactTier)
     this.host.effects?.spawnBumperSpark(vis.mesh.position, vis.color || PALETTE.CYAN)
     this.host.effects?.spawnImpactRing(vis.mesh.position, new Vector3(0, 1, 0), PALETTE.CYAN)
     this.host.effects?.triggerImpactFlash(vis.mesh.position, 1.0, vis.color || '#44aaff')
-    this.host.effects?.spawnFloatingNumber(bumperPoints, new Vector3(ballPos.x, ballPos.y, ballPos.z))
     this.host.effects?.playBeep(400 + Math.random() * 200)
     this.host.updateHUD()
-    this.host.effects?.setLightingMode('hit', 0.2)
+    this.host.effects?.setLightingMode('hit', impactTier === 'heavy' ? 0.35 : impactTier === 'medium' ? 0.25 : 0.2)
     this.host.adventureState.updateGoal('hit-pegs', 1)
 
     const velocity = ballBody.linvel()
@@ -618,8 +680,14 @@ export class GamePhysicsController {
       const mapColor = TABLE_MAPS[this.host.mapManager?.getCurrentMap() || 'neon-helix']?.baseColor || '#00d9ff'
       this.host.effects?.triggerCabinetShake('heavy', mapColor)
     }
+    if (speed > 8) {
+      const impactStrength = Math.min((speed - 8) / 14, 1)
+      this.host.cameraController?.notifyImpact(vis.mesh.position, impactStrength)
+    }
 
-    this.host.soundSystem.playSample('bumper', vis.mesh.position)
+    this.host.soundSystem.playImpact('bumper', speed, {
+      position: new Vector3(ballPos.x, ballPos.y, ballPos.z),
+    })
   }
 
   private handleFlipperCollision(flipperBody: RAPIER.RigidBody, ballBody: RAPIER.RigidBody, ballHandle: number): void {
@@ -644,6 +712,9 @@ export class GamePhysicsController {
 
     this.host.hapticManager?.flipper()
     this.host.effects?.playBeep(880 + Math.random() * 200)
+    this.host.soundSystem.playImpact('flipper', speed, {
+      position: new Vector3(ballPos.x, ballPos.y, ballPos.z),
+    })
     this.applySpinTransfer(ballBody, collisionNormal, speed)
   }
 
@@ -655,13 +726,19 @@ export class GamePhysicsController {
         const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
         const impactIntensity = Math.min(speed / 20, 1.0)
         this.host.ballAnimator.animateSimpleImpact(ballMesh, impactIntensity)
+        this.host.soundSystem.playImpact('peg', speed, {
+          position: new Vector3(ballBody.translation().x, ballBody.translation().y, ballBody.translation().z),
+        })
       }
     }
 
     if (this.host.gameObjects?.deactivateTarget(tgt)) {
       const ballPos = ballBody.translation()
-      this.host.score += GAME_TUNING.scoring.targetHitBase
-      this.host.effects?.spawnFloatingNumber(GAME_TUNING.scoring.targetHitBase, new Vector3(ballPos.x, ballPos.y, ballPos.z))
+      this.awardScore(
+        GAME_TUNING.scoring.targetHitBase,
+        'target-hit',
+        new Vector3(ballPos.x, ballPos.y, ballPos.z)
+      )
       this.host.effects?.playBeep(1200)
       this.host.ballManager?.spawnExtraBalls(1)
       this.host.updateHUD()
@@ -677,12 +754,18 @@ export class GamePhysicsController {
   private handleSpinnerCollision(obstacleBody: RAPIER.RigidBody, ballBody: RAPIER.RigidBody, ballHandle: number): void {
     if (!this.ballHandleSet.has(ballHandle)) return
 
+    this.registerComboObstacleHit('spinner')
+
     const vel = ballBody.linvel()
     const impactForce = Math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)
     const visual = this.host.spinnerVisuals.find(v => v.body === obstacleBody)
     if (visual) {
       const ballPos = ballBody.translation()
       this.host.spinnerBuilder?.triggerSpin(visual, impactForce, new Vector3(ballPos.x, ballPos.y, ballPos.z))
+      if (impactForce > 10) {
+        const impactStrength = Math.min((impactForce - 10) / 16, 1)
+        this.host.cameraController?.notifyImpact(new Vector3(ballPos.x, ballPos.y, ballPos.z), impactStrength)
+      }
     }
   }
 
@@ -691,6 +774,7 @@ export class GamePhysicsController {
 
     const state = this.host.trapStates.find(s => s.body === obstacleBody)
     if (state && state.isOpen && !state.caughtBall) {
+      this.registerComboObstacleHit('trap')
       const ballPos = ballBody.translation()
       this.host.ballTrapBuilder?.catchBall(state, ballBody, new Vector3(ballPos.x, ballPos.y, ballPos.z))
     }
@@ -701,6 +785,7 @@ export class GamePhysicsController {
 
     const state = this.host.launcherStates.find(s => s.body === obstacleBody)
     if (state && state.cooldownTimer <= 0) {
+      this.registerComboObstacleHit('launcher')
       const forceVec = this.host.launcherBuilder?.triggerLauncher(state, 1.0)
       if (forceVec) {
         const rapier = this.host.physics.getRapier()
@@ -716,6 +801,7 @@ export class GamePhysicsController {
 
     const state = this.host.gateStates.find(s => s.body === obstacleBody)
     if (state && !state.isOpen) {
+      this.registerComboObstacleHit('gate')
       this.host.movingGateBuilder?.openGate(state)
     }
   }
@@ -736,6 +822,121 @@ export class GamePhysicsController {
     return new Vector3(t.x, t.y, t.z)
   }
 
+  private nowSeconds(): number {
+    return (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000
+  }
+
+  private syncComboSnapshot(): void {
+    const snapshot = this.comboSystem.getSnapshot()
+    this.host.comboCount = snapshot.comboCount
+    this.host.comboTimer = snapshot.comboTimer
+    this.host.uiManager?.updateComboChainMeter(snapshot.chainProgress, snapshot.chainTarget, false)
+  }
+
+  private emitComboProgressEvent(event: 'started' | 'extended' | null): void {
+    if (!event) return
+    const snapshot = this.comboSystem.getSnapshot()
+    const payload = {
+      comboCount: snapshot.comboCount,
+      chainLength: snapshot.chainProgress,
+      lastType: snapshot.lastType ?? undefined,
+    }
+    if (event === 'started') {
+      this.host.eventBus.emit('combo:started', payload)
+      return
+    }
+    this.host.eventBus.emit('combo:extended', payload)
+  }
+
+  private emitComboChainEvent(chain: {
+    triggered: boolean
+    chainLength: number
+    chainMultiplier: number
+    namedChain: { name: string } | null
+    bonusPoints: number
+  }): void {
+    if (!chain.triggered) return
+    const snapshot = this.comboSystem.getSnapshot()
+    const lastType = snapshot.lastType
+    if (!lastType) return
+    this.host.eventBus.emit('combo:chain', {
+      comboCount: snapshot.comboCount,
+      chainLength: chain.chainLength,
+      lastType,
+      chainName: chain.namedChain?.name,
+      bonusPoints: chain.bonusPoints,
+      multiplier: chain.chainMultiplier,
+    })
+    this.host.uiManager?.updateComboChainMeter(snapshot.chainProgress, snapshot.chainTarget, true)
+    const chainLabel = chain.namedChain?.name ?? `CHAIN x${chain.chainLength}`
+    this.host.showMessage(chain.bonusPoints > 0 ? `${chainLabel} +${chain.bonusPoints}` : chainLabel, 1600)
+  }
+
+  private registerComboObstacleHit(type: ComboHitType): void {
+    const result = this.comboSystem.registerChainHit(type, this.nowSeconds())
+    this.syncComboSnapshot()
+    this.emitComboProgressEvent(result.event)
+    this.emitComboChainEvent(result.chain)
+    if (!GameConfig.accessibility.photosensitiveMode && this.host.effects?.getRuntimePerformanceTier() !== 'low' && result.chain.chainLength >= 2) {
+      const mapColor = TABLE_MAPS[this.host.mapManager?.getCurrentMap() || 'neon-helix']?.baseColor || PALETTE.CYAN
+      this.host.effects?.triggerCabinetShake(result.chain.chainLength >= 4 ? 'heavy' : 'medium', mapColor)
+    }
+    this.host.updateHUD()
+  }
+
+  private getComboImpactTier(): 'light' | 'medium' | 'heavy' {
+    if (this.host.accessibility.reducedMotion || GameConfig.accessibility.photosensitiveMode) {
+      return 'light'
+    }
+    const chainLength = this.comboSystem.getSnapshot().chainProgress
+    if (chainLength >= 4) return 'heavy'
+    if (chainLength >= 2) return 'medium'
+    return 'light'
+  }
+
+  private getActiveScoreMultiplier(): number {
+    return this.host.ballManager?.getChainStats().scoreMultiplier ?? 1
+  }
+
+  private awardScore(basePoints: number, source: string, position?: Vector3): number {
+    const multiplier = this.getActiveScoreMultiplier()
+    const awardedPoints = Math.round(basePoints * multiplier)
+    this.host.score += awardedPoints
+    this.scoringBreakdown.recordScore(awardedPoints, source)
+    if (position) {
+      this.host.effects?.spawnFloatingNumber(awardedPoints, position)
+    }
+    if (multiplier > 1) {
+      this.host.eventBus.emit('score:multiplier', {
+        basePoints,
+        awardedPoints,
+        multiplier,
+        source,
+      })
+    }
+    return awardedPoints
+  }
+
+  private startChainMultiball(reason: 'jackpot' | 'gold-threshold', targetBalls: number): void {
+    const result = this.host.ballManager?.triggerForcedMultiball(targetBalls, reason)
+    if (!result?.started) return
+
+    this.host.eventBus.emit('multiball:start', {
+      reason,
+      ballsInPlay: result.ballsInPlay,
+      scoreMultiplier: result.scoreMultiplier,
+      chainLevel: result.chainLevel,
+    })
+    this.host.showMessage(`MULTIBALL x${Number(result.scoreMultiplier.toFixed(2)).toString()}`, 1800)
+
+    if (!this.host.accessibility.reducedMotion) {
+      this.host.effects?.addCameraShake(0.05)
+    }
+
+    this.host.updateHUD()
+    this.rebuildHandleCaches()
+  }
+
   private activateHologramCatch(ball: RAPIER.RigidBody, bumper: RAPIER.RigidBody): void {
     const visual = this.bumperVisualMap.get(bumper.handle)
     if (!visual || !visual.hologram) return
@@ -748,8 +949,20 @@ export class GamePhysicsController {
 
   handleBallLoss(body: RAPIER.RigidBody): void {
     if (!this.host.stateManager.isPlaying()) return
+    const wasPrimaryBall = body === this.host.ballManager?.getBallBody()
+    const drainVel = body.linvel()
+    const drainSpeed = Math.sqrt(drainVel.x ** 2 + drainVel.y ** 2 + drainVel.z ** 2)
 
-    this.host.comboCount = 0
+    const comboBreak = this.comboSystem.breakCombo()
+    if (comboBreak) {
+      this.host.eventBus.emit('combo:broken', {
+        finalComboCount: comboBreak.finalComboCount,
+        chainLength: comboBreak.chainLength,
+        lastType: comboBreak.lastType ?? undefined,
+      })
+      this.host.uiManager?.updateComboChainMeter(0, GAME_TUNING.combo.chainDistinctThreshold, false)
+    }
+    this.syncComboSnapshot()
     if (this.host.display?.getDisplayState() === DisplayState.FEVER) {
       this.host.eventBus.emit('fever:end')
       this.host.eventBus.emit('display:set', DisplayState.IDLE)
@@ -762,10 +975,13 @@ export class GamePhysicsController {
       // Ball stack visual updated by caller
       this.host.goldBallStack.push({ type: collected.type, timestamp: performance.now() })
       this.host.sessionGoldBalls++
-      this.host.score += collected.points
       const collectPos = new Vector3(body.translation().x, body.translation().y, body.translation().z)
-      this.host.effects?.spawnFloatingNumber(collected.points, collectPos)
-      this.host.showMessage(`+${collected.points}`, 1500)
+      const awardedPoints = this.awardScore(collected.points, 'gold-ball-collect', collectPos)
+      this.host.showMessage(`+${awardedPoints}`, 1500)
+
+      if (GAME_TUNING.multiball.triggerGoldThresholds.includes(this.host.sessionGoldBalls)) {
+        this.startChainMultiball('gold-threshold', 2)
+      }
 
       if (collected.type === BallType.SOLID_GOLD) {
         this.host.effects?.startSolidGoldPulse()
@@ -779,12 +995,21 @@ export class GamePhysicsController {
     }
 
     this.host.ballManager?.removeBall(body)
+    const multiballDrainResult = this.host.ballManager?.registerDrain(body)
+    if (multiballDrainResult?.ballSaved) {
+      this.host.eventBus.emit('multiball:save', { remainingMs: multiballDrainResult.ballSaveRemainingMs })
+      this.host.showMessage('BALL SAVED', 1200)
+      this.rebuildHandleCaches()
+    }
+    if (multiballDrainResult?.multiballEnded) {
+      this.host.eventBus.emit('multiball:end', { ballsInPlay: multiballDrainResult.ballsInPlay })
+      this.host.showMessage('MULTIBALL ENDED', 1400)
+    }
     this.host.hapticManager?.ballLost()
-    this.host.soundSystem.playSample('drain')
+    this.host.soundSystem.playImpact('drain', drainSpeed)
     this.host.display?.triggerDrainReaction()
 
-    const ballBody = this.host.ballManager?.getBallBody()
-    if (body === ballBody) {
+    if (wasPrimaryBall) {
       const ballBodies = this.host.ballManager?.getBallBodies() || []
       if (ballBodies.length > 0) {
         this.host.ballManager?.setBallBody(ballBodies[0])
@@ -863,16 +1088,20 @@ export class GamePhysicsController {
   }
 
   private updateCombo(dt: number): void {
-    if (this.host.comboTimer > 0) {
-      this.host.comboTimer -= dt
-      if (this.host.comboTimer <= 0) {
-        this.host.comboCount = 0
-        this.host.updateHUD()
-        if (this.host.display?.getDisplayState() === DisplayState.FEVER) {
-          this.host.eventBus.emit('fever:end')
-          this.host.eventBus.emit('display:set', DisplayState.IDLE)
-          this.host.effects?.setLightingMode('normal', 0)
-        }
+    const broken = this.comboSystem.update(dt)
+    this.syncComboSnapshot()
+    if (broken) {
+      this.host.eventBus.emit('combo:broken', {
+        finalComboCount: broken.finalComboCount,
+        chainLength: broken.chainLength,
+        lastType: broken.lastType ?? undefined,
+      })
+      this.host.uiManager?.updateComboChainMeter(0, GAME_TUNING.combo.chainDistinctThreshold, false)
+      this.host.updateHUD()
+      if (this.host.display?.getDisplayState() === DisplayState.FEVER) {
+        this.host.eventBus.emit('fever:end')
+        this.host.eventBus.emit('display:set', DisplayState.IDLE)
+        this.host.effects?.setLightingMode('normal', 0)
       }
     }
   }

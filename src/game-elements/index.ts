@@ -18,6 +18,7 @@ export {
   type CabinetPreset,
 } from '../cabinet'
 export { BallManager } from './ball-manager'
+export { ComboSystem, type ComboHitType, type ComboSystemConfig, type ComboNamedChain } from './combo-system'
 // Adventure mode re-exported from new location
 export { AdventureMode, AdventureTrackType, CAMERA_PRESETS, type CameraPreset } from '../adventure'
 export {
@@ -44,7 +45,7 @@ export { GaussCannonFeeder, GaussCannonState } from './gauss-cannon-feeder'
 export { QuantumTunnelFeeder, QuantumTunnelState } from './quantum-tunnel-feeder'
 export { MaterialLibrary, getMaterialLibrary, resetMaterialLibrary, detectQualityTier } from '../materials'
 export { BallAnimator } from './ball-animator'
-export { CameraController, CameraMode, FRAMING_ZONES, DEFAULT_SOFT_FOLLOW } from './camera-controller'
+export { CameraController, CameraMode, FRAMING_ZONES, DEFAULT_SOFT_FOLLOW, type CameraRuntimePolicy } from './camera-controller'
 export {
   detectAccessibility,
   mergeAccessibilityConfig,
@@ -62,6 +63,7 @@ export {
   type TableMapConfig,
 } from '../shaders/lcd-table'
 export { SoundSystem, getSoundSystem, resetSoundSystem, type SampleCategory, type MapId } from './sound-system'
+export { createImpactVoiceProfile, normalizeImpactVelocity, getPortalMotifFrequencies, type ImpactCategory, type ImpactVoiceOptions, type ImpactVoiceProfile } from './audio-synth'
 export { LeaderboardSystem, getLeaderboardSystem, resetLeaderboardSystem, type LeaderboardEntry, type ScoreSubmission } from './leaderboard-system'
 export { NameEntryDialog, getNameEntryDialog, type NameEntryResult } from './name-entry-dialog'
 export { MapSystem, getMapSystem, resetMapSystem, type DynamicMapConfig } from './map-system'
@@ -142,6 +144,16 @@ export {
   type TrackInfo,
   type TrackModeType,
 } from './adventure-track-progression'
+export {
+  TrackThemingSystem,
+  initializeTrackThemingSystem,
+  getTrackThemingSystem,
+  resetTrackThemingSystem,
+  TRACK_THEME_OVERRIDES,
+  applyThemeEmissiveColor,
+  type TrackVisualTheme,
+  type TrackThemingSystemDeps,
+} from './track-theming-system'
 export { AdventureProgressionSupervisor, type PortalSpatialContext } from './adventure-progression-supervisor'
 export {
   getGoalsForTrack,
@@ -149,6 +161,21 @@ export {
   getTotalReward,
   cloneGoals,
 } from './adventure-track-goals'
+export {
+  CampaignRewardsManager,
+  CAMPAIGN_REWARD_CATALOG,
+  initializeCampaignRewardsManager,
+  getCampaignRewardsManager,
+  resetCampaignRewardsManager,
+  type CampaignRewardItem,
+  type CampaignRewardType,
+} from './campaign-rewards-manager'
+export {
+  ScoringBreakdownManager,
+  getScoringBreakdownManager,
+  resetScoringBreakdownManager,
+  type ScoringBreakdownSnapshot,
+} from './scoring-breakdown'
 
 // EventBus integration shims
 export { ObstacleEventBusIntegration } from './obstacle-eventbus-integration'

@@ -87,4 +87,79 @@ describe('SoundSystem', () => {
       expect(mockCreateBuffer).toHaveBeenCalledTimes(7)
     })
   })
+
+  describe('playImpact', () => {
+    it('creates synth nodes and scales gain with velocity', () => {
+      const gainEvents: number[] = []
+      const makeGainNode = () => ({
+        gain: {
+          value: 1,
+          setValueAtTime: vi.fn().mockImplementation((value: number) => gainEvents.push(value)),
+          linearRampToValueAtTime: vi.fn().mockImplementation((value: number) => gainEvents.push(value)),
+          exponentialRampToValueAtTime: vi.fn().mockImplementation((value: number) => gainEvents.push(value)),
+        },
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+      })
+
+      const mockAudioContext = {
+        sampleRate: 48000,
+        currentTime: 1,
+        createGain: vi.fn().mockImplementation(makeGainNode),
+        createOscillator: vi.fn().mockReturnValue({
+          type: 'sine',
+          frequency: {
+            setValueAtTime: vi.fn(),
+            exponentialRampToValueAtTime: vi.fn(),
+          },
+          connect: vi.fn(),
+          start: vi.fn(),
+          stop: vi.fn(),
+        }),
+        createBiquadFilter: vi.fn().mockReturnValue({
+          type: 'lowpass',
+          frequency: {
+            setValueAtTime: vi.fn(),
+            exponentialRampToValueAtTime: vi.fn(),
+          },
+          Q: { value: 0 },
+          connect: vi.fn(),
+        }),
+        createBuffer: vi.fn().mockImplementation((channels: number, length: number, sampleRate: number) => ({
+          numberOfChannels: channels,
+          length,
+          sampleRate,
+          getChannelData: vi.fn().mockReturnValue(new Float32Array(length)),
+        })),
+        createBufferSource: vi.fn().mockReturnValue({
+          buffer: null,
+          connect: vi.fn(),
+          start: vi.fn(),
+          stop: vi.fn(),
+        }),
+        destination: {},
+        state: 'running',
+        resume: vi.fn().mockResolvedValue(undefined),
+      } as unknown as AudioContext
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(soundSystem as any).audioContext = mockAudioContext
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(soundSystem as any).sfxGain = makeGainNode()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(soundSystem as any).isInitialized = true
+
+      soundSystem.playImpact('bumper', 4)
+      const firstPeak = Math.max(...gainEvents)
+      gainEvents.length = 0
+
+      ;(mockAudioContext as unknown as { currentTime: number }).currentTime = 2
+      soundSystem.playImpact('bumper', 18)
+      const secondPeak = Math.max(...gainEvents)
+
+      expect(mockAudioContext.createOscillator).toHaveBeenCalled()
+      expect(mockAudioContext.createBufferSource).toHaveBeenCalled()
+      expect(secondPeak).toBeGreaterThan(firstPeak)
+    })
+  })
 })

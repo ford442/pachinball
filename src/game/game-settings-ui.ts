@@ -83,11 +83,10 @@ export class GameSettingsUI {
 
     this.host.mapManager?.getLCDTableState().setPhotosensitiveMode(settings.photosensitiveMode)
 
-    const volumeSettings = this.host.soundSystem.getVolumeSettings()
-    if (masterVolumeSlider) masterVolumeSlider.value = String(volumeSettings.master)
-    if (musicVolumeSlider) musicVolumeSlider.value = String(volumeSettings.music)
-    if (sfxVolumeSlider) sfxVolumeSlider.value = String(volumeSettings.sfx)
-    if (muteCheckbox) muteCheckbox.checked = volumeSettings.muted
+    if (masterVolumeSlider) masterVolumeSlider.value = String(settings.masterVolume)
+    if (musicVolumeSlider) musicVolumeSlider.value = String(settings.musicVolume)
+    if (sfxVolumeSlider) sfxVolumeSlider.value = String(settings.sfxVolume)
+    if (muteCheckbox) muteCheckbox.checked = settings.muted
   }
 
   private saveSettingsFromUI(): void {
@@ -105,10 +104,15 @@ export class GameSettingsUI {
       reducedMotion: reducedMotionCheckbox?.checked ?? false,
       photosensitiveMode: photosensitiveCheckbox?.checked ?? false,
       shakeIntensity: parseFloat(shakeSlider?.value ?? '0.08'),
+      qualityPreset: SettingsManager.load().qualityPreset,
       scanlineWeight: parseFloat(scanlineSlider?.value ?? '1'),
       enableDebugHUD: debugHUDCheckbox?.checked ?? false,
       enableFog: true,
       enableShadows: true,
+      masterVolume: parseFloat(masterVolumeSlider?.value ?? '0.8'),
+      musicVolume: parseFloat(musicVolumeSlider?.value ?? '0.6'),
+      sfxVolume: parseFloat(sfxVolumeSlider?.value ?? '0.9'),
+      muted: muteCheckbox?.checked ?? false,
     }
 
     SettingsManager.save(newSettings)
@@ -125,16 +129,10 @@ export class GameSettingsUI {
 
     this.host.mapManager?.getLCDTableState().setPhotosensitiveMode(newSettings.photosensitiveMode)
 
-    if (masterVolumeSlider) {
-      this.host.soundSystem.setMasterVolume(parseFloat(masterVolumeSlider.value))
-    }
-    if (musicVolumeSlider) {
-      this.host.soundSystem.setMusicVolume(parseFloat(musicVolumeSlider.value))
-    }
-    if (sfxVolumeSlider) {
-      this.host.soundSystem.setSfxVolume(parseFloat(sfxVolumeSlider.value))
-    }
-    if (muteCheckbox && muteCheckbox.checked !== this.host.soundSystem.getVolumeSettings().muted) {
+    this.host.soundSystem.setMasterVolume(newSettings.masterVolume)
+    this.host.soundSystem.setMusicVolume(newSettings.musicVolume)
+    this.host.soundSystem.setSfxVolume(newSettings.sfxVolume)
+    if (newSettings.muted !== this.host.soundSystem.getVolumeSettings().muted) {
       this.host.soundSystem.toggleMute()
     }
   }

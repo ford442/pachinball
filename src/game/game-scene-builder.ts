@@ -18,10 +18,13 @@ import type { GameUIManager } from './game-ui'
 import { getMaterialLibrary } from '../materials'
 import { getCabinetBuilder } from '../cabinet'
 import { GameConfig } from '../config'
+import type { AccessibilityConfig, QualityTier } from '../game-elements'
 
 export interface SceneBuilderHost {
   readonly scene: Scene
   readonly physics: PhysicsSystem
+  readonly accessibility: AccessibilityConfig
+  readonly qualityTier: QualityTier
   effects: EffectsSystem | null
   display: DisplaySystem | null
   gameObjects: GameObjects | null

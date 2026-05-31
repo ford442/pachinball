@@ -1,4 +1,5 @@
 import { TargetCamera, Vector3, Scalar } from '@babylonjs/core'
+import { QualityTier } from './visual-language'
 
 /**
  * Camera modes for different gameplay situations
@@ -53,6 +54,12 @@ export interface SoftFollowConfig {
   velocityPrediction: number
 }
 
+export interface CameraRuntimePolicy {
+  reducedMotion: boolean
+  photosensitiveMode: boolean
+  qualityTier: QualityTier
+}
+
 /**
  * Default soft follow configuration
  * Conservative values for smooth, safe camera movement
@@ -81,6 +88,20 @@ export class CameraController {
   private softFollowConfig: SoftFollowConfig
   private lastBallPos: Vector3 | null = null
   private velocityEstimate = new Vector3(0, 0, 0)
+  private readonly baseFov: number
+  private dynamicFovBias = 0
+  private speedTargetBiasZ = 0
+  private impactTargetBias = new Vector3(0, 0, 0)
+  private impactCooldownRemaining = 0
+  private dynamicAllowed = true
+
+  private static readonly SPEED_RESPONSE_THRESHOLD = 7
+  private static readonly SPEED_RESPONSE_MAX = 28
+  private static readonly MAX_DYNAMIC_FOV_BIAS = 0.14
+  private static readonly MAX_SPEED_TARGET_BIAS_Z = 1.2
+  private static readonly IMPACT_COOLDOWN_SECONDS = 0.22
+  private static readonly MAX_IMPACT_TARGET_BIAS = 1.0
+  private static readonly IMPACT_DECAY_PER_SECOND = 5.5
 
   constructor(
     tableCam: TargetCamera,
@@ -88,6 +109,7 @@ export class CameraController {
   ) {
     this.tableCam = tableCam
     this.softFollowConfig = { ...DEFAULT_SOFT_FOLLOW, ...softFollowConfig }
+    this.baseFov = tableCam.fov
     // Initialize current target to camera's initial target
     this.currentTarget = tableCam.target.clone()
   }
@@ -99,14 +121,25 @@ export class CameraController {
    * @param ballVel Current ball velocity
    * @param mode Current camera mode
    */
-  update(dt: number, ballPos: Vector3, ballVel: Vector3, mode: CameraMode): void {
+  update(
+    dt: number,
+    ballPos: Vector3,
+    ballVel: Vector3,
+    mode: CameraMode,
+    runtimePolicy?: CameraRuntimePolicy
+  ): void {
     this.currentMode = mode
+
+    this.updateRuntimePolicy(runtimePolicy, mode)
 
     // Estimate velocity for smoother prediction when physics jitters
     this.updateVelocityEstimate(ballPos, dt)
 
     // Calculate target based on mode and ball position
     const target = this.calculateDynamicTarget(ballPos, ballVel, mode)
+    this.applyDynamicSpeedResponse(ballVel, dt)
+    target.z -= this.speedTargetBiasZ
+    target.addInPlace(this.impactTargetBias)
 
     // Smooth interpolation (safety first - keep it slow)
     // Clamp dt to prevent large jumps on frame drops
@@ -120,8 +153,32 @@ export class CameraController {
     this.currentTarget.z = Scalar.Clamp(this.currentTarget.z, -15, 10)
 
     this.tableCam.target = this.currentTarget.clone()
+    this.tableCam.fov = this.baseFov + this.dynamicFovBias
 
     this.lastBallPos = ballPos.clone()
+  }
+
+  notifyImpact(impactPos: Vector3, intensity: number): void {
+    if (!this.dynamicAllowed || this.impactCooldownRemaining > 0) return
+
+    const strength = Scalar.Clamp(intensity, 0, 1)
+    if (strength <= 0.05) return
+
+    const towardImpact = new Vector3(
+      impactPos.x - this.currentTarget.x,
+      0,
+      impactPos.z - this.currentTarget.z
+    )
+    const length = towardImpact.length()
+    if (length < 0.001) return
+
+    const bias = towardImpact.scale((0.4 * strength) / length)
+    this.impactTargetBias.addInPlace(bias)
+    if (this.impactTargetBias.length() > CameraController.MAX_IMPACT_TARGET_BIAS) {
+      this.impactTargetBias.normalize().scaleInPlace(CameraController.MAX_IMPACT_TARGET_BIAS)
+    }
+
+    this.impactCooldownRemaining = CameraController.IMPACT_COOLDOWN_SECONDS
   }
 
   /**
@@ -334,5 +391,54 @@ export class CameraController {
     this.currentMode = CameraMode.IDLE
     this.velocityEstimate = new Vector3(0, 0, 0)
     this.lastBallPos = null
+    this.resetDynamicState()
+  }
+
+  resetDynamicState(): void {
+    this.dynamicFovBias = 0
+    this.speedTargetBiasZ = 0
+    this.impactTargetBias.set(0, 0, 0)
+    this.impactCooldownRemaining = 0
+    this.tableCam.fov = this.baseFov
+  }
+
+  private updateRuntimePolicy(runtimePolicy: CameraRuntimePolicy | undefined, mode: CameraMode): void {
+    if (!runtimePolicy) {
+      this.dynamicAllowed = mode !== CameraMode.ADVENTURE
+      return
+    }
+
+    this.dynamicAllowed =
+      mode !== CameraMode.ADVENTURE &&
+      !runtimePolicy.reducedMotion &&
+      !runtimePolicy.photosensitiveMode &&
+      runtimePolicy.qualityTier !== QualityTier.LOW
+  }
+
+  private applyDynamicSpeedResponse(ballVel: Vector3, dt: number): void {
+    const clampedDt = Math.min(dt, 1 / 20)
+    this.impactCooldownRemaining = Math.max(0, this.impactCooldownRemaining - clampedDt)
+
+    if (!this.dynamicAllowed) {
+      this.resetDynamicState()
+      return
+    }
+
+    const speed = ballVel.length()
+    const normalized = Scalar.Clamp(
+      (speed - CameraController.SPEED_RESPONSE_THRESHOLD) /
+        (CameraController.SPEED_RESPONSE_MAX - CameraController.SPEED_RESPONSE_THRESHOLD),
+      0,
+      1
+    )
+
+    const targetFovBias = normalized * CameraController.MAX_DYNAMIC_FOV_BIAS
+    const targetZBias = normalized * CameraController.MAX_SPEED_TARGET_BIAS_Z
+    const response = Math.min(1, clampedDt * 3.2)
+    this.dynamicFovBias = Scalar.Lerp(this.dynamicFovBias, targetFovBias, response)
+    this.speedTargetBiasZ = Scalar.Lerp(this.speedTargetBiasZ, targetZBias, response)
+
+    const impactDecay = Math.max(0, 1 - (CameraController.IMPACT_DECAY_PER_SECOND * clampedDt))
+    this.impactTargetBias.scaleInPlace(impactDecay)
   }
 }

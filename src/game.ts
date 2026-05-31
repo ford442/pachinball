@@ -285,7 +285,10 @@ export class Game {
       const settings = SettingsManager.load()
       this.debugHUDEnabledInSettings = settings.enableDebugHUD
       SettingsManager.applyToConfig(settings)
-      this.accessibility = detectAccessibility()
+      this.accessibility = detectAccessibility({
+        reducedMotion: settings.reducedMotion,
+        photosensitiveMode: settings.photosensitiveMode,
+      })
       console.log('[Accessibility] Settings loaded:', settings, 'Accessibility:', this.accessibility)
 
       this.hapticManager = new HapticManager({
@@ -606,6 +609,7 @@ export class Game {
   updateHUD(): void { this.hud.updateHUD() }
   updateGoldBallDisplay(): void { this.hud.updateGoldBallDisplay() }
   showMessage(msg: string, duration: number): void { this.uiManager?.showMessage(msg, duration) }
+  handleGameOverLeaderboard(): Promise<void> { return this.hud.handleGameOverLeaderboard() }
   getBallPosition(): Vector3 | null { return this.physicsController.getBallPosition() }
   endAdventureMode(): void { this.slotAdventure.endAdventureMode() }
   tryActivateSlotMachine(): void { this.slotAdventure.tryActivateSlotMachine() }

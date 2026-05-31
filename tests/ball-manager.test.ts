@@ -12,7 +12,7 @@
  * a plain Node environment without a browser or WASM physics engine.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { BallType, BALL_TIERS } from '../src/config'
+import { BallType, BALL_TIERS, GAME_TUNING } from '../src/config'
 
 // ---------------------------------------------------------------------------
 // Module mocks — must be declared before the import under test
@@ -390,6 +390,90 @@ describe('BallManager', () => {
   // -------------------------------------------------------------------------
   // 6. resetBall translation + impulse
   // -------------------------------------------------------------------------
+  describe('chain multiball', () => {
+    it('starts forced multiball, spawns up to target, and exposes dynamic multiplier', () => {
+      const manager = makeManager()
+      const mainBall = { handle: 1 }
+      const extra1 = { handle: 2 }
+      const extra2 = { handle: 3 }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).ballBodies = [mainBall]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).ballBody = mainBall
+
+      const spawnRandomBall = vi.fn()
+        .mockImplementationOnce(() => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ;(manager as any).ballBodies.push(extra1)
+          return extra1
+        })
+        .mockImplementationOnce(() => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ;(manager as any).ballBodies.push(extra2)
+          return extra2
+        })
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).spawnRandomBall = spawnRandomBall
+
+      const result = manager.triggerForcedMultiball(3, 'jackpot')
+      const expectedMultiplier = 1 + (2 * GAME_TUNING.multiball.multiplierPerExtraBall)
+
+      expect(result.started).toBe(true)
+      expect(result.spawnedBalls).toBe(2)
+      expect(result.ballsInPlay).toBe(3)
+      expect(result.scoreMultiplier).toBe(expectedMultiplier)
+      expect(manager.getChainStats().isActive).toBe(true)
+      expect(manager.getScoreMultiplier()).toBe(expectedMultiplier)
+      expect(spawnRandomBall).toHaveBeenCalledTimes(2)
+    })
+
+    it('saves only the first drain during grace window and then ends when down to one ball', () => {
+      const manager = makeManager()
+      const mainBall = { handle: 10 }
+      const extraBall = { handle: 11 }
+      const savedBall = { handle: 12 }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).ballBodies = [mainBall, extraBall]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).ballBody = mainBall
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).chainMultiball = {
+        isActive: true,
+        chainLevel: 1,
+        ballSaveUsed: false,
+        ballSaveExpiresAtMs: Number.MAX_SAFE_INTEGER,
+      }
+
+      const spawnRandomBall = vi.fn().mockImplementation(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(manager as any).ballBodies.push(savedBall)
+        return savedBall
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).spawnRandomBall = spawnRandomBall
+
+      // Drain one ball (simulates post-removal state in controller)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).ballBodies = [mainBall]
+      const firstDrain = manager.registerDrain(extraBall as never)
+      expect(firstDrain.ballSaved).toBe(true)
+      expect(firstDrain.multiballEnded).toBe(false)
+      expect(spawnRandomBall).toHaveBeenCalledTimes(1)
+
+      // Drain again; ball-save already consumed, so multiball ends at one ball left
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).ballBodies = [savedBall]
+      const secondDrain = manager.registerDrain(mainBall as never)
+      expect(secondDrain.ballSaved).toBe(false)
+      expect(secondDrain.multiballEnded).toBe(true)
+      expect(manager.getChainStats().isActive).toBe(false)
+      expect(manager.getScoreMultiplier()).toBe(1)
+    })
+  })
+
   describe('resetBall', () => {
     it('sets translation to spawn point and zeros velocity when ball exists', () => {
       const manager = makeManager()

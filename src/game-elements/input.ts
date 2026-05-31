@@ -147,6 +147,15 @@ export class InputHandler {
       return
     }
     
+    if (gameState === GameState.PAUSED) {
+      if (state.leftFlipper && !prevState?.leftFlipper) {
+        this.onPause()
+      } else if (state.rightFlipper && !prevState?.rightFlipper) {
+        this.onPause()
+      }
+      return
+    }
+
     if (gameState !== GameState.PLAYING) return
     
     // Check tilt before processing flipper inputs
@@ -428,7 +437,8 @@ export class InputHandler {
     // console.log('Key down:', event.code, event.key, this.getState())
     if (!this.rapier) return
 
-    if (event.code === 'KeyP') {
+    if (event.code === 'KeyP' || event.code === 'Escape') {
+      event.preventDefault()
       this.onPause()
       return
     }

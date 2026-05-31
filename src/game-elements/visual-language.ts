@@ -44,6 +44,9 @@ export const PALETTE = {
   AMBIENT: '#001133',
 } as const
 
+/** Palette token key used by theme systems to avoid ad-hoc hex values. */
+export type VisualThemeColor = keyof typeof PALETTE
+
 /** Surface colors - structural and non-emissive materials */
 export const SURFACES = {
   /** Pure black - deepest cabinet areas */

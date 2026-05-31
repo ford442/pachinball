@@ -275,6 +275,10 @@ export class MaterialLibrary extends MaterialLibraryBase {
   updateLCDTableEmissive(baseColor: string, intensity?: number): void {
     return this.structuralMats.updateLCDTableEmissive(baseColor, intensity)
   }
+
+  updatePlayfieldTheme(surfaceTint: string, emissiveTint: string): void {
+    return this.structuralMats.updatePlayfieldTheme(surfaceTint, emissiveTint)
+  }
 }
 
 // ============================================================================

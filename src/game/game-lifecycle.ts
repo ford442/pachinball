@@ -2,8 +2,17 @@
  * Game Lifecycle — State transitions, camera mode, start/pause/reset, jackpot.
  */
 
-import type { Scene } from '@babylonjs/core'
-import { GameState, DisplayState, BallType } from '../game-elements'
+import { Scene } from '@babylonjs/core'
+import {
+  GameState,
+  DisplayState,
+  BallType,
+  SettingsManager,
+  detectAccessibility,
+  QualityTier,
+  getScoringBreakdownManager,
+  type GameSettings,
+} from '../game-elements'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { BallManager } from '../game-elements/ball-manager'
@@ -19,6 +28,7 @@ import type { TableMapManager } from './game-maps'
 import type { GameUIManager } from './game-ui'
 import { GAME_TUNING } from '../config'
 import { TABLE_MAPS } from '../shaders/lcd-table'
+import { getMaterialLibrary } from '../materials'
 
 export interface LifecycleHost {
   readonly stateManager: GameStateManager
@@ -36,7 +46,8 @@ export interface LifecycleHost {
   readonly uiManager: GameUIManager | null
   readonly scene: Scene | null
   readonly tableCam: import('@babylonjs/core').TargetCamera | null
-  readonly accessibility: import('../game-elements').AccessibilityConfig
+  qualityTier: QualityTier
+  accessibility: import('../game-elements').AccessibilityConfig
 
   startScreen: HTMLElement | null
   menuOverlay: HTMLElement | null
@@ -64,9 +75,11 @@ export interface LifecycleHost {
 
 export class GameLifecycle {
   private readonly host: LifecycleHost
+  private readonly scoringBreakdown = getScoringBreakdownManager()
 
   constructor(host: LifecycleHost) {
     this.host = host
+    this.host.uiManager?.setPauseButtonHandler(() => this.togglePause())
   }
 
   setGameState(newState: GameState): void {
@@ -85,6 +98,7 @@ export class GameLifecycle {
       case GameState.PLAYING:
         if (menuOverlay) menuOverlay.classList.add('hidden')
         if (pauseOverlay) pauseOverlay.classList.add('hidden')
+        this.host.uiManager?.hidePauseMenu()
         if (this.host.effects?.getAudioContext()?.state === 'suspended') {
           this.host.effects.getAudioContext()?.resume().catch(() => {})
         }
@@ -92,21 +106,35 @@ export class GameLifecycle {
       case GameState.PAUSED:
         if (menuOverlay) menuOverlay.classList.add('hidden')
         if (pauseOverlay) pauseOverlay.classList.remove('hidden')
+        this.host.uiManager?.showPauseMenu(this.buildPauseMenuSettings(), {
+          onResume: () => this.togglePause(),
+          onRestart: () => { void this.startGame() },
+          onSettingsChange: (next) => this.applyPauseSettings(next),
+        })
         if (this.host.effects?.getAudioContext()?.state === 'running') {
           this.host.effects.getAudioContext()?.suspend().catch(() => {})
         }
         break
       case GameState.GAME_OVER:
+        {
+          const previousBest = this.host.bestScore
+          const isNewBest = this.host.score > previousBest
+          if (isNewBest) {
+            this.host.bestScore = this.host.score
+            try {
+              localStorage.setItem('pachinball.best', String(this.host.bestScore))
+            } catch {
+              // Ignore localStorage errors
+            }
+          }
+          this.host.uiManager?.showScoringBreakdown(this.scoringBreakdown.getSnapshot(), {
+            finalScore: this.host.score,
+            bestScore: this.host.bestScore,
+            bestDelta: isNewBest ? this.host.score - previousBest : 0,
+          })
+        }
         if (gameOverScreen) gameOverScreen.classList.remove('hidden')
         if (finalScoreElement) finalScoreElement.textContent = this.host.score.toString()
-        if (this.host.score > this.host.bestScore) {
-          this.host.bestScore = this.host.score
-          try {
-            localStorage.setItem('pachinball.best', String(this.host.bestScore))
-          } catch {
-            // Ignore localStorage errors
-          }
-        }
         this.host.updateHUD()
         this.host.handleGameOverLeaderboard()
         break
@@ -139,6 +167,8 @@ export class GameLifecycle {
   }
 
   async startGame(): Promise<void> {
+    this.scoringBreakdown.reset()
+    this.host.uiManager?.hideScoringBreakdown()
     this.host.score = 0
     this.host.lives = 3
     this.host.comboCount = 0
@@ -169,6 +199,13 @@ export class GameLifecycle {
           setTimeout(() => reject(new Error('Audio init timeout')), 5000)
         ),
       ])
+      const savedSettings = SettingsManager.load()
+      this.host.soundSystem.setMasterVolume(savedSettings.masterVolume)
+      this.host.soundSystem.setMusicVolume(savedSettings.musicVolume)
+      this.host.soundSystem.setSfxVolume(savedSettings.sfxVolume)
+      if (savedSettings.muted !== this.host.soundSystem.getVolumeSettings().muted) {
+        this.host.soundSystem.toggleMute()
+      }
       // Resume may need a user gesture; if it fails we still have synth sounds ready
       try {
         await this.host.soundSystem.resume()
@@ -185,6 +222,82 @@ export class GameLifecycle {
     const { stateManager } = this.host
     stateManager.togglePause()
     this.setGameState(stateManager.getState())
+  }
+
+  private buildPauseMenuSettings(): {
+    masterVolume: number
+    shakeEnabled: boolean
+    scanlinesEnabled: boolean
+    qualityPreset: 'low' | 'medium' | 'high'
+    reducedMotion: boolean
+    photosensitiveMode: boolean
+  } {
+    const settings = SettingsManager.load()
+    return {
+      masterVolume: settings.masterVolume,
+      shakeEnabled: settings.shakeIntensity > 0.001,
+      scanlinesEnabled: settings.scanlineWeight > 0.001,
+      qualityPreset: settings.qualityPreset,
+      reducedMotion: settings.reducedMotion,
+      photosensitiveMode: settings.photosensitiveMode,
+    }
+  }
+
+  private applyPauseSettings(next: {
+    masterVolume: number
+    shakeEnabled: boolean
+    scanlinesEnabled: boolean
+    qualityPreset: 'low' | 'medium' | 'high'
+    reducedMotion: boolean
+    photosensitiveMode: boolean
+  }): void {
+    const current = SettingsManager.load()
+    const updated: GameSettings = {
+      ...current,
+      masterVolume: Math.max(0, Math.min(1, next.masterVolume)),
+      shakeIntensity: next.shakeEnabled ? Math.max(0.01, current.shakeIntensity || 0.08) : 0,
+      scanlineWeight: next.scanlinesEnabled ? Math.max(0.2, current.scanlineWeight || 1) : 0,
+      qualityPreset: next.qualityPreset,
+      reducedMotion: next.reducedMotion,
+      photosensitiveMode: next.photosensitiveMode,
+    }
+
+    SettingsManager.save(updated)
+    SettingsManager.applyToConfig(updated)
+
+    this.host.accessibility = detectAccessibility({
+      reducedMotion: updated.reducedMotion,
+      photosensitiveMode: updated.photosensitiveMode,
+    })
+
+    this.host.effects?.registerAccessibility(this.host.accessibility)
+    this.host.display?.setAccessibility(this.host.accessibility)
+    this.host.adventureMode?.setAccessibilityConfig(this.host.accessibility)
+    this.host.mapManager?.setScanlineWeight(updated.scanlineWeight)
+    this.host.mapManager?.getLCDTableState().setPhotosensitiveMode(updated.photosensitiveMode)
+
+    this.host.soundSystem.setMasterVolume(updated.masterVolume)
+    this.host.soundSystem.setMusicVolume(updated.musicVolume)
+    this.host.soundSystem.setSfxVolume(updated.sfxVolume)
+    if (updated.muted !== this.host.soundSystem.getVolumeSettings().muted) {
+      this.host.soundSystem.toggleMute()
+    }
+
+    if (this.host.scene) {
+      this.host.scene.fogMode = updated.reducedMotion ? Scene.FOGMODE_NONE : Scene.FOGMODE_EXP2
+    }
+
+    const targetTier =
+      updated.qualityPreset === 'low'
+        ? QualityTier.LOW
+        : updated.qualityPreset === 'high'
+          ? QualityTier.HIGH
+          : QualityTier.MEDIUM
+    this.host.qualityTier = targetTier
+    this.host.effects?.setQualityTier(targetTier)
+    if (this.host.scene) {
+      getMaterialLibrary(this.host.scene).qualityTier = targetTier
+    }
   }
 
   resetBall(): void {
@@ -208,9 +321,20 @@ export class GameLifecycle {
       this.host.effects?.triggerCabinetShake('jackpot', mapColor)
     }
 
-    this.host.score += GAME_TUNING.scoring.jackpotBonus
+    const scoreMultiplier = this.host.ballManager?.getChainStats().scoreMultiplier ?? 1
+    const awardedJackpot = Math.round(GAME_TUNING.scoring.jackpotBonus * scoreMultiplier)
+    this.host.score += awardedJackpot
+    this.scoringBreakdown.recordScore(awardedJackpot, 'jackpot')
+    if (scoreMultiplier > 1) {
+      this.host.eventBus.emit('score:multiplier', {
+        basePoints: GAME_TUNING.scoring.jackpotBonus,
+        awardedPoints: awardedJackpot,
+        multiplier: scoreMultiplier,
+        source: 'jackpot',
+      })
+    }
     this.host.updateHUD()
     const pos = this.host.getBallPosition()
-    if (pos) this.host.effects?.spawnFloatingNumber(GAME_TUNING.scoring.jackpotBonus, pos)
+    if (pos) this.host.effects?.spawnFloatingNumber(awardedJackpot, pos)
   }
 }

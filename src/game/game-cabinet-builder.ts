@@ -418,6 +418,33 @@ export class GameCabinetBuilder {
     effects?.setCabinetColor(config.baseColor)
   }
 
+  applyCampaignCabinetTheme(themeId: string): void {
+    const { cabinetNeonLights } = this.host
+    if (cabinetNeonLights.length === 0) return
+
+    let left = Color3.FromHexString(PALETTE.CYAN)
+    let right = Color3.FromHexString(PALETTE.MAGENTA)
+    let back = Color3.FromHexString(PALETTE.PURPLE)
+    let under = Color3.FromHexString(PALETTE.CYAN)
+
+    if (themeId === 'cabinet-theme-violet') {
+      left = Color3.FromHexString(PALETTE.PURPLE)
+      right = Color3.FromHexString(PALETTE.MAGENTA)
+      back = Color3.FromHexString(PALETTE.CYAN)
+      under = Color3.FromHexString(PALETTE.PURPLE)
+    } else if (themeId === 'cabinet-theme-solar') {
+      left = Color3.FromHexString(PALETTE.GOLD)
+      right = Color3.FromHexString(PALETTE.ALERT)
+      back = Color3.FromHexString(PALETTE.MAGENTA)
+      under = Color3.FromHexString(PALETTE.GOLD)
+    }
+
+    if (cabinetNeonLights[0]) cabinetNeonLights[0].diffuse = left
+    if (cabinetNeonLights[1]) cabinetNeonLights[1].diffuse = right
+    if (cabinetNeonLights[2]) cabinetNeonLights[2].diffuse = back
+    if (cabinetNeonLights[3]) cabinetNeonLights[3].diffuse = under
+  }
+
   // ============================================================================
   // SHADOW CASTERS
   // ============================================================================

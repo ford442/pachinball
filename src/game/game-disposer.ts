@@ -7,6 +7,8 @@
  */
 
 import { resetMaterialLibrary } from '../materials'
+import { resetCampaignRewardsManager } from '../game-elements/campaign-rewards-manager'
+import { resetTrackThemingSystem, resetScoringBreakdownManager } from '../game-elements'
 import type { Game } from '../game'
 
 export class GameDisposer {
@@ -94,6 +96,9 @@ export class GameDisposer {
     this.game.adventureTrackProgression = null
     this.game.adventureProgressionSupervisor?.reset()
     this.game.adventureProgressionSupervisor = null
+    resetCampaignRewardsManager()
+    resetTrackThemingSystem()
+    resetScoringBreakdownManager()
 
     resetMaterialLibrary()
     this.game.scene?.dispose()

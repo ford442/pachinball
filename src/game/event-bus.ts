@@ -214,12 +214,44 @@ export interface PachinballEventMap {
   }
   'combo:started': {
     comboCount: number
+    chainLength?: number
+    lastType?: 'bumper' | 'spinner' | 'gate' | 'trap' | 'launcher'
   }
   'combo:extended': {
     comboCount: number
+    chainLength?: number
+    lastType?: 'bumper' | 'spinner' | 'gate' | 'trap' | 'launcher'
+  }
+  'combo:chain': {
+    comboCount: number
+    chainLength: number
+    lastType: 'bumper' | 'spinner' | 'gate' | 'trap' | 'launcher'
+    chainName?: string
+    bonusPoints: number
+    multiplier: number
   }
   'combo:broken': {
     finalComboCount: number
+    chainLength?: number
+    lastType?: 'bumper' | 'spinner' | 'gate' | 'trap' | 'launcher'
+  }
+  'multiball:start': {
+    reason: 'jackpot' | 'gold-threshold'
+    ballsInPlay: number
+    scoreMultiplier: number
+    chainLevel: number
+  }
+  'multiball:end': {
+    ballsInPlay: number
+  }
+  'multiball:save': {
+    remainingMs: number
+  }
+  'score:multiplier': {
+    basePoints: number
+    awardedPoints: number
+    multiplier: number
+    source: string
   }
 
   // Lighting and effects events

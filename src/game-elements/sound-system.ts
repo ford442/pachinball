@@ -12,6 +12,13 @@
 import { Vector3 } from '@babylonjs/core'
 import { BallType } from '../config'
 import type { EventBus } from '../game/event-bus'
+import { GameConfig } from '../config'
+import {
+  createImpactVoiceProfile,
+  getPortalMotifFrequencies,
+  type ImpactCategory,
+  type ImpactVoiceOptions,
+} from './audio-synth'
 
 // Audio categories for samples
 export type SampleCategory = 'peg' | 'bumper' | 'flipper' | 'jackpot' | 'fever' | 'launch' | 'drain'
@@ -79,6 +86,7 @@ export class SoundSystem {
   private musicVolume = 0.6
   private sfxVolume = 0.9
   private isMuted = false
+  private lastImpactAtByCategory: Partial<Record<ImpactCategory, number>> = {}
   
   // Loading state
   private isInitialized = false
@@ -239,7 +247,7 @@ export class SoundSystem {
       console.warn(`[SoundSystem] No samples in category: ${category}`)
       return
     }
-    
+
     // Pick random sample
     const randomId = sampleIds[Math.floor(Math.random() * sampleIds.length)]
     const cached = this.sampleCache.get(randomId)
@@ -277,6 +285,126 @@ export class SoundSystem {
     source.onended = () => {
       gainNode.disconnect()
     }
+  }
+
+  playImpact(
+    category: ImpactCategory,
+    velocity: number,
+    options: ImpactVoiceOptions & { position?: Vector3 } = {},
+  ): void {
+    if (!this.isInitialized || !this.audioContext || !this.sfxGain) return
+    if (this.isMuted) return
+
+    const now = this.audioContext.currentTime
+    const reducedAudio = GameConfig.camera.reducedMotion || GameConfig.accessibility.photosensitiveMode
+    const profile = createImpactVoiceProfile(category, velocity, options, reducedAudio)
+    const lastPlayedAt = this.lastImpactAtByCategory[category] ?? Number.NEGATIVE_INFINITY
+    if ((now - lastPlayedAt) < profile.cooldownSeconds) return
+    this.lastImpactAtByCategory[category] = now
+
+    const finalGain = Math.max(0.0001, Math.min(1, profile.gain * this.sfxVolume))
+    const voiceGain = this.audioContext.createGain()
+    voiceGain.gain.setValueAtTime(0.0001, now)
+    voiceGain.gain.linearRampToValueAtTime(finalGain, now + profile.attack)
+    voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + profile.decay)
+
+    const stereoPanner = this.createOptionalStereoPanner(options.position, reducedAudio)
+    voiceGain.connect(stereoPanner ?? this.sfxGain)
+
+    const osc = this.audioContext.createOscillator()
+    osc.type = profile.waveform
+    osc.frequency.setValueAtTime(profile.baseFreq, now)
+    osc.frequency.exponentialRampToValueAtTime(Math.max(40, profile.sweepFreq), now + profile.decay)
+
+    const tonalFilter = this.audioContext.createBiquadFilter()
+    tonalFilter.type = 'lowpass'
+    tonalFilter.frequency.setValueAtTime(profile.filterStart, now)
+    tonalFilter.frequency.exponentialRampToValueAtTime(Math.max(120, profile.filterEnd), now + profile.decay)
+
+    osc.connect(tonalFilter)
+    tonalFilter.connect(voiceGain)
+    osc.start(now)
+    osc.stop(now + profile.decay + 0.02)
+
+    if (profile.noiseAmount > 0.001 && !reducedAudio) {
+      this.playNoiseBurst(profile, now, voiceGain)
+    }
+
+    if (category === 'jackpot' || options.premium) {
+      this.playMotif(getPortalMotifFrequencies(true), now, finalGain * 0.55)
+    }
+  }
+
+  playPortalEnter(premium = true): void {
+    if (!this.isInitialized || !this.audioContext || !this.sfxGain) return
+    if (this.isMuted) return
+    const now = this.audioContext.currentTime
+    const reducedAudio = GameConfig.camera.reducedMotion || GameConfig.accessibility.photosensitiveMode
+    const notes = getPortalMotifFrequencies(premium && !reducedAudio)
+    this.playMotif(notes, now, reducedAudio ? 0.1 : 0.16)
+  }
+
+  private playMotif(notes: number[], startTime: number, gain = 0.14): void {
+    if (!this.audioContext || !this.sfxGain || notes.length === 0) return
+    for (let i = 0; i < notes.length; i++) {
+      const osc = this.audioContext.createOscillator()
+      const g = this.audioContext.createGain()
+      const noteStart = startTime + (i * 0.055)
+      const noteEnd = noteStart + 0.2
+      osc.type = i % 2 === 0 ? 'triangle' : 'sine'
+      osc.frequency.setValueAtTime(notes[i], noteStart)
+      g.gain.setValueAtTime(0.0001, noteStart)
+      g.gain.linearRampToValueAtTime(gain, noteStart + 0.015)
+      g.gain.exponentialRampToValueAtTime(0.0001, noteEnd)
+      osc.connect(g)
+      g.connect(this.sfxGain)
+      osc.start(noteStart)
+      osc.stop(noteEnd + 0.01)
+    }
+  }
+
+  private playNoiseBurst(
+    profile: ReturnType<typeof createImpactVoiceProfile>,
+    startTime: number,
+    outputNode: GainNode,
+  ): void {
+    if (!this.audioContext) return
+    const sr = this.audioContext.sampleRate
+    const duration = Math.max(0.02, Math.min(0.12, profile.decay * 0.6))
+    const buffer = this.audioContext.createBuffer(1, Math.floor(sr * duration), sr)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * profile.noiseAmount
+    }
+
+    const source = this.audioContext.createBufferSource()
+    source.buffer = buffer
+
+    const bandpass = this.audioContext.createBiquadFilter()
+    bandpass.type = 'bandpass'
+    bandpass.frequency.setValueAtTime(Math.max(250, profile.filterStart), startTime)
+    bandpass.Q.value = 0.85
+
+    const noiseGain = this.audioContext.createGain()
+    noiseGain.gain.setValueAtTime(profile.noiseAmount, startTime)
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration)
+
+    source.connect(bandpass)
+    bandpass.connect(noiseGain)
+    noiseGain.connect(outputNode)
+    source.start(startTime)
+    source.stop(startTime + duration + 0.01)
+  }
+
+  private createOptionalStereoPanner(position: Vector3 | undefined, reducedAudio: boolean): StereoPannerNode | null {
+    if (!this.audioContext || reducedAudio) return null
+    const createStereoPanner = (this.audioContext as unknown as { createStereoPanner?: () => StereoPannerNode }).createStereoPanner
+    if (!createStereoPanner) return null
+    const panner = createStereoPanner.call(this.audioContext)
+    const pan = position ? Math.max(-1, Math.min(1, position.x / 8)) : (Math.random() * 0.3 - 0.15)
+    panner.pan.value = pan
+    panner.connect(this.sfxGain!)
+    return panner
   }
 
   /**
@@ -446,8 +574,7 @@ export class SoundSystem {
    * Trigger jackpot/fever audio layer
    */
   triggerJackpotAudio(): void {
-    // Play jackpot sample
-    this.playSample('jackpot', undefined, 1.2)
+    this.playImpact('jackpot', 18, { premium: true })
     
     // Brief volume boost on music master
     if (this.musicMasterGain && this.audioContext) {
@@ -459,7 +586,7 @@ export class SoundSystem {
   }
 
   triggerFeverAudio(): void {
-    this.playSample('fever', undefined, 1.0)
+    this.playImpact('fever', 12, { premium: true })
   }
 
   /**
@@ -527,12 +654,16 @@ export class SoundSystem {
    */
   playGoldBallSpawn(type: BallType): void {
     if (type === BallType.STANDARD) return
-
     const soundName = type === BallType.SOLID_GOLD
       ? 'solid-gold-spawn'
       : 'gold-plated-spawn'
-
-    this.play(soundName)
+    if (this.synthesizedSounds.has(soundName)) {
+      this.play(soundName)
+    }
+    this.playImpact('launch', type === BallType.SOLID_GOLD ? 16 : 12, {
+      isGold: true,
+      premium: type === BallType.SOLID_GOLD,
+    })
   }
 
   /**
@@ -540,12 +671,16 @@ export class SoundSystem {
    */
   playGoldBallCollect(type: BallType): void {
     if (type === BallType.STANDARD) return
-
     const soundName = type === BallType.SOLID_GOLD
       ? 'solid-gold-collect'
       : 'gold-plated-collect'
-
-    this.play(soundName)
+    if (this.synthesizedSounds.has(soundName)) {
+      this.play(soundName)
+    }
+    this.playImpact('jackpot', type === BallType.SOLID_GOLD ? 22 : 16, {
+      isGold: true,
+      premium: true,
+    })
   }
 
   /**
@@ -901,24 +1036,37 @@ export function getSoundSystem(eventBus?: EventBus): SoundSystem {
 
     // Route generic 'sound:play' events from obstacle builders to SoundSystem
     ss.addEventBusUnsubscriber(
-      eventBus.on('sound:play', ({ soundKey }) => {
-        // Map obstacle sound keys to known sample categories where possible.
-        // Unknown keys are a no-op — obstacle audio is best-effort in this path.
-        const categoryMap: Record<string, string> = {
-          'trap-catch': 'bumper',
-          'trap-release': 'bumper',
-          'trap-release-timeout': 'bumper',
-          'bump-spinner': 'bumper',
-          'launcher-fire': 'launch',
-          'launcher-trigger': 'launch',
-          'gate-open': 'bumper',
-          'portal-open-success': 'jackpot',
-          'portal-open-timeout': 'drain',
-          'portal-enter': 'launch',
-        }
-        const category = categoryMap[soundKey]
-        if (category) {
-          ss.playSample(category as Parameters<typeof ss.playSample>[0])
+      eventBus.on('sound:play', ({ soundKey, volume = 1, pitch = 1 }) => {
+        const velocity = Math.max(0.5, Math.min(24, volume * pitch * 12))
+        switch (soundKey) {
+          case 'trap-catch':
+          case 'trap-release':
+            ss.playImpact('peg', velocity)
+            return
+          case 'trap-release-timeout':
+            ss.playImpact('drain', velocity * 0.8)
+            return
+          case 'bump-spinner':
+            ss.playImpact('bumper', velocity)
+            return
+          case 'launcher-fire':
+          case 'launcher-trigger':
+            ss.playImpact('launch', velocity * 1.2)
+            return
+          case 'gate-open':
+            ss.playImpact('peg', velocity * 0.9)
+            return
+          case 'portal-open-success':
+            ss.playImpact('jackpot', velocity * 1.4, { premium: true })
+            return
+          case 'portal-open-timeout':
+            ss.playImpact('drain', velocity * 1.1)
+            return
+          case 'portal-enter':
+            ss.playPortalEnter(true)
+            return
+          default:
+            break
         }
       })
     )

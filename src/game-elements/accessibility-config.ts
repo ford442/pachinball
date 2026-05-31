@@ -26,6 +26,11 @@ export interface AccessibilityConfig {
   hapticIntensity: number
 }
 
+export interface AccessibilityOverrides {
+  reducedMotion?: boolean
+  photosensitiveMode?: boolean
+}
+
 /** Default accessibility settings for typical users */
 export const DEFAULT_ACCESSIBILITY: AccessibilityConfig = {
   reducedMotion: false,
@@ -54,11 +59,30 @@ export const REDUCED_MOTION_CONFIG: AccessibilityConfig = {
  * Auto-detect accessibility preferences from system settings
  * Uses prefers-reduced-motion media query
  */
-export function detectAccessibility(): AccessibilityConfig {
+export function detectAccessibility(overrides?: AccessibilityOverrides): AccessibilityConfig {
   if (typeof window === 'undefined') return DEFAULT_ACCESSIBILITY
-  
+
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  return prefersReducedMotion ? REDUCED_MOTION_CONFIG : DEFAULT_ACCESSIBILITY
+  const reducedMotion = overrides?.reducedMotion ?? prefersReducedMotion
+  const photosensitiveMode = overrides?.photosensitiveMode ?? false
+
+  if (reducedMotion) {
+    return {
+      ...REDUCED_MOTION_CONFIG,
+      flashFrequencyMax: photosensitiveMode ? 1 : REDUCED_MOTION_CONFIG.flashFrequencyMax,
+    }
+  }
+
+  if (photosensitiveMode) {
+    return {
+      ...DEFAULT_ACCESSIBILITY,
+      flashFrequencyMax: 1,
+      effectIntensity: 0.45,
+      maxCameraShakeIntensity: 0.0,
+    }
+  }
+
+  return DEFAULT_ACCESSIBILITY
 }
 
 /**

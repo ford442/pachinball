@@ -449,6 +449,13 @@ export class StructuralMaterials extends MaterialLibraryBase {
     }
   }
 
+  updatePlayfieldTheme(surfaceTint: string, emissiveTint: string): void {
+    const mat = this.materialCache.get('playfield') as PBRMaterial | undefined
+    if (!mat) return
+    mat.albedoColor = color(surfaceTint).scale(0.9)
+    mat.emissiveColor = emissive(emissiveTint, INTENSITY.NORMAL)
+  }
+
   /**
    * Create a procedural LCD grid texture with scanlines
    */

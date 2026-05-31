@@ -10,6 +10,7 @@ import type { GameObjects } from '../objects'
 import type { AdventureMode } from '../adventure'
 import { AdventureTrackType } from '../adventure'
 import type { AdventureTrackProgression } from '../game-elements/adventure-track-progression'
+import { getScoringBreakdownManager, getTrackThemingSystem } from '../game-elements'
 import type { EventBus } from './event-bus'
 import type { AdventureCinematicTriggers } from '../game-elements/adventure-cinematic-triggers'
 import type { AdventureUIStateManager } from '../game-elements/adventure-ui-state'
@@ -47,6 +48,7 @@ export interface SlotAdventureHost {
 
 export class GameSlotAdventure {
   private readonly host: SlotAdventureHost
+  private readonly scoringBreakdown = getScoringBreakdownManager()
   private nextAdventureTrack: AdventureTrackType = AdventureTrackType.NEON_HELIX
 
   private static readonly TRACK_ORDER: AdventureTrackType[] = [
@@ -115,6 +117,7 @@ export class GameSlotAdventure {
           effects?.playSlotWin(winData.combination.multiplier)
           effects?.setSlotLightingMode('win')
           this.host.score += winData.score
+          this.scoringBreakdown.recordScore(winData.score, 'slot-win')
           this.host.updateHUD()
           const pos = this.host.getBallPosition()
           if (pos) effects?.spawnFloatingNumber(winData.score, pos)
@@ -167,8 +170,6 @@ export class GameSlotAdventure {
 
   startAdventureMode(): void {
     if (!this.host.adventureMode || !this.host.scene) return
-    // Reset accumulated campaign stats so each run starts from zero.
-    this.host.adventureTrackProgression?.reset()
     const ballBody = this.host.ballManager?.getBallBody()
     const camera = this.host.scene.activeCamera as import('@babylonjs/core').ArcRotateCamera
     const bindings = this.host.gameObjects?.getBindings() || []
@@ -189,6 +190,7 @@ export class GameSlotAdventure {
 
       this.host.display?.setTrackInfo(trackName)
       this.host.display?.setStoryText(`SECTOR: ${trackName}`)
+      getTrackThemingSystem()?.applyTheme(track)
 
       const currentIndex = GameSlotAdventure.TRACK_ORDER.indexOf(track)
       this.nextAdventureTrack = GameSlotAdventure.TRACK_ORDER[(currentIndex + 1) % GameSlotAdventure.TRACK_ORDER.length]
@@ -224,6 +226,7 @@ export class GameSlotAdventure {
     }
     this.host.display?.setTrackInfo(trackName)
     this.host.display?.setStoryText(`ENTERING: ${trackName}`)
+    getTrackThemingSystem()?.applyTheme(trackType)
   }
 
   endAdventureMode(): void {

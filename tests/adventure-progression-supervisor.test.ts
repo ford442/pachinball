@@ -54,6 +54,13 @@ describe('TRACK_CATALOG modeType alternation', () => {
     expect(TRACK_CATALOG['SINGULARITY_WELL']).toMatchObject({ modeType: 'EXTENDED_MAP', timeLimitSeconds: 180, timeoutPenaltyMultiplier: 0.35, recommendedScore: 120000 })
   })
 
+  it('defines at least six distinct track visual themes in catalog entries', () => {
+    const themedTracks = Object.values(TRACK_CATALOG).filter((track) => track.visualTheme?.primary)
+    const uniquePrimaryThemes = new Set(themedTracks.map((track) => track.visualTheme?.primary))
+    expect(themedTracks.length).toBeGreaterThanOrEqual(6)
+    expect(uniquePrimaryThemes.size).toBeGreaterThanOrEqual(6)
+  })
+
   it('portal:open event includes the track modeType', () => {
     const bus = new EventBus()
     const progression = new AdventureTrackProgression()

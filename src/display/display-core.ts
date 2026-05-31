@@ -14,7 +14,7 @@ import {
   DEFAULT_DISPLAY_CONFIG,
   getStateConfig,
 } from '../game-elements/display-config'
-import { QualityTier } from '../game-elements/visual-language'
+import { PALETTE, QualityTier } from '../game-elements/visual-language'
 import {
   type AccessibilityConfig,
   detectAccessibility,
@@ -61,6 +61,8 @@ export class DisplaySystem {
   private textMaterial: StandardMaterial | null = null
   private storyText = ''
   private trackText = ''
+  private trackThemePrimary: string = PALETTE.CYAN
+  private trackThemeAccent: string = PALETTE.GOLD
 
   // Drain / ball-lost flash mode state machine
   private _displayMode: 'normal' | 'drain' = 'normal'
@@ -92,6 +94,11 @@ export class DisplaySystem {
     this.reelsLayer = new DisplayReelsLayer(scene, this.config)
     this.videoLayer = new DisplayVideoLayer(scene, this.config)
     this.imageLayer = new DisplayImageLayer(scene, this.config)
+  }
+
+  setAccessibility(accessibility: AccessibilityConfig): void {
+    this.accessibility = accessibility
+    this.shaderLayer.setAccessibilityScanlineFactor?.(accessibility.scanlineIntensity)
   }
 
   /**
@@ -267,18 +274,18 @@ export class DisplaySystem {
     // Normal mode
 
     if (this.storyText) {
-      ctx.fillStyle = '#7fe9ff'
+      ctx.fillStyle = this.trackThemePrimary
       ctx.font = 'bold 56px "Courier New", monospace'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.shadowColor = '#00bfff'
+      ctx.shadowColor = this.trackThemePrimary
       ctx.shadowBlur = 18
       this.wrapText(ctx, this.storyText, canvas.width / 2, canvas.height * 0.4, canvas.width * 0.9, 64)
     }
 
     if (this.trackText) {
       ctx.shadowBlur = 10
-      ctx.fillStyle = '#ffe16a'
+      ctx.fillStyle = this.trackThemeAccent
       ctx.font = 'bold 40px "Courier New", monospace'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
@@ -506,6 +513,12 @@ export class DisplaySystem {
     const pct = Math.max(0, Math.min(1, progress))
     const bar = '█'.repeat(Math.round(pct * 10)).padEnd(10, '░')
     this.trackText = `♪ ${trackName}  [${bar}]`
+    this.redrawTextOverlay()
+  }
+
+  setTrackTheme(primaryHex: string, accentHex?: string): void {
+    this.trackThemePrimary = primaryHex
+    this.trackThemeAccent = accentHex ?? primaryHex
     this.redrawTextOverlay()
   }
 

@@ -22,6 +22,7 @@ import { CameraEasing } from './camera-easing'
 import { getNextAdventureTrack, getTrackStartAnchor } from './portal-routing'
 import { PALETTE } from '../game-elements/visual-language'
 import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
+import type { AccessibilityConfig } from '../game-elements/accessibility-config'
 
 // Import all track builders
 import { buildNeonHelix } from './tracks/neon-helix'
@@ -88,6 +89,24 @@ export class AdventureMode extends TrackBuilder {
   /** Camera transition state for cinematic polish */
   private cameraTransitionTime = 0
   private cameraTransitionDuration = 0.8 // seconds for smooth entry
+  private zoneCameraTransition:
+    | {
+        elapsed: number
+        duration: number
+        from: { alpha: number; beta: number; radius: number; fov: number }
+        to: { alpha: number; beta: number; radius: number; fov: number }
+      }
+    | null = null
+  private accessibility: AccessibilityConfig = {
+    reducedMotion: false,
+    cameraShakeEnabled: true,
+    flashFrequencyMax: 2,
+    scanlineIntensity: 0.25,
+    effectIntensity: 1,
+    maxCameraShakeIntensity: 0.08,
+    hapticsEnabled: true,
+    hapticIntensity: 1,
+  }
   private exitPortal: ActiveExitPortal | null = null
 
   /**
@@ -291,6 +310,67 @@ export class AdventureMode extends TrackBuilder {
     )
 
     this.followCamera.beta = Scalar.Clamp(this.followCamera.beta, preset.minBeta, preset.maxBeta)
+    this.updateZoneCameraTransition(dt)
+  }
+
+  setAccessibilityConfig(config: AccessibilityConfig): void {
+    this.accessibility = config
+  }
+
+  private updateZoneCameraTransition(dt: number): void {
+    if (!this.followCamera || !this.zoneCameraTransition) return
+
+    const transition = this.zoneCameraTransition
+    transition.elapsed += dt
+    const progress = Math.min(1, transition.elapsed / transition.duration)
+    const eased = CameraEasing.easeOutCubic(progress)
+
+    this.followCamera.alpha = Scalar.Lerp(transition.from.alpha, transition.to.alpha, eased)
+    this.followCamera.beta = Scalar.Lerp(transition.from.beta, transition.to.beta, eased)
+    this.followCamera.radius = Scalar.Lerp(transition.from.radius, transition.to.radius, eased)
+    this.followCamera.fov = Scalar.Lerp(transition.from.fov, transition.to.fov, eased)
+
+    if (progress >= 1) {
+      this.zoneCameraTransition = null
+    }
+  }
+
+  private applyCameraPresetTransition(preset: CameraPreset, duration = 0.7): void {
+    if (!this.followCamera) return
+
+    const shouldCutInstantly =
+      this.accessibility.reducedMotion || this.accessibility.maxCameraShakeIntensity <= 0
+
+    this.followCamera.lowerRadiusLimit = preset.minRadius
+    this.followCamera.upperRadiusLimit = preset.maxRadius
+    this.followCamera.lowerBetaLimit = preset.minBeta
+    this.followCamera.upperBetaLimit = preset.maxBeta
+
+    if (shouldCutInstantly) {
+      this.zoneCameraTransition = null
+      this.followCamera.alpha = preset.alpha
+      this.followCamera.beta = preset.beta
+      this.followCamera.radius = preset.radius
+      this.followCamera.fov = preset.fov
+      return
+    }
+
+    this.zoneCameraTransition = {
+      elapsed: 0,
+      duration,
+      from: {
+        alpha: this.followCamera.alpha,
+        beta: this.followCamera.beta,
+        radius: this.followCamera.radius,
+        fov: this.followCamera.fov,
+      },
+      to: {
+        alpha: preset.alpha,
+        beta: preset.beta,
+        radius: preset.radius,
+        fov: preset.fov,
+      },
+    }
   }
 
   activateExitPortal(
@@ -624,6 +704,9 @@ export class AdventureMode extends TrackBuilder {
     this.cameraTransitionTime = 0
 
     this.currentCameraPreset = CAMERA_PRESETS[newZone as string] || CAMERA_PRESETS.DEFAULT
+    if (this.currentCameraPreset) {
+      this.applyCameraPresetTransition(this.currentCameraPreset, 0.7)
+    }
 
     if (this.onEvent) {
       this.onEvent('ZONE_ENTER', {
@@ -710,15 +793,7 @@ export class AdventureMode extends TrackBuilder {
 
     // Update follow-camera preset without recreating the camera
     if (this.followCamera && this.currentCameraPreset) {
-      const preset = this.currentCameraPreset
-      this.followCamera.alpha = preset.alpha
-      this.followCamera.beta = preset.beta
-      this.followCamera.radius = preset.radius
-      this.followCamera.fov = preset.fov
-      this.followCamera.lowerRadiusLimit = preset.minRadius
-      this.followCamera.upperRadiusLimit = preset.maxRadius
-      this.followCamera.lowerBetaLimit = preset.minBeta
-      this.followCamera.upperBetaLimit = preset.maxBeta
+      this.applyCameraPresetTransition(this.currentCameraPreset, 0.7)
     }
 
     if (zoneChanged && this.onEvent) {

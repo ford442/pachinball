@@ -1,6 +1,8 @@
 // src/game/game-ui.ts
 import type { Scene } from '@babylonjs/core'
-import { TIMER_COLORS } from '../game-elements/visual-language'
+import { TIMER_COLORS, PALETTE, INTENSITY, pulse } from '../game-elements/visual-language'
+import { GameConfig } from '../config'
+import type { ScoringBreakdownSnapshot } from '../game-elements/scoring-breakdown'
 
 export interface PopupConfig {
   duration?: number
@@ -13,6 +15,7 @@ export interface HUDData {
   lives: number
   ballsInPlay?: number
   combo?: number
+  scoreMultiplier?: number
   maxCombo?: number
   bestScore?: number
 }
@@ -33,6 +36,29 @@ export interface AdventureLevel {
   goals: AdventureGoal[]
 }
 
+export interface ScoringBreakdownDisplayOptions {
+  finalScore?: number
+  bestScore?: number
+  bestDelta?: number
+  rewardShards?: number
+  autoDismissMs?: number
+}
+
+export interface PauseMenuSettings {
+  masterVolume: number
+  shakeEnabled: boolean
+  scanlinesEnabled: boolean
+  qualityPreset: 'low' | 'medium' | 'high'
+  reducedMotion: boolean
+  photosensitiveMode: boolean
+}
+
+export interface PauseMenuHandlers {
+  onResume: () => void
+  onRestart: () => void
+  onSettingsChange: (next: PauseMenuSettings) => void
+}
+
 export class GameUIManager {
   // private _scene: Scene // UNUSED
   private activePopups: Map<string, HTMLElement> = new Map()
@@ -46,6 +72,12 @@ export class GameUIManager {
   private ballsElement: HTMLElement | null = null
   private comboElement: HTMLElement | null = null
   private bestHudElement: HTMLElement | null = null
+  private comboChainMeter: HTMLElement | null = null
+  private scoringBreakdownPanel: HTMLElement | null = null
+  private scoringBreakdownKeyHandler: ((event: KeyboardEvent) => void) | null = null
+  private pauseMenuPanel: HTMLElement | null = null
+  private pauseButton: HTMLButtonElement | null = null
+  private pauseButtonHandler: (() => void) | null = null
 
   /**
    * Cached result of the `prefers-reduced-motion` media query.
@@ -59,6 +91,7 @@ export class GameUIManager {
     void scene
     this.bindHUDElements()
     this.initReducedMotionListener()
+    this.ensurePauseButton()
   }
 
   /** Set up a one-time media-query listener so the cached value stays fresh. */
@@ -78,6 +111,41 @@ export class GameUIManager {
     this.ballsElement = document.getElementById('balls')
     this.comboElement = document.getElementById('combo')
     this.bestHudElement = document.getElementById('best')
+  }
+
+  private ensurePauseButton(): void {
+    const cabinet = document.getElementById('game-cabinet')
+    if (!cabinet || this.pauseButton) return
+
+    const button = document.createElement('button')
+    button.id = 'pause-touch-button'
+    button.type = 'button'
+    button.setAttribute('aria-label', 'Pause game')
+    button.textContent = 'PAUSE'
+    button.style.cssText = `
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      margin: 0;
+      padding: 8px 12px;
+      border: 1px solid ${PALETTE.CYAN};
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.72);
+      color: ${PALETTE.CYAN};
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.72rem;
+      letter-spacing: 1px;
+      z-index: 180;
+      pointer-events: auto;
+      touch-action: manipulation;
+    `
+    button.addEventListener('click', () => this.pauseButtonHandler?.())
+    cabinet.appendChild(button)
+    this.pauseButton = button
+  }
+
+  setPauseButtonHandler(handler: () => void): void {
+    this.pauseButtonHandler = handler
   }
 
   // ==================== POPUP METHODS ====================
@@ -270,10 +338,61 @@ export class GameUIManager {
     if (this.scoreElement) this.scoreElement.textContent = String(data.score)
     if (this.livesElement) this.livesElement.textContent = String(data.lives)
     if (this.ballsElement && data.ballsInPlay !== undefined) this.ballsElement.textContent = String(data.ballsInPlay)
-    if (this.comboElement) this.comboElement.textContent = data.combo && data.combo > 1 ? `Combo ${data.combo}` : ''
+    if (this.comboElement) {
+      const comboLabel = data.combo && data.combo > 1 ? `Combo ${data.combo}` : ''
+      const multiballLabel = data.scoreMultiplier && data.scoreMultiplier > 1
+        ? `MB x${Number(data.scoreMultiplier.toFixed(2)).toString()}`
+        : ''
+      this.comboElement.textContent = [comboLabel, multiballLabel].filter(Boolean).join(' | ')
+    }
     if (this.bestHudElement && data.bestScore !== undefined) {
       this.bestHudElement.textContent = String(data.bestScore)
     }
+  }
+
+  updateComboChainMeter(progress: number, target: number, pulseHighlight: boolean): void {
+    const safeTarget = Math.max(1, target)
+    const clampedProgress = Math.max(0, Math.min(progress, safeTarget))
+    let meter = this.comboChainMeter || document.getElementById('combo-chain-meter')
+
+    if (!meter) {
+      meter = document.createElement('div')
+      meter.id = 'combo-chain-meter'
+      meter.setAttribute('data-testid', 'combo-chain-meter')
+      meter.style.cssText = `
+        position: absolute;
+        top: 54px;
+        left: 20px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        border-radius: 6px;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 11px;
+        color: ${PALETTE.GOLD};
+        background: rgba(0, 0, 0, 0.65);
+        border: 1px solid ${PALETTE.GOLD};
+        z-index: 52;
+      `
+      document.getElementById('game-cabinet')?.appendChild(meter)
+      this.comboChainMeter = meter
+    }
+
+    const reducedMotion = this.prefersReducedMotion || GameConfig.accessibility.photosensitiveMode
+    const glow = pulseHighlight && !reducedMotion
+      ? pulse((typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000, 2.5, INTENSITY.AMBIENT, INTENSITY.HIGH)
+      : INTENSITY.AMBIENT
+
+    const pips = Array.from({ length: safeTarget }, (_, idx) => {
+      const filled = idx < clampedProgress
+      const fillColor = filled ? PALETTE.GOLD : PALETTE.AMBIENT
+      const borderColor = filled ? PALETTE.GOLD : PALETTE.CYAN
+      return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${fillColor};border:1px solid ${borderColor};"></span>`
+    }).join('')
+
+    meter.innerHTML = `<span>CHAIN</span><span style="display:flex;gap:4px;">${pips}</span><span>x${clampedProgress}</span>`
+    meter.style.boxShadow = pulseHighlight && !reducedMotion ? `0 0 ${Math.round(glow * 8)}px ${PALETTE.GOLD}` : 'none'
   }
 
   /**
@@ -397,6 +516,88 @@ export class GameUIManager {
       msgEl.remove()
       this.activePopups.delete('message')
     }, duration)
+  }
+
+  showRewardToast(shardsEarned: number, totalShards: number, unlockedRewards: string[] = []): void {
+    const existing = document.getElementById('campaign-reward-toast')
+    existing?.remove()
+
+    const toast = document.createElement('div')
+    toast.id = 'campaign-reward-toast'
+    toast.setAttribute('data-testid', 'campaign-reward-toast')
+
+    const unlockedText =
+      unlockedRewards.length > 0 ? `<div class="campaign-reward-unlocked">Unlocked: ${unlockedRewards.join(', ')}</div>` : ''
+    toast.innerHTML = `
+      <div class="campaign-reward-earned">+${Math.round(shardsEarned).toLocaleString()} Shards</div>
+      <div class="campaign-reward-total">Total: ${Math.round(totalShards).toLocaleString()}</div>
+      ${unlockedText}
+    `
+
+    const reducedMotion = this.prefersReducedMotion || GameConfig.accessibility.photosensitiveMode
+    toast.style.cssText = `
+      position: absolute;
+      top: 18px;
+      right: 20px;
+      min-width: 220px;
+      background: rgba(0, 0, 0, 0.86);
+      border: 1px solid ${PALETTE.GOLD};
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: ${PALETTE.GOLD};
+      font-family: 'Orbitron', sans-serif;
+      z-index: 210;
+      pointer-events: none;
+      box-shadow: ${reducedMotion ? 'none' : `0 0 12px ${PALETTE.GOLD}`};
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: opacity 120ms linear, transform 120ms linear;
+    `
+
+    const style = document.createElement('style')
+    style.id = 'campaign-reward-toast-style'
+    style.textContent = `
+      #campaign-reward-toast .campaign-reward-earned {
+        font-size: 1rem;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+      }
+      #campaign-reward-toast .campaign-reward-total {
+        margin-top: 2px;
+        font-size: 0.78rem;
+        color: ${PALETTE.WHITE};
+        opacity: 0.9;
+      }
+      #campaign-reward-toast .campaign-reward-unlocked {
+        margin-top: 6px;
+        font-size: 0.74rem;
+        color: ${PALETTE.CYAN};
+      }
+    `
+
+    if (!document.getElementById(style.id)) {
+      document.head.appendChild(style)
+    } else {
+      style.remove()
+    }
+
+    document.getElementById('game-cabinet')?.appendChild(toast)
+    this.activePopups.set('campaign-reward', toast)
+
+    requestAnimationFrame(() => {
+      toast.style.opacity = '1'
+      toast.style.transform = 'translateY(0)'
+    })
+
+    const dismissDelay = unlockedRewards.length > 0 ? 3200 : 2200
+    setTimeout(() => {
+      toast.style.opacity = '0'
+      toast.style.transform = reducedMotion ? 'translateY(0)' : 'translateY(-6px)'
+      setTimeout(() => {
+        toast.remove()
+        this.activePopups.delete('campaign-reward')
+      }, 180)
+    }, dismissDelay)
   }
 
   /**
@@ -596,6 +797,248 @@ export class GameUIManager {
     }, 300)
   }
 
+  showScoringBreakdown(snapshot: ScoringBreakdownSnapshot, options: ScoringBreakdownDisplayOptions = {}): void {
+    this.hideScoringBreakdown()
+
+    const panel = document.createElement('section')
+    panel.id = 'scoring-breakdown-panel'
+    panel.setAttribute('data-testid', 'scoring-breakdown-panel')
+    panel.setAttribute('role', 'dialog')
+    panel.setAttribute('aria-modal', 'false')
+    panel.setAttribute('aria-label', 'Scoring breakdown')
+    panel.tabIndex = 0
+
+    const rows = [
+      { label: 'Bumpers', value: snapshot.bumpers, color: PALETTE.CYAN },
+      { label: 'Special Obstacles', value: snapshot.specialObstacles, color: PALETTE.MAGENTA },
+      { label: 'Gold Balls', value: snapshot.goldBalls, color: PALETTE.GOLD },
+      { label: 'Combo Bonus', value: snapshot.comboBonus, color: PALETTE.GOLD },
+      { label: 'Time / Goal Bonus', value: snapshot.timeGoalBonus, color: PALETTE.MATRIX },
+      { label: 'Jackpot / Slot', value: snapshot.premiumBonus, color: PALETTE.PURPLE },
+    ]
+
+    const rowHtml = rows.map((row) => `
+      <div style="display:flex;justify-content:space-between;gap:16px;margin:4px 0;">
+        <span style="color:${row.color};">${row.label}</span>
+        <strong>${Math.round(row.value).toLocaleString()}</strong>
+      </div>
+    `).join('')
+
+    const finalScore = options.finalScore ?? snapshot.total
+    const bestDelta = Math.max(0, options.bestDelta ?? 0)
+    const rewardShards = Math.max(0, options.rewardShards ?? 0)
+    const finalScoreLine = finalScore !== snapshot.total
+      ? `<div style="display:flex;justify-content:space-between;gap:16px;margin-top:6px;">
+          <span style="color:${PALETTE.WHITE};opacity:0.85;">Final Score</span>
+          <strong>${Math.round(finalScore).toLocaleString()}</strong>
+        </div>`
+      : ''
+    const bestLine = bestDelta > 0
+      ? `<div style="margin-top:6px;color:${PALETTE.GOLD};font-size:0.82rem;">NEW BEST +${bestDelta.toLocaleString()}</div>`
+      : options.bestScore !== undefined
+        ? `<div style="margin-top:6px;color:${PALETTE.WHITE};opacity:0.75;font-size:0.78rem;">Best: ${options.bestScore.toLocaleString()}</div>`
+        : ''
+    const rewardLine = rewardShards > 0
+      ? `<div style="display:flex;justify-content:space-between;gap:16px;margin-top:6px;">
+          <span style="color:${PALETTE.GOLD};">Reward Shards</span>
+          <strong>${rewardShards.toLocaleString()}</strong>
+        </div>`
+      : ''
+
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+        <h3 style="margin:0;color:${PALETTE.CYAN};font-size:1rem;letter-spacing:1.2px;">SCORE BREAKDOWN</h3>
+        <button type="button" aria-label="Dismiss scoring breakdown" data-testid="scoring-breakdown-dismiss" style="
+          margin:0;
+          padding:2px 8px;
+          border:1px solid ${PALETTE.CYAN};
+          color:${PALETTE.CYAN};
+          background:transparent;
+          font-size:0.74rem;
+          cursor:pointer;
+        ">DISMISS</button>
+      </div>
+      <div style="margin-top:8px;">${rowHtml}</div>
+      ${rewardLine}
+      <hr style="border:none;border-top:1px solid ${PALETTE.AMBIENT};margin:10px 0 6px;" />
+      <div style="display:flex;justify-content:space-between;gap:16px;" data-testid="scoring-breakdown-total">
+        <span style="color:${PALETTE.WHITE};font-weight:700;">Grand Total</span>
+        <strong>${Math.round(snapshot.total).toLocaleString()}</strong>
+      </div>
+      ${finalScoreLine}
+      ${bestLine}
+      <div style="margin-top:6px;color:${PALETTE.WHITE};opacity:0.62;font-size:0.74rem;">Press ESC or SPACE to close</div>
+    `
+
+    const reducedMotion = this.prefersReducedMotion || GameConfig.accessibility.photosensitiveMode
+    panel.style.cssText = `
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      min-width: 300px;
+      max-width: 360px;
+      background: rgba(0, 0, 0, 0.88);
+      border: 1px solid ${PALETTE.CYAN};
+      border-radius: 8px;
+      padding: 12px;
+      color: ${PALETTE.WHITE};
+      font-family: 'Orbitron', sans-serif;
+      z-index: 240;
+      box-shadow: ${reducedMotion ? 'none' : `0 0 12px ${PALETTE.CYAN}`};
+      opacity: 0;
+      transform: translateY(-6px);
+      transition: opacity 120ms linear, transform 120ms linear;
+      pointer-events: auto;
+    `
+
+    const dismiss = () => this.hideScoringBreakdown()
+    panel.querySelector<HTMLButtonElement>('[data-testid="scoring-breakdown-dismiss"]')?.addEventListener('click', dismiss)
+    panel.addEventListener('click', dismiss)
+
+    this.scoringBreakdownKeyHandler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' || event.key === ' ') {
+        event.preventDefault()
+        dismiss()
+      }
+    }
+    window.addEventListener('keydown', this.scoringBreakdownKeyHandler)
+
+    document.getElementById('game-cabinet')?.appendChild(panel)
+    this.scoringBreakdownPanel = panel
+
+    requestAnimationFrame(() => {
+      panel.style.opacity = '1'
+      panel.style.transform = 'translateY(0)'
+      panel.focus()
+    })
+
+    const autoDismissMs = Math.max(0, options.autoDismissMs ?? 0)
+    if (autoDismissMs > 0) {
+      window.setTimeout(() => {
+        if (this.scoringBreakdownPanel === panel) {
+          this.hideScoringBreakdown()
+        }
+      }, autoDismissMs)
+    }
+  }
+
+  hideScoringBreakdown(): void {
+    if (this.scoringBreakdownKeyHandler) {
+      window.removeEventListener('keydown', this.scoringBreakdownKeyHandler)
+      this.scoringBreakdownKeyHandler = null
+    }
+    this.scoringBreakdownPanel?.remove()
+    this.scoringBreakdownPanel = null
+  }
+
+  showPauseMenu(settings: PauseMenuSettings, handlers: PauseMenuHandlers): void {
+    this.hidePauseMenu()
+    const overlay = document.getElementById('pause-overlay')
+    if (!overlay) return
+
+    const panel = document.createElement('section')
+    panel.id = 'pause-menu-panel'
+    panel.setAttribute('data-testid', 'pause-menu-panel')
+    panel.setAttribute('role', 'dialog')
+    panel.setAttribute('aria-modal', 'false')
+    panel.setAttribute('aria-label', 'Pause menu')
+    panel.tabIndex = 0
+    panel.style.cssText = `
+      width: min(92vw, 540px);
+      max-height: min(86vh, 620px);
+      overflow: auto;
+      background: rgba(0, 0, 0, 0.92);
+      border: 1px solid ${PALETTE.CYAN};
+      border-radius: 10px;
+      padding: 14px;
+      color: ${PALETTE.WHITE};
+      font-family: 'Orbitron', sans-serif;
+      pointer-events: auto;
+      box-shadow: 0 0 18px ${PALETTE.CYAN};
+    `
+
+    const quality = settings.qualityPreset
+    panel.innerHTML = `
+      <h2 style="margin:0 0 8px;color:${PALETTE.CYAN};font-size:1.2rem;">PAUSED</h2>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <button type="button" data-testid="pause-resume-btn" data-action="resume" style="margin:0;flex:1;border-color:${PALETTE.CYAN};color:${PALETTE.CYAN};">Resume</button>
+        <button type="button" data-action="restart" style="margin:0;flex:1;border-color:${PALETTE.GOLD};color:${PALETTE.GOLD};">Restart Run</button>
+      </div>
+      <label style="display:flex;flex-direction:column;gap:4px;margin:8px 0;">
+        <span>Master Volume</span>
+        <input data-testid="pause-master-volume" type="range" min="0" max="1" step="0.05" value="${settings.masterVolume.toFixed(2)}" />
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;margin:8px 0;">
+        <input type="checkbox" data-setting="shakeEnabled" ${settings.shakeEnabled ? 'checked' : ''} />
+        <span>Screen Shake</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;margin:8px 0;">
+        <input type="checkbox" data-setting="scanlinesEnabled" ${settings.scanlinesEnabled ? 'checked' : ''} />
+        <span>Scanlines</span>
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px;margin:8px 0;">
+        <span>Quality</span>
+        <select data-setting="qualityPreset">
+          <option value="low" ${quality === 'low' ? 'selected' : ''}>Low</option>
+          <option value="medium" ${quality === 'medium' ? 'selected' : ''}>Medium</option>
+          <option value="high" ${quality === 'high' ? 'selected' : ''}>High</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;margin:8px 0;">
+        <input data-testid="pause-reduced-motion" type="checkbox" data-setting="reducedMotion" ${settings.reducedMotion ? 'checked' : ''} />
+        <span>Reduce Motion</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;margin:8px 0;">
+        <input type="checkbox" data-setting="photosensitiveMode" ${settings.photosensitiveMode ? 'checked' : ''} />
+        <span>Photosensitive Mode</span>
+      </label>
+      <p style="margin:10px 0 0;color:${PALETTE.AMBIENT};font-size:0.74rem;">ESC resumes • A/Space select • B/Escape back</p>
+    `
+
+    overlay.innerHTML = ''
+    overlay.appendChild(panel)
+    this.pauseMenuPanel = panel
+
+    const next = (): PauseMenuSettings => ({
+      masterVolume: parseFloat((panel.querySelector('input[type="range"]') as HTMLInputElement).value),
+      shakeEnabled: (panel.querySelector('input[data-setting="shakeEnabled"]') as HTMLInputElement).checked,
+      scanlinesEnabled: (panel.querySelector('input[data-setting="scanlinesEnabled"]') as HTMLInputElement).checked,
+      qualityPreset: (panel.querySelector('select[data-setting="qualityPreset"]') as HTMLSelectElement).value as PauseMenuSettings['qualityPreset'],
+      reducedMotion: (panel.querySelector('input[data-setting="reducedMotion"]') as HTMLInputElement).checked,
+      photosensitiveMode: (panel.querySelector('input[data-setting="photosensitiveMode"]') as HTMLInputElement).checked,
+    })
+
+    panel.querySelector('[data-action="resume"]')?.addEventListener('click', handlers.onResume)
+    panel.querySelector('[data-action="restart"]')?.addEventListener('click', handlers.onRestart)
+
+    panel.querySelector('input[type="range"]')?.addEventListener('input', () => handlers.onSettingsChange(next()))
+    panel.querySelectorAll('input[data-setting],select[data-setting]').forEach((el) => {
+      el.addEventListener('change', () => handlers.onSettingsChange(next()))
+    })
+
+    const keyHandler = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        handlers.onResume()
+      }
+    }
+    window.addEventListener('keydown', keyHandler)
+    panel.setAttribute('data-key-handler', 'active')
+    ;(panel as HTMLElement & { __pauseKeyHandler?: (event: KeyboardEvent) => void }).__pauseKeyHandler = keyHandler
+
+    requestAnimationFrame(() => panel.focus())
+  }
+
+  hidePauseMenu(): void {
+    if (!this.pauseMenuPanel) return
+    const typed = this.pauseMenuPanel as HTMLElement & { __pauseKeyHandler?: (event: KeyboardEvent) => void }
+    if (typed.__pauseKeyHandler) {
+      window.removeEventListener('keydown', typed.__pauseKeyHandler)
+    }
+    this.pauseMenuPanel.remove()
+    this.pauseMenuPanel = null
+  }
+
   // ==================== CLEANUP ====================
 
   dispose(): void {
@@ -616,6 +1059,12 @@ export class GameUIManager {
     // Remove campaign-specific HUD elements
     this.hideCountdownTimer()
     this.hidePortalOverlay()
+    this.hideScoringBreakdown()
+    this.hidePauseMenu()
+    this.comboChainMeter?.remove()
+    this.comboChainMeter = null
+    this.pauseButton?.remove()
+    this.pauseButton = null
 
     // Hide loading state
     if (this.loadingOverlay) {

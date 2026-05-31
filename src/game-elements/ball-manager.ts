@@ -14,12 +14,13 @@ import {
 } from '@babylonjs/core'
 import type { MirrorTexture } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
-import { GameConfig, BallType, BALL_TIERS } from '../config'
+import { GameConfig, BallType, BALL_TIERS, GAME_TUNING } from '../config'
 import type { PhysicsBinding, BallData } from './types'
 import { getMaterialLibrary } from '../materials'
 import { getSoundSystem } from './sound-system'
 import { COLLISION_GROUP_PRESETS } from './physics'
-import { pulse } from './visual-language'
+import { pulse, PALETTE, INTENSITY, emissive, color, QualityTier } from './visual-language'
+import { getCampaignRewardsManager } from './campaign-rewards-manager'
 
 
 
@@ -55,6 +56,12 @@ export class BallManager {
   private static readonly STUCK_VELOCITY_THRESHOLD = 0.1
   /** Time before a stuck ball is auto-reset */
   private static readonly STUCK_TIMEOUT = 5.0
+  private chainMultiball = {
+    isActive: false,
+    chainLevel: 0,
+    ballSaveUsed: false,
+    ballSaveExpiresAtMs: 0,
+  }
 
   constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER, bindings: PhysicsBinding[]) {
     this.scene = scene
@@ -293,6 +300,9 @@ export class BallManager {
       // Gentle pop on reset so player notices the ball reappearing in the lane
       this.ballBody!.applyImpulse(new this.rapier.Vector3(0, 0, 2.5), true)
     }
+
+    this.applyCampaignRewards()
+    this.endMultiball()
   }
 
   removeBall(body: RAPIER.RigidBody): void {
@@ -336,6 +346,156 @@ export class BallManager {
       b.mesh.dispose()
       return false
     })
+    this.endMultiball()
+  }
+
+  private nowMs(): number {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now()
+  }
+
+  private getDynamicScoreMultiplier(): number {
+    if (!this.chainMultiball.isActive) return 1
+    const extraBalls = Math.max(0, this.ballBodies.length - 1)
+    return 1 + (extraBalls * GAME_TUNING.multiball.multiplierPerExtraBall)
+  }
+
+  getScoreMultiplier(): number {
+    return this.getDynamicScoreMultiplier()
+  }
+
+  canSaveDrain(nowMs: number = this.nowMs()): boolean {
+    return this.chainMultiball.isActive
+      && !this.chainMultiball.ballSaveUsed
+      && nowMs <= this.chainMultiball.ballSaveExpiresAtMs
+  }
+
+  startMultiball(totalBalls: number, ballSaveMs: number = GAME_TUNING.multiball.drainGraceMs): {
+    started: boolean
+    spawnedBalls: number
+    scoreMultiplier: number
+    ballsInPlay: number
+    chainLevel: number
+    ballSaveRemainingMs: number
+  } {
+    const clampedTotal = Math.max(2, Math.min(totalBalls, GAME_TUNING.multiball.maxChainBalls))
+    const currentBallCount = this.ballBodies.length
+    const needed = Math.max(0, clampedTotal - currentBallCount)
+    const wasActive = this.chainMultiball.isActive
+    const now = this.nowMs()
+
+    for (let i = 0; i < needed; i++) {
+      const spawn = GameConfig.ball.spawnPachinko
+      const jitteredSpawn = {
+        x: spawn.x + (Math.random() - 0.5) * 1.25,
+        y: spawn.y + (i * 0.75),
+        z: spawn.z + (Math.random() - 0.5) * 0.8,
+      } as Vector3
+      this.spawnRandomBall(jitteredSpawn)
+    }
+
+    if (this.ballBodies.length > 0 && (!this.ballBody || !this.ballBodies.includes(this.ballBody))) {
+      this.ballBody = this.ballBodies[0]
+    }
+
+    if (!wasActive) {
+      this.chainMultiball.chainLevel = 1
+    } else if (needed > 0) {
+      this.chainMultiball.chainLevel++
+    }
+
+    this.chainMultiball.isActive = true
+    this.chainMultiball.ballSaveUsed = false
+    this.chainMultiball.ballSaveExpiresAtMs = now + Math.max(0, ballSaveMs)
+
+    return {
+      started: !wasActive || needed > 0,
+      spawnedBalls: needed,
+      scoreMultiplier: this.getDynamicScoreMultiplier(),
+      ballsInPlay: this.ballBodies.length,
+      chainLevel: this.chainMultiball.chainLevel,
+      ballSaveRemainingMs: Math.max(0, this.chainMultiball.ballSaveExpiresAtMs - now),
+    }
+  }
+
+  triggerForcedMultiball(totalBalls: number, _reason: string): {
+    started: boolean
+    spawnedBalls: number
+    scoreMultiplier: number
+    ballsInPlay: number
+    chainLevel: number
+    ballSaveRemainingMs: number
+  } {
+    return this.startMultiball(totalBalls, GAME_TUNING.multiball.drainGraceMs)
+  }
+
+  registerDrain(_drainedBody: RAPIER.RigidBody): {
+    ballSaved: boolean
+    multiballEnded: boolean
+    scoreMultiplier: number
+    ballsInPlay: number
+    ballSaveRemainingMs: number
+  } {
+    if (!this.chainMultiball.isActive) {
+      return {
+        ballSaved: false,
+        multiballEnded: false,
+        scoreMultiplier: 1,
+        ballsInPlay: this.ballBodies.length,
+        ballSaveRemainingMs: 0,
+      }
+    }
+
+    const now = this.nowMs()
+    let ballSaved = false
+    if (this.canSaveDrain(now)) {
+      const spawn = GameConfig.ball.spawnMain
+      const savedBody = this.spawnRandomBall({ x: spawn.x, y: spawn.y, z: spawn.z } as Vector3)
+      if (!this.ballBody || !this.ballBodies.includes(this.ballBody)) {
+        this.ballBody = savedBody
+      }
+      this.chainMultiball.ballSaveUsed = true
+      ballSaved = true
+    }
+
+    let multiballEnded = false
+    if (this.chainMultiball.isActive && this.ballBodies.length <= 1) {
+      this.endMultiball()
+      multiballEnded = true
+    }
+
+    return {
+      ballSaved,
+      multiballEnded,
+      scoreMultiplier: this.getDynamicScoreMultiplier(),
+      ballsInPlay: this.ballBodies.length,
+      ballSaveRemainingMs: Math.max(0, this.chainMultiball.ballSaveExpiresAtMs - now),
+    }
+  }
+
+  endMultiball(): void {
+    this.chainMultiball.isActive = false
+    this.chainMultiball.chainLevel = 0
+    this.chainMultiball.ballSaveUsed = false
+    this.chainMultiball.ballSaveExpiresAtMs = 0
+  }
+
+  getChainStats(): {
+    isActive: boolean
+    chainLevel: number
+    ballsInPlay: number
+    scoreMultiplier: number
+    ballSaveAvailable: boolean
+    ballSaveRemainingMs: number
+  } {
+    const now = this.nowMs()
+    return {
+      isActive: this.chainMultiball.isActive,
+      chainLevel: this.chainMultiball.chainLevel,
+      ballsInPlay: this.ballBodies.length,
+      scoreMultiplier: this.getDynamicScoreMultiplier(),
+      ballSaveAvailable: this.canSaveDrain(now),
+      ballSaveRemainingMs: Math.max(0, this.chainMultiball.ballSaveExpiresAtMs - now),
+    }
   }
 
   activateHologramCatch(ball: RAPIER.RigidBody, targetPos: Vector3, duration: number): void {
@@ -570,13 +730,53 @@ export class BallManager {
 
     switch (skinId) {
       case 'quantum-skin':
+      case 'ball-skin-prism':
         if (ball.material) {
           const pbrMat = ball.material as PBRMaterial
-          pbrMat.albedoColor = new Color3(0, 0, 0)
-          pbrMat.emissiveColor = Color3.FromHexString('#220033')
+          pbrMat.albedoColor = color(PALETTE.AMBIENT)
+          pbrMat.emissiveColor = emissive(PALETTE.PURPLE, INTENSITY.NORMAL)
+          pbrMat.emissiveIntensity = this.matLib.qualityTier === QualityTier.HIGH ? 1.1 : 0.8
+          if (this.matLib.qualityTier === QualityTier.HIGH) {
+            pbrMat.iridescence.isEnabled = true
+            pbrMat.iridescence.intensity = 0.35
+          }
         }
         if (core?.material) {
-          (core.material as PBRMaterial).emissiveColor = Color3.FromHexString('#440066')
+          const coreMat = core.material as PBRMaterial
+          coreMat.emissiveColor = emissive(PALETTE.MAGENTA, INTENSITY.ACTIVE)
+          coreMat.emissiveIntensity = this.matLib.qualityTier === QualityTier.HIGH ? 1.3 : 1.0
+        }
+        break
+      case 'ball-skin-cascade':
+        if (ball.material) {
+          const pbrMat = ball.material as PBRMaterial
+          pbrMat.albedoColor = color(PALETTE.WHITE)
+          pbrMat.emissiveColor = emissive(PALETTE.CYAN, INTENSITY.NORMAL)
+          pbrMat.emissiveIntensity = 0.85
+          pbrMat.clearCoat.isEnabled = true
+          pbrMat.clearCoat.intensity = 0.6
+          pbrMat.clearCoat.roughness = 0.12
+        }
+        if (core?.material) {
+          const coreMat = core.material as PBRMaterial
+          coreMat.emissiveColor = emissive(PALETTE.CYAN, INTENSITY.ACTIVE)
+          coreMat.emissiveIntensity = 0.9
+        }
+        break
+      case 'ball-skin-aurum':
+        if (ball.material) {
+          const pbrMat = ball.material as PBRMaterial
+          pbrMat.albedoColor = color(PALETTE.GOLD)
+          pbrMat.emissiveColor = emissive(PALETTE.GOLD, INTENSITY.NORMAL)
+          pbrMat.emissiveIntensity = 0.95
+          pbrMat.clearCoat.isEnabled = true
+          pbrMat.clearCoat.intensity = 0.8
+          pbrMat.clearCoat.roughness = 0.08
+        }
+        if (core?.material) {
+          const coreMat = core.material as PBRMaterial
+          coreMat.emissiveColor = emissive(PALETTE.GOLD, INTENSITY.HIGH)
+          coreMat.emissiveIntensity = 0.8
         }
         break
       default:
@@ -624,6 +824,14 @@ export class BallManager {
     if (trailData) {
       trailData.material.emissiveColor = Color3.FromHexString('#00FFFF')
       trailData.baseWidth = GameConfig.ball.radius * 0.6
+    }
+  }
+
+  private applyCampaignRewards(): void {
+    const campaignRewards = getCampaignRewardsManager()
+    const equippedBallSkin = campaignRewards?.getEquippedReward('ball-skin')
+    if (equippedBallSkin) {
+      this.applyBallSkin(equippedBallSkin.cosmeticId)
     }
   }
 

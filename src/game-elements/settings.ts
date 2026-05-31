@@ -4,10 +4,15 @@ export interface GameSettings {
   reducedMotion: boolean
   shakeIntensity: number
   photosensitiveMode: boolean
+  qualityPreset: 'low' | 'medium' | 'high'
   enableFog: boolean
   enableShadows: boolean
   scanlineWeight: number
   enableDebugHUD: boolean
+  masterVolume: number
+  musicVolume: number
+  sfxVolume: number
+  muted: boolean
 }
 
 export class SettingsManager {
@@ -18,10 +23,15 @@ export class SettingsManager {
       reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
       shakeIntensity: 0.08,
       photosensitiveMode: false,
+      qualityPreset: 'medium',
       enableFog: true,
       enableShadows: true,
       scanlineWeight: 1.0,
       enableDebugHUD: false,
+      masterVolume: 0.8,
+      musicVolume: 0.6,
+      sfxVolume: 0.9,
+      muted: false,
     }
     
     try {

@@ -216,6 +216,16 @@ export interface GameTuning {
     feverThreshold: number
     expirySeconds: number
     multiplierDivisor: number
+    chainWindowSeconds: number
+    chainDistinctThreshold: number
+    chainMultiplier: number
+    chainCooldownSeconds: number
+    namedChains: Array<{
+      name: string
+      sequence: string[]
+      bonusPoints: number
+      multiplierBonus: number
+    }>
   }
   timing: {
     nudgeCooldownMs: number
@@ -223,6 +233,12 @@ export interface GameTuning {
     tiltBloomResetMs: number
     idleCallbackTimeoutMs: number
     cosmeticFallbackDelayMs: number
+  }
+  multiball: {
+    maxChainBalls: number
+    multiplierPerExtraBall: number
+    triggerGoldThresholds: number[]
+    drainGraceMs: number
   }
 }
 
@@ -237,6 +253,24 @@ export const GAME_TUNING = {
     feverThreshold: 10,
     expirySeconds: 1.5,
     multiplierDivisor: 3,
+    chainWindowSeconds: 4,
+    chainDistinctThreshold: 3,
+    chainMultiplier: 1.5,
+    chainCooldownSeconds: 0.8,
+    namedChains: [
+      {
+        name: 'SPIN LAUNCH SLAM',
+        sequence: ['spinner', 'launcher', 'bumper'],
+        bonusPoints: 250,
+        multiplierBonus: 0.2,
+      },
+      {
+        name: 'LOCK BREAKER',
+        sequence: ['gate', 'trap', 'bumper'],
+        bonusPoints: 180,
+        multiplierBonus: 0.15,
+      },
+    ],
   },
   timing: {
     nudgeCooldownMs: 500,
@@ -244,6 +278,12 @@ export const GAME_TUNING = {
     tiltBloomResetMs: 1000,
     idleCallbackTimeoutMs: 500,
     cosmeticFallbackDelayMs: 100,
+  },
+  multiball: {
+    maxChainBalls: 3,
+    multiplierPerExtraBall: 0.35,
+    triggerGoldThresholds: [GOLD_BALL_THRESHOLDS.jackpot, GOLD_BALL_THRESHOLDS.jackpot * 2],
+    drainGraceMs: 4000,
   },
 } as const satisfies GameTuning
 

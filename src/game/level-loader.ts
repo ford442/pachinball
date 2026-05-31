@@ -10,6 +10,7 @@
 import type { AdventureTrackType } from '../adventure/adventure-types'
 import type { AdventureMode } from '../adventure/adventure-mode'
 import type { BallManager } from '../game-elements/ball-manager'
+import { getTrackThemingSystem } from '../game-elements'
 import type { MapConfig } from './map-registry'
 import { getMapConfigById } from './map-registry'
 
@@ -78,6 +79,7 @@ export class LevelLoader {
 
     // Reset ball to plunger lane
     this.deps.resetBall()
+    getTrackThemingSystem()?.applyTheme(trackType)
 
     return { success: true, mapConfig: mapConfig ?? undefined }
   }

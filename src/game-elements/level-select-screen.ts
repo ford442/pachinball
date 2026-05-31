@@ -10,6 +10,8 @@
 
 import type { AdventureState, AdventureLevel } from './adventure-state'
 import type { TableMapType } from '../shaders/lcd-table'
+import { getCampaignRewardsManager } from './campaign-rewards-manager'
+import { PALETTE } from './visual-language'
 
 export interface LevelSelectConfig {
   onLevelSelect: (level: AdventureLevel, mapType: TableMapType) => void
@@ -139,6 +141,9 @@ export class LevelSelectScreen {
     const currentLevel = this.adventureState.getCurrentLevel()
 
     const completionPercent = this.adventureState.getOverallCompletionPercent()
+    const campaignRewards = getCampaignRewardsManager()
+    const archiveItems = campaignRewards?.getArchiveState() ?? []
+    const totalShards = campaignRewards?.getTotalShards() ?? 0
 
     return `
       <div class="level-select-container">
@@ -183,6 +188,36 @@ export class LevelSelectScreen {
               </div>
             `
           }).join('')}
+        </div>
+
+        <div class="campaign-archive" data-testid="campaign-archive-panel">
+          <div class="campaign-archive-header">
+            <h3>Nexus Archive</h3>
+            <span class="campaign-shards" data-testid="campaign-shards-total">${Math.round(totalShards).toLocaleString()} Shards</span>
+          </div>
+          <div class="campaign-archive-items">
+            ${archiveItems.map((item) => `
+              <div
+                class="campaign-archive-item ${item.unlocked ? 'unlocked' : 'locked'} ${item.equipped ? 'equipped' : ''}"
+                data-testid="campaign-reward-item-${item.id}"
+                data-reward-id="${item.id}"
+              >
+                <div class="campaign-archive-item-title">${item.name}</div>
+                <div class="campaign-archive-item-meta">
+                  <span>${item.type.replace('-', ' ')}</span>
+                  <span>${item.shardCost.toLocaleString()} shards</span>
+                </div>
+                <div class="campaign-archive-item-desc">${item.description}</div>
+                <div class="campaign-archive-item-state">
+                  ${item.unlocked
+                    ? (item.equipped
+                        ? '<span class="campaign-state-badge">Equipped</span>'
+                        : '<button class="campaign-equip-btn" data-reward-id="' + item.id + '">Equip</button>')
+                    : '<span class="campaign-state-locked">Locked · Needs ' + item.remainingShards.toLocaleString() + ' more shards</span>'}
+                </div>
+              </div>
+            `).join('')}
+          </div>
         </div>
 
         <div class="level-select-footer">
@@ -471,6 +506,105 @@ export class LevelSelectScreen {
           color: #ffd700;
           font-weight: bold;
         }
+
+        .campaign-archive {
+          margin-bottom: 18px;
+          padding: 12px;
+          border-radius: 10px;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: rgba(0, 0, 0, 0.35);
+        }
+
+        .campaign-archive-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 10px;
+        }
+
+        .campaign-archive-header h3 {
+          margin: 0;
+          font-size: 0.95rem;
+          letter-spacing: 1px;
+          color: ${PALETTE.CYAN};
+          font-family: 'Orbitron', sans-serif;
+        }
+
+        .campaign-shards {
+          color: ${PALETTE.GOLD};
+          font-family: 'Orbitron', sans-serif;
+          font-size: 0.85rem;
+          font-weight: 700;
+        }
+
+        .campaign-archive-items {
+          display: grid;
+          gap: 8px;
+        }
+
+        .campaign-archive-item {
+          padding: 8px 10px;
+          border-radius: 8px;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: rgba(255, 255, 255, 0.04);
+        }
+
+        .campaign-archive-item.unlocked {
+          border-color: rgba(0, 255, 136, 0.55);
+          background: rgba(0, 255, 136, 0.08);
+        }
+
+        .campaign-archive-item.equipped {
+          box-shadow: 0 0 12px rgba(255, 215, 0, 0.22);
+        }
+
+        .campaign-archive-item-title {
+          color: #fff;
+          font-weight: 700;
+          font-size: 0.86rem;
+        }
+
+        .campaign-archive-item-meta {
+          margin-top: 2px;
+          display: flex;
+          justify-content: space-between;
+          color: #9aa0aa;
+          font-size: 0.72rem;
+          text-transform: uppercase;
+        }
+
+        .campaign-archive-item-desc {
+          margin-top: 4px;
+          color: #c0c8d2;
+          font-size: 0.75rem;
+        }
+
+        .campaign-archive-item-state {
+          margin-top: 6px;
+          display: flex;
+          justify-content: flex-end;
+        }
+
+        .campaign-state-badge {
+          font-size: 0.72rem;
+          color: ${PALETTE.GOLD};
+          font-weight: 700;
+        }
+
+        .campaign-state-locked {
+          font-size: 0.72rem;
+          color: #a9b1bf;
+        }
+
+        .campaign-equip-btn {
+          border: 1px solid ${PALETTE.CYAN};
+          color: ${PALETTE.CYAN};
+          background: rgba(0, 0, 0, 0.45);
+          border-radius: 6px;
+          padding: 3px 8px;
+          font-size: 0.72rem;
+          cursor: pointer;
+        }
       </style>
     `
   }
@@ -542,6 +676,27 @@ export class LevelSelectScreen {
       }
     }
     document.addEventListener('keydown', escHandler)
+
+    const rewardButtons = this.container?.querySelectorAll('.campaign-equip-btn')
+    rewardButtons?.forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation()
+        const target = event.currentTarget as HTMLElement
+        const rewardId = target.getAttribute('data-reward-id')
+        if (!rewardId) return
+        const campaignRewards = getCampaignRewardsManager()
+        if (!campaignRewards) return
+        if (campaignRewards.equip(rewardId)) {
+          this.refreshRewardsPanel()
+        }
+      })
+    })
+  }
+
+  private refreshRewardsPanel(): void {
+    if (!this.container) return
+    this.container.innerHTML = this.renderContent()
+    this.setupEventListeners()
   }
 
   /**

@@ -3,6 +3,8 @@
  * Manages track progression, unlocking, and difficulty progression
  */
 
+import type { VisualThemeColor } from './visual-language'
+
 /** Campaign mode type — alternates A/B across the progression sequence. */
 export type TrackModeType = 'EXTENDED_MAP' | 'STATIONARY_TABLE'
 
@@ -21,11 +23,25 @@ export interface TrackInfo {
   timeoutPenaltyMultiplier: number
   unlockedBy?: string // Track ID that must be completed to unlock this
   theme: string
+  visualTheme?: {
+    primary: VisualThemeColor
+    accent?: VisualThemeColor
+    surfaceTint?: 'PLAYFIELD' | 'PLAYFIELD_DEEP' | 'GLASS'
+  }
 }
 
 export interface ProgressionState {
   completedTracks: Set<string>
   unlockedTracks: Set<string>
+  bestScores: Record<string, number>
+  currentTrack: string
+  totalGoldBallsCollected: number
+  totalRewardsEarned: number
+}
+
+export interface SerializableProgressionState {
+  completedTracks: string[]
+  unlockedTracks: string[]
   bestScores: Record<string, number>
   currentTrack: string
   totalGoldBallsCollected: number
@@ -53,7 +69,8 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     recommendedScore: 50000,
     timeLimitSeconds: 120,
     timeoutPenaltyMultiplier: 0.55,
-    theme: 'cyber-neon'
+    theme: 'cyber-neon',
+    visualTheme: { primary: 'CYAN', accent: 'MAGENTA', surfaceTint: 'PLAYFIELD' },
   },
   'CYBER_CORE': {
     id: 'CYBER_CORE',
@@ -65,7 +82,8 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     timeLimitSeconds: 90,
     timeoutPenaltyMultiplier: 0.45,
     unlockedBy: 'NEON_HELIX',
-    theme: 'digital'
+    theme: 'digital',
+    visualTheme: { primary: 'MAGENTA', accent: 'PURPLE', surfaceTint: 'PLAYFIELD_DEEP' },
   },
   'QUANTUM_GRID': {
     id: 'QUANTUM_GRID',
@@ -77,7 +95,8 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     timeLimitSeconds: 150,
     timeoutPenaltyMultiplier: 0.50,
     unlockedBy: 'CYBER_CORE',
-    theme: 'quantum'
+    theme: 'quantum',
+    visualTheme: { primary: 'PURPLE', accent: 'WHITE', surfaceTint: 'GLASS' },
   },
   'PACHINKO_SPIRE': {
     id: 'PACHINKO_SPIRE',
@@ -89,7 +108,8 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     timeLimitSeconds: 75,
     timeoutPenaltyMultiplier: 0.40,
     unlockedBy: 'NEON_HELIX',
-    theme: 'retro'
+    theme: 'retro',
+    visualTheme: { primary: 'GOLD', accent: 'ALERT', surfaceTint: 'PLAYFIELD' },
   },
   'SINGULARITY_WELL': {
     id: 'SINGULARITY_WELL',
@@ -101,7 +121,21 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     timeLimitSeconds: 180,
     timeoutPenaltyMultiplier: 0.35,
     unlockedBy: 'QUANTUM_GRID',
-    theme: 'cosmic'
+    theme: 'cosmic',
+    visualTheme: { primary: 'ALERT', accent: 'AMBIENT', surfaceTint: 'PLAYFIELD_DEEP' },
+  },
+  'GLITCH_SPIRE': {
+    id: 'GLITCH_SPIRE',
+    name: 'Glitch Spire',
+    description: 'Corrupted geometry and unstable lanes demand quick reflexes and reroutes.',
+    difficulty: 'expert',
+    modeType: 'STATIONARY_TABLE',
+    recommendedScore: 110000,
+    timeLimitSeconds: 105,
+    timeoutPenaltyMultiplier: 0.42,
+    unlockedBy: 'SINGULARITY_WELL',
+    theme: 'glitch',
+    visualTheme: { primary: 'MATRIX', accent: 'CYAN', surfaceTint: 'GLASS' },
   }
 }
 
@@ -261,6 +295,22 @@ export class AdventureTrackProgression {
     }
   }
 
+  loadSerializableState(state: Partial<SerializableProgressionState>): void {
+    const validTrackIds = new Set(Object.keys(TRACK_CATALOG))
+    const completedTracks = (state.completedTracks ?? []).filter((id) => validTrackIds.has(id))
+    const unlockedTracks = (state.unlockedTracks ?? []).filter((id) => validTrackIds.has(id))
+    const fallbackUnlocked = unlockedTracks.length > 0 ? unlockedTracks : ['NEON_HELIX']
+    const currentTrack =
+      state.currentTrack && validTrackIds.has(state.currentTrack) ? state.currentTrack : 'NEON_HELIX'
+
+    this.state.completedTracks = new Set(completedTracks)
+    this.state.unlockedTracks = new Set(fallbackUnlocked)
+    this.state.bestScores = { ...(state.bestScores ?? {}) }
+    this.state.currentTrack = this.state.unlockedTracks.has(currentTrack) ? currentTrack : 'NEON_HELIX'
+    this.state.totalGoldBallsCollected = Math.max(0, state.totalGoldBallsCollected ?? 0)
+    this.state.totalRewardsEarned = Math.max(0, state.totalRewardsEarned ?? 0)
+  }
+
   /**
    * Get current state for saving
    */
@@ -272,6 +322,17 @@ export class AdventureTrackProgression {
       currentTrack: this.state.currentTrack,
       totalGoldBallsCollected: this.state.totalGoldBallsCollected,
       totalRewardsEarned: this.state.totalRewardsEarned
+    }
+  }
+
+  getSerializableState(): SerializableProgressionState {
+    return {
+      completedTracks: Array.from(this.state.completedTracks),
+      unlockedTracks: Array.from(this.state.unlockedTracks),
+      bestScores: { ...this.state.bestScores },
+      currentTrack: this.state.currentTrack,
+      totalGoldBallsCollected: this.state.totalGoldBallsCollected,
+      totalRewardsEarned: this.state.totalRewardsEarned,
     }
   }
 
