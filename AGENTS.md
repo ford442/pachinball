@@ -62,7 +62,7 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 #### `src/game-elements/` — Low-level game systems
 | File / Sub-module | Responsibility |
 |-------------------|----------------|
-| `physics.ts` | Rapier world initialization, fixed timestep, collision event queue. |
+| `physics.ts` | Rapier world initialization, fixed timestep, collision event queue. **Also defines `CollisionGroups` and `COLLISION_GROUP_PRESETS` used by both table and adventure. Adventure bodies MUST use `ADVENTURE_GROUP`.** |
 | `types.ts` | Shared enums/interfaces: `GameState`, `DisplayState`, `PhysicsBinding`, `InputFrame`, ball types, slot machine types. |
 | `ball-manager.ts` | Ball lifecycle: spawning, multiball, resetting, loss detection, gold-ball stack tracking. |
 | `ball-animator.ts` | Squash-and-stretch visual effects for balls. |
@@ -125,7 +125,7 @@ Replaces the old monolithic `display.ts`.
 - **`object-rails.ts`** — Rail and ramp builders.
 - **`object-pachinko.ts`** — Pachinko pin field generation.
 - **`object-decoration.ts`** — Cabinet trim, LEDs, decorative meshes.
-- **`object-types.ts`** — Types and interfaces for game objects (FlipperConfig, BumperConfig, WallConfig, etc.).
+- **`object-types.ts`** — Types and interfaces for game objects (FlipperConfig, BumperConfig, WallConfig, etc.). |
 
 #### `src/materials/` — Unified PBR Material System (barrel: `src/materials/index.ts`)
 `MaterialLibrary` is a singleton (created via `getMaterialLibrary(scene)`). It delegates to:
@@ -143,7 +143,7 @@ Replaces the old monolithic `display.ts`.
 - **`index.ts`** — Shader barrel file.
 
 #### `src/adventure/` — Adventure mode tracks (barrel: `src/adventure/index.ts`)
-- **`adventure-mode.ts`** — Main adventure orchestrator.
+- **`adventure-mode.ts`** — Main adventure orchestrator. **Start/end lifecycle MUST disable/enable table physics. Zone state MUST be reset in `end()`.** |
 - **`track-builder.ts`** — Generic track construction helpers.
 - **`camera-presets.ts`** — Cinematic camera angles.
 - **`adventure-types.ts`** — Adventure mode types and interfaces (`AdventureTrackType`, `AdventureCallback`).
@@ -198,10 +198,53 @@ Campaign truth is `AdventureTrackProgression` + `AdventureProgressionSupervisor`
 
 When adding any screen flash, shake, or rapid strobe, **always** gate it behind these flags.
 
+- **Adventure camera transitions:** `applyCameraPresetTransition()` respects `reducedMotion` for instant cuts vs eased transitions. Accessibility config is set via `setAccessibilityConfig()` during init and pause. If adding new settings-change paths, always propagate to `AdventureMode`.
+
 ### 4.6 Quality Tiering
 `detectQualityTier(engine)` returns a `QualityTier` (`LOW`, `MEDIUM`, `HIGH`, `ULTRA`).
 - Used by `MaterialLibrary` to choose texture resolution / compression.
 - Used by `game.ts` to toggle post-processing features (SSAO, DoF, bloom scale).
+
+### 4.7 Adventure Mode Lifecycle (CRITICAL)
+
+When the campaign loop (STATIONARY_TABLE ↔ EXTENDED_MAP) is involved, the following rules are **mandatory**:
+
+1. **Table physics MUST be disabled when adventure mode starts.**
+   - `gameObjects.setTableBodiesEnabled(false)` before `adventureMode.start()`
+   - `gameObjects.setTableBodiesEnabled(true)` after `adventureMode.end()`
+   - Visual mesh hiding via `setEnabled(false)` is NOT sufficient
+
+2. **Call `rebuildHandleCaches()` after every mode/track transition.**
+   - After `adventureMode.end()`
+   - After `adventureMode.switchToTrack()`
+   - After returning from pause if physics bodies changed
+
+3. **Never cast `scene.activeCamera` to `ArcRotateCamera`.**
+   - Table camera is `FreeCamera` (extends `TargetCamera`)
+   - Adventure camera is `ArcRotateCamera`
+   - Use base `Camera` type for cross-mode references
+   - AdventureCinematicSystem MUST be wired to `followCamera`, not `tableCam`
+
+4. **Input MUST be mode-gated.**
+   - Flippers/plunger inputs must NOT fire during adventure mode
+   - Check `adventureMode?.isActive()` in `GamePhysicsController.stepPhysics()`
+   - Nudge can remain mode-agnostic
+   - `C` key (camera follow toggle) must NOT override adventure camera
+
+5. **Zone state must be fully reset on adventure end.**
+   - `end()` MUST set `currentZone = null` and `previousZone = null`
+   - Failure causes stale transition detection on re-entry
+
+6. **Portal sensor handles must be unregistered on ALL deactivation paths.**
+   - `deactivateExitPortal()` MUST emit `PORTAL_DEACTIVATED` event
+   - Handler in `game-systems-init.ts` MUST call `unregisterPortalSensor()`
+   - This covers `switchToTrack()` and `activateExitPortal()` replacement paths
+
+7. **Collision groups MUST separate table and adventure bodies.**
+   - Adventure bodies use `ADVENTURE_GROUP` membership
+   - Adventure bodies only filter `CollisionGroups.BALL`
+   - Table bodies are unchanged (existing `COLLISION_GROUP_PRESETS`)
+   - This prevents collision even if table bodies are accidentally left enabled
 
 ---
 
@@ -256,7 +299,7 @@ Several systems use `getXxx()` / `resetXxx()` singleton helpers (e.g., `getMater
 1. Ensure `npm run dev` is running.
 2. Write `.spec.ts` files in `tests/` for Playwright E2E tests.
 3. Write `.test.ts` files in `tests/` for Vitest unit tests.
-4. Run E2E tests with `npx playwright test`.
+4. Run E2E tests with `npx playwright test`
 5. Run unit tests with `npm test` (alias for `vitest run`).
 
 ---
@@ -308,3 +351,12 @@ When making changes that touch authentication, API keys, or asset URLs, use `imp
 
 7. **Disposing Physics World Improperly**  
    `PhysicsSystem.dispose()` calls `world.free()`. Make sure this happens on teardown to avoid WASM memory leaks.
+
+8. **Forgetting to Disable Table Physics on Adventure Entry**  
+   `setEnabled(false)` on meshes does NOT affect Rapier bodies. Always pair visual hiding with physics body disablement. Use `setTableBodiesEnabled(false)` or equivalent.
+
+9. **Assuming `scene.activeCamera` is Always `ArcRotateCamera`**  
+   The table uses `FreeCamera`. Never cast `activeCamera` to `ArcRotateCamera` without type guard. Use base `Camera` type for mode-agnostic code.
+
+10. **Stale Portal Handles in `portalSensorHandleSet`**  
+    Every path that deactivates a portal must unregister its handle. The PORTAL_ENTERED handler covers the happy path, but `switchToTrack()` and `activateExitPortal()` replacement also call `deactivateExitPortal()` — use the `PORTAL_DEACTIVATED` event pattern.
