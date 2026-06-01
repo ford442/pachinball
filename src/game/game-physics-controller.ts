@@ -244,7 +244,10 @@ export class GamePhysicsController {
     const dz = this.host.gameObjects?.getDeathZoneBody()
     this.deathZoneHandle = dz ? dz.handle : -1
 
-    this.adventureSensorHandle = -1
+    const adventureSensor = this.host.adventureMode?.isActive()
+      ? this.host.adventureMode.getSensor()
+      : null
+    this.adventureSensorHandle = adventureSensor ? adventureSensor.handle : -1
     // Portal sensor handles are registered/unregistered dynamically via
     // registerPortalSensor / unregisterPortalSensor and are intentionally NOT
     // reset here — portals may already be active when the cache is rebuilt.
@@ -297,9 +300,12 @@ export class GamePhysicsController {
     inputManager?.update()
     const inputFrame = inputManager?.processBufferedInputs()
     if (inputFrame) {
-      if (inputFrame.flipperLeft !== null) inputActions?.handleFlipperLeft(inputFrame.flipperLeft)
-      if (inputFrame.flipperRight !== null) inputActions?.handleFlipperRight(inputFrame.flipperRight)
-      if (inputFrame.plunger) inputActions?.handlePlunger()
+      const adventureActive = this.host.adventureMode?.isActive() ?? false
+      if (!adventureActive) {
+        if (inputFrame.flipperLeft !== null) inputActions?.handleFlipperLeft(inputFrame.flipperLeft)
+        if (inputFrame.flipperRight !== null) inputActions?.handleFlipperRight(inputFrame.flipperRight)
+        if (inputFrame.plunger) inputActions?.handlePlunger()
+      }
       this.applyInputFrame(inputFrame)
     }
 
@@ -949,6 +955,13 @@ export class GamePhysicsController {
 
   handleBallLoss(body: RAPIER.RigidBody): void {
     if (!this.host.stateManager.isPlaying()) return
+    if (this.host.adventureMode?.isActive()) {
+      const ballBodies = this.host.ballManager?.getBallBodies() || []
+      const ballIndex = Math.max(0, ballBodies.indexOf(body))
+      this.host.adventureMode.respawnBallAtStart(body, ballIndex)
+      return
+    }
+
     const wasPrimaryBall = body === this.host.ballManager?.getBallBody()
     const drainVel = body.linvel()
     const drainSpeed = Math.sqrt(drainVel.x ** 2 + drainVel.y ** 2 + drainVel.z ** 2)

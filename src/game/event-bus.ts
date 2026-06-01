@@ -51,7 +51,7 @@ export interface PachinballEventMap {
   }
   /**
    * Fired when the ball physically enters an exit portal.
-   * Spatial fields (id, nextTrack, position, teleportPosition) come from AdventureMode.
+   * Spatial fields (id, position) come from AdventureMode.
    * Reward fields (finalScore, goldBalls, multiplier, totalReward) come from the supervisor.
    */
   'portal:entered': {
@@ -59,12 +59,8 @@ export interface PachinballEventMap {
     trackId: string
     /** Unique portal instance id (set by AdventureMode). */
     id?: string
-    /** Next track identifier (set by AdventureMode). */
-    nextTrack?: string
     /** World position of the portal (set by AdventureMode). */
     position?: { x: number; y: number; z: number }
-    /** Spawn position in the next track (set by AdventureMode). */
-    teleportPosition?: { x: number; y: number; z: number }
     /** Player's score at the moment of entry (set by supervisor). */
     finalScore?: number
     /** Gold balls collected during the track (set by supervisor). */

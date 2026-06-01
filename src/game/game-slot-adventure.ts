@@ -35,9 +35,11 @@ export interface SlotAdventureHost {
 
   // Optional adventure orchestration systems (populated after init)
   readonly adventureCinematicTriggers: AdventureCinematicTriggers | null
+  readonly adventureCinematicSystem: import('../game-elements').AdventureCinematicSystem | null
   readonly adventureUIStateManager: AdventureUIStateManager | null
   readonly adventureGoalTracker: AdventureGoalTracker | null
   readonly adventureProgressionSupervisor: AdventureProgressionSupervisor | null
+  readonly physicsController: { rebuildHandleCaches(): void } | null
 
   updateHUD(): void
   getBallPosition(): import('@babylonjs/core').Vector3 | null
@@ -171,17 +173,20 @@ export class GameSlotAdventure {
   startAdventureMode(): void {
     if (!this.host.adventureMode || !this.host.scene) return
     const ballBody = this.host.ballManager?.getBallBody()
-    const camera = this.host.scene.activeCamera as import('@babylonjs/core').ArcRotateCamera
+    const camera = this.host.scene.activeCamera
     const bindings = this.host.gameObjects?.getBindings() || []
     const ballMesh = bindings.find(b => b.rigidBody === ballBody)?.mesh
 
     if (ballBody && camera) {
       const pinballMeshes = this.host.gameObjects?.getPinballMeshes() || []
       pinballMeshes.forEach(m => m.setEnabled(false))
+      this.host.gameObjects?.setTableBodiesEnabled(false)
 
       const track = this.nextAdventureTrack
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.host.adventureMode.start(ballBody, camera, ballMesh as any, track)
+      this.host.physicsController?.rebuildHandleCaches()
+      this.host.adventureCinematicSystem?.setCamera(this.host.adventureMode.getFollowCamera())
 
       const trackName = this.getTrackDisplayName(track)
       if (this.host.scoreElement) {
@@ -209,6 +214,7 @@ export class GameSlotAdventure {
 
     const success = this.host.adventureMode.switchToTrack(trackType)
     if (!success) return
+    this.host.physicsController?.rebuildHandleCaches()
 
     const trackName = this.getTrackDisplayName(trackType)
 
@@ -231,10 +237,13 @@ export class GameSlotAdventure {
 
   endAdventureMode(): void {
     if (!this.host.adventureMode) return
+    this.host.gameObjects?.setTableBodiesEnabled(true)
     const pinballMeshes = this.host.gameObjects?.getPinballMeshes() || []
     pinballMeshes.forEach(m => m.setEnabled(true))
     this.host.adventureMode.end()
+    this.host.adventureCinematicSystem?.setCamera(null)
     this.host.resetBall()
+    this.host.physicsController?.rebuildHandleCaches()
     this.host.updateHUD()
   }
 }

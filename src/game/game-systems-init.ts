@@ -12,7 +12,6 @@ import {
   MirrorTexture,
   Plane,
   Vector3,
-  ArcRotateCamera,
   AbstractMesh,
 } from '@babylonjs/core'
 
@@ -69,10 +68,12 @@ interface PortalActivatedEventData {
 interface PortalEnteredEventData {
   id: string
   trackId: AdventureTrackType
-  nextTrack: AdventureTrackType
   kind: 'success' | 'timeout'
   position: Vector3
-  teleportPosition: Vector3
+}
+
+interface PortalDeactivatedEventData {
+  handle: number
 }
 
 export class GameSystemsInitializer {
@@ -236,7 +237,6 @@ export class GameSystemsInitializer {
       this.game.adventureGoalTracker.setEventBus(this.game.eventBus)
 
       this.game.adventureCinematicSystem = new AdventureCinematicSystem()
-      this.game.adventureCinematicSystem.setCamera(this.game.tableCam as ArcRotateCamera)
       this.game.adventureCinematicTriggers = new AdventureCinematicTriggers(this.game.adventureCinematicSystem)
       this.game.adventureCinematicTriggers.setEventBus(this.game.eventBus)
       this.game.adventureCinematicTriggers.setGoalTracker(this.game.adventureGoalTracker)
@@ -259,6 +259,7 @@ export class GameSystemsInitializer {
           onTrackAdvanced: (nextTrackId) => {
             if (nextTrackId) {
               this.game.slotAdventure.switchToTrack(nextTrackId)
+              this.game.physicsController.rebuildHandleCaches()
             }
           },
         },
@@ -343,7 +344,7 @@ export class GameSystemsInitializer {
           }
           case 'PORTAL_ENTERED': {
             const portalData = data as PortalEnteredEventData
-            this.game.display?.setStoryText(`WORMHOLE JUMP: ${portalData.nextTrack.replace(/_/g, ' ')}`)
+            this.game.display?.setStoryText(`WORMHOLE JUMP: ${portalData.trackId.replace(/_/g, ' ')}`)
             this.game.eventBus.emit('sound:play', { soundKey: 'portal-enter' })
             // Finalize the completed track through the supervisor.
             // The supervisor's onTrackAdvanced callback (wired above) will drive
@@ -354,15 +355,18 @@ export class GameSystemsInitializer {
               this.game.sessionGoldBalls,
               {
                 id: portalData.id,
-                nextTrack: portalData.nextTrack,
                 position: portalData.position,
-                teleportPosition: portalData.teleportPosition,
               },
             )
             // Unregister the portal sensor so the collision dispatcher stops
             // silently skipping events for this (now inactive) body handle.
             const enteredHandle = this.game.adventureMode?.getPortalSensorHandle() ?? -1
             this.game.physicsController?.unregisterPortalSensor(enteredHandle)
+            break
+          }
+          case 'PORTAL_DEACTIVATED': {
+            const portalData = data as PortalDeactivatedEventData
+            this.game.physicsController?.unregisterPortalSensor(portalData.handle)
             break
           }
         }

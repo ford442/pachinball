@@ -391,6 +391,7 @@ export class Game {
         onFreeMapTestToggle: () => this.toggleFreeMapTestMode(),
         getState: () => this.stateManager.getState(),
         getTiltActive: () => this.tiltActive,
+        getAdventureActive: () => this.adventureMode?.isActive() ?? false,
       })
 
       this.inputManager.configurePlungerCharge({

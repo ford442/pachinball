@@ -69,9 +69,9 @@ export interface TrackProgress {
  * Physics collision groups for color-based filtering
  */
 export const GROUP_UNIVERSAL = 0x0001
-export const GROUP_RED = 0x0002
-export const GROUP_GREEN = 0x0004
-export const GROUP_BLUE = 0x0008
+export const GROUP_RED = 0x0200
+export const GROUP_GREEN = 0x0400
+export const GROUP_BLUE = 0x0800
 
 export const MASK_ALL = 0xFFFF
 export const MASK_RED = GROUP_UNIVERSAL | GROUP_RED

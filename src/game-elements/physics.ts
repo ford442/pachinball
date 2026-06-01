@@ -31,7 +31,10 @@ export const CollisionGroups = {
   TARGET:  0x0020,
   SPINNER: 0x0040,
   GATE:    0x0080,
+  ADVENTURE: 0x0100,
 } as const
+
+export const ADVENTURE_GROUP = CollisionGroups.ADVENTURE
 
 /**
  * Create a Rapier collision group bitmask.
@@ -49,7 +52,8 @@ export const COLLISION_GROUP_PRESETS = {
   BALL: makeCollisionGroups(
     CollisionGroups.BALL,
     CollisionGroups.WALL | CollisionGroups.BUMPER | CollisionGroups.SENSOR |
-    CollisionGroups.FLIPPER | CollisionGroups.TARGET | CollisionGroups.SPINNER | CollisionGroups.GATE
+    CollisionGroups.FLIPPER | CollisionGroups.TARGET | CollisionGroups.SPINNER |
+    CollisionGroups.GATE | CollisionGroups.ADVENTURE
   ),
   /** Walls only collide with balls */
   WALL: makeCollisionGroups(CollisionGroups.WALL, CollisionGroups.BALL),
@@ -65,6 +69,8 @@ export const COLLISION_GROUP_PRESETS = {
   SPINNER: makeCollisionGroups(CollisionGroups.SPINNER, CollisionGroups.BALL),
   /** Gates only collide with balls */
   GATE: makeCollisionGroups(CollisionGroups.GATE, CollisionGroups.BALL),
+  /** Adventure track bodies only collide with balls */
+  ADVENTURE: makeCollisionGroups(ADVENTURE_GROUP, CollisionGroups.BALL),
 } as const
 
 export class PhysicsSystem {

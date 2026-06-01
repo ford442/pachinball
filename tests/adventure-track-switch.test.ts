@@ -59,6 +59,7 @@ const hoisted = vi.hoisted(() => {
     self.upperBetaLimit = Math.PI / 2
     self.lockedTarget = null
     self.attachControl = vi.fn()
+    self.dispose = vi.fn()
     return self
   })
 
@@ -102,13 +103,23 @@ vi.mock('@babylonjs/core', () => ({
     self.clearCoat = { isEnabled: false, intensity: 0, roughness: 0 }
     return self
   }),
-  Color3: {
+  Color3: Object.assign(vi.fn(function (this: Record<string, number>, r = 0, g = 0, b = 0) {
+    const self = this as unknown as Record<string, unknown>
+    self.r = r
+    self.g = g
+    self.b = b
+    self.scale = vi.fn().mockReturnValue(self)
+    self.scaleToRef = vi.fn()
+  }), {
     FromHexString: vi.fn(() => ({ scaleToRef: vi.fn(), scale: vi.fn().mockReturnThis(), r: 0, g: 0, b: 0 })),
     Black: vi.fn(() => ({ r: 0, g: 0, b: 0 })),
     Red: vi.fn(() => ({ r: 1, g: 0, b: 0 })),
     Green: vi.fn(() => ({ r: 0, g: 1, b: 0 })),
     Blue: vi.fn(() => ({ r: 0, g: 0, b: 1 })),
-  },
+    White: vi.fn(() => ({ r: 1, g: 1, b: 1, scale: vi.fn().mockReturnThis(), scaleToRef: vi.fn() })),
+  }),
+  Effect: { ShadersStore: {} },
+  MaterialPluginBase: vi.fn(),
   Scene: vi.fn(),
 }))
 
@@ -116,6 +127,7 @@ vi.mock('@babylonjs/core', () => ({
 
 import { AdventureMode, AdventureTrackType } from '../src/adventure/adventure-mode'
 import { GameSlotAdventure } from '../src/game/game-slot-adventure'
+import { COLLISION_GROUP_PRESETS } from '../src/game-elements/physics'
 
 describe('AdventureMode.switchToTrack', () => {
   let mockScene: unknown
@@ -253,6 +265,16 @@ describe('AdventureMode.switchToTrack', () => {
 
     const initialAlpha = followCam!.alpha
 
+    mode.setAccessibilityConfig({
+      reducedMotion: true,
+      cameraShakeEnabled: false,
+      flashFrequencyMax: 0,
+      scanlineIntensity: 0,
+      effectIntensity: 1,
+      maxCameraShakeIntensity: 0,
+      hapticsEnabled: false,
+      hapticIntensity: 0,
+    })
     mode.switchToTrack(AdventureTrackType.CYBER_CORE)
 
     // Camera should have been updated (CYBER_CORE preset differs from NEON_HELIX default)
@@ -281,6 +303,24 @@ describe('AdventureMode.switchToTrack', () => {
     mode.switchToTrack(AdventureTrackType.CYBER_CORE)
 
     expect(events).toContain('ZONE_ENTER')
+  })
+
+  it('restores ball collision groups when adventure ends', () => {
+    const { mode } = makeMode()
+    const setCollisionGroups = vi.fn()
+    const mockBallBody = {
+      setLinvel: vi.fn(),
+      setAngvel: vi.fn(),
+      setTranslation: vi.fn(),
+      numColliders: vi.fn(() => 1),
+      collider: vi.fn(() => ({ setCollisionGroups })),
+    }
+    const mockCamera = new (hoisted.MockArcRotateCamera as unknown as new () => unknown)()
+
+    mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
+    mode.end()
+
+    expect(setCollisionGroups).toHaveBeenCalledWith(COLLISION_GROUP_PRESETS.BALL)
   })
 })
 

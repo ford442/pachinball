@@ -7,6 +7,7 @@
 
 import {
   ArcRotateCamera,
+  type Camera,
   Vector3,
   Mesh,
   Quaternion,
@@ -15,11 +16,12 @@ import {
   Color3,
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { TrackBuilder } from './track-builder'
 import { CAMERA_PRESETS } from './camera-presets'
 import { AdventureTrackType, type AdventureCallback, type CameraPreset } from './adventure-types'
 import { CameraEasing } from './camera-easing'
-import { getNextAdventureTrack, getTrackStartAnchor } from './portal-routing'
+import { getTrackStartAnchor } from './portal-routing'
 import { PALETTE } from '../game-elements/visual-language'
 import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
 import type { AccessibilityConfig } from '../game-elements/accessibility-config'
@@ -58,6 +60,7 @@ export type { AdventureCallback, CameraPreset }
 
 type ExitPortalKind = 'success' | 'timeout'
 type ExitPortalWorldMode = 'STATIONARY_TABLE' | 'EXTENDED_MAP'
+const FALLOUT_Y_THRESHOLD = -25
 
 interface ActiveExitPortal {
   id: string
@@ -83,7 +86,7 @@ export class AdventureMode extends TrackBuilder {
   private previousZone: AdventureTrackType | null = null
 
   /** Camera management */
-  private tableCamera: ArcRotateCamera | null = null
+  private tableCamera: Camera | null = null
   private followCamera: ArcRotateCamera | null = null
 
   /** Camera transition state for cinematic polish */
@@ -108,6 +111,7 @@ export class AdventureMode extends TrackBuilder {
     hapticIntensity: 1,
   }
   private exitPortal: ActiveExitPortal | null = null
+  private activeBallBodies: RAPIER.RigidBody[] = []
 
   /**
    * Return the Rapier body handle of the active exit portal sensor, or -1 when
@@ -132,6 +136,10 @@ export class AdventureMode extends TrackBuilder {
     return this.previousZone
   }
 
+  getFollowCamera(): ArcRotateCamera | null {
+    return this.followCamera
+  }
+
   /**
    * Update physics and animation state
    */
@@ -139,7 +147,9 @@ export class AdventureMode extends TrackBuilder {
     if (!this.adventureActive) return
 
     this.timeAccumulator += dt
+    this.activeBallBodies = ballBodies
     this.updateExitPortal(dt, ballBodies)
+    this.recoverFallenBalls(ballBodies)
 
     // Camera update
     if (this.followCamera && ballBodies.length > 0 && this.currentCameraPreset) {
@@ -425,6 +435,8 @@ export class AdventureMode extends TrackBuilder {
     const portal = this.exitPortal
     this.exitPortal = null
 
+    this.onEvent?.('PORTAL_DEACTIVATED', { handle: portal.sensor.handle })
+
     portal.root.dispose()
 
     this.world.removeRigidBody(portal.sensor)
@@ -462,31 +474,14 @@ export class AdventureMode extends TrackBuilder {
     })
     if (!isAnyBallInside) return
 
-    const nextTrack = getNextAdventureTrack(portal.trackId)
-    const teleportPos = getTrackStartAnchor(nextTrack)
-
-    for (const [index, ballBody] of ballBodies.entries()) {
-      const lateralOffset = index * 0.35
-      ballBody.setLinvel({ x: 0, y: 0, z: 0 }, true)
-      ballBody.setAngvel({ x: 0, y: 0, z: 0 }, true)
-      ballBody.setTranslation({
-        x: teleportPos.x + lateralOffset,
-        y: teleportPos.y,
-        z: teleportPos.z,
-      }, true)
-    }
-
     this.onEvent?.('PORTAL_ENTERED', {
       id: portal.id,
       trackId: portal.trackId,
-      nextTrack,
       kind: portal.kind,
       position: portal.root.position.clone(),
-      teleportPosition: teleportPos.clone(),
     })
 
     this.deactivateExitPortal()
-    this.switchZone(nextTrack, teleportPos)
   }
 
   /**
@@ -494,7 +489,7 @@ export class AdventureMode extends TrackBuilder {
    */
   start(
     ballBody: RAPIER.RigidBody,
-    currentCamera: ArcRotateCamera,
+    currentCamera: Camera,
     ballMesh: Mesh | undefined,
     trackType: AdventureTrackType = AdventureTrackType.CYBER_CORE
   ): void {
@@ -529,6 +524,7 @@ export class AdventureMode extends TrackBuilder {
     // Store original camera to restore later
     this.tableCamera = currentCamera
     this.currentBallMesh = ballMesh || null
+    this.activeBallBodies = [ballBody]
 
     // Load track-specific camera preset
     const presetKey = trackType as string
@@ -569,117 +565,93 @@ export class AdventureMode extends TrackBuilder {
     // Reset per-track state so each builder starts fresh
     this.portalPosition = null
     this.currentTrackInfo = TRACK_CATALOG[trackType] ?? null
+    this.currentStartPos = getTrackStartAnchor(trackType)
 
     switch (trackType) {
       case AdventureTrackType.CYBER_CORE:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildCyberCore(this)
         break
       case AdventureTrackType.QUANTUM_GRID:
-        this.currentStartPos = new Vector3(0, 10, 0)
         buildQuantumGrid(this)
         break
       case AdventureTrackType.SINGULARITY_WELL:
-        this.currentStartPos = new Vector3(0, 25, 0)
         buildSingularityWell(this)
         break
       case AdventureTrackType.GLITCH_SPIRE:
-        this.currentStartPos = new Vector3(0, 10, 0)
         buildGlitchSpire(this)
         break
       case AdventureTrackType.RETRO_WAVE_HILLS:
-        this.currentStartPos = new Vector3(0, 5, 0)
         buildRetroWaveHills(this)
         break
       case AdventureTrackType.CHRONO_CORE:
-        this.currentStartPos = new Vector3(0, 15, 0)
         buildChronoCore(this)
         break
       case AdventureTrackType.HYPER_DRIFT:
-        this.currentStartPos = new Vector3(0, 15, 0)
         buildHyperDrift(this)
         break
       case AdventureTrackType.PACHINKO_SPIRE:
-        this.currentStartPos = new Vector3(0, 30, 0)
         buildPachinkoSpire(this)
         break
       case AdventureTrackType.ORBITAL_JUNKYARD:
-        this.currentStartPos = new Vector3(0, 15, 0)
         buildOrbitalJunkyard(this)
         break
       case AdventureTrackType.FIREWALL_BREACH:
-        this.currentStartPos = new Vector3(0, 25, 0)
         buildFirewallBreach(this)
         break
       case AdventureTrackType.CPU_CORE:
-        this.currentStartPos = new Vector3(0, 15, 0)
         buildCpuCore(this)
         break
       case AdventureTrackType.CRYO_CHAMBER:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildCryoChamber(this)
         break
       case AdventureTrackType.BIO_HAZARD_LAB:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildBioHazardLab(this)
         break
       case AdventureTrackType.GRAVITY_FORGE:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildGravityForge(this)
         break
       case AdventureTrackType.TIDAL_NEXUS:
-        this.currentStartPos = new Vector3(0, 25, 0)
         buildTidalNexus(this)
         break
       case AdventureTrackType.DIGITAL_ZEN_GARDEN:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildDigitalZenGarden(this)
         break
       case AdventureTrackType.SYNTHWAVE_SURF:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildSynthwaveSurf(this)
         break
       case AdventureTrackType.SOLAR_FLARE:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildSolarFlare(this)
         break
       case AdventureTrackType.PRISM_PATHWAY:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildPrismPathway(this)
         break
       case AdventureTrackType.MAGNETIC_STORAGE:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildMagneticStorage(this)
         break
       case AdventureTrackType.NEURAL_NETWORK:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildNeuralNetwork(this)
         break
       case AdventureTrackType.NEON_STRONGHOLD:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildNeonStronghold(this)
         break
       case AdventureTrackType.CASINO_HEIST:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildCasinoHeist(this)
         break
       case AdventureTrackType.TESLA_TOWER:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildTeslaTower(this)
         break
       case AdventureTrackType.NEON_SKYLINE:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildNeonSkyline(this)
         break
       case AdventureTrackType.POLYCHROME_VOID:
-        this.currentStartPos = new Vector3(0, 20, 0)
         buildPolychromeVoid(this)
         break
       default:
-        this.currentStartPos = new Vector3(0, 2, 8)
         buildNeonHelix(this)
         break
     }
+
+    this.applyDefaultAdventureCollisionGroups()
   }
 
   /**
@@ -790,6 +762,7 @@ export class AdventureMode extends TrackBuilder {
 
     // Build new track
     this.buildTrack(newZone)
+    this.teleportActiveBallsToStart()
 
     // Update follow-camera preset without recreating the camera
     if (this.followCamera && this.currentCameraPreset) {
@@ -817,6 +790,8 @@ export class AdventureMode extends TrackBuilder {
     this.deactivateExitPortal()
 
     if (this.onEvent) this.onEvent('END')
+    this.currentZone = null
+    this.previousZone = null
 
     // Restore Table Camera
     if (this.tableCamera) {
@@ -828,8 +803,45 @@ export class AdventureMode extends TrackBuilder {
 
     this.currentBallMesh = null
     this.currentCameraPreset = null
+    this.resetBallCollisionGroups()
+    this.activeBallBodies = []
 
     this.clearTrack()
+  }
+
+  respawnBallAtStart(ballBody: RAPIER.RigidBody, index = 0): void {
+    const lateralOffset = index * 0.35
+    ballBody.setLinvel({ x: 0, y: 0, z: 0 }, true)
+    ballBody.setAngvel({ x: 0, y: 0, z: 0 }, true)
+    ballBody.setTranslation({
+      x: this.currentStartPos.x + lateralOffset,
+      y: this.currentStartPos.y,
+      z: this.currentStartPos.z,
+    }, true)
+  }
+
+  private recoverFallenBalls(ballBodies: RAPIER.RigidBody[]): void {
+    for (const [index, ballBody] of ballBodies.entries()) {
+      const pos = ballBody.translation()
+      if (pos.y < FALLOUT_Y_THRESHOLD) {
+        this.respawnBallAtStart(ballBody, index)
+      }
+    }
+  }
+
+  private teleportActiveBallsToStart(): void {
+    for (const [index, ballBody] of this.activeBallBodies.entries()) {
+      this.respawnBallAtStart(ballBody, index)
+    }
+  }
+
+  private resetBallCollisionGroups(): void {
+    for (const ballBody of this.activeBallBodies) {
+      const colliderCount = ballBody.numColliders()
+      for (let i = 0; i < colliderCount; i++) {
+        ballBody.collider(i).setCollisionGroups(COLLISION_GROUP_PRESETS.BALL)
+      }
+    }
   }
 
   /**

@@ -109,9 +109,7 @@ describe('AdventureProgressionSupervisor — portal:entered emission', () => {
 
     const spatial: PortalSpatialContext = {
       id: 'NEON_HELIX-exit-portal',
-      nextTrack: 'CYBER_CORE',
       position: { x: 1, y: 0, z: 2 },
-      teleportPosition: { x: 10, y: 0, z: 20 },
     }
 
     supervisor.onPortalEntered(62000, 3, spatial)
@@ -125,9 +123,7 @@ describe('AdventureProgressionSupervisor — portal:entered emission', () => {
     expect(payload.goldBalls).toBe(3)
     // Spatial fields merged in
     expect(payload.id).toBe('NEON_HELIX-exit-portal')
-    expect(payload.nextTrack).toBe('CYBER_CORE')
     expect(payload.position).toEqual({ x: 1, y: 0, z: 2 })
-    expect(payload.teleportPosition).toEqual({ x: 10, y: 0, z: 20 })
   })
 
   it('merges spatial context into the portal:entered payload on timeout', () => {
@@ -138,7 +134,6 @@ describe('AdventureProgressionSupervisor — portal:entered emission', () => {
 
     const spatial: PortalSpatialContext = {
       id: 'NEON_HELIX-exit-portal',
-      nextTrack: 'CYBER_CORE',
     }
 
     supervisor.onPortalEntered(1500, 0, spatial)
@@ -147,7 +142,6 @@ describe('AdventureProgressionSupervisor — portal:entered emission', () => {
     const payload = events[0]
     expect(payload.kind).toBe('timeout')
     expect(payload.id).toBe('NEON_HELIX-exit-portal')
-    expect(payload.nextTrack).toBe('CYBER_CORE')
   })
 
   it('does not include spatial fields in portal:entered when spatial is omitted', () => {
@@ -162,7 +156,7 @@ describe('AdventureProgressionSupervisor — portal:entered emission', () => {
     const payload = events[0]
     // Spatial keys should be absent (no undefined spread)
     expect(Object.hasOwn(payload, 'id')).toBe(false)
-    expect(Object.hasOwn(payload, 'nextTrack')).toBe(false)
+    expect(Object.hasOwn(payload, 'position')).toBe(false)
   })
 })
 

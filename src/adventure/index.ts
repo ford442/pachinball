@@ -36,8 +36,6 @@ export type {
 } from './adventure-types'
 
 export {
-  ADVENTURE_TRACK_SEQUENCE,
-  getNextAdventureTrack,
   getTrackStartAnchor,
   isAdventureTrackType,
 } from './portal-routing'

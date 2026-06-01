@@ -32,6 +32,9 @@ import {
 } from './adventure-types'
 import type { TrackInfo } from '../game-elements/adventure-track-progression'
 import { INTENSITY, emissive } from '../game-elements/visual-language'
+import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+
+const RAPIER_DEFAULT_COLLISION_GROUPS = 0xFFFFFFFF
 
 export abstract class TrackBuilder {
   protected scene: Scene
@@ -79,6 +82,43 @@ export abstract class TrackBuilder {
    */
   setEventListener(callback: AdventureCallback): void {
     this.onEvent = callback
+  }
+
+  protected applyDefaultAdventureCollisionGroups(): void {
+    const bodies = new Set<RAPIER.RigidBody>()
+
+    for (const body of this.adventureBodies) {
+      bodies.add(body)
+    }
+    if (this.adventureSensor) {
+      bodies.add(this.adventureSensor)
+    }
+    for (const body of this.resetSensors) {
+      bodies.add(body)
+    }
+    for (const zone of this.conveyorZones) {
+      bodies.add(zone.sensor)
+    }
+    for (const well of this.gravityWells) {
+      bodies.add(well.sensor)
+    }
+    for (const zone of this.dampingZones) {
+      bodies.add(zone.sensor)
+    }
+    for (const gate of this.chromaGates) {
+      bodies.add(gate.sensor)
+    }
+
+    for (const body of bodies) {
+      const colliderCount = body.numColliders()
+      for (let i = 0; i < colliderCount; i++) {
+        const collider = body.collider(i)
+        const groups = collider.collisionGroups()
+        if (groups === RAPIER_DEFAULT_COLLISION_GROUPS || groups === -1) {
+          collider.setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE)
+        }
+      }
+    }
   }
 
   /**
@@ -193,7 +233,9 @@ export abstract class TrackBuilder {
         .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
     )
     this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(width / 2, 0.25, length / 2).setFriction(friction),
+      this.rapier.ColliderDesc.cuboid(width / 2, 0.25, length / 2)
+        .setFriction(friction)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
       body
     )
     this.adventureBodies.push(body)
@@ -258,7 +300,9 @@ export abstract class TrackBuilder {
           .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
       )
       this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(width / 2, 0.25, chordLen / 2).setFriction(friction),
+        this.rapier.ColliderDesc.cuboid(width / 2, 0.25, chordLen / 2)
+          .setFriction(friction)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
         body
       )
       this.adventureBodies.push(body)
@@ -313,7 +357,9 @@ export abstract class TrackBuilder {
           .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
       )
       this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(0.25, height / 2, length / 2).setFriction(friction),
+        this.rapier.ColliderDesc.cuboid(0.25, height / 2, length / 2)
+          .setFriction(friction)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
         body
       )
       this.adventureBodies.push(body)
@@ -346,6 +392,7 @@ export abstract class TrackBuilder {
 
     const colliderDesc = this.rapier.ColliderDesc.cylinder(thickness / 2, radius)
       .setFriction(1.0)
+      .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE)
 
     this.world.createCollider(colliderDesc, body)
     this.adventureBodies.push(body)
@@ -366,6 +413,7 @@ export abstract class TrackBuilder {
         const toothCollider = this.rapier.ColliderDesc.cuboid(0.5, 0.5, 1.0)
           .setTranslation(tx, 0.5 + 0.25, tz)
           .setRotation({ w: Math.cos(angle / 2), x: 0, y: Math.sin(angle / 2), z: 0 })
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE)
 
         this.world.createCollider(toothCollider, body)
 
@@ -392,7 +440,11 @@ export abstract class TrackBuilder {
     const bBody = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y - 1, pos.z)
     )
-    this.world.createCollider(this.rapier.ColliderDesc.cuboid(4, 0.5, 4), bBody)
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(4, 0.5, 4)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
+      bBody
+    )
     this.adventureBodies.push(bBody)
 
     // Exit Sensor
@@ -403,6 +455,7 @@ export abstract class TrackBuilder {
     this.world.createCollider(
       this.rapier.ColliderDesc.cuboid(2, 1, 1)
         .setSensor(true)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       sensor
     )
@@ -425,7 +478,8 @@ export abstract class TrackBuilder {
       this.rapier.RigidBodyDesc.fixed().setTranslation(mesh.position.x, mesh.position.y, mesh.position.z)
     )
     this.world.createCollider(
-      this.rapier.ColliderDesc.cylinder(height / 2, diameter / 2),
+      this.rapier.ColliderDesc.cylinder(height / 2, diameter / 2)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
       body
     )
     this.adventureBodies.push(body)
@@ -454,7 +508,8 @@ export abstract class TrackBuilder {
       this.rapier.ColliderDesc.cuboid(size / 2, size / 2, size / 2)
         .setDensity(density)
         .setFriction(0.5)
-        .setRestitution(0.2),
+        .setRestitution(0.2)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
       body
     )
     this.adventureBodies.push(body)
@@ -478,7 +533,9 @@ export abstract class TrackBuilder {
       this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
     )
     this.world.createCollider(
-      this.rapier.ColliderDesc.cylinder(0.5, 2.0).setSensor(true),
+      this.rapier.ColliderDesc.cylinder(0.5, 2.0)
+        .setSensor(true)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
       sensor
     )
 
@@ -501,7 +558,8 @@ export abstract class TrackBuilder {
       this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y + 1.5, pos.z)
     )
     this.world.createCollider(
-      this.rapier.ColliderDesc.cylinder(1.5, 0.5),
+      this.rapier.ColliderDesc.cylinder(1.5, 0.5)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
       body
     )
     this.adventureBodies.push(body)
@@ -511,7 +569,9 @@ export abstract class TrackBuilder {
       this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y + 1.5, pos.z)
     )
     this.world.createCollider(
-      this.rapier.ColliderDesc.ball(3.0).setSensor(true),
+      this.rapier.ColliderDesc.ball(3.0)
+        .setSensor(true)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
       sensor
     )
 
@@ -629,6 +689,7 @@ export abstract class TrackBuilder {
     this.world.createCollider(
       this.rapier.ColliderDesc.cylinder(depth, radius * 0.9)
         .setSensor(true)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       sensor
     )

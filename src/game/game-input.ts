@@ -31,6 +31,7 @@ export interface InputConfig {
   onFreeMapTestToggle?: () => void
   getState?: () => import('../game-elements/types').GameState
   getTiltActive?: () => boolean
+  getAdventureActive?: () => boolean
 }
 
 export interface GamepadConfig {
@@ -74,6 +75,7 @@ export class GameInputManager {
         onJackpotTrigger: () => this.config.onJackpotTrigger?.(),
         getState: () => this.config.getState?.() ?? 0,
         getTiltActive: () => this.config.getTiltActive?.() ?? false,
+        getAdventureActive: () => this.config.getAdventureActive?.() ?? false,
       },
       physics.getRapier()
     )
@@ -109,6 +111,7 @@ export class GameInputManager {
     // Get state from config for state-dependent shortcuts
     const gameState = this.config.getState?.()
     const isPlaying = gameState === 1 // GameState.PLAYING = 1
+    const adventureActive = this.config.getAdventureActive?.() ?? false
 
     // Dynamic map switching (Digit1-9)
     if (e.code.startsWith('Digit') && isPlaying) {
@@ -128,7 +131,7 @@ export class GameInputManager {
     }
 
     // 'C' key to toggle camera follow mode
-    if (e.code === 'KeyC' && isPlaying) {
+    if (e.code === 'KeyC' && isPlaying && !adventureActive) {
       e.preventDefault()
       this.config.onCameraToggle?.()
       return

@@ -85,17 +85,15 @@ test.describe('Campaign progression E2E', () => {
         throw new Error('Campaign systems are not initialized')
       }
 
-      const simulateSuccessPortalEntry = (trackId: string, nextTrack: string, score: number) => {
+      const simulateSuccessPortalEntry = (trackId: string, score: number) => {
         g.score = score
         supervisor.startTrack(trackId, 0)
         supervisor.update(0.1, score)
         callback('PORTAL_ENTERED', {
           id: `${trackId}-exit-portal`,
           trackId,
-          nextTrack,
           kind: 'success',
           position: { x: 0, y: 0, z: 0 },
-          teleportPosition: { x: 1, y: 0, z: 1 },
         })
       }
 
@@ -106,14 +104,12 @@ test.describe('Campaign progression E2E', () => {
       callback('PORTAL_ENTERED', {
         id: 'NEON_HELIX-exit-portal',
         trackId: 'NEON_HELIX',
-        nextTrack: 'CYBER_CORE',
         kind: 'success',
         position: { x: 0, y: 0, z: 0 },
-        teleportPosition: { x: 1, y: 0, z: 1 },
       })
 
       // CYBER_CORE (B) -> QUANTUM_GRID (A)
-      simulateSuccessPortalEntry('CYBER_CORE', 'QUANTUM_GRID', 140_000)
+      simulateSuccessPortalEntry('CYBER_CORE', 140_000)
 
       return {
         firstPortalMessage,
@@ -155,10 +151,8 @@ test.describe('Campaign progression E2E', () => {
       callback('PORTAL_ENTERED', {
         id: 'NEON_HELIX-exit-portal',
         trackId: 'NEON_HELIX',
-        nextTrack: 'CYBER_CORE',
         kind: 'timeout',
         position: { x: 0, y: 0, z: 0 },
-        teleportPosition: { x: 1, y: 0, z: 1 },
       })
 
       return {
@@ -241,10 +235,8 @@ test.describe('Campaign progression E2E', () => {
       callback('PORTAL_ENTERED', {
         id: 'NEON_HELIX-exit-portal',
         trackId: 'NEON_HELIX',
-        nextTrack: 'CYBER_CORE',
         kind: 'success',
         position: { x: 0, y: 0, z: 0 },
-        teleportPosition: { x: 1, y: 0, z: 1 },
       })
 
       const toast = document.querySelector('[data-testid="campaign-reward-toast"]') as HTMLElement | null

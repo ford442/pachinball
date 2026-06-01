@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { AdventureTrackType } from '../src/adventure/adventure-types'
-import { getNextAdventureTrack, getTrackStartAnchor, isAdventureTrackType } from '../src/adventure/portal-routing'
+import { getTrackStartAnchor, isAdventureTrackType } from '../src/adventure/portal-routing'
+import { AdventureTrackProgression } from '../src/game-elements/adventure-track-progression'
 
 describe('portal-routing helpers', () => {
-  it('returns next track in sequence and wraps at end', () => {
-    expect(getNextAdventureTrack(AdventureTrackType.NEON_HELIX)).toBe(AdventureTrackType.CYBER_CORE)
-    expect(getNextAdventureTrack(AdventureTrackType.POLYCHROME_VOID)).toBe(AdventureTrackType.NEON_HELIX)
-  })
-
   it('returns canonical start anchors for teleport', () => {
     const cyberCoreStart = getTrackStartAnchor(AdventureTrackType.CYBER_CORE)
     expect(cyberCoreStart.x).toBe(0)
@@ -18,5 +14,18 @@ describe('portal-routing helpers', () => {
   it('validates track ids for portal open events', () => {
     expect(isAdventureTrackType('CYBER_CORE')).toBe(true)
     expect(isAdventureTrackType('UNKNOWN_TRACK')).toBe(false)
+  })
+
+  it('uses campaign progression as the next-track authority', () => {
+    const progression = new AdventureTrackProgression()
+
+    progression.completeTrack('NEON_HELIX', 60_000, 0, 60_000)
+    expect(progression.getNextTrackId()).toBe('CYBER_CORE')
+
+    progression.completeTrack('CYBER_CORE', 140_000, 0, 140_000)
+    expect(progression.getNextTrackId()).toBe('QUANTUM_GRID')
+
+    progression.completeTrack('QUANTUM_GRID', 240_000, 0, 240_000)
+    expect(progression.getNextTrackId()).toBe('PACHINKO_SPIRE')
   })
 })

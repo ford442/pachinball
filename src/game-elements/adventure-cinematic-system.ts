@@ -3,7 +3,7 @@
  * Manages cinematic camera sequences and dramatic effects for major game moments
  */
 
-import { ArcRotateCamera, Color3 } from '@babylonjs/core'
+import { Color3, type ArcRotateCamera } from '@babylonjs/core'
 
 export type CinematicEventType = 'track-start' | 'goal-complete' | 'all-goals-complete' | 'jackpot' | 'special-moment'
 
@@ -58,8 +58,14 @@ export class AdventureCinematicSystem {
   /**
    * Set the camera to control
    */
-  setCamera(camera: ArcRotateCamera): void {
+  setCamera(camera: ArcRotateCamera | null): void {
     this.camera = camera
+    if (!camera) {
+      this.activeSequence = null
+      this.startCameraState = null
+      this.isActive = false
+      this.sequenceProgress = 0
+    }
   }
 
   /**

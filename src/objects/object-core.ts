@@ -280,6 +280,35 @@ export class GameObjects {
     return this.pinballMeshes
   }
 
+  setTableBodiesEnabled(enabled: boolean): void {
+    const bodies = new Set<RAPIER.RigidBody>()
+
+    for (const binding of this.bindings) {
+      bodies.add(binding.rigidBody)
+    }
+    for (const body of this.bumperBodies) {
+      bodies.add(body)
+    }
+    for (const body of this.targetBodies) {
+      bodies.add(body)
+    }
+    for (const flipper of this.refs.flippers.values()) {
+      bodies.add(flipper.body)
+    }
+    if (this.deathZoneBody) {
+      bodies.add(this.deathZoneBody)
+    }
+    if (this.plungerBody) {
+      bodies.add(this.plungerBody)
+    }
+
+    for (const body of bodies) {
+      if (this.world.getRigidBody(body.handle)) {
+        body.setEnabled(enabled)
+      }
+    }
+  }
+
   getFlipper(name: string): { mesh: TransformNode; body: RAPIER.RigidBody; joint: RAPIER.ImpulseJoint } | undefined {
     return this.refs.flippers.get(name)
   }
