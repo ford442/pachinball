@@ -1,5 +1,6 @@
 import { Scene, MeshBuilder, Mesh, PBRMaterial, TransformNode } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
@@ -131,6 +132,7 @@ export class LauncherBuilder {
     this.world.createCollider(
       this.rapier.ColliderDesc.cuboid(0.3 * scale, 0.4 * scale, 0.2 * scale)
         .setSensor(true)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.SENSOR)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       body
     )

@@ -227,6 +227,8 @@ export interface TableMapConfig {
   backgroundPattern: 'hex' | 'grid' | 'circuit' | 'data-flow' | 'none'
   animationSpeed: number
   musicTrackId?: string
+  playfieldImage?: string
+  playfieldVideo?: string
   shaderUrl?: string
   adventureGoals?: string[]
   mode?: WorldMode       // 'fixed' (default) or 'dynamic' scrolling world

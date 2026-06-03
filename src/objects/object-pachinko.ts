@@ -1,6 +1,7 @@
 import { Scene, Vector3, MeshBuilder, Mesh, AbstractMesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
+import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 
@@ -10,6 +11,8 @@ export class PachinkoBuilder {
   private rapier: typeof RAPIER
 
   private matLib: ReturnType<typeof getMaterialLibrary>
+  private meshes: AbstractMesh[] = []
+  private bodies: RAPIER.RigidBody[] = []
 
   constructor(
     scene: Scene,
@@ -108,6 +111,7 @@ export class PachinkoBuilder {
 
     // Track templates so they are disposed and toggled with the scene
     meshes.push(pinHigh, pinMed, pinLow)
+    this.meshes.push(pinHigh, pinMed, pinLow)
 
     for (let r = 0; r < rows; r++) {
       const offsetX = (r % 2 === 0) ? 0 : spacingX / 2
@@ -131,7 +135,8 @@ export class PachinkoBuilder {
         this.world.createCollider(
           this.rapier.ColliderDesc.cylinder(pegHeight / 2, avgRadius)
             .setRestitution(0.65)
-            .setFriction(0.1),
+            .setFriction(0.1)
+            .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
           body
         )
 
@@ -140,6 +145,8 @@ export class PachinkoBuilder {
         bindings.push({ mesh: inst, rigidBody: body })
         meshes.push(inst)
         pins.push(inst)
+        this.meshes.push(inst)
+        this.bodies.push(body)
       }
     }
 
@@ -154,6 +161,7 @@ export class PachinkoBuilder {
     this.world.createCollider(
       this.rapier.ColliderDesc.cylinder(0.5, 1.0)
         .setSensor(true)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.SENSOR)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       catchBody
     )
@@ -163,6 +171,8 @@ export class PachinkoBuilder {
     targetActive.push(true)
     targetRespawnTimer.push(0)
     meshes.push(catcher)
+    this.meshes.push(catcher)
+    this.bodies.push(catchBody)
 
     return {
       bindings,
@@ -173,5 +183,21 @@ export class PachinkoBuilder {
       meshes,
       pins
     }
+  }
+
+  dispose(): void {
+    for (const body of this.bodies) {
+      if (this.world.getRigidBody(body.handle)) {
+        this.world.removeRigidBody(body)
+      }
+    }
+    this.bodies = []
+
+    for (const mesh of this.meshes) {
+      if (!mesh.isDisposed()) {
+        mesh.dispose()
+      }
+    }
+    this.meshes = []
   }
 }

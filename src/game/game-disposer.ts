@@ -69,6 +69,8 @@ export class GameDisposer {
     this.game.ballStackVisual = null
     this.game.effects?.dispose()
     this.game.effects = null
+    this.game.gameObjects?.dispose()
+    this.game.gameObjects = null
 
     // Dispose obstacle builders
     this.game.spinnerBuilder?.dispose()

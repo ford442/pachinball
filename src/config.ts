@@ -120,17 +120,49 @@ export const ASSET_BASE = import.meta.env.VITE_ASSET_URL as string | undefined
   || (import.meta.env.PROD ? PROD_ASSET_BASE : DEV_ASSET_BASE)
 
 /**
- * Helper to make API calls with exponential backoff retry logic
- *
- * NOTE: Backend is disabled. Pachinball runs fully offline.
- * All callers should fall back to hardcoded/local data.
+ * Helper to make API calls with exponential backoff retry logic.
  */
 export async function apiFetch<T>(
-   
-  _endpoint?: string,
-   
-  _options?: RequestInit
+  endpoint = '',
+  options: RequestInit = {}
 ): Promise<T | null> {
+  const trimmedEndpoint = endpoint.trim()
+  const resolvedUrl = /^https?:\/\//i.test(trimmedEndpoint)
+    ? trimmedEndpoint
+    : `${API_BASE}${trimmedEndpoint.startsWith('/') ? trimmedEndpoint : `/${trimmedEndpoint}`}`
+
+  const maxAttempts = 3
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch(resolvedUrl, {
+        headers: {
+          Accept: 'application/json',
+          ...(options.headers ?? {}),
+        },
+        ...options,
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} ${response.statusText}`.trim())
+      }
+
+      if (response.status === 204) {
+        return null
+      }
+
+      return await response.json() as T
+    } catch (error) {
+      if (attempt === maxAttempts) {
+        console.warn(`[apiFetch] Request failed for ${resolvedUrl}`, error)
+        return null
+      }
+
+      const delayMs = 250 * 2 ** (attempt - 1)
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+
   return null
 }
 

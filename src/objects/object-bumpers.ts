@@ -11,6 +11,8 @@ export class BumperBuilder {
   private world: RAPIER.World
   private rapier: typeof RAPIER
   private matLib: ReturnType<typeof getMaterialLibrary>
+  private meshes: Mesh[] = []
+  private bodies: RAPIER.RigidBody[] = []
 
   constructor(
     scene: Scene,
@@ -136,6 +138,7 @@ export class BumperBuilder {
 
       bindings.push({ mesh: bumper, rigidBody: body })
       bumperBodies.push(body)
+      this.bodies.push(body)
       const initialEmissive = emissive(colorHex, INTENSITY.ACTIVE)
 
       bumperVisuals.push({
@@ -151,6 +154,7 @@ export class BumperBuilder {
         wireframeRing: wireframeRing,
       })
       meshes.push(bumper, bumperCap, bumperRing, holoInner, holoOuter, wireframeRing)
+      this.meshes.push(bumper, bumperCap, bumperRing, holoInner, holoOuter, wireframeRing)
     }
 
     // Main center bumper (larger)
@@ -294,6 +298,18 @@ export class BumperBuilder {
   }
 
   dispose(): void {
-    // Nothing to dispose — particles are now managed by EffectsSystem pool
+    for (const body of this.bodies) {
+      if (this.world.getRigidBody(body.handle)) {
+        this.world.removeRigidBody(body)
+      }
+    }
+    this.bodies = []
+
+    for (const mesh of this.meshes) {
+      if (!mesh.isDisposed()) {
+        mesh.dispose()
+      }
+    }
+    this.meshes = []
   }
 }

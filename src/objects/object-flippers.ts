@@ -1,4 +1,4 @@
-import { Scene, Vector3, MeshBuilder, Mesh, TransformNode } from '@babylonjs/core'
+import { Scene, Vector3, MeshBuilder, Mesh, TransformNode, Quaternion } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig, PhysicsConfig } from '../config'
 import { getMaterialLibrary } from '../materials'
@@ -11,6 +11,11 @@ export class FlipperBuilder {
   private rapier: typeof RAPIER
 
   private matLib: ReturnType<typeof getMaterialLibrary>
+  private meshes: Mesh[] = []
+  private roots: TransformNode[] = []
+  private bodies: RAPIER.RigidBody[] = []
+  private anchors: RAPIER.RigidBody[] = []
+  private joints: RAPIER.ImpulseJoint[] = []
 
   constructor(
     scene: Scene,
@@ -50,6 +55,7 @@ export class FlipperBuilder {
       // Create parent node for the flipper assembly
       const flipperRoot = new TransformNode('flipperRoot', this.scene)
       flipperRoot.position.copyFrom(pos)
+      this.roots.push(flipperRoot)
 
       // ================================================================
       // FLIPPER BLADE - Main paddle with curved end
@@ -160,9 +166,11 @@ export class FlipperBuilder {
 
       // Main blade collider (box)
       const colliderOffset = isRight ? (flipperLength - 0.4) / 2 : -(flipperLength - 0.4) / 2
+      const bladeTilt = Quaternion.FromEulerAngles(0.15, 0, 0)
       this.world.createCollider(
         this.rapier.ColliderDesc.cuboid((flipperLength - 0.4) / 2, 0.3, 0.25)
           .setTranslation(colliderOffset, 0, 0)
+          .setRotation({ x: bladeTilt.x, y: bladeTilt.y, z: bladeTilt.z, w: bladeTilt.w })
           .setRestitution(PhysicsConfig.flipper.restitution)
           .setFriction(PhysicsConfig.flipper.friction)
           .setCollisionGroups(COLLISION_GROUP_PRESETS.FLIPPER),
@@ -184,6 +192,8 @@ export class FlipperBuilder {
       bindings.push({ mesh: flipperRoot as unknown as Mesh, rigidBody: body })
       meshes.push(bladeMesh, tipMesh, bevelLeft, bevelRight)
       meshes.push(pivotCyl, pivotCap, pivotRing)
+      this.meshes.push(bladeMesh, tipMesh, bevelLeft, bevelRight, pivotCyl, pivotCap, pivotRing)
+      this.bodies.push(body)
 
       // ================================================================
       // PIVOT JOINT - Revolute joint with limits
@@ -192,6 +202,7 @@ export class FlipperBuilder {
       const anchor = this.world.createRigidBody(
         this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
       )
+      this.anchors.push(anchor)
 
       const pX = isRight ? 1.5 : -1.5
       const jParams = this.rapier.JointData.revolute(
@@ -203,6 +214,7 @@ export class FlipperBuilder {
       jParams.limits = isRight ? [-Math.PI / 4, Math.PI / 6] : [-Math.PI / 6, Math.PI / 4]
 
       const joint = this.world.createImpulseJoint(jParams, anchor, body, true) as RAPIER.RevoluteImpulseJoint
+      this.joints.push(joint)
 
       joint.configureMotorPosition(
         isRight ? -PhysicsConfig.flipper.restAngleRad : PhysicsConfig.flipper.restAngleRad,
@@ -225,5 +237,40 @@ export class FlipperBuilder {
       leftJoint,
       rightJoint
     }
+  }
+
+  dispose(): void {
+    for (const joint of this.joints) {
+      this.world.removeImpulseJoint(joint, true)
+    }
+    this.joints = []
+
+    for (const body of this.bodies) {
+      if (this.world.getRigidBody(body.handle)) {
+        this.world.removeRigidBody(body)
+      }
+    }
+    this.bodies = []
+
+    for (const anchor of this.anchors) {
+      if (this.world.getRigidBody(anchor.handle)) {
+        this.world.removeRigidBody(anchor)
+      }
+    }
+    this.anchors = []
+
+    for (const mesh of this.meshes) {
+      if (!mesh.isDisposed()) {
+        mesh.dispose()
+      }
+    }
+    this.meshes = []
+
+    for (const root of this.roots) {
+      if (!root.isDisposed()) {
+        root.dispose(true)
+      }
+    }
+    this.roots = []
   }
 }

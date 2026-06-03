@@ -11,6 +11,8 @@ export class WallBuilder {
   private rapier: typeof RAPIER
 
   private matLib: ReturnType<typeof getMaterialLibrary>
+  private meshes: Mesh[] = []
+  private bodies: RAPIER.RigidBody[] = []
 
   constructor(
     scene: Scene,
@@ -60,6 +62,8 @@ export class WallBuilder {
     }
 
     meshes.push(ground)
+    this.meshes.push(...meshes)
+    this.bodies.push(groundBody)
     return { binding, meshes }
   }
 
@@ -130,6 +134,8 @@ export class WallBuilder {
 
       bindings.push({ mesh: wedge, rigidBody: body })
       meshes.push(wedge)
+      this.meshes.push(wedge)
+      this.bodies.push(body)
     }
 
     // Top Left Corner Calculation
@@ -166,6 +172,8 @@ export class WallBuilder {
 
     bindings.push({ mesh: w, rigidBody: b })
     meshes.push(w)
+    this.meshes.push(w)
+    this.bodies.push(b)
   }
 
   createSlingshots(): {
@@ -219,5 +227,23 @@ export class WallBuilder {
     bumperBodies.push(b)
     bumperVisuals.push({ mesh, body: b, hitTime: 0, sweep: 0 })
     meshes.push(mesh)
+    this.meshes.push(mesh)
+    this.bodies.push(b)
+  }
+
+  dispose(): void {
+    for (const body of this.bodies) {
+      if (this.world.getRigidBody(body.handle)) {
+        this.world.removeRigidBody(body)
+      }
+    }
+    this.bodies = []
+
+    for (const mesh of this.meshes) {
+      if (!mesh.isDisposed()) {
+        mesh.dispose()
+      }
+    }
+    this.meshes = []
   }
 }

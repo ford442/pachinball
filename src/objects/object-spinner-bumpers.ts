@@ -1,5 +1,6 @@
 import { Scene, MeshBuilder, Mesh, PBRMaterial, TransformNode, Vector3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
@@ -132,6 +133,7 @@ export class SpinnerBumperBuilder {
       this.rapier.ColliderDesc.cylinder(0.15, 0.6 * scale)
         .setRestitution(0.88)
         .setFriction(0.05)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.SPINNER)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       body
     )

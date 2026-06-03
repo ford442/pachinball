@@ -276,6 +276,21 @@ export class MaterialLibrary extends MaterialLibraryBase {
     return this.structuralMats.updateLCDTableEmissive(baseColor, intensity)
   }
 
+  updateLCDTableVisual(
+    config: import('../shaders/lcd-table').TableMapConfig,
+    runtime: {
+      timeSeconds: number
+      flashIntensity: number
+      rippleIntensity: number
+      rippleTime: number
+      reducedMotion: boolean
+      photosensitiveMode: boolean
+      forceRedraw?: boolean
+    }
+  ): void {
+    return this.structuralMats.updateLCDTableVisual(config, runtime)
+  }
+
   updatePlayfieldTheme(surfaceTint: string, emissiveTint: string): void {
     return this.structuralMats.updatePlayfieldTheme(surfaceTint, emissiveTint)
   }

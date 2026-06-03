@@ -1,14 +1,19 @@
-import { Scene, Vector3, MeshBuilder, Mesh } from '@babylonjs/core'
+import { Scene, Vector3, MeshBuilder, Mesh, Quaternion } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
+import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 
 export class RailBuilder {
+  private static readonly SEGMENT_OVERLAP = 0.12
+
   private scene: Scene
   private world: RAPIER.World
   private rapier: typeof RAPIER
 
   private matLib: ReturnType<typeof getMaterialLibrary>
+  private meshes: Mesh[] = []
+  private bodies: RAPIER.RigidBody[] = []
 
   constructor(
     scene: Scene,
@@ -50,6 +55,7 @@ export class RailBuilder {
     }, this.scene)
     leftRail.material = railMat
     meshes.push(leftRail)
+    this.meshes.push(leftRail)
 
     // Physics colliders for left rail
     for (let i = 0; i < leftRailPath.length - 1; i++) {
@@ -66,11 +72,13 @@ export class RailBuilder {
           .setRotation(new this.rapier.Quaternion(0, Math.sin(angle * 0.5), 0, Math.cos(angle * 0.5)))
       )
       this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(railThick / 2, railHeight / 2, length / 2)
+        this.rapier.ColliderDesc.cuboid(railThick / 2, railHeight / 2, length / 2 + RailBuilder.SEGMENT_OVERLAP)
           .setRestitution(0.5)
-          .setFriction(0.1),
+          .setFriction(0.1)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
         railBody
       )
+      this.bodies.push(railBody)
     }
 
     // Right rail - curves inward toward the right flipper
@@ -89,6 +97,7 @@ export class RailBuilder {
     }, this.scene)
     rightRail.material = railMat
     meshes.push(rightRail)
+    this.meshes.push(rightRail)
 
     // Physics colliders for right rail
     for (let i = 0; i < rightRailPath.length - 1; i++) {
@@ -105,11 +114,13 @@ export class RailBuilder {
           .setRotation(new this.rapier.Quaternion(0, Math.sin(angle * 0.5), 0, Math.cos(angle * 0.5)))
       )
       this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(railThick / 2, railHeight / 2, length / 2)
+        this.rapier.ColliderDesc.cuboid(railThick / 2, railHeight / 2, length / 2 + RailBuilder.SEGMENT_OVERLAP)
           .setRestitution(0.5)
-          .setFriction(0.1),
+          .setFriction(0.1)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
         railBody
       )
+      this.bodies.push(railBody)
     }
 
     // Lower guard rails - smooth cylindrical guards above flippers
@@ -122,18 +133,22 @@ export class RailBuilder {
     leftGuard.rotation.z = -Math.PI / 8
     leftGuard.material = guardMat
     meshes.push(leftGuard)
+    this.meshes.push(leftGuard)
 
+    const leftGuardRotation = Quaternion.FromEulerAngles(Math.PI / 2, 0, -Math.PI / 8)
     const lgBody = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.fixed()
         .setTranslation(-4.5, 0.4, -10)
-        .setRotation(new this.rapier.Quaternion(0, Math.sin(-Math.PI / 16), 0, Math.cos(-Math.PI / 16)))
+        .setRotation({ x: leftGuardRotation.x, y: leftGuardRotation.y, z: leftGuardRotation.z, w: leftGuardRotation.w })
     )
     this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(0.15, 0.4, 1.5)
+      this.rapier.ColliderDesc.cylinder(1.5, 0.13)
         .setRestitution(0.6)
-        .setFriction(0.1),
+        .setFriction(0.1)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
       lgBody
     )
+    this.bodies.push(lgBody)
 
     // Right guard - round tube profile
     const rightGuard = MeshBuilder.CreateCylinder('rightGuard', { diameter: 0.26, height: 3, tessellation: 14 }, this.scene)
@@ -142,18 +157,22 @@ export class RailBuilder {
     rightGuard.rotation.z = Math.PI / 8
     rightGuard.material = guardMat
     meshes.push(rightGuard)
+    this.meshes.push(rightGuard)
 
+    const rightGuardRotation = Quaternion.FromEulerAngles(Math.PI / 2, 0, Math.PI / 8)
     const rgBody = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.fixed()
         .setTranslation(6, 0.4, -10)
-        .setRotation(new this.rapier.Quaternion(0, Math.sin(Math.PI / 16), 0, Math.cos(Math.PI / 16)))
+        .setRotation({ x: rightGuardRotation.x, y: rightGuardRotation.y, z: rightGuardRotation.z, w: rightGuardRotation.w })
     )
     this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(0.15, 0.4, 1.5)
+      this.rapier.ColliderDesc.cylinder(1.5, 0.13)
         .setRestitution(0.6)
-        .setFriction(0.1),
+        .setFriction(0.1)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
       rgBody
     )
+    this.bodies.push(rgBody)
 
     return { meshes }
   }
@@ -185,6 +204,7 @@ export class RailBuilder {
     }, this.scene)
     leftRamp.material = rampMat
     meshes.push(leftRamp)
+    this.meshes.push(leftRamp)
 
     // Physics collider for left ramp
     for (let i = 0; i < leftRampPath.length - 1; i++) {
@@ -201,11 +221,13 @@ export class RailBuilder {
           .setRotation(new this.rapier.Quaternion(0, Math.sin(angle * 0.5), 0, Math.cos(angle * 0.5)))
       )
       this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(0.2, 0.15, length / 2)
+        this.rapier.ColliderDesc.cuboid(0.2, 0.15, length / 2 + RailBuilder.SEGMENT_OVERLAP)
           .setRestitution(0.4)
-          .setFriction(0.1),
+          .setFriction(0.1)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
         rampBody
       )
+      this.bodies.push(rampBody)
     }
 
     // ================================================================
@@ -227,6 +249,7 @@ export class RailBuilder {
     }, this.scene)
     rightRamp.material = rampMat
     meshes.push(rightRamp)
+    this.meshes.push(rightRamp)
 
     // Physics collider for right ramp
     for (let i = 0; i < rightRampPath.length - 1; i++) {
@@ -243,11 +266,13 @@ export class RailBuilder {
           .setRotation(new this.rapier.Quaternion(0, Math.sin(angle * 0.5), 0, Math.cos(angle * 0.5)))
       )
       this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(0.2, 0.15, length / 2)
+        this.rapier.ColliderDesc.cuboid(0.2, 0.15, length / 2 + RailBuilder.SEGMENT_OVERLAP)
           .setRestitution(0.4)
-          .setFriction(0.1),
+          .setFriction(0.1)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
         rampBody
       )
+      this.bodies.push(rampBody)
     }
 
     // ================================================================
@@ -267,6 +292,7 @@ export class RailBuilder {
     }, this.scene)
     centerRamp.material = rampMat
     meshes.push(centerRamp)
+    this.meshes.push(centerRamp)
 
     // Physics for center ramp
     const centerRampBody = this.world.createRigidBody(
@@ -275,9 +301,11 @@ export class RailBuilder {
     this.world.createCollider(
       this.rapier.ColliderDesc.cuboid(2.5, 0.1, 0.5)
         .setRestitution(0.4)
-        .setFriction(0.1),
+        .setFriction(0.1)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
       centerRampBody
     )
+    this.bodies.push(centerRampBody)
 
     // ================================================================
     // UPPER DEFLECTOR RAILS - Prevent straight-down drains from upper playfield
@@ -297,6 +325,7 @@ export class RailBuilder {
     }, this.scene)
     leftDeflector.material = rampMat
     meshes.push(leftDeflector)
+    this.meshes.push(leftDeflector)
 
     for (let i = 0; i < leftDeflectorPath.length - 1; i++) {
       const start = leftDeflectorPath[i]
@@ -312,11 +341,13 @@ export class RailBuilder {
           .setRotation(new this.rapier.Quaternion(0, Math.sin(angle * 0.5), 0, Math.cos(angle * 0.5)))
       )
       this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(0.12, 0.08, length / 2)
+        this.rapier.ColliderDesc.cuboid(0.12, 0.08, length / 2 + RailBuilder.SEGMENT_OVERLAP)
           .setRestitution(0.35)
-          .setFriction(0.1),
+          .setFriction(0.1)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
         deflectorBody
       )
+      this.bodies.push(deflectorBody)
     }
 
     // Right upper deflector
@@ -333,6 +364,7 @@ export class RailBuilder {
     }, this.scene)
     rightDeflector.material = rampMat
     meshes.push(rightDeflector)
+    this.meshes.push(rightDeflector)
 
     for (let i = 0; i < rightDeflectorPath.length - 1; i++) {
       const start = rightDeflectorPath[i]
@@ -348,13 +380,31 @@ export class RailBuilder {
           .setRotation(new this.rapier.Quaternion(0, Math.sin(angle * 0.5), 0, Math.cos(angle * 0.5)))
       )
       this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(0.12, 0.08, length / 2)
+        this.rapier.ColliderDesc.cuboid(0.12, 0.08, length / 2 + RailBuilder.SEGMENT_OVERLAP)
           .setRestitution(0.35)
-          .setFriction(0.1),
+          .setFriction(0.1)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
         deflectorBody
       )
+      this.bodies.push(deflectorBody)
     }
 
     return { meshes }
+  }
+
+  dispose(): void {
+    for (const body of this.bodies) {
+      if (this.world.getRigidBody(body.handle)) {
+        this.world.removeRigidBody(body)
+      }
+    }
+    this.bodies = []
+
+    for (const mesh of this.meshes) {
+      if (!mesh.isDisposed()) {
+        mesh.dispose()
+      }
+    }
+    this.meshes = []
   }
 }

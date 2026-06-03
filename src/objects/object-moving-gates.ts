@@ -1,5 +1,6 @@
 import { Scene, MeshBuilder, Mesh, PBRMaterial, TransformNode, Vector3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
@@ -119,7 +120,7 @@ export class MovingGateBuilder {
 
     // Physics body - gate barrier
     const body = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.75 * scale, z)
+      this.rapier.RigidBodyDesc.kinematicPositionBased().setTranslation(x, 0.75 * scale, z)
     )
 
     // Collider for gate
@@ -127,6 +128,7 @@ export class MovingGateBuilder {
       this.rapier.ColliderDesc.cuboid(width * scale / 2, height * scale / 2, 0.1 * scale)
         .setRestitution(0.6)
         .setFriction(0.3)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.GATE)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       body
     )
@@ -258,8 +260,9 @@ export class MovingGateBuilder {
     // Reset to base position/rotation
     const root = state.mesh.parent as TransformNode
     if (root) {
-      root.position = state.basePosition
-      root.rotation = state.baseRotation
+      root.position.copyFrom(state.basePosition)
+      root.rotation.copyFrom(state.baseRotation)
+      this.syncGateBodyToRoot(state, root)
     }
   }
 
@@ -293,7 +296,7 @@ export class MovingGateBuilder {
         if (state.openPosition) {
           const progress = Math.min(state.openTimer / 0.5, 1.0) // 0.5s animation
           const currentPos = Vector3.Lerp(state.basePosition, state.openPosition, progress)
-          root.position = currentPos
+          root.position.copyFrom(currentPos)
         }
       } else if (state.animationType === 'rotate') {
         if (state.openRotation) {
@@ -302,10 +305,49 @@ export class MovingGateBuilder {
         }
       }
 
+      this.syncGateBodyToRoot(state, root)
+
       // Check if time to close
       if (state.openTimer >= state.openDuration) {
         this.closeGate(state, 0.5)
       }
+    } else {
+      this.syncGateBodyToRoot(state, root)
+    }
+  }
+
+  private syncGateBodyToRoot(state: MovingGateState, root: TransformNode): void {
+    const nextTranslation = {
+      x: root.position.x,
+      y: root.position.y,
+      z: root.position.z,
+    }
+    state.body.setNextKinematicTranslation(nextTranslation)
+
+    if (root.rotationQuaternion) {
+      state.body.setNextKinematicRotation(root.rotationQuaternion)
+      return
+    }
+
+    state.body.setNextKinematicRotation(this.toQuaternion(root.rotation))
+  }
+
+  private toQuaternion(rotation: Vector3): { x: number; y: number; z: number; w: number } {
+    const halfX = rotation.x * 0.5
+    const halfY = rotation.y * 0.5
+    const halfZ = rotation.z * 0.5
+    const sx = Math.sin(halfX)
+    const cx = Math.cos(halfX)
+    const sy = Math.sin(halfY)
+    const cy = Math.cos(halfY)
+    const sz = Math.sin(halfZ)
+    const cz = Math.cos(halfZ)
+
+    return {
+      x: sx * cy * cz - cx * sy * sz,
+      y: cx * sy * cz + sx * cy * sz,
+      z: cx * cy * sz - sx * sy * cz,
+      w: cx * cy * cz + sx * sy * sz,
     }
   }
 

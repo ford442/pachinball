@@ -12,6 +12,7 @@ import {
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
+import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { color, emissive, PALETTE, INTENSITY } from '../game-elements/visual-language'
@@ -24,6 +25,7 @@ export class DecorationBuilder {
   private matLib: ReturnType<typeof getMaterialLibrary>
   private bindings: PhysicsBinding[] = []
   private pinballMeshes: Mesh[] = []
+  private rigidBodies: RAPIER.RigidBody[] = []
 
   constructor(
     scene: Scene,
@@ -247,9 +249,11 @@ export class DecorationBuilder {
     this.world.createCollider(
       this.rapier.ColliderDesc.cuboid(0.6, 1.2, 16)
         .setRestitution(0.5)
-        .setFriction(0.1),
+        .setFriction(0.1)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
       leftRailBody
     )
+    this.rigidBodies.push(leftRailBody)
     this.bindings.push({ mesh: leftRail, rigidBody: leftRailBody })
 
     const rightRailBody = this.world.createRigidBody(
@@ -258,9 +262,11 @@ export class DecorationBuilder {
     this.world.createCollider(
       this.rapier.ColliderDesc.cuboid(0.6, 1.2, 16)
         .setRestitution(0.5)
-        .setFriction(0.1),
+        .setFriction(0.1)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
       rightRailBody
     )
+    this.rigidBodies.push(rightRailBody)
     this.bindings.push({ mesh: rightRail, rigidBody: rightRailBody })
 
     // ================================================================
@@ -345,9 +351,11 @@ export class DecorationBuilder {
     this.world.createCollider(
       this.rapier.ColliderDesc.cuboid(0.3, 0.6, 4)
         .setRestitution(0.4)
-        .setFriction(0.1),
+        .setFriction(0.1)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
       leftFlipperRailBody
     )
+    this.rigidBodies.push(leftFlipperRailBody)
     this.bindings.push({ mesh: leftFlipperRail, rigidBody: leftFlipperRailBody })
 
     // Right flipper rail
@@ -365,9 +373,11 @@ export class DecorationBuilder {
     this.world.createCollider(
       this.rapier.ColliderDesc.cuboid(0.3, 0.6, 4)
         .setRestitution(0.4)
-        .setFriction(0.1),
+        .setFriction(0.1)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
       rightFlipperRailBody
     )
+    this.rigidBodies.push(rightFlipperRailBody)
     this.bindings.push({ mesh: rightFlipperRail, rigidBody: rightFlipperRailBody })
   }
 
@@ -377,6 +387,23 @@ export class DecorationBuilder {
 
   getPinballMeshes(): Mesh[] {
     return this.pinballMeshes
+  }
+
+  dispose(): void {
+    for (const body of this.rigidBodies) {
+      if (this.world.getRigidBody(body.handle)) {
+        this.world.removeRigidBody(body)
+      }
+    }
+    this.rigidBodies = []
+
+    for (const mesh of this.pinballMeshes) {
+      if (!mesh.isDisposed()) {
+        mesh.dispose()
+      }
+    }
+    this.pinballMeshes = []
+    this.bindings = []
   }
 }
 

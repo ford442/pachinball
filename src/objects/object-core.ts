@@ -338,8 +338,28 @@ export class GameObjects {
   }
 
   dispose(): void {
+    this.flipperBuilder.dispose()
     this.bumperBuilder.dispose()
-    this.pinballMeshes.forEach(m => m.dispose())
+    this.wallBuilder.dispose()
+    this.railBuilder.dispose()
+    this.pachinkoBuilder.dispose()
+    this.decorationBuilder.dispose()
+
+    if (this.deathZoneBody && this.world.getRigidBody(this.deathZoneBody.handle)) {
+      this.world.removeRigidBody(this.deathZoneBody)
+    }
+    this.deathZoneBody = null
+
+    if (this.plungerBody && this.world.getRigidBody(this.plungerBody.handle)) {
+      this.world.removeRigidBody(this.plungerBody)
+    }
+    this.plungerBody = null
+
+    this.pinballMeshes.forEach(m => {
+      if (!m.isDisposed()) {
+        m.dispose()
+      }
+    })
     this.bindings = []
     this.bumperVisuals = []
     this.bumperBodies = []
@@ -348,5 +368,12 @@ export class GameObjects {
     this.targetActive = []
     this.targetRespawnTimer = []
     this.pinballMeshes = []
+    this.refs.flippers.clear()
+    this.refs.bumpers.clear()
+    this.refs.walls = []
+    this.refs.rails = []
+    this.refs.pins = []
+    this.flipperLeftJoint = null
+    this.flipperRightJoint = null
   }
 }

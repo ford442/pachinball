@@ -1,5 +1,6 @@
 import { Scene, MeshBuilder, Mesh, TransformNode } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { PALETTE } from '../game-elements/visual-language'
@@ -30,6 +31,9 @@ export class DropTargetBuilder {
   private world: RAPIER.World
   private rapier: typeof RAPIER
   private matLib: ReturnType<typeof getMaterialLibrary>
+  private meshes: Mesh[] = []
+  private roots: TransformNode[] = []
+  private bodies: RAPIER.RigidBody[] = []
 
   constructor(
     scene: Scene,
@@ -57,6 +61,7 @@ export class DropTargetBuilder {
 
     const targetRoot = new TransformNode(`dropTarget_${bankId}_${targetIndex}`, this.scene)
     targetRoot.position.set(x, 0, z)
+    this.roots.push(targetRoot)
 
     // Main target body (tall cylinder)
     const targetMesh = MeshBuilder.CreateCylinder('targetCyl', {
@@ -82,12 +87,14 @@ export class DropTargetBuilder {
     const body = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.6 * scale, z)
     )
+    this.bodies.push(body)
 
     // Target collision - upper cylinder
     this.world.createCollider(
       this.rapier.ColliderDesc.cylinder(0.6 * scale, 0.2 * scale)
         .setRestitution(0.75)
         .setFriction(0.2)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.TARGET)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       body
     )
@@ -105,6 +112,7 @@ export class DropTargetBuilder {
     }
 
     bindings.push({ mesh: targetRoot as unknown as Mesh, rigidBody: body })
+    this.meshes.push(targetMesh, capMesh)
 
     return { state, bindings }
   }
@@ -226,5 +234,28 @@ export class DropTargetBuilder {
   getBankProgress(bank: DropTargetBank): number {
     const droppedCount = bank.targets.filter(t => t.isDropped).length
     return droppedCount / bank.targets.length
+  }
+
+  dispose(): void {
+    for (const body of this.bodies) {
+      if (this.world.getRigidBody(body.handle)) {
+        this.world.removeRigidBody(body)
+      }
+    }
+    this.bodies = []
+
+    for (const mesh of this.meshes) {
+      if (!mesh.isDisposed()) {
+        mesh.dispose()
+      }
+    }
+    this.meshes = []
+
+    for (const root of this.roots) {
+      if (!root.isDisposed()) {
+        root.dispose(true)
+      }
+    }
+    this.roots = []
   }
 }

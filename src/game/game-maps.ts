@@ -4,11 +4,9 @@
  * Handles:
  * - Map switching with LCD table state updates
  * - Map cycling through available maps
- * - LCD post-process initialization
+ * - LCD playfield visual updates
  * - Integration with material library, sound system, and cabinet lighting
  */
-
-import { PostProcess, Color3, Texture } from '@babylonjs/core'
 
 import type { Scene } from '@babylonjs/core'
 
@@ -19,7 +17,7 @@ import {
   LCDTableState,
   registerMap,
 } from '../shaders/lcd-table'
-import { SCANLINE_UNIFORM, computeEffectiveScanlineIntensity } from '../shaders/scanline'
+import { computeEffectiveScanlineIntensity } from '../shaders/scanline'
 import { SettingsManager } from '../game-elements/settings'
 import { getMapSystem } from '../game-elements/map-system'
 import { getMaterialLibrary } from '../materials'
@@ -38,17 +36,14 @@ export class TableMapManager {
   private currentMap: TableMapType = 'neon-helix'
   private config: MapManagerConfig
   private lcdTableState: LCDTableState
-  private lcdTablePostProcess: PostProcess | null = null
   // Note: bloomPipeline is set but currently unused - reserved for future map-specific bloom effects
   private mapSystem = getMapSystem()
-  private engine: import('@babylonjs/core').AbstractEngine
   private scanlineWeight: number
 
   constructor(scene: Scene, config: MapManagerConfig = {}) {
     this.scene = scene
     this.config = config
     this.lcdTableState = new LCDTableState()
-    this.engine = scene.getEngine() as import('@babylonjs/core').AbstractEngine
     this.scanlineWeight = SettingsManager.load().scanlineWeight
   }
 
@@ -96,6 +91,15 @@ export class TableMapManager {
     // Update the material library's LCD material
     const matLib = getMaterialLibrary(this.scene)
     matLib.updateLCDTableEmissive(mapConfig.baseColor, mapConfig.glowIntensity)
+    matLib.updateLCDTableVisual(mapConfig, {
+      timeSeconds: performance.now() * 0.001,
+      flashIntensity: this.lcdTableState.flashIntensity,
+      rippleIntensity: this.lcdTableState.rippleIntensity,
+      rippleTime: 0,
+      reducedMotion: SettingsManager.load().reducedMotion,
+      photosensitiveMode: SettingsManager.load().photosensitiveMode,
+      forceRedraw: true,
+    })
 
     // Notify callback for ball/flipper material updates
     this.config.onMapChange?.(mapName, mapConfig)
@@ -136,89 +140,37 @@ export class TableMapManager {
   }
 
   /**
-   * Initialize the LCD table post-process effect
-   * @param camera - The camera to attach the post-process to
-   */
-  initLCDTablePostProcess(
-    camera: import('@babylonjs/core').ArcRotateCamera
-  ): PostProcess | null {
-    if (!this.scene) return null
-
-    // Create LCD table post-process effect
-    this.lcdTablePostProcess = new PostProcess(
-      'lcdTable',
-      'lcdTable',
-      [
-        'uBaseColor',
-        'uAccentColor',
-        SCANLINE_UNIFORM,
-        'uPixelGridIntensity',
-        'uSubpixelIntensity',
-        'uGlowIntensity',
-        'uMapBlend',
-        'uTime',
-        'uFlashIntensity',
-        'uRippleIntensity',
-        'uRippleTime',
-      ],
-      null,
-      1.0,
-      camera,
-      Texture.BILINEAR_SAMPLINGMODE,
-      this.engine
-    )
-
-    // Set up uniform updates
-    this.lcdTablePostProcess.onApply = (effect) => {
-      const config = this.lcdTableState.getCurrentConfig()
-      const baseColor = this.hexToColor3(config.baseColor)
-      const accentColor = this.hexToColor3(config.accentColor)
-
-      effect.setColor3('uBaseColor', baseColor)
-      effect.setColor3('uAccentColor', accentColor)
-      const effectiveScanlineIntensity = computeEffectiveScanlineIntensity(
-        config.scanlineIntensity,
-        this.scanlineWeight,
-        this.lcdTableState.getScanlineIntensityMultiplier()
-      )
-      effect.setFloat(SCANLINE_UNIFORM, effectiveScanlineIntensity)
-      effect.setFloat('uPixelGridIntensity', config.pixelGridIntensity)
-      effect.setFloat('uSubpixelIntensity', config.subpixelIntensity)
-      effect.setFloat('uGlowIntensity', config.glowIntensity)
-      effect.setFloat('uMapBlend', 0.5)
-      effect.setFloat('uTime', performance.now() * 0.001)
-      effect.setFloat('uFlashIntensity', this.lcdTableState.flashIntensity)
-      effect.setFloat('uRippleIntensity', this.lcdTableState.rippleIntensity)
-      effect.setFloat('uRippleTime', performance.now() * 0.001)
-    }
-
-    console.log('[MapManager] LCD table post-process initialized')
-    return this.lcdTablePostProcess
-  }
-
-  /**
    * Update the LCD table state (called each frame)
    * @param dt - Delta time in seconds
    */
   update(dt: number): void {
     this.lcdTableState.update(dt)
+    const config = this.lcdTableState.getCurrentConfig()
+    const effectiveScanlineIntensity = computeEffectiveScanlineIntensity(
+      config.scanlineIntensity,
+      this.scanlineWeight,
+      this.lcdTableState.getScanlineIntensityMultiplier()
+    )
+    const visualConfig = {
+      ...config,
+      scanlineIntensity: effectiveScanlineIntensity,
+    }
+    const settings = SettingsManager.load()
+    getMaterialLibrary(this.scene).updateLCDTableVisual(visualConfig, {
+      timeSeconds: performance.now() * 0.001,
+      flashIntensity: this.lcdTableState.flashIntensity,
+      rippleIntensity: this.lcdTableState.rippleIntensity,
+      rippleTime: performance.now() * 0.001,
+      reducedMotion: settings.reducedMotion,
+      photosensitiveMode: settings.photosensitiveMode,
+    })
   }
 
   setScanlineWeight(weight: number): void {
     this.scanlineWeight = Math.min(1, Math.max(0, weight))
   }
-
-  private hexToColor3(hex: string): Color3 {
-    const clean = hex.replace('#', '')
-    const r = parseInt(clean.substring(0, 2), 16) / 255
-    const g = parseInt(clean.substring(2, 4), 16) / 255
-    const b = parseInt(clean.substring(4, 6), 16) / 255
-    return new Color3(r, g, b)
-  }
-
   dispose(): void {
-    this.lcdTablePostProcess?.dispose()
-    this.lcdTablePostProcess = null
+    // No-op: LCD playfield visuals render directly onto the table material.
   }
 }
 

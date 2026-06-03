@@ -1,5 +1,6 @@
 import { Scene, MeshBuilder, Mesh, PBRMaterial, TransformNode, Color3, StandardMaterial, Vector3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
@@ -134,6 +135,7 @@ export class BallTrapBuilder {
       this.rapier.ColliderDesc.cone(0.6 * scale, 0.2)
         .setRestitution(0.6)
         .setFriction(0.3)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.TARGET)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       body
     )
@@ -143,6 +145,7 @@ export class BallTrapBuilder {
       this.rapier.ColliderDesc.ball(0.45 * scale)
         .setTranslation(0, -0.3 * scale, 0)
         .setSensor(true)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.SENSOR)
         .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
       body
     )
