@@ -272,6 +272,14 @@ export interface GameTuning {
     triggerGoldThresholds: number[]
     drainGraceMs: number
   }
+  feedback: {
+    comboWindowSeconds: number
+    comboHitsPerMultiplier: number
+    comboMaxMultiplier: number
+    ballSaveGraceSeconds: number
+    bonusTallyComboPeakBase: number
+    bonusTallyAnimationMs: number
+  }
 }
 
 export const GAME_TUNING = {
@@ -316,6 +324,14 @@ export const GAME_TUNING = {
     multiplierPerExtraBall: 0.35,
     triggerGoldThresholds: [GOLD_BALL_THRESHOLDS.jackpot, GOLD_BALL_THRESHOLDS.jackpot * 2],
     drainGraceMs: 4000,
+  },
+  feedback: {
+    comboWindowSeconds: 2.5,
+    comboHitsPerMultiplier: 2,
+    comboMaxMultiplier: 5,
+    ballSaveGraceSeconds: 7,
+    bonusTallyComboPeakBase: 250,
+    bonusTallyAnimationMs: 1500,
   },
 } as const satisfies GameTuning
 

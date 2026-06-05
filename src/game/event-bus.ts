@@ -250,6 +250,32 @@ export interface PachinballEventMap {
     source: string
   }
 
+  // Combo multiplier events
+  'combo:multiplier:changed': {
+    multiplier: number
+    comboCount: number
+  }
+
+  // Ball save events
+  'ball:launched': void
+  'ball:save:triggered': {
+    reason: 'grace-window' | 'multiball'
+  }
+  'ball:save:expired': void
+
+  // Bonus tally events
+  'bonus:tally:start': {
+    totalBonus: number
+    breakdown: Record<string, number>
+  }
+  'bonus:tally:tick': {
+    currentDisplay: number
+    totalBonus: number
+  }
+  'bonus:tally:complete': {
+    totalBonus: number
+  }
+
   // Lighting and effects events
   'effect:flash': {
     color?: string

@@ -28,6 +28,8 @@ import type { PrismCoreFeeder } from '../game-elements/prism-core-feeder'
 import type { GaussCannonFeeder } from '../game-elements/gauss-cannon-feeder'
 import type { QuantumTunnelFeeder } from '../game-elements/quantum-tunnel-feeder'
 import { ComboSystem, getScoringBreakdownManager, type ComboHitType, type InputFrame } from '../game-elements'
+import { ComboMultiplierSystem } from '../game-elements/combo-multiplier-system'
+import { BonusTallySystem } from '../game-elements/bonus-tally-system'
 import type { SpinnerBumperBuilder, SpinnerBumperVisual, BallTrapBuilder, BallTrapState, LauncherBuilder, LauncherState, MovingGateBuilder, MovingGateState } from '../objects'
 import { BallType, GAME_TUNING, GameConfig, PhysicsConfig } from '../config'
 import { DisplayState } from '../game-elements'
@@ -81,6 +83,7 @@ export interface PhysicsHost {
   score: number
   comboCount: number
   comboTimer: number
+  comboMultiplier: number
   lives: number
   tiltActive: boolean
   goldBallStack: Array<{ type: BallType; timestamp: number }>
@@ -128,6 +131,8 @@ export class GamePhysicsController {
   private static readonly COLLISION_DEBOUNCE_MS = 16
   private eventBusUnsubscribers: Array<() => void> = []
   private readonly comboSystem: ComboSystem
+  private readonly comboMultiplierSystem: ComboMultiplierSystem
+  private readonly bonusTallySystem: BonusTallySystem
   private readonly scoringBreakdown = getScoringBreakdownManager()
 
   constructor(host: PhysicsHost) {
@@ -142,6 +147,16 @@ export class GamePhysicsController {
         ...chain,
         sequence: chain.sequence as ComboHitType[],
       })),
+    })
+
+    this.comboMultiplierSystem = new ComboMultiplierSystem({
+      windowSeconds: GAME_TUNING.feedback.comboWindowSeconds,
+      hitsPerMultiplier: GAME_TUNING.feedback.comboHitsPerMultiplier,
+      maxMultiplier: GAME_TUNING.feedback.comboMaxMultiplier,
+    })
+
+    this.bonusTallySystem = new BonusTallySystem({
+      comboPeakBase: GAME_TUNING.feedback.bonusTallyComboPeakBase,
     })
 
     // Subscribe to 'points:awarded' from new obstacle builders so their scores
@@ -653,7 +668,9 @@ export class GamePhysicsController {
     )
     if (comboResult.chain.bonusPoints > 0) {
       this.awardScore(comboResult.chain.bonusPoints, 'combo-chain-bonus', new Vector3(ballPos.x, ballPos.y, ballPos.z))
+      this.bonusTallySystem.recordScore('chain-bonus', comboResult.chain.bonusPoints)
     }
+    this.registerComboMultiplierHit()
 
     if (comboResult.comboCount >= GAME_TUNING.combo.feverThreshold && this.host.display?.getDisplayState() === DisplayState.IDLE) {
       this.host.eventBus.emit('fever:start')
@@ -745,6 +762,7 @@ export class GamePhysicsController {
         'target-hit',
         new Vector3(ballPos.x, ballPos.y, ballPos.z)
       )
+      this.registerComboMultiplierHit()
       this.host.effects?.playBeep(1200)
       this.host.ballManager?.spawnExtraBalls(1)
       this.host.updateHUD()
@@ -761,6 +779,7 @@ export class GamePhysicsController {
     if (!this.ballHandleSet.has(ballHandle)) return
 
     this.registerComboObstacleHit('spinner')
+    this.registerComboMultiplierHit()
 
     const vel = ballBody.linvel()
     const impactForce = Math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)
@@ -781,6 +800,7 @@ export class GamePhysicsController {
     const state = this.host.trapStates.find(s => s.body === obstacleBody)
     if (state && state.isOpen && !state.caughtBall) {
       this.registerComboObstacleHit('trap')
+      this.registerComboMultiplierHit()
       const ballPos = ballBody.translation()
       this.host.ballTrapBuilder?.catchBall(state, ballBody, new Vector3(ballPos.x, ballPos.y, ballPos.z))
     }
@@ -792,6 +812,7 @@ export class GamePhysicsController {
     const state = this.host.launcherStates.find(s => s.body === obstacleBody)
     if (state && state.cooldownTimer <= 0) {
       this.registerComboObstacleHit('launcher')
+      this.registerComboMultiplierHit()
       const forceVec = this.host.launcherBuilder?.triggerLauncher(state, 1.0)
       if (forceVec) {
         const rapier = this.host.physics.getRapier()
@@ -808,6 +829,7 @@ export class GamePhysicsController {
     const state = this.host.gateStates.find(s => s.body === obstacleBody)
     if (state && !state.isOpen) {
       this.registerComboObstacleHit('gate')
+      this.registerComboMultiplierHit()
       this.host.movingGateBuilder?.openGate(state)
     }
   }
@@ -890,6 +912,17 @@ export class GamePhysicsController {
     this.host.updateHUD()
   }
 
+  private registerComboMultiplierHit(): void {
+    const result = this.comboMultiplierSystem.registerHit()
+    this.host.comboMultiplier = result.multiplier
+    if (result.changed) {
+      this.host.eventBus.emit('combo:multiplier:changed', {
+        multiplier: result.multiplier,
+        comboCount: result.comboCount,
+      })
+    }
+  }
+
   private getComboImpactTier(): 'light' | 'medium' | 'heavy' {
     if (this.host.accessibility.reducedMotion || GameConfig.accessibility.photosensitiveMode) {
       return 'light'
@@ -905,22 +938,37 @@ export class GamePhysicsController {
   }
 
   private awardScore(basePoints: number, source: string, position?: Vector3): number {
-    const multiplier = this.getActiveScoreMultiplier()
-    const awardedPoints = Math.round(basePoints * multiplier)
+    const multiballMultiplier = this.getActiveScoreMultiplier()
+    const comboMultiplier = this.comboMultiplierSystem.getState().multiplier
+    const totalMultiplier = multiballMultiplier * comboMultiplier
+    const awardedPoints = Math.round(basePoints * totalMultiplier)
     this.host.score += awardedPoints
     this.scoringBreakdown.recordScore(awardedPoints, source)
     if (position) {
       this.host.effects?.spawnFloatingNumber(awardedPoints, position)
     }
-    if (multiplier > 1) {
+    if (totalMultiplier > 1) {
       this.host.eventBus.emit('score:multiplier', {
         basePoints,
         awardedPoints,
-        multiplier,
+        multiplier: totalMultiplier,
         source,
       })
     }
     return awardedPoints
+  }
+
+  private sweepBonusTally(): void {
+    const comboState = this.comboMultiplierSystem.reset()
+    this.bonusTallySystem.recordComboPeak(comboState.peakCombo)
+    const { total, breakdown } = this.bonusTallySystem.sweep()
+    if (total > 0) {
+      this.host.score += total
+      this.host.eventBus.emit('bonus:tally:start', { totalBonus: total, breakdown })
+      this.host.eventBus.emit('bonus:tally:complete', { totalBonus: total })
+      this.host.effects?.setBloomEnergy(2.0)
+      setTimeout(() => this.host.effects?.setBloomEnergy(1.0), GAME_TUNING.timing.tiltBloomResetMs)
+    }
   }
 
   private startChainMultiball(reason: 'jackpot' | 'gold-threshold', targetBalls: number): void {
@@ -990,6 +1038,7 @@ export class GamePhysicsController {
       this.host.sessionGoldBalls++
       const collectPos = new Vector3(body.translation().x, body.translation().y, body.translation().z)
       const awardedPoints = this.awardScore(collected.points, 'gold-ball-collect', collectPos)
+      this.bonusTallySystem.recordScore('gold-ball', collected.points)
       this.host.showMessage(`+${awardedPoints}`, 1500)
 
       if (GAME_TUNING.multiball.triggerGoldThresholds.includes(this.host.sessionGoldBalls)) {
@@ -1032,11 +1081,27 @@ export class GamePhysicsController {
           // and respawning a fresh launch-ready ball, so no life loss applies here.
           this.host.updateHUD()
         } else {
-          this.host.lives--
-          if (this.host.lives > 0) {
+          // Check grace-window ball-save before life loss
+          const nowMs = performance.now()
+          if (this.host.ballManager?.ballSaveSystem.canSave(nowMs)) {
+            this.host.ballManager.ballSaveSystem.consumeSave()
+            this.host.eventBus.emit('ball:save:triggered', { reason: 'grace-window' })
+            this.host.showMessage('BALL SAVED', 1500)
+            this.host.eventBus.emit('sound:play', { soundKey: 'ball-save', volume: 1.0 })
+            // Reset combo multiplier but keep bonus tally for same ball continuation
+            this.comboMultiplierSystem.reset()
             this.host.resetBall()
           } else {
-            this.host.setGameState(3) // GameState.GAME_OVER
+            // Genuine drain — sweep bonus tally
+            this.sweepBonusTally()
+            this.host.lives--
+            if (this.host.lives > 0) {
+              this.host.resetBall()
+              this.bonusTallySystem.reset()
+              this.comboMultiplierSystem.reset()
+            } else {
+              this.host.setGameState(3) // GameState.GAME_OVER
+            }
           }
         }
       }
@@ -1115,6 +1180,14 @@ export class GamePhysicsController {
         this.host.eventBus.emit('fever:end')
         this.host.eventBus.emit('display:set', DisplayState.IDLE)
         this.host.effects?.setLightingMode('normal', 0)
+      }
+    }
+
+    const expired = this.comboMultiplierSystem.update(dt)
+    if (expired) {
+      this.bonusTallySystem.recordComboPeak(expired.peakCombo)
+      if (expired.peakCombo > 0) {
+        this.host.showMessage(`PEAK COMBO x${expired.peakCombo}`, 1200)
       }
     }
   }

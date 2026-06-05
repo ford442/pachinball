@@ -21,6 +21,7 @@ import { getSoundSystem } from './sound-system'
 import { COLLISION_GROUP_PRESETS } from './physics'
 import { pulse, PALETTE, INTENSITY, emissive, color, QualityTier } from './visual-language'
 import { getCampaignRewardsManager } from './campaign-rewards-manager'
+import { BallSaveSystem } from './ball-save-system'
 
 
 
@@ -62,6 +63,8 @@ export class BallManager {
     ballSaveUsed: false,
     ballSaveExpiresAtMs: 0,
   }
+
+  ballSaveSystem = new BallSaveSystem({ graceMs: GAME_TUNING.feedback.ballSaveGraceSeconds * 1000 })
 
   constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER, bindings: PhysicsBinding[]) {
     this.scene = scene
@@ -160,6 +163,8 @@ export class BallManager {
     ballBody.setLinvel(new this.rapier.Vector3(0, 0, 0), true)
     ballBody.setAngvel(new this.rapier.Vector3(0, 0, 0), true)
     ballBody.applyImpulse(new this.rapier.Vector3(0, 0, 2.5), true)
+
+    this.ballSaveSystem.onBallLaunched(this.nowMs())
 
     this.bindings.push({ mesh: ball, rigidBody: ballBody })
     this.ballBody = ballBody
@@ -303,6 +308,7 @@ export class BallManager {
 
     this.applyCampaignRewards()
     this.endMultiball()
+    this.ballSaveSystem.onBallLaunched(this.nowMs())
   }
 
   removeBall(body: RAPIER.RigidBody): void {
@@ -1200,6 +1206,10 @@ export class BallManager {
    */
   getGoldBallCount(): number {
     return this.goldBallCount
+  }
+
+  startBallSaveGraceWindow(): void {
+    this.ballSaveSystem.onBallLaunched(this.nowMs())
   }
 
   /**

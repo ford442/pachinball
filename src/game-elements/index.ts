@@ -19,6 +19,9 @@ export {
 } from '../cabinet'
 export { BallManager } from './ball-manager'
 export { ComboSystem, type ComboHitType, type ComboSystemConfig, type ComboNamedChain } from './combo-system'
+export { ComboMultiplierSystem, type ComboMultiplierConfig } from './combo-multiplier-system'
+export { BallSaveSystem, type BallSaveConfig } from './ball-save-system'
+export { BonusTallySystem, type BonusTallyConfig } from './bonus-tally-system'
 // Adventure mode re-exported from new location
 export { AdventureMode, AdventureTrackType, CAMERA_PRESETS, type CameraPreset } from '../adventure'
 export {

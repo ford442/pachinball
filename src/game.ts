@@ -174,6 +174,7 @@ export class Game {
   lives = 3
   comboCount = 0
   comboTimer = 0
+  comboMultiplier = 1
   goldBallStack: Array<{ type: BallType; timestamp: number }> = []
   sessionGoldBalls = 0
   powerupActive = false
@@ -354,7 +355,11 @@ export class Game {
         onFlipperLeft: (pressed) => this.inputActions.handleFlipperLeft(pressed),
         onFlipperRight: (pressed) => this.inputActions.handleFlipperRight(pressed),
         onPlunger: () => {
-          this.inputActions.handlePlunger()
+          const didLaunch = this.inputActions.handlePlunger()
+          if (didLaunch) {
+            this.eventBus?.emit('ball:launched')
+            this.ballManager?.startBallSaveGraceWindow()
+          }
         },
         onPlungerChargeStart: () => this.inputActions.startPlungerCharge(),
         onPlungerChargeRelease: (chargeLevel) => this.inputActions.releasePlungerCharge(chargeLevel),

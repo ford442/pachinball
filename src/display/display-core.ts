@@ -71,6 +71,15 @@ export class DisplaySystem {
   private _currentSplashIndex = 0
   private _splashImages: HTMLImageElement[] = []
 
+  // Temporary text overlay (combo multiplier, ball save, bonus tally)
+  private _temporaryText = ''
+  private _temporaryTextTimer = 0
+
+  // Bonus tally count-up animation
+  private _bonusTallyTarget = 0
+  private _bonusTallyDisplay = 0
+  private _bonusTallyAnimating = false
+
   constructor(
     scene: Scene,
     engine: Engine | WebGPUEngine,
@@ -273,7 +282,17 @@ export class DisplaySystem {
 
     // Normal mode
 
-    if (this.storyText) {
+    if (this._temporaryText) {
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 72px "Courier New", monospace'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.shadowColor = '#00d9ff'
+      ctx.shadowBlur = 24
+      ctx.fillText(this._temporaryText, canvas.width / 2, canvas.height / 2)
+    }
+
+    if (this.storyText && !this._temporaryText) {
       ctx.fillStyle = this.trackThemePrimary
       ctx.font = 'bold 56px "Courier New", monospace'
       ctx.textAlign = 'center'
@@ -283,7 +302,7 @@ export class DisplaySystem {
       this.wrapText(ctx, this.storyText, canvas.width / 2, canvas.height * 0.4, canvas.width * 0.9, 64)
     }
 
-    if (this.trackText) {
+    if (this.trackText && !this._temporaryText) {
       ctx.shadowBlur = 10
       ctx.fillStyle = this.trackThemeAccent
       ctx.font = 'bold 40px "Courier New", monospace'
@@ -358,6 +377,28 @@ export class DisplaySystem {
         this._drainTimer = 0
         this._flashCycleTime = 0
         this.redrawTextOverlay()
+      }
+    }
+
+    // Temporary text overlay timer
+    if (this._temporaryTextTimer > 0) {
+      this._temporaryTextTimer -= dt
+      if (this._temporaryTextTimer <= 0 && !this._bonusTallyAnimating) {
+        this._temporaryText = ''
+        this.redrawTextOverlay()
+      }
+    }
+
+    // Bonus tally count-up animation
+    if (this._bonusTallyAnimating) {
+      const animDurationS = 1.5
+      const step = Math.max(1, Math.ceil(this._bonusTallyTarget * dt / animDurationS))
+      this._bonusTallyDisplay = Math.min(this._bonusTallyTarget, this._bonusTallyDisplay + step)
+      this._temporaryText = `BONUS ${Math.round(this._bonusTallyDisplay)}`
+      this.redrawTextOverlay()
+      if (this._bonusTallyDisplay >= this._bonusTallyTarget) {
+        this._bonusTallyAnimating = false
+        this._temporaryTextTimer = 2.0
       }
     }
   }
@@ -572,6 +613,31 @@ export class DisplaySystem {
   subscribeToEvents(bus: EventBus): void {
     bus.on('display:set', (state: DisplayState) => {
       this.setDisplayState(state)
+    })
+
+    bus.on('combo:multiplier:changed', (data) => {
+      if (data.multiplier > 1) {
+        this._temporaryText = `MULTIPLIER x${data.multiplier}`
+        this._temporaryTextTimer = 1.5
+        this.redrawTextOverlay()
+      }
+    })
+
+    bus.on('ball:save:triggered', () => {
+      this._temporaryText = 'BALL SAVED'
+      this._temporaryTextTimer = 2.0
+      this.redrawTextOverlay()
+    })
+
+    bus.on('bonus:tally:start', (data) => {
+      this._bonusTallyTarget = data.totalBonus
+      this._bonusTallyDisplay = 0
+      this._bonusTallyAnimating = true
+    })
+
+    bus.on('bonus:tally:complete', () => {
+      this._bonusTallyAnimating = false
+      this._temporaryTextTimer = 2.0
     })
   }
 

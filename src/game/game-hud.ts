@@ -26,6 +26,7 @@ export interface HUDHost {
   lives: number
   comboCount: number
   comboTimer: number
+  comboMultiplier: number
   bestScore: number
   goldBallStack: Array<{ type: BallType; timestamp: number }>
   sessionGoldBalls: number
@@ -42,12 +43,13 @@ export class GameHUD {
 
   updateHUD(): void {
     const { uiManager, score, lives, comboCount, bestScore } = this.host
+    const multiballMultiplier = this.host.ballManager?.getChainStats().scoreMultiplier ?? 1
     uiManager?.updateHUD({
       score,
       lives,
       ballsInPlay: this.host.ballManager?.getBallBodies().length ?? 0,
       combo: comboCount,
-      scoreMultiplier: this.host.ballManager?.getChainStats().scoreMultiplier ?? 1,
+      scoreMultiplier: multiballMultiplier * this.host.comboMultiplier,
       bestScore,
     })
     this.host.adventureState.setGoalProgress('reach-score', score)

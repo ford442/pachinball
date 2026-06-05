@@ -168,6 +168,7 @@ vi.mock('../src/game-elements/display-config', () => ({
 
 vi.mock('../src/game-elements/visual-language', () => ({
   QualityTier: { LOW: 'low', MEDIUM: 'medium', HIGH: 'high', ULTRA: 'ultra' },
+  PALETTE: { CYAN: '#00d9ff', GOLD: '#ffd700' },
 }))
 
 vi.mock('../src/game-elements/accessibility-config', () => ({
