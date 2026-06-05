@@ -18,11 +18,14 @@ export interface SettingsUIHost {
   readonly scene: Scene | null
 
   scanlineWeight: number
+  scanlineEnabled: boolean
   debugHUDEnabledInSettings: boolean
   showDebugUI: boolean
 
   isDebugHUDAvailable(): boolean
   setScanlineWeight?(weight: number): void
+  setScanlineEnabled?(enabled: boolean): void
+  setScanlineIntensityMultiplier?(multiplier: number): void
   switchTableMap(mapName: string): void
   loadCabinetPreset(type: import('./game-cabinet').CabinetType): void
   toggleLevelSelect(): void
@@ -57,6 +60,7 @@ export class GameSettingsUI {
     })
 
     this.setupScanlineSliderLiveUpdate()
+    this.setupScanlineToggleLiveUpdate()
   }
 
   private loadSettingsIntoUI(): void {
@@ -64,7 +68,8 @@ export class GameSettingsUI {
     const reducedMotionCheckbox = document.getElementById('reduced-motion') as HTMLInputElement
     const photosensitiveCheckbox = document.getElementById('photosensitive-mode') as HTMLInputElement
     const shakeSlider = document.getElementById('shake-intensity') as HTMLInputElement
-    const scanlineSlider = document.getElementById('scanline-intensity') as HTMLInputElement
+    const scanlineEnabledToggle = document.getElementById('scanline-enabled') as HTMLInputElement
+    const scanlineMultiplierSlider = document.getElementById('scanline-intensity') as HTMLInputElement
     const debugHUDCheckbox = document.getElementById('enable-debug-hud') as HTMLInputElement
     const masterVolumeSlider = document.getElementById('master-volume') as HTMLInputElement
     const musicVolumeSlider = document.getElementById('music-volume') as HTMLInputElement
@@ -74,10 +79,11 @@ export class GameSettingsUI {
     if (reducedMotionCheckbox) reducedMotionCheckbox.checked = settings.reducedMotion
     if (photosensitiveCheckbox) photosensitiveCheckbox.checked = settings.photosensitiveMode
     if (shakeSlider) shakeSlider.value = String(settings.shakeIntensity)
-    if (scanlineSlider) {
-      scanlineSlider.value = String(settings.scanlineWeight)
-      const span = scanlineSlider.parentElement?.querySelector('span')
-      if (span) span.setAttribute('data-value', String(settings.scanlineWeight))
+    if (scanlineEnabledToggle) scanlineEnabledToggle.checked = settings.scanlineEnabled
+    if (scanlineMultiplierSlider) {
+      scanlineMultiplierSlider.value = String(settings.scanlineIntensityMultiplier)
+      const span = scanlineMultiplierSlider.parentElement?.querySelector('span')
+      if (span) span.setAttribute('data-value', String(settings.scanlineIntensityMultiplier))
     }
     if (debugHUDCheckbox) debugHUDCheckbox.checked = settings.enableDebugHUD
 
@@ -93,19 +99,26 @@ export class GameSettingsUI {
     const reducedMotionCheckbox = document.getElementById('reduced-motion') as HTMLInputElement
     const photosensitiveCheckbox = document.getElementById('photosensitive-mode') as HTMLInputElement
     const shakeSlider = document.getElementById('shake-intensity') as HTMLInputElement
-    const scanlineSlider = document.getElementById('scanline-intensity') as HTMLInputElement
+    const scanlineEnabledToggle = document.getElementById('scanline-enabled') as HTMLInputElement
+    const scanlineMultiplierSlider = document.getElementById('scanline-intensity') as HTMLInputElement
     const debugHUDCheckbox = document.getElementById('enable-debug-hud') as HTMLInputElement
     const masterVolumeSlider = document.getElementById('master-volume') as HTMLInputElement
     const musicVolumeSlider = document.getElementById('music-volume') as HTMLInputElement
     const sfxVolumeSlider = document.getElementById('sfx-volume') as HTMLInputElement
     const muteCheckbox = document.getElementById('mute-audio') as HTMLInputElement
 
+    const scanlineIntensityMultiplier = Math.min(1.5, Math.max(0, parseFloat(scanlineMultiplierSlider?.value ?? '1')))
+    const scanlineEnabled = scanlineEnabledToggle?.checked ?? true
+
+    const currentSettings = SettingsManager.load()
     const newSettings = {
       reducedMotion: reducedMotionCheckbox?.checked ?? false,
       photosensitiveMode: photosensitiveCheckbox?.checked ?? false,
       shakeIntensity: parseFloat(shakeSlider?.value ?? '0.08'),
-      qualityPreset: SettingsManager.load().qualityPreset,
-      scanlineWeight: parseFloat(scanlineSlider?.value ?? '1'),
+      qualityPreset: currentSettings.qualityPreset,
+      scanlineWeight: currentSettings.scanlineWeight,
+      scanlineEnabled,
+      scanlineIntensityMultiplier,
       enableDebugHUD: debugHUDCheckbox?.checked ?? false,
       enableFog: true,
       enableShadows: true,
@@ -118,7 +131,8 @@ export class GameSettingsUI {
     SettingsManager.save(newSettings)
     SettingsManager.applyToConfig(newSettings)
     this.host.debugHUDEnabledInSettings = newSettings.enableDebugHUD
-    this.applyScanlineWeight(newSettings.scanlineWeight)
+    this.applyScanlineEnabled(scanlineEnabled)
+    this.applyScanlineIntensityMultiplier(scanlineIntensityMultiplier)
     console.log('[Accessibility] Settings saved:', newSettings)
 
     if (this.host.debugHUDEnabledInSettings && this.host.isDebugHUDAvailable()) {
@@ -154,21 +168,34 @@ export class GameSettingsUI {
   }
 
   private setupScanlineSliderLiveUpdate(): void {
-    const scanlineSlider = document.getElementById('scanline-intensity') as HTMLInputElement | null
-    if (!scanlineSlider) return
+    const scanlineMultiplierSlider = document.getElementById('scanline-intensity') as HTMLInputElement | null
+    if (!scanlineMultiplierSlider) return
 
-    scanlineSlider.addEventListener('input', () => {
-      const value = Math.min(1, Math.max(0, parseFloat(scanlineSlider.value || '1')))
-      this.applyScanlineWeight(value)
-      const span = scanlineSlider.parentElement?.querySelector('span')
+    scanlineMultiplierSlider.addEventListener('input', () => {
+      const value = Math.min(1.5, Math.max(0, parseFloat(scanlineMultiplierSlider.value || '1')))
+      this.applyScanlineIntensityMultiplier(value)
+      const span = scanlineMultiplierSlider.parentElement?.querySelector('span')
       if (span) span.setAttribute('data-value', String(value))
     })
   }
 
-  private applyScanlineWeight(value: number): void {
-    this.host.scanlineWeight = value
-    this.host.setScanlineWeight?.(value)
-    this.host.mapManager?.setScanlineWeight(value)
+  private setupScanlineToggleLiveUpdate(): void {
+    const scanlineEnabledToggle = document.getElementById('scanline-enabled') as HTMLInputElement | null
+    if (!scanlineEnabledToggle) return
+
+    scanlineEnabledToggle.addEventListener('change', () => {
+      this.applyScanlineEnabled(scanlineEnabledToggle.checked)
+    })
+  }
+
+  private applyScanlineEnabled(enabled: boolean): void {
+    this.host.scanlineEnabled = enabled
+    this.host.setScanlineEnabled?.(enabled)
+  }
+
+  private applyScanlineIntensityMultiplier(multiplier: number): void {
+    this.host.setScanlineIntensityMultiplier?.(multiplier)
+    this.host.mapManager?.setScanlineWeight(multiplier)
   }
 
   updateLatencyDisplay(inputManager?: { getLatencyReport: () => { avg: number; p95: number } | null }): void {

@@ -42,6 +42,7 @@ import {
   GameObjects,
   BallManager,
   ZoneTriggerSystem,
+  SettingsManager,
 } from '../game-elements'
 import { BallStackVisual } from '../game-elements/ball-stack-visual'
 import { CabinetLighting } from '../effects/cabinet-lighting'
@@ -110,6 +111,10 @@ export class GameSystemsInitializer {
       this.game.display.subscribeToEvents(this.game.eventBus)
       this.game.display.setEffectsSystem(this.game.effects)
       this.game.stateManager.setDisplaySystem(this.game.display)
+      // Apply persisted scanline settings now that the display system exists
+      const initialSettings = SettingsManager.load()
+      this.game.display.setPlayerScanlineEnabled(initialSettings.scanlineEnabled)
+      this.game.display.setScanlineIntensityMultiplier(initialSettings.scanlineIntensityMultiplier)
 
       this.game.cabinetLighting = new CabinetLighting(scene, {
         enableEdgeLighting: true,

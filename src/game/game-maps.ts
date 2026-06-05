@@ -44,7 +44,7 @@ export class TableMapManager {
     this.scene = scene
     this.config = config
     this.lcdTableState = new LCDTableState()
-    this.scanlineWeight = SettingsManager.load().scanlineWeight
+    this.scanlineWeight = SettingsManager.load().scanlineIntensityMultiplier
   }
 
   setBloomPipeline(): void {
