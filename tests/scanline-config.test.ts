@@ -10,6 +10,9 @@ describe('scanline configuration source of truth', () => {
     expect(CRT_PRESETS.RETRO.scanlineIntensity).toBeGreaterThanOrEqual(0)
     expect(CRT_PRESETS.RETRO.scanlineIntensity).toBeGreaterThanOrEqual(CRT_PRESETS.STORY.scanlineIntensity)
     expect(CRT_PRESETS.RETRO.scanlineIntensity).toBeGreaterThanOrEqual(CRT_PRESETS.MODERN_LCD.scanlineIntensity)
+    // SUBTLE sits between MODERN_LCD and STORY
+    expect(CRT_PRESETS.SUBTLE.scanlineIntensity).toBeGreaterThanOrEqual(CRT_PRESETS.MODERN_LCD.scanlineIntensity)
+    expect(CRT_PRESETS.STORY.scanlineIntensity).toBeGreaterThanOrEqual(CRT_PRESETS.SUBTLE.scanlineIntensity)
   })
 
   it('includes an OFF preset with no CRT contribution', () => {
@@ -37,7 +40,7 @@ describe('scanline dimmer math', () => {
     }
   })
 
-  it('returns the preset base at weight 1 and full accessibility', () => {
+  it('returns the preset base at weight 1 and full accessibility ceiling', () => {
     expect(computeEffectiveScanlineIntensity(CRT_PRESETS.MODERN_LCD.scanlineIntensity, 1, 1))
       .toBe(CRT_PRESETS.MODERN_LCD.scanlineIntensity)
     expect(computeEffectiveScanlineIntensity(CRT_PRESETS.STORY.scanlineIntensity, 1, 1))
@@ -46,8 +49,34 @@ describe('scanline dimmer math', () => {
       .toBe(CRT_PRESETS.RETRO.scanlineIntensity)
   })
 
-  it('forces zero when accessibility factor is zero', () => {
+  it('forces zero when accessibility ceiling is zero', () => {
     expect(computeEffectiveScanlineIntensity(CRT_PRESETS.RETRO.scanlineIntensity, 1, 0)).toBe(0)
     expect(computeEffectiveScanlineIntensity(CRT_PRESETS.STORY.scanlineIntensity, 0.5, 0)).toBe(0)
+  })
+
+  it('accessibility ceiling caps heavy presets without crushing gentle ones', () => {
+    const ceiling = 0.25
+    // RETRO (0.90) is capped at the ceiling
+    expect(computeEffectiveScanlineIntensity(CRT_PRESETS.RETRO.scanlineIntensity, 1, ceiling))
+      .toBe(ceiling)
+    // MODERN_LCD (0.15) is below the ceiling — passes through unchanged
+    expect(computeEffectiveScanlineIntensity(CRT_PRESETS.MODERN_LCD.scanlineIntensity, 1, ceiling))
+      .toBe(CRT_PRESETS.MODERN_LCD.scanlineIntensity)
+    // SUBTLE (0.30) is just above the ceiling — gets capped
+    expect(computeEffectiveScanlineIntensity(CRT_PRESETS.SUBTLE.scanlineIntensity, 1, ceiling))
+      .toBe(ceiling)
+  })
+
+  it('user multiplier scales proportionally across presets', () => {
+    const multiplier = 0.5
+    expect(computeEffectiveScanlineIntensity(CRT_PRESETS.RETRO.scanlineIntensity, multiplier, 1))
+      .toBeCloseTo(CRT_PRESETS.RETRO.scanlineIntensity * multiplier, 10)
+    expect(computeEffectiveScanlineIntensity(CRT_PRESETS.MODERN_LCD.scanlineIntensity, multiplier, 1))
+      .toBeCloseTo(CRT_PRESETS.MODERN_LCD.scanlineIntensity * multiplier, 10)
+  })
+
+  it('clamps result to [0, 1] for out-of-range inputs', () => {
+    expect(computeEffectiveScanlineIntensity(2.0, 2.0, 1)).toBe(1)
+    expect(computeEffectiveScanlineIntensity(-1.0, 1, 1)).toBe(0)
   })
 })

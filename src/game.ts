@@ -285,6 +285,7 @@ export class Game {
 
       const settings = SettingsManager.load()
       this.debugHUDEnabledInSettings = settings.enableDebugHUD
+      this.scanlineEnabled = settings.scanlineEnabled
       SettingsManager.applyToConfig(settings)
       this.accessibility = detectAccessibility({
         reducedMotion: settings.reducedMotion,
@@ -582,6 +583,16 @@ export class Game {
   cycleTableMap(): void { this.mapCabinet.cycleTableMap() }
   switchScenario(scenarioId: string): void { this.scenarioManager.switchScenario(scenarioId) }
   cycleScenario(direction: 1 | -1 = 1): void { this.scenarioManager.cycleScenario(direction) }
+
+  // SettingsUIHost scanline API
+  scanlineEnabled = true
+  setScanlineEnabled(enabled: boolean): void {
+    this.scanlineEnabled = enabled
+    this.display?.setPlayerScanlineEnabled(enabled)
+  }
+  setScanlineIntensityMultiplier(multiplier: number): void {
+    this.display?.setScanlineIntensityMultiplier(multiplier)
+  }
 
   // --------------------------------------------------------------------------
   // Wrapper methods (called by helpers)

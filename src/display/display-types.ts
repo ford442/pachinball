@@ -90,7 +90,7 @@ export type CRTPresetName = 'MODERN_LCD' | 'STORY' | 'RETRO' | 'SUBTLE' | 'OFF'
 /** Default CRT preset for story mode */
 export const CRT_PRESETS: Record<CRTPresetName, CRTEffectParams> = {
   MODERN_LCD: {
-    scanlineIntensity: 0.05,
+    scanlineIntensity: 0.15,
     curvature: 0.0,
     vignette: 0.1,
     chromaticAberration: 0.0,
@@ -99,7 +99,7 @@ export const CRT_PRESETS: Record<CRTPresetName, CRTEffectParams> = {
     flicker: 0.0,
   },
   STORY: {
-    scanlineIntensity: 0.3,
+    scanlineIntensity: 0.55,
     curvature: 0.02,
     vignette: 0.4,
     chromaticAberration: 0.5,
@@ -108,7 +108,7 @@ export const CRT_PRESETS: Record<CRTPresetName, CRTEffectParams> = {
     flicker: 0.05,
   },
   RETRO: {
-    scanlineIntensity: 0.5,
+    scanlineIntensity: 0.90,
     curvature: 0.05,
     vignette: 0.6,
     chromaticAberration: 0.8,
@@ -117,7 +117,7 @@ export const CRT_PRESETS: Record<CRTPresetName, CRTEffectParams> = {
     flicker: 0.1,
   },
   SUBTLE: {
-    scanlineIntensity: 0.15,
+    scanlineIntensity: 0.30,
     curvature: 0.01,
     vignette: 0.2,
     chromaticAberration: 0.3,

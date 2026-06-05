@@ -71,8 +71,9 @@ export class DisplayShaderLayer {
 
   private time = 0
   private crtEffectActive = false
+  private playerScanlineEnabled = true
   private crtEffectParams: CRTEffectParams = CRT_PRESETS.MODERN_LCD
-  private scanlineWeight = 1.0
+  private scanlineIntensityMultiplier = 1.0
   private accessibilityScanlineFactor = 1.0
   private warnedMissingScanlineUniform = false
 
@@ -195,7 +196,7 @@ export class DisplayShaderLayer {
       const p = this.crtEffectParams
       const scanlineIntensity = computeEffectiveScanlineIntensity(
         p.scanlineIntensity,
-        this.scanlineWeight,
+        this.scanlineIntensityMultiplier,
         this.accessibilityScanlineFactor
       )
 
@@ -209,8 +210,8 @@ export class DisplayShaderLayer {
       effect.setFloat('uFlicker', p.flicker)
     }
 
-    // Attach only if CRT was already requested active
-    if (this.crtEffectActive) {
+    // Attach only if CRT was already requested active and player has it enabled
+    if (this.crtEffectActive && this.playerScanlineEnabled) {
       camera.attachPostProcess(this.crtPostProcess)
       this.crtAttached = true
     } else {
@@ -354,21 +355,34 @@ export class DisplayShaderLayer {
   }
 
   /**
-   * Enable or disable the CRT PostProcess.
+   * Enable or disable the CRT PostProcess (game-system control).
    */
   setCRTEffectEnabled(enabled: boolean): void {
     if (this.crtEffectActive === enabled) return
     this.crtEffectActive = enabled
+    this.syncCRTAttachment()
+  }
 
+  private syncCRTAttachment(): void {
     if (!this.crtPostProcess) return
-
-    if (enabled && !this.crtAttached) {
+    const shouldAttach = this.crtEffectActive && this.playerScanlineEnabled
+    if (shouldAttach && !this.crtAttached) {
       this.attachPP(this.crtPostProcess)
       this.crtAttached = true
-    } else if (!enabled && this.crtAttached) {
+    } else if (!shouldAttach && this.crtAttached) {
       this.detachPP(this.crtPostProcess)
       this.crtAttached = false
     }
+  }
+
+  /**
+   * Player-facing toggle — gates whether the CRT pass runs at all.
+   * Works independently of the active preset (even OFF-preset → pass is skipped).
+   */
+  setPlayerScanlineEnabled(enabled: boolean): void {
+    if (this.playerScanlineEnabled === enabled) return
+    this.playerScanlineEnabled = enabled
+    this.syncCRTAttachment()
   }
 
   /**
@@ -380,7 +394,15 @@ export class DisplayShaderLayer {
   }
 
   setScanlineWeight(weight: number): void {
-    this.scanlineWeight = Math.min(1, Math.max(0, weight))
+    // Legacy shim — delegates to setScanlineIntensityMultiplier
+    this.setScanlineIntensityMultiplier(weight)
+  }
+
+  /**
+   * Set the global user intensity multiplier (range 0.0–1.5, default 1.0).
+   */
+  setScanlineIntensityMultiplier(multiplier: number): void {
+    this.scanlineIntensityMultiplier = Math.min(1.5, Math.max(0, multiplier))
   }
 
   setAccessibilityScanlineFactor(factor: number): void {

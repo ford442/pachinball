@@ -8,6 +8,8 @@ export interface GameSettings {
   enableFog: boolean
   enableShadows: boolean
   scanlineWeight: number
+  scanlineEnabled: boolean
+  scanlineIntensityMultiplier: number
   enableDebugHUD: boolean
   masterVolume: number
   musicVolume: number
@@ -27,6 +29,8 @@ export class SettingsManager {
       enableFog: true,
       enableShadows: true,
       scanlineWeight: 1.0,
+      scanlineEnabled: true,
+      scanlineIntensityMultiplier: 1.0,
       enableDebugHUD: false,
       masterVolume: 0.8,
       musicVolume: 0.6,
@@ -44,7 +48,23 @@ export class SettingsManager {
             : typeof parsed.scanlineIntensity === 'number'
               ? parsed.scanlineIntensity
               : defaults.scanlineWeight
-        return { ...defaults, ...parsed, scanlineWeight: migratedScanlineWeight }
+        const migratedScanlineIntensityMultiplier =
+          typeof parsed.scanlineIntensityMultiplier === 'number'
+            ? parsed.scanlineIntensityMultiplier
+            : typeof parsed.scanlineWeight === 'number'
+              ? parsed.scanlineWeight
+              : defaults.scanlineIntensityMultiplier
+        const scanlineEnabled =
+          typeof parsed.scanlineEnabled === 'boolean'
+            ? parsed.scanlineEnabled
+            : defaults.scanlineEnabled
+        return {
+          ...defaults,
+          ...parsed,
+          scanlineWeight: migratedScanlineWeight,
+          scanlineIntensityMultiplier: migratedScanlineIntensityMultiplier,
+          scanlineEnabled,
+        }
       }
     } catch {
       // Ignore localStorage errors
