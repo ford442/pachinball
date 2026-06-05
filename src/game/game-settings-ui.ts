@@ -110,12 +110,13 @@ export class GameSettingsUI {
     const scanlineIntensityMultiplier = Math.min(1.5, Math.max(0, parseFloat(scanlineMultiplierSlider?.value ?? '1')))
     const scanlineEnabled = scanlineEnabledToggle?.checked ?? true
 
+    const currentSettings = SettingsManager.load()
     const newSettings = {
       reducedMotion: reducedMotionCheckbox?.checked ?? false,
       photosensitiveMode: photosensitiveCheckbox?.checked ?? false,
       shakeIntensity: parseFloat(shakeSlider?.value ?? '0.08'),
-      qualityPreset: SettingsManager.load().qualityPreset,
-      scanlineWeight: SettingsManager.load().scanlineWeight,
+      qualityPreset: currentSettings.qualityPreset,
+      scanlineWeight: currentSettings.scanlineWeight,
       scanlineEnabled,
       scanlineIntensityMultiplier,
       enableDebugHUD: debugHUDCheckbox?.checked ?? false,
