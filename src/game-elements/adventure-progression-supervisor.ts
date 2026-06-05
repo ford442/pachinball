@@ -23,6 +23,28 @@ export interface PortalSpatialContext {
 
 type PortalKind = 'success' | 'timeout'
 
+/**
+ * Owns the per-track timer, reward multiplier, and portal lifecycle for the
+ * currently running campaign stage.
+ *
+ * ## Single source of truth — why there is no duplicate "current track" state
+ *
+ * AdventureTrackProgression is the authoritative record of which track the
+ * campaign is on, which tracks are unlocked, and which are completed.  This
+ * supervisor deliberately does NOT maintain a parallel "current track ID" field
+ * that outlives a single track's execution window.  `activeTrackId` is a local
+ * working copy that exists only while a track is in flight and is cleared in
+ * `reset()`.  All track lookups go through the `progression` instance injected
+ * at construction time.
+ *
+ * Keeping a second long-lived copy would create dual-state: two places that
+ * each claim to know the current track and that can silently diverge on any
+ * code path that updates one but not the other.  The previous architecture
+ * had exactly this divergence — AdventureMode.currentZone and
+ * AdventureTrackProgression.currentTrack were updated independently and could
+ * go out of sync after a portal jump.  The fix was to make progression the
+ * single authority and have geometry/physics always derive from it.
+ */
 export class AdventureProgressionSupervisor {
   private activeTrackId: string | null = null
   private activeTrackInfo: TrackInfo | null = null

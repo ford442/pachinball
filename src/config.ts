@@ -280,12 +280,27 @@ export interface GameTuning {
     bonusTallyComboPeakBase: number
     bonusTallyAnimationMs: number
   }
+  /**
+   * Gold ball streak bonus.  Consecutive collections within `windowSeconds`
+   * earn an escalating multiplier on top of each ball's base points.
+   * See GoldBallStreakSystem for implementation.
+   */
+  goldBall: {
+    streakWindowSeconds: number
+    streakPerBallBonus: number
+    streakMaxMultiplier: number
+  }
 }
 
 export const GAME_TUNING = {
   scoring: {
-    bumperHitBase: 10,
-    targetHitBase: 100,
+    // 100 pts per bumper hit at 1× combo.  At ~3 hits/sec average, the player
+    // earns ~300 pts/sec base — climbing to ~900 pts/sec at 3× combo.  This
+    // puts NEON_HELIX's 50 000-point goal comfortably within its 120-second
+    // window while still requiring consistent play.  Adjust this value first
+    // if tracks feel too easy or too hard.
+    bumperHitBase: 100,
+    targetHitBase: 500,
     jackpotBonus: 100000,
     adventureEndBonus: 5000,
   },
@@ -332,6 +347,12 @@ export const GAME_TUNING = {
     ballSaveGraceSeconds: 7,
     bonusTallyComboPeakBase: 250,
     bonusTallyAnimationMs: 1500,
+  },
+  goldBall: {
+    // Second consecutive gold ball within 5 s earns 1.5×, third 2×, etc., capped at 4×.
+    streakWindowSeconds: 5,
+    streakPerBallBonus: 0.5,
+    streakMaxMultiplier: 4,
   },
 } as const satisfies GameTuning
 

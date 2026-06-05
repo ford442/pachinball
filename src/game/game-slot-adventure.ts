@@ -10,6 +10,7 @@ import type { GameObjects } from '../objects'
 import type { AdventureMode } from '../adventure'
 import { AdventureTrackType } from '../adventure'
 import type { AdventureTrackProgression } from '../game-elements/adventure-track-progression'
+import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
 import { getScoringBreakdownManager, getTrackThemingSystem } from '../game-elements'
 import type { EventBus } from './event-bus'
 import type { AdventureCinematicTriggers } from '../game-elements/adventure-cinematic-triggers'
@@ -156,7 +157,10 @@ export class GameSlotAdventure {
   }
 
   getTrackDisplayName(track: AdventureTrackType): string {
-    return track.replace(/_/g, ' ')
+    // Prefer the human-readable name from the campaign catalog; fall back to
+    // a simple underscore-to-space conversion for tracks outside the catalog
+    // (extended mode tracks that are not part of the 6-stage A/B campaign).
+    return TRACK_CATALOG[track]?.name ?? track.replace(/_/g, ' ')
   }
 
   cycleAdventureTrack(direction: number): void {
@@ -202,6 +206,20 @@ export class GameSlotAdventure {
     }
   }
 
+  /**
+   * Switch to a new track while adventure mode stays live.
+   *
+   * This is the **single authority** for in-session track switches.  Campaign
+   * state is owned exclusively by AdventureTrackProgression; AdventureMode.currentZone
+   * is always set from that progression, never managed in parallel.  We deliberately
+   * avoid a second "current track" field here so that progression and geometry can
+   * never diverge (dual-state would require both to stay in sync on every code path,
+   * which is error-prone and was the root cause of the original rebuild gap).
+   *
+   * Called by the onTrackAdvanced callback wired in GameSystemsInitializer, which
+   * receives the next track ID straight from AdventureTrackProgression after a
+   * portal entry finalises the completed track.
+   */
   switchToTrack(trackId: string): void {
     if (!this.host.adventureMode || !this.host.scene) return
     if (!this.host.adventureMode.isActive()) return
@@ -214,7 +232,17 @@ export class GameSlotAdventure {
 
     const success = this.host.adventureMode.switchToTrack(trackType)
     if (!success) return
+    // rebuildHandleCaches() is called exactly once here.  The onTrackAdvanced
+    // callback in GameSystemsInitializer must NOT call it again.
     this.host.physicsController?.rebuildHandleCaches()
+
+    // Keep the manual-cycling cursor in sync so cycleAdventureTrack() starts
+    // from the correct position after a portal jump, not a stale pre-jump value.
+    const idx = GameSlotAdventure.TRACK_ORDER.indexOf(trackType)
+    if (idx !== -1) {
+      this.nextAdventureTrack =
+        GameSlotAdventure.TRACK_ORDER[(idx + 1) % GameSlotAdventure.TRACK_ORDER.length]
+    }
 
     const trackName = this.getTrackDisplayName(trackType)
 
@@ -222,7 +250,9 @@ export class GameSlotAdventure {
     this.host.adventureCinematicTriggers?.onTrackStart(trackName)
     this.host.adventureUIStateManager?.reset()
 
-    // Re-initialize goal tracking and supervisor timer for the new track
+    // Re-initialize goal tracking and supervisor timer for the new track.
+    // startTrack() is safe here because AdventureProgressionSupervisor.reset()
+    // was already called inside onPortalEntered() before onTrackAdvanced fires.
     this.host.adventureGoalTracker?.initializeTrack(trackType)
     this.host.adventureProgressionSupervisor?.startTrack(trackType, this.host.score)
 

@@ -47,11 +47,12 @@ describe('TRACK_CATALOG modeType alternation', () => {
   })
 
   it('uses the expected mode/time/penalty/recommendedScore values', () => {
+    // Scores calibrated for bumperHitBase=100; see config.ts GAME_TUNING.scoring.
     expect(TRACK_CATALOG['NEON_HELIX']).toMatchObject({ modeType: 'EXTENDED_MAP', timeLimitSeconds: 120, timeoutPenaltyMultiplier: 0.55, recommendedScore: 50000 })
-    expect(TRACK_CATALOG['CYBER_CORE']).toMatchObject({ modeType: 'STATIONARY_TABLE', timeLimitSeconds: 90, timeoutPenaltyMultiplier: 0.45, recommendedScore: 75000 })
-    expect(TRACK_CATALOG['QUANTUM_GRID']).toMatchObject({ modeType: 'EXTENDED_MAP', timeLimitSeconds: 150, timeoutPenaltyMultiplier: 0.50, recommendedScore: 100000 })
-    expect(TRACK_CATALOG['PACHINKO_SPIRE']).toMatchObject({ modeType: 'STATIONARY_TABLE', timeLimitSeconds: 75, timeoutPenaltyMultiplier: 0.40, recommendedScore: 65000 })
-    expect(TRACK_CATALOG['SINGULARITY_WELL']).toMatchObject({ modeType: 'EXTENDED_MAP', timeLimitSeconds: 180, timeoutPenaltyMultiplier: 0.35, recommendedScore: 120000 })
+    expect(TRACK_CATALOG['CYBER_CORE']).toMatchObject({ modeType: 'STATIONARY_TABLE', timeLimitSeconds: 90, timeoutPenaltyMultiplier: 0.45, recommendedScore: 45000 })
+    expect(TRACK_CATALOG['QUANTUM_GRID']).toMatchObject({ modeType: 'EXTENDED_MAP', timeLimitSeconds: 150, timeoutPenaltyMultiplier: 0.50, recommendedScore: 80000 })
+    expect(TRACK_CATALOG['PACHINKO_SPIRE']).toMatchObject({ modeType: 'STATIONARY_TABLE', timeLimitSeconds: 75, timeoutPenaltyMultiplier: 0.40, recommendedScore: 38000 })
+    expect(TRACK_CATALOG['SINGULARITY_WELL']).toMatchObject({ modeType: 'EXTENDED_MAP', timeLimitSeconds: 180, timeoutPenaltyMultiplier: 0.35, recommendedScore: 100000 })
   })
 
   it('defines at least six distinct track visual themes in catalog entries', () => {

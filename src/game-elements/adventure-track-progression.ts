@@ -60,13 +60,18 @@ export interface SerializableProgressionState {
  *   4. SINGULARITY_WELL    — A — EXTENDED_MAP
  */
 export const TRACK_CATALOG: Record<string, TrackInfo> = {
+  // Score targets are calibrated for bumperHitBase=100 (src/config.ts GAME_TUNING.scoring).
+  // Baseline: ~3 hits/sec × 100 pts × average 2× combo = ~600 pts/sec.
+  // Each target sits at ~70-80% of what a focused player can earn in the time limit,
+  // leaving headroom for gold-ball streak bonuses to feel like acceleration rather
+  // than a requirement.
   'NEON_HELIX': {
     id: 'NEON_HELIX',
     name: 'Neon Helix',
     description: 'A classic descent through spiraling neon light. Perfect for beginners.',
     difficulty: 'easy',
     modeType: 'EXTENDED_MAP',
-    recommendedScore: 50000,
+    recommendedScore: 50000,   // 600 pts/s × 120 s × ~70% = ~50 000
     timeLimitSeconds: 120,
     timeoutPenaltyMultiplier: 0.55,
     theme: 'cyber-neon',
@@ -78,7 +83,7 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     description: 'Fast-paced vertical descent through a digital core. Requires precision timing.',
     difficulty: 'medium',
     modeType: 'STATIONARY_TABLE',
-    recommendedScore: 75000,
+    recommendedScore: 45000,   // 600 pts/s × 90 s × ~83%
     timeLimitSeconds: 90,
     timeoutPenaltyMultiplier: 0.45,
     unlockedBy: 'NEON_HELIX',
@@ -91,7 +96,7 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     description: 'Navigate a complex maze of quantum pathways. The ultimate puzzle challenge.',
     difficulty: 'hard',
     modeType: 'EXTENDED_MAP',
-    recommendedScore: 100000,
+    recommendedScore: 80000,   // 600 pts/s × 150 s × ~89%
     timeLimitSeconds: 150,
     timeoutPenaltyMultiplier: 0.50,
     unlockedBy: 'CYBER_CORE',
@@ -104,7 +109,7 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     description: 'Bounce through a classic pin field tower. High-risk, high-reward gameplay.',
     difficulty: 'hard',
     modeType: 'STATIONARY_TABLE',
-    recommendedScore: 65000,
+    recommendedScore: 38000,   // 600 pts/s × 75 s × ~84%
     timeLimitSeconds: 75,
     timeoutPenaltyMultiplier: 0.40,
     unlockedBy: 'NEON_HELIX',
@@ -117,7 +122,7 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     description: 'Enter a black hole. Gravity pulls everything inward. Expert only.',
     difficulty: 'expert',
     modeType: 'EXTENDED_MAP',
-    recommendedScore: 120000,
+    recommendedScore: 100000,  // 600 pts/s × 180 s × ~93%
     timeLimitSeconds: 180,
     timeoutPenaltyMultiplier: 0.35,
     unlockedBy: 'QUANTUM_GRID',
@@ -130,7 +135,7 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     description: 'Corrupted geometry and unstable lanes demand quick reflexes and reroutes.',
     difficulty: 'expert',
     modeType: 'STATIONARY_TABLE',
-    recommendedScore: 110000,
+    recommendedScore: 65000,   // 600 pts/s × 105 s × ~103% — needs gold ball streak
     timeLimitSeconds: 105,
     timeoutPenaltyMultiplier: 0.42,
     unlockedBy: 'SINGULARITY_WELL',

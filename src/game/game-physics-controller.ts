@@ -30,6 +30,7 @@ import type { QuantumTunnelFeeder } from '../game-elements/quantum-tunnel-feeder
 import { ComboSystem, getScoringBreakdownManager, type ComboHitType, type InputFrame } from '../game-elements'
 import { ComboMultiplierSystem } from '../game-elements/combo-multiplier-system'
 import { BonusTallySystem } from '../game-elements/bonus-tally-system'
+import { GoldBallStreakSystem } from '../game-elements/gold-ball-streak-system'
 import type { SpinnerBumperBuilder, SpinnerBumperVisual, BallTrapBuilder, BallTrapState, LauncherBuilder, LauncherState, MovingGateBuilder, MovingGateState } from '../objects'
 import { BallType, GAME_TUNING, GameConfig, PhysicsConfig } from '../config'
 import { DisplayState } from '../game-elements'
@@ -133,10 +134,16 @@ export class GamePhysicsController {
   private readonly comboSystem: ComboSystem
   private readonly comboMultiplierSystem: ComboMultiplierSystem
   private readonly bonusTallySystem: BonusTallySystem
+  private readonly goldBallStreakSystem: GoldBallStreakSystem
   private readonly scoringBreakdown = getScoringBreakdownManager()
 
   constructor(host: PhysicsHost) {
     this.host = host
+    this.goldBallStreakSystem = new GoldBallStreakSystem({
+      windowSeconds: GAME_TUNING.goldBall.streakWindowSeconds,
+      perBallBonus: GAME_TUNING.goldBall.streakPerBallBonus,
+      maxMultiplier: GAME_TUNING.goldBall.streakMaxMultiplier,
+    })
     this.comboSystem = new ComboSystem({
       expirySeconds: GAME_TUNING.combo.expirySeconds,
       chainWindowSeconds: GAME_TUNING.combo.chainWindowSeconds,
@@ -1037,9 +1044,25 @@ export class GamePhysicsController {
       this.host.goldBallStack.push({ type: collected.type, timestamp: performance.now() })
       this.host.sessionGoldBalls++
       const collectPos = new Vector3(body.translation().x, body.translation().y, body.translation().z)
-      const awardedPoints = this.awardScore(collected.points, 'gold-ball-collect', collectPos)
-      this.bonusTallySystem.recordScore('gold-ball', collected.points)
-      this.host.showMessage(`+${awardedPoints}`, 1500)
+
+      // Apply the gold ball streak multiplier before scoring so the point
+      // total already reflects it when spawnFloatingNumber() shows the value.
+      const streak = this.goldBallStreakSystem.registerCollect(this.nowSeconds())
+      const streakAdjustedBase = Math.round(collected.points * streak.multiplier)
+      const awardedPoints = this.awardScore(streakAdjustedBase, 'gold-ball-collect', collectPos)
+      this.bonusTallySystem.recordScore('gold-ball', streakAdjustedBase)
+
+      if (streak.isStreak) {
+        this.host.eventBus.emit('gold-ball:streak', {
+          streakCount: streak.streakCount,
+          multiplier: streak.multiplier,
+          bonusPoints: awardedPoints,
+          ballType: collected.type,
+        })
+        this.host.showMessage(`STREAK x${streak.multiplier.toFixed(1)} +${awardedPoints}`, 1800)
+      } else {
+        this.host.showMessage(`+${awardedPoints}`, 1500)
+      }
 
       if (GAME_TUNING.multiball.triggerGoldThresholds.includes(this.host.sessionGoldBalls)) {
         this.startChainMultiball('gold-threshold', 2)
@@ -1090,10 +1113,12 @@ export class GamePhysicsController {
             this.host.eventBus.emit('sound:play', { soundKey: 'ball-save', volume: 1.0 })
             // Reset combo multiplier but keep bonus tally for same ball continuation
             this.comboMultiplierSystem.reset()
+            this.goldBallStreakSystem.reset()
             this.host.resetBall()
           } else {
-            // Genuine drain — sweep bonus tally
+            // Genuine drain — sweep bonus tally and reset all per-ball accumulators
             this.sweepBonusTally()
+            this.goldBallStreakSystem.reset()
             this.host.lives--
             if (this.host.lives > 0) {
               this.host.resetBall()

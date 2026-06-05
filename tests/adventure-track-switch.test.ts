@@ -366,7 +366,7 @@ describe('GameSlotAdventure.switchToTrack', () => {
 
     // (b) Cinematic trigger called once
     expect(onTrackStart).toHaveBeenCalledOnce()
-    expect(onTrackStart).toHaveBeenCalledWith('CYBER CORE')
+    expect(onTrackStart).toHaveBeenCalledWith('Cyber Core')
 
     // (c) UI reset called once
     expect(uiReset).toHaveBeenCalledOnce()
@@ -378,8 +378,8 @@ describe('GameSlotAdventure.switchToTrack', () => {
     expect(supervisorStart).toHaveBeenCalledWith('CYBER_CORE', 42_000)
 
     // Display updated
-    expect(host.display.setTrackInfo).toHaveBeenCalledWith('CYBER CORE')
-    expect(host.display.setStoryText).toHaveBeenCalledWith('ENTERING: CYBER CORE')
+    expect(host.display.setTrackInfo).toHaveBeenCalledWith('Cyber Core')
+    expect(host.display.setStoryText).toHaveBeenCalledWith('ENTERING: Cyber Core')
   })
 
   it('no-ops when adventure mode is inactive', () => {

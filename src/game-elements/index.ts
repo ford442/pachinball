@@ -22,6 +22,7 @@ export { ComboSystem, type ComboHitType, type ComboSystemConfig, type ComboNamed
 export { ComboMultiplierSystem, type ComboMultiplierConfig } from './combo-multiplier-system'
 export { BallSaveSystem, type BallSaveConfig } from './ball-save-system'
 export { BonusTallySystem, type BonusTallyConfig } from './bonus-tally-system'
+export { GoldBallStreakSystem, type GoldBallStreakConfig, type GoldBallStreakResult } from './gold-ball-streak-system'
 // Adventure mode re-exported from new location
 export { AdventureMode, AdventureTrackType, CAMERA_PRESETS, type CameraPreset } from '../adventure'
 export {

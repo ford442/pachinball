@@ -256,6 +256,18 @@ export interface PachinballEventMap {
     comboCount: number
   }
 
+  // Gold ball streak events
+  'gold-ball:streak': {
+    /** Running count of consecutive gold balls collected in this streak (≥ 2). */
+    streakCount: number
+    /** Streak multiplier applied to this ball's base points. */
+    multiplier: number
+    /** Final points awarded after applying the streak multiplier. */
+    bonusPoints: number
+    /** Ball type that triggered the streak update. */
+    ballType: string
+  }
+
   // Ball save events
   'ball:launched': void
   'ball:save:triggered': {

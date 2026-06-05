@@ -256,10 +256,11 @@ export class GameSystemsInitializer {
             this.game.stateManager.isPlaying(),
           // When the campaign advances to the next track, tear down the old
           // playfield and build the new one via the slot-adventure orchestrator.
+          // switchToTrack() calls rebuildHandleCaches() internally; do NOT call
+          // it again here — a double rebuild mid-frame corrupts handle ordering.
           onTrackAdvanced: (nextTrackId) => {
             if (nextTrackId) {
               this.game.slotAdventure.switchToTrack(nextTrackId)
-              this.game.physicsController.rebuildHandleCaches()
             }
           },
         },
@@ -350,6 +351,13 @@ export class GameSystemsInitializer {
             // The supervisor's onTrackAdvanced callback (wired above) will drive
             // teardown of the old track, build of the new track, cinematic start,
             // and UI reset via slotAdventure.switchToTrack().
+            //
+            // Portal sensor unregistration is handled by the PORTAL_DEACTIVATED
+            // case below.  During the onPortalEntered() call chain, switchToTrack()
+            // → adventureMode.switchToTrack() → deactivateExitPortal() fires
+            // PORTAL_DEACTIVATED with the valid handle.  Calling getPortalSensorHandle()
+            // here would already return -1 (portal nulled mid-chain), so a second
+            // unregisterPortalSensor call would always be a no-op.
             this.game.adventureProgressionSupervisor?.onPortalEntered(
               this.game.score,
               this.game.sessionGoldBalls,
@@ -358,10 +366,6 @@ export class GameSystemsInitializer {
                 position: portalData.position,
               },
             )
-            // Unregister the portal sensor so the collision dispatcher stops
-            // silently skipping events for this (now inactive) body handle.
-            const enteredHandle = this.game.adventureMode?.getPortalSensorHandle() ?? -1
-            this.game.physicsController?.unregisterPortalSensor(enteredHandle)
             break
           }
           case 'PORTAL_DEACTIVATED': {
