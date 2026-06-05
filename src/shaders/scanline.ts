@@ -3,9 +3,11 @@ export const SCANLINE_UNIFORM = 'uScanlineIntensity' as const
 export function computeEffectiveScanlineIntensity(
   presetBase: number,
   scanlineWeight: number,
-  accessibilityFactor: number
+  accessibilityCeiling: number
 ): number {
-  return Math.min(1, Math.max(0, presetBase * scanlineWeight * accessibilityFactor))
+  // accessibilityCeiling is a hard cap, not a multiplier: reduced-motion caps heavy
+  // presets without crushing already-gentle ones (e.g. MODERN_LCD at 0.15 stays ~0.15).
+  return Math.min(Math.min(1, Math.max(0, presetBase * scanlineWeight)), accessibilityCeiling)
 }
 
 export const scanlinePixelShader = {

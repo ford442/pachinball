@@ -501,6 +501,14 @@ export class DisplaySystem {
     this.shaderLayer.setScanlineWeight(weight)
   }
 
+  setPlayerScanlineEnabled(enabled: boolean): void {
+    this.shaderLayer.setPlayerScanlineEnabled(enabled)
+  }
+
+  setScanlineIntensityMultiplier(multiplier: number): void {
+    this.shaderLayer.setScanlineIntensityMultiplier(multiplier)
+  }
+
   /**
    * Load and play a story video from URL
    */

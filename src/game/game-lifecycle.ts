@@ -236,7 +236,7 @@ export class GameLifecycle {
     return {
       masterVolume: settings.masterVolume,
       shakeEnabled: settings.shakeIntensity > 0.001,
-      scanlinesEnabled: settings.scanlineWeight > 0.001,
+      scanlinesEnabled: settings.scanlineEnabled,
       qualityPreset: settings.qualityPreset,
       reducedMotion: settings.reducedMotion,
       photosensitiveMode: settings.photosensitiveMode,
@@ -256,7 +256,7 @@ export class GameLifecycle {
       ...current,
       masterVolume: Math.max(0, Math.min(1, next.masterVolume)),
       shakeIntensity: next.shakeEnabled ? Math.max(0.01, current.shakeIntensity || 0.08) : 0,
-      scanlineWeight: next.scanlinesEnabled ? Math.max(0.2, current.scanlineWeight || 1) : 0,
+      scanlineEnabled: next.scanlinesEnabled,
       qualityPreset: next.qualityPreset,
       reducedMotion: next.reducedMotion,
       photosensitiveMode: next.photosensitiveMode,
@@ -273,7 +273,7 @@ export class GameLifecycle {
     this.host.effects?.registerAccessibility(this.host.accessibility)
     this.host.display?.setAccessibility(this.host.accessibility)
     this.host.adventureMode?.setAccessibilityConfig(this.host.accessibility)
-    this.host.mapManager?.setScanlineWeight(updated.scanlineWeight)
+    this.host.display?.setPlayerScanlineEnabled(updated.scanlineEnabled)
     this.host.mapManager?.getLCDTableState().setPhotosensitiveMode(updated.photosensitiveMode)
 
     this.host.soundSystem.setMasterVolume(updated.masterVolume)
