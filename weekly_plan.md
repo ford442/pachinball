@@ -1,8 +1,8 @@
 # Pachinball — Weekly Plan
 
 ## Today's focus
-**2026-05-29 — Fix First: Wire the adventure track-switch teardown + rebuild path**
-Last week's obstacle-lifecycle audit landed cleanly (commit `c287a31`, +16 tests) but explicitly handed off a glaring follow-up: the campaign track-switch path is a no-op for geometry. The `PORTAL_ENTERED` handler in `game-systems-init.ts:324` advances progression state (`setCurrentTrack` / `initializeTrack` / `startTrack`) and updates HUD text, but **never tears down the old track geometry/physics and never builds the new track**. Confirmed root cause: `AdventureProgressionSupervisor` is constructed at `game-systems-init.ts:244` with only an `isAdventureModeActive` callback — the `onTrackAdvanced` callback is unwired, so `advanceToNextTrack()` (supervisor L201) calls a no-op. Also documented in `.swarm-state.md`: `AdventureCinematicTriggers.onTrackStart()` is never called on switch and `AdventureUIStateManager.reset()` is never called on switch, leaving stale goal elements + skipped cinematics. Fix the orchestrator wiring so a portal jump actually rebuilds the playfield. Scope: `src/game/game-systems-init.ts`, `src/game/game-slot-adventure.ts`, `src/game-elements/adventure-progression-supervisor.ts`, `src/game-elements/adventure-mode.ts`, `src/game-elements/adventure-cinematic-triggers.ts`, `src/game-elements/adventure-ui-state-manager.ts`.
+**2026-06-04 — New Idea: Core-loop scoring & feedback cohesion pass**
+The Copilot Phase 1–4 PRs (#206–#211) physically completed the playable level loop — collision groups + contact forces, kinematic plunger launch, level/map loading + table switching + free-map test mode, and the drain/reset loop. The playfield now *works*, but the moment-to-moment **reward feedback** that turns a physics demo into a game is still thin. Today's focus: build the cohesive scoring-feedback layer on top of the now-playable loop. Three pillars — (1) a **combo/multiplier escalation** system (consecutive bumper/obstacle hits within a window ramp a live multiplier, decaying on drain or idle); (2) a **ball-save grace window** after launch (early drains within N seconds re-spawn without penalty, surfaced on the HUD/backbox); (3) an **end-of-ball bonus tally** that sweeps accumulated bonuses and feeds the backbox display + cabinet lighting. All three flow through the existing typed EventBus and DisplaySystem rather than direct calls. Scope: `src/game.ts` (scoring path), `src/game-elements/game-physics-controller.ts`, `src/game/event-bus.ts` (new event types only), `src/game-elements/ball-manager.ts` (ball-save respawn), and the backbox `DisplaySystem` consumer side. **Do not touch** the adventure/campaign orchestrator, the CRT/scanline shaders, or the cabinet-builder presets.
 
 ## Ideas
 - [done — 2026-04-30] Backbox display state synchronization — FEVER triggered (combo>=10), REACH/JACKPOT/IDLE/ADVENTURE wired; GameStateManager drives IDLE on MENU/GAME_OVER. Full auto-sync folded into Event Bus task below.
@@ -12,13 +12,14 @@ Last week's obstacle-lifecycle audit landed cleanly (commit `c287a31`, +16 tests
 - [done — 2026-05-28] Multi-layer parallax breathing + reel spring refinement — all 4 display layers have `updateParallax()` with staggered phases (π/2, π/4, 3π/4, π); `display-core.ts` wired all four. Spring refined: stiffness=90, damping=4.0, named constants extracted.
 - [done — 2026-05-29] Adventure-mode obstacle lifecycle audit — completed in commit `c287a31` (+16 tests): fixed trap timeout release scoring, `gate:triggered` emission, goal-tracker wiring, `clearObstacleZones()`, supervisor `dispose()` alias. Two orchestrator gaps surfaced and promoted to today's Fix First focus (track-switch rebuild) + Backlog (cinematic/UI reset on switch).
 - [done — 2026-05-29] Hologram fresnel rim + FEVER pulse — landed via PR #192 (view-dependent fresnel rim glow on backbox border + gold balls during FEVER).
+- [done — 2026-06-04] Adventure track-switch teardown + rebuild wiring — `onTrackAdvanced` now wired in `game-systems-init.ts:259` → `slotAdventure.switchToTrack()` → `adventureMode.switchToTrack()` + `physicsController.rebuildHandleCaches()`, with `onTrackStart` cinematic + `adventureUIStateManager.reset()` both fired on switch (the two carried Backlog follow-ups). Portal jumps now rebuild the playfield.
+- [ ] Campaign reward surfacing — `CampaignRewardsManager` applies ball skins/cabinet themes silently; add an unlock notification/cinematic on track-completion reward grants, wired through the backbox display + cabinet lighting. (half-day) [new idea, 2026-06-04]
+- [ ] C++ WASM physics engine bring-up — the Emscripten scaffold (PR #167) is idle; wire a `localStorage` feature-flag A/B path against Rapier for the ball/bumper subset, with a parity test harness. (multi-day) [new idea, 2026-06-04]
 
 ## Backlog
-- [ ] CRT scanline enhancement — temporal flicker already in `src/shaders/scanline.ts` (line 27–30); remaining gap is per-preset intensity tuning and a UI toggle. Low priority. **(Today's Copilot issue — section B.)**
-- [ ] 8 failing `tests/input-handler.test.ts` cases (stale key-binding refs) — fix is in flight on open **draft PR #193** (`claude/eloquent-cannon-JWB2j`, post-campaign hygiene pass; also resets `adventureTrackProgression` in `startAdventureMode()`). Review + merge, don't duplicate.
-- [ ] Adventure track-switch follow-ups (after today's geometry-rebuild wiring): `AdventureCinematicTriggers.onTrackStart(trackName)` is never called on switch; `AdventureUIStateManager.reset()` is never called on switch (stale goal elements). Fold into today's Fix First if scope allows, else carry forward.
-- [ ] Verify issue #131 closed (flipper visibility regression from PR #159 — not explicitly confirmed closed; check before next Copilot PR in that area).
-- [ ] `main` is stale (last commit 2026-05-16); all recent work lives on feature/codespace branches. Decide on a consolidation/merge-to-main pass.
+- [ ] CRT scanline enhancement — temporal flicker already in `src/shaders/scanline.ts` (lines 38–40) and a `clampScanlineIntensity(presetBase, scanlineWeight, accessibilityFactor)` helper exists; remaining gap is per-preset intensity tuning and a UI toggle. Low priority. **(Today's Copilot issue — section B.)**
+- [ ] Verify issue #131 closed (flipper visibility regression from PR #159 — not explicitly confirmed closed; check before next Copilot PR in that area). Note: GitHub issue list currently returns 0 open issues, so likely closed — confirm.
+- [ ] Reconcile the Phase 1–4 "playable core loop" Copilot work (#206–#211) against the campaign/adventure systems — both now load tables/levels; confirm there is one canonical level-load path, not two divergent ones (free-map test mode vs adventure track switch).
 
 ## Next Sprint Ideas (May 9+)
 - [done — 2026-05-21] Input buffering improvements — `queueInput` / `PendingInputFrame` system fully implemented in `src/game-elements/input.ts` (lines 10, 126–206, 331–493).
@@ -26,6 +27,7 @@ Last week's obstacle-lifecycle audit landed cleanly (commit `c287a31`, +16 tests
 - [done — 2026-05-21] Backbox screen border lighting — `BackboxBorderGlow` implemented and tested (PR #138 + PR #147).
 
 ## Done
+- 2026-06-04: **Adventure track-switch teardown + rebuild wiring** (last week's Fix First) — landed. `onTrackAdvanced` callback wired in `game-systems-init.ts:259` drives `slotAdventure.switchToTrack(nextTrackId)` → `adventureMode.switchToTrack()` + `physicsController.rebuildHandleCaches()`. `switchToTrack` (`game-slot-adventure.ts:205`) also fires `adventureCinematicTriggers.onTrackStart()` and `adventureUIStateManager.reset()` (the two carried Backlog follow-ups) plus re-inits goal tracker + supervisor timer. Portal jumps now physically rebuild the playfield. Also confirmed: PR #193 merged (input-handler test fix), `origin/main` is current (stale-main backlog item resolved), GitHub shows 0 open issues / 0 open PRs.
 - 2026-05-29: **Adventure-mode obstacle lifecycle audit** — landed via commit `c287a31` ("Fix all 5 obstacle lifecycle audit bugs + add 16 targeted tests") and `20ba192` (hit-flash emissive bursts). Verified in code: `trap:ball:released` + `points:awarded` on timeout release (`object-ball-traps.ts`), `gate:triggered` emission (`object-moving-gates.ts`), goal-tracker wiring (`adventure-goal-tracker.ts:38-39`), `ZoneTriggerSystem.clearObstacleZones()` (`zone-trigger-system.ts:458`), supervisor `dispose()` alias. Full scoring-wiring matrix verified (spinner/trap/launcher/gate all → `points:awarded` → `GamePhysicsController`). Audit notes in `.swarm-state.md`. Two orchestrator gaps surfaced → today's Fix First + Backlog.
 - 2026-05-29: **Hologram fresnel rim + FEVER pulse** — PR #192 merged. View-dependent fresnel rim glow on the backbox border and on gold balls during FEVER state.
 - 2026-05-28: **Multi-layer parallax breathing + reel spring refinement** — all 4 display layers (`display-reels`, `display-image`, `display-video`, `display-shader`) have `updateParallax(time)` with staggered phase offsets (π/2, π/4, 3π/4, π) and independent periods (3.5 s, 2.0 s, 3.0 s, 4.5 s). `display-core.ts` calls all four each frame. Spring refined: stiffness 90, damping 4.0, snap thresholds named as constants.
@@ -81,10 +83,18 @@ Last week's obstacle-lifecycle audit landed cleanly (commit `c287a31`, +16 tests
 - 2026-02-25 (PR #106): Adventure track switching + dual-screen display integration.
 
 ## Last run
+Date: 2026-06-04
+Mode: New Idea
+Focus: Core-loop scoring & feedback cohesion pass (combo/multiplier escalation + ball-save grace window + end-of-ball bonus tally on top of the now-playable Phase 1–4 loop)
+Outcome: (fill in at end of day)
+
+---
+
+### Prior run — 2026-05-29
 Date: 2026-05-29
 Mode: Fix First
-Focus: Wire the adventure track-switch teardown + rebuild path (orchestrator gap surfaced by last week's obstacle-lifecycle audit)
-Outcome: (fill in at end of day)
+Focus: Wire the adventure track-switch teardown + rebuild path (orchestrator gap surfaced by the obstacle-lifecycle audit)
+Outcome: Done (verified 2026-06-04). `onTrackAdvanced` wired → `slotAdventure.switchToTrack()` tears down + rebuilds geometry, fires track-start cinematic, resets goal UI, re-inits supervisor timer. Both carried Backlog follow-ups (cinematic `onTrackStart` + UI `reset()` on switch) folded in. Separately during the week: Copilot landed Phase 1–4 "playable core loop" (#206–#211 — physics collisions, kinematic plunger, level/map loading + table switching + free-map test mode, drain/reset loop); Kimi Swarm Campaign Loop Audit (2026-06-01) added to docs + CLAUDE.md; PR #193 merged; main caught up.
 
 ---
 
