@@ -1,5 +1,6 @@
 // Main GameObjects orchestrator
 import { Scene, Vector3, Mesh, AbstractMesh, MeshBuilder, TransformNode, StandardMaterial, Color3 } from '@babylonjs/core'
+import { getMaterialLibrary } from '../materials'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
 import type { PhysicsBinding, BumperVisual } from '../game-elements/types'
@@ -145,6 +146,71 @@ export class GameObjects {
 
   getPlungerRestZ(): number {
     return this.plungerRestZ
+  }
+
+  /**
+   * Create the visible plunger rod, knob and related lane visuals synchronously
+   * as part of core gameplay (not deferred to cosmetic cabinet decoration).
+   * This ensures the launcher/plunger input controls have visible response
+   * immediately on game start.
+   */
+  createPlungerVisuals(): void {
+    const matLib = getMaterialLibrary(this.scene)
+    const chromeMat = matLib.getChromeMaterial()
+    const blackPlasticMat = matLib.getBlackPlasticMaterial()
+
+    // Shooter housing
+    const shooterHousing = MeshBuilder.CreateCylinder('shooterHousing', {
+      diameter: 1.2,
+      height: 6,
+      tessellation: 16
+    }, this.scene)
+    shooterHousing.rotation.x = Math.PI / 2
+    shooterHousing.position.set(10.5, -0.2, -10)
+    shooterHousing.material = chromeMat
+
+    // Shooter rod (the plunger) - animated by input actions
+    const shooterRod = MeshBuilder.CreateCylinder('shooterRod', {
+      diameter: 0.4,
+      height: 5,
+      tessellation: 12
+    }, this.scene)
+    shooterRod.rotation.x = Math.PI / 2
+    shooterRod.position.set(10.5, -0.2, -10)
+    const rodMat = new StandardMaterial('rodMat', this.scene)
+    rodMat.diffuseColor = new Color3(0.7, 0.7, 0.8)
+    rodMat.specularColor = new Color3(1, 1, 1)
+    shooterRod.material = rodMat
+
+    // Plunger handle (knob at the end) - animated by input actions
+    const plungerKnob = MeshBuilder.CreateCylinder('plungerKnob', {
+      diameter: 1.5,
+      height: 0.8,
+      tessellation: 16
+    }, this.scene)
+    plungerKnob.rotation.x = Math.PI / 2
+    plungerKnob.position.set(10.5, -0.2, -13)
+    plungerKnob.material = blackPlasticMat
+
+    // Shooter spring (coiled detail)
+    const spring = MeshBuilder.CreateTorus('shooterSpring', {
+      diameter: 0.8,
+      thickness: 0.15,
+      tessellation: 16
+    }, this.scene)
+    spring.position.set(10.5, -0.2, -11.5)
+    spring.rotation.x = Math.PI / 2
+    const springMat = new StandardMaterial('springMat', this.scene)
+    springMat.diffuseColor = new Color3(0.5, 0.5, 0.6)
+    spring.material = springMat
+
+    // Plunger lane guide rail
+    const laneGuide = MeshBuilder.CreateBox('laneGuide', { width: 0.3, height: 1.5, depth: 12 }, this.scene)
+    laneGuide.position.set(8.2, -0.3, -8)
+    laneGuide.material = chromeMat
+
+    // Track the meshes so they can be disposed with game objects
+    this.pinballMeshes.push(shooterHousing, shooterRod, plungerKnob, spring, laneGuide)
   }
 
   createFlippers(): { left: RAPIER.ImpulseJoint; right: RAPIER.ImpulseJoint } {

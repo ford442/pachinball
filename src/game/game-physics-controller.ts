@@ -339,7 +339,6 @@ export class GamePhysicsController {
       const mesh = binding.mesh
       if (!body || !mesh) continue
       if (body.isFixed()) continue
-      if (body.isSleeping()) continue
 
       const pos = body.translation()
       const rot = body.rotation()

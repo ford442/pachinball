@@ -177,6 +177,7 @@ export class GameSceneBuilder {
 
     gameObjects.createDeathZone()
     gameObjects.createPlungerBody()
+    gameObjects.createPlungerVisuals()
     gameObjects.createBumpers()
     effects.initBumperSparkPool(12)
     gameObjects.createSlingshots()

@@ -84,55 +84,61 @@ export class DecorationBuilder {
     // PLUNGER/SHOOTER ROD ASSEMBLY
     // ================================================================
 
-    // Shooter housing (the metal tube)
-    const shooterHousing = MeshBuilder.CreateCylinder('shooterHousing', {
-      diameter: 1.2,
-      height: 6,
-      tessellation: 16
-    }, this.scene)
-    shooterHousing.rotation.x = Math.PI / 2
-    shooterHousing.position.set(10.5, -0.2, -10)
-    shooterHousing.material = chromeMat
+    // Shooter visuals (rod, knob, housing, spring, lane guide) are created synchronously
+    // in core gameplay build via GameObjects.createPlungerVisuals() so launcher controls
+    // have immediate visible + physical response. Guard the whole block to avoid
+    // duplicates when (deferred) cabinet decoration runs later.
+    if (!this.scene.getMeshByName('shooterRod')) {
+      // Shooter housing (the metal tube)
+      const shooterHousing = MeshBuilder.CreateCylinder('shooterHousing', {
+        diameter: 1.2,
+        height: 6,
+        tessellation: 16
+      }, this.scene)
+      shooterHousing.rotation.x = Math.PI / 2
+      shooterHousing.position.set(10.5, -0.2, -10)
+      shooterHousing.material = chromeMat
 
-    // Shooter rod (the plunger)
-    const shooterRod = MeshBuilder.CreateCylinder('shooterRod', {
-      diameter: 0.4,
-      height: 5,
-      tessellation: 12
-    }, this.scene)
-    shooterRod.rotation.x = Math.PI / 2
-    shooterRod.position.set(10.5, -0.2, -10)
-    const rodMat = new StandardMaterial('rodMat', this.scene)
-    rodMat.diffuseColor = new Color3(0.7, 0.7, 0.8)
-    rodMat.specularColor = new Color3(1, 1, 1)
-    shooterRod.material = rodMat
+      // Shooter rod (the plunger)
+      const shooterRod = MeshBuilder.CreateCylinder('shooterRod', {
+        diameter: 0.4,
+        height: 5,
+        tessellation: 12
+      }, this.scene)
+      shooterRod.rotation.x = Math.PI / 2
+      shooterRod.position.set(10.5, -0.2, -10)
+      const rodMat = new StandardMaterial('rodMat', this.scene)
+      rodMat.diffuseColor = new Color3(0.7, 0.7, 0.8)
+      rodMat.specularColor = new Color3(1, 1, 1)
+      shooterRod.material = rodMat
 
-    // Plunger handle (knob at the end)
-    const plungerKnob = MeshBuilder.CreateCylinder('plungerKnob', {
-      diameter: 1.5,
-      height: 0.8,
-      tessellation: 16
-    }, this.scene)
-    plungerKnob.rotation.x = Math.PI / 2
-    plungerKnob.position.set(10.5, -0.2, -13)
-    plungerKnob.material = blackPlasticMat
+      // Plunger handle (knob at the end)
+      const plungerKnob = MeshBuilder.CreateCylinder('plungerKnob', {
+        diameter: 1.5,
+        height: 0.8,
+        tessellation: 16
+      }, this.scene)
+      plungerKnob.rotation.x = Math.PI / 2
+      plungerKnob.position.set(10.5, -0.2, -13)
+      plungerKnob.material = blackPlasticMat
 
-    // Shooter spring (coiled detail)
-    const spring = MeshBuilder.CreateTorus('shooterSpring', {
-      diameter: 0.8,
-      thickness: 0.15,
-      tessellation: 16
-    }, this.scene)
-    spring.position.set(10.5, -0.2, -11.5)
-    spring.rotation.x = Math.PI / 2
-    const springMat = new StandardMaterial('springMat', this.scene)
-    springMat.diffuseColor = new Color3(0.5, 0.5, 0.6)
-    spring.material = springMat
+      // Shooter spring (coiled detail)
+      const spring = MeshBuilder.CreateTorus('shooterSpring', {
+        diameter: 0.8,
+        thickness: 0.15,
+        tessellation: 16
+      }, this.scene)
+      spring.position.set(10.5, -0.2, -11.5)
+      spring.rotation.x = Math.PI / 2
+      const springMat = new StandardMaterial('springMat', this.scene)
+      springMat.diffuseColor = new Color3(0.5, 0.5, 0.6)
+      spring.material = springMat
 
-    // Plunger lane guide rail
-    const laneGuide = MeshBuilder.CreateBox('laneGuide', { width: 0.3, height: 1.5, depth: 12 }, this.scene)
-    laneGuide.position.set(8.2, -0.3, -8)
-    laneGuide.material = chromeMat
+      // Plunger lane guide rail
+      const laneGuide = MeshBuilder.CreateBox('laneGuide', { width: 0.3, height: 1.5, depth: 12 }, this.scene)
+      laneGuide.position.set(8.2, -0.3, -8)
+      laneGuide.material = chromeMat
+    }
 
     // Decorative wing rails
     const path = [
