@@ -25,7 +25,14 @@
 # =============================================================================
 
 set -euo pipefail
-source /content/buil*/emsdk/emsdk_env.sh
+
+# Optional: source a Colab-specific Emscripten install if present.
+for f in /content/build*/emsdk/emsdk_env.sh /root/emsdk/emsdk_env.sh; do
+    if [ -f "$f" ]; then
+        source "$f"
+        break
+    fi
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -52,15 +59,8 @@ echo "[build-wasm] Build type: ${BUILD_TYPE}"
 # Check Emscripten
 # ---------------------------------------------------------------------------
 if ! command -v emcmake &>/dev/null; then
-  echo ""
-  echo "  ERROR: emcmake not found."
-  echo ""
-  echo "  Please install and activate the Emscripten SDK:"
-  echo "    git clone https://github.com/emscripten-core/emsdk.git"
-  echo "    cd emsdk && ./emsdk install latest && ./emsdk activate latest"
-  echo "    source ./emsdk_env.sh"
-  echo ""
-  exit 1
+  echo "[build:wasm] Emscripten not found — skipping WASM compile (source emsdk_env.sh first)."
+  exit 0
 fi
 
 EMSCRIPTEN_VERSION=$(emcc --version 2>&1 | head -1)

@@ -1,0 +1,67 @@
+[console] [Bootstrap] Renderer preference: WebGL2 (forced)
+[console] No available adapters.
+[console] BJS - [10:28:45]: Babylon.js v7.54.3 - WebGL2
+[console] [.WebGL-0x24c00106200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[console] using deprecated parameters for the initialization function; pass a single object instead
+[console] [Bootstrap] Engine + Physics parallel init: 520.155029296875 ms
+[console] [StageDebug] settings_ui ⏳ start
+[console] [Accessibility] Settings loaded: [object Object] Accessibility: [object Object]
+[console] [StageDebug] settings_ui ✓ 2.5ms
+[console] [StageDebug] render_bootstrap ⏳ start
+[console] [GameRenderer] Nexus Cascade arcade environment created — cabinet now feels legendary
+[console] [GameRenderer] ResizeObserver initialized
+[console] [SceneOptimizer] Adaptive quality optimizer started (target: 55 fps)
+[console] [StageDebug] render_bootstrap ✓ 109.3ms
+[console] [StageDebug] core_helpers ⏳ start
+[console] [StageDebug] core_helpers ✓ 3.5ms
+[console] [StageDebug] state_setup ⏳ start
+[console] [GameRenderer] Canvas resized: 612x673
+[console] Failed to load resource: the server responded with a status of 404 (Not Found)
+[requestfailed] http://localhost:3001/api/api/maps: net::ERR_ABORTED
+[console] [MaterialLibrary] Environment texture loaded and cached
+[console] Failed to load resource: the server responded with a status of 404 (Not Found)
+[requestfailed] http://localhost:3001/api/api/maps: net::ERR_ABORTED
+[console] Failed to load resource: the server responded with a status of 404 (Not Found)
+[console] [apiFetch] Request failed for /api/api/maps Error: HTTP 404 Not Found
+[console] [MapSystem] Loaded 8 maps (hardcoded/cache only)
+[console] [StageDebug] state_setup ✓ 1070.0ms
+[console] [StageDebug] physics ⏳ start
+[console] [StageDebug] physics ✓ 3.7ms
+[console] [StageDebug] scene_rendering ⏳ start
+[console] [Display] Slot machine configured [object Object]
+[console] [Display] Slot event callback set
+[console] [StageDebug] scene_rendering ✓ 95.3ms
+[console] [StageDebug] scene_gameplay ⏳ start
+[console] [StageDebug] scene_gameplay ✓ 70.1ms
+[console] [StageDebug] scene_optional ⏳ start
+[console] [StageDebug] scene_optional ✓ 53.7ms
+[console] [StageDebug] scene_critical ⏳ start
+[console] [Cabinet] Built Classic Pinball cabinet
+[console] [Cabinet] Loaded preset: Classic Pinball
+[console] [GameSceneBuilder] LCD playfield created
+[console] [Decoration] Nexus Cascade premium cyber-neon decorations applied — table now feels like a high-end arcade cabinet
+[console] [GameSceneBuilder] Critical scene built: 15 flipper meshes, 1 main ball meshes
+[console] [StageDebug] scene_critical ✓ 763.6ms
+[console] [StageDebug] scene_gameplay_build ⏳ start
+[console] [StageDebug] scene_gameplay_build ✓ 288.6ms
+[console] [StageDebug] input_runtime ⏳ start
+[console] [Input] Gamepad support enabled
+[console] [StageDebug] input_runtime ✓ 3.5ms
+[console] [StageDebug] managers_postinit ⏳ start
+[console] [StageDebug] managers_postinit ✓ 2.0ms
+[console] [Bootstrap] Game init: 2485.883056640625 ms
+[console] [Bootstrap] Total initialization: 3006.22509765625 ms
+[console] [Bootstrap] Physics WASM preloading completed successfully
+[requestfailed] http://localhost:3001/api/api/maps: net::ERR_ABORTED
+[console] [SceneOptimizer] Target FPS reached – optimizations applied
+[console] [SoundSystem] Synthesized game sounds created
+[console] [SoundSystem] Core audio ready — gold ball sounds loading in background
+[console] [SoundSystem] Initialized successfully
+[console] [Game] State changed: MENU -> PLAYING
+[console] [SoundSystem] No music for map: 1
+[console] [.WebGL-0x24c00106200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[console] [StageDebug] scene_cosmetic ⏳ start
+[console] [StageDebug] scene_cosmetic ✓ 888.6ms
+[requestfailed] http://localhost:3001/sounds/gold-spawn.mp3: net::ERR_ABORTED
+[console] [.WebGL-0x24c00106200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[console] [.WebGL-0x24c00106200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
