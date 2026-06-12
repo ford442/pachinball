@@ -36,7 +36,7 @@ import { BallType, BALL_SPAWN_CONFIG, GAME_TUNING, GameConfig, PhysicsConfig } f
 import { DisplayState } from '../game-elements'
 import { TABLE_MAPS } from '../shaders/lcd-table'
 import { PALETTE, CameraMode } from '../game-elements'
-import type { QualityTier } from '../game-elements/visual-language'
+import { QualityTier } from '../game-elements/visual-language'
 
 export interface PhysicsHost {
   readonly engine: import('@babylonjs/core').Engine | import('@babylonjs/core').WebGPUEngine
@@ -145,6 +145,11 @@ export class GamePhysicsController {
   private readonly bonusTallySystem: BonusTallySystem
   private readonly goldBallStreakSystem: GoldBallStreakSystem
   private readonly scoringBreakdown = getScoringBreakdownManager()
+  /** Pose at the end of the previous physics step, per rigid body — used to
+   *  interpolate mesh transforms toward the current pose by the step's alpha. */
+  private readonly prevPoses: Map<RAPIER.RigidBody, { pos: Vector3; rot: Quaternion }> = new Map()
+  private readonly scratchCurrPos = new Vector3()
+  private readonly scratchCurrRot = new Quaternion()
 
   constructor(host: PhysicsHost) {
     this.host = host
@@ -324,6 +329,65 @@ export class GamePhysicsController {
     }
   }
 
+  /**
+   * Syncs dynamic body meshes to their physics poses.
+   *
+   * `alpha` is the fraction of a fixed timestep remaining in the accumulator
+   * (from `PhysicsSystem.step()`). Each mesh is rendered by interpolating
+   * between its pose at the end of the previous physics step (`prevPoses`)
+   * and its current pose, by `alpha`. This smooths motion at framerates that
+   * don't line up with the fixed physics timestep without affecting the
+   * simulation itself. `alpha = 1` renders at the raw current pose (used when
+   * no step has run yet, or interpolation is disabled).
+   */
+  private syncMeshes(alpha: number): void {
+    const bindings = this.host.gameObjects?.getBindings() || []
+    const liveBodies = new Set<RAPIER.RigidBody>()
+
+    for (const binding of bindings) {
+      const body = binding.rigidBody
+      const mesh = binding.mesh
+      if (!body || !mesh) continue
+      if (body.isFixed()) continue
+
+      const pos = body.translation()
+      const rot = body.rotation()
+      if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y) || !Number.isFinite(pos.z)) continue
+      if (Math.abs(pos.x) > 100 || Math.abs(pos.y) > 100 || Math.abs(pos.z) > 100) continue
+
+      liveBodies.add(body)
+      this.scratchCurrPos.set(pos.x, pos.y, pos.z)
+      this.scratchCurrRot.set(rot.x, rot.y, rot.z, rot.w)
+
+      let prev = this.prevPoses.get(body)
+      if (!prev) {
+        prev = { pos: this.scratchCurrPos.clone(), rot: this.scratchCurrRot.clone() }
+        this.prevPoses.set(body, prev)
+      }
+
+      if (alpha < 1 && !body.isSleeping()) {
+        Vector3.LerpToRef(prev.pos, this.scratchCurrPos, alpha, mesh.position)
+        if (!mesh.rotationQuaternion) mesh.rotationQuaternion = new Quaternion()
+        Quaternion.SlerpToRef(prev.rot, this.scratchCurrRot, alpha, mesh.rotationQuaternion)
+      } else {
+        mesh.position.set(pos.x, pos.y, pos.z)
+        if (!mesh.rotationQuaternion) {
+          mesh.rotationQuaternion = new Quaternion(rot.x, rot.y, rot.z, rot.w)
+        } else {
+          mesh.rotationQuaternion.set(rot.x, rot.y, rot.z, rot.w)
+        }
+      }
+
+      prev.pos.copyFrom(this.scratchCurrPos)
+      prev.rot.copyFrom(this.scratchCurrRot)
+    }
+
+    // Drop poses for bodies no longer bound to a mesh (e.g. collected/drained balls).
+    for (const body of this.prevPoses.keys()) {
+      if (!liveBodies.has(body)) this.prevPoses.delete(body)
+    }
+  }
+
   stepPhysics(
     inputManager: { update: () => void; processBufferedInputs: () => InputFrame | null } | null,
     inputActions: { handleFlipperLeft: (p: boolean) => void; handleFlipperRight: (p: boolean) => void; handlePlunger: () => void; updatePlungerFrame?: (dt: number) => void } | null
@@ -340,36 +404,20 @@ export class GamePhysicsController {
       this.applyInputFrame(inputFrame)
     }
 
-    // Mesh sync runs unconditionally so dynamic bodies (ball, flippers) appear at their
-    // physics-body positions even during MENU state before the game starts.
-    const bindings = this.host.gameObjects?.getBindings() || []
-    for (const binding of bindings) {
-      const body = binding.rigidBody
-      const mesh = binding.mesh
-      if (!body || !mesh) continue
-      if (body.isFixed()) continue
-
-      const pos = body.translation()
-      const rot = body.rotation()
-      if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y) || !Number.isFinite(pos.z)) continue
-      if (Math.abs(pos.x) > 100 || Math.abs(pos.y) > 100 || Math.abs(pos.z) > 100) continue
-
-      mesh.position.set(pos.x, pos.y, pos.z)
-      if (!mesh.rotationQuaternion) {
-        mesh.rotationQuaternion = new Quaternion(rot.x, rot.y, rot.z, rot.w)
-      } else {
-        mesh.rotationQuaternion.set(rot.x, rot.y, rot.z, rot.w)
-      }
+    if (!this.host.stateManager.isPlaying()) {
+      // Mesh sync runs unconditionally so dynamic bodies (ball, flippers) appear at their
+      // physics-body positions even during MENU state before the game starts. No physics
+      // step has run, so render at the raw pose (alpha=1, i.e. no interpolation).
+      this.syncMeshes(1)
+      return
     }
-
-    if (!this.host.stateManager.isPlaying()) return
 
     const rawDt = this.host.engine.getDeltaTime() / 1000
     // Advance plunger spring animation each frame (before physics step so kinematic body
     // is at the correct position when Rapier integrates contacts).
     inputActions?.updatePlungerFrame?.(Math.min(rawDt, 1 / 30))
 
-    this.host.physics.step(rawDt, (h1, h2, start) => {
+    const alpha = this.host.physics.step(rawDt, (h1, h2, start) => {
       if (!start) return
       const pairKey = h1 < h2 ? `${h1}_${h2}` : `${h2}_${h1}`
       const now = performance.now()
@@ -388,6 +436,9 @@ export class GamePhysicsController {
     }, (h1, h2, maxForce) => {
       this.processContactForce(h1, h2, maxForce)
     })
+
+    // Skip interpolation on LOW quality tier — render at the raw post-step pose.
+    this.syncMeshes(this.host.qualityTier === QualityTier.LOW ? 1 : alpha)
 
     const dt = Math.min(rawDt, 1 / 30)
 
