@@ -53,6 +53,17 @@ export interface PachinballEventMap {
     timeRemaining?: number
   }
   /**
+   * Fired when `portal:open` is received but `AdventureMode.activateExitPortal()`
+   * returns false (e.g. adventure mode is no longer active). No sensor is
+   * registered and no portal UI/display change occurs; the supervisor can
+   * re-attempt on the next tick if the goal is still met.
+   */
+  'portal:activation-failed': {
+    trackId: string
+    kind: 'success' | 'timeout'
+    mode?: 'STATIONARY_TABLE' | 'EXTENDED_MAP'
+  }
+  /**
    * Fired when the ball physically enters an exit portal.
    * Spatial fields (id, position) come from AdventureMode.
    * Reward fields (finalScore, goldBalls, multiplier, totalReward) come from the supervisor.

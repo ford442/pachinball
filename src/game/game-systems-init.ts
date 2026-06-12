@@ -61,6 +61,7 @@ import { CabinetManager } from './game-cabinet'
 import { isAdventureTrackType } from '../adventure'
 
 import type { Game } from '../game'
+import type { PachinballEventMap } from './event-bus'
 
 interface PortalActivatedEventData {
   trackId: AdventureTrackType
@@ -393,34 +394,7 @@ export class GameSystemsInitializer {
         }
       })
 
-      this.game.eventBus.on('portal:open', ({ trackId, kind, mode }) => {
-        const resolvedTrack = this.resolvePortalTrack(trackId)
-        const resolvedMode = mode || (this.game.gameMode === 'dynamic' ? 'EXTENDED_MAP' : 'STATIONARY_TABLE')
-        const shouldUseFlashes = this.shouldUseFlashEffects()
-        this.game.adventureMode?.activateExitPortal(resolvedTrack, kind, resolvedMode)
-        // Register the portal sensor handle so the collision dispatcher skips it.
-        // Portal contact is detected via intersectionPair queries; Rapier collision
-        // events for the sensor body must not reach other handlers.
-        const openedHandle = this.game.adventureMode?.getPortalSensorHandle() ?? -1
-        this.game.physicsController?.registerPortalSensor(openedHandle)
-        // Show the portal overlay on the HUD
-        this.game.uiManager?.showPortalOverlay(kind, trackId)
-        // The countdown timer is no longer needed once the portal is open
-        this.game.uiManager?.hideCountdownTimer()
-        // Backbox display: dramatic portal announcement + state switch
-        if (kind === 'success') {
-          this.game.display?.setStoryText('PORTAL OPEN\nSHOOT TO ADVANCE')
-          this.game.eventBus.emit('display:set', DisplayState.PORTAL_OPEN)
-          this.game.uiManager?.showMessage('Portal open — advance now!', 2000)
-        } else {
-          this.game.display?.setStoryText('TIME OUT — EMERGENCY ESCAPE\nREWARD PENALTY ACTIVE')
-          this.game.eventBus.emit('display:set', DisplayState.ESCAPE)
-          this.game.uiManager?.showMessage('Time out! Enter the portal to continue (reduced rewards).', 2400)
-        }
-        if (shouldUseFlashes) {
-          this.game.display?.triggerCRTFlash()
-        }
-      })
+      this.game.eventBus.on('portal:open', (payload) => this.handlePortalOpen(payload))
 
       // Note: 'track:completed' is emitted by the supervisor inside onPortalEntered().
       // The old subscription that re-emitted 'portal:open' here was removed because
@@ -474,6 +448,50 @@ export class GameSystemsInitializer {
       this.game.uiManager?.showLoadingState(false, 'cosmetic')
     })
     this.game.scheduleCosmeticSceneBuild()
+  }
+
+  /**
+   * Handles the `portal:open` event: activates the exit portal sensor and
+   * drives the portal overlay/display state. If `AdventureMode.activateExitPortal()`
+   * fails (e.g. adventure mode is no longer active), no sensor is registered and
+   * no portal UI/display change occurs — `portal:activation-failed` is emitted
+   * so the supervisor can re-attempt on the next tick.
+   */
+  public handlePortalOpen({ trackId, kind, mode }: PachinballEventMap['portal:open']): void {
+    const resolvedTrack = this.resolvePortalTrack(trackId)
+    const resolvedMode = mode || (this.game.gameMode === 'dynamic' ? 'EXTENDED_MAP' : 'STATIONARY_TABLE')
+    const shouldUseFlashes = this.shouldUseFlashEffects()
+    const ok = this.game.adventureMode?.activateExitPortal(resolvedTrack, kind, resolvedMode) ?? false
+    if (!ok) {
+      console.warn('[portal:open] activation failed', { trackId, kind, mode })
+      this.game.uiManager?.showMessage('Portal failed — retrying...', 2000)
+      this.game.eventBus.emit('portal:activation-failed', { trackId, kind, mode })
+      return
+    }
+    // Register the portal sensor handle so the collision dispatcher skips it.
+    // Portal contact is detected via intersectionPair queries; Rapier collision
+    // events for the sensor body must not reach other handlers.
+    const openedHandle = this.game.adventureMode?.getPortalSensorHandle() ?? -1
+    if (openedHandle >= 0) {
+      this.game.physicsController?.registerPortalSensor(openedHandle)
+    }
+    // Show the portal overlay on the HUD
+    this.game.uiManager?.showPortalOverlay(kind, trackId)
+    // The countdown timer is no longer needed once the portal is open
+    this.game.uiManager?.hideCountdownTimer()
+    // Backbox display: dramatic portal announcement + state switch
+    if (kind === 'success') {
+      this.game.display?.setStoryText('PORTAL OPEN\nSHOOT TO ADVANCE')
+      this.game.eventBus.emit('display:set', DisplayState.PORTAL_OPEN)
+      this.game.uiManager?.showMessage('Portal open — advance now!', 2000)
+    } else {
+      this.game.display?.setStoryText('TIME OUT — EMERGENCY ESCAPE\nREWARD PENALTY ACTIVE')
+      this.game.eventBus.emit('display:set', DisplayState.ESCAPE)
+      this.game.uiManager?.showMessage('Time out! Enter the portal to continue (reduced rewards).', 2400)
+    }
+    if (shouldUseFlashes) {
+      this.game.display?.triggerCRTFlash()
+    }
   }
 
   private resolvePortalTrack(trackId: string): AdventureTrackType {
