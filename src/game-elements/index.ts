@@ -174,6 +174,7 @@ export {
   type CampaignRewardItem,
   type CampaignRewardType,
 } from './campaign-rewards-manager'
+export { CampaignRewardNotifier } from './campaign-reward-notifier'
 export {
   ScoringBreakdownManager,
   getScoringBreakdownManager,

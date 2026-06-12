@@ -27,8 +27,11 @@ import { BackboxBorderGlow } from './display-border-glow'
 import type { CRTEffectParams } from './display-types'
 import type { EventBus } from '../game/event-bus'
 import type { EffectsSystem } from '../effects/effects-core'
+import { DisplayOverlay } from './display-overlay'
 
 export class DisplaySystem {
+  public readonly overlay = new DisplayOverlay()
+
   private scene: Scene
   private config: DisplayConfig
   private useWGSL = false
@@ -103,6 +106,10 @@ export class DisplaySystem {
     this.reelsLayer = new DisplayReelsLayer(scene, this.config)
     this.videoLayer = new DisplayVideoLayer(scene, this.config)
     this.imageLayer = new DisplayImageLayer(scene, this.config)
+  }
+
+  public getQualityTier(): QualityTier {
+    return this.qualityTier
   }
 
   setAccessibility(accessibility: AccessibilityConfig): void {
@@ -276,6 +283,9 @@ export class DisplaySystem {
       ctx.fillText('BALL LOST', cx, cy)
       ctx.restore()
 
+      // Render DisplayOverlay on top
+      this.overlay.render(ctx, canvas.width, canvas.height, this.currentState)
+
       this.textTexture.update(false)
       return
     }
@@ -310,6 +320,9 @@ export class DisplaySystem {
       ctx.textBaseline = 'middle'
       ctx.fillText(this.trackText, canvas.width / 2, canvas.height * 0.82)
     }
+
+    // Render DisplayOverlay on top
+    this.overlay.render(ctx, canvas.width, canvas.height, this.currentState)
 
     this.textTexture.update(false)
   }
@@ -360,6 +373,12 @@ export class DisplaySystem {
 
     // Border glow animation
     this.borderGlow?.update(dt)
+
+    // Update DisplayOverlay
+    if (this.overlay.isActive()) {
+      this.overlay.update(dt)
+      this.redrawTextOverlay()
+    }
 
     // Drain mode: tick timer, cycle splash, animate overlay, then restore normal mode
     if (this._displayMode === 'drain') {

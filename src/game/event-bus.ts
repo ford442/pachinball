@@ -7,7 +7,7 @@
  */
 
 import type { DisplayState } from '../game-elements/display-config'
-import type { GameState } from '../game-elements/types'
+import type { GameState, UnlockedReward } from '../game-elements/types'
 import type { WasmContactEvent } from '../wasm/wasm-types'
 
 /**
@@ -25,6 +25,9 @@ export interface PachinballEventMap {
 
   // Display state changes
   'display:set': DisplayState
+
+  // Rewards and Unlocks
+  'reward:unlocked': UnlockedReward
 
   // Gameplay events
   'fever:start': void

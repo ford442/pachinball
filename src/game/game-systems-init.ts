@@ -46,6 +46,8 @@ import {
 } from '../game-elements'
 import { BallStackVisual } from '../game-elements/ball-stack-visual'
 import { CabinetLighting } from '../effects/cabinet-lighting'
+import { CelebrationSequencer } from '../effects/celebration-sequencer'
+import { CampaignRewardNotifier } from '../game-elements/campaign-reward-notifier'
 import {
   SpinnerBumperBuilder,
   BallTrapBuilder,
@@ -246,6 +248,13 @@ export class GameSystemsInitializer {
       this.game.adventureCinematicTriggers.setEventBus(this.game.eventBus)
       this.game.adventureCinematicTriggers.setGoalTracker(this.game.adventureGoalTracker)
 
+      this.game.celebrationSequencer = new CelebrationSequencer(
+        this.game.eventBus,
+        this.game.display,
+        this.game.cabinetLighting,
+        this.game.adventureCinematicTriggers
+      )
+
       this.game.adventureUIStateManager = new AdventureUIStateManager()
       this.game.adventureUIStateManager.setEventBus(this.game.eventBus)
 
@@ -270,7 +279,7 @@ export class GameSystemsInitializer {
           },
         },
       )
-      const campaignRewards = initializeCampaignRewardsManager(this.game.adventureTrackProgression)
+      const campaignRewards = initializeCampaignRewardsManager(this.game.adventureTrackProgression, this.game.eventBus)
       campaignRewards.configureAppliers({
         applyBallSkin: (skinId) => this.game.ballManager?.applyBallSkin(skinId),
         applyCabinetTheme: (themeId) => this.game.cabinetBuilder.applyCampaignCabinetTheme(themeId),
@@ -279,6 +288,9 @@ export class GameSystemsInitializer {
         },
       })
       campaignRewards.applyEquippedRewards()
+
+      const notifier = new CampaignRewardNotifier(this.game.eventBus)
+      notifier.flushUnseen()
 
       // Integration plan:
       // 1) Supervisor emits `portal:open` with track + result kind.

@@ -73,6 +73,7 @@ import {
 } from './objects'
 import { BallStackVisual } from './game-elements/ball-stack-visual'
 import { CabinetLighting } from './effects/cabinet-lighting'
+import { CelebrationSequencer } from './effects/celebration-sequencer'
 import { GameStateManager } from './game/game-state'
 import { EventBus } from './game/event-bus'
 import { GameInputManager } from './game/game-input'
@@ -110,6 +111,7 @@ export class Game {
   display: DisplaySystem | null = null
   effects: EffectsSystem | null = null
   cabinetLighting: CabinetLighting | null = null
+  celebrationSequencer: CelebrationSequencer | null = null
   gameObjects: GameObjects | null = null
   ballManager: BallManager | null = null
   ballAnimator: BallAnimator | null = null

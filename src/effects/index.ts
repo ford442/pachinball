@@ -5,6 +5,7 @@ export { ParticleEffects } from './effects-particles'
 export { LightingEffects } from './effects-lighting'
 export { CameraEffects } from './effects-camera'
 export { CabinetLighting } from './cabinet-lighting'
+export { CelebrationSequencer } from './celebration-sequencer'
 export type {
   EffectType,
   ParticleConfig,

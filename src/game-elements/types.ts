@@ -261,6 +261,14 @@ export type PlungerInputEvent =
 // Re-export BallType and BallTierConfig from config.ts for convenience
 export { BallType, type BallTierConfig } from '../config'
 
+export interface UnlockedReward {
+  kind: 'ball-skin' | 'cabinet-theme' | 'flipper-style' | 'backbox-tint'
+  id: string
+  label: string
+  rarity: 'common' | 'rare' | 'legendary'
+  scope: 'track' | 'campaign-complete'
+}
+
 /**
  * BallData interface
  * Tracks ball type, spawn time, and accumulated points for each ball

@@ -4,6 +4,7 @@
  */
 
 import type { EventBus } from '../game/event-bus'
+import { Color3 } from '@babylonjs/core'
 import { AdventureCinematicSystem } from './adventure-cinematic-system'
 import type { AdventureGoalTracker } from './adventure-goal-tracker'
 
@@ -165,6 +166,48 @@ export class AdventureCinematicTriggers {
    */
   isPlayingCinematic(): boolean {
     return this.cinematics.isPlaying()
+  }
+
+  /**
+   * Request a cinematic beat for campaign reward
+   */
+  public requestBeat(options: { rarity: 'common' | 'rare' | 'legendary'; maxDurationMs: number }): Promise<void> {
+    if (this.cinematics.isPlaying()) {
+      return Promise.reject(new Error('Cinematic system is busy'))
+    }
+
+    const colors = {
+      common: '#00ffff',
+      rare: '#8800ff',
+      legendary: '#ffd700'
+    }
+    const colorHex = colors[options.rarity] || '#00ffff'
+    const durationSec = Math.min(options.maxDurationMs, 2000) / 1000
+
+    this.cinematics.playSequence({
+      type: 'special-moment',
+      duration: durationSec,
+      cameraPath: {
+        startAlpha: -Math.PI / 2,
+        startBeta: 1.0,
+        startRadius: 16,
+        endAlpha: -Math.PI / 1.9,
+        endBeta: 0.9,
+        endRadius: 14
+      },
+      effects: {
+        bloomIntensity: options.rarity === 'legendary' ? 1.0 : 0.5,
+        colorFlash: Color3.FromHexString(colorHex),
+        flashDuration: 0.4
+      },
+      easing: (t) => t
+    })
+
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        resolve()
+      }, options.maxDurationMs)
+    })
   }
 
   /**
