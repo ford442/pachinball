@@ -65,6 +65,7 @@ describe('LevelLoader', () => {
   let mockAdventureMode: { isActive: ReturnType<typeof vi.fn>; switchToTrack: ReturnType<typeof vi.fn> }
   let ensureAdventureActive: ReturnType<typeof vi.fn>
   let resetBall: ReturnType<typeof vi.fn>
+  let rebuildHandleCaches: ReturnType<typeof vi.fn>
   let loader: LevelLoader
 
   beforeEach(() => {
@@ -75,19 +76,22 @@ describe('LevelLoader', () => {
     }
     ensureAdventureActive = vi.fn()
     resetBall = vi.fn()
+    rebuildHandleCaches = vi.fn()
     loader = new LevelLoader({
       adventureMode: mockAdventureMode as unknown as InstanceType<typeof import('../src/adventure/adventure-mode').AdventureMode>,
       ballManager: null,
       ensureAdventureActive,
       resetBall,
+      rebuildHandleCaches,
     })
   })
 
-  it('loads a valid map and calls switchToTrack + resetBall', () => {
+  it('loads a valid map and calls switchToTrack + rebuildHandleCaches + resetBall', () => {
     const result = loader.loadMap('NEON_HELIX')
     expect(result.success).toBe(true)
     expect(result.mapConfig?.id).toBe('NEON_HELIX')
     expect(mockAdventureMode.switchToTrack).toHaveBeenCalledWith(AdventureTrackType.NEON_HELIX)
+    expect(rebuildHandleCaches).toHaveBeenCalled()
     expect(resetBall).toHaveBeenCalled()
   })
 
@@ -147,6 +151,7 @@ describe('FreeMapTestMode', () => {
         ballManager: null,
         ensureAdventureActive: vi.fn(),
         resetBall: vi.fn(),
+        rebuildHandleCaches: vi.fn(),
       },
       { onMessage, onStatusChange }
     )

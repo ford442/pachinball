@@ -21,6 +21,8 @@ export interface LevelLoaderDeps {
   ensureAdventureActive: () => void
   /** Callback to reset ball to plunger position. */
   resetBall: () => void
+  /** Callback to refresh physics handle caches after geometry is rebuilt. */
+  rebuildHandleCaches: () => void
 }
 
 export interface LoadResult {
@@ -76,6 +78,10 @@ export class LevelLoader {
     if (!success) {
       return { success: false, error: `Failed to switch to track: ${trackType}` }
     }
+
+    // Refresh physics handle caches after track geometry is rebuilt so collision
+    // dispatch and input actuation use live bodies/joints on every load path.
+    this.deps.rebuildHandleCaches()
 
     // Reset ball to plunger lane
     this.deps.resetBall()

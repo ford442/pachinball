@@ -695,6 +695,7 @@ export class Game {
           ballManager: this.ballManager,
           ensureAdventureActive: () => this.slotAdventure.startAdventureMode(),
           resetBall: () => this.resetBall(),
+          rebuildHandleCaches: () => this.rebuildHandleCaches(),
         },
         {
           onMessage: (msg) => this.showMessage(msg, 3000),

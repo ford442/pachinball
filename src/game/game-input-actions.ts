@@ -95,10 +95,11 @@ export class GameInputActions {
       // Ensure the body is awake so the motor takes effect this step and visual sync sees the pose
       const fl = gameObjects?.getAllFlippers?.().get('left')
       fl?.body?.wakeUp()
-    }
-    if (pressed) {
-      hapticManager?.flipper()
-      soundSystem.playSample('flipper')
+
+      if (pressed) {
+        hapticManager?.flipper()
+        soundSystem.playSample('flipper')
+      }
     }
   }
 
@@ -134,10 +135,11 @@ export class GameInputActions {
       // Ensure the body is awake so the motor takes effect this step and visual sync sees the pose
       const fr = gameObjects?.getAllFlippers?.().get('right')
       fr?.body?.wakeUp()
-    }
-    if (pressed) {
-      hapticManager?.flipper()
-      soundSystem.playSample('flipper')
+
+      if (pressed) {
+        hapticManager?.flipper()
+        soundSystem.playSample('flipper')
+      }
     }
   }
 
