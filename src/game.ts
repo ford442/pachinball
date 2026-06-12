@@ -424,6 +424,7 @@ export class Game {
         this.performanceMonitor.physicsStart()
         this.physicsController.stepPhysics(this.inputManager, this.inputActions)
         this.performanceMonitor.physicsEnd()
+        this.settingsUI.updatePhysicsDebugRenderer()
       })
 
       this.engine.runRenderLoop(() => {

@@ -6,9 +6,19 @@ import type { Scene } from '@babylonjs/core'
 import type { SoundSystem } from '../game-elements/sound-system'
 import type { DebugHUD } from '../game-elements/debug-hud'
 import type { MapSystem } from '../game-elements/map-system'
+import type { PhysicsSystem } from '../game-elements/physics'
 import type { TableMapManager } from './game-maps'
 import { SettingsManager } from '../game-elements'
 import { TABLE_MAPS, registerMap } from '../shaders/lcd-table'
+import { PhysicsDebugRenderer } from '../game-elements/physics-debug-renderer'
+import {
+  getRendererPreference,
+  setRendererPreference,
+  RENDERER_AUTO,
+  RENDERER_WEBGPU,
+  RENDERER_WEBGL2,
+  type RendererPreference,
+} from '../renderers/renderer-selector'
 
 export interface SettingsUIHost {
   readonly mapSystem: MapSystem
@@ -16,6 +26,7 @@ export interface SettingsUIHost {
   readonly soundSystem: SoundSystem
   readonly debugHUD: DebugHUD | null
   readonly scene: Scene | null
+  readonly physics: PhysicsSystem
 
   scanlineWeight: number
   scanlineEnabled: boolean
@@ -34,6 +45,7 @@ export interface SettingsUIHost {
 export class GameSettingsUI {
   private readonly host: SettingsUIHost
   private inputLatencyOverlay: HTMLElement | null = null
+  private physicsDebugRenderer: PhysicsDebugRenderer | null = null
 
   constructor(host: SettingsUIHost) {
     this.host = host
@@ -61,6 +73,9 @@ export class GameSettingsUI {
 
     this.setupScanlineSliderLiveUpdate()
     this.setupScanlineToggleLiveUpdate()
+    this.setupRendererSelectLiveUpdate()
+    this.setupWireframeToggleLiveUpdate()
+    this.setupPhysicsDebugToggleLiveUpdate()
   }
 
   private loadSettingsIntoUI(): void {
@@ -93,6 +108,15 @@ export class GameSettingsUI {
     if (musicVolumeSlider) musicVolumeSlider.value = String(settings.musicVolume)
     if (sfxVolumeSlider) sfxVolumeSlider.value = String(settings.sfxVolume)
     if (muteCheckbox) muteCheckbox.checked = settings.muted
+
+    const rendererSelect = document.getElementById('renderer-select') as HTMLSelectElement | null
+    if (rendererSelect) rendererSelect.value = getRendererPreference()
+
+    const wireframeCheckbox = document.getElementById('debug-wireframe') as HTMLInputElement | null
+    if (wireframeCheckbox) wireframeCheckbox.checked = this.host.scene?.forceWireframe ?? false
+
+    const physicsDebugCheckbox = document.getElementById('debug-physics-draw') as HTMLInputElement | null
+    if (physicsDebugCheckbox) physicsDebugCheckbox.checked = this.physicsDebugRenderer?.isEnabled() ?? false
   }
 
   private saveSettingsFromUI(): void {
@@ -186,6 +210,46 @@ export class GameSettingsUI {
     scanlineEnabledToggle.addEventListener('change', () => {
       this.applyScanlineEnabled(scanlineEnabledToggle.checked)
     })
+  }
+
+  private setupRendererSelectLiveUpdate(): void {
+    const rendererSelect = document.getElementById('renderer-select') as HTMLSelectElement | null
+    if (!rendererSelect) return
+
+    rendererSelect.addEventListener('change', () => {
+      const value = rendererSelect.value
+      const preference: RendererPreference =
+        value === RENDERER_WEBGPU || value === RENDERER_WEBGL2 ? value : RENDERER_AUTO
+      setRendererPreference(preference)
+      window.location.reload()
+    })
+  }
+
+  private setupWireframeToggleLiveUpdate(): void {
+    const wireframeCheckbox = document.getElementById('debug-wireframe') as HTMLInputElement | null
+    if (!wireframeCheckbox) return
+
+    wireframeCheckbox.addEventListener('change', () => {
+      if (this.host.scene) this.host.scene.forceWireframe = wireframeCheckbox.checked
+    })
+  }
+
+  private setupPhysicsDebugToggleLiveUpdate(): void {
+    const physicsDebugCheckbox = document.getElementById('debug-physics-draw') as HTMLInputElement | null
+    if (!physicsDebugCheckbox) return
+
+    physicsDebugCheckbox.addEventListener('change', () => {
+      if (!this.host.scene) return
+      if (!this.physicsDebugRenderer) {
+        this.physicsDebugRenderer = new PhysicsDebugRenderer(this.host.scene, this.host.physics)
+      }
+      this.physicsDebugRenderer.setEnabled(physicsDebugCheckbox.checked)
+    })
+  }
+
+  /** Call once per frame (after the physics step) to refresh the physics debug overlay. */
+  updatePhysicsDebugRenderer(): void {
+    this.physicsDebugRenderer?.update()
   }
 
   private applyScanlineEnabled(enabled: boolean): void {

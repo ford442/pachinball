@@ -4,6 +4,7 @@ import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import './style.css'
 import { Game } from './game'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import { getRendererPreference, exposeRenderer, RENDERER_WEBGL2 } from './renderers/renderer-selector'
 
 /**
  * Preload physics WASM in parallel with engine creation.
@@ -34,6 +35,7 @@ async function bootstrap(): Promise<void> {
   console.time('[Bootstrap] Game init')
 
   applyHardwareScaling(engine)
+  exposeRenderer(canvas, isWebGPUEngine(engine))
 
   const game = new Game(engine, preloadedRapier)
   await game.init()
@@ -156,13 +158,30 @@ async function createEngine(canvas: HTMLCanvasElement): Promise<Engine | WebGPUE
     preserveDrawingBuffer: true,
     stencil: true
   }
-  
+
+  const preference = getRendererPreference()
+  if (preference === RENDERER_WEBGL2) {
+    console.log('[Bootstrap] Renderer preference: WebGL2 (forced)')
+    return (await EngineFactory.CreateAsync(canvas, { disableWebGPU: true, ...engineOptions })) as Engine
+  }
+  if (preference !== 'auto') {
+    console.log(`[Bootstrap] Renderer preference: ${preference}`)
+  }
+
   try {
     return (await EngineFactory.CreateAsync(canvas, { ...engineOptions })) as WebGPUEngine
   } catch (err) {
     console.warn('WebGPU init failed, using WebGL fallback', err)
     return (await EngineFactory.CreateAsync(canvas, { disableWebGPU: true, ...engineOptions })) as Engine
   }
+}
+
+/** True if the created engine is actually running on WebGPU. */
+function isWebGPUEngine(engine: Engine | WebGPUEngine): boolean {
+  return (
+    engine.getClassName() === 'WebGPUEngine' ||
+    (engine as unknown as { isWebGPU?: boolean }).isWebGPU === true
+  )
 }
 
 bootstrap().catch((err) => {
