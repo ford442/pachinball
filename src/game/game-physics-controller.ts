@@ -1087,6 +1087,22 @@ export class GamePhysicsController {
         this.host.showMessage(`+${awardedPoints}`, 1500)
       }
 
+      if (collected.quickCollectBonus) {
+        const bonusAwarded = this.awardScore(
+          collected.quickCollectBonus.totalPoints,
+          'gold-ball-quick-collect',
+          collectPos,
+        )
+        this.bonusTallySystem.recordScore('gold-ball', bonusAwarded)
+        this.host.eventBus.emit('score:multiplier', {
+          basePoints: collected.quickCollectBonus.totalPoints,
+          awardedPoints: bonusAwarded,
+          multiplier: collected.quickCollectBonus.multiplier,
+          source: 'gold-ball-quick-collect',
+        })
+        this.host.showMessage(`QUICK COLLECT x${collected.quickCollectBonus.multiplier.toFixed(1)} +${bonusAwarded}`, 1800)
+      }
+
       if (GAME_TUNING.multiball.triggerGoldThresholds.includes(this.host.sessionGoldBalls)) {
         this.startChainMultiball('gold-threshold', 2)
       }

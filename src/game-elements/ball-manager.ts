@@ -51,6 +51,11 @@ export class BallManager {
   private smallGoldBallLifetimes: Map<RAPIER.RigidBody, number> = new Map()
   private smallGoldBallSpawnTime: Map<RAPIER.RigidBody, number> = new Map()
 
+  /** Swarm group tracking for quick-collect bonus */
+  private swarmGroups: Map<number, { bodies: Set<RAPIER.RigidBody>; collected: Set<RAPIER.RigidBody>; spawnTime: number; baseType: BallType }> = new Map()
+  private ballSwarmId: Map<RAPIER.RigidBody, number> = new Map()
+  private nextSwarmId = 1
+
   /** Track ball positions for stuck detection */
   private ballStuckTimers: Map<RAPIER.RigidBody, { lastPos: { x: number; y: number; z: number }; stuckTime: number }> = new Map()
   /** Threshold: if ball moves less than this per second, it may be stuck */
@@ -314,7 +319,19 @@ export class BallManager {
   removeBall(body: RAPIER.RigidBody): void {
     // Clean up ball data
     this.ballDataMap.delete(body)
-    
+
+    // Clean up swarm group tracking. If the ball leaves play without being
+    // collected (e.g. lifetime expiry), invalidate the whole swarm group so
+    // the remaining members can no longer trigger a quick-collect bonus.
+    const swarmId = this.ballSwarmId.get(body)
+    if (swarmId !== undefined) {
+      const group = this.swarmGroups.get(swarmId)
+      if (group && !group.collected.has(body)) {
+        this.swarmGroups.delete(swarmId)
+      }
+      this.ballSwarmId.delete(body)
+    }
+
     const idx = this.ballBodies.indexOf(body)
     if (idx !== -1) {
       this.world.removeRigidBody(body)
@@ -1107,6 +1124,19 @@ export class BallManager {
       spawnedBodies.push(body)
     }
 
+    if (spawnedBodies.length > 0) {
+      const swarmId = this.nextSwarmId++
+      this.swarmGroups.set(swarmId, {
+        bodies: new Set(spawnedBodies),
+        collected: new Set(),
+        spawnTime: performance.now(),
+        baseType,
+      })
+      for (const body of spawnedBodies) {
+        this.ballSwarmId.set(body, swarmId)
+      }
+    }
+
     return spawnedBodies
   }
 
@@ -1179,7 +1209,7 @@ export class BallManager {
   /**
    * Mark a ball as collected (when it drains)
    */
-  collectBall(body: RAPIER.RigidBody): { type: BallType; points: number } | null {
+  collectBall(body: RAPIER.RigidBody): { type: BallType; points: number; quickCollectBonus?: { multiplier: number; totalPoints: number } } | null {
     const data = this.ballDataMap.get(body)
     if (!data) return null
 
@@ -1191,7 +1221,27 @@ export class BallManager {
     // Trigger callback if registered
     this.onGoldBallCollected?.(data.type, data.points)
 
-    return { type: data.type, points: data.points }
+    let quickCollectBonus: { multiplier: number; totalPoints: number } | undefined
+
+    const swarmId = this.ballSwarmId.get(body)
+    if (swarmId !== undefined) {
+      const group = this.swarmGroups.get(swarmId)
+      if (group) {
+        group.collected.add(body)
+        if (group.collected.size >= group.bodies.size) {
+          const elapsedSeconds = (performance.now() - group.spawnTime) / 1000
+          if (elapsedSeconds <= GameConfig.smallGoldBalls.quickCollectBonusWindow) {
+            const multiplier = GameConfig.smallGoldBalls.quickCollectMultiplier
+            const totalPoints = GameConfig.smallGoldBalls.basePoints * group.bodies.size
+            quickCollectBonus = { multiplier, totalPoints: Math.round(totalPoints * multiplier) }
+          }
+          this.swarmGroups.delete(swarmId)
+        }
+      }
+      this.ballSwarmId.delete(body)
+    }
+
+    return { type: data.type, points: data.points, quickCollectBonus }
   }
 
   /**
@@ -1224,6 +1274,18 @@ export class BallManager {
       if (rand <= cumulative) {
         const type = typeKey as BallType
         const spawnPos = position || GameConfig.ball.spawnMain
+
+        // Gold-tier balls spawn as a chaotic swarm of small balls instead of one heavy ball
+        if (type !== BallType.STANDARD && GameConfig.smallGoldBalls.enabled) {
+          const swarm = this.spawnSmallGoldBallSwarm(position, type)
+          if (swarm.length > 0) {
+            this.playSpawnEffect(new Vector3(spawnPos.x, spawnPos.y, spawnPos.z), type)
+            const soundSystem = getSoundSystem()
+            soundSystem.playGoldBallSpawn(type)
+            return swarm[0]
+          }
+          // Fall through to single-ball spawn if swarm capacity is reached
+        }
 
         // Create the ball
         const body = this.createBallOfType(type, position)

@@ -12,7 +12,7 @@
  * a plain Node environment without a browser or WASM physics engine.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { BallType, BALL_TIERS, GAME_TUNING } from '../src/config'
+import { BallType, BALL_TIERS, GAME_TUNING, GameConfig } from '../src/config'
 
 // ---------------------------------------------------------------------------
 // Module mocks — must be declared before the import under test
@@ -36,18 +36,24 @@ vi.mock('@babylonjs/core', () => ({
       dispose: vi.fn(),
     }),
   },
-  Vector3: vi.fn().mockImplementation((x = 0, y = 0, z = 0) => ({
-    x,
-    y,
-    z,
-    clone: () => ({ x, y, z }),
-  })),
-  TrailMesh: vi.fn().mockReturnValue({ material: null, dispose: vi.fn() }),
-  StandardMaterial: vi.fn().mockReturnValue({
-    emissiveColor: null,
-    alpha: 1,
-    disableLighting: false,
-    dispose: vi.fn(),
+  Vector3: vi.fn().mockImplementation(function (this: Record<string, unknown>, x = 0, y = 0, z = 0) {
+    this.x = x
+    this.y = y
+    this.z = z
+    this.clone = () => ({ x, y, z })
+    return this
+  }),
+  TrailMesh: vi.fn().mockImplementation(function (this: { material: unknown; dispose: () => void }) {
+    this.material = null
+    this.dispose = vi.fn()
+    return this
+  }),
+  StandardMaterial: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+    this.emissiveColor = null
+    this.alpha = 1
+    this.disableLighting = false
+    this.dispose = vi.fn()
+    return this
   }),
   PBRMaterial: vi.fn().mockReturnValue({
     emissiveColor: null,
@@ -68,33 +74,61 @@ vi.mock('@babylonjs/core', () => ({
     Lerp: vi.fn().mockReturnValue({ r: 0, g: 0, b: 0 }),
     White: vi.fn().mockReturnValue({ r: 1, g: 1, b: 1 }),
   },
-  Color4: vi.fn().mockReturnValue({ r: 0, g: 0, b: 0, a: 1 }),
-  PointLight: vi.fn().mockReturnValue({ parent: null, diffuse: null, intensity: 0, range: 0 }),
-  ParticleSystem: vi.fn().mockReturnValue({
-    particleTexture: null,
-    emitter: null,
-    color1: null,
-    color2: null,
-    colorDead: null,
-    minSize: 0,
-    maxSize: 0.2,
-    minLifeTime: 0,
-    maxLifeTime: 1,
-    emitRate: 50,
-    targetStopDuration: 0.2,
-    direction1: null,
-    direction2: null,
-    minEmitPower: 1,
-    maxEmitPower: 3,
-    updateSpeed: 0.02,
-    gravity: null,
-    start: vi.fn(),
-    stop: vi.fn(),
-    dispose: vi.fn(),
+  Color4: vi.fn().mockImplementation(function (this: Record<string, unknown>, r = 0, g = 0, b = 0, a = 1) {
+    this.r = r
+    this.g = g
+    this.b = b
+    this.a = a
+    return this
   }),
-  Texture: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  PointLight: vi.fn().mockReturnValue({ parent: null, diffuse: null, intensity: 0, range: 0 }),
+  ParticleSystem: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+    this.particleTexture = null
+    this.emitter = null
+    this.color1 = null
+    this.color2 = null
+    this.colorDead = null
+    this.minSize = 0
+    this.maxSize = 0.2
+    this.minLifeTime = 0
+    this.maxLifeTime = 1
+    this.emitRate = 50
+    this.targetStopDuration = 0.2
+    this.direction1 = null
+    this.direction2 = null
+    this.minEmitPower = 1
+    this.maxEmitPower = 3
+    this.updateSpeed = 0.02
+    this.gravity = null
+    this.start = vi.fn()
+    this.stop = vi.fn()
+    this.dispose = vi.fn()
+    return this
+  }),
+  Texture: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+    this.dispose = vi.fn()
+    return this
+  }),
   Mesh: class {},
 }))
+
+// Minimal `document.createElement('canvas')` stub so playSpawnEffect's
+// createParticleTexture() can run in the Node test environment.
+const fakeCanvasContext = {
+  beginPath: vi.fn(),
+  arc: vi.fn(),
+  fill: vi.fn(),
+  createRadialGradient: vi.fn().mockReturnValue({ addColorStop: vi.fn() }),
+  fillStyle: '',
+}
+vi.stubGlobal('document', {
+  createElement: vi.fn().mockReturnValue({
+    width: 0,
+    height: 0,
+    getContext: vi.fn().mockReturnValue(fakeCanvasContext),
+    toDataURL: vi.fn().mockReturnValue('data:image/png;base64,'),
+  }),
+})
 
 // Stub getMaterialLibrary so the BallManager constructor can call it without a real Scene.
 vi.mock('../src/materials', () => ({
@@ -159,7 +193,7 @@ function makeDescBuilder(): Record<string, () => Record<string, unknown>> {
 function makeFakeWorld() {
   let handleCounter = 0
   return {
-    createRigidBody: vi.fn().mockImplementation(() => ({ handle: handleCounter++ })),
+    createRigidBody: vi.fn().mockImplementation(() => ({ ...makeFakeBody(), handle: handleCounter++ })),
     createCollider: vi.fn(),
     removeRigidBody: vi.fn(),
   }
@@ -542,6 +576,119 @@ describe('BallManager', () => {
       expect((manager as any).ballBodies.length).toBe(1)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect((manager as any).ballBody).not.toBeNull()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // 7. Small gold ball swarm spawning + quick-collect bonus
+  // -------------------------------------------------------------------------
+  describe('small gold ball swarm', () => {
+    it('spawns swarmSize small balls when enabled', () => {
+      const manager = makeManager()
+      const bodies = manager.spawnSmallGoldBallSwarm(undefined, BallType.GOLD_PLATED)
+      expect(bodies.length).toBe(GameConfig.smallGoldBalls.swarmSize)
+    })
+
+    it('respects maxConcurrentBalls when swarm would exceed the cap', () => {
+      const manager = makeManager()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const lifetimes = (manager as any).smallGoldBallLifetimes as Map<unknown, number>
+
+      // Fill up to one below the cap
+      const cap = GameConfig.smallGoldBalls.maxConcurrentBalls
+      for (let i = 0; i < cap - 1; i++) {
+        lifetimes.set({ handle: `pre_${i}` }, GameConfig.smallGoldBalls.lifetime)
+      }
+
+      const bodies = manager.spawnSmallGoldBallSwarm(undefined, BallType.GOLD_PLATED)
+      expect(bodies.length).toBe(1)
+    })
+
+    it('returns an empty array once the concurrent cap is already reached', () => {
+      const manager = makeManager()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const lifetimes = (manager as any).smallGoldBallLifetimes as Map<unknown, number>
+
+      const cap = GameConfig.smallGoldBalls.maxConcurrentBalls
+      for (let i = 0; i < cap; i++) {
+        lifetimes.set({ handle: `pre_${i}` }, GameConfig.smallGoldBalls.lifetime)
+      }
+
+      const bodies = manager.spawnSmallGoldBallSwarm(undefined, BallType.GOLD_PLATED)
+      expect(bodies.length).toBe(0)
+    })
+
+    it('spawnRandomBall spawns a swarm for non-standard tiers when smallGoldBalls is enabled', () => {
+      const manager = makeManager()
+      const spy = vi.spyOn(manager, 'spawnSmallGoldBallSwarm')
+
+      // Force selection of GOLD_PLATED (cumulative weight just above STANDARD's 0.75)
+      vi.spyOn(Math, 'random').mockReturnValue(BALL_TIERS[BallType.STANDARD].spawnWeight + 0.01)
+
+      const body = manager.spawnRandomBall()
+
+      expect(spy).toHaveBeenCalledWith(undefined, BallType.GOLD_PLATED)
+      // The returned body should be the first member of the spawned swarm
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const swarmBodies = (manager as any).ballBodies as unknown[]
+      expect(swarmBodies).toContain(body)
+      expect(swarmBodies.length).toBe(GameConfig.smallGoldBalls.swarmSize)
+
+      vi.spyOn(Math, 'random').mockRestore()
+    })
+
+    it('awards a quick-collect bonus when all swarm members are collected within the window', () => {
+      const manager = makeManager()
+      const bodies = manager.spawnSmallGoldBallSwarm(undefined, BallType.GOLD_PLATED)
+      expect(bodies.length).toBeGreaterThan(1)
+
+      // Collect all but the last ball — none should report a bonus yet
+      for (let i = 0; i < bodies.length - 1; i++) {
+        const result = manager.collectBall(bodies[i])
+        expect(result?.quickCollectBonus).toBeUndefined()
+      }
+
+      // Collecting the final ball completes the swarm within the window
+      const last = manager.collectBall(bodies[bodies.length - 1])
+      expect(last?.quickCollectBonus).toBeDefined()
+      expect(last?.quickCollectBonus?.multiplier).toBe(GameConfig.smallGoldBalls.quickCollectMultiplier)
+      expect(last?.quickCollectBonus?.totalPoints).toBe(
+        Math.round(GameConfig.smallGoldBalls.basePoints * bodies.length * GameConfig.smallGoldBalls.quickCollectMultiplier),
+      )
+    })
+
+    it('does not award a quick-collect bonus once the window has elapsed', () => {
+      const manager = makeManager()
+      const bodies = manager.spawnSmallGoldBallSwarm(undefined, BallType.GOLD_PLATED)
+
+      // Push the swarm's spawnTime far enough into the past to exceed the window
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const swarmGroups = (manager as any).swarmGroups as Map<number, { spawnTime: number }>
+      for (const group of swarmGroups.values()) {
+        group.spawnTime = performance.now() - (GameConfig.smallGoldBalls.quickCollectBonusWindow + 1) * 1000
+      }
+
+      let last: ReturnType<typeof manager.collectBall> = null
+      for (const body of bodies) {
+        last = manager.collectBall(body)
+      }
+
+      expect(last?.quickCollectBonus).toBeUndefined()
+    })
+
+    it('removeBall cleans up swarm tracking so an incomplete swarm never awards a bonus', () => {
+      const manager = makeManager()
+      const bodies = manager.spawnSmallGoldBallSwarm(undefined, BallType.GOLD_PLATED)
+
+      // Simulate one ball expiring/draining before the rest are collected
+      manager.removeBall(bodies[0])
+
+      let last: ReturnType<typeof manager.collectBall> = null
+      for (let i = 1; i < bodies.length; i++) {
+        last = manager.collectBall(bodies[i])
+      }
+
+      expect(last?.quickCollectBonus).toBeUndefined()
     })
   })
 })
