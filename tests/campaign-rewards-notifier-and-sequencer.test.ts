@@ -255,4 +255,70 @@ describe('CelebrationSequencer', () => {
     // Even if it fails, it shouldn't crash or prevent continuation
     vi.advanceTimersByTime(3000)
   })
+
+  it('uses the LOW-tier presentation profile: longer read time, dimmer burst, no cinematic', async () => {
+    mockDisplay.getQualityTier.mockReturnValue(QualityTier.LOW)
+
+    const reward: UnlockedReward = {
+      kind: 'ball-skin',
+      id: 'skin-1',
+      label: 'Skin 1',
+      rarity: 'rare',
+      scope: 'track',
+    }
+
+    eventBus.emit('reward:unlocked', reward)
+    vi.advanceTimersByTime(100)
+
+    const args = mockDisplay.overlay.show.mock.calls[0][0]
+    expect(args.durationMs).toBe(4000)
+    expect(args.qualityTier).toBe(QualityTier.LOW)
+
+    expect(mockCabinetLighting.triggerRewardBurst).toHaveBeenCalledWith('rare', 200)
+    expect(mockCinematics.requestBeat).not.toHaveBeenCalled()
+  })
+
+  it('drops the summary-mode threshold to 2 on LOW tier', async () => {
+    mockDisplay.getQualityTier.mockReturnValue(QualityTier.LOW)
+
+    const rewards: UnlockedReward[] = [
+      { kind: 'ball-skin', id: 'skin-1', label: 'Skin 1', rarity: 'common', scope: 'track' },
+      { kind: 'cabinet-theme', id: 'theme-1', label: 'Theme 1', rarity: 'rare', scope: 'track' },
+    ]
+
+    for (const r of rewards) {
+      eventBus.emit('reward:unlocked', r)
+    }
+    vi.advanceTimersByTime(100)
+
+    expect(mockDisplay.overlay.show).toHaveBeenCalledTimes(1)
+    const args = mockDisplay.overlay.show.mock.calls[0][0]
+    expect(args.items.length).toBe(2)
+  })
+
+  it('extends duration and forces a legendary burst + cinematic for campaign-complete, even on LOW tier', async () => {
+    mockDisplay.getQualityTier.mockReturnValue(QualityTier.LOW)
+
+    const reward: UnlockedReward = {
+      kind: 'cabinet-theme',
+      id: 'theme-final',
+      label: 'Final Theme',
+      rarity: 'rare',
+      scope: 'campaign-complete',
+    }
+
+    eventBus.emit('reward:unlocked', reward)
+    vi.advanceTimersByTime(100)
+
+    const args = mockDisplay.overlay.show.mock.calls[0][0]
+    expect(args.durationMs).toBe(5000) // LOW (4000) + campaign-complete (+1000)
+
+    // Campaign-complete forces a legendary burst regardless of item rarity
+    expect(mockCabinetLighting.triggerRewardBurst).toHaveBeenCalledWith('legendary', 200)
+    // Campaign-complete forces a cinematic even on LOW tier
+    expect(mockCinematics.requestBeat).toHaveBeenCalledWith({
+      rarity: 'legendary',
+      maxDurationMs: 5000,
+    })
+  })
 })
