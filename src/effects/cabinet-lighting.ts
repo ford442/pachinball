@@ -55,6 +55,13 @@ export class CabinetLighting {
   private eventBurstTime = 0
   private eventBurstDuration = 0.6 // seconds
 
+  private activeRewardBurst: {
+    rarity: 'common' | 'rare' | 'legendary'
+    durationMs: number
+    elapsedMs: number
+    color: Color3
+  } | null = null
+
   constructor(scene: Scene, config: CabinetLightingConfig) {
     this.scene = scene
     this.config = config
@@ -231,6 +238,35 @@ export class CabinetLighting {
       this.updateLightingState(this.underCabinetState, [this.underCabinetLight], dt)
     }
 
+    if (this.activeRewardBurst) {
+      const b = this.activeRewardBurst
+      b.elapsedMs += dt * 1000
+
+      if (b.elapsedMs >= b.durationMs) {
+        this.activeRewardBurst = null
+        this.updateLightingForState()
+      } else {
+        const progress = b.elapsedMs / b.durationMs
+        const intensityFactor = Math.sin(progress * Math.PI)
+        
+        let peakIntensity = 1.5
+        if (b.rarity === 'rare') peakIntensity = 2.0
+        if (b.rarity === 'legendary') peakIntensity = 3.0
+
+        const currentIntensity = intensityFactor * peakIntensity
+
+        for (const light of this.edgeLights) {
+          light.diffuse = b.color
+          light.intensity = currentIntensity
+        }
+        if (this.underCabinetLight) {
+          this.underCabinetLight.diffuse = b.color
+          this.underCabinetLight.intensity = currentIntensity * 0.8
+        }
+        return // Bypass standard transitions/decay while active
+      }
+    }
+
     // Decay event burst
     if (this.eventBurstTime < this.eventBurstDuration) {
       this.eventBurstTime += dt
@@ -269,6 +305,34 @@ export class CabinetLighting {
     for (const light of lights) {
       light.diffuse = state.currentColor.clone()
       light.intensity = state.intensity * pulseFactor
+    }
+  }
+
+  /**
+   * Trigger dynamic event-based cabinet reward burst
+   */
+  public triggerRewardBurst(rarity: 'common' | 'rare' | 'legendary', durationMs: number): void {
+    if (!this.enabled) return
+
+    let burstColor: Color3
+    switch (rarity) {
+      case 'rare':
+        burstColor = new Color3(0.53, 0.0, 1.0) // Purple (#8800ff)
+        break
+      case 'legendary':
+        burstColor = new Color3(1.0, 0.84, 0.0) // Gold (#ffd700)
+        break
+      case 'common':
+      default:
+        burstColor = new Color3(0.0, 0.85, 1.0) // Cyan (#00d9ff)
+        break
+    }
+
+    this.activeRewardBurst = {
+      rarity,
+      durationMs,
+      elapsedMs: 0,
+      color: burstColor
     }
   }
 

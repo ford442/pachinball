@@ -19,6 +19,8 @@ export class GameDisposer {
     this.game.sceneOptimizer = null
     this.game.cabinetLighting?.dispose()
     this.game.cabinetLighting = null
+    this.game.celebrationSequencer?.dispose()
+    this.game.celebrationSequencer = null
     this.game.inputManager?.dispose()
     this.game.debugHUD?.dispose()
     this.game.debugHUD = null

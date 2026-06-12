@@ -26,6 +26,7 @@ export {
 // Core system
 export { DisplaySystem } from './display-core'
 export { BackboxBorderGlow } from './display-border-glow'
+export { DisplayOverlay, type DisplayOverlayShowOptions } from './display-overlay'
 
 // Layer managers
 export { DisplayShaderLayer } from './display-shader'

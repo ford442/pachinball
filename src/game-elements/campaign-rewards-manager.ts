@@ -1,5 +1,7 @@
 import { PALETTE, QualityTier } from './visual-language'
 import type { AdventureTrackProgression, SerializableProgressionState } from './adventure-track-progression'
+import { CampaignRewardNotifier } from './campaign-reward-notifier'
+import type { EventBus } from '../game/event-bus'
 
 export type CampaignRewardType = 'ball-skin' | 'cabinet-theme' | 'backbox-tint'
 
@@ -11,6 +13,7 @@ export interface CampaignRewardItem {
   shardCost: number
   minQualityTier?: QualityTier
   cosmeticId: string
+  rarity: 'common' | 'rare' | 'legendary'
 }
 
 interface CampaignRewardsStorageState {
@@ -36,6 +39,7 @@ export const CAMPAIGN_REWARD_CATALOG: CampaignRewardItem[] = [
     type: 'ball-skin',
     shardCost: 1200,
     cosmeticId: 'ball-skin-cascade',
+    rarity: 'common',
   },
   {
     id: 'ball-skin-aurum',
@@ -44,6 +48,7 @@ export const CAMPAIGN_REWARD_CATALOG: CampaignRewardItem[] = [
     type: 'ball-skin',
     shardCost: 2600,
     cosmeticId: 'ball-skin-aurum',
+    rarity: 'rare',
   },
   {
     id: 'ball-skin-prism',
@@ -53,6 +58,7 @@ export const CAMPAIGN_REWARD_CATALOG: CampaignRewardItem[] = [
     shardCost: 4800,
     minQualityTier: QualityTier.HIGH,
     cosmeticId: 'ball-skin-prism',
+    rarity: 'legendary',
   },
   {
     id: 'cabinet-theme-violet',
@@ -61,6 +67,7 @@ export const CAMPAIGN_REWARD_CATALOG: CampaignRewardItem[] = [
     type: 'cabinet-theme',
     shardCost: 2200,
     cosmeticId: 'cabinet-theme-violet',
+    rarity: 'common',
   },
   {
     id: 'cabinet-theme-solar',
@@ -69,6 +76,7 @@ export const CAMPAIGN_REWARD_CATALOG: CampaignRewardItem[] = [
     type: 'cabinet-theme',
     shardCost: 4200,
     cosmeticId: 'cabinet-theme-solar',
+    rarity: 'rare',
   },
   {
     id: 'backbox-tint-aurora',
@@ -77,6 +85,7 @@ export const CAMPAIGN_REWARD_CATALOG: CampaignRewardItem[] = [
     type: 'backbox-tint',
     shardCost: 3000,
     cosmeticId: 'backbox-tint-aurora',
+    rarity: 'legendary',
   },
 ]
 
@@ -84,10 +93,26 @@ export class CampaignRewardsManager {
   private unlockedRewardIds = new Set<string>()
   private equippedRewards: Partial<Record<CampaignRewardType, string>> = {}
   private appliers: CampaignRewardAppliers = {}
+  private notifier: CampaignRewardNotifier | null = null
 
-  constructor(private readonly progression: AdventureTrackProgression) {
+  constructor(
+    private readonly progression: AdventureTrackProgression,
+    eventBus?: EventBus
+  ) {
+    if (eventBus) {
+      this.notifier = new CampaignRewardNotifier(eventBus)
+    }
     this.load()
-    this.unlockFromShardTotal()
+    this.unlockFromShardTotal(true)
+  }
+
+  private applyUnlock(reward: CampaignRewardItem, suppressNotify = false, isCampaignComplete = false): void {
+    if (this.unlockedRewardIds.has(reward.id)) return
+    this.unlockedRewardIds.add(reward.id)
+    if (!suppressNotify && this.notifier) {
+      const scope = isCampaignComplete ? 'campaign-complete' : 'track'
+      this.notifier.recordGrant(reward, scope)
+    }
   }
 
   configureAppliers(appliers: CampaignRewardAppliers): void {
@@ -123,7 +148,7 @@ export class CampaignRewardsManager {
     if (this.unlockedRewardIds.has(id)) return false
     if (this.getTotalShards() < reward.shardCost) return false
 
-    this.unlockedRewardIds.add(id)
+    this.applyUnlock(reward, false, false)
     this.save()
     return true
   }
@@ -149,7 +174,10 @@ export class CampaignRewardsManager {
   }
 
   applyTrackReward(_rewardAmount: number): { newlyUnlocked: CampaignRewardItem[]; totalShards: number } {
-    const newlyUnlocked = this.unlockFromShardTotal()
+    const stats = this.progression.getStats()
+    const isCampaignComplete = stats.completedTracks === stats.totalTracks
+
+    const newlyUnlocked = this.unlockFromShardTotal(false, isCampaignComplete)
     this.save()
     return {
       newlyUnlocked,
@@ -180,13 +208,13 @@ export class CampaignRewardsManager {
     }
   }
 
-  private unlockFromShardTotal(): CampaignRewardItem[] {
+  private unlockFromShardTotal(suppressNotify = false, isCampaignComplete = false): CampaignRewardItem[] {
     const totalShards = this.getTotalShards()
     const newlyUnlocked: CampaignRewardItem[] = []
 
     for (const reward of CAMPAIGN_REWARD_CATALOG) {
       if (totalShards >= reward.shardCost && !this.unlockedRewardIds.has(reward.id)) {
-        this.unlockedRewardIds.add(reward.id)
+        this.applyUnlock(reward, suppressNotify, isCampaignComplete)
         newlyUnlocked.push(reward)
       }
     }
@@ -236,9 +264,12 @@ export class CampaignRewardsManager {
 
 let campaignRewardsManager: CampaignRewardsManager | null = null
 
-export function initializeCampaignRewardsManager(progression: AdventureTrackProgression): CampaignRewardsManager {
+export function initializeCampaignRewardsManager(
+  progression: AdventureTrackProgression,
+  eventBus?: EventBus
+): CampaignRewardsManager {
   if (!campaignRewardsManager) {
-    campaignRewardsManager = new CampaignRewardsManager(progression)
+    campaignRewardsManager = new CampaignRewardsManager(progression, eventBus)
   }
   return campaignRewardsManager
 }
