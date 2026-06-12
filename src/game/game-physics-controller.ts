@@ -32,7 +32,7 @@ import { ComboMultiplierSystem } from '../game-elements/combo-multiplier-system'
 import { BonusTallySystem } from '../game-elements/bonus-tally-system'
 import { GoldBallStreakSystem } from '../game-elements/gold-ball-streak-system'
 import type { SpinnerBumperBuilder, SpinnerBumperVisual, BallTrapBuilder, BallTrapState, LauncherBuilder, LauncherState, MovingGateBuilder, MovingGateState } from '../objects'
-import { BallType, GAME_TUNING, GameConfig, PhysicsConfig } from '../config'
+import { BallType, BALL_SPAWN_CONFIG, GAME_TUNING, GameConfig, PhysicsConfig } from '../config'
 import { DisplayState } from '../game-elements'
 import { TABLE_MAPS } from '../shaders/lcd-table'
 import { PALETTE, CameraMode } from '../game-elements'
@@ -109,6 +109,15 @@ export interface PhysicsHost {
   endAdventureMode(): void
   getBallPosition(): Vector3 | null
   getCameraMode(): CameraMode
+}
+
+/** Fever gold-ball multiplier from BALL_SPAWN_CONFIG when display is in FEVER state. */
+export function getFeverScoreMultiplier(
+  displayState: DisplayState | undefined,
+  ballType: BallType,
+): number {
+  if (displayState !== DisplayState.FEVER) return 1
+  return BALL_SPAWN_CONFIG.feverMultipliers[ballType]
 }
 
 export class GamePhysicsController {
@@ -1030,7 +1039,8 @@ export class GamePhysicsController {
       this.host.uiManager?.updateComboChainMeter(0, GAME_TUNING.combo.chainDistinctThreshold, false)
     }
     this.syncComboSnapshot()
-    if (this.host.display?.getDisplayState() === DisplayState.FEVER) {
+    const wasFeverActive = this.host.display?.getDisplayState() === DisplayState.FEVER
+    if (wasFeverActive) {
       this.host.eventBus.emit('fever:end')
       this.host.eventBus.emit('display:set', DisplayState.IDLE)
       this.host.effects?.setLightingMode('normal', 0)
@@ -1048,8 +1058,22 @@ export class GamePhysicsController {
       // total already reflects it when spawnFloatingNumber() shows the value.
       const streak = this.goldBallStreakSystem.registerCollect(this.nowSeconds())
       const streakAdjustedBase = Math.round(collected.points * streak.multiplier)
-      const awardedPoints = this.awardScore(streakAdjustedBase, 'gold-ball-collect', collectPos)
-      this.bonusTallySystem.recordScore('gold-ball', streakAdjustedBase)
+      // Stacking: base → streak → fever → combo/multiball (awardScore)
+      const feverMultiplier = getFeverScoreMultiplier(
+        wasFeverActive ? DisplayState.FEVER : DisplayState.IDLE,
+        collected.type,
+      )
+      const feverAdjustedBase = Math.round(streakAdjustedBase * feverMultiplier)
+      if (feverMultiplier > 1) {
+        this.host.eventBus.emit('score:multiplier', {
+          basePoints: streakAdjustedBase,
+          awardedPoints: feverAdjustedBase,
+          multiplier: feverMultiplier,
+          source: 'gold-ball-collect',
+        })
+      }
+      const awardedPoints = this.awardScore(feverAdjustedBase, 'gold-ball-collect', collectPos)
+      this.bonusTallySystem.recordScore('gold-ball', feverAdjustedBase)
 
       if (streak.isStreak) {
         this.host.eventBus.emit('gold-ball:streak', {
