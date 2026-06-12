@@ -26,6 +26,7 @@ describe('InputHandler', () => {
     onFlipperRight: vi.fn(),
     onPlunger: vi.fn(),
     onPlungerChargeUpdate: vi.fn(),
+    onPlungerChargeRelease: vi.fn(),
     onNudge: vi.fn(),
     onPause: vi.fn(),
     onReset: vi.fn(),
@@ -103,8 +104,8 @@ describe('InputHandler', () => {
       expect(frame.nudge).toEqual({ x: 0.6, y: 0, z: 0.3 })
     })
 
-    it('queues nudge with correct direction for Space', () => {
-      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Space' }))
+    it('queues nudge with correct direction for KeyW', () => {
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'KeyW' }))
       const frame = handler.processBufferedInputs()
       expect(frame.nudge).toEqual({ x: 0, y: 0, z: 0.8 })
     })
@@ -156,6 +157,32 @@ describe('InputHandler', () => {
       handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Enter' }))
       const frame = handler.processBufferedInputs()
       expect(frame.plunger).toBe(true)
+    })
+
+    it('queues plunger=true when NumpadEnter is released while held', () => {
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'NumpadEnter' }))
+      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'NumpadEnter' }))
+      const frame = handler.processBufferedInputs()
+      expect(frame.plunger).toBe(true)
+    })
+
+    it('queues plunger=true when Space is released while held', () => {
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Space' }))
+      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Space' }))
+      const frame = handler.processBufferedInputs()
+      expect(frame.plunger).toBe(true)
+    })
+
+    it('computes plunger charge on release even if no update frame ran', () => {
+      const nowSpy = vi.spyOn(performance, 'now')
+      nowSpy.mockReturnValue(1750)
+      nowSpy.mockReturnValueOnce(1000)
+
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Enter' }))
+      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Enter' }))
+
+      expect(callbacks.onPlungerChargeRelease).toHaveBeenCalledWith(0.5)
+      nowSpy.mockRestore()
     })
   })
 

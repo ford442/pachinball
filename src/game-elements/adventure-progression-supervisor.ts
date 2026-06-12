@@ -1,4 +1,4 @@
-import type { EventBus } from '../game/event-bus'
+import type { EventBus, PachinballEventMap } from '../game/event-bus'
 import { type TrackInfo, type AdventureTrackProgression } from './adventure-track-progression'
 
 export interface AdventureProgressionSupervisorCallbacks {
@@ -56,12 +56,17 @@ export class AdventureProgressionSupervisor {
   private portalKind: PortalKind | null = null
   private activeMultiplier = 1
   private elapsedTime = 0
+  private readonly unsubscribePortalActivationFailed: () => void
 
   constructor(
     private readonly eventBus: EventBus,
     private readonly progression: AdventureTrackProgression,
     private readonly callbacks: AdventureProgressionSupervisorCallbacks = {},
-  ) {}
+  ) {
+    this.unsubscribePortalActivationFailed = eventBus.on('portal:activation-failed', (payload) => {
+      this.handlePortalActivationFailed(payload)
+    })
+  }
 
   startTrack(trackId: string, initialScore = 0): void {
     const trackInfo = this.progression.getTrackInfo(trackId)
@@ -133,6 +138,20 @@ export class AdventureProgressionSupervisor {
     return this.portalOpen
   }
 
+  handlePortalActivationFailed({ trackId, kind }: PachinballEventMap['portal:activation-failed']): boolean {
+    if (!this.activeTrackId || !this.activeTrackInfo || !this.hasResolvedOutcome || !this.portalOpen) {
+      return false
+    }
+    if (trackId !== this.activeTrackId || kind !== this.portalKind) {
+      return false
+    }
+
+    this.hasResolvedOutcome = false
+    this.portalOpen = false
+    this.portalKind = null
+    return true
+  }
+
   getActiveMultiplier(): number {
     return this.activeMultiplier
   }
@@ -202,6 +221,7 @@ export class AdventureProgressionSupervisor {
    * other supervisor classes).
    */
   dispose(): void {
+    this.unsubscribePortalActivationFailed()
     this.reset()
   }
 

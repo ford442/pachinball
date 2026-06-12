@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { BallType, BALL_SPAWN_CONFIG } from '../src/config'
+import { BallType, BALL_SPAWN_CONFIG, GameConfig } from '../src/config'
 import { DisplayState } from '../src/game-elements'
-import { getFeverScoreMultiplier } from '../src/game/game-physics-controller'
+import { applyFeverGoldMultiplier, getFeverScoreMultiplier } from '../src/game/game-physics-controller'
 
 describe('getFeverScoreMultiplier', () => {
   it('returns 1× for gold-plated when display is IDLE', () => {
@@ -49,5 +49,25 @@ describe('getFeverScoreMultiplier', () => {
     const base = BALL_SPAWN_CONFIG.points[BallType.SOLID_GOLD]
     const feverAdjusted = Math.round(base * getFeverScoreMultiplier(DisplayState.FEVER, BallType.SOLID_GOLD))
     expect(feverAdjusted).toBe(25000)
+  })
+
+  it('gold-plated small-ball swarm during FEVER applies fever to members and quick-collect bonus before combo stacking', () => {
+    const memberBase = GameConfig.smallGoldBalls.basePoints
+    const swarmSize = GameConfig.smallGoldBalls.swarmSize
+    const feverAdjustedMember = applyFeverGoldMultiplier(DisplayState.FEVER, BallType.GOLD_PLATED, memberBase)
+    const quickCollectBase = Math.round(
+      memberBase * swarmSize * GameConfig.smallGoldBalls.quickCollectMultiplier,
+    )
+    const feverAdjustedQuickCollect = applyFeverGoldMultiplier(
+      DisplayState.FEVER,
+      BallType.GOLD_PLATED,
+      quickCollectBase,
+    )
+
+    expect(feverAdjustedMember).toBe(600)
+    expect(feverAdjustedMember * swarmSize).toBe(2400)
+    expect(quickCollectBase).toBe(1800)
+    expect(feverAdjustedQuickCollect).toBe(3600)
+    expect((feverAdjustedMember * swarmSize) + feverAdjustedQuickCollect).toBe(6000)
   })
 })

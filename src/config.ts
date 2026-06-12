@@ -474,6 +474,15 @@ export const GameConfig = {
   },
 
   smallGoldBalls: {
+    // Economy policy:
+    // - Each swarm member is a real collectible and counts toward sessionGoldBalls
+    //   and gold-threshold multiball progression individually.
+    // - Scoring stack is: member base -> streak -> fever -> quick-collect bonus
+    //   -> combo/multiball. Quick-collect receives fever, but not streak.
+    // - swarmSize=4 and basePoints=300 are the accepted baseline: one
+    //   gold-plated swarm is 1200 base points before fever/quick/combo bonuses.
+    // - Solid-gold swarms keep SOLID_GOLD point tier per member, but jackpot
+    //   presentation is one-shot on the final collected swarm member.
     // Enable small gold ball swarms instead of single heavy balls
     enabled: true,
     // Number of small balls to spawn per gold ball trigger

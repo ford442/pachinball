@@ -7,6 +7,8 @@ import { GamepadManager } from './gamepad'
 export type { InputFrame, PendingInputFrame, LatencyReport }
 
 export class InputHandler {
+  private static readonly PLUNGER_KEYS = new Set(['Enter', 'NumpadEnter', 'Space'])
+
   // Input buffering for frame-aligned processing
   private pendingInputs: PendingInputFrame = {}
   private lastProcessedFrame: InputFrame = {
@@ -398,13 +400,7 @@ export class InputHandler {
    */
   updatePlungerCharge(): void {
     if (!this.plungerChargeState.isHeld) return
-    
-    const now = performance.now()
-    const heldTime = now - this.plungerChargeState.chargeStartTime
-    const newChargeLevel = Math.min(
-      heldTime / this.plungerChargeState.maxChargeTime,
-      1.0
-    )
+    const newChargeLevel = this.calculatePlungerChargeLevel()
     
     // Only update if charge level changed
     if (newChargeLevel !== this.plungerChargeState.chargeLevel) {
@@ -427,10 +423,20 @@ export class InputHandler {
    * Release plunger and return the charge level
    */
   private releasePlungerCharge(): number {
-    const finalChargeLevel = this.plungerChargeState.chargeLevel
+    const finalChargeLevel = this.calculatePlungerChargeLevel()
+    this.plungerChargeState.chargeLevel = finalChargeLevel
     this.plungerChargeState.isHeld = false
     this.onPlungerChargeRelease(finalChargeLevel)
     return finalChargeLevel
+  }
+
+  private calculatePlungerChargeLevel(): number {
+    if (!this.plungerChargeState.isHeld) return this.plungerChargeState.chargeLevel
+    const heldTime = performance.now() - this.plungerChargeState.chargeStartTime
+    return Math.min(
+      Math.max(heldTime / this.plungerChargeState.maxChargeTime, 0),
+      1.0
+    )
   }
 
   /**
@@ -456,7 +462,7 @@ export class InputHandler {
       return
     }
 
-    if ((event.code === 'Space' || event.code === 'Enter') && this.getState() === GameState.MENU) {
+    if ((event.code === 'Space' || InputHandler.PLUNGER_KEYS.has(event.code)) && this.getState() === GameState.MENU) {
       event.preventDefault()
       this.onStart()
       return
@@ -478,7 +484,7 @@ export class InputHandler {
       this.queueInput('flipperRight', true)
     }
 
-    if (!adventureActive && event.code === 'Enter') {
+    if (!adventureActive && InputHandler.PLUNGER_KEYS.has(event.code)) {
       // Start plunger charge on key down
       event.preventDefault()
       if (!this.plungerChargeState.isHeld) {
@@ -494,7 +500,7 @@ export class InputHandler {
       this.queueInput('nudge', { x: 0.6, y: 0, z: 0.3 })
     }
 
-    if (event.code === 'Space') {
+    if (event.code === 'KeyW') {
       event.preventDefault()
       this.queueInput('nudge', { x: 0, y: 0, z: 0.8 })
     }
@@ -531,7 +537,7 @@ export class InputHandler {
       this.queueInput('flipperRight', false)
     }
 
-    if (!adventureActive && event.code === 'Enter') {
+    if (!adventureActive && InputHandler.PLUNGER_KEYS.has(event.code)) {
       // Release plunger on key up
       if (this.plungerChargeState.isHeld) {
         this.releasePlungerCharge()

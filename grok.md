@@ -5,7 +5,7 @@
 ## Project Overview
 **pachinball** is a proof-of-concept 3D hybrid game blending Japanese Pachinko mechanics with American Pinball physics and scoring. Built as a WebGPU-first experience using Babylon.js scene with Rapier 3D WASM physics.
 
-- **Core Idea**: Drop a ball, flip paddles (Space), hit bumpers for points, reset with R.
+- **Core Idea**: Drop a ball, flip paddles with Left Shift / Right Shift, charge and release the plunger with Space or Enter, hit bumpers for points, reset with R.
 - **Tech Focus**: Real-time 3D physics + rendering in browser, Vite + TypeScript.
 - **Live Demo**: https://test.1ink.us/pachinball/index.html
 
@@ -27,7 +27,7 @@
 npm install
 npm run dev
 ```
-Open http://localhost:5173/. Press **Space** to flip paddle, **R** to reset.
+Open http://localhost:5173/. Use **Left Shift** / **Right Shift** for the flippers, hold **Space** or **Enter** to charge and release the plunger, and press **R** to reset.
 
 ## Grok Guidelines
 - **Be helpful with 3D/WebGPU/Physics**: Suggest optimizations for Rapier integration, Babylon.js best practices, performance tweaks for smooth 60fps gameplay.

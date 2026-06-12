@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173/ and press **Space** to flip the paddle. Hit the bumpers to score points! Press **R** to reset the ball and score.
+Open http://localhost:5173/. Use **Left Shift** / **Right Shift** for the flippers, hold **Space** or **Enter** to charge and release the plunger, and press **R** to reset the ball.
 
 ## Campaign Mode
 

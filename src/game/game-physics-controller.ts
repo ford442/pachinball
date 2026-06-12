@@ -120,6 +120,14 @@ export function getFeverScoreMultiplier(
   return BALL_SPAWN_CONFIG.feverMultipliers[ballType]
 }
 
+export function applyFeverGoldMultiplier(
+  displayState: DisplayState | undefined,
+  ballType: BallType,
+  points: number,
+): number {
+  return Math.round(points * getFeverScoreMultiplier(displayState, ballType))
+}
+
 export class GamePhysicsController {
   private readonly host: PhysicsHost
   private lastCollisionTime: Map<string, number> = new Map()
@@ -343,7 +351,8 @@ export class GamePhysicsController {
    * and its current pose, by `alpha`. This smooths motion at framerates that
    * don't line up with the fixed physics timestep without affecting the
    * simulation itself. `alpha = 1` renders at the raw current pose (used when
-   * no step has run yet, or interpolation is disabled).
+   * no step has run yet, or interpolation is disabled). See
+   * tests/game-physics-controller-interpolation.test.ts.
    */
   private syncMeshes(alpha: number): void {
     const bindings = this.host.gameObjects?.getBindings() || []
@@ -1115,11 +1124,9 @@ export class GamePhysicsController {
       const streak = this.goldBallStreakSystem.registerCollect(this.nowSeconds())
       const streakAdjustedBase = Math.round(collected.points * streak.multiplier)
       // Stacking: base → streak → fever → combo/multiball (awardScore)
-      const feverMultiplier = getFeverScoreMultiplier(
-        wasFeverActive ? DisplayState.FEVER : DisplayState.IDLE,
-        collected.type,
-      )
-      const feverAdjustedBase = Math.round(streakAdjustedBase * feverMultiplier)
+      const feverDisplayState = wasFeverActive ? DisplayState.FEVER : DisplayState.IDLE
+      const feverMultiplier = getFeverScoreMultiplier(feverDisplayState, collected.type)
+      const feverAdjustedBase = applyFeverGoldMultiplier(feverDisplayState, collected.type, streakAdjustedBase)
       if (feverMultiplier > 1) {
         this.host.eventBus.emit('score:multiplier', {
           basePoints: streakAdjustedBase,
@@ -1144,16 +1151,24 @@ export class GamePhysicsController {
       }
 
       if (collected.quickCollectBonus) {
-        const bonusAwarded = this.awardScore(
+        // Swarm quick-collect follows the same economy stack as regular gold
+        // collection: base/streak member scoring is already handled above,
+        // then quick-collect bonus receives fever before combo/multiball.
+        const quickCollectAdjustedBase = applyFeverGoldMultiplier(
+          feverDisplayState,
+          collected.type,
           collected.quickCollectBonus.totalPoints,
+        )
+        const bonusAwarded = this.awardScore(
+          quickCollectAdjustedBase,
           'gold-ball-quick-collect',
           collectPos,
         )
-        this.bonusTallySystem.recordScore('gold-ball', bonusAwarded)
+        this.bonusTallySystem.recordScore('gold-ball', quickCollectAdjustedBase)
         this.host.eventBus.emit('score:multiplier', {
           basePoints: collected.quickCollectBonus.totalPoints,
-          awardedPoints: bonusAwarded,
-          multiplier: collected.quickCollectBonus.multiplier,
+          awardedPoints: quickCollectAdjustedBase,
+          multiplier: collected.quickCollectBonus.multiplier * feverMultiplier,
           source: 'gold-ball-quick-collect',
         })
         this.host.showMessage(`QUICK COLLECT x${collected.quickCollectBonus.multiplier.toFixed(1)} +${bonusAwarded}`, 1800)
@@ -1163,7 +1178,7 @@ export class GamePhysicsController {
         this.startChainMultiball('gold-threshold', 2)
       }
 
-      if (collected.type === BallType.SOLID_GOLD) {
+      if (collected.jackpotEligible) {
         this.host.effects?.startSolidGoldPulse()
         this.host.eventBus.emit('jackpot:start')
         this.host.eventBus.emit('display:set', DisplayState.JACKPOT)

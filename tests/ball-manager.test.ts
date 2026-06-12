@@ -676,6 +676,34 @@ describe('BallManager', () => {
       expect(last?.quickCollectBonus).toBeUndefined()
     })
 
+    it('marks only the final solid-gold swarm member as jackpot eligible', () => {
+      const manager = makeManager()
+      const bodies = manager.spawnSmallGoldBallSwarm(undefined, BallType.SOLID_GOLD)
+      expect(bodies.length).toBe(GameConfig.smallGoldBalls.swarmSize)
+
+      for (let i = 0; i < bodies.length - 1; i++) {
+        const result = manager.collectBall(bodies[i])
+        expect(result?.type).toBe(BallType.SOLID_GOLD)
+        expect(result?.points).toBe(GameConfig.smallGoldBalls.basePoints)
+        expect(result?.jackpotEligible).toBe(false)
+      }
+
+      const final = manager.collectBall(bodies[bodies.length - 1])
+      expect(final?.type).toBe(BallType.SOLID_GOLD)
+      expect(final?.jackpotEligible).toBe(true)
+    })
+
+    it('keeps non-swarm solid-gold balls jackpot eligible on collect', () => {
+      const manager = makeManager()
+      const body = {}
+      setBallData(manager, body, BallType.SOLID_GOLD, BALL_TIERS[BallType.SOLID_GOLD].basePoints)
+
+      const result = manager.collectBall(body as never)
+
+      expect(result?.type).toBe(BallType.SOLID_GOLD)
+      expect(result?.jackpotEligible).toBe(true)
+    })
+
     it('removeBall cleans up swarm tracking so an incomplete swarm never awards a bonus', () => {
       const manager = makeManager()
       const bodies = manager.spawnSmallGoldBallSwarm(undefined, BallType.GOLD_PLATED)

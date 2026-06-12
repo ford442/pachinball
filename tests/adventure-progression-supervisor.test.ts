@@ -170,6 +170,45 @@ describe('AdventureProgressionSupervisor', () => {
     expect(supervisor.getActiveMultiplier()).toBe(neonHelixInfo.timeoutPenaltyMultiplier)
   })
 
+  it('recovers from portal activation failure and retries on the next update', () => {
+    const bus = new EventBus()
+    const progression = new AdventureTrackProgression()
+    const supervisor = new AdventureProgressionSupervisor(bus, progression)
+    let portalOpenCount = 0
+    let failedOnce = false
+
+    bus.on('portal:open', (payload) => {
+      portalOpenCount += 1
+      if (!failedOnce) {
+        failedOnce = true
+        bus.emit('portal:activation-failed', {
+          trackId: payload.trackId,
+          kind: payload.kind,
+          mode: payload.mode,
+        })
+      }
+    })
+
+    supervisor.startTrack('NEON_HELIX', 1000)
+    supervisor.update(1, 52000)
+
+    expect(portalOpenCount).toBe(1)
+    expect(supervisor.isPortalOpen()).toBe(false)
+    expect(progression.isTrackCompleted('NEON_HELIX')).toBe(false)
+
+    const remainingAfterFailure = supervisor.getTimeRemaining()
+    supervisor.update(1, 52000)
+
+    expect(portalOpenCount).toBe(2)
+    expect(supervisor.isPortalOpen()).toBe(true)
+    expect(supervisor.getTimeRemaining()).toBeLessThan(remainingAfterFailure)
+
+    supervisor.onPortalEntered(61000, 0)
+
+    expect(progression.isTrackCompleted('NEON_HELIX')).toBe(true)
+    expect(progression.getCurrentTrack()).toBe('CYBER_CORE')
+  })
+
   it('calls onTrackAdvanced after reset so startTrack can safely be used in the callback', () => {
     const bus = new EventBus()
     const progression = new AdventureTrackProgression()

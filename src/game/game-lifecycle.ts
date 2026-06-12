@@ -98,6 +98,7 @@ export class GameLifecycle {
       case GameState.PLAYING:
         if (menuOverlay) menuOverlay.classList.add('hidden')
         if (pauseOverlay) pauseOverlay.classList.add('hidden')
+        this.focusGameplayCanvas()
         this.host.uiManager?.hidePauseMenu()
         if (this.host.effects?.getAudioContext()?.state === 'suspended') {
           this.host.effects.getAudioContext()?.resume().catch(() => {})
@@ -139,6 +140,15 @@ export class GameLifecycle {
         this.host.handleGameOverLeaderboard()
         break
     }
+  }
+
+  private focusGameplayCanvas(): void {
+    const canvas = this.host.scene?.getEngine().getRenderingCanvas()
+    if (!canvas) return
+    if (!canvas.hasAttribute('tabindex')) {
+      canvas.setAttribute('tabindex', '0')
+    }
+    canvas.focus({ preventScroll: true })
   }
 
   getCameraMode(): CameraMode {

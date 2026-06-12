@@ -19,7 +19,7 @@ const SCORE_SOURCES = {
     'launcher-fired',
     'launcher-triggered',
   ]),
-  GOLD: new Set(['gold-ball-collect']),
+  GOLD: new Set(['gold-ball-collect', 'gold-ball-quick-collect']),
   COMBO: new Set(['combo-chain-bonus']),
   TIME_GOAL: new Set(['adventure-goal-award', 'adventure-end-bonus']),
   PREMIUM: new Set(['jackpot', 'slot-win']),

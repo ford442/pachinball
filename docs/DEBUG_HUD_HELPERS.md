@@ -9,7 +9,7 @@ Lightweight debugging tools for validating the A/B campaign loop.
 console.log("Adventure active:", game.adventureMode?.isActive())
 console.log("Current zone:", game.adventureMode?.getCurrentZone())
 console.log("Portal sensor handle:", game.adventureMode?.getPortalSensorHandle())
-console.log("Portal handle set size:", game.physicsController?.portalSensorHandleSet?.size)
+console.log("Portal handle set size:", game.physicsController?.getPortalSensorHandleSetSize?.())
 
 // Quick validation
 console.log("Table bodies disabled:", game.gameObjects?.getBumperBodies?.().every(b => !b.isEnabled?.()))

@@ -1209,7 +1209,7 @@ export class BallManager {
   /**
    * Mark a ball as collected (when it drains)
    */
-  collectBall(body: RAPIER.RigidBody): { type: BallType; points: number; quickCollectBonus?: { multiplier: number; totalPoints: number } } | null {
+  collectBall(body: RAPIER.RigidBody): { type: BallType; points: number; jackpotEligible: boolean; quickCollectBonus?: { multiplier: number; totalPoints: number } } | null {
     const data = this.ballDataMap.get(body)
     if (!data) return null
 
@@ -1222,13 +1222,19 @@ export class BallManager {
     this.onGoldBallCollected?.(data.type, data.points)
 
     let quickCollectBonus: { multiplier: number; totalPoints: number } | undefined
+    let jackpotEligible = data.type === BallType.SOLID_GOLD
 
     const swarmId = this.ballSwarmId.get(body)
     if (swarmId !== undefined) {
+      // Solid-gold swarms represent one jackpot spawn event. Keep each member's
+      // point tier as SOLID_GOLD, but fire jackpot treatment only on the final
+      // collected member of a complete swarm.
+      jackpotEligible = false
       const group = this.swarmGroups.get(swarmId)
       if (group) {
         group.collected.add(body)
         if (group.collected.size >= group.bodies.size) {
+          jackpotEligible = group.baseType === BallType.SOLID_GOLD
           const elapsedSeconds = (performance.now() - group.spawnTime) / 1000
           if (elapsedSeconds <= GameConfig.smallGoldBalls.quickCollectBonusWindow) {
             const multiplier = GameConfig.smallGoldBalls.quickCollectMultiplier
@@ -1241,7 +1247,7 @@ export class BallManager {
       this.ballSwarmId.delete(body)
     }
 
-    return { type: data.type, points: data.points, quickCollectBonus }
+    return { type: data.type, points: data.points, jackpotEligible, quickCollectBonus }
   }
 
   /**
