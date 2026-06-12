@@ -16,7 +16,17 @@ console.log("Table bodies disabled:", game.gameObjects?.getBumperBodies?.().ever
 ```
 
 ## 2. Debug HUD Panel Additions
-Add to DebugHUD: adventureActive, currentZone, portalSensorHandle, portalHandleSetSize, tablePhysicsEnabled, activeCameraType.
+
+The HUD (press `` ` `` to toggle, gated by `import.meta.env.DEV` or `?debug=1`)
+shows a "Campaign" panel with:
+
+- `adventure active` — `adventureMode?.isActive()`
+- `portal sensor handle` — `adventureMode?.getPortalSensorHandle()` (`-1` when no portal is open)
+- `portal handle set size` — `physicsController.getPortalSensorHandleSetSize()`
+- `table physics enabled` — `gameObjects.areTableBodiesEnabled()`
+- `active camera` — `scene.activeCamera?.getClassName()` (e.g. `FreeCamera`, `ArcRotateCamera`)
+
+Values update at the existing 250ms HUD cadence.
 
 ## 3. Automated Assertions (Playwright)
 See full content in swarm output for E2E test examples.

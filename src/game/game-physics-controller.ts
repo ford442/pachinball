@@ -311,6 +311,11 @@ export class GamePhysicsController {
     this.portalSensorHandleSet.delete(handle)
   }
 
+  /** Number of registered exit-portal sensor handles — debug HUD diagnostics. */
+  getPortalSensorHandleSetSize(): number {
+    return this.portalSensorHandleSet.size
+  }
+
   applyInputFrame(frame: InputFrame): void {
     if (frame.flipperLeft !== null) {
       // Delegated to input actions

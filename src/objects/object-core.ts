@@ -31,6 +31,7 @@ export class GameObjects {
   private plungerBody: RAPIER.RigidBody | null = null
   private plungerRestZ = -9.8
   private pinballMeshes: AbstractMesh[] = []
+  private tableBodiesEnabled = true
 
   // Sub-builders
   private flipperBuilder: FlipperBuilder
@@ -346,7 +347,12 @@ export class GameObjects {
     return this.pinballMeshes
   }
 
+  areTableBodiesEnabled(): boolean {
+    return this.tableBodiesEnabled
+  }
+
   setTableBodiesEnabled(enabled: boolean): void {
+    this.tableBodiesEnabled = enabled
     const bodies = new Set<RAPIER.RigidBody>()
 
     for (const binding of this.bindings) {

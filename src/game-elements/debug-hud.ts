@@ -17,6 +17,11 @@ export interface DebugSnapshot {
   adventureTimeMs: number | null
   dynamicZoneState: string | null
   performanceTier: string
+  adventureActive: boolean
+  portalSensorHandle: number
+  portalHandleSetSize: number
+  tablePhysicsEnabled: boolean
+  activeCameraType: string
 }
 
 interface PanelRow {
@@ -137,6 +142,14 @@ export class DebugHUD {
     this.updatePanel('Mode timers', {
       'adventure ms': snapshot.adventureTimeMs?.toFixed(1) ?? 'n/a',
       'zone state': snapshot.dynamicZoneState ?? 'n/a',
+    })
+
+    this.updatePanel('Campaign', {
+      'adventure active': String(snapshot.adventureActive),
+      'portal sensor handle': snapshot.portalSensorHandle,
+      'portal handle set size': snapshot.portalHandleSetSize,
+      'table physics enabled': String(snapshot.tablePhysicsEnabled),
+      'active camera': snapshot.activeCameraType,
     })
   }
 

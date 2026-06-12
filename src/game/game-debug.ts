@@ -12,6 +12,8 @@ import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { AdventureMode } from '../adventure'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
+import type { GameObjects } from '../objects'
+import type { GamePhysicsController } from './game-physics-controller'
 import type { GameStateManager } from './game-state'
 import type { DebugSnapshot } from '../game-elements'
 import { GameState } from '../game-elements'
@@ -26,6 +28,8 @@ export interface DebugHost {
   readonly adventureMode: AdventureMode | null
   readonly zoneTriggerSystem: ZoneTriggerSystem | null
   readonly dynamicWorld: ReturnType<typeof import('../game-elements/dynamic-world').getDynamicWorld> | null
+  readonly gameObjects: GameObjects | null
+  readonly physicsController: GamePhysicsController
 
   readonly debugHUDQueryEnabled: boolean
   comboCount: number
@@ -110,6 +114,11 @@ export class GameDebug {
       adventureTimeMs,
       dynamicZoneState: dynamicZoneLabel,
       performanceTier: this.host.effects?.getRuntimePerformanceTier() || 'high',
+      adventureActive: isAdventureActive,
+      portalSensorHandle: this.host.adventureMode?.getPortalSensorHandle() ?? -1,
+      portalHandleSetSize: this.host.physicsController.getPortalSensorHandleSetSize(),
+      tablePhysicsEnabled: this.host.gameObjects?.areTableBodiesEnabled() ?? true,
+      activeCameraType: this.host.scene?.activeCamera?.getClassName() ?? 'n/a',
     }
   }
 

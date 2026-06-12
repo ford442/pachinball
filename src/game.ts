@@ -485,6 +485,11 @@ export class Game {
               : null,
             dynamicZoneState: 'n/a',
             performanceTier: 'n/a',
+            adventureActive: this.adventureMode?.isActive() ?? false,
+            portalSensorHandle: this.adventureMode?.getPortalSensorHandle() ?? -1,
+            portalHandleSetSize: this.physicsController.getPortalSensorHandleSetSize(),
+            tablePhysicsEnabled: this.gameObjects?.areTableBodiesEnabled() ?? true,
+            activeCameraType: this.scene?.activeCamera?.getClassName() ?? 'n/a',
           })
         }
       })
