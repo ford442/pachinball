@@ -4,6 +4,9 @@ import { CampaignRewardNotifier } from '../src/game-elements/campaign-reward-not
 import { CelebrationSequencer } from '../src/effects/celebration-sequencer'
 import { QualityTier } from '../src/game-elements/visual-language'
 import type { UnlockedReward } from '../src/game-elements/types'
+import type { DisplaySystem } from '../src/display'
+import type { CabinetLighting } from '../src/effects/cabinet-lighting'
+import type { AdventureCinematicTriggers } from '../src/game-elements/adventure-cinematic-triggers'
 
 const mockAccessibility = {
   reducedMotion: false,
@@ -47,7 +50,7 @@ describe('CampaignRewardNotifier', () => {
   })
 
   it('records grants, persists to sessionStorage, and emits event', () => {
-    let emittedEvent: any = null
+    let emittedEvent: UnlockedReward | null = null
     eventBus.on('reward:unlocked', (payload) => {
       emittedEvent = payload
     })
@@ -91,7 +94,7 @@ describe('CampaignRewardNotifier', () => {
 
     // Fresh notifier instance
     const freshNotifier = new CampaignRewardNotifier(eventBus)
-    const emittedEvents: any[] = []
+    const emittedEvents: UnlockedReward[] = []
     eventBus.on('reward:unlocked', (payload) => {
       emittedEvents.push(payload)
     })
@@ -106,9 +109,20 @@ describe('CampaignRewardNotifier', () => {
 
 describe('CelebrationSequencer', () => {
   let eventBus: EventBus
-  let mockDisplay: any
-  let mockCabinetLighting: any
-  let mockCinematics: any
+  let mockDisplay: {
+    getQualityTier: ReturnType<typeof vi.fn>
+    overlay: {
+      show: ReturnType<typeof vi.fn>
+      hide: ReturnType<typeof vi.fn>
+      isActive: ReturnType<typeof vi.fn>
+    }
+  }
+  let mockCabinetLighting: {
+    triggerRewardBurst: ReturnType<typeof vi.fn>
+  }
+  let mockCinematics: {
+    requestBeat: ReturnType<typeof vi.fn>
+  }
   let sequencer: CelebrationSequencer
 
   beforeEach(() => {
@@ -135,9 +149,9 @@ describe('CelebrationSequencer', () => {
 
     sequencer = new CelebrationSequencer(
       eventBus,
-      mockDisplay,
-      mockCabinetLighting,
-      mockCinematics,
+      mockDisplay as unknown as DisplaySystem,
+      mockCabinetLighting as unknown as CabinetLighting,
+      mockCinematics as unknown as AdventureCinematicTriggers,
       { summaryThreshold: 3 }
     )
   })

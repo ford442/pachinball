@@ -182,7 +182,7 @@ export class AdventureCinematicTriggers {
       legendary: '#ffd700'
     }
     const colorHex = colors[options.rarity] || '#00ffff'
-    const durationSec = Math.min(2000, options.maxDurationMs) / 1000
+    const durationSec = Math.min(options.maxDurationMs, 2000) / 1000
 
     this.cinematics.playSequence({
       type: 'special-moment',

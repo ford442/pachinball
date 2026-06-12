@@ -1,6 +1,9 @@
 import { QualityTier } from '../game-elements/visual-language'
 import type { UnlockedReward } from '../game-elements/types'
 
+const MAX_SUMMARY_TEXT_LENGTH = 50
+const TRUNCATE_AT_LENGTH = 47
+
 export interface DisplayOverlayShowOptions {
   items: UnlockedReward[]
   durationMs: number
@@ -161,7 +164,9 @@ export class DisplayOverlay {
         ctx.font = 'bold 22px "Courier New", monospace'
         const names = this.items.map(item => item.label.toUpperCase()).join(', ')
         // Draw centered wrapped text or truncated if too long
-        const truncatedNames = names.length > 50 ? names.substring(0, 47) + '...' : names
+        const truncatedNames = names.length > MAX_SUMMARY_TEXT_LENGTH
+          ? names.substring(0, TRUNCATE_AT_LENGTH) + '...'
+          : names
         ctx.fillText(truncatedNames, canvasWidth / 2, y + overlayHeight * 0.65)
       }
     }

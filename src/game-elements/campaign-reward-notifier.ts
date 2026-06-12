@@ -6,17 +6,11 @@ export class CampaignRewardNotifier {
   constructor(private readonly eventBus: EventBus) {}
 
   public recordGrant(reward: CampaignRewardItem, scope: 'track' | 'campaign-complete' = 'track'): void {
-    const kindMap: Record<string, 'ball-skin' | 'cabinet-theme' | 'flipper-style' | 'backbox-tint'> = {
-      'ball-skin': 'ball-skin',
-      'cabinet-theme': 'cabinet-theme',
-      'backbox-tint': 'backbox-tint'
-    }
-
     const unlocked: UnlockedReward = {
-      kind: kindMap[reward.type] || 'ball-skin',
+      kind: reward.type,
       id: reward.id,
       label: reward.name,
-      rarity: reward.rarity || 'common',
+      rarity: reward.rarity,
       scope
     }
 
