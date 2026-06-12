@@ -1,17 +1,22 @@
 /**
- * Physics Debug Renderer — draws Rapier's collider/joint wireframes via
- * Babylon LineSystem meshes. Toggled from the Developer settings panel.
+ * Physics Debug Renderer — draws Rapier's collider/joint wireframes via a
+ * Babylon LinesMesh. Toggled from the Developer settings panel.
  * WebGL2 is the recommended renderer for this view (see renderer-selector.ts).
  */
 
-import { Color4, LinesMesh, MeshBuilder, Vector3, type Scene } from '@babylonjs/core'
+import { LinesMesh, VertexData, type Scene } from '@babylonjs/core'
 import type { PhysicsSystem } from './physics'
 
 export class PhysicsDebugRenderer {
   private readonly scene: Scene
   private readonly physics: PhysicsSystem
   private linesMesh: LinesMesh | null = null
+  private indices: Uint32Array | null = null
   private enabled = false
+  private lastUpdateMs = 0
+
+  /** Refresh rate cap — collider shapes rarely need 60Hz to be useful as a debug overlay. */
+  private static readonly UPDATE_INTERVAL_MS = 250
 
   constructor(scene: Scene, physics: PhysicsSystem) {
     this.scene = scene
@@ -23,6 +28,7 @@ export class PhysicsDebugRenderer {
     if (!enabled) {
       this.linesMesh?.dispose()
       this.linesMesh = null
+      this.indices = null
     }
   }
 
@@ -30,44 +36,47 @@ export class PhysicsDebugRenderer {
     return this.enabled
   }
 
-  /** Call once per frame (after the physics step) while enabled. */
+  /**
+   * Call once per frame (after the physics step) while enabled.
+   * Rebuilds the mesh geometry directly from Rapier's flat vertex/color
+   * buffers — avoids allocating a Vector3/Color4 per line endpoint, which
+   * for a busy pachinko table (tens of thousands of segments) is fast
+   * enough to do every frame but not via CreateLineSystem's array API.
+   */
   update(): void {
     if (!this.enabled) return
+
+    const now = performance.now()
+    if (now - this.lastUpdateMs < PhysicsDebugRenderer.UPDATE_INTERVAL_MS) return
+    this.lastUpdateMs = now
 
     const world = this.physics.getWorld()
     if (!world) return
 
     const { vertices, colors } = world.debugRender()
-    const segmentCount = Math.floor(vertices.length / 6)
-    if (segmentCount === 0) {
-      this.linesMesh?.dispose()
-      this.linesMesh = null
-      return
+    const vertexCount = vertices.length / 3
+    if (vertexCount === 0) return
+
+    if (!this.linesMesh) {
+      this.linesMesh = new LinesMesh('physicsDebugLines', this.scene, null, null, false, true, true)
+      this.linesMesh.isPickable = false
     }
 
-    const lines: Vector3[][] = []
-    const lineColors: Color4[][] = []
-    for (let i = 0; i < segmentCount; i++) {
-      const vOff = i * 6
-      const cOff = i * 8
-      lines.push([
-        new Vector3(vertices[vOff], vertices[vOff + 1], vertices[vOff + 2]),
-        new Vector3(vertices[vOff + 3], vertices[vOff + 4], vertices[vOff + 5]),
-      ])
-      const color = new Color4(colors[cOff], colors[cOff + 1], colors[cOff + 2], colors[cOff + 3] ?? 1)
-      lineColors.push([color, color])
+    if (!this.indices || this.indices.length !== vertexCount) {
+      this.indices = new Uint32Array(vertexCount)
+      for (let i = 0; i < vertexCount; i++) this.indices[i] = i
     }
 
-    this.linesMesh = MeshBuilder.CreateLineSystem(
-      'physicsDebugLines',
-      { lines, colors: lineColors, instance: this.linesMesh ?? undefined },
-      this.scene
-    )
-    this.linesMesh.isPickable = false
+    const vertexData = new VertexData()
+    vertexData.positions = vertices
+    vertexData.indices = this.indices
+    vertexData.colors = colors
+    vertexData.applyToMesh(this.linesMesh, true)
   }
 
   dispose(): void {
     this.linesMesh?.dispose()
     this.linesMesh = null
+    this.indices = null
   }
 }
