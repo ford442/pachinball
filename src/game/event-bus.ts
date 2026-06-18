@@ -316,6 +316,33 @@ export interface PachinballEventMap {
     amount: number
     duration?: number
   }
+  'effect:slot:lighting': {
+    mode: 'idle' | 'spin' | 'stop' | 'win' | 'jackpot'
+  }
+
+  // Slot machine mini-game events
+  'slot:spin:start': {
+    duration: number
+    reelSpeeds: number[]
+    stopDelays: number[]
+  }
+  'slot:reel:stop': {
+    reelIndex: number
+    symbol: string
+  }
+  'slot:win': {
+    combination: string
+    multiplier: number
+    points: number
+    symbols: string[]
+  }
+  'slot:jackpot': {
+    points: number
+    symbols: string[]
+  }
+  'slot:nearmiss': {
+    symbols: string[]
+  }
 
   // Sound and audio events
   'sound:play': {

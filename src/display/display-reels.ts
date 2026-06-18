@@ -14,20 +14,41 @@ import {
 import type { Scene, Mesh, TransformNode } from '@babylonjs/core'
 import { DisplayState, type DisplayConfig, type SlotReel } from './display-types'
 
+export interface SpinOptions {
+  /** Per-reel rotation speeds. If omitted, random speeds are used. */
+  reelSpeeds?: number[]
+  /** If false, the reels keep spinning until stopReel() is called externally. */
+  autoStop?: boolean
+  /** Base spin duration in seconds before stop delays begin. */
+  spinDuration?: number
+  /** Per-reel delay after spinDuration before this reel locks. */
+  stopDelays?: number[]
+  /** Pre-determined final symbols (used by tests / debug force). */
+  targetSymbols?: string[]
+}
+
 export class DisplayReelsLayer {
   private scene: Scene
   private reels: SlotReel[] = []
   private spinning = false
   private stopTimer = 0
-  private slotSymbols = ['7️⃣', '💎', '🍒', '🔔', '🍇', '⭐']
-  private reelSymbols: string[] = ['7', 'BAR', 'CHERRY', 'BELL', 'DIAMOND']
+
+  // Configurable symbol set. Defaults preserve legacy behavior.
+  private reelSymbols: string[] = ['7', 'DIAMOND', 'BELL', 'CHERRY', 'GRAPE', 'STAR']
+  private symbolWeights: Record<string, number> | null = null
+
+  // Spin control state
+  private spinOptions: SpinOptions = {}
+
+  // Completion callback
+  private onStoppedCallback: ((symbols: string[]) => void) | null = null
 
   private mesh: Mesh | null = null
   private dynamicTexture: DynamicTexture | null = null
 
   constructor(
     scene: Scene,
-     
+
     _config: DisplayConfig
   ) {
     this.scene = scene
@@ -108,7 +129,7 @@ export class DisplayReelsLayer {
       ctx.strokeRect(x, 0, stripW, h)
 
       // Scroll offset in pixels
-      const offset = reel.position * symbolHeight
+      const offset = (reel.position * reel.symbols.length) * symbolHeight
 
       // Draw symbols
       ctx.font = 'bold 48px monospace'
@@ -159,27 +180,103 @@ export class DisplayReelsLayer {
     this.dynamicTexture.update()
   }
 
-  startSpin(): void {
-    this.spinning = true
-    this.stopTimer = 0
+  /**
+   * Replace the symbol set used on all reels. Optionally supply spawn weights
+   * for pickRandomSymbol().
+   */
+  setSymbols(symbols: string[], weights?: Record<string, number>): void {
+    this.reelSymbols = symbols.length > 0 ? symbols : this.reelSymbols
+    this.symbolWeights = weights ?? null
 
     for (const reel of this.reels) {
-      reel.speed = 10 + Math.random() * 5
+      reel.symbols = [...this.reelSymbols].sort(() => Math.random() - 0.5)
+      reel.targetSymbol = reel.symbols[0]
+    }
+    this.renderReels()
+  }
+
+  getSymbols(): string[] {
+    return this.reelSymbols
+  }
+
+  private pickRandomSymbol(): string {
+    if (this.symbolWeights) {
+      const total = Object.values(this.symbolWeights).reduce((sum, w) => sum + w, 0)
+      let roll = Math.random() * total
+      for (const symbol of this.reelSymbols) {
+        const weight = this.symbolWeights[symbol] ?? 0
+        if (roll < weight) return symbol
+        roll -= weight
+      }
+    }
+    return this.reelSymbols[Math.floor(Math.random() * this.reelSymbols.length)]
+  }
+
+  /**
+   * Begin a spin. With no arguments the legacy auto-stop behavior is preserved.
+   */
+  startSpin(options?: SpinOptions): void {
+    this.spinning = true
+    this.stopTimer = 0
+    this.spinOptions = options ?? {}
+
+    for (let i = 0; i < this.reels.length; i++) {
+      const reel = this.reels[i]
+      reel.speed = options?.reelSpeeds?.[i] ?? 10 + Math.random() * 5
       reel.stopping = false
+      if (options?.targetSymbols?.[i]) {
+        reel.targetSymbol = options.targetSymbols[i]
+      }
     }
   }
 
+  /**
+   * Stop a single reel. If targetSymbol is omitted, the reel lands on a
+   * random symbol from the configured set.
+   */
+  stopReel(index: number, targetSymbol?: string): void {
+    if (index < 0 || index >= this.reels.length) return
+    const reel = this.reels[index]
+    reel.stopping = true
+    reel.targetSymbol = targetSymbol ?? this.pickRandomSymbol()
+  }
+
+  /**
+   * Stop all reels at once. Each reel still settles with spring physics.
+   */
   stopSpin(): void {
     for (let i = 0; i < this.reels.length; i++) {
-      const reel = this.reels[i]
-      reel.stopping = true
-      reel.targetSymbol = reel.symbols[Math.floor(Math.random() * reel.symbols.length)]
+      this.stopReel(i)
     }
+  }
+
+  /**
+   * Instantly lock the reels to the supplied symbols without animation.
+   * Useful for debug force-results.
+   */
+  forceResult(symbols: string[]): void {
+    for (let i = 0; i < this.reels.length; i++) {
+      const reel = this.reels[i]
+      reel.targetSymbol = symbols[i] ?? reel.symbols[0]
+      reel.stopping = false
+      reel.speed = 0
+      const targetIndex = reel.symbols.indexOf(reel.targetSymbol)
+      if (targetIndex >= 0) {
+        reel.position = targetIndex / reel.symbols.length
+      }
+    }
+    this.spinning = false
+    this.spinOptions = {}
+    this.renderReels()
+  }
+
+  setOnStopped(callback: ((symbols: string[]) => void) | null): void {
+    this.onStoppedCallback = callback
   }
 
   update(
     dt: number,
-     
+
     _state: DisplayState
   ): void {
     if (!this.spinning) {
@@ -190,13 +287,20 @@ export class DisplayReelsLayer {
 
     this.stopTimer += dt
 
+    const autoStop = this.spinOptions.autoStop ?? true
+    const spinDuration = this.spinOptions.spinDuration ?? 1.0
+    const defaultStopDelays = [0, 0.5, 1.0]
+
     for (let i = 0; i < this.reels.length; i++) {
       const reel = this.reels[i]
+      const stopDelay = this.spinOptions.stopDelays?.[i] ?? defaultStopDelays[i]
 
       // Start stopping reels with staggered delays
-      if (!reel.stopping && this.stopTimer > 1 + i * 0.5) {
+      if (autoStop && !reel.stopping && this.stopTimer > spinDuration + stopDelay) {
         reel.stopping = true
-        reel.targetSymbol = reel.symbols[Math.floor(Math.random() * reel.symbols.length)]
+        if (!this.spinOptions.targetSymbols?.[i]) {
+          reel.targetSymbol = this.pickRandomSymbol()
+        }
       }
 
       if (reel.stopping) {
@@ -240,7 +344,10 @@ export class DisplayReelsLayer {
     // Check if all stopped
     if (this.reels.every((r) => r.speed === 0)) {
       this.spinning = false
+      this.spinOptions = {}
+      const finalSymbols = this.reels.map((r) => r.targetSymbol)
       this.checkWin()
+      this.onStoppedCallback?.(finalSymbols)
     }
 
     this.renderReels()
@@ -276,10 +383,6 @@ export class DisplayReelsLayer {
     return this.reels
   }
 
-  getSymbols(): string[] {
-    return this.slotSymbols
-  }
-
   setVisible(visible: boolean): void {
     if (this.mesh) {
       this.mesh.isVisible = visible
@@ -293,5 +396,6 @@ export class DisplayReelsLayer {
     this.mesh = null
     this.reels = []
     this.spinning = false
+    this.onStoppedCallback = null
   }
 }

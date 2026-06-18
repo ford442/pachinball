@@ -21,6 +21,7 @@ import {
 } from '../game-elements/accessibility-config'
 import { DisplayShaderLayer } from './display-shader'
 import { DisplayReelsLayer } from './display-reels'
+import { SlotMachine } from './slot-machine'
 import { DisplayVideoLayer } from './display-video'
 import { DisplayImageLayer } from './display-image'
 import { BackboxBorderGlow } from './display-border-glow'
@@ -83,6 +84,9 @@ export class DisplaySystem {
   private _bonusTallyDisplay = 0
   private _bonusTallyAnimating = false
 
+  // Slot machine mini-game (created when event bus is wired)
+  private slotMachine: SlotMachine | null = null
+
   constructor(
     scene: Scene,
     engine: Engine | WebGPUEngine,
@@ -106,6 +110,7 @@ export class DisplaySystem {
     this.reelsLayer = new DisplayReelsLayer(scene, this.config)
     this.videoLayer = new DisplayVideoLayer(scene, this.config)
     this.imageLayer = new DisplayImageLayer(scene, this.config)
+
   }
 
   public getQualityTier(): QualityTier {
@@ -366,6 +371,9 @@ export class DisplaySystem {
     this.videoLayer.updateParallax(this.globalTime)
     this.imageLayer.updateParallax(this.globalTime)
 
+    // Update slot machine *before* reels so stop requests reach the spring layer
+    this.slotMachine?.update(dt)
+
     // Update all layers
     this.shaderLayer.update(dt, this.currentState, this.jackpotPhase)
     this.reelsLayer.update(dt, this.currentState)
@@ -604,33 +612,38 @@ export class DisplaySystem {
   /**
    * Configure the slot machine with settings
    */
-  public configureSlotMachine(config: unknown): void {
-    console.log('[Display] Slot machine configured', config)
+  public configureSlotMachine(config: Partial<import('./slot-types').SlotMachineConfig>): void {
+    this.slotMachine?.configure(config)
   }
 
   /**
-   * Set callback for slot machine events
+   * Set callback for slot machine events.
+   * @deprecated Slot events are now emitted on the EventBus; subscribe there.
    */
-  public setSlotEventCallback(callback: (event: string, data: unknown) => void): void {
-    // Store callback for when slot events happen
-    console.log('[Display] Slot event callback set')
-    void callback
+  public setSlotEventCallback(_callback: (event: string, data: unknown) => void): void {
+    // Slot events are typed EventBus events; this stub is kept for API compatibility.
   }
 
   /**
-   * Determine if slot machine should activate based on score
+   * Determine if slot machine should activate based on score.
+   * Note: activation is normally handled automatically on REACH/FEVER.
    */
   public shouldActivateSlotMachine(score: number): boolean {
-    // Stub: Activate every 10k points roughly
-    return score > 0 && score % 10000 === 0
+    return this.slotMachine?.tryActivate(score) ?? false
   }
 
   /**
-   * Start a slot machine spin
+   * Start a slot machine spin.
    */
   public startSlotSpin(): void {
-    console.log('[Display] Slot spin started')
-    this.reelsLayer.startSpin()
+    this.slotMachine?.forceSpin()
+  }
+
+  /**
+   * Force the next spin to land on the supplied symbols (debug / tests).
+   */
+  public setSlotDebugForce(symbols: import('./slot-types').SlotSymbol[]): void {
+    this.slotMachine?.setDebugForceResult(symbols)
   }
 
   /**
@@ -638,6 +651,11 @@ export class DisplaySystem {
    * DisplaySystem self-manages display state changes via the `display:set` event.
    */
   subscribeToEvents(bus: EventBus): void {
+    if (!this.slotMachine) {
+      this.slotMachine = new SlotMachine(this.reelsLayer, bus)
+    }
+    this.slotMachine.subscribeToEvents()
+
     bus.on('display:set', (state: DisplayState) => {
       this.setDisplayState(state)
     })
@@ -672,6 +690,7 @@ export class DisplaySystem {
    * Dispose all resources
    */
   dispose(): void {
+    this.slotMachine?.dispose()
     this.borderGlow?.dispose()
     this.shaderLayer.dispose()
     this.reelsLayer.dispose()

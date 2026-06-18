@@ -953,6 +953,156 @@ export class SoundSystem {
   }
 
   /**
+   * Slot machine spin-start: rising sawtooth sweep 200Hz → 800Hz.
+   */
+  playSlotSpinStart(): void {
+    if (!this.isInitialized || !this.audioContext || !this.sfxGain) return
+    if (this.isMuted) return
+
+    const o = this.audioContext.createOscillator()
+    const g = this.audioContext.createGain()
+
+    o.type = 'sawtooth'
+    o.frequency.setValueAtTime(200, this.audioContext.currentTime)
+    o.frequency.exponentialRampToValueAtTime(800, this.audioContext.currentTime + 0.3)
+
+    g.gain.setValueAtTime(0.25, this.audioContext.currentTime)
+    g.gain.exponentialRampToValueAtTime(0.0001, this.audioContext.currentTime + 0.5)
+
+    o.connect(g)
+    g.connect(this.sfxGain)
+    o.start()
+    o.stop(this.audioContext.currentTime + 0.5)
+  }
+
+  /**
+   * Slot machine reel stop: mechanical click with reel-specific pitch.
+   */
+  playReelStop(reelIndex: number): void {
+    if (!this.isInitialized || !this.audioContext || !this.sfxGain) return
+    if (this.isMuted) return
+
+    const baseFreq = 400 + reelIndex * 100
+    const o = this.audioContext.createOscillator()
+    const g = this.audioContext.createGain()
+
+    o.type = 'square'
+    o.frequency.setValueAtTime(baseFreq, this.audioContext.currentTime)
+    o.frequency.exponentialRampToValueAtTime(baseFreq * 0.5, this.audioContext.currentTime + 0.05)
+
+    g.gain.setValueAtTime(0.2, this.audioContext.currentTime)
+    g.gain.exponentialRampToValueAtTime(0.0001, this.audioContext.currentTime + 0.1)
+
+    o.connect(g)
+    g.connect(this.sfxGain)
+    o.start()
+    o.stop(this.audioContext.currentTime + 0.1)
+  }
+
+  /**
+   * Slot machine small win: ascending C-major arpeggio scaled by multiplier.
+   */
+  playSlotWin(multiplier: number): void {
+    if (!this.isInitialized || !this.audioContext || !this.sfxGain) return
+    if (this.isMuted) return
+
+    const ctx = this.audioContext
+    const out = this.sfxGain
+    const notes = [523.25, 659.25, 783.99, 1046.5]
+    const duration = Math.min(0.4, 0.1 * Math.max(1, multiplier))
+
+    notes.forEach((freq, i) => {
+      const startTime = ctx.currentTime + i * 0.08
+      const o = ctx.createOscillator()
+      const g = ctx.createGain()
+
+      o.type = 'sine'
+      o.frequency.value = freq
+
+      g.gain.setValueAtTime(0.0001, startTime)
+      g.gain.linearRampToValueAtTime(0.25, startTime + 0.02)
+      g.gain.exponentialRampToValueAtTime(0.0001, startTime + duration)
+
+      o.connect(g)
+      g.connect(out)
+      o.start(startTime)
+      o.stop(startTime + duration + 0.02)
+    })
+  }
+
+  /**
+   * Slot machine jackpot: drum-roll fanfare + victory chord.
+   */
+  playSlotJackpot(): void {
+    if (!this.isInitialized || !this.audioContext || !this.sfxGain) return
+    if (this.isMuted) return
+
+    const ctx = this.audioContext
+    const out = this.sfxGain
+    const now = ctx.currentTime
+
+    // Drum roll
+    for (let i = 0; i < 8; i++) {
+      const o = ctx.createOscillator()
+      const g = ctx.createGain()
+
+      o.type = 'sawtooth'
+      o.frequency.value = 100 + Math.random() * 50
+
+      g.gain.setValueAtTime(0.15, now + i * 0.1)
+      g.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.1 + 0.08)
+
+      o.connect(g)
+      g.connect(out)
+      o.start(now + i * 0.1)
+      o.stop(now + i * 0.1 + 0.1)
+    }
+
+    // Victory chord
+    const chord = [523.25, 659.25, 783.99, 1046.5]
+    chord.forEach((freq, i) => {
+      const startTime = now + 0.8 + i * 0.03
+      const o = ctx.createOscillator()
+      const g = ctx.createGain()
+
+      o.type = i === 0 ? 'sawtooth' : 'sine'
+      o.frequency.value = freq * 2
+
+      g.gain.setValueAtTime(0.0001, startTime)
+      g.gain.linearRampToValueAtTime(i === 0 ? 0.35 : 0.2, startTime + 0.03)
+      g.gain.exponentialRampToValueAtTime(0.0001, startTime + 1.2)
+
+      o.connect(g)
+      g.connect(out)
+      o.start(startTime)
+      o.stop(startTime + 1.25)
+    })
+  }
+
+  /**
+   * Slot machine near-miss: descending "aww" tone.
+   */
+  playNearMiss(): void {
+    if (!this.isInitialized || !this.audioContext || !this.sfxGain) return
+    if (this.isMuted) return
+
+    const o = this.audioContext.createOscillator()
+    const g = this.audioContext.createGain()
+
+    o.type = 'sine'
+    o.frequency.setValueAtTime(400, this.audioContext.currentTime)
+    o.frequency.exponentialRampToValueAtTime(200, this.audioContext.currentTime + 0.3)
+
+    g.gain.setValueAtTime(0.25, this.audioContext.currentTime)
+    g.gain.exponentialRampToValueAtTime(0.0001, this.audioContext.currentTime + 0.3)
+
+    o.connect(g)
+    g.connect(this.sfxGain)
+    o.start()
+    o.stop(this.audioContext.currentTime + 0.3)
+  }
+
+  /**
    * Dispose and cleanup
    */
   dispose(): void {
@@ -1031,6 +1181,37 @@ export function getSoundSystem(eventBus?: EventBus): SoundSystem {
         if (state === 'fever') {
           ss.triggerFeverAudio()
         }
+      })
+    )
+
+    // Slot machine mini-game audio
+    ss.addEventBusUnsubscriber(
+      eventBus.on('slot:spin:start', () => {
+        ss.playSlotSpinStart()
+      })
+    )
+
+    ss.addEventBusUnsubscriber(
+      eventBus.on('slot:reel:stop', ({ reelIndex }) => {
+        ss.playReelStop(reelIndex)
+      })
+    )
+
+    ss.addEventBusUnsubscriber(
+      eventBus.on('slot:win', ({ multiplier }) => {
+        ss.playSlotWin(multiplier)
+      })
+    )
+
+    ss.addEventBusUnsubscriber(
+      eventBus.on('slot:jackpot', () => {
+        ss.playSlotJackpot()
+      })
+    )
+
+    ss.addEventBusUnsubscriber(
+      eventBus.on('slot:nearmiss', () => {
+        ss.playNearMiss()
       })
     )
 

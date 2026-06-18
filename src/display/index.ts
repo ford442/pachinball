@@ -33,3 +33,25 @@ export { DisplayShaderLayer } from './display-shader'
 export { DisplayReelsLayer } from './display-reels'
 export { DisplayVideoLayer } from './display-video'
 export { DisplayImageLayer } from './display-image'
+
+// Slot machine mini-game
+export { SlotMachine } from './slot-machine'
+export {
+  SlotSymbol,
+  SlotActivationMode,
+  SlotSpinState,
+  type SlotMachineConfig,
+  type SlotReelConfig,
+  type SlotWinCombination,
+  type SlotSpinPlan,
+  type SlotResult,
+  type SlotActivationState,
+} from './slot-types'
+export {
+  generateSpin,
+  checkWin,
+  shouldActivate,
+  recordActivation,
+  spinStateToLightMode,
+  DEFAULT_SLOT_MACHINE_CONFIG,
+} from './slot-logic'

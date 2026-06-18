@@ -1020,6 +1020,11 @@ export class EffectsSystem {
           }
         }
       }),
+
+      // Slot machine cabinet lighting sync
+      eventBus.on('effect:slot:lighting', ({ mode }) => {
+        this.setSlotLightingMode(mode)
+      }),
     )
   }
 

@@ -1425,9 +1425,11 @@ A "Table within a Table". The player is shrunk down (thematically) to play a min
 *   `neonTrim` = "#FF00FF" (Magenta)
 
 
-## 35. Enhanced Slot Machine System
+## 35. Enhanced Slot Machine System [IMPLEMENTED]
 
 A comprehensive slot machine mini-game integrated into the backbox display, featuring variable spins, jackpot detection, sound effects, and intermittent activation.
+
+> **Implementation status:** Core slot engine, DisplaySystem wiring, EventBus events, SoundSystem audio, EffectsSystem cabinet lighting, and Vitest unit tests are in place. See `src/display/slot-machine.ts`, `src/display/slot-logic.ts`, `src/display/slot-types.ts`, `src/config.ts` (`SLOT_MACHINE_CONFIG`), `src/game/event-bus.ts`, `src/game-elements/sound-system.ts`, and `tests/slot-machine.test.ts`.
 
 ### A. Overview
 
@@ -1495,7 +1497,7 @@ Cabinet lights sync with slot state:
 
 ### H. Technical Architecture
 
-**Type Definitions** (`types.ts`):
+**Type Definitions** (`src/display/slot-types.ts`):
 ```typescript
 enum SlotActivationMode { ALWAYS, CHANCE, SCORE, HYBRID }
 enum SlotSpinState { IDLE, STARTING, SPINNING, STOPPING, STOPPED, JACKPOT }
@@ -1503,49 +1505,46 @@ interface SlotMachineConfig { activationMode, chancePercent, scoreThreshold, ...
 interface SlotMachineState { spinState, reelSpeeds, finalSymbols, ... }
 ```
 
-**DisplaySystem Integration** (`display.ts`):
+**Pure Logic Engine** (`src/display/slot-logic.ts`):
+- `generateSpin(random, config)` - Randomized spin plan (duration, speeds, stops, symbols)
+- `checkWin(symbols, config)` - Win/near-miss detection
+- `shouldActivate(random, score, time, state, config)` - Activation gating
+
+**DisplaySystem Integration** (`src/display/display-core.ts`):
+- `configureSlotMachine(config)` - Runtime configuration
+- `startSlotSpin()` - Initiate a new spin (delegates to `SlotMachine.forceSpin()`)
 - `shouldActivateSlotMachine(score)` - Check activation conditions
-- `startSlotSpin()` - Initiate a new spin
-- `updateSlotMachine(dt)` - Update spin state each frame
-- `checkWinCombination()` - Validate results after stop
-- `setSlotEventCallback()` - Hook for sound/lighting effects
+- `setSlotDebugForce(symbols)` - Force next spin result (debug)
 
-**EffectsSystem Integration** (`effects.ts`):
-- `playSlotSpinStart()` - Rising pitch effect
-- `playReelStop(index)` - Mechanical click
-- `playSlotWin(multiplier)` - Arpeggio
-- `playSlotJackpot()` - Fanfare
-- `playNearMiss()` - Descending tone
-- `setSlotLightingMode()` - Cabinet light control
-- `updateSlotLighting(dt)` - Per-frame light updates
+**SlotMachine System** (`src/display/slot-machine.ts`):
+- Subscribes to `display:set` for REACH / FEVER activation
+- Drives `DisplayReelsLayer` with staggered stops
+- Emits typed EventBus events
+- Supports `localStorage` debug force-result and global `forceSlotSpin()` / `setSlotDebugForce()` helpers
 
-**Game Integration** (`game.ts`):
-```typescript
-// Setup callback during initialization
-this.display.setSlotEventCallback((event, data) => {
-  switch(event) {
-    case 'spin-start': this.effects.playSlotSpinStart(); break;
-    case 'jackpot': this.triggerJackpot(); break;
-    // ... etc
-  }
-})
+**SoundSystem Integration** (`src/game-elements/sound-system.ts`):
+- `playSlotSpinStart()` - Rising sawtooth 200Hz → 800Hz
+- `playReelStop(index)` - Mechanical click with reel-specific pitch
+- `playSlotWin(multiplier)` - Ascending C-major arpeggio
+- `playSlotJackpot()` - Drum-roll fanfare + victory chord
+- `playNearMiss()` - Descending "aww" tone
 
-// Try activation on target hit
-this.tryActivateSlotMachine()
-```
+**EffectsSystem Integration** (`src/effects/effects-core.ts` + `src/effects/effects-cabinet.ts`):
+- Listens to `effect:slot:lighting` event
+- `setSlotLightingMode()` / `updateSlotLighting()` - Cabinet light chase / flash / win / jackpot
 
 ### I. Event System
 
-The slot machine emits typed events:
+The slot machine emits typed EventBus events (defined in `src/game/event-bus.ts`):
 
-- `spin-start` - Spin initiated with duration/speeds
-- `spin-stop` - All reels beginning to stop
-- `reel-stop` - Individual reel stopped with symbol
-- `win` - Winning combination detected
-- `jackpot` - Jackpot combination hit
-- `near-miss` - Two jackpot symbols (almost won)
-- `activation-chance` - Slot activated
-- `activation-denied` - Activation conditions not met
+- `slot:spin:start` - Spin initiated with duration/speeds/stop-delays
+- `slot:reel:stop` - Individual reel stopped with symbol
+- `slot:win` - Winning combination detected
+- `slot:jackpot` - Jackpot combination hit (also re-emits `jackpot:start`)
+- `slot:nearmiss` - Two sevens showing (tension effect)
+- `effect:slot:lighting` - Cabinet lighting mode change
+
+(The sketch items `spin-stop`, `activation-chance`, and `activation-denied` were folded into the above events; activation denial is simply a silent no-op.)
 
 ### J. Scoring Integration
 
