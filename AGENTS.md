@@ -363,3 +363,16 @@ When making changes that touch authentication, API keys, or asset URLs, use `imp
 
 10. **Stale Portal Handles in `portalSensorHandleSet`**  
     Every path that deactivates a portal must unregister its handle. The PORTAL_ENTERED handler covers the happy path, but `switchToTrack()` and `activateExitPortal()` replacement also call `deactivateExitPortal()` — use the `PORTAL_DEACTIVATED` event pattern.
+
+---
+
+## Cursor Cloud specific instructions
+
+This is a frontend-only Vite + TypeScript app — there is no backend service to run for local development. Dependencies (`npm install` + the Playwright Chromium browser) are refreshed automatically by the cloud update script.
+
+Standard commands are in section 2 (`npm run dev`, `npm run build`, `npm run lint`, `npm test`, `npx playwright test`). Non-obvious caveats:
+
+- **Dev server:** `npm run dev` serves on `http://localhost:5173`. Run it in a long-lived terminal (e.g. tmux) before Playwright E2E specs — `playwright.config.ts` has **no** `webServer` block, so it will not auto-start the dev server; tests will fail/hang against `localhost:5173` if nothing is serving.
+- **Tests:** `npm test` (Vitest, Node env, Babylon/Rapier mocked) needs no server. `*.spec.ts` files are Playwright E2E and DO need the dev server running.
+- **Renderer for automation:** WebGPU canvases can't be read by Playwright/computer-use tooling. Append `?renderer=webgl2` to the URL (e.g. `http://localhost:5173/?renderer=webgl2`) when driving the game from automation or capturing screenshots.
+- **`npm run build` and WASM:** `build` runs `tsc -b && vite build && npm run build:wasm`. The `build:wasm` step compiles an *optional* C++ physics engine (`native/`) via Emscripten and **gracefully skips with exit 0 when `emcc` is not installed** — so `npm run build` succeeds in this environment without Emscripten. Gameplay physics uses Rapier WASM (bundled via npm), independent of that optional C++ module.
