@@ -325,6 +325,8 @@ export class GameLifecycle {
     this.host.eventBus.emit('jackpot:start')
     this.host.eventBus.emit('display:set', DisplayState.JACKPOT)
     this.host.soundSystem.triggerJackpotAudio()
+    // Make bumpers visually explode with energy for the whole sequence
+    this.host.gameObjects?.setBumperState('JACKPOT')
 
     if (!this.host.accessibility.reducedMotion) {
       const mapColor = TABLE_MAPS[this.host.mapManager?.getCurrentMap() || 'neon-helix']?.baseColor || '#ff00ff'

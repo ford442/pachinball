@@ -22,6 +22,10 @@ export interface DebugSnapshot {
   portalHandleSetSize: number
   tablePhysicsEnabled: boolean
   activeCameraType: string
+  // Instrumentation for scoring coverage (temporary for audit)
+  bumperHitsThisBall: number
+  pointsThisBall: number
+  zoneEntriesThisBall: number
 }
 
 interface PanelRow {
@@ -125,6 +129,10 @@ export class DebugHUD {
       score: snapshot.score,
       multiplier: `${Math.round(snapshot.multiplier)}x`,
       track: snapshot.adventureTrack ?? 'none',
+      // per-ball scoring instrumentation
+      bumpersThisBall: snapshot.bumperHitsThisBall ?? 0,
+      ptsThisBall: snapshot.pointsThisBall ?? 0,
+      zonesThisBall: snapshot.zoneEntriesThisBall ?? 0,
     })
 
     this.updatePanel('Physics', {

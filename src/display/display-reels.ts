@@ -371,7 +371,9 @@ export class DisplayReelsLayer {
   }
 
   onStateChange(state: DisplayState): void {
-    if (state === DisplayState.JACKPOT || state === DisplayState.FEVER) {
+    // Do not clobber slot-machine controlled spins (autoStop:false with explicit targets)
+    const externallyDriven = !!this.spinOptions && this.spinOptions.autoStop === false
+    if ((state === DisplayState.JACKPOT || state === DisplayState.FEVER) && !externallyDriven) {
       this.startSpin()
     }
   }

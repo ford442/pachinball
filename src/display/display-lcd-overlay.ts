@@ -305,40 +305,123 @@ export class DisplayLcdOverlayLayer {
   }
 
   private drawJackpotOverlay(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-    ctx.save()
-    ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 88px "Courier New", monospace'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.shadowColor = PALETTE.GOLD
-    ctx.shadowBlur = 40
-    ctx.fillText('JACKPOT', w / 2, h * 0.2)
-    ctx.restore()
+    const p = this.jackpotPhase
+    const t = this.time
+    const photosafe = this.reducedMotion || this.photosensitive
 
-    // Crack lines (PLAN.md §8 Phase 1)
-    const crackProgress = this.jackpotPhase >= 1 ? Math.min(1, this.time * 0.4) : 0
-    if (crackProgress > 0 && !this.reducedMotion) {
-      ctx.strokeStyle = `rgba(255, 255, 255, ${crackProgress * 0.7})`
-      ctx.lineWidth = 2
-      const cx = w / 2
-      const cy = h / 2
-      for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI * 2 + this.time * 0.1
-        ctx.beginPath()
-        ctx.moveTo(cx, cy)
-        ctx.lineTo(cx + Math.cos(angle) * w * 0.45 * crackProgress, cy + Math.sin(angle) * h * 0.45 * crackProgress)
-        ctx.stroke()
+    // PHASE 1: BREACH - WARNING + spreading cracks
+    if (p === 1) {
+      ctx.save()
+      ctx.fillStyle = '#ff2244'
+      ctx.font = 'bold 42px "Courier New", monospace'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.shadowColor = '#ff0000'
+      ctx.shadowBlur = photosafe ? 6 : 18
+      const warnPulse = photosafe ? 1 : 0.7 + Math.sin(t * 12) * 0.3
+      ctx.globalAlpha = warnPulse
+      ctx.fillText('WARNING: CORE UNSTABLE', w / 2, h * 0.22)
+      ctx.restore()
+
+      // Cracks radiating from center
+      if (!photosafe) {
+        const crackProgress = Math.min(1.0, t * 0.6)
+        ctx.strokeStyle = `rgba(255,255,255,${0.85 * crackProgress})`
+        ctx.lineWidth = 2.5
+        const cx = w / 2, cy = h / 2
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2 + t * 0.6
+          const r = Math.min(w, h) * 0.42 * crackProgress
+          ctx.beginPath()
+          ctx.moveTo(cx, cy)
+          ctx.lineTo(cx + Math.cos(a) * r * 0.7, cy + Math.sin(a) * r * 0.7)
+          ctx.stroke()
+          // secondary branch
+          const a2 = a + 0.35
+          ctx.beginPath()
+          ctx.moveTo(cx + Math.cos(a) * r * 0.35, cy + Math.sin(a) * r * 0.35)
+          ctx.lineTo(cx + Math.cos(a2) * r, cy + Math.sin(a2) * r)
+          ctx.stroke()
+        }
       }
     }
 
-    // Shockwave ring (Phase 3)
-    if (this.jackpotPhase >= 3 && !this.reducedMotion) {
-      const radius = ((this.time * 120) % (w * 0.6)) + 20
-      ctx.strokeStyle = `rgba(255, 215, 0, ${0.6 - radius / (w * 0.8)})`
-      ctx.lineWidth = 4
-      ctx.beginPath()
-      ctx.arc(w / 2, h / 2, radius, 0, Math.PI * 2)
-      ctx.stroke()
+    // PHASE 2: CRITICAL ERROR - digital countdown + heavy glitch
+    if (p === 2) {
+      const t2 = t - 2.0
+      let num = '3'
+      if (t2 > 1.0) num = '2'
+      if (t2 > 2.0) num = '1'
+      const glitchX = photosafe ? 0 : (Math.sin(t2 * 40) * (w * 0.01))
+      const glitchY = photosafe ? 0 : (Math.cos(t2 * 33) * (h * 0.008))
+
+      ctx.save()
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 140px "Courier New", monospace'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.shadowColor = '#ffffaa'
+      ctx.shadowBlur = photosafe ? 10 : 48
+      ctx.fillText(num, w / 2 + glitchX, h * 0.38 + glitchY)
+      ctx.restore()
+
+      // Hex "peel" hint lines
+      if (!photosafe) {
+        ctx.strokeStyle = 'rgba(255,255,200,0.35)'
+        ctx.lineWidth = 3
+        const r = Math.min(w, h) * 0.32
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + t2 * 1.5
+          ctx.beginPath()
+          ctx.moveTo(w / 2 + Math.cos(a) * r * 0.6, h * 0.38 + Math.sin(a) * r * 0.6)
+          ctx.lineTo(w / 2 + Math.cos(a + 0.6) * r, h * 0.38 + Math.sin(a + 0.6) * r)
+          ctx.stroke()
+        }
+      }
+    }
+
+    // PHASE 3: MELTDOWN - exploding JACKPOT + shockwaves + gold rain
+    if (p === 3) {
+      const t3 = t - 5.0
+      const pop = 1.0 + Math.sin(t3 * 9) * 0.08 + (t3 < 0.6 ? (0.6 - t3) * 1.8 : 0)
+
+      ctx.save()
+      ctx.fillStyle = '#ffeb3b'
+      ctx.font = `bold ${Math.floor(92 * pop)}px "Courier New", monospace`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.shadowColor = '#ffd700'
+      ctx.shadowBlur = photosafe ? 16 : 56
+      ctx.fillText('JACKPOT', w / 2, h * 0.32)
+      ctx.restore()
+
+      // Gold particle rain / shards on canvas (cheap, renderer-agnostic)
+      if (!photosafe) {
+        ctx.fillStyle = 'rgba(255,215,0,0.9)'
+        for (let i = 0; i < 18; i++) {
+          const px = ((i * 73 + t3 * 220) % (w + 40)) - 20
+          const py = (h * 0.5 + ((i * 47 + t3 * 380) % (h * 0.6)))
+          const s = 2 + ((i * 7) % 4)
+          ctx.fillRect(px, py, s, s)
+        }
+      }
+
+      // Radial cyan/gold shockwaves
+      if (!photosafe) {
+        const waveR = ((t3 * 180) % (Math.min(w, h) * 0.7)) + 10
+        ctx.strokeStyle = `rgba(255, 230, 120, ${Math.max(0.15, 0.75 - waveR / (Math.min(w, h) * 0.6))})`
+        ctx.lineWidth = 5
+        ctx.beginPath()
+        ctx.arc(w / 2, h * 0.42, waveR, 0, Math.PI * 2)
+        ctx.stroke()
+
+        const waveR2 = ((t3 * 260 + 60) % (Math.min(w, h) * 0.7)) + 10
+        ctx.strokeStyle = `rgba(120, 255, 255, ${Math.max(0.1, 0.55 - waveR2 / (Math.min(w, h) * 0.6))})`
+        ctx.lineWidth = 3
+        ctx.beginPath()
+        ctx.arc(w / 2, h * 0.42, waveR2, 0, Math.PI * 2)
+        ctx.stroke()
+      }
     }
   }
 

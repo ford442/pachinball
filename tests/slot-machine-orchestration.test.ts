@@ -12,6 +12,7 @@ function createMockReelsLayer(): DisplayReelsLayer & {
   stopReel: ReturnType<typeof vi.fn>
   setOnStopped: ReturnType<typeof vi.fn>
   setSymbols: ReturnType<typeof vi.fn>
+  setVisible: ReturnType<typeof vi.fn>
 } {
   let stoppedCallback: ((symbols: string[]) => void) | null = null
 
@@ -22,6 +23,7 @@ function createMockReelsLayer(): DisplayReelsLayer & {
     setOnStopped: vi.fn((cb) => {
       stoppedCallback = cb
     }),
+    setVisible: vi.fn(),
     // Test helper — simulates reels settling
     simulateStop(symbols: string[]) {
       stoppedCallback?.(symbols)
@@ -31,6 +33,7 @@ function createMockReelsLayer(): DisplayReelsLayer & {
     stopReel: ReturnType<typeof vi.fn>
     setOnStopped: ReturnType<typeof vi.fn>
     setSymbols: ReturnType<typeof vi.fn>
+    setVisible: ReturnType<typeof vi.fn>
     simulateStop(symbols: string[]): void
   }
 }

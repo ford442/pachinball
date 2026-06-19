@@ -73,6 +73,9 @@ export class ZoneTriggerSystem {
   // Debug mode
   private debug = false
 
+  // Per-ball zone entry counter for scoring coverage instrumentation
+  private zoneEntriesThisBall = 0
+
   constructor(debug = false) {
     this.debug = debug
   }
@@ -290,6 +293,7 @@ export class ZoneTriggerSystem {
     newZone.entryPosition = entryPosition.clone()
     this.zoneEntryPosition = entryPosition.clone()
     this.lastTransitionTime = now
+    this.zoneEntriesThisBall++
     
     // Determine if this is a major transition
     const isMajor = this.isMajorZoneTransition(this.previousZoneId, this.currentZoneId)
@@ -449,6 +453,16 @@ export class ZoneTriggerSystem {
     const bounds = activeZone.bounds
     const zoneDepth = bounds.maxZ - bounds.minZ
     return (activeZone.entryPosition.z - bounds.minZ) / zoneDepth
+  }
+
+  /** Per-ball zone entry count (instrumentation) */
+  getZoneEntriesThisBall(): number {
+    return this.zoneEntriesThisBall
+  }
+
+  /** Reset per-ball counters (called on new ball launch) */
+  resetBallCounters(): void {
+    this.zoneEntriesThisBall = 0
   }
 
   /**

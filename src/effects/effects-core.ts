@@ -444,33 +444,57 @@ export class EffectsSystem {
     this.isJackpotActive = true
     this.jackpotTimer = 0
     this.jackpotPhase = 1
-    this.playBeep(100) // Deep sub-bass start
+    // Phase 1 entry: deep sub-bass + alarm siren
+    this.playJackpotAlarm()
   }
 
-  updateJackpotSequence(): void {
+  /**
+   * Advance the 10s Cyber-Shock jackpot sequence with real dt.
+   * Phases:
+   *   1: Breach     (0-2s)  - alarm, cracks, red pulse
+   *   2: Critical   (2-5s)  - rising turbine, countdown glitch, white reveal, white/gold strobe
+   *   3: Meltdown   (5-10s) - explosion, chrome JACKPOT, shockwaves, rainbow, bumper flash
+   */
+  updateJackpotSequence(dt: number): void {
     if (!this.isJackpotActive) return
 
-    const dt = 0.016 // approximate dt
+    const prevPhase = this.jackpotPhase
     this.jackpotTimer += dt
 
     // Phase 1: Breach (0-2s)
     if (this.jackpotTimer < 2.0) {
       this.jackpotPhase = 1
-      if (Math.random() < 0.1) this.playBeep(800) // Alarm siren
+      if (prevPhase !== 1) {
+        // Ensure alarm is audible at the very start of phase 1
+        this.playJackpotAlarm()
+      }
     }
     // Phase 2: Critical Error (2-5s)
     else if (this.jackpotTimer < 5.0) {
       this.jackpotPhase = 2
-      const pitch = 200 + (this.jackpotTimer - 2.0) * 200 // Rising pitch
-      if (Math.random() < 0.2) this.playBeep(pitch)
+      if (prevPhase !== 2) {
+        this.playJackpotTurbine(2.8)
+        // Digital "countdown" beeps (lightweight proxy)
+        setTimeout(() => this.playBeep(880), 300)
+        setTimeout(() => this.playBeep(880), 900)
+        setTimeout(() => this.playBeep(660), 1500)
+      }
     }
     // Phase 3: Meltdown (5-10s)
     else if (this.jackpotTimer < 10.0) {
       if (this.jackpotPhase !== 3) {
-        // One-shot explosion sound simulation
-        this.playBeep(50)
+        this.jackpotPhase = 3
+        this.playJackpotExplosion()
+        // Gold particle bursts
+        this.spawnJackpotBurst(new Vector3(0, 5, 6))
+        this.spawnJackpotBurst(new Vector3(-2, 4, 3))
+        this.spawnJackpotBurst(new Vector3(3, 7, 1))
+        // Extra impact layer
+        this.audioEffects?.playSlotJackpot()
+      } else if (Math.random() < 0.08) {
+        // Occasional extra bursts during meltdown
+        this.spawnJackpotBurst(new Vector3((Math.random() - 0.5) * 8, 3 + Math.random() * 5, 2 + Math.random() * 6))
       }
-      this.jackpotPhase = 3
     }
     // End
     else {
@@ -576,6 +600,18 @@ export class EffectsSystem {
 
   playSlotJackpot(): void {
     this.audioEffects?.playSlotJackpot()
+  }
+
+  playJackpotAlarm(): void {
+    this.audioEffects?.playJackpotAlarm()
+  }
+
+  playJackpotTurbine(duration?: number): void {
+    this.audioEffects?.playJackpotTurbine(duration)
+  }
+
+  playJackpotExplosion(): void {
+    this.audioEffects?.playJackpotExplosion()
   }
 
   playNearMiss(): void {
@@ -923,6 +959,9 @@ export class EffectsSystem {
     // Performance check
     this.checkPerformance(dt)
 
+    // Jackpot sequence phase driver (must run before cabinet/display consume jackpotPhase)
+    this.updateJackpotSequence(dt)
+
     // Original updates
     this.updateShards(dt)
     this.updateBloom()
@@ -968,6 +1007,13 @@ export class EffectsSystem {
 
   spawnTrail(): void {
     this.particleEffects.spawnTrail()
+  }
+
+  /**
+   * Spawn a dramatic gold/magenta particle explosion (used by jackpot meltdown phase).
+   */
+  spawnJackpotBurst(position: Vector3): void {
+    this.particleEffects.spawnJackpotBurst(position)
   }
 
   /**

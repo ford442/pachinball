@@ -141,6 +141,11 @@ export class GamePhysicsController {
   private spinnerHandleSet: Set<number> = new Set()
   private bumperVisualMap: Map<number, BumperVisual> = new Map()
   private deathZoneHandle: number = -1
+
+  // Per-ball scoring coverage instrumentation (reset on launch; for debug/audit)
+  private bumperHitsThisBall = 0
+  private pointsThisBall = 0
+  private zoneEntriesThisBall = 0
   private adventureSensorHandle: number = -1
   /** Handles of active exit-portal sensor bodies; collisions are silently skipped
    *  in the dispatcher since portal contact is detected via intersectionPair queries
@@ -196,6 +201,11 @@ export class GamePhysicsController {
         const awardedPoints = Math.round(data.amount * effectiveMultiplier)
         this.host.score += awardedPoints
         this.scoringBreakdown.recordScore(awardedPoints, data.source)
+        // Also track in per-ball instrumentation (covers slot etc that emit points:awarded directly)
+        this.pointsThisBall += awardedPoints
+        if (data.source?.includes('bumper')) {
+          this.bumperHitsThisBall++
+        }
         if (effectiveMultiplier > 1) {
           this.host.eventBus.emit('score:multiplier', {
             basePoints: data.amount,
@@ -230,6 +240,13 @@ export class GamePhysicsController {
       host.eventBus.on('jackpot:start', () => {
         if (!this.host.stateManager.isPlaying()) return
         this.startChainMultiball('jackpot', 3)
+      })
+    )
+
+    // Reset per-ball scoring counters on launch (instrumentation for coverage audit)
+    this.eventBusUnsubscribers.push(
+      host.eventBus.on('ball:launched', () => {
+        this.resetBallScoreCounters()
       })
     )
   }
@@ -322,6 +339,23 @@ export class GamePhysicsController {
   /** Number of registered exit-portal sensor handles — debug HUD diagnostics. */
   getPortalSensorHandleSetSize(): number {
     return this.portalSensorHandleSet.size
+  }
+
+  // Instrumentation getters for scoring audit
+  getBumperHitsThisBall(): number {
+    return this.bumperHitsThisBall
+  }
+  getPointsThisBall(): number {
+    return this.pointsThisBall
+  }
+  getZoneEntriesThisBall(): number {
+    return this.zoneEntriesThisBall
+  }
+  resetBallScoreCounters(): void {
+    this.bumperHitsThisBall = 0
+    this.pointsThisBall = 0
+    this.zoneEntriesThisBall = 0
+    this.host.zoneTriggerSystem?.resetBallCounters?.()
   }
 
   applyInputFrame(frame: InputFrame): void {
@@ -575,10 +609,17 @@ export class GamePhysicsController {
     const jackpotPhase = this.host.effects?.jackpotPhase || 0
     this.host.display?.update(dt, jackpotPhase)
 
+    // Drive bumper JACKPOT visuals during the Cyber-Shock sequence (especially phase 3 meltdown)
+    if (this.host.effects?.isJackpotActive) {
+      this.host.gameObjects?.setBumperState('JACKPOT')
+    }
+
     if (this.host.effects && !this.host.effects.isJackpotActive && this.host.display?.getDisplayState() === DisplayState.JACKPOT) {
       this.host.eventBus.emit('jackpot:end')
       this.host.eventBus.emit('display:set', DisplayState.IDLE)
       this.host.effects.setAtmosphereState('IDLE')
+      // Restore bumpers to normal lighting after sequence
+      this.host.gameObjects?.setBumperState('IDLE')
     }
 
     this.updateCombo(dt)
@@ -1023,6 +1064,11 @@ export class GamePhysicsController {
     const awardedPoints = Math.round(basePoints * totalMultiplier)
     this.host.score += awardedPoints
     this.scoringBreakdown.recordScore(awardedPoints, source)
+    // Instrumentation: track per-ball awards
+    this.pointsThisBall += awardedPoints
+    if (source.includes('bumper')) {
+      this.bumperHitsThisBall++
+    }
     if (position) {
       this.host.effects?.spawnFloatingNumber(awardedPoints, position)
     }

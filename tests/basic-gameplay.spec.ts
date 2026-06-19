@@ -134,5 +134,36 @@ test.describe('Basic Gameplay Physics Smoke', () => {
       (text) => !text.includes('ERR_CONNECTION_REFUSED') && !text.includes('localhost:8000')
     );
     expect(unexpectedErrors).toHaveLength(0);
+
+    // 8. Scoring coverage guard (PR #263 regression): after launch + flipper activity,
+    // a ball should have hit at least one scoring element (bumper/target) producing >0 points or counter.
+    // Poll for up to 12s while keeping some input activity to prevent instant drain.
+    await page.evaluate(() => {
+      const g = (window as any).game;
+      if (g?.inputActions) {
+        g.inputActions.handleFlipperLeft?.(true);
+        g.inputActions.handleFlipperRight?.(true);
+      }
+    });
+    const hasScore = await expect.poll(async () => {
+      return page.evaluate(() => {
+        const g = (window as any).game;
+        const score = g?.score ?? 0;
+        const bh = g?.physicsController?.getBumperHitsThisBall?.() ?? 0;
+        const pb = g?.physicsController?.getPointsThisBall?.() ?? 0;
+        const zh = g?.zoneTriggerSystem?.getZoneEntriesThisBall?.() ?? 0;
+        return (score > 0 || bh > 0 || pb > 0 || zh > 0);
+      });
+    }, { intervals: [300], timeout: 12000 });
+    expect(hasScore).toBe(true);
+
+    // cleanup input
+    await page.evaluate(() => {
+      const g = (window as any).game;
+      if (g?.inputActions) {
+        g.inputActions.handleFlipperLeft?.(false);
+        g.inputActions.handleFlipperRight?.(false);
+      }
+    });
   });
 });

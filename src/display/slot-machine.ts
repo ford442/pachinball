@@ -157,6 +157,8 @@ export class SlotMachine {
     if (forcedResult) {
       this.setDebugForceResult(forcedResult)
     }
+    // For debug forcing, ensure reels are visible so the spin can be observed.
+    this.reelsLayer.setVisible(true)
     this.startSpin(currentScore)
   }
 
@@ -243,6 +245,10 @@ export class SlotMachine {
       this.eventBus.emit('slot:jackpot', {
         points: result.points,
         symbols: this.finalSymbols,
+      })
+      this.eventBus.emit('points:awarded', {
+        amount: result.points,
+        source: 'slot-machine-jackpot',
       })
       this.setLighting('jackpot')
     } else if (result.combination) {

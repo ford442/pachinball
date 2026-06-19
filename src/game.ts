@@ -494,6 +494,9 @@ export class Game {
             portalHandleSetSize: this.physicsController.getPortalSensorHandleSetSize(),
             tablePhysicsEnabled: this.gameObjects?.areTableBodiesEnabled() ?? true,
             activeCameraType: this.scene?.activeCamera?.getClassName() ?? 'n/a',
+            bumperHitsThisBall: this.physicsController.getBumperHitsThisBall?.() ?? 0,
+            pointsThisBall: this.physicsController.getPointsThisBall?.() ?? 0,
+            zoneEntriesThisBall: this.zoneTriggerSystem?.getZoneEntriesThisBall?.() ?? 0,
           })
         }
       })

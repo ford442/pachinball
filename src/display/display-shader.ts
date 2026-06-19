@@ -313,24 +313,34 @@ export class DisplayShaderLayer {
       let phase = 0
       let crack = 0.0
       let shock = 0.0
+      let glitch = 0.0
+
+      // Use relative timing within each phase for clean animation curves
+      const rel = Math.max(0, this.time % 12)
 
       if (jackpotPhase === 1) {
         phase = 1
-        crack = Math.min(1.0, this.time * 0.5)
+        crack = Math.min(1.0, rel * 0.7)
+        glitch = 0.12
       } else if (jackpotPhase === 2) {
         phase = 2
         crack = 1.0
+        glitch = 0.65 + Math.sin(this.time * 28) * 0.15
       } else if (jackpotPhase === 3) {
         phase = 3
-        shock = Math.max(0.0, (this.time - 5.0) * 0.5)
+        shock = ((rel * 0.9) % 1.6)
+        glitch = 0.15
       }
 
-      this.jackpotState = {
-        phase,
-        crack,
-        shock,
-        glitch: phase === 2 ? 0.5 : phase === 1 ? 0.1 : 0.0,
-      }
+      this.jackpotState = { phase, crack, shock, glitch }
+
+      // Draw phase-specific overlay content into the base texture so the postprocess can show text
+      this.drawJackpotBaseContent(phase)
+    } else if (this.jackpotBaseTex) {
+      // Clear when not in jackpot
+      const ctx = this.jackpotBaseTex.getContext()
+      ctx.clearRect(0, 0, 256, 256)
+      this.jackpotBaseTex.update()
     }
   }
 
@@ -353,6 +363,60 @@ export class DisplayShaderLayer {
     if (this.backgroundMesh) {
       this.backgroundMesh.isVisible = visible
     }
+  }
+
+  /**
+   * Draw phase-specific text/content into the jackpot base texture (used by the postprocess).
+   * This provides WARNING / COUNTDOWN / JACKPOT text for the WGSL overlay path.
+   */
+  private drawJackpotBaseContent(phase: number): void {
+    if (!this.jackpotBaseTex) return
+    const raw = this.jackpotBaseTex.getContext()
+    const ctx = raw as CanvasRenderingContext2D
+    const tw = 256, th = 256
+    ctx.clearRect(0, 0, tw, th)
+
+    ctx.save()
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+
+    if (phase === 1) {
+      ctx.fillStyle = '#ff3344'
+      ctx.font = 'bold 18px monospace'
+      ctx.shadowColor = '#ff0000'
+      ctx.shadowBlur = 8
+      ctx.fillText('WARNING', tw / 2, th * 0.32)
+      ctx.font = 'bold 13px monospace'
+      ctx.fillText('CORE UNSTABLE', tw / 2, th * 0.44)
+    } else if (phase === 2) {
+      // Countdown digits 3 -> 2 -> 1
+      const idx = Math.floor((this.time * 1.05) % 3)
+      const digits = ['3', '2', '1']
+      ctx.fillStyle = '#ffffee'
+      ctx.font = 'bold 92px monospace'
+      ctx.shadowColor = '#ff0'
+      ctx.shadowBlur = 16
+      ctx.fillText(digits[idx], tw / 2, th * 0.5)
+    } else if (phase === 3) {
+      ctx.fillStyle = '#ffeb3b'
+      ctx.font = 'bold 28px monospace'
+      ctx.shadowColor = '#ffd700'
+      ctx.shadowBlur = 14
+      ctx.fillText('JACKPOT', tw / 2, th * 0.42)
+      // small radial burst lines
+      ctx.strokeStyle = 'rgba(255,215,0,0.6)'
+      ctx.lineWidth = 2
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + this.time * 3
+        ctx.beginPath()
+        ctx.moveTo(tw / 2, th * 0.58)
+        ctx.lineTo(tw / 2 + Math.cos(a) * 70, th * 0.58 + Math.sin(a) * 70)
+        ctx.stroke()
+      }
+    }
+
+    ctx.restore()
+    this.jackpotBaseTex.update()
   }
 
   /**

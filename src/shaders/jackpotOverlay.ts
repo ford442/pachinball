@@ -169,6 +169,12 @@ export const jackpotOverlayPostProcessFragment = `
         vec3 finalColor = baseColor.rgb;
         float alpha = 0.0;
 
+        // Boost text drawn into myTexture (white/yellow content) during jackpot phases
+        float baseLuma = dot(baseColor.rgb, vec3(0.299, 0.587, 0.114));
+        if (uPhase >= 1 && baseLuma > 0.6) {
+          alpha = max(alpha, 0.85);
+        }
+
         vec2 center = vec2(0.5, 0.5);
         float distFromCenter = distance(uv, center);
 

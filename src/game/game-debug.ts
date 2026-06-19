@@ -119,6 +119,10 @@ export class GameDebug {
       portalHandleSetSize: this.host.physicsController.getPortalSensorHandleSetSize(),
       tablePhysicsEnabled: this.host.gameObjects?.areTableBodiesEnabled() ?? true,
       activeCameraType: this.host.scene?.activeCamera?.getClassName() ?? 'n/a',
+      // Scoring coverage instrumentation (per-ball, reset on launch)
+      bumperHitsThisBall: this.host.physicsController.getBumperHitsThisBall?.() ?? 0,
+      pointsThisBall: this.host.physicsController.getPointsThisBall?.() ?? 0,
+      zoneEntriesThisBall: this.host.zoneTriggerSystem?.getZoneEntriesThisBall?.() ?? 0,
     }
   }
 
