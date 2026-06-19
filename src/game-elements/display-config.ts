@@ -242,6 +242,14 @@ export function adaptLegacyConfig(legacyConfig: {
   attractImagePath?: string;
   imageOpacity?: number;
   imageBlendMode?: ImageBlendMode;
+  jackpotVideoPath?: string;
+  feverVideoPath?: string;
+  reachVideoPath?: string;
+  adventureVideoPath?: string;
+  jackpotImagePath?: string;
+  feverImagePath?: string;
+  reachImagePath?: string;
+  adventureImagePath?: string;
 }): DisplayConfig {
   const hasVideo = legacyConfig.attractVideoPath && legacyConfig.attractVideoPath.trim() !== '';
   const hasImage = legacyConfig.attractImagePath && legacyConfig.attractImagePath.trim() !== '';
@@ -261,6 +269,50 @@ export function adaptLegacyConfig(legacyConfig: {
       showShaderBackground: true,
       showReels: !legacyConfig.videoReplacesReels,
       opacity: legacyConfig.imageOpacity ?? 0.85,
+    },
+    stateMedia: {
+      [DisplayState.REACH]: {
+        videoPath: legacyConfig.reachVideoPath || '',
+        imagePath: legacyConfig.reachImagePath || '',
+        showShaderBackground: true,
+        showReels: true,
+        opacity: 0.95,
+        shaderParams: { speed: 5.0, color: '#ff0055' },
+      },
+      [DisplayState.FEVER]: {
+        videoPath: legacyConfig.feverVideoPath || '',
+        imagePath: legacyConfig.feverImagePath || '',
+        showShaderBackground: true,
+        showReels: true,
+        opacity: 0.95,
+        shaderParams: { speed: 10.0, color: '#ffd700' },
+      },
+      [DisplayState.JACKPOT]: {
+        videoPath: legacyConfig.jackpotVideoPath || '',
+        imagePath: legacyConfig.jackpotImagePath || '',
+        showShaderBackground: true,
+        showReels: false,
+        opacity: 1.0,
+        shaderParams: { speed: 20.0, color: '#ff00ff' },
+      },
+      [DisplayState.ADVENTURE]: {
+        videoPath: legacyConfig.adventureVideoPath || '',
+        imagePath: legacyConfig.adventureImagePath || '',
+        showShaderBackground: true,
+        showReels: false,
+        opacity: 0.9,
+        shaderParams: { speed: 1.0, color: '#00aa00' },
+      },
+      [DisplayState.PORTAL_OPEN]: {
+        showShaderBackground: true,
+        showReels: false,
+        shaderParams: { speed: 18.0, color: '#00d9ff' },
+      },
+      [DisplayState.ESCAPE]: {
+        showShaderBackground: true,
+        showReels: false,
+        shaderParams: { speed: 10.0, color: '#ff4400' },
+      },
     },
     imageSettings: {
       blendMode: legacyConfig.imageBlendMode ?? 'normal',

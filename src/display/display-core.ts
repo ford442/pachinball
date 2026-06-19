@@ -5,7 +5,7 @@
  * Extracted and refactored from display.ts for modularity.
  */
 
-import { MeshBuilder, Vector3, DynamicTexture, StandardMaterial, Color3, type Scene, type Mesh, TransformNode } from '@babylonjs/core'
+import { MeshBuilder, Vector3, type Scene, type Mesh, TransformNode } from '@babylonjs/core'
 import type { Engine, WebGPUEngine } from '@babylonjs/core'
 
 import {
@@ -24,6 +24,9 @@ import { DisplayReelsLayer } from './display-reels'
 import { SlotMachine } from './slot-machine'
 import { DisplayVideoLayer } from './display-video'
 import { DisplayImageLayer } from './display-image'
+import { DisplayPhysicalLayer } from './display-physical'
+import { DisplayLcdOverlayLayer } from './display-lcd-overlay'
+import { DisplayStateMachine } from './display-state-machine'
 import { BackboxBorderGlow } from './display-border-glow'
 import type { CRTEffectParams } from './display-types'
 import type { EventBus } from '../game/event-bus'
@@ -39,11 +42,14 @@ export class DisplaySystem {
   private qualityTier: QualityTier = QualityTier.MEDIUM
   private accessibility: AccessibilityConfig
 
-  // Layer managers
+  // Layer managers (PLAN.md §1 stack)
+  private physicalLayer: DisplayPhysicalLayer
   private shaderLayer: DisplayShaderLayer
   private reelsLayer: DisplayReelsLayer
   private videoLayer: DisplayVideoLayer
   private imageLayer: DisplayImageLayer
+  private lcdOverlayLayer: DisplayLcdOverlayLayer
+  private stateMachine: DisplayStateMachine
 
   // Border glow
   private borderGlow: BackboxBorderGlow | null = null
@@ -59,12 +65,7 @@ export class DisplaySystem {
   // Backbox position (kept for future use)
   private backboxPosition: Vector3 | null = null
 
-  // Live text overlay (story + track info) rendered onto the backbox
-  private textMesh: Mesh | null = null
-  private textTexture: DynamicTexture | null = null
-  private textMaterial: StandardMaterial | null = null
-  private storyText = ''
-  private trackText = ''
+  // Live text rendered on the LCD overlay (Layer 3)
   private trackThemePrimary: string = PALETTE.CYAN
   private trackThemeAccent: string = PALETTE.GOLD
 
@@ -73,7 +74,6 @@ export class DisplaySystem {
   private _drainTimer = 0
   private _flashCycleTime = 0
   private _currentSplashIndex = 0
-  private _splashImages: HTMLImageElement[] = []
 
   // Temporary text overlay (combo multiplier, ball save, bonus tally)
   private _temporaryText = ''
@@ -105,11 +105,19 @@ export class DisplaySystem {
       (engine as unknown as { isWebGPU: boolean }).isWebGPU === true
 
     // Initialize layer managers
+    this.stateMachine = new DisplayStateMachine(this.config.transitions?.fadeDuration ?? 0.35)
+    this.physicalLayer = new DisplayPhysicalLayer(scene, this.config, this.qualityTier)
     this.shaderLayer = new DisplayShaderLayer(scene, this.config)
     this.shaderLayer.setAccessibilityScanlineFactor?.(this.accessibility.scanlineIntensity)
     this.reelsLayer = new DisplayReelsLayer(scene, this.config)
     this.videoLayer = new DisplayVideoLayer(scene, this.config)
     this.imageLayer = new DisplayImageLayer(scene, this.config)
+    this.lcdOverlayLayer = new DisplayLcdOverlayLayer(scene, this.config, this.qualityTier)
+    this.lcdOverlayLayer.setAccessibility(
+      this.accessibility.reducedMotion,
+      this.accessibility.flashFrequencyMax <= 1
+    )
+    this.lcdOverlayLayer.setDisplayOverlay(this.overlay)
 
   }
 
@@ -120,6 +128,10 @@ export class DisplaySystem {
   setAccessibility(accessibility: AccessibilityConfig): void {
     this.accessibility = accessibility
     this.shaderLayer.setAccessibilityScanlineFactor?.(accessibility.scanlineIntensity)
+    this.lcdOverlayLayer.setAccessibility(
+      accessibility.reducedMotion,
+      accessibility.flashFrequencyMax <= 1
+    )
   }
 
   /**
@@ -147,13 +159,15 @@ export class DisplaySystem {
     displayPlane.position.z += 0.5
     displayPlane.rotation.y = Math.PI
 
-    // Attach layer meshes to the backbox root
+    // Attach layer meshes to the backbox root (back → front)
+    this.physicalLayer.createLayer(backboxRoot, this.config)
     this.shaderLayer.createLayer(backboxRoot)
-    // Disable CRT curve/scanlines — virtual backbox is a crisp modern LCD
     this.shaderLayer.setCRTEffectEnabled(false)
     this.reelsLayer.createLayer(backboxRoot, this.config)
     this.videoLayer.createLayer(backboxRoot, this.config)
     this.imageLayer.createLayer(backboxRoot, this.config)
+    this.lcdOverlayLayer.createLayer(backboxRoot, this.config)
+    this.lcdOverlayLayer.setTrackTheme(this.trackThemePrimary, this.trackThemeAccent)
 
     // Initialise border glow on the cabinet backbox mesh (built by cabinet preset).
     // The mesh is named 'cabinetBackbox' in all four cabinet presets.
@@ -165,55 +179,13 @@ export class DisplaySystem {
     }
     // Apply the current state immediately so the glow colour is correct from the start.
     this.borderGlow.onDisplaySet(this.currentState)
-
-    this.createTextOverlay(backboxRoot)
-    this._preloadSplashImages()
   }
 
   /** Wire an EffectsSystem for the fresnel rim glow during FEVER. */
   setEffectsSystem(effects: EffectsSystem): void {
     this._effectsSystem = effects
-    // If borderGlow already exists (late wiring), propagate immediately.
     if (this.borderGlow) {
       this.borderGlow.setEffectsSystem(effects)
-    }
-  }
-
-  private createTextOverlay(parent: TransformNode): void {
-    const w = this.config.width
-    const h = this.config.height
-    const texW = 1024
-    const texH = Math.round(texW * (h / w))
-
-    this.textTexture = new DynamicTexture('displayTextTex', { width: texW, height: texH }, this.scene, false)
-    this.textTexture.hasAlpha = true
-
-    const mat = new StandardMaterial('displayTextMat', this.scene)
-    mat.diffuseTexture = this.textTexture
-    mat.opacityTexture = this.textTexture
-    mat.emissiveTexture = this.textTexture
-    mat.emissiveColor = Color3.White()
-    mat.disableLighting = true
-    mat.backFaceCulling = false
-    this.textMaterial = mat
-
-    const plane = MeshBuilder.CreatePlane('displayText', { width: w, height: h }, this.scene)
-    plane.parent = parent
-    plane.rotation.y = Math.PI
-    plane.position.z = 0.25
-    plane.material = mat
-    this.textMesh = plane
-
-    this.redrawTextOverlay()
-  }
-
-  private _preloadSplashImages(): void {
-    const paths = ['/assets/backbox/splash1.png', '/assets/backbox/splash2.png']
-    for (const path of paths) {
-      const img = new Image()
-      img.onerror = () => console.warn(`[Display] Failed to load splash image: ${path}`)
-      img.src = path
-      this._splashImages.push(img)
     }
   }
 
@@ -226,7 +198,7 @@ export class DisplaySystem {
     this._drainTimer = 2.0
     this._flashCycleTime = 0
     this._currentSplashIndex = 0
-    this.redrawTextOverlay()
+    this.lcdOverlayLayer.setDrainMode(true, this._flashCycleTime, this._currentSplashIndex)
   }
 
   /**
@@ -237,127 +209,6 @@ export class DisplaySystem {
     return this._displayMode === 'drain'
   }
 
-  private redrawTextOverlay(): void {
-    if (!this.textTexture) return
-    const ctx = this.textTexture.getContext() as CanvasRenderingContext2D
-    const canvas = ctx.canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-    if (this._displayMode === 'drain') {
-      const photosafe = this.isPhotosafeMode()
-
-      // Draw cycling splash image (if loaded) — skip cycling in photosafe mode
-      const splashIdx = photosafe ? 0 : this._currentSplashIndex
-      const img = this._splashImages[splashIdx]
-      if (img?.complete && img.naturalWidth > 0) {
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      } else {
-        // Fallback solid background when image is not yet loaded
-        ctx.fillStyle = splashIdx === 0 ? '#14003c' : '#3c0014'
-        ctx.fillRect(0, 0, canvas.width, canvas.height)
-      }
-
-      // Neon pulse box + "BALL LOST" — alpha/glow driven by sine wave on _flashCycleTime.
-      // In photosensitive/reduced-motion mode, use static alpha/glow instead.
-      const pulse = photosafe ? 0.5 : (Math.sin(this._flashCycleTime * Math.PI * 4) + 1) / 2
-      const alpha = 0.55 + pulse * 0.45
-      const glow = photosafe ? 12 : 8 + pulse * 40
-
-      const cx = canvas.width / 2
-      const cy = canvas.height / 2
-      const boxW = canvas.width * 0.78
-      const boxH = canvas.height * 0.30
-
-      // Glowing border box
-      ctx.save()
-      ctx.strokeStyle = `rgba(255, 40, 40, ${alpha})`
-      ctx.lineWidth = 6
-      ctx.shadowColor = `rgba(255, 0, 0, ${alpha})`
-      ctx.shadowBlur = glow
-      ctx.strokeRect(cx - boxW / 2, cy - boxH / 2, boxW, boxH)
-      ctx.restore()
-
-      // "BALL LOST" text
-      ctx.save()
-      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`
-      ctx.font = 'bold 96px "Courier New", monospace'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.shadowColor = `rgba(255, 60, 60, ${alpha})`
-      ctx.shadowBlur = glow
-      ctx.fillText('BALL LOST', cx, cy)
-      ctx.restore()
-
-      // Render DisplayOverlay on top
-      this.overlay.render(ctx, canvas.width, canvas.height, this.currentState)
-
-      this.textTexture.update(false)
-      return
-    }
-
-    // Normal mode
-
-    if (this._temporaryText) {
-      ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 72px "Courier New", monospace'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.shadowColor = '#00d9ff'
-      ctx.shadowBlur = 24
-      ctx.fillText(this._temporaryText, canvas.width / 2, canvas.height / 2)
-    }
-
-    if (this.storyText && !this._temporaryText) {
-      ctx.fillStyle = this.trackThemePrimary
-      ctx.font = 'bold 56px "Courier New", monospace'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.shadowColor = this.trackThemePrimary
-      ctx.shadowBlur = 18
-      this.wrapText(ctx, this.storyText, canvas.width / 2, canvas.height * 0.4, canvas.width * 0.9, 64)
-    }
-
-    if (this.trackText && !this._temporaryText) {
-      ctx.shadowBlur = 10
-      ctx.fillStyle = this.trackThemeAccent
-      ctx.font = 'bold 40px "Courier New", monospace'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(this.trackText, canvas.width / 2, canvas.height * 0.82)
-    }
-
-    // Render DisplayOverlay on top
-    this.overlay.render(ctx, canvas.width, canvas.height, this.currentState)
-
-    this.textTexture.update(false)
-  }
-
-  private wrapText(
-    ctx: CanvasRenderingContext2D,
-    text: string,
-    x: number,
-    y: number,
-    maxWidth: number,
-    lineHeight: number
-  ): void {
-    const words = text.split(/\s+/)
-    const lines: string[] = []
-    let line = ''
-    for (const word of words) {
-      const test = line ? `${line} ${word}` : word
-      if (ctx.measureText(test).width > maxWidth && line) {
-        lines.push(line)
-        line = word
-      } else {
-        line = test
-      }
-    }
-    if (line) lines.push(line)
-
-    const startY = y - ((lines.length - 1) * lineHeight) / 2
-    lines.forEach((l, i) => ctx.fillText(l, x, startY + i * lineHeight))
-  }
-
   /**
    * Main update loop
    */
@@ -365,64 +216,66 @@ export class DisplaySystem {
     this.globalTime += dt
     this.jackpotPhase = jackpotPhase ?? 0
 
-    // Parallax Z-axis breathing per layer (subtle depth oscillation)
+    const transition = this.stateMachine.update(dt)
+    this.lcdOverlayLayer.setBlend(transition.blend)
+
+    // Cross-fade main media during state transitions
+    const mediaOpacity = 0.7 + transition.blend * 0.3
+    this.videoLayer.setOpacity(mediaOpacity)
+    this.imageLayer.setOpacity(mediaOpacity)
+
+    // Parallax Z-axis breathing per layer
+    this.physicalLayer.updateParallax(this.globalTime)
     this.shaderLayer.updateParallax(this.globalTime)
     this.reelsLayer.updateParallax(this.globalTime)
     this.videoLayer.updateParallax(this.globalTime)
     this.imageLayer.updateParallax(this.globalTime)
 
-    // Update slot machine *before* reels so stop requests reach the spring layer
+    this.physicalLayer.update(dt, this.currentState)
+    this.lcdOverlayLayer.update(dt, this.currentState, this.jackpotPhase)
+
     this.slotMachine?.update(dt)
 
-    // Update all layers
     this.shaderLayer.update(dt, this.currentState, this.jackpotPhase)
     this.reelsLayer.update(dt, this.currentState)
     this.videoLayer.update()
 
-    // Border glow animation
     this.borderGlow?.update(dt)
 
-    // Update DisplayOverlay
     if (this.overlay.isActive()) {
       this.overlay.update(dt)
-      this.redrawTextOverlay()
     }
 
-    // Drain mode: tick timer, cycle splash, animate overlay, then restore normal mode
     if (this._displayMode === 'drain') {
       this._drainTimer -= dt
       this._flashCycleTime += dt
       const newIndex = Math.floor(this._flashCycleTime / 0.3) % 2
-      // Normal mode: redraw every frame for smooth neon-pulse animation.
-      // Photosafe mode: redraw only when the splash image switches (~3 Hz is enough for a static frame).
       if (!this.isPhotosafeMode() || newIndex !== this._currentSplashIndex) {
         this._currentSplashIndex = newIndex
-        this.redrawTextOverlay()
+        this.lcdOverlayLayer.setDrainMode(true, this._flashCycleTime, this._currentSplashIndex)
       }
       if (this._drainTimer <= 0) {
         this._displayMode = 'normal'
         this._drainTimer = 0
         this._flashCycleTime = 0
-        this.redrawTextOverlay()
+        this.lcdOverlayLayer.setDrainMode(false)
       }
     }
 
-    // Temporary text overlay timer
     if (this._temporaryTextTimer > 0) {
       this._temporaryTextTimer -= dt
       if (this._temporaryTextTimer <= 0 && !this._bonusTallyAnimating) {
         this._temporaryText = ''
-        this.redrawTextOverlay()
+        this.lcdOverlayLayer.setTemporaryText('')
       }
     }
 
-    // Bonus tally count-up animation
     if (this._bonusTallyAnimating) {
       const animDurationS = 1.5
       const step = Math.max(1, Math.ceil(this._bonusTallyTarget * dt / animDurationS))
       this._bonusTallyDisplay = Math.min(this._bonusTallyTarget, this._bonusTallyDisplay + step)
       this._temporaryText = `BONUS ${Math.round(this._bonusTallyDisplay)}`
-      this.redrawTextOverlay()
+      this.lcdOverlayLayer.setTemporaryText(this._temporaryText)
       if (this._bonusTallyDisplay >= this._bonusTallyTarget) {
         this._bonusTallyAnimating = false
         this._temporaryTextTimer = 2.0
@@ -439,26 +292,23 @@ export class DisplaySystem {
    * Set the current display state
    */
   setDisplayState(state: DisplayState, jackpotPhase = 0): void {
-    if (this.currentState === state) return
+    const changed = this.stateMachine.requestState(state)
+    this.jackpotPhase = jackpotPhase
+    if (!changed && this.currentState === state) return
 
     console.log(`[Display] State change: ${this.currentState} -> ${state}`)
     this.currentState = state
-    this.jackpotPhase = jackpotPhase
 
     const media = getStateConfig(this.config, state)
 
-    // Shader background visibility
     this.shaderLayer.setBackgroundVisible(media.showShaderBackground ?? true)
-
-    // Reels visibility
     this.reelsLayer.setVisible(media.showReels ?? true)
+    this.physicalLayer.setVisible(media.showShaderBackground ?? true)
 
-    // Shader params
     if (media.shaderParams) {
       this.shaderLayer.setShaderParams(media.shaderParams)
     }
 
-    // Video layer
     if (media.videoPath) {
       this.videoLayer.loadVideo(media.videoPath)
       this.videoLayer.setVisible(true)
@@ -466,7 +316,6 @@ export class DisplaySystem {
       this.videoLayer.setVisible(false)
     }
 
-    // Image layer
     if (media.imagePath) {
       this.imageLayer.loadImage(media.imagePath, media.opacity ?? 1.0)
       this.imageLayer.setVisible(true)
@@ -474,19 +323,34 @@ export class DisplaySystem {
       this.imageLayer.setVisible(false)
     }
 
-    // Fallback: if no video and no image, ensure shader/reels are visible
     if (!media.videoPath && !media.imagePath) {
       this.shaderLayer.setBackgroundVisible(true)
       this.reelsLayer.setVisible(true)
     }
 
-    // Notify layers of state change
+    this.physicalLayer.onStateChange(state)
     this.shaderLayer.onStateChange(state)
     this.reelsLayer.onStateChange(state)
     this.videoLayer.onStateChange(state)
-
-    // Notify border glow of state change
+    this.lcdOverlayLayer.onStateChange(state)
     this.borderGlow?.onDisplaySet(state)
+
+    const lightingMode = this.lightingModeForState(state)
+    this._effectsSystem?.setLightingMode(lightingMode, lightingMode === 'reach' ? 2.5 : lightingMode === 'fever' ? 4.0 : 0)
+  }
+
+  private lightingModeForState(state: DisplayState): 'normal' | 'reach' | 'fever' | 'hit' {
+    switch (state) {
+      case DisplayState.REACH:
+      case DisplayState.PORTAL_OPEN:
+      case DisplayState.ESCAPE:
+        return 'reach'
+      case DisplayState.FEVER:
+      case DisplayState.JACKPOT:
+        return 'fever'
+      default:
+        return 'normal'
+    }
   }
 
   /**
@@ -551,8 +415,7 @@ export class DisplaySystem {
    * Set story text for adventure mode
    */
   setStoryText(text: string): void {
-    this.storyText = text
-    this.redrawTextOverlay()
+    this.lcdOverlayLayer.setStoryText(text)
   }
 
   /**
@@ -588,14 +451,13 @@ export class DisplaySystem {
   setTrackInfo(trackName: string, progress = 0): void {
     const pct = Math.max(0, Math.min(1, progress))
     const bar = '█'.repeat(Math.round(pct * 10)).padEnd(10, '░')
-    this.trackText = `♪ ${trackName}  [${bar}]`
-    this.redrawTextOverlay()
+    this.lcdOverlayLayer.setTrackText(`♪ ${trackName}  [${bar}]`)
   }
 
   setTrackTheme(primaryHex: string, accentHex?: string): void {
     this.trackThemePrimary = primaryHex
     this.trackThemeAccent = accentHex ?? primaryHex
-    this.redrawTextOverlay()
+    this.lcdOverlayLayer.setTrackTheme(primaryHex, accentHex)
   }
 
   /**
@@ -664,14 +526,14 @@ export class DisplaySystem {
       if (data.multiplier > 1) {
         this._temporaryText = `MULTIPLIER x${data.multiplier}`
         this._temporaryTextTimer = 1.5
-        this.redrawTextOverlay()
+        this.lcdOverlayLayer.setTemporaryText(this._temporaryText)
       }
     })
 
     bus.on('ball:save:triggered', () => {
       this._temporaryText = 'BALL SAVED'
       this._temporaryTextTimer = 2.0
-      this.redrawTextOverlay()
+      this.lcdOverlayLayer.setTemporaryText(this._temporaryText)
     })
 
     bus.on('bonus:tally:start', (data) => {
@@ -692,15 +554,11 @@ export class DisplaySystem {
   dispose(): void {
     this.slotMachine?.dispose()
     this.borderGlow?.dispose()
+    this.physicalLayer.dispose()
     this.shaderLayer.dispose()
     this.reelsLayer.dispose()
     this.videoLayer.dispose()
     this.imageLayer.dispose()
-    this.textTexture?.dispose()
-    this.textMaterial?.dispose()
-    this.textMesh?.dispose()
-    this.textTexture = null
-    this.textMaterial = null
-    this.textMesh = null
+    this.lcdOverlayLayer.dispose()
   }
 }

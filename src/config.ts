@@ -448,7 +448,9 @@ export const GameConfig = {
     spinDuration: 1.2,
     cooldown: 3.0,
     releaseForce: 25.0,
-    releaseAngleVariance: 0.25
+    releaseAngleVariance: 0.25,
+    /** Launch direction target — center playfield bumpers */
+    releaseTarget: { x: 0, y: 0, z: 5 },
   },
   nanoLoom: {
     loomPosition: { x: -13.0, y: 4.0, z: 2.0 },

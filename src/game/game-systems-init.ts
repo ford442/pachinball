@@ -592,6 +592,8 @@ export class GameSystemsInitializer {
         onPopupShow: (name) => g.mapCabinet.showCabinetPopup(name),
         onUISelect: () => g.mapCabinet.updateCabinetSelectorUI(),
       })
+
+      g.wireFeederEventHandlers()
     }, true)
   }
 }

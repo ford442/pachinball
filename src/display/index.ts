@@ -33,6 +33,10 @@ export { DisplayShaderLayer } from './display-shader'
 export { DisplayReelsLayer } from './display-reels'
 export { DisplayVideoLayer } from './display-video'
 export { DisplayImageLayer } from './display-image'
+export { DisplayPhysicalLayer } from './display-physical'
+export { DisplayLcdOverlayLayer } from './display-lcd-overlay'
+export { DisplayStateMachine, type DisplayTransitionSnapshot } from './display-state-machine'
+export { DISPLAY_LAYER_Z } from './display-layer-depth'
 
 // Slot machine mini-game
 export { SlotMachine } from './slot-machine'

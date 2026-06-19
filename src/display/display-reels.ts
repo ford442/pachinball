@@ -13,6 +13,7 @@ import {
 } from '@babylonjs/core'
 import type { Scene, Mesh, TransformNode } from '@babylonjs/core'
 import { DisplayState, type DisplayConfig, type SlotReel } from './display-types'
+import { DISPLAY_LAYER_Z } from './display-layer-depth'
 
 export interface SpinOptions {
   /** Per-reel rotation speeds. If omitted, random speeds are used. */
@@ -78,7 +79,7 @@ export class DisplayReelsLayer {
     this.mesh = MeshBuilder.CreatePlane('displayReels', { width, height }, this.scene)
     this.mesh.parent = parent
     this.mesh.rotation.y = Math.PI
-    this.mesh.position.z = 0.2
+    this.mesh.position.z = DISPLAY_LAYER_Z.REELS
 
     this.dynamicTexture = new DynamicTexture(
       'displayReelsTexture',
@@ -365,7 +366,7 @@ export class DisplayReelsLayer {
   updateParallax(time: number): void {
     if (this.mesh) {
       // Period 3.5 s, amplitude 0.03, phase π/2
-      this.mesh.position.z = 0.2 + Math.sin(time * (2 * Math.PI / 3.5) + Math.PI / 2) * 0.03
+      this.mesh.position.z = DISPLAY_LAYER_Z.REELS + Math.sin(time * (2 * Math.PI / 3.5) + Math.PI / 2) * 0.03
     }
   }
 

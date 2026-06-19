@@ -129,6 +129,7 @@ vi.mock('../src/display/display-video', () => ({
     update = vi.fn()
     updateParallax = vi.fn()
     setVisible = vi.fn()
+    setOpacity = vi.fn()
     loadVideo = vi.fn()
     onStateChange = vi.fn()
     dispose = vi.fn()
@@ -141,8 +142,51 @@ vi.mock('../src/display/display-image', () => ({
     update = vi.fn()
     updateParallax = vi.fn()
     setVisible = vi.fn()
+    setOpacity = vi.fn()
     loadImage = vi.fn()
     dispose = vi.fn()
+  },
+}))
+
+vi.mock('../src/display/display-physical', () => ({
+  DisplayPhysicalLayer: class {
+    createLayer = vi.fn()
+    update = vi.fn()
+    updateParallax = vi.fn()
+    setVisible = vi.fn()
+    onStateChange = vi.fn()
+    dispose = vi.fn()
+  },
+}))
+
+vi.mock('../src/display/display-lcd-overlay', () => ({
+  DisplayLcdOverlayLayer: class {
+    createLayer = vi.fn()
+    update = vi.fn()
+    setAccessibility = vi.fn()
+    setDisplayOverlay = vi.fn()
+    setStoryText = vi.fn()
+    setTrackText = vi.fn()
+    setTrackTheme = vi.fn()
+    setTemporaryText = vi.fn()
+    setDrainMode = vi.fn()
+    setBlend = vi.fn()
+    onStateChange = vi.fn()
+    dispose = vi.fn()
+  },
+}))
+
+vi.mock('../src/display/display-state-machine', () => ({
+  DisplayStateMachine: class {
+    requestState = vi.fn(() => true)
+    update = vi.fn(() => ({
+      current: 'idle',
+      previous: null,
+      progress: 1,
+      isTransitioning: false,
+      blend: 1,
+      lightingMode: 'idle',
+    }))
   },
 }))
 

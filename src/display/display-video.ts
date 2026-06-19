@@ -15,6 +15,7 @@ import {
 } from '@babylonjs/core'
 import type { Scene, Mesh } from '@babylonjs/core'
 import { DisplayState, type DisplayConfig } from './display-types'
+import { DISPLAY_LAYER_Z } from './display-layer-depth'
 
 export class DisplayVideoLayer {
   private scene: Scene
@@ -39,7 +40,7 @@ export class DisplayVideoLayer {
     )
     this.mesh.parent = parent
     this.mesh.rotation.y = Math.PI
-    this.mesh.position.z = 0.1 // slightly in front of shader background
+    this.mesh.position.z = DISPLAY_LAYER_Z.MAIN_VIDEO
   }
 
   /**
@@ -107,7 +108,7 @@ export class DisplayVideoLayer {
   updateParallax(time: number): void {
     if (this.mesh) {
       // Period 3.0 s, amplitude 0.04, phase 3π/4
-      this.mesh.position.z = 0.1 + Math.sin(time * (2 * Math.PI / 3.0) + (3 * Math.PI) / 4) * 0.04
+      this.mesh.position.z = DISPLAY_LAYER_Z.MAIN_VIDEO + Math.sin(time * (2 * Math.PI / 3.0) + (3 * Math.PI) / 4) * 0.04
     }
   }
 
@@ -133,6 +134,12 @@ export class DisplayVideoLayer {
   setVisible(visible: boolean): void {
     if (this.mesh) {
       this.mesh.isVisible = visible
+    }
+  }
+
+  setOpacity(opacity: number): void {
+    if (this.mesh?.material) {
+      (this.mesh.material as StandardMaterial).alpha = opacity
     }
   }
 

@@ -35,6 +35,7 @@ import {
   type TransformNode,
 } from '@babylonjs/core'
 import { DisplayState, type DisplayConfig, CRT_PRESETS, type CRTEffectParams } from './display-types'
+import { DISPLAY_LAYER_Z } from './display-layer-depth'
 import { crtEffectShader } from '../shaders/crt-effect'
 import { jackpotOverlayPostProcessFragment } from '../shaders/jackpotOverlay'
 import { SCANLINE_UNIFORM, computeEffectiveScanlineIntensity } from '../shaders/scanline'
@@ -277,7 +278,7 @@ export class DisplayShaderLayer {
       this.scene
     )
     this.backgroundMesh.parent = parent
-    this.backgroundMesh.position.z = -0.5
+    this.backgroundMesh.position.z = DISPLAY_LAYER_Z.SHADER
     this.backgroundMesh.rotation.y = Math.PI
     this.backgroundMesh.material = this.material
     // Static mesh optimisations
@@ -336,7 +337,7 @@ export class DisplayShaderLayer {
   updateParallax(time: number): void {
     if (this.backgroundMesh) {
       // Period 4.5 s, amplitude 0.02, phase π/4
-      this.backgroundMesh.position.z = -0.5 + Math.sin(time * (2 * Math.PI / 4.5) + Math.PI / 4) * 0.02
+      this.backgroundMesh.position.z = DISPLAY_LAYER_Z.SHADER + Math.sin(time * (2 * Math.PI / 4.5) + Math.PI / 4) * 0.02
     }
   }
 

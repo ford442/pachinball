@@ -560,12 +560,16 @@ export class Game {
     this.prismCoreFeeder = new PrismCoreFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.prismCore)
     this.gaussCannon = new GaussCannonFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.gaussCannon)
     this.quantumTunnel = new QuantumTunnelFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.quantumTunnel)
+  }
+
+  /** Wire feeder callbacks after AdventureManager is ready (postInitManagers). */
+  public wireFeederEventHandlers(): void {
     this.adventureManager?.setFeeders({
-      magSpin: this.magSpinFeeder,
-      nanoLoom: this.nanoLoomFeeder,
-      prismCore: this.prismCoreFeeder,
-      gaussCannon: this.gaussCannon,
-      quantumTunnel: this.quantumTunnel,
+      ...(this.magSpinFeeder ? { magSpin: this.magSpinFeeder } : {}),
+      ...(this.nanoLoomFeeder ? { nanoLoom: this.nanoLoomFeeder } : {}),
+      ...(this.prismCoreFeeder ? { prismCore: this.prismCoreFeeder } : {}),
+      ...(this.gaussCannon ? { gaussCannon: this.gaussCannon } : {}),
+      ...(this.quantumTunnel ? { quantumTunnel: this.quantumTunnel } : {}),
     })
     this.adventureManager?.updateSystems({
       effects: this.effects,

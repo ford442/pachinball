@@ -7,6 +7,7 @@
 import { MeshBuilder, StandardMaterial, Color3, Texture } from '@babylonjs/core'
 import type { Scene, Mesh, TransformNode } from '@babylonjs/core'
 import type { DisplayConfig, ImageBlendMode } from './display-types'
+import { DISPLAY_LAYER_Z } from './display-layer-depth'
 
 export class DisplayImageLayer {
   private scene: Scene
@@ -30,13 +31,13 @@ export class DisplayImageLayer {
     )
     this.mesh.parent = parent
     this.mesh.rotation.y = Math.PI
-    this.mesh.position.z = 0.15
+    this.mesh.position.z = DISPLAY_LAYER_Z.MAIN_IMAGE
   }
 
   updateParallax(time: number): void {
     if (this.mesh) {
       // Period 2.0 s, amplitude 0.05, phase π
-      this.mesh.position.z = 0.15 + Math.sin(time * (2 * Math.PI / 2.0) + Math.PI) * 0.05
+      this.mesh.position.z = DISPLAY_LAYER_Z.MAIN_IMAGE + Math.sin(time * (2 * Math.PI / 2.0) + Math.PI) * 0.05
     }
   }
 
@@ -67,6 +68,12 @@ export class DisplayImageLayer {
 
     if (this.mesh) {
       this.mesh.material = mat
+    }
+  }
+
+  setOpacity(opacity: number): void {
+    if (this.material) {
+      this.material.alpha = opacity
     }
   }
 

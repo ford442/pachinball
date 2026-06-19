@@ -15,9 +15,13 @@ import type {
   BallManager,
   SoundSystem,
 } from '../game-elements'
+import { MagSpinState } from '../game-elements/mag-spin-feeder'
+import { DisplayState } from '../game-elements/display-config'
 import type { GameStateManager } from './game-state'
 import type { GameUIManager } from './game-ui'
 import { getZoneConfig, getTransitionShakeIntensity } from '../game-elements'
+import { GameConfig } from '../config'
+import { FEEDER_STYLES } from '../game-elements/visual-language'
 
 export interface AdventureManagerConfig {
   onZoneEnter?: (zone: AdventureTrackType, config: ZoneConfig, isMajor: boolean) => void
@@ -241,19 +245,25 @@ export class AdventureManager {
     if (this.magSpinFeeder) {
       this.magSpinFeeder.onStateChange = (state) => {
         switch (state) {
-          case 1: // MagSpinState.CATCH
+          case MagSpinState.CATCH:
             this.systems.effects?.playBeep(300)
+            this.systems.effects?.setLightingMode('reach', 2.0)
+            this.systems.effects?.setAtmosphereState('REACH')
+            this.systems.display?.setDisplayState(DisplayState.REACH)
             this.config.onScoreAward?.(500, 'MagSpin Capture')
             break
-          case 2: // MagSpinState.SPIN
-            this.systems.effects?.playBeep(600)
+          case MagSpinState.SPIN:
+            this.systems.effects?.playMagSpinCharge(GameConfig.magSpin.spinDuration)
             break
-          case 3: // MagSpinState.RELEASE
-            this.systems.effects?.playBeep(1200)
-            this.systems.effects?.spawnShardBurst(this.magSpinFeeder?.getPosition() || new Vector3(0, 0, 0))
+          case MagSpinState.RELEASE: {
+            const pos = this.magSpinFeeder?.getPosition() || new Vector3(0, 0, 0)
+            this.systems.effects?.playMagSpinRelease()
+            this.systems.effects?.spawnShardBurst(pos, FEEDER_STYLES.MAG_SPIN.release)
             this.systems.effects?.setBloomEnergy(2.0)
+            this.systems.effects?.addCameraShake(0.35)
             this.config.onScoreAward?.(100, 'MagSpin Release')
             break
+          }
         }
       }
     }

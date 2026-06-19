@@ -39,6 +39,49 @@ export class AudioEffects {
     o.stop(this.audioCtx.currentTime + 0.5)
   }
 
+  /** Mag-Spin charge: rising pitch sweep over the spin duration. */
+  playMagSpinCharge(duration = 1.2): void {
+    if (!this.audioCtx) return
+
+    const now = this.audioCtx.currentTime
+    const o = this.audioCtx.createOscillator()
+    const g = this.audioCtx.createGain()
+
+    o.type = 'sawtooth'
+    o.frequency.setValueAtTime(280, now)
+    o.frequency.exponentialRampToValueAtTime(1400, now + duration * 0.92)
+
+    g.gain.setValueAtTime(0.22, now)
+    g.gain.linearRampToValueAtTime(0.32, now + duration * 0.75)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + duration)
+
+    o.connect(g)
+    g.connect(this.audioCtx.destination)
+    o.start(now)
+    o.stop(now + duration)
+  }
+
+  /** Mag-Spin release: short impactful burst. */
+  playMagSpinRelease(): void {
+    if (!this.audioCtx) return
+
+    const now = this.audioCtx.currentTime
+    const o = this.audioCtx.createOscillator()
+    const g = this.audioCtx.createGain()
+
+    o.type = 'square'
+    o.frequency.setValueAtTime(900, now)
+    o.frequency.exponentialRampToValueAtTime(180, now + 0.12)
+
+    g.gain.setValueAtTime(0.35, now)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.18)
+
+    o.connect(g)
+    g.connect(this.audioCtx.destination)
+    o.start(now)
+    o.stop(now + 0.2)
+  }
+
   playReelStop(reelIndex: number): void {
     if (!this.audioCtx) return
 

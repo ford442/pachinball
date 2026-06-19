@@ -558,6 +558,14 @@ export class EffectsSystem {
     this.audioEffects?.playSlotSpinStart()
   }
 
+  playMagSpinCharge(duration = 1.2): void {
+    this.audioEffects?.playMagSpinCharge(duration)
+  }
+
+  playMagSpinRelease(): void {
+    this.audioEffects?.playMagSpinRelease()
+  }
+
   playReelStop(reelIndex: number): void {
     this.audioEffects?.playReelStop(reelIndex)
   }
