@@ -68,6 +68,12 @@ export class SlotMachine {
   /** Override the RNG outcome of the *next* spin. */
   private debugForceResult: SlotSymbol[] | null = null
 
+  /** Supplies the live game score for HYBRID / SCORE activation gating. */
+  private scoreProvider: () => number = () => 0
+
+  /** Countdown before returning to IDLE and clearing cabinet lighting. */
+  private resultSettleTimer = 0
+
   constructor(
     reelsLayer: DisplayReelsLayer,
     eventBus: EventBus,
@@ -112,10 +118,15 @@ export class SlotMachine {
     this.reelsLayer.setSymbols(displaySymbols, displayWeights)
   }
 
+  /** Wire a live score source (typically `() => game.score`). */
+  setScoreProvider(provider: () => number): void {
+    this.scoreProvider = provider
+  }
+
   subscribeToEvents(): void {
     this.eventBus.on('display:set', (displayState) => {
       if (displayState === DisplayState.REACH || displayState === DisplayState.FEVER) {
-        this.tryActivate()
+        this.tryActivate(this.scoreProvider())
       }
     })
   }
@@ -127,7 +138,7 @@ export class SlotMachine {
   tryActivate(currentScore?: number): boolean {
     if (this.spinState !== SlotSpinState.IDLE) return false
 
-    const score = currentScore ?? this.state.lastActivationScore
+    const score = currentScore ?? this.scoreProvider()
     const now = performance.now() / 1000
 
     if (!shouldActivate(Math.random, score, now, this.state, this.config)) {
@@ -184,6 +195,14 @@ export class SlotMachine {
 
   /** Per-frame update. Must be called *before* DisplayReelsLayer.update(). */
   update(dt: number): void {
+    if (this.resultSettleTimer > 0) {
+      this.resultSettleTimer -= dt
+      if (this.resultSettleTimer <= 0) {
+        this.spinState = SlotSpinState.IDLE
+        this.setLighting('idle')
+      }
+    }
+
     if (this.spinState !== SlotSpinState.SPINNING || !this.spinPlan) return
 
     this.spinTimer += dt
@@ -216,33 +235,17 @@ export class SlotMachine {
     this.state.isSpinning = false
 
     if (result.nearMiss) {
-      this.spinState = SlotSpinState.STOPPED
-      this.eventBus.emit('slot:nearmiss', { symbols: this.finalSymbols })
-      this.setLighting('stop')
-      return
-    }
-
-    if (!result.combination) {
-      this.spinState = SlotSpinState.STOPPED
-      this.setLighting('idle')
-      return
-    }
-
-    if (result.nearMiss) {
-      // Two sevens always create a tension beat, even when a payout also applies.
       this.eventBus.emit('slot:nearmiss', { symbols: this.finalSymbols })
     }
 
-    if (result.combination.isJackpot) {
+    if (result.combination?.isJackpot) {
       this.spinState = SlotSpinState.JACKPOT
       this.eventBus.emit('slot:jackpot', {
         points: result.points,
         symbols: this.finalSymbols,
       })
-      // Also trigger the main jackpot pathway
-      this.eventBus.emit('jackpot:start')
       this.setLighting('jackpot')
-    } else {
+    } else if (result.combination) {
       this.spinState = SlotSpinState.STOPPED
       this.eventBus.emit('slot:win', {
         combination: result.combination.name,
@@ -255,7 +258,12 @@ export class SlotMachine {
         source: 'slot-machine',
       })
       this.setLighting('win')
+    } else {
+      this.spinState = SlotSpinState.STOPPED
+      this.setLighting(result.nearMiss ? 'stop' : 'idle')
     }
+
+    this.resultSettleTimer = result.combination?.isJackpot ? 4.0 : 2.5
   }
 
   private setLighting(mode: 'idle' | 'spin' | 'stop' | 'win' | 'jackpot'): void {

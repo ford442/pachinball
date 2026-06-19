@@ -468,7 +468,7 @@ export class DisplaySystem {
   }
 
   // ============================================================================
-  // SLOT MACHINE METHODS (Stub implementations)
+  // SLOT MACHINE
   // ============================================================================
 
   /**
@@ -476,6 +476,13 @@ export class DisplaySystem {
    */
   public configureSlotMachine(config: Partial<import('./slot-types').SlotMachineConfig>): void {
     this.slotMachine?.configure(config)
+  }
+
+  /**
+   * Wire a live score provider for HYBRID / SCORE activation gating.
+   */
+  public setSlotScoreProvider(provider: () => number): void {
+    this.slotMachine?.setScoreProvider(provider)
   }
 
   /**

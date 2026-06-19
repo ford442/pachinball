@@ -29,6 +29,8 @@ export interface AdventureManagerConfig {
   onAdventureStart?: (trackType?: AdventureTrackType) => void
   onAdventureEnd?: () => void
   onScoreAward?: (points: number, reason: string) => void
+  /** Fired when a feeder or toy triggers the REACH display state. */
+  onReachTriggered?: () => void
 }
 
 export interface AdventureManagerSystems {
@@ -250,6 +252,7 @@ export class AdventureManager {
             this.systems.effects?.setLightingMode('reach', 2.0)
             this.systems.effects?.setAtmosphereState('REACH')
             this.systems.display?.setDisplayState(DisplayState.REACH)
+            this.config.onReachTriggered?.()
             this.config.onScoreAward?.(500, 'MagSpin Capture')
             break
           case MagSpinState.SPIN:

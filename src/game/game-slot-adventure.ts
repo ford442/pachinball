@@ -11,7 +11,7 @@ import type { AdventureMode } from '../adventure'
 import { AdventureTrackType } from '../adventure'
 import type { AdventureTrackProgression } from '../game-elements/adventure-track-progression'
 import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
-import { getScoringBreakdownManager, getTrackThemingSystem } from '../game-elements'
+import { getTrackThemingSystem } from '../game-elements'
 import type { EventBus } from './event-bus'
 import type { AdventureCinematicTriggers } from '../game-elements/adventure-cinematic-triggers'
 import type { AdventureUIStateManager } from '../game-elements/adventure-ui-state'
@@ -30,6 +30,7 @@ export interface SlotAdventureHost {
   readonly gameObjects: GameObjects | null
   readonly mapManager: TableMapManager | null
   readonly scene: Scene | null
+  readonly accessibility: { reducedMotion: boolean }
 
   scoreElement: HTMLElement | null
   score: number
@@ -51,8 +52,8 @@ export interface SlotAdventureHost {
 
 export class GameSlotAdventure {
   private readonly host: SlotAdventureHost
-  private readonly scoringBreakdown = getScoringBreakdownManager()
   private nextAdventureTrack: AdventureTrackType = AdventureTrackType.NEON_HELIX
+  private eventUnsubscribers: Array<() => void> = []
 
   private static readonly TRACK_ORDER: AdventureTrackType[] = [
     AdventureTrackType.NEON_HELIX,
@@ -89,71 +90,47 @@ export class GameSlotAdventure {
   }
 
   setupSlotMachineCallbacks(): void {
-    const { display, effects } = this.host
+    const { display, effects, eventBus } = this.host
     if (!display) return
 
+    for (const unsub of this.eventUnsubscribers) unsub()
+    this.eventUnsubscribers = []
+
     display.configureSlotMachine({
-      activationMode: 'hybrid' as import('../game-elements/types').SlotActivationMode,
-      chancePercent: 0.3,
-      scoreThreshold: 10000,
       enableSounds: true,
       enableLightEffects: true,
     })
 
-    display.setSlotEventCallback((event, data) => {
-      switch (event) {
-        case 'spin-start':
-          effects?.playSlotSpinStart()
-          effects?.setSlotLightingMode('spin')
-          console.log('[Slot] Spin started:', data)
-          break
-        case 'reel-stop': {
-          const reelData = data as { reel: number; symbol: string }
-          effects?.playReelStop(reelData.reel)
-          if (reelData.reel === 2) {
-            effects?.setSlotLightingMode('stop')
-          }
-          break
+    this.eventUnsubscribers.push(
+      eventBus.on('slot:win', ({ points, combination }) => {
+        const pos = this.host.getBallPosition()
+        if (pos) effects?.spawnFloatingNumber(points, pos)
+        console.log(`[Slot] Win: ${combination} — ${points} points`)
+      }),
+
+      eventBus.on('slot:jackpot', ({ points }) => {
+        this.host.triggerJackpot()
+        console.log(`[Slot] JACKPOT! ${points} points`)
+      }),
+
+      eventBus.on('slot:nearmiss', () => {
+        if (!this.host.accessibility.reducedMotion) {
+          effects?.addCameraShake(0.25)
+          effects?.flashVignette('#ffd700', 400)
         }
-        case 'win': {
-          const winData = data as { combination: { name: string; multiplier: number }; score: number }
-          effects?.playSlotWin(winData.combination.multiplier)
-          effects?.setSlotLightingMode('win')
-          this.host.score += winData.score
-          this.scoringBreakdown.recordScore(winData.score, 'slot-win')
-          this.host.updateHUD()
-          const pos = this.host.getBallPosition()
-          if (pos) effects?.spawnFloatingNumber(winData.score, pos)
-          console.log(`[Slot] Win: ${winData.combination.name} - ${winData.score} points`)
-          break
-        }
-        case 'jackpot': {
-          const jackpotData = data as { combination: { name: string }; score: number }
-          effects?.playSlotJackpot()
-          effects?.setSlotLightingMode('jackpot')
-          this.host.triggerJackpot()
-          console.log(`[Slot] JACKPOT! ${jackpotData.score} points`)
-          break
-        }
-        case 'near-miss':
-          effects?.playNearMiss()
-          console.log('[Slot] Near miss!')
-          break
-        case 'activation-chance':
-          console.log('[Slot] Activated:', data)
-          break
-        case 'activation-denied':
-          console.log('[Slot] Activation denied:', data)
-          break
-      }
-    })
+        console.log('[Slot] Near miss!')
+      })
+    )
   }
 
+  /** Attempt slot activation using the current score (REACH / FEVER hook). */
   tryActivateSlotMachine(): void {
-    if (!this.host.display) return
-    if (this.host.display.shouldActivateSlotMachine(this.host.score)) {
-      this.host.display.startSlotSpin()
-    }
+    this.host.display?.shouldActivateSlotMachine(this.host.score)
+  }
+
+  /** Force a slot spin immediately (debug / dev tooling). */
+  forceSlotSpin(): void {
+    this.host.display?.startSlotSpin()
   }
 
   getTrackDisplayName(track: AdventureTrackType): string {

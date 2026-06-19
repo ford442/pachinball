@@ -851,7 +851,6 @@ export class GamePhysicsController {
       this.host.effects?.setLightingMode('reach', 3.0)
       this.host.effects?.setAtmosphereState('REACH')
       this.rebuildHandleCaches()
-      this.host.tryActivateSlotMachine()
     }
   }
 

@@ -18,6 +18,8 @@ export interface InputConfig {
   onTrackPrev?: () => void
   onJackpotTrigger?: () => void
   onDebugHUD?: () => void
+  /** Dev-only: force a slot machine spin (bound to `G` when debug HUD is available). */
+  onForceSlotSpin?: () => void
   onMapSwitch?: (mapIndex: number) => void
   onMapCycle?: () => void
   onCabinetCycle?: () => void
@@ -190,6 +192,13 @@ export class GameInputManager {
     if (e.code === 'Backquote') {
       e.preventDefault()
       this.config.onDebugHUD?.()
+      return
+    }
+
+    // 'G' key to force a slot spin (dev / debug tooling)
+    if (e.code === 'KeyG' && this.config.onForceSlotSpin) {
+      e.preventDefault()
+      this.config.onForceSlotSpin()
       return
     }
   }

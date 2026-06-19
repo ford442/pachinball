@@ -112,6 +112,7 @@ export class GameSystemsInitializer {
       const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
       this.game.display = new DisplaySystem(scene, this.game.engine, displayConfig, this.game.qualityTier, this.game.accessibility)
       this.game.display.subscribeToEvents(this.game.eventBus)
+      this.game.display.setSlotScoreProvider(() => this.game.score)
       this.game.display.setEffectsSystem(this.game.effects)
       this.game.stateManager.setDisplaySystem(this.game.display)
       // Apply persisted scanline settings now that the display system exists
@@ -543,6 +544,7 @@ export class GameSystemsInitializer {
             const pos = g.physicsController.getBallPosition()
             if (pos) g.effects?.spawnFloatingNumber(points, pos)
           },
+          onReachTriggered: () => g.tryActivateSlotMachine(),
           onAdventureEnd: () => {
             g.score += GAME_TUNING.scoring.adventureEndBonus
             getScoringBreakdownManager().recordScore(GAME_TUNING.scoring.adventureEndBonus, 'adventure-end-bonus')

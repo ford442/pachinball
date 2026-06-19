@@ -382,6 +382,10 @@ export class Game {
           if (!this.debugHelper.isDebugHUDKeyboardEnabled()) return
           this.debugHUD?.toggle()
         },
+        onForceSlotSpin: () => {
+          if (!this.debugHelper.isDebugHUDAvailable()) return
+          this.slotAdventure.forceSlotSpin()
+        },
         onMapSwitch: (index) => {
           const maps = this.mapManager?.getMapSystem().getMapIds() || []
           if (index >= 0 && index < maps.length) {
@@ -642,6 +646,7 @@ export class Game {
   getBallPosition(): Vector3 | null { return this.physicsController.getBallPosition() }
   endAdventureMode(): void { this.slotAdventure.endAdventureMode() }
   tryActivateSlotMachine(): void { this.slotAdventure.tryActivateSlotMachine() }
+  forceSlotSpin(): void { this.slotAdventure.forceSlotSpin() }
   rebuildHandleCaches(): void { this.physicsController.rebuildHandleCaches() }
   handleDebugHUDVisibilityChange(visible: boolean): void { this.debugHelper.handleDebugHUDVisibilityChange(visible) }
   isDebugHUDAvailable(): boolean { return this.debugHelper.isDebugHUDAvailable() }
