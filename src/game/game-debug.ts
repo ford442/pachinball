@@ -123,6 +123,10 @@ export class GameDebug {
       bumperHitsThisBall: this.host.physicsController.getBumperHitsThisBall?.() ?? 0,
       pointsThisBall: this.host.physicsController.getPointsThisBall?.() ?? 0,
       zoneEntriesThisBall: this.host.zoneTriggerSystem?.getZoneEntriesThisBall?.() ?? 0,
+      rawCollisionEvents: this.host.physicsController.getRawCollisionEvents?.() ?? 0,
+      knownObstacleMatches: this.host.physicsController.getKnownObstacleMatches?.() ?? 0,
+      bumperMatches: this.host.physicsController.getBumperMatches?.() ?? 0,
+      awardScoreCalls: this.host.physicsController.getAwardScoreCalls?.() ?? 0,
     }
   }
 

@@ -497,6 +497,10 @@ export class Game {
             bumperHitsThisBall: this.physicsController.getBumperHitsThisBall?.() ?? 0,
             pointsThisBall: this.physicsController.getPointsThisBall?.() ?? 0,
             zoneEntriesThisBall: this.zoneTriggerSystem?.getZoneEntriesThisBall?.() ?? 0,
+            rawCollisionEvents: this.physicsController.getRawCollisionEvents?.() ?? 0,
+            knownObstacleMatches: this.physicsController.getKnownObstacleMatches?.() ?? 0,
+            bumperMatches: this.physicsController.getBumperMatches?.() ?? 0,
+            awardScoreCalls: this.physicsController.getAwardScoreCalls?.() ?? 0,
           })
         }
       })

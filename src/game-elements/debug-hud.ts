@@ -26,6 +26,10 @@ export interface DebugSnapshot {
   bumperHitsThisBall: number
   pointsThisBall: number
   zoneEntriesThisBall: number
+  rawCollisionEvents: number
+  knownObstacleMatches: number
+  bumperMatches: number
+  awardScoreCalls: number
 }
 
 interface PanelRow {
@@ -133,6 +137,10 @@ export class DebugHUD {
       bumpersThisBall: snapshot.bumperHitsThisBall ?? 0,
       ptsThisBall: snapshot.pointsThisBall ?? 0,
       zonesThisBall: snapshot.zoneEntriesThisBall ?? 0,
+      rawCollisions: snapshot.rawCollisionEvents ?? 0,
+      knownMatches: snapshot.knownObstacleMatches ?? 0,
+      bumperMatches: snapshot.bumperMatches ?? 0,
+      awardCalls: snapshot.awardScoreCalls ?? 0,
     })
 
     this.updatePanel('Physics', {

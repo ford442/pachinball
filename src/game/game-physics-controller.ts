@@ -146,6 +146,11 @@ export class GamePhysicsController {
   private bumperHitsThisBall = 0
   private pointsThisBall = 0
   private zoneEntriesThisBall = 0
+  // Temporary Phase-0 collision-pipeline instrumentation (surfaced only when debug HUD is visible)
+  private rawCollisionEvents = 0
+  private knownObstacleMatches = 0
+  private bumperMatches = 0
+  private awardScoreCalls = 0
   private adventureSensorHandle: number = -1
   /** Handles of active exit-portal sensor bodies; collisions are silently skipped
    *  in the dispatcher since portal contact is detected via intersectionPair queries
@@ -351,10 +356,26 @@ export class GamePhysicsController {
   getZoneEntriesThisBall(): number {
     return this.zoneEntriesThisBall
   }
+  getRawCollisionEvents(): number {
+    return this.rawCollisionEvents
+  }
+  getKnownObstacleMatches(): number {
+    return this.knownObstacleMatches
+  }
+  getBumperMatches(): number {
+    return this.bumperMatches
+  }
+  getAwardScoreCalls(): number {
+    return this.awardScoreCalls
+  }
   resetBallScoreCounters(): void {
     this.bumperHitsThisBall = 0
     this.pointsThisBall = 0
     this.zoneEntriesThisBall = 0
+    this.rawCollisionEvents = 0
+    this.knownObstacleMatches = 0
+    this.bumperMatches = 0
+    this.awardScoreCalls = 0
     this.host.zoneTriggerSystem?.resetBallCounters?.()
   }
 
@@ -475,8 +496,12 @@ export class GamePhysicsController {
 
       const world = this.host.physics.getWorld()
       if (world) {
-        const b1 = world.getRigidBody(h1)
-        const b2 = world.getRigidBody(h2)
+        const c1 = world.getCollider(h1)
+        const c2 = world.getCollider(h2)
+        const bh1 = c1?.parent()?.handle ?? -1
+        const bh2 = c2?.parent()?.handle ?? -1
+        const b1 = bh1 >= 0 ? world.getRigidBody(bh1) : null
+        const b2 = bh2 >= 0 ? world.getRigidBody(bh2) : null
         if (b1?.isFixed() && b2?.isFixed()) return
       }
 
@@ -636,74 +661,93 @@ export class GamePhysicsController {
     if (!world) return
     if (h1 === 0 || h2 === 0 || h1 === h2) return
 
-    const b1 = world.getRigidBody(h1)
-    const b2 = world.getRigidBody(h2)
+    this.rawCollisionEvents++
+
+    // drainCollisionEvents reports collider handles; convert to parent body handles
+    // before any rigid-body lookup or set membership test. Bumpers have multiple
+    // colliders per body, so the spaces diverge immediately at table build time.
+    const c1 = world.getCollider(h1)
+    const c2 = world.getCollider(h2)
+    const bh1 = c1?.parent()?.handle ?? -1
+    const bh2 = c2?.parent()?.handle ?? -1
+    if (bh1 < 0 || bh2 < 0) return
+
+    const b1 = world.getRigidBody(bh1)
+    const b2 = world.getRigidBody(bh2)
     if (!b1 || !b2) return
 
-    // Pre-flight guards — special non-obstacle handles
+    // Pre-flight guards — special non-obstacle handles (now in body-handle space)
     // Exit-portal sensors: contact is handled by intersectionPair queries in
     // AdventureMode.updateExitPortal(); skip here to avoid misrouting.
-    if (this.portalSensorHandleSet.has(h1) || this.portalSensorHandleSet.has(h2)) {
+    if (this.portalSensorHandleSet.has(bh1) || this.portalSensorHandleSet.has(bh2)) {
       return
     }
 
-    if (this.adventureSensorHandle >= 0 && (h1 === this.adventureSensorHandle || h2 === this.adventureSensorHandle)) {
+    if (this.adventureSensorHandle >= 0 && (bh1 === this.adventureSensorHandle || bh2 === this.adventureSensorHandle)) {
       this.host.endAdventureMode()
       return
     }
 
-    if (this.deathZoneHandle >= 0 && (h1 === this.deathZoneHandle || h2 === this.deathZoneHandle)) {
-      this.handleBallLoss(h1 === this.deathZoneHandle ? b2 : b1)
+    if (this.deathZoneHandle >= 0 && (bh1 === this.deathZoneHandle || bh2 === this.deathZoneHandle)) {
+      this.handleBallLoss(bh1 === this.deathZoneHandle ? b2 : b1)
       return
     }
 
     // Collision type dispatch — each branch resolves obstacle/ball bodies then delegates
-    const h1IsBumper = this.bumperHandleSet.has(h1)
-    const h2IsBumper = this.bumperHandleSet.has(h2)
+    const h1IsBumper = this.bumperHandleSet.has(bh1)
+    const h2IsBumper = this.bumperHandleSet.has(bh2)
     if (h1IsBumper || h2IsBumper) {
-      this.handleBumperCollision(h1IsBumper ? b1 : b2, h1IsBumper ? b2 : b1, h1IsBumper ? h2 : h1)
+      this.knownObstacleMatches++
+      this.bumperMatches++
+      this.handleBumperCollision(h1IsBumper ? b1 : b2, h1IsBumper ? b2 : b1, h1IsBumper ? bh2 : bh1)
       return
     }
 
-    const h1IsFlipper = this.flipperHandleSet.has(h1)
-    const h2IsFlipper = this.flipperHandleSet.has(h2)
+    const h1IsFlipper = this.flipperHandleSet.has(bh1)
+    const h2IsFlipper = this.flipperHandleSet.has(bh2)
     if (h1IsFlipper || h2IsFlipper) {
-      this.handleFlipperCollision(h1IsFlipper ? b1 : b2, h1IsFlipper ? b2 : b1, h1IsFlipper ? h2 : h1)
+      this.knownObstacleMatches++
+      this.handleFlipperCollision(h1IsFlipper ? b1 : b2, h1IsFlipper ? b2 : b1, h1IsFlipper ? bh2 : bh1)
       return
     }
 
-    const h1IsTarget = this.targetHandleSet.has(h1)
-    const h2IsTarget = this.targetHandleSet.has(h2)
+    const h1IsTarget = this.targetHandleSet.has(bh1)
+    const h2IsTarget = this.targetHandleSet.has(bh2)
     if (h1IsTarget || h2IsTarget) {
-      this.handleTargetCollision(h1IsTarget ? b1 : b2, h1IsTarget ? b2 : b1, h1IsTarget ? h2 : h1)
+      this.knownObstacleMatches++
+      this.handleTargetCollision(h1IsTarget ? b1 : b2, h1IsTarget ? b2 : b1, h1IsTarget ? bh2 : bh1)
       return
     }
 
-    const h1IsSpinner = this.spinnerHandleSet.has(h1)
-    const h2IsSpinner = this.spinnerHandleSet.has(h2)
+    const h1IsSpinner = this.spinnerHandleSet.has(bh1)
+    const h2IsSpinner = this.spinnerHandleSet.has(bh2)
     if (h1IsSpinner || h2IsSpinner) {
-      this.handleSpinnerCollision(h1IsSpinner ? b1 : b2, h1IsSpinner ? b2 : b1, h1IsSpinner ? h2 : h1)
+      this.knownObstacleMatches++
+      this.handleSpinnerCollision(h1IsSpinner ? b1 : b2, h1IsSpinner ? b2 : b1, h1IsSpinner ? bh2 : bh1)
       return
     }
 
-    const h1IsTrap = this.trapHandleSet.has(h1)
-    const h2IsTrap = this.trapHandleSet.has(h2)
+    const h1IsTrap = this.trapHandleSet.has(bh1)
+    const h2IsTrap = this.trapHandleSet.has(bh2)
     if (h1IsTrap || h2IsTrap) {
-      this.handleBallTrapCollision(h1IsTrap ? b1 : b2, h1IsTrap ? b2 : b1, h1IsTrap ? h2 : h1)
+      this.knownObstacleMatches++
+      this.handleBallTrapCollision(h1IsTrap ? b1 : b2, h1IsTrap ? b2 : b1, h1IsTrap ? bh2 : bh1)
       return
     }
 
-    const h1IsLauncher = this.launcherHandleSet.has(h1)
-    const h2IsLauncher = this.launcherHandleSet.has(h2)
+    const h1IsLauncher = this.launcherHandleSet.has(bh1)
+    const h2IsLauncher = this.launcherHandleSet.has(bh2)
     if (h1IsLauncher || h2IsLauncher) {
-      this.handleLauncherCollision(h1IsLauncher ? b1 : b2, h1IsLauncher ? b2 : b1, h1IsLauncher ? h2 : h1)
+      this.knownObstacleMatches++
+      this.handleLauncherCollision(h1IsLauncher ? b1 : b2, h1IsLauncher ? b2 : b1, h1IsLauncher ? bh2 : bh1)
       return
     }
 
-    const h1IsGate = this.gateHandleSet.has(h1)
-    const h2IsGate = this.gateHandleSet.has(h2)
+    const h1IsGate = this.gateHandleSet.has(bh1)
+    const h2IsGate = this.gateHandleSet.has(bh2)
     if (h1IsGate || h2IsGate) {
-      this.handleGateCollision(h1IsGate ? b1 : b2, h1IsGate ? h2 : h1)
+      this.knownObstacleMatches++
+      this.handleGateCollision(h1IsGate ? b1 : b2, h1IsGate ? bh2 : bh1)
       return
     }
   }
@@ -727,9 +771,20 @@ export class GamePhysicsController {
     // Ignore gentle contacts below threshold
     if (maxForce < GamePhysicsController.CONTACT_FORCE_THRESHOLD) return
 
+    const world = this.host.physics.getWorld()
+    if (!world) return
+
+    // Contact-force events report collider handles; convert to parent body handles
+    // before looking up ball bodies.
+    const c1 = world.getCollider(h1)
+    const c2 = world.getCollider(h2)
+    const bh1 = c1?.parent()?.handle ?? -1
+    const bh2 = c2?.parent()?.handle ?? -1
+    if (bh1 < 0 || bh2 < 0) return
+
     // Only apply force-based effects for ball contacts
-    const h1IsBall = this.ballHandleSet.has(h1)
-    const h2IsBall = this.ballHandleSet.has(h2)
+    const h1IsBall = this.ballHandleSet.has(bh1)
+    const h2IsBall = this.ballHandleSet.has(bh2)
     if (!h1IsBall && !h2IsBall) return
 
     // Normalize intensity (0-1) based on force magnitude
@@ -1058,6 +1113,7 @@ export class GamePhysicsController {
   }
 
   private awardScore(basePoints: number, source: string, position?: Vector3): number {
+    this.awardScoreCalls++
     const multiballMultiplier = this.getActiveScoreMultiplier()
     const comboMultiplier = this.comboMultiplierSystem.getState().multiplier
     const totalMultiplier = multiballMultiplier * comboMultiplier
