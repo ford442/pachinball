@@ -75,6 +75,10 @@ export class GaussCannonFeeder {
       return this.position.clone()
   }
 
+  getState(): GaussCannonState {
+    return this.state
+  }
+
   private createMesh(): void {
     // Root node for the entire structure
     this.rootNode = new TransformNode("gaussRoot", this.scene)
@@ -183,7 +187,7 @@ export class GaussCannonFeeder {
         // Coil stretch animation during AIM state
         if (this.barrelMesh) {
           this.coilPulsePhase += dt * 10
-          const chargeProgress = 1 - (this.timer / 2.0) // 0 to 1 during aim
+          const chargeProgress = 1 - (this.timer / this.config.aimDuration)
           const stretch = 1.0 + Math.sin(this.coilPulsePhase) * 0.15 * chargeProgress
           
           this.barrelMesh.getChildren().forEach((child) => {
@@ -256,7 +260,7 @@ export class GaussCannonFeeder {
   private animateIdle(dt: number): void {
       // Slow breathing or scanning?
       // Just sweep slowly
-      const speed = 0.2
+      const speed = this.config.idleSweepRate
       this.currentAngle += speed * this.aimDirection * dt * 10
       if (this.currentAngle > this.config.maxAngle) {
           this.currentAngle = this.config.maxAngle
@@ -275,9 +279,9 @@ export class GaussCannonFeeder {
       // Target: Breech of the cannon
       // Calculate based on current barrel rotation
       // Breech is at the pivot point (root position + y offset)
-      const targetPos = this.position.add(new Vector3(0, 1.0, 0))
+      const targetPos = this.position.add(new Vector3(0, this.config.breechYOffset, 0))
 
-      const lerpFactor = dt * 5
+      const lerpFactor = dt * this.config.loadLerpSpeed
       const newX = Scalar.Lerp(currentPos.x, targetPos.x, lerpFactor)
       const newY = Scalar.Lerp(currentPos.y, targetPos.y, lerpFactor)
       const newZ = Scalar.Lerp(currentPos.z, targetPos.z, lerpFactor)
@@ -289,13 +293,13 @@ export class GaussCannonFeeder {
         targetPos
       )
 
-      if (dist < 0.2) {
+      if (dist < this.config.loadArrivalDistance) {
         this.setState(GaussCannonState.AIM)
       }
   }
 
   private animateAim(dt: number): void {
-       const speed = this.config.sweepSpeed * 20 // Convert rad/s to deg/frame approx
+       const speed = this.config.sweepSpeed * this.config.aimSweepMultiplier
        this.currentAngle += speed * this.aimDirection * dt
 
        if (this.currentAngle >= this.config.maxAngle) {
@@ -306,7 +310,7 @@ export class GaussCannonFeeder {
 
        // Sync ball to breech
        if (this.caughtBall) {
-           const targetPos = this.position.add(new Vector3(0, 1.0, 0))
+           const targetPos = this.position.add(new Vector3(0, this.config.breechYOffset, 0))
            this.caughtBall.setNextKinematicTranslation({ x: targetPos.x, y: targetPos.y, z: targetPos.z })
        }
   }
@@ -358,7 +362,7 @@ export class GaussCannonFeeder {
         break
 
       case GaussCannonState.AIM:
-        this.timer = 2.0 // Aim duration
+        this.timer = this.config.aimDuration
         this.vibrationIntensity = 0.02 // Subtle charging vibration
         this.setCoilColor(Color3.FromHexString("#FFA500"))
         if (this.light) {

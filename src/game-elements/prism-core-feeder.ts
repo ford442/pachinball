@@ -63,6 +63,10 @@ export class PrismCoreFeeder {
       return this.position.clone()
   }
 
+  getState(): PrismCoreState {
+    return this.state
+  }
+
   private createVisuals(): void {
     // 1. Inner "Core" (The holding chamber)
     this.innerMesh = MeshBuilder.CreatePolyhedron("prismCoreInner", {
@@ -321,7 +325,7 @@ export class PrismCoreFeeder {
       // But `checkCapture` excludes `caughtBalls`. Since I cleared it, they are candidates.
       // I will add a `cooldownTimer` property.
 
-      this.cooldownTimer = 2.0
+      this.cooldownTimer = this.config.postReleaseCooldown
       this.state = PrismCoreState.IDLE
       // Reset visuals
       this.setState(PrismCoreState.IDLE)

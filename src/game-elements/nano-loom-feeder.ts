@@ -63,6 +63,10 @@ export class NanoLoomFeeder {
     this.createPhysics()
   }
 
+  getState(): NanoLoomState {
+    return this.state
+  }
+
   private createVisuals(): void {
     // 1. Frame (Transparent Box)
     const frame = MeshBuilder.CreateBox("nanoLoomFrame", {
@@ -216,7 +220,7 @@ export class NanoLoomFeeder {
 
                 // Determine progress
                 // We want linear speed for lift
-                const speed = 10.0 // units per second
+                const speed = this.config.liftSpeed
                 const dy = speed * dt
 
                 let nextY = currentPos.y + dy
@@ -227,8 +231,8 @@ export class NanoLoomFeeder {
                 }
 
                 // Smooth X/Z alignment
-                const nextX = Scalar.Lerp(currentPos.x, targetPos.x, dt * 5)
-                const nextZ = Scalar.Lerp(currentPos.z, targetPos.z, dt * 5)
+                const nextX = Scalar.Lerp(currentPos.x, targetPos.x, dt * this.config.liftAlignLerpSpeed)
+                const nextZ = Scalar.Lerp(currentPos.z, targetPos.z, dt * this.config.liftAlignLerpSpeed)
 
                 this.caughtBall.setNextKinematicTranslation({ x: nextX, y: nextY, z: nextZ })
 
@@ -282,7 +286,7 @@ export class NanoLoomFeeder {
   }
 
   private checkIntake(ballBodies: RAPIER.RigidBody[]): void {
-      const radius = 1.5
+      const radius = this.config.intakeRadius
       for (const body of ballBodies) {
           const pos = body.translation()
           const dist = Vector3.Distance(
@@ -334,7 +338,7 @@ export class NanoLoomFeeder {
               if (this.caughtBall) {
                   this.caughtBall.setBodyType(this.rapier.RigidBodyType.Dynamic, true)
                   // Give it a tiny nudge to ensure it doesn't balance perfectly on a pin
-                  this.caughtBall.applyImpulse({ x: (Math.random()-0.5)*0.1, y: 0, z: 0 }, true)
+                  this.caughtBall.applyImpulse({ x: (Math.random()-0.5)*this.config.weaveNudgeImpulse, y: 0, z: 0 }, true)
               }
               if (this.light) {
                   this.light.diffuse = Color3.FromHexString("#ff00ff") // Magenta for chaos
@@ -345,10 +349,14 @@ export class NanoLoomFeeder {
               if (this.caughtBall) {
                   // Push out towards center
                   // Loom is on left (x negative), so push Positive X
-                  const force = new Vector3(8.0, 2.0, 0)
+                  const force = new Vector3(
+                    this.config.ejectImpulse.x,
+                    this.config.ejectImpulse.y,
+                    this.config.ejectImpulse.z,
+                  )
                   this.caughtBall.applyImpulse({ x: force.x, y: force.y, z: force.z }, true)
               }
-              this.timer = 1.0 // Short cooldown
+              this.timer = this.config.ejectCooldown
               break
       }
   }

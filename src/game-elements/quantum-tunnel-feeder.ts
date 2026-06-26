@@ -9,6 +9,7 @@ import {
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { GameConfigType } from '../config'
+import { FEEDER_TUNABLES } from '../config'
 
 export enum QuantumTunnelState {
   IDLE = 0,
@@ -35,14 +36,10 @@ export class QuantumTunnelFeeder {
   private capturedBall: RAPIER.RigidBody | null = null
 
   // Follow-through animation: Smooth portal spin acceleration
-  private inputSpinSpeed = 1.0
-  private outputSpinSpeed = -1.0
+  private inputSpinSpeed: number = FEEDER_TUNABLES['quantum-tunnel'].portalSpinIdle
+  private outputSpinSpeed: number = -FEEDER_TUNABLES['quantum-tunnel'].portalSpinIdle
   private portalStretch = 0.0
   private ejectRecoil = 0.0
-  private readonly PORTAL_SPIN_IDLE = 1.0
-  private readonly PORTAL_SPIN_CAPTURE = 5.0
-  private readonly PORTAL_SPIN_TRANSPORT = 8.0
-  private readonly PORTAL_SPIN_EJECT = 10.0
 
   public onStateChange: QuantumTunnelCallback | null = null
 
@@ -111,9 +108,9 @@ export class QuantumTunnelFeeder {
     this.stateTimer += dt
 
     // Portal Animation (Spinning visuals) - Follow-through: Smooth spin acceleration
-    const targetSpeed = this.state === QuantumTunnelState.IDLE ? this.PORTAL_SPIN_IDLE :
-                        this.state === QuantumTunnelState.CAPTURE ? this.PORTAL_SPIN_CAPTURE :
-                        this.state === QuantumTunnelState.TRANSPORT ? this.PORTAL_SPIN_TRANSPORT : this.PORTAL_SPIN_EJECT
+    const targetSpeed = this.state === QuantumTunnelState.IDLE ? this.config.portalSpinIdle :
+                        this.state === QuantumTunnelState.CAPTURE ? this.config.portalSpinCapture :
+                        this.state === QuantumTunnelState.TRANSPORT ? this.config.portalSpinTransport : this.config.portalSpinEject
     this.inputSpinSpeed = Scalar.Lerp(this.inputSpinSpeed, targetSpeed, dt * 5.0)
     this.outputSpinSpeed = Scalar.Lerp(this.outputSpinSpeed, -targetSpeed * 0.8, dt * 5.0)
     this.inputMesh.rotation.z += dt * this.inputSpinSpeed
@@ -196,14 +193,14 @@ export class QuantumTunnelFeeder {
     // BUT, we can just teleport it away and hide it?
 
     // For now, let's just hold it in place (Kinematic) and transition.
-    if (this.stateTimer < 0.5) {
+    if (this.stateTimer < this.config.capturePullDuration) {
         // Pull towards center
         const target = this.config.inputPosition
         const current = this.capturedBall.translation()
         const next = Vector3.Lerp(
             new Vector3(current.x, current.y, current.z),
             new Vector3(target.x, target.y, target.z),
-            dt * 10
+            dt * this.config.capturePullLerpSpeed
         )
         this.capturedBall.setNextKinematicTranslation(next)
     } else {
@@ -217,7 +214,7 @@ export class QuantumTunnelFeeder {
     // Since we don't have mesh access here easily (unless we ask Game),
     // we'll just teleport it to a holding cell (e.g. far below)
     if (this.capturedBall) {
-        this.capturedBall.setNextKinematicTranslation({ x: 0, y: -100, z: 0 })
+        this.capturedBall.setNextKinematicTranslation({ x: 0, y: this.config.transportHideY, z: 0 })
     }
 
     // Charge Output Portal
@@ -252,7 +249,7 @@ export class QuantumTunnelFeeder {
     const impulse = new Vector3(this.config.ejectImpulse, 0, 0)
 
     // Add some variance z?
-    impulse.z += (Math.random() - 0.5) * 5.0
+    impulse.z += (Math.random() - 0.5) * this.config.ejectImpulseVarianceZ
 
     this.capturedBall.applyImpulse(impulse, true)
 
@@ -263,14 +260,14 @@ export class QuantumTunnelFeeder {
     this.setPortalEmissive(this.outputMesh, new Color3(1, 1, 1))
 
     // 6. Trigger eject recoil
-    this.ejectRecoil = 0.5
+    this.ejectRecoil = this.config.ejectRecoilDistance
 
     this.transitionTo(QuantumTunnelState.COOLDOWN)
   }
 
   private updateCooldown(): void {
     // Fade output
-    const fade = 1.0 - Math.min(this.stateTimer / 1.0, 1.0)
+    const fade = 1.0 - Math.min(this.stateTimer / this.config.cooldownFadeDuration, 1.0)
     this.setPortalEmissive(this.outputMesh, new Color3(0, 1.0, 1.0).scale(fade))
 
     if (this.stateTimer >= this.config.cooldown) {
@@ -304,5 +301,9 @@ export class QuantumTunnelFeeder {
 
   public getPosition(): Vector3 {
       return this.inputMesh.position
+  }
+
+  getState(): QuantumTunnelState {
+    return this.state
   }
 }

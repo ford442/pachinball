@@ -2,7 +2,7 @@
  * Unit tests for MagSpinFeeder state machine and release logic.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { GameConfig } from '../src/config'
+import { GameConfig, FEEDER_TUNABLES } from '../src/config'
 import { MagSpinFeeder, MagSpinState } from '../src/game-elements/mag-spin-feeder'
 
 vi.mock('@babylonjs/core', () => {
@@ -159,7 +159,7 @@ describe('MagSpinFeeder', () => {
 
   it('starts in IDLE state with configured catch radius', () => {
     expect(feeder.getState()).toBe(MagSpinState.IDLE)
-    expect(feeder.getCatchRadius()).toBe(1.5)
+    expect(feeder.getCatchRadius()).toBe(FEEDER_TUNABLES['mag-spin'].catchRadius)
   })
 
   it('captures ball within catch radius and transitions through CATCH → SPIN → RELEASE → COOLDOWN', () => {

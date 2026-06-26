@@ -439,10 +439,14 @@ export const GAME_TUNING = {
   },
 } as const satisfies GameTuning
 
-export const GameConfig = {
-  magSpin: {
-    // Moved to Upper Right (between Pachinko Field and Wall)
-    // Pachinko ends at x=7, Wall at x=11.5. Center at 9.25 fits a 3.5 diameter unit.
+/**
+ * Behavioral tunables for all five table feeders.
+ * Single source of truth — GameConfig aliases these for backward compatibility.
+ * Algorithmic constants (2π, deg↔rad) stay inline in feeder implementations.
+ */
+export const FEEDER_TUNABLES = {
+  'mag-spin': {
+    // Upper-right wall — between pachinko field (x≈7) and wall (x≈11.5)
     feederPosition: { x: 9.25, y: 0.5, z: 12 },
     catchRadius: 1.5,
     spinDuration: 1.2,
@@ -451,8 +455,14 @@ export const GameConfig = {
     releaseAngleVariance: 0.25,
     /** Launch direction target — center playfield bumpers */
     releaseTarget: { x: 0, y: 0, z: 5 },
+    catchLerpSpeed: 6,
+    catchArrivalDistance: 0.15,
+    holdYOffset: 0.5,
+    maxCaptureHeightY: 2.0,
+    spinAngularSpeed: 32,
+    releaseUpwardBias: 0.08,
   },
-  nanoLoom: {
+  'nano-loom': {
     loomPosition: { x: -13.0, y: 4.0, z: 2.0 },
     intakePosition: { x: -12.0, y: 0.5, z: 2.0 },
     width: 2.0,
@@ -462,31 +472,66 @@ export const GameConfig = {
     pinCols: 4,
     pinSpacing: 0.6,
     pinBounciness: 0.8,
-    liftDuration: 1.5
+    liftDuration: 1.5,
+    intakeRadius: 1.5,
+    liftSpeed: 10.0,
+    liftAlignLerpSpeed: 5,
+    weaveNudgeImpulse: 0.1,
+    ejectImpulse: { x: 8.0, y: 2.0, z: 0.0 },
+    ejectCooldown: 1.0,
   },
-  prismCore: {
+  'prism-core': {
     prismPosition: { x: 0.0, y: 0.5, z: 12.0 },
     captureRadius: 1.2,
     ejectForce: 20.0,
-    ejectSpread: 45 // degrees
+    ejectSpread: 45,
+    lockCapacity: 3,
+    postReleaseCooldown: 2.0,
   },
-  gaussCannon: {
+  'gauss-cannon': {
     gaussPosition: { x: -12.0, y: 0.5, z: -8.0 },
     intakeRadius: 1.0,
     muzzleVelocity: 30.0,
-    minAngle: 30, // degrees
-    maxAngle: 60, // degrees
-    sweepSpeed: 1.0, // radians/sec
-    cooldown: 2.0 // seconds
+    minAngle: 30,
+    maxAngle: 60,
+    sweepSpeed: 1.0,
+    cooldown: 2.0,
+    aimDuration: 2.0,
+    loadLerpSpeed: 5,
+    loadArrivalDistance: 0.2,
+    breechYOffset: 1.0,
+    idleSweepRate: 2.0,
+    aimSweepMultiplier: 20,
   },
-  quantumTunnel: {
+  'quantum-tunnel': {
     inputPosition: { x: 11.5, y: 0.5, z: 0.0 },
     outputPosition: { x: -11.5, y: 0.5, z: 0.0 },
     inputRadius: 1.2,
     ejectImpulse: 25.0,
     transportDelay: 0.5,
-    cooldown: 2.0
+    cooldown: 2.0,
+    capturePullDuration: 0.5,
+    capturePullLerpSpeed: 10,
+    ejectImpulseVarianceZ: 5.0,
+    ejectRecoilDistance: 0.5,
+    transportHideY: -100,
+    cooldownFadeDuration: 1.0,
+    portalSpinIdle: 1.0,
+    portalSpinCapture: 5.0,
+    portalSpinTransport: 8.0,
+    portalSpinEject: 10.0,
   },
+} as const
+
+export type FeederTunables = typeof FEEDER_TUNABLES
+export type FeederId = keyof FeederTunables
+
+export const GameConfig = {
+  magSpin: FEEDER_TUNABLES['mag-spin'],
+  nanoLoom: FEEDER_TUNABLES['nano-loom'],
+  prismCore: FEEDER_TUNABLES['prism-core'],
+  gaussCannon: FEEDER_TUNABLES['gauss-cannon'],
+  quantumTunnel: FEEDER_TUNABLES['quantum-tunnel'],
   visuals: {
     enableParticles: true,
     enableTrails: true,

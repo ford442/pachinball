@@ -248,8 +248,8 @@ export class MagSpinFeeder {
     if (!this.caughtBall) return
 
     const currentPos = this.caughtBall.translation()
-    const targetPos = this.position.add(new Vector3(0, 0.5, 0))
-    const lerpFactor = dt * 6
+    const targetPos = this.position.add(new Vector3(0, this.config.holdYOffset, 0))
+    const lerpFactor = dt * this.config.catchLerpSpeed
 
     const newX = Scalar.Lerp(currentPos.x, targetPos.x, lerpFactor)
     const newY = Scalar.Lerp(currentPos.y, targetPos.y, lerpFactor)
@@ -263,7 +263,7 @@ export class MagSpinFeeder {
       new Vector3(newX, newY, newZ),
       targetPos
     )
-    if (dist < 0.15) {
+    if (dist < this.config.catchArrivalDistance) {
       this.setState(MagSpinState.SPIN)
     }
   }
@@ -271,14 +271,14 @@ export class MagSpinFeeder {
   private updateSpin(dt: number): void {
     if (!this.caughtBall) return
 
-    const targetPos = this.position.add(new Vector3(0, 0.5, 0))
+    const targetPos = this.position.add(new Vector3(0, this.config.holdYOffset, 0))
     this.caughtBall.setNextKinematicTranslation({
       x: targetPos.x,
       y: targetPos.y,
       z: targetPos.z,
     })
 
-    this.ballSpinAngle += dt * 32
+    this.ballSpinAngle += dt * this.config.spinAngularSpeed
     const spinQ = Quaternion.FromEulerAngles(this.ballSpinAngle, this.ballSpinAngle * 1.3, this.ballSpinAngle * 0.7)
     this.caughtBall.setNextKinematicRotation({ x: spinQ.x, y: spinQ.y, z: spinQ.z, w: spinQ.w })
 
@@ -295,7 +295,7 @@ export class MagSpinFeeder {
       const pos = body.translation()
       const dist = Vector3.Distance(new Vector3(pos.x, pos.y, pos.z), this.position)
 
-      if (dist < pullRadius && pos.y < 2.0) {
+      if (dist < pullRadius && pos.y < this.config.maxCaptureHeightY) {
         this.captureBall(body)
         return
       }
@@ -384,7 +384,7 @@ export class MagSpinFeeder {
     const sin = Math.sin(angleVariance)
     const finalDir = new Vector3(
       targetDir.x * cos - targetDir.z * sin,
-      0.08,
+      this.config.releaseUpwardBias,
       targetDir.x * sin + targetDir.z * cos
     ).normalize()
 
