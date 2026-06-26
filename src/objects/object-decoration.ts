@@ -16,6 +16,7 @@ import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { color, emissive, PALETTE, INTENSITY } from '../game-elements/visual-language'
+import { resolveAssetUrl } from '../game/game-utils'
 
 export class DecorationBuilder {
   private scene: Scene
@@ -1054,22 +1055,22 @@ export function applyTableDecorations(
   // ========================================================================
   // LAYER 1 — PROJECTED DECALS (high-level graphic language)
   // ========================================================================
-  createNeonDecal(scene, playfieldMesh, new Vector3(0, -0.99, 5), '/assets/textures/decals/circuit-center.png', {
+  createNeonDecal(scene, playfieldMesh, new Vector3(0, -0.99, 5), resolveAssetUrl('/assets/textures/decals/circuit-center.png')!, {
     size: new Vector3(7.5, 11, 0.08),
     emissiveIntensity: 1.35,
     zOffset: -0.6
   })
-  createNeonDecal(scene, playfieldMesh, new Vector3(-5.5, -0.99, -6), '/assets/textures/decals/lane-arrow-l.png', {
+  createNeonDecal(scene, playfieldMesh, new Vector3(-5.5, -0.99, -6), resolveAssetUrl('/assets/textures/decals/lane-arrow-l.png')!, {
     size: new Vector3(2.2, 3.5, 0.06),
     emissiveIntensity: 1.6,
     zOffset: -0.7
   })
-  createNeonDecal(scene, playfieldMesh, new Vector3(5.5, -0.99, -6), '/assets/textures/decals/lane-arrow-r.png', {
+  createNeonDecal(scene, playfieldMesh, new Vector3(5.5, -0.99, -6), resolveAssetUrl('/assets/textures/decals/lane-arrow-r.png')!, {
     size: new Vector3(2.2, 3.5, 0.06),
     emissiveIntensity: 1.6,
     zOffset: -0.7
   })
-  createNeonDecal(scene, playfieldMesh, new Vector3(0, -0.99, 14), '/assets/textures/decals/hazard-chevron.png', {
+  createNeonDecal(scene, playfieldMesh, new Vector3(0, -0.99, 14), resolveAssetUrl('/assets/textures/decals/hazard-chevron.png')!, {
     size: new Vector3(9, 4, 0.05),
     emissiveIntensity: 1.1,
     zOffset: -0.9

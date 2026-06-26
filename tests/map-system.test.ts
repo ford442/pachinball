@@ -71,7 +71,7 @@ describe('MapSystem', () => {
     const system = new MapSystem()
     await system.fetchAll()
 
-    expect(apiFetchMock).toHaveBeenCalledWith('https://example.test/api/maps')
+    expect(apiFetchMock).toHaveBeenCalledWith('/maps')
     expect(system.isLoaded).toBe(true)
     expect(system.isLoading).toBe(false)
     expect(system.loadError).toBeNull()
