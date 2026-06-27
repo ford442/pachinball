@@ -2,7 +2,7 @@
  * Game Physics Controller — Physics stepping, collision processing, nudge/tilt, ball loss.
  */
 
-import { Vector3, Quaternion } from '@babylonjs/core'
+import { Vector3, Quaternion, TransformNode, Matrix, TmpVectors } from '@babylonjs/core'
 import type { Mesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
@@ -168,6 +168,8 @@ export class GamePhysicsController {
   private readonly prevPoses: Map<RAPIER.RigidBody, { pos: Vector3; rot: Quaternion }> = new Map()
   private readonly scratchCurrPos = new Vector3()
   private readonly scratchCurrRot = new Quaternion()
+  private readonly scratchInterpPos = new Vector3()
+  private readonly scratchInterpRot = new Quaternion()
 
   constructor(host: PhysicsHost) {
     this.host = host
@@ -435,16 +437,11 @@ export class GamePhysicsController {
       }
 
       if (alpha < 1 && !body.isSleeping()) {
-        Vector3.LerpToRef(prev.pos, this.scratchCurrPos, alpha, mesh.position)
-        if (!mesh.rotationQuaternion) mesh.rotationQuaternion = new Quaternion()
-        Quaternion.SlerpToRef(prev.rot, this.scratchCurrRot, alpha, mesh.rotationQuaternion)
+        const interpPos = Vector3.LerpToRef(prev.pos, this.scratchCurrPos, alpha, this.scratchInterpPos)
+        Quaternion.SlerpToRef(prev.rot, this.scratchCurrRot, alpha, this.scratchInterpRot)
+        this.applyBindingPose(mesh, interpPos, this.scratchInterpRot)
       } else {
-        mesh.position.set(pos.x, pos.y, pos.z)
-        if (!mesh.rotationQuaternion) {
-          mesh.rotationQuaternion = new Quaternion(rot.x, rot.y, rot.z, rot.w)
-        } else {
-          mesh.rotationQuaternion.set(rot.x, rot.y, rot.z, rot.w)
-        }
+        this.applyBindingPose(mesh, this.scratchCurrPos, this.scratchCurrRot)
       }
 
       prev.pos.copyFrom(this.scratchCurrPos)
@@ -455,6 +452,28 @@ export class GamePhysicsController {
     for (const body of this.prevPoses.keys()) {
       if (!liveBodies.has(body)) this.prevPoses.delete(body)
     }
+  }
+
+  /** Apply a physics-world pose to a bound mesh, respecting playfield parenting. */
+  private applyBindingPose(mesh: TransformNode, pos: Vector3, rot: Quaternion): void {
+    if (!mesh.parent) {
+      mesh.position.copyFrom(pos)
+      if (!mesh.rotationQuaternion) {
+        mesh.rotationQuaternion = rot.clone()
+      } else {
+        mesh.rotationQuaternion.copyFrom(rot)
+      }
+      return
+    }
+
+    const parentWorld = mesh.parent.computeWorldMatrix(true)
+    parentWorld.invertToRef(TmpVectors.Matrix[0])
+    Matrix.ComposeToRef(mesh.scaling, rot, pos, TmpVectors.Matrix[1])
+    TmpVectors.Matrix[1].multiplyToRef(TmpVectors.Matrix[0], TmpVectors.Matrix[2])
+    if (!mesh.rotationQuaternion) {
+      mesh.rotationQuaternion = new Quaternion()
+    }
+    TmpVectors.Matrix[2].decompose(mesh.scaling, mesh.rotationQuaternion, mesh.position)
   }
 
   stepPhysics(

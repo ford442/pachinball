@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173/. Use **Left Shift** / **Right Shift** for the flippers, hold **Space** or **Enter** to charge and release the plunger, and press **R** to reset the ball.
+Open http://localhost:5173/. Use **1** / **0** for the flippers, hold **Space** or **Enter** to charge and release the plunger, and press **R** to reset the ball.
 
 ## Campaign Mode
 

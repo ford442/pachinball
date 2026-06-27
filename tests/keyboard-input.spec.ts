@@ -3,8 +3,8 @@ import { test, expect } from '@playwright/test';
 // Real keyboard-path coverage for flippers and the plunger.
 //
 // Correct bindings (src/game-elements/input.ts):
-//   - ShiftLeft  = left flipper
-//   - ShiftRight = right flipper
+//   - Digit1     = left flipper
+//   - Digit0     = right flipper
 //   - Enter      = plunger charge (hold) / launch (release)
 //   - Space      = plunger charge (same action as Enter), not a flipper key
 //
@@ -66,12 +66,12 @@ async function startGame(page: import('@playwright/test').Page) {
 }
 
 test.describe('Keyboard Input Pipeline', () => {
-  test('ShiftLeft rotates the left flipper joint via the real keyboard path', async ({ page }) => {
+  test('Digit1 rotates the left flipper joint via the real keyboard path', async ({ page }) => {
     test.setTimeout(120_000);
 
     const consoleErrors = await startGame(page);
 
-    // Snapshot the flipper joint rotation, hold ShiftLeft via real keyboard
+    // Snapshot the flipper joint rotation, hold Digit1 via real keyboard
     // events, then wait a few rAF ticks (which drive the physics step) before
     // comparing — exactly as a player's keypress would.
     const flipperBefore = await page.evaluate(() => {
@@ -81,7 +81,7 @@ test.describe('Keyboard Input Pipeline', () => {
     });
     expect(flipperBefore).not.toBeNull();
 
-    await page.keyboard.down('ShiftLeft');
+    await page.keyboard.down('Digit1');
 
     const flipperAfter = await page.evaluate(() => {
       const g = (window as any).game;
@@ -97,7 +97,7 @@ test.describe('Keyboard Input Pipeline', () => {
       });
     });
 
-    await page.keyboard.up('ShiftLeft');
+    await page.keyboard.up('Digit1');
 
     // Flipper should have rotated (Y axis is the rotation axis for the revolute joint)
     const flipperDelta = Math.abs((flipperAfter?.bodyY ?? 0) - (flipperBefore?.bodyY ?? 0));
