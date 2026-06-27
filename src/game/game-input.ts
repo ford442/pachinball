@@ -115,12 +115,12 @@ export class GameInputManager {
     const isPlaying = gameState === 1 // GameState.PLAYING = 1
     const adventureActive = this.config.getAdventureActive?.() ?? false
 
-    // Dynamic map switching (Digit1-9)
+    // Dynamic map switching (Digit2-9 → maps 1-8; Digit0/1 are flippers)
     if (e.code.startsWith('Digit') && isPlaying) {
-      const index = parseInt(e.code.replace('Digit', ''), 10) - 1
-      if (index >= 0) {
+      const digit = parseInt(e.code.replace('Digit', ''), 10)
+      if (digit >= 2 && digit <= 9) {
         e.preventDefault()
-        this.config.onMapSwitch?.(index)
+        this.config.onMapSwitch?.(digit - 2)
       }
       return
     }
@@ -260,6 +260,9 @@ export class GameInputManager {
   update(): void {
     // Poll gamepad input
     this.inputHandler.pollGamepad()
+
+    // Keep flipper motors active while 1/0 are held
+    this.inputHandler.pollHeldFlipperKeys()
 
     // Update plunger charge if held
     this.inputHandler.updatePlungerCharge()

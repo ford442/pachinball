@@ -89,6 +89,11 @@ export class GameSceneBuilder {
     }
     ballManager.createMainBall()
 
+    // Parent flipper assemblies into the tilted playfield group (world pose preserved).
+    for (const { mesh } of gameObjects.getAllFlippers().values()) {
+      mesh.setParent(playfieldGroup, true)
+    }
+
     // Reparent walls + flippers into the tilted visual group.
     // Ball is excluded — its position is overwritten each frame from Rapier world coords.
     scene.meshes

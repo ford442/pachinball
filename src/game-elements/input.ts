@@ -55,6 +55,10 @@ export class InputHandler {
   private gamepadManager: GamepadManager | null = null
   private lastGamepadState: GamepadState | null = null
 
+  // Sustained keyboard flipper holds (re-applied each frame for motor + visuals)
+  private flipperLeftHeld = false
+  private flipperRightHeld = false
+
   // Latency tracking for input-to-response timing
   private latencyMetrics: LatencyMetrics = {
     samples: [],
@@ -396,6 +400,22 @@ export class InputHandler {
   }
   
   /**
+   * Re-queue held flipper keys each frame so joint motors stay active and
+   * hold-to-charge stiffness can ramp while the key is down.
+   */
+  pollHeldFlipperKeys(): void {
+    if (this.getState() !== GameState.PLAYING || this.getAdventureActive()) return
+    if (this.getTiltActive()) return
+
+    if (this.flipperLeftHeld) {
+      this.queueInput('flipperLeft', true)
+    }
+    if (this.flipperRightHeld) {
+      this.queueInput('flipperRight', true)
+    }
+  }
+
+  /**
    * Update plunger charge (call each frame while held)
    */
   updatePlungerCharge(): void {
@@ -474,13 +494,15 @@ export class InputHandler {
       this.cancelPlungerCharge()
     }
 
-    if (!adventureActive && event.code === 'ShiftLeft') {
+    if (!adventureActive && event.code === 'Digit1') {
       if (this.getTiltActive()) return
+      this.flipperLeftHeld = true
       this.queueInput('flipperLeft', true)
     }
 
-    if (!adventureActive && event.code === 'ShiftRight') {
+    if (!adventureActive && event.code === 'Digit0') {
       if (this.getTiltActive()) return
+      this.flipperRightHeld = true
       this.queueInput('flipperRight', true)
     }
 
@@ -529,11 +551,13 @@ export class InputHandler {
       this.cancelPlungerCharge()
     }
 
-    if (!adventureActive && event.code === 'ShiftLeft') {
+    if (!adventureActive && event.code === 'Digit1') {
+      this.flipperLeftHeld = false
       this.queueInput('flipperLeft', false)
     }
 
-    if (!adventureActive && event.code === 'ShiftRight') {
+    if (!adventureActive && event.code === 'Digit0') {
+      this.flipperRightHeld = false
       this.queueInput('flipperRight', false)
     }
 

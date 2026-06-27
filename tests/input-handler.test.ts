@@ -48,8 +48,8 @@ describe('InputHandler', () => {
   })
 
   describe('handleKeyDown', () => {
-    it('queues flipperLeft when ShiftLeft is pressed', () => {
-      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'ShiftLeft' }))
+    it('queues flipperLeft when Digit1 is pressed', () => {
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Digit1' }))
       const frame = handler.processBufferedInputs()
       expect(frame.flipperLeft).toBe(true)
     })
@@ -60,8 +60,8 @@ describe('InputHandler', () => {
       expect(frame.flipperLeft).toBeNull()
     })
 
-    it('queues flipperRight when ShiftRight is pressed', () => {
-      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'ShiftRight' }))
+    it('queues flipperRight when Digit0 is pressed', () => {
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Digit0' }))
       const frame = handler.processBufferedInputs()
       expect(frame.flipperRight).toBe(true)
     })
@@ -74,14 +74,14 @@ describe('InputHandler', () => {
 
     it('does not queue flipper inputs when tilt is active', () => {
       callbacks.getTiltActive.mockReturnValue(true)
-      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'ShiftLeft' }))
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Digit1' }))
       const frame = handler.processBufferedInputs()
       expect(frame.flipperLeft).toBeNull()
     })
 
     it('does not queue gameplay inputs when state is MENU', () => {
       callbacks.getState.mockReturnValue(GameState.MENU)
-      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'ShiftLeft' }))
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Digit1' }))
       const frame = handler.processBufferedInputs()
       expect(frame.flipperLeft).toBeNull()
     })
@@ -124,17 +124,25 @@ describe('InputHandler', () => {
       handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'KeyH' }))
       expect(callbacks.onAdventureToggle).toHaveBeenCalledTimes(1)
     })
+
+    it('re-queues flipperLeft while Digit1 is held', () => {
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Digit1' }))
+      handler.processBufferedInputs()
+      handler.pollHeldFlipperKeys()
+      const frame = handler.processBufferedInputs()
+      expect(frame.flipperLeft).toBe(true)
+    })
   })
 
   describe('handleKeyUp', () => {
-    it('queues flipperLeft=false when ShiftLeft is released', () => {
-      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'ShiftLeft' }))
+    it('queues flipperLeft=false when Digit1 is released', () => {
+      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Digit1' }))
       const frame = handler.processBufferedInputs()
       expect(frame.flipperLeft).toBe(false)
     })
 
-    it('queues flipperRight=false when ShiftRight is released', () => {
-      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'ShiftRight' }))
+    it('queues flipperRight=false when Digit0 is released', () => {
+      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Digit0' }))
       const frame = handler.processBufferedInputs()
       expect(frame.flipperRight).toBe(false)
     })
