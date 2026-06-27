@@ -13,6 +13,7 @@ import { Vector3 } from '@babylonjs/core'
 import { BallType } from '../config'
 import type { EventBus } from '../game/event-bus'
 import { GameConfig } from '../config'
+import { resolveAssetUrl } from '../game/game-utils'
 import {
   createImpactVoiceProfile,
   getPortalMotifFrequencies,
@@ -701,12 +702,11 @@ export class SoundSystem {
 
   private async loadGoldBallSounds(): Promise<void> {
     // Try to load actual sound files
-    const base = (import.meta.env.BASE_URL as string) || './'
     const soundFiles = [
-      { name: 'gold-plated-spawn', url: `${base}sounds/gold-spawn.mp3` },
-      { name: 'solid-gold-spawn', url: `${base}sounds/solid-gold-spawn.mp3` },
-      { name: 'gold-plated-collect', url: `${base}sounds/gold-collect.mp3` },
-      { name: 'solid-gold-collect', url: `${base}sounds/solid-gold-collect.mp3` }
+      { name: 'gold-plated-spawn', url: resolveAssetUrl('sounds/gold-spawn.mp3')! },
+      { name: 'solid-gold-spawn', url: resolveAssetUrl('sounds/solid-gold-spawn.mp3')! },
+      { name: 'gold-plated-collect', url: resolveAssetUrl('sounds/gold-collect.mp3')! },
+      { name: 'solid-gold-collect', url: resolveAssetUrl('sounds/solid-gold-collect.mp3')! }
     ]
 
     for (const { name, url } of soundFiles) {

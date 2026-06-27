@@ -14,6 +14,7 @@ import type { Mesh, Scene, TransformNode } from '@babylonjs/core'
 import { DisplayState, type DisplayConfig } from './display-types'
 import { DISPLAY_LAYER_Z } from './display-layer-depth'
 import { PALETTE, STATE_COLORS, QualityTier } from '../game-elements/visual-language'
+import { resolveAssetUrl } from '../game/game-utils'
 import type { DisplayOverlay } from './display-overlay'
 
 interface WalkByCharacter {
@@ -183,9 +184,10 @@ export class DisplayLcdOverlayLayer {
   private preloadSplashImages(): void {
     const paths = ['/assets/backbox/splash1.png', '/assets/backbox/splash2.png']
     for (const path of paths) {
+      const resolved = resolveAssetUrl(path) ?? path
       const img = new Image()
-      img.onerror = () => console.warn(`[DisplayLcd] Failed to load splash: ${path}`)
-      img.src = path
+      img.onerror = () => console.warn(`[DisplayLcd] Failed to load splash: ${resolved}`)
+      img.src = resolved
       this.splashImages.push(img)
     }
   }

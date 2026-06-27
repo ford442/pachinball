@@ -1,16 +1,21 @@
 import { Color3 } from '@babylonjs/core'
 
 /**
- * Resolve video URLs for Vite subdirectory deployment.
+ * Resolve static asset URLs for Vite subdirectory deployment.
  * Prepends import.meta.env.BASE_URL so assets load correctly under any base path.
  * Absolute URLs (http...) are returned as-is.
  */
-export function resolveVideoUrl(videoPath: string | undefined): string | undefined {
-  if (!videoPath) return undefined
-  if (videoPath.startsWith('http')) return videoPath
+export function resolveAssetUrl(assetPath: string | undefined): string | undefined {
+  if (!assetPath) return undefined
+  if (/^https?:\/\//i.test(assetPath)) return assetPath
   const base = (import.meta.env.BASE_URL as string) || '/'
-  const cleanPath = videoPath.startsWith('/') ? videoPath.slice(1) : videoPath
+  const cleanPath = assetPath.startsWith('/') ? assetPath.slice(1) : assetPath
   return `${base}${cleanPath}`
+}
+
+/** @deprecated Use resolveAssetUrl — kept for existing video call sites. */
+export function resolveVideoUrl(videoPath: string | undefined): string | undefined {
+  return resolveAssetUrl(videoPath)
 }
 
 /**

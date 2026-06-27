@@ -156,7 +156,10 @@ async function createEngine(canvas: HTMLCanvasElement): Promise<Engine | WebGPUE
   const engineOptions = {
     antialias: true,
     preserveDrawingBuffer: true,
-    stencil: true
+    stencil: true,
+    // SSAO + DoF + bloom MRT exceeds the WebGPU default 32-byte/sample limit on
+    // many adapters; request adapter maximums so post-processing pipelines validate.
+    setMaximumLimits: true,
   }
 
   const preference = getRendererPreference()

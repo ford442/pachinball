@@ -5,7 +5,7 @@
  * Merges hardcoded fallback maps with dynamically uploaded shader-maps.
  */
 
-import { API_BASE, apiFetch } from '../config'
+import { apiFetch } from '../config'
 import { TABLE_MAPS, type TableMapConfig, type TableMapType } from '../shaders/lcd-table'
 
 export interface DynamicMapConfig extends TableMapConfig {
@@ -58,7 +58,7 @@ export class MapSystem {
     }
 
     try {
-      const remoteMaps = await apiFetch<DynamicMapConfig[]>(`${API_BASE}/maps`)
+      const remoteMaps = await apiFetch<DynamicMapConfig[]>('/maps')
       if (!remoteMaps || remoteMaps.length === 0) {
         this.loaded = true
         console.log(`[MapSystem] Loaded ${this.maps.size} maps (hardcoded/cache only)`)
