@@ -799,6 +799,19 @@ export class EffectsSystem {
     return this.runtimePerformanceTier
   }
 
+  getActiveParticleCount(): number {
+    return this.particleEffects.getActiveSystemCount()
+  }
+
+  /** Immediate tier review — used after heavy track switches or particle spikes. */
+  forcePerformanceTierReview(): void {
+    const fps = this.scene.getEngine().getFps()
+    const targetTier = fps < 40 ? 'low' : fps < 55 ? 'medium' : 'high'
+    if (targetTier === this.runtimePerformanceTier) return
+    this.setRuntimePerformanceTier(targetTier)
+    console.log(`[Performance] Forced tier review → ${this.runtimePerformanceTier} (FPS: ${fps.toFixed(1)})`)
+  }
+
   private areEnhancedEffectsEnabled(): boolean {
     if (!EffectsConfig.enableEnhancedEffects) return false
     if (EffectsConfig.enableFallbackMode) return false

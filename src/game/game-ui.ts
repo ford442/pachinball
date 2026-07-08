@@ -697,6 +697,14 @@ export class GameUIManager {
    * @param secondsRemaining  Seconds left on the current track timer.
    * @param timeLimitSeconds  Total time limit for the current track.
    */
+  private isReducedMotionActive(): boolean {
+    return (
+      this.prefersReducedMotion ||
+      GameConfig.camera.reducedMotion ||
+      GameConfig.accessibility.photosensitiveMode
+    )
+  }
+
   updateCountdownTimer(secondsRemaining: number, timeLimitSeconds: number): void {
     let timerEl = document.getElementById('campaign-countdown-timer')
     if (!timerEl) {
@@ -744,7 +752,7 @@ export class GameUIManager {
 
     // Pulse animation when critically low (ratio === 0 means timer expired — no need to pulse).
     // Suppressed when the user has opted in to reduced motion.
-    if (!this.prefersReducedMotion && ratio > 0 && ratio <= 0.15) {
+    if (!this.isReducedMotionActive() && ratio > 0 && ratio <= 0.15) {
       timerEl.style.animation = 'campaignTimerPulse 0.6s ease-in-out infinite'
       this.ensureTimerPulseKeyframe()
     } else {
@@ -796,11 +804,16 @@ export class GameUIManager {
     const overlay = document.createElement('div')
     overlay.id = 'campaign-portal-overlay'
 
+    const reducedMotion = this.isReducedMotionActive()
     const isSuccess = kind === 'success'
     const headline = isSuccess ? 'PORTAL OPEN' : 'TIME OUT — ESCAPE'
     const subtitle = trackId.replace(/_/g, ' ')
     const accentColor = isSuccess ? '#00d9ff' : '#ff4400'
     const subColor = isSuccess ? '#aaffee' : '#ffaa88'
+    const headlineGlow = reducedMotion
+      ? `0 0 8px ${accentColor}`
+      : `0 0 18px ${accentColor}, 0 0 40px ${accentColor},
+                     2px 0 0 rgba(255,0,0,0.25), -2px 0 0 rgba(0,255,255,0.25)`
 
     overlay.innerHTML = `
       <div class="cpo-headline" data-testid="campaign-portal-headline" style="
@@ -810,8 +823,7 @@ export class GameUIManager {
         letter-spacing: 6px;
         text-transform: uppercase;
         color: ${accentColor};
-        text-shadow: 0 0 18px ${accentColor}, 0 0 40px ${accentColor},
-                     2px 0 0 rgba(255,0,0,0.25), -2px 0 0 rgba(0,255,255,0.25);
+        text-shadow: ${headlineGlow};
       ">${headline}</div>
       <div class="cpo-subtitle" style="
         margin-top: 10px;
@@ -831,7 +843,8 @@ export class GameUIManager {
       justify-content: center;
       pointer-events: none;
       z-index: 200;
-      animation: cpoFadeIn 0.35s ease-out forwards;
+      animation: ${reducedMotion ? 'none' : 'cpoFadeIn 0.35s ease-out forwards'};
+      opacity: ${reducedMotion ? '1' : ''};
     `
 
     // Inject shared keyframe animations once (no color values — those are inline)

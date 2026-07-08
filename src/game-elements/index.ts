@@ -134,6 +134,20 @@ export {
   type ZoneMechanic,
 } from './dynamic-world'
 export { DebugHUD, type DebugSnapshot } from './debug-hud'
+export { EventBusLog, type EventBusLogEntry } from './event-bus-log'
+export {
+  createEmptyTeardownStats,
+  type TrackTeardownStats,
+  type TrackResourceCounts,
+} from './track-teardown-stats'
+export {
+  CAMPAIGN_STORAGE_KEY,
+  CAMPAIGN_STORAGE_VERSION,
+  migrateCampaignStorage,
+  sanitizeProgressionState,
+  serializeCampaignStorage,
+  type CampaignPersistencePayload,
+} from './adventure-campaign-persistence'
 export {
   getPhysicsTuningValue,
   setPhysicsTuningOverride,

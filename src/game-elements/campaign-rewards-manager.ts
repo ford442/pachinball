@@ -2,6 +2,13 @@ import { PALETTE, QualityTier } from './visual-language'
 import type { AdventureTrackProgression, SerializableProgressionState } from './adventure-track-progression'
 import { CampaignRewardNotifier } from './campaign-reward-notifier'
 import type { EventBus } from '../game/event-bus'
+import {
+  CAMPAIGN_STORAGE_KEY,
+  CAMPAIGN_STORAGE_VERSION,
+  migrateCampaignStorage,
+  serializeCampaignStorage,
+  type CampaignPersistencePayload,
+} from './adventure-campaign-persistence'
 
 export type CampaignRewardType = 'ball-skin' | 'cabinet-theme' | 'backbox-tint'
 
@@ -17,7 +24,7 @@ export interface CampaignRewardItem {
 }
 
 interface CampaignRewardsStorageState {
-  version: 1
+  version: number
   progression: SerializableProgressionState
   unlockedRewardIds: string[]
   equippedRewards: Partial<Record<CampaignRewardType, string>>
@@ -28,8 +35,6 @@ interface CampaignRewardAppliers {
   applyCabinetTheme?: (themeId: string) => void
   applyBackboxTint?: (tintId: string) => void
 }
-
-const STORAGE_KEY = 'pachinball.campaign.rewards.v1'
 
 export const CAMPAIGN_REWARD_CATALOG: CampaignRewardItem[] = [
   {
@@ -232,35 +237,41 @@ export class CampaignRewardsManager {
 
   private load(): void {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY)
+      const raw = localStorage.getItem(CAMPAIGN_STORAGE_KEY)
       if (!raw) return
 
-      const parsed = JSON.parse(raw) as Partial<CampaignRewardsStorageState>
-      if (parsed.progression) {
-        this.progression.loadSerializableState(parsed.progression)
-      }
-      this.unlockedRewardIds = new Set((parsed.unlockedRewardIds ?? []).filter((id) =>
-        CAMPAIGN_REWARD_CATALOG.some((reward) => reward.id === id),
-      ))
+      const parsed = JSON.parse(raw) as unknown
+      const migrated = migrateCampaignStorage(parsed)
+      if (!migrated) return
 
-      this.equippedRewards = {
-        ...parsed.equippedRewards,
-      }
+      this.applyStoragePayload(migrated)
     } catch (error) {
       console.warn('[CampaignRewards] Failed to load campaign rewards state:', error)
     }
   }
 
+  private applyStoragePayload(payload: CampaignPersistencePayload): void {
+    this.progression.loadSerializableState(payload.progression)
+    this.unlockedRewardIds = new Set(
+      (payload.unlockedRewardIds ?? []).filter((id) =>
+        CAMPAIGN_REWARD_CATALOG.some((reward) => reward.id === id),
+      ),
+    )
+    this.equippedRewards = {
+      ...(payload.equippedRewards as Partial<Record<CampaignRewardType, string>>),
+    }
+  }
+
   private save(): void {
     const serializableState: CampaignRewardsStorageState = {
-      version: 1,
+      version: CAMPAIGN_STORAGE_VERSION,
       progression: this.progression.getSerializableState(),
       unlockedRewardIds: Array.from(this.unlockedRewardIds),
       equippedRewards: { ...this.equippedRewards },
     }
 
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(serializableState))
+      localStorage.setItem(CAMPAIGN_STORAGE_KEY, serializeCampaignStorage(serializableState))
     } catch (error) {
       console.warn('[CampaignRewards] Failed to save campaign rewards state:', error)
     }

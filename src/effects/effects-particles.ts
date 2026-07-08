@@ -159,6 +159,11 @@ export class ParticleEffects {
     this.maxParticles = count
   }
 
+  getActiveSystemCount(): number {
+    const pooledActive = this.bumperSparkPool.filter((item) => !item.available).length
+    return this.activeParticles.length + pooledActive
+  }
+
   dispose(): void {
     for (const particles of this.activeParticles) {
       particles.dispose()

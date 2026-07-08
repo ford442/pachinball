@@ -52,6 +52,7 @@ import {
   ZoneTriggerSystem,
   getDynamicWorld,
   DebugHUD,
+  EventBusLog,
   PerformanceMonitor,
   type AccessibilityConfig,
   AdventureGoalTracker,
@@ -132,6 +133,7 @@ export class Game {
   uiManager: GameUIManager | null = null
   adventureManager: AdventureManager | null = null
   debugHUD: DebugHUD | null = null
+  eventBusLog = new EventBusLog()
   physicsTuningPanel: PhysicsTuningPanel | null = null
   performanceMonitor = new PerformanceMonitor()
   hapticManager: HapticManager | null = null
@@ -483,41 +485,23 @@ export class Game {
           }
         }
 
-        this.performanceMonitor.updateEngineMetrics(0, this.physics.getActiveBodyCount())
+        const drawCallsCounter = (this.engine as unknown as { _drawCalls?: { current?: number } })._drawCalls
+        this.performanceMonitor.updateEngineMetrics(
+          drawCallsCounter?.current ?? 0,
+          this.physics.getActiveBodyCount(),
+        )
+        this.performanceMonitor.setParticleCount(this.effects?.getActiveParticleCount() ?? 0)
+        this.performanceMonitor.setGoldBallCount(this.ballManager?.getGoldBallCount() ?? 0)
         this.performanceMonitor.frameEnd()
 
-        if (this.performanceMonitor.isEnabled() && this.debugHUD) {
-          const metrics = this.performanceMonitor.getMetrics()
-          this.debugHUD.update({
-            gameState: this.stateManager.getState().toString(),
-            displayState: this.display?.getDisplayState().toString() || 'n/a',
-            score: this.score,
-            multiplier: 1.0,
-            lives: this.lives,
-            adventureTrack: this.adventureTrackProgression?.getCurrentTrack() ?? null,
-            fps: metrics.fps,
-            drawCalls: metrics.drawCalls,
-            frameTimeMs: metrics.frameTimeMs,
-            activeBodies: metrics.activeBodies,
-            physicsStepMs: metrics.physicsStepMs,
-            adventureTimeMs: this.adventureProgressionSupervisor
-              ? Math.round(this.adventureProgressionSupervisor.getTimeRemaining() * 1000)
-              : null,
-            dynamicZoneState: 'n/a',
-            performanceTier: 'n/a',
-            adventureActive: this.adventureMode?.isActive() ?? false,
-            portalSensorHandle: this.adventureMode?.getPortalSensorHandle() ?? -1,
-            portalHandleSetSize: this.physicsController.getPortalSensorHandleSetSize(),
-            tablePhysicsEnabled: this.gameObjects?.areTableBodiesEnabled() ?? true,
-            activeCameraType: this.scene?.activeCamera?.getClassName() ?? 'n/a',
-            bumperHitsThisBall: this.physicsController.getBumperHitsThisBall?.() ?? 0,
-            pointsThisBall: this.physicsController.getPointsThisBall?.() ?? 0,
-            zoneEntriesThisBall: this.zoneTriggerSystem?.getZoneEntriesThisBall?.() ?? 0,
-            rawCollisionEvents: this.physicsController.getRawCollisionEvents?.() ?? 0,
-            knownObstacleMatches: this.physicsController.getKnownObstacleMatches?.() ?? 0,
-            bumperMatches: this.physicsController.getBumperMatches?.() ?? 0,
-            awardScoreCalls: this.physicsController.getAwardScoreCalls?.() ?? 0,
-          })
+        if (this.debugHUD?.isHUDVisible()) {
+          this.debugHUD.update(this.debugHelper.buildDebugSnapshot(dt, this.lives))
+          this.debugHUD.updatePanel('EventBus', this.eventBusLog.getPanelData())
+        }
+
+        const perfMetrics = this.performanceMonitor.getMetrics()
+        if (perfMetrics.suggestedFallback && this.effects?.getRuntimePerformanceTier() === 'high') {
+          this.effects.forcePerformanceTierReview()
         }
       })
 
@@ -671,7 +655,19 @@ export class Game {
   tryActivateSlotMachine(): void { this.slotAdventure.tryActivateSlotMachine() }
   forceSlotSpin(): void { this.slotAdventure.forceSlotSpin() }
   rebuildHandleCaches(): void { this.physicsController.rebuildHandleCaches() }
-  handleDebugHUDVisibilityChange(visible: boolean): void { this.debugHelper.handleDebugHUDVisibilityChange(visible) }
+  handleDebugHUDVisibilityChange(visible: boolean): void {
+    this.debugHelper.handleDebugHUDVisibilityChange(
+      visible,
+      () => {
+        this.eventBusLog.setEnabled(true)
+        this.performanceMonitor.setEnabled(true)
+      },
+      () => {
+        this.eventBusLog.setEnabled(false)
+        this.eventBusLog.clear()
+      },
+    )
+  }
   isDebugHUDAvailable(): boolean { return this.debugHelper.isDebugHUDAvailable() }
   isDebugHUDKeyboardEnabled(): boolean { return this.debugHelper.isDebugHUDKeyboardEnabled() }
   initializeDynamicZones(mapName: string, mapConfig: typeof TABLE_MAPS[string]): void { this.scenarioManager.initializeDynamicZones(mapName, mapConfig) }

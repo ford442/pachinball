@@ -9,19 +9,32 @@ export interface DebugSnapshot {
   multiplier: number
   lives: number
   adventureTrack: string | null
+  trackName: string | null
+  goalProgressPct: number
+  portalState: string
+  portalKind: string | null
   fps: number
   drawCalls: number
   frameTimeMs: number
   activeBodies: number
+  colliderCount: number
+  physicsMemoryKb: number
   physicsStepMs: number
   adventureTimeMs: number | null
   dynamicZoneState: string | null
   performanceTier: string
+  rendererBackend: string
+  activeParticles: number
+  goldBallsInPlay: number
+  lastTrackSwitchMs: number | null
   adventureActive: boolean
   portalSensorHandle: number
   portalHandleSetSize: number
   tablePhysicsEnabled: boolean
   activeCameraType: string
+  teardownMeshes: number
+  teardownBodies: number
+  teardownLingering: number
   // Instrumentation for scoring coverage (temporary for audit)
   bumperHitsThisBall: number
   pointsThisBall: number
@@ -133,7 +146,8 @@ export class DebugHUD {
       score: snapshot.score,
       multiplier: `${Math.round(snapshot.multiplier)}x`,
       track: snapshot.adventureTrack ?? 'none',
-      // per-ball scoring instrumentation
+      'track name': snapshot.trackName ?? 'n/a',
+      'goal %': `${snapshot.goalProgressPct.toFixed(1)}%`,
       bumpersThisBall: snapshot.bumperHitsThisBall ?? 0,
       ptsThisBall: snapshot.pointsThisBall ?? 0,
       zonesThisBall: snapshot.zoneEntriesThisBall ?? 0,
@@ -146,6 +160,8 @@ export class DebugHUD {
     this.updatePanel('Physics', {
       'step ms': snapshot.physicsStepMs.toFixed(2),
       bodies: snapshot.activeBodies,
+      colliders: snapshot.colliderCount,
+      'mem est kb': snapshot.physicsMemoryKb,
     })
 
     this.updatePanel('Display', {
@@ -153,19 +169,28 @@ export class DebugHUD {
       drawCalls: snapshot.drawCalls,
       'frame ms': snapshot.frameTimeMs.toFixed(2),
       tier: snapshot.performanceTier,
+      renderer: snapshot.rendererBackend,
+      particles: snapshot.activeParticles,
+      'gold balls': snapshot.goldBallsInPlay,
+      'track switch ms': snapshot.lastTrackSwitchMs?.toFixed(1) ?? 'n/a',
     })
 
     this.updatePanel('Mode timers', {
-      'adventure ms': snapshot.adventureTimeMs?.toFixed(1) ?? 'n/a',
+      'timer ms': snapshot.adventureTimeMs?.toFixed(1) ?? 'n/a',
       'zone state': snapshot.dynamicZoneState ?? 'n/a',
     })
 
     this.updatePanel('Campaign', {
       'adventure active': String(snapshot.adventureActive),
-      'portal sensor handle': snapshot.portalSensorHandle,
-      'portal handle set size': snapshot.portalHandleSetSize,
-      'table physics enabled': String(snapshot.tablePhysicsEnabled),
-      'active camera': snapshot.activeCameraType,
+      'portal state': snapshot.portalState,
+      'portal kind': snapshot.portalKind ?? 'n/a',
+      'portal sensor': snapshot.portalSensorHandle,
+      'portal handles': snapshot.portalHandleSetSize,
+      'table physics': String(snapshot.tablePhysicsEnabled),
+      camera: snapshot.activeCameraType,
+      'td meshes': snapshot.teardownMeshes,
+      'td bodies': snapshot.teardownBodies,
+      'td lingering': snapshot.teardownLingering,
     })
   }
 

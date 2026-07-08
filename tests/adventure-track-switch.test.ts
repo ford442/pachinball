@@ -254,6 +254,21 @@ describe('AdventureMode.switchToTrack', () => {
     expect(activeBodies.size).toBe(bodyCountAfterStart)
   })
 
+  it('records teardown instrumentation with zero lingering bodies', () => {
+    const { mode } = makeMode()
+    const mockBallBody = { setLinvel: vi.fn(), setAngvel: vi.fn(), setTranslation: vi.fn(), collider: vi.fn(() => null) }
+    const mockCamera = new (hoisted.MockArcRotateCamera as unknown as new () => unknown)()
+
+    mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
+    mode.switchToTrack(AdventureTrackType.CYBER_CORE)
+
+    const stats = mode.getLastTeardownStats()
+    expect(stats).not.toBeNull()
+    expect(stats!.meshesDisposed).toBeGreaterThan(0)
+    expect(stats!.bodiesRemoved).toBeGreaterThan(0)
+    expect(stats!.lingeringBodies).toBe(0)
+  })
+
   it('updates camera preset without recreating the camera', () => {
     const { mode } = makeMode()
     const mockBallBody = { setLinvel: vi.fn(), setAngvel: vi.fn(), setTranslation: vi.fn(), collider: vi.fn(() => null) }

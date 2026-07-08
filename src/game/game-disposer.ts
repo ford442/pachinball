@@ -24,6 +24,7 @@ export class GameDisposer {
     this.game.inputManager?.dispose()
     this.game.debugHUD?.dispose()
     this.game.debugHUD = null
+    this.game.eventBusLog.dispose()
     this.game.uiManager?.dispose()
     this.game.adventureManager?.dispose()
     this.game.renderer?.dispose()

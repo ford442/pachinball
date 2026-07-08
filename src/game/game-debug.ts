@@ -15,8 +15,11 @@ import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
 import type { GameObjects } from '../objects'
 import type { GamePhysicsController } from './game-physics-controller'
 import type { GameStateManager } from './game-state'
-import type { DebugSnapshot } from '../game-elements'
+import type { DebugSnapshot, PerformanceMonitor } from '../game-elements'
 import { GameState } from '../game-elements'
+import type { AdventureProgressionSupervisor } from '../game-elements/adventure-progression-supervisor'
+import type { AdventureTrackProgression } from '../game-elements/adventure-track-progression'
+import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
 
 export interface DebugHost {
   readonly engine: Engine | WebGPUEngine
@@ -30,10 +33,14 @@ export interface DebugHost {
   readonly dynamicWorld: ReturnType<typeof import('../game-elements/dynamic-world').getDynamicWorld> | null
   readonly gameObjects: GameObjects | null
   readonly physicsController: GamePhysicsController
+  readonly adventureProgressionSupervisor: AdventureProgressionSupervisor | null
+  readonly adventureTrackProgression: AdventureTrackProgression | null
+  readonly performanceMonitor: PerformanceMonitor
 
   readonly debugHUDQueryEnabled: boolean
   comboCount: number
   adventureModeStartMs: number | null
+  score: number
 
   sceneInstrumentation: SceneInstrumentation | null
   engineInstrumentation: EngineInstrumentation | null
@@ -54,11 +61,13 @@ export class GameDebug {
     return this.isDebugHUDAvailable()
   }
 
-  handleDebugHUDVisibilityChange(visible: boolean): void {
+  handleDebugHUDVisibilityChange(visible: boolean, onVisible?: () => void, onHidden?: () => void): void {
     if (visible) {
       this.initializeDebugInstrumentation()
+      onVisible?.()
       return
     }
+    onHidden?.()
     this.disposeDebugInstrumentation()
   }
 
@@ -86,40 +95,59 @@ export class GameDebug {
     this.host.engineInstrumentation = null
   }
 
-  buildDebugSnapshot(rawDt: number): DebugSnapshot {
+  buildDebugSnapshot(rawDt: number, lives: number): DebugSnapshot {
     const gameState = GameState[this.host.stateManager.getState()] ?? 'UNKNOWN'
     const displayState = this.host.display?.getDisplayState() ?? 'none'
     const drawCallsCounter = (this.host.engine as unknown as { _drawCalls?: { current?: number } })._drawCalls
     const adventureTrack = this.host.adventureMode?.getCurrentZone()
+    const campaignTrackId = this.host.adventureTrackProgression?.getCurrentTrack() ?? null
+    const trackInfo = campaignTrackId ? TRACK_CATALOG[campaignTrackId] : null
     const activeZoneId = this.host.zoneTriggerSystem?.getCurrentZoneId()
     const dynamicZoneLabel = activeZoneId ?? this.host.dynamicWorld?.getCurrentZoneInfo()?.name ?? null
     const multiplier = Math.floor(this.host.comboCount / 3) + 1
     const isAdventureActive = this.host.adventureMode?.isActive() ?? false
-    const adventureTimeMs = isAdventureActive && this.host.adventureModeStartMs !== null
-      ? performance.now() - this.host.adventureModeStartMs
+    const supervisor = this.host.adventureProgressionSupervisor
+    const adventureTimeMs = supervisor && supervisor.getTimeRemaining() > 0
+      ? Math.round(supervisor.getTimeRemaining() * 1000)
       : null
+    const portalOpen = supervisor?.isPortalOpen() ?? false
+    const portalKind = supervisor?.getPortalKind() ?? null
+    const perfMetrics = this.host.performanceMonitor.getMetrics()
+    const teardown = this.host.adventureMode?.getLastTeardownStats()
 
     return {
       gameState,
       displayState,
-      score: 0, // filled by caller
+      score: this.host.score,
       multiplier,
-      lives: 0, // filled by caller
-      adventureTrack: adventureTrack ? adventureTrack.replace(/_/g, ' ') : null,
-      fps: this.host.scene?.getEngine().getFps() ?? 0,
-      drawCalls: drawCallsCounter?.current ?? 0,
-      frameTimeMs: rawDt * 1000,
-      activeBodies: this.host.physics.getWorld()?.bodies.len() ?? 0,
-      physicsStepMs: rawDt * 1000,
+      lives,
+      adventureTrack: adventureTrack ? adventureTrack.replace(/_/g, ' ') : campaignTrackId,
+      trackName: trackInfo?.name ?? (campaignTrackId?.replace(/_/g, ' ') ?? null),
+      goalProgressPct: supervisor?.getGoalProgressPercent(this.host.score) ?? 0,
+      portalState: portalOpen ? 'open' : 'closed',
+      portalKind,
+      fps: this.host.scene?.getEngine().getFps() ?? perfMetrics.fps,
+      drawCalls: drawCallsCounter?.current ?? perfMetrics.drawCalls,
+      frameTimeMs: perfMetrics.frameTimeMs > 0 ? perfMetrics.frameTimeMs : rawDt * 1000,
+      activeBodies: this.host.physics.getActiveBodyCount(),
+      colliderCount: this.host.physics.getColliderCount(),
+      physicsMemoryKb: this.host.physics.getEstimatedMemoryKb(),
+      physicsStepMs: perfMetrics.physicsStepMs > 0 ? perfMetrics.physicsStepMs : rawDt * 1000,
       adventureTimeMs,
       dynamicZoneState: dynamicZoneLabel,
       performanceTier: this.host.effects?.getRuntimePerformanceTier() || 'high',
+      rendererBackend: perfMetrics.rendererBackend,
+      activeParticles: perfMetrics.activeParticles,
+      goldBallsInPlay: perfMetrics.goldBallsInPlay,
+      lastTrackSwitchMs: perfMetrics.lastTrackSwitchMs,
       adventureActive: isAdventureActive,
       portalSensorHandle: this.host.adventureMode?.getPortalSensorHandle() ?? -1,
       portalHandleSetSize: this.host.physicsController.getPortalSensorHandleSetSize(),
       tablePhysicsEnabled: this.host.gameObjects?.areTableBodiesEnabled() ?? true,
       activeCameraType: this.host.scene?.activeCamera?.getClassName() ?? 'n/a',
-      // Scoring coverage instrumentation (per-ball, reset on launch)
+      teardownMeshes: teardown?.meshesDisposed ?? 0,
+      teardownBodies: teardown?.bodiesRemoved ?? 0,
+      teardownLingering: teardown?.lingeringBodies ?? 0,
       bumperHitsThisBall: this.host.physicsController.getBumperHitsThisBall?.() ?? 0,
       pointsThisBall: this.host.physicsController.getPointsThisBall?.() ?? 0,
       zoneEntriesThisBall: this.host.zoneTriggerSystem?.getZoneEntriesThisBall?.() ?? 0,

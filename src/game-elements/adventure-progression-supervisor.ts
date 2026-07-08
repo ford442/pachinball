@@ -142,6 +142,17 @@ export class AdventureProgressionSupervisor {
     return this.portalOpen
   }
 
+  getPortalKind(): PortalKind | null {
+    return this.portalKind
+  }
+
+  getGoalProgressPercent(currentTotalScore: number): number {
+    if (!this.activeTrackInfo) return 0
+    const scoreDelta = Math.max(0, currentTotalScore - this.baselineScore)
+    const target = Math.max(1, this.activeTrackInfo.recommendedScore)
+    return Math.min(100, (scoreDelta / target) * 100)
+  }
+
   handlePortalActivationFailed({ trackId, kind }: PachinballEventMap['portal:activation-failed']): boolean {
     if (!this.activeTrackId || !this.activeTrackInfo || !this.hasResolvedOutcome || !this.portalOpen) {
       return false

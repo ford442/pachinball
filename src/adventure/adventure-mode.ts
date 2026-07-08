@@ -25,6 +25,11 @@ import { getTrackStartAnchor } from './portal-routing'
 import { PALETTE } from '../game-elements/visual-language'
 import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
 import type { AccessibilityConfig } from '../game-elements/accessibility-config'
+import {
+  createEmptyTeardownStats,
+  type TrackResourceCounts,
+  type TrackTeardownStats,
+} from '../game-elements/track-teardown-stats'
 
 // Import all track builders
 import { buildNeonHelix } from './tracks/neon-helix'
@@ -113,6 +118,7 @@ export class AdventureMode extends TrackBuilder {
   }
   private exitPortal: ActiveExitPortal | null = null
   private activeBallBodies: RAPIER.RigidBody[] = []
+  private lastTeardownStats: TrackTeardownStats | null = null
 
   /**
    * Return the Rapier body handle of the active exit portal sensor, or -1 when
@@ -121,6 +127,53 @@ export class AdventureMode extends TrackBuilder {
    */
   getPortalSensorHandle(): number {
     return this.exitPortal?.sensor.handle ?? -1
+  }
+
+  getLastTeardownStats(): TrackTeardownStats | null {
+    return this.lastTeardownStats
+  }
+
+  getTrackResourceCounts(): TrackResourceCounts {
+    let colliders = 0
+    for (const body of this.adventureBodies) {
+      colliders += body.numColliders()
+    }
+    for (const zone of this.conveyorZones) {
+      colliders += zone.sensor.numColliders()
+    }
+    for (const well of this.gravityWells) {
+      colliders += well.sensor.numColliders()
+    }
+    for (const zone of this.dampingZones) {
+      colliders += zone.sensor.numColliders()
+    }
+    for (const gate of this.chromaGates) {
+      colliders += gate.sensor.numColliders()
+    }
+    if (this.adventureSensor) {
+      colliders += this.adventureSensor.numColliders()
+    }
+    for (const sensor of this.resetSensors) {
+      colliders += sensor.numColliders()
+    }
+    if (this.exitPortal) {
+      colliders += this.exitPortal.sensor.numColliders()
+    }
+
+    return {
+      meshes: this.adventureTrack.length,
+      materials: this.materials.length,
+      bodies:
+        this.adventureBodies.length +
+        this.conveyorZones.length +
+        this.gravityWells.length +
+        this.dampingZones.length +
+        this.chromaGates.length +
+        this.resetSensors.length +
+        (this.adventureSensor ? 1 : 0) +
+        (this.exitPortal ? 1 : 0),
+      colliders,
+    }
   }
 
   /**
@@ -460,11 +513,16 @@ export class AdventureMode extends TrackBuilder {
     if (!portal) return
 
     portal.animationTime += dt
-    portal.root.rotation.z += dt * (portal.kind === 'success' ? 2.5 : 3.5)
 
-    const pulse = 0.85 + Math.sin(portal.animationTime * (portal.kind === 'success' ? 6.0 : 8.0)) * 0.25
-    portal.ringBase.scaleToRef(1.2 * pulse, portal.ringMaterial.emissiveColor)
-    portal.coreBase.scaleToRef(0.85 * pulse, portal.coreMaterial.emissiveColor)
+    if (this.accessibility.reducedMotion || this.accessibility.flashFrequencyMax <= 1) {
+      portal.ringBase.scaleToRef(1.0, portal.ringMaterial.emissiveColor)
+      portal.coreBase.scaleToRef(0.75, portal.coreMaterial.emissiveColor)
+    } else {
+      portal.root.rotation.z += dt * (portal.kind === 'success' ? 2.5 : 3.5)
+      const pulse = 0.85 + Math.sin(portal.animationTime * (portal.kind === 'success' ? 6.0 : 8.0)) * 0.25
+      portal.ringBase.scaleToRef(1.2 * pulse, portal.ringMaterial.emissiveColor)
+      portal.coreBase.scaleToRef(0.85 * pulse, portal.coreMaterial.emissiveColor)
+    }
 
     const sensorCollider = portal.sensor.collider(0)
     if (!sensorCollider) return
@@ -853,6 +911,17 @@ export class AdventureMode extends TrackBuilder {
    * Called by both switchToTrack() and end().
    */
   private clearTrack(): void {
+    const stats = createEmptyTeardownStats()
+    stats.meshesDisposed = this.adventureTrack.length
+    stats.materialsDisposed = this.materials.length
+    stats.bodiesRemoved = this.adventureBodies.length
+    stats.conveyorZonesRemoved = this.conveyorZones.length
+    stats.gravityWellsRemoved = this.gravityWells.length
+    stats.dampingZonesRemoved = this.dampingZones.length
+    stats.resetSensorsRemoved = this.resetSensors.length
+    stats.chromaGatesRemoved = this.chromaGates.length
+    stats.adventureSensorRemoved = this.adventureSensor ? 1 : 0
+
     this.timeAccumulator = 0
     this.portalPosition = null
     this.currentTrackInfo = null
@@ -873,6 +942,8 @@ export class AdventureMode extends TrackBuilder {
     for (const body of this.adventureBodies) {
       if (this.world.getRigidBody(body.handle)) {
         this.world.removeRigidBody(body)
+      } else {
+        stats.lingeringBodies++
       }
     }
     this.adventureBodies = []
@@ -880,6 +951,8 @@ export class AdventureMode extends TrackBuilder {
     for (const zone of this.conveyorZones) {
       if (this.world.getRigidBody(zone.sensor.handle)) {
         this.world.removeRigidBody(zone.sensor)
+      } else {
+        stats.lingeringBodies++
       }
     }
     this.conveyorZones = []
@@ -887,6 +960,8 @@ export class AdventureMode extends TrackBuilder {
     for (const well of this.gravityWells) {
       if (this.world.getRigidBody(well.sensor.handle)) {
         this.world.removeRigidBody(well.sensor)
+      } else {
+        stats.lingeringBodies++
       }
     }
     this.gravityWells = []
@@ -894,6 +969,8 @@ export class AdventureMode extends TrackBuilder {
     for (const zone of this.dampingZones) {
       if (this.world.getRigidBody(zone.sensor.handle)) {
         this.world.removeRigidBody(zone.sensor)
+      } else {
+        stats.lingeringBodies++
       }
     }
     this.dampingZones = []
@@ -901,6 +978,8 @@ export class AdventureMode extends TrackBuilder {
     if (this.adventureSensor) {
       if (this.world.getRigidBody(this.adventureSensor.handle)) {
         this.world.removeRigidBody(this.adventureSensor)
+      } else {
+        stats.lingeringBodies++
       }
       this.adventureSensor = null
     }
@@ -908,6 +987,8 @@ export class AdventureMode extends TrackBuilder {
     for (const sensor of this.resetSensors) {
       if (this.world.getRigidBody(sensor.handle)) {
         this.world.removeRigidBody(sensor)
+      } else {
+        stats.lingeringBodies++
       }
     }
     this.resetSensors = []
@@ -915,8 +996,15 @@ export class AdventureMode extends TrackBuilder {
     for (const gate of this.chromaGates) {
       if (this.world.getRigidBody(gate.sensor.handle)) {
         this.world.removeRigidBody(gate.sensor)
+      } else {
+        stats.lingeringBodies++
       }
     }
     this.chromaGates = []
+
+    this.lastTeardownStats = stats
+    if (stats.lingeringBodies > 0) {
+      console.warn('[AdventureMode] Track teardown left lingering bodies:', stats)
+    }
   }
 }

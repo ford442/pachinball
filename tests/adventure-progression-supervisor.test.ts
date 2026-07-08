@@ -106,6 +106,20 @@ describe('AdventureProgressionSupervisor', () => {
     expect(progression.getNextTrackId()).toBe('PACHINKO_HALL')
   })
 
+  it('reports goal progress percent and portal kind while a track is active', () => {
+    const bus = new EventBus()
+    const progression = new AdventureTrackProgression()
+    const supervisor = new AdventureProgressionSupervisor(bus, progression)
+
+    supervisor.startTrack('NEON_HELIX', 0)
+    expect(supervisor.getGoalProgressPercent(25_000)).toBe(50)
+    expect(supervisor.getPortalKind()).toBeNull()
+
+    supervisor.update(1, 52_000)
+    expect(supervisor.getGoalProgressPercent(52_000)).toBeGreaterThanOrEqual(100)
+    expect(supervisor.getPortalKind()).toBe('success')
+  })
+
   it('resolves success, opens portal, and completes track with multiplier rewards', () => {
     const bus = new EventBus()
     const progression = new AdventureTrackProgression()

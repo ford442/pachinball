@@ -129,8 +129,14 @@ export class GameSystemsInitializer {
       })
       this.game.cabinetLighting.subscribeToEvents(this.game.eventBus)
 
+      this.game.eventBusLog.wire(this.game.eventBus)
+      this.game.performanceMonitor.setRendererBackend(
+        (window as unknown as { currentRenderer?: string }).currentRenderer ??
+          (this.game.engine.getClassName().toLowerCase().includes('webgpu') ? 'webgpu' : 'webgl2'),
+      )
+
       this.game.debugHUD = new DebugHUD({
-        onVisibilityChange: (visible) => this.game.debugHelper.handleDebugHUDVisibilityChange(visible),
+        onVisibilityChange: (visible) => this.game.handleDebugHUDVisibilityChange(visible),
       })
       this.game.debugHUD.setUpdateCadenceHz(4)
       if (this.game.debugHUDEnabledInSettings && this.game.debugHelper.isDebugHUDAvailable()) {

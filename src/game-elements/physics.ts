@@ -140,6 +140,28 @@ export class PhysicsSystem {
     return count
   }
 
+  /** Count all colliders attached to rigid bodies in the world. */
+  getColliderCount(): number {
+    if (!this.world) return 0
+    let count = 0
+    this.world.bodies.forEach((body) => {
+      count += body.numColliders()
+    })
+    return count
+  }
+
+  /**
+   * Rough WASM memory estimate for the Rapier world (bodies + colliders).
+   * Useful for spotting leaks across adventure track switches.
+   */
+  getEstimatedMemoryKb(): number {
+    if (!this.world) return 0
+    const bodies = this.getActiveBodyCount()
+    const colliders = this.getColliderCount()
+    // Empirical averages for Rapier 3D WASM allocations in this project.
+    return Math.round(bodies * 0.45 + colliders * 0.18)
+  }
+
   /**
    * Fixed timestep physics step with accumulator.
    * Ensures deterministic physics regardless of frame rate.

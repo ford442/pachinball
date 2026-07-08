@@ -17,6 +17,7 @@ import type { AdventureCinematicTriggers } from '../game-elements/adventure-cine
 import type { AdventureUIStateManager } from '../game-elements/adventure-ui-state'
 import type { AdventureGoalTracker } from '../game-elements/adventure-goal-tracker'
 import type { AdventureProgressionSupervisor } from '../game-elements/adventure-progression-supervisor'
+import type { PerformanceMonitor } from '../game-elements/performance-monitor'
 
 import type { TableMapManager } from './game-maps'
 import type { LevelLoader } from './level-loader'
@@ -44,6 +45,7 @@ export interface SlotAdventureHost {
   readonly adventureProgressionSupervisor: AdventureProgressionSupervisor | null
   readonly physicsController: { rebuildHandleCaches(): void } | null
   readonly levelLoader: LevelLoader | null
+  readonly performanceMonitor: PerformanceMonitor | null
 
   updateHUD(): void
   getBallPosition(): import('@babylonjs/core').Vector3 | null
@@ -209,6 +211,8 @@ export class GameSlotAdventure {
       console.warn(`[GameSlotAdventure] Invalid track id: ${trackId}`)
       return
     }
+
+    this.host.performanceMonitor?.markTrackSwitch(trackId)
 
     // Canonical load path: LevelLoader tears down old track, applies A/B map + mode, builds new geometry.
     const loader = this.host.levelLoader

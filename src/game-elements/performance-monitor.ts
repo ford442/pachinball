@@ -10,6 +10,13 @@ export interface PerformanceMetrics {
   renderTimeMs: number
   drawCalls: number
   activeBodies: number
+  lastTrackSwitchMs: number | null
+  lastTrackSwitchId: string | null
+  peakFrameAfterSwitchMs: number | null
+  activeParticles: number
+  goldBallsInPlay: number
+  rendererBackend: string
+  suggestedFallback: boolean
 }
 
 export class PerformanceMonitor {
@@ -20,6 +27,13 @@ export class PerformanceMonitor {
     renderTimeMs: 0,
     drawCalls: 0,
     activeBodies: 0,
+    lastTrackSwitchMs: null,
+    lastTrackSwitchId: null,
+    peakFrameAfterSwitchMs: null,
+    activeParticles: 0,
+    goldBallsInPlay: 0,
+    rendererBackend: 'unknown',
+    suggestedFallback: false,
   }
 
   // Frame timing
@@ -34,6 +48,10 @@ export class PerformanceMonitor {
   private maxSamples = 60 // ~1 second at 60 FPS
 
   private enabled = false
+  private trackSwitchStartedAt: number | null = null
+  private trackSwitchPeakMs = 0
+  private trackSwitchSampleFrames = 0
+  private readonly trackSwitchSampleWindow = 90
 
   constructor() {
     this.frameStartTime = performance.now()
@@ -44,7 +62,6 @@ export class PerformanceMonitor {
    * Call at the start of each frame update
    */
   frameStart(): void {
-    if (!this.enabled) return
     this.frameStartTime = performance.now()
   }
 
@@ -69,9 +86,11 @@ export class PerformanceMonitor {
    * Call at the end of frame (after render)
    */
   frameEnd(): void {
+    const frameTime = performance.now() - this.frameStartTime
+    this.trackSwitchProfiling(frameTime)
+
     if (!this.enabled) return
 
-    const frameTime = performance.now() - this.frameStartTime
     this.addSample(this.frameTimeSamples, frameTime)
     this.frameCount++
 
@@ -99,6 +118,27 @@ export class PerformanceMonitor {
     if (!this.enabled) return
     this.metrics.drawCalls = drawCalls
     this.metrics.activeBodies = activeBodies
+  }
+
+  setRendererBackend(backend: string): void {
+    this.metrics.rendererBackend = backend
+  }
+
+  setParticleCount(count: number): void {
+    this.metrics.activeParticles = count
+  }
+
+  setGoldBallCount(count: number): void {
+    this.metrics.goldBallsInPlay = count
+  }
+
+  markTrackSwitch(trackId: string): void {
+    this.trackSwitchStartedAt = performance.now()
+    this.trackSwitchPeakMs = 0
+    this.trackSwitchSampleFrames = 0
+    this.metrics.lastTrackSwitchId = trackId
+    this.metrics.lastTrackSwitchMs = null
+    this.metrics.peakFrameAfterSwitchMs = null
   }
 
   /**
@@ -154,5 +194,29 @@ export class PerformanceMonitor {
     }
     // Render time = frame time - physics time (approximation)
     this.metrics.renderTimeMs = Math.max(0, this.metrics.frameTimeMs - this.metrics.physicsStepMs)
+    this.metrics.suggestedFallback =
+      this.metrics.fps > 0 &&
+      this.metrics.fps < 40 &&
+      (this.metrics.peakFrameAfterSwitchMs ?? 0) > 22
+  }
+
+  private trackSwitchProfiling(frameTime: number): void {
+    if (this.trackSwitchStartedAt === null) return
+
+    this.trackSwitchPeakMs = Math.max(this.trackSwitchPeakMs, frameTime)
+    this.trackSwitchSampleFrames++
+
+    if (this.trackSwitchSampleFrames >= this.trackSwitchSampleWindow) {
+      this.metrics.lastTrackSwitchMs = performance.now() - this.trackSwitchStartedAt
+      this.metrics.peakFrameAfterSwitchMs = this.trackSwitchPeakMs
+      this.trackSwitchStartedAt = null
+      this.trackSwitchSampleFrames = 0
+
+      if (this.enabled && window.localStorage.getItem('debug:perf-log') === 'true') {
+        console.log(
+          `[PERF] Track switch ${this.metrics.lastTrackSwitchId ?? 'unknown'}: ${this.metrics.lastTrackSwitchMs.toFixed(1)}ms, peak frame ${this.metrics.peakFrameAfterSwitchMs.toFixed(1)}ms`,
+        )
+      }
+    }
   }
 }

@@ -282,6 +282,7 @@ export class AdventureTrackProgression {
   setCurrentTrack(trackId: string): void {
     if (this.isTrackUnlocked(trackId)) {
       this.state.currentTrack = trackId
+      this.onProgressChanged?.()
     }
   }
 
