@@ -1,7 +1,7 @@
 import { Scene, Vector3, MeshBuilder, Mesh, StandardMaterial, PBRMaterial, Color3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../materials'
-import { PhysicsConfig } from '../config'
+import { getPhysicsTuningValue } from '../game-elements/physics-tuning'
 import type { PhysicsBinding, BumperVisual } from '../game-elements/types'
 import { INTENSITY, STATE_PROFILES, PALETTE, color, emissive, stateEmissive } from '../game-elements/visual-language'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
@@ -121,7 +121,7 @@ export class BumperBuilder {
 
       this.world.createCollider(
         this.rapier.ColliderDesc.ball(0.4 * scale)
-          .setRestitution(PhysicsConfig.bumper.restitution)
+          .setRestitution(getPhysicsTuningValue('bumperRestitution'))
           .setCollisionGroups(COLLISION_GROUP_PRESETS.BUMPER)
           .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
         body

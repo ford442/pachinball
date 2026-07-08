@@ -1,6 +1,8 @@
 import { Scene, MeshBuilder, Mesh, PBRMaterial, TransformNode, Vector3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import { PhysicsConfig } from '../config'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import { getPhysicsTuningValue } from '../game-elements/physics-tuning'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
@@ -190,7 +192,7 @@ export class SpinnerBumperBuilder {
       const mat = visual.mesh.material as PBRMaterial | null
       if (mat) {
         if (visual.hitTime > 0) {
-          const flash = INTENSITY.BURST * (visual.hitTime / 0.2) * this.effectIntensity
+          const flash = INTENSITY.BURST * (visual.hitTime / PhysicsConfig.spinner.hitFlashSeconds) * this.effectIntensity
           mat.emissiveColor = emissive(visual.color, INTENSITY.NORMAL).add(color(PALETTE.WHITE).scale(flash))
         } else {
           visual.hitTime = 0
@@ -200,11 +202,11 @@ export class SpinnerBumperBuilder {
     }
 
     // Smoothly accelerate rotation toward target
-    const accelerationRate = 25.0
+    const accelerationRate = PhysicsConfig.spinner.acceleration
     visual.rotationSpeed += (visual.targetRotationSpeed - visual.rotationSpeed) * accelerationRate * dt
 
     // Apply friction/deceleration when not actively spinning
-    const decelerationRate = 8.0
+    const decelerationRate = PhysicsConfig.spinner.deceleration
     if (visual.targetRotationSpeed === 0) {
       visual.rotationSpeed *= Math.exp(-decelerationRate * dt)
     }
@@ -237,13 +239,12 @@ export class SpinnerBumperBuilder {
    * Trigger spinner when hit by ball
    */
   triggerSpin(visual: SpinnerBumperVisual, impactForce: number, ballPosition?: Vector3): void {
-    visual.hitTime = 0.2
+    visual.hitTime = PhysicsConfig.spinner.hitFlashSeconds
 
-    // Impact force determines spin intensity
-    const spinIntensity = Math.min(impactForce / 20, 1.0)
-    visual.targetRotationSpeed = 15.0 * spinIntensity * (Math.random() < 0.5 ? 1 : -1)
+    const spinIntensity = Math.min(impactForce / 18, 1.0)
+    const targetSpeed = getPhysicsTuningValue('spinnerTargetSpeed')
+    visual.targetRotationSpeed = targetSpeed * spinIntensity * (Math.random() < 0.5 ? 1 : -1)
 
-    // Emit hit event
     if (this.eventBus) {
       const pos = ballPosition ?? visual.mesh.getAbsolutePosition()
       this.eventBus.emitSpinnerHit(visual.id, {
@@ -251,13 +252,8 @@ export class SpinnerBumperBuilder {
         y: pos.y,
         z: pos.z
       }, impactForce)
-
-      // Award points for spinner hit
-      this.eventBus.emitPointsAwarded(100, 'spinner-hit')
-
-      // Play sound and visual effect
       this.eventBus.emitPlaySound('bump-spinner')
-      this.eventBus.emitFlashEffect(0.4, '#00ffff', 0.2)
+      this.eventBus.emitFlashEffect(0.35 + spinIntensity * 0.25, visual.color, 0.18)
     }
   }
 

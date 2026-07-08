@@ -1,20 +1,22 @@
 /**
- * Adventure Track Goal Definitions
- * Defines goal sets for each adventure track
+ * Campaign track goals — aligned with TRACK_CATALOG timers and recommendedScore.
+ * Primary win condition matches AdventureProgressionSupervisor (score delta).
  */
 
+import { TRACK_CATALOG } from './adventure-track-progression'
 import type { AdventureGoal, GoalType } from './adventure-goal-system'
 
-/**
- * Create a goal object
- */
+export function trackGoalSlug(trackId: string): string {
+  return trackId.toLowerCase().replace(/_/g, '-')
+}
+
 function createGoal(
   id: string,
   title: string,
   description: string,
   type: GoalType,
   target: number,
-  reward: number
+  reward: number,
 ): AdventureGoal {
   return {
     id,
@@ -24,274 +26,108 @@ function createGoal(
     target,
     current: 0,
     completed: false,
-    reward
+    reward,
   }
 }
 
-/**
- * Goals for NEON_HELIX track - A classic descent through spiraling light
- */
-export const NEON_HELIX_GOALS: AdventureGoal[] = [
-  createGoal(
-    'helix-score',
-    'Reach 50,000 Points',
-    'Accumulate 50,000 points by hitting bumpers and collecting gold balls',
-    'score-based',
-    50000,
-    5000
-  ),
-  createGoal(
-    'helix-gold',
-    'Collect 5 Gold Balls',
-    'Find and collect 5 gold balls during the track',
-    'collection-based',
-    5,
-    3000
-  ),
-  createGoal(
-    'helix-combo',
-    'Land 3 Combo Hits',
-    'Hit 3 bumpers in quick succession without missing',
-    'combo-based',
-    3,
-    2000
-  ),
-  createGoal(
-    'helix-survive',
-    'Survive 30 Seconds',
-    'Keep the ball in play for 30 consecutive seconds',
-    'survival',
-    30,
-    4000
-  )
-]
+export interface CampaignGoalTemplate {
+  goldTarget: number
+  comboTarget: number
+  survivalSeconds: number
+  bonusReward: number
+}
+
+/** Per-track secondary objective tuning (primary score comes from catalog). */
+const CAMPAIGN_GOAL_TEMPLATES: Record<string, CampaignGoalTemplate> = {
+  NEON_HELIX: { goldTarget: 3, comboTarget: 5, survivalSeconds: 45, bonusReward: 2500 },
+  PACHINKO_HALL: { goldTarget: 4, comboTarget: 4, survivalSeconds: 40, bonusReward: 2200 },
+  CYBER_CORE: { goldTarget: 4, comboTarget: 6, survivalSeconds: 50, bonusReward: 3000 },
+  QUANTUM_GRID: { goldTarget: 5, comboTarget: 8, survivalSeconds: 60, bonusReward: 4000 },
+  PACHINKO_SPIRE: { goldTarget: 4, comboTarget: 5, survivalSeconds: 35, bonusReward: 2800 },
+  SINGULARITY_WELL: { goldTarget: 6, comboTarget: 10, survivalSeconds: 75, bonusReward: 5000 },
+}
+
+const DEFAULT_TEMPLATE: CampaignGoalTemplate = {
+  goldTarget: 3,
+  comboTarget: 4,
+  survivalSeconds: 30,
+  bonusReward: 2000,
+}
 
 /**
- * Goals for CYBER_CORE track - Fast-paced vertical descent
+ * Build the PoC goal set for a campaign track.
+ * Goal 1 (score) mirrors the portal unlock threshold in the supervisor.
  */
-export const CYBER_CORE_GOALS: AdventureGoal[] = [
-  createGoal(
-    'cyber-score',
-    'Reach 75,000 Points',
-    'Achieve 75,000 points by navigating the core efficiently',
-    'score-based',
-    75000,
-    6000
-  ),
-  createGoal(
-    'cyber-gates',
-    'Trigger All Gates',
-    'Open all 4 moving gates in the core',
-    'hit-all',
-    4,
-    4000
-  ),
-  createGoal(
-    'cyber-gold',
-    'Collect 8 Gold Balls',
-    'Locate and collect 8 gold balls from various zones',
-    'collection-based',
-    8,
-    4000
-  ),
-  createGoal(
-    'cyber-survive',
-    'Survive 45 Seconds',
-    'Maintain ball control for 45 seconds without draining',
-    'survival',
-    45,
-    5000
-  )
-]
+export function buildCampaignGoalsForTrack(trackId: string): AdventureGoal[] {
+  const info = TRACK_CATALOG[trackId]
+  const template = CAMPAIGN_GOAL_TEMPLATES[trackId] ?? DEFAULT_TEMPLATE
+  const slug = trackGoalSlug(trackId)
+  const scoreTarget = info?.recommendedScore ?? 50_000
+  const timeLimit = info?.timeLimitSeconds ?? 120
+
+  return [
+    createGoal(
+      `${slug}-score`,
+      `Reach ${scoreTarget.toLocaleString()} pts`,
+      `Hit ${scoreTarget.toLocaleString()} track points before the ${timeLimit}s timer expires`,
+      'score-based',
+      scoreTarget,
+      Math.round(scoreTarget * 0.1),
+    ),
+    createGoal(
+      `${slug}-gold`,
+      `Collect ${template.goldTarget} gold swarms`,
+      'Drain gold-plated or solid-gold swarm members into the collection lane',
+      'collection-based',
+      template.goldTarget,
+      template.bonusReward,
+    ),
+    createGoal(
+      `${slug}-combo`,
+      `Chain ${template.comboTarget} bumper hits`,
+      'Keep the combo alive — consecutive bumper hits without a long gap',
+      'combo-based',
+      template.comboTarget,
+      Math.round(template.bonusReward * 0.6),
+    ),
+    createGoal(
+      `${slug}-survive`,
+      `Survive ${template.survivalSeconds}s`,
+      'Keep the ball in play without draining',
+      'survival',
+      template.survivalSeconds,
+      Math.round(template.bonusReward * 0.5),
+    ),
+  ]
+}
 
 /**
- * Goals for QUANTUM_GRID track - Maze navigation challenge
- */
-export const QUANTUM_GRID_GOALS: AdventureGoal[] = [
-  createGoal(
-    'quantum-score',
-    'Reach 100,000 Points',
-    'Dominate the grid and accumulate 100,000 points',
-    'score-based',
-    100000,
-    8000
-  ),
-  createGoal(
-    'quantum-zones',
-    'Complete All Zones',
-    'Visit and activate all 6 color zones in the quantum grid',
-    'hit-all',
-    6,
-    5000
-  ),
-  createGoal(
-    'quantum-gold',
-    'Collect 12 Gold Balls',
-    'Find all 12 hidden gold balls scattered across the maze',
-    'collection-based',
-    12,
-    6000
-  ),
-  createGoal(
-    'quantum-perfect',
-    'Achieve 60 Second Run',
-    'Perfect play: maintain control for a full 60 seconds',
-    'survival',
-    60,
-    7000
-  )
-]
-
-/**
- * Goals for PACHINKO_SPIRE track - Pin field challenge
- */
-export const PACHINKO_SPIRE_GOALS: AdventureGoal[] = [
-  createGoal(
-    'spire-score',
-    'Reach 65,000 Points',
-    'Navigate the pin field and score 65,000 points',
-    'score-based',
-    65000,
-    5500
-  ),
-  createGoal(
-    'spire-hits',
-    'Hit 50 Pins',
-    'Bounce off 50 individual pins during descent',
-    'hit-all',
-    50,
-    4500
-  ),
-  createGoal(
-    'spire-gold',
-    'Collect 6 Gold Balls',
-    'Find 6 gold balls in the pin field',
-    'collection-based',
-    6,
-    3500
-  ),
-  createGoal(
-    'spire-multi',
-    'Hit 4 Multi-Bumpers',
-    'Successfully trigger all 4 multi-bumper zones',
-    'combo-based',
-    4,
-    3500
-  )
-]
-
-/**
- * Goals for SINGULARITY_WELL track - Extreme gravity challenge
- */
-export const SINGULARITY_WELL_GOALS: AdventureGoal[] = [
-  createGoal(
-    'well-score',
-    'Reach 150,000 Points',
-    'Master the singularity and achieve maximum score',
-    'score-based',
-    150000,
-    10000
-  ),
-  createGoal(
-    'well-gold',
-    'Collect 15 Gold Balls',
-    'Find all 15 rare gold balls in the gravity well',
-    'collection-based',
-    15,
-    8000
-  ),
-  createGoal(
-    'well-survive',
-    'Survive 90 Seconds',
-    'Maintain perfect control for 90 seconds against gravity',
-    'survival',
-    90,
-    10000
-  ),
-  createGoal(
-    'well-combo',
-    'Build 10 Hit Combo',
-    'Land 10 consecutive bumper hits without missing',
-    'combo-based',
-    10,
-    6000
-  )
-]
-
-/**
- * Get goals for a specific track
+ * Get goals for a specific track (campaign catalog driven).
  */
 export function getGoalsForTrack(trackId: string): AdventureGoal[] {
-  const goalsMap: Record<string, AdventureGoal[]> = {
-    'NEON_HELIX': NEON_HELIX_GOALS,
-    'CYBER_CORE': CYBER_CORE_GOALS,
-    'QUANTUM_GRID': QUANTUM_GRID_GOALS,
-    'PACHINKO_SPIRE': PACHINKO_SPIRE_GOALS,
-    'SINGULARITY_WELL': SINGULARITY_WELL_GOALS,
+  if (trackId in TRACK_CATALOG || trackId in CAMPAIGN_GOAL_TEMPLATES) {
+    return buildCampaignGoalsForTrack(trackId)
   }
-
-  // Default goals for any unlisted track
-  if (!(trackId in goalsMap)) {
-    return [
-      createGoal(
-        `${trackId.toLowerCase()}-score`,
-        'Reach 50,000 Points',
-        'Accumulate 50,000 points on this track',
-        'score-based',
-        50000,
-        5000
-      ),
-      createGoal(
-        `${trackId.toLowerCase()}-gold`,
-        'Collect 5 Gold Balls',
-        'Find 5 gold balls on this track',
-        'collection-based',
-        5,
-        3000
-      ),
-      createGoal(
-        `${trackId.toLowerCase()}-survive`,
-        'Survive 30 Seconds',
-        'Keep the ball in play for 30 seconds',
-        'survival',
-        30,
-        3000
-      ),
-      createGoal(
-        `${trackId.toLowerCase()}-combo`,
-        'Build 3 Hit Combo',
-        'Land 3 consecutive bumper hits',
-        'combo-based',
-        3,
-        2000
-      ),
-    ]
-  }
-
-  return goalsMap[trackId] ?? []
+  return buildCampaignGoalsForTrack('NEON_HELIX')
 }
 
-/**
- * Get completion percentage for a set of goals
- */
 export function getCompletionPercentage(goals: AdventureGoal[]): number {
   if (goals.length === 0) return 0
-  const completed = goals.filter(g => g.completed).length
+  const completed = goals.filter((g) => g.completed).length
   return (completed / goals.length) * 100
 }
 
-/**
- * Get total reward from a set of goals
- */
 export function getTotalReward(goals: AdventureGoal[]): number {
-  return goals
-    .filter(g => g.completed)
-    .reduce((sum, g) => sum + g.reward, 0)
+  return goals.filter((g) => g.completed).reduce((sum, g) => sum + g.reward, 0)
 }
 
-/**
- * Create a new goal tracker state from goals
- */
 export function cloneGoals(goals: AdventureGoal[]): AdventureGoal[] {
-  return goals.map(g => ({ ...g }))
+  return goals.map((g) => ({ ...g }))
 }
+
+/** @deprecated Legacy exports kept for barrel compatibility. */
+export const NEON_HELIX_GOALS = buildCampaignGoalsForTrack('NEON_HELIX')
+export const CYBER_CORE_GOALS = buildCampaignGoalsForTrack('CYBER_CORE')
+export const QUANTUM_GRID_GOALS = buildCampaignGoalsForTrack('QUANTUM_GRID')
+export const PACHINKO_SPIRE_GOALS = buildCampaignGoalsForTrack('PACHINKO_SPIRE')
+export const SINGULARITY_WELL_GOALS = buildCampaignGoalsForTrack('SINGULARITY_WELL')

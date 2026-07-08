@@ -6,10 +6,14 @@ import type { BallManager } from '../game-elements/ball-manager'
 import type { BallStackVisual } from '../game-elements/ball-stack-visual'
 import type { EffectsSystem } from '../effects'
 import type { GameUIManager } from './game-ui'
-import type { AdventureState } from '../game-elements/adventure-state'
 import type { LeaderboardSystem } from '../game-elements/leaderboard-system'
 import type { NameEntryDialog } from '../game-elements/name-entry-dialog'
 import type { TableMapManager } from './game-maps'
+import type { AdventureGoalTracker } from '../game-elements/adventure-goal-tracker'
+import type { AdventureTrackProgression } from '../game-elements/adventure-track-progression'
+import type { AdventureProgressionSupervisor } from '../game-elements/adventure-progression-supervisor'
+import type { AdventureMode } from '../adventure'
+import { getCampaignRewardsManager } from '../game-elements/campaign-rewards-manager'
 import { BallType } from '../config'
 
 export interface HUDHost {
@@ -17,10 +21,13 @@ export interface HUDHost {
   readonly ballStackVisual: BallStackVisual | null
   readonly effects: EffectsSystem | null
   readonly uiManager: GameUIManager | null
-  readonly adventureState: AdventureState
   readonly leaderboardSystem: LeaderboardSystem
   readonly nameEntryDialog: NameEntryDialog
   readonly mapManager: TableMapManager | null
+  readonly adventureMode: AdventureMode | null
+  readonly adventureGoalTracker: AdventureGoalTracker | null
+  readonly adventureTrackProgression: AdventureTrackProgression | null
+  readonly adventureProgressionSupervisor: AdventureProgressionSupervisor | null
 
   score: number
   lives: number
@@ -52,28 +59,54 @@ export class GameHUD {
       scoreMultiplier: multiballMultiplier * this.host.comboMultiplier,
       bestScore,
     })
-    this.host.adventureState.setGoalProgress('reach-score', score)
     this.updateAdventureHUD()
   }
 
   private updateAdventureHUD(): void {
-    const { uiManager, adventureState } = this.host
-    const level = adventureState.getCurrentLevel()
-    if (!level) {
+    const {
+      uiManager,
+      adventureMode,
+      adventureTrackProgression,
+      adventureGoalTracker,
+      adventureProgressionSupervisor,
+      score,
+    } = this.host
+
+    if (!adventureMode?.isActive() || !adventureTrackProgression) {
       uiManager?.hideAdventureHUD()
       return
     }
-    uiManager?.updateAdventureHUD(
-      {
-        name: level.name,
-        goals: level.goals.map(g => ({
-          description: g.description,
-          current: g.current,
-          target: g.target,
-        })),
-      },
-      adventureState.getOverallCompletionPercent()
-    )
+
+    const trackInfo = adventureTrackProgression.getCurrentTrackInfo()
+    if (!trackInfo) {
+      uiManager?.hideAdventureHUD()
+      return
+    }
+
+    const scoreDelta = adventureProgressionSupervisor?.getScoreDelta(score) ?? 0
+    const nextId = adventureTrackProgression.getNextTrackId()
+    const nextInfo = nextId ? adventureTrackProgression.getTrackInfo(nextId) : null
+    const campaignRewards = getCampaignRewardsManager()
+    const goals = adventureGoalTracker?.getGoals() ?? []
+
+    uiManager?.updateCampaignHUD({
+      trackName: trackInfo.name,
+      modeLabel: trackInfo.modeType === 'EXTENDED_MAP' ? 'EXTENDED MAP' : 'ARENA',
+      scoreCurrent: scoreDelta,
+      scoreTarget: trackInfo.recommendedScore,
+      timeRemaining: adventureProgressionSupervisor?.getTimeRemaining() ?? trackInfo.timeLimitSeconds,
+      timeLimit: trackInfo.timeLimitSeconds,
+      nextTrackName: nextInfo?.name ?? null,
+      nextTrackGoal: nextInfo?.recommendedScore ?? null,
+      goals: goals.map((g) => ({
+        description: g.title,
+        current: g.current,
+        target: g.target,
+        completed: g.completed,
+      })),
+      shardTotal: campaignRewards?.getTotalShards() ?? 0,
+      campaignPercent: adventureTrackProgression.getCompletionPercentage(),
+    })
   }
 
   updateCombo(dt: number): void {

@@ -20,12 +20,21 @@ describe('portal-routing helpers', () => {
     const progression = new AdventureTrackProgression()
 
     progression.completeTrack('NEON_HELIX', 60_000, 0, 60_000)
+    expect(progression.getNextTrackId()).toBe('PACHINKO_HALL')
+
+    progression.completeTrack('PACHINKO_HALL', 100_000, 0, 100_000)
     expect(progression.getNextTrackId()).toBe('CYBER_CORE')
 
     progression.completeTrack('CYBER_CORE', 140_000, 0, 140_000)
     expect(progression.getNextTrackId()).toBe('QUANTUM_GRID')
 
     progression.completeTrack('QUANTUM_GRID', 240_000, 0, 240_000)
+    expect(progression.getNextTrackId()).toBe('SINGULARITY_WELL')
+
+    progression.completeTrack('SINGULARITY_WELL', 340_000, 0, 340_000)
+    expect(progression.getNextTrackId()).toBe('GLITCH_SPIRE')
+
+    progression.completeTrack('GLITCH_SPIRE', 440_000, 0, 440_000)
     expect(progression.getNextTrackId()).toBe('PACHINKO_SPIRE')
   })
 })

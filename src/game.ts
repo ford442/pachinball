@@ -93,6 +93,7 @@ import { GameInputActions, type InputActionsHost } from './game/game-input-actio
 import { GameScenario, type ScenarioHost } from './game/game-scenario'
 import { GameSlotAdventure, type SlotAdventureHost } from './game/game-slot-adventure'
 import { GameSettingsUI, type SettingsUIHost } from './game/game-settings-ui'
+import { PhysicsTuningPanel, isPhysicsTuningQueryEnabled } from './game-elements/physics-tuning-panel'
 import { GameDebug, type DebugHost } from './game/game-debug'
 import { GameLifecycle, type LifecycleHost } from './game/game-lifecycle'
 import { GameSystemsInitializer } from './game/game-systems-init'
@@ -101,6 +102,7 @@ import { GameHUD, type HUDHost } from './game/game-hud'
 import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
 import { CheckpointDebugController, type DebugStageKey } from './game/checkpoint-debug'
 import { FreeMapTestMode } from './game/free-map-test-mode'
+import { LevelLoader } from './game/level-loader'
 
 export class Game {
   readonly engine: Engine | WebGPUEngine
@@ -125,10 +127,12 @@ export class Game {
   inputManager: GameInputManager | null = null
   cameraController: CameraController | null = null
   mapManager: TableMapManager | null = null
+  levelLoader: LevelLoader | null = null
   cabinetManager: CabinetManager | null = null
   uiManager: GameUIManager | null = null
   adventureManager: AdventureManager | null = null
   debugHUD: DebugHUD | null = null
+  physicsTuningPanel: PhysicsTuningPanel | null = null
   performanceMonitor = new PerformanceMonitor()
   hapticManager: HapticManager | null = null
   soundSystem!: SoundSystem
@@ -215,6 +219,7 @@ export class Game {
   showDebugUI = false
   readonly debugHUDQueryEnabled = window.location.search.includes('debug=1')
   debugHUDEnabledInSettings = false
+  physicsTuningEnabledInSettings = false
   adventureModeStartMs: number | null = null
 
   // Accessibility
@@ -287,6 +292,7 @@ export class Game {
 
       const settings = SettingsManager.load()
       this.debugHUDEnabledInSettings = settings.enableDebugHUD
+      this.physicsTuningEnabledInSettings = settings.enablePhysicsTuning
       this.scanlineEnabled = settings.scanlineEnabled
       SettingsManager.applyToConfig(settings)
       this.accessibility = detectAccessibility({
@@ -319,6 +325,10 @@ export class Game {
       this.scenarioManager = new GameScenario(this as unknown as ScenarioHost)
       this.slotAdventure = new GameSlotAdventure(this as unknown as SlotAdventureHost)
       this.settingsUI = new GameSettingsUI(this as unknown as SettingsUIHost)
+      this.physicsTuningPanel = new PhysicsTuningPanel()
+      if (isPhysicsTuningQueryEnabled() || this.physicsTuningEnabledInSettings) {
+        this.physicsTuningPanel.show()
+      }
       this.debugHelper = new GameDebug(this as unknown as DebugHost)
       this.lifecycle = new GameLifecycle(this as unknown as LifecycleHost)
       this.hud = new GameHUD(this as unknown as HUDHost)
@@ -455,6 +465,12 @@ export class Game {
         this.adventureUIStateManager?.updateAnimations(dt)
         this.adventureGoalTracker?.update(dt)
         this.adventureProgressionSupervisor?.update(dt, this.score)
+        if (this.adventureMode?.isActive() && this.adventureGoalTracker && this.adventureProgressionSupervisor) {
+          this.adventureGoalTracker.syncTrackScore(
+            this.adventureProgressionSupervisor.getScoreDelta(this.score),
+          )
+          this.updateHUD()
+        }
 
         // Drive the HUD countdown timer from the supervisor state
         if (this.adventureProgressionSupervisor && this.adventureProgressionSupervisor.getTimeRemaining() > 0) {
@@ -712,6 +728,9 @@ export class Game {
   }
 
   toggleFreeMapTestMode(): void {
+    if (!this.levelLoader) {
+      this.levelLoader = this.createLevelLoader()
+    }
     if (!this.freeMapTestMode) {
       this.freeMapTestMode = new FreeMapTestMode(
         {
@@ -720,6 +739,8 @@ export class Game {
           ensureAdventureActive: () => this.slotAdventure.startAdventureMode(),
           resetBall: () => this.resetBall(),
           rebuildHandleCaches: () => this.rebuildHandleCaches(),
+          mapManager: this.mapManager,
+          setGameMode: (mode) => { this.gameMode = mode },
         },
         {
           onMessage: (msg) => this.showMessage(msg, 3000),
@@ -727,6 +748,18 @@ export class Game {
       )
     }
     this.freeMapTestMode.toggle()
+  }
+
+  createLevelLoader(): LevelLoader {
+    return new LevelLoader({
+      adventureMode: this.adventureMode,
+      ballManager: this.ballManager,
+      ensureAdventureActive: () => this.slotAdventure.startAdventureMode(),
+      resetBall: () => this.resetBall(),
+      rebuildHandleCaches: () => this.rebuildHandleCaches(),
+      mapManager: this.mapManager,
+      setGameMode: (mode) => { this.gameMode = mode },
+    })
   }
 
   cycleAdventureTrack(direction: number): void { this.slotAdventure.cycleAdventureTrack(direction) }

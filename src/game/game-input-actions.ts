@@ -10,6 +10,7 @@ import type { SoundSystem } from '../game-elements/sound-system'
 import type { EffectsSystem } from '../effects'
 import type { GameStateManager } from './game-state'
 import { GameConfig, PhysicsConfig } from '../config'
+import { applyPlungerChargeCurve, getPhysicsTuningValue } from '../game-elements/physics-tuning'
 import type { AccessibilityConfig } from '../game-elements'
 import { emissive, PALETTE, INTENSITY } from '../game-elements/visual-language'
 
@@ -88,8 +89,8 @@ export class GameInputActions {
       const stiffnessMultiplier = pressed ? (1.0 + holdFactor * 0.3) : 0.8
       const dampingMultiplier = pressed ? (0.9 + holdFactor * 0.1) : 1.1
 
-      const stiffness = PhysicsConfig.flipper.stiffness * stiffnessMultiplier
-      const damping = PhysicsConfig.flipper.damping * dampingMultiplier
+      const stiffness = getPhysicsTuningValue('flipperStiffness') * stiffnessMultiplier
+      const damping = getPhysicsTuningValue('flipperDamping') * dampingMultiplier
       const angle = pressed ? -PhysicsConfig.flipper.activeAngleRad : PhysicsConfig.flipper.restAngleRad
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
       // Ensure the body is awake so the motor takes effect this step and visual sync sees the pose
@@ -128,8 +129,8 @@ export class GameInputActions {
       const stiffnessMultiplier = pressed ? (1.0 + holdFactor * 0.3) : 0.8
       const dampingMultiplier = pressed ? (0.9 + holdFactor * 0.1) : 1.1
 
-      const stiffness = PhysicsConfig.flipper.stiffness * stiffnessMultiplier
-      const damping = PhysicsConfig.flipper.damping * dampingMultiplier
+      const stiffness = getPhysicsTuningValue('flipperStiffness') * stiffnessMultiplier
+      const damping = getPhysicsTuningValue('flipperDamping') * dampingMultiplier
       const angle = pressed ? PhysicsConfig.flipper.activeAngleRad : -PhysicsConfig.flipper.restAngleRad
       ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
       // Ensure the body is awake so the motor takes effect this step and visual sync sees the pose
@@ -151,9 +152,10 @@ export class GameInputActions {
 
     const pos = ballBody.translation()
     if (pos.x > 8 && pos.z < -4) {
-      const chargeRatio = this.host.plungerChargeLevel
-      const impulseMagnitude = PhysicsConfig.plunger.minImpulse +
-        (PhysicsConfig.plunger.maxImpulse - PhysicsConfig.plunger.minImpulse) * chargeRatio
+      const chargeRatio = applyPlungerChargeCurve(this.host.plungerChargeLevel)
+      const minImpulse = getPhysicsTuningValue('plungerMinImpulse')
+      const maxImpulse = getPhysicsTuningValue('plungerMaxImpulse')
+      const impulseMagnitude = minImpulse + (maxImpulse - minImpulse) * chargeRatio
 
       // Start the per-frame kinematic spring-forward animation
       const gameObjects = this.host.gameObjects

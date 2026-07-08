@@ -15,6 +15,7 @@ export type AdventureCallback = (event: string, data?: unknown) => void
 
 export enum AdventureTrackType {
   NEON_HELIX = 'NEON_HELIX',
+  PACHINKO_HALL = 'PACHINKO_HALL',
   CYBER_CORE = 'CYBER_CORE',
   QUANTUM_GRID = 'QUANTUM_GRID',
   SINGULARITY_WELL = 'SINGULARITY_WELL',

@@ -7,6 +7,7 @@
 
 import { AdventureTrackType } from '../adventure/adventure-types'
 import { TRACK_CATALOG, type TrackModeType } from '../game-elements/adventure-track-progression'
+import { TABLE_MAPS } from '../shaders/lcd-table'
 
 /**
  * A single layout entry in the map registry.
@@ -53,6 +54,28 @@ function buildRegistry(): MapConfig[] {
 function modeTypeToLayout(modeType?: TrackModeType): 'extended' | 'stationary' {
   if (modeType === 'STATIONARY_TABLE') return 'stationary'
   return 'extended'
+}
+
+/** Campaign A/B mode → runtime game mode used by portal resolution and scenarios. */
+export function modeTypeToGameMode(modeType: TrackModeType): 'fixed' | 'dynamic' {
+  return modeType === 'EXTENDED_MAP' ? 'dynamic' : 'fixed'
+}
+
+/** Lookup catalog mode type for a campaign track id (e.g. `NEON_HELIX`). */
+export function getTrackModeType(trackId: string): TrackModeType | undefined {
+  return TRACK_CATALOG[trackId]?.modeType
+}
+
+/**
+ * Resolve the LCD table map id for a campaign track when one exists in TABLE_MAPS.
+ * Track ids use SCREAMING_SNAKE; table maps use kebab-case (`NEON_HELIX` → `neon-helix`).
+ */
+export function getTableMapIdForTrack(trackId: string): string | null {
+  const candidate = trackId.toLowerCase().replace(/_/g, '-')
+  if (candidate in TABLE_MAPS) {
+    return candidate
+  }
+  return null
 }
 
 function formatTrackId(id: string): string {

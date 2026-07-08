@@ -194,6 +194,11 @@ export class CampaignRewardsManager {
     }
   }
 
+  /** Persist progression + unlock state (safe to call after any campaign advance). */
+  persistState(): void {
+    this.save()
+  }
+
   private applyReward(reward: CampaignRewardItem): void {
     switch (reward.type) {
       case 'ball-skin':

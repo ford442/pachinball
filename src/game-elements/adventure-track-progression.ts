@@ -52,13 +52,28 @@ export interface SerializableProgressionState {
  * Campaign track catalog — 5 core stages with alternating A/B modeType pattern:
  *   A (EXTENDED_MAP) → B (STATIONARY_TABLE) → A → B → A
  *
- * Campaign sequence (by unlock depth):
- *   1. NEON_HELIX          — A — EXTENDED_MAP
- *   2. CYBER_CORE          — B — STATIONARY_TABLE
- *   2. PACHINKO_SPIRE      — B — STATIONARY_TABLE (parallel branch from NEON_HELIX)
- *   3. QUANTUM_GRID        — A — EXTENDED_MAP
- *   4. SINGULARITY_WELL    — A — EXTENDED_MAP
+ * Campaign sequence (main spine):
+ *   1. NEON_HELIX          — A — EXTENDED_MAP  (spiral descent run)
+ *   2. PACHINKO_HALL       — A — EXTENDED_MAP  (parlor hub / pin-lane corridor)
+ *   3. CYBER_CORE          — B — STATIONARY_TABLE (flipper arena)
+ *   4. QUANTUM_GRID        — A — EXTENDED_MAP
+ *   5. SINGULARITY_WELL    — A — EXTENDED_MAP
+ *   6. GLITCH_SPIRE        — B — STATIONARY_TABLE
+ *
+ * Parallel branch:
+ *   PACHINKO_SPIRE — B — STATIONARY_TABLE (unlocks from NEON_HELIX)
  */
+
+/** Ordered main campaign spine — used by getNextTrackId() for deterministic A/B flow. */
+export const CAMPAIGN_MAIN_PATH = [
+  'NEON_HELIX',
+  'PACHINKO_HALL',
+  'CYBER_CORE',
+  'QUANTUM_GRID',
+  'SINGULARITY_WELL',
+  'GLITCH_SPIRE',
+] as const
+
 export const TRACK_CATALOG: Record<string, TrackInfo> = {
   // Score targets are calibrated for bumperHitBase=100 (src/config.ts GAME_TUNING.scoring).
   // Baseline: ~3 hits/sec × 100 pts × average 2× combo = ~600 pts/sec.
@@ -77,6 +92,19 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     theme: 'cyber-neon',
     visualTheme: { primary: 'CYAN', accent: 'MAGENTA', surfaceTint: 'PLAYFIELD' },
   },
+  'PACHINKO_HALL': {
+    id: 'PACHINKO_HALL',
+    name: 'Pachinko Hall',
+    description: 'A neon parlor corridor — pin lanes, conveyor currents, and machine alcoves lead to the exit arch.',
+    difficulty: 'easy',
+    modeType: 'EXTENDED_MAP',
+    recommendedScore: 40000,   // 600 pts/s × 100 s × ~67%
+    timeLimitSeconds: 100,
+    timeoutPenaltyMultiplier: 0.50,
+    unlockedBy: 'NEON_HELIX',
+    theme: 'pachinko-neon',
+    visualTheme: { primary: 'GOLD', accent: 'MAGENTA', surfaceTint: 'PLAYFIELD' },
+  },
   'CYBER_CORE': {
     id: 'CYBER_CORE',
     name: 'Cyber Core',
@@ -86,9 +114,9 @@ export const TRACK_CATALOG: Record<string, TrackInfo> = {
     recommendedScore: 45000,   // 600 pts/s × 90 s × ~83%
     timeLimitSeconds: 90,
     timeoutPenaltyMultiplier: 0.45,
-    unlockedBy: 'NEON_HELIX',
+    unlockedBy: 'PACHINKO_HALL',
     theme: 'digital',
-    visualTheme: { primary: 'MAGENTA', accent: 'PURPLE', surfaceTint: 'PLAYFIELD_DEEP' },
+    visualTheme: { primary: 'MAGENTA', accent: 'CYAN', surfaceTint: 'PLAYFIELD_DEEP' },
   },
   'QUANTUM_GRID': {
     id: 'QUANTUM_GRID',
@@ -190,7 +218,12 @@ export class AdventureTrackProgression {
         }
       }
     }
+
+    this.onProgressChanged?.()
   }
+
+  /** Optional hook for persistence layers (CampaignRewardsManager). */
+  onProgressChanged: (() => void) | null = null
 
   /**
    * Get all available (unlocked) tracks
@@ -270,10 +303,19 @@ export class AdventureTrackProgression {
    * Get next unlocked, uncompleted track id
    */
   getNextTrackId(): string | null {
-    const nextTrack = Object.values(TRACK_CATALOG).find((track) =>
-      this.isTrackUnlocked(track.id) && !this.isTrackCompleted(track.id)
-    )
-    return nextTrack?.id ?? null
+    for (const trackId of CAMPAIGN_MAIN_PATH) {
+      if (this.isTrackUnlocked(trackId) && !this.isTrackCompleted(trackId)) {
+        return trackId
+      }
+    }
+    // Parallel / optional branch tracks (e.g. PACHINKO_SPIRE)
+    for (const track of Object.values(TRACK_CATALOG)) {
+      if ((CAMPAIGN_MAIN_PATH as readonly string[]).includes(track.id)) continue
+      if (this.isTrackUnlocked(track.id) && !this.isTrackCompleted(track.id)) {
+        return track.id
+      }
+    }
+    return null
   }
 
   /**

@@ -33,6 +33,7 @@ import { BonusTallySystem } from '../game-elements/bonus-tally-system'
 import { GoldBallStreakSystem } from '../game-elements/gold-ball-streak-system'
 import type { SpinnerBumperBuilder, SpinnerBumperVisual, BallTrapBuilder, BallTrapState, LauncherBuilder, LauncherState, MovingGateBuilder, MovingGateState } from '../objects'
 import { BallType, BALL_SPAWN_CONFIG, GAME_TUNING, GameConfig, PhysicsConfig } from '../config'
+import { getPhysicsTuningValue } from '../game-elements/physics-tuning'
 import { DisplayState } from '../game-elements'
 import { TABLE_MAPS } from '../shaders/lcd-table'
 import { PALETTE, CameraMode } from '../game-elements'
@@ -204,7 +205,8 @@ export class GamePhysicsController {
     // are reflected in the game score alongside legacy direct mutations.
     this.eventBusUnsubscribers.push(
       host.eventBus.on('points:awarded', (data) => {
-        const effectiveMultiplier = (data.multiplier ?? 1) * this.getActiveScoreMultiplier()
+        const comboMultiplier = this.comboMultiplierSystem.getState().multiplier
+        const effectiveMultiplier = (data.multiplier ?? 1) * this.getActiveScoreMultiplier() * comboMultiplier
         const awardedPoints = Math.round(data.amount * effectiveMultiplier)
         this.host.score += awardedPoints
         this.scoringBreakdown.recordScore(awardedPoints, data.source)
@@ -220,6 +222,17 @@ export class GamePhysicsController {
             multiplier: effectiveMultiplier,
             source: data.source,
           })
+        }
+        if (data.position) {
+          const pos = new Vector3(data.position.x, data.position.y, data.position.z)
+          this.host.effects?.spawnFloatingNumber(awardedPoints, pos)
+          if (data.source?.includes('spinner')) {
+            this.host.effects?.spawnBumperSpark(pos, PALETTE.CYAN)
+            this.host.effects?.triggerImpactFlash(pos, 0.8, PALETTE.MAGENTA)
+          } else if (data.source?.includes('trap')) {
+            this.host.effects?.triggerImpactFlash(pos, 0.7, PALETTE.MAGENTA)
+            this.host.effects?.addCameraShake(0.12)
+          }
         }
         this.host.updateHUD()
       })
@@ -933,6 +946,26 @@ export class GamePhysicsController {
     this.host.soundSystem.playImpact('flipper', speed, {
       position: new Vector3(ballPos.x, ballPos.y, ballPos.z),
     })
+
+    const kickScale = getPhysicsTuningValue('flipperKickImpulse')
+    const flipperAngVel = flipperBody.angvel().y
+    if (kickScale > 0 && Math.abs(flipperAngVel) > 2 && speed > 1.2) {
+      const rapier = this.host.physics.getRapier()
+      if (rapier) {
+        const kickStrength = Math.min(Math.abs(flipperAngVel) / 10, 1) * kickScale
+        const lateralSign = flipperPos.x > 0 ? -1 : 1
+        ballBody.applyImpulse(
+          new rapier.Vector3(
+            lateralSign * kickStrength * 0.35,
+            kickStrength * 0.2,
+            kickStrength * 0.95,
+          ),
+          true,
+        )
+        this.host.effects?.addCameraShake(Math.min(kickStrength * 0.08, 0.12))
+      }
+    }
+
     this.applySpinTransfer(ballBody, collisionNormal, speed)
   }
 
@@ -980,10 +1013,14 @@ export class GamePhysicsController {
     const visual = this.host.spinnerVisuals.find(v => v.body === obstacleBody)
     if (visual) {
       const ballPos = ballBody.translation()
-      this.host.spinnerBuilder?.triggerSpin(visual, impactForce, new Vector3(ballPos.x, ballPos.y, ballPos.z))
+      const pos = new Vector3(ballPos.x, ballPos.y, ballPos.z)
+      this.host.spinnerBuilder?.triggerSpin(visual, impactForce, pos)
+      this.awardScore(GAME_TUNING.obstacle.spinnerHitBase, 'spinner-hit', pos)
+      this.host.effects?.spawnEnhancedBumperImpact(pos, impactForce > 14 ? 'medium' : 'light')
+      this.host.hapticManager?.bumper(impactForce)
       if (impactForce > 10) {
         const impactStrength = Math.min((impactForce - 10) / 16, 1)
-        this.host.cameraController?.notifyImpact(new Vector3(ballPos.x, ballPos.y, ballPos.z), impactStrength)
+        this.host.cameraController?.notifyImpact(pos, impactStrength)
       }
     }
   }
@@ -996,7 +1033,10 @@ export class GamePhysicsController {
       this.registerComboObstacleHit('trap')
       this.registerComboMultiplierHit()
       const ballPos = ballBody.translation()
-      this.host.ballTrapBuilder?.catchBall(state, ballBody, new Vector3(ballPos.x, ballPos.y, ballPos.z))
+      const pos = new Vector3(ballPos.x, ballPos.y, ballPos.z)
+      this.host.ballTrapBuilder?.catchBall(state, ballBody, pos)
+      this.host.effects?.spawnImpactRing(pos, new Vector3(0, 1, 0), state.trapColor || PALETTE.MAGENTA)
+      this.host.hapticManager?.bumper(8)
     }
   }
 
@@ -1384,9 +1424,9 @@ export class GamePhysicsController {
     this.host.nudgeState.lastNudgeTime = now
 
     const impulse = new rapier.Vector3(
-      direction.x * PhysicsConfig.nudge.force,
-      PhysicsConfig.nudge.verticalBoost,
-      direction.z * PhysicsConfig.nudge.force
+      direction.x * getPhysicsTuningValue('nudgeForce'),
+      getPhysicsTuningValue('nudgeVerticalBoost'),
+      direction.z * getPhysicsTuningValue('nudgeForce')
     )
     ballBody.applyImpulse(impulse, true)
 

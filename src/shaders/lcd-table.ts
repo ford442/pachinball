@@ -247,6 +247,17 @@ export const TABLE_MAPS: Record<string, TableMapConfig> = {
     backgroundPattern: 'hex',
     animationSpeed: 0.5,
   },
+  'pachinko-hall': {
+    name: 'Pachinko Hall',
+    baseColor: '#ffdd00',
+    accentColor: '#ff66cc',
+    scanlineIntensity: 0.18,
+    pixelGridIntensity: 0.55,
+    subpixelIntensity: 0.3,
+    glowIntensity: 1.45,
+    backgroundPattern: 'grid',
+    animationSpeed: 0.7,
+  },
   'cyber-core': {
     name: 'Cyber Core',
     baseColor: '#8800ff',

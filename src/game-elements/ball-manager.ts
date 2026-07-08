@@ -15,6 +15,7 @@ import {
 import type { MirrorTexture } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig, BallType, BALL_TIERS, GAME_TUNING } from '../config'
+import { getPhysicsTuningValue } from './physics-tuning'
 import type { PhysicsBinding, BallData } from './types'
 import { getMaterialLibrary } from '../materials'
 import { getSoundSystem } from './sound-system'
@@ -97,6 +98,20 @@ export class BallManager {
     return mass / volume
   }
 
+  private getTunedBallPhysics(): {
+    restitution: number
+    friction: number
+    linearDamping: number
+    angularDamping: number
+  } {
+    return {
+      restitution: getPhysicsTuningValue('ballRestitution'),
+      friction: getPhysicsTuningValue('ballFriction'),
+      linearDamping: getPhysicsTuningValue('ballLinearDamping'),
+      angularDamping: getPhysicsTuningValue('ballAngularDamping'),
+    }
+  }
+
   createMainBall(): RAPIER.RigidBody {
     // Enhanced ball: high-poly sphere with bevel ring and map-reactive material
     const diameter = GameConfig.ball.radius * 2
@@ -134,6 +149,7 @@ export class BallManager {
     
     // Use Config for Spawn Point (Plain Objects -> Vector3 implicitly handled by rapier setTranslation usually takes x,y,z args, or we pass individual components)
     const spawn = GameConfig.ball.spawnMain
+    const physics = this.getTunedBallPhysics()
 
     // Position mesh at spawn point immediately so it is visible before physics syncs
     ball.position.set(spawn.x, spawn.y, spawn.z)
@@ -143,16 +159,16 @@ export class BallManager {
         .setTranslation(spawn.x, spawn.y, spawn.z)
         .setCcdEnabled(true)
         .setCanSleep(true)        // Ball sleep: idle balls cost ~0 CPU
-        .setLinearDamping(GameConfig.ball.linearDamping)   // Natural roll decay
-        .setAngularDamping(GameConfig.ball.angularDamping) // Spin decay
+        .setLinearDamping(physics.linearDamping)
+        .setAngularDamping(physics.angularDamping)
     )
 
     const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
 
     this.world.createCollider(
       this.rapier.ColliderDesc.ball(GameConfig.ball.radius)
-        .setRestitution(GameConfig.ball.restitution)
-        .setFriction(GameConfig.ball.friction)
+        .setRestitution(physics.restitution)
+        .setFriction(physics.friction)
         .setDensity(density)
         .setCollisionGroups(COLLISION_GROUP_PRESETS.BALL)
         .setContactForceEventThreshold(0.5)
@@ -212,6 +228,7 @@ export class BallManager {
   spawnExtraBalls(count: number, position?: Vector3): void {
     const spawn = position ? { x: position.x, y: position.y, z: position.z } : GameConfig.ball.spawnPachinko
     const density = this.getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
+    const physics = this.getTunedBallPhysics()
 
     for (let i = 0; i < count; i++) {
       const b = MeshBuilder.CreateSphere("xb", { diameter: GameConfig.ball.radius * 2, segments: 32 }, this.scene) as Mesh
@@ -225,14 +242,14 @@ export class BallManager {
           .setTranslation(b.position.x, b.position.y, b.position.z)
           .setCcdEnabled(true)
           .setCanSleep(true)
-          .setLinearDamping(GameConfig.ball.linearDamping)
-          .setAngularDamping(GameConfig.ball.angularDamping)
+          .setLinearDamping(physics.linearDamping)
+          .setAngularDamping(physics.angularDamping)
       )
 
       this.world.createCollider(
         this.rapier.ColliderDesc.ball(GameConfig.ball.radius)
-          .setRestitution(GameConfig.ball.restitution)
-          .setFriction(GameConfig.ball.friction)
+          .setRestitution(physics.restitution)
+          .setFriction(physics.friction)
           .setDensity(density)
           .setCollisionGroups(COLLISION_GROUP_PRESETS.BALL)
           .setActiveEvents(
@@ -861,7 +878,7 @@ export class BallManager {
   /**
    * Play visual effect when a gold ball spawns
    */
-  private playSpawnEffect(position: Vector3, type: BallType): void {
+  private playSpawnEffect(position: Vector3, type: BallType, swarmBurst = false): void {
     if (type === BallType.STANDARD) return
 
     const isSolidGold = type === BallType.SOLID_GOLD
@@ -869,7 +886,7 @@ export class BallManager {
     // Create particle system for spawn burst
     const particleSystem = new ParticleSystem(
       `spawnEffect_${type}_${Date.now()}`,
-      isSolidGold ? 50 : 20,
+      swarmBurst ? (isSolidGold ? 90 : 60) : (isSolidGold ? 50 : 20),
       this.scene
     )
 
@@ -905,8 +922,10 @@ export class BallManager {
     // Direction and speed
     particleSystem.direction1 = new Vector3(-1, 1, -1)
     particleSystem.direction2 = new Vector3(1, 1, 1)
-    particleSystem.minEmitPower = 1
-    particleSystem.maxEmitPower = isSolidGold ? 5 : 3
+    particleSystem.minEmitPower = swarmBurst ? 2 : 1
+    particleSystem.maxEmitPower = swarmBurst
+      ? (isSolidGold ? 8 : 6)
+      : (isSolidGold ? 5 : 3)
     particleSystem.updateSpeed = 0.02
 
     // Gravity
@@ -975,11 +994,12 @@ export class BallManager {
     ball.material = this.getMaterialForType(type)
 
     // Gold balls feel heavier with more bounce
+    const physics = this.getTunedBallPhysics()
     const isSolidGold = type === BallType.SOLID_GOLD
     const isGoldPlated = type === BallType.GOLD_PLATED
     const mass = isSolidGold ? GameConfig.ball.mass * 1.15 : (isGoldPlated ? GameConfig.ball.mass * 1.08 : GameConfig.ball.mass)
-    const linearDamp = isGoldPlated ? GameConfig.ball.linearDamping * 0.92 : GameConfig.ball.linearDamping
-    const angularDamp = isGoldPlated ? GameConfig.ball.angularDamping * 0.88 : GameConfig.ball.angularDamping
+    const linearDamp = isGoldPlated ? physics.linearDamping * 0.92 : physics.linearDamping
+    const angularDamp = isGoldPlated ? physics.angularDamping * 0.88 : physics.angularDamping
 
     // Create physics body
     const body = this.world.createRigidBody(
@@ -992,8 +1012,8 @@ export class BallManager {
     )
 
     const density = this.getDensityForMass(mass, GameConfig.ball.radius)
-    const restitution = isGoldPlated ? GameConfig.ball.restitution + 0.02 : GameConfig.ball.restitution
-    const friction = isGoldPlated ? GameConfig.ball.friction * 0.95 : GameConfig.ball.friction
+    const restitution = isGoldPlated ? physics.restitution + 0.02 : physics.restitution
+    const friction = isGoldPlated ? physics.friction * 0.95 : physics.friction
 
     const collider = this.world.createCollider(
       this.rapier.ColliderDesc.ball(GameConfig.ball.radius)
@@ -1125,6 +1145,7 @@ export class BallManager {
     }
 
     if (spawnedBodies.length > 0) {
+      this.playSpawnEffect(new Vector3(spawnPos.x, spawnPos.y + 0.5, spawnPos.z), baseType, true)
       const swarmId = this.nextSwarmId++
       this.swarmGroups.set(swarmId, {
         bodies: new Set(spawnedBodies),
@@ -1285,7 +1306,6 @@ export class BallManager {
         if (type !== BallType.STANDARD && GameConfig.smallGoldBalls.enabled) {
           const swarm = this.spawnSmallGoldBallSwarm(position, type)
           if (swarm.length > 0) {
-            this.playSpawnEffect(new Vector3(spawnPos.x, spawnPos.y, spawnPos.z), type)
             const soundSystem = getSoundSystem()
             soundSystem.playGoldBallSpawn(type)
             return swarm[0]

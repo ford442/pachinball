@@ -51,6 +51,18 @@ export const ZONE_REGISTRY: Record<AdventureTrackType, ZoneConfig> = {
     isMajorTransition: true,
     glowIntensity: 1.3,
   },
+  [AdventureTrackType.PACHINKO_HALL]: {
+    id: AdventureTrackType.PACHINKO_HALL,
+    name: 'Pachinko Hall',
+    storyText: 'ENTERING: PACHINKO HALL\n\nThe neon parlor opens — follow the pin lanes to the exit arch...',
+    videoUrl: 'videos/zones/pachinko_hall_intro.mp4',
+    musicTrackId: 'pachinko-hall',
+    primaryColor: '#ffdd00',
+    accentColor: '#ff66cc',
+    interiorColor: '#ffaa00',
+    isMajorTransition: true,
+    glowIntensity: 1.4,
+  },
   [AdventureTrackType.CYBER_CORE]: {
     id: AdventureTrackType.CYBER_CORE,
     name: 'Cyber Core',

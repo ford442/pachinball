@@ -145,6 +145,11 @@ describe('campaign catalog modeType for 5 core tracks', () => {
     expect(TRACK_CATALOG['SINGULARITY_WELL'].modeType).toBe('EXTENDED_MAP')
   })
 
+  it('PACHINKO_HALL is EXTENDED_MAP hub on main campaign spine', () => {
+    expect(TRACK_CATALOG['PACHINKO_HALL'].modeType).toBe('EXTENDED_MAP')
+    expect(TRACK_CATALOG['PACHINKO_HALL'].unlockedBy).toBe('NEON_HELIX')
+  })
+
   it('free-roam tracks outside the catalog yield null currentTrackInfo', () => {
     const { ctx } = makeMockContext('UNKNOWN_FREE_ROAM_TRACK')
     expect(ctx.currentTrackInfo).toBeNull()

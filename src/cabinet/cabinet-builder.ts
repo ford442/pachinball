@@ -227,6 +227,43 @@ export class CabinetBuilder {
   }
 
   /**
+   * Update neon trim and interior lights from explicit theme colors (adventure tracks).
+   */
+  setThemeFromColors(primaryHex: string, accentHex?: string): void {
+    const accent = accentHex ?? primaryHex
+    this.currentNeonColor = primaryHex
+    const matLib = getMaterialLibrary(this.scene)
+    const newNeonMat = matLib.getCabinetNeonMaterial(primaryHex)
+    const accentColor = color(accent)
+    const primaryColor = color(primaryHex)
+
+    for (const mesh of this.neonMeshes) {
+      mesh.material = newNeonMat
+    }
+
+    for (const mesh of this.decorationMeshes) {
+      if (mesh.name.includes('LightBar')) {
+        mesh.material = newNeonMat
+      } else if (mesh.name.includes('Circuit')) {
+        const circuitMat = mesh.material as StandardMaterial
+        if (circuitMat?.emissiveColor) {
+          circuitMat.emissiveColor = accentColor.scale(0.18)
+        }
+      } else if (mesh.name.includes('SidePlate')) {
+        const plateMat = mesh.material as PBRMaterial
+        if (plateMat?.emissiveColor) {
+          plateMat.emissiveColor = primaryColor.scale(0.15)
+        }
+      }
+    }
+
+    for (const light of this.interiorLights) {
+      if (light.name === 'cabinetMarqueeSpot') continue
+      light.diffuse = light.name.includes('Accent') ? accentColor : primaryColor
+    }
+  }
+
+  /**
    * Update the neon trim and interior lights to match a new LCD table map.
    */
   setThemeFromMap(mapName: TableMapType): void {

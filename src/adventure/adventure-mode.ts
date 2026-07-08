@@ -35,6 +35,7 @@ import { buildGlitchSpire } from './tracks/glitch-spire'
 import { buildRetroWaveHills } from './tracks/retro-wave-hills'
 import { buildChronoCore } from './tracks/chrono-core'
 import { buildHyperDrift } from './tracks/hyper-drift'
+import { buildPachinkoHall } from './tracks/pachinko-hall'
 import { buildPachinkoSpire } from './tracks/pachinko-spire'
 import { buildOrbitalJunkyard } from './tracks/orbital-junkyard'
 import { buildFirewallBreach } from './tracks/firewall-breach'
@@ -571,6 +572,9 @@ export class AdventureMode extends TrackBuilder {
       case AdventureTrackType.CYBER_CORE:
         buildCyberCore(this)
         break
+      case AdventureTrackType.PACHINKO_HALL:
+        buildPachinkoHall(this)
+        break
       case AdventureTrackType.QUANTUM_GRID:
         buildQuantumGrid(this)
         break
@@ -849,41 +853,49 @@ export class AdventureMode extends TrackBuilder {
    * Called by both switchToTrack() and end().
    */
   private clearTrack(): void {
-    // Cleanup Visuals
-    this.adventureTrack.forEach(m => m.dispose())
+    this.timeAccumulator = 0
+    this.portalPosition = null
+    this.currentTrackInfo = null
+
+    // Cleanup Visuals — dispose materials/textures to avoid GPU leaks across long sessions
+    for (const mesh of this.adventureTrack) {
+      mesh.dispose(false, true)
+    }
     this.adventureTrack = []
-    this.materials.forEach(m => m.dispose())
+    for (const mat of this.materials) {
+      mat.dispose()
+    }
     this.materials = []
     this.kinematicBindings = []
     this.animatedObstacles = []
 
-    // Cleanup Physics
-    this.adventureBodies.forEach(body => {
+    // Cleanup Physics — remove every adventure-owned body from the Rapier world
+    for (const body of this.adventureBodies) {
       if (this.world.getRigidBody(body.handle)) {
         this.world.removeRigidBody(body)
       }
-    })
+    }
     this.adventureBodies = []
 
-    this.conveyorZones.forEach(z => {
-      if (this.world.getRigidBody(z.sensor.handle)) {
-        this.world.removeRigidBody(z.sensor)
+    for (const zone of this.conveyorZones) {
+      if (this.world.getRigidBody(zone.sensor.handle)) {
+        this.world.removeRigidBody(zone.sensor)
       }
-    })
+    }
     this.conveyorZones = []
 
-    this.gravityWells.forEach(w => {
-      if (this.world.getRigidBody(w.sensor.handle)) {
-        this.world.removeRigidBody(w.sensor)
+    for (const well of this.gravityWells) {
+      if (this.world.getRigidBody(well.sensor.handle)) {
+        this.world.removeRigidBody(well.sensor)
       }
-    })
+    }
     this.gravityWells = []
 
-    this.dampingZones.forEach(z => {
-      if (this.world.getRigidBody(z.sensor.handle)) {
-        this.world.removeRigidBody(z.sensor)
+    for (const zone of this.dampingZones) {
+      if (this.world.getRigidBody(zone.sensor.handle)) {
+        this.world.removeRigidBody(zone.sensor)
       }
-    })
+    }
     this.dampingZones = []
 
     if (this.adventureSensor) {
@@ -893,18 +905,18 @@ export class AdventureMode extends TrackBuilder {
       this.adventureSensor = null
     }
 
-    this.resetSensors.forEach(s => {
-      if (this.world.getRigidBody(s.handle)) {
-        this.world.removeRigidBody(s)
+    for (const sensor of this.resetSensors) {
+      if (this.world.getRigidBody(sensor.handle)) {
+        this.world.removeRigidBody(sensor)
       }
-    })
+    }
     this.resetSensors = []
 
-    this.chromaGates.forEach(g => {
-      if (this.world.getRigidBody(g.sensor.handle)) {
-        this.world.removeRigidBody(g.sensor)
+    for (const gate of this.chromaGates) {
+      if (this.world.getRigidBody(gate.sensor.handle)) {
+        this.world.removeRigidBody(gate.sensor)
       }
-    })
+    }
     this.chromaGates = []
   }
 }

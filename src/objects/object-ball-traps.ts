@@ -1,6 +1,8 @@
 import { Scene, MeshBuilder, Mesh, PBRMaterial, TransformNode, Color3, StandardMaterial, Vector3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import { GAME_TUNING } from '../config'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import { getPhysicsTuningValue } from '../game-elements/physics-tuning'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
@@ -159,7 +161,7 @@ export class BallTrapBuilder {
       trapGate,
       caughtBall: null,
       holdTimer: 0,
-      holdDuration: 2.0, // Hold for 2 seconds
+      holdDuration: getPhysicsTuningValue('trapHoldDuration'),
       isOpen: true,
       trapColor: colorHex,
       hitTime: 0,
@@ -233,7 +235,11 @@ export class BallTrapBuilder {
         this.eventBus.emitTrapBallReleased(state.id, 'ball-released', {
           x: 0, y: 0, z: 0
         })
-        this.eventBus.emitPointsAwarded(100, 'ball-released-timeout', { x: pos.x, y: pos.y, z: pos.z })
+        this.eventBus.emitPointsAwarded(
+          GAME_TUNING.obstacle.trapTimeoutReleaseBase,
+          'ball-released-timeout',
+          { x: pos.x, y: pos.y, z: pos.z },
+        )
         this.eventBus.emitPlaySound('trap-release-timeout')
       }
 
@@ -270,7 +276,11 @@ export class BallTrapBuilder {
           y: pos.y,
           z: pos.z
         })
-        this.eventBus.emitPointsAwarded(50, 'ball-trapped')
+        this.eventBus.emitPointsAwarded(
+          GAME_TUNING.obstacle.trapCatchBase,
+          'ball-trapped',
+          { x: pos.x, y: pos.y, z: pos.z },
+        )
         this.eventBus.emitPlaySound('trap-catch')
         this.eventBus.emitFlashEffect(0.3, '#ff00ff', 0.2)
       }
@@ -282,7 +292,7 @@ export class BallTrapBuilder {
    */
   releaseBallWithBoost(state: BallTrapState, ball: RAPIER.RigidBody): void {
     state.hitTime = 0.2
-    const boostForce = 15.0
+    const boostForce = getPhysicsTuningValue('trapReleaseBoost')
     const boostVelocity = new this.rapier.Vector3(
       (Math.random() - 0.5) * boostForce,
       boostForce * 0.8,
@@ -298,7 +308,11 @@ export class BallTrapBuilder {
         y: boostVelocity.y,
         z: boostVelocity.z
       })
-      this.eventBus.emitPointsAwarded(100, 'ball-released')
+      this.eventBus.emitPointsAwarded(
+        GAME_TUNING.obstacle.trapReleaseBase,
+        'ball-released',
+        { x: boostVelocity.x, y: boostVelocity.y, z: boostVelocity.z },
+      )
       this.eventBus.emitPlaySound('trap-release')
       this.eventBus.emitFlashEffect(0.4, '#ffff00', 0.3)
       this.eventBus.emitBloomEffect(0.5, 0.5)

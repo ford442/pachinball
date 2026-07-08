@@ -48,6 +48,7 @@ import { BallStackVisual } from '../game-elements/ball-stack-visual'
 import { CabinetLighting } from '../effects/cabinet-lighting'
 import { CelebrationSequencer } from '../effects/celebration-sequencer'
 import { CampaignRewardNotifier } from '../game-elements/campaign-reward-notifier'
+import { wireCampaignLoop } from './campaign-loop-controller'
 import {
   SpinnerBumperBuilder,
   BallTrapBuilder,
@@ -290,6 +291,8 @@ export class GameSystemsInitializer {
         },
       })
       campaignRewards.applyEquippedRewards()
+
+      wireCampaignLoop(this.game, this.game.eventBus, campaignRewards)
 
       const notifier = new CampaignRewardNotifier(this.game.eventBus)
       notifier.flushUnseen()
@@ -573,6 +576,8 @@ export class GameSystemsInitializer {
       })
       g.mapManager.setBloomPipeline()
 
+      g.levelLoader = g.createLevelLoader()
+
       const trackThemingSystem = initializeTrackThemingSystem({
         gameObjects: g.gameObjects,
         ballManager: g.ballManager,
@@ -584,6 +589,7 @@ export class GameSystemsInitializer {
         mapManager: g.mapManager,
         qualityTier: g.qualityTier,
         scene: g.scene!,
+        adventureMode: g.adventureMode,
       })
       g.scene?.onBeforeRenderObservable.add(() => {
         const activeTrack = g.adventureMode?.getCurrentZone() ?? null

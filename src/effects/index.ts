@@ -1,3 +1,4 @@
+export { TrackAmbientEffects } from './track-ambient-effects'
 export { EffectsSystem } from './effects-core'
 export { createSharedParticleTexture } from './effects-utils'
 export { RipplesEffects } from './effects-ripples'

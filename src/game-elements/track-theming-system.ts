@@ -7,8 +7,15 @@ import type { EffectsSystem } from '../effects'
 import type { BallManager } from './ball-manager'
 import { TRACK_CATALOG, type TrackInfo } from './adventure-track-progression'
 import { PALETTE, SURFACES, INTENSITY, emissive, color, QualityTier } from './visual-language'
+import {
+  getTrackThemeProfile,
+  type TrackMaterialRole,
+  type TrackThemeProfile,
+} from './track-theme-profiles'
 import type { SpinnerBumperVisual, MovingGateState, GameObjects } from '../objects'
 import type { TableMapManager } from '../game/game-maps'
+import type { AdventureMode } from '../adventure'
+import { getCabinetBuilder } from '../cabinet'
 
 type SurfaceTintKey = keyof typeof SURFACES
 
@@ -20,7 +27,8 @@ export interface TrackVisualTheme {
 
 export const TRACK_THEME_OVERRIDES: Record<string, TrackVisualTheme> = {
   NEON_HELIX: { primary: 'CYAN', accent: 'MAGENTA', surfaceTint: 'PLAYFIELD' },
-  CYBER_CORE: { primary: 'MAGENTA', accent: 'PURPLE', surfaceTint: 'PLAYFIELD_DEEP' },
+  PACHINKO_HALL: { primary: 'GOLD', accent: 'MAGENTA', surfaceTint: 'PLAYFIELD' },
+  CYBER_CORE: { primary: 'MAGENTA', accent: 'CYAN', surfaceTint: 'PLAYFIELD_DEEP' },
   QUANTUM_GRID: { primary: 'PURPLE', accent: 'WHITE', surfaceTint: 'GLASS' },
   PACHINKO_SPIRE: { primary: 'GOLD', accent: 'ALERT', surfaceTint: 'PLAYFIELD' },
   SINGULARITY_WELL: { primary: 'ALERT', accent: 'AMBIENT', surfaceTint: 'PLAYFIELD_DEEP' },
@@ -71,6 +79,7 @@ export interface TrackThemingSystemDeps {
   mapManager: TableMapManager | null
   qualityTier: QualityTier
   scene: Scene
+  adventureMode?: AdventureMode | null
 }
 
 export class TrackThemingSystem {
@@ -107,14 +116,20 @@ export class TrackThemingSystem {
   }
 
   applyTheme(trackId: string, theme: TrackVisualTheme = this.resolveTheme(trackId)): void {
-    const primaryHex = PALETTE[theme.primary]
-    const accentHex = PALETTE[theme.accent ?? theme.primary]
-    const surfaceHex = SURFACES[theme.surfaceTint ?? 'PLAYFIELD']
+    const profile = getTrackThemeProfile(trackId)
+    const palette = profile?.palette ?? theme
+    const primaryKey = palette.primary
+    const accentKey = palette.accent ?? palette.primary
+    const surfaceKey = palette.surfaceTint ?? theme.surfaceTint ?? 'PLAYFIELD'
+
+    const primaryHex = profile?.cabinet.primary ?? PALETTE[primaryKey]
+    const accentHex = profile?.cabinet.accent ?? PALETTE[accentKey]
+    const surfaceHex = SURFACES[surfaceKey]
     const matLib = getMaterialLibrary(this.deps.scene)
 
-    this.applyBumperTheme(theme.primary)
-    this.applySpinnerTheme(theme.primary)
-    this.applyGateTheme(theme.primary)
+    this.applyBumperTheme(primaryKey)
+    this.applySpinnerTheme(primaryKey)
+    this.applyGateTheme(primaryKey)
 
     this.deps.ballManager?.updateBallMaterialColor(primaryHex)
     this.deps.gameObjects?.updateBumperColors(primaryHex)
@@ -127,12 +142,37 @@ export class TrackThemingSystem {
       matLib.updatePlayfieldTheme(surfaceHex, accentHex)
     }
 
-    this.applyCabinetTheme(theme.primary, theme.accent ?? theme.primary)
+    this.applyCabinetTheme(primaryKey, accentKey)
+    getCabinetBuilder(this.deps.scene).setThemeFromColors(primaryHex, accentHex)
     this.deps.display?.setTrackTheme(primaryHex, accentHex)
     this.deps.effects?.setCabinetColor(primaryHex)
 
+    if (profile) {
+      this.applyPremiumProfile(profile)
+    } else {
+      this.deps.effects?.setTrackThemeProfile(null)
+    }
+
     this.activeTrackId = trackId
     this.activeTheme = theme
+  }
+
+  private applyPremiumProfile(profile: TrackThemeProfile): void {
+    this.retintAdventureTrackMaterials(profile)
+    this.deps.effects?.setTrackThemeProfile(profile)
+  }
+
+  private retintAdventureTrackMaterials(profile: TrackThemeProfile): void {
+    const materials = this.deps.adventureMode?.getTrackMaterials() ?? []
+    for (const mat of materials) {
+      const role = mat.metadata?.trackMaterialRole as TrackMaterialRole | undefined
+      if (!role) continue
+      const hex = profile.materials[role]
+      mat.emissiveColor = Color3.FromHexString(hex)
+      if ('emissiveIntensity' in mat && typeof mat.emissiveIntensity === 'number') {
+        mat.emissiveIntensity = role === 'energy' ? 1.5 : 1.2
+      }
+    }
   }
 
   private getCatalogTheme(trackId: string): TrackVisualTheme | null {
@@ -197,6 +237,8 @@ export class TrackThemingSystem {
   }
 
   private applyMapFallbackTheme(): void {
+    this.deps.effects?.setTrackThemeProfile(null)
+
     const mapConfig = this.deps.mapManager?.getCurrentConfig()
     if (!mapConfig) return
 

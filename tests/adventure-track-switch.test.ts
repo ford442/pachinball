@@ -331,6 +331,7 @@ describe('GameSlotAdventure.switchToTrack', () => {
     const goalInit = vi.fn()
     const supervisorStart = vi.fn()
     const adventureSwitch = vi.fn().mockReturnValue(true)
+    const loadCampaignTrack = vi.fn().mockReturnValue({ success: true })
 
     const host = {
       display: { setTrackInfo: vi.fn(), setStoryText: vi.fn() },
@@ -350,6 +351,8 @@ describe('GameSlotAdventure.switchToTrack', () => {
       adventureUIStateManager: { reset: uiReset } as unknown as import('../src/game-elements/adventure-ui-state').AdventureUIStateManager,
       adventureGoalTracker: { initializeTrack: goalInit } as unknown as import('../src/game-elements/adventure-goal-tracker').AdventureGoalTracker,
       adventureProgressionSupervisor: { startTrack: supervisorStart } as unknown as import('../src/game-elements/adventure-progression-supervisor').AdventureProgressionSupervisor,
+      physicsController: { rebuildHandleCaches: vi.fn() },
+      levelLoader: { loadCampaignTrack } as unknown as import('../src/game/level-loader').LevelLoader,
       updateHUD: vi.fn(),
       getBallPosition: vi.fn().mockReturnValue(null),
       triggerJackpot: vi.fn(),
@@ -360,9 +363,10 @@ describe('GameSlotAdventure.switchToTrack', () => {
     const slot = new GameSlotAdventure(host)
     slot.switchToTrack('CYBER_CORE')
 
-    // (a) AdventureMode.switchToTrack invoked first
-    expect(adventureSwitch).toHaveBeenCalledOnce()
-    expect(adventureSwitch).toHaveBeenCalledWith(AdventureTrackType.CYBER_CORE)
+    // (a) LevelLoader canonical path invoked (not direct AdventureMode.switchToTrack)
+    expect(loadCampaignTrack).toHaveBeenCalledOnce()
+    expect(loadCampaignTrack).toHaveBeenCalledWith('CYBER_CORE', { resetBallToPlunger: false })
+    expect(adventureSwitch).not.toHaveBeenCalled()
 
     // (b) Cinematic trigger called once
     expect(onTrackStart).toHaveBeenCalledOnce()
@@ -402,6 +406,8 @@ describe('GameSlotAdventure.switchToTrack', () => {
       adventureUIStateManager: null,
       adventureGoalTracker: null,
       adventureProgressionSupervisor: null,
+      physicsController: null,
+      levelLoader: null,
       updateHUD: vi.fn(),
       getBallPosition: vi.fn().mockReturnValue(null),
       triggerJackpot: vi.fn(),

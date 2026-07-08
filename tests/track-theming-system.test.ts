@@ -20,6 +20,10 @@ vi.mock('../src/materials', async (importOriginal) => {
   }
 })
 
+vi.mock('../src/cabinet', () => ({
+  getCabinetBuilder: () => ({ setThemeFromColors: vi.fn() }),
+}))
+
 describe('TrackThemingSystem', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -48,7 +52,7 @@ describe('TrackThemingSystem', () => {
       gateStates: [],
       cabinetNeonLights: [],
       display: { setTrackTheme: vi.fn() } as never,
-      effects: { setCabinetColor: vi.fn() } as never,
+      effects: { setCabinetColor: vi.fn(), setTrackThemeProfile: vi.fn() } as never,
       mapManager: null,
       qualityTier: QualityTier.MEDIUM,
       scene: {} as never,

@@ -134,6 +134,15 @@ export {
   type ZoneMechanic,
 } from './dynamic-world'
 export { DebugHUD, type DebugSnapshot } from './debug-hud'
+export {
+  getPhysicsTuningValue,
+  setPhysicsTuningOverride,
+  resetPhysicsTuningOverrides,
+  applyPlungerChargeCurve,
+  PHYSICS_TUNING_SLIDERS,
+  type PhysicsTuningKey,
+} from './physics-tuning'
+export { PhysicsTuningPanel, isPhysicsTuningQueryEnabled } from './physics-tuning-panel'
 export { PerformanceMonitor, type PerformanceMetrics } from './performance-monitor'
 
 // Adventure goal & progression systems
@@ -149,6 +158,14 @@ export {
   type TrackModeType,
 } from './adventure-track-progression'
 export {
+  getTrackThemeProfile,
+  getTrackMaterialColor,
+  TRACK_THEME_PROFILES,
+  type TrackThemeProfile,
+  type TrackMaterialRole,
+  type TrackAmbientStyle,
+} from './track-theme-profiles'
+export {
   TrackThemingSystem,
   initializeTrackThemingSystem,
   getTrackThemingSystem,
@@ -161,6 +178,8 @@ export {
 export { AdventureProgressionSupervisor, type PortalSpatialContext } from './adventure-progression-supervisor'
 export {
   getGoalsForTrack,
+  buildCampaignGoalsForTrack,
+  trackGoalSlug,
   getCompletionPercentage,
   getTotalReward,
   cloneGoals,

@@ -20,6 +20,8 @@ import {
   type RendererPreference,
 } from '../renderers/renderer-selector'
 
+import type { PhysicsTuningPanel } from '../game-elements/physics-tuning-panel'
+
 export interface SettingsUIHost {
   readonly mapSystem: MapSystem
   readonly mapManager: TableMapManager | null
@@ -27,6 +29,7 @@ export interface SettingsUIHost {
   readonly debugHUD: DebugHUD | null
   readonly scene: Scene | null
   readonly physics: PhysicsSystem
+  readonly physicsTuningPanel: PhysicsTuningPanel | null
 
   scanlineWeight: number
   scanlineEnabled: boolean
@@ -86,6 +89,7 @@ export class GameSettingsUI {
     const scanlineEnabledToggle = document.getElementById('scanline-enabled') as HTMLInputElement
     const scanlineMultiplierSlider = document.getElementById('scanline-intensity') as HTMLInputElement
     const debugHUDCheckbox = document.getElementById('enable-debug-hud') as HTMLInputElement
+    const physicsTuningCheckbox = document.getElementById('enable-physics-tuning') as HTMLInputElement
     const masterVolumeSlider = document.getElementById('master-volume') as HTMLInputElement
     const musicVolumeSlider = document.getElementById('music-volume') as HTMLInputElement
     const sfxVolumeSlider = document.getElementById('sfx-volume') as HTMLInputElement
@@ -101,6 +105,7 @@ export class GameSettingsUI {
       if (span) span.setAttribute('data-value', String(settings.scanlineIntensityMultiplier))
     }
     if (debugHUDCheckbox) debugHUDCheckbox.checked = settings.enableDebugHUD
+    if (physicsTuningCheckbox) physicsTuningCheckbox.checked = settings.enablePhysicsTuning
 
     this.host.mapManager?.getLCDTableState().setPhotosensitiveMode(settings.photosensitiveMode)
 
@@ -126,6 +131,7 @@ export class GameSettingsUI {
     const scanlineEnabledToggle = document.getElementById('scanline-enabled') as HTMLInputElement
     const scanlineMultiplierSlider = document.getElementById('scanline-intensity') as HTMLInputElement
     const debugHUDCheckbox = document.getElementById('enable-debug-hud') as HTMLInputElement
+    const physicsTuningCheckbox = document.getElementById('enable-physics-tuning') as HTMLInputElement
     const masterVolumeSlider = document.getElementById('master-volume') as HTMLInputElement
     const musicVolumeSlider = document.getElementById('music-volume') as HTMLInputElement
     const sfxVolumeSlider = document.getElementById('sfx-volume') as HTMLInputElement
@@ -144,6 +150,7 @@ export class GameSettingsUI {
       scanlineEnabled,
       scanlineIntensityMultiplier,
       enableDebugHUD: debugHUDCheckbox?.checked ?? false,
+      enablePhysicsTuning: physicsTuningCheckbox?.checked ?? false,
       enableFog: true,
       enableShadows: true,
       masterVolume: parseFloat(masterVolumeSlider?.value ?? '0.8'),
@@ -163,6 +170,12 @@ export class GameSettingsUI {
       this.host.debugHUD?.show()
     } else {
       this.host.debugHUD?.hide()
+    }
+
+    if (newSettings.enablePhysicsTuning) {
+      this.host.physicsTuningPanel?.show()
+    } else {
+      this.host.physicsTuningPanel?.hide()
     }
 
     this.host.mapManager?.getLCDTableState().setPhotosensitiveMode(newSettings.photosensitiveMode)

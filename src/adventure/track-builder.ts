@@ -31,7 +31,11 @@ import {
   MASK_BLUE,
 } from './adventure-types'
 import type { TrackInfo } from '../game-elements/adventure-track-progression'
-import { INTENSITY, emissive } from '../game-elements/visual-language'
+import { INTENSITY, emissive, PALETTE } from '../game-elements/visual-language'
+import {
+  getTrackThemeProfile,
+  type TrackMaterialRole,
+} from '../game-elements/track-theme-profiles'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 
 const RAPIER_DEFAULT_COLLISION_GROUPS = 0xFFFFFFFF
@@ -178,6 +182,24 @@ export abstract class TrackBuilder {
     mat.clearCoat.roughness = 0.2
     this.materials.push(mat)
     return mat
+  }
+
+  /**
+   * Resolve adventure track geometry material from the active track's premium profile.
+   */
+  protected getThemedTrackMaterial(role: TrackMaterialRole): StandardMaterial | PBRMaterial {
+    const trackId = this.currentTrackInfo?.id ?? ''
+    const profile = getTrackThemeProfile(trackId)
+    const hex = profile?.materials[role] ?? PALETTE.CYAN
+    const usePbr = profile?.usePBRStructure && (role === 'structure' || role === 'glow')
+    const mat = usePbr ? this.getTrackPBRMaterial(hex) : this.getTrackMaterial(hex)
+    mat.metadata = { ...(mat.metadata ?? {}), trackMaterialRole: role, trackId }
+    return mat
+  }
+
+  /** Materials created for the active adventure track (for live theme retinting). */
+  getTrackMaterials(): (StandardMaterial | PBRMaterial)[] {
+    return this.materials
   }
 
   // --- Primitive Builders ---

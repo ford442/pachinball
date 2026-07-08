@@ -62,6 +62,10 @@ describe('TRACK_CATALOG modeType alternation', () => {
     expect(uniquePrimaryThemes.size).toBeGreaterThanOrEqual(6)
   })
 
+  it('PACHINKO_HALL is EXTENDED_MAP hub track', () => {
+    expect(TRACK_CATALOG['PACHINKO_HALL'].modeType).toBe('EXTENDED_MAP')
+  })
+
   it('portal:open event includes the track modeType', () => {
     const bus = new EventBus()
     const progression = new AdventureTrackProgression()
@@ -75,6 +79,18 @@ describe('TRACK_CATALOG modeType alternation', () => {
 
     expect(portalMode).toBe('EXTENDED_MAP')
   })
+
+  it('getActiveModeType reflects the running track catalog entry', () => {
+    const bus = new EventBus()
+    const progression = new AdventureTrackProgression()
+    const supervisor = new AdventureProgressionSupervisor(bus, progression)
+
+    supervisor.startTrack('CYBER_CORE', 0)
+    expect(supervisor.getActiveModeType()).toBe('STATIONARY_TABLE')
+
+    supervisor.startTrack('PACHINKO_HALL', 0)
+    expect(supervisor.getActiveModeType()).toBe('EXTENDED_MAP')
+  })
 })
 
 // ─── AdventureProgressionSupervisor tests ────────────────────────────────────
@@ -87,7 +103,7 @@ describe('AdventureProgressionSupervisor', () => {
     expect(progression.getNextTrackId()).toBe('NEON_HELIX')
 
     progression.completeTrack('NEON_HELIX', 50000, 0, 0)
-    expect(progression.getNextTrackId()).toBe('CYBER_CORE')
+    expect(progression.getNextTrackId()).toBe('PACHINKO_HALL')
   })
 
   it('resolves success, opens portal, and completes track with multiplier rewards', () => {
@@ -118,8 +134,8 @@ describe('AdventureProgressionSupervisor', () => {
     expect(progression.getStats().goldBallsCollected).toBe(2)
     expect(progression.getStats().totalRewardsEarned).toBe(75000)
     expect(completedReward).toBe(75000)
-    expect(progression.getCurrentTrack()).toBe('CYBER_CORE')
-    expect(advanced).toEqual(['CYBER_CORE'])
+    expect(progression.getCurrentTrack()).toBe('PACHINKO_HALL')
+    expect(advanced).toEqual(['PACHINKO_HALL'])
   })
 
   it('resolves timeout and applies the track timeoutPenaltyMultiplier', () => {
@@ -206,7 +222,7 @@ describe('AdventureProgressionSupervisor', () => {
     supervisor.onPortalEntered(61000, 0)
 
     expect(progression.isTrackCompleted('NEON_HELIX')).toBe(true)
-    expect(progression.getCurrentTrack()).toBe('CYBER_CORE')
+    expect(progression.getCurrentTrack()).toBe('PACHINKO_HALL')
   })
 
   it('calls onTrackAdvanced after reset so startTrack can safely be used in the callback', () => {

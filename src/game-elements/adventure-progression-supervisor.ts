@@ -1,5 +1,9 @@
 import type { EventBus, PachinballEventMap } from '../game/event-bus'
-import { type TrackInfo, type AdventureTrackProgression } from './adventure-track-progression'
+import {
+  type TrackInfo,
+  type TrackModeType,
+  type AdventureTrackProgression,
+} from './adventure-track-progression'
 
 export interface AdventureProgressionSupervisorCallbacks {
   isAdventureModeActive?: () => boolean
@@ -154,6 +158,23 @@ export class AdventureProgressionSupervisor {
 
   getActiveMultiplier(): number {
     return this.activeMultiplier
+  }
+
+  getBaselineScore(): number {
+    return this.baselineScore
+  }
+
+  getActiveTrackId(): string | null {
+    return this.activeTrackId
+  }
+
+  getScoreDelta(currentTotalScore: number): number {
+    return Math.max(0, currentTotalScore - this.baselineScore)
+  }
+
+  /** Active campaign track mode — EXTENDED_MAP (descent run) or STATIONARY_TABLE (arena). */
+  getActiveModeType(): TrackModeType | null {
+    return this.activeTrackInfo?.modeType ?? null
   }
 
   /**

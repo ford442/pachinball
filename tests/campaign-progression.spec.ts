@@ -97,7 +97,7 @@ test.describe('Campaign progression E2E', () => {
         })
       }
 
-      // NEON_HELIX (A) -> CYBER_CORE (B)
+      // NEON_HELIX (A) -> PACHINKO_HALL (A hub)
       supervisor.startTrack('NEON_HELIX', 0)
       supervisor.update(0.1, 60_000)
       const firstPortalMessage = g.display?.storyText ?? ''
@@ -108,19 +108,22 @@ test.describe('Campaign progression E2E', () => {
         position: { x: 0, y: 0, z: 0 },
       })
 
-      // CYBER_CORE (B) -> QUANTUM_GRID (A)
+      // PACHINKO_HALL (A) -> CYBER_CORE (B)
+      simulateSuccessPortalEntry('PACHINKO_HALL', 100_000)
       simulateSuccessPortalEntry('CYBER_CORE', 140_000)
 
       return {
         firstPortalMessage,
         currentTrack: progression.getCurrentTrack?.() ?? null,
         neonCompleted: progression.isTrackCompleted('NEON_HELIX'),
+        hallCompleted: progression.isTrackCompleted('PACHINKO_HALL'),
         cyberCompleted: progression.isTrackCompleted('CYBER_CORE'),
       }
     })
 
     expect(result.firstPortalMessage).toContain('PORTAL OPEN')
     expect(result.neonCompleted).toBe(true)
+    expect(result.hallCompleted).toBe(true)
     expect(result.cyberCompleted).toBe(true)
     expect(result.currentTrack).toBe('QUANTUM_GRID')
   })

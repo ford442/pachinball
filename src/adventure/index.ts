@@ -42,6 +42,7 @@ export {
 
 // Track builders
 export { buildNeonHelix } from './tracks/neon-helix'
+export { buildPachinkoHall } from './tracks/pachinko-hall'
 export { buildCyberCore } from './tracks/cyber-core'
 export { buildQuantumGrid } from './tracks/quantum-grid'
 export { buildSingularityWell } from './tracks/singularity-well'

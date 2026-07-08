@@ -11,6 +11,7 @@ export interface GameSettings {
   scanlineEnabled: boolean
   scanlineIntensityMultiplier: number
   enableDebugHUD: boolean
+  enablePhysicsTuning: boolean
   masterVolume: number
   musicVolume: number
   sfxVolume: number
@@ -32,6 +33,7 @@ export class SettingsManager {
       scanlineEnabled: true,
       scanlineIntensityMultiplier: 1.0,
       enableDebugHUD: false,
+      enablePhysicsTuning: false,
       masterVolume: 0.8,
       musicVolume: 0.6,
       sfxVolume: 0.9,

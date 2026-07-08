@@ -3,6 +3,7 @@ import { AdventureTrackType } from './adventure-types'
 
 const TRACK_START_ANCHORS: Record<AdventureTrackType, Vector3> = {
   [AdventureTrackType.NEON_HELIX]: new Vector3(0, 2, 8),
+  [AdventureTrackType.PACHINKO_HALL]: new Vector3(0, 8, 4),
   [AdventureTrackType.CYBER_CORE]: new Vector3(0, 20, 0),
   [AdventureTrackType.QUANTUM_GRID]: new Vector3(0, 10, 0),
   [AdventureTrackType.SINGULARITY_WELL]: new Vector3(0, 25, 0),

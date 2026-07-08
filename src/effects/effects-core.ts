@@ -32,6 +32,8 @@ import { EffectsConfig, BallType } from '../config'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { DEFAULT_ACCESSIBILITY, type AccessibilityConfig } from '../game-elements/accessibility-config'
 import { ParticleEffects } from './effects-particles'
+import { TrackAmbientEffects } from './track-ambient-effects'
+import type { TrackThemeProfile } from '../game-elements/track-theme-profiles'
 import { LightingEffects } from './effects-lighting'
 import { CameraEffects } from './effects-camera'
 import { AudioEffects } from './effects-audio'
@@ -155,6 +157,13 @@ export class EffectsSystem {
 
   // Sub-systems
   private particleEffects: ParticleEffects
+  private trackAmbientEffects: TrackAmbientEffects
+  private activeTrackProfile: TrackThemeProfile | null = null
+  private trackAtmosphereActive = false
+  private targetTrackBloom = 0.5
+  private targetTrackVignette = 0.4
+  private targetTrackKeyIntensity = 1.2
+  private trackFlickerScale = 1
   private lightingEffects: LightingEffects
   private cameraEffects: CameraEffects | null = null
   private shardEffects: ShardEffects | null = null
@@ -200,6 +209,7 @@ export class EffectsSystem {
 
     // Initialize sub-systems
     this.particleEffects = new ParticleEffects(scene)
+    this.trackAmbientEffects = new TrackAmbientEffects(scene)
     this.lightingEffects = new LightingEffects(scene)
     if (scene.activeCamera) {
       this.cameraEffects = new CameraEffects(scene.activeCamera)
@@ -224,6 +234,36 @@ export class EffectsSystem {
 
   setCabinetColor(colorHex: string): void {
     this.currentCabinetColor = colorHex
+  }
+
+  setTrackThemeProfile(profile: TrackThemeProfile | null): void {
+    this.activeTrackProfile = profile
+    this.trackAtmosphereActive = profile !== null
+    if (profile) {
+      this.targetFogDensity = profile.atmosphere.fogDensity
+      this.targetFogColor = color(profile.atmosphere.fogColor)
+      this.targetKeyColor = color(profile.atmosphere.keyLightColor)
+      this.targetRimColor = color(profile.atmosphere.rimColor)
+      this.targetRimIntensity = profile.atmosphere.rimIntensity
+      this.targetTrackKeyIntensity = profile.atmosphere.keyLightIntensity
+      this.targetTrackBloom = profile.atmosphere.bloomWeight
+      this.targetTrackVignette = profile.atmosphere.vignetteWeight
+      this.currentCabinetColor = profile.particles.hitPrimary
+      if (this.accessibility.effectIntensity > 0) {
+        this.trackAmbientEffects.applyProfile(profile)
+      } else {
+        this.trackAmbientEffects.applyProfile(null)
+      }
+    } else {
+      this.trackAmbientEffects.applyProfile(null)
+      const fogState = FOG_STATES[this.currentAtmosphereState] || FOG_STATES['IDLE']
+      this.targetFogDensity = fogState.density
+      this.targetFogColor = color(fogState.color)
+    }
+  }
+
+  getTrackHitColor(): string | null {
+    return this.activeTrackProfile?.particles.hitPrimary ?? null
   }
 
   registerCamera(camera: { position: Vector3 }): void {
@@ -379,9 +419,11 @@ export class EffectsSystem {
       this.keyLight.diffuse.g += (this.targetKeyColor.g - this.keyLight.diffuse.g) * lerpSpeed
       this.keyLight.diffuse.b += (this.targetKeyColor.b - this.keyLight.diffuse.b) * lerpSpeed
 
-      // Apply state-based key light intensity
       const lightState = LIGHTING_STATES[this.currentAtmosphereState] || LIGHTING_STATES['IDLE']
-      this.keyLight.intensity += (lightState.key - this.keyLight.intensity) * lerpSpeed
+      const targetKey = this.trackAtmosphereActive
+        ? this.targetTrackKeyIntensity * this.trackFlickerScale
+        : lightState.key
+      this.keyLight.intensity += (targetKey - this.keyLight.intensity) * lerpSpeed
     }
 
     // 3. Rim light drama: intensity and color modulation per state
@@ -390,6 +432,15 @@ export class EffectsSystem {
       this.rimLight.diffuse.r += (this.targetRimColor.r - this.rimLight.diffuse.r) * lerpSpeed
       this.rimLight.diffuse.g += (this.targetRimColor.g - this.rimLight.diffuse.g) * lerpSpeed
       this.rimLight.diffuse.b += (this.targetRimColor.b - this.rimLight.diffuse.b) * lerpSpeed
+    }
+
+    if (this.trackAtmosphereActive && this.bloomPipeline) {
+      const bloomTarget = this.targetTrackBloom * this.trackFlickerScale
+      this.bloomPipeline.bloomWeight += (bloomTarget - this.bloomPipeline.bloomWeight) * lerpSpeed
+      if (this.bloomPipeline.imageProcessing) {
+        this.bloomPipeline.imageProcessing.vignetteWeight +=
+          (this.targetTrackVignette - this.bloomPipeline.imageProcessing.vignetteWeight) * lerpSpeed
+      }
     }
 
     // 4. Bounce light proximity response: brighter when ball is near
@@ -683,6 +734,7 @@ export class EffectsSystem {
     this.transitionFlashMat?.dispose()
 
     this.particleEffects.dispose()
+    this.trackAmbientEffects.dispose()
     this.lightingEffects.dispose()
     this.cameraEffects?.dispose()
     this.impactEffects?.dispose()
@@ -991,6 +1043,7 @@ export class EffectsSystem {
     }
 
     // Update sub-systems
+    this.trackFlickerScale = this.trackAmbientEffects.update(dt)
     this.particleEffects.update()
     this.lightingEffects.update(dt)
     this.cameraEffects?.update(dt)
@@ -1002,7 +1055,8 @@ export class EffectsSystem {
   }
 
   spawnBumperSpark(position: Vector3, color?: string): void {
-    this.particleEffects.spawnBumperSpark(position, color)
+    const trackColor = this.getTrackHitColor()
+    this.particleEffects.spawnBumperSpark(position, color ?? trackColor ?? undefined)
   }
 
   spawnTrail(): void {

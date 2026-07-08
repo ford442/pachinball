@@ -30,17 +30,37 @@
         <div class="hud-item">Lives: <span id="lives">3</span></div>
       </div>
 
-      <div id="adventure-hud" class="hidden">
-        <div class="adventure-title">Adventure Mode</div>
-        <div class="adventure-level" id="adventure-level-name">Level 1</div>
+      <div id="adventure-hud" class="hidden" data-testid="campaign-track-panel">
+        <div class="adventure-title">Campaign</div>
+        <div class="campaign-mode-badge" id="campaign-mode-badge">EXTENDED MAP</div>
+        <div class="adventure-level" id="adventure-level-name">Neon Helix</div>
+        <div class="campaign-score-row" id="campaign-score-row" data-testid="campaign-score-row">
+          <span class="campaign-score-label">Track pts</span>
+          <span class="campaign-score-values">
+            <span id="campaign-score-current">0</span>
+            <span class="campaign-score-sep">/</span>
+            <span id="campaign-score-target">50,000</span>
+          </span>
+        </div>
+        <div class="campaign-score-bar">
+          <div class="campaign-score-fill" id="campaign-score-fill" style="width: 0%"></div>
+        </div>
         <div class="adventure-goals" id="adventure-goals">
           <!-- Goals populated dynamically -->
+        </div>
+        <div class="campaign-next-teaser" id="campaign-next-teaser" data-testid="campaign-next-teaser">
+          <span class="campaign-next-label">Next sector</span>
+          <span id="campaign-next-track-name">—</span>
+          <span class="campaign-next-goal" id="campaign-next-track-goal"></span>
         </div>
         <div class="adventure-progress">
           <div class="progress-bar">
             <div class="progress-fill" id="adventure-progress-fill" style="width: 0%"></div>
           </div>
           <span class="progress-text" id="adventure-progress-text">0%</span>
+        </div>
+        <div class="campaign-shard-row" data-testid="campaign-hud-shards">
+          Shards: <span id="campaign-hud-shard-total">0</span>
         </div>
       </div>
 
@@ -125,6 +145,12 @@
 
           <div id="developer-settings" class="hidden">
             <h3 style="margin-top: 1.5rem; color: #00d9ff; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">Developer</h3>
+            <label class="setting-row">
+              <input type="checkbox" id="enable-physics-tuning">
+              <span>Physics Tuning Panel</span>
+              <small>Live sliders for ball, flipper, plunger, and toy feel</small>
+            </label>
+
             <label class="setting-row">
               <input type="checkbox" id="enable-debug-hud">
               <span>Enable Debug HUD</span>

@@ -5,7 +5,7 @@
 
 import type { EventBus } from '../game/event-bus'
 import { AdventureGoalSystem } from './adventure-goal-system'
-import { getGoalsForTrack } from './adventure-track-goals'
+import { getGoalsForTrack, trackGoalSlug } from './adventure-track-goals'
 
 export class AdventureGoalTracker {
   private goalSystem: AdventureGoalSystem
@@ -37,9 +37,6 @@ export class AdventureGoalTracker {
       eventBus.on('trap:ball:captured', () => this.trackBumperHit()),
       eventBus.on('trap:ball:released', () => this.trackBumperHit()),
       eventBus.on('gate:triggered', () => this.triggerGate(1)),
-      eventBus.on('points:awarded', (payload) => {
-        this.updateScore(payload.amount)
-      }),
       eventBus.on('adventure:start', () => {
         if (this.currentTrackId) {
           this.initializeTrack(this.currentTrackId)
@@ -81,7 +78,8 @@ export class AdventureGoalTracker {
     this.timeElapsed += deltaTime
 
     // Update survival goal
-    this.goalSystem.updateGoal(`${this.currentTrackId.toLowerCase()}-survive`, Math.floor(this.timeElapsed))
+    const surviveGoalId = `${trackGoalSlug(this.currentTrackId)}-survive`
+    this.goalSystem.updateGoal(surviveGoalId, Math.floor(this.timeElapsed))
 
     // Update combo timeout
     if (this.currentCombo > 0 && this.timeElapsed - this.lastComboTime > this.COMBO_TIMEOUT) {
@@ -103,11 +101,8 @@ export class AdventureGoalTracker {
     this.currentCombo++
     this.lastComboTime = this.timeElapsed
 
-    // Check for combo goal
-    const comboGoalId = `${this.currentTrackId.toLowerCase()}-combo`
-    if (this.currentCombo >= 3) {
-      this.goalSystem.updateGoal(comboGoalId, Math.floor(this.currentCombo / 3))
-    }
+    const comboGoalId = `${trackGoalSlug(this.currentTrackId)}-combo`
+    this.goalSystem.updateGoal(comboGoalId, this.currentCombo)
   }
 
   /**
@@ -117,7 +112,7 @@ export class AdventureGoalTracker {
     // Check if it's a gold ball
     if (ballType === 'GOLD_PLATED' || ballType === 'SOLID_GOLD') {
       this.goldBallsCollected++
-      const goldGoalId = `${this.currentTrackId.toLowerCase()}-gold`
+      const goldGoalId = `${trackGoalSlug(this.currentTrackId)}-gold`
       this.goalSystem.incrementGoal(goldGoalId, 1)
     }
   }
@@ -130,10 +125,19 @@ export class AdventureGoalTracker {
   }
 
   /**
-   * Update score-based goal
+   * Sync score goal from campaign supervisor delta (track baseline aware).
+   */
+  syncTrackScore(scoreDelta: number): void {
+    if (!this.currentTrackId) return
+    const scoreGoalId = `${trackGoalSlug(this.currentTrackId)}-score`
+    this.goalSystem.updateGoal(scoreGoalId, scoreDelta)
+  }
+
+  /**
+   * Update score-based goal (absolute score — legacy).
    */
   updateScore(currentScore: number): void {
-    const scoreGoalId = `${this.currentTrackId.toLowerCase()}-score`
+    const scoreGoalId = `${trackGoalSlug(this.currentTrackId)}-score`
     this.goalSystem.updateGoal(scoreGoalId, currentScore)
   }
 

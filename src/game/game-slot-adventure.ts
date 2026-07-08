@@ -19,6 +19,7 @@ import type { AdventureGoalTracker } from '../game-elements/adventure-goal-track
 import type { AdventureProgressionSupervisor } from '../game-elements/adventure-progression-supervisor'
 
 import type { TableMapManager } from './game-maps'
+import type { LevelLoader } from './level-loader'
 
 export interface SlotAdventureHost {
   readonly display: DisplaySystem | null
@@ -42,6 +43,7 @@ export interface SlotAdventureHost {
   readonly adventureGoalTracker: AdventureGoalTracker | null
   readonly adventureProgressionSupervisor: AdventureProgressionSupervisor | null
   readonly physicsController: { rebuildHandleCaches(): void } | null
+  readonly levelLoader: LevelLoader | null
 
   updateHUD(): void
   getBallPosition(): import('@babylonjs/core').Vector3 | null
@@ -57,6 +59,7 @@ export class GameSlotAdventure {
 
   private static readonly TRACK_ORDER: AdventureTrackType[] = [
     AdventureTrackType.NEON_HELIX,
+    AdventureTrackType.PACHINKO_HALL,
     AdventureTrackType.CYBER_CORE,
     AdventureTrackType.QUANTUM_GRID,
     AdventureTrackType.SINGULARITY_WELL,
@@ -207,11 +210,20 @@ export class GameSlotAdventure {
       return
     }
 
-    const success = this.host.adventureMode.switchToTrack(trackType)
-    if (!success) return
-    // rebuildHandleCaches() is called exactly once here.  The onTrackAdvanced
-    // callback in GameSystemsInitializer must NOT call it again.
-    this.host.physicsController?.rebuildHandleCaches()
+    // Canonical load path: LevelLoader tears down old track, applies A/B map + mode, builds new geometry.
+    const loader = this.host.levelLoader
+    if (loader) {
+      const result = loader.loadCampaignTrack(trackId, { resetBallToPlunger: false })
+      if (!result.success) {
+        console.warn(`[GameSlotAdventure] Campaign track load failed: ${result.error}`)
+        return
+      }
+    } else {
+      const success = this.host.adventureMode.switchToTrack(trackType)
+      if (!success) return
+      this.host.physicsController?.rebuildHandleCaches()
+      getTrackThemingSystem()?.applyTheme(trackType)
+    }
 
     // Keep the manual-cycling cursor in sync so cycleAdventureTrack() starts
     // from the correct position after a portal jump, not a stale pre-jump value.
@@ -239,7 +251,6 @@ export class GameSlotAdventure {
     }
     this.host.display?.setTrackInfo(trackName)
     this.host.display?.setStoryText(`ENTERING: ${trackName}`)
-    getTrackThemingSystem()?.applyTheme(trackType)
   }
 
   endAdventureMode(): void {

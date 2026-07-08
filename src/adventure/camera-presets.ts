@@ -27,6 +27,22 @@ export const CAMERA_PRESETS: Record<string, CameraPreset> = {
     minRadius: 10,
     maxRadius: 35,
   },
+  /** PACHINKO_HALL: Wide parlor vista for pin-lane corridor navigation */
+  PACHINKO_HALL: {
+    alpha: -Math.PI / 2,
+    beta: 1.15, // ~66°
+    radius: 22,
+    fov: 0.88,
+    lookAheadTime: 0.45,
+    trackingSmoothing: 5.0,
+    speedRadiusFactor: 0.2,
+    speedFOVFactor: 0.006,
+    maxRadiusExtension: 10,
+    minBeta: 0.9,
+    maxBeta: 1.35,
+    minRadius: 14,
+    maxRadius: 40,
+  },
   /** CYBER_CORE: Steeper angle for vertical descent sections */
   CYBER_CORE: {
     alpha: -Math.PI / 2,

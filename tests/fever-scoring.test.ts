@@ -65,9 +65,9 @@ describe('getFeverScoreMultiplier', () => {
     )
 
     expect(feverAdjustedMember).toBe(600)
-    expect(feverAdjustedMember * swarmSize).toBe(2400)
-    expect(quickCollectBase).toBe(1800)
-    expect(feverAdjustedQuickCollect).toBe(3600)
-    expect((feverAdjustedMember * swarmSize) + feverAdjustedQuickCollect).toBe(6000)
+    expect(feverAdjustedMember * swarmSize).toBe(3000)
+    expect(quickCollectBase).toBe(3000)
+    expect(feverAdjustedQuickCollect).toBe(6000)
+    expect((feverAdjustedMember * swarmSize) + feverAdjustedQuickCollect).toBe(9000)
   })
 })

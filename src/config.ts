@@ -327,6 +327,15 @@ export interface GameTuning {
     jackpotBonus: number
     adventureEndBonus: number
   }
+  obstacle: {
+    spinnerHitBase: number
+    trapCatchBase: number
+    trapReleaseBase: number
+    trapTimeoutReleaseBase: number
+    launcherFireBase: number
+    launcherTriggerBase: number
+    gateOpenBase: number
+  }
   combo: {
     feverThreshold: number
     expirySeconds: number
@@ -387,9 +396,18 @@ export const GAME_TUNING = {
     jackpotBonus: 100000,
     adventureEndBonus: 5000,
   },
+  obstacle: {
+    spinnerHitBase: 150,
+    trapCatchBase: 75,
+    trapReleaseBase: 200,
+    trapTimeoutReleaseBase: 120,
+    launcherFireBase: 60,
+    launcherTriggerBase: 90,
+    gateOpenBase: 35,
+  },
   combo: {
-    feverThreshold: 10,
-    expirySeconds: 1.5,
+    feverThreshold: 12,
+    expirySeconds: 2.0,
     multiplierDivisor: 3,
     chainWindowSeconds: 4,
     chainDistinctThreshold: 3,
@@ -411,7 +429,7 @@ export const GAME_TUNING = {
     ],
   },
   timing: {
-    nudgeCooldownMs: 500,
+    nudgeCooldownMs: 450,
     storyVideoWaitMs: 3000,
     tiltBloomResetMs: 1000,
     idleCallbackTimeoutMs: 500,
@@ -424,18 +442,18 @@ export const GAME_TUNING = {
     drainGraceMs: 4000,
   },
   feedback: {
-    comboWindowSeconds: 2.5,
+    comboWindowSeconds: 2.8,
     comboHitsPerMultiplier: 2,
-    comboMaxMultiplier: 5,
+    comboMaxMultiplier: 6,
     ballSaveGraceSeconds: 7,
     bonusTallyComboPeakBase: 250,
     bonusTallyAnimationMs: 1500,
   },
   goldBall: {
-    // Second consecutive gold ball within 5 s earns 1.5×, third 2×, etc., capped at 4×.
-    streakWindowSeconds: 5,
-    streakPerBallBonus: 0.5,
-    streakMaxMultiplier: 4,
+    // Second consecutive gold ball within 5 s earns 1.5×, third 2×, etc., capped at 5×.
+    streakWindowSeconds: 5.5,
+    streakPerBallBonus: 0.55,
+    streakMaxMultiplier: 5,
   },
 } as const satisfies GameTuning
 
@@ -546,9 +564,9 @@ export const GameConfig = {
     uMapBlend: 0.5,
   },
   physics: {
-    ballRestitution: 0.78,
-    ballFriction: 0.12,
-    bumperRestitution: 0.92, // Increased for snappier bounce and "pop"
+    ballRestitution: 0.76,
+    ballFriction: 0.14,
+    bumperRestitution: 0.94,
     // Surface-specific physics for advanced ball mechanics
     surfaces: {
       bumper: { restitution: 0.95, friction: 0.05 }, // High bounce, low grip
@@ -587,16 +605,16 @@ export const GameConfig = {
     wedgeThickness: 0.5,
 
     // THE SOURCE OF TRUTH:
-    flipperStrength: 25000
+    flipperStrength: 32000
   },
 
   ball: {
     radius: 0.25,
     mass: 1.0,
-    friction: 0.12,        // Slightly higher friction for better control
-    restitution: 0.78,     // Balanced bounciness (0.75-0.85 range)
-    linearDamping: 0.08,   // Natural roll decay for realistic ball motion
-    angularDamping: 0.15,  // Spin decay for realistic ball rotation
+    friction: 0.14,
+    restitution: 0.76,
+    linearDamping: 0.10,
+    angularDamping: 0.18,
     // Plain Objects for Spawn Points
     spawnMain: { x: 10.5, y: 0.5, z: -9 },
     spawnPachinko: { x: 0, y: 5, z: -10 }, // Ported from original
@@ -609,35 +627,22 @@ export const GameConfig = {
     //   and gold-threshold multiball progression individually.
     // - Scoring stack is: member base -> streak -> fever -> quick-collect bonus
     //   -> combo/multiball. Quick-collect receives fever, but not streak.
-    // - swarmSize=4 and basePoints=300 are the accepted baseline: one
-    //   gold-plated swarm is 1200 base points before fever/quick/combo bonuses.
-    // - Solid-gold swarms keep SOLID_GOLD point tier per member, but jackpot
-    //   presentation is one-shot on the final collected swarm member.
-    // Enable small gold ball swarms instead of single heavy balls
+    // - swarmSize=5 and basePoints=300: one gold-plated swarm is 1500 base before bonuses.
     enabled: true,
-    // Number of small balls to spawn per gold ball trigger
-    swarmSize: 4,
-    // Size multiplier for small balls (0.0–1.0 of normal ball size)
-    sizeMultiplier: 0.5,
-    // Mass multiplier (lighter for more chaotic behavior)
-    massMultiplier: 0.35,
-    // Physics for small gold balls
-    restitution: 0.92,     // Bouncier than regular balls
-    friction: 0.08,        // Lower friction for faster movement
-    linearDamping: 0.05,   // Less damping for longer flights
-    angularDamping: 0.10,  // Less spin decay
-    // Spawn spread velocity range (m/s)
-    spawnVelocityMin: 3.0,
-    spawnVelocityMax: 8.0,
-    // Lifetime before auto-despawn (seconds)
-    lifetime: 15.0,
-    // Maximum concurrent swarms (safety limit)
-    maxConcurrentBalls: 20,
-    // Points per small ball
+    swarmSize: 5,
+    sizeMultiplier: 0.48,
+    massMultiplier: 0.32,
+    restitution: 0.94,
+    friction: 0.07,
+    linearDamping: 0.06,
+    angularDamping: 0.09,
+    spawnVelocityMin: 4.0,
+    spawnVelocityMax: 9.5,
+    lifetime: 12.0,
+    maxConcurrentBalls: 24,
     basePoints: 300,
-    // Bonus multiplier if all collected quickly
-    quickCollectBonusWindow: 5.0, // seconds
-    quickCollectMultiplier: 1.5,
+    quickCollectBonusWindow: 4.0,
+    quickCollectMultiplier: 2.0,
   },
 
   plunger: {
@@ -646,9 +651,9 @@ export const GameConfig = {
     /** Max charge time in milliseconds to reach full power */
     maxChargeTime: 1500,
     /** Minimum impulse magnitude (instant tap) */
-    minImpulse: 12,
+    minImpulse: 14,
     /** Maximum impulse magnitude (full charge) */
-    maxImpulse: 38,
+    maxImpulse: 36,
     /** Visual pullback distance for plunger animation */
     maxPullbackDistance: 2.0,
     /** How far past rest the plunger overshoots on release (visual spring effect, world units) */
@@ -660,22 +665,18 @@ export const GameConfig = {
   },
 
   nudge: {
-    force: 0.6,           // Base nudge force
-    verticalBoost: 0.3,   // Slight upward component
+    force: 0.72,
+    verticalBoost: 0.22,
     maxTiltWarnings: 3,   // Warnings before tilt
     tiltDecayTime: 2000,  // Milliseconds to decay warning
     tiltPenaltyTime: 3000, // Milliseconds tilt stays active
   },
 
   flipper: {
-// Flipper physics tuning — extracted from game-input-actions.ts
-    // Motor angles (radians)
-    restAngle: Math.PI / 4,        // 45° — flipper at rest
-    activeAngle: Math.PI / 8,      // 22.5° — flipper raised
-    // Impulse variation on hit
-    kickVariation: 0.15,
-    // Damping for motor control
-    damping: 1000,
+    restAngle: Math.PI / 4,
+    activeAngle: Math.PI / 8,
+    kickVariation: 0.12,
+    damping: 850,
   },
 
   camera: {
@@ -774,35 +775,48 @@ export const PhysicsConfig = {
   ball: {
     radius: 0.25,
     mass: 1.0,
-    restitution: 0.78,
-    friction: 0.12,
-    linearDamping: 0.08,
-    angularDamping: 0.15,
+    restitution: 0.76,
+    friction: 0.14,
+    linearDamping: 0.10,
+    angularDamping: 0.18,
     resetImpulse: { x: 0, y: 0, z: 2.5 },
   },
   flipper: {
-    stiffness: 25000,
-    damping: 1000,
+    stiffness: 32000,
+    damping: 850,
     restAngleRad: Math.PI / 4,
     activeAngleRad: Math.PI / 8,
-    kickVariation: 0.15,
-    holdTimeDivisor: 0.3,
+    kickVariation: 0.12,
+    holdTimeDivisor: 0.28,
+    kickImpulseScale: 2.8,
     leftLimits: [-Math.PI / 6, Math.PI / 4] as [number, number],
     rightLimits: [-Math.PI / 4, Math.PI / 6] as [number, number],
-    restitution: 0.88,
-    friction: 0.1,
+    restitution: 0.90,
+    friction: 0.08,
   },
   bumper: {
-    restitution: 0.92,
+    restitution: 0.94,
+  },
+  spinner: {
+    targetSpeed: 18,
+    acceleration: 32,
+    deceleration: 9,
+    hitFlashSeconds: 0.22,
+  },
+  trap: {
+    holdDuration: 1.5,
+    releaseBoost: 18,
+    catchRestitution: 0.55,
   },
   plunger: {
-    minImpulse: 10,
-    maxImpulse: 35,
+    minImpulse: 14,
+    maxImpulse: 36,
     maxChargeTimeMs: 1500,
+    chargeCurveExponent: 1.25,
   },
   nudge: {
-    force: 0.6,
-    verticalBoost: 0.3,
+    force: 0.72,
+    verticalBoost: 0.22,
     vectorLeft: { x: -0.6, y: 0, z: 0.3 },
     vectorRight: { x: 0.6, y: 0, z: 0.3 },
     vectorForward: { x: 0, y: 0, z: 0.8 },
