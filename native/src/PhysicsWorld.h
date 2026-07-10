@@ -62,6 +62,12 @@ public:
   /** Set the world-space velocity of a body directly. */
   void setVelocity(int id, float vx, float vy, float vz);
 
+  /** Directly set the world-space position of a body. */
+  void setBodyPosition(int id, float px, float py, float pz);
+
+  /** Directly set the world-space rotation of a body. */
+  void setBodyRotation(int id, float qx, float qy, float qz, float qw);
+
   // ---- Static geometry ------------------------------------------------
 
   /** Add a static infinite half-space plane. */

@@ -32,12 +32,13 @@ import { ComboMultiplierSystem } from '../game-elements/combo-multiplier-system'
 import { BonusTallySystem } from '../game-elements/bonus-tally-system'
 import { GoldBallStreakSystem } from '../game-elements/gold-ball-streak-system'
 import type { SpinnerBumperBuilder, SpinnerBumperVisual, BallTrapBuilder, BallTrapState, LauncherBuilder, LauncherState, MovingGateBuilder, MovingGateState } from '../objects'
-import { BallType, BALL_SPAWN_CONFIG, GAME_TUNING, GameConfig, PhysicsConfig } from '../config'
+import { BallType, BALL_SPAWN_CONFIG, GAME_TUNING, GameConfig, PhysicsConfig, WASM_PHYSICS } from '../config'
 import { getPhysicsTuningValue } from '../game-elements/physics-tuning'
 import { DisplayState } from '../game-elements'
 import { TABLE_MAPS } from '../shaders/lcd-table'
 import { PALETTE, CameraMode } from '../game-elements'
 import { QualityTier } from '../game-elements/visual-language'
+import { WasmPhysicsEngine, type WasmContactEvent } from '../wasm'
 
 export interface PhysicsHost {
   readonly engine: import('@babylonjs/core').Engine | import('@babylonjs/core').WebGPUEngine
@@ -142,6 +143,9 @@ export class GamePhysicsController {
   private spinnerHandleSet: Set<number> = new Set()
   private bumperVisualMap: Map<number, BumperVisual> = new Map()
   private deathZoneHandle: number = -1
+
+  /** WASM mirror for the ball+bumper subset. Only active when the flag is on. */
+  private wasmMirror: WasmMirror | null = null
 
   // Per-ball scoring coverage instrumentation (reset on launch; for debug/audit)
   private bumperHitsThisBall = 0
@@ -269,6 +273,15 @@ export class GamePhysicsController {
         this.resetBallScoreCounters()
       })
     )
+
+    // Route WASM contact events to the same dispatcher used for Rapier collisions.
+    // The wrapper already emits these on the EventBus; we just map WASM IDs back to
+    // the Rapier bodies that the scoring/effects code expects.
+    this.eventBusUnsubscribers.push(
+      host.eventBus.on('wasm:physics:contact', (evt) => {
+        this.onWasmContact(evt)
+      })
+    )
   }
 
   /** Clean up EventBus subscriptions. Must be called when the controller is torn down. */
@@ -329,6 +342,27 @@ export class GamePhysicsController {
       ? this.host.adventureMode.getSensor()
       : null
     this.adventureSensorHandle = adventureSensor ? adventureSensor.handle : -1
+
+    // Rebuild the WASM mirror whenever the handle caches are rebuilt. This keeps
+    // the WASM world in sync with ball spawns/drains and bumper state changes.
+    if (this.host.physics.isWasmActive?.()) {
+      const engine = this.host.physics.getWasmEngine?.()
+      if (engine) {
+        if (!this.wasmMirror) {
+          this.wasmMirror = new WasmMirror(engine)
+        }
+        this.wasmMirror.rebuild(
+          this.host.ballManager?.getBallBodies() || [],
+          this.host.gameObjects?.getBumperBodies() || [],
+          this.host.gameObjects?.getBumperVisuals() || []
+        )
+        engine.init(this.host.eventBus)
+      }
+    } else {
+      this.wasmMirror?.clear()
+      this.wasmMirror = null
+    }
+
     // Portal sensor handles are registered/unregistered dynamically via
     // registerPortalSensor / unregisterPortalSensor and are intentionally NOT
     // reset here — portals may already be active when the cache is rebuilt.
@@ -518,6 +552,12 @@ export class GamePhysicsController {
     // is at the correct position when Rapier integrates contacts).
     inputActions?.updatePlungerFrame?.(Math.min(rawDt, 1 / 30))
 
+    const wasmActive = this.host.physics.isWasmActive?.() ?? false
+    if (wasmActive) {
+      // Push current Rapier ball/bumper poses into the WASM world before stepping.
+      this.wasmMirror?.syncToWasm()
+    }
+
     const alpha = this.host.physics.step(rawDt, (h1, h2, start) => {
       if (!start) return
       const pairKey = h1 < h2 ? `${h1}_${h2}` : `${h2}_${h1}`
@@ -541,6 +581,12 @@ export class GamePhysicsController {
     }, (h1, h2, maxForce) => {
       this.processContactForce(h1, h2, maxForce)
     })
+
+    if (wasmActive) {
+      // Pull the WASM-simulated ball poses back into Rapier so mesh sync and scoring
+      // see the new state.
+      this.wasmMirror?.syncFromWasm(this.host.physics.getRapier())
+    }
 
     // Skip interpolation on LOW quality tier — render at the raw post-step pose.
     this.syncMeshes(this.host.qualityTier === QualityTier.LOW ? 1 : alpha)
@@ -708,6 +754,43 @@ export class GamePhysicsController {
     const b2 = world.getRigidBody(bh2)
     if (!b1 || !b2) return
 
+    this.processCollisionBodies(b1, b2, bh1, bh2)
+  }
+
+  /**
+   * Handles contacts that originated in the WASM engine. The wrapper already emits
+   * these on the EventBus as 'wasm:physics:contact'; we just map WASM IDs back to
+   * the Rapier bodies that the rest of the game understands.
+   */
+  private onWasmContact(evt: WasmContactEvent): void {
+    if (!this.wasmMirror) return
+
+    const b1 = this.wasmMirror.getRapierBody(evt.bodyId1)
+    const b2 = this.wasmMirror.getRapierBody(evt.bodyId2)
+    if (!b1 || !b2) return
+
+    // Apply the same pair debounce used for Rapier collision events.
+    const pairKey = b1.handle < b2.handle ? `${b1.handle}_${b2.handle}` : `${b2.handle}_${b1.handle}`
+    const now = performance.now()
+    const lastTime = this.lastCollisionTime.get(pairKey) || 0
+    if (now - lastTime < GamePhysicsController.COLLISION_DEBOUNCE_MS) return
+    this.lastCollisionTime.set(pairKey, now)
+
+    this.rawCollisionEvents++
+    this.processCollisionBodies(b1, b2, b1.handle, b2.handle)
+  }
+
+  /**
+   * Core obstacle/ball dispatch logic. Called both from the Rapier collider→body
+   * path and from the WASM contact path, so the scoring/effects branches stay
+   * identical regardless of backend.
+   */
+  private processCollisionBodies(
+    b1: RAPIER.RigidBody,
+    b2: RAPIER.RigidBody,
+    bh1: number,
+    bh2: number
+  ): void {
     // Pre-flight guards — special non-obstacle handles (now in body-handle space)
     // Exit-portal sensors: contact is handled by intersectionPair queries in
     // AdventureMode.updateExitPortal(); skip here to avoid misrouting.
@@ -1512,5 +1595,114 @@ export class GamePhysicsController {
       ),
       true
     )
+  }
+}
+
+/**
+ * WasmMirror — keeps a small WASM physics world in sync with the Rapier ball and
+ * bumper bodies so the C++ engine can simulate the ball+bumper subset while the
+ * rest of the game continues to use the original Rapier bodies/handles.
+ */
+class WasmMirror {
+  private engine: WasmPhysicsEngine
+  private rapierToWasm = new Map<RAPIER.RigidBody, number>()
+  private wasmToRapier = new Map<number, RAPIER.RigidBody>()
+  private bumperRadius = new Map<RAPIER.RigidBody, number>()
+  private groundAdded = false
+
+  constructor(engine: WasmPhysicsEngine) {
+    this.engine = engine
+  }
+
+  clear(): void {
+    for (const id of this.rapierToWasm.values()) {
+      this.engine.removeBody(id)
+    }
+    this.rapierToWasm.clear()
+    this.wasmToRapier.clear()
+    this.bumperRadius.clear()
+    this.groundAdded = false
+  }
+
+  rebuild(
+    ballBodies: RAPIER.RigidBody[],
+    bumperBodies: RAPIER.RigidBody[],
+    bumperVisuals: BumperVisual[]
+  ): void {
+    this.clear()
+
+    const plane = WASM_PHYSICS.tunables.groundPlane
+    if (!this.groundAdded) {
+      this.engine.addStaticPlane({ x: plane.normal.x, y: plane.normal.y, z: plane.normal.z }, plane.distance)
+      this.groundAdded = true
+    }
+
+    // Map bumper visuals by body handle so we can recover the original scale/radius.
+    const visualByBody = new Map<number, BumperVisual>()
+    for (const vis of bumperVisuals) {
+      visualByBody.set(vis.body.handle, vis)
+    }
+
+    for (const body of bumperBodies) {
+      const vis = visualByBody.get(body.handle)
+      const scale = vis ? vis.mesh.scaling.x : 1.0
+      const radius = 0.4 * scale
+      const id = this.engine.createBody({
+        position: body.translation(),
+        velocity: { x: 0, y: 0, z: 0 },
+        mass: 0,
+        radius,
+        restitution: PhysicsConfig.bumper.restitution,
+        linearDamping: 0,
+        bodyType: 1, // Static
+      })
+      this.track(body, id)
+      this.bumperRadius.set(body, radius)
+    }
+
+    for (const body of ballBodies) {
+      const id = this.engine.createBody({
+        position: body.translation(),
+        velocity: body.linvel(),
+        mass: GameConfig.ball.mass,
+        radius: GameConfig.ball.radius,
+        restitution: PhysicsConfig.ball.restitution,
+        linearDamping: PhysicsConfig.ball.linearDamping,
+        bodyType: 0, // Dynamic
+      })
+      this.track(body, id)
+    }
+  }
+
+  syncToWasm(): void {
+    for (const [body, id] of this.rapierToWasm) {
+      const pos = body.translation()
+      this.engine.setBodyPosition(id, pos.x, pos.y, pos.z)
+      // Only dynamic bodies get velocity synced; bumpers are static.
+      if (!this.bumperRadius.has(body)) {
+        const vel = body.linvel()
+        this.engine.setVelocity(id, vel.x, vel.y, vel.z)
+      }
+    }
+  }
+
+  syncFromWasm(rapier: typeof RAPIER | null): void {
+    if (!rapier) return
+    for (const [body, id] of this.rapierToWasm) {
+      if (this.bumperRadius.has(body)) continue
+      const pos = this.engine.getPosition(id)
+      const vel = this.engine.getVelocity(id)
+      body.setTranslation(new rapier.Vector3(pos.x, pos.y, pos.z), true)
+      body.setLinvel(new rapier.Vector3(vel.x, vel.y, vel.z), true)
+    }
+  }
+
+  getRapierBody(wasmId: number): RAPIER.RigidBody | undefined {
+    return this.wasmToRapier.get(wasmId)
+  }
+
+  private track(body: RAPIER.RigidBody, id: number): void {
+    this.rapierToWasm.set(body, id)
+    this.wasmToRapier.set(id, body)
   }
 }

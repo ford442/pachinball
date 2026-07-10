@@ -45,6 +45,16 @@ void PhysicsWorld::setVelocity(int id, float vx, float vy, float vz) {
   if (b) b->setVelocity({vx, vy, vz});
 }
 
+void PhysicsWorld::setBodyPosition(int id, float px, float py, float pz) {
+  RigidBody* b = findBody(id);
+  if (b) b->setPosition({px, py, pz});
+}
+
+void PhysicsWorld::setBodyRotation(int id, float qx, float qy, float qz, float qw) {
+  RigidBody* b = findBody(id);
+  if (b) b->setRotation({qx, qy, qz, qw});
+}
+
 // ---- Static geometry ----------------------------------------------------
 
 void PhysicsWorld::addStaticPlane(float nx, float ny, float nz, float distance) {

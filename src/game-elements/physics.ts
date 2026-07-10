@@ -1,4 +1,6 @@
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import { WASM_PHYSICS, getPhysicsEnginePreference } from '../config'
+import { WasmPhysicsEngine } from '../wasm'
 
 // Gravity: -Y (down), -Z (roll towards player)
 export const GRAVITY = { x: 0, y: -9.81, z: -5.0 }
@@ -79,6 +81,10 @@ export class PhysicsSystem {
   private eventQueue: RAPIER.EventQueue | null = null
   private stepCount = 0
 
+  /** WASM backend, only active when the feature flag is set and the bundle loads. */
+  private wasmEngine: WasmPhysicsEngine | null = null
+  private wasmActive = false
+
   /** Accumulator for fixed timestep */
   private accumulator = 0
 
@@ -92,7 +98,7 @@ export class PhysicsSystem {
 
   async init(): Promise<void> {
     if (this.rapier && this.world) return
-    
+
     // Fallback: load Rapier here if not preloaded (backward compatibility)
     if (!this.rapier) {
       this.rapier = await import('@dimforge/rapier3d-compat')
@@ -112,6 +118,20 @@ export class PhysicsSystem {
     this.world.integrationParameters.contactSkin = 0.005
 
     this.eventQueue = new this.rapier.EventQueue(true)
+
+    // Optionally activate the WASM physics backend behind a localStorage flag.
+    // The Rapier world is still created so the rest of the game can query bodies/colliders.
+    if (WASM_PHYSICS.enabled && getPhysicsEnginePreference() === 'wasm') {
+      const engine = new WasmPhysicsEngine()
+      await engine.load(WASM_PHYSICS.bundleUrl)
+      if (engine.isReady) {
+        engine.setGravity(GRAVITY.x, GRAVITY.y, GRAVITY.z)
+        this.wasmEngine = engine
+        this.wasmActive = true
+      } else {
+        console.warn('[PhysicsSystem] WASM physics bundle failed to load; falling back to Rapier.')
+      }
+    }
   }
 
   getWorld(): RAPIER.World {
@@ -128,6 +148,16 @@ export class PhysicsSystem {
 
   getEventQueue(): RAPIER.EventQueue | null {
     return this.eventQueue
+  }
+
+  /** True when the WASM backend is active and ready. */
+  isWasmActive(): boolean {
+    return this.wasmActive && this.wasmEngine?.isReady === true
+  }
+
+  /** Access the WASM engine (for sync/registration by the controller). */
+  getWasmEngine(): WasmPhysicsEngine | null {
+    return this.wasmEngine
   }
 
   /**
@@ -175,6 +205,12 @@ export class PhysicsSystem {
     callback: (handle1: number, handle2: number, started: boolean) => void,
     forceCallback?: ContactForceCallback
   ): number {
+    // WASM backend: step the custom engine and let its EventBus contact callback
+    // handle dispatch. The Rapier world is not advanced in this mode.
+    if (this.wasmActive && this.wasmEngine?.isReady) {
+      return this.wasmEngine.step(rawDt)
+    }
+
     if (!this.world || !this.eventQueue) return 0
 
     // DT clamping: prevent physics explosions during lag spikes
@@ -203,6 +239,9 @@ export class PhysicsSystem {
   }
 
   dispose(): void {
+    this.wasmEngine?.dispose()
+    this.wasmEngine = null
+    this.wasmActive = false
     this.world?.free()
   }
 }

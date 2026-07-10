@@ -171,6 +171,16 @@ export class WasmPhysicsEngine {
     this.world?.setVelocity(id, vx, vy, vz)
   }
 
+  /** Directly set the position of a body (used for Rapier↔WASM sync). */
+  setBodyPosition(id: number, px: number, py: number, pz: number): void {
+    this.world?.setBodyPosition(id, px, py, pz)
+  }
+
+  /** Directly set the rotation of a body (used for Rapier↔WASM sync). */
+  setBodyRotation(id: number, qx: number, qy: number, qz: number, qw: number): void {
+    this.world?.setBodyRotation(id, qx, qy, qz, qw)
+  }
+
   // ---- Transform queries -----------------------------------------------
 
   getPosition(id: number): { x: number; y: number; z: number } {

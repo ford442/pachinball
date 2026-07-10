@@ -100,6 +100,8 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("applyForce",   &PhysicsWorld::applyForce)
     .function("applyImpulse", &PhysicsWorld::applyImpulse)
     .function("setVelocity",  &PhysicsWorld::setVelocity)
+    .function("setBodyPosition", &PhysicsWorld::setBodyPosition)
+    .function("setBodyRotation", &PhysicsWorld::setBodyRotation)
 
     // Static geometry
     .function("addStaticPlane", &PhysicsWorld::addStaticPlane)

@@ -64,6 +64,12 @@ export interface WasmPhysicsWorldInstance {
   /** Directly set the velocity of a body. */
   setVelocity(id: number, vx: number, vy: number, vz: number): void
 
+  /** Directly set the position of a body. */
+  setBodyPosition(id: number, px: number, py: number, pz: number): void
+
+  /** Directly set the rotation of a body. */
+  setBodyRotation(id: number, qx: number, qy: number, qz: number, qw: number): void
+
   /** Add an infinite static plane defined by a normal + d offset. */
   addStaticPlane(nx: number, ny: number, nz: number, distance: number): void
 

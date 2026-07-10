@@ -833,3 +833,33 @@ export const PhysicsConfig = {
 } as const
 
 export type PhysicsConfigType = typeof PhysicsConfig
+
+/**
+ * WASM Physics Engine feature flag configuration.
+ * Reads from localStorage at runtime; defaults to Rapier.
+ */
+export const WASM_PHYSICS = {
+  flagKey: 'pachinball:physics-engine',
+  defaultEngine: 'rapier',
+  allowedEngines: ['rapier', 'wasm'] as const,
+  bundleUrl: './wasm/PhysicsModule.js',
+  enabled: true,
+  tunables: {
+    fixedTimestep: 1 / 60,
+    maxSubsteps: 8,
+    solverIterations: 4,
+    groundPlane: { normal: { x: 0, y: 1, z: 0 }, distance: 0 },
+  },
+} as const
+
+export type WasmPhysicsEnginePreference = (typeof WASM_PHYSICS.allowedEngines)[number]
+
+export function getPhysicsEnginePreference(): WasmPhysicsEnginePreference {
+  try {
+    const v = localStorage.getItem(WASM_PHYSICS.flagKey)
+    if (v === 'wasm') return 'wasm'
+  } catch {
+    // ignore localStorage errors (e.g. disabled storage)
+  }
+  return WASM_PHYSICS.defaultEngine as WasmPhysicsEnginePreference
+}
