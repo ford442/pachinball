@@ -183,6 +183,7 @@ export class EffectsSystem {
   // Fresnel rim effect tracking
   private activeRims = new Map<AbstractMesh, RimHandle>()
   private _rimEventUnsubscribers: Array<() => void> = []
+  private _eventBus: EventBus | null = null
   // Pre-allocated Color3 for FEVER rim colour (avoid per-call allocation)
   private readonly _feverRimColor: Color3 = Color3.FromHexString(STATE_COLORS.FEVER)
 
@@ -495,8 +496,7 @@ export class EffectsSystem {
     this.isJackpotActive = true
     this.jackpotTimer = 0
     this.jackpotPhase = 1
-    // Phase 1 entry: deep sub-bass + alarm siren
-    this.playJackpotAlarm()
+    this._eventBus?.emit('jackpot:phase', { phase: 1 })
   }
 
   /**
@@ -509,22 +509,20 @@ export class EffectsSystem {
   updateJackpotSequence(dt: number): void {
     if (!this.isJackpotActive) return
 
-    const prevPhase = this.jackpotPhase
     this.jackpotTimer += dt
 
     // Phase 1: Breach (0-2s)
     if (this.jackpotTimer < 2.0) {
-      this.jackpotPhase = 1
-      if (prevPhase !== 1) {
-        // Ensure alarm is audible at the very start of phase 1
-        this.playJackpotAlarm()
+      if (this.jackpotPhase !== 1) {
+        this.jackpotPhase = 1
+        this._eventBus?.emit('jackpot:phase', { phase: 1 })
       }
     }
     // Phase 2: Critical Error (2-5s)
     else if (this.jackpotTimer < 5.0) {
-      this.jackpotPhase = 2
-      if (prevPhase !== 2) {
-        this.playJackpotTurbine(2.8)
+      if (this.jackpotPhase !== 2) {
+        this.jackpotPhase = 2
+        this._eventBus?.emit('jackpot:phase', { phase: 2 })
         // Digital "countdown" beeps (lightweight proxy)
         setTimeout(() => this.playBeep(880), 300)
         setTimeout(() => this.playBeep(880), 900)
@@ -535,13 +533,11 @@ export class EffectsSystem {
     else if (this.jackpotTimer < 10.0) {
       if (this.jackpotPhase !== 3) {
         this.jackpotPhase = 3
-        this.playJackpotExplosion()
+        this._eventBus?.emit('jackpot:phase', { phase: 3 })
         // Gold particle bursts
         this.spawnJackpotBurst(new Vector3(0, 5, 6))
         this.spawnJackpotBurst(new Vector3(-2, 4, 3))
         this.spawnJackpotBurst(new Vector3(3, 7, 1))
-        // Extra impact layer
-        this.audioEffects?.playSlotJackpot()
       } else if (Math.random() < 0.08) {
         // Occasional extra bursts during meltdown
         this.spawnJackpotBurst(new Vector3((Math.random() - 0.5) * 8, 3 + Math.random() * 5, 2 + Math.random() * 6))
@@ -1121,6 +1117,7 @@ export class EffectsSystem {
     // Unsubscribe any previous listeners (idempotent re-wiring)
     for (const unsub of this._rimEventUnsubscribers) unsub()
     this._rimEventUnsubscribers = []
+    this._eventBus = eventBus
 
     this._rimEventUnsubscribers.push(
       eventBus.on('fever:start', () => {

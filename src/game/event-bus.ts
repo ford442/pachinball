@@ -34,6 +34,7 @@ export interface PachinballEventMap {
   'fever:end': void
   'jackpot:start': void
   'jackpot:end': void
+  'jackpot:phase': { phase: number }
   'reach:start': void
   'reach:end': void
   'adventure:start': void

@@ -162,4 +162,45 @@ describe('SoundSystem', () => {
       expect(secondPeak).toBeGreaterThan(firstPeak)
     })
   })
+
+  describe('playJackpotPhase', () => {
+    it('dedupes repeated phase triggers', () => {
+      const mockCreateBufferSource = vi.fn().mockReturnValue({
+        buffer: null,
+        playbackRate: { value: 1 },
+        connect: vi.fn(),
+        start: vi.fn(),
+        onended: null,
+      })
+
+      const mockAudioContext = {
+        sampleRate: 48000,
+        createGain: vi.fn().mockReturnValue({
+          gain: { value: 1 },
+          connect: vi.fn(),
+        }),
+        createBufferSource: mockCreateBufferSource,
+        destination: {},
+        state: 'running',
+      } as unknown as AudioContext
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(soundSystem as any).audioContext = mockAudioContext
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(soundSystem as any).sfxGain = mockAudioContext.createGain()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(soundSystem as any).isInitialized = true
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(soundSystem as any).audioSource = 'samples'
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(soundSystem as any).sampleBankReady = true
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(soundSystem as any).localSampleBuffers.set('jackpot-phase1', { duration: 0.5 } as AudioBuffer)
+
+      soundSystem.playJackpotPhase(1)
+      soundSystem.playJackpotPhase(1)
+
+      expect(mockCreateBufferSource).toHaveBeenCalledTimes(1)
+    })
+  })
 })

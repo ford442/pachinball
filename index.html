@@ -143,6 +143,15 @@
             <small>Temporarily silence all audio</small>
           </label>
 
+          <label class="setting-row">
+            <span>Sound Style</span>
+            <select id="audio-source">
+              <option value="samples">Sample bank (arcade)</option>
+              <option value="synth">Synth only (prototype)</option>
+            </select>
+            <small>Sample bank falls back to synth if files are missing</small>
+          </label>
+
           <div id="developer-settings" class="hidden">
             <h3 style="margin-top: 1.5rem; color: #00d9ff; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">Developer</h3>
             <label class="setting-row">
