@@ -2,102 +2,115 @@
 
 ## Project Structure
 
-The codebase has been refactored into a modular architecture for better maintainability and scalability.
+The codebase is organized into focused modules under `src/`. See [`AGENTS.md`](../AGENTS.md) for the full module map and development commands.
 
 ### Main Entry Points
-- `src/main.ts` - Application bootstrap and engine initialization
-- `src/game.ts` - Main game orchestrator class (525 lines)
 
-### Game Elements (`src/game-elements/`)
+| File | Role |
+|------|------|
+| [`src/main.ts`](../src/main.ts) | Application bootstrap — Babylon engine (WebGPU-first), Rapier WASM preload, `Game` instantiation |
+| [`src/game.ts`](../src/game.ts) | Main game orchestrator — wires subsystems, render loop, state machine |
+| [`src/game/game-systems-init.ts`](../src/game/game-systems-init.ts) | Subsystem initialization (physics, adventure, campaign, display, etc.) |
 
-The game logic has been separated into focused modules:
+### Core Subsystems
 
-#### Core Systems
-- **`physics.ts`** (41 lines) - Rapier physics engine integration
-  - Physics world management
-  - Collision event handling
-  - Gravity configuration
+| Module | Role |
+|--------|------|
+| [`src/game-elements/`](../src/game-elements/) | Low-level systems: physics, input, ball manager, zone triggers, campaign progression |
+| [`src/game/`](../src/game/) | High-level managers: state, input routing, maps, cabinet, UI, adventure coordination |
+| [`src/objects/`](../src/objects/) | Playfield geometry: flippers, bumpers, walls, rails, pachinko pins |
+| [`src/display/`](../src/display/) | Backbox display: WGSL reels (WebGPU), Canvas2D fallback, video/image layers |
+| [`src/effects/`](../src/effects/) | Visual/audio effects: bloom spikes, particles, camera shake, lighting |
+| [`src/materials/`](../src/materials/) | PBR material library (quality-tier aware) |
+| [`src/shaders/`](../src/shaders/) | Standalone WGSL/GLSL shaders (scanlines, LCD table, CRT, jackpot overlay) |
+| [`src/cabinet/`](../src/cabinet/) | Cabinet preset geometries (classic, neo, vertical, wide) |
+| [`src/adventure/`](../src/adventure/) | **Canonical** adventure track builders and `AdventureMode` orchestrator |
+| [`src/config.ts`](../src/config.ts) | Pure configuration (no Babylon imports) |
 
-- **`types.ts`** (47 lines) - Shared TypeScript interfaces and enums
-  - GameState, DisplayState enums
-  - PhysicsBinding, BumperVisual, CaughtBall interfaces
-  - Common type definitions
+---
 
-#### Game Object Management
-- **`game-objects.ts`** (424 lines) - Scene objects and physics bodies
-  - Ground, walls, flippers, bumpers
-  - Pachinko field pins
-  - Slingshots and targets
-  - Collision body management
+## Adventure Mode Architecture
 
-- **`ball-manager.ts`** (220 lines) - Ball lifecycle and behavior
-  - Main ball creation and reset
-  - Extra ball spawning
-  - Ball removal and loss handling
-  - Hologram catch mechanics
+Adventure mode has a single canonical construction stack. **Do not recreate legacy builders** — all track geometry lives under `src/adventure/tracks/`.
 
-#### Visual & Display
-- **`display.ts`** (355 lines) - Backbox display and slot machine
-  - WGSL shader reels (WebGPU)
-  - Canvas-based fallback reels
-  - Display states (IDLE, REACH, FEVER)
-  - Overlay and scanline effects
+```mermaid
+flowchart TB
+  subgraph canonical [Canonical - ACTIVE]
+    AdventureMode["src/adventure/adventure-mode.ts"]
+    TrackBuilders["src/adventure/tracks/*.ts"]
+    AdventureTypes["src/adventure/adventure-types.ts"]
+    TrackCatalog["adventure-track-progression.ts\nTRACK_CATALOG"]
+    AdventureMode --> TrackBuilders
+    AdventureMode --> AdventureTypes
+    AdventureMode --> TrackCatalog
+    GameSystemsInit["game-systems-init.ts"] --> AdventureMode
+  end
 
-- **`effects.ts`** (167 lines) - Visual and audio effects
-  - Audio beeps and feedback
-  - Particle system (shards)
-  - Bloom post-processing
-  - Cabinet lighting animations
+  subgraph campaign [Campaign loop]
+    Supervisor["AdventureProgressionSupervisor"]
+    Supervisor --> TrackCatalog
+    ZoneRegistry["zone-registry.ts"] --> AdventureTypes
+  end
 
-#### Input & Modes
-- **`input.ts`** (140 lines) - Player input handling
-  - Keyboard controls
-  - Touch controls
-  - Flipper, plunger, nudge actions
-  - Game state-aware input
-
-- **`adventure-mode.ts`** (152 lines) - Holo-deck adventure mode
-  - Dynamic track generation
-  - Camera management
-  - Mode activation/deactivation
-
-#### Module Exports
-- **`index.ts`** (8 lines) - Central export point for all game elements
-
-## Benefits of This Architecture
-
-1. **Separation of Concerns** - Each module has a single, clear responsibility
-2. **Maintainability** - Smaller files are easier to understand and modify
-3. **Testability** - Isolated modules can be tested independently
-4. **Scalability** - New features can be added without touching core game logic
-5. **Reusability** - Systems can be reused or swapped out easily
-
-## Module Dependencies
-
-```
-game.ts
-  ├── physics.ts
-  ├── display.ts (uses types.ts)
-  ├── effects.ts (uses types.ts)
-  ├── game-objects.ts (uses types.ts, physics)
-  ├── ball-manager.ts (uses types.ts, physics)
-  ├── adventure-mode.ts (uses physics)
-  └── input.ts (uses types.ts)
+  subgraph legacyRuntime [Legacy runtime - level-select only]
+    AdventureState["adventure-state.ts"]
+    LevelSelect["level-select-screen.ts"] --> AdventureState
+  end
 ```
 
-## Adding New Features
+### Module responsibilities
 
-To add new game mechanics:
+| Module | Role |
+|--------|------|
+| [`src/adventure/`](../src/adventure/) | Track builders, `AdventureMode` orchestrator, `AdventureTrackType`, portal routing. **Single entry point** for types, catalog re-exports, and builders via [`index.ts`](../src/adventure/index.ts). |
+| [`src/game-elements/adventure-track-progression.ts`](../src/game-elements/adventure-track-progression.ts) | `TRACK_CATALOG`, `AdventureTrackProgression` — campaign spine metadata (mode type, timers, unlock chain) |
+| [`src/game-elements/adventure-progression-supervisor.ts`](../src/game-elements/adventure-progression-supervisor.ts) | Portal lifecycle + campaign state machine |
+| [`src/game-elements/zone-registry.ts`](../src/game-elements/zone-registry.ts) | Per-track theming / story / music metadata |
+| [`src/game-elements/adventure-state.ts`](../src/game-elements/adventure-state.ts) | **Legacy** level-select UI + cosmetic rewards only — not campaign truth |
+| [`docs/ADVENTURE_CAMPAIGN.md`](ADVENTURE_CAMPAIGN.md) | Campaign A/B alternation reference |
 
-1. Determine which module(s) are affected
-2. Add necessary types to `types.ts` if needed
-3. Implement feature in the appropriate module
-4. Update `game.ts` to orchestrate the new feature
-5. Export new classes/functions from `index.ts` if they're used elsewhere
+### Campaign vs legacy progression
+
+| System | Purpose |
+|--------|---------|
+| `AdventureTrackProgression` + `AdventureProgressionSupervisor` | **Campaign truth** — A/B alternating track loop, portal routing, unlock chain |
+| `AdventureState` + `ADVENTURE_LEVELS` | **Legacy** — free-form level-select screen, cosmetic reward equip (ball trail, skin) |
+
+These are intentionally separated. Do not add campaign features to `AdventureState`.
+
+### Adding a new adventure track
+
+1. Add enum value in [`src/adventure/adventure-types.ts`](../src/adventure/adventure-types.ts)
+2. Add catalog entry in `TRACK_CATALOG` ([`adventure-track-progression.ts`](../src/game-elements/adventure-track-progression.ts))
+3. Create builder in [`src/adventure/tracks/<name>.ts`](../src/adventure/tracks/)
+4. Export builder from [`src/adventure/index.ts`](../src/adventure/index.ts)
+5. Register in `AdventureMode.buildTrack()` switch ([`adventure-mode.ts`](../src/adventure/adventure-mode.ts))
+6. Add zone config in [`zone-registry.ts`](../src/game-elements/zone-registry.ts)
+7. Add portal start anchor in [`portal-routing.ts`](../src/adventure/portal-routing.ts) if needed
+
+---
+
+## Module Dependencies (simplified)
+
+```
+main.ts
+  └── game.ts
+        ├── game-elements/physics.ts
+        ├── display/ (DisplaySystem)
+        ├── effects/ (EffectsSystem)
+        ├── objects/ (GameObjects)
+        ├── game-elements/ball-manager.ts
+        ├── adventure/ (AdventureMode + track builders)
+        ├── game-elements/adventure-track-progression.ts (campaign)
+        └── game-elements/input.ts
+```
+
+---
 
 ## Code Organization Principles
 
-- **Keep modules focused** - Each file should handle one aspect of the game
-- **Use dependency injection** - Pass required dependencies to constructors
-- **Maintain clear interfaces** - Public methods should be well-documented
-- **Minimize coupling** - Modules should depend on interfaces, not implementations
+- **Keep modules focused** — Each file handles one aspect of the game
+- **Use dependency injection** — Pass required dependencies to constructors
+- **Maintain clear interfaces** — Public methods should be well-documented
+- **Minimize coupling** — Modules should depend on interfaces, not implementations
+- **No monolith creep in `game.ts`** — Feature logic belongs in the appropriate subsystem module

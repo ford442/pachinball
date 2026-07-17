@@ -208,6 +208,7 @@ export class Game {
 
   // Map / Adventure
   mapSystem = getMapSystem()
+  // Legacy level-select + cosmetic rewards; campaign truth is adventureTrackProgression.
   adventureState = getAdventureState()
   levelSelectScreen: ReturnType<typeof getLevelSelectScreen> | null = null
   dynamicWorld: ReturnType<typeof getDynamicWorld> | null = null
