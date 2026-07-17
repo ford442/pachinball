@@ -25,8 +25,6 @@ type MeasurementResult = {
   telemetry: ReelsTelemetry
 }
 
-const MIN_SPIN_FRAMES = 1
-
 async function bootGame(page: Page, renderer: 'webgl2' | 'webgpu'): Promise<void> {
   await page.goto(`http://localhost:5173/?renderer=${renderer}`)
   await page.evaluate(() => {
