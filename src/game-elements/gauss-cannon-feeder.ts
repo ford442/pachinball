@@ -186,9 +186,10 @@ export class GaussCannonFeeder {
         }
         // Coil stretch animation during AIM state
         if (this.barrelMesh) {
-          this.coilPulsePhase += dt * 10
+          const anim = this.config.animation
+          this.coilPulsePhase += dt * anim.coilPulseRate
           const chargeProgress = 1 - (this.timer / this.config.aimDuration)
-          const stretch = 1.0 + Math.sin(this.coilPulsePhase) * 0.15 * chargeProgress
+          const stretch = 1.0 + Math.sin(this.coilPulsePhase) * anim.coilStretchAmplitude * chargeProgress
           
           this.barrelMesh.getChildren().forEach((child) => {
             if (child instanceof Mesh && child.name.includes("gaussCoil")) {
@@ -236,8 +237,9 @@ export class GaussCannonFeeder {
 
     // Follow-through: Barrel recoil spring physics (visual-only)
     if (this.barrelMesh && (this.barrelRecoilOffset !== 0 || this.barrelRecoilVelocity !== 0)) {
-      const springStrength = 20.0
-      const damping = 0.7
+      const anim = this.config.animation
+      const springStrength = anim.recoilSpringStrength
+      const damping = anim.recoilDamping
       const targetOffset = 0
 
       const force = (targetOffset - this.barrelRecoilOffset) * springStrength
@@ -253,15 +255,13 @@ export class GaussCannonFeeder {
     if (this.vibrationIntensity > 0 && this.barrelMesh) {
       this.barrelMesh.position.x = (Math.random() - 0.5) * this.vibrationIntensity
       this.barrelMesh.position.z = (Math.random() - 0.5) * this.vibrationIntensity
-      this.vibrationIntensity *= 0.95 // Decay
+      this.vibrationIntensity *= this.config.animation.vibrationDecay
     }
   }
 
   private animateIdle(dt: number): void {
-      // Slow breathing or scanning?
-      // Just sweep slowly
       const speed = this.config.idleSweepRate
-      this.currentAngle += speed * this.aimDirection * dt * 10
+      this.currentAngle += speed * this.aimDirection * dt * this.config.animation.idleSweepScale
       if (this.currentAngle > this.config.maxAngle) {
           this.currentAngle = this.config.maxAngle
           this.aimDirection = -1
@@ -357,17 +357,17 @@ export class GaussCannonFeeder {
         this.setCoilColor(Color3.Blue())
         if (this.light) {
             this.light.diffuse = Color3.Blue()
-            this.light.intensity = 0.5
+            this.light.intensity = this.config.animation.stateLightLoad
         }
         break
 
       case GaussCannonState.AIM:
         this.timer = this.config.aimDuration
-        this.vibrationIntensity = 0.02 // Subtle charging vibration
+        this.vibrationIntensity = this.config.animation.aimVibrationIntensity
         this.setCoilColor(Color3.FromHexString("#FFA500"))
         if (this.light) {
             this.light.diffuse = Color3.FromHexString("#FFA500")
-            this.light.intensity = 1.0
+            this.light.intensity = this.config.animation.stateLightAim
         }
         break
 
@@ -380,7 +380,7 @@ export class GaussCannonFeeder {
         this.timer = this.config.cooldown
         this.setCoilColor(Color3.Red())
         if (this.light) {
-            this.light.intensity = 0.2
+            this.light.intensity = this.config.animation.stateLightCooldown
         }
         break
     }
@@ -423,13 +423,13 @@ export class GaussCannonFeeder {
     this.caughtBall = null
 
     // Follow-through: Barrel recoil kickback and vibration
-    this.barrelRecoilVelocity = 0.5
-    this.vibrationIntensity = 0.3 // Strong vibration on fire
+    this.barrelRecoilVelocity = this.config.animation.fireRecoilImpulse
+    this.vibrationIntensity = this.config.animation.fireVibrationIntensity
 
     // Flash effect
     if (this.light) {
-        this.light.intensity = 5.0
-        setTimeout(() => { if (this.light) this.light.intensity = 0.2 }, 100)
+        this.light.intensity = this.config.animation.fireLightFlashIntensity
+        setTimeout(() => { if (this.light) this.light.intensity = this.config.animation.fireLightFadeIntensity }, 100)
     }
   }
 }

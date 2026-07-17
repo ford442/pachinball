@@ -215,3 +215,53 @@ export function mockBabylonCore() {
     },
   }
 }
+
+export type GoldenRecord = {
+  states: number[]
+  impulses: Array<{ x: number; y: number; z: number }>
+  releaseAngvel?: { x: number; y: number; z: number }
+}
+
+type GoldenRunOpts = {
+  feeder: {
+    update: (dt: number, balls: unknown[]) => void
+    onStateChange?: ((state: number) => void) | null
+  }
+  ball: ReturnType<typeof createMockBall>
+  maxFrames: number
+  getState: () => number
+  stateNames: Record<string, number>
+  onFrame?: (frame: number) => void
+  stopWhen?: (state: number, frame: number) => boolean
+}
+
+/** Scripted FSM walk recording state transitions and impulses (deterministic with fixed Math.random). */
+export function runFeederFsmGolden(opts: GoldenRunOpts): GoldenRecord {
+  const { feeder, ball, maxFrames, getState, onFrame, stopWhen } = opts
+  const DT = 1 / 60
+  const states: number[] = [getState()]
+  const impulses: Array<{ x: number; y: number; z: number }> = []
+  let releaseAngvel: { x: number; y: number; z: number } | undefined
+
+  feeder.onStateChange = (state: number) => {
+    if (states[states.length - 1] !== state) {
+      states.push(state)
+    }
+  }
+
+  for (let frame = 0; frame < maxFrames; frame++) {
+    onFrame?.(frame)
+    feeder.update(DT, [ball as never])
+    const impulseCalls = (ball.applyImpulse as ReturnType<typeof import('vitest').vi.fn>).mock.calls
+    for (let i = impulses.length; i < impulseCalls.length; i++) {
+      impulses.push({ ...impulseCalls[i][0] })
+    }
+    const angvelCalls = (ball.setAngvel as ReturnType<typeof import('vitest').vi.fn>).mock.calls
+    if (angvelCalls.length > 0) {
+      releaseAngvel = { ...angvelCalls[angvelCalls.length - 1][0] }
+    }
+    if (stopWhen?.(getState(), frame)) break
+  }
+
+  return { states, impulses, releaseAngvel }
+}

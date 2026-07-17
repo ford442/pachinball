@@ -174,11 +174,14 @@ export class MagSpinFeeder {
   }
 
   private updateVisuals(dt: number): void {
-    const targetSpeed = this.state === MagSpinState.SPIN ? 24 : this.state === MagSpinState.IDLE ? 1 : 4
+    const anim = this.config.animation
+    const targetSpeed = this.state === MagSpinState.SPIN ? anim.ringSpeedSpin
+      : this.state === MagSpinState.IDLE ? anim.ringSpeedIdle
+      : anim.ringSpeedDefault
     this.ringAngularVelocity = Scalar.Lerp(
       this.ringAngularVelocity,
       targetSpeed,
-      dt * (this.state === MagSpinState.SPIN ? 2.5 : 0.5)
+      dt * (this.state === MagSpinState.SPIN ? anim.ringLerpSpin : anim.ringLerpDefault)
     )
 
     const ringSpin = dt * this.ringAngularVelocity
@@ -194,7 +197,7 @@ export class MagSpinFeeder {
         ring.position.x = this.position.x + shakeX
         ring.position.z = this.position.z + shakeZ
       }
-      this.releaseShakeIntensity *= 0.88
+      this.releaseShakeIntensity *= this.config.animation.shakeDecay
     } else {
       const ringYOffsets = [0.35, 0.5, 0.65]
       for (let i = 0; i < this.ringMeshes.length; i++) {
@@ -205,12 +208,12 @@ export class MagSpinFeeder {
 
     if (this.state === MagSpinState.IDLE) {
       this.idlePulsePhase += dt
-      const pulse = 0.5 + 0.5 * Math.sin(this.idlePulsePhase * 1.8)
+      const pulse = 0.5 + 0.5 * Math.sin(this.idlePulsePhase * anim.idlePulseFrequency)
       if (this.light) {
-        this.light.intensity = 0.35 + pulse * 0.35
+        this.light.intensity = anim.idleLightBase + pulse * anim.idleLightPulseAmplitude
       }
       for (const mat of this.ringMaterials) {
-        mat.emissiveColor = color(FEEDER_STYLES.MAG_SPIN.active).scale(0.6 + pulse * 0.4)
+        mat.emissiveColor = color(FEEDER_STYLES.MAG_SPIN.active).scale(anim.idleEmissiveBase + pulse * anim.idleEmissivePulseAmplitude)
       }
     }
   }
@@ -279,12 +282,17 @@ export class MagSpinFeeder {
     })
 
     this.ballSpinAngle += dt * this.config.spinAngularSpeed
-    const spinQ = Quaternion.FromEulerAngles(this.ballSpinAngle, this.ballSpinAngle * 1.3, this.ballSpinAngle * 0.7)
+    const extras = this.config.physicsExtras
+    const spinQ = Quaternion.FromEulerAngles(
+      this.ballSpinAngle,
+      this.ballSpinAngle * extras.spinAxisMultiplierY,
+      this.ballSpinAngle * extras.spinAxisMultiplierZ,
+    )
     this.caughtBall.setNextKinematicRotation({ x: spinQ.x, y: spinQ.y, z: spinQ.z, w: spinQ.w })
 
     const chargeT = 1 - Math.max(0, this.timer) / this.config.spinDuration
     if (this.light) {
-      this.light.intensity = 1.2 + chargeT * 1.5
+      this.light.intensity = this.config.animation.spinChargeLightBase + chargeT * this.config.animation.spinChargeLightScale
     }
   }
 
@@ -321,7 +329,7 @@ export class MagSpinFeeder {
         this.setRingColor(FEEDER_STYLES.MAG_SPIN.active)
         if (this.light) {
           this.light.diffuse = color(FEEDER_STYLES.MAG_SPIN.active)
-          this.light.intensity = 0.5
+          this.light.intensity = this.config.animation.stateLightIdle
         }
         break
 
@@ -329,7 +337,7 @@ export class MagSpinFeeder {
         this.setRingColor(FEEDER_STYLES.MAG_SPIN.locked)
         if (this.light) {
           this.light.diffuse = color(FEEDER_STYLES.MAG_SPIN.locked)
-          this.light.intensity = 1.0
+          this.light.intensity = this.config.animation.stateLightCatch
         }
         break
 
@@ -338,7 +346,7 @@ export class MagSpinFeeder {
         this.setRingColor(FEEDER_STYLES.MAG_SPIN.release)
         if (this.light) {
           this.light.diffuse = color(FEEDER_STYLES.MAG_SPIN.release)
-          this.light.intensity = 1.5
+          this.light.intensity = this.config.animation.stateLightSpin
         }
         break
 
@@ -350,7 +358,7 @@ export class MagSpinFeeder {
         this.timer = this.config.cooldown
         this.setRingColor('#666666')
         if (this.light) {
-          this.light.intensity = 0.2
+          this.light.intensity = this.config.animation.stateLightCooldown
         }
         break
     }
@@ -390,8 +398,13 @@ export class MagSpinFeeder {
 
     const impulse = finalDir.scale(this.config.releaseForce)
     body.applyImpulse({ x: impulse.x, y: impulse.y, z: impulse.z }, true)
-    body.setAngvel({ x: (Math.random() - 0.5) * 8, y: 12, z: (Math.random() - 0.5) * 8 }, true)
+    const extras = this.config.physicsExtras
+    body.setAngvel({
+      x: (Math.random() - 0.5) * extras.releaseSpinVarianceXZ,
+      y: extras.releaseSpinBaseY,
+      z: (Math.random() - 0.5) * extras.releaseSpinVarianceXZ,
+    }, true)
 
-    this.releaseShakeIntensity = 0.6
+    this.releaseShakeIntensity = this.config.animation.releaseShakeInitial
   }
 }
