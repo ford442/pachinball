@@ -1,0 +1,80 @@
+# Optional native C++ physics tests + WASM build verification.
+#
+# This workflow is NON-BLOCKING (continue-on-error) until main CI (#283) lands.
+# It does not gate merges.
+#
+# Skip triggers:
+#   - Use workflow_dispatch only (disable push/PR triggers) for manual runs
+#   - Commit message containing "[skip wasm-ci]" skips the wasm_build job
+#
+# Local equivalents:
+#   npm run test:native          # Catch2 + ctest (g++/cmake only)
+#   npm run build:wasm           # Emscripten build (skipped if emcc missing)
+
+name: Native Physics (optional)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'native/**'
+      - '.github/workflows/native-physics.yml'
+  pull_request:
+    paths:
+      - 'native/**'
+      - '.github/workflows/native-physics.yml'
+
+jobs:
+  native_ctest:
+    name: Native CTest
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake g++
+
+      - name: Run native Catch2 tests
+        run: npm run test:native
+
+  wasm_build:
+    name: WASM Build
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    if: ${{ !contains(github.event.head_commit.message, '[skip wasm-ci]') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Emscripten SDK
+        uses: actions/cache@v4
+        with:
+          path: emsdk
+          key: emsdk-${{ runner.os }}-latest
+
+      - name: Install and activate Emscripten
+        run: |
+          if [ ! -d emsdk ]; then
+            git clone https://github.com/emscripten-core/emsdk.git
+          fi
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+          source ./emsdk_env.sh
+          echo "$(pwd)" >> $GITHUB_PATH
+          emcc --version
+
+      - name: Build WASM module
+        run: |
+          source emsdk/emsdk_env.sh
+          if ! command -v emcmake &>/dev/null; then
+            echo "Emscripten (emcmake) not available — failing WASM job explicitly"
+            exit 1
+          fi
+          npm run build:wasm
+
+      - name: Assert WASM artefact exists
+        run: |
+          test -s public/wasm/PhysicsModule.wasm
+          test -s public/wasm/PhysicsModule.js
+          echo "WASM size: $(wc -c < public/wasm/PhysicsModule.wasm) bytes"

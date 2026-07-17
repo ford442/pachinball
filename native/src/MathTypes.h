@@ -44,6 +44,8 @@ struct Quat {
 
   static Quat identity() { return {0.f, 0.f, 0.f, 1.f}; }
 
+  Quat conjugate() const { return {-x, -y, -z, w}; }
+
   Quat operator*(const Quat& o) const {
     return {
        w*o.x + x*o.w + y*o.z - z*o.y,

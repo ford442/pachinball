@@ -10,6 +10,8 @@
     "build:wasm": "bash scripts/build-wasm.sh",
     "build:wasm_colab": "bash scripts/build-wasm-colab.sh",
     "build:wasm:debug": "bash scripts/build-wasm.sh --debug",
+    "test:native": "cmake -S native -B native/build-native && cmake --build native/build-native && ctest --test-dir native/build-native --output-on-failure",
+    "test:wasm-parity": "node scripts/run-wasm-parity.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run"

@@ -39,6 +39,8 @@ function makeWorldStub() {
     applyImpulse:         vi.fn(),
     setVelocity:          vi.fn(),
     addStaticPlane:       vi.fn(),
+    addStaticBox:         vi.fn().mockReturnValue(-1001),
+    addStaticCapsule:     vi.fn().mockReturnValue(-2001),
     getPosX:              vi.fn().mockReturnValue(1),
     getPosY:              vi.fn().mockReturnValue(2),
     getPosZ:              vi.fn().mockReturnValue(3),
@@ -237,6 +239,20 @@ describe('WasmPhysicsEngine', () => {
     await injectWorld(engine, worldStub)
     engine.addStaticPlane({ x: 0, y: 1, z: 0 }, -2)
     expect(worldStub.addStaticPlane).toHaveBeenCalledWith(0, 1, 0, -2)
+  })
+
+  it('addStaticBox() delegates to world.addStaticBox', async () => {
+    await injectWorld(engine, worldStub)
+    const id = engine.addStaticBox({ x: 1, y: 2, z: 3 }, { x: 0.5, y: 0.5, z: 0.5 })
+    expect(id).toBe(-1001)
+    expect(worldStub.addStaticBox).toHaveBeenCalled()
+  })
+
+  it('addStaticCapsule() delegates to world.addStaticCapsule', async () => {
+    await injectWorld(engine, worldStub)
+    const id = engine.addStaticCapsule({ x: 0, y: 1, z: 0 }, 0.3, 0.5)
+    expect(id).toBe(-2001)
+    expect(worldStub.addStaticCapsule).toHaveBeenCalled()
   })
 
   // 13 ----------------------------------------------------------------------

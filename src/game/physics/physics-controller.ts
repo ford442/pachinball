@@ -9,6 +9,7 @@
 import type { PhysicsHost } from './types'
 import { MeshInterpolationSystem } from './mesh-interpolation'
 import { WasmMirror } from './wasm-mirror'
+import { WasmOwner } from './wasm-owner'
 import { ScoringBridge } from './scoring-bridge'
 import { CollisionDispatcher } from './collision-dispatch'
 import { Vector3 } from '@babylonjs/core'
@@ -23,11 +24,16 @@ import { CameraMode } from '../../game-elements'
 import { QualityTier } from '../../game-elements/visual-language'
 import type { WasmContactEvent } from '../../wasm'
 
+/** Shared surface for mirror and owner WASM bridges. */
+import type { WasmPhysicsBridge } from './collision-dispatch'
+
 export class GamePhysicsController {
   private readonly host: PhysicsHost
 
-  /** WASM mirror for the ball+bumper subset. Only active when the flag is on. */
+  /** WASM bridge for mirror or owner mode. */
+  private wasmBridge: WasmPhysicsBridge | null = null
   private wasmMirror: WasmMirror | null = null
+  private wasmOwner: WasmOwner | null = null
 
   private readonly scoringBridge: ScoringBridge
   private readonly collisionDispatcher: CollisionDispatcher
@@ -37,7 +43,7 @@ export class GamePhysicsController {
   constructor(host: PhysicsHost) {
     this.host = host
     this.scoringBridge = new ScoringBridge(host)
-    this.collisionDispatcher = new CollisionDispatcher(host, this.scoringBridge, () => this.wasmMirror)
+    this.collisionDispatcher = new CollisionDispatcher(host, this.scoringBridge, () => this.wasmBridge)
 
     // Route 'effect:flash' to EffectsSystem (respects accessibility guards internally)
     this.eventBusUnsubscribers.push(
@@ -79,24 +85,47 @@ export class GamePhysicsController {
   rebuildHandleCaches(): void {
     this.collisionDispatcher.rebuildHandleCaches()
 
-    // Rebuild the WASM mirror whenever the handle caches are rebuilt. This keeps
-    // the WASM world in sync with ball spawns/drains and bumper state changes.
-    if (this.host.physics.isWasmActive?.()) {
+    const wasmActive = this.host.physics.isWasmActive?.() ?? false
+    const isOwner = this.host.physics.isWasmOwnerMode?.() ?? false
+
+    if (wasmActive) {
       const engine = this.host.physics.getWasmEngine?.()
       if (engine) {
-        if (!this.wasmMirror) {
-          this.wasmMirror = new WasmMirror(engine)
-        }
-        this.wasmMirror.rebuild(
-          this.host.ballManager?.getBallBodies() || [],
-          this.host.gameObjects?.getBumperBodies() || [],
-          this.host.gameObjects?.getBumperVisuals() || []
-        )
         engine.init(this.host.eventBus)
+        if (isOwner) {
+          this.wasmMirror?.clear()
+          this.wasmMirror = null
+          if (!this.wasmOwner) {
+            this.wasmOwner = new WasmOwner(engine)
+          }
+          this.wasmBridge = this.wasmOwner
+          this.wasmOwner.rebuild(
+            this.host.ballManager?.getBallBodies() || [],
+            this.host.gameObjects?.getBumperBodies() || [],
+            this.host.gameObjects?.getBumperVisuals() || [],
+            this.host.gameObjects?.getBindings() || [],
+            [...(this.host.gameObjects?.getAllFlippers?.().values() ?? [])].map((f) => f.body)
+          )
+        } else {
+          this.wasmOwner?.clear()
+          this.wasmOwner = null
+          if (!this.wasmMirror) {
+            this.wasmMirror = new WasmMirror(engine)
+          }
+          this.wasmBridge = this.wasmMirror
+          this.wasmMirror.rebuild(
+            this.host.ballManager?.getBallBodies() || [],
+            this.host.gameObjects?.getBumperBodies() || [],
+            this.host.gameObjects?.getBumperVisuals() || []
+          )
+        }
       }
     } else {
       this.wasmMirror?.clear()
+      this.wasmOwner?.dispose()
       this.wasmMirror = null
+      this.wasmOwner = null
+      this.wasmBridge = null
     }
 
     // Portal sensor handles are registered/unregistered dynamically via
@@ -209,9 +238,18 @@ export class GamePhysicsController {
     inputActions?.updatePlungerFrame?.(Math.min(rawDt, 1 / 30))
 
     const wasmActive = this.host.physics.isWasmActive?.() ?? false
-    if (wasmActive) {
-      // Push current Rapier ball/bumper poses into the WASM world before stepping.
+    const isOwner = this.host.physics.isWasmOwnerMode?.() ?? false
+
+    if (wasmActive && !isOwner) {
+      const syncT0 = performance.now()
       this.wasmMirror?.syncToWasm()
+      this.host.physics.setMirrorOverheadMs?.(performance.now() - syncT0)
+    }
+    if (wasmActive && isOwner) {
+      this.wasmOwner?.syncFlipperProxies(
+        [...(this.host.gameObjects?.getAllFlippers?.().values() ?? [])].map((f) => f.body)
+      )
+      this.host.physics.setMirrorOverheadMs?.(0)
     }
 
     const alpha = this.host.physics.step(rawDt, (h1, h2, start) => {
@@ -221,9 +259,14 @@ export class GamePhysicsController {
     })
 
     if (wasmActive) {
-      // Pull the WASM-simulated ball poses back into Rapier so mesh sync and scoring
-      // see the new state.
-      this.wasmMirror?.syncFromWasm(this.host.physics.getRapier())
+      const syncT0 = performance.now()
+      if (isOwner) {
+        this.wasmOwner?.syncFromWasm(this.host.physics.getRapier())
+      } else {
+        this.wasmMirror?.syncFromWasm(this.host.physics.getRapier())
+        const prev = this.host.physics.getLastMirrorOverheadMs?.() ?? 0
+        this.host.physics.setMirrorOverheadMs?.(prev + (performance.now() - syncT0))
+      }
     }
 
     // Skip interpolation on LOW quality tier — render at the raw post-step pose.
