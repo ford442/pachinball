@@ -61,6 +61,33 @@ void PhysicsWorld::addStaticPlane(float nx, float ny, float nz, float distance) 
   planes_.push_back({{nx, ny, nz}, distance});
 }
 
+int PhysicsWorld::addStaticBox(float px, float py, float pz,
+                               float hx, float hy, float hz,
+                               float qx, float qy, float qz, float qw,
+                               float restitution) {
+  boxes_.push_back({
+    {px, py, pz},
+    {hx, hy, hz},
+    {qx, qy, qz, qw},
+    restitution
+  });
+  return STATIC_BOX_ID_BASE - static_cast<int>(boxes_.size()) + 1;
+}
+
+int PhysicsWorld::addStaticCapsule(float px, float py, float pz,
+                                   float radius, float halfHeight,
+                                   float qx, float qy, float qz, float qw,
+                                   float restitution) {
+  capsules_.push_back({
+    {px, py, pz},
+    radius,
+    halfHeight,
+    {qx, qy, qz, qw},
+    restitution
+  });
+  return STATIC_CAPSULE_ID_BASE - static_cast<int>(capsules_.size()) + 1;
+}
+
 // ---- Transform queries --------------------------------------------------
 
 void PhysicsWorld::getPosition(int id, float* px, float* py, float* pz) const {
@@ -166,6 +193,24 @@ void PhysicsWorld::substep(float dt) {
         resolveSphereVsPlane(*body, plane);
       }
     }
+
+    // Dynamic vs Static boxes
+    for (std::size_t bi = 0; bi < boxes_.size(); ++bi) {
+      const int boxId = STATIC_BOX_ID_BASE - static_cast<int>(bi);
+      for (auto& body : bodies_) {
+        if (!body->isActive() || body->getType() == BodyType::Static) continue;
+        resolveSphereVsBox(*body, boxes_[bi], boxId);
+      }
+    }
+
+    // Dynamic vs Static capsules
+    for (std::size_t ci = 0; ci < capsules_.size(); ++ci) {
+      const int capId = STATIC_CAPSULE_ID_BASE - static_cast<int>(ci);
+      for (auto& body : bodies_) {
+        if (!body->isActive() || body->getType() == BodyType::Static) continue;
+        resolveSphereVsCapsule(*body, capsules_[ci], capId);
+      }
+    }
   }
 }
 
@@ -253,10 +298,118 @@ void PhysicsWorld::resolveSphereVsPlane(RigidBody& body, const PlaneDesc& plane)
   // ---- Emit contact event ----
   ContactEvent evt;
   evt.bodyId1   = body.getId();
-  evt.bodyId2   = -1; // -1 = static plane
+  evt.bodyId2   = STATIC_PLANE_ID; // static plane
   evt.normal    = plane.normal;
   evt.point     = body.getPosition() - plane.normal * body.getRadius();
   evt.impulse   = j;
+  evt.isEntering = true;
+  contactListener_.pushContact(evt);
+}
+
+void PhysicsWorld::resolveSphereVsBox(RigidBody& body, const BoxDesc& box, int boxId) {
+  const Quat invRot = box.rotation.conjugate();
+  const Vec3 localCenter = invRot.rotate(body.getPosition() - box.center);
+
+  Vec3 closest{
+    std::clamp(localCenter.x, -box.halfExtents.x, box.halfExtents.x),
+    std::clamp(localCenter.y, -box.halfExtents.y, box.halfExtents.y),
+    std::clamp(localCenter.z, -box.halfExtents.z, box.halfExtents.z),
+  };
+
+  Vec3 delta = localCenter - closest;
+  float distSq = delta.lengthSq();
+  float radius = body.getRadius();
+
+  if (distSq >= radius * radius) return;
+
+  Vec3 normal;
+  float penetration;
+  if (distSq < CONTACT_EPSILON_SQ) {
+    // Sphere centre is inside the box — push out along the shallowest axis.
+    const float dx = box.halfExtents.x - std::fabs(localCenter.x);
+    const float dy = box.halfExtents.y - std::fabs(localCenter.y);
+    const float dz = box.halfExtents.z - std::fabs(localCenter.z);
+    Vec3 localNormal = Vec3::up();
+    float shallow = dy;
+    if (dx < shallow) { shallow = dx; localNormal = {localCenter.x >= 0.f ? 1.f : -1.f, 0.f, 0.f}; }
+    if (dz < shallow) { localNormal = {0.f, 0.f, localCenter.z >= 0.f ? 1.f : -1.f}; }
+    normal = box.rotation.rotate(localNormal).normalized();
+    penetration = radius + shallow;
+  } else {
+    float dist = std::sqrt(distSq);
+    Vec3 localNormal = delta / dist;
+    normal = box.rotation.rotate(localNormal);
+    penetration = radius - dist;
+  }
+
+  Vec3 vel = body.getVelocity();
+  float velN = vel.dot(normal);
+  if (velN >= 0.f) return;
+
+  float e = std::min(body.getRestitution(), box.restitution);
+  float j = -(1.f + e) * velN;
+  body.applyImpulse(normal * j);
+
+  constexpr float SLOP    = 0.001f;
+  constexpr float CORRECT = 0.8f;
+  if (penetration > SLOP && body.getType() == BodyType::Dynamic) {
+    body.setPosition(body.getPosition() + normal * ((penetration - SLOP) * CORRECT));
+  }
+
+  ContactEvent evt;
+  evt.bodyId1    = body.getId();
+  evt.bodyId2    = boxId;
+  evt.normal     = normal;
+  evt.point      = body.getPosition() - normal * radius;
+  evt.impulse    = j;
+  evt.isEntering = true;
+  contactListener_.pushContact(evt);
+}
+
+void PhysicsWorld::resolveSphereVsCapsule(RigidBody& body, const CapsuleDesc& cap, int capId) {
+  const Vec3 axisHalf = cap.rotation.rotate(Vec3{0.f, cap.halfHeight, 0.f});
+  const Vec3 segA = cap.center - axisHalf;
+  const Vec3 segB = cap.center + axisHalf;
+  const Vec3 ab = segB - segA;
+
+  float t = 0.f;
+  const float abLenSq = ab.lengthSq();
+  if (abLenSq > CONTACT_EPSILON_SQ) {
+    t = std::clamp((body.getPosition() - segA).dot(ab) / abLenSq, 0.f, 1.f);
+  }
+  const Vec3 closest = segA + ab * t;
+
+  Vec3 delta = body.getPosition() - closest;
+  float distSq = delta.lengthSq();
+  float minDist = body.getRadius() + cap.radius;
+
+  if (distSq >= minDist * minDist) return;
+
+  float dist = std::sqrt(std::max(distSq, CONTACT_EPSILON_SQ));
+  Vec3 normal = dist > 1e-5f ? delta / dist
+                              : cap.rotation.rotate(Vec3{0.f, 1.f, 0.f}).normalized();
+  float penetration = minDist - dist;
+
+  Vec3 vel = body.getVelocity();
+  float velN = vel.dot(normal);
+  if (velN >= 0.f) return;
+
+  float e = std::min(body.getRestitution(), cap.restitution);
+  float j = -(1.f + e) * velN;
+  body.applyImpulse(normal * j);
+
+  constexpr float SLOP    = 0.001f;
+  constexpr float CORRECT = 0.8f;
+  if (penetration > SLOP && body.getType() == BodyType::Dynamic) {
+    body.setPosition(body.getPosition() + normal * ((penetration - SLOP) * CORRECT));
+  }
+
+  ContactEvent evt;
+  evt.bodyId1    = body.getId();
+  evt.bodyId2    = capId;
+  evt.normal     = normal;
+  evt.point      = body.getPosition() - normal * body.getRadius();
+  evt.impulse    = j;
   evt.isEntering = true;
   contactListener_.pushContact(evt);
 }

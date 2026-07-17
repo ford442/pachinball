@@ -7,19 +7,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # ---------------------------------------------------------------------------
 # Source files
 # ---------------------------------------------------------------------------
-set(SOURCES
+set(PHYSICS_CORE_SOURCES
   src/RigidBody.cpp
   src/PhysicsWorld.cpp
-  src/bindings.cpp
 )
 
-add_executable(PhysicsModule ${SOURCES})
-target_include_directories(PhysicsModule PRIVATE src)
-
 # ---------------------------------------------------------------------------
-# Emscripten-specific flags
+# Emscripten WASM module
 # ---------------------------------------------------------------------------
 if(EMSCRIPTEN)
+add_executable(PhysicsModule
+  ${PHYSICS_CORE_SOURCES}
+  src/bindings.cpp
+)
+target_include_directories(PhysicsModule PRIVATE src)
   # Output as a proper ES module that can be imported directly by Vite
   set_target_properties(PhysicsModule PROPERTIES
     SUFFIX ".js"
@@ -61,11 +62,28 @@ endif()
 # a standard compiler (Catch2, GoogleTest, etc.).
 # ---------------------------------------------------------------------------
 if(NOT EMSCRIPTEN)
-  # Build a shared library that host-side C++ tests can link against.
-  add_library(pachinball_physics_native STATIC
-    src/RigidBody.cpp
-    src/PhysicsWorld.cpp
-  )
+  add_library(pachinball_physics_native STATIC ${PHYSICS_CORE_SOURCES})
   target_include_directories(pachinball_physics_native PUBLIC src)
   target_compile_options(pachinball_physics_native PRIVATE -Wall -Wextra -O2)
+
+  include(CTest)
+  enable_testing()
+
+  include(FetchContent)
+  FetchContent_Declare(
+    Catch2
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG        v3.7.1
+  )
+  FetchContent_MakeAvailable(Catch2)
+
+  add_executable(physics_world_test tests/physics_world_test.cpp)
+  target_link_libraries(physics_world_test PRIVATE
+    pachinball_physics_native
+    Catch2::Catch2WithMain
+  )
+  target_compile_options(physics_world_test PRIVATE -Wall -Wextra -O2)
+
+  include(Catch)
+  catch_discover_tests(physics_world_test)
 endif()

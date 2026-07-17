@@ -289,8 +289,9 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
 ]
 
 /**
- * @deprecated Legacy progression store for free-form level goals/rewards.
- * Use AdventureTrackProgression + AdventureProgressionSupervisor for campaign.
+ * @deprecated Legacy level-select / cosmetic-reward system only.
+ * Campaign progression truth is AdventureTrackProgression + AdventureProgressionSupervisor.
+ * Do not add new campaign features here — use TRACK_CATALOG and the supervisor instead.
  */
 export class AdventureState {
   private progress: AdventureProgress

@@ -840,8 +840,16 @@ export type PhysicsConfigType = typeof PhysicsConfig
  */
 export const WASM_PHYSICS = {
   flagKey: 'pachinball:physics-engine',
+  /** Rapier-only until wasm-owner is explicitly enabled. */
   defaultEngine: 'rapier',
-  allowedEngines: ['rapier', 'wasm'] as const,
+  /**
+   * Engine modes:
+   *  - `rapier`       — Rapier only (production default)
+   *  - `wasm-mirror`  — WASM mirrors ball+bumper subset; Rapier bodies remain handles
+   *  - `wasm-owner`   — WASM owns ball + static table geometry; Rapier kept for joints
+   * Legacy `wasm` is treated as `wasm-mirror`.
+   */
+  allowedEngines: ['rapier', 'wasm', 'wasm-mirror', 'wasm-owner'] as const,
   bundleUrl: './wasm/PhysicsModule.js',
   enabled: true,
   tunables: {
@@ -854,12 +862,24 @@ export const WASM_PHYSICS = {
 
 export type WasmPhysicsEnginePreference = (typeof WASM_PHYSICS.allowedEngines)[number]
 
+/** Resolved runtime mode after normalising legacy flag values. */
+export type WasmPhysicsRuntimeMode = 'rapier' | 'wasm-mirror' | 'wasm-owner'
+
 export function getPhysicsEnginePreference(): WasmPhysicsEnginePreference {
   try {
     const v = localStorage.getItem(WASM_PHYSICS.flagKey)
-    if (v === 'wasm') return 'wasm'
+    if (v === 'wasm' || v === 'wasm-mirror') return 'wasm-mirror'
+    if (v === 'wasm-owner') return 'wasm-owner'
   } catch {
     // ignore localStorage errors (e.g. disabled storage)
   }
   return WASM_PHYSICS.defaultEngine as WasmPhysicsEnginePreference
+}
+
+/** Normalise localStorage values to the three documented runtime modes. */
+export function getWasmPhysicsRuntimeMode(): WasmPhysicsRuntimeMode {
+  const pref = getPhysicsEnginePreference()
+  if (pref === 'wasm-mirror' || pref === 'wasm') return 'wasm-mirror'
+  if (pref === 'wasm-owner') return 'wasm-owner'
+  return 'rapier'
 }

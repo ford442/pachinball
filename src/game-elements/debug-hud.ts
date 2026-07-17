@@ -20,10 +20,15 @@ export interface DebugSnapshot {
   colliderCount: number
   physicsMemoryKb: number
   physicsStepMs: number
+  wasmStepMs: number | null
+  rapierStepMs: number | null
+  mirrorOverheadMs: number | null
+  wasmMode: string
   adventureTimeMs: number | null
   dynamicZoneState: string | null
   performanceTier: string
   rendererBackend: string
+  postProcessDegraded: boolean
   activeParticles: number
   goldBallsInPlay: number
   lastTrackSwitchMs: number | null
@@ -158,7 +163,11 @@ export class DebugHUD {
     })
 
     this.updatePanel('Physics', {
+      mode: snapshot.wasmMode,
       'step ms': snapshot.physicsStepMs.toFixed(2),
+      'wasm ms': snapshot.wasmStepMs !== null ? snapshot.wasmStepMs.toFixed(2) : 'n/a',
+      'rapier ms': snapshot.rapierStepMs !== null ? snapshot.rapierStepMs.toFixed(2) : 'n/a',
+      'mirror ms': snapshot.mirrorOverheadMs !== null ? snapshot.mirrorOverheadMs.toFixed(2) : 'n/a',
       bodies: snapshot.activeBodies,
       colliders: snapshot.colliderCount,
       'mem est kb': snapshot.physicsMemoryKb,
@@ -170,6 +179,7 @@ export class DebugHUD {
       'frame ms': snapshot.frameTimeMs.toFixed(2),
       tier: snapshot.performanceTier,
       renderer: snapshot.rendererBackend,
+      'pp degraded': String(snapshot.postProcessDegraded),
       particles: snapshot.activeParticles,
       'gold balls': snapshot.goldBallsInPlay,
       'track switch ms': snapshot.lastTrackSwitchMs?.toFixed(1) ?? 'n/a',

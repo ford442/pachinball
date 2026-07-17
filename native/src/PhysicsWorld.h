@@ -16,6 +16,28 @@ struct PlaneDesc {
   float distance = 0.f;        ///< Signed distance from origin along the normal
 };
 
+/** Oriented static box collider (half-extents in local space). */
+struct BoxDesc {
+  Vec3  center       = Vec3::zero();
+  Vec3  halfExtents  = {0.5f, 0.5f, 0.5f};
+  Quat  rotation     = Quat::identity();
+  float restitution  = 0.4f;
+};
+
+/** Oriented static capsule collider (local Y is the segment axis). */
+struct CapsuleDesc {
+  Vec3  center      = Vec3::zero();
+  float radius      = 0.1f;
+  float halfHeight  = 0.5f; ///< Half-length of the cylindrical section
+  Quat  rotation    = Quat::identity();
+  float restitution = 0.4f;
+};
+
+/** Negative body IDs reserved for static colliders in contact events. */
+static constexpr int STATIC_PLANE_ID    = -1;
+static constexpr int STATIC_BOX_ID_BASE   = -1000;
+static constexpr int STATIC_CAPSULE_ID_BASE = -2000;
+
 /** Per-world simulation parameters. */
 struct WorldParams {
   Vec3  gravity          = {0.f, -9.81f, -5.0f};  ///< m/s² (matches Rapier default)
@@ -31,10 +53,12 @@ struct WorldParams {
  * TypeScript WasmPhysicsEngine wrapper can present an identical interface to
  * PhysicsSystem without changes to game logic.
  *
- * Collision model (sphere-only):
- *   - Dynamic ↔ Dynamic sphere-sphere broad + narrow phase
- *   - Dynamic ↔ Static   sphere-plane  narrow phase
- * Reponse: single-pass sequential impulse with position correction.
+ * Collision model (dynamic spheres vs static primitives):
+ *   - Dynamic ↔ Dynamic   sphere-sphere
+ *   - Dynamic ↔ Plane     sphere-plane
+ *   - Dynamic ↔ Box       sphere-OBB
+ *   - Dynamic ↔ Capsule   sphere-capsule
+ * Response: single-pass sequential impulse with position correction.
  */
 class PhysicsWorld {
 public:
@@ -72,6 +96,24 @@ public:
 
   /** Add a static infinite half-space plane. */
   void addStaticPlane(float nx, float ny, float nz, float distance);
+
+  /**
+   * Add an oriented static box collider.
+   * @returns Stable negative collider id for contact events.
+   */
+  int addStaticBox(float px, float py, float pz,
+                   float hx, float hy, float hz,
+                   float qx, float qy, float qz, float qw,
+                   float restitution = 0.4f);
+
+  /**
+   * Add an oriented static capsule collider (local Y axis).
+   * @returns Stable negative collider id for contact events.
+   */
+  int addStaticCapsule(float px, float py, float pz,
+                       float radius, float halfHeight,
+                       float qx, float qy, float qz, float qw,
+                       float restitution = 0.4f);
 
   // ---- Transform queries ----------------------------------------------
 
@@ -115,6 +157,8 @@ private:
   WorldParams                          params_;
   std::vector<std::unique_ptr<RigidBody>> bodies_;
   std::vector<PlaneDesc>               planes_;
+  std::vector<BoxDesc>                 boxes_;
+  std::vector<CapsuleDesc>             capsules_;
   ContactListener                      contactListener_;
   float                                accumulator_  = 0.f;
   uint64_t                             stepCount_    = 0;
@@ -129,6 +173,8 @@ private:
   // Narrow-phase collision detection + response
   void resolveSphereVsSphere(RigidBody& a, RigidBody& b);
   void resolveSphereVsPlane(RigidBody& body, const PlaneDesc& plane);
+  void resolveSphereVsBox(RigidBody& body, const BoxDesc& box, int boxId);
+  void resolveSphereVsCapsule(RigidBody& body, const CapsuleDesc& cap, int capId);
 };
 
 } // namespace pachinball

@@ -22,6 +22,7 @@
 - **Post-processing:** Bloom (`DefaultRenderingPipeline`), SSAO (`SSAO2RenderingPipeline`), depth of field, scanlines, and filmic tone mapping (Hable/ACES).
 - **Shadows:** Blur exponential shadow maps with tuned bias/normal bias.
 - **Renderer toggle:** `src/renderers/renderer-selector.ts` lets you force WebGL2 instead of WebGPU. Priority: `?renderer=webgl2|webgpu` URL param → `window.DEBUG_RENDERER` → `localStorage['pachinball-renderer']` → auto (WebGPU-first). Also exposed as a "Renderer" dropdown in the Developer settings panel (changing it reloads the page). The active backend is tagged on `<canvas data-renderer="webgpu|webgl2">` and `window.currentRenderer` for Playwright.
+- **Engine bootstrap:** `src/main.ts` + `src/engine/` centralize Babylon options (`preserveDrawingBuffer`, `powerPreference`, hardware scaling, tab visibility, idle WASM warm-load). Full option matrix and benchmark procedure: [`docs/ENGINE_BOOTSTRAP.md`](docs/ENGINE_BOOTSTRAP.md).
 - **Debug overlays (Developer settings):** "Wireframe Mode" sets `scene.forceWireframe`; "Physics Debug Draw" renders Rapier's `world.debugRender()` collider/joint lines via `src/game-elements/physics-debug-renderer.ts`. Both work in either renderer, but WebGL2 is recommended for inspecting them with Playwright/agents since WebGPU canvases aren't readable by current automation tooling.
 - **WebGL2 ↔ WebGPU porting notes:** Gameplay, physics, materials, and post-processing are backend-agnostic (Babylon abstracts both). The one backend-specific area is `src/display/display-shader.ts`, which uses WGSL `ShaderMaterial`s for the backbox reels with a Canvas2D fallback — check `engine.getClassName() === 'WebGPUEngine'` (or `engine.isWebGPU`) before taking the WGSL path, as the existing display code does.
 
@@ -88,10 +89,10 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 | `ball-stack-visual.ts` | Visual stack of reserve balls (gold-ball tracking). |
 | `debug-hud.ts` | Development overlay for runtime state monitoring (FPS, physics, performance tier). |
 | `display-config.ts` | Display system configuration: modes, states, blend modes, media playlists. |
-| `adventure-state.ts` | Level goals, progression, story system, unlockable rewards, map unlocking. |
-| `adventure-mode.ts` | Legacy adventure orchestrator (being phased out in favor of `src/adventure/`). |
-| `adventure-mode-builder.ts` | Legacy adventure track builder. |
-| `adventure-mode-tracks-a.ts` / `adventure-mode-tracks-b.ts` | Legacy track data files. |
+| `adventure-state.ts` | **Legacy** level-select UI + cosmetic rewards only. Campaign truth is `AdventureTrackProgression` + supervisor. |
+| `adventure-track-progression.ts` | `TRACK_CATALOG`, `AdventureTrackProgression` — campaign spine metadata. |
+| `adventure-progression-supervisor.ts` | Portal lifecycle + campaign state machine. |
+| `zone-registry.ts` | Per-track theming / story / music metadata for adventure zones. |
 | Various `*-feeder.ts` | Specialized table toys: `mag-spin-feeder`, `nano-loom-feeder`, `prism-core-feeder`, `gauss-cannon-feeder`, `quantum-tunnel-feeder`. |
 
 #### `src/game/` — High-level managers (barrel: `src/game/index.ts`)
@@ -146,14 +147,17 @@ Replaces the old monolithic `display.ts`.
 - **`index.ts`** — Shader barrel file.
 
 #### `src/adventure/` — Adventure mode tracks (barrel: `src/adventure/index.ts`)
-- **`adventure-mode.ts`** — Main adventure orchestrator. **Start/end lifecycle MUST disable/enable table physics. Zone state MUST be reset in `end()`.** |
-- **`track-builder.ts`** — Generic track construction helpers.
+- **`adventure-mode.ts`** — Main adventure orchestrator. **Start/end lifecycle MUST disable/enable table physics. Zone state MUST be reset in `end()`.**
+- **`track-builder.ts`** — Generic track construction helpers (`addStraightRamp`, `addCurvedRamp`, etc.).
 - **`camera-presets.ts`** — Cinematic camera angles.
-- **`adventure-types.ts`** — Adventure mode types and interfaces (`AdventureTrackType`, `AdventureCallback`).
-- **`tracks/*.ts`** — 25+ individual track builders (e.g., `neon-helix`, `cyber-core`, `quantum-grid`, `glitch-spire`, `prism-pathway`, `tesla-tower`, etc.).
+- **`adventure-types.ts`** — **Single source of truth** for `AdventureTrackType` and adventure interfaces.
+- **`portal-routing.ts`** — Track start anchors and `isAdventureTrackType()` guard.
+- **`tracks/*.ts`** — 28 individual track builders (e.g., `neon-helix`, `cyber-core`, `quantum-grid`, `glitch-spire`, `prism-pathway`, `tesla-tower`, etc.).
+
+**Do not recreate legacy builders.** All new track geometry goes in `src/adventure/tracks/`. The barrel also re-exports `TRACK_CATALOG` and `AdventureTrackProgression` from `game-elements/adventure-track-progression.ts`.
 
 Campaign progression reference: `docs/ADVENTURE_CAMPAIGN.md` (A/B alternation + portal loop).  
-Campaign truth is `AdventureTrackProgression` + `AdventureProgressionSupervisor`; treat `AdventureState` as legacy level-select progression.
+Campaign truth is `AdventureTrackProgression` + `AdventureProgressionSupervisor`; `AdventureState` is legacy level-select / cosmetic rewards only.
 
 #### `src/cabinet/` — Cabinet presets (barrel: `src/cabinet/index.ts`)
 - **`cabinet-builder.ts`** — Factory / orchestrator.

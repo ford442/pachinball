@@ -40,6 +40,19 @@ export {
   isAdventureTrackType,
 } from './portal-routing'
 
+// Campaign catalog (source file remains in game-elements for now)
+export {
+  TRACK_CATALOG,
+  AdventureTrackProgression,
+  CAMPAIGN_MAIN_PATH,
+} from '../game-elements/adventure-track-progression'
+export type {
+  TrackInfo,
+  TrackModeType,
+  ProgressionState,
+  SerializableProgressionState,
+} from '../game-elements/adventure-track-progression'
+
 // Track builders
 export { buildNeonHelix } from './tracks/neon-helix'
 export { buildPachinkoHall } from './tracks/pachinko-hall'
