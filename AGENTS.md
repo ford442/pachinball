@@ -49,6 +49,20 @@ npm run preview
 npx playwright test
 ```
 
+### Continuous Integration
+
+`.github/workflows/ci.yml` gates every pull request and every push to `main`. The blocking
+`check` job runs, in order: `npm ci` → `npx tsc -b` → `npm run lint` → `npx vitest run` →
+`npx vite build`. **PRs must stay green** — do not merge red. A second, non-blocking
+(`continue-on-error`) `e2e` job runs a Playwright smoke against a live dev server.
+
+Notes:
+- CI runs `npx vite build`, **not** `npm run build` — the latter chains `build:wasm`
+  (Emscripten), which isn't installed on the runner. The C++ WASM bundle is intentionally
+  out of CI; the physics-engine flag falls back to Rapier when the bundle is absent.
+- Enabling branch protection on `main` (require the `check` job) is recommended so ungated
+  direct-to-`main` pushes can't regress the build.
+
 ---
 
 ## 3. Directory & Module Map

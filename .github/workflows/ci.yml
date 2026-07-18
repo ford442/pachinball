@@ -1,0 +1,85 @@
+name: CI
+
+# Gate every PR and every push to main. Nothing landed on main should be red here.
+# Mirrors the local swarm discipline (tsc -b, lint, vitest, build) so regressions are
+# caught before merge rather than after a direct-to-main push.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to save minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: typecheck / lint / test / build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc -b
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests (Vitest)
+        run: npx vitest run
+
+      # NOTE: intentionally `vite build`, NOT `npm run build`.
+      # `npm run build` chains `build:wasm` (scripts/build-wasm.sh), which needs Emscripten.
+      # emcc is not installed on the default runner, so WASM is kept out of this job; the
+      # localStorage physics-engine flag falls back to Rapier when the bundle is absent.
+      # This step still verifies the TS/Vite bundle compiles and links.
+      - name: Build (bundle only, no WASM)
+        run: npx vite build
+
+  # Optional smoke: full dev server + a couple of Playwright specs.
+  # `continue-on-error` while this stabilizes — a red e2e must NOT block merges yet.
+  # verify_prism_core.spec.ts hard-codes http://localhost:5173, so we run the real dev
+  # server on that port rather than relying on Playwright's baseURL. No webServer block is
+  # added to playwright.config.ts here (kept out of scope); the server is managed inline.
+  e2e:
+    name: playwright smoke (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start dev server
+        run: |
+          npm run dev &
+          # Poll the dev server until it answers on 5173 (max ~60s), then continue.
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:5173 >/dev/null; then
+              echo "dev server up after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "dev server did not start within 60s" >&2
+          exit 1
+
+      - name: Playwright smoke specs
+        run: npx playwright test tests/verify_prism_core.spec.ts tests/basic-gameplay.spec.ts

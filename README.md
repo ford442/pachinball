@@ -16,6 +16,15 @@ npm run dev
 
 Open http://localhost:5173/. Use **1** / **0** for the flippers, hold **Space** or **Enter** to charge and release the plunger, and press **R** to reset the ball.
 
+## Continuous Integration
+
+Every pull request and push to `main` is gated by GitHub Actions (`.github/workflows/ci.yml`):
+`tsc -b`, `npm run lint`, `npx vitest run`, and `npx vite build`. **Keep PRs green.** A
+non-blocking Playwright smoke job also runs against a live dev server. CI builds the bundle
+with `vite build` (not `npm run build`) so the Emscripten/WASM step is skipped on the runner —
+the physics-engine flag falls back to Rapier when the C++ bundle is absent. Enabling branch
+protection on `main` (require the CI `check` job) is recommended.
+
 ## Campaign Mode
 
 The recommended progression path is the alternating A/B campaign system (`EXTENDED_MAP` <-> `STATIONARY_TABLE`) driven by `AdventureTrackProgression` + `AdventureProgressionSupervisor`. See `docs/ADVENTURE_CAMPAIGN.md`.
