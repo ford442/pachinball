@@ -129,7 +129,9 @@ export class GameSystemsInitializer {
       })
       this.game.cabinetLighting.subscribeToEvents(this.game.eventBus)
 
-      this.game.eventBusLog.wire(this.game.eventBus)
+      if (this.game.debugHelper.isDebugHUDAvailable()) {
+        this.game.eventBusLog.wire(this.game.eventBus)
+      }
       this.game.performanceMonitor.setRendererBackend(
         (window as unknown as { currentRenderer?: string }).currentRenderer ??
           (this.game.engine.getClassName().toLowerCase().includes('webgpu') ? 'webgpu' : 'webgl2'),
