@@ -165,6 +165,7 @@ export class GameDebug {
       knownObstacleMatches: this.host.physicsController.getKnownObstacleMatches?.() ?? 0,
       bumperMatches: this.host.physicsController.getBumperMatches?.() ?? 0,
       awardScoreCalls: this.host.physicsController.getAwardScoreCalls?.() ?? 0,
+      lastLaneHit: this.host.physicsController.getLastLaneHit?.() ?? null,
     }
   }
 

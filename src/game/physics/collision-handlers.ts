@@ -9,8 +9,9 @@ import type { Mesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 import type { BumperVisual } from '../../game-elements/types'
+import type { LaneSensorDef } from '../../objects/object-lane-sensors'
 import { DisplayState } from '../../game-elements'
-import { GAME_TUNING, PhysicsConfig } from '../../config'
+import { getLaneRolloverPoints, GAME_TUNING, PhysicsConfig } from '../../config'
 import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
 import { TABLE_MAPS } from '../../shaders/lcd-table'
 import { PALETTE } from '../../game-elements'
@@ -23,6 +24,8 @@ export interface CollisionHandlerContext {
   scoringBridge: ScoringBridge
   ballHandleSet: Set<number>
   bumperVisualMap: Map<number, BumperVisual>
+  laneRolloverAwardedKeys: Set<string>
+  setLastLaneHit: (laneId: string) => void
 }
 
 export function handleBumperCollision(
@@ -293,6 +296,34 @@ export function handleGateCollision(
     ctx.scoringBridge.registerComboMultiplierHit()
     ctx.host.movingGateBuilder?.openGate(state)
   }
+}
+
+export function handleLaneRolloverCollision(
+  ctx: CollisionHandlerContext,
+  sensor: LaneSensorDef,
+  ballBody: RAPIER.RigidBody,
+  ballHandle: number,
+): void {
+  if (!ctx.ballHandleSet.has(ballHandle)) return
+
+  const awardKey = `${ballHandle}_${sensor.id}`
+  if (ctx.laneRolloverAwardedKeys.has(awardKey)) return
+  ctx.laneRolloverAwardedKeys.add(awardKey)
+
+  const points = getLaneRolloverPoints(sensor.kind)
+  const ballPos = ballBody.translation()
+  const pos = new Vector3(ballPos.x, ballPos.y, ballPos.z)
+
+  ctx.scoringBridge.awardScore(points, `lane-rollover:${sensor.id}`, pos)
+  ctx.host.eventBus.emit('lane:rollover', {
+    laneId: sensor.id,
+    kind: sensor.kind,
+    points,
+    ballHandle,
+  })
+  ctx.host.soundSystem.playImpact('peg', 6)
+  ctx.setLastLaneHit(sensor.id)
+  ctx.host.updateHUD()
 }
 
 export function getBallMeshForBody(host: PhysicsHost, body: RAPIER.RigidBody): Mesh | null {

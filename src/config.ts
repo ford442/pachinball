@@ -320,12 +320,23 @@ export const EffectsConfig = {
   }
 } as const
 
+/** Lane rollover sensor category — maps to GAME_TUNING.scoring.laneRollover keys. */
+export type LaneRolloverKind = 'launch' | 'inlane' | 'outlane' | 'drainApproach'
+
+export interface LaneSensorConfig {
+  id: string
+  kind: LaneRolloverKind
+  position: { x: number; y: number; z: number }
+  halfExtents: { x: number; y: number; z: number }
+}
+
 export interface GameTuning {
   scoring: {
     bumperHitBase: number
     targetHitBase: number
     jackpotBonus: number
     adventureEndBonus: number
+    laneRollover: Record<LaneRolloverKind, number>
   }
   obstacle: {
     spinnerHitBase: number
@@ -395,6 +406,12 @@ export const GAME_TUNING = {
     targetHitBase: 500,
     jackpotBonus: 100000,
     adventureEndBonus: 5000,
+    laneRollover: {
+      launch: 25,
+      inlane: 15,
+      outlane: 10,
+      drainApproach: 20,
+    },
   },
   obstacle: {
     spinnerHitBase: 150,
@@ -456,6 +473,11 @@ export const GAME_TUNING = {
     streakMaxMultiplier: 5,
   },
 } as const satisfies GameTuning
+
+/** Base points for a lane rollover sensor kind (no magic numbers in dispatch code). */
+export function getLaneRolloverPoints(kind: LaneRolloverKind): number {
+  return GAME_TUNING.scoring.laneRollover[kind]
+}
 
 /**
  * Behavioral tunables for all five table feeders.
@@ -682,7 +704,18 @@ export const GameConfig = {
     wedgeThickness: 0.5,
 
     // THE SOURCE OF TRUTH:
-    flipperStrength: 32000
+    flipperStrength: 32000,
+
+    /** Thin Rapier sensor cuboids for lane rollover scoring (Phase 2). */
+    laneSensors: [
+      { id: 'launch-mid', kind: 'launch', position: { x: 10.5, y: 0.5, z: -4 }, halfExtents: { x: 0.15, y: 0.4, z: 1.2 } },
+      { id: 'launch-upper', kind: 'launch', position: { x: 10.5, y: 0.5, z: 3 }, halfExtents: { x: 0.15, y: 0.4, z: 1.2 } },
+      { id: 'inlane-left', kind: 'inlane', position: { x: -5.5, y: 0.5, z: -8 }, halfExtents: { x: 0.8, y: 0.4, z: 0.12 } },
+      { id: 'inlane-right', kind: 'inlane', position: { x: 6.5, y: 0.5, z: -8 }, halfExtents: { x: 0.8, y: 0.4, z: 0.12 } },
+      { id: 'outlane-left', kind: 'outlane', position: { x: -8.5, y: 0.5, z: -5 }, halfExtents: { x: 0.12, y: 0.4, z: 1.0 } },
+      { id: 'outlane-right', kind: 'outlane', position: { x: 9.5, y: 0.5, z: -5 }, halfExtents: { x: 0.12, y: 0.4, z: 1.0 } },
+      { id: 'drain-approach', kind: 'drainApproach', position: { x: 0, y: 0.5, z: -12 }, halfExtents: { x: 4, y: 0.4, z: 0.15 } },
+    ] satisfies LaneSensorConfig[],
   },
 
   ball: {

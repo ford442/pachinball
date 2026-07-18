@@ -223,6 +223,12 @@ export interface PachinballEventMap {
     position?: { x: number; y: number; z: number }
     multiplier?: number
   }
+  'lane:rollover': {
+    laneId: string
+    kind: 'launch' | 'inlane' | 'outlane' | 'drainApproach'
+    points: number
+    ballHandle: number
+  }
   'combo:started': {
     comboCount: number
     chainLength?: number
