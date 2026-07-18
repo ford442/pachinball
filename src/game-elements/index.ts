@@ -66,8 +66,20 @@ export {
   type TableMapType,
   type TableMapConfig,
 } from '../shaders/lcd-table'
-export { SoundSystem, getSoundSystem, resetSoundSystem, type SampleCategory, type MapId } from './sound-system'
+export { SoundSystem, getSoundSystem, resetSoundSystem, type MapId } from './sound-system'
 export { createImpactVoiceProfile, normalizeImpactVelocity, getPortalMotifFrequencies, type ImpactCategory, type ImpactVoiceOptions, type ImpactVoiceProfile } from './audio-synth'
+export {
+  getJackpotPhaseSampleKey,
+  getLocalAudioPath,
+  getSampleKeyForCategory,
+  getSampleKeyForImpact,
+  LOCAL_MUSIC_STEMS,
+  LOCAL_SAMPLE_BANK,
+  type AudioMusicStem,
+  type AudioSampleKey,
+  type AudioSourceMode,
+  type SampleCategory,
+} from './audio-sample-bank'
 export { LeaderboardSystem, getLeaderboardSystem, resetLeaderboardSystem, type LeaderboardEntry, type ScoreSubmission } from './leaderboard-system'
 export { NameEntryDialog, getNameEntryDialog, type NameEntryResult } from './name-entry-dialog'
 export { MapSystem, getMapSystem, resetMapSystem, type DynamicMapConfig } from './map-system'

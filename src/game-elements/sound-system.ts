@@ -20,9 +20,21 @@ import {
   type ImpactCategory,
   type ImpactVoiceOptions,
 } from './audio-synth'
+import {
+  getJackpotPhaseSampleKey,
+  getLocalAudioPath,
+  getSampleKeyForCategory,
+  getSampleKeyForImpact,
+  LOCAL_MUSIC_STEMS,
+  LOCAL_SAMPLE_BANK,
+  type AudioMusicStem,
+  type AudioSampleKey,
+  type AudioSourceMode,
+  type SampleCategory,
+} from './audio-sample-bank'
 
 // Audio categories for samples
-export type SampleCategory = 'peg' | 'bumper' | 'flipper' | 'jackpot' | 'fever' | 'launch' | 'drain'
+export type { SampleCategory } from './audio-sample-bank'
 
 // Map IDs for music tracks (dynamic — any string allowed)
 export type MapId = string
@@ -92,6 +104,13 @@ export class SoundSystem {
   // Loading state
   private isInitialized = false
   private loadPromise: Promise<void> | null = null
+  private audioSource: AudioSourceMode = 'samples'
+  private localSampleBuffers = new Map<AudioSampleKey, AudioBuffer>()
+  private localMusicBuffers = new Map<AudioMusicStem, AudioBuffer>()
+  private sampleBankReady = false
+  private sampleBankPromise: Promise<void> | null = null
+  private activeMusicStem: AudioMusicStem | null = null
+  private lastJackpotPhasePlayed = 0
 
   // EventBus subscriptions
   private eventBusUnsubscribers: Array<() => void> = []
@@ -173,6 +192,11 @@ export class SoundSystem {
       this.isInitialized = true
       console.log('[SoundSystem] Core audio ready — gold ball sounds loading in background')
       
+      // Decode local sample bank after user gesture (non-blocking for gameplay)
+      this.sampleBankPromise = this.decodeLocalSampleBank().catch((err) => {
+        console.warn('[SoundSystem] Local sample bank decode failed, synth fallback active:', err)
+      })
+      
       // Load gold ball sounds (with synthesized fallback) — non-blocking
       this.loadGoldBallSounds().catch(err => {
         console.warn('[SoundSystem] Gold ball sound loading failed:', err)
@@ -245,12 +269,267 @@ export class SoundSystem {
     }
   }
 
+  setAudioSource(mode: AudioSourceMode): void {
+    this.audioSource = mode
+  }
+
+  getAudioSource(): AudioSourceMode {
+    return this.audioSource
+  }
+
+  /** Await local sample bank decode (no-op if synth-only or already done). */
+  async waitForSampleBank(): Promise<void> {
+    if (this.sampleBankPromise) {
+      await this.sampleBankPromise
+    }
+  }
+
+  private usesSampleBank(): boolean {
+    return this.audioSource === 'samples' && this.sampleBankReady
+  }
+
+  /**
+   * Fetch + decode all local OGG samples on first user gesture.
+   * Playback after decode is buffer-source only (<2ms on main thread).
+   */
+  private async decodeLocalSampleBank(): Promise<void> {
+    if (!this.audioContext) return
+
+    const decodeOne = async (url: string): Promise<AudioBuffer | null> => {
+      try {
+        const response = await fetch(url)
+        if (!response.ok) return null
+        const arrayBuffer = await response.arrayBuffer()
+        return await this.audioContext!.decodeAudioData(arrayBuffer)
+      } catch {
+        return null
+      }
+    }
+
+    await Promise.all(
+      LOCAL_SAMPLE_BANK.map(async (def) => {
+        const buffer = await decodeOne(getLocalAudioPath(def.file))
+        if (buffer) {
+          this.localSampleBuffers.set(def.key, buffer)
+        }
+      }),
+    )
+
+    await Promise.all(
+      LOCAL_MUSIC_STEMS.map(async (def) => {
+        const buffer = await decodeOne(getLocalAudioPath(def.file))
+        if (buffer) {
+          this.localMusicBuffers.set(def.stem, buffer)
+          this.musicCache.set(`stem-${def.stem}`, {
+            id: `stem-${def.stem}`,
+            title: def.title,
+            artist: 'Nexus Cascade',
+            url: getLocalAudioPath(def.file),
+            duration: buffer.duration,
+            map_id: def.stem,
+          })
+        }
+      }),
+    )
+
+    this.sampleBankReady = this.localSampleBuffers.size > 0
+    if (this.sampleBankReady) {
+      console.log(`[SoundSystem] Sample bank ready (${this.localSampleBuffers.size} SFX, ${this.localMusicBuffers.size} stems)`)
+    }
+  }
+
+  /**
+   * Play a pre-decoded local sample. Fast path — no fetch/decode on main thread.
+   */
+  private playLocalSampleKey(
+    key: AudioSampleKey,
+    volume = 1.0,
+    position?: Vector3,
+    playbackRate = 1,
+  ): boolean {
+    if (!this.isInitialized || !this.audioContext || !this.sfxGain) return false
+    if (this.isMuted) return false
+
+    const buffer = this.localSampleBuffers.get(key)
+    if (!buffer) return false
+
+    try {
+      const source = this.audioContext.createBufferSource()
+      source.buffer = buffer
+      source.playbackRate.value = Math.max(0.5, Math.min(2, playbackRate))
+
+      const gainNode = this.audioContext.createGain()
+      gainNode.gain.value = volume * this.sfxVolume
+
+      if (position && this.spatialPanner) {
+        this.spatialPanner.positionX.value = position.x
+        this.spatialPanner.positionY.value = position.y
+        this.spatialPanner.positionZ.value = position.z
+        source.connect(gainNode)
+        gainNode.connect(this.spatialPanner)
+      } else {
+        source.connect(gainNode)
+        gainNode.connect(this.sfxGain)
+      }
+
+      source.start(0)
+      source.onended = () => {
+        gainNode.disconnect()
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  playJackpotPhase(phase: number): void {
+    if (phase < 1 || phase > 3) return
+    if (phase === this.lastJackpotPhasePlayed) return
+    this.lastJackpotPhasePlayed = phase
+
+    const sampleKey = getJackpotPhaseSampleKey(phase)
+    if (sampleKey && this.usesSampleBank() && this.playLocalSampleKey(sampleKey, 0.95)) {
+      return
+    }
+
+    switch (phase) {
+      case 1:
+        this.playJackpotAlarmSynth()
+        break
+      case 2:
+        this.playJackpotTurbineSynth(2.8)
+        break
+      case 3:
+        this.playJackpotExplosionSynth()
+        this.playSlotJackpot()
+        break
+      default:
+        break
+    }
+  }
+
+  resetJackpotPhaseAudio(): void {
+    this.lastJackpotPhasePlayed = 0
+  }
+
+  /**
+   * Cross-fade to a loopable local music stem (attract / fever).
+   */
+  async playMusicStem(stem: AudioMusicStem): Promise<void> {
+    if (!this.isInitialized || !this.audioContext || !this.musicMasterGain) return
+    if (this.activeMusicStem === stem) return
+
+    const buffer = this.localMusicBuffers.get(stem)
+    if (!buffer) {
+      console.warn(`[SoundSystem] No local music stem: ${stem}`)
+      return
+    }
+
+    const trackId = `stem-${stem}`
+    const track = this.musicCache.get(trackId)
+    if (!track) return
+
+    this.activeMusicStem = stem
+    await this.crossfadeToBuffer(buffer, trackId, track.title)
+  }
+
+  private async crossfadeToBuffer(targetBuffer: AudioBuffer, trackId: string, title: string): Promise<void> {
+    if (!this.audioContext || !this.musicMasterGain) return
+
+    const isTrackOnA = this.musicTrackIdA === trackId
+    const isTrackOnB = this.musicTrackIdB === trackId
+
+    let resolvedBuffer: AudioBuffer = targetBuffer
+    if (isTrackOnA && this.musicBufferA) resolvedBuffer = this.musicBufferA
+    else if (isTrackOnB && this.musicBufferB) resolvedBuffer = this.musicBufferB
+
+    const outgoingChannel = this.activeMusicChannel
+    const incomingChannel = outgoingChannel === 'A' ? 'B' : 'A'
+    const outGain = outgoingChannel === 'A' ? this.musicGainA : this.musicGainB
+    const inGain = incomingChannel === 'A' ? this.musicGainA : this.musicGainB
+    const now = this.audioContext.currentTime
+    const duration = this.CROSSFADE_DURATION
+    const outSource = outgoingChannel === 'A' ? this.musicSourceA : this.musicSourceB
+
+    if (!outSource) {
+      const source = this.audioContext.createBufferSource()
+      source.buffer = resolvedBuffer
+      source.loop = true
+      source.connect(inGain!)
+      source.start(now)
+      inGain!.gain.setValueAtTime(0, now)
+      inGain!.gain.linearRampToValueAtTime(this.getEffectiveMusicVolume(), now + 0.1)
+      if (incomingChannel === 'A') {
+        this.musicSourceA = source
+        this.musicBufferA = resolvedBuffer
+        this.musicTrackIdA = trackId
+      } else {
+        this.musicSourceB = source
+        this.musicBufferB = resolvedBuffer
+        this.musicTrackIdB = trackId
+      }
+      this.activeMusicChannel = incomingChannel
+      console.log(`[SoundSystem] Playing music: ${title}`)
+      return
+    }
+
+    const prevIncomingSource = incomingChannel === 'A' ? this.musicSourceA : this.musicSourceB
+    if (prevIncomingSource) {
+      try { prevIncomingSource.stop(now) } catch { /* ignore */ }
+      try { prevIncomingSource.disconnect() } catch { /* ignore */ }
+    }
+
+    const newSource = this.audioContext.createBufferSource()
+    newSource.buffer = resolvedBuffer
+    newSource.loop = true
+    newSource.connect(inGain!)
+    newSource.start(now)
+
+    const currentOutValue = outGain!.gain.value
+    outGain!.gain.cancelScheduledValues(now)
+    outGain!.gain.setValueAtTime(currentOutValue, now)
+    outGain!.gain.linearRampToValueAtTime(0, now + duration)
+
+    inGain!.gain.cancelScheduledValues(now)
+    inGain!.gain.setValueAtTime(0, now)
+    inGain!.gain.linearRampToValueAtTime(this.getEffectiveMusicVolume(), now + duration)
+
+    if (incomingChannel === 'A') {
+      this.musicSourceA = newSource
+      this.musicBufferA = resolvedBuffer
+      this.musicTrackIdA = trackId
+    } else {
+      this.musicSourceB = newSource
+      this.musicBufferB = resolvedBuffer
+      this.musicTrackIdB = trackId
+    }
+
+    setTimeout(() => {
+      try { outSource.stop() } catch { /* ignore */ }
+      try { outSource.disconnect() } catch { /* ignore */ }
+      outGain!.gain.value = 0
+    }, duration * 1000)
+
+    this.activeMusicChannel = incomingChannel
+    console.log(`[SoundSystem] Cross-fading to music: ${title}`)
+  }
+
+  private getEffectiveMusicVolume(): number {
+    const reducedAudio = GameConfig.camera.reducedMotion || GameConfig.accessibility.photosensitiveMode
+    return this.musicVolume * (reducedAudio ? 0.55 : 1)
+  }
+
   /**
    * Play a random sample from a category
    */
   playSample(category: SampleCategory, position?: Vector3, volume = 1.0): void {
     if (!this.isInitialized || !this.audioContext || !this.sfxGain) return
     if (this.isMuted) return
+
+    if (this.usesSampleBank()) {
+      const key = getSampleKeyForCategory(category)
+      if (key && this.playLocalSampleKey(key, volume, position)) return
+    }
     
     const sampleIds = this.samplesByCategory.get(category)
     if (!sampleIds || sampleIds.length === 0) {
@@ -305,6 +584,16 @@ export class SoundSystem {
     if (!this.isInitialized || !this.audioContext || !this.sfxGain) return
     if (this.isMuted) return
 
+    if (this.usesSampleBank()) {
+      const key = getSampleKeyForImpact(category)
+      if (key) {
+        const n = Math.max(0, Math.min(1, velocity / 24))
+        const vol = (0.55 + n * 0.45) * (options.premium ? 1.08 : 1)
+        const rate = 0.85 + n * 0.35
+        if (this.playLocalSampleKey(key, vol, options.position, rate)) return
+      }
+    }
+
     const now = this.audioContext.currentTime
     const reducedAudio = GameConfig.camera.reducedMotion || GameConfig.accessibility.photosensitiveMode
     const profile = createImpactVoiceProfile(category, velocity, options, reducedAudio)
@@ -348,6 +637,11 @@ export class SoundSystem {
   playPortalEnter(premium = true): void {
     if (!this.isInitialized || !this.audioContext || !this.sfxGain) return
     if (this.isMuted) return
+
+    if (this.usesSampleBank() && this.playLocalSampleKey('portal', premium ? 0.95 : 0.7)) {
+      return
+    }
+
     const now = this.audioContext.currentTime
     const reducedAudio = GameConfig.camera.reducedMotion || GameConfig.accessibility.photosensitiveMode
     const notes = getPortalMotifFrequencies(premium && !reducedAudio)
@@ -584,14 +878,15 @@ export class SoundSystem {
    * Trigger jackpot/fever audio layer
    */
   triggerJackpotAudio(): void {
-    this.playImpact('jackpot', 18, { premium: true })
-    
+    this.resetJackpotPhaseAudio()
+
     // Brief volume boost on music master
     if (this.musicMasterGain && this.audioContext) {
       const now = this.audioContext.currentTime
-      this.musicMasterGain.gain.setValueAtTime(this.musicVolume, now)
-      this.musicMasterGain.gain.linearRampToValueAtTime(this.musicVolume * 1.3, now + 0.1)
-      this.musicMasterGain.gain.linearRampToValueAtTime(this.musicVolume, now + 0.5)
+      const base = this.getEffectiveMusicVolume()
+      this.musicMasterGain.gain.setValueAtTime(base, now)
+      this.musicMasterGain.gain.linearRampToValueAtTime(base * 1.3, now + 0.1)
+      this.musicMasterGain.gain.linearRampToValueAtTime(base, now + 0.5)
     }
   }
 
@@ -615,7 +910,7 @@ export class SoundSystem {
   setMusicVolume(volume: number): void {
     this.musicVolume = Math.max(0, Math.min(1, volume))
     if (this.musicMasterGain) {
-      this.musicMasterGain.gain.value = this.musicVolume
+      this.musicMasterGain.gain.value = this.getEffectiveMusicVolume()
     }
   }
 
@@ -686,6 +981,9 @@ export class SoundSystem {
       : 'gold-plated-collect'
     if (this.synthesizedSounds.has(soundName)) {
       this.play(soundName)
+    }
+    if (this.usesSampleBank() && this.playLocalSampleKey('gold-collect', type === BallType.SOLID_GOLD ? 1 : 0.85)) {
+      return
     }
     this.playImpact('jackpot', type === BallType.SOLID_GOLD ? 22 : 16, {
       isGold: true,
@@ -942,6 +1240,98 @@ export class SoundSystem {
     })
   }
 
+  /** Synth fallbacks for jackpot phases when sample bank is off or missing. */
+  private playJackpotAlarmSynth(): void {
+    if (!this.audioContext || !this.sfxGain) return
+    const now = this.audioContext.currentTime
+
+    const sub = this.audioContext.createOscillator()
+    const subG = this.audioContext.createGain()
+    sub.type = 'sine'
+    sub.frequency.setValueAtTime(48, now)
+    subG.gain.setValueAtTime(0.6 * this.sfxVolume, now)
+    subG.gain.exponentialRampToValueAtTime(0.0001, now + 1.2)
+    sub.connect(subG)
+    subG.connect(this.sfxGain)
+    sub.start(now)
+    sub.stop(now + 1.3)
+
+    const siren = this.audioContext.createOscillator()
+    const sG = this.audioContext.createGain()
+    siren.type = 'sawtooth'
+    siren.frequency.setValueAtTime(620, now)
+    siren.frequency.linearRampToValueAtTime(980, now + 0.25)
+    siren.frequency.linearRampToValueAtTime(620, now + 0.5)
+    sG.gain.setValueAtTime(0.25 * this.sfxVolume, now)
+    sG.gain.exponentialRampToValueAtTime(0.0001, now + 0.6)
+    siren.connect(sG)
+    sG.connect(this.sfxGain)
+    siren.start(now)
+    siren.stop(now + 0.65)
+  }
+
+  private playJackpotTurbineSynth(duration = 2.8): void {
+    if (!this.audioContext || !this.sfxGain) return
+    const now = this.audioContext.currentTime
+
+    const o = this.audioContext.createOscillator()
+    const g = this.audioContext.createGain()
+    const filter = this.audioContext.createBiquadFilter()
+
+    o.type = 'sawtooth'
+    o.frequency.setValueAtTime(140, now)
+    o.frequency.exponentialRampToValueAtTime(920, now + duration)
+
+    filter.type = 'bandpass'
+    filter.frequency.setValueAtTime(600, now)
+    filter.Q.setValueAtTime(1.8, now)
+
+    g.gain.setValueAtTime(0.0001, now)
+    g.gain.linearRampToValueAtTime(0.22 * this.sfxVolume, now + 0.2)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + duration)
+
+    o.connect(filter)
+    filter.connect(g)
+    g.connect(this.sfxGain)
+    o.start(now)
+    o.stop(now + duration + 0.05)
+  }
+
+  private playJackpotExplosionSynth(): void {
+    if (!this.audioContext || !this.sfxGain) return
+    const now = this.audioContext.currentTime
+
+    const noise = this.audioContext.createBufferSource()
+    const buffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * 1.2, this.audioContext.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1
+    noise.buffer = buffer
+
+    const noiseFilter = this.audioContext.createBiquadFilter()
+    noiseFilter.type = 'lowpass'
+    noiseFilter.frequency.setValueAtTime(1200, now)
+
+    const nG = this.audioContext.createGain()
+    nG.gain.setValueAtTime(0.7 * this.sfxVolume, now)
+    nG.gain.exponentialRampToValueAtTime(0.0001, now + 0.9)
+
+    noise.connect(noiseFilter)
+    noiseFilter.connect(nG)
+    nG.connect(this.sfxGain)
+    noise.start(now)
+
+    const punch = this.audioContext.createOscillator()
+    const pG = this.audioContext.createGain()
+    punch.type = 'sine'
+    punch.frequency.setValueAtTime(48, now)
+    pG.gain.setValueAtTime(0.9 * this.sfxVolume, now)
+    pG.gain.exponentialRampToValueAtTime(0.0001, now + 0.6)
+    punch.connect(pG)
+    pG.connect(this.sfxGain)
+    punch.start(now)
+    punch.stop(now + 0.7)
+  }
+
   /**
    * Play a short synthesized beep at the given frequency
    */
@@ -990,6 +1380,11 @@ export class SoundSystem {
   playReelStop(reelIndex: number): void {
     if (!this.isInitialized || !this.audioContext || !this.sfxGain) return
     if (this.isMuted) return
+
+    if (this.usesSampleBank()) {
+      const rate = 0.9 + reelIndex * 0.08
+      if (this.playLocalSampleKey('slot-stop', 0.85, undefined, rate)) return
+    }
 
     const baseFreq = 400 + reelIndex * 100
     const o = this.audioContext.createOscillator()
@@ -1138,6 +1533,9 @@ export class SoundSystem {
     }
     
     this.sampleCache.clear()
+    this.localSampleBuffers.clear()
+    this.localMusicBuffers.clear()
+    this.sampleBankReady = false
     this.isInitialized = false
   }
 }
@@ -1169,12 +1567,31 @@ export function getSoundSystem(eventBus?: EventBus): SoundSystem {
     ss.addEventBusUnsubscriber(
       eventBus.on('fever:start', () => {
         ss.triggerFeverAudio()
+        void ss.playMusicStem('fever')
+      })
+    )
+
+    ss.addEventBusUnsubscriber(
+      eventBus.on('fever:end', () => {
+        void ss.playMusicStem('attract')
       })
     )
 
     ss.addEventBusUnsubscriber(
       eventBus.on('jackpot:start', () => {
         ss.triggerJackpotAudio()
+      })
+    )
+
+    ss.addEventBusUnsubscriber(
+      eventBus.on('jackpot:phase', ({ phase }) => {
+        ss.playJackpotPhase(phase)
+      })
+    )
+
+    ss.addEventBusUnsubscriber(
+      eventBus.on('jackpot:end', () => {
+        ss.resetJackpotPhaseAudio()
       })
     )
 

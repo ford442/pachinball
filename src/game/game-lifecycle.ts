@@ -210,6 +210,7 @@ export class GameLifecycle {
         ),
       ])
       const savedSettings = SettingsManager.load()
+      this.host.soundSystem.setAudioSource(savedSettings.audioSource)
       this.host.soundSystem.setMasterVolume(savedSettings.masterVolume)
       this.host.soundSystem.setMusicVolume(savedSettings.musicVolume)
       this.host.soundSystem.setSfxVolume(savedSettings.sfxVolume)
@@ -222,7 +223,10 @@ export class GameLifecycle {
       } catch (resumeErr) {
         console.warn('[GameLifecycle] Audio resume failed (needs user gesture):', resumeErr)
       }
-      this.host.soundSystem.playMapMusic('1')
+      if (this.host.soundSystem.getAudioSource() === 'samples') {
+        await this.host.soundSystem.waitForSampleBank()
+      }
+      void this.host.soundSystem.playMusicStem('attract')
     } catch (err) {
       console.warn('[GameLifecycle] Audio init failed or timed out, continuing without sound:', err)
     }
