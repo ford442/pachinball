@@ -18,20 +18,41 @@ export class TrackAmbientEffects {
   private flickerTimer = 0
   private profile: TrackThemeProfile | null = null
   private photosensitiveMode = false
+  private reducedMotion = false
 
   constructor(scene: Scene) {
     this.scene = scene
   }
 
+  setAccessibilityFlags(flags: { photosensitiveMode: boolean; reducedMotion: boolean }): void {
+    const changed =
+      this.photosensitiveMode !== flags.photosensitiveMode ||
+      this.reducedMotion !== flags.reducedMotion
+    this.photosensitiveMode = flags.photosensitiveMode
+    this.reducedMotion = flags.reducedMotion
+    if (!changed) return
+
+    const profile = this.profile
+    this.clear()
+    if (profile && this.shouldRenderAmbient(profile)) {
+      this.applyProfile(profile)
+    }
+  }
+
+  /** @deprecated Use setAccessibilityFlags */
   setPhotosensitiveMode(enabled: boolean): void {
-    this.photosensitiveMode = enabled
-    if (enabled) this.clear()
+    this.setAccessibilityFlags({ photosensitiveMode: enabled, reducedMotion: this.reducedMotion })
+  }
+
+  private shouldRenderAmbient(profile: TrackThemeProfile): boolean {
+    if (this.photosensitiveMode || this.reducedMotion) return false
+    return profile.particles.ambient !== 'none'
   }
 
   applyProfile(profile: TrackThemeProfile | null): void {
     this.clear()
     this.profile = profile
-    if (!profile || profile.particles.ambient === 'none' || this.photosensitiveMode) {
+    if (!profile || !this.shouldRenderAmbient(profile)) {
       this.activeStyle = 'none'
       return
     }
@@ -59,7 +80,9 @@ export class TrackAmbientEffects {
   }
 
   update(dt: number): number {
-    if (!this.profile || this.activeStyle === 'none') return 1
+    if (!this.profile || this.activeStyle === 'none' || this.photosensitiveMode || this.reducedMotion) {
+      return 1
+    }
 
     this.flickerTimer += dt
 

@@ -38,6 +38,8 @@ export interface SettingsUIHost {
   showDebugUI: boolean
 
   isDebugHUDAvailable(): boolean
+  ensurePhysicsTuningPanel(): PhysicsTuningPanel
+  applyAccessibilitySettings(reducedMotion: boolean, photosensitiveMode: boolean): void
   setScanlineWeight?(weight: number): void
   setScanlineEnabled?(enabled: boolean): void
   setScanlineIntensityMultiplier?(multiplier: number): void
@@ -166,6 +168,7 @@ export class GameSettingsUI {
 
     SettingsManager.save(newSettings)
     SettingsManager.applyToConfig(newSettings)
+    this.host.applyAccessibilitySettings(newSettings.reducedMotion, newSettings.photosensitiveMode)
     this.host.debugHUDEnabledInSettings = newSettings.enableDebugHUD
     this.applyScanlineEnabled(scanlineEnabled)
     this.applyScanlineIntensityMultiplier(scanlineIntensityMultiplier)
@@ -178,12 +181,10 @@ export class GameSettingsUI {
     }
 
     if (newSettings.enablePhysicsTuning) {
-      this.host.physicsTuningPanel?.show()
+      this.host.ensurePhysicsTuningPanel().show()
     } else {
       this.host.physicsTuningPanel?.hide()
     }
-
-    this.host.mapManager?.getLCDTableState().setPhotosensitiveMode(newSettings.photosensitiveMode)
 
     this.host.soundSystem.setMasterVolume(newSettings.masterVolume)
     this.host.soundSystem.setMusicVolume(newSettings.musicVolume)

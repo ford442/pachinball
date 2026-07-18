@@ -168,7 +168,7 @@ export {
   PHYSICS_TUNING_SLIDERS,
   type PhysicsTuningKey,
 } from './physics-tuning'
-export { PhysicsTuningPanel, isPhysicsTuningQueryEnabled } from './physics-tuning-panel'
+export { PhysicsTuningPanel, isPhysicsTuningQueryEnabled, isPhysicsTuningEnabled } from './physics-tuning-panel'
 export { PerformanceMonitor, type PerformanceMetrics } from './performance-monitor'
 
 // Adventure goal & progression systems

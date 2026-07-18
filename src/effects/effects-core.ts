@@ -28,7 +28,7 @@ import {
   STATE_COLORS,
   INTENSITY,
 } from '../game-elements/visual-language'
-import { EffectsConfig, BallType } from '../config'
+import { EffectsConfig, BallType, GameConfig } from '../config'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { DEFAULT_ACCESSIBILITY, type AccessibilityConfig } from '../game-elements/accessibility-config'
 import { ParticleEffects } from './effects-particles'
@@ -250,7 +250,7 @@ export class EffectsSystem {
       this.targetTrackBloom = profile.atmosphere.bloomWeight
       this.targetTrackVignette = profile.atmosphere.vignetteWeight
       this.currentCabinetColor = profile.particles.hitPrimary
-      if (this.accessibility.effectIntensity > 0) {
+      if (this.shouldEnableTrackAmbientEffects()) {
         this.trackAmbientEffects.applyProfile(profile)
       } else {
         this.trackAmbientEffects.applyProfile(null)
@@ -281,6 +281,19 @@ export class EffectsSystem {
 
   registerAccessibility(config: AccessibilityConfig): void {
     this.accessibility = config
+    this.trackAmbientEffects.setAccessibilityFlags({
+      photosensitiveMode: GameConfig.accessibility.photosensitiveMode,
+      reducedMotion: config.reducedMotion,
+    })
+    if (this.activeTrackProfile) {
+      this.setTrackThemeProfile(this.activeTrackProfile)
+    }
+  }
+
+  private shouldEnableTrackAmbientEffects(): boolean {
+    if (this.accessibility.reducedMotion) return false
+    if (GameConfig.accessibility.photosensitiveMode) return false
+    return this.accessibility.effectIntensity > 0
   }
 
   registerSceneLights(keyLight: DirectionalLight, rimLight: DirectionalLight, bounceLight: PointLight): void {
