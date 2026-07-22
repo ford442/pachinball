@@ -28,7 +28,10 @@ import { SSRRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeli
 import { MotionBlurPostProcess } from '@babylonjs/core/PostProcesses/motionBlurPostProcess'
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation'
 import { EngineInstrumentation } from '@babylonjs/core/Instrumentation/engineInstrumentation'
-import { SceneOptimizer, SceneOptimizerOptions } from '@babylonjs/core/Misc/sceneOptimizer'
+import {
+  SceneOptimizer,
+} from '@babylonjs/core/Misc/sceneOptimizer'
+import { createSafeSceneOptimizerOptions } from './safe-scene-optimizer-options'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 
@@ -554,7 +557,14 @@ export class GameRenderer {
     })
   }
 
-  /** Start adaptive quality optimizer targeting 55 fps. */
+  /**
+   * Start adaptive quality optimizer targeting 55 fps.
+   *
+   * Intentionally omits Babylon's MergeMeshesOptimization. That pass merges
+   * same-material meshes (flipper blades/pivots, bumpers, balls, etc.) into
+   * static `_merged` meshes and detaches them from their physics-driven
+   * parents — which makes flippers appear frozen while joints still move.
+   */
   setupSceneOptimizer(): void {
     const { scene } = this.host
     if (!scene) return
@@ -565,7 +575,7 @@ export class GameRenderer {
       return
     }
 
-    const options = SceneOptimizerOptions.ModerateDegradationAllowed(55)
+    const options = createSafeSceneOptimizerOptions(55)
     this._sceneOptimizer = new SceneOptimizer(scene, options)
     this._sceneOptimizer.onSuccessObservable.add(() => {
       console.log('[SceneOptimizer] Target FPS reached – optimizations applied')
@@ -574,7 +584,7 @@ export class GameRenderer {
       console.warn('[SceneOptimizer] Could not reach target FPS after all optimizations')
     })
     this._sceneOptimizer.start()
-    console.log('[SceneOptimizer] Adaptive quality optimizer started (target: 55 fps)')
+    console.log('[SceneOptimizer] Adaptive quality optimizer started (target: 55 fps, no mesh merge)')
   }
 
   /** Initialize debug instrumentation when HUD becomes visible. */

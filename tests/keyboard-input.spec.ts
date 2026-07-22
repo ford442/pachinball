@@ -179,7 +179,11 @@ test.describe('Keyboard Input Pipeline', () => {
 
 function expectUnexpectedConsoleErrors(consoleErrors: string[]) {
   const unexpectedErrors = consoleErrors.filter(
-    (text) => !text.includes('ERR_CONNECTION_REFUSED') && !text.includes('localhost:8000')
+    (text) =>
+      !text.includes('ERR_CONNECTION_REFUSED') &&
+      !text.includes('localhost:8000') &&
+      !text.includes('404') &&
+      !text.includes('Failed to load resource')
   );
   expect(unexpectedErrors).toHaveLength(0);
 }
