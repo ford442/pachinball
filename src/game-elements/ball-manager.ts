@@ -369,6 +369,12 @@ export class BallManager {
       }
       this.ballTrails.delete(body)
     }
+
+    // Never leave ballBody pointing at a removed Rapier handle — the next
+    // physics frame would call translation()/linvel() and trap in WASM.
+    if (this.ballBody === body) {
+      this.ballBody = this.ballBodies[0] ?? null
+    }
   }
 
   removeExtraBalls(): void {
@@ -379,13 +385,18 @@ export class BallManager {
         this.ballBodies.splice(i, 1)
       }
     }
-    
-    this.bindings = this.bindings.filter(b => {
-      if (!b.mesh.name.startsWith('ball')) return true
-      if (b.rigidBody === this.ballBody) return true
+
+    // Mutate in place — do NOT reassign `this.bindings`. BallManager shares the
+    // same array reference as GameObjects; `filter()` would split them and leave
+    // GameObjects holding stale ball bodies. syncMeshes then crashes in Rapier
+    // (`isFixed` → WASM unreachable) on the next drain.
+    for (let i = this.bindings.length - 1; i >= 0; i--) {
+      const b = this.bindings[i]
+      if (!b.mesh.name.startsWith('ball')) continue
+      if (b.rigidBody === this.ballBody) continue
       b.mesh.dispose()
-      return false
-    })
+      this.bindings.splice(i, 1)
+    }
     this.endMultiball()
   }
 
@@ -592,6 +603,10 @@ export class BallManager {
   }
 
   getBallBody(): RAPIER.RigidBody | null {
+    // Heal stale primary pointer after removeBall races / incomplete drain paths.
+    if (this.ballBody && typeof this.ballBody.isValid === 'function' && !this.ballBody.isValid()) {
+      this.ballBody = this.ballBodies.find((b) => b.isValid?.() !== false) ?? null
+    }
     return this.ballBody
   }
 
