@@ -149,30 +149,25 @@ export class InteractiveMaterials extends MaterialLibraryBase {
   getEnhancedFlipperMaterial(): PBRMaterial {
     return this.getCachedPBR('enhancedFlipper', () => {
       const mat = new PBRMaterial('enhancedFlipperMat', this.scene)
-      
-      // Base: warm wood tone (like classic pinball)
-      mat.albedoColor = new Color3(0.4, 0.25, 0.15)
-      
-      // Metal plating on striking surface
-      mat.metallic = 0.4
-      mat.roughness = 0.35
-      
-      // Medium-high environment reflection
-      mat.environmentIntensity = 0.8
-      
-      // Polished clear coat for the "playing surface"
-      mat.clearCoat.isEnabled = true
-      mat.clearCoat.intensity = 0.6
-      mat.clearCoat.roughness = 0.2
-      
-      // Subtle emissive edge glow (neon accent)
-      mat.emissiveColor = emissive('#ff6600', INTENSITY.AMBIENT)
-      mat.emissiveIntensity = 0.4
 
-      // Anisotropy for brushed metal look on striking surface
+      // Warm interactive paddle — readable on the dark LCD even when IBL is weak
+      // (LOW quality tier drops environment intensity toward 0).
+      mat.albedoColor = color(PALETTE.ALERT).scale(0.55)
+      mat.metallic = 0.25
+      mat.roughness = 0.4
+      mat.environmentIntensity = 0.6
+
+      mat.clearCoat.isEnabled = true
+      mat.clearCoat.intensity = 0.5
+      mat.clearCoat.roughness = 0.25
+
+      // Self-lit neon edge so flippers stay visible without relying on reflections
+      mat.emissiveColor = emissive(PALETTE.ALERT, INTENSITY.NORMAL)
+      mat.emissiveIntensity = 1.1
+
       if (this._qualityTier === QualityTier.HIGH) {
         mat.anisotropy.isEnabled = true
-        mat.anisotropy.intensity = 0.3
+        mat.anisotropy.intensity = 0.25
         mat.anisotropy.direction.x = 1
         mat.anisotropy.direction.y = 0
       }
