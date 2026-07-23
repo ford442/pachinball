@@ -9,6 +9,7 @@ import type { MapSystem } from '../game-elements/map-system'
 import type { PhysicsSystem } from '../game-elements/physics'
 import type { TableMapManager } from './game-maps'
 import { SettingsManager } from '../game-elements'
+import type { AudioSourceMode } from '../game-elements/audio-sample-bank'
 import { TABLE_MAPS, registerMap } from '../shaders/lcd-table'
 import { PhysicsDebugRenderer } from '../game-elements/physics-debug-renderer'
 import {
@@ -37,6 +38,8 @@ export interface SettingsUIHost {
   showDebugUI: boolean
 
   isDebugHUDAvailable(): boolean
+  ensurePhysicsTuningPanel(): PhysicsTuningPanel
+  applyAccessibilitySettings(reducedMotion: boolean, photosensitiveMode: boolean): void
   setScanlineWeight?(weight: number): void
   setScanlineEnabled?(enabled: boolean): void
   setScanlineIntensityMultiplier?(multiplier: number): void
@@ -94,6 +97,7 @@ export class GameSettingsUI {
     const musicVolumeSlider = document.getElementById('music-volume') as HTMLInputElement
     const sfxVolumeSlider = document.getElementById('sfx-volume') as HTMLInputElement
     const muteCheckbox = document.getElementById('mute-audio') as HTMLInputElement
+    const audioSourceSelect = document.getElementById('audio-source') as HTMLSelectElement
 
     if (reducedMotionCheckbox) reducedMotionCheckbox.checked = settings.reducedMotion
     if (photosensitiveCheckbox) photosensitiveCheckbox.checked = settings.photosensitiveMode
@@ -113,6 +117,7 @@ export class GameSettingsUI {
     if (musicVolumeSlider) musicVolumeSlider.value = String(settings.musicVolume)
     if (sfxVolumeSlider) sfxVolumeSlider.value = String(settings.sfxVolume)
     if (muteCheckbox) muteCheckbox.checked = settings.muted
+    if (audioSourceSelect) audioSourceSelect.value = settings.audioSource
 
     const rendererSelect = document.getElementById('renderer-select') as HTMLSelectElement | null
     if (rendererSelect) rendererSelect.value = getRendererPreference()
@@ -136,6 +141,7 @@ export class GameSettingsUI {
     const musicVolumeSlider = document.getElementById('music-volume') as HTMLInputElement
     const sfxVolumeSlider = document.getElementById('sfx-volume') as HTMLInputElement
     const muteCheckbox = document.getElementById('mute-audio') as HTMLInputElement
+    const audioSourceSelect = document.getElementById('audio-source') as HTMLSelectElement
 
     const scanlineIntensityMultiplier = Math.min(1.5, Math.max(0, parseFloat(scanlineMultiplierSlider?.value ?? '1')))
     const scanlineEnabled = scanlineEnabledToggle?.checked ?? true
@@ -157,10 +163,12 @@ export class GameSettingsUI {
       musicVolume: parseFloat(musicVolumeSlider?.value ?? '0.6'),
       sfxVolume: parseFloat(sfxVolumeSlider?.value ?? '0.9'),
       muted: muteCheckbox?.checked ?? false,
+      audioSource: (audioSourceSelect?.value === 'synth' ? 'synth' : 'samples') as AudioSourceMode,
     }
 
     SettingsManager.save(newSettings)
     SettingsManager.applyToConfig(newSettings)
+    this.host.applyAccessibilitySettings(newSettings.reducedMotion, newSettings.photosensitiveMode)
     this.host.debugHUDEnabledInSettings = newSettings.enableDebugHUD
     this.applyScanlineEnabled(scanlineEnabled)
     this.applyScanlineIntensityMultiplier(scanlineIntensityMultiplier)
@@ -173,12 +181,10 @@ export class GameSettingsUI {
     }
 
     if (newSettings.enablePhysicsTuning) {
-      this.host.physicsTuningPanel?.show()
+      this.host.ensurePhysicsTuningPanel().show()
     } else {
       this.host.physicsTuningPanel?.hide()
     }
-
-    this.host.mapManager?.getLCDTableState().setPhotosensitiveMode(newSettings.photosensitiveMode)
 
     this.host.soundSystem.setMasterVolume(newSettings.masterVolume)
     this.host.soundSystem.setMusicVolume(newSettings.musicVolume)
@@ -186,6 +192,7 @@ export class GameSettingsUI {
     if (newSettings.muted !== this.host.soundSystem.getVolumeSettings().muted) {
       this.host.soundSystem.toggleMute()
     }
+    this.host.soundSystem.setAudioSource(newSettings.audioSource)
   }
 
   setupLatencyOverlay(): void {

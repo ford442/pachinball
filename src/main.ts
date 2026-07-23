@@ -8,6 +8,7 @@ import { getRendererPreference, exposeRenderer, RENDERER_WEBGL2 } from './render
 import { applyHardwareScaling, resolveEngineOptions } from './engine/engine-options'
 import { scheduleIdleWasmPreload } from './engine/wasm-idle-preload'
 import { VisibilityManager } from './engine/visibility-manager'
+import { registerServiceWorker } from './pwa'
 
 /**
  * Preload physics WASM in parallel with engine creation.
@@ -21,6 +22,8 @@ async function preloadPhysics(): Promise<typeof RAPIER> {
 }
 
 async function bootstrap(): Promise<void> {
+  registerServiceWorker()
+
   const canvas = document.getElementById('pachinball-canvas') as HTMLCanvasElement | null
   if (!canvas) throw new Error('Canvas element not found')
 

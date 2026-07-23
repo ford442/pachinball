@@ -34,6 +34,7 @@ export interface PachinballEventMap {
   'fever:end': void
   'jackpot:start': void
   'jackpot:end': void
+  'jackpot:phase': { phase: number }
   'reach:start': void
   'reach:end': void
   'adventure:start': void
@@ -221,6 +222,12 @@ export interface PachinballEventMap {
     source: string
     position?: { x: number; y: number; z: number }
     multiplier?: number
+  }
+  'lane:rollover': {
+    laneId: string
+    kind: 'launch' | 'inlane' | 'outlane' | 'drainApproach'
+    points: number
+    ballHandle: number
   }
   'combo:started': {
     comboCount: number

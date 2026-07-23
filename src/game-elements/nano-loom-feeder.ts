@@ -213,8 +213,8 @@ export class NanoLoomFeeder {
 
         case NanoLoomState.LIFT:
             if (this.caughtBall) {
-                // Lerp ball up to top center of loom
-                const topY = this.position.y + (this.config.height / 2) - 0.5
+                const anim = this.config.animation
+                const topY = this.position.y + (this.config.height / 2) - anim.liftTopYOffset
                 const targetPos = new Vector3(this.position.x, topY, this.position.z)
                 const currentPos = this.caughtBall.translation()
 
@@ -245,11 +245,11 @@ export class NanoLoomFeeder {
                     const row = Math.floor(index / this.config.pinCols)
                     const distanceFromActive = Math.abs(row - ballRow)
 
-                    if (distanceFromActive < 2) {
-                        const activation = 1.0 - (distanceFromActive / 2)
-                        pin.scaling.setAll(1.0 + activation * 0.5)
+                    if (distanceFromActive < anim.pinActivationRowRadius) {
+                        const activation = 1.0 - (distanceFromActive / anim.pinActivationRowRadius)
+                        pin.scaling.setAll(1.0 + activation * anim.pinActivationScaleBoost)
                         ;(pin.material as StandardMaterial).emissiveColor =
-                          Color3.FromHexString("#00ff00").scale(0.5 + activation * 0.5)
+                          Color3.FromHexString("#00ff00").scale(anim.pinActivationEmissiveBase + activation * anim.pinActivationEmissiveBase)
                     } else {
                         pin.scaling.setAll(1.0)
                         ;(pin.material as StandardMaterial).emissiveColor = Color3.FromHexString("#00ff00")
@@ -264,7 +264,7 @@ export class NanoLoomFeeder {
                 const pos = this.caughtBall.translation()
                 const bottomY = this.position.y - (this.config.height / 2)
 
-                if (pos.y < bottomY + 0.5) {
+                if (pos.y < bottomY + this.config.animation.weaveExitMarginY) {
                     this.setState(NanoLoomState.EJECT)
                 }
             }
@@ -324,13 +324,13 @@ export class NanoLoomFeeder {
       switch (newState) {
           case NanoLoomState.IDLE:
               this.caughtBall = null
-              if (this.light) this.light.intensity = 0.2
+              if (this.light) this.light.intensity = this.config.animation.stateLightIdle
               break
 
           case NanoLoomState.LIFT:
               if (this.light) {
                   this.light.diffuse = Color3.FromHexString("#00ffff")
-                  this.light.intensity = 1.0
+                  this.light.intensity = this.config.animation.stateLightLift
               }
               break
 

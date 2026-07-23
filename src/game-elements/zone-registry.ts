@@ -8,7 +8,7 @@
  * - Transition type (major/minor - affects shake intensity)
  */
 
-import { AdventureTrackType } from './adventure-mode-builder'
+import { AdventureTrackType } from '../adventure/adventure-types'
 import { resolveVideoUrl } from '../game/game-utils'
 
 export interface ZoneConfig {

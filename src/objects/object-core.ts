@@ -11,6 +11,7 @@ import { WallBuilder } from './object-walls'
 import { RailBuilder } from './object-rails'
 import { PachinkoBuilder } from './object-pachinko'
 import { DecorationBuilder } from './object-decoration'
+import { LaneSensorBuilder, type LaneSensorDef } from './object-lane-sensors'
 import type { GameObjectRefs } from './object-types'
 
 export class GameObjects {
@@ -40,6 +41,7 @@ export class GameObjects {
   private railBuilder: RailBuilder
   private pachinkoBuilder: PachinkoBuilder
   private decorationBuilder: DecorationBuilder
+  private laneSensorBuilder: LaneSensorBuilder
 
   // References
   private refs: GameObjectRefs = {
@@ -67,6 +69,7 @@ export class GameObjects {
     this.railBuilder = new RailBuilder(scene, world, rapier, config)
     this.pachinkoBuilder = new PachinkoBuilder(scene, world, rapier, config)
     this.decorationBuilder = new DecorationBuilder(scene, world, rapier, config)
+    this.laneSensorBuilder = new LaneSensorBuilder(world, rapier)
   }
 
   createCabinetDecoration(): void {
@@ -119,6 +122,10 @@ export class GameObjects {
     deathMat.emissiveColor = Color3.Red()
     deathMat.alpha = 0.2
     deathZoneVis.material = deathMat
+  }
+
+  createLaneSensors(): void {
+    this.laneSensorBuilder.createLaneSensors()
   }
 
   /**
@@ -336,6 +343,10 @@ export class GameObjects {
     return this.deathZoneBody
   }
 
+  getLaneSensors(): LaneSensorDef[] {
+    return this.laneSensorBuilder.getSensors()
+  }
+
   getFlipperJoints(): { left: RAPIER.ImpulseJoint | null; right: RAPIER.ImpulseJoint | null } {
     return {
       left: this.flipperLeftJoint,
@@ -372,6 +383,9 @@ export class GameObjects {
     }
     if (this.plungerBody) {
       bodies.add(this.plungerBody)
+    }
+    for (const body of this.laneSensorBuilder.getBodies()) {
+      bodies.add(body)
     }
 
     for (const body of bodies) {

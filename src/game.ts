@@ -94,7 +94,7 @@ import { GameInputActions, type InputActionsHost } from './game/game-input-actio
 import { GameScenario, type ScenarioHost } from './game/game-scenario'
 import { GameSlotAdventure, type SlotAdventureHost } from './game/game-slot-adventure'
 import { GameSettingsUI, type SettingsUIHost } from './game/game-settings-ui'
-import { PhysicsTuningPanel, isPhysicsTuningQueryEnabled } from './game-elements/physics-tuning-panel'
+import { PhysicsTuningPanel, isPhysicsTuningEnabled } from './game-elements/physics-tuning-panel'
 import { GameDebug, type DebugHost } from './game/game-debug'
 import { GameLifecycle, type LifecycleHost } from './game/game-lifecycle'
 import { GameSystemsInitializer } from './game/game-systems-init'
@@ -208,6 +208,7 @@ export class Game {
 
   // Map / Adventure
   mapSystem = getMapSystem()
+  // Legacy level-select + cosmetic rewards; campaign truth is adventureTrackProgression.
   adventureState = getAdventureState()
   levelSelectScreen: ReturnType<typeof getLevelSelectScreen> | null = null
   dynamicWorld: ReturnType<typeof getDynamicWorld> | null = null
@@ -328,8 +329,8 @@ export class Game {
       this.scenarioManager = new GameScenario(this as unknown as ScenarioHost)
       this.slotAdventure = new GameSlotAdventure(this as unknown as SlotAdventureHost)
       this.settingsUI = new GameSettingsUI(this as unknown as SettingsUIHost)
-      this.physicsTuningPanel = new PhysicsTuningPanel()
-      if (isPhysicsTuningQueryEnabled() || this.physicsTuningEnabledInSettings) {
+      if (isPhysicsTuningEnabled(this.physicsTuningEnabledInSettings)) {
+        this.physicsTuningPanel = new PhysicsTuningPanel()
         this.physicsTuningPanel.show()
       }
       this.debugHelper = new GameDebug(this as unknown as DebugHost)
@@ -662,6 +663,7 @@ export class Game {
     this.debugHelper.handleDebugHUDVisibilityChange(
       visible,
       () => {
+        this.eventBusLog.wire(this.eventBus)
         this.eventBusLog.setEnabled(true)
         this.performanceMonitor.setEnabled(true)
       },
@@ -670,6 +672,19 @@ export class Game {
         this.eventBusLog.clear()
       },
     )
+  }
+  ensurePhysicsTuningPanel(): PhysicsTuningPanel {
+    if (!this.physicsTuningPanel) {
+      this.physicsTuningPanel = new PhysicsTuningPanel()
+    }
+    return this.physicsTuningPanel
+  }
+  applyAccessibilitySettings(reducedMotion: boolean, photosensitiveMode: boolean): void {
+    this.accessibility = detectAccessibility({ reducedMotion, photosensitiveMode })
+    this.effects?.registerAccessibility(this.accessibility)
+    this.adventureMode?.setAccessibilityConfig(this.accessibility)
+    this.display?.setAccessibility(this.accessibility)
+    this.mapManager?.getLCDTableState().setPhotosensitiveMode(photosensitiveMode)
   }
   isDebugHUDAvailable(): boolean { return this.debugHelper.isDebugHUDAvailable() }
   isDebugHUDKeyboardEnabled(): boolean { return this.debugHelper.isDebugHUDKeyboardEnabled() }

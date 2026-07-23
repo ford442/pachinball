@@ -3,7 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0e1a" />
+    <meta name="description" content="Nexus Cascade — hybrid pachinko and pinball arcade cabinet. Install for fullscreen landscape play, offline after first visit." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Nexus Cascade" />
     <title>Nexus Cascade</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
@@ -141,6 +148,15 @@
             <input type="checkbox" id="mute-audio">
             <span>Mute All</span>
             <small>Temporarily silence all audio</small>
+          </label>
+
+          <label class="setting-row">
+            <span>Sound Style</span>
+            <select id="audio-source">
+              <option value="samples">Sample bank (arcade)</option>
+              <option value="synth">Synth only (prototype)</option>
+            </select>
+            <small>Sample bank falls back to synth if files are missing</small>
           </label>
 
           <div id="developer-settings" class="hidden">

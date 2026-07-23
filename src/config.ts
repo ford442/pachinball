@@ -320,12 +320,23 @@ export const EffectsConfig = {
   }
 } as const
 
+/** Lane rollover sensor category — maps to GAME_TUNING.scoring.laneRollover keys. */
+export type LaneRolloverKind = 'launch' | 'inlane' | 'outlane' | 'drainApproach'
+
+export interface LaneSensorConfig {
+  id: string
+  kind: LaneRolloverKind
+  position: { x: number; y: number; z: number }
+  halfExtents: { x: number; y: number; z: number }
+}
+
 export interface GameTuning {
   scoring: {
     bumperHitBase: number
     targetHitBase: number
     jackpotBonus: number
     adventureEndBonus: number
+    laneRollover: Record<LaneRolloverKind, number>
   }
   obstacle: {
     spinnerHitBase: number
@@ -395,6 +406,12 @@ export const GAME_TUNING = {
     targetHitBase: 500,
     jackpotBonus: 100000,
     adventureEndBonus: 5000,
+    laneRollover: {
+      launch: 25,
+      inlane: 15,
+      outlane: 10,
+      drainApproach: 20,
+    },
   },
   obstacle: {
     spinnerHitBase: 150,
@@ -457,12 +474,17 @@ export const GAME_TUNING = {
   },
 } as const satisfies GameTuning
 
+/** Base points for a lane rollover sensor kind (no magic numbers in dispatch code). */
+export function getLaneRolloverPoints(kind: LaneRolloverKind): number {
+  return GAME_TUNING.scoring.laneRollover[kind]
+}
+
 /**
  * Behavioral tunables for all five table feeders.
  * Single source of truth — GameConfig aliases these for backward compatibility.
  * Algorithmic constants (2π, deg↔rad) stay inline in feeder implementations.
  */
-export const FEEDER_TUNABLES = {
+export const FEEDER_TUNABLES = Object.freeze({
   'mag-spin': {
     // Upper-right wall — between pachinko field (x≈7) and wall (x≈11.5)
     feederPosition: { x: 9.25, y: 0.5, z: 12 },
@@ -479,6 +501,32 @@ export const FEEDER_TUNABLES = {
     maxCaptureHeightY: 2.0,
     spinAngularSpeed: 32,
     releaseUpwardBias: 0.08,
+    animation: {
+      ringSpeedSpin: 24,
+      ringSpeedIdle: 1,
+      ringSpeedDefault: 4,
+      ringLerpSpin: 2.5,
+      ringLerpDefault: 0.5,
+      shakeDecay: 0.88,
+      idlePulseFrequency: 1.8,
+      idleLightBase: 0.35,
+      idleLightPulseAmplitude: 0.35,
+      idleEmissiveBase: 0.6,
+      idleEmissivePulseAmplitude: 0.4,
+      spinChargeLightBase: 1.2,
+      spinChargeLightScale: 1.5,
+      releaseShakeInitial: 0.6,
+      stateLightIdle: 0.5,
+      stateLightCatch: 1.0,
+      stateLightSpin: 1.5,
+      stateLightCooldown: 0.2,
+    },
+    physicsExtras: {
+      releaseSpinVarianceXZ: 8,
+      releaseSpinBaseY: 12,
+      spinAxisMultiplierY: 1.3,
+      spinAxisMultiplierZ: 0.7,
+    },
   },
   'nano-loom': {
     loomPosition: { x: -13.0, y: 4.0, z: 2.0 },
@@ -497,6 +545,15 @@ export const FEEDER_TUNABLES = {
     weaveNudgeImpulse: 0.1,
     ejectImpulse: { x: 8.0, y: 2.0, z: 0.0 },
     ejectCooldown: 1.0,
+    animation: {
+      liftTopYOffset: 0.5,
+      pinActivationRowRadius: 2,
+      pinActivationScaleBoost: 0.5,
+      pinActivationEmissiveBase: 0.5,
+      weaveExitMarginY: 0.5,
+      stateLightIdle: 0.2,
+      stateLightLift: 1.0,
+    },
   },
   'prism-core': {
     prismPosition: { x: 0.0, y: 0.5, z: 12.0 },
@@ -505,6 +562,20 @@ export const FEEDER_TUNABLES = {
     ejectSpread: 45,
     lockCapacity: 3,
     postReleaseCooldown: 2.0,
+    animation: {
+      rotationSpeedIdle: 0.5,
+      rotationSpeedLocked1: 2.0,
+      rotationSpeedLocked2: 5.0,
+      rotationSpeedOverload: 15.0,
+      rotationLerpRate: 2,
+      outerRotationRatio: 0.5,
+      breathPhaseMultiplier: 2,
+      breathAmplitudeBase: 0.05,
+      bloomDecay: 0.9,
+      bloomScaleMultiplier: 3.0,
+      bloomAlphaScale: 0.5,
+      bloomCutoff: 0.01,
+    },
   },
   'gauss-cannon': {
     gaussPosition: { x: -12.0, y: 0.5, z: -8.0 },
@@ -520,6 +591,22 @@ export const FEEDER_TUNABLES = {
     breechYOffset: 1.0,
     idleSweepRate: 2.0,
     aimSweepMultiplier: 20,
+    animation: {
+      coilPulseRate: 10,
+      coilStretchAmplitude: 0.15,
+      recoilSpringStrength: 20.0,
+      recoilDamping: 0.7,
+      fireRecoilImpulse: 0.5,
+      aimVibrationIntensity: 0.02,
+      fireVibrationIntensity: 0.3,
+      vibrationDecay: 0.95,
+      idleSweepScale: 10,
+      stateLightLoad: 0.5,
+      stateLightAim: 1.0,
+      stateLightCooldown: 0.2,
+      fireLightFlashIntensity: 5.0,
+      fireLightFadeIntensity: 0.2,
+    },
   },
   'quantum-tunnel': {
     inputPosition: { x: 11.5, y: 0.5, z: 0.0 },
@@ -538,8 +625,20 @@ export const FEEDER_TUNABLES = {
     portalSpinCapture: 5.0,
     portalSpinTransport: 8.0,
     portalSpinEject: 10.0,
+    animation: {
+      portalSpinLerpRate: 5.0,
+      outputSpinRatio: 0.8,
+      portalStretchAmplitude: 0.3,
+      portalStretchSideFactor: 0.3,
+      ejectRecoilDecay: 0.8,
+      ejectRecoilThreshold: 0.01,
+      idlePulseRate: 0.002,
+      idlePulseBase: 0.5,
+      idlePulseAmplitude: 0.2,
+      discEmissiveScale: 0.8,
+    },
   },
-} as const
+} as const)
 
 export type FeederTunables = typeof FEEDER_TUNABLES
 export type FeederId = keyof FeederTunables
@@ -605,7 +704,18 @@ export const GameConfig = {
     wedgeThickness: 0.5,
 
     // THE SOURCE OF TRUTH:
-    flipperStrength: 32000
+    flipperStrength: 32000,
+
+    /** Thin Rapier sensor cuboids for lane rollover scoring (Phase 2). */
+    laneSensors: [
+      { id: 'launch-mid', kind: 'launch', position: { x: 10.5, y: 0.5, z: -4 }, halfExtents: { x: 0.15, y: 0.4, z: 1.2 } },
+      { id: 'launch-upper', kind: 'launch', position: { x: 10.5, y: 0.5, z: 3 }, halfExtents: { x: 0.15, y: 0.4, z: 1.2 } },
+      { id: 'inlane-left', kind: 'inlane', position: { x: -5.5, y: 0.5, z: -8 }, halfExtents: { x: 0.8, y: 0.4, z: 0.12 } },
+      { id: 'inlane-right', kind: 'inlane', position: { x: 6.5, y: 0.5, z: -8 }, halfExtents: { x: 0.8, y: 0.4, z: 0.12 } },
+      { id: 'outlane-left', kind: 'outlane', position: { x: -8.5, y: 0.5, z: -5 }, halfExtents: { x: 0.12, y: 0.4, z: 1.0 } },
+      { id: 'outlane-right', kind: 'outlane', position: { x: 9.5, y: 0.5, z: -5 }, halfExtents: { x: 0.12, y: 0.4, z: 1.0 } },
+      { id: 'drain-approach', kind: 'drainApproach', position: { x: 0, y: 0.5, z: -12 }, halfExtents: { x: 4, y: 0.4, z: 0.15 } },
+    ] satisfies LaneSensorConfig[],
   },
 
   ball: {

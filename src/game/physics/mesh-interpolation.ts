@@ -18,6 +18,7 @@ export class MeshInterpolationSystem {
   private readonly scratchCurrRot = new Quaternion()
   private readonly scratchInterpPos = new Vector3()
   private readonly scratchInterpRot = new Quaternion()
+  private readonly scratchScale = new Vector3(1, 1, 1)
 
   syncMeshes(alpha: number, bindings: InterpolationBinding[]): void {
     const liveBodies = new Set<RAPIER.RigidBody>()
@@ -26,6 +27,10 @@ export class MeshInterpolationSystem {
       const body = binding.rigidBody
       const mesh = binding.mesh
       if (!body || !mesh) continue
+      // Removed bodies stay in a stale shared binding list if arrays diverge;
+      // calling isFixed()/translation() on them traps in Rapier WASM.
+      if (typeof body.isValid === 'function' && !body.isValid()) continue
+      if (mesh.isDisposed?.()) continue
       if (body.isFixed()) continue
 
       const pos = body.translation()
@@ -75,12 +80,16 @@ export class MeshInterpolationSystem {
 
     const parentWorld = mesh.parent.computeWorldMatrix(true)
     parentWorld.invertToRef(TmpVectors.Matrix[0])
-    Matrix.ComposeToRef(mesh.scaling, rot, pos, TmpVectors.Matrix[1])
+    // Physics-driven roots are authored at unit scale. Never feed mesh.scaling
+    // back into Compose→decompose — float drift can shrink flippers to invisible.
+    this.scratchScale.set(1, 1, 1)
+    Matrix.ComposeToRef(this.scratchScale, rot, pos, TmpVectors.Matrix[1])
     TmpVectors.Matrix[1].multiplyToRef(TmpVectors.Matrix[0], TmpVectors.Matrix[2])
     if (!mesh.rotationQuaternion) {
       mesh.rotationQuaternion = new Quaternion()
     }
-    TmpVectors.Matrix[2].decompose(mesh.scaling, mesh.rotationQuaternion, mesh.position)
+    TmpVectors.Matrix[2].decompose(this.scratchScale, mesh.rotationQuaternion, mesh.position)
+    mesh.scaling.set(1, 1, 1)
   }
 
   dispose(): void {

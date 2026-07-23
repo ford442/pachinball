@@ -12,6 +12,8 @@ export interface TrackTeardownStats {
   resetSensorsRemoved: number
   chromaGatesRemoved: number
   adventureSensorRemoved: number
+  /** Exit portal mesh + sensor removed during track switch (deactivateExitPortal). */
+  exitPortalsRemoved: number
   lingeringBodies: number
 }
 
@@ -33,6 +35,22 @@ export function createEmptyTeardownStats(): TrackTeardownStats {
     resetSensorsRemoved: 0,
     chromaGatesRemoved: 0,
     adventureSensorRemoved: 0,
+    exitPortalsRemoved: 0,
     lingeringBodies: 0,
   }
 }
+
+/** Documented teardown contract — every counter must reach zero lingering bodies. */
+export const PLAYFIELD_TEARDOWN_FIELDS: ReadonlyArray<keyof TrackTeardownStats> = [
+  'meshesDisposed',
+  'materialsDisposed',
+  'bodiesRemoved',
+  'conveyorZonesRemoved',
+  'gravityWellsRemoved',
+  'dampingZonesRemoved',
+  'resetSensorsRemoved',
+  'chromaGatesRemoved',
+  'adventureSensorRemoved',
+  'exitPortalsRemoved',
+  'lingeringBodies',
+] as const

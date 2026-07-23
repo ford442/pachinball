@@ -75,6 +75,7 @@ export class GamePhysicsController {
 
   /** Clean up EventBus subscriptions. Must be called when the controller is torn down. */
   dispose(): void {
+    this.collisionDispatcher.dispose()
     this.scoringBridge.dispose()
     for (const unsub of this.eventBusUnsubscribers) {
       unsub()
@@ -179,6 +180,12 @@ export class GamePhysicsController {
   }
   getAwardScoreCalls(): number {
     return this.scoringBridge.getAwardScoreCalls()
+  }
+  getLastLaneHit(): string | null {
+    return this.collisionDispatcher.getLastLaneHit()
+  }
+  getLaneSensorHandleMapSize(): number {
+    return this.collisionDispatcher.getLaneSensorHandleMapSize()
   }
   resetBallScoreCounters(): void {
     this.collisionDispatcher.resetCollisionCounters()

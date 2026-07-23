@@ -25,7 +25,17 @@ export {
   type CabinetPreset,
   type CabinetManagerConfig,
 } from './game-cabinet'
-export { GameUIManager, type PopupConfig, type HUDData, type GoldBallCounts } from './game-ui'
+export {
+  GameUIManager,
+  type PopupConfig,
+  type HUDData,
+  type GoldBallCounts,
+  type AdventureGoal,
+  type AdventureLevel,
+  type ScoringBreakdownDisplayOptions,
+  type PauseMenuSettings,
+  type PauseMenuHandlers,
+} from './game-ui'
 export {
   AdventureManager,
   type AdventureManagerConfig,
@@ -60,4 +70,13 @@ export {
   type MapConfig,
 } from './map-registry'
 export { LevelLoader, type LevelLoaderDeps, type LoadResult, type CampaignLoadOptions } from './level-loader'
+export {
+  loadPlayfield,
+  campaignPlayfieldSpec,
+  freeMapPlayfieldSpec,
+  type PlayfieldSpec,
+  type PlayfieldLoadSource,
+  type PlayfieldLoaderDeps,
+  type PlayfieldLoadResult,
+} from './playfield-loader'
 export { FreeMapTestMode, type FreeMapTestModeConfig } from './free-map-test-mode'

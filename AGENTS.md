@@ -50,6 +50,20 @@ npm run preview
 npx playwright test
 ```
 
+### Continuous Integration
+
+`.github/workflows/ci.yml` gates every pull request and every push to `main`. The blocking
+`check` job runs, in order: `npm ci` → `npx tsc -b` → `npm run lint` → `npx vitest run` →
+`npx vite build`. **PRs must stay green** — do not merge red. A second, non-blocking
+(`continue-on-error`) `e2e` job runs a Playwright smoke against a live dev server.
+
+Notes:
+- CI runs `npx vite build`, **not** `npm run build` — the latter chains `build:wasm`
+  (Emscripten), which isn't installed on the runner. The C++ WASM bundle is intentionally
+  out of CI; the physics-engine flag falls back to Rapier when the bundle is absent.
+- Enabling branch protection on `main` (require the `check` job) is recommended so ungated
+  direct-to-`main` pushes can't regress the build.
+
 ---
 
 ## 3. Directory & Module Map
@@ -89,10 +103,10 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 | `ball-stack-visual.ts` | Visual stack of reserve balls (gold-ball tracking). |
 | `debug-hud.ts` | Development overlay for runtime state monitoring (FPS, physics, performance tier). |
 | `display-config.ts` | Display system configuration: modes, states, blend modes, media playlists. |
-| `adventure-state.ts` | Level goals, progression, story system, unlockable rewards, map unlocking. |
-| `adventure-mode.ts` | Legacy adventure orchestrator (being phased out in favor of `src/adventure/`). |
-| `adventure-mode-builder.ts` | Legacy adventure track builder. |
-| `adventure-mode-tracks-a.ts` / `adventure-mode-tracks-b.ts` | Legacy track data files. |
+| `adventure-state.ts` | **Legacy** level-select UI + cosmetic rewards only. Campaign truth is `AdventureTrackProgression` + supervisor. |
+| `adventure-track-progression.ts` | `TRACK_CATALOG`, `AdventureTrackProgression` — campaign spine metadata. |
+| `adventure-progression-supervisor.ts` | Portal lifecycle + campaign state machine. |
+| `zone-registry.ts` | Per-track theming / story / music metadata for adventure zones. |
 | Various `*-feeder.ts` | Specialized table toys: `mag-spin-feeder`, `nano-loom-feeder`, `prism-core-feeder`, `gauss-cannon-feeder`, `quantum-tunnel-feeder`. |
 
 #### `src/game/` — High-level managers (barrel: `src/game/index.ts`)
@@ -147,14 +161,17 @@ Replaces the old monolithic `display.ts`.
 - **`index.ts`** — Shader barrel file.
 
 #### `src/adventure/` — Adventure mode tracks (barrel: `src/adventure/index.ts`)
-- **`adventure-mode.ts`** — Main adventure orchestrator. **Start/end lifecycle MUST disable/enable table physics. Zone state MUST be reset in `end()`.** |
-- **`track-builder.ts`** — Generic track construction helpers.
+- **`adventure-mode.ts`** — Main adventure orchestrator. **Start/end lifecycle MUST disable/enable table physics. Zone state MUST be reset in `end()`.**
+- **`track-builder.ts`** — Generic track construction helpers (`addStraightRamp`, `addCurvedRamp`, etc.).
 - **`camera-presets.ts`** — Cinematic camera angles.
-- **`adventure-types.ts`** — Adventure mode types and interfaces (`AdventureTrackType`, `AdventureCallback`).
-- **`tracks/*.ts`** — 25+ individual track builders (e.g., `neon-helix`, `cyber-core`, `quantum-grid`, `glitch-spire`, `prism-pathway`, `tesla-tower`, etc.).
+- **`adventure-types.ts`** — **Single source of truth** for `AdventureTrackType` and adventure interfaces.
+- **`portal-routing.ts`** — Track start anchors and `isAdventureTrackType()` guard.
+- **`tracks/*.ts`** — 28 individual track builders (e.g., `neon-helix`, `cyber-core`, `quantum-grid`, `glitch-spire`, `prism-pathway`, `tesla-tower`, etc.).
+
+**Do not recreate legacy builders.** All new track geometry goes in `src/adventure/tracks/`. The barrel also re-exports `TRACK_CATALOG` and `AdventureTrackProgression` from `game-elements/adventure-track-progression.ts`.
 
 Campaign progression reference: `docs/ADVENTURE_CAMPAIGN.md` (A/B alternation + portal loop).  
-Campaign truth is `AdventureTrackProgression` + `AdventureProgressionSupervisor`; treat `AdventureState` as legacy level-select progression.
+Campaign truth is `AdventureTrackProgression` + `AdventureProgressionSupervisor`; `AdventureState` is legacy level-select / cosmetic rewards only.
 
 #### `src/cabinet/` — Cabinet presets (barrel: `src/cabinet/index.ts`)
 - **`cabinet-builder.ts`** — Factory / orchestrator.
@@ -310,14 +327,24 @@ Several systems use `getXxx()` / `resetXxx()` singleton helpers (e.g., `getMater
 
 ## 7. Deployment
 
-**Command:** `python3 deploy.py`
+**Commands:**
+
+```bash
+npm run build
+cp .env.deploy.example .env.deploy   # first time only; set DEPLOY_TOKEN
+python3 deploy.py
+python3 deploy.py --list-only        # dry-run: print transfer plan, no upload
+```
 
 **What it does:**
 1. Assumes `dist/` already exists (run `npm run build` first if missing).
-2. Uses `paramiko` to open an SFTP connection.
-3. Recursively uploads `dist/` to the remote server path.
+2. Zips `dist/` locally and uploads a single bundle to the Contabo deploy API.
+3. The remote service extracts the archive over a persistent SFTP connection on the VPS.
 
-**Important:** `deploy.py` contains hardcoded credentials. Do not modify or expose its contents unnecessarily.
+**Configuration:** Copy `.env.deploy.example` to `.env.deploy` (gitignored) or export
+`DEPLOY_TOKEN` in your shell. Optional overrides: `DEPLOY_BASE_URL`, `DEPLOY_PROJECT_NAME`,
+`DEPLOY_BUILD_DIR`, `DEPLOY_TARGET_FOLDER`. The script fails closed with a clear error if
+`DEPLOY_TOKEN` is missing.
 
 ---
 
@@ -325,7 +352,7 @@ Several systems use `getXxx()` / `resetXxx()` singleton helpers (e.g., `getMater
 
 | File | Sensitivity | Guidance |
 |------|-------------|----------|
-| `deploy.py` | **High** | Contains hardcoded SFTP password. Avoid logging or sharing. |
+| `.env.deploy` | **High** | Local deploy token. Gitignored; copy from `.env.deploy.example`. Never commit. |
 | `.env.production` | **High** | Blocked from read access by security policy. Do not paste contents into chat. |
 | `src/config.ts` | Medium | Exposes prod API base (`storage.noahcohn.com`) and asset paths. Safe to reference, not to abuse. |
 

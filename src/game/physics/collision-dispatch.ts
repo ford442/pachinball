@@ -12,6 +12,7 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { Mesh } from '@babylonjs/core'
 
 import type { BumperVisual } from '../../game-elements/types'
+import type { LaneSensorDef } from '../../objects/object-lane-sensors'
 import type { WasmContactEvent } from '../../wasm'
 
 import type { PhysicsHost } from './types'
@@ -30,6 +31,7 @@ import {
   handleBallTrapCollision,
   handleLauncherCollision,
   handleGateCollision,
+  handleLaneRolloverCollision,
   getBallMeshForBody as lookupBallMeshForBody,
   type CollisionHandlerContext,
 } from './collision-handlers'
@@ -57,6 +59,10 @@ export class CollisionDispatcher {
    *  in the dispatcher since portal contact is detected via intersectionPair queries
    *  inside AdventureMode.updateExitPortal(). */
   private portalSensorHandleSet: Set<number> = new Set()
+  private laneSensorHandleMap: Map<number, LaneSensorDef> = new Map()
+  private laneRolloverAwardedKeys: Set<string> = new Set()
+  private lastLaneHitId: string | null = null
+  private eventBusUnsubscribers: Array<() => void> = []
 
   // Temporary Phase-0 collision-pipeline instrumentation (surfaced only when debug HUD is visible)
   private rawCollisionEvents = 0
@@ -86,7 +92,24 @@ export class CollisionDispatcher {
       scoringBridge: this.scoringBridge,
       ballHandleSet: this.ballHandleSet,
       bumperVisualMap: this.bumperVisualMap,
+      laneRolloverAwardedKeys: this.laneRolloverAwardedKeys,
+      setLastLaneHit: (laneId: string) => {
+        this.lastLaneHitId = laneId
+      },
     }
+
+    this.eventBusUnsubscribers.push(
+      host.eventBus.on('ball:launched', () => {
+        this.laneRolloverAwardedKeys.clear()
+      }),
+    )
+  }
+
+  dispose(): void {
+    for (const unsub of this.eventBusUnsubscribers) {
+      unsub()
+    }
+    this.eventBusUnsubscribers = []
   }
 
   rebuildHandleCaches(): void {
@@ -99,6 +122,7 @@ export class CollisionDispatcher {
     this.launcherHandleSet.clear()
     this.spinnerHandleSet.clear()
     this.bumperVisualMap.clear()
+    this.laneSensorHandleMap.clear()
 
     for (const b of (this.host.gameObjects?.getBumperBodies() || [])) {
       this.bumperHandleSet.add(b.handle)
@@ -130,6 +154,10 @@ export class CollisionDispatcher {
     }
     for (const b of (this.host.spinnerBuilder?.getBodies() || [])) {
       this.spinnerHandleSet.add(b.handle)
+    }
+
+    for (const sensor of (this.host.gameObjects?.getLaneSensors() || [])) {
+      this.laneSensorHandleMap.set(sensor.body.handle, sensor)
     }
 
     const dz = this.host.gameObjects?.getDeathZoneBody()
@@ -180,6 +208,12 @@ export class CollisionDispatcher {
   }
   getBumperMatches(): number {
     return this.bumperMatches
+  }
+  getLastLaneHit(): string | null {
+    return this.lastLaneHitId
+  }
+  getLaneSensorHandleMapSize(): number {
+    return this.laneSensorHandleMap.size
   }
   resetCollisionCounters(): void {
     this.rawCollisionEvents = 0
@@ -283,6 +317,15 @@ export class CollisionDispatcher {
       return
     }
 
+    const laneHit = this.resolveLaneSensor(bh1, bh2)
+    if (laneHit) {
+      this.knownObstacleMatches++
+      const ballBody = this.ballHandleSet.has(bh1) ? b1 : b2
+      const ballHandle = this.ballHandleSet.has(bh1) ? bh1 : bh2
+      handleLaneRolloverCollision(this.handlerContext, laneHit.sensor, ballBody, ballHandle)
+      return
+    }
+
     // Collision type dispatch — each branch resolves obstacle/ball bodies then delegates
     const h1IsBumper = this.bumperHandleSet.has(bh1)
     const h2IsBumper = this.bumperHandleSet.has(bh2)
@@ -381,5 +424,22 @@ export class CollisionDispatcher {
 
   getBallMeshForBody(body: RAPIER.RigidBody): Mesh | null {
     return lookupBallMeshForBody(this.host, body)
+  }
+
+  private resolveLaneSensor(
+    bh1: number,
+    bh2: number,
+  ): { sensor: LaneSensorDef; ballHandle: number } | null {
+    const s1 = this.laneSensorHandleMap.get(bh1)
+    if (s1) {
+      if (!this.ballHandleSet.has(bh2)) return null
+      return { sensor: s1, ballHandle: bh2 }
+    }
+    const s2 = this.laneSensorHandleMap.get(bh2)
+    if (s2) {
+      if (!this.ballHandleSet.has(bh1)) return null
+      return { sensor: s2, ballHandle: bh1 }
+    }
+    return null
   }
 }
