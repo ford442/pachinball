@@ -80,6 +80,24 @@ These are intentionally separated. Do not add campaign features to `AdventureSta
 
 ### Adding a new adventure track
 
+There are two paths. Prefer **JSON** for tracks the data-driven schema can express (ramp / curve /
+gap / bucket / spinner / portal primitives); fall back to a **TS builder** for flagship tracks that
+need hand-tuned geometry or bespoke logic.
+
+**JSON path (data-driven — preferred where the schema allows):**
+
+1. Author `src/adventure/track-data/<NAME>.json` conforming to the v1 schema in
+   [`src/adventure/track-schema.ts`](../src/adventure/track-schema.ts).
+2. Register it in [`track-data-registry.ts`](../src/adventure/track-data-registry.ts); it is compiled
+   to runtime geometry by [`track-compiler.ts`](../src/adventure/track-compiler.ts).
+3. Add the catalog entry in `TRACK_CATALOG` ([`adventure-track-progression.ts`](../src/game-elements/adventure-track-progression.ts))
+   plus zone config in [`zone-registry.ts`](../src/game-elements/zone-registry.ts).
+4. `switchToTrack` validates fail-closed — an invalid track is rejected without tearing down physics.
+   See [`docs/TRACK_SCHEMA.md`](TRACK_SCHEMA.md) for the field reference and add a case to
+   [`tests/track-schema.test.ts`](../tests/track-schema.test.ts).
+
+**TS-builder path (flagship / bespoke geometry):**
+
 1. Add enum value in [`src/adventure/adventure-types.ts`](../src/adventure/adventure-types.ts)
 2. Add catalog entry in `TRACK_CATALOG` ([`adventure-track-progression.ts`](../src/game-elements/adventure-track-progression.ts))
 3. Create builder in [`src/adventure/tracks/<name>.ts`](../src/adventure/tracks/)
@@ -87,6 +105,9 @@ These are intentionally separated. Do not add campaign features to `AdventureSta
 5. Register in `AdventureMode.buildTrack()` switch ([`adventure-mode.ts`](../src/adventure/adventure-mode.ts))
 6. Add zone config in [`zone-registry.ts`](../src/game-elements/zone-registry.ts)
 7. Add portal start anchor in [`portal-routing.ts`](../src/adventure/portal-routing.ts) if needed
+
+> Consolidating these two paths behind a single `TrackManifest` registration surface is tracked in
+> issue #320.
 
 ---
 

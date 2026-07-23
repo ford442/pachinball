@@ -45,15 +45,14 @@ jobs:
       - name: Build (bundle only, no WASM)
         run: npx vite build
 
-  # Optional smoke: full dev server + a couple of Playwright specs.
-  # `continue-on-error` while this stabilizes — a red e2e must NOT block merges yet.
-  # verify_prism_core.spec.ts hard-codes http://localhost:5173, so we run the real dev
-  # server on that port rather than relying on Playwright's baseURL. No webServer block is
-  # added to playwright.config.ts here (kept out of scope); the server is managed inline.
+  # Blocking smoke: desktop + mobile Playwright specs. A red e2e now blocks merges (#319).
+  # The dev server is started by the `webServer` block in playwright.config.ts (pinned to
+  # 5173 with --strictPort, since verify_prism_core.spec.ts hard-codes that URL), so there
+  # is no inline `npm run dev &` poll here. Scope is kept to the known-stable smoke specs —
+  # the blocking gate must stay deterministic, not run the entire *.spec.ts suite.
   e2e:
-    name: playwright smoke (non-blocking)
+    name: playwright smoke (desktop + mobile, blocking)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -68,18 +67,16 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Start dev server
-        run: |
-          npm run dev &
-          # Poll the dev server until it answers on 5173 (max ~60s), then continue.
-          for i in $(seq 1 60); do
-            if curl -sf http://localhost:5173 >/dev/null; then
-              echo "dev server up after ${i}s"; exit 0
-            fi
-            sleep 1
-          done
-          echo "dev server did not start within 60s" >&2
-          exit 1
-
-      - name: Playwright smoke specs
-        run: npx playwright test tests/verify_prism_core.spec.ts tests/basic-gameplay.spec.ts
+      # Playwright's webServer boots `npm run dev` on 5173 and waits for it. The chromium
+      # project runs the desktop specs; the mobile-chrome project (Pixel 7 emulation) runs
+      # the touch smoke — each spec is routed to the right project by testMatch/testIgnore.
+      - name: Playwright smoke (desktop + mobile)
+        env:
+          CI: 'true'
+        run: >
+          npx playwright test
+          --project=chromium
+          --project=mobile-chrome
+          tests/verify_prism_core.spec.ts
+          tests/basic-gameplay.spec.ts
+          tests/mobile-touch-smoke.spec.ts
