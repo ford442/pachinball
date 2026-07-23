@@ -51,12 +51,15 @@ fast supplement to — or eventual replacement for — Rapier.  It is
 ```
 native/
 ├── CMakeLists.txt               Emscripten + native build config
-└── src/
-    ├── MathTypes.h              Vec3, Quat, Transform
-    ├── RigidBody.h / .cpp       Dynamic / static / kinematic sphere bodies
-    ├── ContactListener.h        Contact-event queue + callback dispatch
-    ├── PhysicsWorld.h / .cpp    Simulation world (step, broadphase, solver)
-    └── bindings.cpp             EMSCRIPTEN_BINDINGS (Embind)
+├── src/
+│   ├── MathTypes.h              Vec3, Quat, Transform
+│   ├── RigidBody.h / .cpp       Dynamic / static / kinematic sphere bodies
+│   ├── ContactListener.h        Contact-event queue + callback dispatch
+│   ├── PhysicsWorld.h / .cpp    Simulation world (step, broadphase, solver)
+│   └── bindings.cpp             EMSCRIPTEN_BINDINGS (Embind)
+└── tests/
+    ├── physics_world_test.cpp   Catch2 unit tests (native build only)
+    └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
 ├── wasm-types.ts                TypeScript interfaces matching the Embind API
@@ -179,13 +182,97 @@ migrate body creation to the WASM engine incrementally.
 
 ---
 
+## Physics engine modes
+
+Set via `localStorage['pachinball:physics-engine']`:
+
+| Mode | Value | Behaviour |
+|------|-------|-----------|
+| **Rapier** (default) | `rapier` or unset | Full Rapier simulation — production path |
+| **WASM mirror** | `wasm-mirror` or legacy `wasm` | WASM steps ball+bumper subset; poses sync Rapier↔WASM each frame |
+| **WASM owner** | `wasm-owner` | WASM owns balls + static table geometry (boxes/capsules/planes); Rapier keeps flipper joints |
+
+Mirror mode remains the default WASM path until owner mode is stable. Owner mode disables Rapier colliders for exported static bodies and ball puppets while WASM simulates them.
+
+```javascript
+// Dev console — mirror (default WASM path)
+localStorage.setItem('pachinball:physics-engine', 'wasm-mirror')
+
+// Owner mode — balls + walls/rails in WASM
+localStorage.setItem('pachinball:physics-engine', 'wasm-owner')
+
+// Back to Rapier
+localStorage.removeItem('pachinball:physics-engine')
+location.reload()
+```
+
+Debug HUD (Developer settings → Enable Debug HUD) shows `wasm ms`, `rapier ms` (owner), and `mirror ms` (mirror sync overhead) under the Physics panel.
+
+---
+
+## Static colliders (Phase 2a)
+
+The C++ engine supports oriented static boxes and capsules in addition to infinite planes and sphere bodies:
+
+```typescript
+engine.addStaticBox(
+  { x: 0, y: 0, z: 0 },           // centre
+  { x: 2, y: 0.5, z: 2 },         // half-extents
+  { x: 0, y: 0, z: 0, w: 1 },     // rotation quaternion
+  0.5                              // restitution
+)
+
+engine.addStaticCapsule(
+  { x: 0, y: 1, z: 0 },           // centre
+  0.35, 0.5,                       // radius, half-height (local Y)
+  { x: 0, y: 0, z: 0, w: 1 },
+  0.5
+)
+```
+
+Native C++ tests (no browser, no Emscripten):
+
+```bash
+npm run test:native
+# Equivalent:
+cmake -S native -B native/build-native
+cmake --build native/build-native
+ctest --test-dir native/build-native --output-on-failure
+```
+
+Catch2 is fetched automatically via CMake `FetchContent` on first configure.
+Test scenarios:
+
+| Test | Validates |
+|------|-----------|
+| `gravity integration` | Semi-implicit Euler velocity/position after one tick |
+| `sphere-sphere contact` | Overlapping balls separate; relative velocity resolves |
+| `sphere-plane bounce restitution` | Post-bounce speed ratio within bounds for `e=0.6` |
+| `energy non-explosion (60 steps)` | Multi-ball swarm stays finite and bounded after 60 ticks |
+| `body remove and recreate` | Handle lifecycle and `getActiveBodyCount()` |
+| `ball drops on box` | Static OBB collision + settling |
+| `ball hits capsule` | Static capsule collision + settling |
+
+Parity suite (native Catch2 + compiled WASM bundle):
+
+```bash
+RUN_WASM_PARITY=1 npx vitest run tests/wasm-physics-parity.test.ts
+# or directly:
+node scripts/run-wasm-parity.mjs
+```
+
+---
+
 ## Phased plan
 
 | Phase | Goal | Status |
 |-------|------|--------|
-| **0 – Spike** | C++ source + TypeScript wrapper + Vite import path working | ✅ Done (this PR) |
-| **1 – Core API** | PhysicsWorld + RigidBody + Embind bindings | ✅ Done (this PR) |
-| **2 – Events & Parity** | Contact events via EventBus; match Rapier behaviour | 🔜 Next |
+| **0 – Spike** | C++ source + TypeScript wrapper + Vite import path working | ✅ Done |
+| **1 – Core API** | PhysicsWorld + RigidBody + Embind bindings | ✅ Done |
+| **2a – Geometry** | Static box + capsule colliders; parity tests | ✅ Done |
+| **2b – Ownership** | `wasm-mirror` / `wasm-owner` modes; static table export | ✅ Done |
+| **2c – Flipper motors** | Hinge + motor parity or kinematic hybrid | 🔜 Next |
+| **2d – Perf HUD** | Rapier vs WASM vs mirror timing in Debug HUD | ✅ Done |
 | **3 – Benchmark** | RapierVsCppBenchmark scene; frame-time comparison | 🔜 Next |
 | **4 – Decision Point** | Replace vs hybrid; determinism comparison | 🔜 After Phase 3 |
 | **5 – Polish** | Memory budgeting, Debug HUD, documentation | 🔜 After Phase 4 |
@@ -225,14 +312,39 @@ link flags, but this requires server-side header changes.
 ## C++ development without Emscripten
 
 The `CMakeLists.txt` supports a **native (non-Emscripten) build** that
-produces a static library `pachinball_physics_native` for unit-testing the
-C++ logic directly:
+produces a static library `pachinball_physics_native` and a Catch2 test
+executable for unit-testing the C++ logic directly:
 
 ```bash
-cmake -S native -B native/build-native
-cmake --build native/build-native
-# Link your C++ test runner against pachinball_physics_native
+npm run test:native
 ```
+
+Prerequisites: CMake ≥ 3.20 and a C++17 compiler (g++ or clang). No
+Emscripten required. Catch2 v3.7.1 is downloaded automatically on first
+`cmake` configure.
 
 This lets you iterate on solver logic with fast compile times using your
 native compiler before re-running the full Emscripten build.
+
+---
+
+## CI (optional)
+
+A non-blocking GitHub Actions workflow (`.github/workflows/native-physics.yml`)
+runs on changes under `native/`:
+
+| Job | Tools | What it checks |
+|-----|-------|----------------|
+| `native_ctest` | cmake, g++ | `npm run test:native` (Catch2 suite) |
+| `wasm_build` | emsdk (cached) | `npm run build:wasm` + `PhysicsModule.wasm` size > 0 |
+
+Both jobs use `continue-on-error: true` so they **do not gate merges** until
+main CI ([#283](https://github.com/ford442/pachinball/issues/283)) lands.
+Main CI will add tsc/lint/Vitest/vite build separately.
+
+Skip options:
+
+- **WASM job only:** include `[skip wasm-ci]` in the commit message.
+- **Entire workflow:** trigger manually via `workflow_dispatch` only.
+- **Local without emcc:** `npm run build:wasm` exits 0 with a skip message;
+  the WASM CI job fails explicitly if `emcmake` is missing or artefacts are absent.

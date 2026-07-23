@@ -36,6 +36,7 @@ export interface DebugHost {
   readonly adventureProgressionSupervisor: AdventureProgressionSupervisor | null
   readonly adventureTrackProgression: AdventureTrackProgression | null
   readonly performanceMonitor: PerformanceMonitor
+  postProcessDegraded: boolean
 
   readonly debugHUDQueryEnabled: boolean
   comboCount: number
@@ -133,10 +134,19 @@ export class GameDebug {
       colliderCount: this.host.physics.getColliderCount(),
       physicsMemoryKb: this.host.physics.getEstimatedMemoryKb(),
       physicsStepMs: perfMetrics.physicsStepMs > 0 ? perfMetrics.physicsStepMs : rawDt * 1000,
+      wasmStepMs: this.host.physics.isWasmActive() ? this.host.physics.getLastWasmStepMs() : null,
+      rapierStepMs: this.host.physics.getWasmMode() === 'wasm-owner'
+        ? this.host.physics.getLastRapierStepMs()
+        : null,
+      mirrorOverheadMs: this.host.physics.getWasmMode() === 'wasm-mirror'
+        ? this.host.physics.getLastMirrorOverheadMs()
+        : null,
+      wasmMode: this.host.physics.getWasmMode(),
       adventureTimeMs,
       dynamicZoneState: dynamicZoneLabel,
       performanceTier: this.host.effects?.getRuntimePerformanceTier() || 'high',
       rendererBackend: perfMetrics.rendererBackend,
+      postProcessDegraded: this.host.postProcessDegraded,
       activeParticles: perfMetrics.activeParticles,
       goldBallsInPlay: perfMetrics.goldBallsInPlay,
       lastTrackSwitchMs: perfMetrics.lastTrackSwitchMs,

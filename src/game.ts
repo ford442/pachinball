@@ -161,6 +161,7 @@ export class Game {
 
   // Rendering
   bloomPipeline: DefaultRenderingPipeline | null = null
+  postProcessDegraded = false
   sceneOptimizer: SceneOptimizer | null = null
   mirrorTexture: MirrorTexture | null = null
   tableRenderTarget: RenderTargetTexture | null = null
@@ -443,67 +444,7 @@ export class Game {
         this.settingsUI.updatePhysicsDebugRenderer()
       })
 
-      this.engine.runRenderLoop(() => {
-        this.settingsUI.updateLatencyDisplay(this.inputManager || undefined)
-        this.scene?.render()
-        const dt = this.engine.getDeltaTime() / 1000
-        this.cabinetLighting?.update(dt)
-
-        for (const visual of this.spinnerVisuals) {
-          this.spinnerBuilder?.updateSpinner(visual, dt)
-        }
-        for (const state of this.trapStates) {
-          this.ballTrapBuilder?.updateTrap(state, dt)
-        }
-        for (const state of this.launcherStates) {
-          this.launcherBuilder?.updateLauncher(state, dt)
-        }
-        for (const state of this.gateStates) {
-          this.movingGateBuilder?.updateGate(state, dt)
-        }
-
-        this.adventureCinematicSystem?.update(dt)
-        this.adventureCinematicTriggers?.update()
-        this.adventureUIStateManager?.updateAnimations(dt)
-        this.adventureGoalTracker?.update(dt)
-        this.adventureProgressionSupervisor?.update(dt, this.score)
-        if (this.adventureMode?.isActive() && this.adventureGoalTracker && this.adventureProgressionSupervisor) {
-          this.adventureGoalTracker.syncTrackScore(
-            this.adventureProgressionSupervisor.getScoreDelta(this.score),
-          )
-          this.updateHUD()
-        }
-
-        // Drive the HUD countdown timer from the supervisor state
-        if (this.adventureProgressionSupervisor && this.adventureProgressionSupervisor.getTimeRemaining() > 0) {
-          const trackInfo = this.adventureTrackProgression?.getCurrentTrackInfo()
-          if (trackInfo) {
-            this.uiManager?.updateCountdownTimer(
-              this.adventureProgressionSupervisor.getTimeRemaining(),
-              trackInfo.timeLimitSeconds,
-            )
-          }
-        }
-
-        const drawCallsCounter = (this.engine as unknown as { _drawCalls?: { current?: number } })._drawCalls
-        this.performanceMonitor.updateEngineMetrics(
-          drawCallsCounter?.current ?? 0,
-          this.physics.getActiveBodyCount(),
-        )
-        this.performanceMonitor.setParticleCount(this.effects?.getActiveParticleCount() ?? 0)
-        this.performanceMonitor.setGoldBallCount(this.ballManager?.getGoldBallCount() ?? 0)
-        this.performanceMonitor.frameEnd()
-
-        if (this.debugHUD?.isHUDVisible()) {
-          this.debugHUD.update(this.debugHelper.buildDebugSnapshot(dt, this.lives))
-          this.debugHUD.updatePanel('EventBus', this.eventBusLog.getPanelData())
-        }
-
-        const perfMetrics = this.performanceMonitor.getMetrics()
-        if (perfMetrics.suggestedFallback && this.effects?.getRuntimePerformanceTier() === 'high') {
-          this.effects.forcePerformanceTierReview()
-        }
-      })
+      this.engine.runRenderLoop(() => this.renderFrame())
 
       this.showDebugUI = new URLSearchParams(window.location.search).has('debug')
       if (this.showDebugUI) {
@@ -518,6 +459,68 @@ export class Game {
     await this.systemsInitializer.postInitManagers()
 
     this.lifecycle.setGameState(GameState.MENU)
+  }
+
+  /** Per-frame render loop body — also used by VisibilityManager on tab resume. */
+  renderFrame(): void {
+    this.settingsUI.updateLatencyDisplay(this.inputManager || undefined)
+    this.scene?.render()
+    const dt = this.engine.getDeltaTime() / 1000
+    this.cabinetLighting?.update(dt)
+
+    for (const visual of this.spinnerVisuals) {
+      this.spinnerBuilder?.updateSpinner(visual, dt)
+    }
+    for (const state of this.trapStates) {
+      this.ballTrapBuilder?.updateTrap(state, dt)
+    }
+    for (const state of this.launcherStates) {
+      this.launcherBuilder?.updateLauncher(state, dt)
+    }
+    for (const state of this.gateStates) {
+      this.movingGateBuilder?.updateGate(state, dt)
+    }
+
+    this.adventureCinematicSystem?.update(dt)
+    this.adventureCinematicTriggers?.update()
+    this.adventureUIStateManager?.updateAnimations(dt)
+    this.adventureGoalTracker?.update(dt)
+    this.adventureProgressionSupervisor?.update(dt, this.score)
+    if (this.adventureMode?.isActive() && this.adventureGoalTracker && this.adventureProgressionSupervisor) {
+      this.adventureGoalTracker.syncTrackScore(
+        this.adventureProgressionSupervisor.getScoreDelta(this.score),
+      )
+      this.updateHUD()
+    }
+
+    if (this.adventureProgressionSupervisor && this.adventureProgressionSupervisor.getTimeRemaining() > 0) {
+      const trackInfo = this.adventureTrackProgression?.getCurrentTrackInfo()
+      if (trackInfo) {
+        this.uiManager?.updateCountdownTimer(
+          this.adventureProgressionSupervisor.getTimeRemaining(),
+          trackInfo.timeLimitSeconds,
+        )
+      }
+    }
+
+    const drawCallsCounter = (this.engine as unknown as { _drawCalls?: { current?: number } })._drawCalls
+    this.performanceMonitor.updateEngineMetrics(
+      drawCallsCounter?.current ?? 0,
+      this.physics.getActiveBodyCount(),
+    )
+    this.performanceMonitor.setParticleCount(this.effects?.getActiveParticleCount() ?? 0)
+    this.performanceMonitor.setGoldBallCount(this.ballManager?.getGoldBallCount() ?? 0)
+    this.performanceMonitor.frameEnd()
+
+    if (this.debugHUD?.isHUDVisible()) {
+      this.debugHUD.update(this.debugHelper.buildDebugSnapshot(dt, this.lives))
+      this.debugHUD.updatePanel('EventBus', this.eventBusLog.getPanelData())
+    }
+
+    const perfMetrics = this.performanceMonitor.getMetrics()
+    if (perfMetrics.suggestedFallback && this.effects?.getRuntimePerformanceTier() === 'high') {
+      this.effects.forcePerformanceTierReview()
+    }
   }
 
 

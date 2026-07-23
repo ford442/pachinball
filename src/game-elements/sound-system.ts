@@ -226,6 +226,15 @@ export class SoundSystem {
       this.startAmbientHum()
     }
   }
+
+  /**
+   * Suspend audio context (e.g. tab hidden or game paused)
+   */
+  async suspend(): Promise<void> {
+    if (this.audioContext?.state === 'running') {
+      await this.audioContext.suspend()
+    }
+  }
   
   /**
    * Set ambient cabinet hum volume (0.0 to 1.0)

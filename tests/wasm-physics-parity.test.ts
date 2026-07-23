@@ -63,6 +63,8 @@ function makeWasmEngineStub() {
   const stub = {
     isReady: true,
     addStaticPlane: vi.fn(),
+    addStaticBox: vi.fn().mockReturnValue(-1001),
+    addStaticCapsule: vi.fn().mockReturnValue(-2001),
     createBody: vi.fn((desc = {}) => {
       const id = nextId++
       bodies.set(id, {
@@ -128,7 +130,11 @@ function makeHostForWasm(opts: { wasmEngine: WasmEngineStub; ballBody: BodyStub;
 
   const physics = {
     isWasmActive: vi.fn(() => true),
+    isWasmOwnerMode: vi.fn(() => false),
+    getWasmMode: vi.fn(() => 'wasm-mirror' as const),
     getWasmEngine: vi.fn(() => opts.wasmEngine),
+    getLastMirrorOverheadMs: vi.fn(() => 0),
+    setMirrorOverheadMs: vi.fn(),
     step: vi.fn((dt: number) => {
       opts.wasmEngine.step(dt)
       return 0
@@ -334,129 +340,22 @@ describe('WASM physics parity harness (unit layer)', () => {
 const RUN_WASM_PARITY = process.env.RUN_WASM_PARITY === '1'
 
 describe.skipIf(!RUN_WASM_PARITY)('WASM physics parity harness (real-engine integration)', () => {
-  it('keeps ball+bumper divergence within documented epsilon', async () => {
-    const [{ WasmPhysicsEngine }, rapier] = await Promise.all([
-      import('../src/wasm'),
-      import('@dimforge/rapier3d-compat'),
-    ])
+  it('keeps all Rapier vs WASM scenarios within documented epsilon', async () => {
+    const { execFile } = await import('node:child_process')
+    const { promisify } = await import('node:util')
+    const { fileURLToPath } = await import('node:url')
+    const path = await import('node:path')
+    const execFileAsync = promisify(execFile)
 
-    await (rapier.init as unknown as () => Promise<void>)()
-
-    const gravity = { x: 0, y: -9.81, z: -5.0 }
-    const fixedDt = 1 / 60
-    const steps = 120
-
-    // --- Rapier world ---
-    const rapierWorld = new rapier.World(gravity)
-    const ballRadius = 0.25
-    const ballMass = 1.0
-    const bumperRadius = 0.4
-
-    const rapierBall = rapierWorld.createRigidBody(
-      rapier.RigidBodyDesc.dynamic().setTranslation(0, 2, 0).setLinearDamping(0.1)
-    )
-    rapierWorld.createCollider(
-      rapier.ColliderDesc.ball(ballRadius)
-        .setRestitution(0.76)
-        .setDensity(ballMass / ((4 / 3) * Math.PI * ballRadius ** 3)),
-      rapierBall
-    )
-
-    const rapierBumper = rapierWorld.createRigidBody(
-      rapier.RigidBodyDesc.fixed().setTranslation(0, 0.5, 0)
-    )
-    rapierWorld.createCollider(
-      rapier.ColliderDesc.ball(bumperRadius).setRestitution(0.94),
-      rapierBumper
-    )
-
-    // --- WASM world ---
-    const wasmEngine = new WasmPhysicsEngine()
-    await wasmEngine.load('./wasm/PhysicsModule.js')
-    if (!wasmEngine.isReady) {
-      throw new Error('WASM bundle did not load; cannot run real-engine parity test')
-    }
-    wasmEngine.setGravity(gravity.x, gravity.y, gravity.z)
-    wasmEngine.addStaticPlane({ x: 0, y: 1, z: 0 }, 0)
-
-    const wasmBall = wasmEngine.createBody({
-      position: { x: 0, y: 2, z: 0 },
-      velocity: { x: 0, y: 0, z: 0 },
-      mass: ballMass,
-      radius: ballRadius,
-      restitution: 0.76,
-      linearDamping: 0.1,
-      bodyType: 0,
+    const script = path.join(path.dirname(fileURLToPath(import.meta.url)), '../scripts/run-wasm-parity.mjs')
+    const { stdout, stderr } = await execFileAsync(process.execPath, [script], {
+      cwd: path.join(path.dirname(fileURLToPath(import.meta.url)), '..'),
+      env: { ...process.env },
     })
-    wasmEngine.createBody({
-      position: { x: 0, y: 0.5, z: 0 },
-      velocity: { x: 0, y: 0, z: 0 },
-      mass: 0,
-      radius: bumperRadius,
-      restitution: 0.94,
-      linearDamping: 0,
-      bodyType: 1,
-    })
-
-    let rapierContactStep = -1
-    let wasmContactStep = -1
-
-    const contacts: WasmContactEvent[] = []
-    // The wrapper emits on its own EventBus only if one is wired, so collect
-    // contacts through the C++ callback directly via a temporary bus.
-    const bus = new EventBus()
-    wasmEngine.init(bus)
-    bus.on('wasm:physics:contact', (evt) => { contacts.push(evt) })
-
-    for (let i = 0; i < steps; i++) {
-      rapierWorld.timestep = fixedDt
-      rapierWorld.step()
-
-      // Track first Rapier contact between ball and bumper
-      if (rapierContactStep < 0) {
-        // @ts-expect-error Rapier exposes contact pairs through an internal-ish API
-        for (const pair of rapierWorld.contactsWith(rapierBall.collider(0))) {
-          if (pair.collider2() === rapierBumper.collider(0) || pair.collider1() === rapierBumper.collider(0)) {
-            rapierContactStep = i
-            break
-          }
-        }
-      }
-
-      wasmEngine.step(fixedDt)
-      if (wasmContactStep < 0 && contacts.length > 0) {
-        wasmContactStep = i
-        contacts.length = 0
-      }
-    }
-
-    const rapierPos = rapierBall.translation()
-    const rapierVel = rapierBall.linvel()
-    const wasmPos = wasmEngine.getPosition(wasmBall)
-    const wasmVel = wasmEngine.getVelocity(wasmBall)
-
-    const positionDivergence = Math.sqrt(
-      (rapierPos.x - wasmPos.x) ** 2 +
-      (rapierPos.y - wasmPos.y) ** 2 +
-      (rapierPos.z - wasmPos.z) ** 2
-    )
-    const velocityDivergence = Math.sqrt(
-      (rapierVel.x - wasmVel.x) ** 2 +
-      (rapierVel.y - wasmVel.y) ** 2 +
-      (rapierVel.z - wasmVel.z) ** 2
-    )
-
-    // Epsilon rationale: the WASM solver is a simplified sequential-impulse
-    // sphere solver with no friction/rolling/CCD, while Rapier uses a full
-    // constraint solver with contact skin. The slice is considered visually
-    // matched if the ball stays within ~5 cm and velocity within ~0.5 m/s.
-    expect(positionDivergence).toBeLessThanOrEqual(0.05)
-    expect(velocityDivergence).toBeLessThanOrEqual(0.5)
-
-    expect(rapierContactStep).toBeGreaterThanOrEqual(0)
-    expect(wasmContactStep).toBeGreaterThanOrEqual(0)
-    expect(Math.abs(rapierContactStep - wasmContactStep)).toBeLessThanOrEqual(2)
-
-    wasmEngine.dispose()
+    if (stderr) console.warn(stderr)
+    expect(stdout).toContain('PASS native physics_world_test')
+    expect(stdout).toContain('PASS wasm ball-on-box')
+    expect(stdout).toContain('PASS wasm ball-on-capsule')
+    expect(stdout).toContain('PASS wasm ball+bumper drop')
   })
 })

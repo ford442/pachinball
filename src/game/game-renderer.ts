@@ -68,6 +68,7 @@ export interface RendererHost {
   sceneInstrumentation: SceneInstrumentation | null
   engineInstrumentation: EngineInstrumentation | null
   eventBus?: EventBus
+  postProcessDegraded: boolean
 }
 
 export class GameRenderer {
@@ -169,17 +170,24 @@ export class GameRenderer {
     }
 
     if (!GameConfig.camera.reducedMotion) {
-      bloom.depthOfFieldEnabled = true
-      bloom.depthOfField.focusDistance = 2500
-      bloom.depthOfField.fStop = 2.4
-      bloom.depthOfFieldBlurLevel =
-        qualityTier === QualityTier.HIGH
-          ? DepthOfFieldEffectBlurLevel.High
-          : DepthOfFieldEffectBlurLevel.Low
+      try {
+        bloom.depthOfFieldEnabled = true
+        bloom.depthOfField.focusDistance = 2500
+        bloom.depthOfField.fStop = 2.4
+        bloom.depthOfFieldBlurLevel =
+          qualityTier === QualityTier.HIGH
+            ? DepthOfFieldEffectBlurLevel.High
+            : DepthOfFieldEffectBlurLevel.Low
+      } catch (err) {
+        bloom.depthOfFieldEnabled = false
+        this.host.postProcessDegraded = true
+        console.warn('[GameRenderer] MRT post-process unavailable; running bloom-only (DoF failed)', err)
+      }
     }
 
-    // Skip MRT-based post-processes when running on SwiftShader to avoid
-    // GL_INVALID_OPERATION: Active draw buffers with missing fragment shader outputs
+    // Skip MRT-based post-processes when running on SwiftShader (WebGL) to avoid
+    // GL_INVALID_OPERATION: Active draw buffers with missing fragment shader outputs.
+    // WebGPU adapters that still fail validation are handled via try/catch below.
     const isSwiftShader = (() => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const gl = (this.host.engine as any)._gl as WebGLRenderingContext | null
@@ -192,18 +200,23 @@ export class GameRenderer {
 
     // SSAO
     if (!isSwiftShader && !GameConfig.camera.reducedMotion) {
-      const isHigh = qualityTier === QualityTier.HIGH
-      const ssao = new SSAO2RenderingPipeline('ssao', scene, {
-        ssaoRatio: isHigh ? 1.0 : 0.5,
-        blurRatio: isHigh ? 1.0 : 0.5,
-      })
-      ssao.radius = 1.5
-      ssao.totalStrength = 0.6
-      ssao.base = 0.5
-      ssao.samples = isHigh ? 32 : 16
-      ssao.maxZ = 50
-      ssao.minZAspect = 0.5
-      scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline('ssao', [tableCam])
+      try {
+        const isHigh = qualityTier === QualityTier.HIGH
+        const ssao = new SSAO2RenderingPipeline('ssao', scene, {
+          ssaoRatio: isHigh ? 1.0 : 0.5,
+          blurRatio: isHigh ? 1.0 : 0.5,
+        })
+        ssao.radius = 1.5
+        ssao.totalStrength = 0.6
+        ssao.base = 0.5
+        ssao.samples = isHigh ? 32 : 16
+        ssao.maxZ = 50
+        ssao.minZAspect = 0.5
+        scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline('ssao', [tableCam])
+      } catch (err) {
+        this.host.postProcessDegraded = true
+        console.warn('[GameRenderer] MRT post-process unavailable; running bloom-only (SSAO failed)', err)
+      }
     }
 
     // SSR

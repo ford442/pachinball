@@ -33,6 +33,7 @@
 
 import type { WasmPhysicsModule, WasmPhysicsWorldInstance, WasmContactEvent } from './wasm-types'
 import type { EventBus } from '../game/event-bus'
+import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
 
 // ---------------------------------------------------------------------------
 // Rigid body descriptor
@@ -73,16 +74,25 @@ export class WasmPhysicsEngine {
    * Safe to call multiple times — subsequent calls are no-ops.
    *
    * @param moduleUrl  Override the default WASM_MODULE_URL (useful for tests).
+   * @param preloadedModule  Optional module from idle warm-load cache.
    */
-  async load(moduleUrl = WASM_MODULE_URL): Promise<void> {
+  async load(moduleUrl = WASM_MODULE_URL, preloadedModule?: WasmPhysicsModule): Promise<void> {
     if (this.isReady) return
 
     try {
-      // Dynamic import of the Emscripten ES module factory
-      const { default: factory } = await import(/* @vite-ignore */ moduleUrl) as {
-        default: () => Promise<WasmPhysicsModule>
+      if (preloadedModule) {
+        this.module = preloadedModule
+      } else {
+        const cached = await getPreloadedWasmModule()
+        if (cached) {
+          this.module = cached
+        } else {
+          const { default: factory } = await import(/* @vite-ignore */ moduleUrl) as {
+            default: () => Promise<WasmPhysicsModule>
+          }
+          this.module = await factory()
+        }
       }
-      this.module = await factory()
       this.world  = new this.module.PhysicsWorld()
 
       // Wire contact events → ContactListener → EventBus (if set)
@@ -128,6 +138,45 @@ export class WasmPhysicsEngine {
    */
   addStaticPlane(normal: { x: number; y: number; z: number }, d: number): void {
     this.world?.addStaticPlane(normal.x, normal.y, normal.z, d)
+  }
+
+  /**
+   * Add an oriented static box collider.
+   * @returns Negative collider id, or -1 when the engine is not ready.
+   */
+  addStaticBox(
+    center: { x: number; y: number; z: number },
+    halfExtents: { x: number; y: number; z: number },
+    rotation: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 1 },
+    restitution = 0.4
+  ): number {
+    if (!this.world) return -1
+    return this.world.addStaticBox(
+      center.x, center.y, center.z,
+      halfExtents.x, halfExtents.y, halfExtents.z,
+      rotation.x, rotation.y, rotation.z, rotation.w,
+      restitution
+    )
+  }
+
+  /**
+   * Add an oriented static capsule collider (local Y axis).
+   * @returns Negative collider id, or -1 when the engine is not ready.
+   */
+  addStaticCapsule(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    halfHeight: number,
+    rotation: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 1 },
+    restitution = 0.4
+  ): number {
+    if (!this.world) return -1
+    return this.world.addStaticCapsule(
+      center.x, center.y, center.z,
+      radius, halfHeight,
+      rotation.x, rotation.y, rotation.z, rotation.w,
+      restitution
+    )
   }
 
   // ---- Body management -------------------------------------------------

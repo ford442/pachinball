@@ -16,7 +16,12 @@ import type { WasmContactEvent } from '../../wasm'
 
 import type { PhysicsHost } from './types'
 import type { ScoringBridge } from './scoring-bridge'
-import type { WasmMirror } from './wasm-mirror'
+
+/** Minimal WASM bridge surface used by collision dispatch. */
+export interface WasmPhysicsBridge {
+  getRapierBody(wasmId: number): RAPIER.RigidBody | undefined
+}
+
 import {
   handleBumperCollision,
   handleFlipperCollision,
@@ -32,7 +37,7 @@ import {
 export class CollisionDispatcher {
   private readonly host: PhysicsHost
   private readonly scoringBridge: ScoringBridge
-  private readonly getWasmMirror: () => WasmMirror | null
+  private readonly getWasmBridge: () => WasmPhysicsBridge | null
 
   private lastCollisionTime: Map<string, number> = new Map()
   private lastColliderCollisionTime: Map<string, number> = new Map()
@@ -72,10 +77,10 @@ export class CollisionDispatcher {
 
   private readonly handlerContext: CollisionHandlerContext
 
-  constructor(host: PhysicsHost, scoringBridge: ScoringBridge, getWasmMirror: () => WasmMirror | null) {
+  constructor(host: PhysicsHost, scoringBridge: ScoringBridge, getWasmBridge: () => WasmPhysicsBridge | null) {
     this.host = host
     this.scoringBridge = scoringBridge
-    this.getWasmMirror = getWasmMirror
+    this.getWasmBridge = getWasmBridge
     this.handlerContext = {
       host: this.host,
       scoringBridge: this.scoringBridge,
@@ -224,11 +229,11 @@ export class CollisionDispatcher {
    * the Rapier bodies that the rest of the game understands.
    */
   onWasmContact(evt: WasmContactEvent): void {
-    const wasmMirror = this.getWasmMirror()
-    if (!wasmMirror) return
+    const bridge = this.getWasmBridge()
+    if (!bridge) return
 
-    const b1 = wasmMirror.getRapierBody(evt.bodyId1)
-    const b2 = wasmMirror.getRapierBody(evt.bodyId2)
+    const b1 = bridge.getRapierBody(evt.bodyId1)
+    const b2 = bridge.getRapierBody(evt.bodyId2)
     if (!b1 || !b2) return
 
     this.processBodyCollision(b1, b2, b1.handle, b2.handle)
