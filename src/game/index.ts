@@ -25,7 +25,17 @@ export {
   type CabinetPreset,
   type CabinetManagerConfig,
 } from './game-cabinet'
-export { GameUIManager, type PopupConfig, type HUDData, type GoldBallCounts } from './game-ui'
+export {
+  GameUIManager,
+  type PopupConfig,
+  type HUDData,
+  type GoldBallCounts,
+  type AdventureGoal,
+  type AdventureLevel,
+  type ScoringBreakdownDisplayOptions,
+  type PauseMenuSettings,
+  type PauseMenuHandlers,
+} from './game-ui'
 export {
   AdventureManager,
   type AdventureManagerConfig,
