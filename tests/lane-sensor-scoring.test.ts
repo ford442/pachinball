@@ -4,11 +4,15 @@
 
 import { describe, it, expect, vi } from 'vitest'
 
-import { GamePhysicsController, type PhysicsHost } from '../src/game/game-physics-controller'
+import { GamePhysicsController } from '../src/game/game-physics-controller'
 import { EventBus } from '../src/game/event-bus'
-import { QualityTier } from '../src/game-elements/visual-language'
 import { GAME_TUNING } from '../src/config'
 import type { LaneSensorDef } from '../src/objects/object-lane-sensors'
+import {
+  makeBallManagerStub,
+  makeGameObjectsStub,
+  makePhysicsHostShell,
+} from './helpers/make-physics-host'
 
 function makeBody(handle: number, pos: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 }) {
   const velocity = { x: 0, y: 0, z: 0 }
@@ -74,96 +78,16 @@ function makeHost(opts: {
     getRapier: vi.fn(() => null),
   }
 
-  const ballManager = {
+  const ballManager = makeBallManagerStub({
     getBallBodies: vi.fn(() => [ballBody]),
     getBallBody: vi.fn(() => ballBody),
-    getBindings: vi.fn(() => []),
-    getBallType: vi.fn(() => 'standard'),
-    getChainStats: vi.fn(() => ({ scoreMultiplier: 1 })),
-    updateCaughtBalls: vi.fn(),
-    updateTrailEffects: vi.fn(),
-    updateGoldBallGlow: vi.fn(),
-    updateStuckDetection: vi.fn(() => []),
-    updateSmallGoldBallLifetimes: vi.fn(),
-  }
+  })
 
-  const gameObjects = {
-    getBindings: vi.fn(() => []),
-    getBumperBodies: vi.fn(() => []),
-    getBumperVisuals: vi.fn(() => []),
-    getTargetBodies: vi.fn(() => []),
+  const gameObjects = makeGameObjectsStub({
     getLaneSensors: vi.fn(() => [laneSensor]),
-    getAllFlippers: vi.fn(() => new Map()),
-    getDeathZoneBody: vi.fn(() => null),
-    updateBumpers: vi.fn(),
-    updateTargets: vi.fn(),
-    activateBumperHit: vi.fn(),
-  }
+  })
 
-  const host = {
-    engine: { getDeltaTime: vi.fn(() => 16.6667) },
-    physics,
-    stateManager: { isPlaying: vi.fn(() => true) },
-    eventBus,
-    ballManager,
-    gameObjects,
-    effects: null,
-    display: null,
-    ballAnimator: null,
-    hapticManager: null,
-    soundSystem: { playBeep: vi.fn(), playImpact: vi.fn(), playGoldBallCollect: vi.fn() },
-    mapManager: null,
-    uiManager: null,
-    adventureState: { updateGoal: vi.fn() },
-    adventureMode: null,
-    adventureManager: null,
-    zoneTriggerSystem: null,
-    cameraController: null,
-    dynamicWorld: null,
-    magSpinFeeder: null,
-    nanoLoomFeeder: null,
-    prismCoreFeeder: null,
-    gaussCannon: null,
-    quantumTunnel: null,
-    tableCam: null,
-    accessibility: { reducedMotion: false, photosensitiveMode: false, hapticsEnabled: true },
-    qualityTier: QualityTier.HIGH,
-    spinnerBuilder: null,
-    ballTrapBuilder: null,
-    launcherBuilder: null,
-    movingGateBuilder: null,
-    spinnerVisuals: [],
-    trapStates: [],
-    launcherStates: [],
-    gateStates: [],
-    score: 0,
-    comboCount: 0,
-    comboTimer: 0,
-    comboMultiplier: 1,
-    lives: 3,
-    tiltActive: false,
-    goldBallStack: [],
-    sessionGoldBalls: 0,
-    powerupActive: false,
-    powerupTimer: 0,
-    plungerChargeLevel: 0,
-    nudgeState: { tiltWarnings: 0, lastNudgeTime: 0, tiltActive: false, tiltWarningActive: false },
-    isCameraFollowMode: false,
-    cameraFollowTransition: 0,
-    cameraFollowTransitionSpeed: 1,
-    updateHUD: vi.fn(),
-    resetBall: vi.fn(),
-    handlePrimaryBallDrain: vi.fn(() => false),
-    triggerJackpot: vi.fn(),
-    tryActivateSlotMachine: vi.fn(),
-    rebuildHandleCaches: vi.fn(),
-    updateGoldBallDisplay: vi.fn(),
-    showMessage: vi.fn(),
-    setGameState: vi.fn(),
-    endAdventureMode: vi.fn(),
-    getBallPosition: vi.fn(() => null),
-    getCameraMode: vi.fn(() => 0),
-  } as unknown as PhysicsHost
+  const host = makePhysicsHostShell({ physics, eventBus, ballManager, gameObjects })
 
   return { host, laneBody, ballBody, physics, gameObjects, eventBus }
 }
@@ -248,23 +172,37 @@ describe('Lane rollover sensor scoring', () => {
   })
 
   it('clears per-ball debounce on ball:launched', () => {
-    const { host, physics, eventBus } = makeHost({
+    const { host, eventBus } = makeHost({
       laneBodyHandle: 200,
       ballBodyHandle: 1,
       laneColliderHandle: 300,
       ballColliderHandle: 50,
     })
 
+    // Pair debounce uses performance.now(); advance past COLLISION_DEBOUNCE_MS (16)
+    // so a post-launch re-hit is not blocked by the general collider/body pair gates.
+    let now = 1_000
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now)
+
     const controller = new GamePhysicsController(host)
     controller.rebuildHandleCaches()
     controller.stepPhysics(null, null)
     expect(controller.getAwardScoreCalls()).toBe(1)
+    expect(host.score).toBe(GAME_TUNING.scoring.laneRollover.launch)
 
+    // Without clearing laneRolloverAwardedKeys, a later hit would still be suppressed.
+    // ball:launched clears that set; ScoringBridge also resets per-ball awardScoreCalls to 0.
     eventBus.emit('ball:launched')
+    expect(controller.getAwardScoreCalls()).toBe(0)
+
+    now += 20
     controller.stepPhysics(null, null)
 
-    expect(controller.getAwardScoreCalls()).toBe(2)
+    // Fresh per-ball counter after reset + one new award; cumulative score doubled.
+    expect(controller.getAwardScoreCalls()).toBe(1)
     expect(host.score).toBe(GAME_TUNING.scoring.laneRollover.launch * 2)
+
+    nowSpy.mockRestore()
   })
 
   it('emits lane:rollover on the EventBus', () => {

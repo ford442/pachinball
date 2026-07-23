@@ -66,6 +66,7 @@ describe('LevelLoader', () => {
     isActive: ReturnType<typeof vi.fn>
     switchToTrack: ReturnType<typeof vi.fn>
     getLastTeardownStats?: ReturnType<typeof vi.fn>
+    getLastTrackLoadError?: ReturnType<typeof vi.fn>
   }
   let ensureAdventureActive: ReturnType<typeof vi.fn>
   let resetBall: ReturnType<typeof vi.fn>
@@ -78,6 +79,7 @@ describe('LevelLoader', () => {
       isActive: vi.fn().mockReturnValue(true),
       switchToTrack: vi.fn().mockReturnValue(true),
       getLastTeardownStats: vi.fn().mockReturnValue(null),
+      getLastTrackLoadError: vi.fn().mockReturnValue(null),
     }
     ensureAdventureActive = vi.fn()
     resetBall = vi.fn()
