@@ -45,7 +45,11 @@ export class GameSceneBuilder {
     this.host = host
   }
 
-  buildCriticalScene(): void {
+  async buildCriticalScene(
+    options: {
+      onCabinetProgress?: (progress: number) => void
+    } = {},
+  ): Promise<void> {
     const { scene, gameObjects, ballManager, tableCam, effects, display } = this.host
     if (!gameObjects || !ballManager || !display) return
 
@@ -57,8 +61,12 @@ export class GameSceneBuilder {
 
     if (scene) {
       const cabinetBuilder = getCabinetBuilder(scene)
-      // Cabinet preset is loaded by the cabinet manager; this is a fallback
-      cabinetBuilder.loadCabinetPreset('classic')
+      cabinetBuilder.setQualityTier(this.host.qualityTier)
+      // Classic glTF (or procedural fallback) — gate Start until this resolves
+      await cabinetBuilder.loadCabinetPreset('classic', {
+        qualityTier: this.host.qualityTier,
+        onProgress: options.onCabinetProgress,
+      })
     }
 
     this.createLCDPlayfield()   // ground + flipperGlow are parented to playfieldGroup inside

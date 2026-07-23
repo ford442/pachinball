@@ -1,10 +1,17 @@
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameState } from './types'
-import type { InputFrame, PendingInputFrame, PlungerChargeState, LatencyMetrics, LatencyReport } from './types'
+import type {
+  InputFrame,
+  PendingInputFrame,
+  PlungerChargeState,
+  LatencyMetrics,
+  LatencyReport,
+  InputLatencySource,
+} from './types'
 import type { GamepadConfig, GamepadState } from './gamepad'
 import { GamepadManager } from './gamepad'
 
-export type { InputFrame, PendingInputFrame, LatencyReport }
+export type { InputFrame, PendingInputFrame, LatencyReport, InputLatencySource }
 
 export class InputHandler {
   private static readonly PLUNGER_KEYS = new Set(['Enter', 'NumpadEnter', 'Space'])
@@ -18,6 +25,7 @@ export class InputHandler {
     nudge: null,
     timestamp: 0
   }
+  private pendingLatencySource: InputLatencySource = 'keyboard'
   
   // Plunger charge state tracking
   private plungerChargeState: PlungerChargeState = {
@@ -62,6 +70,7 @@ export class InputHandler {
   // Latency tracking for input-to-response timing
   private latencyMetrics: LatencyMetrics = {
     samples: [],
+    samplesBySource: { keyboard: [], touch: [], gamepad: [] },
     lastReportTime: 0,
     maxSamples: 100,
     enabled: false
@@ -275,6 +284,7 @@ export class InputHandler {
     this.latencyMetrics.enabled = enabled
     if (!enabled) {
       this.latencyMetrics.samples = []
+      this.latencyMetrics.samplesBySource = { keyboard: [], touch: [], gamepad: [] }
       this.latencyMetrics.lastReportTime = 0
     }
   }
@@ -287,49 +297,62 @@ export class InputHandler {
   }
 
   /**
-   * Record input timestamp when input is first received
+   * Record input timestamp when input is first received.
+   * Prefers native event.timeStamp when provided.
    */
-  private recordInputTimestamp(): number {
+  private recordInputTimestamp(eventTimestamp?: number): number {
+    if (typeof eventTimestamp === 'number' && Number.isFinite(eventTimestamp) && eventTimestamp > 0) {
+      return eventTimestamp
+    }
     return performance.now()
   }
 
   /**
    * Mark input as processed and record latency
    */
-  private markInputProcessed(inputTimestamp: number): void {
+  private markInputProcessed(inputTimestamp: number, source: InputLatencySource): void {
     if (!this.latencyMetrics.enabled) return
 
     const now = performance.now()
     const latency = now - inputTimestamp
+    if (!Number.isFinite(latency) || latency < 0) return
 
     this.latencyMetrics.samples.push(latency)
+    this.latencyMetrics.samplesBySource[source].push(latency)
 
-    // Keep max samples
     if (this.latencyMetrics.samples.length > this.latencyMetrics.maxSamples) {
       this.latencyMetrics.samples.shift()
     }
+    const bySource = this.latencyMetrics.samplesBySource[source]
+    if (bySource.length > this.latencyMetrics.maxSamples) {
+      bySource.shift()
+    }
 
-    // Report every 5 seconds
     if (now - this.latencyMetrics.lastReportTime > 5000) {
       this.reportLatency()
     }
   }
 
+  private computeReport(samples: number[], source?: InputLatencySource): LatencyReport | null {
+    if (samples.length === 0) return null
+    const sorted = [...samples].sort((a, b) => a - b)
+    const sum = sorted.reduce((a, b) => a + b, 0)
+    const avg = sum / sorted.length
+    const min = sorted[0]
+    const max = sorted[sorted.length - 1]
+    const p95Index = Math.floor(sorted.length * 0.95)
+    const p95 = sorted[Math.min(p95Index, sorted.length - 1)]
+    return { avg, min, max, p95, sampleCount: sorted.length, source }
+  }
+
   /**
-   * Get current latency report
+   * Get current latency report (all sources, or a specific source).
    */
-  getLatencyReport(): LatencyReport | null {
-    if (this.latencyMetrics.samples.length === 0) return null
-
-    const samples = [...this.latencyMetrics.samples].sort((a, b) => a - b)
-    const sum = samples.reduce((a, b) => a + b, 0)
-    const avg = sum / samples.length
-    const min = samples[0]
-    const max = samples[samples.length - 1]
-    const p95Index = Math.floor(samples.length * 0.95)
-    const p95 = samples[Math.min(p95Index, samples.length - 1)]
-
-    return { avg, min, max, p95, sampleCount: samples.length }
+  getLatencyReport(source?: InputLatencySource): LatencyReport | null {
+    if (source) {
+      return this.computeReport(this.latencyMetrics.samplesBySource[source], source)
+    }
+    return this.computeReport(this.latencyMetrics.samples)
   }
 
   /**
@@ -337,6 +360,7 @@ export class InputHandler {
    */
   resetLatencyMetrics(): void {
     this.latencyMetrics.samples = []
+    this.latencyMetrics.samplesBySource = { keyboard: [], touch: [], gamepad: [] }
     this.latencyMetrics.lastReportTime = 0
   }
 
@@ -344,15 +368,19 @@ export class InputHandler {
    * Report latency statistics to console
    */
   private reportLatency(): void {
-    const report = this.getLatencyReport()
-    if (!report) return
+    const all = this.getLatencyReport()
+    const touch = this.getLatencyReport('touch')
+    if (!all) return
 
+    const touchPart = touch
+      ? ` | touch P95: ${touch.p95.toFixed(2)}ms (n=${touch.sampleCount})`
+      : ''
     console.log(
-      `[Input Latency] Avg: ${report.avg.toFixed(2)}ms, ` +
-      `Min: ${report.min.toFixed(2)}ms, ` +
-      `Max: ${report.max.toFixed(2)}ms, ` +
-      `P95: ${report.p95.toFixed(2)}ms ` +
-      `(n=${report.sampleCount})`
+      `[Input Latency] Avg: ${all.avg.toFixed(2)}ms, ` +
+      `Min: ${all.min.toFixed(2)}ms, ` +
+      `Max: ${all.max.toFixed(2)}ms, ` +
+      `P95: ${all.p95.toFixed(2)}ms ` +
+      `(n=${all.sampleCount})${touchPart}`
     )
 
     this.latencyMetrics.lastReportTime = performance.now()
@@ -362,10 +390,15 @@ export class InputHandler {
    * Queue an input for frame-aligned processing
    * This replaces immediate processing to eliminate jitter
    */
-  private queueInput<T extends keyof PendingInputFrame>(type: T, value: PendingInputFrame[T]): void {
-    // Record timestamp on first input in a frame
+  private queueInput<T extends keyof PendingInputFrame>(
+    type: T,
+    value: PendingInputFrame[T],
+    meta?: { source?: InputLatencySource; eventTimestamp?: number },
+  ): void {
+    const source = meta?.source ?? 'keyboard'
     if (!this.pendingInputs.timestamp) {
-      this.pendingInputs.timestamp = this.recordInputTimestamp()
+      this.pendingInputs.timestamp = this.recordInputTimestamp(meta?.eventTimestamp)
+      this.pendingLatencySource = source
     }
     this.pendingInputs[type] = value
   }
@@ -377,7 +410,6 @@ export class InputHandler {
   processBufferedInputs(): InputFrame {
     const now = performance.now()
 
-    // Build the input frame from pending inputs
     const frame: InputFrame = {
       flipperLeft: this.pendingInputs.flipperLeft ?? null,
       flipperRight: this.pendingInputs.flipperRight ?? null,
@@ -387,13 +419,12 @@ export class InputHandler {
       nudgeSource: this.pendingInputs.nudgeSource
     }
 
-    // Track latency from first input event
     if (this.pendingInputs.timestamp) {
-      this.markInputProcessed(this.pendingInputs.timestamp)
+      this.markInputProcessed(this.pendingInputs.timestamp, this.pendingLatencySource)
     }
 
-    // Reset for next frame
     this.pendingInputs = {}
+    this.pendingLatencySource = 'keyboard'
     this.lastProcessedFrame = frame
 
     return frame
@@ -595,19 +626,19 @@ export class InputHandler {
       if (this.getAdventureActive()) return
       if (this.getTiltActive()) return
       setActive(leftBtn, true)
-      this.queueInput('flipperLeft', true)
+      this.queueInput('flipperLeft', true, { source: 'touch', eventTimestamp: e.timeStamp })
     }, { passive: false })
 
     leftBtn?.addEventListener('touchend', (e) => {
       e.preventDefault()
       setActive(leftBtn, false)
-      this.queueInput('flipperLeft', false)
+      this.queueInput('flipperLeft', false, { source: 'touch', eventTimestamp: e.timeStamp })
     }, { passive: false })
 
     leftBtn?.addEventListener('touchcancel', (e) => {
       e.preventDefault()
       setActive(leftBtn, false)
-      this.queueInput('flipperLeft', false)
+      this.queueInput('flipperLeft', false, { source: 'touch', eventTimestamp: e.timeStamp })
     }, { passive: false })
 
     // Also handle mouse events for desktop testing of touch controls
@@ -616,18 +647,18 @@ export class InputHandler {
       if (this.getAdventureActive()) return
       if (this.getTiltActive()) return
       setActive(leftBtn, true)
-      this.queueInput('flipperLeft', true)
+      this.queueInput('flipperLeft', true, { source: 'touch', eventTimestamp: e.timeStamp })
     })
 
     leftBtn?.addEventListener('mouseup', (e) => {
       e.preventDefault()
       setActive(leftBtn, false)
-      this.queueInput('flipperLeft', false)
+      this.queueInput('flipperLeft', false, { source: 'touch', eventTimestamp: e.timeStamp })
     })
 
     leftBtn?.addEventListener('mouseleave', () => {
       setActive(leftBtn, false)
-      this.queueInput('flipperLeft', false)
+      this.queueInput('flipperLeft', false, { source: 'touch' })
     })
 
     // Right flipper touch
@@ -636,19 +667,19 @@ export class InputHandler {
       if (this.getAdventureActive()) return
       if (this.getTiltActive()) return
       setActive(rightBtn, true)
-      this.queueInput('flipperRight', true)
+      this.queueInput('flipperRight', true, { source: 'touch', eventTimestamp: e.timeStamp })
     }, { passive: false })
 
     rightBtn?.addEventListener('touchend', (e) => {
       e.preventDefault()
       setActive(rightBtn, false)
-      this.queueInput('flipperRight', false)
+      this.queueInput('flipperRight', false, { source: 'touch', eventTimestamp: e.timeStamp })
     }, { passive: false })
 
     rightBtn?.addEventListener('touchcancel', (e) => {
       e.preventDefault()
       setActive(rightBtn, false)
-      this.queueInput('flipperRight', false)
+      this.queueInput('flipperRight', false, { source: 'touch', eventTimestamp: e.timeStamp })
     }, { passive: false })
 
     // Mouse events for right flipper
@@ -657,23 +688,27 @@ export class InputHandler {
       if (this.getAdventureActive()) return
       if (this.getTiltActive()) return
       setActive(rightBtn, true)
-      this.queueInput('flipperRight', true)
+      this.queueInput('flipperRight', true, { source: 'touch', eventTimestamp: e.timeStamp })
     })
 
     rightBtn?.addEventListener('mouseup', (e) => {
       e.preventDefault()
       setActive(rightBtn, false)
-      this.queueInput('flipperRight', false)
+      this.queueInput('flipperRight', false, { source: 'touch', eventTimestamp: e.timeStamp })
     })
 
     rightBtn?.addEventListener('mouseleave', () => {
       setActive(rightBtn, false)
-      this.queueInput('flipperRight', false)
+      this.queueInput('flipperRight', false, { source: 'touch' })
     })
 
-    // Plunger touch with charge support
+    // Plunger touch with charge support — MENU starts the game (audio unlock)
     plungerBtn?.addEventListener('touchstart', (e) => {
       e.preventDefault()
+      if (this.getState() === GameState.MENU) {
+        this.onStart()
+        return
+      }
       if (this.getAdventureActive()) return
       setActive(plungerBtn, true)
       if (!this.plungerChargeState.isHeld) {
@@ -690,7 +725,7 @@ export class InputHandler {
       }
       if (this.plungerChargeState.isHeld) {
         this.releasePlungerCharge()
-        this.queueInput('plunger', true)
+        this.queueInput('plunger', true, { source: 'touch', eventTimestamp: e.timeStamp })
       }
     }, { passive: false })
 
@@ -711,6 +746,10 @@ export class InputHandler {
     // Mouse events for plunger
     plungerBtn?.addEventListener('mousedown', (e) => {
       e.preventDefault()
+      if (this.getState() === GameState.MENU) {
+        this.onStart()
+        return
+      }
       if (this.getAdventureActive()) return
       setActive(plungerBtn, true)
       if (!this.plungerChargeState.isHeld) {
@@ -727,7 +766,7 @@ export class InputHandler {
       }
       if (this.plungerChargeState.isHeld) {
         this.releasePlungerCharge()
-        this.queueInput('plunger', true)
+        this.queueInput('plunger', true, { source: 'touch', eventTimestamp: e.timeStamp })
       }
     })
 
@@ -747,7 +786,7 @@ export class InputHandler {
     nudgeBtn?.addEventListener('touchstart', (e) => {
       e.preventDefault()
       setActive(nudgeBtn, true)
-      this.queueInput('nudge', { x: 0, y: 0, z: 1 })
+      this.queueInput('nudge', { x: 0, y: 0, z: 1 }, { source: 'touch', eventTimestamp: e.timeStamp })
       // Auto-remove active class after short delay for nudge
       setTimeout(() => setActive(nudgeBtn, false), 150)
     }, { passive: false })
@@ -766,7 +805,7 @@ export class InputHandler {
     nudgeBtn?.addEventListener('mousedown', (e) => {
       e.preventDefault()
       setActive(nudgeBtn, true)
-      this.queueInput('nudge', { x: 0, y: 0, z: 1 })
+      this.queueInput('nudge', { x: 0, y: 0, z: 1 }, { source: 'touch', eventTimestamp: e.timeStamp })
       setTimeout(() => setActive(nudgeBtn, false), 150)
     })
 

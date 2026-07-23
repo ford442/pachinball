@@ -1,6 +1,7 @@
 /**
  * Performance Monitor - Lightweight metrics tracking
- * Tracks FPS, frame time, physics step time, and render time
+ * Tracks FPS, frame time, physics step time, and render time.
+ * Emits a one-shot sustained-jank callback when avg frame time stays >22ms for 2s.
  */
 
 export interface PerformanceMetrics {
@@ -18,6 +19,9 @@ export interface PerformanceMetrics {
   rendererBackend: string
   suggestedFallback: boolean
 }
+
+const JANK_FRAME_MS = 22
+const JANK_SUSTAINED_SECONDS = 2
 
 export class PerformanceMonitor {
   private metrics: PerformanceMetrics = {
@@ -53,9 +57,22 @@ export class PerformanceMonitor {
   private trackSwitchSampleFrames = 0
   private readonly trackSwitchSampleWindow = 90
 
+  /** Consecutive seconds with avg frameTime > JANK_FRAME_MS. */
+  private slowSecondCount = 0
+  private jankCallbackFired = false
+  private onSustainedJank: (() => void) | null = null
+
   constructor() {
     this.frameStartTime = performance.now()
     this.lastSecondTime = this.frameStartTime
+  }
+
+  /**
+   * Register a one-shot callback for sustained jank (frame time >22ms for 2s).
+   * Used to auto-drop quality tier once per session.
+   */
+  setOnSustainedJank(callback: (() => void) | null): void {
+    this.onSustainedJank = callback
   }
 
   /**
@@ -89,20 +106,18 @@ export class PerformanceMonitor {
     const frameTime = performance.now() - this.frameStartTime
     this.trackSwitchProfiling(frameTime)
 
-    if (!this.enabled) return
-
+    // Always sample frame times so jank auto-drop works outside debug mode
     this.addSample(this.frameTimeSamples, frameTime)
     this.frameCount++
 
-    // Update FPS every second
     const now = performance.now()
     if (now - this.lastSecondTime >= 1000) {
       this.metrics.fps = this.frameCount
       this.frameCount = 0
       this.lastSecondTime = now
       this.updateAverages()
+      this.checkSustainedJank()
 
-      // Log metrics to console in debug mode
       if (this.enabled && window.localStorage.getItem('debug:perf-log') === 'true') {
         console.log(
           `[PERF] FPS: ${this.metrics.fps.toFixed(1)} | Frame: ${this.metrics.frameTimeMs.toFixed(2)}ms | Physics: ${this.metrics.physicsStepMs.toFixed(2)}ms | Render: ${this.metrics.renderTimeMs.toFixed(2)}ms`
@@ -174,6 +189,7 @@ export class PerformanceMonitor {
     this.frameCount = 0
     this.frameStartTime = performance.now()
     this.lastSecondTime = this.frameStartTime
+    this.slowSecondCount = 0
   }
 
   private addSample(buffer: number[], value: number): void {
@@ -198,6 +214,25 @@ export class PerformanceMonitor {
       this.metrics.fps > 0 &&
       this.metrics.fps < 40 &&
       (this.metrics.peakFrameAfterSwitchMs ?? 0) > 22
+  }
+
+  private checkSustainedJank(): void {
+    if (this.jankCallbackFired || !this.onSustainedJank) return
+
+    if (this.metrics.frameTimeMs > JANK_FRAME_MS) {
+      this.slowSecondCount++
+      if (this.slowSecondCount >= JANK_SUSTAINED_SECONDS) {
+        this.jankCallbackFired = true
+        this.metrics.suggestedFallback = true
+        try {
+          this.onSustainedJank()
+        } catch (err) {
+          console.warn('[PerfMonitor] Sustained jank callback failed:', err)
+        }
+      }
+    } else {
+      this.slowSecondCount = 0
+    }
   }
 
   private trackSwitchProfiling(frameTime: number): void {

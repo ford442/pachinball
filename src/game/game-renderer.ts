@@ -72,6 +72,8 @@ export interface RendererHost {
   engineInstrumentation: EngineInstrumentation | null
   eventBus?: EventBus
   postProcessDegraded: boolean
+  /** Optional EffectsSystem hook for quality sync. */
+  effects?: { setQualityTier(tier: QualityTier): void } | null
 }
 
 export class GameRenderer {
@@ -95,6 +97,11 @@ export class GameRenderer {
   // EventBus unsub handles
   private _unsubBloom: (() => void) | null = null
   private _unsubShake: (() => void) | null = null
+
+  private _ssaoPipeline: SSAO2RenderingPipeline | null = null
+  private _ssrPipeline: SSRRenderingPipeline | null = null
+  private _motionBlur: MotionBlurPostProcess | null = null
+  private _isSwiftShader = false
 
   constructor(host: RendererHost) {
     this.host = host
@@ -172,26 +179,8 @@ export class GameRenderer {
       bloom.bloomWeight = Math.min(bloom.bloomWeight, 0.25)
     }
 
-    if (!GameConfig.camera.reducedMotion) {
-      try {
-        bloom.depthOfFieldEnabled = true
-        bloom.depthOfField.focusDistance = 2500
-        bloom.depthOfField.fStop = 2.4
-        bloom.depthOfFieldBlurLevel =
-          qualityTier === QualityTier.HIGH
-            ? DepthOfFieldEffectBlurLevel.High
-            : DepthOfFieldEffectBlurLevel.Low
-      } catch (err) {
-        bloom.depthOfFieldEnabled = false
-        this.host.postProcessDegraded = true
-        console.warn('[GameRenderer] MRT post-process unavailable; running bloom-only (DoF failed)', err)
-      }
-    }
-
-    // Skip MRT-based post-processes when running on SwiftShader (WebGL) to avoid
-    // GL_INVALID_OPERATION: Active draw buffers with missing fragment shader outputs.
-    // WebGPU adapters that still fail validation are handled via try/catch below.
-    const isSwiftShader = (() => {
+    // DoF / SSAO / SSR / motion blur are HIGH-only (mobile boot caps at MEDIUM).
+    this._isSwiftShader = (() => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const gl = (this.host.engine as any)._gl as WebGLRenderingContext | null
       if (!gl) return false
@@ -201,45 +190,7 @@ export class GameRenderer {
       return renderer?.toLowerCase().includes('swiftshader') ?? false
     })()
 
-    // SSAO
-    if (!isSwiftShader && !GameConfig.camera.reducedMotion) {
-      try {
-        const isHigh = qualityTier === QualityTier.HIGH
-        const ssao = new SSAO2RenderingPipeline('ssao', scene, {
-          ssaoRatio: isHigh ? 1.0 : 0.5,
-          blurRatio: isHigh ? 1.0 : 0.5,
-        })
-        ssao.radius = 1.5
-        ssao.totalStrength = 0.6
-        ssao.base = 0.5
-        ssao.samples = isHigh ? 32 : 16
-        ssao.maxZ = 50
-        ssao.minZAspect = 0.5
-        scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline('ssao', [tableCam])
-      } catch (err) {
-        this.host.postProcessDegraded = true
-        console.warn('[GameRenderer] MRT post-process unavailable; running bloom-only (SSAO failed)', err)
-      }
-    }
-
-    // SSR
-    if (!isSwiftShader && qualityTier === QualityTier.HIGH && !GameConfig.camera.reducedMotion) {
-      const ssr = new SSRRenderingPipeline('ssr', scene, [tableCam])
-      ssr.step = 0.5
-      ssr.reflectionSpecularFalloffExponent = 3
-      ssr.strength = 0.6
-      ssr.thickness = 0.1
-      ssr.selfCollisionNumSkip = 1
-      ssr.enableSmoothReflections = true
-      ssr.enableAutomaticThicknessComputation = true
-    }
-
-    // Motion blur
-    if (!isSwiftShader && qualityTier === QualityTier.HIGH && !GameConfig.camera.reducedMotion) {
-      const motionBlur = new MotionBlurPostProcess('motionBlur', scene, 1.0, tableCam)
-      motionBlur.motionStrength = 0.15
-      motionBlur.motionBlurSamples = 16
-    }
+    this.applyHeavyPostProcesses(qualityTier, reducedMotion)
 
     // EventBus subscriptions — bloom kick and camera shake
     const { eventBus } = this.host
@@ -293,6 +244,152 @@ export class GameRenderer {
         }
       }
     })
+  }
+
+  /**
+   * Apply a quality tier at runtime (settings change or auto-drop).
+   * Updates bloom knobs and toggles HIGH-only heavy post-process.
+   */
+  applyQualityTier(tier: QualityTier): void {
+    const { scene, bloomPipeline, accessibility } = this.host
+    if (!scene || !bloomPipeline) {
+      this.host.qualityTier = tier
+      return
+    }
+
+    this.host.qualityTier = tier
+    this.host.effects?.setQualityTier(tier)
+    getMaterialLibrary(scene).qualityTier = tier
+
+    const reducedMotion = accessibility?.reducedMotion ?? GameConfig.camera.reducedMotion
+    const effectIntensity = accessibility?.effectIntensity ?? 1.0
+    const baseWeight = 0.25 * effectIntensity * INTENSITY.ACTIVE
+
+    bloomPipeline.bloomEnabled = !reducedMotion && effectIntensity > 0
+    bloomPipeline.bloomThreshold = 0.75
+    bloomPipeline.sharpenEnabled = !reducedMotion && tier !== QualityTier.LOW
+
+    if (tier === QualityTier.LOW) {
+      bloomPipeline.bloomKernel = 16
+      bloomPipeline.bloomScale = 0.2
+      bloomPipeline.bloomWeight = Math.min(baseWeight, 0.12)
+      bloomPipeline.sharpenEnabled = false
+    } else if (tier === QualityTier.MEDIUM) {
+      bloomPipeline.bloomKernel = 32
+      bloomPipeline.bloomScale = 0.35
+      bloomPipeline.bloomWeight = Math.min(baseWeight, 0.25)
+    } else {
+      bloomPipeline.bloomKernel = 64
+      bloomPipeline.bloomScale = 0.5
+      bloomPipeline.bloomWeight = baseWeight
+    }
+
+    this.applyHeavyPostProcesses(tier, reducedMotion)
+    console.log(`[GameRenderer] Quality tier applied: ${tier}`)
+  }
+
+  /** Drop one quality step (HIGH→MEDIUM→LOW). Returns the new tier. */
+  dropQualityTierOnce(): QualityTier {
+    const current = this.host.qualityTier
+    const next =
+      current === QualityTier.HIGH
+        ? QualityTier.MEDIUM
+        : current === QualityTier.MEDIUM
+          ? QualityTier.LOW
+          : QualityTier.LOW
+    if (next !== current) {
+      this.applyQualityTier(next)
+    }
+    return next
+  }
+
+  private applyHeavyPostProcesses(qualityTier: QualityTier, reducedMotion: boolean): void {
+    const { scene, tableCam } = this.host
+    if (!scene || !tableCam) return
+
+    const allowHeavy =
+      qualityTier === QualityTier.HIGH && !reducedMotion && !this._isSwiftShader
+
+    // DoF lives on the default pipeline
+    const bloom = this.host.bloomPipeline
+    if (bloom) {
+      if (allowHeavy) {
+        try {
+          bloom.depthOfFieldEnabled = true
+          bloom.depthOfField.focusDistance = 2500
+          bloom.depthOfField.fStop = 2.4
+          bloom.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.High
+        } catch (err) {
+          bloom.depthOfFieldEnabled = false
+          this.host.postProcessDegraded = true
+          console.warn('[GameRenderer] MRT post-process unavailable; DoF failed', err)
+        }
+      } else {
+        bloom.depthOfFieldEnabled = false
+      }
+    }
+
+    if (allowHeavy) {
+      if (!this._ssaoPipeline) {
+        try {
+          const ssao = new SSAO2RenderingPipeline('ssao', scene, {
+            ssaoRatio: 1.0,
+            blurRatio: 1.0,
+          })
+          ssao.radius = 1.5
+          ssao.totalStrength = 0.6
+          ssao.base = 0.5
+          ssao.samples = 32
+          ssao.maxZ = 50
+          ssao.minZAspect = 0.5
+          scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline('ssao', [tableCam])
+          this._ssaoPipeline = ssao
+        } catch (err) {
+          this.host.postProcessDegraded = true
+          console.warn('[GameRenderer] MRT post-process unavailable; SSAO failed', err)
+        }
+      }
+
+      if (!this._ssrPipeline) {
+        this._ssrPipeline = new SSRRenderingPipeline('ssr', scene, [tableCam])
+        this._ssrPipeline.step = 0.5
+        this._ssrPipeline.reflectionSpecularFalloffExponent = 3
+        this._ssrPipeline.strength = 0.6
+        this._ssrPipeline.thickness = 0.1
+        this._ssrPipeline.selfCollisionNumSkip = 1
+        this._ssrPipeline.enableSmoothReflections = true
+        this._ssrPipeline.enableAutomaticThicknessComputation = true
+      }
+
+      if (!this._motionBlur) {
+        this._motionBlur = new MotionBlurPostProcess('motionBlur', scene, 1.0, tableCam)
+        this._motionBlur.motionStrength = 0.15
+        this._motionBlur.motionBlurSamples = 16
+      }
+    } else {
+      this.disposeHeavyPostProcesses()
+    }
+  }
+
+  private disposeHeavyPostProcesses(): void {
+    const { scene, tableCam } = this.host
+    if (this._ssaoPipeline && scene && tableCam) {
+      try {
+        scene.postProcessRenderPipelineManager.detachCamerasFromRenderPipeline('ssao', [tableCam])
+      } catch {
+        // Pipeline may already be detached
+      }
+      this._ssaoPipeline.dispose()
+      this._ssaoPipeline = null
+    }
+    if (this._ssrPipeline) {
+      this._ssrPipeline.dispose()
+      this._ssrPipeline = null
+    }
+    if (this._motionBlur) {
+      this._motionBlur.dispose()
+      this._motionBlur = null
+    }
   }
 
   /** Setup key, rim, bounce, and fill lights + shadow generator. */
@@ -628,6 +725,7 @@ export class GameRenderer {
 
     this.host.bloomPipeline?.dispose()
     this.host.bloomPipeline = null
+    this.disposeHeavyPostProcesses()
 
     this.host.mirrorTexture?.dispose()
     this.host.mirrorTexture = null

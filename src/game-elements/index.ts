@@ -47,7 +47,7 @@ export { NanoLoomFeeder, NanoLoomState } from './nano-loom-feeder'
 export { PrismCoreFeeder, PrismCoreState } from './prism-core-feeder'
 export { GaussCannonFeeder, GaussCannonState } from './gauss-cannon-feeder'
 export { QuantumTunnelFeeder, QuantumTunnelState } from './quantum-tunnel-feeder'
-export { MaterialLibrary, getMaterialLibrary, resetMaterialLibrary, detectQualityTier } from '../materials'
+export { MaterialLibrary, getMaterialLibrary, resetMaterialLibrary, detectQualityTier, applyMobileQualityCap } from '../materials'
 export { BallAnimator } from './ball-animator'
 export { CameraController, CameraMode, FRAMING_ZONES, DEFAULT_SOFT_FOLLOW, type CameraRuntimePolicy } from './camera-controller'
 export {
@@ -226,6 +226,33 @@ export {
   resetScoringBreakdownManager,
   type ScoringBreakdownSnapshot,
 } from './scoring-breakdown'
+
+export {
+  createSeededRng,
+  hashStringToSeed,
+  dailySeedId,
+  seedFromDailyId,
+  randomU32Seed,
+  type SeededRng,
+} from './seeded-rng'
+export {
+  generateTableLayout,
+  validateLayout,
+  runSpawnProbes,
+  CANONICAL_BUMPERS,
+  LAYOUT_CONSTANTS,
+  FEEDER_KEYS,
+  type TableLayout,
+  type FeederKey,
+  type PinSpec,
+  type BumperSpec,
+} from './daily-cascade-layout'
+export {
+  DailyCascadeState,
+  getDailyCascadeState,
+  resetDailyCascadeState,
+  type DailyCascadeMode,
+} from './daily-cascade-state'
 
 // EventBus integration shims
 export { ObstacleEventBusIntegration } from './obstacle-eventbus-integration'

@@ -6,6 +6,16 @@ import { Vector3 } from '@babylonjs/core'
 
 export type CabinetType = 'classic' | 'neo' | 'vertical' | 'wide'
 
+/** Optional glTF shell assets. Collision stays code-authored (playfield walls). */
+export interface CabinetGltfConfig {
+  /** Low-poly / LOW-tier mesh (always fetched on QualityTier.LOW) */
+  simpleUrl: string
+  /** High mesh for MEDIUM/HIGH; falls back to simpleUrl on failure */
+  highUrl: string
+  /** Per-load timeout; defaults in loader */
+  loadTimeoutMs?: number
+}
+
 export interface CabinetPreset {
   /** Preset identifier */
   type: CabinetType
@@ -51,6 +61,9 @@ export interface CabinetPreset {
   hasAngledSides: boolean
   hasExtendedMarquee: boolean
   hasCoinDoor: boolean
+
+  /** When set, CabinetBuilder tries glTF first and falls back to procedural */
+  gltf?: CabinetGltfConfig
 }
 
 export interface CabinetDimensions {

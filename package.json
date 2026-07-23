@@ -10,15 +10,19 @@
     "build:wasm": "bash scripts/build-wasm.sh",
     "build:wasm_colab": "bash scripts/build-wasm-colab.sh",
     "build:wasm:debug": "bash scripts/build-wasm.sh --debug",
+    "build:wasm:assert": "bash scripts/build-wasm.sh --assert",
+    "bench:wasm-flags": "bash scripts/build-wasm.sh --bench-matrix && node scripts/bench-wasm-flags.mjs",
     "test:native": "cmake -S native -B native/build-native && cmake --build native/build-native && ctest --test-dir native/build-native --output-on-failure",
     "test:wasm-parity": "node scripts/run-wasm-parity.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "icons:generate": "node scripts/generate-pwa-icons.mjs",
+    "models:cabinet-placeholders": "node scripts/generate-cabinet-placeholders.mjs",
     "test": "vitest run"
   },
   "dependencies": {
     "@babylonjs/core": "^7.45.0",
+    "@babylonjs/loaders": "^7.54.3",
     "@dimforge/rapier3d-compat": "^0.15.0"
   },
   "devDependencies": {

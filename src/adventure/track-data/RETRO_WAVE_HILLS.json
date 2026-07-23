@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "id": "RETRO_WAVE_HILLS",
+  "cameraPresetId": "RETRO_WAVE_HILLS",
+  "materials": {
+    "structure": "#FF8800"
+  },
+  "segments": [
+    {
+      "type": "straight",
+      "width": 6,
+      "length": 10,
+      "inclineDeg": 0,
+      "material": "#FF8800"
+    },
+    {
+      "type": "straight",
+      "width": 6,
+      "length": 8,
+      "inclineDeg": -15,
+      "material": "#FF8800"
+    },
+    {
+      "type": "straight",
+      "width": 6,
+      "length": 8,
+      "inclineDeg": 15,
+      "material": "#FF8800"
+    },
+    {
+      "type": "straight",
+      "width": 6,
+      "length": 8,
+      "inclineDeg": -20,
+      "material": "#FF8800"
+    },
+    {
+      "type": "straight",
+      "width": 6,
+      "length": 8,
+      "inclineDeg": 20,
+      "material": "#FF8800"
+    },
+    {
+      "type": "curve",
+      "radius": 12,
+      "angleDeg": 180,
+      "inclineDeg": 0,
+      "width": 6,
+      "wallHeight": 2,
+      "bankingDeg": -15,
+      "segments": 20,
+      "material": "#FF8800"
+    },
+    {
+      "type": "straight",
+      "width": 4,
+      "length": 12,
+      "inclineDeg": -25,
+      "material": "#FF8800"
+    },
+    {
+      "type": "gap",
+      "length": 15,
+      "drop": -5
+    },
+    {
+      "type": "bucket",
+      "material": "#FF8800"
+    }
+  ]
+}

@@ -41,6 +41,36 @@ function isMobileUserAgent(userAgent: string): boolean {
   return /Mobi|Android/i.test(userAgent)
 }
 
+/** Exported for quality-tier probing and fullscreen gating. */
+export { isMobileUserAgent }
+
+export interface MobileQualityHints {
+  userAgent?: string
+  /** `navigator.deviceMemory` when available (GiB). */
+  deviceMemory?: number
+  /** `navigator.connection.saveData` when available. */
+  saveData?: boolean
+}
+
+/** True when mobile heuristics should force LOW quality. */
+export function shouldForceLowQualityMobile(hints: MobileQualityHints = {}): boolean {
+  const ua = hints.userAgent ?? (typeof navigator !== 'undefined' ? navigator.userAgent : '')
+  if (!isMobileUserAgent(ua)) return false
+  const deviceMemory =
+    hints.deviceMemory ??
+    (typeof navigator !== 'undefined'
+      ? (navigator as Navigator & { deviceMemory?: number }).deviceMemory
+      : undefined)
+  const saveData =
+    hints.saveData ??
+    (typeof navigator !== 'undefined'
+      ? (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData
+      : undefined)
+  if (saveData === true) return true
+  if (typeof deviceMemory === 'number' && deviceMemory > 0 && deviceMemory <= 4) return true
+  return false
+}
+
 /** Resolve Babylon EngineOptions for EngineFactory.CreateAsync. */
 export function resolveEngineOptions(ctx: EngineOptionsContext = DEFAULT_CONTEXT): ResolvedEngineOptions {
   const params = new URLSearchParams(ctx.search)

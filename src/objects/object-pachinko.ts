@@ -31,7 +31,8 @@ export class PachinkoBuilder {
   createPachinkoField(
     center: Vector3 = new Vector3(0, 0.5, 6),
     width: number = 24,
-    height: number = 22
+    height: number = 22,
+    pinPositions?: { x: number; z: number }[],
   ): {
     bindings: PhysicsBinding[]
     targetBodies: RAPIER.RigidBody[]
@@ -52,7 +53,7 @@ export class PachinkoBuilder {
     // Enhanced peg material with map-reactive emissive tips
     const pinMat = this.matLib.getEnhancedPinMaterial()
 
-    // Dense pachinko grid
+    // Dense pachinko grid (vanilla) — overridden when pinPositions is provided
     const rows = 10
     const cols = 13
     const spacingX = width / cols
@@ -113,40 +114,45 @@ export class PachinkoBuilder {
     meshes.push(pinHigh, pinMed, pinLow)
     this.meshes.push(pinHigh, pinMed, pinLow)
 
-    for (let r = 0; r < rows; r++) {
-      const offsetX = (r % 2 === 0) ? 0 : spacingX / 2
-      for (let c = 0; c < cols; c++) {
-        const x = center.x - (width / 2) + c * spacingX + offsetX
-        const z = center.z - (height / 2) + r * spacingZ
-        // Skip center area for the main catcher/target
-        if (Math.abs(x) < 2.5 && Math.abs(z - center.z) < 2.5) continue
+    const placePin = (x: number, z: number, name: string) => {
+      const inst = pinHigh.createInstance(name)
+      inst.position.set(x, 0.4, z)
+      inst.isPickable = false
+      inst.freezeWorldMatrix()
 
-        // Instance inherits geometry + LOD from template; each instance
-        // gets its own world transform but shares one vertex buffer.
-        const inst = pinHigh.createInstance(`pin_${r}_${c}`)
-        inst.position.set(x, 0.4, z)
-        inst.isPickable = false
-        // Static object: lock the world matrix in GPU memory
-        inst.freezeWorldMatrix()
+      const body = this.world.createRigidBody(
+        this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.4, z)
+      )
+      this.world.createCollider(
+        this.rapier.ColliderDesc.cylinder(pegHeight / 2, avgRadius)
+          .setRestitution(0.65)
+          .setFriction(0.1)
+          .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
+        body
+      )
 
-        const body = this.world.createRigidBody(
-          this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.4, z)
-        )
-        this.world.createCollider(
-          this.rapier.ColliderDesc.cylinder(pegHeight / 2, avgRadius)
-            .setRestitution(0.65)
-            .setFriction(0.1)
-            .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
-          body
-        )
+      bindings.push({ mesh: inst, rigidBody: body })
+      meshes.push(inst)
+      pins.push(inst)
+      this.meshes.push(inst)
+      this.bodies.push(body)
+    }
 
-        // Fixed bodies are skipped in the physics-sync loop; the binding
-        // is kept only so the body is reachable via getBindings() if needed.
-        bindings.push({ mesh: inst, rigidBody: body })
-        meshes.push(inst)
-        pins.push(inst)
-        this.meshes.push(inst)
-        this.bodies.push(body)
+    if (pinPositions && pinPositions.length > 0) {
+      for (let i = 0; i < pinPositions.length; i++) {
+        const p = pinPositions[i]!
+        placePin(p.x, p.z, `pin_seed_${i}`)
+      }
+    } else {
+      for (let r = 0; r < rows; r++) {
+        const offsetX = (r % 2 === 0) ? 0 : spacingX / 2
+        for (let c = 0; c < cols; c++) {
+          const x = center.x - (width / 2) + c * spacingX + offsetX
+          const z = center.z - (height / 2) + r * spacingZ
+          // Skip center area for the main catcher/target
+          if (Math.abs(x) < 2.5 && Math.abs(z - center.z) < 2.5) continue
+          placePin(x, z, `pin_${r}_${c}`)
+        }
       }
     }
 

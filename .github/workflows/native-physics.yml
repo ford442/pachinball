@@ -9,7 +9,9 @@
 #
 # Local equivalents:
 #   npm run test:native          # Catch2 + ctest (g++/cmake only)
-#   npm run build:wasm           # Emscripten build (skipped if emcc missing)
+#   npm run build:wasm           # Emscripten Release → public/wasm/ (production)
+#   npm run build:wasm:assert    # RelWithAsserts → native/build-assert/
+#   WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npm run test:wasm-parity
 
 name: Native Physics (optional)
 
@@ -18,10 +20,14 @@ on:
   push:
     paths:
       - 'native/**'
+      - 'scripts/build-wasm.sh'
+      - 'scripts/run-wasm-parity.mjs'
       - '.github/workflows/native-physics.yml'
   pull_request:
     paths:
       - 'native/**'
+      - 'scripts/build-wasm.sh'
+      - 'scripts/run-wasm-parity.mjs'
       - '.github/workflows/native-physics.yml'
 
 jobs:
@@ -64,7 +70,7 @@ jobs:
           echo "$(pwd)" >> $GITHUB_PATH
           emcc --version
 
-      - name: Build WASM module
+      - name: Build WASM module (Release — production path)
         run: |
           source emsdk/emsdk_env.sh
           if ! command -v emcmake &>/dev/null; then
@@ -73,8 +79,29 @@ jobs:
           fi
           npm run build:wasm
 
-      - name: Assert WASM artefact exists
+      - name: Assert Release WASM artefact exists
         run: |
           test -s public/wasm/PhysicsModule.wasm
           test -s public/wasm/PhysicsModule.js
+          # Production must not ship source maps
+          test ! -e public/wasm/PhysicsModule.wasm.map
+          test ! -e public/wasm/PhysicsModule.js.map
           echo "WASM size: $(wc -c < public/wasm/PhysicsModule.wasm) bytes"
+
+      - name: Build RelWithAsserts artefact
+        run: |
+          source emsdk/emsdk_env.sh
+          npm run build:wasm:assert
+          test -s native/build-assert/PhysicsModule.wasm
+          test -s native/build-assert/PhysicsModule.js
+
+      - name: Install Node deps for parity
+        run: npm ci
+
+      - name: Install cmake/g++ for native reference
+        run: sudo apt-get update && sudo apt-get install -y cmake g++
+
+      - name: WASM parity against RelWithAsserts
+        run: |
+          source emsdk/emsdk_env.sh
+          WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npm run test:wasm-parity

@@ -32,6 +32,7 @@ export class PrismCoreFeeder {
   private state: PrismCoreState = PrismCoreState.IDLE
   private caughtBalls: RAPIER.RigidBody[] = []
   public visualRotationSpeed: number = 0.5
+  private gameplayEnabled = true
 
   // Animation properties
   private innerRotationSpeed = 0.5
@@ -65,6 +66,14 @@ export class PrismCoreFeeder {
 
   getState(): PrismCoreState {
     return this.state
+  }
+
+  setGameplayEnabled(enabled: boolean): void {
+    this.gameplayEnabled = enabled
+    this.outerMesh?.setEnabled(enabled)
+    this.innerMesh?.setEnabled(enabled)
+    this.energyBloom?.setEnabled(enabled)
+    if (this.light) this.light.setEnabled(enabled)
   }
 
   private createVisuals(): void {
@@ -123,6 +132,7 @@ export class PrismCoreFeeder {
   }
 
   update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+    if (!this.gameplayEnabled) return
     const anim = this.config.animation
     // Smooth rotation with decay
     const targetInner = this.state === PrismCoreState.IDLE ? anim.rotationSpeedIdle :

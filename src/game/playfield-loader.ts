@@ -125,7 +125,10 @@ export function loadPlayfield(
   // switchToTrack → deactivateExitPortal + clearTrack + buildTrack
   const success = deps.adventureMode.switchToTrack(trackType)
   if (!success) {
-    return { success: false, error: `Failed to switch to track: ${trackType}` }
+    const detail =
+      deps.adventureMode.getLastTrackLoadError() ??
+      `Failed to switch to track: ${trackType}`
+    return { success: false, error: detail }
   }
 
   deps.rebuildHandleCaches()

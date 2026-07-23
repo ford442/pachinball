@@ -48,6 +48,8 @@ import {
   getLeaderboardSystem,
   getNameEntryDialog,
   getAdventureState,
+  getDailyCascadeState,
+  type FeederKey,
   getLevelSelectScreen,
   ZoneTriggerSystem,
   getDynamicWorld,
@@ -286,6 +288,9 @@ export class Game {
 
       document.getElementById('start-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
       document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
+      this.uiManager?.setStartButtonEnabled(false)
+      const { bindDailyCascadeUI } = await import('./game/daily-cascade-ui')
+      bindDailyCascadeUI()
 
       try {
         const v = localStorage.getItem('pachinball.best')
@@ -306,7 +311,7 @@ export class Game {
       console.log('[Accessibility] Settings loaded:', settings, 'Accessibility:', this.accessibility)
 
       this.hapticManager = new HapticManager({
-        enabled: this.accessibility.hapticsEnabled,
+        enabled: settings.hapticsEnabled && this.accessibility.hapticsEnabled,
         intensity: this.accessibility.hapticIntensity,
       })
     })
@@ -320,6 +325,16 @@ export class Game {
       this.renderer.setupResizeObserver()
       this.renderer.setupDPRHandling()
       this.renderer.setupSceneOptimizer()
+
+      // One-shot auto quality drop when avg frame time stays >22ms for 2s (#300)
+      this.performanceMonitor.setOnSustainedJank(() => {
+        const before = this.qualityTier
+        const after = this.renderer.dropQualityTierOnce()
+        if (after !== before) {
+          this.uiManager?.showMessage('Graphics reduced for performance', 3000)
+          console.warn(`[Perf] Auto quality drop: ${before} → ${after}`)
+        }
+      })
     })
 
     await this.runCheckpointStage('core_helpers', () => {
@@ -407,7 +422,7 @@ export class Game {
           }
         },
         onMapCycle: () => this.mapManager?.cycleTableMap(),
-        onCabinetCycle: () => this.cabinetManager?.cycleCabinetPreset(),
+        onCabinetCycle: () => { void this.cabinetManager?.cycleCabinetPreset() },
         onCameraToggle: () => { this.isCameraFollowMode = !this.isCameraFollowMode },
         onLevelSelectToggle: () => this.toggleLevelSelect(),
         onLeaderboardToggle: () => this.leaderboardSystem.toggle(),
@@ -604,9 +619,41 @@ export class Game {
   // --------------------------------------------------------------------------
 
   startGame(): Promise<void> { return this.lifecycle.startGame() }
+
+  applyDailyCascadeOnStart(): void {
+    const state = getDailyCascadeState()
+    const mode = state.getMode()
+
+    if (mode === 'vanilla') {
+      if (state.wasMutatorApplied()) {
+        this.gameObjects?.rebuildMutableToys(null)
+        this.applyFeederGameplayFlags(null)
+        this.physicsController?.rebuildHandleCaches()
+        state.markMutatorApplied(false)
+      }
+      return
+    }
+
+    const layout = state.ensureLayout()
+    if (!layout || !this.gameObjects) return
+    this.gameObjects.rebuildMutableToys(layout)
+    this.applyFeederGameplayFlags(layout.feedersEnabled)
+    this.physicsController?.rebuildHandleCaches()
+    state.markMutatorApplied(true)
+  }
+
+  private applyFeederGameplayFlags(flags: Record<FeederKey, boolean> | null): void {
+    const allOn = flags === null
+    this.magSpinFeeder?.setGameplayEnabled(allOn || !!flags?.magSpin)
+    this.nanoLoomFeeder?.setGameplayEnabled(allOn || !!flags?.nanoLoom)
+    this.prismCoreFeeder?.setGameplayEnabled(allOn || !!flags?.prismCore)
+    this.gaussCannon?.setGameplayEnabled(allOn || !!flags?.gaussCannon)
+    this.quantumTunnel?.setGameplayEnabled(allOn || !!flags?.quantumTunnel)
+  }
+
   switchTableMap(mapName: string): void { this.mapCabinet.switchTableMap(mapName) }
-  loadCabinetPreset(type: CabinetType): void { this.mapCabinet.loadCabinetPreset(type) }
-  cycleCabinetPreset(): void { this.mapCabinet.cycleCabinetPreset() }
+  loadCabinetPreset(type: CabinetType): Promise<void> { return this.mapCabinet.loadCabinetPreset(type) }
+  cycleCabinetPreset(): Promise<void> { return this.mapCabinet.cycleCabinetPreset() }
   cycleTableMap(): void { this.mapCabinet.cycleTableMap() }
   switchScenario(scenarioId: string): void { this.scenarioManager.switchScenario(scenarioId) }
   cycleScenario(direction: 1 | -1 = 1): void { this.scenarioManager.cycleScenario(direction) }

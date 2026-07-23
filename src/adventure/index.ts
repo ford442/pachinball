@@ -40,6 +40,25 @@ export {
   isAdventureTrackType,
 } from './portal-routing'
 
+export {
+  validateTrackDefinition,
+  formatTrackValidationErrors,
+  TRACK_SCHEMA_VERSION,
+} from './track-schema'
+export type {
+  TrackDefinition,
+  TrackSegment,
+  TrackValidationResult,
+  TrackValidationIssue,
+} from './track-schema'
+export { compileTrackDefinition } from './track-compiler'
+export type { TrackBuildApi, TrackCursor } from './track-compiler'
+export {
+  DATA_TRACK_REGISTRY,
+  getDataTrackDefinition,
+  isDataDrivenTrack,
+} from './track-data-registry'
+
 // Campaign catalog (source file remains in game-elements for now)
 export {
   TRACK_CATALOG,
@@ -59,10 +78,7 @@ export { buildPachinkoHall } from './tracks/pachinko-hall'
 export { buildCyberCore } from './tracks/cyber-core'
 export { buildQuantumGrid } from './tracks/quantum-grid'
 export { buildSingularityWell } from './tracks/singularity-well'
-export { buildGlitchSpire } from './tracks/glitch-spire'
-export { buildRetroWaveHills } from './tracks/retro-wave-hills'
 export { buildChronoCore } from './tracks/chrono-core'
-export { buildHyperDrift } from './tracks/hyper-drift'
 export { buildPachinkoSpire } from './tracks/pachinko-spire'
 export { buildOrbitalJunkyard } from './tracks/orbital-junkyard'
 export { buildFirewallBreach } from './tracks/firewall-breach'

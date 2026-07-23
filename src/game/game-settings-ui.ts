@@ -44,7 +44,7 @@ export interface SettingsUIHost {
   setScanlineEnabled?(enabled: boolean): void
   setScanlineIntensityMultiplier?(multiplier: number): void
   switchTableMap(mapName: string): void
-  loadCabinetPreset(type: import('./game-cabinet').CabinetType): void
+  loadCabinetPreset(type: import('./game-cabinet').CabinetType): Promise<void> | void
   toggleLevelSelect(): void
 }
 
@@ -152,6 +152,7 @@ export class GameSettingsUI {
       photosensitiveMode: photosensitiveCheckbox?.checked ?? false,
       shakeIntensity: parseFloat(shakeSlider?.value ?? '0.08'),
       qualityPreset: currentSettings.qualityPreset,
+      hapticsEnabled: currentSettings.hapticsEnabled,
       scanlineWeight: currentSettings.scanlineWeight,
       scanlineEnabled,
       scanlineIntensityMultiplier,
@@ -390,7 +391,7 @@ export class GameSettingsUI {
       btn.addEventListener('click', () => {
         const cabinetType = btn.getAttribute('data-cabinet') as import('./game-cabinet').CabinetType
         if (cabinetType) {
-          this.host.loadCabinetPreset(cabinetType)
+          void this.host.loadCabinetPreset(cabinetType)
         }
       })
     })

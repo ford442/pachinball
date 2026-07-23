@@ -16,44 +16,76 @@ set(PHYSICS_CORE_SOURCES
 # Emscripten WASM module
 # ---------------------------------------------------------------------------
 if(EMSCRIPTEN)
-add_executable(PhysicsModule
-  ${PHYSICS_CORE_SOURCES}
-  src/bindings.cpp
-)
-target_include_directories(PhysicsModule PRIVATE src)
+  # Opt-in perf flags — default OFF until scripts/bench-wasm-flags.mjs justifies promoting.
+  option(PACHINBALL_WASM_SIMD "Enable WASM SIMD auto-vectorization (-msimd128)" OFF)
+  option(PACHINBALL_WASM_LTO  "Enable link-time optimization (-flto)" OFF)
+
+  add_executable(PhysicsModule
+    ${PHYSICS_CORE_SOURCES}
+    src/bindings.cpp
+  )
+  target_include_directories(PhysicsModule PRIVATE src)
+
   # Output as a proper ES module that can be imported directly by Vite
   set_target_properties(PhysicsModule PROPERTIES
     SUFFIX ".js"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
   )
 
   target_link_options(PhysicsModule PRIVATE
     # Produce an ES module (import PhysicsModuleFactory from './PhysicsModule.js')
     "-sEXPORT_ES6=1"
+    # Wrap the module in a factory so callers await PhysicsModule()
     "-sMODULARIZE=1"
+    # Global/factory export name expected by src/wasm/PhysicsModule.ts
     "-sEXPORT_NAME=PhysicsModule"
 
-    # Enable Embind bindings
+    # Enable Embind bindings (native/src/bindings.cpp)
     "--bind"
+
+    # Browser + Node only — keeps Node parity harness working; excludes shell/worker
+    "-sENVIRONMENT=web,node"
+    # No fopen/FS usage in the physics module — shrinks the JS glue
+    "-sFILESYSTEM=0"
 
     # Allow heap to grow at runtime (ball swarms can be large)
     "-sALLOW_MEMORY_GROWTH=1"
-
-    # Initial heap size — 32 MB is more than enough for the initial prototype
+    # Initial heap size — 32 MB is enough for table + adventure body counts
     "-sINITIAL_MEMORY=33554432"
 
-    # Export the helper functions used by the JS wrapper
+    # Export helpers used by the JS wrapper (contact callbacks + string utils)
     "-sEXPORTED_RUNTIME_METHODS=[\"addFunction\",\"removeFunction\",\"UTF8ToString\",\"stringToUTF8\"]"
   )
 
-  # Optimisation flags follow CMAKE_BUILD_TYPE so --debug builds work correctly.
+  # No C++ exceptions in native/src — drop EH runtime for smaller binaries
+  target_compile_options(PhysicsModule PRIVATE "-fno-exceptions")
+  target_link_options(PhysicsModule PRIVATE "-fno-exceptions")
+
+  # Opt-in SIMD (auto-vectorize only; no hand wasm_simd128 intrinsics yet)
+  if(PACHINBALL_WASM_SIMD)
+    target_compile_options(PhysicsModule PRIVATE "-msimd128")
+    target_link_options(PhysicsModule PRIVATE "-msimd128")
+  endif()
+
+  # Opt-in LTO — apply to both compile and link
+  if(PACHINBALL_WASM_LTO)
+    target_compile_options(PhysicsModule PRIVATE "-flto")
+    target_link_options(PhysicsModule PRIVATE "-flto")
+  endif()
+
+  # Optimisation / assertions follow CMAKE_BUILD_TYPE:
+  #   Debug          — -O0 -g -gsource-map, ASSERTIONS=2
+  #   Release        — -O2, ASSERTIONS=0  (production default)
+  #   RelWithAsserts — -O2, ASSERTIONS=1  (CI parity without full debug)
   target_compile_options(PhysicsModule PRIVATE
-    "$<$<CONFIG:Debug>:-O0;-g>"
+    "$<$<CONFIG:Debug>:-O0;-g;-gsource-map>"
     "$<$<CONFIG:Release>:-O2>"
+    "$<$<CONFIG:RelWithAsserts>:-O2>"
   )
   target_link_options(PhysicsModule PRIVATE
-    "$<$<CONFIG:Debug>:-O0;-sASSERTIONS=2>"
+    "$<$<CONFIG:Debug>:-O0;-g;-gsource-map;-sASSERTIONS=2>"
     "$<$<CONFIG:Release>:-O2;-sASSERTIONS=0>"
+    "$<$<CONFIG:RelWithAsserts>:-O2;-sASSERTIONS=1>"
   )
 endif()
 

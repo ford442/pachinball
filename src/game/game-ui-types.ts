@@ -45,6 +45,7 @@ export interface PauseMenuSettings {
   qualityPreset: 'low' | 'medium' | 'high'
   reducedMotion: boolean
   photosensitiveMode: boolean
+  hapticsEnabled: boolean
 }
 
 export interface PauseMenuHandlers {

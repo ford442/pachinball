@@ -239,8 +239,8 @@ export class GameObjects {
     }
   }
 
-  createBumpers(): void {
-    const result = this.bumperBuilder.createBumpers()
+  createBumpers(specs?: { x: number; z: number; color: string; scale: number }[]): void {
+    const result = this.bumperBuilder.createBumpers(specs)
     for (const [key, value] of result.bumpers) {
       this.refs.bumpers.set(key, value)
     }
@@ -250,8 +250,13 @@ export class GameObjects {
     this.pinballMeshes.push(...result.meshes)
   }
 
-  createPachinkoField(center?: Vector3, width?: number, height?: number): void {
-    const result = this.pachinkoBuilder.createPachinkoField(center, width, height)
+  createPachinkoField(
+    center?: Vector3,
+    width?: number,
+    height?: number,
+    pinPositions?: { x: number; z: number }[],
+  ): void {
+    const result = this.pachinkoBuilder.createPachinkoField(center, width, height, pinPositions)
     this.bindings.push(...result.bindings)
     this.targetBodies.push(...result.targetBodies)
     this.targetMeshes.push(...result.targetMeshes)
@@ -259,6 +264,42 @@ export class GameObjects {
     this.targetRespawnTimer.push(...result.targetRespawnTimer)
     this.pinballMeshes.push(...result.meshes)
     this.refs.pins = result.pins
+  }
+
+  /**
+   * Dispose and recreate bumpers + pachinko pins from a Daily Cascade layout
+   * (or vanilla defaults when layout is null). Does not touch walls/flippers/lanes/slingshots.
+   */
+  rebuildMutableToys(layout: import('../game-elements/daily-cascade-layout').TableLayout | null): void {
+    // BumperBuilder toys have holograms; slingshots do not — preserve slingshot visuals/bodies
+    const slingshotVisuals = this.bumperVisuals.filter((v) => !v.hologram)
+    const slingshotBodies = new Set(slingshotVisuals.map((v) => v.body))
+
+    this.bumperBuilder.dispose()
+    this.pachinkoBuilder.dispose()
+
+    this.pinballMeshes = this.pinballMeshes.filter((m) => !m.isDisposed())
+    this.bindings = this.bindings.filter(
+      (b) => !b.mesh.isDisposed() && !!this.world.getRigidBody(b.rigidBody.handle),
+    )
+    this.bumperVisuals = slingshotVisuals
+    this.bumperBodies = this.bumperBodies.filter(
+      (b) => slingshotBodies.has(b) && !!this.world.getRigidBody(b.handle),
+    )
+    this.refs.bumpers.clear()
+    this.targetBodies = []
+    this.targetMeshes = []
+    this.targetActive = []
+    this.targetRespawnTimer = []
+    this.refs.pins = []
+
+    if (layout) {
+      this.createBumpers(layout.bumpers)
+      this.createPachinkoField(undefined, undefined, undefined, layout.pins)
+    } else {
+      this.createBumpers()
+      this.createPachinkoField()
+    }
   }
 
   createSlingshots(): void {
@@ -430,6 +471,7 @@ export class GameObjects {
     this.railBuilder.dispose()
     this.pachinkoBuilder.dispose()
     this.decorationBuilder.dispose()
+    this.laneSensorBuilder.dispose()
 
     if (this.deathZoneBody && this.world.getRigidBody(this.deathZoneBody.handle)) {
       this.world.removeRigidBody(this.deathZoneBody)

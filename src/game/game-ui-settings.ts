@@ -67,6 +67,10 @@ export function showPauseMenu(
       <input type="checkbox" data-setting="photosensitiveMode" ${settings.photosensitiveMode ? 'checked' : ''} />
       <span>Photosensitive Mode</span>
     </label>
+    <label style="display:flex;align-items:center;gap:8px;margin:8px 0;">
+      <input type="checkbox" data-setting="hapticsEnabled" ${settings.hapticsEnabled ? 'checked' : ''} />
+      <span>Haptics (vibration)</span>
+    </label>
     <p style="margin:10px 0 0;color:${PALETTE.AMBIENT};font-size:0.74rem;">ESC resumes • A/Space select • B/Escape back</p>
   `
 
@@ -81,6 +85,7 @@ export function showPauseMenu(
     qualityPreset: (panel.querySelector('select[data-setting="qualityPreset"]') as HTMLSelectElement).value as PauseMenuSettings['qualityPreset'],
     reducedMotion: (panel.querySelector('input[data-setting="reducedMotion"]') as HTMLInputElement).checked,
     photosensitiveMode: (panel.querySelector('input[data-setting="photosensitiveMode"]') as HTMLInputElement).checked,
+    hapticsEnabled: (panel.querySelector('input[data-setting="hapticsEnabled"]') as HTMLInputElement).checked,
   })
 
   panel.querySelector('[data-action="resume"]')?.addEventListener('click', handlers.onResume)

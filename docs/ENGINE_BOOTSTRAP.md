@@ -81,6 +81,8 @@ Or call `window.runVisibilityDiagnostic()` after the game loads.
 
 `setMaximumLimits: true` is the first defense for WebGPU MRT (SSAO + DoF + bloom). Try/catch around DoF/SSAO is the second.
 
+**Mobile quality probe (#300):** `detectQualityTier()` in `material-core.ts` applies `applyMobileQualityCap()` using `isMobileUserAgent` from `engine-options.ts` — mobile caps at MEDIUM (LOW on low memory / Save-Data). SSAO/DoF are HIGH-only. Sustained frame time >22ms for 2s triggers a one-shot auto tier drop via `PerformanceMonitor`.
+
 ---
 
 ## Visibility + audio lifecycle
@@ -105,6 +107,11 @@ Game pause (`PAUSED` state) still suspends the effects `AudioContext` via `GameL
 | **C++ physics (active mode)** | `physics.init()` when `localStorage` flag ≠ `rapier` | Reuses idle cache via `getPreloadedWasmModule()` |
 
 Idle preload no-ops gracefully when the bundle is missing (dev machines without Emscripten build).
+
+Emscripten Release/Debug/RelWithAsserts flags, SIMD/LTO options, and the 50-sphere
+microbench table live in [`docs/wasm-physics-engine.md`](wasm-physics-engine.md)
+(section **Emscripten flag matrix**). Default `npm run build:wasm` remains the
+production path.
 
 Toggle C++ WASM:
 

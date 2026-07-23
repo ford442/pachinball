@@ -77,7 +77,19 @@
           <p>Best: <span id="best-score-menu">0</span></p>
           <p>1 / 0 to Flip</p>
           <p>Space or Enter to Launch</p>
-          <button id="start-btn">Start Game</button>
+          <div id="daily-cascade-panel" class="daily-cascade-panel">
+            <label class="setting-row">
+              Mode
+              <select id="cascade-mode">
+                <option value="vanilla">Vanilla</option>
+                <option value="daily">Daily Cascade</option>
+                <option value="free">Free Play</option>
+              </select>
+            </label>
+            <p id="cascade-seed-label" class="cascade-seed-label">Vanilla table</p>
+            <button type="button" id="cascade-randomize-btn" class="hidden">Randomize</button>
+          </div>
+          <button id="start-btn" disabled title="Loading cabinet…">Start Game</button>
           <button id="settings-btn">Settings</button>
         </div>
         <div id="game-over-screen" class="screen hidden">

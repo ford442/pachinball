@@ -91,7 +91,8 @@ export class GameSystemsInitializer {
     const rapier = this.game.physics.getRapier()
     if (!world || !rapier) throw new Error('Physics not ready')
 
-    this.game.uiManager?.showLoadingState(true)
+    this.game.uiManager?.showLoadingState(true, { label: 'LOADING...', progress: 0 })
+    this.game.uiManager?.setStartButtonEnabled(false)
     await this.game.runCheckpointStage('scene_rendering', () => {
       const skybox = MeshBuilder.CreateBox('skybox', { size: GameConfig.visuals.skyboxSize }, scene)
       const skyboxMaterial = new StandardMaterial('skyBox', scene)
@@ -446,18 +447,26 @@ export class GameSystemsInitializer {
       })
     }, true)
 
-    await this.game.runCheckpointStage('scene_critical', () => {
-      this.game.sceneBuilder.buildCriticalScene()
+    await this.game.runCheckpointStage('scene_critical', async () => {
+      await this.game.sceneBuilder.buildCriticalScene({
+        onCabinetProgress: (progress) => {
+          this.game.uiManager?.showLoadingState(true, {
+            progress,
+            label: 'Loading cabinet…',
+          })
+        },
+      })
       this.game.cabinetBuilder.updateCabinetLightExclusions()
     })
     this.game.ready = true
-    this.game.uiManager?.showLoadingState(false, 'gameplay')
+    this.game.uiManager?.setStartButtonEnabled(true)
+    this.game.uiManager?.showLoadingState(false, { phase: 'gameplay' })
 
     await this.game.runCheckpointStage('scene_gameplay_build', async () => {
       await this.game.sceneBuilder.yieldFrame()
       this.game.sceneBuilder.buildGameplayScene()
       this.game.physicsController.rebuildHandleCaches()
-      this.game.uiManager?.showLoadingState(false, 'cosmetic')
+      this.game.uiManager?.showLoadingState(false, { phase: 'cosmetic' })
     })
     this.game.scheduleCosmeticSceneBuild()
   }

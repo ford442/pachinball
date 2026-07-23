@@ -63,6 +63,12 @@ flowchart LR
 - Portal flash effects and CRT flash are softened/disabled when reduced motion safety flags are active.
 - Timeout copy should clearly communicate **penalized rewards** before portal entry.
 
+## Declarative track geometry
+
+Simple tracks may ship as JSON under `src/adventure/track-data/` (schema v1).
+See [`docs/TRACK_SCHEMA.md`](TRACK_SCHEMA.md). Campaign goals/rewards remain in
+`TRACK_CATALOG`; JSON covers layout only.
+
 ## Developer Notes
 
 - Wire campaign behavior through EventBus events:

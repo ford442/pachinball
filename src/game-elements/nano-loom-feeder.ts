@@ -36,6 +36,7 @@ export class NanoLoomFeeder {
 
   private state: NanoLoomState = NanoLoomState.IDLE
   private timer: number = 0
+  private gameplayEnabled = true
 
   private caughtBall: RAPIER.RigidBody | null = null
   public pinActivationProgress = 0
@@ -65,6 +66,14 @@ export class NanoLoomFeeder {
 
   getState(): NanoLoomState {
     return this.state
+  }
+
+  setGameplayEnabled(enabled: boolean): void {
+    this.gameplayEnabled = enabled
+    this._frameMesh?.setEnabled(enabled)
+    this._intakeMesh?.setEnabled(enabled)
+    for (const pin of this.pins) pin.setEnabled(enabled)
+    if (this.light) this.light.setEnabled(enabled)
   }
 
   private createVisuals(): void {
@@ -202,6 +211,7 @@ export class NanoLoomFeeder {
   }
 
   update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+    if (!this.gameplayEnabled) return
     if (this.timer > 0) this.timer -= dt
 
     switch (this.state) {

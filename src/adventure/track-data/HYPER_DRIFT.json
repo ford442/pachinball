@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "HYPER_DRIFT",
+  "cameraPresetId": "HYPER_DRIFT",
+  "materials": {
+    "structure": "#00FFFF"
+  },
+  "segments": [
+    {
+      "type": "straight",
+      "width": 8,
+      "length": 15,
+      "inclineDeg": 20,
+      "material": "#00FFFF"
+    },
+    {
+      "type": "curve",
+      "radius": 15,
+      "angleDeg": -90,
+      "inclineDeg": 5,
+      "width": 8,
+      "wallHeight": 2,
+      "bankingDeg": 30,
+      "segments": 20,
+      "material": "#00FFFF"
+    },
+    {
+      "type": "curve",
+      "radius": 15,
+      "angleDeg": 90,
+      "inclineDeg": 5,
+      "width": 8,
+      "wallHeight": 2,
+      "bankingDeg": -30,
+      "segments": 20,
+      "material": "#00FFFF"
+    },
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": 360,
+      "inclineDeg": 10,
+      "width": 8,
+      "wallHeight": 2,
+      "bankingDeg": -45,
+      "segments": 30,
+      "material": "#00FFFF"
+    },
+    {
+      "type": "straight",
+      "width": 6,
+      "length": 10,
+      "inclineDeg": -30,
+      "material": "#00FFFF"
+    },
+    {
+      "type": "gap",
+      "length": 15,
+      "drop": -8
+    },
+    {
+      "type": "bucket",
+      "material": "#00FFFF"
+    }
+  ]
+}

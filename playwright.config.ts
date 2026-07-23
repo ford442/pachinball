@@ -19,6 +19,16 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: '**/mobile-touch-smoke.spec.ts',
+    },
+    {
+      name: 'mobile-chrome',
+      use: {
+        ...devices['Pixel 7'],
+        hasTouch: true,
+        isMobile: true,
+      },
+      testMatch: '**/mobile-touch-smoke.spec.ts',
     },
   ],
 });

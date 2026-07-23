@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "GLITCH_SPIRE",
+  "themeProfile": "GLITCH_SPIRE",
+  "cameraPresetId": "GLITCH_SPIRE",
+  "materials": {
+    "structure": "#FF00FF"
+  },
+  "segments": [
+    {
+      "type": "straight",
+      "width": 4,
+      "length": 15,
+      "inclineDeg": -20,
+      "material": "#FF00FF"
+    },
+    {
+      "type": "gap",
+      "length": 6,
+      "drop": 4
+    },
+    {
+      "type": "straight",
+      "width": 4,
+      "length": 3,
+      "inclineDeg": 0,
+      "material": "#FF00FF"
+    },
+    {
+      "type": "turn",
+      "deltaHeadingDeg": 90
+    },
+    {
+      "type": "straight",
+      "width": 3,
+      "length": 5,
+      "inclineDeg": 0,
+      "material": "#FF00FF"
+    },
+    {
+      "type": "turn",
+      "deltaHeadingDeg": -90
+    },
+    {
+      "type": "straight",
+      "width": 3,
+      "length": 5,
+      "inclineDeg": 0,
+      "material": "#FF00FF"
+    },
+    {
+      "type": "curve",
+      "radius": 8,
+      "angleDeg": 360,
+      "inclineDeg": 10,
+      "width": 3,
+      "wallHeight": 0.5,
+      "segments": 30,
+      "material": "#FF00FF"
+    },
+    {
+      "type": "bucket",
+      "material": "#FF00FF"
+    }
+  ]
+}

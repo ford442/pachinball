@@ -150,11 +150,23 @@ export function showMapNamePopup(state: GameUIRuntimeState, name: string, color:
   }, 2000)
 }
 
+export interface LoadingStateOptions {
+  /** 0–1 load progress for progress bar */
+  progress?: number
+  /** Status label under/beside LOADING */
+  label?: string
+  /** Legacy phase tag (cosmetic dismiss path) */
+  phase?: 'gameplay' | 'cosmetic'
+}
+
 export function showLoadingState(
   state: GameUIRuntimeState,
   show: boolean,
-  _phase?: 'gameplay' | 'cosmetic'
+  optionsOrPhase?: LoadingStateOptions | 'gameplay' | 'cosmetic',
 ): void {
+  const options: LoadingStateOptions =
+    typeof optionsOrPhase === 'string' ? { phase: optionsOrPhase } : (optionsOrPhase ?? {})
+
   if (show) {
     if (!state.loadingOverlay) {
       state.loadingOverlay = document.createElement('div')
@@ -174,11 +186,49 @@ export function showLoadingState(
         pointer-events: none;
         border: 1px solid #00d9ff;
         box-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
+        min-width: 220px;
+        text-align: center;
+      `
+      state.loadingOverlay.innerHTML = `
+        <div class="loading-label">LOADING...</div>
+        <div class="loading-bar-track" style="
+          margin-top: 12px;
+          height: 6px;
+          background: rgba(0, 217, 255, 0.15);
+          border-radius: 3px;
+          overflow: hidden;
+        ">
+          <div class="loading-bar-fill" style="
+            height: 100%;
+            width: 0%;
+            background: #00d9ff;
+            transition: width 0.15s ease-out;
+          "></div>
+        </div>
+        <div class="loading-pct" style="margin-top: 8px; font-size: 12px; opacity: 0.85;"></div>
       `
       document.body.appendChild(state.loadingOverlay)
     }
-    state.loadingOverlay.textContent = 'LOADING...'
+
     state.loadingOverlay.style.display = 'block'
+    state.loadingOverlay.style.opacity = '1'
+    state.loadingOverlay.style.transition = ''
+
+    const labelEl = state.loadingOverlay.querySelector('.loading-label')
+    const fillEl = state.loadingOverlay.querySelector('.loading-bar-fill') as HTMLElement | null
+    const pctEl = state.loadingOverlay.querySelector('.loading-pct')
+
+    if (labelEl) {
+      labelEl.textContent = options.label ?? 'LOADING...'
+    }
+    if (options.progress !== undefined && fillEl && pctEl) {
+      const pct = Math.max(0, Math.min(100, Math.round(options.progress * 100)))
+      fillEl.style.width = `${pct}%`
+      pctEl.textContent = `${pct}%`
+    } else if (fillEl && pctEl) {
+      fillEl.style.width = '0%'
+      pctEl.textContent = ''
+    }
   } else if (state.loadingOverlay) {
     state.loadingOverlay.style.transition = 'opacity 0.5s'
     state.loadingOverlay.style.opacity = '0'
@@ -187,6 +237,16 @@ export function showLoadingState(
       state.loadingOverlay = null
     }, 500)
   }
+}
+
+/** Gate Start until cabinet (or fallback) has resolved. */
+export function setStartButtonEnabled(enabled: boolean): void {
+  const btn = document.getElementById('start-btn') as HTMLButtonElement | null
+  if (!btn) return
+  btn.disabled = !enabled
+  btn.style.opacity = enabled ? '1' : '0.45'
+  btn.style.cursor = enabled ? 'pointer' : 'not-allowed'
+  btn.title = enabled ? '' : 'Loading cabinet…'
 }
 
 export function showMessage(state: GameUIRuntimeState, message: string, duration = 2000): void {

@@ -11,9 +11,21 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import path from 'node:path'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const wasmModuleUrl = pathToFileURL(path.join(root, 'public/wasm/PhysicsModule.js')).href
+// Override for RelWithAsserts / bench artefacts, e.g.:
+//   WASM_MODULE_PATH=native/build-assert/PhysicsModule.js node scripts/run-wasm-parity.mjs
+const wasmModulePath = process.env.WASM_MODULE_PATH
+  ? path.resolve(root, process.env.WASM_MODULE_PATH)
+  : path.join(root, 'public/wasm/PhysicsModule.js')
+const wasmModuleUrl = pathToFileURL(wasmModulePath).href
 const buildNativeDir = path.join(root, 'native/build-native')
 const nativeTest = path.join(buildNativeDir, 'physics_world_test')
+
+if (!existsSync(wasmModulePath)) {
+  console.error(`WASM module missing: ${wasmModulePath}`)
+  console.error('Build with: npm run build:wasm  (or npm run build:wasm:assert)')
+  process.exit(1)
+}
+console.log(`Using WASM module: ${wasmModulePath}`)
 
 // 1. Native C++ reference (Catch2 suite via ctest or direct binary)
 try {
@@ -52,7 +64,8 @@ let failed = false
 
 failed ||= !runScenario('wasm ball-on-box', (w) => {
   w.setGravity(0, -9.81, 0)
-  w.addStaticBox(0, 0, 0, 2, 0.5, 2, 0, 0, 0, 1)
+  // px,py,pz, hx,hy,hz, qx,qy,qz,qw, restitution (Embind has no C++ defaults)
+  w.addStaticBox(0, 0, 0, 2, 0.5, 2, 0, 0, 0, 1, 0.4)
   w.createRigidBody(0, 2, 0, 0, 0, 0, 1, 0.25, 0.5, 0.02, 0)
 }, (w) => {
   const y = w.getPosY(0)
@@ -61,7 +74,8 @@ failed ||= !runScenario('wasm ball-on-box', (w) => {
 
 failed ||= !runScenario('wasm ball-on-capsule', (w) => {
   w.setGravity(0, -9.81, 0)
-  w.addStaticCapsule(0, 1, 0, 0.4, 0.5, 0, 0, 0, 1)
+  // px,py,pz, radius, halfHeight, qx,qy,qz,qw, restitution
+  w.addStaticCapsule(0, 1, 0, 0.4, 0.5, 0, 0, 0, 1, 0.4)
   w.createRigidBody(0, 3, 0, 0, 0, 0, 1, 0.2, 0.5, 0.02, 0)
 }, (w) => {
   const y = w.getPosY(0)

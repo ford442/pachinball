@@ -34,6 +34,7 @@ export class GaussCannonFeeder {
 
   private state: GaussCannonState = GaussCannonState.IDLE
   private timer: number = 0
+  private gameplayEnabled = true
 
   // Aiming logic
   private currentAngle: number = 0
@@ -77,6 +78,15 @@ export class GaussCannonFeeder {
 
   getState(): GaussCannonState {
     return this.state
+  }
+
+  setGameplayEnabled(enabled: boolean): void {
+    this.gameplayEnabled = enabled
+    this.rootNode?.setEnabled(enabled)
+    if (this.physicsBody && this.world.getRigidBody(this.physicsBody.handle)) {
+      this.physicsBody.setEnabled(enabled)
+    }
+    if (this.light) this.light.setEnabled(enabled)
   }
 
   private createMesh(): void {
@@ -164,6 +174,7 @@ export class GaussCannonFeeder {
   }
 
   update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+    if (!this.gameplayEnabled) return
     this.timer -= dt
 
     // State Machine

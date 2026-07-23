@@ -42,6 +42,7 @@ export class MagSpinFeeder {
 
   private caughtBall: RAPIER.RigidBody | null = null
   private physicsBody: RAPIER.RigidBody | null = null
+  private gameplayEnabled = true
 
   private ringAngularVelocity = 0
   private releaseShakeIntensity = 0
@@ -168,9 +169,19 @@ export class MagSpinFeeder {
   }
 
   update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+    if (!this.gameplayEnabled) return
     this.timer -= dt
     this.updateVisuals(dt)
     this.updateStateMachine(dt, ballBodies)
+  }
+
+  setGameplayEnabled(enabled: boolean): void {
+    this.gameplayEnabled = enabled
+    if (this._mesh) this._mesh.setEnabled(enabled)
+    if (this.physicsBody && this.world.getRigidBody(this.physicsBody.handle)) {
+      this.physicsBody.setEnabled(enabled)
+    }
+    if (this.light) this.light.setEnabled(enabled)
   }
 
   private updateVisuals(dt: number): void {

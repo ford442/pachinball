@@ -37,6 +37,12 @@ import {
   type TrackMaterialRole,
 } from '../game-elements/track-theme-profiles'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import type { TrackDefinition } from './track-schema'
+import {
+  compileTrackDefinition,
+  type TrackBuildApi,
+  type TrackCursor,
+} from './track-compiler'
 
 const RAPIER_DEFAULT_COLLISION_GROUPS = 0xFFFFFFFF
 
@@ -61,6 +67,9 @@ export abstract class TrackBuilder {
   protected currentStartPos: Vector3 = Vector3.Zero()
   protected timeAccumulator = 0
   protected currentBallMesh: Mesh | null = null
+
+  /** Baseline world gravity captured before a data-track multiplier is applied. */
+  private storedGravity: { x: number; y: number; z: number } | null = null
 
   /** Campaign catalog info for the currently active track; null for free-roam. */
   protected currentTrackInfo: TrackInfo | null = null
@@ -200,6 +209,100 @@ export abstract class TrackBuilder {
   /** Materials created for the active adventure track (for live theme retinting). */
   getTrackMaterials(): (StandardMaterial | PBRMaterial)[] {
     return this.materials
+  }
+
+  /**
+   * Build track geometry from a validated declarative definition (#296).
+   */
+  buildFromDefinition(def: TrackDefinition): TrackCursor {
+    const multiplier = def.gravityMultiplier ?? 1
+    if (multiplier !== 1) {
+      this.applyGravityMultiplier(multiplier)
+    }
+
+    const api: TrackBuildApi = {
+      currentStartPos: this.currentStartPos,
+      getTrackMaterial: (hex) => this.getTrackMaterial(hex),
+      getThemedTrackMaterial: (role) => this.getThemedTrackMaterial(role),
+      addStraightRamp: (
+        startPos,
+        heading,
+        width,
+        length,
+        inclineRad,
+        material,
+        wallHeight,
+        friction,
+      ) =>
+        this.addStraightRamp(
+          startPos,
+          heading,
+          width,
+          length,
+          inclineRad,
+          material,
+          wallHeight,
+          friction,
+        ),
+      addCurvedRamp: (
+        startPos,
+        startHeading,
+        radius,
+        totalAngle,
+        inclineRad,
+        width,
+        wallHeight,
+        material,
+        segments,
+        bankingAngle,
+        friction,
+      ) =>
+        this.addCurvedRamp(
+          startPos,
+          startHeading,
+          radius,
+          totalAngle,
+          inclineRad,
+          width,
+          wallHeight,
+          material,
+          segments,
+          bankingAngle,
+          friction,
+        ),
+      createBasin: (pos, material) => this.createBasin(pos, material),
+      addExitPortal: (position) => this.addExitPortal(position),
+      createRotatingPlatform: (center, radius, angVelY, material, hasTeeth) =>
+        this.createRotatingPlatform(center, radius, angVelY, material, hasTeeth),
+      createChromaGate: (pos, color) => this.createChromaGate(pos, color),
+    }
+
+    return compileTrackDefinition(def, api)
+  }
+
+  protected applyGravityMultiplier(multiplier: number): void {
+    if (!this.world) return
+    if (!this.storedGravity) {
+      const g = this.world.gravity
+      this.storedGravity = { x: g.x, y: g.y, z: g.z }
+    }
+    const base = this.storedGravity
+    this.world.gravity = {
+      x: base.x * multiplier,
+      y: base.y * multiplier,
+      z: base.z * multiplier,
+    }
+  }
+
+  /** Restore world gravity after a data-track multiplier (called from clearTrack). */
+  protected restoreTrackGravity(): void {
+    if (!this.world || !this.storedGravity) return
+    this.world.gravity = {
+      x: this.storedGravity.x,
+      y: this.storedGravity.y,
+      z: this.storedGravity.z,
+    }
+    this.storedGravity = null
   }
 
   // --- Primitive Builders ---
@@ -451,7 +554,7 @@ export abstract class TrackBuilder {
   /**
    * Creates a goal basin at the specified position.
    */
-  protected createBasin(pos: Vector3, material: StandardMaterial): void {
+  protected createBasin(pos: Vector3, material: StandardMaterial | PBRMaterial): void {
     if (!this.world) return
 
     const basin = MeshBuilder.CreateBox("basin", { width: 8, height: 1, depth: 8 }, this.scene)

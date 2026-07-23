@@ -29,6 +29,7 @@ import type { GameUIManager } from './game-ui'
 import { GAME_TUNING } from '../config'
 import { TABLE_MAPS } from '../shaders/lcd-table'
 import { getMaterialLibrary } from '../materials'
+import { isMobileUserAgent } from '../engine/engine-options'
 
 export interface LifecycleHost {
   readonly stateManager: GameStateManager
@@ -46,6 +47,7 @@ export interface LifecycleHost {
   readonly uiManager: GameUIManager | null
   readonly scene: Scene | null
   readonly tableCam: import('@babylonjs/core').TargetCamera | null
+  readonly renderer: { applyQualityTier(tier: QualityTier): void } | null
   qualityTier: QualityTier
   accessibility: import('../game-elements').AccessibilityConfig
 
@@ -71,6 +73,8 @@ export interface LifecycleHost {
   setGameState(state: GameState): void
   handleGameOverLeaderboard(): Promise<void>
   getBallPosition(): import('@babylonjs/core').Vector3 | null
+  /** Rebuild pins/bumpers/feeders for Daily Cascade / free-play before PLAYING. */
+  applyDailyCascadeOnStart(): void
 }
 
 export class GameLifecycle {
@@ -177,6 +181,8 @@ export class GameLifecycle {
   }
 
   async startGame(): Promise<void> {
+    this.host.applyDailyCascadeOnStart()
+
     this.scoringBreakdown.reset()
     this.host.uiManager?.hideScoringBreakdown()
     this.host.score = 0
@@ -192,6 +198,11 @@ export class GameLifecycle {
     this.host.updateHUD()
     this.host.resetBall()
 
+    // Sync-resume AudioContexts while the Start gesture is still trusted (#300).
+    // Heavy sample decode continues in the background afterward.
+    this.unlockAudioSync()
+    this.requestMobileFullscreen()
+
     // Fire audio init in background — never block game start on it.
     // AudioContext.resume() can hang in headless/automated contexts
     // where the browser doesn't recognise the click as a trusted gesture.
@@ -199,6 +210,56 @@ export class GameLifecycle {
 
     // Leaderboard context is set by the caller (Game)
     this.host.setGameState(GameState.PLAYING)
+  }
+
+  /**
+   * Resume all game AudioContexts without awaiting — must run on the Start gesture.
+   */
+  private unlockAudioSync(): void {
+    try {
+      const effectsCtx = this.host.effects?.getAudioContext()
+      if (effectsCtx?.state === 'suspended') {
+        void effectsCtx.resume()
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const soundCtx = this.host.soundSystem.audioContext
+      if (soundCtx?.state === 'suspended') {
+        void soundCtx.resume()
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      // Babylon engine audio (if present)
+      const engineAudio = (
+        this.host as LifecycleHost & {
+          engine?: { audioEngine?: { audioContext?: AudioContext } }
+        }
+      ).engine?.audioEngine?.audioContext
+      if (engineAudio?.state === 'suspended') {
+        void engineAudio.resume()
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  /** Best-effort fullscreen on mobile; silent no-op when unsupported (e.g. iOS Safari). */
+  private requestMobileFullscreen(): void {
+    if (typeof document === 'undefined' || typeof navigator === 'undefined') return
+    if (!isMobileUserAgent(navigator.userAgent)) return
+    if (!document.fullscreenEnabled) return
+    if (document.fullscreenElement) return
+    const el = document.documentElement
+    if (typeof el.requestFullscreen !== 'function') return
+    void el.requestFullscreen().catch(() => {
+      // iOS / permission denial — ignore
+    })
   }
 
   private async initAudioInBackground(): Promise<void> {
@@ -245,6 +306,7 @@ export class GameLifecycle {
     qualityPreset: 'low' | 'medium' | 'high'
     reducedMotion: boolean
     photosensitiveMode: boolean
+    hapticsEnabled: boolean
   } {
     const settings = SettingsManager.load()
     return {
@@ -254,6 +316,7 @@ export class GameLifecycle {
       qualityPreset: settings.qualityPreset,
       reducedMotion: settings.reducedMotion,
       photosensitiveMode: settings.photosensitiveMode,
+      hapticsEnabled: settings.hapticsEnabled,
     }
   }
 
@@ -264,6 +327,7 @@ export class GameLifecycle {
     qualityPreset: 'low' | 'medium' | 'high'
     reducedMotion: boolean
     photosensitiveMode: boolean
+    hapticsEnabled: boolean
   }): void {
     const current = SettingsManager.load()
     const updated: GameSettings = {
@@ -274,6 +338,7 @@ export class GameLifecycle {
       qualityPreset: next.qualityPreset,
       reducedMotion: next.reducedMotion,
       photosensitiveMode: next.photosensitiveMode,
+      hapticsEnabled: next.hapticsEnabled,
     }
 
     SettingsManager.save(updated)
@@ -289,6 +354,15 @@ export class GameLifecycle {
     this.host.adventureMode?.setAccessibilityConfig(this.host.accessibility)
     this.host.display?.setPlayerScanlineEnabled(updated.scanlineEnabled)
     this.host.mapManager?.getLCDTableState().setPhotosensitiveMode(updated.photosensitiveMode)
+
+    const hapticsOn =
+      updated.hapticsEnabled &&
+      !updated.reducedMotion &&
+      this.host.accessibility.hapticsEnabled
+    this.host.hapticManager?.setConfig({
+      enabled: hapticsOn,
+      intensity: this.host.accessibility.hapticIntensity,
+    })
 
     this.host.soundSystem.setMasterVolume(updated.masterVolume)
     this.host.soundSystem.setMusicVolume(updated.musicVolume)
@@ -307,10 +381,14 @@ export class GameLifecycle {
         : updated.qualityPreset === 'high'
           ? QualityTier.HIGH
           : QualityTier.MEDIUM
-    this.host.qualityTier = targetTier
-    this.host.effects?.setQualityTier(targetTier)
-    if (this.host.scene) {
-      getMaterialLibrary(this.host.scene).qualityTier = targetTier
+    if (this.host.renderer) {
+      this.host.renderer.applyQualityTier(targetTier)
+    } else {
+      this.host.qualityTier = targetTier
+      this.host.effects?.setQualityTier(targetTier)
+      if (this.host.scene) {
+        getMaterialLibrary(this.host.scene).qualityTier = targetTier
+      }
     }
   }
 

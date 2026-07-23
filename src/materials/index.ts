@@ -14,6 +14,7 @@ export {
   type MaterialLibraryStats,
   COMPRESSION_FORMATS,
   detectQualityTier,
+  applyMobileQualityCap,
 } from './material-core'
 
 // Import QualityTier from visual-language (where it's defined)

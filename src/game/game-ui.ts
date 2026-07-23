@@ -16,7 +16,8 @@ import {
   hideScoringBreakdown,
   showCabinetPopup,
   showCampaignIntermission,
-  showLoadingState,
+  showLoadingState as showLoadingStatePopup,
+  setStartButtonEnabled as setStartButtonEnabledPopup,
   showMapNamePopup,
   showMessage,
   showPortalOverlay,
@@ -94,7 +95,15 @@ export class GameUIManager {
   setPauseButtonHandler(handler: () => void): void { setPauseButtonHandler(this.state, handler) }
   showCabinetPopup(name: string): void { showCabinetPopup(this.state, name) }
   showMapNamePopup(name: string, color: string): void { showMapNamePopup(this.state, name, color) }
-  showLoadingState(show: boolean, phase?: 'gameplay' | 'cosmetic'): void { showLoadingState(this.state, show, phase) }
+  showLoadingState(
+    show: boolean,
+    optionsOrPhase?: import('./game-ui-popups').LoadingStateOptions | 'gameplay' | 'cosmetic',
+  ): void {
+    showLoadingStatePopup(this.state, show, optionsOrPhase)
+  }
+  setStartButtonEnabled(enabled: boolean): void {
+    setStartButtonEnabledPopup(enabled)
+  }
   updateHUD(data: HUDData): void { updateHUD(this.state, data) }
   updateComboChainMeter(progress: number, target: number, pulseHighlight: boolean): void {
     updateComboChainMeter(this.state, progress, target, pulseHighlight)

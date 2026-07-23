@@ -20,6 +20,8 @@ export interface GameSettings {
   sfxVolume: number
   muted: boolean
   audioSource: AudioSourceMode
+  /** User preference for vibration; no-op when Vibration API missing (iOS Safari). */
+  hapticsEnabled: boolean
 }
 
 export class SettingsManager {
@@ -43,6 +45,7 @@ export class SettingsManager {
       sfxVolume: 0.9,
       muted: false,
       audioSource: 'samples',
+      hapticsEnabled: true,
     }
     
     try {

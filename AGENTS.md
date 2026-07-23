@@ -166,7 +166,7 @@ Replaces the old monolithic `display.ts`.
 - **`camera-presets.ts`** — Cinematic camera angles.
 - **`adventure-types.ts`** — **Single source of truth** for `AdventureTrackType` and adventure interfaces.
 - **`portal-routing.ts`** — Track start anchors and `isAdventureTrackType()` guard.
-- **`tracks/*.ts`** — 28 individual track builders (e.g., `neon-helix`, `cyber-core`, `quantum-grid`, `glitch-spire`, `prism-pathway`, `tesla-tower`, etc.).
+- **`tracks/*.ts`** — Hand-tuned track builders (flagships + complex layouts). Simpler tracks may use declarative JSON under `track-data/` — see [`docs/TRACK_SCHEMA.md`](docs/TRACK_SCHEMA.md).
 
 **Do not recreate legacy builders.** All new track geometry goes in `src/adventure/tracks/`. The barrel also re-exports `TRACK_CATALOG` and `AdventureTrackProgression` from `game-elements/adventure-track-progression.ts`.
 
@@ -174,9 +174,11 @@ Campaign progression reference: `docs/ADVENTURE_CAMPAIGN.md` (A/B alternation + 
 Campaign truth is `AdventureTrackProgression` + `AdventureProgressionSupervisor`; `AdventureState` is legacy level-select / cosmetic rewards only.
 
 #### `src/cabinet/` — Cabinet presets (barrel: `src/cabinet/index.ts`)
-- **`cabinet-builder.ts`** — Factory / orchestrator.
-- **`cabinet-classic.ts`** / **`cabinet-neo.ts`** / **`cabinet-vertical.ts`** / **`cabinet-wide.ts`** — Individual preset geometries.
-- **`cabinet-types.ts`** — Shared type definitions (`CabinetType`, `CabinetPreset`).
+- **`cabinet-builder.ts`** — Factory / orchestrator (async `loadCabinetPreset`; classic may load glTF).
+- **`cabinet-gltf-loader.ts`** — `@babylonjs/loaders` glTF load, LOD pick by `QualityTier`, optional insert hook.
+- **`cabinet-classic.ts`** / **`cabinet-neo.ts`** / **`cabinet-vertical.ts`** / **`cabinet-wide.ts`** — Individual preset geometries (procedural fallback).
+- **`cabinet-types.ts`** — Shared type definitions (`CabinetType`, `CabinetPreset`, optional `gltf` URLs).
+- **Art pipeline:** Blender → glTF → `public/models/cabinet/`. See [`docs/CABINET_GLTF.md`](docs/CABINET_GLTF.md). Collision remains code-authored (playfield walls); do not auto-mesh-collide cabinet art.
 
 ---
 

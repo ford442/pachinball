@@ -31,15 +31,12 @@ import {
   type TrackTeardownStats,
 } from '../game-elements/track-teardown-stats'
 
-// Import all track builders
+// Import track builders (data-driven: GLITCH_SPIRE, RETRO_WAVE_HILLS, HYPER_DRIFT)
 import { buildNeonHelix } from './tracks/neon-helix'
 import { buildCyberCore } from './tracks/cyber-core'
 import { buildQuantumGrid } from './tracks/quantum-grid'
 import { buildSingularityWell } from './tracks/singularity-well'
-import { buildGlitchSpire } from './tracks/glitch-spire'
-import { buildRetroWaveHills } from './tracks/retro-wave-hills'
 import { buildChronoCore } from './tracks/chrono-core'
-import { buildHyperDrift } from './tracks/hyper-drift'
 import { buildPachinkoHall } from './tracks/pachinko-hall'
 import { buildPachinkoSpire } from './tracks/pachinko-spire'
 import { buildOrbitalJunkyard } from './tracks/orbital-junkyard'
@@ -60,6 +57,11 @@ import { buildSolarFlare } from './tracks/solar-flare'
 import { buildTeslaTower } from './tracks/tesla-tower'
 import { buildNeonSkyline } from './tracks/neon-skyline'
 import { buildPolychromeVoid } from './tracks/polychrome-void'
+import { getDataTrackDefinition } from './track-data-registry'
+import {
+  formatTrackValidationErrors,
+  validateTrackDefinition,
+} from './track-schema'
 
 export { AdventureTrackType, CAMERA_PRESETS }
 export type { AdventureCallback, CameraPreset }
@@ -90,6 +92,9 @@ export class AdventureMode extends TrackBuilder {
   private currentZone: AdventureTrackType | null = null
   /** Previous zone for transition intensity calculation */
   private previousZone: AdventureTrackType | null = null
+
+  /** Soft-fail message from the last rejected data-track load (HUD). */
+  private lastTrackLoadError: string | null = null
 
   /** Camera management */
   private tableCamera: Camera | null = null
@@ -133,6 +138,11 @@ export class AdventureMode extends TrackBuilder {
 
   getLastTeardownStats(): TrackTeardownStats | null {
     return this.lastTeardownStats
+  }
+
+  /** Soft-fail reason from the last rejected declarative track load. */
+  getLastTrackLoadError(): string | null {
+    return this.lastTrackLoadError
   }
 
   getTrackResourceCounts(): TrackResourceCounts {
@@ -605,8 +615,9 @@ export class AdventureMode extends TrackBuilder {
     this.currentBallMesh = ballMesh || null
     this.activeBallBodies = [ballBody]
 
-    // Load track-specific camera preset
-    const presetKey = trackType as string
+    // Load track-specific camera preset (data tracks may override via cameraPresetId)
+    const dataDef = getDataTrackDefinition(trackType)
+    const presetKey = dataDef?.cameraPresetId ?? (trackType as string)
     this.currentCameraPreset = CAMERA_PRESETS[presetKey] || CAMERA_PRESETS.DEFAULT
     const preset = this.currentCameraPreset
 
@@ -646,6 +657,13 @@ export class AdventureMode extends TrackBuilder {
     this.currentTrackInfo = TRACK_CATALOG[trackType] ?? null
     this.currentStartPos = getTrackStartAnchor(trackType)
 
+    const dataDef = getDataTrackDefinition(trackType)
+    if (dataDef) {
+      this.buildFromDefinition(dataDef)
+      this.applyDefaultAdventureCollisionGroups()
+      return
+    }
+
     switch (trackType) {
       case AdventureTrackType.CYBER_CORE:
         buildCyberCore(this)
@@ -659,17 +677,8 @@ export class AdventureMode extends TrackBuilder {
       case AdventureTrackType.SINGULARITY_WELL:
         buildSingularityWell(this)
         break
-      case AdventureTrackType.GLITCH_SPIRE:
-        buildGlitchSpire(this)
-        break
-      case AdventureTrackType.RETRO_WAVE_HILLS:
-        buildRetroWaveHills(this)
-        break
       case AdventureTrackType.CHRONO_CORE:
         buildChronoCore(this)
-        break
-      case AdventureTrackType.HYPER_DRIFT:
-        buildHyperDrift(this)
         break
       case AdventureTrackType.PACHINKO_SPIRE:
         buildPachinkoSpire(this)
@@ -826,6 +835,18 @@ export class AdventureMode extends TrackBuilder {
       return false
     }
 
+    // Validate declarative tracks before teardown so a bad JSON never clears a healthy world
+    const dataDef = getDataTrackDefinition(newZone)
+    if (dataDef) {
+      const validation = validateTrackDefinition(dataDef)
+      if (!validation.ok) {
+        this.lastTrackLoadError = formatTrackValidationErrors(validation.errors)
+        console.warn(`[AdventureMode] ${this.lastTrackLoadError}`)
+        return false
+      }
+    }
+    this.lastTrackLoadError = null
+
     this.deactivateExitPortal()
 
     const zoneChanged = this.currentZone !== newZone
@@ -837,7 +858,8 @@ export class AdventureMode extends TrackBuilder {
     // Reset camera transition timer for cinematic entry
     this.cameraTransitionTime = 0
 
-    this.currentCameraPreset = CAMERA_PRESETS[newZone as string] || CAMERA_PRESETS.DEFAULT
+    const presetKey = dataDef?.cameraPresetId ?? (newZone as string)
+    this.currentCameraPreset = CAMERA_PRESETS[presetKey] || CAMERA_PRESETS.DEFAULT
 
     // Tear down old track geometry and physics
     this.clearTrack()
@@ -947,6 +969,7 @@ export class AdventureMode extends TrackBuilder {
     this.timeAccumulator = 0
     this.portalPosition = null
     this.currentTrackInfo = null
+    this.restoreTrackGravity()
 
     // Cleanup Visuals — dispose materials/textures to avoid GPU leaks across long sessions
     for (const mesh of this.adventureTrack) {

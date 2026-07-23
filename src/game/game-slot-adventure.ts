@@ -46,6 +46,7 @@ export interface SlotAdventureHost {
   readonly physicsController: { rebuildHandleCaches(): void } | null
   readonly levelLoader: LevelLoader | null
   readonly performanceMonitor: PerformanceMonitor | null
+  readonly uiManager: { showMessage(message: string, duration?: number): void } | null
 
   updateHUD(): void
   getBallPosition(): import('@babylonjs/core').Vector3 | null
@@ -220,11 +221,17 @@ export class GameSlotAdventure {
       const result = loader.loadCampaignTrack(trackId, { resetBallToPlunger: false })
       if (!result.success) {
         console.warn(`[GameSlotAdventure] Campaign track load failed: ${result.error}`)
+        this.host.uiManager?.showMessage(result.error ?? 'Track load failed', 3000)
         return
       }
     } else {
       const success = this.host.adventureMode.switchToTrack(trackType)
-      if (!success) return
+      if (!success) {
+        const detail =
+          this.host.adventureMode.getLastTrackLoadError() ?? `Failed to switch to track: ${trackId}`
+        this.host.uiManager?.showMessage(detail, 3000)
+        return
+      }
       this.host.physicsController?.rebuildHandleCaches()
       getTrackThemingSystem()?.applyTheme(trackType)
     }

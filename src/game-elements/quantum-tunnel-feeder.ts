@@ -33,6 +33,7 @@ export class QuantumTunnelFeeder {
   private state: QuantumTunnelState = QuantumTunnelState.IDLE
   private stateTimer: number = 0
   private capturedBall: RAPIER.RigidBody | null = null
+  private gameplayEnabled = true
 
   // Follow-through animation: Smooth portal spin acceleration
   private inputSpinSpeed: number = 0
@@ -41,6 +42,15 @@ export class QuantumTunnelFeeder {
   private ejectRecoil = 0.0
 
   public onStateChange: QuantumTunnelCallback | null = null
+
+  setGameplayEnabled(enabled: boolean): void {
+    this.gameplayEnabled = enabled
+    this.inputMesh.setEnabled(enabled)
+    this.outputMesh.setEnabled(enabled)
+    if (this.inputSensor && this.world.getRigidBody(this.inputSensor.handle)) {
+      this.inputSensor.setEnabled(enabled)
+    }
+  }
 
   constructor(
     scene: Scene,
@@ -106,6 +116,7 @@ export class QuantumTunnelFeeder {
   }
 
   public update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+    if (!this.gameplayEnabled) return
     this.stateTimer += dt
 
     // Portal Animation (Spinning visuals) - Follow-through: Smooth spin acceleration
