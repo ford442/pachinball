@@ -119,6 +119,8 @@ export class AdventureMode extends TrackBuilder {
   private exitPortal: ActiveExitPortal | null = null
   private activeBallBodies: RAPIER.RigidBody[] = []
   private lastTeardownStats: TrackTeardownStats | null = null
+  /** Portals torn down since the last clearTrack() — merged into teardown stats. */
+  private portalsRemovedSinceClear = 0
 
   /**
    * Return the Rapier body handle of the active exit portal sensor, or -1 when
@@ -492,8 +494,26 @@ export class AdventureMode extends TrackBuilder {
     this.onEvent?.('PORTAL_DEACTIVATED', { handle: portal.sensor.handle })
 
     portal.root.dispose()
+    this.portalsRemovedSinceClear++
 
-    this.world.removeRigidBody(portal.sensor)
+    if (this.world.getRigidBody(portal.sensor.handle)) {
+      this.world.removeRigidBody(portal.sensor)
+    }
+
+    // createExitPortal() registers the sensor in adventureBodies — remove it here
+    // so clearTrack() does not count an already-removed body as lingering.
+    const bodyIndex = this.adventureBodies.indexOf(portal.sensor)
+    if (bodyIndex >= 0) {
+      this.adventureBodies.splice(bodyIndex, 1)
+    }
+
+    const portalMeshSet = new Set([portal.root, portal.core])
+    this.adventureTrack = this.adventureTrack.filter(
+      (mesh) => !portalMeshSet.has(mesh) && mesh.parent !== portal.root,
+    )
+    this.materials = this.materials.filter(
+      (mat) => mat !== portal.ringMaterial && mat !== portal.coreMaterial,
+    )
   }
 
   private getExitPortalPosition(trackId: AdventureTrackType, mode: ExitPortalWorldMode): Vector3 {
@@ -921,6 +941,8 @@ export class AdventureMode extends TrackBuilder {
     stats.resetSensorsRemoved = this.resetSensors.length
     stats.chromaGatesRemoved = this.chromaGates.length
     stats.adventureSensorRemoved = this.adventureSensor ? 1 : 0
+    stats.exitPortalsRemoved = this.portalsRemovedSinceClear
+    this.portalsRemovedSinceClear = 0
 
     this.timeAccumulator = 0
     this.portalPosition = null

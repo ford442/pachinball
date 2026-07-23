@@ -62,7 +62,11 @@ describe('MapRegistry', () => {
 // ─── Level Loader Tests ───────────────────────────────────────────────────────
 
 describe('LevelLoader', () => {
-  let mockAdventureMode: { isActive: ReturnType<typeof vi.fn>; switchToTrack: ReturnType<typeof vi.fn> }
+  let mockAdventureMode: {
+    isActive: ReturnType<typeof vi.fn>
+    switchToTrack: ReturnType<typeof vi.fn>
+    getLastTeardownStats?: ReturnType<typeof vi.fn>
+  }
   let ensureAdventureActive: ReturnType<typeof vi.fn>
   let resetBall: ReturnType<typeof vi.fn>
   let rebuildHandleCaches: ReturnType<typeof vi.fn>
@@ -73,6 +77,7 @@ describe('LevelLoader', () => {
     mockAdventureMode = {
       isActive: vi.fn().mockReturnValue(true),
       switchToTrack: vi.fn().mockReturnValue(true),
+      getLastTeardownStats: vi.fn().mockReturnValue(null),
     }
     ensureAdventureActive = vi.fn()
     resetBall = vi.fn()
@@ -93,6 +98,32 @@ describe('LevelLoader', () => {
     expect(mockAdventureMode.switchToTrack).toHaveBeenCalledWith(AdventureTrackType.NEON_HELIX)
     expect(rebuildHandleCaches).toHaveBeenCalled()
     expect(resetBall).toHaveBeenCalled()
+  })
+
+  it('surfaces teardown stats from adventure mode on free-map load', () => {
+    const teardown = {
+      meshesDisposed: 4,
+      materialsDisposed: 2,
+      bodiesRemoved: 3,
+      conveyorZonesRemoved: 0,
+      gravityWellsRemoved: 0,
+      dampingZonesRemoved: 0,
+      resetSensorsRemoved: 0,
+      chromaGatesRemoved: 0,
+      adventureSensorRemoved: 0,
+      exitPortalsRemoved: 0,
+      lingeringBodies: 0,
+    }
+    mockAdventureMode.getLastTeardownStats = vi.fn().mockReturnValue(teardown)
+    loader.updateDeps({
+      adventureMode: mockAdventureMode as never,
+    })
+
+    const result = loader.loadMap('CYBER_CORE')
+
+    expect(result.teardown?.meshesDisposed).toBe(4)
+    expect(result.teardown?.bodiesRemoved).toBe(3)
+    expect(result.teardown?.lingeringBodies).toBe(0)
   })
 
   it('returns error for unknown map id', () => {
@@ -141,6 +172,7 @@ describe('FreeMapTestMode', () => {
     mockAdventureMode = {
       isActive: vi.fn().mockReturnValue(true),
       switchToTrack: vi.fn().mockReturnValue(true),
+      getLastTeardownStats: vi.fn().mockReturnValue(null),
     }
     onMessage = vi.fn()
     onStatusChange = vi.fn()

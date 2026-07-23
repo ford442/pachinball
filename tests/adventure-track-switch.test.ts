@@ -202,6 +202,8 @@ describe('AdventureMode.switchToTrack', () => {
         cylinder: vi.fn().mockReturnValue({
           setFriction: vi.fn().mockReturnThis(),
           setSensor: vi.fn().mockReturnThis(),
+          setCollisionGroups: vi.fn().mockReturnThis(),
+          setActiveEvents: vi.fn().mockReturnThis(),
         }),
         ball: vi.fn().mockReturnValue({
           setSensor: vi.fn().mockReturnThis(),
@@ -267,6 +269,20 @@ describe('AdventureMode.switchToTrack', () => {
     expect(stats!.meshesDisposed).toBeGreaterThan(0)
     expect(stats!.bodiesRemoved).toBeGreaterThan(0)
     expect(stats!.lingeringBodies).toBe(0)
+  })
+
+  it('records zero lingering bodies after portal open then track switch', () => {
+    const { mode } = makeMode()
+    const mockBallBody = { setLinvel: vi.fn(), setAngvel: vi.fn(), setTranslation: vi.fn(), collider: vi.fn(() => null) }
+    const mockCamera = new (hoisted.MockArcRotateCamera as unknown as new () => unknown)()
+
+    mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
+    mode.activateExitPortal(AdventureTrackType.NEON_HELIX, 'success', 'EXTENDED_MAP')
+    mode.switchToTrack(AdventureTrackType.CYBER_CORE)
+
+    const stats = mode.getLastTeardownStats()
+    expect(stats?.lingeringBodies).toBe(0)
+    expect(stats?.exitPortalsRemoved).toBe(1)
   })
 
   it('updates camera preset without recreating the camera', () => {

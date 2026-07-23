@@ -58,6 +58,7 @@ describe('LevelLoader.loadCampaignTrack', () => {
       adventureMode: {
         isActive: vi.fn().mockReturnValue(true),
         switchToTrack,
+        getLastTeardownStats: vi.fn().mockReturnValue(null),
       } as never,
       ballManager: null,
       ensureAdventureActive: vi.fn(),
@@ -90,6 +91,40 @@ describe('LevelLoader.loadCampaignTrack', () => {
   it('resets ball to plunger for free-map test loads', () => {
     loader.loadCampaignTrack('NEON_HELIX', { resetBallToPlunger: true })
     expect(resetBall).toHaveBeenCalledOnce()
+  })
+
+  it('returns teardown stats with zero lingering bodies on campaign load', () => {
+    const teardown = {
+      meshesDisposed: 6,
+      materialsDisposed: 3,
+      bodiesRemoved: 5,
+      conveyorZonesRemoved: 1,
+      gravityWellsRemoved: 0,
+      dampingZonesRemoved: 0,
+      resetSensorsRemoved: 0,
+      chromaGatesRemoved: 0,
+      adventureSensorRemoved: 0,
+      exitPortalsRemoved: 1,
+      lingeringBodies: 0,
+    }
+    loader = new LevelLoader({
+      adventureMode: {
+        isActive: vi.fn().mockReturnValue(true),
+        switchToTrack,
+        getLastTeardownStats: vi.fn().mockReturnValue(teardown),
+      } as never,
+      ballManager: null,
+      ensureAdventureActive: vi.fn(),
+      resetBall,
+      rebuildHandleCaches,
+      mapManager: { switchTableMap } as never,
+      setGameMode,
+    })
+
+    const result = loader.loadCampaignTrack('CYBER_CORE')
+
+    expect(result.teardown?.exitPortalsRemoved).toBe(1)
+    expect(result.teardown?.lingeringBodies).toBe(0)
   })
 })
 
