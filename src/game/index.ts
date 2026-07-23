@@ -70,4 +70,13 @@ export {
   type MapConfig,
 } from './map-registry'
 export { LevelLoader, type LevelLoaderDeps, type LoadResult, type CampaignLoadOptions } from './level-loader'
+export {
+  loadPlayfield,
+  campaignPlayfieldSpec,
+  freeMapPlayfieldSpec,
+  type PlayfieldSpec,
+  type PlayfieldLoadSource,
+  type PlayfieldLoaderDeps,
+  type PlayfieldLoadResult,
+} from './playfield-loader'
 export { FreeMapTestMode, type FreeMapTestModeConfig } from './free-map-test-mode'
