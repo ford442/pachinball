@@ -44,3 +44,23 @@ The Developer settings panel (visible in dev builds or with a debug query param)
 - **Physics Debug Draw** — overlays Rapier's collider/joint wireframes via `world.debugRender()`
 
 See `AGENTS.md` for implementation details and WebGL2 ↔ WebGPU porting notes.
+
+## Deployment
+
+Production deploy is a two-step local workflow:
+
+```bash
+npm run build
+cp .env.deploy.example .env.deploy   # first time only
+# Edit .env.deploy and set DEPLOY_TOKEN (from VPS env)
+python3 deploy.py
+```
+
+Dry-run without uploading:
+
+```bash
+python3 deploy.py --list-only
+```
+
+`deploy.py` contains no secrets. Required config is read from `.env.deploy` (gitignored) or
+shell environment variables. See `.env.deploy.example` for all supported keys.

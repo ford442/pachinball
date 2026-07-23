@@ -327,14 +327,24 @@ Several systems use `getXxx()` / `resetXxx()` singleton helpers (e.g., `getMater
 
 ## 7. Deployment
 
-**Command:** `python3 deploy.py`
+**Commands:**
+
+```bash
+npm run build
+cp .env.deploy.example .env.deploy   # first time only; set DEPLOY_TOKEN
+python3 deploy.py
+python3 deploy.py --list-only        # dry-run: print transfer plan, no upload
+```
 
 **What it does:**
 1. Assumes `dist/` already exists (run `npm run build` first if missing).
-2. Uses `paramiko` to open an SFTP connection.
-3. Recursively uploads `dist/` to the remote server path.
+2. Zips `dist/` locally and uploads a single bundle to the Contabo deploy API.
+3. The remote service extracts the archive over a persistent SFTP connection on the VPS.
 
-**Important:** `deploy.py` contains hardcoded credentials. Do not modify or expose its contents unnecessarily.
+**Configuration:** Copy `.env.deploy.example` to `.env.deploy` (gitignored) or export
+`DEPLOY_TOKEN` in your shell. Optional overrides: `DEPLOY_BASE_URL`, `DEPLOY_PROJECT_NAME`,
+`DEPLOY_BUILD_DIR`, `DEPLOY_TARGET_FOLDER`. The script fails closed with a clear error if
+`DEPLOY_TOKEN` is missing.
 
 ---
 
@@ -342,7 +352,7 @@ Several systems use `getXxx()` / `resetXxx()` singleton helpers (e.g., `getMater
 
 | File | Sensitivity | Guidance |
 |------|-------------|----------|
-| `deploy.py` | **High** | Contains hardcoded SFTP password. Avoid logging or sharing. |
+| `.env.deploy` | **High** | Local deploy token. Gitignored; copy from `.env.deploy.example`. Never commit. |
 | `.env.production` | **High** | Blocked from read access by security policy. Do not paste contents into chat. |
 | `src/config.ts` | Medium | Exposes prod API base (`storage.noahcohn.com`) and asset paths. Safe to reference, not to abuse. |
 
