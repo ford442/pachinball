@@ -41,6 +41,7 @@ import { ShardEffects } from './effects-shards'
 import { TrailEffects } from './effects-trails'
 import { FloatingNumberEffects } from './effects-floating'
 import { RipplesEffects } from './effects-ripples'
+import { JackpotSequenceController } from './effects-jackpot'
 import { createSharedParticleTexture } from './effects-utils'
 import { createCabinetLighting, updateCabinetLighting, updateSlotLighting, getTransitionColor, type CabinetState } from './effects-cabinet'
 import { ImpactEffects } from './effects-impact'
@@ -82,19 +83,32 @@ export class EffectsSystem {
   private targetRimIntensity: number = LIGHTING.RIM.intensity
   private targetRimColor: Color3 = color(LIGHTING.RIM.color)
 
-  // Jackpot Variables
-  jackpotTimer = 0
-  isJackpotActive = false
-  jackpotPhase = 0 // 0=Idle, 1=Breach, 2=Error, 3=Meltdown
-
-  // Solid Gold Pulse Variables
-  private isSolidGoldPulseActive = false
-  private solidGoldPulseTimer = 0
-  private readonly SOLID_GOLD_PULSE_DURATION = 1.5
+  // Jackpot sequence controller
+  private jackpotSequenceController: JackpotSequenceController
 
   // Public getter for lighting mode
   get currentLightingMode(): 'normal' | 'hit' | 'fever' | 'reach' {
     return this.lightingMode
+  }
+
+  get jackpotTimer(): number {
+    return this.jackpotSequenceController.jackpotTimer
+  }
+
+  get isJackpotActive(): boolean {
+    return this.jackpotSequenceController.isJackpotActive
+  }
+
+  get jackpotPhase(): number {
+    return this.jackpotSequenceController.jackpotPhase
+  }
+
+  private get isSolidGoldPulseActive(): boolean {
+    return this.jackpotSequenceController.pulseActive
+  }
+
+  private get solidGoldPulseTimer(): number {
+    return this.jackpotSequenceController.pulseTimer
   }
 
   // Screen shake state
@@ -231,6 +245,21 @@ export class EffectsSystem {
     if (this.audioCtx) {
       this.audioEffects = new AudioEffects(this.audioCtx)
     }
+
+    this.jackpotSequenceController = new JackpotSequenceController({
+      emitJackpotPhase: (phase) => this._eventBus?.emit('jackpot:phase', { phase }),
+      spawnJackpotBurst: (position) => this.spawnJackpotBurst(position),
+      playBeep: (freq) => this.playBeep(freq),
+      setLightingMode: (mode) => {
+        this.lightingMode = mode
+      },
+      flashVignette: (colorHex, durationMs) => this.flashVignette(colorHex, durationMs),
+      addCameraShake: (intensity) => this.addCameraShake(intensity),
+      isReducedMotion: () => this.accessibility.reducedMotion,
+      setBloomEnergy: (value) => {
+        this.bloomEnergy = value
+      },
+    })
   }
 
   setCabinetColor(colorHex: string): void {
@@ -506,10 +535,7 @@ export class EffectsSystem {
   }
 
   startJackpotSequence(): void {
-    this.isJackpotActive = true
-    this.jackpotTimer = 0
-    this.jackpotPhase = 1
-    this._eventBus?.emit('jackpot:phase', { phase: 1 })
+    this.jackpotSequenceController.startJackpotSequence()
   }
 
   /**
@@ -520,75 +546,15 @@ export class EffectsSystem {
    *   3: Meltdown   (5-10s) - explosion, chrome JACKPOT, shockwaves, rainbow, bumper flash
    */
   updateJackpotSequence(dt: number): void {
-    if (!this.isJackpotActive) return
-
-    this.jackpotTimer += dt
-
-    // Phase 1: Breach (0-2s)
-    if (this.jackpotTimer < 2.0) {
-      if (this.jackpotPhase !== 1) {
-        this.jackpotPhase = 1
-        this._eventBus?.emit('jackpot:phase', { phase: 1 })
-      }
-    }
-    // Phase 2: Critical Error (2-5s)
-    else if (this.jackpotTimer < 5.0) {
-      if (this.jackpotPhase !== 2) {
-        this.jackpotPhase = 2
-        this._eventBus?.emit('jackpot:phase', { phase: 2 })
-        // Digital "countdown" beeps (lightweight proxy)
-        setTimeout(() => this.playBeep(880), 300)
-        setTimeout(() => this.playBeep(880), 900)
-        setTimeout(() => this.playBeep(660), 1500)
-      }
-    }
-    // Phase 3: Meltdown (5-10s)
-    else if (this.jackpotTimer < 10.0) {
-      if (this.jackpotPhase !== 3) {
-        this.jackpotPhase = 3
-        this._eventBus?.emit('jackpot:phase', { phase: 3 })
-        // Gold particle bursts
-        this.spawnJackpotBurst(new Vector3(0, 5, 6))
-        this.spawnJackpotBurst(new Vector3(-2, 4, 3))
-        this.spawnJackpotBurst(new Vector3(3, 7, 1))
-      } else if (Math.random() < 0.08) {
-        // Occasional extra bursts during meltdown
-        this.spawnJackpotBurst(new Vector3((Math.random() - 0.5) * 8, 3 + Math.random() * 5, 2 + Math.random() * 6))
-      }
-    }
-    // End
-    else {
-      this.isJackpotActive = false
-      this.jackpotPhase = 0
-      this.lightingMode = 'normal'
-    }
+    this.jackpotSequenceController.updateJackpotSequence(dt)
   }
 
   startSolidGoldPulse(): void {
-    this.isSolidGoldPulseActive = true
-    this.solidGoldPulseTimer = 0
-    this.bloomEnergy = 2.5
-    this.playBeep(1200)
-
-    // Vignette flash (smooth, not strobe — safe for photosensitive users)
-    this.flashVignette(PALETTE.GOLD, 600)
-
-    // Camera shake (respect reduced motion)
-    if (!this.accessibility.reducedMotion) {
-      this.addCameraShake(0.04)
-    }
+    this.jackpotSequenceController.startSolidGoldPulse()
   }
 
   private updateSolidGoldPulse(dt: number): void {
-    if (!this.isSolidGoldPulseActive) return
-
-    this.solidGoldPulseTimer += dt
-    this.bloomEnergy = Math.max(0, 2.5 * (1 - this.solidGoldPulseTimer / this.SOLID_GOLD_PULSE_DURATION))
-
-    if (this.solidGoldPulseTimer >= this.SOLID_GOLD_PULSE_DURATION) {
-      this.isSolidGoldPulseActive = false
-      this.solidGoldPulseTimer = 0
-    }
+    this.jackpotSequenceController.updateSolidGoldPulse(dt)
   }
 
   updateCabinetLighting(): void {
@@ -940,15 +906,8 @@ export class EffectsSystem {
     isFever: boolean,
     dt: number
   ): void {
-    if (!this.trailEffects) return
-
-    // Gating is preserved here (accessibility + feature flag)
-    if (!this.areEnhancedEffectsEnabled() || !EffectsConfig.enableFeverTrail) {
-      this.trailEffects.clearFeverTrails()
-      return
-    }
-
-    this.trailEffects.updateFeverTrails(ballBodies, isFever, dt)
+    const trailsEnabled = this.areEnhancedEffectsEnabled() && EffectsConfig.enableFeverTrail
+    this.trailEffects?.updateFeverTrails(ballBodies, isFever, dt, trailsEnabled)
   }
 
   // Fever trail logic delegated to TrailEffects
