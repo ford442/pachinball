@@ -32,6 +32,14 @@ import {
   SceneOptimizer,
 } from '@babylonjs/core/Misc/sceneOptimizer'
 import { createSafeSceneOptimizerOptions } from './safe-scene-optimizer-options'
+import {
+  applyBloomPipelineProfile,
+  downgradePostProcessTier,
+  isUniformBufferLimitError,
+  isWebGPUEngine,
+  resolveWebGPUPostProcessProfile,
+  type WebGPUPostProcessProfile,
+} from './webgpu-post-process-profile'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 
@@ -102,6 +110,8 @@ export class GameRenderer {
   private _ssrPipeline: SSRRenderingPipeline | null = null
   private _motionBlur: MotionBlurPostProcess | null = null
   private _isSwiftShader = false
+  private _postProcessProfile: WebGPUPostProcessProfile | null = null
+  private _webgpuErrorListener: ((event: Event) => void) | null = null
 
   constructor(host: RendererHost) {
     this.host = host
@@ -145,6 +155,16 @@ export class GameRenderer {
     const bloom = new DefaultRenderingPipeline('pachinbloom', true, scene, [tableCam])
     this.host.bloomPipeline = bloom
 
+    this._postProcessProfile = resolveWebGPUPostProcessProfile(this.host.engine)
+    applyBloomPipelineProfile(bloom, this._postProcessProfile, reducedMotion)
+    if (this._postProcessProfile.tier !== 'full') {
+      this.host.postProcessDegraded = true
+      console.warn(
+        `[GameRenderer] WebGPU post-process tier: ${this._postProcessProfile.tier} (${this._postProcessProfile.reason})`,
+      )
+    }
+    this.attachWebGPUUniformBufferGuard()
+
     const bloomSafe = !reducedMotion && effectIntensity > 0
     const baseWeight = 0.25
     bloom.bloomEnabled = bloomSafe
@@ -152,21 +172,19 @@ export class GameRenderer {
     bloom.bloomScale = 0.5
     bloom.bloomWeight = baseWeight * effectIntensity * INTENSITY.ACTIVE
     bloom.bloomThreshold = 0.75
-    bloom.fxaaEnabled = true
     bloom.imageProcessing.toneMappingEnabled = true
     bloom.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES
     bloom.imageProcessing.contrast = 1.1
     bloom.imageProcessing.exposure = 1.0
-    bloom.imageProcessing.vignetteEnabled = !reducedMotion
     bloom.imageProcessing.vignetteWeight = 0.4
     bloom.imageProcessing.vignetteColor = new Color4(0, 0, 0, 0)
-    bloom.imageProcessing.colorCurvesEnabled = true
-    if (bloom.imageProcessing.colorCurves) {
+    if (bloom.imageProcessing.colorCurvesEnabled && bloom.imageProcessing.colorCurves) {
       bloom.imageProcessing.colorCurves.globalHue = 5
       bloom.imageProcessing.colorCurves.globalSaturation = 15
     }
-    bloom.sharpenEnabled = !reducedMotion
-    bloom.sharpen.edgeAmount = 0.3
+    if (bloom.sharpenEnabled) {
+      bloom.sharpen.edgeAmount = 0.3
+    }
 
     if (qualityTier === QualityTier.LOW) {
       bloom.bloomKernel = 16
@@ -267,7 +285,9 @@ export class GameRenderer {
 
     bloomPipeline.bloomEnabled = !reducedMotion && effectIntensity > 0
     bloomPipeline.bloomThreshold = 0.75
-    bloomPipeline.sharpenEnabled = !reducedMotion && tier !== QualityTier.LOW
+
+    const profile = this._postProcessProfile ?? resolveWebGPUPostProcessProfile(this.host.engine)
+    applyBloomPipelineProfile(bloomPipeline, profile, reducedMotion)
 
     if (tier === QualityTier.LOW) {
       bloomPipeline.bloomKernel = 16
@@ -369,6 +389,48 @@ export class GameRenderer {
     } else {
       this.disposeHeavyPostProcesses()
     }
+  }
+
+  private attachWebGPUUniformBufferGuard(): void {
+    if (!isWebGPUEngine(this.host.engine) || this._webgpuErrorListener) return
+
+    const device = (this.host.engine as WebGPUEngine)._device
+    if (!device) return
+
+    this._webgpuErrorListener = (event: Event) => {
+      const gpuEvent = event as GPUUncapturedErrorEvent
+      const message = gpuEvent.error?.message ?? String(gpuEvent.error)
+      if (!isUniformBufferLimitError(message)) return
+
+      const currentTier = this._postProcessProfile?.tier ?? 'full'
+      const nextTier = downgradePostProcessTier(currentTier)
+      if (!nextTier || !this.host.bloomPipeline) return
+
+      console.warn(
+        `[GameRenderer] WebGPU uniform-buffer overflow — downgrading post-process ${currentTier} → ${nextTier}`,
+      )
+      this._postProcessProfile = {
+        ...(this._postProcessProfile ?? resolveWebGPUPostProcessProfile(this.host.engine)),
+        tier: nextTier,
+        reason: `runtime validation: ${message}`,
+      }
+      const reducedMotion = this.host.accessibility?.reducedMotion ?? GameConfig.camera.reducedMotion
+      applyBloomPipelineProfile(this.host.bloomPipeline, this._postProcessProfile, reducedMotion)
+      this.host.postProcessDegraded = true
+    }
+
+    device.addEventListener('uncapturederror', this._webgpuErrorListener)
+  }
+
+  private detachWebGPUUniformBufferGuard(): void {
+    if (!this._webgpuErrorListener || !isWebGPUEngine(this.host.engine)) {
+      this._webgpuErrorListener = null
+      return
+    }
+
+    const device = (this.host.engine as WebGPUEngine)._device
+    device?.removeEventListener('uncapturederror', this._webgpuErrorListener)
+    this._webgpuErrorListener = null
   }
 
   private disposeHeavyPostProcesses(): void {
@@ -710,6 +772,9 @@ export class GameRenderer {
   }
 
   dispose(): void {
+    this.detachWebGPUUniformBufferGuard()
+    this._postProcessProfile = null
+
     this._unsubBloom?.()
     this._unsubBloom = null
     this._unsubShake?.()
