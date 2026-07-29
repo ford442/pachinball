@@ -227,6 +227,11 @@ export async function apiFetch<T>(
       })
 
       if (!response.ok) {
+        // Client errors are permanent — retrying just spams the console (e.g. /api/maps 404 on static hosts).
+        if (response.status >= 400 && response.status < 500) {
+          console.warn(`[apiFetch] Request failed for ${resolvedUrl}`, new Error(`HTTP ${response.status}`))
+          return null
+        }
         throw new Error(`HTTP ${response.status} ${response.statusText}`.trim())
       }
 

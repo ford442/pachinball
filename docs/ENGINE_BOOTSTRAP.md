@@ -77,6 +77,7 @@ Or call `window.runVisibilityDiagnostic()` after the game loads.
 
 1. **Full** — bloom, FXAA, tone-map, DoF, SSAO (+ SSR/motion blur on HIGH tier).
 2. **Bloom-only** — DoF or SSAO failed validation (WebGPU strict adapters or WebGL SwiftShader). `game.postProcessDegraded === true`; debug HUD shows `pp degraded: true`.
+   On WebGPU adapters capped at 12 uniform buffers per stage, the game proactively uses a **conservative** image-processing profile (bloom + ACES tone-map only; FXAA/sharpen/vignette/color-curves disabled). Runtime validation errors downgrade further to bloom-only.
 3. **Disabled** — `?nopp=1` skips all post-processing.
 
 `setMaximumLimits: true` is the first defense for WebGPU MRT (SSAO + DoF + bloom). Try/catch around DoF/SSAO is the second.
