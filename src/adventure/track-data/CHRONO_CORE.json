@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "CHRONO_CORE",
+  "cameraPresetId": "CHRONO_CORE",
+  "materials": {
+    "structure": "#FFD700"
+  },
+  "segments": [
+    { "type": "straight", "width": 5, "length": 10, "inclineDeg": 10, "material": "#FFD700" },
+
+    { "type": "spinner", "radius": 8, "angVelDeg": -30, "advance": true, "material": "#FFD700" },
+
+    { "type": "straight", "width": 3, "length": 12, "inclineDeg": 0, "material": "#FFD700" },
+
+    { "type": "gap", "length": -0.5, "drop": -1 },
+    { "type": "spinner", "radius": 10, "angVelDeg": 20, "teeth": true, "material": "#FFD700" },
+
+    { "type": "gap", "length": 19, "drop": 1 },
+    { "type": "turn", "deltaHeadingDeg": 180 },
+    { "type": "straight", "width": 4, "length": 4, "inclineDeg": -30, "material": "#FFD700" },
+
+    { "type": "bucket", "material": "#FFD700", "offset": { "x": 0, "y": 2, "z": -4.5358984 } }
+  ]
+}

@@ -37,7 +37,9 @@ describe('TrackManifest registry', () => {
 
   it('maps json manifests to validated data definitions', () => {
     const jsonManifests = getAllTrackManifests().filter((m) => m.buildKind === 'json')
-    expect(jsonManifests.length).toBe(3)
+    // Count is a floor, not a fixture — migrating a TS track to JSON (#321)
+    // should not require editing this test.
+    expect(jsonManifests.length).toBeGreaterThanOrEqual(3)
     for (const manifest of jsonManifests) {
       expect(getDataTrackDefinition(manifest.id)).toBeDefined()
     }
@@ -55,7 +57,8 @@ describe('TrackManifest registry', () => {
 
   it('maps ts manifests to builder functions', () => {
     const tsManifests = getAllTrackManifests().filter((m) => m.buildKind === 'ts')
-    expect(tsManifests.length).toBe(enumValues.length - 3)
+    const jsonCount = getAllTrackManifests().filter((m) => m.buildKind === 'json').length
+    expect(tsManifests.length).toBe(enumValues.length - jsonCount)
     for (const manifest of tsManifests) {
       if (manifest.buildKind !== 'ts') continue
       expect(manifest.builder).toBeTypeOf('function')

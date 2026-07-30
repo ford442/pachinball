@@ -66,9 +66,18 @@ Roles resolve via `getThemedTrackMaterial` / track theme profiles.
 | `bucket` | optional `material`, `offset` `{x,y,z}` | `createBasin` |
 | `portal` | optional `offset` | `addExitPortal` |
 | `spinner` | `radius`, `angVelDeg`, optional `teeth`, `advance`, `material` | `createRotatingPlatform` |
-| `gate` | `color`: `RED` \| `GREEN` \| `BLUE` | `createChromaGate` |
+| `gate` | `color`: `RED` \| `GREEN` \| `BLUE`, optional `offset` | `createChromaGate` |
 
 Cursor starts at `getTrackStartAnchor(id)` with heading `0`.
+
+`offset` (on `bucket`, `portal`, `gate`) is a **world-space** vector added to the
+cursor — it does not rotate with heading. Gates in particular usually need a `y`
+offset, or they sit buried in the running surface.
+
+`gap` accepts negative `length` and `drop`, which is the idiomatic way to nudge the
+cursor backwards or upwards before a segment whose builder call has a fixed offset
+of its own (see `CHRONO_CORE.json`, where a `-0.5 / -1` gap lines the second gear up
+with the position its original TypeScript builder used).
 
 ## Runtime behavior
 
@@ -80,11 +89,27 @@ Cursor starts at `getTrackStartAnchor(id)` with heading `0`.
 
 Hand-tuned flagships (`NEON_HELIX`, `PACHINKO_HALL`, `CYBER_CORE`) remain TypeScript builders.
 
-## Adding a fourth data track
+## Shipped data tracks
+
+`GLITCH_SPIRE`, `RETRO_WAVE_HILLS`, `HYPER_DRIFT`, and — since #321 —
+`QUANTUM_GRID` and `CHRONO_CORE`, which were migrated from TypeScript builders.
+
+A migration is only sound if the compiled JSON reproduces the original geometry.
+`tests/track-json-migration-parity.test.ts` records the `TrackBuilder` call
+sequence from a frozen copy of each original builder and from the compiled JSON,
+then asserts the two are identical. Do a migration that way rather than by eye.
+
+> `QUANTUM_GRID`'s builder branched on `modeType`. Its catalog entry pins it to
+> `EXTENDED_MAP`, so only that branch ever ran; the JSON captures it and the
+> unreachable `STATIONARY_TABLE` variant is gone.
+
+## Adding a data track
 
 1. Author `src/adventure/track-data/MY_TRACK.json` with `id` matching an existing enum value.
-2. Remove that track’s `buildX` from the `AdventureMode.buildTrack` switch and barrel exports (if present).
-3. Run `npm test` — Vitest validates every shipped JSON file.
+2. Point the track's manifest at it: `buildKind: 'json'` + `dataPath: './track-data/MY_TRACK.json'`.
+3. If it replaces a TS builder, delete the builder and its `src/adventure/index.ts` export,
+   and add a parity case before deleting anything.
+4. Run `npm test` — Vitest validates every shipped JSON file.
 
 ## Validation
 

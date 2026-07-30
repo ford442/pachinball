@@ -45,6 +45,18 @@ const CAMPAIGN_GOAL_TEMPLATES: Record<string, CampaignGoalTemplate> = {
   QUANTUM_GRID: { goldTarget: 5, comboTarget: 8, survivalSeconds: 60, bonusReward: 4000 },
   PACHINKO_SPIRE: { goldTarget: 4, comboTarget: 5, survivalSeconds: 35, bonusReward: 2800 },
   SINGULARITY_WELL: { goldTarget: 6, comboTarget: 10, survivalSeconds: 75, bonusReward: 5000 },
+  // ── Spine extension (#321) ────────────────────────────────────────────────
+  // survivalSeconds stays well under each track's catalog timeLimitSeconds so
+  // the secondary objective is achievable inside the stage timer.
+  GLITCH_SPIRE: { goldTarget: 5, comboTarget: 8, survivalSeconds: 55, bonusReward: 4200 },
+  RETRO_WAVE_HILLS: { goldTarget: 5, comboTarget: 6, survivalSeconds: 65, bonusReward: 3600 },
+  POLYCHROME_VOID: { goldTarget: 6, comboTarget: 9, survivalSeconds: 50, bonusReward: 4500 },
+  HYPER_DRIFT: { goldTarget: 6, comboTarget: 10, survivalSeconds: 70, bonusReward: 5200 },
+  CHRONO_CORE: { goldTarget: 6, comboTarget: 9, survivalSeconds: 55, bonusReward: 5400 },
+  CRYO_CHAMBER: { goldTarget: 7, comboTarget: 11, survivalSeconds: 80, bonusReward: 6000 },
+  CASINO_HEIST: { goldTarget: 7, comboTarget: 12, survivalSeconds: 50, bonusReward: 6500 },
+  FIREWALL_BREACH: { goldTarget: 8, comboTarget: 14, survivalSeconds: 90, bonusReward: 8000 },
+  NEON_STRONGHOLD: { goldTarget: 5, comboTarget: 7, survivalSeconds: 50, bonusReward: 3400 },
 }
 
 const DEFAULT_TEMPLATE: CampaignGoalTemplate = {
