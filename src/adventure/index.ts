@@ -33,12 +33,20 @@ export type {
   AnimatedObstacle,
   ConveyorZone,
   ChromaGate,
+  TrackModeType,
 } from './adventure-types'
 
 export {
   getTrackStartAnchor,
   isAdventureTrackType,
 } from './portal-routing'
+
+export {
+  getTrackManifest,
+  getAllTrackManifests,
+  TRACK_MANIFEST_REGISTRY,
+} from './manifests'
+export type { TrackManifest } from './manifests'
 
 export {
   validateTrackDefinition,
@@ -67,7 +75,6 @@ export {
 } from '../game-elements/adventure-track-progression'
 export type {
   TrackInfo,
-  TrackModeType,
   ProgressionState,
   SerializableProgressionState,
 } from '../game-elements/adventure-track-progression'
