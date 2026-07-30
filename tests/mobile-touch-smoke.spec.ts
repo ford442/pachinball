@@ -1,17 +1,17 @@
-import { test, expect, devices } from '@playwright/test'
+import { test, expect } from '@playwright/test'
 
 /**
  * Mobile touch smoke — Pixel 7–class viewport (#300).
- * Requires the Vite dev server on PLAYWRIGHT_BASE_URL (default localhost:5173).
+ *
+ * Device emulation (Pixel 7, hasTouch, isMobile) comes from the `mobile-chrome`
+ * project in playwright.config.ts, which also owns the testMatch that routes this
+ * spec. It must NOT be re-declared with an in-file `test.use()`: options like
+ * isMobile/hasTouch force a new worker, which Playwright rejects inside a
+ * `describe` group and which fails the whole run at collection time.
+ *
+ * The dev server is booted by the config's `webServer` block.
  */
 test.describe('Mobile touch smoke', () => {
-  test.use({
-    ...devices['Pixel 7'],
-    // Prefer WebGL2 for automation canvas readability
-    hasTouch: true,
-    isMobile: true,
-  })
-
   test('touch controls visible in portrait and landscape; reduced-motion starts', async ({
     page,
   }) => {

@@ -10,7 +10,10 @@ import {
 import { TRACK_CATALOG } from '../src/game-elements/adventure-track-progression'
 import { ZONE_REGISTRY } from '../src/game-elements/zone-registry'
 import { getTrackStartAnchor } from '../src/adventure/portal-routing'
-import { getDataTrackDefinition } from '../src/adventure/track-data-registry'
+import {
+  getDataTrackDefinition,
+  getDataTrackSourcePath,
+} from '../src/adventure/track-data-registry'
 
 describe('TrackManifest registry', () => {
   const enumValues = Object.values(AdventureTrackType)
@@ -40,11 +43,34 @@ describe('TrackManifest registry', () => {
     }
   })
 
+  it('declares a dataPath on every json manifest matching its loaded source file', () => {
+    const jsonManifests = getAllTrackManifests().filter((m) => m.buildKind === 'json')
+    for (const manifest of jsonManifests) {
+      // Narrow through buildKind so the discriminated union exposes dataPath.
+      if (manifest.buildKind !== 'json') continue
+      expect(manifest.dataPath, `${manifest.id} must declare a dataPath`).toBeTruthy()
+      expect(getDataTrackSourcePath(manifest.id)).toBe(manifest.dataPath)
+    }
+  })
+
   it('maps ts manifests to builder functions', () => {
     const tsManifests = getAllTrackManifests().filter((m) => m.buildKind === 'ts')
     expect(tsManifests.length).toBe(enumValues.length - 3)
     for (const manifest of tsManifests) {
+      if (manifest.buildKind !== 'ts') continue
       expect(manifest.builder).toBeTypeOf('function')
+    }
+  })
+
+  it('resolves build dispatch from the manifest alone — no parallel builder table', () => {
+    // Registration is one manifest entry: every registered track carries its own
+    // dispatch (TS builder or JSON dataPath), so adding a track needs no second list.
+    for (const manifest of getAllTrackManifests()) {
+      if (manifest.buildKind === 'ts') {
+        expect(manifest.builder, `${manifest.id} builder`).toBeTypeOf('function')
+      } else {
+        expect(manifest.dataPath, `${manifest.id} dataPath`).toMatch(/^\.\/track-data\/.+\.json$/)
+      }
     }
   })
 

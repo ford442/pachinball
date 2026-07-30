@@ -1,19 +1,45 @@
 /**
- * Per-track manifest definitions — zone, catalog, anchors, build kind.
+ * Per-track manifest definitions — the single registration surface for a track.
  *
- * TS builder functions are wired in builders.ts to avoid circular imports.
+ * One entry per AdventureTrackType carries its portal anchor, zone theming,
+ * optional campaign catalog metadata, and its build dispatch: either a TS
+ * `builder` function or a `dataPath` pointing at declarative JSON.
  */
 
 import { AdventureTrackType } from '../adventure-types'
 import type { TrackManifest } from './track-manifest-types'
+import { buildNeonHelix } from '../tracks/neon-helix'
+import { buildCyberCore } from '../tracks/cyber-core'
+import { buildQuantumGrid } from '../tracks/quantum-grid'
+import { buildSingularityWell } from '../tracks/singularity-well'
+import { buildChronoCore } from '../tracks/chrono-core'
+import { buildPachinkoHall } from '../tracks/pachinko-hall'
+import { buildPachinkoSpire } from '../tracks/pachinko-spire'
+import { buildOrbitalJunkyard } from '../tracks/orbital-junkyard'
+import { buildFirewallBreach } from '../tracks/firewall-breach'
+import { buildPrismPathway } from '../tracks/prism-pathway'
+import { buildMagneticStorage } from '../tracks/magnetic-storage'
+import { buildNeuralNetwork } from '../tracks/neural-network'
+import { buildNeonStronghold } from '../tracks/neon-stronghold'
+import { buildCasinoHeist } from '../tracks/casino-heist'
+import { buildCpuCore } from '../tracks/cpu-core'
+import { buildCryoChamber } from '../tracks/cryo-chamber'
+import { buildBioHazardLab } from '../tracks/bio-hazard-lab'
+import { buildGravityForge } from '../tracks/gravity-forge'
+import { buildTidalNexus } from '../tracks/tidal-nexus'
+import { buildDigitalZenGarden } from '../tracks/digital-zen-garden'
+import { buildSynthwaveSurf } from '../tracks/synthwave-surf'
+import { buildSolarFlare } from '../tracks/solar-flare'
+import { buildTeslaTower } from '../tracks/tesla-tower'
+import { buildNeonSkyline } from '../tracks/neon-skyline'
+import { buildPolychromeVoid } from '../tracks/polychrome-void'
 
-type ManifestData = Omit<TrackManifest, 'builder'>
-
-export const MANIFEST_DATA: ManifestData[] = [
+export const MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.NEON_HELIX,
     startAnchor: { x: 0, y: 2, z: 8 },
     buildKind: 'ts',
+    builder: buildNeonHelix,
     zone: {
       name: 'Neon Helix',
       storyText: 'ENTERING: NEON HELIX\n\nThe spiral descent begins...',
@@ -40,6 +66,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.PACHINKO_HALL,
     startAnchor: { x: 0, y: 8, z: 4 },
     buildKind: 'ts',
+    builder: buildPachinkoHall,
     zone: {
       name: 'Pachinko Hall',
       storyText: 'ENTERING: PACHINKO HALL\n\nThe neon parlor opens — follow the pin lanes to the exit arch...',
@@ -67,6 +94,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.CYBER_CORE,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildCyberCore,
     zone: {
       name: 'Cyber Core',
       storyText: 'ENTERING: CYBER CORE\n\nDescending into the digital depths...',
@@ -94,6 +122,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.QUANTUM_GRID,
     startAnchor: { x: 0, y: 10, z: 0 },
     buildKind: 'ts',
+    builder: buildQuantumGrid,
     zone: {
       name: 'Quantum Grid',
       storyText: 'ENTERING: QUANTUM GRID\n\nNavigate the probability maze...',
@@ -121,6 +150,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.SINGULARITY_WELL,
     startAnchor: { x: 0, y: 25, z: 0 },
     buildKind: 'ts',
+    builder: buildSingularityWell,
     zone: {
       name: 'Singularity Well',
       storyText: 'WARNING: GRAVITY ANOMALY\n\nApproaching event horizon...',
@@ -148,6 +178,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.GLITCH_SPIRE,
     startAnchor: { x: 0, y: 10, z: 0 },
     buildKind: 'json',
+    dataPath: './track-data/GLITCH_SPIRE.json',
     zone: {
       name: 'Glitch Spire',
       storyText: 'ALERT: REALITY UNSTABLE\n\nGlitch corruption detected...',
@@ -175,6 +206,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.RETRO_WAVE_HILLS,
     startAnchor: { x: 0, y: 5, z: 0 },
     buildKind: 'json',
+    dataPath: './track-data/RETRO_WAVE_HILLS.json',
     zone: {
       name: 'Retro Wave Hills',
       storyText: 'ENTERING: RETRO WAVE\n\nCruise the neon sunset...',
@@ -191,6 +223,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.CHRONO_CORE,
     startAnchor: { x: 0, y: 15, z: 0 },
     buildKind: 'ts',
+    builder: buildChronoCore,
     zone: {
       name: 'Chrono Core',
       storyText: 'TEMPORAL ANOMALY\n\nTime flows differently here...',
@@ -207,6 +240,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.HYPER_DRIFT,
     startAnchor: { x: 0, y: 15, z: 0 },
     buildKind: 'json',
+    dataPath: './track-data/HYPER_DRIFT.json',
     zone: {
       name: 'Hyper Drift',
       storyText: 'HYPER VELOCITY\n\nHold on tight...',
@@ -223,6 +257,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.PACHINKO_SPIRE,
     startAnchor: { x: 0, y: 30, z: 0 },
     buildKind: 'ts',
+    builder: buildPachinkoSpire,
     zone: {
       name: 'Pachinko Spire',
       storyText: 'ENTERING: PACHINKO SPIRE\n\nThe vertical descent awaits...',
@@ -250,6 +285,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.ORBITAL_JUNKYARD,
     startAnchor: { x: 0, y: 15, z: 0 },
     buildKind: 'ts',
+    builder: buildOrbitalJunkyard,
     zone: {
       name: 'Orbital Junkyard',
       storyText: 'ORBITAL DEBRIS FIELD\n\nNavigate the scrap sector...',
@@ -266,6 +302,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.FIREWALL_BREACH,
     startAnchor: { x: 0, y: 25, z: 0 },
     buildKind: 'ts',
+    builder: buildFirewallBreach,
     zone: {
       name: 'Firewall Breach',
       storyText: 'WARNING: SECURITY BREACH\n\nIntrusion detected...',
@@ -282,6 +319,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.CPU_CORE,
     startAnchor: { x: 0, y: 15, z: 0 },
     buildKind: 'ts',
+    builder: buildCpuCore,
     zone: {
       name: 'CPU Core',
       storyText: 'ENTERING: CPU CORE\n\nThe central processor awaits...',
@@ -298,6 +336,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.CRYO_CHAMBER,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildCryoChamber,
     zone: {
       name: 'Cryo Chamber',
       storyText: 'CRYOGENIC ZONE\n\nTemperature dropping...',
@@ -314,6 +353,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.BIO_HAZARD_LAB,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildBioHazardLab,
     zone: {
       name: 'Bio Hazard Lab',
       storyText: 'BIOHAZARD WARNING\n\nToxic materials present...',
@@ -330,6 +370,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.GRAVITY_FORGE,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildGravityForge,
     zone: {
       name: 'Gravity Forge',
       storyText: 'GRAVITY FORGE\n\nHeavy industry sector...',
@@ -346,6 +387,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.TIDAL_NEXUS,
     startAnchor: { x: 0, y: 25, z: 0 },
     buildKind: 'ts',
+    builder: buildTidalNexus,
     zone: {
       name: 'Tidal Nexus',
       storyText: 'TIDAL NEXUS\n\nFlow with the current...',
@@ -362,6 +404,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.DIGITAL_ZEN_GARDEN,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildDigitalZenGarden,
     zone: {
       name: 'Digital Zen Garden',
       storyText: 'ZEN GARDEN\n\nFind your center...',
@@ -378,6 +421,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.SYNTHWAVE_SURF,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildSynthwaveSurf,
     zone: {
       name: 'Synthwave Surf',
       storyText: 'SURF THE WAVES\n\nCatch the perfect break...',
@@ -394,6 +438,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.SOLAR_FLARE,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildSolarFlare,
     zone: {
       name: 'Solar Flare',
       storyText: 'WARNING: SOLAR FLARE\n\nRadiation levels high...',
@@ -410,6 +455,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.PRISM_PATHWAY,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildPrismPathway,
     zone: {
       name: 'Prism Pathway',
       storyText: 'PRISM PATHWAY\n\nLight refracts infinitely...',
@@ -426,6 +472,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.MAGNETIC_STORAGE,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildMagneticStorage,
     zone: {
       name: 'Magnetic Storage',
       storyText: 'MAGNETIC STORAGE\n\nData streams flowing...',
@@ -442,6 +489,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.NEURAL_NETWORK,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildNeuralNetwork,
     zone: {
       name: 'Neural Network',
       storyText: 'NEURAL NETWORK\n\nSynaptic pathways active...',
@@ -458,6 +506,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.NEON_STRONGHOLD,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildNeonStronghold,
     zone: {
       name: 'Neon Stronghold',
       storyText: 'NEON STRONGHOLD\n\nThe fortress awaits...',
@@ -474,6 +523,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.CASINO_HEIST,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildCasinoHeist,
     zone: {
       name: 'Casino Heist',
       storyText: 'CASINO HEIST\n\nHigh stakes ahead...',
@@ -490,6 +540,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.TESLA_TOWER,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildTeslaTower,
     zone: {
       name: 'Tesla Tower',
       storyText: 'TESLA TOWER\n\nHigh voltage zone...',
@@ -506,6 +557,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.NEON_SKYLINE,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildNeonSkyline,
     zone: {
       name: 'Neon Skyline',
       storyText: 'NEON SKYLINE\n\nThe city never sleeps...',
@@ -522,6 +574,7 @@ export const MANIFEST_DATA: ManifestData[] = [
     id: AdventureTrackType.POLYCHROME_VOID,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
+    builder: buildPolychromeVoid,
     zone: {
       name: 'Polychrome Void',
       storyText: 'THE POLYCHROME VOID\n\nBeyond the spectrum...',
