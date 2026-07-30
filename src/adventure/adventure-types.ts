@@ -11,6 +11,9 @@ import type { TrackInfo } from '../game-elements/adventure-track-progression'
 // Event callback signature for communicating with Game.ts
 export type AdventureCallback = (event: string, data?: unknown) => void
 
+/** Campaign mode type — alternates A/B across the progression sequence. */
+export type TrackModeType = 'EXTENDED_MAP' | 'STATIONARY_TABLE'
+
 /**
  * Available track types for adventure mode
  */

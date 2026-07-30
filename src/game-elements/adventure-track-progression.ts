@@ -3,10 +3,11 @@
  * Manages track progression, unlocking, and difficulty progression
  */
 
+import { buildTrackCatalogFromManifests } from '../adventure/manifests'
+import type { TrackModeType } from '../adventure/adventure-types'
 import type { VisualThemeColor } from './visual-language'
 
-/** Campaign mode type — alternates A/B across the progression sequence. */
-export type TrackModeType = 'EXTENDED_MAP' | 'STATIONARY_TABLE'
+export type { TrackModeType } from '../adventure/adventure-types'
 
 export interface TrackInfo {
   id: string
@@ -74,103 +75,8 @@ export const CAMPAIGN_MAIN_PATH = [
   'GLITCH_SPIRE',
 ] as const
 
-export const TRACK_CATALOG: Record<string, TrackInfo> = {
-  // Score targets are calibrated for bumperHitBase=100 (src/config.ts GAME_TUNING.scoring).
-  // Baseline: ~3 hits/sec × 100 pts × average 2× combo = ~600 pts/sec.
-  // Each target sits at ~70-80% of what a focused player can earn in the time limit,
-  // leaving headroom for gold-ball streak bonuses to feel like acceleration rather
-  // than a requirement.
-  'NEON_HELIX': {
-    id: 'NEON_HELIX',
-    name: 'Neon Helix',
-    description: 'A classic descent through spiraling neon light. Perfect for beginners.',
-    difficulty: 'easy',
-    modeType: 'EXTENDED_MAP',
-    recommendedScore: 50000,   // 600 pts/s × 120 s × ~70% = ~50 000
-    timeLimitSeconds: 120,
-    timeoutPenaltyMultiplier: 0.55,
-    theme: 'cyber-neon',
-    visualTheme: { primary: 'CYAN', accent: 'MAGENTA', surfaceTint: 'PLAYFIELD' },
-  },
-  'PACHINKO_HALL': {
-    id: 'PACHINKO_HALL',
-    name: 'Pachinko Hall',
-    description: 'A neon parlor corridor — pin lanes, conveyor currents, and machine alcoves lead to the exit arch.',
-    difficulty: 'easy',
-    modeType: 'EXTENDED_MAP',
-    recommendedScore: 40000,   // 600 pts/s × 100 s × ~67%
-    timeLimitSeconds: 100,
-    timeoutPenaltyMultiplier: 0.50,
-    unlockedBy: 'NEON_HELIX',
-    theme: 'pachinko-neon',
-    visualTheme: { primary: 'GOLD', accent: 'MAGENTA', surfaceTint: 'PLAYFIELD' },
-  },
-  'CYBER_CORE': {
-    id: 'CYBER_CORE',
-    name: 'Cyber Core',
-    description: 'Fast-paced vertical descent through a digital core. Requires precision timing.',
-    difficulty: 'medium',
-    modeType: 'STATIONARY_TABLE',
-    recommendedScore: 45000,   // 600 pts/s × 90 s × ~83%
-    timeLimitSeconds: 90,
-    timeoutPenaltyMultiplier: 0.45,
-    unlockedBy: 'PACHINKO_HALL',
-    theme: 'digital',
-    visualTheme: { primary: 'MAGENTA', accent: 'CYAN', surfaceTint: 'PLAYFIELD_DEEP' },
-  },
-  'QUANTUM_GRID': {
-    id: 'QUANTUM_GRID',
-    name: 'Quantum Grid',
-    description: 'Navigate a complex maze of quantum pathways. The ultimate puzzle challenge.',
-    difficulty: 'hard',
-    modeType: 'EXTENDED_MAP',
-    recommendedScore: 80000,   // 600 pts/s × 150 s × ~89%
-    timeLimitSeconds: 150,
-    timeoutPenaltyMultiplier: 0.50,
-    unlockedBy: 'CYBER_CORE',
-    theme: 'quantum',
-    visualTheme: { primary: 'PURPLE', accent: 'WHITE', surfaceTint: 'GLASS' },
-  },
-  'PACHINKO_SPIRE': {
-    id: 'PACHINKO_SPIRE',
-    name: 'Pachinko Spire',
-    description: 'Bounce through a classic pin field tower. High-risk, high-reward gameplay.',
-    difficulty: 'hard',
-    modeType: 'STATIONARY_TABLE',
-    recommendedScore: 38000,   // 600 pts/s × 75 s × ~84%
-    timeLimitSeconds: 75,
-    timeoutPenaltyMultiplier: 0.40,
-    unlockedBy: 'NEON_HELIX',
-    theme: 'retro',
-    visualTheme: { primary: 'GOLD', accent: 'ALERT', surfaceTint: 'PLAYFIELD' },
-  },
-  'SINGULARITY_WELL': {
-    id: 'SINGULARITY_WELL',
-    name: 'Singularity Well',
-    description: 'Enter a black hole. Gravity pulls everything inward. Expert only.',
-    difficulty: 'expert',
-    modeType: 'EXTENDED_MAP',
-    recommendedScore: 100000,  // 600 pts/s × 180 s × ~93%
-    timeLimitSeconds: 180,
-    timeoutPenaltyMultiplier: 0.35,
-    unlockedBy: 'QUANTUM_GRID',
-    theme: 'cosmic',
-    visualTheme: { primary: 'ALERT', accent: 'AMBIENT', surfaceTint: 'PLAYFIELD_DEEP' },
-  },
-  'GLITCH_SPIRE': {
-    id: 'GLITCH_SPIRE',
-    name: 'Glitch Spire',
-    description: 'Corrupted geometry and unstable lanes demand quick reflexes and reroutes.',
-    difficulty: 'expert',
-    modeType: 'STATIONARY_TABLE',
-    recommendedScore: 65000,   // 600 pts/s × 105 s × ~103% — needs gold ball streak
-    timeLimitSeconds: 105,
-    timeoutPenaltyMultiplier: 0.42,
-    unlockedBy: 'SINGULARITY_WELL',
-    theme: 'glitch',
-    visualTheme: { primary: 'MATRIX', accent: 'CYAN', surfaceTint: 'GLASS' },
-  }
-}
+/** Derived from TrackManifest registry — see src/adventure/manifests/ */
+export const TRACK_CATALOG: Record<string, TrackInfo> = buildTrackCatalogFromManifests()
 
 export class AdventureTrackProgression {
   private state: ProgressionState

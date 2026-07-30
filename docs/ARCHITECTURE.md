@@ -80,34 +80,36 @@ These are intentionally separated. Do not add campaign features to `AdventureSta
 
 ### Adding a new adventure track
 
-There are two paths. Prefer **JSON** for tracks the data-driven schema can express (ramp / curve /
-gap / bucket / spinner / portal primitives); fall back to a **TS builder** for flagship tracks that
-need hand-tuned geometry or bespoke logic.
+Register a track through the **TrackManifest** surface in `src/adventure/manifests/`.
+One manifest entry replaces the old scattered edits (enum, catalog, zone registry,
+portal anchors, and `buildTrack()` switch case).
 
-**JSON path (data-driven — preferred where the schema allows):**
+**Steps:**
 
-1. Author `src/adventure/track-data/<NAME>.json` conforming to the v1 schema in
-   [`src/adventure/track-schema.ts`](../src/adventure/track-schema.ts).
-2. Register it in [`track-data-registry.ts`](../src/adventure/track-data-registry.ts); it is compiled
-   to runtime geometry by [`track-compiler.ts`](../src/adventure/track-compiler.ts).
-3. Add the catalog entry in `TRACK_CATALOG` ([`adventure-track-progression.ts`](../src/game-elements/adventure-track-progression.ts))
-   plus zone config in [`zone-registry.ts`](../src/game-elements/zone-registry.ts).
-4. `switchToTrack` validates fail-closed — an invalid track is rejected without tearing down physics.
-   See [`docs/TRACK_SCHEMA.md`](TRACK_SCHEMA.md) for the field reference and add a case to
-   [`tests/track-schema.test.ts`](../tests/track-schema.test.ts).
+1. Add the enum value in [`adventure-types.ts`](../src/adventure/adventure-types.ts)
+   (`AdventureTrackType`).
+2. Add a manifest entry in [`track-manifest-data.ts`](../src/adventure/manifests/track-manifest-data.ts):
+   - `startAnchor` — portal teleport position
+   - `zone` — story text, colors, music, transition flags (feeds `ZONE_REGISTRY`)
+   - `catalog` — optional campaign metadata (feeds `TRACK_CATALOG` when present)
+   - `buildKind` — `'json'` or `'ts'`
+3. **JSON path** (`buildKind: 'json'`):
+   - Author `src/adventure/track-data/<NAME>.json` conforming to the v1 schema in
+     [`track-schema.ts`](../src/adventure/track-schema.ts).
+   - The file is auto-registered via `track-data-registry.ts` (`import.meta.glob`).
+   - See [`docs/TRACK_SCHEMA.md`](TRACK_SCHEMA.md) for the field reference.
+4. **TS-builder path** (`buildKind: 'ts'`):
+   - Create builder in [`src/adventure/tracks/<name>.ts`](../src/adventure/tracks/)
+   - Register the builder in [`manifests/builders.ts`](../src/adventure/manifests/builders.ts)
+   - Export from [`src/adventure/index.ts`](../src/adventure/index.ts) if needed externally.
+5. `switchToTrack` validates JSON tracks fail-closed — an invalid track is rejected
+   without tearing down physics.
+6. Add coverage in [`tests/track-manifest.test.ts`](../tests/track-manifest.test.ts)
+   and [`tests/track-schema.test.ts`](../tests/track-schema.test.ts) as appropriate.
 
-**TS-builder path (flagship / bespoke geometry):**
-
-1. Add enum value in [`src/adventure/adventure-types.ts`](../src/adventure/adventure-types.ts)
-2. Add catalog entry in `TRACK_CATALOG` ([`adventure-track-progression.ts`](../src/game-elements/adventure-track-progression.ts))
-3. Create builder in [`src/adventure/tracks/<name>.ts`](../src/adventure/tracks/)
-4. Export builder from [`src/adventure/index.ts`](../src/adventure/index.ts)
-5. Register in `AdventureMode.buildTrack()` switch ([`adventure-mode.ts`](../src/adventure/adventure-mode.ts))
-6. Add zone config in [`zone-registry.ts`](../src/game-elements/zone-registry.ts)
-7. Add portal start anchor in [`portal-routing.ts`](../src/adventure/portal-routing.ts) if needed
-
-> Consolidating these two paths behind a single `TrackManifest` registration surface is tracked in
-> issue #320.
+`TRACK_CATALOG` and `ZONE_REGISTRY` are **derived** from manifests — do not edit them
+directly. `AdventureMode.buildTrack()` dispatches via `getTrackManifest()` — no switch
+case needed.
 
 ---
 

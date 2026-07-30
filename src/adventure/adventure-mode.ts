@@ -22,6 +22,7 @@ import { CAMERA_PRESETS } from './camera-presets'
 import { AdventureTrackType, type AdventureCallback, type CameraPreset } from './adventure-types'
 import { CameraEasing } from './camera-easing'
 import { getTrackStartAnchor } from './portal-routing'
+import { getTrackManifest } from './manifests'
 import { PALETTE } from '../game-elements/visual-language'
 import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
 import type { AccessibilityConfig } from '../game-elements/accessibility-config'
@@ -31,32 +32,6 @@ import {
   type TrackTeardownStats,
 } from '../game-elements/track-teardown-stats'
 
-// Import track builders (data-driven: GLITCH_SPIRE, RETRO_WAVE_HILLS, HYPER_DRIFT)
-import { buildNeonHelix } from './tracks/neon-helix'
-import { buildCyberCore } from './tracks/cyber-core'
-import { buildQuantumGrid } from './tracks/quantum-grid'
-import { buildSingularityWell } from './tracks/singularity-well'
-import { buildChronoCore } from './tracks/chrono-core'
-import { buildPachinkoHall } from './tracks/pachinko-hall'
-import { buildPachinkoSpire } from './tracks/pachinko-spire'
-import { buildOrbitalJunkyard } from './tracks/orbital-junkyard'
-import { buildFirewallBreach } from './tracks/firewall-breach'
-import { buildPrismPathway } from './tracks/prism-pathway'
-import { buildMagneticStorage } from './tracks/magnetic-storage'
-import { buildNeuralNetwork } from './tracks/neural-network'
-import { buildNeonStronghold } from './tracks/neon-stronghold'
-import { buildCasinoHeist } from './tracks/casino-heist'
-import { buildCpuCore } from './tracks/cpu-core'
-import { buildCryoChamber } from './tracks/cryo-chamber'
-import { buildBioHazardLab } from './tracks/bio-hazard-lab'
-import { buildGravityForge } from './tracks/gravity-forge'
-import { buildTidalNexus } from './tracks/tidal-nexus'
-import { buildDigitalZenGarden } from './tracks/digital-zen-garden'
-import { buildSynthwaveSurf } from './tracks/synthwave-surf'
-import { buildSolarFlare } from './tracks/solar-flare'
-import { buildTeslaTower } from './tracks/tesla-tower'
-import { buildNeonSkyline } from './tracks/neon-skyline'
-import { buildPolychromeVoid } from './tracks/polychrome-void'
 import { getDataTrackDefinition } from './track-data-registry'
 import {
   formatTrackValidationErrors,
@@ -657,92 +632,23 @@ export class AdventureMode extends TrackBuilder {
     this.currentTrackInfo = TRACK_CATALOG[trackType] ?? null
     this.currentStartPos = getTrackStartAnchor(trackType)
 
-    const dataDef = getDataTrackDefinition(trackType)
-    if (dataDef) {
-      this.buildFromDefinition(dataDef)
+    const manifest = getTrackManifest(trackType)
+
+    if (manifest?.buildKind === 'json') {
+      const dataDef = getDataTrackDefinition(trackType)
+      if (dataDef) {
+        this.buildFromDefinition(dataDef)
+        this.applyDefaultAdventureCollisionGroups()
+        return
+      }
+    }
+
+    if (manifest?.buildKind === 'ts' && manifest.builder) {
+      manifest.builder(this)
       this.applyDefaultAdventureCollisionGroups()
       return
     }
 
-    switch (trackType) {
-      case AdventureTrackType.CYBER_CORE:
-        buildCyberCore(this)
-        break
-      case AdventureTrackType.PACHINKO_HALL:
-        buildPachinkoHall(this)
-        break
-      case AdventureTrackType.QUANTUM_GRID:
-        buildQuantumGrid(this)
-        break
-      case AdventureTrackType.SINGULARITY_WELL:
-        buildSingularityWell(this)
-        break
-      case AdventureTrackType.CHRONO_CORE:
-        buildChronoCore(this)
-        break
-      case AdventureTrackType.PACHINKO_SPIRE:
-        buildPachinkoSpire(this)
-        break
-      case AdventureTrackType.ORBITAL_JUNKYARD:
-        buildOrbitalJunkyard(this)
-        break
-      case AdventureTrackType.FIREWALL_BREACH:
-        buildFirewallBreach(this)
-        break
-      case AdventureTrackType.CPU_CORE:
-        buildCpuCore(this)
-        break
-      case AdventureTrackType.CRYO_CHAMBER:
-        buildCryoChamber(this)
-        break
-      case AdventureTrackType.BIO_HAZARD_LAB:
-        buildBioHazardLab(this)
-        break
-      case AdventureTrackType.GRAVITY_FORGE:
-        buildGravityForge(this)
-        break
-      case AdventureTrackType.TIDAL_NEXUS:
-        buildTidalNexus(this)
-        break
-      case AdventureTrackType.DIGITAL_ZEN_GARDEN:
-        buildDigitalZenGarden(this)
-        break
-      case AdventureTrackType.SYNTHWAVE_SURF:
-        buildSynthwaveSurf(this)
-        break
-      case AdventureTrackType.SOLAR_FLARE:
-        buildSolarFlare(this)
-        break
-      case AdventureTrackType.PRISM_PATHWAY:
-        buildPrismPathway(this)
-        break
-      case AdventureTrackType.MAGNETIC_STORAGE:
-        buildMagneticStorage(this)
-        break
-      case AdventureTrackType.NEURAL_NETWORK:
-        buildNeuralNetwork(this)
-        break
-      case AdventureTrackType.NEON_STRONGHOLD:
-        buildNeonStronghold(this)
-        break
-      case AdventureTrackType.CASINO_HEIST:
-        buildCasinoHeist(this)
-        break
-      case AdventureTrackType.TESLA_TOWER:
-        buildTeslaTower(this)
-        break
-      case AdventureTrackType.NEON_SKYLINE:
-        buildNeonSkyline(this)
-        break
-      case AdventureTrackType.POLYCHROME_VOID:
-        buildPolychromeVoid(this)
-        break
-      default:
-        buildNeonHelix(this)
-        break
-    }
-
-    this.applyDefaultAdventureCollisionGroups()
   }
 
   /**
