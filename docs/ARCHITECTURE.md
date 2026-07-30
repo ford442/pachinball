@@ -92,24 +92,32 @@ portal anchors, and `buildTrack()` switch case).
    - `startAnchor` — portal teleport position
    - `zone` — story text, colors, music, transition flags (feeds `ZONE_REGISTRY`)
    - `catalog` — optional campaign metadata (feeds `TRACK_CATALOG` when present)
-   - `buildKind` — `'json'` or `'ts'`
+   - `cameraPresetId` — optional `CAMERA_PRESETS` key (defaults to the track id, then `DEFAULT`)
+   - `buildKind` — `'json'` or `'ts'`, plus that kind's dispatch field (below)
 3. **JSON path** (`buildKind: 'json'`):
    - Author `src/adventure/track-data/<NAME>.json` conforming to the v1 schema in
      [`track-schema.ts`](../src/adventure/track-schema.ts).
-   - The file is auto-registered via `track-data-registry.ts` (`import.meta.glob`).
+   - Point the manifest's `dataPath` at it (glob-relative, e.g. `./track-data/<NAME>.json`).
+   - The file is auto-registered via `track-data-registry.ts` (`import.meta.glob`); the
+     manifest registry cross-checks `dataPath` against the file the definition actually
+     came from, so a typo or rename fails loudly at startup.
    - See [`docs/TRACK_SCHEMA.md`](TRACK_SCHEMA.md) for the field reference.
 4. **TS-builder path** (`buildKind: 'ts'`):
-   - Create builder in [`src/adventure/tracks/<name>.ts`](../src/adventure/tracks/)
-   - Register the builder in [`manifests/builders.ts`](../src/adventure/manifests/builders.ts)
+   - Create the builder in [`src/adventure/tracks/<name>.ts`](../src/adventure/tracks/)
+   - Reference it directly as the manifest's `builder` — there is no separate
+     dispatch table to update.
    - Export from [`src/adventure/index.ts`](../src/adventure/index.ts) if needed externally.
 5. `switchToTrack` validates JSON tracks fail-closed — an invalid track is rejected
-   without tearing down physics.
+   without tearing down physics. `buildTrack` likewise refuses to build (and records
+   `getLastTrackLoadError()`) rather than leaving an empty world.
 6. Add coverage in [`tests/track-manifest.test.ts`](../tests/track-manifest.test.ts)
    and [`tests/track-schema.test.ts`](../tests/track-schema.test.ts) as appropriate.
 
-`TRACK_CATALOG` and `ZONE_REGISTRY` are **derived** from manifests — do not edit them
-directly. `AdventureMode.buildTrack()` dispatches via `getTrackManifest()` — no switch
-case needed.
+`TrackManifest` is a discriminated union on `buildKind`: a `'ts'` entry must supply a
+`builder`, a `'json'` entry a `dataPath`, so the compiler rejects a half-registered
+track. `TRACK_CATALOG` and `ZONE_REGISTRY` are **derived** from manifests — do not edit
+them directly. `AdventureMode.buildTrack()` dispatches via `getTrackManifest()` — no
+switch case needed.
 
 ---
 

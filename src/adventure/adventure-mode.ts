@@ -590,9 +590,13 @@ export class AdventureMode extends TrackBuilder {
     this.currentBallMesh = ballMesh || null
     this.activeBallBodies = [ballBody]
 
-    // Load track-specific camera preset (data tracks may override via cameraPresetId)
+    // Load track-specific camera preset. JSON schema override wins, then the
+    // manifest's cameraPresetId, then the track id itself, then DEFAULT.
     const dataDef = getDataTrackDefinition(trackType)
-    const presetKey = dataDef?.cameraPresetId ?? (trackType as string)
+    const presetKey =
+      dataDef?.cameraPresetId ??
+      getTrackManifest(trackType)?.cameraPresetId ??
+      (trackType as string)
     this.currentCameraPreset = CAMERA_PRESETS[presetKey] || CAMERA_PRESETS.DEFAULT
     const preset = this.currentCameraPreset
 
@@ -634,21 +638,30 @@ export class AdventureMode extends TrackBuilder {
 
     const manifest = getTrackManifest(trackType)
 
-    if (manifest?.buildKind === 'json') {
-      const dataDef = getDataTrackDefinition(trackType)
-      if (dataDef) {
-        this.buildFromDefinition(dataDef)
-        this.applyDefaultAdventureCollisionGroups()
-        return
-      }
+    if (!manifest) {
+      // No manifest survived registry validation for this id. Report it rather
+      // than silently leaving an empty world the player can fall through.
+      this.lastTrackLoadError = `No registered track manifest for ${trackType}`
+      console.error(`[AdventureMode] ${this.lastTrackLoadError}`)
+      return
     }
 
-    if (manifest?.buildKind === 'ts' && manifest.builder) {
-      manifest.builder(this)
+    if (manifest.buildKind === 'json') {
+      const dataDef = getDataTrackDefinition(trackType)
+      if (!dataDef) {
+        this.lastTrackLoadError =
+          `Track ${trackType} declares data path ${manifest.dataPath} but no valid ` +
+          'definition was loaded for it'
+        console.error(`[AdventureMode] ${this.lastTrackLoadError}`)
+        return
+      }
+      this.buildFromDefinition(dataDef)
       this.applyDefaultAdventureCollisionGroups()
       return
     }
 
+    manifest.builder(this)
+    this.applyDefaultAdventureCollisionGroups()
   }
 
   /**

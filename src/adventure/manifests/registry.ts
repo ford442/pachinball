@@ -10,18 +10,47 @@ import type { TrackInfo } from '../../game-elements/adventure-track-progression'
 import type { ZoneConfig } from '../../game-elements/zone-registry'
 import type { TrackManifest } from './track-manifest-types'
 import { MANIFEST_DATA } from './track-manifest-data'
-import { TS_BUILDERS } from './builders'
+import { getDataTrackSourcePath } from '../track-data-registry'
+
+/**
+ * Accept a manifest only if its declared build dispatch actually resolves.
+ * A TS entry needs a callable builder; a JSON entry needs its `dataPath` to
+ * match the file the data registry loaded for that id — so a typo or a renamed
+ * JSON surfaces here at startup instead of as an empty track at play time.
+ */
+function isDispatchable(manifest: TrackManifest): boolean {
+  if (manifest.buildKind === 'ts') {
+    if (typeof manifest.builder !== 'function') {
+      console.error(`[track-manifest] Missing TS builder for ${manifest.id}`)
+      return false
+    }
+    return true
+  }
+
+  const sourcePath = getDataTrackSourcePath(manifest.id)
+  if (!sourcePath) {
+    console.error(
+      `[track-manifest] ${manifest.id} declares dataPath ${manifest.dataPath} but no valid ` +
+        'track JSON was loaded for that id',
+    )
+    return false
+  }
+  if (sourcePath !== manifest.dataPath) {
+    console.error(
+      `[track-manifest] ${manifest.id} declares dataPath ${manifest.dataPath} but its ` +
+        `definition was loaded from ${sourcePath}`,
+    )
+    return false
+  }
+  return true
+}
 
 function buildManifestRegistry(): ReadonlyMap<AdventureTrackType, TrackManifest> {
   const map = new Map<AdventureTrackType, TrackManifest>()
 
-  for (const data of MANIFEST_DATA) {
-    const builder = data.buildKind === 'ts' ? TS_BUILDERS[data.id] : undefined
-    if (data.buildKind === 'ts' && !builder) {
-      console.error(`[track-manifest] Missing TS builder for ${data.id}`)
-      continue
-    }
-    map.set(data.id, { ...data, builder })
+  for (const manifest of MANIFEST_DATA) {
+    if (!isDispatchable(manifest)) continue
+    map.set(manifest.id, manifest)
   }
 
   return map

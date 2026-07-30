@@ -45,17 +45,40 @@ export type TrackBuildKind = 'ts' | 'json'
 /** TS track builder function signature. */
 export type TrackBuilderFn = (ctx: TrackBuilder) => void
 
-/**
- * Complete track manifest — one module per track in manifests/*.ts,
- * aggregated in registry.ts.
- */
-export interface TrackManifest {
+/** Fields shared by both build kinds. */
+interface TrackManifestBase {
   id: AdventureTrackType
   startAnchor: { x: number; y: number; z: number }
   zone: TrackManifestZone
   /** Present only for campaign / catalog tracks. */
   catalog?: TrackManifestCatalog
-  buildKind: TrackBuildKind
-  /** Required for buildKind === 'ts'. Omitted for JSON tracks. */
-  builder?: TrackBuilderFn
+  /**
+   * Optional CAMERA_PRESETS key. Defaults to the track id, then to DEFAULT.
+   * JSON tracks may also override this via the schema's `cameraPresetId`.
+   */
+  cameraPresetId?: string
 }
+
+/** Hand-tuned TS track — geometry emitted by a builder function. */
+export interface TsTrackManifest extends TrackManifestBase {
+  buildKind: 'ts'
+  builder: TrackBuilderFn
+}
+
+/** Declarative track — geometry compiled from a JSON definition. */
+export interface JsonTrackManifest extends TrackManifestBase {
+  buildKind: 'json'
+  /**
+   * Glob-relative path of the backing JSON, as keyed by `track-data-registry`
+   * (e.g. `./track-data/GLITCH_SPIRE.json`). Cross-checked at registry build
+   * time against the definition actually loaded for this track id.
+   */
+  dataPath: string
+}
+
+/**
+ * Complete track manifest — one entry per track in `track-manifest-data.ts`,
+ * aggregated in `registry.ts`. The `buildKind` discriminant makes the build
+ * dispatch total: a TS track must supply a `builder`, a JSON track a `dataPath`.
+ */
+export type TrackManifest = TsTrackManifest | JsonTrackManifest

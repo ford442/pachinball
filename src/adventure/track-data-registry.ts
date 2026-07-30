@@ -12,8 +12,15 @@ const rawModules = import.meta.glob('./track-data/*.json', {
   import: 'default',
 }) as Record<string, unknown>
 
-function buildRegistry(): ReadonlyMap<string, TrackDefinition> {
-  const map = new Map<string, TrackDefinition>()
+interface BuiltRegistry {
+  byId: Map<string, TrackDefinition>
+  /** Glob-relative source path of each accepted definition, keyed by track id. */
+  pathById: Map<string, string>
+}
+
+function buildRegistry(): BuiltRegistry {
+  const byId = new Map<string, TrackDefinition>()
+  const pathById = new Map<string, string>()
 
   for (const [path, raw] of Object.entries(rawModules)) {
     const result = validateTrackDefinition(raw)
@@ -25,18 +32,32 @@ function buildRegistry(): ReadonlyMap<string, TrackDefinition> {
       continue
     }
     const def = result.definition
-    if (map.has(def.id)) {
+    if (byId.has(def.id)) {
       console.error(`[track-data-registry] Duplicate track id ${def.id} from ${path}`)
       continue
     }
-    map.set(def.id, def)
+    byId.set(def.id, def)
+    pathById.set(def.id, path)
   }
 
-  return map
+  return { byId, pathById }
 }
 
+const REGISTRY = buildRegistry()
+
 /** Validated data-driven track definitions keyed by AdventureTrackType id. */
-export const DATA_TRACK_REGISTRY: ReadonlyMap<string, TrackDefinition> = buildRegistry()
+export const DATA_TRACK_REGISTRY: ReadonlyMap<string, TrackDefinition> = REGISTRY.byId
+
+/**
+ * Source path each definition was loaded from, keyed by track id. Lets the
+ * manifest registry verify a declared `dataPath` actually backs that track.
+ */
+export const DATA_TRACK_SOURCE_PATHS: ReadonlyMap<string, string> = REGISTRY.pathById
+
+/** Glob-relative source path for a loaded track definition, if any. */
+export function getDataTrackSourcePath(trackId: string): string | undefined {
+  return REGISTRY.pathById.get(trackId)
+}
 
 export function getDataTrackDefinition(trackId: string): TrackDefinition | undefined {
   return DATA_TRACK_REGISTRY.get(trackId)

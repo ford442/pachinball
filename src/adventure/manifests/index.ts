@@ -1,5 +1,7 @@
 export type {
   TrackManifest,
+  TsTrackManifest,
+  JsonTrackManifest,
   TrackManifestZone,
   TrackManifestCatalog,
   TrackBuildKind,
