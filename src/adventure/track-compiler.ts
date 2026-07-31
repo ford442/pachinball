@@ -177,7 +177,11 @@ function applySegment(
       break
     }
     case 'gate': {
-      api.createChromaGate(cursor.pos.clone(), segment.color)
+      let pos = cursor.pos.clone()
+      if (segment.offset) {
+        pos = pos.add(new Vector3(segment.offset.x, segment.offset.y, segment.offset.z))
+      }
+      api.createChromaGate(pos, segment.color)
       break
     }
   }

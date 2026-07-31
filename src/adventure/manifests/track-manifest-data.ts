@@ -10,9 +10,7 @@ import { AdventureTrackType } from '../adventure-types'
 import type { TrackManifest } from './track-manifest-types'
 import { buildNeonHelix } from '../tracks/neon-helix'
 import { buildCyberCore } from '../tracks/cyber-core'
-import { buildQuantumGrid } from '../tracks/quantum-grid'
 import { buildSingularityWell } from '../tracks/singularity-well'
-import { buildChronoCore } from '../tracks/chrono-core'
 import { buildPachinkoHall } from '../tracks/pachinko-hall'
 import { buildPachinkoSpire } from '../tracks/pachinko-spire'
 import { buildOrbitalJunkyard } from '../tracks/orbital-junkyard'
@@ -121,8 +119,8 @@ export const MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.QUANTUM_GRID,
     startAnchor: { x: 0, y: 10, z: 0 },
-    buildKind: 'ts',
-    builder: buildQuantumGrid,
+    buildKind: 'json',
+    dataPath: './track-data/QUANTUM_GRID.json',
     zone: {
       name: 'Quantum Grid',
       storyText: 'ENTERING: QUANTUM GRID\n\nNavigate the probability maze...',
@@ -218,12 +216,23 @@ export const MANIFEST_DATA: TrackManifest[] = [
       isMajorTransition: false,
       glowIntensity: 1.2,
     },
+    catalog: {
+      description: 'A neon sunset cruise — rolling hills and wide banked curves after the Spire.',
+      difficulty: 'medium',
+      modeType: 'EXTENDED_MAP',
+      recommendedScore: 70000,
+      timeLimitSeconds: 130,
+      timeoutPenaltyMultiplier: 0.50,
+      unlockedBy: 'GLITCH_SPIRE',
+      theme: 'retrowave',
+      visualTheme: { primary: 'MAGENTA', accent: 'CYAN', surfaceTint: 'PLAYFIELD' },
+    },
   },
   {
     id: AdventureTrackType.CHRONO_CORE,
     startAnchor: { x: 0, y: 15, z: 0 },
-    buildKind: 'ts',
-    builder: buildChronoCore,
+    buildKind: 'json',
+    dataPath: './track-data/CHRONO_CORE.json',
     zone: {
       name: 'Chrono Core',
       storyText: 'TEMPORAL ANOMALY\n\nTime flows differently here...',
@@ -234,6 +243,17 @@ export const MANIFEST_DATA: TrackManifest[] = [
       interiorColor: '#44ffdd',
       isMajorTransition: true,
       glowIntensity: 1.3,
+    },
+    catalog: {
+      description: 'A clockwork arena — ride two counter-rotating gears to reach the escapement.',
+      difficulty: 'hard',
+      modeType: 'STATIONARY_TABLE',
+      recommendedScore: 90000,
+      timeLimitSeconds: 100,
+      timeoutPenaltyMultiplier: 0.42,
+      unlockedBy: 'HYPER_DRIFT',
+      theme: 'clockwork',
+      visualTheme: { primary: 'GOLD', accent: 'AMBIENT', surfaceTint: 'PLAYFIELD_DEEP' },
     },
   },
   {
@@ -251,6 +271,17 @@ export const MANIFEST_DATA: TrackManifest[] = [
       interiorColor: '#88ffff',
       isMajorTransition: false,
       glowIntensity: 1.5,
+    },
+    catalog: {
+      description: 'Full-throttle banked drifting through a corkscrew loop and a long jump.',
+      difficulty: 'hard',
+      modeType: 'EXTENDED_MAP',
+      recommendedScore: 85000,
+      timeLimitSeconds: 140,
+      timeoutPenaltyMultiplier: 0.48,
+      unlockedBy: 'POLYCHROME_VOID',
+      theme: 'hyper-drift',
+      visualTheme: { primary: 'CYAN', accent: 'ALERT', surfaceTint: 'PLAYFIELD' },
     },
   },
   {
@@ -314,6 +345,17 @@ export const MANIFEST_DATA: TrackManifest[] = [
       isMajorTransition: true,
       glowIntensity: 1.7,
     },
+    catalog: {
+      description: 'Campaign finale — punch through two security layers to reach root access.',
+      difficulty: 'expert',
+      modeType: 'EXTENDED_MAP',
+      recommendedScore: 120000,
+      timeLimitSeconds: 165,
+      timeoutPenaltyMultiplier: 0.36,
+      unlockedBy: 'CASINO_HEIST',
+      theme: 'firewall',
+      visualTheme: { primary: 'ALERT', accent: 'CYAN', surfaceTint: 'PLAYFIELD_DEEP' },
+    },
   },
   {
     id: AdventureTrackType.CPU_CORE,
@@ -347,6 +389,17 @@ export const MANIFEST_DATA: TrackManifest[] = [
       interiorColor: '#88ddff',
       isMajorTransition: true,
       glowIntensity: 1.2,
+    },
+    catalog: {
+      description: 'Near-frictionless ice — a slalom of pillars and an avalanche sweep.',
+      difficulty: 'expert',
+      modeType: 'EXTENDED_MAP',
+      recommendedScore: 95000,
+      timeLimitSeconds: 150,
+      timeoutPenaltyMultiplier: 0.40,
+      unlockedBy: 'CHRONO_CORE',
+      theme: 'cryo',
+      visualTheme: { primary: 'WHITE', accent: 'CYAN', surfaceTint: 'GLASS' },
     },
   },
   {
@@ -518,6 +571,17 @@ export const MANIFEST_DATA: TrackManifest[] = [
       isMajorTransition: true,
       glowIntensity: 1.4,
     },
+    catalog: {
+      description: 'Optional siege route — drawbridges and portcullis gates ring the courtyard.',
+      difficulty: 'hard',
+      modeType: 'STATIONARY_TABLE',
+      recommendedScore: 55000,
+      timeLimitSeconds: 95,
+      timeoutPenaltyMultiplier: 0.45,
+      unlockedBy: 'PACHINKO_HALL',
+      theme: 'fortress',
+      visualTheme: { primary: 'PURPLE', accent: 'GOLD', surfaceTint: 'PLAYFIELD' },
+    },
   },
   {
     id: AdventureTrackType.CASINO_HEIST,
@@ -534,6 +598,17 @@ export const MANIFEST_DATA: TrackManifest[] = [
       interiorColor: '#ffdd44',
       isMajorTransition: true,
       glowIntensity: 1.5,
+    },
+    catalog: {
+      description: 'Chip stacks, a live roulette wheel, and slot gates guarding the vault.',
+      difficulty: 'expert',
+      modeType: 'STATIONARY_TABLE',
+      recommendedScore: 105000,
+      timeLimitSeconds: 90,
+      timeoutPenaltyMultiplier: 0.38,
+      unlockedBy: 'CRYO_CHAMBER',
+      theme: 'casino',
+      visualTheme: { primary: 'GOLD', accent: 'ALERT', surfaceTint: 'PLAYFIELD' },
     },
   },
   {
@@ -585,6 +660,17 @@ export const MANIFEST_DATA: TrackManifest[] = [
       interiorColor: '#f0f0f0',
       isMajorTransition: true,
       glowIntensity: 1.4,
+    },
+    catalog: {
+      description: 'A colour-logic arena — chroma gates only pass the matching ball state.',
+      difficulty: 'hard',
+      modeType: 'STATIONARY_TABLE',
+      recommendedScore: 75000,
+      timeLimitSeconds: 95,
+      timeoutPenaltyMultiplier: 0.44,
+      unlockedBy: 'RETRO_WAVE_HILLS',
+      theme: 'chroma-puzzle',
+      visualTheme: { primary: 'WHITE', accent: 'MAGENTA', surfaceTint: 'GLASS' },
     },
   },
 ]

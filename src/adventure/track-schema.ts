@@ -80,6 +80,11 @@ export interface SpinnerSegment {
 export interface GateSegment {
   type: 'gate'
   color: 'RED' | 'GREEN' | 'BLUE'
+  /**
+   * World-space offset from the cursor. Gates usually sit above the running
+   * surface, so a bare cursor position would bury them in the ramp.
+   */
+  offset?: Vec3Json
 }
 
 export type TrackSegment =
@@ -293,6 +298,9 @@ function validateSegment(
           path: `${path}.color`,
           message: 'color must be RED, GREEN, or BLUE',
         })
+      }
+      if (segment.offset !== undefined) {
+        validateVec3(segment.offset, `${path}.offset`, errors)
       }
       break
     }

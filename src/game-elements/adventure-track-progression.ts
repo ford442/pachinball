@@ -50,19 +50,33 @@ export interface SerializableProgressionState {
 }
 
 /**
- * Campaign track catalog — 5 core stages with alternating A/B modeType pattern:
- *   A (EXTENDED_MAP) → B (STATIONARY_TABLE) → A → B → A
+ * Campaign track catalog — 13 main-spine stages plus 2 optional branches (#321).
  *
- * Campaign sequence (main spine):
- *   1. NEON_HELIX          — A — EXTENDED_MAP  (spiral descent run)
- *   2. PACHINKO_HALL       — A — EXTENDED_MAP  (parlor hub / pin-lane corridor)
- *   3. CYBER_CORE          — B — STATIONARY_TABLE (flipper arena)
- *   4. QUANTUM_GRID        — A — EXTENDED_MAP
- *   5. SINGULARITY_WELL    — A — EXTENDED_MAP
- *   6. GLITCH_SPIRE        — B — STATIONARY_TABLE
+ * Campaign sequence (main spine), with A = EXTENDED_MAP, B = STATIONARY_TABLE:
+ *    1. NEON_HELIX          — A — spiral descent run
+ *    2. PACHINKO_HALL       — A — parlor hub / pin-lane corridor
+ *    3. CYBER_CORE          — B — flipper arena
+ *    4. QUANTUM_GRID        — A — maze (JSON)
+ *    5. SINGULARITY_WELL    — A
+ *    6. GLITCH_SPIRE        — B — (JSON)
+ *    7. RETRO_WAVE_HILLS    — A — (JSON)
+ *    8. POLYCHROME_VOID     — B — chroma-gate puzzle
+ *    9. HYPER_DRIFT         — A — (JSON)
+ *   10. CHRONO_CORE         — B — gear arena (JSON)
+ *   11. CRYO_CHAMBER        — A — ice slalom
+ *   12. CASINO_HEIST        — B — vault arena
+ *   13. FIREWALL_BREACH     — A — finale
  *
- * Parallel branch:
- *   PACHINKO_SPIRE — B — STATIONARY_TABLE (unlocks from NEON_HELIX)
+ * Parallel branches (not on the spine, reachable early):
+ *   PACHINKO_SPIRE  — B — unlocks from NEON_HELIX
+ *   NEON_STRONGHOLD — B — unlocks from PACHINKO_HALL
+ *
+ * Stages 1–6 predate #321 and keep their original A/A/B/A/A/B shape; 7–13 are
+ * strictly alternating. The rhythm is bounded by content, not preference: mode
+ * type describes what a track physically *is* (a traversal course vs a contained
+ * arena), so it is assigned from geometry rather than chosen to fit the pattern.
+ * Most remaining uncatalogued builders are long courses (A), which is why the
+ * spine cannot alternate further without new arena content.
  */
 
 /** Ordered main campaign spine — used by getNextTrackId() for deterministic A/B flow. */
@@ -73,6 +87,13 @@ export const CAMPAIGN_MAIN_PATH = [
   'QUANTUM_GRID',
   'SINGULARITY_WELL',
   'GLITCH_SPIRE',
+  'RETRO_WAVE_HILLS',
+  'POLYCHROME_VOID',
+  'HYPER_DRIFT',
+  'CHRONO_CORE',
+  'CRYO_CHAMBER',
+  'CASINO_HEIST',
+  'FIREWALL_BREACH',
 ] as const
 
 /** Derived from TrackManifest registry — see src/adventure/manifests/ */
