@@ -1,6 +1,6 @@
 import type { Vector3 } from '@babylonjs/core'
 import { BallType, GameConfig } from '../config'
-import { resolveAssetUrl } from '../game/game-utils'
+import { resolveAssetUrl } from '../core/asset-urls'
 import {
   createImpactVoiceProfile,
   getPortalMotifFrequencies,

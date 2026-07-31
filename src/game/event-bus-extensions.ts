@@ -7,12 +7,12 @@
  * only shared payload helpers and utility types.
  */
 
-import type { PachinballEventMap } from './event-bus'
+import type { PachinballEventMap } from '../core/event-bus'
 
 /**
  * Re-export the canonical event map for consumers that previously
  * imported ExtendedPachinballEventMap.
- * @deprecated Import PachinballEventMap directly from './event-bus'
+ * @deprecated Import PachinballEventMap directly from '../core/event-bus'
  */
 export type ExtendedPachinballEventMap = PachinballEventMap
 

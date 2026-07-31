@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { EventBus } from '../src/game/event-bus'
+import { EventBus } from '../src/core/event-bus'
 import { AdventureTrackProgression, TRACK_CATALOG } from '../src/game-elements/adventure-track-progression'
 import { AdventureProgressionSupervisor } from '../src/game-elements/adventure-progression-supervisor'
 

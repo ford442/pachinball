@@ -1,6 +1,6 @@
 import type { Vector3 } from '@babylonjs/core'
 import { BallType } from '../config'
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import {
   type ImpactCategory,
   type ImpactVoiceOptions,

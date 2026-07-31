@@ -24,7 +24,7 @@
 
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { WasmPhysicsEngine } from '../src/wasm/PhysicsModule'
-import { EventBus } from '../src/game/event-bus'
+import { EventBus } from '../src/core/event-bus'
 
 // ---------------------------------------------------------------------------
 // Mock helpers

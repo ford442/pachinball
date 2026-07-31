@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Quaternion, Vector3 } from '@babylonjs/core'
 
 import { GamePhysicsController, type PhysicsHost } from '../src/game/game-physics-controller'
-import { EventBus } from '../src/game/event-bus'
+import { EventBus } from '../src/core/event-bus'
 import { QualityTier } from '../src/game-elements/visual-language'
 
 type BindingBody = {

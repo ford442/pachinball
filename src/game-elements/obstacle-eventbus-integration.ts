@@ -3,7 +3,7 @@
  * Manages event emission for all obstacle systems (spinners, traps, launchers, gates, drop targets)
  */
 
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 
 /**
  * Obstacle EventBus Manager

@@ -13,7 +13,7 @@
 import type { DisplaySystem } from '../display'
 import type { TableMapType } from '../shaders/lcd-table'
 import { apiFetch } from '../config'
-import { resolveVideoUrl } from '../game/game-utils'
+import { resolveVideoUrl } from '../core/asset-urls'
 
 export type GoalType = 'hit-pegs' | 'survive-time' | 'reach-score' | 'collect-items' | 'no-drain'
 

@@ -30,7 +30,7 @@ import { AtmosphereController } from './effects-atmosphere'
 import { ScreenEffectsController } from './effects-screen'
 import { FresnelRimController } from './effects-fresnel-rim'
 import { RuntimePerformanceController } from './effects-performance'
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import type { BallManager } from '../game-elements/ball-manager'
 
 export class EffectsSystem {

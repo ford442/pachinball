@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
-import { EventBus } from '../src/game/event-bus'
+import { EventBus } from '../src/core/event-bus'
 import { ZoneTriggerSystem } from '../src/game-elements/zone-trigger-system'
 
 // ---------------------------------------------------------------------------

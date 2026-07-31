@@ -62,7 +62,7 @@ import { CabinetManager } from './game-cabinet'
 import { isAdventureTrackType } from '../adventure'
 
 import type { Game } from '../game'
-import type { PachinballEventMap } from './event-bus'
+import type { PachinballEventMap } from '../core/event-bus'
 
 interface PortalActivatedEventData {
   trackId: AdventureTrackType
