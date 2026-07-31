@@ -485,28 +485,234 @@ export function getLaneRolloverPoints(kind: LaneRolloverKind): number {
 }
 
 /**
+ * Per-feeder tunable schemas (discriminated union).
+ * Each feeder declares only the tunables that are meaningful for its FSM.
+ * Sentinel zeroes or "N/A" placeholders are intentionally avoided.
+ */
+
+/** Identifies which feeder a tunable block belongs to. */
+export type FeederId = 'mag-spin' | 'nano-loom' | 'prism-core' | 'gauss-cannon' | 'quantum-tunnel'
+
+export interface MagSpinTunables {
+  readonly kind: 'mag-spin'
+  /** Capture trigger radius in world units. */
+  readonly catchRadius: number
+  /** Duration of the SPIN phase in seconds. */
+  readonly spinDuration: number
+  /** Post-RELEASE ignore window in seconds. Invariant: >= spinDuration. */
+  readonly cooldown: number
+  /** Scalar impulse applied to the ball on RELEASE. */
+  readonly releaseForce: number
+  readonly releaseAngleVariance: number
+  readonly releaseTarget: { readonly x: number; readonly y: number; readonly z: number }
+  readonly catchLerpSpeed: number
+  readonly catchArrivalDistance: number
+  readonly holdYOffset: number
+  readonly maxCaptureHeightY: number
+  readonly spinAngularSpeed: number
+  readonly releaseUpwardBias: number
+  readonly feederPosition: { readonly x: number; readonly y: number; readonly z: number }
+  readonly animation: {
+    readonly ringSpeedSpin: number
+    readonly ringSpeedIdle: number
+    readonly ringSpeedDefault: number
+    readonly ringLerpSpin: number
+    readonly ringLerpDefault: number
+    readonly shakeDecay: number
+    readonly idlePulseFrequency: number
+    readonly idleLightBase: number
+    readonly idleLightPulseAmplitude: number
+    readonly idleEmissiveBase: number
+    readonly idleEmissivePulseAmplitude: number
+    readonly spinChargeLightBase: number
+    readonly spinChargeLightScale: number
+    readonly releaseShakeInitial: number
+    readonly stateLightIdle: number
+    readonly stateLightCatch: number
+    readonly stateLightSpin: number
+    readonly stateLightCooldown: number
+  }
+  readonly physicsExtras: {
+    readonly releaseSpinVarianceXZ: number
+    readonly releaseSpinBaseY: number
+    readonly spinAxisMultiplierY: number
+    readonly spinAxisMultiplierZ: number
+  }
+}
+
+export interface NanoLoomTunables {
+  readonly kind: 'nano-loom'
+  /** Intake capture trigger radius in world units. */
+  readonly intakeRadius: number
+  /** Post-EJECT re-entry gate in seconds. */
+  readonly ejectCooldown: number
+  readonly liftDuration: number
+  readonly liftSpeed: number
+  readonly loomPosition: { readonly x: number; readonly y: number; readonly z: number }
+  readonly intakePosition: { readonly x: number; readonly y: number; readonly z: number }
+  readonly width: number
+  readonly height: number
+  readonly depth: number
+  readonly pinRows: number
+  readonly pinCols: number
+  readonly pinSpacing: number
+  readonly pinBounciness: number
+  readonly liftAlignLerpSpeed: number
+  readonly weaveNudgeImpulse: number
+  readonly ejectImpulse: { readonly x: number; readonly y: number; readonly z: number }
+  readonly animation: {
+    readonly liftTopYOffset: number
+    readonly pinActivationRowRadius: number
+    readonly pinActivationScaleBoost: number
+    readonly pinActivationEmissiveBase: number
+    readonly weaveExitMarginY: number
+    readonly stateLightIdle: number
+    readonly stateLightLift: number
+  }
+}
+
+export interface PrismCoreTunables {
+  readonly kind: 'prism-core'
+  /** Ball-lock sensor radius in world units. */
+  readonly captureRadius: number
+  /** Scalar impulse applied to each ball on OVERLOAD eject. */
+  readonly ejectForce: number
+  /** Spread angle of the multiball cone in degrees. */
+  readonly ejectSpread: number
+  /** Maximum balls held before OVERLOAD. */
+  readonly lockCapacity: number
+  /** Post-OVERLOAD ignore window in seconds. */
+  readonly postReleaseCooldown: number
+  readonly prismPosition: { readonly x: number; readonly y: number; readonly z: number }
+  readonly animation: {
+    readonly rotationSpeedIdle: number
+    readonly rotationSpeedLocked1: number
+    readonly rotationSpeedLocked2: number
+    readonly rotationSpeedOverload: number
+    readonly rotationLerpRate: number
+    readonly outerRotationRatio: number
+    readonly breathPhaseMultiplier: number
+    readonly breathAmplitudeBase: number
+    readonly bloomDecay: number
+    readonly bloomScaleMultiplier: number
+    readonly bloomAlphaScale: number
+    readonly bloomCutoff: number
+  }
+}
+
+export interface GaussCannonTunables {
+  readonly kind: 'gauss-cannon'
+  /** Intake capture trigger radius in world units. */
+  readonly intakeRadius: number
+  /** Scalar impulse applied to the ball on FIRE. */
+  readonly muzzleVelocity: number
+  /** Duration of the AIM sweep phase in seconds. */
+  readonly aimDuration: number
+  /** Post-FIRE ignore window in seconds. Invariant: >= aimDuration. */
+  readonly cooldown: number
+  readonly minAngle: number
+  readonly maxAngle: number
+  readonly sweepSpeed: number
+  readonly loadLerpSpeed: number
+  readonly loadArrivalDistance: number
+  readonly breechYOffset: number
+  readonly idleSweepRate: number
+  readonly aimSweepMultiplier: number
+  readonly gaussPosition: { readonly x: number; readonly y: number; readonly z: number }
+  readonly animation: {
+    readonly coilPulseRate: number
+    readonly coilStretchAmplitude: number
+    readonly recoilSpringStrength: number
+    readonly recoilDamping: number
+    readonly fireRecoilImpulse: number
+    readonly aimVibrationIntensity: number
+    readonly fireVibrationIntensity: number
+    readonly vibrationDecay: number
+    readonly idleSweepScale: number
+    readonly stateLightLoad: number
+    readonly stateLightAim: number
+    readonly stateLightCooldown: number
+    readonly fireLightFlashIntensity: number
+    readonly fireLightFadeIntensity: number
+  }
+}
+
+export interface QuantumTunnelTunables {
+  readonly kind: 'quantum-tunnel'
+  /** Input portal sensor radius in world units. */
+  readonly inputRadius: number
+  /**
+   * Scalar +X impulse applied to the ball on EJECT.
+   * Exit velocity is derived as `new Vector3(ejectImpulse, 0, 0)` plus a random Z variance;
+   * no spin or release-force phase exists (no CATCH→SPIN FSM for this feeder).
+   */
+  readonly ejectImpulse: number
+  /** TRANSPORT hold duration in seconds (ball hidden off-table). */
+  readonly transportDelay: number
+  /** Post-EJECT ignore window in seconds. Invariant: >= transportDelay + capturePullDuration. */
+  readonly cooldown: number
+  /** Duration of the CAPTURE pull phase in seconds. */
+  readonly capturePullDuration: number
+  readonly capturePullLerpSpeed: number
+  readonly ejectImpulseVarianceZ: number
+  readonly ejectRecoilDistance: number
+  /** Off-table Y used to hide the ball during TRANSPORT. */
+  readonly transportHideY: number
+  readonly cooldownFadeDuration: number
+  readonly portalSpinIdle: number
+  readonly portalSpinCapture: number
+  readonly portalSpinTransport: number
+  readonly portalSpinEject: number
+  readonly inputPosition: { readonly x: number; readonly y: number; readonly z: number }
+  readonly outputPosition: { readonly x: number; readonly y: number; readonly z: number }
+  readonly animation: {
+    readonly portalSpinLerpRate: number
+    readonly outputSpinRatio: number
+    readonly portalStretchAmplitude: number
+    readonly portalStretchSideFactor: number
+    readonly ejectRecoilDecay: number
+    readonly ejectRecoilThreshold: number
+    readonly idlePulseRate: number
+    readonly idlePulseBase: number
+    readonly idlePulseAmplitude: number
+    readonly discEmissiveScale: number
+  }
+}
+
+/** Discriminated union of all feeder tunable blocks. */
+export type FeederTunable =
+  | MagSpinTunables
+  | NanoLoomTunables
+  | PrismCoreTunables
+  | GaussCannonTunables
+  | QuantumTunnelTunables
+
+/**
  * Behavioral tunables for all five table feeders.
  * Single source of truth — GameConfig aliases these for backward compatibility.
  * Algorithmic constants (2π, deg↔rad) stay inline in feeder implementations.
+ *
+ * Deep-frozen via Object.freeze; each feeder snapshots its slice at construction.
  */
 export const FEEDER_TUNABLES = Object.freeze({
-  'mag-spin': {
+  'mag-spin': Object.freeze({
+    kind: 'mag-spin',
     // Upper-right wall — between pachinko field (x≈7) and wall (x≈11.5)
-    feederPosition: { x: 9.25, y: 0.5, z: 12 },
+    feederPosition: Object.freeze({ x: 9.25, y: 0.5, z: 12 }),
     catchRadius: 1.5,
     spinDuration: 1.2,
     cooldown: 3.0,
     releaseForce: 25.0,
     releaseAngleVariance: 0.25,
     /** Launch direction target — center playfield bumpers */
-    releaseTarget: { x: 0, y: 0, z: 5 },
+    releaseTarget: Object.freeze({ x: 0, y: 0, z: 5 }),
     catchLerpSpeed: 6,
     catchArrivalDistance: 0.15,
     holdYOffset: 0.5,
     maxCaptureHeightY: 2.0,
     spinAngularSpeed: 32,
     releaseUpwardBias: 0.08,
-    animation: {
+    animation: Object.freeze({
       ringSpeedSpin: 24,
       ringSpeedIdle: 1,
       ringSpeedDefault: 4,
@@ -525,17 +731,18 @@ export const FEEDER_TUNABLES = Object.freeze({
       stateLightCatch: 1.0,
       stateLightSpin: 1.5,
       stateLightCooldown: 0.2,
-    },
-    physicsExtras: {
+    }),
+    physicsExtras: Object.freeze({
       releaseSpinVarianceXZ: 8,
       releaseSpinBaseY: 12,
       spinAxisMultiplierY: 1.3,
       spinAxisMultiplierZ: 0.7,
-    },
-  },
-  'nano-loom': {
-    loomPosition: { x: -13.0, y: 4.0, z: 2.0 },
-    intakePosition: { x: -12.0, y: 0.5, z: 2.0 },
+    }),
+  } as const satisfies MagSpinTunables),
+  'nano-loom': Object.freeze({
+    kind: 'nano-loom',
+    loomPosition: Object.freeze({ x: -13.0, y: 4.0, z: 2.0 }),
+    intakePosition: Object.freeze({ x: -12.0, y: 0.5, z: 2.0 }),
     width: 2.0,
     height: 6.0,
     depth: 1.0,
@@ -548,9 +755,9 @@ export const FEEDER_TUNABLES = Object.freeze({
     liftSpeed: 10.0,
     liftAlignLerpSpeed: 5,
     weaveNudgeImpulse: 0.1,
-    ejectImpulse: { x: 8.0, y: 2.0, z: 0.0 },
+    ejectImpulse: Object.freeze({ x: 8.0, y: 2.0, z: 0.0 }),
     ejectCooldown: 1.0,
-    animation: {
+    animation: Object.freeze({
       liftTopYOffset: 0.5,
       pinActivationRowRadius: 2,
       pinActivationScaleBoost: 0.5,
@@ -558,16 +765,17 @@ export const FEEDER_TUNABLES = Object.freeze({
       weaveExitMarginY: 0.5,
       stateLightIdle: 0.2,
       stateLightLift: 1.0,
-    },
-  },
-  'prism-core': {
-    prismPosition: { x: 0.0, y: 0.5, z: 12.0 },
+    }),
+  } as const satisfies NanoLoomTunables),
+  'prism-core': Object.freeze({
+    kind: 'prism-core',
+    prismPosition: Object.freeze({ x: 0.0, y: 0.5, z: 12.0 }),
     captureRadius: 1.2,
     ejectForce: 20.0,
     ejectSpread: 45,
     lockCapacity: 3,
     postReleaseCooldown: 2.0,
-    animation: {
+    animation: Object.freeze({
       rotationSpeedIdle: 0.5,
       rotationSpeedLocked1: 2.0,
       rotationSpeedLocked2: 5.0,
@@ -580,10 +788,11 @@ export const FEEDER_TUNABLES = Object.freeze({
       bloomScaleMultiplier: 3.0,
       bloomAlphaScale: 0.5,
       bloomCutoff: 0.01,
-    },
-  },
-  'gauss-cannon': {
-    gaussPosition: { x: -12.0, y: 0.5, z: -8.0 },
+    }),
+  } as const satisfies PrismCoreTunables),
+  'gauss-cannon': Object.freeze({
+    kind: 'gauss-cannon',
+    gaussPosition: Object.freeze({ x: -12.0, y: 0.5, z: -8.0 }),
     intakeRadius: 1.0,
     muzzleVelocity: 30.0,
     minAngle: 30,
@@ -596,7 +805,7 @@ export const FEEDER_TUNABLES = Object.freeze({
     breechYOffset: 1.0,
     idleSweepRate: 2.0,
     aimSweepMultiplier: 20,
-    animation: {
+    animation: Object.freeze({
       coilPulseRate: 10,
       coilStretchAmplitude: 0.15,
       recoilSpringStrength: 20.0,
@@ -611,11 +820,12 @@ export const FEEDER_TUNABLES = Object.freeze({
       stateLightCooldown: 0.2,
       fireLightFlashIntensity: 5.0,
       fireLightFadeIntensity: 0.2,
-    },
-  },
-  'quantum-tunnel': {
-    inputPosition: { x: 11.5, y: 0.5, z: 0.0 },
-    outputPosition: { x: -11.5, y: 0.5, z: 0.0 },
+    }),
+  } as const satisfies GaussCannonTunables),
+  'quantum-tunnel': Object.freeze({
+    kind: 'quantum-tunnel',
+    inputPosition: Object.freeze({ x: 11.5, y: 0.5, z: 0.0 }),
+    outputPosition: Object.freeze({ x: -11.5, y: 0.5, z: 0.0 }),
     inputRadius: 1.2,
     ejectImpulse: 25.0,
     transportDelay: 0.5,
@@ -630,7 +840,7 @@ export const FEEDER_TUNABLES = Object.freeze({
     portalSpinCapture: 5.0,
     portalSpinTransport: 8.0,
     portalSpinEject: 10.0,
-    animation: {
+    animation: Object.freeze({
       portalSpinLerpRate: 5.0,
       outputSpinRatio: 0.8,
       portalStretchAmplitude: 0.3,
@@ -641,12 +851,68 @@ export const FEEDER_TUNABLES = Object.freeze({
       idlePulseBase: 0.5,
       idlePulseAmplitude: 0.2,
       discEmissiveScale: 0.8,
-    },
-  },
-} as const)
+    }),
+  } as const satisfies QuantumTunnelTunables),
+} as const satisfies Record<FeederId, FeederTunable>)
 
+/** @deprecated Use FeederTunable (singular) for the discriminated union type. */
 export type FeederTunables = typeof FEEDER_TUNABLES
-export type FeederId = keyof FeederTunables
+
+/**
+ * Validates coupled invariants for a single feeder's tunable block.
+ * Called at module load for all five feeders — throws on malformed config before the
+ * game constructs any feeder instance.
+ */
+export function validateFeederTunables(t: FeederTunable): void {
+  if (t.kind === 'mag-spin') {
+    if (t.catchRadius <= 0)
+      throw new Error(`mag-spin: catchRadius must be > 0, got ${t.catchRadius}`)
+    if (t.releaseForce <= 0)
+      throw new Error(`mag-spin: releaseForce must be > 0, got ${t.releaseForce}`)
+    if (t.cooldown < t.spinDuration)
+      throw new Error(`mag-spin: cooldown (${t.cooldown}) must be >= spinDuration (${t.spinDuration})`)
+  } else if (t.kind === 'nano-loom') {
+    if (t.intakeRadius <= 0)
+      throw new Error(`nano-loom: intakeRadius must be > 0, got ${t.intakeRadius}`)
+    if (t.ejectCooldown <= 0)
+      throw new Error(`nano-loom: ejectCooldown must be > 0, got ${t.ejectCooldown}`)
+    if (t.liftSpeed <= 0)
+      throw new Error(`nano-loom: liftSpeed must be > 0, got ${t.liftSpeed}`)
+  } else if (t.kind === 'prism-core') {
+    if (t.captureRadius <= 0)
+      throw new Error(`prism-core: captureRadius must be > 0, got ${t.captureRadius}`)
+    if (t.ejectForce <= 0)
+      throw new Error(`prism-core: ejectForce must be > 0, got ${t.ejectForce}`)
+    if (t.postReleaseCooldown <= 0)
+      throw new Error(`prism-core: postReleaseCooldown must be > 0, got ${t.postReleaseCooldown}`)
+    if (t.lockCapacity < 1)
+      throw new Error(`prism-core: lockCapacity must be >= 1, got ${t.lockCapacity}`)
+  } else if (t.kind === 'gauss-cannon') {
+    if (t.intakeRadius <= 0)
+      throw new Error(`gauss-cannon: intakeRadius must be > 0, got ${t.intakeRadius}`)
+    if (t.muzzleVelocity <= 0)
+      throw new Error(`gauss-cannon: muzzleVelocity must be > 0, got ${t.muzzleVelocity}`)
+    if (t.cooldown < t.aimDuration)
+      throw new Error(`gauss-cannon: cooldown (${t.cooldown}) must be >= aimDuration (${t.aimDuration})`)
+    if (t.minAngle >= t.maxAngle)
+      throw new Error(`gauss-cannon: minAngle (${t.minAngle}) must be < maxAngle (${t.maxAngle})`)
+  } else if (t.kind === 'quantum-tunnel') {
+    if (t.inputRadius <= 0)
+      throw new Error(`quantum-tunnel: inputRadius must be > 0, got ${t.inputRadius}`)
+    if (t.ejectImpulse <= 0)
+      throw new Error(`quantum-tunnel: ejectImpulse must be > 0, got ${t.ejectImpulse}`)
+    if (t.cooldown < t.transportDelay + t.capturePullDuration)
+      throw new Error(
+        `quantum-tunnel: cooldown (${t.cooldown}) must be >= transportDelay + capturePullDuration ` +
+        `(${t.transportDelay} + ${t.capturePullDuration} = ${t.transportDelay + t.capturePullDuration})`
+      )
+  }
+}
+
+// Boot-time invariant check — runs once when this module is first imported.
+;(Object.keys(FEEDER_TUNABLES) as FeederId[]).forEach((id) =>
+  validateFeederTunables(FEEDER_TUNABLES[id])
+)
 
 export const GameConfig = {
   magSpin: FEEDER_TUNABLES['mag-spin'],
