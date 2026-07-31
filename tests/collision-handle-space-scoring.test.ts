@@ -12,7 +12,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { Vector3 } from '@babylonjs/core'
 
 import { GamePhysicsController } from '../src/game/game-physics-controller'
-import { EventBus } from '../src/game/event-bus'
+import { EventBus } from '../src/core/event-bus'
 import type { BumperVisual } from '../src/game-elements/types'
 import {
   makeBallManagerStub,

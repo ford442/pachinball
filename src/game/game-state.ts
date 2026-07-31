@@ -1,6 +1,6 @@
 import { Engine } from '@babylonjs/core'
 import { GameState, DisplayState } from '../game-elements/types'
-import { EventBus } from './event-bus'
+import { EventBus } from '../core/event-bus'
 
 export interface StateManagerConfig {
   onStateChange?: (oldState: GameState, newState: GameState) => void

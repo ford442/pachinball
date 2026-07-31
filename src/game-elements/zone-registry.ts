@@ -13,7 +13,7 @@
 
 import { AdventureTrackType } from '../adventure/adventure-types'
 import { buildZoneRegistryFromManifests } from '../adventure/manifests'
-import { resolveVideoUrl } from '../game/game-utils'
+import { resolveVideoUrl } from '../core/asset-urls'
 
 export interface ZoneConfig {
   /** Zone identifier */

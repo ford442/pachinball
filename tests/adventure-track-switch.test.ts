@@ -367,7 +367,7 @@ describe('GameSlotAdventure.switchToTrack', () => {
     const host = {
       display: { setTrackInfo: vi.fn(), setStoryText: vi.fn() },
       effects: null,
-      eventBus: { emit: vi.fn(), on: vi.fn() } as unknown as import('../src/game/event-bus').EventBus,
+      eventBus: { emit: vi.fn(), on: vi.fn() } as unknown as import('../src/core/event-bus').EventBus,
       ballManager: null,
       adventureMode: {
         isActive: vi.fn().mockReturnValue(true),
@@ -422,7 +422,7 @@ describe('GameSlotAdventure.switchToTrack', () => {
     const host = {
       display: { setTrackInfo: vi.fn(), setStoryText: vi.fn() },
       effects: null,
-      eventBus: { emit: vi.fn(), on: vi.fn() } as unknown as import('../src/game/event-bus').EventBus,
+      eventBus: { emit: vi.fn(), on: vi.fn() } as unknown as import('../src/core/event-bus').EventBus,
       ballManager: null,
       adventureMode: {
         isActive: vi.fn().mockReturnValue(false),

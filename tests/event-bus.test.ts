@@ -6,7 +6,7 @@
  * All tests run entirely in the plain Node environment provided by Vitest.
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import { EventBus } from '../src/game/event-bus'
+import { EventBus } from '../src/core/event-bus'
 import { DisplayState, GameState } from '../src/game-elements/types'
 
 describe('EventBus', () => {

@@ -55,7 +55,7 @@ import {
 } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
 import { GameConfig } from '../config'
-import type { EventBus } from './event-bus'
+import type { EventBus } from '../core/event-bus'
 
 export interface RendererHost {
   readonly engine: Engine | WebGPUEngine

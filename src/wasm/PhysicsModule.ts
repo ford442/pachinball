@@ -32,7 +32,7 @@
  */
 
 import type { WasmPhysicsModule, WasmPhysicsWorldInstance, WasmContactEvent } from './wasm-types'
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
 
 // ---------------------------------------------------------------------------

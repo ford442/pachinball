@@ -1,9 +1,27 @@
 /**
- * Event Bus - Lightweight typed pub/sub layer for Pachinball
+ * Event Bus — lightweight typed pub/sub layer for Pachinball.
  *
- * Replaces scattered direct calls between systems with clean event-driven communication.
- * GameStateManager emits lifecycle events; DisplaySystem, EffectsSystem, and audio
- * subscribe to the events they care about without game.ts needing to coordinate them.
+ * Replaces scattered direct calls between systems with clean event-driven
+ * communication. GameStateManager emits lifecycle events; DisplaySystem,
+ * EffectsSystem, and audio subscribe to what they care about without game.ts
+ * having to coordinate them.
+ *
+ * ## Why this lives in `src/core/` (#322)
+ *
+ * This is the kernel: the layer everything else may depend on, and which depends
+ * on nothing above it. It previously sat in `src/game/`, which forced low-level
+ * systems in `src/game-elements/` to reach *upward* into the high-level game
+ * layer just to emit an event — an inverted dependency and a standing cycle risk
+ * between the two barrels.
+ *
+ * Two rules keep it a kernel, both enforced by `no-restricted-imports` in
+ * eslint.config.js rather than by convention:
+ *
+ *   1. **No Babylon.** Nothing here may import `@babylonjs/core`, so the bus can
+ *      be unit-tested and reused without standing up an engine.
+ *   2. **No runtime imports from upper layers.** The event-map payload types
+ *      below are `import type` only — erased at compile time, so no runtime edge
+ *      is created. Emitters import the concrete enums from their own layer.
  */
 
 import type { DisplayState } from '../game-elements/display-config'

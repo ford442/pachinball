@@ -3,7 +3,7 @@
  * Manages UI state and feedback display for adventure mode
  */
 
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import type { AdventureGoal } from './adventure-goal-system'
 
 export interface GoalUIElement {

@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { EventBus } from '../src/game/event-bus'
+import { EventBus } from '../src/core/event-bus'
 import { AdventureTrackProgression } from '../src/game-elements/adventure-track-progression'
 import { AdventureProgressionSupervisor } from '../src/game-elements/adventure-progression-supervisor'
 import { LevelLoader } from '../src/game/level-loader'

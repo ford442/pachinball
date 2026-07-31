@@ -1,7 +1,7 @@
 import { PALETTE, QualityTier } from './visual-language'
 import type { AdventureTrackProgression, SerializableProgressionState } from './adventure-track-progression'
 import { CampaignRewardNotifier } from './campaign-reward-notifier'
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import {
   CAMPAIGN_STORAGE_KEY,
   CAMPAIGN_STORAGE_VERSION,

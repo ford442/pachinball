@@ -16,6 +16,7 @@ The codebase is organized into focused modules under `src/`. See [`AGENTS.md`](.
 
 | Module | Role |
 |--------|------|
+| [`src/core/`](../src/core/) | **Kernel** — `EventBus` + typed event map, asset URL resolution. Engine-free; depends on nothing above it |
 | [`src/game-elements/`](../src/game-elements/) | Low-level systems: physics, input, ball manager, zone triggers, campaign progression |
 | [`src/game/`](../src/game/) | High-level managers: state, input routing, maps, cabinet, UI, adventure coordination |
 | [`src/objects/`](../src/objects/) | Playfield geometry: flippers, bumpers, walls, rails, pachinko pins |
@@ -145,3 +146,29 @@ main.ts
 - **Maintain clear interfaces** — Public methods should be well-documented
 - **Minimize coupling** — Modules should depend on interfaces, not implementations
 - **No monolith creep in `game.ts`** — Feature logic belongs in the appropriate subsystem module
+
+### Layering
+
+Dependencies point one way:
+
+```text
+src/core/  ←  src/game-elements/  ←  src/game/
+  kernel        low-level systems      orchestration
+```
+
+| Layer | May depend on | Must not |
+|-------|---------------|----------|
+| `src/core/` | nothing above it | Babylon, `src/game/**`; runtime imports from `src/game-elements/**` (erased `import type` is allowed for event-map payloads) |
+| `src/game-elements/` | `src/core/`, peers | `src/game/**` — anything at all |
+| `src/game/` | everything below | — |
+
+Both rules are enforced by `@typescript-eslint/no-restricted-imports` in
+[`eslint.config.js`](../eslint.config.js), so a violation fails `npm run lint`
+rather than relying on review to catch it.
+
+If a `game-elements` module needs a type from a game-layer class, **declare the
+shape it actually uses locally** instead of importing the class — structural
+typing means callers keep passing the concrete object unchanged. See
+`TrackThemingMapSource` in
+[`track-theming-system.ts`](../src/game-elements/track-theming-system.ts), which
+replaced an import of `TableMapManager` used only for `getCurrentConfig()`.

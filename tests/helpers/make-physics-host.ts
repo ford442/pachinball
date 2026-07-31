@@ -5,7 +5,7 @@
 
 import { vi } from 'vitest'
 
-import { EventBus } from '../../src/game/event-bus'
+import { EventBus } from '../../src/core/event-bus'
 import type { PhysicsHost } from '../../src/game/game-physics-controller'
 import { QualityTier } from '../../src/game-elements/visual-language'
 

@@ -1,4 +1,4 @@
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import type { SoundSystem } from './sound-system'
 
 export function bindSoundEventBindings(soundSystem: SoundSystem, eventBus: EventBus): void {

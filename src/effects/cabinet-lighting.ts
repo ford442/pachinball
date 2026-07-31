@@ -6,7 +6,7 @@
  */
 
 import { Color3, PointLight, Vector3, type Scene } from '@babylonjs/core'
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import { DisplayState } from '../game-elements/display-config'
 import { PALETTE, color, QualityTier } from '../game-elements/visual-language'
 

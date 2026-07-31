@@ -2,7 +2,7 @@ import { Color3, PBRMaterial } from '@babylonjs/core'
 import type { AbstractMesh } from '@babylonjs/core'
 import { BallType } from '../config'
 import type { BallManager } from '../game-elements/ball-manager'
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import { INTENSITY, QualityTier, STATE_COLORS } from '../game-elements/visual-language'
 import { FresnelRimMaterialPlugin, FRESNEL_RIM_PHASE_FREQ } from './fresnel-rim-plugin'
 

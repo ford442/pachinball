@@ -1,22 +1,9 @@
 import { Color3 } from '@babylonjs/core'
 
-/**
- * Resolve static asset URLs for Vite subdirectory deployment.
- * Prepends import.meta.env.BASE_URL so assets load correctly under any base path.
- * Absolute URLs (http...) are returned as-is.
- */
-export function resolveAssetUrl(assetPath: string | undefined): string | undefined {
-  if (!assetPath) return undefined
-  if (/^https?:\/\//i.test(assetPath)) return assetPath
-  const base = (import.meta.env.BASE_URL as string) || '/'
-  const cleanPath = assetPath.startsWith('/') ? assetPath.slice(1) : assetPath
-  return `${base}${cleanPath}`
-}
-
-/** @deprecated Use resolveAssetUrl — kept for existing video call sites. */
-export function resolveVideoUrl(videoPath: string | undefined): string | undefined {
-  return resolveAssetUrl(videoPath)
-}
+// resolveAssetUrl / resolveVideoUrl moved to src/core/asset-urls.ts (#322) so
+// game-elements can use them without importing from the game layer. Re-exported
+// here for the game-layer call sites that already reference them.
+export { resolveAssetUrl, resolveVideoUrl } from '../core/asset-urls'
 
 /**
  * Convert hex color string to Babylon Color3.

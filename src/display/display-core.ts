@@ -29,7 +29,7 @@ import { DisplayLcdOverlayLayer } from './display-lcd-overlay'
 import { DisplayStateMachine } from './display-state-machine'
 import { BackboxBorderGlow } from './display-border-glow'
 import type { CRTEffectParams } from './display-types'
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import type { EffectsSystem } from '../effects/effects-core'
 import { DisplayOverlay } from './display-overlay'
 

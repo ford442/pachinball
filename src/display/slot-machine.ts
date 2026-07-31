@@ -11,7 +11,7 @@
 
 import { DisplayState } from '../game-elements/display-config'
 import { SLOT_MACHINE_CONFIG } from '../config'
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import { DisplayReelsLayer, type SpinOptions } from './display-reels'
 import {
   SlotSymbol,
