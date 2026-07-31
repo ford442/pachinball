@@ -97,7 +97,6 @@ export class FresnelRimMaterialPlugin extends MaterialPluginBase {
 
     if (shaderLanguage === ShaderLanguage.WGSL) {
       return {
-        // eslint-disable-next-line @typescript-eslint/naming-convention
         CUSTOM_FRAGMENT_BEFORE_FINALCOLORCOMPOSITION: `
 #ifdef FRESNEL_RIM
 {
@@ -111,7 +110,6 @@ export class FresnelRimMaterialPlugin extends MaterialPluginBase {
 
     // GLSL (WebGL) — `saturate` is defined as clamp(x,0,1) in helperFunctions.glsl
     return {
-      // eslint-disable-next-line @typescript-eslint/naming-convention
       CUSTOM_FRAGMENT_BEFORE_FINALCOLORCOMPOSITION: `
 #ifdef FRESNEL_RIM
 {
