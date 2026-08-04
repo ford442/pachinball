@@ -152,10 +152,19 @@ export class GameRenderer {
     const reducedMotion = accessibility?.reducedMotion ?? GameConfig.camera.reducedMotion
     const effectIntensity = accessibility?.effectIntensity ?? 1.0
 
-    const bloom = new DefaultRenderingPipeline('pachinbloom', true, scene, [tableCam])
+    this._postProcessProfile = resolveWebGPUPostProcessProfile(this.host.engine)
+    if (this._postProcessProfile.tier === 'none') {
+      console.warn(
+        `[GameRenderer] WebGPU post-process disabled (${this._postProcessProfile.reason})`,
+      )
+      this.host.postProcessDegraded = true
+      return
+    }
+
+    // Defer pipeline build until profile toggles are applied (image-processing off on strict adapters).
+    const bloom = new DefaultRenderingPipeline('pachinbloom', true, scene, [tableCam], false)
     this.host.bloomPipeline = bloom
 
-    this._postProcessProfile = resolveWebGPUPostProcessProfile(this.host.engine)
     applyBloomPipelineProfile(bloom, this._postProcessProfile, reducedMotion)
     if (this._postProcessProfile.tier !== 'full') {
       this.host.postProcessDegraded = true
@@ -172,19 +181,23 @@ export class GameRenderer {
     bloom.bloomScale = 0.5
     bloom.bloomWeight = baseWeight * effectIntensity * INTENSITY.ACTIVE
     bloom.bloomThreshold = 0.75
-    bloom.imageProcessing.toneMappingEnabled = true
-    bloom.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES
-    bloom.imageProcessing.contrast = 1.1
-    bloom.imageProcessing.exposure = 1.0
-    bloom.imageProcessing.vignetteWeight = 0.4
-    bloom.imageProcessing.vignetteColor = new Color4(0, 0, 0, 0)
-    if (bloom.imageProcessing.colorCurvesEnabled && bloom.imageProcessing.colorCurves) {
-      bloom.imageProcessing.colorCurves.globalHue = 5
-      bloom.imageProcessing.colorCurves.globalSaturation = 15
+    if (bloom.imageProcessingEnabled && bloom.imageProcessing) {
+      bloom.imageProcessing.toneMappingEnabled = true
+      bloom.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES
+      bloom.imageProcessing.contrast = 1.1
+      bloom.imageProcessing.exposure = 1.0
+      bloom.imageProcessing.vignetteWeight = 0.4
+      bloom.imageProcessing.vignetteColor = new Color4(0, 0, 0, 0)
+      if (bloom.imageProcessing.colorCurvesEnabled && bloom.imageProcessing.colorCurves) {
+        bloom.imageProcessing.colorCurves.globalHue = 5
+        bloom.imageProcessing.colorCurves.globalSaturation = 15
+      }
     }
     if (bloom.sharpenEnabled) {
       bloom.sharpen.edgeAmount = 0.3
     }
+
+    bloom.prepare()
 
     if (qualityTier === QualityTier.LOW) {
       bloom.bloomKernel = 16
@@ -288,6 +301,9 @@ export class GameRenderer {
 
     const profile = this._postProcessProfile ?? resolveWebGPUPostProcessProfile(this.host.engine)
     applyBloomPipelineProfile(bloomPipeline, profile, reducedMotion)
+    if (profile.tier !== 'full') {
+      bloomPipeline.prepare()
+    }
 
     if (tier === QualityTier.LOW) {
       bloomPipeline.bloomKernel = 16
@@ -404,7 +420,7 @@ export class GameRenderer {
 
       const currentTier = this._postProcessProfile?.tier ?? 'full'
       const nextTier = downgradePostProcessTier(currentTier)
-      if (!nextTier || !this.host.bloomPipeline) return
+      if (!nextTier) return
 
       console.warn(
         `[GameRenderer] WebGPU uniform-buffer overflow — downgrading post-process ${currentTier} → ${nextTier}`,
@@ -414,9 +430,19 @@ export class GameRenderer {
         tier: nextTier,
         reason: `runtime validation: ${message}`,
       }
+      this.host.postProcessDegraded = true
+
+      if (nextTier === 'none') {
+        this.host.bloomPipeline?.dispose()
+        this.host.bloomPipeline = null
+        return
+      }
+
+      if (!this.host.bloomPipeline) return
+
       const reducedMotion = this.host.accessibility?.reducedMotion ?? GameConfig.camera.reducedMotion
       applyBloomPipelineProfile(this.host.bloomPipeline, this._postProcessProfile, reducedMotion)
-      this.host.postProcessDegraded = true
+      this.host.bloomPipeline.prepare()
     }
 
     device.addEventListener('uncapturederror', this._webgpuErrorListener)

@@ -2,8 +2,9 @@
  * Renderer selection for WebGPU vs WebGL2 fallback.
  *
  * Pachinball is built on Babylon.js, which already abstracts WebGPU/WebGL
- * behind `EngineFactory.CreateAsync`. This module only decides *which*
- * backend that factory should attempt, and exposes the result for
+ * Babylon's WebGPUEngine / Engine constructors. This module decides which backend
+ * to instantiate. EngineFactory.CreateAsync always prefers WebGPU when available
+ * and cannot be used to force WebGL2.
  * Playwright / debugging.
  *
  * Priority (first match wins):

@@ -38,11 +38,11 @@ describe('webgpu-post-process-profile', () => {
     )
   })
 
-  it('selects conservative tier when adapter cap is below full pipeline estimate', () => {
+  it('selects bloom-only tier when adapter cap is below full pipeline estimate', () => {
     const profile = resolveWebGPUPostProcessProfile(
       mockEngine('WebGPUEngine', { maxUniformBuffersPerShaderStage: 12 }) as never,
     )
-    expect(profile.tier).toBe('conservative')
+    expect(profile.tier).toBe('bloom-only')
     expect(profile.isWebGPU).toBe(true)
   })
 
@@ -52,16 +52,24 @@ describe('webgpu-post-process-profile', () => {
     expect(profile.isWebGPU).toBe(false)
   })
 
-  it('conservative tier disables optional image-processing features', () => {
-    const toggles = bloomPipelineTogglesForTier('conservative', false)
+  it('bloom-only tier disables image processing and optional features', () => {
+    const toggles = bloomPipelineTogglesForTier('bloom-only', false)
+    expect(toggles.imageProcessingEnabled).toBe(false)
     expect(toggles.fxaaEnabled).toBe(false)
     expect(toggles.sharpenEnabled).toBe(false)
     expect(toggles.vignetteEnabled).toBe(false)
     expect(toggles.colorCurvesEnabled).toBe(false)
   })
 
+  it('conservative tier matches bloom-only (image-processing pass must be skipped)', () => {
+    const toggles = bloomPipelineTogglesForTier('conservative', false)
+    expect(toggles.imageProcessingEnabled).toBe(false)
+    expect(toggles.fxaaEnabled).toBe(false)
+  })
+
   it('full tier keeps cinematic features when motion is allowed', () => {
     const toggles = bloomPipelineTogglesForTier('full', false)
+    expect(toggles.imageProcessingEnabled).toBe(true)
     expect(toggles.fxaaEnabled).toBe(true)
     expect(toggles.sharpenEnabled).toBe(true)
     expect(toggles.vignetteEnabled).toBe(true)
@@ -76,13 +84,15 @@ describe('webgpu-post-process-profile', () => {
   })
 
   it('downgrades tiers in order', () => {
-    expect(downgradePostProcessTier('full')).toBe('conservative')
+    expect(downgradePostProcessTier('full')).toBe('bloom-only')
     expect(downgradePostProcessTier('conservative')).toBe('bloom-only')
-    expect(downgradePostProcessTier('bloom-only')).toBeNull()
+    expect(downgradePostProcessTier('bloom-only')).toBe('none')
+    expect(downgradePostProcessTier('none')).toBeNull()
   })
 
   it('applyBloomPipelineProfile toggles pipeline flags', () => {
     const bloom = {
+      imageProcessingEnabled: true,
       fxaaEnabled: true,
       sharpenEnabled: true,
       chromaticAberrationEnabled: true,
@@ -97,12 +107,13 @@ describe('webgpu-post-process-profile', () => {
     const profile: WebGPUPostProcessProfile = {
       isWebGPU: true,
       maxUniformBuffersPerStage: 12,
-      tier: 'conservative',
+      tier: 'bloom-only',
       reason: 'test',
     }
 
     applyBloomPipelineProfile(bloom as never, profile, false)
 
+    expect(bloom.imageProcessingEnabled).toBe(false)
     expect(bloom.fxaaEnabled).toBe(false)
     expect(bloom.sharpenEnabled).toBe(false)
     expect(bloom.imageProcessing.vignetteEnabled).toBe(false)
