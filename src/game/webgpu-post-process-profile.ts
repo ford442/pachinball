@@ -14,11 +14,11 @@ export const WEBGPU_DEFAULT_MAX_UNIFORM_BUFFERS_PER_STAGE = 12
 /**
  * Estimated uniform buffers for the full DefaultRenderingPipeline image-processing
  * vertex stage (bloom + FXAA + sharpen + tone-map + vignette + color curves).
- * Adapters capped at 12 need the conservative profile below.
+ * Adapters capped at 12 need the bloom-only profile below (no image-processing pass).
  */
 export const FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE = 17
 
-export type WebGPUPostProcessTier = 'full' | 'conservative' | 'bloom-only'
+export type WebGPUPostProcessTier = 'full' | 'conservative' | 'bloom-only' | 'none'
 
 export interface WebGPUPostProcessProfile {
   readonly isWebGPU: boolean
@@ -28,6 +28,7 @@ export interface WebGPUPostProcessProfile {
 }
 
 export interface BloomPipelineToggles {
+  imageProcessingEnabled: boolean
   fxaaEnabled: boolean
   sharpenEnabled: boolean
   vignetteEnabled: boolean
@@ -90,8 +91,8 @@ export function resolveWebGPUPostProcessProfile(
     return {
       isWebGPU: true,
       maxUniformBuffersPerStage,
-      tier: 'conservative',
-      reason: `adapter maxUniformBuffersPerShaderStage=${maxUniformBuffersPerStage} < estimated full pipeline (${FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE})`,
+      tier: 'bloom-only',
+      reason: `adapter maxUniformBuffersPerShaderStage=${maxUniformBuffersPerStage} < estimated full pipeline (${FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE}) — image-processing pass disabled`,
     }
   }
 
@@ -108,8 +109,9 @@ export function bloomPipelineTogglesForTier(
   tier: WebGPUPostProcessTier,
   reducedMotion: boolean,
 ): BloomPipelineToggles {
-  if (tier === 'bloom-only') {
+  if (tier === 'none') {
     return {
+      imageProcessingEnabled: false,
       fxaaEnabled: false,
       sharpenEnabled: false,
       vignetteEnabled: false,
@@ -119,8 +121,11 @@ export function bloomPipelineTogglesForTier(
     }
   }
 
-  if (tier === 'conservative') {
+  if (tier === 'bloom-only' || tier === 'conservative') {
+    // Image-processing vertex shaders bind all features regardless of toggles;
+    // strict adapters must skip the pass entirely.
     return {
+      imageProcessingEnabled: false,
       fxaaEnabled: false,
       sharpenEnabled: false,
       vignetteEnabled: false,
@@ -131,6 +136,7 @@ export function bloomPipelineTogglesForTier(
   }
 
   return {
+    imageProcessingEnabled: true,
     fxaaEnabled: true,
     sharpenEnabled: !reducedMotion,
     vignetteEnabled: !reducedMotion,
@@ -147,15 +153,18 @@ export function applyBloomPipelineProfile(
 ): void {
   const toggles = bloomPipelineTogglesForTier(profile.tier, reducedMotion)
 
+  bloom.imageProcessingEnabled = toggles.imageProcessingEnabled
   bloom.fxaaEnabled = toggles.fxaaEnabled
   bloom.sharpenEnabled = toggles.sharpenEnabled
   bloom.chromaticAberrationEnabled = toggles.chromaticAberrationEnabled
   bloom.grainEnabled = toggles.grainEnabled
 
-  bloom.imageProcessing.vignetteEnabled = toggles.vignetteEnabled
-  bloom.imageProcessing.colorCurvesEnabled = toggles.colorCurvesEnabled
-  if (!toggles.colorCurvesEnabled) {
-    bloom.imageProcessing.colorGradingEnabled = false
+  if (bloom.imageProcessing) {
+    bloom.imageProcessing.vignetteEnabled = toggles.vignetteEnabled
+    bloom.imageProcessing.colorCurvesEnabled = toggles.colorCurvesEnabled
+    if (!toggles.colorCurvesEnabled) {
+      bloom.imageProcessing.colorGradingEnabled = false
+    }
   }
 }
 
@@ -167,7 +176,8 @@ export function isUniformBufferLimitError(message: string): boolean {
 
 /** Downgrade tier after a runtime WebGPU validation failure. */
 export function downgradePostProcessTier(current: WebGPUPostProcessTier): WebGPUPostProcessTier | null {
-  if (current === 'full') return 'conservative'
+  if (current === 'full') return 'bloom-only'
   if (current === 'conservative') return 'bloom-only'
+  if (current === 'bloom-only') return 'none'
   return null
 }
