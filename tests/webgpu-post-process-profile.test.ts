@@ -6,6 +6,7 @@ import {
   bloomPipelineTogglesForTier,
   downgradePostProcessTier,
   isUniformBufferLimitError,
+  isWebGPUAdapterStrictForPostProcess,
   isWebGPUEngine,
   readMaxUniformBuffersPerStage,
   resolveWebGPUPostProcessProfile,
@@ -38,11 +39,11 @@ describe('webgpu-post-process-profile', () => {
     )
   })
 
-  it('selects bloom-only tier when adapter cap is below full pipeline estimate', () => {
+  it('selects none tier when adapter cap is below pipeline minimum', () => {
     const profile = resolveWebGPUPostProcessProfile(
       mockEngine('WebGPUEngine', { maxUniformBuffersPerShaderStage: 12 }) as never,
     )
-    expect(profile.tier).toBe('bloom-only')
+    expect(profile.tier).toBe('none')
     expect(profile.isWebGPU).toBe(true)
   })
 
@@ -83,9 +84,9 @@ describe('webgpu-post-process-profile', () => {
     expect(isUniformBufferLimitError('something else')).toBe(false)
   })
 
-  it('downgrades tiers in order', () => {
-    expect(downgradePostProcessTier('full')).toBe('bloom-only')
-    expect(downgradePostProcessTier('conservative')).toBe('bloom-only')
+  it('downgrades tiers to none', () => {
+    expect(downgradePostProcessTier('full')).toBe('none')
+    expect(downgradePostProcessTier('conservative')).toBe('none')
     expect(downgradePostProcessTier('bloom-only')).toBe('none')
     expect(downgradePostProcessTier('none')).toBeNull()
   })
@@ -119,6 +120,20 @@ describe('webgpu-post-process-profile', () => {
     expect(bloom.imageProcessing.vignetteEnabled).toBe(false)
     expect(bloom.imageProcessing.colorCurvesEnabled).toBe(false)
     expect(bloom.imageProcessing.colorGradingEnabled).toBe(false)
+  })
+
+  it('detects strict WebGPU adapters that cannot run DefaultRenderingPipeline', () => {
+    expect(
+      isWebGPUAdapterStrictForPostProcess(
+        mockEngine('WebGPUEngine', { maxUniformBuffersPerShaderStage: 12 }) as never,
+      ),
+    ).toBe(true)
+    expect(
+      isWebGPUAdapterStrictForPostProcess(
+        mockEngine('WebGPUEngine', { maxUniformBuffersPerShaderStage: 24 }) as never,
+      ),
+    ).toBe(false)
+    expect(isWebGPUAdapterStrictForPostProcess(mockEngine('Engine') as never)).toBe(false)
   })
 
   it('documents the full-pipeline uniform-buffer estimate used for tier selection', () => {

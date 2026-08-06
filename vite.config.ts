@@ -13,18 +13,11 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: [
         'vite.svg',
-        'reel.png',
         'icons/icon.svg',
         'icons/icon-192.png',
         'icons/icon-512.png',
-        'textures/environment.env',
-        'assets/particle.png',
-        'assets/shard.png',
-        'assets/backbox/splash1.png',
-        'assets/backbox/splash2.png',
         'backbox/attract.png',
         'audio/*.ogg',
-        'wasm/**/*',
       ],
       manifest: {
         name: 'Nexus Cascade',
