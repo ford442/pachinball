@@ -54,6 +54,7 @@ export default defineConfig({
       workbox: {
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api\//],
+        cleanupOutdatedCaches: true,
         // Main bundle + Rapier WASM chunk exceed Workbox's 2 MiB default
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         globPatterns: [

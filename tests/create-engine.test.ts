@@ -13,8 +13,8 @@ describe('create-engine', () => {
     expect(resolveEngineCreationPlan(RENDERER_WEBGPU, false)).toBe('webgpu')
   })
 
-  it('defaults to WebGL2 for auto and when WebGPU is supported', () => {
-    expect(resolveEngineCreationPlan(RENDERER_AUTO, true)).toBe('webgl2')
+  it('defaults to WebGPU when auto preference and WebGPU is supported', () => {
+    expect(resolveEngineCreationPlan(RENDERER_AUTO, true)).toBe('webgpu')
     expect(resolveEngineCreationPlan(RENDERER_AUTO, false)).toBe('webgl2')
     expect(resolveEngineCreationPlan(RENDERER_WEBGL2, true)).toBe('webgl2')
   })

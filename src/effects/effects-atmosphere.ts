@@ -1,6 +1,6 @@
 import { Color3, Color4, PointLight, Scene, Vector3 } from '@babylonjs/core'
 import type { DirectionalLight } from '@babylonjs/core'
-import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
+import type { BloomPipelineController } from './bloom-pipeline-types'
 import { GameConfig } from '../config'
 import type { AccessibilityConfig } from '../game-elements/accessibility-config'
 import type { TrackThemeProfile } from '../game-elements/track-theme-profiles'
@@ -9,7 +9,7 @@ import { TrackAmbientEffects } from './track-ambient-effects'
 
 export class AtmosphereController {
   private scene: Scene
-  private bloomPipeline: DefaultRenderingPipeline | null
+  private bloomPipeline: BloomPipelineController | null
   private trackAmbientEffects: TrackAmbientEffects
   private accessibility: AccessibilityConfig
 
@@ -33,7 +33,7 @@ export class AtmosphereController {
 
   constructor(
     scene: Scene,
-    bloomPipeline: DefaultRenderingPipeline | null,
+    bloomPipeline: BloomPipelineController | null,
     trackAmbientEffects: TrackAmbientEffects,
     accessibility: AccessibilityConfig
   ) {
@@ -43,7 +43,7 @@ export class AtmosphereController {
     this.accessibility = accessibility
   }
 
-  setBloomPipeline(pipeline: DefaultRenderingPipeline | null): void {
+  setBloomPipeline(pipeline: BloomPipelineController | null): void {
     this.bloomPipeline = pipeline
   }
 

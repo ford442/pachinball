@@ -11,7 +11,7 @@
  *   1. URL param    ?renderer=webgpu|webgl2
  *   2. global       window.DEBUG_RENDERER = 'webgpu' | 'webgl2'
  *   3. localStorage pachinball-renderer
- *   4. default      WebGL2 (stable; use the menu button to opt into WebGPU)
+ *   4. default      WebGPU-first auto (WebGL2 fallback on init failure)
  *
  * WebGL2 -> WebGPU porting notes:
  *   - `ShaderMaterial` with WGSL (display-shader.ts) needs a GLSL/canvas
@@ -54,13 +54,14 @@ export function getRendererPreference(): RendererPreference {
 
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored === RENDERER_AUTO) return RENDERER_WEBGL2
-    if (stored === RENDERER_WEBGL2 || stored === RENDERER_WEBGPU) return stored
+    if (stored === RENDERER_WEBGL2 || stored === RENDERER_WEBGPU || stored === RENDERER_AUTO) {
+      return stored
+    }
   } catch {
     // Private browsing / storage disabled — ignore.
   }
 
-  return RENDERER_WEBGL2
+  return RENDERER_AUTO
 }
 
 /**

@@ -91,8 +91,8 @@ export function resolveWebGPUPostProcessProfile(
     return {
       isWebGPU: true,
       maxUniformBuffersPerStage,
-      tier: 'none',
-      reason: `adapter maxUniformBuffersPerShaderStage=${maxUniformBuffersPerStage} < estimated pipeline minimum (${FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE}) — post-process disabled`,
+      tier: 'bloom-only',
+      reason: `adapter maxUniformBuffersPerShaderStage=${maxUniformBuffersPerStage} < estimated DefaultRenderingPipeline minimum (${FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE}) — using standalone BloomEffect`,
     }
   }
 

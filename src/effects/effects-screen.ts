@@ -8,7 +8,7 @@ import {
   TargetCamera,
   Vector3,
 } from '@babylonjs/core'
-import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
+import type { BloomPipelineController } from './bloom-pipeline-types'
 import { EffectsConfig } from '../config'
 import { DEFAULT_ACCESSIBILITY, type AccessibilityConfig } from '../game-elements/accessibility-config'
 import { PALETTE } from '../game-elements/visual-language'
@@ -18,14 +18,14 @@ type LightingMode = 'normal' | 'hit' | 'fever' | 'reach'
 
 interface ScreenEffectsControllerOptions {
   scene: Scene
-  bloomPipeline: DefaultRenderingPipeline | null
+  bloomPipeline: BloomPipelineController | null
   accessibility: AccessibilityConfig
   isEnhancedEffectsEnabled: () => boolean
 }
 
 export class ScreenEffectsController {
   private scene: Scene
-  private bloomPipeline: DefaultRenderingPipeline | null
+  private bloomPipeline: BloomPipelineController | null
   private accessibility: AccessibilityConfig
   private isEnhancedEffectsEnabled: () => boolean
 
@@ -88,7 +88,7 @@ export class ScreenEffectsController {
     this.isEnhancedEffectsEnabled = options.isEnhancedEffectsEnabled
   }
 
-  setBloomPipeline(pipeline: DefaultRenderingPipeline | null): void {
+  setBloomPipeline(pipeline: BloomPipelineController | null): void {
     this.bloomPipeline = pipeline
   }
 

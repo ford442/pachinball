@@ -1,5 +1,5 @@
 import { Scene } from '@babylonjs/core'
-import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
+import type { BloomPipelineController } from './bloom-pipeline-types'
 import { EffectsConfig } from '../config'
 import type { ParticleEffects } from './effects-particles'
 
@@ -7,7 +7,7 @@ export type RuntimePerformanceTier = 'high' | 'medium' | 'low'
 
 export class RuntimePerformanceController {
   private scene: Scene
-  private bloomPipeline: DefaultRenderingPipeline | null
+  private bloomPipeline: BloomPipelineController | null
   private particleEffects: ParticleEffects
 
   // Runtime adaptive tiering
@@ -17,7 +17,7 @@ export class RuntimePerformanceController {
 
   constructor(
     scene: Scene,
-    bloomPipeline: DefaultRenderingPipeline | null,
+    bloomPipeline: BloomPipelineController | null,
     particleEffects: ParticleEffects
   ) {
     this.scene = scene
@@ -25,7 +25,7 @@ export class RuntimePerformanceController {
     this.particleEffects = particleEffects
   }
 
-  setBloomPipeline(pipeline: DefaultRenderingPipeline | null): void {
+  setBloomPipeline(pipeline: BloomPipelineController | null): void {
     this.bloomPipeline = pipeline
     this.applyPerformanceTier()
   }
