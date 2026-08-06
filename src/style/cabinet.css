@@ -1,0 +1,70 @@
+/* CABINET CONTAINER */
+#game-cabinet {
+  position: relative;
+  width: var(--cabinet-width);
+  height: var(--cabinet-height);
+  background: #000;                     /* glass‑like interior */
+  border: 4px solid #333;               /* outer bezel */
+  border-radius: 10px;
+  box-shadow: 
+    0 0 50px rgba(0, 217, 255, 0.1),
+    0 20px 60px rgba(0,0,0,0.5);        /* floor shadow */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transform-style: preserve-3d;
+}
+
+/* CANVAS – fills the whole cabinet, sits *behind* UI layers */
+#pachinball-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;               /* behind everything */
+  
+  box-sizing: border-box;
+  outline: none;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* UI OVERLAYS – transparent so the canvas shows through */
+#machine-head,
+#ball-table {
+  position: relative;
+  width: 100%;
+  background: transparent;   /* crucial – do NOT hide canvas */
+  pointer-events: none;      /* let mouse events fall through to canvas */
+  z-index: 10;
+}
+
+/* Machine-head mask - subtle bottom fade to prevent playfield bleed */
+#machine-head::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 80%,
+    rgba(5, 5, 8, 0.5) 100%
+  );
+  pointer-events: none;
+  z-index: 11;
+}
+
+/* Height split – matches the viewport split set in code */
+#machine-head { height: calc(100% * var(--split-perc)); }
+#ball-table   { height: calc(100% * (1 - var(--split-perc))); }
+
+/* BEZEL / DIVIDER – opaque "physical" separator */
+#cabinet-divider {
+  height: var(--bezel-height);
+  background: #222;
+  border-top: 2px solid #444;
+  border-bottom: 2px solid #111;
+  z-index: 20;
+}

@@ -1,0 +1,284 @@
+/* ========================================================================
+   MAP SELECTOR - Floating LCD-style panel
+   ======================================================================== */
+
+#map-selector {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 10px;
+  background: rgba(0, 10, 20, 0.75);
+  border: 1px solid rgba(0, 217, 255, 0.35);
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+  z-index: 50;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 4px 20px rgba(0, 0, 0, 0.4),
+    inset 0 0 20px rgba(0, 217, 255, 0.05);
+  /* Scanline overlay */
+  overflow: hidden;
+}
+
+#map-selector::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15) 0px,
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.6;
+}
+
+.map-hint {
+  grid-column: span 4;
+  text-align: center;
+  font-size: 0.55rem;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  padding-bottom: 4px;
+  pointer-events: none;
+}
+
+.map-btn {
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 217, 255, 0.25);
+  border-radius: 3px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
+  position: relative;
+  /* Subpixel RGB phosphor simulation */
+  text-shadow:
+    -0.5px 0 0 rgba(255, 0, 0, 0.35),
+    0.5px 0 0 rgba(0, 255, 0, 0.35),
+    0 0 2px rgba(0, 100, 255, 0.4);
+}
+
+.map-btn:hover {
+  background: rgba(0, 217, 255, 0.15);
+  border-color: rgba(0, 217, 255, 0.7);
+  color: #fff;
+  box-shadow:
+    0 0 12px rgba(0, 217, 255, 0.35),
+    inset 0 0 12px rgba(0, 217, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+.map-btn:active {
+  transform: scale(0.92);
+  transition: transform 0.05s ease;
+}
+
+/* Active map - intense phosphor glow */
+.map-btn.active {
+  color: #000;
+  background: var(--map-accent, #00d9ff);
+  border-color: var(--map-accent, #00d9ff);
+  text-shadow: none;
+  box-shadow:
+    0 0 15px var(--map-accent, #00d9ff),
+    0 0 30px var(--map-accent, #00d9ff),
+    0 0 45px var(--map-accent, #00d9ff),
+    inset 0 0 12px rgba(255, 255, 255, 0.5);
+  animation: activeMapPulse 2s ease-in-out infinite;
+}
+
+@keyframes activeMapPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 15px var(--map-accent, #00d9ff),
+      0 0 30px var(--map-accent, #00d9ff),
+      0 0 45px var(--map-accent, #00d9ff),
+      inset 0 0 12px rgba(255, 255, 255, 0.5);
+  }
+  50% {
+    box-shadow:
+      0 0 20px var(--map-accent, #00d9ff),
+      0 0 40px var(--map-accent, #00d9ff),
+      0 0 60px var(--map-accent, #00d9ff),
+      inset 0 0 15px rgba(255, 255, 255, 0.6);
+  }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 480px) {
+  #map-selector {
+    bottom: 10px;
+    right: 10px;
+    padding: 8px;
+    gap: 5px;
+  }
+  .map-btn {
+    width: 28px;
+    height: 26px;
+    font-size: 0.65rem;
+  }
+  .map-hint {
+    font-size: 0.5rem;
+  }
+  #cabinet-selector {
+    bottom: 10px;
+    left: 10px;
+    padding: 8px;
+  }
+  .cabinet-btn {
+    padding: 6px 10px;
+    font-size: 0.65rem;
+  }
+}
+
+/* Cabinet Selector */
+#cabinet-selector {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  z-index: 50;
+}
+
+.cabinet-hint {
+  text-align: center;
+  font-size: 0.55rem;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  padding-bottom: 4px;
+  pointer-events: none;
+}
+
+.cabinet-btn {
+  padding: 8px 14px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.cabinet-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+  transform: translateX(2px);
+}
+
+.cabinet-btn:active {
+  transform: scale(0.95);
+  transition: transform 0.05s ease;
+}
+
+/* Active cabinet */
+.cabinet-btn.active {
+  color: #000;
+  background: #fff;
+  border-color: #fff;
+  box-shadow:
+    0 0 10px rgba(255, 255, 255, 0.5),
+    0 0 20px rgba(255, 255, 255, 0.3),
+    inset 0 0 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Levels Selector */
+#levels-selector {
+  position: absolute;
+  bottom: 20px;
+  left: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(0, 217, 255, 0.3);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  z-index: 50;
+}
+
+.levels-hint {
+  text-align: center;
+  font-size: 0.55rem;
+  letter-spacing: 2px;
+  color: rgba(0, 217, 255, 0.7);
+  text-transform: uppercase;
+  padding-bottom: 4px;
+  pointer-events: none;
+}
+
+.levels-btn {
+  padding: 8px 14px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: rgba(0, 217, 255, 0.9);
+  background: rgba(0, 217, 255, 0.1);
+  border: 1px solid rgba(0, 217, 255, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.levels-btn:hover {
+  background: rgba(0, 217, 255, 0.2);
+  border-color: rgba(0, 217, 255, 0.6);
+  color: #00d9ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 217, 255, 0.3);
+}
+
+.levels-btn:active {
+  transform: scale(0.95);
+  transition: transform 0.05s ease;
+}
+
+/* Mobile responsive for levels selector */
+@media (max-width: 768px) {
+  #levels-selector {
+    bottom: 10px;
+    left: 110px;
+    padding: 6px;
+  }
+  .levels-btn {
+    padding: 6px 10px;
+    font-size: 0.65rem;
+  }
+}
