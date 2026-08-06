@@ -1,0 +1,68 @@
+
+:root {
+  /* Cabinet sizing – 1:1.1 aspect ratio for immersive 3D view */
+  --cabinet-size: min(85vh, 85vw);  /* square-ish container */
+  --cabinet-width: var(--cabinet-size);
+  --cabinet-height: calc(var(--cabinet-size) * 1.1);
+  --split-perc: 0.4;          /* top screen = 40% of height */
+  --bezel-height: 12px;       /* visual separator thickness */
+  
+  /* Safe area insets for mobile devices */
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --touch-controls-height: 140px;
+}
+
+/* Body – dark "arcade room" with floor/wall gradient */
+body {
+  margin: 0;
+  background: 
+    linear-gradient(180deg, 
+      #0a0a12 0%, 
+      #151520 40%, 
+      #0d0d15 70%,
+      #050508 100%
+    );
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Orbitron', sans-serif;
+  color: #00d9ff;
+  perspective: 1000px;
+}
+
+/* Room floor effect */
+body::before {
+  content: '';
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: 
+    linear-gradient(0deg, 
+      rgba(0,20,40,0.4) 0%, 
+      transparent 100%
+    );
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Ambient glow behind machine */
+body::after {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120vh;
+  height: 120vh;
+  background: radial-gradient(circle, 
+    rgba(0,100,150,0.08) 0%, 
+    rgba(0,50,80,0.03) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: -1;
+}

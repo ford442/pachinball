@@ -1,0 +1,110 @@
+/* HUD – simple overlay that lives on top of the canvas */
+#hud {
+  position: absolute;
+  top: calc(100% * var(--split-perc) + var(--bezel-height) + 8px);
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.hud-item {
+  padding: 4px 8px;
+  background: rgba(0, 20, 40, 0.5);
+  border-left: 3px solid #00d9ff;
+  color: #00d9ff;
+  font-size: 0.9rem;
+  text-shadow: 0 0 5px rgba(0,217,255,.6);
+  backdrop-filter: blur(4px);
+}
+.hud-item span { color: #fff; }
+
+/* Combo/Tilt Specifics */
+#combo { border-left-color: #ff0055; color: #ff0055; }
+#tilt { border-left-color: #ff2200; color: #ff2200; animation: tiltBlink 0.2s infinite alternate; }
+@keyframes tiltBlink { from { opacity: 0.8; } to { opacity: 1; text-shadow: 0 0 15px red; } }
+
+/* OVERLAY MENUS */
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  z-index: 30;
+}
+.hidden { display: none !important; }
+
+h1 {
+  font-size: 3rem;
+  color: transparent;
+  -webkit-text-stroke: 1px #00d9ff;
+  font-style: italic;
+  margin-bottom: 1rem;
+}
+.screen {
+  background: rgba(0,20,30,.9);
+  border: 2px solid #00d9ff;
+  padding: 2rem;
+  text-align: center;
+  min-width: 280px;
+}
+
+.daily-cascade-panel {
+  margin: 0.75rem 0 0.25rem;
+  text-align: left;
+}
+.daily-cascade-panel .setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+.daily-cascade-panel select {
+  font-family: inherit;
+  background: #001018;
+  color: #00d9ff;
+  border: 1px solid #00d9ff;
+  padding: 0.25rem 0.5rem;
+}
+.cascade-seed-label {
+  font-size: 0.8rem;
+  opacity: 0.85;
+  margin-bottom: 0.35rem !important;
+  font-variant-numeric: tabular-nums;
+}
+#cascade-randomize-btn {
+  margin-top: 0.25rem;
+  padding: 6px 16px;
+  font-size: 0.75rem;
+}
+#cascade-randomize-btn.hidden {
+  display: none;
+}
+
+h2 { color: #ff0055; margin-bottom: 1rem; }
+p { margin-bottom: 1rem; opacity: 0.9; }
+
+button {
+  margin-top: 1rem;
+  padding: 10px 30px;
+  background: transparent;
+  border: 2px solid #00d9ff;
+  color: #00d9ff;
+  font-family: 'Orbitron';
+  cursor: pointer;
+  text-transform: uppercase;
+  font-weight: 700;
+  transition: all 0.2s;
+}
+button:hover {
+  background: #00d9ff;
+  color: #000;
+  box-shadow: 0 0 20px rgba(0, 217, 255, 0.4);
+}
