@@ -12,15 +12,23 @@ enum class BodyType : uint8_t {
   Kinematic = 2 ///< Moved programmatically; does not respond to forces.
 };
 
+/** Identifies the collision shape a RigidBody presents. */
+enum class Shape : uint8_t {
+  Sphere  = 0, ///< Bounding sphere of `radius` (the original/default shape).
+  Capsule = 1  ///< Capsule of `radius` and `capsuleHalfHeight`, segment along local +Y.
+};
+
 /** Descriptor passed to PhysicsWorld::createRigidBody(). */
 struct RigidBodyDesc {
   Vec3      position       = Vec3::zero();
   Vec3      velocity       = Vec3::zero();
   float     mass           = 1.f;    ///< kg (ignored for Static/Kinematic)
-  float     radius         = 0.1f;   ///< Bounding sphere radius (metres)
+  float     radius         = 0.1f;   ///< Bounding sphere radius, or capsule radius (metres)
   float     restitution    = 0.4f;   ///< Coefficient of restitution (0–1)
   float     linearDamping  = 0.02f;  ///< Linear drag factor
   BodyType  type           = BodyType::Dynamic;
+  Shape     shape          = Shape::Sphere;
+  float     capsuleHalfHeight = 0.5f; ///< Half-length of the capsule segment (ignored for Sphere)
 };
 
 /** Live rigid-body state, managed by PhysicsWorld. */
@@ -35,7 +43,9 @@ public:
 
   // ---- Geometric properties -------------------------------------------
   BodyType getType()    const { return desc_.type; }
+  Shape    getShape()   const { return desc_.shape; }
   float    getRadius()  const { return desc_.radius; }
+  float    getCapsuleHalfHeight() const { return desc_.capsuleHalfHeight; }
   float    getMass()    const { return desc_.mass; }
   float    getInvMass() const {
     return (desc_.type == BodyType::Dynamic && desc_.mass > 0.f)

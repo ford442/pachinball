@@ -43,11 +43,15 @@ export interface WasmBodyDesc {
   position?:       { x: number; y: number; z: number }
   velocity?:       { x: number; y: number; z: number }
   mass?:           number  // kg, default 1
-  radius?:         number  // metres, default 0.1
+  radius?:         number  // metres; sphere radius, or capsule radius, default 0.1
   restitution?:    number  // 0–1, default 0.4
   linearDamping?:  number  // 0–1, default 0.02
   /** 0=Dynamic, 1=Static, 2=Kinematic */
   bodyType?:       0 | 1 | 2
+  /** 'sphere' (default) or 'capsule' — capsule segment runs along local +Y. */
+  shape?:          'sphere' | 'capsule'
+  /** Half-length of the capsule segment (metres). Ignored for sphere shape. */
+  capsuleHalfHeight?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -196,7 +200,9 @@ export class WasmPhysicsEngine {
       desc.radius        ?? 0.1,
       desc.restitution   ?? 0.4,
       desc.linearDamping ?? 0.02,
-      desc.bodyType      ?? 0
+      desc.bodyType      ?? 0,
+      desc.shape === 'capsule' ? 1 : 0,
+      desc.capsuleHalfHeight ?? 0.5
     )
   }
 

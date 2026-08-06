@@ -66,7 +66,8 @@ failed ||= !runScenario('wasm ball-on-box', (w) => {
   w.setGravity(0, -9.81, 0)
   // px,py,pz, hx,hy,hz, qx,qy,qz,qw, restitution (Embind has no C++ defaults)
   w.addStaticBox(0, 0, 0, 2, 0.5, 2, 0, 0, 0, 1, 0.4)
-  w.createRigidBody(0, 2, 0, 0, 0, 0, 1, 0.25, 0.5, 0.02, 0)
+  // px,py,pz, vx,vy,vz, mass,radius,restitution,damping, bodyType, shape, capsuleHalfHeight
+  w.createRigidBody(0, 2, 0, 0, 0, 0, 1, 0.25, 0.5, 0.02, 0, 0, 0.5)
 }, (w) => {
   const y = w.getPosY(0)
   return y > 0.5 && y < 1.2
@@ -76,7 +77,7 @@ failed ||= !runScenario('wasm ball-on-capsule', (w) => {
   w.setGravity(0, -9.81, 0)
   // px,py,pz, radius, halfHeight, qx,qy,qz,qw, restitution
   w.addStaticCapsule(0, 1, 0, 0.4, 0.5, 0, 0, 0, 1, 0.4)
-  w.createRigidBody(0, 3, 0, 0, 0, 0, 1, 0.2, 0.5, 0.02, 0)
+  w.createRigidBody(0, 3, 0, 0, 0, 0, 1, 0.2, 0.5, 0.02, 0, 0, 0.5)
 }, (w) => {
   const y = w.getPosY(0)
   return y > 1.0 && y < 3.5
@@ -85,11 +86,22 @@ failed ||= !runScenario('wasm ball-on-capsule', (w) => {
 failed ||= !runScenario('wasm ball+bumper drop', (w) => {
   w.setGravity(0, -9.81, -5)
   w.addStaticPlane(0, 1, 0, 0)
-  w.createRigidBody(0, 2, 0, 0, 0, 0, 1, 0.25, 0.76, 0.1, 0)
-  w.createRigidBody(0, 0.5, 0, 0, 0, 0, 0, 0.4, 0.94, 0, 1)
+  w.createRigidBody(0, 2, 0, 0, 0, 0, 1, 0.25, 0.76, 0.1, 0, 0, 0.5)
+  w.createRigidBody(0, 0.5, 0, 0, 0, 0, 0, 0.4, 0.94, 0, 1, 0, 0.5)
 }, (w) => {
   const y = w.getPosY(0)
   return y < 2.0 && y > 0.3
+})
+
+failed ||= !runScenario('wasm kinematic capsule flings ball', (w) => {
+  w.setGravity(0, 0, 0)
+  // Kinematic capsule (flipper stand-in) moving at vx=5, id 0.
+  // shape=1 (Capsule), bodyType=2 (Kinematic).
+  w.createRigidBody(0, 1, 0, 5, 0, 0, 0, 0.4, 0.5, 0, 2, 1, 0.5)
+  // Resting ball touching the capsule's surface along +x, id 1.
+  w.createRigidBody(0.58, 1, 0, 0, 0, 0, 1, 0.2, 0.5, 0, 0, 0, 0.5)
+}, (w) => {
+  return w.getVelX(1) > 1.0
 })
 
 process.exit(failed ? 1 : 0)

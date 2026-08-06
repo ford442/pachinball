@@ -201,3 +201,58 @@ TEST_CASE("ball hits capsule", "[physics]") {
   CHECK(pos.y > 1.0f);
   CHECK((near(vel.y, 0.f, 0.5f) || vel.y > 0.f));
 }
+
+TEST_CASE("stationary kinematic capsule supports resting ball", "[physics]") {
+  // Parity check against "ball hits capsule" (static-geometry path) — a
+  // Kinematic capsule RigidBody at rest should support a dropped ball the
+  // same way a static CapsuleDesc does.
+  PhysicsWorld world;
+  world.setGravity(0.f, -9.81f, 0.f);
+
+  world.createRigidBody({
+    {0.f, 1.f, 0.f}, {0.f, 0.f, 0.f},
+    0.f, 0.4f, 0.5f, 0.f, BodyType::Kinematic, Shape::Capsule, 0.5f
+  });
+
+  const int ball = world.createRigidBody({
+    {0.f, 3.f, 0.f}, {0.f, 0.f, 0.f},
+    1.f, 0.2f, 0.5f, 0.02f, BodyType::Dynamic
+  });
+
+  stepFixed(world, 120);
+
+  const Vec3 pos = readPos(world, ball);
+  const Vec3 vel = readVel(world, ball);
+  CHECK(pos.y > 1.0f);
+  CHECK((near(vel.y, 0.f, 0.5f) || vel.y > 0.f));
+}
+
+TEST_CASE("kinematic capsule flings ball", "[physics]") {
+  // A moving Kinematic capsule (e.g. a flipper proxy) must impart its own
+  // velocity onto the ball via the relative-velocity impulse term, unlike
+  // the static-geometry capsule path which only sees the ball's velocity.
+  PhysicsWorld world;
+  world.setGravity(0.f, 0.f, 0.f);
+
+  const int capsule = world.createRigidBody({
+    {0.f, 1.f, 0.f}, {5.f, 0.f, 0.f},
+    0.f, 0.4f, 0.5f, 0.f, BodyType::Kinematic, Shape::Capsule, 0.5f
+  });
+
+  const int ball = world.createRigidBody({
+    {0.58f, 1.f, 0.f}, {0.f, 0.f, 0.f},
+    1.f, 0.2f, 0.5f, 0.f, BodyType::Dynamic
+  });
+
+  stepFixed(world, 5);
+
+  const Vec3 capsulePos = readPos(world, capsule);
+  const Vec3 vel = readVel(world, ball);
+
+  // Kinematic bodies never integrate — position is caller-controlled and
+  // must stay exactly where it was created regardless of its velocity field.
+  CHECK(near(capsulePos.x, 0.f, 1e-5f));
+
+  // The ball must pick up momentum in the capsule's direction of travel.
+  CHECK(vel.x > 1.0f);
+}
