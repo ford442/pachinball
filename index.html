@@ -90,6 +90,9 @@
             <button type="button" id="cascade-randomize-btn" class="hidden">Randomize</button>
           </div>
           <button id="start-btn" disabled title="Loading cabinet…">Start Game</button>
+          <button type="button" id="renderer-toggle-btn" class="secondary-btn">
+            Try WebGPU (experimental)
+          </button>
           <button id="settings-btn">Settings</button>
         </div>
         <div id="game-over-screen" class="screen hidden">
@@ -188,12 +191,11 @@
             <label class="setting-row range-row">
               <span>Renderer</span>
               <select id="renderer-select">
-                <option value="auto">Auto (WebGPU → WebGL2)</option>
-                <option value="webgpu">Force WebGPU</option>
-                <option value="webgl2">Force WebGL2</option>
+                <option value="webgl2">WebGL2 (default)</option>
+                <option value="webgpu">WebGPU (experimental)</option>
               </select>
             </label>
-            <small>Reloads the page. WebGL2 is recommended for visual debugging and automated testing.</small>
+            <small>Reloads the page. WebGL2 is recommended for stability; WebGPU is opt-in.</small>
 
             <label class="setting-row">
               <input type="checkbox" id="debug-wireframe">

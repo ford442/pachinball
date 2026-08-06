@@ -13,11 +13,13 @@ import type { AudioSourceMode } from '../game-elements/audio-sample-bank'
 import { TABLE_MAPS, registerMap } from '../shaders/lcd-table'
 import { PhysicsDebugRenderer } from '../game-elements/physics-debug-renderer'
 import {
+  attemptWebGPURenderer,
+  getActiveRenderer,
   getRendererPreference,
   setRendererPreference,
-  RENDERER_AUTO,
   RENDERER_WEBGPU,
   RENDERER_WEBGL2,
+  useWebGL2Renderer,
   type RendererPreference,
 } from '../renderers/renderer-selector'
 
@@ -79,6 +81,7 @@ export class GameSettingsUI {
 
     this.setupScanlineSliderLiveUpdate()
     this.setupScanlineToggleLiveUpdate()
+    this.setupRendererToggleButton()
     this.setupRendererSelectLiveUpdate()
     this.setupWireframeToggleLiveUpdate()
     this.setupPhysicsDebugToggleLiveUpdate()
@@ -233,6 +236,31 @@ export class GameSettingsUI {
     })
   }
 
+  private setupRendererToggleButton(): void {
+    const btn = document.getElementById('renderer-toggle-btn') as HTMLButtonElement | null
+    if (!btn) return
+
+    const syncLabel = (): void => {
+      const active = getActiveRenderer()
+      if (active === RENDERER_WEBGPU) {
+        btn.textContent = 'Use WebGL2 (recommended)'
+        btn.title = 'Switch back to the stable WebGL2 renderer'
+      } else {
+        btn.textContent = 'Try WebGPU (experimental)'
+        btn.title = 'Reload with the experimental WebGPU renderer'
+      }
+    }
+
+    syncLabel()
+    btn.addEventListener('click', () => {
+      if (getActiveRenderer() === RENDERER_WEBGPU) {
+        useWebGL2Renderer()
+      } else {
+        attemptWebGPURenderer()
+      }
+    })
+  }
+
   private setupRendererSelectLiveUpdate(): void {
     const rendererSelect = document.getElementById('renderer-select') as HTMLSelectElement | null
     if (!rendererSelect) return
@@ -240,7 +268,7 @@ export class GameSettingsUI {
     rendererSelect.addEventListener('change', () => {
       const value = rendererSelect.value
       const preference: RendererPreference =
-        value === RENDERER_WEBGPU || value === RENDERER_WEBGL2 ? value : RENDERER_AUTO
+        value === RENDERER_WEBGPU ? RENDERER_WEBGPU : RENDERER_WEBGL2
       setRendererPreference(preference)
       window.location.reload()
     })

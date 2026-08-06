@@ -13,8 +13,9 @@ describe('create-engine', () => {
     expect(resolveEngineCreationPlan(RENDERER_WEBGPU, false)).toBe('webgpu')
   })
 
-  it('auto prefers WebGPU when supported, otherwise WebGL2', () => {
-    expect(resolveEngineCreationPlan(RENDERER_AUTO, true)).toBe('webgpu-with-webgl2-fallback')
+  it('defaults to WebGL2 for auto and when WebGPU is supported', () => {
+    expect(resolveEngineCreationPlan(RENDERER_AUTO, true)).toBe('webgl2')
     expect(resolveEngineCreationPlan(RENDERER_AUTO, false)).toBe('webgl2')
+    expect(resolveEngineCreationPlan(RENDERER_WEBGL2, true)).toBe('webgl2')
   })
 })
