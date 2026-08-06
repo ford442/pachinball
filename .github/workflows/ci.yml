@@ -1,0 +1,82 @@
+name: CI
+
+# Gate every PR and every push to main. Nothing landed on main should be red here.
+# Mirrors the local swarm discipline (tsc -b, lint, vitest, build) so regressions are
+# caught before merge rather than after a direct-to-main push.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to save minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: typecheck / lint / test / build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc -b
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests (Vitest)
+        run: npx vitest run
+
+      # NOTE: intentionally `vite build`, NOT `npm run build`.
+      # `npm run build` chains `build:wasm` (scripts/build-wasm.sh), which needs Emscripten.
+      # emcc is not installed on the default runner, so WASM is kept out of this job; the
+      # localStorage physics-engine flag falls back to Rapier when the bundle is absent.
+      # This step still verifies the TS/Vite bundle compiles and links.
+      - name: Build (bundle only, no WASM)
+        run: npx vite build
+
+  # Blocking smoke: desktop + mobile Playwright specs. A red e2e now blocks merges (#319).
+  # The dev server is started by the `webServer` block in playwright.config.ts (pinned to
+  # 5173 with --strictPort, since verify_prism_core.spec.ts hard-codes that URL), so there
+  # is no inline `npm run dev &` poll here. Scope is kept to the known-stable smoke specs —
+  # the blocking gate must stay deterministic, not run the entire *.spec.ts suite.
+  e2e:
+    name: playwright smoke (desktop + mobile, blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Playwright's webServer boots `npm run dev` on 5173 and waits for it. The chromium
+      # project runs the desktop specs; the mobile-chrome project (Pixel 7 emulation) runs
+      # the touch smoke — each spec is routed to the right project by testMatch/testIgnore.
+      - name: Playwright smoke (desktop + mobile)
+        env:
+          CI: 'true'
+        run: >
+          npx playwright test
+          --project=chromium
+          --project=mobile-chrome
+          tests/verify_prism_core.spec.ts
+          tests/basic-gameplay.spec.ts
+          tests/mobile-touch-smoke.spec.ts

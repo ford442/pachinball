@@ -168,5 +168,14 @@ function formatTuningValue(key: PhysicsTuningKey, value: number): string {
 
 export function isPhysicsTuningQueryEnabled(): boolean {
   if (typeof window === 'undefined') return false
-  return new URLSearchParams(window.location.search).has('tune')
+  const params = new URLSearchParams(window.location.search)
+  if (!params.has('tune')) return false
+  return import.meta.env.DEV || params.has('debug')
+}
+
+export function isPhysicsTuningEnabled(
+  enabledInSettings: boolean,
+  queryEnabled = isPhysicsTuningQueryEnabled(),
+): boolean {
+  return queryEnabled || enabledInSettings
 }

@@ -9,7 +9,6 @@ import {
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { GameConfigType } from '../config'
-import { FEEDER_TUNABLES } from '../config'
 
 export enum QuantumTunnelState {
   IDLE = 0,
@@ -34,14 +33,24 @@ export class QuantumTunnelFeeder {
   private state: QuantumTunnelState = QuantumTunnelState.IDLE
   private stateTimer: number = 0
   private capturedBall: RAPIER.RigidBody | null = null
+  private gameplayEnabled = true
 
   // Follow-through animation: Smooth portal spin acceleration
-  private inputSpinSpeed: number = FEEDER_TUNABLES['quantum-tunnel'].portalSpinIdle
-  private outputSpinSpeed: number = -FEEDER_TUNABLES['quantum-tunnel'].portalSpinIdle
+  private inputSpinSpeed: number = 0
+  private outputSpinSpeed: number = 0
   private portalStretch = 0.0
   private ejectRecoil = 0.0
 
   public onStateChange: QuantumTunnelCallback | null = null
+
+  setGameplayEnabled(enabled: boolean): void {
+    this.gameplayEnabled = enabled
+    this.inputMesh.setEnabled(enabled)
+    this.outputMesh.setEnabled(enabled)
+    if (this.inputSensor && this.world.getRigidBody(this.inputSensor.handle)) {
+      this.inputSensor.setEnabled(enabled)
+    }
+  }
 
   constructor(
     scene: Scene,
@@ -53,6 +62,8 @@ export class QuantumTunnelFeeder {
     this.world = world
     this.rapier = rapier
     this.config = config
+    this.inputSpinSpeed = config.portalSpinIdle
+    this.outputSpinSpeed = -config.portalSpinIdle
 
     // Create Visuals
     const inputPos = new Vector3(config.inputPosition.x, config.inputPosition.y, config.inputPosition.z)
@@ -105,24 +116,26 @@ export class QuantumTunnelFeeder {
   }
 
   public update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+    if (!this.gameplayEnabled) return
     this.stateTimer += dt
 
     // Portal Animation (Spinning visuals) - Follow-through: Smooth spin acceleration
+    const anim = this.config.animation
     const targetSpeed = this.state === QuantumTunnelState.IDLE ? this.config.portalSpinIdle :
                         this.state === QuantumTunnelState.CAPTURE ? this.config.portalSpinCapture :
                         this.state === QuantumTunnelState.TRANSPORT ? this.config.portalSpinTransport : this.config.portalSpinEject
-    this.inputSpinSpeed = Scalar.Lerp(this.inputSpinSpeed, targetSpeed, dt * 5.0)
-    this.outputSpinSpeed = Scalar.Lerp(this.outputSpinSpeed, -targetSpeed * 0.8, dt * 5.0)
+    this.inputSpinSpeed = Scalar.Lerp(this.inputSpinSpeed, targetSpeed, dt * anim.portalSpinLerpRate)
+    this.outputSpinSpeed = Scalar.Lerp(this.outputSpinSpeed, -targetSpeed * anim.outputSpinRatio, dt * anim.portalSpinLerpRate)
     this.inputMesh.rotation.z += dt * this.inputSpinSpeed
     this.outputMesh.rotation.z += dt * this.outputSpinSpeed
 
     // Portal distortion during TRANSPORT
     if (this.state === QuantumTunnelState.TRANSPORT) {
       const progress = Math.min(this.stateTimer / this.config.transportDelay, 1.0)
-      this.portalStretch = Math.sin(progress * Math.PI) * 0.3
+      this.portalStretch = Math.sin(progress * Math.PI) * anim.portalStretchAmplitude
       this.inputMesh.scaling.z = 1.0 + this.portalStretch
-      this.inputMesh.scaling.x = 1.0 - this.portalStretch * 0.3
-      this.inputMesh.scaling.y = 1.0 - this.portalStretch * 0.3
+      this.inputMesh.scaling.x = 1.0 - this.portalStretch * anim.portalStretchSideFactor
+      this.inputMesh.scaling.y = 1.0 - this.portalStretch * anim.portalStretchSideFactor
     } else {
       // Reset scaling when not in transport
       this.inputMesh.scaling.setAll(1.0)
@@ -132,8 +145,8 @@ export class QuantumTunnelFeeder {
     // Eject recoil recovery
     if (this.ejectRecoil > 0) {
       this.outputMesh.position.x = this.config.outputPosition.x - this.ejectRecoil
-      this.ejectRecoil *= 0.8
-      if (this.ejectRecoil < 0.01) {
+      this.ejectRecoil *= this.config.animation.ejectRecoilDecay
+      if (this.ejectRecoil < this.config.animation.ejectRecoilThreshold) {
         this.ejectRecoil = 0
         this.outputMesh.position.x = this.config.outputPosition.x
       }
@@ -173,7 +186,8 @@ export class QuantumTunnelFeeder {
     }
 
     // Pulse Input Visual
-    const pulse = 0.5 + Math.sin(performance.now() * 0.002) * 0.2
+    const pulse = this.config.animation.idlePulseBase
+      + Math.sin(performance.now() * this.config.animation.idlePulseRate) * this.config.animation.idlePulseAmplitude
     this.setPortalEmissive(this.inputMesh, new Color3(0.5, 0, 1.0).scale(pulse))
   }
 
@@ -295,7 +309,7 @@ export class QuantumTunnelFeeder {
       const disc = portal.getChildren()[0] as Mesh
       if (disc) {
           const discMat = disc.material as StandardMaterial
-          if (discMat) discMat.emissiveColor = color.scale(0.8)
+          if (discMat) discMat.emissiveColor = color.scale(this.config.animation.discEmissiveScale)
       }
   }
 

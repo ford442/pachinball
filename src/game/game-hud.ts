@@ -14,6 +14,7 @@ import type { AdventureTrackProgression } from '../game-elements/adventure-track
 import type { AdventureProgressionSupervisor } from '../game-elements/adventure-progression-supervisor'
 import type { AdventureMode } from '../adventure'
 import { getCampaignRewardsManager } from '../game-elements/campaign-rewards-manager'
+import { getDailyCascadeState } from '../game-elements/daily-cascade-state'
 import { BallType } from '../config'
 
 export interface HUDHost {
@@ -151,7 +152,9 @@ export class GameHUD {
       console.log('[Leaderboard] Score too low for submission')
       return
     }
-    this.host.leaderboardSystem.setContext(this.host.mapManager?.getCurrentMap() || 'neon-helix')
+    const fallbackMap = this.host.mapManager?.getCurrentMap() || 'neon-helix'
+    const mapId = getDailyCascadeState().getLeaderboardMapId(fallbackMap)
+    this.host.leaderboardSystem.setContext(mapId)
     const rank = await this.host.leaderboardSystem.checkRank(this.host.score)
     if (rank === null || rank > 100) {
       console.log('[Leaderboard] Score not in top 100')
@@ -162,7 +165,7 @@ export class GameHUD {
       const submitResult = await this.host.leaderboardSystem.submitScore({
         name: result.name,
         score: this.host.score,
-        map_id: this.host.mapManager?.getCurrentMap() || 'neon-helix',
+        map_id: mapId,
         balls: 1,
         combo_max: this.host.comboCount,
       })

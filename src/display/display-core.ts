@@ -20,7 +20,7 @@ import {
   detectAccessibility,
 } from '../game-elements/accessibility-config'
 import { DisplayShaderLayer } from './display-shader'
-import { DisplayReelsLayer } from './display-reels'
+import { DisplayReelsLayer, type ReelsRenderTelemetrySnapshot } from './display-reels'
 import { SlotMachine } from './slot-machine'
 import { DisplayVideoLayer } from './display-video'
 import { DisplayImageLayer } from './display-image'
@@ -29,7 +29,7 @@ import { DisplayLcdOverlayLayer } from './display-lcd-overlay'
 import { DisplayStateMachine } from './display-state-machine'
 import { BackboxBorderGlow } from './display-border-glow'
 import type { CRTEffectParams } from './display-types'
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import type { EffectsSystem } from '../effects/effects-core'
 import { DisplayOverlay } from './display-overlay'
 
@@ -513,6 +513,37 @@ export class DisplaySystem {
    */
   public setSlotDebugForce(symbols: import('./slot-types').SlotSymbol[]): void {
     this.slotMachine?.setDebugForceResult(symbols)
+  }
+
+  /** Enable debug-gated canvas reel draw/upload telemetry (#261 Phase 1). */
+  public setReelsTelemetryEnabled(enabled: boolean): void {
+    this.reelsLayer.setTelemetryEnabled(enabled)
+  }
+
+  public resetReelsTelemetry(): void {
+    this.reelsLayer.resetTelemetry()
+  }
+
+  public getReelsTelemetry(): ReelsRenderTelemetrySnapshot {
+    return this.reelsLayer.getTelemetry()
+  }
+
+  public isReelsSpinning(): boolean {
+    return this.reelsLayer.isSpinning()
+  }
+
+  /**
+   * Start a long benchmark spin for Phase 1 telemetry capture (debug / tests).
+   * Bypasses slot-machine gating so reel draw/upload cost can be sampled in isolation.
+   */
+  public debugStartReelsBenchmarkSpin(): void {
+    this.reelsLayer.setVisible(true)
+    this.reelsLayer.startSpin({
+      autoStop: true,
+      spinDuration: 2.0,
+      reelSpeeds: [14, 16, 12],
+      stopDelays: [0, 0.35, 0.7],
+    })
   }
 
   /**

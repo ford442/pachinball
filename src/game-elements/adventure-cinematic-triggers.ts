@@ -3,7 +3,7 @@
  * Automatically triggers cinematic moments on game events
  */
 
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import { Color3 } from '@babylonjs/core'
 import { AdventureCinematicSystem } from './adventure-cinematic-system'
 import type { AdventureGoalTracker } from './adventure-goal-tracker'

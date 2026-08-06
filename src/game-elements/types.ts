@@ -203,9 +203,13 @@ export type PendingInputFrame = Partial<Omit<InputFrame, 'timestamp'>> & { times
 // ============================================================================
 
 /** Latency metrics for input-to-response timing */
+export type InputLatencySource = 'keyboard' | 'touch' | 'gamepad'
+
 export interface LatencyMetrics {
-  /** Array of latency samples in milliseconds */
+  /** Array of latency samples in milliseconds (all sources) */
   samples: number[]
+  /** Per-source sample buffers */
+  samplesBySource: Record<InputLatencySource, number[]>
   /** Last time a report was generated (ms) */
   lastReportTime: number
   /** Maximum number of samples to keep */
@@ -226,6 +230,8 @@ export interface LatencyReport {
   p95: number
   /** Number of samples in the report */
   sampleCount: number
+  /** Optional source this report was computed for */
+  source?: InputLatencySource
 }
 
 // ============================================================================

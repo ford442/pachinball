@@ -2,7 +2,7 @@
  * EventBus log — ring buffer of recent game events for the debug HUD.
  */
 
-import type { EventBus, PachinballEventMap, PachinballEventName } from '../game/event-bus'
+import type { EventBus, PachinballEventMap, PachinballEventName } from '../core/event-bus'
 
 export interface EventBusLogEntry {
   timestampMs: number

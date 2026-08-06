@@ -13,6 +13,7 @@ export {
   CABINET_PRESETS,
   type CabinetType,
   type CabinetPreset,
+  type LoadCabinetOptions,
 } from './cabinet-builder'
 
 // Type exports
@@ -20,7 +21,17 @@ export type {
   CabinetConfig,
   CabinetDimensions,
   CabinetPart,
+  CabinetGltfConfig,
 } from './cabinet-types'
+
+export {
+  pickCabinetGltfUrl,
+  loadCabinetGltf,
+  loadCabinetGltfForPreset,
+  loadOptionalInsert,
+  assertCabinetAlignment,
+  splitAssetUrl,
+} from './cabinet-gltf-loader'
 
 // Classic preset exports
 export {

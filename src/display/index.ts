@@ -30,7 +30,7 @@ export { DisplayOverlay, type DisplayOverlayShowOptions } from './display-overla
 
 // Layer managers
 export { DisplayShaderLayer } from './display-shader'
-export { DisplayReelsLayer } from './display-reels'
+export { DisplayReelsLayer, REELS_RENDER_BUDGET_MS, type ReelsRenderTelemetrySnapshot } from './display-reels'
 export { DisplayVideoLayer } from './display-video'
 export { DisplayImageLayer } from './display-image'
 export { DisplayPhysicalLayer } from './display-physical'

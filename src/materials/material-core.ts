@@ -28,6 +28,11 @@ import {
   TIER_TEXTURE_SIZE,
   ROUGHNESS,
 } from '../game-elements/visual-language'
+import {
+  isMobileUserAgent,
+  shouldForceLowQualityMobile,
+  type MobileQualityHints,
+} from '../engine/engine-options'
 
 export interface TextureSet {
   albedo?: Texture | null
@@ -73,17 +78,41 @@ export interface MaterialLibraryStats {
 }
 
 /**
- * Detect hardware quality tier from engine capabilities.
+ * Cap a GPU-capability tier for mobile devices.
+ * Mobile → at most MEDIUM; low-memory / save-data → LOW.
  */
-export function detectQualityTier(engine: AbstractEngine): QualityTier {
+export function applyMobileQualityCap(
+  tier: QualityTier,
+  hints: MobileQualityHints = {},
+): QualityTier {
+  const ua = hints.userAgent ?? (typeof navigator !== 'undefined' ? navigator.userAgent : '')
+  if (!isMobileUserAgent(ua)) return tier
+  if (shouldForceLowQualityMobile(hints)) return QualityTier.LOW
+  if (tier === QualityTier.HIGH) return QualityTier.MEDIUM
+  return tier
+}
+
+/**
+ * Detect hardware quality tier from engine capabilities + mobile heuristics.
+ */
+export function detectQualityTier(
+  engine: AbstractEngine,
+  hints: MobileQualityHints = {},
+): QualityTier {
+  let tier: QualityTier
   try {
     const caps = engine.getCaps()
-    if (!caps.textureFloat) return QualityTier.LOW
-    if (!caps.textureLOD) return QualityTier.MEDIUM
-    return QualityTier.HIGH
+    if (!caps.textureFloat) {
+      tier = QualityTier.LOW
+    } else if (!caps.textureLOD) {
+      tier = QualityTier.MEDIUM
+    } else {
+      tier = QualityTier.HIGH
+    }
   } catch {
-    return QualityTier.MEDIUM
+    tier = QualityTier.MEDIUM
   }
+  return applyMobileQualityCap(tier, hints)
 }
 
 /**

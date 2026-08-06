@@ -33,8 +33,14 @@ export class TrailEffects {
   updateFeverTrails(
     ballBodies: { translation: () => { x: number; y: number; z: number }; handle: number }[],
     isFever: boolean,
-    dt: number
+    dt: number,
+    isEnabled = true
   ): void {
+    if (!isEnabled) {
+      this.clearFeverTrails()
+      return
+    }
+
     if (!isFever) {
       this.clearFeverTrails()
       return

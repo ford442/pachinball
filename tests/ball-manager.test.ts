@@ -719,4 +719,51 @@ describe('BallManager', () => {
       expect(last?.quickCollectBonus).toBeUndefined()
     })
   })
+
+  describe('shared bindings array identity', () => {
+    it('removeExtraBalls mutates bindings in place (does not split from GameObjects)', () => {
+      const shared: Array<{ mesh: { name: string; dispose: () => void }; rigidBody: object }> = [
+        { mesh: { name: 'wall', dispose: vi.fn() }, rigidBody: {} },
+        { mesh: { name: 'ball', dispose: vi.fn() }, rigidBody: {} },
+        { mesh: { name: 'ball_extra', dispose: vi.fn() }, rigidBody: {} },
+      ]
+      const manager = new BallManager(
+        {} as never,
+        makeFakeWorld() as never,
+        makeFakeRapier() as never,
+        shared as never,
+      )
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).ballBody = shared[1].rigidBody
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).ballBodies = [shared[1].rigidBody, shared[2].rigidBody]
+
+      const extraMesh = shared[2].mesh
+      manager.removeExtraBalls()
+
+      expect(manager.getBindings()).toBe(shared)
+      expect(shared.map((b) => b.mesh.name)).toEqual(['wall', 'ball'])
+      expect(extraMesh.dispose).toHaveBeenCalled()
+    })
+
+    it('removeBall clears primary ballBody so getBallBody() is not a dead Rapier handle', () => {
+      const body = {
+        isValid: vi.fn(() => false),
+      }
+      const manager = makeManager()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).ballBody = body
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).ballBodies = [body]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(manager as any).world = {
+        removeRigidBody: vi.fn(),
+      }
+
+      manager.removeBall(body as never)
+
+      expect(manager.getBallBody()).toBeNull()
+      expect(manager.getBallBodies()).toEqual([])
+    })
+  })
 })

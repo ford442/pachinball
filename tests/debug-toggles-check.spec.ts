@@ -29,7 +29,6 @@ test('wireframe and physics-debug toggles work', async ({ page }) => {
   await page.locator('#debug-physics-draw').check({ force: true })
   await page.waitForTimeout(500)
   const linesMeshExists = await page.evaluate(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const scene = (window as unknown as { game?: any }).game?.scene
     return scene?.meshes?.some((m: { name: string }) => m.name === 'physicsDebugLines') ?? false
   })

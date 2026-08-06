@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "QUANTUM_GRID",
+  "cameraPresetId": "QUANTUM_GRID",
+  "materials": {
+    "structure": "#00FF00"
+  },
+  "segments": [
+    { "type": "straight", "width": 4, "length": 10, "inclineDeg": 0, "material": "#00FF00" },
+
+    { "type": "straight", "width": 3, "length": 5, "inclineDeg": 0, "material": "#00FF00" },
+    { "type": "turn", "deltaHeadingDeg": -90 },
+    { "type": "straight", "width": 3, "length": 5, "inclineDeg": 0, "material": "#00FF00" },
+    { "type": "turn", "deltaHeadingDeg": 90 },
+    { "type": "straight", "width": 3, "length": 5, "inclineDeg": 0, "material": "#00FF00" },
+    { "type": "turn", "deltaHeadingDeg": -90 },
+    { "type": "straight", "width": 3, "length": 5, "inclineDeg": 0, "material": "#00FF00" },
+    { "type": "turn", "deltaHeadingDeg": 90 },
+    { "type": "straight", "width": 3, "length": 5, "inclineDeg": 0, "material": "#00FF00" },
+
+    { "type": "gate", "color": "GREEN", "offset": { "x": 0, "y": 1.5, "z": 2 } },
+
+    {
+      "type": "curve",
+      "radius": 6,
+      "angleDeg": 270,
+      "inclineDeg": -5,
+      "width": 3,
+      "wallHeight": 0.5,
+      "material": "#00FF00"
+    },
+
+    { "type": "gap", "length": 4, "drop": 1 },
+    { "type": "straight", "width": 4, "length": 3, "inclineDeg": 0, "material": "#00FF00" },
+
+    { "type": "portal", "offset": { "x": 0, "y": 1.8, "z": 0 } },
+    { "type": "bucket", "material": "#00FF00" }
+  ]
+}

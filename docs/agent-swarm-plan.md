@@ -28,13 +28,14 @@ Track Specifications (from PLAN.md):
 - Technical Variables: [VARIABLES]
 
 Requirements:
-1. Create the track geometry using addStraightRamp(), addCurvedRamp(), etc.
+1. Create the track geometry using addStraightRamp(), addCurvedRamp(), etc. (via TrackBuilder context)
 2. Implement all hazards, obstacles, and mechanics
-3. Add the track builder method to adventure-mode-tracks-{A|B}.ts
-4. Register the track in the buildTrack() switch statement
-5. Handle the goal trigger to emit 'mission-complete' event
-6. Add the enum to AdventureTrackType if missing
-7. Commit with message: "feat: implement [TRACK_NAME] adventure track"
+3. Create the builder in src/adventure/tracks/<track-name>.ts
+4. Export from src/adventure/index.ts and register in AdventureMode.buildTrack() switch
+5. Add TRACK_CATALOG entry in adventure-track-progression.ts
+6. Add zone config in zone-registry.ts
+7. Add the enum to AdventureTrackType in adventure-types.ts if missing
+8. Commit with message: "feat: implement [TRACK_NAME] adventure track"
 
 Success Criteria:
 - Track loads without errors
@@ -54,12 +55,14 @@ Success Criteria:
 8. TESLA_TOWER (Section 35)
 
 **Dependencies:**
-- `AdventureModeBuilder` base class exists
-- Helper methods: `addStraightRamp()`, `addCurvedRamp()`, `createRotatingPlatform()`, etc.
+- `TrackBuilder` context (passed to track builder functions in `src/adventure/tracks/`)
+- Helper methods: `addStraightRamp()`, `addCurvedRamp()`, `createRotatingPlatform()`, etc. (on TrackBuilder / AdventureMode)
 
 **Output:**
-- Modified `src/game-elements/adventure-mode-tracks-{A|B}.ts`
-- Updated enum in `adventure-mode-builder.ts` (if new)
+- New file `src/adventure/tracks/<track-name>.ts`
+- Updated enum in `src/adventure/adventure-types.ts` (if new)
+- Updated `TRACK_CATALOG` in `adventure-track-progression.ts`
+- Export + `buildTrack()` registration in `src/adventure/`
 - Git commit on working branch
 
 ---
@@ -457,7 +460,7 @@ Success Criteria:
 
 **Output:**
 - Checkpoint system class
-- Integration in `adventure-mode-builder.ts`
+- Integration in `src/adventure/adventure-mode.ts` or track builders
 - Git commit
 
 ---

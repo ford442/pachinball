@@ -1,4 +1,4 @@
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import type { DisplaySystem } from '../display'
 import type { CabinetLighting } from './cabinet-lighting'
 import type { AdventureCinematicTriggers } from '../game-elements/adventure-cinematic-triggers'

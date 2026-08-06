@@ -63,4 +63,43 @@ test.describe('Scoring collision dispatch (#266)', () => {
     expect(pipeline.bumperMatches).toBeGreaterThan(0);
     expect(pipeline.awardCalls).toBeGreaterThan(0);
   });
+
+  test('plunger launch accrues lane rollover points without bumper contact', async ({ page }) => {
+    test.setTimeout(120_000);
+
+    await page.goto('/?renderer=webgl2');
+    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 10_000 });
+
+    await expect.poll(async () => {
+      return page.evaluate(() => !!(window as any).game?.stateManager);
+    }, { intervals: [200], timeout: 15_000 }).toBe(true);
+
+    await page.evaluate(() => document.getElementById('start-btn')?.click());
+    await page.waitForTimeout(500);
+
+    await expect.poll(async () => {
+      return page.evaluate(() => (window as any).game?.stateManager?.isPlaying?.() ?? false);
+    }, { intervals: [200], timeout: 30_000 }).toBe(true);
+
+    await page.evaluate(() => (window as any).game?.inputActions?.handlePlunger?.());
+    await page.waitForTimeout(3000);
+
+    const pipeline = await page.evaluate(() => {
+      const g = (window as any).game;
+      return {
+        score: g?.score ?? 0,
+        awardCalls: g?.physicsController?.getAwardScoreCalls?.() ?? 0,
+        lastLaneHit: g?.physicsController?.getLastLaneHit?.() ?? null,
+        bumperMatches: g?.physicsController?.getBumperMatches?.() ?? 0,
+      };
+    });
+
+    const scoreText = await page.locator('#score').textContent();
+    const scoreNum = Number.parseInt(scoreText ?? '0', 10);
+
+    expect(scoreNum, `HUD score should reflect lane rollover; pipeline=${JSON.stringify(pipeline)}`).toBeGreaterThan(0);
+    expect(pipeline.awardCalls).toBeGreaterThan(0);
+    expect(pipeline.lastLaneHit).toMatch(/^launch-/);
+    expect(pipeline.bumperMatches).toBe(0);
+  });
 });

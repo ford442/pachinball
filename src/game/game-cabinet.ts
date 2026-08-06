@@ -15,6 +15,7 @@ import {
   CABINET_PRESETS,
   type CabinetType,
   type CabinetPreset,
+  type LoadCabinetOptions,
 } from '../cabinet'
 
 export interface CabinetManagerConfig {
@@ -46,7 +47,7 @@ export class CabinetManager {
    * Load a cabinet preset and rebuild the cabinet.
    * @param type - The cabinet preset type ('classic', 'neo', 'vertical', 'wide')
    */
-  loadCabinetPreset(type: CabinetType): void {
+  async loadCabinetPreset(type: CabinetType, options: LoadCabinetOptions = {}): Promise<void> {
     if (!this.scene) return
 
     if (!CABINET_PRESETS[type]) {
@@ -54,11 +55,15 @@ export class CabinetManager {
       return
     }
 
-    this.currentType = type
     const cabinetBuilder = getCabinetBuilder(this.scene)
-    cabinetBuilder.loadCabinetPreset(type)
+    if (cabinetBuilder.isLoadInFlight()) {
+      console.warn(`[CabinetManager] Ignoring re-entrant load for ${type}`)
+      return
+    }
 
-    // Show cabinet name popup
+    this.currentType = type
+    await cabinetBuilder.loadCabinetPreset(type, options)
+
     const presetNames: Record<CabinetType, string> = {
       classic: 'Classic Pinball',
       neo: 'Neo Arcade',
@@ -66,12 +71,9 @@ export class CabinetManager {
       wide: 'Deluxe Wide',
     }
     this.config.onPopupShow?.(presetNames[type])
-
-    // Notify callbacks
     this.config.onPresetChange?.(type, CABINET_PRESETS[type])
-
-    // Update UI
     this.config.onUISelect?.(type)
+    this.config.onCabinetBuild?.(cabinetBuilder.getCabinetMeshes())
 
     console.log(`[CabinetManager] Loaded ${presetNames[type]}`)
   }
@@ -79,11 +81,11 @@ export class CabinetManager {
   /**
    * Cycle to the next cabinet preset.
    */
-  cycleCabinetPreset(): void {
+  async cycleCabinetPreset(options: LoadCabinetOptions = {}): Promise<void> {
     const types: CabinetType[] = ['classic', 'neo', 'vertical', 'wide']
     const currentIndex = types.indexOf(this.currentType)
     const nextIndex = (currentIndex + 1) % types.length
-    this.loadCabinetPreset(types[nextIndex])
+    await this.loadCabinetPreset(types[nextIndex], options)
   }
 
   /**

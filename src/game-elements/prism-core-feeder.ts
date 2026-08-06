@@ -32,6 +32,7 @@ export class PrismCoreFeeder {
   private state: PrismCoreState = PrismCoreState.IDLE
   private caughtBalls: RAPIER.RigidBody[] = []
   public visualRotationSpeed: number = 0.5
+  private gameplayEnabled = true
 
   // Animation properties
   private innerRotationSpeed = 0.5
@@ -65,6 +66,14 @@ export class PrismCoreFeeder {
 
   getState(): PrismCoreState {
     return this.state
+  }
+
+  setGameplayEnabled(enabled: boolean): void {
+    this.gameplayEnabled = enabled
+    this.outerMesh?.setEnabled(enabled)
+    this.innerMesh?.setEnabled(enabled)
+    this.energyBloom?.setEnabled(enabled)
+    if (this.light) this.light.setEnabled(enabled)
   }
 
   private createVisuals(): void {
@@ -123,12 +132,14 @@ export class PrismCoreFeeder {
   }
 
   update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+    if (!this.gameplayEnabled) return
+    const anim = this.config.animation
     // Smooth rotation with decay
-    const targetInner = this.state === PrismCoreState.IDLE ? 0.5 :
-                        this.state === PrismCoreState.LOCKED_1 ? 2.0 :
-                        this.state === PrismCoreState.LOCKED_2 ? 5.0 : 15.0
-    this.innerRotationSpeed = Scalar.Lerp(this.innerRotationSpeed, targetInner, dt * 2)
-    this.outerRotationSpeed = Scalar.Lerp(this.outerRotationSpeed, -targetInner * 0.5, dt * 2)
+    const targetInner = this.state === PrismCoreState.IDLE ? anim.rotationSpeedIdle :
+                        this.state === PrismCoreState.LOCKED_1 ? anim.rotationSpeedLocked1 :
+                        this.state === PrismCoreState.LOCKED_2 ? anim.rotationSpeedLocked2 : anim.rotationSpeedOverload
+    this.innerRotationSpeed = Scalar.Lerp(this.innerRotationSpeed, targetInner, dt * anim.rotationLerpRate)
+    this.outerRotationSpeed = Scalar.Lerp(this.outerRotationSpeed, -targetInner * anim.outerRotationRatio, dt * anim.rotationLerpRate)
 
     // Update Rotation
     if (this.innerMesh) {
@@ -141,8 +152,8 @@ export class PrismCoreFeeder {
 
     // Shell breathing effect
     if (this.outerMesh) {
-      this.shellBreathPhase += dt * this.innerRotationSpeed * 2
-      const breath = 0.05 * (this.state + 1)
+      this.shellBreathPhase += dt * this.innerRotationSpeed * anim.breathPhaseMultiplier
+      const breath = anim.breathAmplitudeBase * (this.state + 1)
       this.outerMesh.scaling.y = 1.0 + Math.sin(this.shellBreathPhase) * breath
       this.outerMesh.scaling.x = 1.0 + Math.cos(this.shellBreathPhase) * breath * 0.5
       this.outerMesh.scaling.z = 1.0 + Math.cos(this.shellBreathPhase) * breath * 0.5
@@ -151,14 +162,14 @@ export class PrismCoreFeeder {
     // Energy bloom effect
     if (this.energyBloom) {
       if (this.bloomIntensity > 0) {
-        this.bloomIntensity *= 0.9
-        const scale = 1.0 + (1.0 - this.bloomIntensity) * 3.0
+        this.bloomIntensity *= anim.bloomDecay
+        const scale = 1.0 + (1.0 - this.bloomIntensity) * anim.bloomScaleMultiplier
         this.energyBloom.scaling.setAll(scale)
         const bloomMat = this.energyBloom.material as StandardMaterial
         if (bloomMat) {
-          bloomMat.alpha = this.bloomIntensity * 0.5
+          bloomMat.alpha = this.bloomIntensity * anim.bloomAlphaScale
         }
-        if (this.bloomIntensity < 0.01) {
+        if (this.bloomIntensity < anim.bloomCutoff) {
           this.energyBloom.dispose()
           this.energyBloom = null
           this.bloomIntensity = 0

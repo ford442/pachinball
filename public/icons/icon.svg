@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Nexus Cascade">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0e1a"/>
+      <stop offset="100%" stop-color="#1a0a2e"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00d9ff"/>
+      <stop offset="50%" stop-color="#7b2fff"/>
+      <stop offset="100%" stop-color="#ff00aa"/>
+    </linearGradient>
+    <filter id="blur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="140" fill="url(#glow)" opacity="0.25" filter="url(#blur)"/>
+  <path d="M156 330 L256 120 L356 330 Z" fill="none" stroke="url(#glow)" stroke-width="28" stroke-linejoin="round"/>
+  <circle cx="256" cy="300" r="36" fill="#00d9ff"/>
+  <circle cx="200" cy="220" r="18" fill="#ff00aa" opacity="0.9"/>
+  <circle cx="312" cy="220" r="18" fill="#7b2fff" opacity="0.9"/>
+</svg>

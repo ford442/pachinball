@@ -1,4 +1,7 @@
 import { GameConfig } from '../config'
+import type { AudioSourceMode } from './audio-sample-bank'
+
+export type { AudioSourceMode } from './audio-sample-bank'
 
 export interface GameSettings {
   reducedMotion: boolean
@@ -16,6 +19,9 @@ export interface GameSettings {
   musicVolume: number
   sfxVolume: number
   muted: boolean
+  audioSource: AudioSourceMode
+  /** User preference for vibration; no-op when Vibration API missing (iOS Safari). */
+  hapticsEnabled: boolean
 }
 
 export class SettingsManager {
@@ -38,6 +44,8 @@ export class SettingsManager {
       musicVolume: 0.6,
       sfxVolume: 0.9,
       muted: false,
+      audioSource: 'samples',
+      hapticsEnabled: true,
     }
     
     try {
@@ -66,6 +74,7 @@ export class SettingsManager {
           scanlineWeight: migratedScanlineWeight,
           scanlineIntensityMultiplier: migratedScanlineIntensityMultiplier,
           scanlineEnabled,
+          audioSource: parsed.audioSource === 'synth' ? 'synth' : 'samples',
         }
       }
     } catch {

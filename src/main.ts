@@ -1,10 +1,14 @@
-import { EngineFactory } from '@babylonjs/core/Engines/engineFactory'
-import type { Engine } from '@babylonjs/core/Engines/engine'
-import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import './style.css'
 import { Game } from './game'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
-import { getRendererPreference, exposeRenderer, RENDERER_WEBGL2 } from './renderers/renderer-selector'
+import type { Engine } from '@babylonjs/core/Engines/engine'
+import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
+import { exposeRenderer } from './renderers/renderer-selector'
+import { applyHardwareScaling, resolveEngineOptions } from './engine/engine-options'
+import { createEngine, isWebGPUEngine } from './engine/create-engine'
+import { scheduleIdleWasmPreload } from './engine/wasm-idle-preload'
+import { VisibilityManager } from './engine/visibility-manager'
+import { registerServiceWorker } from './pwa'
 
 /**
  * Preload physics WASM in parallel with engine creation.
@@ -18,6 +22,8 @@ async function preloadPhysics(): Promise<typeof RAPIER> {
 }
 
 async function bootstrap(): Promise<void> {
+  registerServiceWorker()
+
   const canvas = document.getElementById('pachinball-canvas') as HTMLCanvasElement | null
   if (!canvas) throw new Error('Canvas element not found')
 
@@ -28,7 +34,7 @@ async function bootstrap(): Promise<void> {
   // This reduces total load time by overlapping network fetch (WASM) with GPU initialization
   const [engine, preloadedRapier] = await Promise.all([
     createEngine(canvas),
-    preloadPhysics()
+    preloadPhysics(),
   ]) as [Engine | WebGPUEngine, typeof RAPIER]
 
   console.timeEnd('[Bootstrap] Engine + Physics parallel init')
@@ -37,8 +43,20 @@ async function bootstrap(): Promise<void> {
   applyHardwareScaling(engine)
   exposeRenderer(canvas, isWebGPUEngine(engine))
 
+  ;(window as unknown as Record<string, unknown>).bootstrapEngineOptions = resolveEngineOptions()
+
   const game = new Game(engine, preloadedRapier)
   await game.init()
+
+  const visibilityManager = new VisibilityManager({
+    engine,
+    renderFrame: () => game.renderFrame(),
+    getGameState: () => game.stateManager.getState(),
+    soundSystem: game.soundSystem,
+    effects: game.effects,
+  })
+  visibilityManager.attach()
+  scheduleIdleWasmPreload()
 
   // Expose for Playwright tests
   ;(window as unknown as Record<string, unknown>).game = game
@@ -73,34 +91,46 @@ async function bootstrap(): Promise<void> {
     console.log('=== MESHES (count:', scene.meshes.length, ') ===')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const interesting = scene.meshes.filter((m: any) =>
-      /flipper|ball|bumper|wall|pin|playfield|lcd|cabinet/i.test(m.name)
+      /flipper|ball|bumper|wall|pin|playfield|lcd|cabinet/i.test(m.name),
     )
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    console.table(interesting.map((m: any) => ({
-      name: m.name,
-      enabled: m.isEnabled(),
-      visible: m.isVisible,
-      visibility: m.visibility,
-      inFrustum: cam.isInFrustum(m),
-      x: m.position.x.toFixed(2),
-      y: m.position.y.toFixed(2),
-      z: m.position.z.toFixed(2),
-      material: m.material?.name || '(none)',
-      alpha: m.material?.alpha,
-      parent: m.parent?.name || '(none)',
-    })))
+    console.table(
+      interesting.map((m: any) => ({
+        name: m.name,
+        enabled: m.isEnabled(),
+        visible: m.isVisible,
+        visibility: m.visibility,
+        inFrustum: cam.isInFrustum(m),
+        x: m.position.x.toFixed(2),
+        y: m.position.y.toFixed(2),
+        z: m.position.z.toFixed(2),
+        material: m.material?.name || '(none)',
+        alpha: m.material?.alpha,
+        parent: m.parent?.name || '(none)',
+      })),
+    )
 
     console.log('=== LIGHTS ===')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    console.table(scene.lights.map((l: any) => ({
-      name: l.name, type: l.getClassName(), intensity: l.intensity, enabled: l.isEnabled()
-    })))
+    console.table(
+      scene.lights.map((l: any) => ({
+        name: l.name,
+        type: l.getClassName(),
+        intensity: l.intensity,
+        enabled: l.isEnabled(),
+      })),
+    )
 
     console.log('=== RENDER STATS ===')
     console.log('engine fps:', engine?.getFps().toFixed(1))
     console.log('render width × height:', engine?.getRenderWidth(), '×', engine?.getRenderHeight())
     console.log('hardware scaling:', engine?.getHardwareScalingLevel())
-    console.log('canvas client:', engine?.getRenderingCanvas()?.clientWidth, '×', engine?.getRenderingCanvas()?.clientHeight)
+    console.log(
+      'canvas client:',
+      engine?.getRenderingCanvas()?.clientWidth,
+      '×',
+      engine?.getRenderingCanvas()?.clientHeight,
+    )
     console.log('=== DIAGNOSTIC COMPLETE ===')
   }
 
@@ -113,6 +143,7 @@ async function bootstrap(): Promise<void> {
 
   if (import.meta.hot) {
     import.meta.hot.dispose(() => {
+      visibilityManager.dispose()
       game.dispose()
       engine.dispose()
     })
@@ -130,61 +161,6 @@ function setupResizeHandler(_canvas: HTMLCanvasElement, engine: Engine | WebGPUE
   window.addEventListener('resize', () => {
     engine.resize()
   })
-}
-
-/**
- * Reduce GPU fill-rate on mobile and high-DPI devices.
- * Mobile:  render at ½ canvas size (level 2) — displays scale up via CSS.
- * HiDPI desktop (DPR > 1): render at logical resolution so the OS handles
- * the scale-up, halving fill-rate on 4K / Retina screens with minimal
- * visual difference for a fast-moving arcade game.
- */
-function applyHardwareScaling(engine: Engine | WebGPUEngine): void {
-  const isMobile = /Mobi|Android/i.test(navigator.userAgent)
-  if (isMobile) {
-    engine.setHardwareScalingLevel(2)
-    console.log('[Bootstrap] Mobile detected: hardware scaling 2x (half resolution)')
-  } else if (window.devicePixelRatio > 1) {
-    // Cap at 2 so a 3x screen still gets some Retina benefit
-    const scale = Math.min(window.devicePixelRatio, 2)
-    engine.setHardwareScalingLevel(scale)
-    console.log(`[Bootstrap] HiDPI display (DPR ${window.devicePixelRatio}): hardware scaling ${scale}x`)
-  }
-}
-
-async function createEngine(canvas: HTMLCanvasElement): Promise<Engine | WebGPUEngine> {
-  const engineOptions = {
-    antialias: true,
-    preserveDrawingBuffer: true,
-    stencil: true,
-    // SSAO + DoF + bloom MRT exceeds the WebGPU default 32-byte/sample limit on
-    // many adapters; request adapter maximums so post-processing pipelines validate.
-    setMaximumLimits: true,
-  }
-
-  const preference = getRendererPreference()
-  if (preference === RENDERER_WEBGL2) {
-    console.log('[Bootstrap] Renderer preference: WebGL2 (forced)')
-    return (await EngineFactory.CreateAsync(canvas, { disableWebGPU: true, ...engineOptions })) as Engine
-  }
-  if (preference !== 'auto') {
-    console.log(`[Bootstrap] Renderer preference: ${preference}`)
-  }
-
-  try {
-    return (await EngineFactory.CreateAsync(canvas, { ...engineOptions })) as WebGPUEngine
-  } catch (err) {
-    console.warn('WebGPU init failed, using WebGL fallback', err)
-    return (await EngineFactory.CreateAsync(canvas, { disableWebGPU: true, ...engineOptions })) as Engine
-  }
-}
-
-/** True if the created engine is actually running on WebGPU. */
-function isWebGPUEngine(engine: Engine | WebGPUEngine): boolean {
-  return (
-    engine.getClassName() === 'WebGPUEngine' ||
-    (engine as unknown as { isWebGPU?: boolean }).isWebGPU === true
-  )
 }
 
 bootstrap().catch((err) => {

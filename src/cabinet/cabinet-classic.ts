@@ -56,6 +56,12 @@ export const CLASSIC_CONFIG: CabinetPreset = {
   hasAngledSides: false,
   hasExtendedMarquee: false,
   hasCoinDoor: true,
+
+  gltf: {
+    simpleUrl: 'models/cabinet/classic/simple.glb',
+    highUrl: 'models/cabinet/classic/high.glb',
+    loadTimeoutMs: 15_000,
+  },
 }
 
 export function createClassicCabinet(scene: Scene, materials: ReturnType<typeof getMaterialLibrary>): Mesh[] {

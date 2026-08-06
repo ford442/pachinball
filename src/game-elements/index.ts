@@ -47,7 +47,7 @@ export { NanoLoomFeeder, NanoLoomState } from './nano-loom-feeder'
 export { PrismCoreFeeder, PrismCoreState } from './prism-core-feeder'
 export { GaussCannonFeeder, GaussCannonState } from './gauss-cannon-feeder'
 export { QuantumTunnelFeeder, QuantumTunnelState } from './quantum-tunnel-feeder'
-export { MaterialLibrary, getMaterialLibrary, resetMaterialLibrary, detectQualityTier } from '../materials'
+export { MaterialLibrary, getMaterialLibrary, resetMaterialLibrary, detectQualityTier, applyMobileQualityCap } from '../materials'
 export { BallAnimator } from './ball-animator'
 export { CameraController, CameraMode, FRAMING_ZONES, DEFAULT_SOFT_FOLLOW, type CameraRuntimePolicy } from './camera-controller'
 export {
@@ -66,8 +66,20 @@ export {
   type TableMapType,
   type TableMapConfig,
 } from '../shaders/lcd-table'
-export { SoundSystem, getSoundSystem, resetSoundSystem, type SampleCategory, type MapId } from './sound-system'
+export { SoundSystem, getSoundSystem, resetSoundSystem, type MapId } from './sound-system'
 export { createImpactVoiceProfile, normalizeImpactVelocity, getPortalMotifFrequencies, type ImpactCategory, type ImpactVoiceOptions, type ImpactVoiceProfile } from './audio-synth'
+export {
+  getJackpotPhaseSampleKey,
+  getLocalAudioPath,
+  getSampleKeyForCategory,
+  getSampleKeyForImpact,
+  LOCAL_MUSIC_STEMS,
+  LOCAL_SAMPLE_BANK,
+  type AudioMusicStem,
+  type AudioSampleKey,
+  type AudioSourceMode,
+  type SampleCategory,
+} from './audio-sample-bank'
 export { LeaderboardSystem, getLeaderboardSystem, resetLeaderboardSystem, type LeaderboardEntry, type ScoreSubmission } from './leaderboard-system'
 export { NameEntryDialog, getNameEntryDialog, type NameEntryResult } from './name-entry-dialog'
 export { MapSystem, getMapSystem, resetMapSystem, type DynamicMapConfig } from './map-system'
@@ -156,7 +168,7 @@ export {
   PHYSICS_TUNING_SLIDERS,
   type PhysicsTuningKey,
 } from './physics-tuning'
-export { PhysicsTuningPanel, isPhysicsTuningQueryEnabled } from './physics-tuning-panel'
+export { PhysicsTuningPanel, isPhysicsTuningQueryEnabled, isPhysicsTuningEnabled } from './physics-tuning-panel'
 export { PerformanceMonitor, type PerformanceMetrics } from './performance-monitor'
 
 // Adventure goal & progression systems
@@ -214,6 +226,33 @@ export {
   resetScoringBreakdownManager,
   type ScoringBreakdownSnapshot,
 } from './scoring-breakdown'
+
+export {
+  createSeededRng,
+  hashStringToSeed,
+  dailySeedId,
+  seedFromDailyId,
+  randomU32Seed,
+  type SeededRng,
+} from './seeded-rng'
+export {
+  generateTableLayout,
+  validateLayout,
+  runSpawnProbes,
+  CANONICAL_BUMPERS,
+  LAYOUT_CONSTANTS,
+  FEEDER_KEYS,
+  type TableLayout,
+  type FeederKey,
+  type PinSpec,
+  type BumperSpec,
+} from './daily-cascade-layout'
+export {
+  DailyCascadeState,
+  getDailyCascadeState,
+  resetDailyCascadeState,
+  type DailyCascadeMode,
+} from './daily-cascade-state'
 
 // EventBus integration shims
 export { ObstacleEventBusIntegration } from './obstacle-eventbus-integration'

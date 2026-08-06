@@ -75,12 +75,12 @@ export class GameMapCabinet {
     this.host.mapManager?.cycleTableMap()
   }
 
-  loadCabinetPreset(type: import('./game-cabinet').CabinetType): void {
-    this.host.cabinetManager?.loadCabinetPreset(type)
+  async loadCabinetPreset(type: import('./game-cabinet').CabinetType): Promise<void> {
+    await this.host.cabinetManager?.loadCabinetPreset(type)
   }
 
-  cycleCabinetPreset(): void {
-    this.host.cabinetManager?.cycleCabinetPreset()
+  async cycleCabinetPreset(): Promise<void> {
+    await this.host.cabinetManager?.cycleCabinetPreset()
   }
 
   showMapNamePopup(name: string, color: string): void {

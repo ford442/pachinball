@@ -13,7 +13,17 @@ import {
   type TrackThemeProfile,
 } from './track-theme-profiles'
 import type { SpinnerBumperVisual, MovingGateState, GameObjects } from '../objects'
-import type { TableMapManager } from '../game/game-maps'
+/**
+ * Structural view of the game layer's TableMapManager (#322).
+ *
+ * This system only ever reads the current map's base colour, so it declares the
+ * shape it needs instead of importing the concrete class from `src/game/**` —
+ * which would invert the layering. `TableMapManager` satisfies this
+ * structurally, so callers keep passing it unchanged.
+ */
+export interface TrackThemingMapSource {
+  getCurrentConfig(): { baseColor: string; accentColor: string } | undefined
+}
 import type { AdventureMode } from '../adventure'
 import { getCabinetBuilder } from '../cabinet'
 
@@ -76,7 +86,7 @@ export interface TrackThemingSystemDeps {
   cabinetNeonLights: Array<{ diffuse: Color3 }>
   display: DisplaySystem | null
   effects: EffectsSystem | null
-  mapManager: TableMapManager | null
+  mapManager: TrackThemingMapSource | null
   qualityTier: QualityTier
   scene: Scene
   adventureMode?: AdventureMode | null

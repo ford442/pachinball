@@ -1035,6 +1035,10 @@ function createUpperMaintenanceCluster(scene: Scene, parent: TransformNode): voi
  * Everything lives under a single `playfieldCyberDecor` TransformNode for cleanliness.
  * ZERO physics cost. Highly bloom-friendly. Uses shared materials aggressively.
  */
+
+// Layer 1 decals need PNGs under public/assets/textures/decals/ — keep off until art ships.
+const PLAYFIELD_DECAL_TEXTURES_READY = false
+
 export function applyTableDecorations(
   scene: Scene,
   playfieldMesh: Mesh,
@@ -1055,26 +1059,28 @@ export function applyTableDecorations(
   // ========================================================================
   // LAYER 1 — PROJECTED DECALS (high-level graphic language)
   // ========================================================================
-  createNeonDecal(scene, playfieldMesh, new Vector3(0, -0.99, 5), resolveAssetUrl('/assets/textures/decals/circuit-center.png')!, {
-    size: new Vector3(7.5, 11, 0.08),
-    emissiveIntensity: 1.35,
-    zOffset: -0.6
-  })
-  createNeonDecal(scene, playfieldMesh, new Vector3(-5.5, -0.99, -6), resolveAssetUrl('/assets/textures/decals/lane-arrow-l.png')!, {
-    size: new Vector3(2.2, 3.5, 0.06),
-    emissiveIntensity: 1.6,
-    zOffset: -0.7
-  })
-  createNeonDecal(scene, playfieldMesh, new Vector3(5.5, -0.99, -6), resolveAssetUrl('/assets/textures/decals/lane-arrow-r.png')!, {
-    size: new Vector3(2.2, 3.5, 0.06),
-    emissiveIntensity: 1.6,
-    zOffset: -0.7
-  })
-  createNeonDecal(scene, playfieldMesh, new Vector3(0, -0.99, 14), resolveAssetUrl('/assets/textures/decals/hazard-chevron.png')!, {
-    size: new Vector3(9, 4, 0.05),
-    emissiveIntensity: 1.1,
-    zOffset: -0.9
-  })
+  if (PLAYFIELD_DECAL_TEXTURES_READY) {
+    createNeonDecal(scene, playfieldMesh, new Vector3(0, -0.99, 5), resolveAssetUrl('/assets/textures/decals/circuit-center.png')!, {
+      size: new Vector3(7.5, 11, 0.08),
+      emissiveIntensity: 1.35,
+      zOffset: -0.6
+    })
+    createNeonDecal(scene, playfieldMesh, new Vector3(-5.5, -0.99, -6), resolveAssetUrl('/assets/textures/decals/lane-arrow-l.png')!, {
+      size: new Vector3(2.2, 3.5, 0.06),
+      emissiveIntensity: 1.6,
+      zOffset: -0.7
+    })
+    createNeonDecal(scene, playfieldMesh, new Vector3(5.5, -0.99, -6), resolveAssetUrl('/assets/textures/decals/lane-arrow-r.png')!, {
+      size: new Vector3(2.2, 3.5, 0.06),
+      emissiveIntensity: 1.6,
+      zOffset: -0.7
+    })
+    createNeonDecal(scene, playfieldMesh, new Vector3(0, -0.99, 14), resolveAssetUrl('/assets/textures/decals/hazard-chevron.png')!, {
+      size: new Vector3(9, 4, 0.05),
+      emissiveIntensity: 1.1,
+      zOffset: -0.9
+    })
+  }
 
   // ========================================================================
   // LAYER 2 — ARCHITECTURAL BEZEL & POWER RAILS (premium framing)

@@ -15,6 +15,25 @@ import type { Scene, Mesh, TransformNode } from '@babylonjs/core'
 import { DisplayState, type DisplayConfig, type SlotReel } from './display-types'
 import { DISPLAY_LAYER_Z } from './display-layer-depth'
 
+/** Per-frame draw/upload budget (ms) for canvas reel rasterization. */
+export const REELS_RENDER_BUDGET_MS = 1.0
+
+const DEBUG_TELEMETRY_KEY = 'debug:reels-telemetry'
+
+export interface ReelsRenderTelemetrySnapshot {
+  enabled: boolean
+  budgetMs: number
+  frameCount: number
+  spinFrameCount: number
+  budgetExceededCount: number
+  spinBudgetExceededCount: number
+  last: { drawMs: number; uploadMs: number; totalMs: number } | null
+  max: { drawMs: number; uploadMs: number; totalMs: number }
+  avg: { drawMs: number; uploadMs: number; totalMs: number }
+  spinAvg: { drawMs: number; uploadMs: number; totalMs: number }
+  spinMax: { drawMs: number; uploadMs: number; totalMs: number }
+}
+
 export interface SpinOptions {
   /** Per-reel rotation speeds. If omitted, random speeds are used. */
   reelSpeeds?: number[]
@@ -47,6 +66,26 @@ export class DisplayReelsLayer {
   private mesh: Mesh | null = null
   private dynamicTexture: DynamicTexture | null = null
 
+  private telemetryEnabled = false
+  private telemetryFrameCount = 0
+  private telemetrySpinFrameCount = 0
+  private telemetryBudgetExceededCount = 0
+  private telemetrySpinBudgetExceededCount = 0
+  private telemetrySumDrawMs = 0
+  private telemetrySumUploadMs = 0
+  private telemetrySumTotalMs = 0
+  private telemetrySpinSumDrawMs = 0
+  private telemetrySpinSumUploadMs = 0
+  private telemetrySpinSumTotalMs = 0
+  private telemetryMaxDrawMs = 0
+  private telemetryMaxUploadMs = 0
+  private telemetryMaxTotalMs = 0
+  private telemetrySpinMaxDrawMs = 0
+  private telemetrySpinMaxUploadMs = 0
+  private telemetrySpinMaxTotalMs = 0
+  private telemetryLast: { drawMs: number; uploadMs: number; totalMs: number } | null = null
+  private telemetryWarnCooldownUntil = 0
+
   constructor(
     scene: Scene,
 
@@ -55,7 +94,152 @@ export class DisplayReelsLayer {
     this.scene = scene
     // Use void expression to suppress "declared but never read" warning
     void this.scene
+    this.telemetryEnabled = this.readTelemetryFlagFromStorage()
     this.initReels()
+    this.exposeDebugGlobals()
+  }
+
+  private readTelemetryFlagFromStorage(): boolean {
+    if (typeof localStorage === 'undefined') return false
+    return localStorage.getItem(DEBUG_TELEMETRY_KEY) === 'true'
+  }
+
+  private exposeDebugGlobals(): void {
+    if (typeof window === 'undefined') return
+    try {
+      const w = window as unknown as {
+        setReelsTelemetryEnabled?: (enabled: boolean) => void
+        getReelsTelemetry?: () => ReelsRenderTelemetrySnapshot
+        resetReelsTelemetry?: () => void
+      }
+      w.setReelsTelemetryEnabled = (enabled: boolean) => this.setTelemetryEnabled(enabled)
+      w.getReelsTelemetry = () => this.getTelemetry()
+      w.resetReelsTelemetry = () => this.resetTelemetry()
+    } catch {
+      // Ignore if window object is frozen
+    }
+  }
+
+  setTelemetryEnabled(enabled: boolean): void {
+    this.telemetryEnabled = enabled
+    if (typeof localStorage !== 'undefined') {
+      if (enabled) {
+        localStorage.setItem(DEBUG_TELEMETRY_KEY, 'true')
+      } else {
+        localStorage.removeItem(DEBUG_TELEMETRY_KEY)
+      }
+    }
+    if (enabled) {
+      console.log(
+        `[ReelsTelemetry] Enabled (budget ${REELS_RENDER_BUDGET_MS} ms/frame). ` +
+          'Use getReelsTelemetry() / resetReelsTelemetry() in devtools.'
+      )
+    }
+  }
+
+  isTelemetryEnabled(): boolean {
+    return this.telemetryEnabled
+  }
+
+  resetTelemetry(): void {
+    this.telemetryFrameCount = 0
+    this.telemetrySpinFrameCount = 0
+    this.telemetryBudgetExceededCount = 0
+    this.telemetrySpinBudgetExceededCount = 0
+    this.telemetrySumDrawMs = 0
+    this.telemetrySumUploadMs = 0
+    this.telemetrySumTotalMs = 0
+    this.telemetrySpinSumDrawMs = 0
+    this.telemetrySpinSumUploadMs = 0
+    this.telemetrySpinSumTotalMs = 0
+    this.telemetryMaxDrawMs = 0
+    this.telemetryMaxUploadMs = 0
+    this.telemetryMaxTotalMs = 0
+    this.telemetrySpinMaxDrawMs = 0
+    this.telemetrySpinMaxUploadMs = 0
+    this.telemetrySpinMaxTotalMs = 0
+    this.telemetryLast = null
+    this.telemetryWarnCooldownUntil = 0
+  }
+
+  getTelemetry(): ReelsRenderTelemetrySnapshot {
+    const avg = (sum: number, count: number): number => (count > 0 ? sum / count : 0)
+    return {
+      enabled: this.telemetryEnabled,
+      budgetMs: REELS_RENDER_BUDGET_MS,
+      frameCount: this.telemetryFrameCount,
+      spinFrameCount: this.telemetrySpinFrameCount,
+      budgetExceededCount: this.telemetryBudgetExceededCount,
+      spinBudgetExceededCount: this.telemetrySpinBudgetExceededCount,
+      last: this.telemetryLast,
+      max: {
+        drawMs: this.telemetryMaxDrawMs,
+        uploadMs: this.telemetryMaxUploadMs,
+        totalMs: this.telemetryMaxTotalMs,
+      },
+      avg: {
+        drawMs: avg(this.telemetrySumDrawMs, this.telemetryFrameCount),
+        uploadMs: avg(this.telemetrySumUploadMs, this.telemetryFrameCount),
+        totalMs: avg(this.telemetrySumTotalMs, this.telemetryFrameCount),
+      },
+      spinAvg: {
+        drawMs: avg(this.telemetrySpinSumDrawMs, this.telemetrySpinFrameCount),
+        uploadMs: avg(this.telemetrySpinSumUploadMs, this.telemetrySpinFrameCount),
+        totalMs: avg(this.telemetrySpinSumTotalMs, this.telemetrySpinFrameCount),
+      },
+      spinMax: {
+        drawMs: this.telemetrySpinMaxDrawMs,
+        uploadMs: this.telemetrySpinMaxUploadMs,
+        totalMs: this.telemetrySpinMaxTotalMs,
+      },
+    }
+  }
+
+  private recordTelemetry(
+    drawMs: number,
+    uploadMs: number,
+    totalMs: number,
+    spinningFrame: boolean
+  ): void {
+    this.telemetryFrameCount++
+    this.telemetrySumDrawMs += drawMs
+    this.telemetrySumUploadMs += uploadMs
+    this.telemetrySumTotalMs += totalMs
+    this.telemetryLast = { drawMs, uploadMs, totalMs }
+
+    this.telemetryMaxDrawMs = Math.max(this.telemetryMaxDrawMs, drawMs)
+    this.telemetryMaxUploadMs = Math.max(this.telemetryMaxUploadMs, uploadMs)
+    this.telemetryMaxTotalMs = Math.max(this.telemetryMaxTotalMs, totalMs)
+
+    const budgetExceeded = totalMs > REELS_RENDER_BUDGET_MS
+    if (budgetExceeded) {
+      this.telemetryBudgetExceededCount++
+    }
+
+    if (spinningFrame) {
+      this.telemetrySpinFrameCount++
+      this.telemetrySpinSumDrawMs += drawMs
+      this.telemetrySpinSumUploadMs += uploadMs
+      this.telemetrySpinSumTotalMs += totalMs
+      this.telemetrySpinMaxDrawMs = Math.max(this.telemetrySpinMaxDrawMs, drawMs)
+      this.telemetrySpinMaxUploadMs = Math.max(this.telemetrySpinMaxUploadMs, uploadMs)
+      this.telemetrySpinMaxTotalMs = Math.max(this.telemetrySpinMaxTotalMs, totalMs)
+      if (budgetExceeded) {
+        this.telemetrySpinBudgetExceededCount++
+      }
+    }
+
+    if (budgetExceeded) {
+      const now = performance.now()
+      if (now >= this.telemetryWarnCooldownUntil) {
+        this.telemetryWarnCooldownUntil = now + 1000
+        console.warn(
+          `[ReelsTelemetry] Reel render exceeded ${REELS_RENDER_BUDGET_MS} ms budget: ` +
+            `draw=${drawMs.toFixed(3)}ms upload=${uploadMs.toFixed(3)}ms total=${totalMs.toFixed(3)}ms ` +
+            `(spinning=${spinningFrame})`
+        )
+      }
+    }
   }
 
   private initReels(): void {
@@ -101,6 +285,10 @@ export class DisplayReelsLayer {
   private renderReels(): void {
     const ctx = this.dynamicTexture?.getContext() as CanvasRenderingContext2D | null
     if (!ctx || !this.dynamicTexture) return
+
+    const telemetryOn = this.telemetryEnabled
+    const spinningFrame = this.spinning
+    const drawStart = telemetryOn ? performance.now() : 0
 
     const canvas = ctx.canvas
     const w = canvas.width
@@ -178,7 +366,15 @@ export class DisplayReelsLayer {
     ctx.lineTo(w, h / 2)
     ctx.stroke()
 
+    const uploadStart = telemetryOn ? performance.now() : 0
     this.dynamicTexture.update()
+    if (telemetryOn) {
+      const uploadEnd = performance.now()
+      const drawMs = uploadStart - drawStart
+      const uploadMs = uploadEnd - uploadStart
+      const totalMs = uploadEnd - drawStart
+      this.recordTelemetry(drawMs, uploadMs, totalMs, spinningFrame)
+    }
   }
 
   /**

@@ -64,8 +64,36 @@ export interface WasmPhysicsWorldInstance {
   /** Directly set the velocity of a body. */
   setVelocity(id: number, vx: number, vy: number, vz: number): void
 
+  /** Directly set the position of a body. */
+  setBodyPosition(id: number, px: number, py: number, pz: number): void
+
+  /** Directly set the rotation of a body. */
+  setBodyRotation(id: number, qx: number, qy: number, qz: number, qw: number): void
+
   /** Add an infinite static plane defined by a normal + d offset. */
   addStaticPlane(nx: number, ny: number, nz: number, distance: number): void
+
+  /**
+   * Add an oriented static box collider.
+   * @returns Negative collider id used in contact events.
+   */
+  addStaticBox(
+    px: number, py: number, pz: number,
+    hx: number, hy: number, hz: number,
+    qx: number, qy: number, qz: number, qw: number,
+    restitution?: number
+  ): number
+
+  /**
+   * Add an oriented static capsule collider (local Y axis).
+   * @returns Negative collider id used in contact events.
+   */
+  addStaticCapsule(
+    px: number, py: number, pz: number,
+    radius: number, halfHeight: number,
+    qx: number, qy: number, qz: number, qw: number,
+    restitution?: number
+  ): number
 
   // Position getters
   getPosX(id: number): number

@@ -57,6 +57,14 @@ Vitest transition tests assert full catch→release cycles complete within tuned
 | maxCaptureHeightY | — | 2.0 | Ignore aerial balls (hologram lane) |
 | spinAngularSpeed | — | 32 | Visual spin rate during charge |
 | releaseUpwardBias | — | 0.08 | Small lift on release to clear well rim |
+| animation.ringSpeedSpin / Idle / Default | — | 24 / 1 / 4 | Ring spin targets per state (was inline in updateVisuals) |
+| animation.ringLerpSpin / Default | — | 2.5 / 0.5 | Ring speed convergence rates |
+| animation.shakeDecay | — | 0.88 | Per-frame release shake decay |
+| animation.idlePulseFrequency | — | 1.8 | IDLE sin pulse rate |
+| animation.releaseShakeInitial | — | 0.6 | Shake amplitude on release |
+| physicsExtras.releaseSpinVarianceXZ | — | 8 | Release angular velocity X/Z spread |
+| physicsExtras.releaseSpinBaseY | — | 12 | Release angular velocity Y impulse |
+| physicsExtras.spinAxisMultiplierY/Z | — | 1.3 / 0.7 | Ball spin quaternion axis multipliers |
 
 **Render paths:** Babylon `StandardMaterial` + `PointLight` — WebGPU and WebGL2 both use the same mesh path; no WGSL-only feeder visuals.
 
@@ -81,6 +89,10 @@ Vitest transition tests assert full catch→release cycles complete within tuned
 | weaveNudgeImpulse | — | 0.1 | Breaks pin balance when entering WEAVE |
 | ejectImpulse | — | `{ x: 8, y: 2, z: 0 }` | Push toward center (+X) from left wall |
 | ejectCooldown | — | 1.0 s | Short gate before IDLE (PLAN has no cooldown state) |
+| animation.liftTopYOffset | — | 0.5 | Top-of-loom hold offset during LIFT |
+| animation.pinActivationRowRadius | — | 2 | Pin glow proximity rows |
+| animation.pinActivationScaleBoost | — | 0.5 | Pin scale pulse amplitude |
+| animation.weaveExitMarginY | — | 0.5 | Bottom exit threshold margin |
 
 **Render paths:** Canvas-compatible `StandardMaterial` on frame, intake, pins.
 
@@ -99,6 +111,10 @@ Vitest transition tests assert full catch→release cycles complete within tuned
 | ejectSpread | 45° | 45 | Matches spec |
 | lockCapacity | 3 (implicit) | 3 | Explicit for tests/config |
 | postReleaseCooldown | — | 2.0 s | Prevents instant re-capture after multiball (was inline) |
+| animation.rotationSpeedIdle/Locked1/Locked2/Overload | — | 0.5 / 2 / 5 / 15 | Inner core spin targets per lock state |
+| animation.rotationLerpRate | — | 2 | Rotation speed convergence |
+| animation.outerRotationRatio | — | 0.5 | Outer shell counter-rotation factor |
+| animation.bloomDecay | — | 0.9 | Energy bloom fade per frame |
 
 **Render paths:** Procedural polyhedron + wireframe cylinder; both renderers supported. Custom refraction shader noted in PLAN — **not implemented** (follow-up if needed).
 
@@ -123,6 +139,11 @@ Vitest transition tests assert full catch→release cycles complete within tuned
 | breechYOffset | — | 1.0 | Ball hold height on mount |
 | idleSweepRate | — | 2.0 | IDLE visual sweep (was 0.2×10 inline) |
 | aimSweepMultiplier | — | 20 | Converts sweepSpeed to deg/frame during AIM |
+| animation.coilPulseRate | — | 10 | AIM coil stretch oscillation rate |
+| animation.recoilSpringStrength / recoilDamping | — | 20 / 0.7 | Barrel recoil spring physics |
+| animation.fireRecoilImpulse | — | 0.5 | Initial recoil velocity on fire |
+| animation.vibrationDecay | — | 0.95 | Per-frame charge/fire vibration decay |
+| animation.idleSweepScale | — | 10 | IDLE sweep rate multiplier |
 
 **Render paths:** TransformNode + emissive coils; renderer-agnostic.
 
@@ -148,6 +169,11 @@ Vitest transition tests assert full catch→release cycles complete within tuned
 | transportHideY | — | -100 | Off-table hold during transport |
 | cooldownFadeDuration | — | 1.0 s | Output portal fade rate |
 | portalSpinIdle/Capture/Transport/Eject | — | 1 / 5 / 8 / 10 | Visual spin tiers (was class constants) |
+| animation.portalSpinLerpRate | — | 5.0 | Spin acceleration lerp |
+| animation.outputSpinRatio | — | 0.8 | Output portal counter-spin factor |
+| animation.portalStretchAmplitude | — | 0.3 | TRANSPORT portal distortion peak |
+| animation.ejectRecoilDecay | — | 0.8 | Output portal recoil decay per frame |
+| animation.idlePulseRate | — | 0.002 | IDLE emissive sin rate (performance.now scale) |
 
 **Render paths:** Torus + disc materials. PLAN mentions swirling UV shader — **not implemented** (file follow-up for display/shaders branch).
 
@@ -162,6 +188,12 @@ Vitest transition tests assert full catch→release cycles complete within tuned
 | `tests/nano-loom-feeder.test.ts` | nano-loom | lift→weave→eject→idle, +X eject |
 | `tests/prism-core-feeder.test.ts` | prism-core | 3-ball lock chain, -Z eject, post-release cooldown |
 | `tests/quantum-tunnel-feeder.test.ts` | quantum-tunnel | capture→transport→eject→cooldown, +X eject |
+| `tests/feeder-golden-fixtures.test.ts` | all five | Golden FSM replay with fixed Math.random — parity gate for config extraction |
+| `tests/feeder-golden-fixtures.test.ts` | invariants | All five entries present; finite positive core scalars |
+
+## Is PLAN.md §5 still ground truth?
+
+**No.** `FEEDER_TUNABLES` (including `animation` / `physicsExtras` nested blocks) is ground truth for gameplay feel. PLAN.md §5–§31 documents design intent; drift is intentional where code values were tuned for playability.
 
 ## Config entry point
 

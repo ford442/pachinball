@@ -48,6 +48,8 @@ import {
   getLeaderboardSystem,
   getNameEntryDialog,
   getAdventureState,
+  getDailyCascadeState,
+  type FeederKey,
   getLevelSelectScreen,
   ZoneTriggerSystem,
   getDynamicWorld,
@@ -76,7 +78,7 @@ import { BallStackVisual } from './game-elements/ball-stack-visual'
 import { CabinetLighting } from './effects/cabinet-lighting'
 import { CelebrationSequencer } from './effects/celebration-sequencer'
 import { GameStateManager } from './game/game-state'
-import { EventBus } from './game/event-bus'
+import { EventBus } from './core/event-bus'
 import { GameInputManager } from './game/game-input'
 import { TableMapManager } from './game/game-maps'
 import { CabinetManager } from './game/game-cabinet'
@@ -94,7 +96,7 @@ import { GameInputActions, type InputActionsHost } from './game/game-input-actio
 import { GameScenario, type ScenarioHost } from './game/game-scenario'
 import { GameSlotAdventure, type SlotAdventureHost } from './game/game-slot-adventure'
 import { GameSettingsUI, type SettingsUIHost } from './game/game-settings-ui'
-import { PhysicsTuningPanel, isPhysicsTuningQueryEnabled } from './game-elements/physics-tuning-panel'
+import { PhysicsTuningPanel, isPhysicsTuningEnabled } from './game-elements/physics-tuning-panel'
 import { GameDebug, type DebugHost } from './game/game-debug'
 import { GameLifecycle, type LifecycleHost } from './game/game-lifecycle'
 import { GameSystemsInitializer } from './game/game-systems-init'
@@ -161,6 +163,7 @@ export class Game {
 
   // Rendering
   bloomPipeline: DefaultRenderingPipeline | null = null
+  postProcessDegraded = false
   sceneOptimizer: SceneOptimizer | null = null
   mirrorTexture: MirrorTexture | null = null
   tableRenderTarget: RenderTargetTexture | null = null
@@ -207,6 +210,7 @@ export class Game {
 
   // Map / Adventure
   mapSystem = getMapSystem()
+  // Legacy level-select + cosmetic rewards; campaign truth is adventureTrackProgression.
   adventureState = getAdventureState()
   levelSelectScreen: ReturnType<typeof getLevelSelectScreen> | null = null
   dynamicWorld: ReturnType<typeof getDynamicWorld> | null = null
@@ -284,6 +288,9 @@ export class Game {
 
       document.getElementById('start-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
       document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
+      this.uiManager?.setStartButtonEnabled(false)
+      const { bindDailyCascadeUI } = await import('./game/daily-cascade-ui')
+      bindDailyCascadeUI()
 
       try {
         const v = localStorage.getItem('pachinball.best')
@@ -304,7 +311,7 @@ export class Game {
       console.log('[Accessibility] Settings loaded:', settings, 'Accessibility:', this.accessibility)
 
       this.hapticManager = new HapticManager({
-        enabled: this.accessibility.hapticsEnabled,
+        enabled: settings.hapticsEnabled && this.accessibility.hapticsEnabled,
         intensity: this.accessibility.hapticIntensity,
       })
     })
@@ -318,6 +325,16 @@ export class Game {
       this.renderer.setupResizeObserver()
       this.renderer.setupDPRHandling()
       this.renderer.setupSceneOptimizer()
+
+      // One-shot auto quality drop when avg frame time stays >22ms for 2s (#300)
+      this.performanceMonitor.setOnSustainedJank(() => {
+        const before = this.qualityTier
+        const after = this.renderer.dropQualityTierOnce()
+        if (after !== before) {
+          this.uiManager?.showMessage('Graphics reduced for performance', 3000)
+          console.warn(`[Perf] Auto quality drop: ${before} → ${after}`)
+        }
+      })
     })
 
     await this.runCheckpointStage('core_helpers', () => {
@@ -327,8 +344,8 @@ export class Game {
       this.scenarioManager = new GameScenario(this as unknown as ScenarioHost)
       this.slotAdventure = new GameSlotAdventure(this as unknown as SlotAdventureHost)
       this.settingsUI = new GameSettingsUI(this as unknown as SettingsUIHost)
-      this.physicsTuningPanel = new PhysicsTuningPanel()
-      if (isPhysicsTuningQueryEnabled() || this.physicsTuningEnabledInSettings) {
+      if (isPhysicsTuningEnabled(this.physicsTuningEnabledInSettings)) {
+        this.physicsTuningPanel = new PhysicsTuningPanel()
         this.physicsTuningPanel.show()
       }
       this.debugHelper = new GameDebug(this as unknown as DebugHost)
@@ -405,7 +422,7 @@ export class Game {
           }
         },
         onMapCycle: () => this.mapManager?.cycleTableMap(),
-        onCabinetCycle: () => this.cabinetManager?.cycleCabinetPreset(),
+        onCabinetCycle: () => { void this.cabinetManager?.cycleCabinetPreset() },
         onCameraToggle: () => { this.isCameraFollowMode = !this.isCameraFollowMode },
         onLevelSelectToggle: () => this.toggleLevelSelect(),
         onLeaderboardToggle: () => this.leaderboardSystem.toggle(),
@@ -443,67 +460,7 @@ export class Game {
         this.settingsUI.updatePhysicsDebugRenderer()
       })
 
-      this.engine.runRenderLoop(() => {
-        this.settingsUI.updateLatencyDisplay(this.inputManager || undefined)
-        this.scene?.render()
-        const dt = this.engine.getDeltaTime() / 1000
-        this.cabinetLighting?.update(dt)
-
-        for (const visual of this.spinnerVisuals) {
-          this.spinnerBuilder?.updateSpinner(visual, dt)
-        }
-        for (const state of this.trapStates) {
-          this.ballTrapBuilder?.updateTrap(state, dt)
-        }
-        for (const state of this.launcherStates) {
-          this.launcherBuilder?.updateLauncher(state, dt)
-        }
-        for (const state of this.gateStates) {
-          this.movingGateBuilder?.updateGate(state, dt)
-        }
-
-        this.adventureCinematicSystem?.update(dt)
-        this.adventureCinematicTriggers?.update()
-        this.adventureUIStateManager?.updateAnimations(dt)
-        this.adventureGoalTracker?.update(dt)
-        this.adventureProgressionSupervisor?.update(dt, this.score)
-        if (this.adventureMode?.isActive() && this.adventureGoalTracker && this.adventureProgressionSupervisor) {
-          this.adventureGoalTracker.syncTrackScore(
-            this.adventureProgressionSupervisor.getScoreDelta(this.score),
-          )
-          this.updateHUD()
-        }
-
-        // Drive the HUD countdown timer from the supervisor state
-        if (this.adventureProgressionSupervisor && this.adventureProgressionSupervisor.getTimeRemaining() > 0) {
-          const trackInfo = this.adventureTrackProgression?.getCurrentTrackInfo()
-          if (trackInfo) {
-            this.uiManager?.updateCountdownTimer(
-              this.adventureProgressionSupervisor.getTimeRemaining(),
-              trackInfo.timeLimitSeconds,
-            )
-          }
-        }
-
-        const drawCallsCounter = (this.engine as unknown as { _drawCalls?: { current?: number } })._drawCalls
-        this.performanceMonitor.updateEngineMetrics(
-          drawCallsCounter?.current ?? 0,
-          this.physics.getActiveBodyCount(),
-        )
-        this.performanceMonitor.setParticleCount(this.effects?.getActiveParticleCount() ?? 0)
-        this.performanceMonitor.setGoldBallCount(this.ballManager?.getGoldBallCount() ?? 0)
-        this.performanceMonitor.frameEnd()
-
-        if (this.debugHUD?.isHUDVisible()) {
-          this.debugHUD.update(this.debugHelper.buildDebugSnapshot(dt, this.lives))
-          this.debugHUD.updatePanel('EventBus', this.eventBusLog.getPanelData())
-        }
-
-        const perfMetrics = this.performanceMonitor.getMetrics()
-        if (perfMetrics.suggestedFallback && this.effects?.getRuntimePerformanceTier() === 'high') {
-          this.effects.forcePerformanceTierReview()
-        }
-      })
+      this.engine.runRenderLoop(() => this.renderFrame())
 
       this.showDebugUI = new URLSearchParams(window.location.search).has('debug')
       if (this.showDebugUI) {
@@ -518,6 +475,68 @@ export class Game {
     await this.systemsInitializer.postInitManagers()
 
     this.lifecycle.setGameState(GameState.MENU)
+  }
+
+  /** Per-frame render loop body — also used by VisibilityManager on tab resume. */
+  renderFrame(): void {
+    this.settingsUI.updateLatencyDisplay(this.inputManager || undefined)
+    this.scene?.render()
+    const dt = this.engine.getDeltaTime() / 1000
+    this.cabinetLighting?.update(dt)
+
+    for (const visual of this.spinnerVisuals) {
+      this.spinnerBuilder?.updateSpinner(visual, dt)
+    }
+    for (const state of this.trapStates) {
+      this.ballTrapBuilder?.updateTrap(state, dt)
+    }
+    for (const state of this.launcherStates) {
+      this.launcherBuilder?.updateLauncher(state, dt)
+    }
+    for (const state of this.gateStates) {
+      this.movingGateBuilder?.updateGate(state, dt)
+    }
+
+    this.adventureCinematicSystem?.update(dt)
+    this.adventureCinematicTriggers?.update()
+    this.adventureUIStateManager?.updateAnimations(dt)
+    this.adventureGoalTracker?.update(dt)
+    this.adventureProgressionSupervisor?.update(dt, this.score)
+    if (this.adventureMode?.isActive() && this.adventureGoalTracker && this.adventureProgressionSupervisor) {
+      this.adventureGoalTracker.syncTrackScore(
+        this.adventureProgressionSupervisor.getScoreDelta(this.score),
+      )
+      this.updateHUD()
+    }
+
+    if (this.adventureProgressionSupervisor && this.adventureProgressionSupervisor.getTimeRemaining() > 0) {
+      const trackInfo = this.adventureTrackProgression?.getCurrentTrackInfo()
+      if (trackInfo) {
+        this.uiManager?.updateCountdownTimer(
+          this.adventureProgressionSupervisor.getTimeRemaining(),
+          trackInfo.timeLimitSeconds,
+        )
+      }
+    }
+
+    const drawCallsCounter = (this.engine as unknown as { _drawCalls?: { current?: number } })._drawCalls
+    this.performanceMonitor.updateEngineMetrics(
+      drawCallsCounter?.current ?? 0,
+      this.physics.getActiveBodyCount(),
+    )
+    this.performanceMonitor.setParticleCount(this.effects?.getActiveParticleCount() ?? 0)
+    this.performanceMonitor.setGoldBallCount(this.ballManager?.getGoldBallCount() ?? 0)
+    this.performanceMonitor.frameEnd()
+
+    if (this.debugHUD?.isHUDVisible()) {
+      this.debugHUD.update(this.debugHelper.buildDebugSnapshot(dt, this.lives))
+      this.debugHUD.updatePanel('EventBus', this.eventBusLog.getPanelData())
+    }
+
+    const perfMetrics = this.performanceMonitor.getMetrics()
+    if (perfMetrics.suggestedFallback && this.effects?.getRuntimePerformanceTier() === 'high') {
+      this.effects.forcePerformanceTierReview()
+    }
   }
 
 
@@ -600,9 +619,41 @@ export class Game {
   // --------------------------------------------------------------------------
 
   startGame(): Promise<void> { return this.lifecycle.startGame() }
+
+  applyDailyCascadeOnStart(): void {
+    const state = getDailyCascadeState()
+    const mode = state.getMode()
+
+    if (mode === 'vanilla') {
+      if (state.wasMutatorApplied()) {
+        this.gameObjects?.rebuildMutableToys(null)
+        this.applyFeederGameplayFlags(null)
+        this.physicsController?.rebuildHandleCaches()
+        state.markMutatorApplied(false)
+      }
+      return
+    }
+
+    const layout = state.ensureLayout()
+    if (!layout || !this.gameObjects) return
+    this.gameObjects.rebuildMutableToys(layout)
+    this.applyFeederGameplayFlags(layout.feedersEnabled)
+    this.physicsController?.rebuildHandleCaches()
+    state.markMutatorApplied(true)
+  }
+
+  private applyFeederGameplayFlags(flags: Record<FeederKey, boolean> | null): void {
+    const allOn = flags === null
+    this.magSpinFeeder?.setGameplayEnabled(allOn || !!flags?.magSpin)
+    this.nanoLoomFeeder?.setGameplayEnabled(allOn || !!flags?.nanoLoom)
+    this.prismCoreFeeder?.setGameplayEnabled(allOn || !!flags?.prismCore)
+    this.gaussCannon?.setGameplayEnabled(allOn || !!flags?.gaussCannon)
+    this.quantumTunnel?.setGameplayEnabled(allOn || !!flags?.quantumTunnel)
+  }
+
   switchTableMap(mapName: string): void { this.mapCabinet.switchTableMap(mapName) }
-  loadCabinetPreset(type: CabinetType): void { this.mapCabinet.loadCabinetPreset(type) }
-  cycleCabinetPreset(): void { this.mapCabinet.cycleCabinetPreset() }
+  loadCabinetPreset(type: CabinetType): Promise<void> { return this.mapCabinet.loadCabinetPreset(type) }
+  cycleCabinetPreset(): Promise<void> { return this.mapCabinet.cycleCabinetPreset() }
   cycleTableMap(): void { this.mapCabinet.cycleTableMap() }
   switchScenario(scenarioId: string): void { this.scenarioManager.switchScenario(scenarioId) }
   cycleScenario(direction: 1 | -1 = 1): void { this.scenarioManager.cycleScenario(direction) }
@@ -659,6 +710,7 @@ export class Game {
     this.debugHelper.handleDebugHUDVisibilityChange(
       visible,
       () => {
+        this.eventBusLog.wire(this.eventBus)
         this.eventBusLog.setEnabled(true)
         this.performanceMonitor.setEnabled(true)
       },
@@ -667,6 +719,19 @@ export class Game {
         this.eventBusLog.clear()
       },
     )
+  }
+  ensurePhysicsTuningPanel(): PhysicsTuningPanel {
+    if (!this.physicsTuningPanel) {
+      this.physicsTuningPanel = new PhysicsTuningPanel()
+    }
+    return this.physicsTuningPanel
+  }
+  applyAccessibilitySettings(reducedMotion: boolean, photosensitiveMode: boolean): void {
+    this.accessibility = detectAccessibility({ reducedMotion, photosensitiveMode })
+    this.effects?.registerAccessibility(this.accessibility)
+    this.adventureMode?.setAccessibilityConfig(this.accessibility)
+    this.display?.setAccessibility(this.accessibility)
+    this.mapManager?.getLCDTableState().setPhotosensitiveMode(photosensitiveMode)
   }
   isDebugHUDAvailable(): boolean { return this.debugHelper.isDebugHUDAvailable() }
   isDebugHUDKeyboardEnabled(): boolean { return this.debugHelper.isDebugHUDKeyboardEnabled() }

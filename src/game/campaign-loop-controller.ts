@@ -6,7 +6,7 @@ import { DisplayState } from '../game-elements/display-config'
 import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
 import type { AdventureTrackProgression } from '../game-elements/adventure-track-progression'
 import type { CampaignRewardsManager } from '../game-elements/campaign-rewards-manager'
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 
 export interface CampaignLoopHost {
   score: number

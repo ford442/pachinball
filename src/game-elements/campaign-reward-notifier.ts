@@ -1,4 +1,4 @@
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import type { UnlockedReward } from './types'
 import type { CampaignRewardItem } from './campaign-rewards-manager'
 

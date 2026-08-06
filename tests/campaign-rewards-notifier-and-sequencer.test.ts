@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { EventBus } from '../src/game/event-bus'
+import { EventBus } from '../src/core/event-bus'
 import { CampaignRewardNotifier } from '../src/game-elements/campaign-reward-notifier'
 import { CelebrationSequencer } from '../src/effects/celebration-sequencer'
 import { QualityTier } from '../src/game-elements/visual-language'

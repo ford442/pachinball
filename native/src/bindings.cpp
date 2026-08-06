@@ -100,9 +100,13 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("applyForce",   &PhysicsWorld::applyForce)
     .function("applyImpulse", &PhysicsWorld::applyImpulse)
     .function("setVelocity",  &PhysicsWorld::setVelocity)
+    .function("setBodyPosition", &PhysicsWorld::setBodyPosition)
+    .function("setBodyRotation", &PhysicsWorld::setBodyRotation)
 
     // Static geometry
     .function("addStaticPlane", &PhysicsWorld::addStaticPlane)
+    .function("addStaticBox",    &PhysicsWorld::addStaticBox)
+    .function("addStaticCapsule", &PhysicsWorld::addStaticCapsule)
 
     // Queries — JS side uses simple return-value helpers
     .function("getPosX", optional_override([](PhysicsWorld& self, int id) -> float {

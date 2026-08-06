@@ -3,7 +3,7 @@
  * Manages event emission for adventure mode systems (goals, progression, cinematics)
  */
 
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 
 /**
  * Adventure EventBus Manager

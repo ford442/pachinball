@@ -5,6 +5,7 @@ export { WallBuilder } from './object-walls'
 export { RailBuilder } from './object-rails'
 export { PachinkoBuilder } from './object-pachinko'
 export { DecorationBuilder, DecorationFactory, createNeonDecal, applyTableDecorations } from './object-decoration'
+export { LaneSensorBuilder, type LaneSensorDef } from './object-lane-sensors'
 
 // New obstacle systems
 export { SpinnerBumperBuilder } from './object-spinner-bumpers'

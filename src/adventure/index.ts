@@ -33,6 +33,7 @@ export type {
   AnimatedObstacle,
   ConveyorZone,
   ChromaGate,
+  TrackModeType,
 } from './adventure-types'
 
 export {
@@ -40,16 +41,49 @@ export {
   isAdventureTrackType,
 } from './portal-routing'
 
+export {
+  getTrackManifest,
+  getAllTrackManifests,
+  TRACK_MANIFEST_REGISTRY,
+} from './manifests'
+export type { TrackManifest } from './manifests'
+
+export {
+  validateTrackDefinition,
+  formatTrackValidationErrors,
+  TRACK_SCHEMA_VERSION,
+} from './track-schema'
+export type {
+  TrackDefinition,
+  TrackSegment,
+  TrackValidationResult,
+  TrackValidationIssue,
+} from './track-schema'
+export { compileTrackDefinition } from './track-compiler'
+export type { TrackBuildApi, TrackCursor } from './track-compiler'
+export {
+  DATA_TRACK_REGISTRY,
+  getDataTrackDefinition,
+  isDataDrivenTrack,
+} from './track-data-registry'
+
+// Campaign catalog (source file remains in game-elements for now)
+export {
+  TRACK_CATALOG,
+  AdventureTrackProgression,
+  CAMPAIGN_MAIN_PATH,
+} from '../game-elements/adventure-track-progression'
+export type {
+  TrackInfo,
+  ProgressionState,
+  SerializableProgressionState,
+} from '../game-elements/adventure-track-progression'
+
 // Track builders
 export { buildNeonHelix } from './tracks/neon-helix'
 export { buildPachinkoHall } from './tracks/pachinko-hall'
 export { buildCyberCore } from './tracks/cyber-core'
-export { buildQuantumGrid } from './tracks/quantum-grid'
 export { buildSingularityWell } from './tracks/singularity-well'
-export { buildGlitchSpire } from './tracks/glitch-spire'
-export { buildRetroWaveHills } from './tracks/retro-wave-hills'
-export { buildChronoCore } from './tracks/chrono-core'
-export { buildHyperDrift } from './tracks/hyper-drift'
 export { buildPachinkoSpire } from './tracks/pachinko-spire'
 export { buildOrbitalJunkyard } from './tracks/orbital-junkyard'
 export { buildFirewallBreach } from './tracks/firewall-breach'

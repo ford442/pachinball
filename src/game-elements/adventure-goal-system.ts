@@ -3,7 +3,7 @@
  * Manages track-specific goals and progression tracking
  */
 
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 
 export type GoalType = 'score-based' | 'collection-based' | 'survival' | 'combo-based' | 'hit-all'
 

@@ -22,6 +22,7 @@ import { CAMERA_PRESETS } from './camera-presets'
 import { AdventureTrackType, type AdventureCallback, type CameraPreset } from './adventure-types'
 import { CameraEasing } from './camera-easing'
 import { getTrackStartAnchor } from './portal-routing'
+import { getTrackManifest } from './manifests'
 import { PALETTE } from '../game-elements/visual-language'
 import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
 import type { AccessibilityConfig } from '../game-elements/accessibility-config'
@@ -31,35 +32,11 @@ import {
   type TrackTeardownStats,
 } from '../game-elements/track-teardown-stats'
 
-// Import all track builders
-import { buildNeonHelix } from './tracks/neon-helix'
-import { buildCyberCore } from './tracks/cyber-core'
-import { buildQuantumGrid } from './tracks/quantum-grid'
-import { buildSingularityWell } from './tracks/singularity-well'
-import { buildGlitchSpire } from './tracks/glitch-spire'
-import { buildRetroWaveHills } from './tracks/retro-wave-hills'
-import { buildChronoCore } from './tracks/chrono-core'
-import { buildHyperDrift } from './tracks/hyper-drift'
-import { buildPachinkoHall } from './tracks/pachinko-hall'
-import { buildPachinkoSpire } from './tracks/pachinko-spire'
-import { buildOrbitalJunkyard } from './tracks/orbital-junkyard'
-import { buildFirewallBreach } from './tracks/firewall-breach'
-import { buildPrismPathway } from './tracks/prism-pathway'
-import { buildMagneticStorage } from './tracks/magnetic-storage'
-import { buildNeuralNetwork } from './tracks/neural-network'
-import { buildNeonStronghold } from './tracks/neon-stronghold'
-import { buildCasinoHeist } from './tracks/casino-heist'
-import { buildCpuCore } from './tracks/cpu-core'
-import { buildCryoChamber } from './tracks/cryo-chamber'
-import { buildBioHazardLab } from './tracks/bio-hazard-lab'
-import { buildGravityForge } from './tracks/gravity-forge'
-import { buildTidalNexus } from './tracks/tidal-nexus'
-import { buildDigitalZenGarden } from './tracks/digital-zen-garden'
-import { buildSynthwaveSurf } from './tracks/synthwave-surf'
-import { buildSolarFlare } from './tracks/solar-flare'
-import { buildTeslaTower } from './tracks/tesla-tower'
-import { buildNeonSkyline } from './tracks/neon-skyline'
-import { buildPolychromeVoid } from './tracks/polychrome-void'
+import { getDataTrackDefinition } from './track-data-registry'
+import {
+  formatTrackValidationErrors,
+  validateTrackDefinition,
+} from './track-schema'
 
 export { AdventureTrackType, CAMERA_PRESETS }
 export type { AdventureCallback, CameraPreset }
@@ -91,6 +68,9 @@ export class AdventureMode extends TrackBuilder {
   /** Previous zone for transition intensity calculation */
   private previousZone: AdventureTrackType | null = null
 
+  /** Soft-fail message from the last rejected data-track load (HUD). */
+  private lastTrackLoadError: string | null = null
+
   /** Camera management */
   private tableCamera: Camera | null = null
   private followCamera: ArcRotateCamera | null = null
@@ -119,6 +99,8 @@ export class AdventureMode extends TrackBuilder {
   private exitPortal: ActiveExitPortal | null = null
   private activeBallBodies: RAPIER.RigidBody[] = []
   private lastTeardownStats: TrackTeardownStats | null = null
+  /** Portals torn down since the last clearTrack() — merged into teardown stats. */
+  private portalsRemovedSinceClear = 0
 
   /**
    * Return the Rapier body handle of the active exit portal sensor, or -1 when
@@ -131,6 +113,11 @@ export class AdventureMode extends TrackBuilder {
 
   getLastTeardownStats(): TrackTeardownStats | null {
     return this.lastTeardownStats
+  }
+
+  /** Soft-fail reason from the last rejected declarative track load. */
+  getLastTrackLoadError(): string | null {
+    return this.lastTrackLoadError
   }
 
   getTrackResourceCounts(): TrackResourceCounts {
@@ -492,8 +479,26 @@ export class AdventureMode extends TrackBuilder {
     this.onEvent?.('PORTAL_DEACTIVATED', { handle: portal.sensor.handle })
 
     portal.root.dispose()
+    this.portalsRemovedSinceClear++
 
-    this.world.removeRigidBody(portal.sensor)
+    if (this.world.getRigidBody(portal.sensor.handle)) {
+      this.world.removeRigidBody(portal.sensor)
+    }
+
+    // createExitPortal() registers the sensor in adventureBodies — remove it here
+    // so clearTrack() does not count an already-removed body as lingering.
+    const bodyIndex = this.adventureBodies.indexOf(portal.sensor)
+    if (bodyIndex >= 0) {
+      this.adventureBodies.splice(bodyIndex, 1)
+    }
+
+    const portalMeshSet = new Set([portal.root, portal.core])
+    this.adventureTrack = this.adventureTrack.filter(
+      (mesh) => !portalMeshSet.has(mesh) && mesh.parent !== portal.root,
+    )
+    this.materials = this.materials.filter(
+      (mat) => mat !== portal.ringMaterial && mat !== portal.coreMaterial,
+    )
   }
 
   private getExitPortalPosition(trackId: AdventureTrackType, mode: ExitPortalWorldMode): Vector3 {
@@ -585,8 +590,13 @@ export class AdventureMode extends TrackBuilder {
     this.currentBallMesh = ballMesh || null
     this.activeBallBodies = [ballBody]
 
-    // Load track-specific camera preset
-    const presetKey = trackType as string
+    // Load track-specific camera preset. JSON schema override wins, then the
+    // manifest's cameraPresetId, then the track id itself, then DEFAULT.
+    const dataDef = getDataTrackDefinition(trackType)
+    const presetKey =
+      dataDef?.cameraPresetId ??
+      getTrackManifest(trackType)?.cameraPresetId ??
+      (trackType as string)
     this.currentCameraPreset = CAMERA_PRESETS[presetKey] || CAMERA_PRESETS.DEFAULT
     const preset = this.currentCameraPreset
 
@@ -626,93 +636,31 @@ export class AdventureMode extends TrackBuilder {
     this.currentTrackInfo = TRACK_CATALOG[trackType] ?? null
     this.currentStartPos = getTrackStartAnchor(trackType)
 
-    switch (trackType) {
-      case AdventureTrackType.CYBER_CORE:
-        buildCyberCore(this)
-        break
-      case AdventureTrackType.PACHINKO_HALL:
-        buildPachinkoHall(this)
-        break
-      case AdventureTrackType.QUANTUM_GRID:
-        buildQuantumGrid(this)
-        break
-      case AdventureTrackType.SINGULARITY_WELL:
-        buildSingularityWell(this)
-        break
-      case AdventureTrackType.GLITCH_SPIRE:
-        buildGlitchSpire(this)
-        break
-      case AdventureTrackType.RETRO_WAVE_HILLS:
-        buildRetroWaveHills(this)
-        break
-      case AdventureTrackType.CHRONO_CORE:
-        buildChronoCore(this)
-        break
-      case AdventureTrackType.HYPER_DRIFT:
-        buildHyperDrift(this)
-        break
-      case AdventureTrackType.PACHINKO_SPIRE:
-        buildPachinkoSpire(this)
-        break
-      case AdventureTrackType.ORBITAL_JUNKYARD:
-        buildOrbitalJunkyard(this)
-        break
-      case AdventureTrackType.FIREWALL_BREACH:
-        buildFirewallBreach(this)
-        break
-      case AdventureTrackType.CPU_CORE:
-        buildCpuCore(this)
-        break
-      case AdventureTrackType.CRYO_CHAMBER:
-        buildCryoChamber(this)
-        break
-      case AdventureTrackType.BIO_HAZARD_LAB:
-        buildBioHazardLab(this)
-        break
-      case AdventureTrackType.GRAVITY_FORGE:
-        buildGravityForge(this)
-        break
-      case AdventureTrackType.TIDAL_NEXUS:
-        buildTidalNexus(this)
-        break
-      case AdventureTrackType.DIGITAL_ZEN_GARDEN:
-        buildDigitalZenGarden(this)
-        break
-      case AdventureTrackType.SYNTHWAVE_SURF:
-        buildSynthwaveSurf(this)
-        break
-      case AdventureTrackType.SOLAR_FLARE:
-        buildSolarFlare(this)
-        break
-      case AdventureTrackType.PRISM_PATHWAY:
-        buildPrismPathway(this)
-        break
-      case AdventureTrackType.MAGNETIC_STORAGE:
-        buildMagneticStorage(this)
-        break
-      case AdventureTrackType.NEURAL_NETWORK:
-        buildNeuralNetwork(this)
-        break
-      case AdventureTrackType.NEON_STRONGHOLD:
-        buildNeonStronghold(this)
-        break
-      case AdventureTrackType.CASINO_HEIST:
-        buildCasinoHeist(this)
-        break
-      case AdventureTrackType.TESLA_TOWER:
-        buildTeslaTower(this)
-        break
-      case AdventureTrackType.NEON_SKYLINE:
-        buildNeonSkyline(this)
-        break
-      case AdventureTrackType.POLYCHROME_VOID:
-        buildPolychromeVoid(this)
-        break
-      default:
-        buildNeonHelix(this)
-        break
+    const manifest = getTrackManifest(trackType)
+
+    if (!manifest) {
+      // No manifest survived registry validation for this id. Report it rather
+      // than silently leaving an empty world the player can fall through.
+      this.lastTrackLoadError = `No registered track manifest for ${trackType}`
+      console.error(`[AdventureMode] ${this.lastTrackLoadError}`)
+      return
     }
 
+    if (manifest.buildKind === 'json') {
+      const dataDef = getDataTrackDefinition(trackType)
+      if (!dataDef) {
+        this.lastTrackLoadError =
+          `Track ${trackType} declares data path ${manifest.dataPath} but no valid ` +
+          'definition was loaded for it'
+        console.error(`[AdventureMode] ${this.lastTrackLoadError}`)
+        return
+      }
+      this.buildFromDefinition(dataDef)
+      this.applyDefaultAdventureCollisionGroups()
+      return
+    }
+
+    manifest.builder(this)
     this.applyDefaultAdventureCollisionGroups()
   }
 
@@ -806,6 +754,18 @@ export class AdventureMode extends TrackBuilder {
       return false
     }
 
+    // Validate declarative tracks before teardown so a bad JSON never clears a healthy world
+    const dataDef = getDataTrackDefinition(newZone)
+    if (dataDef) {
+      const validation = validateTrackDefinition(dataDef)
+      if (!validation.ok) {
+        this.lastTrackLoadError = formatTrackValidationErrors(validation.errors)
+        console.warn(`[AdventureMode] ${this.lastTrackLoadError}`)
+        return false
+      }
+    }
+    this.lastTrackLoadError = null
+
     this.deactivateExitPortal()
 
     const zoneChanged = this.currentZone !== newZone
@@ -817,7 +777,8 @@ export class AdventureMode extends TrackBuilder {
     // Reset camera transition timer for cinematic entry
     this.cameraTransitionTime = 0
 
-    this.currentCameraPreset = CAMERA_PRESETS[newZone as string] || CAMERA_PRESETS.DEFAULT
+    const presetKey = dataDef?.cameraPresetId ?? (newZone as string)
+    this.currentCameraPreset = CAMERA_PRESETS[presetKey] || CAMERA_PRESETS.DEFAULT
 
     // Tear down old track geometry and physics
     this.clearTrack()
@@ -921,10 +882,13 @@ export class AdventureMode extends TrackBuilder {
     stats.resetSensorsRemoved = this.resetSensors.length
     stats.chromaGatesRemoved = this.chromaGates.length
     stats.adventureSensorRemoved = this.adventureSensor ? 1 : 0
+    stats.exitPortalsRemoved = this.portalsRemovedSinceClear
+    this.portalsRemovedSinceClear = 0
 
     this.timeAccumulator = 0
     this.portalPosition = null
     this.currentTrackInfo = null
+    this.restoreTrackGravity()
 
     // Cleanup Visuals — dispose materials/textures to avoid GPU leaks across long sessions
     for (const mesh of this.adventureTrack) {

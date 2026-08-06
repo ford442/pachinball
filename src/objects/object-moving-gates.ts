@@ -4,7 +4,7 @@ import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
 

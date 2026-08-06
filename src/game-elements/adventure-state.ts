@@ -13,7 +13,7 @@
 import type { DisplaySystem } from '../display'
 import type { TableMapType } from '../shaders/lcd-table'
 import { apiFetch } from '../config'
-import { resolveVideoUrl } from '../game/game-utils'
+import { resolveVideoUrl } from '../core/asset-urls'
 
 export type GoalType = 'hit-pegs' | 'survive-time' | 'reach-score' | 'collect-items' | 'no-drain'
 
@@ -289,8 +289,9 @@ export const ADVENTURE_LEVELS: AdventureLevel[] = [
 ]
 
 /**
- * @deprecated Legacy progression store for free-form level goals/rewards.
- * Use AdventureTrackProgression + AdventureProgressionSupervisor for campaign.
+ * @deprecated Legacy level-select / cosmetic-reward system only.
+ * Campaign progression truth is AdventureTrackProgression + AdventureProgressionSupervisor.
+ * Do not add new campaign features here — use TRACK_CATALOG and the supervisor instead.
  */
 export class AdventureState {
   private progress: AdventureProgress

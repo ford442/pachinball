@@ -1,4 +1,4 @@
-import type { EventBus, PachinballEventMap } from '../game/event-bus'
+import type { EventBus, PachinballEventMap } from '../core/event-bus'
 import {
   type TrackInfo,
   type TrackModeType,

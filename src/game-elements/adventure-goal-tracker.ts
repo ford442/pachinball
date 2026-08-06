@@ -3,7 +3,7 @@
  * Integrates goal system with ball manager, physics, and game events
  */
 
-import type { EventBus } from '../game/event-bus'
+import type { EventBus } from '../core/event-bus'
 import { AdventureGoalSystem } from './adventure-goal-system'
 import { getGoalsForTrack, trackGoalSlug } from './adventure-track-goals'
 

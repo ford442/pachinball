@@ -25,7 +25,7 @@ export class BumperBuilder {
     this.matLib = getMaterialLibrary(scene)
   }
 
-  createBumpers(): {
+  createBumpers(specs?: { x: number; z: number; color: string; scale: number }[]): {
     bumpers: Map<string, Mesh>
     bindings: PhysicsBinding[]
     bumperBodies: RAPIER.RigidBody[]
@@ -157,28 +157,34 @@ export class BumperBuilder {
       this.meshes.push(bumper, bumperCap, bumperRing, holoInner, holoOuter, wireframeRing)
     }
 
-    // Main center bumper (larger)
-    make(0, 8, '#ff00aa', 1.2)
-    // Upper side bumpers
-    make(-4, 4, '#00aaff', 1.0)
-    make(4, 4, '#00aaff', 1.0)
-    // Lower bumpers - funnel toward flippers
-    make(-3, 0, '#ffaa00', 0.9)
-    make(3, 0, '#ffaa00', 0.9)
-    // Far upper bumper
-    make(0, 14, '#00ff88', 0.85)
-    // Side deflector bumper
-    make(-6, 10, '#ff4400', 1.0)
+    if (specs && specs.length > 0) {
+      for (const s of specs) {
+        make(s.x, s.z, s.color, s.scale)
+      }
+    } else {
+      // Main center bumper (larger)
+      make(0, 8, '#ff00aa', 1.2)
+      // Upper side bumpers
+      make(-4, 4, '#00aaff', 1.0)
+      make(4, 4, '#00aaff', 1.0)
+      // Lower bumpers - funnel toward flippers
+      make(-3, 0, '#ffaa00', 0.9)
+      make(3, 0, '#ffaa00', 0.9)
+      // Far upper bumper
+      make(0, 14, '#00ff88', 0.85)
+      // Side deflector bumper
+      make(-6, 10, '#ff4400', 1.0)
 
-    // Additional scoring bumpers to ensure reliable hits on default paths (addresses zero-score dead corridors)
-    // Center lower to catch straight drops from center
-    make(0, 2, '#88ffaa', 0.85)
-    // Mid-side to catch bank shots and side drains
-    make(-5, 6, '#ffaa88', 0.9)
-    make(5, 6, '#ffaa88', 0.9)
-    // Lower sides near slings to catch outlane recoveries
-    make(-4, -1, '#aaffff', 0.8)
-    make(4, -1, '#aaffff', 0.8)
+      // Additional scoring bumpers to ensure reliable hits on default paths (addresses zero-score dead corridors)
+      // Center lower to catch straight drops from center
+      make(0, 2, '#88ffaa', 0.85)
+      // Mid-side to catch bank shots and side drains
+      make(-5, 6, '#ffaa88', 0.9)
+      make(5, 6, '#ffaa88', 0.9)
+      // Lower sides near slings to catch outlane recoveries
+      make(-4, -1, '#aaffff', 0.8)
+      make(4, -1, '#aaffff', 0.8)
+    }
 
     return {
       bumpers,

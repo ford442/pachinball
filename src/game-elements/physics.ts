@@ -1,4 +1,7 @@
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import { WASM_PHYSICS, getWasmPhysicsRuntimeMode, type WasmPhysicsRuntimeMode } from '../config'
+import { WasmPhysicsEngine } from '../wasm'
+import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
 
 // Gravity: -Y (down), -Z (roll towards player)
 export const GRAVITY = { x: 0, y: -9.81, z: -5.0 }
@@ -79,6 +82,16 @@ export class PhysicsSystem {
   private eventQueue: RAPIER.EventQueue | null = null
   private stepCount = 0
 
+  /** WASM backend, only active when the feature flag is set and the bundle loads. */
+  private wasmEngine: WasmPhysicsEngine | null = null
+  private wasmMode: WasmPhysicsRuntimeMode = 'rapier'
+  private wasmActive = false
+
+  /** Last-step timing for Debug HUD (milliseconds). */
+  private lastWasmStepMs = 0
+  private lastRapierStepMs = 0
+  private lastMirrorOverheadMs = 0
+
   /** Accumulator for fixed timestep */
   private accumulator = 0
 
@@ -92,7 +105,7 @@ export class PhysicsSystem {
 
   async init(): Promise<void> {
     if (this.rapier && this.world) return
-    
+
     // Fallback: load Rapier here if not preloaded (backward compatibility)
     if (!this.rapier) {
       this.rapier = await import('@dimforge/rapier3d-compat')
@@ -112,6 +125,23 @@ export class PhysicsSystem {
     this.world.integrationParameters.contactSkin = 0.005
 
     this.eventQueue = new this.rapier.EventQueue(true)
+
+    // Optionally activate the WASM physics backend behind a localStorage flag.
+    // The Rapier world is still created so the rest of the game can query bodies/colliders.
+    this.wasmMode = getWasmPhysicsRuntimeMode()
+    if (WASM_PHYSICS.enabled && this.wasmMode !== 'rapier') {
+      const engine = new WasmPhysicsEngine()
+      const preloaded = await getPreloadedWasmModule()
+      await engine.load(WASM_PHYSICS.bundleUrl, preloaded ?? undefined)
+      if (engine.isReady) {
+        engine.setGravity(GRAVITY.x, GRAVITY.y, GRAVITY.z)
+        this.wasmEngine = engine
+        this.wasmActive = true
+      } else {
+        console.warn('[PhysicsSystem] WASM physics bundle failed to load; falling back to Rapier.')
+        this.wasmMode = 'rapier'
+      }
+    }
   }
 
   getWorld(): RAPIER.World {
@@ -128,6 +158,34 @@ export class PhysicsSystem {
 
   getEventQueue(): RAPIER.EventQueue | null {
     return this.eventQueue
+  }
+
+  /** True when the WASM backend is active and ready. */
+  isWasmActive(): boolean {
+    return this.wasmActive && this.wasmEngine?.isReady === true
+  }
+
+  /** Resolved WASM runtime mode (`rapier` when inactive). */
+  getWasmMode(): WasmPhysicsRuntimeMode {
+    return this.isWasmActive() ? this.wasmMode : 'rapier'
+  }
+
+  /** True when WASM owns ball+static simulation (not mirror). */
+  isWasmOwnerMode(): boolean {
+    return this.isWasmActive() && this.wasmMode === 'wasm-owner'
+  }
+
+  getLastWasmStepMs(): number { return this.lastWasmStepMs }
+  getLastRapierStepMs(): number { return this.lastRapierStepMs }
+  getLastMirrorOverheadMs(): number { return this.lastMirrorOverheadMs }
+
+  setMirrorOverheadMs(ms: number): void {
+    this.lastMirrorOverheadMs = ms
+  }
+
+  /** Access the WASM engine (for sync/registration by the controller). */
+  getWasmEngine(): WasmPhysicsEngine | null {
+    return this.wasmEngine
   }
 
   /**
@@ -175,21 +233,51 @@ export class PhysicsSystem {
     callback: (handle1: number, handle2: number, started: boolean) => void,
     forceCallback?: ContactForceCallback
   ): number {
+    const mode = this.getWasmMode()
+
+    if (mode === 'wasm-mirror' && this.wasmEngine?.isReady) {
+      const t0 = performance.now()
+      const alpha = this.wasmEngine.step(rawDt)
+      this.lastWasmStepMs = performance.now() - t0
+      this.lastRapierStepMs = 0
+      this.lastMirrorOverheadMs = 0
+      return alpha
+    }
+
+    if (mode === 'wasm-owner' && this.wasmEngine?.isReady) {
+      const wasmT0 = performance.now()
+      const alpha = this.wasmEngine.step(rawDt)
+      this.lastWasmStepMs = performance.now() - wasmT0
+
+      // Rapier partial step — flippers/plunger joints still integrate.
+      const rapierT0 = performance.now()
+      const rapierAlpha = this.stepRapier(rawDt, callback, forceCallback)
+      this.lastRapierStepMs = performance.now() - rapierT0
+      this.lastMirrorOverheadMs = 0
+      return alpha > 0 ? alpha : rapierAlpha
+    }
+
+    this.lastWasmStepMs = 0
+    this.lastRapierStepMs = 0
+    this.lastMirrorOverheadMs = 0
+    return this.stepRapier(rawDt, callback, forceCallback)
+  }
+
+  private stepRapier(
+    rawDt: number,
+    callback: (handle1: number, handle2: number, started: boolean) => void,
+    forceCallback?: ContactForceCallback
+  ): number {
     if (!this.world || !this.eventQueue) return 0
 
-    // DT clamping: prevent physics explosions during lag spikes
     const dt = Math.min(rawDt, MAX_DT)
-
     this.accumulator += dt
 
-    // Step physics at fixed intervals for determinism
     while (this.accumulator >= FIXED_TIMESTEP) {
       this.world.timestep = FIXED_TIMESTEP
       this.world.step(this.eventQueue)
       this.stepCount++
       this.eventQueue.drainCollisionEvents(callback)
-      // Drain contact force events to prevent queue buildup and enable
-      // force-proportional hit effects (stronger hits = bigger response)
       this.eventQueue.drainContactForceEvents((event) => {
         if (forceCallback) {
           forceCallback(event.collider1(), event.collider2(), event.maxForceMagnitude())
@@ -198,11 +286,14 @@ export class PhysicsSystem {
       this.accumulator -= FIXED_TIMESTEP
     }
 
-    // Return interpolation alpha for visual smoothing
     return this.accumulator / FIXED_TIMESTEP
   }
 
   dispose(): void {
+    this.wasmEngine?.dispose()
+    this.wasmEngine = null
+    this.wasmActive = false
+    this.wasmMode = 'rapier'
     this.world?.free()
   }
 }
