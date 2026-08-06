@@ -93,8 +93,8 @@ async function bootstrap(): Promise<void> {
     const interesting = scene.meshes.filter((m: any) =>
       /flipper|ball|bumper|wall|pin|playfield|lcd|cabinet/i.test(m.name),
     )
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     console.table(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       interesting.map((m: any) => ({
         name: m.name,
         enabled: m.isEnabled(),
@@ -111,8 +111,8 @@ async function bootstrap(): Promise<void> {
     )
 
     console.log('=== LIGHTS ===')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     console.table(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       scene.lights.map((l: any) => ({
         name: l.name,
         type: l.getClassName(),

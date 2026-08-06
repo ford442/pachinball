@@ -11,22 +11,20 @@ import { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import type { WebGPUEngine as WebGPUEngineType, WebGPUEngineOptions } from '@babylonjs/core/Engines/webgpuEngine'
 import {
   getRendererPreference,
-  RENDERER_WEBGL2,
   RENDERER_WEBGPU,
   type RendererPreference,
 } from '../renderers/renderer-selector'
 import { resolveEngineOptions, type ResolvedEngineOptions } from './engine-options'
 
-export type EngineCreationPlan = 'webgl2' | 'webgpu' | 'webgpu-with-webgl2-fallback'
+export type EngineCreationPlan = 'webgl2' | 'webgpu'
 
 /** Pure routing for tests — which backend createEngine will attempt. */
 export function resolveEngineCreationPlan(
   preference: RendererPreference,
-  webgpuSupported: boolean,
+  _webgpuSupported: boolean,
 ): EngineCreationPlan {
-  if (preference === RENDERER_WEBGL2) return 'webgl2'
   if (preference === RENDERER_WEBGPU) return 'webgpu'
-  return webgpuSupported ? 'webgpu-with-webgl2-fallback' : 'webgl2'
+  return 'webgl2'
 }
 
 function toWebGPUEngineOptions(options: ResolvedEngineOptions): WebGPUEngineOptions {
@@ -52,36 +50,23 @@ export async function createEngine(canvas: HTMLCanvasElement): Promise<EngineTyp
   const plan = resolveEngineCreationPlan(preference, await WebGPUEngine.IsSupportedAsync)
 
   if (plan === 'webgl2') {
-    console.log('[Bootstrap] Renderer preference: WebGL2 (forced)')
+    console.log('[Bootstrap] Renderer preference: WebGL2 (default)')
     const engine = createWebGL2Engine(canvas, engineOptions)
     console.log(`[Bootstrap] Active renderer: ${engine.getClassName()}`)
     return engine
   }
 
-  if (plan === 'webgpu') {
-    console.log('[Bootstrap] Renderer preference: webgpu (forced)')
+  console.log('[Bootstrap] Renderer preference: WebGPU (experimental)')
+  try {
     const engine = await WebGPUEngine.CreateAsync(canvas, toWebGPUEngineOptions(engineOptions))
     console.log(`[Bootstrap] Active renderer: ${engine.getClassName()}`)
     return engine
+  } catch (err) {
+    console.warn('[Bootstrap] WebGPU init failed, using WebGL2 fallback', err)
+    const engine = createWebGL2Engine(canvas, engineOptions)
+    console.log(`[Bootstrap] Active renderer: ${engine.getClassName()} (WebGL fallback)`)
+    return engine
   }
-
-  if (!engineOptions.preserveDrawingBuffer) {
-    console.log('[Bootstrap] preserveDrawingBuffer=false (opt in via ?preserveBuffer=1)')
-  }
-
-  if (plan === 'webgpu-with-webgl2-fallback') {
-    try {
-      const engine = await WebGPUEngine.CreateAsync(canvas, toWebGPUEngineOptions(engineOptions))
-      console.log(`[Bootstrap] Active renderer: ${engine.getClassName()}`)
-      return engine
-    } catch (err) {
-      console.warn('WebGPU init failed, using WebGL fallback', err)
-    }
-  }
-
-  const engine = createWebGL2Engine(canvas, engineOptions)
-  console.log(`[Bootstrap] Active renderer: ${engine.getClassName()} (WebGL fallback)`)
-  return engine
 }
 
 /** True if the created engine is actually running on WebGPU. */

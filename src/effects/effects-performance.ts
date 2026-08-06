@@ -61,20 +61,35 @@ export class RuntimePerformanceController {
   applyPerformanceTier(): void {
     if (!this.bloomPipeline) return
 
+    const apply = (fn: () => void): void => {
+      try {
+        fn()
+      } catch {
+        // Pipeline may be disposed or in a broken WebGPU state after tier downgrade.
+        this.bloomPipeline = null
+      }
+    }
+
     switch (this.runtimePerformanceTier) {
       case 'high':
-        this.bloomPipeline.bloomWeight = 0.25
-        this.bloomPipeline.bloomScale = 0.5
+        apply(() => {
+          this.bloomPipeline!.bloomWeight = 0.25
+          this.bloomPipeline!.bloomScale = 0.5
+        })
         this.particleEffects.setMaxParticles(100)
         break
       case 'medium':
-        this.bloomPipeline.bloomWeight = 0.15
-        this.bloomPipeline.bloomScale = 0.3
+        apply(() => {
+          this.bloomPipeline!.bloomWeight = 0.15
+          this.bloomPipeline!.bloomScale = 0.3
+        })
         this.particleEffects.setMaxParticles(60)
         break
       case 'low':
-        this.bloomPipeline.bloomWeight = 0.08
-        this.bloomPipeline.bloomScale = 0.15
+        apply(() => {
+          this.bloomPipeline!.bloomWeight = 0.08
+          this.bloomPipeline!.bloomScale = 0.15
+        })
         this.particleEffects.setMaxParticles(30)
         break
     }

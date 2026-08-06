@@ -11,7 +11,7 @@
  *   1. URL param    ?renderer=webgpu|webgl2
  *   2. global       window.DEBUG_RENDERER = 'webgpu' | 'webgl2'
  *   3. localStorage pachinball-renderer
- *   4. default      'auto' (WebGPU first, automatic WebGL fallback)
+ *   4. default      WebGL2 (stable; use the menu button to opt into WebGPU)
  *
  * WebGL2 -> WebGPU porting notes:
  *   - `ShaderMaterial` with WGSL (display-shader.ts) needs a GLSL/canvas
@@ -31,6 +31,8 @@ export type RendererPreference =
   | typeof RENDERER_AUTO
   | typeof RENDERER_WEBGPU
   | typeof RENDERER_WEBGL2
+
+export type ActiveRenderer = typeof RENDERER_WEBGPU | typeof RENDERER_WEBGL2
 
 /**
  * Resolve the user's renderer preference from URL param, debug global, or
@@ -52,12 +54,13 @@ export function getRendererPreference(): RendererPreference {
 
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored === RENDERER_AUTO) return RENDERER_WEBGL2
     if (stored === RENDERER_WEBGL2 || stored === RENDERER_WEBGPU) return stored
   } catch {
     // Private browsing / storage disabled — ignore.
   }
 
-  return RENDERER_AUTO
+  return RENDERER_WEBGL2
 }
 
 /**
@@ -66,7 +69,7 @@ export function getRendererPreference(): RendererPreference {
  */
 export function setRendererPreference(renderer: RendererPreference): void {
   try {
-    if (renderer === RENDERER_AUTO) {
+    if (renderer === RENDERER_AUTO || renderer === RENDERER_WEBGL2) {
       localStorage.removeItem(STORAGE_KEY)
     } else {
       localStorage.setItem(STORAGE_KEY, renderer)
@@ -74,6 +77,29 @@ export function setRendererPreference(renderer: RendererPreference): void {
   } catch {
     // Private browsing / storage disabled — ignore.
   }
+}
+
+/** Renderer currently running (set during bootstrap via exposeRenderer). */
+export function getActiveRenderer(): ActiveRenderer {
+  const fromWindow = (window as unknown as { currentRenderer?: string }).currentRenderer
+  if (fromWindow === RENDERER_WEBGPU) return RENDERER_WEBGPU
+
+  const canvas = document.getElementById('pachinball-canvas') as HTMLCanvasElement | null
+  if (canvas?.dataset.renderer === RENDERER_WEBGPU) return RENDERER_WEBGPU
+
+  return RENDERER_WEBGL2
+}
+
+/** Opt into WebGPU on the next page load. */
+export function attemptWebGPURenderer(): void {
+  setRendererPreference(RENDERER_WEBGPU)
+  window.location.reload()
+}
+
+/** Return to the default WebGL2 renderer on the next page load. */
+export function useWebGL2Renderer(): void {
+  setRendererPreference(RENDERER_WEBGL2)
+  window.location.reload()
 }
 
 /**

@@ -513,7 +513,7 @@ export class EffectsSystem {
     this.lightingEffects.fadeOut(duration)
   }
 
-  setPipeline(pipeline: DefaultRenderingPipeline): void {
+  setPipeline(pipeline: DefaultRenderingPipeline | null): void {
     this.bloomPipeline = pipeline
     this.lightingEffects.setPipeline(pipeline)
     this.atmosphereController.setBloomPipeline(pipeline)

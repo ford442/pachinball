@@ -80,8 +80,8 @@ export interface RendererHost {
   engineInstrumentation: EngineInstrumentation | null
   eventBus?: EventBus
   postProcessDegraded: boolean
-  /** Optional EffectsSystem hook for quality sync. */
-  effects?: { setQualityTier(tier: QualityTier): void } | null
+  /** Optional EffectsSystem hook for quality sync and bloom teardown. */
+  effects?: { setPipeline(pipeline: DefaultRenderingPipeline | null): void; setQualityTier(tier: QualityTier): void } | null
 }
 
 export class GameRenderer {
@@ -433,8 +433,7 @@ export class GameRenderer {
       this.host.postProcessDegraded = true
 
       if (nextTier === 'none') {
-        this.host.bloomPipeline?.dispose()
-        this.host.bloomPipeline = null
+        this.disposeBloomPipeline()
         return
       }
 
@@ -446,6 +445,13 @@ export class GameRenderer {
     }
 
     device.addEventListener('uncapturederror', this._webgpuErrorListener)
+  }
+
+  private disposeBloomPipeline(): void {
+    if (!this.host.bloomPipeline) return
+    this.host.bloomPipeline.dispose()
+    this.host.bloomPipeline = null
+    this.host.effects?.setPipeline(null)
   }
 
   private detachWebGPUUniformBufferGuard(): void {
@@ -814,8 +820,7 @@ export class GameRenderer {
       this._resizeObserver = null
     }
 
-    this.host.bloomPipeline?.dispose()
-    this.host.bloomPipeline = null
+    this.disposeBloomPipeline()
     this.disposeHeavyPostProcesses()
 
     this.host.mirrorTexture?.dispose()

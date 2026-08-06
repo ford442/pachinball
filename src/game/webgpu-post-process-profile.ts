@@ -12,9 +12,9 @@ import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/Ren
 export const WEBGPU_DEFAULT_MAX_UNIFORM_BUFFERS_PER_STAGE = 12
 
 /**
- * Estimated uniform buffers for the full DefaultRenderingPipeline image-processing
- * vertex stage (bloom + FXAA + sharpen + tone-map + vignette + color curves).
- * Adapters capped at 12 need the bloom-only profile below (no image-processing pass).
+ * Estimated uniform buffers for DefaultRenderingPipeline's vertex stage (bloom +
+ * image-processing stack). Babylon still binds the full layout even when toggles
+ * disable FXAA/sharpen/vignette — adapters below this cap cannot run the pipeline.
  */
 export const FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE = 17
 
@@ -91,8 +91,8 @@ export function resolveWebGPUPostProcessProfile(
     return {
       isWebGPU: true,
       maxUniformBuffersPerStage,
-      tier: 'bloom-only',
-      reason: `adapter maxUniformBuffersPerShaderStage=${maxUniformBuffersPerStage} < estimated full pipeline (${FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE}) — image-processing pass disabled`,
+      tier: 'none',
+      reason: `adapter maxUniformBuffersPerShaderStage=${maxUniformBuffersPerStage} < estimated pipeline minimum (${FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE}) — post-process disabled`,
     }
   }
 
@@ -176,8 +176,13 @@ export function isUniformBufferLimitError(message: string): boolean {
 
 /** Downgrade tier after a runtime WebGPU validation failure. */
 export function downgradePostProcessTier(current: WebGPUPostProcessTier): WebGPUPostProcessTier | null {
-  if (current === 'full') return 'bloom-only'
-  if (current === 'conservative') return 'bloom-only'
-  if (current === 'bloom-only') return 'none'
+  if (current === 'full' || current === 'conservative' || current === 'bloom-only') return 'none'
   return null
+}
+
+/** True when the active WebGPU adapter cannot run DefaultRenderingPipeline. */
+export function isWebGPUAdapterStrictForPostProcess(engine: Engine | WebGPUEngine): boolean {
+  if (!isWebGPUEngine(engine)) return false
+  const cap = readMaxUniformBuffersPerStage(engine)
+  return cap !== null && cap < FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE
 }
