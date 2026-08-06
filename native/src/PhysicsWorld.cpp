@@ -182,7 +182,20 @@ void PhysicsWorld::substep(float dt) {
         RigidBody& b = *bodies_[j];
         if (!a.isActive() || !b.isActive()) continue;
         if (a.getType() == BodyType::Static && b.getType() == BodyType::Static) continue;
-        resolveSphereVsSphere(a, b);
+
+        const bool aCapsule = a.getShape() == Shape::Capsule;
+        const bool bCapsule = b.getShape() == Shape::Capsule;
+        if (aCapsule && bCapsule) {
+          // Capsule-vs-capsule (e.g. two flipper proxies) is not needed for any
+          // current gameplay scenario — explicit non-goal for Phase 2c-A.
+          continue;
+        } else if (aCapsule) {
+          resolveSphereVsCapsuleBody(b, a);
+        } else if (bCapsule) {
+          resolveSphereVsCapsuleBody(a, b);
+        } else {
+          resolveSphereVsSphere(a, b);
+        }
       }
     }
 
@@ -366,18 +379,21 @@ void PhysicsWorld::resolveSphereVsBox(RigidBody& body, const BoxDesc& box, int b
   contactListener_.pushContact(evt);
 }
 
+Vec3 PhysicsWorld::closestPointOnSegment(const Vec3& p, const Vec3& segA, const Vec3& segB) {
+  const Vec3 ab = segB - segA;
+  float t = 0.f;
+  const float abLenSq = ab.lengthSq();
+  if (abLenSq > CONTACT_EPSILON_SQ) {
+    t = std::clamp((p - segA).dot(ab) / abLenSq, 0.f, 1.f);
+  }
+  return segA + ab * t;
+}
+
 void PhysicsWorld::resolveSphereVsCapsule(RigidBody& body, const CapsuleDesc& cap, int capId) {
   const Vec3 axisHalf = cap.rotation.rotate(Vec3{0.f, cap.halfHeight, 0.f});
   const Vec3 segA = cap.center - axisHalf;
   const Vec3 segB = cap.center + axisHalf;
-  const Vec3 ab = segB - segA;
-
-  float t = 0.f;
-  const float abLenSq = ab.lengthSq();
-  if (abLenSq > CONTACT_EPSILON_SQ) {
-    t = std::clamp((body.getPosition() - segA).dot(ab) / abLenSq, 0.f, 1.f);
-  }
-  const Vec3 closest = segA + ab * t;
+  const Vec3 closest = closestPointOnSegment(body.getPosition(), segA, segB);
 
   Vec3 delta = body.getPosition() - closest;
   float distSq = delta.lengthSq();
@@ -409,6 +425,61 @@ void PhysicsWorld::resolveSphereVsCapsule(RigidBody& body, const CapsuleDesc& ca
   evt.bodyId2    = capId;
   evt.normal     = normal;
   evt.point      = body.getPosition() - normal * body.getRadius();
+  evt.impulse    = j;
+  evt.isEntering = true;
+  contactListener_.pushContact(evt);
+}
+
+void PhysicsWorld::resolveSphereVsCapsuleBody(RigidBody& sphere, RigidBody& capsule) {
+  const Vec3 axisHalf = capsule.getRotation().rotate(Vec3{0.f, capsule.getCapsuleHalfHeight(), 0.f});
+  const Vec3 segA = capsule.getPosition() - axisHalf;
+  const Vec3 segB = capsule.getPosition() + axisHalf;
+  const Vec3 closest = closestPointOnSegment(sphere.getPosition(), segA, segB);
+
+  Vec3 delta = sphere.getPosition() - closest;
+  float distSq = delta.lengthSq();
+  float minDist = sphere.getRadius() + capsule.getRadius();
+
+  if (distSq >= minDist * minDist) return;
+
+  float dist = std::sqrt(std::max(distSq, CONTACT_EPSILON_SQ));
+  Vec3 normal = dist > 1e-5f ? delta / dist
+                             : capsule.getRotation().rotate(Vec3{0.f, 1.f, 0.f}).normalized();
+  float penetration = minDist - dist;
+
+  // Relative velocity along the contact normal — unlike the static-geometry path,
+  // the capsule's own velocity participates here so a moving kinematic capsule
+  // (e.g. a flipper proxy) imparts correct momentum onto the sphere.
+  Vec3 relVel = sphere.getVelocity() - capsule.getVelocity();
+  float velAlongN = relVel.dot(normal);
+  if (velAlongN >= 0.f) return;
+
+  float e = std::min(sphere.getRestitution(), capsule.getRestitution());
+  float invSphere = sphere.getInvMass();
+  float invCapsule = capsule.getInvMass();
+  float denom = invSphere + invCapsule;
+  if (denom < 1e-12f) return;
+
+  float j = -(1.f + e) * velAlongN / denom;
+  Vec3 impulse = normal * j;
+
+  sphere.applyImpulse(impulse);
+  capsule.applyImpulse(impulse * -1.f);
+
+  constexpr float SLOP    = 0.001f;
+  constexpr float CORRECT = 0.8f;
+  if (penetration > SLOP) {
+    if (sphere.getType() == BodyType::Dynamic)
+      sphere.setPosition(sphere.getPosition() + normal * ((penetration - SLOP) * CORRECT * invSphere / denom));
+    if (capsule.getType() == BodyType::Dynamic)
+      capsule.setPosition(capsule.getPosition() - normal * ((penetration - SLOP) * CORRECT * invCapsule / denom));
+  }
+
+  ContactEvent evt;
+  evt.bodyId1    = sphere.getId();
+  evt.bodyId2    = capsule.getId();
+  evt.normal     = normal;
+  evt.point      = sphere.getPosition() - normal * sphere.getRadius();
   evt.impulse    = j;
   evt.isEntering = true;
   contactListener_.pushContact(evt);

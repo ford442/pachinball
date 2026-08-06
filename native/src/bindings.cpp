@@ -58,6 +58,11 @@ EMSCRIPTEN_BINDINGS(rigid_body_desc) {
     .value("Static",    BodyType::Static)
     .value("Kinematic", BodyType::Kinematic);
 
+  // Expose Shape enum so JS can pass typed constants
+  enum_<Shape>("Shape")
+    .value("Sphere",  Shape::Sphere)
+    .value("Capsule", Shape::Capsule);
+
   // Expose Vec3 so JS can construct positions/velocities conveniently
   value_object<Vec3>("Vec3")
     .field("x", &Vec3::x)
@@ -83,7 +88,7 @@ EMSCRIPTEN_BINDINGS(physics_world) {
         float px, float py, float pz,
         float vx, float vy, float vz,
         float mass, float radius, float restitution, float linearDamping,
-        int bodyType) -> int {
+        int bodyType, int shape, float capsuleHalfHeight) -> int {
           RigidBodyDesc desc;
           desc.position      = {px, py, pz};
           desc.velocity      = {vx, vy, vz};
@@ -92,6 +97,8 @@ EMSCRIPTEN_BINDINGS(physics_world) {
           desc.restitution   = restitution;
           desc.linearDamping = linearDamping;
           desc.type          = static_cast<BodyType>(bodyType);
+          desc.shape         = static_cast<Shape>(shape);
+          desc.capsuleHalfHeight = capsuleHalfHeight;
           return self.createRigidBody(desc);
         }))
     .function("removeRigidBody",  &PhysicsWorld::removeRigidBody)
