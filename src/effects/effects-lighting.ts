@@ -11,7 +11,7 @@ export class LightingEffects {
     this.scene = scene
   }
 
-  setPipeline(pipeline: DefaultRenderingPipeline): void {
+  setPipeline(pipeline: DefaultRenderingPipeline | null): void {
     this.pipeline = pipeline
   }
 

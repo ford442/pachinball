@@ -4,7 +4,7 @@
  */
 
 import type { WasmPhysicsModule } from '../wasm/wasm-types'
-import { WASM_PHYSICS } from '../config'
+import { WASM_PHYSICS, getPhysicsEnginePreference } from '../config'
 
 let preloadPromise: Promise<WasmPhysicsModule | null> | null = null
 let preloadStarted = false
@@ -27,6 +27,10 @@ async function fetchAndCompileModule(bundleUrl: string): Promise<WasmPhysicsModu
 export function scheduleIdleWasmPreload(bundleUrl = WASM_PHYSICS.bundleUrl): void {
   if (preloadStarted) return
   preloadStarted = true
+
+  if (!WASM_PHYSICS.enabled || getPhysicsEnginePreference() === 'rapier') {
+    return
+  }
 
   const run = () => {
     preloadPromise = fetchAndCompileModule(bundleUrl)

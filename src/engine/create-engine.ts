@@ -16,6 +16,11 @@ import {
   type RendererPreference,
 } from '../renderers/renderer-selector'
 import { resolveEngineOptions, type ResolvedEngineOptions } from './engine-options'
+import {
+  FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE,
+  isWebGPUAdapterStrictForPostProcess,
+  readMaxUniformBuffersPerStage,
+} from '../game/webgpu-post-process-profile'
 
 export type EngineCreationPlan = 'webgl2' | 'webgpu' | 'webgpu-with-webgl2-fallback'
 
@@ -72,6 +77,16 @@ export async function createEngine(canvas: HTMLCanvasElement): Promise<EngineTyp
   if (plan === 'webgpu-with-webgl2-fallback') {
     try {
       const engine = await WebGPUEngine.CreateAsync(canvas, toWebGPUEngineOptions(engineOptions))
+      if (isWebGPUAdapterStrictForPostProcess(engine)) {
+        const cap = readMaxUniformBuffersPerStage(engine)
+        console.warn(
+          `[Bootstrap] WebGPU adapter maxUniformBuffersPerShaderStage=${cap} < ${FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE}; using WebGL2 fallback`,
+        )
+        engine.dispose()
+        const fallback = createWebGL2Engine(canvas, engineOptions)
+        console.log(`[Bootstrap] Active renderer: ${fallback.getClassName()} (WebGL fallback)`)
+        return fallback
+      }
       console.log(`[Bootstrap] Active renderer: ${engine.getClassName()}`)
       return engine
     } catch (err) {
