@@ -73,7 +73,9 @@ export class FlipperBuilder {
       bladeMesh.position.y = 0
       bladeMesh.rotation.x = 0.15 // Slight upward angle for better ball contact
       bladeMesh.parent = flipperRoot
+      bladeMesh.position.y += 0.1
       bladeMesh.material = flipperMat
+      bladeMesh.renderingGroupId = 1
 
       // Rounded flipper tip (curved end) - smooth sphere collision
       const tipMesh = MeshBuilder.CreateSphere('flipperTip', {
@@ -84,7 +86,9 @@ export class FlipperBuilder {
       tipMesh.position.y = 0.05
       tipMesh.position.z = 0
       tipMesh.parent = flipperRoot
+      tipMesh.position.y += 0.1
       tipMesh.material = flipperMat
+      tipMesh.renderingGroupId = 1
 
       // Side bevels - angled edges for visual detail
       const bevelLeft = MeshBuilder.CreateBox('flipperBevelL', {
@@ -97,7 +101,9 @@ export class FlipperBuilder {
       bevelLeft.position.y = 0.05
       bevelLeft.rotation.x = 0.15
       bevelLeft.parent = flipperRoot
+      bevelLeft.position.y += 0.1
       bevelLeft.material = flipperMat
+      bevelLeft.renderingGroupId = 1
 
       const bevelRight = MeshBuilder.CreateBox('flipperBevelR', {
         width: flipperLength - 0.6,
@@ -109,7 +115,9 @@ export class FlipperBuilder {
       bevelRight.position.y = 0.05
       bevelRight.rotation.x = 0.15
       bevelRight.parent = flipperRoot
+      bevelRight.position.y += 0.1
       bevelRight.material = flipperMat
+      bevelRight.renderingGroupId = 1
 
       // ================================================================
       // PIVOT ASSEMBLY - Detailed pivot visualization
@@ -125,7 +133,9 @@ export class FlipperBuilder {
       pivotCyl.position.x = isRight ? 1.5 : -1.5
       pivotCyl.position.y = -0.1
       pivotCyl.parent = flipperRoot
+      pivotCyl.position.y += 0.1
       pivotCyl.material = pivotMat
+      pivotCyl.renderingGroupId = 1
 
       // Pivot cap (top)
       const pivotCap = MeshBuilder.CreateCylinder('flipperPivotCap', {
@@ -138,7 +148,9 @@ export class FlipperBuilder {
       pivotCap.position.y = -0.1
       pivotCap.position.z = 0.4
       pivotCap.parent = flipperRoot
+      pivotCap.position.y += 0.1
       pivotCap.material = pivotMat
+      pivotCap.renderingGroupId = 1
 
       // Pivot ring detail
       const pivotRing = MeshBuilder.CreateTorus('flipperPivotRing', {
@@ -150,7 +162,9 @@ export class FlipperBuilder {
       pivotRing.position.y = -0.1
       pivotRing.position.z = 0
       pivotRing.parent = flipperRoot
+      pivotRing.position.y += 0.1
       pivotRing.material = pivotMat
+      pivotRing.renderingGroupId = 1
 
       // ================================================================
       // PHYSICS BODY - Simplified collider matching visual shape

@@ -204,7 +204,8 @@ export class ScoringBridge {
   activateHologramCatch(ball: RAPIER.RigidBody, bumper: RAPIER.RigidBody, bumperVisualMap: Map<number, BumperVisual>): void {
     const visual = bumperVisualMap.get(bumper.handle)
     if (!visual || !visual.hologram) return
-    this.host.ballManager?.activateHologramCatch(ball, visual.hologram.position, 4.0)
+    const target = visual.hologram.getAbsolutePosition()
+    this.host.ballManager?.activateHologramCatch(ball, target, 4.0)
     this.host.effects?.playBeep(880)
     this.host.eventBus.emit('reach:start')
     this.host.eventBus.emit('display:set', DisplayState.REACH)

@@ -53,7 +53,8 @@ describe('feeder golden FSM fixtures', () => {
   it('mag-spin: IDLE → CATCH → SPIN → RELEASE → COOLDOWN with fixed impulse', () => {
     const rapier = createMockRapier()
     const feeder = new MagSpinFeeder({} as never, createMockWorld() as never, rapier as never, FEEDER_TUNABLES['mag-spin'])
-    const ball = createMockBall({ x: 9.5, y: 0.5, z: 12.2 })
+    const pos = FEEDER_TUNABLES['mag-spin'].feederPosition
+    const ball = createMockBall({ x: pos.x + 0.2, y: pos.y, z: pos.z + 0.2 })
 
     const record = runFeederFsmGolden({
       feeder,
@@ -74,9 +75,9 @@ describe('feeder golden FSM fixtures', () => {
 
     expect(record.impulses).toHaveLength(1)
     const imp = record.impulses[0]
-    expect(imp.x).toBeCloseTo(-19.87167170926644, 10)
+    expect(imp.x).toBeCloseTo(-14.952229178041874, 10)
     expect(imp.y).toBeCloseTo(1.9936305570722506, 10)
-    expect(imp.z).toBeCloseTo(-15.03802183403947, 10)
+    expect(imp.z).toBeCloseTo(-19.936305570722503, 10)
     expect(record.releaseAngvel).toEqual({ x: 0, y: 12, z: 0 })
   })
 
