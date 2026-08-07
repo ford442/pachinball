@@ -166,7 +166,8 @@ describe('MagSpinFeeder', () => {
     const states: MagSpinState[] = []
     feeder.onStateChange = (state) => states.push(state)
 
-    const ball = createMockBall({ x: 9.5, y: 0.5, z: 12.2 })
+    const { x, y, z } = FEEDER_TUNABLES['mag-spin'].feederPosition
+    const ball = createMockBall({ x: x + 0.2, y, z: z + 0.2 })
     feeder.update(1 / 60, [ball as never])
 
     expect(feeder.getState()).toBe(MagSpinState.CATCH)
@@ -187,6 +188,13 @@ describe('MagSpinFeeder', () => {
     expect(ball.setBodyType).toHaveBeenLastCalledWith('Dynamic', true)
   })
 
+  it('does not capture ball still in the plunger launch lane', () => {
+    const ball = createMockBall({ x: 10.5, y: 0.5, z: 5 })
+    feeder.update(1 / 60, [ball as never])
+    expect(feeder.getState()).toBe(MagSpinState.IDLE)
+    expect(ball.setBodyType).not.toHaveBeenCalled()
+  })
+
   it('does not capture ball outside catch radius during IDLE', () => {
     const ball = createMockBall({ x: 20, y: 0.5, z: 20 })
     feeder.update(1 / 60, [ball as never])
@@ -196,14 +204,15 @@ describe('MagSpinFeeder', () => {
 
   it('ignores balls during COOLDOWN', () => {
     feeder.onStateChange = null
-    const ball = createMockBall({ x: 9.5, y: 0.5, z: 12.2 })
+    const { x, y, z } = FEEDER_TUNABLES['mag-spin'].feederPosition
+    const ball = createMockBall({ x: x + 0.2, y, z: z + 0.2 })
 
     feeder.update(1 / 60, [ball as never])
     for (let i = 0; i < 200; i++) feeder.update(1 / 60, [ball as never])
 
     expect(feeder.getState()).toBe(MagSpinState.COOLDOWN)
 
-    const secondBall = createMockBall({ x: 9.4, y: 0.5, z: 12.1 })
+    const secondBall = createMockBall({ x: x + 0.1, y, z: z + 0.1 })
     feeder.update(1 / 60, [secondBall as never])
     expect(secondBall.setBodyType).not.toHaveBeenCalled()
   })
@@ -212,7 +221,8 @@ describe('MagSpinFeeder', () => {
     const impulses: Array<{ x: number; y: number; z: number }> = []
     for (let trial = 0; trial < 8; trial++) {
       const f = new MagSpinFeeder({} as never, createMockWorld() as never, rapier as never, GameConfig.magSpin)
-      const ball = createMockBall({ x: 9.25, y: 0.5, z: 12 })
+      const { x, y, z } = FEEDER_TUNABLES['mag-spin'].feederPosition
+      const ball = createMockBall({ x, y, z })
       f.update(1 / 60, [ball as never])
       for (let i = 0; i < 200; i++) f.update(1 / 60, [ball as never])
       const call = (ball.applyImpulse as ReturnType<typeof vi.fn>).mock.calls.at(-1)

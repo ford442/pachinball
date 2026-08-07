@@ -164,6 +164,8 @@ export class InteractiveMaterials extends MaterialLibraryBase {
       // Self-lit neon edge so flippers stay visible without relying on reflections
       mat.emissiveColor = emissive(PALETTE.ALERT, INTENSITY.NORMAL)
       mat.emissiveIntensity = 1.1
+      // Sit above the tilted LCD playfield to avoid z-fighting that hides paddles.
+      mat.zOffset = -2
 
       if (this._qualityTier === QualityTier.HIGH) {
         mat.anisotropy.isEnabled = true

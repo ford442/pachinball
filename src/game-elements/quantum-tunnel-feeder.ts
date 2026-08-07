@@ -177,6 +177,10 @@ export class QuantumTunnelFeeder {
     const sensorHandle = this.inputSensor.collider(0)
 
     for (const ball of ballBodies) {
+      const pos = ball.translation()
+      // Input portal is on the right wall — ignore balls still in the plunger lane.
+      if (pos.x > 8.5 && pos.z < 10) continue
+
       const ballHandle = ball.collider(0)
       if (this.world.intersectionPair(sensorHandle, ballHandle)) {
         this.capturedBall = ball
