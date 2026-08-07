@@ -8,7 +8,8 @@ import {
   Scalar
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
-import type { GameConfigType } from '../config'
+import { GameConfig } from '../config'
+import { getSessionRng } from './seeded-rng'
 
 export enum QuantumTunnelState {
   IDLE = 0,
@@ -24,7 +25,7 @@ export class QuantumTunnelFeeder {
   private scene: Scene
   private world: RAPIER.World
   private rapier: typeof RAPIER
-  private config: GameConfigType['quantumTunnel']
+  private config: typeof GameConfig['quantumTunnel']
 
   private inputMesh: Mesh
   private outputMesh: Mesh
@@ -56,7 +57,7 @@ export class QuantumTunnelFeeder {
     scene: Scene,
     world: RAPIER.World,
     rapier: typeof RAPIER,
-    config: GameConfigType['quantumTunnel']
+    config: typeof GameConfig['quantumTunnel']
   ) {
     this.scene = scene
     this.world = world
@@ -267,7 +268,7 @@ export class QuantumTunnelFeeder {
     const impulse = new Vector3(this.config.ejectImpulse, 0, 0)
 
     // Add some variance z?
-    impulse.z += (Math.random() - 0.5) * this.config.ejectImpulseVarianceZ
+    impulse.z += (getSessionRng().next() - 0.5) * this.config.ejectImpulseVarianceZ
 
     this.capturedBall.applyImpulse(impulse, true)
 

@@ -8,6 +8,7 @@ export interface DebugSnapshot {
   score: number
   multiplier: number
   lives: number
+  sessionSeed: number
   adventureTrack: string | null
   trackName: string | null
   goalProgressPct: number
@@ -145,15 +146,15 @@ export class DebugHUD {
   update(snapshot: DebugSnapshot): void {
     if (!this.isVisible) return
 
-    this.updatePanel('Game State', {
+    this.updatePanel('Game', {
       state: snapshot.gameState,
-      mode: snapshot.displayState,
-      lives: snapshot.lives,
+      display: snapshot.displayState,
       score: snapshot.score,
-      multiplier: `${Math.round(snapshot.multiplier)}x`,
-      track: snapshot.adventureTrack ?? 'none',
-      'track name': snapshot.trackName ?? 'n/a',
-      'goal %': `${snapshot.goalProgressPct.toFixed(1)}%`,
+      multiplier: snapshot.multiplier,
+      lives: snapshot.lives,
+      seed: snapshot.sessionSeed,
+      track: snapshot.adventureTrack ?? snapshot.trackName ?? 'none',
+      goal: `${snapshot.goalProgressPct.toFixed(0)}%`,
       bumpersThisBall: snapshot.bumperHitsThisBall ?? 0,
       ptsThisBall: snapshot.pointsThisBall ?? 0,
       zonesThisBall: snapshot.zoneEntriesThisBall ?? 0,

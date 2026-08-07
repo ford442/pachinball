@@ -1,0 +1,20 @@
+[
+{
+  "directory": "/root/pachinball/native/build",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -O3 -DNDEBUG -std=gnu++17 -fno-exceptions -O2 -o CMakeFiles/PhysicsModule.dir/src/RigidBody.cpp.o -c /root/pachinball/native/src/RigidBody.cpp",
+  "file": "/root/pachinball/native/src/RigidBody.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/RigidBody.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -O3 -DNDEBUG -std=gnu++17 -fno-exceptions -O2 -o CMakeFiles/PhysicsModule.dir/src/PhysicsWorld.cpp.o -c /root/pachinball/native/src/PhysicsWorld.cpp",
+  "file": "/root/pachinball/native/src/PhysicsWorld.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/PhysicsWorld.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -O3 -DNDEBUG -std=gnu++17 -fno-exceptions -O2 -o CMakeFiles/PhysicsModule.dir/src/bindings.cpp.o -c /root/pachinball/native/src/bindings.cpp",
+  "file": "/root/pachinball/native/src/bindings.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/bindings.cpp.o"
+}
+]

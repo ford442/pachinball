@@ -89,3 +89,73 @@ export function randomU32Seed(): number {
   }
   return (Date.now() ^ (Math.floor(Math.random() * 0xffffffff) >>> 0)) >>> 0
 }
+
+// ---------------------------------------------------------------------------
+// Session SeededRng Management
+// ---------------------------------------------------------------------------
+
+let currentSessionSeed: number = 0
+let currentSessionRng: SeededRng | null = null
+
+/**
+ * Initialize or re-initialize the active gameplay session RNG with a seed.
+ * If no seed is provided, a fresh u32 seed is generated.
+ */
+export function initSessionRng(seed?: number): { seed: number; rng: SeededRng } {
+  currentSessionSeed = seed !== undefined ? (seed >>> 0) : randomU32Seed()
+  currentSessionRng = createSeededRng(currentSessionSeed)
+  return { seed: currentSessionSeed, rng: currentSessionRng }
+}
+
+/**
+ * Get the active session SeededRng instance.
+ * Automatically initializes with a default seed if not explicitly initialized.
+ */
+export function getSessionRng(): SeededRng {
+  if (!currentSessionRng) {
+    initSessionRng(0x12345678)
+  }
+  return currentSessionRng!
+}
+
+/**
+ * Get the active session u32 seed.
+ */
+export function getSessionSeed(): number {
+  if (!currentSessionRng) {
+    initSessionRng(0x12345678)
+  }
+  return currentSessionSeed
+}
+
+/** Reset active session RNG with optional new seed. */
+export function resetSessionRng(seed?: number): void {
+  initSessionRng(seed)
+}
+
+/**
+ * ============================================================================
+ * GAMEPLAY VS COSMETIC RNG POLICY
+ * ============================================================================
+ *
+ * To ensure 100% deterministic physics replays and fair leaderboards:
+ *
+ * MUST USE SeededRng (getSessionRng()):
+ * - Ball spawn type weights and initial spawn position/velocity jitter
+ * - Multiball spawn offsets and gold ball swarm trajectories
+ * - Imposter ball catch release impulses
+ * - Feeder release angle and spin variances (mag-spin, quantum-tunnel, nano-loom, etc.)
+ * - Dynamic launcher and trap boost impulse variances
+ * - Spinner bumper target rotation direction
+ * - Slot machine activation checks and reel outcome generation
+ *
+ * EXEMPT (Cosmetic RNG, may use Math.random()):
+ * - Audio synth frequencies, beep pitches, and noise buffer generation
+ * - Particle shard initial velocities, scales, and rotation speeds
+ * - Camera shake / screen shake pixel offsets
+ * - Decorative trim mesh placement, LED jitter, and cabinet detail scaling
+ * - Backbox LCD overlay walk-by emoji timers and visual walk speeds
+ * - Ball stack visual rotation offsets
+ * ============================================================================
+ */
+

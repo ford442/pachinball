@@ -8,6 +8,7 @@ import type { PhysicsBinding } from '../game-elements/types'
 import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
 import type { EventBus } from '../core/event-bus'
 import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
+import { getSessionRng } from '../game-elements/seeded-rng'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
 
 export interface SpinnerBumperVisual {
@@ -243,7 +244,7 @@ export class SpinnerBumperBuilder {
 
     const spinIntensity = Math.min(impactForce / 18, 1.0)
     const targetSpeed = getPhysicsTuningValue('spinnerTargetSpeed')
-    visual.targetRotationSpeed = targetSpeed * spinIntensity * (Math.random() < 0.5 ? 1 : -1)
+    visual.targetRotationSpeed = targetSpeed * spinIntensity * (getSessionRng().next() < 0.5 ? 1 : -1)
 
     if (this.eventBus) {
       const pos = ballPosition ?? visual.mesh.getAbsolutePosition()

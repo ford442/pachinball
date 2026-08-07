@@ -54,6 +54,7 @@ export interface PhysicsHost {
   readonly tableCam: TargetCamera | null
   readonly accessibility: import('../../game-elements').AccessibilityConfig
   readonly qualityTier: QualityTier
+  readonly ghostBallRenderer?: import('../../game-elements/ghost-ball-renderer').GhostBallRenderer | null
 
   readonly spinnerBuilder: SpinnerBumperBuilder | null
   readonly ballTrapBuilder: BallTrapBuilder | null

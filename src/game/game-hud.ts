@@ -40,6 +40,7 @@ export interface HUDHost {
   sessionGoldBalls: number
 
   updateHUD(): void
+  readonly replayRecorder?: import('../game-elements').ReplayRecorder
 }
 
 export class GameHUD {
@@ -47,6 +48,21 @@ export class GameHUD {
 
   constructor(host: HUDHost) {
     this.host = host
+    this.setupChallengeButton()
+  }
+
+  private setupChallengeButton(): void {
+    const challengeBtn = document.getElementById('challenge-share-btn')
+    if (challengeBtn) {
+      challengeBtn.onclick = async () => {
+        const mapId = this.host.mapManager?.getCurrentMap() || 'neon-helix'
+        const seed = (await import('../game-elements')).getSessionSeed()
+        const copied = await (await import('../game-elements')).ChallengeSystem.copyChallengeLink(seed, this.host.score, mapId)
+        if (copied) {
+          this.host.uiManager?.showMessage('Challenge link copied to clipboard! Share with friends.', 3500)
+        }
+      }
+    }
   }
 
   updateHUD(): void {
@@ -152,6 +168,27 @@ export class GameHUD {
       console.log('[Leaderboard] Score too low for submission')
       return
     }
+
+    let replayId: string | undefined
+    if (this.host.replayRecorder) {
+      const payload = this.host.replayRecorder.stop(this.host.score)
+      if (payload) {
+        try {
+          const { apiFetch } = await import('../config')
+          const res = await apiFetch<{ success: boolean; replay_id: string }>('/replays', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: (await import('../game-elements')).ReplayRecorder.toJSON(payload, true),
+          })
+          if (res?.replay_id) {
+            replayId = res.replay_id
+          }
+        } catch {
+          // Replay submission optional fallback
+        }
+      }
+    }
+
     const fallbackMap = this.host.mapManager?.getCurrentMap() || 'neon-helix'
     const mapId = getDailyCascadeState().getLeaderboardMapId(fallbackMap)
     this.host.leaderboardSystem.setContext(mapId)
@@ -168,6 +205,7 @@ export class GameHUD {
         map_id: mapId,
         balls: 1,
         combo_max: this.host.comboCount,
+        replay_id: replayId,
       })
       if (submitResult.success) {
         console.log(`[Leaderboard] Score submitted! Rank #${submitResult.rank}`)

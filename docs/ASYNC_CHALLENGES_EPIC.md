@@ -1,8 +1,8 @@
 # Async Challenges & Replay Spectate (P3 Epic)
 
-**Status:** Direction-setting only — **do not implement until foundation issues close.**  
+**Status:** **v1 Implemented** (Client share links, RLE compression, API contract in `api/replays.py`, Leaderboard ▶ spectate button, `GhostBallRenderer`).  
 **Priority:** P3  
-**Related issues:** #297 (replay), #304 (procedural mutator), #292 (lane sensors), #288 (deploy/API auth), #298 (PWA — optional for share links)
+**Related issues:** #297 (replay), #304 (procedural mutator), #292 (lane sensors), #288 (deploy/API auth), #322 / #340 (Async Challenges v1)
 
 ---
 
@@ -73,10 +73,10 @@ These are **hard gates** for v1 acceptance. Do not start replay work in parallel
 
 **Deliverables before v1 coding:**
 
-- [ ] `ReplayRecorder` — append-only `InputFrame[]` + metadata each physics tick while `PLAYING`
-- [ ] `SeededRng` — injectable RNG replacing `Math.random` on gameplay paths (ball spawn, slot, feeders)
-- [ ] `ReplayRunner` — feed recorded frames into `applyInputFrame`; disable live input
-- [ ] Parity test: record N frames → replay → assert final score + ball position within epsilon
+- [x] `ReplayRecorder` — append-only `InputFrame[]` + metadata each physics tick while `PLAYING`
+- [x] `SeededRng` — session RNG replacing `Math.random` on gameplay paths (ball spawn, slot, feeders)
+- [x] `ReplayRunner` — feed recorded frames into `applyInputFrame`; disable live input
+- [x] Parity test: record N frames → replay → assert final score + ball position within epsilon
 
 ### 2. Procedural mutator (#304)
 
@@ -186,11 +186,14 @@ Loading this URL starts a seeded run; on game over, prompt to beat the target an
 
 ---
 
+---
+
 ## v1 acceptance criteria
 
-- [ ] **Upload replay + seed to API** — `POST /replays` after qualifying game over; payload includes seed, map, frames, score
-- [ ] **Download and watch ghost on another client** — `GET /replays/:id` drives `ReplayRunner` with visible ghost ball
-- [ ] **Leaderboard entry links to replay id** — submission stores `replay_id`; leaderboard row opens spectate mode
+- [x] **Upload replay + seed to API** — `POST /replays` after qualifying game over; payload includes seed, map, frames/compressedFrames, score
+- [x] **Download and watch ghost on another client** — `GET /replays/:id` drives `ReplayRunner` with `GhostBallRenderer`
+- [x] **Leaderboard entry links to replay id** — submission stores `replay_id`; leaderboard row ▶ button opens spectate mode
+- [x] **Shareable Challenge Links** — `?challenge=<seed>:<target>` / `?seed=...` loads challenge run; "Challenge Friends" UI button copies URL
 
 ---
 
@@ -204,38 +207,16 @@ Loading this URL starts a seeded run; on game over, prompt to beat the target an
 
 ---
 
-## Suggested implementation order (after foundation closes)
+## Residual risks & mitigations
 
-1. **#297 core** — `ReplayRecorder` + `ReplayRunner` + Vitest parity test (no network)
-2. **#292** — lane sensor scoring so `final_score` in replay matches live play
-3. **API stub** — add `api/replays.py` mirroring `api/adventure.py` pattern; wire to GCS
-4. **Client upload** — extend `handleGameOverLeaderboard()` flow
-5. **Spectate mode** — leaderboard ▶ button + direct `?replay_id=` URL
-6. **#304 mutator** — wire seed into layout; bump `ReplayPayload.version` to 2
-7. **#298 PWA** — offline cache of downloaded replays (optional polish)
-
----
-
-## Testing strategy
-
-| Layer | Approach |
-|-------|----------|
-| Unit | Record → replay → score/position parity (Vitest, mocked physics or fixed Rapier scene) |
-| Golden | Extend `feeder-golden-fixtures.test.ts` pattern for full 10 s input scripts |
-| E2E | Playwright: submit score with mock API, open `?replay_id=fixture`, assert ghost visible (`?renderer=webgl2`) |
+| Risk | Status | Mitigation |
+|------|--------|------------|
+| Cross-browser physics non-determinism | Mitigated | WebGL2 & Rapier forced for spectate validation; `build_id` mismatch warnings logged |
+| Replay payload size / bandwidth | Mitigated | Zero-dependency RLE delta frame compression (`compressInputFrames`) + 512 KB API cap |
+| Server-side replay verification | Deferred (v3) | Client-uploaded replays attached to leaderboard; anti-cheat verification deferred to v3 |
+| Slot machine non-determinism | Mitigated | Slot machine triggers use `getSessionRng()` |
 
 ---
 
-## Risk register
-
-| Risk | Mitigation |
-|------|------------|
-| Cross-browser physics drift | Lock replay to `webgl2`; document `build_id` mismatch warnings |
-| Replay size / abuse | Server cap + rate limit; auth before public write |
-| Slot machine nondeterminism | Exclude slot spins from v1 challenge mode, or seed slot RNG from challenge seed |
-| WASM A/B path | Force Rapier-only during record and playback |
-
----
-
-**Last updated:** 2026-07-23  
-**Owner:** TBD — assign when #297 foundation closes
+**Last updated:** 2026-08-07  
+**Owner:** Core Engineering  

@@ -18,6 +18,8 @@ export interface LeaderboardEntry {
   balls: number
   combo_max: number
   date: string
+  replay_id?: string
+  challenge_id?: string
 }
 
 export interface ScoreSubmission {
@@ -27,6 +29,8 @@ export interface ScoreSubmission {
   adventure_level?: string
   balls: number
   combo_max: number
+  replay_id?: string
+  challenge_id?: string
 }
 
 export class LeaderboardSystem {
@@ -36,6 +40,7 @@ export class LeaderboardSystem {
   private isRefreshing = false
   private currentMapId = 'neon-helix'
   private currentAdventureLevel?: string
+  private onSpectateCallback: ((replayId: string) => void) | null = null
 
   // Polling retry state
   private consecutiveFailures = 0
@@ -318,6 +323,10 @@ export class LeaderboardSystem {
     this.scoreList = scoreList
   }
 
+  setOnSpectateCallback(cb: (replayId: string) => void): void {
+    this.onSpectateCallback = cb
+  }
+
   /**
    * Update the UI with current scores
    */
@@ -329,25 +338,57 @@ export class LeaderboardSystem {
       return
     }
 
-    const html = this.scores
-      .map(
-        (entry, index) => `
-        <div style="
-          display: flex;
-          justify-content: space-between;
-          padding: 8px;
-          margin: 4px 0;
-          background: ${index % 2 === 0 ? 'rgba(0, 255, 136, 0.1)' : 'transparent'};
-          border-left: 3px solid ${index < 3 ? '#ffd700' : '#00ff88'};
-        ">
-          <span>${entry.rank}. ${entry.name}</span>
-          <span style="font-weight: bold;">${entry.score.toLocaleString()}</span>
-        </div>
+    this.scoreList.innerHTML = ''
+    this.scores.forEach((entry, index) => {
+      const row = document.createElement('div')
+      row.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px;
+        margin: 4px 0;
+        background: ${index % 2 === 0 ? 'rgba(0, 255, 136, 0.1)' : 'transparent'};
+        border-left: 3px solid ${index < 3 ? '#ffd700' : '#00ff88'};
       `
-      )
-      .join('')
 
-    this.scoreList.innerHTML = html
+      const left = document.createElement('span')
+      left.textContent = `${entry.rank}. ${entry.name}`
+
+      const right = document.createElement('div')
+      right.style.cssText = 'display: flex; gap: 10px; align-items: center;'
+
+      const scoreVal = document.createElement('span')
+      scoreVal.style.fontWeight = 'bold'
+      scoreVal.textContent = entry.score.toLocaleString()
+      right.appendChild(scoreVal)
+
+      if (entry.replay_id) {
+        const replayBtn = document.createElement('button')
+        replayBtn.title = 'Watch Replay Spectate'
+        replayBtn.textContent = '▶'
+        replayBtn.style.cssText = `
+          background: rgba(0, 240, 255, 0.2);
+          border: 1px solid #00f0ff;
+          color: #00f0ff;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 11px;
+          padding: 2px 6px;
+        `
+        replayBtn.onclick = (e) => {
+          e.stopPropagation()
+          if (this.onSpectateCallback && entry.replay_id) {
+            this.hide()
+            this.onSpectateCallback(entry.replay_id)
+          }
+        }
+        right.appendChild(replayBtn)
+      }
+
+      row.appendChild(left)
+      row.appendChild(right)
+      this.scoreList!.appendChild(row)
+    })
   }
 
   /**

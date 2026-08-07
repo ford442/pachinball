@@ -48,6 +48,12 @@ npm run preview
 
 # Run Playwright E2E tests
 npx playwright test
+
+# Run native C++ Catch2 physics tests (generates compile_commands.json for clangd/IDE navigation)
+npm run test:native
+
+# Microbench C++ WASM physics build flags (baseline vs SIMD vs LTO)
+npm run bench:wasm-flags
 ```
 
 ### Continuous Integration

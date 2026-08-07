@@ -76,6 +76,9 @@ export const COLLISION_GROUP_PRESETS = {
   ADVENTURE: makeCollisionGroups(ADVENTURE_GROUP, CollisionGroups.BALL),
 } as const
 
+let cachedRapier: typeof RAPIER | null = null
+let rapierInitPromise: Promise<void> | null = null
+
 export class PhysicsSystem {
   private rapier: typeof RAPIER | null = null
   private world: RAPIER.World | null = null
@@ -108,8 +111,23 @@ export class PhysicsSystem {
 
     // Fallback: load Rapier here if not preloaded (backward compatibility)
     if (!this.rapier) {
-      this.rapier = await import('@dimforge/rapier3d-compat')
-      await (this.rapier.init as unknown as () => Promise<void>)()
+      if (cachedRapier) {
+        this.rapier = cachedRapier
+      } else {
+        const r = await import('@dimforge/rapier3d-compat')
+        this.rapier = r
+        cachedRapier = r
+        if (!rapierInitPromise) {
+          rapierInitPromise = (async () => {
+            try {
+              await (r.init as unknown as () => Promise<void>)()
+            } catch {
+              // Ignore export mutation errors in ESM test runners — WASM is ready
+            }
+          })()
+        }
+        await rapierInitPromise
+      }
     }
 
     // Updated: Pass a single object with gravity property

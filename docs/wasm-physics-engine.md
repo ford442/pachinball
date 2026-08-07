@@ -195,19 +195,19 @@ API / wasm-bindgen-style surface is deferred.
 ### Flag microbench (50 spheres)
 
 Scenario: floor plane + 50 dynamic spheres, warmup 30 steps, timed 300 steps
-at `1/60` s. Host: Node on the build machine (2026-07-23).
+at `1/60` s. Host: Linux build environment (2026-08-07).
 
 | Combo | Flags | mean ms | p50 ms | p95 ms | .wasm KiB |
 |-------|-------|---------|--------|--------|-----------|
-| A Baseline | Release + always-on size/env | 0.0591 | 0.0424 | 0.0949 | 27.1 |
-| B +SIMD | A + `-msimd128` | 0.0448 | 0.0369 | 0.0699 | 27.7 |
-| C +SIMD+LTO | B + `-flto` | 0.0626 | 0.0276 | 0.0645 | 27.0 |
+| A Baseline | Release + always-on size/env | 0.0445 | 0.0367 | 0.0692 | 28.6 |
+| B +SIMD | A + `-msimd128` | 0.0611 | 0.0431 | 0.0875 | 29.3 |
+| C +SIMD+LTO | B + `-flto` | 0.0452 | 0.0356 | 0.0775 | 28.6 |
 
-**Interpretation:** SIMD improved mean step ~24% on this host; LTO did not
-clearly improve mean step time (p50 improved, mean noisier) and only shaved a
-fraction of a KiB. **Default Release stays without SIMD/LTO** until a second
-host confirms the win and browser SIMD coverage is accepted. Regenerate with
-`npm run bench:wasm-flags`.
+**Decision & Rationale:**
+1. **Default production build stays Release baseline (`SIMD=OFF`, `LTO=OFF`)**: Baseline step time is sub-0.05ms per tick for 50 spheres. `-msimd128` slightly increases WASM binary size (+0.7 KiB) and introduces auto-vectorization overhead without benefiting scalar sphere interactions, while reducing compatibility across older browser engines. `-flto` adds build time without measurable runtime improvement over baseline.
+2. **Default production runtime physics engine stays Rapier**: Rapier 3D WASM remains the primary production physics backend.
+3. **No `-pthread` / `SharedArrayBuffer`**: Threading remains disabled to avoid requiring COOP/COEP headers.
+4. **Regenerate metrics at any time**: Run `npm run bench:wasm-flags`.
 
 ---
 
@@ -468,21 +468,24 @@ Emscripten required. Catch2 v3.7.1 is downloaded automatically on first
 This lets you iterate on solver logic with fast compile times using your
 native compiler before re-running the full Emscripten build.
 
+### Language Server & IDE Tooling (`compile_commands.json`)
+
+CMake is configured with `CMAKE_EXPORT_COMPILE_COMMANDS ON`. Both `npm run test:native` and `npm run build:wasm` automatically generate and copy `compile_commands.json` to `native/compile_commands.json` and project root `compile_commands.json`.
+
+Root `.clangd` points clangd / IDE language servers directly to `native/` for symbol indexing, auto-completion, and inline diagnostics across `native/src/**`.
+
 ---
 
-## CI (optional)
+## CI Workflows
 
-A non-blocking GitHub Actions workflow (`.github/workflows/native-physics.yml`)
-runs on changes under `native/`:
+The GitHub Actions workflow (`.github/workflows/native-physics.yml`) runs on changes touching `native/**` or build scripts:
 
-| Job | Tools | What it checks |
-|-----|-------|----------------|
-| `native_ctest` | cmake, g++ | `npm run test:native` (Catch2 suite) |
-| `wasm_build` | emsdk (cached) | Release `npm run build:wasm` + artefact size; no `.map` in `public/wasm/`; RelWithAsserts `npm run build:wasm:assert`; parity via `WASM_MODULE_PATH=native/build-assert/PhysicsModule.js` |
+| Job | Status | Tools | What it checks |
+|-----|--------|-------|----------------|
+| `native_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native` (Catch2 suite — 9/9 scenarios) |
+| `wasm_build` | Non-blocking | emsdk (cached) | Release `npm run build:wasm` + artefact size; no `.map` in `public/wasm/`; RelWithAsserts `npm run build:wasm:assert`; parity via `WASM_MODULE_PATH=native/build-assert/PhysicsModule.js` |
 
-Both jobs use `continue-on-error: true` so they **do not gate merges** until
-main CI ([#283](https://github.com/ford442/pachinball/issues/283)) lands.
-Main CI will add tsc/lint/Vitest/vite build separately.
+`native_ctest` runs in ~15 seconds without requiring Emscripten and gates PRs against C++ logic regressions. Additionally, `tests/embind-surface.test.ts` asserts that TypeScript interface definitions (`src/wasm/wasm-types.ts`) match the exported Embind surface (`native/src/bindings.cpp`).
 
 Skip options:
 

@@ -16,7 +16,7 @@ import { Vector3 } from '@babylonjs/core'
 import type { Mesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
-import { type InputFrame } from '../../game-elements'
+import { type InputFrame, type ReplayRecorder, type ReplayRunner } from '../../game-elements'
 import { BallType, GAME_TUNING, GameConfig } from '../../config'
 import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
 import { DisplayState } from '../../game-elements'
@@ -217,11 +217,27 @@ export class GamePhysicsController {
 
   stepPhysics(
     inputManager: { update: () => void; processBufferedInputs: () => InputFrame | null } | null,
-    inputActions: { handleFlipperLeft: (p: boolean) => void; handleFlipperRight: (p: boolean) => void; handlePlunger: () => void; updatePlungerFrame?: (dt: number) => void } | null
+    inputActions: { handleFlipperLeft: (p: boolean) => void; handleFlipperRight: (p: boolean) => void; handlePlunger: () => void; updatePlungerFrame?: (dt: number) => void } | null,
+    replayRunner?: ReplayRunner | null,
+    replayRecorder?: ReplayRecorder | null
   ): void {
-    inputManager?.update()
-    const inputFrame = inputManager?.processBufferedInputs()
+    let inputFrame: InputFrame | null = null
+
+    if (replayRunner && replayRunner.isPlaying()) {
+      inputFrame = replayRunner.getNextFrame()
+      const pos = this.getBallPosition()
+      if (pos && this.host.ghostBallRenderer?.isVisible()) {
+        this.host.ghostBallRenderer.updatePosition(pos)
+      }
+    } else {
+      inputManager?.update()
+      inputFrame = inputManager?.processBufferedInputs() ?? null
+    }
+
     if (inputFrame) {
+      if (replayRecorder && replayRecorder.isRecording() && (!replayRunner || !replayRunner.isPlaying()) && this.host.stateManager.isPlaying()) {
+        replayRecorder.recordFrame(inputFrame)
+      }
       const adventureActive = this.host.adventureMode?.isActive() ?? false
       if (!adventureActive) {
         if (inputFrame.flipperLeft !== null) inputActions?.handleFlipperLeft(inputFrame.flipperLeft)

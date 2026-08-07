@@ -12,6 +12,7 @@ import {
   StandardMaterial,
 } from '@babylonjs/core'
 import type { Scene, Mesh, TransformNode } from '@babylonjs/core'
+import { getSessionRng } from '../game-elements/seeded-rng'
 import { DisplayState, type DisplayConfig, type SlotReel } from './display-types'
 import { DISPLAY_LAYER_Z } from './display-layer-depth'
 
@@ -247,7 +248,7 @@ export class DisplayReelsLayer {
 
     for (let i = 0; i < 3; i++) {
       this.reels.push({
-        symbols: [...symbols].sort(() => Math.random() - 0.5),
+        symbols: getSessionRng().shuffle([...symbols]),
         position: 0,
         speed: 0,
         stopping: false,
@@ -386,7 +387,7 @@ export class DisplayReelsLayer {
     this.symbolWeights = weights ?? null
 
     for (const reel of this.reels) {
-      reel.symbols = [...this.reelSymbols].sort(() => Math.random() - 0.5)
+      reel.symbols = getSessionRng().shuffle([...this.reelSymbols])
       reel.targetSymbol = reel.symbols[0]
     }
     this.renderReels()
@@ -397,16 +398,17 @@ export class DisplayReelsLayer {
   }
 
   private pickRandomSymbol(): string {
+    const rng = getSessionRng()
     if (this.symbolWeights) {
       const total = Object.values(this.symbolWeights).reduce((sum, w) => sum + w, 0)
-      let roll = Math.random() * total
+      let roll = rng.next() * total
       for (const symbol of this.reelSymbols) {
         const weight = this.symbolWeights[symbol] ?? 0
         if (roll < weight) return symbol
         roll -= weight
       }
     }
-    return this.reelSymbols[Math.floor(Math.random() * this.reelSymbols.length)]
+    return rng.pick(this.reelSymbols)
   }
 
   /**
@@ -416,10 +418,11 @@ export class DisplayReelsLayer {
     this.spinning = true
     this.stopTimer = 0
     this.spinOptions = options ?? {}
+    const rng = getSessionRng()
 
     for (let i = 0; i < this.reels.length; i++) {
       const reel = this.reels[i]
-      reel.speed = options?.reelSpeeds?.[i] ?? 10 + Math.random() * 5
+      reel.speed = options?.reelSpeeds?.[i] ?? 10 + rng.next() * 5
       reel.stopping = false
       if (options?.targetSymbols?.[i]) {
         reel.targetSymbol = options.targetSymbols[i]

@@ -9,6 +9,7 @@ import type { Mesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { BallType, GameConfig } from '../config'
 import { pulse } from './visual-language'
+import { getSessionRng } from './seeded-rng'
 import { getDensityForMass, type BallManagerHost } from './ball-manager-context'
 
 /**
@@ -184,10 +185,11 @@ export function spawnSmallGoldBallSwarm(host: BallManagerHost, position?: Vector
     return []
   }
 
-  const swarmCount = Math.min(cfg.swarmSize, cfg.maxConcurrentBalls - smallGoldCount)
   const smallRadius = GameConfig.ball.radius * cfg.sizeMultiplier
   const smallMass = GameConfig.ball.mass * cfg.massMultiplier
 
+  const swarmCount = Math.min(cfg.swarmSize, cfg.maxConcurrentBalls - smallGoldCount)
+  const rng = getSessionRng()
   for (let i = 0; i < swarmCount; i++) {
     // Create small gold mesh
     const goldBall = MeshBuilder.CreateSphere(`smallGoldBall_${baseType}_${i}`, {
@@ -200,17 +202,17 @@ export function spawnSmallGoldBallSwarm(host: BallManagerHost, position?: Vector
     goldBall.material = host.matLib.getSolidGoldBallMaterial()
 
     // Create physics body with chaotic velocity spread
-    const angleSpread = (Math.PI * 2 / swarmCount) * i + (Math.random() - 0.5) * 0.3
-    const speedVariation = cfg.spawnVelocityMin + Math.random() * (cfg.spawnVelocityMax - cfg.spawnVelocityMin)
+    const angleSpread = (Math.PI * 2 / swarmCount) * i + (rng.next() - 0.5) * 0.3
+    const speedVariation = cfg.spawnVelocityMin + rng.next() * (cfg.spawnVelocityMax - cfg.spawnVelocityMin)
     const velocity = new host.rapier.Vector3(
       Math.cos(angleSpread) * speedVariation,
-      2.0 + Math.random() * 1.5,
+      2.0 + rng.next() * 1.5,
       Math.sin(angleSpread) * speedVariation,
     )
 
     const body = host.world.createRigidBody(
       host.rapier.RigidBodyDesc.dynamic()
-        .setTranslation(spawnPos.x + (Math.random() - 0.5) * 0.5, spawnPos.y, spawnPos.z + (Math.random() - 0.5) * 0.5)
+        .setTranslation(spawnPos.x + (rng.next() - 0.5) * 0.5, spawnPos.y, spawnPos.z + (rng.next() - 0.5) * 0.5)
         .setCcdEnabled(true)
         .setCanSleep(true)
         .setLinearDamping(cfg.linearDamping)

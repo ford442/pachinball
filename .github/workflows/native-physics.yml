@@ -1,7 +1,7 @@
-# Optional native C++ physics tests + WASM build verification.
+# Native C++ physics Catch2 unit tests + optional WASM build verification.
 #
-# This workflow is NON-BLOCKING (continue-on-error) until main CI (#283) lands.
-# It does not gate merges.
+# native_ctest is BLOCKING for any pull request touching `native/**` (Ubuntu + g++/cmake).
+# wasm_build is NON-BLOCKING (continue-on-error) to avoid runner emsdk dependencies gating JS-only PRs.
 #
 # Skip triggers:
 #   - Use workflow_dispatch only (disable push/PR triggers) for manual runs
@@ -13,7 +13,7 @@
 #   npm run build:wasm:assert    # RelWithAsserts → native/build-assert/
 #   WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npm run test:wasm-parity
 
-name: Native Physics (optional)
+name: Native Physics
 
 on:
   workflow_dispatch:
@@ -32,9 +32,8 @@ on:
 
 jobs:
   native_ctest:
-    name: Native CTest
+    name: Native CTest (Blocking)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 

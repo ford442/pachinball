@@ -19,6 +19,7 @@ import {
 } from './ball-manager-context'
 import { COLLISION_GROUP_PRESETS } from './physics'
 import { getSoundSystem } from './sound-system'
+import { getSessionRng } from './seeded-rng'
 import { QualityTier, color, emissive, INTENSITY, PALETTE } from './visual-language'
 
 export function createMainBall(host: BallManagerHost): RAPIER.RigidBody {
@@ -136,11 +137,12 @@ export function spawnExtraBalls(host: BallManagerHost, count: number, position?:
   const spawn = position ? { x: position.x, y: position.y, z: position.z } : GameConfig.ball.spawnPachinko
   const density = getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
   const physics = getTunedBallPhysics()
+  const rng = getSessionRng()
 
   for (let i = 0; i < count; i++) {
     const b = MeshBuilder.CreateSphere('xb', { diameter: GameConfig.ball.radius * 2, segments: 32 }, host.scene) as Mesh
     // Offset slightly to avoid stacking
-    b.position.set(spawn.x + (Math.random() - 0.5), spawn.y + (i * 2), spawn.z)
+    b.position.set(spawn.x + (rng.next() - 0.5), spawn.y + (i * 2), spawn.z)
 
     b.material = host.matLib.getExtraBallMaterial()
 
@@ -515,7 +517,7 @@ export function createBallOfType(host: BallManagerHost, type: BallType, position
   )
 
   // Enhanced ball physics: better restitution coefficients and spin response
-  collider.setRestitutionCombineRule(host.rapier.CoefficientCombineRule.Max)
+  collider?.setRestitutionCombineRule?.(host.rapier.CoefficientCombineRule.Max)
 
   // Store ball data
   host.ballDataMap.set(body, {
@@ -545,7 +547,7 @@ export function createBallOfType(host: BallManagerHost, type: BallType, position
  * Spawn a random ball with weighted probability.
  */
 export function spawnRandomBall(host: BallManagerHost, position?: Vector3): RAPIER.RigidBody {
-  const rand = Math.random()
+  const rand = getSessionRng().next()
   let cumulative = 0
 
   for (const [typeKey, config] of Object.entries(BALL_TIERS)) {

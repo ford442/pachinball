@@ -141,6 +141,12 @@ configure_and_build() {
 
   echo "[build-wasm] Building..."
   cmake --build "${build_dir}" --config "${build_type}" -- -j"${JOBS}"
+
+  if [[ -f "${build_dir}/compile_commands.json" ]]; then
+    cp "${build_dir}/compile_commands.json" "${NATIVE_DIR}/compile_commands.json"
+    cp "${build_dir}/compile_commands.json" "${REPO_ROOT}/compile_commands.json"
+    echo "[build-wasm] Synced compile_commands.json → native/ and project root"
+  fi
 }
 
 install_artefacts() {

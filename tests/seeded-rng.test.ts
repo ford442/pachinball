@@ -7,6 +7,9 @@ import {
   hashStringToSeed,
   dailySeedId,
   seedFromDailyId,
+  initSessionRng,
+  getSessionRng,
+  getSessionSeed,
 } from '../src/game-elements/seeded-rng'
 
 describe('createSeededRng', () => {
@@ -54,5 +57,29 @@ describe('daily seed helpers', () => {
 
   it('seedFromDailyId matches hash', () => {
     expect(seedFromDailyId('2026-07-23')).toBe(hashStringToSeed('2026-07-23'))
+  })
+})
+
+describe('session SeededRng', () => {
+  it('initSessionRng sets seed and session RNG instance', () => {
+    const { seed, rng } = initSessionRng(12345)
+    expect(seed).toBe(12345)
+    expect(getSessionSeed()).toBe(12345)
+    expect(getSessionRng()).toBe(rng)
+  })
+
+  it('fixed session seed produces identical spawn sequence and feeder angle sequence', () => {
+    initSessionRng(98765)
+    const rng1 = getSessionRng()
+    const seq1 = Array.from({ length: 10 }, () => rng1.next())
+    const angles1 = Array.from({ length: 5 }, () => (rng1.next() - 0.5) * 2)
+
+    initSessionRng(98765)
+    const rng2 = getSessionRng()
+    const seq2 = Array.from({ length: 10 }, () => rng2.next())
+    const angles2 = Array.from({ length: 5 }, () => (rng2.next() - 0.5) * 2)
+
+    expect(seq1).toEqual(seq2)
+    expect(angles1).toEqual(angles2)
   })
 })

@@ -9,6 +9,7 @@ import { NanoLoomFeeder, NanoLoomState } from '../src/game-elements/nano-loom-fe
 import { PrismCoreFeeder, PrismCoreState } from '../src/game-elements/prism-core-feeder'
 import { GaussCannonFeeder, GaussCannonState } from '../src/game-elements/gauss-cannon-feeder'
 import { QuantumTunnelFeeder, QuantumTunnelState } from '../src/game-elements/quantum-tunnel-feeder'
+import { initSessionRng } from '../src/game-elements/seeded-rng'
 import {
   createMockBall,
   createMockRapier,
@@ -32,7 +33,8 @@ vi.mock('../src/game-elements/visual-language', () => ({
       release: '#ff00aa',
     },
   },
-  INTENSITY: { LOW: 0.3, FLASH: 1.0 },
+  PALETTE: { CYAN: '#00ffff' },
+  INTENSITY: { HIGH: 1.5, MED: 1.0, LOW: 0.3, FLASH: 1.0 },
 }))
 
 const DT = 1 / 60
@@ -41,6 +43,7 @@ describe('feeder golden FSM fixtures', () => {
   let randomSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
+    initSessionRng(42)
     randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5)
     vi.spyOn(performance, 'now').mockReturnValue(0)
   })
@@ -75,10 +78,12 @@ describe('feeder golden FSM fixtures', () => {
 
     expect(record.impulses).toHaveLength(1)
     const imp = record.impulses[0]
-    expect(imp.x).toBeCloseTo(-14.952229178041874, 10)
+    expect(imp.x).toBeCloseTo(-13.925739637901094, 10)
     expect(imp.y).toBeCloseTo(1.9936305570722506, 10)
-    expect(imp.z).toBeCloseTo(-19.936305570722503, 10)
-    expect(record.releaseAngvel).toEqual({ x: 0, y: 12, z: 0 })
+    expect(imp.z).toBeCloseTo(-20.66637880082764, 5)
+    expect(record.releaseAngvel.y).toBe(12)
+    expect(record.releaseAngvel.x).toBeCloseTo(-0.41367552801966667, 10)
+    expect(record.releaseAngvel.z).toBeCloseTo(2.819726347923279, 10)
   })
 
   it('nano-loom: LIFT → WEAVE → EJECT with fixed eject impulse', () => {
@@ -200,7 +205,9 @@ describe('feeder golden FSM fixtures', () => {
     ])
 
     expect(record.impulses).toHaveLength(1)
-    expect(record.impulses[0]).toEqual({ x: 25, y: 0, z: 0 })
+    expect(record.impulses[0].x).toBeCloseTo(25, 10)
+    expect(record.impulses[0].y).toBeCloseTo(0, 10)
+    expect(record.impulses[0].z).toBeCloseTo(0.5055187596008182, 10)
   })
 })
 

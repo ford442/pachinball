@@ -11,6 +11,7 @@ import {
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { GameConfigType } from '../config'
+import { getSessionRng } from './seeded-rng'
 import { color, emissive, FEEDER_STYLES, INTENSITY } from './visual-language'
 
 export enum MagSpinState {
@@ -401,7 +402,8 @@ export class MagSpinFeeder {
       target.z - currentPos.z
     ).normalize()
 
-    const angleVariance = (Math.random() - 0.5) * 2 * this.config.releaseAngleVariance
+    const rng = getSessionRng()
+    const angleVariance = (rng.next() - 0.5) * 2 * this.config.releaseAngleVariance
     const cos = Math.cos(angleVariance)
     const sin = Math.sin(angleVariance)
     const finalDir = new Vector3(
@@ -414,9 +416,9 @@ export class MagSpinFeeder {
     body.applyImpulse({ x: impulse.x, y: impulse.y, z: impulse.z }, true)
     const extras = this.config.physicsExtras
     body.setAngvel({
-      x: (Math.random() - 0.5) * extras.releaseSpinVarianceXZ,
+      x: (rng.next() - 0.5) * extras.releaseSpinVarianceXZ,
       y: extras.releaseSpinBaseY,
-      z: (Math.random() - 0.5) * extras.releaseSpinVarianceXZ,
+      z: (rng.next() - 0.5) * extras.releaseSpinVarianceXZ,
     }, true)
 
     this.releaseShakeIntensity = this.config.animation.releaseShakeInitial

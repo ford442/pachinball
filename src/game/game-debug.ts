@@ -16,7 +16,7 @@ import type { GameObjects } from '../objects'
 import type { GamePhysicsController } from './game-physics-controller'
 import type { GameStateManager } from './game-state'
 import type { DebugSnapshot, PerformanceMonitor } from '../game-elements'
-import { GameState } from '../game-elements'
+import { GameState, getSessionSeed } from '../game-elements'
 import type { AdventureProgressionSupervisor } from '../game-elements/adventure-progression-supervisor'
 import type { AdventureTrackProgression } from '../game-elements/adventure-track-progression'
 import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
@@ -122,6 +122,7 @@ export class GameDebug {
       score: this.host.score,
       multiplier,
       lives,
+      sessionSeed: getSessionSeed(),
       adventureTrack: adventureTrack ? adventureTrack.replace(/_/g, ' ') : campaignTrackId,
       trackName: trackInfo?.name ?? (campaignTrackId?.replace(/_/g, ' ') ?? null),
       goalProgressPct: supervisor?.getGoalProgressPercent(this.host.score) ?? 0,

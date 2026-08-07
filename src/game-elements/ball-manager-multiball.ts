@@ -2,6 +2,7 @@ import type { Vector3 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GAME_TUNING, GameConfig } from '../config'
 import { nowMs, type BallManagerHost } from './ball-manager-context'
+import { getSessionRng } from './seeded-rng'
 
 function getDynamicScoreMultiplier(host: BallManagerHost): number {
   if (!host.chainMultiball.isActive) return 1
@@ -32,13 +33,14 @@ export function startMultiball(host: BallManagerHost, totalBalls: number, ballSa
   const needed = Math.max(0, clampedTotal - currentBallCount)
   const wasActive = host.chainMultiball.isActive
   const current = nowMs()
+  const rng = getSessionRng()
 
   for (let i = 0; i < needed; i++) {
     const spawn = GameConfig.ball.spawnPachinko
     const jitteredSpawn = {
-      x: spawn.x + (Math.random() - 0.5) * 1.25,
+      x: spawn.x + (rng.next() - 0.5) * 1.25,
       y: spawn.y + (i * 0.75),
-      z: spawn.z + (Math.random() - 0.5) * 0.8,
+      z: spawn.z + (rng.next() - 0.5) * 0.8,
     } as Vector3
     host.spawnRandomBall(jitteredSpawn)
   }

@@ -11,6 +11,10 @@ import {
   detectAccessibility,
   QualityTier,
   getScoringBreakdownManager,
+  initSessionRng,
+  getSessionSeed,
+  randomU32Seed,
+  getDailyCascadeState,
   type GameSettings,
 } from '../game-elements'
 import type { EffectsSystem } from '../effects'
@@ -48,6 +52,9 @@ export interface LifecycleHost {
   readonly scene: Scene | null
   readonly tableCam: import('@babylonjs/core').TargetCamera | null
   readonly renderer: { applyQualityTier(tier: QualityTier): void } | null
+  readonly replayRecorder?: import('../game-elements').ReplayRecorder
+  readonly replayRunner?: import('../game-elements').ReplayRunner
+  readonly currentMapId?: string
   qualityTier: QualityTier
   accessibility: import('../game-elements').AccessibilityConfig
 
@@ -141,6 +148,9 @@ export class GameLifecycle {
         if (gameOverScreen) gameOverScreen.classList.remove('hidden')
         if (finalScoreElement) finalScoreElement.textContent = this.host.score.toString()
         this.host.updateHUD()
+        if (this.host.replayRecorder?.isRecording()) {
+          this.host.replayRecorder.stop(this.host.score)
+        }
         this.host.handleGameOverLeaderboard()
         break
     }
@@ -182,6 +192,34 @@ export class GameLifecycle {
 
   async startGame(): Promise<void> {
     this.host.applyDailyCascadeOnStart()
+
+    const dailyState = getDailyCascadeState()
+    const isDaily = dailyState.getMode() === 'daily'
+    const isReplaying = this.host.replayRunner?.isPlaying() ?? false
+
+    let seed: number
+    if (isReplaying) {
+      seed = this.host.replayRunner?.getPayload()?.seed ?? randomU32Seed()
+    } else if (isDaily) {
+      const layout = dailyState.ensureLayout()
+      seed = layout ? layout.seed : randomU32Seed()
+    } else {
+      seed = randomU32Seed()
+    }
+
+    initSessionRng(seed)
+
+    if (!isReplaying && this.host.replayRecorder) {
+      this.host.replayRecorder.start({
+        version: 1,
+        buildId: '1.0.0',
+        mapId: this.host.currentMapId ?? 'neon-helix',
+        seed: getSessionSeed(),
+        physicsEngine: 'rapier',
+        renderer: (typeof window !== 'undefined' && (window as unknown as { currentRenderer?: string }).currentRenderer === 'webgpu') ? 'webgpu' : 'webgl2',
+        createdAt: new Date().toISOString(),
+      })
+    }
 
     this.scoringBreakdown.reset()
     this.host.uiManager?.hideScoringBreakdown()

@@ -27,6 +27,9 @@ import {
   GameObjects,
   type CabinetType,
   BallManager,
+  ReplayRecorder,
+  ReplayRunner,
+  GhostBallRenderer,
   BallAnimator,
   AdventureMode,
   MagSpinFeeder,
@@ -142,6 +145,8 @@ export class Game {
   soundSystem!: SoundSystem
   leaderboardSystem = getLeaderboardSystem()
   nameEntryDialog = getNameEntryDialog()
+  readonly replayRecorder = new ReplayRecorder()
+  readonly replayRunner = new ReplayRunner()
 
   // New obstacle builders
   spinnerBuilder: SpinnerBumperBuilder | null = null
@@ -252,6 +257,7 @@ export class Game {
   freeMapTestMode: FreeMapTestMode | null = null
   checkpointDebug = new CheckpointDebugController()
   cosmeticSceneBuilt = false
+  ghostBallRenderer: GhostBallRenderer | null = null
 
   constructor(engine: Engine | WebGPUEngine, preloadedRapier?: typeof RAPIER) {
     this.engine = engine
@@ -452,10 +458,20 @@ export class Game {
       const touchNudgeBtn = document.getElementById('touch-nudge')
       this.inputManager.setupTouchControls(touchLeftBtn, touchRightBtn, touchPlungerBtn, touchNudgeBtn)
 
+      this.leaderboardSystem.setOnSpectateCallback((replayId) => {
+        void this.startSpectateReplay(replayId)
+      })
+
+      const urlParams = new URLSearchParams(window.location.search)
+      const replayParam = urlParams.get('replay')
+      if (replayParam) {
+        void this.startSpectateReplay(replayParam)
+      }
+
       scene.onBeforeRenderObservable.add(() => {
         this.performanceMonitor.frameStart()
         this.performanceMonitor.physicsStart()
-        this.physicsController.stepPhysics(this.inputManager, this.inputActions)
+        this.physicsController.stepPhysics(this.inputManager, this.inputActions, this.replayRunner, this.replayRecorder)
         this.performanceMonitor.physicsEnd()
         this.settingsUI.updatePhysicsDebugRenderer()
       })
@@ -825,6 +841,31 @@ export class Game {
 
   cycleAdventureTrack(direction: number): void { this.slotAdventure.cycleAdventureTrack(direction) }
   startAdventureMode(): void { this.slotAdventure.startAdventureMode() }
+
+  async startSpectateReplay(replayId: string): Promise<boolean> {
+    try {
+      const { apiFetch } = await import('./config')
+      const payload = await apiFetch<import('./game-elements').ReplayPayload>(`/replays/${replayId}`)
+      if (!payload) {
+        this.showMessage('Replay payload not found', 3000)
+        return false
+      }
+
+      if (!this.ghostBallRenderer && this.scene) {
+        this.ghostBallRenderer = new GhostBallRenderer(this.scene)
+      }
+
+      this.replayRunner.load(payload)
+      this.ghostBallRenderer?.show()
+      this.uiManager?.showMessage(`Watching Replay: ${payload.mapId} (Score: ${payload.finalScore.toLocaleString()})`, 4000)
+      await this.lifecycle.startGame()
+      return true
+    } catch (err) {
+      console.warn('[Game] Failed to spectate replay:', err)
+      this.showMessage('Failed to load replay payload', 3000)
+      return false
+    }
+  }
 
   // --------------------------------------------------------------------------
   // Misc
