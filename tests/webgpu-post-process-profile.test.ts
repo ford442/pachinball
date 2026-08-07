@@ -43,7 +43,7 @@ describe('webgpu-post-process-profile', () => {
     const profile = resolveWebGPUPostProcessProfile(
       mockEngine('WebGPUEngine', { maxUniformBuffersPerShaderStage: 12 }) as never,
     )
-    expect(profile.tier).toBe('none')
+    expect(profile.tier).toBe('bloom-only')
     expect(profile.isWebGPU).toBe(true)
   })
 

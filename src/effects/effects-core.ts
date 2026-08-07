@@ -1,7 +1,7 @@
 // Main EffectsSystem orchestrator
 import { Mesh, PBRMaterial, Scene, StandardMaterial, Texture, Vector3 } from '@babylonjs/core'
 import type { AbstractMesh, Color3, DirectionalLight, PointLight, TargetCamera } from '@babylonjs/core'
-import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
+import type { BloomPipelineController } from './bloom-pipeline-types'
 import type { CabinetLight, ShardParticle } from '../game-elements/types'
 import { PALETTE, QualityTier } from '../game-elements/visual-language'
 import { BallType, EffectsConfig } from '../config'
@@ -37,7 +37,7 @@ export class EffectsSystem {
   private scene: Scene
   private audioCtx: AudioContext | null = null
   private audioEffects: AudioEffects | null = null
-  private bloomPipeline: DefaultRenderingPipeline | null = null
+  private bloomPipeline: BloomPipelineController | null = null
   private bloomEnergy = 0
   private shards: ShardParticle[] = []
   private cabinetLights: CabinetLight[] = []
@@ -103,7 +103,7 @@ export class EffectsSystem {
 
   constructor(
     scene: Scene,
-    bloomPipeline: DefaultRenderingPipeline | null,
+    bloomPipeline: BloomPipelineController | null,
     accessibility?: AccessibilityConfig
   ) {
     this.scene = scene
@@ -513,7 +513,7 @@ export class EffectsSystem {
     this.lightingEffects.fadeOut(duration)
   }
 
-  setPipeline(pipeline: DefaultRenderingPipeline | null): void {
+  setPipeline(pipeline: BloomPipelineController | null): void {
     this.bloomPipeline = pipeline
     this.lightingEffects.setPipeline(pipeline)
     this.atmosphereController.setBloomPipeline(pipeline)

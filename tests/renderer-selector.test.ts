@@ -37,13 +37,13 @@ describe('renderer-selector', () => {
     vi.unstubAllGlobals()
   })
 
-  it('defaults to WebGL2 when no preference is stored', () => {
-    expect(getRendererPreference()).toBe(RENDERER_WEBGL2)
+  it('defaults to WebGPU-first auto when no preference is stored', () => {
+    expect(getRendererPreference()).toBe(RENDERER_AUTO)
   })
 
-  it('migrates legacy auto storage to WebGL2', () => {
+  it('preserves legacy auto storage preference', () => {
     storage.set(STORAGE_KEY, RENDERER_AUTO)
-    expect(getRendererPreference()).toBe(RENDERER_WEBGL2)
+    expect(getRendererPreference()).toBe(RENDERER_AUTO)
   })
 
   it('reads URL and stored renderer overrides', () => {

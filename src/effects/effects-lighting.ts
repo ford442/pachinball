@@ -1,9 +1,9 @@
 import { Scene, Color3 } from '@babylonjs/core'
-import type { DefaultRenderingPipeline } from '@babylonjs/core'
+import type { BloomPipelineController } from './bloom-pipeline-types'
 
 export class LightingEffects {
   private scene: Scene
-  private pipeline: DefaultRenderingPipeline | null = null
+  private pipeline: BloomPipelineController | null = null
   private strobeActive = false
   private strobeTimer = 0
 
@@ -11,7 +11,7 @@ export class LightingEffects {
     this.scene = scene
   }
 
-  setPipeline(pipeline: DefaultRenderingPipeline | null): void {
+  setPipeline(pipeline: BloomPipelineController | null): void {
     this.pipeline = pipeline
   }
 

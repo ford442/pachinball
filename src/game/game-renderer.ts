@@ -40,6 +40,8 @@ import {
   resolveWebGPUPostProcessProfile,
   type WebGPUPostProcessProfile,
 } from './webgpu-post-process-profile'
+import type { BloomPipelineController } from '../effects/bloom-pipeline-types'
+import { MinimalBloomPipeline } from '../effects/minimal-bloom-pipeline'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 
@@ -66,7 +68,7 @@ export interface RendererHost {
   cameraFollowTransition: number
   readonly cameraFollowTransitionSpeed: number
   tableCam: TargetCamera | null
-  bloomPipeline: DefaultRenderingPipeline | null
+  bloomPipeline: BloomPipelineController | null
   shadowGenerator: ShadowGenerator | null
   mirrorTexture: MirrorTexture | null
   tableRenderTarget: RenderTargetTexture | null
@@ -81,7 +83,10 @@ export interface RendererHost {
   eventBus?: EventBus
   postProcessDegraded: boolean
   /** Optional EffectsSystem hook for quality sync and bloom teardown. */
-  effects?: { setPipeline(pipeline: DefaultRenderingPipeline | null): void; setQualityTier(tier: QualityTier): void } | null
+  effects?: {
+    setPipeline(pipeline: BloomPipelineController | null): void
+    setQualityTier(tier: QualityTier): void
+  } | null
 }
 
 export class GameRenderer {
@@ -161,43 +166,62 @@ export class GameRenderer {
       return
     }
 
-    // Defer pipeline build until profile toggles are applied (image-processing off on strict adapters).
-    const bloom = new DefaultRenderingPipeline('pachinbloom', true, scene, [tableCam], false)
-    this.host.bloomPipeline = bloom
+    const useMinimalBloom =
+      this._postProcessProfile.tier === 'bloom-only' ||
+      this._postProcessProfile.tier === 'conservative'
 
-    applyBloomPipelineProfile(bloom, this._postProcessProfile, reducedMotion)
-    if (this._postProcessProfile.tier !== 'full') {
+    if (useMinimalBloom) {
+      const minimal = new MinimalBloomPipeline(scene, [tableCam])
+      this.host.bloomPipeline = minimal
       this.host.postProcessDegraded = true
       console.warn(
         `[GameRenderer] WebGPU post-process tier: ${this._postProcessProfile.tier} (${this._postProcessProfile.reason})`,
       )
+      this.attachWebGPUUniformBufferGuard()
+    } else {
+      // Defer pipeline build until profile toggles are applied on full DefaultRenderingPipeline.
+      const bloom = new DefaultRenderingPipeline('pachinbloom', true, scene, [tableCam], false)
+      this.host.bloomPipeline = bloom
+      applyBloomPipelineProfile(bloom, this._postProcessProfile, reducedMotion)
+      this.attachWebGPUUniformBufferGuard()
     }
-    this.attachWebGPUUniformBufferGuard()
+
+    const bloom = this.host.bloomPipeline
+    if (!bloom) return
 
     const bloomSafe = !reducedMotion && effectIntensity > 0
     const baseWeight = 0.25
-    bloom.bloomEnabled = bloomSafe
-    bloom.bloomKernel = 64
-    bloom.bloomScale = 0.5
-    bloom.bloomWeight = baseWeight * effectIntensity * INTENSITY.ACTIVE
-    bloom.bloomThreshold = 0.75
-    if (bloom.imageProcessingEnabled && bloom.imageProcessing) {
-      bloom.imageProcessing.toneMappingEnabled = true
-      bloom.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES
-      bloom.imageProcessing.contrast = 1.1
-      bloom.imageProcessing.exposure = 1.0
-      bloom.imageProcessing.vignetteWeight = 0.4
-      bloom.imageProcessing.vignetteColor = new Color4(0, 0, 0, 0)
-      if (bloom.imageProcessing.colorCurvesEnabled && bloom.imageProcessing.colorCurves) {
-        bloom.imageProcessing.colorCurves.globalHue = 5
-        bloom.imageProcessing.colorCurves.globalSaturation = 15
+    if (!useMinimalBloom) {
+      const fullBloom = bloom as DefaultRenderingPipeline
+      fullBloom.bloomEnabled = bloomSafe
+      fullBloom.bloomKernel = 64
+      fullBloom.bloomScale = 0.5
+      fullBloom.bloomWeight = baseWeight * effectIntensity * INTENSITY.ACTIVE
+      fullBloom.bloomThreshold = 0.75
+      if (fullBloom.imageProcessingEnabled && fullBloom.imageProcessing) {
+        fullBloom.imageProcessing.toneMappingEnabled = true
+        fullBloom.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES
+        fullBloom.imageProcessing.contrast = 1.1
+        fullBloom.imageProcessing.exposure = 1.0
+        fullBloom.imageProcessing.vignetteWeight = 0.4
+        fullBloom.imageProcessing.vignetteColor = new Color4(0, 0, 0, 0)
+        if (fullBloom.imageProcessing.colorCurvesEnabled && fullBloom.imageProcessing.colorCurves) {
+          fullBloom.imageProcessing.colorCurves.globalHue = 5
+          fullBloom.imageProcessing.colorCurves.globalSaturation = 15
+        }
       }
+      if (fullBloom.sharpenEnabled) {
+        fullBloom.sharpen.edgeAmount = 0.3
+      }
+      fullBloom.prepare()
+    } else {
+      bloom.bloomEnabled = bloomSafe
+      bloom.bloomKernel = 64
+      bloom.bloomScale = 0.5
+      bloom.bloomWeight = baseWeight * effectIntensity * INTENSITY.ACTIVE
+      bloom.bloomThreshold = 0.75
+      bloom.prepare()
     }
-    if (bloom.sharpenEnabled) {
-      bloom.sharpen.edgeAmount = 0.3
-    }
-
-    bloom.prepare()
 
     if (qualityTier === QualityTier.LOW) {
       bloom.bloomKernel = 16
@@ -300,9 +324,11 @@ export class GameRenderer {
     bloomPipeline.bloomThreshold = 0.75
 
     const profile = this._postProcessProfile ?? resolveWebGPUPostProcessProfile(this.host.engine)
-    applyBloomPipelineProfile(bloomPipeline, profile, reducedMotion)
-    if (profile.tier !== 'full') {
-      bloomPipeline.prepare()
+    if (bloomPipeline instanceof DefaultRenderingPipeline) {
+      applyBloomPipelineProfile(bloomPipeline, profile, reducedMotion)
+      if (profile.tier !== 'full') {
+        bloomPipeline.prepare()
+      }
     }
 
     if (tier === QualityTier.LOW) {
@@ -348,7 +374,7 @@ export class GameRenderer {
 
     // DoF lives on the default pipeline
     const bloom = this.host.bloomPipeline
-    if (bloom) {
+    if (bloom instanceof DefaultRenderingPipeline) {
       if (allowHeavy) {
         try {
           bloom.depthOfFieldEnabled = true
@@ -437,7 +463,7 @@ export class GameRenderer {
         return
       }
 
-      if (!this.host.bloomPipeline) return
+      if (!this.host.bloomPipeline || !(this.host.bloomPipeline instanceof DefaultRenderingPipeline)) return
 
       const reducedMotion = this.host.accessibility?.reducedMotion ?? GameConfig.camera.reducedMotion
       applyBloomPipelineProfile(this.host.bloomPipeline, this._postProcessProfile, reducedMotion)

@@ -11,6 +11,7 @@ import { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import type { WebGPUEngine as WebGPUEngineType, WebGPUEngineOptions } from '@babylonjs/core/Engines/webgpuEngine'
 import {
   getRendererPreference,
+  RENDERER_AUTO,
   RENDERER_WEBGPU,
   type RendererPreference,
 } from '../renderers/renderer-selector'
@@ -21,9 +22,10 @@ export type EngineCreationPlan = 'webgl2' | 'webgpu'
 /** Pure routing for tests — which backend createEngine will attempt. */
 export function resolveEngineCreationPlan(
   preference: RendererPreference,
-  _webgpuSupported: boolean,
+  webgpuSupported: boolean,
 ): EngineCreationPlan {
   if (preference === RENDERER_WEBGPU) return 'webgpu'
+  if (preference === RENDERER_AUTO) return webgpuSupported ? 'webgpu' : 'webgl2'
   return 'webgl2'
 }
 
@@ -47,16 +49,21 @@ function createWebGL2Engine(
 export async function createEngine(canvas: HTMLCanvasElement): Promise<EngineType | WebGPUEngineType> {
   const engineOptions = resolveEngineOptions()
   const preference = getRendererPreference()
-  const plan = resolveEngineCreationPlan(preference, await WebGPUEngine.IsSupportedAsync)
+  const webgpuSupported = await WebGPUEngine.IsSupportedAsync
+  const plan = resolveEngineCreationPlan(preference, webgpuSupported)
 
   if (plan === 'webgl2') {
-    console.log('[Bootstrap] Renderer preference: WebGL2 (default)')
+    const reason =
+      preference === RENDERER_AUTO && !webgpuSupported
+        ? 'WebGPU unavailable'
+        : 'WebGL2 preference'
+    console.log(`[Bootstrap] Renderer preference: WebGL2 (${reason})`)
     const engine = createWebGL2Engine(canvas, engineOptions)
     console.log(`[Bootstrap] Active renderer: ${engine.getClassName()}`)
     return engine
   }
 
-  console.log('[Bootstrap] Renderer preference: WebGPU (experimental)')
+  console.log('[Bootstrap] Renderer preference: WebGPU (auto or explicit)')
   try {
     const engine = await WebGPUEngine.CreateAsync(canvas, toWebGPUEngineOptions(engineOptions))
     console.log(`[Bootstrap] Active renderer: ${engine.getClassName()}`)
