@@ -17,6 +17,12 @@ export const enum BodyType {
   Kinematic = 2,
 }
 
+/** Mirrors the C++ Shape enum. */
+export const enum Shape {
+  Sphere  = 0,
+  Capsule = 1,
+}
+
 // ---------------------------------------------------------------------------
 // Contact event
 // ---------------------------------------------------------------------------
@@ -44,12 +50,12 @@ export interface WasmContactEvent {
 
 /** The compiled Embind class proxy for PhysicsWorld. */
 export interface WasmPhysicsWorldInstance {
-  /** Create a dynamic sphere body; returns a stable integer handle. */
+  /** Create a rigid body (sphere or capsule shape); returns a stable integer handle. */
   createRigidBody(
     px: number, py: number, pz: number,
     vx: number, vy: number, vz: number,
     mass: number, radius: number, restitution: number, linearDamping: number,
-    bodyType: number
+    bodyType: number, shape: number, capsuleHalfHeight: number
   ): number
 
   /** Remove a body by handle. The handle is no longer valid after this. */
@@ -160,5 +166,9 @@ export interface WasmPhysicsModule {
     Dynamic:   { value: 0 }
     Static:    { value: 1 }
     Kinematic: { value: 2 }
+  }
+  Shape: {
+    Sphere:  { value: 0 }
+    Capsule: { value: 1 }
   }
 }

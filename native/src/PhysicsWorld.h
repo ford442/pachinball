@@ -175,6 +175,14 @@ private:
   void resolveSphereVsPlane(RigidBody& body, const PlaneDesc& plane);
   void resolveSphereVsBox(RigidBody& body, const BoxDesc& box, int boxId);
   void resolveSphereVsCapsule(RigidBody& body, const CapsuleDesc& cap, int capId);
+  // Dynamic sphere vs. a Kinematic/Dynamic capsule-shaped RigidBody (e.g. a flipper proxy).
+  // `capsule`'s own velocity participates in the impulse response, unlike the static-geometry
+  // path above, so a moving kinematic capsule correctly imparts momentum onto `sphere`.
+  void resolveSphereVsCapsuleBody(RigidBody& sphere, RigidBody& capsule);
+
+  // Shared closest-point-on-segment projection used by both the static-capsule and
+  // body-capsule collision paths.
+  static Vec3 closestPointOnSegment(const Vec3& p, const Vec3& segA, const Vec3& segB);
 };
 
 } // namespace pachinball

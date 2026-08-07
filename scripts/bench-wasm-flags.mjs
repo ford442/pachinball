@@ -48,8 +48,8 @@ function setupWorld(Module) {
       const x = (c - (cols - 1) / 2) * 0.55
       const z = (r - (rows - 1) / 2) * 0.55
       const y = 1.5 + r * 0.15
-      // createRigidBody(px,py,pz, vx,vy,vz, mass,radius,restitution,damping, bodyType)
-      world.createRigidBody(x, y, z, 0, 0, 0, 1, 0.2, 0.5, 0.02, 0)
+      // createRigidBody(px,py,pz, vx,vy,vz, mass,radius,restitution,damping, bodyType, shape, capsuleHalfHeight)
+      world.createRigidBody(x, y, z, 0, 0, 0, 1, 0.2, 0.5, 0.02, 0, 0, 0.5)
     }
   }
   return world

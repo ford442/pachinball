@@ -5,12 +5,48 @@ import { WASM_PHYSICS, PhysicsConfig, GameConfig } from '../../config'
 import { WasmPhysicsEngine } from '../../wasm'
 import { exportRapierBodyToWasm } from './wasm-static-export'
 
+/** Blade half-length / radius approximation matching object-flippers.ts's cuboid collider. */
+const FLIPPER_PROXY_RADIUS = 0.3
+const FLIPPER_PROXY_HALF_HEIGHT = 1.55
+
+interface PlainQuat { x: number; y: number; z: number; w: number }
+interface PlainVec3 { x: number; y: number; z: number }
+
+/**
+ * -90° rotation about Z: maps the native capsule's local +Y segment axis onto
+ * the flipper blade's local +X (long) axis. Same fixed remap for both flippers —
+ * the left/right asymmetry already lives in the blade collider's own world
+ * translation/rotation, not in this constant.
+ */
+const CAPSULE_AXIS_TO_BLADE_AXIS: PlainQuat = { x: 0, y: 0, z: -Math.SQRT1_2, w: Math.SQRT1_2 }
+
+/** Hamilton product a*b — applies b first, then a. Mirrors native/src/MathTypes.h Quat::operator*. */
+function quatMultiply(a: PlainQuat, b: PlainQuat): PlainQuat {
+  return {
+    x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+    y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+    z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+    w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+  }
+}
+
+function cross(a: PlainVec3, b: PlainVec3): PlainVec3 {
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x,
+  }
+}
+
 /**
  * WasmOwner — WASM owns ball simulation and static table geometry.
  *
  * Rapier rigid bodies remain as handle-space puppets for mesh interpolation and
  * scoring dispatch, but table static colliders are disabled while WASM runs.
- * Flipper joints continue to live in Rapier (Phase 2c will add motor parity).
+ * Flipper joints/motors continue to run entirely in Rapier — each tick their
+ * live blade pose and point-velocity are mirrored into a kinematic capsule
+ * proxy body in WASM (see syncFlipperProxies) so the WASM-owned ball collides
+ * with flippers correctly, with momentum transfer on a flick (Phase 2c-A).
  */
 export class WasmOwner {
   private engine: WasmPhysicsEngine
@@ -18,6 +54,7 @@ export class WasmOwner {
   private wasmToRapier = new Map<number, RAPIER.RigidBody>()
   private bumperWasmIds = new Set<number>()
   private ballBodies = new Set<RAPIER.RigidBody>()
+  private flipperProxyIds = new Map<RAPIER.RigidBody, number>()
   private disabledRapierBodies = new Set<RAPIER.RigidBody>()
   private groundAdded = false
 
@@ -29,10 +66,14 @@ export class WasmOwner {
     for (const id of this.rapierToWasm.values()) {
       this.engine.removeBody(id)
     }
+    for (const id of this.flipperProxyIds.values()) {
+      this.engine.removeBody(id)
+    }
     this.rapierToWasm.clear()
     this.wasmToRapier.clear()
     this.bumperWasmIds.clear()
     this.ballBodies.clear()
+    this.flipperProxyIds.clear()
     this.restoreRapierBodies()
     this.groundAdded = false
   }
@@ -100,6 +141,28 @@ export class WasmOwner {
       this.disableRapierBody(body)
     }
 
+    // Kinematic capsule proxies mirroring each flipper's live blade pose (Phase 2c-A).
+    // The Rapier flipper body/joint/motor is left fully enabled and keeps driving the
+    // visual mesh — only the ball is WASM-owned, so we mirror the flipper's resulting
+    // pose into WASM each tick (syncFlipperProxies) rather than disabling it here.
+    for (const body of flipperBodies) {
+      const collider = body.collider(0)
+      const position = collider ? collider.translation() : body.translation()
+      const id = this.engine.createBody({
+        position,
+        velocity: { x: 0, y: 0, z: 0 },
+        mass: 0,
+        radius: FLIPPER_PROXY_RADIUS,
+        capsuleHalfHeight: FLIPPER_PROXY_HALF_HEIGHT,
+        shape: 'capsule',
+        restitution: PhysicsConfig.flipper.restitution,
+        linearDamping: 0,
+        bodyType: 2,
+      })
+      this.wasmToRapier.set(id, body)
+      this.flipperProxyIds.set(body, id)
+    }
+
     // Disable static Rapier bodies that WASM now owns (walls/rails).
     for (const binding of staticBindings) {
       const body = binding.rigidBody
@@ -111,9 +174,38 @@ export class WasmOwner {
     }
   }
 
-  /** Sync kinematic flipper proxies from Rapier before WASM step (Phase 2c hook). */
-  syncFlipperProxies(_flipperBodies: RAPIER.RigidBody[]): void {
-    // Flipper motor parity lands in Phase 2c — Rapier still drives flipper visuals.
+  /**
+   * Mirror each flipper's live Rapier blade pose + point-velocity into its
+   * WASM kinematic capsule proxy. Called once per physics tick, immediately
+   * before the WASM step, so the proxy tracks the joint/motor-driven blade
+   * exactly as Rapier resolved it this frame.
+   */
+  syncFlipperProxies(flipperBodies: RAPIER.RigidBody[]): void {
+    for (const body of flipperBodies) {
+      const id = this.flipperProxyIds.get(body)
+      if (id === undefined) continue
+
+      const collider = body.collider(0)
+      if (!collider) continue
+
+      const pos = collider.translation()
+      const rot = collider.rotation()
+      const worldRot = quatMultiply(rot, CAPSULE_AXIS_TO_BLADE_AXIS)
+
+      const origin = body.translation()
+      const r = { x: pos.x - origin.x, y: pos.y - origin.y, z: pos.z - origin.z }
+      const pointVel = cross(body.angvel(), r)
+      const linvel = body.linvel()
+
+      this.engine.setBodyPosition(id, pos.x, pos.y, pos.z)
+      this.engine.setBodyRotation(id, worldRot.x, worldRot.y, worldRot.z, worldRot.w)
+      this.engine.setVelocity(
+        id,
+        linvel.x + pointVel.x,
+        linvel.y + pointVel.y,
+        linvel.z + pointVel.z
+      )
+    }
   }
 
   syncFromWasm(rapier: typeof RAPIER | null): void {
