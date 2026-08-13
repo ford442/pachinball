@@ -11,7 +11,7 @@ import {
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { GameConfigType } from '../config'
-import { getSessionRng } from './seeded-rng'
+import { getSessionRngFork, RNG_FORK } from './seeded-rng'
 import { color, emissive, FEEDER_STYLES, INTENSITY } from './visual-language'
 
 export enum MagSpinState {
@@ -402,7 +402,7 @@ export class MagSpinFeeder {
       target.z - currentPos.z
     ).normalize()
 
-    const rng = getSessionRng()
+    const rng = getSessionRngFork(RNG_FORK.FEEDER)
     const angleVariance = (rng.next() - 0.5) * 2 * this.config.releaseAngleVariance
     const cos = Math.cos(angleVariance)
     const sin = Math.sin(angleVariance)

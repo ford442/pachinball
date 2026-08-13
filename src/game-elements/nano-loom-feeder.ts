@@ -11,7 +11,7 @@ import {
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { GameConfigType } from '../config'
-import { getSessionRng } from './seeded-rng'
+import { getSessionRngFork, RNG_FORK } from './seeded-rng'
 
 export enum NanoLoomState {
   IDLE,
@@ -349,7 +349,7 @@ export class NanoLoomFeeder {
               if (this.caughtBall) {
                   this.caughtBall.setBodyType(this.rapier.RigidBodyType.Dynamic, true)
                   // Give it a tiny nudge to ensure it doesn't balance perfectly on a pin
-                  this.caughtBall.applyImpulse({ x: (getSessionRng().next() - 0.5) * this.config.weaveNudgeImpulse, y: 0, z: 0 }, true)
+                  this.caughtBall.applyImpulse({ x: (getSessionRngFork(RNG_FORK.FEEDER).next() - 0.5) * this.config.weaveNudgeImpulse, y: 0, z: 0 }, true)
               }
               if (this.light) {
                   this.light.diffuse = Color3.FromHexString("#ff00ff") // Magenta for chaos

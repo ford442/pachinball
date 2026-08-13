@@ -12,7 +12,7 @@ import {
   StandardMaterial,
 } from '@babylonjs/core'
 import type { Scene, Mesh, TransformNode } from '@babylonjs/core'
-import { getSessionRng } from '../game-elements/seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../game-elements/seeded-rng'
 import { DisplayState, type DisplayConfig, type SlotReel } from './display-types'
 import { DISPLAY_LAYER_Z } from './display-layer-depth'
 
@@ -248,7 +248,7 @@ export class DisplayReelsLayer {
 
     for (let i = 0; i < 3; i++) {
       this.reels.push({
-        symbols: getSessionRng().shuffle([...symbols]),
+        symbols: getSessionRngFork(RNG_FORK.SLOT).shuffle([...symbols]),
         position: 0,
         speed: 0,
         stopping: false,
@@ -387,7 +387,7 @@ export class DisplayReelsLayer {
     this.symbolWeights = weights ?? null
 
     for (const reel of this.reels) {
-      reel.symbols = getSessionRng().shuffle([...this.reelSymbols])
+      reel.symbols = getSessionRngFork(RNG_FORK.SLOT).shuffle([...this.reelSymbols])
       reel.targetSymbol = reel.symbols[0]
     }
     this.renderReels()
@@ -398,7 +398,7 @@ export class DisplayReelsLayer {
   }
 
   private pickRandomSymbol(): string {
-    const rng = getSessionRng()
+    const rng = getSessionRngFork(RNG_FORK.SLOT)
     if (this.symbolWeights) {
       const total = Object.values(this.symbolWeights).reduce((sum, w) => sum + w, 0)
       let roll = rng.next() * total
@@ -418,7 +418,7 @@ export class DisplayReelsLayer {
     this.spinning = true
     this.stopTimer = 0
     this.spinOptions = options ?? {}
-    const rng = getSessionRng()
+    const rng = getSessionRngFork(RNG_FORK.SLOT)
 
     for (let i = 0; i < this.reels.length; i++) {
       const reel = this.reels[i]

@@ -9,7 +9,9 @@ import {
   seedFromDailyId,
   initSessionRng,
   getSessionRng,
+  getSessionRngFork,
   getSessionSeed,
+  RNG_FORK,
 } from '../src/core/seeded-rng'
 
 describe('createSeededRng', () => {
@@ -61,6 +63,14 @@ describe('createSeededRng', () => {
     expect(a).toEqual(b)
   })
 
+  it('pick returns an element from the array', () => {
+    const rng = createSeededRng(7)
+    const items = ['a', 'b', 'c', 'd']
+    for (let i = 0; i < 30; i++) {
+      expect(items).toContain(rng.pick(items))
+    }
+  })
+
   it('fork streams are independent and reproducible', () => {
     const parent = createSeededRng(100)
     const forkA1 = parent.fork('ball-spawn')
@@ -110,16 +120,23 @@ describe('session SeededRng', () => {
 
   it('fixed session seed produces identical spawn sequence and feeder angle sequence', () => {
     initSessionRng(98765)
-    const rng1 = getSessionRng()
-    const seq1 = Array.from({ length: 10 }, () => rng1.next())
-    const angles1 = Array.from({ length: 5 }, () => (rng1.next() - 0.5) * 2)
+    const seq1 = Array.from({ length: 10 }, () => getSessionRngFork(RNG_FORK.SPAWN).next())
+    const angles1 = Array.from({ length: 5 }, () => (getSessionRngFork(RNG_FORK.FEEDER).next() - 0.5) * 2)
 
     initSessionRng(98765)
-    const rng2 = getSessionRng()
-    const seq2 = Array.from({ length: 10 }, () => rng2.next())
-    const angles2 = Array.from({ length: 5 }, () => (rng2.next() - 0.5) * 2)
+    const seq2 = Array.from({ length: 10 }, () => getSessionRngFork(RNG_FORK.SPAWN).next())
+    const angles2 = Array.from({ length: 5 }, () => (getSessionRngFork(RNG_FORK.FEEDER).next() - 0.5) * 2)
 
     expect(seq1).toEqual(seq2)
     expect(angles1).toEqual(angles2)
+  })
+
+  it('getSessionRngFork matches createSeededRng(root).fork(label)', () => {
+    initSessionRng(4242)
+    const viaSession = getSessionRngFork(RNG_FORK.TRAP)
+    const viaDirect = createSeededRng(4242).fork(RNG_FORK.TRAP)
+    const sessionSeq = Array.from({ length: 5 }, () => viaSession.next())
+    const directSeq = Array.from({ length: 5 }, () => viaDirect.next())
+    expect(sessionSeq).toEqual(directSeq)
   })
 })

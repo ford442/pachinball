@@ -117,9 +117,27 @@ export function randomU32Seed(): number {
 /** Dev/test fallback when getSessionRng() is called before initSessionRng(). */
 export const DEV_DEFAULT_SESSION_SEED = 0x12345678
 
+/**
+ * Named fork labels for physics-affecting sub-streams.
+ * Each label derives an independent reproducible stream from the session root seed.
+ */
+export const RNG_FORK = {
+  SPAWN: 'spawn',
+  GOLD_SWARM: 'gold-swarm',
+  MULTIBALL: 'multiball',
+  TRAP: 'trap',
+  SPINNER: 'spinner',
+  FEEDER: 'feeder',
+  SLOT: 'slot',
+} as const
+
+export type RngForkLabel = (typeof RNG_FORK)[keyof typeof RNG_FORK]
+
 let currentSessionSeed: number = 0
 let currentSessionRng: SeededRng | null = null
 let sessionInitialized = false
+/** Cached fork streams — one advancing instance per label per session. */
+const sessionForkCache = new Map<string, SeededRng>()
 
 /**
  * Initialize or re-initialize the active gameplay session RNG with a seed.
@@ -128,6 +146,7 @@ let sessionInitialized = false
 export function initSessionRng(seed?: number): { seed: number; rng: SeededRng } {
   currentSessionSeed = seed !== undefined ? (seed >>> 0) : randomU32Seed()
   currentSessionRng = createSeededRng(currentSessionSeed)
+  sessionForkCache.clear()
   sessionInitialized = true
   return { seed: currentSessionSeed, rng: currentSessionRng }
 }
@@ -162,20 +181,34 @@ export function resetSessionRng(seed?: number): void {
 }
 
 /**
+ * Independent reproducible sub-stream for a named gameplay system.
+ * One cached advancing instance per label per session; re-created on initSessionRng().
+ */
+export function getSessionRngFork(label: RngForkLabel | string): SeededRng {
+  const key = String(label)
+  let fork = sessionForkCache.get(key)
+  if (!fork) {
+    fork = getSessionRng().fork(key)
+    sessionForkCache.set(key, fork)
+  }
+  return fork
+}
+
+/**
  * ============================================================================
  * GAMEPLAY VS COSMETIC RNG POLICY
  * ============================================================================
  *
  * To ensure deterministic physics replays and fair leaderboards:
  *
- * MUST USE SeededRng (getSessionRng()):
- * - Ball spawn type weights and initial spawn position/velocity jitter
- * - Multiball spawn offsets and gold ball swarm trajectories
+ * MUST USE SeededRng (getSessionRng() or getSessionRngFork(label)):
+ * - Ball spawn type weights and initial spawn position/velocity jitter (fork: spawn)
+ * - Multiball spawn offsets (fork: multiball) and gold ball swarm trajectories (fork: gold-swarm)
  * - Imposter ball catch release impulses
- * - Feeder release angle and spin variances (mag-spin, quantum-tunnel, nano-loom, etc.)
- * - Dynamic launcher and trap boost impulse variances
- * - Spinner bumper target rotation direction
- * - Slot machine activation checks and reel outcome generation
+ * - Feeder release angle and spin variances (fork: feeder)
+ * - Dynamic launcher and trap boost impulse variances (fork: trap)
+ * - Spinner bumper target rotation direction (fork: spinner)
+ * - Slot machine activation checks and reel outcome generation (fork: slot)
  *
  * EXEMPT (Cosmetic RNG, may use Math.random()):
  * - Audio synth frequencies, beep pitches, and noise buffer generation

@@ -12,7 +12,7 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { BallType, GAME_TUNING } from '../config'
 import { getMaterialLibrary } from '../materials'
 import { BallSaveSystem } from './ball-save-system'
-import { getSessionRng } from './seeded-rng'
+import { getSessionRngFork, RNG_FORK } from './seeded-rng'
 import {
   type BallManagerHost,
   type BallStuckTracker,
@@ -274,7 +274,7 @@ export class BallManager {
           trailData.material.alpha = 1.0
         }
 
-        catchData.body.applyImpulse({ x: (getSessionRng().next() - 0.5) * 5, y: 5, z: 5 }, true)
+        catchData.body.applyImpulse({ x: (getSessionRngFork(RNG_FORK.SPAWN).next() - 0.5) * 5, y: 5, z: 5 }, true)
         onRelease(catchData.body)
         this.caughtBalls.splice(i, 1)
       }
