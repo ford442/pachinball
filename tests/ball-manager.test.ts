@@ -13,7 +13,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { BallType, BALL_TIERS, GAME_TUNING, GameConfig } from '../src/config'
-import { getSessionRng } from '../src/game-elements/seeded-rng'
+import { createSeededRng, getSessionRng } from '../src/core/seeded-rng'
+import { selectWeightedBallType } from '../src/game-elements/ball-manager-spawn'
 
 // ---------------------------------------------------------------------------
 // Module mocks — must be declared before the import under test
@@ -275,6 +276,16 @@ describe('BallManager', () => {
   // 1. Type-assignment distribution
   // -------------------------------------------------------------------------
   describe('type assignment distribution', () => {
+    it('selectWeightedBallType is deterministic for a fixed seed', () => {
+      const drawSequence = (seed: number) => {
+        const rng = createSeededRng(seed)
+        return Array.from({ length: 40 }, () => selectWeightedBallType(rng))
+      }
+
+      expect(drawSequence(42)).toEqual(drawSequence(42))
+      expect(drawSequence(42)).not.toEqual(drawSequence(43))
+    })
+
     it('selects STANDARD ≈75%, GOLD_PLATED ≈20%, SOLID_GOLD ≈5% over 1000 draws', () => {
       const counts: Record<BallType, number> = {
         [BallType.STANDARD]: 0,
