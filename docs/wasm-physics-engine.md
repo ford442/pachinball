@@ -40,9 +40,12 @@ C++ PhysicsWorld  ◄──── native/src/PhysicsWorld.{h,cpp}
 RigidBody  ContactListener
 ```
 
-The C++ engine is a **sphere-only** rigid-body solver and runs as a thin,
-fast supplement to — or eventual replacement for — Rapier.  It is
-**not** a full physics engine; it is purpose-built for Pachinball's workload.
+The C++ engine is a **sphere-primary** rigid-body solver (with static boxes/capsules
+and kinematic capsule flipper proxies) and runs as a thin, fast supplement to —
+or eventual replacement for — Rapier. Collision response includes a **normal
+impulse**, **Coulomb friction** (geometric-mean combine `μ = sqrt(μ_a μ_b)`),
+**spherical inertia** `I = 2/5 m r²` with integrated orientation, and a small
+**rolling-resistance** term so balls settle instead of rolling forever.
 
 ---
 
@@ -317,7 +320,8 @@ engine.addStaticBox(
   { x: 0, y: 0, z: 0 },           // centre
   { x: 2, y: 0.5, z: 2 },         // half-extents
   { x: 0, y: 0, z: 0, w: 1 },     // rotation quaternion
-  0.5                              // restitution
+  0.5,                             // restitution
+  0.2                              // friction (Coulomb; combined as sqrt(μ_a μ_b))
 )
 
 engine.addStaticCapsule(
@@ -352,6 +356,11 @@ Test scenarios:
 | `ball hits capsule` | Static capsule collision + settling |
 | `stationary kinematic capsule supports resting ball` | Kinematic-body capsule shape parity with the static-geometry capsule path |
 | `kinematic capsule flings ball` | A moving kinematic capsule imparts its own velocity onto a resting ball |
+| `ball rolls down inclined plane` | Coulomb friction converts sliding into rolling |
+| `spinning ball deflects on wall contact` | ω × r at the contact produces a tangential impulse |
+| `kinematic capsule flick imparts spin` | Flipper-proxy motion with a tangential component spins the ball |
+| `ball on flat plane comes to rest` | Rolling resistance + friction settle a sliding ball |
+| `orientation integrates from angular velocity` | Quaternion `q` advances from ω and stays unit length |
 
 Parity suite (native Catch2 + compiled WASM bundle):
 

@@ -22,7 +22,15 @@ void RigidBody::integrate(float dt, const Vec3& gravity) {
   if (dampFactor < 0.f) dampFactor = 0.f;
   velocity_ *= dampFactor;
 
+  float angDampFactor = 1.f - desc_.angularDamping * dt;
+  if (angDampFactor < 0.f) angDampFactor = 0.f;
+  angularVelocity_ *= angDampFactor;
+
   position_ += velocity_ * dt;
+
+  // Quaternion derivative q' = 0.5 * ω_quat * q
+  const Quat omegaQuat{angularVelocity_.x, angularVelocity_.y, angularVelocity_.z, 0.f};
+  rotation_ = (rotation_ + (omegaQuat * rotation_) * (0.5f * dt)).normalized();
 
   // Clear force accumulator for next frame
   forceAccum_ = Vec3::zero();

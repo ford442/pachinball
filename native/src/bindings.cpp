@@ -71,9 +71,24 @@ EMSCRIPTEN_BINDINGS(rigid_body_desc) {
 
   // Expose WorldParams for advanced configuration
   value_object<WorldParams>("WorldParams")
-    .field("fixedTimestep",    &WorldParams::fixedTimestep)
-    .field("maxSubsteps",      &WorldParams::maxSubsteps)
-    .field("solverIterations", &WorldParams::solverIterations);
+    .field("fixedTimestep",     &WorldParams::fixedTimestep)
+    .field("maxSubsteps",       &WorldParams::maxSubsteps)
+    .field("solverIterations",  &WorldParams::solverIterations)
+    .field("rollingResistance", &WorldParams::rollingResistance);
+
+  // Bound descriptor so JS can pass a single object instead of 15 positionals.
+  value_object<RigidBodyDesc>("RigidBodyDesc")
+    .field("position",          &RigidBodyDesc::position)
+    .field("velocity",          &RigidBodyDesc::velocity)
+    .field("mass",              &RigidBodyDesc::mass)
+    .field("radius",            &RigidBodyDesc::radius)
+    .field("restitution",       &RigidBodyDesc::restitution)
+    .field("linearDamping",     &RigidBodyDesc::linearDamping)
+    .field("type",              &RigidBodyDesc::type)
+    .field("shape",             &RigidBodyDesc::shape)
+    .field("capsuleHalfHeight", &RigidBodyDesc::capsuleHalfHeight)
+    .field("friction",          &RigidBodyDesc::friction)
+    .field("angularDamping",    &RigidBodyDesc::angularDamping);
 }
 
 // ---------------------------------------------------------------------------
@@ -88,7 +103,8 @@ EMSCRIPTEN_BINDINGS(physics_world) {
         float px, float py, float pz,
         float vx, float vy, float vz,
         float mass, float radius, float restitution, float linearDamping,
-        int bodyType, int shape, float capsuleHalfHeight) -> int {
+        int bodyType, int shape, float capsuleHalfHeight,
+        float friction, float angularDamping) -> int {
           RigidBodyDesc desc;
           desc.position      = {px, py, pz};
           desc.velocity      = {vx, vy, vz};
@@ -99,14 +115,18 @@ EMSCRIPTEN_BINDINGS(physics_world) {
           desc.type          = static_cast<BodyType>(bodyType);
           desc.shape         = static_cast<Shape>(shape);
           desc.capsuleHalfHeight = capsuleHalfHeight;
+          desc.friction          = friction;
+          desc.angularDamping    = angularDamping;
           return self.createRigidBody(desc);
         }))
+    .function("createRigidBodyDesc", &PhysicsWorld::createRigidBody)
     .function("removeRigidBody",  &PhysicsWorld::removeRigidBody)
 
     // Force / velocity control
     .function("applyForce",   &PhysicsWorld::applyForce)
     .function("applyImpulse", &PhysicsWorld::applyImpulse)
     .function("setVelocity",  &PhysicsWorld::setVelocity)
+    .function("setAngularVelocity", &PhysicsWorld::setAngularVelocity)
     .function("setBodyPosition", &PhysicsWorld::setBodyPosition)
     .function("setBodyRotation", &PhysicsWorld::setBodyRotation)
 
@@ -130,6 +150,13 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("getVelZ", optional_override([](PhysicsWorld& self, int id) -> float {
         float x=0,y=0,z=0; self.getVelocity(id,&x,&y,&z); return z; }))
 
+    .function("getAngVelX", optional_override([](PhysicsWorld& self, int id) -> float {
+        float x=0,y=0,z=0; self.getAngularVelocity(id,&x,&y,&z); return x; }))
+    .function("getAngVelY", optional_override([](PhysicsWorld& self, int id) -> float {
+        float x=0,y=0,z=0; self.getAngularVelocity(id,&x,&y,&z); return y; }))
+    .function("getAngVelZ", optional_override([](PhysicsWorld& self, int id) -> float {
+        float x=0,y=0,z=0; self.getAngularVelocity(id,&x,&y,&z); return z; }))
+
     .function("getRotX", optional_override([](PhysicsWorld& self, int id) -> float {
         float x=0,y=0,z=0,w=1; self.getRotation(id,&x,&y,&z,&w); return x; }))
     .function("getRotY", optional_override([](PhysicsWorld& self, int id) -> float {
@@ -147,6 +174,8 @@ EMSCRIPTEN_BINDINGS(physics_world) {
 
     // World config
     .function("setGravity", &PhysicsWorld::setGravity)
+    .function("setRollingResistance", &PhysicsWorld::setRollingResistance)
+    .function("getRollingResistance", &PhysicsWorld::getRollingResistance)
 
     // Contact callback
     .function("setContactCallbackJS", &setContactCallbackJS);

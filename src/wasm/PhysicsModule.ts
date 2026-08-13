@@ -46,6 +46,10 @@ export interface WasmBodyDesc {
   radius?:         number  // metres; sphere radius, or capsule radius, default 0.1
   restitution?:    number  // 0–1, default 0.4
   linearDamping?:  number  // 0–1, default 0.02
+  /** Coulomb friction coefficient, default 0.2. Combined per-pair as sqrt(μ_a μ_b). */
+  friction?:       number
+  /** Angular drag factor for dynamic spheres, default 0.1. */
+  angularDamping?: number
   /** 0=Dynamic, 1=Static, 2=Kinematic */
   bodyType?:       0 | 1 | 2
   /** 'sphere' (default) or 'capsule' — capsule segment runs along local +Y. */
@@ -135,13 +139,18 @@ export class WasmPhysicsEngine {
     this.world?.setGravity(x, y, z)
   }
 
+  /** Rolling-resistance coefficient applied at contacts after Coulomb friction. */
+  setRollingResistance(rr: number): void {
+    this.world?.setRollingResistance(rr)
+  }
+
   /**
    * Add a static infinite half-space plane.
    * @param normal  Unit normal (outward-facing).
    * @param d       Signed plane offset from origin along the normal.
    */
-  addStaticPlane(normal: { x: number; y: number; z: number }, d: number): void {
-    this.world?.addStaticPlane(normal.x, normal.y, normal.z, d)
+  addStaticPlane(normal: { x: number; y: number; z: number }, d: number, friction = 0.2): void {
+    this.world?.addStaticPlane(normal.x, normal.y, normal.z, d, friction)
   }
 
   /**
@@ -152,14 +161,16 @@ export class WasmPhysicsEngine {
     center: { x: number; y: number; z: number },
     halfExtents: { x: number; y: number; z: number },
     rotation: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 1 },
-    restitution = 0.4
+    restitution = 0.4,
+    friction = 0.2
   ): number {
     if (!this.world) return -1
     return this.world.addStaticBox(
       center.x, center.y, center.z,
       halfExtents.x, halfExtents.y, halfExtents.z,
       rotation.x, rotation.y, rotation.z, rotation.w,
-      restitution
+      restitution,
+      friction
     )
   }
 
@@ -172,14 +183,16 @@ export class WasmPhysicsEngine {
     radius: number,
     halfHeight: number,
     rotation: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 1 },
-    restitution = 0.4
+    restitution = 0.4,
+    friction = 0.2
   ): number {
     if (!this.world) return -1
     return this.world.addStaticCapsule(
       center.x, center.y, center.z,
       radius, halfHeight,
       rotation.x, rotation.y, rotation.z, rotation.w,
-      restitution
+      restitution,
+      friction
     )
   }
 
@@ -202,7 +215,9 @@ export class WasmPhysicsEngine {
       desc.linearDamping ?? 0.02,
       desc.bodyType      ?? 0,
       desc.shape === 'capsule' ? 1 : 0,
-      desc.capsuleHalfHeight ?? 0.5
+      desc.capsuleHalfHeight ?? 0.5,
+      desc.friction          ?? 0.2,
+      desc.angularDamping    ?? 0.1
     )
   }
 
@@ -224,6 +239,11 @@ export class WasmPhysicsEngine {
   /** Directly set the velocity of a body. */
   setVelocity(id: number, vx: number, vy: number, vz: number): void {
     this.world?.setVelocity(id, vx, vy, vz)
+  }
+
+  /** Directly set the angular velocity of a body. */
+  setAngularVelocity(id: number, wx: number, wy: number, wz: number): void {
+    this.world?.setAngularVelocity(id, wx, wy, wz)
   }
 
   /** Directly set the position of a body (used for Rapier↔WASM sync). */
@@ -253,6 +273,15 @@ export class WasmPhysicsEngine {
       x: this.world.getVelX(id),
       y: this.world.getVelY(id),
       z: this.world.getVelZ(id),
+    }
+  }
+
+  getAngularVelocity(id: number): { x: number; y: number; z: number } {
+    if (!this.world) return { x: 0, y: 0, z: 0 }
+    return {
+      x: this.world.getAngVelX(id),
+      y: this.world.getAngVelY(id),
+      z: this.world.getAngVelZ(id),
     }
   }
 

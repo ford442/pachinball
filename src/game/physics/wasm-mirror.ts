@@ -39,7 +39,11 @@ export class WasmMirror {
 
     const plane = WASM_PHYSICS.tunables.groundPlane
     if (!this.groundAdded) {
-      this.engine.addStaticPlane({ x: plane.normal.x, y: plane.normal.y, z: plane.normal.z }, plane.distance)
+      this.engine.addStaticPlane(
+        { x: plane.normal.x, y: plane.normal.y, z: plane.normal.z },
+        plane.distance,
+        plane.friction
+      )
       this.groundAdded = true
     }
 
@@ -59,6 +63,7 @@ export class WasmMirror {
         mass: 0,
         radius,
         restitution: PhysicsConfig.bumper.restitution,
+        friction: GameConfig.physics.surfaces.bumper.friction,
         linearDamping: 0,
         bodyType: 1, // Static
       })
@@ -73,7 +78,9 @@ export class WasmMirror {
         mass: GameConfig.ball.mass,
         radius: GameConfig.ball.radius,
         restitution: PhysicsConfig.ball.restitution,
+        friction: PhysicsConfig.ball.friction,
         linearDamping: PhysicsConfig.ball.linearDamping,
+        angularDamping: PhysicsConfig.ball.angularDamping,
         bodyType: 0, // Dynamic
       })
       this.track(body, id)
@@ -88,6 +95,8 @@ export class WasmMirror {
       if (!this.bumperRadius.has(body)) {
         const vel = body.linvel()
         this.engine.setVelocity(id, vel.x, vel.y, vel.z)
+        const ang = body.angvel()
+        this.engine.setAngularVelocity(id, ang.x, ang.y, ang.z)
       }
     }
   }
@@ -98,8 +107,12 @@ export class WasmMirror {
       if (this.bumperRadius.has(body)) continue
       const pos = this.engine.getPosition(id)
       const vel = this.engine.getVelocity(id)
+      const rot = this.engine.getRotation(id)
+      const ang = this.engine.getAngularVelocity(id)
       body.setTranslation(new rapier.Vector3(pos.x, pos.y, pos.z), true)
       body.setLinvel(new rapier.Vector3(vel.x, vel.y, vel.z), true)
+      body.setRotation({ x: rot.x, y: rot.y, z: rot.z, w: rot.w }, true)
+      body.setAngvel(new rapier.Vector3(ang.x, ang.y, ang.z), true)
     }
   }
 

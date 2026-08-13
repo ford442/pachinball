@@ -55,6 +55,16 @@ struct Quat {
     };
   }
 
+  Quat operator+(const Quat& o) const { return {x + o.x, y + o.y, z + o.z, w + o.w}; }
+  Quat operator*(float s) const { return {x * s, y * s, z * s, w * s}; }
+
+  float lengthSq() const { return x * x + y * y + z * z + w * w; }
+
+  Quat normalized() const {
+    float len = std::sqrt(lengthSq());
+    return len > 1e-12f ? Quat{x / len, y / len, z / len, w / len} : identity();
+  }
+
   Vec3 rotate(const Vec3& v) const {
     // Rodrigues rotation via quaternion
     Vec3 qv{x, y, z};

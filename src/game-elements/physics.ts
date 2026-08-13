@@ -153,6 +153,7 @@ export class PhysicsSystem {
       await engine.load(WASM_PHYSICS.bundleUrl, preloaded ?? undefined)
       if (engine.isReady) {
         engine.setGravity(GRAVITY.x, GRAVITY.y, GRAVITY.z)
+        engine.setRollingResistance(WASM_PHYSICS.tunables.rollingResistance)
         this.wasmEngine = engine
         this.wasmActive = true
       } else {

@@ -89,7 +89,11 @@ export class WasmOwner {
 
     const plane = WASM_PHYSICS.tunables.groundPlane
     if (!this.groundAdded) {
-      this.engine.addStaticPlane({ x: plane.normal.x, y: plane.normal.y, z: plane.normal.z }, plane.distance)
+      this.engine.addStaticPlane(
+        { x: plane.normal.x, y: plane.normal.y, z: plane.normal.z },
+        plane.distance,
+        plane.friction
+      )
       this.groundAdded = true
     }
 
@@ -119,6 +123,7 @@ export class WasmOwner {
         mass: 0,
         radius,
         restitution: PhysicsConfig.bumper.restitution,
+        friction: GameConfig.physics.surfaces.bumper.friction,
         linearDamping: 0,
         bodyType: 1,
       })
@@ -133,7 +138,9 @@ export class WasmOwner {
         mass: GameConfig.ball.mass,
         radius: GameConfig.ball.radius,
         restitution: PhysicsConfig.ball.restitution,
+        friction: PhysicsConfig.ball.friction,
         linearDamping: PhysicsConfig.ball.linearDamping,
+        angularDamping: PhysicsConfig.ball.angularDamping,
         bodyType: 0,
       })
       this.track(body, id)
@@ -156,6 +163,7 @@ export class WasmOwner {
         capsuleHalfHeight: FLIPPER_PROXY_HALF_HEIGHT,
         shape: 'capsule',
         restitution: PhysicsConfig.flipper.restitution,
+        friction: PhysicsConfig.flipper.friction,
         linearDamping: 0,
         bodyType: 2,
       })
@@ -205,6 +213,8 @@ export class WasmOwner {
         linvel.y + pointVel.y,
         linvel.z + pointVel.z
       )
+      const omega = body.angvel()
+      this.engine.setAngularVelocity(id, omega.x, omega.y, omega.z)
     }
   }
 
@@ -215,8 +225,12 @@ export class WasmOwner {
       if (id === undefined) continue
       const pos = this.engine.getPosition(id)
       const vel = this.engine.getVelocity(id)
+      const rot = this.engine.getRotation(id)
+      const ang = this.engine.getAngularVelocity(id)
       body.setTranslation(new rapier.Vector3(pos.x, pos.y, pos.z), true)
       body.setLinvel(new rapier.Vector3(vel.x, vel.y, vel.z), true)
+      body.setRotation({ x: rot.x, y: rot.y, z: rot.z, w: rot.w }, true)
+      body.setAngvel(new rapier.Vector3(ang.x, ang.y, ang.z), true)
     }
   }
 

@@ -37,6 +37,7 @@ export function exportRapierBodyToWasm(
     const pos = collider.translation()
     const rot = collider.rotation()
     const restitution = collider.restitution() ?? defaultRestitution
+    const friction = typeof collider.friction === 'function' ? collider.friction() : 0.2
 
     switch (collider.shapeType()) {
       case RapierShapeType.Ball: {
@@ -46,6 +47,7 @@ export function exportRapierBodyToWasm(
           mass: 0,
           radius: collider.radius(),
           restitution,
+          friction,
           linearDamping: 0,
           bodyType: 1,
         })
@@ -57,7 +59,8 @@ export function exportRapierBodyToWasm(
           { x: pos.x, y: pos.y, z: pos.z },
           { x: half.x, y: half.y, z: half.z },
           { x: rot.x, y: rot.y, z: rot.z, w: rot.w },
-          restitution
+          restitution,
+          friction
         )
         break
       }
@@ -67,7 +70,8 @@ export function exportRapierBodyToWasm(
           collider.radius(),
           collider.halfHeight(),
           { x: rot.x, y: rot.y, z: rot.z, w: rot.w },
-          restitution
+          restitution,
+          friction
         )
         break
       }

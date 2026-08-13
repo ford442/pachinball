@@ -14,6 +14,7 @@ namespace pachinball {
 struct PlaneDesc {
   Vec3  normal   = Vec3::up(); ///< Outward-facing plane normal (unit vector)
   float distance = 0.f;        ///< Signed distance from origin along the normal
+  float friction = 0.2f;       ///< Coulomb friction coefficient
 };
 
 /** Oriented static box collider (half-extents in local space). */
@@ -22,6 +23,7 @@ struct BoxDesc {
   Vec3  halfExtents  = {0.5f, 0.5f, 0.5f};
   Quat  rotation     = Quat::identity();
   float restitution  = 0.4f;
+  float friction     = 0.2f;
 };
 
 /** Oriented static capsule collider (local Y is the segment axis). */
@@ -31,6 +33,7 @@ struct CapsuleDesc {
   float halfHeight  = 0.5f; ///< Half-length of the cylindrical section
   Quat  rotation    = Quat::identity();
   float restitution = 0.4f;
+  float friction    = 0.2f;
 };
 
 /** Negative body IDs reserved for static colliders in contact events. */
@@ -44,6 +47,12 @@ struct WorldParams {
   float fixedTimestep    = 1.f / 60.f;             ///< Seconds per physics tick
   float maxSubsteps      = 8;                      ///< Safety cap on substep count
   int   solverIterations = 4;                      ///< Velocity/position iterations
+  /**
+   * Rolling-resistance coefficient applied at contacts after Coulomb friction.
+   * Pure Coulomb friction lets a sphere roll forever; this term bleeds spin
+   * and matching tangential speed so balls settle on the playfield.
+   */
+  float rollingResistance = 0.04f;
 };
 
 /**
@@ -58,7 +67,12 @@ struct WorldParams {
  *   - Dynamic ↔ Plane     sphere-plane
  *   - Dynamic ↔ Box       sphere-OBB
  *   - Dynamic ↔ Capsule   sphere-capsule
- * Response: single-pass sequential impulse with position correction.
+ * Response: sequential impulse with Coulomb friction, spherical inertia,
+ * and Baumgarte position correction.
+ *
+ * Friction combine rule is the geometric mean μ = sqrt(μ_a * μ_b)
+ * (documented as CoefficientCombineRule::GeometricMean). Restitution still
+ * uses min(e_a, e_b).
  */
 class PhysicsWorld {
 public:
@@ -83,8 +97,11 @@ public:
   /** Apply an instantaneous world-space impulse to a dynamic body. */
   void applyImpulse(int id, float ix, float iy, float iz);
 
-  /** Set the world-space velocity of a body directly. */
+  /** Set the world-space linear velocity of a body directly. */
   void setVelocity(int id, float vx, float vy, float vz);
+
+  /** Set the world-space angular velocity of a body directly. */
+  void setAngularVelocity(int id, float wx, float wy, float wz);
 
   /** Directly set the world-space position of a body. */
   void setBodyPosition(int id, float px, float py, float pz);
@@ -95,7 +112,7 @@ public:
   // ---- Static geometry ------------------------------------------------
 
   /** Add a static infinite half-space plane. */
-  void addStaticPlane(float nx, float ny, float nz, float distance);
+  void addStaticPlane(float nx, float ny, float nz, float distance, float friction = 0.2f);
 
   /**
    * Add an oriented static box collider.
@@ -104,7 +121,8 @@ public:
   int addStaticBox(float px, float py, float pz,
                    float hx, float hy, float hz,
                    float qx, float qy, float qz, float qw,
-                   float restitution = 0.4f);
+                   float restitution = 0.4f,
+                   float friction = 0.2f);
 
   /**
    * Add an oriented static capsule collider (local Y axis).
@@ -113,15 +131,19 @@ public:
   int addStaticCapsule(float px, float py, float pz,
                        float radius, float halfHeight,
                        float qx, float qy, float qz, float qw,
-                       float restitution = 0.4f);
+                       float restitution = 0.4f,
+                       float friction = 0.2f);
 
   // ---- Transform queries ----------------------------------------------
 
   /** Fill (px,py,pz) with the body's current world position. */
   void getPosition(int id, float* px, float* py, float* pz) const;
 
-  /** Fill (vx,vy,vz) with the body's current velocity. */
+  /** Fill (vx,vy,vz) with the body's current linear velocity. */
   void getVelocity(int id, float* vx, float* vy, float* vz) const;
+
+  /** Fill (wx,wy,wz) with the body's current angular velocity. */
+  void getAngularVelocity(int id, float* wx, float* wy, float* wz) const;
 
   /** Fill (qx,qy,qz,qw) with the body's current orientation quaternion. */
   void getRotation(int id, float* qx, float* qy, float* qz, float* qw) const;
@@ -153,6 +175,9 @@ public:
     params_.gravity = {gx, gy, gz};
   }
 
+  void setRollingResistance(float rr) { params_.rollingResistance = rr; }
+  float getRollingResistance() const { return params_.rollingResistance; }
+
 private:
   WorldParams                          params_;
   std::vector<std::unique_ptr<RigidBody>> bodies_;
@@ -169,6 +194,15 @@ private:
 
   // Single fixed-timestep tick
   void substep(float dt);
+
+  /**
+   * Shared normal + Coulomb friction + rolling-resistance response.
+   * `b` may be null (static geometry). Returns the normal impulse magnitude.
+   */
+  float applyContactImpulse(RigidBody& a, RigidBody* b,
+                            const Vec3& contactPoint, const Vec3& normal,
+                            float restitution, float friction,
+                            float penetration = 0.f);
 
   // Narrow-phase collision detection + response
   void resolveSphereVsSphere(RigidBody& a, RigidBody& b);

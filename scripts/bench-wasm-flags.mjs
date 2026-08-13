@@ -37,7 +37,7 @@ function percentile(sorted, p) {
 function setupWorld(Module) {
   const world = new Module.PhysicsWorld()
   world.setGravity(0, -9.81, 0)
-  world.addStaticPlane(0, 1, 0, 0)
+  world.addStaticPlane(0, 1, 0, 0, 0.2)
 
   // Deterministic 5×10 grid of dynamic spheres above the floor
   const cols = 10
@@ -48,8 +48,8 @@ function setupWorld(Module) {
       const x = (c - (cols - 1) / 2) * 0.55
       const z = (r - (rows - 1) / 2) * 0.55
       const y = 1.5 + r * 0.15
-      // createRigidBody(px,py,pz, vx,vy,vz, mass,radius,restitution,damping, bodyType, shape, capsuleHalfHeight)
-      world.createRigidBody(x, y, z, 0, 0, 0, 1, 0.2, 0.5, 0.02, 0, 0, 0.5)
+      // createRigidBody(..., bodyType, shape, capsuleHalfHeight, friction, angularDamping)
+      world.createRigidBody(x, y, z, 0, 0, 0, 1, 0.2, 0.5, 0.02, 0, 0, 0.5, 0.2, 0.1)
     }
   }
   return world
