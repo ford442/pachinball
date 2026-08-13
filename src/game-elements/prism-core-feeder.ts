@@ -7,9 +7,16 @@ import {
   Color3,
   PointLight,
   Scalar,
+  type AssetContainer,
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { GameConfigType } from '../config'
+import type { QualityTier } from './visual-language'
+import {
+  attachInsertMeshes,
+  loadInsertGltfForPreset,
+  PRISM_CORE_INSERT_GLTF,
+} from '../cabinet/insert-gltf-loader'
 
 export enum PrismCoreState {
   IDLE,
@@ -40,6 +47,8 @@ export class PrismCoreFeeder {
   private shellBreathPhase = 0.0
   private energyBloom: Mesh | null = null
   private bloomIntensity = 0.0
+  private insertContainer: AssetContainer | null = null
+  private proceduralMeshesVisible = true
 
   // Callback to communicate with Game
   public onStateChange: ((state: PrismCoreState, ballCount: number) => void) | null = null
@@ -68,10 +77,47 @@ export class PrismCoreFeeder {
     return this.state
   }
 
+  /**
+   * Optional glTF insert overlay — visual-only; Rapier capture collider stays code-authored.
+   */
+  async loadInsertGltf(tier: QualityTier): Promise<void> {
+    try {
+      const result = await loadInsertGltfForPreset(this.scene, PRISM_CORE_INSERT_GLTF, tier)
+      this.insertContainer = result.container
+      attachInsertMeshes(result.meshes, this.position)
+      this.setProceduralMeshesVisible(false)
+      console.info(`[PrismCore] Insert glTF loaded (${result.lod}): ${result.url}`)
+    } catch (err) {
+      console.warn('[PrismCore] Insert glTF unavailable, using procedural mesh:', err)
+    }
+  }
+
+  private setProceduralMeshesVisible(visible: boolean): void {
+    this.proceduralMeshesVisible = visible
+    if (this.innerMesh) this.innerMesh.setEnabled(visible)
+    if (this.outerMesh) this.outerMesh.setEnabled(visible)
+  }
+
+  disposeInsert(): void {
+    if (this.insertContainer) {
+      this.insertContainer.removeAllFromScene()
+      this.insertContainer.dispose()
+      this.insertContainer = null
+    }
+    this.setProceduralMeshesVisible(true)
+  }
+
   setGameplayEnabled(enabled: boolean): void {
     this.gameplayEnabled = enabled
-    this.outerMesh?.setEnabled(enabled)
-    this.innerMesh?.setEnabled(enabled)
+    if (this.proceduralMeshesVisible) {
+      this.innerMesh?.setEnabled(enabled)
+      this.outerMesh?.setEnabled(enabled)
+    }
+    if (this.insertContainer) {
+      for (const mesh of this.insertContainer.meshes) {
+        mesh.setEnabled(enabled)
+      }
+    }
     this.energyBloom?.setEnabled(enabled)
     if (this.light) this.light.setEnabled(enabled)
   }

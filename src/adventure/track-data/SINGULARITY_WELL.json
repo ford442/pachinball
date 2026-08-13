@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "SINGULARITY_WELL",
+  "cameraPresetId": "SINGULARITY_WELL",
+  "materials": {
+    "structure": "#9900FF",
+    "accent": "#cc44ff"
+  },
+  "segments": [
+    { "type": "straight", "width": 6, "length": 12, "inclineDeg": 15, "material": "#9900FF" },
+    {
+      "type": "curve",
+      "radius": 14,
+      "angleDeg": 180,
+      "inclineDeg": 5,
+      "width": 6,
+      "wallHeight": 4,
+      "bankingDeg": -15,
+      "segments": 20,
+      "material": "#9900FF"
+    },
+    { "type": "gap", "length": 4, "drop": 2 },
+    { "type": "straight", "width": 6, "length": 4, "inclineDeg": 0, "material": "#9900FF" },
+    {
+      "type": "curve",
+      "radius": 8,
+      "angleDeg": 270,
+      "inclineDeg": 10,
+      "width": 6,
+      "wallHeight": 1,
+      "bankingDeg": -25,
+      "segments": 20,
+      "material": "#9900FF"
+    },
+    { "type": "straight", "width": 5, "length": 8, "inclineDeg": 35, "material": "#9900FF" },
+    { "type": "portal", "offset": { "x": 0, "y": 1.8, "z": 0 } },
+    { "type": "bucket", "material": "#9900FF" }
+  ]
+}

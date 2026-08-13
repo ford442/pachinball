@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "id": "CRYO_CHAMBER",
+  "cameraPresetId": "CRYO_CHAMBER",
+  "materials": {
+    "structure": "#A5F2F3"
+  },
+  "segments": [
+    {
+      "type": "straight",
+      "width": 6,
+      "length": 15,
+      "inclineDeg": 20,
+      "wallHeight": 1,
+      "friction": 0.001,
+      "material": "#A5F2F3"
+    },
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": -45,
+      "inclineDeg": 0,
+      "width": 8,
+      "wallHeight": 1,
+      "friction": 0.001,
+      "segments": 10,
+      "material": "#A5F2F3"
+    },
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": 90,
+      "inclineDeg": 0,
+      "width": 8,
+      "wallHeight": 1,
+      "friction": 0.001,
+      "segments": 15,
+      "material": "#A5F2F3"
+    },
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": -45,
+      "inclineDeg": 0,
+      "width": 8,
+      "wallHeight": 1,
+      "friction": 0.001,
+      "segments": 10,
+      "material": "#A5F2F3"
+    },
+    {
+      "type": "straight",
+      "width": 2.5,
+      "length": 12,
+      "inclineDeg": 0,
+      "wallHeight": 0,
+      "friction": 0.001,
+      "material": "#A5F2F3"
+    },
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": 180,
+      "inclineDeg": 15,
+      "width": 8,
+      "wallHeight": 2,
+      "bankingDeg": -20,
+      "friction": 0.001,
+      "segments": 20,
+      "material": "#A5F2F3"
+    },
+    { "type": "portal", "offset": { "x": 0, "y": -2.2, "z": 2 } },
+    { "type": "bucket", "material": "#A5F2F3", "offset": { "x": 0, "y": -2, "z": 2 } }
+  ]
+}

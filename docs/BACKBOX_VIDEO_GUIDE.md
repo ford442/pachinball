@@ -54,18 +54,23 @@ Browsers have strict autoplay policies. The implementation handles this graceful
 
 ## Configuration
 
-### config.ts
+### config.ts (path resolution)
+
+`resolveBackboxAssetPath(name, ext)` picks the URL:
+
+1. `VITE_ASSET_URL` override (if set) → `{VITE_ASSET_URL}/pachinball/backbox/{name}.{ext}`
+2. Production build → `https://storage.noahcohn.com/pachinball/backbox/…`
+3. Local dev → `/backbox/{name}.{ext}` (served from `public/backbox/`)
+
 ```typescript
 backbox: {
-  // Video path (relative to public/)
-  attractVideoPath: '/backbox/attract.mp4',
-  
-  // If true, hides reels when video plays
-  // If false, video overlays reels
+  get attractVideoPath(): string { return resolveBackboxAssetPath('attract', 'mp4') },
+  get feverVideoPath(): string { return resolveBackboxAssetPath('fever', 'mp4') },
+  get jackpotVideoPath(): string { return resolveBackboxAssetPath('jackpot', 'mp4') },
+  get reachVideoPath(): string { return resolveBackboxAssetPath('reach', 'mp4') },
   videoReplacesReels: true,
-  
-  // Fallback image (used if video fails)
-  attractImagePath: '/backbox/attract.png',
+  get attractImagePath(): string { return resolveBackboxAssetPath('attract', 'png') },
+  // … matching *ImagePath getters for fever/jackpot/reach/adventure
   imageOpacity: 0.85,
   imageBlendMode: 'normal',
 }
@@ -76,10 +81,29 @@ backbox: {
 ```
 public/
 └── backbox/
-    ├── attract.mp4     # Video (checked first)
-    ├── attract.png     # Image (fallback)
-    └── README.md       # Documentation
+    ├── attract.mp4 / attract.png
+    ├── fever.mp4 / fever.png
+    ├── jackpot.mp4 / jackpot.png
+    ├── reach.mp4 / reach.png
+    └── README.md
 ```
+
+## Capture / encoding (placeholder generation)
+
+For dev placeholders or quick iteration, solid-color loops are enough:
+
+```bash
+# 640×360 H.264, 2 s loop, 30 fps — adjust hex per state
+ffmpeg -f lavfi -i color=c=0xFF2244:s=640x360:d=2:r=30 -pix_fmt yuv420p public/backbox/jackpot.mp4
+ffmpeg -f lavfi -i color=c=0xFF8800:s=640x360:d=2:r=30 -pix_fmt yuv420p public/backbox/fever.mp4
+ffmpeg -f lavfi -i color=c=0x00CCFF:s=640x360:d=2:r=30 -pix_fmt yuv420p public/backbox/reach.mp4
+
+# Still fallback from first frame
+ffmpeg -y -i public/backbox/jackpot.mp4 -update 1 -frames:v 1 public/backbox/jackpot.png
+```
+
+Production clips: **16:9**, H.264 baseline or main, **720p–1080p**, ≤50 MB, seamless loop,
+no audio track (muted autoplay). Match filenames above so config getters resolve without edits.
 
 ## Runtime API
 

@@ -10,6 +10,15 @@ To enhance visuals, add an environment texture:
 
 ```
 public/
+├── backbox/
+│   ├── attract.mp4 / attract.png
+│   ├── fever.mp4 / fever.png      # FEVER display state
+│   ├── jackpot.mp4 / jackpot.png  # JACKPOT display state
+│   ├── reach.mp4 / reach.png      # REACH display state
+│   └── README.md
+├── models/
+│   ├── cabinet/classic/{simple,high}.glb
+│   └── inserts/prism-core/{simple,high}.glb
 └── textures/
     └── environment.env    ← Optional: Enables realistic reflections
 ```
@@ -304,9 +313,37 @@ displaySystem.setImageOpacity(0.5)
 displaySystem.setImageOpacity(0.5)
 ```
 
----
+### State-specific clips
 
-## Migration from Old System
+`GameConfig.backbox` exposes getters for event states (paths resolved by
+`resolveBackboxAssetPath()` — dev serves `public/backbox/` at `/backbox/…`;
+production uses the CDN unless `VITE_ASSET_URL` overrides):
+
+| State | Video | Image fallback |
+|-------|-------|----------------|
+| IDLE / attract | `attract.mp4` | `attract.png` |
+| REACH | `reach.mp4` | `reach.png` |
+| FEVER | `fever.mp4` | `fever.png` |
+| JACKPOT | `jackpot.mp4` | `jackpot.png` |
+| ADVENTURE | `adventure.mp4` | `adventure.png` |
+
+Video and image layers load in parallel on state change; failed video `dispose()`
+leaves image + procedural reels visible.
+
+### Playfield insert glTF
+
+Visual-only toy overlays under `public/models/inserts/<toy-id>/`:
+
+| Tier | File |
+|------|------|
+| LOW | `simple.glb` |
+| MEDIUM / HIGH | `high.glb` (falls back to simple) |
+
+Regenerate Prism Core placeholders: `npm run models:insert-placeholders`.
+
+Rapier colliders for toys stay code-authored — see `docs/CABINET_GLTF.md`.
+
+---
 
 Previous code using `StandardMaterial` directly:
 ```typescript

@@ -91,8 +91,13 @@ Hand-tuned flagships (`NEON_HELIX`, `PACHINKO_HALL`, `CYBER_CORE`) remain TypeSc
 
 ## Shipped data tracks
 
-`GLITCH_SPIRE`, `RETRO_WAVE_HILLS`, `HYPER_DRIFT`, and — since #321 —
-`QUANTUM_GRID` and `CHRONO_CORE`, which were migrated from TypeScript builders.
+**Campaign spine (JSON):** `QUANTUM_GRID`, `GLITCH_SPIRE`, `RETRO_WAVE_HILLS`, `HYPER_DRIFT`,
+`CHRONO_CORE`, `SINGULARITY_WELL`, `CRYO_CHAMBER`, `FIREWALL_BREACH`.
+
+**Post-finale branch (JSON):** `TIDAL_NEXUS` → `SOLAR_FLARE` → `DIGITAL_ZEN_GARDEN`.
+
+`QUANTUM_GRID` and `CHRONO_CORE` were migrated from TypeScript in #321; the three spine
+tracks above were migrated in the content-foundation slice with the same parity pattern.
 
 A migration is only sound if the compiled JSON reproduces the original geometry.
 `tests/track-json-migration-parity.test.ts` records the `TrackBuilder` call
@@ -109,9 +114,10 @@ then asserts the two are identical. Do a migration that way rather than by eye.
 2. Point the track's manifest at it: `buildKind: 'json'` + `dataPath: './track-data/MY_TRACK.json'`.
 3. If it replaces a TS builder, delete the builder and its `src/adventure/index.ts` export,
    and add a parity case before deleting anything.
-4. Run `npm test` — Vitest validates every shipped JSON file.
+4. Run `npm run tracks:validate` and `npm test`.
 
 ## Validation
 
 - Runtime: `validateTrackDefinition()` in `src/adventure/track-schema.ts`
-- CI / local: `tests/track-schema.test.ts`
+- CLI: `npm run tracks:validate` (wraps `tests/tracks-validate-cli.test.ts`)
+- CI / local: `tests/track-schema.test.ts`, `tests/track-json-migration-parity.test.ts`

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "DIGITAL_ZEN_GARDEN",
+  "cameraPresetId": "DIGITAL_ZEN_GARDEN",
+  "materials": {
+    "structure": "#FFFFFF",
+    "accent": "#FF69B4"
+  },
+  "segments": [
+    {
+      "type": "straight",
+      "width": 8,
+      "length": 15,
+      "inclineDeg": 15,
+      "wallHeight": 1,
+      "friction": 0.8,
+      "material": "#FFFFFF"
+    },
+    {
+      "type": "straight",
+      "width": 12,
+      "length": 20,
+      "inclineDeg": 0,
+      "wallHeight": 0.5,
+      "friction": 0.8,
+      "material": "#FFFFFF"
+    },
+    {
+      "type": "curve",
+      "radius": 15,
+      "angleDeg": 90,
+      "inclineDeg": 0,
+      "width": 8,
+      "wallHeight": 1,
+      "friction": 0.1,
+      "segments": 20,
+      "material": "#FFFFFF"
+    },
+    {
+      "type": "straight",
+      "width": 3,
+      "length": 10,
+      "inclineDeg": 0,
+      "wallHeight": 1,
+      "friction": 0.8,
+      "material": "#FF69B4"
+    },
+    { "type": "portal", "offset": { "x": 0, "y": 0.5, "z": 4 } },
+    { "type": "bucket", "material": "#FF69B4", "offset": { "x": 0, "y": 0, "z": 4 } }
+  ]
+}

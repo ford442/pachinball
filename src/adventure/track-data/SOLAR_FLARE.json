@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "SOLAR_FLARE",
+  "cameraPresetId": "SOLAR_FLARE",
+  "materials": {
+    "structure": "#FF4500",
+    "accent": "#FFFF00"
+  },
+  "segments": [
+    {
+      "type": "straight",
+      "width": 6,
+      "length": 15,
+      "inclineDeg": 20,
+      "material": "#FF4500"
+    },
+    {
+      "type": "straight",
+      "width": 12,
+      "length": 25,
+      "inclineDeg": 0,
+      "material": "#FF4500"
+    },
+    {
+      "type": "curve",
+      "radius": 15,
+      "angleDeg": 180,
+      "inclineDeg": 0,
+      "width": 8,
+      "wallHeight": 1,
+      "segments": 20,
+      "material": "#FF4500"
+    },
+    { "type": "gap", "length": 4, "drop": 0 },
+    { "type": "portal", "offset": { "x": 0, "y": 0.5, "z": 4 } },
+    { "type": "bucket", "material": "#FFFF00", "offset": { "x": 0, "y": 0, "z": 4 } }
+  ]
+}

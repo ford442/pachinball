@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "TIDAL_NEXUS",
+  "cameraPresetId": "TIDAL_NEXUS",
+  "materials": {
+    "structure": "#0066FF",
+    "accent": "#E0FFFF"
+  },
+  "segments": [
+    {
+      "type": "straight",
+      "width": 6,
+      "length": 15,
+      "inclineDeg": 20,
+      "material": "#0066FF"
+    },
+    {
+      "type": "spinner",
+      "radius": 8,
+      "angVelDeg": -86,
+      "advance": true,
+      "material": "#0066FF"
+    },
+    {
+      "type": "curve",
+      "radius": 12,
+      "angleDeg": 180,
+      "inclineDeg": 5,
+      "width": 8,
+      "wallHeight": 2,
+      "bankingDeg": -10,
+      "segments": 20,
+      "material": "#0066FF"
+    },
+    {
+      "type": "straight",
+      "width": 8,
+      "length": 20,
+      "inclineDeg": 0,
+      "material": "#0066FF"
+    },
+    { "type": "gap", "length": 4, "drop": 4 },
+    { "type": "portal", "offset": { "x": 0, "y": 0.5, "z": 4 } },
+    { "type": "bucket", "material": "#0066FF", "offset": { "x": 0, "y": -2, "z": 4 } }
+  ]
+}

@@ -33,6 +33,12 @@ export {
   splitAssetUrl,
 } from './cabinet-gltf-loader'
 
+export {
+  loadInsertGltfForPreset,
+  attachInsertMeshes,
+  PRISM_CORE_INSERT_GLTF,
+} from './insert-gltf-loader'
+
 // Classic preset exports
 export {
   CLASSIC_CONFIG,
