@@ -1250,7 +1250,9 @@ export const WASM_PHYSICS = {
     fixedTimestep: 1 / 60,
     maxSubsteps: 8,
     solverIterations: 4,
-    groundPlane: { normal: { x: 0, y: 1, z: 0 }, distance: 0 },
+    /** Rolling resistance applied at contacts after Coulomb friction. */
+    rollingResistance: 0.04,
+    groundPlane: { normal: { x: 0, y: 1, z: 0 }, distance: 0, friction: 0.18 },
   },
 } as const
 

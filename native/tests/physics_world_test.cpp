@@ -256,3 +256,150 @@ TEST_CASE("kinematic capsule flings ball", "[physics]") {
   // The ball must pick up momentum in the capsule's direction of travel.
   CHECK(vel.x > 1.0f);
 }
+
+TEST_CASE("ball rolls down inclined plane", "[physics][friction]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, -9.81f, 0.f);
+  world.setRollingResistance(0.01f);
+
+  const float theta = 0.35f; // ~20 degrees
+  const float nx = -std::sin(theta);
+  const float ny =  std::cos(theta);
+  world.addStaticPlane(nx, ny, 0.f, 0.f, 0.8f);
+
+  RigidBodyDesc desc;
+  desc.position = {nx * 0.26f, ny * 0.26f, 0.f};
+  desc.mass = 1.f;
+  desc.radius = 0.25f;
+  desc.restitution = 0.f;
+  desc.linearDamping = 0.f;
+  desc.friction = 0.8f;
+  desc.angularDamping = 0.02f;
+  const int ball = world.createRigidBody(desc);
+
+  stepFixed(world, 90);
+
+  const Vec3 vel = readVel(world, ball);
+  const Vec3 omega = readAngVel(world, ball);
+  const Vec3 pos = readPos(world, ball);
+
+  CHECK(pos.x < -0.05f);
+  CHECK(omega.length() > 0.8f);
+
+  // Rolling without slipping: |v + ω × r_contact| should be much smaller
+  // than |v|. Contact radius is -normal * R.
+  const Vec3 normal{nx, ny, 0.f};
+  const Vec3 r = normal * -0.25f;
+  const Vec3 contactVel = vel + omega.cross(r);
+  const Vec3 vt = contactVel - normal * contactVel.dot(normal);
+  CHECK(vt.length() < vel.length() * 0.55f);
+}
+
+TEST_CASE("spinning ball deflects on wall contact", "[physics][friction]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, 0.f, 0.f);
+  world.setRollingResistance(0.f);
+  // Wall at x = 1, inward normal -X, allowed half-space x <= 1.
+  world.addStaticPlane(-1.f, 0.f, 0.f, -1.f, 0.8f);
+
+  RigidBodyDesc desc;
+  desc.position = {0.7f, 0.f, 0.f};
+  desc.velocity = {2.f, 0.f, 0.f};
+  desc.mass = 1.f;
+  desc.radius = 0.25f;
+  desc.restitution = 0.4f;
+  desc.linearDamping = 0.f;
+  desc.friction = 0.8f;
+  desc.angularDamping = 0.f;
+  const int ball = world.createRigidBody(desc);
+  world.setAngularVelocity(ball, 0.f, 10.f, 0.f);
+
+  stepFixed(world, 20);
+
+  const Vec3 vel = readVel(world, ball);
+  const Vec3 omega = readAngVel(world, ball);
+  CHECK(vel.z > 0.15f);
+  CHECK(omega.y < 10.f);
+}
+
+TEST_CASE("kinematic capsule flick imparts spin", "[physics][friction]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, 0.f, 0.f);
+  world.setRollingResistance(0.f);
+
+  RigidBodyDesc capDesc;
+  capDesc.position = {0.f, 1.f, 0.f};
+  capDesc.velocity = {0.f, 0.f, 5.f};
+  capDesc.mass = 0.f;
+  capDesc.radius = 0.4f;
+  capDesc.restitution = 0.5f;
+  capDesc.linearDamping = 0.f;
+  capDesc.type = BodyType::Kinematic;
+  capDesc.shape = Shape::Capsule;
+  capDesc.capsuleHalfHeight = 0.5f;
+  capDesc.friction = 0.8f;
+  world.createRigidBody(capDesc);
+
+  RigidBodyDesc ballDesc;
+  ballDesc.position = {0.55f, 1.f, 0.f};
+  ballDesc.mass = 1.f;
+  ballDesc.radius = 0.2f;
+  ballDesc.restitution = 0.5f;
+  ballDesc.linearDamping = 0.f;
+  ballDesc.friction = 0.8f;
+  ballDesc.angularDamping = 0.f;
+  const int ball = world.createRigidBody(ballDesc);
+
+  stepFixed(world, 5);
+
+  const Vec3 vel = readVel(world, ball);
+  const Vec3 omega = readAngVel(world, ball);
+  CHECK(vel.z > 0.5f);
+  CHECK(omega.length() > 0.5f);
+}
+
+TEST_CASE("ball on flat plane comes to rest", "[physics][friction]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, -9.81f, 0.f);
+  world.setRollingResistance(0.12f);
+  world.addStaticPlane(0.f, 1.f, 0.f, 0.f, 0.5f);
+
+  RigidBodyDesc desc;
+  desc.position = {0.f, 0.25f, 0.f};
+  desc.velocity = {1.5f, 0.f, 0.f};
+  desc.mass = 1.f;
+  desc.radius = 0.25f;
+  desc.restitution = 0.f;
+  desc.linearDamping = 0.05f;
+  desc.friction = 0.5f;
+  desc.angularDamping = 0.15f;
+  const int ball = world.createRigidBody(desc);
+
+  stepFixed(world, 240);
+
+  const Vec3 vel = readVel(world, ball);
+  const Vec3 omega = readAngVel(world, ball);
+  CHECK(vel.length() < 0.25f);
+  CHECK(omega.length() < 1.5f);
+}
+
+TEST_CASE("orientation integrates from angular velocity", "[physics][friction]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, 0.f, 0.f);
+
+  RigidBodyDesc desc;
+  desc.position = {0.f, 2.f, 0.f};
+  desc.mass = 1.f;
+  desc.radius = 0.25f;
+  desc.linearDamping = 0.f;
+  desc.angularDamping = 0.f;
+  const int ball = world.createRigidBody(desc);
+  world.setAngularVelocity(ball, 0.f, 6.f, 0.f);
+
+  stepFixed(world, 60);
+
+  const Quat q = readRot(world, ball);
+  const float len = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+  CHECK(near(len, 1.f, 1e-3f));
+  CHECK(std::fabs(q.y) > 0.1f);
+}

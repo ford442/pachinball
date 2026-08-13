@@ -23,6 +23,18 @@ inline Vec3 readVel(const PhysicsWorld& world, int id) {
   return {x, y, z};
 }
 
+inline Vec3 readAngVel(const PhysicsWorld& world, int id) {
+  float x = 0.f, y = 0.f, z = 0.f;
+  world.getAngularVelocity(id, &x, &y, &z);
+  return {x, y, z};
+}
+
+inline Quat readRot(const PhysicsWorld& world, int id) {
+  float x = 0.f, y = 0.f, z = 0.f, w = 1.f;
+  world.getRotation(id, &x, &y, &z, &w);
+  return {x, y, z, w};
+}
+
 inline void stepFixed(PhysicsWorld& world, int steps) {
   for (int i = 0; i < steps; ++i) {
     world.step(FIXED_DT);

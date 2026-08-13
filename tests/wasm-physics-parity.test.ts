@@ -44,6 +44,7 @@ function makeBody(handle: number, opts: { fixed?: boolean; pos?: { x: number; y:
   const setAngvel = vi.fn((_v: { x: number; y: number; z: number }, _wake = true) => {
     // no-op for the stub
   })
+  const setRotation = vi.fn()
   return {
     handle,
     translation,
@@ -52,6 +53,7 @@ function makeBody(handle: number, opts: { fixed?: boolean; pos?: { x: number; y:
     setTranslation,
     setLinvel,
     setAngvel,
+    setRotation,
     isFixed: () => opts.fixed ?? false,
     isSleeping: () => false,
   }
@@ -88,8 +90,11 @@ function makeWasmEngineStub() {
       const b = bodies.get(id)
       if (b) b.velocity = { x, y, z }
     }),
+    setAngularVelocity: vi.fn(),
     getPosition: vi.fn((id: number) => bodies.get(id)?.position ?? { x: 0, y: 0, z: 0 }),
     getVelocity: vi.fn((id: number) => bodies.get(id)?.velocity ?? { x: 0, y: 0, z: 0 }),
+    getRotation: vi.fn(() => ({ x: 0, y: 0, z: 0, w: 1 })),
+    getAngularVelocity: vi.fn(() => ({ x: 0, y: 0, z: 0 })),
     init: vi.fn((b: EventBus) => { bus = b }),
     step: vi.fn((_dt: number) => {
       // Deterministic one-frame drop: integrate gravity for dynamic bodies
@@ -150,6 +155,15 @@ function makeHostForWasm(opts: { wasmEngine: WasmEngineStub; ballBody: BodyStub;
         y: number
         z: number
         constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z }
+      },
+      Quaternion: class {
+        x: number
+        y: number
+        z: number
+        w: number
+        constructor(x = 0, y = 0, z = 0, w = 1) {
+          this.x = x; this.y = y; this.z = z; this.w = w
+        }
       },
     })),
   }
@@ -289,5 +303,6 @@ describe.skipIf(!RUN_WASM_PARITY)('WASM physics parity harness (real-engine inte
     expect(stdout).toContain('PASS wasm ball-on-box')
     expect(stdout).toContain('PASS wasm ball-on-capsule')
     expect(stdout).toContain('PASS wasm ball+bumper drop')
+    expect(stdout).toContain('PASS wasm spinning ball picks up tangential velocity')
   })
 })

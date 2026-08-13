@@ -38,6 +38,7 @@ function makeWorldStub() {
     applyForce:           vi.fn(),
     applyImpulse:         vi.fn(),
     setVelocity:          vi.fn(),
+    setAngularVelocity:   vi.fn(),
     addStaticPlane:       vi.fn(),
     addStaticBox:         vi.fn().mockReturnValue(-1001),
     addStaticCapsule:     vi.fn().mockReturnValue(-2001),
@@ -47,6 +48,9 @@ function makeWorldStub() {
     getVelX:              vi.fn().mockReturnValue(4),
     getVelY:              vi.fn().mockReturnValue(5),
     getVelZ:              vi.fn().mockReturnValue(6),
+    getAngVelX:           vi.fn().mockReturnValue(0),
+    getAngVelY:           vi.fn().mockReturnValue(0),
+    getAngVelZ:           vi.fn().mockReturnValue(0),
     getRotX:              vi.fn().mockReturnValue(0),
     getRotY:              vi.fn().mockReturnValue(0),
     getRotZ:              vi.fn().mockReturnValue(0),
@@ -55,6 +59,7 @@ function makeWorldStub() {
     getStepCount:         vi.fn().mockReturnValue(10),
     getActiveBodyCount:   vi.fn().mockReturnValue(3),
     setGravity:           vi.fn(),
+    setRollingResistance: vi.fn(),
     setContactCallbackJS: vi.fn(),
     delete:               vi.fn(),
   }
@@ -131,6 +136,8 @@ describe('WasmPhysicsEngine', () => {
     expect(call[7]).toBe(0.1) // default radius
     expect(call[9]).toBe(0.02) // default linearDamping
     expect(call[10]).toBe(0)  // BodyType.Dynamic
+    expect(call[13]).toBe(0.2) // default friction
+    expect(call[14]).toBe(0.1) // default angularDamping
   })
 
   // 6 -----------------------------------------------------------------------
@@ -238,7 +245,7 @@ describe('WasmPhysicsEngine', () => {
   it('addStaticPlane() delegates to world.addStaticPlane', async () => {
     await injectWorld(engine, worldStub)
     engine.addStaticPlane({ x: 0, y: 1, z: 0 }, -2)
-    expect(worldStub.addStaticPlane).toHaveBeenCalledWith(0, 1, 0, -2)
+    expect(worldStub.addStaticPlane).toHaveBeenCalledWith(0, 1, 0, -2, 0.2)
   })
 
   it('addStaticBox() delegates to world.addStaticBox', async () => {

@@ -55,8 +55,24 @@ export interface WasmPhysicsWorldInstance {
     px: number, py: number, pz: number,
     vx: number, vy: number, vz: number,
     mass: number, radius: number, restitution: number, linearDamping: number,
-    bodyType: number, shape: number, capsuleHalfHeight: number
+    bodyType: number, shape: number, capsuleHalfHeight: number,
+    friction: number, angularDamping: number
   ): number
+
+  /** Create a rigid body from a bound RigidBodyDesc value object. */
+  createRigidBodyDesc(desc: {
+    position: { x: number; y: number; z: number }
+    velocity: { x: number; y: number; z: number }
+    mass: number
+    radius: number
+    restitution: number
+    linearDamping: number
+    type: number
+    shape: number
+    capsuleHalfHeight: number
+    friction: number
+    angularDamping: number
+  }): number
 
   /** Remove a body by handle. The handle is no longer valid after this. */
   removeRigidBody(id: number): void
@@ -70,6 +86,9 @@ export interface WasmPhysicsWorldInstance {
   /** Directly set the velocity of a body. */
   setVelocity(id: number, vx: number, vy: number, vz: number): void
 
+  /** Directly set the angular velocity of a body. */
+  setAngularVelocity(id: number, wx: number, wy: number, wz: number): void
+
   /** Directly set the position of a body. */
   setBodyPosition(id: number, px: number, py: number, pz: number): void
 
@@ -77,7 +96,7 @@ export interface WasmPhysicsWorldInstance {
   setBodyRotation(id: number, qx: number, qy: number, qz: number, qw: number): void
 
   /** Add an infinite static plane defined by a normal + d offset. */
-  addStaticPlane(nx: number, ny: number, nz: number, distance: number): void
+  addStaticPlane(nx: number, ny: number, nz: number, distance: number, friction: number): void
 
   /**
    * Add an oriented static box collider.
@@ -87,7 +106,8 @@ export interface WasmPhysicsWorldInstance {
     px: number, py: number, pz: number,
     hx: number, hy: number, hz: number,
     qx: number, qy: number, qz: number, qw: number,
-    restitution?: number
+    restitution?: number,
+    friction?: number
   ): number
 
   /**
@@ -98,7 +118,8 @@ export interface WasmPhysicsWorldInstance {
     px: number, py: number, pz: number,
     radius: number, halfHeight: number,
     qx: number, qy: number, qz: number, qw: number,
-    restitution?: number
+    restitution?: number,
+    friction?: number
   ): number
 
   // Position getters
@@ -110,6 +131,10 @@ export interface WasmPhysicsWorldInstance {
   getVelX(id: number): number
   getVelY(id: number): number
   getVelZ(id: number): number
+
+  getAngVelX(id: number): number
+  getAngVelY(id: number): number
+  getAngVelZ(id: number): number
 
   // Rotation (quaternion) getters
   getRotX(id: number): number
@@ -131,6 +156,9 @@ export interface WasmPhysicsWorldInstance {
 
   /** Override global gravity. */
   setGravity(gx: number, gy: number, gz: number): void
+
+  setRollingResistance(rr: number): void
+  getRollingResistance(): number
 
   /**
    * Register a JS function to receive contact events.

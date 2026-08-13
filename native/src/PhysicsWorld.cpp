@@ -45,6 +45,11 @@ void PhysicsWorld::setVelocity(int id, float vx, float vy, float vz) {
   if (b) b->setVelocity({vx, vy, vz});
 }
 
+void PhysicsWorld::setAngularVelocity(int id, float wx, float wy, float wz) {
+  RigidBody* b = findBody(id);
+  if (b) b->setAngularVelocity({wx, wy, wz});
+}
+
 void PhysicsWorld::setBodyPosition(int id, float px, float py, float pz) {
   RigidBody* b = findBody(id);
   if (b) b->setPosition({px, py, pz});
@@ -57,19 +62,20 @@ void PhysicsWorld::setBodyRotation(int id, float qx, float qy, float qz, float q
 
 // ---- Static geometry ----------------------------------------------------
 
-void PhysicsWorld::addStaticPlane(float nx, float ny, float nz, float distance) {
-  planes_.push_back({{nx, ny, nz}, distance});
+void PhysicsWorld::addStaticPlane(float nx, float ny, float nz, float distance, float friction) {
+  planes_.push_back({{nx, ny, nz}, distance, friction});
 }
 
 int PhysicsWorld::addStaticBox(float px, float py, float pz,
                                float hx, float hy, float hz,
                                float qx, float qy, float qz, float qw,
-                               float restitution) {
+                               float restitution, float friction) {
   boxes_.push_back({
     {px, py, pz},
     {hx, hy, hz},
     {qx, qy, qz, qw},
-    restitution
+    restitution,
+    friction
   });
   return STATIC_BOX_ID_BASE - static_cast<int>(boxes_.size()) + 1;
 }
@@ -77,13 +83,14 @@ int PhysicsWorld::addStaticBox(float px, float py, float pz,
 int PhysicsWorld::addStaticCapsule(float px, float py, float pz,
                                    float radius, float halfHeight,
                                    float qx, float qy, float qz, float qw,
-                                   float restitution) {
+                                   float restitution, float friction) {
   capsules_.push_back({
     {px, py, pz},
     radius,
     halfHeight,
     {qx, qy, qz, qw},
-    restitution
+    restitution,
+    friction
   });
   return STATIC_CAPSULE_ID_BASE - static_cast<int>(capsules_.size()) + 1;
 }
@@ -105,6 +112,15 @@ void PhysicsWorld::getVelocity(int id, float* vx, float* vy, float* vz) const {
     *vx = b->getVelocity().x;
     *vy = b->getVelocity().y;
     *vz = b->getVelocity().z;
+  }
+}
+
+void PhysicsWorld::getAngularVelocity(int id, float* wx, float* wy, float* wz) const {
+  const RigidBody* b = findBody(id);
+  if (b) {
+    *wx = b->getAngularVelocity().x;
+    *wy = b->getAngularVelocity().y;
+    *wz = b->getAngularVelocity().z;
   }
 }
 
@@ -227,6 +243,140 @@ void PhysicsWorld::substep(float dt) {
   }
 }
 
+// ---- Contact solver -----------------------------------------------------
+//
+// Friction combine: geometric mean μ = sqrt(μ_a * μ_b).
+// Restitution combine: min(e_a, e_b) (handled by callers).
+// Contact-point velocity includes ω × r so a spinning sphere (or a kinematic
+// flipper proxy with angular velocity) participates in the tangential term.
+
+namespace {
+
+struct ContactSide {
+  RigidBody* body = nullptr;
+  Vec3 r = Vec3::zero();
+  float invMass = 0.f;
+  float invInertia = 0.f;
+};
+
+Vec3 sidePointVel(const ContactSide& s) {
+  if (!s.body) return Vec3::zero();
+  return s.body->getVelocity() + s.body->getAngularVelocity().cross(s.r);
+}
+
+float sideAngularDenom(const ContactSide& s, const Vec3& dir) {
+  if (s.invInertia <= 0.f) return 0.f;
+  return s.invInertia * s.r.cross(dir).lengthSq();
+}
+
+void sideApplyImpulse(ContactSide& s, const Vec3& impulse) {
+  if (!s.body) return;
+  s.body->applyImpulseAt(impulse, s.body->getPosition() + s.r);
+}
+
+ContactSide makeSide(RigidBody* body, const Vec3& contactPoint) {
+  ContactSide s;
+  if (!body) return s;
+  s.body = body;
+  s.r = contactPoint - body->getPosition();
+  s.invMass = body->getInvMass();
+  s.invInertia = body->getInvInertia();
+  return s;
+}
+
+} // namespace
+
+float PhysicsWorld::applyContactImpulse(RigidBody& a, RigidBody* b,
+                                        const Vec3& contactPoint, const Vec3& normal,
+                                        float restitution, float friction,
+                                        float penetration) {
+  ContactSide sa = makeSide(&a, contactPoint);
+  ContactSide sb = makeSide(b, contactPoint);
+
+  Vec3 relVel = sidePointVel(sa) - sidePointVel(sb);
+  float vn = relVel.dot(normal);
+  // Clearly receding and not overlapping — nothing to do.
+  if (vn > 0.f && penetration <= 0.f) return 0.f;
+
+  // Bounce only above a speed threshold so resting contacts settle.
+  constexpr float RESTITUTION_THRESHOLD = 1.0f;
+  const float e = (vn > -RESTITUTION_THRESHOLD) ? 0.f : restitution;
+
+  const float kn = sa.invMass + sb.invMass
+                 + sideAngularDenom(sa, normal)
+                 + sideAngularDenom(sb, normal);
+  if (kn < 1e-12f) return 0.f;
+
+  float jn = 0.f;
+  if (vn < 0.f) {
+    jn = -(1.f + e) * vn / kn;
+    if (jn < 0.f) jn = 0.f;
+  }
+
+  sideApplyImpulse(sa, normal * jn);
+  sideApplyImpulse(sb, normal * -jn);
+
+  // Overlapping contacts with little/no approach (kinematic sweepers, resting
+  // overlap) still need a non-empty Coulomb cone. Bias from overlap / dt so a
+  // 2 cm interpenetration yields ~O(1) impulse at 60 Hz.
+  float jnFriction = jn;
+  constexpr float SLOP = 0.001f;
+  if (penetration > SLOP) {
+    const float biasVel = 0.8f * (penetration - SLOP) / std::max(params_.fixedTimestep, 1e-5f);
+    jnFriction = std::max(jnFriction, biasVel / kn);
+  }
+
+  // Coulomb friction: cancel as much tangential velocity as μ jn allows.
+  relVel = sidePointVel(sa) - sidePointVel(sb);
+  Vec3 vt = relVel - normal * relVel.dot(normal);
+  const float vtLen = vt.length();
+  const float mu = friction;
+  if (vtLen > 1e-8f && mu > 0.f && jnFriction > 0.f) {
+    const Vec3 t = vt / vtLen;
+    const float kt = sa.invMass + sb.invMass
+                   + sideAngularDenom(sa, t)
+                   + sideAngularDenom(sb, t);
+    if (kt > 1e-12f) {
+      float jt = -vtLen / kt;
+      const float maxJt = mu * jnFriction;
+      if (jt >  maxJt) jt =  maxJt;
+      if (jt < -maxJt) jt = -maxJt;
+      sideApplyImpulse(sa, t * jt);
+      sideApplyImpulse(sb, t * -jt);
+    }
+  }
+
+  // Rolling resistance: extra couple + matching linear impulse opposing
+  // residual spin / tangential COM velocity, scaled by the normal impulse.
+  const float rr = params_.rollingResistance;
+  const float jnResist = std::max(jn, jnFriction);
+  if (rr > 0.f && jnResist > 0.f) {
+    auto applyRolling = [&](ContactSide& s) {
+      if (!s.body || s.invInertia <= 0.f) return;
+      const Vec3 w = s.body->getAngularVelocity();
+      const Vec3 wTan = w - normal * w.dot(normal);
+      const float wLen = wTan.length();
+      const float rLen = s.r.length();
+      if (wLen > 1e-6f && rLen > 1e-6f) {
+        const float maxTau = rr * jnResist * rLen;
+        const float tau = std::min(maxTau, wLen / s.invInertia);
+        s.body->applyTorqueImpulse((wTan / wLen) * -tau);
+      }
+      const Vec3 v = s.body->getVelocity();
+      const Vec3 vTan = v - normal * v.dot(normal);
+      const float vLen = vTan.length();
+      if (vLen > 1e-6f && s.invMass > 0.f) {
+        const float linMag = std::min(rr * jnResist, vLen / s.invMass);
+        s.body->applyImpulse((vTan / vLen) * -linMag);
+      }
+    };
+    applyRolling(sa);
+    applyRolling(sb);
+  }
+
+  return jn;
+}
+
 void PhysicsWorld::resolveSphereVsSphere(RigidBody& a, RigidBody& b) {
   Vec3 delta = a.getPosition() - b.getPosition();
   float distSq = delta.lengthSq();
@@ -241,8 +391,9 @@ void PhysicsWorld::resolveSphereVsSphere(RigidBody& a, RigidBody& b) {
   Vec3  relVel    = a.getVelocity() - b.getVelocity();
   float velAlongN = relVel.dot(normal);
 
-  // Already separating
-  if (velAlongN > 0.f) return;
+  // Already separating (linear-only check is a cheap reject; the solver
+  // re-evaluates with ω × r).
+  if (velAlongN > 0.5f) return;
 
   float e    = std::min(a.getRestitution(), b.getRestitution());
   float invA = a.getInvMass();
@@ -250,18 +401,16 @@ void PhysicsWorld::resolveSphereVsSphere(RigidBody& a, RigidBody& b) {
   float denom = invA + invB;
   if (denom < 1e-12f) return;
 
-  float j       = -(1.f + e) * velAlongN / denom;
-  Vec3  impulse = normal * j;
-
-  a.applyImpulse( impulse);
-  b.applyImpulse(impulse * -1.f);
+  const Vec3 contactPoint = a.getPosition() - normal * a.getRadius();
+  const float mu = std::sqrt(std::max(a.getFriction(), 0.f) * std::max(b.getFriction(), 0.f));
+  const float penetration = minDist - dist;
+  float j = applyContactImpulse(a, &b, contactPoint, normal, e, mu, penetration);
 
   // Baumgarte position correction:
   //   SLOP    — allowable penetration depth before correction activates.
   //   CORRECT — fraction of remaining penetration resolved per substep (0–1).
   constexpr float SLOP    = 0.001f;
   constexpr float CORRECT = 0.4f;
-  float penetration = minDist - dist;
   if (penetration > SLOP) {
     float corr = (penetration - SLOP) * CORRECT / denom;
     if (a.getType() == BodyType::Dynamic)
@@ -290,13 +439,12 @@ void PhysicsWorld::resolveSphereVsPlane(RigidBody& body, const PlaneDesc& plane)
   // Reflect velocity component along plane normal
   Vec3  vel    = body.getVelocity();
   float velN   = vel.dot(plane.normal);
-  if (velN >= 0.f) return; // Moving away from or along the plane
+  if (velN >= 0.5f) return; // Clearly receding; skip cheap
 
-  float e       = body.getRestitution();
-  float invMass = body.getInvMass();
-  float j       = -(1.f + e) * velN;  // invMass of static plane = 0
-
-  body.applyImpulse(plane.normal * j);
+  float e = body.getRestitution();
+  const Vec3 contactPoint = body.getPosition() - plane.normal * body.getRadius();
+  const float mu = std::sqrt(std::max(body.getFriction(), 0.f) * std::max(plane.friction, 0.f));
+  float j = applyContactImpulse(body, nullptr, contactPoint, plane.normal, e, mu, penetration);
 
   // Baumgarte position correction:
   //   SLOP    — allowable penetration depth before correction activates.
@@ -357,11 +505,12 @@ void PhysicsWorld::resolveSphereVsBox(RigidBody& body, const BoxDesc& box, int b
 
   Vec3 vel = body.getVelocity();
   float velN = vel.dot(normal);
-  if (velN >= 0.f) return;
+  if (velN >= 0.5f) return;
 
   float e = std::min(body.getRestitution(), box.restitution);
-  float j = -(1.f + e) * velN;
-  body.applyImpulse(normal * j);
+  const Vec3 contactPoint = body.getPosition() - normal * radius;
+  const float mu = std::sqrt(std::max(body.getFriction(), 0.f) * std::max(box.friction, 0.f));
+  float j = applyContactImpulse(body, nullptr, contactPoint, normal, e, mu, penetration);
 
   constexpr float SLOP    = 0.001f;
   constexpr float CORRECT = 0.8f;
@@ -408,11 +557,12 @@ void PhysicsWorld::resolveSphereVsCapsule(RigidBody& body, const CapsuleDesc& ca
 
   Vec3 vel = body.getVelocity();
   float velN = vel.dot(normal);
-  if (velN >= 0.f) return;
+  if (velN >= 0.5f) return;
 
   float e = std::min(body.getRestitution(), cap.restitution);
-  float j = -(1.f + e) * velN;
-  body.applyImpulse(normal * j);
+  const Vec3 contactPoint = body.getPosition() - normal * body.getRadius();
+  const float mu = std::sqrt(std::max(body.getFriction(), 0.f) * std::max(cap.friction, 0.f));
+  float j = applyContactImpulse(body, nullptr, contactPoint, normal, e, mu, penetration);
 
   constexpr float SLOP    = 0.001f;
   constexpr float CORRECT = 0.8f;
@@ -452,27 +602,26 @@ void PhysicsWorld::resolveSphereVsCapsuleBody(RigidBody& sphere, RigidBody& caps
   // (e.g. a flipper proxy) imparts correct momentum onto the sphere.
   Vec3 relVel = sphere.getVelocity() - capsule.getVelocity();
   float velAlongN = relVel.dot(normal);
-  if (velAlongN >= 0.f) return;
+  if (velAlongN >= 0.5f) return;
 
   float e = std::min(sphere.getRestitution(), capsule.getRestitution());
   float invSphere = sphere.getInvMass();
   float invCapsule = capsule.getInvMass();
   float denom = invSphere + invCapsule;
-  if (denom < 1e-12f) return;
+  if (denom < 1e-12f && sphere.getType() != BodyType::Dynamic) return;
 
-  float j = -(1.f + e) * velAlongN / denom;
-  Vec3 impulse = normal * j;
-
-  sphere.applyImpulse(impulse);
-  capsule.applyImpulse(impulse * -1.f);
+  const Vec3 contactPoint = sphere.getPosition() - normal * sphere.getRadius();
+  const float mu = std::sqrt(std::max(sphere.getFriction(), 0.f) * std::max(capsule.getFriction(), 0.f));
+  float j = applyContactImpulse(sphere, &capsule, contactPoint, normal, e, mu, penetration);
 
   constexpr float SLOP    = 0.001f;
   constexpr float CORRECT = 0.8f;
   if (penetration > SLOP) {
+    const float posDenom = std::max(invSphere + invCapsule, 1e-12f);
     if (sphere.getType() == BodyType::Dynamic)
-      sphere.setPosition(sphere.getPosition() + normal * ((penetration - SLOP) * CORRECT * invSphere / denom));
+      sphere.setPosition(sphere.getPosition() + normal * ((penetration - SLOP) * CORRECT * invSphere / posDenom));
     if (capsule.getType() == BodyType::Dynamic)
-      capsule.setPosition(capsule.getPosition() - normal * ((penetration - SLOP) * CORRECT * invCapsule / denom));
+      capsule.setPosition(capsule.getPosition() - normal * ((penetration - SLOP) * CORRECT * invCapsule / posDenom));
   }
 
   ContactEvent evt;
