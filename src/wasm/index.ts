@@ -9,7 +9,16 @@
  */
 
 export { WasmPhysicsEngine, type WasmBodyDesc } from './PhysicsModule'
+export {
+  ContactPhase,
+  CONTACT_STRIDE,
+  decodeContactBuffer,
+  encodeContactBuffer,
+  contactStarted,
+  toWasmContactEvent,
+} from './contact-buffer'
 export type {
+  PhysicsContact,
   WasmContactEvent,
   WasmPhysicsModule,
   WasmPhysicsModuleFactory,

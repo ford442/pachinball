@@ -32,6 +32,7 @@
  */
 
 import type { WasmPhysicsModule, WasmPhysicsWorldInstance, WasmContactEvent } from './wasm-types'
+import { CONTACT_STRIDE, decodeContactBuffer, toWasmContactEvent } from './contact-buffer'
 import type { EventBus } from '../core/event-bus'
 import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
 
@@ -102,19 +103,6 @@ export class WasmPhysicsEngine {
         }
       }
       this.world  = new this.module.PhysicsWorld()
-
-      // Wire contact events → ContactListener → EventBus (if set)
-      this.world.setContactCallbackJS(
-        (id1, id2, nx, ny, nz, px, py, pz, impulse, isEntering) => {
-          this._handleContact({
-            bodyId1: id1, bodyId2: id2,
-            normal: { x: nx, y: ny, z: nz },
-            point:  { x: px, y: py, z: pz },
-            impulse, isEntering,
-          })
-        }
-      )
-
       this.isReady = true
     } catch (err) {
       console.warn(
@@ -305,7 +293,16 @@ export class WasmPhysicsEngine {
     if (!this.world) return 0
     const alpha = this.world.step(rawDt)
     this.stepCount_ = this.world.getStepCount()
+    this.drainContactBuffer()
     return alpha
+  }
+
+  getDroppedContactCount(): number {
+    return this.world?.getDroppedContactCount() ?? 0
+  }
+
+  setMaxContacts(max: number): void {
+    this.world?.setMaxContacts(max)
   }
 
   getStepCount(): number { return this.stepCount_ }
@@ -327,6 +324,37 @@ export class WasmPhysicsEngine {
   }
 
   // ---- Internal --------------------------------------------------------
+
+  private drainContactBuffer(): void {
+    if (!this.world || !this.module) return
+    const count = this.world.getContactCount()
+    if (count <= 0) return
+
+    const heap = this.getHeapF32()
+    if (!heap) return
+
+    const ptr = this.world.getContactBufferPtr()
+    if (ptr === 0) return
+
+    const start = ptr >> 2
+    const end = start + count * CONTACT_STRIDE
+    if (end > heap.length) return
+
+    const view = heap.subarray(start, end)
+    const contacts = decodeContactBuffer(view, count)
+    for (const contact of contacts) {
+      this._handleContact(toWasmContactEvent(contact))
+    }
+  }
+
+  private getHeapF32(): Float32Array | null {
+    if (!this.module) return null
+    if (this.module.HEAPF32) return this.module.HEAPF32
+    if (this.module.wasmMemory?.buffer) {
+      return new Float32Array(this.module.wasmMemory.buffer)
+    }
+    return null
+  }
 
   private _handleContact(evt: WasmContactEvent): void {
     if (!this.eventBus) return

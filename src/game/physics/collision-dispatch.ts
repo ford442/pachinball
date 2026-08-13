@@ -13,7 +13,7 @@ import type { Mesh } from '@babylonjs/core'
 
 import type { BumperVisual } from '../../game-elements/types'
 import type { LaneSensorDef } from '../../objects/object-lane-sensors'
-import type { WasmContactEvent } from '../../wasm'
+import { ContactPhase, contactStarted, type PhysicsContact, type WasmContactEvent } from '../../wasm'
 
 import type { PhysicsHost } from './types'
 import type { ScoringBridge } from './scoring-bridge'
@@ -222,12 +222,31 @@ export class CollisionDispatcher {
   }
 
   /**
+   * Unified contact entry for both engines. Rapier begin/end and WASM
+   * Enter/Stay/Exit all collapse here; scoring only runs on Enter.
+   */
+  processContact(contact: PhysicsContact): void {
+    if (!contactStarted(contact)) return
+    this.dispatchStartedPair(contact.bodyId1, contact.bodyId2)
+  }
+
+  /**
    * Entry point for Rapier collider-handle collision events. Mirrors the legacy
    * callback shape: collider-pair debounce, collider→body conversion, fixed-body
    * guard, then the body-pair debounce and obstacle dispatch.
    */
   processCollision(h1: number, h2: number, started: boolean): void {
-    if (!started) return
+    this.processContact({
+      bodyId1: h1,
+      bodyId2: h2,
+      normal: { x: 0, y: 0, z: 0 },
+      point: { x: 0, y: 0, z: 0 },
+      impulse: 0,
+      phase: started ? ContactPhase.Enter : ContactPhase.Exit,
+    })
+  }
+
+  private dispatchStartedPair(h1: number, h2: number): void {
     if (h1 === 0 || h2 === 0 || h1 === h2) return
 
     // First debounce in collider-handle space (the raw event index space).
@@ -261,8 +280,12 @@ export class CollisionDispatcher {
    * Handles contacts that originated in the WASM engine. The wrapper already emits
    * these on the EventBus as 'wasm:physics:contact'; we just map WASM IDs back to
    * the Rapier bodies that the rest of the game understands.
+   *
+   * Stay/Exit are ignored here — scoring and hit SFX are Enter-edge only, matching
+   * Rapier's `started` filter.
    */
   onWasmContact(evt: WasmContactEvent): void {
+    if (!contactStarted(evt)) return
     const bridge = this.getWasmBridge()
     if (!bridge) return
 

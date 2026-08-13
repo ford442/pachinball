@@ -152,8 +152,12 @@ float PhysicsWorld::step(float rawDt) {
     ++stepCount_;
   }
 
-  // Flush contact events once per step call
-  contactListener_.flushEvents();
+  // Classify Enter/Stay/Exit and pack the contact buffer once per step, but
+  // only if at least one substep ran — otherwise the manifold would spuriously
+  // emit Exit for every pair.
+  if (substepsDone > 0) {
+    contactListener_.flushEvents();
+  }
 
   // Interpolation alpha for visual smoothing
   return accumulator_ / params_.fixedTimestep;
@@ -421,12 +425,11 @@ void PhysicsWorld::resolveSphereVsSphere(RigidBody& a, RigidBody& b) {
 
   // ---- Emit contact event ----
   ContactEvent evt;
-  evt.bodyId1   = a.getId();
-  evt.bodyId2   = b.getId();
-  evt.normal    = normal;
-  evt.point     = a.getPosition() - normal * a.getRadius();
-  evt.impulse   = j;
-  evt.isEntering = true;
+  evt.bodyId1 = a.getId();
+  evt.bodyId2 = b.getId();
+  evt.normal  = normal;
+  evt.point   = a.getPosition() - normal * a.getRadius();
+  evt.impulse = j;
   contactListener_.pushContact(evt);
 }
 
@@ -458,12 +461,11 @@ void PhysicsWorld::resolveSphereVsPlane(RigidBody& body, const PlaneDesc& plane)
 
   // ---- Emit contact event ----
   ContactEvent evt;
-  evt.bodyId1   = body.getId();
-  evt.bodyId2   = STATIC_PLANE_ID; // static plane
-  evt.normal    = plane.normal;
-  evt.point     = body.getPosition() - plane.normal * body.getRadius();
-  evt.impulse   = j;
-  evt.isEntering = true;
+  evt.bodyId1 = body.getId();
+  evt.bodyId2 = STATIC_PLANE_ID; // static plane
+  evt.normal  = plane.normal;
+  evt.point   = body.getPosition() - plane.normal * body.getRadius();
+  evt.impulse = j;
   contactListener_.pushContact(evt);
 }
 
@@ -519,12 +521,11 @@ void PhysicsWorld::resolveSphereVsBox(RigidBody& body, const BoxDesc& box, int b
   }
 
   ContactEvent evt;
-  evt.bodyId1    = body.getId();
-  evt.bodyId2    = boxId;
-  evt.normal     = normal;
-  evt.point      = body.getPosition() - normal * radius;
-  evt.impulse    = j;
-  evt.isEntering = true;
+  evt.bodyId1 = body.getId();
+  evt.bodyId2 = boxId;
+  evt.normal  = normal;
+  evt.point   = body.getPosition() - normal * radius;
+  evt.impulse = j;
   contactListener_.pushContact(evt);
 }
 
@@ -571,12 +572,11 @@ void PhysicsWorld::resolveSphereVsCapsule(RigidBody& body, const CapsuleDesc& ca
   }
 
   ContactEvent evt;
-  evt.bodyId1    = body.getId();
-  evt.bodyId2    = capId;
-  evt.normal     = normal;
-  evt.point      = body.getPosition() - normal * body.getRadius();
-  evt.impulse    = j;
-  evt.isEntering = true;
+  evt.bodyId1 = body.getId();
+  evt.bodyId2 = capId;
+  evt.normal  = normal;
+  evt.point   = body.getPosition() - normal * body.getRadius();
+  evt.impulse = j;
   contactListener_.pushContact(evt);
 }
 
@@ -625,12 +625,11 @@ void PhysicsWorld::resolveSphereVsCapsuleBody(RigidBody& sphere, RigidBody& caps
   }
 
   ContactEvent evt;
-  evt.bodyId1    = sphere.getId();
-  evt.bodyId2    = capsule.getId();
-  evt.normal     = normal;
-  evt.point      = sphere.getPosition() - normal * sphere.getRadius();
-  evt.impulse    = j;
-  evt.isEntering = true;
+  evt.bodyId1 = sphere.getId();
+  evt.bodyId2 = capsule.getId();
+  evt.normal  = normal;
+  evt.point   = sphere.getPosition() - normal * sphere.getRadius();
+  evt.impulse = j;
   contactListener_.pushContact(evt);
 }
 

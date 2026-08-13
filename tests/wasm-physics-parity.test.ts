@@ -108,14 +108,17 @@ function makeWasmEngineStub() {
     }),
     getStepCount: vi.fn(() => 0),
     dispose: vi.fn(),
-    emitContact: (id1: number, id2: number) => {
+    emitContact: (id1: number, id2: number, phase = 0) => {
+      const started = phase === 0
       const evt: WasmContactEvent = {
         bodyId1: id1,
         bodyId2: id2,
         normal: { x: 0, y: 1, z: 0 },
         point: { x: 0, y: 0.5, z: 0 },
         impulse: 1,
-        isEntering: true,
+        phase,
+        started,
+        isEntering: started,
       }
       bus?.emit('wasm:physics:contact', evt)
     },
@@ -255,6 +258,23 @@ describe('WASM physics parity harness (unit layer)', () => {
     expect(host.score).toBeGreaterThan(0)
   })
 
+  it('does not rescore Stay or Exit WASM contacts (Rapier started-edge parity)', () => {
+    ballBody.setTranslation({ x: 0, y: 1, z: 0 }, true)
+    controller.stepPhysics(null, null)
+
+    const ballId = wasmEngine.createBody.mock.results.find(
+      (_r, i) => wasmEngine.createBody.mock.calls[i][0]?.bodyType === 0
+    )?.value as number
+    const bumperId = wasmEngine.createBody.mock.results.find(
+      (_r, i) => wasmEngine.createBody.mock.calls[i][0]?.bodyType === 1
+    )?.value as number
+
+    wasmEngine.emitContact(ballId, bumperId, 1) // Stay
+    wasmEngine.emitContact(ballId, bumperId, 2) // Exit
+    expect(controller.getAwardScoreCalls()).toBe(0)
+    expect(host.score).toBe(0)
+  })
+
   it('stays within deterministic sync divergence of zero', () => {
     // Step 60 times; the deterministic stub should always produce the same
     // trajectory, so the Rapier body pose written back should exactly match
@@ -304,5 +324,6 @@ describe.skipIf(!RUN_WASM_PARITY)('WASM physics parity harness (real-engine inte
     expect(stdout).toContain('PASS wasm ball-on-capsule')
     expect(stdout).toContain('PASS wasm ball+bumper drop')
     expect(stdout).toContain('PASS wasm spinning ball picks up tangential velocity')
+    expect(stdout).toContain('PASS wasm/rapier enter-exit ordering')
   })
 })

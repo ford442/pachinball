@@ -34,6 +34,8 @@ describe('Embind surface and type declaration consistency', () => {
       'getActiveBodyCount',
       'setGravity',
       'dispose',
+      'getDroppedContactCount',
+      'setMaxContacts',
     ]
 
     for (const method of requiredMethods) {
