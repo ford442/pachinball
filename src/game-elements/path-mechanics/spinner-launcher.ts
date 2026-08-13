@@ -1,7 +1,7 @@
 import { MeshBuilder, Vector3, Mesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../../materials'
-import { getSessionRng } from '../seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../seeded-rng'
 import type { SpinnerLauncherConfig } from './types'
 import { PathMechanic } from './base'
 
@@ -149,7 +149,7 @@ export class SpinnerLauncher extends PathMechanic {
     this.launchCooldown = 1.5
 
     // Launch in random direction with upward angle
-    const angle = getSessionRng().next() * Math.PI * 2
+    const angle = getSessionRngFork(RNG_FORK.FEEDER).next() * Math.PI * 2
     const launchDir = new Vector3(
       Math.cos(angle),
       0.8, // Upward component

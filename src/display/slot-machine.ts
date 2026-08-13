@@ -10,7 +10,7 @@
  */
 
 import { DisplayState } from '../game-elements/display-config'
-import { getSessionRng } from '../game-elements/seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../game-elements/seeded-rng'
 import { SLOT_MACHINE_CONFIG } from '../config'
 import type { EventBus } from '../core/event-bus'
 import { DisplayReelsLayer, type SpinOptions } from './display-reels'
@@ -142,7 +142,7 @@ export class SlotMachine {
     const score = currentScore ?? this.scoreProvider()
     const now = performance.now() / 1000
 
-    if (!shouldActivate(() => getSessionRng().next(), score, now, this.state, this.config)) {
+    if (!shouldActivate(() => getSessionRngFork(RNG_FORK.SLOT).next(), score, now, this.state, this.config)) {
       return false
     }
 
@@ -167,7 +167,7 @@ export class SlotMachine {
     recordActivation(this.state, performance.now() / 1000, currentScore)
 
     this.spinState = SlotSpinState.STARTING
-    this.spinPlan = generateSpin(() => getSessionRng().next(), this.config)
+    this.spinPlan = generateSpin(() => getSessionRngFork(RNG_FORK.SLOT).next(), this.config)
 
     if (this.debugForceResult) {
       this.spinPlan.targetSymbols = [...this.debugForceResult]

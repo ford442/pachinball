@@ -19,7 +19,7 @@ import {
 } from './ball-manager-context'
 import { COLLISION_GROUP_PRESETS } from './physics'
 import { getSoundSystem } from './sound-system'
-import { getSessionRng, type SeededRng } from '../core/seeded-rng'
+import { getSessionRngFork, RNG_FORK, type SeededRng } from '../core/seeded-rng'
 import { QualityTier, color, emissive, INTENSITY, PALETTE } from './visual-language'
 
 export function createMainBall(host: BallManagerHost): RAPIER.RigidBody {
@@ -137,7 +137,7 @@ export function spawnExtraBalls(host: BallManagerHost, count: number, position?:
   const spawn = position ? { x: position.x, y: position.y, z: position.z } : GameConfig.ball.spawnPachinko
   const density = getDensityForMass(GameConfig.ball.mass, GameConfig.ball.radius)
   const physics = getTunedBallPhysics()
-  const rng = getSessionRng()
+  const rng = getSessionRngFork(RNG_FORK.SPAWN)
 
   for (let i = 0; i < count; i++) {
     const b = MeshBuilder.CreateSphere('xb', { diameter: GameConfig.ball.radius * 2, segments: 32 }, host.scene) as Mesh
@@ -546,7 +546,7 @@ export function createBallOfType(host: BallManagerHost, type: BallType, position
 /**
  * Select a ball type using weighted tiers from a single [0, 1) draw.
  */
-export function selectWeightedBallType(rng: SeededRng = getSessionRng()): BallType {
+export function selectWeightedBallType(rng: SeededRng = getSessionRngFork(RNG_FORK.SPAWN)): BallType {
   const rand = rng.next()
   let cumulative = 0
 

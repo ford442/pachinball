@@ -9,7 +9,7 @@ import {
 } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
-import { getSessionRng } from './seeded-rng'
+import { getSessionRngFork, RNG_FORK } from './seeded-rng'
 
 export enum QuantumTunnelState {
   IDLE = 0,
@@ -268,7 +268,7 @@ export class QuantumTunnelFeeder {
     const impulse = new Vector3(this.config.ejectImpulse, 0, 0)
 
     // Add some variance z?
-    impulse.z += (getSessionRng().next() - 0.5) * this.config.ejectImpulseVarianceZ
+    impulse.z += (getSessionRngFork(RNG_FORK.FEEDER).next() - 0.5) * this.config.ejectImpulseVarianceZ
 
     this.capturedBall.applyImpulse(impulse, true)
 

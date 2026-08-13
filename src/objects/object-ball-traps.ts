@@ -9,7 +9,7 @@ import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elemen
 import type { EventBus } from '../core/event-bus'
 import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
-import { getSessionRng } from '../game-elements/seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../game-elements/seeded-rng'
 
 export interface BallTrapState {
   mesh: Mesh
@@ -294,10 +294,11 @@ export class BallTrapBuilder {
   releaseBallWithBoost(state: BallTrapState, ball: RAPIER.RigidBody): void {
     state.hitTime = 0.2
     const boostForce = getPhysicsTuningValue('trapReleaseBoost')
+    const rng = getSessionRngFork(RNG_FORK.TRAP)
     const boostVelocity = new this.rapier.Vector3(
-      (getSessionRng().next() - 0.5) * boostForce,
+      (rng.next() - 0.5) * boostForce,
       boostForce * 0.8,
-      (getSessionRng().next() - 0.5) * boostForce * 0.5
+      (rng.next() - 0.5) * boostForce * 0.5
     )
 
     ball.setLinvel(boostVelocity, true)

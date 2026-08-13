@@ -9,7 +9,7 @@ import type { Mesh } from '@babylonjs/core'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { BallType, GameConfig } from '../config'
 import { pulse } from './visual-language'
-import { getSessionRng } from './seeded-rng'
+import { getSessionRngFork, RNG_FORK } from './seeded-rng'
 import { getDensityForMass, type BallManagerHost } from './ball-manager-context'
 
 /**
@@ -189,7 +189,7 @@ export function spawnSmallGoldBallSwarm(host: BallManagerHost, position?: Vector
   const smallMass = GameConfig.ball.mass * cfg.massMultiplier
 
   const swarmCount = Math.min(cfg.swarmSize, cfg.maxConcurrentBalls - smallGoldCount)
-  const rng = getSessionRng()
+  const rng = getSessionRngFork(RNG_FORK.GOLD_SWARM)
   for (let i = 0; i < swarmCount; i++) {
     // Create small gold mesh
     const goldBall = MeshBuilder.CreateSphere(`smallGoldBall_${baseType}_${i}`, {

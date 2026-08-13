@@ -13,7 +13,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { BallType, BALL_TIERS, GAME_TUNING, GameConfig } from '../src/config'
-import { createSeededRng, getSessionRng } from '../src/core/seeded-rng'
+import * as seededRng from '../src/core/seeded-rng'
+import { createSeededRng } from '../src/core/seeded-rng'
 import { selectWeightedBallType } from '../src/game-elements/ball-manager-spawn'
 
 // ---------------------------------------------------------------------------
@@ -636,8 +637,15 @@ describe('BallManager', () => {
 
       // Force selection of GOLD_PLATED (cumulative weight just above STANDARD's 0.75)
       const targetWeight = BALL_TIERS[BallType.STANDARD].spawnWeight + 0.01
-      const rngSpy = vi.spyOn(getSessionRng(), 'next').mockReturnValue(targetWeight)
-      const mathSpy = vi.spyOn(Math, 'random').mockReturnValue(targetWeight)
+      const forkSpy = vi.spyOn(seededRng, 'getSessionRngFork').mockReturnValue({
+        next: () => targetWeight,
+        int: () => 0,
+        pick: <T>(arr: readonly T[]) => arr[0]!,
+        fork: () => createSeededRng(0),
+        nextInt: () => 0,
+        shuffle: <T>(arr: readonly T[]) => [...arr],
+        state: () => 0,
+      })
 
       const body = manager.spawnRandomBall()
 
@@ -648,8 +656,7 @@ describe('BallManager', () => {
       expect(swarmBodies).toContain(body)
       expect(swarmBodies.length).toBe(GameConfig.smallGoldBalls.swarmSize)
 
-      rngSpy.mockRestore()
-      mathSpy.mockRestore()
+      forkSpy.mockRestore()
     })
 
     it('awards a quick-collect bonus when all swarm members are collected within the window', () => {
