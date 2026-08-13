@@ -1,66 +1,115 @@
 #include "PhysicsWorld.h"
 #include <cmath>
 #include <algorithm>
+#include <cstdlib>
 
 namespace pachinball {
 
-// Minimum squared distance between sphere centres before we skip collision
-// detection (prevents division by near-zero when bodies are exactly coincident).
 static constexpr float CONTACT_EPSILON_SQ = 1e-10f;
-
-// ---- Constructor --------------------------------------------------------
 
 PhysicsWorld::PhysicsWorld(const WorldParams& params)
     : params_(params) {}
 
-// ---- Body management ----------------------------------------------------
-
-int PhysicsWorld::createRigidBody(const RigidBodyDesc& desc) {
-  int id = nextId_++;
-  bodies_.push_back(std::make_unique<RigidBody>(id, desc));
-  return id;
+PhysicsWorld::~PhysicsWorld() {
+  freeTransformBuffer();
 }
 
-void PhysicsWorld::removeRigidBody(int id) {
-  for (auto it = bodies_.begin(); it != bodies_.end(); ++it) {
-    if ((*it)->getId() == id) {
-      bodies_.erase(it);
-      return;
-    }
+void PhysicsWorld::freeTransformBuffer() {
+  if (transformBuffer_) {
+    std::free(transformBuffer_);
+    transformBuffer_ = nullptr;
+    transformCapSlots_ = 0;
   }
 }
 
+void PhysicsWorld::ensureTransformCapacity(int slotCount) {
+  if (slotCount <= static_cast<int>(transformCapSlots_)) return;
+  std::size_t bytes = static_cast<std::size_t>(slotCount) *
+                      static_cast<std::size_t>(TRANSFORM_STRIDE) * sizeof(float);
+  bytes = (bytes + 15u) & ~std::size_t(15);
+  void* p = std::aligned_alloc(16, bytes);
+  if (!p) std::abort();
+  if (transformBuffer_) std::free(transformBuffer_);
+  transformBuffer_ = static_cast<float*>(p);
+  transformCapSlots_ = bytes / (sizeof(float) * static_cast<std::size_t>(TRANSFORM_STRIDE));
+}
+
+void PhysicsWorld::scatterTransforms() {
+  const int slots = handles_.nextId();
+  if (slots <= 0) return;
+  ensureTransformCapacity(slots);
+  const std::size_t floats = static_cast<std::size_t>(slots) * static_cast<std::size_t>(TRANSFORM_STRIDE);
+  std::memset(transformBuffer_, 0, floats * sizeof(float));
+
+  for (int i = 0; i < bodies_.denseCount(); ++i) {
+    const int publicId = bodies_.publicIdAt(i);
+    float* slot = transformBuffer_ + static_cast<std::size_t>(publicId) * TRANSFORM_STRIDE;
+    slot[0]  = static_cast<float>(publicId);
+    slot[1]  = bodies_.posX(i);
+    slot[2]  = bodies_.posY(i);
+    slot[3]  = bodies_.posZ(i);
+    slot[4]  = bodies_.view(i).getRotation().x;
+    slot[5]  = bodies_.view(i).getRotation().y;
+    slot[6]  = bodies_.view(i).getRotation().z;
+    slot[7]  = bodies_.view(i).getRotation().w;
+    slot[8]  = bodies_.velX(i);
+    slot[9]  = bodies_.velY(i);
+    slot[10] = bodies_.velZ(i);
+    const Vec3 w = bodies_.view(i).getAngularVelocity();
+    slot[11] = w.x;
+    slot[12] = w.y;
+    slot[13] = w.z;
+    slot[14] = bodies_.isActive(i) ? 1.f : 0.f;
+  }
+}
+
+int PhysicsWorld::createRigidBody(const RigidBodyDesc& desc) {
+  return bodies_.create(handles_, desc);
+}
+
+void PhysicsWorld::removeRigidBody(int id) {
+  bodies_.remove(handles_, id);
+}
+
+BodyView PhysicsWorld::findViewMut(int id) {
+  return bodies_.viewById(handles_, id);
+}
+
+BodyView PhysicsWorld::findView(int id) const {
+  const int dense = handles_.findDenseIndex(id);
+  if (dense < 0) return {};
+  return const_cast<BodyStore&>(bodies_).view(dense);
+}
+
 void PhysicsWorld::applyForce(int id, float fx, float fy, float fz) {
-  RigidBody* b = findBody(id);
-  if (b) b->applyForce({fx, fy, fz});
+  BodyView b = findViewMut(id);
+  if (b.valid()) b.applyForce({fx, fy, fz});
 }
 
 void PhysicsWorld::applyImpulse(int id, float ix, float iy, float iz) {
-  RigidBody* b = findBody(id);
-  if (b) b->applyImpulse({ix, iy, iz});
+  BodyView b = findViewMut(id);
+  if (b.valid()) b.applyImpulse({ix, iy, iz});
 }
 
 void PhysicsWorld::setVelocity(int id, float vx, float vy, float vz) {
-  RigidBody* b = findBody(id);
-  if (b) b->setVelocity({vx, vy, vz});
+  BodyView b = findViewMut(id);
+  if (b.valid()) b.setVelocity({vx, vy, vz});
 }
 
 void PhysicsWorld::setAngularVelocity(int id, float wx, float wy, float wz) {
-  RigidBody* b = findBody(id);
-  if (b) b->setAngularVelocity({wx, wy, wz});
+  BodyView b = findViewMut(id);
+  if (b.valid()) b.setAngularVelocity({wx, wy, wz});
 }
 
 void PhysicsWorld::setBodyPosition(int id, float px, float py, float pz) {
-  RigidBody* b = findBody(id);
-  if (b) b->setPosition({px, py, pz});
+  BodyView b = findViewMut(id);
+  if (b.valid()) b.setPosition({px, py, pz});
 }
 
 void PhysicsWorld::setBodyRotation(int id, float qx, float qy, float qz, float qw) {
-  RigidBody* b = findBody(id);
-  if (b) b->setRotation({qx, qy, qz, qw});
+  BodyView b = findViewMut(id);
+  if (b.valid()) b.setRotation({qx, qy, qz, qw});
 }
-
-// ---- Static geometry ----------------------------------------------------
 
 void PhysicsWorld::addStaticPlane(float nx, float ny, float nz, float distance, float friction) {
   planes_.push_back({{nx, ny, nz}, distance, friction});
@@ -70,74 +119,61 @@ int PhysicsWorld::addStaticBox(float px, float py, float pz,
                                float hx, float hy, float hz,
                                float qx, float qy, float qz, float qw,
                                float restitution, float friction) {
-  boxes_.push_back({
-    {px, py, pz},
-    {hx, hy, hz},
-    {qx, qy, qz, qw},
-    restitution,
-    friction
-  });
-  return STATIC_BOX_ID_BASE - static_cast<int>(boxes_.size()) + 1;
+  BoxDesc box{{px, py, pz}, {hx, hy, hz}, {qx, qy, qz, qw}, restitution, friction};
+  boxes_.push_back(box);
+  const int idx = static_cast<int>(boxes_.size()) - 1;
+  broadphase_.insertStaticBox(idx, box);
+  return STATIC_BOX_ID_BASE - idx;
 }
 
 int PhysicsWorld::addStaticCapsule(float px, float py, float pz,
                                    float radius, float halfHeight,
                                    float qx, float qy, float qz, float qw,
                                    float restitution, float friction) {
-  capsules_.push_back({
-    {px, py, pz},
-    radius,
-    halfHeight,
-    {qx, qy, qz, qw},
-    restitution,
-    friction
-  });
-  return STATIC_CAPSULE_ID_BASE - static_cast<int>(capsules_.size()) + 1;
+  CapsuleDesc cap{{px, py, pz}, radius, halfHeight, {qx, qy, qz, qw}, restitution, friction};
+  capsules_.push_back(cap);
+  const int idx = static_cast<int>(capsules_.size()) - 1;
+  broadphase_.insertStaticCapsule(idx, cap);
+  return STATIC_CAPSULE_ID_BASE - idx;
 }
 
-// ---- Transform queries --------------------------------------------------
-
 void PhysicsWorld::getPosition(int id, float* px, float* py, float* pz) const {
-  const RigidBody* b = findBody(id);
-  if (b) {
-    *px = b->getPosition().x;
-    *py = b->getPosition().y;
-    *pz = b->getPosition().z;
-  }
+  const int dense = handles_.findDenseIndex(id);
+  if (dense < 0) return;
+  if (px) *px = bodies_.posX(dense);
+  if (py) *py = bodies_.posY(dense);
+  if (pz) *pz = bodies_.posZ(dense);
 }
 
 void PhysicsWorld::getVelocity(int id, float* vx, float* vy, float* vz) const {
-  const RigidBody* b = findBody(id);
-  if (b) {
-    *vx = b->getVelocity().x;
-    *vy = b->getVelocity().y;
-    *vz = b->getVelocity().z;
-  }
+  BodyView b = findView(id);
+  if (!b.valid()) return;
+  const Vec3 v = b.getVelocity();
+  if (vx) *vx = v.x;
+  if (vy) *vy = v.y;
+  if (vz) *vz = v.z;
 }
 
 void PhysicsWorld::getAngularVelocity(int id, float* wx, float* wy, float* wz) const {
-  const RigidBody* b = findBody(id);
-  if (b) {
-    *wx = b->getAngularVelocity().x;
-    *wy = b->getAngularVelocity().y;
-    *wz = b->getAngularVelocity().z;
-  }
+  BodyView b = findView(id);
+  if (!b.valid()) return;
+  const Vec3 w = b.getAngularVelocity();
+  if (wx) *wx = w.x;
+  if (wy) *wy = w.y;
+  if (wz) *wz = w.z;
 }
 
 void PhysicsWorld::getRotation(int id, float* qx, float* qy, float* qz, float* qw) const {
-  const RigidBody* b = findBody(id);
-  if (b) {
-    *qx = b->getRotation().x;
-    *qy = b->getRotation().y;
-    *qz = b->getRotation().z;
-    *qw = b->getRotation().w;
-  }
+  BodyView b = findView(id);
+  if (!b.valid()) return;
+  const Quat q = b.getRotation();
+  if (qx) *qx = q.x;
+  if (qy) *qy = q.y;
+  if (qz) *qz = q.z;
+  if (qw) *qw = q.w;
 }
 
-// ---- Simulation step ----------------------------------------------------
-
 float PhysicsWorld::step(float rawDt) {
-  // Cap dt to avoid explosions during lag spikes
   constexpr float MAX_DT = 1.f / 30.f;
   float dt = (rawDt < MAX_DT) ? rawDt : MAX_DT;
 
@@ -145,126 +181,96 @@ float PhysicsWorld::step(float rawDt) {
 
   int substepsDone = 0;
   while (accumulator_ >= params_.fixedTimestep &&
-         substepsDone < (int)params_.maxSubsteps) {
+         substepsDone < static_cast<int>(params_.maxSubsteps)) {
     substep(params_.fixedTimestep);
     accumulator_ -= params_.fixedTimestep;
     ++substepsDone;
     ++stepCount_;
   }
 
-  // Classify Enter/Stay/Exit and pack the contact buffer once per step, but
-  // only if at least one substep ran — otherwise the manifold would spuriously
-  // emit Exit for every pair.
   if (substepsDone > 0) {
     contactListener_.flushEvents();
+    scatterTransforms();
   }
 
-  // Interpolation alpha for visual smoothing
   return accumulator_ / params_.fixedTimestep;
 }
 
 int PhysicsWorld::getActiveBodyCount() const {
-  int count = 0;
-  for (const auto& b : bodies_) {
-    if (b->isActive()) ++count;
-  }
-  return count;
+  return bodies_.activeCount();
 }
 
-// ---- Private helpers ----------------------------------------------------
-
-RigidBody* PhysicsWorld::findBody(int id) {
-  for (auto& b : bodies_) {
-    if (b->getId() == id) return b.get();
-  }
-  return nullptr;
-}
-
-const RigidBody* PhysicsWorld::findBody(int id) const {
-  for (const auto& b : bodies_) {
-    if (b->getId() == id) return b.get();
-  }
-  return nullptr;
+void PhysicsWorld::wakeOnContact(BodyView& a, BodyView* b) {
+  auto wakesSleepers = [](BodyView* partner) -> bool {
+    if (!partner || !partner->valid() || !partner->isActive()) return false;
+    const BodyType t = partner->getType();
+    return t == BodyType::Dynamic || t == BodyType::Kinematic;
+  };
+  if (!a.isActive() && wakesSleepers(b)) a.wake();
+  if (b && b->valid() && !b->isActive() && wakesSleepers(&a)) b->wake();
 }
 
 void PhysicsWorld::substep(float dt) {
-  // 1. Integrate forces → update velocities + positions
-  for (auto& b : bodies_) {
-    b->integrate(dt, params_.gravity);
-  }
+  bodies_.integrateAll(dt, params_.gravity);
 
-  // 2. Collision detection & response (sequential impulse, single pass)
+  bodies_.updateSleep(params_.sleepLinearThreshold,
+                      params_.sleepAngularThreshold,
+                      params_.sleepFramesRequired);
+
+  broadphase_.buildPairs(bodies_, pairs_);
+
   for (int iter = 0; iter < params_.solverIterations; ++iter) {
-    // Dynamic vs Dynamic
-    for (std::size_t i = 0; i < bodies_.size(); ++i) {
-      for (std::size_t j = i + 1; j < bodies_.size(); ++j) {
-        RigidBody& a = *bodies_[i];
-        RigidBody& b = *bodies_[j];
+    for (const auto& pair : pairs_) {
+      if (pair.type == BroadphaseGrid::Pair::BodyBody) {
+        BodyView a = bodies_.view(pair.bodyA);
+        BodyView b = bodies_.view(pair.bodyB);
         if (!a.isActive() || !b.isActive()) continue;
         if (a.getType() == BodyType::Static && b.getType() == BodyType::Static) continue;
 
         const bool aCapsule = a.getShape() == Shape::Capsule;
         const bool bCapsule = b.getShape() == Shape::Capsule;
-        if (aCapsule && bCapsule) {
-          // Capsule-vs-capsule (e.g. two flipper proxies) is not needed for any
-          // current gameplay scenario — explicit non-goal for Phase 2c-A.
-          continue;
-        } else if (aCapsule) {
+        if (aCapsule && bCapsule) continue;
+        if (aCapsule) {
           resolveSphereVsCapsuleBody(b, a);
         } else if (bCapsule) {
           resolveSphereVsCapsuleBody(a, b);
         } else {
           resolveSphereVsSphere(a, b);
         }
+      } else if (pair.type == BroadphaseGrid::Pair::BodyBox) {
+        BodyView body = bodies_.view(pair.bodyA);
+        if (!body.isActive() || body.getType() == BodyType::Static) continue;
+        const int boxId = STATIC_BOX_ID_BASE - pair.bodyB;
+        resolveSphereVsBox(body, boxes_[static_cast<std::size_t>(pair.bodyB)], boxId);
+      } else if (pair.type == BroadphaseGrid::Pair::BodyCapsule) {
+        BodyView body = bodies_.view(pair.bodyA);
+        if (!body.isActive() || body.getType() == BodyType::Static) continue;
+        const int capId = STATIC_CAPSULE_ID_BASE - pair.bodyB;
+        resolveSphereVsCapsule(body, capsules_[static_cast<std::size_t>(pair.bodyB)], capId);
       }
     }
 
-    // Dynamic vs Static planes
-    for (auto& body : bodies_) {
-      if (!body->isActive() || body->getType() == BodyType::Static) continue;
+    for (int i = 0; i < bodies_.denseCount(); ++i) {
+      BodyView body = bodies_.view(i);
+      if (!body.isActive() || body.getType() == BodyType::Static) continue;
       for (const auto& plane : planes_) {
-        resolveSphereVsPlane(*body, plane);
-      }
-    }
-
-    // Dynamic vs Static boxes
-    for (std::size_t bi = 0; bi < boxes_.size(); ++bi) {
-      const int boxId = STATIC_BOX_ID_BASE - static_cast<int>(bi);
-      for (auto& body : bodies_) {
-        if (!body->isActive() || body->getType() == BodyType::Static) continue;
-        resolveSphereVsBox(*body, boxes_[bi], boxId);
-      }
-    }
-
-    // Dynamic vs Static capsules
-    for (std::size_t ci = 0; ci < capsules_.size(); ++ci) {
-      const int capId = STATIC_CAPSULE_ID_BASE - static_cast<int>(ci);
-      for (auto& body : bodies_) {
-        if (!body->isActive() || body->getType() == BodyType::Static) continue;
-        resolveSphereVsCapsule(*body, capsules_[ci], capId);
+        resolveSphereVsPlane(body, plane);
       }
     }
   }
 }
 
-// ---- Contact solver -----------------------------------------------------
-//
-// Friction combine: geometric mean μ = sqrt(μ_a * μ_b).
-// Restitution combine: min(e_a, e_b) (handled by callers).
-// Contact-point velocity includes ω × r so a spinning sphere (or a kinematic
-// flipper proxy with angular velocity) participates in the tangential term.
-
 namespace {
 
 struct ContactSide {
-  RigidBody* body = nullptr;
+  BodyView* body = nullptr;
   Vec3 r = Vec3::zero();
   float invMass = 0.f;
   float invInertia = 0.f;
 };
 
 Vec3 sidePointVel(const ContactSide& s) {
-  if (!s.body) return Vec3::zero();
+  if (!s.body || !s.body->valid()) return Vec3::zero();
   return s.body->getVelocity() + s.body->getAngularVelocity().cross(s.r);
 }
 
@@ -274,13 +280,13 @@ float sideAngularDenom(const ContactSide& s, const Vec3& dir) {
 }
 
 void sideApplyImpulse(ContactSide& s, const Vec3& impulse) {
-  if (!s.body) return;
+  if (!s.body || !s.body->valid()) return;
   s.body->applyImpulseAt(impulse, s.body->getPosition() + s.r);
 }
 
-ContactSide makeSide(RigidBody* body, const Vec3& contactPoint) {
+ContactSide makeSide(BodyView* body, const Vec3& contactPoint) {
   ContactSide s;
-  if (!body) return s;
+  if (!body || !body->valid()) return s;
   s.body = body;
   s.r = contactPoint - body->getPosition();
   s.invMass = body->getInvMass();
@@ -290,19 +296,19 @@ ContactSide makeSide(RigidBody* body, const Vec3& contactPoint) {
 
 } // namespace
 
-float PhysicsWorld::applyContactImpulse(RigidBody& a, RigidBody* b,
+float PhysicsWorld::applyContactImpulse(BodyView& a, BodyView* b,
                                         const Vec3& contactPoint, const Vec3& normal,
                                         float restitution, float friction,
                                         float penetration) {
+  wakeOnContact(a, b);
+
   ContactSide sa = makeSide(&a, contactPoint);
   ContactSide sb = makeSide(b, contactPoint);
 
   Vec3 relVel = sidePointVel(sa) - sidePointVel(sb);
   float vn = relVel.dot(normal);
-  // Clearly receding and not overlapping — nothing to do.
   if (vn > 0.f && penetration <= 0.f) return 0.f;
 
-  // Bounce only above a speed threshold so resting contacts settle.
   constexpr float RESTITUTION_THRESHOLD = 1.0f;
   const float e = (vn > -RESTITUTION_THRESHOLD) ? 0.f : restitution;
 
@@ -320,9 +326,6 @@ float PhysicsWorld::applyContactImpulse(RigidBody& a, RigidBody* b,
   sideApplyImpulse(sa, normal * jn);
   sideApplyImpulse(sb, normal * -jn);
 
-  // Overlapping contacts with little/no approach (kinematic sweepers, resting
-  // overlap) still need a non-empty Coulomb cone. Bias from overlap / dt so a
-  // 2 cm interpenetration yields ~O(1) impulse at 60 Hz.
   float jnFriction = jn;
   constexpr float SLOP = 0.001f;
   if (penetration > SLOP) {
@@ -330,7 +333,6 @@ float PhysicsWorld::applyContactImpulse(RigidBody& a, RigidBody* b,
     jnFriction = std::max(jnFriction, biasVel / kn);
   }
 
-  // Coulomb friction: cancel as much tangential velocity as μ jn allows.
   relVel = sidePointVel(sa) - sidePointVel(sb);
   Vec3 vt = relVel - normal * relVel.dot(normal);
   const float vtLen = vt.length();
@@ -350,13 +352,11 @@ float PhysicsWorld::applyContactImpulse(RigidBody& a, RigidBody* b,
     }
   }
 
-  // Rolling resistance: extra couple + matching linear impulse opposing
-  // residual spin / tangential COM velocity, scaled by the normal impulse.
   const float rr = params_.rollingResistance;
   const float jnResist = std::max(jn, jnFriction);
   if (rr > 0.f && jnResist > 0.f) {
     auto applyRolling = [&](ContactSide& s) {
-      if (!s.body || s.invInertia <= 0.f) return;
+      if (!s.body || !s.body->valid() || s.invInertia <= 0.f) return;
       const Vec3 w = s.body->getAngularVelocity();
       const Vec3 wTan = w - normal * w.dot(normal);
       const float wLen = wTan.length();
@@ -381,7 +381,7 @@ float PhysicsWorld::applyContactImpulse(RigidBody& a, RigidBody* b,
   return jn;
 }
 
-void PhysicsWorld::resolveSphereVsSphere(RigidBody& a, RigidBody& b) {
+void PhysicsWorld::resolveSphereVsSphere(BodyView& a, BodyView& b) {
   Vec3 delta = a.getPosition() - b.getPosition();
   float distSq = delta.lengthSq();
   float minDist = a.getRadius() + b.getRadius();
@@ -389,14 +389,10 @@ void PhysicsWorld::resolveSphereVsSphere(RigidBody& a, RigidBody& b) {
   if (distSq >= minDist * minDist || distSq < CONTACT_EPSILON_SQ) return;
 
   float dist   = std::sqrt(distSq);
-  Vec3  normal = delta / dist;  // from b to a
+  Vec3  normal = delta / dist;
 
-  // ---- Relative velocity along the contact normal ----
   Vec3  relVel    = a.getVelocity() - b.getVelocity();
   float velAlongN = relVel.dot(normal);
-
-  // Already separating (linear-only check is a cheap reject; the solver
-  // re-evaluates with ω × r).
   if (velAlongN > 0.5f) return;
 
   float e    = std::min(a.getRestitution(), b.getRestitution());
@@ -410,9 +406,6 @@ void PhysicsWorld::resolveSphereVsSphere(RigidBody& a, RigidBody& b) {
   const float penetration = minDist - dist;
   float j = applyContactImpulse(a, &b, contactPoint, normal, e, mu, penetration);
 
-  // Baumgarte position correction:
-  //   SLOP    — allowable penetration depth before correction activates.
-  //   CORRECT — fraction of remaining penetration resolved per substep (0–1).
   constexpr float SLOP    = 0.001f;
   constexpr float CORRECT = 0.4f;
   if (penetration > SLOP) {
@@ -423,7 +416,6 @@ void PhysicsWorld::resolveSphereVsSphere(RigidBody& a, RigidBody& b) {
       b.setPosition(b.getPosition() - normal * (corr * invB));
   }
 
-  // ---- Emit contact event ----
   ContactEvent evt;
   evt.bodyId1 = a.getId();
   evt.bodyId2 = b.getId();
@@ -433,25 +425,20 @@ void PhysicsWorld::resolveSphereVsSphere(RigidBody& a, RigidBody& b) {
   contactListener_.pushContact(evt);
 }
 
-void PhysicsWorld::resolveSphereVsPlane(RigidBody& body, const PlaneDesc& plane) {
-  // Signed distance from sphere centre to plane
+void PhysicsWorld::resolveSphereVsPlane(BodyView& body, const PlaneDesc& plane) {
   float dist = body.getPosition().dot(plane.normal) - plane.distance;
   float penetration = body.getRadius() - dist;
   if (penetration <= 0.f) return;
 
-  // Reflect velocity component along plane normal
   Vec3  vel    = body.getVelocity();
   float velN   = vel.dot(plane.normal);
-  if (velN >= 0.5f) return; // Clearly receding; skip cheap
+  if (velN >= 0.5f) return;
 
   float e = body.getRestitution();
   const Vec3 contactPoint = body.getPosition() - plane.normal * body.getRadius();
   const float mu = std::sqrt(std::max(body.getFriction(), 0.f) * std::max(plane.friction, 0.f));
   float j = applyContactImpulse(body, nullptr, contactPoint, plane.normal, e, mu, penetration);
 
-  // Baumgarte position correction:
-  //   SLOP    — allowable penetration depth before correction activates.
-  //   CORRECT — fraction of remaining penetration resolved per substep (0–1).
   constexpr float SLOP    = 0.001f;
   constexpr float CORRECT = 0.8f;
   if (penetration > SLOP && body.getType() == BodyType::Dynamic) {
@@ -459,17 +446,16 @@ void PhysicsWorld::resolveSphereVsPlane(RigidBody& body, const PlaneDesc& plane)
         body.getPosition() + plane.normal * ((penetration - SLOP) * CORRECT));
   }
 
-  // ---- Emit contact event ----
   ContactEvent evt;
   evt.bodyId1 = body.getId();
-  evt.bodyId2 = STATIC_PLANE_ID; // static plane
+  evt.bodyId2 = STATIC_PLANE_ID;
   evt.normal  = plane.normal;
   evt.point   = body.getPosition() - plane.normal * body.getRadius();
   evt.impulse = j;
   contactListener_.pushContact(evt);
 }
 
-void PhysicsWorld::resolveSphereVsBox(RigidBody& body, const BoxDesc& box, int boxId) {
+void PhysicsWorld::resolveSphereVsBox(BodyView& body, const BoxDesc& box, int boxId) {
   const Quat invRot = box.rotation.conjugate();
   const Vec3 localCenter = invRot.rotate(body.getPosition() - box.center);
 
@@ -488,7 +474,6 @@ void PhysicsWorld::resolveSphereVsBox(RigidBody& body, const BoxDesc& box, int b
   Vec3 normal;
   float penetration;
   if (distSq < CONTACT_EPSILON_SQ) {
-    // Sphere centre is inside the box — push out along the shallowest axis.
     const float dx = box.halfExtents.x - std::fabs(localCenter.x);
     const float dy = box.halfExtents.y - std::fabs(localCenter.y);
     const float dz = box.halfExtents.z - std::fabs(localCenter.z);
@@ -539,7 +524,7 @@ Vec3 PhysicsWorld::closestPointOnSegment(const Vec3& p, const Vec3& segA, const 
   return segA + ab * t;
 }
 
-void PhysicsWorld::resolveSphereVsCapsule(RigidBody& body, const CapsuleDesc& cap, int capId) {
+void PhysicsWorld::resolveSphereVsCapsule(BodyView& body, const CapsuleDesc& cap, int capId) {
   const Vec3 axisHalf = cap.rotation.rotate(Vec3{0.f, cap.halfHeight, 0.f});
   const Vec3 segA = cap.center - axisHalf;
   const Vec3 segB = cap.center + axisHalf;
@@ -580,7 +565,7 @@ void PhysicsWorld::resolveSphereVsCapsule(RigidBody& body, const CapsuleDesc& ca
   contactListener_.pushContact(evt);
 }
 
-void PhysicsWorld::resolveSphereVsCapsuleBody(RigidBody& sphere, RigidBody& capsule) {
+void PhysicsWorld::resolveSphereVsCapsuleBody(BodyView& sphere, BodyView& capsule) {
   const Vec3 axisHalf = capsule.getRotation().rotate(Vec3{0.f, capsule.getCapsuleHalfHeight(), 0.f});
   const Vec3 segA = capsule.getPosition() - axisHalf;
   const Vec3 segB = capsule.getPosition() + axisHalf;
@@ -597,9 +582,6 @@ void PhysicsWorld::resolveSphereVsCapsuleBody(RigidBody& sphere, RigidBody& caps
                              : capsule.getRotation().rotate(Vec3{0.f, 1.f, 0.f}).normalized();
   float penetration = minDist - dist;
 
-  // Relative velocity along the contact normal — unlike the static-geometry path,
-  // the capsule's own velocity participates here so a moving kinematic capsule
-  // (e.g. a flipper proxy) imparts correct momentum onto the sphere.
   Vec3 relVel = sphere.getVelocity() - capsule.getVelocity();
   float velAlongN = relVel.dot(normal);
   if (velAlongN >= 0.5f) return;

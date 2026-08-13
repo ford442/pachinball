@@ -110,6 +110,84 @@ failed ||= !runScenario('wasm spinning ball picks up tangential velocity', (w) =
   return w.getVelZ(0) > 0.15 && w.getAngVelY(0) < 10
 })
 
+// Side-by-side Rapier compare for the same spinning-ball / wall IC.
+// Sequential-impulse vs Rapier's solver will not match bit-exactly; slack is
+// documented below. μ_a = μ_b = 0.8 so Average and GeometricMean coincide.
+{
+  const dt = 1 / 60
+  const steps = 120
+  const vzSlack = 0.25
+  const wySlack = 0.75
+
+  const wasm = new Module.PhysicsWorld()
+  wasm.setGravity(0, 0, 0)
+  wasm.setRollingResistance(0)
+  wasm.addStaticPlane(-1, 0, 0, -1, 0.8)
+  const wasmId = wasm.createRigidBody(0.7, 0, 0, 2, 0, 0, 1, 0.25, 0.4, 0, 0, 0, 0.5, 0.8, 0)
+  wasm.setAngularVelocity(wasmId, 0, 10, 0)
+
+  let rapierVz = null
+  let rapierWy = null
+  try {
+    const RAPIER = await import('@dimforge/rapier3d-compat/rapier.es.js')
+    try {
+      await RAPIER.init({})
+    } catch {
+      try { await RAPIER.init() } catch { /* WASM already ready in some runners */ }
+    }
+    const rw = new RAPIER.World({ x: 0, y: 0, z: 0 })
+    rw.integrationParameters.dt = dt
+    // Inner face at x = 1, matching the WASM plane n·x = -1 with n = (-1,0,0).
+    rw.createCollider(
+      RAPIER.ColliderDesc.cuboid(0.5, 10, 10)
+        .setTranslation(1.5, 0, 0)
+        .setFriction(0.8)
+        .setRestitution(0.4)
+    )
+    const rb = rw.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(0.7, 0, 0)
+        .setLinvel(2, 0, 0)
+        .setAngvel({ x: 0, y: 10, z: 0 })
+        .setLinearDamping(0)
+        .setAngularDamping(0)
+        .setGravityScale(0)
+    )
+    rw.createCollider(
+      RAPIER.ColliderDesc.ball(0.25).setFriction(0.8).setRestitution(0.4).setMass(1),
+      rb
+    )
+    for (let i = 0; i < steps; i++) {
+      wasm.step(dt)
+      rw.step()
+    }
+    rapierVz = rb.linvel().z
+    rapierWy = rb.angvel().y
+    rw.free()
+  } catch (err) {
+    wasm.delete()
+    console.error('Rapier init/step failed for spinning-ball compare:', err)
+    failed = true
+    console.log('FAIL wasm/rapier spinning-ball english')
+  }
+
+  if (rapierVz !== null) {
+    const wasmVz = wasm.getVelZ(0)
+    const wasmWy = wasm.getAngVelY(0)
+    wasm.delete()
+    const ok = wasmVz > 0.1 && rapierVz > 0.1
+      && wasmWy < 10 && rapierWy < 10
+      && Math.abs(wasmVz - rapierVz) <= vzSlack
+      && Math.abs(wasmWy - rapierWy) <= wySlack
+    console.log(
+      `${ok ? 'PASS' : 'FAIL'} wasm/rapier spinning-ball english ` +
+      `(vz wasm=${wasmVz.toFixed(3)} rapier=${rapierVz.toFixed(3)} ` +
+      `wy wasm=${wasmWy.toFixed(3)} rapier=${rapierWy.toFixed(3)})`
+    )
+    if (!ok) failed = true
+  }
+}
+
 function readContacts(mod, world) {
   const count = world.getContactCount()
   const ptr = world.getContactBufferPtr()

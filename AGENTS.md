@@ -49,8 +49,14 @@ npm run preview
 # Run Playwright E2E tests
 npx playwright test
 
-# Run native C++ Catch2 physics tests (generates compile_commands.json for clangd/IDE navigation)
+# Run native C++ Catch2 physics tests (writes `native/build-native/compile_commands.json` for clangd)
 npm run test:native
+
+# Build C++ physics to WASM (requires Emscripten)
+npm run build:wasm
+
+# WASM bundle parity vs native C++ reference
+npm run test:wasm-parity
 
 # Microbench C++ WASM physics build flags (baseline vs SIMD vs LTO)
 npm run bench:wasm-flags
@@ -65,8 +71,11 @@ npm run bench:wasm-flags
 
 Notes:
 - CI runs `npx vite build`, **not** `npm run build` — the latter chains `build:wasm`
-  (Emscripten), which isn't installed on the runner. The C++ WASM bundle is intentionally
-  out of CI; the physics-engine flag falls back to Rapier when the bundle is absent.
+  (Emscripten), which isn't installed on the default runner. The C++ WASM bundle is intentionally
+  out of the main `check` job; the localStorage physics-engine flag falls back to Rapier when
+  the bundle is absent.
+- `.github/workflows/native-physics.yml` gates PRs touching `native/**` or `src/wasm/**` with
+  blocking native Catch2, ASan/UBSan, and WASM build + parity jobs (requires Emscripten on runner).
 - Enabling branch protection on `main` (require the `check` job) is recommended so ungated
   direct-to-`main` pushes can't regress the build.
 
@@ -74,7 +83,7 @@ Notes:
 
 ## 3. Directory & Module Map
 
-Every major subdirectory exposes a barrel file (`index.ts`). Import through the barrel rather than deep-path imports when possible.
+Every major subdirectory exposes a barrel file (`index.ts`). Import through the barrel rather than deep-path imports when possible. `src/style/` also has `index.css` as its CSS barrel; `index.ts` side-effect-imports it for TS entry points.
 
 ### Entry Points
 - **`src/main.ts`** — Bootstrap. Creates the Babylon engine in parallel with Rapier WASM preloading, then instantiates and initializes `Game`.
@@ -82,6 +91,30 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 - **`src/config.ts`** — Pure configuration (no Babylon dependencies). Contains API bases, ball spawn weights, gameplay constants, effects feature flags, and backbox media paths.
 
 ### Core Logic Modules
+
+#### `src/core/` — Kernel utilities (barrel: `src/core/index.ts`)
+- **`event-bus.ts`** — Typed `EventBus` pub/sub kernel (#322). No Babylon imports.
+- **`seeded-rng.ts`** — Deterministic RNG for spawn/scoring forks.
+- **`asset-urls.ts`** — Asset URL resolution helpers.
+
+#### `src/engine/` — Babylon bootstrap (barrel: `src/engine/index.ts`)
+- **`create-engine.ts`** — WebGPU-first engine creation with WebGL2 fallback.
+- **`engine-options.ts`** — Hardware scaling, mobile quality hints, power preference.
+- **`wasm-idle-preload.ts`** — Idle preload of the C++ physics WASM bundle.
+- **`visibility-manager.ts`** — Tab visibility / render pause handling.
+
+#### `src/wasm/` — C++ physics WASM loader (barrel: `src/wasm/index.ts`)
+- **`PhysicsModule.ts`** — `WasmPhysicsEngine` wrapper around Emscripten embind exports.
+- **`contact-buffer.ts`** / **`transform-buffer.ts`** — Packed HEAP buffer codecs.
+- **`wasm-types.ts`** — TypeScript types for the WASM module surface.
+
+#### `native/` — C++ physics engine
+- **`src/PhysicsWorld.cpp`** — World step, collision, sleep, broadphase integration.
+- **`src/bindings.cpp`** — Emscripten embind exports for the WASM module.
+- **`tests/physics_world_test.cpp`** — Catch2 suite (`npm run test:native`).
+
+#### `src/renderers/` — Renderer backend selection (barrel: `src/renderers/index.ts`)
+- **`renderer-selector.ts`** — WebGPU vs WebGL2 preference (URL param, localStorage, dev override).
 
 #### `src/game-elements/` — Low-level game systems
 | File / Sub-module | Responsibility |
@@ -124,6 +157,15 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 | `game-cabinet.ts` | `CabinetManager` — cabinet preset cycling (classic, neo, vertical, wide). |
 | `game-ui.ts` | `GameUIManager` — HUD popups, messages, toast notifications. |
 | `game-adventure.ts` | `AdventureManager` — orchestrates adventure mode start/stop, zone callbacks, score awards. |
+
+#### `src/game/physics/` — Physics engine seam
+| File | Responsibility |
+|------|----------------|
+| `physics-controller.ts` | Main physics step orchestrator; routes to Rapier or WASM backends. |
+| `wasm-mirror.ts` | WASM mirrors ball+bumper subset; Rapier bodies remain handles. |
+| `wasm-owner.ts` | WASM owns ball + static table geometry; Rapier kept for joints. |
+| `collision-dispatch.ts` | Handle-space collision routing to scoring handlers. |
+| `scoring-bridge.ts` | Points, combos, and effect triggers from collision events. |
 
 #### `src/display/` — Backbox display system (barrel: `src/display/index.ts`)
 Replaces the old monolithic `display.ts`.
@@ -200,11 +242,20 @@ Campaign truth is `AdventureTrackProgression` + `AdventureProgressionSupervisor`
 **Bad:** Adding 50 lines of bumper logic directly into `game.ts`.  
 **Good:** Extending `object-bumpers.ts` or `effects-particles.ts`, then calling it from `game.ts`.
 
-### 4.2 Physics — Rapier Only
-- Import Rapier **exclusively** from `@dimforge/rapier3d-compat`.
-- `PhysicsSystem` initializes the WASM asynchronously and runs a **fixed timestep** with an accumulator (`FIXED_TIMESTEP = 1/60`).
-- Collision events are drained from `RAPIER.EventQueue` inside `PhysicsSystem.step()`.
-- **Never** use Babylon's built-in collision or physics engine for gameplay logic.
+### 4.2 Physics — Engine Selection
+Gameplay physics never uses Babylon's built-in collision engine. The active backend is selected at runtime (`src/config.ts`):
+
+| Mode | When | Source |
+|------|------|--------|
+| `rapier` | Production default | `@dimforge/rapier3d-compat` via `PhysicsSystem` / `physics-controller.ts` |
+| `wasm-mirror` | Dev parity; WASM mirrors ball+bumper subset | `src/game/physics/wasm-mirror.ts` |
+| `wasm-owner` | C++ owns balls + static table geometry | `src/game/physics/wasm-owner.ts` + `native/` |
+
+- Import Rapier **exclusively** from `@dimforge/rapier3d-compat` (not `@dimforge/rapier3d`).
+- `PhysicsSystem` initializes Rapier WASM asynchronously and runs a **fixed timestep** with an accumulator (`FIXED_TIMESTEP = 1/60`).
+- Collision events are drained from `RAPIER.EventQueue` inside `PhysicsSystem.step()` when Rapier is active.
+- The optional C++ engine (`npm run build:wasm`) is loaded via `src/wasm/PhysicsModule.ts`; parity is checked with `npm run test:wasm-parity`.
+- **Never** use Babylon's built-in collision or physics engine for gameplay logic. Rapier remains required for flipper joints and adventure mode even in `wasm-owner`.
 
 ### 4.3 Display System — Hybrid WebGPU / Canvas2D
 - **Primary path:** WebGPU WGSL shaders (`display-shader.ts`) for slot reels and jackpot overlays.

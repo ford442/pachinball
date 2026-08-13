@@ -219,7 +219,7 @@ private:
     std::size_t bytes = floats * sizeof(float);
     bytes = (bytes + 15u) & ~std::size_t(15);
     void* p = std::aligned_alloc(16, bytes);
-    if (!p) throw std::bad_alloc();
+    if (!p) std::abort();
     if (buffer_ && bufferCapFloats_ > 0) {
       std::memcpy(p, buffer_, bufferCapFloats_ * sizeof(float));
       std::free(buffer_);

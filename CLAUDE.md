@@ -6,11 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm run dev        # Start Vite dev server (http://localhost:5173)
-npm run build      # TypeScript check + Vite production build
+npm run build      # TypeScript check + Vite production build + optional WASM
 npm run lint       # ESLint on all .ts/.tsx files
 npm run preview    # Preview production build locally
 npm test           # Run Vitest unit tests
 npx playwright test  # Run E2E / visual regression tests
+npm run test:native       # C++ Catch2 tests (also generates clangd compile DB)
+npm run build:wasm        # Emscripten Release → public/wasm/
+npm run test:wasm-parity  # WASM bundle vs native C++ reference
+npm run bench:wasm-flags  # Microbench WASM flag matrix (SIMD/LTO)
 ```
 
 To run a single Vitest test file:
@@ -20,7 +24,7 @@ npx vitest run tests/ball-manager.test.ts
 
 ## Architecture
 
-**Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 7 and Rapier 3D WASM physics.
+**Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 7. Physics uses Rapier 3D WASM by default, with an optional in-house C++ engine compiled to WASM (`native/` + `src/wasm/`). Runtime mode is selected via `src/config.ts` (`rapier` / `wasm-mirror` / `wasm-owner`).
 
 ### Startup flow
 
@@ -32,6 +36,9 @@ npx vitest run tests/ball-manager.test.ts
 |------|------|
 | `src/game.ts` | Central orchestrator (~33 KB / ~840 lines — slimmed from its former ~140 KB monolith; the sub-systems now live under `src/game/`, `src/game-elements/`, `src/display/`, `src/effects/`, `src/objects/`). Owns scene, cameras, lights, materials, post-processing, game-state machine (MENU / PLAYING / PAUSED / GAME_OVER), and wires all sub-systems together. |
 | `src/game-elements/` | Discrete sub-systems: `physics.ts` (Rapier world), `ball-manager.ts` (spawn/collect/drain), `input.ts` (keyboard/touch/gamepad), `camera-controller.ts`, `sound-system.ts`, `zone-trigger-system.ts`, `leaderboard-system.ts`, `adventure-mode.ts`, `debug-hud.ts`, etc. |
+| `native/` | C++ physics core — rigid bodies, broadphase, contact listener. Catch2-tested via `npm run test:native`. |
+| `src/wasm/` | Emscripten loader (`PhysicsModule.ts`), contact/transform buffer codecs, WASM types. |
+| `src/game/physics/` | Runtime physics engine selection and collision dispatch (`rapier`, `wasm-mirror`, `wasm-owner`). |
 | `src/objects/` | Playfield geometry: bumpers, flippers (joint-based rotation), walls, rails, pachinko pins, decoration. All live under `object-core.ts` as the top-level orchestrator. |
 | `src/cabinet/` | Four cabinet presets (classic, neo, vertical, wide) built by `cabinet-builder.ts`. Each defines its own dimensions and styling. |
 | `src/display/` | Multi-layer backbox display — reels rendered with WGSL shaders (`display-shader.ts`) or a canvas fallback; `display-core.ts` drives state transitions (IDLE → REACH → FEVER). |

@@ -33,6 +33,11 @@
 
 import type { WasmPhysicsModule, WasmPhysicsWorldInstance, WasmContactEvent } from './wasm-types'
 import { CONTACT_STRIDE, decodeContactBuffer, toWasmContactEvent } from './contact-buffer'
+import {
+  TRANSFORM_STRIDE,
+  createTransformBufferView,
+  decodeTransformSlot,
+} from './transform-buffer'
 import type { EventBus } from '../core/event-bus'
 import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
 
@@ -75,6 +80,8 @@ export class WasmPhysicsEngine {
   private eventBus: EventBus | null = null
   private stepCount_ = 0
   private unsubscribers: Array<() => void> = []
+  private transformView: Float32Array | null = null
+  private heapByteLength = 0
 
   // ---- Loading ----------------------------------------------------------
 
@@ -247,6 +254,8 @@ export class WasmPhysicsEngine {
   // ---- Transform queries -----------------------------------------------
 
   getPosition(id: number): { x: number; y: number; z: number } {
+    const fromBuffer = this.readTransformFromBuffer(id)
+    if (fromBuffer) return fromBuffer.position
     if (!this.world) return { x: 0, y: 0, z: 0 }
     return {
       x: this.world.getPosX(id),
@@ -256,6 +265,8 @@ export class WasmPhysicsEngine {
   }
 
   getVelocity(id: number): { x: number; y: number; z: number } {
+    const fromBuffer = this.readTransformFromBuffer(id)
+    if (fromBuffer) return fromBuffer.velocity
     if (!this.world) return { x: 0, y: 0, z: 0 }
     return {
       x: this.world.getVelX(id),
@@ -265,6 +276,8 @@ export class WasmPhysicsEngine {
   }
 
   getAngularVelocity(id: number): { x: number; y: number; z: number } {
+    const fromBuffer = this.readTransformFromBuffer(id)
+    if (fromBuffer) return fromBuffer.angularVelocity
     if (!this.world) return { x: 0, y: 0, z: 0 }
     return {
       x: this.world.getAngVelX(id),
@@ -274,6 +287,8 @@ export class WasmPhysicsEngine {
   }
 
   getRotation(id: number): { x: number; y: number; z: number; w: number } {
+    const fromBuffer = this.readTransformFromBuffer(id)
+    if (fromBuffer) return fromBuffer.rotation
     if (!this.world) return { x: 0, y: 0, z: 0, w: 1 }
     return {
       x: this.world.getRotX(id),
@@ -293,6 +308,7 @@ export class WasmPhysicsEngine {
     if (!this.world) return 0
     const alpha = this.world.step(rawDt)
     this.stepCount_ = this.world.getStepCount()
+    this.transformView = null
     this.drainContactBuffer()
     return alpha
   }
@@ -321,9 +337,42 @@ export class WasmPhysicsEngine {
     this.module   = null
     this.isReady  = false
     this.eventBus = null
+    this.transformView = null
+    this.heapByteLength = 0
   }
 
   // ---- Internal --------------------------------------------------------
+
+  private readTransformFromBuffer(id: number) {
+    const view = this.refreshTransformView()
+    if (!view) return null
+    return decodeTransformSlot(view, id, TRANSFORM_STRIDE)
+  }
+
+  private refreshTransformView(): Float32Array | null {
+    if (!this.world || !this.module) return null
+    const heap = this.getHeapF32()
+    if (!heap) return null
+
+    const buffer = this.module.wasmMemory?.buffer ?? heap.buffer
+    if (buffer.byteLength !== this.heapByteLength) {
+      this.heapByteLength = buffer.byteLength
+      this.transformView = null
+    }
+
+    if (!this.transformView) {
+      const ptr = this.world.getTransformBufferPtr?.()
+      if (ptr === undefined || ptr === 0) return null
+      const slotCount = this.world.getTransformSlotCount?.() ?? 0
+      if (slotCount <= 0) return null
+      const stride = this.world.getTransformStride?.() ?? TRANSFORM_STRIDE
+      const heapFresh = this.getHeapF32()
+      if (!heapFresh) return null
+      this.transformView = createTransformBufferView(heapFresh, ptr, slotCount, stride)
+    }
+
+    return this.transformView
+  }
 
   private drainContactBuffer(): void {
     if (!this.world || !this.module) return

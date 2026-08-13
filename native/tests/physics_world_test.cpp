@@ -15,6 +15,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <chrono>
 #include <iterator>
 
 using namespace pachinball;
@@ -545,4 +546,99 @@ TEST_CASE("contact listener peak impulse and lossless overflow", "[physics][cont
   capped.flushEvents();
   CHECK(capped.getContactCount() == 2);
   CHECK(capped.getDroppedContactCount() == 8);
+}
+
+TEST_CASE("broadphase culls distant static colliders", "[physics][broadphase]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, 0.f, 0.f);
+
+  for (int i = 0; i < 200; ++i) {
+    world.addStaticBox(500.f + static_cast<float>(i), 0.f, 500.f + static_cast<float>(i),
+                       0.5f, 0.5f, 0.5f, 0.f, 0.f, 0.f, 1.f);
+  }
+
+  world.createRigidBody({
+    {0.f, 1.f, 0.f}, {0.f, 0.f, 0.f},
+    1.f, 0.2f, 0.5f, 0.02f, BodyType::Dynamic
+  });
+
+  world.step(FIXED_DT);
+  CHECK(world.getLastBroadphasePairCount() == 0);
+}
+
+TEST_CASE("broadphase emits pairs for nearby static colliders", "[physics][broadphase]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, -9.81f, 0.f);
+  world.addStaticBox(0.f, 0.f, 0.f, 2.f, 0.5f, 2.f, 0.f, 0.f, 0.f, 1.f);
+
+  world.createRigidBody({
+    {0.f, 2.f, 0.f}, {0.f, 0.f, 0.f},
+    1.f, 0.25f, 0.5f, 0.02f, BodyType::Dynamic
+  });
+
+  world.step(FIXED_DT);
+  CHECK(world.getLastBroadphasePairCount() >= 1);
+}
+
+TEST_CASE("sleeping bodies reduce broadphase pair count", "[physics][sleep]") {
+  WorldParams params;
+  params.sleepFramesRequired = 8;
+  params.sleepLinearThreshold = 0.1f;
+  params.sleepAngularThreshold = 0.2f;
+  PhysicsWorld world(params);
+  world.setGravity(0.f, 0.f, 0.f);
+  world.addStaticPlane(0.f, 1.f, 0.f, 0.f);
+
+  world.createRigidBody({
+    {0.f, 0.26f, 0.f}, {0.f, 0.f, 0.f},
+    1.f, 0.25f, 0.f, 0.1f, BodyType::Dynamic
+  });
+
+  for (int i = 0; i < 30; ++i) {
+    world.step(FIXED_DT);
+  }
+  CHECK(world.getActiveBodyCount() == 0);
+
+  for (int i = 0; i < 200; ++i) {
+    world.addStaticBox(500.f + static_cast<float>(i), 0.f, 500.f + static_cast<float>(i),
+                       0.5f, 0.5f, 0.5f, 0.f, 0.f, 0.f, 1.f);
+  }
+
+  world.createRigidBody({
+    {5.f, 3.f, 5.f}, {2.f, 0.f, 0.f},
+    1.f, 0.2f, 0.5f, 0.02f, BodyType::Dynamic
+  });
+
+  world.step(FIXED_DT);
+  CHECK(world.getLastBroadphasePairCount() == 0);
+}
+
+TEST_CASE("large scene step completes under time budget", "[physics][benchmark]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, -9.81f, 0.f);
+  world.addStaticPlane(0.f, 1.f, 0.f, 0.f);
+
+  for (int i = 0; i < 200; ++i) {
+    const float x = static_cast<float>((i % 20) - 10) * 1.2f;
+    const float z = static_cast<float>(i / 20) * 1.2f;
+    world.addStaticCapsule(x, 0.5f, z, 0.12f, 0.5f, 0.f, 0.f, 0.f, 1.f);
+  }
+
+  for (int i = 0; i < 40; ++i) {
+    const float x = static_cast<float>((i % 8) - 4) * 0.8f;
+    const float z = static_cast<float>(i / 8) * 0.8f;
+    world.createRigidBody({
+      {x, 2.f + 0.1f * static_cast<float>(i % 5), z},
+      {0.f, 0.f, 0.f},
+      1.f, 0.2f, 0.5f, 0.02f, BodyType::Dynamic
+    });
+  }
+
+  const auto t0 = std::chrono::steady_clock::now();
+  for (int s = 0; s < 30; ++s) {
+    world.step(FIXED_DT);
+  }
+  const auto t1 = std::chrono::steady_clock::now();
+  const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+  CHECK(ms < 5000);
 }

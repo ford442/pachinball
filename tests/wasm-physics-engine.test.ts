@@ -66,6 +66,9 @@ function makeWorldStub() {
     getDroppedContactCount: vi.fn().mockReturnValue(0),
     setMaxContacts:       vi.fn(),
     getMaxContacts:       vi.fn().mockReturnValue(65536),
+    getTransformBufferPtr:  vi.fn().mockReturnValue(0),
+    getTransformStride:   vi.fn().mockReturnValue(16),
+    getTransformSlotCount: vi.fn().mockReturnValue(0),
     delete:               vi.fn(),
   }
 }

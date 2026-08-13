@@ -17,7 +17,11 @@ import path from 'node:path'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const benchRoot = path.join(root, 'native/build-bench')
 
-const SPHERE_COUNT = 50
+const SCENARIO = process.env.BENCH_SCENARIO ?? 'spheres'
+const SPHERE_COUNT = Number(process.env.BENCH_SPHERES ?? 50)
+const BALL_COUNT = Number(process.env.BENCH_BALLS ?? 20)
+const PIN_ROWS = Number(process.env.BENCH_PIN_ROWS ?? 10)
+const PIN_COLS = Number(process.env.BENCH_PIN_COLS ?? 13)
 const WARMUP_STEPS = Number(process.env.BENCH_WARMUP ?? 30)
 const TIMED_STEPS = Number(process.env.BENCH_STEPS ?? 300)
 const DT = 1 / 60
@@ -35,6 +39,13 @@ function percentile(sorted, p) {
 }
 
 function setupWorld(Module) {
+  if (SCENARIO === 'table') {
+    return setupTableWorld(Module)
+  }
+  return setupSphereGridWorld(Module)
+}
+
+function setupSphereGridWorld(Module) {
   const world = new Module.PhysicsWorld()
   world.setGravity(0, -9.81, 0)
   world.addStaticPlane(0, 1, 0, 0, 0.2)
@@ -51,6 +62,28 @@ function setupWorld(Module) {
       // createRigidBody(..., bodyType, shape, capsuleHalfHeight, friction, angularDamping)
       world.createRigidBody(x, y, z, 0, 0, 0, 1, 0.2, 0.5, 0.02, 0, 0, 0.5, 0.2, 0.1)
     }
+  }
+  return world
+}
+
+function setupTableWorld(Module) {
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, -9.81, -5)
+  world.addStaticPlane(0, 1, 0, 0, 0.18)
+
+  for (let r = 0; r < PIN_ROWS; r++) {
+    for (let c = 0; c < PIN_COLS; c++) {
+      const x = (c - (PIN_COLS - 1) / 2) * 1.85
+      const z = 6 + (r - (PIN_ROWS - 1) / 2) * 2.2
+      world.addStaticCapsule(x, 0.5, z, 0.12, 0.75, 0, 0, 0, 1, 0.4, 0.05)
+    }
+  }
+
+  for (let i = 0; i < BALL_COUNT; i++) {
+    const x = (i % 5 - 2) * 0.9
+    const z = 4 + Math.floor(i / 5) * 0.8
+    const y = 2.5 + (i % 3) * 0.2
+    world.createRigidBody(x, y, z, 0, 0, 0, 1, 0.22, 0.5, 0.02, 0, 0, 0.5, 0.14, 0.1)
   }
   return world
 }
@@ -97,7 +130,9 @@ async function benchCombo(combo) {
     p50Ms: p50,
     p95Ms: p95,
     steps: TIMED_STEPS,
-    spheres: SPHERE_COUNT,
+    spheres: SCENARIO === 'table' ? BALL_COUNT : SPHERE_COUNT,
+    pins: SCENARIO === 'table' ? PIN_ROWS * PIN_COLS : 0,
+    scenario: SCENARIO,
   }
 }
 
@@ -116,7 +151,10 @@ for (const combo of COMBOS) {
 }
 
 console.log('')
-console.log(`WASM flag microbench — ${SPHERE_COUNT} spheres, warmup=${WARMUP_STEPS}, timed=${TIMED_STEPS}`)
+const scenarioLabel = SCENARIO === 'table'
+  ? `${BALL_COUNT} balls + ${PIN_ROWS * PIN_COLS} pin capsules`
+  : `${SPHERE_COUNT} spheres`
+console.log(`WASM flag microbench — ${scenarioLabel}, warmup=${WARMUP_STEPS}, timed=${TIMED_STEPS}`)
 console.log('')
 console.log('| Combo | Flags | mean ms | p50 ms | p95 ms | .wasm KiB |')
 console.log('|-------|-------|---------|--------|--------|-----------|')

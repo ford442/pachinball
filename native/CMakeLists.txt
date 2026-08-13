@@ -10,6 +10,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ---------------------------------------------------------------------------
 set(PHYSICS_CORE_SOURCES
   src/RigidBody.cpp
+  src/BodyStore.cpp
+  src/BroadphaseGrid.cpp
   src/PhysicsWorld.cpp
 )
 
@@ -17,9 +19,9 @@ set(PHYSICS_CORE_SOURCES
 # Emscripten WASM module
 # ---------------------------------------------------------------------------
 if(EMSCRIPTEN)
-  # Opt-in perf flags — default OFF until scripts/bench-wasm-flags.mjs justifies promoting.
-  option(PACHINBALL_WASM_SIMD "Enable WASM SIMD auto-vectorization (-msimd128)" OFF)
-  option(PACHINBALL_WASM_LTO  "Enable link-time optimization (-flto)" OFF)
+  # SoA integration + broadphase loops vectorize under -msimd128; bench justifies ON.
+  option(PACHINBALL_WASM_SIMD "Enable WASM SIMD auto-vectorization (-msimd128)" ON)
+  option(PACHINBALL_WASM_LTO  "Enable link-time optimization (-flto)" ON)
 
   add_executable(PhysicsModule
     ${PHYSICS_CORE_SOURCES}
@@ -51,11 +53,16 @@ if(EMSCRIPTEN)
 
     # Allow heap to grow at runtime (ball swarms can be large)
     "-sALLOW_MEMORY_GROWTH=1"
-    # Initial heap size — 32 MB is enough for table + adventure body counts
-    "-sINITIAL_MEMORY=33554432"
+    # Initial heap — 16 MB covers table + adventure; grows if needed
+    "-sINITIAL_MEMORY=16777216"
+    # Smaller allocator — module does little dynamic allocation after setup
+    "-sMALLOC=emmalloc"
 
-    # Export helpers used by the JS wrapper (contact buffer HEAP view + string utils)
-    "-sEXPORTED_RUNTIME_METHODS=[\"addFunction\",\"removeFunction\",\"UTF8ToString\",\"stringToUTF8\",\"HEAPF32\"]"
+    # Contact buffer HEAP view for JS wrapper
+    "-sEXPORTED_RUNTIME_METHODS=[\"HEAPF32\"]"
+
+    # Shrink JS glue (parity harness validates embind + modularize)
+    "--closure=1"
   )
 
   # No C++ exceptions in native/src — drop EH runtime for smaller binaries
@@ -76,17 +83,17 @@ if(EMSCRIPTEN)
 
   # Optimisation / assertions follow CMAKE_BUILD_TYPE:
   #   Debug          — -O0 -g -gsource-map, ASSERTIONS=2
-  #   Release        — -O2, ASSERTIONS=0  (production default)
-  #   RelWithAsserts — -O2, ASSERTIONS=1  (CI parity without full debug)
+  #   Release        — -O3, ASSERTIONS=0  (production default)
+  #   RelWithAsserts — -O3, ASSERTIONS=1  (CI parity without full debug)
   target_compile_options(PhysicsModule PRIVATE
     "$<$<CONFIG:Debug>:-O0;-g;-gsource-map>"
-    "$<$<CONFIG:Release>:-O2>"
-    "$<$<CONFIG:RelWithAsserts>:-O2>"
+    "$<$<CONFIG:Release>:-O3>"
+    "$<$<CONFIG:RelWithAsserts>:-O3>"
   )
   target_link_options(PhysicsModule PRIVATE
     "$<$<CONFIG:Debug>:-O0;-g;-gsource-map;-sASSERTIONS=2>"
-    "$<$<CONFIG:Release>:-O2;-sASSERTIONS=0>"
-    "$<$<CONFIG:RelWithAsserts>:-O2;-sASSERTIONS=1>"
+    "$<$<CONFIG:Release>:-O3;-sASSERTIONS=0>"
+    "$<$<CONFIG:RelWithAsserts>:-O3;-sASSERTIONS=1>"
   )
 endif()
 
@@ -97,7 +104,7 @@ endif()
 if(NOT EMSCRIPTEN)
   add_library(pachinball_physics_native STATIC ${PHYSICS_CORE_SOURCES})
   target_include_directories(pachinball_physics_native PUBLIC src)
-  target_compile_options(pachinball_physics_native PRIVATE -Wall -Wextra -O2)
+  target_compile_options(pachinball_physics_native PRIVATE -Wall -Wextra -Werror -O2)
 
   include(CTest)
   enable_testing()
@@ -115,7 +122,7 @@ if(NOT EMSCRIPTEN)
     pachinball_physics_native
     Catch2::Catch2WithMain
   )
-  target_compile_options(physics_world_test PRIVATE -Wall -Wextra -O2)
+  target_compile_options(physics_world_test PRIVATE -Wall -Wextra -Werror -O2)
 
   include(Catch)
   catch_discover_tests(physics_world_test)

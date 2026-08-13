@@ -54,8 +54,8 @@ BUILD_DIR="${NATIVE_DIR}/build"
 INSTALL_TO_PUBLIC=1
 DO_CLEAN=0
 DO_BENCH_MATRIX=0
-WASM_SIMD="${PACHINBALL_WASM_SIMD:-OFF}"
-WASM_LTO="${PACHINBALL_WASM_LTO:-OFF}"
+WASM_SIMD="${PACHINBALL_WASM_SIMD:-ON}"
+WASM_LTO="${PACHINBALL_WASM_LTO:-ON}"
 
 # ---------------------------------------------------------------------------
 # Parse args
@@ -141,12 +141,6 @@ configure_and_build() {
 
   echo "[build-wasm] Building..."
   cmake --build "${build_dir}" --config "${build_type}" -- -j"${JOBS}"
-
-  if [[ -f "${build_dir}/compile_commands.json" ]]; then
-    cp "${build_dir}/compile_commands.json" "${NATIVE_DIR}/compile_commands.json"
-    cp "${build_dir}/compile_commands.json" "${REPO_ROOT}/compile_commands.json"
-    echo "[build-wasm] Synced compile_commands.json → native/ and project root"
-  fi
 }
 
 install_artefacts() {

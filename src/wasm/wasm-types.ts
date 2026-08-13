@@ -170,6 +170,14 @@ export interface WasmPhysicsWorldInstance {
   getMaxContacts(): number
 
   /**
+   * Pointer to packed per-id transform slots (16 floats/slot).
+   * Layout: id, px, py, pz, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz, active, pad.
+   */
+  getTransformBufferPtr(): number
+  getTransformStride(): number
+  getTransformSlotCount(): number
+
+  /**
    * Optional legacy per-event callback.
    * Signature: (id1, id2, nx, ny, nz, px, py, pz, impulse, phase) => void
    * Production drain uses getContactBufferPtr() instead.

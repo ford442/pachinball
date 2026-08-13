@@ -324,6 +324,7 @@ describe.skipIf(!RUN_WASM_PARITY)('WASM physics parity harness (real-engine inte
     expect(stdout).toContain('PASS wasm ball-on-capsule')
     expect(stdout).toContain('PASS wasm ball+bumper drop')
     expect(stdout).toContain('PASS wasm spinning ball picks up tangential velocity')
+    expect(stdout).toContain('PASS wasm/rapier spinning-ball english')
     expect(stdout).toContain('PASS wasm/rapier enter-exit ordering')
   })
 })

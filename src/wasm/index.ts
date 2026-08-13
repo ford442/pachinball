@@ -17,6 +17,13 @@ export {
   contactStarted,
   toWasmContactEvent,
 } from './contact-buffer'
+export {
+  TRANSFORM_STRIDE,
+  decodeTransformSlot,
+  encodeTransformBuffer,
+  createTransformBufferView,
+  type WasmTransform,
+} from './transform-buffer'
 export type {
   PhysicsContact,
   WasmContactEvent,

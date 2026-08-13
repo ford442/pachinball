@@ -1,22 +1,10 @@
 /**
  * Emscripten bindings for the Pachinball C++ physics engine.
  *
- * Compile with:
- *   emcc  PhysicsWorld.cpp RigidBody.cpp bindings.cpp
- *         -I. -std=c++17 -O2
- *         -s MODULARIZE=1 -s EXPORT_ES6=1
- *         -s EXPORT_NAME=PhysicsModule
- *         -s ALLOW_MEMORY_GROWTH=1
- *         -s EXPORTED_RUNTIME_METHODS='["addFunction","removeFunction"]'
- *         --bind
- *         -o ../build/PhysicsModule.js
+ * Build via: npm run build:wasm (see scripts/build-wasm.sh + native/CMakeLists.txt)
  *
- * The resulting PhysicsModule.js + PhysicsModule.wasm pair can be imported
- * directly in the Vite/TypeScript project as an ES module:
- *
- *   import PhysicsModuleFactory from './wasm/PhysicsModule.js'
- *   const Module = await PhysicsModuleFactory()
- *   const world  = new Module.PhysicsWorld()
+ * Contact callbacks use embind val (setContactCallbackJS), not addFunction.
+ * JS reads contact/transform buffers via Module.HEAPF32.
  */
 
 #include <emscripten/bind.h>
@@ -183,6 +171,13 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("getDroppedContactCount", &PhysicsWorld::getDroppedContactCount)
     .function("setMaxContacts", &PhysicsWorld::setMaxContacts)
     .function("getMaxContacts", &PhysicsWorld::getMaxContacts)
+
+    // Packed transform buffer (zero-copy body state reads)
+    .function("getTransformBufferPtr", optional_override([](PhysicsWorld& self) -> uintptr_t {
+        return reinterpret_cast<uintptr_t>(self.getTransformBufferPtr());
+      }))
+    .function("getTransformStride", &PhysicsWorld::getTransformStride)
+    .function("getTransformSlotCount", &PhysicsWorld::getTransformSlotCount)
 
     // Legacy per-event callback (tests / debug). Production uses the packed buffer.
     .function("setContactCallbackJS", &setContactCallbackJS);

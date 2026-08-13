@@ -1,11 +1,12 @@
-# Native C++ physics Catch2 unit tests + optional WASM build verification.
+# Native C++ physics Catch2 unit tests + blocking WASM build/parity verification.
 #
-# native_ctest is BLOCKING for any pull request touching `native/**` (Ubuntu + g++/cmake).
-# wasm_build is NON-BLOCKING (continue-on-error) to avoid runner emsdk dependencies gating JS-only PRs.
+# native_ctest + sanitizer_ctest are BLOCKING for PRs touching `native/**`.
+# wasm_parity is BLOCKING for PRs touching `native/**`, `src/wasm/**`, or wasm tests.
+# JS-only PRs outside those paths are not gated on Emscripten.
 #
 # Skip triggers:
-#   - Use workflow_dispatch only (disable push/PR triggers) for manual runs
-#   - Commit message containing "[skip wasm-ci]" skips the wasm_build job
+#   - workflow_dispatch for manual runs
+#   - Commit message containing "[skip wasm-ci]" skips the wasm_parity job
 #
 # Local equivalents:
 #   npm run test:native          # Catch2 + ctest (g++/cmake only)
@@ -20,12 +21,18 @@ on:
   push:
     paths:
       - 'native/**'
+      - 'src/wasm/**'
+      - 'tests/wasm-*.test.ts'
+      - 'tests/transform-buffer.test.ts'
       - 'scripts/build-wasm.sh'
       - 'scripts/run-wasm-parity.mjs'
       - '.github/workflows/native-physics.yml'
   pull_request:
     paths:
       - 'native/**'
+      - 'src/wasm/**'
+      - 'tests/wasm-*.test.ts'
+      - 'tests/transform-buffer.test.ts'
       - 'scripts/build-wasm.sh'
       - 'scripts/run-wasm-parity.mjs'
       - '.github/workflows/native-physics.yml'
@@ -43,10 +50,29 @@ jobs:
       - name: Run native Catch2 tests
         run: npm run test:native
 
-  wasm_build:
-    name: WASM Build
+  sanitizer_ctest:
+    name: Sanitizer CTest (Blocking)
     runs-on: ubuntu-latest
-    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake g++
+
+      - name: Configure with ASan/UBSan
+        run: >
+          cmake -S native -B native/build-san
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
+
+      - name: Build and run Catch2 under sanitizers
+        run: |
+          cmake --build native/build-san
+          ctest --test-dir native/build-san --output-on-failure
+
+  wasm_parity:
+    name: WASM Build + Parity (Blocking)
+    runs-on: ubuntu-latest
     if: ${{ !contains(github.event.head_commit.message, '[skip wasm-ci]') }}
     steps:
       - uses: actions/checkout@v4
