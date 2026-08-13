@@ -54,8 +54,8 @@ if(EMSCRIPTEN)
     # Initial heap size — 32 MB is enough for table + adventure body counts
     "-sINITIAL_MEMORY=33554432"
 
-    # Export helpers used by the JS wrapper (contact callbacks + string utils)
-    "-sEXPORTED_RUNTIME_METHODS=[\"addFunction\",\"removeFunction\",\"UTF8ToString\",\"stringToUTF8\"]"
+    # Export helpers used by the JS wrapper (contact buffer HEAP view + string utils)
+    "-sEXPORTED_RUNTIME_METHODS=[\"addFunction\",\"removeFunction\",\"UTF8ToString\",\"stringToUTF8\",\"HEAPF32\"]"
   )
 
   # No C++ exceptions in native/src — drop EH runtime for smaller binaries

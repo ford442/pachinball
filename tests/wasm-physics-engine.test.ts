@@ -61,6 +61,11 @@ function makeWorldStub() {
     setGravity:           vi.fn(),
     setRollingResistance: vi.fn(),
     setContactCallbackJS: vi.fn(),
+    getContactBufferPtr:  vi.fn().mockReturnValue(0),
+    getContactCount:      vi.fn().mockReturnValue(0),
+    getDroppedContactCount: vi.fn().mockReturnValue(0),
+    setMaxContacts:       vi.fn(),
+    getMaxContacts:       vi.fn().mockReturnValue(65536),
     delete:               vi.fn(),
   }
 }
@@ -196,34 +201,39 @@ describe('WasmPhysicsEngine', () => {
   })
 
   // 10 ----------------------------------------------------------------------
-  it('contact callback forwards to EventBus as wasm:physics:contact', async () => {
+  it('drains packed contact buffer onto EventBus as wasm:physics:contact', async () => {
     const bus = new EventBus()
     engine.init(bus)
-    await injectWorld(engine, worldStub)
+
+    const packed = new Float32Array(16)
+    packed.set([
+      1, 2, 0, 1, 0, 0.5, 0.125, 0.25, 3.25, 0, 0, 0,
+    ], 4)
+    worldStub.getContactCount.mockReturnValue(1)
+    worldStub.getContactBufferPtr.mockReturnValue(16)
+    await injectWorld(engine, worldStub, packed)
 
     let received: unknown = null
     bus.on('wasm:physics:contact', (evt) => { received = evt })
 
-    // Retrieve the callback registered with the stub world
-    type ContactRawCb = (
-      id1: number, id2: number,
-      nx: number, ny: number, nz: number,
-      px: number, py: number, pz: number,
-      impulse: number, isEntering: boolean
-    ) => void
-    const registeredCb = (worldStub.setContactCallbackJS as Mock).mock.calls[0][0] as ContactRawCb
-
-    // Simulate a contact event from the C++ side
-    registeredCb(1, 2, 0, 1, 0, 0.5, 0.1, 0.2, 3.14, true)
+    engine.step(1 / 60)
 
     expect(received).toMatchObject({
       bodyId1: 1,
       bodyId2: 2,
       normal:  { x: 0, y: 1, z: 0 },
-      point:   { x: 0.5, y: 0.1, z: 0.2 },
-      impulse: 3.14,
+      point:   { x: 0.5, y: 0.125, z: 0.25 },
+      impulse: 3.25,
+      phase: 0,
+      started: true,
       isEntering: true,
     })
+  })
+
+  it('getDroppedContactCount surfaces the WASM cap counter', async () => {
+    worldStub.getDroppedContactCount.mockReturnValue(8)
+    await injectWorld(engine, worldStub)
+    expect(engine.getDroppedContactCount()).toBe(8)
   })
 
   // 11 ----------------------------------------------------------------------
@@ -283,26 +293,13 @@ describe('WasmPhysicsEngine', () => {
 // Helper: inject a pre-built world stub into the engine without needing a
 // real WASM load.
 // ---------------------------------------------------------------------------
-async function injectWorld(eng: WasmPhysicsEngine, stub: WorldStub): Promise<void> {
+async function injectWorld(
+  eng: WasmPhysicsEngine,
+  stub: WorldStub,
+  heap: Float32Array = new Float32Array(0),
+): Promise<void> {
   const internal = eng as unknown as Record<string, unknown>
   internal['world']   = stub
+  internal['module']  = { HEAPF32: heap }
   internal['isReady'] = true
-  // Register the contact callback (as the real load() would)
-  stub.setContactCallbackJS(
-    (id1: number, id2: number,
-     nx: number, ny: number, nz: number,
-     px: number, py: number, pz: number,
-     impulse: number, isEntering: boolean) => {
-      // Call the private _handleContact method directly
-      const handleContact = internal['_handleContact'] as (evt: unknown) => void
-      if (typeof handleContact === 'function') {
-        handleContact.call(eng, {
-          bodyId1: id1, bodyId2: id2,
-          normal: { x: nx, y: ny, z: nz },
-          point:  { x: px, y: py, z: pz },
-          impulse, isEntering,
-        })
-      }
-    }
-  )
 }

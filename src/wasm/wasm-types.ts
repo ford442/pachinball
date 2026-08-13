@@ -24,25 +24,19 @@ export const enum Shape {
 }
 
 // ---------------------------------------------------------------------------
-// Contact event
+// Contact event (shared Rapier / WASM record)
 // ---------------------------------------------------------------------------
 
-/**
- * A contact event fired for each collision pair each physics step.
- * bodyId2 === -1 means the second body is a static plane.
- */
-export interface WasmContactEvent {
-  bodyId1: number
-  bodyId2: number
-  /** Contact normal, pointing from body2 to body1. */
-  normal: { x: number; y: number; z: number }
-  /** World-space contact point. */
-  point: { x: number; y: number; z: number }
-  /** Impulse magnitude applied at the contact. */
-  impulse: number
-  /** true = contact began, false = contact ended (currently always true for entering). */
-  isEntering: boolean
-}
+export {
+  ContactPhase,
+  CONTACT_STRIDE,
+  decodeContactBuffer,
+  encodeContactBuffer,
+  contactStarted,
+  toWasmContactEvent,
+  type PhysicsContact,
+  type WasmContactEvent,
+} from './contact-buffer'
 
 // ---------------------------------------------------------------------------
 // Raw WASM module interface (Embind class bindings)
@@ -161,8 +155,24 @@ export interface WasmPhysicsWorldInstance {
   getRollingResistance(): number
 
   /**
-   * Register a JS function to receive contact events.
-   * Signature: (id1, id2, nx, ny, nz, px, py, pz, impulse, isEntering) => void
+   * Pointer (byte offset into WASM memory) of the packed contact buffer.
+   * Layout: 12 floats/contact — id1, id2, nx, ny, nz, px, py, pz, impulse, phase, pad, pad.
+   */
+  getContactBufferPtr(): number
+
+  /** Contacts written this step. */
+  getContactCount(): number
+
+  /** Contacts discarded this step when the cap was hit. */
+  getDroppedContactCount(): number
+
+  setMaxContacts(max: number): void
+  getMaxContacts(): number
+
+  /**
+   * Optional legacy per-event callback.
+   * Signature: (id1, id2, nx, ny, nz, px, py, pz, impulse, phase) => void
+   * Production drain uses getContactBufferPtr() instead.
    */
   setContactCallbackJS(
     cb: (
@@ -170,7 +180,7 @@ export interface WasmPhysicsWorldInstance {
       nx: number, ny: number, nz: number,
       px: number, py: number, pz: number,
       impulse: number,
-      isEntering: boolean
+      phase: number
     ) => void
   ): void
 
@@ -189,6 +199,8 @@ export interface WasmPhysicsModuleFactory {
 
 /** Emscripten module instance returned by the factory. */
 export interface WasmPhysicsModule {
+  HEAPF32?: Float32Array
+  wasmMemory?: { buffer: ArrayBuffer }
   PhysicsWorld: new () => WasmPhysicsWorldInstance
   BodyType: {
     Dynamic:   { value: 0 }

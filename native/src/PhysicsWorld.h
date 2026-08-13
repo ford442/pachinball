@@ -169,6 +169,26 @@ public:
     contactListener_.setCallback(std::move(cb));
   }
 
+  /** Pointer to the packed float contact buffer written by the last step (12 floats/contact). */
+  const float* getContactBufferPtr() const { return contactListener_.getContactBufferPtr(); }
+  float* getContactBufferPtr() { return contactListener_.getContactBufferPtr(); }
+
+  /** Number of contacts packed this step. */
+  int getContactCount() const { return contactListener_.getContactCount(); }
+
+  /** Contacts dropped this step because the cap was hit (0 when lossless). */
+  int getDroppedContactCount() const { return contactListener_.getDroppedContactCount(); }
+
+  /** Hard cap on emitted contacts per step. Default is CONTACT_DEFAULT_MAX. */
+  void setMaxContacts(int max) {
+    contactListener_.setMaxContacts(max > 0 ? static_cast<std::size_t>(max) : 1);
+  }
+  int getMaxContacts() const { return static_cast<int>(contactListener_.getMaxContacts()); }
+
+  const std::vector<ContactEvent>& lastContactEvents() const {
+    return contactListener_.lastEvents();
+  }
+
   // ---- World config ---------------------------------------------------
 
   void setGravity(float gx, float gy, float gz) {

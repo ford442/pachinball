@@ -110,4 +110,56 @@ failed ||= !runScenario('wasm spinning ball picks up tangential velocity', (w) =
   return w.getVelZ(0) > 0.15 && w.getAngVelY(0) < 10
 })
 
+function readContacts(mod, world) {
+  const count = world.getContactCount()
+  const ptr = world.getContactBufferPtr()
+  if (!count || ptr == null) return []
+  const heap = mod.HEAPF32
+  if (!heap) throw new Error('Module.HEAPF32 missing — cannot drain contact buffer')
+  const start = ptr >> 2
+  const out = []
+  for (let i = 0; i < count; i++) {
+    const o = start + i * 12
+    out.push({
+      id1: heap[o],
+      id2: heap[o + 1],
+      impulse: heap[o + 8],
+      phase: heap[o + 9],
+    })
+  }
+  return out
+}
+
+// Rapier drainCollisionEvents emits begin/end only (`started` true then false).
+// WASM Enter=0 / Exit=2 must match that edge order for a scripted rest-then-lift.
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, -9.81, 0)
+  world.addStaticPlane(0, 1, 0, 0, 0.2)
+  world.createRigidBody(0, 0.25, 0, 0, 0, 0, 1, 0.25, 0, 0.05, 0, 0, 0.5, 0.5, 0.15)
+
+  const planePhases = []
+  for (let i = 0; i < 30; i++) {
+    world.step(1 / 60)
+    for (const c of readContacts(Module, world)) {
+      if (c.id1 === -1 || c.id2 === -1) planePhases.push(c.phase)
+    }
+  }
+  world.setBodyPosition(0, 0, 10, 0)
+  world.setVelocity(0, 0, 0, 0)
+  world.step(1 / 60)
+  for (const c of readContacts(Module, world)) {
+    if (c.id1 === -1 || c.id2 === -1) planePhases.push(c.phase)
+  }
+  world.delete()
+
+  const edges = planePhases.filter((p) => p === 0 || p === 2)
+  const rapierExpected = [0, 2] // Enter then Exit — Rapier begin/end
+  const ok = edges.length >= 2 && edges[0] === rapierExpected[0] && edges[edges.length - 1] === rapierExpected[1]
+    && planePhases.filter((p) => p === 0).length === 1
+    && planePhases.some((p) => p === 1)
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm/rapier enter-exit ordering (edges=${JSON.stringify(edges)} phases=${JSON.stringify(planePhases)})`)
+  if (!ok) failed = true
+}
+
 process.exit(failed ? 1 : 0)

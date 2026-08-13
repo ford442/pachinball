@@ -10,6 +10,7 @@
  */
 
 #include "PhysicsWorld.h"
+#include "ContactListener.h"
 #include "test_helpers.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -402,4 +403,146 @@ TEST_CASE("orientation integrates from angular velocity", "[physics][friction]")
   const float len = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
   CHECK(near(len, 1.f, 1e-3f));
   CHECK(std::fabs(q.y) > 0.1f);
+}
+
+TEST_CASE("contact manifold enter/stay/exit for resting ball", "[physics][contacts]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, -9.81f, 0.f);
+  world.addStaticPlane(0.f, 1.f, 0.f, 0.f);
+
+  RigidBodyDesc desc;
+  desc.position = {0.f, 0.25f, 0.f};
+  desc.mass = 1.f;
+  desc.radius = 0.25f;
+  desc.restitution = 0.f;
+  desc.linearDamping = 0.05f;
+  desc.friction = 0.5f;
+  const int ball = world.createRigidBody(desc);
+
+  world.step(FIXED_DT);
+  const auto& first = world.lastContactEvents();
+  REQUIRE(first.size() >= 1);
+  bool sawEnter = false;
+  for (const auto& e : first) {
+    if ((e.bodyId1 == ball && e.bodyId2 == STATIC_PLANE_ID) ||
+        (e.bodyId2 == ball && e.bodyId1 == STATIC_PLANE_ID)) {
+      CHECK(e.phase == ContactPhase::Enter);
+      sawEnter = true;
+    }
+  }
+  REQUIRE(sawEnter);
+
+  for (int i = 0; i < 10; ++i) {
+    world.step(FIXED_DT);
+    const auto& evts = world.lastContactEvents();
+    int pairCount = 0;
+    for (const auto& e : evts) {
+      if ((e.bodyId1 == ball && e.bodyId2 == STATIC_PLANE_ID) ||
+          (e.bodyId2 == ball && e.bodyId1 == STATIC_PLANE_ID)) {
+        ++pairCount;
+        CHECK(e.phase == ContactPhase::Stay);
+      }
+    }
+    CHECK(pairCount == 1);
+  }
+
+  world.setBodyPosition(ball, 0.f, 8.f, 0.f);
+  world.setVelocity(ball, 0.f, 0.f, 0.f);
+  world.step(FIXED_DT);
+  const auto& afterLift = world.lastContactEvents();
+  bool sawExit = false;
+  for (const auto& e : afterLift) {
+    if ((e.bodyId1 == ball && e.bodyId2 == STATIC_PLANE_ID) ||
+        (e.bodyId2 == ball && e.bodyId1 == STATIC_PLANE_ID)) {
+      CHECK(e.phase == ContactPhase::Exit);
+      sawExit = true;
+    }
+  }
+  REQUIRE(sawExit);
+}
+
+TEST_CASE("one contact event per pair per step despite substeps", "[physics][contacts]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, 0.f, 0.f);
+
+  const int a = world.createRigidBody({
+    {-0.1f, 0.f, 0.f}, {0.f, 0.f, 0.f},
+    1.f, 0.25f, 0.f, 0.f, BodyType::Dynamic
+  });
+  world.createRigidBody({
+    {0.1f, 0.f, 0.f}, {0.f, 0.f, 0.f},
+    1.f, 0.25f, 0.f, 0.f, BodyType::Dynamic
+  });
+
+  // 8 substeps in one step() call (maxSubsteps default is 8)
+  world.step(8.f / 60.f);
+  int pairEvents = 0;
+  for (const auto& e : world.lastContactEvents()) {
+    if (contactPairKey(e.bodyId1, e.bodyId2) == contactPairKey(a, 1)) {
+      ++pairEvents;
+      CHECK(e.phase == ContactPhase::Enter);
+    }
+  }
+  CHECK(pairEvents == 1);
+}
+
+TEST_CASE("contact listener peak impulse and lossless overflow", "[physics][contacts]") {
+  ContactListener listener;
+
+  ContactEvent sample;
+  sample.bodyId1 = 1;
+  sample.bodyId2 = 2;
+  sample.normal = {0.f, 1.f, 0.f};
+  sample.point = {0.f, 0.f, 0.f};
+  sample.impulse = 1.f;
+  listener.pushContact(sample);
+  sample.impulse = 7.5f;
+  listener.pushContact(sample);
+  sample.impulse = 3.f;
+  listener.pushContact(sample);
+  listener.flushEvents();
+
+  REQUIRE(listener.lastEvents().size() == 1);
+  CHECK(listener.lastEvents()[0].impulse == 7.5f);
+  CHECK(listener.lastEvents()[0].phase == ContactPhase::Enter);
+  CHECK(listener.getContactCount() == 1);
+  CHECK(listener.getDroppedContactCount() == 0);
+
+  const float* buf = listener.getContactBufferPtr();
+  REQUIRE(buf != nullptr);
+  CHECK(buf[0] == 1.f);
+  CHECK(buf[1] == 2.f);
+  CHECK(buf[8] == 7.5f);
+  CHECK(buf[9] == static_cast<float>(static_cast<int>(ContactPhase::Enter)));
+
+  listener.flushEvents();
+  REQUIRE(listener.lastEvents().size() == 1);
+  CHECK(listener.lastEvents()[0].phase == ContactPhase::Exit);
+
+  ContactListener many;
+  constexpr int N = 400;
+  for (int i = 0; i < N; ++i) {
+    ContactEvent e;
+    e.bodyId1 = i;
+    e.bodyId2 = 10000;
+    e.impulse = 1.f;
+    many.pushContact(e);
+  }
+  many.flushEvents();
+  CHECK(many.getContactCount() == N);
+  CHECK(many.getDroppedContactCount() == 0);
+  CHECK(many.lastEvents().size() == static_cast<std::size_t>(N));
+
+  ContactListener capped;
+  capped.setMaxContacts(2);
+  for (int i = 0; i < 10; ++i) {
+    ContactEvent e;
+    e.bodyId1 = i;
+    e.bodyId2 = 99;
+    e.impulse = 1.f;
+    capped.pushContact(e);
+  }
+  capped.flushEvents();
+  CHECK(capped.getContactCount() == 2);
+  CHECK(capped.getDroppedContactCount() == 8);
 }

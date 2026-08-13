@@ -21,18 +21,16 @@
 
 #include <emscripten/bind.h>
 #include "PhysicsWorld.h"
+#include <cstdint>
 
 using namespace emscripten;
 using namespace pachinball;
 
 // ---------------------------------------------------------------------------
-// Thin contact-event shim
+// Thin contact-event shim (legacy per-event path — prefer the packed buffer)
 // ---------------------------------------------------------------------------
-// emscripten::function callbacks receive plain values, not C++ structs, so we
-// expose a helper that sets a JavaScript callback on the world.
-//
 // From JavaScript the callback will be:
-//   world.setContactCallbackJS(function(id1, id2, nx, ny, nz, px, py, pz, impulse, isEntering) { … })
+//   world.setContactCallbackJS(function(id1, id2, nx, ny, nz, px, py, pz, impulse, phase) { … })
 //
 static void setContactCallbackJS(PhysicsWorld& world, emscripten::val jsCallback) {
   world.setContactCallback([jsCallback](const ContactEvent& evt) {
@@ -43,7 +41,7 @@ static void setContactCallbackJS(PhysicsWorld& world, emscripten::val jsCallback
         evt.normal.x, evt.normal.y, evt.normal.z,
         evt.point.x,  evt.point.y,  evt.point.z,
         evt.impulse,
-        evt.isEntering
+        static_cast<int>(evt.phase)
     );
   });
 }
@@ -177,6 +175,15 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("setRollingResistance", &PhysicsWorld::setRollingResistance)
     .function("getRollingResistance", &PhysicsWorld::getRollingResistance)
 
-    // Contact callback
+    // Packed contact buffer (one JS boundary crossing per step)
+    .function("getContactBufferPtr", optional_override([](PhysicsWorld& self) -> uintptr_t {
+        return reinterpret_cast<uintptr_t>(self.getContactBufferPtr());
+      }))
+    .function("getContactCount", &PhysicsWorld::getContactCount)
+    .function("getDroppedContactCount", &PhysicsWorld::getDroppedContactCount)
+    .function("setMaxContacts", &PhysicsWorld::setMaxContacts)
+    .function("getMaxContacts", &PhysicsWorld::getMaxContacts)
+
+    // Legacy per-event callback (tests / debug). Production uses the packed buffer.
     .function("setContactCallbackJS", &setContactCallbackJS);
 }
