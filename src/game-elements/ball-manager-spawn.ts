@@ -19,7 +19,7 @@ import {
 } from './ball-manager-context'
 import { COLLISION_GROUP_PRESETS } from './physics'
 import { getSoundSystem } from './sound-system'
-import { getSessionRng } from './seeded-rng'
+import { getSessionRng, type SeededRng } from '../core/seeded-rng'
 import { QualityTier, color, emissive, INTENSITY, PALETTE } from './visual-language'
 
 export function createMainBall(host: BallManagerHost): RAPIER.RigidBody {
@@ -544,42 +544,49 @@ export function createBallOfType(host: BallManagerHost, type: BallType, position
 }
 
 /**
- * Spawn a random ball with weighted probability.
+ * Select a ball type using weighted tiers from a single [0, 1) draw.
  */
-export function spawnRandomBall(host: BallManagerHost, position?: Vector3): RAPIER.RigidBody {
-  const rand = getSessionRng().next()
+export function selectWeightedBallType(rng: SeededRng = getSessionRng()): BallType {
+  const rand = rng.next()
   let cumulative = 0
 
   for (const [typeKey, config] of Object.entries(BALL_TIERS)) {
     cumulative += config.spawnWeight
     if (rand <= cumulative) {
-      const type = typeKey as BallType
-      const spawnPos = position || GameConfig.ball.spawnMain
-
-      // Gold-tier balls spawn as a chaotic swarm of small balls instead of one heavy ball
-      if (type !== BallType.STANDARD && GameConfig.smallGoldBalls.enabled) {
-        const swarm = host.spawnSmallGoldBallSwarm(position, type)
-        if (swarm.length > 0) {
-          const soundSystem = getSoundSystem()
-          soundSystem.playGoldBallSpawn(type)
-          return swarm[0]
-        }
-        // Fall through to single-ball spawn if swarm capacity is reached
-      }
-
-      // Create the ball
-      const body = host.createBallOfType(type, position)
-
-      // Play spawn effect for gold balls
-      if (type !== BallType.STANDARD) {
-        host.playSpawnEffect(new Vector3(spawnPos.x, spawnPos.y, spawnPos.z), type)
-        const soundSystem = getSoundSystem()
-        soundSystem.playGoldBallSpawn(type)
-      }
-
-      return body
+      return typeKey as BallType
     }
   }
 
-  return host.createMainBall() // Fallback
+  return BallType.STANDARD
+}
+
+/**
+ * Spawn a random ball with weighted probability.
+ */
+export function spawnRandomBall(host: BallManagerHost, position?: Vector3): RAPIER.RigidBody {
+  const type = selectWeightedBallType()
+  const spawnPos = position || GameConfig.ball.spawnMain
+
+  // Gold-tier balls spawn as a chaotic swarm of small balls instead of one heavy ball
+  if (type !== BallType.STANDARD && GameConfig.smallGoldBalls.enabled) {
+    const swarm = host.spawnSmallGoldBallSwarm(position, type)
+    if (swarm.length > 0) {
+      const soundSystem = getSoundSystem()
+      soundSystem.playGoldBallSpawn(type)
+      return swarm[0]
+    }
+    // Fall through to single-ball spawn if swarm capacity is reached
+  }
+
+  // Create the ball
+  const body = host.createBallOfType(type, position)
+
+  // Play spawn effect for gold balls
+  if (type !== BallType.STANDARD) {
+    host.playSpawnEffect(new Vector3(spawnPos.x, spawnPos.y, spawnPos.z), type)
+    const soundSystem = getSoundSystem()
+    soundSystem.playGoldBallSpawn(type)
+  }
+
+  return body
 }

@@ -237,8 +237,10 @@ export {
   getSessionRng,
   getSessionSeed,
   resetSessionRng,
+  isSessionRngInitialized,
+  DEV_DEFAULT_SESSION_SEED,
   type SeededRng,
-} from './seeded-rng'
+} from '../core/seeded-rng'
 export {
   ReplayRecorder,
   compressInputFrames,

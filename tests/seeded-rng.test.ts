@@ -10,7 +10,7 @@ import {
   initSessionRng,
   getSessionRng,
   getSessionSeed,
-} from '../src/game-elements/seeded-rng'
+} from '../src/core/seeded-rng'
 
 describe('createSeededRng', () => {
   it('same seed produces identical sequences', () => {
@@ -21,12 +21,29 @@ describe('createSeededRng', () => {
     expect(seqA).toEqual(seqB)
   })
 
+  it('string seed hashes to a stable numeric seed', () => {
+    const a = createSeededRng('nexus-cascade')
+    const b = createSeededRng(hashStringToSeed('nexus-cascade'))
+    const seqA = Array.from({ length: 10 }, () => a.next())
+    const seqB = Array.from({ length: 10 }, () => b.next())
+    expect(seqA).toEqual(seqB)
+  })
+
   it('different seeds diverge', () => {
     const a = createSeededRng(1)
     const b = createSeededRng(2)
     const seqA = Array.from({ length: 10 }, () => a.next())
     const seqB = Array.from({ length: 10 }, () => b.next())
     expect(seqA).not.toEqual(seqB)
+  })
+
+  it('int stays in [0, maxExclusive)', () => {
+    const rng = createSeededRng(99)
+    for (let i = 0; i < 100; i++) {
+      const n = rng.int(7)
+      expect(n).toBeGreaterThanOrEqual(0)
+      expect(n).toBeLessThan(7)
+    }
   })
 
   it('nextInt stays in range', () => {
@@ -42,6 +59,29 @@ describe('createSeededRng', () => {
     const a = createSeededRng(7).shuffle([1, 2, 3, 4, 5])
     const b = createSeededRng(7).shuffle([1, 2, 3, 4, 5])
     expect(a).toEqual(b)
+  })
+
+  it('fork streams are independent and reproducible', () => {
+    const parent = createSeededRng(100)
+    const forkA1 = parent.fork('ball-spawn')
+    const forkB1 = parent.fork('feeder-angle')
+
+    const parentSeq1 = Array.from({ length: 5 }, () => parent.next())
+    const forkASeq1 = Array.from({ length: 5 }, () => forkA1.next())
+    const forkBSeq1 = Array.from({ length: 5 }, () => forkB1.next())
+
+    const parent2 = createSeededRng(100)
+    const forkA2 = parent2.fork('ball-spawn')
+    const forkB2 = parent2.fork('feeder-angle')
+
+    const parentSeq2 = Array.from({ length: 5 }, () => parent2.next())
+    const forkASeq2 = Array.from({ length: 5 }, () => forkA2.next())
+    const forkBSeq2 = Array.from({ length: 5 }, () => forkB2.next())
+
+    expect(parentSeq1).toEqual(parentSeq2)
+    expect(forkASeq1).toEqual(forkASeq2)
+    expect(forkBSeq1).toEqual(forkBSeq2)
+    expect(forkASeq1).not.toEqual(forkBSeq1)
   })
 })
 
