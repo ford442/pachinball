@@ -17,6 +17,9 @@ import { compileTrackDefinition, type TrackBuildApi, type TrackMaterial } from '
 import { validateTrackDefinition } from '../src/adventure/track-schema'
 import quantumGridJson from '../src/adventure/track-data/QUANTUM_GRID.json'
 import chronoCoreJson from '../src/adventure/track-data/CHRONO_CORE.json'
+import singularityWellJson from '../src/adventure/track-data/SINGULARITY_WELL.json'
+import cryoChamberJson from '../src/adventure/track-data/CRYO_CHAMBER.json'
+import firewallBreachJson from '../src/adventure/track-data/FIREWALL_BREACH.json'
 
 type Call = { fn: string; args: unknown[] }
 
@@ -155,6 +158,75 @@ function referenceChronoCore(api: TrackBuildApi): void {
   api.createBasin(goalPos, chronoMat)
 }
 
+/** SINGULARITY_WELL path geometry (no vista pylons). */
+function referenceSingularityWell(api: TrackBuildApi): void {
+  const wellMat = api.getTrackMaterial('#9900FF')
+  let pos = api.currentStartPos.clone()
+  let heading = 0
+
+  pos = api.addStraightRamp(pos, heading, 6, 12, deg(15), wellMat)
+  pos = api.addCurvedRamp(pos, heading, 14, Math.PI, deg(5), 6, 4.0, wellMat, 20, deg(-15))
+  heading += Math.PI
+
+  const gapForward = new Vector3(Math.sin(heading), 0, Math.cos(heading)).scale(4)
+  pos = pos.add(gapForward)
+  pos.y -= 2
+
+  pos = api.addStraightRamp(pos, heading, 6, 4, 0, wellMat)
+  pos = api.addCurvedRamp(pos, heading, 8, deg(270), deg(10), 6, 1.0, wellMat, 20, deg(-25))
+  heading += deg(270)
+
+  pos = api.addStraightRamp(pos, heading, 5, 8, deg(35), wellMat)
+  api.addExitPortal(new Vector3(pos.x, pos.y + 1.8, pos.z))
+  api.createBasin(pos, wellMat)
+}
+
+/** CRYO_CHAMBER path geometry (no ice pillars). */
+function referenceCryoChamber(api: TrackBuildApi): void {
+  const iceMat = api.getTrackMaterial('#A5F2F3')
+  let pos = api.currentStartPos.clone()
+  let heading = 0
+  const iceFriction = 0.001
+
+  pos = api.addStraightRamp(pos, heading, 6, 15, deg(20), iceMat, 1.0, iceFriction)
+  pos = api.addCurvedRamp(pos, heading, 10, -Math.PI / 4, 0, 8, 1.0, iceMat, 10, 0, iceFriction)
+  heading -= Math.PI / 4
+  pos = api.addCurvedRamp(pos, heading, 10, Math.PI / 2, 0, 8, 1.0, iceMat, 15, 0, iceFriction)
+  heading += Math.PI / 2
+  pos = api.addCurvedRamp(pos, heading, 10, -Math.PI / 4, 0, 8, 1.0, iceMat, 10, 0, iceFriction)
+  heading -= Math.PI / 4
+  pos = api.addStraightRamp(pos, heading, 2.5, 12, 0, iceMat, 0.0, iceFriction)
+  pos = api.addCurvedRamp(pos, heading, 10, Math.PI, deg(15), 8, 2.0, iceMat, 20, deg(-20), iceFriction)
+  heading += Math.PI
+
+  const goalPos = pos.clone()
+  goalPos.y -= 2
+  goalPos.z += 2
+  api.addExitPortal(new Vector3(goalPos.x, goalPos.y - 0.2, goalPos.z))
+  api.createBasin(goalPos, iceMat)
+}
+
+/** FIREWALL_BREACH path geometry (no debris blocks). */
+function referenceFirewallBreach(api: TrackBuildApi): void {
+  const wallMat = api.getTrackMaterial('#FF4400')
+  let pos = api.currentStartPos.clone()
+  let heading = 0
+
+  pos = api.addStraightRamp(pos, heading, 6, 20, deg(25), wallMat)
+  pos = api.addStraightRamp(pos, heading, 8, 15, 0, wallMat)
+  pos = api.addCurvedRamp(pos, heading, 10, -Math.PI / 2, 0, 8, 1.0, wallMat, 15, 0)
+  heading -= Math.PI / 2
+  pos = api.addCurvedRamp(pos, heading, 10, Math.PI / 2, 0, 8, 1.0, wallMat, 15, 0)
+  heading += Math.PI / 2
+  pos = api.addStraightRamp(pos, heading, 8, 10, 0, wallMat)
+
+  const goalPos = pos.clone()
+  goalPos.y -= 2
+  goalPos.z += 2
+  api.addExitPortal(new Vector3(goalPos.x, goalPos.y - 0.2, goalPos.z))
+  api.createBasin(goalPos, wallMat)
+}
+
 // ── Parity assertions ────────────────────────────────────────────────────────
 
 function runJson(raw: unknown, startPos: Vector3): Call[] {
@@ -186,6 +258,27 @@ describe('JSON migration parity (#321)', () => {
   it('CHRONO_CORE JSON reproduces the TS builder call-for-call', () => {
     const fromJson = runJson(chronoCoreJson, chronoCoreAnchor)
     const fromTs = runReference(referenceChronoCore, chronoCoreAnchor)
+    expect(fromJson).toEqual(fromTs)
+  })
+
+  it('SINGULARITY_WELL JSON reproduces the TS path geometry', () => {
+    const anchor = new Vector3(0, 25, 0)
+    const fromJson = runJson(singularityWellJson, anchor)
+    const fromTs = runReference(referenceSingularityWell, anchor)
+    expect(fromJson).toEqual(fromTs)
+  })
+
+  it('CRYO_CHAMBER JSON reproduces the TS path geometry', () => {
+    const anchor = new Vector3(0, 20, 0)
+    const fromJson = runJson(cryoChamberJson, anchor)
+    const fromTs = runReference(referenceCryoChamber, anchor)
+    expect(fromJson).toEqual(fromTs)
+  })
+
+  it('FIREWALL_BREACH JSON reproduces the TS path geometry', () => {
+    const anchor = new Vector3(0, 25, 0)
+    const fromJson = runJson(firewallBreachJson, anchor)
+    const fromTs = runReference(referenceFirewallBreach, anchor)
     expect(fromJson).toEqual(fromTs)
   })
 })

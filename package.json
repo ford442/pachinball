@@ -18,6 +18,8 @@
     "preview": "vite preview",
     "icons:generate": "node scripts/generate-pwa-icons.mjs",
     "models:cabinet-placeholders": "node scripts/generate-cabinet-placeholders.mjs",
+    "models:insert-placeholders": "node scripts/generate-insert-placeholders.mjs",
+    "tracks:validate": "vitest run tests/tracks-validate-cli.test.ts",
     "test": "vitest run"
   },
   "dependencies": {

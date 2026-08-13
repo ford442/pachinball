@@ -7,13 +7,15 @@ Classic cabinet shells can load from **glTF 2.0** (`.glb`) with a procedural fal
 ```
 public/models/cabinet/classic/simple.glb   # LOW tier (and fallback)
 public/models/cabinet/classic/high.glb     # MEDIUM / HIGH
-public/models/inserts/                     # Optional insert hook (not wired yet)
+public/models/inserts/prism-core/simple.glb  # Playfield insert LOW
+public/models/inserts/prism-core/high.glb    # Playfield insert MEDIUM / HIGH
 ```
 
 Regenerate placeholders:
 
 ```bash
-node scripts/generate-cabinet-placeholders.mjs
+npm run models:cabinet-placeholders
+npm run models:insert-placeholders
 ```
 
 ## LOD + QualityTier
@@ -70,6 +72,22 @@ Examples: `cabinetNeonMarquee`, `cabinetLightBar`, `cabinetSidePlateDetail`.
 - Orchestrator: `CabinetBuilder.loadCabinetPreset()` (async) tries glTF then procedural.
 - Dependency: `@babylonjs/loaders` (side-effect import registers the glTF plugin).
 
-## Inserts (future)
+## Inserts (playfield toys)
 
-`loadOptionalInsert(scene, 'models/inserts/…')` is exported for playfield toys. Not wired into bumpers/feeders in the classic pilot.
+`src/cabinet/insert-gltf-loader.ts` loads visual-only insert meshes with the same
+LOD rules as cabinet shells (`LOW` → `simple.glb`; `MEDIUM`/`HIGH` → `high.glb`
+with simple fallback).
+
+**Pilot wiring:** `PrismCoreFeeder.loadInsertGltf(tier)` overlays
+`public/models/inserts/prism-core/{simple,high}.glb` and hides procedural meshes
+when load succeeds. Rapier capture colliders remain in `prism-core-feeder.ts` —
+never derive gameplay colliders from insert art.
+
+| Node name (substring) | Purpose |
+|-----------------------|---------|
+| `prismCoreInner` | Inner chamber mesh |
+| `prismCoreOuter` | Outer shell |
+| `prismCoreShardDetail` | HIGH-only shard accent |
+
+Export checklist matches cabinet shells (Y-up, −Z forward, 1 unit = 1 game unit).
+Place assets under `public/models/inserts/<toy-id>/`.

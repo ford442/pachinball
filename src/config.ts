@@ -203,6 +203,19 @@ export const ASSET_BASE = import.meta.env.VITE_ASSET_URL as string | undefined
   || (import.meta.env.PROD ? PROD_ASSET_BASE : DEV_ASSET_BASE)
 
 /**
+ * Backbox media path: VITE_ASSET_URL override → prod CDN → dev `public/backbox/` bundle.
+ */
+export function resolveBackboxAssetPath(name: string, ext: string): string {
+  if (import.meta.env.VITE_ASSET_URL) {
+    return `${import.meta.env.VITE_ASSET_URL}/pachinball/backbox/${name}.${ext}`
+  }
+  if (import.meta.env.PROD) {
+    return `${PROD_ASSET_BASE}/pachinball/backbox/${name}.${ext}`
+  }
+  return `/backbox/${name}.${ext}`
+}
+
+/**
  * Helper to make API calls with exponential backoff retry logic.
  */
 export async function apiFetch<T>(
@@ -1085,7 +1098,7 @@ export const GameConfig = {
     // Supported formats: mp4, webm (mp4 recommended for compatibility)
     // Uses ASSET_BASE for remote assets or local paths for bundled files
     get attractVideoPath(): string {
-      return `${ASSET_BASE}/pachinball/backbox/attract.mp4`
+      return resolveBackboxAssetPath('attract', 'mp4')
     },
     
     // If true, video replaces reels completely (reels hidden when video plays)
@@ -1096,7 +1109,7 @@ export const GameConfig = {
     // Used as fallback if video fails or isn't configured
     // Set to '' to disable image and use reels only
     get attractImagePath(): string {
-      return `${ASSET_BASE}/pachinball/backbox/attract.png`
+      return resolveBackboxAssetPath('attract', 'png')
     },
     
     // Opacity of the image layer (0.0 = invisible, 1.0 = fully opaque)
@@ -1112,30 +1125,30 @@ export const GameConfig = {
     // State-specific video clips that play on game events
     // Set to '' to disable state-specific video and use attract/default
     get jackpotVideoPath(): string {
-      return `${ASSET_BASE}/pachinball/backbox/jackpot.mp4`
+      return resolveBackboxAssetPath('jackpot', 'mp4')
     },
     get feverVideoPath(): string {
-      return `${ASSET_BASE}/pachinball/backbox/fever.mp4`
+      return resolveBackboxAssetPath('fever', 'mp4')
     },
     get reachVideoPath(): string {
-      return `${ASSET_BASE}/pachinball/backbox/reach.mp4`
+      return resolveBackboxAssetPath('reach', 'mp4')
     },
     get adventureVideoPath(): string {
-      return `${ASSET_BASE}/pachinball/backbox/adventure.mp4`
+      return resolveBackboxAssetPath('adventure', 'mp4')
     },
 
     // State-specific image fallbacks
     get jackpotImagePath(): string {
-      return `${ASSET_BASE}/pachinball/backbox/jackpot.png`
+      return resolveBackboxAssetPath('jackpot', 'png')
     },
     get feverImagePath(): string {
-      return `${ASSET_BASE}/pachinball/backbox/fever.png`
+      return resolveBackboxAssetPath('fever', 'png')
     },
     get reachImagePath(): string {
-      return `${ASSET_BASE}/pachinball/backbox/reach.png`
+      return resolveBackboxAssetPath('reach', 'png')
     },
     get adventureImagePath(): string {
-      return `${ASSET_BASE}/pachinball/backbox/adventure.png`
+      return resolveBackboxAssetPath('adventure', 'png')
     },
   }
 }

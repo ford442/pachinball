@@ -10,24 +10,18 @@ import { AdventureTrackType } from '../adventure-types'
 import type { TrackManifest } from './track-manifest-types'
 import { buildNeonHelix } from '../tracks/neon-helix'
 import { buildCyberCore } from '../tracks/cyber-core'
-import { buildSingularityWell } from '../tracks/singularity-well'
 import { buildPachinkoHall } from '../tracks/pachinko-hall'
 import { buildPachinkoSpire } from '../tracks/pachinko-spire'
 import { buildOrbitalJunkyard } from '../tracks/orbital-junkyard'
-import { buildFirewallBreach } from '../tracks/firewall-breach'
 import { buildPrismPathway } from '../tracks/prism-pathway'
 import { buildMagneticStorage } from '../tracks/magnetic-storage'
 import { buildNeuralNetwork } from '../tracks/neural-network'
 import { buildNeonStronghold } from '../tracks/neon-stronghold'
 import { buildCasinoHeist } from '../tracks/casino-heist'
 import { buildCpuCore } from '../tracks/cpu-core'
-import { buildCryoChamber } from '../tracks/cryo-chamber'
 import { buildBioHazardLab } from '../tracks/bio-hazard-lab'
 import { buildGravityForge } from '../tracks/gravity-forge'
-import { buildTidalNexus } from '../tracks/tidal-nexus'
-import { buildDigitalZenGarden } from '../tracks/digital-zen-garden'
 import { buildSynthwaveSurf } from '../tracks/synthwave-surf'
-import { buildSolarFlare } from '../tracks/solar-flare'
 import { buildTeslaTower } from '../tracks/tesla-tower'
 import { buildNeonSkyline } from '../tracks/neon-skyline'
 import { buildPolychromeVoid } from '../tracks/polychrome-void'
@@ -147,8 +141,8 @@ export const MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.SINGULARITY_WELL,
     startAnchor: { x: 0, y: 25, z: 0 },
-    buildKind: 'ts',
-    builder: buildSingularityWell,
+    buildKind: 'json',
+    dataPath: './track-data/SINGULARITY_WELL.json',
     zone: {
       name: 'Singularity Well',
       storyText: 'WARNING: GRAVITY ANOMALY\n\nApproaching event horizon...',
@@ -332,8 +326,8 @@ export const MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.FIREWALL_BREACH,
     startAnchor: { x: 0, y: 25, z: 0 },
-    buildKind: 'ts',
-    builder: buildFirewallBreach,
+    buildKind: 'json',
+    dataPath: './track-data/FIREWALL_BREACH.json',
     zone: {
       name: 'Firewall Breach',
       storyText: 'WARNING: SECURITY BREACH\n\nIntrusion detected...',
@@ -377,8 +371,8 @@ export const MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.CRYO_CHAMBER,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    builder: buildCryoChamber,
+    buildKind: 'json',
+    dataPath: './track-data/CRYO_CHAMBER.json',
     zone: {
       name: 'Cryo Chamber',
       storyText: 'CRYOGENIC ZONE\n\nTemperature dropping...',
@@ -439,8 +433,8 @@ export const MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.TIDAL_NEXUS,
     startAnchor: { x: 0, y: 25, z: 0 },
-    buildKind: 'ts',
-    builder: buildTidalNexus,
+    buildKind: 'json',
+    dataPath: './track-data/TIDAL_NEXUS.json',
     zone: {
       name: 'Tidal Nexus',
       storyText: 'TIDAL NEXUS\n\nFlow with the current...',
@@ -452,12 +446,23 @@ export const MANIFEST_DATA: TrackManifest[] = [
       isMajorTransition: false,
       glowIntensity: 1.2,
     },
+    catalog: {
+      description: 'Post-finale spillway — turbine spin, riptide bank, and an abyssal drop basin.',
+      difficulty: 'expert',
+      modeType: 'EXTENDED_MAP',
+      recommendedScore: 125000,
+      timeLimitSeconds: 170,
+      timeoutPenaltyMultiplier: 0.35,
+      unlockedBy: 'FIREWALL_BREACH',
+      theme: 'tidal',
+      visualTheme: { primary: 'CYAN', accent: 'WHITE', surfaceTint: 'GLASS' },
+    },
   },
   {
     id: AdventureTrackType.DIGITAL_ZEN_GARDEN,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    builder: buildDigitalZenGarden,
+    buildKind: 'json',
+    dataPath: './track-data/DIGITAL_ZEN_GARDEN.json',
     zone: {
       name: 'Digital Zen Garden',
       storyText: 'ZEN GARDEN\n\nFind your center...',
@@ -468,6 +473,17 @@ export const MANIFEST_DATA: TrackManifest[] = [
       interiorColor: '#aaffcc',
       isMajorTransition: false,
       glowIntensity: 0.8,
+    },
+    catalog: {
+      description: 'Raked sand lanes, a low-friction stream bend, and a moon-bridge shrine basin.',
+      difficulty: 'medium',
+      modeType: 'STATIONARY_TABLE',
+      recommendedScore: 60000,
+      timeLimitSeconds: 110,
+      timeoutPenaltyMultiplier: 0.48,
+      unlockedBy: 'SOLAR_FLARE',
+      theme: 'zen',
+      visualTheme: { primary: 'WHITE', accent: 'MAGENTA', surfaceTint: 'PLAYFIELD' },
     },
   },
   {
@@ -490,8 +506,8 @@ export const MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.SOLAR_FLARE,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    builder: buildSolarFlare,
+    buildKind: 'json',
+    dataPath: './track-data/SOLAR_FLARE.json',
     zone: {
       name: 'Solar Flare',
       storyText: 'WARNING: SOLAR FLARE\n\nRadiation levels high...',
@@ -502,6 +518,17 @@ export const MANIFEST_DATA: TrackManifest[] = [
       interiorColor: '#ffcc44',
       isMajorTransition: true,
       glowIntensity: 1.6,
+    },
+    catalog: {
+      description: 'Coronal launch, sunspot straight, and a solar-wind sweep into the fusion core.',
+      difficulty: 'hard',
+      modeType: 'EXTENDED_MAP',
+      recommendedScore: 115000,
+      timeLimitSeconds: 155,
+      timeoutPenaltyMultiplier: 0.36,
+      unlockedBy: 'TIDAL_NEXUS',
+      theme: 'solar',
+      visualTheme: { primary: 'GOLD', accent: 'ALERT', surfaceTint: 'PLAYFIELD_DEEP' },
     },
   },
   {

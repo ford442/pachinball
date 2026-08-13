@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "FIREWALL_BREACH",
+  "cameraPresetId": "FIREWALL_BREACH",
+  "materials": {
+    "structure": "#FF4400",
+    "accent": "#0088FF"
+  },
+  "segments": [
+    { "type": "straight", "width": 6, "length": 20, "inclineDeg": 25, "material": "#FF4400" },
+    { "type": "straight", "width": 8, "length": 15, "inclineDeg": 0, "material": "#FF4400" },
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": -90,
+      "inclineDeg": 0,
+      "width": 8,
+      "wallHeight": 1,
+      "segments": 15,
+      "material": "#FF4400"
+    },
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": 90,
+      "inclineDeg": 0,
+      "width": 8,
+      "wallHeight": 1,
+      "segments": 15,
+      "material": "#FF4400"
+    },
+    { "type": "straight", "width": 8, "length": 10, "inclineDeg": 0, "material": "#FF4400" },
+    { "type": "portal", "offset": { "x": 0, "y": -2.2, "z": 2 } },
+    { "type": "bucket", "material": "#FF4400", "offset": { "x": 0, "y": -2, "z": 2 } }
+  ]
+}
