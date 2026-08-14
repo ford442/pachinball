@@ -245,8 +245,10 @@ export class FlipperBuilder {
       return joint
     }
 
-    leftJoint = make(new Vector3(-4, -0.5, -7), false)
-    rightJoint = make(new Vector3(4, -0.5, -7), true)
+    // Slightly above the LCD deck (y=-1) so paddles clear the tilted playfield
+    // after reparenting + mesh interpolation (y=-0.5 still z-fought the surface).
+    leftJoint = make(new Vector3(-4, -0.25, -7), false)
+    rightJoint = make(new Vector3(4, -0.25, -7), true)
 
     return {
       flippers,

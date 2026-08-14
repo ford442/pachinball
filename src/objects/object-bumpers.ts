@@ -168,28 +168,27 @@ export class BumperBuilder {
         make(s.x, s.z, s.color, s.scale)
       }
     } else {
+      // Keep all default bumpers out of KEEP_OUT_BOXES.launchLane (x 8.5–12).
       // Main center bumper (larger)
       make(0, 8, '#ff00aa', 1.2)
       // Upper side bumpers
       make(-4, 4, '#00aaff', 1.0)
-      make(4, 4, '#00aaff', 1.0)
+      make(3.5, 4, '#00aaff', 1.0)
       // Lower bumpers - funnel toward flippers
       make(-3, 0, '#ffaa00', 0.9)
       make(3, 0, '#ffaa00', 0.9)
       // Far upper bumper
       make(0, 14, '#00ff88', 0.85)
-      // Side deflector bumper
+      // Side deflector bumper (left only — right side is the plunger corridor)
       make(-6, 10, '#ff4400', 1.0)
 
-      // Additional scoring bumpers to ensure reliable hits on default paths (addresses zero-score dead corridors)
-      // Center lower to catch straight drops from center
+      // Additional scoring bumpers — stay left of the launch corridor
       make(0, 2, '#88ffaa', 0.85)
-      // Mid-side to catch bank shots and side drains
       make(-5, 6, '#ffaa88', 0.9)
-      make(5, 6, '#ffaa88', 0.9)
+      make(3.5, 7, '#ffaa88', 0.9)
       // Lower sides near slings to catch outlane recoveries
       make(-4, -1, '#aaffff', 0.8)
-      make(4, -1, '#aaffff', 0.8)
+      make(3.5, -1, '#aaffff', 0.8)
     }
 
     return {

@@ -5,9 +5,17 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
+import { KEEP_OUT_BOXES } from '../game-elements/daily-cascade-layout'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
+
+function pinInKeepOut(x: number, z: number): boolean {
+  for (const box of KEEP_OUT_BOXES) {
+    if (x >= box.minX && x <= box.maxX && z >= box.minZ && z <= box.maxZ) return true
+  }
+  return false
+}
 
 export class PachinkoBuilder {
   private scene: Scene
@@ -145,6 +153,9 @@ export class PachinkoBuilder {
     if (pinPositions && pinPositions.length > 0) {
       for (let i = 0; i < pinPositions.length; i++) {
         const p = pinPositions[i]!
+        // Seeded layouts should already respect keep-outs; filter as a safety net
+        // so the plunger corridor never fills with pins.
+        if (pinInKeepOut(p.x, p.z)) continue
         placePin(p.x, p.z, `pin_seed_${i}`)
       }
     } else {
@@ -153,8 +164,9 @@ export class PachinkoBuilder {
         for (let c = 0; c < cols; c++) {
           const x = center.x - (width / 2) + c * spacingX + offsetX
           const z = center.z - (height / 2) + r * spacingZ
-          // Skip center area for the main catcher/target
-          if (Math.abs(x) < 2.5 && Math.abs(z - center.z) < 2.5) continue
+          // Skip catcher hole, plunger lane, flipper arcs, and drain mouth —
+          // same keep-outs Daily Cascade already enforces for seeded layouts.
+          if (pinInKeepOut(x, z)) continue
           placePin(x, z, `pin_${r}_${c}`)
         }
       }

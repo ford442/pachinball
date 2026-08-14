@@ -73,7 +73,8 @@ describe('QuantumTunnelFeeder', () => {
   })
 
   it('does not capture balls still in the plunger launch lane', () => {
-    const ball = createMockBall({ x: 10.5, y: 0.5, z: 2 })
+    // Even if the sensor reports intersection, lane-guard must win for right-side climb.
+    const ball = createMockBall({ x: 10.5, y: 0.5, z: 14 })
     feeder.update(1 / 60, [ball as never])
     expect(feeder.getState()).toBe(QuantumTunnelState.IDLE)
     expect(ball.setBodyType).not.toHaveBeenCalled()

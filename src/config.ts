@@ -710,8 +710,8 @@ export type FeederTunable =
 export const FEEDER_TUNABLES = Object.freeze({
   'mag-spin': Object.freeze({
     kind: 'mag-spin',
-    // Upper playfield — off the plunger lane exit (was z=12, caught every launch)
-    feederPosition: Object.freeze({ x: 7.5, y: 0.5, z: 15 }),
+    // Upper-left of center — well clear of the plunger corridor (x≈10.5)
+    feederPosition: Object.freeze({ x: 4.5, y: 0.5, z: 15 }),
     catchRadius: 1.5,
     spinDuration: 1.2,
     cooldown: 3.0,
@@ -837,7 +837,9 @@ export const FEEDER_TUNABLES = Object.freeze({
   } as const satisfies GaussCannonTunables),
   'quantum-tunnel': Object.freeze({
     kind: 'quantum-tunnel',
-    inputPosition: Object.freeze({ x: 11.5, y: 0.5, z: 14 }),
+    // Left upper wall — was on the right wall at the top of the plunger lane
+    // and teleported nearly every launch. Eject still uses +X toward center.
+    inputPosition: Object.freeze({ x: -11.5, y: 0.5, z: 14 }),
     outputPosition: Object.freeze({ x: -11.5, y: 0.5, z: 0.0 }),
     inputRadius: 1.2,
     ejectImpulse: 25.0,

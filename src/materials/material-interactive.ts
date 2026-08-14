@@ -163,10 +163,10 @@ export class InteractiveMaterials extends MaterialLibraryBase {
       mat.clearCoat.roughness = 0.25
 
       // Self-lit neon edge so flippers stay visible without relying on reflections
-      mat.emissiveColor = emissive(PALETTE.ALERT, INTENSITY.NORMAL)
-      mat.emissiveIntensity = 1.1
+      mat.emissiveColor = emissive(PALETTE.ALERT, INTENSITY.HIGH)
+      mat.emissiveIntensity = 1.35
       // Sit above the tilted LCD playfield to avoid z-fighting that hides paddles.
-      mat.zOffset = -2
+      mat.zOffset = -4
 
       if (this._qualityTier === QualityTier.HIGH) {
         mat.anisotropy.isEnabled = true
@@ -193,6 +193,10 @@ export class InteractiveMaterials extends MaterialLibraryBase {
       
       // High environment reflection for metal
       mat.environmentIntensity = 1.0
+      // Keep pivots readable against the dark LCD (map theming must not bury them).
+      mat.emissiveColor = emissive(PALETTE.CYAN, INTENSITY.AMBIENT)
+      mat.emissiveIntensity = 0.8
+      mat.zOffset = -4
       
       // Subtle clear coat for machined metal look
       mat.clearCoat.isEnabled = true
@@ -212,12 +216,17 @@ export class InteractiveMaterials extends MaterialLibraryBase {
   }
 
   /**
-   * Update flipper emissive color to match current LCD map
+   * Tint flipper edge glow toward the active LCD map without dimming paddles
+   * into the playfield (0.25× map color used to make them effectively invisible).
    */
   updateFlipperMaterialEmissive(mapColorHex: string): void {
     const mat = this.materialCache.get('enhancedFlipper') as PBRMaterial | undefined
     if (mat) {
-      mat.emissiveColor = emissive(mapColorHex, 0.25)
+      // Keep ALERT base readable; blend a little map color on top.
+      const mapTint = emissive(mapColorHex, INTENSITY.NORMAL)
+      const base = emissive(PALETTE.ALERT, INTENSITY.HIGH)
+      mat.emissiveColor = Color3.Lerp(base, mapTint, 0.35)
+      mat.emissiveIntensity = 1.35
     }
   }
 

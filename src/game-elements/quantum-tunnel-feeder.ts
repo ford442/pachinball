@@ -177,8 +177,9 @@ export class QuantumTunnelFeeder {
 
     for (const ball of ballBodies) {
       const pos = ball.translation()
-      // Input portal is on the right wall — ignore balls still in the plunger lane.
-      if (pos.x > 8.5 && pos.z < 10) continue
+      // Input portal sits on the right wall at the top of the plunger corridor —
+      // ignore the entire launch climb so every launch is not a free teleport.
+      if (pos.x > 8.5 && pos.z < 16) continue
 
       const ballHandle = ball.collider(0)
       if (this.world.intersectionPair(sensorHandle, ballHandle)) {

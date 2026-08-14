@@ -54,8 +54,12 @@ export function handleBumperCollision(
     ctx.host.ballAnimator.animateBallImpact(ballMesh, impactNormal, impactIntensity)
   }
 
+  // Tall bumper hologram sensors sit above the playfield. Do not steal balls that
+  // are still climbing the plunger corridor (x≈10.5) — that launches straight into
+  // a kinematic catch and dumps the ball behind the launcher on release.
+  const inLaunchCorridor = ballPos.x > 8.5 && ballPos.z < 16
   if (ballPos.y > 1.5) {
-    if (ctx.host.display?.getDisplayState() === DisplayState.IDLE) {
+    if (!inLaunchCorridor && ctx.host.display?.getDisplayState() === DisplayState.IDLE) {
       ctx.scoringBridge.activateHologramCatch(ballBody, bump, ctx.bumperVisualMap)
     }
     return

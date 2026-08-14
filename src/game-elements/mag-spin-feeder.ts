@@ -311,7 +311,8 @@ export class MagSpinFeeder {
     for (const body of ballBodies) {
       const pos = body.translation()
       // Plunger lane runs along x≈10.5 — don't vacuum balls still exiting launch.
-      if (pos.x > 8.5 && pos.z < 11) continue
+      // Full corridor height matches KEEP_OUT_BOXES.launchLane (z up to 18).
+      if (pos.x > 8.5 && pos.z < 16) continue
 
       const dist = Vector3.Distance(new Vector3(pos.x, pos.y, pos.z), this.position)
 

@@ -10,6 +10,8 @@ import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight'
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight'
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
+// Side-effect: registers ShadowGeneratorSceneComponent on Scene
+import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
 import { RenderTargetTexture } from '@babylonjs/core/Materials/Textures/renderTargetTexture'

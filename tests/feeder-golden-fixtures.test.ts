@@ -78,9 +78,10 @@ describe('feeder golden FSM fixtures', () => {
 
     expect(record.impulses).toHaveLength(1)
     const imp = record.impulses[0]
-    expect(imp.x).toBeCloseTo(-14.206584819476339, 10)
-    expect(imp.y).toBeCloseTo(1.9936305570722506, 10)
-    expect(imp.z).toBeCloseTo(-20.474334786970058, 5)
+    // Position-dependent release (feeder at x=4.5,z=15) — recompute if feederPosition moves.
+    expect(imp.x).toBeCloseTo(-9.381123839678642, 10)
+    expect(imp.y).toBeCloseTo(1.99363055707225, 10)
+    expect(imp.z).toBeCloseTo(-23.087224881014194, 5)
     expect(record.releaseAngvel.y).toBe(12)
     expect(record.releaseAngvel.x).toBeCloseTo(2.8240335527807474, 10)
     expect(record.releaseAngvel.z).toBeCloseTo(-3.3973993621766567, 10)
