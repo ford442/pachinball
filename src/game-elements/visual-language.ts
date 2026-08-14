@@ -11,8 +11,7 @@
  * - Layered readability: background < interactive < highlight < energy
  */
 
-import { Color3 } from '@babylonjs/core'
-
+import { Color3 } from '@babylonjs/core/Maths/math.color'
 // ============================================================================
 // COLOR PALETTE - Single source of truth
 // ============================================================================

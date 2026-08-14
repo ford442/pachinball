@@ -1,14 +1,11 @@
-import {
-  Mesh,
-  MeshBuilder,
-  Scene,
-  Vector3,
-  StandardMaterial,
-  Color3,
-  Scalar,
-  PointLight,
-  Quaternion,
-} from '@babylonjs/core'
+import { PointLight } from '@babylonjs/core/Lights/pointLight'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Scalar } from '@babylonjs/core/Maths/math.scalar'
+import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { Scene } from '@babylonjs/core/scene'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { GameConfigType } from '../config'
 import { getSessionRngFork, RNG_FORK } from './seeded-rng'

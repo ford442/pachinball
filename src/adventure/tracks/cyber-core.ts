@@ -5,12 +5,12 @@
  * tiger-orange bumper cluster. Materials resolve from TRACK_THEME_PROFILES.
  */
 
-import { Vector3 } from '@babylonjs/core'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { TrackBuilder } from '../track-builder'
 import type { TrackInfo } from '../../game-elements/adventure-track-progression'
 
 type BuilderCtx = {
-  getThemedTrackMaterial: (role: 'structure' | 'accent' | 'energy' | 'glow') => import('@babylonjs/core').StandardMaterial
+  getThemedTrackMaterial: (role: 'structure' | 'accent' | 'energy' | 'glow') => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial
   currentStartPos: Vector3
   currentTrackInfo: TrackInfo | null
   addStraightRamp: (...args: unknown[]) => Vector3

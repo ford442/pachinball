@@ -3,8 +3,8 @@
  * Manages camera transitions and presets for different adventure tracks
  */
 
-import { ArcRotateCamera, Scalar } from '@babylonjs/core'
-
+import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera'
+import { Scalar } from '@babylonjs/core/Maths/math.scalar'
 export interface CameraTransition {
   duration: number
   easing: (t: number) => number

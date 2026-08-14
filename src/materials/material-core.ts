@@ -9,16 +9,13 @@
  * - MaterialLibraryBase class with caching infrastructure
  */
 
-import {
-  Scene,
-  StandardMaterial,
-  PBRMaterial,
-  Texture,
-  DynamicTexture,
-  CubeTexture,
-  BaseTexture,
-} from '@babylonjs/core'
-
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture'
+import { CubeTexture } from '@babylonjs/core/Materials/Textures/cubeTexture'
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import { Texture } from '@babylonjs/core/Materials/Textures/texture'
+import { Scene } from '@babylonjs/core/scene'
 // Import KTX2 loader to register the format (side-effect)
 import '@babylonjs/core/Materials/Textures/Loaders/ktxTextureLoader'
 import type { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine'

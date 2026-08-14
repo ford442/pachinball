@@ -1,4 +1,4 @@
-import { Engine } from '@babylonjs/core'
+import { Engine } from '@babylonjs/core/Engines/engine'
 import { GameState, DisplayState } from '../game-elements/types'
 import { EventBus } from '../core/event-bus'
 

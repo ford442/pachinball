@@ -1,5 +1,11 @@
-import { MeshBuilder, Vector3, StandardMaterial, Mesh, Animation, Scene, DynamicTexture, Color3 } from '@babylonjs/core'
-
+import { Animation } from '@babylonjs/core/Animations/animation'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { Scene } from '@babylonjs/core/scene'
 export class FloatingNumberEffects {
   private scene: Scene
   private floatingNumbers: Mesh[] = []

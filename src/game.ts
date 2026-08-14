@@ -1,17 +1,15 @@
-import {
-  TargetCamera,
-  Color3,
-  HemisphericLight,
-  Mesh,
-  Scene,
-  Vector3,
-  MirrorTexture,
-  RenderTargetTexture,
-  DirectionalLight,
-  PointLight,
-  ShadowGenerator,
-  TransformNode,
-} from '@babylonjs/core'
+import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera'
+import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight'
+import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight'
+import { PointLight } from '@babylonjs/core/Lights/pointLight'
+import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
+import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
+import { RenderTargetTexture } from '@babylonjs/core/Materials/Textures/renderTargetTexture'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
+import { Scene } from '@babylonjs/core/scene'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import { SceneOptimizer } from '@babylonjs/core/Misc/sceneOptimizer'
 import type { Engine } from '@babylonjs/core/Engines/engine'
@@ -48,12 +46,9 @@ import {
   getSoundSystem,
   SoundSystem,
   getMapSystem,
-  getLeaderboardSystem,
-  getNameEntryDialog,
   getAdventureState,
   getDailyCascadeState,
   type FeederKey,
-  getLevelSelectScreen,
   ZoneTriggerSystem,
   getDynamicWorld,
   DebugHUD,
@@ -109,6 +104,9 @@ import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
 import { CheckpointDebugController, type DebugStageKey } from './game/checkpoint-debug'
 import { FreeMapTestMode } from './game/free-map-test-mode'
 import { LevelLoader } from './game/level-loader'
+import type { LeaderboardSystem } from './game-elements/leaderboard-system'
+import type { NameEntryDialog } from './game-elements/name-entry-dialog'
+import type { LevelSelectScreen } from './game-elements/level-select-screen'
 
 export class Game {
   readonly engine: Engine | WebGPUEngine
@@ -143,10 +141,53 @@ export class Game {
   performanceMonitor = new PerformanceMonitor()
   hapticManager: HapticManager | null = null
   soundSystem!: SoundSystem
-  leaderboardSystem = getLeaderboardSystem()
-  nameEntryDialog = getNameEntryDialog()
+  private _leaderboardSystem: LeaderboardSystem | null = null
+  private _nameEntryDialog: NameEntryDialog | null = null
+  private _overlaySystemsReady: Promise<void> | null = null
   readonly replayRecorder = new ReplayRecorder()
   readonly replayRunner = new ReplayRunner()
+
+  async ensureOverlaySystems(): Promise<void> {
+    if (this._leaderboardSystem && this._nameEntryDialog) return
+    if (!this._overlaySystemsReady) {
+      this._overlaySystemsReady = Promise.all([
+        import('./game-elements/leaderboard-system'),
+        import('./game-elements/name-entry-dialog'),
+      ]).then(([lb, ne]) => {
+        this._leaderboardSystem = lb.getLeaderboardSystem()
+        this._nameEntryDialog = ne.getNameEntryDialog()
+        this._leaderboardSystem.setOnSpectateCallback((replayId) => {
+          void this.startSpectateReplay(replayId)
+        })
+      }).catch((err: unknown) => {
+        this._overlaySystemsReady = null
+        throw err
+      })
+    }
+    await this._overlaySystemsReady
+  }
+
+  get leaderboardSystem(): LeaderboardSystem {
+    if (!this._leaderboardSystem) {
+      throw new Error('LeaderboardSystem not loaded — call ensureOverlaySystems() first')
+    }
+    return this._leaderboardSystem
+  }
+
+  get nameEntryDialog(): NameEntryDialog {
+    if (!this._nameEntryDialog) {
+      throw new Error('NameEntryDialog not loaded — call ensureOverlaySystems() first')
+    }
+    return this._nameEntryDialog
+  }
+
+  disposeOverlaySystems(): void {
+    this._leaderboardSystem?.stop()
+    this._leaderboardSystem?.dispose()
+    this._leaderboardSystem = null
+    this._nameEntryDialog = null
+    this._overlaySystemsReady = null
+  }
 
   // New obstacle builders
   spinnerBuilder: SpinnerBumperBuilder | null = null
@@ -217,7 +258,7 @@ export class Game {
   mapSystem = getMapSystem()
   // Legacy level-select + cosmetic rewards; campaign truth is adventureTrackProgression.
   adventureState = getAdventureState()
-  levelSelectScreen: ReturnType<typeof getLevelSelectScreen> | null = null
+  levelSelectScreen: LevelSelectScreen | null = null
   dynamicWorld: ReturnType<typeof getDynamicWorld> | null = null
   ballStackVisual: BallStackVisual | null = null
 
@@ -431,7 +472,9 @@ export class Game {
         onCabinetCycle: () => { void this.cabinetManager?.cycleCabinetPreset() },
         onCameraToggle: () => { this.isCameraFollowMode = !this.isCameraFollowMode },
         onLevelSelectToggle: () => this.toggleLevelSelect(),
-        onLeaderboardToggle: () => this.leaderboardSystem.toggle(),
+        onLeaderboardToggle: () => {
+          void this.ensureOverlaySystems().then(() => this.leaderboardSystem.toggle())
+        },
         onDynamicModeToggle: () => this.scenarioManager.toggleDynamicMode(),
         onScenarioCycle: () => this.scenarioManager.cycleScenario(),
         onPerfMonitorToggle: () => this.togglePerformanceMonitor(),
@@ -457,10 +500,6 @@ export class Game {
       const touchPlungerBtn = document.getElementById('touch-plunger')
       const touchNudgeBtn = document.getElementById('touch-nudge')
       this.inputManager.setupTouchControls(touchLeftBtn, touchRightBtn, touchPlungerBtn, touchNudgeBtn)
-
-      this.leaderboardSystem.setOnSpectateCallback((replayId) => {
-        void this.startSpectateReplay(replayId)
-      })
 
       const urlParams = new URLSearchParams(window.location.search)
       const replayParam = urlParams.get('replay')
@@ -782,19 +821,23 @@ export class Game {
   }
 
   toggleLevelSelect(): void {
-    if (!this.levelSelectScreen) {
-      this.levelSelectScreen = getLevelSelectScreen(
-        {
-          onLevelSelect: (level, mapType) => {
-            this.mapCabinet.switchTableMap(mapType)
-            this.adventureState.startLevel(level.id)
-          },
-          onClose: () => {},
+    void this.ensureLevelSelectScreen().then((screen) => screen.toggle())
+  }
+
+  private async ensureLevelSelectScreen(): Promise<LevelSelectScreen> {
+    if (this.levelSelectScreen) return this.levelSelectScreen
+    const { getLevelSelectScreen } = await import('./game-elements/level-select-screen')
+    this.levelSelectScreen = getLevelSelectScreen(
+      {
+        onLevelSelect: (level, mapType) => {
+          this.mapCabinet.switchTableMap(mapType)
+          this.adventureState.startLevel(level.id)
         },
-        this.adventureState
-      )
-    }
-    this.levelSelectScreen.toggle()
+        onClose: () => {},
+      },
+      this.adventureState,
+    )
+    return this.levelSelectScreen
   }
 
   toggleCameraMode(): void { this.isCameraFollowMode = !this.isCameraFollowMode }

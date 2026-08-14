@@ -1,13 +1,11 @@
-import {
-  Color3,
-  Mesh,
-  MeshBuilder,
-  PointLight,
-  StandardMaterial,
-  TrailMesh,
-  Vector3,
-} from '@babylonjs/core'
-import type { PBRMaterial } from '@babylonjs/core'
+import { PointLight } from '@babylonjs/core/Lights/pointLight'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { TrailMesh } from '@babylonjs/core/Meshes/trailMesh'
+import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { BALL_TIERS, BallType, GameConfig } from '../config'
 import { getCampaignRewardsManager } from './campaign-rewards-manager'

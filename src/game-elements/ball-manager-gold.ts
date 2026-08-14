@@ -1,11 +1,9 @@
-import {
-  Color4,
-  MeshBuilder,
-  ParticleSystem,
-  Texture,
-  Vector3,
-} from '@babylonjs/core'
-import type { Mesh } from '@babylonjs/core'
+import { Texture } from '@babylonjs/core/Materials/Textures/texture'
+import { Color4 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem'
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { BallType, GameConfig } from '../config'
 import { pulse } from './visual-language'

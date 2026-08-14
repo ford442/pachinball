@@ -45,6 +45,9 @@ jobs:
       - name: Build (bundle only, no WASM)
         run: npx vite build
 
+      - name: Bundle size gate
+        run: npm run check:bundle
+
   # Blocking smoke: desktop + mobile Playwright specs. A red e2e now blocks merges (#319).
   # The dev server is started by the `webServer` block in playwright.config.ts (pinned to
   # 5173 with --strictPort, since verify_prism_core.spec.ts hard-codes that URL), so there

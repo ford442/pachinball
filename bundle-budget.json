@@ -1,0 +1,9 @@
+{
+  "chunks": {
+    "entryGzipMaxKb": 200,
+    "babylonCoreGzipMaxKb": 680,
+    "rapierGzipMaxKb": 800,
+    "precacheTotalKiBMax": 8300
+  },
+  "tolerancePercent": 5
+}

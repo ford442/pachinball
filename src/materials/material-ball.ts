@@ -2,7 +2,8 @@
  * Ball Materials - Ball-specific material definitions
  */
 
-import { PBRMaterial, Color3 } from '@babylonjs/core'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { MaterialLibraryBase } from './material-core'
 import {
   PALETTE,

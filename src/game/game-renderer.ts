@@ -4,22 +4,19 @@
  * Extracted from game.ts to keep the orchestrator lean.
  */
 
-import {
-  FreeCamera,
-  TargetCamera,
-  Color3,
-  Color4,
-  HemisphericLight,
-  MeshBuilder,
-  Scene,
-  Vector3,
-  MirrorTexture,
-  StandardMaterial,
-  RenderTargetTexture,
-  DirectionalLight,
-  PointLight,
-  ShadowGenerator,
-} from '@babylonjs/core'
+import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera'
+import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera'
+import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight'
+import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight'
+import { PointLight } from '@babylonjs/core/Lights/pointLight'
+import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
+import { RenderTargetTexture } from '@babylonjs/core/Materials/Textures/renderTargetTexture'
+import { Color3, Color4 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { Scene } from '@babylonjs/core/scene'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration'
 import { DepthOfFieldEffectBlurLevel } from '@babylonjs/core/PostProcesses/depthOfFieldEffect'

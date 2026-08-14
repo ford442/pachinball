@@ -1,5 +1,8 @@
 // Types and interfaces for game objects
-import type { Mesh, AbstractMesh, Vector3, TransformNode } from '@babylonjs/core'
+import type { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
+import type { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export interface FlipperConfig {

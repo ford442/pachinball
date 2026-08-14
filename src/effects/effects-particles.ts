@@ -1,4 +1,8 @@
-import { Scene, Vector3, ParticleSystem, Color4, Texture } from '@babylonjs/core'
+import { Texture } from '@babylonjs/core/Materials/Textures/texture'
+import { Color4 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem'
+import { Scene } from '@babylonjs/core/scene'
 import { PALETTE } from '../game-elements/visual-language'
 
 export class ParticleEffects {

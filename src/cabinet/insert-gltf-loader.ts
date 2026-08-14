@@ -3,7 +3,9 @@
  * Colliders remain code-authored in Rapier; never mesh-collide insert art.
  */
 
-import type { Scene, AbstractMesh, AssetContainer } from '@babylonjs/core'
+import type { AssetContainer } from '@babylonjs/core/assetContainer'
+import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
+import type { Scene } from '@babylonjs/core/scene'
 import { QualityTier } from '../game-elements/visual-language'
 import {
   loadCabinetGltf,

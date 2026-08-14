@@ -1,7 +1,7 @@
 import { AdventureTrackType } from './adventure-types'
 import { getManifestStartAnchor } from './manifests'
 
-export function getTrackStartAnchor(track: AdventureTrackType): import('@babylonjs/core').Vector3 {
+export function getTrackStartAnchor(track: AdventureTrackType): import('@babylonjs/core/Maths/math.vector').Vector3 {
   return getManifestStartAnchor(track).clone()
 }
 

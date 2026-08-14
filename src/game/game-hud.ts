@@ -22,6 +22,7 @@ export interface HUDHost {
   readonly ballStackVisual: BallStackVisual | null
   readonly effects: EffectsSystem | null
   readonly uiManager: GameUIManager | null
+  ensureOverlaySystems(): Promise<void>
   readonly leaderboardSystem: LeaderboardSystem
   readonly nameEntryDialog: NameEntryDialog
   readonly mapManager: TableMapManager | null
@@ -191,6 +192,7 @@ export class GameHUD {
 
     const fallbackMap = this.host.mapManager?.getCurrentMap() || 'neon-helix'
     const mapId = getDailyCascadeState().getLeaderboardMapId(fallbackMap)
+    await this.host.ensureOverlaySystems()
     this.host.leaderboardSystem.setContext(mapId)
     const rank = await this.host.leaderboardSystem.checkRank(this.host.score)
     if (rank === null || rank > 100) {

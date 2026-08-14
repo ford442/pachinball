@@ -5,13 +5,13 @@
  * Extracted from display.ts for modularity.
  */
 
-import {
-  Color3,
-  DynamicTexture,
-  MeshBuilder,
-  StandardMaterial,
-} from '@babylonjs/core'
-import type { Scene, Mesh, TransformNode } from '@babylonjs/core'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
+import type { TransformNode } from '@babylonjs/core/Meshes/transformNode'
+import type { Scene } from '@babylonjs/core/scene'
 import { getSessionRngFork, RNG_FORK } from '../game-elements/seeded-rng'
 import { DisplayState, type DisplayConfig, type SlotReel } from './display-types'
 import { DISPLAY_LAYER_Z } from './display-layer-depth'

@@ -1,4 +1,6 @@
-import { TargetCamera, Vector3, Scalar } from '@babylonjs/core'
+import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera'
+import { Scalar } from '@babylonjs/core/Maths/math.scalar'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { QualityTier } from './visual-language'
 
 /**

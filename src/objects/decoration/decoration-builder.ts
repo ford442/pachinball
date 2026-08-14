@@ -1,13 +1,11 @@
-import {
-  Scene,
-  Vector3,
-  MeshBuilder,
-  Mesh,
-  StandardMaterial,
-  Color3,
-  Scalar,
-  Animation
-} from '@babylonjs/core'
+import { Animation } from '@babylonjs/core/Animations/animation'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Scalar } from '@babylonjs/core/Maths/math.scalar'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { Scene } from '@babylonjs/core/scene'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../../config'
 import { COLLISION_GROUP_PRESETS } from '../../game-elements/physics'
@@ -180,7 +178,7 @@ export class DecorationBuilder {
     this.createSideRails(brushedMetalMat, plasticMat)
   }
 
-  private createSideRails(metalMat: import('@babylonjs/core').PBRMaterial, accentMat: import('@babylonjs/core').PBRMaterial): void {
+  private createSideRails(metalMat: import('@babylonjs/core/Materials/PBR/pbrMaterial').PBRMaterial, accentMat: import('@babylonjs/core/Materials/PBR/pbrMaterial').PBRMaterial): void {
     // ================================================================
     // SMOOTH CURVED RAILS
     // ================================================================

@@ -3,7 +3,8 @@
  * in place of the transparent glass playfield, plus its procedural canvas rendering.
  */
 
-import { PBRMaterial, DynamicTexture } from '@babylonjs/core'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
 import type { TableMapConfig } from '../shaders/lcd-table'
 import { PlayfieldMaterials } from './material-playfield'
 import {

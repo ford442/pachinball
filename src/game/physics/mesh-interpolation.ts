@@ -1,4 +1,5 @@
-import { Vector3, Quaternion, TransformNode, Matrix, TmpVectors } from '@babylonjs/core'
+import { Vector3, Quaternion, Matrix, TmpVectors } from '@babylonjs/core/Maths/math.vector'
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export interface InterpolationBinding {

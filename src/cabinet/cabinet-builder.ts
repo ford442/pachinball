@@ -10,17 +10,15 @@
  * Classic may load from glTF (see cabinet-gltf-loader.ts) with procedural fallback.
  */
 
-import {
-  Scene,
-  Mesh,
-  AbstractMesh,
-  PointLight,
-  SpotLight,
-  PBRMaterial,
-  StandardMaterial,
-  Color3,
-  type AssetContainer,
-} from '@babylonjs/core'
+import type { AssetContainer } from '@babylonjs/core/assetContainer'
+import { PointLight } from '@babylonjs/core/Lights/pointLight'
+import { SpotLight } from '@babylonjs/core/Lights/spotLight'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { Scene } from '@babylonjs/core/scene'
 import { getMaterialLibrary } from '../materials'
 import { PALETTE, color, QualityTier } from '../game-elements/visual-language'
 import type { TableMapType } from '../shaders/lcd-table'

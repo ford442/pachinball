@@ -93,8 +93,8 @@ describe('LevelLoader', () => {
     })
   })
 
-  it('loads a valid map and calls switchToTrack + rebuildHandleCaches + resetBall', () => {
-    const result = loader.loadMap('NEON_HELIX')
+  it('loads a valid map and calls switchToTrack + rebuildHandleCaches + resetBall', async () => {
+    const result = await loader.loadMap('NEON_HELIX')
     expect(result.success).toBe(true)
     expect(result.mapConfig?.id).toBe('NEON_HELIX')
     expect(mockAdventureMode.switchToTrack).toHaveBeenCalledWith(AdventureTrackType.NEON_HELIX)
@@ -102,7 +102,7 @@ describe('LevelLoader', () => {
     expect(resetBall).toHaveBeenCalled()
   })
 
-  it('surfaces teardown stats from adventure mode on free-map load', () => {
+  it('surfaces teardown stats from adventure mode on free-map load', async () => {
     const teardown = {
       meshesDisposed: 4,
       materialsDisposed: 2,
@@ -121,41 +121,41 @@ describe('LevelLoader', () => {
       adventureMode: mockAdventureMode as never,
     })
 
-    const result = loader.loadMap('CYBER_CORE')
+    const result = await loader.loadMap('CYBER_CORE')
 
     expect(result.teardown?.meshesDisposed).toBe(4)
     expect(result.teardown?.bodiesRemoved).toBe(3)
     expect(result.teardown?.lingeringBodies).toBe(0)
   })
 
-  it('returns error for unknown map id', () => {
-    const result = loader.loadMap('INVALID_MAP')
+  it('returns error for unknown map id', async () => {
+    const result = await loader.loadMap('INVALID_MAP')
     expect(result.success).toBe(false)
     expect(result.error).toContain('Unknown map id')
   })
 
-  it('calls ensureAdventureActive when adventure is not active', () => {
+  it('calls ensureAdventureActive when adventure is not active', async () => {
     mockAdventureMode.isActive.mockReturnValue(false)
-    loader.loadMap('CYBER_CORE')
+    await loader.loadMap('CYBER_CORE')
     expect(ensureAdventureActive).toHaveBeenCalled()
   })
 
-  it('does not call ensureAdventureActive when already active', () => {
+  it('does not call ensureAdventureActive when already active', async () => {
     mockAdventureMode.isActive.mockReturnValue(true)
-    loader.loadMap('CYBER_CORE')
+    await loader.loadMap('CYBER_CORE')
     expect(ensureAdventureActive).not.toHaveBeenCalled()
   })
 
-  it('returns error when switchToTrack fails', () => {
+  it('returns error when switchToTrack fails', async () => {
     mockAdventureMode.switchToTrack.mockReturnValue(false)
-    const result = loader.loadMap('NEON_HELIX')
+    const result = await loader.loadMap('NEON_HELIX')
     expect(result.success).toBe(false)
     expect(result.error).toContain('Failed to switch')
   })
 
-  it('returns error when adventureMode is null', () => {
+  it('returns error when adventureMode is null', async () => {
     loader.updateDeps({ adventureMode: null })
-    const result = loader.loadMap('NEON_HELIX')
+    const result = await loader.loadMap('NEON_HELIX')
     expect(result.success).toBe(false)
     expect(result.error).toContain('not available')
   })

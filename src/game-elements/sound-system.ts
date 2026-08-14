@@ -1,4 +1,4 @@
-import type { Vector3 } from '@babylonjs/core'
+import type { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { BallType } from '../config'
 import type { EventBus } from '../core/event-bus'
 import {

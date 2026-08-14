@@ -1,4 +1,8 @@
-import { MeshBuilder, Vector3, StandardMaterial, Mesh, Scene } from '@babylonjs/core'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { Scene } from '@babylonjs/core/scene'
 import { emissive, INTENSITY, PALETTE } from '../game-elements/visual-language'
 import { EffectsConfig } from '../config'
 

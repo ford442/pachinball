@@ -2,7 +2,9 @@
  * Shared types for the adventure exit-portal system.
  */
 
-import type { Mesh, StandardMaterial, Color3 } from '@babylonjs/core'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import type { Color3 } from '@babylonjs/core/Maths/math.color'
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { AdventureTrackType } from './adventure-types'
 

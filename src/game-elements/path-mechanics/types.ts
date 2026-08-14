@@ -1,5 +1,4 @@
-import type { Vector3 } from '@babylonjs/core'
-
+import type { Vector3 } from '@babylonjs/core/Maths/math.vector'
 export interface PathMechanicConfig {
   position: Vector3
   mapBaseColor: string

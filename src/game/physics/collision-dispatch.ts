@@ -9,8 +9,7 @@
  */
 
 import type * as RAPIER from '@dimforge/rapier3d-compat'
-import type { Mesh } from '@babylonjs/core'
-
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { BumperVisual } from '../../game-elements/types'
 import type { LaneSensorDef } from '../../objects/object-lane-sensors'
 import { ContactPhase, contactStarted, type PhysicsContact, type WasmContactEvent } from '../../wasm'

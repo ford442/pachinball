@@ -1,4 +1,7 @@
-import { Scene, MeshBuilder, Mesh, TransformNode } from '@babylonjs/core'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
+import { Scene } from '@babylonjs/core/scene'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'

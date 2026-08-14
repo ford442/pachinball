@@ -3,14 +3,11 @@
  * Collision is never derived from these meshes; playfield Rapier walls stay code-authored.
  */
 
-import '@babylonjs/loaders/glTF'
-import {
-  SceneLoader,
-  type Scene,
-  type AbstractMesh,
-  type AssetContainer,
-  type ISceneLoaderProgressEvent,
-} from '@babylonjs/core'
+import type { AssetContainer } from '@babylonjs/core/assetContainer'
+import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader'
+import type { ISceneLoaderProgressEvent } from '@babylonjs/core/Loading/sceneLoader'
+import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
+import type { Scene } from '@babylonjs/core/scene'
 import { QualityTier } from '../game-elements/visual-language'
 import { resolveAssetUrl } from '../game/game-utils'
 import type { CabinetGltfConfig, CabinetPreset } from './cabinet-types'
@@ -81,6 +78,7 @@ export async function loadCabinetGltf(
     timeoutMs?: number
   } = {},
 ): Promise<AssetContainer> {
+  await import('@babylonjs/loaders/glTF')
   const resolved = resolveAssetUrl(relativeUrl)
   if (!resolved) {
     throw new Error(`[CabinetGltf] Invalid URL: ${relativeUrl}`)

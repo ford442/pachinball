@@ -1,6 +1,5 @@
-import { Color3 } from '@babylonjs/core'
-import type { Scene } from '@babylonjs/core'
-
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import type { Scene } from '@babylonjs/core/scene'
 import { getMaterialLibrary } from '../materials'
 import type { DisplaySystem } from '../display'
 import type { EffectsSystem } from '../effects'

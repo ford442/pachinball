@@ -32,7 +32,7 @@ export class GameInputActions {
   private flipperLeftHoldTime = 0
   private flipperRightHoldTime = 0
   private lastFrameTime = 0
-  private scene: import('@babylonjs/core').Scene | null = null
+  private scene: import('@babylonjs/core/scene').Scene | null = null
 
   // ── Plunger spatial constants ──────────────────────────────────────────────
   /** X position of both the kinematic plunger body and its visual meshes. */
@@ -60,7 +60,7 @@ export class GameInputActions {
   }
 
   /** Provide the BabylonJS scene so per-frame visual updates can find meshes. */
-  setScene(scene: import('@babylonjs/core').Scene | null): void {
+  setScene(scene: import('@babylonjs/core/scene').Scene | null): void {
     this.scene = scene
   }
 
@@ -210,7 +210,7 @@ export class GameInputActions {
     this.host.plungerChargeLevel = chargeLevel
   }
 
-  updatePlungerVisual(scene: import('@babylonjs/core').Scene | null, chargeLevel: number): void {
+  updatePlungerVisual(scene: import('@babylonjs/core/scene').Scene | null, chargeLevel: number): void {
     if (!scene) return
 
     // Skip visual update while the launch animation is playing (state machine owns positions)
@@ -357,7 +357,7 @@ export class GameInputActions {
   /**
    * Reset the plunger to a launch-ready rest position.
    */
-  resetPlungerVisual(scene: import('@babylonjs/core').Scene | null): void {
+  resetPlungerVisual(scene: import('@babylonjs/core/scene').Scene | null): void {
     if (scene) {
       this.scene = scene
     }

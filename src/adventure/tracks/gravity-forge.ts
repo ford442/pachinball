@@ -4,25 +4,26 @@
  * An industrial track with conveyor belts, hydraulic pistons, and centrifugal casters.
  */
 
-import { Vector3, MeshBuilder, Quaternion } from '@babylonjs/core'
+import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildGravityForge(builder: TrackBuilder): void {
-  const rustMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#8B4513")
-  const steelMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#333333")
-  const moltenMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#FF4500")
-  const waterMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#0088FF")
+  const rustMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#8B4513")
+  const steelMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#333333")
+  const moltenMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FF4500")
+  const waterMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#0088FF")
 
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core').Scene }).scene
+  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
   const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
-  const kinematicBindings = (builder as unknown as { kinematicBindings: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core').Mesh }[] }).kinematicBindings
+  const kinematicBindings = (builder as unknown as { kinematicBindings: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
   const conveyorZones = (builder as unknown as { conveyorZones: { sensor: RAPIER.RigidBody, force: Vector3 }[] }).conveyorZones
-  const animatedObstacles = (builder as unknown as { animatedObstacles: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core').Mesh, type: string, basePos: Vector3, frequency: number, amplitude: number, phase: number }[] }).animatedObstacles
-  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core').Mesh[] }).adventureTrack
+  const animatedObstacles = (builder as unknown as { animatedObstacles: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, frequency: number, amplitude: number, phase: number }[] }).animatedObstacles
+  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
 
   let currentPos = currentStartPos.clone()
   let heading = 0

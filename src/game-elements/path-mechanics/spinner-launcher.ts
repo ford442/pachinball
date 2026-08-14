@@ -1,4 +1,6 @@
-import { MeshBuilder, Vector3, Mesh } from '@babylonjs/core'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../../materials'
 import { getSessionRngFork, RNG_FORK } from '../seeded-rng'

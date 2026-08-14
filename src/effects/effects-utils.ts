@@ -1,5 +1,5 @@
-import { DynamicTexture, Scene } from '@babylonjs/core'
-
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import { Scene } from '@babylonjs/core/scene'
 export function createSharedParticleTexture(scene: Scene): DynamicTexture {
   const size = 64
   const tex = new DynamicTexture('sharedParticleTex', size, scene, false)

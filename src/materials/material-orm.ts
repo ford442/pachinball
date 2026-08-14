@@ -2,7 +2,9 @@
  * ORM (Occlusion/Roughness/Metallic) channel-packing helpers for PBR materials.
  */
 
-import { PBRMaterial, DynamicTexture, Texture } from '@babylonjs/core'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import { Texture } from '@babylonjs/core/Materials/Textures/texture'
 import { MaterialLibraryBase, type TextureSet } from './material-core'
 
 export class ORMTexturePacking extends MaterialLibraryBase {

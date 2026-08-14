@@ -2,9 +2,16 @@
  * Game Scene Builder — Staged scene construction helpers.
  */
 
-import { MeshBuilder, Mesh, Vector3, Scene, StandardMaterial, Color3, ShadowGenerator, TransformNode, Tools } from '@babylonjs/core'
-import type { TargetCamera } from '@babylonjs/core'
-
+import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
+import { Tools } from '@babylonjs/core/Misc/tools'
+import { Scene } from '@babylonjs/core/scene'
+import type { TargetCamera } from '@babylonjs/core/Cameras/targetCamera'
 import type { PhysicsSystem } from '../game-elements/physics'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
@@ -32,7 +39,7 @@ export interface SceneBuilderHost {
   tableCam: TargetCamera | null
   cameraController: CameraController | null
   adventureMode: AdventureMode | null
-  mirrorTexture: import('@babylonjs/core').MirrorTexture | null
+  mirrorTexture: import('@babylonjs/core/Materials/Textures/mirrorTexture').MirrorTexture | null
   shadowGenerator: ShadowGenerator | null
   playfieldGroup: TransformNode | null
   uiManager: GameUIManager | null

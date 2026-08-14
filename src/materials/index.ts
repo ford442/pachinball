@@ -28,7 +28,9 @@ export { InteractiveMaterials } from './material-interactive'
 export { StructuralMaterials } from './material-structural'
 
 // Import for composition
-import { Scene, StandardMaterial, PBRMaterial } from '@babylonjs/core'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Scene } from '@babylonjs/core/scene'
 import { MaterialLibraryBase } from './material-core'
 import { BallMaterials } from './material-ball'
 import { MetallicMaterials } from './material-metallic'

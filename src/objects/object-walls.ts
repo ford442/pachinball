@@ -1,4 +1,9 @@
-import { Scene, Vector3, MeshBuilder, Mesh, Quaternion, StandardMaterial, Color3 } from '@babylonjs/core'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { Scene } from '@babylonjs/core/scene'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
 import { getMaterialLibrary } from '../materials'
@@ -152,7 +157,7 @@ export class WallBuilder {
   private createWall(
     pos: Vector3,
     size: Vector3,
-    mat: import('@babylonjs/core').StandardMaterial | import('@babylonjs/core').PBRMaterial,
+    mat: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial | import('@babylonjs/core/Materials/PBR/pbrMaterial').PBRMaterial,
     bindings: PhysicsBinding[],
     meshes: Mesh[]
   ): void {
@@ -198,7 +203,7 @@ export class WallBuilder {
   private createSlingshot(
     pos: Vector3,
     rot: number,
-    mat: import('@babylonjs/core').StandardMaterial | import('@babylonjs/core').PBRMaterial,
+    mat: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial | import('@babylonjs/core/Materials/PBR/pbrMaterial').PBRMaterial,
     bindings: PhysicsBinding[],
     bumperBodies: RAPIER.RigidBody[],
     bumperVisuals: BumperVisual[],

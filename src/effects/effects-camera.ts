@@ -1,5 +1,5 @@
-import { Camera, Vector3 } from '@babylonjs/core'
-
+import { Camera } from '@babylonjs/core/Cameras/camera'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 interface ScreenShakeConfig {
   intensity: number
   duration: number

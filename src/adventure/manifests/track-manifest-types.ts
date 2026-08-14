@@ -45,6 +45,9 @@ export type TrackBuildKind = 'ts' | 'json'
 /** TS track builder function signature. */
 export type TrackBuilderFn = (ctx: TrackBuilder) => void
 
+/** Lazy loader for TS track builders (code-split per track). */
+export type TrackBuilderLoader = () => Promise<TrackBuilderFn>
+
 /** Fields shared by both build kinds. */
 interface TrackManifestBase {
   id: AdventureTrackType
@@ -59,10 +62,10 @@ interface TrackManifestBase {
   cameraPresetId?: string
 }
 
-/** Hand-tuned TS track — geometry emitted by a builder function. */
+/** Hand-tuned TS track — geometry emitted by a lazily loaded builder function. */
 export interface TsTrackManifest extends TrackManifestBase {
   buildKind: 'ts'
-  builder: TrackBuilderFn
+  loadBuilder: TrackBuilderLoader
 }
 
 /** Declarative track — geometry compiled from a JSON definition. */
@@ -79,6 +82,6 @@ export interface JsonTrackManifest extends TrackManifestBase {
 /**
  * Complete track manifest — one entry per track in `track-manifest-data.ts`,
  * aggregated in `registry.ts`. The `buildKind` discriminant makes the build
- * dispatch total: a TS track must supply a `builder`, a JSON track a `dataPath`.
+ * dispatch total: a TS track must supply a `loadBuilder`, a JSON track a `dataPath`.
  */
 export type TrackManifest = TsTrackManifest | JsonTrackManifest

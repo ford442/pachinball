@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Vector3 } from '@babylonjs/core'
-
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { CameraController, CameraMode, QualityTier, type CameraRuntimePolicy } from '../src/game-elements'
 
 function createPolicy(overrides: Partial<CameraRuntimePolicy> = {}): CameraRuntimePolicy {
@@ -16,7 +15,7 @@ function createCameraStub() {
   return {
     target: new Vector3(0, 0, 2),
     fov: 0.9,
-  } as unknown as import('@babylonjs/core').TargetCamera
+  } as unknown as import('@babylonjs/core/Cameras/targetCamera').TargetCamera
 }
 
 describe('CameraController', () => {

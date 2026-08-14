@@ -4,8 +4,8 @@
  * focused on handle-space conversion and routing.
  */
 
-import { Vector3 } from '@babylonjs/core'
-import type { Mesh } from '@babylonjs/core'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 import type { BumperVisual } from '../../game-elements/types'

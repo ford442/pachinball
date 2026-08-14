@@ -2,7 +2,7 @@
  * Game Slot & Adventure — Slot machine callbacks and legacy adventure track cycling.
  */
 
-import type { Scene } from '@babylonjs/core'
+import type { Scene } from '@babylonjs/core/scene'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { BallManager } from '../game-elements/ball-manager'
@@ -49,7 +49,7 @@ export interface SlotAdventureHost {
   readonly uiManager: { showMessage(message: string, duration?: number): void } | null
 
   updateHUD(): void
-  getBallPosition(): import('@babylonjs/core').Vector3 | null
+  getBallPosition(): import('@babylonjs/core/Maths/math.vector').Vector3 | null
   triggerJackpot(): void
   setGameState(state: import('../game-elements').GameState): void
   resetBall(): void
@@ -171,21 +171,22 @@ export class GameSlotAdventure {
 
       const track = this.nextAdventureTrack
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.host.adventureMode.start(ballBody, camera, ballMesh as any, track)
-      this.host.physicsController?.rebuildHandleCaches()
-      this.host.adventureCinematicSystem?.setCamera(this.host.adventureMode.getFollowCamera())
+      void this.host.adventureMode.start(ballBody, camera, ballMesh as any, track).then(() => {
+        this.host.physicsController?.rebuildHandleCaches()
+        this.host.adventureCinematicSystem?.setCamera(this.host.adventureMode!.getFollowCamera())
 
-      const trackName = this.getTrackDisplayName(track)
-      if (this.host.scoreElement) {
-        this.host.scoreElement.innerText = `HOLO-DECK: ${trackName}`
-      }
+        const trackName = this.getTrackDisplayName(track)
+        if (this.host.scoreElement) {
+          this.host.scoreElement.innerText = `HOLO-DECK: ${trackName}`
+        }
 
-      this.host.display?.setTrackInfo(trackName)
-      this.host.display?.setStoryText(`SECTOR: ${trackName}`)
-      getTrackThemingSystem()?.applyTheme(track)
+        this.host.display?.setTrackInfo(trackName)
+        this.host.display?.setStoryText(`SECTOR: ${trackName}`)
+        getTrackThemingSystem()?.applyTheme(track)
 
-      const currentIndex = GameSlotAdventure.TRACK_ORDER.indexOf(track)
-      this.nextAdventureTrack = GameSlotAdventure.TRACK_ORDER[(currentIndex + 1) % GameSlotAdventure.TRACK_ORDER.length]
+        const currentIndex = GameSlotAdventure.TRACK_ORDER.indexOf(track)
+        this.nextAdventureTrack = GameSlotAdventure.TRACK_ORDER[(currentIndex + 1) % GameSlotAdventure.TRACK_ORDER.length]
+      })
     }
   }
 
@@ -203,32 +204,39 @@ export class GameSlotAdventure {
    * receives the next track ID straight from AdventureTrackProgression after a
    * portal entry finalises the completed track.
    */
-  switchToTrack(trackId: string): void {
-    if (!this.host.adventureMode || !this.host.scene) return
-    if (!this.host.adventureMode.isActive()) return
+  switchToTrack(trackId: string): Promise<void> {
+    if (!this.host.adventureMode || !this.host.scene) return Promise.resolve()
+    if (!this.host.adventureMode.isActive()) return Promise.resolve()
 
     const trackType = trackId as AdventureTrackType
     if (!Object.values(AdventureTrackType).includes(trackType)) {
       console.warn(`[GameSlotAdventure] Invalid track id: ${trackId}`)
-      return
+      return Promise.resolve()
     }
+
+    return this.performTrackSwitch(trackType, trackId)
+  }
+
+  private async performTrackSwitch(trackType: AdventureTrackType, trackId: string): Promise<void> {
 
     this.host.performanceMonitor?.markTrackSwitch(trackId)
 
     // Canonical load path: LevelLoader tears down old track, applies A/B map + mode, builds new geometry.
     const loader = this.host.levelLoader
     if (loader) {
-      const result = loader.loadCampaignTrack(trackId, { resetBallToPlunger: false })
+      const result = await loader.loadCampaignTrack(trackId, { resetBallToPlunger: false })
       if (!result.success) {
         console.warn(`[GameSlotAdventure] Campaign track load failed: ${result.error}`)
         this.host.uiManager?.showMessage(result.error ?? 'Track load failed', 3000)
         return
       }
     } else {
-      const success = this.host.adventureMode.switchToTrack(trackType)
+      const adventureMode = this.host.adventureMode
+      if (!adventureMode) return
+      const success = await adventureMode.switchToTrack(trackType)
       if (!success) {
         const detail =
-          this.host.adventureMode.getLastTrackLoadError() ?? `Failed to switch to track: ${trackId}`
+          adventureMode.getLastTrackLoadError() ?? `Failed to switch to track: ${trackId}`
         this.host.uiManager?.showMessage(detail, 3000)
         return
       }

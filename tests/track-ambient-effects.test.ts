@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Scene } from '@babylonjs/core'
+import type { Scene } from '@babylonjs/core/scene'
 import { TrackAmbientEffects } from '../src/effects/track-ambient-effects'
 import { getTrackThemeProfile } from '../src/game-elements/track-theme-profiles'
 

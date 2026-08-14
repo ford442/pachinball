@@ -4,17 +4,18 @@
  * A debris-filled track with space junk obstacles and the Crusher choke point.
  */
 
-import { Vector3, MeshBuilder, Quaternion } from '@babylonjs/core'
+import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildOrbitalJunkyard(builder: TrackBuilder): void {
-  const junkMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#888888")
+  const junkMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#888888")
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core').Scene }).scene
+  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
   const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
-  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core').Mesh[] }).adventureTrack
+  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
 
   let currentPos = currentStartPos.clone()
@@ -49,7 +50,7 @@ export function buildOrbitalJunkyard(builder: TrackBuilder): void {
       const scale = 0.5 + Math.random() * 1.0
       const finalPos = debrisPosOnSurface.add(normalVec.scale(scale * 0.5))
 
-      let mesh: import('@babylonjs/core').Mesh
+      let mesh: import('@babylonjs/core/Meshes/mesh').Mesh
       let colliderDesc: RAPIER.ColliderDesc
 
       if (type === 'box') {

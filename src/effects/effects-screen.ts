@@ -1,13 +1,10 @@
-import {
-  Color3,
-  Color4,
-  Mesh,
-  MeshBuilder,
-  Scene,
-  StandardMaterial,
-  TargetCamera,
-  Vector3,
-} from '@babylonjs/core'
+import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3, Color4 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { Scene } from '@babylonjs/core/scene'
 import type { BloomPipelineController } from './bloom-pipeline-types'
 import { EffectsConfig } from '../config'
 import { DEFAULT_ACCESSIBILITY, type AccessibilityConfig } from '../game-elements/accessibility-config'

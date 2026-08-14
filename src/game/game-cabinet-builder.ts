@@ -2,23 +2,20 @@
  * Game Cabinet Builder — Cabinet geometry, decorative elements, room environment.
  */
 
-import {
-  Color3,
-  Vector3,
-  MeshBuilder,
-  Mesh,
-  Scene,
-  StandardMaterial,
-  PBRMaterial,
-  PointLight,
-  HemisphericLight,
-  ShadowGenerator,
-  MirrorTexture,
-  Animation,
-  GlowLayer,
-  DynamicTexture,
-} from '@babylonjs/core'
-
+import { Animation } from '@babylonjs/core/Animations/animation'
+import { GlowLayer } from '@babylonjs/core/Layers/glowLayer'
+import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight'
+import { PointLight } from '@babylonjs/core/Lights/pointLight'
+import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { Scene } from '@babylonjs/core/scene'
 import {
   PALETTE,
   QualityTier,

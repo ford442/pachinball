@@ -1,5 +1,9 @@
-import { MeshBuilder, Vector3, StandardMaterial, Color3, Animation } from '@babylonjs/core'
-import type { Scene } from '@babylonjs/core'
+import { Animation } from '@babylonjs/core/Animations/animation'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import type { Scene } from '@babylonjs/core/scene'
 import type { ShardParticle } from '../game-elements/types'
 import { emissive, INTENSITY, PALETTE } from '../game-elements/visual-language'
 

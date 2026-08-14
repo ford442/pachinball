@@ -8,30 +8,13 @@
 
 import { AdventureTrackType } from '../adventure-types'
 import type { TrackManifest } from './track-manifest-types'
-import { buildNeonHelix } from '../tracks/neon-helix'
-import { buildCyberCore } from '../tracks/cyber-core'
-import { buildPachinkoHall } from '../tracks/pachinko-hall'
-import { buildPachinkoSpire } from '../tracks/pachinko-spire'
-import { buildOrbitalJunkyard } from '../tracks/orbital-junkyard'
-import { buildPrismPathway } from '../tracks/prism-pathway'
-import { buildMagneticStorage } from '../tracks/magnetic-storage'
-import { buildNeuralNetwork } from '../tracks/neural-network'
-import { buildNeonStronghold } from '../tracks/neon-stronghold'
-import { buildCasinoHeist } from '../tracks/casino-heist'
-import { buildCpuCore } from '../tracks/cpu-core'
-import { buildBioHazardLab } from '../tracks/bio-hazard-lab'
-import { buildGravityForge } from '../tracks/gravity-forge'
-import { buildSynthwaveSurf } from '../tracks/synthwave-surf'
-import { buildTeslaTower } from '../tracks/tesla-tower'
-import { buildNeonSkyline } from '../tracks/neon-skyline'
-import { buildPolychromeVoid } from '../tracks/polychrome-void'
 
 export const MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.NEON_HELIX,
     startAnchor: { x: 0, y: 2, z: 8 },
     buildKind: 'ts',
-    builder: buildNeonHelix,
+    loadBuilder: () => import('../tracks/neon-helix').then((m) => m.buildNeonHelix),
     zone: {
       name: 'Neon Helix',
       storyText: 'ENTERING: NEON HELIX\n\nThe spiral descent begins...',
@@ -58,7 +41,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.PACHINKO_HALL,
     startAnchor: { x: 0, y: 8, z: 4 },
     buildKind: 'ts',
-    builder: buildPachinkoHall,
+    loadBuilder: () => import('../tracks/pachinko-hall').then((m) => m.buildPachinkoHall),
     zone: {
       name: 'Pachinko Hall',
       storyText: 'ENTERING: PACHINKO HALL\n\nThe neon parlor opens — follow the pin lanes to the exit arch...',
@@ -86,7 +69,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.CYBER_CORE,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
-    builder: buildCyberCore,
+    loadBuilder: () => import('../tracks/cyber-core').then((m) => m.buildCyberCore),
     zone: {
       name: 'Cyber Core',
       storyText: 'ENTERING: CYBER CORE\n\nDescending into the digital depths...',
@@ -282,7 +265,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.PACHINKO_SPIRE,
     startAnchor: { x: 0, y: 30, z: 0 },
     buildKind: 'ts',
-    builder: buildPachinkoSpire,
+    loadBuilder: () => import('../tracks/pachinko-spire').then((m) => m.buildPachinkoSpire),
     zone: {
       name: 'Pachinko Spire',
       storyText: 'ENTERING: PACHINKO SPIRE\n\nThe vertical descent awaits...',
@@ -310,7 +293,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.ORBITAL_JUNKYARD,
     startAnchor: { x: 0, y: 15, z: 0 },
     buildKind: 'ts',
-    builder: buildOrbitalJunkyard,
+    loadBuilder: () => import('../tracks/orbital-junkyard').then((m) => m.buildOrbitalJunkyard),
     zone: {
       name: 'Orbital Junkyard',
       storyText: 'ORBITAL DEBRIS FIELD\n\nNavigate the scrap sector...',
@@ -355,7 +338,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.CPU_CORE,
     startAnchor: { x: 0, y: 15, z: 0 },
     buildKind: 'ts',
-    builder: buildCpuCore,
+    loadBuilder: () => import('../tracks/cpu-core').then((m) => m.buildCpuCore),
     zone: {
       name: 'CPU Core',
       storyText: 'ENTERING: CPU CORE\n\nThe central processor awaits...',
@@ -400,7 +383,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.BIO_HAZARD_LAB,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
-    builder: buildBioHazardLab,
+    loadBuilder: () => import('../tracks/bio-hazard-lab').then((m) => m.buildBioHazardLab),
     zone: {
       name: 'Bio Hazard Lab',
       storyText: 'BIOHAZARD WARNING\n\nToxic materials present...',
@@ -417,7 +400,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.GRAVITY_FORGE,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
-    builder: buildGravityForge,
+    loadBuilder: () => import('../tracks/gravity-forge').then((m) => m.buildGravityForge),
     zone: {
       name: 'Gravity Forge',
       storyText: 'GRAVITY FORGE\n\nHeavy industry sector...',
@@ -490,7 +473,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.SYNTHWAVE_SURF,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
-    builder: buildSynthwaveSurf,
+    loadBuilder: () => import('../tracks/synthwave-surf').then((m) => m.buildSynthwaveSurf),
     zone: {
       name: 'Synthwave Surf',
       storyText: 'SURF THE WAVES\n\nCatch the perfect break...',
@@ -535,7 +518,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.PRISM_PATHWAY,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
-    builder: buildPrismPathway,
+    loadBuilder: () => import('../tracks/prism-pathway').then((m) => m.buildPrismPathway),
     zone: {
       name: 'Prism Pathway',
       storyText: 'PRISM PATHWAY\n\nLight refracts infinitely...',
@@ -552,7 +535,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.MAGNETIC_STORAGE,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
-    builder: buildMagneticStorage,
+    loadBuilder: () => import('../tracks/magnetic-storage').then((m) => m.buildMagneticStorage),
     zone: {
       name: 'Magnetic Storage',
       storyText: 'MAGNETIC STORAGE\n\nData streams flowing...',
@@ -569,7 +552,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.NEURAL_NETWORK,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
-    builder: buildNeuralNetwork,
+    loadBuilder: () => import('../tracks/neural-network').then((m) => m.buildNeuralNetwork),
     zone: {
       name: 'Neural Network',
       storyText: 'NEURAL NETWORK\n\nSynaptic pathways active...',
@@ -586,7 +569,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.NEON_STRONGHOLD,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
-    builder: buildNeonStronghold,
+    loadBuilder: () => import('../tracks/neon-stronghold').then((m) => m.buildNeonStronghold),
     zone: {
       name: 'Neon Stronghold',
       storyText: 'NEON STRONGHOLD\n\nThe fortress awaits...',
@@ -614,7 +597,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.CASINO_HEIST,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
-    builder: buildCasinoHeist,
+    loadBuilder: () => import('../tracks/casino-heist').then((m) => m.buildCasinoHeist),
     zone: {
       name: 'Casino Heist',
       storyText: 'CASINO HEIST\n\nHigh stakes ahead...',
@@ -642,7 +625,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.TESLA_TOWER,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
-    builder: buildTeslaTower,
+    loadBuilder: () => import('../tracks/tesla-tower').then((m) => m.buildTeslaTower),
     zone: {
       name: 'Tesla Tower',
       storyText: 'TESLA TOWER\n\nHigh voltage zone...',
@@ -659,7 +642,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.NEON_SKYLINE,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
-    builder: buildNeonSkyline,
+    loadBuilder: () => import('../tracks/neon-skyline').then((m) => m.buildNeonSkyline),
     zone: {
       name: 'Neon Skyline',
       storyText: 'NEON SKYLINE\n\nThe city never sleeps...',
@@ -676,7 +659,7 @@ export const MANIFEST_DATA: TrackManifest[] = [
     id: AdventureTrackType.POLYCHROME_VOID,
     startAnchor: { x: 0, y: 20, z: 0 },
     buildKind: 'ts',
-    builder: buildPolychromeVoid,
+    loadBuilder: () => import('../tracks/polychrome-void').then((m) => m.buildPolychromeVoid),
     zone: {
       name: 'Polychrome Void',
       storyText: 'THE POLYCHROME VOID\n\nBeyond the spectrum...',

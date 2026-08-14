@@ -216,7 +216,7 @@ describe('AdventureMode.switchToTrack', () => {
   function makeMode() {
     const mode = new AdventureMode(mockScene as never, mockWorld as never, mockRapier as never)
     // Override the private buildTrack so we don't need to mock 25+ track builders
-    const buildTrackSpy = vi.fn((trackType: AdventureTrackType) => {
+    const buildTrackSpy = vi.fn(async (trackType: AdventureTrackType) => {
       // Simulate pushing a mesh and a body for the track
       ;(mode as unknown as { adventureTrack: Array<{ dispose: () => void; name: string }> }).adventureTrack.push({
         dispose: hoisted.mockMeshDispose,
@@ -230,12 +230,12 @@ describe('AdventureMode.switchToTrack', () => {
     return { mode, buildTrackSpy }
   }
 
-  it('tears down old meshes and bodies then builds the new track', () => {
+  it('tears down old meshes and bodies then builds the new track', async () => {
     const { mode, buildTrackSpy } = makeMode()
     const mockBallBody = { setLinvel: vi.fn(), setAngvel: vi.fn(), setTranslation: vi.fn(), collider: vi.fn(() => null) }
     const mockCamera = new (hoisted.MockArcRotateCamera as unknown as new () => unknown)()
 
-    mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
+    await mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
 
     // After start, we should have one mesh and one body
     expect(buildTrackSpy).toHaveBeenCalledWith(AdventureTrackType.NEON_HELIX)
@@ -243,7 +243,7 @@ describe('AdventureMode.switchToTrack', () => {
     const bodyCountAfterStart = activeBodies.size
 
     // Switch to the next track
-    const result = mode.switchToTrack(AdventureTrackType.CYBER_CORE)
+    const result = await mode.switchToTrack(AdventureTrackType.CYBER_CORE)
 
     expect(result).toBe(true)
     // Old mesh disposed
@@ -256,13 +256,13 @@ describe('AdventureMode.switchToTrack', () => {
     expect(activeBodies.size).toBe(bodyCountAfterStart)
   })
 
-  it('records teardown instrumentation with zero lingering bodies', () => {
+  it('records teardown instrumentation with zero lingering bodies', async () => {
     const { mode } = makeMode()
     const mockBallBody = { setLinvel: vi.fn(), setAngvel: vi.fn(), setTranslation: vi.fn(), collider: vi.fn(() => null) }
     const mockCamera = new (hoisted.MockArcRotateCamera as unknown as new () => unknown)()
 
-    mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
-    mode.switchToTrack(AdventureTrackType.CYBER_CORE)
+    await mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
+    await mode.switchToTrack(AdventureTrackType.CYBER_CORE)
 
     const stats = mode.getLastTeardownStats()
     expect(stats).not.toBeNull()
@@ -271,26 +271,26 @@ describe('AdventureMode.switchToTrack', () => {
     expect(stats!.lingeringBodies).toBe(0)
   })
 
-  it('records zero lingering bodies after portal open then track switch', () => {
+  it('records zero lingering bodies after portal open then track switch', async () => {
     const { mode } = makeMode()
     const mockBallBody = { setLinvel: vi.fn(), setAngvel: vi.fn(), setTranslation: vi.fn(), collider: vi.fn(() => null) }
     const mockCamera = new (hoisted.MockArcRotateCamera as unknown as new () => unknown)()
 
-    mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
+    await mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
     mode.activateExitPortal(AdventureTrackType.NEON_HELIX, 'success', 'EXTENDED_MAP')
-    mode.switchToTrack(AdventureTrackType.CYBER_CORE)
+    await mode.switchToTrack(AdventureTrackType.CYBER_CORE)
 
     const stats = mode.getLastTeardownStats()
     expect(stats?.lingeringBodies).toBe(0)
     expect(stats?.exitPortalsRemoved).toBe(1)
   })
 
-  it('updates camera preset without recreating the camera', () => {
+  it('updates camera preset without recreating the camera', async () => {
     const { mode } = makeMode()
     const mockBallBody = { setLinvel: vi.fn(), setAngvel: vi.fn(), setTranslation: vi.fn(), collider: vi.fn(() => null) }
     const mockCamera = new (hoisted.MockArcRotateCamera as unknown as new () => unknown)()
 
-    mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
+    await mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
     const followCam = (mode as unknown as { followCamera: { alpha: number; beta: number } }).followCamera
     expect(followCam).not.toBeNull()
 
@@ -306,19 +306,19 @@ describe('AdventureMode.switchToTrack', () => {
       hapticsEnabled: false,
       hapticIntensity: 0,
     })
-    mode.switchToTrack(AdventureTrackType.CYBER_CORE)
+    await mode.switchToTrack(AdventureTrackType.CYBER_CORE)
 
     // Camera should have been updated (CYBER_CORE preset differs from NEON_HELIX default)
     expect(followCam!.alpha).not.toBe(initialAlpha)
   })
 
-  it('returns false when adventure is not active', () => {
+  it('returns false when adventure is not active', async () => {
     const { mode } = makeMode()
-    const result = mode.switchToTrack(AdventureTrackType.CYBER_CORE)
+    const result = await mode.switchToTrack(AdventureTrackType.CYBER_CORE)
     expect(result).toBe(false)
   })
 
-  it('emits ZONE_ENTER on a zone change', () => {
+  it('emits ZONE_ENTER on a zone change', async () => {
     const { mode } = makeMode()
     const events: string[] = []
     mode.setEventListener((event: string) => {
@@ -328,15 +328,15 @@ describe('AdventureMode.switchToTrack', () => {
     const mockBallBody = { setLinvel: vi.fn(), setAngvel: vi.fn(), setTranslation: vi.fn(), collider: vi.fn(() => null) }
     const mockCamera = new (hoisted.MockArcRotateCamera as unknown as new () => unknown)()
 
-    mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
+    await mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
     events.length = 0
 
-    mode.switchToTrack(AdventureTrackType.CYBER_CORE)
+    await mode.switchToTrack(AdventureTrackType.CYBER_CORE)
 
     expect(events).toContain('ZONE_ENTER')
   })
 
-  it('restores ball collision groups when adventure ends', () => {
+  it('restores ball collision groups when adventure ends', async () => {
     const { mode } = makeMode()
     const setCollisionGroups = vi.fn()
     const mockBallBody = {
@@ -348,7 +348,7 @@ describe('AdventureMode.switchToTrack', () => {
     }
     const mockCamera = new (hoisted.MockArcRotateCamera as unknown as new () => unknown)()
 
-    mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
+    await mode.start(mockBallBody as never, mockCamera as never, undefined, AdventureTrackType.NEON_HELIX)
     mode.end()
 
     expect(setCollisionGroups).toHaveBeenCalledWith(COLLISION_GROUP_PRESETS.BALL)
@@ -356,7 +356,7 @@ describe('AdventureMode.switchToTrack', () => {
 })
 
 describe('GameSlotAdventure.switchToTrack', () => {
-  it('orchestrates teardown, build, cinematic, and UI reset in order', () => {
+  it('orchestrates teardown, build, cinematic, and UI reset in order', async () => {
     const onTrackStart = vi.fn()
     const uiReset = vi.fn()
     const goalInit = vi.fn()
@@ -375,7 +375,7 @@ describe('GameSlotAdventure.switchToTrack', () => {
       } as unknown as import('../src/adventure').AdventureMode,
       gameObjects: null,
       mapManager: null,
-      scene: {} as import('@babylonjs/core').Scene,
+      scene: {} as import('@babylonjs/core/scene').Scene,
       scoreElement: null,
       score: 42_000,
       adventureCinematicTriggers: { onTrackStart } as unknown as import('../src/game-elements/adventure-cinematic-triggers').AdventureCinematicTriggers,
@@ -392,7 +392,7 @@ describe('GameSlotAdventure.switchToTrack', () => {
     }
 
     const slot = new GameSlotAdventure(host)
-    slot.switchToTrack('CYBER_CORE')
+    await slot.switchToTrack('CYBER_CORE')
 
     // (a) LevelLoader canonical path invoked (not direct AdventureMode.switchToTrack)
     expect(loadCampaignTrack).toHaveBeenCalledOnce()

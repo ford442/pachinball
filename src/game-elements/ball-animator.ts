@@ -1,13 +1,8 @@
-import {
-  Scene,
-  Mesh,
-  Vector3,
-  Animation,
-  ElasticEase,
-  EasingFunction,
-  Quaternion,
-} from '@babylonjs/core'
-
+import { Animation } from '@babylonjs/core/Animations/animation'
+import { ElasticEase, EasingFunction } from '@babylonjs/core/Animations/easing'
+import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { Scene } from '@babylonjs/core/scene'
 /**
  * BallAnimator - Handles squash-and-stretch animations for ball impacts
  * 

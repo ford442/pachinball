@@ -6,14 +6,14 @@
  * terminus of the journey.
  */
 
-import { Vector3 } from '@babylonjs/core'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { TrackBuilder } from '../track-builder'
 import type { TrackInfo } from '../../game-elements/adventure-track-progression'
 
 /** Convenience cast helpers — keeps track functions free of boilerplate. */
 type BuilderCtx = {
-  getTrackPBRMaterial: (hex: string) => import('@babylonjs/core').PBRMaterial
-  getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial
+  getTrackPBRMaterial: (hex: string) => import('@babylonjs/core/Materials/PBR/pbrMaterial').PBRMaterial
+  getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial
   currentStartPos: Vector3
   currentTrackInfo: TrackInfo | null
   addStraightRamp: (...args: unknown[]) => Vector3

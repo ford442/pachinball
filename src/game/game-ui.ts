@@ -1,4 +1,4 @@
-import type { Scene } from '@babylonjs/core'
+import type { Scene } from '@babylonjs/core/scene'
 import type { ScoringBreakdownSnapshot } from '../game-elements/scoring-breakdown'
 import { hideAdventureHUD, updateAdventureHUD, updateCampaignHUD } from './game-ui-adventure-hud'
 import {

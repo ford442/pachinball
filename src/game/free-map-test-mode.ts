@@ -159,10 +159,14 @@ export class FreeMapTestMode {
   // ─── Private ────────────────────────────────────────────────────────────────
 
   private loadCurrentMap(): void {
+    void this.loadCurrentMapAsync()
+  }
+
+  private async loadCurrentMapAsync(): Promise<void> {
     const config = this.getCurrentMapConfig()
     if (!config) return
 
-    const result = this.levelLoader.loadMap(config.id)
+    const result = await this.levelLoader.loadMap(config.id)
     if (result.success) {
       this.config.onMapLoaded?.(config)
       this.config.onMessage?.(`[TEST MODE] Loaded: ${config.displayName} (${config.layoutType})`)

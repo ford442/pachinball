@@ -2,13 +2,11 @@
  * Per-track ambient VFX — electric arcs, neon flicker, mist, caustics hints.
  */
 
-import {
-  Scene,
-  Vector3,
-  ParticleSystem,
-  Color4,
-  Texture,
-} from '@babylonjs/core'
+import { Texture } from '@babylonjs/core/Materials/Textures/texture'
+import { Color4 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem'
+import { Scene } from '@babylonjs/core/scene'
 import type { TrackAmbientStyle, TrackThemeProfile } from '../game-elements/track-theme-profiles'
 
 export class TrackAmbientEffects {

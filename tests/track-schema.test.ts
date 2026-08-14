@@ -38,7 +38,7 @@ vi.mock('@babylonjs/core', () => {
   return { Vector3 }
 })
 
-import { Vector3 } from '@babylonjs/core'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import {
   validateTrackDefinition,
   formatTrackValidationErrors,

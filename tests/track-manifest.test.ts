@@ -61,7 +61,7 @@ describe('TrackManifest registry', () => {
     expect(tsManifests.length).toBe(enumValues.length - jsonCount)
     for (const manifest of tsManifests) {
       if (manifest.buildKind !== 'ts') continue
-      expect(manifest.builder).toBeTypeOf('function')
+      expect(manifest.loadBuilder).toBeTypeOf('function')
     }
   })
 
@@ -70,7 +70,7 @@ describe('TrackManifest registry', () => {
     // dispatch (TS builder or JSON dataPath), so adding a track needs no second list.
     for (const manifest of getAllTrackManifests()) {
       if (manifest.buildKind === 'ts') {
-        expect(manifest.builder, `${manifest.id} builder`).toBeTypeOf('function')
+        expect(manifest.loadBuilder, `${manifest.id} loadBuilder`).toBeTypeOf('function')
       } else {
         expect(manifest.dataPath, `${manifest.id} dataPath`).toMatch(/^\.\/track-data\/.+\.json$/)
       }

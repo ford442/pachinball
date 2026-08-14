@@ -1,12 +1,10 @@
-import { 
-  Scene, 
-  TransformNode, 
-  Mesh, 
-  MeshBuilder, 
-  Vector3, 
-  PBRMaterial,
-  Color3
-} from '@babylonjs/core'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
+import { Scene } from '@babylonjs/core/scene'
 import { BallType } from '../config'
 import { getMaterialLibrary } from '../materials'
 

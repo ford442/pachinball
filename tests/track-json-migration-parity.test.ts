@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { Vector3 } from '@babylonjs/core'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { compileTrackDefinition, type TrackBuildApi, type TrackMaterial } from '../src/adventure/track-compiler'
 import { validateTrackDefinition } from '../src/adventure/track-schema'
 import quantumGridJson from '../src/adventure/track-data/QUANTUM_GRID.json'

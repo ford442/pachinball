@@ -16,16 +16,14 @@
  * - Fallback to fixed mode for backward compatibility
  */
 
-import {
-  Vector3,
-  TargetCamera,
-  Color3,
-  MeshBuilder,
-  StandardMaterial,
-  Mesh,
-  PointLight,
-} from '@babylonjs/core'
-import type { Scene } from '@babylonjs/core'
+import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera'
+import { PointLight } from '@babylonjs/core/Lights/pointLight'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import type { Scene } from '@babylonjs/core/scene'
 import type { TableMapType, TableMapConfig } from '../shaders/lcd-table'
 import type { DisplaySystem } from '../display'
 import type { SoundSystem } from './sound-system'

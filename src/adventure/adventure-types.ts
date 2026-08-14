@@ -4,7 +4,8 @@
  * Contains all type definitions, enums, and interfaces for the adventure mode system.
  */
 
-import type { Vector3, Quaternion, Mesh } from '@babylonjs/core'
+import type { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { TrackInfo } from '../game-elements/adventure-track-progression'
 
@@ -160,14 +161,14 @@ export interface CameraPreset {
  * Track builder context passed to track creation functions
  */
 export interface TrackBuilderContext {
-  scene: import('@babylonjs/core').Scene
+  scene: import('@babylonjs/core/scene').Scene
   world: RAPIER.World
   rapier: typeof RAPIER
   currentStartPos: Vector3
   /** Track metadata from the campaign catalog, or null for free-roam tracks. */
   currentTrackInfo: TrackInfo | null
-  adventureTrack: import('@babylonjs/core').Mesh[]
-  materials: import('@babylonjs/core').StandardMaterial[]
+  adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[]
+  materials: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial[]
   adventureBodies: RAPIER.RigidBody[]
   kinematicBindings: KinematicBinding[]
   animatedObstacles: AnimatedObstacle[]
@@ -177,14 +178,14 @@ export interface TrackBuilderContext {
   chromaGates: ChromaGate[]
   resetSensors: RAPIER.RigidBody[]
   adventureSensor: RAPIER.RigidBody | null
-  getTrackMaterial: (colorHex: string) => import('@babylonjs/core').StandardMaterial
+  getTrackMaterial: (colorHex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial
   addStraightRamp: (
     startPos: Vector3,
     heading: number,
     width: number,
     length: number,
     inclineRad: number,
-    material: import('@babylonjs/core').StandardMaterial,
+    material: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial,
     wallHeight?: number,
     friction?: number
   ) => Vector3
@@ -196,33 +197,33 @@ export interface TrackBuilderContext {
     inclineRad: number,
     width: number,
     wallHeight: number,
-    material: import('@babylonjs/core').StandardMaterial,
+    material: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial,
     segments?: number,
     bankingAngle?: number,
     friction?: number
   ) => Vector3
-  createBasin: (pos: Vector3, material: import('@babylonjs/core').StandardMaterial) => void
+  createBasin: (pos: Vector3, material: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial) => void
   createRotatingPlatform: (
     center: Vector3,
     radius: number,
     angVelY: number,
-    material: import('@babylonjs/core').StandardMaterial,
+    material: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial,
     hasTeeth?: boolean
   ) => void
   createStaticCylinder: (
     pos: Vector3,
     diameter: number,
     height: number,
-    material: import('@babylonjs/core').StandardMaterial
+    material: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial
   ) => void
   createDynamicBlock: (
     pos: Vector3,
     size: number,
     mass: number,
-    material: import('@babylonjs/core').StandardMaterial
+    material: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial
   ) => void
   createChromaGate: (pos: Vector3, color: 'RED' | 'GREEN' | 'BLUE') => void
-  createArcPylon: (pos: Vector3, mat: import('@babylonjs/core').StandardMaterial) => void
+  createArcPylon: (pos: Vector3, mat: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial) => void
   /**
    * Declare the exit portal position for this track.
    * The portal is activated by AdventureMode.activateExitPortal() when the

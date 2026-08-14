@@ -2,7 +2,9 @@
  * Metallic Materials - Metallic surface material definitions
  */
 
-import { PBRMaterial, Color3, DynamicTexture } from '@babylonjs/core'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { MaterialLibraryBase } from './material-core'
 import {
   PALETTE,

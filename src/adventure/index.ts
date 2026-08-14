@@ -79,21 +79,3 @@ export type {
   SerializableProgressionState,
 } from '../game-elements/adventure-track-progression'
 
-// Track builders
-export { buildNeonHelix } from './tracks/neon-helix'
-export { buildPachinkoHall } from './tracks/pachinko-hall'
-export { buildCyberCore } from './tracks/cyber-core'
-export { buildPachinkoSpire } from './tracks/pachinko-spire'
-export { buildOrbitalJunkyard } from './tracks/orbital-junkyard'
-export { buildPrismPathway } from './tracks/prism-pathway'
-export { buildMagneticStorage } from './tracks/magnetic-storage'
-export { buildNeuralNetwork } from './tracks/neural-network'
-export { buildNeonStronghold } from './tracks/neon-stronghold'
-export { buildCasinoHeist } from './tracks/casino-heist'
-export { buildCpuCore } from './tracks/cpu-core'
-export { buildBioHazardLab } from './tracks/bio-hazard-lab'
-export { buildGravityForge } from './tracks/gravity-forge'
-export { buildSynthwaveSurf } from './tracks/synthwave-surf'
-export { buildTeslaTower } from './tracks/tesla-tower'
-export { buildNeonSkyline } from './tracks/neon-skyline'
-export { buildPolychromeVoid } from './tracks/polychrome-void'

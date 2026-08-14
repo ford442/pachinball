@@ -4,7 +4,7 @@
  * Derives TRACK_CATALOG and ZONE_REGISTRY entries from manifest data.
  */
 
-import { Vector3 } from '@babylonjs/core'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { AdventureTrackType } from '../adventure-types'
 import type { TrackInfo } from '../../game-elements/adventure-track-progression'
 import type { ZoneConfig } from '../../game-elements/zone-registry'
@@ -20,8 +20,8 @@ import { getDataTrackSourcePath } from '../track-data-registry'
  */
 function isDispatchable(manifest: TrackManifest): boolean {
   if (manifest.buildKind === 'ts') {
-    if (typeof manifest.builder !== 'function') {
-      console.error(`[track-manifest] Missing TS builder for ${manifest.id}`)
+    if (typeof manifest.loadBuilder !== 'function') {
+      console.error(`[track-manifest] Missing TS loadBuilder for ${manifest.id}`)
       return false
     }
     return true

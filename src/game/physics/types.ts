@@ -1,6 +1,7 @@
-import type { Vector3 } from '@babylonjs/core'
-import type { Engine, WebGPUEngine, TargetCamera } from '@babylonjs/core'
-
+import type { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import type { TargetCamera } from '@babylonjs/core/Cameras/targetCamera'
+import type { Engine } from '@babylonjs/core/Engines/engine'
+import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import type { PhysicsSystem } from '../../game-elements/physics'
 import type { BallManager } from '../../game-elements/ball-manager'
 import type { BallAnimator } from '../../game-elements/ball-animator'

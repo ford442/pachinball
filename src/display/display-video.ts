@@ -5,15 +5,14 @@
  * Extracted from display.ts for modularity.
  */
 
-import {
-  VideoTexture,
-  Texture,
-  MeshBuilder,
-  StandardMaterial,
-  Color3,
-  TransformNode,
-} from '@babylonjs/core'
-import type { Scene, Mesh } from '@babylonjs/core'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Texture } from '@babylonjs/core/Materials/Textures/texture'
+import { VideoTexture } from '@babylonjs/core/Materials/Textures/videoTexture'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
+import type { Scene } from '@babylonjs/core/scene'
 import { DisplayState, type DisplayConfig } from './display-types'
 import { DISPLAY_LAYER_Z } from './display-layer-depth'
 

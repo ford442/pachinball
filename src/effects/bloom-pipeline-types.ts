@@ -3,7 +3,7 @@
  * WebGPU-strict MinimalBloomPipeline (standalone BloomEffect).
  */
 
-import type { Color4 } from '@babylonjs/core'
+import type { Color4 } from '@babylonjs/core/Maths/math.color'
 import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 
 /** Image-processing knobs optional effects may read (absent on minimal bloom path). */

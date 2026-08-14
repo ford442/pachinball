@@ -12,7 +12,7 @@
  * - Callback system for Game.ts to handle visual/audio changes
  */
 
-import { Vector3 } from '@babylonjs/core'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { DynamicScenario, ScenarioZone } from './dynamic-scenarios'
 

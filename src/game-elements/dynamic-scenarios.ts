@@ -8,7 +8,7 @@
  * - Thematic music and audio
  */
 
-import { Vector3 } from '@babylonjs/core'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { ZoneTrigger } from './path-mechanics'
 
 // =============================================================================

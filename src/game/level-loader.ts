@@ -40,14 +40,14 @@ export class LevelLoader {
   /**
    * Load a specific layout by MapConfig id (free-map test mode path).
    */
-  loadMap(mapId: string): PlayfieldLoadResult {
+  loadMap(mapId: string): Promise<PlayfieldLoadResult> {
     return loadPlayfield(freeMapPlayfieldSpec(mapId), this.deps)
   }
 
   /**
    * Canonical campaign path: portal completion → next track.
    */
-  loadCampaignTrack(trackId: string, options: CampaignLoadOptions = {}): PlayfieldLoadResult {
+  loadCampaignTrack(trackId: string, options: CampaignLoadOptions = {}): Promise<PlayfieldLoadResult> {
     return loadPlayfield(
       campaignPlayfieldSpec(trackId, options.resetBallToPlunger ?? false),
       this.deps,
@@ -61,7 +61,7 @@ export class LevelLoader {
     trackType: AdventureTrackType,
     config?: MapConfig,
     options: CampaignLoadOptions = {},
-  ): PlayfieldLoadResult {
+  ): Promise<PlayfieldLoadResult> {
     const mapConfig = config ?? getMapConfigById(trackType)
     const trackId = mapConfig?.id ?? trackType
 

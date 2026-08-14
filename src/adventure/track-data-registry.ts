@@ -1,7 +1,7 @@
 /**
  * Eager registry of declarative track JSON (schema v1).
  *
- * Synced via import.meta.glob so AdventureMode.buildTrack stays synchronous.
+ * Synced via import.meta.glob so JSON tracks stay off the TS builder code-split.
  */
 
 import type { TrackDefinition } from './track-schema'

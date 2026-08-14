@@ -2,7 +2,9 @@
  * Playfield Materials - the transparent/glass playfield surface and its procedural grid textures
  */
 
-import { PBRMaterial, Color3, DynamicTexture } from '@babylonjs/core'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { CabinetMaterials } from './material-cabinet'
 import {
   PALETTE,

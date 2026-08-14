@@ -16,8 +16,12 @@
  *   - GlowLayer and jackpot strobe are disabled when `reducedMotion` is true.
  */
 
-import { Color3, GlowLayer, StandardMaterial, PBRMaterial } from '@babylonjs/core'
-import type { Mesh, Scene } from '@babylonjs/core'
+import { GlowLayer } from '@babylonjs/core/Layers/glowLayer'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
+import type { Scene } from '@babylonjs/core/scene'
 import { DisplayState } from '../game-elements/display-config'
 import { QualityTier, PALETTE, INTENSITY, emissive, STATE_COLORS } from '../game-elements/visual-language'
 import { type AccessibilityConfig, DEFAULT_ACCESSIBILITY } from '../game-elements/accessibility-config'

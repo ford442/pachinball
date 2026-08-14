@@ -1,12 +1,10 @@
-import {
-  Scene,
-  Vector3,
-  MeshBuilder,
-  Mesh,
-  StandardMaterial,
-  Color3,
-  TransformNode
-} from '@babylonjs/core'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
+import { Scene } from '@babylonjs/core/scene'
 import { emissive, PALETTE, INTENSITY } from '../../game-elements/visual-language'
 
 // ============================================================================

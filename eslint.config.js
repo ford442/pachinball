@@ -22,6 +22,14 @@ export default defineConfig([
         varsIgnorePattern: '^_',
         destructuredArrayIgnorePattern: '^_',
       }],
+      '@typescript-eslint/no-restricted-imports': ['error', {
+        paths: [{
+          name: '@babylonjs/core',
+          message:
+            'Use deep imports (@babylonjs/core/Meshes/mesh, etc.) for tree-shaking. ' +
+            'Run node scripts/codemod-babylon-deep-imports.mjs if needed.',
+        }],
+      }],
     },
   },
   // ── Layering (#322) ───────────────────────────────────────────────────────
@@ -35,6 +43,12 @@ export default defineConfig([
     files: ['src/game-elements/**/*.ts'],
     rules: {
       '@typescript-eslint/no-restricted-imports': ['error', {
+        paths: [{
+          name: '@babylonjs/core',
+          message:
+            'Use deep imports (@babylonjs/core/Meshes/mesh, etc.) for tree-shaking. ' +
+            'Run node scripts/codemod-babylon-deep-imports.mjs if needed.',
+        }],
         patterns: [{
           group: ['../game/*', '../game/**', '**/src/game/*', '**/src/game/**'],
           message:

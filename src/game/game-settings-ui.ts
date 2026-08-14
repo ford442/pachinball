@@ -2,7 +2,7 @@
  * Game Settings UI — Settings panel, latency overlay, map/cabinet/level selectors.
  */
 
-import type { Scene } from '@babylonjs/core'
+import type { Scene } from '@babylonjs/core/scene'
 import type { SoundSystem } from '../game-elements/sound-system'
 import type { DebugHUD } from '../game-elements/debug-hud'
 import type { MapSystem } from '../game-elements/map-system'

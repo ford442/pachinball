@@ -4,7 +4,11 @@
  * Renders a glowing semi-transparent sphere mesh with emissive material.
  */
 
-import { Scene, Mesh, MeshBuilder, StandardMaterial, Color3 } from '@babylonjs/core'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { Scene } from '@babylonjs/core/scene'
 import { PALETTE, INTENSITY, emissive } from './visual-language'
 
 export class GhostBallRenderer {

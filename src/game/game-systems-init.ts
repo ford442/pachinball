@@ -5,16 +5,13 @@
  * from the main Game class.
  */
 
-import {
-  MeshBuilder,
-  StandardMaterial,
-  Color3,
-  MirrorTexture,
-  Plane,
-  Vector3,
-  AbstractMesh,
-} from '@babylonjs/core'
-
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Plane } from '@babylonjs/core/Maths/math.plane'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { GameConfig, GAME_TUNING } from '../config'
 import { getMaterialLibrary } from '../materials'
 import { adaptLegacyConfig, type DisplayConfig } from '../game-elements/display-config'

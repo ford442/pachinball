@@ -1,5 +1,12 @@
 // Main GameObjects orchestrator
-import { Scene, Vector3, Mesh, AbstractMesh, MeshBuilder, TransformNode, StandardMaterial, Color3 } from '@babylonjs/core'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
+import { Scene } from '@babylonjs/core/scene'
 import { getMaterialLibrary } from '../materials'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'

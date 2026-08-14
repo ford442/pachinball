@@ -5,13 +5,10 @@
  * physics updates, and event dispatching.
  */
 
-import {
-  type Camera,
-  ArcRotateCamera,
-  Vector3,
-  Mesh,
-  Quaternion,
-} from '@babylonjs/core'
+import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera'
+import type { Camera } from '@babylonjs/core/Cameras/camera'
+import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { AdventurePortalMixin } from './adventure-portal'
@@ -224,12 +221,12 @@ export class AdventureMode extends AdventurePortalMixin {
   /**
    * Activates Adventure Mode
    */
-  start(
+  async start(
     ballBody: RAPIER.RigidBody,
     currentCamera: Camera,
     ballMesh: Mesh | undefined,
     trackType: AdventureTrackType = AdventureTrackType.CYBER_CORE
-  ): void {
+  ): Promise<void> {
     if (this.adventureActive) return
     this.adventureActive = true
 
@@ -251,7 +248,7 @@ export class AdventureMode extends AdventurePortalMixin {
     })
 
     // Build the selected track
-    this.buildTrack(trackType)
+    await this.buildTrack(trackType)
 
     // Reset ball velocity
     ballBody.setLinvel({ x: 0, y: 0, z: 0 }, true)
@@ -303,7 +300,7 @@ export class AdventureMode extends AdventurePortalMixin {
   /**
    * Build the specified track
    */
-  private buildTrack(trackType: AdventureTrackType): void {
+  private async buildTrack(trackType: AdventureTrackType): Promise<void> {
     // Reset per-track state so each builder starts fresh
     this.portalPosition = null
     this.currentTrackInfo = TRACK_CATALOG[trackType] ?? null
@@ -333,7 +330,8 @@ export class AdventureMode extends AdventurePortalMixin {
       return
     }
 
-    manifest.builder(this)
+    const builder = await manifest.loadBuilder()
+    builder(this)
     this.applyDefaultAdventureCollisionGroups()
   }
 
@@ -421,7 +419,7 @@ export class AdventureMode extends AdventurePortalMixin {
    * Tears down the old track's geometry and physics, builds the new track,
    * and resets the camera transition for a cinematic entry.
    */
-  switchToTrack(newZone: AdventureTrackType): boolean {
+  async switchToTrack(newZone: AdventureTrackType): Promise<boolean> {
     if (!this.adventureActive) {
       console.warn('[AdventureMode] Cannot switch track: adventure not active')
       return false
@@ -457,7 +455,7 @@ export class AdventureMode extends AdventurePortalMixin {
     this.clearTrack()
 
     // Build new track
-    this.buildTrack(newZone)
+    await this.buildTrack(newZone)
     this.teleportActiveBallsToStart()
 
     // Update follow-camera preset without recreating the camera

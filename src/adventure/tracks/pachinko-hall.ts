@@ -5,21 +5,22 @@
  * Gravity-driven pin lanes, conveyor currents, and machine alcoves — no flipper bumper cluster.
  */
 
-import { Vector3, MeshBuilder, Quaternion } from '@babylonjs/core'
+import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import type { TrackInfo } from '../../game-elements/adventure-track-progression'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 type BuilderCtx = {
-  scene: import('@babylonjs/core').Scene
+  scene: import('@babylonjs/core/scene').Scene
   world: RAPIER.World
   rapier: typeof RAPIER
   currentStartPos: Vector3
   currentTrackInfo: TrackInfo | null
-  adventureTrack: import('@babylonjs/core').Mesh[]
+  adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[]
   adventureBodies: RAPIER.RigidBody[]
   conveyorZones: { sensor: RAPIER.RigidBody; force: Vector3 }[]
-  getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial
+  getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial
   addStraightRamp: (...args: unknown[]) => Vector3
   addCurvedRamp: (...args: unknown[]) => Vector3
   createBasin: (...args: unknown[]) => void
@@ -34,8 +35,8 @@ function addPinLane(
   length: number,
   incline: number,
   width: number,
-  mat: import('@babylonjs/core').StandardMaterial,
-  pinMat: import('@babylonjs/core').StandardMaterial,
+  mat: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial,
+  pinMat: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial,
 ): Vector3 {
   const laneStart = start.clone()
   const end = b.addStraightRamp(start, heading, width, length, incline, mat) as Vector3
@@ -89,7 +90,7 @@ function addConveyorRamp(
   length: number,
   incline: number,
   width: number,
-  mat: import('@babylonjs/core').StandardMaterial,
+  mat: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial,
   forceScale: number,
 ): Vector3 {
   const rampStart = start.clone()

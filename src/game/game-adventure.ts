@@ -1,6 +1,7 @@
 // src/game/game-adventure.ts
-import { Vector3, Color3 } from '@babylonjs/core'
-import type { Scene } from '@babylonjs/core'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import type { Scene } from '@babylonjs/core/scene'
 import type { PhysicsSystem } from '../game-elements/physics'
 import type {
   MagSpinFeeder,

@@ -1,5 +1,4 @@
-import { Color3 } from '@babylonjs/core'
-
+import { Color3 } from '@babylonjs/core/Maths/math.color'
 // resolveAssetUrl / resolveVideoUrl moved to src/core/asset-urls.ts (#322) so
 // game-elements can use them without importing from the game layer. Re-exported
 // here for the game-layer call sites that already reference them.

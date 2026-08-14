@@ -4,16 +4,13 @@
  * Provides the foundation for building adventure mode tracks with physics and visuals.
  */
 
-import {
-  MeshBuilder,
-  Vector3,
-  Scene,
-  StandardMaterial,
-  PBRMaterial,
-  Color3,
-  Quaternion,
-  Mesh,
-} from '@babylonjs/core'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { Scene } from '@babylonjs/core/scene'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type {
   AdventureCallback,

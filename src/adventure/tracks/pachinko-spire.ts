@@ -6,22 +6,23 @@
  * central catch basin.
  */
 
-import { Vector3, MeshBuilder, Quaternion } from '@babylonjs/core'
+import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import type { TrackInfo } from '../../game-elements/adventure-track-progression'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildPachinkoSpire(builder: TrackBuilder): void {
-  const spireMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#FFFFFF")
-  const accentMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#ffdd00")
+  const spireMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FFFFFF")
+  const accentMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#ffdd00")
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const currentTrackInfo = (builder as unknown as { currentTrackInfo: TrackInfo | null }).currentTrackInfo
-  const scene = (builder as unknown as { scene: import('@babylonjs/core').Scene }).scene
+  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
   const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
-  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core').Mesh[] }).adventureTrack
+  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
-  const kinematicBindings = (builder as unknown as { kinematicBindings: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core').Mesh }[] }).kinematicBindings
+  const kinematicBindings = (builder as unknown as { kinematicBindings: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
   const resetSensors = (builder as unknown as { resetSensors: RAPIER.RigidBody[] }).resetSensors
 
   const modeType = currentTrackInfo?.modeType ?? 'STATIONARY_TABLE'

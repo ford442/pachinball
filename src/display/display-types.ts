@@ -5,7 +5,11 @@
  * Extracted from display.ts for modularity.
  */
 
-import type { Mesh, StandardMaterial, ShaderMaterial, Texture, VideoTexture } from '@babylonjs/core'
+import type { ShaderMaterial } from '@babylonjs/core/Materials/shaderMaterial'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import type { Texture } from '@babylonjs/core/Materials/Textures/texture'
+import type { VideoTexture } from '@babylonjs/core/Materials/Textures/videoTexture'
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { DisplayState } from '../game-elements/display-config'
 
 // Re-export canonical definitions from game-elements/display-config

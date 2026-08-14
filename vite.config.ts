@@ -4,8 +4,24 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   // Use relative paths so assets resolve correctly when deployed to a subdirectory
   base: './',
+  esbuild: {
+    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
+  },
   build: {
     target: 'es2022',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('@dimforge/rapier3d-compat')) return 'rapier'
+          if (id.includes('@babylonjs/loaders')) return 'babylon-loaders'
+          if (id.includes('node_modules/@babylonjs/core')) return 'babylon-core'
+          if (id.match(/leaderboard-system|level-select-screen|name-entry-dialog/)) {
+            return 'ui-overlays'
+          }
+          return undefined
+        },
+      },
+    },
   },
   plugins: [
     VitePWA({
@@ -61,7 +77,34 @@ export default defineConfig({
           '**/*.{js,css,html,wasm,svg,png,ogg,env,webp,ico,txt,webmanifest}',
         ],
         // Full backbox loops can be large — poster (attract.png) is precached instead
-        globIgnores: ['**/backbox/*.mp4', '**/backbox/*.webm'],
+        globIgnores: [
+          '**/backbox/*.mp4',
+          '**/backbox/*.webm',
+          // Classic-cabinet glTF loader — fetched on first classic preset use
+          '**/babylon-loaders-*.js',
+          // Leaderboard / name-entry / level-select overlays
+          '**/ui-overlays-*.js',
+          // Per-track adventure builders (dynamic import)
+          '**/neon-helix-*.js',
+          '**/pachinko-hall-*.js',
+          '**/cyber-core-*.js',
+          '**/pachinko-spire-*.js',
+          '**/orbital-junkyard-*.js',
+          '**/cpu-core-*.js',
+          '**/bio-hazard-lab-*.js',
+          '**/gravity-forge-*.js',
+          '**/synthwave-surf-*.js',
+          '**/prism-pathway-*.js',
+          '**/magnetic-storage-*.js',
+          '**/neural-network-*.js',
+          '**/neon-stronghold-*.js',
+          '**/casino-heist-*.js',
+          '**/tesla-tower-*.js',
+          '**/neon-skyline-*.js',
+          '**/polychrome-void-*.js',
+          // Canvas reel atlas — runtime-cached on first reel use
+          '**/reel.png',
+        ],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/storage\.noahcohn\.com\/api\//,
@@ -112,6 +155,22 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'nexus-remote-assets-dev',
+              expiration: {
+                maxEntries: 64,
+                maxAgeSeconds: 30 * 24 * 60 * 60,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: ({ sameOrigin, request, url }) =>
+              sameOrigin &&
+              (request.destination === 'script' || url.pathname.endsWith('.js')),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'nexus-js-chunks',
               expiration: {
                 maxEntries: 64,
                 maxAgeSeconds: 30 * 24 * 60 * 60,

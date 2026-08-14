@@ -3,8 +3,8 @@
  * Manages cinematic camera sequences and dramatic effects for major game moments
  */
 
-import { Color3, type ArcRotateCamera } from '@babylonjs/core'
-
+import type { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
 export type CinematicEventType = 'track-start' | 'goal-complete' | 'all-goals-complete' | 'jackpot' | 'special-moment'
 
 export interface CinematicSequence {

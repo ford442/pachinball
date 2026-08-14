@@ -85,10 +85,10 @@ function resolveOptions(spec: PlayfieldSpec): {
  *
  * This is the single authority for in-session adventure layout switches.
  */
-export function loadPlayfield(
+export async function loadPlayfield(
   spec: PlayfieldSpec,
   deps: PlayfieldLoaderDeps,
-): PlayfieldLoadResult {
+): Promise<PlayfieldLoadResult> {
   const config = getMapConfigById(spec.trackId)
   if (!config?.adventureTrackType) {
     return {
@@ -123,7 +123,7 @@ export function loadPlayfield(
   }
 
   // switchToTrack → deactivateExitPortal + clearTrack + buildTrack
-  const success = deps.adventureMode.switchToTrack(trackType)
+  const success = await deps.adventureMode.switchToTrack(trackType)
   if (!success) {
     const detail =
       deps.adventureMode.getLastTrackLoadError() ??

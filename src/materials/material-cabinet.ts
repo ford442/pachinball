@@ -2,7 +2,10 @@
  * Cabinet Materials - cabinet body, side panels, wood trim, and metal trim surfaces
  */
 
-import { PBRMaterial, StandardMaterial, Color3, DynamicTexture } from '@babylonjs/core'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { ORMTexturePacking } from './material-orm'
 import {
   PALETTE,

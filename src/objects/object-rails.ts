@@ -1,4 +1,7 @@
-import { Scene, Vector3, MeshBuilder, Mesh, Quaternion } from '@babylonjs/core'
+import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { Scene } from '@babylonjs/core/scene'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../config'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'

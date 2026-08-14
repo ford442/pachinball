@@ -5,9 +5,13 @@
  * Extracted and refactored from display.ts for modularity.
  */
 
-import { MeshBuilder, Vector3, type Scene, type Mesh, TransformNode } from '@babylonjs/core'
-import type { Engine, WebGPUEngine } from '@babylonjs/core'
-
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
+import type { Scene } from '@babylonjs/core/scene'
+import type { Engine } from '@babylonjs/core/Engines/engine'
+import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import {
   DisplayState,
   type DisplayConfig,

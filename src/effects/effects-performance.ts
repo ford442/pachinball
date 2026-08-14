@@ -1,4 +1,4 @@
-import { Scene } from '@babylonjs/core'
+import { Scene } from '@babylonjs/core/scene'
 import type { BloomPipelineController } from './bloom-pipeline-types'
 import { EffectsConfig } from '../config'
 import type { ParticleEffects } from './effects-particles'

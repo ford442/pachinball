@@ -15,6 +15,7 @@
     "test:native": "cmake -S native -B native/build-native -DCMAKE_EXPORT_COMPILE_COMMANDS=ON && cmake --build native/build-native && ctest --test-dir native/build-native --output-on-failure",
     "test:wasm-parity": "node scripts/run-wasm-parity.mjs",
     "lint": "eslint .",
+    "check:bundle": "node scripts/check-bundle-size.mjs",
     "preview": "vite preview",
     "icons:generate": "node scripts/generate-pwa-icons.mjs",
     "models:cabinet-placeholders": "node scripts/generate-cabinet-placeholders.mjs",

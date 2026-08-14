@@ -4,20 +4,21 @@
  * A circuit board themed track with logic gates and heatsink fans.
  */
 
-import { Vector3, MeshBuilder, Quaternion } from '@babylonjs/core'
+import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildCpuCore(builder: TrackBuilder): void {
-  const pcbMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#004400")
-  const traceMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core').StandardMaterial }).getTrackMaterial("#FFD700")
+  const pcbMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#004400")
+  const traceMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FFD700")
 
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core').Scene }).scene
+  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
   const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
-  const kinematicBindings = (builder as unknown as { kinematicBindings: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core').Mesh }[] }).kinematicBindings
+  const kinematicBindings = (builder as unknown as { kinematicBindings: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
 
   let currentPos = currentStartPos.clone()
   let heading = 0
@@ -92,5 +93,5 @@ export function buildCpuCore(builder: TrackBuilder): void {
   socket.position.copyFrom(goalPos)
   socket.position.y += 0.5
   socket.material = traceMat
-  ;(builder as unknown as { adventureTrack: import('@babylonjs/core').Mesh[] }).adventureTrack.push(socket)
+  ;(builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack.push(socket)
 }

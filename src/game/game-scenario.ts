@@ -2,8 +2,9 @@
  * Game Scenario — Dynamic adventure mode, scenario loading, zone transitions.
  */
 
-import { Vector3, Color3 } from '@babylonjs/core'
-import type { Scene } from '@babylonjs/core'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import type { Scene } from '@babylonjs/core/scene'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { BallManager } from '../game-elements/ball-manager'
@@ -29,9 +30,9 @@ export interface ScenarioHost {
   readonly hapticManager: HapticManager | null
   readonly adventureManager: AdventureManager | null
 
-  cabinetNeonLights: import('@babylonjs/core').PointLight[]
-  keyLight: import('@babylonjs/core').DirectionalLight | null
-  rimLight: import('@babylonjs/core').DirectionalLight | null
+  cabinetNeonLights: import('@babylonjs/core/Lights/pointLight').PointLight[]
+  keyLight: import('@babylonjs/core/Lights/directionalLight').DirectionalLight | null
+  rimLight: import('@babylonjs/core/Lights/directionalLight').DirectionalLight | null
 
   gameMode: 'fixed' | 'dynamic'
 
@@ -183,7 +184,7 @@ export class GameScenario {
       this.host.rimLight.diffuse = Color3.FromHexString(lighting.rimLightColor)
     }
     if (this.host.scene) {
-      const hemiLight = this.host.scene.getLightByName('hemiLight') as import('@babylonjs/core').HemisphericLight
+      const hemiLight = this.host.scene.getLightByName('hemiLight') as import('@babylonjs/core/Lights/hemisphericLight').HemisphericLight
       if (hemiLight) {
         hemiLight.diffuse = Color3.FromHexString(lighting.ambientColor)
       }

@@ -1,4 +1,7 @@
-import { MeshBuilder, Vector3, Mesh, PointLight } from '@babylonjs/core'
+import { PointLight } from '@babylonjs/core/Lights/pointLight'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../../materials'
 import { color } from '../visual-language'

@@ -1,4 +1,4 @@
-import type { Vector3 } from '@babylonjs/core'
+import type { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GAME_TUNING, GameConfig } from '../config'
 import { nowMs, type BallManagerHost } from './ball-manager-context'

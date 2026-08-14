@@ -1,4 +1,9 @@
-import type { TransformNode, Mesh, StandardMaterial, PBRMaterial, PointLight, Color3 } from '@babylonjs/core'
+import type { PointLight } from '@babylonjs/core/Lights/pointLight'
+import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import type { Color3 } from '@babylonjs/core/Maths/math.color'
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
+import type { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export interface PhysicsBinding {
@@ -43,8 +48,8 @@ export interface CabinetLight {
 
 export interface ShardParticle {
   mesh: Mesh
-  vel: import('@babylonjs/core').Vector3
-  rotVel: import('@babylonjs/core').Vector3        // Angular velocity for tumbling
+  vel: import('@babylonjs/core/Maths/math.vector').Vector3
+  rotVel: import('@babylonjs/core/Maths/math.vector').Vector3        // Angular velocity for tumbling
   life: number
   maxLife: number        // For normalized life calculations
   material: StandardMaterial | PBRMaterial
@@ -53,7 +58,7 @@ export interface ShardParticle {
 
 export interface CaughtBall {
   body: RAPIER.RigidBody
-  targetPos: import('@babylonjs/core').Vector3
+  targetPos: import('@babylonjs/core/Maths/math.vector').Vector3
   timer: number
 }
 

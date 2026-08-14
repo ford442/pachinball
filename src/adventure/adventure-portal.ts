@@ -5,7 +5,8 @@
  * it each frame, and detecting when a ball has passed through.
  */
 
-import { Vector3, Color3 } from '@babylonjs/core'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { AdventureCameraMixin } from './adventure-camera'
 import { AdventureTrackType } from './adventure-types'

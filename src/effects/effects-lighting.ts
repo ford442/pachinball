@@ -1,4 +1,5 @@
-import { Scene, Color3 } from '@babylonjs/core'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Scene } from '@babylonjs/core/scene'
 import type { BloomPipelineController } from './bloom-pipeline-types'
 
 export class LightingEffects {

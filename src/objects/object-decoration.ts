@@ -1,4 +1,7 @@
-import { Scene, Vector3, Mesh, TransformNode } from '@babylonjs/core'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
+import { Scene } from '@babylonjs/core/scene'
 import { resolveAssetUrl } from '../game/game-utils'
 import { createNeonDecal } from './decoration/decoration-decal'
 import {

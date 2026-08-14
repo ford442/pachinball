@@ -25,6 +25,7 @@
 - **Engine bootstrap:** `src/main.ts` + `src/engine/` centralize Babylon options (`preserveDrawingBuffer`, `powerPreference`, hardware scaling, tab visibility, idle WASM warm-load). Full option matrix and benchmark procedure: [`docs/ENGINE_BOOTSTRAP.md`](docs/ENGINE_BOOTSTRAP.md).
 - **Debug overlays (Developer settings):** "Wireframe Mode" sets `scene.forceWireframe`; "Physics Debug Draw" renders Rapier's `world.debugRender()` collider/joint lines via `src/game-elements/physics-debug-renderer.ts`. Both work in either renderer, but WebGL2 is recommended for inspecting them with Playwright/agents since WebGPU canvases aren't readable by current automation tooling.
 - **WebGL2 ↔ WebGPU porting notes:** Gameplay, physics, materials, and post-processing are backend-agnostic (Babylon abstracts both). The one backend-specific area is `src/display/display-shader.ts`, which uses WGSL `ShaderMaterial`s for the backbox reels with a Canvas2D fallback — check `engine.getClassName() === 'WebGPUEngine'` (or `engine.isWebGPU`) before taking the WGSL path, as the existing display code does.
+- **Babylon imports:** Always use deep paths (`@babylonjs/core/Meshes/mesh`, etc.) — never the `@babylonjs/core` barrel, which defeats tree-shaking. ESLint enforces this; `node scripts/codemod-babylon-deep-imports.mjs` rewrites barrel imports mechanically.
 
 ---
 

@@ -8,8 +8,7 @@
  * - Integration with material library, sound system, and cabinet lighting
  */
 
-import type { Scene } from '@babylonjs/core'
-
+import type { Scene } from '@babylonjs/core/scene'
 import {
   TABLE_MAPS,
   type TableMapType,

@@ -5,12 +5,10 @@
  * ball-tracking update, and zone-to-zone camera preset transitions.
  */
 
-import {
-  ArcRotateCamera,
-  type Camera,
-  Vector3,
-  Scalar,
-} from '@babylonjs/core'
+import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera'
+import type { Camera } from '@babylonjs/core/Cameras/camera'
+import { Scalar } from '@babylonjs/core/Maths/math.scalar'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { TrackBuilder } from './track-builder'
 import { CameraEasing } from './camera-easing'

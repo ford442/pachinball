@@ -1,5 +1,6 @@
-import { Color3, PBRMaterial } from '@babylonjs/core'
-import type { AbstractMesh } from '@babylonjs/core'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import { BallType } from '../config'
 import type { BallManager } from '../game-elements/ball-manager'
 import type { EventBus } from '../core/event-bus'

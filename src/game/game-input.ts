@@ -1,7 +1,6 @@
 import { InputHandler, type InputFrame } from '../game-elements/input'
 import type { PhysicsSystem } from '../game-elements/physics'
-import type { Scene } from '@babylonjs/core'
-
+import type { Scene } from '@babylonjs/core/scene'
 export interface InputConfig {
   onFlipperLeft?: (pressed: boolean) => void
   onFlipperRight?: (pressed: boolean) => void

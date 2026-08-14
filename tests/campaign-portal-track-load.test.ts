@@ -69,8 +69,8 @@ describe('LevelLoader.loadCampaignTrack', () => {
     })
   })
 
-  it('switches A→B with extended→stationary mode and matching LCD map', () => {
-    const result = loader.loadCampaignTrack('CYBER_CORE', { resetBallToPlunger: false })
+  it('switches A→B with extended→stationary mode and matching LCD map', async () => {
+    const result = await loader.loadCampaignTrack('CYBER_CORE', { resetBallToPlunger: false })
 
     expect(result.success).toBe(true)
     expect(setGameMode).toHaveBeenCalledWith('fixed')
@@ -80,20 +80,20 @@ describe('LevelLoader.loadCampaignTrack', () => {
     expect(resetBall).not.toHaveBeenCalled()
   })
 
-  it('switches B→A with stationary→extended mode', () => {
-    loader.loadCampaignTrack('QUANTUM_GRID')
+  it('switches B→A with stationary→extended mode', async () => {
+    await loader.loadCampaignTrack('QUANTUM_GRID')
 
     expect(setGameMode).toHaveBeenCalledWith('dynamic')
     expect(switchTableMap).toHaveBeenCalledWith('quantum-grid')
     expect(switchToTrack).toHaveBeenCalledWith(AdventureTrackType.QUANTUM_GRID)
   })
 
-  it('resets ball to plunger for free-map test loads', () => {
-    loader.loadCampaignTrack('NEON_HELIX', { resetBallToPlunger: true })
+  it('resets ball to plunger for free-map test loads', async () => {
+    await loader.loadCampaignTrack('NEON_HELIX', { resetBallToPlunger: true })
     expect(resetBall).toHaveBeenCalledOnce()
   })
 
-  it('returns teardown stats with zero lingering bodies on campaign load', () => {
+  it('returns teardown stats with zero lingering bodies on campaign load', async () => {
     const teardown = {
       meshesDisposed: 6,
       materialsDisposed: 3,
@@ -121,7 +121,7 @@ describe('LevelLoader.loadCampaignTrack', () => {
       setGameMode,
     })
 
-    const result = loader.loadCampaignTrack('CYBER_CORE')
+    const result = await loader.loadCampaignTrack('CYBER_CORE')
 
     expect(result.teardown?.exitPortalsRemoved).toBe(1)
     expect(result.teardown?.lingeringBodies).toBe(0)
@@ -129,7 +129,7 @@ describe('LevelLoader.loadCampaignTrack', () => {
 })
 
 describe('Campaign portal → next track (supervisor + slot + loader)', () => {
-  it('completes NEON_HELIX portal entry and loads PACHINKO_HALL hub without duplicate physics rebuild', () => {
+  it('completes NEON_HELIX portal entry and loads PACHINKO_HALL hub without duplicate physics rebuild', async () => {
     const bus = new EventBus()
     const progression = new AdventureTrackProgression()
     const switchToTrack = vi.fn().mockReturnValue(true)
@@ -185,9 +185,10 @@ describe('Campaign portal → next track (supervisor + slot + loader)', () => {
       resetBall: vi.fn(),
     })
 
+    const pendingLoads: Promise<void>[] = []
     const supervisor = new AdventureProgressionSupervisor(bus, progression, {
       onTrackAdvanced: (nextTrackId) => {
-        if (nextTrackId) slot.switchToTrack(nextTrackId)
+        if (nextTrackId) pendingLoads.push(slot.switchToTrack(nextTrackId))
       },
     })
 
@@ -196,6 +197,7 @@ describe('Campaign portal → next track (supervisor + slot + loader)', () => {
     expect(supervisor.isPortalOpen()).toBe(true)
 
     supervisor.onPortalEntered(62_000, 1)
+    await Promise.all(pendingLoads)
 
     expect(progression.isTrackCompleted('NEON_HELIX')).toBe(true)
     expect(progression.getCurrentTrack()).toBe('PACHINKO_HALL')
@@ -209,7 +211,7 @@ describe('Campaign portal → next track (supervisor + slot + loader)', () => {
     expect(supervisorStart).toHaveBeenCalledWith('PACHINKO_HALL', 62_000)
   })
 
-  it('chains A hub → B arena portal loads without accumulating rebuild calls', () => {
+  it('chains A hub → B arena portal loads without accumulating rebuild calls', async () => {
     const bus = new EventBus()
     const progression = new AdventureTrackProgression()
     const switchToTrack = vi.fn().mockReturnValue(true)
@@ -255,9 +257,10 @@ describe('Campaign portal → next track (supervisor + slot + loader)', () => {
       resetBall: vi.fn(),
     })
 
+    const pendingLoads: Promise<void>[] = []
     const supervisor = new AdventureProgressionSupervisor(bus, progression, {
       onTrackAdvanced: (nextTrackId) => {
-        if (nextTrackId) slot.switchToTrack(nextTrackId)
+        if (nextTrackId) pendingLoads.push(slot.switchToTrack(nextTrackId))
       },
     })
 
@@ -265,11 +268,14 @@ describe('Campaign portal → next track (supervisor + slot + loader)', () => {
     supervisor.startTrack('NEON_HELIX', 0)
     supervisor.update(0.1, 60_000)
     supervisor.onPortalEntered(60_000, 0)
+    await Promise.all(pendingLoads)
+    pendingLoads.length = 0
 
     // PACHINKO_HALL (A) complete → CYBER_CORE (B)
     supervisor.startTrack('PACHINKO_HALL', 60_000)
     supervisor.update(0.1, 110_000)
     supervisor.onPortalEntered(110_000, 0)
+    await Promise.all(pendingLoads)
 
     expect(progression.getCurrentTrack()).toBe('CYBER_CORE')
     expect(switchToTrack).toHaveBeenCalledTimes(2)

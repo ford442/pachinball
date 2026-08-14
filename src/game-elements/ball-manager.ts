@@ -1,13 +1,11 @@
-import {
-  Color3,
-  Mesh,
-  PBRMaterial,
-  Scene,
-  StandardMaterial,
-  TrailMesh,
-  Vector3,
-} from '@babylonjs/core'
-import type { MirrorTexture } from '@babylonjs/core'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { TrailMesh } from '@babylonjs/core/Meshes/trailMesh'
+import { Scene } from '@babylonjs/core/scene'
+import type { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { BallType, GAME_TUNING } from '../config'
 import { getMaterialLibrary } from '../materials'

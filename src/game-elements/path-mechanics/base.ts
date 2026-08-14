@@ -1,4 +1,6 @@
-import { TransformNode, Scene, PBRMaterial } from '@babylonjs/core'
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
+import { Scene } from '@babylonjs/core/scene'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../../materials'
 

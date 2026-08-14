@@ -3,14 +3,12 @@
  * Extra wide cabinet for deluxe experience
  */
 
-import {
-  Scene,
-  MeshBuilder,
-  Mesh,
-  Vector3,
-  StandardMaterial,
-  Color3,
-} from '@babylonjs/core'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { Scene } from '@babylonjs/core/scene'
 import { getMaterialLibrary } from '../materials'
 import { PALETTE } from '../game-elements/visual-language'
 import type { CabinetPreset } from './cabinet-types'

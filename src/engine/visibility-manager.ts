@@ -2,7 +2,7 @@
  * Tab visibility lifecycle — pause render loop and audio when the document is hidden.
  */
 
-import { Engine } from '@babylonjs/core'
+import { Engine } from '@babylonjs/core/Engines/engine'
 import type { Engine as BabylonEngine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import { GameState } from '../game-elements'

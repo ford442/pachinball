@@ -1,5 +1,7 @@
-import { ParticleSystem, DynamicTexture, Vector3, Scene } from '@babylonjs/core'
-
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem'
+import { Scene } from '@babylonjs/core/scene'
 export class ImpactEffects {
   private scene: Scene
   private impactFlashPool: ParticleSystem | null = null

@@ -4,13 +4,12 @@
  * behind the glass LCD screen.
  */
 
-import {
-  MeshBuilder,
-  StandardMaterial,
-  Color3,
-  TransformNode,
-} from '@babylonjs/core'
-import type { Mesh, Scene } from '@babylonjs/core'
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
+import type { Scene } from '@babylonjs/core/scene'
 import { DisplayState, type DisplayConfig } from './display-types'
 import { DISPLAY_LAYER_Z } from './display-layer-depth'
 import { color, emissive, INTENSITY, PALETTE, QualityTier, STATE_COLORS } from '../game-elements/visual-language'

@@ -2,7 +2,7 @@
  * Game Map & Cabinet — Table map switching, cabinet presets, popups.
  */
 
-import type { Scene } from '@babylonjs/core'
+import type { Scene } from '@babylonjs/core/scene'
 import type { TableMapManager } from './game-maps'
 import type { CabinetManager } from './game-cabinet'
 import type { GameUIManager } from './game-ui'

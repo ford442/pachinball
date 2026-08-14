@@ -2,8 +2,7 @@
  * Cabinet Types - Shared type definitions for cabinet system
  */
 
-import { Vector3 } from '@babylonjs/core'
-
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 export type CabinetType = 'classic' | 'neo' | 'vertical' | 'wide'
 
 /** Optional glTF shell assets. Collision stays code-authored (playfield walls). */

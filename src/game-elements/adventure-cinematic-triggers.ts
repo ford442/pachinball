@@ -4,7 +4,7 @@
  */
 
 import type { EventBus } from '../core/event-bus'
-import { Color3 } from '@babylonjs/core'
+import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { AdventureCinematicSystem } from './adventure-cinematic-system'
 import type { AdventureGoalTracker } from './adventure-goal-tracker'
 

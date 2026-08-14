@@ -80,15 +80,10 @@ export {
   type AudioSourceMode,
   type SampleCategory,
 } from './audio-sample-bank'
-export { LeaderboardSystem, getLeaderboardSystem, resetLeaderboardSystem, type LeaderboardEntry, type ScoreSubmission } from './leaderboard-system'
-export { NameEntryDialog, getNameEntryDialog, type NameEntryResult } from './name-entry-dialog'
+export type { LeaderboardSystem, LeaderboardEntry, ScoreSubmission } from './leaderboard-system'
+export type { NameEntryDialog, NameEntryResult } from './name-entry-dialog'
 export { MapSystem, getMapSystem, resetMapSystem, type DynamicMapConfig } from './map-system'
-export {
-  LevelSelectScreen,
-  getLevelSelectScreen,
-  resetLevelSelectScreen,
-  type LevelSelectConfig,
-} from './level-select-screen'
+export type { LevelSelectScreen, LevelSelectConfig } from './level-select-screen'
 export {
   PathMechanic,
   MovingGate,

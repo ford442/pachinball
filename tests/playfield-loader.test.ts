@@ -50,8 +50,8 @@ describe('loadPlayfield', () => {
     }
   })
 
-  it('campaign-portal path syncs mode, LCD map, and skips ball reset', () => {
-    const result = loadPlayfield(campaignPlayfieldSpec('CYBER_CORE'), deps)
+  it('campaign-portal path syncs mode, LCD map, and skips ball reset', async () => {
+    const result = await loadPlayfield(campaignPlayfieldSpec('CYBER_CORE'), deps)
 
     expect(result.success).toBe(true)
     expect(result.trackId).toBe('CYBER_CORE')
@@ -63,8 +63,8 @@ describe('loadPlayfield', () => {
     expect(result.teardown?.lingeringBodies).toBe(0)
   })
 
-  it('free-map path resets ball and skips campaign sync', () => {
-    const result = loadPlayfield(freeMapPlayfieldSpec('NEON_HELIX'), deps)
+  it('free-map path resets ball and skips campaign sync', async () => {
+    const result = await loadPlayfield(freeMapPlayfieldSpec('NEON_HELIX'), deps)
 
     expect(result.success).toBe(true)
     expect(setGameMode).not.toHaveBeenCalled()
@@ -74,7 +74,7 @@ describe('loadPlayfield', () => {
     expect(result.teardown?.bodiesRemoved).toBe(2)
   })
 
-  it('returns teardown stats from adventure mode on both paths', () => {
+  it('returns teardown stats from adventure mode on both paths', async () => {
     const portalStats = makeTeardownStats({ exitPortalsRemoved: 1 })
     const freeMapStats = makeTeardownStats({ exitPortalsRemoved: 1, meshesDisposed: 5 })
 
@@ -83,33 +83,33 @@ describe('loadPlayfield', () => {
       .mockReturnValueOnce(portalStats)
       .mockReturnValueOnce(freeMapStats)
 
-    const portal = loadPlayfield(campaignPlayfieldSpec('PACHINKO_HALL'), deps)
-    const freeMap = loadPlayfield(freeMapPlayfieldSpec('QUANTUM_GRID'), deps)
+    const portal = await loadPlayfield(campaignPlayfieldSpec('PACHINKO_HALL'), deps)
+    const freeMap = await loadPlayfield(freeMapPlayfieldSpec('QUANTUM_GRID'), deps)
 
     expect(portal.teardown?.exitPortalsRemoved).toBe(1)
     expect(freeMap.teardown?.exitPortalsRemoved).toBe(1)
     expect(freeMap.teardown?.meshesDisposed).toBe(5)
   })
 
-  it('calls ensureAdventureActive when adventure is not yet running', () => {
+  it('calls ensureAdventureActive when adventure is not yet running', async () => {
     const ensureAdventureActive = vi.fn()
     ;(deps.adventureMode as { isActive: ReturnType<typeof vi.fn> }).isActive.mockReturnValue(false)
 
-    loadPlayfield(freeMapPlayfieldSpec('NEON_HELIX'), { ...deps, ensureAdventureActive })
+    await loadPlayfield(freeMapPlayfieldSpec('NEON_HELIX'), { ...deps, ensureAdventureActive })
 
     expect(ensureAdventureActive).toHaveBeenCalledOnce()
   })
 
-  it('returns error for unknown track without calling switchToTrack', () => {
-    const result = loadPlayfield({ trackId: 'NONEXISTENT', source: 'free-map' }, deps)
+  it('returns error for unknown track without calling switchToTrack', async () => {
+    const result = await loadPlayfield({ trackId: 'NONEXISTENT', source: 'free-map' }, deps)
 
     expect(result.success).toBe(false)
     expect(switchToTrack).not.toHaveBeenCalled()
   })
 
-  it('does not double-register physics when called twice in succession', () => {
-    loadPlayfield(campaignPlayfieldSpec('NEON_HELIX'), deps)
-    loadPlayfield(campaignPlayfieldSpec('CYBER_CORE'), deps)
+  it('does not double-register physics when called twice in succession', async () => {
+    await loadPlayfield(campaignPlayfieldSpec('NEON_HELIX'), deps)
+    await loadPlayfield(campaignPlayfieldSpec('CYBER_CORE'), deps)
 
     expect(switchToTrack).toHaveBeenCalledTimes(2)
     expect(rebuildHandleCaches).toHaveBeenCalledTimes(2)
@@ -120,7 +120,7 @@ describe('loadPlayfield', () => {
 })
 
 describe('LevelLoader delegates to loadPlayfield', () => {
-  it('loadCampaignTrack and loadMap both surface teardown stats', () => {
+  it('loadCampaignTrack and loadMap both surface teardown stats', async () => {
     resetMapRegistry()
     const teardown = makeTeardownStats({ exitPortalsRemoved: 1 })
     const loader = new LevelLoader({
@@ -135,8 +135,8 @@ describe('LevelLoader delegates to loadPlayfield', () => {
       rebuildHandleCaches: vi.fn(),
     })
 
-    const campaign = loader.loadCampaignTrack('CYBER_CORE')
-    const freeMap = loader.loadMap('NEON_HELIX')
+    const campaign = await loader.loadCampaignTrack('CYBER_CORE')
+    const freeMap = await loader.loadMap('NEON_HELIX')
 
     expect(campaign.teardown?.exitPortalsRemoved).toBe(1)
     expect(freeMap.teardown?.exitPortalsRemoved).toBe(1)

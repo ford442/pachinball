@@ -5,8 +5,9 @@
  * can stub the surface without loading the engine.
  */
 
-import { Vector3 } from '@babylonjs/core'
-import type { StandardMaterial, PBRMaterial } from '@babylonjs/core'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import type {
   MaterialRef,
   TrackDefinition,

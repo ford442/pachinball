@@ -4,7 +4,7 @@
 
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation'
 import { EngineInstrumentation } from '@babylonjs/core/Instrumentation/engineInstrumentation'
-import type { Scene } from '@babylonjs/core'
+import type { Scene } from '@babylonjs/core/scene'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import type { PhysicsSystem } from '../game-elements/physics'

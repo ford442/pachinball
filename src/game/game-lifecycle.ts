@@ -2,7 +2,7 @@
  * Game Lifecycle — State transitions, camera mode, start/pause/reset, jackpot.
  */
 
-import { Scene } from '@babylonjs/core'
+import { Scene } from '@babylonjs/core/scene'
 import {
   GameState,
   DisplayState,
@@ -50,7 +50,7 @@ export interface LifecycleHost {
   readonly mapManager: TableMapManager | null
   readonly uiManager: GameUIManager | null
   readonly scene: Scene | null
-  readonly tableCam: import('@babylonjs/core').TargetCamera | null
+  readonly tableCam: import('@babylonjs/core/Cameras/targetCamera').TargetCamera | null
   readonly renderer: { applyQualityTier(tier: QualityTier): void } | null
   readonly replayRecorder?: import('../game-elements').ReplayRecorder
   readonly replayRunner?: import('../game-elements').ReplayRunner
@@ -79,7 +79,7 @@ export interface LifecycleHost {
   resetBall(): void
   setGameState(state: GameState): void
   handleGameOverLeaderboard(): Promise<void>
-  getBallPosition(): import('@babylonjs/core').Vector3 | null
+  getBallPosition(): import('@babylonjs/core/Maths/math.vector').Vector3 | null
   /** Rebuild pins/bumpers/feeders for Daily Cascade / free-play before PLAYING. */
   applyDailyCascadeOnStart(): void
 }

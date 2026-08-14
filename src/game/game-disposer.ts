@@ -53,8 +53,7 @@ export class GameDisposer {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.game.mapCabinet = null as any
 
-    this.game.leaderboardSystem.stop()
-    this.game.leaderboardSystem.dispose()
+    this.game.disposeOverlaySystems()
 
     this.game.bloomPipeline?.dispose()
     this.game.bloomPipeline = null

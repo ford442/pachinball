@@ -4,7 +4,9 @@
  * WebGL2 is the recommended renderer for this view (see renderer-selector.ts).
  */
 
-import { LinesMesh, VertexData, type Scene } from '@babylonjs/core'
+import { LinesMesh } from '@babylonjs/core/Meshes/linesMesh'
+import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData'
+import type { Scene } from '@babylonjs/core/scene'
 import type { PhysicsSystem } from './physics'
 
 export class PhysicsDebugRenderer {

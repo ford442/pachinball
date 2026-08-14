@@ -1,5 +1,5 @@
-import { Vector3 } from '@babylonjs/core'
-import type { Scene } from '@babylonjs/core'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import type { Scene } from '@babylonjs/core/scene'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { PathMechanic } from './base'
 import { MovingGate } from './moving-gate'
