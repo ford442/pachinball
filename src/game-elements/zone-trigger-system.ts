@@ -59,7 +59,7 @@ export class ZoneTriggerSystem {
   
   // Debounce timing to prevent zone flicker at boundaries
   private readonly ZONE_DEBOUNCE_MS = 200
-  private lastTransitionTime = 0
+  private lastTransitionTime = -Infinity
   
   // Progress tracking for current zone
   private zoneEntryPosition: Vector3 | null = null
