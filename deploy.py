@@ -113,12 +113,38 @@ def iter_build_files(build_path: Path) -> Iterable[Path]:
         yield rel
 
 
-def build_zip(build_path: Path, *, verbose: bool = True) -> bytes:
+def fetch_remote_sizes(config: DeployConfig) -> dict[str, int]:
+    url = f"{config.base_url.rstrip('/')}/api/deploy/{config.project_name}/sizes"
+    headers = {"X-Deploy-Token": config.token}
+    try:
+        response = requests.get(
+            url,
+            params={"target_folder": config.target_folder},
+            headers=headers,
+            timeout=60,
+        )
+        if response.status_code == 200:
+            files = response.json().get("files") or {}
+            print(f"Remote size map: {len(files)} file(s)")
+            return {str(k).replace("\\", "/"): int(v) for k, v in files.items()}
+        print(f"  ! sizes HTTP {response.status_code}; uploading all files")
+    except Exception as exc:
+        print(f"  ! Could not fetch remote sizes ({exc}); uploading all files")
+    return {}
+
+
+def build_zip(build_path: Path, *, verbose: bool = True, skip_sizes: dict[str, int] | None = None) -> bytes:
     """Zip the contents of build_path into an in-memory archive."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for rel in iter_build_files(build_path):
-            zf.write(build_path / rel, str(rel))
+            rel_s = str(rel).replace("\\", "/")
+            local_size = (build_path / rel).stat().st_size
+            if skip_sizes and skip_sizes.get(rel_s) == local_size:
+                if verbose:
+                    print(f"  = {rel} ({local_size} bytes, unchanged)")
+                continue
+            zf.write(build_path / rel, rel_s)
             if verbose:
                 print(f"  + {rel}")
     return buf.getvalue()
@@ -153,9 +179,16 @@ def deploy_bundle(config: DeployConfig, build_path: Path) -> bool:
     url = f"{config.base_url}/api/deploy/{config.project_name}/bundle"
     headers = {"X-Deploy-Token": config.token}
 
+    print("Checking remote file sizes...")
+    skip_sizes = fetch_remote_sizes(config)
     print("Building zip archive...")
-    zip_bytes = build_zip(build_path)
+    zip_bytes = build_zip(build_path, skip_sizes=skip_sizes)
     print(f"Archive size: {len(zip_bytes) / 1024:.1f} KB\n")
+
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        if not zf.namelist():
+            print("All files identical in size on the target; nothing to upload.")
+            return True
 
     print("Uploading bundle...")
     try:
