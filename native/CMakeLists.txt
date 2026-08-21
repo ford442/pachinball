@@ -1,6 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
 project(pachinball_physics LANGUAGES CXX)
 
+# CMAKE_BUILD_TYPE (single-config generators) / configs:
+#   Debug          — native: -O0 -g; WASM: -O0 -g -gsource-map, ASSERTIONS=2
+#   Release        — native: -O2;    WASM: -O3, ASSERTIONS=0  (production default)
+#   RelWithDebInfo — native: -O2;    (unused for WASM)
+#   RelWithAsserts — WASM only: -O3, ASSERTIONS=1  (CI parity; build-wasm.sh --assert)
+#
+# Native library uses -fno-exceptions to match the WASM dialect of the same sources.
+# Catch2 test binary keeps exceptions (the framework requires them).
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -19,9 +28,16 @@ set(PHYSICS_CORE_SOURCES
 # Emscripten WASM module
 # ---------------------------------------------------------------------------
 if(EMSCRIPTEN)
-  # SoA integration + broadphase loops vectorize under -msimd128; bench justifies ON.
+  # SoA / broadphase vectorize under -msimd128; docs/WASM_BENCH_RESULTS.md justifies ON.
   option(PACHINBALL_WASM_SIMD "Enable WASM SIMD auto-vectorization (-msimd128)" ON)
   option(PACHINBALL_WASM_LTO  "Enable link-time optimization (-flto)" ON)
+
+  # web + worker: #361 can instantiate PhysicsModule.js on a Worker.
+  # node: scripts/run-wasm-parity.mjs. Do not drop node.
+  set(PACHINBALL_WASM_ENVIRONMENT "web,worker,node")
+  set(PACHINBALL_WASM_INITIAL_MEMORY 16777216)
+
+  message(STATUS "PACHINBALL WASM SIMD=${PACHINBALL_WASM_SIMD} LTO=${PACHINBALL_WASM_LTO} ENV=${PACHINBALL_WASM_ENVIRONMENT} INITIAL_MEMORY=${PACHINBALL_WASM_INITIAL_MEMORY}")
 
   add_executable(PhysicsModule
     ${PHYSICS_CORE_SOURCES}
@@ -36,55 +52,32 @@ if(EMSCRIPTEN)
   )
 
   target_link_options(PhysicsModule PRIVATE
-    # Produce an ES module (import PhysicsModuleFactory from './PhysicsModule.js')
     "-sEXPORT_ES6=1"
-    # Wrap the module in a factory so callers await PhysicsModule()
     "-sMODULARIZE=1"
-    # Global/factory export name expected by src/wasm/PhysicsModule.ts
     "-sEXPORT_NAME=PhysicsModule"
-
-    # Enable Embind bindings (native/src/bindings.cpp)
     "--bind"
-
-    # Browser + Node only — keeps Node parity harness working; excludes shell/worker
-    "-sENVIRONMENT=web,node"
-    # No fopen/FS usage in the physics module — shrinks the JS glue
+    "-sENVIRONMENT=${PACHINBALL_WASM_ENVIRONMENT}"
     "-sFILESYSTEM=0"
-
-    # Allow heap to grow at runtime (ball swarms can be large)
     "-sALLOW_MEMORY_GROWTH=1"
-    # Initial heap — 16 MB covers table + adventure; grows if needed
-    "-sINITIAL_MEMORY=16777216"
-    # Smaller allocator — module does little dynamic allocation after setup
+    "-sINITIAL_MEMORY=${PACHINBALL_WASM_INITIAL_MEMORY}"
     "-sMALLOC=emmalloc"
-
-    # Contact buffer HEAP view for JS wrapper
     "-sEXPORTED_RUNTIME_METHODS=[\"HEAPF32\"]"
-
-    # Shrink JS glue (parity harness validates embind + modularize)
     "--closure=1"
   )
 
-  # No C++ exceptions in native/src — drop EH runtime for smaller binaries
   target_compile_options(PhysicsModule PRIVATE "-fno-exceptions")
   target_link_options(PhysicsModule PRIVATE "-fno-exceptions")
 
-  # Opt-in SIMD (auto-vectorize only; no hand wasm_simd128 intrinsics yet)
   if(PACHINBALL_WASM_SIMD)
     target_compile_options(PhysicsModule PRIVATE "-msimd128")
     target_link_options(PhysicsModule PRIVATE "-msimd128")
   endif()
 
-  # Opt-in LTO — apply to both compile and link
   if(PACHINBALL_WASM_LTO)
     target_compile_options(PhysicsModule PRIVATE "-flto")
     target_link_options(PhysicsModule PRIVATE "-flto")
   endif()
 
-  # Optimisation / assertions follow CMAKE_BUILD_TYPE:
-  #   Debug          — -O0 -g -gsource-map, ASSERTIONS=2
-  #   Release        — -O3, ASSERTIONS=0  (production default)
-  #   RelWithAsserts — -O3, ASSERTIONS=1  (CI parity without full debug)
   target_compile_options(PhysicsModule PRIVATE
     "$<$<CONFIG:Debug>:-O0;-g;-gsource-map>"
     "$<$<CONFIG:Release>:-O3>"
@@ -98,13 +91,18 @@ if(EMSCRIPTEN)
 endif()
 
 # ---------------------------------------------------------------------------
-# Native (non-Emscripten) build — used for unit-testing the C++ logic with
-# a standard compiler (Catch2, GoogleTest, etc.).
+# Native (non-Emscripten) build — Catch2 unit tests.
+# compile_commands.json lands in native/build-native/ (see root .clangd).
 # ---------------------------------------------------------------------------
 if(NOT EMSCRIPTEN)
   add_library(pachinball_physics_native STATIC ${PHYSICS_CORE_SOURCES})
   target_include_directories(pachinball_physics_native PUBLIC src)
-  target_compile_options(pachinball_physics_native PRIVATE -Wall -Wextra -Werror -O2)
+  target_compile_options(pachinball_physics_native PRIVATE
+    -Wall -Wextra -Werror
+    -fno-exceptions
+    "$<$<CONFIG:Debug>:-O0;-g>"
+    "$<$<NOT:$<CONFIG:Debug>>:-O2>"
+  )
 
   include(CTest)
   enable_testing()
@@ -122,7 +120,12 @@ if(NOT EMSCRIPTEN)
     pachinball_physics_native
     Catch2::Catch2WithMain
   )
-  target_compile_options(physics_world_test PRIVATE -Wall -Wextra -Werror -O2)
+  # Catch2 requires C++ exceptions; do not pass -fno-exceptions here.
+  target_compile_options(physics_world_test PRIVATE
+    -Wall -Wextra -Werror
+    "$<$<CONFIG:Debug>:-O0;-g>"
+    "$<$<NOT:$<CONFIG:Debug>>:-O2>"
+  )
 
   include(Catch)
   catch_discover_tests(physics_world_test)

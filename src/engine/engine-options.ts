@@ -1,17 +1,38 @@
 /**
  * Babylon engine bootstrap options — single source of truth for createEngine().
  * Override via URL params or window debug globals (see docs/ENGINE_BOOTSTRAP.md).
+ *
+ * `setMaximumLimits: true` is the WebGPU MRT defense (SSAO + DoF + bloom).
+ * Do not turn it off to "fix" Safari — degrade post-process via
+ * `src/game/webgpu-post-process-profile.ts` instead.
  */
 
 export type PowerPreference = 'default' | 'high-performance' | 'low-power'
+export type GpuFeatureLevel = 'core' | 'compatibility'
 
 export interface ResolvedEngineOptions {
   antialias: boolean
   preserveDrawingBuffer: boolean
   stencil: boolean
+  /**
+   * WebGPU: request adapter maximum limits. Keep true; bloom/SSAO already
+   * degrade on strict adapters (webgpu-post-process-profile.ts).
+   */
   setMaximumLimits: boolean
   powerPreference: PowerPreference
   adaptToDeviceRatio: boolean
+  /** We own audio via SoundSystem + EffectsSystem — do not spawn a third AudioContext. */
+  audioEngine: false
+  /** Babylon should restore the context; we still log / toast / resize. */
+  doNotHandleContextLost: false
+  /** False so SwiftShader CI can boot; `?gpu=strict` enables the caveat check. */
+  failIfMajorPerformanceCaveat: boolean
+  /** Matches CSS cabinet compositing. */
+  premultipliedAlpha: true
+  /** WebGPU feature level; `?gpu=compat` forces compatibility. */
+  featureLevel: GpuFeatureLevel
+  /** WebGPU debug markers; `?gpuDebug=1`. */
+  enableGPUDebugMarkers: boolean
 }
 
 export interface EngineOptionsContext {
@@ -94,6 +115,11 @@ export function resolveEngineOptions(ctx: EngineOptionsContext = DEFAULT_CONTEXT
     powerPreference = 'high-performance'
   }
 
+  const gpu = params.get('gpu')
+  const featureLevel: GpuFeatureLevel = gpu === 'compat' ? 'compatibility' : 'core'
+  const failIfMajorPerformanceCaveat = gpu === 'strict'
+  const enableGPUDebugMarkers = parseBoolParam(params, 'gpuDebug') === true
+
   return {
     antialias: !antialiasOff,
     preserveDrawingBuffer,
@@ -101,6 +127,12 @@ export function resolveEngineOptions(ctx: EngineOptionsContext = DEFAULT_CONTEXT
     setMaximumLimits: !maxLimitsOff,
     powerPreference,
     adaptToDeviceRatio: false,
+    audioEngine: false,
+    doNotHandleContextLost: false,
+    failIfMajorPerformanceCaveat,
+    premultipliedAlpha: true,
+    featureLevel,
+    enableGPUDebugMarkers,
   }
 }
 

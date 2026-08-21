@@ -2,6 +2,10 @@ export {
   createEngine,
   isWebGPUEngine,
   resolveEngineCreationPlan,
+  webgpuFeatureLevelsToTry,
+  toWebGLEngineOptions,
+  toWebGPUEngineOptions,
+  attachGpuContextLostHandlers,
   type EngineCreationPlan,
 } from './create-engine'
 export {
@@ -11,6 +15,7 @@ export {
   shouldForceLowQualityMobile,
   isMobileUserAgent,
   type PowerPreference,
+  type GpuFeatureLevel,
   type ResolvedEngineOptions,
   type EngineOptionsContext,
   type MobileQualityHints,

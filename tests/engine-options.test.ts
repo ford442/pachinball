@@ -26,6 +26,12 @@ describe('resolveEngineOptions', () => {
     expect(opts.setMaximumLimits).toBe(true)
     expect(opts.adaptToDeviceRatio).toBe(false)
     expect(opts.powerPreference).toBe('high-performance')
+    expect(opts.audioEngine).toBe(false)
+    expect(opts.doNotHandleContextLost).toBe(false)
+    expect(opts.failIfMajorPerformanceCaveat).toBe(false)
+    expect(opts.premultipliedAlpha).toBe(true)
+    expect(opts.featureLevel).toBe('core')
+    expect(opts.enableGPUDebugMarkers).toBe(false)
   })
 
   it('uses default powerPreference on mobile', () => {
@@ -55,6 +61,12 @@ describe('resolveEngineOptions', () => {
   it('honors ?power=low-power', () => {
     const opts = resolveEngineOptions(desktopCtx('?power=low-power'))
     expect(opts.powerPreference).toBe('low-power')
+  })
+
+  it('honors ?gpu=compat, ?gpu=strict, and ?gpuDebug=1', () => {
+    expect(resolveEngineOptions(desktopCtx('?gpu=compat')).featureLevel).toBe('compatibility')
+    expect(resolveEngineOptions(desktopCtx('?gpu=strict')).failIfMajorPerformanceCaveat).toBe(true)
+    expect(resolveEngineOptions(desktopCtx('?gpuDebug=1')).enableGPUDebugMarkers).toBe(true)
   })
 })
 
