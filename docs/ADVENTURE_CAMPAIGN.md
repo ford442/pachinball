@@ -4,8 +4,9 @@ This document is the canonical mental model for campaign progression.
 
 ## Source of Truth
 
-- **Campaign progression truth:** `AdventureTrackProgression` + `AdventureProgressionSupervisor`
-- **Legacy free-form progression:** `AdventureState` + `ADVENTURE_LEVELS` (level-select/reward flow)
+- **Campaign progression truth:** `AdventureTrackProgression` + `AdventureProgressionSupervisor` (`src/adventure/`)
+- **Legacy free-form progression:** `AdventureState` + `ADVENTURE_LEVELS` (level-select/reward flow; `@deprecated`)
+- **Free-map scenario overlay:** `dynamic-scenarios.ts` is debug-only. Gate with `?scenarios=1` (D/S keys). It shares `gameMode` with campaign portal fallback and is **mutually exclusive with campaign**. Do not fold `DYNAMIC_SCENARIOS` into `TrackManifest`.
 
 These systems are intentionally separated to avoid silent dual-state bugs.
 

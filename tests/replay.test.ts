@@ -8,11 +8,10 @@ import { describe, it, expect } from 'vitest'
 import {
   ReplayRecorder,
   ReplayRunner,
-  initSessionRng,
-  getSessionRng,
   type InputFrame,
   type ReplayPayload,
 } from '../src/game-elements'
+import { initSessionRng, getSessionRng } from '../src/core/seeded-rng'
 
 describe('ReplayRecorder & ReplayRunner schema & serialization', () => {
   it('records frames and serializes/deserializes correctly', () => {

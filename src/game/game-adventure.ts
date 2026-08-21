@@ -10,12 +10,12 @@ import type {
   GaussCannonFeeder,
   QuantumTunnelFeeder,
   ZoneConfig,
-  AdventureTrackType,
-  EffectsSystem,
-  DisplaySystem,
   BallManager,
   SoundSystem,
 } from '../game-elements'
+import type { EffectsSystem } from '../effects'
+import type { DisplaySystem } from '../display'
+import type { AdventureTrackType } from '../adventure'
 import { MagSpinState } from '../game-elements/mag-spin-feeder'
 import { DisplayState } from '../game-elements/display-config'
 import type { GameStateManager } from './game-state'

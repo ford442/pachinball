@@ -2,6 +2,7 @@
  * Game Lifecycle — State transitions, camera mode, start/pause/reset, jackpot.
  */
 
+import { peekAudioEngine } from '../audio/audio-engine'
 import { Scene } from '@babylonjs/core/scene'
 import {
   GameState,
@@ -11,12 +12,10 @@ import {
   detectAccessibility,
   QualityTier,
   getScoringBreakdownManager,
-  initSessionRng,
-  getSessionSeed,
-  randomU32Seed,
   getDailyCascadeState,
   type GameSettings,
 } from '../game-elements'
+import { initSessionRng, getSessionSeed, randomU32Seed } from '../core/seeded-rng'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { BallManager } from '../game-elements/ball-manager'
@@ -111,9 +110,7 @@ export class GameLifecycle {
         if (pauseOverlay) pauseOverlay.classList.add('hidden')
         this.focusGameplayCanvas()
         this.host.uiManager?.hidePauseMenu()
-        if (this.host.effects?.getAudioContext()?.state === 'suspended') {
-          this.host.effects.getAudioContext()?.resume().catch(() => {})
-        }
+        peekAudioEngine()?.resumeSync()
         break
       case GameState.PAUSED:
         if (menuOverlay) menuOverlay.classList.add('hidden')
@@ -123,9 +120,7 @@ export class GameLifecycle {
           onRestart: () => { void this.startGame() },
           onSettingsChange: (next) => this.applyPauseSettings(next),
         })
-        if (this.host.effects?.getAudioContext()?.state === 'running') {
-          this.host.effects.getAudioContext()?.suspend().catch(() => {})
-        }
+        void peekAudioEngine()?.suspend()
         break
       case GameState.GAME_OVER:
         {
@@ -251,37 +246,11 @@ export class GameLifecycle {
   }
 
   /**
-   * Resume all game AudioContexts without awaiting — must run on the Start gesture.
+   * Resume the single AudioEngine context without awaiting — must run on the Start gesture.
    */
   private unlockAudioSync(): void {
     try {
-      const effectsCtx = this.host.effects?.getAudioContext()
-      if (effectsCtx?.state === 'suspended') {
-        void effectsCtx.resume()
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const soundCtx = this.host.soundSystem.audioContext
-      if (soundCtx?.state === 'suspended') {
-        void soundCtx.resume()
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      // Babylon engine audio (if present)
-      const engineAudio = (
-        this.host as LifecycleHost & {
-          engine?: { audioEngine?: { audioContext?: AudioContext } }
-        }
-      ).engine?.audioEngine?.audioContext
-      if (engineAudio?.state === 'suspended') {
-        void engineAudio.resume()
-      }
+      peekAudioEngine()?.resumeSync()
     } catch {
       // ignore
     }

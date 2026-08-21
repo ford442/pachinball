@@ -24,6 +24,7 @@ import {
   splitAssetUrl,
   loadCabinetGltfForPreset,
 } from '../src/cabinet/cabinet-gltf-loader'
+import { MAG_SPIN_INSERT_GLTF, NANO_LOOM_INSERT_GLTF } from '../src/cabinet/insert-gltf-loader'
 import type { CabinetGltfConfig } from '../src/cabinet/cabinet-types'
 
 const GLTF: CabinetGltfConfig = {
@@ -75,6 +76,25 @@ describe('splitAssetUrl', () => {
       rootUrl: './',
       sceneFilename: 'simple.glb',
     })
+  })
+})
+
+describe('insert glTF configs', () => {
+  it('Mag-Spin and Nano-Loom LOW never select high.glb', () => {
+    for (const gltf of [MAG_SPIN_INSERT_GLTF, NANO_LOOM_INSERT_GLTF]) {
+      const picked = pickCabinetGltfUrl(gltf, QualityTier.LOW)
+      expect(picked.lod).toBe('simple')
+      expect(picked.url).toContain('simple.glb')
+      expect(picked.url).not.toContain('high.glb')
+    }
+  })
+
+  it('Mag-Spin and Nano-Loom HIGH select high.glb', () => {
+    for (const gltf of [MAG_SPIN_INSERT_GLTF, NANO_LOOM_INSERT_GLTF]) {
+      const picked = pickCabinetGltfUrl(gltf, QualityTier.HIGH)
+      expect(picked.lod).toBe('high')
+      expect(picked.url).toContain('high.glb')
+    }
   })
 })
 

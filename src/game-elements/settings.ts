@@ -20,6 +20,8 @@ export interface GameSettings {
   sfxVolume: number
   muted: boolean
   audioSource: AudioSourceMode
+  /** Duck impact voices independently of camera reduced-motion. */
+  reducedAudio: boolean
   /** User preference for vibration; no-op when Vibration API missing (iOS Safari). */
   hapticsEnabled: boolean
 }
@@ -45,6 +47,7 @@ export class SettingsManager {
       sfxVolume: 0.9,
       muted: false,
       audioSource: 'samples',
+      reducedAudio: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
       hapticsEnabled: true,
     }
     
@@ -75,6 +78,10 @@ export class SettingsManager {
           scanlineIntensityMultiplier: migratedScanlineIntensityMultiplier,
           scanlineEnabled,
           audioSource: parsed.audioSource === 'synth' ? 'synth' : 'samples',
+          reducedAudio:
+            typeof parsed.reducedAudio === 'boolean'
+              ? parsed.reducedAudio
+              : parsed.reducedMotion === true,
         }
       }
     } catch {
@@ -95,6 +102,7 @@ export class SettingsManager {
     GameConfig.camera.reducedMotion = settings.reducedMotion
     GameConfig.camera.shakeIntensity = settings.reducedMotion ? 0 : settings.shakeIntensity
     GameConfig.accessibility.photosensitiveMode = settings.photosensitiveMode
+    GameConfig.audio.reducedAudio = settings.reducedAudio || settings.reducedMotion
     
     // Apply photosensitive mode - disable all flashing
     if (settings.photosensitiveMode) {

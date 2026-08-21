@@ -15,10 +15,11 @@ public/
 │   ├── fever.mp4 / fever.png      # FEVER display state
 │   ├── jackpot.mp4 / jackpot.png  # JACKPOT display state
 │   ├── reach.mp4 / reach.png      # REACH display state
+│   ├── nexus/{idle,reach,fever,jackpot}.png  # characterLayer pack
 │   └── README.md
 ├── models/
 │   ├── cabinet/classic/{simple,high}.glb
-│   └── inserts/prism-core/{simple,high}.glb
+│   └── inserts/{prism-core,mag-spin,nano-loom}/{simple,high}.glb
 └── textures/
     └── environment.env    ← Optional: Enables realistic reflections
 ```
@@ -327,8 +328,10 @@ production uses the CDN unless `VITE_ASSET_URL` overrides):
 | JACKPOT | `jackpot.mp4` | `jackpot.png` |
 | ADVENTURE | `adventure.mp4` | `adventure.png` |
 
+**Nexus character pack** (`characterLayer`): `public/backbox/nexus/{idle,reach,fever,jackpot}.png`
+
 Video and image layers load in parallel on state change; failed video `dispose()`
-leaves image + procedural reels visible.
+leaves image + procedural reels visible. LCD emoji walk-bys run when `characterLayer` is unset.
 
 ### Playfield insert glTF
 
@@ -339,7 +342,7 @@ Visual-only toy overlays under `public/models/inserts/<toy-id>/`:
 | LOW | `simple.glb` |
 | MEDIUM / HIGH | `high.glb` (falls back to simple) |
 
-Regenerate Prism Core placeholders: `npm run models:insert-placeholders`.
+Toys with placeholders: `prism-core`, `mag-spin`, `nano-loom`. Regenerate: `npm run models:insert-placeholders`.
 
 Rapier colliders for toys stay code-authored — see `docs/CABINET_GLTF.md`.
 

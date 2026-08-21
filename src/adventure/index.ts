@@ -67,15 +67,52 @@ export {
   isDataDrivenTrack,
 } from './track-data-registry'
 
-// Campaign catalog (source file remains in game-elements for now)
+// Campaign catalog (moved from game-elements)
 export {
   TRACK_CATALOG,
   AdventureTrackProgression,
   CAMPAIGN_MAIN_PATH,
-} from '../game-elements/adventure-track-progression'
+} from './adventure-track-progression'
 export type {
   TrackInfo,
   ProgressionState,
   SerializableProgressionState,
-} from '../game-elements/adventure-track-progression'
+} from './adventure-track-progression'
+
+export {
+  ZONE_REGISTRY,
+  getZoneConfig,
+  isMajorTransition,
+  getTransitionShakeIntensity,
+  type ZoneConfig,
+} from './zone-registry'
+export { AdventureState, getAdventureState, resetAdventureState, ADVENTURE_LEVELS } from './adventure-state'
+export { AdventureGoalSystem } from './adventure-goal-system'
+export { AdventureGoalTracker } from './adventure-goal-tracker'
+export { AdventureCinematicSystem } from './adventure-cinematic-system'
+export { AdventureCinematicTriggers } from './adventure-cinematic-triggers'
+export { AdventureUIStateManager } from './adventure-ui-state'
+export { AdventureProgressionSupervisor, type PortalSpatialContext } from './adventure-progression-supervisor'
+export {
+  getTrackThemeProfile,
+  getTrackMaterialColor,
+  TRACK_THEME_PROFILES,
+  type TrackThemeProfile,
+  type TrackMaterialRole,
+  type TrackAmbientStyle,
+} from './track-theme-profiles'
+export {
+  TrackThemingSystem,
+  initializeTrackThemingSystem,
+  getTrackThemingSystem,
+  resetTrackThemingSystem,
+} from './track-theming-system'
+export {
+  CampaignRewardsManager,
+  CAMPAIGN_REWARD_CATALOG,
+  initializeCampaignRewardsManager,
+  getCampaignRewardsManager,
+  resetCampaignRewardsManager,
+} from './campaign-rewards-manager'
+export { CampaignRewardNotifier } from './campaign-reward-notifier'
 

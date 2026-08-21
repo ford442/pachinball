@@ -37,6 +37,8 @@ export {
   loadInsertGltfForPreset,
   attachInsertMeshes,
   PRISM_CORE_INSERT_GLTF,
+  MAG_SPIN_INSERT_GLTF,
+  NANO_LOOM_INSERT_GLTF,
 } from './insert-gltf-loader'
 
 // Classic preset exports

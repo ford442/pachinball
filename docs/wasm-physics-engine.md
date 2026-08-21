@@ -301,6 +301,7 @@ Set via `localStorage['pachinball:physics-engine']`:
 | **Rapier** (default) | `rapier` or unset | Full Rapier simulation — production path |
 | **WASM mirror** | `wasm-mirror` or legacy `wasm` | WASM steps ball+bumper subset; poses sync Rapier↔WASM each frame |
 | **WASM owner** | `wasm-owner` | WASM owns balls + static table geometry + **native hinge flippers**; Rapier is not stepped on the table path (`lastRapierStepMs === 0`). Adventure-mode bodies still use Rapier. |
+| **WASM worker** | `wasm-worker` | Same ownership as `wasm-owner`, but `PhysicsWorld` runs in a Dedicated Worker. Snapshots arrive via `postMessage` + transferable `ArrayBuffer`s (**one physics frame of extra latency**). Worker construction / load failure falls back to in-process `wasm-owner`. Adventure still steps Rapier on the main thread. |
 
 Mirror mode remains a WASM parity path. Owner mode disables Rapier colliders for exported statics, bumpers, balls, **and flippers**. Each flipper is a dynamic WASM capsule with a world-anchored hinge (`PhysicsWorld::createHinge` / `setHingeMotor`). Pose is copied back onto the Rapier puppet for mesh interpolation only.
 
@@ -310,6 +311,9 @@ localStorage.setItem('pachinball:physics-engine', 'wasm-mirror')
 
 // Owner mode — balls + walls/rails in WASM
 localStorage.setItem('pachinball:physics-engine', 'wasm-owner')
+
+// Worker mode — same as owner, C++ world off the main thread (Phase 1, no SAB)
+localStorage.setItem('pachinball:physics-engine', 'wasm-worker')
 
 // Back to Rapier
 localStorage.removeItem('pachinball:physics-engine')
@@ -441,6 +445,7 @@ flicking tests; production flippers use hinges (above).
 | **2b – Ownership** | `wasm-mirror` / `wasm-owner` modes; static table export | ✅ Done |
 | **2c – Flipper motors** | Native world-anchored hinge + velocity motor; kinematic proxy deleted | ✅ Done |
 | **2d – Perf HUD** | Rapier vs WASM vs mirror timing in Debug HUD | ✅ Done |
+| **2e – Worker (#361 P1)** | `wasm-worker` + `postMessage` transferables; one-frame lag; no COOP/COEP | ✅ Done |
 | **3 – Benchmark** | RapierVsCppBenchmark scene; frame-time comparison | 🔜 Next |
 | **4 – Decision Point** | Replace vs hybrid; determinism comparison | 🔜 After Phase 3 |
 | **5 – Polish** | Memory budgeting, Debug HUD, documentation | 🔜 After Phase 4 |
@@ -456,13 +461,19 @@ flicking tests; production flippers use hinges (above).
   release C++ memory back to the WASM heap.
 - `WasmPhysicsEngine.dispose()` calls `world.delete()` automatically.
 
-### SharedArrayBuffer / threading
+### Worker transport (#361 Phase 1)
 
-WebAssembly threads require `SharedArrayBuffer`, which in turn requires
-`Cross-Origin-Isolation` headers (`COOP: same-origin` + `COEP: require-corp`).
-The current build uses a **single-threaded** configuration.  Threading can be
-enabled later by adding `-pthread` and `-sPROXY_TO_PTHREAD=1` to the Emscripten
-link flags, but this requires server-side header changes.
+`wasm-worker` instantiates `PhysicsModule` inside a Dedicated Worker
+(`src/wasm/physics-worker.ts`). The main thread queues commands and never
+blocks on `Atomics.wait`. Each `step()` posts a command batch; the worker
+copies transform + contact HEAP slices into **new** `ArrayBuffer`s and
+transfers them back. Visuals interpolate the **previous** snapshot (one
+frame of extra latency). Idle preload warms the worker instead of compiling
+the module on the main thread.
+
+SharedArrayBuffer, a lock-free command ring, and COOP/COEP isolation headers
+are **not** in this phase. `-pthread` / `PROXY_TO_PTHREAD` remain unused: the
+C++ world is single-threaded *inside* the worker.
 
 ---
 

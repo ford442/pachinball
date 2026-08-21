@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "PACHINKO_SPIRE",
+  "cameraPresetId": "PACHINKO_SPIRE",
+  "themeProfile": "PACHINKO_SPIRE",
+  "materials": {
+    "structure": "#FFFFFF",
+    "accent": "#ffdd00"
+  },
+  "segments": [
+    { "type": "straight", "width": 6, "length": 5, "inclineDeg": 45, "material": "#FFFFFF" },
+    { "type": "straight", "width": 12, "length": 30, "inclineDeg": 75, "material": "#FFFFFF" },
+    {
+      "type": "pinField",
+      "spacing": 2,
+      "evenOffsets": [-4, -2, 0, 2, 4],
+      "oddOffsets": [-3, -1, 1, 3],
+      "diameter": 0.3,
+      "height": 0.5,
+      "material": "#FFFFFF"
+    },
+    { "type": "mill", "alongRamp": 15, "lateral": -3.5, "radius": 3, "angVel": 2, "surfaceOffset": 0.1, "material": "#FFFFFF" },
+    { "type": "mill", "alongRamp": 15, "lateral": 3.5, "radius": 3, "angVel": -2, "surfaceOffset": 0.1, "material": "#FFFFFF" },
+    { "type": "cylinder", "diameter": 0.7, "height": 1, "offset": { "x": 4, "y": 0, "z": 0 }, "material": "#ffdd00" },
+    { "type": "cylinder", "diameter": 0.7, "height": 1, "offset": { "x": 2, "y": 0, "z": 3.464 }, "material": "#ffdd00" },
+    { "type": "cylinder", "diameter": 0.7, "height": 1, "offset": { "x": -2, "y": 0, "z": 3.464 }, "material": "#ffdd00" },
+    { "type": "cylinder", "diameter": 0.7, "height": 1, "offset": { "x": -4, "y": 0, "z": 0 }, "material": "#ffdd00" },
+    { "type": "cylinder", "diameter": 0.7, "height": 1, "offset": { "x": -2, "y": 0, "z": -3.464 }, "material": "#ffdd00" },
+    { "type": "cylinder", "diameter": 0.7, "height": 1, "offset": { "x": 2, "y": 0, "z": -3.464 }, "material": "#ffdd00" },
+    { "type": "portal", "offset": { "x": 0, "y": -0.4, "z": 0 } },
+    { "type": "bucket", "material": "#FFFFFF", "offset": { "x": 0, "y": -2, "z": 0 } },
+    { "type": "resetBasin", "offset": { "x": -6, "y": -2, "z": 0 }, "material": "#FFFFFF" },
+    { "type": "resetBasin", "offset": { "x": 6, "y": -2, "z": 0 }, "material": "#FFFFFF" }
+  ]
+}

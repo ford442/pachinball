@@ -53,7 +53,6 @@ async function bootstrap(): Promise<void> {
     renderFrame: () => game.renderFrame(),
     getGameState: () => game.stateManager.getState(),
     soundSystem: game.soundSystem,
-    effects: game.effects,
   })
   visibilityManager.attach()
   scheduleIdleWasmPreload()

@@ -56,11 +56,19 @@ Browsers have strict autoplay policies. The implementation handles this graceful
 
 ### config.ts (path resolution)
 
-`resolveBackboxAssetPath(name, ext)` picks the URL:
+`resolveBackboxAssetPath(name, ext, pack?)` picks the URL:
 
-1. `VITE_ASSET_URL` override (if set) → `{VITE_ASSET_URL}/pachinball/backbox/{name}.{ext}`
+1. `VITE_ASSET_URL` override (if set) → `{VITE_ASSET_URL}/pachinball/backbox/{pack?/}{name}.{ext}`
 2. Production build → `https://storage.noahcohn.com/pachinball/backbox/…`
-3. Local dev → `/backbox/{name}.{ext}` (served from `public/backbox/`)
+3. Local dev → `/backbox/{pack?/}{name}.{ext}` (served from `public/backbox/`)
+
+Flat getters (`attract`, `fever`, `jackpot`, `reach`, `adventure`) stay on the main video/image layers. The **Nexus character pack** uses the optional `pack` folder:
+
+```
+public/backbox/nexus/{idle,reach,fever,jackpot}.png
+```
+
+Wired as `StateMediaConfig.characterLayer` (see `GameConfig.backbox.*CharacterPath`). Video takes may use `.webm` or `.mp4` on the same stem; posters are PNG. If `characterLayer` is empty or fails, the LCD overlay emoji walk-by remains the Canvas2D fallback. Do not add a third video framework — `HTMLVideoElement` in `display-video.ts` is the stack.
 
 ```typescript
 backbox: {
@@ -85,6 +93,7 @@ public/
     ├── fever.mp4 / fever.png
     ├── jackpot.mp4 / jackpot.png
     ├── reach.mp4 / reach.png
+    ├── nexus/{idle,reach,fever,jackpot}.png
     └── README.md
 ```
 

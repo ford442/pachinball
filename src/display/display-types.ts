@@ -48,6 +48,8 @@ export interface StateMediaConfig {
   showReels?: boolean
   /** Opacity of the media layer (0.0 - 1.0) */
   opacity?: number
+  /** Optional character / drum take (video or poster). LCD walk-by if missing. */
+  characterLayer?: string
   /** Custom shader parameters for this state */
   shaderParams?: {
     /** Grid animation speed multiplier */

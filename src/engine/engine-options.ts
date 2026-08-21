@@ -21,7 +21,7 @@ export interface ResolvedEngineOptions {
   setMaximumLimits: boolean
   powerPreference: PowerPreference
   adaptToDeviceRatio: boolean
-  /** We own audio via SoundSystem + EffectsSystem — do not spawn a third AudioContext. */
+  /** We own audio via src/audio AudioEngine — do not spawn Babylon's AudioContext. */
   audioEngine: false
   /** Babylon should restore the context; we still log / toast / resize. */
   doNotHandleContextLost: false

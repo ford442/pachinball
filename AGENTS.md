@@ -98,6 +98,12 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 - **`seeded-rng.ts`** — Deterministic RNG for spawn/scoring forks.
 - **`asset-urls.ts`** — Asset URL resolution helpers.
 
+#### `src/audio/` — Single Web Audio graph (barrel: `src/audio/index.ts`)
+- **`audio-engine.ts`** — One `AudioContext` (`latencyHint: 'interactive'`). Buses: master, sfx, music, stem, hud. Debug: `getOwnedAudioContextCount()`.
+- **`pachinko-voice` worklet** — `public/audio/pachinko-voice-processor.js`; bumper / peg / flipper / drain tails. Oscillator synth is fallback if the worklet fails to load.
+- **`sound-system.ts`** — Samples, music stems, EventBus bindings. Do not create a second context here.
+- Babylon `Engine.audioEngine` stays **off** (`engine-options.audioEngine: false`). Do not add Tone.js / Howler.
+
 #### `src/engine/` — Babylon bootstrap (barrel: `src/engine/index.ts`)
 - **`create-engine.ts`** — WebGPU-first engine creation with WebGL2 fallback.
 - **`engine-options.ts`** — Hardware scaling, mobile quality hints, power preference.
@@ -177,8 +183,8 @@ Replaces the old monolithic `display.ts`.
 - **`display-image.ts`** — Static image display layer for the backbox.
 - **`display-types.ts`** — Enums and interfaces (`DisplayState`, `DisplayMode`, CRT presets).
 
-#### `src/effects/` — Visual & audio effects (barrel: `src/effects/index.ts`)
-- **`effects-core.ts`** — `EffectsSystem`: bloom spikes, screen shake, jackpot sequences.
+#### `src/effects/` — Visual effects (barrel: `src/effects/index.ts`)
+- **`effects-core.ts`** — `EffectsSystem`: bloom spikes, screen shake, jackpot sequences. Shares `AudioEngine` for stingers (`playVoice` / hud bus) — does **not** create an `AudioContext`.
 - **`effects-particles.ts`** — Shard burst particle systems.
 - **`effects-lighting.ts`** — Environment color shifts, light animations.
 - **`effects-camera.ts`** — Camera shake, trauma/decay logic.

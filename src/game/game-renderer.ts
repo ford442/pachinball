@@ -48,13 +48,12 @@ import {
   SURFACES,
   LIGHTING,
   color,
-  detectQualityTier,
   INTENSITY,
   QualityTier,
   PALETTE,
   type AccessibilityConfig,
 } from '../game-elements'
-import { getMaterialLibrary } from '../materials'
+import { getMaterialLibrary, detectQualityTier } from '../materials'
 import { GameConfig } from '../config'
 import type { EventBus } from '../core/event-bus'
 

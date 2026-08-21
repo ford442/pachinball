@@ -133,6 +133,31 @@ describe('validateTrackDefinition — invalid fixtures', () => {
     }
   })
 
+  it('rejects mill without radius', () => {
+    const result = validateTrackDefinition({
+      schemaVersion: 1,
+      id: 'GLITCH_SPIRE',
+      segments: [{ type: 'mill', alongRamp: 1, lateral: 0, angVel: 1 }],
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errors.some((e) => e.path === 'segments[0].radius')).toBe(true)
+    }
+  })
+
+  it('accepts initialHeadingDeg and cylinder segments', () => {
+    const result = validateTrackDefinition({
+      schemaVersion: 1,
+      id: 'NEON_HELIX',
+      initialHeadingDeg: 180,
+      segments: [
+        { type: 'straight', width: 4, length: 5, inclineDeg: 0 },
+        { type: 'cylinder', diameter: 0.6, height: 3, offset: { x: -3, y: 0, z: -2 } },
+      ],
+    })
+    expect(result.ok).toBe(true)
+  })
+
   it('rejects invalid material ref', () => {
     const result = validateTrackDefinition({
       schemaVersion: 1,
@@ -216,6 +241,18 @@ describe('compileTrackDefinition', () => {
       },
       createChromaGate: (_pos, color) => {
         calls.push(`gate:${color}`)
+      },
+      createStaticCylinder: () => {
+        calls.push('cylinder')
+      },
+      createPinField: () => {
+        calls.push('pinField')
+      },
+      createInclinedMill: () => {
+        calls.push('mill')
+      },
+      createResetBasin: () => {
+        calls.push('resetBasin')
       },
     })
 

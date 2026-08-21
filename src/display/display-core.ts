@@ -313,24 +313,32 @@ export class DisplaySystem {
       this.shaderLayer.setShaderParams(media.shaderParams)
     }
 
-    if (media.videoPath) {
-      this.videoLayer.loadVideo(media.videoPath)
+    const character = media.characterLayer?.trim() ?? ''
+    const characterIsVideo = /\.(webm|mp4)(\?|$)/i.test(character)
+    const characterIsImage = /\.(png|jpe?g|webp)(\?|$)/i.test(character)
+    const videoUrl = characterIsVideo ? character : (media.videoPath || '')
+    const imageUrl = characterIsImage ? character : (media.imagePath || '')
+
+    if (videoUrl) {
+      this.videoLayer.loadVideo(videoUrl)
       this.videoLayer.setVisible(true)
     } else {
       this.videoLayer.setVisible(false)
     }
 
-    if (media.imagePath) {
-      this.imageLayer.loadImage(media.imagePath, media.opacity ?? 1.0)
+    if (imageUrl) {
+      this.imageLayer.loadImage(imageUrl, media.opacity ?? 1.0)
       this.imageLayer.setVisible(true)
     } else {
       this.imageLayer.setVisible(false)
     }
 
-    if (!media.videoPath && !media.imagePath) {
+    if (!videoUrl && !imageUrl) {
       this.shaderLayer.setBackgroundVisible(true)
       this.reelsLayer.setVisible(true)
     }
+
+    this.lcdOverlayLayer.setCharacterTakeActive(character.length > 0)
 
     this.physicalLayer.onStateChange(state)
     this.shaderLayer.onStateChange(state)

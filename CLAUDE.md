@@ -44,6 +44,7 @@ npx vitest run tests/ball-manager.test.ts
 | `src/display/` | Multi-layer backbox display — reels rendered with WGSL shaders (`display-shader.ts`) or a canvas fallback; `display-core.ts` drives state transitions (IDLE → REACH → FEVER). |
 | `src/shaders/` | Standalone WGSL/GLSL effect shaders: CRT scanlines + curvature, LCD table, jackpot overlay, number-scroll animation. |
 | `src/materials/` | PBR material library split by domain (ball, metallic, interactive, structural). `material-core.ts` is the entry point. |
+| `src/audio/` | Single `AudioEngine` (one AudioContext) + pachinko worklet + sample bank. EventBus remains the trigger API. |
 | `src/config.ts` | Ball-type definitions (STANDARD / GOLD_PLATED / SOLID_GOLD), spawn weight distribution (75 / 20 / 5 %), point values, fever-mode multipliers, API config. |
 
 ### Ball lifecycle

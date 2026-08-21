@@ -363,6 +363,40 @@ export class WasmPhysicsEngine {
     return this.world?.getActiveBodyCount() ?? 0
   }
 
+  hasTransformSnapshot(): boolean {
+    return this.isReady
+  }
+
+  getLastWorkerStepMs(): number {
+    return 0
+  }
+
+  /** Detached copy of the packed transform HEAP (worker → main transfer). */
+  copyTransformBuffer(): ArrayBuffer {
+    const view = this.refreshTransformView()
+    if (!view || view.length === 0) return new ArrayBuffer(0)
+    const copy = new Float32Array(view.length)
+    copy.set(view)
+    return copy.buffer
+  }
+
+  /** Detached copy of the packed contact HEAP. */
+  copyContactBuffer(): { buffer: ArrayBuffer; count: number } {
+    if (!this.world || !this.module) return { buffer: new ArrayBuffer(0), count: 0 }
+    const count = this.world.getContactCount()
+    if (count <= 0) return { buffer: new ArrayBuffer(0), count: 0 }
+    const heap = this.getHeapF32()
+    if (!heap) return { buffer: new ArrayBuffer(0), count: 0 }
+    const ptr = this.world.getContactBufferPtr()
+    if (ptr === 0) return { buffer: new ArrayBuffer(0), count: 0 }
+    const start = ptr >> 2
+    const end = start + count * CONTACT_STRIDE
+    if (end > heap.length) return { buffer: new ArrayBuffer(0), count: 0 }
+    const copy = new Float32Array(count * CONTACT_STRIDE)
+    copy.set(heap.subarray(start, end))
+    return { buffer: copy.buffer, count }
+  }
+
   // ---- Teardown --------------------------------------------------------
 
   dispose(): void {

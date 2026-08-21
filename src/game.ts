@@ -20,16 +20,11 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 import {
   GameState,
   PhysicsSystem,
-  DisplaySystem,
-  EffectsSystem,
-  GameObjects,
-  type CabinetType,
   BallManager,
   ReplayRecorder,
   ReplayRunner,
   GhostBallRenderer,
   BallAnimator,
-  AdventureMode,
   MagSpinFeeder,
   NanoLoomFeeder,
   PrismCoreFeeder,
@@ -62,6 +57,11 @@ import {
   AdventureTrackProgression,
   AdventureProgressionSupervisor,
 } from './game-elements'
+import { DisplaySystem } from './display'
+import { EffectsSystem } from './effects'
+import { GameObjects } from './objects'
+import type { CabinetType } from './cabinet'
+import { AdventureMode } from './adventure'
 import {
   SpinnerBumperBuilder,
   type SpinnerBumperVisual,
@@ -337,7 +337,10 @@ export class Game {
       document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
       this.uiManager?.setStartButtonEnabled(false)
       const { bindDailyCascadeUI } = await import('./game/daily-cascade-ui')
-      bindDailyCascadeUI()
+      bindDailyCascadeUI({
+        getCampaignStageName: () =>
+          this.adventureTrackProgression?.getCurrentTrackInfo()?.name ?? 'Neon Helix',
+      })
 
       try {
         const v = localStorage.getItem('pachinball.best')
@@ -643,6 +646,8 @@ export class Game {
     this.magSpinFeeder = new MagSpinFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.magSpin)
     this.nanoLoomFeeder = new NanoLoomFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.nanoLoom)
     this.prismCoreFeeder = new PrismCoreFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.prismCore)
+    void this.magSpinFeeder.loadInsertGltf(this.qualityTier)
+    void this.nanoLoomFeeder.loadInsertGltf(this.qualityTier)
     void this.prismCoreFeeder.loadInsertGltf(this.qualityTier)
     this.gaussCannon = new GaussCannonFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.gaussCannon)
     this.quantumTunnel = new QuantumTunnelFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.quantumTunnel)

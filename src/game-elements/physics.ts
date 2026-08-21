@@ -1,6 +1,8 @@
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { WASM_PHYSICS, getWasmPhysicsRuntimeMode, type WasmPhysicsRuntimeMode } from '../config'
 import { WasmPhysicsEngine } from '../wasm'
+import type { WasmSimEngine } from '../wasm/wasm-sim-engine'
+import { PhysicsWorkerClient } from '../wasm/physics-worker-client'
 import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
 
 // Gravity: -Y (down), -Z (roll towards player)
@@ -86,7 +88,7 @@ export class PhysicsSystem {
   private stepCount = 0
 
   /** WASM backend, only active when the feature flag is set and the bundle loads. */
-  private wasmEngine: WasmPhysicsEngine | null = null
+  private wasmEngine: WasmSimEngine | null = null
   private wasmMode: WasmPhysicsRuntimeMode = 'rapier'
   private wasmActive = false
 
@@ -150,17 +152,35 @@ export class PhysicsSystem {
     // The Rapier world is still created so the rest of the game can query bodies/colliders.
     this.wasmMode = getWasmPhysicsRuntimeMode()
     if (WASM_PHYSICS.enabled && this.wasmMode !== 'rapier') {
-      const engine = new WasmPhysicsEngine()
-      const preloaded = await getPreloadedWasmModule()
-      await engine.load(WASM_PHYSICS.bundleUrl, preloaded ?? undefined)
-      if (engine.isReady) {
-        engine.setGravity(GRAVITY.x, GRAVITY.y, GRAVITY.z)
-        engine.setRollingResistance(WASM_PHYSICS.tunables.rollingResistance)
-        this.wasmEngine = engine
-        this.wasmActive = true
-      } else {
-        console.warn('[PhysicsSystem] WASM physics bundle failed to load; falling back to Rapier.')
-        this.wasmMode = 'rapier'
+      if (this.wasmMode === 'wasm-worker') {
+        const client = new PhysicsWorkerClient()
+        await client.load(WASM_PHYSICS.bundleUrl)
+        if (client.isReady) {
+          client.setGravity(GRAVITY.x, GRAVITY.y, GRAVITY.z)
+          client.setRollingResistance(WASM_PHYSICS.tunables.rollingResistance)
+          this.wasmEngine = client
+          this.wasmActive = true
+        } else {
+          console.warn(
+            '[PhysicsSystem] WASM physics worker failed; falling back to in-process wasm-owner.',
+          )
+          this.wasmMode = 'wasm-owner'
+        }
+      }
+
+      if (this.wasmMode !== 'rapier' && this.wasmMode !== 'wasm-worker') {
+        const engine = new WasmPhysicsEngine()
+        const preloaded = await getPreloadedWasmModule()
+        await engine.load(WASM_PHYSICS.bundleUrl, preloaded ?? undefined)
+        if (engine.isReady) {
+          engine.setGravity(GRAVITY.x, GRAVITY.y, GRAVITY.z)
+          engine.setRollingResistance(WASM_PHYSICS.tunables.rollingResistance)
+          this.wasmEngine = engine
+          this.wasmActive = true
+        } else {
+          console.warn('[PhysicsSystem] WASM physics bundle failed to load; falling back to Rapier.')
+          this.wasmMode = 'rapier'
+        }
       }
     }
   }
@@ -191,9 +211,9 @@ export class PhysicsSystem {
     return this.isWasmActive() ? this.wasmMode : 'rapier'
   }
 
-  /** True when WASM owns ball+static simulation (not mirror). */
+  /** True when WASM owns ball+static simulation (in-process or worker). */
   isWasmOwnerMode(): boolean {
-    return this.isWasmActive() && this.wasmMode === 'wasm-owner'
+    return this.isWasmActive() && (this.wasmMode === 'wasm-owner' || this.wasmMode === 'wasm-worker')
   }
 
   getLastWasmStepMs(): number { return this.lastWasmStepMs }
@@ -213,7 +233,7 @@ export class PhysicsSystem {
   }
 
   /** Access the WASM engine (for sync/registration by the controller). */
-  getWasmEngine(): WasmPhysicsEngine | null {
+  getWasmEngine(): WasmSimEngine | null {
     return this.wasmEngine
   }
 
@@ -273,10 +293,12 @@ export class PhysicsSystem {
       return alpha
     }
 
-    if (mode === 'wasm-owner' && this.wasmEngine?.isReady) {
+    if ((mode === 'wasm-owner' || mode === 'wasm-worker') && this.wasmEngine?.isReady) {
       const wasmT0 = performance.now()
       const alpha = this.wasmEngine.step(rawDt)
-      this.lastWasmStepMs = performance.now() - wasmT0
+      this.lastWasmStepMs = mode === 'wasm-worker'
+        ? this.wasmEngine.getLastWorkerStepMs()
+        : performance.now() - wasmT0
       this.lastMirrorOverheadMs = 0
 
       if (this.ownerSkipRapierStep) {

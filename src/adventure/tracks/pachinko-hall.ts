@@ -8,7 +8,7 @@
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
-import type { TrackInfo } from '../../game-elements/adventure-track-progression'
+import type { TrackInfo } from '../adventure-track-progression'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 type BuilderCtx = {

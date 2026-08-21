@@ -6,7 +6,7 @@
  */
 
 import { AdventureTrackType } from './adventure-types'
-import type { TrackMaterialRole } from '../game-elements/track-theme-profiles'
+import type { TrackMaterialRole } from './track-theme-profiles'
 
 export const TRACK_SCHEMA_VERSION = 1 as const
 
@@ -74,6 +74,48 @@ export interface SpinnerSegment {
   teeth?: boolean
   /** When true, advance cursor by radius along heading past the spinner center. */
   advance?: boolean
+  /**
+   * World-space offset from the cursor used as the spinner center.
+   * When omitted, the compiler uses the legacy (radius+1 along heading, y-1) placement.
+   */
+  offset?: Vec3Json
+  material?: MaterialRef
+}
+
+export interface CylinderSegment {
+  type: 'cylinder'
+  diameter: number
+  height: number
+  offset?: Vec3Json
+  material?: MaterialRef
+}
+
+export interface PinFieldSegment {
+  type: 'pinField'
+  spacing: number
+  evenOffsets: number[]
+  oddOffsets: number[]
+  diameter: number
+  height: number
+  material?: MaterialRef
+}
+
+export interface MillSegment {
+  type: 'mill'
+  /** Distance along the previous straight ramp surface from its start. */
+  alongRamp: number
+  /** Lateral offset along ramp right-vector. */
+  lateral: number
+  radius: number
+  /** Angular velocity along the ramp normal (radians/second). */
+  angVel: number
+  surfaceOffset?: number
+  material?: MaterialRef
+}
+
+export interface ResetBasinSegment {
+  type: 'resetBasin'
+  offset?: Vec3Json
   material?: MaterialRef
 }
 
@@ -96,6 +138,10 @@ export type TrackSegment =
   | PortalSegment
   | SpinnerSegment
   | GateSegment
+  | CylinderSegment
+  | PinFieldSegment
+  | MillSegment
+  | ResetBasinSegment
 
 export interface TrackDefinition {
   schemaVersion: typeof TRACK_SCHEMA_VERSION
@@ -104,6 +150,8 @@ export interface TrackDefinition {
   themeProfile?: string
   cameraPresetId?: string
   gravityMultiplier?: number
+  /** Compiler cursor heading in degrees (default 0). NEON_HELIX uses 180. */
+  initialHeadingDeg?: number
   materials?: Partial<Record<TrackMaterialRole, string>>
   segments: TrackSegment[]
 }
@@ -129,6 +177,10 @@ const SEGMENT_TYPES = new Set([
   'portal',
   'spinner',
   'gate',
+  'cylinder',
+  'pinField',
+  'mill',
+  'resetBasin',
 ])
 
 const VALID_TRACK_IDS = new Set<string>(Object.values(AdventureTrackType))
@@ -290,6 +342,75 @@ function validateSegment(
       if (segment.material !== undefined) {
         validateMaterialRef(segment.material, `${path}.material`, errors)
       }
+      if (segment.offset !== undefined) {
+        validateVec3(segment.offset, `${path}.offset`, errors)
+      }
+      break
+    }
+    case 'cylinder': {
+      for (const key of ['diameter', 'height'] as const) {
+        if (!isFiniteNumber(segment[key])) {
+          errors.push({ path: `${path}.${key}`, message: 'must be a finite number' })
+        }
+      }
+      if (isFiniteNumber(segment.diameter) && segment.diameter <= 0) {
+        errors.push({ path: `${path}.diameter`, message: 'must be > 0' })
+      }
+      if (isFiniteNumber(segment.height) && segment.height <= 0) {
+        errors.push({ path: `${path}.height`, message: 'must be > 0' })
+      }
+      if (segment.offset !== undefined) {
+        validateVec3(segment.offset, `${path}.offset`, errors)
+      }
+      if (segment.material !== undefined) {
+        validateMaterialRef(segment.material, `${path}.material`, errors)
+      }
+      break
+    }
+    case 'pinField': {
+      if (!isFiniteNumber(segment.spacing) || segment.spacing <= 0) {
+        errors.push({ path: `${path}.spacing`, message: 'must be a finite number > 0' })
+      }
+      if (!isFiniteNumber(segment.diameter) || segment.diameter <= 0) {
+        errors.push({ path: `${path}.diameter`, message: 'must be a finite number > 0' })
+      }
+      if (!isFiniteNumber(segment.height) || segment.height <= 0) {
+        errors.push({ path: `${path}.height`, message: 'must be a finite number > 0' })
+      }
+      for (const key of ['evenOffsets', 'oddOffsets'] as const) {
+        if (!Array.isArray(segment[key]) || segment[key].some((n) => !isFiniteNumber(n))) {
+          errors.push({ path: `${path}.${key}`, message: 'must be an array of finite numbers' })
+        }
+      }
+      if (segment.material !== undefined) {
+        validateMaterialRef(segment.material, `${path}.material`, errors)
+      }
+      break
+    }
+    case 'mill': {
+      for (const key of ['alongRamp', 'lateral', 'radius', 'angVel'] as const) {
+        if (!isFiniteNumber(segment[key])) {
+          errors.push({ path: `${path}.${key}`, message: 'must be a finite number' })
+        }
+      }
+      if (isFiniteNumber(segment.radius) && segment.radius <= 0) {
+        errors.push({ path: `${path}.radius`, message: 'must be > 0' })
+      }
+      if (segment.surfaceOffset !== undefined && !isFiniteNumber(segment.surfaceOffset)) {
+        errors.push({ path: `${path}.surfaceOffset`, message: 'must be a finite number' })
+      }
+      if (segment.material !== undefined) {
+        validateMaterialRef(segment.material, `${path}.material`, errors)
+      }
+      break
+    }
+    case 'resetBasin': {
+      if (segment.offset !== undefined) {
+        validateVec3(segment.offset, `${path}.offset`, errors)
+      }
+      if (segment.material !== undefined) {
+        validateMaterialRef(segment.material, `${path}.material`, errors)
+      }
       break
     }
     case 'gate': {
@@ -346,6 +467,10 @@ export function validateTrackDefinition(raw: unknown): TrackValidationResult {
     if (!isFiniteNumber(raw.gravityMultiplier) || raw.gravityMultiplier <= 0) {
       errors.push({ path: 'gravityMultiplier', message: 'must be a finite number > 0' })
     }
+  }
+
+  if (raw.initialHeadingDeg !== undefined && !isFiniteNumber(raw.initialHeadingDeg)) {
+    errors.push({ path: 'initialHeadingDeg', message: 'must be a finite number' })
   }
 
   if (raw.materials !== undefined) {

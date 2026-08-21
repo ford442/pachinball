@@ -37,3 +37,16 @@ export type {
   MovingGateState,
   GateAnimationType
 } from './object-moving-gates'
+
+export {
+  MagSpinFeeder,
+  MagSpinState,
+  NanoLoomFeeder,
+  NanoLoomState,
+  PrismCoreFeeder,
+  PrismCoreState,
+  GaussCannonFeeder,
+  GaussCannonState,
+  QuantumTunnelFeeder,
+  QuantumTunnelState,
+} from './feeders'

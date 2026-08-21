@@ -50,6 +50,8 @@ export interface DebugSnapshot {
   bumperMatches: number
   awardScoreCalls: number
   lastLaneHit: string | null
+  audioContexts?: number
+  audioWorklet?: boolean
 }
 
 interface PanelRow {
@@ -186,6 +188,8 @@ export class DebugHUD {
       particles: snapshot.activeParticles,
       'gold balls': snapshot.goldBallsInPlay,
       'track switch ms': snapshot.lastTrackSwitchMs?.toFixed(1) ?? 'n/a',
+      'audio ctx': snapshot.audioContexts ?? 0,
+      worklet: String(snapshot.audioWorklet ?? false),
     })
 
     this.updatePanel('Mode timers', {

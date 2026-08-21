@@ -59,6 +59,60 @@ export default defineConfig([
       }],
     },
   },
+  // Config purity: no Babylon, no game-elements. The display barrel is banned;
+  // display-slot.ts is the sole exception (slot enums needed at runtime).
+  {
+    files: ['src/config.ts', 'src/config/**/*.ts'],
+    ignores: ['src/config/display-slot.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', {
+        paths: [{
+          name: '@babylonjs/core',
+          message: 'src/config must stay engine-free (Worker-safe).',
+        }],
+        patterns: [
+          {
+            group: ['@babylonjs/**'],
+            message: 'src/config must stay engine-free (Worker-safe).',
+          },
+          {
+            group: ['**/game-elements', '**/game-elements/**', '../game-elements', '../game-elements/**'],
+            message: 'src/config must not import game-elements.',
+          },
+          {
+            group: ['**/display', '../display', '../display/**', '**/display/**'],
+            message:
+              'src/config may import slot enums only from display/slot-types, and only in display-slot.ts.',
+          },
+        ],
+      }],
+    },
+  },
+  {
+    files: ['src/config/display-slot.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', {
+        paths: [{
+          name: '@babylonjs/core',
+          message: 'src/config must stay engine-free (Worker-safe).',
+        }],
+        patterns: [
+          {
+            group: ['@babylonjs/**'],
+            message: 'src/config must stay engine-free (Worker-safe).',
+          },
+          {
+            group: ['**/game-elements', '**/game-elements/**', '../game-elements', '../game-elements/**'],
+            message: 'src/config must not import game-elements.',
+          },
+          {
+            group: ['../display/index', '../display/index.ts'],
+            message: 'Import slot-types deep path only, not the display barrel.',
+          },
+        ],
+      }],
+    },
+  },
   {
     files: ['src/core/**/*.ts'],
     rules: {
@@ -83,6 +137,42 @@ export default defineConfig([
             message:
               'src/core may reference game-elements types (erased at compile time) but must ' +
               'not import runtime values from them.',
+          },
+        ],
+      }],
+    },
+  },
+
+  // game-elements barrel must not re-export sibling packages (inverted barrel).
+  {
+    files: ['src/game-elements/index.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', {
+        paths: [{
+          name: '@babylonjs/core',
+          message:
+            'Use deep imports (@babylonjs/core/Meshes/mesh, etc.) for tree-shaking. ' +
+            'Run node scripts/codemod-babylon-deep-imports.mjs if needed.',
+        }],
+        patterns: [
+          {
+            group: ['../game/*', '../game/**', '**/src/game/*', '**/src/game/**'],
+            message:
+              'game-elements must not import from the game layer (inverted dependency).',
+          },
+          {
+            group: [
+              '../display', '../display/**',
+              '../effects', '../effects/**',
+              '../objects', '../objects/**',
+              '../cabinet', '../cabinet/**',
+              '../shaders', '../shaders/**',
+              '../materials', '../materials/**',
+              '../core/seeded-rng',
+              '../adventure', '../adventure/**',
+            ],
+            message:
+              'game-elements/index.ts must not re-export sibling packages. Import them from their canonical barrels.',
           },
         ],
       }],

@@ -15,6 +15,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { GameConfig, GAME_TUNING } from '../config'
 import { getMaterialLibrary } from '../materials'
 import { adaptLegacyConfig, type DisplayConfig } from '../game-elements/display-config'
+import { refreshDailyCascadeUI } from './daily-cascade-ui'
 import {
   QualityTier,
   PALETTE,
@@ -22,8 +23,6 @@ import {
   emissive,
   DebugHUD,
   getDynamicWorld,
-  AdventureMode,
-  AdventureTrackType,
   AdventureGoalTracker,
   AdventureCinematicSystem,
   AdventureCinematicTriggers,
@@ -34,13 +33,14 @@ import {
   initializeCampaignRewardsManager,
   getScoringBreakdownManager,
   DisplayState,
-  DisplaySystem,
-  EffectsSystem,
-  GameObjects,
   BallManager,
   ZoneTriggerSystem,
   SettingsManager,
 } from '../game-elements'
+import { DisplaySystem } from '../display'
+import { EffectsSystem } from '../effects'
+import { GameObjects } from '../objects'
+import { AdventureMode, AdventureTrackType, isAdventureTrackType } from '../adventure'
 import { BallStackVisual } from '../game-elements/ball-stack-visual'
 import { CabinetLighting } from '../effects/cabinet-lighting'
 import { CelebrationSequencer } from '../effects/celebration-sequencer'
@@ -56,7 +56,6 @@ import {
 import { AdventureManager } from './game-adventure'
 import { TableMapManager } from './game-maps'
 import { CabinetManager } from './game-cabinet'
-import { isAdventureTrackType } from '../adventure'
 
 import type { Game } from '../game'
 import type { PachinballEventMap } from '../core/event-bus'
@@ -268,6 +267,7 @@ export class GameSystemsInitializer {
       this.game.adventureUIStateManager.setEventBus(this.game.eventBus)
 
       this.game.adventureTrackProgression = new AdventureTrackProgression()
+      refreshDailyCascadeUI()
       this.game.adventureProgressionSupervisor = new AdventureProgressionSupervisor(
         this.game.eventBus,
         this.game.adventureTrackProgression,

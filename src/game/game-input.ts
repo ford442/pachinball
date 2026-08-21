@@ -159,17 +159,20 @@ export class GameInputManager {
       return
     }
 
-    // 'D' key to toggle Dynamic/Fixed mode
+    // 'D' / 'S' scenario overlay — gated behind ?scenarios=1 (mutually exclusive with campaign).
     if (e.code === 'KeyD') {
       e.preventDefault()
-      this.config.onDynamicModeToggle?.()
+      if (new URLSearchParams(window.location.search).get('scenarios') === '1') {
+        this.config.onDynamicModeToggle?.()
+      }
       return
     }
 
-    // 'S' key to cycle scenarios in Dynamic Mode
     if (e.code === 'KeyS') {
       e.preventDefault()
-      this.config.onScenarioCycle?.()
+      if (new URLSearchParams(window.location.search).get('scenarios') === '1') {
+        this.config.onScenarioCycle?.()
+      }
       return
     }
 

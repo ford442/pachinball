@@ -168,6 +168,7 @@ export class GameSettingsUI {
       sfxVolume: parseFloat(sfxVolumeSlider?.value ?? '0.9'),
       muted: muteCheckbox?.checked ?? false,
       audioSource: (audioSourceSelect?.value === 'synth' ? 'synth' : 'samples') as AudioSourceMode,
+      reducedAudio: currentSettings.reducedAudio,
     }
 
     SettingsManager.save(newSettings)

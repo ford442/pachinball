@@ -19,8 +19,8 @@ import { Scene } from '@babylonjs/core/scene'
 import {
   PALETTE,
   QualityTier,
-  getMaterialLibrary,
 } from '../game-elements'
+import { getMaterialLibrary } from '../materials'
 import type { GameObjects } from '../objects'
 import type { EffectsSystem } from '../effects'
 import type { TableMapManager } from './game-maps'

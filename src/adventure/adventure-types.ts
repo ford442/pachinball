@@ -7,7 +7,7 @@
 import type { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
-import type { TrackInfo } from '../game-elements/adventure-track-progression'
+import type { TrackInfo } from './adventure-track-progression'
 
 // Event callback signature for communicating with Game.ts
 export type AdventureCallback = (event: string, data?: unknown) => void

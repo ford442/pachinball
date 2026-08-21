@@ -46,6 +46,7 @@ export class DisplayLcdOverlayLayer {
   private walkByTimer = 0
   private walkBy: WalkByCharacter | null = null
   private readonly walkByEmojis = ['🐯', '🎎', '⭐', '🎰', '💎']
+  private characterTakeActive = false
 
   private displayOverlay: DisplayOverlay | null = null
   private drainMode = false
@@ -90,6 +91,13 @@ export class DisplayLcdOverlayLayer {
   setAccessibility(reducedMotion: boolean, photosensitive: boolean): void {
     this.reducedMotion = reducedMotion
     this.photosensitive = photosensitive
+  }
+
+  setCharacterTakeActive(active: boolean): void {
+    this.characterTakeActive = active
+    if (active && this.walkBy) {
+      this.walkBy.active = false
+    }
   }
 
   setDisplayOverlay(overlay: DisplayOverlay): void {
@@ -159,6 +167,7 @@ export class DisplayLcdOverlayLayer {
   }
 
   private updateWalkBy(dt: number): void {
+    if (this.characterTakeActive) return
     if (this.reducedMotion || this.qualityTier === QualityTier.LOW) return
 
     if (this.walkBy?.active) {
@@ -223,7 +232,7 @@ export class DisplayLcdOverlayLayer {
     }
 
     // Idle walk-by character
-    if (this.walkBy?.active && this.currentState === DisplayState.IDLE) {
+    if (this.walkBy?.active && this.currentState === DisplayState.IDLE && !this.characterTakeActive) {
       this.drawWalkBy(ctx, canvas.width, canvas.height)
     }
 

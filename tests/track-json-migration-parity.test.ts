@@ -20,6 +20,9 @@ import chronoCoreJson from '../src/adventure/track-data/CHRONO_CORE.json'
 import singularityWellJson from '../src/adventure/track-data/SINGULARITY_WELL.json'
 import cryoChamberJson from '../src/adventure/track-data/CRYO_CHAMBER.json'
 import firewallBreachJson from '../src/adventure/track-data/FIREWALL_BREACH.json'
+import neonHelixJson from '../src/adventure/track-data/NEON_HELIX.json'
+import cyberCoreJson from '../src/adventure/track-data/CYBER_CORE.json'
+import pachinkoSpireJson from '../src/adventure/track-data/PACHINKO_SPIRE.json'
 
 type Call = { fn: string; args: unknown[] }
 
@@ -83,6 +86,41 @@ function makeRecorder(startPos: Vector3) {
     createRotatingPlatform: (center, radius, angVelY, material, hasTeeth) =>
       calls.push({ fn: 'spinner', args: [v(center), radius, round(angVelY), material, hasTeeth ?? false] }),
     createChromaGate: (pos, color) => calls.push({ fn: 'gate', args: [v(pos), color] }),
+    createStaticCylinder: (pos, diameter, height, material) =>
+      calls.push({ fn: 'cylinder', args: [v(pos), diameter, height, material] }),
+    createPinField: (
+      rampStart,
+      heading,
+      inclineRad,
+      rampLength,
+      pinSpacing,
+      evenOffsets,
+      oddOffsets,
+      pinDiameter,
+      pinHeight,
+      material,
+    ) =>
+      calls.push({
+        fn: 'pinField',
+        args: [
+          v(rampStart),
+          round(heading),
+          round(inclineRad),
+          rampLength,
+          pinSpacing,
+          [...evenOffsets],
+          [...oddOffsets],
+          pinDiameter,
+          pinHeight,
+          material,
+        ],
+      }),
+    createInclinedMill: (center, radius, inclineRad, angVelAlongNormal, material) =>
+      calls.push({
+        fn: 'mill',
+        args: [v(center), radius, round(inclineRad), round(angVelAlongNormal), material],
+      }),
+    createResetBasin: (pos, material) => calls.push({ fn: 'resetBasin', args: [v(pos), material] }),
   }
 
   return { api, calls }
@@ -227,6 +265,148 @@ function referenceFirewallBreach(api: TrackBuildApi): void {
   api.createBasin(goalPos, wallMat)
 }
 
+/** NEON_HELIX EXTENDED_MAP path (vista pylons kept as cylinders). */
+function referenceNeonHelix(api: TrackBuildApi): void {
+  const holoMat = api.getTrackMaterial('#00ffff')
+  const accentMat = api.getTrackMaterial('#00aaff')
+  let pos = api.currentStartPos.clone()
+  let heading = Math.PI
+
+  const addRamp = (width: number, length: number, drop: number) => {
+    const incline = Math.atan2(drop, length)
+    const meshLen = Math.sqrt(length * length + drop * drop)
+    pos = api.addStraightRamp(pos, heading, width, meshLen, incline, holoMat)
+  }
+
+  addRamp(6, 14, 6)
+  heading += Math.PI / 2
+  addRamp(4, 10, 2)
+  heading -= Math.PI / 1.5
+  addRamp(4, 16, 4)
+
+  pos = api.addCurvedRamp(pos, heading, 12, Math.PI * 0.75, deg(8), 5, 2.0, holoMat, 24, -deg(10))
+  heading += Math.PI * 0.75
+
+  addRamp(5, 10, 5)
+
+  api.createStaticCylinder(new Vector3(pos.x - 3, pos.y, pos.z - 2), 0.6, 3.0, accentMat)
+  api.createStaticCylinder(new Vector3(pos.x + 3, pos.y, pos.z - 2), 0.6, 3.0, accentMat)
+  api.addExitPortal(new Vector3(pos.x, pos.y + 1.8, pos.z))
+  api.createBasin(pos, holoMat)
+}
+
+/** CYBER_CORE STATIONARY_TABLE arena (catalog mode). */
+function referenceCyberCore(api: TrackBuildApi): void {
+  const coreMat = api.getThemedTrackMaterial('structure')
+  const accentMat = api.getThemedTrackMaterial('energy')
+  const glowMat = api.getThemedTrackMaterial('glow')
+  let pos = api.currentStartPos.clone()
+  let heading = 0
+
+  pos = api.addStraightRamp(pos, heading, 6, 15, deg(20), coreMat)
+  pos = api.addCurvedRamp(pos, heading, 15, Math.PI, deg(5), 6, 3.0, coreMat, 48)
+  heading += Math.PI
+
+  const gapForward = new Vector3(Math.sin(heading), 0, Math.cos(heading)).scale(8)
+  pos = pos.add(gapForward)
+  pos.y -= 2
+
+  pos = api.addStraightRamp(pos, heading, 6, 5, 0, glowMat)
+
+  pos = api.addCurvedRamp(pos, heading, 8, deg(270), deg(15), 6, 1.0, coreMat, 48)
+  heading += deg(270)
+
+  const bumpCentre = new Vector3(pos.x, pos.y + 0.5, pos.z + 2)
+  const bumperPositions = [
+    new Vector3(bumpCentre.x, bumpCentre.y, bumpCentre.z - 3),
+    new Vector3(bumpCentre.x - 2, bumpCentre.y, bumpCentre.z - 1),
+    new Vector3(bumpCentre.x + 2, bumpCentre.y, bumpCentre.z - 1),
+    new Vector3(bumpCentre.x - 3, bumpCentre.y, bumpCentre.z + 1),
+    new Vector3(bumpCentre.x + 3, bumpCentre.y, bumpCentre.z + 1),
+    new Vector3(bumpCentre.x, bumpCentre.y, bumpCentre.z + 3),
+  ]
+  for (const bumperPos of bumperPositions) {
+    api.createStaticCylinder(bumperPos, 0.8, 1.2, accentMat)
+  }
+
+  api.createRotatingPlatform(
+    new Vector3(pos.x, pos.y - 0.5, pos.z + 6),
+    3.5,
+    0.8,
+    api.getThemedTrackMaterial('accent'),
+  )
+
+  const basinPos = new Vector3(pos.x, pos.y, pos.z + 8)
+  api.addExitPortal(new Vector3(basinPos.x, basinPos.y + 1.6, basinPos.z))
+  api.createBasin(basinPos, coreMat)
+}
+
+/** PACHINKO_SPIRE STATIONARY_TABLE pin mill (gizmos on TrackBuildApi). */
+function referencePachinkoSpire(api: TrackBuildApi): void {
+  const spireMat = api.getTrackMaterial('#FFFFFF')
+  const accentMat = api.getTrackMaterial('#ffdd00')
+  let pos = api.currentStartPos.clone()
+  const heading = 0
+
+  pos = api.addStraightRamp(pos, heading, 6, 5, deg(45), spireMat)
+
+  const mainLen = 30
+  const mainIncline = deg(75)
+  const mainStartPos = pos.clone()
+  pos = api.addStraightRamp(pos, heading, 12, mainLen, mainIncline, spireMat)
+
+  api.createPinField(
+    mainStartPos,
+    heading,
+    mainIncline,
+    mainLen,
+    2.0,
+    [-4, -2, 0, 2, 4],
+    [-3, -1, 1, 3],
+    0.3,
+    0.5,
+    spireMat,
+  )
+
+  const millCenter = (lateral: number) => {
+    const horiz = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+    const fwd = new Vector3(
+      horiz.x * Math.cos(mainIncline),
+      -Math.sin(mainIncline),
+      horiz.z * Math.cos(mainIncline),
+    )
+    const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+    const normal = new Vector3(
+      horiz.x * Math.sin(mainIncline),
+      Math.cos(mainIncline),
+      horiz.z * Math.sin(mainIncline),
+    )
+    return mainStartPos.add(fwd.scale(15)).add(right.scale(lateral)).add(normal.scale(0.1))
+  }
+
+  api.createInclinedMill(millCenter(-3.5), 3, mainIncline, 2.0, spireMat)
+  api.createInclinedMill(millCenter(3.5), 3, mainIncline, -2.0, spireMat)
+
+  const basinY = pos.y - 2
+  const basinZ = pos.z
+  const bumperRingY = basinY + 2
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * Math.PI * 2
+    api.createStaticCylinder(
+      new Vector3(Math.cos(angle) * 4, bumperRingY, basinZ + Math.sin(angle) * 4),
+      0.7,
+      1.0,
+      accentMat,
+    )
+  }
+
+  const centralBasinPos = new Vector3(0, basinY, basinZ)
+  api.addExitPortal(new Vector3(centralBasinPos.x, centralBasinPos.y + 1.6, centralBasinPos.z))
+  api.createBasin(centralBasinPos, spireMat)
+  api.createResetBasin(new Vector3(-6, basinY, basinZ), spireMat)
+  api.createResetBasin(new Vector3(6, basinY, basinZ), spireMat)
+}
+
 // ── Parity assertions ────────────────────────────────────────────────────────
 
 function runJson(raw: unknown, startPos: Vector3): Call[] {
@@ -279,6 +459,27 @@ describe('JSON migration parity (#321)', () => {
     const anchor = new Vector3(0, 25, 0)
     const fromJson = runJson(firewallBreachJson, anchor)
     const fromTs = runReference(referenceFirewallBreach, anchor)
+    expect(fromJson).toEqual(fromTs)
+  })
+
+  it('NEON_HELIX JSON reproduces the TS builder call-for-call', () => {
+    const anchor = new Vector3(0, 2, 8)
+    const fromJson = runJson(neonHelixJson, anchor)
+    const fromTs = runReference(referenceNeonHelix, anchor)
+    expect(fromJson).toEqual(fromTs)
+  })
+
+  it('CYBER_CORE JSON reproduces the TS builder call-for-call', () => {
+    const anchor = new Vector3(0, 20, 0)
+    const fromJson = runJson(cyberCoreJson, anchor)
+    const fromTs = runReference(referenceCyberCore, anchor)
+    expect(fromJson).toEqual(fromTs)
+  })
+
+  it('PACHINKO_SPIRE JSON reproduces the TS builder call-for-call', () => {
+    const anchor = new Vector3(0, 30, 0)
+    const fromJson = runJson(pachinkoSpireJson, anchor)
+    const fromTs = runReference(referencePachinkoSpire, anchor)
     expect(fromJson).toEqual(fromTs)
   })
 })

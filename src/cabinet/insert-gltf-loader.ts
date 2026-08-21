@@ -28,6 +28,18 @@ export const PRISM_CORE_INSERT_GLTF: CabinetGltfConfig = {
   loadTimeoutMs: 10_000,
 }
 
+export const MAG_SPIN_INSERT_GLTF: CabinetGltfConfig = {
+  simpleUrl: 'models/inserts/mag-spin/simple.glb',
+  highUrl: 'models/inserts/mag-spin/high.glb',
+  loadTimeoutMs: 10_000,
+}
+
+export const NANO_LOOM_INSERT_GLTF: CabinetGltfConfig = {
+  simpleUrl: 'models/inserts/nano-loom/simple.glb',
+  highUrl: 'models/inserts/nano-loom/high.glb',
+  loadTimeoutMs: 10_000,
+}
+
 /**
  * Load a playfield insert preferring tier LOD, falling back to simple on failure.
  */

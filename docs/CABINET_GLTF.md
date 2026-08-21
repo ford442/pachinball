@@ -7,8 +7,9 @@ Classic cabinet shells can load from **glTF 2.0** (`.glb`) with a procedural fal
 ```
 public/models/cabinet/classic/simple.glb   # LOW tier (and fallback)
 public/models/cabinet/classic/high.glb     # MEDIUM / HIGH
-public/models/inserts/prism-core/simple.glb  # Playfield insert LOW
-public/models/inserts/prism-core/high.glb    # Playfield insert MEDIUM / HIGH
+public/models/inserts/prism-core/{simple,high}.glb
+public/models/inserts/mag-spin/{simple,high}.glb
+public/models/inserts/nano-loom/{simple,high}.glb
 ```
 
 Regenerate placeholders:
@@ -78,16 +79,22 @@ Examples: `cabinetNeonMarquee`, `cabinetLightBar`, `cabinetSidePlateDetail`.
 LOD rules as cabinet shells (`LOW` → `simple.glb`; `MEDIUM`/`HIGH` → `high.glb`
 with simple fallback).
 
-**Pilot wiring:** `PrismCoreFeeder.loadInsertGltf(tier)` overlays
-`public/models/inserts/prism-core/{simple,high}.glb` and hides procedural meshes
-when load succeeds. Rapier capture colliders remain in `prism-core-feeder.ts` —
-never derive gameplay colliders from insert art.
+**Pilot wiring:** `PrismCoreFeeder`, `MagSpinFeeder`, and `NanoLoomFeeder` each call
+`loadInsertGltf(tier)` to overlay `public/models/inserts/<toy-id>/{simple,high}.glb`
+and hide procedural meshes when load succeeds. Rapier colliders remain in the
+feeder `createPhysics()` methods — never derive gameplay colliders from insert art.
 
-| Node name (substring) | Purpose |
-|-----------------------|---------|
-| `prismCoreInner` | Inner chamber mesh |
-| `prismCoreOuter` | Outer shell |
-| `prismCoreShardDetail` | HIGH-only shard accent |
+| Node name (substring) | Toy | Purpose |
+|-----------------------|-----|---------|
+| `prismCoreInner` | Prism Core | Inner chamber mesh |
+| `prismCoreOuter` | Prism Core | Outer shell |
+| `prismCoreShardDetail` | Prism Core | HIGH-only shard accent |
+| `magSpinWell` | Mag-Spin | Well body |
+| `magSpinFloor` | Mag-Spin | Well floor |
+| `magSpinRingDetail` | Mag-Spin | HIGH-only ring accent |
+| `nanoLoomFrame` | Nano-Loom | Frame board |
+| `nanoLoomIntake` | Nano-Loom | Intake |
+| `nanoLoomPinDetail` | Nano-Loom | HIGH-only pin plate |
 
 Export checklist matches cabinet shells (Y-up, −Z forward, 1 unit = 1 game unit).
 Place assets under `public/models/inserts/<toy-id>/`.

@@ -27,12 +27,12 @@ import {
   MASK_GREEN,
   MASK_BLUE,
 } from './adventure-types'
-import type { TrackInfo } from '../game-elements/adventure-track-progression'
+import type { TrackInfo } from './adventure-track-progression'
 import { INTENSITY, emissive, PALETTE } from '../game-elements/visual-language'
 import {
   getTrackThemeProfile,
   type TrackMaterialRole,
-} from '../game-elements/track-theme-profiles'
+} from './track-theme-profiles'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import type { TrackDefinition } from './track-schema'
 import {
@@ -272,6 +272,35 @@ export abstract class TrackBuilder {
       createRotatingPlatform: (center, radius, angVelY, material, hasTeeth) =>
         this.createRotatingPlatform(center, radius, angVelY, material, hasTeeth),
       createChromaGate: (pos, color) => this.createChromaGate(pos, color),
+      createStaticCylinder: (pos, diameter, height, material) =>
+        this.createStaticCylinder(pos, diameter, height, material),
+      createPinField: (
+        rampStart,
+        heading,
+        inclineRad,
+        rampLength,
+        pinSpacing,
+        evenOffsets,
+        oddOffsets,
+        pinDiameter,
+        pinHeight,
+        material,
+      ) =>
+        this.createPinField(
+          rampStart,
+          heading,
+          inclineRad,
+          rampLength,
+          pinSpacing,
+          evenOffsets,
+          oddOffsets,
+          pinDiameter,
+          pinHeight,
+          material,
+        ),
+      createInclinedMill: (center, radius, inclineRad, angVelAlongNormal, material) =>
+        this.createInclinedMill(center, radius, inclineRad, angVelAlongNormal, material),
+      createResetBasin: (pos, material) => this.createResetBasin(pos, material),
     }
 
     return compileTrackDefinition(def, api)
@@ -587,7 +616,12 @@ export abstract class TrackBuilder {
   /**
    * Creates a static cylinder obstacle.
    */
-  protected createStaticCylinder(pos: Vector3, diameter: number, height: number, material: StandardMaterial): void {
+  protected createStaticCylinder(
+    pos: Vector3,
+    diameter: number,
+    height: number,
+    material: StandardMaterial | PBRMaterial,
+  ): void {
     if (!this.world) return
 
     const mesh = MeshBuilder.CreateCylinder("staticPillar", { diameter, height }, this.scene)
@@ -605,6 +639,128 @@ export abstract class TrackBuilder {
       body
     )
     this.adventureBodies.push(body)
+  }
+
+  /**
+   * Lattice of static pins on the most recent straight ramp surface.
+   */
+  protected createPinField(
+    rampStart: Vector3,
+    heading: number,
+    inclineRad: number,
+    rampLength: number,
+    pinSpacing: number,
+    evenOffsets: readonly number[],
+    oddOffsets: readonly number[],
+    pinDiameter: number,
+    pinHeight: number,
+    material: StandardMaterial | PBRMaterial,
+  ): void {
+    if (!this.world) return
+
+    const horiz = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+    const forwardVec = new Vector3(
+      horiz.x * Math.cos(inclineRad),
+      -Math.sin(inclineRad),
+      horiz.z * Math.cos(inclineRad),
+    )
+    const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+    const normalVec = new Vector3(
+      horiz.x * Math.sin(inclineRad),
+      Math.cos(inclineRad),
+      horiz.z * Math.sin(inclineRad),
+    )
+
+    const rows = Math.floor(rampLength / pinSpacing) - 1
+    for (let r = 1; r <= rows; r++) {
+      const dist = r * pinSpacing
+      const xOffsets = r % 2 === 0 ? evenOffsets : oddOffsets
+      for (const xOff of xOffsets) {
+        const pinPos = rampStart.add(forwardVec.scale(dist)).add(right.scale(xOff))
+        const surfaceOffset = normalVec.scale(0.25 + pinHeight / 2)
+        const finalPos = pinPos.add(surfaceOffset)
+
+        const pin = MeshBuilder.CreateCylinder('pin', { diameter: pinDiameter, height: pinHeight }, this.scene)
+        pin.position.copyFrom(finalPos)
+        pin.rotation.x = inclineRad
+        pin.material = material
+        this.adventureTrack.push(pin)
+
+        const q = Quaternion.FromEulerAngles(pin.rotation.x, pin.rotation.y, pin.rotation.z)
+        const body = this.world.createRigidBody(
+          this.rapier.RigidBodyDesc.fixed()
+            .setTranslation(finalPos.x, finalPos.y, finalPos.z)
+            .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }),
+        )
+        this.world.createCollider(
+          this.rapier.ColliderDesc.cylinder(pinHeight / 2, pinDiameter / 2).setRestitution(0.6),
+          body,
+        )
+        this.adventureBodies.push(body)
+      }
+    }
+  }
+
+  /**
+   * Kinematic mill whose angular velocity is along the ramp normal (not world Y).
+   */
+  protected createInclinedMill(
+    center: Vector3,
+    radius: number,
+    inclineRad: number,
+    angVelAlongNormal: number,
+    material: StandardMaterial | PBRMaterial,
+  ): void {
+    if (!this.world) return
+
+    const mill = MeshBuilder.CreateCylinder('mill', { diameter: radius * 2, height: 0.2 }, this.scene)
+    mill.position.copyFrom(center)
+    mill.rotation.x = inclineRad
+    mill.material = material
+    this.adventureTrack.push(mill)
+
+    const bodyDesc = this.rapier.RigidBodyDesc.kinematicVelocityBased()
+      .setTranslation(center.x, center.y, center.z)
+    const q = Quaternion.FromEulerAngles(inclineRad, 0, 0)
+    bodyDesc.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+    const body = this.world.createRigidBody(bodyDesc)
+
+    const normalVec = new Vector3(0, Math.cos(inclineRad), Math.sin(inclineRad))
+    const angVel = normalVec.scale(angVelAlongNormal)
+    body.setAngvel({ x: angVel.x, y: angVel.y, z: angVel.z }, true)
+
+    this.world.createCollider(this.rapier.ColliderDesc.cylinder(0.1, radius).setFriction(1.0), body)
+    this.adventureBodies.push(body)
+    this.kinematicBindings.push({ body, mesh: mill })
+  }
+
+  /**
+   * Side catch basin with a reset sensor (penalty zone).
+   */
+  protected createResetBasin(pos: Vector3, material: StandardMaterial | PBRMaterial): void {
+    if (!this.world) return
+
+    const basin = MeshBuilder.CreateBox('resetBasin', { width: 4, height: 1, depth: 4 }, this.scene)
+    basin.position.copyFrom(pos)
+    basin.material = material
+    this.adventureTrack.push(basin)
+
+    const body = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z),
+    )
+    this.world.createCollider(this.rapier.ColliderDesc.cuboid(2, 0.5, 2), body)
+    this.adventureBodies.push(body)
+
+    const sensorPos = pos.clone()
+    sensorPos.y += 0.75
+    const sensorBody = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed().setTranslation(sensorPos.x, sensorPos.y, sensorPos.z),
+    )
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(1.8, 0.25, 1.8).setSensor(true),
+      sensorBody,
+    )
+    this.resetSensors.push(sensorBody)
   }
 
   /**

@@ -13,8 +13,8 @@ export const MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.NEON_HELIX,
     startAnchor: { x: 0, y: 2, z: 8 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/neon-helix').then((m) => m.buildNeonHelix),
+    buildKind: 'json',
+    dataPath: './track-data/NEON_HELIX.json',
     zone: {
       name: 'Neon Helix',
       storyText: 'ENTERING: NEON HELIX\n\nThe spiral descent begins...',
@@ -68,8 +68,8 @@ export const MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.CYBER_CORE,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/cyber-core').then((m) => m.buildCyberCore),
+    buildKind: 'json',
+    dataPath: './track-data/CYBER_CORE.json',
     zone: {
       name: 'Cyber Core',
       storyText: 'ENTERING: CYBER CORE\n\nDescending into the digital depths...',
@@ -264,8 +264,8 @@ export const MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.PACHINKO_SPIRE,
     startAnchor: { x: 0, y: 30, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/pachinko-spire').then((m) => m.buildPachinkoSpire),
+    buildKind: 'json',
+    dataPath: './track-data/PACHINKO_SPIRE.json',
     zone: {
       name: 'Pachinko Spire',
       storyText: 'ENTERING: PACHINKO SPIRE\n\nThe vertical descent awaits...',

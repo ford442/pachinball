@@ -16,10 +16,12 @@ import type { GameObjects } from '../objects'
 import type { GamePhysicsController } from './game-physics-controller'
 import type { GameStateManager } from './game-state'
 import type { DebugSnapshot, PerformanceMonitor } from '../game-elements'
-import { GameState, getSessionSeed } from '../game-elements'
+import { GameState } from '../game-elements'
+import { getSessionSeed } from '../core/seeded-rng'
 import type { AdventureProgressionSupervisor } from '../game-elements/adventure-progression-supervisor'
 import type { AdventureTrackProgression } from '../game-elements/adventure-track-progression'
 import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
+import { getOwnedAudioContextCount, peekAudioEngine } from '../audio/audio-engine'
 
 export interface DebugHost {
   readonly engine: Engine | WebGPUEngine
@@ -136,7 +138,7 @@ export class GameDebug {
       physicsMemoryKb: this.host.physics.getEstimatedMemoryKb(),
       physicsStepMs: perfMetrics.physicsStepMs > 0 ? perfMetrics.physicsStepMs : rawDt * 1000,
       wasmStepMs: this.host.physics.isWasmActive() ? this.host.physics.getLastWasmStepMs() : null,
-      rapierStepMs: this.host.physics.getWasmMode() === 'wasm-owner'
+      rapierStepMs: this.host.physics.isWasmOwnerMode()
         ? this.host.physics.getLastRapierStepMs()
         : null,
       mirrorOverheadMs: this.host.physics.getWasmMode() === 'wasm-mirror'
@@ -167,6 +169,8 @@ export class GameDebug {
       bumperMatches: this.host.physicsController.getBumperMatches?.() ?? 0,
       awardScoreCalls: this.host.physicsController.getAwardScoreCalls?.() ?? 0,
       lastLaneHit: this.host.physicsController.getLastLaneHit?.() ?? null,
+      audioContexts: getOwnedAudioContextCount(),
+      audioWorklet: peekAudioEngine()?.isWorkletReady() ?? false,
     }
   }
 

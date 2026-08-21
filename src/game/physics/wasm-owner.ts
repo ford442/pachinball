@@ -2,7 +2,7 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 import type { BumperVisual, PhysicsBinding, InputFrame } from '../../game-elements/types'
 import { WASM_PHYSICS, PhysicsConfig, GameConfig } from '../../config'
-import { WasmPhysicsEngine } from '../../wasm'
+import type { WasmSimEngine } from '../../wasm/wasm-sim-engine'
 import { exportRapierBodyToWasm } from './wasm-static-export'
 import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
 
@@ -46,7 +46,7 @@ interface FlipperHinge {
  * Rapier while WASM runs. Adventure-mode bodies stay on Rapier.
  */
 export class WasmOwner {
-  private engine: WasmPhysicsEngine
+  private engine: WasmSimEngine
   private rapierToWasm = new Map<RAPIER.RigidBody, number>()
   private wasmToRapier = new Map<number, RAPIER.RigidBody>()
   private bumperWasmIds = new Set<number>()
@@ -59,7 +59,7 @@ export class WasmOwner {
   private leftHoldTime = 0
   private rightHoldTime = 0
 
-  constructor(engine: WasmPhysicsEngine) {
+  constructor(engine: WasmSimEngine) {
     this.engine = engine
   }
 
@@ -253,6 +253,7 @@ export class WasmOwner {
 
   syncFromWasm(rapier: typeof RAPIER | null): void {
     if (!rapier) return
+    if (!this.engine.hasTransformSnapshot()) return
     for (const body of this.ballBodies) {
       const id = this.rapierToWasm.get(body)
       if (id === undefined) continue

@@ -67,6 +67,12 @@ export interface StateMediaConfig {
    * Opacity of the media layer (0.0 - 1.0)
    */
   opacity?: number;
+
+  /**
+   * Optional per-state character / physical-drum take (video or poster image).
+   * When unset or load fails, the LCD overlay emoji walk-by remains the fallback.
+   */
+  characterLayer?: string;
   
   /**
    * Custom shader parameters for this state
@@ -250,6 +256,10 @@ export function adaptLegacyConfig(legacyConfig: {
   feverImagePath?: string;
   reachImagePath?: string;
   adventureImagePath?: string;
+  idleCharacterPath?: string;
+  reachCharacterPath?: string;
+  feverCharacterPath?: string;
+  jackpotCharacterPath?: string;
 }): DisplayConfig {
   const hasVideo = legacyConfig.attractVideoPath && legacyConfig.attractVideoPath.trim() !== '';
   const hasImage = legacyConfig.attractImagePath && legacyConfig.attractImagePath.trim() !== '';
@@ -266,6 +276,7 @@ export function adaptLegacyConfig(legacyConfig: {
     defaultMedia: {
       videoPath: legacyConfig.attractVideoPath || '',
       imagePath: legacyConfig.attractImagePath || '',
+      characterLayer: legacyConfig.idleCharacterPath || '',
       showShaderBackground: true,
       showReels: !legacyConfig.videoReplacesReels,
       opacity: legacyConfig.imageOpacity ?? 0.85,
@@ -274,6 +285,7 @@ export function adaptLegacyConfig(legacyConfig: {
       [DisplayState.REACH]: {
         videoPath: legacyConfig.reachVideoPath || '',
         imagePath: legacyConfig.reachImagePath || '',
+        characterLayer: legacyConfig.reachCharacterPath || '',
         showShaderBackground: true,
         showReels: true,
         opacity: 0.95,
@@ -282,6 +294,7 @@ export function adaptLegacyConfig(legacyConfig: {
       [DisplayState.FEVER]: {
         videoPath: legacyConfig.feverVideoPath || '',
         imagePath: legacyConfig.feverImagePath || '',
+        characterLayer: legacyConfig.feverCharacterPath || '',
         showShaderBackground: true,
         showReels: true,
         opacity: 0.95,
@@ -290,6 +303,7 @@ export function adaptLegacyConfig(legacyConfig: {
       [DisplayState.JACKPOT]: {
         videoPath: legacyConfig.jackpotVideoPath || '',
         imagePath: legacyConfig.jackpotImagePath || '',
+        characterLayer: legacyConfig.jackpotCharacterPath || '',
         showShaderBackground: true,
         showReels: false,
         opacity: 1.0,

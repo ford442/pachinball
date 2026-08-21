@@ -2,19 +2,16 @@
  * Tab visibility lifecycle — pause render loop and audio when the document is hidden.
  */
 
-import { Engine } from '@babylonjs/core/Engines/engine'
 import type { Engine as BabylonEngine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import { GameState } from '../game-elements'
-import type { SoundSystem } from '../game-elements/sound-system'
-import type { EffectsSystem } from '../effects'
+import type { SoundSystem } from '../audio/sound-system'
 
 export interface VisibilityManagerDeps {
   engine: BabylonEngine | WebGPUEngine
   renderFrame: () => void
   getGameState: () => GameState
   soundSystem: SoundSystem
-  effects: EffectsSystem | null
 }
 
 export class VisibilityManager {
@@ -69,16 +66,12 @@ export class VisibilityManager {
   private async suspendAudioContexts(): Promise<void> {
     await Promise.allSettled([
       this.deps.soundSystem.suspend(),
-      this.deps.effects?.getAudioContext()?.suspend(),
-      Engine.audioEngine?.audioContext?.suspend(),
     ])
   }
 
   private async resumeAudioContexts(): Promise<void> {
     await Promise.allSettled([
       this.deps.soundSystem.resume(),
-      this.deps.effects?.getAudioContext()?.resume(),
-      Engine.audioEngine?.audioContext?.resume(),
     ])
   }
 }

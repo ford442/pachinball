@@ -39,6 +39,7 @@ import { AtmosphereController } from './effects-atmosphere'
 import { ScreenEffectsController } from './effects-screen'
 import { FresnelRimController } from './effects-fresnel-rim'
 import { RuntimePerformanceController } from './effects-performance'
+import { getAudioEngine, peekAudioEngine, type PlayVoiceParams } from '../audio/audio-engine'
 import type { EventBus } from '../core/event-bus'
 import type { BallManager } from '../game-elements/ball-manager'
 
@@ -142,14 +143,12 @@ export class EffectsSystem {
     this.fresnelRimController = new FresnelRimController(this.qualityTier)
 
     try {
-      this.audioCtx = new (window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+      const engine = getAudioEngine()
+      this.audioCtx = engine.context
+      this.audioEffects = new AudioEffects(this.audioCtx, engine.hudGain)
+      void engine.ensureWorklet()
     } catch {
       this.audioCtx = null
-    }
-
-    if (this.audioCtx) {
-      this.audioEffects = new AudioEffects(this.audioCtx)
     }
 
     this.jackpotSequenceController = new JackpotSequenceController({
@@ -317,6 +316,11 @@ export class EffectsSystem {
   }
 
   playBeep(freq: number): void { this.audioEffects?.playBeep(freq) }
+
+  playVoice(params: PlayVoiceParams): boolean {
+    return peekAudioEngine()?.playVoice(params) ?? false
+  }
+
   playSlotSpinStart(): void { this.audioEffects?.playSlotSpinStart() }
   playMagSpinCharge(duration = 1.2): void { this.audioEffects?.playMagSpinCharge(duration) }
   playMagSpinRelease(): void { this.audioEffects?.playMagSpinRelease() }
@@ -355,14 +359,12 @@ export class EffectsSystem {
   }
 
   getAudioContext(): AudioContext | null {
-    return this.audioCtx
+    return peekAudioEngine()?.context ?? this.audioCtx
   }
 
   dispose(): void {
-    if (this.audioCtx && this.audioCtx.state !== 'closed') {
-      this.audioCtx.close().catch(() => {
-      })
-    }
+    this.audioEffects?.dispose()
+    this.audioCtx = null
 
     for (const unsub of this._eventUnsubscribers) unsub()
     this._eventUnsubscribers = []

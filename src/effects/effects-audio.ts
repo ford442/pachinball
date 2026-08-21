@@ -1,8 +1,10 @@
 export class AudioEffects {
   private audioCtx: AudioContext | null
+  private output: AudioNode | null
 
-  constructor(audioCtx: AudioContext | null) {
+  constructor(audioCtx: AudioContext | null, output?: AudioNode | null) {
     this.audioCtx = audioCtx
+    this.output = output ?? null
   }
 
   playBeep(freq: number): void {
@@ -13,7 +15,7 @@ export class AudioEffects {
 
     o.frequency.value = freq
     o.connect(g)
-    g.connect(this.audioCtx.destination)
+    g.connect(this.output ?? this.audioCtx.destination)
     o.start()
 
     g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.1)
@@ -34,7 +36,7 @@ export class AudioEffects {
     g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.5)
 
     o.connect(g)
-    g.connect(this.audioCtx.destination)
+    g.connect(this.output ?? this.audioCtx.destination)
     o.start()
     o.stop(this.audioCtx.currentTime + 0.5)
   }
@@ -56,7 +58,7 @@ export class AudioEffects {
     g.gain.exponentialRampToValueAtTime(0.0001, now + duration)
 
     o.connect(g)
-    g.connect(this.audioCtx.destination)
+    g.connect(this.output ?? this.audioCtx.destination)
     o.start(now)
     o.stop(now + duration)
   }
@@ -77,7 +79,7 @@ export class AudioEffects {
     g.gain.exponentialRampToValueAtTime(0.0001, now + 0.18)
 
     o.connect(g)
-    g.connect(this.audioCtx.destination)
+    g.connect(this.output ?? this.audioCtx.destination)
     o.start(now)
     o.stop(now + 0.2)
   }
@@ -97,7 +99,7 @@ export class AudioEffects {
     g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.1)
 
     o.connect(g)
-    g.connect(this.audioCtx.destination)
+    g.connect(this.output ?? this.audioCtx.destination)
     o.start()
     o.stop(this.audioCtx.currentTime + 0.1)
   }
@@ -121,7 +123,7 @@ export class AudioEffects {
         g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + duration)
 
         o.connect(g)
-        g.connect(this.audioCtx.destination)
+        g.connect(this.output ?? this.audioCtx.destination)
         o.start()
         o.stop(this.audioCtx.currentTime + duration)
       }, i * 100)
@@ -144,7 +146,7 @@ export class AudioEffects {
       g.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.1 + 0.08)
 
       o.connect(g)
-      g.connect(this.audioCtx.destination)
+      g.connect(this.output ?? this.audioCtx.destination)
       o.start(now + i * 0.1)
       o.stop(now + i * 0.1 + 0.1)
     }
@@ -163,7 +165,7 @@ export class AudioEffects {
         g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx!.currentTime + 1.5)
 
         o.connect(g)
-        g.connect(this.audioCtx!.destination)
+        g.connect(this.output ?? this.audioCtx!.destination)
         o.start()
         o.stop(this.audioCtx!.currentTime + 1.5)
       })
@@ -183,7 +185,7 @@ export class AudioEffects {
     subG.gain.setValueAtTime(0.6, now)
     subG.gain.exponentialRampToValueAtTime(0.0001, now + 1.2)
     sub.connect(subG)
-    subG.connect(this.audioCtx.destination)
+    subG.connect(this.output ?? this.audioCtx.destination)
     sub.start(now)
     sub.stop(now + 1.3)
 
@@ -197,7 +199,7 @@ export class AudioEffects {
     sG.gain.setValueAtTime(0.25, now)
     sG.gain.exponentialRampToValueAtTime(0.0001, now + 0.6)
     siren.connect(sG)
-    sG.connect(this.audioCtx.destination)
+    sG.connect(this.output ?? this.audioCtx.destination)
     siren.start(now)
     siren.stop(now + 0.65)
   }
@@ -225,7 +227,7 @@ export class AudioEffects {
 
     o.connect(filter)
     filter.connect(g)
-    g.connect(this.audioCtx.destination)
+    g.connect(this.output ?? this.audioCtx.destination)
     o.start(now)
     o.stop(now + duration + 0.05)
   }
@@ -252,7 +254,7 @@ export class AudioEffects {
 
     noise.connect(noiseFilter)
     noiseFilter.connect(nG)
-    nG.connect(this.audioCtx.destination)
+    nG.connect(this.output ?? this.audioCtx.destination)
     noise.start(now)
 
     // Low sine punch
@@ -263,7 +265,7 @@ export class AudioEffects {
     pG.gain.setValueAtTime(0.9, now)
     pG.gain.exponentialRampToValueAtTime(0.0001, now + 0.6)
     punch.connect(pG)
-    pG.connect(this.audioCtx.destination)
+    pG.connect(this.output ?? this.audioCtx.destination)
     punch.start(now)
     punch.stop(now + 0.7)
 
@@ -280,7 +282,7 @@ export class AudioEffects {
         g.gain.setValueAtTime(0.18, t + i * 0.04)
         g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35 + i * 0.04)
         o.connect(g)
-        g.connect(this.audioCtx!.destination)
+        g.connect(this.output ?? this.audioCtx!.destination)
         o.start(t + i * 0.04)
         o.stop(t + 0.45 + i * 0.04)
       })
@@ -301,14 +303,14 @@ export class AudioEffects {
     g.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.3)
 
     o.connect(g)
-    g.connect(this.audioCtx.destination)
+    g.connect(this.output ?? this.audioCtx.destination)
     o.start()
     o.stop(this.audioCtx.currentTime + 0.3)
   }
 
   dispose(): void {
-    if (this.audioCtx && this.audioCtx.state !== 'closed') {
-      this.audioCtx.close().catch(() => {})
-    }
+    // Shared AudioEngine owns the context — do not close it here.
+    this.audioCtx = null
+    this.output = null
   }
 }

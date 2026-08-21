@@ -180,3 +180,41 @@ writeFileSync(join(outDir, 'high.glb'), highGlb)
 console.log(
   `Wrote prism-core insert placeholders: simple=${simpleGlb.byteLength}B high=${highGlb.byteLength}B → ${outDir}`,
 )
+
+function writeInsert(toyId, simpleMeshes, highMeshes) {
+  const dir = join(__dirname, '../public/models/inserts', toyId)
+  mkdirSync(dir, { recursive: true })
+  const simple = buildGlb(simpleMeshes)
+  const high = buildGlb(highMeshes)
+  writeFileSync(join(dir, 'simple.glb'), simple)
+  writeFileSync(join(dir, 'high.glb'), high)
+  console.log(
+    `Wrote ${toyId} insert placeholders: simple=${simple.byteLength}B high=${high.byteLength}B → ${dir}`,
+  )
+}
+
+writeInsert(
+  'mag-spin',
+  [
+    { name: 'magSpinWell', ...boxGeometry(0, 0, 0, 1.75, 0.5, 1.75) },
+    { name: 'magSpinFloor', ...boxGeometry(0, -0.45, 0, 1.75, 0.05, 1.75) },
+  ],
+  [
+    { name: 'magSpinWell', ...boxGeometry(0, 0, 0, 1.75, 0.5, 1.75) },
+    { name: 'magSpinFloor', ...boxGeometry(0, -0.45, 0, 1.75, 0.05, 1.75) },
+    { name: 'magSpinRingDetail', ...boxGeometry(0, 0.55, 0, 1.9, 0.08, 1.9) },
+  ],
+)
+
+writeInsert(
+  'nano-loom',
+  [
+    { name: 'nanoLoomFrame', ...boxGeometry(0, 0, 0, 1.5, 2.0, 0.4) },
+    { name: 'nanoLoomIntake', ...boxGeometry(0, 2.2, 0, 0.6, 0.5, 0.6) },
+  ],
+  [
+    { name: 'nanoLoomFrame', ...boxGeometry(0, 0, 0, 1.5, 2.0, 0.4) },
+    { name: 'nanoLoomIntake', ...boxGeometry(0, 2.2, 0, 0.6, 0.5, 0.6) },
+    { name: 'nanoLoomPinDetail', ...boxGeometry(0, 0, 0.3, 1.2, 1.6, 0.05) },
+  ],
+)

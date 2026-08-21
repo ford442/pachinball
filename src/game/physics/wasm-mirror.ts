@@ -2,7 +2,7 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 import type { BumperVisual } from '../../game-elements/types'
 import { WASM_PHYSICS, PhysicsConfig, GameConfig } from '../../config'
-import { WasmPhysicsEngine } from '../../wasm'
+import type { WasmSimEngine } from '../../wasm/wasm-sim-engine'
 
 /**
  * WasmMirror — keeps a small WASM physics world in sync with the Rapier ball and
@@ -10,13 +10,13 @@ import { WasmPhysicsEngine } from '../../wasm'
  * rest of the game continues to use the original Rapier bodies/handles.
  */
 export class WasmMirror {
-  private engine: WasmPhysicsEngine
+  private engine: WasmSimEngine
   private rapierToWasm = new Map<RAPIER.RigidBody, number>()
   private wasmToRapier = new Map<number, RAPIER.RigidBody>()
   private bumperRadius = new Map<RAPIER.RigidBody, number>()
   private groundAdded = false
 
-  constructor(engine: WasmPhysicsEngine) {
+  constructor(engine: WasmSimEngine) {
     this.engine = engine
   }
 

@@ -6,8 +6,8 @@
 
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { AdventureTrackType } from '../adventure-types'
-import type { TrackInfo } from '../../game-elements/adventure-track-progression'
-import type { ZoneConfig } from '../../game-elements/zone-registry'
+import type { TrackInfo } from '../adventure-track-progression'
+import type { ZoneConfig } from '../zone-registry'
 import type { TrackManifest } from './track-manifest-types'
 import { MANIFEST_DATA } from './track-manifest-data'
 import { getDataTrackSourcePath } from '../track-data-registry'

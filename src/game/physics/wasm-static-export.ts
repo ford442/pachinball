@@ -1,6 +1,6 @@
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
-import type { WasmPhysicsEngine } from '../../wasm'
+import type { WasmSimEngine } from '../../wasm/wasm-sim-engine'
 
 /** Mirrors `ShapeType` without importing Rapier values (keeps Vitest node-safe). */
 const RapierShapeType = {
@@ -22,7 +22,7 @@ export interface StaticExportOptions {
  */
 export function exportRapierBodyToWasm(
   body: RAPIER.RigidBody,
-  engine: WasmPhysicsEngine,
+  engine: WasmSimEngine,
   options: StaticExportOptions = {}
 ): void {
   if (!body.isFixed() && !body.isKinematic()) return

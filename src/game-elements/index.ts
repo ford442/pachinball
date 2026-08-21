@@ -4,27 +4,12 @@ export * from './visual-language'
 export { PhysicsSystem } from './physics'
 export { SettingsManager, type GameSettings } from './settings'
 export { InputHandler } from './input'
-// Display system re-exported from new location
-export { DisplaySystem } from '../display'
-// Effects system re-exported from new location
-export { EffectsSystem } from '../effects'
-export { GameObjects } from '../objects'
-export {
-  CabinetBuilder,
-  getCabinetBuilder,
-  resetCabinetBuilder,
-  CABINET_PRESETS,
-  type CabinetType,
-  type CabinetPreset,
-} from '../cabinet'
 export { BallManager } from './ball-manager'
 export { ComboSystem, type ComboHitType, type ComboSystemConfig, type ComboNamedChain } from './combo-system'
 export { ComboMultiplierSystem, type ComboMultiplierConfig } from './combo-multiplier-system'
 export { BallSaveSystem, type BallSaveConfig } from './ball-save-system'
 export { BonusTallySystem, type BonusTallyConfig } from './bonus-tally-system'
 export { GoldBallStreakSystem, type GoldBallStreakConfig, type GoldBallStreakResult } from './gold-ball-streak-system'
-// Adventure mode re-exported from new location
-export { AdventureMode, AdventureTrackType, CAMERA_PRESETS, type CameraPreset } from '../adventure'
 export {
   ZONE_REGISTRY,
   getZoneConfig,
@@ -47,7 +32,6 @@ export { NanoLoomFeeder, NanoLoomState } from './nano-loom-feeder'
 export { PrismCoreFeeder, PrismCoreState } from './prism-core-feeder'
 export { GaussCannonFeeder, GaussCannonState } from './gauss-cannon-feeder'
 export { QuantumTunnelFeeder, QuantumTunnelState } from './quantum-tunnel-feeder'
-export { MaterialLibrary, getMaterialLibrary, resetMaterialLibrary, detectQualityTier, applyMobileQualityCap } from '../materials'
 export { BallAnimator } from './ball-animator'
 export { CameraController, CameraMode, FRAMING_ZONES, DEFAULT_SOFT_FOLLOW, type CameraRuntimePolicy } from './camera-controller'
 export {
@@ -59,13 +43,6 @@ export {
 } from './accessibility-config'
 export { HapticManager, type HapticConfig } from './haptics'
 export { GamepadManager, type GamepadConfig, type GamepadState } from './gamepad'
-export {
-  lcdTablePixelShader,
-  TABLE_MAPS,
-  LCDTableState,
-  type TableMapType,
-  type TableMapConfig,
-} from '../shaders/lcd-table'
 export { SoundSystem, getSoundSystem, resetSoundSystem, type MapId } from './sound-system'
 export { createImpactVoiceProfile, normalizeImpactVelocity, getPortalMotifFrequencies, type ImpactCategory, type ImpactVoiceOptions, type ImpactVoiceProfile } from './audio-synth'
 export {
@@ -222,23 +199,6 @@ export {
   type ScoringBreakdownSnapshot,
 } from './scoring-breakdown'
 
-export {
-  createSeededRng,
-  hashStringToSeed,
-  dailySeedId,
-  seedFromDailyId,
-  randomU32Seed,
-  initSessionRng,
-  getSessionRng,
-  getSessionRngFork,
-  getSessionSeed,
-  resetSessionRng,
-  isSessionRngInitialized,
-  DEV_DEFAULT_SESSION_SEED,
-  RNG_FORK,
-  type SeededRng,
-  type RngForkLabel,
-} from '../core/seeded-rng'
 export {
   ReplayRecorder,
   compressInputFrames,

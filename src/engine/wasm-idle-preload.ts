@@ -1,10 +1,14 @@
 /**
  * Idle warm-load for the optional C++ physics WASM bundle.
  * Overlaps fetch/compile with menu idle time so A/B toggling avoids a hitch.
+ *
+ * wasm-worker mode warms a Dedicated Worker instead of instantiating the
+ * Emscripten module on the main thread (that instance is not transferable).
  */
 
 import type { WasmPhysicsModule } from '../wasm/wasm-types'
 import { WASM_PHYSICS, getPhysicsEnginePreference } from '../config'
+import { resetPhysicsWorkerPrewarmForTests, warmPhysicsWorker } from '../wasm/physics-worker-client'
 
 let preloadPromise: Promise<WasmPhysicsModule | null> | null = null
 let preloadStarted = false
@@ -33,6 +37,20 @@ export function scheduleIdleWasmPreload(bundleUrl = WASM_PHYSICS.bundleUrl): voi
   }
 
   const run = () => {
+    if (getPhysicsEnginePreference() === 'wasm-worker') {
+      try {
+        const held = warmPhysicsWorker(bundleUrl)
+        void held.ready.then((ok) => {
+          if (ok) {
+            console.log('[Bootstrap] C++ WASM physics worker warm-loaded')
+          }
+        })
+      } catch {
+        // Worker constructor unavailable (Node / tests)
+      }
+      return
+    }
+
     preloadPromise = fetchAndCompileModule(bundleUrl)
     void preloadPromise.then((mod) => {
       if (mod) {
@@ -41,7 +59,7 @@ export function scheduleIdleWasmPreload(bundleUrl = WASM_PHYSICS.bundleUrl): voi
     })
   }
 
-  if ('requestIdleCallback' in window) {
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
     requestIdleCallback(run, { timeout: 8000 })
   } else {
     setTimeout(run, 2000)
@@ -58,4 +76,5 @@ export async function getPreloadedWasmModule(): Promise<WasmPhysicsModule | null
 export function resetWasmPreloadForTests(): void {
   preloadPromise = null
   preloadStarted = false
+  resetPhysicsWorkerPrewarmForTests()
 }

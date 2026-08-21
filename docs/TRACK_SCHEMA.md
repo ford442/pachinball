@@ -41,6 +41,7 @@ Files are loaded eagerly via `import.meta.glob` (synchronous `buildTrack`).
 | `themeProfile` | no | Preferred theme profile id for material roles |
 | `cameraPresetId` | no | Key into `CAMERA_PRESETS` (defaults to `id`) |
 | `gravityMultiplier` | no | Scales world gravity for this track; default `1` |
+| `initialHeadingDeg` | no | Compiler cursor heading in degrees; default `0`. `NEON_HELIX` uses `180`. |
 | `materials` | no | Optional hex overrides per role |
 | `segments` | yes | Non-empty ordered list |
 
@@ -65,14 +66,18 @@ Roles resolve via `getThemedTrackMaterial` / track theme profiles.
 | `turn` | `deltaHeadingDeg` | Cursor heading += delta |
 | `bucket` | optional `material`, `offset` `{x,y,z}` | `createBasin` |
 | `portal` | optional `offset` | `addExitPortal` |
-| `spinner` | `radius`, `angVelDeg`, optional `teeth`, `advance`, `material` | `createRotatingPlatform` |
+| `spinner` | `radius`, `angVelDeg`, optional `teeth`, `advance`, `offset`, `material` | `createRotatingPlatform` |
 | `gate` | `color`: `RED` \| `GREEN` \| `BLUE`, optional `offset` | `createChromaGate` |
+| `cylinder` | `diameter`, `height`, optional `offset`, `material` | `createStaticCylinder` |
+| `pinField` | `spacing`, `evenOffsets`, `oddOffsets`, `diameter`, `height`, optional `material` | `createPinField` on the previous straight |
+| `mill` | `alongRamp`, `lateral`, `radius`, `angVel` (rad/s along ramp normal), optional `surfaceOffset`, `material` | `createInclinedMill` |
+| `resetBasin` | optional `offset`, `material` | `createResetBasin` |
 
-Cursor starts at `getTrackStartAnchor(id)` with heading `0`.
+Cursor starts at `getTrackStartAnchor(id)` with heading `initialHeadingDeg` (default `0`).
 
-`offset` (on `bucket`, `portal`, `gate`) is a **world-space** vector added to the
+`offset` (on `bucket`, `portal`, `gate`, `cylinder`, `resetBasin`, and `spinner` when set) is a **world-space** vector added to the
 cursor — it does not rotate with heading. Gates in particular usually need a `y`
-offset, or they sit buried in the running surface.
+offset, or they sit buried in the running surface. When `spinner` omits `offset`, the compiler uses the legacy `(radius+1 along heading, y-1)` placement.
 
 `gap` accepts negative `length` and `drop`, which is the idiomatic way to nudge the
 cursor backwards or upwards before a segment whose builder call has a fixed offset
@@ -87,12 +92,12 @@ with the position its original TypeScript builder used).
    HUD shows a soft error via `uiManager.showMessage`.
 3. Valid data → tear down → `buildFromDefinition` → collision groups.
 
-Hand-tuned flagships (`NEON_HELIX`, `PACHINKO_HALL`, `CYBER_CORE`) remain TypeScript builders.
+Hand-tuned flagships that still need custom gizmos (`PACHINKO_HALL`, `TESLA_TOWER`, `CASINO_HEIST`) remain TypeScript builders. `NEON_HELIX`, `CYBER_CORE`, and `PACHINKO_SPIRE` are JSON + `buildKind: 'json'`.
 
 ## Shipped data tracks
 
-**Campaign spine (JSON):** `QUANTUM_GRID`, `GLITCH_SPIRE`, `RETRO_WAVE_HILLS`, `HYPER_DRIFT`,
-`CHRONO_CORE`, `SINGULARITY_WELL`, `CRYO_CHAMBER`, `FIREWALL_BREACH`.
+**Campaign spine (JSON):** `NEON_HELIX`, `CYBER_CORE`, `QUANTUM_GRID`, `GLITCH_SPIRE`, `RETRO_WAVE_HILLS`, `HYPER_DRIFT`,
+`CHRONO_CORE`, `SINGULARITY_WELL`, `CRYO_CHAMBER`, `FIREWALL_BREACH`. Optional branch: `PACHINKO_SPIRE`.
 
 **Post-finale branch (JSON):** `TIDAL_NEXUS` → `SOLAR_FLARE` → `DIGITAL_ZEN_GARDEN`.
 

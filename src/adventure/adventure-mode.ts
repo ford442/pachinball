@@ -16,12 +16,12 @@ import { CAMERA_PRESETS } from './camera-presets'
 import { AdventureTrackType, type AdventureCallback, type CameraPreset } from './adventure-types'
 import { getTrackStartAnchor } from './portal-routing'
 import { getTrackManifest } from './manifests'
-import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
+import { TRACK_CATALOG } from './adventure-track-progression'
 import {
   createEmptyTeardownStats,
   type TrackResourceCounts,
   type TrackTeardownStats,
-} from '../game-elements/track-teardown-stats'
+} from './track-teardown-stats'
 import { FALLOUT_Y_THRESHOLD } from './adventure-portal-types'
 
 import { getDataTrackDefinition } from './track-data-registry'

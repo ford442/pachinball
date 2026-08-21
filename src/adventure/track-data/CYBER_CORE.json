@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "CYBER_CORE",
+  "cameraPresetId": "CYBER_CORE",
+  "themeProfile": "CYBER_CORE",
+  "segments": [
+    { "type": "straight", "width": 6, "length": 15, "inclineDeg": 20, "material": "structure" },
+    {
+      "type": "curve",
+      "radius": 15,
+      "angleDeg": 180,
+      "inclineDeg": 5,
+      "width": 6,
+      "wallHeight": 3,
+      "segments": 48,
+      "material": "structure"
+    },
+    { "type": "gap", "length": 8, "drop": 2 },
+    { "type": "straight", "width": 6, "length": 5, "inclineDeg": 0, "material": "glow" },
+    {
+      "type": "curve",
+      "radius": 8,
+      "angleDeg": 270,
+      "inclineDeg": 15,
+      "width": 6,
+      "wallHeight": 1,
+      "segments": 48,
+      "material": "structure"
+    },
+    { "type": "cylinder", "diameter": 0.8, "height": 1.2, "offset": { "x": 0, "y": 0.5, "z": -1 }, "material": "energy" },
+    { "type": "cylinder", "diameter": 0.8, "height": 1.2, "offset": { "x": -2, "y": 0.5, "z": 1 }, "material": "energy" },
+    { "type": "cylinder", "diameter": 0.8, "height": 1.2, "offset": { "x": 2, "y": 0.5, "z": 1 }, "material": "energy" },
+    { "type": "cylinder", "diameter": 0.8, "height": 1.2, "offset": { "x": -3, "y": 0.5, "z": 3 }, "material": "energy" },
+    { "type": "cylinder", "diameter": 0.8, "height": 1.2, "offset": { "x": 3, "y": 0.5, "z": 3 }, "material": "energy" },
+    { "type": "cylinder", "diameter": 0.8, "height": 1.2, "offset": { "x": 0, "y": 0.5, "z": 5 }, "material": "energy" },
+    {
+      "type": "spinner",
+      "radius": 3.5,
+      "angVelDeg": 45.83662361046586,
+      "offset": { "x": 0, "y": -0.5, "z": 6 },
+      "material": "accent"
+    },
+    { "type": "portal", "offset": { "x": 0, "y": 1.6, "z": 8 } },
+    { "type": "bucket", "material": "structure", "offset": { "x": 0, "y": 0, "z": 8 } }
+  ]
+}

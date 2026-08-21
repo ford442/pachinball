@@ -57,7 +57,7 @@ export class GameHUD {
     if (challengeBtn) {
       challengeBtn.onclick = async () => {
         const mapId = this.host.mapManager?.getCurrentMap() || 'neon-helix'
-        const seed = (await import('../game-elements')).getSessionSeed()
+        const seed = (await import('../core/seeded-rng')).getSessionSeed()
         const copied = await (await import('../game-elements')).ChallengeSystem.copyChallengeLink(seed, this.host.score, mapId)
         if (copied) {
           this.host.uiManager?.showMessage('Challenge link copied to clipboard! Share with friends.', 3500)
