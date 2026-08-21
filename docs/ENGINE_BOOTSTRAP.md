@@ -13,9 +13,18 @@ Resolved by [`src/engine/engine-options.ts`](../src/engine/engine-options.ts) vi
 | `antialias` | `true` | `?antialias=0` |
 | `preserveDrawingBuffer` | **`false`** | `?preserveBuffer=1`, `window.DEBUG_PRESERVE_DRAWING_BUFFER = true` |
 | `stencil` | `true` | — |
-| `setMaximumLimits` | `true` (WebGPU) | `?maxLimits=0` |
+| `setMaximumLimits` | `true` (WebGPU MRT defense) | `?maxLimits=0` — do **not** disable to "fix" Safari; see [`webgpu-post-process-profile.ts`](../src/game/webgpu-post-process-profile.ts) |
 | `powerPreference` | `'high-performance'` (desktop), `'default'` (mobile UA) | `?power=high-performance\|low-power\|default` |
 | `adaptToDeviceRatio` | **`false`** | Documented only — manual hardware scaling owns DPR |
+| `audioEngine` | **`false`** | — (SoundSystem + EffectsSystem own audio; avoid a third AudioContext) |
+| `doNotHandleContextLost` | **`false`** | Babylon restores; we also log, toast (`#power-toast`), and `engine.resize()` |
+| `failIfMajorPerformanceCaveat` | **`false`** (SwiftShader CI) | `?gpu=strict` |
+| `premultipliedAlpha` | **`true`** | — (matches CSS cabinet) |
+| `featureLevel` | `'core'`, then `'compatibility'` on CreateAsync failure | `?gpu=compat` (skip core) |
+| `enableGPUDebugMarkers` | `false` | `?gpuDebug=1` |
+| `requiredFeatures` / `enableAllFeatures` | empty / `false` | bloom/SSAO already degrade; do not request timestamp-query / float32-filterable yet |
+
+`setMaximumLimits: true` is the first defense for WebGPU MRT (SSAO + DoF + bloom). Try/catch around DoF/SSAO is the second.
 
 ### Renderer backend
 
@@ -35,6 +44,9 @@ Active backend is tagged on `<canvas data-renderer="webgpu|webgl2">` and `window
 | `?nopp=1` | Skip all post-processing in `GameRenderer` |
 | `?noopt=1` | Disable `SceneOptimizer` |
 | `?preserveBuffer=1` | Enable `preserveDrawingBuffer` for framebuffer readback |
+| `?gpu=compat` | WebGPU `featureLevel: 'compatibility'` only |
+| `?gpu=strict` | `failIfMajorPerformanceCaveat: true` (not for SwiftShader CI) |
+| `?gpuDebug=1` | WebGPU `enableGPUDebugMarkers` |
 
 ---
 
@@ -167,6 +179,13 @@ npx playwright test tests/engine-bootstrap.spec.ts tests/verify_prism_core.spec.
 ```
 
 Use `?renderer=webgl2` for automation-friendly WebGL2 canvas capture.
+
+---
+
+## Follow-ups (not in this pass)
+
+- **Rapier** stays `@dimforge/rapier3d-compat@^0.15.0`. 0.18/0.19 add snapshot APIs that replay (#341 leftovers) will want — bump in a dedicated PR; do not mix with bootstrap hygiene.
+- **#361** Worker + SharedArrayBuffer still needs COOP/COEP. Glue ENVIRONMENT is already `web,worker,node`.
 
 ---
 

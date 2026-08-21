@@ -11,7 +11,7 @@ npm run lint       # ESLint on all .ts/.tsx files
 npm run preview    # Preview production build locally
 npm test           # Run Vitest unit tests
 npx playwright test  # Run E2E / visual regression tests
-npm run test:native       # C++ Catch2 tests (also generates clangd compile DB)
+npm run test:native       # C++ Catch2 tests (writes native/build-native/compile_commands.json; see root .clangd)
 npm run build:wasm        # Emscripten Release → public/wasm/
 npm run test:wasm-parity  # WASM bundle vs native C++ reference
 npm run bench:wasm-flags  # Microbench WASM flag matrix (SIMD/LTO)

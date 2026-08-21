@@ -105,8 +105,7 @@ npm run build:wasm
 ```
 
 Copies `PhysicsModule.js` + `PhysicsModule.wasm` to `public/wasm/`. Does **not**
-copy source maps. SIMD and LTO stay **off** by default until promoted after
-measurement (see [Flag microbench](#flag-microbench-50-spheres)).
+copy source maps. **SIMD and LTO default ON** (see [`docs/WASM_BENCH_RESULTS.md`](WASM_BENCH_RESULTS.md)).
 
 ### Debug build
 
@@ -126,20 +125,25 @@ npm run build:wasm:assert
 # Equivalent: bash scripts/build-wasm.sh --assert
 ```
 
-`-O2` + `ASSERTIONS=1` → `native/build-assert/` (does **not** overwrite
+`-O3` + `ASSERTIONS=1` → `native/build-assert/` (does **not** overwrite
 `public/wasm/` unless `WASM_INSTALL_ASSERT=1`).
 
 ```bash
 WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npm run test:wasm-parity
 ```
 
-### Opt-in SIMD / LTO
+### SIMD / LTO (default ON)
 
 ```bash
-bash scripts/build-wasm.sh --simd          # -msimd128
-bash scripts/build-wasm.sh --lto           # -flto
-bash scripts/build-wasm.sh --simd --lto
-# or: PACHINBALL_WASM_SIMD=ON PACHINBALL_WASM_LTO=ON npm run build:wasm
+bash scripts/build-wasm.sh --no-simd --no-lto   # opt out
+# or: PACHINBALL_WASM_SIMD=OFF PACHINBALL_WASM_LTO=OFF npm run build:wasm
+```
+
+Print the CMake source-of-truth line (also logged on the `wasm_parity` CI job):
+
+```bash
+npm run print:wasm-flags
+# [wasm-flags] SIMD=ON LTO=ON ENV=web,worker,node INITIAL_MEMORY=16777216
 ```
 
 ### Flag matrix microbench build
@@ -168,27 +172,29 @@ Configured in [`native/CMakeLists.txt`](../native/CMakeLists.txt). Every
 | `-sMODULARIZE=1` | Factory `await PhysicsModule()` |
 | `-sEXPORT_NAME=PhysicsModule` | Name expected by `src/wasm/PhysicsModule.ts` |
 | `--bind` | Embind surface in `bindings.cpp` |
-| `-sENVIRONMENT=web,node` | Browser + Node parity harness; excludes shell/worker. Pure `web` would break `run-wasm-parity.mjs`. |
+| `-sENVIRONMENT=web,worker,node` | Browser + Worker (#361) + Node parity harness (`run-wasm-parity.mjs`). |
 | `-sFILESYSTEM=0` | No FS APIs in the physics module — smaller JS glue |
 | `-sALLOW_MEMORY_GROWTH=1` | Heap grows for large ball swarms |
-| `-sINITIAL_MEMORY=33554432` | 32 MB initial heap |
-| `-sEXPORTED_RUNTIME_METHODS=…` | `addFunction` / `removeFunction` / UTF8 helpers for contact callbacks |
+| `-sINITIAL_MEMORY=16777216` | 16 MB initial heap (`emmalloc`; grows if needed) |
+| `-sEXPORTED_RUNTIME_METHODS=["HEAPF32"]` | Packed contact/transform buffer views only — no `addFunction` / UTF8 helpers |
+| `-sMALLOC=emmalloc` | Smaller allocator after setup |
+| `--closure=1` | Minify JS glue (parity-validated) |
 | `-fno-exceptions` | No `try`/`throw` in `native/src` — drops EH runtime |
 
 ### Per-config compile / link
 
 | Config | Compile | Link assertions | Source maps |
 |--------|---------|-----------------|-------------|
-| **Release** (default / production) | `-O2` | `ASSERTIONS=0` | none |
+| **Release** (default / production) | `-O3` | `ASSERTIONS=0` | none |
 | **Debug** | `-O0 -g -gsource-map` | `ASSERTIONS=2` | yes (`.map` → `public/wasm/` only for `--debug`) |
-| **RelWithAsserts** | `-O2` | `ASSERTIONS=1` | none; artefact in `native/build-assert/` |
+| **RelWithAsserts** | `-O3` | `ASSERTIONS=1` | none; artefact in `native/build-assert/` |
 
-### Opt-in CMake options (default OFF)
+### CMake options (default ON)
 
 | Option | Flags | Notes |
 |--------|-------|-------|
-| `PACHINBALL_WASM_SIMD` | `-msimd128` (compile + link) | Auto-vectorize only; no hand `wasm_simd128` intrinsics yet |
-| `PACHINBALL_WASM_LTO` | `-flto` (compile + link) | Measure size + step before promoting to Release |
+| `PACHINBALL_WASM_SIMD` | `-msimd128` (compile + link) | Auto-vectorize only; no hand `wasm_simd128` intrinsics |
+| `PACHINBALL_WASM_LTO` | `-flto` (compile + link) | Production default after 2026-08-14 bench |
 
 ### Embind migration (non-goal)
 
@@ -206,11 +212,14 @@ at `1/60` s. Host: Linux build environment (2026-08-07).
 | B +SIMD | A + `-msimd128` | 0.0611 | 0.0431 | 0.0875 | 29.3 |
 | C +SIMD+LTO | B + `-flto` | 0.0452 | 0.0356 | 0.0775 | 28.6 |
 
-**Decision & Rationale:**
-1. **Default production build stays Release baseline (`SIMD=OFF`, `LTO=OFF`)**: Baseline step time is sub-0.05ms per tick for 50 spheres. `-msimd128` slightly increases WASM binary size (+0.7 KiB) and introduces auto-vectorization overhead without benefiting scalar sphere interactions, while reducing compatibility across older browser engines. `-flto` adds build time without measurable runtime improvement over baseline.
-2. **Default production runtime physics engine stays Rapier**: Rapier 3D WASM remains the primary production physics backend.
-3. **No `-pthread` / `SharedArrayBuffer`**: Threading remains disabled to avoid requiring COOP/COEP headers.
-4. **Regenerate metrics at any time**: Run `npm run bench:wasm-flags`.
+**Canonical numbers:** [`docs/WASM_BENCH_RESULTS.md`](WASM_BENCH_RESULTS.md) (2026-08-14) — SIMD+LTO **ON**, 16 MiB heap, `-O3`, `emmalloc`, `--closure=1`. Production combo is **C**.
+
+Historical 2026-08-07 table above is retained for comparison only; do not copy those defaults.
+
+**Other decisions:**
+1. **Default production runtime physics engine stays Rapier** until wasm-owner hinges + replay land.
+2. **No `-pthread` / `SharedArrayBuffer` yet** — #361; ENVIRONMENT already includes `worker` so the glue can instantiate off-thread without a rebuild of that flag.
+3. **Regenerate metrics:** `npm run bench:wasm-flags`.
 
 ---
 
@@ -433,7 +442,7 @@ is skipped in the solver.
 
 - Emscripten allocates a single contiguous `ArrayBuffer` (WASM heap).
 - `ALLOW_MEMORY_GROWTH=1` allows the heap to grow dynamically.
-- Initial heap is 32 MB (`INITIAL_MEMORY=33554432`).
+- Initial heap is 16 MB (`INITIAL_MEMORY=16777216`).
 - `PhysicsWorld::delete()` must be called when the world is disposed to
   release C++ memory back to the WASM heap.
 - `WasmPhysicsEngine.dispose()` calls `world.delete()` automatically.
@@ -454,7 +463,7 @@ link flags, but this requires server-side header changes.
 - Debug installs copy `PhysicsModule*.map` into `public/wasm/` for browser
   DevTools. Release and RelWithAsserts never ship maps into `public/wasm/` or
   production `dist/`.
-- Use `npm run build:wasm:assert` for CI-style `-O2` + `ASSERTIONS=1` without
+- Use `npm run build:wasm:assert` for CI-style `-O3` + `ASSERTIONS=1` without
   full debug cost.
 - The `Debug HUD` (`src/game-elements/debug-hud.ts`) shows WASM vs Rapier step
   timing when a WASM physics mode is active.
@@ -479,9 +488,10 @@ native compiler before re-running the full Emscripten build.
 
 ### Language Server & IDE Tooling (`compile_commands.json`)
 
-CMake is configured with `CMAKE_EXPORT_COMPILE_COMMANDS ON`. Both `npm run test:native` and `npm run build:wasm` automatically generate and copy `compile_commands.json` to `native/compile_commands.json` and project root `compile_commands.json`.
-
-Root `.clangd` points clangd / IDE language servers directly to `native/` for symbol indexing, auto-completion, and inline diagnostics across `native/src/**`.
+CMake sets `CMAKE_EXPORT_COMPILE_COMMANDS ON`. `npm run test:native` writes
+`native/build-native/compile_commands.json` (gitignored). Root `.clangd` sets
+`CompilationDatabase: native/build-native` so clangd indexes `native/src/**`
+without a symlink. Run `test:native` once after clone so the database exists.
 
 ---
 
@@ -491,8 +501,9 @@ The GitHub Actions workflow (`.github/workflows/native-physics.yml`) runs on cha
 
 | Job | Status | Tools | What it checks |
 |-----|--------|-------|----------------|
-| `native_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native` (Catch2 suite — 9/9 scenarios) |
-| `wasm_build` | Non-blocking | emsdk (cached) | Release `npm run build:wasm` + artefact size; no `.map` in `public/wasm/`; RelWithAsserts `npm run build:wasm:assert`; parity via `WASM_MODULE_PATH=native/build-assert/PhysicsModule.js` |
+| `native_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native` (Catch2) |
+| `sanitizer_ctest` | **BLOCKING** | cmake, g++ | ASan/UBSan Catch2 (`CMAKE_BUILD_TYPE=Debug`) |
+| `wasm_parity` | **BLOCKING** | emsdk | `print:wasm-flags` then Release + RelWithAsserts + `test:wasm-parity` |
 
 `native_ctest` runs in ~15 seconds without requiring Emscripten and gates PRs against C++ logic regressions. Additionally, `tests/embind-surface.test.ts` asserts that TypeScript interface definitions (`src/wasm/wasm-types.ts`) match the exported Embind surface (`native/src/bindings.cpp`).
 

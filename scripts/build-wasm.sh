@@ -132,6 +132,7 @@ configure_and_build() {
 
   mkdir -p "${build_dir}"
   echo "[build-wasm] Configuring (${build_type}, SIMD=${simd}, LTO=${lto}) → ${build_dir}"
+  echo "[build-wasm] ENVIRONMENT=web,worker,node INITIAL_MEMORY=16777216 (see npm run print:wasm-flags)"
   emcmake cmake \
     -S "${NATIVE_DIR}" \
     -B "${build_dir}" \

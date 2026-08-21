@@ -50,7 +50,7 @@ npm run preview
 # Run Playwright E2E tests
 npx playwright test
 
-# Run native C++ Catch2 physics tests (writes `native/build-native/compile_commands.json` for clangd)
+# Run native C++ Catch2 physics tests (writes native/build-native/compile_commands.json; root .clangd points clangd there)
 npm run test:native
 
 # Build C++ physics to WASM (requires Emscripten)

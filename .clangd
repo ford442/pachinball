@@ -1,2 +1,4 @@
 CompileFlags:
+  # npm run test:native writes compile_commands.json here.
   CompilationDatabase: native/build-native
+

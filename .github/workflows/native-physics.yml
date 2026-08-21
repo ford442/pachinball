@@ -26,6 +26,7 @@ on:
       - 'tests/transform-buffer.test.ts'
       - 'scripts/build-wasm.sh'
       - 'scripts/run-wasm-parity.mjs'
+      - 'scripts/print-wasm-flags.mjs'
       - '.github/workflows/native-physics.yml'
   pull_request:
     paths:
@@ -35,6 +36,7 @@ on:
       - 'tests/transform-buffer.test.ts'
       - 'scripts/build-wasm.sh'
       - 'scripts/run-wasm-parity.mjs'
+      - 'scripts/print-wasm-flags.mjs'
       - '.github/workflows/native-physics.yml'
 
 jobs:
@@ -94,6 +96,9 @@ jobs:
           source ./emsdk_env.sh
           echo "$(pwd)" >> $GITHUB_PATH
           emcc --version
+
+      - name: Print effective WASM flags
+        run: node scripts/print-wasm-flags.mjs
 
       - name: Build WASM module (Release — production path)
         run: |
