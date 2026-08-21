@@ -3,6 +3,12 @@
  *
  * Babylon's EngineFactory.CreateAsync always prefers WebGPU when supported and
  * ignores a `disableWebGPU` option, so forced WebGL2 must use Engine directly.
+ *
+ * We also avoid `WebGPUEngine.CreateAsync`: in @babylonjs/core 7.54.3 it wraps
+ * `initAsync()` in a promise with no reject path, so a failed WebGPU init never
+ * settles (and leaves the half-built engine undisposed). Constructing the
+ * engine ourselves and awaiting `initAsync()` gives us both a real rejection to
+ * fall back on and a handle to dispose before the next attempt.
  */
 
 import { Engine } from '@babylonjs/core/Engines/engine'
@@ -23,6 +29,9 @@ import {
 } from './engine-options'
 
 export type EngineCreationPlan = 'webgl2' | 'webgpu'
+
+/** Greppable marker for "we booted on a degraded GPU path" — see docs/ENGINE_BOOTSTRAP.md. */
+export const GPU_DEGRADE_MARKER = '[Bootstrap][gpu-degrade]'
 
 /** Pure routing for tests — which backend createEngine will attempt. */
 export function resolveEngineCreationPlan(
@@ -69,49 +78,115 @@ export function toWebGPUEngineOptions(
     doNotHandleContextLost: options.doNotHandleContextLost,
     premultipliedAlpha: options.premultipliedAlpha,
     adaptToDeviceRatio: options.adaptToDeviceRatio,
-    // MRT defense — do not disable to "fix" Safari; see webgpu-post-process-profile.ts
-    setMaximumLimits: options.setMaximumLimits,
+    // MRT defense — do not disable to "fix" Safari; see webgpu-post-process-profile.ts.
+    // The compatibility retry is the one place we ask for less: a strict adapter that
+    // rejected core+maxLimits can still hand us a device once we stop demanding them.
+    setMaximumLimits: featureLevel === 'compatibility' ? false : options.setMaximumLimits,
     powerPreference: gpuPower,
     featureLevel,
     enableGPUDebugMarkers: options.enableGPUDebugMarkers,
     enableAllFeatures: false,
+    // Deliberately empty: risky optional features (timestamp-query,
+    // float32-filterable, rg11b10ufloat-renderable) are not universally supported,
+    // and a hard requirement here fails device creation outright. The rule is to
+    // check `adapter.features.has(...)` in the pass that needs one and degrade
+    // there instead. Babylon mutates this object during initAsync, so it must stay
+    // a fresh literal per call.
+    deviceDescriptor: { requiredFeatures: [] },
   }
 }
 
-function showGpuToast(message: string): void {
-  if (typeof document === 'undefined') return
-  const el = document.getElementById('power-toast')
-  if (!el) return
-  el.textContent = message
-  el.classList.remove('hidden')
-  el.classList.add('show')
-  window.setTimeout(() => {
-    el.classList.add('hidden')
-    el.classList.remove('show')
-  }, 4000)
+interface ContextObservable {
+  add: (callback: () => void) => unknown
+  removeCallback: (callback: () => void) => unknown
 }
 
-/** Log + toast + resize when the GPU context is lost (Babylon still owns restore). */
-export function attachGpuContextLostHandlers(
+interface ContextLostEngine {
+  onContextLostObservable?: ContextObservable
+  onContextRestoredObservable?: ContextObservable
+}
+
+/**
+ * Log GPU context loss / restore. Logging only, on purpose.
+ *
+ * `doNotHandleContextLost` is false, so Babylon owns the actual rebuild of GPU
+ * resources. Calling `engine.resize()` here would look like recovery without
+ * re-uploading a single buffer or pipeline, so we don't. A user-facing toast is
+ * a follow-up, not part of this layer.
+ */
+export function attachGpuContextLogging(engine: ContextLostEngine): () => void {
+  const onLost = (): void => {
+    console.warn(`${GPU_DEGRADE_MARKER} GPU context lost — Babylon will attempt to restore it`)
+  }
+  const onRestored = (): void => {
+    console.log('[Bootstrap] GPU context restored')
+  }
+
+  engine.onContextLostObservable?.add(onLost)
+  engine.onContextRestoredObservable?.add(onRestored)
+
+  return () => {
+    engine.onContextLostObservable?.removeCallback(onLost)
+    engine.onContextRestoredObservable?.removeCallback(onRestored)
+  }
+}
+
+/** Minimal surface of WebGPUEngine used by the fallback loop, so tests can inject a stub. */
+export interface WebGPUEngineLike {
+  initAsync(glslangOptions?: unknown, twgslOptions?: unknown): Promise<void>
+  dispose(): void
+}
+
+export type WebGPUEngineFactory = (
   canvas: HTMLCanvasElement,
-  engine: { resize: () => void },
-): () => void {
-  const onLost = (event: Event): void => {
-    event.preventDefault?.()
-    console.warn('[Bootstrap] GPU context lost', event.type)
-    showGpuToast('Graphics context lost — restoring…')
+  options: WebGPUEngineOptions,
+) => WebGPUEngineLike
+
+const defaultWebGPUEngineFactory: WebGPUEngineFactory = (canvas, options) =>
+  new WebGPUEngine(canvas, options) as unknown as WebGPUEngineLike
+
+export interface WebGPUCreationResult {
+  engine: WebGPUEngineLike
+  featureLevel: GpuFeatureLevel
+}
+
+/**
+ * Try WebGPU at each feature level in turn, disposing the failed instance before
+ * moving on. Returns null when every level failed — the caller falls back to WebGL2.
+ */
+export async function createWebGPUEngineWithFallback(
+  canvas: HTMLCanvasElement,
+  options: ResolvedEngineOptions,
+  factory: WebGPUEngineFactory = defaultWebGPUEngineFactory,
+): Promise<WebGPUCreationResult | null> {
+  const levels = webgpuFeatureLevelsToTry(options.featureLevel)
+
+  for (const featureLevel of levels) {
+    const gpuOptions = toWebGPUEngineOptions(options, featureLevel)
+    let engine: WebGPUEngineLike | undefined
     try {
-      engine.resize()
+      engine = factory(canvas, gpuOptions)
+      await engine.initAsync()
+      if (featureLevel !== options.featureLevel) {
+        console.warn(
+          `${GPU_DEGRADE_MARKER} WebGPU featureLevel fell back to ${featureLevel} ` +
+            `(setMaximumLimits=${String(gpuOptions.setMaximumLimits)})`,
+        )
+      }
+      return { engine, featureLevel }
     } catch (err) {
-      console.warn('[Bootstrap] engine.resize() after context lost failed', err)
+      console.warn(`[Bootstrap] WebGPU init failed at featureLevel=${featureLevel}`, err)
+      // Dispose before the next attempt — a half-initialised WebGPUEngine keeps
+      // its canvas context and device callbacks alive otherwise.
+      try {
+        engine?.dispose()
+      } catch (disposeErr) {
+        console.warn('[Bootstrap] Disposing failed WebGPU engine threw', disposeErr)
+      }
     }
   }
-  canvas.addEventListener('webglcontextlost', onLost)
-  canvas.addEventListener('webgpucontextlost', onLost)
-  return () => {
-    canvas.removeEventListener('webglcontextlost', onLost)
-    canvas.removeEventListener('webgpucontextlost', onLost)
-  }
+
+  return null
 }
 
 function createWebGL2Engine(
@@ -122,7 +197,7 @@ function createWebGL2Engine(
     throw new Error('WebGL2 is not supported on this device')
   }
   const engine = new Engine(canvas, undefined, toWebGLEngineOptions(engineOptions))
-  attachGpuContextLostHandlers(canvas, engine)
+  attachGpuContextLogging(engine)
   return engine
 }
 
@@ -144,24 +219,18 @@ export async function createEngine(canvas: HTMLCanvasElement): Promise<EngineTyp
   }
 
   console.log('[Bootstrap] Renderer preference: WebGPU (auto or explicit)')
-  const levels = webgpuFeatureLevelsToTry(engineOptions.featureLevel)
-  let lastErr: unknown
-  for (const level of levels) {
-    try {
-      const engine = await WebGPUEngine.CreateAsync(canvas, toWebGPUEngineOptions(engineOptions, level))
-      attachGpuContextLostHandlers(canvas, engine)
-      if (level !== engineOptions.featureLevel) {
-        console.warn(`[Bootstrap] WebGPU featureLevel fell back to ${level}`)
-      }
-      console.log(`[Bootstrap] Active renderer: ${engine.getClassName()} (featureLevel=${level})`)
-      return engine
-    } catch (err) {
-      lastErr = err
-      console.warn(`[Bootstrap] WebGPU init failed at featureLevel=${level}`, err)
-    }
+  const created = await createWebGPUEngineWithFallback(canvas, engineOptions)
+
+  if (created) {
+    const engine = created.engine as unknown as WebGPUEngineType
+    attachGpuContextLogging(engine)
+    console.log(
+      `[Bootstrap] Active renderer: ${engine.getClassName()} (featureLevel=${created.featureLevel})`,
+    )
+    return engine
   }
 
-  console.warn('[Bootstrap] WebGPU init failed, using WebGL2 fallback', lastErr)
+  console.warn(`${GPU_DEGRADE_MARKER} WebGPU init failed at every featureLevel, using WebGL2 fallback`)
   const engine = createWebGL2Engine(canvas, engineOptions)
   console.log(`[Bootstrap] Active renderer: ${engine.getClassName()} (WebGL fallback)`)
   return engine

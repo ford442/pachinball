@@ -17,14 +17,64 @@ Resolved by [`src/engine/engine-options.ts`](../src/engine/engine-options.ts) vi
 | `powerPreference` | `'high-performance'` (desktop), `'default'` (mobile UA) | `?power=high-performance\|low-power\|default` |
 | `adaptToDeviceRatio` | **`false`** | Documented only — manual hardware scaling owns DPR |
 | `audioEngine` | **`false`** | — (SoundSystem + EffectsSystem own audio; avoid a third AudioContext) |
-| `doNotHandleContextLost` | **`false`** | Babylon restores; we also log, toast (`#power-toast`), and `engine.resize()` |
+| `doNotHandleContextLost` | **`false`** | — Babylon owns the rebuild; we only log (see [Context loss](#context-loss)) |
 | `failIfMajorPerformanceCaveat` | **`false`** (SwiftShader CI) | `?gpu=strict` |
 | `premultipliedAlpha` | **`true`** | — (matches CSS cabinet) |
-| `featureLevel` | `'core'`, then `'compatibility'` on CreateAsync failure | `?gpu=compat` (skip core) |
+| `featureLevel` | `'core'`, then `'compatibility'` on init failure | `?gpu=compat` (skip core, also forces `setMaximumLimits: false`) |
 | `enableGPUDebugMarkers` | `false` | `?gpuDebug=1` |
-| `requiredFeatures` / `enableAllFeatures` | empty / `false` | bloom/SSAO already degrade; do not request timestamp-query / float32-filterable yet |
+| `deviceDescriptor.requiredFeatures` / `enableAllFeatures` | `[]` / `false` | — see [Optional WebGPU features](#optional-webgpu-features) |
 
 `setMaximumLimits: true` is the first defense for WebGPU MRT (SSAO + DoF + bloom). Try/catch around DoF/SSAO is the second.
+
+### WebGPU feature-level degrade
+
+[`createWebGPUEngineWithFallback()`](../src/engine/create-engine.ts) walks the GPU paths in order,
+logging each transition:
+
+```
+featureLevel: 'core'          + setMaximumLimits as resolved
+  ↓ initAsync() rejected — dispose the half-built engine
+featureLevel: 'compatibility' + setMaximumLimits: false
+  ↓ initAsync() rejected — dispose
+WebGL2 (new Engine(...))
+```
+
+The compatibility retry is the only place `setMaximumLimits` is forced off: asking a strict adapter
+(Safari/Metal) for *less* is what lets it hand us a device at all. That is **not** a reason to lower
+the `core` default — post-process degrades in
+[`webgpu-post-process-profile.ts`](../src/game/webgpu-post-process-profile.ts) instead.
+
+`?gpu=compat` skips the `core` attempt (and so also boots with `setMaximumLimits: false`), which is
+the deterministic way to reproduce the degraded profile in CI.
+
+We construct `new WebGPUEngine(...)` and `await engine.initAsync()` rather than calling
+`WebGPUEngine.CreateAsync()`. In `@babylonjs/core` 7.54.3 `CreateAsync` builds its promise with no
+reject path, so a failed init never settles — the chain above would hang, and the half-built engine
+would never be disposed.
+
+Every degraded path logs the greppable marker `[Bootstrap][gpu-degrade]` (`GPU_DEGRADE_MARKER`).
+Until a real analytics sink exists, that string is how you count degrades in a console log.
+
+### Optional WebGPU features
+
+`deviceDescriptor.requiredFeatures` is deliberately `[]` — we require **no** optional WebGPU feature
+at device creation. Anything listed there is a hard requirement: an adapter that lacks it fails
+`requestDevice()` outright, turning a degraded-but-playable boot into no boot at all. Current
+adapter support makes that a real risk (`timestamp-query` ~98% but flaky on Safari/Metal,
+`float32-filterable` ~92%, `rg11b10ufloat-renderable` ~99.97%).
+
+**Rule:** a pass that wants an optional feature checks `adapter.features.has(...)` at the point of
+use and degrades there, instead of adding it to this list.
+
+(`enableAllFeatures: false` is belt-and-braces — Babylon ignores it once `requiredFeatures` is set
+explicitly.)
+
+### Context loss
+
+`attachGpuContextLogging()` subscribes to `engine.onContextLostObservable` /
+`onContextRestoredObservable` and **logs only**. With `doNotHandleContextLost: false` Babylon
+rebuilds the GPU resources itself; `engine.resize()` re-uploads nothing, so calling it here would
+only look like recovery. A user-facing toast on loss is a deliberate follow-up.
 
 ### Renderer backend
 
@@ -44,7 +94,7 @@ Active backend is tagged on `<canvas data-renderer="webgpu|webgl2">` and `window
 | `?nopp=1` | Skip all post-processing in `GameRenderer` |
 | `?noopt=1` | Disable `SceneOptimizer` |
 | `?preserveBuffer=1` | Enable `preserveDrawingBuffer` for framebuffer readback |
-| `?gpu=compat` | WebGPU `featureLevel: 'compatibility'` only |
+| `?gpu=compat` | WebGPU `featureLevel: 'compatibility'` only (skips the `core` attempt; implies `setMaximumLimits: false`) |
 | `?gpu=strict` | `failIfMajorPerformanceCaveat: true` (not for SwiftShader CI) |
 | `?gpuDebug=1` | WebGPU `enableGPUDebugMarkers` |
 
@@ -186,6 +236,10 @@ Use `?renderer=webgl2` for automation-friendly WebGL2 canvas capture.
 
 - **Rapier** stays `@dimforge/rapier3d-compat@^0.15.0`. 0.18/0.19 add snapshot APIs that replay (#341 leftovers) will want — bump in a dedicated PR; do not mix with bootstrap hygiene.
 - **#361** Worker + SharedArrayBuffer still needs COOP/COEP. Glue ENVIRONMENT is already `web,worker,node`.
+- **Context-lost toast.** `attachGpuContextLogging()` is logging-only by design. Surfacing loss/restore in `#power-toast` needs its own copy + UX pass.
+- **Probe-and-clamp `requiredLimits`.** Query the adapter and request only what MRT actually needs, instead of the blunt `setMaximumLimits`. Larger async rewrite of the creation path; the compatibility retry is the low-risk stand-in (#370).
+- **Degrade telemetry.** `[Bootstrap][gpu-degrade]` is a console marker, not analytics. Wire it to a real sink once one exists.
+- **Align Babylon package ranges.** `@babylonjs/core` is declared `^7.45.0` while `@babylonjs/loaders` is `^7.54.3`; both resolve to 7.54.3 today. Pin in the #370 "align Babylon packages" PR.
 
 ---
 
