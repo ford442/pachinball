@@ -27,6 +27,7 @@ on:
       - 'scripts/build-wasm.sh'
       - 'scripts/run-wasm-parity.mjs'
       - 'scripts/print-wasm-flags.mjs'
+      - 'package.json'
       - '.github/workflows/native-physics.yml'
   pull_request:
     paths:
@@ -37,6 +38,7 @@ on:
       - 'scripts/build-wasm.sh'
       - 'scripts/run-wasm-parity.mjs'
       - 'scripts/print-wasm-flags.mjs'
+      - 'package.json'
       - '.github/workflows/native-physics.yml'
 
 jobs:
