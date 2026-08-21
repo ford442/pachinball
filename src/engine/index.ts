@@ -5,8 +5,13 @@ export {
   webgpuFeatureLevelsToTry,
   toWebGLEngineOptions,
   toWebGPUEngineOptions,
-  attachGpuContextLostHandlers,
+  attachGpuContextLogging,
+  createWebGPUEngineWithFallback,
+  GPU_DEGRADE_MARKER,
   type EngineCreationPlan,
+  type WebGPUEngineLike,
+  type WebGPUEngineFactory,
+  type WebGPUCreationResult,
 } from './create-engine'
 export {
   applyHardwareScaling,
