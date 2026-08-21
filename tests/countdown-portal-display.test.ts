@@ -159,6 +159,7 @@ vi.mock('../src/display/display-lcd-overlay', () => ({
     setTemporaryText = vi.fn()
     setDrainMode = vi.fn()
     setBlend = vi.fn()
+    setCharacterTakeActive = vi.fn()
     onStateChange = vi.fn()
     dispose = vi.fn()
   },

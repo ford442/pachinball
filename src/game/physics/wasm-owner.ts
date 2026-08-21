@@ -14,8 +14,10 @@ const FLIPPER_MASS = 2.0
 interface PlainQuat { x: number; y: number; z: number; w: number }
 
 /**
- * -90° rotation about Z: maps the native capsule's local +Y segment axis onto
- * the flipper blade's local +X (long) axis.
+ * Native capsules have their segment on local +Y; Rapier flipper cuboids are
+ * long on local +X. This is shape-axis alignment for the *dynamic* hinge body
+ * (and the inverse remap onto the Rapier mesh puppet). It is not the retired
+ * kinematic `syncFlipperProxies` path.
  */
 const CAPSULE_AXIS_TO_BLADE_AXIS: PlainQuat = { x: 0, y: 0, z: -Math.SQRT1_2, w: Math.SQRT1_2 }
 /** Inverse of CAPSULE_AXIS_TO_BLADE_AXIS (+90° about Z) for Rapier puppet sync. */

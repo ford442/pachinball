@@ -418,6 +418,11 @@ Rapier for `ADVENTURE_GROUP` bodies.
 Dynamic capsules now report isotropic inertia (averaged cylinder) so the hinge
 can apply motor torque. Capsule-vs-capsule collision remains skipped.
 
+Native capsules are authored along local +Y; Rapier flipper cuboids are long on
+local +X. `wasm-owner` applies a one-time 90° Z rest rotation (and the inverse
+when copying pose onto the Rapier mesh puppet). That remap is shape-axis
+alignment, not the retired kinematic `syncFlipperProxies` path.
+
 This unblocks #361 Phase 3 (worker + SharedArrayBuffer): flippers no longer
 depend on Rapier impulse joints on the main thread.
 

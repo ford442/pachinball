@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { WasmOwner } from '../src/game/physics/wasm-owner'
 import { PhysicsConfig } from '../src/config'
+import { PhysicsSystem } from '../src/game-elements/physics'
 import type { WasmPhysicsEngine } from '../src/wasm'
 import type { InputFrame } from '../src/game-elements/types'
 
@@ -72,5 +73,24 @@ describe('WasmOwner native hinges', () => {
     const [, targetVel, maxTorque] = engine.setHingeMotor.mock.calls[0]
     expect(targetVel).not.toBe(0)
     expect(maxTorque).toBeGreaterThan(1000)
+  })
+})
+
+describe('PhysicsSystem wasm-owner Rapier skip', () => {
+  it('skips Rapier world.step when ownerSkipRapierStep is set', () => {
+    const physics = new PhysicsSystem()
+    const wasmStep = vi.fn(() => 0.25)
+    Object.assign(physics as unknown as Record<string, unknown>, {
+      wasmEngine: { isReady: true, step: wasmStep, getLastWorkerStepMs: () => 0 },
+      wasmActive: true,
+      wasmMode: 'wasm-owner',
+    })
+    physics.setOwnerSkipRapierStep(true)
+    const callback = vi.fn()
+    const alpha = physics.step(1 / 60, callback)
+    expect(alpha).toBe(0.25)
+    expect(wasmStep).toHaveBeenCalled()
+    expect(physics.getLastRapierStepMs()).toBe(0)
+    expect(callback).not.toHaveBeenCalled()
   })
 })

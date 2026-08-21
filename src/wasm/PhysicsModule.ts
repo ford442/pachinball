@@ -80,6 +80,17 @@ export interface WasmHingeDesc {
 /** Path to the compiled Emscripten ES module (relative to the web root). */
 const WASM_MODULE_URL = './wasm/PhysicsModule.js'
 
+/** Resolve a public-root WASM URL. `import(rel)` is relative to this module (`src/wasm/`), not `/`. */
+function resolveModuleUrl(moduleUrl: string): string {
+  if (/^(https?:|blob:)/i.test(moduleUrl) || moduleUrl.startsWith('/')) return moduleUrl
+  if (typeof window === 'undefined' || !window.location?.href) return moduleUrl
+  try {
+    return new URL(moduleUrl, window.location.href).href
+  } catch {
+    return moduleUrl
+  }
+}
+
 export class WasmPhysicsEngine {
   /** true once the WASM module has loaded and the world is ready. */
   isReady = false
@@ -112,7 +123,7 @@ export class WasmPhysicsEngine {
         if (cached) {
           this.module = cached
         } else {
-          const { default: factory } = await import(/* @vite-ignore */ moduleUrl) as {
+          const { default: factory } = await import(/* @vite-ignore */ resolveModuleUrl(moduleUrl)) as {
             default: () => Promise<WasmPhysicsModule>
           }
           this.module = await factory()

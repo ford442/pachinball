@@ -27,47 +27,80 @@ test.describe('wasm-owner native flipper hinge', () => {
       test.skip(true, 'WASM owner engine not loaded in this environment')
     }
 
-    await page.evaluate(() => document.getElementById('start-btn')?.click())
-    await expect.poll(async () => {
-      return page.evaluate(() => {
-        const g = (window as unknown as { game?: { stateManager?: { isPlaying?: () => boolean } } }).game
-        return g?.stateManager?.isPlaying?.() === true
-      })
-    }, { timeout: 30_000 }).toBe(true)
+    const started = await page.evaluate(async () => {
+      const g = (window as unknown as {
+        game?: { startGame?: () => Promise<void>; stateManager?: { isPlaying?: () => boolean } }
+      }).game
+      try {
+        await g?.startGame?.()
+        return { ok: g?.stateManager?.isPlaying?.() === true, error: null as string | null }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    })
+    expect(started.error, started.error ?? 'startGame failed').toBeNull()
+    expect(started.ok).toBe(true)
 
-    const launched = await page.evaluate(async () => {
+    const placed = await page.evaluate(() => {
       const g = (window as unknown as {
         game?: {
-          ballManager?: { getBallBody?: () => { setTranslation: (v: unknown, w: boolean) => void; setLinvel: (v: unknown, w: boolean) => void; linvel: () => { z: number } } }
-          physics?: { getRapier?: () => { Vector3: new (x: number, y: number, z: number) => unknown }; getLastRapierStepMs?: () => number }
-          inputActions?: { handleFlipperLeft: (p: boolean) => void }
+          ballManager?: { getBallBody?: () => { setTranslation: (v: unknown, w: boolean) => void; setLinvel: (v: unknown, w: boolean) => void } }
+          physics?: { getRapier?: () => { Vector3: new (x: number, y: number, z: number) => unknown } }
           physicsController?: { rebuildHandleCaches?: () => void }
         }
       }).game
       const rapier = g?.physics?.getRapier?.()
       const ball = g?.ballManager?.getBallBody?.()
-      if (!rapier || !ball) return { ok: false, vz: 0, rapierMs: -1 }
-
+      if (!rapier || !ball) return false
       g.physicsController?.rebuildHandleCaches?.()
-      ball.setTranslation(new rapier.Vector3(-2.5, 0.4, -6.2), true)
-      ball.setLinvel(new rapier.Vector3(0, 0, -1.5), true)
+      // Left blade at hinge-angle 0 lies along -X from the pivot (-4, -0.25, -7).
+      ball.setTranslation(new rapier.Vector3(-5.5, 0.45, -7.0), true)
+      ball.setLinvel(new rapier.Vector3(0, 0, 0), true)
       g.physicsController?.rebuildHandleCaches?.()
+      return true
+    })
+    expect(placed).toBe(true)
 
-      const waitFrames = (n: number) => new Promise<void>((resolve) => {
-        let i = 0
-        const tick = () => { if (++i >= n) resolve(); else requestAnimationFrame(tick) }
-        requestAnimationFrame(tick)
-      })
+    // Digit1 is the left flipper. Wasm-owner motors follow InputFrame, not Rapier
+    // configureMotorPosition, so a real key hold is required.
+    await page.keyboard.down('Digit1')
 
-      g.inputActions?.handleFlipperLeft(true)
-      await waitFrames(45)
-      g.inputActions?.handleFlipperLeft(false)
-      await waitFrames(15)
-
-      const vz = ball.linvel().z
+    const launched = await page.evaluate(() => {
+      const g = (window as unknown as {
+        game?: {
+          engine?: { getDeltaTime: () => number }
+          inputManager?: unknown
+          inputActions?: unknown
+          ballManager?: { getBallBody?: () => { linvel: () => { z: number } } }
+          physics?: { getLastRapierStepMs?: () => number }
+          physicsController?: {
+            stepPhysics: (
+              inputManager: unknown,
+              inputActions: unknown,
+              replayRunner: null,
+              replayRecorder: null
+            ) => void
+          }
+        }
+      }).game
+      if (!g?.physicsController || !g.engine) {
+        return { ok: false, vz: 0, rapierMs: -1 }
+      }
+      const origDt = g.engine.getDeltaTime.bind(g.engine)
+      g.engine.getDeltaTime = () => 1000 / 60
+      try {
+        for (let i = 0; i < 45; i++) {
+          g.physicsController.stepPhysics(g.inputManager, g.inputActions, null, null)
+        }
+      } finally {
+        g.engine.getDeltaTime = origDt
+      }
+      const vz = g.ballManager?.getBallBody?.()?.linvel().z ?? 0
       const rapierMs = g.physics?.getLastRapierStepMs?.() ?? -1
       return { ok: true, vz, rapierMs }
     })
+
+    await page.keyboard.up('Digit1')
 
     expect(launched.ok).toBe(true)
     expect(launched.rapierMs).toBe(0)

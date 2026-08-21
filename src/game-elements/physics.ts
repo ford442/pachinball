@@ -168,7 +168,9 @@ export class PhysicsSystem {
         }
       }
 
-      if (this.wasmMode !== 'rapier' && this.wasmMode !== 'wasm-worker') {
+      // Outer branch already excluded `'rapier'`. After a worker load failure we
+      // fall through as `'wasm-owner'` and create an in-process engine.
+      if (this.wasmMode !== 'wasm-worker') {
         const engine = new WasmPhysicsEngine()
         const preloaded = await getPreloadedWasmModule()
         await engine.load(WASM_PHYSICS.bundleUrl, preloaded ?? undefined)
