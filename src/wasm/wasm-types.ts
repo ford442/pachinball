@@ -89,6 +89,16 @@ export interface WasmPhysicsWorldInstance {
   /** Directly set the rotation of a body. */
   setBodyRotation(id: number, qx: number, qy: number, qz: number, qw: number): void
 
+  createHinge(
+    bodyId: number,
+    ax: number, ay: number, az: number,
+    nx: number, ny: number, nz: number,
+    minAngle: number, maxAngle: number
+  ): number
+  setHingeMotor(id: number, targetVel: number, maxTorque: number): void
+  getHingeAngle(id: number): number
+  removeHinge(id: number): void
+
   /** Add an infinite static plane defined by a normal + d offset. */
   addStaticPlane(nx: number, ny: number, nz: number, distance: number, friction: number): void
 

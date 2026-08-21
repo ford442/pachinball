@@ -75,6 +75,15 @@ EMSCRIPTEN_BINDINGS(rigid_body_desc) {
     .field("capsuleHalfHeight", &RigidBodyDesc::capsuleHalfHeight)
     .field("friction",          &RigidBodyDesc::friction)
     .field("angularDamping",    &RigidBodyDesc::angularDamping);
+
+  value_object<HingeDesc>("HingeDesc")
+    .field("worldAnchor",    &HingeDesc::worldAnchor)
+    .field("worldAxis",      &HingeDesc::worldAxis)
+    .field("minAngle",       &HingeDesc::minAngle)
+    .field("maxAngle",       &HingeDesc::maxAngle)
+    .field("motorTargetVel", &HingeDesc::motorTargetVel)
+    .field("motorMaxTorque", &HingeDesc::motorMaxTorque)
+    .field("baumgarte",      &HingeDesc::baumgarte);
 }
 
 // ---------------------------------------------------------------------------
@@ -115,6 +124,22 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("setAngularVelocity", &PhysicsWorld::setAngularVelocity)
     .function("setBodyPosition", &PhysicsWorld::setBodyPosition)
     .function("setBodyRotation", &PhysicsWorld::setBodyRotation)
+
+    .function("createHinge", optional_override([](PhysicsWorld& self,
+        int bodyId,
+        float ax, float ay, float az,
+        float nx, float ny, float nz,
+        float minAngle, float maxAngle) -> int {
+          HingeDesc desc;
+          desc.worldAnchor = {ax, ay, az};
+          desc.worldAxis = {nx, ny, nz};
+          desc.minAngle = minAngle;
+          desc.maxAngle = maxAngle;
+          return self.createHinge(bodyId, desc);
+        }))
+    .function("setHingeMotor", &PhysicsWorld::setHingeMotor)
+    .function("getHingeAngle", &PhysicsWorld::getHingeAngle)
+    .function("removeHinge", &PhysicsWorld::removeHinge)
 
     // Static geometry
     .function("addStaticPlane", &PhysicsWorld::addStaticPlane)

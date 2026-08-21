@@ -8,7 +8,7 @@
  * import { WasmPhysicsEngine } from './wasm'
  */
 
-export { WasmPhysicsEngine, type WasmBodyDesc } from './PhysicsModule'
+export { WasmPhysicsEngine, type WasmBodyDesc, type WasmHingeDesc } from './PhysicsModule'
 export {
   ContactPhase,
   CONTACT_STRIDE,

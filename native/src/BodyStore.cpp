@@ -215,11 +215,21 @@ void BodyView::wake() {
 // ---- BodyStore ----------------------------------------------------------
 
 float BodyStore::computeInvInertia(const RigidBodyDesc& desc) {
-  if (desc.type != BodyType::Dynamic || desc.shape != Shape::Sphere) return 0.f;
-  if (desc.mass <= 0.f) return 0.f;
-  const float r2 = desc.radius * desc.radius;
-  if (r2 < 1e-12f) return 0.f;
-  return 2.5f / (desc.mass * r2);
+  if (desc.type != BodyType::Dynamic || desc.mass <= 0.f) return 0.f;
+  if (desc.shape == Shape::Sphere) {
+    const float r2 = desc.radius * desc.radius;
+    if (r2 < 1e-12f) return 0.f;
+    return 2.5f / (desc.mass * r2);
+  }
+  if (desc.shape == Shape::Capsule) {
+    const float r = desc.radius;
+    const float h = 2.f * desc.capsuleHalfHeight;
+    const float Iax = 0.5f * desc.mass * r * r;
+    const float Ipp = (1.f / 12.f) * desc.mass * (3.f * r * r + h * h);
+    const float I = (Iax + 2.f * Ipp) / 3.f;
+    return I > 1e-12f ? 1.f / I : 0.f;
+  }
+  return 0.f;
 }
 
 void BodyStore::appendSlot(int publicId, const RigidBodyDesc& desc) {

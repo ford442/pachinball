@@ -262,6 +262,8 @@ export class GamePhysicsController {
 
     const wasmActive = this.host.physics.isWasmActive?.() ?? false
     const isOwner = this.host.physics.isWasmOwnerMode?.() ?? false
+    const adventureActive = this.host.adventureMode?.isActive() ?? false
+    this.host.physics.setOwnerSkipRapierStep?.(isOwner && !adventureActive)
 
     if (wasmActive && !isOwner) {
       const syncT0 = performance.now()
@@ -269,9 +271,7 @@ export class GamePhysicsController {
       this.host.physics.setMirrorOverheadMs?.(performance.now() - syncT0)
     }
     if (wasmActive && isOwner) {
-      this.wasmOwner?.syncFlipperProxies(
-        [...(this.host.gameObjects?.getAllFlippers?.().values() ?? [])].map((f) => f.body)
-      )
+      this.wasmOwner?.driveFlippers(inputFrame, Math.min(rawDt, 1 / 30))
       this.host.physics.setMirrorOverheadMs?.(0)
     }
 
@@ -449,6 +449,10 @@ export class GamePhysicsController {
     return new Vector3(t.x, t.y, t.z)
   }
 
+  applyOwnedBallImpulse(body: RAPIER.RigidBody, ix: number, iy: number, iz: number): void {
+    this.wasmOwner?.applyBallImpulse(body, ix, iy, iz)
+  }
+
   applyNudge(direction: { x: number; y: number; z: number }): void {
     if (this.host.nudgeState.tiltActive) {
       this.host.hapticManager?.tiltWarning()
@@ -474,6 +478,7 @@ export class GamePhysicsController {
       direction.z * getPhysicsTuningValue('nudgeForce')
     )
     ballBody.applyImpulse(impulse, true)
+    this.wasmOwner?.applyBallImpulse(ballBody, impulse.x, impulse.y, impulse.z)
 
     const nudgeDirection = direction.x > 0 ? 'right' : direction.x < 0 ? 'left' : 'up'
     this.host.hapticManager?.nudge(nudgeDirection)

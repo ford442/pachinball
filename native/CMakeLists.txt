@@ -12,6 +12,7 @@ set(PHYSICS_CORE_SOURCES
   src/RigidBody.cpp
   src/BodyStore.cpp
   src/BroadphaseGrid.cpp
+  src/HingeJoint.cpp
   src/PhysicsWorld.cpp
 )
 

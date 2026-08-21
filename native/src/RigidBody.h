@@ -59,15 +59,27 @@ public:
   float getAngularDamping()  const { return desc_.angularDamping; }
 
   /**
-   * Inverse scalar inertia. Dynamic spheres use I = 2/5 m r².
-   * Static, kinematic, and capsule bodies report 0 (no angular response).
+   * Inverse scalar (isotropic) inertia.
+   * Dynamic spheres: I = 2/5 m r².
+   * Dynamic capsules: averaged cylinder inertia so hinges can motor the blade.
+   * Static / kinematic bodies report 0.
    */
   float getInvInertia() const {
-    if (desc_.type != BodyType::Dynamic || desc_.shape != Shape::Sphere) return 0.f;
-    if (desc_.mass <= 0.f) return 0.f;
-    const float r2 = desc_.radius * desc_.radius;
-    if (r2 < 1e-12f) return 0.f;
-    return 2.5f / (desc_.mass * r2);
+    if (desc_.type != BodyType::Dynamic || desc_.mass <= 0.f) return 0.f;
+    if (desc_.shape == Shape::Sphere) {
+      const float r2 = desc_.radius * desc_.radius;
+      if (r2 < 1e-12f) return 0.f;
+      return 2.5f / (desc_.mass * r2);
+    }
+    if (desc_.shape == Shape::Capsule) {
+      const float r = desc_.radius;
+      const float h = 2.f * desc_.capsuleHalfHeight;
+      const float Iax = 0.5f * desc_.mass * r * r;
+      const float Ipp = (1.f / 12.f) * desc_.mass * (3.f * r * r + h * h);
+      const float I = (Iax + 2.f * Ipp) / 3.f;
+      return I > 1e-12f ? 1.f / I : 0.f;
+    }
+    return 0.f;
   }
 
   // ---- Position / velocity --------------------------------------------

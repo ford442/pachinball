@@ -6,6 +6,7 @@
 #include "BodyStore.h"
 #include "HandleTable.h"
 #include "BroadphaseGrid.h"
+#include "HingeJoint.h"
 
 #include <vector>
 #include <cstdint>
@@ -99,6 +100,11 @@ public:
 
   float step(float rawDt);
 
+  int   createHinge(int bodyId, const HingeDesc& desc);
+  void  setHingeMotor(int id, float targetVel, float maxTorque);
+  float getHingeAngle(int id) const;
+  void  removeHinge(int id);
+
   uint64_t getStepCount() const { return stepCount_; }
   int getActiveBodyCount() const;
 
@@ -135,6 +141,7 @@ private:
   BodyView findViewMut(int id);
 
   void substep(float dt);
+  void solveHinges(float dt);
   void scatterTransforms();
 
   void ensureTransformCapacity(int slotCount);
@@ -164,6 +171,8 @@ private:
   std::vector<PlaneDesc>         planes_;
   std::vector<BoxDesc>           boxes_;
   std::vector<CapsuleDesc>       capsules_;
+  std::vector<HingeJoint>        hinges_;
+  int                            nextHingeId_ = 0;
   ContactListener                contactListener_;
 
   float*                         transformBuffer_ = nullptr;

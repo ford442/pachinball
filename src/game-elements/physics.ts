@@ -94,6 +94,8 @@ export class PhysicsSystem {
   private lastWasmStepMs = 0
   private lastRapierStepMs = 0
   private lastMirrorOverheadMs = 0
+  /** When true, wasm-owner skips Rapier world.step (table joints live in C++). Adventure still needs Rapier. */
+  private ownerSkipRapierStep = false
 
   /** Accumulator for fixed timestep */
   private accumulator = 0
@@ -202,6 +204,14 @@ export class PhysicsSystem {
     this.lastMirrorOverheadMs = ms
   }
 
+  /**
+   * Skip Rapier integration in wasm-owner when no Rapier-owned gameplay bodies remain.
+   * Adventure mode must leave this false so ADVENTURE_GROUP bodies still step.
+   */
+  setOwnerSkipRapierStep(skip: boolean): void {
+    this.ownerSkipRapierStep = skip
+  }
+
   /** Access the WASM engine (for sync/registration by the controller). */
   getWasmEngine(): WasmPhysicsEngine | null {
     return this.wasmEngine
@@ -267,12 +277,16 @@ export class PhysicsSystem {
       const wasmT0 = performance.now()
       const alpha = this.wasmEngine.step(rawDt)
       this.lastWasmStepMs = performance.now() - wasmT0
+      this.lastMirrorOverheadMs = 0
 
-      // Rapier partial step — flippers/plunger joints still integrate.
+      if (this.ownerSkipRapierStep) {
+        this.lastRapierStepMs = 0
+        return alpha
+      }
+
       const rapierT0 = performance.now()
       const rapierAlpha = this.stepRapier(rawDt, callback, forceCallback)
       this.lastRapierStepMs = performance.now() - rapierT0
-      this.lastMirrorOverheadMs = 0
       return alpha > 0 ? alpha : rapierAlpha
     }
 

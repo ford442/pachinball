@@ -642,3 +642,132 @@ TEST_CASE("large scene step completes under time budget", "[physics][benchmark]"
   const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
   CHECK(ms < 5000);
 }
+
+TEST_CASE("hinge holds angle under gravity", "[physics][hinge]") {
+  WorldParams params;
+  params.solverIterations = 12;
+  params.gravity = {0.f, -9.81f, 0.f};
+  PhysicsWorld world(params);
+
+  RigidBodyDesc desc;
+  desc.position = {1.f, 0.f, 0.f};
+  desc.mass = 1.f;
+  desc.radius = 0.15f;
+  desc.linearDamping = 0.f;
+  desc.angularDamping = 0.f;
+  desc.type = BodyType::Dynamic;
+  const int body = world.createRigidBody(desc);
+
+  HingeDesc hinge;
+  hinge.worldAnchor = {0.f, 0.f, 0.f};
+  hinge.worldAxis = {0.f, 0.f, 1.f};
+  hinge.minAngle = 0.f;
+  hinge.maxAngle = 0.f;
+  hinge.baumgarte = 0.8f;
+  const int hid = world.createHinge(body, hinge);
+  REQUIRE(hid >= 0);
+
+  stepFixed(world, 60);
+
+  const Vec3 pos = readPos(world, body);
+  CHECK(near(world.getHingeAngle(hid), 0.f, 0.15f));
+  CHECK(near(pos.x, 1.f, 0.2f));
+  CHECK(near(pos.y, 0.f, 0.2f));
+  CHECK(isFinite(pos));
+}
+
+TEST_CASE("hinge motor reaches target omega", "[physics][hinge]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, 0.f, 0.f);
+
+  RigidBodyDesc desc;
+  desc.position = {0.f, 0.f, 0.f};
+  desc.mass = 1.f;
+  desc.radius = 0.2f;
+  desc.linearDamping = 0.f;
+  desc.angularDamping = 0.f;
+  desc.type = BodyType::Dynamic;
+  const int body = world.createRigidBody(desc);
+
+  HingeDesc hinge;
+  hinge.worldAnchor = {0.f, 0.f, 0.f};
+  hinge.worldAxis = {0.f, 1.f, 0.f};
+  hinge.minAngle = -3.f;
+  hinge.maxAngle =  3.f;
+  const int hid = world.createHinge(body, hinge);
+  REQUIRE(hid >= 0);
+
+  constexpr float targetW = 2.0f;
+  world.setHingeMotor(hid, targetW, 50.f);
+  stepFixed(world, 30);
+
+  const Vec3 w = readAngVel(world, body);
+  CHECK(near(w.y, targetW, 0.15f));
+  CHECK(isFinite(w));
+}
+
+TEST_CASE("hinge angle limits do not explode", "[physics][hinge]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, 0.f, 0.f);
+
+  RigidBodyDesc desc;
+  desc.position = {0.8f, 0.f, 0.f};
+  desc.mass = 1.f;
+  desc.radius = 0.15f;
+  desc.linearDamping = 0.f;
+  desc.angularDamping = 0.f;
+  desc.type = BodyType::Dynamic;
+  const int body = world.createRigidBody(desc);
+
+  HingeDesc hinge;
+  hinge.worldAnchor = {0.f, 0.f, 0.f};
+  hinge.worldAxis = {0.f, 0.f, 1.f};
+  hinge.minAngle = -0.2f;
+  hinge.maxAngle =  0.2f;
+  const int hid = world.createHinge(body, hinge);
+  world.setHingeMotor(hid, 8.f, 80.f);
+
+  stepFixed(world, 120);
+
+  const float angle = world.getHingeAngle(hid);
+  const Vec3 pos = readPos(world, body);
+  const Vec3 w = readAngVel(world, body);
+  CHECK(angle >= -0.35f);
+  CHECK(angle <=  0.35f);
+  CHECK(isFinite(angle));
+  CHECK(isFinite(pos));
+  CHECK(isFinite(w));
+}
+
+TEST_CASE("hinge motor wakes sleeping body", "[physics][hinge]") {
+  WorldParams params;
+  params.sleepLinearThreshold = 0.05f;
+  params.sleepAngularThreshold = 0.1f;
+  params.sleepFramesRequired = 10;
+  params.solverIterations = 4;
+  params.gravity = {0.f, 0.f, 0.f};
+  PhysicsWorld world(params);
+
+  RigidBodyDesc desc;
+  desc.position = {0.f, 0.f, 0.f};
+  desc.mass = 1.f;
+  desc.radius = 0.2f;
+  desc.linearDamping = 0.5f;
+  desc.angularDamping = 0.5f;
+  desc.type = BodyType::Dynamic;
+  const int body = world.createRigidBody(desc);
+
+  HingeDesc hinge;
+  hinge.worldAnchor = {0.f, 0.f, 0.f};
+  hinge.worldAxis = {0.f, 1.f, 0.f};
+  const int hid = world.createHinge(body, hinge);
+
+  stepFixed(world, 40);
+  CHECK(world.getActiveBodyCount() == 0);
+
+  world.setHingeMotor(hid, 3.f, 40.f);
+  stepFixed(world, 5);
+  CHECK(world.getActiveBodyCount() >= 1);
+  const Vec3 w = readAngVel(world, body);
+  CHECK(std::fabs(w.y) > 0.5f);
+}

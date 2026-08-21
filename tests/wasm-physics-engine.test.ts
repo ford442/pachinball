@@ -39,6 +39,10 @@ function makeWorldStub() {
     applyImpulse:         vi.fn(),
     setVelocity:          vi.fn(),
     setAngularVelocity:   vi.fn(),
+    createHinge:          vi.fn().mockReturnValue(7),
+    setHingeMotor:        vi.fn(),
+    getHingeAngle:        vi.fn().mockReturnValue(0.1),
+    removeHinge:          vi.fn(),
     addStaticPlane:       vi.fn(),
     addStaticBox:         vi.fn().mockReturnValue(-1001),
     addStaticCapsule:     vi.fn().mockReturnValue(-2001),
@@ -289,6 +293,24 @@ describe('WasmPhysicsEngine', () => {
 
   it('getActiveBodyCount() returns 0 when not ready', () => {
     expect(engine.getActiveBodyCount()).toBe(0)
+  })
+
+  it('createHinge() delegates to world.createHinge', async () => {
+    await injectWorld(engine, worldStub)
+    const id = engine.createHinge({
+      bodyId: 42,
+      worldAnchor: { x: 1, y: 2, z: 3 },
+      worldAxis: { x: 0, y: 1, z: 0 },
+      minAngle: -0.5,
+      maxAngle: 0.8,
+    })
+    expect(id).toBe(7)
+    expect(worldStub.createHinge).toHaveBeenCalledWith(42, 1, 2, 3, 0, 1, 0, -0.5, 0.8)
+    engine.setHingeMotor(7, 2, 40)
+    expect(worldStub.setHingeMotor).toHaveBeenCalledWith(7, 2, 40)
+    expect(engine.getHingeAngle(7)).toBe(0.1)
+    engine.removeHinge(7)
+    expect(worldStub.removeHinge).toHaveBeenCalledWith(7)
   })
 })
 
