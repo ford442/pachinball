@@ -92,7 +92,10 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies, std::vector<Pair>& outP
 
     const float px = bodies.posX(i);
     const float pz = bodies.posZ(i);
-    const float r = bodies.radius(i);
+    float r = bodies.radius(i);
+    if (static_cast<Shape>(bodies.shape(i)) == Shape::Capsule) {
+      r += bodies.capsuleHalfHeight(i);
+    }
     cells.clear();
     cellsForAabb(px - r, px + r, pz - r, pz + r, cells);
     for (const auto& c : cells) {

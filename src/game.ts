@@ -807,6 +807,9 @@ export class Game {
   updatePlungerCharge(chargeLevel: number): void { this.inputActions.updatePlungerCharge(chargeLevel) }
   releasePlungerCharge(chargeLevel: number): void { this.inputActions.releasePlungerCharge(chargeLevel) }
   applyNudge(direction: { x: number; y: number; z: number }): void { this.physicsController.applyNudge(direction) }
+  applyOwnedBallImpulse(body: RAPIER.RigidBody, ix: number, iy: number, iz: number): void {
+    this.physicsController.applyOwnedBallImpulse(body, ix, iy, iz)
+  }
 
   // --------------------------------------------------------------------------
   // Adventure / Mode delegates

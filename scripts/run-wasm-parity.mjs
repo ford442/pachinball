@@ -240,4 +240,18 @@ function readContacts(mod, world) {
   if (!ok) failed = true
 }
 
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, 0, 0)
+  const id = world.createRigidBody(0, 0, 0, 0, 0, 0, 1, 0.2, 0.4, 0, 0, 0, 0.5, 0.2, 0)
+  const hid = world.createHinge(id, 0, 0, 0, 0, 1, 0, -3, 3)
+  world.setHingeMotor(hid, 2, 50)
+  for (let i = 0; i < 30; i++) world.step(1 / 60)
+  const wy = world.getAngVelY(id)
+  const ok = Math.abs(wy - 2) < 0.2 && Number.isFinite(world.getHingeAngle(hid))
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm hinge motor omega (wy=${wy.toFixed(3)})`)
+  if (!ok) failed = true
+  world.delete()
+}
+
 process.exit(failed ? 1 : 0)

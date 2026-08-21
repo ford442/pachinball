@@ -300,9 +300,9 @@ Set via `localStorage['pachinball:physics-engine']`:
 |------|-------|-----------|
 | **Rapier** (default) | `rapier` or unset | Full Rapier simulation — production path |
 | **WASM mirror** | `wasm-mirror` or legacy `wasm` | WASM steps ball+bumper subset; poses sync Rapier↔WASM each frame |
-| **WASM owner** | `wasm-owner` | WASM owns balls + static table geometry (boxes/capsules/planes) + kinematic flipper proxies; Rapier keeps flipper joints/motors |
+| **WASM owner** | `wasm-owner` | WASM owns balls + static table geometry + **native hinge flippers**; Rapier is not stepped on the table path (`lastRapierStepMs === 0`). Adventure-mode bodies still use Rapier. |
 
-Mirror mode remains the default WASM path until owner mode is stable. Owner mode disables Rapier colliders for exported static bodies and ball puppets while WASM simulates them. Flipper bodies are **not** disabled — Rapier's joint/motor keeps driving each flipper's blade every frame, and `WasmOwner.syncFlipperProxies()` mirrors the resulting live pose + point-velocity into a kinematic capsule proxy in WASM before each step (Phase 2c-A), so the WASM-owned ball collides with flippers and picks up momentum on a flick.
+Mirror mode remains a WASM parity path. Owner mode disables Rapier colliders for exported statics, bumpers, balls, **and flippers**. Each flipper is a dynamic WASM capsule with a world-anchored hinge (`PhysicsWorld::createHinge` / `setHingeMotor`). Pose is copied back onto the Rapier puppet for mesh interpolation only.
 
 ```javascript
 // Dev console — mirror (default WASM path)
@@ -370,6 +370,10 @@ Test scenarios:
 | `kinematic capsule flick imparts spin` | Flipper-proxy motion with a tangential component spins the ball |
 | `ball on flat plane comes to rest` | Rolling resistance + friction settle a sliding ball |
 | `orientation integrates from angular velocity` | Quaternion `q` advances from ω and stays unit length |
+| `hinge holds angle under gravity` | World-anchored hinge + locked limits keep a hanging body |
+| `hinge motor reaches target omega` | Velocity motor hits target ω within ε |
+| `hinge angle limits do not explode` | Hard limits stay finite under an aggressive motor |
+| `hinge motor wakes sleeping body` | `setHingeMotor` wakes a sleeper |
 
 Parity suite (native Catch2 + compiled WASM bundle):
 
@@ -381,44 +385,49 @@ node scripts/run-wasm-parity.mjs
 
 ---
 
-## Kinematic capsule bodies (Phase 2c)
+## Joints
 
-`RigidBodyDesc` gained a `shape` field (`Sphere` — the default — or `Capsule`)
-and a `capsuleHalfHeight` field, so a `RigidBody` (not just static geometry)
-can present a capsule collider. Combined with `BodyType.Kinematic`, this is
-how the WASM engine represents a moving flipper: `RigidBody::integrate()` is
-a no-op for non-Dynamic bodies, so a kinematic capsule's position/rotation
-are fully caller-controlled via `setBodyPosition`/`setBodyRotation`, while its
-caller-set `velocity` still participates in the impulse response against a
-dynamic sphere (`getInvMass()` is 0, so the capsule itself is never moved by
-collision — but the sphere it hits picks up the capsule's momentum, same as
-the existing kinematic-sphere-vs-sphere path).
+World-anchored 1-DOF revolute hinges live in `native/src/HingeJoint.cpp` and are
+solved **after contacts** in each `PhysicsWorld` solver iteration so the motor
+and the contact manifold do not fight.
 
 ```typescript
-const proxyId = engine.createBody({
-  shape: 'capsule',
-  radius: 0.3,
-  capsuleHalfHeight: 1.55,   // segment runs along local +Y
-  bodyType: 2,               // Kinematic
-  mass: 0,
-  restitution: 0.9,
+const hingeId = engine.createHinge({
+  bodyId: flipperId,
+  worldAnchor: { x: -4, y: -0.25, z: -7 },
+  worldAxis: { x: 0, y: 1, z: 0 },   // table flippers match Rapier's Y revolute
+  minAngle: PhysicsConfig.flipper.leftLimits[0],
+  maxAngle: PhysicsConfig.flipper.leftLimits[1],
 })
 
-// Each tick, before engine.step():
-engine.setBodyPosition(proxyId, px, py, pz)
-engine.setBodyRotation(proxyId, qx, qy, qz, qw)
-engine.setVelocity(proxyId, vx, vy, vz)
+engine.setHingeMotor(hingeId, targetVel, maxTorque)
+const angle = engine.getHingeAngle(hingeId)
 ```
 
-`WasmOwner.syncFlipperProxies()` (`src/game/physics/wasm-owner.ts`) is the
-concrete consumer: each flipper's blade collider's live world transform
-(`collider.translation()`/`.rotation()`) is read directly from Rapier — no
-manual pivot/offset reconstruction needed, since Rapier already resolves the
-joint each frame — composed with a fixed axis-remap quaternion (the capsule's
-native +Y segment axis onto the blade's local +X long axis), and the contact
-point's linear velocity is computed as `linvel + angvel × r`. Capsule-vs-capsule
-collision (e.g. two flippers hitting each other) is an explicit non-goal and
-is skipped in the solver.
+`WasmOwner` creates one hinge per flipper at `rebuildHandleCaches()`, drives
+`setHingeMotor` from the same `InputFrame` / `PhysicsConfig.flipper` rest and
+active angles + stiffness/damping as Rapier `configureMotorPosition`, and
+**does not** call `world.step()` on Rapier while a table ball is in play
+(Debug HUD `rapier ms` / `lastRapierStepMs === 0`). Adventure mode still steps
+Rapier for `ADVENTURE_GROUP` bodies.
+
+Dynamic capsules now report isotropic inertia (averaged cylinder) so the hinge
+can apply motor torque. Capsule-vs-capsule collision remains skipped.
+
+This unblocks #361 Phase 3 (worker + SharedArrayBuffer): flippers no longer
+depend on Rapier impulse joints on the main thread.
+
+Kinematic capsules remain available for tests and non-flipper movers; they are
+no longer the wasm-owner flipper path.
+
+---
+
+## Kinematic capsule bodies (legacy / tests)
+
+`RigidBodyDesc` includes `shape` (`Sphere` or `Capsule`) and `capsuleHalfHeight`.
+Combined with `BodyType.Kinematic`, a caller-driven capsule still imparts
+momentum to dynamic spheres (`getInvMass()` is 0). That path is used by Catch2
+flicking tests; production flippers use hinges (above).
 
 ---
 
@@ -430,7 +439,7 @@ is skipped in the solver.
 | **1 – Core API** | PhysicsWorld + RigidBody + Embind bindings | ✅ Done |
 | **2a – Geometry** | Static box + capsule colliders; parity tests | ✅ Done |
 | **2b – Ownership** | `wasm-mirror` / `wasm-owner` modes; static table export | ✅ Done |
-| **2c – Flipper motors** | Kinematic hybrid — capsule proxies mirror Rapier-driven flippers | ✅ Done (2c-A; native hinge/motor parity remains 2c-B, deferred) |
+| **2c – Flipper motors** | Native world-anchored hinge + velocity motor; kinematic proxy deleted | ✅ Done |
 | **2d – Perf HUD** | Rapier vs WASM vs mirror timing in Debug HUD | ✅ Done |
 | **3 – Benchmark** | RapierVsCppBenchmark scene; frame-time comparison | 🔜 Next |
 | **4 – Decision Point** | Replace vs hybrid; determinism comparison | 🔜 After Phase 3 |

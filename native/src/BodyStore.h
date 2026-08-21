@@ -91,6 +91,7 @@ public:
   float velY(int i) const { return velY_[static_cast<std::size_t>(i)]; }
   float velZ(int i) const { return velZ_[static_cast<std::size_t>(i)]; }
   float radius(int i) const { return radius_[static_cast<std::size_t>(i)]; }
+  float capsuleHalfHeight(int i) const { return capsuleHalfHeight_[static_cast<std::size_t>(i)]; }
   uint8_t type(int i) const { return type_[static_cast<std::size_t>(i)]; }
   uint8_t shape(int i) const { return shape_[static_cast<std::size_t>(i)]; }
   bool isActive(int i) const { return active_[static_cast<std::size_t>(i)] != 0; }

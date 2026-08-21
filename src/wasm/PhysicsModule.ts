@@ -64,6 +64,15 @@ export interface WasmBodyDesc {
   capsuleHalfHeight?: number
 }
 
+/** World-anchored revolute hinge (flipper vs static table). */
+export interface WasmHingeDesc {
+  bodyId: number
+  worldAnchor: { x: number; y: number; z: number }
+  worldAxis?: { x: number; y: number; z: number }
+  minAngle?: number
+  maxAngle?: number
+}
+
 // ---------------------------------------------------------------------------
 // Engine class
 // ---------------------------------------------------------------------------
@@ -249,6 +258,33 @@ export class WasmPhysicsEngine {
   /** Directly set the rotation of a body (used for Rapier↔WASM sync). */
   setBodyRotation(id: number, qx: number, qy: number, qz: number, qw: number): void {
     this.world?.setBodyRotation(id, qx, qy, qz, qw)
+  }
+
+  // ---- Hinges --------------------------------------------------------------
+
+  createHinge(desc: WasmHingeDesc): number {
+    if (!this.world?.createHinge) return -1
+    const a = desc.worldAnchor
+    const n = desc.worldAxis ?? { x: 0, y: 1, z: 0 }
+    return this.world.createHinge(
+      desc.bodyId,
+      a.x, a.y, a.z,
+      n.x, n.y, n.z,
+      desc.minAngle ?? -Math.PI,
+      desc.maxAngle ?? Math.PI
+    )
+  }
+
+  setHingeMotor(id: number, targetVel: number, maxTorque: number): void {
+    this.world?.setHingeMotor?.(id, targetVel, maxTorque)
+  }
+
+  getHingeAngle(id: number): number {
+    return this.world?.getHingeAngle?.(id) ?? 0
+  }
+
+  removeHinge(id: number): void {
+    this.world?.removeHinge?.(id)
   }
 
   // ---- Transform queries -----------------------------------------------

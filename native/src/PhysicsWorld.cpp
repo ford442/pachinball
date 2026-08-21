@@ -1,4 +1,5 @@
 #include "PhysicsWorld.h"
+#include "HingeJoint.h"
 #include <cmath>
 #include <algorithm>
 #include <cstdlib>
@@ -68,7 +69,74 @@ int PhysicsWorld::createRigidBody(const RigidBodyDesc& desc) {
 }
 
 void PhysicsWorld::removeRigidBody(int id) {
+  for (HingeJoint& h : hinges_) {
+    if (h.active && h.bodyId == id) h.active = false;
+  }
   bodies_.remove(handles_, id);
+}
+
+int PhysicsWorld::createHinge(int bodyId, const HingeDesc& desc) {
+  BodyView body = findViewMut(bodyId);
+  if (!body.valid()) return -1;
+
+  HingeJoint h;
+  h.id = nextHingeId_++;
+  h.bodyId = bodyId;
+  h.active = true;
+  h.worldAnchor = desc.worldAnchor;
+  const float axisLen = desc.worldAxis.length();
+  h.worldAxis = axisLen > 1e-8f ? desc.worldAxis / axisLen : Vec3::up();
+  h.restRotation = body.getRotation();
+  h.localAnchor = h.restRotation.conjugate().rotate(desc.worldAnchor - body.getPosition());
+  h.minAngle = desc.minAngle;
+  h.maxAngle = desc.maxAngle;
+  h.motorTargetVel = desc.motorTargetVel;
+  h.motorMaxTorque = desc.motorMaxTorque;
+  h.baumgarte = desc.baumgarte > 0.f ? desc.baumgarte : 0.2f;
+  hinges_.push_back(h);
+  return h.id;
+}
+
+void PhysicsWorld::setHingeMotor(int id, float targetVel, float maxTorque) {
+  for (HingeJoint& h : hinges_) {
+    if (!h.active || h.id != id) continue;
+    h.motorTargetVel = targetVel;
+    h.motorMaxTorque = maxTorque < 0.f ? 0.f : maxTorque;
+    BodyView body = findViewMut(h.bodyId);
+    if (body.valid()) body.wake();
+    return;
+  }
+}
+
+float PhysicsWorld::getHingeAngle(int id) const {
+  for (const HingeJoint& h : hinges_) {
+    if (!h.active || h.id != id) continue;
+    BodyView body = findView(h.bodyId);
+    if (!body.valid()) return 0.f;
+    return computeHingeAngle(h, body.getRotation());
+  }
+  return 0.f;
+}
+
+void PhysicsWorld::removeHinge(int id) {
+  for (HingeJoint& h : hinges_) {
+    if (h.active && h.id == id) {
+      h.active = false;
+      return;
+    }
+  }
+}
+
+void PhysicsWorld::solveHinges(float dt) {
+  for (HingeJoint& h : hinges_) {
+    if (!h.active) continue;
+    BodyView body = findViewMut(h.bodyId);
+    if (!body.valid()) {
+      h.active = false;
+      continue;
+    }
+    solveWorldHinge(h, body, dt);
+  }
 }
 
 BodyView PhysicsWorld::findViewMut(int id) {
@@ -257,6 +325,8 @@ void PhysicsWorld::substep(float dt) {
         resolveSphereVsPlane(body, plane);
       }
     }
+
+    solveHinges(dt);
   }
 }
 

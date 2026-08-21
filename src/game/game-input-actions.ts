@@ -25,6 +25,9 @@ export interface InputActionsHost {
 
   plungerChargeLevel: number
   tiltActive: boolean
+
+  /** Route a ball impulse into WASM when wasm-owner is simulating the ball. */
+  applyOwnedBallImpulse?(body: RAPIER.RigidBody, ix: number, iy: number, iz: number): void
 }
 
 export class GameInputActions {
@@ -84,7 +87,12 @@ export class GameInputActions {
     }
 
     const joint = gameObjects?.getFlipperJoints().left
-    if (joint) {
+    if (this.host.physics.isWasmOwnerMode()) {
+      if (pressed) {
+        hapticManager?.flipper()
+        soundSystem.playSample('flipper')
+      }
+    } else if (joint) {
       const holdFactor = Math.min(this.flipperLeftHoldTime / 0.3, 1.0)
       const stiffnessMultiplier = pressed ? (1.0 + holdFactor * 0.3) : 0.8
       const dampingMultiplier = pressed ? (0.9 + holdFactor * 0.1) : 1.1
@@ -124,7 +132,12 @@ export class GameInputActions {
     }
 
     const joint = gameObjects?.getFlipperJoints().right
-    if (joint) {
+    if (this.host.physics.isWasmOwnerMode()) {
+      if (pressed) {
+        hapticManager?.flipper()
+        soundSystem.playSample('flipper')
+      }
+    } else if (joint) {
       const holdFactor = Math.min(this.flipperRightHoldTime / 0.3, 1.0)
       const stiffnessMultiplier = pressed ? (1.0 + holdFactor * 0.3) : 0.8
       const dampingMultiplier = pressed ? (0.9 + holdFactor * 0.1) : 1.1
@@ -169,6 +182,7 @@ export class GameInputActions {
 
       // Direct impulse for reliable launch (primary mechanism)
       ballBody.applyImpulse(new rapier.Vector3(0, 0, impulseMagnitude), true)
+      this.host.applyOwnedBallImpulse?.(ballBody, 0, 0, impulseMagnitude)
 
       const hapticIntensity = 30 + Math.floor(chargeRatio * 40)
       this.host.hapticManager?.trigger([hapticIntensity, 10, Math.floor(hapticIntensity / 2)])
