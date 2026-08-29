@@ -107,9 +107,11 @@ export class GamePhysicsController {
             this.host.gameObjects?.getBindings() || [],
             [...(this.host.gameObjects?.getAllFlippers?.().values() ?? [])].map((f) => f.body)
           )
+          this.host.physics.setWasmDebugColliders?.([...this.wasmOwner.getDebugColliders()])
         } else {
           this.wasmOwner?.clear()
           this.wasmOwner = null
+          this.host.physics.setWasmDebugColliders?.([])
           if (!this.wasmMirror) {
             this.wasmMirror = new WasmMirror(engine)
           }
@@ -127,6 +129,7 @@ export class GamePhysicsController {
       this.wasmMirror = null
       this.wasmOwner = null
       this.wasmBridge = null
+      this.host.physics.setWasmDebugColliders?.([])
     }
 
     // Portal sensor handles are registered/unregistered dynamically via

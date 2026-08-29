@@ -168,7 +168,7 @@ export class DebugHUD {
     })
 
     this.updatePanel('Physics', {
-      mode: snapshot.wasmMode,
+      engine: snapshot.wasmMode,
       'step ms': snapshot.physicsStepMs.toFixed(2),
       'wasm ms': snapshot.wasmStepMs !== null ? snapshot.wasmStepMs.toFixed(2) : 'n/a',
       'rapier ms': snapshot.rapierStepMs !== null ? snapshot.rapierStepMs.toFixed(2) : 'n/a',

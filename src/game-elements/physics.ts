@@ -4,6 +4,16 @@ import { WasmPhysicsEngine } from '../wasm'
 import type { WasmSimEngine } from '../wasm/wasm-sim-engine'
 import { PhysicsWorkerClient } from '../wasm/physics-worker-client'
 import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
+import type { WasmDebugCollider } from './wasm-debug-geometry'
+
+/** Greppable marker for "table physics booted on Rapier because WASM failed". */
+export const PHYSICS_DEGRADE_MARKER = '[Bootstrap][physics-degrade]'
+
+/** Engine that actually served the last init/step — not the localStorage preference. */
+export function exposeCurrentPhysicsEngine(mode: WasmPhysicsRuntimeMode): void {
+  if (typeof window === 'undefined') return
+  ;(window as unknown as { currentPhysicsEngine?: WasmPhysicsRuntimeMode }).currentPhysicsEngine = mode
+}
 
 // Gravity: -Y (down), -Z (roll towards player)
 export const GRAVITY = { x: 0, y: -9.81, z: -5.0 }
@@ -98,6 +108,8 @@ export class PhysicsSystem {
   private lastMirrorOverheadMs = 0
   /** When true, wasm-owner skips Rapier world.step (table joints live in C++). Adventure still needs Rapier. */
   private ownerSkipRapierStep = false
+  /** Static/dynamic collider descriptors for C++ debug draw (owner/worker). */
+  private wasmDebugColliders: WasmDebugCollider[] = []
 
   /** Accumulator for fixed timestep */
   private accumulator = 0
@@ -180,11 +192,14 @@ export class PhysicsSystem {
           this.wasmEngine = engine
           this.wasmActive = true
         } else {
-          console.warn('[PhysicsSystem] WASM physics bundle failed to load; falling back to Rapier.')
+          console.warn(
+            `${PHYSICS_DEGRADE_MARKER} WASM physics bundle failed to load; falling back to Rapier.`,
+          )
           this.wasmMode = 'rapier'
         }
       }
     }
+    exposeCurrentPhysicsEngine(this.getWasmMode())
   }
 
   getWorld(): RAPIER.World {
@@ -232,6 +247,18 @@ export class PhysicsSystem {
    */
   setOwnerSkipRapierStep(skip: boolean): void {
     this.ownerSkipRapierStep = skip
+  }
+
+  getOwnerSkipRapierStep(): boolean {
+    return this.ownerSkipRapierStep
+  }
+
+  setWasmDebugColliders(colliders: WasmDebugCollider[]): void {
+    this.wasmDebugColliders = colliders
+  }
+
+  getWasmDebugColliders(): readonly WasmDebugCollider[] {
+    return this.wasmDebugColliders
   }
 
   /** Access the WASM engine (for sync/registration by the controller). */
@@ -285,6 +312,7 @@ export class PhysicsSystem {
     forceCallback?: ContactForceCallback
   ): number {
     const mode = this.getWasmMode()
+    exposeCurrentPhysicsEngine(mode)
 
     if (mode === 'wasm-mirror' && this.wasmEngine?.isReady) {
       const t0 = performance.now()

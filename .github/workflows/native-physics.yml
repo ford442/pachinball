@@ -22,6 +22,7 @@ on:
     paths:
       - 'native/**'
       - 'src/wasm/**'
+      - 'src/config/physics.ts'
       - 'tests/wasm-*.test.ts'
       - 'tests/transform-buffer.test.ts'
       - 'scripts/build-wasm.sh'
@@ -33,6 +34,7 @@ on:
     paths:
       - 'native/**'
       - 'src/wasm/**'
+      - 'src/config/physics.ts'
       - 'tests/wasm-*.test.ts'
       - 'tests/transform-buffer.test.ts'
       - 'scripts/build-wasm.sh'
@@ -119,6 +121,8 @@ jobs:
           test ! -e public/wasm/PhysicsModule.wasm.map
           test ! -e public/wasm/PhysicsModule.js.map
           echo "WASM size: $(wc -c < public/wasm/PhysicsModule.wasm) bytes"
+          grep -q "defaultEngine: 'wasm-owner'" src/config/physics.ts
+          echo "defaultEngine is wasm-owner"
 
       - name: Build RelWithAsserts artefact
         run: |

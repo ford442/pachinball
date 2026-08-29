@@ -53,6 +53,8 @@ describe('WasmOwner native hinges', () => {
     expect(leftCall.maxAngle).toBe(PhysicsConfig.flipper.leftLimits[1])
     expect(left.setEnabled).toHaveBeenCalledWith(false)
     expect(right.setEnabled).toHaveBeenCalledWith(false)
+    expect(owner.getDebugColliders().length).toBe(2)
+    expect(owner.getDebugColliders()[0]?.kind).toBe('capsule')
   })
 
   it('driveFlippers sets a motor from PhysicsConfig rest/active angles', () => {
@@ -92,5 +94,27 @@ describe('PhysicsSystem wasm-owner Rapier skip', () => {
     expect(wasmStep).toHaveBeenCalled()
     expect(physics.getLastRapierStepMs()).toBe(0)
     expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('still steps Rapier when ownerSkipRapierStep is false (adventure path)', () => {
+    const physics = new PhysicsSystem()
+    const wasmStep = vi.fn(() => 0.25)
+    const worldStep = vi.fn()
+    Object.assign(physics as unknown as Record<string, unknown>, {
+      wasmEngine: { isReady: true, step: wasmStep, getLastWorkerStepMs: () => 0 },
+      wasmActive: true,
+      wasmMode: 'wasm-owner',
+      world: { timestep: 0, step: worldStep, integrationParameters: {} },
+      eventQueue: {
+        drainCollisionEvents: vi.fn(),
+        drainContactForceEvents: vi.fn(),
+      },
+    })
+    physics.setOwnerSkipRapierStep(false)
+    const callback = vi.fn()
+    physics.step(1 / 60, callback)
+    expect(wasmStep).toHaveBeenCalled()
+    expect(worldStep).toHaveBeenCalled()
+    expect(physics.getOwnerSkipRapierStep()).toBe(false)
   })
 })

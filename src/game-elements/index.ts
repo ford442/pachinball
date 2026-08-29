@@ -1,7 +1,7 @@
 export * from './types'
 export * from './display-config'
 export * from './visual-language'
-export { PhysicsSystem } from './physics'
+export { PhysicsSystem, PHYSICS_DEGRADE_MARKER, exposeCurrentPhysicsEngine } from './physics'
 export { SettingsManager, type GameSettings } from './settings'
 export { InputHandler } from './input'
 export { BallManager } from './ball-manager'

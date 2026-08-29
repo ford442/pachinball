@@ -294,33 +294,41 @@ migrate body creation to the WASM engine incrementally.
 
 ## Physics engine modes
 
+Production **table** physics defaults to **WASM owner** (`WASM_PHYSICS.defaultEngine`).
+Adventure-mode bodies still step Rapier. If `public/wasm/PhysicsModule.wasm` is missing,
+init fail-closes to Rapier and logs `[Bootstrap][physics-degrade]`.
+
+`window.currentPhysicsEngine` reports the engine that actually served the last
+init/step (`rapier` | `wasm-mirror` | `wasm-owner` | `wasm-worker`), not the
+localStorage preference.
+
 Set via `localStorage['pachinball:physics-engine']`:
 
 | Mode | Value | Behaviour |
 |------|-------|-----------|
-| **Rapier** (default) | `rapier` or unset | Full Rapier simulation — production path |
+| **WASM owner** (default) | `wasm-owner` or unset | WASM owns balls + static table geometry + **native hinge flippers**; Rapier is not stepped on the table path (`lastRapierStepMs === 0`). Adventure-mode bodies still use Rapier. |
+| **Rapier** | `rapier` (explicit) | Full Rapier simulation — also the fail-closed fallback |
 | **WASM mirror** | `wasm-mirror` or legacy `wasm` | WASM steps ball+bumper subset; poses sync Rapier↔WASM each frame |
-| **WASM owner** | `wasm-owner` | WASM owns balls + static table geometry + **native hinge flippers**; Rapier is not stepped on the table path (`lastRapierStepMs === 0`). Adventure-mode bodies still use Rapier. |
 | **WASM worker** | `wasm-worker` | Same ownership as `wasm-owner`, but `PhysicsWorld` runs in a Dedicated Worker. Snapshots arrive via `postMessage` + transferable `ArrayBuffer`s (**one physics frame of extra latency**). Worker construction / load failure falls back to in-process `wasm-owner`. Adventure still steps Rapier on the main thread. |
 
 Mirror mode remains a WASM parity path. Owner mode disables Rapier colliders for exported statics, bumpers, balls, **and flippers**. Each flipper is a dynamic WASM capsule with a world-anchored hinge (`PhysicsWorld::createHinge` / `setHingeMotor`). Pose is copied back onto the Rapier puppet for mesh interpolation only.
 
 ```javascript
-// Dev console — mirror (default WASM path)
+// Dev console — mirror
 localStorage.setItem('pachinball:physics-engine', 'wasm-mirror')
 
-// Owner mode — balls + walls/rails in WASM
+// Owner mode — production default (also: localStorage.removeItem(...))
 localStorage.setItem('pachinball:physics-engine', 'wasm-owner')
 
 // Worker mode — same as owner, C++ world off the main thread (Phase 1, no SAB)
 localStorage.setItem('pachinball:physics-engine', 'wasm-worker')
 
-// Back to Rapier
-localStorage.removeItem('pachinball:physics-engine')
+// Explicit Rapier override (removeItem now falls back to wasm-owner)
+localStorage.setItem('pachinball:physics-engine', 'rapier')
 location.reload()
 ```
 
-Debug HUD (Developer settings → Enable Debug HUD) shows `wasm ms`, `rapier ms` (owner), and `mirror ms` (mirror sync overhead) under the Physics panel.
+Debug HUD (Developer settings → Enable Debug HUD) shows `engine` (`wasmMode`), `wasm ms`, `rapier ms` (owner), and `mirror ms` (mirror sync overhead) under the Physics panel. Physics debug draw in owner/worker mode reads packed C++ transform/contact buffers plus cached static box/capsule AABBs.
 
 ---
 

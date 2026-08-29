@@ -77,17 +77,17 @@ export type PhysicsConfigType = typeof PhysicsConfig
 
 /**
  * WASM Physics Engine feature flag configuration.
- * Reads from localStorage at runtime; defaults to Rapier.
+ * Reads from localStorage at runtime; defaults to wasm-owner.
  */
 export const WASM_PHYSICS = {
   flagKey: 'pachinball:physics-engine',
-  /** Rapier-only until wasm-owner is explicitly enabled. */
-  defaultEngine: 'rapier',
+  /** Production table physics; Rapier remains the missing-bundle / adventure path. */
+  defaultEngine: 'wasm-owner',
   /**
    * Engine modes:
-   *  - `rapier`       — Rapier only (production default)
+   *  - `rapier`       — Rapier only (explicit override or fail-closed fallback)
    *  - `wasm-mirror`  — WASM mirrors ball+bumper subset; Rapier bodies remain handles
-   *  - `wasm-owner`   — WASM owns ball + static table + flipper hinges (in-process)
+   *  - `wasm-owner`   — WASM owns ball + static table + flipper hinges (in-process, production default)
    *  - `wasm-worker`  — same ownership as wasm-owner, C++ world in a Dedicated Worker
    *                     (`postMessage` snapshots, one-frame lag; no SAB / COOP+COEP yet)
    * Legacy `wasm` is treated as `wasm-mirror`.
@@ -113,6 +113,7 @@ export type WasmPhysicsRuntimeMode = 'rapier' | 'wasm-mirror' | 'wasm-owner' | '
 export function getPhysicsEnginePreference(): WasmPhysicsEnginePreference {
   try {
     const v = localStorage.getItem(WASM_PHYSICS.flagKey)
+    if (v === 'rapier') return 'rapier'
     if (v === 'wasm' || v === 'wasm-mirror') return 'wasm-mirror'
     if (v === 'wasm-owner') return 'wasm-owner'
     if (v === 'wasm-worker') return 'wasm-worker'

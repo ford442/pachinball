@@ -5,6 +5,7 @@ import { WASM_PHYSICS, PhysicsConfig, GameConfig } from '../../config'
 import type { WasmSimEngine } from '../../wasm/wasm-sim-engine'
 import { exportRapierBodyToWasm } from './wasm-static-export'
 import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
+import type { WasmDebugCollider } from '../../game-elements/wasm-debug-geometry'
 
 /** Blade half-length / radius approximation matching object-flippers.ts's cuboid collider. */
 const FLIPPER_PROXY_RADIUS = 0.3
@@ -56,6 +57,7 @@ export class WasmOwner {
   private flippers: FlipperHinge[] = []
   private disabledRapierBodies = new Set<RAPIER.RigidBody>()
   private groundAdded = false
+  private debugColliders: WasmDebugCollider[] = []
   private leftPressed = false
   private rightPressed = false
   private leftHoldTime = 0
@@ -80,6 +82,7 @@ export class WasmOwner {
     this.flippers = []
     this.restoreRapierBodies()
     this.groundAdded = false
+    this.debugColliders = []
     this.leftPressed = false
     this.rightPressed = false
     this.leftHoldTime = 0
@@ -112,7 +115,7 @@ export class WasmOwner {
     for (const binding of staticBindings) {
       const body = binding.rigidBody
       if (flipperSet.has(body) || bumperSet.has(body) || ballSet.has(body)) continue
-      exportRapierBodyToWasm(body, this.engine)
+      this.debugColliders.push(...exportRapierBodyToWasm(body, this.engine))
     }
 
     const visualByBody = new Map<number, BumperVisual>()
@@ -132,10 +135,19 @@ export class WasmOwner {
         restitution: PhysicsConfig.bumper.restitution,
         friction: GameConfig.physics.surfaces.bumper.friction,
         linearDamping: 0,
-        bodyType: 1,
+        // Kinematic: C++ broadphase skips Static spheres (only boxes/capsules are
+        // inserted as static refs), so Static bumpers never generate contacts.
+        bodyType: 2,
       })
       this.track(body, id)
       this.bumperWasmIds.add(id)
+      const t = body.translation()
+      this.debugColliders.push({
+        kind: 'sphere',
+        center: { x: t.x, y: t.y, z: t.z },
+        radius,
+        bodyId: id,
+      })
     }
 
     for (const body of ballBodies) {
@@ -153,6 +165,13 @@ export class WasmOwner {
       this.track(body, id)
       this.ballBodies.add(body)
       this.disableRapierBody(body)
+      const t = body.translation()
+      this.debugColliders.push({
+        kind: 'sphere',
+        center: { x: t.x, y: t.y, z: t.z },
+        radius: GameConfig.ball.radius,
+        bodyId: id,
+      })
     }
 
     for (const body of flipperBodies) {
@@ -198,6 +217,14 @@ export class WasmOwner {
         hingeId,
         isRight,
         anchor: { x: pivot.x, y: pivot.y, z: pivot.z },
+      })
+      this.debugColliders.push({
+        kind: 'capsule',
+        center: { x: com.x, y: com.y, z: com.z },
+        radius: FLIPPER_PROXY_RADIUS,
+        halfHeight: FLIPPER_PROXY_HALF_HEIGHT,
+        rotation: { ...CAPSULE_AXIS_TO_BLADE_AXIS },
+        bodyId: id,
       })
       this.disableRapierBody(body)
     }
@@ -281,6 +308,10 @@ export class WasmOwner {
       f.rapierBody.setAngvel(new rapier.Vector3(ang.x, ang.y, ang.z), true)
       f.rapierBody.setLinvel(new rapier.Vector3(0, 0, 0), true)
     }
+  }
+
+  getDebugColliders(): readonly WasmDebugCollider[] {
+    return this.debugColliders
   }
 
   getRapierBody(wasmId: number): RAPIER.RigidBody | undefined {
