@@ -92,6 +92,28 @@ describe('InputHandler', () => {
       expect(callbacks.onStart).toHaveBeenCalledTimes(1)
     })
 
+    it('starts plunger charge after MENU Space hold once PLAYING', () => {
+      callbacks.getState.mockReturnValue(GameState.MENU)
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Space' }))
+      expect(handler.isPlungerHeld()).toBe(false)
+
+      callbacks.getState.mockReturnValue(GameState.PLAYING)
+      handler.updatePlungerCharge()
+
+      expect(handler.isPlungerHeld()).toBe(true)
+    })
+
+    it('does not start plunger charge if Space is released before PLAYING', () => {
+      callbacks.getState.mockReturnValue(GameState.MENU)
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Space' }))
+      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Space' }))
+
+      callbacks.getState.mockReturnValue(GameState.PLAYING)
+      handler.updatePlungerCharge()
+
+      expect(handler.isPlungerHeld()).toBe(false)
+    })
+
     it('queues nudge with correct direction for KeyZ', () => {
       handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'KeyZ' }))
       const frame = handler.processBufferedInputs()

@@ -5,7 +5,7 @@
  * Merges hardcoded fallback maps with dynamically uploaded shader-maps.
  */
 
-import { apiFetch } from '../config'
+import { API_BASE, apiFetch, isRemoteApiBase } from '../config'
 import { TABLE_MAPS, type TableMapConfig, type TableMapType } from '../shaders/lcd-table'
 
 export interface DynamicMapConfig extends TableMapConfig {
@@ -58,10 +58,21 @@ export class MapSystem {
     }
 
     try {
+      const staticMaps = await this.fetchStaticMaps()
+      if (staticMaps && staticMaps.length > 0) {
+        this.overlayMaps(staticMaps)
+      }
+
+      if (!isRemoteApiBase(API_BASE)) {
+        this.loaded = true
+        console.log(`[MapSystem] Loaded ${this.maps.size} maps (static/hardcoded; skipped ${API_BASE || 'empty'} API)`)
+        return
+      }
+
       const remoteMaps = await apiFetch<DynamicMapConfig[]>('/maps')
       if (!remoteMaps || remoteMaps.length === 0) {
         this.loaded = true
-        console.log(`[MapSystem] Loaded ${this.maps.size} maps (hardcoded/cache only)`)
+        console.log(`[MapSystem] Loaded ${this.maps.size} maps (hardcoded/cache/static only)`)
         return
       }
 
@@ -137,6 +148,36 @@ export class MapSystem {
     return legacyMapping[mapId] || mapId
   }
 
+  private staticMapsUrl(): string {
+    const base = (import.meta.env.BASE_URL as string | undefined) ?? './'
+    return `${base.endsWith('/') ? base : `${base}/`}maps.json`
+  }
+
+  private async fetchStaticMaps(): Promise<DynamicMapConfig[] | null> {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 4000)
+    try {
+      const response = await fetch(this.staticMapsUrl(), {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        return null
+      }
+      const data: unknown = await response.json()
+      if (!Array.isArray(data)) {
+        return null
+      }
+      return data
+        .map((map) => this.sanitizeRemoteMap(map as DynamicMapConfig))
+        .filter((map): map is DynamicMapConfig => map !== null)
+    } catch {
+      return null
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
   private resetToHardcodedMaps(): void {
     this.maps.clear()
     const hardcoded: TableMapType[] = Object.keys(TABLE_MAPS) as TableMapType[]
@@ -150,14 +191,18 @@ export class MapSystem {
     }
   }
 
-  private mergeMaps(maps: DynamicMapConfig[]): void {
-    this.resetToHardcodedMaps()
+  private overlayMaps(maps: DynamicMapConfig[]): void {
     for (const map of maps) {
       this.maps.set(map.id, {
         ...map,
         musicTrackId: map.musicTrackId || this.inferMusicTrackId(map.id),
       })
     }
+  }
+
+  private mergeMaps(maps: DynamicMapConfig[]): void {
+    this.resetToHardcodedMaps()
+    this.overlayMaps(maps)
   }
 
   private sanitizeRemoteMap(map: DynamicMapConfig | null | undefined): DynamicMapConfig | null {

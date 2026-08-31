@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { apiFetchMock } = vi.hoisted(() => ({
+const { apiFetchMock, isRemoteApiBaseMock } = vi.hoisted(() => ({
   apiFetchMock: vi.fn(),
+  isRemoteApiBaseMock: vi.fn(),
 }))
 
 vi.mock('../src/config', () => ({
   API_BASE: 'https://example.test/api',
   apiFetch: apiFetchMock,
+  isRemoteApiBase: (base?: string) => isRemoteApiBaseMock(base ?? 'https://example.test/api'),
 }))
 
 import { MapSystem } from '../src/game-elements/map-system'
@@ -32,6 +34,12 @@ function createStorage(): Storage {
 describe('MapSystem', () => {
   beforeEach(() => {
     apiFetchMock.mockReset()
+    isRemoteApiBaseMock.mockReset()
+    isRemoteApiBaseMock.mockReturnValue(true)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => [],
+    }))
     Object.defineProperty(globalThis, 'localStorage', {
       value: createStorage(),
       configurable: true,
@@ -150,5 +158,47 @@ describe('MapSystem', () => {
     expect(system.getMap('spring-grid')).toBeUndefined()
     expect(system.getMap('summer-grid')).toBeDefined()
     expect(apiFetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('skips relative /api backends and overlays static maps.json', async () => {
+    isRemoteApiBaseMock.mockReturnValue(false)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: 'static-run',
+          name: 'Static Run',
+          baseColor: '#111111',
+          accentColor: '#222222',
+          scanlineIntensity: 0.1,
+          pixelGridIntensity: 0.2,
+          subpixelIntensity: 0.3,
+          glowIntensity: 1.0,
+          backgroundPattern: 'hex',
+          animationSpeed: 0.4,
+        },
+      ],
+    }))
+
+    const system = new MapSystem()
+    await system.fetchAll()
+
+    expect(apiFetchMock).not.toHaveBeenCalled()
+    expect(system.isLoaded).toBe(true)
+    expect(system.getMap('static-run')?.name).toBe('Static Run')
+    expect(system.getMap('neon-helix')).toBeDefined()
+  })
+
+  it('resolves without a backend when static JSON and API are missing', async () => {
+    isRemoteApiBaseMock.mockReturnValue(false)
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+
+    const system = new MapSystem()
+    await system.fetchAll()
+
+    expect(apiFetchMock).not.toHaveBeenCalled()
+    expect(system.isLoaded).toBe(true)
+    expect(system.isLoading).toBe(false)
+    expect(system.getMap('neon-helix')).toBeDefined()
   })
 })

@@ -12,7 +12,7 @@ export {
   type BallTierConfig,
 } from './balls'
 export { SLOT_MACHINE_CONFIG } from './display-slot'
-export { API_BASE, ASSET_BASE, resolveBackboxAssetPath, apiFetch } from './api'
+export { API_BASE, ASSET_BASE, resolveBackboxAssetPath, apiFetch, isRemoteApiBase } from './api'
 export { EffectsConfig } from './visuals'
 export {
   GAME_TUNING,

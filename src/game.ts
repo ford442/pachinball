@@ -410,7 +410,7 @@ export class Game {
 
     await this.runCheckpointStage('state_setup', async () => {
       this.soundSystem = getSoundSystem()
-      await this.settingsUI.setupMapSelector()
+      this.settingsUI.setupMapSelector()
 
       this.eventBus = new EventBus()
       getSoundSystem(this.eventBus)

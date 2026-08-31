@@ -67,6 +67,9 @@ export class InputHandler {
   private flipperLeftHeld = false
   private flipperRightHeld = false
 
+  /** Space/Enter/gamepad plunger still down after MENU start — charge once PLAYING. */
+  private pendingMenuPlungerHold = false
+
   // Latency tracking for input-to-response timing
   private latencyMetrics: LatencyMetrics = {
     samples: [],
@@ -160,8 +163,14 @@ export class InputHandler {
     const gameState = this.getState()
     
     // Handle start button (Start/Options) for menu navigation
-    if (gameState === GameState.MENU && state.plunger && (!prevState || !prevState.plunger)) {
-      this.onStart()
+    if (gameState === GameState.MENU) {
+      if (this.pendingMenuPlungerHold && !state.plunger) {
+        this.pendingMenuPlungerHold = false
+      }
+      if (state.plunger && (!prevState || !prevState.plunger)) {
+        this.pendingMenuPlungerHold = true
+        this.onStart()
+      }
       return
     }
     
@@ -175,6 +184,10 @@ export class InputHandler {
     }
 
     if (gameState !== GameState.PLAYING) return
+    if (this.pendingMenuPlungerHold && !state.plunger) {
+      this.pendingMenuPlungerHold = false
+    }
+    this.tryStartChargeAfterMenuHold()
     const adventureActive = this.getAdventureActive()
     if (adventureActive) {
       this.cancelPlungerCharge()
@@ -450,6 +463,7 @@ export class InputHandler {
    * Update plunger charge (call each frame while held)
    */
   updatePlungerCharge(): void {
+    this.tryStartChargeAfterMenuHold()
     if (!this.plungerChargeState.isHeld) return
     const newChargeLevel = this.calculatePlungerChargeLevel()
     
@@ -460,6 +474,15 @@ export class InputHandler {
     }
   }
   
+  private tryStartChargeAfterMenuHold(): void {
+    if (!this.pendingMenuPlungerHold) return
+    if (this.getState() !== GameState.PLAYING) return
+    this.pendingMenuPlungerHold = false
+    if (this.getAdventureActive()) return
+    if (this.plungerChargeState.isHeld) return
+    this.startPlungerCharge()
+  }
+
   /**
    * Start plunger charge
    */
@@ -515,6 +538,7 @@ export class InputHandler {
 
     if ((event.code === 'Space' || InputHandler.PLUNGER_KEYS.has(event.code)) && this.getState() === GameState.MENU) {
       event.preventDefault()
+      this.pendingMenuPlungerHold = true
       this.onStart()
       return
     }
@@ -576,7 +600,14 @@ export class InputHandler {
   }
 
   handleKeyUp = (event: KeyboardEvent): void => {
-    if (!this.rapier || this.getState() !== GameState.PLAYING) return
+    if (!this.rapier) return
+
+    if (InputHandler.PLUNGER_KEYS.has(event.code) && this.pendingMenuPlungerHold) {
+      this.pendingMenuPlungerHold = false
+      if (this.getState() !== GameState.PLAYING) return
+    }
+
+    if (this.getState() !== GameState.PLAYING) return
     const adventureActive = this.getAdventureActive()
     if (adventureActive) {
       this.cancelPlungerCharge()
