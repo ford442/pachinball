@@ -60,6 +60,14 @@ describe('InputHandler', () => {
       expect(frame.flipperLeft).toBeNull()
     })
 
+    it('does not queue flippers on Shift (Windows Sticky Keys)', () => {
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'ShiftLeft' }))
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'ShiftRight' }))
+      const frame = handler.processBufferedInputs()
+      expect(frame.flipperLeft).toBeNull()
+      expect(frame.flipperRight).toBeNull()
+    })
+
     it('queues flipperRight when Digit0 is pressed', () => {
       handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Digit0' }))
       const frame = handler.processBufferedInputs()
@@ -178,6 +186,14 @@ describe('InputHandler', () => {
     it('does not queue flipper on Slash release (Slash is nudge-right)', () => {
       handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Slash' }))
       const frame = handler.processBufferedInputs()
+      expect(frame.flipperRight).toBeNull()
+    })
+
+    it('does not queue flipper release on Shift', () => {
+      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'ShiftLeft' }))
+      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'ShiftRight' }))
+      const frame = handler.processBufferedInputs()
+      expect(frame.flipperLeft).toBeNull()
       expect(frame.flipperRight).toBeNull()
     })
 

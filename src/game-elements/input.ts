@@ -15,6 +15,9 @@ export type { InputFrame, PendingInputFrame, LatencyReport, InputLatencySource }
 
 export class InputHandler {
   private static readonly PLUNGER_KEYS = new Set(['Enter', 'NumpadEnter', 'Space'])
+  // Digit1/Digit0 — never Shift. Holding Shift five times trips Windows Sticky Keys.
+  private static readonly LEFT_FLIPPER_KEYS = new Set(['Digit1'])
+  private static readonly RIGHT_FLIPPER_KEYS = new Set(['Digit0'])
 
   // Input buffering for frame-aligned processing
   private pendingInputs: PendingInputFrame = {}
@@ -549,14 +552,16 @@ export class InputHandler {
       this.cancelPlungerCharge()
     }
 
-    if (!adventureActive && event.code === 'Digit1') {
+    if (!adventureActive && InputHandler.LEFT_FLIPPER_KEYS.has(event.code)) {
       if (this.getTiltActive()) return
+      event.preventDefault()
       this.flipperLeftHeld = true
       this.queueInput('flipperLeft', true)
     }
 
-    if (!adventureActive && event.code === 'Digit0') {
+    if (!adventureActive && InputHandler.RIGHT_FLIPPER_KEYS.has(event.code)) {
       if (this.getTiltActive()) return
+      event.preventDefault()
       this.flipperRightHeld = true
       this.queueInput('flipperRight', true)
     }
@@ -613,12 +618,12 @@ export class InputHandler {
       this.cancelPlungerCharge()
     }
 
-    if (!adventureActive && event.code === 'Digit1') {
+    if (!adventureActive && InputHandler.LEFT_FLIPPER_KEYS.has(event.code)) {
       this.flipperLeftHeld = false
       this.queueInput('flipperLeft', false)
     }
 
-    if (!adventureActive && event.code === 'Digit0') {
+    if (!adventureActive && InputHandler.RIGHT_FLIPPER_KEYS.has(event.code)) {
       this.flipperRightHeld = false
       this.queueInput('flipperRight', false)
     }
