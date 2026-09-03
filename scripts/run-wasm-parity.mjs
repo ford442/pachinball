@@ -254,4 +254,60 @@ function readContacts(mod, world) {
   world.delete()
 }
 
+// #383 Slice A — kinematic OBB mover: a rising piston must launch a resting ball.
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, -9.81, 0)
+  const piston = world.addKinematicMover(0, 0, 0, 1, 0.1, 1, 0, 0, 0, 1, 0.3, 0.2)
+  world.createRigidBody(0, 0.3, 0, 0, 0, 0, 1, 0.2, 0.3, 0, 0, 0, 0.5, 0.2, 0.1)
+  for (let i = 0; i < 15; i++) world.step(1 / 60)
+  const riseDist = 0.05
+  const pistonVy = riseDist / (1 / 60)
+  world.setNextKinematicTransform(piston, 0, riseDist, 0, 0, 0, 0, 1)
+  world.step(1 / 60)
+  const vy = world.getVelY(0)
+  const ok = vy > pistonVy * 0.5
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm kinematic mover launches resting ball (vy=${vy.toFixed(3)}, pistonVy=${pistonVy.toFixed(3)})`)
+  if (!ok) failed = true
+  world.delete()
+}
+
+// #383 Slice A — sensor volume: crossing ball emits exactly one Enter + one Exit, zero impulse.
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, 0, 0)
+  const sensorId = world.addSensorVolume(0, 0, 0, 0.5, 0.5, 0.5, 0, 0, 0, 1)
+  world.createRigidBody(-2, 0, 0, 2, 0, 0, 1, 0.1, 0.5, 0, 0, 0, 0.5, 0.5, 0)
+
+  let enters = 0, exits = 0, impulseSeen = false
+  for (let i = 0; i < 120; i++) {
+    world.step(1 / 60)
+    for (const c of readContacts(Module, world)) {
+      if (c.id2 !== sensorId) continue
+      if (c.impulse !== 0) impulseSeen = true
+      if (c.phase === 0) enters++
+      if (c.phase === 2) exits++
+    }
+  }
+  const ok = enters === 1 && exits === 1 && !impulseSeen
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm sensor volume enter/exit (enters=${enters} exits=${exits} impulseSeen=${impulseSeen})`)
+  if (!ok) failed = true
+  world.delete()
+}
+
+// #383 Slice A — collision-group filter: mutually exclusive masks never pair.
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, 0, 0)
+  const a = world.createRigidBody(0, 0, 0, 0, 0, 0, 1, 0.3, 0.5, 0, 0, 0, 0.5, 0.2, 0.1)
+  const b = world.createRigidBody(0.1, 0, 0, 0, 0, 0, 1, 0.3, 0.5, 0, 0, 0, 0.5, 0.2, 0.1)
+  world.setCollisionGroups(a, 0x1, 0x1)
+  world.setCollisionGroups(b, 0x2, 0x2)
+  for (let i = 0; i < 5; i++) world.step(1 / 60)
+  const ok = world.getContactCount() === 0
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm filtered bodies never pair (contactCount=${world.getContactCount()})`)
+  if (!ok) failed = true
+  world.delete()
+}
+
 process.exit(failed ? 1 : 0)

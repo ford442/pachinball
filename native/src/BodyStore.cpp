@@ -148,6 +148,20 @@ void BodyView::applyImpulseAt(const Vec3& impulse, const Vec3& worldPoint) {
   applyTorqueImpulse((worldPoint - getPosition()).cross(impulse));
 }
 
+uint32_t BodyView::getMembership() const {
+  return store_->membership_[static_cast<std::size_t>(denseIndex_)];
+}
+
+uint32_t BodyView::getFilter() const {
+  return store_->filter_[static_cast<std::size_t>(denseIndex_)];
+}
+
+void BodyView::setCollisionGroups(uint32_t membership, uint32_t filter) {
+  const std::size_t i = static_cast<std::size_t>(denseIndex_);
+  store_->membership_[i] = membership;
+  store_->filter_[i] = filter;
+}
+
 void BodyView::clearForces() {
   const std::size_t i = static_cast<std::size_t>(denseIndex_);
   store_->forceX_[i] = 0.f;
@@ -271,6 +285,8 @@ void BodyStore::appendSlot(int publicId, const RigidBodyDesc& desc) {
   shape_.push_back(static_cast<uint8_t>(desc.shape));
   active_.push_back(1);
   sleepCounter_.push_back(0);
+  membership_.push_back(desc.membership);
+  filter_.push_back(desc.filter);
 }
 
 void BodyStore::swapPop(int denseIndex) {
@@ -290,6 +306,7 @@ void BodyStore::swapPop(int denseIndex) {
     mass_.pop_back();
     type_.pop_back(); shape_.pop_back();
     active_.pop_back(); sleepCounter_.pop_back();
+    membership_.pop_back(); filter_.pop_back();
     return;
   }
 
@@ -309,6 +326,7 @@ void BodyStore::swapPop(int denseIndex) {
   mass_[i] = mass_[j];
   type_[i] = type_[j]; shape_[i] = shape_[j];
   active_[i] = active_[j]; sleepCounter_[i] = sleepCounter_[j];
+  membership_[i] = membership_[j]; filter_[i] = filter_[j];
 
   swapPop(last);
 }

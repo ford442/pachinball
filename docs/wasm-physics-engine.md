@@ -386,6 +386,11 @@ Test scenarios:
 | `hinge motor reaches target omega` | Velocity motor hits target ω within ε |
 | `hinge angle limits do not explode` | Hard limits stay finite under an aggressive motor |
 | `hinge motor wakes sleeping body` | `setHingeMotor` wakes a sleeper |
+| `ball resting on a rising kinematic piston is launched upward` (`kinematic_mover_test.cpp`) | Pose-delta velocity actually launches a resting ball, not just teleports geometry |
+| `ball on a rotating kinematic platter picks up tangential velocity` (`kinematic_mover_test.cpp`) | ω × r at the mover contact point imparts tangential speed via friction |
+| `ball crossing a sensor volume emits exactly one enter and one exit` (`sensor_volume_test.cpp`) | Enter/Stay/Exit lifecycle, zero impulse |
+| `ball dwelling inside a sensor for N frames emits N-2 stay events` (`sensor_volume_test.cpp`) | Multi-frame dwell + exit-by-teleport lifecycle |
+| `two bodies whose filter masks exclude each other never generate a contact pair` (`collision_filter_test.cpp`) | Broadphase respects membership/filter masks |
 
 Parity suite (native Catch2 + compiled WASM bundle):
 
@@ -394,6 +399,57 @@ RUN_WASM_PARITY=1 npx vitest run tests/wasm-physics-parity.test.ts
 # or directly:
 node scripts/run-wasm-parity.mjs
 ```
+
+---
+
+## Kinematic OBB movers and sensor volumes (#383 Slice A)
+
+Table physics (`wasm-owner`) can represent moving platforms and non-impulse
+trigger zones without a second physics engine:
+
+```typescript
+// Kinematic oriented-box mover (piston, platter, gate). Push a new pose once
+// per tick; linear/angular velocity is derived from the pose delta so a
+// resting ball is actually launched by a rising piston or carried
+// tangentially by a rotating platter — it does not just teleport through it.
+const piston = engine.addKinematicMover(
+  { x: 0, y: 0, z: 0 },        // position
+  { x: 1, y: 0.1, z: 1 },      // half-extents
+  { x: 0, y: 0, z: 0, w: 1 },  // rotation quaternion
+  0.3,                          // restitution
+  0.2                           // friction
+)
+engine.setNextKinematicTransform(piston, { x: 0, y: 0.05, z: 0 }, { x: 0, y: 0, z: 0, w: 1 })
+
+// Static OBB trigger volume: Enter/Stay/Exit contact events with zero
+// impulse and no positional correction. Rides the existing packed contact
+// buffer — decoded contacts carry an `isSensor` flag (contact-buffer.ts).
+const sensor = engine.addSensorVolume(
+  { x: 0, y: 0, z: 0 },        // centre
+  { x: 0.5, y: 0.5, z: 0.5 },  // half-extents
+)
+```
+
+Sphere-vs-OBB and capsule-vs-OBB narrowphase are implemented for movers;
+OBB-vs-OBB is out of scope (movers never pair with statics or each other).
+Sensors are static-position OBBs — Enter/Stay/Exit lifecycle is entirely a
+byproduct of `ContactListener`'s existing pair-presence bookkeeping, so a
+ball leaving a sensor by teleport (`setBodyPosition`) is handled the same
+way as one leaving by velocity.
+
+Every body — dynamic/kinematic RigidBody, static box/capsule, mover, or
+sensor — carries a `membership`/`filter` bitmask mirroring `CollisionGroups`
+in `src/game-elements/physics.ts` (see `native/src/CollisionFilter.h`; do not
+renumber independently of the TS side). Two colliders interact iff each
+one's membership intersects the other's filter. Unset masks default to
+"collides with everything", so existing callers are unaffected:
+
+```typescript
+engine.setCollisionGroups(ballId, CollisionGroups.BALL, COLLIDES_WITH_EVERYTHING)
+```
+
+Adventure mode still steps a full Rapier world today — wiring these shapes
+into `src/adventure/track-builder.ts` is Slice B, not this slice.
 
 ---
 

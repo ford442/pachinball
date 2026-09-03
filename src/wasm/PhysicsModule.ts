@@ -211,6 +211,68 @@ export class WasmPhysicsEngine {
     )
   }
 
+  /**
+   * Add a kinematic oriented-box mover (piston, platter, gate).
+   * @returns Negative handle, or -1 when the engine is not ready.
+   */
+  addKinematicMover(
+    position: { x: number; y: number; z: number },
+    halfExtents: { x: number; y: number; z: number },
+    rotation: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 1 },
+    restitution = 0.4,
+    friction = 0.2
+  ): number {
+    if (!this.world) return -1
+    return this.world.addKinematicMover(
+      position.x, position.y, position.z,
+      halfExtents.x, halfExtents.y, halfExtents.z,
+      rotation.x, rotation.y, rotation.z, rotation.w,
+      restitution,
+      friction
+    )
+  }
+
+  /** Push the pose a kinematic mover should reach by the next `step()`. */
+  setNextKinematicTransform(
+    moverId: number,
+    position: { x: number; y: number; z: number },
+    rotation: { x: number; y: number; z: number; w: number }
+  ): void {
+    this.world?.setNextKinematicTransform(
+      moverId,
+      position.x, position.y, position.z,
+      rotation.x, rotation.y, rotation.z, rotation.w
+    )
+  }
+
+  /**
+   * Add a static OBB sensor volume (Enter/Stay/Exit contact events, zero
+   * impulse, no positional correction).
+   * @returns Negative handle, or -1 when the engine is not ready.
+   */
+  addSensorVolume(
+    center: { x: number; y: number; z: number },
+    halfExtents: { x: number; y: number; z: number },
+    rotation: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 1 }
+  ): number {
+    if (!this.world) return -1
+    return this.world.addSensorVolume(
+      center.x, center.y, center.z,
+      halfExtents.x, halfExtents.y, halfExtents.z,
+      rotation.x, rotation.y, rotation.z, rotation.w
+    )
+  }
+
+  /**
+   * Set the collision-group membership/filter mask for any handle — a
+   * dynamic/kinematic body, or a static box/capsule/mover/sensor (as
+   * returned by its add*() call). Mirrors `CollisionGroups` in
+   * src/game-elements/physics.ts.
+   */
+  setCollisionGroups(id: number, membership: number, filter: number): void {
+    this.world?.setCollisionGroups(id, membership, filter)
+  }
+
   // ---- Body management -------------------------------------------------
 
   /**

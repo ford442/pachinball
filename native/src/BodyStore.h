@@ -49,6 +49,10 @@ public:
   void applyImpulseAt(const Vec3& impulse, const Vec3& worldPoint);
   void clearForces();
 
+  uint32_t getMembership() const;
+  uint32_t getFilter()     const;
+  void setCollisionGroups(uint32_t membership, uint32_t filter);
+
   void integrate(float dt, const Vec3& gravity);
   void wake();
 
@@ -96,6 +100,8 @@ public:
   uint8_t shape(int i) const { return shape_[static_cast<std::size_t>(i)]; }
   bool isActive(int i) const { return active_[static_cast<std::size_t>(i)] != 0; }
   bool isAwake(int i) const { return isActive(i); }
+  uint32_t membership(int i) const { return membership_[static_cast<std::size_t>(i)]; }
+  uint32_t filter(int i) const { return filter_[static_cast<std::size_t>(i)]; }
 
   void scatterTransformSlot(int publicId, float* dst, int stride) const;
 
@@ -126,6 +132,8 @@ private:
   std::vector<uint8_t> shape_;
   std::vector<uint8_t> active_;
   std::vector<uint16_t> sleepCounter_;
+  std::vector<uint32_t> membership_;
+  std::vector<uint32_t> filter_;
 };
 
 } // namespace pachinball
