@@ -146,6 +146,41 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("addStaticBox",    &PhysicsWorld::addStaticBox)
     .function("addStaticCapsule", &PhysicsWorld::addStaticCapsule)
 
+    // Kinematic OBB movers (pistons, platters, gates)
+    .function("addKinematicMover", optional_override([](PhysicsWorld& self,
+        float px, float py, float pz,
+        float hx, float hy, float hz,
+        float qx, float qy, float qz, float qw,
+        float restitution, float friction) -> int {
+          KinematicMoverDesc desc;
+          desc.position = {px, py, pz};
+          desc.halfExtents = {hx, hy, hz};
+          desc.rotation = {qx, qy, qz, qw};
+          desc.restitution = restitution;
+          desc.friction = friction;
+          return self.addKinematicMover(desc);
+        }))
+    .function("setNextKinematicTransform", &PhysicsWorld::setNextKinematicTransform)
+
+    // Sensor volumes (Enter/Stay/Exit, zero impulse)
+    .function("addSensorVolume", optional_override([](PhysicsWorld& self,
+        float px, float py, float pz,
+        float hx, float hy, float hz,
+        float qx, float qy, float qz, float qw) -> int {
+          SensorVolumeDesc desc;
+          desc.center = {px, py, pz};
+          desc.halfExtents = {hx, hy, hz};
+          desc.rotation = {qx, qy, qz, qw};
+          return self.addSensorVolume(desc);
+        }))
+
+    // Collision-group membership/filter (any handle: body id ≥ 0, or a
+    // negative static/mover/sensor id as returned by its add*() call).
+    .function("setCollisionGroups", optional_override([](PhysicsWorld& self,
+        int id, unsigned membership, unsigned filter) {
+          self.setCollisionGroups(id, static_cast<uint32_t>(membership), static_cast<uint32_t>(filter));
+        }))
+
     // Queries — JS side uses simple return-value helpers
     .function("getPosX", optional_override([](PhysicsWorld& self, int id) -> float {
         float x=0,y=0,z=0; self.getPosition(id,&x,&y,&z); return x; }))

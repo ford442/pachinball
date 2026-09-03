@@ -126,6 +126,47 @@ export interface WasmPhysicsWorldInstance {
     friction?: number
   ): number
 
+  /**
+   * Add a kinematic oriented-box mover (piston, platter, gate). Its pose is
+   * pushed once per tick via `setNextKinematicTransform`; linear/angular
+   * velocity is derived from the pose delta so contacts pick up its motion.
+   * @returns Negative handle used in contact events / setCollisionGroups.
+   */
+  addKinematicMover(
+    px: number, py: number, pz: number,
+    hx: number, hy: number, hz: number,
+    qx: number, qy: number, qz: number, qw: number,
+    restitution: number,
+    friction: number
+  ): number
+
+  /** Push the pose this mover should reach by the next `step()`. */
+  setNextKinematicTransform(
+    moverId: number,
+    px: number, py: number, pz: number,
+    qx: number, qy: number, qz: number, qw: number
+  ): void
+
+  /**
+   * Add a static OBB trigger volume. Produces Enter/Stay/Exit contact
+   * events (via the packed contact buffer, `isSensor` bit set) with zero
+   * impulse and no positional correction.
+   * @returns Negative handle used in contact events / setCollisionGroups.
+   */
+  addSensorVolume(
+    px: number, py: number, pz: number,
+    hx: number, hy: number, hz: number,
+    qx: number, qy: number, qz: number, qw: number
+  ): number
+
+  /**
+   * Set the collision-group membership/filter mask for any handle — a
+   * dynamic/kinematic body (id ≥ 0) or a static box/capsule/mover/sensor
+   * (id < 0, as returned by the matching add*() call). Mirrors
+   * `CollisionGroups` in src/game-elements/physics.ts.
+   */
+  setCollisionGroups(id: number, membership: number, filter: number): void
+
   // Position getters
   getPosX(id: number): number
   getPosY(id: number): number
@@ -166,7 +207,7 @@ export interface WasmPhysicsWorldInstance {
 
   /**
    * Pointer (byte offset into WASM memory) of the packed contact buffer.
-   * Layout: 12 floats/contact — id1, id2, nx, ny, nz, px, py, pz, impulse, phase, pad, pad.
+   * Layout: 12 floats/contact — id1, id2, nx, ny, nz, px, py, pz, impulse, phase, isSensor, pad.
    */
   getContactBufferPtr(): number
 

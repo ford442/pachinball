@@ -22,6 +22,9 @@ set(PHYSICS_CORE_SOURCES
   src/BodyStore.cpp
   src/BroadphaseGrid.cpp
   src/HingeJoint.cpp
+  src/KinematicMover.cpp
+  src/SensorVolume.cpp
+  src/Narrowphase.cpp
   src/PhysicsWorld.cpp
 )
 
@@ -116,7 +119,12 @@ if(NOT EMSCRIPTEN)
   )
   FetchContent_MakeAvailable(Catch2)
 
-  add_executable(physics_world_test tests/physics_world_test.cpp)
+  add_executable(physics_world_test
+    tests/physics_world_test.cpp
+    tests/kinematic_mover_test.cpp
+    tests/sensor_volume_test.cpp
+    tests/collision_filter_test.cpp
+  )
   target_link_libraries(physics_world_test PRIVATE
     pachinball_physics_native
     Catch2::Catch2WithMain

@@ -4,9 +4,12 @@
 #include "RigidBody.h"
 #include "ContactListener.h"
 #include "BodyStore.h"
+#include "CollisionFilter.h"
 #include "HandleTable.h"
 #include "BroadphaseGrid.h"
 #include "HingeJoint.h"
+#include "KinematicMover.h"
+#include "SensorVolume.h"
 
 #include <vector>
 #include <cstdint>
@@ -24,27 +27,33 @@ struct PlaneDesc {
 
 /** Oriented static box collider (half-extents in local space). */
 struct BoxDesc {
-  Vec3  center       = Vec3::zero();
-  Vec3  halfExtents  = {0.5f, 0.5f, 0.5f};
-  Quat  rotation     = Quat::identity();
-  float restitution  = 0.4f;
-  float friction     = 0.2f;
+  Vec3     center       = Vec3::zero();
+  Vec3     halfExtents  = {0.5f, 0.5f, 0.5f};
+  Quat     rotation     = Quat::identity();
+  float    restitution  = 0.4f;
+  float    friction     = 0.2f;
+  uint32_t membership   = COLLISION_GROUPS_ALL;
+  uint32_t filter       = COLLISION_GROUPS_ALL;
 };
 
 /** Oriented static capsule collider (local Y is the segment axis). */
 struct CapsuleDesc {
-  Vec3  center      = Vec3::zero();
-  float radius      = 0.1f;
-  float halfHeight  = 0.5f;
-  Quat  rotation    = Quat::identity();
-  float restitution = 0.4f;
-  float friction    = 0.2f;
+  Vec3     center      = Vec3::zero();
+  float    radius      = 0.1f;
+  float    halfHeight  = 0.5f;
+  Quat     rotation    = Quat::identity();
+  float    restitution = 0.4f;
+  float    friction    = 0.2f;
+  uint32_t membership  = COLLISION_GROUPS_ALL;
+  uint32_t filter      = COLLISION_GROUPS_ALL;
 };
 
 /** Negative body IDs reserved for static colliders in contact events. */
 static constexpr int STATIC_PLANE_ID    = -1;
 static constexpr int STATIC_BOX_ID_BASE   = -1000;
 static constexpr int STATIC_CAPSULE_ID_BASE = -2000;
+// KINEMATIC_MOVER_ID_BASE (-3000) and SENSOR_VOLUME_ID_BASE (-4000) are
+// declared in KinematicMover.h / SensorVolume.h respectively.
 
 /** Packed transform-buffer layout (16 floats per public-id slot). */
 inline constexpr int TRANSFORM_STRIDE = 16;
@@ -92,6 +101,23 @@ public:
                        float qx, float qy, float qz, float qw,
                        float restitution = 0.4f,
                        float friction = 0.2f);
+
+  /** Add a kinematic oriented-box mover (piston, platter, gate). @returns negative handle. */
+  int addKinematicMover(const KinematicMoverDesc& desc);
+
+  /** Push the pose this mover should reach by the next `step()`; velocity is derived from the delta. */
+  void setNextKinematicTransform(int moverId, float px, float py, float pz,
+                                 float qx, float qy, float qz, float qw);
+
+  /** Add a static OBB trigger volume (Enter/Stay/Exit events, zero impulse). @returns negative handle. */
+  int addSensorVolume(const SensorVolumeDesc& desc);
+
+  /**
+   * Set the collision-group membership/filter mask for any handle — a
+   * dynamic/kinematic body (id ≥ 0) or a static box/capsule/mover/sensor
+   * (id < 0, as returned by the matching add*() call).
+   */
+  void setCollisionGroups(int id, uint32_t membership, uint32_t filter);
 
   void getPosition(int id, float* px, float* py, float* pz) const;
   void getVelocity(int id, float* vx, float* vy, float* vz) const;
@@ -162,6 +188,17 @@ private:
 
   static Vec3 closestPointOnSegment(const Vec3& p, const Vec3& segA, const Vec3& segB);
 
+  // ---- Kinematic movers (KinematicMover.cpp) ---------------------------
+  void resolveSphereVsMover(BodyView& body, int moverIndex);
+  void resolveCapsuleVsMover(BodyView& body, int moverIndex);
+  /** One-sided impulse: `body` reacts to a contact against a prescribed-velocity, infinite-mass opponent. */
+  float applyMoverContactImpulse(BodyView& body, const Vec3& contactPoint, const Vec3& normal,
+                                 const Vec3& otherPointVel, float restitution, float friction,
+                                 float penetration);
+
+  // ---- Sensor volumes (SensorVolume.cpp) --------------------------------
+  void resolveSphereVsSensor(BodyView& body, int sensorIndex);
+
   WorldParams                    params_;
   BodyStore                      bodies_;
   HandleTable                    handles_;
@@ -171,6 +208,8 @@ private:
   std::vector<PlaneDesc>         planes_;
   std::vector<BoxDesc>           boxes_;
   std::vector<CapsuleDesc>       capsules_;
+  std::vector<KinematicMover>    movers_;
+  std::vector<SensorVolumeDesc>  sensors_;
   std::vector<HingeJoint>        hinges_;
   int                            nextHingeId_ = 0;
   ContactListener                contactListener_;

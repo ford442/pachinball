@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CollisionFilter.h"
 #include "MathTypes.h"
 #include <cstdint>
 
@@ -31,6 +32,8 @@ struct RigidBodyDesc {
   float     capsuleHalfHeight = 0.5f; ///< Half-length of the capsule segment (ignored for Sphere)
   float     friction          = 0.2f; ///< Coulomb friction coefficient (≥ 0)
   float     angularDamping    = 0.1f; ///< Angular drag factor (dynamic spheres)
+  uint32_t  membership        = COLLISION_GROUPS_ALL; ///< Collision groups this body belongs to
+  uint32_t  filter            = COLLISION_GROUPS_ALL; ///< Collision groups this body interacts with
 };
 
 /** Live rigid-body state, managed by PhysicsWorld. */
