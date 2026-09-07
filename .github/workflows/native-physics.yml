@@ -23,8 +23,12 @@ on:
       - 'native/**'
       - 'src/wasm/**'
       - 'src/config/physics.ts'
+      - 'src/game-elements/physics.ts'
       - 'tests/wasm-*.test.ts'
+      - 'tests/wasm-*.spec.ts'
       - 'tests/transform-buffer.test.ts'
+      - 'tests/helpers/wasm-owner-boot.ts'
+      - 'playwright.config.ts'
       - 'scripts/build-wasm.sh'
       - 'scripts/run-wasm-parity.mjs'
       - 'scripts/print-wasm-flags.mjs'
@@ -35,8 +39,12 @@ on:
       - 'native/**'
       - 'src/wasm/**'
       - 'src/config/physics.ts'
+      - 'src/game-elements/physics.ts'
       - 'tests/wasm-*.test.ts'
+      - 'tests/wasm-*.spec.ts'
       - 'tests/transform-buffer.test.ts'
+      - 'tests/helpers/wasm-owner-boot.ts'
+      - 'playwright.config.ts'
       - 'scripts/build-wasm.sh'
       - 'scripts/run-wasm-parity.mjs'
       - 'scripts/print-wasm-flags.mjs'
@@ -141,3 +149,14 @@ jobs:
         run: |
           source emsdk/emsdk_env.sh
           WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npm run test:wasm-parity
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Playwright wasm-owner feel + debug draw
+        env:
+          CI: 'true'
+        run: >
+          npx playwright test --project=chromium
+          tests/wasm-owner-flipper.spec.ts
+          tests/wasm-owner-debug-draw.spec.ts

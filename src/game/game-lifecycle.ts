@@ -2,6 +2,7 @@
  * Game Lifecycle — State transitions, camera mode, start/pause/reset, jackpot.
  */
 
+import type { PhysicsSystem } from '../game-elements/physics'
 import { peekAudioEngine } from '../audio/audio-engine'
 import { Scene } from '@babylonjs/core/scene'
 import {
@@ -48,6 +49,7 @@ export interface LifecycleHost {
   readonly cameraController: CameraController | null
   readonly mapManager: TableMapManager | null
   readonly uiManager: GameUIManager | null
+  readonly physics: PhysicsSystem | null
   readonly scene: Scene | null
   readonly tableCam: import('@babylonjs/core/Cameras/targetCamera').TargetCamera | null
   readonly renderer: { applyQualityTier(tier: QualityTier): void } | null
@@ -210,7 +212,7 @@ export class GameLifecycle {
         buildId: '1.0.0',
         mapId: this.host.currentMapId ?? 'neon-helix',
         seed: getSessionSeed(),
-        physicsEngine: 'rapier',
+        physicsEngine: this.host.physics?.getWasmMode() ?? 'rapier',
         renderer: (typeof window !== 'undefined' && (window as unknown as { currentRenderer?: string }).currentRenderer === 'webgpu') ? 'webgpu' : 'webgl2',
         createdAt: new Date().toISOString(),
       })

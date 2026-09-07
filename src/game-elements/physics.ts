@@ -15,6 +15,17 @@ export function exposeCurrentPhysicsEngine(mode: WasmPhysicsRuntimeMode): void {
   ;(window as unknown as { currentPhysicsEngine?: WasmPhysicsRuntimeMode }).currentPhysicsEngine = mode
 }
 
+/** Last degrade reason (Playwright / diagnostics); undefined when WASM loaded successfully. */
+export function exposePhysicsDegradeReason(reason: string | undefined): void {
+  if (typeof window === 'undefined') return
+  const w = window as unknown as { physicsDegradeReason?: string }
+  if (reason === undefined) {
+    delete w.physicsDegradeReason
+  } else {
+    w.physicsDegradeReason = reason
+  }
+}
+
 // Gravity: -Y (down), -Z (roll towards player)
 export const GRAVITY = { x: 0, y: -9.81, z: -5.0 }
 
@@ -192,9 +203,9 @@ export class PhysicsSystem {
           this.wasmEngine = engine
           this.wasmActive = true
         } else {
-          console.warn(
-            `${PHYSICS_DEGRADE_MARKER} WASM physics bundle failed to load; falling back to Rapier.`,
-          )
+          const reason = `${PHYSICS_DEGRADE_MARKER} WASM physics bundle failed to load; falling back to Rapier.`
+          console.warn(reason)
+          exposePhysicsDegradeReason(reason)
           this.wasmMode = 'rapier'
         }
       }

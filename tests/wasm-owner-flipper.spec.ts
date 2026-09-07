@@ -1,78 +1,10 @@
-import { test, expect, type Page } from '@playwright/test'
-
-type GameHooks = {
-  game?: {
-    startGame?: () => Promise<void>
-    stateManager?: { isPlaying?: () => boolean }
-    physics?: {
-      isWasmOwnerMode?: () => boolean
-      getWasmEngine?: () => { isReady?: boolean }
-      getRapier?: () => { Vector3: new (x: number, y: number, z: number) => unknown }
-      getLastRapierStepMs?: () => number
-    }
-    physicsController?: {
-      rebuildHandleCaches?: () => void
-      resetBallScoreCounters?: () => void
-      getPointsThisBall?: () => number
-      getBumperHitsThisBall?: () => number
-      getRawCollisionEvents?: () => number
-      getLastLaneHit?: () => string | null
-      applyOwnedBallImpulse?: (body: unknown, ix: number, iy: number, iz: number) => void
-      stepPhysics: (
-        inputManager: unknown,
-        inputActions: unknown,
-        replayRunner: null,
-        replayRecorder: null
-      ) => void
-    }
-    ballManager?: {
-      getBallBody?: () => {
-        setTranslation: (v: unknown, w: boolean) => void
-        setLinvel: (v: unknown, w: boolean) => void
-        translation: () => { x: number; y: number; z: number }
-        linvel: () => { x: number; y: number; z: number }
-      }
-    }
-    gameObjects?: {
-      getBumperBodies?: () => Array<{ translation: () => { x: number; y: number; z: number } }>
-    }
-    inputManager?: unknown
-    inputActions?: { handlePlunger?: () => boolean }
-    plungerChargeLevel?: number
-  }
-}
-
-async function bootWasmOwner(page: Page): Promise<{ wasmReady: boolean; engine: string | null }> {
-  await page.addInitScript(() => {
-    localStorage.setItem('pachinball:physics-engine', 'wasm-owner')
-  })
-  await page.goto('/?renderer=webgl2')
-  await expect(page.locator('#start-btn')).toBeVisible({ timeout: 10_000 })
-  await expect.poll(async () => {
-    return page.evaluate(() => !!(window as unknown as GameHooks).game?.stateManager)
-  }, { timeout: 15_000 }).toBe(true)
-
-  return page.evaluate(() => {
-    const w = window as unknown as GameHooks & { currentPhysicsEngine?: string }
-    const g = w.game
-    const wasmReady = !!(g?.physics?.isWasmOwnerMode?.() && g?.physics?.getWasmEngine?.()?.isReady)
-    return { wasmReady, engine: w.currentPhysicsEngine ?? null }
-  })
-}
-
-async function startPlaying(page: Page): Promise<void> {
-  const started = await page.evaluate(async () => {
-    const g = (window as unknown as GameHooks).game
-    try {
-      await g?.startGame?.()
-      return { ok: g?.stateManager?.isPlaying?.() === true, error: null as string | null }
-    } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
-    }
-  })
-  expect(started.error, started.error ?? 'startGame failed').toBeNull()
-  expect(started.ok).toBe(true)
-}
+import { test, expect } from '@playwright/test'
+import {
+  assertWasmOwnerReady,
+  bootWasmOwner,
+  startPlaying,
+  type GameHooks,
+} from './helpers/wasm-owner-boot'
 
 /**
  * wasm-owner flipper smoke + plunger/score feel gate.
@@ -82,10 +14,7 @@ test.describe('wasm-owner native flipper hinge', () => {
   test('raise/lower launches a ball and skips Rapier step', async ({ page }) => {
     test.setTimeout(180_000)
     const boot = await bootWasmOwner(page)
-    if (!boot.wasmReady) {
-      test.skip(true, 'WASM owner engine not loaded in this environment')
-    }
-    expect(boot.engine).toBe('wasm-owner')
+    assertWasmOwnerReady(boot)
     await startPlaying(page)
 
     const placed = await page.evaluate(() => {
@@ -139,10 +68,7 @@ test.describe('wasm-owner native flipper hinge', () => {
     })
 
     const boot = await bootWasmOwner(page)
-    if (!boot.wasmReady) {
-      test.skip(true, 'WASM owner engine not loaded in this environment')
-    }
-    expect(boot.engine, 'must not silently fall back to Rapier').toBe('wasm-owner')
+    assertWasmOwnerReady(boot)
     await startPlaying(page)
 
     const launched = await page.evaluate(() => {
@@ -177,15 +103,13 @@ test.describe('wasm-owner native flipper hinge', () => {
     expect(launched.ok).toBe(true)
     expect(launched.engine).toBe('wasm-owner')
     expect(launched.leftLane, `ball still in lane x=${launched.x} z=${launched.z}`).toBe(true)
+    expect(degrade, 'must not degrade when WASM bundle is present').toHaveLength(0)
   })
 
   test('bumper contact awards score', async ({ page }) => {
     test.setTimeout(180_000)
     const boot = await bootWasmOwner(page)
-    if (!boot.wasmReady) {
-      test.skip(true, 'WASM owner engine not loaded in this environment')
-    }
-    expect(boot.engine, 'must not silently fall back to Rapier').toBe('wasm-owner')
+    assertWasmOwnerReady(boot)
     await startPlaying(page)
 
     const scored = await page.evaluate(() => {

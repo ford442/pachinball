@@ -70,6 +70,14 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
+      # Dev server without public/wasm — validates fail-closed Rapier degrade + marker.
+      - name: Physics degrade (no WASM bundle)
+        env:
+          CI: 'true'
+        run: |
+          rm -rf public/wasm
+          npx playwright test --config=playwright.degrade.config.ts
+
       # Playwright's webServer boots `npm run dev` on 5173 and waits for it. The chromium
       # project runs the desktop specs; the mobile-chrome project (Pixel 7 emulation) runs
       # the touch smoke — each spec is routed to the right project by testMatch/testIgnore.
