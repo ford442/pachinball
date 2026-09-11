@@ -317,7 +317,6 @@ function readContacts(mod, world) {
 {
   const world = new Module.PhysicsWorld()
   world.setGravity(0, 0, 0)
-  // px,py,pz, radius, halfHeight, qx,qy,qz,qw, restitution, friction
   const cylId = world.addStaticCylinder(0, 0, 0, 0.5, 2, 0, 0, 0, 1, 0.9, 0)
   world.createRigidBody(1.2, 0, 0, -4, 0, 0, 1, 0.1, 0.9, 0, 0, 0, 0.5, 0, 0)
 
@@ -377,7 +376,6 @@ function readContacts(mod, world) {
   world.delete()
 }
 
-// #383 Slice B — static sphere reflects, and its handle range is distinct.
 {
   const world = new Module.PhysicsWorld()
   world.setGravity(0, 0, 0)
@@ -392,13 +390,12 @@ function readContacts(mod, world) {
     }
   }
   const vz = world.getVelZ(0)
-  const ok = sphId === -6000 && normalZ !== null && Math.abs(normalZ - 1) < 1e-3 && vz > 0.5
+  const ok = sphId === -8000 && normalZ !== null && Math.abs(normalZ - 1) < 1e-3 && vz > 0.5
   console.log(`${ok ? 'PASS' : 'FAIL'} wasm static sphere reflect (id=${sphId} nz=${normalZ} vz=${vz.toFixed(3)})`)
   if (!ok) failed = true
   world.delete()
 }
 
-// #383 Slice B — a filter word must exclude the new static shapes too.
 {
   const world = new Module.PhysicsWorld()
   world.setGravity(0, 0, 0)
@@ -424,9 +421,6 @@ function readContacts(mod, world) {
   world.delete()
 }
 
-// #383 Slice B — clearStaticGeometry: statics are append-only, so a rebuilt
-// scene (new adventure track, fresh WasmOwner.rebuild) must be able to drop
-// the old one instead of stacking a second copy.
 {
   const world = new Module.PhysicsWorld()
   world.setGravity(0, 0, 0)
@@ -444,10 +438,7 @@ function readContacts(mod, world) {
   }
 
   world.clearStaticGeometry()
-
-  // Handles restart from their bases, so the next add reuses boxId.
   const reBoxId = world.addStaticBox(0, 40, 0, 1, 1, 1, 0, 0, 0, 1, 0.9, 0)
-
   world.setBodyPosition(0, 4, 0, 0)
   world.setVelocity(0, -4, 0, 0)
   let hitAfter = false
@@ -467,6 +458,87 @@ function readContacts(mod, world) {
   world.delete()
 }
 
+// ---------------------------------------------------------------------------
+// #383 Slice B — adventure geometry
+// ---------------------------------------------------------------------------
+
+/** Upload a triangle mesh through the heap, as PhysicsModule.ts does. */
+function addMesh(world, vertices, indices, restitution = 0.1, friction = 0.05, doubleSided = false) {
+  const vPtr = Module._malloc(vertices.byteLength)
+  const iPtr = Module._malloc(indices.byteLength)
+  Module.HEAPF32.set(vertices, vPtr >> 2)
+  Module.HEAPU32.set(indices, iPtr >> 2)
+  const id = world.addStaticTriangleMesh(
+    vPtr, vertices.length / 3, iPtr, indices.length, restitution, friction, doubleSided
+  )
+  Module._free(vPtr)
+  Module._free(iPtr)
+  return id
+}
+
+/** Flat quad tilted `slopeDeg` about X, split on the 0–2 diagonal; +z is downhill. */
+function rampMesh(halfWidth, halfLength, slopeDeg, centreY) {
+  const s = Math.sin((slopeDeg * Math.PI) / 180)
+  const c = Math.cos((slopeDeg * Math.PI) / 180)
+  const corner = (x, z) => [x, centreY - z * s, z * c]
+  return {
+    vertices: Float32Array.from([
+      ...corner(-halfWidth, -halfLength),
+      ...corner(halfWidth, -halfLength),
+      ...corner(halfWidth, halfLength),
+      ...corner(-halfWidth, halfLength),
+    ]),
+    indices: Uint32Array.from([0, 3, 2, 0, 2, 1]),
+  }
+}
+
+// Static cylinder: a ball dropped on a pin cap comes to rest on it.
+failed ||= !runScenario('wasm ball rests on a static cylinder', (w) => {
+  w.setGravity(0, -9.81, 0)
+  w.addStaticCylinder(0, 0.5, 0, 0.6, 0.5, 0, 0, 0, 1, 0.1, 0.4)
+  w.createRigidBody(0, 2, 0, 0, 0, 0, 1, 0.2, 0.1, 0, 0, 0, 0.5, 0.2, 0.1)
+}, (w) => Math.abs(w.getPosY(0) - 1.2) < 0.08)
+
+// Triangle mesh: a ball must roll downhill on a 15° ramp, not fall through it.
+failed ||= !runScenario('wasm ball rolls down a triangle-mesh ramp', (w) => {
+  w.setGravity(0, -9.81, 0)
+  w.setRollingResistance(0)
+  const { vertices, indices } = rampMesh(4, 6, 15, 2)
+  addMesh(w, vertices, indices)
+  w.createRigidBody(0, 3.35, -4, 0, 0, 0, 1, 0.2, 0.1, 0, 0, 0, 0.5, 0.05, 0.1)
+}, (w) => w.getPosZ(0) > -3 && w.getVelZ(0) > 0.5 && w.getPosY(0) > 0)
+
+// One-sidedness: approaching a mesh from behind its face must not collide.
+failed ||= !runScenario('wasm one-sided mesh ignores contact from behind', (w) => {
+  w.setGravity(0, 0, 0)
+  const { vertices, indices } = rampMesh(4, 4, 0, 1)
+  addMesh(w, vertices, indices)
+  w.createRigidBody(0, 0, 0, 0, 3, 0, 1, 0.2, 0.5, 0, 0, 0, 0.5, 0.2, 0.1)
+}, (w) => w.getPosY(0) > 1.5 && Math.abs(w.getVelY(0) - 3) < 0.1)
+
+// Shaped sensors: a cylinder column fires exactly one enter and one exit.
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, 0, 0)
+  const sensorId = world.addSensorVolumeShaped(1, 0, 0, 0, 0.5, 2, 0.5, 0, 0, 0, 1)
+  world.createRigidBody(-2, 0, 0, 2, 0, 0, 1, 0.1, 0.5, 0, 0, 0, 0.5, 0.5, 0)
+
+  let enters = 0, exits = 0, impulseSeen = false
+  for (let i = 0; i < 120; i++) {
+    world.step(1 / 60)
+    for (const c of readContacts(Module, world)) {
+      if (c.id2 !== sensorId) continue
+      if (c.impulse !== 0) impulseSeen = true
+      if (c.phase === 0) enters++
+      if (c.phase === 2) exits++
+    }
+  }
+  const ok = enters === 1 && exits === 1 && !impulseSeen
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm cylinder sensor enter/exit (enters=${enters} exits=${exits})`)
+  if (!ok) failed = true
+  world.delete()
+}
+
 // #383 Slice B — static handle families are spaced 1000 apart, so overrunning
 // one must be refused rather than aliasing the next family's base.
 {
@@ -479,7 +551,7 @@ function readContacts(mod, world) {
   const overflow = world.addStaticCylinder(0, 0, 0, 0.1, 0.1, 0, 0, 0, 1, 0.4, 0.2)
   const sphere = world.addStaticSphere(0, 0, 0, 0.1, 0.4, 0.2)
   const ok = last === -5999 && dropsBefore === 0 && overflow > 0
-    && world.getDroppedStaticCount() === 1 && sphere === -6000
+    && world.getDroppedStaticCount() === 1 && sphere === -8000
   console.log(
     `${ok ? 'PASS' : 'FAIL'} wasm static handle family capacity ` +
     `(last=${last} overflow=${overflow} drops=${world.getDroppedStaticCount()} sphere=${sphere})`
@@ -488,4 +560,159 @@ function readContacts(mod, world) {
   world.delete()
 }
 
+// Kinematic cylinder platter drags a resting ball around with it.
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, -9.81, 0)
+  const platter = world.addKinematicMoverShaped(1, 0, 0, 0, 2, 0.2, 2, 0, 0, 0, 1, 0, 1)
+  world.createRigidBody(1, 0.45, 0, 0, 0, 0, 1, 0.2, 0, 0, 0, 0, 0.5, 1, 0.1)
+  for (let i = 0; i < 20; i++) world.step(1 / 60)
+
+  let angle = 0
+  for (let i = 0; i < 40; i++) {
+    angle += 2 * (1 / 60)
+    world.setNextKinematicTransform(platter, 0, 0, 0, 0, Math.sin(angle / 2), 0, Math.cos(angle / 2))
+    world.step(1 / 60)
+  }
+  // Right-handed spin about +Y carries +X toward -Z.
+  const vz = world.getVelZ(0)
+  const ok = vz < -0.3
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm kinematic cylinder platter drags ball (vz=${vz.toFixed(3)})`)
+  if (!ok) failed = true
+  world.delete()
+}
+
+// Force field: an updraft lifts a ball against gravity, mass-independently.
+failed ||= !runScenario('wasm force field lifts ball against gravity', (w) => {
+  w.setGravity(0, -9.81, 0)
+  w.addForceField(0, 5, 0, 2, 5, 2, 0, 0, 0, 1, 0, 20, 0, 0, true)
+  w.createRigidBody(0, 2, 0, 0, 0, 0, 1, 0.2, 0.1, 0, 0, 0, 0.5, 0.2, 0.1)
+  w.createRigidBody(1, 2, 0, 0, 0, 0, 8, 0.2, 0.1, 0, 0, 0, 0.5, 0.2, 0.1)
+}, (w) => w.getPosY(0) > 2.5 && Math.abs(w.getPosY(0) - w.getPosY(1)) < 0.05)
+
+// Dynamic box: a crate settles on a static box instead of sinking or exploding.
+failed ||= !runScenario('wasm dynamic box rests on a static box', (w) => {
+  w.setGravity(0, -9.81, 0)
+  w.addStaticBox(0, -0.5, 0, 5, 0.5, 5, 0, 0, 0, 1, 0.1, 0.6)
+  w.createBoxBody(0, 1, 0, 0, 0, 0, 2, 0.3, 0.3, 0.3, 0, 0.02, 0, 0.6, 0.1)
+}, (w) => Math.abs(w.getPosY(0) - 0.3) < 0.1 && Math.abs(w.getVelY(0)) < 0.3)
+
+// clearStaticGeometry: a track switch must not leave the old geometry behind.
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, -9.81, 0)
+  world.addStaticBox(0, 0, 0, 5, 0.5, 5, 0, 0, 0, 1, 0.1, 0.4)
+  const ball = world.createRigidBody(0, 2, 0, 0, 0, 0, 1, 0.2, 0.1, 0, 0, 0, 0.5, 0.2, 0.1)
+  for (let i = 0; i < 90; i++) world.step(1 / 60)
+  const restedY = world.getPosY(ball)
+
+  world.clearStaticGeometry()
+  world.setBodyPosition(ball, 0, 2, 0)
+  world.setVelocity(ball, 0, 0, 0)
+  for (let i = 0; i < 90; i++) world.step(1 / 60)
+  const fellY = world.getPosY(ball)
+
+  const ok = Math.abs(restedY - 0.7) < 0.1 && fellY < -3
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm clearStaticGeometry removes colliders (rested=${restedY.toFixed(2)} fell=${fellY.toFixed(2)})`)
+  if (!ok) failed = true
+  world.delete()
+}
+
+// Repeated track switches must not leak geometry: the same scene rebuilt five
+// times has to behave identically to the first build.
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, -9.81, 0)
+  const ball = world.createRigidBody(0, 3, 0, 0, 0, 0, 1, 0.2, 0.1, 0, 0, 0, 0.5, 0.4, 0.1)
+  const verts = Float32Array.from([-4, 1, -4, 4, 1, -4, 4, 1, 4, -4, 1, 4])
+  const idx = Uint32Array.from([0, 3, 2, 0, 2, 1])
+
+  const rested = []
+  const contacts = []
+  for (let cycle = 0; cycle < 5; cycle++) {
+    world.clearStaticGeometry()
+    addMesh(world, verts, idx, 0.1, 0.4)
+    world.addStaticCylinder(1, 1.5, 0, 0.3, 0.5, 0, 0, 0, 1, 0.5, 0.3)
+    world.addSensorVolumeShaped(0, -2, 1.5, 0, 0.5, 0.5, 0.5, 0, 0, 0, 1)
+    world.setBodyPosition(ball, 0, 3, 0)
+    world.setVelocity(ball, 0, 0, 0)
+    for (let i = 0; i < 60; i++) world.step(1 / 60)
+    rested.push(world.getPosY(ball))
+    contacts.push(world.getContactCount())
+  }
+  const ok = rested.every((y) => Math.abs(y - rested[0]) < 1e-4) &&
+             contacts.every((c) => c === contacts[0])
+  console.log(
+    `${ok ? 'PASS' : 'FAIL'} wasm repeated track switches leak no geometry ` +
+    `(restY=[${rested.map((y) => y.toFixed(3)).join(',')}] contacts=[${contacts.join(',')}])`
+  )
+  if (!ok) failed = true
+  world.delete()
+}
+
+// Side-by-side against Rapier: same 15° ramp as a trimesh in both engines.
+// Tolerance is loose on purpose — the two solvers differ in detail; what must
+// agree is that the ball stays on the surface and runs downhill at a similar rate.
+{
+  const dt = 1 / 60
+  const steps = 120
+  const { vertices, indices } = rampMesh(4, 6, 15, 2)
+
+  const wasm = new Module.PhysicsWorld()
+  wasm.setGravity(0, -9.81, 0)
+  wasm.setRollingResistance(0)
+  addMesh(wasm, vertices, indices)
+  wasm.createRigidBody(0, 3.35, -4, 0, 0, 0, 1, 0.2, 0.1, 0, 0, 0, 0.5, 0.05, 0.1)
+
+  let rapierZ = null
+  try {
+    const RAPIER = await import('@dimforge/rapier3d-compat/rapier.es.js')
+    try {
+      await RAPIER.init({})
+    } catch {
+      try { await RAPIER.init() } catch { /* WASM already ready in some runners */ }
+    }
+    const rw = new RAPIER.World({ x: 0, y: -9.81, z: 0 })
+    rw.integrationParameters.dt = dt
+    rw.createCollider(
+      RAPIER.ColliderDesc.trimesh(vertices, indices).setFriction(0.05).setRestitution(0.1)
+    )
+    const rb = rw.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(0, 3.35, -4)
+        .setLinearDamping(0)
+        .setAngularDamping(0.1)
+    )
+    rw.createCollider(
+      RAPIER.ColliderDesc.ball(0.2).setFriction(0.05).setRestitution(0.1).setMass(1),
+      rb
+    )
+    for (let i = 0; i < steps; i++) {
+      wasm.step(dt)
+      rw.step()
+    }
+    rapierZ = rb.translation().z
+  } catch (err) {
+    for (let i = 0; i < steps; i++) wasm.step(dt)
+    console.log(`SKIP wasm/rapier mesh ramp (rapier unavailable: ${err?.message ?? err})`)
+  }
+
+  const wasmZ = wasm.getPosZ(0)
+  const wasmY = wasm.getPosY(0)
+  const onSurface = wasmY > 2 - wasmZ * Math.tan((15 * Math.PI) / 180) - 0.15
+  if (rapierZ === null) {
+    const ok = wasmZ > -3 && onSurface
+    console.log(`${ok ? 'PASS' : 'FAIL'} wasm mesh ramp (no rapier) (z=${wasmZ.toFixed(3)})`)
+    if (!ok) failed = true
+  } else {
+    const bothDownhill = wasmZ > -4 && rapierZ > -4
+    const ok = bothDownhill && onSurface && Math.abs(wasmZ - rapierZ) < 2.0
+    console.log(
+      `${ok ? 'PASS' : 'FAIL'} wasm/rapier mesh ramp downhill ` +
+      `(wasmZ=${wasmZ.toFixed(3)} rapierZ=${rapierZ.toFixed(3)})`
+    )
+    if (!ok) failed = true
+  }
+  wasm.delete()
+}
 process.exit(failed ? 1 : 0)

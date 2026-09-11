@@ -11,11 +11,15 @@
 #include "KinematicMover.h"
 #include "SensorVolume.h"
 #include "StaticShapes.h"
+#include "TriangleMesh.h"
+#include "ForceField.h"
+#include "StaticShapes.h"
 
 #include <vector>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 
 namespace pachinball {
 
@@ -55,8 +59,10 @@ static constexpr int STATIC_BOX_ID_BASE   = -1000;
 static constexpr int STATIC_CAPSULE_ID_BASE = -2000;
 // KINEMATIC_MOVER_ID_BASE (-3000) and SENSOR_VOLUME_ID_BASE (-4000) are
 // declared in KinematicMover.h / SensorVolume.h respectively;
-// STATIC_CYLINDER_ID_BASE (-5000) and STATIC_SPHERE_ID_BASE (-6000) in
-// StaticShapes.h.
+// STATIC_CYLINDER_ID_BASE (-5000) in StaticShapes.h;
+// STATIC_MESH_ID_BASE (-6000) in TriangleMesh.h;
+// FORCE_FIELD_ID_BASE (-7000) in ForceField.h;
+// STATIC_SPHERE_ID_BASE (-8000) in StaticShapes.h.
 
 /**
  * Entries per static-handle family.
@@ -140,7 +146,40 @@ public:
                       float restitution = 0.4f,
                       float friction = 0.2f);
 
-  /** Add a kinematic oriented-box mover (piston, platter, gate). @returns negative handle. */
+  /**
+   * Add an immutable static triangle mesh from world-space vertex/index
+   * arrays (`vertices` is 3 floats per vertex, `indices` 3 per triangle).
+   * Adventure ramps, walls and floors arrive through here.
+   * Degenerate (zero-area) triangles are dropped. @returns negative handle.
+   */
+  int addStaticTriangleMesh(const float* vertices, int vertexCount,
+                            const uint32_t* indices, int indexCount,
+                            float restitution = 0.4f,
+                            float friction = 0.2f,
+                            bool doubleSided = false);
+
+  /**
+   * Drop every static, kinematic and force-field collider — boxes, capsules,
+   * cylinders, meshes, sensors, movers, fields and planes — and reset the
+   * broadphase's static cells.
+   *
+   * All negative handles previously returned by `add*()` are invalidated, so
+   * the caller must re-export everything it still wants. Needed because an
+   * adventure track switch replaces the whole static world; rigid bodies are
+   * unaffected.
+   */
+  void clearStaticGeometry();
+
+  /** Add an oriented box force region (updraft, conveyor, solar wind). @returns negative handle. */
+  int addForceField(const ForceFieldDesc& desc);
+
+  /** Toggle a force field without removing it (gates a conveyor on and off). */
+  void setForceFieldEnabled(int fieldId, bool enabled);
+
+  /** Retarget a force field's vector, keeping its region and mode. */
+  void setForceFieldVector(int fieldId, float fx, float fy, float fz);
+
+  /** Add a kinematic mover (piston, platter, gate, rotating disc). @returns negative handle. */
   int addKinematicMover(const KinematicMoverDesc& desc);
 
   /** Push the pose this mover should reach by the next `step()`; velocity is derived from the delta. */
@@ -151,21 +190,9 @@ public:
   int addSensorVolume(const SensorVolumeDesc& desc);
 
   /**
-   * Drop every static collider, sensor volume and kinematic mover.
-   *
-   * Statics are append-only (they live in flat vectors indexed by their
-   * negative handle), so a scene that is rebuilt — a new adventure track, or
-   * a fresh WasmOwner.rebuild() — must clear before re-adding or it stacks a
-   * second copy of the old geometry. INVALIDATES every negative handle;
-   * dynamic bodies, hinges and their ids are untouched.
-   */
-  void clearStaticGeometry();
-
-  /**
    * Set the collision-group membership/filter mask for any handle — a
-   * dynamic/kinematic body (id ≥ 0) or a static
-   * box/capsule/cylinder/sphere/mover/sensor (id < 0, as returned by the
-   * matching add*() call).
+   * dynamic/kinematic body (id ≥ 0) or any static/kinematic collider
+   * (id < 0, as returned by the matching add*() call).
    */
   void setCollisionGroups(int id, uint32_t membership, uint32_t filter);
 
@@ -240,6 +267,27 @@ private:
   // ---- Static cylinder / sphere (StaticShapes.cpp) ---------------------
   void resolveSphereVsCylinder(BodyView& body, const CylinderDesc& cyl, int cylId);
   void resolveSphereVsStaticSphere(BodyView& body, const SphereDesc& sph, int sphId);
+  // ---- Static triangle meshes (TriangleMesh.cpp) ------------------------
+  void resolveSphereVsTriangle(BodyView& body, int triangleIndex);
+
+  // ---- Force fields (ForceField.cpp) ------------------------------------
+  /** Accumulate every enabled field's contribution; runs just before integration. */
+  void applyForceFields();
+
+  // ---- Dynamic boxes (DynamicBox.cpp) -----------------------------------
+  /**
+   * Point query against a static surface: returns whether `worldPoint` is
+   * inside it and, if so, the outward contact normal and penetration depth.
+   */
+  using SurfacePointQuery = std::function<bool(const Vec3& worldPoint,
+                                               Vec3& outNormal, float& outPenetration)>;
+  void resolveSphereVsBoxBody(BodyView& sphere, BodyView& box);
+  void resolveBoxCorners(BodyView& box, int otherId,
+                         float otherRestitution, float otherFriction,
+                         const SurfacePointQuery& query);
+  void resolveBoxBodyVsPlane(BodyView& box, const PlaneDesc& plane);
+  void resolveBoxBodyVsBox(BodyView& box, const BoxDesc& other, int otherId);
+  void resolveBoxBodyVsTriangle(BodyView& box, int triangleIndex);
 
   void wakeOnContact(BodyView& a, BodyView* b);
 
@@ -255,6 +303,9 @@ private:
 
   // ---- Sensor volumes (SensorVolume.cpp) --------------------------------
   void resolveSphereVsSensor(BodyView& body, int sensorIndex);
+  void resolveCapsuleVsSensor(BodyView& body, int sensorIndex);
+  /** Shared overlap emit — `queryPoint` is the body point nearest the volume. */
+  void emitSensorOverlap(BodyView& body, int sensorIndex, const Vec3& queryPoint);
 
   WorldParams                    params_;
   BodyStore                      bodies_;
@@ -269,6 +320,10 @@ private:
   std::vector<SphereDesc>        spheres_;
   std::vector<KinematicMover>    movers_;
   std::vector<SensorVolumeDesc>  sensors_;
+  std::vector<TriangleMeshDesc>  meshes_;
+  /** Flat, world-space triangle soup across every mesh; indices are stable. */
+  std::vector<MeshTriangle>      triangles_;
+  std::vector<ForceFieldDesc>    fields_;
   std::vector<HingeJoint>        hinges_;
   int                            nextHingeId_ = 0;
   ContactListener                contactListener_;

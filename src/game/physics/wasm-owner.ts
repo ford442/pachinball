@@ -1,51 +1,34 @@
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
-import type { BumperVisual, PhysicsBinding, InputFrame } from '../../game-elements/types'
+import type { AdventureColliderDesc } from '../../adventure/track-collider-descriptors'
+import type { AdventurePhysicsBridge } from '../../adventure/track-builder'
 import { WASM_PHYSICS, PhysicsConfig, GameConfig } from '../../config'
+import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
+import { peekPackedPhysicsBuffers, type WasmDebugCollider } from '../../game-elements/wasm-debug-geometry'
+import type { BumperVisual, InputFrame, PhysicsBinding } from '../../game-elements/types'
+import { ContactPhase, decodeContactBuffer } from '../../wasm/contact-buffer'
 import type { WasmSimEngine } from '../../wasm/wasm-sim-engine'
-import { exportRapierBodyToWasm } from './wasm-static-export'
 import {
   exportAdventureCollidersToWasm,
   type AdventureExportResult,
 } from './wasm-adventure-export'
-import type { AdventureColliderDesc } from '../../adventure/track-collider-descriptors'
-import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
-import type { WasmDebugCollider } from '../../game-elements/wasm-debug-geometry'
+import { exportRapierBodyToWasm } from './wasm-static-export'
 
-/** Blade half-length / radius approximation matching object-flippers.ts's cuboid collider. */
 const FLIPPER_PROXY_RADIUS = 0.3
 const FLIPPER_PROXY_HALF_HEIGHT = 1.55
 const FLIPPER_MASS = 2.0
 
 interface PlainQuat { x: number; y: number; z: number; w: number }
 
-/**
- * What WasmOwner needs to know about the adventure track that is currently
- * built, supplied per frame by the physics controller.
- */
 export interface AdventureTrackState {
-  /** Bumped by TrackBuilder on every build and teardown. */
   epoch: number
   descriptors: readonly AdventureColliderDesc[]
-  /** Non-empty when the track built Rapier geometry with no descriptor. */
   unexported: readonly string[]
-  /** The Rapier body a descriptor was realised as, for contact-event mapping. */
   bodyForDescriptor: (index: number) => RAPIER.RigidBody | null
-  /**
-   * True while an exit portal is up. Portal entry is detected with
-   * Rapier `intersectionPair` queries, which need a stepped Rapier world.
-   */
   portalActive: boolean
 }
 
-/**
- * Native capsules have their segment on local +Y; Rapier flipper cuboids are
- * long on local +X. This is shape-axis alignment for the *dynamic* hinge body
- * (and the inverse remap onto the Rapier mesh puppet). It is not the retired
- * kinematic `syncFlipperProxies` path.
- */
 const CAPSULE_AXIS_TO_BLADE_AXIS: PlainQuat = { x: 0, y: 0, z: -Math.SQRT1_2, w: Math.SQRT1_2 }
-/** Inverse of CAPSULE_AXIS_TO_BLADE_AXIS (+90° about Z) for Rapier puppet sync. */
 const BLADE_AXIS_TO_CAPSULE_AXIS: PlainQuat = { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 }
 
 function quatMultiply(a: PlainQuat, b: PlainQuat): PlainQuat {
@@ -65,13 +48,6 @@ interface FlipperHinge {
   anchor: { x: number; y: number; z: number }
 }
 
-/**
- * WasmOwner — WASM owns ball simulation, static table geometry, and flipper hinges.
- *
- * Rapier rigid bodies remain as handle-space puppets for mesh interpolation and
- * scoring dispatch. Table statics, bumpers, balls, and flippers are disabled in
- * Rapier while WASM runs. Adventure-mode bodies stay on Rapier.
- */
 export class WasmOwner {
   private engine: WasmSimEngine
   private rapierToWasm = new Map<RAPIER.RigidBody, number>()
@@ -80,21 +56,18 @@ export class WasmOwner {
   private ballBodies = new Set<RAPIER.RigidBody>()
   private flippers: FlipperHinge[] = []
   private disabledRapierBodies = new Set<RAPIER.RigidBody>()
-  /** Debug geometry for the dynamic bodies (balls, bumpers, flippers). */
   private dynamicDebug: WasmDebugCollider[] = []
-
-  /** Table statics from the last rebuild(), replayed when the scene is rebuilt. */
   private tableStaticBindings: PhysicsBinding[] = []
   private tableStaticDebug: WasmDebugCollider[] = []
-
-  /** Epoch of the adventure track currently exported; -1 when none is. */
+  private adventureTrack: AdventureTrackState | null = null
   private adventureEpoch = -1
   private adventureExport: AdventureExportResult | null = null
-  /** Mover handle per Rapier kinematic body, for the per-frame pose push. */
   private adventureMovers: { body: RAPIER.RigidBody; handle: number }[] = []
   private adventureDebug: WasmDebugCollider[] = []
-  /** Negative C++ handles this track registered in wasmToRapier. */
   private adventureWasmIds: number[] = []
+  private sensorBodyByHandle = new Map<number, RAPIER.RigidBody>()
+  private sensorHandlesByBody = new Map<RAPIER.RigidBody, number[]>()
+  private sensorOverlaps = new Set<string>()
   private leftPressed = false
   private rightPressed = false
   private leftHoldTime = 0
@@ -121,11 +94,15 @@ export class WasmOwner {
     this.dynamicDebug = []
     this.tableStaticBindings = []
     this.tableStaticDebug = []
+    this.adventureTrack = null
     this.adventureEpoch = -1
     this.adventureExport = null
     this.adventureMovers = []
     this.adventureDebug = []
     this.adventureWasmIds = []
+    this.sensorBodyByHandle.clear()
+    this.sensorHandlesByBody.clear()
+    this.sensorOverlaps.clear()
     this.leftPressed = false
     this.rightPressed = false
     this.leftHoldTime = 0
@@ -165,22 +142,15 @@ export class WasmOwner {
         velocity: { x: 0, y: 0, z: 0 },
         mass: 0,
         radius,
-        restitution: PhysicsConfig.bumper.restitution,
-        friction: GameConfig.physics.surfaces.bumper.friction,
+        restitution: PhysicsConfig.surfaces.bumper.restitution,
+        friction: PhysicsConfig.surfaces.bumper.friction,
         linearDamping: 0,
-        // Kinematic: C++ broadphase skips Static spheres (only boxes/capsules are
-        // inserted as static refs), so Static bumpers never generate contacts.
         bodyType: 2,
       })
       this.track(body, id)
       this.bumperWasmIds.add(id)
       const t = body.translation()
-      this.dynamicDebug.push({
-        kind: 'sphere',
-        center: { x: t.x, y: t.y, z: t.z },
-        radius,
-        bodyId: id,
-      })
+      this.dynamicDebug.push({ kind: 'sphere', center: { x: t.x, y: t.y, z: t.z }, radius, bodyId: id })
     }
 
     for (const body of ballBodies) {
@@ -199,12 +169,7 @@ export class WasmOwner {
       this.ballBodies.add(body)
       this.disableRapierBody(body)
       const t = body.translation()
-      this.dynamicDebug.push({
-        kind: 'sphere',
-        center: { x: t.x, y: t.y, z: t.z },
-        radius: GameConfig.ball.radius,
-        bodyId: id,
-      })
+      this.dynamicDebug.push({ kind: 'sphere', center: { x: t.x, y: t.y, z: t.z }, radius: GameConfig.ball.radius, bodyId: id })
     }
 
     for (const body of flipperBodies) {
@@ -213,7 +178,6 @@ export class WasmOwner {
       const com = collider ? collider.translation() : pivot
       const isRight = pivot.x >= 0
       const limits = isRight ? PhysicsConfig.flipper.rightLimits : PhysicsConfig.flipper.leftLimits
-
       const id = this.engine.createBody({
         position: com,
         velocity: { x: 0, y: 0, z: 0 },
@@ -232,9 +196,8 @@ export class WasmOwner {
         CAPSULE_AXIS_TO_BLADE_AXIS.x,
         CAPSULE_AXIS_TO_BLADE_AXIS.y,
         CAPSULE_AXIS_TO_BLADE_AXIS.z,
-        CAPSULE_AXIS_TO_BLADE_AXIS.w
+        CAPSULE_AXIS_TO_BLADE_AXIS.w,
       )
-
       const hingeId = this.engine.createHinge({
         bodyId: id,
         worldAnchor: { x: pivot.x, y: pivot.y, z: pivot.z },
@@ -244,13 +207,7 @@ export class WasmOwner {
       })
 
       this.wasmToRapier.set(id, body)
-      this.flippers.push({
-        rapierBody: body,
-        wasmId: id,
-        hingeId,
-        isRight,
-        anchor: { x: pivot.x, y: pivot.y, z: pivot.z },
-      })
+      this.flippers.push({ rapierBody: body, wasmId: id, hingeId, isRight, anchor: { x: pivot.x, y: pivot.y, z: pivot.z } })
       this.dynamicDebug.push({
         kind: 'capsule',
         center: { x: com.x, y: com.y, z: com.z },
@@ -272,33 +229,23 @@ export class WasmOwner {
     }
   }
 
-  /**
-   * Latch flipper input and drive native hinge motors from PhysicsConfig
-   * rest/active angles + stiffness/damping (same numbers as Rapier position motors).
-   */
   driveFlippers(frame: InputFrame | null, dt: number): void {
     if (frame) {
       if (frame.flipperLeft !== null) this.leftPressed = frame.flipperLeft
       if (frame.flipperRight !== null) this.rightPressed = frame.flipperRight
     }
-    if (this.leftPressed) this.leftHoldTime += dt
-    else this.leftHoldTime = 0
-    if (this.rightPressed) this.rightHoldTime += dt
-    else this.rightHoldTime = 0
+    this.leftHoldTime = this.leftPressed ? this.leftHoldTime + dt : 0
+    this.rightHoldTime = this.rightPressed ? this.rightHoldTime + dt : 0
 
     for (const f of this.flippers) {
       const pressed = f.isRight ? this.rightPressed : this.leftPressed
       const hold = f.isRight ? this.rightHoldTime : this.leftHoldTime
       const holdFactor = Math.min(hold / PhysicsConfig.flipper.holdTimeDivisor, 1)
-      const stiffnessMultiplier = pressed ? (1.0 + holdFactor * 0.3) : 0.8
-      const dampingMultiplier = pressed ? (0.9 + holdFactor * 0.1) : 1.1
-      const stiffness = getPhysicsTuningValue('flipperStiffness') * stiffnessMultiplier
-      const damping = getPhysicsTuningValue('flipperDamping') * dampingMultiplier
-
+      const stiffness = getPhysicsTuningValue('flipperStiffness') * (pressed ? 1 + holdFactor * 0.3 : 0.8)
+      const damping = getPhysicsTuningValue('flipperDamping') * (pressed ? 0.9 + holdFactor * 0.1 : 1.1)
       const target = f.isRight
         ? (pressed ? PhysicsConfig.flipper.activeAngleRad : -PhysicsConfig.flipper.restAngleRad)
         : (pressed ? -PhysicsConfig.flipper.activeAngleRad : PhysicsConfig.flipper.restAngleRad)
-
       const angle = this.engine.getHingeAngle(f.hingeId)
       const omega = this.engine.getAngularVelocity(f.wasmId).y
       const err = target - angle
@@ -307,15 +254,49 @@ export class WasmOwner {
     }
   }
 
+  driveAdventure(_dt: number): void {
+    if (!this.adventureExport || !this.engine.setNextKinematicTransform) return
+    for (const { body, handle } of this.adventureMovers) {
+      const p = body.nextTranslation()
+      const q = body.nextRotation()
+      this.engine.setNextKinematicTransform(handle, { x: p.x, y: p.y, z: p.z }, { x: q.x, y: q.y, z: q.z, w: q.w })
+      body.setTranslation(p, false)
+      body.setRotation(q, false)
+    }
+  }
+
   applyBallImpulse(rapierBody: RAPIER.RigidBody, ix: number, iy: number, iz: number): void {
     const id = this.rapierToWasm.get(rapierBody)
-    if (id === undefined) return
-    this.engine.applyImpulse(id, ix, iy, iz)
+    if (id !== undefined) this.engine.applyImpulse(id, ix, iy, iz)
+  }
+
+  refreshSensorOverlaps(): void {
+    if (!this.isAdventureOwned() || this.sensorBodyByHandle.size === 0) return
+    const packed = peekPackedPhysicsBuffers(this.engine)
+    if (!packed.contacts || packed.contactCount <= 0) return
+
+    for (const evt of decodeContactBuffer(packed.contacts, packed.contactCount)) {
+      if (!evt.isSensor || !this.sensorBodyByHandle.has(evt.bodyId2)) continue
+      const key = `${evt.bodyId2}:${evt.bodyId1}`
+      if (evt.phase === ContactPhase.Exit) this.sensorOverlaps.delete(key)
+      else this.sensorOverlaps.add(key)
+    }
+  }
+
+  getPhysicsBridge(): AdventurePhysicsBridge {
+    return {
+      overlaps: (sensorBody, ball) => {
+        const ballId = this.rapierToWasm.get(ball)
+        if (ballId === undefined) return false
+        const handles = this.sensorHandlesByBody.get(sensorBody)
+        return handles ? handles.some((handle) => this.sensorOverlaps.has(`${handle}:${ballId}`)) : false
+      },
+      applyImpulse: (ball, x, y, z) => this.applyBallImpulse(ball, x, y, z),
+    }
   }
 
   syncFromWasm(rapier: typeof RAPIER | null): void {
-    if (!rapier) return
-    if (!this.engine.hasTransformSnapshot()) return
+    if (!rapier || !this.engine.hasTransformSnapshot()) return
     for (const body of this.ballBodies) {
       const id = this.rapierToWasm.get(body)
       if (id === undefined) continue
@@ -334,145 +315,55 @@ export class WasmOwner {
       const rapierRot = quatMultiply(rot, BLADE_AXIS_TO_CAPSULE_AXIS)
       const ang = this.engine.getAngularVelocity(f.wasmId)
       f.rapierBody.setTranslation(new rapier.Vector3(f.anchor.x, f.anchor.y, f.anchor.z), true)
-      f.rapierBody.setRotation(
-        { x: rapierRot.x, y: rapierRot.y, z: rapierRot.z, w: rapierRot.w },
-        true
-      )
+      f.rapierBody.setRotation({ x: rapierRot.x, y: rapierRot.y, z: rapierRot.z, w: rapierRot.w }, true)
       f.rapierBody.setAngvel(new rapier.Vector3(ang.x, ang.y, ang.z), true)
       f.rapierBody.setLinvel(new rapier.Vector3(0, 0, 0), true)
     }
   }
 
-  // ---- Static scene (table + adventure) ---------------------------------
-
-  /**
-   * Re-export every static shape in the scene.
-   *
-   * C++ statics are append-only — `clearStaticGeometry()` is the only way to
-   * drop them — so the ground plane, the table's fixed colliders and the
-   * current adventure track are always (re)written together.
-   */
-  private exportStaticScene(): void {
-    this.engine.clearStaticGeometry()
-
-    const plane = WASM_PHYSICS.tunables.groundPlane
-    this.engine.addStaticPlane(
-      { x: plane.normal.x, y: plane.normal.y, z: plane.normal.z },
-      plane.distance,
-      plane.friction
-    )
-
-    this.tableStaticDebug = []
-    for (const binding of this.tableStaticBindings) {
-      this.tableStaticDebug.push(...exportRapierBodyToWasm(binding.rigidBody, this.engine))
-    }
-
-    this.exportAdventureGeometry()
-  }
-
-  /** Rewrite the adventure half of the static scene from `adventureExport`'s source. */
-  private exportAdventureGeometry(): void {
-    for (const wasmId of this.adventureWasmIds) {
-      this.wasmToRapier.delete(wasmId)
-    }
-    this.adventureWasmIds = []
-    this.adventureMovers = []
-    this.adventureDebug = []
-
-    const track = this.adventureTrack
-    this.adventureExport = null
-    if (!track) return
-
-    const result = exportAdventureCollidersToWasm(track.descriptors, this.engine)
-    this.adventureExport = result
-    this.adventureDebug = result.debug
-
-    // Map each exported collider's C++ handle back to the Rapier body it was
-    // built from, so sensor contacts reach the same dispatch path Rapier's
-    // own collision events would have taken.
-    for (const [index, handle] of result.handles) {
-      const body = track.bodyForDescriptor(index)
-      if (!body) continue
-      this.wasmToRapier.set(handle, body)
-      this.adventureWasmIds.push(handle)
-    }
-
-    for (const mover of result.movers) {
-      const body = track.bodyForDescriptor(mover.index)
-      if (body) this.adventureMovers.push({ body, handle: mover.handle })
-    }
-  }
-
-  /** The adventure track state seen on the most recent sync. */
-  private adventureTrack: AdventureTrackState | null = null
-
-  /**
-   * Keep the C++ static scene in step with the adventure track, and drive the
-   * exported kinematic movers.
-   *
-   * @returns true when C++ owns the whole track, i.e. the caller may leave
-   *   Rapier unstepped. False whenever anything still needs Rapier: an
-   *   inexpressible collider, geometry built outside the descriptor path, or
-   *   an active exit portal (portal entry is an `intersectionPair` query).
-   */
   syncAdventureTrack(state: AdventureTrackState | null): boolean {
-    const changed =
-      (state?.epoch ?? -1) !== this.adventureEpoch ||
-      (state === null) !== (this.adventureTrack === null)
-
+    const changed = (state?.epoch ?? -1) !== this.adventureEpoch || (state === null) !== (this.adventureTrack === null)
     if (changed) {
       this.adventureTrack = state
       this.adventureEpoch = state?.epoch ?? -1
       this.exportStaticScene()
     }
-
     if (!state) return true
-    if (state.unexported.length > 0) return false
-    if (!this.adventureExport || this.adventureExport.unsupported.length > 0) return false
-
-    this.driveAdventureMovers()
-    return !state.portalActive
-  }
-
-  /**
-   * Push each animated obstacle's target pose into its C++ mover.
-   *
-   * AdventureMode animates these through Rapier's
-   * `setNextKinematicTranslation`/`Rotation`, which only lands on the body
-   * when Rapier steps. With Rapier unstepped we read that pending pose back
-   * and both push it to C++ and commit it on the Rapier puppet, so the mesh
-   * sync that reads `body.translation()` still tracks the obstacle.
-   */
-  private driveAdventureMovers(): void {
-    for (const { body, handle } of this.adventureMovers) {
-      const p = body.nextTranslation()
-      const q = body.nextRotation()
-      this.engine.setNextKinematicTransform(
-        handle,
-        { x: p.x, y: p.y, z: p.z },
-        { x: q.x, y: q.y, z: q.z, w: q.w }
-      )
-      body.setTranslation(p, false)
-      body.setRotation(q, false)
+    const owned = this.isAdventureOwned()
+    if (owned && !state.portalActive) {
+      this.driveAdventure(0)
     }
+    return owned && !state.portalActive
   }
 
-  /** True when the current adventure track is fully simulated in C++. */
+  clearAdventureTrack(): void {
+    if (!this.adventureTrack && this.adventureWasmIds.length === 0) return
+    this.adventureTrack = null
+    this.adventureEpoch = -1
+    this.exportStaticScene()
+  }
+
   isAdventureOwned(): boolean {
-    if (!this.adventureTrack) return true
+    if (!this.adventureTrack) return false
     if (this.adventureTrack.unexported.length > 0) return false
     return this.adventureExport !== null && this.adventureExport.unsupported.length === 0
   }
 
-  /** Descriptors the C++ engine could not express, for the debug HUD. */
-  getAdventureUnsupported(): readonly { index: number; reason: string; label?: string }[] {
-    return this.adventureExport?.unsupported ?? []
+  getAdventureUnsupported(): readonly { reason: string; index?: number; label?: string }[] {
+    const unsupported = this.adventureExport?.unsupported ?? []
+    const unexported = this.adventureTrack?.unexported.map((label) => ({
+      reason: 'built outside the descriptor export path',
+      label,
+    })) ?? []
+    return [...unsupported, ...unexported]
+  }
+
+  getAdventureDebugColliders(): readonly WasmDebugCollider[] {
+    return this.adventureDebug
   }
 
   getDebugColliders(): WasmDebugCollider[] {
-    // Composed on read so re-exporting the static scene (a track switch) does
-    // not drop the dynamic bodies' debug entries.
-    return [...this.tableStaticDebug, ...this.adventureDebug, ...this.dynamicDebug]
+    return [...this.tableStaticDebug, ...this.dynamicDebug, ...this.adventureDebug]
   }
 
   getRapierBody(wasmId: number): RAPIER.RigidBody | undefined {
@@ -485,6 +376,56 @@ export class WasmOwner {
 
   dispose(): void {
     this.clear()
+  }
+
+  private exportStaticScene(): void {
+    this.engine.clearStaticGeometry?.()
+    const plane = WASM_PHYSICS.tunables.groundPlane
+    this.engine.addStaticPlane({ x: plane.normal.x, y: plane.normal.y, z: plane.normal.z }, plane.distance, plane.friction)
+    this.tableStaticDebug = []
+    for (const binding of this.tableStaticBindings) {
+      this.tableStaticDebug.push(...exportRapierBodyToWasm(binding.rigidBody, this.engine))
+    }
+    this.exportAdventureGeometry()
+  }
+
+  private exportAdventureGeometry(): void {
+    for (const wasmId of this.adventureWasmIds) {
+      this.wasmToRapier.delete(wasmId)
+    }
+    this.adventureWasmIds = []
+    this.adventureMovers = []
+    this.adventureDebug = []
+    this.adventureExport = null
+    this.sensorBodyByHandle.clear()
+    this.sensorHandlesByBody.clear()
+    this.sensorOverlaps.clear()
+
+    const track = this.adventureTrack
+    if (!track) return
+
+    const result = exportAdventureCollidersToWasm(track.descriptors, this.engine)
+    this.adventureExport = result
+    this.adventureDebug = result.debug
+
+    for (const [index, handle] of result.handles) {
+      const body = track.bodyForDescriptor(index)
+      if (!body) continue
+      this.wasmToRapier.set(handle, body)
+      this.adventureWasmIds.push(handle)
+
+      if (track.descriptors[index]?.sensor) {
+        this.sensorBodyByHandle.set(handle, body)
+        const handles = this.sensorHandlesByBody.get(body)
+        if (handles) handles.push(handle)
+        else this.sensorHandlesByBody.set(body, [handle])
+      }
+    }
+
+    for (const mover of result.movers) {
+      const body = track.bodyForDescriptor(mover.index)
+      if (body) this.adventureMovers.push({ body, handle: mover.handle })
+    }
   }
 
   private track(body: RAPIER.RigidBody, id: number): void {

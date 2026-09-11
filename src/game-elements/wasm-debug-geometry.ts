@@ -14,6 +14,11 @@ export type WasmDebugCollider =
   | { kind: 'box'; center: Vec3; halfExtents: Vec3; rotation: Quat }
   | { kind: 'capsule'; center: Vec3; radius: number; halfHeight: number; rotation: Quat; bodyId?: number }
   | { kind: 'sphere'; center: Vec3; radius: number; bodyId?: number }
+  | { kind: 'cylinder'; center: Vec3; radius: number; halfHeight: number; rotation: Quat }
+  /** Sensor volumes draw as wireframe only — they never apply impulse. */
+  | { kind: 'sensor'; center: Vec3; halfExtents: Vec3; rotation: Quat; volumeShape: 'box' | 'cylinder' | 'sphere' }
+  /** Triangle soup; `triangleCount` is enough for the HUD, the verts are not redrawn. */
+  | { kind: 'mesh'; center: Vec3; triangleCount: number }
 
 const WASM_LINE_RGBA = [0, 0.85, 1, 1] as const
 const CONTACT_LINE_RGBA = [1, 0.45, 0.1, 1] as const
@@ -214,9 +219,25 @@ export function buildWasmDebugLineBuffers(
     } else if (c.kind === 'sphere') {
       const { p } = poseOf(c.bodyId, c.center)
       appendSphereWire(positions, colors, p, c.radius)
-    } else {
+    } else if (c.kind === 'capsule') {
       const { p, r } = poseOf(c.bodyId, c.center, c.rotation)
       appendCapsuleWire(positions, colors, p, c.radius, c.halfHeight, r)
+    } else if (c.kind === 'cylinder') {
+      // Close enough for a debug overlay: a capsule wire of the same radius
+      // and half-height traces the cylinder's silhouette.
+      appendCapsuleWire(positions, colors, c.center, c.radius, c.halfHeight, c.rotation)
+    } else if (c.kind === 'sensor') {
+      if (c.volumeShape === 'sphere') {
+        appendSphereWire(positions, colors, c.center, c.halfExtents.x)
+      } else if (c.volumeShape === 'cylinder') {
+        appendCapsuleWire(positions, colors, c.center, c.halfExtents.x, c.halfExtents.y, c.rotation)
+      } else {
+        appendOrientedBoxEdges(positions, colors, c.center, c.halfExtents, c.rotation)
+      }
+    } else {
+      // Mesh: drawing every triangle would swamp the overlay, so mark the
+      // soup's origin and let the triangle count show in the HUD instead.
+      appendSphereWire(positions, colors, c.center, 0.15)
     }
   }
 

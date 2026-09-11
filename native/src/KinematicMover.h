@@ -2,14 +2,17 @@
 
 #include "CollisionFilter.h"
 #include "MathTypes.h"
+#include "VolumeShape.h"
 
 #include <cstdint>
 
 namespace pachinball {
 
-/** Parameters for creating a kinematic oriented-box mover (piston, platter, gate). */
+/** Parameters for creating a kinematic mover (piston, platter, gate, rotating disc). */
 struct KinematicMoverDesc {
-  Vec3     position      = Vec3::zero();
+  Vec3        position   = Vec3::zero();
+  VolumeShape shape      = VolumeShape::Box;
+  /** Read per `shape` — see VolumeShape. Cylinder movers drive rotating platforms and mills. */
   Vec3     halfExtents   = {0.5f, 0.5f, 0.5f};
   Quat     rotation      = Quat::identity();
   float    restitution   = 0.4f;
@@ -26,6 +29,7 @@ struct KinematicMoverDesc {
  * tangential velocity) instead of only teleporting geometry.
  */
 struct KinematicMover {
+  VolumeShape shape        = VolumeShape::Box;
   Vec3     halfExtents     = {0.5f, 0.5f, 0.5f};
   Vec3     currentPos      = Vec3::zero();
   Quat     currentRot      = Quat::identity();
@@ -40,7 +44,7 @@ struct KinematicMover {
   uint32_t filter          = COLLISION_GROUPS_ALL;
 };
 
-/** Negative-id base for kinematic OBB movers in contact events / setCollisionGroups. */
+/** Negative-id base for kinematic movers in contact events / setCollisionGroups. */
 static constexpr int KINEMATIC_MOVER_ID_BASE = -3000;
 
 /**

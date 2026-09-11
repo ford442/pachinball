@@ -1,6 +1,8 @@
 #include "BroadphaseGrid.h"
 #include "CollisionFilter.h"
+#include "Cylinder.h"
 #include "PhysicsWorld.h"
+#include "TriangleMesh.h"
 
 #include <algorithm>
 #include <cmath>
@@ -122,6 +124,21 @@ void BroadphaseGrid::insertSensorVolume(int sensorIndex, const SensorVolumeDesc&
   }
 }
 
+void BroadphaseGrid::insertTriangle(int triangleIndex, const MeshTriangle& tri) {
+  const float margin = 0.05f;
+  std::vector<CellKey> cells;
+  cellsForAabb(
+    std::min({tri.a.x, tri.b.x, tri.c.x}) - margin,
+    std::max({tri.a.x, tri.b.x, tri.c.x}) + margin,
+    std::min({tri.a.z, tri.b.z, tri.c.z}) - margin,
+    std::max({tri.a.z, tri.b.z, tri.c.z}) + margin,
+    cells);
+  StaticRef ref{StaticRef::Triangle, triangleIndex};
+  for (const auto& c : cells) {
+    addStaticToCell(c, ref);
+  }
+}
+
 void BroadphaseGrid::addToCell(const CellKey& key, int dynamicDense) {
   dynamicCells_[key].push_back(dynamicDense);
 }
@@ -146,6 +163,8 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
                                 const std::vector<SphereDesc>& spheres,
                                 const std::vector<SensorVolumeDesc>& sensors,
                                 const std::vector<KinematicMover>& movers,
+                                const std::vector<MeshTriangle>& triangles,
+                                const std::vector<TriangleMeshDesc>& meshes,
                                 std::vector<Pair>& outPairs) {
   outPairs.clear();
   dynamicCells_.clear();
@@ -162,8 +181,12 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
     const float px = bodies.posX(i);
     const float pz = bodies.posZ(i);
     float r = bodies.radius(i);
-    if (static_cast<Shape>(bodies.shape(i)) == Shape::Capsule) {
+    const Shape shape = static_cast<Shape>(bodies.shape(i));
+    if (shape == Shape::Capsule) {
       r += bodies.capsuleHalfHeight(i);
+    } else if (shape == Shape::Box) {
+      // Circumscribing radius, so any orientation is covered.
+      r = bodies.boxHalfExtents(i).length();
     }
     cells.clear();
     cellsForAabb(px - r, px + r, pz - r, pz + r, cells);
@@ -188,11 +211,13 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
            static_cast<uint32_t>(hi);
   };
 
+  // Disjoint bit fields rather than XOR: the old `(idx << 1) ^ type` aliased
+  // across kinds (idx 4/type 3 and idx 5/type 1 both hashed to 11), which
+  // would silently drop a pair now that there are eight pair types and
+  // per-triangle indices run high.
   auto pairKeyStatic = [](int body, int staticIdx, Pair::Type type) -> uint64_t {
-    // Type tag gets its own low 3 bits (7 Pair::Type values) so a static
-    // index can never alias a different pair type and drop a real pair.
-    return (static_cast<uint64_t>(static_cast<uint32_t>(body)) << 32) ^
-           (static_cast<uint64_t>(staticIdx) << 3) ^
+    return (static_cast<uint64_t>(static_cast<uint32_t>(body)) << 32) |
+           (static_cast<uint64_t>(static_cast<uint32_t>(staticIdx)) << 8) |
            static_cast<uint64_t>(type);
   };
 
@@ -200,7 +225,7 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
     const auto& dynamics = entry.second;
 
     // Dynamic vs dynamic within cell (+ deterministic order)
-  for (std::size_t ai = 0; ai < dynamics.size(); ++ai) {
+    for (std::size_t ai = 0; ai < dynamics.size(); ++ai) {
       for (std::size_t bi = ai + 1; bi < dynamics.size(); ++bi) {
         const int a = dynamics[ai];
         const int b = dynamics[bi];
@@ -236,6 +261,16 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
             ptype = Pair::BodySphere;
             refMembership = spheres[static_cast<std::size_t>(ref.index)].membership;
             refFilter = spheres[static_cast<std::size_t>(ref.index)].filter;
+          } else if (ref.kind == StaticRef::Triangle) {
+            ptype = Pair::BodyTriangle;
+            const int meshIndex = triangles[static_cast<std::size_t>(ref.index)].meshIndex;
+            refMembership = meshes[static_cast<std::size_t>(meshIndex)].membership;
+            refFilter = meshes[static_cast<std::size_t>(meshIndex)].filter;
+          } else if (ref.kind == StaticRef::Triangle) {
+            ptype = Pair::BodyTriangle;
+            const int meshIndex = triangles[static_cast<std::size_t>(ref.index)].meshIndex;
+            refMembership = meshes[static_cast<std::size_t>(meshIndex)].membership;
+            refFilter = meshes[static_cast<std::size_t>(meshIndex)].filter;
           } else {
             ptype = Pair::BodySensor;
             refMembership = sensors[static_cast<std::size_t>(ref.index)].membership;

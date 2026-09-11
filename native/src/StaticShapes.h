@@ -38,6 +38,6 @@ struct SphereDesc {
 
 /** Negative-id bases for the static shapes declared here. */
 static constexpr int STATIC_CYLINDER_ID_BASE = -5000;
-static constexpr int STATIC_SPHERE_ID_BASE   = -6000;
+static constexpr int STATIC_SPHERE_ID_BASE   = -8000;
 
 } // namespace pachinball

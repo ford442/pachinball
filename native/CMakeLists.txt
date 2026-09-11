@@ -3,9 +3,14 @@ project(pachinball_physics LANGUAGES CXX)
 
 # CMAKE_BUILD_TYPE (single-config generators) / configs:
 #   Debug          — native: -O0 -g; WASM: -O0 -g -gsource-map, ASSERTIONS=2
-#   Release        — native: -O2;    WASM: -O3, ASSERTIONS=0  (production default)
-#   RelWithDebInfo — native: -O2;    (unused for WASM)
+#   Release        — native: -O3 -DNDEBUG (CMAKE_CXX_FLAGS_RELEASE); WASM: -O3, ASSERTIONS=0
+#   RelWithDebInfo — native: -O2 -g -DNDEBUG (CMAKE_CXX_FLAGS_RELWITHDEBINFO); (unused for WASM)
 #   RelWithAsserts — WASM only: -O3, ASSERTIONS=1  (CI parity; build-wasm.sh --assert)
+#
+# The native targets do NOT add their own -O flag: CMAKE_CXX_FLAGS_<CONFIG> owns the
+# optimisation level so every translation unit in compile_commands.json carries exactly
+# one -O. Always configure with an explicit -DCMAKE_BUILD_TYPE (npm run test:native does);
+# a bare configure defaults to Debug below so clangd/ASan see -O0 -g.
 #
 # Native library uses -fno-exceptions to match the WASM dialect of the same sources.
 # Catch2 test binary keeps exceptions (the framework requires them).
@@ -24,6 +29,11 @@ set(PHYSICS_CORE_SOURCES
   src/HingeJoint.cpp
   src/KinematicMover.cpp
   src/SensorVolume.cpp
+  src/VolumeShape.cpp
+  src/Cylinder.cpp
+  src/TriangleMesh.cpp
+  src/ForceField.cpp
+  src/DynamicBox.cpp
   src/Narrowphase.cpp
   src/StaticShapes.cpp
   src/PhysicsWorld.cpp
@@ -66,7 +76,10 @@ if(EMSCRIPTEN)
     "-sALLOW_MEMORY_GROWTH=1"
     "-sINITIAL_MEMORY=${PACHINBALL_WASM_INITIAL_MEMORY}"
     "-sMALLOC=emmalloc"
-    "-sEXPORTED_RUNTIME_METHODS=[\"HEAPF32\"]"
+    "-sEXPORTED_RUNTIME_METHODS=[\"HEAPF32\",\"HEAPU32\"]"
+    # Triangle soup is uploaded through the heap (addStaticTriangleMesh takes
+    # pointers), so the allocator has to be reachable from JS.
+    "-sEXPORTED_FUNCTIONS=[\"_malloc\",\"_free\"]"
     "--closure=1"
   )
 
@@ -100,13 +113,28 @@ endif()
 # compile_commands.json lands in native/build-native/ (see root .clangd).
 # ---------------------------------------------------------------------------
 if(NOT EMSCRIPTEN)
+  # Single-config generators leave CMAKE_BUILD_TYPE empty, which means no
+  # CMAKE_CXX_FLAGS_<CONFIG> at all — no -O, no -g, and a compile_commands.json that
+  # matches nothing anybody debugs. Default to Debug; callers override explicitly.
+  get_property(_pachinball_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+  if(NOT _pachinball_multi_config AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type for the native Catch2 tree" FORCE)
+    message(STATUS "PACHINBALL native: CMAKE_BUILD_TYPE unset, defaulting to Debug")
+  endif()
+  # GCC/Clang ship CMAKE_CXX_FLAGS_DEBUG as bare "-g" and lean on the compiler's
+  # implicit -O0. Spell it out so compile_commands.json states the level clangd and
+  # the sanitizer tree are actually building at.
+  if(NOT CMAKE_CXX_FLAGS_DEBUG MATCHES "(^| )-O")
+    string(APPEND CMAKE_CXX_FLAGS_DEBUG " -O0")
+  endif()
+  message(STATUS "PACHINBALL native: CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
+
   add_library(pachinball_physics_native STATIC ${PHYSICS_CORE_SOURCES})
   target_include_directories(pachinball_physics_native PUBLIC src)
+  # No -O here: CMAKE_CXX_FLAGS_<CONFIG> is the single source of the opt level.
   target_compile_options(pachinball_physics_native PRIVATE
     -Wall -Wextra -Werror
     -fno-exceptions
-    "$<$<CONFIG:Debug>:-O0;-g>"
-    "$<$<NOT:$<CONFIG:Debug>>:-O2>"
   )
 
   include(CTest)
@@ -126,6 +154,7 @@ if(NOT EMSCRIPTEN)
     tests/sensor_volume_test.cpp
     tests/collision_filter_test.cpp
     tests/static_shapes_test.cpp
+    tests/adventure_geometry_test.cpp
   )
   target_link_libraries(physics_world_test PRIVATE
     pachinball_physics_native
@@ -134,8 +163,6 @@ if(NOT EMSCRIPTEN)
   # Catch2 requires C++ exceptions; do not pass -fno-exceptions here.
   target_compile_options(physics_world_test PRIVATE
     -Wall -Wextra -Werror
-    "$<$<CONFIG:Debug>:-O0;-g>"
-    "$<$<NOT:$<CONFIG:Debug>>:-O2>"
   )
 
   include(Catch)

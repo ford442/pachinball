@@ -16,6 +16,9 @@ namespace pachinball {
 struct PlaneDesc;
 struct BoxDesc;
 struct CapsuleDesc;
+struct CylinderDesc;
+struct TriangleMeshDesc;
+struct MeshTriangle;
 
 /** Uniform XZ spatial hash for sphere/capsule broadphase on the playfield. */
 class BroadphaseGrid {
@@ -29,9 +32,10 @@ public:
   };
 
   struct StaticRef {
-    enum Kind : uint8_t { Box = 0, Capsule = 1, Sensor = 2, Cylinder = 3, Sphere = 4 };
+    enum Kind : uint8_t { Box = 0, Capsule = 1, Sensor = 2, Cylinder = 3, Sphere = 4, Triangle = 5 };
     Kind  kind;
-    int   index; ///< index into boxes_, capsules_, cylinders_, spheres_, or sensors_
+    /** Index into the matching world vector for this static kind. */
+    int   index;
   };
 
   struct Pair {
@@ -43,6 +47,7 @@ public:
       BodyMover   = 4,
       BodyCylinder = 5,
       BodySphere   = 6,
+      BodyTriangle = 7,
     };
     Type type;
     int  bodyA;   ///< dense body index
@@ -58,6 +63,8 @@ public:
   void insertSensorVolume(int sensorIndex, const SensorVolumeDesc& sensor);
   void insertStaticCylinder(int cylIndex, const CylinderDesc& cyl);
   void insertStaticSphere(int sphereIndex, const SphereDesc& sphere);
+  /** Mesh triangles are registered individually so the grid culls per triangle, not per mesh. */
+  void insertTriangle(int triangleIndex, const MeshTriangle& tri);
 
   /**
    * Rebuild dynamic + kinematic-mover cell occupancy and emit collision
@@ -74,6 +81,8 @@ public:
                   const std::vector<SphereDesc>& spheres,
                   const std::vector<SensorVolumeDesc>& sensors,
                   const std::vector<KinematicMover>& movers,
+                  const std::vector<MeshTriangle>& triangles,
+                  const std::vector<TriangleMeshDesc>& meshes,
                   std::vector<Pair>& outPairs);
 
   int lastPairCount() const { return lastPairCount_; }

@@ -21,25 +21,8 @@ export const GameConfig = {
     skyboxSize: 200.0,
     uMapBlend: 0.5,
   },
-  physics: {
-    ballRestitution: 0.76,
-    ballFriction: 0.14,
-    bumperRestitution: 0.94,
-    // Surface-specific physics for advanced ball mechanics
-    surfaces: {
-      bumper: { restitution: 0.95, friction: 0.05 }, // High bounce, low grip
-      flipper: { restitution: 0.88, friction: 0.1 },  // Controlled energy return
-      wall: { restitution: 0.82, friction: 0.15 },    // Medium bounce, some grip
-      playfield: { restitution: 0.72, friction: 0.18 }, // Low bounce, higher grip
-      rail: { restitution: 0.85, friction: 0.08 },    // Smooth guidance
-    },
-    // Spin physics
-    spinTransferFactor: 0.35, // How much collision applies spin (0-1)
-    spinDecayFactor: 0.12,   // How quickly spin decays over time
-    englishSpinAmount: 0.08, // Side spin from angled hits (radians/sec)
-    // REMOVED: flipperPower (Legacy/Unused)
-    gravity: { x: 0, y: -9.81, z: -5.0 }
-  },
+  // Physics tunables live in `PhysicsConfig` (src/config/physics.ts) — this used to
+  // be a duplicated `physics: {...}` block with values that drifted from PhysicsConfig.
   gameplay: {
     maxBalls: 3,
     targetRespawnTime: 5.0,
@@ -61,9 +44,6 @@ export const GameConfig = {
     // Wedge Parameters
     wedgeSize: 8,
     wedgeThickness: 0.5,
-
-    // THE SOURCE OF TRUTH:
-    flipperStrength: 32000,
 
     /** Thin Rapier sensor cuboids for lane rollover scoring (Phase 2). */
     laneSensors: [

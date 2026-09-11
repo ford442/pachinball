@@ -151,53 +151,45 @@ export class AdventureMode extends AdventurePortalMixin {
 
     // Apply Conveyor Forces
     for (const zone of this.conveyorZones) {
-      const sensorHandle = zone.sensor.collider(0)
       for (const ball of ballBodies) {
-        const ballHandle = ball.collider(0)
-        if (this.world.intersectionPair(sensorHandle, ballHandle)) {
+        if (this.testSensorOverlap(zone.sensor, ball)) {
           const imp = zone.force.scale(dt)
-          ball.applyImpulse({ x: imp.x, y: imp.y, z: imp.z }, true)
+          this.applyBallImpulse(ball, imp.x, imp.y, imp.z)
         }
       }
     }
 
     // Apply Gravity Wells
     for (const well of this.gravityWells) {
-      const sensorHandle = well.sensor.collider(0)
       for (const ball of ballBodies) {
-        const ballHandle = ball.collider(0)
-        if (this.world.intersectionPair(sensorHandle, ballHandle)) {
+        if (this.testSensorOverlap(well.sensor, ball)) {
           const ballPos = ball.translation()
           const dir = well.center.subtract(new Vector3(ballPos.x, ballPos.y, ballPos.z)).normalize()
           const imp = dir.scale(well.strength * dt)
-          ball.applyImpulse({ x: imp.x, y: imp.y, z: imp.z }, true)
+          this.applyBallImpulse(ball, imp.x, imp.y, imp.z)
         }
       }
     }
 
     // Apply Damping Zones
     for (const zone of this.dampingZones) {
-      const sensorHandle = zone.sensor.collider(0)
       for (const ball of ballBodies) {
-        const ballHandle = ball.collider(0)
-        if (this.world.intersectionPair(sensorHandle, ballHandle)) {
+        if (this.testSensorOverlap(zone.sensor, ball)) {
           const vel = ball.linvel()
-          const force = {
-            x: -vel.x * zone.damping,
-            y: -vel.y * zone.damping,
-            z: -vel.z * zone.damping
-          }
-          ball.applyImpulse({ x: force.x * dt, y: force.y * dt, z: force.z * dt }, true)
+          this.applyBallImpulse(
+            ball,
+            -vel.x * zone.damping * dt,
+            -vel.y * zone.damping * dt,
+            -vel.z * zone.damping * dt
+          )
         }
       }
     }
 
     // Apply Chroma Gates
     for (const gate of this.chromaGates) {
-      const sensorHandle = gate.sensor.collider(0)
       for (const ball of ballBodies) {
-        const ballHandle = ball.collider(0)
-        if (this.world.intersectionPair(sensorHandle, ballHandle)) {
+        if (this.testSensorOverlap(gate.sensor, ball)) {
           this.setBallColorState(ball, gate.colorType)
         }
       }

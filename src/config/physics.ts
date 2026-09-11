@@ -2,10 +2,21 @@
  * PhysicsConfig — Centralized physics tunables extracted from game.ts monolith
  * All scalar values; Vector3 construction stays in implementation files.
  *
- * Intentionally separate from GameConfig.physics (known duplicate). Runtime
- * physics mostly uses PhysicsConfig; a few call sites still read GameConfig.physics.
- * Do not merge them in this pass — keep both and avoid further drift.
+ * Single source of truth for physics numbers. `GameConfig.physics` (the former
+ * duplicate) has been removed; every surface constant below is defined once
+ * and reused, so the Rapier and WASM (wasm-owner / wasm-mirror) paths cannot drift.
  */
+const BUMPER_RESTITUTION = 0.94
+const BUMPER_FRICTION = 0.05
+const FLIPPER_RESTITUTION = 0.90
+const FLIPPER_FRICTION = 0.08
+const WALL_RESTITUTION = 0.82
+const WALL_FRICTION = 0.15
+const PLAYFIELD_RESTITUTION = 0.72
+const PLAYFIELD_FRICTION = 0.18
+const RAIL_RESTITUTION = 0.85
+const RAIL_FRICTION = 0.08
+
 export const PhysicsConfig = {
   global: {
     gravity: { x: 0, y: -9.81, z: -5.0 },
@@ -32,11 +43,19 @@ export const PhysicsConfig = {
     kickImpulseScale: 2.8,
     leftLimits: [-Math.PI / 6, Math.PI / 4] as [number, number],
     rightLimits: [-Math.PI / 4, Math.PI / 6] as [number, number],
-    restitution: 0.90,
-    friction: 0.08,
+    restitution: FLIPPER_RESTITUTION,
+    friction: FLIPPER_FRICTION,
   },
   bumper: {
-    restitution: 0.94,
+    restitution: BUMPER_RESTITUTION,
+  },
+  /** Per-surface restitution/friction pairs — the single source for both the Rapier and WASM physics paths. */
+  surfaces: {
+    bumper: { restitution: BUMPER_RESTITUTION, friction: BUMPER_FRICTION },
+    flipper: { restitution: FLIPPER_RESTITUTION, friction: FLIPPER_FRICTION },
+    wall: { restitution: WALL_RESTITUTION, friction: WALL_FRICTION },
+    playfield: { restitution: PLAYFIELD_RESTITUTION, friction: PLAYFIELD_FRICTION },
+    rail: { restitution: RAIL_RESTITUTION, friction: RAIL_FRICTION },
   },
   spinner: {
     targetSpeed: 18,
@@ -89,7 +108,9 @@ export const WASM_PHYSICS = {
    *  - `wasm-mirror`  — WASM mirrors ball+bumper subset; Rapier bodies remain handles
    *  - `wasm-owner`   — WASM owns ball + static table + flipper hinges (in-process, production default)
    *  - `wasm-worker`  — same ownership as wasm-owner, C++ world in a Dedicated Worker
-   *                     (`postMessage` snapshots, one-frame lag; no SAB / COOP+COEP yet)
+   *                     (`postMessage` snapshots, one-frame lag). Cross-origin isolation
+   *                     is now detectable via `isCrossOriginIsolated()` below; a SAB-backed
+   *                     zero-copy transform/contact path is a follow-up (see #384).
    * Legacy `wasm` is treated as `wasm-mirror`.
    */
   allowedEngines: ['rapier', 'wasm', 'wasm-mirror', 'wasm-owner', 'wasm-worker'] as const,
@@ -130,4 +151,14 @@ export function getWasmPhysicsRuntimeMode(): WasmPhysicsRuntimeMode {
   if (pref === 'wasm-owner') return 'wasm-owner'
   if (pref === 'wasm-worker') return 'wasm-worker'
   return 'rapier'
+}
+
+/**
+ * True when the page is cross-origin isolated (SharedArrayBuffer available).
+ * Observability only today — `wasm-worker` mode works identically with or without
+ * isolation, since it has no SAB dependency yet. This exists so a future SAB-backed
+ * transform/contact path has a ready detector to gate on (see #384).
+ */
+export function isCrossOriginIsolated(): boolean {
+  return typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated === true
 }

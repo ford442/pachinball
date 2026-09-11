@@ -47,6 +47,15 @@ import {
 
 const RAPIER_DEFAULT_COLLISION_GROUPS = 0xFFFFFFFF
 
+/**
+ * Overlap + impulse operations a track needs, abstracted over the engine that
+ * actually owns the simulation. See `TrackBuilder.setPhysicsBridge`.
+ */
+export interface AdventurePhysicsBridge {
+  overlaps(sensorBody: RAPIER.RigidBody, ball: RAPIER.RigidBody): boolean
+  applyImpulse(ball: RAPIER.RigidBody, x: number, y: number, z: number): void
+}
+
 export abstract class TrackBuilder {
   protected scene: Scene
   protected world: RAPIER.World
@@ -105,6 +114,46 @@ export abstract class TrackBuilder {
 
   // Communication
   protected onEvent: AdventureCallback | null = null
+
+  /**
+   * Physics bridge for zone effects (conveyors, gravity wells, damping zones,
+   * chroma gates, exit portals).
+   *
+   * These were written against Rapier directly: `world.intersectionPair` for
+   * overlap and `body.applyImpulse` for the push. Neither works once WASM owns
+   * the track — Rapier's narrowphase only produces intersection pairs while it
+   * is being stepped, and the ball bodies are disabled puppets by then.
+   *
+   * Routing both through this one seam lets `wasm-owner` substitute the WASM
+   * contact stream and impulse path without the zone logic knowing which
+   * engine is underneath. Unset, it falls back to Rapier.
+   */
+  private physicsBridge: AdventurePhysicsBridge | null = null
+
+  /** Install (or clear, with null) the WASM-backed overlap/impulse bridge. */
+  setPhysicsBridge(bridge: AdventurePhysicsBridge | null): void {
+    this.physicsBridge = bridge
+  }
+
+  /** True when `ball` currently overlaps `sensorBody`'s trigger volume. */
+  protected testSensorOverlap(sensorBody: RAPIER.RigidBody, ball: RAPIER.RigidBody): boolean {
+    const bridge = this.physicsBridge
+    if (bridge) return bridge.overlaps(sensorBody, ball)
+    const sensorCollider = sensorBody.collider(0)
+    const ballCollider = ball.collider(0)
+    if (!sensorCollider || !ballCollider) return false
+    return this.world.intersectionPair(sensorCollider, ballCollider)
+  }
+
+  /** Apply a world-space impulse to a ball, on whichever engine owns it. */
+  protected applyBallImpulse(ball: RAPIER.RigidBody, x: number, y: number, z: number): void {
+    const bridge = this.physicsBridge
+    if (bridge) {
+      bridge.applyImpulse(ball, x, y, z)
+      return
+    }
+    ball.applyImpulse({ x, y, z }, true)
+  }
 
   constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER) {
     this.scene = scene
@@ -176,7 +225,15 @@ export abstract class TrackBuilder {
     this.onEvent = callback
   }
 
-  protected applyDefaultAdventureCollisionGroups(): void {
+  /**
+   * Every Rapier body this track owns — structure plus each sensor family.
+   *
+   * Deduplicated, because a body can be reachable through more than one list
+   * (a bucket contributes both its floor and its goal sensor). This is the
+   * single enumeration of the track's physics footprint, used both to stamp
+   * collision groups and to export the track into the WASM world.
+   */
+  collectTrackBodies(): RAPIER.RigidBody[] {
     const bodies = new Set<RAPIER.RigidBody>()
 
     for (const body of this.adventureBodies) {
@@ -201,7 +258,11 @@ export abstract class TrackBuilder {
       bodies.add(gate.sensor)
     }
 
-    for (const body of bodies) {
+    return [...bodies]
+  }
+
+  protected applyDefaultAdventureCollisionGroups(): void {
+    for (const body of this.collectTrackBodies()) {
       const colliderCount = body.numColliders()
       for (let i = 0; i < colliderCount; i++) {
         const collider = body.collider(i)

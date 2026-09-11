@@ -4,15 +4,21 @@
  * must not depend on Embind or HEAP views.
  */
 
-import type { EventBus } from '../core/event-bus'
-import type { WasmBodyDesc, WasmHingeDesc } from './PhysicsModule'
+import type {
+  WasmBodyDesc,
+  WasmBoxBodyDesc,
+  WasmContactEventBus,
+  WasmForceFieldDesc,
+  WasmHingeDesc,
+  WasmVolumeShape,
+} from './PhysicsModule'
 import type { WasmPhysicsModule } from './wasm-types'
 
 export interface WasmSimEngine {
   isReady: boolean
 
   load(moduleUrl?: string, preloadedModule?: WasmPhysicsModule): Promise<void>
-  init(bus: EventBus): void
+  init(bus: WasmContactEventBus): void
   dispose(): void
 
   setGravity(x: number, y: number, z: number): void
@@ -34,7 +40,15 @@ export interface WasmSimEngine {
     friction?: number
   ): number
 
-  addStaticCylinder(
+  /**
+   * Adventure geometry. Optional because only the in-process engine
+   * implements it — the worker client's id allocator does not yet mirror
+   * these handle ranges, so `wasm-worker` cannot own an adventure track.
+   * Callers must feature-detect rather than assume; see
+   * `wasm-adventure-export.ts`, which reports unsupported geometry instead
+   * of dropping it silently.
+   */
+  addStaticCylinder?(
     center: { x: number; y: number; z: number },
     radius: number,
     halfHeight: number,
@@ -42,45 +56,49 @@ export interface WasmSimEngine {
     restitution?: number,
     friction?: number
   ): number
-  addStaticSphere(
+  addStaticSphere?(
     center: { x: number; y: number; z: number },
     radius: number,
     restitution?: number,
     friction?: number
   ): number
-  /**
-   * Drop every static collider, sensor volume and kinematic mover. Statics
-   * are append-only, so a rebuilt scene must clear before re-adding or it
-   * stacks a second copy. Invalidates every negative handle; dynamic bodies
-   * and hinges are untouched.
-   */
-  clearStaticGeometry(): void
-
-  /** Static OBB trigger volume — Enter/Stay/Exit contacts, zero impulse. */
-  addSensorVolume(
-    center: { x: number; y: number; z: number },
-    halfExtents: { x: number; y: number; z: number },
-    rotation?: { x: number; y: number; z: number; w: number }
+  addStaticTriangleMesh?(
+    vertices: Float32Array,
+    indices: Uint32Array,
+    restitution?: number,
+    friction?: number,
+    doubleSided?: boolean
   ): number
-  /** Kinematic OBB mover (piston, platter, gate); pose pushed per tick. */
-  addKinematicMover(
+  addKinematicMover?(
     position: { x: number; y: number; z: number },
     halfExtents: { x: number; y: number; z: number },
     rotation?: { x: number; y: number; z: number; w: number },
     restitution?: number,
-    friction?: number
+    friction?: number,
+    shape?: WasmVolumeShape
   ): number
-  setNextKinematicTransform(
+  setNextKinematicTransform?(
     moverId: number,
     position: { x: number; y: number; z: number },
     rotation: { x: number; y: number; z: number; w: number }
   ): void
+  addSensorVolume?(
+    center: { x: number; y: number; z: number },
+    halfExtents: { x: number; y: number; z: number },
+    rotation?: { x: number; y: number; z: number; w: number },
+    shape?: WasmVolumeShape
+  ): number
+  createBoxBody?(desc: WasmBoxBodyDesc): number
+  addForceField?(desc: WasmForceFieldDesc): number
+  setForceFieldEnabled?(fieldId: number, enabled: boolean): void
+  setForceFieldVector?(fieldId: number, fx: number, fy: number, fz: number): void
+  setCollisionGroups?(id: number, membership: number, filter: number): void
   /**
-   * Membership/filter mask for any handle — a body (id ≥ 0) or a static
-   * box/capsule/cylinder/sphere/mover/sensor (id < 0). Mirrors
-   * `CollisionGroups` in src/game-elements/physics.ts.
+   * Drop every static/kinematic collider and force field, invalidating all
+   * negative handles. The caller must re-export whatever it still needs — an
+   * adventure track switch replaces the entire static world.
    */
-  setCollisionGroups(id: number, membership: number, filter: number): void
+  clearStaticGeometry?(): void
 
   createBody(desc?: WasmBodyDesc): number
   removeBody(id: number): void

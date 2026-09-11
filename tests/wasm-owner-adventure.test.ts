@@ -18,7 +18,7 @@ import type { WasmPhysicsEngine } from '../src/wasm'
 function makeEngine() {
   let nextBox = -1000
   let nextCylinder = -5000
-  let nextSphere = -6000
+  let nextSphere = -8000
   let nextMover = -3000
   let nextSensor = -4000
   return {

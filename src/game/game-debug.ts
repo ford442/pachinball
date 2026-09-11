@@ -42,6 +42,7 @@ export interface DebugHost {
 
   readonly debugHUDQueryEnabled: boolean
   comboCount: number
+  comboMultiplier: number
   adventureModeStartMs: number | null
   score: number
 
@@ -107,7 +108,9 @@ export class GameDebug {
     const trackInfo = campaignTrackId ? TRACK_CATALOG[campaignTrackId] : null
     const activeZoneId = this.host.zoneTriggerSystem?.getCurrentZoneId()
     const dynamicZoneLabel = activeZoneId ?? this.host.dynamicWorld?.getCurrentZoneInfo()?.name ?? null
-    const multiplier = Math.floor(this.host.comboCount / 3) + 1
+    // Single source of truth: the live score multiplier from ComboMultiplierSystem
+    // (see ScoringBridge), not a HUD-local recomputation from comboCount.
+    const multiplier = this.host.comboMultiplier
     const isAdventureActive = this.host.adventureMode?.isActive() ?? false
     const supervisor = this.host.adventureProgressionSupervisor
     const adventureTimeMs = supervisor && supervisor.getTimeRemaining() > 0

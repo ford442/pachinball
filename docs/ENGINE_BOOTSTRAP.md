@@ -23,8 +23,44 @@ Resolved by [`src/engine/engine-options.ts`](../src/engine/engine-options.ts) vi
 | `featureLevel` | `'core'`, then `'compatibility'` on init failure | `?gpu=compat` (skip core, also forces `setMaximumLimits: false`) |
 | `enableGPUDebugMarkers` | `false` | `?gpuDebug=1` |
 | `deviceDescriptor.requiredFeatures` / `enableAllFeatures` | `[]` / `false` | — see [Optional WebGPU features](#optional-webgpu-features) |
+| `deviceDescriptor.requiredLimits` | probed + clamped from `adapter.limits` on the `core` attempt | dropped entirely on the `compatibility` retry; absent when `?maxLimits=0` or no `navigator.gpu` |
 
 `setMaximumLimits: true` is the first defense for WebGPU MRT (SSAO + DoF + bloom). Try/catch around DoF/SSAO is the second.
+It is now only the *fallback* first defense — see [Probed `requiredLimits`](#probed-requiredlimits).
+
+### Probed `requiredLimits`
+
+[`src/engine/gpu-limits.ts`](../src/engine/gpu-limits.ts) replaces the blunt "ask for every limit
+at its maximum" with "ask for what the MRT chain needs, clamped to what this adapter reports":
+
+```
+navigator.gpu.requestAdapter({ powerPreference })
+  → resolveRequiredLimits(adapter.limits, MRT_REQUIRED_LIMITS)
+      • adapter meets the limit  → request the MRT value
+      • adapter is below it      → request the adapter value, push onto `clamped`
+      • adapter doesn't report it→ omit it, push onto `unsupported`
+  → deviceDescriptor.requiredLimits = { … }, setMaximumLimits: false
+```
+
+Because nothing in the list can exceed `adapter.limits`, `requestDevice()` can never fail
+*because of* this list — which is the difference from `setMaximumLimits`, where one limit the
+driver dislikes costs a whole feature level.
+
+Babylon applies `setMaximumLimits` only when `deviceDescriptor.requiredLimits` is unset
+(`webgpuEngine.js`), so `toWebGPUEngineOptions()` sets the flag to `false` explicitly rather than
+relying on that ordering.
+
+| Situation | What we send |
+|-----------|--------------|
+| `core` attempt, probe succeeded | `requiredLimits` (clamped), `setMaximumLimits: false` |
+| `core` attempt, no `navigator.gpu` / adapter / probe threw | no `requiredLimits`, `setMaximumLimits: true` (old behaviour) |
+| `compatibility` retry | no `requiredLimits`, `setMaximumLimits: false` — WebGPU defaults, the safety net |
+| `?maxLimits=0` | no probe at all, `setMaximumLimits: false` |
+
+`MRT_REQUIRED_LIMITS` is the one place to edit when a post-process pass starts needing more. A
+non-empty `clamped` list means the adapter cannot run the full profile and
+[`webgpu-post-process-profile.ts`](../src/game/webgpu-post-process-profile.ts) will degrade — it is
+logged with `[Bootstrap][gpu-degrade]` and recorded as a `limits-clamped` entry.
 
 ### WebGPU feature-level degrade
 
@@ -72,9 +108,47 @@ explicitly.)
 ### Context loss
 
 `attachGpuContextLogging()` subscribes to `engine.onContextLostObservable` /
-`onContextRestoredObservable` and **logs only**. With `doNotHandleContextLost: false` Babylon
-rebuilds the GPU resources itself; `engine.resize()` re-uploads nothing, so calling it here would
-only look like recovery. A user-facing toast on loss is a deliberate follow-up.
+`onContextRestoredObservable` and does three things: logs, drives a toast, and records the event.
+
+With `doNotHandleContextLost: false` Babylon rebuilds the GPU resources itself. We still do **not**
+call `engine.resize()` on restore — it re-uploads nothing and would only look like recovery. We
+wait for Babylon's restore observable and then say "Restored".
+
+| | Toast (`#power-toast`) | `<html data-gpu-context>` | Telemetry |
+|---|---|---|---|
+| loss | `Graphics context lost — restoring…`, stays up | `lost` | `context-lost` |
+| restore | `Graphics restored`, auto-hides after 2.6 s | `ok` | `context-restored` |
+
+`data-gpu-context` is the Playwright hook (`tests/engine-bootstrap.spec.ts` drives a real loss with
+`WEBGL_lose_context`); assert on it rather than on toast copy. It is set to `ok` at attach time, so
+it is present on a clean boot too.
+
+**Photosensitive mode** ([`GpuContextToast`](../src/engine/gpu-context-toast.ts)) drops the toast's
+opacity/transform transition and holds the restored toast for 5 s instead of 2.6 s — a flapping
+context must not turn the toast into a strobe. The setting is read from the persisted
+`pachinball.settings` blob, because engine creation runs before `Game` populates `GameConfig`.
+
+### Degrade telemetry
+
+[`src/engine/gpu-degrade-telemetry.ts`](../src/engine/gpu-degrade-telemetry.ts) keeps the same
+events in a bounded ring buffer (32 entries) on `window.bootstrapGpuDegrades`, created during
+`createEngine()` so a clean boot reads `[]` rather than `undefined`:
+
+```js
+window.bootstrapGpuDegrades
+// [{ path: 'limits-clamped', featureLevel: 'core', detail: 'maxUniformBuffersPerShaderStage 16→12', timestamp: … }]
+```
+
+| `path` | Meaning |
+|--------|---------|
+| `limits-clamped` | The adapter could not grant an MRT limit; expect a degraded post-process profile |
+| `webgpu-featurelevel` | WebGPU booted at a lower feature level than requested |
+| `webgl2-fallback` | WebGPU failed at every level; the engine is WebGL2 |
+| `context-lost` / `context-restored` | Runtime device loss and recovery |
+
+Bounded on purpose — a flapping context would otherwise grow an unbounded array on `window` in
+exactly the situation we most want to survive. `countGpuDegrades(path)` is what an analytics sink
+would drain; the console marker `[Bootstrap][gpu-degrade]` still fires alongside it.
 
 ### Renderer backend
 
@@ -236,10 +310,8 @@ Use `?renderer=webgl2` for automation-friendly WebGL2 canvas capture.
 
 - **Rapier** stays `@dimforge/rapier3d-compat@^0.15.0`. 0.18/0.19 add snapshot APIs that replay (#341 leftovers) will want — bump in a dedicated PR; do not mix with bootstrap hygiene.
 - **#361** Worker + SharedArrayBuffer still needs COOP/COEP. Glue ENVIRONMENT is already `web,worker,node`.
-- **Context-lost toast.** `attachGpuContextLogging()` is logging-only by design. Surfacing loss/restore in `#power-toast` needs its own copy + UX pass.
-- **Probe-and-clamp `requiredLimits`.** Query the adapter and request only what MRT actually needs, instead of the blunt `setMaximumLimits`. Larger async rewrite of the creation path; the compatibility retry is the low-risk stand-in (#370).
-- **Degrade telemetry.** `[Bootstrap][gpu-degrade]` is a console marker, not analytics. Wire it to a real sink once one exists.
-- **Align Babylon package ranges.** `@babylonjs/core` is declared `^7.45.0` while `@babylonjs/loaders` is `^7.54.3`; both resolve to 7.54.3 today. Pin in the #370 "align Babylon packages" PR.
+- **Ship degrade telemetry to a sink.** `window.bootstrapGpuDegrades` is the buffer; nothing drains it yet. Wire it to real analytics once one exists — the ring buffer is deliberately the only consumer today.
+- **GPU-time HUD.** If one is added, check `adapter.features.has('timestamp-query')` in that pass only. Do **not** add it to `deviceDescriptor.requiredFeatures`; see [Optional WebGPU features](#optional-webgpu-features).
 
 ---
 

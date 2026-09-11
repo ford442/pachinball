@@ -1,11 +1,11 @@
-# Pachinball PoC
+# Pachinball
 
-This proof-of-concept demonstrates a Babylon.js scene backed by Rapier 3D physics, showcasing a pachinko/pinball hybrid with WebGPU-first rendering.
+A Babylon.js scene backed by physics, showcasing a pachinko/pinball hybrid with WebGPU-first rendering.
 
 ## Stack
 - Vite (vanilla TypeScript template)
 - Babylon.js (core)
-- Rapier 3D WASM (`@dimforge/rapier3d-compat`)
+- Physics: Rapier 3D WASM (`@dimforge/rapier3d-compat`) by default, with an optional in-house C++ physics engine (`native/` + `src/wasm/`) compiled to WASM — selectable via the `pachinball:physics-engine` localStorage flag (`rapier` / `wasm-mirror` / `wasm-owner`; `wasm-owner` is the shipping default for the table, Rapier remains the adventure-mode path)
 
 ## Getting Started
 
@@ -44,10 +44,19 @@ Playwright: `npx playwright test --project=mobile-chrome` (Pixel 7 viewport smok
 
 Every pull request and push to `main` is gated by GitHub Actions (`.github/workflows/ci.yml`):
 `tsc -b`, `npm run lint`, `npx vitest run`, and `npx vite build`. **Keep PRs green.** A
-non-blocking Playwright smoke job also runs against a live dev server. CI builds the bundle
+blocking Playwright smoke job (desktop + mobile, plus a no-WASM physics-degrade check) also
+runs against a live dev server — a red e2e blocks merges. CI builds the bundle
 with `vite build` (not `npm run build`) so the Emscripten/WASM step is skipped on the runner —
 the physics-engine flag falls back to Rapier when the C++ bundle is absent. Enabling branch
 protection on `main` (require the CI `check` job) is recommended.
+
+## C++ physics: editor setup (clangd)
+
+`npm run test:native` configures `native/build-native` with an explicit
+`-DCMAKE_BUILD_TYPE=Debug` and writes `compile_commands.json` there. The root `.clangd`
+points clangd at that directory and **nowhere else** — do not copy the Emscripten database
+from `native/build/` to the repo root or to `native/`; clangd cannot parse `em++` command
+lines and a stale emcc dump silently omits newer sources.
 
 ## Campaign Mode
 

@@ -25,6 +25,7 @@ public:
   Shape    getShape()   const;
   float    getRadius()  const;
   float    getCapsuleHalfHeight() const;
+  Vec3     getBoxHalfExtents() const;
   float    getMass()    const;
   float    getInvMass() const;
   float    getInvInertia() const;
@@ -96,6 +97,10 @@ public:
   float velZ(int i) const { return velZ_[static_cast<std::size_t>(i)]; }
   float radius(int i) const { return radius_[static_cast<std::size_t>(i)]; }
   float capsuleHalfHeight(int i) const { return capsuleHalfHeight_[static_cast<std::size_t>(i)]; }
+  Vec3 boxHalfExtents(int i) const {
+    const std::size_t j = static_cast<std::size_t>(i);
+    return {boxHalfX_[j], boxHalfY_[j], boxHalfZ_[j]};
+  }
   uint8_t type(int i) const { return type_[static_cast<std::size_t>(i)]; }
   uint8_t shape(int i) const { return shape_[static_cast<std::size_t>(i)]; }
   bool isActive(int i) const { return active_[static_cast<std::size_t>(i)] != 0; }
@@ -122,6 +127,7 @@ private:
   std::vector<float>   invInertia_;
   std::vector<float>   radius_;
   std::vector<float>   capsuleHalfHeight_;
+  std::vector<float>   boxHalfX_, boxHalfY_, boxHalfZ_;
   std::vector<float>   restitution_;
   std::vector<float>   friction_;
   std::vector<float>   linearDamping_;

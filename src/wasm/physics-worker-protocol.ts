@@ -11,7 +11,7 @@ export const STATIC_CAPSULE_ID_BASE = -2000
 export const KINEMATIC_MOVER_ID_BASE = -3000
 export const SENSOR_VOLUME_ID_BASE = -4000
 export const STATIC_CYLINDER_ID_BASE = -5000
-export const STATIC_SPHERE_ID_BASE = -6000
+export const STATIC_SPHERE_ID_BASE = -8000
 
 /** Packed hinge snapshot: id, angle (radians) per entry. */
 export const HINGE_ANGLE_STRIDE = 2

@@ -3,8 +3,7 @@
  * Mutations queue; step() posts and returns the previous snapshot's alpha.
  */
 
-import type { EventBus } from '../core/event-bus'
-import type { WasmBodyDesc, WasmHingeDesc } from './PhysicsModule'
+import type { WasmBodyDesc, WasmHingeDesc, WasmContactEventBus } from './PhysicsModule'
 import type { WasmPhysicsModule } from './wasm-types'
 import type { WasmSimEngine } from './wasm-sim-engine'
 import {
@@ -25,9 +24,14 @@ const IDENTITY_Q = { x: 0, y: 0, z: 0, w: 1 }
 
 export function resolvePhysicsBundleUrl(bundleUrl: string): string {
   if (/^https?:/i.test(bundleUrl) || bundleUrl.startsWith('blob:')) return bundleUrl
-  if (typeof window === 'undefined' || !window.location?.href) return bundleUrl
+  // Accessed via globalThis (not the bare `window` identifier) — this file compiles
+  // under both the DOM app project and the WebWorker-lib worker project.
+  const win = (globalThis as Record<string, unknown>).window as
+    | { location?: { href?: string } }
+    | undefined
+  if (!win?.location?.href) return bundleUrl
   try {
-    return new URL(bundleUrl, window.location.href).href
+    return new URL(bundleUrl, win.location.href).href
   } catch {
     return bundleUrl
   }
@@ -87,7 +91,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   isReady = false
 
   private worker: Worker | null = null
-  private eventBus: EventBus | null = null
+  private eventBus: WasmContactEventBus | null = null
   private queue: PhysicsWorkerCommand[] = []
   private ids = new WasmIdShadow()
   private lastAlpha = 0
@@ -134,7 +138,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     this.isReady = ok
   }
 
-  init(bus: EventBus): void {
+  init(bus: WasmContactEventBus): void {
     this.eventBus = bus
   }
 

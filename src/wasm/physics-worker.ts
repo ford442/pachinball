@@ -11,11 +11,7 @@ const engine = new WasmPhysicsEngine()
 const runtime = createWorkerRuntimeState()
 
 function post(msg: PhysicsWorkerFromWorker, transfer: Transferable[] = []): void {
-  // tsconfig.app.json libs DOM (Window.postMessage) rather than webworker.
-  const scope = self as unknown as {
-    postMessage: (message: PhysicsWorkerFromWorker, transfer: Transferable[]) => void
-  }
-  scope.postMessage(msg, transfer)
+  self.postMessage(msg, transfer)
 }
 
 async function handleInit(bundleUrl: string): Promise<void> {

@@ -1,5 +1,10 @@
 import type * as RAPIER from '@dimforge/rapier3d-compat'
-import { WASM_PHYSICS, getWasmPhysicsRuntimeMode, type WasmPhysicsRuntimeMode } from '../config'
+import {
+  WASM_PHYSICS,
+  getWasmPhysicsRuntimeMode,
+  isCrossOriginIsolated,
+  type WasmPhysicsRuntimeMode,
+} from '../config'
 import { WasmPhysicsEngine } from '../wasm'
 import type { WasmSimEngine } from '../wasm/wasm-sim-engine'
 import { PhysicsWorkerClient } from '../wasm/physics-worker-client'
@@ -176,6 +181,7 @@ export class PhysicsSystem {
     this.wasmMode = getWasmPhysicsRuntimeMode()
     if (WASM_PHYSICS.enabled && this.wasmMode !== 'rapier') {
       if (this.wasmMode === 'wasm-worker') {
+        console.info(`[PhysicsSystem] wasm-worker mode: crossOriginIsolated=${isCrossOriginIsolated()}`)
         const client = new PhysicsWorkerClient()
         await client.load(WASM_PHYSICS.bundleUrl)
         if (client.isReady) {
@@ -253,8 +259,11 @@ export class PhysicsSystem {
   }
 
   /**
-   * Skip Rapier integration in wasm-owner when no Rapier-owned gameplay bodies remain.
-   * Adventure mode must leave this false so ADVENTURE_GROUP bodies still step.
+   * Skip Rapier integration in wasm-owner when no Rapier-owned gameplay bodies
+   * remain. Since #383 Slice B that includes adventure mode, provided
+   * WasmOwner could export every collider on the active track; a track with
+   * geometry the WASM world cannot represent leaves this false so
+   * ADVENTURE_GROUP bodies keep stepping on Rapier.
    */
   setOwnerSkipRapierStep(skip: boolean): void {
     this.ownerSkipRapierStep = skip
