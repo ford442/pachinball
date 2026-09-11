@@ -33,6 +33,11 @@ import {
   createTrackMaterial,
   createTrackPBRMaterial,
 } from './track-materials'
+import {
+  applyBallImpulse,
+  testSensorOverlap,
+  type AdventurePhysicsBridge,
+} from './track-physics-bridge'
 import * as primitives from './track-primitives'
 import type { TrackPrimitiveContext } from './track-primitives'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
@@ -46,15 +51,6 @@ import {
 } from './track-compiler'
 
 const RAPIER_DEFAULT_COLLISION_GROUPS = 0xFFFFFFFF
-
-/**
- * Overlap + impulse operations a track needs, abstracted over the engine that
- * actually owns the simulation. See `TrackBuilder.setPhysicsBridge`.
- */
-export interface AdventurePhysicsBridge {
-  overlaps(sensorBody: RAPIER.RigidBody, ball: RAPIER.RigidBody): boolean
-  applyImpulse(ball: RAPIER.RigidBody, x: number, y: number, z: number): void
-}
 
 export abstract class TrackBuilder {
   protected scene: Scene
@@ -115,19 +111,7 @@ export abstract class TrackBuilder {
   // Communication
   protected onEvent: AdventureCallback | null = null
 
-  /**
-   * Physics bridge for zone effects (conveyors, gravity wells, damping zones,
-   * chroma gates, exit portals).
-   *
-   * These were written against Rapier directly: `world.intersectionPair` for
-   * overlap and `body.applyImpulse` for the push. Neither works once WASM owns
-   * the track — Rapier's narrowphase only produces intersection pairs while it
-   * is being stepped, and the ball bodies are disabled puppets by then.
-   *
-   * Routing both through this one seam lets `wasm-owner` substitute the WASM
-   * contact stream and impulse path without the zone logic knowing which
-   * engine is underneath. Unset, it falls back to Rapier.
-   */
+  /** See `AdventurePhysicsBridge`. Unset, zone effects fall back to Rapier. */
   private physicsBridge: AdventurePhysicsBridge | null = null
 
   /** Install (or clear, with null) the WASM-backed overlap/impulse bridge. */
@@ -137,22 +121,12 @@ export abstract class TrackBuilder {
 
   /** True when `ball` currently overlaps `sensorBody`'s trigger volume. */
   protected testSensorOverlap(sensorBody: RAPIER.RigidBody, ball: RAPIER.RigidBody): boolean {
-    const bridge = this.physicsBridge
-    if (bridge) return bridge.overlaps(sensorBody, ball)
-    const sensorCollider = sensorBody.collider(0)
-    const ballCollider = ball.collider(0)
-    if (!sensorCollider || !ballCollider) return false
-    return this.world.intersectionPair(sensorCollider, ballCollider)
+    return testSensorOverlap(this.physicsBridge, this.world, sensorBody, ball)
   }
 
   /** Apply a world-space impulse to a ball, on whichever engine owns it. */
   protected applyBallImpulse(ball: RAPIER.RigidBody, x: number, y: number, z: number): void {
-    const bridge = this.physicsBridge
-    if (bridge) {
-      bridge.applyImpulse(ball, x, y, z)
-      return
-    }
-    ball.applyImpulse({ x, y, z }, true)
+    applyBallImpulse(this.physicsBridge, ball, x, y, z)
   }
 
   constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER) {

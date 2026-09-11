@@ -1,7 +1,7 @@
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 import type { AdventureColliderDesc } from '../../adventure/track-collider-descriptors'
-import type { AdventurePhysicsBridge } from '../../adventure/track-builder'
+import type { AdventurePhysicsBridge } from '../../adventure/track-physics-bridge'
 import { WASM_PHYSICS, PhysicsConfig, GameConfig } from '../../config'
 import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
 import { peekPackedPhysicsBuffers, type WasmDebugCollider } from '../../game-elements/wasm-debug-geometry'
