@@ -86,6 +86,13 @@ export abstract class TrackBuilder {
    */
   protected colliders: TrackColliderEmitter
 
+  /**
+   * Rapier geometry this track built outside the descriptor path (today only
+   * prism-pathway's convex hull). A track with any of these can never be
+   * fully exported to C++, whatever its descriptors say.
+   */
+  protected unexportedColliders: string[] = []
+
   /** Baseline world gravity captured before a data-track multiplier is applied. */
   private storedGravity: { x: number; y: number; z: number } | null = null
 
@@ -122,6 +129,25 @@ export abstract class TrackBuilder {
    */
   emitCollider(desc: AdventureColliderDesc): EmittedCollider {
     return this.colliders.emit(desc)
+  }
+
+  /**
+   * Declare that this track built a Rapier collider the descriptor path does
+   * not cover, so the C++ adventure gate knows the export is incomplete.
+   */
+  markUnexportedCollider(reason: string): void {
+    this.unexportedColliders.push(reason)
+  }
+
+  /** Reasons this track cannot be fully exported to C++; empty when it can. */
+  getUnexportedColliders(): readonly string[] {
+    return this.unexportedColliders
+  }
+
+  /** Drop the previous track's descriptors (called from clearTrack). */
+  protected resetTrackColliders(): void {
+    this.colliders.clear()
+    this.unexportedColliders = []
   }
 
   /**

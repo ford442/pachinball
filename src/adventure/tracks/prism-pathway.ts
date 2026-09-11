@@ -76,6 +76,9 @@ export function buildPrismPathway(builder: TrackBuilder): void {
           hull.setRestitution(0.8)
           world.createCollider(hull, body)
           adventureBodies.push(body)
+          // The one convex hull in the codebase — no descriptor, no C++
+          // shape. This track stays on Rapier.
+          builder.markUnexportedCollider('prism convexHull')
         }
       }
     }
