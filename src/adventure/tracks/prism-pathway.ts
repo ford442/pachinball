@@ -8,6 +8,7 @@ import { VertexBuffer } from '@babylonjs/core/Buffers/buffer'
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
+import { cylinderDesc } from '../track-collider-descriptors'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildPrismPathway(builder: TrackBuilder): void {
@@ -101,13 +102,11 @@ export function buildPrismPathway(builder: TrackBuilder): void {
       laser.material = laserMat
       adventureTrack.push(laser)
 
-      const body = world.createRigidBody(
-        rapier.RigidBodyDesc.kinematicPositionBased()
-          .setTranslation(basePos.x, basePos.y, basePos.z)
-      )
-      world.createCollider(
-        rapier.ColliderDesc.cylinder(laserHeight / 2, laserRadius),
-        body
+      const { body } = builder.emitCollider(
+        cylinderDesc({ x: basePos.x, y: basePos.y, z: basePos.z }, laserHeight / 2, laserRadius, {
+          motion: 'kinematic-position',
+          label: 'laser',
+        })
       )
       adventureBodies.push(body)
 

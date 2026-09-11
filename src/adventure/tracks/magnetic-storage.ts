@@ -7,6 +7,7 @@
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
+import { boxDesc } from '../track-collider-descriptors'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildMagneticStorage(builder: TrackBuilder): void {
@@ -16,7 +17,6 @@ export function buildMagneticStorage(builder: TrackBuilder): void {
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
-  const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
   const kinematicBindings = (builder as unknown as { kinematicBindings: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
   const animatedObstacles = (builder as unknown as { animatedObstacles: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, baseRot?: Quaternion, frequency: number, amplitude: number, phase: number, axis?: Vector3 }[] }).animatedObstacles
@@ -63,11 +63,20 @@ export function buildMagneticStorage(builder: TrackBuilder): void {
       }
 
       const colRot = Quaternion.FromEulerAngles(0, p.angle, 0)
-      world.createCollider(
-        rapier.ColliderDesc.cuboid(size / 2, size / 2, size / 2)
-          .setTranslation(Math.sin(p.angle) * p.r, size / 2 + 0.25, Math.cos(p.angle) * p.r)
-          .setRotation({ x: colRot.x, y: colRot.y, z: colRot.z, w: colRot.w }),
-        platterBody
+      builder.attachCollider(
+        platterBody,
+        boxDesc(
+          {
+            x: Math.sin(p.angle) * p.r,
+            y: size / 2 + 0.25,
+            z: Math.cos(p.angle) * p.r,
+          },
+          { x: size / 2, y: size / 2, z: size / 2 },
+          {
+            rotation: { x: colRot.x, y: colRot.y, z: colRot.z, w: colRot.w },
+            label: 'badSector',
+          }
+        )
       )
     })
   }
@@ -93,14 +102,18 @@ export function buildMagneticStorage(builder: TrackBuilder): void {
     armBox.position.set(armLength / 2, 0, 0)
     armBox.material = storageMat
 
-    const bodyDesc = rapier.RigidBodyDesc.kinematicPositionBased()
-      .setTranslation(pivotPos.x, pivotPos.y, pivotPos.z)
-    const body = world.createRigidBody(bodyDesc)
-
-    world.createCollider(
-      rapier.ColliderDesc.cuboid(armLength / 2, armHeight / 2, armWidth / 2)
-        .setTranslation(armLength / 2, 0, 0),
-      body
+    // Body sits on the pivot; the arm collider hangs half its length out
+    // along +X so the oscillator swings it about that pivot.
+    const { body } = builder.emitCollider(
+      boxDesc(
+        { x: pivotPos.x, y: pivotPos.y, z: pivotPos.z },
+        { x: armLength / 2, y: armHeight / 2, z: armWidth / 2 },
+        {
+          localPosition: { x: armLength / 2, y: 0, z: 0 },
+          motion: 'kinematic-position',
+          label: 'actuatorArm',
+        }
+      )
     )
     adventureBodies.push(body)
 

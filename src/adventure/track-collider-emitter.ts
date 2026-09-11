@@ -27,6 +27,8 @@ export interface EmittedCollider {
 
 export class TrackColliderEmitter {
   private readonly descriptors: AdventureColliderDesc[] = []
+  /** Descriptor index of each body this emitter created, for attach() lookups. */
+  private readonly bodyIndex = new Map<RAPIER.RigidBody, number>()
 
   constructor(
     private readonly world: RAPIER.World,
@@ -40,6 +42,13 @@ export class TrackColliderEmitter {
 
   clear(): void {
     this.descriptors.length = 0
+    this.bodyIndex.clear()
+  }
+
+  /** Resolve a body this emitter created back to its descriptor anchor. */
+  find(body: RAPIER.RigidBody): EmittedCollider | null {
+    const index = this.bodyIndex.get(body)
+    return index === undefined ? null : { body, index }
   }
 
   /** Record a descriptor and create its own Rapier body carrying the collider. */
@@ -47,7 +56,7 @@ export class TrackColliderEmitter {
     const index = this.descriptors.length
     this.descriptors.push(desc)
 
-    const body = this.world.createRigidBody(
+    const body: RAPIER.RigidBody = this.world.createRigidBody(
       this.bodyDesc(desc)
         .setTranslation(desc.position.x, desc.position.y, desc.position.z)
         .setRotation(desc.rotation)
@@ -56,6 +65,7 @@ export class TrackColliderEmitter {
       body.setAngvel(desc.angularVelocity, true)
     }
     this.world.createCollider(this.colliderDesc(desc, false), body)
+    this.bodyIndex.set(body, index)
 
     return { body, index }
   }
@@ -64,9 +74,17 @@ export class TrackColliderEmitter {
    * Record a descriptor as an extra collider on an already-emitted body. Its
    * position/rotation are body-local (the rotating platform's teeth).
    */
-  attach(parent: EmittedCollider, desc: AdventureColliderDesc): void {
-    this.descriptors.push({ ...desc, parentIndex: parent.index })
-    this.world.createCollider(this.colliderDesc(desc, true), parent.body)
+  attach(parent: EmittedCollider | RAPIER.RigidBody, desc: AdventureColliderDesc): void {
+    const resolved = 'index' in parent ? parent : this.find(parent)
+    if (!resolved) {
+      // A body this emitter did not create (or a torn-down track): still
+      // build the Rapier collider, but do not record an unanchored
+      // descriptor the C++ exporter could not place.
+      this.world.createCollider(this.colliderDesc(desc, true), parent as RAPIER.RigidBody)
+      return
+    }
+    this.descriptors.push({ ...desc, parentIndex: resolved.index })
+    this.world.createCollider(this.colliderDesc(desc, true), resolved.body)
   }
 
   private bodyDesc(desc: AdventureColliderDesc): RAPIER.RigidBodyDesc {
@@ -106,8 +124,14 @@ export class TrackColliderEmitter {
     if (desc.density !== undefined) shape.setDensity(desc.density)
 
     if (local) {
+      // Attached collider: position/rotation are already parent-body-local.
       shape.setTranslation(desc.position.x, desc.position.y, desc.position.z)
       shape.setRotation(desc.rotation)
+    } else {
+      if (desc.localPosition) {
+        shape.setTranslation(desc.localPosition.x, desc.localPosition.y, desc.localPosition.z)
+      }
+      if (desc.localRotation) shape.setRotation(desc.localRotation)
     }
     return shape
   }

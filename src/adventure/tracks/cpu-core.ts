@@ -7,6 +7,7 @@
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
+import { boxDesc } from '../track-collider-descriptors'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildCpuCore(builder: TrackBuilder): void {
@@ -16,7 +17,6 @@ export function buildCpuCore(builder: TrackBuilder): void {
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
-  const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
   const kinematicBindings = (builder as unknown as { kinematicBindings: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
 
@@ -67,11 +67,17 @@ export function buildCpuCore(builder: TrackBuilder): void {
         blade.material = traceMat
 
         const colRot = Quaternion.FromEulerAngles(0, angle, 0)
-        const colliderDesc = rapier.ColliderDesc.cuboid(bladeThickness / 2, bladeHeight / 2, bladeLength / 2)
-          .setTranslation(lx, bladeHeight / 2 + 0.25, lz)
-          .setRotation({ x: colRot.x, y: colRot.y, z: colRot.z, w: colRot.w })
-
-        world.createCollider(colliderDesc, fanBody)
+        builder.attachCollider(
+          fanBody,
+          boxDesc(
+            { x: lx, y: bladeHeight / 2 + 0.25, z: lz },
+            { x: bladeThickness / 2, y: bladeHeight / 2, z: bladeLength / 2 },
+            {
+              rotation: { x: colRot.x, y: colRot.y, z: colRot.z, w: colRot.w },
+              label: 'fanBlade',
+            }
+          )
+        )
       }
     }
   }

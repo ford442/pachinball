@@ -41,7 +41,7 @@ import {
   type AdventureColliderDesc,
   type DescQuat,
 } from './track-collider-descriptors'
-import { TrackColliderEmitter } from './track-collider-emitter'
+import { TrackColliderEmitter, type EmittedCollider } from './track-collider-emitter'
 import type { TrackDefinition } from './track-schema'
 import {
   compileTrackDefinition,
@@ -112,6 +112,24 @@ export abstract class TrackBuilder {
   /** Collider descriptors emitted by the currently-built track. */
   getColliderDescriptors(): readonly AdventureColliderDesc[] {
     return this.colliders.list()
+  }
+
+  /**
+   * Emit one collider for this track: recorded as a descriptor and realised
+   * as a Rapier body. Track modules call this instead of building
+   * `rapier.ColliderDesc` inline, so the same geometry can be replayed into
+   * the C++ engine.
+   */
+  emitCollider(desc: AdventureColliderDesc): EmittedCollider {
+    return this.colliders.emit(desc)
+  }
+
+  /**
+   * Emit an extra, body-local collider on an already-emitted body. Accepts
+   * either the handle emitCollider() returned or the raw Rapier body.
+   */
+  attachCollider(parent: EmittedCollider | RAPIER.RigidBody, desc: AdventureColliderDesc): void {
+    this.colliders.attach(parent, desc)
   }
 
   /**

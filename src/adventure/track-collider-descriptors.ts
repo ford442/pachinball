@@ -52,9 +52,12 @@ export type AdventureColliderKind = 'box' | 'cylinder' | 'sphere'
 /**
  * One adventure collider, engine-agnostic.
  *
- * `position`/`rotation` are world-space unless `parentIndex` is set, in which
- * case they are relative to that descriptor's body (Rapier collider-local),
- * matching how the rotating platform's teeth hang off the platter body.
+ * `position`/`rotation` are the BODY's world pose. When `parentIndex` is set
+ * there is no body of this descriptor's own, and they are instead the
+ * collider's pose in the parent body's frame (how the rotating platform's
+ * teeth hang off the platter). `localPosition`/`localRotation` add a further
+ * collider offset inside its own body — needed when the body pose is animated
+ * about a pivot the collider is not centred on (magnetic-storage's arm).
  *
  * Defaults mirror Rapier's `ColliderDesc` defaults (friction 0.5,
  * restitution 0) so an emitted collider that leaves them unset behaves
@@ -71,6 +74,10 @@ export interface AdventureColliderDesc {
   radius?: number
   /** `cylinder` only — half of the axis length (local Y, as Rapier). */
   halfHeight?: number
+
+  /** Collider offset inside its own body. Ignored when `parentIndex` is set. */
+  localPosition?: DescVec3
+  localRotation?: DescQuat
 
   restitution: number
   friction: number
@@ -127,6 +134,8 @@ export interface DescOptions {
   density?: number
   parentIndex?: number
   label?: string
+  localPosition?: DescVec3
+  localRotation?: DescQuat
 }
 
 function common(opts: DescOptions): Omit<AdventureColliderDesc, 'kind' | 'position'> {
@@ -143,6 +152,8 @@ function common(opts: DescOptions): Omit<AdventureColliderDesc, 'kind' | 'positi
     ...(opts.density !== undefined ? { density: opts.density } : {}),
     ...(opts.parentIndex !== undefined ? { parentIndex: opts.parentIndex } : {}),
     ...(opts.label ? { label: opts.label } : {}),
+    ...(opts.localPosition ? { localPosition: opts.localPosition } : {}),
+    ...(opts.localRotation ? { localRotation: opts.localRotation } : {}),
   }
 }
 

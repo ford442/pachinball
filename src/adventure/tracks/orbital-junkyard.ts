@@ -7,6 +7,7 @@
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
+import { boxDesc } from '../track-collider-descriptors'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildOrbitalJunkyard(builder: TrackBuilder): void {
@@ -14,7 +15,6 @@ export function buildOrbitalJunkyard(builder: TrackBuilder): void {
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
-  const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
 
@@ -51,14 +51,14 @@ export function buildOrbitalJunkyard(builder: TrackBuilder): void {
       const finalPos = debrisPosOnSurface.add(normalVec.scale(scale * 0.5))
 
       let mesh: import('@babylonjs/core/Meshes/mesh').Mesh
-      let colliderDesc: RAPIER.ColliderDesc
+      let half: number
 
       if (type === 'box') {
         mesh = MeshBuilder.CreateBox("junkBox", { size: scale }, scene)
-        colliderDesc = rapier.ColliderDesc.cuboid(scale / 2, scale / 2, scale / 2)
+        half = scale / 2
       } else {
         mesh = MeshBuilder.CreatePolyhedron("junkTetra", { type: 0, size: scale * 0.6 }, scene)
-        colliderDesc = rapier.ColliderDesc.cuboid(scale / 3, scale / 3, scale / 3)
+        half = scale / 3
       }
 
       mesh.position.copyFrom(finalPos)
@@ -69,12 +69,13 @@ export function buildOrbitalJunkyard(builder: TrackBuilder): void {
       adventureTrack.push(mesh)
 
       const q = Quaternion.FromEulerAngles(mesh.rotation.x, mesh.rotation.y, mesh.rotation.z)
-      const body = world.createRigidBody(
-        rapier.RigidBodyDesc.fixed()
-          .setTranslation(finalPos.x, finalPos.y, finalPos.z)
-          .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+      const { body } = builder.emitCollider(
+        boxDesc(
+          { x: finalPos.x, y: finalPos.y, z: finalPos.z },
+          { x: half, y: half, z: half },
+          { rotation: { x: q.x, y: q.y, z: q.z, w: q.w }, label: 'junkDebris' }
+        )
       )
-      world.createCollider(colliderDesc, body)
       adventureBodies.push(body)
     }
 
@@ -101,14 +102,12 @@ export function buildOrbitalJunkyard(builder: TrackBuilder): void {
       adventureTrack.push(box)
 
       const q = Quaternion.FromEulerAngles(box.rotation.x, box.rotation.y, box.rotation.z)
-      const body = world.createRigidBody(
-        rapier.RigidBodyDesc.fixed()
-          .setTranslation(pos.x, pos.y, pos.z)
-          .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-      )
-      world.createCollider(
-        rapier.ColliderDesc.cuboid(blockWidth / 2, blockHeight / 2, blockDepth / 2),
-        body
+      const { body } = builder.emitCollider(
+        boxDesc(
+          { x: pos.x, y: pos.y, z: pos.z },
+          { x: blockWidth / 2, y: blockHeight / 2, z: blockDepth / 2 },
+          { rotation: { x: q.x, y: q.y, z: q.z, w: q.w }, label: 'crusherBlock' }
+        )
       )
       adventureBodies.push(body)
     }

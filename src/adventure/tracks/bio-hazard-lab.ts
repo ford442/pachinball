@@ -7,6 +7,7 @@
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
+import { boxDesc } from '../track-collider-descriptors'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildBioHazardLab(builder: TrackBuilder): void {
@@ -16,7 +17,6 @@ export function buildBioHazardLab(builder: TrackBuilder): void {
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
-  const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
   void adventureTrack // Used for visual mesh tracking
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
@@ -70,11 +70,17 @@ export function buildBioHazardLab(builder: TrackBuilder): void {
         const colRot = Quaternion.FromEulerAngles(0, angle, 0)
         const arcLen = centrifugeRadius * angleStep
 
-        const colliderDesc = rapier.ColliderDesc.cuboid(wallThickness / 2, wallHeight / 2, arcLen / 2 + 0.2)
-          .setTranslation(cx, wallHeight / 2 + 0.25, cz)
-          .setRotation({ x: colRot.x, y: colRot.y, z: colRot.z, w: colRot.w })
-
-        world.createCollider(colliderDesc, platformBody)
+        builder.attachCollider(
+          platformBody,
+          boxDesc(
+            { x: cx, y: wallHeight / 2 + 0.25, z: cz },
+            { x: wallThickness / 2, y: wallHeight / 2, z: arcLen / 2 + 0.2 },
+            {
+              rotation: { x: colRot.x, y: colRot.y, z: colRot.z, w: colRot.w },
+              label: 'centrifugeWall',
+            }
+          )
+        )
       }
     }
   }
