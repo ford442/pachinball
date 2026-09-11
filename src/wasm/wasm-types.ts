@@ -6,6 +6,17 @@
  * They are intentionally narrow — only the surface area actually exposed to JS.
  */
 
+/**
+ * Mirrors native `STATIC_HANDLE_OVERFLOW` in PhysicsWorld.h. Every `add*`
+ * that creates a static shape returns this instead of a handle once its
+ * family hits `STATIC_HANDLE_CAPACITY` (1000), and creates no collider.
+ *
+ * It is positive, so it can never be mistaken for a static handle, and
+ * `setCollisionGroups` ignores it. Callers must treat it as a failure rather
+ * than storing it: a stored sentinel would name geometry that does not exist.
+ */
+export const STATIC_HANDLE_OVERFLOW = 0x7FFFFFFF
+
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
@@ -129,7 +140,8 @@ export interface WasmPhysicsWorldInstance {
   /**
    * Add an oriented static cylinder collider (local Y axis), matching
    * Rapier's `ColliderDesc.cylinder(halfHeight, radius)`.
-   * @returns Negative collider id used in contact events.
+   * @returns Negative collider id used in contact events, or
+   * `STATIC_HANDLE_OVERFLOW` (creating nothing) if the family is full.
    */
   addStaticCylinder(
     px: number, py: number, pz: number,
@@ -141,7 +153,8 @@ export interface WasmPhysicsWorldInstance {
 
   /**
    * Add a static sphere collider.
-   * @returns Negative collider id used in contact events.
+   * @returns Negative collider id used in contact events, or
+   * `STATIC_HANDLE_OVERFLOW` (creating nothing) if the family is full.
    */
   addStaticSphere(
     px: number, py: number, pz: number,

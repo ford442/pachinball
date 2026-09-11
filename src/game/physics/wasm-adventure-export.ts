@@ -8,6 +8,7 @@ import type {
 } from '../../adventure/track-collider-descriptors'
 import { WasmVolumeShape } from '../../wasm/PhysicsModule'
 import type { WasmSimEngine } from '../../wasm/wasm-sim-engine'
+import { STATIC_HANDLE_OVERFLOW } from '../../wasm/wasm-types'
 
 const RapierShapeType = {
   Ball: 0,
@@ -435,6 +436,9 @@ export function exportAdventureCollidersToWasm(
     const restitution = desc.restitution
     const friction = desc.friction
 
+    const debugBefore = debug.length
+    const moversBefore = movers.length
+
     let handle: number | null = null
     if (motion === 'kinematic-position') {
       if (desc.kind !== 'box') return reject(`C++ kinematic movers are box only, got ${desc.kind}`)
@@ -470,6 +474,15 @@ export function exportAdventureCollidersToWasm(
       debug.push({ kind: 'sphere', center: p, radius })
     }
 
+    if (handle === STATIC_HANDLE_OVERFLOW) {
+      // The family is full and native created nothing. Storing the sentinel
+      // would name geometry that does not exist, and drawing its debug box
+      // would show a collider that is not there — so undo both and report it,
+      // which also stops `isFullyExportable` handing the track to C++.
+      debug.length = debugBefore
+      movers.length = moversBefore
+      return reject('native static handle capacity exhausted')
+    }
     if (handle === null || handle === -1) return
     handles.set(index, handle)
     engine.setCollisionGroups?.(handle, desc.membership, desc.filter)

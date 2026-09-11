@@ -13,6 +13,7 @@ import {
 import { decodeTransformSlot, TRANSFORM_STRIDE } from './transform-buffer'
 import {
   decodeHingeAngle,
+  STATIC_HANDLE_OVERFLOW,
   WasmIdShadow,
   type PhysicsWorkerCommand,
   type PhysicsWorkerFromWorker,
@@ -163,6 +164,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   ): number {
     if (!this.isReady) return -1
     const id = this.ids.allocStaticBox()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
     this.enqueue({ type: 'addStaticBox', center, halfExtents, rotation, restitution, friction })
     return id
   }
@@ -177,6 +179,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   ): number {
     if (!this.isReady) return -1
     const id = this.ids.allocStaticCapsule()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
     this.enqueue({ type: 'addStaticCapsule', center, radius, halfHeight, rotation, restitution, friction })
     return id
   }
@@ -191,6 +194,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   ): number {
     if (!this.isReady) return -1
     const id = this.ids.allocStaticCylinder()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
     this.enqueue({ type: 'addStaticCylinder', center, radius, halfHeight, rotation, restitution, friction })
     return id
   }
@@ -203,6 +207,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   ): number {
     if (!this.isReady) return -1
     const id = this.ids.allocStaticSphere()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
     this.enqueue({ type: 'addStaticSphere', center, radius, restitution, friction })
     return id
   }
@@ -214,6 +219,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   ): number {
     if (!this.isReady) return -1
     const id = this.ids.allocSensorVolume()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
     this.enqueue({ type: 'addSensorVolume', center, halfExtents, rotation })
     return id
   }
@@ -227,6 +233,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   ): number {
     if (!this.isReady) return -1
     const id = this.ids.allocKinematicMover()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
     this.enqueue({ type: 'addKinematicMover', position, halfExtents, rotation, restitution, friction })
     return id
   }

@@ -12,6 +12,7 @@ import {
   type AdventureColliderDesc,
 } from '../src/adventure/track-collider-descriptors'
 import { ADVENTURE_GROUP, CollisionGroups, makeCollisionGroups } from '../src/game-elements/physics'
+import { STATIC_HANDLE_OVERFLOW } from '../src/wasm/wasm-types'
 import {
   collectUnsupported,
   driveAdventureMovers,
@@ -429,5 +430,40 @@ describe('driveAdventureMovers', () => {
     driveAdventureMovers(movers, engine, 1 / 60)
     const [, position] = engine.setNextKinematicTransform.mock.calls[0]
     expect(position.y).toBeCloseTo(4, 5)
+  })
+})
+
+describe('static handle capacity in the descriptor exporter', () => {
+  it('treats STATIC_HANDLE_OVERFLOW as unsupported rather than storing it', () => {
+    const calls: Call[] = []
+    const engine = {
+      addStaticBox: (...args: unknown[]) => { calls.push({ fn: 'addStaticBox', args }); return -1001 },
+      // Native refused this one: the family is full and no collider exists.
+      addStaticCylinder: (...args: unknown[]) => {
+        calls.push({ fn: 'addStaticCylinder', args })
+        return STATIC_HANDLE_OVERFLOW
+      },
+      setCollisionGroups: (...args: unknown[]) => { calls.push({ fn: 'setCollisionGroups', args }) },
+    } as unknown as WasmSimEngine
+
+    const descriptors: AdventureColliderDesc[] = [
+      boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { label: 'floor' }),
+      cylinderDesc({ x: 2, y: 0, z: 0 }, 0.5, 0.25, { label: 'post' }),
+    ]
+
+    const result = exportAdventureCollidersToWasm(descriptors, engine)
+
+    // The box exported normally.
+    expect(result.handles.get(0)).toBe(-1001)
+
+    // The refused cylinder must leave no trace: no handle, no collision-group
+    // call naming the sentinel, and no debug box for geometry that is absent.
+    expect(result.handles.has(1)).toBe(false)
+    expect(at(calls, 'setCollisionGroups').map((c) => c.args[0])).toEqual([-1001])
+    expect(result.debug.filter((d) => d.kind === 'cylinder')).toHaveLength(0)
+
+    // And it must be reported, so the gate cannot hand the track to C++.
+    expect(result.unsupported).toHaveLength(1)
+    expect(result.unsupported[0].reason).toMatch(/capacity/i)
   })
 })

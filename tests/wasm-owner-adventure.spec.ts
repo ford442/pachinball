@@ -30,7 +30,7 @@ type AdventureHooks = GameHooks & {
       getPortalSensorHandle: () => number
     } | null
     scene?: { activeCamera?: unknown }
-    physicsController?: GameHooks['game'] extends { physicsController?: infer P } ? P : never
+    physicsController?: NonNullable<GameHooks['game']>['physicsController']
   }
 }
 
@@ -126,7 +126,7 @@ test.describe('wasm-owner adventure: synthwave-surf runs without Rapier', () => 
       if (!rapier || !ball) return false
       ball.setTranslation(new rapier.Vector3(0, 2, 1), true)
       ball.setLinvel(new rapier.Vector3(0, 0, 0), true)
-      g.physicsController?.rebuildHandleCaches?.()
+      g?.physicsController?.rebuildHandleCaches?.()
       return true
     })
     expect(placed).toBe(true)
