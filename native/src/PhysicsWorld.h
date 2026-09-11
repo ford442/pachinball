@@ -58,6 +58,24 @@ static constexpr int STATIC_CAPSULE_ID_BASE = -2000;
 // STATIC_CYLINDER_ID_BASE (-5000) and STATIC_SPHERE_ID_BASE (-6000) in
 // StaticShapes.h.
 
+/**
+ * Entries per static-handle family.
+ *
+ * The id bases above are spaced 1000 apart, so the 1001st shape of a family
+ * would be handed the next family's base — `setCollisionGroups` would then
+ * edit the wrong descriptor and a contact id would name two different
+ * shapes. Creation is refused at the cap instead: a dropped collider is
+ * visible (`getDroppedStaticCount()`) where aliasing is silent.
+ */
+inline constexpr std::size_t STATIC_HANDLE_CAPACITY = 1000;
+
+/**
+ * Returned by an add*() that hit `STATIC_HANDLE_CAPACITY`. Positive, so it can
+ * never be mistaken for a static handle, and no body ever carries this id — so
+ * passing it to setCollisionGroups() is a no-op rather than a mis-edit.
+ */
+inline constexpr int STATIC_HANDLE_OVERFLOW = 0x7FFFFFFF;
+
 /** Packed transform-buffer layout (16 floats per public-id slot). */
 inline constexpr int TRANSFORM_STRIDE = 16;
 
@@ -163,6 +181,9 @@ public:
   float getHingeAngle(int id) const;
   void  removeHinge(int id);
 
+  /** Static shapes refused because their family hit STATIC_HANDLE_CAPACITY. */
+  int getDroppedStaticCount() const { return droppedStatics_; }
+
   uint64_t getStepCount() const { return stepCount_; }
   int getActiveBodyCount() const;
 
@@ -254,6 +275,8 @@ private:
 
   float*                         transformBuffer_ = nullptr;
   std::size_t                    transformCapSlots_ = 0;
+
+  int                            droppedStatics_ = 0;
 
   float                          accumulator_  = 0.f;
   uint64_t                       stepCount_    = 0;

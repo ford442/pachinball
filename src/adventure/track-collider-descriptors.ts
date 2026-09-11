@@ -165,7 +165,12 @@ export function boxDesc(
   return { kind: 'box', position, halfExtents, ...common(opts) }
 }
 
-/** Matches Rapier's `ColliderDesc.cylinder(halfHeight, radius)` — local Y axis. */
+/**
+ * Matches Rapier's `ColliderDesc.cylinder(halfHeight, radius)` — local Y axis —
+ * because this replaces Rapier call sites and copying them should not require
+ * reordering. The C++ engine's `addStaticCylinder` takes radius FIRST; that
+ * swap happens once, in wasm-adventure-export.ts.
+ */
 export function cylinderDesc(
   position: DescVec3,
   halfHeight: number,

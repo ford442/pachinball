@@ -186,6 +186,7 @@ int PhysicsWorld::addStaticBox(float px, float py, float pz,
                                float hx, float hy, float hz,
                                float qx, float qy, float qz, float qw,
                                float restitution, float friction) {
+  if (boxes_.size() >= STATIC_HANDLE_CAPACITY) { ++droppedStatics_; return STATIC_HANDLE_OVERFLOW; }
   BoxDesc box;
   box.center = {px, py, pz};
   box.halfExtents = {hx, hy, hz};
@@ -202,6 +203,7 @@ int PhysicsWorld::addStaticCapsule(float px, float py, float pz,
                                    float radius, float halfHeight,
                                    float qx, float qy, float qz, float qw,
                                    float restitution, float friction) {
+  if (capsules_.size() >= STATIC_HANDLE_CAPACITY) { ++droppedStatics_; return STATIC_HANDLE_OVERFLOW; }
   CapsuleDesc cap;
   cap.center = {px, py, pz};
   cap.radius = radius;
@@ -216,6 +218,7 @@ int PhysicsWorld::addStaticCapsule(float px, float py, float pz,
 }
 
 int PhysicsWorld::addKinematicMover(const KinematicMoverDesc& desc) {
+  if (movers_.size() >= STATIC_HANDLE_CAPACITY) { ++droppedStatics_; return STATIC_HANDLE_OVERFLOW; }
   KinematicMover mover;
   mover.halfExtents = desc.halfExtents;
   mover.currentPos = desc.position;
@@ -241,6 +244,7 @@ void PhysicsWorld::setNextKinematicTransform(int moverId, float px, float py, fl
 }
 
 int PhysicsWorld::addSensorVolume(const SensorVolumeDesc& desc) {
+  if (sensors_.size() >= STATIC_HANDLE_CAPACITY) { ++droppedStatics_; return STATIC_HANDLE_OVERFLOW; }
   sensors_.push_back(desc);
   const int idx = static_cast<int>(sensors_.size()) - 1;
   broadphase_.insertSensorVolume(idx, desc);

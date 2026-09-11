@@ -353,9 +353,12 @@ engine.addStaticCapsule(
   0.5
 )
 
-// Slice B — the two shapes the adventure tracks needed. Cylinder argument
-// order matches Rapier's ColliderDesc.cylinder(halfHeight, radius), with the
-// axis on local Y.
+// Slice B — the two shapes the adventure tracks needed. NOTE the argument
+// order: this API takes radius BEFORE halfHeight, the opposite of Rapier's
+// ColliderDesc.cylinder(halfHeight, radius). Both put the axis on local Y.
+// The descriptor factory cylinderDesc() deliberately keeps Rapier's order,
+// since it replaces Rapier call sites — wasm-adventure-export.ts is what
+// swaps them over.
 engine.addStaticCylinder(
   { x: 0, y: 0, z: 0 },           // centre
   0.5, 2.0,                        // radius, half-height (local Y)

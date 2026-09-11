@@ -172,8 +172,14 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
     }
   }
 
-  std::unordered_set<uint64_t> seen;
-  seen.reserve(1024);
+  // Two dedup sets, not one. A body-body key and a body-static key are built
+  // from different fields and can collide numerically — pairKeyBody(0, 5) and
+  // pairKeyStatic(0, 0, Pair::BodyCylinder) are both 5 — and a shared set
+  // would let whichever is emitted first silently evict the other.
+  std::unordered_set<uint64_t> seenBody;
+  std::unordered_set<uint64_t> seenStatic;
+  seenBody.reserve(1024);
+  seenStatic.reserve(1024);
 
   auto pairKeyBody = [](int a, int b) -> uint64_t {
     const int lo = (a <= b) ? a : b;
@@ -202,7 +208,7 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
         if (!groupsInteract(bodies.membership(a), bodies.filter(a),
                             bodies.membership(b), bodies.filter(b))) continue;
         const uint64_t key = pairKeyBody(a, b);
-        if (!seen.insert(key).second) continue;
+        if (!seenBody.insert(key).second) continue;
         outPairs.push_back({Pair::BodyBody, a, b});
       }
     }
@@ -238,7 +244,7 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
           if (!groupsInteract(bodies.membership(bodyDense), bodies.filter(bodyDense),
                               refMembership, refFilter)) continue;
           const uint64_t key = pairKeyStatic(bodyDense, ref.index, ptype);
-          if (!seen.insert(key).second) continue;
+          if (!seenStatic.insert(key).second) continue;
           outPairs.push_back({ptype, bodyDense, ref.index});
         }
       }
@@ -253,7 +259,7 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
           if (!groupsInteract(bodies.membership(bodyDense), bodies.filter(bodyDense),
                               mover.membership, mover.filter)) continue;
           const uint64_t key = pairKeyStatic(bodyDense, moverIdx, Pair::BodyMover);
-          if (!seen.insert(key).second) continue;
+          if (!seenStatic.insert(key).second) continue;
           outPairs.push_back({Pair::BodyMover, bodyDense, moverIdx});
         }
       }
@@ -278,7 +284,7 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
             if (!groupsInteract(bodies.membership(a), bodies.filter(a),
                                 bodies.membership(b), bodies.filter(b))) continue;
             const uint64_t key = pairKeyBody(a, b);
-            if (!seen.insert(key).second) continue;
+            if (!seenBody.insert(key).second) continue;
             outPairs.push_back({Pair::BodyBody, a, b});
           }
         }

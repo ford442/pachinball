@@ -422,3 +422,100 @@ TEST_CASE("dynamic bodies and hinges survive clearStaticGeometry",
   CHECK(hinge >= 0);
   CHECK(isFinite(world.getHingeAngle(hinge)));
 }
+
+// ---------------------------------------------------------------------------
+// Broadphase pair-key aliasing: a body-body pair and a body-static pair must
+// never share a dedup key, or one of them is silently dropped.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("a body-body pair does not suppress a body-cylinder pair with the same key",
+          "[physics][broadphase]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, 0.f, 0.f);
+
+  // Cylinder index 0, tall enough that both balls sit against its curved side.
+  const int cylId = world.addStaticCylinder(0.f, 0.f, 0.f, 0.5f, 4.f,
+                                            0.f, 0.f, 0.f, 1.f, 0.9f, 0.f);
+
+  // Dense body 0, overlapping the cylinder's side.
+  world.createRigidBody({
+    {0.55f, 0.f, 0.f}, {0.f, 0.f, 0.f}, 0.08f, 0.1f, 0.9f, 0.f, BodyType::Dynamic
+  });
+
+  // Dense bodies 1..4 parked far away, each in its own cell, forming no pairs.
+  for (int i = 1; i <= 4; ++i) {
+    world.createRigidBody({
+      {100.f + static_cast<float>(i) * 5.f, 0.f, 0.f}, {0.f, 0.f, 0.f},
+      0.08f, 0.1f, 0.5f, 0.f, BodyType::Dynamic
+    });
+  }
+
+  // Dense body 5, directly above body 0. The broadphase grid is XZ-only, so
+  // these two share a cell permanently and always emit a body-body pair,
+  // while being far enough apart in Y never to actually touch.
+  world.createRigidBody({
+    {0.55f, 0.6f, 0.f}, {0.f, 0.f, 0.f}, 0.08f, 0.1f, 0.9f, 0.f, BodyType::Dynamic
+  });
+
+  world.step(FIXED_DT);
+
+  // Three pairs: body0-body5, body0-cylinder, body5-cylinder. The body-body
+  // key for (0, 5) is 5, and so was the body-static key for
+  // (body 0, cylinder 0, Pair::BodyCylinder) while both pair classes shared
+  // one dedup set — the body-body pair went in first and evicted the
+  // cylinder's, so body 0 could never hit the cylinder.
+  CHECK(world.getLastBroadphasePairCount() == 3);
+  CHECK(findContact(world, cylId).has_value());
+}
+
+// ---------------------------------------------------------------------------
+// Static-handle families are spaced 1000 apart, so overrunning one would hand
+// out the next family's base and silently alias two different shapes.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("a static family refuses creation at its capacity instead of aliasing the next",
+          "[physics][static-handles]") {
+  PhysicsWorld world;
+
+  int lastBox = 0;
+  for (std::size_t i = 0; i < STATIC_HANDLE_CAPACITY; ++i) {
+    lastBox = world.addStaticBox(static_cast<float>(i), 0.f, 0.f, 0.1f, 0.1f, 0.1f,
+                                 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f);
+  }
+  CHECK(lastBox == STATIC_BOX_ID_BASE - static_cast<int>(STATIC_HANDLE_CAPACITY) + 1);
+  CHECK(lastBox > STATIC_CAPSULE_ID_BASE);          // never reached the next base
+  CHECK(world.getDroppedStaticCount() == 0);
+
+  const int overflow = world.addStaticBox(0.f, 0.f, 0.f, 0.1f, 0.1f, 0.1f,
+                                          0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f);
+  CHECK(overflow == STATIC_HANDLE_OVERFLOW);
+  CHECK(overflow > 0);                               // can never look like a static
+  CHECK(world.getDroppedStaticCount() == 1);
+
+  // A capsule added afterwards still gets its own family's first handle.
+  CHECK(world.addStaticCapsule(0.f, 0.f, 0.f, 0.1f, 0.1f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f)
+        == STATIC_CAPSULE_ID_BASE);
+}
+
+TEST_CASE("every static family enforces the same capacity", "[physics][static-handles]") {
+  PhysicsWorld world;
+  for (std::size_t i = 0; i < STATIC_HANDLE_CAPACITY; ++i) {
+    world.addStaticCylinder(0.f, static_cast<float>(i), 0.f, 0.1f, 0.1f,
+                            0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f);
+    world.addStaticSphere(0.f, static_cast<float>(i), 0.f, 0.1f, 0.4f, 0.2f);
+    world.addSensorVolume(SensorVolumeDesc{});
+  }
+  CHECK(world.getDroppedStaticCount() == 0);
+
+  CHECK(world.addStaticCylinder(0.f, 0.f, 0.f, 0.1f, 0.1f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f)
+        == STATIC_HANDLE_OVERFLOW);
+  CHECK(world.addStaticSphere(0.f, 0.f, 0.f, 0.1f, 0.4f, 0.2f) == STATIC_HANDLE_OVERFLOW);
+  CHECK(world.addSensorVolume(SensorVolumeDesc{}) == STATIC_HANDLE_OVERFLOW);
+  CHECK(world.getDroppedStaticCount() == 3);
+
+  // clearStaticGeometry() frees the families and resets the drop count.
+  world.clearStaticGeometry();
+  CHECK(world.getDroppedStaticCount() == 0);
+  CHECK(world.addStaticCylinder(0.f, 0.f, 0.f, 0.1f, 0.1f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f)
+        == STATIC_CYLINDER_ID_BASE);
+}

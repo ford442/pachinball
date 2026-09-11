@@ -250,6 +250,13 @@ export interface WasmPhysicsWorldInstance {
   /** Contacts discarded this step when the cap was hit. */
   getDroppedContactCount(): number
 
+  /**
+   * Static shapes refused because their negative-handle family hit its
+   * 1000-entry capacity. Non-zero means geometry is missing from the C++
+   * world — the alternative would have been two shapes sharing a handle.
+   */
+  getDroppedStaticCount(): number
+
   setMaxContacts(max: number): void
   getMaxContacts(): number
 

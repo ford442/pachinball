@@ -467,4 +467,25 @@ function readContacts(mod, world) {
   world.delete()
 }
 
+// #383 Slice B — static handle families are spaced 1000 apart, so overrunning
+// one must be refused rather than aliasing the next family's base.
+{
+  const world = new Module.PhysicsWorld()
+  let last = 0
+  for (let i = 0; i < 1000; i++) {
+    last = world.addStaticCylinder(i * 0.01, 0, 0, 0.1, 0.1, 0, 0, 0, 1, 0.4, 0.2)
+  }
+  const dropsBefore = world.getDroppedStaticCount()
+  const overflow = world.addStaticCylinder(0, 0, 0, 0.1, 0.1, 0, 0, 0, 1, 0.4, 0.2)
+  const sphere = world.addStaticSphere(0, 0, 0, 0.1, 0.4, 0.2)
+  const ok = last === -5999 && dropsBefore === 0 && overflow > 0
+    && world.getDroppedStaticCount() === 1 && sphere === -6000
+  console.log(
+    `${ok ? 'PASS' : 'FAIL'} wasm static handle family capacity ` +
+    `(last=${last} overflow=${overflow} drops=${world.getDroppedStaticCount()} sphere=${sphere})`
+  )
+  if (!ok) failed = true
+  world.delete()
+}
+
 process.exit(failed ? 1 : 0)
