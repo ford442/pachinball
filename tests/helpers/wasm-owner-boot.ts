@@ -37,7 +37,7 @@ export type GameHooks = {
       getBumperBodies?: () => Array<{ translation: () => { x: number; y: number; z: number } }>
     }
     inputManager?: unknown
-    inputActions?: { handlePlunger?: () => boolean }
+    inputActions?: { handlePlunger?: () => boolean; handleFlipperLeft?: (pressed: boolean) => void }
     plungerChargeLevel?: number
     engine?: { getDeltaTime: () => number }
     scene?: { meshes?: Array<{ name: string; getVerticesData?: (kind: string) => Float32Array | number[] | null }> }

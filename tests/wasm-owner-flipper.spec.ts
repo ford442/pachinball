@@ -17,33 +17,44 @@ test.describe('wasm-owner native flipper hinge', () => {
     assertWasmOwnerReady(boot)
     await startPlaying(page)
 
-    const placed = await page.evaluate(() => {
+    // Placement, flipper engage and stepping all happen in ONE evaluate.
+    //
+    // This used to place the ball, then `page.keyboard.down('Digit1')`, then
+    // step in a second evaluate. The page's own rAF loop keeps calling
+    // stepPhysics across those round trips, so on a slow runner the flipper
+    // finished its whole sweep before the scripted loop started and never
+    // struck the ball — |vz| came out ~0.13 instead of ~12. That raced about
+    // half the time in CI, on code as unrelated as a docs-only commit.
+    //
+    // The flipper is engaged through inputActions rather than the keyboard so
+    // it starts its sweep in the same tick the stepping does. It stays
+    // engaged because an unheld key yields `flipperLeft: null`, which
+    // stepPhysics skips (see InputManager.processBufferedInputs +
+    // pollHeldFlipperKeys). The real keyboard path has its own coverage in
+    // tests/keyboard-input.spec.ts; what this spec gates is the native hinge
+    // and the Rapier skip.
+    const launched = await page.evaluate(() => {
       const g = (window as unknown as GameHooks).game
       const rapier = g?.physics?.getRapier?.()
       const ball = g?.ballManager?.getBallBody?.()
-      if (!rapier || !ball) return false
-      g.physicsController?.rebuildHandleCaches?.()
-      ball.setTranslation(new rapier.Vector3(-5.5, 0.45, -7.0), true)
-      ball.setLinvel(new rapier.Vector3(0, 0, 0), true)
-      g.physicsController?.rebuildHandleCaches?.()
-      return true
-    })
-    expect(placed).toBe(true)
-
-    await page.keyboard.down('Digit1')
-
-    const launched = await page.evaluate(() => {
-      const g = (window as unknown as GameHooks).game
-      if (!g?.physicsController || !g.engine) {
+      if (!g?.physicsController || !g.engine || !rapier || !ball) {
         return { ok: false, vz: 0, rapierMs: -1, engine: null as string | null }
       }
+
+      g.physicsController.rebuildHandleCaches?.()
+      ball.setTranslation(new rapier.Vector3(-5.5, 0.45, -7.0), true)
+      ball.setLinvel(new rapier.Vector3(0, 0, 0), true)
+      g.physicsController.rebuildHandleCaches?.()
+
       const origDt = g.engine.getDeltaTime.bind(g.engine)
       g.engine.getDeltaTime = () => 1000 / 60
       try {
+        g.inputActions?.handleFlipperLeft?.(true)
         for (let i = 0; i < 90; i++) {
           g.physicsController.stepPhysics(g.inputManager, g.inputActions, null, null)
         }
       } finally {
+        g.inputActions?.handleFlipperLeft?.(false)
         g.engine.getDeltaTime = origDt
       }
       const vz = g.ballManager?.getBallBody?.()?.linvel().z ?? 0
@@ -51,8 +62,6 @@ test.describe('wasm-owner native flipper hinge', () => {
       const engine = (window as unknown as { currentPhysicsEngine?: string }).currentPhysicsEngine ?? null
       return { ok: true, vz, rapierMs, engine }
     })
-
-    await page.keyboard.up('Digit1')
 
     expect(launched.ok).toBe(true)
     expect(launched.engine).toBe('wasm-owner')
