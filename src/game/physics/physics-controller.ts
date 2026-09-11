@@ -9,7 +9,7 @@
 import type { PhysicsHost } from './types'
 import { MeshInterpolationSystem } from './mesh-interpolation'
 import { WasmMirror } from './wasm-mirror'
-import { WasmOwner } from './wasm-owner'
+import { WasmOwner, type AdventureTrackState } from './wasm-owner'
 import { ScoringBridge } from './scoring-bridge'
 import { CollisionDispatcher } from './collision-dispatch'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
@@ -218,6 +218,25 @@ export class GamePhysicsController {
     this.meshInterpolation.syncMeshes(alpha, this.host.gameObjects?.getBindings() || [])
   }
 
+
+  /**
+   * Snapshot of the built adventure track for the C++ exporter, or null when
+   * adventure is not running. `portalActive` keeps Rapier stepping while an
+   * exit portal is up, because portal entry is an `intersectionPair` query
+   * and those need a stepped narrowphase.
+   */
+  private adventureTrackState(adventureActive: boolean): AdventureTrackState | null {
+    const adventure = this.host.adventureMode
+    if (!adventureActive || !adventure) return null
+    return {
+      epoch: adventure.getColliderEpoch(),
+      descriptors: adventure.getColliderDescriptors(),
+      unexported: adventure.getUnexportedColliders(),
+      bodyForDescriptor: (index) => adventure.getBodyForDescriptor(index),
+      portalActive: adventure.getPortalSensorHandle() >= 0,
+    }
+  }
+
   stepPhysics(
     inputManager: { update: () => void; processBufferedInputs: () => InputFrame | null } | null,
     inputActions: { handleFlipperLeft: (p: boolean) => void; handleFlipperRight: (p: boolean) => void; handlePlunger: () => void; updatePlungerFrame?: (dt: number) => void } | null,
@@ -266,7 +285,16 @@ export class GamePhysicsController {
     const wasmActive = this.host.physics.isWasmActive?.() ?? false
     const isOwner = this.host.physics.isWasmOwnerMode?.() ?? false
     const adventureActive = this.host.adventureMode?.isActive() ?? false
-    this.host.physics.setOwnerSkipRapierStep?.(isOwner && !adventureActive)
+
+    // Adventure no longer forces Rapier to keep stepping: a track whose whole
+    // collider set is expressible in C++ (#383 Slice B) is exported there and
+    // Rapier can stay idle. Every other track still steps Rapier.
+    const adventureOwnedByWasm = isOwner
+      ? (this.wasmOwner?.syncAdventureTrack(this.adventureTrackState(adventureActive)) ?? false)
+      : false
+    this.host.physics.setOwnerSkipRapierStep?.(
+      isOwner && (!adventureActive || adventureOwnedByWasm)
+    )
 
     if (wasmActive && !isOwner) {
       const syncT0 = performance.now()

@@ -335,3 +335,90 @@ TEST_CASE("a filter word excludes a static sphere from a ball that should pass t
   CHECK_FALSE(findContact(world, sphId).has_value());
   CHECK(readPos(world, ghost).x < -1.f);
 }
+
+// ---------------------------------------------------------------------------
+// clearStaticGeometry — statics are append-only, so a rebuilt scene must be
+// able to drop the old one.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("clearStaticGeometry removes every static, sensor and mover",
+          "[physics][static-clear]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, 0.f, 0.f);
+
+  world.addStaticBox(0.f, 0.f, 0.f, 1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.9f, 0.f);
+  world.addStaticCylinder(0.f, 6.f, 0.f, 1.f, 2.f, 0.f, 0.f, 0.f, 1.f, 0.9f, 0.f);
+  world.addStaticSphere(0.f, 12.f, 0.f, 1.f, 0.9f, 0.f);
+  world.addStaticPlane(0.f, 1.f, 0.f, -50.f, 0.2f);
+
+  const int ball = world.createRigidBody({
+    {4.f, 0.f, 0.f}, {-4.f, 0.f, 0.f}, 0.08f, 0.1f, 0.9f, 0.f, BodyType::Dynamic
+  });
+  REQUIRE(stepUntilContact(world, STATIC_BOX_ID_BASE, 60).has_value());
+
+  world.clearStaticGeometry();
+
+  // Same ball, fired at the same spot: nothing left to hit.
+  world.setBodyPosition(ball, 4.f, 0.f, 0.f);
+  world.setVelocity(ball, -4.f, 0.f, 0.f);
+  stepFixed(world, 120);  // 2 s at 4 m/s: from x=4 straight through to x=-4
+  CHECK_FALSE(findContact(world, STATIC_BOX_ID_BASE).has_value());
+  CHECK(readPos(world, ball).x < -3.f);
+  CHECK(near(readVel(world, ball).x, -4.f, 1e-3f));
+}
+
+TEST_CASE("handles restart from the base after clearStaticGeometry",
+          "[physics][static-clear]") {
+  PhysicsWorld world;
+  CHECK(world.addStaticBox(0.f, 0.f, 0.f, 1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f)
+        == STATIC_BOX_ID_BASE);
+  CHECK(world.addStaticCylinder(0.f, 0.f, 0.f, 1.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f)
+        == STATIC_CYLINDER_ID_BASE);
+
+  world.clearStaticGeometry();
+
+  CHECK(world.addStaticBox(0.f, 0.f, 0.f, 1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f)
+        == STATIC_BOX_ID_BASE);
+  CHECK(world.addStaticCylinder(0.f, 0.f, 0.f, 1.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f)
+        == STATIC_CYLINDER_ID_BASE);
+}
+
+TEST_CASE("re-adding after clearStaticGeometry leaves exactly one copy",
+          "[physics][static-clear]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, 0.f, 0.f);
+
+  for (int pass = 0; pass < 3; ++pass) {
+    world.clearStaticGeometry();
+    world.addStaticBox(0.f, 0.f, 0.f, 1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.9f, 0.f);
+  }
+
+  const int ball = world.createRigidBody({
+    {3.f, 0.f, 0.f}, {-2.f, 0.f, 0.f}, 0.08f, 0.1f, 0.9f, 0.f, BodyType::Dynamic
+  });
+  stepFixed(world, 5);
+  // One box in the world means one static ref per cell, so at most one pair.
+  CHECK(world.getLastBroadphasePairCount() <= 1);
+  REQUIRE(isFinite(readPos(world, ball)));
+}
+
+TEST_CASE("dynamic bodies and hinges survive clearStaticGeometry",
+          "[physics][static-clear]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, 0.f, 0.f);
+
+  const int ball = world.createRigidBody({
+    {1.f, 2.f, 3.f}, {0.f, 0.f, 0.f}, 1.f, 0.2f, 0.4f, 0.f, BodyType::Dynamic
+  });
+  const int hinge = world.createHinge(ball, HingeDesc{});
+  world.addStaticBox(0.f, 0.f, 0.f, 1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f);
+
+  world.clearStaticGeometry();
+
+  const Vec3 p = readPos(world, ball);
+  CHECK(near(p.x, 1.f));
+  CHECK(near(p.y, 2.f));
+  CHECK(near(p.z, 3.f));
+  CHECK(hinge >= 0);
+  CHECK(isFinite(world.getHingeAngle(hinge)));
+}

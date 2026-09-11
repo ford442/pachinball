@@ -147,6 +147,7 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("addStaticCapsule", &PhysicsWorld::addStaticCapsule)
     .function("addStaticCylinder", &PhysicsWorld::addStaticCylinder)
     .function("addStaticSphere", &PhysicsWorld::addStaticSphere)
+    .function("clearStaticGeometry", &PhysicsWorld::clearStaticGeometry)
 
     // Kinematic OBB movers (pistons, platters, gates)
     .function("addKinematicMover", optional_override([](PhysicsWorld& self,

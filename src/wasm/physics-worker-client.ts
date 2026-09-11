@@ -239,6 +239,11 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     this.enqueue({ type: 'setCollisionGroups', id, membership, filter })
   }
 
+  clearStaticGeometry(): void {
+    this.ids.resetStaticHandles()
+    this.enqueue({ type: 'clearStaticGeometry' })
+  }
+
   createBody(desc: WasmBodyDesc = {}): number {
     if (!this.isReady) return -1
     const id = this.ids.allocBody()

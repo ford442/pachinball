@@ -51,6 +51,20 @@ int PhysicsWorld::addStaticSphere(float px, float py, float pz,
   return STATIC_SPHERE_ID_BASE - idx;
 }
 
+void PhysicsWorld::clearStaticGeometry() {
+  planes_.clear();
+  boxes_.clear();
+  capsules_.clear();
+  cylinders_.clear();
+  spheres_.clear();
+  movers_.clear();
+  sensors_.clear();
+  broadphase_.clearStatics();
+  // Persistent pairs reference handles that no longer exist; dropping the
+  // manifold stops a stale Exit event firing for removed geometry.
+  contactListener_.resetManifold();
+}
+
 /**
  * Closed-form sphere vs solid cylinder.
  *

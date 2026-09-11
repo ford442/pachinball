@@ -4,6 +4,11 @@ import type { BumperVisual, PhysicsBinding, InputFrame } from '../../game-elemen
 import { WASM_PHYSICS, PhysicsConfig, GameConfig } from '../../config'
 import type { WasmSimEngine } from '../../wasm/wasm-sim-engine'
 import { exportRapierBodyToWasm } from './wasm-static-export'
+import {
+  exportAdventureCollidersToWasm,
+  type AdventureExportResult,
+} from './wasm-adventure-export'
+import type { AdventureColliderDesc } from '../../adventure/track-collider-descriptors'
 import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
 import type { WasmDebugCollider } from '../../game-elements/wasm-debug-geometry'
 
@@ -13,6 +18,25 @@ const FLIPPER_PROXY_HALF_HEIGHT = 1.55
 const FLIPPER_MASS = 2.0
 
 interface PlainQuat { x: number; y: number; z: number; w: number }
+
+/**
+ * What WasmOwner needs to know about the adventure track that is currently
+ * built, supplied per frame by the physics controller.
+ */
+export interface AdventureTrackState {
+  /** Bumped by TrackBuilder on every build and teardown. */
+  epoch: number
+  descriptors: readonly AdventureColliderDesc[]
+  /** Non-empty when the track built Rapier geometry with no descriptor. */
+  unexported: readonly string[]
+  /** The Rapier body a descriptor was realised as, for contact-event mapping. */
+  bodyForDescriptor: (index: number) => RAPIER.RigidBody | null
+  /**
+   * True while an exit portal is up. Portal entry is detected with
+   * Rapier `intersectionPair` queries, which need a stepped Rapier world.
+   */
+  portalActive: boolean
+}
 
 /**
  * Native capsules have their segment on local +Y; Rapier flipper cuboids are
@@ -56,8 +80,21 @@ export class WasmOwner {
   private ballBodies = new Set<RAPIER.RigidBody>()
   private flippers: FlipperHinge[] = []
   private disabledRapierBodies = new Set<RAPIER.RigidBody>()
-  private groundAdded = false
-  private debugColliders: WasmDebugCollider[] = []
+  /** Debug geometry for the dynamic bodies (balls, bumpers, flippers). */
+  private dynamicDebug: WasmDebugCollider[] = []
+
+  /** Table statics from the last rebuild(), replayed when the scene is rebuilt. */
+  private tableStaticBindings: PhysicsBinding[] = []
+  private tableStaticDebug: WasmDebugCollider[] = []
+
+  /** Epoch of the adventure track currently exported; -1 when none is. */
+  private adventureEpoch = -1
+  private adventureExport: AdventureExportResult | null = null
+  /** Mover handle per Rapier kinematic body, for the per-frame pose push. */
+  private adventureMovers: { body: RAPIER.RigidBody; handle: number }[] = []
+  private adventureDebug: WasmDebugCollider[] = []
+  /** Negative C++ handles this track registered in wasmToRapier. */
+  private adventureWasmIds: number[] = []
   private leftPressed = false
   private rightPressed = false
   private leftHoldTime = 0
@@ -81,8 +118,14 @@ export class WasmOwner {
     this.ballBodies.clear()
     this.flippers = []
     this.restoreRapierBodies()
-    this.groundAdded = false
-    this.debugColliders = []
+    this.dynamicDebug = []
+    this.tableStaticBindings = []
+    this.tableStaticDebug = []
+    this.adventureEpoch = -1
+    this.adventureExport = null
+    this.adventureMovers = []
+    this.adventureDebug = []
+    this.adventureWasmIds = []
     this.leftPressed = false
     this.rightPressed = false
     this.leftHoldTime = 0
@@ -98,25 +141,15 @@ export class WasmOwner {
   ): void {
     this.clear()
 
-    const plane = WASM_PHYSICS.tunables.groundPlane
-    if (!this.groundAdded) {
-      this.engine.addStaticPlane(
-        { x: plane.normal.x, y: plane.normal.y, z: plane.normal.z },
-        plane.distance,
-        plane.friction
-      )
-      this.groundAdded = true
-    }
-
     const flipperSet = new Set(flipperBodies)
     const bumperSet = new Set(bumperBodies)
     const ballSet = new Set(ballBodies)
 
-    for (const binding of staticBindings) {
+    this.tableStaticBindings = staticBindings.filter((binding) => {
       const body = binding.rigidBody
-      if (flipperSet.has(body) || bumperSet.has(body) || ballSet.has(body)) continue
-      this.debugColliders.push(...exportRapierBodyToWasm(body, this.engine))
-    }
+      return !flipperSet.has(body) && !bumperSet.has(body) && !ballSet.has(body)
+    })
+    this.exportStaticScene()
 
     const visualByBody = new Map<number, BumperVisual>()
     for (const vis of bumperVisuals) {
@@ -142,7 +175,7 @@ export class WasmOwner {
       this.track(body, id)
       this.bumperWasmIds.add(id)
       const t = body.translation()
-      this.debugColliders.push({
+      this.dynamicDebug.push({
         kind: 'sphere',
         center: { x: t.x, y: t.y, z: t.z },
         radius,
@@ -166,7 +199,7 @@ export class WasmOwner {
       this.ballBodies.add(body)
       this.disableRapierBody(body)
       const t = body.translation()
-      this.debugColliders.push({
+      this.dynamicDebug.push({
         kind: 'sphere',
         center: { x: t.x, y: t.y, z: t.z },
         radius: GameConfig.ball.radius,
@@ -218,7 +251,7 @@ export class WasmOwner {
         isRight,
         anchor: { x: pivot.x, y: pivot.y, z: pivot.z },
       })
-      this.debugColliders.push({
+      this.dynamicDebug.push({
         kind: 'capsule',
         center: { x: com.x, y: com.y, z: com.z },
         radius: FLIPPER_PROXY_RADIUS,
@@ -310,8 +343,136 @@ export class WasmOwner {
     }
   }
 
-  getDebugColliders(): readonly WasmDebugCollider[] {
-    return this.debugColliders
+  // ---- Static scene (table + adventure) ---------------------------------
+
+  /**
+   * Re-export every static shape in the scene.
+   *
+   * C++ statics are append-only — `clearStaticGeometry()` is the only way to
+   * drop them — so the ground plane, the table's fixed colliders and the
+   * current adventure track are always (re)written together.
+   */
+  private exportStaticScene(): void {
+    this.engine.clearStaticGeometry()
+
+    const plane = WASM_PHYSICS.tunables.groundPlane
+    this.engine.addStaticPlane(
+      { x: plane.normal.x, y: plane.normal.y, z: plane.normal.z },
+      plane.distance,
+      plane.friction
+    )
+
+    this.tableStaticDebug = []
+    for (const binding of this.tableStaticBindings) {
+      this.tableStaticDebug.push(...exportRapierBodyToWasm(binding.rigidBody, this.engine))
+    }
+
+    this.exportAdventureGeometry()
+  }
+
+  /** Rewrite the adventure half of the static scene from `adventureExport`'s source. */
+  private exportAdventureGeometry(): void {
+    for (const wasmId of this.adventureWasmIds) {
+      this.wasmToRapier.delete(wasmId)
+    }
+    this.adventureWasmIds = []
+    this.adventureMovers = []
+    this.adventureDebug = []
+
+    const track = this.adventureTrack
+    this.adventureExport = null
+    if (!track) return
+
+    const result = exportAdventureCollidersToWasm(track.descriptors, this.engine)
+    this.adventureExport = result
+    this.adventureDebug = result.debug
+
+    // Map each exported collider's C++ handle back to the Rapier body it was
+    // built from, so sensor contacts reach the same dispatch path Rapier's
+    // own collision events would have taken.
+    for (const [index, handle] of result.handles) {
+      const body = track.bodyForDescriptor(index)
+      if (!body) continue
+      this.wasmToRapier.set(handle, body)
+      this.adventureWasmIds.push(handle)
+    }
+
+    for (const mover of result.movers) {
+      const body = track.bodyForDescriptor(mover.index)
+      if (body) this.adventureMovers.push({ body, handle: mover.handle })
+    }
+  }
+
+  /** The adventure track state seen on the most recent sync. */
+  private adventureTrack: AdventureTrackState | null = null
+
+  /**
+   * Keep the C++ static scene in step with the adventure track, and drive the
+   * exported kinematic movers.
+   *
+   * @returns true when C++ owns the whole track, i.e. the caller may leave
+   *   Rapier unstepped. False whenever anything still needs Rapier: an
+   *   inexpressible collider, geometry built outside the descriptor path, or
+   *   an active exit portal (portal entry is an `intersectionPair` query).
+   */
+  syncAdventureTrack(state: AdventureTrackState | null): boolean {
+    const changed =
+      (state?.epoch ?? -1) !== this.adventureEpoch ||
+      (state === null) !== (this.adventureTrack === null)
+
+    if (changed) {
+      this.adventureTrack = state
+      this.adventureEpoch = state?.epoch ?? -1
+      this.exportStaticScene()
+    }
+
+    if (!state) return true
+    if (state.unexported.length > 0) return false
+    if (!this.adventureExport || this.adventureExport.unsupported.length > 0) return false
+
+    this.driveAdventureMovers()
+    return !state.portalActive
+  }
+
+  /**
+   * Push each animated obstacle's target pose into its C++ mover.
+   *
+   * AdventureMode animates these through Rapier's
+   * `setNextKinematicTranslation`/`Rotation`, which only lands on the body
+   * when Rapier steps. With Rapier unstepped we read that pending pose back
+   * and both push it to C++ and commit it on the Rapier puppet, so the mesh
+   * sync that reads `body.translation()` still tracks the obstacle.
+   */
+  private driveAdventureMovers(): void {
+    for (const { body, handle } of this.adventureMovers) {
+      const p = body.nextTranslation()
+      const q = body.nextRotation()
+      this.engine.setNextKinematicTransform(
+        handle,
+        { x: p.x, y: p.y, z: p.z },
+        { x: q.x, y: q.y, z: q.z, w: q.w }
+      )
+      body.setTranslation(p, false)
+      body.setRotation(q, false)
+    }
+  }
+
+  /** True when the current adventure track is fully simulated in C++. */
+  isAdventureOwned(): boolean {
+    if (!this.adventureTrack) return true
+    if (this.adventureTrack.unexported.length > 0) return false
+    return this.adventureExport !== null && this.adventureExport.unsupported.length === 0
+  }
+
+  /** Descriptors the C++ engine could not express, for the debug HUD. */
+  getAdventureUnsupported(): readonly { index: number; reason: string; label?: string }[] {
+    return this.adventureExport?.unsupported ?? []
+  }
+
+  getDebugColliders(): WasmDebugCollider[] {
+    // Composed on read so re-exporting the static scene (a track switch) does
+    // not drop the dynamic bodies' debug entries.
+    return [...this.tableStaticDebug, ...this.adventureDebug, ...this.dynamicDebug]
   }
 
   getRapierBody(wasmId: number): RAPIER.RigidBody | undefined {

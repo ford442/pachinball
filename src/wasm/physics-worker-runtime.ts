@@ -39,6 +39,7 @@ export function applyPhysicsCommand(
     | 'addKinematicMover'
     | 'setNextKinematicTransform'
     | 'setCollisionGroups'
+    | 'clearStaticGeometry'
     | 'createBody'
     | 'removeBody'
     | 'applyForce'
@@ -89,6 +90,9 @@ export function applyPhysicsCommand(
       return 0
     case 'setCollisionGroups':
       engine.setCollisionGroups(cmd.id, cmd.membership, cmd.filter)
+      return 0
+    case 'clearStaticGeometry':
+      engine.clearStaticGeometry()
       return 0
     case 'createBody':
       return engine.createBody(cmd.desc)

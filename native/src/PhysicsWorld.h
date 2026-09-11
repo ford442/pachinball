@@ -133,6 +133,17 @@ public:
   int addSensorVolume(const SensorVolumeDesc& desc);
 
   /**
+   * Drop every static collider, sensor volume and kinematic mover.
+   *
+   * Statics are append-only (they live in flat vectors indexed by their
+   * negative handle), so a scene that is rebuilt — a new adventure track, or
+   * a fresh WasmOwner.rebuild() — must clear before re-adding or it stacks a
+   * second copy of the old geometry. INVALIDATES every negative handle;
+   * dynamic bodies, hinges and their ids are untouched.
+   */
+  void clearStaticGeometry();
+
+  /**
    * Set the collision-group membership/filter mask for any handle — a
    * dynamic/kinematic body (id ≥ 0) or a static
    * box/capsule/cylinder/sphere/mover/sensor (id < 0, as returned by the

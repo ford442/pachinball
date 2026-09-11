@@ -151,6 +151,14 @@ export interface WasmPhysicsWorldInstance {
   ): number
 
   /**
+   * Drop every static collider, sensor volume and kinematic mover. Statics
+   * are append-only, so a rebuilt scene must clear before re-adding or it
+   * stacks a second copy. Invalidates every negative handle; dynamic bodies
+   * and hinges are untouched.
+   */
+  clearStaticGeometry(): void
+
+  /**
    * Add a kinematic oriented-box mover (piston, platter, gate). Its pose is
    * pushed once per tick via `setNextKinematicTransform`; linear/angular
    * velocity is derived from the pose delta so contacts pick up its motion.

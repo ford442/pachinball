@@ -254,6 +254,16 @@ export class WasmPhysicsEngine {
   }
 
   /**
+   * Drop every static collider, sensor volume and kinematic mover. Statics
+   * are append-only, so a rebuilt scene must clear before re-adding or it
+   * stacks a second copy. Invalidates every negative handle; dynamic bodies
+   * and hinges are untouched.
+   */
+  clearStaticGeometry(): void {
+    this.world?.clearStaticGeometry()
+  }
+
+  /**
    * Add a kinematic oriented-box mover (piston, platter, gate).
    * @returns Negative handle, or -1 when the engine is not ready.
    */

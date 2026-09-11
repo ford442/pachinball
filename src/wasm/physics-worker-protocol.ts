@@ -31,6 +31,7 @@ export type PhysicsWorkerCommand =
   | { type: 'addKinematicMover'; position: Vec3Msg; halfExtents: Vec3Msg; rotation: QuatMsg; restitution: number; friction: number }
   | { type: 'setNextKinematicTransform'; moverId: number; position: Vec3Msg; rotation: QuatMsg }
   | { type: 'setCollisionGroups'; id: number; membership: number; filter: number }
+  | { type: 'clearStaticGeometry' }
   | { type: 'createBody'; desc: WasmBodyDesc }
   | { type: 'removeBody'; id: number }
   | { type: 'applyForce'; id: number; fx: number; fy: number; fz: number }
@@ -116,6 +117,16 @@ export class WasmIdShadow {
   allocSensorVolume(): number {
     const idx = this.nextSensor++
     return SENSOR_VOLUME_ID_BASE - idx
+  }
+
+  /** Mirror of PhysicsWorld::clearStaticGeometry — negative handles restart. */
+  resetStaticHandles(): void {
+    this.nextBox = 0
+    this.nextCapsule = 0
+    this.nextCylinder = 0
+    this.nextSphere = 0
+    this.nextMover = 0
+    this.nextSensor = 0
   }
 
   reset(): void {

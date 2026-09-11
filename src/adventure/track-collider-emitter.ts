@@ -29,6 +29,8 @@ export class TrackColliderEmitter {
   private readonly descriptors: AdventureColliderDesc[] = []
   /** Descriptor index of each body this emitter created, for attach() lookups. */
   private readonly bodyIndex = new Map<RAPIER.RigidBody, number>()
+  /** The reverse: the Rapier body a descriptor was realised as. */
+  private readonly bodyByIndex = new Map<number, RAPIER.RigidBody>()
 
   constructor(
     private readonly world: RAPIER.World,
@@ -43,6 +45,18 @@ export class TrackColliderEmitter {
   clear(): void {
     this.descriptors.length = 0
     this.bodyIndex.clear()
+    this.bodyByIndex.clear()
+  }
+
+  /**
+   * The Rapier body a descriptor was realised as. Attached descriptors
+   * resolve to their parent's body, which is the body their collider lives on.
+   */
+  bodyForDescriptor(index: number): RAPIER.RigidBody | null {
+    const direct = this.bodyByIndex.get(index)
+    if (direct) return direct
+    const parentIndex = this.descriptors[index]?.parentIndex
+    return parentIndex === undefined ? null : (this.bodyByIndex.get(parentIndex) ?? null)
   }
 
   /** Resolve a body this emitter created back to its descriptor anchor. */
@@ -66,6 +80,7 @@ export class TrackColliderEmitter {
     }
     this.world.createCollider(this.colliderDesc(desc, false), body)
     this.bodyIndex.set(body, index)
+    this.bodyByIndex.set(index, body)
 
     return { body, index }
   }

@@ -83,6 +83,13 @@ export abstract class TrackBuilder {
    */
   protected unexportedColliders: string[] = []
 
+  /**
+   * Bumped every time the track's collider set changes (a build or a
+   * teardown). The C++ adventure exporter watches this to know when to
+   * rewrite its static scene.
+   */
+  private colliderEpoch = 0
+
   /** Baseline world gravity captured before a data-track multiplier is applied. */
   private storedGravity: { x: number; y: number; z: number } | null = null
 
@@ -111,6 +118,16 @@ export abstract class TrackBuilder {
     return this.colliders.list()
   }
 
+  /** Monotonic id of the current collider set; changes on build and teardown. */
+  getColliderEpoch(): number {
+    return this.colliderEpoch
+  }
+
+  /** The Rapier body a descriptor was realised as, for C++ handle mapping. */
+  getBodyForDescriptor(index: number): RAPIER.RigidBody | null {
+    return this.colliders.bodyForDescriptor(index)
+  }
+
   /**
    * Emit one collider for this track: recorded as a descriptor and realised
    * as a Rapier body. Track modules call this instead of building
@@ -118,6 +135,7 @@ export abstract class TrackBuilder {
    * the C++ engine.
    */
   emitCollider(desc: AdventureColliderDesc): EmittedCollider {
+    this.colliderEpoch++
     return this.colliders.emit(desc)
   }
 
@@ -126,6 +144,7 @@ export abstract class TrackBuilder {
    * not cover, so the C++ adventure gate knows the export is incomplete.
    */
   markUnexportedCollider(reason: string): void {
+    this.colliderEpoch++
     this.unexportedColliders.push(reason)
   }
 
@@ -136,6 +155,7 @@ export abstract class TrackBuilder {
 
   /** Drop the previous track's descriptors (called from clearTrack). */
   protected resetTrackColliders(): void {
+    this.colliderEpoch++
     this.colliders.clear()
     this.unexportedColliders = []
   }
@@ -145,6 +165,7 @@ export abstract class TrackBuilder {
    * either the handle emitCollider() returned or the raw Rapier body.
    */
   attachCollider(parent: EmittedCollider | RAPIER.RigidBody, desc: AdventureColliderDesc): void {
+    this.colliderEpoch++
     this.colliders.attach(parent, desc)
   }
 

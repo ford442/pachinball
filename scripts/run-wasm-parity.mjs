@@ -424,4 +424,47 @@ function readContacts(mod, world) {
   world.delete()
 }
 
+// #383 Slice B — clearStaticGeometry: statics are append-only, so a rebuilt
+// scene (new adventure track, fresh WasmOwner.rebuild) must be able to drop
+// the old one instead of stacking a second copy.
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, 0, 0)
+  const boxId = world.addStaticBox(0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0.9, 0)
+  world.addStaticCylinder(0, 6, 0, 1, 2, 0, 0, 0, 1, 0.9, 0)
+  world.addStaticSphere(0, 12, 0, 1, 0.9, 0)
+  world.createRigidBody(4, 0, 0, -4, 0, 0, 1, 0.1, 0.9, 0, 0, 0, 0.5, 0, 0)
+
+  let hitBefore = false
+  for (let i = 0; i < 60; i++) {
+    world.step(1 / 60)
+    for (const c of readContacts(Module, world)) {
+      if (c.id2 === boxId) hitBefore = true
+    }
+  }
+
+  world.clearStaticGeometry()
+
+  // Handles restart from their bases, so the next add reuses boxId.
+  const reBoxId = world.addStaticBox(0, 40, 0, 1, 1, 1, 0, 0, 0, 1, 0.9, 0)
+
+  world.setBodyPosition(0, 4, 0, 0)
+  world.setVelocity(0, -4, 0, 0)
+  let hitAfter = false
+  for (let i = 0; i < 120; i++) {
+    world.step(1 / 60)
+    for (const c of readContacts(Module, world)) {
+      if (c.id2 === boxId) hitAfter = true
+    }
+  }
+  const x = world.getPosX(0)
+  const ok = hitBefore && !hitAfter && reBoxId === boxId && x < -3
+  console.log(
+    `${ok ? 'PASS' : 'FAIL'} wasm clearStaticGeometry drops statics ` +
+    `(hitBefore=${hitBefore} hitAfter=${hitAfter} reBoxId=${reBoxId} x=${x.toFixed(3)})`
+  )
+  if (!ok) failed = true
+  world.delete()
+}
+
 process.exit(failed ? 1 : 0)

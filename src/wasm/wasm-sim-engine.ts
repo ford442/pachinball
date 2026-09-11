@@ -48,6 +48,14 @@ export interface WasmSimEngine {
     restitution?: number,
     friction?: number
   ): number
+  /**
+   * Drop every static collider, sensor volume and kinematic mover. Statics
+   * are append-only, so a rebuilt scene must clear before re-adding or it
+   * stacks a second copy. Invalidates every negative handle; dynamic bodies
+   * and hinges are untouched.
+   */
+  clearStaticGeometry(): void
+
   /** Static OBB trigger volume — Enter/Stay/Exit contacts, zero impulse. */
   addSensorVolume(
     center: { x: number; y: number; z: number },

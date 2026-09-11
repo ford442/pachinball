@@ -20,6 +20,7 @@ function fakeBody(x: number, colliderX: number, handle: number) {
 function makeEngine() {
   let nextId = 1
   return {
+    clearStaticGeometry: vi.fn(),
     addStaticPlane: vi.fn(),
     createBody: vi.fn(() => nextId++),
     setBodyRotation: vi.fn(),
