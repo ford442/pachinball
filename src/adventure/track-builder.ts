@@ -34,6 +34,14 @@ import {
   type TrackMaterialRole,
 } from './track-theme-profiles'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import {
+  boxDesc,
+  cylinderDesc,
+  sphereDesc,
+  type AdventureColliderDesc,
+  type DescQuat,
+} from './track-collider-descriptors'
+import { TrackColliderEmitter } from './track-collider-emitter'
 import type { TrackDefinition } from './track-schema'
 import {
   compileTrackDefinition,
@@ -42,6 +50,12 @@ import {
 } from './track-compiler'
 
 const RAPIER_DEFAULT_COLLISION_GROUPS = 0xFFFFFFFF
+
+/** Quaternion for a Babylon YXZ Euler triple, as a plain descriptor quat. */
+function eulerQuat(x: number, y: number, z: number): DescQuat {
+  const q = Quaternion.FromEulerAngles(x, y, z)
+  return { x: q.x, y: q.y, z: q.z, w: q.w }
+}
 
 export abstract class TrackBuilder {
   protected scene: Scene
@@ -65,6 +79,13 @@ export abstract class TrackBuilder {
   protected timeAccumulator = 0
   protected currentBallMesh: Mesh | null = null
 
+  /**
+   * Records every collider this track emits and realises it on Rapier.
+   * The recorded list is the single source the C++ adventure exporter walks
+   * (see src/game/physics/wasm-adventure-export.ts).
+   */
+  protected colliders: TrackColliderEmitter
+
   /** Baseline world gravity captured before a data-track multiplier is applied. */
   private storedGravity: { x: number; y: number; z: number } | null = null
 
@@ -85,6 +106,12 @@ export abstract class TrackBuilder {
     this.scene = scene
     this.world = world
     this.rapier = rapier
+    this.colliders = new TrackColliderEmitter(world, rapier)
+  }
+
+  /** Collider descriptors emitted by the currently-built track. */
+  getColliderDescriptors(): readonly AdventureColliderDesc[] {
+    return this.colliders.list()
   }
 
   /**
@@ -377,17 +404,12 @@ export abstract class TrackBuilder {
     this.adventureTrack.push(box)
 
     // Physics
-    const q = Quaternion.FromEulerAngles(box.rotation.x, box.rotation.y, 0)
-    const body = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed()
-        .setTranslation(center.x, center.y, center.z)
-        .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(width / 2, 0.25, length / 2)
-        .setFriction(friction)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-      body
+    const { body } = this.colliders.emit(
+      boxDesc(
+        { x: center.x, y: center.y, z: center.z },
+        { x: width / 2, y: 0.25, z: length / 2 },
+        { rotation: eulerQuat(box.rotation.x, box.rotation.y, 0), friction, label: 'straightRamp' }
+      )
     )
     this.adventureBodies.push(body)
 
@@ -444,17 +466,16 @@ export abstract class TrackBuilder {
       box.material = material
       this.adventureTrack.push(box)
 
-      const q = Quaternion.FromEulerAngles(box.rotation.x, box.rotation.y, box.rotation.z)
-      const body = this.world.createRigidBody(
-        this.rapier.RigidBodyDesc.fixed()
-          .setTranslation(center.x, center.y, center.z)
-          .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-      )
-      this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(width / 2, 0.25, chordLen / 2)
-          .setFriction(friction)
-          .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-        body
+      const { body } = this.colliders.emit(
+        boxDesc(
+          { x: center.x, y: center.y, z: center.z },
+          { x: width / 2, y: 0.25, z: chordLen / 2 },
+          {
+            rotation: eulerQuat(box.rotation.x, box.rotation.y, box.rotation.z),
+            friction,
+            label: 'curveSeg',
+          }
+        )
       )
       this.adventureBodies.push(body)
 
@@ -501,17 +522,12 @@ export abstract class TrackBuilder {
       wall.material = mat
       this.adventureTrack.push(wall)
 
-      const q = Quaternion.FromEulerAngles(wall.rotation.x, wall.rotation.y, 0)
-      const body = this.world.createRigidBody(
-        this.rapier.RigidBodyDesc.fixed()
-          .setTranslation(wallPos.x, wallPos.y, wallPos.z)
-          .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-      )
-      this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(0.25, height / 2, length / 2)
-          .setFriction(friction)
-          .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-        body
+      const { body } = this.colliders.emit(
+        boxDesc(
+          { x: wallPos.x, y: wallPos.y, z: wallPos.z },
+          { x: 0.25, y: height / 2, z: length / 2 },
+          { rotation: eulerQuat(wall.rotation.x, wall.rotation.y, 0), friction, label: 'wall' }
+        )
       )
       this.adventureBodies.push(body)
     })
@@ -535,17 +551,20 @@ export abstract class TrackBuilder {
     cylinder.material = material
     this.adventureTrack.push(cylinder)
 
-    const bodyDesc = this.rapier.RigidBodyDesc.kinematicVelocityBased()
-      .setTranslation(center.x, center.y, center.z)
-
-    const body = this.world.createRigidBody(bodyDesc)
-    body.setAngvel({ x: 0, y: angVelY, z: 0 }, true)
-
-    const colliderDesc = this.rapier.ColliderDesc.cylinder(thickness / 2, radius)
-      .setFriction(1.0)
-      .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE)
-
-    this.world.createCollider(colliderDesc, body)
+    const platter = this.colliders.emit(
+      cylinderDesc(
+        { x: center.x, y: center.y, z: center.z },
+        thickness / 2,
+        radius,
+        {
+          friction: 1.0,
+          motion: 'kinematic-velocity',
+          angularVelocity: { x: 0, y: angVelY, z: 0 },
+          label: 'rotatingPlatform',
+        }
+      )
+    )
+    const body = platter.body
     this.adventureBodies.push(body)
 
     this.kinematicBindings.push({ body, mesh: cylinder })
@@ -561,12 +580,17 @@ export abstract class TrackBuilder {
         const tx = Math.sin(angle) * (radius - 0.25)
         const tz = Math.cos(angle) * (radius - 0.25)
 
-        const toothCollider = this.rapier.ColliderDesc.cuboid(0.5, 0.5, 1.0)
-          .setTranslation(tx, 0.5 + 0.25, tz)
-          .setRotation({ w: Math.cos(angle / 2), x: 0, y: Math.sin(angle / 2), z: 0 })
-          .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE)
-
-        this.world.createCollider(toothCollider, body)
+        this.colliders.attach(
+          platter,
+          boxDesc(
+            { x: tx, y: 0.5 + 0.25, z: tz },
+            { x: 0.5, y: 0.5, z: 1.0 },
+            {
+              rotation: { x: 0, y: Math.sin(angle / 2), z: 0, w: Math.cos(angle / 2) },
+              label: 'rotatingPlatformTooth',
+            }
+          )
+        )
 
         const tooth = MeshBuilder.CreateBox("tooth", { width: 1, height: 1, depth: 2 }, this.scene)
         tooth.parent = cylinder
@@ -588,27 +612,19 @@ export abstract class TrackBuilder {
     basin.material = material
     this.adventureTrack.push(basin)
 
-    const bBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y - 1, pos.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(4, 0.5, 4)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-      bBody
+    const { body: bBody } = this.colliders.emit(
+      boxDesc({ x: pos.x, y: pos.y - 1, z: pos.z }, { x: 4, y: 0.5, z: 4 }, { label: 'basin' })
     )
     this.adventureBodies.push(bBody)
 
     // Exit Sensor
     const sensorY = pos.y - 0.5
-    const sensor = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, sensorY, pos.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(2, 1, 1)
-        .setSensor(true)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE)
-        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
-      sensor
+    const { body: sensor } = this.colliders.emit(
+      boxDesc({ x: pos.x, y: sensorY, z: pos.z }, { x: 2, y: 1, z: 1 }, {
+        sensor: true,
+        collisionEvents: true,
+        label: 'basinGoalSensor',
+      })
     )
     this.adventureSensor = sensor
   }
@@ -630,13 +646,13 @@ export abstract class TrackBuilder {
     mesh.material = material
     this.adventureTrack.push(mesh)
 
-    const body = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(mesh.position.x, mesh.position.y, mesh.position.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cylinder(height / 2, diameter / 2)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-      body
+    const { body } = this.colliders.emit(
+      cylinderDesc(
+        { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
+        height / 2,
+        diameter / 2,
+        { label: 'staticPillar' }
+      )
     )
     this.adventureBodies.push(body)
   }
@@ -686,15 +702,17 @@ export abstract class TrackBuilder {
         pin.material = material
         this.adventureTrack.push(pin)
 
-        const q = Quaternion.FromEulerAngles(pin.rotation.x, pin.rotation.y, pin.rotation.z)
-        const body = this.world.createRigidBody(
-          this.rapier.RigidBodyDesc.fixed()
-            .setTranslation(finalPos.x, finalPos.y, finalPos.z)
-            .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }),
-        )
-        this.world.createCollider(
-          this.rapier.ColliderDesc.cylinder(pinHeight / 2, pinDiameter / 2).setRestitution(0.6),
-          body,
+        const { body } = this.colliders.emit(
+          cylinderDesc(
+            { x: finalPos.x, y: finalPos.y, z: finalPos.z },
+            pinHeight / 2,
+            pinDiameter / 2,
+            {
+              rotation: eulerQuat(pin.rotation.x, pin.rotation.y, pin.rotation.z),
+              restitution: 0.6,
+              label: 'pin',
+            }
+          )
         )
         this.adventureBodies.push(body)
       }
@@ -719,17 +737,18 @@ export abstract class TrackBuilder {
     mill.material = material
     this.adventureTrack.push(mill)
 
-    const bodyDesc = this.rapier.RigidBodyDesc.kinematicVelocityBased()
-      .setTranslation(center.x, center.y, center.z)
-    const q = Quaternion.FromEulerAngles(inclineRad, 0, 0)
-    bodyDesc.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-    const body = this.world.createRigidBody(bodyDesc)
-
     const normalVec = new Vector3(0, Math.cos(inclineRad), Math.sin(inclineRad))
     const angVel = normalVec.scale(angVelAlongNormal)
-    body.setAngvel({ x: angVel.x, y: angVel.y, z: angVel.z }, true)
 
-    this.world.createCollider(this.rapier.ColliderDesc.cylinder(0.1, radius).setFriction(1.0), body)
+    const { body } = this.colliders.emit(
+      cylinderDesc({ x: center.x, y: center.y, z: center.z }, 0.1, radius, {
+        rotation: eulerQuat(inclineRad, 0, 0),
+        friction: 1.0,
+        motion: 'kinematic-velocity',
+        angularVelocity: { x: angVel.x, y: angVel.y, z: angVel.z },
+        label: 'inclinedMill',
+      })
+    )
     this.adventureBodies.push(body)
     this.kinematicBindings.push({ body, mesh: mill })
   }
@@ -745,20 +764,19 @@ export abstract class TrackBuilder {
     basin.material = material
     this.adventureTrack.push(basin)
 
-    const body = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z),
+    const { body } = this.colliders.emit(
+      boxDesc({ x: pos.x, y: pos.y, z: pos.z }, { x: 2, y: 0.5, z: 2 }, { label: 'resetBasin' })
     )
-    this.world.createCollider(this.rapier.ColliderDesc.cuboid(2, 0.5, 2), body)
     this.adventureBodies.push(body)
 
     const sensorPos = pos.clone()
     sensorPos.y += 0.75
-    const sensorBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(sensorPos.x, sensorPos.y, sensorPos.z),
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(1.8, 0.25, 1.8).setSensor(true),
-      sensorBody,
+    const { body: sensorBody } = this.colliders.emit(
+      boxDesc(
+        { x: sensorPos.x, y: sensorPos.y, z: sensorPos.z },
+        { x: 1.8, y: 0.25, z: 1.8 },
+        { sensor: true, label: 'resetBasinSensor' }
+      )
     )
     this.resetSensors.push(sensorBody)
   }
@@ -774,21 +792,17 @@ export abstract class TrackBuilder {
     box.material = material
     this.adventureTrack.push(box)
 
-    const bodyDesc = this.rapier.RigidBodyDesc.dynamic()
-      .setTranslation(pos.x, pos.y, pos.z)
-
-    const body = this.world.createRigidBody(bodyDesc)
-
     const volume = size * size * size
     const density = mass / volume
 
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(size / 2, size / 2, size / 2)
-        .setDensity(density)
-        .setFriction(0.5)
-        .setRestitution(0.2)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-      body
+    const { body } = this.colliders.emit(
+      boxDesc({ x: pos.x, y: pos.y, z: pos.z }, { x: size / 2, y: size / 2, z: size / 2 }, {
+        density,
+        friction: 0.5,
+        restitution: 0.2,
+        motion: 'dynamic',
+        label: 'dynamicBlock',
+      })
     )
     this.adventureBodies.push(body)
     this.kinematicBindings.push({ body, mesh: box })
@@ -807,14 +821,11 @@ export abstract class TrackBuilder {
     gate.material = gateMat
     this.adventureTrack.push(gate)
 
-    const sensor = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cylinder(0.5, 2.0)
-        .setSensor(true)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-      sensor
+    const { body: sensor } = this.colliders.emit(
+      cylinderDesc({ x: pos.x, y: pos.y, z: pos.z }, 0.5, 2.0, {
+        sensor: true,
+        label: 'chromaGate',
+      })
     )
 
     this.chromaGates.push({ sensor, colorType: color })
@@ -832,25 +843,17 @@ export abstract class TrackBuilder {
     pylon.material = mat
     this.adventureTrack.push(pylon)
 
-    const body = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y + 1.5, pos.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cylinder(1.5, 0.5)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-      body
+    const { body } = this.colliders.emit(
+      cylinderDesc({ x: pos.x, y: pos.y + 1.5, z: pos.z }, 1.5, 0.5, { label: 'arcPylon' })
     )
     this.adventureBodies.push(body)
 
     // Repulsive Gravity Well
-    const sensor = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y + 1.5, pos.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.ball(3.0)
-        .setSensor(true)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-      sensor
+    const { body: sensor } = this.colliders.emit(
+      sphereDesc({ x: pos.x, y: pos.y + 1.5, z: pos.z }, 3.0, {
+        sensor: true,
+        label: 'arcPylonWell',
+      })
     )
 
     this.gravityWells.push({
@@ -961,15 +964,12 @@ export abstract class TrackBuilder {
     this.adventureTrack.push(ring, core)
     this.materials.push(ringMaterial, coreMaterial)
 
-    const sensor = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cylinder(depth, radius * 0.9)
-        .setSensor(true)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE)
-        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
-      sensor
+    const { body: sensor } = this.colliders.emit(
+      cylinderDesc({ x: position.x, y: position.y, z: position.z }, depth, radius * 0.9, {
+        sensor: true,
+        collisionEvents: true,
+        label: 'exitPortalSensor',
+      })
     )
     this.adventureBodies.push(sensor)
 
