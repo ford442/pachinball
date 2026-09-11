@@ -7,6 +7,21 @@ export default defineConfig({
   esbuild: {
     drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
   },
+  // Cross-origin isolation for `crossOriginIsolated`/SharedArrayBuffer support in
+  // local dev + preview. Production (Apache, outside this repo) already serves the
+  // same headers plus CORP on cross-origin assets — see docs/cross-origin-isolation.md.
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
   build: {
     target: 'es2022',
     rollupOptions: {

@@ -183,6 +183,11 @@ Configured in [`native/CMakeLists.txt`](../native/CMakeLists.txt). Every
 
 ### Per-config compile / link
 
+Emscripten targets only. The native Catch2 tree (`native/build-native`, `npm run test:native`)
+adds **no** `-O` of its own — `CMAKE_CXX_FLAGS_<CONFIG>` owns the level there, so every entry in
+its `compile_commands.json` carries exactly one. It is configured with an explicit
+`-DCMAKE_BUILD_TYPE=Debug`; see the root `.clangd`.
+
 | Config | Compile | Link assertions | Source maps |
 |--------|---------|-----------------|-------------|
 | **Release** (default / production) | `-O3` | `ASSERTIONS=0` | none |
@@ -294,33 +299,41 @@ migrate body creation to the WASM engine incrementally.
 
 ## Physics engine modes
 
+Production **table** physics defaults to **WASM owner** (`WASM_PHYSICS.defaultEngine`).
+Adventure-mode bodies still step Rapier. If `public/wasm/PhysicsModule.wasm` is missing,
+init fail-closes to Rapier and logs `[Bootstrap][physics-degrade]`.
+
+`window.currentPhysicsEngine` reports the engine that actually served the last
+init/step (`rapier` | `wasm-mirror` | `wasm-owner` | `wasm-worker`), not the
+localStorage preference.
+
 Set via `localStorage['pachinball:physics-engine']`:
 
 | Mode | Value | Behaviour |
 |------|-------|-----------|
-| **Rapier** (default) | `rapier` or unset | Full Rapier simulation — production path |
+| **WASM owner** (default) | `wasm-owner` or unset | WASM owns balls + static table geometry + **native hinge flippers**; Rapier is not stepped on the table path (`lastRapierStepMs === 0`). Adventure-mode bodies still use Rapier. |
+| **Rapier** | `rapier` (explicit) | Full Rapier simulation — also the fail-closed fallback |
 | **WASM mirror** | `wasm-mirror` or legacy `wasm` | WASM steps ball+bumper subset; poses sync Rapier↔WASM each frame |
-| **WASM owner** | `wasm-owner` | WASM owns balls + static table geometry + **native hinge flippers**; Rapier is not stepped on the table path (`lastRapierStepMs === 0`). Adventure-mode bodies still use Rapier. |
 | **WASM worker** | `wasm-worker` | Same ownership as `wasm-owner`, but `PhysicsWorld` runs in a Dedicated Worker. Snapshots arrive via `postMessage` + transferable `ArrayBuffer`s (**one physics frame of extra latency**). Worker construction / load failure falls back to in-process `wasm-owner`. Adventure still steps Rapier on the main thread. |
 
 Mirror mode remains a WASM parity path. Owner mode disables Rapier colliders for exported statics, bumpers, balls, **and flippers**. Each flipper is a dynamic WASM capsule with a world-anchored hinge (`PhysicsWorld::createHinge` / `setHingeMotor`). Pose is copied back onto the Rapier puppet for mesh interpolation only.
 
 ```javascript
-// Dev console — mirror (default WASM path)
+// Dev console — mirror
 localStorage.setItem('pachinball:physics-engine', 'wasm-mirror')
 
-// Owner mode — balls + walls/rails in WASM
+// Owner mode — production default (also: localStorage.removeItem(...))
 localStorage.setItem('pachinball:physics-engine', 'wasm-owner')
 
 // Worker mode — same as owner, C++ world off the main thread (Phase 1, no SAB)
 localStorage.setItem('pachinball:physics-engine', 'wasm-worker')
 
-// Back to Rapier
-localStorage.removeItem('pachinball:physics-engine')
+// Explicit Rapier override (removeItem now falls back to wasm-owner)
+localStorage.setItem('pachinball:physics-engine', 'rapier')
 location.reload()
 ```
 
-Debug HUD (Developer settings → Enable Debug HUD) shows `wasm ms`, `rapier ms` (owner), and `mirror ms` (mirror sync overhead) under the Physics panel.
+Debug HUD (Developer settings → Enable Debug HUD) shows `engine` (`wasmMode`), `wasm ms`, `rapier ms` (owner), and `mirror ms` (mirror sync overhead) under the Physics panel. Physics debug draw in owner/worker mode reads packed C++ transform/contact buffers plus cached static box/capsule AABBs.
 
 ---
 
@@ -378,6 +391,11 @@ Test scenarios:
 | `hinge motor reaches target omega` | Velocity motor hits target ω within ε |
 | `hinge angle limits do not explode` | Hard limits stay finite under an aggressive motor |
 | `hinge motor wakes sleeping body` | `setHingeMotor` wakes a sleeper |
+| `ball resting on a rising kinematic piston is launched upward` (`kinematic_mover_test.cpp`) | Pose-delta velocity actually launches a resting ball, not just teleports geometry |
+| `ball on a rotating kinematic platter picks up tangential velocity` (`kinematic_mover_test.cpp`) | ω × r at the mover contact point imparts tangential speed via friction |
+| `ball crossing a sensor volume emits exactly one enter and one exit` (`sensor_volume_test.cpp`) | Enter/Stay/Exit lifecycle, zero impulse |
+| `ball dwelling inside a sensor for N frames emits N-2 stay events` (`sensor_volume_test.cpp`) | Multi-frame dwell + exit-by-teleport lifecycle |
+| `two bodies whose filter masks exclude each other never generate a contact pair` (`collision_filter_test.cpp`) | Broadphase respects membership/filter masks |
 
 Parity suite (native Catch2 + compiled WASM bundle):
 
@@ -386,6 +404,57 @@ RUN_WASM_PARITY=1 npx vitest run tests/wasm-physics-parity.test.ts
 # or directly:
 node scripts/run-wasm-parity.mjs
 ```
+
+---
+
+## Kinematic OBB movers and sensor volumes (#383 Slice A)
+
+Table physics (`wasm-owner`) can represent moving platforms and non-impulse
+trigger zones without a second physics engine:
+
+```typescript
+// Kinematic oriented-box mover (piston, platter, gate). Push a new pose once
+// per tick; linear/angular velocity is derived from the pose delta so a
+// resting ball is actually launched by a rising piston or carried
+// tangentially by a rotating platter — it does not just teleport through it.
+const piston = engine.addKinematicMover(
+  { x: 0, y: 0, z: 0 },        // position
+  { x: 1, y: 0.1, z: 1 },      // half-extents
+  { x: 0, y: 0, z: 0, w: 1 },  // rotation quaternion
+  0.3,                          // restitution
+  0.2                           // friction
+)
+engine.setNextKinematicTransform(piston, { x: 0, y: 0.05, z: 0 }, { x: 0, y: 0, z: 0, w: 1 })
+
+// Static OBB trigger volume: Enter/Stay/Exit contact events with zero
+// impulse and no positional correction. Rides the existing packed contact
+// buffer — decoded contacts carry an `isSensor` flag (contact-buffer.ts).
+const sensor = engine.addSensorVolume(
+  { x: 0, y: 0, z: 0 },        // centre
+  { x: 0.5, y: 0.5, z: 0.5 },  // half-extents
+)
+```
+
+Sphere-vs-OBB and capsule-vs-OBB narrowphase are implemented for movers;
+OBB-vs-OBB is out of scope (movers never pair with statics or each other).
+Sensors are static-position OBBs — Enter/Stay/Exit lifecycle is entirely a
+byproduct of `ContactListener`'s existing pair-presence bookkeeping, so a
+ball leaving a sensor by teleport (`setBodyPosition`) is handled the same
+way as one leaving by velocity.
+
+Every body — dynamic/kinematic RigidBody, static box/capsule, mover, or
+sensor — carries a `membership`/`filter` bitmask mirroring `CollisionGroups`
+in `src/game-elements/physics.ts` (see `native/src/CollisionFilter.h`; do not
+renumber independently of the TS side). Two colliders interact iff each
+one's membership intersects the other's filter. Unset masks default to
+"collides with everything", so existing callers are unaffected:
+
+```typescript
+engine.setCollisionGroups(ballId, CollisionGroups.BALL, COLLIDES_WITH_EVERYTHING)
+```
+
+Adventure mode still steps a full Rapier world today — wiring these shapes
+into `src/adventure/track-builder.ts` is Slice B, not this slice.
 
 ---
 

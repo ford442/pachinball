@@ -60,6 +60,14 @@ describe('InputHandler', () => {
       expect(frame.flipperLeft).toBeNull()
     })
 
+    it('does not queue flippers on Shift (Windows Sticky Keys)', () => {
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'ShiftLeft' }))
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'ShiftRight' }))
+      const frame = handler.processBufferedInputs()
+      expect(frame.flipperLeft).toBeNull()
+      expect(frame.flipperRight).toBeNull()
+    })
+
     it('queues flipperRight when Digit0 is pressed', () => {
       handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Digit0' }))
       const frame = handler.processBufferedInputs()
@@ -90,6 +98,28 @@ describe('InputHandler', () => {
       callbacks.getState.mockReturnValue(GameState.MENU)
       handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Space' }))
       expect(callbacks.onStart).toHaveBeenCalledTimes(1)
+    })
+
+    it('starts plunger charge after MENU Space hold once PLAYING', () => {
+      callbacks.getState.mockReturnValue(GameState.MENU)
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Space' }))
+      expect(handler.isPlungerHeld()).toBe(false)
+
+      callbacks.getState.mockReturnValue(GameState.PLAYING)
+      handler.updatePlungerCharge()
+
+      expect(handler.isPlungerHeld()).toBe(true)
+    })
+
+    it('does not start plunger charge if Space is released before PLAYING', () => {
+      callbacks.getState.mockReturnValue(GameState.MENU)
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Space' }))
+      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Space' }))
+
+      callbacks.getState.mockReturnValue(GameState.PLAYING)
+      handler.updatePlungerCharge()
+
+      expect(handler.isPlungerHeld()).toBe(false)
     })
 
     it('queues nudge with correct direction for KeyZ', () => {
@@ -156,6 +186,14 @@ describe('InputHandler', () => {
     it('does not queue flipper on Slash release (Slash is nudge-right)', () => {
       handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Slash' }))
       const frame = handler.processBufferedInputs()
+      expect(frame.flipperRight).toBeNull()
+    })
+
+    it('does not queue flipper release on Shift', () => {
+      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'ShiftLeft' }))
+      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'ShiftRight' }))
+      const frame = handler.processBufferedInputs()
+      expect(frame.flipperLeft).toBeNull()
       expect(frame.flipperRight).toBeNull()
     })
 

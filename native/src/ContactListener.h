@@ -33,6 +33,7 @@ struct ContactEvent {
   Vec3          normal;               ///< Contact normal (pointing from body2 to body1)
   float         impulse    = 0.f;     ///< Peak impulse magnitude observed this step
   ContactPhase  phase      = ContactPhase::Enter;
+  bool          isSensor   = false;   ///< True for sensor-volume overlaps: no impulse/correction applied
   bool          isEntering() const { return phase == ContactPhase::Enter; }
 };
 
@@ -208,7 +209,7 @@ private:
       dst[7]  = e.point.z;
       dst[8]  = e.impulse;
       dst[9]  = static_cast<float>(static_cast<int>(e.phase));
-      dst[10] = 0.f;
+      dst[10] = e.isSensor ? 1.f : 0.f;
       dst[11] = 0.f;
       dst += CONTACT_STRIDE;
     }

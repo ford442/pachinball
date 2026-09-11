@@ -1,6 +1,7 @@
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 import type { WasmSimEngine } from '../../wasm/wasm-sim-engine'
+import type { WasmDebugCollider } from '../../game-elements/wasm-debug-geometry'
 
 /** Mirrors `ShapeType` without importing Rapier values (keeps Vitest node-safe). */
 const RapierShapeType = {
@@ -24,11 +25,12 @@ export function exportRapierBodyToWasm(
   body: RAPIER.RigidBody,
   engine: WasmSimEngine,
   options: StaticExportOptions = {}
-): void {
-  if (!body.isFixed() && !body.isKinematic()) return
+): WasmDebugCollider[] {
+  if (!body.isFixed() && !body.isKinematic()) return []
 
   const skipSensors = options.skipSensors ?? true
   const defaultRestitution = options.defaultRestitution ?? 0.4
+  const debug: WasmDebugCollider[] = []
 
   for (let i = 0; i < body.numColliders(); i++) {
     const collider = body.collider(i)
@@ -38,46 +40,55 @@ export function exportRapierBodyToWasm(
     const rot = collider.rotation()
     const restitution = collider.restitution() ?? defaultRestitution
     const friction = typeof collider.friction === 'function' ? collider.friction() : 0.2
+    const center = { x: pos.x, y: pos.y, z: pos.z }
+    const rotation = { x: rot.x, y: rot.y, z: rot.z, w: rot.w }
 
     switch (collider.shapeType()) {
       case RapierShapeType.Ball: {
+        const radius = collider.radius()
         engine.createBody({
-          position: { x: pos.x, y: pos.y, z: pos.z },
+          position: center,
           velocity: { x: 0, y: 0, z: 0 },
           mass: 0,
-          radius: collider.radius(),
+          radius,
           restitution,
           friction,
           linearDamping: 0,
           bodyType: 1,
         })
+        debug.push({ kind: 'sphere', center, radius })
         break
       }
       case RapierShapeType.Cuboid: {
         const half = collider.halfExtents()
+        const halfExtents = { x: half.x, y: half.y, z: half.z }
         engine.addStaticBox(
-          { x: pos.x, y: pos.y, z: pos.z },
-          { x: half.x, y: half.y, z: half.z },
-          { x: rot.x, y: rot.y, z: rot.z, w: rot.w },
+          center,
+          halfExtents,
+          rotation,
           restitution,
           friction
         )
+        debug.push({ kind: 'box', center, halfExtents, rotation })
         break
       }
       case RapierShapeType.Capsule: {
+        const radius = collider.radius()
+        const halfHeight = collider.halfHeight()
         engine.addStaticCapsule(
-          { x: pos.x, y: pos.y, z: pos.z },
-          collider.radius(),
-          collider.halfHeight(),
-          { x: rot.x, y: rot.y, z: rot.z, w: rot.w },
+          center,
+          radius,
+          halfHeight,
+          rotation,
           restitution,
           friction
         )
+        debug.push({ kind: 'capsule', center, radius, halfHeight, rotation })
         break
       }
       default:
-        // Unsupported shapes (tri-mesh, convex hull) — skip for now.
         break
     }
   }
+  return debug
 }

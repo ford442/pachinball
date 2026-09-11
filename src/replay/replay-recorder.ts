@@ -3,14 +3,23 @@
  * Encapsulates replay metadata and serialization for local persistence & API submission.
  */
 
+import type { WasmPhysicsRuntimeMode } from '../config/physics'
 import type { InputFrame } from '../game-elements/types'
+
+/** Normalise legacy replay metadata (`wasm` → mirror). */
+function normalizeReplayPhysicsEngine(value: unknown): WasmPhysicsRuntimeMode {
+  if (value === 'wasm-mirror' || value === 'wasm') return 'wasm-mirror'
+  if (value === 'wasm-owner') return 'wasm-owner'
+  if (value === 'wasm-worker') return 'wasm-worker'
+  return 'rapier'
+}
 
 export interface ReplayMetadata {
   version: number
   buildId: string
   mapId: string
   seed: number
-  physicsEngine: 'rapier' | 'wasm'
+  physicsEngine: WasmPhysicsRuntimeMode
   renderer: 'webgl2' | 'webgpu'
   createdAt: string
 }
@@ -201,7 +210,7 @@ export class ReplayRecorder {
       buildId: data.buildId ?? data.build_id ?? '1.0.0',
       mapId: data.mapId ?? data.map_id ?? 'neon-helix',
       seed: data.seed ?? 0,
-      physicsEngine: data.physicsEngine ?? 'rapier',
+      physicsEngine: normalizeReplayPhysicsEngine(data.physicsEngine),
       renderer: data.renderer ?? data.client_renderer ?? 'webgl2',
       createdAt: data.createdAt ?? new Date().toISOString(),
       frames,

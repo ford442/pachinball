@@ -9,7 +9,7 @@ import {
   ReplayRecorder,
   type InputFrame,
   type ReplayPayload,
-} from '../src/game-elements/replay-recorder'
+} from '../src/replay/replay-recorder'
 
 describe('Replay InputFrame RLE Compression & Payload Serialization', () => {
   it('compressInputFrames compresses static frames dramatically and decompresses accurately', () => {

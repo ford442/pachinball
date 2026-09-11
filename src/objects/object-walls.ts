@@ -5,7 +5,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
-import { GameConfig } from '../config'
+import { GameConfig, PhysicsConfig } from '../config'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding, BumperVisual } from '../game-elements/types'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
@@ -46,8 +46,8 @@ export class WallBuilder {
     )
     this.world.createCollider(
       this.rapier.ColliderDesc.cuboid(GameConfig.table.width / 2, 0.1, GameConfig.table.height / 2)
-        .setRestitution(GameConfig.physics.surfaces.playfield.restitution)
-        .setFriction(GameConfig.physics.surfaces.playfield.friction)
+        .setRestitution(PhysicsConfig.surfaces.playfield.restitution)
+        .setFriction(PhysicsConfig.surfaces.playfield.friction)
         .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
       groundBody
     )

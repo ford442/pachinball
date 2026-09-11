@@ -38,8 +38,19 @@ import {
   createTransformBufferView,
   decodeTransformSlot,
 } from './transform-buffer'
-import type { EventBus } from '../core/event-bus'
 import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
+
+/**
+ * Minimal EventBus surface this engine needs. Deliberately narrower than the
+ * real `EventBus` type (`../core/event-bus`) — that file's payload types pull in
+ * Babylon-typed `GameState`/`UnlockedReward` fields via `game-elements/types.ts`,
+ * which this class must stay decoupled from: it's imported by the Worker-lib
+ * `physics-worker.ts` compile graph (see tsconfig.worker.json), which has no DOM
+ * lib globals. Any real `EventBus` instance satisfies this shape structurally.
+ */
+export interface WasmContactEventBus {
+  emit(event: 'wasm:physics:contact', payload: WasmContactEvent): void
+}
 
 // ---------------------------------------------------------------------------
 // Rigid body descriptor
@@ -64,6 +75,54 @@ export interface WasmBodyDesc {
   capsuleHalfHeight?: number
 }
 
+/**
+ * Shape tag for the volume colliders (kinematic movers, sensor volumes).
+ * Mirrors `VolumeShape` in native/src/VolumeShape.h — do not renumber
+ * independently of that file.
+ *
+ * `halfExtents` is read per tag: Box takes all three, Cylinder reads
+ * (radius, halfHeight, radius), Sphere reads (radius, _, _).
+ */
+export const WasmVolumeShape = {
+  Box: 0,
+  Cylinder: 1,
+  Sphere: 2,
+} as const
+export type WasmVolumeShape = (typeof WasmVolumeShape)[keyof typeof WasmVolumeShape]
+
+/** Whether a force field's vector is world-space or in the field's own frame. */
+export const WasmForceSpace = {
+  World: 0,
+  Local: 1,
+} as const
+export type WasmForceSpace = (typeof WasmForceSpace)[keyof typeof WasmForceSpace]
+
+/** Dynamic oriented-box body (Firewall-style crate). */
+export interface WasmBoxBodyDesc {
+  position?:       { x: number; y: number; z: number }
+  velocity?:       { x: number; y: number; z: number }
+  halfExtents:     { x: number; y: number; z: number }
+  mass?:           number
+  restitution?:    number
+  linearDamping?:  number
+  friction?:       number
+  angularDamping?: number
+  /** 0=Dynamic, 1=Static, 2=Kinematic */
+  bodyType?:       0 | 1 | 2
+}
+
+/** Oriented box force region — updraft, conveyor, solar wind. */
+export interface WasmForceFieldDesc {
+  center:       { x: number; y: number; z: number }
+  halfExtents:  { x: number; y: number; z: number }
+  rotation?:    { x: number; y: number; z: number; w: number }
+  /** Acceleration in m/s² when `acceleration` is set, otherwise force in newtons. */
+  force:        { x: number; y: number; z: number }
+  space?:       WasmForceSpace
+  /** Mass-independent form — a light ball and a heavy one drift alike. */
+  acceleration?: boolean
+}
+
 /** World-anchored revolute hinge (flipper vs static table). */
 export interface WasmHingeDesc {
   bodyId: number
@@ -83,9 +142,15 @@ const WASM_MODULE_URL = './wasm/PhysicsModule.js'
 /** Resolve a public-root WASM URL. `import(rel)` is relative to this module (`src/wasm/`), not `/`. */
 function resolveModuleUrl(moduleUrl: string): string {
   if (/^(https?:|blob:)/i.test(moduleUrl) || moduleUrl.startsWith('/')) return moduleUrl
-  if (typeof window === 'undefined' || !window.location?.href) return moduleUrl
+  // Accessed via globalThis (not the bare `window` identifier) — this class is
+  // instantiated both on the main thread (DOM lib) and inside the physics worker
+  // (WebWorker lib), so it must stay lib-agnostic.
+  const win = (globalThis as Record<string, unknown>).window as
+    | { location?: { href?: string } }
+    | undefined
+  if (!win?.location?.href) return moduleUrl
   try {
-    return new URL(moduleUrl, window.location.href).href
+    return new URL(moduleUrl, win.location.href).href
   } catch {
     return moduleUrl
   }
@@ -97,7 +162,7 @@ export class WasmPhysicsEngine {
 
   private module: WasmPhysicsModule | null = null
   private world:  WasmPhysicsWorldInstance | null = null
-  private eventBus: EventBus | null = null
+  private eventBus: WasmContactEventBus | null = null
   private stepCount_ = 0
   private unsubscribers: Array<() => void> = []
   private transformView: Float32Array | null = null
@@ -143,7 +208,7 @@ export class WasmPhysicsEngine {
    * Wire the EventBus.  Must be called before (or after) load(); order
    * does not matter — the bus reference is checked at each contact event.
    */
-  init(bus: EventBus): void {
+  init(bus: WasmContactEventBus): void {
     this.eventBus = bus
   }
 
@@ -209,6 +274,220 @@ export class WasmPhysicsEngine {
       restitution,
       friction
     )
+  }
+
+  /**
+   * Add a kinematic oriented-box mover (piston, platter, gate).
+   * @returns Negative handle, or -1 when the engine is not ready.
+   */
+  addKinematicMover(
+    position: { x: number; y: number; z: number },
+    halfExtents: { x: number; y: number; z: number },
+    rotation: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 1 },
+    restitution = 0.4,
+    friction = 0.2,
+    shape: WasmVolumeShape = WasmVolumeShape.Box
+  ): number {
+    if (!this.world) return -1
+    if (this.world.addKinematicMoverShaped) {
+      return this.world.addKinematicMoverShaped(
+        shape,
+        position.x, position.y, position.z,
+        halfExtents.x, halfExtents.y, halfExtents.z,
+        rotation.x, rotation.y, rotation.z, rotation.w,
+        restitution,
+        friction
+      )
+    }
+    return this.world.addKinematicMover(
+      position.x, position.y, position.z,
+      halfExtents.x, halfExtents.y, halfExtents.z,
+      rotation.x, rotation.y, rotation.z, rotation.w,
+      restitution,
+      friction
+    )
+  }
+
+  /** Push the pose a kinematic mover should reach by the next `step()`. */
+  setNextKinematicTransform(
+    moverId: number,
+    position: { x: number; y: number; z: number },
+    rotation: { x: number; y: number; z: number; w: number }
+  ): void {
+    this.world?.setNextKinematicTransform(
+      moverId,
+      position.x, position.y, position.z,
+      rotation.x, rotation.y, rotation.z, rotation.w
+    )
+  }
+
+  /**
+   * Add a static OBB sensor volume (Enter/Stay/Exit contact events, zero
+   * impulse, no positional correction).
+   * @returns Negative handle, or -1 when the engine is not ready.
+   */
+  addSensorVolume(
+    center: { x: number; y: number; z: number },
+    halfExtents: { x: number; y: number; z: number },
+    rotation: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 1 },
+    shape: WasmVolumeShape = WasmVolumeShape.Box
+  ): number {
+    if (!this.world) return -1
+    if (this.world.addSensorVolumeShaped) {
+      return this.world.addSensorVolumeShaped(
+        shape,
+        center.x, center.y, center.z,
+        halfExtents.x, halfExtents.y, halfExtents.z,
+        rotation.x, rotation.y, rotation.z, rotation.w
+      )
+    }
+    return this.world.addSensorVolume(
+      center.x, center.y, center.z,
+      halfExtents.x, halfExtents.y, halfExtents.z,
+      rotation.x, rotation.y, rotation.z, rotation.w
+    )
+  }
+
+  /**
+   * Add an oriented static cylinder collider (local Y axis) — pins, pylons,
+   * chroma gates. Argument order matches Rapier's `cylinder(halfHeight, radius)`
+   * inputs but is spelled out here to avoid the ambiguity.
+   * @returns Negative collider id, or -1 when the engine is not ready.
+   */
+  addStaticCylinder(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    halfHeight: number,
+    rotation: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 1 },
+    restitution = 0.4,
+    friction = 0.2
+  ): number {
+    if (!this.world?.addStaticCylinder) return -1
+    return this.world.addStaticCylinder(
+      center.x, center.y, center.z,
+      radius, halfHeight,
+      rotation.x, rotation.y, rotation.z, rotation.w,
+      restitution,
+      friction
+    )
+  }
+
+  /**
+   * Add an immutable static triangle mesh — adventure ramps, walls, floors.
+   *
+   * The arrays are copied into the WASM heap for the duration of the call and
+   * freed immediately: the C++ side denormalizes them into its own triangle
+   * soup, so it keeps no reference to this memory.
+   *
+   * @param vertices 3 floats per vertex, world space.
+   * @param indices  3 indices per triangle, CCW when seen from the front face.
+   * @returns Negative mesh id, or -1 when the engine is not ready.
+   */
+  addStaticTriangleMesh(
+    vertices: Float32Array,
+    indices: Uint32Array,
+    restitution = 0.4,
+    friction = 0.2,
+    doubleSided = false
+  ): number {
+    const mod = this.module
+    if (!this.world?.addStaticTriangleMesh || !mod?._malloc || !mod._free) return -1
+    if (vertices.length < 9 || indices.length < 3) return -1
+
+    const vertexPtr = mod._malloc(vertices.byteLength)
+    const indexPtr = mod._malloc(indices.byteLength)
+    if (!vertexPtr || !indexPtr) {
+      if (vertexPtr) mod._free(vertexPtr)
+      if (indexPtr) mod._free(indexPtr)
+      return -1
+    }
+
+    try {
+      // Re-read the heap views after _malloc: a growing heap detaches them.
+      const heapF32 = this.getHeapF32()
+      const heapU32 = mod.HEAPU32 ?? (mod.wasmMemory ? new Uint32Array(mod.wasmMemory.buffer) : null)
+      if (!heapF32 || !heapU32) return -1
+
+      heapF32.set(vertices, vertexPtr >> 2)
+      heapU32.set(indices, indexPtr >> 2)
+
+      return this.world.addStaticTriangleMesh(
+        vertexPtr, vertices.length / 3,
+        indexPtr, indices.length,
+        restitution, friction, doubleSided
+      )
+    } finally {
+      mod._free(vertexPtr)
+      mod._free(indexPtr)
+    }
+  }
+
+  /**
+   * Create a dynamic oriented-box body (a crate).
+   * @returns Stable body handle, or -1 when the engine is not ready.
+   */
+  createBoxBody(desc: WasmBoxBodyDesc): number {
+    if (!this.world?.createBoxBody) return -1
+    const p = desc.position ?? { x: 0, y: 0, z: 0 }
+    const v = desc.velocity ?? { x: 0, y: 0, z: 0 }
+    const h = desc.halfExtents
+    return this.world.createBoxBody(
+      p.x, p.y, p.z,
+      v.x, v.y, v.z,
+      desc.mass ?? 1,
+      h.x, h.y, h.z,
+      desc.restitution ?? 0.4,
+      desc.linearDamping ?? 0.02,
+      desc.bodyType ?? 0,
+      desc.friction ?? 0.2,
+      desc.angularDamping ?? 0.1
+    )
+  }
+
+  /**
+   * Add an oriented box force region (updraft, conveyor, solar wind).
+   * @returns Negative handle, or -1 when the engine is not ready.
+   */
+  addForceField(desc: WasmForceFieldDesc): number {
+    if (!this.world?.addForceField) return -1
+    const rot = desc.rotation ?? { x: 0, y: 0, z: 0, w: 1 }
+    return this.world.addForceField(
+      desc.center.x, desc.center.y, desc.center.z,
+      desc.halfExtents.x, desc.halfExtents.y, desc.halfExtents.z,
+      rot.x, rot.y, rot.z, rot.w,
+      desc.force.x, desc.force.y, desc.force.z,
+      desc.space ?? WasmForceSpace.World,
+      desc.acceleration ?? false
+    )
+  }
+
+  /**
+   * Drop every static/kinematic collider and force field. All negative
+   * handles are invalidated; rigid bodies are untouched. Used when an
+   * adventure track switch replaces the whole static world.
+   */
+  clearStaticGeometry(): void {
+    this.world?.clearStaticGeometry?.()
+  }
+
+  /** Toggle a force field without removing it (gates a conveyor on and off). */
+  setForceFieldEnabled(fieldId: number, enabled: boolean): void {
+    this.world?.setForceFieldEnabled?.(fieldId, enabled)
+  }
+
+  /** Retarget a force field's vector, keeping its region and mode. */
+  setForceFieldVector(fieldId: number, fx: number, fy: number, fz: number): void {
+    this.world?.setForceFieldVector?.(fieldId, fx, fy, fz)
+  }
+
+  /**
+   * Set the collision-group membership/filter mask for any handle — a
+   * dynamic/kinematic body, or a static box/capsule/mover/sensor (as
+   * returned by its add*() call). Mirrors `CollisionGroups` in
+   * src/game-elements/physics.ts.
+   */
+  setCollisionGroups(id: number, membership: number, filter: number): void {
+    this.world?.setCollisionGroups(id, membership, filter)
   }
 
   // ---- Body management -------------------------------------------------

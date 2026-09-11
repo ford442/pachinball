@@ -7,7 +7,7 @@
  */
 
 import type { WasmPhysicsModule } from '../wasm/wasm-types'
-import { WASM_PHYSICS, getPhysicsEnginePreference } from '../config'
+import { WASM_PHYSICS, getPhysicsEnginePreference } from '../config/physics'
 import { resetPhysicsWorkerPrewarmForTests, warmPhysicsWorker } from '../wasm/physics-worker-client'
 
 let preloadPromise: Promise<WasmPhysicsModule | null> | null = null
@@ -59,8 +59,14 @@ export function scheduleIdleWasmPreload(bundleUrl = WASM_PHYSICS.bundleUrl): voi
     })
   }
 
-  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-    requestIdleCallback(run, { timeout: 8000 })
+  // Accessed via globalThis (not the bare `window` identifier) so this file stays
+  // lib-agnostic — it's imported transitively by the Worker-lib physics-worker.ts
+  // compile graph, which has no DOM lib globals.
+  const ric = (globalThis as Record<string, unknown>).requestIdleCallback as
+    | ((callback: () => void, options?: { timeout?: number }) => void)
+    | undefined
+  if (ric) {
+    ric(run, { timeout: 8000 })
   } else {
     setTimeout(run, 2000)
   }

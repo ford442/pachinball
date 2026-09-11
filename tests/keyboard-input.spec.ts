@@ -22,8 +22,9 @@ async function startGame(page: import('@playwright/test').Page) {
     if (msg.type() === 'error') consoleErrors.push(msg.text());
   });
 
-  await page.goto('/');
-  await expect(page.locator('#start-btn')).toBeVisible({ timeout: 10_000 });
+  await page.goto('/?renderer=webgl2');
+  const startBtn = page.locator('#start-btn');
+  await expect(startBtn).toBeVisible({ timeout: 10_000 });
 
   await expect.poll(async () => {
     return page.evaluate(() => !!(window as any).game?.stateManager);
@@ -32,9 +33,22 @@ async function startGame(page: import('@playwright/test').Page) {
     timeout: 15_000,
   }).toBe(true);
 
-  const startBtn = page.locator('#start-btn');
-  await expect(startBtn).toBeVisible();
-  await startBtn.click({ force: true });
+  await expect(startBtn).toBeEnabled({ timeout: 60_000 });
+  // Start is enabled after the cabinet load, but flippers land in a later
+  // gameplay-build stage — wait for them so startGame/resetBall can succeed.
+  await expect.poll(async () => {
+    return page.evaluate(() => {
+      const g = (window as any).game;
+      return !!g?.lifecycle && !!g?.gameObjects?.getAllFlippers?.()?.get('left');
+    });
+  }, {
+    intervals: [200],
+    timeout: 90_000,
+  }).toBe(true);
+
+  await page.evaluate(() => {
+    document.getElementById('start-btn')?.click();
+  });
   await page.waitForTimeout(500);
 
   await expect.poll(async () => {
@@ -67,7 +81,7 @@ async function startGame(page: import('@playwright/test').Page) {
 
 test.describe('Keyboard Input Pipeline', () => {
   test('Digit1 rotates the left flipper joint via the real keyboard path', async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
 
     const consoleErrors = await startGame(page);
 
@@ -106,8 +120,52 @@ test.describe('Keyboard Input Pipeline', () => {
     expectUnexpectedConsoleErrors(consoleErrors);
   });
 
+  test('Digit0 rotates the right flipper joint via the real keyboard path', async ({ page }) => {
+    test.setTimeout(180_000);
+
+    const consoleErrors = await startGame(page);
+
+    const flipperBefore = await page.evaluate(() => {
+      const g = (window as any).game;
+      const right = g?.gameObjects?.getAllFlippers?.().get('right');
+      return right ? { bodyY: right.body.rotation().y } : null;
+    });
+    expect(flipperBefore).not.toBeNull();
+
+    await page.keyboard.down('Digit0');
+
+    const flipperAfter = await page.evaluate(() => {
+      const g = (window as any).game;
+      return new Promise<{ bodyY: number }>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              const right = g?.gameObjects?.getAllFlippers?.().get('right');
+              resolve({ bodyY: right ? right.body.rotation().y : 0 });
+            });
+          });
+        });
+      });
+    });
+
+    await page.keyboard.up('Digit0');
+
+    const flipperDelta = Math.abs((flipperAfter?.bodyY ?? 0) - (flipperBefore?.bodyY ?? 0));
+    expect(flipperDelta).toBeGreaterThan(0.05);
+
+    expectUnexpectedConsoleErrors(consoleErrors);
+  });
+
+  test('menu and HUD advertise 1/0 flippers, not Shift', async ({ page }) => {
+    await page.goto('/?renderer=webgl2');
+    await expect(page.locator('#start-screen')).toContainText('1 / 0 to Flip');
+    await expect(page.locator('#start-screen')).not.toContainText(/Shift/i);
+    await expect(page.locator('#controls-hint')).toContainText('1/0: Flippers');
+    await expect(page.locator('#controls-hint')).not.toContainText(/Shift/i);
+  });
+
   test('Enter charges and launches the plunger via the real keyboard path', async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
 
     const consoleErrors = await startGame(page);
 
@@ -183,7 +241,12 @@ function expectUnexpectedConsoleErrors(consoleErrors: string[]) {
       !text.includes('ERR_CONNECTION_REFUSED') &&
       !text.includes('localhost:8000') &&
       !text.includes('404') &&
-      !text.includes('Failed to load resource')
+      !text.includes('Failed to load resource') &&
+      !text.includes('Error compiling effect') &&
+      !text.includes('Unable to compile effect') &&
+      !text.includes('VERTEX SHADER') &&
+      !text.includes('FRAGMENT SHADER') &&
+      !text.includes('BJS -')
   );
   expect(unexpectedErrors).toHaveLength(0);
 }

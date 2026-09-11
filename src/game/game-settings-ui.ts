@@ -331,21 +331,28 @@ export class GameSettingsUI {
     }
   }
 
-  async setupMapSelector(): Promise<void> {
+  setupMapSelector(): void {
     const selector = document.getElementById('map-selector')
     if (!selector) return
 
-    await Promise.all([
-      this.host.mapSystem.fetchAll(),
-      this.host.soundSystem.fetchMusicTracks(),
-    ])
+    this.registerUnknownMaps()
+    this.buildMapSelectorUI(selector)
+    this.updateMapSelectorUI()
+
+    void this.host.soundSystem.fetchMusicTracks()
+    void this.host.mapSystem.fetchAll().then(() => {
+      this.registerUnknownMaps()
+      this.buildMapSelectorUI(selector)
+      this.updateMapSelectorUI()
+    })
+  }
+
+  private registerUnknownMaps(): void {
     for (const map of this.host.mapSystem.getAllMaps()) {
       if (!TABLE_MAPS[map.id]) {
         registerMap(map.id, map)
       }
     }
-    this.buildMapSelectorUI(selector)
-    this.updateMapSelectorUI()
   }
 
   private buildMapSelectorUI(selector: HTMLElement): void {

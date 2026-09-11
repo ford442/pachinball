@@ -35,6 +35,10 @@ float BodyView::getCapsuleHalfHeight() const {
   return store_->capsuleHalfHeight_[static_cast<std::size_t>(denseIndex_)];
 }
 
+Vec3 BodyView::getBoxHalfExtents() const {
+  return store_->boxHalfExtents(denseIndex_);
+}
+
 float BodyView::getMass() const {
   return store_->mass_[static_cast<std::size_t>(denseIndex_)];
 }
@@ -148,6 +152,20 @@ void BodyView::applyImpulseAt(const Vec3& impulse, const Vec3& worldPoint) {
   applyTorqueImpulse((worldPoint - getPosition()).cross(impulse));
 }
 
+uint32_t BodyView::getMembership() const {
+  return store_->membership_[static_cast<std::size_t>(denseIndex_)];
+}
+
+uint32_t BodyView::getFilter() const {
+  return store_->filter_[static_cast<std::size_t>(denseIndex_)];
+}
+
+void BodyView::setCollisionGroups(uint32_t membership, uint32_t filter) {
+  const std::size_t i = static_cast<std::size_t>(denseIndex_);
+  store_->membership_[i] = membership;
+  store_->filter_[i] = filter;
+}
+
 void BodyView::clearForces() {
   const std::size_t i = static_cast<std::size_t>(denseIndex_);
   store_->forceX_[i] = 0.f;
@@ -229,6 +247,15 @@ float BodyStore::computeInvInertia(const RigidBodyDesc& desc) {
     const float I = (Iax + 2.f * Ipp) / 3.f;
     return I > 1e-12f ? 1.f / I : 0.f;
   }
+  if (desc.shape == Shape::Box) {
+    // Isotropic average of the three principal moments, matching the capsule
+    // simplification above — see RigidBody::getInvInertia for the rationale.
+    const Vec3 he = desc.boxHalfExtents;
+    const float w = 2.f * he.x, h = 2.f * he.y, d = 2.f * he.z;
+    const float k = desc.mass / 12.f;
+    const float I = (k * (h * h + d * d) + k * (w * w + d * d) + k * (w * w + h * h)) / 3.f;
+    return I > 1e-12f ? 1.f / I : 0.f;
+  }
   return 0.f;
 }
 
@@ -262,6 +289,9 @@ void BodyStore::appendSlot(int publicId, const RigidBodyDesc& desc) {
   invInertia_.push_back(computeInvInertia(desc));
   radius_.push_back(desc.radius);
   capsuleHalfHeight_.push_back(desc.capsuleHalfHeight);
+  boxHalfX_.push_back(desc.boxHalfExtents.x);
+  boxHalfY_.push_back(desc.boxHalfExtents.y);
+  boxHalfZ_.push_back(desc.boxHalfExtents.z);
   restitution_.push_back(desc.restitution);
   friction_.push_back(desc.friction);
   linearDamping_.push_back(desc.linearDamping);
@@ -271,6 +301,8 @@ void BodyStore::appendSlot(int publicId, const RigidBodyDesc& desc) {
   shape_.push_back(static_cast<uint8_t>(desc.shape));
   active_.push_back(1);
   sleepCounter_.push_back(0);
+  membership_.push_back(desc.membership);
+  filter_.push_back(desc.filter);
 }
 
 void BodyStore::swapPop(int denseIndex) {
@@ -285,11 +317,13 @@ void BodyStore::swapPop(int denseIndex) {
     forceX_.pop_back(); forceY_.pop_back(); forceZ_.pop_back();
     invMass_.pop_back(); invInertia_.pop_back();
     radius_.pop_back(); capsuleHalfHeight_.pop_back();
+    boxHalfX_.pop_back(); boxHalfY_.pop_back(); boxHalfZ_.pop_back();
     restitution_.pop_back(); friction_.pop_back();
     linearDamping_.pop_back(); angularDamping_.pop_back();
     mass_.pop_back();
     type_.pop_back(); shape_.pop_back();
     active_.pop_back(); sleepCounter_.pop_back();
+    membership_.pop_back(); filter_.pop_back();
     return;
   }
 
@@ -304,11 +338,13 @@ void BodyStore::swapPop(int denseIndex) {
   forceX_[i] = forceX_[j]; forceY_[i] = forceY_[j]; forceZ_[i] = forceZ_[j];
   invMass_[i] = invMass_[j]; invInertia_[i] = invInertia_[j];
   radius_[i] = radius_[j]; capsuleHalfHeight_[i] = capsuleHalfHeight_[j];
+  boxHalfX_[i] = boxHalfX_[j]; boxHalfY_[i] = boxHalfY_[j]; boxHalfZ_[i] = boxHalfZ_[j];
   restitution_[i] = restitution_[j]; friction_[i] = friction_[j];
   linearDamping_[i] = linearDamping_[j]; angularDamping_[i] = angularDamping_[j];
   mass_[i] = mass_[j];
   type_[i] = type_[j]; shape_[i] = shape_[j];
   active_[i] = active_[j]; sleepCounter_[i] = sleepCounter_[j];
+  membership_[i] = membership_[j]; filter_[i] = filter_[j];
 
   swapPop(last);
 }

@@ -242,6 +242,7 @@ export class CollisionDispatcher {
       point: { x: 0, y: 0, z: 0 },
       impulse: 0,
       phase: started ? ContactPhase.Enter : ContactPhase.Exit,
+      isSensor: false,
     })
   }
 

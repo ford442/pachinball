@@ -14,6 +14,31 @@ const PROD_ASSET_BASE = 'https://storage.noahcohn.com'
 export const API_BASE = import.meta.env.VITE_API_URL as string | undefined
   || (import.meta.env.PROD ? PROD_API_BASE : DEV_API_BASE)
 
+const FETCH_TIMEOUT_MS = 4000
+
+/** True when the API base is a real backend, not a same-origin `/api` stub. */
+export function isRemoteApiBase(base: string = API_BASE): boolean {
+  return /^https?:\/\//i.test(base)
+}
+
+function withTimeoutSignal(existing?: AbortSignal | null): { signal: AbortSignal; cancel: () => void } {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  const cancel = () => clearTimeout(timer)
+  if (existing) {
+    if (existing.aborted) {
+      controller.abort()
+      cancel()
+    } else {
+      existing.addEventListener('abort', () => {
+        controller.abort()
+        cancel()
+      }, { once: true })
+    }
+  }
+  return { signal: controller.signal, cancel }
+}
+
 /**
  * Asset Base URL for static files (videos, images, shaders)
  * Allow VITE_ASSET_URL override, otherwise use prod/dev logic
@@ -50,6 +75,7 @@ export async function apiFetch<T>(
   const maxAttempts = 3
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const { signal, cancel } = withTimeoutSignal(options.signal)
     try {
       const response = await fetch(resolvedUrl, {
         headers: {
@@ -57,7 +83,9 @@ export async function apiFetch<T>(
           ...(options.headers ?? {}),
         },
         ...options,
+        signal,
       })
+      cancel()
 
       if (!response.ok) {
         // Client errors are permanent — retrying just spams the console (e.g. /api/maps 404 on static hosts).
@@ -74,6 +102,11 @@ export async function apiFetch<T>(
 
       return await response.json() as T
     } catch (error) {
+      cancel()
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.warn(`[apiFetch] Request timed out for ${resolvedUrl}`)
+        return null
+      }
       if (attempt === maxAttempts) {
         console.warn(`[apiFetch] Request failed for ${resolvedUrl}`, error)
         return null

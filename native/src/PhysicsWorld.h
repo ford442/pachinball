@@ -4,14 +4,21 @@
 #include "RigidBody.h"
 #include "ContactListener.h"
 #include "BodyStore.h"
+#include "CollisionFilter.h"
 #include "HandleTable.h"
 #include "BroadphaseGrid.h"
 #include "HingeJoint.h"
+#include "KinematicMover.h"
+#include "SensorVolume.h"
+#include "Cylinder.h"
+#include "TriangleMesh.h"
+#include "ForceField.h"
 
 #include <vector>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 
 namespace pachinball {
 
@@ -24,27 +31,38 @@ struct PlaneDesc {
 
 /** Oriented static box collider (half-extents in local space). */
 struct BoxDesc {
-  Vec3  center       = Vec3::zero();
-  Vec3  halfExtents  = {0.5f, 0.5f, 0.5f};
-  Quat  rotation     = Quat::identity();
-  float restitution  = 0.4f;
-  float friction     = 0.2f;
+  Vec3     center       = Vec3::zero();
+  Vec3     halfExtents  = {0.5f, 0.5f, 0.5f};
+  Quat     rotation     = Quat::identity();
+  float    restitution  = 0.4f;
+  float    friction     = 0.2f;
+  uint32_t membership   = COLLISION_GROUPS_ALL;
+  uint32_t filter       = COLLISION_GROUPS_ALL;
 };
 
 /** Oriented static capsule collider (local Y is the segment axis). */
 struct CapsuleDesc {
-  Vec3  center      = Vec3::zero();
-  float radius      = 0.1f;
-  float halfHeight  = 0.5f;
-  Quat  rotation    = Quat::identity();
-  float restitution = 0.4f;
-  float friction    = 0.2f;
+  Vec3     center      = Vec3::zero();
+  float    radius      = 0.1f;
+  float    halfHeight  = 0.5f;
+  Quat     rotation    = Quat::identity();
+  float    restitution = 0.4f;
+  float    friction    = 0.2f;
+  uint32_t membership  = COLLISION_GROUPS_ALL;
+  uint32_t filter      = COLLISION_GROUPS_ALL;
 };
 
 /** Negative body IDs reserved for static colliders in contact events. */
 static constexpr int STATIC_PLANE_ID    = -1;
 static constexpr int STATIC_BOX_ID_BASE   = -1000;
 static constexpr int STATIC_CAPSULE_ID_BASE = -2000;
+// The remaining negative-id bases live beside the type they address:
+// KINEMATIC_MOVER_ID_BASE  (-3000) KinematicMover.h
+// SENSOR_VOLUME_ID_BASE    (-4000) SensorVolume.h
+// STATIC_CYLINDER_ID_BASE  (-5000) Cylinder.h
+// STATIC_MESH_ID_BASE      (-6000) TriangleMesh.h
+// FORCE_FIELD_ID_BASE      (-7000) ForceField.h
+// Each base reserves 1000 handles; the next free base is -8000.
 
 /** Packed transform-buffer layout (16 floats per public-id slot). */
 inline constexpr int TRANSFORM_STRIDE = 16;
@@ -92,6 +110,63 @@ public:
                        float qx, float qy, float qz, float qw,
                        float restitution = 0.4f,
                        float friction = 0.2f);
+
+  /** Add an oriented static cylinder (pin, pylon, chroma gate). @returns negative handle. */
+  int addStaticCylinder(float px, float py, float pz,
+                        float radius, float halfHeight,
+                        float qx, float qy, float qz, float qw,
+                        float restitution = 0.4f,
+                        float friction = 0.2f);
+
+  /**
+   * Add an immutable static triangle mesh from world-space vertex/index
+   * arrays (`vertices` is 3 floats per vertex, `indices` 3 per triangle).
+   * Adventure ramps, walls and floors arrive through here.
+   * Degenerate (zero-area) triangles are dropped. @returns negative handle.
+   */
+  int addStaticTriangleMesh(const float* vertices, int vertexCount,
+                            const uint32_t* indices, int indexCount,
+                            float restitution = 0.4f,
+                            float friction = 0.2f,
+                            bool doubleSided = false);
+
+  /**
+   * Drop every static, kinematic and force-field collider — boxes, capsules,
+   * cylinders, meshes, sensors, movers, fields and planes — and reset the
+   * broadphase's static cells.
+   *
+   * All negative handles previously returned by `add*()` are invalidated, so
+   * the caller must re-export everything it still wants. Needed because an
+   * adventure track switch replaces the whole static world; rigid bodies are
+   * unaffected.
+   */
+  void clearStaticGeometry();
+
+  /** Add an oriented box force region (updraft, conveyor, solar wind). @returns negative handle. */
+  int addForceField(const ForceFieldDesc& desc);
+
+  /** Toggle a force field without removing it (gates a conveyor on and off). */
+  void setForceFieldEnabled(int fieldId, bool enabled);
+
+  /** Retarget a force field's vector, keeping its region and mode. */
+  void setForceFieldVector(int fieldId, float fx, float fy, float fz);
+
+  /** Add a kinematic mover (piston, platter, gate, rotating disc). @returns negative handle. */
+  int addKinematicMover(const KinematicMoverDesc& desc);
+
+  /** Push the pose this mover should reach by the next `step()`; velocity is derived from the delta. */
+  void setNextKinematicTransform(int moverId, float px, float py, float pz,
+                                 float qx, float qy, float qz, float qw);
+
+  /** Add a static OBB trigger volume (Enter/Stay/Exit events, zero impulse). @returns negative handle. */
+  int addSensorVolume(const SensorVolumeDesc& desc);
+
+  /**
+   * Set the collision-group membership/filter mask for any handle — a
+   * dynamic/kinematic body (id ≥ 0) or any static/kinematic collider
+   * (id < 0, as returned by the matching add*() call).
+   */
+  void setCollisionGroups(int id, uint32_t membership, uint32_t filter);
 
   void getPosition(int id, float* px, float* py, float* pz) const;
   void getVelocity(int id, float* vx, float* vy, float* vz) const;
@@ -158,9 +233,48 @@ private:
   void resolveSphereVsCapsule(BodyView& body, const CapsuleDesc& cap, int capId);
   void resolveSphereVsCapsuleBody(BodyView& sphere, BodyView& capsule);
 
+  // ---- Static cylinders (Cylinder.cpp) ---------------------------------
+  void resolveSphereVsCylinder(BodyView& body, const CylinderDesc& cyl, int cylId);
+
+  // ---- Static triangle meshes (TriangleMesh.cpp) ------------------------
+  void resolveSphereVsTriangle(BodyView& body, int triangleIndex);
+
+  // ---- Force fields (ForceField.cpp) ------------------------------------
+  /** Accumulate every enabled field's contribution; runs just before integration. */
+  void applyForceFields();
+
+  // ---- Dynamic boxes (DynamicBox.cpp) -----------------------------------
+  /**
+   * Point query against a static surface: returns whether `worldPoint` is
+   * inside it and, if so, the outward contact normal and penetration depth.
+   */
+  using SurfacePointQuery = std::function<bool(const Vec3& worldPoint,
+                                               Vec3& outNormal, float& outPenetration)>;
+  void resolveSphereVsBoxBody(BodyView& sphere, BodyView& box);
+  void resolveBoxCorners(BodyView& box, int otherId,
+                         float otherRestitution, float otherFriction,
+                         const SurfacePointQuery& query);
+  void resolveBoxBodyVsPlane(BodyView& box, const PlaneDesc& plane);
+  void resolveBoxBodyVsBox(BodyView& box, const BoxDesc& other, int otherId);
+  void resolveBoxBodyVsTriangle(BodyView& box, int triangleIndex);
+
   void wakeOnContact(BodyView& a, BodyView* b);
 
   static Vec3 closestPointOnSegment(const Vec3& p, const Vec3& segA, const Vec3& segB);
+
+  // ---- Kinematic movers (KinematicMover.cpp) ---------------------------
+  void resolveSphereVsMover(BodyView& body, int moverIndex);
+  void resolveCapsuleVsMover(BodyView& body, int moverIndex);
+  /** One-sided impulse: `body` reacts to a contact against a prescribed-velocity, infinite-mass opponent. */
+  float applyMoverContactImpulse(BodyView& body, const Vec3& contactPoint, const Vec3& normal,
+                                 const Vec3& otherPointVel, float restitution, float friction,
+                                 float penetration);
+
+  // ---- Sensor volumes (SensorVolume.cpp) --------------------------------
+  void resolveSphereVsSensor(BodyView& body, int sensorIndex);
+  void resolveCapsuleVsSensor(BodyView& body, int sensorIndex);
+  /** Shared overlap emit — `queryPoint` is the body point nearest the volume. */
+  void emitSensorOverlap(BodyView& body, int sensorIndex, const Vec3& queryPoint);
 
   WorldParams                    params_;
   BodyStore                      bodies_;
@@ -171,6 +285,13 @@ private:
   std::vector<PlaneDesc>         planes_;
   std::vector<BoxDesc>           boxes_;
   std::vector<CapsuleDesc>       capsules_;
+  std::vector<CylinderDesc>      cylinders_;
+  std::vector<KinematicMover>    movers_;
+  std::vector<SensorVolumeDesc>  sensors_;
+  std::vector<TriangleMeshDesc>  meshes_;
+  /** Flat, world-space triangle soup across every mesh; indices are stable. */
+  std::vector<MeshTriangle>      triangles_;
+  std::vector<ForceFieldDesc>    fields_;
   std::vector<HingeJoint>        hinges_;
   int                            nextHingeId_ = 0;
   ContactListener                contactListener_;

@@ -1,6 +1,6 @@
 /**
- * Physics Debug Renderer — draws Rapier's collider/joint wireframes via a
- * Babylon LinesMesh. Toggled from the Developer settings panel.
+ * Physics Debug Renderer — Rapier wireframes in rapier/mirror mode;
+ * packed C++ transform/contact buffers (+ cached static AABBs) in owner/worker.
  * WebGL2 is the recommended renderer for this view (see renderer-selector.ts).
  */
 
@@ -8,6 +8,7 @@ import { LinesMesh } from '@babylonjs/core/Meshes/linesMesh'
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData'
 import type { Scene } from '@babylonjs/core/scene'
 import type { PhysicsSystem } from './physics'
+import { buildWasmDebugLineBuffers } from './wasm-debug-geometry'
 
 export class PhysicsDebugRenderer {
   private readonly scene: Scene
@@ -40,10 +41,7 @@ export class PhysicsDebugRenderer {
 
   /**
    * Call once per frame (after the physics step) while enabled.
-   * Rebuilds the mesh geometry directly from Rapier's flat vertex/color
-   * buffers — avoids allocating a Vector3/Color4 per line endpoint, which
-   * for a busy pachinko table (tens of thousands of segments) is fast
-   * enough to do every frame but not via CreateLineSystem's array API.
+   * Rebuilds the mesh geometry from Rapier and/or packed WASM buffers.
    */
   update(): void {
     if (!this.enabled) return
@@ -52,10 +50,44 @@ export class PhysicsDebugRenderer {
     if (now - this.lastUpdateMs < PhysicsDebugRenderer.UPDATE_INTERVAL_MS) return
     this.lastUpdateMs = now
 
-    const world = this.physics.getWorld()
-    if (!world) return
+    const mode = this.physics.getWasmMode()
+    const useWasmDraw = mode === 'wasm-owner' || mode === 'wasm-worker'
 
-    const { vertices, colors } = world.debugRender()
+    if (!useWasmDraw) {
+      const world = this.physics.getWorld()
+      if (!world) return
+      const { vertices, colors } = world.debugRender()
+      this.applyLineBuffers(vertices, colors)
+      return
+    }
+
+    const wasm = buildWasmDebugLineBuffers(
+      this.physics.getWasmEngine(),
+      this.physics.getWasmDebugColliders(),
+    )
+    const positions = wasm.positions
+    const colors = wasm.colors
+
+    if (!this.physics.getOwnerSkipRapierStep()) {
+      const world = this.physics.getWorld()
+      if (world) {
+        const rendered = world.debugRender()
+        for (let i = 0; i < rendered.vertices.length; i++) {
+          positions.push(rendered.vertices[i] ?? 0)
+        }
+        for (let i = 0; i < rendered.colors.length; i++) {
+          colors.push(rendered.colors[i] ?? 0)
+        }
+      }
+    }
+
+    this.applyLineBuffers(positions, colors)
+  }
+
+  private applyLineBuffers(
+    vertices: ArrayLike<number>,
+    colors: ArrayLike<number>,
+  ): void {
     const vertexCount = vertices.length / 3
     if (vertexCount === 0) return
 
@@ -70,9 +102,9 @@ export class PhysicsDebugRenderer {
     }
 
     const vertexData = new VertexData()
-    vertexData.positions = vertices
+    vertexData.positions = vertices as number[] | Float32Array
     vertexData.indices = this.indices
-    vertexData.colors = colors
+    vertexData.colors = colors as number[] | Float32Array
     vertexData.applyToMesh(this.linesMesh, true)
   }
 

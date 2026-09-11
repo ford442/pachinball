@@ -1,5 +1,8 @@
 #include "BroadphaseGrid.h"
+#include "CollisionFilter.h"
+#include "Cylinder.h"
 #include "PhysicsWorld.h"
+#include "TriangleMesh.h"
 
 #include <algorithm>
 #include <cmath>
@@ -40,6 +43,13 @@ void BroadphaseGrid::cellsForAabb(float minX, float maxX, float minZ, float maxZ
   }
 }
 
+void BroadphaseGrid::cellsForObb(const Vec3& center, const Vec3& halfExtents,
+                                 std::vector<CellKey>& out) const {
+  // Rotation-agnostic conservative bound: the OBB's XZ circumscribing radius.
+  const float r = std::sqrt(halfExtents.x * halfExtents.x + halfExtents.z * halfExtents.z) + 0.05f;
+  cellsForAabb(center.x - r, center.x + r, center.z - r, center.z + r, out);
+}
+
 void BroadphaseGrid::addStaticToCell(const CellKey& key, StaticRef ref) {
   staticCells_[key].push_back(ref);
 }
@@ -74,13 +84,70 @@ void BroadphaseGrid::insertStaticCapsule(int capIndex, const CapsuleDesc& cap) {
   }
 }
 
+void BroadphaseGrid::insertSensorVolume(int sensorIndex, const SensorVolumeDesc& sensor) {
+  std::vector<CellKey> cells;
+  cellsForObb(sensor.center, sensor.halfExtents, cells);
+  StaticRef ref{StaticRef::Sensor, sensorIndex};
+  for (const auto& c : cells) {
+    addStaticToCell(c, ref);
+  }
+}
+
+void BroadphaseGrid::insertStaticCylinder(int cylIndex, const CylinderDesc& cyl) {
+  // Conservative: the cylinder always fits inside the OBB that bounds it.
+  const Vec3 bound{cyl.radius, cyl.halfHeight, cyl.radius};
+  std::vector<CellKey> cells;
+  cellsForObb(cyl.center, bound, cells);
+  StaticRef ref{StaticRef::Cylinder, cylIndex};
+  for (const auto& c : cells) {
+    addStaticToCell(c, ref);
+  }
+}
+
+void BroadphaseGrid::insertTriangle(int triangleIndex, const MeshTriangle& tri) {
+  const float margin = 0.05f;
+  std::vector<CellKey> cells;
+  cellsForAabb(
+    std::min({tri.a.x, tri.b.x, tri.c.x}) - margin,
+    std::max({tri.a.x, tri.b.x, tri.c.x}) + margin,
+    std::min({tri.a.z, tri.b.z, tri.c.z}) - margin,
+    std::max({tri.a.z, tri.b.z, tri.c.z}) + margin,
+    cells);
+  StaticRef ref{StaticRef::Triangle, triangleIndex};
+  for (const auto& c : cells) {
+    addStaticToCell(c, ref);
+  }
+}
+
 void BroadphaseGrid::addToCell(const CellKey& key, int dynamicDense) {
   dynamicCells_[key].push_back(dynamicDense);
 }
 
-void BroadphaseGrid::buildPairs(const BodyStore& bodies, std::vector<Pair>& outPairs) {
+void BroadphaseGrid::rebuildMoverCells(const std::vector<KinematicMover>& movers) {
+  moverCells_.clear();
+  std::vector<CellKey> cells;
+  for (int i = 0; i < static_cast<int>(movers.size()); ++i) {
+    cells.clear();
+    cellsForObb(movers[static_cast<std::size_t>(i)].currentPos,
+               movers[static_cast<std::size_t>(i)].halfExtents, cells);
+    for (const auto& c : cells) {
+      moverCells_[c].push_back(i);
+    }
+  }
+}
+
+void BroadphaseGrid::buildPairs(const BodyStore& bodies,
+                                const std::vector<BoxDesc>& boxes,
+                                const std::vector<CapsuleDesc>& capsules,
+                                const std::vector<SensorVolumeDesc>& sensors,
+                                const std::vector<KinematicMover>& movers,
+                                const std::vector<CylinderDesc>& cylinders,
+                                const std::vector<MeshTriangle>& triangles,
+                                const std::vector<TriangleMeshDesc>& meshes,
+                                std::vector<Pair>& outPairs) {
   outPairs.clear();
   dynamicCells_.clear();
+  rebuildMoverCells(movers);
 
   const int n = bodies.denseCount();
   std::vector<CellKey> cells;
@@ -93,8 +160,12 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies, std::vector<Pair>& outP
     const float px = bodies.posX(i);
     const float pz = bodies.posZ(i);
     float r = bodies.radius(i);
-    if (static_cast<Shape>(bodies.shape(i)) == Shape::Capsule) {
+    const Shape shape = static_cast<Shape>(bodies.shape(i));
+    if (shape == Shape::Capsule) {
       r += bodies.capsuleHalfHeight(i);
+    } else if (shape == Shape::Box) {
+      // Circumscribing radius, so any orientation is covered.
+      r = bodies.boxHalfExtents(i).length();
     }
     cells.clear();
     cellsForAabb(px - r, px + r, pz - r, pz + r, cells);
@@ -113,9 +184,13 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies, std::vector<Pair>& outP
            static_cast<uint32_t>(hi);
   };
 
+  // Disjoint bit fields rather than XOR: the old `(idx << 1) ^ type` aliased
+  // across kinds (idx 4/type 3 and idx 5/type 1 both hashed to 11), which
+  // would silently drop a pair now that there are seven pair types and
+  // per-triangle indices run high.
   auto pairKeyStatic = [](int body, int staticIdx, Pair::Type type) -> uint64_t {
-    return (static_cast<uint64_t>(static_cast<uint32_t>(body)) << 32) ^
-           (static_cast<uint64_t>(staticIdx) << 1) ^
+    return (static_cast<uint64_t>(static_cast<uint32_t>(body)) << 32) |
+           (static_cast<uint64_t>(static_cast<uint32_t>(staticIdx)) << 8) |
            static_cast<uint64_t>(type);
   };
 
@@ -128,6 +203,8 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies, std::vector<Pair>& outP
         const int a = dynamics[ai];
         const int b = dynamics[bi];
         if (!bodies.isAwake(a) || !bodies.isAwake(b)) continue;
+        if (!groupsInteract(bodies.membership(a), bodies.filter(a),
+                            bodies.membership(b), bodies.filter(b))) continue;
         const uint64_t key = pairKeyBody(a, b);
         if (!seen.insert(key).second) continue;
         outPairs.push_back({Pair::BodyBody, a, b});
@@ -135,15 +212,55 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies, std::vector<Pair>& outP
     }
 
     const auto sit = staticCells_.find(entry.first);
-    if (sit == staticCells_.end()) continue;
+    if (sit != staticCells_.end()) {
+      for (int bodyDense : dynamics) {
+        if (!bodies.isAwake(bodyDense)) continue;
+        for (const StaticRef& ref : sit->second) {
+          Pair::Type ptype;
+          uint32_t refMembership, refFilter;
+          if (ref.kind == StaticRef::Box) {
+            ptype = Pair::BodyBox;
+            refMembership = boxes[static_cast<std::size_t>(ref.index)].membership;
+            refFilter = boxes[static_cast<std::size_t>(ref.index)].filter;
+          } else if (ref.kind == StaticRef::Capsule) {
+            ptype = Pair::BodyCapsule;
+            refMembership = capsules[static_cast<std::size_t>(ref.index)].membership;
+            refFilter = capsules[static_cast<std::size_t>(ref.index)].filter;
+          } else if (ref.kind == StaticRef::Cylinder) {
+            ptype = Pair::BodyCylinder;
+            refMembership = cylinders[static_cast<std::size_t>(ref.index)].membership;
+            refFilter = cylinders[static_cast<std::size_t>(ref.index)].filter;
+          } else if (ref.kind == StaticRef::Triangle) {
+            ptype = Pair::BodyTriangle;
+            const int meshIndex = triangles[static_cast<std::size_t>(ref.index)].meshIndex;
+            refMembership = meshes[static_cast<std::size_t>(meshIndex)].membership;
+            refFilter = meshes[static_cast<std::size_t>(meshIndex)].filter;
+          } else {
+            ptype = Pair::BodySensor;
+            refMembership = sensors[static_cast<std::size_t>(ref.index)].membership;
+            refFilter = sensors[static_cast<std::size_t>(ref.index)].filter;
+          }
+          if (!groupsInteract(bodies.membership(bodyDense), bodies.filter(bodyDense),
+                              refMembership, refFilter)) continue;
+          const uint64_t key = pairKeyStatic(bodyDense, ref.index, ptype);
+          if (!seen.insert(key).second) continue;
+          outPairs.push_back({ptype, bodyDense, ref.index});
+        }
+      }
+    }
 
-    for (int bodyDense : dynamics) {
-      if (!bodies.isAwake(bodyDense)) continue;
-      for (const StaticRef& ref : sit->second) {
-        const Pair::Type ptype = (ref.kind == StaticRef::Box) ? Pair::BodyBox : Pair::BodyCapsule;
-        const uint64_t key = pairKeyStatic(bodyDense, ref.index, ptype);
-        if (!seen.insert(key).second) continue;
-        outPairs.push_back({ptype, bodyDense, ref.index});
+    const auto mit = moverCells_.find(entry.first);
+    if (mit != moverCells_.end()) {
+      for (int bodyDense : dynamics) {
+        if (!bodies.isAwake(bodyDense)) continue;
+        for (int moverIdx : mit->second) {
+          const KinematicMover& mover = movers[static_cast<std::size_t>(moverIdx)];
+          if (!groupsInteract(bodies.membership(bodyDense), bodies.filter(bodyDense),
+                              mover.membership, mover.filter)) continue;
+          const uint64_t key = pairKeyStatic(bodyDense, moverIdx, Pair::BodyMover);
+          if (!seen.insert(key).second) continue;
+          outPairs.push_back({Pair::BodyMover, bodyDense, moverIdx});
+        }
       }
     }
   }
@@ -163,6 +280,8 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies, std::vector<Pair>& outP
           for (int b : other) {
             if (a >= b) continue;
             if (!bodies.isAwake(a) || !bodies.isAwake(b)) continue;
+            if (!groupsInteract(bodies.membership(a), bodies.filter(a),
+                                bodies.membership(b), bodies.filter(b))) continue;
             const uint64_t key = pairKeyBody(a, b);
             if (!seen.insert(key).second) continue;
             outPairs.push_back({Pair::BodyBody, a, b});

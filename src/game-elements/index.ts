@@ -1,7 +1,7 @@
 export * from './types'
 export * from './display-config'
 export * from './visual-language'
-export { PhysicsSystem } from './physics'
+export { PhysicsSystem, PHYSICS_DEGRADE_MARKER, exposeCurrentPhysicsEngine, exposePhysicsDegradeReason } from './physics'
 export { SettingsManager, type GameSettings } from './settings'
 export { InputHandler } from './input'
 export { BallManager } from './ball-manager'
@@ -205,15 +205,15 @@ export {
   decompressInputFrames,
   type ReplayMetadata,
   type ReplayPayload,
-} from './replay-recorder'
-export { ReplayRunner } from './replay-runner'
-export { GhostBallRenderer } from './ghost-ball-renderer'
+} from '../replay/replay-recorder'
+export { ReplayRunner } from '../replay/replay-runner'
+export { GhostBallRenderer } from '../replay/ghost-ball-renderer'
 export {
   ChallengeSystem,
   getChallengeSystem,
   resetChallengeSystem,
   type ChallengeConfig,
-} from './challenge-system'
+} from '../replay/challenge-system'
 export {
   generateTableLayout,
   validateLayout,

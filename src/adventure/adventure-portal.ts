@@ -137,13 +137,9 @@ export abstract class AdventurePortalMixin extends AdventureCameraMixin {
       portal.coreBase.scaleToRef(0.85 * pulse, portal.coreMaterial.emissiveColor)
     }
 
-    const sensorCollider = portal.sensor.collider(0)
-    if (!sensorCollider) return
-
-    const isAnyBallInside = ballBodies.some((candidateBall) => {
-      const ballCollider = candidateBall.collider(0)
-      return !!ballCollider && this.world.intersectionPair(sensorCollider, ballCollider)
-    })
+    const isAnyBallInside = ballBodies.some(
+      (candidateBall) => this.testSensorOverlap(portal.sensor, candidateBall)
+    )
     if (!isAnyBallInside) return
 
     this.onEvent?.('PORTAL_ENTERED', {

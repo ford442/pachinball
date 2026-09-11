@@ -47,7 +47,18 @@ EMSCRIPTEN_BINDINGS(rigid_body_desc) {
   // Expose Shape enum so JS can pass typed constants
   enum_<Shape>("Shape")
     .value("Sphere",  Shape::Sphere)
-    .value("Capsule", Shape::Capsule);
+    .value("Capsule", Shape::Capsule)
+    .value("Box",     Shape::Box);
+
+  // Shape tag for the volume colliders (kinematic movers, sensor volumes)
+  enum_<VolumeShape>("VolumeShape")
+    .value("Box",      VolumeShape::Box)
+    .value("Cylinder", VolumeShape::Cylinder)
+    .value("Sphere",   VolumeShape::Sphere);
+
+  enum_<ForceSpace>("ForceSpace")
+    .value("World", ForceSpace::World)
+    .value("Local", ForceSpace::Local);
 
   // Expose Vec3 so JS can construct positions/velocities conveniently
   value_object<Vec3>("Vec3")
@@ -114,6 +125,31 @@ EMSCRIPTEN_BINDINGS(physics_world) {
           desc.angularDamping    = angularDamping;
           return self.createRigidBody(desc);
         }))
+    // Dynamic oriented boxes (crates) need three half-extents rather than a
+    // radius, so they get their own entry point instead of widening the
+    // 15-argument signature above that every existing caller passes.
+    .function("createBoxBody", optional_override([](PhysicsWorld& self,
+        float px, float py, float pz,
+        float vx, float vy, float vz,
+        float mass, float hx, float hy, float hz,
+        float restitution, float linearDamping,
+        int bodyType, float friction, float angularDamping) -> int {
+          RigidBodyDesc desc;
+          desc.position       = {px, py, pz};
+          desc.velocity       = {vx, vy, vz};
+          desc.mass           = mass;
+          desc.shape          = Shape::Box;
+          desc.boxHalfExtents = {hx, hy, hz};
+          // Bounding radius keeps the broadphase and the sleep heuristics
+          // sane for a shape whose `radius` field is otherwise unused.
+          desc.radius         = Vec3{hx, hy, hz}.length();
+          desc.restitution    = restitution;
+          desc.linearDamping  = linearDamping;
+          desc.type           = static_cast<BodyType>(bodyType);
+          desc.friction       = friction;
+          desc.angularDamping = angularDamping;
+          return self.createRigidBody(desc);
+        }))
     .function("createRigidBodyDesc", &PhysicsWorld::createRigidBody)
     .function("removeRigidBody",  &PhysicsWorld::removeRigidBody)
 
@@ -145,6 +181,104 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("addStaticPlane", &PhysicsWorld::addStaticPlane)
     .function("addStaticBox",    &PhysicsWorld::addStaticBox)
     .function("addStaticCapsule", &PhysicsWorld::addStaticCapsule)
+    .function("addStaticCylinder", &PhysicsWorld::addStaticCylinder)
+    .function("clearStaticGeometry", &PhysicsWorld::clearStaticGeometry)
+
+    // Static triangle soup. JS passes heap offsets (Module._malloc) rather
+    // than typed arrays so a whole adventure track uploads in one copy; see
+    // the wrapper in src/wasm/PhysicsModule.ts.
+    .function("addStaticTriangleMesh", optional_override([](PhysicsWorld& self,
+        uintptr_t verticesPtr, int vertexCount,
+        uintptr_t indicesPtr, int indexCount,
+        float restitution, float friction, bool doubleSided) -> int {
+          return self.addStaticTriangleMesh(
+            reinterpret_cast<const float*>(verticesPtr), vertexCount,
+            reinterpret_cast<const uint32_t*>(indicesPtr), indexCount,
+            restitution, friction, doubleSided);
+        }))
+
+    // Force fields (updraft, conveyor, solar wind)
+    .function("addForceField", optional_override([](PhysicsWorld& self,
+        float px, float py, float pz,
+        float hx, float hy, float hz,
+        float qx, float qy, float qz, float qw,
+        float fx, float fy, float fz,
+        int space, bool acceleration) -> int {
+          ForceFieldDesc desc;
+          desc.center = {px, py, pz};
+          desc.halfExtents = {hx, hy, hz};
+          desc.rotation = {qx, qy, qz, qw};
+          desc.force = {fx, fy, fz};
+          desc.space = static_cast<ForceSpace>(space);
+          desc.acceleration = acceleration;
+          return self.addForceField(desc);
+        }))
+    .function("setForceFieldEnabled", &PhysicsWorld::setForceFieldEnabled)
+    .function("setForceFieldVector", &PhysicsWorld::setForceFieldVector)
+
+    // Kinematic OBB movers (pistons, platters, gates)
+    .function("addKinematicMover", optional_override([](PhysicsWorld& self,
+        float px, float py, float pz,
+        float hx, float hy, float hz,
+        float qx, float qy, float qz, float qw,
+        float restitution, float friction) -> int {
+          KinematicMoverDesc desc;
+          desc.position = {px, py, pz};
+          desc.halfExtents = {hx, hy, hz};
+          desc.rotation = {qx, qy, qz, qw};
+          desc.restitution = restitution;
+          desc.friction = friction;
+          return self.addKinematicMover(desc);
+        }))
+    // Shaped variant — a cylinder mover drives rotating platforms and mills,
+    // keeping their round profile instead of a faceted OBB approximation.
+    .function("addKinematicMoverShaped", optional_override([](PhysicsWorld& self,
+        int shape,
+        float px, float py, float pz,
+        float hx, float hy, float hz,
+        float qx, float qy, float qz, float qw,
+        float restitution, float friction) -> int {
+          KinematicMoverDesc desc;
+          desc.shape = static_cast<VolumeShape>(shape);
+          desc.position = {px, py, pz};
+          desc.halfExtents = {hx, hy, hz};
+          desc.rotation = {qx, qy, qz, qw};
+          desc.restitution = restitution;
+          desc.friction = friction;
+          return self.addKinematicMover(desc);
+        }))
+    .function("setNextKinematicTransform", &PhysicsWorld::setNextKinematicTransform)
+
+    // Sensor volumes (Enter/Stay/Exit, zero impulse)
+    .function("addSensorVolume", optional_override([](PhysicsWorld& self,
+        float px, float py, float pz,
+        float hx, float hy, float hz,
+        float qx, float qy, float qz, float qw) -> int {
+          SensorVolumeDesc desc;
+          desc.center = {px, py, pz};
+          desc.halfExtents = {hx, hy, hz};
+          desc.rotation = {qx, qy, qz, qw};
+          return self.addSensorVolume(desc);
+        }))
+    .function("addSensorVolumeShaped", optional_override([](PhysicsWorld& self,
+        int shape,
+        float px, float py, float pz,
+        float hx, float hy, float hz,
+        float qx, float qy, float qz, float qw) -> int {
+          SensorVolumeDesc desc;
+          desc.shape = static_cast<VolumeShape>(shape);
+          desc.center = {px, py, pz};
+          desc.halfExtents = {hx, hy, hz};
+          desc.rotation = {qx, qy, qz, qw};
+          return self.addSensorVolume(desc);
+        }))
+
+    // Collision-group membership/filter (any handle: body id ≥ 0, or a
+    // negative static/mover/sensor id as returned by its add*() call).
+    .function("setCollisionGroups", optional_override([](PhysicsWorld& self,
+        int id, unsigned membership, unsigned filter) {
+          self.setCollisionGroups(id, static_cast<uint32_t>(membership), static_cast<uint32_t>(filter));
+        }))
 
     // Queries — JS side uses simple return-value helpers
     .function("getPosX", optional_override([](PhysicsWorld& self, int id) -> float {
