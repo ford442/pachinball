@@ -183,6 +183,11 @@ Configured in [`native/CMakeLists.txt`](../native/CMakeLists.txt). Every
 
 ### Per-config compile / link
 
+Emscripten targets only. The native Catch2 tree (`native/build-native`, `npm run test:native`)
+adds **no** `-O` of its own — `CMAKE_CXX_FLAGS_<CONFIG>` owns the level there, so every entry in
+its `compile_commands.json` carries exactly one. It is configured with an explicit
+`-DCMAKE_BUILD_TYPE=Debug`; see the root `.clangd`.
+
 | Config | Compile | Link assertions | Source maps |
 |--------|---------|-----------------|-------------|
 | **Release** (default / production) | `-O3` | `ASSERTIONS=0` | none |

@@ -50,7 +50,10 @@ npm run preview
 # Run Playwright E2E tests
 npx playwright test
 
-# Run native C++ Catch2 physics tests (writes native/build-native/compile_commands.json; root .clangd points clangd there)
+# Run native C++ Catch2 physics tests.
+# Configures with an explicit -DCMAKE_BUILD_TYPE=Debug and writes
+# native/build-native/compile_commands.json, the ONLY compile DB clangd reads (root .clangd).
+# Never copy native/build/compile_commands.json (Emscripten) to the repo root or native/.
 npm run test:native
 
 # Build C++ physics to WASM (requires Emscripten)

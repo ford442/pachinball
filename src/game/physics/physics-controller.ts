@@ -107,7 +107,11 @@ export class GamePhysicsController {
             this.host.gameObjects?.getBindings() || [],
             [...(this.host.gameObjects?.getAllFlippers?.().values() ?? [])].map((f) => f.body)
           )
-          this.host.physics.setWasmDebugColliders?.([...this.wasmOwner.getDebugColliders()])
+          this.attachAdventureTrackToWasm()
+          this.host.physics.setWasmDebugColliders?.([
+            ...this.wasmOwner.getDebugColliders(),
+            ...this.wasmOwner.getAdventureDebugColliders(),
+          ])
         } else {
           this.wasmOwner?.clear()
           this.wasmOwner = null
@@ -135,6 +139,43 @@ export class GamePhysicsController {
     // Portal sensor handles are registered/unregistered dynamically via
     // registerPortalSensor / unregisterPortalSensor and are intentionally NOT
     // reset here — portals may already be active when the cache is rebuilt.
+  }
+
+  /**
+   * Whether WASM owns the active adventure track, and what stopped it if not.
+   * Exposed for the E2E cutover check and the debug HUD.
+   */
+  getAdventureOwnership(): {
+    owned: boolean
+    unsupported: ReadonlyArray<{ shapeType: number; reason: string }>
+  } {
+    return {
+      owned: this.wasmOwner?.isAdventureOwned() ?? false,
+      unsupported: this.wasmOwner?.getAdventureUnsupported() ?? [],
+    }
+  }
+
+  /**
+   * Hand the active adventure track's bodies to WasmOwner and, if every
+   * collider could be represented, install the WASM-backed overlap/impulse
+   * bridge so zone effects keep working with Rapier unstepped.
+   *
+   * Called from rebuildHandleCaches, which already runs on adventure start,
+   * end and track switch — exactly the moments the static world changes.
+   */
+  private attachAdventureTrackToWasm(): void {
+    const adventureMode = this.host.adventureMode
+    const owner = this.wasmOwner
+    if (!owner) return
+
+    if (!adventureMode?.isActive()) {
+      owner.clearAdventureTrack()
+      adventureMode?.setPhysicsBridge(null)
+      return
+    }
+
+    const owned = owner.attachAdventureTrack(adventureMode.collectTrackBodies())
+    adventureMode.setPhysicsBridge(owned ? owner.getPhysicsBridge() : null)
   }
 
   /**
@@ -266,7 +307,13 @@ export class GamePhysicsController {
     const wasmActive = this.host.physics.isWasmActive?.() ?? false
     const isOwner = this.host.physics.isWasmOwnerMode?.() ?? false
     const adventureActive = this.host.adventureMode?.isActive() ?? false
-    this.host.physics.setOwnerSkipRapierStep?.(isOwner && !adventureActive)
+    // Adventure geometry now exports into the WASM world, so Rapier's step can
+    // be skipped there too — but only once WasmOwner confirms it could
+    // represent every collider on the active track. A track carrying geometry
+    // with no WASM equivalent falls back to the old two-engine arrangement
+    // rather than simulating with pieces missing.
+    const adventureOwned = adventureActive && (this.wasmOwner?.isAdventureOwned() ?? false)
+    this.host.physics.setOwnerSkipRapierStep?.(isOwner && (!adventureActive || adventureOwned))
 
     if (wasmActive && !isOwner) {
       const syncT0 = performance.now()
@@ -275,6 +322,9 @@ export class GamePhysicsController {
     }
     if (wasmActive && isOwner) {
       this.wasmOwner?.driveFlippers(inputFrame, Math.min(rawDt, 1 / 30))
+      // Rotating platforms and mills are still posed by Rapier's kinematic
+      // integration, so push their poses across before the WASM step.
+      this.wasmOwner?.driveAdventure(Math.min(rawDt, 1 / 30))
       this.host.physics.setMirrorOverheadMs?.(0)
     }
 
@@ -287,6 +337,7 @@ export class GamePhysicsController {
     if (wasmActive) {
       const syncT0 = performance.now()
       if (isOwner) {
+        this.wasmOwner?.refreshSensorOverlaps()
         this.wasmOwner?.syncFromWasm(this.host.physics.getRapier())
       } else {
         this.wasmMirror?.syncFromWasm(this.host.physics.getRapier())

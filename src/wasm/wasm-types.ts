@@ -140,6 +140,21 @@ export interface WasmPhysicsWorldInstance {
     friction: number
   ): number
 
+  /**
+   * Add a kinematic mover with an explicit shape tag (0 box, 1 cylinder,
+   * 2 sphere). A cylinder mover keeps a rotating platform's round profile
+   * instead of approximating it with a faceted box.
+   * @returns Negative handle used in contact events / setCollisionGroups.
+   */
+  addKinematicMoverShaped(
+    shape: number,
+    px: number, py: number, pz: number,
+    hx: number, hy: number, hz: number,
+    qx: number, qy: number, qz: number, qw: number,
+    restitution: number,
+    friction: number
+  ): number
+
   /** Push the pose this mover should reach by the next `step()`. */
   setNextKinematicTransform(
     moverId: number,
@@ -158,6 +173,68 @@ export interface WasmPhysicsWorldInstance {
     hx: number, hy: number, hz: number,
     qx: number, qy: number, qz: number, qw: number
   ): number
+
+  /** Sensor volume with an explicit shape tag (0 box, 1 cylinder, 2 sphere). */
+  addSensorVolumeShaped(
+    shape: number,
+    px: number, py: number, pz: number,
+    hx: number, hy: number, hz: number,
+    qx: number, qy: number, qz: number, qw: number
+  ): number
+
+  /**
+   * Add an oriented static cylinder collider (local Y axis) — pachinko pins,
+   * arc pylons, chroma gates.
+   * @returns Negative collider id used in contact events.
+   */
+  addStaticCylinder(
+    px: number, py: number, pz: number,
+    radius: number, halfHeight: number,
+    qx: number, qy: number, qz: number, qw: number,
+    restitution?: number,
+    friction?: number
+  ): number
+
+  /**
+   * Add an immutable static triangle mesh. `verticesPtr` and `indicesPtr` are
+   * byte offsets into WASM memory (allocate with `_malloc`); vertices are
+   * 3 floats each, indices 3 uint32 per triangle, CCW for the front face.
+   * @returns Negative mesh id used in contact events.
+   */
+  addStaticTriangleMesh(
+    verticesPtr: number, vertexCount: number,
+    indicesPtr: number, indexCount: number,
+    restitution: number, friction: number, doubleSided: boolean
+  ): number
+
+  /** Create a dynamic oriented-box body (crate). @returns Stable body handle. */
+  createBoxBody(
+    px: number, py: number, pz: number,
+    vx: number, vy: number, vz: number,
+    mass: number, hx: number, hy: number, hz: number,
+    restitution: number, linearDamping: number,
+    bodyType: number, friction: number, angularDamping: number
+  ): number
+
+  /**
+   * Add an oriented box force region (updraft, conveyor, solar wind).
+   * `space` is 0 world / 1 local; `acceleration` selects the mass-independent
+   * form (m/s²) over a force in newtons.
+   * @returns Negative handle used in setForceField*() / setCollisionGroups.
+   */
+  addForceField(
+    px: number, py: number, pz: number,
+    hx: number, hy: number, hz: number,
+    qx: number, qy: number, qz: number, qw: number,
+    fx: number, fy: number, fz: number,
+    space: number, acceleration: boolean
+  ): number
+
+  /** Drop all static/kinematic geometry and force fields; negative handles are invalidated. */
+  clearStaticGeometry(): void
+
+  setForceFieldEnabled(fieldId: number, enabled: boolean): void
+  setForceFieldVector(fieldId: number, fx: number, fy: number, fz: number): void
 
   /**
    * Set the collision-group membership/filter mask for any handle — a
@@ -259,7 +336,11 @@ export interface WasmPhysicsModuleFactory {
 /** Emscripten module instance returned by the factory. */
 export interface WasmPhysicsModule {
   HEAPF32?: Float32Array
+  HEAPU32?: Uint32Array
   wasmMemory?: { buffer: ArrayBuffer }
+  /** Emscripten heap allocator — needed to hand triangle soup to the C++ side. */
+  _malloc?: (bytes: number) => number
+  _free?: (ptr: number) => void
   PhysicsWorld: new () => WasmPhysicsWorldInstance
   BodyType: {
     Dynamic:   { value: 0 }
@@ -269,5 +350,15 @@ export interface WasmPhysicsModule {
   Shape: {
     Sphere:  { value: 0 }
     Capsule: { value: 1 }
+    Box:     { value: 2 }
+  }
+  VolumeShape: {
+    Box:      { value: 0 }
+    Cylinder: { value: 1 }
+    Sphere:   { value: 2 }
+  }
+  ForceSpace: {
+    World: { value: 0 }
+    Local: { value: 1 }
   }
 }

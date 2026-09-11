@@ -4,8 +4,18 @@ import type { BumperVisual, PhysicsBinding, InputFrame } from '../../game-elemen
 import { WASM_PHYSICS, PhysicsConfig, GameConfig } from '../../config'
 import type { WasmSimEngine } from '../../wasm/wasm-sim-engine'
 import { exportRapierBodyToWasm } from './wasm-static-export'
+import {
+  driveAdventureMovers,
+  exportAdventureBodyToWasm,
+  type AdventureExportResult,
+  type UnsupportedCollider,
+} from './wasm-adventure-export'
+import { ADVENTURE_GROUP, CollisionGroups, makeCollisionGroups } from '../../game-elements/physics'
 import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
 import type { WasmDebugCollider } from '../../game-elements/wasm-debug-geometry'
+import { peekPackedPhysicsBuffers } from '../../game-elements/wasm-debug-geometry'
+import { ContactPhase, decodeContactBuffer } from '../../wasm/contact-buffer'
+import type { AdventurePhysicsBridge } from '../../adventure/track-builder'
 
 /** Blade half-length / radius approximation matching object-flippers.ts's cuboid collider. */
 const FLIPPER_PROXY_RADIUS = 0.3
@@ -56,8 +66,25 @@ export class WasmOwner {
   private ballBodies = new Set<RAPIER.RigidBody>()
   private flippers: FlipperHinge[] = []
   private disabledRapierBodies = new Set<RAPIER.RigidBody>()
-  private groundAdded = false
   private debugColliders: WasmDebugCollider[] = []
+  /** Table static bindings, retained so the static world can be rebuilt on a track switch. */
+  private tableStaticBindings: RAPIER.RigidBody[] = []
+  private adventureMovers: AdventureExportResult['movers'] = []
+  private adventureDebug: WasmDebugCollider[] = []
+  private adventureUnsupported: UnsupportedCollider[] = []
+  private adventureOwned = false
+  /** WASM sensor handle → the Rapier body the zone logic knows it by. */
+  private sensorBodyByHandle = new Map<number, RAPIER.RigidBody>()
+  /** Reverse index, so an overlap query is a map lookup rather than a scan. */
+  private sensorHandlesByBody = new Map<RAPIER.RigidBody, number[]>()
+  /**
+   * Currently-overlapping `sensorHandle:ballWasmId` pairs.
+   *
+   * Maintained from Enter/Exit contact events rather than rebuilt from Stay
+   * events each frame, so a Stay dropped by the contact buffer's cap cannot
+   * make a ball flicker out of a conveyor it is still sitting in.
+   */
+  private sensorOverlaps = new Set<string>()
   private leftPressed = false
   private rightPressed = false
   private leftHoldTime = 0
@@ -81,8 +108,15 @@ export class WasmOwner {
     this.ballBodies.clear()
     this.flippers = []
     this.restoreRapierBodies()
-    this.groundAdded = false
     this.debugColliders = []
+    this.tableStaticBindings = []
+    this.adventureMovers = []
+    this.adventureDebug = []
+    this.adventureUnsupported = []
+    this.adventureOwned = false
+    this.sensorBodyByHandle.clear()
+    this.sensorHandlesByBody.clear()
+    this.sensorOverlaps.clear()
     this.leftPressed = false
     this.rightPressed = false
     this.leftHoldTime = 0
@@ -98,23 +132,28 @@ export class WasmOwner {
   ): void {
     this.clear()
 
+    // rebuild() runs again on every handle-cache rebuild (adventure start, end
+    // and track switch). Without this the table's static colliders would be
+    // appended to the WASM world afresh each time and accumulate, since C++
+    // static geometry has no per-handle removal.
+    this.engine.clearStaticGeometry?.()
+
     const plane = WASM_PHYSICS.tunables.groundPlane
-    if (!this.groundAdded) {
-      this.engine.addStaticPlane(
-        { x: plane.normal.x, y: plane.normal.y, z: plane.normal.z },
-        plane.distance,
-        plane.friction
-      )
-      this.groundAdded = true
-    }
+    this.engine.addStaticPlane(
+      { x: plane.normal.x, y: plane.normal.y, z: plane.normal.z },
+      plane.distance,
+      plane.friction
+    )
 
     const flipperSet = new Set(flipperBodies)
     const bumperSet = new Set(bumperBodies)
     const ballSet = new Set(ballBodies)
 
+    this.tableStaticBindings = []
     for (const binding of staticBindings) {
       const body = binding.rigidBody
       if (flipperSet.has(body) || bumperSet.has(body) || ballSet.has(body)) continue
+      this.tableStaticBindings.push(body)
       this.debugColliders.push(...exportRapierBodyToWasm(body, this.engine))
     }
 
@@ -132,8 +171,8 @@ export class WasmOwner {
         velocity: { x: 0, y: 0, z: 0 },
         mass: 0,
         radius,
-        restitution: PhysicsConfig.bumper.restitution,
-        friction: GameConfig.physics.surfaces.bumper.friction,
+        restitution: PhysicsConfig.surfaces.bumper.restitution,
+        friction: PhysicsConfig.surfaces.bumper.friction,
         linearDamping: 0,
         // Kinematic: C++ broadphase skips Static spheres (only boxes/capsules are
         // inserted as static refs), so Static bumpers never generate contacts.
@@ -239,6 +278,154 @@ export class WasmOwner {
     }
   }
 
+  // ---- Adventure tracks --------------------------------------------------
+
+  /**
+   * Export an adventure track's Rapier bodies into the WASM world.
+   *
+   * Returns whether WASM can own the track outright. When any collider has no
+   * WASM equivalent the export is rolled back and `false` is returned, so the
+   * caller keeps Rapier stepping rather than running a track with holes in it.
+   *
+   * The C++ static world has no per-handle removal, so a track switch rebuilds
+   * the whole static set: `clearAdventureTrack()` wipes it and re-exports the
+   * table statics that were captured during `rebuild()`.
+   */
+  attachAdventureTrack(trackBodies: readonly RAPIER.RigidBody[]): boolean {
+    this.clearAdventureTrack()
+    if (trackBodies.length === 0) return false
+
+    const groups = makeCollisionGroups(ADVENTURE_GROUP, CollisionGroups.BALL)
+    const membership = (groups >>> 16) & 0xffff
+    const filter = groups & 0xffff
+
+    const movers: AdventureExportResult['movers'] = []
+    const debug: WasmDebugCollider[] = []
+    const unsupported: UnsupportedCollider[] = []
+
+    for (const body of trackBodies) {
+      const result = exportAdventureBodyToWasm(body, this.engine, { membership, filter })
+      movers.push(...result.movers)
+      debug.push(...result.debug)
+      unsupported.push(...result.unsupported)
+      for (const sensor of result.sensors) {
+        this.sensorBodyByHandle.set(sensor.handle, sensor.body)
+        const existing = this.sensorHandlesByBody.get(sensor.body)
+        if (existing) existing.push(sensor.handle)
+        else this.sensorHandlesByBody.set(sensor.body, [sensor.handle])
+      }
+    }
+
+    if (unsupported.length > 0) {
+      console.warn(
+        `[WasmOwner] ${unsupported.length} adventure collider(s) have no WASM equivalent — ` +
+        'keeping Rapier stepped for this track.',
+        unsupported
+      )
+      this.adventureUnsupported = unsupported
+      this.clearAdventureTrack()
+      this.adventureUnsupported = unsupported
+      return false
+    }
+
+    this.adventureMovers = movers
+    this.adventureDebug = debug
+    this.adventureUnsupported = []
+    this.adventureOwned = true
+
+    for (const body of trackBodies) {
+      this.disableRapierBody(body)
+    }
+    return true
+  }
+
+  /** Drop the current track's WASM geometry and re-export the table statics. */
+  clearAdventureTrack(): void {
+    const hadTrack = this.adventureOwned || this.adventureDebug.length > 0
+    this.adventureMovers = []
+    this.adventureDebug = []
+    this.adventureUnsupported = []
+    this.adventureOwned = false
+    this.sensorBodyByHandle.clear()
+    this.sensorHandlesByBody.clear()
+    this.sensorOverlaps.clear()
+    if (!hadTrack) return
+
+    this.engine.clearStaticGeometry?.()
+
+    // clearStaticGeometry drops the ground plane and table too, so put them back.
+    const plane = WASM_PHYSICS.tunables.groundPlane
+    this.engine.addStaticPlane(
+      { x: plane.normal.x, y: plane.normal.y, z: plane.normal.z },
+      plane.distance,
+      plane.friction
+    )
+
+    this.debugColliders = []
+    for (const body of this.tableStaticBindings) {
+      this.debugColliders.push(...exportRapierBodyToWasm(body, this.engine))
+    }
+  }
+
+  /**
+   * Fold this step's sensor contacts into the overlap set. Call once per frame
+   * after `step()`, before the adventure zone logic reads it.
+   */
+  refreshSensorOverlaps(): void {
+    if (!this.adventureOwned || this.sensorBodyByHandle.size === 0) return
+
+    const packed = peekPackedPhysicsBuffers(this.engine)
+    if (!packed.contacts || packed.contactCount <= 0) return
+
+    for (const evt of decodeContactBuffer(packed.contacts, packed.contactCount)) {
+      if (!evt.isSensor) continue
+      if (!this.sensorBodyByHandle.has(evt.bodyId2)) continue
+      const key = `${evt.bodyId2}:${evt.bodyId1}`
+      if (evt.phase === ContactPhase.Exit) {
+        this.sensorOverlaps.delete(key)
+      } else {
+        this.sensorOverlaps.add(key)
+      }
+    }
+  }
+
+  /**
+   * Overlap + impulse operations for the adventure zone logic, backed by the
+   * WASM contact stream instead of Rapier's narrowphase.
+   */
+  getPhysicsBridge(): AdventurePhysicsBridge {
+    return {
+      overlaps: (sensorBody, ball) => {
+        const ballId = this.rapierToWasm.get(ball)
+        if (ballId === undefined) return false
+        const handles = this.sensorHandlesByBody.get(sensorBody)
+        if (!handles) return false
+        return handles.some((handle) => this.sensorOverlaps.has(`${handle}:${ballId}`))
+      },
+      applyImpulse: (ball, x, y, z) => this.applyBallImpulse(ball, x, y, z),
+    }
+  }
+
+  /** True when WASM owns the active track and Rapier's step can be skipped. */
+  isAdventureOwned(): boolean {
+    return this.adventureOwned
+  }
+
+  /** Colliders the last attach could not represent; empty when the track is owned. */
+  getAdventureUnsupported(): readonly UnsupportedCollider[] {
+    return this.adventureUnsupported
+  }
+
+  /**
+   * Push each kinematic rotator's Rapier pose into WASM. Call once per frame
+   * before `step()` — the C++ side derives the mover's velocity from the pose
+   * delta, which is what drags a ball around a spinning platter.
+   */
+  driveAdventure(dt: number): void {
+    if (!this.adventureOwned) return
+    driveAdventureMovers(this.adventureMovers, this.engine, dt)
+  }
+
   /**
    * Latch flipper input and drive native hinge motors from PhysicsConfig
    * rest/active angles + stiffness/damping (same numbers as Rapier position motors).
@@ -308,6 +495,10 @@ export class WasmOwner {
       f.rapierBody.setAngvel(new rapier.Vector3(ang.x, ang.y, ang.z), true)
       f.rapierBody.setLinvel(new rapier.Vector3(0, 0, 0), true)
     }
+  }
+
+  getAdventureDebugColliders(): readonly WasmDebugCollider[] {
+    return this.adventureDebug
   }
 
   getDebugColliders(): readonly WasmDebugCollider[] {

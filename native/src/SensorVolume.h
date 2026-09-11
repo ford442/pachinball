@@ -2,20 +2,23 @@
 
 #include "CollisionFilter.h"
 #include "MathTypes.h"
+#include "VolumeShape.h"
 
 #include <cstdint>
 
 namespace pachinball {
 
 /**
- * Static oriented-box trigger volume. Produces Enter/Stay/Exit contact
+ * Static trigger volume — box, cylinder or sphere per its shape tag. Produces Enter/Stay/Exit contact
  * events (via the existing packed contact buffer, `isSensor` bit set) but
  * never applies impulse or positional correction — it is purely a spatial
  * query, riding the same broadphase + contact-listener pipeline as solid
  * shapes.
  */
 struct SensorVolumeDesc {
-  Vec3     center       = Vec3::zero();
+  Vec3        center    = Vec3::zero();
+  VolumeShape shape     = VolumeShape::Box;
+  /** Read per `shape` — see VolumeShape. Goals and portals are boxes; catch radii are spheres. */
   Vec3     halfExtents  = {0.5f, 0.5f, 0.5f};
   Quat     rotation     = Quat::identity();
   uint32_t membership   = COLLISION_GROUPS_ALL;

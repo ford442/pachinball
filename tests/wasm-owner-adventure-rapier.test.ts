@@ -98,7 +98,7 @@ function makeHost(adventureActive: boolean) {
   return { host, setOwnerSkipRapierStep }
 }
 
-describe('wasm-owner adventure still steps Rapier', () => {
+describe('wasm-owner adventure Rapier gating', () => {
   it('skips Rapier on the table path when adventure is inactive', () => {
     const { host, setOwnerSkipRapierStep } = makeHost(false)
     const controller = new GamePhysicsController(host)
@@ -106,7 +106,9 @@ describe('wasm-owner adventure still steps Rapier', () => {
     expect(setOwnerSkipRapierStep).toHaveBeenCalledWith(true)
   })
 
-  it('keeps Rapier stepping for ADVENTURE_GROUP when adventure is active', () => {
+  it('keeps Rapier stepping when adventure geometry could not be exported', () => {
+    // No WASM engine here, so WasmOwner never attaches the track and
+    // isAdventureOwned() stays false — the pre-cutover two-engine fallback.
     const { host, setOwnerSkipRapierStep } = makeHost(true)
     const controller = new GamePhysicsController(host)
     controller.stepPhysics(null, null)

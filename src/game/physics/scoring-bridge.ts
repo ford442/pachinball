@@ -17,6 +17,17 @@ import { getFeverScoreMultiplier, applyFeverGoldMultiplier } from './scoring-mul
  * ScoringBridge — owns combo/fever/tally/streak state, score awards, and the
  * ball-loss scoring path. Wired into GamePhysicsController so the collision
  * dispatchers can call scoring hooks without owning scoring state.
+ *
+ * This is the single owner of both combo mechanics; nothing outside this class
+ * reads `comboSystem`/`comboMultiplierSystem` directly. They track different
+ * things and are intentionally not merged (different windows/thresholds — see
+ * `GAME_TUNING.combo` vs `GAME_TUNING.feedback`):
+ *  - `comboSystem` (ComboSystem) — distinct-obstacle-type chain tracker. Its
+ *    `comboCount` is the number the FEVER threshold (`GAME_TUNING.combo.feverThreshold`)
+ *    reads, and it emits `combo:started` / `combo:extended` / `combo:chain` / `combo:broken`.
+ *  - `comboMultiplierSystem` (ComboMultiplierSystem) — rolling-window score
+ *    multiplier. `host.comboMultiplier` (read by the HUD and debug HUD) always
+ *    comes from here; it emits `combo:multiplier:changed`.
  */
 export class ScoringBridge {
   private readonly host: PhysicsHost

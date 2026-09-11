@@ -1,5 +1,6 @@
 #include "KinematicMover.h"
 #include "CollisionFilter.h"
+#include "VolumeShape.h"
 #include "PhysicsWorld.h"
 
 #include <algorithm>
@@ -84,44 +85,25 @@ float PhysicsWorld::applyMoverContactImpulse(BodyView& body, const Vec3& contact
   return jn;
 }
 
-/** Closest point on an OBB (given as local half-extents) to a local-space point, clamped per axis. */
-static Vec3 clampToHalfExtents(const Vec3& local, const Vec3& he) {
-  return {
-    std::clamp(local.x, -he.x, he.x),
-    std::clamp(local.y, -he.y, he.y),
-    std::clamp(local.z, -he.z, he.z),
-  };
-}
-
-/** Shallowest-face normal + penetration for a point known to be inside the OBB (deep contact). */
-static void deepestFaceNormal(const Vec3& local, const Vec3& he, Vec3& outLocalNormal, float& outShallow) {
-  const float dx = he.x - std::fabs(local.x);
-  const float dy = he.y - std::fabs(local.y);
-  const float dz = he.z - std::fabs(local.z);
-  outLocalNormal = Vec3::up();
-  outShallow = dy;
-  if (dx < outShallow) { outShallow = dx; outLocalNormal = {local.x >= 0.f ? 1.f : -1.f, 0.f, 0.f}; }
-  if (dz < outShallow) { outShallow = dz; outLocalNormal = {0.f, 0.f, local.z >= 0.f ? 1.f : -1.f}; }
-}
-
 void PhysicsWorld::resolveSphereVsMover(BodyView& body, int moverIndex) {
   KinematicMover& mover = movers_[static_cast<std::size_t>(moverIndex)];
   if (!groupsInteract(body.getMembership(), body.getFilter(), mover.membership, mover.filter)) return;
 
   const Quat invRot = mover.currentRot.conjugate();
   const Vec3 localCenter = invRot.rotate(body.getPosition() - mover.currentPos);
-  const Vec3 closest = clampToHalfExtents(localCenter, mover.halfExtents);
+  bool inside = false;
+  const Vec3 closest = closestPointOnVolume(mover.shape, localCenter, mover.halfExtents, inside);
 
   const Vec3 delta = localCenter - closest;
   const float distSq = delta.lengthSq();
   const float radius = body.getRadius();
-  if (distSq >= radius * radius) return;
+  if (!inside && distSq >= radius * radius) return;
 
   Vec3 localNormal;
   float penetration;
-  if (distSq < MOVER_EPSILON_SQ) {
+  if (inside || distSq < MOVER_EPSILON_SQ) {
     float shallow;
-    deepestFaceNormal(localCenter, mover.halfExtents, localNormal, shallow);
+    deepestVolumeNormal(mover.shape, localCenter, mover.halfExtents, localNormal, shallow);
     penetration = radius + shallow;
   } else {
     const float dist = std::sqrt(distSq);
@@ -162,25 +144,27 @@ void PhysicsWorld::resolveCapsuleVsMover(BodyView& body, int moverIndex) {
   const Vec3 segA = invRot.rotate((body.getPosition() - axisHalf) - mover.currentPos);
   const Vec3 segB = invRot.rotate((body.getPosition() + axisHalf) - mover.currentPos);
 
-  // Alternating projection between the segment and the box converges to the
-  // closest pair within a handful of iterations for a convex box.
-  Vec3 boxPt = Vec3::zero();
+  // Alternating projection between the segment and the volume converges to
+  // the closest pair within a handful of iterations for any convex volume.
+  Vec3 volumePt = Vec3::zero();
+  bool inside = false;
   for (int iter = 0; iter < 6; ++iter) {
-    const Vec3 segPt = closestPointOnSegment(boxPt, segA, segB);
-    boxPt = clampToHalfExtents(segPt, mover.halfExtents);
+    const Vec3 segPt = closestPointOnSegment(volumePt, segA, segB);
+    volumePt = closestPointOnVolume(mover.shape, segPt, mover.halfExtents, inside);
   }
-  const Vec3 segPtLocal = closestPointOnSegment(boxPt, segA, segB);
+  const Vec3 segPtLocal = closestPointOnSegment(volumePt, segA, segB);
+  closestPointOnVolume(mover.shape, segPtLocal, mover.halfExtents, inside);
 
-  const Vec3 delta = segPtLocal - boxPt;
+  const Vec3 delta = segPtLocal - volumePt;
   const float distSq = delta.lengthSq();
   const float radius = body.getRadius();
-  if (distSq >= radius * radius) return;
+  if (!inside && distSq >= radius * radius) return;
 
   Vec3 localNormal;
   float penetration;
-  if (distSq < MOVER_EPSILON_SQ) {
+  if (inside || distSq < MOVER_EPSILON_SQ) {
     float shallow;
-    deepestFaceNormal(segPtLocal, mover.halfExtents, localNormal, shallow);
+    deepestVolumeNormal(mover.shape, segPtLocal, mover.halfExtents, localNormal, shallow);
     penetration = radius + shallow;
   } else {
     const float dist = std::sqrt(distSq);

@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { ChallengeSystem } from '../src/game-elements/challenge-system'
+import { ChallengeSystem } from '../src/replay/challenge-system'
 
 describe('ChallengeSystem & Share Link Utilities', () => {
   beforeEach(() => {

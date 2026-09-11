@@ -15,6 +15,9 @@ namespace pachinball {
 struct PlaneDesc;
 struct BoxDesc;
 struct CapsuleDesc;
+struct CylinderDesc;
+struct TriangleMeshDesc;
+struct MeshTriangle;
 
 /** Uniform XZ spatial hash for sphere/capsule broadphase on the playfield. */
 class BroadphaseGrid {
@@ -28,9 +31,10 @@ public:
   };
 
   struct StaticRef {
-    enum Kind : uint8_t { Box = 0, Capsule = 1, Sensor = 2 };
+    enum Kind : uint8_t { Box = 0, Capsule = 1, Sensor = 2, Cylinder = 3, Triangle = 4 };
     Kind  kind;
-    int   index; ///< index into boxes_, capsules_, or sensors_ vector
+    /** Index into the matching world vector — boxes_, capsules_, sensors_, cylinders_, triangles_. */
+    int   index;
   };
 
   struct Pair {
@@ -40,6 +44,8 @@ public:
       BodyCapsule = 2,
       BodySensor  = 3,
       BodyMover   = 4,
+      BodyCylinder = 5,
+      BodyTriangle = 6,
     };
     Type type;
     int  bodyA;   ///< dense body index
@@ -53,6 +59,9 @@ public:
   void insertStaticBox(int boxIndex, const BoxDesc& box);
   void insertStaticCapsule(int capIndex, const CapsuleDesc& cap);
   void insertSensorVolume(int sensorIndex, const SensorVolumeDesc& sensor);
+  void insertStaticCylinder(int cylIndex, const CylinderDesc& cyl);
+  /** Mesh triangles are registered individually so the grid culls per triangle, not per mesh. */
+  void insertTriangle(int triangleIndex, const MeshTriangle& tri);
 
   /**
    * Rebuild dynamic + kinematic-mover cell occupancy and emit collision
@@ -67,6 +76,9 @@ public:
                   const std::vector<CapsuleDesc>& capsules,
                   const std::vector<SensorVolumeDesc>& sensors,
                   const std::vector<KinematicMover>& movers,
+                  const std::vector<CylinderDesc>& cylinders,
+                  const std::vector<MeshTriangle>& triangles,
+                  const std::vector<TriangleMeshDesc>& meshes,
                   std::vector<Pair>& outPairs);
 
   int lastPairCount() const { return lastPairCount_; }

@@ -16,7 +16,8 @@ enum class BodyType : uint8_t {
 /** Identifies the collision shape a RigidBody presents. */
 enum class Shape : uint8_t {
   Sphere  = 0, ///< Bounding sphere of `radius` (the original/default shape).
-  Capsule = 1  ///< Capsule of `radius` and `capsuleHalfHeight`, segment along local +Y.
+  Capsule = 1, ///< Capsule of `radius` and `capsuleHalfHeight`, segment along local +Y.
+  Box     = 2  ///< Oriented box of `boxHalfExtents` (Firewall-style dynamic crates).
 };
 
 /** Descriptor passed to PhysicsWorld::createRigidBody(). */
@@ -32,6 +33,7 @@ struct RigidBodyDesc {
   float     capsuleHalfHeight = 0.5f; ///< Half-length of the capsule segment (ignored for Sphere)
   float     friction          = 0.2f; ///< Coulomb friction coefficient (≥ 0)
   float     angularDamping    = 0.1f; ///< Angular drag factor (dynamic spheres)
+  Vec3      boxHalfExtents    = {0.5f, 0.5f, 0.5f}; ///< Half-extents for Shape::Box (ignored otherwise)
   uint32_t  membership        = COLLISION_GROUPS_ALL; ///< Collision groups this body belongs to
   uint32_t  filter            = COLLISION_GROUPS_ALL; ///< Collision groups this body interacts with
 };
@@ -65,6 +67,9 @@ public:
    * Inverse scalar (isotropic) inertia.
    * Dynamic spheres: I = 2/5 m r².
    * Dynamic capsules: averaged cylinder inertia so hinges can motor the blade.
+   * Dynamic boxes: averaged principal moments, following the same isotropic
+   * simplification as capsules — crates tumble plausibly without forcing a
+   * full inertia tensor through every existing resolver.
    * Static / kinematic bodies report 0.
    */
   float getInvInertia() const {
@@ -80,6 +85,13 @@ public:
       const float Iax = 0.5f * desc_.mass * r * r;
       const float Ipp = (1.f / 12.f) * desc_.mass * (3.f * r * r + h * h);
       const float I = (Iax + 2.f * Ipp) / 3.f;
+      return I > 1e-12f ? 1.f / I : 0.f;
+    }
+    if (desc_.shape == Shape::Box) {
+      const Vec3 he = desc_.boxHalfExtents;
+      const float w = 2.f * he.x, h = 2.f * he.y, d = 2.f * he.z;
+      const float k = desc_.mass / 12.f;
+      const float I = (k * (h * h + d * d) + k * (w * w + d * d) + k * (w * w + h * h)) / 3.f;
       return I > 1e-12f ? 1.f / I : 0.f;
     }
     return 0.f;

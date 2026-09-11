@@ -62,8 +62,8 @@ export class WasmMirror {
         velocity: { x: 0, y: 0, z: 0 },
         mass: 0,
         radius,
-        restitution: PhysicsConfig.bumper.restitution,
-        friction: GameConfig.physics.surfaces.bumper.friction,
+        restitution: PhysicsConfig.surfaces.bumper.restitution,
+        friction: PhysicsConfig.surfaces.bumper.friction,
         linearDamping: 0,
         bodyType: 1, // Static
       })

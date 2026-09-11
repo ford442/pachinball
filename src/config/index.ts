@@ -39,6 +39,7 @@ export {
   WASM_PHYSICS,
   getPhysicsEnginePreference,
   getWasmPhysicsRuntimeMode,
+  isCrossOriginIsolated,
   type PhysicsConfigType,
   type WasmPhysicsEnginePreference,
   type WasmPhysicsRuntimeMode,
