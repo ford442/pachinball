@@ -9,7 +9,6 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type {
@@ -28,19 +27,16 @@ import {
   MASK_BLUE,
 } from './adventure-types'
 import type { TrackInfo } from './adventure-track-progression'
-import { INTENSITY, emissive, PALETTE } from '../game-elements/visual-language'
+import type { TrackMaterialRole } from './track-theme-profiles'
 import {
-  getTrackThemeProfile,
-  type TrackMaterialRole,
-} from './track-theme-profiles'
+  createThemedTrackMaterial,
+  createTrackMaterial,
+  createTrackPBRMaterial,
+} from './track-materials'
+import * as primitives from './track-primitives'
+import type { TrackPrimitiveContext } from './track-primitives'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
-import {
-  boxDesc,
-  cylinderDesc,
-  sphereDesc,
-  type AdventureColliderDesc,
-  type DescQuat,
-} from './track-collider-descriptors'
+import type { AdventureColliderDesc } from './track-collider-descriptors'
 import { TrackColliderEmitter, type EmittedCollider } from './track-collider-emitter'
 import type { TrackDefinition } from './track-schema'
 import {
@@ -50,12 +46,6 @@ import {
 } from './track-compiler'
 
 const RAPIER_DEFAULT_COLLISION_GROUPS = 0xFFFFFFFF
-
-/** Quaternion for a Babylon YXZ Euler triple, as a plain descriptor quat. */
-function eulerQuat(x: number, y: number, z: number): DescQuat {
-  const q = Quaternion.FromEulerAngles(x, y, z)
-  return { x: q.x, y: q.y, z: q.z, w: q.w }
-}
 
 export abstract class TrackBuilder {
   protected scene: Scene
@@ -231,14 +221,10 @@ export abstract class TrackBuilder {
   }
 
   // --- Shared Helper for Materials ---
+  // Construction lives in track-materials.ts; these keep the protected surface.
+
   protected getTrackMaterial(colorHex: string): StandardMaterial {
-    const mat = new StandardMaterial("trackMat", this.scene)
-    mat.emissiveColor = Color3.FromHexString(colorHex)
-    mat.diffuseColor = Color3.Black()
-    mat.alpha = 0.6
-    mat.wireframe = true
-    this.materials.push(mat)
-    return mat
+    return createTrackMaterial(this.scene, this.materials, colorHex)
   }
 
   /**
@@ -246,32 +232,19 @@ export abstract class TrackBuilder {
    * Use this for tracks that should look more physically realistic.
    */
   protected getTrackPBRMaterial(colorHex: string): PBRMaterial {
-    const mat = new PBRMaterial("trackPBRMat", this.scene)
-    mat.albedoColor = Color3.Black()
-    mat.emissiveColor = Color3.FromHexString(colorHex)
-    mat.emissiveIntensity = 1.2
-    mat.metallic = 0.8
-    mat.roughness = 0.2
-    mat.alpha = 0.85
-    mat.wireframe = true
-    mat.clearCoat.isEnabled = true
-    mat.clearCoat.intensity = 0.4
-    mat.clearCoat.roughness = 0.2
-    this.materials.push(mat)
-    return mat
+    return createTrackPBRMaterial(this.scene, this.materials, colorHex)
   }
 
   /**
    * Resolve adventure track geometry material from the active track's premium profile.
    */
   protected getThemedTrackMaterial(role: TrackMaterialRole): StandardMaterial | PBRMaterial {
-    const trackId = this.currentTrackInfo?.id ?? ''
-    const profile = getTrackThemeProfile(trackId)
-    const hex = profile?.materials[role] ?? PALETTE.CYAN
-    const usePbr = profile?.usePBRStructure && (role === 'structure' || role === 'glow')
-    const mat = usePbr ? this.getTrackPBRMaterial(hex) : this.getTrackMaterial(hex)
-    mat.metadata = { ...(mat.metadata ?? {}), trackMaterialRole: role, trackId }
-    return mat
+    return createThemedTrackMaterial(
+      this.scene,
+      this.materials,
+      role,
+      this.currentTrackInfo?.id ?? ''
+    )
   }
 
   /** Materials created for the active adventure track (for live theme retinting). */
@@ -403,6 +376,32 @@ export abstract class TrackBuilder {
   }
 
   // --- Primitive Builders ---
+  //
+  // Geometry + mesh construction lives in track-primitives.ts (over the pure
+  // layout maths in track-geometry.ts). These wrappers keep the protected
+  // method surface every track module already calls.
+
+  /** Context handed to each primitive. Rebuilt per call — clearTrack() swaps
+   * the arrays out, so a cached context would hold the old track's lists. */
+  private primitiveContext(): TrackPrimitiveContext {
+    return {
+      scene: this.scene,
+      hasWorld: Boolean(this.world),
+      adventureTrack: this.adventureTrack,
+      adventureBodies: this.adventureBodies,
+      kinematicBindings: this.kinematicBindings,
+      gravityWells: this.gravityWells,
+      chromaGates: this.chromaGates,
+      resetSensors: this.resetSensors,
+      materials: this.materials,
+      emit: (desc) => this.colliders.emit(desc),
+      attach: (parent, desc) => this.colliders.attach(parent, desc),
+      getTrackMaterial: (hex) => this.getTrackMaterial(hex),
+      setGoalSensor: (body) => {
+        this.adventureSensor = body
+      },
+    }
+  }
 
   /**
    * Creates a straight ramp segment.
@@ -426,50 +425,13 @@ export abstract class TrackBuilder {
     wallHeight: number = 0,
     friction: number = 0.5
   ): Vector3 {
-    if (!this.world) return startPos
-
-    const box = MeshBuilder.CreateBox("straightRamp", { width, height: 0.5, depth: length }, this.scene)
-
-    // Calculate Horizontal and Vertical components
-    const hLen = length * Math.cos(inclineRad)
-    const vDrop = length * Math.sin(inclineRad)
-
-    const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
-
-    // Center of the box
-    const center = startPos.add(forward.scale(hLen / 2))
-    center.y -= vDrop / 2
-
-    box.position.copyFrom(center)
-    box.rotation.y = heading
-    box.rotation.x = inclineRad
-
-    box.material = material
-    this.adventureTrack.push(box)
-
-    // Physics
-    const { body } = this.colliders.emit(
-      boxDesc(
-        { x: center.x, y: center.y, z: center.z },
-        { x: width / 2, y: 0.25, z: length / 2 },
-        { rotation: eulerQuat(box.rotation.x, box.rotation.y, 0), friction, label: 'straightRamp' }
-      )
+    return primitives.addStraightRamp(
+      this.primitiveContext(),
+      startPos, heading, width, length, inclineRad, material, wallHeight, friction
     )
-    this.adventureBodies.push(body)
-
-    if (wallHeight > 0) {
-      this.createWall(center, heading, length, width, wallHeight, inclineRad, material, friction)
-    }
-
-    // Return End Position
-    const endPos = startPos.add(forward.scale(hLen))
-    endPos.y -= vDrop
-    return endPos
   }
 
-  /**
-   * Creates a curved ramp segment.
-   */
+  /** Creates a curved ramp segment. */
   protected addCurvedRamp(
     startPos: Vector3,
     startHeading: number,
@@ -483,62 +445,14 @@ export abstract class TrackBuilder {
     bankingAngle: number = 0,
     friction: number = 0.5
   ): Vector3 {
-    if (!this.world) return startPos
-
-    const segmentAngle = totalAngle / segments
-    const arcLength = radius * Math.abs(segmentAngle)
-    const chordLen = 2 * radius * Math.sin(Math.abs(segmentAngle) / 2)
-    const segmentDrop = arcLength * Math.sin(inclineRad)
-
-    let currentHeading = startHeading
-    let currentP = startPos.clone()
-
-    for (let i = 0; i < Math.abs(segments); i++) {
-      currentHeading += (segmentAngle / 2)
-
-      const forward = new Vector3(Math.sin(currentHeading), 0, Math.cos(currentHeading))
-      const center = currentP.add(forward.scale(chordLen / 2))
-      center.y -= segmentDrop / 2
-
-      const box = MeshBuilder.CreateBox("curveSeg", { width, height: 0.5, depth: chordLen }, this.scene)
-      box.position.copyFrom(center)
-
-      box.rotation.x = inclineRad
-      box.rotation.y = currentHeading
-      box.rotation.z = bankingAngle
-
-      box.material = material
-      this.adventureTrack.push(box)
-
-      const { body } = this.colliders.emit(
-        boxDesc(
-          { x: center.x, y: center.y, z: center.z },
-          { x: width / 2, y: 0.25, z: chordLen / 2 },
-          {
-            rotation: eulerQuat(box.rotation.x, box.rotation.y, box.rotation.z),
-            friction,
-            label: 'curveSeg',
-          }
-        )
-      )
-      this.adventureBodies.push(body)
-
-      if (wallHeight > 0) {
-        this.createWall(center, currentHeading, chordLen, width, wallHeight, inclineRad, material, friction)
-      }
-
-      currentP = currentP.add(forward.scale(chordLen))
-      currentP.y -= segmentDrop
-
-      currentHeading += (segmentAngle / 2)
-    }
-
-    return currentP
+    return primitives.addCurvedRamp(
+      this.primitiveContext(),
+      startPos, startHeading, radius, totalAngle, inclineRad, width, wallHeight,
+      material, segments, bankingAngle, friction
+    )
   }
 
-  /**
-   * Creates walls alongside a track segment.
-   */
+  /** Creates walls alongside a track segment. */
   protected createWall(
     center: Vector3,
     heading: number,
@@ -548,38 +462,14 @@ export abstract class TrackBuilder {
     inclineRad: number,
     mat: StandardMaterial | PBRMaterial,
     friction: number = 0.5
-  ) {
-    if (!this.world) return
-
-    const offsets = [trackWidth / 2 + 0.25, -trackWidth / 2 - 0.25]
-
-    offsets.forEach(offset => {
-      const wall = MeshBuilder.CreateBox("wall", { width: 0.5, height: height, depth: length }, this.scene)
-
-      const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
-      const wallPos = center.add(right.scale(offset))
-      wallPos.y += height / 2
-
-      wall.position.copyFrom(wallPos)
-      wall.rotation.y = heading
-      wall.rotation.x = inclineRad
-      wall.material = mat
-      this.adventureTrack.push(wall)
-
-      const { body } = this.colliders.emit(
-        boxDesc(
-          { x: wallPos.x, y: wallPos.y, z: wallPos.z },
-          { x: 0.25, y: height / 2, z: length / 2 },
-          { rotation: eulerQuat(wall.rotation.x, wall.rotation.y, 0), friction, label: 'wall' }
-        )
-      )
-      this.adventureBodies.push(body)
-    })
+  ): void {
+    primitives.createWall(
+      this.primitiveContext(),
+      center, heading, length, trackWidth, height, inclineRad, mat, friction
+    )
   }
 
-  /**
-   * Creates a rotating platform.
-   */
+  /** Creates a rotating platform. */
   protected createRotatingPlatform(
     center: Vector3,
     radius: number,
@@ -587,123 +477,27 @@ export abstract class TrackBuilder {
     material: StandardMaterial | PBRMaterial,
     hasTeeth: boolean = false
   ): void {
-    if (!this.world) return
-
-    const thickness = 0.5
-    const cylinder = MeshBuilder.CreateCylinder("gear", { diameter: radius * 2, height: thickness, tessellation: 32 }, this.scene)
-    cylinder.position.copyFrom(center)
-    cylinder.material = material
-    this.adventureTrack.push(cylinder)
-
-    const platter = this.colliders.emit(
-      cylinderDesc(
-        { x: center.x, y: center.y, z: center.z },
-        thickness / 2,
-        radius,
-        {
-          friction: 1.0,
-          motion: 'kinematic-velocity',
-          angularVelocity: { x: 0, y: angVelY, z: 0 },
-          label: 'rotatingPlatform',
-        }
-      )
+    primitives.createRotatingPlatform(
+      this.primitiveContext(), center, radius, angVelY, material, hasTeeth
     )
-    const body = platter.body
-    this.adventureBodies.push(body)
-
-    this.kinematicBindings.push({ body, mesh: cylinder })
-
-    if (hasTeeth) {
-      const toothCount = 12
-      const angleStep = (2 * Math.PI) / toothCount
-
-      for (let i = 0; i < toothCount; i++) {
-        if (i % 2 !== 0) continue
-
-        const angle = i * angleStep
-        const tx = Math.sin(angle) * (radius - 0.25)
-        const tz = Math.cos(angle) * (radius - 0.25)
-
-        this.colliders.attach(
-          platter,
-          boxDesc(
-            { x: tx, y: 0.5 + 0.25, z: tz },
-            { x: 0.5, y: 0.5, z: 1.0 },
-            {
-              rotation: { x: 0, y: Math.sin(angle / 2), z: 0, w: Math.cos(angle / 2) },
-              label: 'rotatingPlatformTooth',
-            }
-          )
-        )
-
-        const tooth = MeshBuilder.CreateBox("tooth", { width: 1, height: 1, depth: 2 }, this.scene)
-        tooth.parent = cylinder
-        tooth.position.set(tx, 0.5 + 0.25, tz)
-        tooth.rotation.y = angle
-        tooth.material = material
-      }
-    }
   }
 
-  /**
-   * Creates a goal basin at the specified position.
-   */
+  /** Creates a goal basin at the specified position. */
   protected createBasin(pos: Vector3, material: StandardMaterial | PBRMaterial): void {
-    if (!this.world) return
-
-    const basin = MeshBuilder.CreateBox("basin", { width: 8, height: 1, depth: 8 }, this.scene)
-    basin.position.set(pos.x, pos.y - 1, pos.z)
-    basin.material = material
-    this.adventureTrack.push(basin)
-
-    const { body: bBody } = this.colliders.emit(
-      boxDesc({ x: pos.x, y: pos.y - 1, z: pos.z }, { x: 4, y: 0.5, z: 4 }, { label: 'basin' })
-    )
-    this.adventureBodies.push(bBody)
-
-    // Exit Sensor
-    const sensorY = pos.y - 0.5
-    const { body: sensor } = this.colliders.emit(
-      boxDesc({ x: pos.x, y: sensorY, z: pos.z }, { x: 2, y: 1, z: 1 }, {
-        sensor: true,
-        collisionEvents: true,
-        label: 'basinGoalSensor',
-      })
-    )
-    this.adventureSensor = sensor
+    primitives.createBasin(this.primitiveContext(), pos, material)
   }
 
-  /**
-   * Creates a static cylinder obstacle.
-   */
+  /** Creates a static cylinder obstacle. */
   protected createStaticCylinder(
     pos: Vector3,
     diameter: number,
     height: number,
     material: StandardMaterial | PBRMaterial,
   ): void {
-    if (!this.world) return
-
-    const mesh = MeshBuilder.CreateCylinder("staticPillar", { diameter, height }, this.scene)
-    mesh.position.copyFrom(pos)
-    mesh.position.y += height / 2
-    mesh.material = material
-    this.adventureTrack.push(mesh)
-
-    const { body } = this.colliders.emit(
-      cylinderDesc(
-        { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
-        height / 2,
-        diameter / 2,
-        { label: 'staticPillar' }
-      )
-    )
-    this.adventureBodies.push(body)
+    primitives.createStaticCylinder(this.primitiveContext(), pos, diameter, height, material)
   }
 
-  /**
-   * Lattice of static pins on the most recent straight ramp surface.
-   */
+  /** Lattice of static pins on the most recent straight ramp surface. */
   protected createPinField(
     rampStart: Vector3,
     heading: number,
@@ -716,56 +510,14 @@ export abstract class TrackBuilder {
     pinHeight: number,
     material: StandardMaterial | PBRMaterial,
   ): void {
-    if (!this.world) return
-
-    const horiz = new Vector3(Math.sin(heading), 0, Math.cos(heading))
-    const forwardVec = new Vector3(
-      horiz.x * Math.cos(inclineRad),
-      -Math.sin(inclineRad),
-      horiz.z * Math.cos(inclineRad),
+    primitives.createPinField(
+      this.primitiveContext(),
+      rampStart, heading, inclineRad, rampLength, pinSpacing,
+      evenOffsets, oddOffsets, pinDiameter, pinHeight, material
     )
-    const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
-    const normalVec = new Vector3(
-      horiz.x * Math.sin(inclineRad),
-      Math.cos(inclineRad),
-      horiz.z * Math.sin(inclineRad),
-    )
-
-    const rows = Math.floor(rampLength / pinSpacing) - 1
-    for (let r = 1; r <= rows; r++) {
-      const dist = r * pinSpacing
-      const xOffsets = r % 2 === 0 ? evenOffsets : oddOffsets
-      for (const xOff of xOffsets) {
-        const pinPos = rampStart.add(forwardVec.scale(dist)).add(right.scale(xOff))
-        const surfaceOffset = normalVec.scale(0.25 + pinHeight / 2)
-        const finalPos = pinPos.add(surfaceOffset)
-
-        const pin = MeshBuilder.CreateCylinder('pin', { diameter: pinDiameter, height: pinHeight }, this.scene)
-        pin.position.copyFrom(finalPos)
-        pin.rotation.x = inclineRad
-        pin.material = material
-        this.adventureTrack.push(pin)
-
-        const { body } = this.colliders.emit(
-          cylinderDesc(
-            { x: finalPos.x, y: finalPos.y, z: finalPos.z },
-            pinHeight / 2,
-            pinDiameter / 2,
-            {
-              rotation: eulerQuat(pin.rotation.x, pin.rotation.y, pin.rotation.z),
-              restitution: 0.6,
-              label: 'pin',
-            }
-          )
-        )
-        this.adventureBodies.push(body)
-      }
-    }
   }
 
-  /**
-   * Kinematic mill whose angular velocity is along the ramp normal (not world Y).
-   */
+  /** Kinematic mill whose angular velocity is along the ramp normal (not world Y). */
   protected createInclinedMill(
     center: Vector3,
     radius: number,
@@ -773,138 +525,29 @@ export abstract class TrackBuilder {
     angVelAlongNormal: number,
     material: StandardMaterial | PBRMaterial,
   ): void {
-    if (!this.world) return
-
-    const mill = MeshBuilder.CreateCylinder('mill', { diameter: radius * 2, height: 0.2 }, this.scene)
-    mill.position.copyFrom(center)
-    mill.rotation.x = inclineRad
-    mill.material = material
-    this.adventureTrack.push(mill)
-
-    const normalVec = new Vector3(0, Math.cos(inclineRad), Math.sin(inclineRad))
-    const angVel = normalVec.scale(angVelAlongNormal)
-
-    const { body } = this.colliders.emit(
-      cylinderDesc({ x: center.x, y: center.y, z: center.z }, 0.1, radius, {
-        rotation: eulerQuat(inclineRad, 0, 0),
-        friction: 1.0,
-        motion: 'kinematic-velocity',
-        angularVelocity: { x: angVel.x, y: angVel.y, z: angVel.z },
-        label: 'inclinedMill',
-      })
+    primitives.createInclinedMill(
+      this.primitiveContext(), center, radius, inclineRad, angVelAlongNormal, material
     )
-    this.adventureBodies.push(body)
-    this.kinematicBindings.push({ body, mesh: mill })
   }
 
-  /**
-   * Side catch basin with a reset sensor (penalty zone).
-   */
+  /** Side catch basin with a reset sensor (penalty zone). */
   protected createResetBasin(pos: Vector3, material: StandardMaterial | PBRMaterial): void {
-    if (!this.world) return
-
-    const basin = MeshBuilder.CreateBox('resetBasin', { width: 4, height: 1, depth: 4 }, this.scene)
-    basin.position.copyFrom(pos)
-    basin.material = material
-    this.adventureTrack.push(basin)
-
-    const { body } = this.colliders.emit(
-      boxDesc({ x: pos.x, y: pos.y, z: pos.z }, { x: 2, y: 0.5, z: 2 }, { label: 'resetBasin' })
-    )
-    this.adventureBodies.push(body)
-
-    const sensorPos = pos.clone()
-    sensorPos.y += 0.75
-    const { body: sensorBody } = this.colliders.emit(
-      boxDesc(
-        { x: sensorPos.x, y: sensorPos.y, z: sensorPos.z },
-        { x: 1.8, y: 0.25, z: 1.8 },
-        { sensor: true, label: 'resetBasinSensor' }
-      )
-    )
-    this.resetSensors.push(sensorBody)
+    primitives.createResetBasin(this.primitiveContext(), pos, material)
   }
 
-  /**
-   * Creates a dynamic physics block.
-   */
+  /** Creates a dynamic physics block. */
   protected createDynamicBlock(pos: Vector3, size: number, mass: number, material: StandardMaterial): void {
-    if (!this.world) return
-
-    const box = MeshBuilder.CreateBox("dynBlock", { size }, this.scene)
-    box.position.copyFrom(pos)
-    box.material = material
-    this.adventureTrack.push(box)
-
-    const volume = size * size * size
-    const density = mass / volume
-
-    const { body } = this.colliders.emit(
-      boxDesc({ x: pos.x, y: pos.y, z: pos.z }, { x: size / 2, y: size / 2, z: size / 2 }, {
-        density,
-        friction: 0.5,
-        restitution: 0.2,
-        motion: 'dynamic',
-        label: 'dynamicBlock',
-      })
-    )
-    this.adventureBodies.push(body)
-    this.kinematicBindings.push({ body, mesh: box })
+    primitives.createDynamicBlock(this.primitiveContext(), pos, size, mass, material)
   }
 
-  /**
-   * Creates a chroma gate that changes ball color state.
-   */
+  /** Creates a chroma gate that changes ball color state. */
   protected createChromaGate(pos: Vector3, color: 'RED' | 'GREEN' | 'BLUE'): void {
-    if (!this.world) return
-
-    const gateMat = this.getTrackMaterial(color === 'RED' ? "#FF0000" : color === 'GREEN' ? "#00FF00" : "#0000FF")
-    const gate = MeshBuilder.CreateTorus("gate", { diameter: 4, thickness: 0.2 }, this.scene)
-    gate.position.copyFrom(pos)
-    gate.rotation.x = Math.PI / 2
-    gate.material = gateMat
-    this.adventureTrack.push(gate)
-
-    const { body: sensor } = this.colliders.emit(
-      cylinderDesc({ x: pos.x, y: pos.y, z: pos.z }, 0.5, 2.0, {
-        sensor: true,
-        label: 'chromaGate',
-      })
-    )
-
-    this.chromaGates.push({ sensor, colorType: color })
+    primitives.createChromaGate(this.primitiveContext(), pos, color)
   }
 
-  /**
-   * Creates an arc pylon with repulsive gravity well.
-   */
+  /** Creates an arc pylon with repulsive gravity well. */
   protected createArcPylon(pos: Vector3, mat: StandardMaterial): void {
-    if (!this.world) return
-
-    const pylon = MeshBuilder.CreateCylinder("pylon", { diameter: 1.0, height: 3.0 }, this.scene)
-    pylon.position.copyFrom(pos)
-    pylon.position.y += 1.5
-    pylon.material = mat
-    this.adventureTrack.push(pylon)
-
-    const { body } = this.colliders.emit(
-      cylinderDesc({ x: pos.x, y: pos.y + 1.5, z: pos.z }, 1.5, 0.5, { label: 'arcPylon' })
-    )
-    this.adventureBodies.push(body)
-
-    // Repulsive Gravity Well
-    const { body: sensor } = this.colliders.emit(
-      sphereDesc({ x: pos.x, y: pos.y + 1.5, z: pos.z }, 3.0, {
-        sensor: true,
-        label: 'arcPylonWell',
-      })
-    )
-
-    this.gravityWells.push({
-      sensor,
-      center: pos,
-      strength: -50.0 // Repel
-    })
+    primitives.createArcPylon(this.primitiveContext(), pos, mat)
   }
 
   /**
@@ -971,58 +614,9 @@ export abstract class TrackBuilder {
     coreColorHex: string,
     radius: number = 2.1,
     depth: number = 0.8
-  ): {
-    root: Mesh
-    core: Mesh
-    ringMaterial: StandardMaterial
-    coreMaterial: StandardMaterial
-    sensor: RAPIER.RigidBody
-  } {
-    const ring = MeshBuilder.CreateTorus(
-      'exitPortalRing',
-      { diameter: radius * 2, thickness: 0.45, tessellation: 48 },
-      this.scene
+  ): primitives.ExitPortalParts {
+    return primitives.createExitPortal(
+      this.primitiveContext(), position, ringColorHex, coreColorHex, radius, depth
     )
-    ring.position.copyFrom(position)
-    ring.rotation.x = Math.PI / 2
-
-    const core = MeshBuilder.CreateDisc(
-      'exitPortalCore',
-      { radius: radius * 0.82, tessellation: 48 },
-      this.scene
-    )
-    core.parent = ring
-    core.position.z = -0.08
-
-    const ringMaterial = new StandardMaterial('exitPortalRingMat', this.scene)
-    ringMaterial.diffuseColor = Color3.Black()
-    ringMaterial.emissiveColor = emissive(ringColorHex, INTENSITY.HIGH)
-    ring.material = ringMaterial
-
-    const coreMaterial = new StandardMaterial('exitPortalCoreMat', this.scene)
-    coreMaterial.diffuseColor = Color3.Black()
-    coreMaterial.emissiveColor = emissive(coreColorHex, INTENSITY.ACTIVE)
-    coreMaterial.alpha = 0.72
-    core.material = coreMaterial
-
-    this.adventureTrack.push(ring, core)
-    this.materials.push(ringMaterial, coreMaterial)
-
-    const { body: sensor } = this.colliders.emit(
-      cylinderDesc({ x: position.x, y: position.y, z: position.z }, depth, radius * 0.9, {
-        sensor: true,
-        collisionEvents: true,
-        label: 'exitPortalSensor',
-      })
-    )
-    this.adventureBodies.push(sensor)
-
-    return {
-      root: ring,
-      core,
-      ringMaterial,
-      coreMaterial,
-      sensor,
-    }
   }
 }
