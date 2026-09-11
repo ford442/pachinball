@@ -212,6 +212,48 @@ export class WasmPhysicsEngine {
   }
 
   /**
+   * Add an oriented static cylinder collider (local Y axis), matching
+   * Rapier's `ColliderDesc.cylinder(halfHeight, radius)`.
+   * @returns Negative collider id, or -1 when the engine is not ready.
+   */
+  addStaticCylinder(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    halfHeight: number,
+    rotation: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 1 },
+    restitution = 0.4,
+    friction = 0.2
+  ): number {
+    if (!this.world) return -1
+    return this.world.addStaticCylinder(
+      center.x, center.y, center.z,
+      radius, halfHeight,
+      rotation.x, rotation.y, rotation.z, rotation.w,
+      restitution,
+      friction
+    )
+  }
+
+  /**
+   * Add a static sphere collider.
+   * @returns Negative collider id, or -1 when the engine is not ready.
+   */
+  addStaticSphere(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    restitution = 0.4,
+    friction = 0.2
+  ): number {
+    if (!this.world) return -1
+    return this.world.addStaticSphere(
+      center.x, center.y, center.z,
+      radius,
+      restitution,
+      friction
+    )
+  }
+
+  /**
    * Add a kinematic oriented-box mover (piston, platter, gate).
    * @returns Negative handle, or -1 when the engine is not ready.
    */
@@ -265,7 +307,8 @@ export class WasmPhysicsEngine {
 
   /**
    * Set the collision-group membership/filter mask for any handle — a
-   * dynamic/kinematic body, or a static box/capsule/mover/sensor (as
+   * dynamic/kinematic body, or a static box/capsule/cylinder/sphere/mover/
+   * sensor (as
    * returned by its add*() call). Mirrors `CollisionGroups` in
    * src/game-elements/physics.ts.
    */

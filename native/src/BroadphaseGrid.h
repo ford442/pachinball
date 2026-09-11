@@ -4,6 +4,7 @@
 #include "KinematicMover.h"
 #include "MathTypes.h"
 #include "SensorVolume.h"
+#include "StaticShapes.h"
 
 #include <cstdint>
 #include <unordered_map>
@@ -28,9 +29,9 @@ public:
   };
 
   struct StaticRef {
-    enum Kind : uint8_t { Box = 0, Capsule = 1, Sensor = 2 };
+    enum Kind : uint8_t { Box = 0, Capsule = 1, Sensor = 2, Cylinder = 3, Sphere = 4 };
     Kind  kind;
-    int   index; ///< index into boxes_, capsules_, or sensors_ vector
+    int   index; ///< index into boxes_, capsules_, cylinders_, spheres_, or sensors_
   };
 
   struct Pair {
@@ -40,6 +41,8 @@ public:
       BodyCapsule = 2,
       BodySensor  = 3,
       BodyMover   = 4,
+      BodyCylinder = 5,
+      BodySphere   = 6,
     };
     Type type;
     int  bodyA;   ///< dense body index
@@ -53,10 +56,12 @@ public:
   void insertStaticBox(int boxIndex, const BoxDesc& box);
   void insertStaticCapsule(int capIndex, const CapsuleDesc& cap);
   void insertSensorVolume(int sensorIndex, const SensorVolumeDesc& sensor);
+  void insertStaticCylinder(int cylIndex, const CylinderDesc& cyl);
+  void insertStaticSphere(int sphereIndex, const SphereDesc& sphere);
 
   /**
    * Rebuild dynamic + kinematic-mover cell occupancy and emit collision
-   * pairs for this substep. `boxes`/`capsules`/`sensors` are read live (by
+   * pairs for this substep. The static desc vectors are read live (by
    * the static index cached in each StaticRef) so a group-mask change takes
    * effect on the very next call with no separate cache to invalidate.
    * Movers move every tick, so their cell membership is rebuilt from
@@ -65,6 +70,8 @@ public:
   void buildPairs(const BodyStore& bodies,
                   const std::vector<BoxDesc>& boxes,
                   const std::vector<CapsuleDesc>& capsules,
+                  const std::vector<CylinderDesc>& cylinders,
+                  const std::vector<SphereDesc>& spheres,
                   const std::vector<SensorVolumeDesc>& sensors,
                   const std::vector<KinematicMover>& movers,
                   std::vector<Pair>& outPairs);

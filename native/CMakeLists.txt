@@ -25,6 +25,7 @@ set(PHYSICS_CORE_SOURCES
   src/KinematicMover.cpp
   src/SensorVolume.cpp
   src/Narrowphase.cpp
+  src/StaticShapes.cpp
   src/PhysicsWorld.cpp
 )
 
@@ -124,6 +125,7 @@ if(NOT EMSCRIPTEN)
     tests/kinematic_mover_test.cpp
     tests/sensor_volume_test.cpp
     tests/collision_filter_test.cpp
+    tests/static_shapes_test.cpp
   )
   target_link_libraries(physics_world_test PRIVATE
     pachinball_physics_native

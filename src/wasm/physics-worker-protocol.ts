@@ -8,6 +8,10 @@ import type { WasmBodyDesc, WasmHingeDesc } from './PhysicsModule'
 /** Mirrors native PhysicsWorld.h static collider id bases. */
 export const STATIC_BOX_ID_BASE = -1000
 export const STATIC_CAPSULE_ID_BASE = -2000
+export const KINEMATIC_MOVER_ID_BASE = -3000
+export const SENSOR_VOLUME_ID_BASE = -4000
+export const STATIC_CYLINDER_ID_BASE = -5000
+export const STATIC_SPHERE_ID_BASE = -6000
 
 /** Packed hinge snapshot: id, angle (radians) per entry. */
 export const HINGE_ANGLE_STRIDE = 2
@@ -21,6 +25,12 @@ export type PhysicsWorkerCommand =
   | { type: 'addStaticPlane'; normal: Vec3Msg; d: number; friction: number }
   | { type: 'addStaticBox'; center: Vec3Msg; halfExtents: Vec3Msg; rotation: QuatMsg; restitution: number; friction: number }
   | { type: 'addStaticCapsule'; center: Vec3Msg; radius: number; halfHeight: number; rotation: QuatMsg; restitution: number; friction: number }
+  | { type: 'addStaticCylinder'; center: Vec3Msg; radius: number; halfHeight: number; rotation: QuatMsg; restitution: number; friction: number }
+  | { type: 'addStaticSphere'; center: Vec3Msg; radius: number; restitution: number; friction: number }
+  | { type: 'addSensorVolume'; center: Vec3Msg; halfExtents: Vec3Msg; rotation: QuatMsg }
+  | { type: 'addKinematicMover'; position: Vec3Msg; halfExtents: Vec3Msg; rotation: QuatMsg; restitution: number; friction: number }
+  | { type: 'setNextKinematicTransform'; moverId: number; position: Vec3Msg; rotation: QuatMsg }
+  | { type: 'setCollisionGroups'; id: number; membership: number; filter: number }
   | { type: 'createBody'; desc: WasmBodyDesc }
   | { type: 'removeBody'; id: number }
   | { type: 'applyForce'; id: number; fx: number; fy: number; fz: number }
@@ -65,6 +75,10 @@ export class WasmIdShadow {
   private nextHingeId = 0
   private nextBox = 0
   private nextCapsule = 0
+  private nextCylinder = 0
+  private nextSphere = 0
+  private nextMover = 0
+  private nextSensor = 0
 
   allocBody(): number {
     return this.nextBodyId++
@@ -84,11 +98,35 @@ export class WasmIdShadow {
     return STATIC_CAPSULE_ID_BASE - idx
   }
 
+  allocStaticCylinder(): number {
+    const idx = this.nextCylinder++
+    return STATIC_CYLINDER_ID_BASE - idx
+  }
+
+  allocStaticSphere(): number {
+    const idx = this.nextSphere++
+    return STATIC_SPHERE_ID_BASE - idx
+  }
+
+  allocKinematicMover(): number {
+    const idx = this.nextMover++
+    return KINEMATIC_MOVER_ID_BASE - idx
+  }
+
+  allocSensorVolume(): number {
+    const idx = this.nextSensor++
+    return SENSOR_VOLUME_ID_BASE - idx
+  }
+
   reset(): void {
     this.nextBodyId = 0
     this.nextHingeId = 0
     this.nextBox = 0
     this.nextCapsule = 0
+    this.nextCylinder = 0
+    this.nextSphere = 0
+    this.nextMover = 0
+    this.nextSensor = 0
   }
 }
 

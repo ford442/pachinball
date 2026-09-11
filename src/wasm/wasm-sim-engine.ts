@@ -34,6 +34,46 @@ export interface WasmSimEngine {
     friction?: number
   ): number
 
+  addStaticCylinder(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    halfHeight: number,
+    rotation?: { x: number; y: number; z: number; w: number },
+    restitution?: number,
+    friction?: number
+  ): number
+  addStaticSphere(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    restitution?: number,
+    friction?: number
+  ): number
+  /** Static OBB trigger volume — Enter/Stay/Exit contacts, zero impulse. */
+  addSensorVolume(
+    center: { x: number; y: number; z: number },
+    halfExtents: { x: number; y: number; z: number },
+    rotation?: { x: number; y: number; z: number; w: number }
+  ): number
+  /** Kinematic OBB mover (piston, platter, gate); pose pushed per tick. */
+  addKinematicMover(
+    position: { x: number; y: number; z: number },
+    halfExtents: { x: number; y: number; z: number },
+    rotation?: { x: number; y: number; z: number; w: number },
+    restitution?: number,
+    friction?: number
+  ): number
+  setNextKinematicTransform(
+    moverId: number,
+    position: { x: number; y: number; z: number },
+    rotation: { x: number; y: number; z: number; w: number }
+  ): void
+  /**
+   * Membership/filter mask for any handle — a body (id ≥ 0) or a static
+   * box/capsule/cylinder/sphere/mover/sensor (id < 0). Mirrors
+   * `CollisionGroups` in src/game-elements/physics.ts.
+   */
+  setCollisionGroups(id: number, membership: number, filter: number): void
+
   createBody(desc?: WasmBodyDesc): number
   removeBody(id: number): void
   applyForce(id: number, fx: number, fy: number, fz: number): void

@@ -10,6 +10,7 @@
 #include "HingeJoint.h"
 #include "KinematicMover.h"
 #include "SensorVolume.h"
+#include "StaticShapes.h"
 
 #include <vector>
 #include <cstdint>
@@ -53,7 +54,9 @@ static constexpr int STATIC_PLANE_ID    = -1;
 static constexpr int STATIC_BOX_ID_BASE   = -1000;
 static constexpr int STATIC_CAPSULE_ID_BASE = -2000;
 // KINEMATIC_MOVER_ID_BASE (-3000) and SENSOR_VOLUME_ID_BASE (-4000) are
-// declared in KinematicMover.h / SensorVolume.h respectively.
+// declared in KinematicMover.h / SensorVolume.h respectively;
+// STATIC_CYLINDER_ID_BASE (-5000) and STATIC_SPHERE_ID_BASE (-6000) in
+// StaticShapes.h.
 
 /** Packed transform-buffer layout (16 floats per public-id slot). */
 inline constexpr int TRANSFORM_STRIDE = 16;
@@ -102,6 +105,23 @@ public:
                        float restitution = 0.4f,
                        float friction = 0.2f);
 
+  /**
+   * Add an oriented static cylinder (local Y axis), matching Rapier's
+   * `ColliderDesc.cylinder(halfHeight, radius)`.
+   * @returns negative handle.
+   */
+  int addStaticCylinder(float px, float py, float pz,
+                        float radius, float halfHeight,
+                        float qx, float qy, float qz, float qw,
+                        float restitution = 0.4f,
+                        float friction = 0.2f);
+
+  /** Add a static sphere collider. @returns negative handle. */
+  int addStaticSphere(float px, float py, float pz,
+                      float radius,
+                      float restitution = 0.4f,
+                      float friction = 0.2f);
+
   /** Add a kinematic oriented-box mover (piston, platter, gate). @returns negative handle. */
   int addKinematicMover(const KinematicMoverDesc& desc);
 
@@ -114,8 +134,9 @@ public:
 
   /**
    * Set the collision-group membership/filter mask for any handle — a
-   * dynamic/kinematic body (id ≥ 0) or a static box/capsule/mover/sensor
-   * (id < 0, as returned by the matching add*() call).
+   * dynamic/kinematic body (id ≥ 0) or a static
+   * box/capsule/cylinder/sphere/mover/sensor (id < 0, as returned by the
+   * matching add*() call).
    */
   void setCollisionGroups(int id, uint32_t membership, uint32_t filter);
 
@@ -184,6 +205,10 @@ private:
   void resolveSphereVsCapsule(BodyView& body, const CapsuleDesc& cap, int capId);
   void resolveSphereVsCapsuleBody(BodyView& sphere, BodyView& capsule);
 
+  // ---- Static cylinder / sphere (StaticShapes.cpp) ---------------------
+  void resolveSphereVsCylinder(BodyView& body, const CylinderDesc& cyl, int cylId);
+  void resolveSphereVsStaticSphere(BodyView& body, const SphereDesc& sph, int sphId);
+
   void wakeOnContact(BodyView& a, BodyView* b);
 
   static Vec3 closestPointOnSegment(const Vec3& p, const Vec3& segA, const Vec3& segB);
@@ -208,6 +233,8 @@ private:
   std::vector<PlaneDesc>         planes_;
   std::vector<BoxDesc>           boxes_;
   std::vector<CapsuleDesc>       capsules_;
+  std::vector<CylinderDesc>      cylinders_;
+  std::vector<SphereDesc>        spheres_;
   std::vector<KinematicMover>    movers_;
   std::vector<SensorVolumeDesc>  sensors_;
   std::vector<HingeJoint>        hinges_;

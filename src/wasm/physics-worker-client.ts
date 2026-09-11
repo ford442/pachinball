@@ -177,6 +177,68 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     return id
   }
 
+  addStaticCylinder(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    halfHeight: number,
+    rotation: { x: number; y: number; z: number; w: number } = IDENTITY_Q,
+    restitution = 0.4,
+    friction = 0.2,
+  ): number {
+    if (!this.isReady) return -1
+    const id = this.ids.allocStaticCylinder()
+    this.enqueue({ type: 'addStaticCylinder', center, radius, halfHeight, rotation, restitution, friction })
+    return id
+  }
+
+  addStaticSphere(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    restitution = 0.4,
+    friction = 0.2,
+  ): number {
+    if (!this.isReady) return -1
+    const id = this.ids.allocStaticSphere()
+    this.enqueue({ type: 'addStaticSphere', center, radius, restitution, friction })
+    return id
+  }
+
+  addSensorVolume(
+    center: { x: number; y: number; z: number },
+    halfExtents: { x: number; y: number; z: number },
+    rotation: { x: number; y: number; z: number; w: number } = IDENTITY_Q,
+  ): number {
+    if (!this.isReady) return -1
+    const id = this.ids.allocSensorVolume()
+    this.enqueue({ type: 'addSensorVolume', center, halfExtents, rotation })
+    return id
+  }
+
+  addKinematicMover(
+    position: { x: number; y: number; z: number },
+    halfExtents: { x: number; y: number; z: number },
+    rotation: { x: number; y: number; z: number; w: number } = IDENTITY_Q,
+    restitution = 0.4,
+    friction = 0.2,
+  ): number {
+    if (!this.isReady) return -1
+    const id = this.ids.allocKinematicMover()
+    this.enqueue({ type: 'addKinematicMover', position, halfExtents, rotation, restitution, friction })
+    return id
+  }
+
+  setNextKinematicTransform(
+    moverId: number,
+    position: { x: number; y: number; z: number },
+    rotation: { x: number; y: number; z: number; w: number },
+  ): void {
+    this.enqueue({ type: 'setNextKinematicTransform', moverId, position, rotation })
+  }
+
+  setCollisionGroups(id: number, membership: number, filter: number): void {
+    this.enqueue({ type: 'setCollisionGroups', id, membership, filter })
+  }
+
   createBody(desc: WasmBodyDesc = {}): number {
     if (!this.isReady) return -1
     const id = this.ids.allocBody()

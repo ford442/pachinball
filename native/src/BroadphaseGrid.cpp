@@ -82,6 +82,37 @@ void BroadphaseGrid::insertStaticCapsule(int capIndex, const CapsuleDesc& cap) {
   }
 }
 
+void BroadphaseGrid::insertStaticCylinder(int cylIndex, const CylinderDesc& cyl) {
+  // Exact world AABB of a rotated cylinder: along world axis e the extent is
+  // |halfHeight * a·e| + radius * sqrt(1 - (a·e)^2), where a is the rotated
+  // local Y axis.
+  const Vec3 a = cyl.rotation.rotate(Vec3{0.f, 1.f, 0.f});
+  auto extent = [&](float ae) {
+    const float perp = std::sqrt(std::max(0.f, 1.f - ae * ae));
+    return std::fabs(cyl.halfHeight * ae) + cyl.radius * perp + 0.05f;
+  };
+  const float ex = extent(a.x);
+  const float ez = extent(a.z);
+  std::vector<CellKey> cells;
+  cellsForAabb(cyl.center.x - ex, cyl.center.x + ex,
+               cyl.center.z - ez, cyl.center.z + ez, cells);
+  StaticRef ref{StaticRef::Cylinder, cylIndex};
+  for (const auto& c : cells) {
+    addStaticToCell(c, ref);
+  }
+}
+
+void BroadphaseGrid::insertStaticSphere(int sphereIndex, const SphereDesc& sphere) {
+  const float r = sphere.radius + 0.05f;
+  std::vector<CellKey> cells;
+  cellsForAabb(sphere.center.x - r, sphere.center.x + r,
+               sphere.center.z - r, sphere.center.z + r, cells);
+  StaticRef ref{StaticRef::Sphere, sphereIndex};
+  for (const auto& c : cells) {
+    addStaticToCell(c, ref);
+  }
+}
+
 void BroadphaseGrid::insertSensorVolume(int sensorIndex, const SensorVolumeDesc& sensor) {
   std::vector<CellKey> cells;
   cellsForObb(sensor.center, sensor.halfExtents, cells);
@@ -111,6 +142,8 @@ void BroadphaseGrid::rebuildMoverCells(const std::vector<KinematicMover>& movers
 void BroadphaseGrid::buildPairs(const BodyStore& bodies,
                                 const std::vector<BoxDesc>& boxes,
                                 const std::vector<CapsuleDesc>& capsules,
+                                const std::vector<CylinderDesc>& cylinders,
+                                const std::vector<SphereDesc>& spheres,
                                 const std::vector<SensorVolumeDesc>& sensors,
                                 const std::vector<KinematicMover>& movers,
                                 std::vector<Pair>& outPairs) {
@@ -150,8 +183,10 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
   };
 
   auto pairKeyStatic = [](int body, int staticIdx, Pair::Type type) -> uint64_t {
+    // Type tag gets its own low 3 bits (7 Pair::Type values) so a static
+    // index can never alias a different pair type and drop a real pair.
     return (static_cast<uint64_t>(static_cast<uint32_t>(body)) << 32) ^
-           (static_cast<uint64_t>(staticIdx) << 1) ^
+           (static_cast<uint64_t>(staticIdx) << 3) ^
            static_cast<uint64_t>(type);
   };
 
@@ -187,6 +222,14 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
             ptype = Pair::BodyCapsule;
             refMembership = capsules[static_cast<std::size_t>(ref.index)].membership;
             refFilter = capsules[static_cast<std::size_t>(ref.index)].filter;
+          } else if (ref.kind == StaticRef::Cylinder) {
+            ptype = Pair::BodyCylinder;
+            refMembership = cylinders[static_cast<std::size_t>(ref.index)].membership;
+            refFilter = cylinders[static_cast<std::size_t>(ref.index)].filter;
+          } else if (ref.kind == StaticRef::Sphere) {
+            ptype = Pair::BodySphere;
+            refMembership = spheres[static_cast<std::size_t>(ref.index)].membership;
+            refFilter = spheres[static_cast<std::size_t>(ref.index)].filter;
           } else {
             ptype = Pair::BodySensor;
             refMembership = sensors[static_cast<std::size_t>(ref.index)].membership;

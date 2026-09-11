@@ -127,6 +127,30 @@ export interface WasmPhysicsWorldInstance {
   ): number
 
   /**
+   * Add an oriented static cylinder collider (local Y axis), matching
+   * Rapier's `ColliderDesc.cylinder(halfHeight, radius)`.
+   * @returns Negative collider id used in contact events.
+   */
+  addStaticCylinder(
+    px: number, py: number, pz: number,
+    radius: number, halfHeight: number,
+    qx: number, qy: number, qz: number, qw: number,
+    restitution?: number,
+    friction?: number
+  ): number
+
+  /**
+   * Add a static sphere collider.
+   * @returns Negative collider id used in contact events.
+   */
+  addStaticSphere(
+    px: number, py: number, pz: number,
+    radius: number,
+    restitution?: number,
+    friction?: number
+  ): number
+
+  /**
    * Add a kinematic oriented-box mover (piston, platter, gate). Its pose is
    * pushed once per tick via `setNextKinematicTransform`; linear/angular
    * velocity is derived from the pose delta so contacts pick up its motion.
@@ -161,8 +185,9 @@ export interface WasmPhysicsWorldInstance {
 
   /**
    * Set the collision-group membership/filter mask for any handle — a
-   * dynamic/kinematic body (id ≥ 0) or a static box/capsule/mover/sensor
-   * (id < 0, as returned by the matching add*() call). Mirrors
+   * dynamic/kinematic body (id ≥ 0) or a static
+   * box/capsule/cylinder/sphere/mover/sensor (id < 0, as returned by the
+   * matching add*() call). Mirrors
    * `CollisionGroups` in src/game-elements/physics.ts.
    */
   setCollisionGroups(id: number, membership: number, filter: number): void

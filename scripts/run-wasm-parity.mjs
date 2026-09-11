@@ -201,6 +201,9 @@ function readContacts(mod, world) {
     out.push({
       id1: heap[o],
       id2: heap[o + 1],
+      nx: heap[o + 2],
+      ny: heap[o + 3],
+      nz: heap[o + 4],
       impulse: heap[o + 8],
       phase: heap[o + 9],
     })
@@ -306,6 +309,117 @@ function readContacts(mod, world) {
   for (let i = 0; i < 5; i++) world.step(1 / 60)
   const ok = world.getContactCount() === 0
   console.log(`${ok ? 'PASS' : 'FAIL'} wasm filtered bodies never pair (contactCount=${world.getContactCount()})`)
+  if (!ok) failed = true
+  world.delete()
+}
+
+// #383 Slice B — static cylinder: side wall, end cap and rim all reflect.
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, 0, 0)
+  // px,py,pz, radius, halfHeight, qx,qy,qz,qw, restitution, friction
+  const cylId = world.addStaticCylinder(0, 0, 0, 0.5, 2, 0, 0, 0, 1, 0.9, 0)
+  world.createRigidBody(1.2, 0, 0, -4, 0, 0, 1, 0.1, 0.9, 0, 0, 0, 0.5, 0, 0)
+
+  let normalX = null
+  for (let i = 0; i < 60; i++) {
+    world.step(1 / 60)
+    for (const c of readContacts(Module, world)) {
+      if (c.id2 === cylId && normalX === null) normalX = c.nx
+    }
+  }
+  const vx = world.getVelX(0)
+  const ok = cylId === -5000 && normalX !== null && Math.abs(normalX - 1) < 1e-3 && vx > 0.5
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm static cylinder side reflect (id=${cylId} nx=${normalX} vx=${vx.toFixed(3)})`)
+  if (!ok) failed = true
+  world.delete()
+}
+
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, 0, 0)
+  const cylId = world.addStaticCylinder(0, 0, 0, 2, 0.5, 0, 0, 0, 1, 0.9, 0)
+  world.createRigidBody(0.2, 1.5, 0, 0, -4, 0, 1, 0.1, 0.9, 0, 0, 0, 0.5, 0, 0)
+
+  let normalY = null
+  for (let i = 0; i < 60; i++) {
+    world.step(1 / 60)
+    for (const c of readContacts(Module, world)) {
+      if (c.id2 === cylId && normalY === null) normalY = c.ny
+    }
+  }
+  const vy = world.getVelY(0)
+  const ok = normalY !== null && Math.abs(normalY - 1) < 1e-3 && vy > 0.5
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm static cylinder end-cap reflect (ny=${normalY} vy=${vy.toFixed(3)})`)
+  if (!ok) failed = true
+  world.delete()
+}
+
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, 0, 0)
+  const R = 1, H = 0.5, d = Math.SQRT1_2
+  const cylId = world.addStaticCylinder(0, 0, 0, R, H, 0, 0, 0, 1, 0.6, 0)
+  world.createRigidBody(R + d * 0.9, H + d * 0.9, 0, -4 * d, -4 * d, 0, 1, 0.1, 0.6, 0, 0, 0, 0.5, 0, 0)
+
+  let n = null
+  for (let i = 0; i < 60; i++) {
+    world.step(1 / 60)
+    for (const c of readContacts(Module, world)) {
+      if (c.id2 === cylId && n === null) n = { x: c.nx, y: c.ny, z: c.nz }
+    }
+  }
+  const len = n ? Math.hypot(n.x, n.y, n.z) : 0
+  const ok = n !== null && Number.isFinite(len) && Math.abs(len - 1) < 1e-3
+    && n.x > 0.2 && n.y > 0.2 && Math.abs(n.z) < 1e-3
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm static cylinder rim normal (n=${JSON.stringify(n)} |n|=${len.toFixed(4)})`)
+  if (!ok) failed = true
+  world.delete()
+}
+
+// #383 Slice B — static sphere reflects, and its handle range is distinct.
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, 0, 0)
+  const sphId = world.addStaticSphere(0, 0, 0, 0.5, 0.9, 0)
+  world.createRigidBody(0, 0, 1.2, 0, 0, -4, 1, 0.1, 0.9, 0, 0, 0, 0.5, 0, 0)
+
+  let normalZ = null
+  for (let i = 0; i < 60; i++) {
+    world.step(1 / 60)
+    for (const c of readContacts(Module, world)) {
+      if (c.id2 === sphId && normalZ === null) normalZ = c.nz
+    }
+  }
+  const vz = world.getVelZ(0)
+  const ok = sphId === -6000 && normalZ !== null && Math.abs(normalZ - 1) < 1e-3 && vz > 0.5
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm static sphere reflect (id=${sphId} nz=${normalZ} vz=${vz.toFixed(3)})`)
+  if (!ok) failed = true
+  world.delete()
+}
+
+// #383 Slice B — a filter word must exclude the new static shapes too.
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, 0, 0)
+  const cylId = world.addStaticCylinder(0, 0, 0, 1, 2, 0, 0, 0, 1, 0.9, 0)
+  const sphId = world.addStaticSphere(0, 6, 0, 1, 0.9, 0)
+  world.setCollisionGroups(cylId, 0x0100, 0x0001)
+  world.setCollisionGroups(sphId, 0x0100, 0x0001)
+  const ghostA = world.createRigidBody(2, 0, 0, -4, 0, 0, 1, 0.1, 0.9, 0, 0, 0, 0.5, 0, 0)
+  const ghostB = world.createRigidBody(2, 6, 0, -4, 0, 0, 1, 0.1, 0.9, 0, 0, 0, 0.5, 0, 0)
+  world.setCollisionGroups(ghostA, 0x0004, 0x0002)
+  world.setCollisionGroups(ghostB, 0x0004, 0x0002)
+
+  let hits = 0
+  for (let i = 0; i < 60; i++) {
+    world.step(1 / 60)
+    for (const c of readContacts(Module, world)) {
+      if (c.id2 === cylId || c.id2 === sphId) hits++
+    }
+  }
+  const ok = hits === 0 && world.getPosX(0) < -1 && world.getPosX(1) < -1
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm filtered static cylinder/sphere pass-through (hits=${hits})`)
   if (!ok) failed = true
   world.delete()
 }

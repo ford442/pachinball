@@ -33,6 +33,12 @@ export function applyPhysicsCommand(
     | 'addStaticPlane'
     | 'addStaticBox'
     | 'addStaticCapsule'
+    | 'addStaticCylinder'
+    | 'addStaticSphere'
+    | 'addSensorVolume'
+    | 'addKinematicMover'
+    | 'setNextKinematicTransform'
+    | 'setCollisionGroups'
     | 'createBody'
     | 'removeBody'
     | 'applyForce'
@@ -66,6 +72,24 @@ export function applyPhysicsCommand(
       return engine.addStaticCapsule(
         cmd.center, cmd.radius, cmd.halfHeight, cmd.rotation, cmd.restitution, cmd.friction,
       )
+    case 'addStaticCylinder':
+      return engine.addStaticCylinder(
+        cmd.center, cmd.radius, cmd.halfHeight, cmd.rotation, cmd.restitution, cmd.friction,
+      )
+    case 'addStaticSphere':
+      return engine.addStaticSphere(cmd.center, cmd.radius, cmd.restitution, cmd.friction)
+    case 'addSensorVolume':
+      return engine.addSensorVolume(cmd.center, cmd.halfExtents, cmd.rotation)
+    case 'addKinematicMover':
+      return engine.addKinematicMover(
+        cmd.position, cmd.halfExtents, cmd.rotation, cmd.restitution, cmd.friction,
+      )
+    case 'setNextKinematicTransform':
+      engine.setNextKinematicTransform(cmd.moverId, cmd.position, cmd.rotation)
+      return 0
+    case 'setCollisionGroups':
+      engine.setCollisionGroups(cmd.id, cmd.membership, cmd.filter)
+      return 0
     case 'createBody':
       return engine.createBody(cmd.desc)
     case 'removeBody':
