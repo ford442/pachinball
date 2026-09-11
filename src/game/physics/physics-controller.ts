@@ -108,10 +108,7 @@ export class GamePhysicsController {
             [...(this.host.gameObjects?.getAllFlippers?.().values() ?? [])].map((f) => f.body)
           )
           this.attachAdventureTrackToWasm()
-          this.host.physics.setWasmDebugColliders?.([
-            ...this.wasmOwner.getDebugColliders(),
-            ...this.wasmOwner.getAdventureDebugColliders(),
-          ])
+          this.host.physics.setWasmDebugColliders?.(this.wasmOwner.getDebugColliders())
         } else {
           this.wasmOwner?.clear()
           this.wasmOwner = null
