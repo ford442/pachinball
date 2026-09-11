@@ -29,6 +29,8 @@ export interface DebugSnapshot {
   dynamicZoneState: string | null
   performanceTier: string
   rendererBackend: string
+  gpuFeatureLevel: string
+  postProcessTier: string
   postProcessDegraded: boolean
   activeParticles: number
   goldBallsInPlay: number
@@ -184,6 +186,8 @@ export class DebugHUD {
       'frame ms': snapshot.frameTimeMs.toFixed(2),
       tier: snapshot.performanceTier,
       renderer: snapshot.rendererBackend,
+      'feature level': snapshot.gpuFeatureLevel,
+      'pp tier': snapshot.postProcessTier,
       'pp degraded': String(snapshot.postProcessDegraded),
       particles: snapshot.activeParticles,
       'gold balls': snapshot.goldBallsInPlay,

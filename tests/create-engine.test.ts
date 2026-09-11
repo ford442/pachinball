@@ -6,11 +6,12 @@ import {
   toWebGPUEngineOptions,
   attachGpuContextLogging,
   createWebGPUEngineWithFallback,
+  DEBUG_LOSE_CONTEXT_GLOBAL,
+  DEBUG_RESTORE_CONTEXT_GLOBAL,
   type WebGPUEngineFactory,
   type WebGPUEngineLike,
 } from '../src/engine/create-engine'
 import { resolveEngineOptions } from '../src/engine/engine-options'
-import { MRT_REQUIRED_LIMITS, type ResolvedGpuLimits } from '../src/engine/gpu-limits'
 import { getGpuDegrades, resetGpuDegradesForTests } from '../src/engine/gpu-degrade-telemetry'
 import { RENDERER_AUTO, RENDERER_WEBGL2, RENDERER_WEBGPU } from '../src/renderers/renderer-selector'
 
@@ -239,114 +240,6 @@ describe('createWebGPUEngineWithFallback', () => {
   })
 })
 
-describe('probe-and-clamp requiredLimits', () => {
-  const canvas = {} as HTMLCanvasElement
-
-  const stubEngine = () => ({ initAsync: () => Promise.resolve(), dispose: vi.fn() })
-
-  /** Adapter that meets everything MRT asks for. */
-  const fullyGranted: ResolvedGpuLimits = {
-    requiredLimits: { ...MRT_REQUIRED_LIMITS },
-    clamped: [],
-    unsupported: [],
-  }
-
-  it('passes probed limits on the core attempt and turns setMaximumLimits off', async () => {
-    const factory = vi.fn(() => stubEngine()) as unknown as WebGPUEngineFactory
-
-    await createWebGPUEngineWithFallback(canvas, resolveEngineOptions(desktopCtx()), factory, {
-      probeLimits: async () => fullyGranted,
-    })
-
-    const options = vi.mocked(factory).mock.calls[0][1]
-    expect(options.featureLevel).toBe('core')
-    // Babylon only honours setMaximumLimits when requiredLimits is unset; be explicit.
-    expect(options.setMaximumLimits).toBe(false)
-    expect(options.deviceDescriptor?.requiredLimits).toEqual({ ...MRT_REQUIRED_LIMITS })
-    expect(options.deviceDescriptor?.requiredFeatures).toEqual([])
-  })
-
-  it('keeps the blunt setMaximumLimits when the adapter probe is unavailable', async () => {
-    const factory = vi.fn(() => stubEngine()) as unknown as WebGPUEngineFactory
-
-    await createWebGPUEngineWithFallback(canvas, resolveEngineOptions(desktopCtx()), factory, {
-      probeLimits: async () => null,
-    })
-
-    const options = vi.mocked(factory).mock.calls[0][1]
-    expect(options.setMaximumLimits).toBe(true)
-    expect(options.deviceDescriptor?.requiredLimits).toBeUndefined()
-  })
-
-  it('drops probed limits on the compatibility retry — that retry asks for less', async () => {
-    let call = 0
-    const factory = vi.fn(() => {
-      if (call++ === 0) {
-        return { initAsync: () => Promise.reject(new Error('device lost')), dispose: vi.fn() }
-      }
-      return stubEngine()
-    }) as unknown as WebGPUEngineFactory
-
-    const result = await createWebGPUEngineWithFallback(
-      canvas,
-      resolveEngineOptions(desktopCtx()),
-      factory,
-      { probeLimits: async () => fullyGranted },
-    )
-
-    expect(result?.featureLevel).toBe('compatibility')
-    const compatOptions = vi.mocked(factory).mock.calls[1][1]
-    expect(compatOptions.setMaximumLimits).toBe(false)
-    expect(compatOptions.deviceDescriptor?.requiredLimits).toBeUndefined()
-  })
-
-  it('does not probe when ?maxLimits=0 opted out of the MRT defense', async () => {
-    const probeLimits = vi.fn(async () => fullyGranted)
-    const factory = vi.fn(() => stubEngine()) as unknown as WebGPUEngineFactory
-
-    await createWebGPUEngineWithFallback(
-      canvas,
-      resolveEngineOptions(desktopCtx('?maxLimits=0')),
-      factory,
-      { probeLimits },
-    )
-
-    expect(probeLimits).not.toHaveBeenCalled()
-    expect(vi.mocked(factory).mock.calls[0][1].setMaximumLimits).toBe(false)
-  })
-
-  it('does not probe for ?gpu=compat, which never attempts core', async () => {
-    const probeLimits = vi.fn(async () => fullyGranted)
-    const factory = vi.fn(() => stubEngine()) as unknown as WebGPUEngineFactory
-
-    await createWebGPUEngineWithFallback(
-      canvas,
-      resolveEngineOptions(desktopCtx('?gpu=compat')),
-      factory,
-      { probeLimits },
-    )
-
-    expect(probeLimits).not.toHaveBeenCalled()
-  })
-
-  it('records a clamped-limits degrade when the adapter cannot grant everything', async () => {
-    const factory = vi.fn(() => stubEngine()) as unknown as WebGPUEngineFactory
-
-    await createWebGPUEngineWithFallback(canvas, resolveEngineOptions(desktopCtx()), factory, {
-      probeLimits: async () => ({
-        requiredLimits: { ...MRT_REQUIRED_LIMITS, maxUniformBuffersPerShaderStage: 12 },
-        clamped: [{ name: 'maxUniformBuffersPerShaderStage', requested: 16, granted: 12 }],
-        unsupported: [],
-      }),
-    })
-
-    const degrades = getGpuDegrades()
-    expect(degrades).toHaveLength(1)
-    expect(degrades[0].path).toBe('limits-clamped')
-    expect(degrades[0].detail).toBe('maxUniformBuffersPerShaderStage 16\u219212')
-  })
-})
-
 describe('degrade telemetry from the creation path', () => {
   const canvas = {} as HTMLCanvasElement
 
@@ -359,9 +252,7 @@ describe('degrade telemetry from the creation path', () => {
       return { initAsync: () => Promise.resolve(), dispose: vi.fn() }
     }) as unknown as WebGPUEngineFactory
 
-    await createWebGPUEngineWithFallback(canvas, resolveEngineOptions(desktopCtx()), factory, {
-      probeLimits: async () => null,
-    })
+    await createWebGPUEngineWithFallback(canvas, resolveEngineOptions(desktopCtx()), factory)
 
     const degrades = getGpuDegrades()
     expect(degrades).toHaveLength(1)
@@ -372,13 +263,35 @@ describe('degrade telemetry from the creation path', () => {
     })
   })
 
+  it('publishes dev-only hooks that drive the context-loss UX without a real device loss', () => {
+    // WebGPU has no reliable cross-browser programmatic context loss; Playwright uses these.
+    const lost = makeObservable()
+    const restored = makeObservable()
+    const hookHost: Record<string, unknown> = {}
+
+    const detach = attachGpuContextLogging(
+      { onContextLostObservable: lost.observable, onContextRestoredObservable: restored.observable },
+      { featureLevel: 'core', debugHookHost: hookHost },
+    )
+
+    expect(typeof hookHost[DEBUG_LOSE_CONTEXT_GLOBAL]).toBe('function')
+    ;(hookHost[DEBUG_LOSE_CONTEXT_GLOBAL] as () => void)()
+    ;(hookHost[DEBUG_RESTORE_CONTEXT_GLOBAL] as () => void)()
+
+    expect(getGpuDegrades().map((d) => d.path)).toEqual(['context-lost', 'context-restored'])
+
+    detach()
+    expect(hookHost[DEBUG_LOSE_CONTEXT_GLOBAL]).toBeUndefined()
+    expect(hookHost[DEBUG_RESTORE_CONTEXT_GLOBAL]).toBeUndefined()
+  })
+
   it('records context loss and restore as a pair', () => {
     const lost = makeObservable()
     const restored = makeObservable()
 
     attachGpuContextLogging(
       { onContextLostObservable: lost.observable, onContextRestoredObservable: restored.observable },
-      { featureLevel: 'core' },
+      { featureLevel: 'core', debugHookHost: null },
     )
 
     lost.fire()

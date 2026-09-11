@@ -28,19 +28,24 @@ import {
   type ResolvedEngineOptions,
 } from './engine-options'
 import {
-  describeClampedLimits,
-  probeGpuLimits,
-  type GpuLike,
-  type ProbeGpuLimitsOptions,
-  type ResolvedGpuLimits,
-} from './gpu-limits'
-import { ensureGpuDegradeBuffer, recordGpuDegrade } from './gpu-degrade-telemetry'
+  ensureGpuDegradeBuffer,
+  ensureGpuProbe,
+  getActiveGpuFeatureLevel,
+  recordGpuDegrade,
+  recordGpuProbeEngine,
+  setActiveGpuFeatureLevel,
+  type GpuDegradeFeatureLevel,
+} from './gpu-degrade-telemetry'
 import { GpuContextToast, type GpuContextToastDeps } from './gpu-context-toast'
 
 export type EngineCreationPlan = 'webgl2' | 'webgpu'
 
 /** Greppable marker for "we booted on a degraded GPU path" — see docs/ENGINE_BOOTSTRAP.md. */
 export const GPU_DEGRADE_MARKER = '[Bootstrap][gpu-degrade]'
+
+/** Dev/test-only globals that drive the context-loss UX without a real device loss. */
+export const DEBUG_LOSE_CONTEXT_GLOBAL = '__DEBUG_LOSE_CONTEXT'
+export const DEBUG_RESTORE_CONTEXT_GLOBAL = '__DEBUG_RESTORE_CONTEXT'
 
 /** Pure routing for tests — which backend createEngine will attempt. */
 export function resolveEngineCreationPlan(
@@ -75,20 +80,19 @@ export function toWebGLEngineOptions(options: ResolvedEngineOptions): EngineOpti
 /**
  * Build the Babylon WebGPU options for one attempt.
  *
- * When `requiredLimits` is supplied (the probe-and-clamp path) it wins: Babylon only
- * applies `setMaximumLimits` when `deviceDescriptor.requiredLimits` is unset, so we turn
- * the blunt flag off explicitly rather than relying on that ordering.
+ * We do **not** probe `adapter.limits` and clamp `requiredLimits` here — see
+ * "Why we don't probe-and-clamp" in docs/ENGINE_BOOTSTRAP.md. `requiredLimits` are
+ * validation bounds, not allocations: asking for the adapter maximum costs nothing, and
+ * asking for less cannot raise a cap the post-process stack is already over.
  */
 export function toWebGPUEngineOptions(
   options: ResolvedEngineOptions,
   featureLevel: GpuFeatureLevel = options.featureLevel,
-  requiredLimits?: Record<string, number>,
 ): WebGPUEngineOptions {
   const gpuPower =
     options.powerPreference === 'default'
       ? undefined
       : (options.powerPreference as WebGPUEngineOptions['powerPreference'])
-  const hasProbedLimits = requiredLimits !== undefined && Object.keys(requiredLimits).length > 0
   return {
     antialias: options.antialias,
     stencil: options.stencil,
@@ -99,8 +103,7 @@ export function toWebGPUEngineOptions(
     // MRT defense — do not disable to "fix" Safari; see webgpu-post-process-profile.ts.
     // The compatibility retry is the one place we ask for less: a strict adapter that
     // rejected core+maxLimits can still hand us a device once we stop demanding them.
-    setMaximumLimits:
-      featureLevel === 'compatibility' || hasProbedLimits ? false : options.setMaximumLimits,
+    setMaximumLimits: featureLevel === 'compatibility' ? false : options.setMaximumLimits,
     powerPreference: gpuPower,
     featureLevel,
     enableGPUDebugMarkers: options.enableGPUDebugMarkers,
@@ -111,9 +114,7 @@ export function toWebGPUEngineOptions(
     // check `adapter.features.has(...)` in the pass that needs one and degrade
     // there instead. Babylon mutates this object during initAsync, so it must stay
     // a fresh literal per call.
-    deviceDescriptor: hasProbedLimits
-      ? { requiredFeatures: [], requiredLimits: { ...requiredLimits } }
-      : { requiredFeatures: [] },
+    deviceDescriptor: { requiredFeatures: [] },
   }
 }
 
@@ -128,10 +129,21 @@ interface ContextLostEngine {
 }
 
 export interface GpuContextLoggingDeps extends GpuContextToastDeps {
-  /** Feature level recorded with the degrade entry; null for WebGL2. */
-  featureLevel?: GpuFeatureLevel | null
+  /** Feature level recorded with the degrade entry; defaults to the booted level. */
+  featureLevel?: GpuDegradeFeatureLevel | null
   /** Injected by tests; defaults to a fresh toast bound to the ambient document. */
   toast?: GpuContextToast
+  /**
+   * Where `__DEBUG_LOSE_CONTEXT` / `__DEBUG_RESTORE_CONTEXT` are published.
+   * Defaults to `window` outside production builds; pass `null` to skip them.
+   */
+  debugHookHost?: Record<string, unknown> | null
+}
+
+function defaultDebugHookHost(): Record<string, unknown> | null {
+  // Production builds get no debug globals; dev server and Playwright do.
+  if (import.meta.env?.PROD) return null
+  return typeof window !== 'undefined' ? (window as unknown as Record<string, unknown>) : null
 }
 
 /**
@@ -147,27 +159,50 @@ export function attachGpuContextLogging(
   engine: ContextLostEngine,
   deps: GpuContextLoggingDeps = {},
 ): () => void {
-  const { featureLevel = null, toast: injectedToast, ...toastDeps } = deps
+  const {
+    featureLevel,
+    toast: injectedToast,
+    debugHookHost = defaultDebugHookHost(),
+    ...toastDeps
+  } = deps
+  // `undefined` means "whatever the engine booted on", resolved at record time.
+  const level = (): GpuDegradeFeatureLevel | null =>
+    featureLevel === undefined ? getActiveGpuFeatureLevel() : featureLevel
   const toast = injectedToast ?? new GpuContextToast(toastDeps)
   toast.markReady()
 
   const onLost = (): void => {
     console.warn(`${GPU_DEGRADE_MARKER} GPU context lost — Babylon will attempt to restore it`)
-    recordGpuDegrade('context-lost', featureLevel)
+    recordGpuDegrade('context-lost', level())
     toast.onLost()
   }
   const onRestored = (): void => {
     console.log('[Bootstrap] GPU context restored')
-    recordGpuDegrade('context-restored', featureLevel)
+    recordGpuDegrade('context-restored', level())
     toast.onRestored()
   }
 
   engine.onContextLostObservable?.add(onLost)
   engine.onContextRestoredObservable?.add(onRestored)
 
+  // WebGPU has no reliable cross-browser programmatic context loss, so tests drive the
+  // handlers directly rather than trying to kill a real device.
+  if (debugHookHost) {
+    debugHookHost[DEBUG_LOSE_CONTEXT_GLOBAL] = onLost
+    debugHookHost[DEBUG_RESTORE_CONTEXT_GLOBAL] = onRestored
+  }
+
   return () => {
     engine.onContextLostObservable?.removeCallback(onLost)
     engine.onContextRestoredObservable?.removeCallback(onRestored)
+    if (debugHookHost) {
+      if (debugHookHost[DEBUG_LOSE_CONTEXT_GLOBAL] === onLost) {
+        delete debugHookHost[DEBUG_LOSE_CONTEXT_GLOBAL]
+      }
+      if (debugHookHost[DEBUG_RESTORE_CONTEXT_GLOBAL] === onRestored) {
+        delete debugHookHost[DEBUG_RESTORE_CONTEXT_GLOBAL]
+      }
+    }
     toast.dispose()
   }
 }
@@ -191,69 +226,26 @@ export interface WebGPUCreationResult {
   featureLevel: GpuFeatureLevel
 }
 
-export type GpuLimitsProbe = (
-  options: ProbeGpuLimitsOptions,
-) => Promise<ResolvedGpuLimits | null>
-
-const defaultGpuLimitsProbe: GpuLimitsProbe = (probeOptions) => {
-  const gpu =
-    typeof navigator !== 'undefined'
-      ? (navigator as Navigator & { gpu?: GpuLike }).gpu
-      : undefined
-  return probeGpuLimits(gpu, probeOptions)
-}
-
-export interface WebGPUFallbackDeps {
-  factory?: WebGPUEngineFactory
-  /** Injected in tests; defaults to `navigator.gpu.requestAdapter()`. */
-  probeLimits?: GpuLimitsProbe
-}
-
 /**
  * Try WebGPU at each feature level in turn, disposing the failed instance before
  * moving on. Returns null when every level failed — the caller falls back to WebGL2.
  *
- * The `core` attempt probes the adapter and asks for only the limits the MRT chain needs
- * (clamped to what the adapter reports). The `compatibility` retry deliberately drops the
- * list entirely and takes WebGPU's default limits — asking a strict adapter for *less* is
- * the whole point of that retry.
+ * The `compatibility` retry is the one attempt that deliberately asks for less
+ * (`setMaximumLimits: false`); a strict adapter that rejected core can still hand us a
+ * device once we stop demanding every limit at its maximum.
  */
 export async function createWebGPUEngineWithFallback(
   canvas: HTMLCanvasElement,
   options: ResolvedEngineOptions,
   factory: WebGPUEngineFactory = defaultWebGPUEngineFactory,
-  deps: WebGPUFallbackDeps = {},
 ): Promise<WebGPUCreationResult | null> {
   const levels = webgpuFeatureLevelsToTry(options.featureLevel)
-  const probeLimits = deps.probeLimits ?? defaultGpuLimitsProbe
-  const engineFactory = deps.factory ?? factory
-
-  let probed: ResolvedGpuLimits | null = null
-  if (options.setMaximumLimits && levels.includes('core')) {
-    probed = await probeLimits({ powerPreference: options.powerPreference, featureLevel: 'core' })
-    if (probed) {
-      if (probed.clamped.length > 0) {
-        const detail = describeClampedLimits(probed.clamped)
-        console.warn(`${GPU_DEGRADE_MARKER} adapter clamped requiredLimits: ${detail}`)
-        recordGpuDegrade('limits-clamped', 'core', detail)
-      }
-      if (probed.unsupported.length > 0) {
-        console.log(
-          `[Bootstrap] adapter does not report ${probed.unsupported.join(', ')} — omitted from requiredLimits`,
-        )
-      }
-    } else {
-      console.log('[Bootstrap] requiredLimits probe unavailable, keeping setMaximumLimits')
-    }
-  }
 
   for (const featureLevel of levels) {
-    // Compatibility is the safety net: no probed limits, WebGPU defaults only.
-    const requiredLimits = featureLevel === 'core' ? probed?.requiredLimits : undefined
-    const gpuOptions = toWebGPUEngineOptions(options, featureLevel, requiredLimits)
+    const gpuOptions = toWebGPUEngineOptions(options, featureLevel)
     let engine: WebGPUEngineLike | undefined
     try {
-      engine = engineFactory(canvas, gpuOptions)
+      engine = factory(canvas, gpuOptions)
       await engine.initAsync()
       if (featureLevel !== options.featureLevel) {
         console.warn(
@@ -290,12 +282,15 @@ function createWebGL2Engine(
     throw new Error('WebGL2 is not supported on this device')
   }
   const engine = new Engine(canvas, undefined, toWebGLEngineOptions(engineOptions))
-  attachGpuContextLogging(engine)
+  setActiveGpuFeatureLevel('webgl2')
+  recordGpuProbeEngine('webgl2', 'webgl2')
+  attachGpuContextLogging(engine, { featureLevel: 'webgl2' })
   return engine
 }
 
 export async function createEngine(canvas: HTMLCanvasElement): Promise<EngineType | WebGPUEngineType> {
   ensureGpuDegradeBuffer()
+  ensureGpuProbe()
   const engineOptions = resolveEngineOptions()
   const preference = getRendererPreference()
   const webgpuSupported = await WebGPUEngine.IsSupportedAsync
@@ -317,6 +312,8 @@ export async function createEngine(canvas: HTMLCanvasElement): Promise<EngineTyp
 
   if (created) {
     const engine = created.engine as unknown as WebGPUEngineType
+    setActiveGpuFeatureLevel(created.featureLevel)
+    recordGpuProbeEngine('webgpu', created.featureLevel)
     attachGpuContextLogging(engine, { featureLevel: created.featureLevel })
     console.log(
       `[Bootstrap] Active renderer: ${engine.getClassName()} (featureLevel=${created.featureLevel})`,
@@ -325,7 +322,7 @@ export async function createEngine(canvas: HTMLCanvasElement): Promise<EngineTyp
   }
 
   console.warn(`${GPU_DEGRADE_MARKER} WebGPU init failed at every featureLevel, using WebGL2 fallback`)
-  recordGpuDegrade('webgl2-fallback', null, `requested ${engineOptions.featureLevel}`)
+  recordGpuDegrade('webgl2-fallback', 'webgl2', `requested ${engineOptions.featureLevel}`)
   const engine = createWebGL2Engine(canvas, engineOptions)
   console.log(`[Bootstrap] Active renderer: ${engine.getClassName()} (WebGL fallback)`)
   return engine

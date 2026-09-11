@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import {
   FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE,
   WEBGPU_DEFAULT_MAX_UNIFORM_BUFFERS_PER_STAGE,
@@ -9,9 +9,15 @@ import {
   isWebGPUAdapterStrictForPostProcess,
   isWebGPUEngine,
   readMaxUniformBuffersPerStage,
+  recordPostProcessTierDegrade,
   resolveWebGPUPostProcessProfile,
   type WebGPUPostProcessProfile,
 } from '../src/game/webgpu-post-process-profile'
+import {
+  getGpuDegrades,
+  resetGpuDegradesForTests,
+  setActiveGpuFeatureLevel,
+} from '../src/engine/gpu-degrade-telemetry'
 
 function mockEngine(className: string, limits?: { maxUniformBuffersPerShaderStage?: number }) {
   return {
@@ -140,5 +146,59 @@ describe('webgpu-post-process-profile', () => {
     expect(FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE).toBeGreaterThan(
       WEBGPU_DEFAULT_MAX_UNIFORM_BUFFERS_PER_STAGE,
     )
+  })
+})
+
+describe('post-process tier degrade telemetry', () => {
+  beforeEach(() => {
+    resetGpuDegradesForTests()
+  })
+
+  it('records the boot downgrade a strict adapter forces, with the reason', () => {
+    const engine = mockEngine('WebGPUEngine', { maxUniformBuffersPerShaderStage: 12 })
+    setActiveGpuFeatureLevel('core')
+
+    const profile = resolveWebGPUPostProcessProfile(engine as never)
+    recordPostProcessTierDegrade('postprocess-tier-boot', profile)
+
+    const [entry] = getGpuDegrades()
+    expect(profile.tier).toBe('bloom-only')
+    expect(entry.path).toBe('postprocess-tier-boot')
+    expect(entry.featureLevel).toBe('core')
+    expect(entry.detail).toContain('tier bloom-only')
+    expect(entry.detail).toContain('maxUniformBuffersPerShaderStage=12')
+  })
+
+  it('records the runtime downgrade as a tier transition', () => {
+    const engine = mockEngine('WebGPUEngine', { maxUniformBuffersPerShaderStage: 12 })
+    setActiveGpuFeatureLevel('compatibility')
+
+    const booted = resolveWebGPUPostProcessProfile(engine as never)
+    const next = downgradePostProcessTier(booted.tier)
+    expect(next).toBe('none')
+
+    recordPostProcessTierDegrade(
+      'postprocess-tier-runtime',
+      { ...booted, tier: next!, reason: 'runtime validation: uniform buffers exceeds the maximum' },
+      booted.tier,
+    )
+
+    const [entry] = getGpuDegrades()
+    expect(entry.path).toBe('postprocess-tier-runtime')
+    expect(entry.featureLevel).toBe('compatibility')
+    expect(entry.detail).toBe(
+      'bloom-only \u2192 none: runtime validation: uniform buffers exceeds the maximum',
+    )
+  })
+
+  it('stays quiet on the undegraded full tier', () => {
+    const engine = mockEngine('WebGPUEngine', { maxUniformBuffersPerShaderStage: 24 })
+
+    recordPostProcessTierDegrade(
+      'postprocess-tier-boot',
+      resolveWebGPUPostProcessProfile(engine as never),
+    )
+
+    expect(getGpuDegrades()).toHaveLength(0)
   })
 })

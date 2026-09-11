@@ -7,6 +7,7 @@
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
+import { recordGpuDegrade, recordGpuProbePostProcess } from '../engine/gpu-degrade-telemetry'
 
 /** Conservative default: WebGPU spec minimum per-stage uniform buffer count. */
 export const WEBGPU_DEFAULT_MAX_UNIFORM_BUFFERS_PER_STAGE = 12
@@ -166,6 +167,28 @@ export function applyBloomPipelineProfile(
       bloom.imageProcessing.colorGradingEnabled = false
     }
   }
+}
+
+/**
+ * Push a tier degrade into the shared ring buffer.
+ *
+ * Tier downgrades were the one degrade path with no observable surface at all — they are
+ * also the one most likely to be silently costing players visual fidelity, so the `reason`
+ * string the profile already computes is routed straight into `detail`.
+ *
+ * A no-op at tier `full`: that is the undegraded path and must not fill the ring buffer.
+ */
+export function recordPostProcessTierDegrade(
+  path: 'postprocess-tier-boot' | 'postprocess-tier-runtime',
+  profile: WebGPUPostProcessProfile,
+  fromTier?: WebGPUPostProcessTier,
+): void {
+  // The probe records the tier in play whether or not it is a degrade — `full` is the
+  // answer to "what did this session get" just as much as `bloom-only` is.
+  recordGpuProbePostProcess(profile.tier, profile.maxUniformBuffersPerStage)
+  if (profile.tier === 'full') return
+  const transition = fromTier ? `${fromTier} \u2192 ${profile.tier}` : `tier ${profile.tier}`
+  recordGpuDegrade(path, undefined, `${transition}: ${profile.reason}`)
 }
 
 /** True when a WebGPU validation error indicates uniform-buffer overflow. */

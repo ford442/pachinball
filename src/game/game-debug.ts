@@ -22,6 +22,7 @@ import type { AdventureProgressionSupervisor } from '../game-elements/adventure-
 import type { AdventureTrackProgression } from '../game-elements/adventure-track-progression'
 import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
 import { getOwnedAudioContextCount, peekAudioEngine } from '../audio/audio-engine'
+import { getGpuProbe } from '../engine/gpu-degrade-telemetry'
 
 export interface DebugHost {
   readonly engine: Engine | WebGPUEngine
@@ -119,6 +120,7 @@ export class GameDebug {
     const portalOpen = supervisor?.isPortalOpen() ?? false
     const portalKind = supervisor?.getPortalKind() ?? null
     const perfMetrics = this.host.performanceMonitor.getMetrics()
+    const gpuProbe = getGpuProbe()
     const teardown = this.host.adventureMode?.getLastTeardownStats()
 
     return {
@@ -152,6 +154,8 @@ export class GameDebug {
       dynamicZoneState: dynamicZoneLabel,
       performanceTier: this.host.effects?.getRuntimePerformanceTier() || 'high',
       rendererBackend: perfMetrics.rendererBackend,
+      gpuFeatureLevel: gpuProbe.featureLevel ?? 'n/a',
+      postProcessTier: gpuProbe.postProcessTier ?? 'n/a',
       postProcessDegraded: this.host.postProcessDegraded,
       activeParticles: perfMetrics.activeParticles,
       goldBallsInPlay: perfMetrics.goldBallsInPlay,

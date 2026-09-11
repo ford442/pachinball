@@ -8,8 +8,14 @@ import {
   countGpuDegrades,
   ensureGpuDegradeBuffer,
   resetGpuDegradesForTests,
+  setActiveGpuFeatureLevel,
   GPU_DEGRADE_RING_SIZE,
   GPU_DEGRADE_GLOBAL,
+  GPU_PROBE_GLOBAL,
+  ensureGpuProbe,
+  getGpuProbe,
+  recordGpuProbeEngine,
+  recordGpuProbePostProcess,
 } from '../src/engine/gpu-degrade-telemetry'
 
 beforeEach(() => {
@@ -64,7 +70,26 @@ describe('gpu degrade telemetry', () => {
 
     expect(countGpuDegrades('context-lost')).toBe(2)
     expect(countGpuDegrades('context-restored')).toBe(1)
-    expect(countGpuDegrades('limits-clamped')).toBe(0)
+    expect(countGpuDegrades('webgl2-fallback')).toBe(0)
+  })
+
+  it('is bounded at 16 entries', () => {
+    expect(GPU_DEGRADE_RING_SIZE).toBe(16)
+  })
+
+  it('defaults featureLevel to the level the engine actually booted on', () => {
+    // The post-process layer can see "this is WebGPU" but not "this is the compat retry".
+    setActiveGpuFeatureLevel('compatibility')
+    recordGpuDegrade('postprocess-tier-boot', undefined, 'tier bloom-only: cap 12')
+
+    expect(getGpuDegrades()[0].featureLevel).toBe('compatibility')
+  })
+
+  it('distinguishes the WebGL2 fallback from a WebGPU feature level', () => {
+    setActiveGpuFeatureLevel('webgl2')
+    recordGpuDegrade('postprocess-tier-runtime')
+
+    expect(getGpuDegrades()[0].featureLevel).toBe('webgl2')
   })
 
   it('hands out a snapshot, not the live buffer', () => {
@@ -73,6 +98,49 @@ describe('gpu degrade telemetry', () => {
     snapshot.length = 0
 
     expect(getGpuDegrades()).toHaveLength(1)
+  })
+})
+
+describe('gpu probe snapshot', () => {
+  it('publishes an all-null snapshot on window before anything is known', () => {
+    ensureGpuProbe()
+
+    expect(GPU_PROBE_GLOBAL).toBe('bootstrapGpuProbe')
+    expect((window as unknown as Record<string, unknown>)[GPU_PROBE_GLOBAL]).toEqual({
+      backend: null,
+      featureLevel: null,
+      maxUniformBuffersPerShaderStage: null,
+      postProcessTier: null,
+    })
+  })
+
+  it('merges the engine half and the post-process half into one snapshot', () => {
+    recordGpuProbeEngine('webgpu', 'compatibility')
+    recordGpuProbePostProcess('bloom-only', 12)
+
+    expect(getGpuProbe()).toEqual({
+      backend: 'webgpu',
+      featureLevel: 'compatibility',
+      maxUniformBuffersPerShaderStage: 12,
+      postProcessTier: 'bloom-only',
+    })
+  })
+
+  it('records the undegraded path too — full tier is an answer, not a silence', () => {
+    recordGpuProbeEngine('webgl2', 'webgl2')
+    recordGpuProbePostProcess('full', null)
+
+    expect(getGpuProbe().postProcessTier).toBe('full')
+    expect(getGpuDegrades()).toHaveLength(0)
+  })
+
+  it('hands back a copy so a HUD reader cannot mutate the live snapshot', () => {
+    recordGpuProbeEngine('webgpu', 'core')
+
+    const copy = getGpuProbe()
+    copy.backend = 'webgl2'
+
+    expect(getGpuProbe().backend).toBe('webgpu')
   })
 })
 

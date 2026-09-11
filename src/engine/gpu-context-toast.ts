@@ -3,7 +3,7 @@
  *
  * `attachGpuContextLogging()` used to be log-only, which meant a user whose GPU device
  * went away saw a frozen canvas and nothing else. This surfaces loss/restore in the
- * existing `#power-toast` and mirrors the state onto `<html data-gpu-context>` so
+ * existing `#power-toast` and mirrors the state onto `<body data-gpu-context>` so
  * Playwright has a hook that does not depend on toast copy.
  *
  * What this deliberately does NOT do is call `engine.resize()` on restore.
@@ -14,7 +14,7 @@
 
 export type GpuContextState = 'ok' | 'lost'
 
-/** Attribute on `<html>`; Playwright asserts on this rather than on toast copy. */
+/** Attribute on `<body>`; Playwright asserts on this rather than on toast copy. */
 export const GPU_CONTEXT_ATTRIBUTE = 'data-gpu-context'
 
 export const GPU_CONTEXT_TOAST_ID = 'power-toast'
@@ -24,29 +24,29 @@ export const GPU_CONTEXT_RESTORED_MESSAGE = 'Graphics restored'
 
 /** How long the "restored" toast stays up before hiding itself. */
 export const RESTORED_TOAST_MS = 2600
-/** Photosensitive mode holds it longer so the text is readable without a quick flash. */
-export const RESTORED_TOAST_MS_PHOTOSENSITIVE = 5000
+/** Reduced motion holds it longer so the text is readable without a quick flash. */
+export const RESTORED_TOAST_MS_REDUCED_MOTION = 5000
 
 export interface GpuContextToastDeps {
   /** Injected in tests; defaults to the ambient document. */
   doc?: Document
-  /** Defaults to the persisted accessibility setting. */
-  isPhotosensitive?: () => boolean
+  /** Defaults to the OS `prefers-reduced-motion` query. */
+  isReducedMotion?: () => boolean
   setTimeoutFn?: (handler: () => void, ms: number) => unknown
   clearTimeoutFn?: (handle: unknown) => void
 }
 
 /**
- * Read photosensitive mode without importing the game config into the bootstrap layer.
- * Engine creation runs before `Game`, so `GameConfig` may not be populated yet; the
- * persisted settings blob is the earliest reliable source.
+ * Read reduced-motion preference without reaching across a layer boundary.
+ *
+ * The in-game `photosensitiveMode` flag lives in `src/effects/track-ambient-effects.ts`;
+ * importing that into the bootstrap layer would couple `src/engine/**` to the game, and
+ * engine creation runs before `Game` populates it anyway. The OS-level media query is the
+ * signal that is already available here.
  */
-function defaultIsPhotosensitive(): boolean {
+function defaultIsReducedMotion(): boolean {
   try {
-    const raw = localStorage.getItem('pachinball.settings')
-    if (!raw) return false
-    const parsed = JSON.parse(raw) as { photosensitiveMode?: unknown }
-    return parsed?.photosensitiveMode === true
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
   } catch {
     return false
   }
@@ -54,7 +54,7 @@ function defaultIsPhotosensitive(): boolean {
 
 export class GpuContextToast {
   private readonly doc: Document | undefined
-  private readonly isPhotosensitive: () => boolean
+  private readonly isReducedMotion: () => boolean
   private readonly setTimeoutFn: (handler: () => void, ms: number) => unknown
   private readonly clearTimeoutFn: (handle: unknown) => void
 
@@ -63,7 +63,7 @@ export class GpuContextToast {
 
   constructor(deps: GpuContextToastDeps = {}) {
     this.doc = deps.doc ?? (typeof document !== 'undefined' ? document : undefined)
-    this.isPhotosensitive = deps.isPhotosensitive ?? defaultIsPhotosensitive
+    this.isReducedMotion = deps.isReducedMotion ?? defaultIsReducedMotion
     this.setTimeoutFn =
       deps.setTimeoutFn ?? ((handler, ms) => setTimeout(handler, ms) as unknown)
     this.clearTimeoutFn =
@@ -94,7 +94,7 @@ export class GpuContextToast {
     this.writeAttribute('ok')
     this.showToast(
       GPU_CONTEXT_RESTORED_MESSAGE,
-      this.isPhotosensitive() ? RESTORED_TOAST_MS_PHOTOSENSITIVE : RESTORED_TOAST_MS,
+      this.isReducedMotion() ? RESTORED_TOAST_MS_REDUCED_MOTION : RESTORED_TOAST_MS,
     )
   }
 
@@ -105,7 +105,7 @@ export class GpuContextToast {
   }
 
   private writeAttribute(state: GpuContextState): void {
-    this.doc?.documentElement?.setAttribute(GPU_CONTEXT_ATTRIBUTE, state)
+    this.doc?.body?.setAttribute(GPU_CONTEXT_ATTRIBUTE, state)
   }
 
   private toastElement(): HTMLElement | null {
@@ -118,10 +118,10 @@ export class GpuContextToast {
     if (!el) return
 
     el.textContent = message
-    // The .toast class fades opacity and slides on show. Under photosensitive mode a
-    // flapping context would turn that into a repeating flash, so drop the transition
-    // and let the toast appear and disappear flat.
-    el.style.transition = this.isPhotosensitive() ? 'none' : ''
+    // The .toast class fades opacity and slides on show. Under reduced motion a flapping
+    // context would turn that into a repeating flash, so drop the transition and let the
+    // toast appear and disappear flat.
+    el.style.transition = this.isReducedMotion() ? 'none' : ''
     el.classList.remove('hidden')
     el.classList.add('show')
 

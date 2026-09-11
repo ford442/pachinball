@@ -9,7 +9,7 @@ import {
   GPU_CONTEXT_LOST_MESSAGE,
   GPU_CONTEXT_RESTORED_MESSAGE,
   RESTORED_TOAST_MS,
-  RESTORED_TOAST_MS_PHOTOSENSITIVE,
+  RESTORED_TOAST_MS_REDUCED_MOTION,
 } from '../src/engine/gpu-context-toast'
 
 /** Manual clock so the tests assert the delay we pass, not wall time. */
@@ -35,13 +35,13 @@ function fakeTimers() {
   }
 }
 
-function setup(isPhotosensitive = false) {
-  document.documentElement.removeAttribute(GPU_CONTEXT_ATTRIBUTE)
+function setup(reducedMotion = false) {
+  document.body.removeAttribute(GPU_CONTEXT_ATTRIBUTE)
   document.body.innerHTML = `<div id="${GPU_CONTEXT_TOAST_ID}" class="toast hidden"></div>`
   const timers = fakeTimers()
   const toast = new GpuContextToast({
     doc: document,
-    isPhotosensitive: () => isPhotosensitive,
+    isReducedMotion: () => reducedMotion,
     setTimeoutFn: timers.setTimeoutFn,
     clearTimeoutFn: timers.clearTimeoutFn,
   })
@@ -49,14 +49,14 @@ function setup(isPhotosensitive = false) {
   return { toast, el, timers }
 }
 
-const contextAttr = () => document.documentElement.getAttribute(GPU_CONTEXT_ATTRIBUTE)
+const contextAttr = () => document.body.getAttribute(GPU_CONTEXT_ATTRIBUTE)
 
 beforeEach(() => {
-  document.documentElement.removeAttribute(GPU_CONTEXT_ATTRIBUTE)
+  document.body.removeAttribute(GPU_CONTEXT_ATTRIBUTE)
 })
 
 describe('GpuContextToast', () => {
-  it('publishes data-gpu-context="ok" on markReady without showing a toast', () => {
+  it('publishes data-gpu-context="ok" on <body> at markReady without showing a toast', () => {
     const { toast, el } = setup()
 
     toast.markReady()
@@ -131,7 +131,7 @@ describe('GpuContextToast', () => {
     expect(el.classList.contains('show')).toBe(true)
   })
 
-  describe('photosensitive mode', () => {
+  describe('reduced motion', () => {
     it('drops the toast transition so a flapping context cannot strobe', () => {
       const { toast, el } = setup(true)
       toast.markReady()
@@ -157,8 +157,8 @@ describe('GpuContextToast', () => {
 
       toast.onRestored()
 
-      expect(timers.onlyDelay()).toBe(RESTORED_TOAST_MS_PHOTOSENSITIVE)
-      expect(RESTORED_TOAST_MS_PHOTOSENSITIVE).toBeGreaterThan(RESTORED_TOAST_MS)
+      expect(timers.onlyDelay()).toBe(RESTORED_TOAST_MS_REDUCED_MOTION)
+      expect(RESTORED_TOAST_MS_REDUCED_MOTION).toBeGreaterThan(RESTORED_TOAST_MS)
     })
   })
 
@@ -176,7 +176,7 @@ describe('GpuContextToast', () => {
 
   it('still tracks state when #power-toast is absent', () => {
     document.body.innerHTML = ''
-    const toast = new GpuContextToast({ doc: document, isPhotosensitive: () => false })
+    const toast = new GpuContextToast({ doc: document, isReducedMotion: () => false })
 
     toast.markReady()
     expect(() => toast.onLost()).not.toThrow()

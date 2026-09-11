@@ -20,6 +20,7 @@ import {
   downgradePostProcessTier,
   isUniformBufferLimitError,
   isWebGPUEngine,
+  recordPostProcessTierDegrade,
   resolveWebGPUPostProcessProfile,
   type WebGPUPostProcessProfile,
 } from './webgpu-post-process-profile'
@@ -80,6 +81,8 @@ export class PostProcessManager {
     const effectIntensity = accessibility?.effectIntensity ?? 1.0
 
     this._postProcessProfile = resolveWebGPUPostProcessProfile(this.host.engine)
+    // Any tier below `full` is a silent visual downgrade; make it countable.
+    recordPostProcessTierDegrade('postprocess-tier-boot', this._postProcessProfile)
     if (this._postProcessProfile.tier === 'none') {
       console.warn(
         `[GameRenderer] WebGPU post-process disabled (${this._postProcessProfile.reason})`,
@@ -378,6 +381,11 @@ export class PostProcessManager {
         tier: nextTier,
         reason: `runtime validation: ${message}`,
       }
+      recordPostProcessTierDegrade(
+        'postprocess-tier-runtime',
+        this._postProcessProfile,
+        currentTier,
+      )
       this.host.postProcessDegraded = true
 
       if (nextTier === 'none') {
