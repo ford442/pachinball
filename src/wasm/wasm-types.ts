@@ -6,6 +6,17 @@
  * They are intentionally narrow — only the surface area actually exposed to JS.
  */
 
+/**
+ * Mirrors native `STATIC_HANDLE_OVERFLOW` in PhysicsWorld.h. Every `add*`
+ * that creates a static shape returns this instead of a handle once its
+ * family hits `STATIC_HANDLE_CAPACITY` (1000), and creates no collider.
+ *
+ * It is positive, so it can never be mistaken for a static handle, and
+ * `setCollisionGroups` ignores it. Callers must treat it as a failure rather
+ * than storing it: a stored sentinel would name geometry that does not exist.
+ */
+export const STATIC_HANDLE_OVERFLOW = 0x7FFFFFFF
+
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
@@ -127,6 +138,40 @@ export interface WasmPhysicsWorldInstance {
   ): number
 
   /**
+   * Add an oriented static cylinder collider (local Y axis), matching
+   * Rapier's `ColliderDesc.cylinder(halfHeight, radius)`.
+   * @returns Negative collider id used in contact events, or
+   * `STATIC_HANDLE_OVERFLOW` (creating nothing) if the family is full.
+   */
+  addStaticCylinder(
+    px: number, py: number, pz: number,
+    radius: number, halfHeight: number,
+    qx: number, qy: number, qz: number, qw: number,
+    restitution?: number,
+    friction?: number
+  ): number
+
+  /**
+   * Add a static sphere collider.
+   * @returns Negative collider id used in contact events, or
+   * `STATIC_HANDLE_OVERFLOW` (creating nothing) if the family is full.
+   */
+  addStaticSphere(
+    px: number, py: number, pz: number,
+    radius: number,
+    restitution?: number,
+    friction?: number
+  ): number
+
+  /**
+   * Drop every static collider, sensor volume and kinematic mover. Statics
+   * are append-only, so a rebuilt scene must clear before re-adding or it
+   * stacks a second copy. Invalidates every negative handle; dynamic bodies
+   * and hinges are untouched.
+   */
+  clearStaticGeometry(): void
+
+  /**
    * Add a kinematic oriented-box mover (piston, platter, gate). Its pose is
    * pushed once per tick via `setNextKinematicTransform`; linear/angular
    * velocity is derived from the pose delta so contacts pick up its motion.
@@ -238,8 +283,9 @@ export interface WasmPhysicsWorldInstance {
 
   /**
    * Set the collision-group membership/filter mask for any handle — a
-   * dynamic/kinematic body (id ≥ 0) or a static box/capsule/mover/sensor
-   * (id < 0, as returned by the matching add*() call). Mirrors
+   * dynamic/kinematic body (id ≥ 0) or a static
+   * box/capsule/cylinder/sphere/mover/sensor (id < 0, as returned by the
+   * matching add*() call). Mirrors
    * `CollisionGroups` in src/game-elements/physics.ts.
    */
   setCollisionGroups(id: number, membership: number, filter: number): void
@@ -293,6 +339,13 @@ export interface WasmPhysicsWorldInstance {
 
   /** Contacts discarded this step when the cap was hit. */
   getDroppedContactCount(): number
+
+  /**
+   * Static shapes refused because their negative-handle family hit its
+   * 1000-entry capacity. Non-zero means geometry is missing from the C++
+   * world — the alternative would have been two shapes sharing a handle.
+   */
+  getDroppedStaticCount(): number
 
   setMaxContacts(max: number): void
   getMaxContacts(): number

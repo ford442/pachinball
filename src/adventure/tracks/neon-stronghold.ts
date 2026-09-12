@@ -7,6 +7,7 @@
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
+import { boxDesc, cylinderDesc } from '../track-collider-descriptors'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildNeonStronghold(builder: TrackBuilder): void {
@@ -16,7 +17,6 @@ export function buildNeonStronghold(builder: TrackBuilder): void {
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
-  const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
   const kinematicBindings = (builder as unknown as { kinematicBindings: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
@@ -81,14 +81,16 @@ export function buildNeonStronghold(builder: TrackBuilder): void {
       adventureTrack.push(gate)
 
       const q = Quaternion.FromEulerAngles(0, heading, 0)
-      const body = world.createRigidBody(
-        rapier.RigidBodyDesc.kinematicPositionBased()
-          .setTranslation(basePos.x, basePos.y, basePos.z)
-          .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-      )
-      world.createCollider(
-        rapier.ColliderDesc.cuboid(gateWidth / 2, gateHeight / 2, gateDepth / 2),
-        body
+      const { body } = builder.emitCollider(
+        boxDesc(
+          { x: basePos.x, y: basePos.y, z: basePos.z },
+          { x: gateWidth / 2, y: gateHeight / 2, z: gateDepth / 2 },
+          {
+            rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+            motion: 'kinematic-position',
+            label: 'strongholdGate',
+          }
+        )
       )
       adventureBodies.push(body)
 
@@ -130,10 +132,14 @@ export function buildNeonStronghold(builder: TrackBuilder): void {
         turret.position.set(cx, turretHeight / 2 + 0.25, cz)
         turret.material = neonMat
 
-        world.createCollider(
-          rapier.ColliderDesc.cylinder(turretHeight / 2, turretRadius)
-            .setTranslation(cx, turretHeight / 2 + 0.25, cz),
-          platformBody
+        builder.attachCollider(
+          platformBody,
+          cylinderDesc(
+            { x: cx, y: turretHeight / 2 + 0.25, z: cz },
+            turretHeight / 2,
+            turretRadius,
+            { label: 'turret' }
+          )
         )
       }
     }

@@ -7,6 +7,8 @@
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
+import { boxDesc, cylinderDesc } from '../track-collider-descriptors'
+import type { EmittedCollider } from '../track-collider-emitter'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildCasinoHeist(builder: TrackBuilder): void {
@@ -21,7 +23,6 @@ export function buildCasinoHeist(builder: TrackBuilder): void {
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
-  const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
   const kinematicBindings = (builder as unknown as { kinematicBindings: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
@@ -62,12 +63,11 @@ export function buildCasinoHeist(builder: TrackBuilder): void {
       chip.material = chipMats[Math.floor(Math.random() * chipMats.length)]
       adventureTrack.push(chip)
 
-      const body = world.createRigidBody(
-        rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
-      )
-      world.createCollider(
-        rapier.ColliderDesc.cylinder(stackHeight / 2, chipRadius).setRestitution(0.8),
-        body
+      const { body } = builder.emitCollider(
+        cylinderDesc({ x: pos.x, y: pos.y, z: pos.z }, stackHeight / 2, chipRadius, {
+          restitution: 0.8,
+          label: 'pokerChip',
+        })
       )
       adventureBodies.push(body)
     }
@@ -84,13 +84,9 @@ export function buildCasinoHeist(builder: TrackBuilder): void {
     const pocketCount = 2
     const pocketAngleStep = Math.PI
 
-    const sensorBodyDesc = rapier.RigidBodyDesc.kinematicVelocityBased()
-      .setTranslation(wheelCenter.x, wheelCenter.y, wheelCenter.z)
-    const sensorBody = world.createRigidBody(sensorBodyDesc)
-    sensorBody.setAngvel({ x: 0, y: wheelSpeed, z: 0 }, true)
-
-    resetSensors.push(sensorBody)
-    adventureBodies.push(sensorBody)
+    // The wheel's zero pockets are sensors riding the spinning wheel body.
+    // The first is emitted as the body; the rest attach to it.
+    let wheel: EmittedCollider | null = null
 
     for (let i = 0; i < pocketCount; i++) {
       const angle = i * pocketAngleStep
@@ -99,11 +95,29 @@ export function buildCasinoHeist(builder: TrackBuilder): void {
       const lx = Math.sin(angle) * r
       const lz = Math.cos(angle) * r
 
-      const sensorShape = rapier.ColliderDesc.cylinder(0.5, 1.0)
-        .setTranslation(lx, 0.5, lz)
-        .setSensor(true)
-
-      world.createCollider(sensorShape, sensorBody)
+      if (!wheel) {
+        wheel = builder.emitCollider(
+          cylinderDesc(
+            { x: wheelCenter.x, y: wheelCenter.y, z: wheelCenter.z },
+            0.5,
+            1.0,
+            {
+              sensor: true,
+              motion: 'kinematic-velocity',
+              angularVelocity: { x: 0, y: wheelSpeed, z: 0 },
+              localPosition: { x: lx, y: 0.5, z: lz },
+              label: 'zeroPocket',
+            }
+          )
+        )
+        resetSensors.push(wheel.body)
+        adventureBodies.push(wheel.body)
+      } else {
+        builder.attachCollider(
+          wheel,
+          cylinderDesc({ x: lx, y: 0.5, z: lz }, 0.5, 1.0, { sensor: true, label: 'zeroPocket' })
+        )
+      }
 
       const marker = MeshBuilder.CreateCylinder("zeroPocket", { diameter: 2, height: 0.1 }, scene)
       if (kinematicBindings.length > 0) {
@@ -152,14 +166,16 @@ export function buildCasinoHeist(builder: TrackBuilder): void {
       adventureTrack.push(gate)
 
       const q = Quaternion.FromEulerAngles(0, heading, 0)
-      const body = world.createRigidBody(
-        rapier.RigidBodyDesc.kinematicPositionBased()
-          .setTranslation(basePos.x, basePos.y, basePos.z)
-          .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-      )
-      world.createCollider(
-        rapier.ColliderDesc.cuboid(gateWidth / 2, gateHeight / 2, gateDepth / 2),
-        body
+      const { body } = builder.emitCollider(
+        boxDesc(
+          { x: basePos.x, y: basePos.y, z: basePos.z },
+          { x: gateWidth / 2, y: gateHeight / 2, z: gateDepth / 2 },
+          {
+            rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+            motion: 'kinematic-position',
+            label: 'slotGate',
+          }
+        )
       )
       adventureBodies.push(body)
 

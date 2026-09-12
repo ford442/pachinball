@@ -7,6 +7,7 @@
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
+import { boxDesc } from '../track-collider-descriptors'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildSynthwaveSurf(builder: TrackBuilder): void {
@@ -18,7 +19,6 @@ export function buildSynthwaveSurf(builder: TrackBuilder): void {
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
-  const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
   const animatedObstacles = (builder as unknown as { animatedObstacles: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, frequency: number, amplitude: number, phase: number }[] }).animatedObstacles
@@ -70,14 +70,16 @@ export function buildSynthwaveSurf(builder: TrackBuilder): void {
         adventureTrack.push(box)
 
         const q = Quaternion.FromEulerAngles(0, heading, 0)
-        const body = world.createRigidBody(
-          rapier.RigidBodyDesc.kinematicPositionBased()
-            .setTranslation(animBasePos.x, animBasePos.y, animBasePos.z)
-            .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-        )
-        world.createCollider(
-          rapier.ColliderDesc.cuboid(pistonWidth / 2, pistonHeight / 2, pistonDepth / 2),
-          body
+        const { body } = builder.emitCollider(
+          boxDesc(
+            { x: animBasePos.x, y: animBasePos.y, z: animBasePos.z },
+            { x: pistonWidth / 2, y: pistonHeight / 2, z: pistonDepth / 2 },
+            {
+              rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+              motion: 'kinematic-position',
+              label: 'eqPiston',
+            }
+          )
         )
         adventureBodies.push(body)
 

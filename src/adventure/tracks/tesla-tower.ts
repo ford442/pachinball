@@ -7,6 +7,7 @@
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
+import { boxDesc, sphereDesc } from '../track-collider-descriptors'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildTeslaTower(builder: TrackBuilder): void {
@@ -16,7 +17,6 @@ export function buildTeslaTower(builder: TrackBuilder): void {
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
-  const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
   const kinematicBindings = (builder as unknown as { kinematicBindings: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
@@ -52,15 +52,13 @@ export function buildTeslaTower(builder: TrackBuilder): void {
       center.y -= drop / 2
       center.y += 0.5
 
-      const sensor = world.createRigidBody(
-        rapier.RigidBodyDesc.fixed().setTranslation(center.x, center.y, center.z)
-      )
       const q = Quaternion.FromEulerAngles(coilIncline, curH, 0)
-      sensor.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
-
-      world.createCollider(
-        rapier.ColliderDesc.cuboid(4, 1, chordLen / 2).setSensor(true),
-        sensor
+      const { body: sensor } = builder.emitCollider(
+        boxDesc({ x: center.x, y: center.y, z: center.z }, { x: 4, y: 1, z: chordLen / 2 }, {
+          rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+          sensor: true,
+          label: 'coilConveyor',
+        })
       )
 
       const forceVec = new Vector3(Math.sin(curH), -Math.sin(coilIncline), Math.cos(curH)).normalize().scale(200.0)
@@ -132,13 +130,12 @@ export function buildTeslaTower(builder: TrackBuilder): void {
       sphere.material = lightningMat
       adventureTrack.push(sphere)
 
-      const body = world.createRigidBody(
-        rapier.RigidBodyDesc.kinematicVelocityBased()
-          .setTranslation(pos.x, pos.y, pos.z)
-      )
-      world.createCollider(
-        rapier.ColliderDesc.ball(sphereRadius).setRestitution(1.2),
-        body
+      const { body } = builder.emitCollider(
+        sphereDesc({ x: pos.x, y: pos.y, z: pos.z }, sphereRadius, {
+          restitution: 1.2,
+          motion: 'kinematic-velocity',
+          label: 'ballLightning',
+        })
       )
       adventureBodies.push(body)
       kinematicBindings.push({ body, mesh: sphere })

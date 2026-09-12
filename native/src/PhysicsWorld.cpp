@@ -186,6 +186,7 @@ int PhysicsWorld::addStaticBox(float px, float py, float pz,
                                float hx, float hy, float hz,
                                float qx, float qy, float qz, float qw,
                                float restitution, float friction) {
+  if (boxes_.size() >= STATIC_HANDLE_CAPACITY) { ++droppedStatics_; return STATIC_HANDLE_OVERFLOW; }
   BoxDesc box;
   box.center = {px, py, pz};
   box.halfExtents = {hx, hy, hz};
@@ -202,6 +203,7 @@ int PhysicsWorld::addStaticCapsule(float px, float py, float pz,
                                    float radius, float halfHeight,
                                    float qx, float qy, float qz, float qw,
                                    float restitution, float friction) {
+  if (capsules_.size() >= STATIC_HANDLE_CAPACITY) { ++droppedStatics_; return STATIC_HANDLE_OVERFLOW; }
   CapsuleDesc cap;
   cap.center = {px, py, pz};
   cap.radius = radius;
@@ -216,6 +218,7 @@ int PhysicsWorld::addStaticCapsule(float px, float py, float pz,
 }
 
 int PhysicsWorld::addKinematicMover(const KinematicMoverDesc& desc) {
+  if (movers_.size() >= STATIC_HANDLE_CAPACITY) { ++droppedStatics_; return STATIC_HANDLE_OVERFLOW; }
   KinematicMover mover;
   mover.shape = desc.shape;
   mover.halfExtents = desc.halfExtents;
@@ -242,6 +245,7 @@ void PhysicsWorld::setNextKinematicTransform(int moverId, float px, float py, fl
 }
 
 int PhysicsWorld::addSensorVolume(const SensorVolumeDesc& desc) {
+  if (sensors_.size() >= STATIC_HANDLE_CAPACITY) { ++droppedStatics_; return STATIC_HANDLE_OVERFLOW; }
   sensors_.push_back(desc);
   const int idx = static_cast<int>(sensors_.size()) - 1;
   broadphase_.insertSensorVolume(idx, desc);
@@ -249,10 +253,12 @@ int PhysicsWorld::addSensorVolume(const SensorVolumeDesc& desc) {
 }
 
 void PhysicsWorld::clearStaticGeometry() {
+  droppedStatics_ = 0;
   planes_.clear();
   boxes_.clear();
   capsules_.clear();
   cylinders_.clear();
+  spheres_.clear();
   movers_.clear();
   sensors_.clear();
   meshes_.clear();
@@ -261,6 +267,7 @@ void PhysicsWorld::clearStaticGeometry() {
   broadphase_.clearStatics();
   // Mover cells are rebuilt from scratch every substep, so clearing the
   // vector above is all that is needed there.
+  contactListener_.resetManifold();
 }
 
 void PhysicsWorld::setCollisionGroups(int id, uint32_t membership, uint32_t filter) {
@@ -289,9 +296,12 @@ void PhysicsWorld::setCollisionGroups(int id, uint32_t membership, uint32_t filt
     // the broadphase still reads the mask live.
     const std::size_t idx = static_cast<std::size_t>(STATIC_MESH_ID_BASE - id);
     if (idx < meshes_.size()) { meshes_[idx].membership = membership; meshes_[idx].filter = filter; }
-  } else if (id <= FORCE_FIELD_ID_BASE) {
+  } else if (id <= FORCE_FIELD_ID_BASE && id > STATIC_SPHERE_ID_BASE) {
     const std::size_t idx = static_cast<std::size_t>(FORCE_FIELD_ID_BASE - id);
     if (idx < fields_.size()) { fields_[idx].membership = membership; fields_[idx].filter = filter; }
+  } else if (id <= STATIC_SPHERE_ID_BASE) {
+    const std::size_t idx = static_cast<std::size_t>(STATIC_SPHERE_ID_BASE - id);
+    if (idx < spheres_.size()) { spheres_[idx].membership = membership; spheres_[idx].filter = filter; }
   }
 }
 
@@ -383,8 +393,8 @@ void PhysicsWorld::substep(float dt) {
                       params_.sleepAngularThreshold,
                       params_.sleepFramesRequired);
 
-  broadphase_.buildPairs(bodies_, boxes_, capsules_, sensors_, movers_,
-                         cylinders_, triangles_, meshes_, pairs_);
+  broadphase_.buildPairs(bodies_, boxes_, capsules_, cylinders_, spheres_,
+                         sensors_, movers_, triangles_, meshes_, pairs_);
 
   for (int iter = 0; iter < params_.solverIterations; ++iter) {
     for (const auto& pair : pairs_) {
@@ -427,20 +437,18 @@ void PhysicsWorld::substep(float dt) {
         if (!body.isActive() || body.getType() == BodyType::Static) continue;
         const int capId = STATIC_CAPSULE_ID_BASE - pair.bodyB;
         resolveSphereVsCapsule(body, capsules_[static_cast<std::size_t>(pair.bodyB)], capId);
-      } else if (pair.type == BroadphaseGrid::Pair::BodyMover) {
-        BodyView body = bodies_.view(pair.bodyA);
-        if (!body.isActive() || body.getType() == BodyType::Static) continue;
-        if (body.getShape() == Shape::Capsule) {
-          resolveCapsuleVsMover(body, pair.bodyB);
-        } else {
-          resolveSphereVsMover(body, pair.bodyB);
-        }
       } else if (pair.type == BroadphaseGrid::Pair::BodyCylinder) {
         BodyView body = bodies_.view(pair.bodyA);
         if (!body.isActive() || body.getType() == BodyType::Static) continue;
-        if (body.getShape() == Shape::Box) continue; // box-vs-cylinder is out of scope
+        if (body.getShape() != Shape::Sphere) continue;
         const int cylId = STATIC_CYLINDER_ID_BASE - pair.bodyB;
         resolveSphereVsCylinder(body, cylinders_[static_cast<std::size_t>(pair.bodyB)], cylId);
+      } else if (pair.type == BroadphaseGrid::Pair::BodySphere) {
+        BodyView body = bodies_.view(pair.bodyA);
+        if (!body.isActive() || body.getType() == BodyType::Static) continue;
+        if (body.getShape() != Shape::Sphere) continue;
+        const int sphId = STATIC_SPHERE_ID_BASE - pair.bodyB;
+        resolveSphereVsStaticSphere(body, spheres_[static_cast<std::size_t>(pair.bodyB)], sphId);
       } else if (pair.type == BroadphaseGrid::Pair::BodyTriangle) {
         BodyView body = bodies_.view(pair.bodyA);
         if (!body.isActive() || body.getType() == BodyType::Static) continue;
@@ -456,6 +464,14 @@ void PhysicsWorld::substep(float dt) {
           resolveCapsuleVsSensor(body, pair.bodyB);
         } else {
           resolveSphereVsSensor(body, pair.bodyB);
+        }
+      } else if (pair.type == BroadphaseGrid::Pair::BodyMover) {
+        BodyView body = bodies_.view(pair.bodyA);
+        if (!body.isActive() || body.getType() == BodyType::Static) continue;
+        if (body.getShape() == Shape::Capsule) {
+          resolveCapsuleVsMover(body, pair.bodyB);
+        } else {
+          resolveSphereVsMover(body, pair.bodyB);
         }
       }
     }

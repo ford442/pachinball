@@ -56,6 +56,12 @@ export interface WasmSimEngine {
     restitution?: number,
     friction?: number
   ): number
+  addStaticSphere?(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    restitution?: number,
+    friction?: number
+  ): number
   addStaticTriangleMesh?(
     vertices: Float32Array,
     indices: Uint32Array,

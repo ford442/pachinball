@@ -182,7 +182,9 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("addStaticBox",    &PhysicsWorld::addStaticBox)
     .function("addStaticCapsule", &PhysicsWorld::addStaticCapsule)
     .function("addStaticCylinder", &PhysicsWorld::addStaticCylinder)
+    .function("addStaticSphere", &PhysicsWorld::addStaticSphere)
     .function("clearStaticGeometry", &PhysicsWorld::clearStaticGeometry)
+    .function("getDroppedStaticCount", &PhysicsWorld::getDroppedStaticCount)
 
     // Static triangle soup. JS passes heap offsets (Module._malloc) rather
     // than typed arrays so a whole adventure track uploads in one copy; see

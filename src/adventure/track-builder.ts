@@ -9,7 +9,6 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type {
@@ -28,12 +27,22 @@ import {
   MASK_BLUE,
 } from './adventure-types'
 import type { TrackInfo } from './adventure-track-progression'
-import { INTENSITY, emissive, PALETTE } from '../game-elements/visual-language'
+import type { TrackMaterialRole } from './track-theme-profiles'
 import {
-  getTrackThemeProfile,
-  type TrackMaterialRole,
-} from './track-theme-profiles'
+  createThemedTrackMaterial,
+  createTrackMaterial,
+  createTrackPBRMaterial,
+} from './track-materials'
+import {
+  applyBallImpulse,
+  testSensorOverlap,
+  type AdventurePhysicsBridge,
+} from './track-physics-bridge'
+import * as primitives from './track-primitives'
+import type { TrackPrimitiveContext } from './track-primitives'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
+import type { AdventureColliderDesc } from './track-collider-descriptors'
+import { TrackColliderEmitter, type EmittedCollider } from './track-collider-emitter'
 import type { TrackDefinition } from './track-schema'
 import {
   compileTrackDefinition,
@@ -42,15 +51,6 @@ import {
 } from './track-compiler'
 
 const RAPIER_DEFAULT_COLLISION_GROUPS = 0xFFFFFFFF
-
-/**
- * Overlap + impulse operations a track needs, abstracted over the engine that
- * actually owns the simulation. See `TrackBuilder.setPhysicsBridge`.
- */
-export interface AdventurePhysicsBridge {
-  overlaps(sensorBody: RAPIER.RigidBody, ball: RAPIER.RigidBody): boolean
-  applyImpulse(ball: RAPIER.RigidBody, x: number, y: number, z: number): void
-}
 
 export abstract class TrackBuilder {
   protected scene: Scene
@@ -74,6 +74,27 @@ export abstract class TrackBuilder {
   protected timeAccumulator = 0
   protected currentBallMesh: Mesh | null = null
 
+  /**
+   * Records every collider this track emits and realises it on Rapier.
+   * The recorded list is the single source the C++ adventure exporter walks
+   * (see src/game/physics/wasm-adventure-export.ts).
+   */
+  protected colliders: TrackColliderEmitter
+
+  /**
+   * Rapier geometry this track built outside the descriptor path (today only
+   * prism-pathway's convex hull). A track with any of these can never be
+   * fully exported to C++, whatever its descriptors say.
+   */
+  protected unexportedColliders: string[] = []
+
+  /**
+   * Bumped every time the track's collider set changes (a build or a
+   * teardown). The C++ adventure exporter watches this to know when to
+   * rewrite its static scene.
+   */
+  private colliderEpoch = 0
+
   /** Baseline world gravity captured before a data-track multiplier is applied. */
   private storedGravity: { x: number; y: number; z: number } | null = null
 
@@ -90,19 +111,7 @@ export abstract class TrackBuilder {
   // Communication
   protected onEvent: AdventureCallback | null = null
 
-  /**
-   * Physics bridge for zone effects (conveyors, gravity wells, damping zones,
-   * chroma gates, exit portals).
-   *
-   * These were written against Rapier directly: `world.intersectionPair` for
-   * overlap and `body.applyImpulse` for the push. Neither works once WASM owns
-   * the track — Rapier's narrowphase only produces intersection pairs while it
-   * is being stepped, and the ball bodies are disabled puppets by then.
-   *
-   * Routing both through this one seam lets `wasm-owner` substitute the WASM
-   * contact stream and impulse path without the zone logic knowing which
-   * engine is underneath. Unset, it falls back to Rapier.
-   */
+  /** See `AdventurePhysicsBridge`. Unset, zone effects fall back to Rapier. */
   private physicsBridge: AdventurePhysicsBridge | null = null
 
   /** Install (or clear, with null) the WASM-backed overlap/impulse bridge. */
@@ -112,28 +121,75 @@ export abstract class TrackBuilder {
 
   /** True when `ball` currently overlaps `sensorBody`'s trigger volume. */
   protected testSensorOverlap(sensorBody: RAPIER.RigidBody, ball: RAPIER.RigidBody): boolean {
-    const bridge = this.physicsBridge
-    if (bridge) return bridge.overlaps(sensorBody, ball)
-    const sensorCollider = sensorBody.collider(0)
-    const ballCollider = ball.collider(0)
-    if (!sensorCollider || !ballCollider) return false
-    return this.world.intersectionPair(sensorCollider, ballCollider)
+    return testSensorOverlap(this.physicsBridge, this.world, sensorBody, ball)
   }
 
   /** Apply a world-space impulse to a ball, on whichever engine owns it. */
   protected applyBallImpulse(ball: RAPIER.RigidBody, x: number, y: number, z: number): void {
-    const bridge = this.physicsBridge
-    if (bridge) {
-      bridge.applyImpulse(ball, x, y, z)
-      return
-    }
-    ball.applyImpulse({ x, y, z }, true)
+    applyBallImpulse(this.physicsBridge, ball, x, y, z)
   }
 
   constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
+    this.colliders = new TrackColliderEmitter(world, rapier)
+  }
+
+  /** Collider descriptors emitted by the currently-built track. */
+  getColliderDescriptors(): readonly AdventureColliderDesc[] {
+    return this.colliders.list()
+  }
+
+  /** Monotonic id of the current collider set; changes on build and teardown. */
+  getColliderEpoch(): number {
+    return this.colliderEpoch
+  }
+
+  /** The Rapier body a descriptor was realised as, for C++ handle mapping. */
+  getBodyForDescriptor(index: number): RAPIER.RigidBody | null {
+    return this.colliders.bodyForDescriptor(index)
+  }
+
+  /**
+   * Emit one collider for this track: recorded as a descriptor and realised
+   * as a Rapier body. Track modules call this instead of building
+   * `rapier.ColliderDesc` inline, so the same geometry can be replayed into
+   * the C++ engine.
+   */
+  emitCollider(desc: AdventureColliderDesc): EmittedCollider {
+    this.colliderEpoch++
+    return this.colliders.emit(desc)
+  }
+
+  /**
+   * Declare that this track built a Rapier collider the descriptor path does
+   * not cover, so the C++ adventure gate knows the export is incomplete.
+   */
+  markUnexportedCollider(reason: string): void {
+    this.colliderEpoch++
+    this.unexportedColliders.push(reason)
+  }
+
+  /** Reasons this track cannot be fully exported to C++; empty when it can. */
+  getUnexportedColliders(): readonly string[] {
+    return this.unexportedColliders
+  }
+
+  /** Drop the previous track's descriptors (called from clearTrack). */
+  protected resetTrackColliders(): void {
+    this.colliderEpoch++
+    this.colliders.clear()
+    this.unexportedColliders = []
+  }
+
+  /**
+   * Emit an extra, body-local collider on an already-emitted body. Accepts
+   * either the handle emitCollider() returned or the raw Rapier body.
+   */
+  attachCollider(parent: EmittedCollider | RAPIER.RigidBody, desc: AdventureColliderDesc): void {
+    this.colliderEpoch++
+    this.colliders.attach(parent, desc)
   }
 
   /**
@@ -221,14 +277,10 @@ export abstract class TrackBuilder {
   }
 
   // --- Shared Helper for Materials ---
+  // Construction lives in track-materials.ts; these keep the protected surface.
+
   protected getTrackMaterial(colorHex: string): StandardMaterial {
-    const mat = new StandardMaterial("trackMat", this.scene)
-    mat.emissiveColor = Color3.FromHexString(colorHex)
-    mat.diffuseColor = Color3.Black()
-    mat.alpha = 0.6
-    mat.wireframe = true
-    this.materials.push(mat)
-    return mat
+    return createTrackMaterial(this.scene, this.materials, colorHex)
   }
 
   /**
@@ -236,32 +288,19 @@ export abstract class TrackBuilder {
    * Use this for tracks that should look more physically realistic.
    */
   protected getTrackPBRMaterial(colorHex: string): PBRMaterial {
-    const mat = new PBRMaterial("trackPBRMat", this.scene)
-    mat.albedoColor = Color3.Black()
-    mat.emissiveColor = Color3.FromHexString(colorHex)
-    mat.emissiveIntensity = 1.2
-    mat.metallic = 0.8
-    mat.roughness = 0.2
-    mat.alpha = 0.85
-    mat.wireframe = true
-    mat.clearCoat.isEnabled = true
-    mat.clearCoat.intensity = 0.4
-    mat.clearCoat.roughness = 0.2
-    this.materials.push(mat)
-    return mat
+    return createTrackPBRMaterial(this.scene, this.materials, colorHex)
   }
 
   /**
    * Resolve adventure track geometry material from the active track's premium profile.
    */
   protected getThemedTrackMaterial(role: TrackMaterialRole): StandardMaterial | PBRMaterial {
-    const trackId = this.currentTrackInfo?.id ?? ''
-    const profile = getTrackThemeProfile(trackId)
-    const hex = profile?.materials[role] ?? PALETTE.CYAN
-    const usePbr = profile?.usePBRStructure && (role === 'structure' || role === 'glow')
-    const mat = usePbr ? this.getTrackPBRMaterial(hex) : this.getTrackMaterial(hex)
-    mat.metadata = { ...(mat.metadata ?? {}), trackMaterialRole: role, trackId }
-    return mat
+    return createThemedTrackMaterial(
+      this.scene,
+      this.materials,
+      role,
+      this.currentTrackInfo?.id ?? ''
+    )
   }
 
   /** Materials created for the active adventure track (for live theme retinting). */
@@ -393,6 +432,32 @@ export abstract class TrackBuilder {
   }
 
   // --- Primitive Builders ---
+  //
+  // Geometry + mesh construction lives in track-primitives.ts (over the pure
+  // layout maths in track-geometry.ts). These wrappers keep the protected
+  // method surface every track module already calls.
+
+  /** Context handed to each primitive. Rebuilt per call — clearTrack() swaps
+   * the arrays out, so a cached context would hold the old track's lists. */
+  private primitiveContext(): TrackPrimitiveContext {
+    return {
+      scene: this.scene,
+      hasWorld: Boolean(this.world),
+      adventureTrack: this.adventureTrack,
+      adventureBodies: this.adventureBodies,
+      kinematicBindings: this.kinematicBindings,
+      gravityWells: this.gravityWells,
+      chromaGates: this.chromaGates,
+      resetSensors: this.resetSensors,
+      materials: this.materials,
+      emit: (desc) => this.colliders.emit(desc),
+      attach: (parent, desc) => this.colliders.attach(parent, desc),
+      getTrackMaterial: (hex) => this.getTrackMaterial(hex),
+      setGoalSensor: (body) => {
+        this.adventureSensor = body
+      },
+    }
+  }
 
   /**
    * Creates a straight ramp segment.
@@ -416,55 +481,13 @@ export abstract class TrackBuilder {
     wallHeight: number = 0,
     friction: number = 0.5
   ): Vector3 {
-    if (!this.world) return startPos
-
-    const box = MeshBuilder.CreateBox("straightRamp", { width, height: 0.5, depth: length }, this.scene)
-
-    // Calculate Horizontal and Vertical components
-    const hLen = length * Math.cos(inclineRad)
-    const vDrop = length * Math.sin(inclineRad)
-
-    const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
-
-    // Center of the box
-    const center = startPos.add(forward.scale(hLen / 2))
-    center.y -= vDrop / 2
-
-    box.position.copyFrom(center)
-    box.rotation.y = heading
-    box.rotation.x = inclineRad
-
-    box.material = material
-    this.adventureTrack.push(box)
-
-    // Physics
-    const q = Quaternion.FromEulerAngles(box.rotation.x, box.rotation.y, 0)
-    const body = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed()
-        .setTranslation(center.x, center.y, center.z)
-        .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+    return primitives.addStraightRamp(
+      this.primitiveContext(),
+      startPos, heading, width, length, inclineRad, material, wallHeight, friction
     )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(width / 2, 0.25, length / 2)
-        .setFriction(friction)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-      body
-    )
-    this.adventureBodies.push(body)
-
-    if (wallHeight > 0) {
-      this.createWall(center, heading, length, width, wallHeight, inclineRad, material, friction)
-    }
-
-    // Return End Position
-    const endPos = startPos.add(forward.scale(hLen))
-    endPos.y -= vDrop
-    return endPos
   }
 
-  /**
-   * Creates a curved ramp segment.
-   */
+  /** Creates a curved ramp segment. */
   protected addCurvedRamp(
     startPos: Vector3,
     startHeading: number,
@@ -478,63 +501,14 @@ export abstract class TrackBuilder {
     bankingAngle: number = 0,
     friction: number = 0.5
   ): Vector3 {
-    if (!this.world) return startPos
-
-    const segmentAngle = totalAngle / segments
-    const arcLength = radius * Math.abs(segmentAngle)
-    const chordLen = 2 * radius * Math.sin(Math.abs(segmentAngle) / 2)
-    const segmentDrop = arcLength * Math.sin(inclineRad)
-
-    let currentHeading = startHeading
-    let currentP = startPos.clone()
-
-    for (let i = 0; i < Math.abs(segments); i++) {
-      currentHeading += (segmentAngle / 2)
-
-      const forward = new Vector3(Math.sin(currentHeading), 0, Math.cos(currentHeading))
-      const center = currentP.add(forward.scale(chordLen / 2))
-      center.y -= segmentDrop / 2
-
-      const box = MeshBuilder.CreateBox("curveSeg", { width, height: 0.5, depth: chordLen }, this.scene)
-      box.position.copyFrom(center)
-
-      box.rotation.x = inclineRad
-      box.rotation.y = currentHeading
-      box.rotation.z = bankingAngle
-
-      box.material = material
-      this.adventureTrack.push(box)
-
-      const q = Quaternion.FromEulerAngles(box.rotation.x, box.rotation.y, box.rotation.z)
-      const body = this.world.createRigidBody(
-        this.rapier.RigidBodyDesc.fixed()
-          .setTranslation(center.x, center.y, center.z)
-          .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-      )
-      this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(width / 2, 0.25, chordLen / 2)
-          .setFriction(friction)
-          .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-        body
-      )
-      this.adventureBodies.push(body)
-
-      if (wallHeight > 0) {
-        this.createWall(center, currentHeading, chordLen, width, wallHeight, inclineRad, material, friction)
-      }
-
-      currentP = currentP.add(forward.scale(chordLen))
-      currentP.y -= segmentDrop
-
-      currentHeading += (segmentAngle / 2)
-    }
-
-    return currentP
+    return primitives.addCurvedRamp(
+      this.primitiveContext(),
+      startPos, startHeading, radius, totalAngle, inclineRad, width, wallHeight,
+      material, segments, bankingAngle, friction
+    )
   }
 
-  /**
-   * Creates walls alongside a track segment.
-   */
+  /** Creates walls alongside a track segment. */
   protected createWall(
     center: Vector3,
     heading: number,
@@ -544,43 +518,14 @@ export abstract class TrackBuilder {
     inclineRad: number,
     mat: StandardMaterial | PBRMaterial,
     friction: number = 0.5
-  ) {
-    if (!this.world) return
-
-    const offsets = [trackWidth / 2 + 0.25, -trackWidth / 2 - 0.25]
-
-    offsets.forEach(offset => {
-      const wall = MeshBuilder.CreateBox("wall", { width: 0.5, height: height, depth: length }, this.scene)
-
-      const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
-      const wallPos = center.add(right.scale(offset))
-      wallPos.y += height / 2
-
-      wall.position.copyFrom(wallPos)
-      wall.rotation.y = heading
-      wall.rotation.x = inclineRad
-      wall.material = mat
-      this.adventureTrack.push(wall)
-
-      const q = Quaternion.FromEulerAngles(wall.rotation.x, wall.rotation.y, 0)
-      const body = this.world.createRigidBody(
-        this.rapier.RigidBodyDesc.fixed()
-          .setTranslation(wallPos.x, wallPos.y, wallPos.z)
-          .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-      )
-      this.world.createCollider(
-        this.rapier.ColliderDesc.cuboid(0.25, height / 2, length / 2)
-          .setFriction(friction)
-          .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-        body
-      )
-      this.adventureBodies.push(body)
-    })
+  ): void {
+    primitives.createWall(
+      this.primitiveContext(),
+      center, heading, length, trackWidth, height, inclineRad, mat, friction
+    )
   }
 
-  /**
-   * Creates a rotating platform.
-   */
+  /** Creates a rotating platform. */
   protected createRotatingPlatform(
     center: Vector3,
     radius: number,
@@ -588,123 +533,27 @@ export abstract class TrackBuilder {
     material: StandardMaterial | PBRMaterial,
     hasTeeth: boolean = false
   ): void {
-    if (!this.world) return
-
-    const thickness = 0.5
-    const cylinder = MeshBuilder.CreateCylinder("gear", { diameter: radius * 2, height: thickness, tessellation: 32 }, this.scene)
-    cylinder.position.copyFrom(center)
-    cylinder.material = material
-    this.adventureTrack.push(cylinder)
-
-    const bodyDesc = this.rapier.RigidBodyDesc.kinematicVelocityBased()
-      .setTranslation(center.x, center.y, center.z)
-
-    const body = this.world.createRigidBody(bodyDesc)
-    body.setAngvel({ x: 0, y: angVelY, z: 0 }, true)
-
-    const colliderDesc = this.rapier.ColliderDesc.cylinder(thickness / 2, radius)
-      .setFriction(1.0)
-      .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE)
-
-    this.world.createCollider(colliderDesc, body)
-    this.adventureBodies.push(body)
-
-    this.kinematicBindings.push({ body, mesh: cylinder })
-
-    if (hasTeeth) {
-      const toothCount = 12
-      const angleStep = (2 * Math.PI) / toothCount
-
-      for (let i = 0; i < toothCount; i++) {
-        if (i % 2 !== 0) continue
-
-        const angle = i * angleStep
-        const tx = Math.sin(angle) * (radius - 0.25)
-        const tz = Math.cos(angle) * (radius - 0.25)
-
-        const toothCollider = this.rapier.ColliderDesc.cuboid(0.5, 0.5, 1.0)
-          .setTranslation(tx, 0.5 + 0.25, tz)
-          .setRotation({ w: Math.cos(angle / 2), x: 0, y: Math.sin(angle / 2), z: 0 })
-          .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE)
-
-        this.world.createCollider(toothCollider, body)
-
-        const tooth = MeshBuilder.CreateBox("tooth", { width: 1, height: 1, depth: 2 }, this.scene)
-        tooth.parent = cylinder
-        tooth.position.set(tx, 0.5 + 0.25, tz)
-        tooth.rotation.y = angle
-        tooth.material = material
-      }
-    }
+    primitives.createRotatingPlatform(
+      this.primitiveContext(), center, radius, angVelY, material, hasTeeth
+    )
   }
 
-  /**
-   * Creates a goal basin at the specified position.
-   */
+  /** Creates a goal basin at the specified position. */
   protected createBasin(pos: Vector3, material: StandardMaterial | PBRMaterial): void {
-    if (!this.world) return
-
-    const basin = MeshBuilder.CreateBox("basin", { width: 8, height: 1, depth: 8 }, this.scene)
-    basin.position.set(pos.x, pos.y - 1, pos.z)
-    basin.material = material
-    this.adventureTrack.push(basin)
-
-    const bBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y - 1, pos.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(4, 0.5, 4)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-      bBody
-    )
-    this.adventureBodies.push(bBody)
-
-    // Exit Sensor
-    const sensorY = pos.y - 0.5
-    const sensor = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, sensorY, pos.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(2, 1, 1)
-        .setSensor(true)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE)
-        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
-      sensor
-    )
-    this.adventureSensor = sensor
+    primitives.createBasin(this.primitiveContext(), pos, material)
   }
 
-  /**
-   * Creates a static cylinder obstacle.
-   */
+  /** Creates a static cylinder obstacle. */
   protected createStaticCylinder(
     pos: Vector3,
     diameter: number,
     height: number,
     material: StandardMaterial | PBRMaterial,
   ): void {
-    if (!this.world) return
-
-    const mesh = MeshBuilder.CreateCylinder("staticPillar", { diameter, height }, this.scene)
-    mesh.position.copyFrom(pos)
-    mesh.position.y += height / 2
-    mesh.material = material
-    this.adventureTrack.push(mesh)
-
-    const body = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(mesh.position.x, mesh.position.y, mesh.position.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cylinder(height / 2, diameter / 2)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-      body
-    )
-    this.adventureBodies.push(body)
+    primitives.createStaticCylinder(this.primitiveContext(), pos, diameter, height, material)
   }
 
-  /**
-   * Lattice of static pins on the most recent straight ramp surface.
-   */
+  /** Lattice of static pins on the most recent straight ramp surface. */
   protected createPinField(
     rampStart: Vector3,
     heading: number,
@@ -717,54 +566,14 @@ export abstract class TrackBuilder {
     pinHeight: number,
     material: StandardMaterial | PBRMaterial,
   ): void {
-    if (!this.world) return
-
-    const horiz = new Vector3(Math.sin(heading), 0, Math.cos(heading))
-    const forwardVec = new Vector3(
-      horiz.x * Math.cos(inclineRad),
-      -Math.sin(inclineRad),
-      horiz.z * Math.cos(inclineRad),
+    primitives.createPinField(
+      this.primitiveContext(),
+      rampStart, heading, inclineRad, rampLength, pinSpacing,
+      evenOffsets, oddOffsets, pinDiameter, pinHeight, material
     )
-    const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
-    const normalVec = new Vector3(
-      horiz.x * Math.sin(inclineRad),
-      Math.cos(inclineRad),
-      horiz.z * Math.sin(inclineRad),
-    )
-
-    const rows = Math.floor(rampLength / pinSpacing) - 1
-    for (let r = 1; r <= rows; r++) {
-      const dist = r * pinSpacing
-      const xOffsets = r % 2 === 0 ? evenOffsets : oddOffsets
-      for (const xOff of xOffsets) {
-        const pinPos = rampStart.add(forwardVec.scale(dist)).add(right.scale(xOff))
-        const surfaceOffset = normalVec.scale(0.25 + pinHeight / 2)
-        const finalPos = pinPos.add(surfaceOffset)
-
-        const pin = MeshBuilder.CreateCylinder('pin', { diameter: pinDiameter, height: pinHeight }, this.scene)
-        pin.position.copyFrom(finalPos)
-        pin.rotation.x = inclineRad
-        pin.material = material
-        this.adventureTrack.push(pin)
-
-        const q = Quaternion.FromEulerAngles(pin.rotation.x, pin.rotation.y, pin.rotation.z)
-        const body = this.world.createRigidBody(
-          this.rapier.RigidBodyDesc.fixed()
-            .setTranslation(finalPos.x, finalPos.y, finalPos.z)
-            .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }),
-        )
-        this.world.createCollider(
-          this.rapier.ColliderDesc.cylinder(pinHeight / 2, pinDiameter / 2).setRestitution(0.6),
-          body,
-        )
-        this.adventureBodies.push(body)
-      }
-    }
   }
 
-  /**
-   * Kinematic mill whose angular velocity is along the ramp normal (not world Y).
-   */
+  /** Kinematic mill whose angular velocity is along the ramp normal (not world Y). */
   protected createInclinedMill(
     center: Vector3,
     radius: number,
@@ -772,153 +581,29 @@ export abstract class TrackBuilder {
     angVelAlongNormal: number,
     material: StandardMaterial | PBRMaterial,
   ): void {
-    if (!this.world) return
-
-    const mill = MeshBuilder.CreateCylinder('mill', { diameter: radius * 2, height: 0.2 }, this.scene)
-    mill.position.copyFrom(center)
-    mill.rotation.x = inclineRad
-    mill.material = material
-    this.adventureTrack.push(mill)
-
-    const bodyDesc = this.rapier.RigidBodyDesc.kinematicVelocityBased()
-      .setTranslation(center.x, center.y, center.z)
-    const q = Quaternion.FromEulerAngles(inclineRad, 0, 0)
-    bodyDesc.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-    const body = this.world.createRigidBody(bodyDesc)
-
-    const normalVec = new Vector3(0, Math.cos(inclineRad), Math.sin(inclineRad))
-    const angVel = normalVec.scale(angVelAlongNormal)
-    body.setAngvel({ x: angVel.x, y: angVel.y, z: angVel.z }, true)
-
-    this.world.createCollider(this.rapier.ColliderDesc.cylinder(0.1, radius).setFriction(1.0), body)
-    this.adventureBodies.push(body)
-    this.kinematicBindings.push({ body, mesh: mill })
+    primitives.createInclinedMill(
+      this.primitiveContext(), center, radius, inclineRad, angVelAlongNormal, material
+    )
   }
 
-  /**
-   * Side catch basin with a reset sensor (penalty zone).
-   */
+  /** Side catch basin with a reset sensor (penalty zone). */
   protected createResetBasin(pos: Vector3, material: StandardMaterial | PBRMaterial): void {
-    if (!this.world) return
-
-    const basin = MeshBuilder.CreateBox('resetBasin', { width: 4, height: 1, depth: 4 }, this.scene)
-    basin.position.copyFrom(pos)
-    basin.material = material
-    this.adventureTrack.push(basin)
-
-    const body = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z),
-    )
-    this.world.createCollider(this.rapier.ColliderDesc.cuboid(2, 0.5, 2), body)
-    this.adventureBodies.push(body)
-
-    const sensorPos = pos.clone()
-    sensorPos.y += 0.75
-    const sensorBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(sensorPos.x, sensorPos.y, sensorPos.z),
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(1.8, 0.25, 1.8).setSensor(true),
-      sensorBody,
-    )
-    this.resetSensors.push(sensorBody)
+    primitives.createResetBasin(this.primitiveContext(), pos, material)
   }
 
-  /**
-   * Creates a dynamic physics block.
-   */
+  /** Creates a dynamic physics block. */
   protected createDynamicBlock(pos: Vector3, size: number, mass: number, material: StandardMaterial): void {
-    if (!this.world) return
-
-    const box = MeshBuilder.CreateBox("dynBlock", { size }, this.scene)
-    box.position.copyFrom(pos)
-    box.material = material
-    this.adventureTrack.push(box)
-
-    const bodyDesc = this.rapier.RigidBodyDesc.dynamic()
-      .setTranslation(pos.x, pos.y, pos.z)
-
-    const body = this.world.createRigidBody(bodyDesc)
-
-    const volume = size * size * size
-    const density = mass / volume
-
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(size / 2, size / 2, size / 2)
-        .setDensity(density)
-        .setFriction(0.5)
-        .setRestitution(0.2)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-      body
-    )
-    this.adventureBodies.push(body)
-    this.kinematicBindings.push({ body, mesh: box })
+    primitives.createDynamicBlock(this.primitiveContext(), pos, size, mass, material)
   }
 
-  /**
-   * Creates a chroma gate that changes ball color state.
-   */
+  /** Creates a chroma gate that changes ball color state. */
   protected createChromaGate(pos: Vector3, color: 'RED' | 'GREEN' | 'BLUE'): void {
-    if (!this.world) return
-
-    const gateMat = this.getTrackMaterial(color === 'RED' ? "#FF0000" : color === 'GREEN' ? "#00FF00" : "#0000FF")
-    const gate = MeshBuilder.CreateTorus("gate", { diameter: 4, thickness: 0.2 }, this.scene)
-    gate.position.copyFrom(pos)
-    gate.rotation.x = Math.PI / 2
-    gate.material = gateMat
-    this.adventureTrack.push(gate)
-
-    const sensor = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cylinder(0.5, 2.0)
-        .setSensor(true)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-      sensor
-    )
-
-    this.chromaGates.push({ sensor, colorType: color })
+    primitives.createChromaGate(this.primitiveContext(), pos, color)
   }
 
-  /**
-   * Creates an arc pylon with repulsive gravity well.
-   */
+  /** Creates an arc pylon with repulsive gravity well. */
   protected createArcPylon(pos: Vector3, mat: StandardMaterial): void {
-    if (!this.world) return
-
-    const pylon = MeshBuilder.CreateCylinder("pylon", { diameter: 1.0, height: 3.0 }, this.scene)
-    pylon.position.copyFrom(pos)
-    pylon.position.y += 1.5
-    pylon.material = mat
-    this.adventureTrack.push(pylon)
-
-    const body = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y + 1.5, pos.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cylinder(1.5, 0.5)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-      body
-    )
-    this.adventureBodies.push(body)
-
-    // Repulsive Gravity Well
-    const sensor = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y + 1.5, pos.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.ball(3.0)
-        .setSensor(true)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE),
-      sensor
-    )
-
-    this.gravityWells.push({
-      sensor,
-      center: pos,
-      strength: -50.0 // Repel
-    })
+    primitives.createArcPylon(this.primitiveContext(), pos, mat)
   }
 
   /**
@@ -985,61 +670,9 @@ export abstract class TrackBuilder {
     coreColorHex: string,
     radius: number = 2.1,
     depth: number = 0.8
-  ): {
-    root: Mesh
-    core: Mesh
-    ringMaterial: StandardMaterial
-    coreMaterial: StandardMaterial
-    sensor: RAPIER.RigidBody
-  } {
-    const ring = MeshBuilder.CreateTorus(
-      'exitPortalRing',
-      { diameter: radius * 2, thickness: 0.45, tessellation: 48 },
-      this.scene
+  ): primitives.ExitPortalParts {
+    return primitives.createExitPortal(
+      this.primitiveContext(), position, ringColorHex, coreColorHex, radius, depth
     )
-    ring.position.copyFrom(position)
-    ring.rotation.x = Math.PI / 2
-
-    const core = MeshBuilder.CreateDisc(
-      'exitPortalCore',
-      { radius: radius * 0.82, tessellation: 48 },
-      this.scene
-    )
-    core.parent = ring
-    core.position.z = -0.08
-
-    const ringMaterial = new StandardMaterial('exitPortalRingMat', this.scene)
-    ringMaterial.diffuseColor = Color3.Black()
-    ringMaterial.emissiveColor = emissive(ringColorHex, INTENSITY.HIGH)
-    ring.material = ringMaterial
-
-    const coreMaterial = new StandardMaterial('exitPortalCoreMat', this.scene)
-    coreMaterial.diffuseColor = Color3.Black()
-    coreMaterial.emissiveColor = emissive(coreColorHex, INTENSITY.ACTIVE)
-    coreMaterial.alpha = 0.72
-    core.material = coreMaterial
-
-    this.adventureTrack.push(ring, core)
-    this.materials.push(ringMaterial, coreMaterial)
-
-    const sensor = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(position.x, position.y, position.z)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cylinder(depth, radius * 0.9)
-        .setSensor(true)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.ADVENTURE)
-        .setActiveEvents(this.rapier.ActiveEvents.COLLISION_EVENTS),
-      sensor
-    )
-    this.adventureBodies.push(sensor)
-
-    return {
-      root: ring,
-      core,
-      ringMaterial,
-      coreMaterial,
-      sensor,
-    }
   }
 }

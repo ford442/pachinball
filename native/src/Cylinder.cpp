@@ -56,11 +56,12 @@ int PhysicsWorld::addStaticCylinder(float px, float py, float pz,
                                     float radius, float halfHeight,
                                     float qx, float qy, float qz, float qw,
                                     float restitution, float friction) {
+  if (cylinders_.size() >= STATIC_HANDLE_CAPACITY) { ++droppedStatics_; return STATIC_HANDLE_OVERFLOW; }
   CylinderDesc cyl;
   cyl.center = {px, py, pz};
   cyl.radius = radius;
   cyl.halfHeight = halfHeight;
-  cyl.rotation = {qx, qy, qz, qw};
+  cyl.rotation = Quat{qx, qy, qz, qw}.normalized();
   cyl.restitution = restitution;
   cyl.friction = friction;
   cylinders_.push_back(cyl);

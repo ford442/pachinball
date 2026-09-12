@@ -7,6 +7,7 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
+import { boxDesc, cylinderDesc } from '../track-collider-descriptors'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildNeonSkyline(builder: TrackBuilder): void {
@@ -16,7 +17,6 @@ export function buildNeonSkyline(builder: TrackBuilder): void {
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
-  const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
   const conveyorZones = (builder as unknown as { conveyorZones: { sensor: RAPIER.RigidBody, force: Vector3 }[] }).conveyorZones
@@ -45,12 +45,11 @@ export function buildNeonSkyline(builder: TrackBuilder): void {
     fan.material = windMat
     adventureTrack.push(fan)
 
-    const sensor = world.createRigidBody(
-      rapier.RigidBodyDesc.fixed().setTranslation(center.x, center.y + 1.0, center.z)
-    )
-    world.createCollider(
-      rapier.ColliderDesc.cylinder(3.0, 2.5).setSensor(true),
-      sensor
+    const { body: sensor } = builder.emitCollider(
+      cylinderDesc({ x: center.x, y: center.y + 1.0, z: center.z }, 3.0, 2.5, {
+        sensor: true,
+        label: 'ventFanUpdraft',
+      })
     )
 
     conveyorZones.push({
@@ -85,12 +84,8 @@ export function buildNeonSkyline(builder: TrackBuilder): void {
       ac.material = skylineMat
       adventureTrack.push(ac)
 
-      const body = world.createRigidBody(
-        rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
-      )
-      world.createCollider(
-        rapier.ColliderDesc.cuboid(1, 1, 1),
-        body
+      const { body } = builder.emitCollider(
+        boxDesc({ x: pos.x, y: pos.y, z: pos.z }, { x: 1, y: 1, z: 1 }, { label: 'acUnit' })
       )
       adventureBodies.push(body)
     }

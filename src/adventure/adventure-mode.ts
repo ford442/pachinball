@@ -552,6 +552,7 @@ export class AdventureMode extends AdventurePortalMixin {
     this.portalPosition = null
     this.currentTrackInfo = null
     this.restoreTrackGravity()
+    this.resetTrackColliders()
 
     // Cleanup Visuals — dispose materials/textures to avoid GPU leaks across long sessions
     for (const mesh of this.adventureTrack) {

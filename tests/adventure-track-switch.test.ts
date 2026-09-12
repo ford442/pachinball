@@ -129,6 +129,30 @@ import { AdventureMode, AdventureTrackType } from '../src/adventure/adventure-mo
 import { GameSlotAdventure } from '../src/game/game-slot-adventure'
 import { COLLISION_GROUP_PRESETS } from '../src/game-elements/physics'
 
+/** Fully chainable RigidBodyDesc stub — every builder method returns `this`. */
+function mockBodyDesc() {
+  const desc = {
+    setTranslation: vi.fn(() => desc),
+    setRotation: vi.fn(() => desc),
+  }
+  return desc
+}
+
+/** Fully chainable ColliderDesc stub, shared by cuboid / cylinder / ball. */
+function mockColliderDesc() {
+  const desc = {
+    setFriction: vi.fn(() => desc),
+    setRestitution: vi.fn(() => desc),
+    setCollisionGroups: vi.fn(() => desc),
+    setSensor: vi.fn(() => desc),
+    setActiveEvents: vi.fn(() => desc),
+    setDensity: vi.fn(() => desc),
+    setTranslation: vi.fn(() => desc),
+    setRotation: vi.fn(() => desc),
+  }
+  return desc
+}
+
 describe('AdventureMode.switchToTrack', () => {
   let mockScene: unknown
   let mockWorld: {
@@ -178,36 +202,15 @@ describe('AdventureMode.switchToTrack', () => {
 
     mockRapier = {
       RigidBodyDesc: {
-        fixed: vi.fn().mockReturnValue({
-          setTranslation: vi.fn().mockReturnThis(),
-          setRotation: vi.fn().mockReturnThis(),
-        }),
-        kinematicVelocityBased: vi.fn().mockReturnValue({
-          setTranslation: vi.fn().mockReturnThis(),
-        }),
-        dynamic: vi.fn().mockReturnValue({
-          setTranslation: vi.fn().mockReturnThis(),
-        }),
+        fixed: vi.fn(mockBodyDesc),
+        kinematicPositionBased: vi.fn(mockBodyDesc),
+        kinematicVelocityBased: vi.fn(mockBodyDesc),
+        dynamic: vi.fn(mockBodyDesc),
       },
       ColliderDesc: {
-        cuboid: vi.fn().mockReturnValue({
-          setFriction: vi.fn().mockReturnThis(),
-          setSensor: vi.fn().mockReturnThis(),
-          setActiveEvents: vi.fn().mockReturnThis(),
-          setDensity: vi.fn().mockReturnThis(),
-          setRestitution: vi.fn().mockReturnThis(),
-          setTranslation: vi.fn().mockReturnThis(),
-          setRotation: vi.fn().mockReturnThis(),
-        }),
-        cylinder: vi.fn().mockReturnValue({
-          setFriction: vi.fn().mockReturnThis(),
-          setSensor: vi.fn().mockReturnThis(),
-          setCollisionGroups: vi.fn().mockReturnThis(),
-          setActiveEvents: vi.fn().mockReturnThis(),
-        }),
-        ball: vi.fn().mockReturnValue({
-          setSensor: vi.fn().mockReturnThis(),
-        }),
+        cuboid: vi.fn(mockColliderDesc),
+        cylinder: vi.fn(mockColliderDesc),
+        ball: vi.fn(mockColliderDesc),
       },
       ActiveEvents: { COLLISION_EVENTS: 1 },
     }

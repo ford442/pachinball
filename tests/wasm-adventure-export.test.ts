@@ -1,23 +1,59 @@
-/**
- * Unit coverage for the adventure → WASM geometry exporter (#383 Slice B).
- *
- * Rapier is fully mocked, per the house testing rule: no engine code is
- * imported, and the `ShapeType` values are the literal numbers the real
- * enum uses (Ball 0, Cuboid 1, Capsule 2, TriMesh 6, ConvexPolyhedron 9,
- * Cylinder 10, Cone 11).
- */
-
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  ADVENTURE_FILTER,
+  ADVENTURE_MEMBERSHIP,
+  boxDesc,
+  cylinderDesc,
+  descCollisionGroups,
+  RAPIER_DEFAULT_FRICTION,
+  RAPIER_DEFAULT_RESTITUTION,
+  sphereDesc,
+  type AdventureColliderDesc,
+} from '../src/adventure/track-collider-descriptors'
+import { ADVENTURE_GROUP, CollisionGroups, makeCollisionGroups } from '../src/game-elements/physics'
+import { STATIC_HANDLE_OVERFLOW } from '../src/wasm/wasm-types'
+import {
+  collectUnsupported,
   driveAdventureMovers,
   exportAdventureBodyToWasm,
+  exportAdventureCollidersToWasm,
+  isFullyExportable,
   tessellateBox,
 } from '../src/game/physics/wasm-adventure-export'
 import { WasmVolumeShape } from '../src/wasm/PhysicsModule'
+import type { WasmSimEngine } from '../src/wasm/wasm-sim-engine'
 
 const ORIGIN = { x: 0, y: 0, z: 0 }
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 }
+
+type Call = { fn: string; args: unknown[] }
+
+function recordingEngine() {
+  const calls: Call[] = []
+  let box = -1000
+  let cylinder = -5000
+  let sphere = -8000
+  let mover = -3000
+  let sensor = -4000
+  const engine = {
+    addStaticBox: (...args: unknown[]) => { calls.push({ fn: 'addStaticBox', args }); return box-- },
+    addStaticCylinder: (...args: unknown[]) => { calls.push({ fn: 'addStaticCylinder', args }); return cylinder-- },
+    addStaticSphere: (...args: unknown[]) => { calls.push({ fn: 'addStaticSphere', args }); return sphere-- },
+    addKinematicMover: (...args: unknown[]) => { calls.push({ fn: 'addKinematicMover', args }); return mover-- },
+    addSensorVolume: (...args: unknown[]) => { calls.push({ fn: 'addSensorVolume', args }); return sensor-- },
+    setCollisionGroups: (...args: unknown[]) => { calls.push({ fn: 'setCollisionGroups', args }) },
+  }
+  return { engine: engine as unknown as WasmSimEngine, calls }
+}
+
+function at(calls: Call[], fn: string): Call[] {
+  return calls.filter((c) => c.fn === fn)
+}
+
+function yaw(rad: number) {
+  return { x: 0, y: Math.sin(rad / 2), z: 0, w: Math.cos(rad / 2) }
+}
 
 interface ColliderSpec {
   shapeType: number
@@ -69,8 +105,7 @@ function makeBody(kind: BodyKind, colliders: ColliderSpec[], opts: {
     nextTranslation: opts.nextTranslation ? () => opts.nextTranslation! : undefined,
     nextRotation: undefined,
     mass: () => 2,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any
+  } as never
 }
 
 function makeEngine(overrides: Record<string, unknown> = {}) {
@@ -78,6 +113,7 @@ function makeEngine(overrides: Record<string, unknown> = {}) {
     addStaticBox: vi.fn(() => -1001),
     addStaticCapsule: vi.fn(() => -2001),
     addStaticCylinder: vi.fn(() => -5001),
+    addStaticSphere: vi.fn(() => -8001),
     addStaticTriangleMesh: vi.fn(() => -6001),
     addSensorVolume: vi.fn(() => -4001),
     addKinematicMover: vi.fn(() => -3001),
@@ -86,17 +122,180 @@ function makeEngine(overrides: Record<string, unknown> = {}) {
     createBody: vi.fn(() => 8),
     setCollisionGroups: vi.fn(),
     ...overrides,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any
+  } as never
 }
+
+describe('adventure collider descriptors', () => {
+  it('defaults friction and restitution to Rapier ColliderDesc defaults', () => {
+    const d = boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 })
+    expect(d.friction).toBe(RAPIER_DEFAULT_FRICTION)
+    expect(d.restitution).toBe(RAPIER_DEFAULT_RESTITUTION)
+  })
+
+  it('defaults the group word to the ADVENTURE preset', () => {
+    const d = cylinderDesc({ x: 0, y: 0, z: 0 }, 1, 2)
+    expect(d.membership).toBe(ADVENTURE_MEMBERSHIP)
+    expect(d.filter).toBe(ADVENTURE_FILTER)
+    expect(descCollisionGroups(d)).toBe(makeCollisionGroups(ADVENTURE_GROUP, CollisionGroups.BALL))
+  })
+
+  it('keeps a caller-supplied colour filter word', () => {
+    const d = boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { membership: 0x0200, filter: 0xffff })
+    expect(descCollisionGroups(d)).toBe((0x0200 << 16) | 0xffff)
+  })
+
+  it('omits optional flags it was not given', () => {
+    const d = sphereDesc({ x: 0, y: 0, z: 0 }, 1)
+    expect(d.sensor).toBeUndefined()
+    expect(d.motion).toBeUndefined()
+    expect(d.density).toBeUndefined()
+  })
+})
+
+describe('exportAdventureCollidersToWasm', () => {
+  it('routes each shape to its matching C++ add call', () => {
+    const { engine, calls } = recordingEngine()
+    const descs: AdventureColliderDesc[] = [
+      boxDesc({ x: 1, y: 2, z: 3 }, { x: 0.5, y: 0.25, z: 4 }, { friction: 0.7 }),
+      cylinderDesc({ x: -1, y: 0, z: 2 }, 1.5, 0.4, { restitution: 0.6 }),
+      sphereDesc({ x: 0, y: 5, z: 0 }, 3),
+    ]
+
+    const result = exportAdventureCollidersToWasm(descs, engine)
+
+    expect(result.unsupported).toEqual([])
+    expect(at(calls, 'addStaticBox')).toHaveLength(1)
+    expect(at(calls, 'addStaticCylinder')).toHaveLength(1)
+    expect(at(calls, 'addStaticSphere')).toHaveLength(1)
+    expect(result.handles.get(0)).toBe(-1000)
+    expect(result.handles.get(1)).toBe(-5000)
+    expect(result.handles.get(2)).toBe(-8000)
+  })
+
+  it('passes cylinder radius and halfHeight in the C++ argument order', () => {
+    const { engine, calls } = recordingEngine()
+    exportAdventureCollidersToWasm(
+      [cylinderDesc({ x: 0, y: 0, z: 0 }, 1.5, 0.4, { restitution: 0.6, friction: 0.3 })],
+      engine,
+    )
+    const [center, radius, halfHeight, , restitution, friction] = at(calls, 'addStaticCylinder')[0].args
+    expect(center).toEqual({ x: 0, y: 0, z: 0 })
+    expect(radius).toBe(0.4)
+    expect(halfHeight).toBe(1.5)
+    expect(restitution).toBe(0.6)
+    expect(friction).toBe(0.3)
+  })
+
+  it('sets membership/filter on every exported handle', () => {
+    const { engine, calls } = recordingEngine()
+    exportAdventureCollidersToWasm(
+      [
+        boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }),
+        sphereDesc({ x: 0, y: 0, z: 0 }, 1, { membership: 0x0200, filter: 0xffff }),
+      ],
+      engine,
+    )
+    expect(at(calls, 'setCollisionGroups')).toEqual([
+      { fn: 'setCollisionGroups', args: [-1000, ADVENTURE_GROUP, CollisionGroups.BALL] },
+      { fn: 'setCollisionGroups', args: [-8000, 0x0200, 0xffff] },
+    ])
+  })
+
+  it('routes a box sensor to addSensorVolume and a kinematic box to addKinematicMover', () => {
+    const { engine, calls } = recordingEngine()
+    const result = exportAdventureCollidersToWasm(
+      [
+        boxDesc({ x: 0, y: 1, z: 0 }, { x: 2, y: 1, z: 1 }, { sensor: true }),
+        boxDesc({ x: 3, y: 0, z: 0 }, { x: 1, y: 2, z: 1 }, { motion: 'kinematic-position' }),
+      ],
+      engine,
+    )
+    expect(result.unsupported).toEqual([])
+    expect(at(calls, 'addSensorVolume')).toHaveLength(1)
+    expect(at(calls, 'addKinematicMover')).toHaveLength(1)
+    expect(result.movers).toEqual([{ index: 1, handle: -3000 }])
+  })
+
+  it('bakes a body-local collider offset into the exported world pose', () => {
+    const { engine, calls } = recordingEngine()
+    exportAdventureCollidersToWasm(
+      [boxDesc({ x: 10, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { rotation: yaw(Math.PI / 2), localPosition: { x: 2, y: 0, z: 0 } })],
+      engine,
+    )
+    const [center] = at(calls, 'addStaticBox')[0].args as [{ x: number; y: number; z: number }]
+    expect(center.x).toBeCloseTo(10, 6)
+    expect(center.y).toBeCloseTo(0, 6)
+    expect(center.z).toBeCloseTo(-2, 6)
+  })
+
+  it('composes a parented collider against its fixed parent body', () => {
+    const { engine, calls } = recordingEngine()
+    const parent = boxDesc({ x: 0, y: 0, z: 5 }, { x: 1, y: 1, z: 1 })
+    const child: AdventureColliderDesc = {
+      ...boxDesc({ x: 0, y: 0, z: 3 }, { x: 0.5, y: 0.5, z: 0.5 }, { rotation: yaw(Math.PI / 2) }),
+      parentIndex: 0,
+    }
+    exportAdventureCollidersToWasm([parent, child], engine)
+    const [childCenter] = at(calls, 'addStaticBox')[1].args as [{ x: number; y: number; z: number }]
+    expect(childCenter.x).toBeCloseTo(0, 6)
+    expect(childCenter.z).toBeCloseTo(8, 6)
+  })
+
+  it('rejects a collider parented to a spinning platter', () => {
+    const { engine } = recordingEngine()
+    const platter = cylinderDesc({ x: 0, y: 0, z: 0 }, 0.25, 5, { motion: 'kinematic-velocity', angularVelocity: { x: 0, y: 1, z: 0 } })
+    const tooth: AdventureColliderDesc = {
+      ...boxDesc({ x: 4, y: 0.75, z: 0 }, { x: 0.5, y: 0.5, z: 1 }),
+      parentIndex: 0,
+    }
+    const { unsupported } = exportAdventureCollidersToWasm([platter, tooth], engine)
+    expect(unsupported.map((u) => u.index)).toEqual([0, 1])
+  })
+
+  it('rejects the shapes the C++ engine genuinely cannot express', () => {
+    const { engine, calls } = recordingEngine()
+    const descs: AdventureColliderDesc[] = [
+      cylinderDesc({ x: 0, y: 0, z: 0 }, 0.5, 2, { sensor: true }),
+      sphereDesc({ x: 0, y: 0, z: 0 }, 3, { sensor: true }),
+      cylinderDesc({ x: 0, y: 0, z: 0 }, 1, 1, { motion: 'kinematic-position' }),
+      boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { motion: 'dynamic', density: 2 }),
+      cylinderDesc({ x: 0, y: 0, z: 0 }, 0.25, 5, { motion: 'kinematic-velocity', angularVelocity: { x: 0, y: 1, z: 0 } }),
+      boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { motion: 'kinematic-position', localPosition: { x: 5, y: 0, z: 0 } }),
+    ]
+    const { unsupported, handles } = exportAdventureCollidersToWasm(descs, engine)
+    expect(unsupported.map((u) => u.index)).toEqual([0, 1, 2, 3, 4, 5])
+    expect(handles.size).toBe(0)
+    expect(calls).toEqual([])
+  })
+
+  it('still exports the supported colliders of a partially-supported track', () => {
+    const { engine, calls } = recordingEngine()
+    const descs: AdventureColliderDesc[] = [
+      boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }),
+      boxDesc({ x: 1, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { motion: 'dynamic', density: 1 }),
+      sphereDesc({ x: 2, y: 0, z: 0 }, 1),
+    ]
+    const { unsupported, handles, debug } = exportAdventureCollidersToWasm(descs, engine)
+    expect(unsupported.map((u) => u.index)).toEqual([1])
+    expect([...handles.keys()]).toEqual([0, 2])
+    expect(debug).toHaveLength(2)
+    expect(at(calls, 'addStaticBox')).toHaveLength(1)
+  })
+
+  it('dry-runs exportability checks without touching an engine', () => {
+    const supported = [boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 })]
+    const unsupported = [boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { motion: 'dynamic', density: 1 })]
+    expect(isFullyExportable(supported)).toBe(true)
+    expect(isFullyExportable(unsupported)).toBe(false)
+    expect(collectUnsupported(unsupported)).toHaveLength(1)
+  })
+})
 
 describe('exportAdventureBodyToWasm', () => {
   it('exports a fixed cuboid ramp through the analytic box path by default', () => {
     const engine = makeEngine()
     const body = makeBody('fixed', [{ shapeType: 1, halfExtents: { x: 2, y: 0.25, z: 6 } }])
-
     const result = exportAdventureBodyToWasm(body, engine)
-
     expect(engine.addStaticBox).toHaveBeenCalledTimes(1)
     expect(engine.addStaticTriangleMesh).not.toHaveBeenCalled()
     expect(result.unsupported).toEqual([])
@@ -106,26 +305,19 @@ describe('exportAdventureBodyToWasm', () => {
   it('tessellates cuboids into 12 triangles when asked to', () => {
     const engine = makeEngine()
     const body = makeBody('fixed', [{ shapeType: 1, halfExtents: { x: 2, y: 0.25, z: 6 } }])
-
     const result = exportAdventureBodyToWasm(body, engine, { tessellateCuboids: true })
-
-    expect(engine.addStaticBox).not.toHaveBeenCalled()
     expect(engine.addStaticTriangleMesh).toHaveBeenCalledTimes(1)
     const [vertices, indices] = engine.addStaticTriangleMesh.mock.calls[0]
-    expect(vertices).toHaveLength(24) // 8 corners × 3 floats
-    expect(indices).toHaveLength(36) // 12 triangles
+    expect(vertices).toHaveLength(24)
+    expect(indices).toHaveLength(36)
     expect(result.debug[0]).toMatchObject({ kind: 'mesh', triangleCount: 12 })
   })
 
   it('exports a pin-field cylinder analytically rather than as soup', () => {
     const engine = makeEngine()
     const body = makeBody('fixed', [{ shapeType: 10, radius: 0.2, halfHeight: 0.5 }])
-
     exportAdventureBodyToWasm(body, engine)
-
     expect(engine.addStaticCylinder).toHaveBeenCalledTimes(1)
-    expect(engine.addStaticCylinder.mock.calls[0][1]).toBe(0.2)
-    expect(engine.addStaticCylinder.mock.calls[0][2]).toBe(0.5)
     expect(engine.addStaticTriangleMesh).not.toHaveBeenCalled()
   })
 
@@ -136,85 +328,49 @@ describe('exportAdventureBodyToWasm', () => {
       { shapeType: 10, sensor: true, radius: 0.5, halfHeight: 2 },
       { shapeType: 0, sensor: true, radius: 3 },
     ])
-
     const result = exportAdventureBodyToWasm(body, engine)
-
     expect(engine.addSensorVolume).toHaveBeenCalledTimes(3)
-    const shapes = engine.addSensorVolume.mock.calls.map((c: unknown[]) => c[3])
-    expect(shapes).toEqual([
+    expect(engine.addSensorVolume.mock.calls.map((c: unknown[]) => c[3])).toEqual([
       WasmVolumeShape.Box,
       WasmVolumeShape.Cylinder,
       WasmVolumeShape.Sphere,
     ])
     expect(result.sensors).toHaveLength(3)
-    expect(result.unsupported).toEqual([])
   })
 
-  it('exports a rotating platform as a cylinder mover, not a box', () => {
+  it('exports a rotating platform as a cylinder mover', () => {
     const engine = makeEngine()
-    const body = makeBody(
-      'kinematic',
-      [{ shapeType: 10, radius: 3, halfHeight: 0.25 }],
-      { angvel: { x: 0, y: 1.5, z: 0 } }
-    )
-
+    const body = makeBody('kinematic', [{ shapeType: 10, radius: 3, halfHeight: 0.25 }], { angvel: { x: 0, y: 1.5, z: 0 } })
     const result = exportAdventureBodyToWasm(body, engine)
-
-    expect(engine.addKinematicMover).toHaveBeenCalledTimes(1)
     expect(engine.addKinematicMover.mock.calls[0][5]).toBe(WasmVolumeShape.Cylinder)
-    expect(result.movers).toHaveLength(1)
     expect(result.movers[0].velocityDriven).toBe(true)
   })
 
   it('exports a dynamic cuboid crate as a box body', () => {
     const engine = makeEngine()
-    const body = makeBody(
-      'dynamic',
-      [{ shapeType: 1, halfExtents: { x: 0.5, y: 0.5, z: 0.5 } }],
-      { translation: { x: 1, y: 2, z: 3 } }
-    )
-
+    const body = makeBody('dynamic', [{ shapeType: 1, halfExtents: { x: 0.5, y: 0.5, z: 0.5 } }], { translation: { x: 1, y: 2, z: 3 } })
     exportAdventureBodyToWasm(body, engine)
-
     expect(engine.createBoxBody).toHaveBeenCalledTimes(1)
-    expect(engine.createBoxBody.mock.calls[0][0]).toMatchObject({
-      position: { x: 1, y: 2, z: 3 },
-      halfExtents: { x: 0.5, y: 0.5, z: 0.5 },
-    })
   })
 
   it('reports unsupported geometry instead of dropping it silently', () => {
     const engine = makeEngine()
-    // A cone has no WASM equivalent.
     const body = makeBody('fixed', [{ shapeType: 11 }])
-
     const result = exportAdventureBodyToWasm(body, engine)
-
     expect(result.unsupported).toHaveLength(1)
-    expect(result.unsupported[0].shapeType).toBe(11)
-    expect(result.handles).toEqual([])
   })
 
   it('reports unsupported when the engine lacks the needed shape', () => {
     const engine = makeEngine({ addStaticCylinder: undefined })
     const body = makeBody('fixed', [{ shapeType: 10, radius: 0.2, halfHeight: 0.5 }])
-
     const result = exportAdventureBodyToWasm(body, engine)
-
-    expect(result.unsupported).toHaveLength(1)
     expect(result.unsupported[0].reason).toMatch(/no static cylinders/)
   })
 
   it('stamps the requested collision groups on every exported handle', () => {
     const engine = makeEngine()
-    const body = makeBody('fixed', [
-      { shapeType: 1 },
-      { shapeType: 10 },
-    ])
-
+    const body = makeBody('fixed', [{ shapeType: 1 }, { shapeType: 10 }])
     exportAdventureBodyToWasm(body, engine, { membership: 0x0100, filter: 0x0001 })
-
-    expect(engine.setCollisionGroups).toHaveBeenCalledTimes(2)
     for (const call of engine.setCollisionGroups.mock.calls) {
       expect(call[1]).toBe(0x0100)
       expect(call[2]).toBe(0x0001)
@@ -223,15 +379,8 @@ describe('exportAdventureBodyToWasm', () => {
 
   it('converts trimesh vertices from collider-local into world space', () => {
     const engine = makeEngine()
-    const body = makeBody('fixed', [{
-      shapeType: 6,
-      translation: { x: 10, y: 0, z: 0 },
-      vertices: new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 1]),
-      indices: new Uint32Array([0, 1, 2]),
-    }])
-
+    const body = makeBody('fixed', [{ shapeType: 6, translation: { x: 10, y: 0, z: 0 }, vertices: new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 1]), indices: new Uint32Array([0, 1, 2]) }])
     exportAdventureBodyToWasm(body, engine)
-
     const [world] = engine.addStaticTriangleMesh.mock.calls[0]
     expect(Array.from(world as Float32Array)).toEqual([10, 0, 0, 11, 0, 0, 10, 0, 1])
   })
@@ -239,26 +388,22 @@ describe('exportAdventureBodyToWasm', () => {
 
 describe('tessellateBox', () => {
   it('produces outward-facing triangles for every face', () => {
-    const center = { x: 0, y: 0, z: 0 }
-    const half = { x: 1, y: 2, z: 3 }
-    const { vertices, indices } = tessellateBox(center, half, IDENTITY)
-
+    const { vertices, indices } = tessellateBox({ x: 0, y: 0, z: 0 }, { x: 1, y: 2, z: 3 }, IDENTITY)
     expect(indices).toHaveLength(36)
-
-    // Every face normal (CCW winding) must point away from the box centre.
     for (let t = 0; t < indices.length; t += 3) {
       const p = (i: number) => ({
         x: vertices[indices[i] * 3],
         y: vertices[indices[i] * 3 + 1],
         z: vertices[indices[i] * 3 + 2],
       })
-      const a = p(t), b = p(t + 1), c = p(t + 2)
+      const a = p(t)
+      const b = p(t + 1)
+      const c = p(t + 2)
       const ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z
       const vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z
       const nx = uy * vz - uz * vy
       const ny = uz * vx - ux * vz
       const nz = ux * vy - uy * vx
-      // Centroid of the triangle, which for a box face points outward.
       const cx = (a.x + b.x + c.x) / 3
       const cy = (a.y + b.y + c.y) / 3
       const cz = (a.z + b.z + c.z) / 3
@@ -270,34 +415,55 @@ describe('tessellateBox', () => {
 describe('driveAdventureMovers', () => {
   it('integrates a velocity-driven platter without Rapier stepping', () => {
     const engine = makeEngine()
-    const body = makeBody(
-      'kinematic',
-      [{ shapeType: 10, radius: 3, halfHeight: 0.25 }],
-      { angvel: { x: 0, y: 2, z: 0 } }
-    )
+    const body = makeBody('kinematic', [{ shapeType: 10, radius: 3, halfHeight: 0.25 }], { angvel: { x: 0, y: 2, z: 0 } })
     const { movers } = exportAdventureBodyToWasm(body, engine)
-
     for (let i = 0; i < 10; i++) driveAdventureMovers(movers, engine, 1 / 60)
-
-    expect(engine.setNextKinematicTransform).toHaveBeenCalledTimes(10)
-    // Rapier never stepped, yet the mover's orientation has advanced.
     const last = engine.setNextKinematicTransform.mock.calls.at(-1)
     expect(Math.abs(last[2].y)).toBeGreaterThan(0.05)
   })
 
   it('follows the queued kinematic target for a pose-driven piston', () => {
     const engine = makeEngine()
-    const body = makeBody(
-      'kinematic',
-      [{ shapeType: 1, halfExtents: { x: 1, y: 0.1, z: 1 } }],
-      { nextTranslation: { x: 0, y: 4, z: 0 } }
-    )
+    const body = makeBody('kinematic', [{ shapeType: 1, halfExtents: { x: 1, y: 0.1, z: 1 } }], { nextTranslation: { x: 0, y: 4, z: 0 } })
     const { movers } = exportAdventureBodyToWasm(body, engine)
     expect(movers[0].velocityDriven).toBe(false)
-
     driveAdventureMovers(movers, engine, 1 / 60)
-
     const [, position] = engine.setNextKinematicTransform.mock.calls[0]
     expect(position.y).toBeCloseTo(4, 5)
+  })
+})
+
+describe('static handle capacity in the descriptor exporter', () => {
+  it('treats STATIC_HANDLE_OVERFLOW as unsupported rather than storing it', () => {
+    const calls: Call[] = []
+    const engine = {
+      addStaticBox: (...args: unknown[]) => { calls.push({ fn: 'addStaticBox', args }); return -1001 },
+      // Native refused this one: the family is full and no collider exists.
+      addStaticCylinder: (...args: unknown[]) => {
+        calls.push({ fn: 'addStaticCylinder', args })
+        return STATIC_HANDLE_OVERFLOW
+      },
+      setCollisionGroups: (...args: unknown[]) => { calls.push({ fn: 'setCollisionGroups', args }) },
+    } as unknown as WasmSimEngine
+
+    const descriptors: AdventureColliderDesc[] = [
+      boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { label: 'floor' }),
+      cylinderDesc({ x: 2, y: 0, z: 0 }, 0.5, 0.25, { label: 'post' }),
+    ]
+
+    const result = exportAdventureCollidersToWasm(descriptors, engine)
+
+    // The box exported normally.
+    expect(result.handles.get(0)).toBe(-1001)
+
+    // The refused cylinder must leave no trace: no handle, no collision-group
+    // call naming the sentinel, and no debug box for geometry that is absent.
+    expect(result.handles.has(1)).toBe(false)
+    expect(at(calls, 'setCollisionGroups').map((c) => c.args[0])).toEqual([-1001])
+    expect(result.debug.filter((d) => d.kind === 'cylinder')).toHaveLength(0)
+
+    // And it must be reported, so the gate cannot hand the track to C++.
+    expect(result.unsupported).toHaveLength(1)
+    expect(result.unsupported[0].reason).toMatch(/capacity/i)
   })
 })

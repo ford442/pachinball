@@ -15,6 +15,10 @@ import {
   WasmIdShadow,
   STATIC_BOX_ID_BASE,
   STATIC_CAPSULE_ID_BASE,
+  STATIC_CYLINDER_ID_BASE,
+  STATIC_SPHERE_ID_BASE,
+  STATIC_HANDLE_CAPACITY,
+  STATIC_HANDLE_OVERFLOW,
   cloneFloat32Array,
   encodeHingeAngleBuffer,
   decodeHingeAngle,
@@ -216,5 +220,31 @@ describe('physics worker in-process loopback', () => {
     expect(client.getPosition(0).x).toBe(3)
     expect(client.getHingeAngle(0)).toBe(0.25)
     expect(contacts).toHaveLength(1)
+  })
+})
+
+describe('static handle capacity', () => {
+  it('refuses a family past STATIC_HANDLE_CAPACITY instead of aliasing the next one', () => {
+    const ids = new WasmIdShadow()
+
+    // The families are 1000 apart, so the 1001st cylinder would otherwise be
+    // handed STATIC_CYLINDER_ID_BASE - 1000 === STATIC_MESH_ID_BASE (-6000)
+    // and alias a triangle mesh. Native refuses at the same point.
+    const last = Array.from({ length: STATIC_HANDLE_CAPACITY }, () => ids.allocStaticCylinder())
+    expect(last[0]).toBe(STATIC_CYLINDER_ID_BASE)
+    expect(last[STATIC_HANDLE_CAPACITY - 1]).toBe(STATIC_CYLINDER_ID_BASE - (STATIC_HANDLE_CAPACITY - 1))
+    expect(ids.allocStaticCylinder()).toBe(STATIC_HANDLE_OVERFLOW)
+
+    // The overflow must not consume or disturb another family's range.
+    expect(ids.allocStaticSphere()).toBe(STATIC_SPHERE_ID_BASE)
+  })
+
+  it('restarts every family after resetStaticHandles', () => {
+    const ids = new WasmIdShadow()
+    for (let i = 0; i < STATIC_HANDLE_CAPACITY; i++) ids.allocStaticBox()
+    expect(ids.allocStaticBox()).toBe(STATIC_HANDLE_OVERFLOW)
+
+    ids.resetStaticHandles()
+    expect(ids.allocStaticBox()).toBe(STATIC_BOX_ID_BASE)
   })
 })

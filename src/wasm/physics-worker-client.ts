@@ -13,6 +13,7 @@ import {
 import { decodeTransformSlot, TRANSFORM_STRIDE } from './transform-buffer'
 import {
   decodeHingeAngle,
+  STATIC_HANDLE_OVERFLOW,
   WasmIdShadow,
   type PhysicsWorkerCommand,
   type PhysicsWorkerFromWorker,
@@ -163,6 +164,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   ): number {
     if (!this.isReady) return -1
     const id = this.ids.allocStaticBox()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
     this.enqueue({ type: 'addStaticBox', center, halfExtents, rotation, restitution, friction })
     return id
   }
@@ -177,8 +179,80 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   ): number {
     if (!this.isReady) return -1
     const id = this.ids.allocStaticCapsule()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
     this.enqueue({ type: 'addStaticCapsule', center, radius, halfHeight, rotation, restitution, friction })
     return id
+  }
+
+  addStaticCylinder(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    halfHeight: number,
+    rotation: { x: number; y: number; z: number; w: number } = IDENTITY_Q,
+    restitution = 0.4,
+    friction = 0.2,
+  ): number {
+    if (!this.isReady) return -1
+    const id = this.ids.allocStaticCylinder()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
+    this.enqueue({ type: 'addStaticCylinder', center, radius, halfHeight, rotation, restitution, friction })
+    return id
+  }
+
+  addStaticSphere(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    restitution = 0.4,
+    friction = 0.2,
+  ): number {
+    if (!this.isReady) return -1
+    const id = this.ids.allocStaticSphere()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
+    this.enqueue({ type: 'addStaticSphere', center, radius, restitution, friction })
+    return id
+  }
+
+  addSensorVolume(
+    center: { x: number; y: number; z: number },
+    halfExtents: { x: number; y: number; z: number },
+    rotation: { x: number; y: number; z: number; w: number } = IDENTITY_Q,
+  ): number {
+    if (!this.isReady) return -1
+    const id = this.ids.allocSensorVolume()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
+    this.enqueue({ type: 'addSensorVolume', center, halfExtents, rotation })
+    return id
+  }
+
+  addKinematicMover(
+    position: { x: number; y: number; z: number },
+    halfExtents: { x: number; y: number; z: number },
+    rotation: { x: number; y: number; z: number; w: number } = IDENTITY_Q,
+    restitution = 0.4,
+    friction = 0.2,
+  ): number {
+    if (!this.isReady) return -1
+    const id = this.ids.allocKinematicMover()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
+    this.enqueue({ type: 'addKinematicMover', position, halfExtents, rotation, restitution, friction })
+    return id
+  }
+
+  setNextKinematicTransform(
+    moverId: number,
+    position: { x: number; y: number; z: number },
+    rotation: { x: number; y: number; z: number; w: number },
+  ): void {
+    this.enqueue({ type: 'setNextKinematicTransform', moverId, position, rotation })
+  }
+
+  setCollisionGroups(id: number, membership: number, filter: number): void {
+    this.enqueue({ type: 'setCollisionGroups', id, membership, filter })
+  }
+
+  clearStaticGeometry(): void {
+    this.ids.resetStaticHandles()
+    this.enqueue({ type: 'clearStaticGeometry' })
   }
 
   createBody(desc: WasmBodyDesc = {}): number {

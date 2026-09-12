@@ -10,6 +10,12 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import type { TrackInfo } from '../adventure-track-progression'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
+import {
+  boxDesc,
+  cylinderDesc,
+  type AdventureColliderDesc,
+} from '../track-collider-descriptors'
+import type { EmittedCollider } from '../track-collider-emitter'
 
 type BuilderCtx = {
   scene: import('@babylonjs/core/scene').Scene
@@ -26,6 +32,7 @@ type BuilderCtx = {
   createBasin: (...args: unknown[]) => void
   createStaticCylinder: (...args: unknown[]) => void
   addExitPortal: (position: Vector3) => void
+  emitCollider: (desc: AdventureColliderDesc) => EmittedCollider
 }
 
 function addPinLane(
@@ -67,14 +74,12 @@ function addPinLane(
       b.adventureTrack.push(pin)
 
       const q = Quaternion.FromEulerAngles(incline, heading, 0)
-      const body = b.world.createRigidBody(
-        b.rapier.RigidBodyDesc.fixed()
-          .setTranslation(pinPos.x, pinPos.y, pinPos.z)
-          .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }),
-      )
-      b.world.createCollider(
-        b.rapier.ColliderDesc.cylinder(pinHeight / 2, 0.12).setRestitution(0.75),
-        body,
+      const { body } = b.emitCollider(
+        cylinderDesc({ x: pinPos.x, y: pinPos.y, z: pinPos.z }, pinHeight / 2, 0.12, {
+          rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+          restitution: 0.75,
+          label: 'hallPin',
+        })
       )
       b.adventureBodies.push(body)
     }
@@ -109,14 +114,13 @@ function addConveyorRamp(
     Math.cos(heading) * hLen / 2,
   ))
 
-  const sensor = b.world.createRigidBody(
-    b.rapier.RigidBodyDesc.fixed().setTranslation(center.x, center.y, center.z),
-  )
   const q = Quaternion.FromEulerAngles(incline, heading, 0)
-  sensor.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
-  b.world.createCollider(
-    b.rapier.ColliderDesc.cuboid(width / 2, 0.5, length / 2).setSensor(true),
-    sensor,
+  const { body: sensor } = b.emitCollider(
+    boxDesc({ x: center.x, y: center.y, z: center.z }, { x: width / 2, y: 0.5, z: length / 2 }, {
+      rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+      sensor: true,
+      label: 'conveyorRamp',
+    })
   )
   b.conveyorZones.push({ sensor, force: forward.scale(forceScale) })
   b.adventureBodies.push(sensor)

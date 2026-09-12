@@ -7,6 +7,7 @@
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
+import { boxDesc, cylinderDesc, sphereDesc } from '../track-collider-descriptors'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildNeuralNetwork(builder: TrackBuilder): void {
@@ -16,7 +17,6 @@ export function buildNeuralNetwork(builder: TrackBuilder): void {
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
-  const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
   const animatedObstacles = (builder as unknown as { animatedObstacles: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, frequency: number, amplitude: number, phase: number }[] }).animatedObstacles
@@ -59,12 +59,8 @@ export function buildNeuralNetwork(builder: TrackBuilder): void {
     rock.position.copyFrom(rockPos)
     rock.material = veinMat
     adventureTrack.push(rock)
-    const body = world.createRigidBody(
-      rapier.RigidBodyDesc.fixed().setTranslation(rockPos.x, rockPos.y, rockPos.z)
-    )
-    world.createCollider(
-      rapier.ColliderDesc.ball(rockRadius),
-      body
+    const { body } = builder.emitCollider(
+      sphereDesc({ x: rockPos.x, y: rockPos.y, z: rockPos.z }, rockRadius, { label: 'cellBody' })
     )
     adventureBodies.push(body)
   }
@@ -101,14 +97,16 @@ export function buildNeuralNetwork(builder: TrackBuilder): void {
     adventureTrack.push(box)
 
     const q = Quaternion.FromEulerAngles(0, heading, 0)
-    const body = world.createRigidBody(
-      rapier.RigidBodyDesc.kinematicPositionBased()
-        .setTranslation(basePos.x, basePos.y, basePos.z)
-        .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-    )
-    world.createCollider(
-      rapier.ColliderDesc.cuboid(bridgeWidth / 2, bridgeHeight / 2, bridgeLen / 2),
-      body
+    const { body } = builder.emitCollider(
+      boxDesc(
+        { x: basePos.x, y: basePos.y, z: basePos.z },
+        { x: bridgeWidth / 2, y: bridgeHeight / 2, z: bridgeLen / 2 },
+        {
+          rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+          motion: 'kinematic-position',
+          label: 'synapticBridge',
+        }
+      )
     )
     adventureBodies.push(body)
 
@@ -135,15 +133,17 @@ export function buildNeuralNetwork(builder: TrackBuilder): void {
     const center = forestStart.add(forward.scale(hLen / 2))
     center.y += 0.5
 
-    const sensor = world.createRigidBody(
-      rapier.RigidBodyDesc.fixed().setTranslation(center.x, center.y, center.z)
-    )
     const q = Quaternion.FromEulerAngles(0, heading, 0)
-    sensor.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
-
-    world.createCollider(
-      rapier.ColliderDesc.cuboid(forestWidth / 2, 1, forestLen / 2).setSensor(true),
-      sensor
+    const { body: sensor } = builder.emitCollider(
+      boxDesc(
+        { x: center.x, y: center.y, z: center.z },
+        { x: forestWidth / 2, y: 1, z: forestLen / 2 },
+        {
+          rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+          sensor: true,
+          label: 'dendriteForestDamping',
+        }
+      )
     )
 
     dampingZones.push({
@@ -165,12 +165,8 @@ export function buildNeuralNetwork(builder: TrackBuilder): void {
       cilia.material = veinMat
       adventureTrack.push(cilia)
 
-      const body = world.createRigidBody(
-        rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
-      )
-      world.createCollider(
-        rapier.ColliderDesc.cylinder(1.0, 0.1),
-        body
+      const { body } = builder.emitCollider(
+        cylinderDesc({ x: pos.x, y: pos.y, z: pos.z }, 1.0, 0.1, { label: 'cilia' })
       )
       adventureBodies.push(body)
     }

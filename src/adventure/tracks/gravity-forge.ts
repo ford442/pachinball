@@ -7,6 +7,7 @@
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
+import { boxDesc } from '../track-collider-descriptors'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildGravityForge(builder: TrackBuilder): void {
@@ -18,7 +19,6 @@ export function buildGravityForge(builder: TrackBuilder): void {
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
-  const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
   const kinematicBindings = (builder as unknown as { kinematicBindings: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
   const conveyorZones = (builder as unknown as { conveyorZones: { sensor: RAPIER.RigidBody, force: Vector3 }[] }).conveyorZones
@@ -43,15 +43,13 @@ export function buildGravityForge(builder: TrackBuilder): void {
     center.y -= vDrop / 2
     center.y += 0.5
 
-    const sensorBody = world.createRigidBody(
-      rapier.RigidBodyDesc.fixed().setTranslation(center.x, center.y, center.z)
-    )
     const q = Quaternion.FromEulerAngles(feedIncline, heading, 0)
-    sensorBody.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
-
-    world.createCollider(
-      rapier.ColliderDesc.cuboid(3, 1, feedLen / 2).setSensor(true),
-      sensorBody
+    const { body: sensorBody } = builder.emitCollider(
+      boxDesc({ x: center.x, y: center.y, z: center.z }, { x: 3, y: 1, z: feedLen / 2 }, {
+        rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+        sensor: true,
+        label: 'conveyorFeed',
+      })
     )
 
     const forceDir = new Vector3(
@@ -96,12 +94,12 @@ export function buildGravityForge(builder: TrackBuilder): void {
       piston.material = steelMat
       adventureTrack.push(piston)
 
-      const body = world.createRigidBody(
-        rapier.RigidBodyDesc.kinematicPositionBased().setTranslation(basePos.x, basePos.y, basePos.z)
-      )
-      world.createCollider(
-        rapier.ColliderDesc.cuboid(pistonWidth / 2, pistonHeight / 2, pistonDepth / 2),
-        body
+      const { body } = builder.emitCollider(
+        boxDesc(
+          { x: basePos.x, y: basePos.y, z: basePos.z },
+          { x: pistonWidth / 2, y: pistonHeight / 2, z: pistonDepth / 2 },
+          { motion: 'kinematic-position', label: 'forgePiston' }
+        )
       )
       adventureBodies.push(body)
 
@@ -165,11 +163,17 @@ export function buildGravityForge(builder: TrackBuilder): void {
       }
 
       const colRot = Quaternion.FromEulerAngles(0, theta, 0)
-      const colliderDesc = rapier.ColliderDesc.cuboid(wallThickness / 2, wallHeight / 2, arcLen / 2 + 0.1)
-        .setTranslation(cx, wallHeight / 2 + 0.25, cz)
-        .setRotation({ x: colRot.x, y: colRot.y, z: colRot.z, w: colRot.w })
-
-      world.createCollider(colliderDesc, platformBody)
+      builder.attachCollider(
+        platformBody,
+        boxDesc(
+          { x: cx, y: wallHeight / 2 + 0.25, z: cz },
+          { x: wallThickness / 2, y: wallHeight / 2, z: arcLen / 2 + 0.1 },
+          {
+            rotation: { x: colRot.x, y: colRot.y, z: colRot.z, w: colRot.w },
+            label: 'castingWall',
+          }
+        )
+      )
     }
   }
 

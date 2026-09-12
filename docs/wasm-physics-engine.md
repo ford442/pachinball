@@ -339,7 +339,8 @@ Debug HUD (Developer settings → Enable Debug HUD) shows `engine` (`wasmMode`),
 
 ## Static colliders (Phase 2a)
 
-The C++ engine supports oriented static boxes and capsules in addition to infinite planes and sphere bodies:
+The C++ engine supports oriented static boxes, capsules, cylinders and
+spheres in addition to infinite planes and sphere bodies:
 
 ```typescript
 engine.addStaticBox(
@@ -356,7 +357,56 @@ engine.addStaticCapsule(
   { x: 0, y: 0, z: 0, w: 1 },
   0.5
 )
+
+// Slice B — the two shapes the adventure tracks needed. NOTE the argument
+// order: this API takes radius BEFORE halfHeight, the opposite of Rapier's
+// ColliderDesc.cylinder(halfHeight, radius). Both put the axis on local Y.
+// The descriptor factory cylinderDesc() deliberately keeps Rapier's order,
+// since it replaces Rapier call sites — wasm-adventure-export.ts is what
+// swaps them over.
+engine.addStaticCylinder(
+  { x: 0, y: 0, z: 0 },           // centre
+  0.5, 2.0,                        // radius, half-height (local Y)
+  { x: 0, y: 0, z: 0, w: 1 },
+  0.4,
+  0.2
+)
+
+engine.addStaticSphere(
+  { x: 0, y: 0, z: 0 },           // centre
+  0.5,                             // radius
+  0.4,
+  0.2
+)
+
+// Statics are append-only — a rebuilt scene (a new adventure track, a fresh
+// WasmOwner.rebuild) must clear first or it stacks a second copy. This
+// invalidates every negative handle; dynamic bodies and hinges survive.
+engine.clearStaticGeometry()
 ```
+
+Negative handle ranges, one per shape family (see `native/src/PhysicsWorld.h`
+and `native/src/StaticShapes.h`):
+
+| Base | Shape |
+|------|-------|
+| `-1` | the infinite plane |
+| `-1000` | static box |
+| `-2000` | static capsule |
+| `-3000` | kinematic OBB mover |
+| `-4000` | OBB sensor volume |
+| `-5000` | static cylinder |
+| `-8000` | static sphere |
+
+**Sphere vs cylinder** is closed form (`native/src/StaticShapes.cpp`). The ball
+centre is transformed into the cylinder's local frame and clamped
+independently in the radial and axial directions; that yields the three
+regions for free — the curved side (only the radial clamp bites), the flat end
+caps (only the axial clamp bites), and the rim circle where both do. A centre
+strictly inside the solid falls back to the shallower of the two exit faces.
+No GJK, no convex solver, no mesh colliders — the 14 adventure tracks between
+them use only cuboid, cylinder and ball, plus one convexHull in
+`prism-pathway` that stays on Rapier.
 
 Native C++ tests (no browser, no Emscripten):
 
@@ -380,6 +430,11 @@ Test scenarios:
 | `body remove and recreate` | Handle lifecycle and `getActiveBodyCount()` |
 | `ball drops on box` | Static OBB collision + settling |
 | `ball hits capsule` | Static capsule collision + settling |
+| `ball rolls down a static box rotated 15 degrees` | Rotated OBB ramp — no tunnelling, no jitter (adventure ramps are rotated cuboids) |
+| `cylinder SIDE / END CAP / RIM` | The three sphere-vs-cylinder regions, each with the expected normal; the rim normal is finite and unit |
+| `ball vs static sphere` | Static sphere reflection |
+| `filter word excludes a static cylinder / sphere` | Group masks apply to the new shapes |
+| `clearStaticGeometry` | Statics drop, handles restart from their bases, dynamic bodies and hinges survive |
 | `stationary kinematic capsule supports resting ball` | Kinematic-body capsule shape parity with the static-geometry capsule path |
 | `kinematic capsule flings ball` | A moving kinematic capsule imparts its own velocity onto a resting ball |
 | `ball rolls down inclined plane` | Coulomb friction converts sliding into rolling |
@@ -453,8 +508,30 @@ one's membership intersects the other's filter. Unset masks default to
 engine.setCollisionGroups(ballId, CollisionGroups.BALL, COLLIDES_WITH_EVERYTHING)
 ```
 
-Adventure mode still steps a full Rapier world today — wiring these shapes
-into `src/adventure/track-builder.ts` is Slice B, not this slice.
+### Adventure geometry (Slice B)
+
+Adventure tracks no longer build Rapier colliders inline. Every primitive
+emits an `AdventureColliderDesc`
+(`src/adventure/track-collider-descriptors.ts`), and the list has two
+consumers: `TrackColliderEmitter` realises it on Rapier, and
+`src/game/physics/wasm-adventure-export.ts` walks it into
+`addStaticBox` / `addStaticCylinder` / `addStaticSphere` /
+`addSensorVolume` / `addKinematicMover`, setting each exported handle's
+membership/filter word.
+
+`PhysicsSystem.ownerSkipRapierStep` is now decided **per track**, not as a
+blanket "adventure is active" flag. `WasmOwner.syncAdventureTrack()` returns
+true — and Rapier stays unstepped — only when all of:
+
+- every descriptor is expressible in C++ (`unsupported` is empty),
+- the track built no geometry outside the descriptor path
+  (`markUnexportedCollider`, today only prism-pathway's convex hull),
+- no exit portal is active (portal entry is a Rapier `intersectionPair`
+  query, which needs a stepped narrowphase).
+
+`synthwave-surf` is the first track to clear that bar; its 174 descriptors
+cover the ramps, walls, basin, goal sensor and the 20 equaliser pistons,
+which run as C++ kinematic movers. The other 13 tracks still step Rapier.
 
 ---
 

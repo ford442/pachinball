@@ -9,7 +9,7 @@
 import type { PhysicsHost } from './types'
 import { MeshInterpolationSystem } from './mesh-interpolation'
 import { WasmMirror } from './wasm-mirror'
-import { WasmOwner } from './wasm-owner'
+import { WasmOwner, type AdventureTrackState } from './wasm-owner'
 import { ScoringBridge } from './scoring-bridge'
 import { CollisionDispatcher } from './collision-dispatch'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
@@ -108,10 +108,7 @@ export class GamePhysicsController {
             [...(this.host.gameObjects?.getAllFlippers?.().values() ?? [])].map((f) => f.body)
           )
           this.attachAdventureTrackToWasm()
-          this.host.physics.setWasmDebugColliders?.([
-            ...this.wasmOwner.getDebugColliders(),
-            ...this.wasmOwner.getAdventureDebugColliders(),
-          ])
+          this.host.physics.setWasmDebugColliders?.(this.wasmOwner.getDebugColliders())
         } else {
           this.wasmOwner?.clear()
           this.wasmOwner = null
@@ -147,7 +144,7 @@ export class GamePhysicsController {
    */
   getAdventureOwnership(): {
     owned: boolean
-    unsupported: ReadonlyArray<{ shapeType: number; reason: string }>
+    unsupported: ReadonlyArray<{ reason: string; index?: number; label?: string }>
   } {
     return {
       owned: this.wasmOwner?.isAdventureOwned() ?? false,
@@ -174,7 +171,7 @@ export class GamePhysicsController {
       return
     }
 
-    const owned = owner.attachAdventureTrack(adventureMode.collectTrackBodies())
+    const owned = owner.syncAdventureTrack(this.adventureTrackState(true))
     adventureMode.setPhysicsBridge(owned ? owner.getPhysicsBridge() : null)
   }
 
@@ -259,6 +256,25 @@ export class GamePhysicsController {
     this.meshInterpolation.syncMeshes(alpha, this.host.gameObjects?.getBindings() || [])
   }
 
+
+  /**
+   * Snapshot of the built adventure track for the C++ exporter, or null when
+   * adventure is not running. `portalActive` keeps Rapier stepping while an
+   * exit portal is up, because portal entry is an `intersectionPair` query
+   * and those need a stepped narrowphase.
+   */
+  private adventureTrackState(adventureActive: boolean): AdventureTrackState | null {
+    const adventure = this.host.adventureMode
+    if (!adventureActive || !adventure) return null
+    return {
+      epoch: adventure.getColliderEpoch(),
+      descriptors: adventure.getColliderDescriptors(),
+      unexported: adventure.getUnexportedColliders(),
+      bodyForDescriptor: (index) => adventure.getBodyForDescriptor(index),
+      portalActive: adventure.getPortalSensorHandle() >= 0,
+    }
+  }
+
   stepPhysics(
     inputManager: { update: () => void; processBufferedInputs: () => InputFrame | null } | null,
     inputActions: { handleFlipperLeft: (p: boolean) => void; handleFlipperRight: (p: boolean) => void; handlePlunger: () => void; updatePlungerFrame?: (dt: number) => void } | null,
@@ -307,13 +323,12 @@ export class GamePhysicsController {
     const wasmActive = this.host.physics.isWasmActive?.() ?? false
     const isOwner = this.host.physics.isWasmOwnerMode?.() ?? false
     const adventureActive = this.host.adventureMode?.isActive() ?? false
-    // Adventure geometry now exports into the WASM world, so Rapier's step can
-    // be skipped there too — but only once WasmOwner confirms it could
-    // represent every collider on the active track. A track carrying geometry
-    // with no WASM equivalent falls back to the old two-engine arrangement
-    // rather than simulating with pieces missing.
-    const adventureOwned = adventureActive && (this.wasmOwner?.isAdventureOwned() ?? false)
-    this.host.physics.setOwnerSkipRapierStep?.(isOwner && (!adventureActive || adventureOwned))
+    const adventureOwnedByWasm = isOwner
+      ? (this.wasmOwner?.syncAdventureTrack(this.adventureTrackState(adventureActive)) ?? false)
+      : false
+    this.host.physics.setOwnerSkipRapierStep?.(
+      isOwner && (!adventureActive || adventureOwnedByWasm)
+    )
 
     if (wasmActive && !isOwner) {
       const syncT0 = performance.now()

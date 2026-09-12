@@ -7,6 +7,7 @@
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
+import { boxDesc } from '../track-collider-descriptors'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GROUP_RED, GROUP_GREEN, GROUP_BLUE, MASK_ALL } from '../adventure-types'
 
@@ -19,7 +20,6 @@ export function buildPolychromeVoid(builder: TrackBuilder): void {
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
-  const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
   const chromaGates = (builder as unknown as { chromaGates: { sensor: RAPIER.RigidBody, colorType: 'RED' | 'GREEN' | 'BLUE' }[] }).chromaGates
@@ -53,17 +53,19 @@ export function buildPolychromeVoid(builder: TrackBuilder): void {
   adventureTrack.push(floor)
 
   if (world) {
-    const body = world.createRigidBody(
-      rapier.RigidBodyDesc.fixed().setTranslation(crimCenter.x, crimCenter.y, crimCenter.z)
-    )
     const q = Quaternion.FromEulerAngles(0, heading, 0)
-    body.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true)
-
-    const collider = rapier.ColliderDesc.cuboid(crimWidth / 2, 0.25, crimLen / 2)
-    const groups = (GROUP_RED << 16) | MASK_ALL
-    collider.setCollisionGroups(groups)
-
-    world.createCollider(collider, body)
+    const { body } = builder.emitCollider(
+      boxDesc(
+        { x: crimCenter.x, y: crimCenter.y, z: crimCenter.z },
+        { x: crimWidth / 2, y: 0.25, z: crimLen / 2 },
+        {
+          rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+          membership: GROUP_RED,
+          filter: MASK_ALL,
+          label: 'crimsonWalkway',
+        }
+      )
+    )
     adventureBodies.push(body)
 
     // Add Blue Ghosts
@@ -81,14 +83,13 @@ export function buildPolychromeVoid(builder: TrackBuilder): void {
       ghost.material = blueMat
       adventureTrack.push(ghost)
 
-      const ghostBody = world.createRigidBody(
-        rapier.RigidBodyDesc.fixed().setTranslation(ghostPos.x, ghostPos.y, ghostPos.z)
+      const { body: ghostBody } = builder.emitCollider(
+        boxDesc({ x: ghostPos.x, y: ghostPos.y, z: ghostPos.z }, { x: 0.5, y: 0.5, z: 0.5 }, {
+          membership: GROUP_BLUE,
+          filter: MASK_ALL,
+          label: 'blueGhost',
+        })
       )
-      const ghostCollider = rapier.ColliderDesc.cuboid(0.5, 0.5, 0.5)
-      const ghostGroups = (GROUP_BLUE << 16) | MASK_ALL
-      ghostCollider.setCollisionGroups(ghostGroups)
-
-      world.createCollider(ghostCollider, ghostBody)
       adventureBodies.push(ghostBody)
     }
   }
@@ -127,12 +128,13 @@ export function buildPolychromeVoid(builder: TrackBuilder): void {
       adventureTrack.push(box)
 
       if (world) {
-        const body = world.createRigidBody(
-          rapier.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z)
+        const { body } = builder.emitCollider(
+          boxDesc({ x: pos.x, y: pos.y, z: pos.z }, { x: isleSize / 2, y: 0.25, z: isleSize / 2 }, {
+            membership: grp,
+            filter: MASK_ALL,
+            label: 'emeraldIsle',
+          })
         )
-        const col = rapier.ColliderDesc.cuboid(isleSize / 2, 0.25, isleSize / 2)
-        col.setCollisionGroups((grp << 16) | MASK_ALL)
-        world.createCollider(col, body)
         adventureBodies.push(body)
       }
     }

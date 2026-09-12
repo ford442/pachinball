@@ -153,10 +153,11 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Playwright wasm-owner feel + debug draw
+      - name: Playwright wasm-owner feel + debug draw + adventure
         env:
           CI: 'true'
         run: >
           npx playwright test --project=chromium
           tests/wasm-owner-flipper.spec.ts
           tests/wasm-owner-debug-draw.spec.ts
+          tests/wasm-owner-adventure.spec.ts

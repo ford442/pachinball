@@ -25,7 +25,7 @@ interface CutoverGame {
   physicsController?: {
     getAdventureOwnership?: () => {
       owned: boolean
-      unsupported: ReadonlyArray<{ shapeType: number; reason: string }>
+      unsupported: ReadonlyArray<{ reason: string; index?: number; label?: string }>
     }
   }
   levelLoader?: {

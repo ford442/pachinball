@@ -1,32 +1,8 @@
 #pragma once
 
-#include "CollisionFilter.h"
-#include "MathTypes.h"
-
-#include <cstdint>
+#include "StaticShapes.h"
 
 namespace pachinball {
-
-/**
- * Oriented static cylinder collider — the analytic counterpart to Rapier's
- * `ColliderDesc.cylinder(halfHeight, radius)`, with the segment along local
- * +Y. Adventure pin fields, arc pylons and chroma gates are all built from
- * these; they stay analytic rather than tessellated so ball rebounds off a
- * pin keep their exact round profile and remain deterministic.
- */
-struct CylinderDesc {
-  Vec3     center      = Vec3::zero();
-  float    radius      = 0.5f;
-  float    halfHeight  = 0.5f;
-  Quat     rotation    = Quat::identity();
-  float    restitution = 0.4f;
-  float    friction    = 0.2f;
-  uint32_t membership  = COLLISION_GROUPS_ALL;
-  uint32_t filter      = COLLISION_GROUPS_ALL;
-};
-
-/** Negative-id base for static cylinders in contact events / setCollisionGroups. */
-static constexpr int STATIC_CYLINDER_ID_BASE = -5000;
 
 /**
  * Closest point on a finite cylinder (centred at the origin, axis along +Y,

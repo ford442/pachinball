@@ -4,6 +4,7 @@
 #include "KinematicMover.h"
 #include "MathTypes.h"
 #include "SensorVolume.h"
+#include "StaticShapes.h"
 
 #include <cstdint>
 #include <unordered_map>
@@ -31,9 +32,9 @@ public:
   };
 
   struct StaticRef {
-    enum Kind : uint8_t { Box = 0, Capsule = 1, Sensor = 2, Cylinder = 3, Triangle = 4 };
+    enum Kind : uint8_t { Box = 0, Capsule = 1, Sensor = 2, Cylinder = 3, Sphere = 4, Triangle = 5 };
     Kind  kind;
-    /** Index into the matching world vector — boxes_, capsules_, sensors_, cylinders_, triangles_. */
+    /** Index into the matching world vector for this static kind. */
     int   index;
   };
 
@@ -45,7 +46,8 @@ public:
       BodySensor  = 3,
       BodyMover   = 4,
       BodyCylinder = 5,
-      BodyTriangle = 6,
+      BodySphere   = 6,
+      BodyTriangle = 7,
     };
     Type type;
     int  bodyA;   ///< dense body index
@@ -60,12 +62,13 @@ public:
   void insertStaticCapsule(int capIndex, const CapsuleDesc& cap);
   void insertSensorVolume(int sensorIndex, const SensorVolumeDesc& sensor);
   void insertStaticCylinder(int cylIndex, const CylinderDesc& cyl);
+  void insertStaticSphere(int sphereIndex, const SphereDesc& sphere);
   /** Mesh triangles are registered individually so the grid culls per triangle, not per mesh. */
   void insertTriangle(int triangleIndex, const MeshTriangle& tri);
 
   /**
    * Rebuild dynamic + kinematic-mover cell occupancy and emit collision
-   * pairs for this substep. `boxes`/`capsules`/`sensors` are read live (by
+   * pairs for this substep. The static desc vectors are read live (by
    * the static index cached in each StaticRef) so a group-mask change takes
    * effect on the very next call with no separate cache to invalidate.
    * Movers move every tick, so their cell membership is rebuilt from
@@ -74,9 +77,10 @@ public:
   void buildPairs(const BodyStore& bodies,
                   const std::vector<BoxDesc>& boxes,
                   const std::vector<CapsuleDesc>& capsules,
+                  const std::vector<CylinderDesc>& cylinders,
+                  const std::vector<SphereDesc>& spheres,
                   const std::vector<SensorVolumeDesc>& sensors,
                   const std::vector<KinematicMover>& movers,
-                  const std::vector<CylinderDesc>& cylinders,
                   const std::vector<MeshTriangle>& triangles,
                   const std::vector<TriangleMeshDesc>& meshes,
                   std::vector<Pair>& outPairs);

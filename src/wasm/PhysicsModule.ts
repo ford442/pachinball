@@ -277,6 +277,58 @@ export class WasmPhysicsEngine {
   }
 
   /**
+   * Add an oriented static cylinder collider (local Y axis), matching
+   * Rapier's `ColliderDesc.cylinder(halfHeight, radius)`.
+   * @returns Negative collider id, or -1 when the engine is not ready.
+   */
+  addStaticCylinder(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    halfHeight: number,
+    rotation: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 1 },
+    restitution = 0.4,
+    friction = 0.2
+  ): number {
+    if (!this.world) return -1
+    return this.world.addStaticCylinder(
+      center.x, center.y, center.z,
+      radius, halfHeight,
+      rotation.x, rotation.y, rotation.z, rotation.w,
+      restitution,
+      friction
+    )
+  }
+
+  /**
+   * Add a static sphere collider.
+   * @returns Negative collider id, or -1 when the engine is not ready.
+   */
+  addStaticSphere(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    restitution = 0.4,
+    friction = 0.2
+  ): number {
+    if (!this.world) return -1
+    return this.world.addStaticSphere(
+      center.x, center.y, center.z,
+      radius,
+      restitution,
+      friction
+    )
+  }
+
+  /**
+   * Drop every static collider, sensor volume and kinematic mover. Statics
+   * are append-only, so a rebuilt scene must clear before re-adding or it
+   * stacks a second copy. Invalidates every negative handle; dynamic bodies
+   * and hinges are untouched.
+   */
+  clearStaticGeometry(): void {
+    this.world?.clearStaticGeometry()
+  }
+
+  /**
    * Add a kinematic oriented-box mover (piston, platter, gate).
    * @returns Negative handle, or -1 when the engine is not ready.
    */
@@ -345,30 +397,6 @@ export class WasmPhysicsEngine {
       center.x, center.y, center.z,
       halfExtents.x, halfExtents.y, halfExtents.z,
       rotation.x, rotation.y, rotation.z, rotation.w
-    )
-  }
-
-  /**
-   * Add an oriented static cylinder collider (local Y axis) — pins, pylons,
-   * chroma gates. Argument order matches Rapier's `cylinder(halfHeight, radius)`
-   * inputs but is spelled out here to avoid the ambiguity.
-   * @returns Negative collider id, or -1 when the engine is not ready.
-   */
-  addStaticCylinder(
-    center: { x: number; y: number; z: number },
-    radius: number,
-    halfHeight: number,
-    rotation: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 1 },
-    restitution = 0.4,
-    friction = 0.2
-  ): number {
-    if (!this.world?.addStaticCylinder) return -1
-    return this.world.addStaticCylinder(
-      center.x, center.y, center.z,
-      radius, halfHeight,
-      rotation.x, rotation.y, rotation.z, rotation.w,
-      restitution,
-      friction
     )
   }
 
@@ -461,15 +489,6 @@ export class WasmPhysicsEngine {
     )
   }
 
-  /**
-   * Drop every static/kinematic collider and force field. All negative
-   * handles are invalidated; rigid bodies are untouched. Used when an
-   * adventure track switch replaces the whole static world.
-   */
-  clearStaticGeometry(): void {
-    this.world?.clearStaticGeometry?.()
-  }
-
   /** Toggle a force field without removing it (gates a conveyor on and off). */
   setForceFieldEnabled(fieldId: number, enabled: boolean): void {
     this.world?.setForceFieldEnabled?.(fieldId, enabled)
@@ -482,7 +501,8 @@ export class WasmPhysicsEngine {
 
   /**
    * Set the collision-group membership/filter mask for any handle — a
-   * dynamic/kinematic body, or a static box/capsule/mover/sensor (as
+   * dynamic/kinematic body, or a static box/capsule/cylinder/sphere/mover/
+   * sensor (as
    * returned by its add*() call). Mirrors `CollisionGroups` in
    * src/game-elements/physics.ts.
    */
