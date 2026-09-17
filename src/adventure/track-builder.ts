@@ -163,6 +163,14 @@ export abstract class TrackBuilder {
   }
 
   /**
+   * Drop an emitted body's colliders from the descriptor list before the body
+   * is removed from the Rapier world, so the C++ export stops carrying them.
+   */
+  retireEmittedBody(body: RAPIER.RigidBody): void {
+    if (this.colliders.retireBody(body)) this.colliderEpoch++
+  }
+
+  /**
    * Declare that this track built a Rapier collider the descriptor path does
    * not cover, so the C++ adventure gate knows the export is incomplete.
    */

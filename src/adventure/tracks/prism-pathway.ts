@@ -4,11 +4,11 @@
  * A glass-themed track with refracting prisms and laser gauntlets.
  */
 
-import { VertexBuffer } from '@babylonjs/core/Buffers/buffer'
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
-import { cylinderDesc } from '../track-collider-descriptors'
+import { convexMeshDesc, cylinderDesc } from '../track-collider-descriptors'
+import { triangularPrismLayout } from '../track-geometry'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 export function buildPrismPathway(builder: TrackBuilder): void {
@@ -19,7 +19,6 @@ export function buildPrismPathway(builder: TrackBuilder): void {
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
   const world = (builder as unknown as { world: RAPIER.World }).world
-  const rapier = (builder as unknown as { rapier: typeof RAPIER }).rapier
   const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
   const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
   const animatedObstacles = (builder as unknown as { animatedObstacles: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, frequency: number, amplitude: number, phase: number, axis?: Vector3 }[] }).animatedObstacles
@@ -60,27 +59,15 @@ export function buildPrismPathway(builder: TrackBuilder): void {
       prism.material = glassMat
       adventureTrack.push(prism)
 
-      const positions = prism.getVerticesData(VertexBuffer.PositionKind)
-      if (positions) {
-        const q = Quaternion.FromEulerAngles(0, prism.rotation.y, 0)
-        const body = world.createRigidBody(
-          rapier.RigidBodyDesc.fixed()
-            .setTranslation(pos.x, pos.y, pos.z)
-            .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
-        )
-
-        const vertices = new Float32Array(positions)
-        const hull = rapier.ColliderDesc.convexHull(vertices)
-
-        if (hull) {
-          hull.setRestitution(0.8)
-          world.createCollider(hull, body)
-          adventureBodies.push(body)
-          // The one convex hull in the codebase — no descriptor, no C++
-          // shape. This track stays on Rapier.
-          builder.markUnexportedCollider('prism convexHull')
-        }
-      }
+      const q = Quaternion.FromEulerAngles(0, prism.rotation.y, 0)
+      const { body } = builder.emitCollider(
+        convexMeshDesc({ x: pos.x, y: pos.y, z: pos.z }, triangularPrismLayout(prismRadius, prismHeight), {
+          rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+          restitution: 0.8,
+          label: 'prism',
+        })
+      )
+      adventureBodies.push(body)
     }
 
     // 3. The Laser Gauntlet

@@ -10,12 +10,11 @@
  *      the exact same colliders (same shape, pose, material and group word).
  *   2. `src/game/physics/wasm-adventure-export.ts` — the C++ path, walking
  *      descriptors into addStaticBox / addStaticCylinder / addStaticSphere /
- *      addSensorVolume / addKinematicMover.
+ *      addStaticTriangleMesh / addSensorVolume / addKinematicMover.
  *
- * Shape coverage is deliberately narrow: the 14 tracks between them use only
- * cuboid, cylinder and ball (plus one convexHull in prism-pathway, which has
- * no descriptor and stays on Rapier). Do not widen this without a track that
- * needs it.
+ * Shape coverage is deliberately narrow: the tracks between them use only
+ * cuboid, cylinder and ball, plus prism-pathway's closed triangular prisms
+ * (`convexMesh`). Do not widen this without a track that needs it.
  */
 
 import { ADVENTURE_GROUP, CollisionGroups, makeCollisionGroups } from '../game-elements/physics'
@@ -47,7 +46,7 @@ export type AdventureBodyMotion =
   | 'kinematic-velocity'
   | 'dynamic'
 
-export type AdventureColliderKind = 'box' | 'cylinder' | 'sphere'
+export type AdventureColliderKind = 'box' | 'cylinder' | 'sphere' | 'convexMesh'
 
 /**
  * One adventure collider, engine-agnostic.
@@ -74,6 +73,14 @@ export interface AdventureColliderDesc {
   radius?: number
   /** `cylinder` only — half of the axis length (local Y, as Rapier). */
   halfHeight?: number
+  /**
+   * `convexMesh` only — a CLOSED convex solid in body-local space: 3 floats
+   * per vertex, 3 indices per triangle wound CCW from outside. Rapier takes
+   * the hull of the vertices; C++ takes the triangles as a one-sided mesh,
+   * which is the same surface seen from outside.
+   */
+  vertices?: readonly number[]
+  indices?: readonly number[]
 
   /** Collider offset inside its own body. Ignored when `parentIndex` is set. */
   localPosition?: DescVec3
@@ -108,6 +115,13 @@ export interface AdventureColliderDesc {
 
   /** Free-form tag for diagnostics and for the per-track export report. */
   label?: string
+
+  /**
+   * Set when the body was torn down mid-track (an exit portal closing). The
+   * entry stays in the list so every other descriptor keeps its index — the
+   * `parentIndex` anchor — and consumers skip it.
+   */
+  removed?: true
 }
 
 export const IDENTITY_ROTATION: DescQuat = { x: 0, y: 0, z: 0, w: 1 }
@@ -186,6 +200,18 @@ export function sphereDesc(
   opts: DescOptions = {}
 ): AdventureColliderDesc {
   return { kind: 'sphere', position, radius, ...common(opts) }
+}
+
+/**
+ * A closed convex solid given as triangles (see `vertices` on the descriptor).
+ * Static only — the exporter rejects a moving or sensor convex mesh.
+ */
+export function convexMeshDesc(
+  position: DescVec3,
+  mesh: { vertices: readonly number[]; indices: readonly number[] },
+  opts: DescOptions = {}
+): AdventureColliderDesc {
+  return { kind: 'convexMesh', position, vertices: mesh.vertices, indices: mesh.indices, ...common(opts) }
 }
 
 /** Combined Rapier interaction-groups word for a descriptor. */

@@ -14,6 +14,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <cmath>
 #include <vector>
 
@@ -63,6 +64,43 @@ int addRamp(PhysicsWorld& world, const RampMesh& mesh, float friction = 0.05f) {
                                      mesh.indices.data(),
                                      static_cast<int>(mesh.indices.size()),
                                      0.1f, friction, false);
+}
+
+/**
+ * Closed triangular prism, axis +Y, ring vertex j at angle -j·120° — the same
+ * layout as `triangularPrismLayout` in src/adventure/track-geometry.ts, which
+ * replaced prism-pathway's Rapier convex hull. Winding is fixed per face so
+ * every normal points out of the solid.
+ */
+RampMesh makePrism(float radius, float height) {
+  RampMesh mesh;
+  const float h = height / 2.f;
+  for (float y : {-h, h}) {
+    for (int j = 0; j < 3; ++j) {
+      const float a = static_cast<float>(j) * 2.f * 3.14159265358979f / 3.f;
+      mesh.vertices.push_back(std::cos(-a) * radius);
+      mesh.vertices.push_back(y);
+      mesh.vertices.push_back(std::sin(-a) * radius);
+    }
+  }
+  std::vector<std::array<uint32_t, 3>> faces = {{0, 1, 2}, {3, 4, 5}};
+  for (uint32_t j = 0; j < 3; ++j) {
+    const uint32_t k = (j + 1) % 3;
+    faces.push_back({j, k, k + 3});
+    faces.push_back({j, k + 3, j + 3});
+  }
+  auto at = [&](uint32_t i) {
+    return Vec3{mesh.vertices[i * 3], mesh.vertices[i * 3 + 1], mesh.vertices[i * 3 + 2]};
+  };
+  for (const auto& f : faces) {
+    const Vec3 a = at(f[0]), b = at(f[1]), c = at(f[2]);
+    const Vec3 n = (b - a).cross(c - a);
+    const bool outward = n.dot(a + b + c) >= 0.f;
+    mesh.indices.push_back(f[0]);
+    mesh.indices.push_back(outward ? f[1] : f[2]);
+    mesh.indices.push_back(outward ? f[2] : f[1]);
+  }
+  return mesh;
 }
 
 } // namespace
@@ -533,4 +571,79 @@ TEST_CASE("a dynamic box rests on a triangle-mesh floor", "[physics][dynbox][mes
   CHECK(pos.y > -0.2f);            // did not fall through the soup
   CHECK(pos.y < 0.6f);             // and did settle down onto it
   CHECK(std::fabs(readVel(world, box).y) < 0.3f);
+}
+
+// ---------------------------------------------------------------------------
+// Prism-pathway's prisms: a closed convex triangle mesh in place of a hull
+// ---------------------------------------------------------------------------
+
+TEST_CASE("a ball bounces off a prism face exactly as off a box face in the same plane", "[physics][mesh][prism]") {
+  // The prism's side between ring vertices 1 and 2 lies in the plane
+  // x = cos(120°)·0.5 = -0.25, facing -X. A static box whose -X face sits in
+  // that plane is the reference a convex hull would also have matched.
+  auto fire = [](bool usePrism) {
+    PhysicsWorld world;
+    world.setGravity(0.f, 0.f, 0.f);
+    if (usePrism) {
+      const RampMesh prism = makePrism(0.5f, 1.5f);
+      world.addStaticTriangleMesh(prism.vertices.data(), static_cast<int>(prism.vertices.size() / 3),
+                                  prism.indices.data(), static_cast<int>(prism.indices.size()),
+                                  0.8f, 0.2f, false);
+    } else {
+      world.addStaticBox(0.75f, 0.f, 0.f, 1.f, 0.75f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.8f, 0.2f);
+    }
+    const int ball = world.createRigidBody({
+      {-3.f, 0.f, 0.f}, {6.f, 0.f, 0.f},
+      1.f, 0.2f, 0.8f, 0.f, BodyType::Dynamic
+    });
+    stepFixed(world, 60);
+    return std::make_pair(readPos(world, ball), readVel(world, ball));
+  };
+
+  const auto [prismPos, prismVel] = fire(true);
+  const auto [boxPos, boxVel] = fire(false);
+
+  REQUIRE(isFinite(prismVel));
+  CHECK(prismVel.x < -1.f);                       // reflected back toward -X
+  CHECK(near(prismVel.x, boxVel.x, 0.05f));
+  CHECK(near(prismVel.y, 0.f, 1e-3f));
+  CHECK(near(prismVel.z, 0.f, 1e-3f));
+  CHECK(near(prismPos.x, boxPos.x, 0.05f));
+}
+
+TEST_CASE("a ball clipping a prism's vertical edge deflects and never enters the solid", "[physics][mesh][prism]") {
+  PhysicsWorld world;
+  world.setGravity(0.f, 0.f, 0.f);
+  const RampMesh prism = makePrism(0.5f, 1.5f);
+  world.addStaticTriangleMesh(prism.vertices.data(), static_cast<int>(prism.vertices.size() / 3),
+                              prism.indices.data(), static_cast<int>(prism.indices.size()),
+                              0.8f, 0.2f, false);
+
+  // Aimed at the +X edge (ring vertex 0) a little off-centre toward +Z.
+  const int ball = world.createRigidBody({
+    {3.f, 0.f, 0.1f}, {-6.f, 0.f, 0.f},
+    1.f, 0.2f, 0.8f, 0.f, BodyType::Dynamic
+  });
+
+  // Inside the triangular cross-section means past all three side planes.
+  const float c = std::cos(2.f * 3.14159265358979f / 3.f);
+  auto inside = [&](const Vec3& p) {
+    const Vec3 v[3] = {{0.5f, 0.f, 0.f}, {c * 0.5f, 0.f, -std::sin(2.f * 3.14159265358979f / 3.f) * 0.5f},
+                       {c * 0.5f, 0.f, std::sin(2.f * 3.14159265358979f / 3.f) * 0.5f}};
+    bool pos = false, neg = false;
+    for (int i = 0; i < 3; ++i) {
+      const Vec3 a = v[i], b = v[(i + 1) % 3];
+      const float side = (b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x);
+      (side > 0.f ? pos : neg) = true;
+    }
+    return !(pos && neg);
+  };
+
+  for (int i = 0; i < 90; ++i) {
+    world.step(FIXED_DT);
+    REQUIRE_FALSE(inside(readPos(world, ball)));
+  }
+  const Vec3 vel = readVel(world, ball);
+  CHECK(vel.x > 0.f);   // turned back from the edge
+  CHECK(vel.z > 0.f);   // and pushed to the side it struck on
 }

@@ -55,7 +55,7 @@ export class CollisionDispatcher {
 
   private adventureSensorHandle: number = -1
   /** Handles of active exit-portal sensor bodies; collisions are silently skipped
-   *  in the dispatcher since portal contact is detected via intersectionPair queries
+   *  in the dispatcher since portal contact is detected by the bridge overlap test
    *  inside AdventureMode.updateExitPortal(). */
   private portalSensorHandleSet: Set<number> = new Set()
   private laneSensorHandleMap: Map<number, LaneSensorDef> = new Map()
@@ -174,9 +174,10 @@ export class CollisionDispatcher {
 
   /**
    * Register an exit-portal sensor body handle so the collision dispatcher
-   * can skip it cleanly.  Portal contact is detected by intersectionPair
-   * queries inside AdventureMode.updateExitPortal(); Rapier collision events
-   * for the sensor body are redundant and must not reach other handlers.
+   * can skip it cleanly.  Portal contact is detected by the sensor-overlap
+   * test inside AdventureMode.updateExitPortal() (Rapier or WASM, via the
+   * physics bridge); contact events for the sensor body are redundant and
+   * must not reach other handlers.
    *
    * Call this immediately after AdventureMode.activateExitPortal() succeeds.
    */
@@ -324,7 +325,7 @@ export class CollisionDispatcher {
     bh2: number
   ): void {
     // Pre-flight guards — special non-obstacle handles (now in body-handle space)
-    // Exit-portal sensors: contact is handled by intersectionPair queries in
+    // Exit-portal sensors: contact is handled by the overlap test in
     // AdventureMode.updateExitPortal(); skip here to avoid misrouting.
     if (this.portalSensorHandleSet.has(bh1) || this.portalSensorHandleSet.has(bh2)) {
       return

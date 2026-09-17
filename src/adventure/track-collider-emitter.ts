@@ -59,6 +59,22 @@ export class TrackColliderEmitter {
     return parentIndex === undefined ? null : (this.bodyByIndex.get(parentIndex) ?? null)
   }
 
+  /**
+   * Tombstone every descriptor realised on `body` (its own, and any attached
+   * to it) ahead of the caller removing the body from the Rapier world.
+   * Returns whether anything was recorded for it.
+   */
+  retireBody(body: RAPIER.RigidBody): boolean {
+    const index = this.bodyIndex.get(body)
+    if (index === undefined) return false
+    this.descriptors.forEach((desc, i) => {
+      if (i === index || desc.parentIndex === index) this.descriptors[i] = { ...desc, removed: true }
+    })
+    this.bodyIndex.delete(body)
+    this.bodyByIndex.delete(index)
+    return true
+  }
+
   /** Resolve a body this emitter created back to its descriptor anchor. */
   find(body: RAPIER.RigidBody): EmittedCollider | null {
     const index = this.bodyIndex.get(body)
@@ -129,6 +145,13 @@ export class TrackColliderEmitter {
       case 'sphere':
         shape = this.rapier.ColliderDesc.ball(desc.radius ?? 0.5)
         break
+      case 'convexMesh': {
+        const hull = this.rapier.ColliderDesc.convexHull(new Float32Array(desc.vertices ?? []))
+        // Only a degenerate (flat or empty) point set has no hull — a builder bug.
+        if (!hull) throw new Error(`convexMesh descriptor ${desc.label ?? ''} has no convex hull`)
+        shape = hull
+        break
+      }
     }
 
     shape.setFriction(desc.friction)

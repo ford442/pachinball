@@ -65,6 +65,8 @@ function fakeKinematicBody(handle: number) {
       committed.q = q
     }),
     committed,
+    translation: () => committed.p,
+    rotation: () => committed.q,
     setEnabled: vi.fn(),
   }
 }
@@ -83,7 +85,6 @@ function trackState(
     descriptors,
     unexported: [],
     bodyForDescriptor: (i) => (bodies[i] ?? null) as never,
-    portalActive: false,
     ...over,
   }
 }
@@ -138,8 +139,8 @@ describe('WasmOwner.syncAdventureTrack', () => {
 
     const descs: AdventureColliderDesc[] = [
       boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }),
-      // A cylinder sensor — C++ trigger volumes are OBB only.
-      cylinderDesc({ x: 0, y: 2, z: 0 }, 0.5, 2, { sensor: true }),
+      // A dynamic body — no track builds one and C++ has no route for it.
+      boxDesc({ x: 0, y: 2, z: 0 }, { x: 1, y: 1, z: 1 }, { motion: 'dynamic', density: 1 }),
     ]
     expect(owner.syncAdventureTrack(trackState(descs, {}))).toBe(false)
     expect(owner.isAdventureOwned()).toBe(false)
@@ -160,7 +161,7 @@ describe('WasmOwner.syncAdventureTrack', () => {
     expect(owner.isAdventureOwned()).toBe(false)
   })
 
-  it('keeps Rapier stepping while an exit portal is up', () => {
+  it('stays unstepped when an exit portal sensor is added to an owned track', () => {
     const engine = makeEngine()
     const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
     owner.rebuild([], [], [], [], [])
@@ -168,11 +169,15 @@ describe('WasmOwner.syncAdventureTrack', () => {
     const descs = synthwaveLikeTrack()
     const bodies = { 2: fakeKinematicBody(70) }
     expect(owner.syncAdventureTrack(trackState(descs, bodies))).toBe(true)
-    expect(
-      owner.syncAdventureTrack(trackState(descs, bodies, { portalActive: true }))
-    ).toBe(false)
-    // The track itself is still fully owned; only the portal query needs Rapier.
-    expect(owner.isAdventureOwned()).toBe(true)
+
+    // Portal entry goes through the physics bridge, so its cylinder sensor is
+    // just more exported geometry — no reason to wake Rapier.
+    const withPortal = [
+      ...descs,
+      cylinderDesc({ x: 0, y: 2, z: 45 }, 0.8, 1.9, { sensor: true, collisionEvents: true, label: 'exitPortalSensor' }),
+    ]
+    expect(owner.syncAdventureTrack(trackState(withPortal, bodies, { epoch: 2 }))).toBe(true)
+    expect(engine.addSensorVolume).toHaveBeenCalledTimes(3)
   })
 
   it('allows Rapier to stay unstepped when no adventure track is running', () => {
@@ -263,7 +268,7 @@ describe('WasmOwner.syncAdventureTrack', () => {
     owner.syncAdventureTrack(trackState(descs, { 2: piston }))
 
     piston.setNext({ x: -3, y: 2.4, z: 12 })
-    owner.syncAdventureTrack(trackState(descs, { 2: piston }))
+    owner.driveAdventure(1 / 60)
 
     expect(engine.setNextKinematicTransform).toHaveBeenLastCalledWith(
       -3000,
@@ -283,10 +288,83 @@ describe('WasmOwner.syncAdventureTrack', () => {
     const piston = fakeKinematicBody(70)
     const descs = [
       ...synthwaveLikeTrack(),
-      cylinderDesc({ x: 0, y: 0, z: 0 }, 0.5, 2, { sensor: true }),
+      boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { motion: 'dynamic', density: 1 }),
     ]
     expect(owner.syncAdventureTrack(trackState(descs, { 2: piston }))).toBe(false)
+    owner.driveAdventure(1 / 60)
     expect(engine.setNextKinematicTransform).not.toHaveBeenCalled()
+  })
+
+  it('integrates a spinning platter in TS and carries its teeth with it', () => {
+    const engine = makeEngine()
+    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
+    owner.rebuild([], [], [], [], [])
+
+    const platterBody = fakeKinematicBody(80)
+    const descs: AdventureColliderDesc[] = [
+      cylinderDesc({ x: 0, y: 0, z: 0 }, 0.25, 5, {
+        motion: 'kinematic-velocity',
+        angularVelocity: { x: 0, y: Math.PI, z: 0 },
+      }),
+      { ...boxDesc({ x: 4, y: 0.75, z: 0 }, { x: 0.5, y: 0.5, z: 1 }), parentIndex: 0 },
+    ]
+    expect(owner.syncAdventureTrack(trackState(descs, { 0: platterBody, 1: platterBody }))).toBe(true)
+
+    // Half a second at π rad/s is a quarter turn about +Y: local +X → world -Z.
+    owner.driveAdventure(0.25)
+    owner.driveAdventure(0.25)
+
+    const quarter = { x: 0, y: Math.SQRT1_2, z: 0, w: Math.SQRT1_2 }
+    const [, toothPos, toothRot] = engine.setNextKinematicTransform.mock.calls.at(-1) as unknown as [
+      number,
+      { x: number; y: number; z: number },
+      { x: number; y: number; z: number; w: number },
+    ]
+    expect(toothPos.x).toBeCloseTo(0, 6)
+    expect(toothPos.y).toBeCloseTo(0.75, 6)
+    expect(toothPos.z).toBeCloseTo(-4, 6)
+    expect(toothRot.y).toBeCloseTo(quarter.y, 6)
+    expect(toothRot.w).toBeCloseTo(quarter.w, 6)
+    // The platter pose is committed to its Rapier body once per tick, not per collider.
+    expect(platterBody.committed.q.y).toBeCloseTo(quarter.y, 6)
+    expect(platterBody.setRotation).toHaveBeenCalledTimes(2)
+  })
+
+  it('answers bridge overlaps for sensors riding a moving body analytically', () => {
+    const engine = makeEngine()
+    const ballPos = { x: 0, y: 0, z: 0 }
+    engine.getPosition.mockImplementation(() => ballPos)
+    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
+    const ball = {
+      handle: 1,
+      translation: () => ({ x: 0, y: 0, z: 0 }),
+      linvel: () => ({ x: 0, y: 0, z: 0 }),
+      setEnabled: vi.fn(),
+    }
+    owner.rebuild([ball as never], [], [], [], [])
+
+    const wheelBody = fakeKinematicBody(90)
+    const descs: AdventureColliderDesc[] = [
+      cylinderDesc({ x: 0, y: 0, z: 0 }, 0.5, 1, {
+        sensor: true,
+        motion: 'kinematic-velocity',
+        angularVelocity: { x: 0, y: Math.PI, z: 0 },
+        localPosition: { x: 3, y: 0.5, z: 0 },
+      }),
+    ]
+    expect(owner.syncAdventureTrack(trackState(descs, { 0: wheelBody }))).toBe(true)
+    const bridge = owner.getPhysicsBridge()
+
+    ballPos.x = 3
+    ballPos.y = 0.5
+    expect(bridge.overlaps(wheelBody as never, ball as never)).toBe(true)
+
+    // A quarter turn carries the pocket from +X to -Z; the ball left behind misses it.
+    owner.driveAdventure(0.5)
+    expect(bridge.overlaps(wheelBody as never, ball as never)).toBe(false)
+    ballPos.x = 0
+    ballPos.z = -3
+    expect(bridge.overlaps(wheelBody as never, ball as never)).toBe(true)
   })
 
   it('reports adventure colliders in the debug-draw geometry', () => {

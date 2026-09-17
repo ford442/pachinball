@@ -18,6 +18,7 @@ import {
   rampForward,
   rampNormal,
   straightRampLayout,
+  triangularPrismLayout,
   wallLayout,
   RAMP_HALF_THICKNESS,
   WALL_HALF_THICKNESS,
@@ -215,5 +216,51 @@ describe('addScaled', () => {
     expect(out).toEqual({ x: 1, y: 4, z: 1 })
     expect(a).toEqual({ x: 1, y: 1, z: 1 })
     expect(dir).toEqual({ x: 0, y: 1, z: 0 })
+  })
+})
+
+describe('triangularPrismLayout', () => {
+  const layout = triangularPrismLayout(0.5, 1.5)
+  const vertex = (i: number) => ({ x: layout.vertices[i * 3], y: layout.vertices[i * 3 + 1], z: layout.vertices[i * 3 + 2] })
+
+  it('puts its ring vertices where Babylon\'s tessellation-3 cylinder draws them', () => {
+    expect(layout.vertices).toHaveLength(18)
+    for (let j = 0; j < 3; j++) {
+      const angle = (j * 2 * Math.PI) / 3
+      for (const [ring, y] of [[0, -0.75], [1, 0.75]] as const) {
+        const v = vertex(ring * 3 + j)
+        expect(v.x).toBeCloseTo(Math.cos(-angle) * 0.5, 9)
+        expect(v.y).toBe(y)
+        expect(v.z).toBeCloseTo(Math.sin(-angle) * 0.5, 9)
+      }
+    }
+  })
+
+  it('winds all eight triangles outward', () => {
+    expect(layout.indices).toHaveLength(24)
+    for (let t = 0; t < 8; t++) {
+      const [a, b, c] = [0, 1, 2].map((k) => vertex(layout.indices[t * 3 + k]))
+      const e1 = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }
+      const e2 = { x: c.x - a.x, y: c.y - a.y, z: c.z - a.z }
+      const n = { x: e1.y * e2.z - e1.z * e2.y, y: e1.z * e2.x - e1.x * e2.z, z: e1.x * e2.y - e1.y * e2.x }
+      const centroid = { x: a.x + b.x + c.x, y: a.y + b.y + c.y, z: a.z + b.z + c.z }
+      expect(n.x * centroid.x + n.y * centroid.y + n.z * centroid.z).toBeGreaterThan(0)
+    }
+  })
+
+  it('is closed: every directed edge is matched by its reverse exactly once', () => {
+    const edges = new Map<string, number>()
+    for (let t = 0; t < 8; t++) {
+      for (let k = 0; k < 3; k++) {
+        const from = layout.indices[t * 3 + k]
+        const to = layout.indices[t * 3 + ((k + 1) % 3)]
+        edges.set(`${from}>${to}`, (edges.get(`${from}>${to}`) ?? 0) + 1)
+      }
+    }
+    for (const [key, count] of edges) {
+      const [from, to] = key.split('>')
+      expect(count).toBe(1)
+      expect(edges.get(`${to}>${from}`)).toBe(1)
+    }
   })
 })

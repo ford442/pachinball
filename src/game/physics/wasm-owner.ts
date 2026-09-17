@@ -12,6 +12,7 @@ import {
   exportAdventureCollidersToWasm,
   type AdventureExportResult,
 } from './wasm-adventure-export'
+import { composePose, integrateSpin, sphereTouchesVolume, type Pose, type VolumeKind } from './adventure-kinematics'
 import { exportRapierBodyToWasm } from './wasm-static-export'
 
 const FLIPPER_PROXY_RADIUS = 0.3
@@ -25,7 +26,15 @@ export interface AdventureTrackState {
   descriptors: readonly AdventureColliderDesc[]
   unexported: readonly string[]
   bodyForDescriptor: (index: number) => RAPIER.RigidBody | null
-  portalActive: boolean
+}
+
+/** A moving adventure body whose pose TypeScript advances (no Rapier step). */
+interface AdventureKinematicBody {
+  body: RAPIER.RigidBody
+  /** Prescribed spin; null when the track's animator sets the next pose. */
+  angularVelocity: { x: number; y: number; z: number } | null
+  movers: { handle: number; local: Pose }[]
+  sensors: { local: Pose; kind: VolumeKind; halfExtents: { x: number; y: number; z: number } }[]
 }
 
 const CAPSULE_AXIS_TO_BLADE_AXIS: PlainQuat = { x: 0, y: 0, z: -Math.SQRT1_2, w: Math.SQRT1_2 }
@@ -62,7 +71,7 @@ export class WasmOwner {
   private adventureTrack: AdventureTrackState | null = null
   private adventureEpoch = -1
   private adventureExport: AdventureExportResult | null = null
-  private adventureMovers: { body: RAPIER.RigidBody; handle: number }[] = []
+  private adventureKinematics: AdventureKinematicBody[] = []
   private adventureDebug: WasmDebugCollider[] = []
   private adventureWasmIds: number[] = []
   private sensorBodyByHandle = new Map<number, RAPIER.RigidBody>()
@@ -97,7 +106,7 @@ export class WasmOwner {
     this.adventureTrack = null
     this.adventureEpoch = -1
     this.adventureExport = null
-    this.adventureMovers = []
+    this.adventureKinematics = []
     this.adventureDebug = []
     this.adventureWasmIds = []
     this.sensorBodyByHandle.clear()
@@ -254,14 +263,26 @@ export class WasmOwner {
     }
   }
 
-  driveAdventure(_dt: number): void {
-    if (!this.adventureExport || !this.engine.setNextKinematicTransform) return
-    for (const { body, handle } of this.adventureMovers) {
-      const p = body.nextTranslation()
-      const q = body.nextRotation()
-      this.engine.setNextKinematicTransform(handle, { x: p.x, y: p.y, z: p.z }, { x: q.x, y: q.y, z: q.z, w: q.w })
-      body.setTranslation(p, false)
-      body.setRotation(q, false)
+  /**
+   * Advance every moving adventure body by `dt` and push its colliders' poses
+   * into the C++ movers.
+   *
+   * Animated obstacles (pistons, oscillators, swinging arms) have their next
+   * pose set by AdventureMode's animator; spinning platters and mills are
+   * integrated here from their prescribed angular velocity. Either way the
+   * pose is computed in TypeScript — Rapier is never stepped for it. The
+   * Rapier body only stores the committed pose, which the mesh bindings and
+   * the Rapier fallback read.
+   */
+  driveAdventure(dt: number): void {
+    // Unowned tracks step Rapier, which integrates these bodies itself.
+    if (!this.isAdventureOwned() || !this.engine.setNextKinematicTransform) return
+    for (const k of this.adventureKinematics) {
+      const pose = this.advanceKinematicBody(k, dt)
+      for (const mover of k.movers) {
+        const world = composePose(pose, mover.local)
+        this.engine.setNextKinematicTransform(mover.handle, world.position, world.rotation)
+      }
     }
   }
 
@@ -289,7 +310,8 @@ export class WasmOwner {
         const ballId = this.rapierToWasm.get(ball)
         if (ballId === undefined) return false
         const handles = this.sensorHandlesByBody.get(sensorBody)
-        return handles ? handles.some((handle) => this.sensorOverlaps.has(`${handle}:${ballId}`)) : false
+        if (handles?.some((handle) => this.sensorOverlaps.has(`${handle}:${ballId}`))) return true
+        return this.touchesMovingSensor(sensorBody, ballId)
       },
       applyImpulse: (ball, x, y, z) => this.applyBallImpulse(ball, x, y, z),
     }
@@ -329,11 +351,7 @@ export class WasmOwner {
       this.exportStaticScene()
     }
     if (!state) return true
-    const owned = this.isAdventureOwned()
-    if (owned && !state.portalActive) {
-      this.driveAdventure(0)
-    }
-    return owned && !state.portalActive
+    return this.isAdventureOwned()
   }
 
   clearAdventureTrack(): void {
@@ -394,7 +412,7 @@ export class WasmOwner {
       this.wasmToRapier.delete(wasmId)
     }
     this.adventureWasmIds = []
-    this.adventureMovers = []
+    this.adventureKinematics = []
     this.adventureDebug = []
     this.adventureExport = null
     this.sensorBodyByHandle.clear()
@@ -422,10 +440,54 @@ export class WasmOwner {
       }
     }
 
-    for (const mover of result.movers) {
-      const body = track.bodyForDescriptor(mover.index)
-      if (body) this.adventureMovers.push({ body, handle: mover.handle })
+    const kinematicByIndex = new Map<number, AdventureKinematicBody>()
+    for (const { bodyIndex, angularVelocity } of result.kinematicBodies) {
+      const body = track.bodyForDescriptor(bodyIndex)
+      if (!body) continue
+      const entry: AdventureKinematicBody = { body, angularVelocity, movers: [], sensors: [] }
+      kinematicByIndex.set(bodyIndex, entry)
+      this.adventureKinematics.push(entry)
     }
+    for (const mover of result.movers) {
+      kinematicByIndex.get(mover.bodyIndex)?.movers.push({ handle: mover.handle, local: mover.local })
+    }
+    for (const sensor of result.movingSensors) {
+      kinematicByIndex.get(sensor.bodyIndex)?.sensors.push(sensor)
+    }
+  }
+
+  /** Commit a moving body's pose for this tick and return it. */
+  private advanceKinematicBody(k: AdventureKinematicBody, dt: number): Pose {
+    const { body } = k
+    let position: Pose['position']
+    let rotation: Pose['rotation']
+    if (k.angularVelocity) {
+      const t = body.translation()
+      const r = body.rotation()
+      position = { x: t.x, y: t.y, z: t.z }
+      rotation = integrateSpin({ x: r.x, y: r.y, z: r.z, w: r.w }, k.angularVelocity, dt)
+    } else {
+      const t = body.nextTranslation()
+      const r = body.nextRotation()
+      position = { x: t.x, y: t.y, z: t.z }
+      rotation = { x: r.x, y: r.y, z: r.z, w: r.w }
+    }
+    body.setTranslation(position, false)
+    body.setRotation(rotation, false)
+    return { position, rotation }
+  }
+
+  /** Analytic overlap for sensors riding on a moving body (no C++ sensor exists for them). */
+  private touchesMovingSensor(sensorBody: RAPIER.RigidBody, ballId: number): boolean {
+    const k = this.adventureKinematics.find((entry) => entry.body === sensorBody)
+    if (!k || k.sensors.length === 0) return false
+    const center = this.engine.getPosition(ballId)
+    const t = sensorBody.translation()
+    const r = sensorBody.rotation()
+    const bodyPose: Pose = { position: { x: t.x, y: t.y, z: t.z }, rotation: { x: r.x, y: r.y, z: r.z, w: r.w } }
+    return k.sensors.some((sensor) =>
+      sphereTouchesVolume(center, GameConfig.ball.radius, sensor.kind, sensor.halfExtents, composePose(bodyPose, sensor.local))
+    )
   }
 
   private track(body: RAPIER.RigidBody, id: number): void {

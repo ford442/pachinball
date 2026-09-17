@@ -4,6 +4,7 @@ import {
   ADVENTURE_FILTER,
   ADVENTURE_MEMBERSHIP,
   boxDesc,
+  convexMeshDesc,
   cylinderDesc,
   descCollisionGroups,
   RAPIER_DEFAULT_FRICTION,
@@ -22,6 +23,7 @@ import {
   tessellateBox,
 } from '../src/game/physics/wasm-adventure-export'
 import { WasmVolumeShape } from '../src/wasm/PhysicsModule'
+import { triangularPrismLayout } from '../src/adventure/track-geometry'
 import type { WasmSimEngine } from '../src/wasm/wasm-sim-engine'
 
 const ORIGIN = { x: 0, y: 0, z: 0 }
@@ -36,12 +38,14 @@ function recordingEngine() {
   let sphere = -8000
   let mover = -3000
   let sensor = -4000
+  let mesh = -6000
   const engine = {
     addStaticBox: (...args: unknown[]) => { calls.push({ fn: 'addStaticBox', args }); return box-- },
     addStaticCylinder: (...args: unknown[]) => { calls.push({ fn: 'addStaticCylinder', args }); return cylinder-- },
     addStaticSphere: (...args: unknown[]) => { calls.push({ fn: 'addStaticSphere', args }); return sphere-- },
     addKinematicMover: (...args: unknown[]) => { calls.push({ fn: 'addKinematicMover', args }); return mover-- },
     addSensorVolume: (...args: unknown[]) => { calls.push({ fn: 'addSensorVolume', args }); return sensor-- },
+    addStaticTriangleMesh: (...args: unknown[]) => { calls.push({ fn: 'addStaticTriangleMesh', args }); return mesh-- },
     setCollisionGroups: (...args: unknown[]) => { calls.push({ fn: 'setCollisionGroups', args }) },
   }
   return { engine: engine as unknown as WasmSimEngine, calls }
@@ -213,7 +217,8 @@ describe('exportAdventureCollidersToWasm', () => {
     expect(result.unsupported).toEqual([])
     expect(at(calls, 'addSensorVolume')).toHaveLength(1)
     expect(at(calls, 'addKinematicMover')).toHaveLength(1)
-    expect(result.movers).toEqual([{ index: 1, handle: -3000 }])
+    expect(result.movers).toEqual([{ index: 1, handle: -3000, bodyIndex: 1, local: { position: ORIGIN, rotation: IDENTITY } }])
+    expect(result.kinematicBodies).toEqual([{ bodyIndex: 1, angularVelocity: null }])
   })
 
   it('bakes a body-local collider offset into the exported world pose', () => {
@@ -241,29 +246,106 @@ describe('exportAdventureCollidersToWasm', () => {
     expect(childCenter.z).toBeCloseTo(8, 6)
   })
 
-  it('rejects a collider parented to a spinning platter', () => {
-    const { engine } = recordingEngine()
+  it('exports a spinning platter and its teeth as movers carried by the platter body', () => {
+    const { engine, calls } = recordingEngine()
     const platter = cylinderDesc({ x: 0, y: 0, z: 0 }, 0.25, 5, { motion: 'kinematic-velocity', angularVelocity: { x: 0, y: 1, z: 0 } })
     const tooth: AdventureColliderDesc = {
       ...boxDesc({ x: 4, y: 0.75, z: 0 }, { x: 0.5, y: 0.5, z: 1 }),
       parentIndex: 0,
     }
-    const { unsupported } = exportAdventureCollidersToWasm([platter, tooth], engine)
-    expect(unsupported.map((u) => u.index)).toEqual([0, 1])
+    const result = exportAdventureCollidersToWasm([platter, tooth], engine)
+    expect(result.unsupported).toEqual([])
+    expect(result.movers.map((m) => [m.index, m.bodyIndex])).toEqual([[0, 0], [1, 0]])
+    expect(result.movers[1].local.position).toEqual({ x: 4, y: 0.75, z: 0 })
+    expect(result.kinematicBodies).toEqual([{ bodyIndex: 0, angularVelocity: { x: 0, y: 1, z: 0 } }])
+
+    const shapes = at(calls, 'addKinematicMover').map((c) => c.args[5])
+    expect(shapes).toEqual([WasmVolumeShape.Cylinder, WasmVolumeShape.Box])
+    // Platter: (radius, halfHeight, radius), the C++ VolumeShape convention.
+    expect(at(calls, 'addKinematicMover')[0].args[1]).toEqual({ x: 5, y: 0.25, z: 5 })
   })
 
-  it('rejects the shapes the C++ engine genuinely cannot express', () => {
+  it('routes cylinder and sphere sensors to shaped sensor volumes', () => {
     const { engine, calls } = recordingEngine()
+    const result = exportAdventureCollidersToWasm(
+      [
+        cylinderDesc({ x: 0, y: 0, z: 0 }, 0.5, 2, { sensor: true }),
+        sphereDesc({ x: 0, y: 0, z: 0 }, 3, { sensor: true }),
+      ],
+      engine,
+    )
+    expect(result.unsupported).toEqual([])
+    const sensors = at(calls, 'addSensorVolume')
+    expect(sensors.map((c) => c.args[3])).toEqual([WasmVolumeShape.Cylinder, WasmVolumeShape.Sphere])
+    expect(sensors[0].args[1]).toEqual({ x: 2, y: 0.5, z: 2 })
+    expect(sensors[1].args[1]).toEqual({ x: 3, y: 3, z: 3 })
+  })
+
+  it('bakes a moving body\'s collider offset into the mover pose and keeps it as the local pose', () => {
+    const { engine, calls } = recordingEngine()
+    const result = exportAdventureCollidersToWasm(
+      [boxDesc({ x: 10, y: 0, z: 0 }, { x: 2, y: 0.5, z: 0.5 }, {
+        rotation: yaw(Math.PI / 2),
+        motion: 'kinematic-position',
+        localPosition: { x: 2, y: 0, z: 0 },
+      })],
+      engine,
+    )
+    expect(result.unsupported).toEqual([])
+    const [center] = at(calls, 'addKinematicMover')[0].args as [{ x: number; y: number; z: number }]
+    expect(center.x).toBeCloseTo(10, 6)
+    expect(center.z).toBeCloseTo(-2, 6)
+    expect(result.movers[0].local.position).toEqual({ x: 2, y: 0, z: 0 })
+  })
+
+  it('returns sensors on a moving body for analytic testing instead of creating C++ sensors', () => {
+    const { engine, calls } = recordingEngine()
+    const wheel = cylinderDesc({ x: 0, y: 0, z: 0 }, 0.5, 1, {
+      sensor: true,
+      motion: 'kinematic-velocity',
+      angularVelocity: { x: 0, y: 2, z: 0 },
+      localPosition: { x: 3, y: 0.5, z: 0 },
+    })
+    const pocket: AdventureColliderDesc = { ...cylinderDesc({ x: -3, y: 0.5, z: 0 }, 0.5, 1, { sensor: true }), parentIndex: 0 }
+    const result = exportAdventureCollidersToWasm([wheel, pocket], engine)
+    expect(result.unsupported).toEqual([])
+    expect(at(calls, 'addSensorVolume')).toEqual([])
+    expect(result.handles.size).toBe(0)
+    expect(result.movingSensors.map((m) => [m.index, m.bodyIndex, m.kind])).toEqual([[0, 0, 'cylinder'], [1, 0, 'cylinder']])
+    expect(result.movingSensors[1].local.position).toEqual({ x: -3, y: 0.5, z: 0 })
+    expect(result.kinematicBodies).toEqual([{ bodyIndex: 0, angularVelocity: { x: 0, y: 2, z: 0 } }])
+  })
+
+  it('exports a convex mesh as a world-space, one-sided triangle mesh', () => {
+    const { engine, calls } = recordingEngine()
+    const prism = triangularPrismLayout(0.5, 1.5)
+    const result = exportAdventureCollidersToWasm(
+      [convexMeshDesc({ x: 10, y: 1, z: 0 }, prism, { rotation: yaw(Math.PI), restitution: 0.8 })],
+      engine,
+    )
+    expect(result.unsupported).toEqual([])
+    const [call] = at(calls, 'addStaticTriangleMesh')
+    const [verts, indices, restitution, , doubleSided] = call.args as [Float32Array, Uint32Array, number, number, boolean]
+    expect(indices).toHaveLength(24)
+    expect(restitution).toBe(0.8)
+    expect(doubleSided).toBe(false)
+    // Vertex 0 is (0.5, -0.75, 0) locally; a half-turn yaw sends it to (-0.5, -0.75, 0).
+    expect(verts[0]).toBeCloseTo(9.5, 5)
+    expect(verts[1]).toBeCloseTo(0.25, 5)
+    expect(verts[2]).toBeCloseTo(0, 5)
+    expect(result.handles.get(0)).toBe(-6000)
+  })
+
+  it('rejects dynamic bodies and convex meshes that move or sense', () => {
+    const { engine, calls } = recordingEngine()
+    const prism = triangularPrismLayout(0.5, 1.5)
     const descs: AdventureColliderDesc[] = [
-      cylinderDesc({ x: 0, y: 0, z: 0 }, 0.5, 2, { sensor: true }),
-      sphereDesc({ x: 0, y: 0, z: 0 }, 3, { sensor: true }),
-      cylinderDesc({ x: 0, y: 0, z: 0 }, 1, 1, { motion: 'kinematic-position' }),
       boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { motion: 'dynamic', density: 2 }),
-      cylinderDesc({ x: 0, y: 0, z: 0 }, 0.25, 5, { motion: 'kinematic-velocity', angularVelocity: { x: 0, y: 1, z: 0 } }),
-      boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { motion: 'kinematic-position', localPosition: { x: 5, y: 0, z: 0 } }),
+      convexMeshDesc(ORIGIN, prism, { motion: 'kinematic-position' }),
+      convexMeshDesc(ORIGIN, prism, { sensor: true }),
     ]
     const { unsupported, handles } = exportAdventureCollidersToWasm(descs, engine)
-    expect(unsupported.map((u) => u.index)).toEqual([0, 1, 2, 3, 4, 5])
+    expect(unsupported.map((u) => u.index)).toEqual([0, 1, 2])
     expect(handles.size).toBe(0)
     expect(calls).toEqual([])
   })

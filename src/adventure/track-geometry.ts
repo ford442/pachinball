@@ -202,3 +202,64 @@ export function inclinedMillAxis(inclineRad: number, angVelAlongNormal: number):
     z: Math.sin(inclineRad) * angVelAlongNormal,
   }
 }
+
+export interface ConvexMeshLayout {
+  /** 3 floats per vertex, body-local. */
+  vertices: number[]
+  /** 3 indices per triangle, wound CCW seen from outside the solid. */
+  indices: number[]
+}
+
+/**
+ * Closed triangular prism matching Babylon's `CreateCylinder({ tessellation: 3 })`
+ * ring layout (vertex j at angle -j·120° in XZ, axis along local Y), so the
+ * collider is exactly the prism that is drawn.
+ *
+ * Replaces prism-pathway's Rapier `convexHull`: two caps and three quad sides
+ * make 8 outward-facing triangles, which the C++ engine takes as a one-sided
+ * static mesh. Winding is fixed up per face against the solid's centre rather
+ * than hand-ordered, so the outward guarantee does not rest on the angle
+ * convention above.
+ */
+export function triangularPrismLayout(radius: number, height: number): ConvexMeshLayout {
+  const halfHeight = height / 2
+  const vertices: number[] = []
+  for (const y of [-halfHeight, halfHeight]) {
+    for (let j = 0; j < 3; j++) {
+      const angle = (j * 2 * Math.PI) / 3
+      vertices.push(Math.cos(-angle) * radius, y, Math.sin(-angle) * radius)
+    }
+  }
+
+  // Bottom ring 0..2, top ring 3..5.
+  const faces: Array<[number, number, number]> = [
+    [0, 1, 2],
+    [3, 4, 5],
+  ]
+  for (let j = 0; j < 3; j++) {
+    const k = (j + 1) % 3
+    faces.push([j, k, k + 3], [j, k + 3, j + 3])
+  }
+
+  const at = (i: number): GeoVec3 => ({ x: vertices[i * 3], y: vertices[i * 3 + 1], z: vertices[i * 3 + 2] })
+  const indices: number[] = []
+  for (const [a, b, c] of faces) {
+    const pa = at(a)
+    const pb = at(b)
+    const pc = at(c)
+    const e1 = { x: pb.x - pa.x, y: pb.y - pa.y, z: pb.z - pa.z }
+    const e2 = { x: pc.x - pa.x, y: pc.y - pa.y, z: pc.z - pa.z }
+    const n = {
+      x: e1.y * e2.z - e1.z * e2.y,
+      y: e1.z * e2.x - e1.x * e2.z,
+      z: e1.x * e2.y - e1.y * e2.x,
+    }
+    // The prism is centred on the local origin, so a face's centroid is also
+    // its outward direction.
+    const outward = n.x * (pa.x + pb.x + pc.x) + n.y * (pa.y + pb.y + pc.y) + n.z * (pa.z + pb.z + pc.z)
+    if (outward >= 0) indices.push(a, b, c)
+    else indices.push(a, c, b)
+  }
+
+  return { vertices, indices }
+}

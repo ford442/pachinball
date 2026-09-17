@@ -177,9 +177,10 @@ export class GamePhysicsController {
 
   /**
    * Register an exit-portal sensor body handle so the collision dispatcher
-   * can skip it cleanly.  Portal contact is detected by intersectionPair
-   * queries inside AdventureMode.updateExitPortal(); Rapier collision events
-   * for the sensor body are redundant and must not reach other handlers.
+   * can skip it cleanly.  Portal contact is detected by the sensor-overlap
+   * test inside AdventureMode.updateExitPortal() (Rapier or WASM, via the
+   * physics bridge); contact events for the sensor body are redundant and
+   * must not reach other handlers.
    *
    * Call this immediately after AdventureMode.activateExitPortal() succeeds.
    */
@@ -257,12 +258,7 @@ export class GamePhysicsController {
   }
 
 
-  /**
-   * Snapshot of the built adventure track for the C++ exporter, or null when
-   * adventure is not running. `portalActive` keeps Rapier stepping while an
-   * exit portal is up, because portal entry is an `intersectionPair` query
-   * and those need a stepped narrowphase.
-   */
+  /** Snapshot of the built adventure track for the C++ exporter, or null when adventure is not running. */
   private adventureTrackState(adventureActive: boolean): AdventureTrackState | null {
     const adventure = this.host.adventureMode
     if (!adventureActive || !adventure) return null
@@ -271,7 +267,6 @@ export class GamePhysicsController {
       descriptors: adventure.getColliderDescriptors(),
       unexported: adventure.getUnexportedColliders(),
       bodyForDescriptor: (index) => adventure.getBodyForDescriptor(index),
-      portalActive: adventure.getPortalSensorHandle() >= 0,
     }
   }
 
@@ -337,8 +332,8 @@ export class GamePhysicsController {
     }
     if (wasmActive && isOwner) {
       this.wasmOwner?.driveFlippers(inputFrame, Math.min(rawDt, 1 / 30))
-      // Rotating platforms and mills are still posed by Rapier's kinematic
-      // integration, so push their poses across before the WASM step.
+      // Advance pistons, platters and mills in TS and push their poses into
+      // the C++ movers before the WASM step.
       this.wasmOwner?.driveAdventure(Math.min(rawDt, 1 / 30))
       this.host.physics.setMirrorOverheadMs?.(0)
     }

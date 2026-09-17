@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { AdventureTrackType } from '../src/adventure/adventure-types'
 import {
   assertWasmOwnerReady,
   bootWasmOwner,
@@ -7,9 +8,10 @@ import {
 } from './helpers/wasm-owner-boot'
 
 /**
- * #383 Slice B acceptance: synthwave-surf runs in wasm-owner with the second
- * Rapier world unstepped. Every other track keeps stepping Rapier, so the
- * gate is checked per track, not as a blanket flag.
+ * #383 cutover acceptance: every catalogued adventure track runs in
+ * wasm-owner with the second Rapier world unstepped — full descriptor export,
+ * `lastRapierStepMs === 0`, and moving gizmos posed by TypeScript rather than
+ * Rapier's kinematic integration. Synthwave-surf additionally plays a ball.
  *
  * Drives stepPhysics directly, like the other wasm-owner specs, to avoid rAF
  * hangs in headless runs.
@@ -25,14 +27,31 @@ type AdventureHooks = GameHooks & {
         ballMesh: unknown,
         trackType: string
       ) => Promise<void>
-      getColliderDescriptors: () => readonly { kind: string; label?: string }[]
+      getColliderDescriptors: () => readonly {
+        kind: string
+        label?: string
+        motion?: string
+        angularVelocity?: { x: number; y: number; z: number }
+        removed?: true
+      }[]
+      getBodyForDescriptor: (index: number) => { rotation: () => { x: number; y: number; z: number; w: number } } | null
       getUnexportedColliders: () => readonly string[]
       getPortalSensorHandle: () => number
+      switchToTrack: (track: string) => Promise<boolean>
+      activateExitPortal: (track: string, kind: 'success' | 'failure', mode?: string) => boolean
+      deactivateExitPortal: () => void
     } | null
     scene?: { activeCamera?: unknown }
-    physicsController?: NonNullable<GameHooks['game']>['physicsController']
+    physicsController?: NonNullable<GameHooks['game']>['physicsController'] & {
+      getAdventureOwnership?: () => {
+        owned: boolean
+        unsupported: ReadonlyArray<{ reason: string; index?: number; label?: string }>
+      }
+    }
   }
 }
+
+const CATALOGUED_TRACKS = Object.values(AdventureTrackType)
 
 async function startTrack(page: import('@playwright/test').Page, trackType: string) {
   return page.evaluate(async (track) => {
@@ -50,6 +69,23 @@ async function startTrack(page: import('@playwright/test').Page, trackType: stri
     g.physicsController?.rebuildHandleCaches?.()
     return { ok: g.adventureMode.isActive(), error: null as string | null }
   }, trackType)
+}
+
+/**
+ * Take GPU work out of these physics-only tests. They drive `stepPhysics` by
+ * hand, so the page's render loop is stopped; and `mapManager.update` is
+ * stubbed because its periodic LCD-table texture re-upload (`texImage2D`) was
+ * measured at over four minutes per call under headless software WebGL,
+ * starving every later `page.evaluate`.
+ */
+async function pauseRendering(page: import('@playwright/test').Page) {
+  await page.evaluate(() => {
+    const g = (window as unknown as {
+      game?: { engine?: { stopRenderLoop?: () => void }; mapManager?: { update?: (dt: number) => void } }
+    }).game
+    g?.engine?.stopRenderLoop?.()
+    if (g?.mapManager) g.mapManager.update = () => {}
+  })
 }
 
 /** Run the fixed-step physics loop n times with a pinned dt. */
@@ -169,17 +205,123 @@ test.describe('wasm-owner adventure: synthwave-surf runs without Rapier', () => 
     expect(physicsErrors, `physics console errors: ${physicsErrors.join(' | ')}`).toEqual([])
   })
 
-  // There is deliberately NO browser test for a track the gate refuses.
-  //
-  // Exercising one means putting the app into adventure + wasm-owner with
-  // Rapier still stepping, and that state traps the Rapier WASM module — the
-  // page's own rAF loop hits it and the execution context dies mid-test. That
-  // crash is pre-existing on main (reproduced there for both prism-pathway and
-  // synthwave-surf) and is out of this slice's scope, so a spec that depends on
-  // surviving it would only ever be flaky.
-  //
-  // The refusal logic is covered without a browser in
-  // tests/wasm-owner-adventure.test.ts: an inexpressible descriptor, geometry
-  // built outside the descriptor path (prism-pathway's convex hull), and an
-  // active exit portal each keep Rapier stepping.
+  test('every catalogued track exports fully and runs with Rapier unstepped', async ({ page }) => {
+    test.setTimeout(600_000)
+
+    const boot = await bootWasmOwner(page)
+    assertWasmOwnerReady(boot)
+    await startPlaying(page)
+    await pauseRendering(page)
+
+    const started = await startTrack(page, CATALOGUED_TRACKS[0])
+    expect(started.error, started.error ?? 'track start failed').toBeNull()
+
+    const failures: string[] = []
+    let spinnersChecked = 0
+
+    for (const track of CATALOGUED_TRACKS) {
+      const switched = await page.evaluate(async (t) => {
+        const g = (window as unknown as AdventureHooks).game
+        const ok = (await g?.adventureMode?.switchToTrack(t)) ?? false
+        g?.physicsController?.rebuildHandleCaches?.()
+        return ok
+      }, track)
+      if (!switched) {
+        failures.push(`${track}: switchToTrack failed`)
+        continue
+      }
+
+      // Record every prescribed-spin body's pose, then step: Rapier stays
+      // unstepped, so any rotation must come from the TypeScript driver.
+      const spinners = await page.evaluate(() => {
+        const a = (window as unknown as AdventureHooks).game?.adventureMode
+        const descs = a?.getColliderDescriptors() ?? []
+        return descs.flatMap((d, i) => {
+          const w = d.angularVelocity
+          if (d.removed || d.motion !== 'kinematic-velocity' || !w || Math.hypot(w.x, w.y, w.z) < 1e-6) return []
+          const q = a?.getBodyForDescriptor(i)?.rotation()
+          return q ? [{ index: i, label: d.label ?? '?', q: { x: q.x, y: q.y, z: q.z, w: q.w } }] : []
+        })
+      })
+
+      const run = await stepPhysics(page, 30)
+
+      const report = await page.evaluate((before) => {
+        const g = (window as unknown as AdventureHooks).game
+        const a = g?.adventureMode
+        const ownership = g?.physicsController?.getAdventureOwnership?.()
+        const stuck = before.filter(({ index, q }) => {
+          const now = a?.getBodyForDescriptor(index)?.rotation()
+          return !now || Math.abs(now.x * q.x + now.y * q.y + now.z * q.z + now.w * q.w) > 0.999999
+        })
+        return {
+          descriptors: a?.getColliderDescriptors().length ?? 0,
+          active: a?.isActive() ?? false,
+          owned: ownership?.owned ?? false,
+          unsupported: (ownership?.unsupported ?? []).map((u) => `${u.label ?? '?'}: ${u.reason}`),
+          rapierMs: g?.physics?.getLastRapierStepMs?.() ?? -1,
+          stuck: stuck.map((s) => s.label),
+        }
+      }, spinners)
+      spinnersChecked += spinners.length
+
+      const problems: string[] = []
+      if (!report.active) problems.push('adventure not active')
+      if (report.descriptors === 0) problems.push('no descriptors emitted')
+      if (report.unsupported.length > 0) problems.push(`unsupported: ${[...new Set(report.unsupported)].join('; ')}`)
+      if (!report.owned) problems.push('not owned by wasm')
+      if (!run.ok || run.rapierMs !== 0 || report.rapierMs !== 0) problems.push(`Rapier stepped (${run.rapierMs} ms)`)
+      if (run.wasmMs <= 0) problems.push('C++ engine did not step')
+      if (report.stuck.length > 0) problems.push(`spinning bodies did not turn: ${report.stuck.join(', ')}`)
+      if (problems.length > 0) failures.push(`${track}: ${problems.join(' | ')}`)
+    }
+
+    expect(failures, failures.join('\n')).toEqual([])
+    // CYBER_CORE, CHRONO_CORE, CPU_CORE, … all carry platters; a zero here
+    // would mean the rotation check above silently checked nothing.
+    expect(spinnersChecked).toBeGreaterThan(5)
+  })
+
+  test('an exit portal opening and closing keeps the track owned', async ({ page }) => {
+    test.setTimeout(180_000)
+
+    const boot = await bootWasmOwner(page)
+    assertWasmOwnerReady(boot)
+    await startPlaying(page)
+    await pauseRendering(page)
+    const started = await startTrack(page, 'CYBER_CORE')
+    expect(started.error, started.error ?? 'track start failed').toBeNull()
+
+    const sample = async () => {
+      const run = await stepPhysics(page, 10)
+      return page.evaluate((rapierMs) => {
+        const g = (window as unknown as AdventureHooks).game
+        const descs = g?.adventureMode?.getColliderDescriptors() ?? []
+        return {
+          owned: g?.physicsController?.getAdventureOwnership?.()?.owned ?? false,
+          rapierMs,
+          livePortalSensors: descs.filter((d) => d.label === 'exitPortalSensor' && !d.removed).length,
+        }
+      }, run.rapierMs)
+    }
+
+    expect(await sample()).toEqual({ owned: true, rapierMs: 0, livePortalSensors: 0 })
+
+    const opened = await page.evaluate(() =>
+      (window as unknown as AdventureHooks).game?.adventureMode?.activateExitPortal('CYBER_CORE', 'success') ?? false
+    )
+    expect(opened).toBe(true)
+    expect(await sample()).toEqual({ owned: true, rapierMs: 0, livePortalSensors: 1 })
+
+    // Re-opening replaces the portal rather than stacking a second sensor.
+    await page.evaluate(() => {
+      (window as unknown as AdventureHooks).game?.adventureMode?.activateExitPortal('CYBER_CORE', 'failure')
+    })
+    expect(await sample()).toEqual({ owned: true, rapierMs: 0, livePortalSensors: 1 })
+
+    await page.evaluate(() => {
+      (window as unknown as AdventureHooks).game?.adventureMode?.deactivateExitPortal()
+    })
+    expect(await sample()).toEqual({ owned: true, rapierMs: 0, livePortalSensors: 0 })
+  })
 })

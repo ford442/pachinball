@@ -89,6 +89,7 @@ export abstract class AdventurePortalMixin extends AdventureCameraMixin {
     portal.root.dispose()
     this.portalsRemovedSinceClear++
 
+    this.retireEmittedBody(portal.sensor)
     if (this.world.getRigidBody(portal.sensor.handle)) {
       this.world.removeRigidBody(portal.sensor)
     }

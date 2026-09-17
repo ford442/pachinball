@@ -133,7 +133,9 @@ export function buildTeslaTower(builder: TrackBuilder): void {
       const { body } = builder.emitCollider(
         sphereDesc({ x: pos.x, y: pos.y, z: pos.z }, sphereRadius, {
           restitution: 1.2,
-          motion: 'kinematic-velocity',
+          // Position-based: the OSCILLATOR animator below sets its next pose.
+          // (It was velocity-based, which ignores that pose, so it never moved.)
+          motion: 'kinematic-position',
           label: 'ballLightning',
         })
       )

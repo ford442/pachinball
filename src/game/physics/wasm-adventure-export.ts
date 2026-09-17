@@ -7,6 +7,7 @@ import type {
   DescVec3,
 } from '../../adventure/track-collider-descriptors'
 import { WasmVolumeShape } from '../../wasm/PhysicsModule'
+import { composePose, quatRotateVec, type Pose, type VolumeKind } from './adventure-kinematics'
 import type { WasmSimEngine } from '../../wasm/wasm-sim-engine'
 import { STATIC_HANDLE_OVERFLOW } from '../../wasm/wasm-types'
 
@@ -43,8 +44,30 @@ export interface AdventureMover {
 }
 
 export interface ExportedMover {
+  /** Descriptor of the collider. */
   index: number
   handle: number
+  /** Descriptor whose body carries the collider — itself, or its parent. */
+  bodyIndex: number
+  /** Collider pose inside that body. */
+  local: Pose
+}
+
+/** A trigger volume riding on a moving body; see `exportAdventureCollidersToWasm`. */
+export interface MovingSensor {
+  index: number
+  bodyIndex: number
+  local: Pose
+  kind: VolumeKind
+  /** VolumeShape convention — see `sphereTouchesVolume`. */
+  halfExtents: DescVec3
+}
+
+/** A moving body whose pose WasmOwner advances each tick. */
+export interface KinematicBody {
+  bodyIndex: number
+  /** World-space spin for `kinematic-velocity` bodies; null when an animator poses it. */
+  angularVelocity: DescVec3 | null
 }
 
 export interface UnsupportedCollider {
@@ -64,13 +87,10 @@ interface AdventureBodyExportResult {
 export interface AdventureExportResult {
   handles: Map<number, number>
   movers: ExportedMover[]
+  movingSensors: MovingSensor[]
+  kinematicBodies: KinematicBody[]
   unsupported: UnsupportedCollider[]
   debug: WasmDebugCollider[]
-}
-
-interface Pose {
-  position: DescVec3
-  rotation: DescQuat
 }
 
 function emptyBodyResult(): AdventureBodyExportResult {
@@ -114,24 +134,8 @@ function rotatePoint(
   }
 }
 
-function quatRotate(q: DescQuat, v: DescVec3): DescVec3 {
-  return rotatePoint(q, v.x, v.y, v.z)
-}
-
 function conjugate(q: { x: number; y: number; z: number; w: number }) {
   return { x: -q.x, y: -q.y, z: -q.z, w: q.w }
-}
-
-function compose(parent: Pose, localPos: DescVec3, localRot: DescQuat): Pose {
-  const offset = quatRotate(parent.rotation, localPos)
-  return {
-    position: {
-      x: parent.position.x + offset.x,
-      y: parent.position.y + offset.y,
-      z: parent.position.z + offset.z,
-    },
-    rotation: quatMultiply(parent.rotation, localRot),
-  }
 }
 
 export function tessellateBox(
@@ -397,26 +401,57 @@ export function exportAdventureBodyToWasm(
   return result
 }
 
-function worldPose(desc: AdventureColliderDesc, all: readonly AdventureColliderDesc[]): Pose | null {
-  if (desc.parentIndex === undefined) {
-    const body: Pose = { position: desc.position, rotation: desc.rotation }
-    if (!desc.localPosition && !desc.localRotation) return body
-    return compose(body, desc.localPosition ?? { x: 0, y: 0, z: 0 }, desc.localRotation ?? IDENTITY_DESC)
-  }
+const ZERO_VEC: DescVec3 = { x: 0, y: 0, z: 0 }
 
-  const parent = all[desc.parentIndex]
-  if (!parent || (parent.motion && parent.motion !== 'fixed')) return null
-  const parentPose = worldPose(parent, all)
-  if (!parentPose) return null
-  return compose(parentPose, desc.position, desc.rotation)
+/** C++ volume-shape tag and half-extents (VolumeShape convention) for a descriptor. */
+function volumeOf(desc: AdventureColliderDesc): { kind: VolumeKind; shape: WasmVolumeShape; half: DescVec3 } | null {
+  switch (desc.kind) {
+    case 'box':
+      return { kind: 'box', shape: WasmVolumeShape.Box, half: desc.halfExtents ?? { x: 0.5, y: 0.5, z: 0.5 } }
+    case 'cylinder': {
+      const r = desc.radius ?? 0.5
+      return { kind: 'cylinder', shape: WasmVolumeShape.Cylinder, half: { x: r, y: desc.halfHeight ?? 0.5, z: r } }
+    }
+    case 'sphere': {
+      const r = desc.radius ?? 0.5
+      return { kind: 'sphere', shape: WasmVolumeShape.Sphere, half: { x: r, y: r, z: r } }
+    }
+    default:
+      return null
+  }
 }
 
+function volumeDebug(volume: { kind: VolumeKind; half: DescVec3 }, pose: Pose, sensor: boolean): WasmDebugCollider {
+  const { position: center, rotation } = pose
+  if (sensor) return { kind: 'sensor', center, halfExtents: volume.half, rotation, volumeShape: volume.kind }
+  if (volume.kind === 'cylinder') return { kind: 'cylinder', center, radius: volume.half.x, halfHeight: volume.half.y, rotation }
+  if (volume.kind === 'sphere') return { kind: 'sphere', center, radius: volume.half.x }
+  return { kind: 'box', center, halfExtents: volume.half, rotation }
+}
+
+/**
+ * Walk a track's descriptors into the C++ engine.
+ *
+ * A collider's body is its own descriptor, or its `parentIndex` descriptor
+ * when attached; the body's `motion` decides the route:
+ *
+ *   fixed               → static box / cylinder / sphere / triangle mesh, or a
+ *                         static sensor volume
+ *   kinematic-position  → kinematic mover (pose supplied by the track's
+ *   kinematic-velocity    animator, or integrated from the body's spin)
+ *   dynamic             → unsupported (no track builds one)
+ *
+ * A sensor on a moving body has no C++ equivalent — C++ sensors are static —
+ * and is returned in `movingSensors` for WasmOwner to test analytically.
+ */
 export function exportAdventureCollidersToWasm(
   descriptors: readonly AdventureColliderDesc[],
   engine: WasmSimEngine
 ): AdventureExportResult {
   const handles = new Map<number, number>()
   const movers: ExportedMover[] = []
+  const movingSensors: MovingSensor[] = []
+  const kinematicBodies = new Map<number, KinematicBody>()
   const unsupported: UnsupportedCollider[] = []
   const debug: WasmDebugCollider[] = []
 
@@ -425,70 +460,104 @@ export function exportAdventureCollidersToWasm(
       unsupported.push({ index, reason, ...(desc.label ? { label: desc.label } : {}) })
     }
 
-    const motion = desc.motion ?? 'fixed'
-    if (motion === 'dynamic') return reject('dynamic bodies have no C++ equivalent')
-    if (motion === 'kinematic-velocity') return reject('prescribed-spin kinematic bodies have no C++ equivalent')
-
-    const pose = worldPose(desc, descriptors)
-    if (!pose) return reject('collider hangs off a non-fixed parent body')
-
-    const { position: p, rotation: q } = pose
-    const restitution = desc.restitution
-    const friction = desc.friction
-
-    const debugBefore = debug.length
-    const moversBefore = movers.length
-
-    let handle: number | null = null
-    if (motion === 'kinematic-position') {
-      if (desc.kind !== 'box') return reject(`C++ kinematic movers are box only, got ${desc.kind}`)
-      if (desc.sensor) return reject('a kinematic mover cannot also be a sensor')
-      if (desc.localPosition || desc.localRotation) {
-        return reject('kinematic movers with a body-local collider offset are not supported')
+    /** Record a created handle; false when native created nothing. */
+    const finish = (created: number, debugEntry: WasmDebugCollider): boolean => {
+      if (created === STATIC_HANDLE_OVERFLOW) {
+        // The family is full and native created nothing. Storing the sentinel
+        // would name geometry that does not exist, and drawing it would show a
+        // collider that is not there — so report it instead, which also stops
+        // `isFullyExportable` handing the track to C++.
+        reject('native static handle capacity exhausted')
+        return false
       }
+      if (created === -1) return false
+      handles.set(index, created)
+      debug.push(debugEntry)
+      engine.setCollisionGroups?.(created, desc.membership, desc.filter)
+      return true
+    }
+
+    if (desc.removed) return
+
+    const bodyIndex = desc.parentIndex ?? index
+    const body = descriptors[bodyIndex]
+    if (!body) return reject('parent descriptor is missing')
+    if (body.parentIndex !== undefined) return reject('nested collider attachment is not supported')
+
+    const motion = body.motion ?? 'fixed'
+    if (motion === 'dynamic') return reject('dynamic bodies have no C++ equivalent')
+    const moving = motion !== 'fixed'
+
+    const bodyPose: Pose = { position: body.position, rotation: body.rotation }
+    const local: Pose = desc.parentIndex !== undefined
+      ? { position: desc.position, rotation: desc.rotation }
+      : { position: desc.localPosition ?? ZERO_VEC, rotation: desc.localRotation ?? IDENTITY_DESC }
+    const pose = composePose(bodyPose, local)
+    const { position: p, rotation: q } = pose
+    const { restitution, friction } = desc
+
+    const noteKinematicBody = (): void => {
+      if (kinematicBodies.has(bodyIndex)) return
+      kinematicBodies.set(bodyIndex, {
+        bodyIndex,
+        angularVelocity: motion === 'kinematic-velocity' ? (body.angularVelocity ?? ZERO_VEC) : null,
+      })
+    }
+
+    if (desc.kind === 'convexMesh') {
+      if (moving) return reject('a convex mesh must be static')
+      if (desc.sensor) return reject('a convex mesh cannot be a sensor')
+      if (!engine.addStaticTriangleMesh) return reject('engine exposes no triangle meshes')
+      const verts = desc.vertices ?? []
+      const world = new Float32Array(verts.length)
+      for (let v = 0; v + 2 < verts.length; v += 3) {
+        const w = quatRotateVec(q, { x: verts[v], y: verts[v + 1], z: verts[v + 2] })
+        world[v] = p.x + w.x
+        world[v + 1] = p.y + w.y
+        world[v + 2] = p.z + w.z
+      }
+      const indices = Uint32Array.from(desc.indices ?? [])
+      const handle = engine.addStaticTriangleMesh(world, indices, restitution, friction, false)
+      return finish(handle, { kind: 'mesh', center: p, triangleCount: indices.length / 3 })
+    }
+
+    const volume = volumeOf(desc)
+    if (!volume) return reject(`no C++ equivalent for ${desc.kind}`)
+
+    if (moving && desc.sensor) {
+      movingSensors.push({ index, bodyIndex, local, kind: volume.kind, halfExtents: volume.half })
+      noteKinematicBody()
+      return
+    }
+
+    if (moving) {
       if (!engine.addKinematicMover) return reject('engine exposes no kinematic movers')
-      const half = desc.halfExtents ?? { x: 0.5, y: 0.5, z: 0.5 }
-      handle = engine.addKinematicMover(p, half, q, restitution, friction)
-      movers.push({ index, handle })
-      debug.push({ kind: 'box', center: p, halfExtents: half, rotation: q })
-    } else if (desc.sensor) {
-      if (desc.kind !== 'box') return reject(`C++ sensor volumes are box only, got ${desc.kind}`)
+      const handle = engine.addKinematicMover(p, volume.half, q, restitution, friction, volume.shape)
+      if (!finish(handle, volumeDebug(volume, pose, false))) return
+      movers.push({ index, handle, bodyIndex, local })
+      noteKinematicBody()
+      return
+    }
+
+    if (desc.sensor) {
       if (!engine.addSensorVolume) return reject('engine exposes no sensor volumes')
-      const half = desc.halfExtents ?? { x: 0.5, y: 0.5, z: 0.5 }
-      handle = engine.addSensorVolume(p, half, q)
-      debug.push({ kind: 'box', center: p, halfExtents: half, rotation: q })
-    } else if (desc.kind === 'box') {
-      const half = desc.halfExtents ?? { x: 0.5, y: 0.5, z: 0.5 }
-      handle = engine.addStaticBox(p, half, q, restitution, friction)
-      debug.push({ kind: 'box', center: p, halfExtents: half, rotation: q })
+      return finish(engine.addSensorVolume(p, volume.half, q, volume.shape), volumeDebug(volume, pose, true))
+    }
+
+    let handle: number
+    if (desc.kind === 'box') {
+      handle = engine.addStaticBox(p, volume.half, q, restitution, friction)
     } else if (desc.kind === 'cylinder') {
       if (!engine.addStaticCylinder) return reject('engine exposes no static cylinders')
-      const radius = desc.radius ?? 0.5
-      const halfHeight = desc.halfHeight ?? 0.5
-      handle = engine.addStaticCylinder(p, radius, halfHeight, q, restitution, friction)
-      debug.push({ kind: 'cylinder', center: p, radius, halfHeight, rotation: q })
+      handle = engine.addStaticCylinder(p, volume.half.x, volume.half.y, q, restitution, friction)
     } else {
       if (!engine.addStaticSphere) return reject('engine exposes no static spheres')
-      const radius = desc.radius ?? 0.5
-      handle = engine.addStaticSphere(p, radius, restitution, friction)
-      debug.push({ kind: 'sphere', center: p, radius })
+      handle = engine.addStaticSphere(p, volume.half.x, restitution, friction)
     }
-
-    if (handle === STATIC_HANDLE_OVERFLOW) {
-      // The family is full and native created nothing. Storing the sentinel
-      // would name geometry that does not exist, and drawing its debug box
-      // would show a collider that is not there — so undo both and report it,
-      // which also stops `isFullyExportable` handing the track to C++.
-      debug.length = debugBefore
-      movers.length = moversBefore
-      return reject('native static handle capacity exhausted')
-    }
-    if (handle === null || handle === -1) return
-    handles.set(index, handle)
-    engine.setCollisionGroups?.(handle, desc.membership, desc.filter)
+    finish(handle, volumeDebug(volume, pose, false))
   })
 
-  return { handles, movers, unsupported, debug }
+  return { handles, movers, movingSensors, kinematicBodies: [...kinematicBodies.values()], unsupported, debug }
 }
 
 export function isFullyExportable(descriptors: readonly AdventureColliderDesc[]): boolean {
@@ -503,6 +572,7 @@ export function collectUnsupported(descriptors: readonly AdventureColliderDesc[]
     addStaticCapsule: handle,
     addStaticCylinder: handle,
     addStaticSphere: handle,
+    addStaticTriangleMesh: handle,
     addSensorVolume: handle,
     addKinematicMover: handle,
     setCollisionGroups: () => {},

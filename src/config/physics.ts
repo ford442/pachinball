@@ -104,9 +104,9 @@ export const WASM_PHYSICS = {
   defaultEngine: 'wasm-owner',
   /**
    * Engine modes:
-   *  - `rapier`       — Rapier only (explicit override or fail-closed fallback)
+   *  - `rapier`       — Rapier only: dev/degrade path (explicit override, or fail-closed when the WASM bundle is missing)
    *  - `wasm-mirror`  — WASM mirrors ball+bumper subset; Rapier bodies remain handles
-   *  - `wasm-owner`   — WASM owns ball + static table + flipper hinges (in-process, production default)
+   *  - `wasm-owner`   — WASM owns ball + static table + flipper hinges + adventure tracks (in-process, production default)
    *  - `wasm-worker`  — same ownership as wasm-owner, C++ world in a Dedicated Worker
    *                     (`postMessage` snapshots, one-frame lag). Cross-origin isolation
    *                     is now detectable via `isCrossOriginIsolated()` below; a SAB-backed

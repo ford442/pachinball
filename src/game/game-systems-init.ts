@@ -487,8 +487,8 @@ export class GameSystemsInitializer {
       return
     }
     // Register the portal sensor handle so the collision dispatcher skips it.
-    // Portal contact is detected via intersectionPair queries; Rapier collision
-    // events for the sensor body must not reach other handlers.
+    // Portal contact is detected by the overlap test in updateExitPortal();
+    // contact events for the sensor body must not reach other handlers.
     const openedHandle = this.game.adventureMode?.getPortalSensorHandle() ?? -1
     if (openedHandle >= 0) {
       this.game.physicsController?.registerPortalSensor(openedHandle)
