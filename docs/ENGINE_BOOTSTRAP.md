@@ -215,19 +215,30 @@ The game canvas is **not** full-viewport. It fills `#game-cabinet`, sized in CSS
 #pachinball-canvas CSS client size (100% of cabinet)
   → ResizeObserver in GameRenderer.setupResizeObserver() → engine.resize()
   → hardwareScalingLevel from resolveHardwareScalingLevel():
-       mobile UA: 2 (half internal resolution)
-       desktop DPR > 1: min(DPR, 2)
-       else: 1
-  → adaptToDeviceRatio=false (Babylon does NOT auto-multiply DPR)
+       mobile UA: 2 (half CSS-pixel resolution)
+       desktop (any DPR): 1 (CSS-pixel resolution)
+  → adaptToDeviceRatio=false (Babylon does NOT multiply DPR — ever)
   → setupDPRHandling(): re-call engine.resize() on DPR media-query change
 ```
 
 **Effective render pixels** (approximate):
 
 ```
-renderWidth  ≈ clientWidth  × DPR / hardwareScalingLevel
-renderHeight ≈ clientHeight × DPR / hardwareScalingLevel
+renderWidth  ≈ clientWidth  / hardwareScalingLevel
+renderHeight ≈ clientHeight / hardwareScalingLevel
 ```
+
+DPR does not appear: Babylon's `resize()` is `setSize(clientWidth / level, …)`, and
+with `adaptToDeviceRatio: false` the level starts at 1. `setupDPRHandling()` only
+re-triggers `resize()` when the DPR media query changes.
+
+**HiDPI decision (2026-09-17).** Desktop used to return `min(DPR, 2)`, on the
+assumption that DPR was multiplied in first. It is not, so a 2× display rendered at
+half its CSS size — a quarter of native pixels per axis, visibly soft. Desktop is now
+pinned to 1 at any DPR: CSS-pixel resolution, never supersampled to native DPR (that
+would quadruple fill cost under the post-process stack). Mobile keeps 2 as a
+deliberate fill-rate trade. `SceneOptimizer` may still raise the level at runtime
+when the frame budget slips.
 
 (Babylon applies internal rounding; use `engine.getRenderWidth()` / `getRenderHeight()` for ground truth.)
 

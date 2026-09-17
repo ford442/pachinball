@@ -1,14 +1,17 @@
 # WASM Physics Engine
 
-> High-performance C++ simulation core for Pachinball, compiled to WebAssembly
-> via Emscripten and integrated with the existing Rapier / Babylon.js stack.
+> C++ simulation core for Pachinball, compiled to WebAssembly via Emscripten.
+> It is the **production physics engine** (`wasm-owner`, see
+> [`src/config/physics.ts`](../src/config/physics.ts)). Rapier is still linked for body
+> handles until #412, and still simulates on the explicit `rapier` override or when the
+> WASM bundle is missing (fail-closed fallback).
 
 ---
 
 ## Motivation
 
-Pachinball's current physics stack — Rapier 3D WASM + Babylon.js — works well
-for the standard game flow.  A custom C++ WASM core unlocks:
+Pachinball started on Rapier 3D WASM + Babylon.js. The custom C++ core replaced
+Rapier as the simulation owner because it unlocks:
 
 | Benefit | Detail |
 |---------|--------|
@@ -26,23 +29,28 @@ for the standard game flow.  A custom C++ WASM core unlocks:
 TypeScript (game logic)
         │
         ▼
-WasmPhysicsEngine  ◄──── src/wasm/PhysicsModule.ts
-(TypeScript wrapper)           │
-        │                      │  dynamic import
-        ▼                      ▼
-PhysicsModule.js  ◄─── native/build/ (Emscripten output)
-PhysicsModule.wasm
-        │
+WasmOwner / WasmMirror  ◄──── src/game/physics/wasm-{owner,mirror}.ts
+        │  WasmSimEngine (src/wasm/wasm-sim-engine.ts)
+        ├───────────────────────────────┐
+        ▼ in-process                    ▼ wasm-worker
+WasmPhysicsEngine                PhysicsWorkerClient ──postMessage──► physics-worker.ts
+ src/wasm/PhysicsModule.ts        (physics-worker-protocol.ts)          └─► WasmPhysicsEngine
+ + physics-module-adventure.ts
+        │  dynamic import
+        ▼
+PhysicsModule.js / .wasm  ◄─── public/wasm/ (Emscripten output, npm run build:wasm)
+        │  Embind (native/src/bindings.cpp)
         ▼
 C++ PhysicsWorld  ◄──── native/src/PhysicsWorld.{h,cpp}
         │
-   ┌────┴────┐
-RigidBody  ContactListener
+   ┌────┴──────────────┬──────────────┬───────────────┐
+BodyStore/RigidBody  Narrowphase   HingeJoint   ContactListener
 ```
 
-The C++ engine is a **sphere-primary** rigid-body solver (with static boxes/capsules
-and kinematic capsule flipper proxies) and runs as a thin, fast supplement to —
-or eventual replacement for — Rapier. Collision response includes a **normal
+The C++ engine is a sphere-and-capsule rigid-body solver with dynamic boxes,
+static boxes / capsules / cylinders / spheres / triangle meshes, kinematic movers,
+sensor volumes, force fields and world-anchored hinges. It owns the table and every
+adventure track in production. Collision response includes a **normal
 impulse**, **Coulomb friction** (geometric-mean combine `μ = sqrt(μ_a μ_b)`),
 **spherical inertia** `I = 2/5 m r²` with integrated orientation, and a small
 **rolling-resistance** term so balls settle instead of rolling forever.
@@ -53,27 +61,64 @@ impulse**, **Coulomb friction** (geometric-mean combine `μ = sqrt(μ_a μ_b)`),
 
 ```
 native/
-├── CMakeLists.txt               Emscripten + native build config
+├── CMakeLists.txt               Emscripten + native (Catch2) build config
 ├── src/
 │   ├── MathTypes.h              Vec3, Quat, Transform
-│   ├── RigidBody.h / .cpp       Dynamic / static / kinematic sphere bodies
-│   ├── ContactListener.h        Contact-event queue + callback dispatch
-│   ├── PhysicsWorld.h / .cpp    Simulation world (step, broadphase, solver)
-│   └── bindings.cpp             EMSCRIPTEN_BINDINGS (Embind)
-└── tests/
-    ├── physics_world_test.cpp   Catch2 unit tests (native build only)
+│   ├── RigidBody.h / .cpp       Dynamic / static / kinematic sphere + capsule bodies
+│   ├── DynamicBox.cpp           Dynamic oriented-box bodies (createBoxBody)
+│   ├── BodyStore.h / .cpp       SoA body storage + packed transform buffer
+│   ├── HandleTable.h            Stable body / hinge handles
+│   ├── BroadphaseGrid.h / .cpp  Uniform-grid broadphase
+│   ├── Narrowphase.cpp          Pair tests (sphere / capsule / box / statics)
+│   ├── CollisionFilter.h        membership/filter masks (mirrors CollisionGroups)
+│   ├── StaticShapes.h / .cpp    Static box / capsule / sphere
+│   ├── Cylinder.h / .cpp        Static cylinder (closed-form sphere vs cylinder)
+│   ├── TriangleMesh.h / .cpp    Static triangle mesh (addStaticTriangleMesh)
+│   ├── VolumeShape.h / .cpp     Box / Cylinder / Sphere tag for movers + sensors
+│   ├── KinematicMover.h / .cpp  Pose-driven kinematic movers
+│   ├── SensorVolume.h / .cpp    Enter/Stay/Exit trigger volumes
+│   ├── ForceField.h / .cpp      Oriented force / acceleration regions
+│   ├── HingeJoint.h / .cpp      World-anchored revolute hinge + motor
+│   ├── ContactListener.h        Contact-event queue + packed contact buffer
+│   ├── PhysicsWorld.h / .cpp    Simulation world (step, solver, handle ranges)
+│   └── bindings.cpp             EMSCRIPTEN_BINDINGS (Embind) — Emscripten only
+└── tests/                       Catch2 (native build only)
+    ├── physics_world_test.cpp   Integration, contacts, broadphase, sleep, benchmark
+    ├── hinge_friction_test.cpp  Friction / spin / rolling resistance + hinges
+    ├── static_shapes_test.cpp
+    ├── adventure_geometry_test.cpp
+    ├── kinematic_mover_test.cpp
+    ├── sensor_volume_test.cpp
+    ├── collision_filter_test.cpp
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
 ├── wasm-types.ts                TypeScript interfaces matching the Embind API
-├── PhysicsModule.ts             WasmPhysicsEngine wrapper
+├── PhysicsModule.ts             WasmPhysicsEngine: load, world, table statics, bodies, hinges, step
+├── physics-module-adventure.ts  Cylinder / sphere / mesh / mover / sensor / box body / force field
+├── wasm-sim-engine.ts           WasmSimEngine interface (in-process engine + worker client)
+├── physics-worker-protocol.ts   Worker command union + id shadow
+├── physics-worker-runtime.ts    applyPhysicsCommand / snapshot collection
+├── physics-worker-client.ts     Main-thread PhysicsWorkerClient
+├── physics-worker.ts            Dedicated Worker entry
+├── contact-buffer.ts            Packed contact codec
+├── transform-buffer.ts          Packed transform codec
 └── index.ts                     Barrel export
+
+src/game/physics/
+├── wasm-owner.ts                wasm-owner / wasm-worker driver
+├── wasm-mirror.ts               wasm-mirror driver
+├── wasm-static-export.ts        Table statics → C++
+└── wasm-adventure-export.ts     AdventureColliderDesc → C++
 
 scripts/
 ├── build-wasm.sh                Emscripten build helper (Release/Debug/Assert/bench)
 ├── build-wasm-colab.sh          Thin Colab wrapper → build-wasm.sh
 ├── bench-wasm-flags.mjs         50-sphere flag A/B/C microbench
-└── run-wasm-parity.mjs          Native + WASM parity (WASM_MODULE_PATH override)
+├── print-wasm-flags.mjs         Print the effective CMake WASM flags
+├── run-wasm-parity.mjs          Native + WASM parity (WASM_MODULE_PATH override)
+├── check-compile-db.mjs         clangd compile_commands.json smoke check
+└── check-wasm-docs.mjs          Fails when this doc drifts from CMake / sources
 
 public/wasm/                     Generated at build time (git-ignored)
 ├── PhysicsModule.js
@@ -176,7 +221,8 @@ Configured in [`native/CMakeLists.txt`](../native/CMakeLists.txt). Every
 | `-sFILESYSTEM=0` | No FS APIs in the physics module — smaller JS glue |
 | `-sALLOW_MEMORY_GROWTH=1` | Heap grows for large ball swarms |
 | `-sINITIAL_MEMORY=16777216` | 16 MB initial heap (`emmalloc`; grows if needed) |
-| `-sEXPORTED_RUNTIME_METHODS=["HEAPF32"]` | Packed contact/transform buffer views only — no `addFunction` / UTF8 helpers |
+| `-sEXPORTED_RUNTIME_METHODS=["HEAPF32","HEAPU32"]` | `HEAPF32` for packed contact/transform buffer views and mesh vertices; `HEAPU32` for mesh indices — no `addFunction` / UTF8 helpers |
+| `-sEXPORTED_FUNCTIONS=["_malloc","_free"]` | `addStaticTriangleMesh` takes heap pointers, so JS allocates + frees the triangle soup around the call |
 | `-sMALLOC=emmalloc` | Smaller allocator after setup |
 | `--closure=1` | Minify JS glue (parity-validated) |
 | `-fno-exceptions` | No `try`/`throw` in `native/src` — drops EH runtime |
@@ -186,7 +232,7 @@ Configured in [`native/CMakeLists.txt`](../native/CMakeLists.txt). Every
 Emscripten targets only. The native Catch2 tree (`native/build-native`, `npm run test:native`)
 adds **no** `-O` of its own — `CMAKE_CXX_FLAGS_<CONFIG>` owns the level there, so every entry in
 its `compile_commands.json` carries exactly one. It is configured with an explicit
-`-DCMAKE_BUILD_TYPE=Debug`; see the root `.clangd`.
+`-DCMAKE_BUILD_TYPE=Debug` by `npm run compile-db`; see the root `.clangd`.
 
 | Config | Compile | Link assertions | Source maps |
 |--------|---------|-----------------|-------------|
@@ -297,7 +343,7 @@ Set via `localStorage['pachinball:physics-engine']`:
 | **WASM owner** (default) | `wasm-owner` or unset | WASM owns balls + static table geometry + **native hinge flippers** + adventure track geometry and gizmos; Rapier is not stepped (`lastRapierStepMs === 0`). |
 | **Rapier** | `rapier` (explicit) | Dev / degrade path: full Rapier simulation, and the fail-closed fallback when the WASM bundle is missing. Kept deliberately and covered by `tests/physics-degrade.spec.ts` and the fallback case in `tests/wasm-owner-adventure-cutover.spec.ts`. |
 | **WASM mirror** | `wasm-mirror` or legacy `wasm` | WASM steps ball+bumper subset; poses sync Rapier↔WASM each frame |
-| **WASM worker** | `wasm-worker` | Same ownership as `wasm-owner`, but `PhysicsWorld` runs in a Dedicated Worker. Snapshots arrive via `postMessage` + transferable `ArrayBuffer`s (**one physics frame of extra latency**). Worker construction / load failure falls back to in-process `wasm-owner`. The worker protocol has no cylinder / mesh / mover commands yet, so adventure tracks fail the ownership gate there and step Rapier on the main thread. |
+| **WASM worker** | `wasm-worker` | Same ownership as `wasm-owner`, but `PhysicsWorld` runs in a Dedicated Worker. Snapshots arrive via `postMessage` + transferable `ArrayBuffer`s (**one physics frame of extra latency**). Worker construction / load failure falls back to in-process `wasm-owner`. The worker protocol carries cylinder / sphere / sensor / mover commands but not triangle mesh, box body or force field (#414), so tracks that need those fail the ownership gate there and step Rapier on the main thread. `tests/wasm-worker-api-parity.test.ts` keeps that gap list explicit. |
 
 Mirror mode remains a WASM parity path. Owner mode disables Rapier colliders for exported statics, bumpers, balls, **and flippers**. Each flipper is a dynamic WASM capsule with a world-anchored hinge (`PhysicsWorld::createHinge` / `setHingeMotor`). Pose is copied back onto the Rapier puppet for mesh interpolation only.
 
@@ -396,13 +442,13 @@ Native C++ tests (no browser, no Emscripten):
 ```bash
 npm run test:native
 # Equivalent:
-cmake -S native -B native/build-native
+npm run compile-db                      # configure only: Debug + compile_commands.json
 cmake --build native/build-native
 ctest --test-dir native/build-native --output-on-failure
 ```
 
 Catch2 is fetched automatically via CMake `FetchContent` on first configure.
-Test scenarios:
+Test scenarios (friction and hinge cases live in `hinge_friction_test.cpp`):
 
 | Test | Validates |
 |------|-----------|
@@ -562,8 +608,9 @@ const angle = engine.getHingeAngle(hingeId)
 `setHingeMotor` from the same `InputFrame` / `PhysicsConfig.flipper` rest and
 active angles + stiffness/damping as Rapier `configureMotorPosition`, and
 **does not** call `world.step()` on Rapier while a table ball is in play
-(Debug HUD `rapier ms` / `lastRapierStepMs === 0`). Adventure mode still steps
-Rapier for `ADVENTURE_GROUP` bodies.
+(Debug HUD `rapier ms` / `lastRapierStepMs === 0`). Adventure tracks are owned by
+C++ too (see *Adventure geometry*); Rapier only steps on the explicit `rapier`
+override or the missing-bundle fallback.
 
 Dynamic capsules now report isotropic inertia (averaged cylinder) so the hinge
 can apply motor torque. Capsule-vs-capsule collision remains skipped.
@@ -601,9 +648,10 @@ flicking tests; production flippers use hinges (above).
 | **2c – Flipper motors** | Native world-anchored hinge + velocity motor; kinematic proxy deleted | ✅ Done |
 | **2d – Perf HUD** | Rapier vs WASM vs mirror timing in Debug HUD | ✅ Done |
 | **2e – Worker (#361 P1)** | `wasm-worker` + `postMessage` transferables; one-frame lag; no COOP/COEP | ✅ Done |
-| **3 – Benchmark** | RapierVsCppBenchmark scene; frame-time comparison | 🔜 Next |
-| **4 – Decision Point** | Replace vs hybrid; determinism comparison | 🔜 After Phase 3 |
-| **5 – Polish** | Memory budgeting, Debug HUD, documentation | 🔜 After Phase 4 |
+| **2f – Adventure (#383)** | Movers, sensors, cylinders, spheres, meshes, force fields; every track owned by C++ | ✅ Done |
+| **3 – Decision** | Replace, not hybrid: `wasm-owner` is the production default | ✅ Done |
+| **4 – Rapier removal (#412)** | Migrate body handles off Rapier; drop `@dimforge/rapier3d-compat` from the player bundle | 🔜 Next |
+| **5 – Worker parity (#414)** | Worker commands for mesh / box body / force field | 🔜 Next |
 
 ---
 
@@ -663,10 +711,16 @@ native compiler before re-running the full Emscripten build.
 
 ### Language Server & IDE Tooling (`compile_commands.json`)
 
-CMake sets `CMAKE_EXPORT_COMPILE_COMMANDS ON`. `npm run test:native` writes
-`native/build-native/compile_commands.json` (gitignored). Root `.clangd` sets
-`CompilationDatabase: native/build-native` so clangd indexes `native/src/**`
-without a symlink. Run `test:native` once after clone so the database exists.
+CMake sets `CMAKE_EXPORT_COMPILE_COMMANDS ON`. `npm run compile-db` configures
+`native/build-native` (Debug, no build, never Emscripten) and writes
+`native/build-native/compile_commands.json` (gitignored); `npm run test:native`
+runs it first. Root `.clangd` sets `CompilationDatabase: native/build-native` so
+clangd indexes `native/src/**` without a symlink. Run `compile-db` once after clone
+so the database exists, and again after adding a `.cpp`.
+
+`npm run check:compile-db` verifies the database: every `native/src` and
+`native/tests` TU present, exactly one `-O` level per TU, no `em++` entries, and
+no stray `compile_commands.json` at the repo root or `native/`.
 
 ---
 
@@ -676,11 +730,11 @@ The GitHub Actions workflow (`.github/workflows/native-physics.yml`) runs on cha
 
 | Job | Status | Tools | What it checks |
 |-----|--------|-------|----------------|
-| `native_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native` (Catch2) |
+| `native_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native` (Catch2), `check:compile-db`, `check:wasm-docs` |
 | `sanitizer_ctest` | **BLOCKING** | cmake, g++ | ASan/UBSan Catch2 (`CMAKE_BUILD_TYPE=Debug`) |
 | `wasm_parity` | **BLOCKING** | emsdk | `print:wasm-flags` then Release + RelWithAsserts + `test:wasm-parity` |
 
-`native_ctest` runs in ~15 seconds without requiring Emscripten and gates PRs against C++ logic regressions. Additionally, `tests/embind-surface.test.ts` asserts that TypeScript interface definitions (`src/wasm/wasm-types.ts`) match the exported Embind surface (`native/src/bindings.cpp`).
+`native_ctest` runs in ~15 seconds without requiring Emscripten and gates PRs against C++ logic regressions. Additionally, `tests/embind-surface.test.ts` asserts that TypeScript interface definitions (`src/wasm/wasm-types.ts`) match the exported Embind surface (`native/src/bindings.cpp`), and `tests/wasm-worker-api-parity.test.ts` (Vitest, no WASM) fails when a mutating Embind function is not wrapped on `WasmPhysicsEngine`, or a mutating engine method has no `PhysicsWorkerCommand` and is not on its tracked-gap list.
 
 Skip options:
 

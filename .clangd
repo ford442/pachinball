@@ -1,11 +1,11 @@
 # clangd reads exactly one compilation database for this repo:
 #
-#   native/build-native/compile_commands.json   ← written by `npm run test:native`
+#   native/build-native/compile_commands.json   ← written by `npm run compile-db`
 #                                                 (g++, Catch2 tree, -DCMAKE_BUILD_TYPE=Debug)
 #
-# Regenerate it with `npm run test:native` (or just the configure step:
-#   cmake -S native -B native/build-native -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-# ).
+# Regenerate it with `npm run compile-db` (configure only — no build, never Emscripten;
+# `npm run test:native` runs it first). Re-run after adding a .cpp.
+# Verify it with `npm run check:compile-db`.
 #
 # Do NOT copy the Emscripten database from native/build/ to the repo root or to
 # native/ — clangd cannot parse `em++` command lines, and a stale emcc dump silently

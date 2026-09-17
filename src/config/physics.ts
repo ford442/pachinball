@@ -100,7 +100,7 @@ export type PhysicsConfigType = typeof PhysicsConfig
  */
 export const WASM_PHYSICS = {
   flagKey: 'pachinball:physics-engine',
-  /** Production table physics; Rapier remains the missing-bundle / adventure path. */
+  /** Production physics (table + adventure); Rapier remains the missing-bundle fallback. */
   defaultEngine: 'wasm-owner',
   /**
    * Engine modes:

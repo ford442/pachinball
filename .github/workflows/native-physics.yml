@@ -9,7 +9,10 @@
 #   - Commit message containing "[skip wasm-ci]" skips the wasm_parity job
 #
 # Local equivalents:
-#   npm run test:native          # Catch2 + ctest (g++/cmake only)
+#   npm run compile-db           # configure only → native/build-native/compile_commands.json
+#   npm run test:native          # compile-db + Catch2 + ctest (g++/cmake only)
+#   npm run check:compile-db     # clangd DB smoke (after compile-db)
+#   npm run check:wasm-docs      # docs/wasm-physics-engine.md drift check
 #   npm run build:wasm           # Emscripten Release → public/wasm/ (production)
 #   npm run build:wasm:assert    # RelWithAsserts → native/build-assert/
 #   WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npm run test:wasm-parity
@@ -32,6 +35,9 @@ on:
       - 'scripts/build-wasm.sh'
       - 'scripts/run-wasm-parity.mjs'
       - 'scripts/print-wasm-flags.mjs'
+      - 'scripts/check-compile-db.mjs'
+      - 'scripts/check-wasm-docs.mjs'
+      - 'docs/wasm-physics-engine.md'
       - 'package.json'
       - '.github/workflows/native-physics.yml'
   pull_request:
@@ -48,6 +54,9 @@ on:
       - 'scripts/build-wasm.sh'
       - 'scripts/run-wasm-parity.mjs'
       - 'scripts/print-wasm-flags.mjs'
+      - 'scripts/check-compile-db.mjs'
+      - 'scripts/check-wasm-docs.mjs'
+      - 'docs/wasm-physics-engine.md'
       - 'package.json'
       - '.github/workflows/native-physics.yml'
 
@@ -63,6 +72,12 @@ jobs:
 
       - name: Run native Catch2 tests
         run: npm run test:native
+
+      - name: Compile-database smoke (clangd)
+        run: npm run check:compile-db
+
+      - name: WASM doc drift check
+        run: npm run check:wasm-docs
 
   sanitizer_ctest:
     name: Sanitizer CTest (Blocking)

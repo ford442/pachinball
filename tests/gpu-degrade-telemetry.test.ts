@@ -16,6 +16,7 @@ import {
   getGpuProbe,
   recordGpuProbeEngine,
   recordGpuProbePostProcess,
+  formatGpuProbeSummary,
 } from '../src/engine/gpu-degrade-telemetry'
 
 beforeEach(() => {
@@ -158,5 +159,22 @@ describe('gpu degrade telemetry without a window', () => {
     expect(() => recordGpuDegrade('webgl2-fallback')).not.toThrow()
     expect(getGpuDegrades().length).toBeGreaterThan(0)
     resetGpuDegradesForTests()
+  })
+})
+
+describe('formatGpuProbeSummary', () => {
+  it('prints placeholders before the probe is filled', () => {
+    expect(formatGpuProbeSummary()).toBe(
+      '[Bootstrap] GPU probe: backend=? featureLevel=? pp=? maxUBO/stage=? degrades=0',
+    )
+  })
+
+  it('carries backend, feature level, pp tier and degrade count', () => {
+    recordGpuProbeEngine('webgpu', 'compatibility')
+    recordGpuProbePostProcess('bloom-only', 12)
+    recordGpuDegrade('postprocess-tier-boot', 'compatibility')
+    expect(formatGpuProbeSummary()).toBe(
+      '[Bootstrap] GPU probe: backend=webgpu featureLevel=compatibility pp=bloom-only maxUBO/stage=12 degrades=1',
+    )
   })
 })

@@ -191,3 +191,16 @@ export function ensureGpuProbe(): GpuProbeSnapshot {
 export function getGpuProbe(): GpuProbeSnapshot {
   return { ...probe() }
 }
+
+/**
+ * One-line boot summary so a pasted console log carries backend, feature level and
+ * post-process tier without opening the HUD. Also counts recorded degrades.
+ */
+export function formatGpuProbeSummary(): string {
+  const p = probe()
+  return (
+    `[Bootstrap] GPU probe: backend=${p.backend ?? '?'} featureLevel=${p.featureLevel ?? '?'} ` +
+    `pp=${p.postProcessTier ?? '?'} maxUBO/stage=${p.maxUniformBuffersPerShaderStage ?? '?'} ` +
+    `degrades=${getGpuDegrades().length}`
+  )
+}

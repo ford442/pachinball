@@ -8,6 +8,7 @@ import { applyHardwareScaling, resolveEngineOptions } from './engine/engine-opti
 import { createEngine, isWebGPUEngine } from './engine/create-engine'
 import { scheduleIdleWasmPreload } from './engine/wasm-idle-preload'
 import { VisibilityManager } from './engine/visibility-manager'
+import { formatGpuProbeSummary } from './engine/gpu-degrade-telemetry'
 import { registerServiceWorker } from './pwa'
 
 /**
@@ -47,6 +48,7 @@ async function bootstrap(): Promise<void> {
 
   const game = new Game(engine, preloadedRapier)
   await game.init()
+  console.info(formatGpuProbeSummary())
 
   const visibilityManager = new VisibilityManager({
     engine,

@@ -150,6 +150,7 @@ if(NOT EMSCRIPTEN)
 
   add_executable(physics_world_test
     tests/physics_world_test.cpp
+    tests/hinge_friction_test.cpp
     tests/kinematic_mover_test.cpp
     tests/sensor_volume_test.cpp
     tests/collision_filter_test.cpp

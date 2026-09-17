@@ -52,8 +52,10 @@ protection on `main` (require the CI `check` job) is recommended.
 
 ## C++ physics: editor setup (clangd)
 
-`npm run test:native` configures `native/build-native` with an explicit
-`-DCMAKE_BUILD_TYPE=Debug` and writes `compile_commands.json` there. The root `.clangd`
+`npm run compile-db` configures `native/build-native` with an explicit
+`-DCMAKE_BUILD_TYPE=Debug` and writes `compile_commands.json` there — configure only, no
+Catch2 build (`npm run test:native` runs it first). `npm run check:compile-db` verifies
+every TU is present with a single `-O` level. The root `.clangd`
 points clangd at that directory and **nowhere else** — do not copy the Emscripten database
 from `native/build/` to the repo root or to `native/`; clangd cannot parse `em++` command
 lines and a stale emcc dump silently omits newer sources.

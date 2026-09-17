@@ -11,7 +11,9 @@ npm run lint       # ESLint on all .ts/.tsx files
 npm run preview    # Preview production build locally
 npm test           # Run Vitest unit tests
 npx playwright test  # Run E2E / visual regression tests
-npm run test:native       # C++ Catch2 tests (writes native/build-native/compile_commands.json; see root .clangd)
+npm run compile-db        # Configure-only: writes native/build-native/compile_commands.json for clangd (see root .clangd)
+npm run test:native       # compile-db + C++ Catch2 tests
+npm run check:wasm-docs   # Fail if docs/wasm-physics-engine.md drifts from CMake / config / sources
 npm run build:wasm        # Emscripten Release → public/wasm/
 npm run test:wasm-parity  # WASM bundle vs native C++ reference
 npm run bench:wasm-flags  # Microbench WASM flag matrix (SIMD/LTO)
