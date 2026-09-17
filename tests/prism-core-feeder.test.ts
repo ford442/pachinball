@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { FEEDER_TUNABLES } from '../src/config'
-import { PrismCoreFeeder, PrismCoreState } from '../src/game-elements/prism-core-feeder'
+import { PrismCoreFeeder, PrismCoreState } from '../src/objects/feeders/prism-core-feeder'
 import { createMockBall, createMockRapier, createMockWorld } from './feeder-test-helpers'
 
 vi.mock('@babylonjs/core', async () => {

@@ -23,20 +23,20 @@ import {
   emissive,
   DebugHUD,
   getDynamicWorld,
-  AdventureGoalTracker,
-  AdventureCinematicSystem,
-  AdventureCinematicTriggers,
-  AdventureUIStateManager,
-  AdventureTrackProgression,
-  AdventureProgressionSupervisor,
-  initializeTrackThemingSystem,
-  initializeCampaignRewardsManager,
   getScoringBreakdownManager,
   DisplayState,
   BallManager,
   ZoneTriggerSystem,
   SettingsManager,
 } from '../game-elements'
+import { AdventureGoalTracker } from '../adventure/adventure-goal-tracker'
+import { AdventureCinematicSystem } from '../adventure/adventure-cinematic-system'
+import { AdventureCinematicTriggers } from '../adventure/adventure-cinematic-triggers'
+import { AdventureUIStateManager } from '../adventure/adventure-ui-state'
+import { AdventureTrackProgression } from '../adventure/adventure-track-progression'
+import { AdventureProgressionSupervisor } from '../adventure/adventure-progression-supervisor'
+import { initializeTrackThemingSystem } from '../adventure/track-theming-system'
+import { initializeCampaignRewardsManager } from '../adventure/campaign-rewards-manager'
 import { DisplaySystem } from '../display'
 import { EffectsSystem } from '../effects'
 import { GameObjects } from '../objects'
@@ -44,7 +44,7 @@ import { AdventureMode, AdventureTrackType, isAdventureTrackType } from '../adve
 import { BallStackVisual } from '../game-elements/ball-stack-visual'
 import { CabinetLighting } from '../effects/cabinet-lighting'
 import { CelebrationSequencer } from '../effects/celebration-sequencer'
-import { CampaignRewardNotifier } from '../game-elements/campaign-reward-notifier'
+import { CampaignRewardNotifier } from '../adventure/campaign-reward-notifier'
 import { wireCampaignLoop } from './campaign-loop-controller'
 import {
   SpinnerBumperBuilder,

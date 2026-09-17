@@ -3,9 +3,9 @@
  */
 
 import { DisplayState } from '../game-elements/display-config'
-import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
-import type { AdventureTrackProgression } from '../game-elements/adventure-track-progression'
-import type { CampaignRewardsManager } from '../game-elements/campaign-rewards-manager'
+import { TRACK_CATALOG } from '../adventure/adventure-track-progression'
+import type { AdventureTrackProgression } from '../adventure/adventure-track-progression'
+import type { CampaignRewardsManager } from '../adventure/campaign-rewards-manager'
 import type { EventBus } from '../core/event-bus'
 
 export interface CampaignLoopHost {

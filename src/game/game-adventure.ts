@@ -3,20 +3,18 @@ import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Scene } from '@babylonjs/core/scene'
 import type { PhysicsSystem } from '../game-elements/physics'
+import type { ZoneConfig, BallManager, SoundSystem } from '../game-elements'
 import type {
   MagSpinFeeder,
   NanoLoomFeeder,
   PrismCoreFeeder,
   GaussCannonFeeder,
   QuantumTunnelFeeder,
-  ZoneConfig,
-  BallManager,
-  SoundSystem,
-} from '../game-elements'
+} from '../objects/feeders'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { AdventureTrackType } from '../adventure'
-import { MagSpinState } from '../game-elements/mag-spin-feeder'
+import { MagSpinState } from '../objects/feeders/mag-spin-feeder'
 import { DisplayState } from '../game-elements/display-config'
 import type { GameStateManager } from './game-state'
 import type { GameUIManager } from './game-ui'

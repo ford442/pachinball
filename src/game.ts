@@ -25,11 +25,6 @@ import {
   ReplayRunner,
   GhostBallRenderer,
   BallAnimator,
-  MagSpinFeeder,
-  NanoLoomFeeder,
-  PrismCoreFeeder,
-  GaussCannonFeeder,
-  QuantumTunnelFeeder,
   CameraController,
   CameraMode,
   QualityTier,
@@ -41,7 +36,6 @@ import {
   getSoundSystem,
   SoundSystem,
   getMapSystem,
-  getAdventureState,
   getDailyCascadeState,
   type FeederKey,
   ZoneTriggerSystem,
@@ -50,13 +44,21 @@ import {
   EventBusLog,
   PerformanceMonitor,
   type AccessibilityConfig,
-  AdventureGoalTracker,
-  AdventureCinematicSystem,
-  AdventureCinematicTriggers,
-  AdventureUIStateManager,
-  AdventureTrackProgression,
-  AdventureProgressionSupervisor,
 } from './game-elements'
+import {
+  MagSpinFeeder,
+  NanoLoomFeeder,
+  PrismCoreFeeder,
+  GaussCannonFeeder,
+  QuantumTunnelFeeder,
+} from './objects/feeders'
+import { getAdventureState } from './adventure/adventure-state'
+import { AdventureGoalTracker } from './adventure/adventure-goal-tracker'
+import { AdventureCinematicSystem } from './adventure/adventure-cinematic-system'
+import { AdventureCinematicTriggers } from './adventure/adventure-cinematic-triggers'
+import { AdventureUIStateManager } from './adventure/adventure-ui-state'
+import { AdventureTrackProgression } from './adventure/adventure-track-progression'
+import { AdventureProgressionSupervisor } from './adventure/adventure-progression-supervisor'
 import { DisplaySystem } from './display'
 import { EffectsSystem } from './effects'
 import { GameObjects } from './objects'

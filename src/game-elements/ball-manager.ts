@@ -10,7 +10,7 @@ import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { BallType, GAME_TUNING } from '../config'
 import { getMaterialLibrary } from '../materials'
 import { BallSaveSystem } from './ball-save-system'
-import { getSessionRngFork, RNG_FORK } from './seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 import {
   type BallManagerHost,
   type BallStuckTracker,

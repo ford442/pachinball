@@ -7,7 +7,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameConfig } from '../../config'
-import { getSessionRngFork, RNG_FORK } from '../../game-elements/seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../../core/seeded-rng'
 
 export enum QuantumTunnelState {
   IDLE = 0,

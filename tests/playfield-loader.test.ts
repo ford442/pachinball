@@ -13,8 +13,8 @@ import {
 import { LevelLoader } from '../src/game/level-loader'
 import { AdventureTrackType } from '../src/adventure/adventure-types'
 import { resetMapRegistry } from '../src/game/map-registry'
-import type { TrackTeardownStats } from '../src/game-elements/track-teardown-stats'
-import { createEmptyTeardownStats } from '../src/game-elements/track-teardown-stats'
+import type { TrackTeardownStats } from '../src/adventure/track-teardown-stats'
+import { createEmptyTeardownStats } from '../src/adventure/track-teardown-stats'
 
 function makeTeardownStats(overrides: Partial<TrackTeardownStats> = {}): TrackTeardownStats {
   return { ...createEmptyTeardownStats(), meshesDisposed: 3, bodiesRemoved: 2, ...overrides }

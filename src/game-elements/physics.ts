@@ -185,6 +185,9 @@ export class PhysicsSystem {
         const client = new PhysicsWorkerClient()
         await client.load(WASM_PHYSICS.bundleUrl)
         if (client.isReady) {
+          console.info(
+            `[PhysicsSystem] wasm-worker snapshot transport requested: ${isCrossOriginIsolated() ? 'shared' : 'post-message'}`,
+          )
           client.setGravity(GRAVITY.x, GRAVITY.y, GRAVITY.z)
           client.setRollingResistance(WASM_PHYSICS.tunables.rollingResistance)
           this.wasmEngine = client

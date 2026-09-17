@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { TRACK_CATALOG } from '../src/game-elements/adventure-track-progression'
+import { TRACK_CATALOG } from '../src/adventure/adventure-track-progression'
 import type { TrackBuilderContext } from '../src/adventure/adventure-types'
 
 // ─── Minimal Vector3-like helper ─────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { FEEDER_TUNABLES } from '../src/config'
-import { GaussCannonFeeder, GaussCannonState } from '../src/game-elements/gauss-cannon-feeder'
+import { GaussCannonFeeder, GaussCannonState } from '../src/objects/feeders/gauss-cannon-feeder'
 import { createMockBall, createMockRapier, createMockWorld } from './feeder-test-helpers'
 
 vi.mock('@babylonjs/core', async () => {

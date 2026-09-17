@@ -13,7 +13,7 @@ import type { PhysicsBinding } from '../game-elements/types'
 import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elements/visual-language'
 import type { EventBus } from '../core/event-bus'
 import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
-import { getSessionRngFork, RNG_FORK } from '../game-elements/seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
 
 export interface SpinnerBumperVisual {

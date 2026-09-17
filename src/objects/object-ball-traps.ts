@@ -16,7 +16,7 @@ import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elemen
 import type { EventBus } from '../core/event-bus'
 import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
-import { getSessionRngFork, RNG_FORK } from '../game-elements/seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 
 export interface BallTrapState {
   mesh: Mesh

@@ -4,7 +4,7 @@ import { getTrackStartAnchor, isAdventureTrackType } from '../src/adventure/port
 import {
   AdventureTrackProgression,
   CAMPAIGN_MAIN_PATH,
-} from '../src/game-elements/adventure-track-progression'
+} from '../src/adventure/adventure-track-progression'
 
 describe('portal-routing helpers', () => {
   it('returns canonical start anchors for teleport', () => {

@@ -7,7 +7,7 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { BallType, GameConfig } from '../config'
 import { pulse } from './visual-language'
-import { getSessionRngFork, RNG_FORK } from './seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 import { getDensityForMass, type BallManagerHost } from './ball-manager-context'
 
 /**

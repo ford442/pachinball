@@ -3,7 +3,7 @@
  * Pure TS — no Babylon / Rapier. Used at runtime and in Vitest spawn probes.
  */
 
-import { createSeededRng, type SeededRng } from '../game-elements/seeded-rng'
+import { createSeededRng, type SeededRng } from '../core/seeded-rng'
 
 export type FeederKey =
   | 'magSpin'

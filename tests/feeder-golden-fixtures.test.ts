@@ -4,12 +4,12 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { FEEDER_TUNABLES } from '../src/config'
-import { MagSpinFeeder, MagSpinState } from '../src/game-elements/mag-spin-feeder'
-import { NanoLoomFeeder, NanoLoomState } from '../src/game-elements/nano-loom-feeder'
-import { PrismCoreFeeder, PrismCoreState } from '../src/game-elements/prism-core-feeder'
-import { GaussCannonFeeder, GaussCannonState } from '../src/game-elements/gauss-cannon-feeder'
-import { QuantumTunnelFeeder, QuantumTunnelState } from '../src/game-elements/quantum-tunnel-feeder'
-import { initSessionRng } from '../src/game-elements/seeded-rng'
+import { MagSpinFeeder, MagSpinState } from '../src/objects/feeders/mag-spin-feeder'
+import { NanoLoomFeeder, NanoLoomState } from '../src/objects/feeders/nano-loom-feeder'
+import { PrismCoreFeeder, PrismCoreState } from '../src/objects/feeders/prism-core-feeder'
+import { GaussCannonFeeder, GaussCannonState } from '../src/objects/feeders/gauss-cannon-feeder'
+import { QuantumTunnelFeeder, QuantumTunnelState } from '../src/objects/feeders/quantum-tunnel-feeder'
+import { initSessionRng } from '../src/core/seeded-rng'
 import {
   createMockBall,
   createMockRapier,

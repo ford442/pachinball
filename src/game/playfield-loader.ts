@@ -11,8 +11,8 @@
 
 import type { AdventureMode } from '../adventure/adventure-mode'
 import type { BallManager } from '../game-elements/ball-manager'
-import type { TrackTeardownStats } from '../game-elements/track-teardown-stats'
-import { getTrackThemingSystem } from '../game-elements'
+import type { TrackTeardownStats } from '../adventure/track-teardown-stats'
+import { getTrackThemingSystem } from '../adventure/track-theming-system'
 import type { TableMapManager } from './game-maps'
 import {
   getMapConfigById,

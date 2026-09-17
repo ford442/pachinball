@@ -6,7 +6,7 @@ import {
   dailySeedId,
   randomU32Seed,
   seedFromDailyId,
-} from '../game-elements/seeded-rng'
+} from '../core/seeded-rng'
 import {
   generateTableLayout,
   type TableLayout,

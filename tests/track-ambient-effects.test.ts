@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Scene } from '@babylonjs/core/scene'
 import { TrackAmbientEffects } from '../src/effects/track-ambient-effects'
-import { getTrackThemeProfile } from '../src/game-elements/track-theme-profiles'
+import { getTrackThemeProfile } from '../src/adventure/track-theme-profiles'
 
 describe('TrackAmbientEffects accessibility', () => {
   const scene = { uniqueId: 1 } as unknown as Scene

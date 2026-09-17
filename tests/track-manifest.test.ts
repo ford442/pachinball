@@ -7,7 +7,7 @@ import {
   buildTrackCatalogFromManifests,
   buildZoneRegistryFromManifests,
 } from '../src/adventure/manifests'
-import { TRACK_CATALOG } from '../src/game-elements/adventure-track-progression'
+import { TRACK_CATALOG } from '../src/adventure/adventure-track-progression'
 import { ZONE_REGISTRY } from '../src/game-elements/zone-registry'
 import { getTrackStartAnchor } from '../src/adventure/portal-routing'
 import {

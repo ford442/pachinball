@@ -3,7 +3,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { getMaterialLibrary } from '../../materials'
-import { getSessionRngFork, RNG_FORK } from '../seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../../core/seeded-rng'
 import type { SpinnerLauncherConfig } from './types'
 import { PathMechanic } from './base'
 

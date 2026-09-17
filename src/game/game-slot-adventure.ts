@@ -9,14 +9,14 @@ import type { BallManager } from '../game-elements/ball-manager'
 import type { GameObjects } from '../objects'
 import type { AdventureMode } from '../adventure'
 import { AdventureTrackType } from '../adventure'
-import type { AdventureTrackProgression } from '../game-elements/adventure-track-progression'
-import { TRACK_CATALOG } from '../game-elements/adventure-track-progression'
-import { getTrackThemingSystem } from '../game-elements'
+import type { AdventureTrackProgression } from '../adventure/adventure-track-progression'
+import { TRACK_CATALOG } from '../adventure/adventure-track-progression'
+import { getTrackThemingSystem } from '../adventure/track-theming-system'
 import type { EventBus } from '../core/event-bus'
-import type { AdventureCinematicTriggers } from '../game-elements/adventure-cinematic-triggers'
-import type { AdventureUIStateManager } from '../game-elements/adventure-ui-state'
-import type { AdventureGoalTracker } from '../game-elements/adventure-goal-tracker'
-import type { AdventureProgressionSupervisor } from '../game-elements/adventure-progression-supervisor'
+import type { AdventureCinematicTriggers } from '../adventure/adventure-cinematic-triggers'
+import type { AdventureUIStateManager } from '../adventure/adventure-ui-state'
+import type { AdventureGoalTracker } from '../adventure/adventure-goal-tracker'
+import type { AdventureProgressionSupervisor } from '../adventure/adventure-progression-supervisor'
 import type { PerformanceMonitor } from '../game-elements/performance-monitor'
 
 import type { TableMapManager } from './game-maps'
@@ -39,7 +39,7 @@ export interface SlotAdventureHost {
 
   // Optional adventure orchestration systems (populated after init)
   readonly adventureCinematicTriggers: AdventureCinematicTriggers | null
-  readonly adventureCinematicSystem: import('../game-elements').AdventureCinematicSystem | null
+  readonly adventureCinematicSystem: import('../adventure/adventure-cinematic-system').AdventureCinematicSystem | null
   readonly adventureUIStateManager: AdventureUIStateManager | null
   readonly adventureGoalTracker: AdventureGoalTracker | null
   readonly adventureProgressionSupervisor: AdventureProgressionSupervisor | null

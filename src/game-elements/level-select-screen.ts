@@ -8,9 +8,9 @@
  * - Map selection integration
  */
 
-import type { AdventureState, AdventureLevel } from './adventure-state'
+import type { AdventureState, AdventureLevel } from '../adventure/adventure-state'
 import type { TableMapType } from '../shaders/lcd-table'
-import { getCampaignRewardsManager } from './campaign-rewards-manager'
+import { getCampaignRewardsManager } from '../adventure/campaign-rewards-manager'
 import { PALETTE } from './visual-language'
 
 export interface LevelSelectConfig {

@@ -3,7 +3,7 @@ import {
   getTrackThemeProfile,
   getTrackMaterialColor,
   TRACK_THEME_PROFILES,
-} from '../src/game-elements/track-theme-profiles'
+} from '../src/adventure/track-theme-profiles'
 
 describe('track-theme-profiles', () => {
   it('defines CYBER_CORE Cyber-Shock premium profile', () => {

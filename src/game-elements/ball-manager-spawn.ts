@@ -8,7 +8,7 @@ import { TrailMesh } from '@babylonjs/core/Meshes/trailMesh'
 import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
 import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { BALL_TIERS, BallType, GameConfig } from '../config'
-import { getCampaignRewardsManager } from './campaign-rewards-manager'
+import { getCampaignRewardsManager } from '../adventure/campaign-rewards-manager'
 import {
   getDensityForMass,
   getTunedBallPhysics,

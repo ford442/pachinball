@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { GameConfig, FEEDER_TUNABLES } from '../src/config'
-import { MagSpinFeeder, MagSpinState } from '../src/game-elements/mag-spin-feeder'
+import { MagSpinFeeder, MagSpinState } from '../src/objects/feeders/mag-spin-feeder'
 
 vi.mock('@babylonjs/core', () => {
   class MockVector3 {

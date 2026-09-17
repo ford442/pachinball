@@ -7,8 +7,9 @@
  */
 
 import { resetMaterialLibrary } from '../materials'
-import { resetCampaignRewardsManager } from '../game-elements/campaign-rewards-manager'
-import { resetTrackThemingSystem, resetScoringBreakdownManager } from '../game-elements'
+import { resetCampaignRewardsManager } from '../adventure/campaign-rewards-manager'
+import { resetScoringBreakdownManager } from '../game-elements'
+import { resetTrackThemingSystem } from '../adventure/track-theming-system'
 import type { Game } from '../game'
 
 export class GameDisposer {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { TRACK_CATALOG } from '../src/game-elements/adventure-track-progression'
-import { buildCampaignGoalsForTrack, getGoalsForTrack, trackGoalSlug } from '../src/game-elements/adventure-track-goals'
+import { TRACK_CATALOG } from '../src/adventure/adventure-track-progression'
+import { buildCampaignGoalsForTrack, getGoalsForTrack, trackGoalSlug } from '../src/adventure/adventure-track-goals'
 
 const EARLY_TRACKS = ['NEON_HELIX', 'PACHINKO_HALL', 'CYBER_CORE', 'QUANTUM_GRID', 'PACHINKO_SPIRE'] as const
 

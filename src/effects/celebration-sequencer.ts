@@ -1,7 +1,7 @@
 import type { EventBus } from '../core/event-bus'
 import type { DisplaySystem } from '../display'
 import type { CabinetLighting } from './cabinet-lighting'
-import type { AdventureCinematicTriggers } from '../game-elements/adventure-cinematic-triggers'
+import type { AdventureCinematicTriggers } from '../adventure/adventure-cinematic-triggers'
 import type { UnlockedReward } from '../game-elements/types'
 import { QualityTier } from '../game-elements/visual-language'
 import { detectAccessibility } from '../game-elements/accessibility-config'
