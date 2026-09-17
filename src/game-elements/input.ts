@@ -10,15 +10,23 @@ import type {
 } from './types'
 import type { GamepadConfig, GamepadState } from './gamepad'
 import { GamepadManager } from './gamepad'
+import {
+  handleKeyDown as handleKeyDownImpl,
+  handleKeyUp as handleKeyUpImpl,
+  type KeyboardInputHost,
+} from './input-keyboard'
+import { setupTouchControls as setupTouchControlsImpl, type TouchInputHost } from './input-touch'
+import {
+  beginPlungerCharge,
+  computePlungerChargeLevel,
+  finishPlungerCharge,
+  softCancelPlungerCharge,
+  wipePlungerCharge,
+} from './input-plunger'
 
 export type { InputFrame, PendingInputFrame, LatencyReport, InputLatencySource }
 
 export class InputHandler {
-  private static readonly PLUNGER_KEYS = new Set(['Enter', 'NumpadEnter', 'Space'])
-  // Digit1/Digit0 — never Shift. Holding Shift five times trips Windows Sticky Keys.
-  private static readonly LEFT_FLIPPER_KEYS = new Set(['Digit1'])
-  private static readonly RIGHT_FLIPPER_KEYS = new Set(['Digit0'])
-
   // Input buffering for frame-aligned processing
   private pendingInputs: PendingInputFrame = {}
   private lastProcessedFrame: InputFrame = {
@@ -29,7 +37,7 @@ export class InputHandler {
     timestamp: 0
   }
   private pendingLatencySource: InputLatencySource = 'keyboard'
-  
+
   // Plunger charge state tracking
   private plungerChargeState: PlungerChargeState = {
     isHeld: false,
@@ -39,12 +47,15 @@ export class InputHandler {
     minImpulse: 10,
     maxImpulse: 35
   }
-  
+
+  /** Space/Enter/gamepad plunger still down after MENU start — charge once PLAYING. */
+  private pendingMenuPlungerHold = false
+
   // Callbacks for plunger charge events
   private onPlungerChargeStart: () => void
   private onPlungerChargeRelease: (chargeLevel: number) => void
   private onPlungerChargeUpdate: (chargeLevel: number) => void
-  
+
   // These callbacks are invoked via applyInputFrame in game.ts
   public onFlipperLeft: (pressed: boolean) => void
   public onFlipperRight: (pressed: boolean) => void
@@ -61,7 +72,7 @@ export class InputHandler {
   private getTiltActive: () => boolean
   private getAdventureActive: () => boolean
   private rapier: typeof RAPIER | null = null
-  
+
   // Gamepad support
   private gamepadManager: GamepadManager | null = null
   private lastGamepadState: GamepadState | null = null
@@ -69,9 +80,6 @@ export class InputHandler {
   // Sustained keyboard flipper holds (re-applied each frame for motor + visuals)
   private flipperLeftHeld = false
   private flipperRightHeld = false
-
-  /** Space/Enter/gamepad plunger still down after MENU start — charge once PLAYING. */
-  private pendingMenuPlungerHold = false
 
   // Latency tracking for input-to-response timing
   private latencyMetrics: LatencyMetrics = {
@@ -119,7 +127,7 @@ export class InputHandler {
     this.getTiltActive = handlers.getTiltActive
     this.getAdventureActive = handlers.getAdventureActive || (() => false)
     this.rapier = rapier
-    
+
     // Initialize plunger charge callbacks (with no-ops as defaults)
     this.onPlungerChargeStart = handlers.onPlungerChargeStart || (() => {})
     this.onPlungerChargeRelease = handlers.onPlungerChargeRelease || (() => {})
@@ -129,7 +137,7 @@ export class InputHandler {
   setRapier(rapier: typeof RAPIER): void {
     this.rapier = rapier
   }
-  
+
   /**
    * Setup gamepad support
    * Call this after initializing the input handler
@@ -138,33 +146,33 @@ export class InputHandler {
     this.gamepadManager = new GamepadManager(config)
     console.log('[Input] Gamepad support enabled')
   }
-  
+
   /**
    * Get the gamepad manager instance (for external access to haptics)
    */
   getGamepadManager(): GamepadManager | null {
     return this.gamepadManager
   }
-  
+
   /**
    * Poll gamepad state and queue inputs
    * Call this each frame from the game loop
    */
   pollGamepad(): void {
     if (!this.gamepadManager) return
-    
+
     const state = this.gamepadManager.poll()
-    
+
     // Store last state for change detection
     const prevState = this.lastGamepadState
     this.lastGamepadState = state
-    
+
     // Skip if not connected
     if (!state.connected) return
-    
+
     // Only process inputs during gameplay (except start button)
     const gameState = this.getState()
-    
+
     // Handle start button (Start/Options) for menu navigation
     if (gameState === GameState.MENU) {
       if (this.pendingMenuPlungerHold && !state.plunger) {
@@ -176,7 +184,7 @@ export class InputHandler {
       }
       return
     }
-    
+
     if (gameState === GameState.PAUSED) {
       if (state.leftFlipper && !prevState?.leftFlipper) {
         this.onPause()
@@ -195,10 +203,10 @@ export class InputHandler {
     if (adventureActive) {
       this.cancelPlungerCharge()
     }
-    
+
     // Check tilt before processing flipper inputs
     const tiltActive = this.getTiltActive()
-    
+
     // Left flipper with edge detection and haptic feedback
     if (!adventureActive && state.leftFlipper !== (prevState?.leftFlipper ?? false)) {
       if (!tiltActive || !state.leftFlipper) {
@@ -211,7 +219,7 @@ export class InputHandler {
         this.gamepadManager.vibrate(100, 50, 100)
       }
     }
-    
+
     // Right flipper with edge detection and haptic feedback
     if (!adventureActive && state.rightFlipper !== (prevState?.rightFlipper ?? false)) {
       if (!tiltActive || !state.rightFlipper) {
@@ -224,7 +232,7 @@ export class InputHandler {
         this.gamepadManager.vibrate(100, 50, 100)
       }
     }
-    
+
     // Plunger with charge support
     if (!adventureActive && state.plunger !== (prevState?.plunger ?? false)) {
       if (state.plunger) {
@@ -241,39 +249,39 @@ export class InputHandler {
         }
       }
     }
-    
+
     // Analog nudge (threshold-based to avoid accidental triggers)
     const nudgeThreshold = 0.5
     if (Math.abs(state.nudgeX) > nudgeThreshold || Math.abs(state.nudgeY) > nudgeThreshold) {
       // Check if nudge state changed significantly
       const prevNudgeX = prevState?.nudgeX ?? 0
       const prevNudgeY = prevState?.nudgeY ?? 0
-      
+
       if (Math.abs(state.nudgeX - prevNudgeX) > 0.2 || Math.abs(state.nudgeY - prevNudgeY) > 0.2) {
-        this.queueInput('nudge', { 
-          x: state.nudgeX * 0.6, 
-          y: 0, 
-          z: state.nudgeY * 0.3 
+        this.queueInput('nudge', {
+          x: state.nudgeX * 0.6,
+          y: 0,
+          z: state.nudgeY * 0.3
         })
         this.gamepadManager.nudgeFeedback()
       }
     }
   }
-  
+
   /**
    * Configure plunger charge parameters
    */
   configurePlungerCharge(config: Partial<PlungerChargeState>): void {
     this.plungerChargeState = { ...this.plungerChargeState, ...config }
   }
-  
+
   /**
    * Get current plunger charge state
    */
   getPlungerChargeState(): PlungerChargeState {
     return { ...this.plungerChargeState }
   }
-  
+
   /**
    * Check if plunger is currently being charged
    */
@@ -286,11 +294,14 @@ export class InputHandler {
    */
   cancelPlungerCharge(): void {
     if (!this.plungerChargeState.isHeld && !this.pendingInputs.plunger) return
-    this.plungerChargeState.isHeld = false
-    this.plungerChargeState.chargeStartTime = 0
-    this.plungerChargeState.chargeLevel = 0
+    wipePlungerCharge(this.plungerChargeState)
     this.pendingInputs.plunger = false
     this.onPlungerChargeUpdate(0)
+  }
+
+  /** Touch/mouse cancel-without-firing (no callback, chargeStartTime untouched). */
+  private softCancelPlungerCharge(): void {
+    softCancelPlungerCharge(this.plungerChargeState)
   }
 
   /**
@@ -445,7 +456,7 @@ export class InputHandler {
 
     return frame
   }
-  
+
   /**
    * Re-queue held flipper keys each frame so joint motors stay active and
    * hold-to-charge stiffness can ramp while the key is down.
@@ -468,15 +479,15 @@ export class InputHandler {
   updatePlungerCharge(): void {
     this.tryStartChargeAfterMenuHold()
     if (!this.plungerChargeState.isHeld) return
-    const newChargeLevel = this.calculatePlungerChargeLevel()
-    
+    const newChargeLevel = computePlungerChargeLevel(this.plungerChargeState)
+
     // Only update if charge level changed
     if (newChargeLevel !== this.plungerChargeState.chargeLevel) {
       this.plungerChargeState.chargeLevel = newChargeLevel
       this.onPlungerChargeUpdate(newChargeLevel)
     }
   }
-  
+
   private tryStartChargeAfterMenuHold(): void {
     if (!this.pendingMenuPlungerHold) return
     if (this.getState() !== GameState.PLAYING) return
@@ -490,30 +501,17 @@ export class InputHandler {
    * Start plunger charge
    */
   private startPlungerCharge(): void {
-    this.plungerChargeState.isHeld = true
-    this.plungerChargeState.chargeStartTime = performance.now()
-    this.plungerChargeState.chargeLevel = 0
+    beginPlungerCharge(this.plungerChargeState)
     this.onPlungerChargeStart()
   }
-  
+
   /**
    * Release plunger and return the charge level
    */
   private releasePlungerCharge(): number {
-    const finalChargeLevel = this.calculatePlungerChargeLevel()
-    this.plungerChargeState.chargeLevel = finalChargeLevel
-    this.plungerChargeState.isHeld = false
+    const finalChargeLevel = finishPlungerCharge(this.plungerChargeState)
     this.onPlungerChargeRelease(finalChargeLevel)
     return finalChargeLevel
-  }
-
-  private calculatePlungerChargeLevel(): number {
-    if (!this.plungerChargeState.isHeld) return this.plungerChargeState.chargeLevel
-    const heldTime = performance.now() - this.plungerChargeState.chargeStartTime
-    return Math.min(
-      Math.max(heldTime / this.plungerChargeState.maxChargeTime, 0),
-      1.0
-    )
   }
 
   /**
@@ -524,117 +522,50 @@ export class InputHandler {
     return { ...this.lastProcessedFrame }
   }
 
+  private readonly keyboardHost: KeyboardInputHost = {
+    isReady: () => !!this.rapier,
+    getState: () => this.getState(),
+    getTiltActive: () => this.getTiltActive(),
+    getAdventureActive: () => this.getAdventureActive(),
+    queueInput: (type, value) => this.queueInput(type, value),
+    onPause: () => this.onPause(),
+    onReset: () => this.onReset(),
+    onStart: () => this.onStart(),
+    onAdventureToggle: () => this.onAdventureToggle(),
+    onTrackNext: () => this.onTrackNext?.(),
+    onTrackPrev: () => this.onTrackPrev?.(),
+    onJackpotTrigger: () => this.onJackpotTrigger?.(),
+    setFlipperLeftHeld: (held) => { this.flipperLeftHeld = held },
+    setFlipperRightHeld: (held) => { this.flipperRightHeld = held },
+    armMenuPlungerHold: () => { this.pendingMenuPlungerHold = true },
+    disarmMenuPlungerHold: () => { this.pendingMenuPlungerHold = false },
+    isMenuPlungerHoldPending: () => this.pendingMenuPlungerHold,
+    isPlungerHeld: () => this.isPlungerHeld(),
+    startPlungerCharge: () => this.startPlungerCharge(),
+    releasePlungerCharge: () => this.releasePlungerCharge(),
+    cancelPlungerCharge: () => this.cancelPlungerCharge(),
+  }
+
+  private readonly touchHost: TouchInputHost = {
+    isReady: () => !!this.rapier,
+    getState: () => this.getState(),
+    getTiltActive: () => this.getTiltActive(),
+    getAdventureActive: () => this.getAdventureActive(),
+    queueInput: (type, value, meta) => this.queueInput(type, value, meta),
+    onStart: () => this.onStart(),
+    isPlungerHeld: () => this.isPlungerHeld(),
+    startPlungerCharge: () => this.startPlungerCharge(),
+    releasePlungerCharge: () => this.releasePlungerCharge(),
+    cancelPlungerCharge: () => this.cancelPlungerCharge(),
+    softCancelPlungerCharge: () => this.softCancelPlungerCharge(),
+  }
+
   handleKeyDown = (event: KeyboardEvent): void => {
-    // console.log('Key down:', event.code, event.key, this.getState())
-    if (!this.rapier) return
-
-    if (event.code === 'KeyP' || event.code === 'Escape') {
-      event.preventDefault()
-      this.onPause()
-      return
-    }
-
-    if (event.code === 'KeyR' && this.getState() === GameState.PLAYING) {
-      this.onReset()
-      return
-    }
-
-    if ((event.code === 'Space' || InputHandler.PLUNGER_KEYS.has(event.code)) && this.getState() === GameState.MENU) {
-      event.preventDefault()
-      this.pendingMenuPlungerHold = true
-      this.onStart()
-      return
-    }
-
-    if (this.getState() !== GameState.PLAYING) return
-    const adventureActive = this.getAdventureActive()
-    if (adventureActive) {
-      this.cancelPlungerCharge()
-    }
-
-    if (!adventureActive && InputHandler.LEFT_FLIPPER_KEYS.has(event.code)) {
-      if (this.getTiltActive()) return
-      event.preventDefault()
-      this.flipperLeftHeld = true
-      this.queueInput('flipperLeft', true)
-    }
-
-    if (!adventureActive && InputHandler.RIGHT_FLIPPER_KEYS.has(event.code)) {
-      if (this.getTiltActive()) return
-      event.preventDefault()
-      this.flipperRightHeld = true
-      this.queueInput('flipperRight', true)
-    }
-
-    if (!adventureActive && InputHandler.PLUNGER_KEYS.has(event.code)) {
-      // Start plunger charge on key down
-      event.preventDefault()
-      if (!this.plungerChargeState.isHeld) {
-        this.startPlungerCharge()
-      }
-    }
-
-    if (event.code === 'KeyZ') {
-      this.queueInput('nudge', { x: -0.6, y: 0, z: 0.3 })
-    }
-
-    if (event.code === 'Slash') {
-      this.queueInput('nudge', { x: 0.6, y: 0, z: 0.3 })
-    }
-
-    if (event.code === 'KeyW') {
-      event.preventDefault()
-      this.queueInput('nudge', { x: 0, y: 0, z: 0.8 })
-    }
-
-    if (event.code === 'KeyH') {
-      this.onAdventureToggle()
-    }
-
-    if (event.code === 'BracketRight' && this.onTrackNext) {
-      this.onTrackNext()
-    }
-
-    if (event.code === 'BracketLeft' && this.onTrackPrev) {
-      this.onTrackPrev()
-    }
-
-    if (event.code === 'KeyJ' && this.onJackpotTrigger) {
-      this.onJackpotTrigger()
-    }
+    handleKeyDownImpl(this.keyboardHost, event)
   }
 
   handleKeyUp = (event: KeyboardEvent): void => {
-    if (!this.rapier) return
-
-    if (InputHandler.PLUNGER_KEYS.has(event.code) && this.pendingMenuPlungerHold) {
-      this.pendingMenuPlungerHold = false
-      if (this.getState() !== GameState.PLAYING) return
-    }
-
-    if (this.getState() !== GameState.PLAYING) return
-    const adventureActive = this.getAdventureActive()
-    if (adventureActive) {
-      this.cancelPlungerCharge()
-    }
-
-    if (!adventureActive && InputHandler.LEFT_FLIPPER_KEYS.has(event.code)) {
-      this.flipperLeftHeld = false
-      this.queueInput('flipperLeft', false)
-    }
-
-    if (!adventureActive && InputHandler.RIGHT_FLIPPER_KEYS.has(event.code)) {
-      this.flipperRightHeld = false
-      this.queueInput('flipperRight', false)
-    }
-
-    if (!adventureActive && InputHandler.PLUNGER_KEYS.has(event.code)) {
-      // Release plunger on key up
-      if (this.plungerChargeState.isHeld) {
-        this.releasePlungerCharge()
-        this.queueInput('plunger', true)
-      }
-    }
+    handleKeyUpImpl(this.keyboardHost, event)
   }
 
   setupTouchControls(
@@ -643,215 +574,6 @@ export class InputHandler {
     plungerBtn: HTMLElement | null,
     nudgeBtn: HTMLElement | null
   ): void {
-    if (!this.rapier) return
-
-    // Helper to add/remove active class for visual feedback
-    const setActive = (btn: HTMLElement | null, active: boolean) => {
-      if (btn) {
-        if (active) {
-          btn.classList.add('active')
-        } else {
-          btn.classList.remove('active')
-        }
-      }
-    }
-
-    // Left flipper touch
-    leftBtn?.addEventListener('touchstart', (e) => {
-      e.preventDefault()
-      if (this.getAdventureActive()) return
-      if (this.getTiltActive()) return
-      setActive(leftBtn, true)
-      this.queueInput('flipperLeft', true, { source: 'touch', eventTimestamp: e.timeStamp })
-    }, { passive: false })
-
-    leftBtn?.addEventListener('touchend', (e) => {
-      e.preventDefault()
-      setActive(leftBtn, false)
-      this.queueInput('flipperLeft', false, { source: 'touch', eventTimestamp: e.timeStamp })
-    }, { passive: false })
-
-    leftBtn?.addEventListener('touchcancel', (e) => {
-      e.preventDefault()
-      setActive(leftBtn, false)
-      this.queueInput('flipperLeft', false, { source: 'touch', eventTimestamp: e.timeStamp })
-    }, { passive: false })
-
-    // Also handle mouse events for desktop testing of touch controls
-    leftBtn?.addEventListener('mousedown', (e) => {
-      e.preventDefault()
-      if (this.getAdventureActive()) return
-      if (this.getTiltActive()) return
-      setActive(leftBtn, true)
-      this.queueInput('flipperLeft', true, { source: 'touch', eventTimestamp: e.timeStamp })
-    })
-
-    leftBtn?.addEventListener('mouseup', (e) => {
-      e.preventDefault()
-      setActive(leftBtn, false)
-      this.queueInput('flipperLeft', false, { source: 'touch', eventTimestamp: e.timeStamp })
-    })
-
-    leftBtn?.addEventListener('mouseleave', () => {
-      setActive(leftBtn, false)
-      this.queueInput('flipperLeft', false, { source: 'touch' })
-    })
-
-    // Right flipper touch
-    rightBtn?.addEventListener('touchstart', (e) => {
-      e.preventDefault()
-      if (this.getAdventureActive()) return
-      if (this.getTiltActive()) return
-      setActive(rightBtn, true)
-      this.queueInput('flipperRight', true, { source: 'touch', eventTimestamp: e.timeStamp })
-    }, { passive: false })
-
-    rightBtn?.addEventListener('touchend', (e) => {
-      e.preventDefault()
-      setActive(rightBtn, false)
-      this.queueInput('flipperRight', false, { source: 'touch', eventTimestamp: e.timeStamp })
-    }, { passive: false })
-
-    rightBtn?.addEventListener('touchcancel', (e) => {
-      e.preventDefault()
-      setActive(rightBtn, false)
-      this.queueInput('flipperRight', false, { source: 'touch', eventTimestamp: e.timeStamp })
-    }, { passive: false })
-
-    // Mouse events for right flipper
-    rightBtn?.addEventListener('mousedown', (e) => {
-      e.preventDefault()
-      if (this.getAdventureActive()) return
-      if (this.getTiltActive()) return
-      setActive(rightBtn, true)
-      this.queueInput('flipperRight', true, { source: 'touch', eventTimestamp: e.timeStamp })
-    })
-
-    rightBtn?.addEventListener('mouseup', (e) => {
-      e.preventDefault()
-      setActive(rightBtn, false)
-      this.queueInput('flipperRight', false, { source: 'touch', eventTimestamp: e.timeStamp })
-    })
-
-    rightBtn?.addEventListener('mouseleave', () => {
-      setActive(rightBtn, false)
-      this.queueInput('flipperRight', false, { source: 'touch' })
-    })
-
-    // Plunger touch with charge support — MENU starts the game (audio unlock)
-    plungerBtn?.addEventListener('touchstart', (e) => {
-      e.preventDefault()
-      if (this.getState() === GameState.MENU) {
-        this.onStart()
-        return
-      }
-      if (this.getAdventureActive()) return
-      setActive(plungerBtn, true)
-      if (!this.plungerChargeState.isHeld) {
-        this.startPlungerCharge()
-      }
-    }, { passive: false })
-
-    plungerBtn?.addEventListener('touchend', (e) => {
-      e.preventDefault()
-      setActive(plungerBtn, false)
-      if (this.getAdventureActive()) {
-        this.cancelPlungerCharge()
-        return
-      }
-      if (this.plungerChargeState.isHeld) {
-        this.releasePlungerCharge()
-        this.queueInput('plunger', true, { source: 'touch', eventTimestamp: e.timeStamp })
-      }
-    }, { passive: false })
-
-    plungerBtn?.addEventListener('touchcancel', (e) => {
-      e.preventDefault()
-      setActive(plungerBtn, false)
-      if (this.getAdventureActive()) {
-        this.cancelPlungerCharge()
-        return
-      }
-      if (this.plungerChargeState.isHeld) {
-        // Cancel charge without firing on touch cancel
-        this.plungerChargeState.isHeld = false
-        this.plungerChargeState.chargeLevel = 0
-      }
-    }, { passive: false })
-
-    // Mouse events for plunger
-    plungerBtn?.addEventListener('mousedown', (e) => {
-      e.preventDefault()
-      if (this.getState() === GameState.MENU) {
-        this.onStart()
-        return
-      }
-      if (this.getAdventureActive()) return
-      setActive(plungerBtn, true)
-      if (!this.plungerChargeState.isHeld) {
-        this.startPlungerCharge()
-      }
-    })
-
-    plungerBtn?.addEventListener('mouseup', (e) => {
-      e.preventDefault()
-      setActive(plungerBtn, false)
-      if (this.getAdventureActive()) {
-        this.cancelPlungerCharge()
-        return
-      }
-      if (this.plungerChargeState.isHeld) {
-        this.releasePlungerCharge()
-        this.queueInput('plunger', true, { source: 'touch', eventTimestamp: e.timeStamp })
-      }
-    })
-
-    plungerBtn?.addEventListener('mouseleave', () => {
-      setActive(plungerBtn, false)
-      if (this.getAdventureActive()) {
-        this.cancelPlungerCharge()
-        return
-      }
-      if (this.plungerChargeState.isHeld) {
-        this.plungerChargeState.isHeld = false
-        this.plungerChargeState.chargeLevel = 0
-      }
-    })
-
-    // Nudge touch (trigger action - queues once per press)
-    nudgeBtn?.addEventListener('touchstart', (e) => {
-      e.preventDefault()
-      setActive(nudgeBtn, true)
-      this.queueInput('nudge', { x: 0, y: 0, z: 1 }, { source: 'touch', eventTimestamp: e.timeStamp })
-      // Auto-remove active class after short delay for nudge
-      setTimeout(() => setActive(nudgeBtn, false), 150)
-    }, { passive: false })
-
-    nudgeBtn?.addEventListener('touchend', (e) => {
-      e.preventDefault()
-      setActive(nudgeBtn, false)
-    }, { passive: false })
-
-    nudgeBtn?.addEventListener('touchcancel', (e) => {
-      e.preventDefault()
-      setActive(nudgeBtn, false)
-    }, { passive: false })
-
-    // Mouse events for nudge
-    nudgeBtn?.addEventListener('mousedown', (e) => {
-      e.preventDefault()
-      setActive(nudgeBtn, true)
-      this.queueInput('nudge', { x: 0, y: 0, z: 1 }, { source: 'touch', eventTimestamp: e.timeStamp })
-      setTimeout(() => setActive(nudgeBtn, false), 150)
-    })
-
-    nudgeBtn?.addEventListener('mouseup', (e) => {
-      e.preventDefault()
-      setActive(nudgeBtn, false)
-    })
-
-    nudgeBtn?.addEventListener('mouseleave', () => {
-      setActive(nudgeBtn, false)
-    })
+    setupTouchControlsImpl(this.touchHost, leftBtn, rightBtn, plungerBtn, nudgeBtn)
   }
 }
