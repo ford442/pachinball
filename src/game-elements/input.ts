@@ -1,4 +1,3 @@
-import type * as RAPIER from '@dimforge/rapier3d-compat'
 import { GameState } from './types'
 import type {
   InputFrame,
@@ -71,7 +70,8 @@ export class InputHandler {
   private getState: () => GameState
   private getTiltActive: () => boolean
   private getAdventureActive: () => boolean
-  private rapier: typeof RAPIER | null = null
+  /** True once the underlying physics engine has finished booting. */
+  private ready = false
 
   // Gamepad support
   private gamepadManager: GamepadManager | null = null
@@ -110,7 +110,7 @@ export class InputHandler {
       getTiltActive: () => boolean
       getAdventureActive?: () => boolean
     },
-    rapier: typeof RAPIER | null
+    ready: boolean
   ) {
     this.onFlipperLeft = handlers.onFlipperLeft
     this.onFlipperRight = handlers.onFlipperRight
@@ -126,7 +126,7 @@ export class InputHandler {
     this.getState = handlers.getState
     this.getTiltActive = handlers.getTiltActive
     this.getAdventureActive = handlers.getAdventureActive || (() => false)
-    this.rapier = rapier
+    this.ready = ready
 
     // Initialize plunger charge callbacks (with no-ops as defaults)
     this.onPlungerChargeStart = handlers.onPlungerChargeStart || (() => {})
@@ -134,8 +134,9 @@ export class InputHandler {
     this.onPlungerChargeUpdate = handlers.onPlungerChargeUpdate || (() => {})
   }
 
-  setRapier(rapier: typeof RAPIER): void {
-    this.rapier = rapier
+  /** Flip once the underlying physics engine finishes booting (if constructed before ready). */
+  setReady(ready: boolean): void {
+    this.ready = ready
   }
 
   /**
@@ -523,7 +524,7 @@ export class InputHandler {
   }
 
   private readonly keyboardHost: KeyboardInputHost = {
-    isReady: () => !!this.rapier,
+    isReady: () => this.ready,
     getState: () => this.getState(),
     getTiltActive: () => this.getTiltActive(),
     getAdventureActive: () => this.getAdventureActive(),
@@ -547,7 +548,7 @@ export class InputHandler {
   }
 
   private readonly touchHost: TouchInputHost = {
-    isReady: () => !!this.rapier,
+    isReady: () => this.ready,
     getState: () => this.getState(),
     getTiltActive: () => this.getTiltActive(),
     getAdventureActive: () => this.getAdventureActive(),

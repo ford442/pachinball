@@ -36,15 +36,11 @@ describe('InputHandler', () => {
     getTiltActive: vi.fn().mockReturnValue(false),
   }
 
-  const fakeRapier = {
-    Vector3: vi.fn().mockImplementation((x: number, y: number, z: number) => ({ x, y, z })),
-  }
-
   beforeEach(() => {
     vi.clearAllMocks()
     callbacks.getState.mockReturnValue(GameState.PLAYING)
     callbacks.getTiltActive.mockReturnValue(false)
-    handler = new InputHandler(callbacks, fakeRapier as unknown as typeof import('@dimforge/rapier3d-compat'))
+    handler = new InputHandler(callbacks, true)
   })
 
   describe('handleKeyDown', () => {
