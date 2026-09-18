@@ -31,11 +31,6 @@ const isNonMutating = (name: string) =>
  * (the "allowlist is not stale" case enforces that).
  */
 const KNOWN_WORKER_GAPS: Record<string, string> = {
-  addStaticTriangleMesh: '#414 — worker adventure commands',
-  createBoxBody: '#414 — worker adventure commands',
-  addForceField: '#414 — worker adventure commands',
-  setForceFieldEnabled: '#414 — worker adventure commands',
-  setForceFieldVector: '#414 — worker adventure commands',
   setMaxContacts: 'owner/mirror tuning only; the worker keeps the C++ default',
 }
 

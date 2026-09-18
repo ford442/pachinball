@@ -80,8 +80,8 @@ const CYBER_CORE_PROFILE: TrackThemeProfile = {
   usePBRStructure: true,
 }
 
-/** Placeholder profiles for future premium passes (material slots defined). */
-const THEME_PROFILE_STUBS: Record<string, TrackThemeProfile> = {
+/** Catalogued tracks with a full premium profile (materials, atmosphere, particles, cabinet). */
+const CATALOG_PROFILES: Record<string, TrackThemeProfile> = {
   NEON_HELIX: {
     trackId: 'NEON_HELIX',
     label: 'Neon Helix',
@@ -176,7 +176,7 @@ const THEME_PROFILE_STUBS: Record<string, TrackThemeProfile> = {
 
 export const TRACK_THEME_PROFILES: Record<string, TrackThemeProfile> = {
   CYBER_CORE: CYBER_CORE_PROFILE,
-  ...THEME_PROFILE_STUBS,
+  ...CATALOG_PROFILES,
 }
 
 export function getTrackThemeProfile(trackId: string): TrackThemeProfile | null {

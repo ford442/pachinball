@@ -1,9 +1,19 @@
 /**
- * postMessage protocol for #361 Phase 1 (transferable ArrayBuffers, no SAB).
- * JSON-serializable commands plus packed float snapshots on STEP_RESULT.
+ * Worker protocol for `wasm-worker` (#361 / #414).
+ *
+ * Commands always travel main → worker as one ordered `postMessage` batch per
+ * frame. Snapshots come back either over the shared layout in
+ * `physics-shared-layout.ts` (cross-origin isolated) or as transferred
+ * `ArrayBuffer`s on `step-result` (the fallback, and the overflow path).
  */
 
-import type { WasmBodyDesc, WasmHingeDesc } from './PhysicsModule'
+import type {
+  WasmBodyDesc,
+  WasmBoxBodyDesc,
+  WasmForceFieldDesc,
+  WasmHingeDesc,
+  WasmVolumeShape,
+} from './PhysicsModule'
 import { STATIC_HANDLE_OVERFLOW } from './wasm-types'
 
 /** Mirrors native PhysicsWorld.h static collider id bases. */
@@ -12,6 +22,8 @@ export const STATIC_CAPSULE_ID_BASE = -2000
 export const KINEMATIC_MOVER_ID_BASE = -3000
 export const SENSOR_VOLUME_ID_BASE = -4000
 export const STATIC_CYLINDER_ID_BASE = -5000
+export const STATIC_MESH_ID_BASE = -6000
+export const FORCE_FIELD_ID_BASE = -7000
 export const STATIC_SPHERE_ID_BASE = -8000
 
 /**
@@ -37,12 +49,17 @@ export type PhysicsWorkerCommand =
   | { type: 'addStaticCapsule'; center: Vec3Msg; radius: number; halfHeight: number; rotation: QuatMsg; restitution: number; friction: number }
   | { type: 'addStaticCylinder'; center: Vec3Msg; radius: number; halfHeight: number; rotation: QuatMsg; restitution: number; friction: number }
   | { type: 'addStaticSphere'; center: Vec3Msg; radius: number; restitution: number; friction: number }
-  | { type: 'addSensorVolume'; center: Vec3Msg; halfExtents: Vec3Msg; rotation: QuatMsg }
-  | { type: 'addKinematicMover'; position: Vec3Msg; halfExtents: Vec3Msg; rotation: QuatMsg; restitution: number; friction: number }
+  | { type: 'addStaticTriangleMesh'; vertices: Float32Array; indices: Uint32Array; restitution: number; friction: number; doubleSided: boolean }
+  | { type: 'addSensorVolume'; center: Vec3Msg; halfExtents: Vec3Msg; rotation: QuatMsg; shape: WasmVolumeShape }
+  | { type: 'addKinematicMover'; position: Vec3Msg; halfExtents: Vec3Msg; rotation: QuatMsg; restitution: number; friction: number; shape: WasmVolumeShape }
   | { type: 'setNextKinematicTransform'; moverId: number; position: Vec3Msg; rotation: QuatMsg }
   | { type: 'setCollisionGroups'; id: number; membership: number; filter: number }
   | { type: 'clearStaticGeometry' }
+  | { type: 'addForceField'; desc: WasmForceFieldDesc }
+  | { type: 'setForceFieldEnabled'; fieldId: number; enabled: boolean }
+  | { type: 'setForceFieldVector'; fieldId: number; fx: number; fy: number; fz: number }
   | { type: 'createBody'; desc: WasmBodyDesc }
+  | { type: 'createBoxBody'; desc: WasmBoxBodyDesc }
   | { type: 'removeBody'; id: number }
   | { type: 'applyForce'; id: number; fx: number; fy: number; fz: number }
   | { type: 'applyImpulse'; id: number; ix: number; iy: number; iz: number }
@@ -58,6 +75,12 @@ export type PhysicsWorkerCommand =
 
 export type PhysicsWorkerToWorker =
   | { type: 'init'; bundleUrl: string }
+  /**
+   * Opt the worker into the shared snapshot layout. Sent only when the page is
+   * cross-origin isolated; the worker allocates the buffer itself (it knows the
+   * slot count) and answers with `shared-attach`.
+   */
+  | { type: 'use-shared-transport' }
   | { type: 'batch'; commands: PhysicsWorkerCommand[] }
 
 export type PhysicsWorkerStepResult = {
@@ -71,10 +94,21 @@ export type PhysicsWorkerStepResult = {
   hingeBuffer: ArrayBuffer
 }
 
+/**
+ * The worker switched to a (new) shared buffer. Every write to the previous
+ * buffer finished before this was posted, so the receiver drains the old
+ * contact ring before reading the new one.
+ */
+export type PhysicsWorkerSharedAttach = {
+  type: 'shared-attach'
+  buffer: SharedArrayBuffer
+}
+
 export type PhysicsWorkerFromWorker =
   | { type: 'ready' }
   | { type: 'error'; message: string }
   | PhysicsWorkerStepResult
+  | PhysicsWorkerSharedAttach
 
 /**
  * Client-side id allocator matching C++ HandleTable + static collider ids.
@@ -90,6 +124,8 @@ export class WasmIdShadow {
   private nextSphere = 0
   private nextMover = 0
   private nextSensor = 0
+  private nextMesh = 0
+  private nextField = 0
 
   allocBody(): number {
     return this.nextBodyId++
@@ -135,8 +171,22 @@ export class WasmIdShadow {
     return SENSOR_VOLUME_ID_BASE - idx
   }
 
+  /**
+   * Native meshes and force fields have no capacity check, so neither does
+   * the shadow: it must hand out exactly the id C++ will.
+   */
+  allocStaticMesh(): number {
+    return STATIC_MESH_ID_BASE - this.nextMesh++
+  }
+
+  allocForceField(): number {
+    return FORCE_FIELD_ID_BASE - this.nextField++
+  }
+
   /** Mirror of PhysicsWorld::clearStaticGeometry — negative handles restart. */
   resetStaticHandles(): void {
+    this.nextMesh = 0
+    this.nextField = 0
     this.nextBox = 0
     this.nextCapsule = 0
     this.nextCylinder = 0
@@ -146,6 +196,7 @@ export class WasmIdShadow {
   }
 
   reset(): void {
+    this.resetStaticHandles()
     this.nextBodyId = 0
     this.nextHingeId = 0
     this.nextBox = 0

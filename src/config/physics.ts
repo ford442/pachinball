@@ -107,10 +107,10 @@ export const WASM_PHYSICS = {
    *  - `rapier`       — Rapier only: dev/degrade path (explicit override, or fail-closed when the WASM bundle is missing)
    *  - `wasm-mirror`  — WASM mirrors ball+bumper subset; Rapier bodies remain handles
    *  - `wasm-owner`   — WASM owns ball + static table + flipper hinges + adventure tracks (in-process, production default)
-   *  - `wasm-worker`  — same ownership as wasm-owner, C++ world in a Dedicated Worker
-   *                     (`postMessage` snapshots, one-frame lag). Cross-origin isolation
-   *                     is now detectable via `isCrossOriginIsolated()` below; a SAB-backed
-   *                     zero-copy transform/contact path is a follow-up (see #384).
+   *  - `wasm-worker`  — same ownership as wasm-owner (table + adventure tracks), C++ world
+   *                     in a Dedicated Worker with one frame of lag. Snapshots come back over
+   *                     a SharedArrayBuffer when `isCrossOriginIsolated()`, else as transferred
+   *                     `postMessage` buffers (see docs/wasm-physics-engine.md, #414).
    * Legacy `wasm` is treated as `wasm-mirror`.
    */
   allowedEngines: ['rapier', 'wasm', 'wasm-mirror', 'wasm-owner', 'wasm-worker'] as const,
@@ -155,9 +155,8 @@ export function getWasmPhysicsRuntimeMode(): WasmPhysicsRuntimeMode {
 
 /**
  * True when the page is cross-origin isolated (SharedArrayBuffer available).
- * Observability only today — `wasm-worker` mode works identically with or without
- * isolation, since it has no SAB dependency yet. This exists so a future SAB-backed
- * transform/contact path has a ready detector to gate on (see #384).
+ * Gates the `wasm-worker` snapshot transport: shared memory when true, transferred
+ * `postMessage` buffers when false. Never gates whether the worker boots.
  */
 export function isCrossOriginIsolated(): boolean {
   return typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated === true

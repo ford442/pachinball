@@ -1,9 +1,20 @@
 /**
  * Main-thread proxy for a worker-owned WasmPhysicsEngine.
  * Mutations queue; step() posts and returns the previous snapshot's alpha.
+ *
+ * Snapshots arrive over the shared layout when the page is cross-origin
+ * isolated (read at the top of `step()`, never blocking), otherwise as
+ * transferred `step-result` buffers.
  */
 
-import type { WasmBodyDesc, WasmHingeDesc, WasmContactEventBus } from './PhysicsModule'
+import type {
+  WasmBodyDesc,
+  WasmBoxBodyDesc,
+  WasmContactEventBus,
+  WasmForceFieldDesc,
+  WasmHingeDesc,
+} from './PhysicsModule'
+import { WasmVolumeShape } from './physics-module-adventure'
 import type { WasmPhysicsModule } from './wasm-types'
 import type { WasmSimEngine } from './wasm-sim-engine'
 import {
@@ -11,6 +22,8 @@ import {
   toWasmContactEvent,
 } from './contact-buffer'
 import { decodeTransformSlot, TRANSFORM_STRIDE } from './transform-buffer'
+import { SharedSnapshotReader } from './physics-shared-layout'
+import { isCrossOriginIsolated } from '../config/physics'
 import {
   decodeHingeAngle,
   STATIC_HANDLE_OVERFLOW,
@@ -88,6 +101,26 @@ export function resetPhysicsWorkerPrewarmForTests(): void {
   }
 }
 
+export type PhysicsWorkerTransport = 'shared' | 'post-message'
+
+/** Debug counters; Playwright asserts the shared path allocates no per-step buffers. */
+export interface PhysicsWorkerTransportStats {
+  transport: PhysicsWorkerTransport
+  /** Snapshots copied out of the shared buffer. */
+  sharedSnapshots: number
+  /** `step-result` messages received — each carries freshly allocated buffers. */
+  postMessageSnapshots: number
+  /** `shared-attach` messages (first attach plus every growth). */
+  sharedAttaches: number
+  /** Snapshots discarded because a newer one had already been applied. */
+  staleSnapshots: number
+}
+
+export interface PhysicsWorkerClientOptions {
+  /** Ask the worker for the shared transport. Defaults to `crossOriginIsolated`. */
+  sharedTransport?: boolean
+}
+
 export class PhysicsWorkerClient implements WasmSimEngine {
   isReady = false
 
@@ -103,6 +136,23 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   private snapshotReady = false
   private ownsWorker = true
   private readyWaiters: Array<(ok: boolean) => void> = []
+  private readonly wantShared: boolean
+  private shared: SharedSnapshotReader | null = null
+  private stats: PhysicsWorkerTransportStats = PhysicsWorkerClient.emptyStats()
+
+  constructor(options: PhysicsWorkerClientOptions = {}) {
+    this.wantShared = options.sharedTransport ?? isCrossOriginIsolated()
+  }
+
+  private static emptyStats(): PhysicsWorkerTransportStats {
+    return {
+      transport: 'post-message',
+      sharedSnapshots: 0,
+      postMessageSnapshots: 0,
+      sharedAttaches: 0,
+      staleSnapshots: 0,
+    }
+  }
 
   async load(moduleUrl = './wasm/PhysicsModule.js', _preloadedModule?: WasmPhysicsModule): Promise<void> {
     if (this.isReady) return
@@ -118,7 +168,9 @@ export class PhysicsWorkerClient implements WasmSimEngine {
         this.worker.removeEventListener('message', this.onMessage)
         this.worker.terminate()
         this.worker = null
+        return
       }
+      this.requestSharedTransport()
       return
     }
 
@@ -137,6 +189,11 @@ export class PhysicsWorkerClient implements WasmSimEngine {
       this.readyWaiters.push(resolve)
     })
     this.isReady = ok
+    if (ok) this.requestSharedTransport()
+  }
+
+  private requestSharedTransport(): void {
+    if (this.wantShared) this.post({ type: 'use-shared-transport' })
   }
 
   init(bus: WasmContactEventBus): void {
@@ -212,15 +269,42 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     return id
   }
 
+  /**
+   * Mirrors the in-process wrapper's guard: a mesh it would refuse before
+   * reaching C++ consumes no native id, so it must not consume a shadow one.
+   * The arrays are copied now (the caller may reuse them) and transferred on flush.
+   */
+  addStaticTriangleMesh(
+    vertices: Float32Array,
+    indices: Uint32Array,
+    restitution = 0.4,
+    friction = 0.2,
+    doubleSided = false,
+  ): number {
+    if (!this.isReady) return -1
+    if (vertices.length < 9 || indices.length < 3) return -1
+    const id = this.ids.allocStaticMesh()
+    this.enqueue({
+      type: 'addStaticTriangleMesh',
+      vertices: vertices.slice(),
+      indices: indices.slice(),
+      restitution,
+      friction,
+      doubleSided,
+    })
+    return id
+  }
+
   addSensorVolume(
     center: { x: number; y: number; z: number },
     halfExtents: { x: number; y: number; z: number },
     rotation: { x: number; y: number; z: number; w: number } = IDENTITY_Q,
+    shape: WasmVolumeShape = WasmVolumeShape.Box,
   ): number {
     if (!this.isReady) return -1
     const id = this.ids.allocSensorVolume()
     if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
-    this.enqueue({ type: 'addSensorVolume', center, halfExtents, rotation })
+    this.enqueue({ type: 'addSensorVolume', center, halfExtents, rotation, shape })
     return id
   }
 
@@ -230,11 +314,12 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     rotation: { x: number; y: number; z: number; w: number } = IDENTITY_Q,
     restitution = 0.4,
     friction = 0.2,
+    shape: WasmVolumeShape = WasmVolumeShape.Box,
   ): number {
     if (!this.isReady) return -1
     const id = this.ids.allocKinematicMover()
     if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
-    this.enqueue({ type: 'addKinematicMover', position, halfExtents, rotation, restitution, friction })
+    this.enqueue({ type: 'addKinematicMover', position, halfExtents, rotation, restitution, friction, shape })
     return id
   }
 
@@ -255,10 +340,33 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     this.enqueue({ type: 'clearStaticGeometry' })
   }
 
+  addForceField(desc: WasmForceFieldDesc): number {
+    if (!this.isReady) return -1
+    const id = this.ids.allocForceField()
+    this.enqueue({ type: 'addForceField', desc })
+    return id
+  }
+
+  setForceFieldEnabled(fieldId: number, enabled: boolean): void {
+    this.enqueue({ type: 'setForceFieldEnabled', fieldId, enabled })
+  }
+
+  setForceFieldVector(fieldId: number, fx: number, fy: number, fz: number): void {
+    this.enqueue({ type: 'setForceFieldVector', fieldId, fx, fy, fz })
+  }
+
   createBody(desc: WasmBodyDesc = {}): number {
     if (!this.isReady) return -1
     const id = this.ids.allocBody()
     this.enqueue({ type: 'createBody', desc })
+    return id
+  }
+
+  /** Box bodies share the rigid-body handle table with spheres. */
+  createBoxBody(desc: WasmBoxBodyDesc): number {
+    if (!this.isReady) return -1
+    const id = this.ids.allocBody()
+    this.enqueue({ type: 'createBoxBody', desc })
     return id
   }
 
@@ -327,6 +435,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   }
 
   step(rawDt: number): number {
+    this.pollShared()
     this.enqueue({ type: 'step', rawDt })
     this.flush()
     return this.lastAlpha
@@ -348,6 +457,10 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     return this.lastWorkerStepMs
   }
 
+  getTransportStats(): PhysicsWorkerTransportStats {
+    return { ...this.stats }
+  }
+
   dispose(): void {
     this.enqueue({ type: 'dispose' })
     this.flush()
@@ -362,6 +475,8 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     this.ids.reset()
     this.transformView = null
     this.hingeView = null
+    this.shared = null
+    this.stats = PhysicsWorkerClient.emptyStats()
     this.snapshotReady = false
     this.lastAlpha = 0
     this.lastStepCount = 0
@@ -377,21 +492,87 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   private loopback: ((batch: PhysicsWorkerCommand[]) => void) | null = null
 
   applyStepResult(msg: Extract<PhysicsWorkerFromWorker, { type: 'step-result' }>): void {
-    this.lastAlpha = msg.alpha
-    this.lastStepCount = msg.stepCount
-    this.lastWorkerStepMs = msg.stepMs
-    this.transformView = msg.transformBuffer.byteLength > 0
-      ? new Float32Array(msg.transformBuffer)
-      : null
-    this.hingeView = msg.hingeBuffer.byteLength > 0
-      ? new Float32Array(msg.hingeBuffer)
-      : null
-    this.snapshotReady = true
+    this.stats.postMessageSnapshots++
+    // A `step-result` can be overtaken by a later shared publish that step()
+    // already read. Its contacts still count; its poses are stale.
+    if (this.snapshotReady && msg.stepCount < this.lastStepCount) {
+      this.stats.staleSnapshots++
+    } else {
+      this.lastAlpha = msg.alpha
+      this.lastStepCount = msg.stepCount
+      this.lastWorkerStepMs = msg.stepMs
+      this.transformView = msg.transformBuffer.byteLength > 0
+        ? new Float32Array(msg.transformBuffer)
+        : null
+      this.hingeView = msg.hingeBuffer.byteLength > 0
+        ? new Float32Array(msg.hingeBuffer)
+        : null
+      this.snapshotReady = true
+    }
 
-    if (!this.eventBus || msg.contactCount <= 0) return
-    const view = new Float32Array(msg.contactBuffer)
-    const contacts = decodeContactBuffer(view, msg.contactCount)
-    for (const contact of contacts) {
+    if (msg.contactCount > 0) this.emitContacts(new Float32Array(msg.contactBuffer), msg.contactCount)
+  }
+
+  /** @internal Route one worker message (the Worker listener and loopback tests). */
+  receiveWorkerMessage(data: PhysicsWorkerFromWorker): void {
+    if (data.type === 'ready') {
+      this.isReady = true
+      this.flushReadyWaiters(true)
+      return
+    }
+    if (data.type === 'error') {
+      console.warn('[PhysicsWorkerClient]', data.message)
+      this.isReady = false
+      this.flushReadyWaiters(false)
+      return
+    }
+    if (data.type === 'step-result') {
+      this.applyStepResult(data)
+      return
+    }
+    if (data.type === 'shared-attach') {
+      this.attachShared(data.buffer)
+    }
+  }
+
+  private attachShared(buffer: SharedArrayBuffer): void {
+    let reader: SharedSnapshotReader
+    try {
+      reader = new SharedSnapshotReader(buffer)
+    } catch (err) {
+      // A layout mismatch is a stale worker bundle; stay on step-result.
+      console.warn('[PhysicsWorkerClient] shared transport rejected', err)
+      return
+    }
+    // The worker finished writing the old buffer before posting this, so
+    // draining it first keeps contact order across the swap.
+    this.pollShared()
+    this.shared = reader
+    this.stats.transport = 'shared'
+    this.stats.sharedAttaches++
+  }
+
+  private pollShared(): void {
+    const shared = this.shared
+    if (!shared) return
+    shared.drainContacts((packed, count) => this.emitContacts(packed, count))
+    if (!shared.read()) return
+    if (this.snapshotReady && shared.stepCount < this.lastStepCount) {
+      this.stats.staleSnapshots++
+      return
+    }
+    this.stats.sharedSnapshots++
+    this.lastAlpha = shared.alpha
+    this.lastStepCount = shared.stepCount
+    this.lastWorkerStepMs = shared.stepMs
+    this.transformView = shared.transforms
+    this.hingeView = shared.hinges
+    this.snapshotReady = true
+  }
+
+  private emitContacts(packed: Float32Array, count: number): void {
+    if (!this.eventBus) return
+    for (const contact of decodeContactBuffer(packed, count)) {
       this.eventBus.emit('wasm:physics:contact', toWasmContactEvent(contact))
     }
   }
@@ -413,30 +594,20 @@ export class PhysicsWorkerClient implements WasmSimEngine {
       this.loopback(commands)
       return
     }
-    this.post({ type: 'batch', commands })
+    // Mesh arrays were copied at enqueue, so hand them over instead of cloning again.
+    const transfer: Transferable[] = []
+    for (const cmd of commands) {
+      if (cmd.type === 'addStaticTriangleMesh') transfer.push(cmd.vertices.buffer, cmd.indices.buffer)
+    }
+    this.post({ type: 'batch', commands }, transfer)
   }
 
-  private post(msg: PhysicsWorkerToWorker): void {
-    this.worker?.postMessage(msg)
+  private post(msg: PhysicsWorkerToWorker, transfer: Transferable[] = []): void {
+    this.worker?.postMessage(msg, transfer)
   }
 
   private onMessage = (event: MessageEvent<PhysicsWorkerFromWorker>): void => {
-    const data = event.data
-    if (!data) return
-    if (data.type === 'ready') {
-      this.isReady = true
-      this.flushReadyWaiters(true)
-      return
-    }
-    if (data.type === 'error') {
-      console.warn('[PhysicsWorkerClient]', data.message)
-      this.isReady = false
-      this.flushReadyWaiters(false)
-      return
-    }
-    if (data.type === 'step-result') {
-      this.applyStepResult(data)
-    }
+    if (event.data) this.receiveWorkerMessage(event.data)
   }
 
   private flushReadyWaiters(ok: boolean): void {

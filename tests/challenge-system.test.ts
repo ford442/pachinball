@@ -5,6 +5,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { ChallengeSystem } from '../src/replay/challenge-system'
+import { DEFAULT_TABLE_MAP_ID, TABLE_MAPS } from '../src/shaders/lcd-table'
 
 describe('ChallengeSystem & Share Link Utilities', () => {
   beforeEach(() => {
@@ -40,5 +41,12 @@ describe('ChallengeSystem & Share Link Utilities', () => {
     expect(active?.targetScore).toBe(150000)
     expect(active?.mapId).toBe('quantum-grid')
     system.dispose()
+  })
+
+  it('defaults a map-less challenge link to a real table map', () => {
+    expect(TABLE_MAPS[DEFAULT_TABLE_MAP_ID]).toBeDefined()
+    const active = new ChallengeSystem().checkUrlParameters('?challenge=7:1000')
+    expect(active?.mapId).toBe(DEFAULT_TABLE_MAP_ID)
+    expect(ChallengeSystem.createChallengeShareUrl(7, 1000)).toContain(`map=${DEFAULT_TABLE_MAP_ID}`)
   })
 })

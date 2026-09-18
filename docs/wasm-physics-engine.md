@@ -98,7 +98,8 @@ src/wasm/
 ├── physics-module-adventure.ts  Cylinder / sphere / mesh / mover / sensor / box body / force field
 ├── wasm-sim-engine.ts           WasmSimEngine interface (in-process engine + worker client)
 ├── physics-worker-protocol.ts   Worker command union + id shadow
-├── physics-worker-runtime.ts    applyPhysicsCommand / snapshot collection
+├── physics-worker-runtime.ts    applyPhysicsCommand / WorkerSnapshotPublisher
+├── physics-shared-layout.ts     Versioned SharedArrayBuffer snapshot layout (seqlock + contact ring)
 ├── physics-worker-client.ts     Main-thread PhysicsWorkerClient
 ├── physics-worker.ts            Dedicated Worker entry
 ├── contact-buffer.ts            Packed contact codec
@@ -343,7 +344,7 @@ Set via `localStorage['pachinball:physics-engine']`:
 | **WASM owner** (default) | `wasm-owner` or unset | WASM owns balls + static table geometry + **native hinge flippers** + adventure track geometry and gizmos; Rapier is not stepped (`lastRapierStepMs === 0`). |
 | **Rapier** | `rapier` (explicit) | Dev / degrade path: full Rapier simulation, and the fail-closed fallback when the WASM bundle is missing. Kept deliberately and covered by `tests/physics-degrade.spec.ts` and the fallback case in `tests/wasm-owner-adventure-cutover.spec.ts`. |
 | **WASM mirror** | `wasm-mirror` or legacy `wasm` | WASM steps ball+bumper subset; poses sync Rapier↔WASM each frame |
-| **WASM worker** | `wasm-worker` | Same ownership as `wasm-owner`, but `PhysicsWorld` runs in a Dedicated Worker. Snapshots arrive via `postMessage` + transferable `ArrayBuffer`s (**one physics frame of extra latency**). Worker construction / load failure falls back to in-process `wasm-owner`. The worker protocol carries cylinder / sphere / sensor / mover commands but not triangle mesh, box body or force field (#414), so tracks that need those fail the ownership gate there and step Rapier on the main thread. `tests/wasm-worker-api-parity.test.ts` keeps that gap list explicit. |
+| **WASM worker** | `wasm-worker` | Same ownership as `wasm-owner` — table **and** adventure tracks — but `PhysicsWorld` runs in a Dedicated Worker (**one physics frame of extra latency**). Snapshots arrive over a SharedArrayBuffer when the page is cross-origin isolated, otherwise as transferred `ArrayBuffer`s; see *Worker transport*. Worker construction / load failure falls back to in-process `wasm-owner`. `tests/wasm-worker-api-parity.test.ts` fails the build if an engine method has no worker command; `tests/physics-worker-shared-parity.test.ts` runs the worker path against real C++ and requires identical handles, poses and contacts. |
 
 Mirror mode remains a WASM parity path. Owner mode disables Rapier colliders for exported statics, bumpers, balls, **and flippers**. Each flipper is a dynamic WASM capsule with a world-anchored hinge (`PhysicsWorld::createHinge` / `setHingeMotor`). Pose is copied back onto the Rapier puppet for mesh interpolation only.
 
@@ -354,7 +355,7 @@ localStorage.setItem('pachinball:physics-engine', 'wasm-mirror')
 // Owner mode — production default (also: localStorage.removeItem(...))
 localStorage.setItem('pachinball:physics-engine', 'wasm-owner')
 
-// Worker mode — same as owner, C++ world off the main thread (Phase 1, no SAB)
+// Worker mode — same as owner, C++ world off the main thread
 localStorage.setItem('pachinball:physics-engine', 'wasm-worker')
 
 // Explicit Rapier override (removeItem now falls back to wasm-owner)
@@ -651,7 +652,7 @@ flicking tests; production flippers use hinges (above).
 | **2f – Adventure (#383)** | Movers, sensors, cylinders, spheres, meshes, force fields; every track owned by C++ | ✅ Done |
 | **3 – Decision** | Replace, not hybrid: `wasm-owner` is the production default | ✅ Done |
 | **4 – Rapier removal (#412)** | Migrate body handles off Rapier; drop `@dimforge/rapier3d-compat` from the player bundle | 🔜 Next |
-| **5 – Worker parity (#414)** | Worker commands for mesh / box body / force field | 🔜 Next |
+| **5 – Worker parity (#414)** | Worker commands for mesh / box body / force field; SAB snapshot transport gated on isolation | ✅ Done |
 
 ---
 
@@ -664,19 +665,80 @@ flicking tests; production flippers use hinges (above).
   release C++ memory back to the WASM heap.
 - `WasmPhysicsEngine.dispose()` calls `world.delete()` automatically.
 
-### Worker transport (#361 Phase 1)
+### Worker transport (#361, #414)
 
 `wasm-worker` instantiates `PhysicsModule` inside a Dedicated Worker
-(`src/wasm/physics-worker.ts`). The main thread queues commands and never
-blocks on `Atomics.wait`. Each `step()` posts a command batch; the worker
-copies transform + contact HEAP slices into **new** `ArrayBuffer`s and
-transfers them back. Visuals interpolate the **previous** snapshot (one
-frame of extra latency). Idle preload warms the worker instead of compiling
-the module on the main thread.
+(`src/wasm/physics-worker.ts`). The main thread never blocks: it queues
+commands, and each `step()` first reads whatever the worker last published,
+then posts the frame's command batch. Visuals therefore trail by one physics
+frame. Idle preload warms the worker instead of compiling the module on the
+main thread. `-pthread` / `PROXY_TO_PTHREAD` stay unused — the C++ world is
+single-threaded *inside* the worker, and its WASM memory is not shared.
 
-SharedArrayBuffer, a lock-free command ring, and COOP/COEP isolation headers
-are **not** in this phase. `-pthread` / `PROXY_TO_PTHREAD` remain unused: the
-C++ world is single-threaded *inside* the worker.
+**Commands (main → worker)** are the tagged `PhysicsWorkerCommand` union, one
+ordered `postMessage` batch per frame. Keeping a single ordered channel means a
+`createBody` can never be overtaken by the `applyImpulse` that names it. Mesh
+vertex / index arrays are copied at enqueue and transferred, not cloned.
+Handles are allocated on the main thread by `WasmIdShadow`, which mirrors every
+native id range (bodies, hinges, and the static families -1000 … -8000).
+
+**Snapshots (worker → main)** take one of two transports, chosen by
+`isCrossOriginIsolated()` (`src/config/physics.ts`):
+
+| | Cross-origin isolated | Not isolated (file://, embeds, header misconfig) |
+|---|---|---|
+| Transforms + hinge angles | Copied from HEAP into a SharedArrayBuffer under a seqlock | Copied into new `ArrayBuffer`s, transferred on `step-result` |
+| Contacts | SPSC ring in the same buffer (exactly once, in order) | Same `step-result` message |
+| Per-step allocation | None on either side (reader ping-pongs two staging buffers) | Three `ArrayBuffer`s per step |
+
+The client asks for shared transport with `use-shared-transport`; the worker
+allocates the buffer (it knows the slot count) and posts `shared-attach`. When a
+step outgrows the buffer — body ids are never reused, so transform slots only
+grow — the worker allocates one with doubled capacity and posts `shared-attach`
+again *before* writing to it; the client drains the old contact ring and then
+switches, so contact order survives. Past 64 MB, or if the client rejects the
+layout version, that step falls back to `step-result`. A snapshot older than one
+already applied is discarded (`staleSnapshots`).
+
+`PhysicsWorkerClient.getTransportStats()` reports the active transport and
+counts shared reads, `step-result` messages, attaches and stale snapshots;
+`tests/wasm-worker-adventure.spec.ts` asserts `postMessageSnapshots === 0` when
+isolated.
+
+#### Shared snapshot layout (v1)
+
+Defined in `src/wasm/physics-shared-layout.ts`; bump `SHARED_LAYOUT_VERSION`
+when anything below moves. All words are 4 bytes, little-endian.
+
+| Words | Type | Content |
+|-------|------|---------|
+| 0 | Int32 | `MAGIC` = `0x4c534250` ("PBSL") |
+| 1 | Int32 | `VERSION` = 1 — the reader refuses any other |
+| 2 | Int32 | `SEQ` — seqlock counter; odd while the worker is publishing |
+| 3 | Int32 | `STEP_COUNT` of the published snapshot |
+| 4 | Int32 | `TRANSFORM_FLOATS` in use |
+| 5 | Int32 | `HINGE_COUNT` in use |
+| 6 | Int32 | `CONTACT_HEAD` — advanced only by the main thread |
+| 7 | Int32 | `CONTACT_TAIL` — advanced only by the worker |
+| 8–10 | Int32 | Capacities: transform floats, hinge entries, contact records |
+| 11 | Int32 | `PUBLISH_COUNT` |
+| 12–15 | Int32 | Reserved |
+| 16–17 | Float32 | `alpha`, worker `stepMs` |
+| 18–19 | Float32 | Padding |
+| 20… | Float32 | Transforms, `TRANSFORM_STRIDE` (16) per body slot |
+| … | Float32 | Hinges: `id, angle` per entry |
+| … | Float32 | Contact ring: (capacity + 1) × `CONTACT_STRIDE` (12) |
+
+Transforms, hinges and the scalars are latest-wins: the reader copies them into
+its own staging buffers and keeps the copy only if `SEQ` was even and unchanged
+across it; otherwise it keeps the previous snapshot for another frame rather
+than retrying. Nobody calls `Atomics.wait` or `Atomics.notify` — the main thread
+polls once per `step()`, and the worker is driven by the command batch.
+
+A world step that runs no substeps (a frame shorter than the fixed timestep)
+publishes no contacts: native only refreshes its contact buffer when it
+substeps, so re-reading it would deliver the previous step's contacts twice.
+The in-process engine applies the same rule.
 
 ---
 

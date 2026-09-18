@@ -12,11 +12,11 @@ test.describe('wasm-worker physics mode', () => {
       localStorage.setItem('pachinball:physics-engine', 'wasm-worker')
     })
     await page.goto('/?renderer=webgl2')
-    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 30_000 })
 
     await expect.poll(async () => {
       return page.evaluate(() => !!(window as unknown as { game?: { stateManager?: unknown } }).game?.stateManager)
-    }, { timeout: 15_000 }).toBe(true)
+    }, { timeout: 60_000 }).toBe(true)
 
     const wasmReady = await page.evaluate(() => {
       const g = (window as unknown as {

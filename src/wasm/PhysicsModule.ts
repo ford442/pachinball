@@ -124,6 +124,13 @@ export class WasmPhysicsEngine {
   private world:  WasmPhysicsWorldInstance | null = null
   private eventBus: WasmContactEventBus | null = null
   private stepCount_ = 0
+  /**
+   * False after a step that ran no substeps. Native only flushes the contact
+   * buffer when it substeps, so without this a sub-fixed-step frame (any
+   * display faster than the fixed rate) would re-deliver the previous step's
+   * contacts — double-scoring every Enter.
+   */
+  private contactsFresh = false
   private unsubscribers: Array<() => void> = []
   private transformView: Float32Array | null = null
   private heapByteLength = 0
@@ -498,7 +505,9 @@ export class WasmPhysicsEngine {
   step(rawDt: number): number {
     if (!this.world) return 0
     const alpha = this.world.step(rawDt)
-    this.stepCount_ = this.world.getStepCount()
+    const stepCount = this.world.getStepCount()
+    this.contactsFresh = stepCount !== this.stepCount_
+    this.stepCount_ = stepCount
     this.transformView = null
     this.drainContactBuffer()
     return alpha
@@ -526,6 +535,28 @@ export class WasmPhysicsEngine {
     return 0
   }
 
+  /**
+   * Live HEAP view of the packed transforms. Valid until the next step or heap
+   * growth — the worker copies it straight into the shared snapshot buffer.
+   */
+  getTransformHeapView(): Float32Array | null {
+    return this.refreshTransformView()
+  }
+
+  /** Live HEAP view of this step's packed contacts; same lifetime as above. */
+  getContactHeapView(): { view: Float32Array; count: number } | null {
+    if (!this.world || !this.module || !this.contactsFresh) return null
+    const count = this.world.getContactCount()
+    if (count <= 0) return null
+    const heap = this.getHeapF32()
+    const ptr = this.world.getContactBufferPtr()
+    if (!heap || ptr === 0) return null
+    const start = ptr >> 2
+    const end = start + count * CONTACT_STRIDE
+    if (end > heap.length) return null
+    return { view: heap.subarray(start, end), count }
+  }
+
   /** Detached copy of the packed transform HEAP (worker → main transfer). */
   copyTransformBuffer(): ArrayBuffer {
     const view = this.refreshTransformView()
@@ -537,7 +568,7 @@ export class WasmPhysicsEngine {
 
   /** Detached copy of the packed contact HEAP. */
   copyContactBuffer(): { buffer: ArrayBuffer; count: number } {
-    if (!this.world || !this.module) return { buffer: new ArrayBuffer(0), count: 0 }
+    if (!this.world || !this.module || !this.contactsFresh) return { buffer: new ArrayBuffer(0), count: 0 }
     const count = this.world.getContactCount()
     if (count <= 0) return { buffer: new ArrayBuffer(0), count: 0 }
     const heap = this.getHeapF32()
@@ -564,6 +595,8 @@ export class WasmPhysicsEngine {
     this.eventBus = null
     this.transformView = null
     this.heapByteLength = 0
+    this.stepCount_ = 0
+    this.contactsFresh = false
   }
 
   // ---- Internal --------------------------------------------------------
@@ -600,7 +633,7 @@ export class WasmPhysicsEngine {
   }
 
   private drainContactBuffer(): void {
-    if (!this.world || !this.module) return
+    if (!this.world || !this.module || !this.contactsFresh) return
     const count = this.world.getContactCount()
     if (count <= 0) return
 

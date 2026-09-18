@@ -41,14 +41,11 @@ export interface WasmSimEngine {
   ): number
 
   /**
-   * Adventure geometry. Optional because only the in-process engine
-   * implements it — the worker client's id allocator does not yet mirror
-   * these handle ranges, so `wasm-worker` cannot own an adventure track.
-   * Callers must feature-detect rather than assume; see
-   * `wasm-adventure-export.ts`, which reports unsupported geometry instead
-   * of dropping it silently.
+   * Adventure geometry. Both the in-process engine and the worker client
+   * implement all of it; the client mirrors every native handle range in
+   * `WasmIdShadow` (tests/wasm-worker-api-parity.test.ts locks the surface).
    */
-  addStaticCylinder?(
+  addStaticCylinder(
     center: { x: number; y: number; z: number },
     radius: number,
     halfHeight: number,
@@ -56,20 +53,20 @@ export interface WasmSimEngine {
     restitution?: number,
     friction?: number
   ): number
-  addStaticSphere?(
+  addStaticSphere(
     center: { x: number; y: number; z: number },
     radius: number,
     restitution?: number,
     friction?: number
   ): number
-  addStaticTriangleMesh?(
+  addStaticTriangleMesh(
     vertices: Float32Array,
     indices: Uint32Array,
     restitution?: number,
     friction?: number,
     doubleSided?: boolean
   ): number
-  addKinematicMover?(
+  addKinematicMover(
     position: { x: number; y: number; z: number },
     halfExtents: { x: number; y: number; z: number },
     rotation?: { x: number; y: number; z: number; w: number },
@@ -77,28 +74,28 @@ export interface WasmSimEngine {
     friction?: number,
     shape?: WasmVolumeShape
   ): number
-  setNextKinematicTransform?(
+  setNextKinematicTransform(
     moverId: number,
     position: { x: number; y: number; z: number },
     rotation: { x: number; y: number; z: number; w: number }
   ): void
-  addSensorVolume?(
+  addSensorVolume(
     center: { x: number; y: number; z: number },
     halfExtents: { x: number; y: number; z: number },
     rotation?: { x: number; y: number; z: number; w: number },
     shape?: WasmVolumeShape
   ): number
-  createBoxBody?(desc: WasmBoxBodyDesc): number
-  addForceField?(desc: WasmForceFieldDesc): number
-  setForceFieldEnabled?(fieldId: number, enabled: boolean): void
-  setForceFieldVector?(fieldId: number, fx: number, fy: number, fz: number): void
-  setCollisionGroups?(id: number, membership: number, filter: number): void
+  createBoxBody(desc: WasmBoxBodyDesc): number
+  addForceField(desc: WasmForceFieldDesc): number
+  setForceFieldEnabled(fieldId: number, enabled: boolean): void
+  setForceFieldVector(fieldId: number, fx: number, fy: number, fz: number): void
+  setCollisionGroups(id: number, membership: number, filter: number): void
   /**
    * Drop every static/kinematic collider and force field, invalidating all
    * negative handles. The caller must re-export whatever it still needs — an
    * adventure track switch replaces the entire static world.
    */
-  clearStaticGeometry?(): void
+  clearStaticGeometry(): void
 
   createBody(desc?: WasmBodyDesc): number
   removeBody(id: number): void

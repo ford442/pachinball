@@ -4,7 +4,11 @@
  */
 
 import { WasmPhysicsEngine } from './PhysicsModule'
-import { applyPhysicsCommand, collectStepSnapshot, createWorkerRuntimeState } from './physics-worker-runtime'
+import {
+  applyPhysicsCommand,
+  createWorkerRuntimeState,
+  WorkerSnapshotPublisher,
+} from './physics-worker-runtime'
 import type { PhysicsWorkerFromWorker, PhysicsWorkerToWorker } from './physics-worker-protocol'
 
 const engine = new WasmPhysicsEngine()
@@ -13,6 +17,8 @@ const runtime = createWorkerRuntimeState()
 function post(msg: PhysicsWorkerFromWorker, transfer: Transferable[] = []): void {
   self.postMessage(msg, transfer)
 }
+
+const publisher = new WorkerSnapshotPublisher(post)
 
 async function handleInit(bundleUrl: string): Promise<void> {
   try {
@@ -37,6 +43,11 @@ self.onmessage = (event: MessageEvent<PhysicsWorkerToWorker>) => {
     return
   }
 
+  if (data.type === 'use-shared-transport') {
+    publisher.requestShared()
+    return
+  }
+
   if (data.type !== 'batch') return
 
   let alpha = 0
@@ -52,19 +63,5 @@ self.onmessage = (event: MessageEvent<PhysicsWorkerToWorker>) => {
 
   if (!stepped) return
 
-  const stepMs = performance.now() - t0
-  const snap = collectStepSnapshot(engine, runtime, alpha, stepMs)
-  post(
-    {
-      type: 'step-result',
-      alpha: snap.alpha,
-      stepCount: snap.stepCount,
-      stepMs: snap.stepMs,
-      transformBuffer: snap.transformBuffer,
-      contactBuffer: snap.contactBuffer,
-      contactCount: snap.contactCount,
-      hingeBuffer: snap.hingeBuffer,
-    },
-    [snap.transformBuffer, snap.contactBuffer, snap.hingeBuffer],
-  )
+  publisher.publish(engine, runtime, alpha, performance.now() - t0)
 }

@@ -235,6 +235,16 @@ describe('WasmPhysicsEngine', () => {
       started: true,
       isEntering: true,
     })
+
+    // A step with no substeps leaves native's contact buffer untouched; it
+    // must not re-deliver the same contacts (a >60 Hz frame would double-score).
+    received = null
+    engine.step(1 / 240)
+    expect(received).toBeNull()
+
+    worldStub.getStepCount.mockReturnValue(11)
+    engine.step(1 / 60)
+    expect(received).not.toBeNull()
   })
 
   it('getDroppedContactCount surfaces the WASM cap counter', async () => {
