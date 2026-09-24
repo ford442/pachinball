@@ -13,15 +13,21 @@
   :root { --touch-controls-height: 120px; }
 }
 
-@media (max-height: 500px) and (max-width: 768px) {
+@media (max-height: 500px) and (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
   :root { --touch-controls-height: 100px; }
 }
 
-/* Hide on larger screens (desktop) */
-@media (min-width: 769px) {
+/* Hide on desktop: wide AND mouse-driven. Width alone hid the controls on
+   phones in landscape (Pixel 7 is 915px wide). */
+@media (min-width: 769px) and (pointer: fine) {
   #touch-controls {
     display: none;
   }
+}
+
+/* Touch controls overlap the menu buttons; the menu has its own Start. */
+#menu-overlay:not(.hidden) ~ #touch-controls {
+  display: none;
 }
 
 /* Tablet adjustments */
@@ -95,7 +101,7 @@
 }
 
 /* Landscape mode on mobile - make buttons shorter */
-@media (max-height: 500px) and (max-width: 768px) {
+@media (max-height: 500px) and (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
   #touch-controls {
     height: 100px;
     padding: 0 20px 10px 20px;

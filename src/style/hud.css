@@ -39,6 +39,16 @@
 }
 .hidden { display: none !important; }
 
+/* The menu grew a "Today's machine" panel; on short viewports (720p, phones
+   where the cabinet box is ~390px tall) its content is taller than the
+   overlay. Scroll instead of clipping, and keep the top reachable. */
+#menu-overlay {
+  justify-content: safe center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#menu-overlay > * { flex-shrink: 0; }
+
 h1 {
   font-size: 3rem;
   color: transparent;

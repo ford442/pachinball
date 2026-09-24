@@ -24,10 +24,8 @@ test.describe('Basic Gameplay Physics Smoke', () => {
     }).toBe(true);
 
     // 2. Click START GAME and poll until state becomes PLAYING
-    await page.evaluate(() => {
-      document.getElementById('start-btn')?.click();
-    });
-    await page.waitForTimeout(500); // give click handler a moment to fire
+    // Real pointer click: fails if anything (selectors, touch controls) covers the button.
+    await page.locator('#start-btn').click();
 
     // Poll for PLAYING state (up to 10s) — WASM physics init can vary
     await expect.poll(async () => {
