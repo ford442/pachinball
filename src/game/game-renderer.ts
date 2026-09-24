@@ -19,6 +19,10 @@ import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
+import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader'
+import type { ISceneLoaderPlugin, ISceneLoaderPluginAsync } from '@babylonjs/core/Loading/sceneLoader'
+import type { Observer } from '@babylonjs/core/Misc/observable'
+import type { Material } from '@babylonjs/core/Materials/material'
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation'
 import { EngineInstrumentation } from '@babylonjs/core/Instrumentation/engineInstrumentation'
 import {
@@ -39,6 +43,12 @@ import {
   type AccessibilityConfig,
 } from '../game-elements'
 import { getMaterialLibrary, detectQualityTier } from '../materials'
+import {
+  clampMaterialLights,
+  computeWebGLLightBudget,
+  DEFAULT_LIGHT_BUDGET,
+  type LightCappedMaterial,
+} from '../materials/light-budget'
 import type { EventBus } from '../core/event-bus'
 
 export interface RendererHost {
@@ -78,6 +88,7 @@ export class GameRenderer {
   private _sceneOptimizer: SceneOptimizer | null = null
   private _lastResizeWidth = 0
   private _lastResizeHeight = 0
+  private _lightBudgetTeardown: (() => void) | null = null
 
   constructor(host: RendererHost) {
     this.host = host
@@ -120,6 +131,8 @@ export class GameRenderer {
   setupLighting(): void {
     const { scene, qualityTier } = this.host
     if (!scene) return
+
+    this.installWebGLLightBudget()
 
     // Environment lighting
     this.setupEnvironmentLighting()
@@ -433,7 +446,59 @@ export class GameRenderer {
     this.host.engineInstrumentation = null
   }
 
+  /**
+   * WebGL only: keep every material's `maxSimultaneousLights` within the
+   * uniform-block budget (see materials/light-budget.ts). Babylon's glTF
+   * loader raises it to `scene.lights.length` on all scene materials after
+   * each load, which overflows GL_MAX_*_UNIFORM_BLOCKS and breaks every
+   * effect compile. Re-clamp on new materials and whenever a glTF loader
+   * changes state (READY fires synchronously right after that raise, before
+   * the next render). WebGPU is deliberately left untouched.
+   */
+  private installWebGLLightBudget(): void {
+    const { engine, scene } = this.host
+    if (engine.isWebGPU || this._lightBudgetTeardown) return
+
+    const webgl = engine as Engine
+    let budget = DEFAULT_LIGHT_BUDGET
+    if (webgl.supportsUniformBuffers && webgl._gl) {
+      const gl = webgl._gl
+      budget = computeWebGLLightBudget(
+        gl.getParameter(gl.MAX_VERTEX_UNIFORM_BLOCKS) as number,
+        gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_BLOCKS) as number,
+      )
+    }
+
+    const clampAll = (): void => { clampMaterialLights(scene.materials as LightCappedMaterial[], budget) }
+    clampAll()
+
+    const materialObserver = scene.onNewMaterialAddedObservable.add((material: Material) => {
+      clampMaterialLights([material as LightCappedMaterial], budget)
+    })
+
+    type StatefulLoader = { onLoaderStateChangedObservable?: { add(cb: () => void): unknown; remove(o: unknown): boolean } }
+    const loaderObservers: Array<[StatefulLoader, unknown]> = []
+    const pluginObserver: Observer<ISceneLoaderPlugin | ISceneLoaderPluginAsync> =
+      SceneLoader.OnPluginActivatedObservable.add((plugin) => {
+        const loader = plugin as unknown as StatefulLoader
+        const observable = loader.onLoaderStateChangedObservable
+        if (!observable) return
+        loaderObservers.push([loader, observable.add(clampAll)])
+      })
+
+    this._lightBudgetTeardown = () => {
+      scene.onNewMaterialAddedObservable.remove(materialObserver)
+      SceneLoader.OnPluginActivatedObservable.remove(pluginObserver)
+      for (const [loader, observer] of loaderObservers) {
+        loader.onLoaderStateChangedObservable?.remove(observer)
+      }
+    }
+  }
+
   dispose(): void {
+    this._lightBudgetTeardown?.()
+    this._lightBudgetTeardown = null
+
     this.postProcess.dispose()
 
     this._sceneOptimizer?.dispose()
