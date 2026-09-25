@@ -1,6 +1,6 @@
 # Cabinet glTF Pipeline
 
-Classic cabinet shells can load from **glTF 2.0** (`.glb`) with a procedural fallback. Playfield **Rapier colliders stay code-authored** — never mesh-collide high-poly art.
+Classic cabinet shells can load from **glTF 2.0** (`.glb`) with a procedural fallback. Playfield colliders stay **code-authored / WASM descriptors** — never mesh-collide high-poly art.
 
 ## Asset layout
 
@@ -81,8 +81,9 @@ with simple fallback).
 
 **Pilot wiring:** `PrismCoreFeeder`, `MagSpinFeeder`, and `NanoLoomFeeder` each call
 `loadInsertGltf(tier)` to overlay `public/models/inserts/<toy-id>/{simple,high}.glb`
-and hide procedural meshes when load succeeds. Rapier colliders remain in the
-feeder `createPhysics()` methods — never derive gameplay colliders from insert art.
+and hide procedural meshes when load succeeds. Colliders remain code-authored / WASM
+descriptors in the feeder `createPhysics()` methods — never derive gameplay colliders
+from insert art.
 
 | Node name (substring) | Toy | Purpose |
 |-----------------------|-----|---------|
