@@ -3,6 +3,7 @@
  */
 
 import { apiFetch } from '../config'
+import { randomU32Seed } from '../core/seeded-rng'
 import { DEFAULT_TABLE_MAP_ID } from '../shaders/lcd-table'
 
 export interface ChallengeConfig {
@@ -42,7 +43,8 @@ export class ChallengeSystem {
       } else {
         // Single challenge ID
         const targetScore = targetParam ? parseInt(targetParam, 10) : 100000
-        const seed = seedParam ? parseInt(seedParam, 10) : Math.floor(Math.random() * 1000000)
+        // No ?seed=: a fresh u32 from the session entropy source, never Math.random.
+        const seed = seedParam ? parseInt(seedParam, 10) >>> 0 : randomU32Seed()
         this.activeChallenge = { id: challengeParam, seed, targetScore, mapId: mapParam }
       }
     } else if (seedParam) {

@@ -5,11 +5,14 @@
 
 import type { InputFrame } from '../game-elements/types'
 import type { ReplayPayload } from './replay-recorder'
+import type { ReplayWorldFingerprint } from './replay-snapshot'
 
 export class ReplayRunner {
   private payload: ReplayPayload | null = null
   private currentFrameIndex = 0
   private playing = false
+  /** True from load()/reset() until the first replayed step has checked the frame-0 snapshot. */
+  private snapshotPending = false
 
   /**
    * Load a replay payload and arm it for playback.
@@ -18,6 +21,24 @@ export class ReplayRunner {
     this.payload = payload
     this.currentFrameIndex = 0
     this.playing = true
+    this.snapshotPending = true
+  }
+
+  /**
+   * The recording's world fingerprint, exactly once per playback: the
+   * physics step that replays frame 0 restores / verifies it before stepping.
+   */
+  takeSnapshotCheck(): ReplayWorldFingerprint | null {
+    if (!this.snapshotPending || !this.payload) return null
+    this.snapshotPending = false
+    const p = this.payload
+    return {
+      snapshotVersion: p.snapshotVersion,
+      staticHash: p.staticHash,
+      pinFieldOccupancy: p.pinFieldOccupancy,
+      feederTunablesHash: p.feederTunablesHash,
+      initialSnapshot: p.initialSnapshot,
+    }
   }
 
   isPlaying(): boolean {
@@ -57,6 +78,7 @@ export class ReplayRunner {
   reset(): void {
     this.currentFrameIndex = 0
     this.playing = this.payload !== null
+    this.snapshotPending = this.playing
   }
 
   stop(): void {

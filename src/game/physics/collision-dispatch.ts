@@ -24,6 +24,7 @@ import type { LaneSensorDef } from '../../objects/object-lane-sensors'
 import { ContactPhase, contactStarted, type PhysicsContact, type WasmContactEvent } from '../../wasm'
 
 import type { PhysicsHost } from './types'
+import { FIXED_TIMESTEP } from '../../game-elements/physics'
 import type { ScoringBridge } from './scoring-bridge'
 
 /** Maps WASM contact ids onto bodies and dispatch keys. */
@@ -87,6 +88,7 @@ export class CollisionDispatcher {
   private knownObstacleMatches = 0
   private bumperMatches = 0
 
+  /** One fixed physics step (1000 / 60 ≈ 16.7 ms) passes; a same-step repeat does not. */
   private static readonly COLLISION_DEBOUNCE_MS = 16
   /** Minimum contact force to trigger visual effects */
   private static readonly CONTACT_FORCE_THRESHOLD = 5
@@ -286,9 +288,8 @@ export class CollisionDispatcher {
 
     // First debounce in collider-handle space (the raw event index space).
     const colliderPairKey = h1 < h2 ? `${h1}_${h2}` : `${h2}_${h1}`
-    const now = performance.now()
-    const lastColliderTime = this.lastColliderCollisionTime.get(colliderPairKey) || 0
-    if (now - lastColliderTime < CollisionDispatcher.COLLISION_DEBOUNCE_MS) return
+    const now = this.debounceClockMs()
+    if (CollisionDispatcher.debounced(this.lastColliderCollisionTime.get(colliderPairKey), now)) return
     this.lastColliderCollisionTime.set(colliderPairKey, now)
 
     const world = this.host.physics.getWorld()
@@ -309,6 +310,26 @@ export class CollisionDispatcher {
     if (b1.isFixed() && b2.isFixed()) return
 
     this.processBodyCollision(b1, b2, bh1, bh2)
+  }
+
+  /**
+   * Simulation time for the pair debounce, in ms: fixed steps taken × the fixed
+   * step. Wall-clock time would make scoring depend on how fast the frames were
+   * rendered — a replay verified headless (or a snapshot fast-forward, #422)
+   * would debounce different hits than the live run did. Contacts are
+   * dispatched after their step is counted, so one step's contacts share a stamp.
+   * Hosts without a step counter (unit-test stubs) fall back to wall time.
+   */
+  private debounceClockMs(): number {
+    const physics = this.host.physics as Partial<PhysicsHost['physics']>
+    const wasm = physics.isWasmOwnerMode?.() ? physics.getWasmEngine?.() : null
+    const steps = wasm ? wasm.getStepCount() : physics.getStepCount?.()
+    return typeof steps === 'number' ? steps * FIXED_TIMESTEP * 1000 : performance.now()
+  }
+
+  /** A clock that went backwards (snapshot rewind, new world) never debounces. */
+  private static debounced(last: number | undefined, now: number): boolean {
+    return last !== undefined && now >= last && now - last < CollisionDispatcher.COLLISION_DEBOUNCE_MS
   }
 
   /**
@@ -343,9 +364,8 @@ export class CollisionDispatcher {
     this.rawCollisionEvents++
 
     const pairKey = bh1 < bh2 ? `${bh1}_${bh2}` : `${bh2}_${bh1}`
-    const now = performance.now()
-    const lastTime = this.lastCollisionTime.get(pairKey) || 0
-    if (now - lastTime < CollisionDispatcher.COLLISION_DEBOUNCE_MS) return
+    const now = this.debounceClockMs()
+    if (CollisionDispatcher.debounced(this.lastCollisionTime.get(pairKey), now)) return
     this.lastCollisionTime.set(pairKey, now)
 
     this.processCollisionBodies(b1, b2, bh1, bh2)

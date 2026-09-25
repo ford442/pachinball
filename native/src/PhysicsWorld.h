@@ -14,6 +14,7 @@
 #include "TriangleMesh.h"
 #include "ForceField.h"
 #include "PinField.h"
+#include "Snapshot.h"
 
 #include <vector>
 #include <cstdint>
@@ -258,6 +259,34 @@ public:
   float getHingeAngle(int id) const;
   void  removeHinge(int id);
 
+  // ---- Snapshots (Snapshot.cpp) ----------------------------------------
+  /**
+   * Versioned little-endian blob of the full solver state — see Snapshot.h
+   * for what is (and deliberately is not) in it. Taken between `step()`
+   * calls; pending `setNextKinematicTransform` targets are included.
+   */
+  std::vector<uint8_t> serialize() const;
+
+  /**
+   * Restore a `serialize()` blob. Validates everything before touching the
+   * world: on any status other than `Ok` the world is left exactly as it was.
+   * Refuses (`StaticMismatch`) a snapshot of a differently built table.
+   * On success the packed transform buffer is re-scattered, so JS reads the
+   * restored poses without stepping; the contact buffer is empty until the
+   * next step.
+   */
+  SnapshotStatus restore(const uint8_t* data, std::size_t size);
+
+  /**
+   * FNV-1a 64 over every static collider's geometry and material, in handle
+   * order (group masks, mover poses and force-field vectors are runtime
+   * state, snapshotted instead of hashed).
+   */
+  uint64_t staticContentHash() const;
+
+  /** Contact flushes so far (ContactListener::generation). */
+  uint64_t getContactGeneration() const { return contactListener_.generation(); }
+
   /** Static shapes refused because their family hit STATIC_HANDLE_CAPACITY. */
   int getDroppedStaticCount() const { return droppedStatics_; }
 
@@ -298,6 +327,8 @@ private:
 
   void substep(float dt);
   void solveHinges(float dt);
+  /** Per-family static counts in Snapshot.h header order. */
+  void staticCounts(uint32_t out[SNAPSHOT_STATIC_FAMILIES]) const;
   void scatterTransforms();
 
   void ensureTransformCapacity(int slotCount);

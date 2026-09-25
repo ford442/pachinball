@@ -10,6 +10,7 @@ import type { TrackBuilder } from '../track-builder'
 import { convexMeshDesc, cylinderDesc } from '../track-collider-descriptors'
 import { triangularPrismLayout } from '../track-geometry'
 import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import { getLayoutRng } from '../../core/seeded-rng'
 
 export function buildPrismPathway(builder: TrackBuilder): void {
   const glassMat = (builder as unknown as { getTrackPBRMaterial: (hex: string) => import('@babylonjs/core/Materials/PBR/pbrMaterial').PBRMaterial }).getTrackPBRMaterial("#E0FFFF")
@@ -46,16 +47,18 @@ export function buildPrismPathway(builder: TrackBuilder): void {
     const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
     const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
 
+    // Prisms are colliders: seeded, so a replay rebuilds the same field.
+    const layout = getLayoutRng('track:prism-pathway')
     for (let i = 0; i < prismCount; i++) {
-      const dist = 3 + Math.random() * (fieldLen - 6)
-      const offset = (Math.random() - 0.5) * (fieldWidth - 2)
+      const dist = 3 + layout.next() * (fieldLen - 6)
+      const offset = (layout.next() - 0.5) * (fieldWidth - 2)
 
       const pos = fieldStart.add(forward.scale(dist)).add(right.scale(offset))
       pos.y += prismHeight / 2
 
       const prism = MeshBuilder.CreateCylinder("prism", { diameter: prismRadius * 2, height: prismHeight, tessellation: 3 }, scene)
       prism.position.copyFrom(pos)
-      prism.rotation.y = Math.random() * Math.PI * 2
+      prism.rotation.y = layout.next() * Math.PI * 2
       prism.material = glassMat
       adventureTrack.push(prism)
 

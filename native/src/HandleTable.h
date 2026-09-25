@@ -11,6 +11,9 @@ namespace pachinball {
  */
 class HandleTable {
 public:
+  /** Snapshot.cpp restores slots + the id counter verbatim (ids must not be reissued). */
+  friend struct SnapshotAccess;
+
   struct Slot {
     int      denseIndex = -1;
     uint16_t generation = 0;

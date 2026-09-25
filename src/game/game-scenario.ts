@@ -15,6 +15,7 @@ import type { AdventureManager } from './game-adventure'
 import type { TableMapManager } from './game-maps'
 import { getScenario, getZoneConfig, ZoneTriggerSystem as ZoneTriggerSystemClass } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
+import { getLayoutRng } from '../core/seeded-rng'
 import { resolveVideoUrl } from './game-utils'
 import { TABLE_MAPS } from '../shaders/lcd-table'
 import type { DynamicScenario, ScenarioZone, WorldZone, ZoneMechanic } from '../game-elements'
@@ -299,12 +300,14 @@ export class GameScenario {
   private generateZoneMechanics(zoneIndex: number, startZ: number, endZ: number): ZoneMechanic[] {
     const mechanics: ZoneMechanic[] = []
     const count = 3 + zoneIndex
+    // Bumpers / targets spawned here are colliders: seeded per zone.
+    const layout = getLayoutRng(`scenario-zone:${zoneIndex}`)
     for (let i = 0; i < count; i++) {
       const z = startZ + (endZ - startZ) * ((i + 1) / (count + 1))
-      const x = (Math.random() - 0.5) * 8
+      const x = (layout.next() - 0.5) * 8
       const types: Array<'bumper' | 'target' | 'collectible'> = ['bumper', 'target', 'collectible']
       mechanics.push({
-        type: types[Math.floor(Math.random() * types.length)],
+        type: layout.pick(types),
         position: new Vector3(x, 0.5, -z),
       })
     }

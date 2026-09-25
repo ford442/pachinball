@@ -3,7 +3,7 @@
  * Unit tests for ChallengeSystem & URL share link parsing/generation.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { ChallengeSystem } from '../src/replay/challenge-system'
 import { DEFAULT_TABLE_MAP_ID, TABLE_MAPS } from '../src/shaders/lcd-table'
 
@@ -48,5 +48,18 @@ describe('ChallengeSystem & Share Link Utilities', () => {
     const active = new ChallengeSystem().checkUrlParameters('?challenge=7:1000')
     expect(active?.mapId).toBe(DEFAULT_TABLE_MAP_ID)
     expect(ChallengeSystem.createChallengeShareUrl(7, 1000)).toContain(`map=${DEFAULT_TABLE_MAP_ID}`)
+  })
+
+  it('a challenge id without ?seed= draws a u32 from the entropy source, never Math.random (#422)', () => {
+    const random = vi.spyOn(Math, 'random')
+    const active = new ChallengeSystem().checkUrlParameters('?challenge=abc123')
+    expect(random).not.toHaveBeenCalled()
+    random.mockRestore()
+    expect(active?.id).toBe('abc123')
+    expect(Number.isInteger(active?.seed)).toBe(true)
+    expect(active!.seed).toBeGreaterThanOrEqual(0)
+    expect(active!.seed).toBeLessThanOrEqual(0xffffffff)
+    // An explicit seed still wins, normalised to u32 like the session RNG does.
+    expect(new ChallengeSystem().checkUrlParameters('?challenge=abc123&seed=12345')?.seed).toBe(12345)
   })
 })

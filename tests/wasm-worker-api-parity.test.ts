@@ -43,6 +43,8 @@ const isNonMutating = (name: string) =>
  */
 const KNOWN_WORKER_GAPS: Record<string, string> = {
   setMaxContacts: 'owner/mirror tuning only; the worker keeps the C++ default',
+  serializeSnapshot: 'in-process only (#422): a blob needs a request/reply the batch protocol lacks',
+  restoreSnapshot: 'in-process only (#422): replay verification runs on the owner world',
 }
 
 /** Embind functions exposed under a different wrapper name. */

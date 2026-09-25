@@ -168,6 +168,9 @@ jobs:
       - name: Pin field TS resolver vs compiled bundle
         run: RUN_WASM_PARITY=1 WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npx vitest run tests/pin-field-wasm.test.ts
 
+      - name: Replay from a C++ snapshot on the compiled bundle (#422)
+        run: RUN_WASM_PARITY=1 WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npx vitest run tests/replay-snapshot-wasm.test.ts
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
@@ -181,3 +184,4 @@ jobs:
           tests/wasm-owner-adventure.spec.ts
           tests/wasm-owner-capture.spec.ts
           tests/wasm-owner-pin-field.spec.ts
+          tests/replay-seed-determinism.spec.ts

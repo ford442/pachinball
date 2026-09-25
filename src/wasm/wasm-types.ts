@@ -21,6 +21,26 @@ export const STATIC_HANDLE_OVERFLOW = 0x7FFFFFFF
 // Enums
 // ---------------------------------------------------------------------------
 
+/** Mirrors native `SNAPSHOT_VERSION` (native/src/Snapshot.h). Recorded in replay metadata. */
+export const WASM_SNAPSHOT_VERSION = 1
+
+/**
+ * `restoreSnapshot` result — mirrors native `SnapshotStatus` (Snapshot.h), plus
+ * `Unsupported` for an engine that cannot snapshot (an old bundle, the worker).
+ * Anything but `Ok` leaves the world exactly as it was.
+ */
+export const WasmSnapshotStatus = {
+  Unsupported: -1,
+  Ok: 0,
+  BadMagic: 1,
+  BadVersion: 2,
+  Truncated: 3,
+  /** The snapshot was taken on a differently built table (static hash / counts). */
+  StaticMismatch: 4,
+  Corrupt: 5,
+} as const
+export type WasmSnapshotStatus = (typeof WasmSnapshotStatus)[keyof typeof WasmSnapshotStatus]
+
 /** Mirrors the C++ BodyType enum. */
 export const enum BodyType {
   Dynamic   = 0,
@@ -423,6 +443,23 @@ export interface WasmPhysicsWorldInstance {
       phase: number
     ) => void
   ): void
+
+  /**
+   * Versioned little-endian world snapshot (native/src/Snapshot.h): bodies,
+   * handles, hinges, movers, fields, group masks, kinematic targets and the
+   * contact manifold. A fresh copy — safe to keep across steps.
+   * Optional: bundles before #422 do not export it.
+   */
+  serializeSnapshot?(): Uint8Array
+
+  /** Restore a `serializeSnapshot()` blob; returns a `WasmSnapshotStatus` code. */
+  restoreSnapshot?(bytes: Uint8Array): number
+
+  /** FNV-1a 64 of the static table, 16 hex chars — equal iff snapshots are interchangeable. */
+  getStaticContentHash?(): string
+
+  /** Contact flushes so far (restored with the snapshot). */
+  getContactGeneration?(): number
 
   /** Release the C++ object. Must be called when done to avoid WASM memory leaks. */
   delete(): void

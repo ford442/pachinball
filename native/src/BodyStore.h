@@ -73,6 +73,8 @@ private:
 class BodyStore {
 public:
   friend class BodyView;
+  /** Snapshot.cpp dumps / reloads every SoA column verbatim. */
+  friend struct SnapshotAccess;
 
   int create(HandleTable& handles, const RigidBodyDesc& desc);
   bool remove(HandleTable& handles, int publicId);

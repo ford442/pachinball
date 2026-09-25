@@ -89,6 +89,8 @@ native/
 │   ├── ContactListener.h        Contact-event queue + packed contact buffer
 │   ├── PhysicsWorld.h / .cpp    Simulation world: bodies, colliders, handle ranges
 │   ├── PhysicsWorldStep.cpp     step() / substep(): integration, broadphase, solver loop, transform scatter
+│   ├── Snapshot.h / .cpp        serialize() / restore(): versioned LE world snapshot + static hash (#422)
+│   ├── SnapshotCodec.cpp        Little-endian word writer / reader + FNV-1a hasher for snapshots
 │   └── bindings.cpp             EMSCRIPTEN_BINDINGS (Embind) — Emscripten only
 └── tests/                       Catch2 (native build only)
     ├── physics_world_test.cpp   Integration, contacts, broadphase, sleep, benchmark
@@ -101,6 +103,7 @@ native/
     ├── kinematic_body_test.cpp  Runtime body type: capture, steer, release (#420)
     ├── cone_test.cpp            Static cone: apex / slant / base / inside / groups (#420)
     ├── pin_field_test.cpp       Pin field: 12×12 fall-through, keep-out, mask, dropout, parity, handle cap (#421)
+    ├── snapshot_test.cpp        World snapshot: rewind / fresh-table restore bit-exact, manifold, mismatch, malformed (#422)
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
@@ -590,6 +593,10 @@ Test scenarios (friction and hinge cases live in `hinge_friction_test.cpp`):
 | `a keep-out AABB holds no pin` / `an occupancy mask punches a hole` (`pin_field_test.cpp`) | Lattice resolution rules shared with `src/core/pin-field.ts` |
 | `a pin field steps like the same pins added one cylinder at a time` (`pin_field_test.cpp`) | Field ≡ `addStaticCylinder` loop |
 | `four dense fields plus table statics fit without dropping a handle` (`pin_field_test.cpp`, + rotated / groups / capacity / dropout) | One handle per field; family capacity and reset |
+| `snapshot rewind reproduces the run bit-for-bit` / `snapshot restores into a freshly built table` (`snapshot_test.cpp`) | serialize → restore → 90 steps: every pose, velocity, hinge angle and contact event identical; the window hits the mover, pins, hinge and sensor |
+| `restored manifold does not re-fire Enter for resting contacts` (`snapshot_test.cpp`) | Contact manifold + flush generation survive restore |
+| `snapshot refuses a differently built table…` / `…rejects malformed blobs…` (`snapshot_test.cpp`) | `StaticMismatch` / `BadMagic` / `BadVersion` / `Truncated` / `Corrupt`, world untouched |
+| `hinge angle uses a libm-independent atan2` (`snapshot_test.cpp`) | Native (glibc) and WASM (musl) hinge maths agree bit-for-bit |
 
 Parity suite (native Catch2 + compiled WASM bundle):
 
@@ -824,6 +831,9 @@ no Rapier world on the owner path (Debug HUD `rapier ms` /
 `lastRapierStepMs === 0`); Rapier only exists on the explicit `rapier` override
 or the missing-bundle fallback.
 
+The hinge angle is `2·atan2(sinHalf, w)` of the rest-relative rotation, via a
+portable `atan2` (HingeJoint.cpp) so native and WASM agree bit-for-bit (#422).
+
 Dynamic capsules now report isotropic inertia (averaged cylinder) so the hinge
 can apply motor torque. Capsule-vs-capsule collision remains skipped.
 
@@ -865,6 +875,54 @@ flicking tests; production flippers use hinges (above).
 | **3 – Decision** | Replace, not hybrid: `wasm-owner` is the production default | ✅ Done |
 | **4 – Rapier removal (#412)** | Builders author through `PhysicsApi`; `WasmTableWorld` / WASM-id identity; no Rapier module or `World` on the owner boot; rapier chunk lazy and out of the PWA precache | ✅ Done |
 | **5 – Worker parity (#414)** | Worker commands for mesh / box body / force field; SAB snapshot transport gated on isolation | ✅ Done |
+
+---
+
+## World snapshots (#422)
+
+`native/src/Snapshot.{h,cpp}` adds `PhysicsWorld::serialize()` / `restore()`:
+a flat run of little-endian 32-bit words (float32 bit patterns, int32/uint32;
+u64 counters as lo, hi) with an explicit magic (`PBSN`), version word and
+total length.
+
+| In the blob | Not in the blob |
+|-------------|-----------------|
+| Step counter, accumulator, world params (gravity, rolling resistance, …) | Static geometry — only its **hash + per-family counts** |
+| Handle table (public-id counter, generations, dense bindings) | The packed transform / contact buffers (derived) |
+| Every `BodyStore` SoA column: pose, velocity, spin, force, mass / inertia, material, type, shape, sleep flag + counter, group masks | The optional per-event contact callback |
+| Hinges (rest pose, anchors, limits, motor target / torque) | |
+| Pending kinematic-body targets and last tick's driven bodies | |
+| Per-static group masks, mover poses + velocities, force-field vectors / enables | |
+| Contact manifold (pairs touching at the last flush) + flush generation | |
+
+`restore()` decodes into scratch copies and validates (magic, version, length,
+static hash + counts, handle ↔ dense consistency, enum ranges) before a single
+member changes, so any status but `Ok` leaves the world as it was. A snapshot
+of a differently built table is refused with `StaticMismatch` — rebuild the
+table, then restore; rigid bodies (and their public ids) are replaced
+wholesale. On success the transform buffer is re-scattered and the contact
+buffer is empty until the next step.
+
+Bit-exactness: contact events are emitted in pair-key order within each phase
+(the manifold maps iterate in hash order, which a restore does not reproduce),
+and the hinge angle uses a portable `atan2` built from correctly rounded IEEE
+ops, because glibc's and musl's `atan2f` differ by an ULP. With that, the
+native build and the WASM bundle serialize the same scene to **identical
+bytes** — `npm run test:wasm-parity` compares them against the fixture
+`snapshot_test.cpp` writes (`PACHINBALL_SNAPSHOT_FIXTURE`).
+
+Embind / TS surface (`WasmPhysicsEngine`, `WasmSimEngine`):
+
+```typescript
+const bytes = engine.serializeSnapshot()        // Uint8Array copy, or null (old bundle / worker)
+const status = engine.restoreSnapshot(bytes)    // WasmSnapshotStatus: Ok 0, BadMagic 1, BadVersion 2,
+                                                // Truncated 3, StaticMismatch 4, Corrupt 5, Unsupported -1
+engine.getStaticContentHash()                   // '0123456789abcdef'
+```
+
+The worker client reports `null` / `Unsupported` (a blob needs a request /
+reply the batch protocol does not have). Replays use it through
+`src/replay/replay-snapshot.ts` — see `docs/ASYNC_CHALLENGES_EPIC.md`.
 
 ---
 

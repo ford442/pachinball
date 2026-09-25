@@ -17,6 +17,47 @@ float wrapPi(float a) {
   return a;
 }
 
+/**
+ * atan2 from + - * / and sqrt only — every one correctly rounded by IEEE 754 —
+ * so the native build (glibc) and the WASM bundle (musl) agree bit-for-bit.
+ * `std::atan2` differs between those libms by an ULP or two, which is enough
+ * to make a flipper's snapshot bytes diverge (#422, scripts/run-wasm-parity.mjs).
+ *
+ * Evaluated in double: reduce to t ∈ [-tan(π/12), tan(π/12)] via
+ * atan(a) = π/6 + atan((√3·a − 1) / (a + √3)), then an odd Taylor series whose
+ * truncation error (< 1e-11) is far below float resolution.
+ */
+float portableAtan2(float yf, float xf) {
+  const double y = yf;
+  const double x = xf;
+  const double ax = x < 0.0 ? -x : x;
+  const double ay = y < 0.0 ? -y : y;
+  if (ax == 0.0 && ay == 0.0) {
+    // Match atan2's signed-zero conventions closely enough for an angle.
+    return x < 0.0 || std::signbit(xf) ? (std::signbit(yf) ? -kPi : kPi) : yf;
+  }
+  constexpr double kPiD = 3.14159265358979323846;
+  constexpr double kSqrt3 = 1.73205080756887729353;
+  constexpr double kTan15 = 0.26794919243112270647;
+
+  const bool swap = ay > ax;
+  double a = swap ? ax / ay : ay / ax; // [0, 1]
+  double offset = 0.0;
+  if (a > kTan15) {
+    a = (kSqrt3 * a - 1.0) / (a + kSqrt3);
+    offset = kPiD / 6.0;
+  }
+  const double t2 = a * a;
+  double series = 1.0 / 17.0;
+  for (int k = 15; k >= 1; k -= 2) series = 1.0 / k - t2 * series;
+  double r = offset + a * series;
+
+  if (swap) r = kPiD / 2.0 - r;
+  if (x < 0.0) r = kPiD - r;
+  if (y < 0.0) r = -r;
+  return static_cast<float>(r);
+}
+
 void refreshPointVel(const BodyView& body, const Vec3& r, Vec3& v, Vec3& w, Vec3& vpt) {
   v = body.getVelocity();
   w = body.getAngularVelocity();
@@ -29,7 +70,7 @@ float computeHingeAngle(const HingeJoint& joint, const Quat& rotation) {
   const Quat qRel = rotation * joint.restRotation.conjugate();
   const Vec3 qv{qRel.x, qRel.y, qRel.z};
   const float sinHalf = qv.dot(joint.worldAxis);
-  return wrapPi(2.f * std::atan2(sinHalf, qRel.w));
+  return wrapPi(2.f * portableAtan2(sinHalf, qRel.w));
 }
 
 void solveWorldHinge(HingeJoint& joint, BodyView& body, float dt) {

@@ -61,6 +61,8 @@ export type OwnerEngine = 'wasm-owner' | 'wasm-worker'
 export async function bootWasmOwner(
   page: Page,
   mode: OwnerEngine = 'wasm-owner',
+  /** Extra query parameters, e.g. `seed=12345` (#422). */
+  query = '',
 ): Promise<{ wasmReady: boolean; engine: string | null; rapierLoaded: boolean; rapierRequests: string[] }> {
   // Any fetch of the Rapier module (the Vite dep in dev, the rapier-*.js chunk in a build).
   const rapierRequests: string[] = []
@@ -70,7 +72,7 @@ export async function bootWasmOwner(
   await page.addInitScript((m) => {
     localStorage.setItem('pachinball:physics-engine', m)
   }, mode)
-  await page.goto('/?renderer=webgl2')
+  await page.goto(`/?renderer=webgl2${query ? `&${query}` : ''}`)
   await expect(page.locator('#start-btn')).toBeVisible({ timeout: 30_000 })
   await expect.poll(async () => {
     return page.evaluate(() => !!(window as unknown as GameHooks).game?.stateManager)

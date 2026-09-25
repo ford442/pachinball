@@ -56,6 +56,7 @@ export {
   createTransformBufferView,
   type WasmTransform,
 } from './transform-buffer'
+export { WasmSnapshotStatus, WASM_SNAPSHOT_VERSION } from './wasm-types'
 export type {
   PhysicsContact,
   WasmContactEvent,

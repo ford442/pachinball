@@ -9,6 +9,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import { boxDesc, sphereDesc } from '../track-collider-descriptors'
 import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import { getLayoutRng } from '../../core/seeded-rng'
 
 export function buildTeslaTower(builder: TrackBuilder): void {
   const coilMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#CD7F32")
@@ -118,9 +119,11 @@ export function buildTeslaTower(builder: TrackBuilder): void {
     const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
     const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
 
+    // Kinematic colliders: placement and oscillation are both physics — seeded.
+    const layout = getLayoutRng('track:tesla-tower:lightning')
     for (let i = 0; i < 3; i++) {
-      const offsetZ = 2 + Math.random() * (cageSize - 4)
-      const offsetX = (Math.random() - 0.5) * (cageSize - 4)
+      const offsetZ = 2 + layout.next() * (cageSize - 4)
+      const offsetX = (layout.next() - 0.5) * (cageSize - 4)
 
       const pos = cageStart.add(forward.scale(offsetZ)).add(right.scale(offsetX))
       pos.y += 2.0
@@ -147,10 +150,10 @@ export function buildTeslaTower(builder: TrackBuilder): void {
         mesh: sphere,
         type: 'OSCILLATOR',
         basePos: pos,
-        frequency: 0.5 + Math.random(),
+        frequency: 0.5 + layout.next(),
         amplitude: 3.0,
         axis: right,
-        phase: Math.random() * Math.PI
+        phase: layout.next() * Math.PI
       })
     }
   }

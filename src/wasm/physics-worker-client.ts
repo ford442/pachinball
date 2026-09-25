@@ -16,7 +16,7 @@ import type {
   WasmHingeDesc,
 } from './PhysicsModule'
 import { WasmVolumeShape } from './physics-module-adventure'
-import type { WasmPhysicsModule } from './wasm-types'
+import { WasmSnapshotStatus, type WasmPhysicsModule } from './wasm-types'
 import type { WasmSimEngine } from './wasm-sim-engine'
 import type { PinFieldSpec } from '../core/pin-field'
 import {
@@ -497,6 +497,23 @@ export class PhysicsWorkerClient implements WasmSimEngine {
 
   getLastWorkerStepMs(): number {
     return this.lastWorkerStepMs
+  }
+
+  /**
+   * Snapshots are in-process only (#422): the C++ world lives on the worker
+   * and a blob would need a request/reply round trip the batch protocol does
+   * not have. Report the gap instead of returning a stale or partial state.
+   */
+  serializeSnapshot(): Uint8Array | null {
+    return null
+  }
+
+  restoreSnapshot(_bytes: Uint8Array): WasmSnapshotStatus {
+    return WasmSnapshotStatus.Unsupported
+  }
+
+  getStaticContentHash(): string | null {
+    return null
   }
 
   getTransportStats(): PhysicsWorkerTransportStats {

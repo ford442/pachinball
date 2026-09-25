@@ -26,6 +26,14 @@ import type { WasmContactEvent } from '../../wasm'
 
 /** Shared surface for mirror and owner WASM bridges. */
 import type { WasmContactBridge } from './collision-dispatch'
+import {
+  applyReplaySnapshot,
+  captureReplayFingerprint,
+  linkedBodyIds,
+  NO_SNAPSHOT_ENGINE,
+  showReplayDivergenceToast,
+  type ReplaySnapshotResult,
+} from '../../replay/replay-snapshot'
 
 export class GamePhysicsController {
   private readonly host: PhysicsHost
@@ -34,6 +42,7 @@ export class GamePhysicsController {
   private wasmBridge: WasmContactBridge | null = null
   private wasmMirror: WasmMirror | null = null
   private wasmOwner: WasmOwner | null = null
+  private lastReplaySnapshot: ReplaySnapshotResult | null = null
 
   private readonly scoringBridge: ScoringBridge
   private readonly collisionDispatcher: CollisionDispatcher
@@ -244,6 +253,29 @@ export class GamePhysicsController {
     this.scoringBridge.resetBallScoreCounters()
   }
 
+  /** Outcome of the last replay's frame-0 snapshot check (null until a replay plays). */
+  getLastReplaySnapshotResult(): ReplaySnapshotResult | null {
+    return this.lastReplaySnapshot
+  }
+
+  /**
+   * Frame-0 world snapshot (#422), taken and restored at the same point: after
+   * this frame's inputs have driven flippers / movers, right before the step.
+   * Recording fingerprints the world once frame 0 is on the tape; playback
+   * restores that snapshot, and says so on screen when it cannot.
+   */
+  private syncReplaySnapshot(isOwner: boolean, runner: ReplayRunner | null, recorder: ReplayRecorder | null): void {
+    const engine = isOwner ? this.host.physics.getWasmEngine?.() ?? null : null
+    const world = isOwner ? this.host.physics.getWasmTableWorld?.() ?? null : null
+    if (recorder?.isRecording() && recorder.getFrameCount() > 0 && !recorder.hasWorldFingerprint()) {
+      recorder.attachWorldFingerprint(captureReplayFingerprint(engine, world))
+    }
+    const check = runner?.isPlaying() ? runner.takeSnapshotCheck() : null
+    if (!check) return
+    this.lastReplaySnapshot = applyReplaySnapshot(engine ?? NO_SNAPSHOT_ENGINE, linkedBodyIds(world), check)
+    showReplayDivergenceToast(this.lastReplaySnapshot)
+  }
+
   applyInputFrame(frame: InputFrame): void {
     if (frame.flipperLeft !== null) {
       // Delegated to input actions
@@ -342,6 +374,8 @@ export class GamePhysicsController {
       owner.beginStep(stepDt)
       this.host.physics.setMirrorOverheadMs?.(0)
     }
+
+    this.syncReplaySnapshot(owner !== null, replayRunner ?? null, replayRecorder ?? null)
 
     const alpha = this.host.physics.step(rawDt, (h1, h2, start) => {
       this.collisionDispatcher.processCollision(h1, h2, start)
