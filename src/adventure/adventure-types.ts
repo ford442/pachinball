@@ -24,6 +24,8 @@ export enum AdventureTrackType {
   PACHINKO_HALL = 'PACHINKO_HALL',
   CYBER_CORE = 'CYBER_CORE',
   QUANTUM_GRID = 'QUANTUM_GRID',
+  /** Schema-only C++ toy arena: native pin lattice + force-field storm (#424). */
+  STORM_LATTICE = 'STORM_LATTICE',
   SINGULARITY_WELL = 'SINGULARITY_WELL',
   GLITCH_SPIRE = 'GLITCH_SPIRE',
   RETRO_WAVE_HILLS = 'RETRO_WAVE_HILLS',

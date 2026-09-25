@@ -10,11 +10,23 @@ import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
 import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import type {
   MaterialRef,
+  PinLatticeSegment,
   TrackDefinition,
   TrackSegment,
 } from './track-schema'
 import { isMaterialRole } from './track-schema'
 import type { TrackMaterialRole } from './track-theme-profiles'
+import type { PinFieldSpec } from '../core/pin-field'
+import { pinFieldOccupancy } from '../core/pin-field'
+import type { ForceFieldSpace } from './track-collider-descriptors'
+import {
+  pinLatticeLayout,
+  rampQuat,
+  rampSurfacePoint,
+  yawQuat,
+  type GeoQuat,
+  type GeoVec3,
+} from './track-geometry'
 
 export interface TrackCursor {
   pos: Vector3
@@ -23,6 +35,12 @@ export interface TrackCursor {
   lastRampStart?: Vector3
   lastInclineRad?: number
   lastRampLength?: number
+  /**
+   * Heading the most recent straight was built with. `pinLattice` and a
+   * ramp-anchored `forceField` use it, so a `turn` after the ramp cannot
+   * swing them off it (the older `pinField` / `mill` read the live heading).
+   */
+  lastRampHeading?: number
 }
 
 export type TrackMaterial = StandardMaterial | PBRMaterial
@@ -94,6 +112,18 @@ export interface TrackBuildApi {
     material: TrackMaterial,
   ): void
   createResetBasin(pos: Vector3, material: TrackMaterial): void
+  /** One native pin field (a single C++ handle), spec already in world space. */
+  createPinLattice(spec: PinFieldSpec, material: TrackMaterial): void
+  /** One C++ force field box. */
+  createForceField(
+    center: GeoVec3,
+    halfExtents: GeoVec3,
+    rotation: GeoQuat,
+    acceleration: GeoVec3,
+    space: ForceFieldSpace,
+    visible: boolean,
+    material: TrackMaterial,
+  ): void
 }
 
 function degToRad(deg: number): number {
@@ -165,6 +195,7 @@ function applySegment(
       cursor.lastRampStart = cursor.pos.clone()
       cursor.lastInclineRad = degToRad(segment.inclineDeg)
       cursor.lastRampLength = segment.length
+      cursor.lastRampHeading = cursor.heading
       cursor.pos = api.addStraightRamp(
         cursor.pos,
         cursor.heading,
@@ -297,7 +328,92 @@ function applySegment(
       api.createResetBasin(applyOffset(cursor.pos, segment.offset), mat)
       break
     }
+    case 'pinLattice': {
+      const mat = resolveMaterial(api, segment.material, fallback)
+      api.createPinLattice(pinLatticeSpec(cursor, segment), mat)
+      break
+    }
+    case 'forceField': {
+      const mat = resolveMaterial(api, segment.material ?? 'energy', fallback)
+      const half = { x: segment.size.x / 2, y: segment.size.y / 2, z: segment.size.z / 2 }
+      let center: GeoVec3
+      let rotation: GeoQuat
+      if (segment.alongRamp !== undefined) {
+        const rampStart = cursor.lastRampStart ?? cursor.pos
+        const heading = cursor.lastRampHeading ?? cursor.heading
+        const incline = cursor.lastInclineRad ?? 0
+        center = rampSurfacePoint(
+          rampStart,
+          heading,
+          incline,
+          segment.alongRamp,
+          segment.lateral ?? 0,
+          segment.surfaceOffset ?? half.y,
+        )
+        rotation = rampQuat(heading, incline)
+      } else {
+        const pos = applyOffset(cursor.pos, segment.offset)
+        center = { x: pos.x, y: pos.y, z: pos.z }
+        rotation = yawQuat(cursor.heading + degToRad(segment.yawDeg ?? 0))
+      }
+      api.createForceField(
+        center,
+        half,
+        rotation,
+        { x: segment.accel.x, y: segment.accel.y, z: segment.accel.z },
+        segment.space ?? 'world',
+        segment.visible ?? true,
+        mat,
+      )
+      break
+    }
   }
+}
+
+/** The world-space native pin field a `pinLattice` segment describes. */
+export function pinLatticeSpec(cursor: TrackCursor, segment: PinLatticeSegment): PinFieldSpec {
+  const rowSpacing = segment.rowSpacing ?? segment.spacing
+  const layout = pinLatticeLayout({
+    rampStart: cursor.lastRampStart ?? cursor.pos,
+    heading: cursor.lastRampHeading ?? cursor.heading,
+    inclineRad: cursor.lastInclineRad ?? 0,
+    rows: segment.rows,
+    cols: segment.cols,
+    spacing: segment.spacing,
+    rowSpacing,
+    rowOffset: segment.rowOffset ?? segment.spacing / 2,
+    startAlong: segment.startAlong ?? rowSpacing,
+    lateral: segment.lateral ?? 0,
+    pinHeight: segment.height,
+  })
+  const spec: PinFieldSpec = {
+    origin: layout.origin,
+    rotation: layout.rotation,
+    rows: segment.rows,
+    cols: segment.cols,
+    spacingX: segment.spacing,
+    spacingZ: rowSpacing,
+    rowOffsetX: segment.rowOffset ?? segment.spacing / 2,
+    radius: segment.diameter / 2,
+    halfHeight: segment.height / 2,
+    restitution: segment.restitution ?? 0.6,
+    friction: segment.friction ?? 0.3,
+  }
+  if (segment.dropout !== undefined && segment.dropout > 0) {
+    spec.dropout = segment.dropout
+    spec.dropoutSeed = segment.dropoutSeed ?? 0
+  }
+  if (segment.holes && segment.holes.length > 0) {
+    const holes = new Set(segment.holes.map((h) => h.row * segment.cols + h.col))
+    const slots: { row: number; col: number }[] = []
+    for (let row = 0; row < segment.rows; row++) {
+      for (let col = 0; col < segment.cols; col++) {
+        if (!holes.has(row * segment.cols + col)) slots.push({ row, col })
+      }
+    }
+    spec.occupancy = pinFieldOccupancy(segment.rows, segment.cols, slots)
+  }
+  return spec
 }
 
 /**

@@ -32,6 +32,9 @@ describe('portal-routing helpers', () => {
     expect(progression.getNextTrackId()).toBe('QUANTUM_GRID')
 
     progression.completeTrack('QUANTUM_GRID', 240_000, 0, 240_000)
+    expect(progression.getNextTrackId()).toBe('STORM_LATTICE')
+
+    progression.completeTrack('STORM_LATTICE', 290_000, 0, 290_000)
     expect(progression.getNextTrackId()).toBe('SINGULARITY_WELL')
 
     progression.completeTrack('SINGULARITY_WELL', 340_000, 0, 340_000)

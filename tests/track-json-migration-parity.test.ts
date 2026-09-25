@@ -121,6 +121,10 @@ function makeRecorder(startPos: Vector3) {
         args: [v(center), radius, round(inclineRad), round(angVelAlongNormal), material],
       }),
     createResetBasin: (pos, material) => calls.push({ fn: 'resetBasin', args: [v(pos), material] }),
+    // No migrated track uses the #424 C++ toys; recorded so a stray call fails parity.
+    createPinLattice: (spec, material) => calls.push({ fn: 'pinLattice', args: [spec.rows, spec.cols, material] }),
+    createForceField: (center, _half, _rotation, _accel, space, _visible, material) =>
+      calls.push({ fn: 'forceField', args: [center.x, center.y, center.z, space, material] }),
   }
 
   return { api, calls }

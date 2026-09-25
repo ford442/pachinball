@@ -50,33 +50,34 @@ export interface SerializableProgressionState {
 }
 
 /**
- * Campaign track catalog — 13 main-spine stages plus 2 optional branches (#321).
+ * Campaign track catalog — 14 main-spine stages plus 2 optional branches (#321, #424).
  *
  * Campaign sequence (main spine), with A = EXTENDED_MAP, B = STATIONARY_TABLE:
  *    1. NEON_HELIX          — A — spiral descent run
  *    2. PACHINKO_HALL       — A — parlor hub / pin-lane corridor
  *    3. CYBER_CORE          — B — flipper arena
  *    4. QUANTUM_GRID        — A — maze (JSON)
- *    5. SINGULARITY_WELL    — A
- *    6. GLITCH_SPIRE        — B — (JSON)
- *    7. RETRO_WAVE_HILLS    — A — (JSON)
- *    8. POLYCHROME_VOID     — B — chroma-gate puzzle
- *    9. HYPER_DRIFT         — A — (JSON)
- *   10. CHRONO_CORE         — B — gear arena (JSON)
- *   11. CRYO_CHAMBER        — A — ice slalom
- *   12. CASINO_HEIST        — B — vault arena
- *   13. FIREWALL_BREACH     — A — finale
+ *    5. STORM_LATTICE       — B — pin-lattice storm arena (JSON, C++ toys; #424)
+ *    6. SINGULARITY_WELL    — A
+ *    7. GLITCH_SPIRE        — B — (JSON)
+ *    8. RETRO_WAVE_HILLS    — A — (JSON)
+ *    9. POLYCHROME_VOID     — B — chroma-gate puzzle
+ *   10. HYPER_DRIFT         — A — (JSON)
+ *   11. CHRONO_CORE         — B — gear arena (JSON)
+ *   12. CRYO_CHAMBER        — A — ice slalom
+ *   13. CASINO_HEIST        — B — vault arena
+ *   14. FIREWALL_BREACH     — A — finale
  *
  * Parallel branches (not on the spine, reachable early):
  *   PACHINKO_SPIRE  — B — unlocks from NEON_HELIX
  *   NEON_STRONGHOLD — B — unlocks from PACHINKO_HALL
  *
- * Stages 1–6 predate #321 and keep their original A/A/B/A/A/B shape; 7–13 are
- * strictly alternating. The rhythm is bounded by content, not preference: mode
- * type describes what a track physically *is* (a traversal course vs a contained
- * arena), so it is assigned from geometry rather than chosen to fit the pattern.
- * Most remaining uncatalogued builders are long courses (A), which is why the
- * spine cannot alternate further without new arena content.
+ * Stages 2–14 strictly alternate. Before #424 stages 4–5 were an A/A pair
+ * (QUANTUM_GRID → SINGULARITY_WELL); STORM_LATTICE is the arena content that
+ * splits it, leaving only the historical NEON_HELIX → PACHINKO_HALL opener.
+ * The rhythm is bounded by content, not preference: mode type describes what
+ * a track physically *is* (a traversal course vs a contained arena), so it is
+ * assigned from geometry rather than chosen to fit the pattern.
  */
 
 /** Ordered main campaign spine — used by getNextTrackId() for deterministic A/B flow. */
@@ -85,6 +86,7 @@ export const CAMPAIGN_MAIN_PATH = [
   'PACHINKO_HALL',
   'CYBER_CORE',
   'QUANTUM_GRID',
+  'STORM_LATTICE',
   'SINGULARITY_WELL',
   'GLITCH_SPIRE',
   'RETRO_WAVE_HILLS',
@@ -280,6 +282,13 @@ export class AdventureTrackProgression {
 
     this.state.completedTracks = new Set(completedTracks)
     this.state.unlockedTracks = new Set(fallbackUnlocked)
+    // Re-derive unlocks from completions, so a stage inserted into the spine
+    // after a save was written (STORM_LATTICE, #424) is still offered.
+    for (const [id, info] of Object.entries(TRACK_CATALOG)) {
+      if (info.unlockedBy && this.state.completedTracks.has(info.unlockedBy)) {
+        this.state.unlockedTracks.add(id)
+      }
+    }
     this.state.bestScores = { ...(state.bestScores ?? {}) }
     this.state.currentTrack = this.state.unlockedTracks.has(currentTrack) ? currentTrack : 'NEON_HELIX'
     this.state.totalGoldBallsCollected = Math.max(0, state.totalGoldBallsCollected ?? 0)

@@ -19,6 +19,7 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { Scene } from '@babylonjs/core/scene'
 import type { PhysicsBody } from '../core/physics-api'
+import { resolvePinField, type PinFieldSpec } from '../core/pin-field'
 
 import type {
   ChromaGate,
@@ -29,9 +30,12 @@ import { INTENSITY, emissive } from '../game-elements/visual-language'
 import {
   boxDesc,
   cylinderDesc,
+  forceFieldDesc,
+  pinFieldDesc,
   sphereDesc,
   type AdventureColliderDesc,
   type DescQuat,
+  type ForceFieldSpace,
 } from './track-collider-descriptors'
 import type { EmittedCollider } from './track-collider-emitter'
 import {
@@ -43,6 +47,7 @@ import {
   wallLayout,
   RAMP_HALF_THICKNESS,
   WALL_HALF_THICKNESS,
+  type GeoQuat,
   type GeoVec3,
 } from './track-geometry'
 
@@ -61,6 +66,8 @@ export interface TrackPrimitiveContext {
   resetSensors: PhysicsBody[]
   materials: TrackMaterial[]
   emit: (desc: AdventureColliderDesc) => EmittedCollider
+  /** Record a body-less descriptor (a force field); returns its index. */
+  emitField: (desc: AdventureColliderDesc) => number
   attach: (parent: EmittedCollider, desc: AdventureColliderDesc) => void
   getTrackMaterial: (colorHex: string) => StandardMaterial
   setGoalSensor: (body: PhysicsBody) => void
@@ -383,6 +390,84 @@ export function createPinField(
     )
     ctx.adventureBodies.push(body)
   }
+}
+
+/**
+ * A native pin lattice (#424): ONE `pinField` descriptor, whatever its pin
+ * count. The visuals are instances of one cylinder placed from
+ * `resolvePinField`, so they sit on exactly the pins C++ collides with.
+ */
+export function createPinLattice(
+  ctx: TrackPrimitiveContext,
+  spec: PinFieldSpec,
+  material: TrackMaterial
+): void {
+  if (!ctx.hasWorld) return
+
+  const { body } = ctx.emit(pinFieldDesc(spec, { label: 'pinLattice' }))
+  ctx.adventureBodies.push(body)
+
+  const [first, ...rest] = resolvePinField(spec)
+  if (!first) return
+  const rotation = spec.rotation ?? { x: 0, y: 0, z: 0, w: 1 }
+  const source = MeshBuilder.CreateCylinder(
+    'pinLattice',
+    { diameter: spec.radius * 2, height: spec.halfHeight * 2, tessellation: 12 },
+    ctx.scene
+  )
+  source.material = material
+  source.isPickable = false
+  const place = (mesh: Pick<Mesh, 'position' | 'rotationQuaternion'>, p: GeoVec3): void => {
+    mesh.position.set(p.x, p.y, p.z)
+    mesh.rotationQuaternion = new Quaternion(rotation.x, rotation.y, rotation.z, rotation.w)
+  }
+  place(source, first.position)
+  // Disposing the source (clearTrack) takes its instances with it.
+  ctx.adventureTrack.push(source)
+  for (const pin of rest) {
+    place(source.createInstance(`pinLattice_${pin.index}`), pin.position)
+  }
+}
+
+/**
+ * A C++ force field (#424): an oriented box accelerating every ball inside
+ * it. There is no body and no Rapier collider — the Rapier dev path runs the
+ * track without it. The optional volume is a faint, static tint (no flashing),
+ * so it needs no reduced-motion path.
+ */
+export function createForceField(
+  ctx: TrackPrimitiveContext,
+  center: GeoVec3,
+  halfExtents: GeoVec3,
+  rotation: GeoQuat,
+  acceleration: GeoVec3,
+  space: ForceFieldSpace,
+  visible: boolean,
+  material: TrackMaterial
+): void {
+  if (!ctx.hasWorld) return
+
+  ctx.emitField(forceFieldDesc(center, halfExtents, acceleration, { rotation, space, label: 'forceField' }))
+  if (!visible) return
+
+  const volume = MeshBuilder.CreateBox(
+    'forceField',
+    { width: halfExtents.x * 2, height: halfExtents.y * 2, depth: halfExtents.z * 2 },
+    ctx.scene
+  )
+  volume.position.set(center.x, center.y, center.z)
+  volume.rotationQuaternion = new Quaternion(rotation.x, rotation.y, rotation.z, rotation.w)
+  volume.isPickable = false
+
+  const tint = new StandardMaterial('forceFieldMat', ctx.scene)
+  tint.diffuseColor = Color3.Black()
+  tint.emissiveColor = material.emissiveColor.clone()
+  tint.alpha = 0.12
+  tint.backFaceCulling = false
+  tint.disableLighting = true
+  ctx.materials.push(tint)
+  volume.material = tint
+  ctx.adventureTrack.push(volume)
 }
 
 /** Kinematic mill whose angular velocity is along the ramp normal, not world Y. */

@@ -14,9 +14,12 @@
  *
  * Shape coverage is deliberately narrow: the tracks between them use only
  * cuboid, cylinder and ball, plus prism-pathway's closed triangular prisms
- * (`convexMesh`). Do not widen this without a track that needs it.
+ * (`convexMesh`), plus two C++ toys (#424): a whole pin lattice as one
+ * `pinField` handle and a `forceField` box. Do not widen this without a track
+ * that needs it.
  */
 
+import type { PinFieldSpec } from '../core/pin-field'
 import { ADVENTURE_GROUP, CollisionGroups, makeCollisionGroups } from '../game-elements/physics'
 
 export interface DescVec3 {
@@ -46,7 +49,21 @@ export type AdventureBodyMotion =
   | 'kinematic-velocity'
   | 'dynamic'
 
-export type AdventureColliderKind = 'box' | 'cylinder' | 'sphere' | 'convexMesh'
+export type AdventureColliderKind =
+  | 'box'
+  | 'cylinder'
+  | 'sphere'
+  | 'convexMesh'
+  /** One C++ `addPinField` handle; Rapier gets one fixed cylinder per pin. */
+  | 'pinField'
+  /** One C++ `addForceField` box; C++-only, Rapier builds nothing for it. */
+  | 'forceField'
+
+/**
+ * Frame a force field's vector is expressed in: `world` as given, `field`
+ * rotated by the descriptor's `rotation` (C++ `ForceSpace::Local`).
+ */
+export type ForceFieldSpace = 'world' | 'field'
 
 /**
  * One adventure collider, engine-agnostic.
@@ -81,6 +98,18 @@ export interface AdventureColliderDesc {
    */
   vertices?: readonly number[]
   indices?: readonly number[]
+
+  /**
+   * `pinField` only — the whole lattice in world space. `position`/`rotation`
+   * mirror its origin and rotation; `restitution`/`friction`/groups come from
+   * the descriptor, not the spec.
+   */
+  pinField?: PinFieldSpec
+
+  /** `forceField` only — m/s² (mass-independent, like gravity) over the `halfExtents` box. */
+  acceleration?: DescVec3
+  /** `forceField` only — defaults to `'world'`. */
+  forceSpace?: ForceFieldSpace
 
   /** Collider offset inside its own body. Ignored when `parentIndex` is set. */
   localPosition?: DescVec3
@@ -212,6 +241,44 @@ export function convexMeshDesc(
   opts: DescOptions = {}
 ): AdventureColliderDesc {
   return { kind: 'convexMesh', position, vertices: mesh.vertices, indices: mesh.indices, ...common(opts) }
+}
+
+/**
+ * A whole pin lattice as one collider. Static only, never a sensor, never
+ * attached — the exporter rejects anything else.
+ */
+export function pinFieldDesc(
+  spec: PinFieldSpec,
+  opts: Omit<DescOptions, 'rotation' | 'restitution' | 'friction'> = {}
+): AdventureColliderDesc {
+  const rotation = spec.rotation ?? IDENTITY_ROTATION
+  return {
+    kind: 'pinField',
+    position: { ...spec.origin },
+    pinField: spec,
+    ...common({ ...opts, rotation, restitution: spec.restitution, friction: spec.friction }),
+  }
+}
+
+/**
+ * An oriented box that accelerates every ball inside it — an updraft,
+ * crosswind or conveyor. C++ integrates it with gravity each substep; there
+ * is no Rapier equivalent, so the Rapier dev path runs the track without it.
+ */
+export function forceFieldDesc(
+  position: DescVec3,
+  halfExtents: DescVec3,
+  acceleration: DescVec3,
+  opts: Pick<DescOptions, 'rotation' | 'membership' | 'filter' | 'label'> & { space?: ForceFieldSpace } = {}
+): AdventureColliderDesc {
+  return {
+    kind: 'forceField',
+    position,
+    halfExtents,
+    acceleration,
+    ...(opts.space && opts.space !== 'world' ? { forceSpace: opts.space } : {}),
+    ...common(opts),
+  }
 }
 
 /** Combined Rapier interaction-groups word for a descriptor. */

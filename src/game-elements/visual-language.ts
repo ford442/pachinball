@@ -487,6 +487,7 @@ export const ADVENTURE_THEMES = {
   NEON_HELIX: { primary: PALETTE.CYAN, secondary: PALETTE.MAGENTA },
   CYBER_CORE: { primary: PALETTE.PURPLE, secondary: PALETTE.CYAN },
   QUANTUM_GRID: { primary: PALETTE.MATRIX, secondary: PALETTE.WHITE },
+  STORM_LATTICE: { primary: '#44ccff', secondary: PALETTE.WHITE },
   SINGULARITY_WELL: { primary: '#ff0000', secondary: '#000000' },
   GLITCH_SPIRE: { primary: PALETTE.ALERT, secondary: PALETTE.WHITE },
   RETRO_WAVE_HILLS: { primary: '#ff00ff', secondary: '#00ffff' },

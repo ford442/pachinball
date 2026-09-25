@@ -97,10 +97,11 @@ describe('main spine', () => {
     }
   })
 
-  it('alternates EXTENDED_MAP / STATIONARY_TABLE across the extension (stages 7+)', () => {
-    // Stages 1-6 predate #321 and keep their historical A/A/B/A/A/B shape.
-    const extension = CAMPAIGN_MAIN_PATH.slice(6)
-    expect(extension.length).toBeGreaterThanOrEqual(7)
+  it('alternates EXTENDED_MAP / STATIONARY_TABLE from stage 2 on', () => {
+    // Only the NEON_HELIX → PACHINKO_HALL opener is an A/A pair. The other one
+    // (QUANTUM_GRID → SINGULARITY_WELL) was split by STORM_LATTICE in #424.
+    const extension = CAMPAIGN_MAIN_PATH.slice(1)
+    expect(extension.length).toBeGreaterThanOrEqual(13)
 
     for (let i = 1; i < extension.length; i++) {
       const prev = TRACK_CATALOG[extension[i - 1]].modeType
@@ -114,12 +115,14 @@ describe('main spine', () => {
     expect(modes).toEqual(new Set(['EXTENDED_MAP', 'STATIONARY_TABLE']))
   })
 
-  it('never lowers the recommended score across the extension (stage 6 onward)', () => {
-    // Scoped to stage 6+ deliberately. Stages 1-2 carry a pre-existing dip
-    // (NEON_HELIX 50k -> PACHINKO_HALL 40k) from the original calibration, which
+  it('never lowers the recommended score from GLITCH_SPIRE onward', () => {
+    // Scoped to the #321 extension deliberately. Earlier stages carry dips from
+    // the original calibration (NEON_HELIX 50k -> PACHINKO_HALL 40k,
+    // SINGULARITY_WELL 100k -> GLITCH_SPIRE 65k), which
     // tests/adventure-progression-supervisor.test.ts pins to exact values; #321
-    // adds stages rather than retuning that.
-    const tail = CAMPAIGN_MAIN_PATH.slice(5)
+    // and #424 add stages rather than retuning those.
+    const tail = CAMPAIGN_MAIN_PATH.slice(CAMPAIGN_MAIN_PATH.indexOf('GLITCH_SPIRE'))
+    expect(tail.length).toBeGreaterThanOrEqual(8)
     for (let i = 1; i < tail.length; i++) {
       const prev = TRACK_CATALOG[tail[i - 1]].recommendedScore
       const curr = TRACK_CATALOG[tail[i]].recommendedScore

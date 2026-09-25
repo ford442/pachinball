@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "id": "STORM_LATTICE",
+  "themeProfile": "STORM_LATTICE",
+  "cameraPresetId": "STORM_LATTICE",
+  "gravityMultiplier": 0.9,
+  "materials": {
+    "structure": "#1a4a6e",
+    "accent": "#e8f6ff"
+  },
+  "segments": [
+    { "type": "gap", "length": -2, "drop": -0.7 },
+    { "type": "straight", "width": 5, "length": 7, "inclineDeg": 40, "wallHeight": 1, "material": "structure" },
+    { "type": "straight", "width": 14, "length": 26, "inclineDeg": 55, "wallHeight": 1.5, "friction": 0.3, "material": "structure" },
+    {
+      "type": "pinLattice",
+      "rows": 11,
+      "cols": 8,
+      "spacing": 1.5,
+      "rowSpacing": 2,
+      "rowOffset": 0.75,
+      "startAlong": 3,
+      "lateral": -0.375,
+      "diameter": 0.3,
+      "height": 0.8,
+      "dropout": 0.1,
+      "dropoutSeed": 424,
+      "holes": [
+        { "row": 5, "col": 2 },
+        { "row": 5, "col": 3 },
+        { "row": 5, "col": 4 }
+      ],
+      "material": "accent"
+    },
+    { "type": "mill", "alongRamp": 13, "lateral": 0, "radius": 1.6, "angVel": 3, "surfaceOffset": 0.1, "material": "energy" },
+    {
+      "type": "forceField",
+      "alongRamp": 13,
+      "lateral": -3.5,
+      "size": { "x": 3, "y": 2.5, "z": 8 },
+      "accel": { "x": 0, "y": 3, "z": -3.2 },
+      "space": "field",
+      "material": "glow"
+    },
+    {
+      "type": "forceField",
+      "alongRamp": 13,
+      "lateral": 3.5,
+      "size": { "x": 3, "y": 2.5, "z": 8 },
+      "accel": { "x": 0, "y": 3, "z": -3.2 },
+      "space": "field",
+      "material": "glow"
+    },
+    {
+      "type": "forceField",
+      "alongRamp": 23.5,
+      "lateral": -4.5,
+      "size": { "x": 5, "y": 2, "z": 5 },
+      "accel": { "x": 6, "y": 0, "z": 0 },
+      "space": "field",
+      "material": "energy"
+    },
+    {
+      "type": "forceField",
+      "alongRamp": 23.5,
+      "lateral": 4.5,
+      "size": { "x": 5, "y": 2, "z": 5 },
+      "accel": { "x": -6, "y": 0, "z": 0 },
+      "space": "field",
+      "material": "energy"
+    },
+    { "type": "portal", "offset": { "x": 0, "y": -0.4, "z": 0 } },
+    { "type": "bucket", "material": "accent", "offset": { "x": 0, "y": -2, "z": 0 } },
+    { "type": "resetBasin", "offset": { "x": -6, "y": -2, "z": 0 }, "material": "structure" },
+    { "type": "resetBasin", "offset": { "x": 6, "y": -2, "z": 0 }, "material": "structure" }
+  ]
+}
