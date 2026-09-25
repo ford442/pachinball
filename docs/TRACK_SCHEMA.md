@@ -84,6 +84,47 @@ cursor backwards or upwards before a segment whose builder call has a fixed offs
 of its own (see `CHRONO_CORE.json`, where a `-0.5 / -1` gap lines the second gear up
 with the position its original TypeScript builder used).
 
+## Collider vocabulary (WASM export contract)
+
+Every track must run on `wasm-owner` with Rapier unstepped. Builders emit
+`AdventureColliderDesc` descriptors (`src/adventure/track-collider-descriptors.ts`),
+and `exportAdventureCollidersToWasm` (`src/game/physics/wasm-adventure-export.ts`)
+walks them into the C++ engine. A descriptor it cannot place is reported
+`unsupported`, and a track with any `unsupported` entry falls back to Rapier.
+**That is the whole vocabulary — nothing outside this table ships:**
+
+| Descriptor `kind` | Body `motion` | Sensor? | C++ call |
+|-------------------|---------------|---------|----------|
+| `box` / `cylinder` / `sphere` | `fixed` | no | `addStaticBox` / `addStaticCylinder` / `addStaticSphere` |
+| `box` / `cylinder` / `sphere` | `fixed` | yes | `addSensorVolume` |
+| `box` / `cylinder` / `sphere` | `kinematic-position` / `kinematic-velocity` | no | `addKinematicMover` (pose driven per tick) |
+| `box` / `cylinder` / `sphere` | `kinematic-position` / `kinematic-velocity` | yes | moving sensor, overlap-tested analytically by `WasmOwner` |
+| `convexMesh` (closed, CCW) | `fixed` | no | `addStaticTriangleMesh` |
+
+Rejected: `dynamic` bodies, a moving or sensor `convexMesh`, attachments
+nested more than one level deep (`parentIndex` on a parent), and any Rapier
+collider built outside the descriptor path (`markUnexportedCollider`). There is
+no capsule descriptor, no general hull, and no trimesh beyond closed convex
+solids. Widen this only in C++ first, with a Catch2 test, then here.
+
+Every JSON segment type above compiles to this vocabulary:
+
+| Segment | Descriptors |
+|---------|-------------|
+| `straight`, `curve` | fixed boxes (ramp + optional walls) |
+| `bucket` | fixed boxes + goal sensor box |
+| `resetBasin` | fixed box + sensor box |
+| `cylinder`, `pinField` | fixed cylinders |
+| `spinner` | `kinematic-velocity` cylinder, optional attached box teeth |
+| `mill` | `kinematic-velocity` cylinder |
+| `gate` | fixed cylinder sensor (chroma recolour on overlap) |
+| `portal`, `gap`, `turn` | none (portal sensor is created on activation) |
+
+`npm run tracks:validate` enforces the contract: it builds every JSON track
+through the real `TrackBuilder.buildFromDefinition` path
+(`tests/helpers/track-export-harness.ts`) and fails any track whose descriptor
+list has an `unsupported` entry or an unexported Rapier collider.
+
 ## Runtime behavior
 
 1. If `id` has a JSON definition, `validateTrackDefinition` runs **before**

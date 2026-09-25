@@ -23,20 +23,20 @@ import {
   emissive,
   DebugHUD,
   getDynamicWorld,
-  AdventureGoalTracker,
-  AdventureCinematicSystem,
-  AdventureCinematicTriggers,
-  AdventureUIStateManager,
-  AdventureTrackProgression,
-  AdventureProgressionSupervisor,
-  initializeTrackThemingSystem,
-  initializeCampaignRewardsManager,
   getScoringBreakdownManager,
   DisplayState,
   BallManager,
   ZoneTriggerSystem,
   SettingsManager,
 } from '../game-elements'
+import { AdventureGoalTracker } from '../adventure/adventure-goal-tracker'
+import { AdventureCinematicSystem } from '../adventure/adventure-cinematic-system'
+import { AdventureCinematicTriggers } from '../adventure/adventure-cinematic-triggers'
+import { AdventureUIStateManager } from '../adventure/adventure-ui-state'
+import { AdventureTrackProgression } from '../adventure/adventure-track-progression'
+import { AdventureProgressionSupervisor } from '../adventure/adventure-progression-supervisor'
+import { initializeTrackThemingSystem } from '../adventure/track-theming-system'
+import { initializeCampaignRewardsManager } from '../adventure/campaign-rewards-manager'
 import { DisplaySystem } from '../display'
 import { EffectsSystem } from '../effects'
 import { GameObjects } from '../objects'
@@ -44,7 +44,7 @@ import { AdventureMode, AdventureTrackType, isAdventureTrackType } from '../adve
 import { BallStackVisual } from '../game-elements/ball-stack-visual'
 import { CabinetLighting } from '../effects/cabinet-lighting'
 import { CelebrationSequencer } from '../effects/celebration-sequencer'
-import { CampaignRewardNotifier } from '../game-elements/campaign-reward-notifier'
+import { CampaignRewardNotifier } from '../adventure/campaign-reward-notifier'
 import { wireCampaignLoop } from './campaign-loop-controller'
 import {
   SpinnerBumperBuilder,
@@ -83,9 +83,10 @@ export class GameSystemsInitializer {
   public async initAll(): Promise<void> {
     if (!this.game.scene) throw new Error('Scene not ready')
     const scene = this.game.scene
+    if (!this.game.physics.isReady()) throw new Error('Physics not ready')
+    // The C++ owner's table world + descriptor API, or Rapier on the explicit/degrade path.
     const world = this.game.physics.getWorld()
-    const rapier = this.game.physics.getRapier()
-    if (!world || !rapier) throw new Error('Physics not ready')
+    const rapier = this.game.physics.getPhysicsApi()
 
     this.game.uiManager?.showLoadingState(true, { label: 'LOADING...', progress: 0 })
     this.game.uiManager?.setStartButtonEnabled(false)

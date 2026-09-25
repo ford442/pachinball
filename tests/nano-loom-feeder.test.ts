@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { FEEDER_TUNABLES } from '../src/config'
-import { NanoLoomFeeder, NanoLoomState } from '../src/game-elements/nano-loom-feeder'
+import { NanoLoomFeeder, NanoLoomState } from '../src/objects/feeders/nano-loom-feeder'
 import { createMockBall, createMockRapier, createMockWorld } from './feeder-test-helpers'
 
 vi.mock('@babylonjs/core', async () => {

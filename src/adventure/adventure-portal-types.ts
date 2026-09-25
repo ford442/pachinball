@@ -5,7 +5,7 @@
 import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import type { Color3 } from '@babylonjs/core/Maths/math.color'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../core/physics-api'
 import type { AdventureTrackType } from './adventure-types'
 
 export type ExitPortalKind = 'success' | 'timeout'
@@ -20,7 +20,7 @@ export interface ActiveExitPortal {
   mode: ExitPortalWorldMode
   root: Mesh
   core: Mesh
-  sensor: RAPIER.RigidBody
+  sensor: PhysicsBody
   ringMaterial: StandardMaterial
   coreMaterial: StandardMaterial
   ringBase: Color3

@@ -7,9 +7,10 @@ import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import { CapturedBall } from '../../core/captured-ball'
 import type { GameConfigType } from '../../config'
-import { getSessionRngFork, RNG_FORK } from '../../game-elements/seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../../core/seeded-rng'
 import { color, emissive, FEEDER_STYLES, INTENSITY, type QualityTier } from '../../game-elements/visual-language'
 import {
   attachInsertMeshes,
@@ -31,8 +32,8 @@ const RING_COUNT = 3
 
 export class MagSpinFeeder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
   private config: GameConfigType['magSpin']
 
   private position: Vector3
@@ -44,8 +45,9 @@ export class MagSpinFeeder {
   private state: MagSpinState = MagSpinState.IDLE
   private timer = 0
 
-  private caughtBall: RAPIER.RigidBody | null = null
-  private physicsBody: RAPIER.RigidBody | null = null
+  private caughtBall: PhysicsBody | null = null
+  private readonly capture: CapturedBall
+  private physicsBody: PhysicsBody | null = null
   private gameplayEnabled = true
 
   private ringAngularVelocity = 0
@@ -60,13 +62,14 @@ export class MagSpinFeeder {
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
     config: GameConfigType['magSpin']
   ) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
+    this.capture = new CapturedBall(rapier)
     this.config = config
     this.position = new Vector3(
       this.config.feederPosition.x,
@@ -176,7 +179,7 @@ export class MagSpinFeeder {
     }
   }
 
-  update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+  update(dt: number, ballBodies: PhysicsBody[]): void {
     if (!this.gameplayEnabled) return
     this.timer -= dt
     this.updateVisuals(dt)
@@ -184,7 +187,7 @@ export class MagSpinFeeder {
   }
 
   /**
-   * Optional glTF insert overlay — visual-only; Rapier well collider stays code-authored.
+   * Optional glTF insert overlay — visual-only; the well collider stays code-authored.
    */
   async loadInsertGltf(tier: QualityTier): Promise<void> {
     try {
@@ -277,7 +280,7 @@ export class MagSpinFeeder {
     }
   }
 
-  private updateStateMachine(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+  private updateStateMachine(dt: number, ballBodies: PhysicsBody[]): void {
     switch (this.state) {
       case MagSpinState.IDLE:
         this.checkProximity(ballBodies)
@@ -317,9 +320,7 @@ export class MagSpinFeeder {
     const newY = Scalar.Lerp(currentPos.y, targetPos.y, lerpFactor)
     const newZ = Scalar.Lerp(currentPos.z, targetPos.z, lerpFactor)
 
-    this.caughtBall.setNextKinematicTranslation({ x: newX, y: newY, z: newZ })
-    this.caughtBall.setLinvel({ x: 0, y: 0, z: 0 }, true)
-    this.caughtBall.setAngvel({ x: 0, y: 0, z: 0 }, true)
+    this.capture.steer(this.caughtBall, { translation: { x: newX, y: newY, z: newZ } })
 
     const dist = Vector3.Distance(
       new Vector3(newX, newY, newZ),
@@ -334,12 +335,6 @@ export class MagSpinFeeder {
     if (!this.caughtBall) return
 
     const targetPos = this.position.add(new Vector3(0, this.config.holdYOffset, 0))
-    this.caughtBall.setNextKinematicTranslation({
-      x: targetPos.x,
-      y: targetPos.y,
-      z: targetPos.z,
-    })
-
     this.ballSpinAngle += dt * this.config.spinAngularSpeed
     const extras = this.config.physicsExtras
     const spinQ = Quaternion.FromEulerAngles(
@@ -347,7 +342,10 @@ export class MagSpinFeeder {
       this.ballSpinAngle * extras.spinAxisMultiplierY,
       this.ballSpinAngle * extras.spinAxisMultiplierZ,
     )
-    this.caughtBall.setNextKinematicRotation({ x: spinQ.x, y: spinQ.y, z: spinQ.z, w: spinQ.w })
+    this.capture.steer(this.caughtBall, {
+      translation: { x: targetPos.x, y: targetPos.y, z: targetPos.z },
+      rotation: { x: spinQ.x, y: spinQ.y, z: spinQ.z, w: spinQ.w },
+    })
 
     const chargeT = 1 - Math.max(0, this.timer) / this.config.spinDuration
     if (this.light) {
@@ -355,7 +353,7 @@ export class MagSpinFeeder {
     }
   }
 
-  private checkProximity(ballBodies: RAPIER.RigidBody[]): void {
+  private checkProximity(ballBodies: PhysicsBody[]): void {
     const pullRadius = this.config.catchRadius
 
     for (const body of ballBodies) {
@@ -373,11 +371,9 @@ export class MagSpinFeeder {
     }
   }
 
-  private captureBall(body: RAPIER.RigidBody): void {
+  private captureBall(body: PhysicsBody): void {
     this.caughtBall = body
-    body.setLinvel({ x: 0, y: 0, z: 0 }, true)
-    body.setAngvel({ x: 0, y: 0, z: 0 }, true)
-    body.setBodyType(this.rapier.RigidBodyType.KinematicPositionBased, true)
+    this.capture.capture(body)
     this.ballSpinAngle = 0
     this.setState(MagSpinState.CATCH)
   }
@@ -440,8 +436,6 @@ export class MagSpinFeeder {
     const body = this.caughtBall
     this.caughtBall = null
 
-    body.setBodyType(this.rapier.RigidBodyType.Dynamic, true)
-
     const currentPos = body.translation()
     const target = this.config.releaseTarget
     const targetDir = new Vector3(
@@ -461,13 +455,14 @@ export class MagSpinFeeder {
     ).normalize()
 
     const impulse = finalDir.scale(this.config.releaseForce)
-    body.applyImpulse({ x: impulse.x, y: impulse.y, z: impulse.z }, true)
     const extras = this.config.physicsExtras
-    body.setAngvel({
+    const spin = {
       x: (rng.next() - 0.5) * extras.releaseSpinVarianceXZ,
       y: extras.releaseSpinBaseY,
       z: (rng.next() - 0.5) * extras.releaseSpinVarianceXZ,
-    }, true)
+    }
+    // Dynamic again (keeping the well's last motion), then the launch and spin.
+    this.capture.release(body, { impulse: { x: impulse.x, y: impulse.y, z: impulse.z }, angvel: spin })
 
     this.releaseShakeIntensity = this.config.animation.releaseShakeInitial
   }

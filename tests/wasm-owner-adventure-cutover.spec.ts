@@ -1,10 +1,11 @@
 /**
- * E2E for #383 Slice B: an adventure track runs in `wasm-owner` with Rapier
- * unstepped.
+ * E2E for #383 Slice B / #412: an adventure track runs in `wasm-owner` with no
+ * Rapier at all.
  *
- * The load-bearing assertion is that the Rapier world's step counter stays
- * flat while adventure is active — that is the whole point of the slice, and
- * the thing that silently regresses if geometry export ever starts failing.
+ * The load-bearing assertions are that every collider on the track has a C++
+ * equivalent and that the owner boot never created a Rapier module or World —
+ * the thing that silently regresses if geometry export or the lazy Rapier
+ * import ever breaks.
  */
 
 import { test, expect, type Page } from '@playwright/test'
@@ -19,8 +20,9 @@ interface CutoverGame {
   physics?: {
     getWasmMode?: () => string
     isWasmOwnerMode?: () => boolean
-    getOwnerSkipRapierStep?: () => boolean
-    getWorld?: () => { timestep?: number } | null
+    getRapier?: () => unknown
+    getRapierWorld?: () => unknown
+    getLastRapierStepMs?: () => number
   }
   physicsController?: {
     getAdventureOwnership?: () => {
@@ -60,7 +62,7 @@ async function bootGame(page: Page): Promise<void> {
 }
 
 test.describe('wasm-owner adventure cutover', () => {
-  test('Neon Helix runs in wasm-owner with Rapier unstepped', async ({ page }) => {
+  test('Neon Helix runs in wasm-owner with no Rapier world', async ({ page }) => {
     await bootGame(page)
 
     const mode = await page.evaluate(() => {
@@ -83,26 +85,7 @@ test.describe('wasm-owner adventure cutover', () => {
       const trackBodyCount = g.adventureMode?.collectTrackBodies?.().length ?? 0
       const adventureOwned = ownership?.owned ?? false
       const unsupported = [...(ownership?.unsupported ?? [])]
-
-      // Rapier exposes no step counter, so count integration indirectly: a
-      // disabled, unstepped world leaves a free-floating probe body exactly
-      // where it was put. Under gravity a stepping world would move it.
-      const world = g.physics?.getWorld?.() as
-         
-        { createRigidBody?: (d: unknown) => any; removeRigidBody?: (b: unknown) => void } | null
-
-      let probeMoved = -1
-       
-      const RAPIER = (window as unknown as { RAPIER?: any }).RAPIER
-      if (world?.createRigidBody && RAPIER) {
-        const probe = world.createRigidBody(
-          RAPIER.RigidBodyDesc.dynamic().setTranslation(0, 50, 0)
-        )
-        const y0 = probe.translation().y
-        await wait(600)
-        probeMoved = Math.abs(probe.translation().y - y0)
-        world.removeRigidBody?.(probe)
-      }
+      await wait(600)
 
       return {
         adventureActive: g.adventureMode?.isActive() ?? false,
@@ -110,8 +93,8 @@ test.describe('wasm-owner adventure cutover', () => {
         adventureOwned,
         unsupportedCount: unsupported.length,
         unsupported: JSON.stringify(unsupported).slice(0, 500),
-        skipRapierStep: g.physics?.getOwnerSkipRapierStep?.() ?? false,
-        probeMoved,
+        rapierLoaded: g.physics?.getRapier?.() != null || g.physics?.getRapierWorld?.() != null,
+        rapierMs: g.physics?.getLastRapierStepMs?.() ?? -1,
       }
     })
 
@@ -122,11 +105,9 @@ test.describe('wasm-owner adventure cutover', () => {
     expect(result.unsupportedCount, `unsupported geometry: ${result.unsupported}`).toBe(0)
     expect(result.adventureOwned).toBe(true)
 
-    // ...and with the track owned, Rapier's integration is switched off.
-    expect(result.skipRapierStep).toBe(true)
-    if (result.probeMoved >= 0) {
-      expect(result.probeMoved).toBeLessThan(0.01)
-    }
+    // ...and there is no Rapier to step: never loaded, never stepped.
+    expect(result.rapierLoaded).toBe(false)
+    expect(result.rapierMs).toBe(0)
   })
 
   test('falls back to a stepping Rapier world when WASM is unavailable', async ({ page }) => {

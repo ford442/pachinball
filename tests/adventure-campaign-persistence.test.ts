@@ -3,7 +3,7 @@ import {
   migrateCampaignStorage,
   sanitizeProgressionState,
   CAMPAIGN_STORAGE_VERSION,
-} from '../src/game-elements/adventure-campaign-persistence'
+} from '../src/adventure/adventure-campaign-persistence'
 
 describe('adventure campaign persistence', () => {
   it('sanitizes unknown tracks and invalid scores', () => {

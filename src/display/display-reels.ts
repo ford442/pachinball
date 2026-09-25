@@ -12,7 +12,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import type { Scene } from '@babylonjs/core/scene'
-import { getSessionRngFork, RNG_FORK } from '../game-elements/seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 import { DisplayState, type DisplayConfig, type SlotReel } from './display-types'
 import { DISPLAY_LAYER_Z } from './display-layer-depth'
 

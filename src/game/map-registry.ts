@@ -6,7 +6,7 @@
  */
 
 import { AdventureTrackType } from '../adventure/adventure-types'
-import { TRACK_CATALOG, type TrackModeType } from '../game-elements/adventure-track-progression'
+import { TRACK_CATALOG, type TrackModeType } from '../adventure/adventure-track-progression'
 import { TABLE_MAPS } from '../shaders/lcd-table'
 
 /**

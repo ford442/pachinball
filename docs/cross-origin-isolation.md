@@ -1,13 +1,15 @@
 # Cross-origin isolation (COOP/COEP)
 
-Tracking issue: **#384** ("SharedArrayBuffer physics ring + COOP/COEP, finish #361").
-This doc covers the isolation-headers slice only; the SAB memory layout itself is a
-separate follow-up (see `src/config/physics.ts`'s `wasm-worker` doc comment).
+Tracking issues: **#384** (headers) and **#414** (the SharedArrayBuffer transport).
+This doc covers the headers. The shared memory layout that depends on them is
+specified in `docs/wasm-physics-engine.md` → *Worker transport* → *Shared snapshot
+layout*.
 
 ## Why
 
-`SharedArrayBuffer` (needed for a future zero-copy worker↔main physics transform/
-contact ring) is only constructible when the page is **cross-origin isolated**:
+`SharedArrayBuffer` (used by `wasm-worker` to hand transforms, hinge angles and
+contacts from the physics worker to the main thread without a per-step allocation)
+is only constructible when the page is **cross-origin isolated**:
 `window.crossOriginIsolated === true`. That requires every top-level response to
 carry:
 
@@ -49,13 +51,13 @@ first-party same-origin responses served by the dev server itself.
 
 ## Mandatory fallback
 
-`wasm-worker` mode does not require cross-origin isolation to function — it has no
-`SharedArrayBuffer` dependency today and works identically over `postMessage`
-whether or not the page is isolated. `isCrossOriginIsolated()`
-(`src/config/physics.ts`) exists purely as a detector/diagnostic for the future
-SAB-backed transport; nothing in the physics engine's mode-selection or fallback
-path (`PhysicsSystem.init()`, `src/game-elements/physics.ts`) branches on it yet.
-The game must and does still boot with headers off.
+`wasm-worker` mode does not require cross-origin isolation to function.
+`isCrossOriginIsolated()` (`src/config/physics.ts`) picks the snapshot transport
+only: shared memory when true, transferred `postMessage` buffers when false. It
+never decides whether the worker (or the game) boots — engine selection and its
+fallbacks in `PhysicsSystem.init()` (`src/game-elements/physics.ts`) do not branch
+on it. `tests/wasm-worker-adventure.spec.ts` plays an adventure track both ways,
+stripping COOP/COEP from the document response for the non-isolated run.
 
 ## Verifying locally
 

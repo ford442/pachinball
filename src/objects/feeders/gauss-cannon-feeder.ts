@@ -7,7 +7,8 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import { CapturedBall } from '../../core/captured-ball'
 import type { GameConfigType } from '../../config'
 
 export enum GaussCannonState {
@@ -20,8 +21,8 @@ export enum GaussCannonState {
 
 export class GaussCannonFeeder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
   private config: GameConfigType['gaussCannon']
 
   private position: Vector3
@@ -40,8 +41,9 @@ export class GaussCannonFeeder {
   // Coil stretch animation
   private coilPulsePhase: number = 0
 
-  private caughtBall: RAPIER.RigidBody | null = null
-  private physicsBody: RAPIER.RigidBody | null = null
+  private caughtBall: PhysicsBody | null = null
+  private readonly capture: CapturedBall
+  private physicsBody: PhysicsBody | null = null
 
   // Follow-through animation: Barrel recoil with spring physics
   private barrelRecoilOffset: number = 0
@@ -55,13 +57,14 @@ export class GaussCannonFeeder {
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
     config: GameConfigType['gaussCannon']
   ) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
+    this.capture = new CapturedBall(rapier)
     this.config = config
     this.position = new Vector3(this.config.gaussPosition.x, this.config.gaussPosition.y, this.config.gaussPosition.z)
 
@@ -170,7 +173,7 @@ export class GaussCannonFeeder {
     )
   }
 
-  update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+  update(dt: number, ballBodies: PhysicsBody[]): void {
     if (!this.gameplayEnabled) return
     this.timer -= dt
 
@@ -294,7 +297,7 @@ export class GaussCannonFeeder {
       const newY = Scalar.Lerp(currentPos.y, targetPos.y, lerpFactor)
       const newZ = Scalar.Lerp(currentPos.z, targetPos.z, lerpFactor)
 
-      this.caughtBall.setNextKinematicTranslation({ x: newX, y: newY, z: newZ })
+      this.capture.steer(this.caughtBall, { translation: { x: newX, y: newY, z: newZ } })
 
       const dist = Vector3.Distance(
         new Vector3(currentPos.x, currentPos.y, currentPos.z),
@@ -319,11 +322,11 @@ export class GaussCannonFeeder {
        // Sync ball to breech
        if (this.caughtBall) {
            const targetPos = this.position.add(new Vector3(0, this.config.breechYOffset, 0))
-           this.caughtBall.setNextKinematicTranslation({ x: targetPos.x, y: targetPos.y, z: targetPos.z })
+           this.capture.steer(this.caughtBall, { translation: { x: targetPos.x, y: targetPos.y, z: targetPos.z } })
        }
   }
 
-  private checkProximity(ballBodies: RAPIER.RigidBody[]): void {
+  private checkProximity(ballBodies: PhysicsBody[]): void {
     const PULL_RADIUS = this.config.intakeRadius || 1.0
 
     for (const body of ballBodies) {
@@ -341,9 +344,9 @@ export class GaussCannonFeeder {
     }
   }
 
-  private captureBall(body: RAPIER.RigidBody): void {
+  private captureBall(body: PhysicsBody): void {
     this.caughtBall = body
-    body.setBodyType(this.rapier.RigidBodyType.KinematicPositionBased, true)
+    this.capture.capture(body)
     this.setState(GaussCannonState.LOAD)
   }
 
@@ -409,8 +412,6 @@ export class GaussCannonFeeder {
   private fireBall(): void {
     if (!this.caughtBall) return
 
-    this.caughtBall.setBodyType(this.rapier.RigidBodyType.Dynamic, true)
-
     // Calculate direction from angle
     // angle 0 = +X (Right)
     const rad = this.currentAngle * (Math.PI / 180)
@@ -422,12 +423,10 @@ export class GaussCannonFeeder {
     // Actually we just need direction vector
     const dir = new Vector3(dirX, 0, dirZ).normalize()
 
-    // We can't teleport dynamic body easily without sleep, but we just switched it.
-    // Apply impulse is safer.
-
     const force = dir.scale(this.config.muzzleVelocity)
 
-    this.caughtBall.applyImpulse({ x: force.x, y: force.y, z: force.z }, true)
+    // Dynamic again at the breech, then the muzzle impulse.
+    this.capture.release(this.caughtBall, { impulse: { x: force.x, y: force.y, z: force.z } })
     this.caughtBall = null
 
     // Follow-through: Barrel recoil kickback and vibration

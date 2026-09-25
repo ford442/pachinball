@@ -8,7 +8,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
 import { getMaterialLibrary } from '../materials'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsImpulseJoint, PhysicsWorldSink } from '../core/physics-api'
 import { GameConfig } from '../config'
 import type { PhysicsBinding, BumperVisual } from '../game-elements/types'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
@@ -23,20 +23,20 @@ import type { GameObjectRefs } from './object-types'
 
 export class GameObjects {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
   private config: typeof GameConfig
   private bindings: PhysicsBinding[] = []
   private bumperVisuals: BumperVisual[] = []
-  private bumperBodies: RAPIER.RigidBody[] = []
-  private targetBodies: RAPIER.RigidBody[] = []
+  private bumperBodies: PhysicsBody[] = []
+  private targetBodies: PhysicsBody[] = []
   private targetMeshes: Mesh[] = []
   private targetActive: boolean[] = []
   private targetRespawnTimer: number[] = []
-  private flipperLeftJoint: RAPIER.ImpulseJoint | null = null
-  private flipperRightJoint: RAPIER.ImpulseJoint | null = null
-  private deathZoneBody: RAPIER.RigidBody | null = null
-  private plungerBody: RAPIER.RigidBody | null = null
+  private flipperLeftJoint: PhysicsImpulseJoint | null = null
+  private flipperRightJoint: PhysicsImpulseJoint | null = null
+  private deathZoneBody: PhysicsBody | null = null
+  private plungerBody: PhysicsBody | null = null
   private plungerRestZ = -9.8
   private pinballMeshes: AbstractMesh[] = []
   private tableBodiesEnabled = true
@@ -61,8 +61,8 @@ export class GameObjects {
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
     config: typeof GameConfig
   ) {
     this.scene = scene
@@ -155,7 +155,7 @@ export class GameObjects {
     )
   }
 
-  getPlungerBody(): RAPIER.RigidBody | null {
+  getPlungerBody(): PhysicsBody | null {
     return this.plungerBody
   }
 
@@ -228,7 +228,7 @@ export class GameObjects {
     this.pinballMeshes.push(shooterHousing, shooterRod, plungerKnob, spring, laneGuide)
   }
 
-  createFlippers(): { left: RAPIER.ImpulseJoint; right: RAPIER.ImpulseJoint } {
+  createFlippers(): { left: PhysicsImpulseJoint; right: PhysicsImpulseJoint } {
     const result = this.flipperBuilder.createFlippers()
     
     for (const [key, value] of result.flippers) {
@@ -336,7 +336,7 @@ export class GameObjects {
     }
   }
 
-  activateBumperHit(body: RAPIER.RigidBody): void {
+  activateBumperHit(body: PhysicsBody): void {
     const vis = this.bumperVisuals.find(v => v.body === body)
     if (vis) {
       vis.hitTime = 0.2
@@ -351,7 +351,7 @@ export class GameObjects {
     this.bumperBuilder.updateBumperColors(mapColorHex, this.bumperVisuals)
   }
 
-  deactivateTarget(body: RAPIER.RigidBody): boolean {
+  deactivateTarget(body: PhysicsBody): boolean {
     const idx = this.targetBodies.indexOf(body)
     if (idx !== -1 && this.targetActive[idx]) {
       this.targetActive[idx] = false
@@ -375,7 +375,7 @@ export class GameObjects {
     return this.bindings
   }
 
-  getBumperBodies(): RAPIER.RigidBody[] {
+  getBumperBodies(): PhysicsBody[] {
     return this.bumperBodies
   }
 
@@ -383,19 +383,38 @@ export class GameObjects {
     return this.bumperVisuals
   }
 
-  getTargetBodies(): RAPIER.RigidBody[] {
+  getTargetBodies(): PhysicsBody[] {
     return this.targetBodies
   }
 
-  getDeathZoneBody(): RAPIER.RigidBody | null {
+  getDeathZoneBody(): PhysicsBody | null {
     return this.deathZoneBody
+  }
+
+  /**
+   * Table bodies the C++ owner simulates (#412): everything with a mesh
+   * binding (walls, slingshots, bumpers, pachinko pins and targets,
+   * decoration rails), the lane rollover sensors and the drain.
+   *
+   * Held out: RailBuilder's rails and guards, and the plunger body. They were
+   * authored against the Rapier table surface (the LCD ground's top, y = -0.9),
+   * where the ball rolls beneath them; the owner's ground plane is y = 0, and
+   * exported unchanged they close the plunger lane. They stay recorded (and
+   * listed by `WasmOwner.getTableUnsupported()`) until they are calibrated for
+   * the owner plane. (The ball traps join the scope in GamePhysicsController.)
+   */
+  getWasmExportBodies(): PhysicsBody[] {
+    const bodies = this.bindings.map((b) => b.rigidBody)
+    bodies.push(...this.laneSensorBuilder.getBodies())
+    if (this.deathZoneBody) bodies.push(this.deathZoneBody)
+    return bodies
   }
 
   getLaneSensors(): LaneSensorDef[] {
     return this.laneSensorBuilder.getSensors()
   }
 
-  getFlipperJoints(): { left: RAPIER.ImpulseJoint | null; right: RAPIER.ImpulseJoint | null } {
+  getFlipperJoints(): { left: PhysicsImpulseJoint | null; right: PhysicsImpulseJoint | null } {
     return {
       left: this.flipperLeftJoint,
       right: this.flipperRightJoint
@@ -412,7 +431,7 @@ export class GameObjects {
 
   setTableBodiesEnabled(enabled: boolean): void {
     this.tableBodiesEnabled = enabled
-    const bodies = new Set<RAPIER.RigidBody>()
+    const bodies = new Set<PhysicsBody>()
 
     for (const binding of this.bindings) {
       bodies.add(binding.rigidBody)
@@ -443,11 +462,11 @@ export class GameObjects {
     }
   }
 
-  getFlipper(name: string): { mesh: TransformNode; body: RAPIER.RigidBody; joint: RAPIER.ImpulseJoint } | undefined {
+  getFlipper(name: string): { mesh: TransformNode; body: PhysicsBody; joint: PhysicsImpulseJoint } | undefined {
     return this.refs.flippers.get(name)
   }
 
-  getAllFlippers(): Map<string, { mesh: TransformNode; body: RAPIER.RigidBody; joint: RAPIER.ImpulseJoint }> {
+  getAllFlippers(): Map<string, { mesh: TransformNode; body: PhysicsBody; joint: PhysicsImpulseJoint }> {
     return this.refs.flippers
   }
 
@@ -463,7 +482,7 @@ export class GameObjects {
     this.bindings.push(binding)
   }
 
-  removeBinding(rigidBody: RAPIER.RigidBody): void {
+  removeBinding(rigidBody: PhysicsBody): void {
     const idx = this.bindings.findIndex(b => b.rigidBody === rigidBody)
     if (idx !== -1) {
       this.bindings[idx].mesh.dispose()

@@ -4,16 +4,16 @@ import type { StandardMaterial } from '@babylonjs/core/Materials/standardMateria
 import type { Color3 } from '@babylonjs/core/Maths/math.color'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../core/physics-api'
 
 export interface PhysicsBinding {
   mesh: TransformNode
-  rigidBody: RAPIER.RigidBody
+  rigidBody: PhysicsBody
 }
 
 export interface BumperVisual {
   mesh: Mesh
-  body: RAPIER.RigidBody
+  body: PhysicsBody
   hologram?: Mesh
   hitTime: number
   sweep: number
@@ -57,7 +57,7 @@ export interface ShardParticle {
 }
 
 export interface CaughtBall {
-  body: RAPIER.RigidBody
+  body: PhysicsBody
   targetPos: import('@babylonjs/core/Maths/math.vector').Vector3
   timer: number
 }
@@ -295,5 +295,5 @@ export interface BallData {
   /** Babylon.js mesh reference (optional, for tracking) */
   mesh?: Mesh
   /** Rapier rigid body reference (optional, for tracking) */
-  rigidBody?: RAPIER.RigidBody
+  rigidBody?: PhysicsBody
 }

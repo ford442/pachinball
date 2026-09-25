@@ -7,7 +7,7 @@ import {
   validateLayout,
   runSpawnProbes,
 } from '../src/game-elements/daily-cascade-layout'
-import { hashStringToSeed } from '../src/game-elements/seeded-rng'
+import { hashStringToSeed } from '../src/core/seeded-rng'
 
 const PROBE_SEEDS = Array.from({ length: 20 }, (_, i) => hashStringToSeed(`probe-${i}`))
 

@@ -31,7 +31,7 @@ import { CameraController, CameraMode } from '../game-elements/camera-controller
 import type { TableMapManager } from './game-maps'
 import type { GameUIManager } from './game-ui'
 import { GAME_TUNING } from '../config'
-import { TABLE_MAPS } from '../shaders/lcd-table'
+import { DEFAULT_TABLE_MAP_ID, TABLE_MAPS } from '../shaders/lcd-table'
 import { getMaterialLibrary } from '../materials'
 import { isMobileUserAgent } from '../engine/engine-options'
 
@@ -210,7 +210,7 @@ export class GameLifecycle {
       this.host.replayRecorder.start({
         version: 1,
         buildId: '1.0.0',
-        mapId: this.host.currentMapId ?? 'neon-helix',
+        mapId: this.host.currentMapId ?? DEFAULT_TABLE_MAP_ID,
         seed: getSessionSeed(),
         physicsEngine: this.host.physics?.getWasmMode() ?? 'rapier',
         renderer: (typeof window !== 'undefined' && (window as unknown as { currentRenderer?: string }).currentRenderer === 'webgpu') ? 'webgpu' : 'webgl2',

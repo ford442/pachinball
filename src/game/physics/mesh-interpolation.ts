@@ -1,9 +1,9 @@
 import { Vector3, Quaternion, Matrix, TmpVectors } from '@babylonjs/core/Maths/math.vector'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../../core/physics-api'
 
 export interface InterpolationBinding {
-  rigidBody?: RAPIER.RigidBody
+  rigidBody?: PhysicsBody
   mesh?: TransformNode
 }
 
@@ -14,7 +14,7 @@ export interface InterpolationBinding {
 export class MeshInterpolationSystem {
   /** Pose at the end of the previous physics step, per rigid body — used to
    *  interpolate mesh transforms toward the current pose by the step's alpha. */
-  private readonly prevPoses: Map<RAPIER.RigidBody, { pos: Vector3; rot: Quaternion }> = new Map()
+  private readonly prevPoses: Map<PhysicsBody, { pos: Vector3; rot: Quaternion }> = new Map()
   private readonly scratchCurrPos = new Vector3()
   private readonly scratchCurrRot = new Quaternion()
   private readonly scratchInterpPos = new Vector3()
@@ -22,7 +22,7 @@ export class MeshInterpolationSystem {
   private readonly scratchScale = new Vector3(1, 1, 1)
 
   syncMeshes(alpha: number, bindings: InterpolationBinding[]): void {
-    const liveBodies = new Set<RAPIER.RigidBody>()
+    const liveBodies = new Set<PhysicsBody>()
 
     for (const binding of bindings) {
       const body = binding.rigidBody

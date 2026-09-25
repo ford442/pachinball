@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-import { TrackThemingSystem, applyThemeEmissiveColor } from '../src/game-elements/track-theming-system'
+import { TrackThemingSystem, applyThemeEmissiveColor } from '../src/adventure/track-theming-system'
 import { PALETTE, INTENSITY, color, emissive, QualityTier } from '../src/game-elements/visual-language'
 
 const materialLibraryMock = {

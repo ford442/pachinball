@@ -10,10 +10,10 @@ import { describe, expect, it } from 'vitest'
 import {
   CAMPAIGN_MAIN_PATH,
   TRACK_CATALOG,
-} from '../src/game-elements/adventure-track-progression'
+} from '../src/adventure/adventure-track-progression'
 import { getAllTrackManifests, getTrackManifest } from '../src/adventure/manifests'
 import { getDataTrackDefinition } from '../src/adventure/track-data-registry'
-import { buildCampaignGoalsForTrack } from '../src/game-elements/adventure-track-goals'
+import { buildCampaignGoalsForTrack } from '../src/adventure/adventure-track-goals'
 
 const catalogIds = Object.keys(TRACK_CATALOG)
 

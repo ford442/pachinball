@@ -6,7 +6,7 @@ import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight'
 import type { BloomPipelineController } from './bloom-pipeline-types'
 import { GameConfig } from '../config'
 import type { AccessibilityConfig } from '../game-elements/accessibility-config'
-import type { TrackThemeProfile } from '../game-elements/track-theme-profiles'
+import type { TrackThemeProfile } from '../adventure/track-theme-profiles'
 import { FOG_STATES, LIGHTING, LIGHTING_STATES, SURFACES, TEMPERATURE, color, pulse } from '../game-elements/visual-language'
 import { TrackAmbientEffects } from './track-ambient-effects'
 

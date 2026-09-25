@@ -2,7 +2,6 @@
   "schemaVersion": 1,
   "id": "PACHINKO_SPIRE",
   "cameraPresetId": "PACHINKO_SPIRE",
-  "themeProfile": "PACHINKO_SPIRE",
   "materials": {
     "structure": "#FFFFFF",
     "accent": "#ffdd00"

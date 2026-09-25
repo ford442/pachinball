@@ -227,17 +227,20 @@ type GoldenRunOpts = {
     update: (dt: number, balls: unknown[]) => void
     onStateChange?: ((state: number) => void) | null
   }
-  ball: ReturnType<typeof createMockBall>
+  /** A mock ball, or a real body whose `applyImpulse` / `setAngvel` are `vi.spyOn`-wrapped. */
+  ball: Pick<ReturnType<typeof createMockBall>, 'applyImpulse' | 'setAngvel'>
   maxFrames: number
   getState: () => number
   stateNames: Record<string, number>
   onFrame?: (frame: number) => void
+  /** After each feeder update — the owner-path fixtures step the WASM engine here. */
+  afterFrame?: (frame: number) => void
   stopWhen?: (state: number, frame: number) => boolean
 }
 
 /** Scripted FSM walk recording state transitions and impulses (deterministic with fixed Math.random). */
 export function runFeederFsmGolden(opts: GoldenRunOpts): GoldenRecord {
-  const { feeder, ball, maxFrames, getState, onFrame, stopWhen } = opts
+  const { feeder, ball, maxFrames, getState, onFrame, afterFrame, stopWhen } = opts
   const DT = 1 / 60
   const states: number[] = [getState()]
   const impulses: Array<{ x: number; y: number; z: number }> = []
@@ -252,6 +255,7 @@ export function runFeederFsmGolden(opts: GoldenRunOpts): GoldenRecord {
   for (let frame = 0; frame < maxFrames; frame++) {
     onFrame?.(frame)
     feeder.update(DT, [ball as never])
+    afterFrame?.(frame)
     const impulseCalls = (ball.applyImpulse as ReturnType<typeof import('vitest').vi.fn>).mock.calls
     for (let i = impulses.length; i < impulseCalls.length; i++) {
       impulses.push({ ...impulseCalls[i][0] })

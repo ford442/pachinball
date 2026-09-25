@@ -5,6 +5,7 @@
 
 import type { WasmPhysicsRuntimeMode } from '../config/physics'
 import type { InputFrame } from '../game-elements/types'
+import { DEFAULT_TABLE_MAP_ID } from '../shaders/lcd-table'
 
 /** Normalise legacy replay metadata (`wasm` → mirror). */
 function normalizeReplayPhysicsEngine(value: unknown): WasmPhysicsRuntimeMode {
@@ -208,7 +209,7 @@ export class ReplayRecorder {
     return {
       version: data.version ?? 1,
       buildId: data.buildId ?? data.build_id ?? '1.0.0',
-      mapId: data.mapId ?? data.map_id ?? 'neon-helix',
+      mapId: data.mapId ?? data.map_id ?? DEFAULT_TABLE_MAP_ID,
       seed: data.seed ?? 0,
       physicsEngine: normalizeReplayPhysicsEngine(data.physicsEngine),
       renderer: data.renderer ?? data.client_renderer ?? 'webgl2',

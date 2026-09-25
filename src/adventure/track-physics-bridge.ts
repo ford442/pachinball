@@ -1,4 +1,4 @@
-import type RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 
 /**
  * Overlap + impulse operations a track needs, abstracted over the engine that
@@ -15,16 +15,16 @@ import type RAPIER from '@dimforge/rapier3d-compat'
  * is underneath. With no bridge installed, both fall back to Rapier.
  */
 export interface AdventurePhysicsBridge {
-  overlaps(sensorBody: RAPIER.RigidBody, ball: RAPIER.RigidBody): boolean
-  applyImpulse(ball: RAPIER.RigidBody, x: number, y: number, z: number): void
+  overlaps(sensorBody: PhysicsBody, ball: PhysicsBody): boolean
+  applyImpulse(ball: PhysicsBody, x: number, y: number, z: number): void
 }
 
 /** True when `ball` currently overlaps `sensorBody`'s trigger volume. */
 export function testSensorOverlap(
   bridge: AdventurePhysicsBridge | null,
-  world: RAPIER.World,
-  sensorBody: RAPIER.RigidBody,
-  ball: RAPIER.RigidBody
+  world: PhysicsWorldSink,
+  sensorBody: PhysicsBody,
+  ball: PhysicsBody
 ): boolean {
   if (bridge) return bridge.overlaps(sensorBody, ball)
   const sensorCollider = sensorBody.collider(0)
@@ -36,7 +36,7 @@ export function testSensorOverlap(
 /** Apply a world-space impulse to a ball, on whichever engine owns it. */
 export function applyBallImpulse(
   bridge: AdventurePhysicsBridge | null,
-  ball: RAPIER.RigidBody,
+  ball: PhysicsBody,
   x: number,
   y: number,
   z: number

@@ -1,14 +1,18 @@
 # WASM Physics Engine
 
-> High-performance C++ simulation core for Pachinball, compiled to WebAssembly
-> via Emscripten and integrated with the existing Rapier / Babylon.js stack.
+> C++ simulation core for Pachinball, compiled to WebAssembly via Emscripten.
+> It is the **production physics engine** (`wasm-owner`, see
+> [`src/config/physics.ts`](../src/config/physics.ts)). Since #412 the owner boot never
+> loads Rapier: builders author through a narrow physics API, bodies are keyed on WASM
+> public ids, and `@dimforge/rapier3d-compat` is fetched lazily only for the explicit
+> `rapier` / `wasm-mirror` modes or when the WASM bundle is missing (fail-closed fallback).
 
 ---
 
 ## Motivation
 
-Pachinball's current physics stack — Rapier 3D WASM + Babylon.js — works well
-for the standard game flow.  A custom C++ WASM core unlocks:
+Pachinball started on Rapier 3D WASM + Babylon.js. The custom C++ core replaced
+Rapier as the simulation owner because it unlocks:
 
 | Benefit | Detail |
 |---------|--------|
@@ -23,26 +27,34 @@ for the standard game flow.  A custom C++ WASM core unlocks:
 ## Architecture overview
 
 ```
-TypeScript (game logic)
-        │
+TypeScript (game logic: table builders, balls, toys, adventure tracks)
+        │  PhysicsApi / PhysicsWorldSink / PhysicsBody (src/core/physics-api.ts)
         ▼
-WasmPhysicsEngine  ◄──── src/wasm/PhysicsModule.ts
-(TypeScript wrapper)           │
-        │                      │  dynamic import
-        ▼                      ▼
-PhysicsModule.js  ◄─── native/build/ (Emscripten output)
-PhysicsModule.wasm
-        │
+WASM_PHYSICS_API + WasmTableWorld  ◄──── src/wasm/wasm-{physics-api,table-world,body}.ts
+        │  TableColliderDesc per body; balls are C++ bodies from birth
+        ▼
+WasmOwner / WasmMirror  ◄──── src/game/physics/wasm-{owner,mirror}.ts
+        │  WasmSimEngine (src/wasm/wasm-sim-engine.ts)
+        ├───────────────────────────────┐
+        ▼ in-process                    ▼ wasm-worker
+WasmPhysicsEngine                PhysicsWorkerClient ──postMessage──► physics-worker.ts
+ src/wasm/PhysicsModule.ts        (physics-worker-protocol.ts)          └─► WasmPhysicsEngine
+ + physics-module-adventure.ts
+        │  dynamic import
+        ▼
+PhysicsModule.js / .wasm  ◄─── public/wasm/ (Emscripten output, npm run build:wasm)
+        │  Embind (native/src/bindings.cpp)
         ▼
 C++ PhysicsWorld  ◄──── native/src/PhysicsWorld.{h,cpp}
         │
-   ┌────┴────┐
-RigidBody  ContactListener
+   ┌────┴──────────────┬──────────────┬───────────────┐
+BodyStore/RigidBody  Narrowphase   HingeJoint   ContactListener
 ```
 
-The C++ engine is a **sphere-primary** rigid-body solver (with static boxes/capsules
-and kinematic capsule flipper proxies) and runs as a thin, fast supplement to —
-or eventual replacement for — Rapier. Collision response includes a **normal
+The C++ engine is a sphere-and-capsule rigid-body solver with dynamic boxes,
+static boxes / capsules / cylinders / spheres / triangle meshes, kinematic movers,
+sensor volumes, force fields and world-anchored hinges. It owns the table and every
+adventure track in production. Collision response includes a **normal
 impulse**, **Coulomb friction** (geometric-mean combine `μ = sqrt(μ_a μ_b)`),
 **spherical inertia** `I = 2/5 m r²` with integrated orientation, and a small
 **rolling-resistance** term so balls settle instead of rolling forever.
@@ -53,27 +65,73 @@ impulse**, **Coulomb friction** (geometric-mean combine `μ = sqrt(μ_a μ_b)`),
 
 ```
 native/
-├── CMakeLists.txt               Emscripten + native build config
+├── CMakeLists.txt               Emscripten + native (Catch2) build config
 ├── src/
 │   ├── MathTypes.h              Vec3, Quat, Transform
-│   ├── RigidBody.h / .cpp       Dynamic / static / kinematic sphere bodies
-│   ├── ContactListener.h        Contact-event queue + callback dispatch
-│   ├── PhysicsWorld.h / .cpp    Simulation world (step, broadphase, solver)
-│   └── bindings.cpp             EMSCRIPTEN_BINDINGS (Embind)
-└── tests/
-    ├── physics_world_test.cpp   Catch2 unit tests (native build only)
+│   ├── RigidBody.h / .cpp       Dynamic / static / kinematic sphere + capsule bodies
+│   ├── DynamicBox.cpp           Dynamic oriented-box bodies (createBoxBody)
+│   ├── BodyStore.h / .cpp       SoA body storage + packed transform buffer
+│   ├── HandleTable.h            Stable body / hinge handles
+│   ├── BroadphaseGrid.h / .cpp  Uniform-grid broadphase
+│   ├── Narrowphase.cpp          Pair tests (sphere / capsule / box / statics)
+│   ├── CollisionFilter.h        membership/filter masks (mirrors CollisionGroups)
+│   ├── StaticShapes.h / .cpp    Static box / capsule / sphere (+ ConeDesc)
+│   ├── Cylinder.h / .cpp        Static cylinder (closed-form sphere vs cylinder)
+│   ├── Cone.cpp                 Static cone — ball-trap funnels (closed-form sphere vs cone)
+│   ├── TriangleMesh.h / .cpp    Static triangle mesh (addStaticTriangleMesh)
+│   ├── VolumeShape.h / .cpp     Box / Cylinder / Sphere tag for movers + sensors
+│   ├── KinematicMover.h / .cpp  Pose-driven kinematic movers
+│   ├── KinematicBody.cpp        Runtime setBodyType + kinematic rigid-body targets (toy capture)
+│   ├── SensorVolume.h / .cpp    Enter/Stay/Exit trigger volumes
+│   ├── ForceField.h / .cpp      Oriented force / acceleration regions
+│   ├── HingeJoint.h / .cpp      World-anchored revolute hinge + motor
+│   ├── ContactListener.h        Contact-event queue + packed contact buffer
+│   ├── PhysicsWorld.h / .cpp    Simulation world: bodies, colliders, handle ranges
+│   ├── PhysicsWorldStep.cpp     step() / substep(): integration, broadphase, solver loop, transform scatter
+│   └── bindings.cpp             EMSCRIPTEN_BINDINGS (Embind) — Emscripten only
+└── tests/                       Catch2 (native build only)
+    ├── physics_world_test.cpp   Integration, contacts, broadphase, sleep, benchmark
+    ├── hinge_friction_test.cpp  Friction / spin / rolling resistance + hinges
+    ├── static_shapes_test.cpp
+    ├── adventure_geometry_test.cpp
+    ├── kinematic_mover_test.cpp
+    ├── sensor_volume_test.cpp
+    ├── collision_filter_test.cpp
+    ├── kinematic_body_test.cpp  Runtime body type: capture, steer, release (#420)
+    ├── cone_test.cpp            Static cone: apex / slant / base / inside / groups (#420)
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
 ├── wasm-types.ts                TypeScript interfaces matching the Embind API
-├── PhysicsModule.ts             WasmPhysicsEngine wrapper
+├── PhysicsModule.ts             WasmPhysicsEngine: load, world, table statics, bodies, hinges, step
+├── physics-module-adventure.ts  Cylinder / sphere / cone / mesh / mover / sensor / box body / force field
+├── wasm-sim-engine.ts           WasmSimEngine interface (in-process engine + worker client)
+├── physics-worker-protocol.ts   Worker command union + id shadow
+├── physics-worker-runtime.ts    applyPhysicsCommand / WorkerSnapshotPublisher
+├── physics-shared-layout.ts     Versioned SharedArrayBuffer snapshot layout (seqlock + contact ring)
+├── physics-worker-client.ts     Main-thread PhysicsWorkerClient
+├── physics-worker.ts            Dedicated Worker entry
+├── contact-buffer.ts            Packed contact codec
+├── transform-buffer.ts          Packed transform codec
+├── wasm-physics-api.ts          WASM_PHYSICS_API: descriptor-recording RigidBodyDesc / ColliderDesc / JointData
+├── wasm-table-world.ts          WasmTableWorld: the owner-path PhysicsWorldSink (bodies, colliders, joints)
+├── wasm-body.ts                 WasmBody / WasmCollider: WASM-id-keyed bodies (linked to C++ or pose stores)
 └── index.ts                     Barrel export
+
+src/game/physics/
+├── wasm-owner.ts                wasm-owner / wasm-worker driver + WASM-id contact resolution
+├── wasm-mirror.ts               wasm-mirror driver (Rapier-authoritative parity path)
+├── wasm-static-export.ts        TableColliderDesc → C++ statics / sensors / kinematic movers
+└── wasm-adventure-export.ts     AdventureColliderDesc → C++
 
 scripts/
 ├── build-wasm.sh                Emscripten build helper (Release/Debug/Assert/bench)
 ├── build-wasm-colab.sh          Thin Colab wrapper → build-wasm.sh
 ├── bench-wasm-flags.mjs         50-sphere flag A/B/C microbench
-└── run-wasm-parity.mjs          Native + WASM parity (WASM_MODULE_PATH override)
+├── print-wasm-flags.mjs         Print the effective CMake WASM flags
+├── run-wasm-parity.mjs          Native + WASM parity (WASM_MODULE_PATH override)
+├── check-compile-db.mjs         clangd compile_commands.json smoke check
+└── check-wasm-docs.mjs          Fails when this doc drifts from CMake / sources
 
 public/wasm/                     Generated at build time (git-ignored)
 ├── PhysicsModule.js
@@ -176,7 +234,8 @@ Configured in [`native/CMakeLists.txt`](../native/CMakeLists.txt). Every
 | `-sFILESYSTEM=0` | No FS APIs in the physics module — smaller JS glue |
 | `-sALLOW_MEMORY_GROWTH=1` | Heap grows for large ball swarms |
 | `-sINITIAL_MEMORY=16777216` | 16 MB initial heap (`emmalloc`; grows if needed) |
-| `-sEXPORTED_RUNTIME_METHODS=["HEAPF32"]` | Packed contact/transform buffer views only — no `addFunction` / UTF8 helpers |
+| `-sEXPORTED_RUNTIME_METHODS=["HEAPF32","HEAPU32"]` | `HEAPF32` for packed contact/transform buffer views and mesh vertices; `HEAPU32` for mesh indices — no `addFunction` / UTF8 helpers |
+| `-sEXPORTED_FUNCTIONS=["_malloc","_free"]` | `addStaticTriangleMesh` takes heap pointers, so JS allocates + frees the triangle soup around the call |
 | `-sMALLOC=emmalloc` | Smaller allocator after setup |
 | `--closure=1` | Minify JS glue (parity-validated) |
 | `-fno-exceptions` | No `try`/`throw` in `native/src` — drops EH runtime |
@@ -186,7 +245,7 @@ Configured in [`native/CMakeLists.txt`](../native/CMakeLists.txt). Every
 Emscripten targets only. The native Catch2 tree (`native/build-native`, `npm run test:native`)
 adds **no** `-O` of its own — `CMAKE_CXX_FLAGS_<CONFIG>` owns the level there, so every entry in
 its `compile_commands.json` carries exactly one. It is configured with an explicit
-`-DCMAKE_BUILD_TYPE=Debug`; see the root `.clangd`.
+`-DCMAKE_BUILD_TYPE=Debug` by `npm run compile-db`; see the root `.clangd`.
 
 | Config | Compile | Link assertions | Source maps |
 |--------|---------|-----------------|-------------|
@@ -234,7 +293,8 @@ import { WasmPhysicsEngine } from './src/wasm'
 
 const engine = new WasmPhysicsEngine()
 
-// Load WASM (async — do once at startup, in parallel with Rapier/Babylon)
+// Load WASM (async — do once at startup; main.ts starts the fetch in parallel
+// with Babylon engine creation via preloadWasmPhysicsNow())
 await engine.load()              // uses './wasm/PhysicsModule.js' by default
 
 // Wire EventBus for contact events
@@ -294,12 +354,15 @@ Set via `localStorage['pachinball:physics-engine']`:
 
 | Mode | Value | Behaviour |
 |------|-------|-----------|
-| **WASM owner** (default) | `wasm-owner` or unset | WASM owns balls + static table geometry + **native hinge flippers** + adventure track geometry and gizmos; Rapier is not stepped (`lastRapierStepMs === 0`). |
-| **Rapier** | `rapier` (explicit) | Dev / degrade path: full Rapier simulation, and the fail-closed fallback when the WASM bundle is missing. Kept deliberately and covered by `tests/physics-degrade.spec.ts` and the fallback case in `tests/wasm-owner-adventure-cutover.spec.ts`. |
-| **WASM mirror** | `wasm-mirror` or legacy `wasm` | WASM steps ball+bumper subset; poses sync Rapier↔WASM each frame |
-| **WASM worker** | `wasm-worker` | Same ownership as `wasm-owner`, but `PhysicsWorld` runs in a Dedicated Worker. Snapshots arrive via `postMessage` + transferable `ArrayBuffer`s (**one physics frame of extra latency**). Worker construction / load failure falls back to in-process `wasm-owner`. The worker protocol has no cylinder / mesh / mover commands yet, so adventure tracks fail the ownership gate there and step Rapier on the main thread. |
+| **WASM owner** (default) | `wasm-owner` or unset | WASM owns balls + the table scope + **native hinge flippers** + adventure track geometry and gizmos. Rapier is never loaded: no module, no `World` (`getRapier() === null`, `lastRapierStepMs === 0`). |
+| **Rapier** | `rapier` (explicit) | Dev / degrade path: full Rapier simulation, and the fail-closed fallback when the WASM bundle is missing — Rapier is imported lazily (`loadRapier()`). Kept deliberately and covered by `tests/physics-degrade.spec.ts` and the fallback case in `tests/wasm-owner-adventure-cutover.spec.ts`. |
+| **WASM mirror** | `wasm-mirror` or legacy `wasm` | Rapier authoritative (loaded at boot); WASM steps ball+bumper subset and poses sync Rapier↔WASM each frame |
+| **WASM worker** | `wasm-worker` | Same ownership as `wasm-owner` — table **and** adventure tracks — but `PhysicsWorld` runs in a Dedicated Worker (**one physics frame of extra latency**). Snapshots arrive over a SharedArrayBuffer when the page is cross-origin isolated, otherwise as transferred `ArrayBuffer`s; see *Worker transport*. Worker construction / load failure falls back to in-process `wasm-owner`. `tests/wasm-worker-api-parity.test.ts` fails the build if an engine method has no worker command; `tests/physics-worker-shared-parity.test.ts` runs the worker path against real C++ and requires identical handles, poses and contacts. |
 
-Mirror mode remains a WASM parity path. Owner mode disables Rapier colliders for exported statics, bumpers, balls, **and flippers**. Each flipper is a dynamic WASM capsule with a world-anchored hinge (`PhysicsWorld::createHinge` / `setHingeMotor`). Pose is copied back onto the Rapier puppet for mesh interpolation only.
+Mirror mode remains a WASM parity path on Rapier bodies. Owner mode has no Rapier bodies at
+all (see *Table authoring and WASM-id identity* below): each flipper is a dynamic WASM capsule
+with a world-anchored hinge (`PhysicsWorld::createHinge` / `setHingeMotor`), linked to the
+`WasmBody` the flipper builder authored so meshes interpolate from the C++ pose directly.
 
 ```javascript
 // Dev console — mirror
@@ -308,7 +371,7 @@ localStorage.setItem('pachinball:physics-engine', 'wasm-mirror')
 // Owner mode — production default (also: localStorage.removeItem(...))
 localStorage.setItem('pachinball:physics-engine', 'wasm-owner')
 
-// Worker mode — same as owner, C++ world off the main thread (Phase 1, no SAB)
+// Worker mode — same as owner, C++ world off the main thread
 localStorage.setItem('pachinball:physics-engine', 'wasm-worker')
 
 // Explicit Rapier override (removeItem now falls back to wasm-owner)
@@ -316,14 +379,14 @@ localStorage.setItem('pachinball:physics-engine', 'rapier')
 location.reload()
 ```
 
-Debug HUD (Developer settings → Enable Debug HUD) shows `engine` (`wasmMode`), `wasm ms`, `rapier ms` (owner), and `mirror ms` (mirror sync overhead) under the Physics panel. Physics debug draw in owner/worker mode reads packed C++ transform/contact buffers plus cached static box/capsule AABBs.
+Debug HUD (Developer settings → Enable Debug HUD) shows `engine` (`wasmMode`), `wasm ms`, `rapier ms` (owner), and `mirror ms` (mirror sync overhead) under the Physics panel, and `wasm unexported` (table colliders the C++ owner is not simulating) under Campaign. Physics debug draw in owner/worker mode reads packed C++ transform/contact buffers plus the exported collider descriptors.
 
 ---
 
 ## Static colliders (Phase 2a)
 
-The C++ engine supports oriented static boxes, capsules, cylinders and
-spheres in addition to infinite planes and sphere bodies:
+The C++ engine supports oriented static boxes, capsules, cylinders, spheres
+and cones in addition to infinite planes and sphere bodies:
 
 ```typescript
 engine.addStaticBox(
@@ -362,6 +425,17 @@ engine.addStaticSphere(
   0.2
 )
 
+// #420 — ball-trap funnels. Apex at +halfHeight on local Y, base disc at
+// -halfHeight: Rapier's ColliderDesc.cone(halfHeight, radius), with the same
+// radius-first argument swap as the cylinder above.
+engine.addStaticCone(
+  { x: -5, y: 0.5, z: 10 },       // centre
+  0.2, 0.6,                        // base radius, half-height (local Y)
+  { x: 0, y: 0, z: 0, w: 1 },
+  0.6,
+  0.3
+)
+
 // Statics are append-only — a rebuilt scene (a new adventure track, a fresh
 // WasmOwner.rebuild) must clear first or it stacks a second copy. This
 // invalidates every negative handle; dynamic bodies and hinges survive.
@@ -379,7 +453,10 @@ and `native/src/StaticShapes.h`):
 | `-3000` | kinematic OBB mover |
 | `-4000` | OBB sensor volume |
 | `-5000` | static cylinder |
+| `-6000` | static triangle mesh |
+| `-7000` | force field |
 | `-8000` | static sphere |
+| `-9000` | static cone |
 
 **Sphere vs cylinder** is closed form (`native/src/StaticShapes.cpp`). The ball
 centre is transformed into the cylinder's local frame and clamped
@@ -391,18 +468,29 @@ No GJK, no convex solver — the adventure tracks between them use only cuboid,
 cylinder and ball, plus prism-pathway's triangular prisms, which are closed
 convex triangle meshes (`triangularPrismLayout`) rather than a hull.
 
+**Sphere vs cone** (`native/src/Cone.cpp`, #420) is closed form too. The solid
+is the triangle apex (0, h) / rim (R, −h) / base centre (0, −h) swept around
+the axis, and a point's nearest cone point always lies in the half-plane
+through the axis and that point — so the query runs in 2D, (ρ, y), against
+the base segment and the slant segment, then lifts back along the point's
+radial direction. Inside the solid it exits through whichever of the base and
+the slant is shallower. The broadphase files a cone under its bounding
+cylinder. `run-wasm-parity.mjs` compares a slant hit against Rapier's own cone.
+A native cone was chosen over a TS-emitted cylinder + sphere compound: it
+added one ~170-line TU and kept `PhysicsWorld.cpp` well under the 500-line cap.
+
 Native C++ tests (no browser, no Emscripten):
 
 ```bash
 npm run test:native
 # Equivalent:
-cmake -S native -B native/build-native
+npm run compile-db                      # configure only: Debug + compile_commands.json
 cmake --build native/build-native
 ctest --test-dir native/build-native --output-on-failure
 ```
 
 Catch2 is fetched automatically via CMake `FetchContent` on first configure.
-Test scenarios:
+Test scenarios (friction and hinge cases live in `hinge_friction_test.cpp`):
 
 | Test | Validates |
 |------|-----------|
@@ -434,6 +522,12 @@ Test scenarios:
 | `ball crossing a sensor volume emits exactly one enter and one exit` (`sensor_volume_test.cpp`) | Enter/Stay/Exit lifecycle, zero impulse |
 | `ball dwelling inside a sensor for N frames emits N-2 stay events` (`sensor_volume_test.cpp`) | Multi-frame dwell + exit-by-teleport lifecycle |
 | `two bodies whose filter masks exclude each other never generate a contact pair` (`collision_filter_test.cpp`) | Broadphase respects membership/filter masks |
+| `Dynamic <-> Kinematic round trip preserves mass` (`kinematic_body_test.cpp`) | `setBodyType` zeroes / restores inverse mass; a captured ball ignores impulses |
+| `kinematic ball does not respond to gravity` (`kinematic_body_test.cpp`) | No integration or force accumulation while kinematic |
+| `release velocity matches the last kinematic delta` (`kinematic_body_test.cpp`) | → Dynamic keeps the pose-delta velocity; free flight continues it |
+| `captured ball holds for 30 frames while a second ball rolls past` (`kinematic_body_test.cpp`) | The held ball stays on its targets and deflects the roller without tunnelling |
+| `kinematic body skips static solids but still trips sensors` (`kinematic_body_test.cpp`) | No impulse-less contact spam against statics; sensors still see a carried ball |
+| `a ball hitting the slant gets the slant normal` (`cone_test.cpp`, + apex / base / inside / rotated / groups) | Sphere-vs-cone regions and handle family |
 
 Parity suite (native Catch2 + compiled WASM bundle):
 
@@ -495,9 +589,10 @@ engine.setCollisionGroups(ballId, CollisionGroups.BALL, COLLIDES_WITH_EVERYTHING
 
 Adventure tracks never build Rapier colliders inline. Every primitive emits an
 `AdventureColliderDesc` (`src/adventure/track-collider-descriptors.ts`), and
-the list has two consumers: `TrackColliderEmitter` realises it on Rapier (the
-dev/degrade path), and `src/game/physics/wasm-adventure-export.ts` walks it
-into the C++ engine. A collider's *body* is its own descriptor, or its
+the list has two consumers: `TrackColliderEmitter` realises it on the active
+world sink (Rapier bodies on the dev/degrade path, `WasmBody` pose stores on
+the owner path), and `src/game/physics/wasm-adventure-export.ts` walks it into
+the C++ engine. A collider's *body* is its own descriptor, or its
 `parentIndex` descriptor when attached, and the body's `motion` picks the route:
 
 | Body motion | Collider | C++ |
@@ -514,11 +609,12 @@ advances each moving body once per frame — animated obstacles take the next
 pose AdventureMode's animator set, spinning platters and mills integrate their
 prescribed angular velocity exactly (`integrateSpin`) — then composes each
 collider's body-local pose and pushes it through `setNextKinematicTransform`.
-Rapier is never stepped for this; the Rapier body only stores the committed
-pose for mesh bindings and for the Rapier fallback.
+No Rapier exists on this path; the track's `WasmBody` only stores the
+committed pose for mesh bindings.
 
-**The ownership gate.** `WasmOwner.syncAdventureTrack()` returns true — and
-Rapier stays unstepped — when every live descriptor is expressible in C++ and
+**The ownership gate.** `WasmOwner.syncAdventureTrack()` returns true — the
+track is fully owned and its WASM overlap bridge is installed — when every live
+descriptor is expressible in C++ and
 the track built nothing outside the descriptor path (`markUnexportedCollider`).
 Exit portals no longer hold Rapier awake: portal entry goes through the
 `AdventurePhysicsBridge`, and its cylinder sensor is exported like any other.
@@ -527,15 +623,115 @@ C++ does not keep a sensor for a body Rapier has removed.
 
 `tests/wasm-owner-adventure.spec.ts` (run in the native-physics CI job) walks
 **every** `AdventureTrackType` in the browser and fails on any unsupported
-collider, an unowned track, a non-zero `lastRapierStepMs`, or a spinning body
-that did not turn.
+collider, an unowned track, a loaded Rapier module, a non-zero
+`lastRapierStepMs`, or a spinning body that did not turn.
 
-**Rapier is still a runtime dependency.** Only adventure *collider authorship*
-has moved; ball, flipper, bumper and table bodies are still created as Rapier
-bodies and used as the game-wide body handle (disabled puppets in owner mode),
-and table statics are exported by reading Rapier colliders
-(`wasm-static-export.ts`). Dropping `@dimforge/rapier3d-compat` from the
-player bundle needs that handle migration first.
+---
+
+## Table authoring and WASM-id identity (#412)
+
+The table, the balls, the toys and the adventure tracks are authored through a
+narrow physics API — `PhysicsApi`, `PhysicsWorldSink`, `PhysicsBody`
+(`src/core/physics-api.ts`) — instead of Rapier types. Rapier satisfies those
+interfaces structurally, so the explicit `rapier` mode and the degrade path hand
+the real library straight to the same builders and build a byte-identical table.
+On the owner path `PhysicsSystem.init()` hands out `WASM_PHYSICS_API` and a
+`WasmTableWorld` instead, and never imports Rapier.
+
+**Descriptors.** `WASM_PHYSICS_API`'s `RigidBodyDesc` / `ColliderDesc` /
+`JointData` builders only record data (`TableBodyDesc`, `TableColliderDesc`,
+Rapier's defaults for anything left unset). `WasmTableWorld.createRigidBody` /
+`createCollider` turn them into `WasmBody`s carrying `TableColliderDesc`s.
+
+**Bodies.** A `WasmBody` is either
+
+- *linked* to a C++ rigid body (`WasmBodyLink.id` is its WASM public id): a
+  dynamic body whose first collider is a sphere becomes a C++ body the moment
+  that collider is attached (balls, multiball, gold swarms), and `WasmOwner`
+  links each flipper to its hinged capsule. Reads come from the engine, writes
+  go straight to it, and values written since the last step are served from a
+  write-through cache, because the C++ transform snapshot only refreshes when
+  the engine steps (an impulse shows in `linvel()` at once, as in Rapier); or
+- a *pose store* (fixed, kinematic): its colliders are exported below, and a
+  kinematic target (`setNextKinematicTranslation`) becomes the pose after the
+  step, as in Rapier.
+
+**Runtime body type (#420).** A linked body's Rapier type is a C++ body type.
+A toy capturing a ball (`setBodyType(KinematicPositionBased)`) flips the C++
+body to `Kinematic` — infinite mass, no gravity, velocity zeroed, pose kept —
+and its `setNextKinematicTranslation` / `Rotation` become C++ pose targets on
+the ball's WASM id (`setNextKinematicTransform(id ≥ 0, …)`): the step moves the
+body onto the target and gives it the pose delta over the fixed tick as its
+velocity, so a held ball pushes a passing ball like a wall. A tick without a
+target leaves a driven body at rest. Back to `Dynamic` rebuilds mass and
+inertia and keeps that last kinematic velocity, so a release carries the
+well's motion before the toy's impulse. A kinematic body never collides with
+statics or movers (no impulse can pass, and Rapier reports no
+kinematic-vs-fixed contact); sensors still see it. A disabled body is frozen
+the same way and also drops to collision groups `0/0`; a hinged flipper is
+never retyped. `WasmBody.translation()` of a driven body reports its last
+target, since the worker's snapshot trails a frame.
+
+Every toy that holds a ball — MagSpin, NanoLoom, Prism Core, Gauss Cannon,
+Quantum Tunnel, `BallManager`'s hologram catch and the ball traps — goes
+through one driver, `CapturedBall` (`src/core/captured-ball.ts`):
+`capture(ball)` → `steer(ball, pose)` each tick → `release(ball, { impulse,
+linvel, angvel })`. The toy state machines stay in TypeScript; the body-type
+flip and the kinematic integration live in the solver that steps the ball.
+`tests/feeder-golden-fixtures.test.ts` replays each feeder's golden FSM on the
+Rapier mock and on the owner path (`WasmTableWorld` + the `WasmSimEngine`
+fake) with identical impulses; `tests/wasm-owner-capture.spec.ts` captures and
+launches a real ball in `wasm-owner` and `wasm-worker`.
+
+Otherwise a linked body keeps C++'s all-groups default, as owner-mode balls
+always have. The authored group word is kept on the collider but not forwarded
+yet: the adventure chroma masks (`MASK_RED` …) omit `ADVENTURE_GROUP`, so a
+coloured ball would drop through ordinary track geometry. Statics carry their
+authored groups.
+
+**Export.** `wasm-static-export.ts` walks the descriptors — nothing reads a
+Rapier collider:
+
+| Body | Collider | C++ |
+|------|----------|-----|
+| fixed | box / capsule / cylinder / sphere / cone | `addStaticBox` / `addStaticCapsule` / `addStaticCylinder` / `addStaticSphere` / `addStaticCone` |
+| any | sensor box / cylinder / sphere | `addSensorVolume` |
+| kinematic | box / cylinder | `addKinematicMover`, posed each tick from the body's target |
+| any | convex hull, kinematic capsule / cone / sphere, unlinked dynamic | reported, not exported |
+
+Export order is deterministic and C++ static ids are index-based, so a
+re-export (an adventure track switch, a table edit) hands every collider the
+same WASM id. Authored collision groups are applied (`setCollisionGroups`).
+
+**The owner table scope.** `GameObjects.getWasmExportBodies()` names the table
+bodies the C++ world simulates: everything with a mesh binding (walls,
+slingshots, bumpers, pachinko pins and targets, decoration rails), the lane
+rollover sensors and the drain; `GamePhysicsController` adds the ball traps
+(funnel cone + chamber sensor, #420). Every other authored body — RailBuilder's
+rails and guards, the plunger body, the spinner / launcher / gate, the
+feeders' well geometry, the LCD ground (the owner's ground plane replaces it)
+— is recorded but held out, and listed with a reason by `WasmOwner.getTableUnsupported()`. Those
+bodies were authored against the Rapier table surface (the LCD ground's top,
+y = −0.9), where the ball rolls underneath them; the owner's ground plane is
+y = 0, and exported unchanged they close the plunger lane. They join the scope
+once calibrated for the owner plane.
+
+**Identity.** `CollisionDispatcher` keys every set on WASM public ids: a ball's
+C++ body id, and a static body's first exported collider id. A contact's WASM
+id resolves collider → body → key in `WasmOwner.resolveContactId`, the C++
+analogue of Rapier's collider-handle → body-handle conversion, and the sets
+rebuild whenever ids change (`WasmOwner.getIdEpoch()`: a re-export, a flipper
+hinge, a ball spawned or removed).
+`WasmMirror.getRapierBody()` is the only WASM-id → Rapier-body map left, for
+the mirror parity path. `tests/collision-dispatch-wasm-ids.test.ts` locks the
+key space.
+
+**Bundle.** `loadRapier()` (`src/game-elements/rapier-loader.ts`) is the one
+runtime import of `@dimforge/rapier3d-compat`. `main.ts` preloads the C++
+bundle in parallel with engine creation (`preloadWasmPhysicsNow()`) and only
+warms Rapier for the explicit Rapier modes. The rapier chunk is excluded from
+the Workbox precache, and `npm run check:bundle` fails if it is ever precached
+or modulepreloaded again.
 
 ---
 
@@ -560,18 +756,19 @@ const angle = engine.getHingeAngle(hingeId)
 
 `WasmOwner` creates one hinge per flipper at `rebuildHandleCaches()`, drives
 `setHingeMotor` from the same `InputFrame` / `PhysicsConfig.flipper` rest and
-active angles + stiffness/damping as Rapier `configureMotorPosition`, and
-**does not** call `world.step()` on Rapier while a table ball is in play
-(Debug HUD `rapier ms` / `lastRapierStepMs === 0`). Adventure mode still steps
-Rapier for `ADVENTURE_GROUP` bodies.
+active angles + stiffness/damping as Rapier `configureMotorPosition`. There is
+no Rapier world on the owner path (Debug HUD `rapier ms` /
+`lastRapierStepMs === 0`); Rapier only exists on the explicit `rapier` override
+or the missing-bundle fallback.
 
 Dynamic capsules now report isotropic inertia (averaged cylinder) so the hinge
 can apply motor torque. Capsule-vs-capsule collision remains skipped.
 
 Native capsules are authored along local +Y; Rapier flipper cuboids are long on
-local +X. `wasm-owner` applies a one-time 90° Z rest rotation (and the inverse
-when copying pose onto the Rapier mesh puppet). That remap is shape-axis
-alignment, not the retired kinematic `syncFlipperProxies` path.
+local +X. `wasm-owner` applies a one-time 90° Z rest rotation, and the authored
+flipper `WasmBody` reports the inverse (`WasmBodyLink.rotationOffset`) plus its
+pivot (`WasmBodyLink.pivot`), exactly as the Rapier flipper body did. That remap
+is shape-axis alignment, not the retired kinematic `syncFlipperProxies` path.
 
 This unblocks #361 Phase 3 (worker + SharedArrayBuffer): flippers no longer
 depend on Rapier impulse joints on the main thread.
@@ -601,9 +798,10 @@ flicking tests; production flippers use hinges (above).
 | **2c – Flipper motors** | Native world-anchored hinge + velocity motor; kinematic proxy deleted | ✅ Done |
 | **2d – Perf HUD** | Rapier vs WASM vs mirror timing in Debug HUD | ✅ Done |
 | **2e – Worker (#361 P1)** | `wasm-worker` + `postMessage` transferables; one-frame lag; no COOP/COEP | ✅ Done |
-| **3 – Benchmark** | RapierVsCppBenchmark scene; frame-time comparison | 🔜 Next |
-| **4 – Decision Point** | Replace vs hybrid; determinism comparison | 🔜 After Phase 3 |
-| **5 – Polish** | Memory budgeting, Debug HUD, documentation | 🔜 After Phase 4 |
+| **2f – Adventure (#383)** | Movers, sensors, cylinders, spheres, meshes, force fields; every track owned by C++ | ✅ Done |
+| **3 – Decision** | Replace, not hybrid: `wasm-owner` is the production default | ✅ Done |
+| **4 – Rapier removal (#412)** | Builders author through `PhysicsApi`; `WasmTableWorld` / WASM-id identity; no Rapier module or `World` on the owner boot; rapier chunk lazy and out of the PWA precache | ✅ Done |
+| **5 – Worker parity (#414)** | Worker commands for mesh / box body / force field; SAB snapshot transport gated on isolation | ✅ Done |
 
 ---
 
@@ -616,19 +814,80 @@ flicking tests; production flippers use hinges (above).
   release C++ memory back to the WASM heap.
 - `WasmPhysicsEngine.dispose()` calls `world.delete()` automatically.
 
-### Worker transport (#361 Phase 1)
+### Worker transport (#361, #414)
 
 `wasm-worker` instantiates `PhysicsModule` inside a Dedicated Worker
-(`src/wasm/physics-worker.ts`). The main thread queues commands and never
-blocks on `Atomics.wait`. Each `step()` posts a command batch; the worker
-copies transform + contact HEAP slices into **new** `ArrayBuffer`s and
-transfers them back. Visuals interpolate the **previous** snapshot (one
-frame of extra latency). Idle preload warms the worker instead of compiling
-the module on the main thread.
+(`src/wasm/physics-worker.ts`). The main thread never blocks: it queues
+commands, and each `step()` first reads whatever the worker last published,
+then posts the frame's command batch. Visuals therefore trail by one physics
+frame. Idle preload warms the worker instead of compiling the module on the
+main thread. `-pthread` / `PROXY_TO_PTHREAD` stay unused — the C++ world is
+single-threaded *inside* the worker, and its WASM memory is not shared.
 
-SharedArrayBuffer, a lock-free command ring, and COOP/COEP isolation headers
-are **not** in this phase. `-pthread` / `PROXY_TO_PTHREAD` remain unused: the
-C++ world is single-threaded *inside* the worker.
+**Commands (main → worker)** are the tagged `PhysicsWorkerCommand` union, one
+ordered `postMessage` batch per frame. Keeping a single ordered channel means a
+`createBody` can never be overtaken by the `applyImpulse` that names it. Mesh
+vertex / index arrays are copied at enqueue and transferred, not cloned.
+Handles are allocated on the main thread by `WasmIdShadow`, which mirrors every
+native id range (bodies, hinges, and the static families -1000 … -8000).
+
+**Snapshots (worker → main)** take one of two transports, chosen by
+`isCrossOriginIsolated()` (`src/config/physics.ts`):
+
+| | Cross-origin isolated | Not isolated (file://, embeds, header misconfig) |
+|---|---|---|
+| Transforms + hinge angles | Copied from HEAP into a SharedArrayBuffer under a seqlock | Copied into new `ArrayBuffer`s, transferred on `step-result` |
+| Contacts | SPSC ring in the same buffer (exactly once, in order) | Same `step-result` message |
+| Per-step allocation | None on either side (reader ping-pongs two staging buffers) | Three `ArrayBuffer`s per step |
+
+The client asks for shared transport with `use-shared-transport`; the worker
+allocates the buffer (it knows the slot count) and posts `shared-attach`. When a
+step outgrows the buffer — body ids are never reused, so transform slots only
+grow — the worker allocates one with doubled capacity and posts `shared-attach`
+again *before* writing to it; the client drains the old contact ring and then
+switches, so contact order survives. Past 64 MB, or if the client rejects the
+layout version, that step falls back to `step-result`. A snapshot older than one
+already applied is discarded (`staleSnapshots`).
+
+`PhysicsWorkerClient.getTransportStats()` reports the active transport and
+counts shared reads, `step-result` messages, attaches and stale snapshots;
+`tests/wasm-worker-adventure.spec.ts` asserts `postMessageSnapshots === 0` when
+isolated.
+
+#### Shared snapshot layout (v1)
+
+Defined in `src/wasm/physics-shared-layout.ts`; bump `SHARED_LAYOUT_VERSION`
+when anything below moves. All words are 4 bytes, little-endian.
+
+| Words | Type | Content |
+|-------|------|---------|
+| 0 | Int32 | `MAGIC` = `0x4c534250` ("PBSL") |
+| 1 | Int32 | `VERSION` = 1 — the reader refuses any other |
+| 2 | Int32 | `SEQ` — seqlock counter; odd while the worker is publishing |
+| 3 | Int32 | `STEP_COUNT` of the published snapshot |
+| 4 | Int32 | `TRANSFORM_FLOATS` in use |
+| 5 | Int32 | `HINGE_COUNT` in use |
+| 6 | Int32 | `CONTACT_HEAD` — advanced only by the main thread |
+| 7 | Int32 | `CONTACT_TAIL` — advanced only by the worker |
+| 8–10 | Int32 | Capacities: transform floats, hinge entries, contact records |
+| 11 | Int32 | `PUBLISH_COUNT` |
+| 12–15 | Int32 | Reserved |
+| 16–17 | Float32 | `alpha`, worker `stepMs` |
+| 18–19 | Float32 | Padding |
+| 20… | Float32 | Transforms, `TRANSFORM_STRIDE` (16) per body slot |
+| … | Float32 | Hinges: `id, angle` per entry |
+| … | Float32 | Contact ring: (capacity + 1) × `CONTACT_STRIDE` (12) |
+
+Transforms, hinges and the scalars are latest-wins: the reader copies them into
+its own staging buffers and keeps the copy only if `SEQ` was even and unchanged
+across it; otherwise it keeps the previous snapshot for another frame rather
+than retrying. Nobody calls `Atomics.wait` or `Atomics.notify` — the main thread
+polls once per `step()`, and the worker is driven by the command batch.
+
+A world step that runs no substeps (a frame shorter than the fixed timestep)
+publishes no contacts: native only refreshes its contact buffer when it
+substeps, so re-reading it would deliver the previous step's contacts twice.
+The in-process engine applies the same rule.
 
 ---
 
@@ -641,7 +900,9 @@ C++ world is single-threaded *inside* the worker.
 - Use `npm run build:wasm:assert` for CI-style `-O3` + `ASSERTIONS=1` without
   full debug cost.
 - The `Debug HUD` (`src/game-elements/debug-hud.ts`) shows WASM vs Rapier step
-  timing when a WASM physics mode is active.
+  timing when a WASM physics mode is active, and how many table colliders the
+  owner is not simulating (`wasm unexported`; the list with reasons is
+  `game.physicsController.getTableUnexported()`).
 ---
 
 ## C++ development without Emscripten
@@ -663,10 +924,16 @@ native compiler before re-running the full Emscripten build.
 
 ### Language Server & IDE Tooling (`compile_commands.json`)
 
-CMake sets `CMAKE_EXPORT_COMPILE_COMMANDS ON`. `npm run test:native` writes
-`native/build-native/compile_commands.json` (gitignored). Root `.clangd` sets
-`CompilationDatabase: native/build-native` so clangd indexes `native/src/**`
-without a symlink. Run `test:native` once after clone so the database exists.
+CMake sets `CMAKE_EXPORT_COMPILE_COMMANDS ON`. `npm run compile-db` configures
+`native/build-native` (Debug, no build, never Emscripten) and writes
+`native/build-native/compile_commands.json` (gitignored); `npm run test:native`
+runs it first. Root `.clangd` sets `CompilationDatabase: native/build-native` so
+clangd indexes `native/src/**` without a symlink. Run `compile-db` once after clone
+so the database exists, and again after adding a `.cpp`.
+
+`npm run check:compile-db` verifies the database: every `native/src` and
+`native/tests` TU present, exactly one `-O` level per TU, no `em++` entries, and
+no stray `compile_commands.json` at the repo root or `native/`.
 
 ---
 
@@ -676,11 +943,11 @@ The GitHub Actions workflow (`.github/workflows/native-physics.yml`) runs on cha
 
 | Job | Status | Tools | What it checks |
 |-----|--------|-------|----------------|
-| `native_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native` (Catch2) |
+| `native_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native` (Catch2), `check:compile-db`, `check:wasm-docs` |
 | `sanitizer_ctest` | **BLOCKING** | cmake, g++ | ASan/UBSan Catch2 (`CMAKE_BUILD_TYPE=Debug`) |
 | `wasm_parity` | **BLOCKING** | emsdk | `print:wasm-flags` then Release + RelWithAsserts + `test:wasm-parity` |
 
-`native_ctest` runs in ~15 seconds without requiring Emscripten and gates PRs against C++ logic regressions. Additionally, `tests/embind-surface.test.ts` asserts that TypeScript interface definitions (`src/wasm/wasm-types.ts`) match the exported Embind surface (`native/src/bindings.cpp`).
+`native_ctest` runs in ~15 seconds without requiring Emscripten and gates PRs against C++ logic regressions. Additionally, `tests/embind-surface.test.ts` asserts that TypeScript interface definitions (`src/wasm/wasm-types.ts`) match the exported Embind surface (`native/src/bindings.cpp`), and `tests/wasm-worker-api-parity.test.ts` (Vitest, no WASM) fails when a mutating Embind function is not wrapped on `WasmPhysicsEngine`, or a mutating engine method has no `PhysicsWorkerCommand` and is not on its tracked-gap list.
 
 Skip options:
 

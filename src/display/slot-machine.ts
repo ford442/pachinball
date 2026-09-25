@@ -10,7 +10,7 @@
  */
 
 import { DisplayState } from '../game-elements/display-config'
-import { getSessionRngFork, RNG_FORK } from '../game-elements/seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 import { SLOT_MACHINE_CONFIG } from '../config'
 import type { EventBus } from '../core/event-bus'
 import { DisplayReelsLayer, type SpinOptions } from './display-reels'

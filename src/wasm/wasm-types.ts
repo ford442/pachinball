@@ -100,6 +100,15 @@ export interface WasmPhysicsWorldInstance {
   /** Directly set the rotation of a body. */
   setBodyRotation(id: number, qx: number, qy: number, qz: number, qw: number): void
 
+  /**
+   * Change a live body's simulation type (0 Dynamic, 1 Static, 2 Kinematic).
+   * Optional: absent on bundles older than #420.
+   */
+  setBodyType?(id: number, type: number): void
+
+  /** Current body type (0/1/2), or -1 for an unknown id. Optional as above. */
+  getBodyType?(id: number): number
+
   createHinge(
     bodyId: number,
     ax: number, ay: number, az: number,
@@ -164,6 +173,21 @@ export interface WasmPhysicsWorldInstance {
   ): number
 
   /**
+   * Add an oriented static cone (local Y axis, apex at +halfHeight), matching
+   * Rapier's `ColliderDesc.cone(halfHeight, radius)`. Optional: absent on
+   * bundles older than #420.
+   * @returns Negative collider id used in contact events, or
+   * `STATIC_HANDLE_OVERFLOW` (creating nothing) if the family is full.
+   */
+  addStaticCone?(
+    px: number, py: number, pz: number,
+    radius: number, halfHeight: number,
+    qx: number, qy: number, qz: number, qw: number,
+    restitution: number,
+    friction: number
+  ): number
+
+  /**
    * Drop every static collider, sensor volume and kinematic mover. Statics
    * are append-only, so a rebuilt scene must clear before re-adding or it
    * stacks a second copy. Invalidates every negative handle; dynamic bodies
@@ -200,9 +224,12 @@ export interface WasmPhysicsWorldInstance {
     friction: number
   ): number
 
-  /** Push the pose this mover should reach by the next `step()`. */
+  /**
+   * Push the pose a mover (negative id) or a kinematic rigid body (id ≥ 0)
+   * should reach by the next `step()`.
+   */
   setNextKinematicTransform(
-    moverId: number,
+    id: number,
     px: number, py: number, pz: number,
     qx: number, qy: number, qz: number, qw: number
   ): void

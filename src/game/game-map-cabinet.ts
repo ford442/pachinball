@@ -9,7 +9,7 @@ import type { GameUIManager } from './game-ui'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { SoundSystem } from '../game-elements/sound-system'
-import type { AdventureState } from '../game-elements/adventure-state'
+import type { AdventureState } from '../adventure/adventure-state'
 import { TABLE_MAPS } from '../shaders/lcd-table'
 
 export interface MapCabinetHost {

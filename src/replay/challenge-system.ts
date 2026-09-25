@@ -3,6 +3,7 @@
  */
 
 import { apiFetch } from '../config'
+import { DEFAULT_TABLE_MAP_ID } from '../shaders/lcd-table'
 
 export interface ChallengeConfig {
   id?: string
@@ -30,7 +31,7 @@ export class ChallengeSystem {
     const challengeParam = params.get('challenge')
     const seedParam = params.get('seed')
     const targetParam = params.get('target')
-    const mapParam = params.get('map') || 'neon-helix'
+    const mapParam = params.get('map') || DEFAULT_TABLE_MAP_ID
 
     if (challengeParam) {
       if (challengeParam.includes(':')) {
@@ -73,7 +74,7 @@ export class ChallengeSystem {
   /**
    * Generate a shareable URL string for a challenge.
    */
-  static createChallengeShareUrl(seed: number, targetScore: number, mapId = 'neon-helix'): string {
+  static createChallengeShareUrl(seed: number, targetScore: number, mapId = DEFAULT_TABLE_MAP_ID): string {
     const baseUrl = (typeof window !== 'undefined' && window.location)
       ? `${window.location.origin}${window.location.pathname}`
       : 'https://pachinball.example/'
@@ -83,7 +84,7 @@ export class ChallengeSystem {
   /**
    * Copy challenge link to user's clipboard and display feedback toast.
    */
-  static async copyChallengeLink(seed: number, targetScore: number, mapId = 'neon-helix'): Promise<boolean> {
+  static async copyChallengeLink(seed: number, targetScore: number, mapId = DEFAULT_TABLE_MAP_ID): Promise<boolean> {
     const url = ChallengeSystem.createChallengeShareUrl(seed, targetScore, mapId)
     try {
       await navigator.clipboard.writeText(url)

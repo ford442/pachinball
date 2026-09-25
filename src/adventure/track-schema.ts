@@ -6,7 +6,7 @@
  */
 
 import { AdventureTrackType } from './adventure-types'
-import type { TrackMaterialRole } from './track-theme-profiles'
+import { TRACK_THEME_PROFILES, type TrackMaterialRole } from './track-theme-profiles'
 
 export const TRACK_SCHEMA_VERSION = 1 as const
 
@@ -455,8 +455,12 @@ export function validateTrackDefinition(raw: unknown): TrackValidationResult {
     })
   }
 
-  if (raw.themeProfile !== undefined && typeof raw.themeProfile !== 'string') {
-    errors.push({ path: 'themeProfile', message: 'must be a string' })
+  if (raw.themeProfile !== undefined) {
+    if (typeof raw.themeProfile !== 'string') {
+      errors.push({ path: 'themeProfile', message: 'must be a string' })
+    } else if (!(raw.themeProfile in TRACK_THEME_PROFILES)) {
+      errors.push({ path: 'themeProfile', message: `unknown theme profile: ${raw.themeProfile}` })
+    }
   }
 
   if (raw.cameraPresetId !== undefined && typeof raw.cameraPresetId !== 'string') {

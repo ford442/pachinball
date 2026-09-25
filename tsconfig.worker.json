@@ -18,9 +18,11 @@
     "src/wasm/physics-worker.ts",
     "src/wasm/physics-worker-runtime.ts",
     "src/wasm/physics-worker-protocol.ts",
+    "src/wasm/physics-shared-layout.ts",
     "src/wasm/transform-buffer.ts",
     "src/wasm/contact-buffer.ts",
     "src/wasm/PhysicsModule.ts",
+    "src/wasm/physics-module-adventure.ts",
     "src/wasm/wasm-types.ts"
   ]
 }

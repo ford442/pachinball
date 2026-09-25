@@ -1,8 +1,8 @@
 import type { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../core/physics-api'
 import { GAME_TUNING, GameConfig } from '../config'
 import { nowMs, type BallManagerHost } from './ball-manager-context'
-import { getSessionRngFork, RNG_FORK } from './seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 
 function getDynamicScoreMultiplier(host: BallManagerHost): number {
   if (!host.chainMultiball.isActive) return 1
@@ -80,7 +80,7 @@ export function triggerForcedMultiball(host: BallManagerHost, totalBalls: number
   return startMultiball(host, totalBalls, GAME_TUNING.multiball.drainGraceMs)
 }
 
-export function registerDrain(host: BallManagerHost, _drainedBody: RAPIER.RigidBody): {
+export function registerDrain(host: BallManagerHost, _drainedBody: PhysicsBody): {
   ballSaved: boolean
   multiballEnded: boolean
   scoreMultiplier: number

@@ -8,7 +8,7 @@ import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import { boxDesc } from '../track-collider-descriptors'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { GROUP_RED, GROUP_GREEN, GROUP_BLUE, MASK_ALL } from '../adventure-types'
 
 export function buildPolychromeVoid(builder: TrackBuilder): void {
@@ -19,10 +19,10 @@ export function buildPolychromeVoid(builder: TrackBuilder): void {
 
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: RAPIER.World }).world
+  const world = (builder as unknown as { world: PhysicsWorldSink }).world
   const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
-  const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
-  const chromaGates = (builder as unknown as { chromaGates: { sensor: RAPIER.RigidBody, colorType: 'RED' | 'GREEN' | 'BLUE' }[] }).chromaGates
+  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
+  const chromaGates = (builder as unknown as { chromaGates: { sensor: PhysicsBody, colorType: 'RED' | 'GREEN' | 'BLUE' }[] }).chromaGates
   void chromaGates // Used for gate tracking
 
   let currentPos = currentStartPos.clone()

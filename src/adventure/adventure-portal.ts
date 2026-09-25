@@ -7,7 +7,7 @@
 
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../core/physics-api'
 import { AdventureCameraMixin } from './adventure-camera'
 import { AdventureTrackType } from './adventure-types'
 import { getTrackStartAnchor } from './portal-routing'
@@ -122,7 +122,7 @@ export abstract class AdventurePortalMixin extends AdventureCameraMixin {
     return new Vector3(anchor.x, anchor.y + yOffset, anchor.z + zOffset)
   }
 
-  protected updateExitPortal(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+  protected updateExitPortal(dt: number, ballBodies: PhysicsBody[]): void {
     const portal = this.exitPortal
     if (!portal) return
 

@@ -8,7 +8,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import { boxDesc, cylinderDesc } from '../track-collider-descriptors'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 
 export function buildNeonSkyline(builder: TrackBuilder): void {
   const skylineMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#111122")
@@ -16,10 +16,10 @@ export function buildNeonSkyline(builder: TrackBuilder): void {
 
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: RAPIER.World }).world
+  const world = (builder as unknown as { world: PhysicsWorldSink }).world
   const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
-  const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
-  const conveyorZones = (builder as unknown as { conveyorZones: { sensor: RAPIER.RigidBody, force: Vector3 }[] }).conveyorZones
+  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
+  const conveyorZones = (builder as unknown as { conveyorZones: { sensor: PhysicsBody, force: Vector3 }[] }).conveyorZones
 
   let currentPos = currentStartPos.clone()
   let heading = 0

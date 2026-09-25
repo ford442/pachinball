@@ -109,6 +109,19 @@ describe('validateTrackDefinition — invalid fixtures', () => {
     }
   })
 
+  it('rejects a themeProfile with no profile behind it', () => {
+    const result = validateTrackDefinition({
+      schemaVersion: 1,
+      id: 'PACHINKO_SPIRE',
+      themeProfile: 'PACHINKO_SPIRE',
+      segments: [{ type: 'gap', length: 1, drop: 0 }],
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errors.some((e) => e.path === 'themeProfile')).toBe(true)
+    }
+  })
+
   it('rejects empty segments', () => {
     const result = validateTrackDefinition({
       schemaVersion: 1,

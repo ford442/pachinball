@@ -14,7 +14,7 @@ import { ScoringBridge } from './scoring-bridge'
 import { CollisionDispatcher } from './collision-dispatch'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../../core/physics-api'
 
 import { type InputFrame, type ReplayRecorder, type ReplayRunner } from '../../game-elements'
 import { BallType, GAME_TUNING, GameConfig } from '../../config'
@@ -25,13 +25,13 @@ import { QualityTier } from '../../game-elements/visual-language'
 import type { WasmContactEvent } from '../../wasm'
 
 /** Shared surface for mirror and owner WASM bridges. */
-import type { WasmPhysicsBridge } from './collision-dispatch'
+import type { WasmContactBridge } from './collision-dispatch'
 
 export class GamePhysicsController {
   private readonly host: PhysicsHost
 
   /** WASM bridge for mirror or owner mode. */
-  private wasmBridge: WasmPhysicsBridge | null = null
+  private wasmBridge: WasmContactBridge | null = null
   private wasmMirror: WasmMirror | null = null
   private wasmOwner: WasmOwner | null = null
 
@@ -84,8 +84,6 @@ export class GamePhysicsController {
   }
 
   rebuildHandleCaches(): void {
-    this.collisionDispatcher.rebuildHandleCaches()
-
     const wasmActive = this.host.physics.isWasmActive?.() ?? false
     const isOwner = this.host.physics.isWasmOwnerMode?.() ?? false
 
@@ -96,21 +94,29 @@ export class GamePhysicsController {
         if (isOwner) {
           this.wasmMirror?.clear()
           this.wasmMirror = null
-          if (!this.wasmOwner) {
-            this.wasmOwner = new WasmOwner(engine)
+          // PhysicsSystem builds the table world whenever it runs an owner mode.
+          const tableWorld = this.host.physics.getWasmTableWorld?.() ?? null
+          if (!this.wasmOwner && tableWorld) {
+            this.wasmOwner = new WasmOwner(engine, tableWorld)
+            this.wasmOwner.setTableScope(() => [
+              ...(this.host.gameObjects?.getWasmExportBodies() ?? []),
+              // Ball traps (#420): the funnel is a C++ cone and the chamber a
+              // sensor sphere; the trap sits well clear of the plunger lane.
+              ...(this.host.ballTrapBuilder?.getBodies() ?? []),
+            ])
           }
           this.wasmBridge = this.wasmOwner
-          this.wasmOwner.rebuild(
-            this.host.ballManager?.getBallBodies() || [],
-            this.host.gameObjects?.getBumperBodies() || [],
-            this.host.gameObjects?.getBumperVisuals() || [],
-            this.host.gameObjects?.getBindings() || [],
-            [...(this.host.gameObjects?.getAllFlippers?.().values() ?? [])].map((f) => f.body)
-          )
-          this.attachAdventureTrackToWasm()
-          this.host.physics.setWasmDebugColliders?.(this.wasmOwner.getDebugColliders())
+          if (this.wasmOwner) {
+            const adventureActive = this.host.adventureMode?.isActive() ?? false
+            this.wasmOwner.rebuild(
+              [...(this.host.gameObjects?.getAllFlippers?.().values() ?? [])].map((f) => f.body),
+              this.adventureTrackState(adventureActive),
+            )
+            this.attachAdventureBridge()
+            this.host.physics.setWasmDebugColliders?.(this.wasmOwner.getDebugColliders())
+          }
         } else {
-          this.wasmOwner?.clear()
+          this.wasmOwner?.dispose()
           this.wasmOwner = null
           this.host.physics.setWasmDebugColliders?.([])
           if (!this.wasmMirror) {
@@ -133,6 +139,9 @@ export class GamePhysicsController {
       this.host.physics.setWasmDebugColliders?.([])
     }
 
+    // Built last so owner mode keys every set on the WASM ids the rebuild just assigned.
+    this.collisionDispatcher.rebuildHandleCaches()
+
     // Portal sensor handles are registered/unregistered dynamically via
     // registerPortalSensor / unregisterPortalSensor and are intentionally NOT
     // reset here — portals may already be active when the cache is rebuilt.
@@ -153,26 +162,27 @@ export class GamePhysicsController {
   }
 
   /**
-   * Hand the active adventure track's bodies to WasmOwner and, if every
-   * collider could be represented, install the WASM-backed overlap/impulse
-   * bridge so zone effects keep working with Rapier unstepped.
+   * Table colliders the C++ world is not simulating, each with a reason
+   * (shape it cannot represent, or outside the owner table scope). Empty off
+   * the owner path. Exposed for the debug HUD.
+   */
+  getTableUnexported(): ReadonlyArray<{ bodyHandle: number; colliderIndex: number; shape: string; reason: string }> {
+    return this.wasmOwner?.getTableUnsupported() ?? []
+  }
+
+  /**
+   * Install the WASM-backed overlap/impulse bridge on a running adventure
+   * track so zone effects read C++ sensor contacts. Without it AdventureMode
+   * answers overlaps analytically through `world.intersectionPair`.
    *
    * Called from rebuildHandleCaches, which already runs on adventure start,
    * end and track switch — exactly the moments the static world changes.
    */
-  private attachAdventureTrackToWasm(): void {
+  private attachAdventureBridge(): void {
     const adventureMode = this.host.adventureMode
     const owner = this.wasmOwner
-    if (!owner) return
-
-    if (!adventureMode?.isActive()) {
-      owner.clearAdventureTrack()
-      adventureMode?.setPhysicsBridge(null)
-      return
-    }
-
-    const owned = owner.syncAdventureTrack(this.adventureTrackState(true))
-    adventureMode.setPhysicsBridge(owned ? owner.getPhysicsBridge() : null)
+    if (!owner || !adventureMode) return
+    adventureMode.setPhysicsBridge(adventureMode.isActive() && owner.isAdventureOwned() ? owner.getPhysicsBridge() : null)
   }
 
   /**
@@ -245,10 +255,7 @@ export class GamePhysicsController {
       // Delegated to input actions
     }
     if (frame.nudge) {
-      const rapier = this.host.physics.getRapier()
-      if (rapier) {
-        this.applyNudge(new rapier.Vector3(frame.nudge.x, frame.nudge.y, frame.nudge.z))
-      }
+      this.applyNudge({ x: frame.nudge.x, y: frame.nudge.y, z: frame.nudge.z })
     }
   }
 
@@ -317,24 +324,22 @@ export class GamePhysicsController {
 
     const wasmActive = this.host.physics.isWasmActive?.() ?? false
     const isOwner = this.host.physics.isWasmOwnerMode?.() ?? false
-    const adventureActive = this.host.adventureMode?.isActive() ?? false
-    const adventureOwnedByWasm = isOwner
-      ? (this.wasmOwner?.syncAdventureTrack(this.adventureTrackState(adventureActive)) ?? false)
-      : false
-    this.host.physics.setOwnerSkipRapierStep?.(
-      isOwner && (!adventureActive || adventureOwnedByWasm)
-    )
+    const owner = isOwner ? this.wasmOwner : null
 
     if (wasmActive && !isOwner) {
       const syncT0 = performance.now()
       this.wasmMirror?.syncToWasm()
       this.host.physics.setMirrorOverheadMs?.(performance.now() - syncT0)
     }
-    if (wasmActive && isOwner) {
-      this.wasmOwner?.driveFlippers(inputFrame, Math.min(rawDt, 1 / 30))
-      // Advance pistons, platters and mills in TS and push their poses into
-      // the C++ movers before the WASM step.
-      this.wasmOwner?.driveAdventure(Math.min(rawDt, 1 / 30))
+    if (owner) {
+      const stepDt = Math.min(rawDt, 1 / 30)
+      // Pick up a track switch or a table edit before the step.
+      owner.syncAdventureTrack(this.adventureTrackState(this.host.adventureMode?.isActive() ?? false))
+      owner.syncStatics()
+      owner.driveFlippers(inputFrame, stepDt)
+      // Push the plunger, gates, pistons, platters and mills into their C++
+      // movers (captured balls are C++ kinematic bodies already).
+      owner.beginStep(stepDt)
       this.host.physics.setMirrorOverheadMs?.(0)
     }
 
@@ -344,16 +349,13 @@ export class GamePhysicsController {
       this.collisionDispatcher.processContactForce(h1, h2, maxForce)
     })
 
-    if (wasmActive) {
+    if (owner) {
+      owner.endStep()
+    } else if (wasmActive) {
       const syncT0 = performance.now()
-      if (isOwner) {
-        this.wasmOwner?.refreshSensorOverlaps()
-        this.wasmOwner?.syncFromWasm(this.host.physics.getRapier())
-      } else {
-        this.wasmMirror?.syncFromWasm(this.host.physics.getRapier())
-        const prev = this.host.physics.getLastMirrorOverheadMs?.() ?? 0
-        this.host.physics.setMirrorOverheadMs?.(prev + (performance.now() - syncT0))
-      }
+      this.wasmMirror?.syncFromWasm()
+      const prev = this.host.physics.getLastMirrorOverheadMs?.() ?? 0
+      this.host.physics.setMirrorOverheadMs?.(prev + (performance.now() - syncT0))
     }
 
     // Skip interpolation on LOW quality tier — render at the raw post-step pose.
@@ -502,7 +504,7 @@ export class GamePhysicsController {
     }
   }
 
-  getBallMeshForBody(body: RAPIER.RigidBody): Mesh | null {
+  getBallMeshForBody(body: PhysicsBody): Mesh | null {
     return this.collisionDispatcher.getBallMeshForBody(body)
   }
 
@@ -513,18 +515,13 @@ export class GamePhysicsController {
     return new Vector3(t.x, t.y, t.z)
   }
 
-  applyOwnedBallImpulse(body: RAPIER.RigidBody, ix: number, iy: number, iz: number): void {
-    this.wasmOwner?.applyBallImpulse(body, ix, iy, iz)
-  }
-
   applyNudge(direction: { x: number; y: number; z: number }): void {
     if (this.host.nudgeState.tiltActive) {
       this.host.hapticManager?.tiltWarning()
       return
     }
-    const rapier = this.host.physics.getRapier()
     const ballBody = this.host.ballManager?.getBallBody()
-    if (!ballBody || !rapier) return
+    if (!ballBody) return
 
     const now = performance.now()
     if (now - this.host.nudgeState.lastNudgeTime < GAME_TUNING.timing.nudgeCooldownMs) {
@@ -536,13 +533,12 @@ export class GamePhysicsController {
     }
     this.host.nudgeState.lastNudgeTime = now
 
-    const impulse = new rapier.Vector3(
-      direction.x * getPhysicsTuningValue('nudgeForce'),
-      getPhysicsTuningValue('nudgeVerticalBoost'),
-      direction.z * getPhysicsTuningValue('nudgeForce')
-    )
+    const impulse = {
+      x: direction.x * getPhysicsTuningValue('nudgeForce'),
+      y: getPhysicsTuningValue('nudgeVerticalBoost'),
+      z: direction.z * getPhysicsTuningValue('nudgeForce'),
+    }
     ballBody.applyImpulse(impulse, true)
-    this.wasmOwner?.applyBallImpulse(ballBody, impulse.x, impulse.y, impulse.z)
 
     const nudgeDirection = direction.x > 0 ? 'right' : direction.x < 0 ? 'left' : 'up'
     this.host.hapticManager?.nudge(nudgeDirection)

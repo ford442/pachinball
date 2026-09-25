@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { AdventureTrackProgression } from '../src/game-elements/adventure-track-progression'
-import { CampaignRewardsManager } from '../src/game-elements/campaign-rewards-manager'
+import { AdventureTrackProgression } from '../src/adventure/adventure-track-progression'
+import { CampaignRewardsManager } from '../src/adventure/campaign-rewards-manager'
 
 class MemoryStorage {
   private data = new Map<string, string>()

@@ -10,7 +10,7 @@ import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import type {
   AdventureCallback,
   GravityWell,
@@ -54,21 +54,21 @@ const RAPIER_DEFAULT_COLLISION_GROUPS = 0xFFFFFFFF
 
 export abstract class TrackBuilder {
   protected scene: Scene
-  protected world: RAPIER.World
-  protected rapier: typeof RAPIER
+  protected world: PhysicsWorldSink
+  protected rapier: PhysicsApi
 
   // State Management
   protected adventureTrack: Mesh[] = []
   protected materials: (StandardMaterial | PBRMaterial)[] = []
-  protected adventureBodies: RAPIER.RigidBody[] = []
+  protected adventureBodies: PhysicsBody[] = []
   protected kinematicBindings: KinematicBinding[] = []
   protected animatedObstacles: AnimatedObstacle[] = []
   protected conveyorZones: ConveyorZone[] = []
   protected gravityWells: GravityWell[] = []
   protected dampingZones: DampingZone[] = []
   protected chromaGates: ChromaGate[] = []
-  protected adventureSensor: RAPIER.RigidBody | null = null
-  protected resetSensors: RAPIER.RigidBody[] = []
+  protected adventureSensor: PhysicsBody | null = null
+  protected resetSensors: PhysicsBody[] = []
   protected adventureActive = false
   protected currentStartPos: Vector3 = Vector3.Zero()
   protected timeAccumulator = 0
@@ -120,16 +120,16 @@ export abstract class TrackBuilder {
   }
 
   /** True when `ball` currently overlaps `sensorBody`'s trigger volume. */
-  protected testSensorOverlap(sensorBody: RAPIER.RigidBody, ball: RAPIER.RigidBody): boolean {
+  protected testSensorOverlap(sensorBody: PhysicsBody, ball: PhysicsBody): boolean {
     return testSensorOverlap(this.physicsBridge, this.world, sensorBody, ball)
   }
 
   /** Apply a world-space impulse to a ball, on whichever engine owns it. */
-  protected applyBallImpulse(ball: RAPIER.RigidBody, x: number, y: number, z: number): void {
+  protected applyBallImpulse(ball: PhysicsBody, x: number, y: number, z: number): void {
     applyBallImpulse(this.physicsBridge, ball, x, y, z)
   }
 
-  constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER) {
+  constructor(scene: Scene, world: PhysicsWorldSink, rapier: PhysicsApi) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
@@ -147,7 +147,7 @@ export abstract class TrackBuilder {
   }
 
   /** The Rapier body a descriptor was realised as, for C++ handle mapping. */
-  getBodyForDescriptor(index: number): RAPIER.RigidBody | null {
+  getBodyForDescriptor(index: number): PhysicsBody | null {
     return this.colliders.bodyForDescriptor(index)
   }
 
@@ -166,7 +166,7 @@ export abstract class TrackBuilder {
    * Drop an emitted body's colliders from the descriptor list before the body
    * is removed from the Rapier world, so the C++ export stops carrying them.
    */
-  retireEmittedBody(body: RAPIER.RigidBody): void {
+  retireEmittedBody(body: PhysicsBody): void {
     if (this.colliders.retireBody(body)) this.colliderEpoch++
   }
 
@@ -195,7 +195,7 @@ export abstract class TrackBuilder {
    * Emit an extra, body-local collider on an already-emitted body. Accepts
    * either the handle emitCollider() returned or the raw Rapier body.
    */
-  attachCollider(parent: EmittedCollider | RAPIER.RigidBody, desc: AdventureColliderDesc): void {
+  attachCollider(parent: EmittedCollider | PhysicsBody, desc: AdventureColliderDesc): void {
     this.colliderEpoch++
     this.colliders.attach(parent, desc)
   }
@@ -215,8 +215,8 @@ export abstract class TrackBuilder {
    * single enumeration of the track's physics footprint, used both to stamp
    * collision groups and to export the track into the WASM world.
    */
-  collectTrackBodies(): RAPIER.RigidBody[] {
-    const bodies = new Set<RAPIER.RigidBody>()
+  collectTrackBodies(): PhysicsBody[] {
+    const bodies = new Set<PhysicsBody>()
 
     for (const body of this.adventureBodies) {
       bodies.add(body)
@@ -259,14 +259,14 @@ export abstract class TrackBuilder {
   /**
    * Get sensor body for goal detection
    */
-  getSensor(): RAPIER.RigidBody | null {
+  getSensor(): PhysicsBody | null {
     return this.adventureSensor
   }
 
   /**
    * Get reset sensors for penalty zones
    */
-  getResetSensors(): RAPIER.RigidBody[] {
+  getResetSensors(): PhysicsBody[] {
     return this.resetSensors
   }
 
@@ -638,7 +638,7 @@ export abstract class TrackBuilder {
   /**
    * Sets ball color state for collision filtering.
    */
-  protected setBallColorState(ball: RAPIER.RigidBody, color: 'RED' | 'GREEN' | 'BLUE'): void {
+  protected setBallColorState(ball: PhysicsBody, color: 'RED' | 'GREEN' | 'BLUE'): void {
     const collider = ball.collider(0)
     if (!collider) return
 

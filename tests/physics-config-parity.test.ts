@@ -1,6 +1,14 @@
 import { describe, it, expect, vi } from 'vitest'
 import { PhysicsConfig, GameConfig } from '../src/config'
 
+// BumperBuilder only needs *a* material per getter; the real library needs a live Scene.
+vi.mock('../src/materials', () => {
+  const library = new Proxy({}, {
+    get: () => vi.fn(() => ({ emissiveColor: null, albedoColor: null, clearCoat: {}, alpha: 1 })),
+  })
+  return { getMaterialLibrary: vi.fn(() => library) }
+})
+
 describe('physics config — single source of truth', () => {
   it('has no leftover GameConfig.physics duplicate', () => {
     expect('physics' in GameConfig).toBe(false)
@@ -16,48 +24,30 @@ describe('physics config — single source of truth', () => {
   })
 })
 
-describe('WasmOwner reads bumper surface physics from PhysicsConfig', () => {
-  it('creates bumper bodies with PhysicsConfig.surfaces.bumper values', async () => {
+describe('owner-mode bumpers carry PhysicsConfig surface physics into C++', () => {
+  it('exports the authored bumper sphere with PhysicsConfig.surfaces.bumper values', async () => {
+    const { BumperBuilder } = await import('../src/objects/object-bumpers')
+    const { WasmTableWorld } = await import('../src/wasm/wasm-table-world')
+    const { WASM_PHYSICS_API } = await import('../src/wasm/wasm-physics-api')
     const { WasmOwner } = await import('../src/game/physics/wasm-owner')
+    const { makeFakeWasmEngine, asSimEngine } = await import('./helpers/fake-wasm-engine')
 
-    const engine = {
-      addStaticPlane: vi.fn(),
-      clearStaticGeometry: vi.fn(),
-      createBody: vi.fn(() => 1),
-      setBodyRotation: vi.fn(),
-      createHinge: vi.fn(() => 1),
-      setHingeMotor: vi.fn(),
-      getHingeAngle: vi.fn(() => 0),
-      getAngularVelocity: vi.fn(() => ({ x: 0, y: 0, z: 0 })),
-      removeBody: vi.fn(),
-      removeHinge: vi.fn(),
-      applyImpulse: vi.fn(),
-      getPosition: vi.fn(() => ({ x: 0, y: 0, z: 0 })),
-      getVelocity: vi.fn(() => ({ x: 0, y: 0, z: 0 })),
-      getRotation: vi.fn(() => ({ x: 0, y: 0, z: 0, w: 1 })),
-    }
+    const engine = makeFakeWasmEngine()
+    const world = new WasmTableWorld(asSimEngine(engine), { x: 0, y: -9.81, z: -5 })
+    const builder = new BumperBuilder({} as never, world, WASM_PHYSICS_API)
+    const { bumperBodies } = builder.createBumpers([{ x: 0, z: 8, color: '#00ffff', scale: 1 }])
 
-    const bumperBody = {
-      handle: 1,
-      translation: () => ({ x: 0, y: 0.5, z: 8 }),
-      linvel: () => ({ x: 0, y: 0, z: 0 }),
-      setEnabled: vi.fn(),
-    }
+    const owner = new WasmOwner(asSimEngine(engine), world)
+    owner.setTableScope(() => bumperBodies)
+    owner.rebuild([])
 
-    const owner = new WasmOwner(engine as never)
-    owner.rebuild(
-      [],
-      [bumperBody as never],
-      [{ mesh: { scaling: { x: 1 } }, body: bumperBody } as never],
-      [],
-      [],
+    // Authored as a fixed body → a C++ static sphere, not a Rapier-shaped proxy.
+    expect(engine.addStaticSphere).toHaveBeenCalledWith(
+      expect.objectContaining({ x: 0, z: 8 }),
+      0.4,
+      PhysicsConfig.surfaces.bumper.restitution,
+      PhysicsConfig.surfaces.bumper.friction,
     )
-
-    expect(engine.createBody).toHaveBeenCalledWith(
-      expect.objectContaining({
-        restitution: PhysicsConfig.surfaces.bumper.restitution,
-        friction: PhysicsConfig.surfaces.bumper.friction,
-      }),
-    )
+    expect(engine.createBody).not.toHaveBeenCalled()
   })
 })

@@ -282,3 +282,12 @@
     font-size: 0.65rem;
   }
 }
+
+/* In-play widgets sit on top of the menu row (Start / Try WebGPU / Settings)
+   and intercept clicks. Hide them while the menu overlay is showing
+   (MENU and GAME_OVER); keyboard shortcuts C / M / L still work. */
+#menu-overlay:not(.hidden) ~ #map-selector,
+#menu-overlay:not(.hidden) ~ #cabinet-selector,
+#menu-overlay:not(.hidden) ~ #levels-selector {
+  display: none;
+}

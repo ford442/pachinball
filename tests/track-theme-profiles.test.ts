@@ -3,7 +3,8 @@ import {
   getTrackThemeProfile,
   getTrackMaterialColor,
   TRACK_THEME_PROFILES,
-} from '../src/game-elements/track-theme-profiles'
+} from '../src/adventure/track-theme-profiles'
+import { TRACK_CATALOG } from '../src/adventure/adventure-track-progression'
 
 describe('track-theme-profiles', () => {
   it('defines CYBER_CORE Cyber-Shock premium profile', () => {
@@ -21,9 +22,16 @@ describe('track-theme-profiles', () => {
     expect(getTrackMaterialColor('UNKNOWN', 'structure')).toBeNull()
   })
 
-  it('includes stub profiles for future premium tracks', () => {
+  it('includes premium profiles for the other catalogued tracks', () => {
     expect(TRACK_THEME_PROFILES.TIDAL_NEXUS.particles.ambient).toBe('underwater-caustic')
     expect(TRACK_THEME_PROFILES.GLITCH_SPIRE.particles.ambient).toBe('ghost-mist')
     expect(TRACK_THEME_PROFILES.QUANTUM_GRID.particles.ambient).toBe('pixel-scan')
+  })
+
+  it('keys every profile by a catalogued track id', () => {
+    for (const [key, profile] of Object.entries(TRACK_THEME_PROFILES)) {
+      expect(profile.trackId).toBe(key)
+      expect(TRACK_CATALOG[key], `${key} is not a catalogued track`).toBeDefined()
+    }
   })
 })

@@ -75,9 +75,10 @@ describe('resolveHardwareScalingLevel', () => {
     expect(resolveHardwareScalingLevel(mobileCtx())).toBe(2)
   })
 
-  it('returns min(DPR, 2) on HiDPI desktop', () => {
-    expect(resolveHardwareScalingLevel(desktopCtx('', 3))).toBe(2)
-    expect(resolveHardwareScalingLevel(desktopCtx('', 1.5))).toBe(1.5)
+  it('returns 1 on HiDPI desktop (DPR never lowers resolution below CSS pixels)', () => {
+    expect(resolveHardwareScalingLevel(desktopCtx('', 3))).toBe(1)
+    expect(resolveHardwareScalingLevel(desktopCtx('', 2))).toBe(1)
+    expect(resolveHardwareScalingLevel(desktopCtx('', 1.5))).toBe(1)
   })
 
   it('returns 1 on standard desktop', () => {

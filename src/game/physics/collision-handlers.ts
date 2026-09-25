@@ -6,7 +6,7 @@
 
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../../core/physics-api'
 
 import type { BumperVisual } from '../../game-elements/types'
 import type { LaneSensorDef } from '../../objects/object-lane-sensors'
@@ -23,21 +23,21 @@ export interface CollisionHandlerContext {
   host: PhysicsHost
   scoringBridge: ScoringBridge
   ballHandleSet: Set<number>
-  bumperVisualMap: Map<number, BumperVisual>
+  bumperVisualMap: Map<PhysicsBody, BumperVisual>
   laneRolloverAwardedKeys: Set<string>
   setLastLaneHit: (laneId: string) => void
 }
 
 export function handleBumperCollision(
   ctx: CollisionHandlerContext,
-  bump: RAPIER.RigidBody,
-  ballBody: RAPIER.RigidBody,
+  bump: PhysicsBody,
+  ballBody: PhysicsBody,
   ballHandle: number
 ): void {
   if (!ctx.ballHandleSet.has(ballHandle)) return
 
   const ballPos = ballBody.translation()
-  const vis = ctx.bumperVisualMap.get(bump.handle)
+  const vis = ctx.bumperVisualMap.get(bump)
   if (!vis) return
 
   const ballMesh = getBallMeshForBody(ctx.host, ballBody)
@@ -110,7 +110,7 @@ export function handleBumperCollision(
     ballPos.y - vis.mesh.position.y,
     ballPos.z - vis.mesh.position.z
   ).normalize()
-  applySpinTransfer(ctx.host, ballBody, impactNormal, speed)
+  applySpinTransfer(ballBody, impactNormal, speed)
 
   if (speed > 12) {
     const mapColor = TABLE_MAPS[ctx.host.mapManager?.getCurrentMap() || 'neon-helix']?.baseColor || '#00d9ff'
@@ -128,8 +128,8 @@ export function handleBumperCollision(
 
 export function handleFlipperCollision(
   ctx: CollisionHandlerContext,
-  flipperBody: RAPIER.RigidBody,
-  ballBody: RAPIER.RigidBody,
+  flipperBody: PhysicsBody,
+  ballBody: PhysicsBody,
   ballHandle: number
 ): void {
   if (!ctx.ballHandleSet.has(ballHandle)) return
@@ -160,29 +160,26 @@ export function handleFlipperCollision(
   const kickScale = getPhysicsTuningValue('flipperKickImpulse')
   const flipperAngVel = flipperBody.angvel().y
   if (kickScale > 0 && Math.abs(flipperAngVel) > 2 && speed > 1.2) {
-    const rapier = ctx.host.physics.getRapier()
-    if (rapier) {
-      const kickStrength = Math.min(Math.abs(flipperAngVel) / 10, 1) * kickScale
-      const lateralSign = flipperPos.x > 0 ? -1 : 1
-      ballBody.applyImpulse(
-        new rapier.Vector3(
-          lateralSign * kickStrength * 0.35,
-          kickStrength * 0.2,
-          kickStrength * 0.95,
-        ),
-        true,
-      )
-      ctx.host.effects?.addCameraShake(Math.min(kickStrength * 0.08, 0.12))
-    }
+    const kickStrength = Math.min(Math.abs(flipperAngVel) / 10, 1) * kickScale
+    const lateralSign = flipperPos.x > 0 ? -1 : 1
+    ballBody.applyImpulse(
+      {
+        x: lateralSign * kickStrength * 0.35,
+        y: kickStrength * 0.2,
+        z: kickStrength * 0.95,
+      },
+      true,
+    )
+    ctx.host.effects?.addCameraShake(Math.min(kickStrength * 0.08, 0.12))
   }
 
-  applySpinTransfer(ctx.host, ballBody, collisionNormal, speed)
+  applySpinTransfer(ballBody, collisionNormal, speed)
 }
 
 export function handleTargetCollision(
   ctx: CollisionHandlerContext,
-  tgt: RAPIER.RigidBody,
-  ballBody: RAPIER.RigidBody,
+  tgt: PhysicsBody,
+  ballBody: PhysicsBody,
   ballHandle: number
 ): void {
   if (ctx.ballHandleSet.has(ballHandle)) {
@@ -219,8 +216,8 @@ export function handleTargetCollision(
 
 export function handleSpinnerCollision(
   ctx: CollisionHandlerContext,
-  obstacleBody: RAPIER.RigidBody,
-  ballBody: RAPIER.RigidBody,
+  obstacleBody: PhysicsBody,
+  ballBody: PhysicsBody,
   ballHandle: number
 ): void {
   if (!ctx.ballHandleSet.has(ballHandle)) return
@@ -247,14 +244,14 @@ export function handleSpinnerCollision(
 
 export function handleBallTrapCollision(
   ctx: CollisionHandlerContext,
-  obstacleBody: RAPIER.RigidBody,
-  ballBody: RAPIER.RigidBody,
+  obstacleBody: PhysicsBody,
+  ballBody: PhysicsBody,
   ballHandle: number
 ): void {
   if (!ctx.ballHandleSet.has(ballHandle)) return
 
   const state = ctx.host.trapStates.find(s => s.body === obstacleBody)
-  if (state && state.isOpen && !state.caughtBall) {
+  if (state && state.isOpen && !state.caughtBall && state.rearmTimer <= 0) {
     ctx.scoringBridge.registerComboObstacleHit('trap')
     ctx.scoringBridge.registerComboMultiplierHit()
     const ballPos = ballBody.translation()
@@ -267,8 +264,8 @@ export function handleBallTrapCollision(
 
 export function handleLauncherCollision(
   ctx: CollisionHandlerContext,
-  obstacleBody: RAPIER.RigidBody,
-  ballBody: RAPIER.RigidBody,
+  obstacleBody: PhysicsBody,
+  ballBody: PhysicsBody,
   ballHandle: number
 ): void {
   if (!ctx.ballHandleSet.has(ballHandle)) return
@@ -279,17 +276,14 @@ export function handleLauncherCollision(
     ctx.scoringBridge.registerComboMultiplierHit()
     const forceVec = ctx.host.launcherBuilder?.triggerLauncher(state, 1.0)
     if (forceVec) {
-      const rapier = ctx.host.physics.getRapier()
-      if (rapier) {
-        ballBody.applyImpulse(new rapier.Vector3(forceVec.x, forceVec.y, forceVec.z), true)
-      }
+      ballBody.applyImpulse({ x: forceVec.x, y: forceVec.y, z: forceVec.z }, true)
     }
   }
 }
 
 export function handleGateCollision(
   ctx: CollisionHandlerContext,
-  obstacleBody: RAPIER.RigidBody,
+  obstacleBody: PhysicsBody,
   ballHandle: number
 ): void {
   if (!ctx.ballHandleSet.has(ballHandle)) return
@@ -305,7 +299,7 @@ export function handleGateCollision(
 export function handleLaneRolloverCollision(
   ctx: CollisionHandlerContext,
   sensor: LaneSensorDef,
-  ballBody: RAPIER.RigidBody,
+  ballBody: PhysicsBody,
   ballHandle: number,
 ): void {
   if (!ctx.ballHandleSet.has(ballHandle)) return
@@ -330,7 +324,7 @@ export function handleLaneRolloverCollision(
   ctx.host.updateHUD()
 }
 
-export function getBallMeshForBody(host: PhysicsHost, body: RAPIER.RigidBody): Mesh | null {
+export function getBallMeshForBody(host: PhysicsHost, body: PhysicsBody): Mesh | null {
   const gameObjectBinding = host.gameObjects?.getBindings().find(b => b.rigidBody === body)
   if (gameObjectBinding) {
     return gameObjectBinding.mesh as Mesh
@@ -340,16 +334,12 @@ export function getBallMeshForBody(host: PhysicsHost, body: RAPIER.RigidBody): M
 }
 
 export function applySpinTransfer(
-  host: PhysicsHost,
-  ball: RAPIER.RigidBody,
+  ball: PhysicsBody,
   collisionNormal: Vector3,
   contactSpeed: number
 ): void {
   // Apply spin based on collision normal and ball velocity
   // Creates "English" effect where angled hits produce side spin
-  const rapier = host.physics.getRapier()
-  if (!rapier) return
-
   const spinFactor = PhysicsConfig.global.spinTransferFactor * Math.min(contactSpeed / 10, 1.0)
   const angvel = ball.angvel()
 
@@ -362,11 +352,11 @@ export function applySpinTransfer(
 
   const spinAmount = spinFactor * PhysicsConfig.global.englishSpinAmount
   ball.setAngvel(
-    new rapier.Vector3(
-      angvel.x + tangent.x * spinAmount,
-      angvel.y,
-      angvel.z + tangent.z * spinAmount
-    ),
+    {
+      x: angvel.x + tangent.x * spinAmount,
+      y: angvel.y,
+      z: angvel.z + tangent.z * spinAmount,
+    },
     true
   )
 }

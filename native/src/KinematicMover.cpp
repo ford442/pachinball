@@ -17,17 +17,24 @@ void advanceKinematicMoverPose(KinematicMover& mover, float dt) {
     return;
   }
 
-  mover.linearVelocity = (mover.nextPos - mover.currentPos) / dt;
-
-  // Shortest-path quaternion delta: dq = nextRot * currentRot^-1, then
-  // small-angle extraction ω ≈ 2 * dq.xyz / dt.
-  Quat dq = mover.nextRot * mover.currentRot.conjugate();
-  if (dq.w < 0.f) dq = Quat{-dq.x, -dq.y, -dq.z, -dq.w};
-  mover.angularVelocity = Vec3{dq.x, dq.y, dq.z} * (2.f / dt);
+  poseDeltaVelocity(mover.currentPos, mover.currentRot, mover.nextPos, mover.nextRot, dt,
+                    mover.linearVelocity, mover.angularVelocity);
 
   mover.currentPos = mover.nextPos;
   mover.currentRot = mover.nextRot;
   mover.hasNextPose = false;
+}
+
+void poseDeltaVelocity(const Vec3& fromPos, const Quat& fromRot,
+                       const Vec3& toPos, const Quat& toRot, float dt,
+                       Vec3& outLinear, Vec3& outAngular) {
+  outLinear = (toPos - fromPos) / dt;
+
+  // Shortest-path quaternion delta: dq = to * from^-1, then small-angle
+  // extraction ω ≈ 2 * dq.xyz / dt.
+  Quat dq = toRot * fromRot.conjugate();
+  if (dq.w < 0.f) dq = Quat{-dq.x, -dq.y, -dq.z, -dq.w};
+  outAngular = Vec3{dq.x, dq.y, dq.z} * (2.f / dt);
 }
 
 float PhysicsWorld::applyMoverContactImpulse(BodyView& body, const Vec3& contactPoint,

@@ -27,6 +27,7 @@ export {
   recordGpuProbeEngine,
   recordGpuProbePostProcess,
   getGpuProbe,
+  formatGpuProbeSummary,
   resetGpuDegradesForTests,
   GPU_DEGRADE_RING_SIZE,
   GPU_DEGRADE_GLOBAL,
@@ -60,6 +61,7 @@ export {
   type MobileQualityHints,
 } from './engine-options'
 export {
+  preloadWasmPhysicsNow,
   scheduleIdleWasmPreload,
   getPreloadedWasmModule,
   resetWasmPreloadForTests,

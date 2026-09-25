@@ -7,7 +7,8 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import { CapturedBall } from '../../core/captured-ball'
 import type { GameConfigType } from '../../config'
 import type { QualityTier } from '../../game-elements/visual-language'
 import {
@@ -25,8 +26,8 @@ export enum PrismCoreState {
 
 export class PrismCoreFeeder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
   private config: GameConfigType['prismCore']
 
   private position: Vector3
@@ -35,7 +36,8 @@ export class PrismCoreFeeder {
   private light: PointLight | null = null
 
   private state: PrismCoreState = PrismCoreState.IDLE
-  private caughtBalls: RAPIER.RigidBody[] = []
+  private caughtBalls: PhysicsBody[] = []
+  private readonly capture: CapturedBall
   public visualRotationSpeed: number = 0.5
   private gameplayEnabled = true
 
@@ -53,13 +55,14 @@ export class PrismCoreFeeder {
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
     config: GameConfigType['prismCore']
   ) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
+    this.capture = new CapturedBall(rapier)
     this.config = config
     this.position = new Vector3(config.prismPosition.x, config.prismPosition.y, config.prismPosition.z)
 
@@ -175,7 +178,7 @@ export class PrismCoreFeeder {
     this.world.createCollider(colliderDesc, body)
   }
 
-  update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+  update(dt: number, ballBodies: PhysicsBody[]): void {
     if (!this.gameplayEnabled) return
     const anim = this.config.animation
     // Smooth rotation with decay
@@ -231,7 +234,7 @@ export class PrismCoreFeeder {
     }
   }
 
-  private checkCapture(ballBodies: RAPIER.RigidBody[]): void {
+  private checkCapture(ballBodies: PhysicsBody[]): void {
       for (const body of ballBodies) {
           // Skip balls already caught
           if (this.caughtBalls.includes(body)) continue
@@ -245,7 +248,7 @@ export class PrismCoreFeeder {
       }
   }
 
-  private captureBall(body: RAPIER.RigidBody): void {
+  private captureBall(body: PhysicsBody): void {
       // Logic State Machine Transition
       let nextState = this.state
 
@@ -262,14 +265,9 @@ export class PrismCoreFeeder {
       // Add to tracked list
       this.caughtBalls.push(body)
 
-      // Physics: Switch to Kinematic and hide inside core
-      body.setBodyType(this.rapier.RigidBodyType.KinematicPositionBased, true)
-
-      // Arrange inside the core based on count
-      // Ball 1: Center. Ball 2: Slightly offset. Ball 3: Entering.
-      // Actually, we just stack them or rotate them.
-      // Let's just put them at center for now.
-      body.setNextKinematicTranslation({ x: this.position.x, y: this.position.y, z: this.position.z })
+      // Physics: hold it kinematic, hidden inside the core (all three stack at the centre).
+      this.capture.capture(body)
+      this.capture.steer(body, { translation: { x: this.position.x, y: this.position.y, z: this.position.z } })
 
       // Update State
       this.setState(nextState)
@@ -326,8 +324,6 @@ export class PrismCoreFeeder {
       const spreadRad = (this.config.ejectSpread * Math.PI) / 180
 
       this.caughtBalls.forEach((body, index) => {
-          body.setBodyType(this.rapier.RigidBodyType.Dynamic, true)
-
           // Calculate spread angle
           // -Spread/2 to +Spread/2 based on index
           // 3 balls: -Angle, 0, +Angle
@@ -347,7 +343,7 @@ export class PrismCoreFeeder {
           )
 
           const force = dir.scale(this.config.ejectForce)
-          body.applyImpulse({ x: force.x, y: force.y, z: force.z }, true)
+          this.capture.release(body, { impulse: { x: force.x, y: force.y, z: force.z } })
       })
 
       // Clear caught list

@@ -83,6 +83,13 @@ public:
   BodyView view(int denseIndex);
   BodyView viewById(HandleTable& handles, int publicId);
 
+  /**
+   * Retype a live slot: rebuilds inverse mass / inertia from its stored mass
+   * and shape, clears accumulated force and wakes it. Pose and velocity are
+   * left to the caller (PhysicsWorld::setBodyType).
+   */
+  void setType(int denseIndex, BodyType type);
+
   void integrateAll(float dt, const Vec3& gravity);
   void updateSleep(float linearThreshold, float angularThreshold, int framesRequired);
 

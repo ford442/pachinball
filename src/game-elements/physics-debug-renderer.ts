@@ -54,34 +54,19 @@ export class PhysicsDebugRenderer {
     const useWasmDraw = mode === 'wasm-owner' || mode === 'wasm-worker'
 
     if (!useWasmDraw) {
-      const world = this.physics.getWorld()
+      const world = this.physics.getRapierWorld()
       if (!world) return
       const { vertices, colors } = world.debugRender()
       this.applyLineBuffers(vertices, colors)
       return
     }
 
+    // Owner path: there is no Rapier world, only the C++ colliders.
     const wasm = buildWasmDebugLineBuffers(
       this.physics.getWasmEngine(),
       this.physics.getWasmDebugColliders(),
     )
-    const positions = wasm.positions
-    const colors = wasm.colors
-
-    if (!this.physics.getOwnerSkipRapierStep()) {
-      const world = this.physics.getWorld()
-      if (world) {
-        const rendered = world.debugRender()
-        for (let i = 0; i < rendered.vertices.length; i++) {
-          positions.push(rendered.vertices[i] ?? 0)
-        }
-        for (let i = 0; i < rendered.colors.length; i++) {
-          colors.push(rendered.colors[i] ?? 0)
-        }
-      }
-    }
-
-    this.applyLineBuffers(positions, colors)
+    this.applyLineBuffers(wasm.positions, wasm.colors)
   }
 
   private applyLineBuffers(

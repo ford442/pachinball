@@ -17,21 +17,6 @@ export {
   getTransitionShakeIntensity,
   type ZoneConfig,
 } from './zone-registry'
-export {
-  AdventureState,
-  getAdventureState,
-  resetAdventureState,
-  ADVENTURE_LEVELS,
-  type GoalType,
-  type LevelGoal,
-  type AdventureLevel,
-  type AdventureProgress,
-} from './adventure-state'
-export { MagSpinFeeder, MagSpinState } from './mag-spin-feeder'
-export { NanoLoomFeeder, NanoLoomState } from './nano-loom-feeder'
-export { PrismCoreFeeder, PrismCoreState } from './prism-core-feeder'
-export { GaussCannonFeeder, GaussCannonState } from './gauss-cannon-feeder'
-export { QuantumTunnelFeeder, QuantumTunnelState } from './quantum-tunnel-feeder'
 export { BallAnimator } from './ball-animator'
 export { CameraController, CameraMode, FRAMING_ZONES, DEFAULT_SOFT_FOLLOW, type CameraRuntimePolicy } from './camera-controller'
 export {
@@ -120,19 +105,6 @@ export {
 export { DebugHUD, type DebugSnapshot } from './debug-hud'
 export { EventBusLog, type EventBusLogEntry } from './event-bus-log'
 export {
-  createEmptyTeardownStats,
-  type TrackTeardownStats,
-  type TrackResourceCounts,
-} from './track-teardown-stats'
-export {
-  CAMPAIGN_STORAGE_KEY,
-  CAMPAIGN_STORAGE_VERSION,
-  migrateCampaignStorage,
-  sanitizeProgressionState,
-  serializeCampaignStorage,
-  type CampaignPersistencePayload,
-} from './adventure-campaign-persistence'
-export {
   getPhysicsTuningValue,
   setPhysicsTuningOverride,
   resetPhysicsTuningOverrides,
@@ -143,55 +115,6 @@ export {
 export { PhysicsTuningPanel, isPhysicsTuningQueryEnabled, isPhysicsTuningEnabled } from './physics-tuning-panel'
 export { PerformanceMonitor, type PerformanceMetrics } from './performance-monitor'
 
-// Adventure goal & progression systems
-export { AdventureGoalSystem } from './adventure-goal-system'
-export { AdventureGoalTracker } from './adventure-goal-tracker'
-export { AdventureCinematicSystem } from './adventure-cinematic-system'
-export { AdventureCinematicTriggers } from './adventure-cinematic-triggers'
-export { AdventureUIStateManager } from './adventure-ui-state'
-export {
-  AdventureTrackProgression,
-  TRACK_CATALOG,
-  type TrackInfo,
-  type TrackModeType,
-} from './adventure-track-progression'
-export {
-  getTrackThemeProfile,
-  getTrackMaterialColor,
-  TRACK_THEME_PROFILES,
-  type TrackThemeProfile,
-  type TrackMaterialRole,
-  type TrackAmbientStyle,
-} from './track-theme-profiles'
-export {
-  TrackThemingSystem,
-  initializeTrackThemingSystem,
-  getTrackThemingSystem,
-  resetTrackThemingSystem,
-  TRACK_THEME_OVERRIDES,
-  applyThemeEmissiveColor,
-  type TrackVisualTheme,
-  type TrackThemingSystemDeps,
-} from './track-theming-system'
-export { AdventureProgressionSupervisor, type PortalSpatialContext } from './adventure-progression-supervisor'
-export {
-  getGoalsForTrack,
-  buildCampaignGoalsForTrack,
-  trackGoalSlug,
-  getCompletionPercentage,
-  getTotalReward,
-  cloneGoals,
-} from './adventure-track-goals'
-export {
-  CampaignRewardsManager,
-  CAMPAIGN_REWARD_CATALOG,
-  initializeCampaignRewardsManager,
-  getCampaignRewardsManager,
-  resetCampaignRewardsManager,
-  type CampaignRewardItem,
-  type CampaignRewardType,
-} from './campaign-rewards-manager'
-export { CampaignRewardNotifier } from './campaign-reward-notifier'
 export {
   ScoringBreakdownManager,
   getScoringBreakdownManager,
@@ -233,6 +156,4 @@ export {
   type DailyCascadeMode,
 } from './daily-cascade-state'
 
-// EventBus integration shims
 export { ObstacleEventBusIntegration } from './obstacle-eventbus-integration'
-export { AdventureEventBusIntegration } from './adventure-eventbus-integration'

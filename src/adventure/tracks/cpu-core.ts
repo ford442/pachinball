@@ -8,7 +8,7 @@ import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import { boxDesc } from '../track-collider-descriptors'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 
 export function buildCpuCore(builder: TrackBuilder): void {
   const pcbMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#004400")
@@ -16,9 +16,9 @@ export function buildCpuCore(builder: TrackBuilder): void {
 
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: RAPIER.World }).world
-  const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
-  const kinematicBindings = (builder as unknown as { kinematicBindings: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
+  const world = (builder as unknown as { world: PhysicsWorldSink }).world
+  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
+  const kinematicBindings = (builder as unknown as { kinematicBindings: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
 
   let currentPos = currentStartPos.clone()
   let heading = 0

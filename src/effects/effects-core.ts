@@ -14,9 +14,9 @@ import type { BloomPipelineController } from './bloom-pipeline-types'
 import type { CabinetLight, ShardParticle } from '../game-elements/types'
 import { PALETTE, QualityTier } from '../game-elements/visual-language'
 import { BallType, EffectsConfig } from '../config'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../core/physics-api'
 import { DEFAULT_ACCESSIBILITY, type AccessibilityConfig } from '../game-elements/accessibility-config'
-import type { TrackThemeProfile } from '../game-elements/track-theme-profiles'
+import type { TrackThemeProfile } from '../adventure/track-theme-profiles'
 import { ParticleEffects } from './effects-particles'
 import { TrackAmbientEffects } from './track-ambient-effects'
 import { LightingEffects } from './effects-lighting'
@@ -563,15 +563,15 @@ export class EffectsSystem {
     this.fresnelRimController.clearFresnelRimEffect(mesh)
   }
 
-  addBallTrail(body: RAPIER.RigidBody, mesh: Mesh, ballType: BallType): void {
+  addBallTrail(body: PhysicsBody, mesh: Mesh, ballType: BallType): void {
     this.trailEffects?.addBallTrail(body, mesh, ballType)
   }
 
-  removeBallTrail(body: RAPIER.RigidBody): void {
+  removeBallTrail(body: PhysicsBody): void {
     this.trailEffects?.removeBallTrail(body)
   }
 
-  updateTrails(balls: { body: RAPIER.RigidBody; mesh: Mesh; type: BallType }[]): void {
+  updateTrails(balls: { body: PhysicsBody; mesh: Mesh; type: BallType }[]): void {
     this.trailEffects?.updateTrails(balls, this.qualityTier)
   }
 

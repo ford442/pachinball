@@ -22,3 +22,35 @@ export {
   type RngForkLabel,
 } from './seeded-rng'
 export { resolveAssetUrl, resolveVideoUrl } from './asset-urls'
+export {
+  PhysicsActiveEvents,
+  PhysicsBodyType,
+  PhysicsCombineRule,
+  type PhysicsApi,
+  type PhysicsBody,
+  type PhysicsBodyTypeValue,
+  type PhysicsCollider,
+  type PhysicsColliderDesc,
+  type PhysicsImpulseJoint,
+  type PhysicsJointData,
+  type PhysicsRevoluteJoint,
+  type PhysicsRigidBodyDesc,
+  type PhysicsRotation,
+  type PhysicsVector,
+  type PhysicsWorldSink,
+} from './physics-api'
+export {
+  IDENTITY_POSE_ROTATION,
+  composePose,
+  quatMul,
+  quatRotateVec,
+  sphereTouchesVolume,
+  type Pose,
+  type VolumeKind,
+} from './pose-math'
+export {
+  CapturedBall,
+  type CapturedBallOptions,
+  type CapturedBallPose,
+  type CapturedBallRelease,
+} from './captured-ball'

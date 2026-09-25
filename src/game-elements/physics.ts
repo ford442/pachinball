@@ -9,6 +9,10 @@ import { WasmPhysicsEngine } from '../wasm'
 import type { WasmSimEngine } from '../wasm/wasm-sim-engine'
 import { PhysicsWorkerClient } from '../wasm/physics-worker-client'
 import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
+import { WASM_PHYSICS_API } from '../wasm/wasm-physics-api'
+import { WasmTableWorld } from '../wasm/wasm-table-world'
+import type { PhysicsApi, PhysicsWorldSink } from '../core/physics-api'
+import { loadRapier } from './rapier-loader'
 import type { WasmDebugCollider } from './wasm-debug-geometry'
 
 /** Greppable marker for "table physics booted on Rapier because WASM failed". */
@@ -104,13 +108,21 @@ export const COLLISION_GROUP_PRESETS = {
   ADVENTURE: makeCollisionGroups(ADVENTURE_GROUP, CollisionGroups.BALL),
 } as const
 
-let cachedRapier: typeof RAPIER | null = null
-let rapierInitPromise: Promise<void> | null = null
-
+/**
+ * Owns the physics world for the session.
+ *
+ * `wasm-owner` / `wasm-worker` (the default) run entirely on the C++ engine:
+ * builders author into a `WasmTableWorld` through `WASM_PHYSICS_API`, and no
+ * Rapier module, `World` or event queue is created (#412). Rapier is loaded —
+ * lazily, via `loadRapier()` — only for the explicit `rapier` override,
+ * `wasm-mirror`, or the fail-closed degrade when the C++ bundle is missing.
+ */
 export class PhysicsSystem {
   private rapier: typeof RAPIER | null = null
   private world: RAPIER.World | null = null
   private eventQueue: RAPIER.EventQueue | null = null
+  /** The owner-mode world sink (null on every Rapier path). */
+  private tableWorld: WasmTableWorld | null = null
   private stepCount = 0
 
   /** WASM backend, only active when the feature flag is set and the bundle loads. */
@@ -122,49 +134,76 @@ export class PhysicsSystem {
   private lastWasmStepMs = 0
   private lastRapierStepMs = 0
   private lastMirrorOverheadMs = 0
-  /** When true, wasm-owner skips Rapier world.step (table joints live in C++). Adventure still needs Rapier. */
-  private ownerSkipRapierStep = false
   /** Static/dynamic collider descriptors for C++ debug draw (owner/worker). */
   private wasmDebugColliders: WasmDebugCollider[] = []
 
   /** Accumulator for fixed timestep */
   private accumulator = 0
 
-  constructor(preloadedRapier?: typeof RAPIER) {
-    // If Rapier was preloaded in parallel with engine creation, use it directly.
-    // This avoids redundant WASM fetch/compilation and reduces total init time.
-    if (preloadedRapier) {
-      this.rapier = preloadedRapier
-    }
-  }
+  /**
+   * @param preloadedRapier Rapier, when the bootstrap already fetched it for an
+   *   explicit Rapier mode. Owner modes pass nothing and never load it.
+   */
+  constructor(private readonly preloadedRapier?: typeof RAPIER) {}
 
   async init(): Promise<void> {
-    if (this.rapier && this.world) return
+    if (this.world || this.tableWorld) return
 
-    // Fallback: load Rapier here if not preloaded (backward compatibility)
-    if (!this.rapier) {
-      if (cachedRapier) {
-        this.rapier = cachedRapier
-      } else {
-        const r = await import('@dimforge/rapier3d-compat')
-        this.rapier = r
-        cachedRapier = r
-        if (!rapierInitPromise) {
-          rapierInitPromise = (async () => {
-            try {
-              await (r.init as unknown as () => Promise<void>)()
-            } catch {
-              // Ignore export mutation errors in ESM test runners — WASM is ready
-            }
-          })()
-        }
-        await rapierInitPromise
-      }
+    this.wasmMode = getWasmPhysicsRuntimeMode()
+    if (WASM_PHYSICS.enabled && this.wasmMode !== 'rapier') {
+      await this.initWasmEngine()
     }
 
-    // Updated: Pass a single object with gravity property
-    const gravity = { x: GRAVITY.x, y: GRAVITY.y, z: GRAVITY.z }
-    this.world = new this.rapier.World(gravity)
+    if (this.isWasmOwnerMode() && this.wasmEngine) {
+      // The C++ engine owns everything: no Rapier module, world or queue.
+      this.tableWorld = new WasmTableWorld(this.wasmEngine, GRAVITY)
+    } else {
+      await this.initRapierWorld()
+    }
+    exposeCurrentPhysicsEngine(this.getWasmMode())
+  }
+
+  /** Load the C++ engine for the selected mode; on failure fall back to `rapier` with a degrade reason. */
+  private async initWasmEngine(): Promise<void> {
+    if (this.wasmMode === 'wasm-worker') {
+      console.info(`[PhysicsSystem] wasm-worker mode: crossOriginIsolated=${isCrossOriginIsolated()}`)
+      const client = new PhysicsWorkerClient()
+      await client.load(WASM_PHYSICS.bundleUrl)
+      if (client.isReady) {
+        console.info(
+          `[PhysicsSystem] wasm-worker snapshot transport requested: ${isCrossOriginIsolated() ? 'shared' : 'post-message'}`,
+        )
+        client.setGravity(GRAVITY.x, GRAVITY.y, GRAVITY.z)
+        client.setRollingResistance(WASM_PHYSICS.tunables.rollingResistance)
+        this.wasmEngine = client
+        this.wasmActive = true
+        return
+      }
+      console.warn('[PhysicsSystem] WASM physics worker failed; falling back to in-process wasm-owner.')
+      this.wasmMode = 'wasm-owner'
+    }
+
+    const engine = new WasmPhysicsEngine()
+    const preloaded = await getPreloadedWasmModule()
+    await engine.load(WASM_PHYSICS.bundleUrl, preloaded ?? undefined)
+    if (engine.isReady) {
+      engine.setGravity(GRAVITY.x, GRAVITY.y, GRAVITY.z)
+      engine.setRollingResistance(WASM_PHYSICS.tunables.rollingResistance)
+      this.wasmEngine = engine
+      this.wasmActive = true
+      return
+    }
+    const reason = `${PHYSICS_DEGRADE_MARKER} WASM physics bundle failed to load; falling back to Rapier.`
+    console.warn(reason)
+    exposePhysicsDegradeReason(reason)
+    this.wasmMode = 'rapier'
+  }
+
+  /** Rapier world for `rapier`, `wasm-mirror` and the degrade path. */
+  private async initRapierWorld(): Promise<void> {
+    this.rapier = this.preloadedRapier ?? (await loadRapier())
+
+    this.world = new this.rapier.World({ x: GRAVITY.x, y: GRAVITY.y, z: GRAVITY.z })
 
     // OP-1: Solver iterations for flipper stability and consistent hits
     this.world.integrationParameters.numSolverIterations = 8
@@ -175,58 +214,42 @@ export class PhysicsSystem {
     this.world.integrationParameters.contactSkin = 0.005
 
     this.eventQueue = new this.rapier.EventQueue(true)
-
-    // Optionally activate the WASM physics backend behind a localStorage flag.
-    // The Rapier world is still created so the rest of the game can query bodies/colliders.
-    this.wasmMode = getWasmPhysicsRuntimeMode()
-    if (WASM_PHYSICS.enabled && this.wasmMode !== 'rapier') {
-      if (this.wasmMode === 'wasm-worker') {
-        console.info(`[PhysicsSystem] wasm-worker mode: crossOriginIsolated=${isCrossOriginIsolated()}`)
-        const client = new PhysicsWorkerClient()
-        await client.load(WASM_PHYSICS.bundleUrl)
-        if (client.isReady) {
-          client.setGravity(GRAVITY.x, GRAVITY.y, GRAVITY.z)
-          client.setRollingResistance(WASM_PHYSICS.tunables.rollingResistance)
-          this.wasmEngine = client
-          this.wasmActive = true
-        } else {
-          console.warn(
-            '[PhysicsSystem] WASM physics worker failed; falling back to in-process wasm-owner.',
-          )
-          this.wasmMode = 'wasm-owner'
-        }
-      }
-
-      // Outer branch already excluded `'rapier'`. After a worker load failure we
-      // fall through as `'wasm-owner'` and create an in-process engine.
-      if (this.wasmMode !== 'wasm-worker') {
-        const engine = new WasmPhysicsEngine()
-        const preloaded = await getPreloadedWasmModule()
-        await engine.load(WASM_PHYSICS.bundleUrl, preloaded ?? undefined)
-        if (engine.isReady) {
-          engine.setGravity(GRAVITY.x, GRAVITY.y, GRAVITY.z)
-          engine.setRollingResistance(WASM_PHYSICS.tunables.rollingResistance)
-          this.wasmEngine = engine
-          this.wasmActive = true
-        } else {
-          const reason = `${PHYSICS_DEGRADE_MARKER} WASM physics bundle failed to load; falling back to Rapier.`
-          console.warn(reason)
-          exposePhysicsDegradeReason(reason)
-          this.wasmMode = 'rapier'
-        }
-      }
-    }
-    exposeCurrentPhysicsEngine(this.getWasmMode())
   }
 
-  getWorld(): RAPIER.World {
-    return this.world!
+  /** True once `init()` produced a world to author into. */
+  isReady(): boolean {
+    return this.tableWorld !== null || this.world !== null
+  }
+
+  /** The world builders author into: the C++ owner's table world, else the Rapier world. */
+  getWorld(): PhysicsWorldSink {
+    const world = this.tableWorld ?? this.world
+    if (!world) throw new Error('PhysicsSystem.getWorld() before init()')
+    return world
+  }
+
+  /** The value namespace builders construct descriptors from (Rapier, or the C++ recorder). */
+  getPhysicsApi(): PhysicsApi {
+    if (this.tableWorld) return WASM_PHYSICS_API
+    if (this.rapier) return this.rapier
+    throw new Error('PhysicsSystem.getPhysicsApi() before init()')
+  }
+
+  /** The owner-mode world sink, or null on a Rapier path. */
+  getWasmTableWorld(): WasmTableWorld | null {
+    return this.tableWorld
+  }
+
+  /** The Rapier world — null on the owner path, where Rapier is never loaded. */
+  getRapierWorld(): RAPIER.World | null {
+    return this.world
   }
 
   getStepCount(): number {
     return this.stepCount
   }
 
+  /** The Rapier namespace — null on the owner path, where Rapier is never loaded. */
   getRapier(): typeof RAPIER | null {
     return this.rapier
   }
@@ -258,21 +281,6 @@ export class PhysicsSystem {
     this.lastMirrorOverheadMs = ms
   }
 
-  /**
-   * Skip Rapier integration in wasm-owner when no Rapier-owned gameplay bodies
-   * remain. Since #383 Slice B that includes adventure mode, provided
-   * WasmOwner could export every collider on the active track; a track with
-   * geometry the WASM world cannot represent leaves this false so
-   * ADVENTURE_GROUP bodies keep stepping on Rapier.
-   */
-  setOwnerSkipRapierStep(skip: boolean): void {
-    this.ownerSkipRapierStep = skip
-  }
-
-  getOwnerSkipRapierStep(): boolean {
-    return this.ownerSkipRapierStep
-  }
-
   setWasmDebugColliders(colliders: WasmDebugCollider[]): void {
     this.wasmDebugColliders = colliders
   }
@@ -290,6 +298,7 @@ export class PhysicsSystem {
    * Get count of active rigid bodies in the world
    */
   getActiveBodyCount(): number {
+    if (this.tableWorld) return this.tableWorld.allBodies().length
     if (!this.world) return 0
     let count = 0
     this.world.bodies.forEach(() => count++)
@@ -298,6 +307,9 @@ export class PhysicsSystem {
 
   /** Count all colliders attached to rigid bodies in the world. */
   getColliderCount(): number {
+    if (this.tableWorld) {
+      return this.tableWorld.allBodies().reduce((n, body) => n + body.numColliders(), 0)
+    }
     if (!this.world) return 0
     let count = 0
     this.world.bodies.forEach((body) => {
@@ -311,10 +323,11 @@ export class PhysicsSystem {
    * Useful for spotting leaks across adventure track switches.
    */
   getEstimatedMemoryKb(): number {
-    if (!this.world) return 0
+    if (!this.world && !this.tableWorld) return 0
     const bodies = this.getActiveBodyCount()
     const colliders = this.getColliderCount()
-    // Empirical averages for Rapier 3D WASM allocations in this project.
+    // Empirical averages for Rapier 3D WASM allocations in this project (a rough
+    // proxy for the C++ world's footprint on the owner path).
     return Math.round(bodies * 0.45 + colliders * 0.18)
   }
 
@@ -350,16 +363,9 @@ export class PhysicsSystem {
         ? this.wasmEngine.getLastWorkerStepMs()
         : performance.now() - wasmT0
       this.lastMirrorOverheadMs = 0
-
-      if (this.ownerSkipRapierStep) {
-        this.lastRapierStepMs = 0
-        return alpha
-      }
-
-      const rapierT0 = performance.now()
-      const rapierAlpha = this.stepRapier(rawDt, callback, forceCallback)
-      this.lastRapierStepMs = performance.now() - rapierT0
-      return alpha > 0 ? alpha : rapierAlpha
+      // No Rapier exists on the owner path; the C++ step is the whole simulation.
+      this.lastRapierStepMs = 0
+      return alpha
     }
 
     this.lastWasmStepMs = 0
@@ -395,10 +401,13 @@ export class PhysicsSystem {
   }
 
   dispose(): void {
+    this.tableWorld?.dispose()
+    this.tableWorld = null
     this.wasmEngine?.dispose()
     this.wasmEngine = null
     this.wasmActive = false
     this.wasmMode = 'rapier'
     this.world?.free()
+    this.world = null
   }
 }

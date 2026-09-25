@@ -1,19 +1,20 @@
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../../core/physics-api'
 
 import type { BumperVisual } from '../../game-elements/types'
 import { WASM_PHYSICS, PhysicsConfig, GameConfig } from '../../config'
 import type { WasmSimEngine } from '../../wasm/wasm-sim-engine'
+import type { WasmContactBridge } from './collision-dispatch'
 
 /**
  * WasmMirror — keeps a small WASM physics world in sync with the Rapier ball and
  * bumper bodies so the C++ engine can simulate the ball+bumper subset while the
  * rest of the game continues to use the original Rapier bodies/handles.
  */
-export class WasmMirror {
+export class WasmMirror implements WasmContactBridge {
   private engine: WasmSimEngine
-  private rapierToWasm = new Map<RAPIER.RigidBody, number>()
-  private wasmToRapier = new Map<number, RAPIER.RigidBody>()
-  private bumperRadius = new Map<RAPIER.RigidBody, number>()
+  private rapierToWasm = new Map<PhysicsBody, number>()
+  private wasmToRapier = new Map<number, PhysicsBody>()
+  private bumperRadius = new Map<PhysicsBody, number>()
   private groundAdded = false
 
   constructor(engine: WasmSimEngine) {
@@ -31,8 +32,8 @@ export class WasmMirror {
   }
 
   rebuild(
-    ballBodies: RAPIER.RigidBody[],
-    bumperBodies: RAPIER.RigidBody[],
+    ballBodies: PhysicsBody[],
+    bumperBodies: PhysicsBody[],
     bumperVisuals: BumperVisual[]
   ): void {
     this.clear()
@@ -101,26 +102,32 @@ export class WasmMirror {
     }
   }
 
-  syncFromWasm(rapier: typeof RAPIER | null): void {
-    if (!rapier) return
+  syncFromWasm(): void {
     for (const [body, id] of this.rapierToWasm) {
       if (this.bumperRadius.has(body)) continue
       const pos = this.engine.getPosition(id)
       const vel = this.engine.getVelocity(id)
       const rot = this.engine.getRotation(id)
       const ang = this.engine.getAngularVelocity(id)
-      body.setTranslation(new rapier.Vector3(pos.x, pos.y, pos.z), true)
-      body.setLinvel(new rapier.Vector3(vel.x, vel.y, vel.z), true)
+      body.setTranslation({ x: pos.x, y: pos.y, z: pos.z }, true)
+      body.setLinvel({ x: vel.x, y: vel.y, z: vel.z }, true)
       body.setRotation({ x: rot.x, y: rot.y, z: rot.z, w: rot.w }, true)
-      body.setAngvel(new rapier.Vector3(ang.x, ang.y, ang.z), true)
+      body.setAngvel({ x: ang.x, y: ang.y, z: ang.z }, true)
     }
   }
 
-  getRapierBody(wasmId: number): RAPIER.RigidBody | undefined {
+  /** Degrade-only: the mirrored Rapier body a WASM id stands for. */
+  getRapierBody(wasmId: number): PhysicsBody | undefined {
     return this.wasmToRapier.get(wasmId)
   }
 
-  private track(body: RAPIER.RigidBody, id: number): void {
+  /** Mirror contacts dispatch in Rapier's key space: the mirrored body's own handle. */
+  resolveContactId(wasmId: number): { body: PhysicsBody; key: number } | null {
+    const body = this.wasmToRapier.get(wasmId)
+    return body ? { body, key: body.handle } : null
+  }
+
+  private track(body: PhysicsBody, id: number): void {
     this.rapierToWasm.set(body, id)
     this.wasmToRapier.set(id, body)
   }

@@ -5,7 +5,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../core/physics-api'
 import { EffectsConfig, BallType } from '../config'
 import { emissive, QualityTier } from '../game-elements/visual-language'
 
@@ -25,7 +25,7 @@ export class TrailEffects {
     number,
     {
       system: ParticleSystem
-      body: RAPIER.RigidBody
+      body: PhysicsBody
       mesh: Mesh
       type: BallType
     }
@@ -147,7 +147,7 @@ export class TrailEffects {
   }
 
   // Ball particle trails
-  addBallTrail(body: RAPIER.RigidBody, mesh: Mesh, ballType: BallType): void {
+  addBallTrail(body: PhysicsBody, mesh: Mesh, ballType: BallType): void {
     if (this.ballTrails.has(body.handle)) return
 
     const ps = new ParticleSystem(`ballTrail_${body.handle}`, 100, this.scene)
@@ -181,7 +181,7 @@ export class TrailEffects {
     this.ballTrails.set(body.handle, { system: ps, body, mesh, type: ballType })
   }
 
-  removeBallTrail(body: RAPIER.RigidBody): void {
+  removeBallTrail(body: PhysicsBody): void {
     const trail = this.ballTrails.get(body.handle)
     if (!trail) return
     trail.system.stop()
@@ -189,7 +189,7 @@ export class TrailEffects {
     this.ballTrails.delete(body.handle)
   }
 
-  updateTrails(balls: { body: RAPIER.RigidBody; mesh: Mesh; type: BallType }[], qualityTier: QualityTier): void {
+  updateTrails(balls: { body: PhysicsBody; mesh: Mesh; type: BallType }[], qualityTier: QualityTier): void {
     // Quality tier gating: disable trails entirely on LOW
     if (qualityTier === QualityTier.LOW) {
       // Clean up any existing trails

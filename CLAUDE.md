@@ -11,7 +11,9 @@ npm run lint       # ESLint on all .ts/.tsx files
 npm run preview    # Preview production build locally
 npm test           # Run Vitest unit tests
 npx playwright test  # Run E2E / visual regression tests
-npm run test:native       # C++ Catch2 tests (writes native/build-native/compile_commands.json; see root .clangd)
+npm run compile-db        # Configure-only: writes native/build-native/compile_commands.json for clangd (see root .clangd)
+npm run test:native       # compile-db + C++ Catch2 tests
+npm run check:wasm-docs   # Fail if docs/wasm-physics-engine.md drifts from CMake / config / sources
 npm run build:wasm        # Emscripten Release → public/wasm/
 npm run test:wasm-parity  # WASM bundle vs native C++ reference
 npm run bench:wasm-flags  # Microbench WASM flag matrix (SIMD/LTO)
@@ -24,18 +26,18 @@ npx vitest run tests/ball-manager.test.ts
 
 ## Architecture
 
-**Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 7. Physics uses Rapier 3D WASM by default, with an optional in-house C++ engine compiled to WASM (`native/` + `src/wasm/`). Runtime mode is selected via `src/config.ts` (`rapier` / `wasm-mirror` / `wasm-owner`).
+**Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 7. Physics runs on an in-house C++ engine compiled to WASM (`native/` + `src/wasm/`) by default (`wasm-owner`); Rapier 3D WASM is the lazily loaded dev/degrade path. Runtime mode is selected via `src/config.ts` (`rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker`). Builders author physics through `PhysicsApi` / `PhysicsWorldSink` / `PhysicsBody` (`src/core/physics-api.ts`), never Rapier values — see `docs/wasm-physics-engine.md`.
 
 ### Startup flow
 
-`src/main.ts` bootstraps the Babylon engine (WebGPU → WebGL fallback) and preloads the Rapier WASM bundle in parallel, then hands off to `new Game()`. The `window.game` global is set for Playwright tests to hook into.
+`src/main.ts` bootstraps the Babylon engine (WebGPU → WebGL fallback) and preloads the C++ physics WASM bundle in parallel (Rapier only for the explicit `rapier` / `wasm-mirror` modes), then hands off to `new Game()`. The `window.game` global is set for Playwright tests to hook into.
 
 ### Core modules
 
 | Path | Role |
 |------|------|
 | `src/game.ts` | Central orchestrator (~33 KB / ~840 lines — slimmed from its former ~140 KB monolith; the sub-systems now live under `src/game/`, `src/game-elements/`, `src/display/`, `src/effects/`, `src/objects/`). Owns scene, cameras, lights, materials, post-processing, game-state machine (MENU / PLAYING / PAUSED / GAME_OVER), and wires all sub-systems together. |
-| `src/game-elements/` | Discrete sub-systems: `physics.ts` (Rapier world), `ball-manager.ts` (spawn/collect/drain), `input.ts` (keyboard/touch/gamepad), `camera-controller.ts`, `sound-system.ts`, `zone-trigger-system.ts`, `leaderboard-system.ts`, `adventure-mode.ts`, `debug-hud.ts`, etc. |
+| `src/game-elements/` | Discrete sub-systems: `physics.ts` (physics world: the C++ owner's `WasmTableWorld`, or Rapier), `ball-manager.ts` (spawn/collect/drain), `input.ts` (keyboard/touch/gamepad), `camera-controller.ts`, `sound-system.ts`, `zone-trigger-system.ts`, `leaderboard-system.ts`, `adventure-mode.ts`, `debug-hud.ts`, etc. |
 | `native/` | C++ physics core — rigid bodies, broadphase, contact listener. Catch2-tested via `npm run test:native`. |
 | `src/wasm/` | Emscripten loader (`PhysicsModule.ts`), contact/transform buffer codecs, WASM types. |
 | `src/game/physics/` | Runtime physics engine selection and collision dispatch (`rapier`, `wasm-mirror`, `wasm-owner`). |

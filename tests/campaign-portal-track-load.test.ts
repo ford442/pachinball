@@ -9,8 +9,8 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { EventBus } from '../src/core/event-bus'
-import { AdventureTrackProgression } from '../src/game-elements/adventure-track-progression'
-import { AdventureProgressionSupervisor } from '../src/game-elements/adventure-progression-supervisor'
+import { AdventureTrackProgression } from '../src/adventure/adventure-track-progression'
+import { AdventureProgressionSupervisor } from '../src/adventure/adventure-progression-supervisor'
 import { LevelLoader } from '../src/game/level-loader'
 import { GameSlotAdventure } from '../src/game/game-slot-adventure'
 import { AdventureTrackType } from '../src/adventure/adventure-types'

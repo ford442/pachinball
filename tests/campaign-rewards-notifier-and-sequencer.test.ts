@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { EventBus } from '../src/core/event-bus'
-import { CampaignRewardNotifier } from '../src/game-elements/campaign-reward-notifier'
+import { CampaignRewardNotifier } from '../src/adventure/campaign-reward-notifier'
 import { CelebrationSequencer } from '../src/effects/celebration-sequencer'
 import { QualityTier } from '../src/game-elements/visual-language'
 import type { UnlockedReward } from '../src/game-elements/types'
 import type { DisplaySystem } from '../src/display'
 import type { CabinetLighting } from '../src/effects/cabinet-lighting'
-import type { AdventureCinematicTriggers } from '../src/game-elements/adventure-cinematic-triggers'
+import type { AdventureCinematicTriggers } from '../src/adventure/adventure-cinematic-triggers'
 
 const mockAccessibility = {
   reducedMotion: false,

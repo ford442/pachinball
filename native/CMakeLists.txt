@@ -36,7 +36,10 @@ set(PHYSICS_CORE_SOURCES
   src/DynamicBox.cpp
   src/Narrowphase.cpp
   src/StaticShapes.cpp
+  src/Cone.cpp
+  src/KinematicBody.cpp
   src/PhysicsWorld.cpp
+  src/PhysicsWorldStep.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -150,11 +153,14 @@ if(NOT EMSCRIPTEN)
 
   add_executable(physics_world_test
     tests/physics_world_test.cpp
+    tests/hinge_friction_test.cpp
     tests/kinematic_mover_test.cpp
     tests/sensor_volume_test.cpp
     tests/collision_filter_test.cpp
     tests/static_shapes_test.cpp
     tests/adventure_geometry_test.cpp
+    tests/kinematic_body_test.cpp
+    tests/cone_test.cpp
   )
   target_link_libraries(physics_world_test PRIVATE
     pachinball_physics_native

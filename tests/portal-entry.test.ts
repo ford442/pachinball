@@ -19,11 +19,11 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { EventBus } from '../src/core/event-bus'
-import { AdventureTrackProgression, TRACK_CATALOG } from '../src/game-elements/adventure-track-progression'
+import { AdventureTrackProgression, TRACK_CATALOG } from '../src/adventure/adventure-track-progression'
 import {
   AdventureProgressionSupervisor,
   type PortalSpatialContext,
-} from '../src/game-elements/adventure-progression-supervisor'
+} from '../src/adventure/adventure-progression-supervisor'
 import { ZoneTriggerSystem } from '../src/game-elements/zone-trigger-system'
 
 // ─── Helper: build a supervisor in a state where the portal is open ───────────

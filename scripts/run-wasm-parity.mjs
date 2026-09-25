@@ -715,4 +715,119 @@ failed ||= !runScenario('wasm dynamic box rests on a static box', (w) => {
   }
   wasm.delete()
 }
+
+// #420 — runtime body type: Dynamic → Kinematic → Dynamic keeps mass, ignores
+// gravity while held, and releases with the last kinematic velocity
+// (native reference: native/tests/kinematic_body_test.cpp).
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, -9.81, 0)
+  const id = world.createRigidBody(0, 1, 0, 0, 0, 0, 2, 0.25, 0.5, 0, 0, 0, 0.5, 0.2, 0)
+  world.setBodyType(id, 2)
+  const heldType = world.getBodyType(id)
+  world.applyImpulse(id, 5, 0, 0)
+  for (let i = 0; i < 30; i++) world.step(1 / 60)
+  const heldY = world.getPosY(id)
+  const heldVx = world.getVelX(id)
+
+  const delta = 0.02
+  for (let i = 1; i <= 6; i++) {
+    world.setNextKinematicTransform(id, delta * i, 1, 0, 0, 0, 0, 1)
+    world.step(1 / 60)
+  }
+  const followedX = world.getPosX(id)
+  world.setBodyType(id, 0)
+  const releaseVx = world.getVelX(id)
+  world.applyImpulse(id, 2, 0, 0)
+  const massVx = world.getVelX(id) - releaseVx
+
+  const ok = heldType === 2 && Math.abs(heldY - 1) < 1e-6 && heldVx === 0
+    && Math.abs(followedX - delta * 6) < 1e-5
+    && Math.abs(releaseVx - delta * 60) < 1e-3
+    && Math.abs(massVx - 1) < 1e-5
+    && world.getBodyType(id) === 0 && world.getBodyType(999) === -1
+  console.log(
+    `${ok ? 'PASS' : 'FAIL'} wasm runtime body type capture/release ` +
+    `(heldY=${heldY.toFixed(4)} followedX=${followedX.toFixed(4)} releaseVx=${releaseVx.toFixed(3)} dv=${massVx.toFixed(3)})`
+  )
+  if (!ok) failed = true
+  world.delete()
+}
+
+// #420 — a captured (kinematic) ball is a wall to a rolling ball, and never
+// collides with static geometry itself.
+{
+  const world = new Module.PhysicsWorld()
+  world.setGravity(0, -9.81, 0)
+  world.addStaticPlane(0, 1, 0, 0, 0.3)
+  const held = world.createRigidBody(0, 0.25, 0, 0, 0, 0, 1, 0.25, 0.5, 0, 0, 0, 0.5, 0.2, 0)
+  const roller = world.createRigidBody(-1.2, 0.25, 0, 8, 0, 0, 1, 0.25, 0.5, 0, 0, 0, 0.5, 0.2, 0)
+  world.setBodyType(held, 2)
+  let hit = false
+  let planeHitByHeld = false
+  for (let i = 0; i < 30; i++) {
+    world.setNextKinematicTransform(held, 0, 0.25, 0, 0, 0, 0, 1)
+    world.step(1 / 60)
+    for (const c of readContacts(Module, world)) {
+      if ((c.id1 === held && c.id2 === roller) || (c.id1 === roller && c.id2 === held)) hit = true
+      if (c.id1 === held && c.id2 === -1) planeHitByHeld = true
+    }
+  }
+  const ok = hit && !planeHitByHeld && world.getVelX(roller) < 0
+    && Math.abs(world.getPosX(held)) < 1e-6 && world.getPosX(roller) < 0
+  console.log(`${ok ? 'PASS' : 'FAIL'} wasm captured ball deflects a roller (rollerVx=${world.getVelX(roller).toFixed(3)})`)
+  if (!ok) failed = true
+  world.delete()
+}
+
+// #420 — static cone (ball-trap funnel) vs Rapier's own cone: a ball fired at
+// the slant deflects out and up along the slant normal (2h, R)/L.
+{
+  const dt = 1 / 60
+  const wasm = new Module.PhysicsWorld()
+  wasm.setGravity(0, 0, 0)
+  const coneId = wasm.addStaticCone(0, 0, 0, 1, 1, 0, 0, 0, 1, 0.5, 0)
+  wasm.createRigidBody(2, 0, 0, -4, 0, 0, 1, 0.1, 0.5, 0, 0, 0, 0.5, 0, 0)
+  let n = null
+  for (let i = 0; i < 60; i++) {
+    wasm.step(dt)
+    for (const c of readContacts(Module, wasm)) {
+      if (c.id2 === coneId && n === null) n = { x: c.nx, y: c.ny, z: c.nz }
+    }
+  }
+  const wasmV = { x: wasm.getVelX(0), y: wasm.getVelY(0) }
+  wasm.delete()
+  const inv = 1 / Math.sqrt(5)
+  let ok = coneId === -9000 && n !== null
+    && Math.abs(n.x - 2 * inv) < 2e-2 && Math.abs(n.y - inv) < 2e-2 && Math.abs(n.z) < 1e-3
+    && wasmV.x > 0 && wasmV.y > 0
+
+  let rapierV = null
+  try {
+    const RAPIER = await import('@dimforge/rapier3d-compat/rapier.es.js')
+    try { await RAPIER.init({}) } catch { try { await RAPIER.init() } catch { /* already ready */ } }
+    const rw = new RAPIER.World({ x: 0, y: 0, z: 0 })
+    rw.integrationParameters.dt = dt
+    rw.createCollider(RAPIER.ColliderDesc.cone(1, 1).setRestitution(0.5).setFriction(0))
+    const rb = rw.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic().setTranslation(2, 0, 0).setLinvel(-4, 0, 0).setLinearDamping(0),
+    )
+    rw.createCollider(RAPIER.ColliderDesc.ball(0.1).setRestitution(0.5).setFriction(0).setMass(1), rb)
+    for (let i = 0; i < 60; i++) rw.step()
+    rapierV = { x: rb.linvel().x, y: rb.linvel().y }
+    rw.free()
+  } catch (err) {
+    console.log(`SKIP wasm/rapier cone compare (rapier unavailable: ${err?.message ?? err})`)
+  }
+  if (rapierV) {
+    // Same deflection quadrant and direction within 20°; restitution models differ.
+    const angle = (v) => Math.atan2(v.y, v.x)
+    ok = ok && rapierV.x > 0 && rapierV.y > 0 && Math.abs(angle(wasmV) - angle(rapierV)) < (20 * Math.PI) / 180
+  }
+  console.log(
+    `${ok ? 'PASS' : 'FAIL'} wasm static cone slant deflect (id=${coneId} n=${JSON.stringify(n)} ` +
+    `v wasm=${JSON.stringify(wasmV)} rapier=${JSON.stringify(rapierV)})`
+  )
+  if (!ok) failed = true
+}
 process.exit(failed ? 1 : 0)

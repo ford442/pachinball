@@ -17,6 +17,7 @@ import {
   STATIC_CAPSULE_ID_BASE,
   STATIC_CYLINDER_ID_BASE,
   STATIC_SPHERE_ID_BASE,
+  STATIC_CONE_ID_BASE,
   STATIC_HANDLE_CAPACITY,
   STATIC_HANDLE_OVERFLOW,
   cloneFloat32Array,
@@ -48,6 +49,7 @@ function makeMockEngine() {
   let nextHinge = 0
   let nextBox = 0
   let nextCapsule = 0
+  let nextCone = 0
   const bodies: number[] = []
   const hinges = new Map<number, number>()
   let stepCount = 0
@@ -72,6 +74,9 @@ function makeMockEngine() {
     addStaticPlane: vi.fn(),
     addStaticBox: vi.fn(() => STATIC_BOX_ID_BASE - nextBox++),
     addStaticCapsule: vi.fn(() => STATIC_CAPSULE_ID_BASE - nextCapsule++),
+    addStaticCone: vi.fn(() => STATIC_CONE_ID_BASE - nextCone++),
+    setNextKinematicTransform: vi.fn(),
+    setBodyType: vi.fn(),
     createBody: vi.fn(() => {
       const id = nextBody++
       bodies.push(id)
@@ -220,6 +225,50 @@ describe('physics worker in-process loopback', () => {
     expect(client.getPosition(0).x).toBe(3)
     expect(client.getHingeAngle(0)).toBe(0.25)
     expect(contacts).toHaveLength(1)
+  })
+})
+
+describe('physics worker capture (#420)', () => {
+  it('carries a capture → steer → release sequence to the worker engine in order', () => {
+    const engine = makeMockEngine()
+    const runtime = createWorkerRuntimeState()
+    const client = new PhysicsWorkerClient()
+    const order: string[] = []
+    client.attachLoopback((commands) => {
+      for (const cmd of commands) {
+        order.push(cmd.type)
+        applyPhysicsCommand(engine, cmd, runtime)
+      }
+    })
+
+    const ball = client.createBody({ mass: 1, radius: 0.25 })
+    const cone = client.addStaticCone({ x: -5, y: 0.5, z: 10 }, 0.2, 0.6)
+    expect(cone).toBe(STATIC_CONE_ID_BASE)
+
+    client.setBodyType(ball, 2)
+    client.setNextKinematicTransform(ball, { x: 1, y: 2, z: 3 }, { x: 0, y: 0, z: 0, w: 1 })
+    client.setBodyType(ball, 0)
+    client.applyImpulse(ball, 0, 0, 4)
+    client.step(1 / 60)
+
+    expect(order).toEqual([
+      'createBody', 'addStaticCone', 'setBodyType', 'setNextKinematicTransform', 'setBodyType', 'applyImpulse', 'step',
+    ])
+    expect(engine.addStaticCone).toHaveBeenCalledWith({ x: -5, y: 0.5, z: 10 }, 0.2, 0.6, { x: 0, y: 0, z: 0, w: 1 }, 0.4, 0.2)
+    expect(engine.setBodyType).toHaveBeenNthCalledWith(1, ball, 2)
+    expect(engine.setNextKinematicTransform).toHaveBeenCalledWith(ball, { x: 1, y: 2, z: 3 }, { x: 0, y: 0, z: 0, w: 1 })
+    expect(engine.setBodyType).toHaveBeenNthCalledWith(2, ball, 0)
+  })
+
+  it('shadows cone handles like native: own family, capacity, reset', () => {
+    const ids = new WasmIdShadow()
+    expect(ids.allocStaticCone()).toBe(STATIC_CONE_ID_BASE)
+    expect(ids.allocStaticSphere()).toBe(STATIC_SPHERE_ID_BASE)
+    expect(ids.allocStaticCone()).toBe(STATIC_CONE_ID_BASE - 1)
+    for (let i = 2; i < STATIC_HANDLE_CAPACITY; i++) ids.allocStaticCone()
+    expect(ids.allocStaticCone()).toBe(STATIC_HANDLE_OVERFLOW)
+    ids.resetStaticHandles()
+    expect(ids.allocStaticCone()).toBe(STATIC_CONE_ID_BASE)
   })
 })
 

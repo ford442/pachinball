@@ -5,9 +5,10 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import { CapturedBall } from '../../core/captured-ball'
 import { GameConfig } from '../../config'
-import { getSessionRngFork, RNG_FORK } from '../../game-elements/seeded-rng'
+import { getSessionRngFork, RNG_FORK } from '../../core/seeded-rng'
 
 export enum QuantumTunnelState {
   IDLE = 0,
@@ -21,17 +22,18 @@ export type QuantumTunnelCallback = (state: QuantumTunnelState) => void
 
 export class QuantumTunnelFeeder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
   private config: typeof GameConfig['quantumTunnel']
 
   private inputMesh: Mesh
   private outputMesh: Mesh
-  private inputSensor: RAPIER.RigidBody | null = null
+  private inputSensor: PhysicsBody | null = null
 
   private state: QuantumTunnelState = QuantumTunnelState.IDLE
   private stateTimer: number = 0
-  private capturedBall: RAPIER.RigidBody | null = null
+  private capturedBall: PhysicsBody | null = null
+  private readonly capture: CapturedBall
   private gameplayEnabled = true
 
   // Follow-through animation: Smooth portal spin acceleration
@@ -53,13 +55,14 @@ export class QuantumTunnelFeeder {
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
     config: typeof GameConfig['quantumTunnel']
   ) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
+    this.capture = new CapturedBall(rapier)
     this.config = config
     this.inputSpinSpeed = config.portalSpinIdle
     this.outputSpinSpeed = -config.portalSpinIdle
@@ -114,7 +117,7 @@ export class QuantumTunnelFeeder {
     this.world.createCollider(colliderDesc, this.inputSensor)
   }
 
-  public update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+  public update(dt: number, ballBodies: PhysicsBody[]): void {
     if (!this.gameplayEnabled) return
     this.stateTimer += dt
 
@@ -170,7 +173,7 @@ export class QuantumTunnelFeeder {
     }
   }
 
-  private updateIdle(ballBodies: RAPIER.RigidBody[]): void {
+  private updateIdle(ballBodies: PhysicsBody[]): void {
     if (!this.inputSensor) return
 
     const sensorHandle = this.inputSensor.collider(0)
@@ -220,7 +223,7 @@ export class QuantumTunnelFeeder {
             new Vector3(target.x, target.y, target.z),
             dt * this.config.capturePullLerpSpeed
         )
-        this.capturedBall.setNextKinematicTranslation(next)
+        this.capture.steer(this.capturedBall, { translation: { x: next.x, y: next.y, z: next.z } })
     } else {
         this.transitionTo(QuantumTunnelState.TRANSPORT)
     }
@@ -232,7 +235,7 @@ export class QuantumTunnelFeeder {
     // Since we don't have mesh access here easily (unless we ask Game),
     // we'll just teleport it to a holding cell (e.g. far below)
     if (this.capturedBall) {
-        this.capturedBall.setNextKinematicTranslation({ x: 0, y: this.config.transportHideY, z: 0 })
+        this.capture.steer(this.capturedBall, { translation: { x: 0, y: this.config.transportHideY, z: 0 } })
     }
 
     // Charge Output Portal
@@ -257,10 +260,7 @@ export class QuantumTunnelFeeder {
     // 1. Move to Output
     this.capturedBall.setTranslation({ x: outPos.x, y: outPos.y, z: outPos.z }, true)
 
-    // 2. Restore Physics
-    this.capturedBall.setBodyType(this.rapier.RigidBodyType.Dynamic, true)
-
-    // 3. Apply Impulse (Towards Center)
+    // 2. Apply Impulse (Towards Center)
     // Center is roughly 0,0,0. Left Wall is -11.5. Impulse +X.
     // Let's aim slightly randomly?
     // Impulse 25.0
@@ -269,7 +269,8 @@ export class QuantumTunnelFeeder {
     // Add some variance z?
     impulse.z += (getSessionRngFork(RNG_FORK.FEEDER).next() - 0.5) * this.config.ejectImpulseVarianceZ
 
-    this.capturedBall.applyImpulse(impulse, true)
+    // 3. Restore physics and launch
+    this.capture.release(this.capturedBall, { impulse: { x: impulse.x, y: impulse.y, z: impulse.z } })
 
     // 4. Release ref
     this.capturedBall = null
@@ -301,7 +302,7 @@ export class QuantumTunnelFeeder {
 
     // State Entry Logic
     if (newState === QuantumTunnelState.CAPTURE && this.capturedBall) {
-        this.capturedBall.setBodyType(this.rapier.RigidBodyType.KinematicPositionBased, true)
+        this.capture.capture(this.capturedBall)
     }
   }
 

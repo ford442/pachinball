@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { FEEDER_TUNABLES } from '../src/config'
-import { QuantumTunnelFeeder, QuantumTunnelState } from '../src/game-elements/quantum-tunnel-feeder'
+import { QuantumTunnelFeeder, QuantumTunnelState } from '../src/objects/feeders/quantum-tunnel-feeder'
 import { createMockBall, createMockRapier, createMockWorld } from './feeder-test-helpers'
 
 vi.mock('@babylonjs/core', async () => {

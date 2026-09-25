@@ -161,6 +161,14 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("setBodyPosition", &PhysicsWorld::setBodyPosition)
     .function("setBodyRotation", &PhysicsWorld::setBodyRotation)
 
+    // Runtime body type (a toy capturing a live ball): 0 Dynamic, 1 Static,
+    // 2 Kinematic. Out-of-range values are ignored rather than cast blindly.
+    .function("setBodyType", optional_override([](PhysicsWorld& self, int id, int type) {
+        if (type < 0 || type > static_cast<int>(BodyType::Kinematic)) return;
+        self.setBodyType(id, static_cast<BodyType>(type));
+      }))
+    .function("getBodyType", &PhysicsWorld::getBodyType)
+
     .function("createHinge", optional_override([](PhysicsWorld& self,
         int bodyId,
         float ax, float ay, float az,
@@ -183,6 +191,7 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("addStaticCapsule", &PhysicsWorld::addStaticCapsule)
     .function("addStaticCylinder", &PhysicsWorld::addStaticCylinder)
     .function("addStaticSphere", &PhysicsWorld::addStaticSphere)
+    .function("addStaticCone", &PhysicsWorld::addStaticCone)
     .function("clearStaticGeometry", &PhysicsWorld::clearStaticGeometry)
     .function("getDroppedStaticCount", &PhysicsWorld::getDroppedStaticCount)
 
@@ -218,7 +227,8 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("setForceFieldEnabled", &PhysicsWorld::setForceFieldEnabled)
     .function("setForceFieldVector", &PhysicsWorld::setForceFieldVector)
 
-    // Kinematic OBB movers (pistons, platters, gates)
+    // Kinematic OBB movers (pistons, platters, gates). setNextKinematicTransform
+    // also takes a kinematic rigid-body id (≥ 0) — see setBodyType above.
     .function("addKinematicMover", optional_override([](PhysicsWorld& self,
         float px, float py, float pz,
         float hx, float hy, float hz,

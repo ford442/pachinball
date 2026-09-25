@@ -139,15 +139,15 @@ export function resolveEngineOptions(ctx: EngineOptionsContext = DEFAULT_CONTEXT
 /**
  * Hardware scaling level for Babylon's setHardwareScalingLevel().
  * Higher level = lower internal render resolution.
+ *
+ * With `adaptToDeviceRatio: false`, Babylon's `resize()` sizes the backbuffer to
+ * `clientWidth / level` — DPR never enters. So level 1 is CSS-pixel resolution and
+ * any level > 1 renders *below* CSS pixels. Only mobile trades that sharpness for
+ * fill rate; HiDPI desktop stays at 1 (the former `min(DPR, 2)` rendered a 2× display
+ * at a quarter of its native pixels per axis). See docs/ENGINE_BOOTSTRAP.md.
  */
 export function resolveHardwareScalingLevel(ctx: EngineOptionsContext = DEFAULT_CONTEXT): number {
-  if (isMobileUserAgent(ctx.userAgent)) {
-    return 2
-  }
-  if (ctx.devicePixelRatio > 1) {
-    return Math.min(ctx.devicePixelRatio, 2)
-  }
-  return 1
+  return isMobileUserAgent(ctx.userAgent) ? 2 : 1
 }
 
 /** Apply resolved hardware scaling and log when non-default. */
@@ -159,9 +159,5 @@ export function applyHardwareScaling(
   if (level === 1) return
 
   engine.setHardwareScalingLevel(level)
-  if (isMobileUserAgent(ctx.userAgent)) {
-    console.log('[Bootstrap] Mobile detected: hardware scaling 2x (half resolution)')
-  } else {
-    console.log(`[Bootstrap] HiDPI display (DPR ${ctx.devicePixelRatio}): hardware scaling ${level}x`)
-  }
+  console.log(`[Bootstrap] Mobile detected: hardware scaling ${level}x (half CSS-pixel resolution)`)
 }
