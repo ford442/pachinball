@@ -263,3 +263,101 @@ export function triangularPrismLayout(radius: number, height: number): ConvexMes
 
   return { vertices, indices }
 }
+
+export interface GeoQuat {
+  x: number
+  y: number
+  z: number
+  w: number
+}
+
+/** Rotation about world Y by `yaw` — Babylon's heading convention. */
+export function yawQuat(yaw: number): GeoQuat {
+  return { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) }
+}
+
+/**
+ * Orientation of a straight ramp slab: local X across the ramp (`headingRight`),
+ * local Y off the surface (`rampNormal`), local Z down the slope
+ * (`rampForward`). Identical to the slab's own `Quaternion.FromEulerAngles(
+ * inclineRad, heading, 0)`, written out so it needs no Babylon.
+ */
+export function rampQuat(heading: number, inclineRad: number): GeoQuat {
+  const sy = Math.sin(heading / 2)
+  const cy = Math.cos(heading / 2)
+  const sx = Math.sin(inclineRad / 2)
+  const cx = Math.cos(inclineRad / 2)
+  return { x: cy * sx, y: sy * cx, z: -sy * sx, w: cy * cx }
+}
+
+/** Rotate `v` by unit quaternion `q`. */
+export function rotateByQuat(q: GeoQuat, v: GeoVec3): GeoVec3 {
+  const ux = q.y * v.z - q.z * v.y
+  const uy = q.z * v.x - q.x * v.z
+  const uz = q.x * v.y - q.y * v.x
+  return {
+    x: v.x + 2 * (q.w * ux + q.y * uz - q.z * uy),
+    y: v.y + 2 * (q.w * uy + q.z * ux - q.x * uz),
+    z: v.z + 2 * (q.w * uz + q.x * uy - q.y * ux),
+  }
+}
+
+/**
+ * A point in a straight ramp's frame: `along` down the slope from its start,
+ * `lateral` across it, `height` above the running surface.
+ */
+export function rampSurfacePoint(
+  rampStart: GeoVec3,
+  heading: number,
+  inclineRad: number,
+  along: number,
+  lateral: number,
+  height: number
+): GeoVec3 {
+  const onSurface = addScaled(
+    addScaled(rampStart, rampForward(heading, inclineRad), along),
+    headingRight(heading),
+    lateral
+  )
+  return addScaled(onSurface, rampNormal(heading, inclineRad), RAMP_HALF_THICKNESS + height)
+}
+
+export interface PinLatticeLayoutInput {
+  rampStart: GeoVec3
+  heading: number
+  inclineRad: number
+  rows: number
+  cols: number
+  spacing: number
+  rowSpacing: number
+  rowOffset: number
+  startAlong: number
+  lateral: number
+  pinHeight: number
+}
+
+export interface PinLatticeLayout {
+  /** World centre of pin (row 0, col 0). */
+  origin: GeoVec3
+  /** The ramp frame — the lattice's X across, Y up the pins, Z down the slope. */
+  rotation: GeoQuat
+}
+
+/**
+ * Where a native pin field sits on a straight ramp: rows down the slope,
+ * columns across it, centred on `lateral`, pins standing on the surface.
+ */
+export function pinLatticeLayout(input: PinLatticeLayoutInput): PinLatticeLayout {
+  const firstCol = input.lateral - ((input.cols - 1) * input.spacing) / 2
+  return {
+    origin: rampSurfacePoint(
+      input.rampStart,
+      input.heading,
+      input.inclineRad,
+      input.startAlong,
+      firstCol,
+      input.pinHeight / 2
+    ),
+    rotation: rampQuat(input.heading, input.inclineRad),
+  }
+}

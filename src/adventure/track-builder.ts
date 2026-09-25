@@ -163,6 +163,15 @@ export abstract class TrackBuilder {
   }
 
   /**
+   * Emit a body-less descriptor (a C++ force field). Recorded for the C++
+   * exporter only — a Rapier world has no force fields.
+   */
+  emitField(desc: AdventureColliderDesc): number {
+    this.colliderEpoch++
+    return this.colliders.emitField(desc)
+  }
+
+  /**
    * Drop an emitted body's colliders from the descriptor list before the body
    * is removed from the Rapier world, so the C++ export stops carrying them.
    */
@@ -409,6 +418,11 @@ export abstract class TrackBuilder {
       createInclinedMill: (center, radius, inclineRad, angVelAlongNormal, material) =>
         this.createInclinedMill(center, radius, inclineRad, angVelAlongNormal, material),
       createResetBasin: (pos, material) => this.createResetBasin(pos, material),
+      createPinLattice: (spec, material) => primitives.createPinLattice(this.primitiveContext(), spec, material),
+      createForceField: (center, halfExtents, rotation, acceleration, space, visible, material) =>
+        primitives.createForceField(
+          this.primitiveContext(), center, halfExtents, rotation, acceleration, space, visible, material
+        ),
     }
 
     return compileTrackDefinition(def, api)
@@ -459,6 +473,7 @@ export abstract class TrackBuilder {
       resetSensors: this.resetSensors,
       materials: this.materials,
       emit: (desc) => this.colliders.emit(desc),
+      emitField: (desc) => this.colliders.emitField(desc),
       attach: (parent, desc) => this.colliders.attach(parent, desc),
       getTrackMaterial: (hex) => this.getTrackMaterial(hex),
       setGoalSensor: (body) => {

@@ -65,6 +65,7 @@ export class GameSlotAdventure {
     AdventureTrackType.PACHINKO_HALL,
     AdventureTrackType.CYBER_CORE,
     AdventureTrackType.QUANTUM_GRID,
+    AdventureTrackType.STORM_LATTICE,
     AdventureTrackType.SINGULARITY_WELL,
     AdventureTrackType.GLITCH_SPIRE,
     AdventureTrackType.RETRO_WAVE_HILLS,

@@ -75,6 +75,22 @@ export const CAMERA_PRESETS: Record<string, CameraPreset> = {
     minRadius: 14,
     maxRadius: 35,
   },
+  /** STORM_LATTICE: Near-face-on view of the steep lattice board and its updraft shafts */
+  STORM_LATTICE: {
+    alpha: -Math.PI / 2,
+    beta: 1.2, // ~69°
+    radius: 22,
+    fov: 0.9,
+    lookAheadTime: 0.2,
+    trackingSmoothing: 9.0,
+    speedRadiusFactor: 0.1,
+    speedFOVFactor: 0.003,
+    maxRadiusExtension: 5,
+    minBeta: 1.05,
+    maxBeta: 1.42,
+    minRadius: 16,
+    maxRadius: 40,
+  },
   /** SINGULARITY_WELL: Tighter view for gravitational challenge */
   SINGULARITY_WELL: {
     alpha: -Math.PI / 2,

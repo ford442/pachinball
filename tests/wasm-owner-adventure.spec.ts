@@ -204,6 +204,55 @@ test.describe('wasm-owner adventure: synthwave-surf runs without Rapier', () => 
     expect(physicsErrors, `physics console errors: ${physicsErrors.join(' | ')}`).toEqual([])
   })
 
+  test('plays a ball through STORM_LATTICE: one C++ pin field, four force fields, Rapier unstepped', async ({ page }) => {
+    // #424 Slice A: the first schema-only track built on C++ toys.
+    test.setTimeout(180_000)
+
+    const boot = await bootWasmOwner(page)
+    assertWasmOwnerReady(boot)
+    await startPlaying(page)
+    await pauseRendering(page)
+
+    const started = await startTrack(page, 'STORM_LATTICE')
+    expect(started.error, started.error ?? 'track start failed').toBeNull()
+    expect(started.ok).toBe(true)
+
+    const track = await page.evaluate(() => {
+      const g = (window as unknown as AdventureHooks).game
+      const descs = (g?.adventureMode?.getColliderDescriptors?.() ?? []).filter((d) => !d.removed)
+      const ownership = g?.physicsController?.getAdventureOwnership?.()
+      return {
+        pinFields: descs.filter((d) => d.kind === 'pinField').length,
+        forceFields: descs.filter((d) => d.kind === 'forceField').length,
+        convex: descs.filter((d) => d.kind === 'convexMesh').length,
+        unexported: [...(g?.adventureMode?.getUnexportedColliders?.() ?? [])],
+        owned: ownership?.owned ?? false,
+        unsupported: (ownership?.unsupported ?? []).map((u) => `${u.label ?? '?'}: ${u.reason}`),
+      }
+    })
+    expect(track).toEqual({ pinFields: 1, forceFields: 4, convex: 0, unexported: [], owned: true, unsupported: [] })
+
+    const before = await page.evaluate(() => {
+      const t = (window as unknown as AdventureHooks).game?.ballManager?.getBallBody?.()?.translation()
+      return { x: t?.x ?? 0, y: t?.y ?? 0, z: t?.z ?? 0 }
+    })
+    const run = await stepPhysics(page, 360)
+    const after = await page.evaluate(() => {
+      const g = (window as unknown as AdventureHooks).game
+      const t = g?.ballManager?.getBallBody?.()?.translation()
+      return { x: t?.x ?? 0, y: t?.y ?? 0, z: t?.z ?? 0, rapierMs: g?.physics?.getLastRapierStepMs?.() ?? -1 }
+    })
+
+    expect(run.ok).toBe(true)
+    expect(run.rapierMs).toBe(0)
+    expect(after.rapierMs).toBe(0)
+    expect(run.wasmMs).toBeGreaterThan(0)
+    // Six seconds in, the ball has come off the feed chute and down into the
+    // lattice — it has dropped, and it is still on the board, not behind it.
+    expect(before.y - after.y, `ball did not descend: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`).toBeGreaterThan(3)
+    expect(after.z).toBeGreaterThan(before.z)
+  })
+
   test('every catalogued track exports fully and runs with Rapier unstepped', async ({ page }) => {
     test.setTimeout(600_000)
 

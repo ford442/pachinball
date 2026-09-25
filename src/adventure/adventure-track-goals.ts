@@ -43,6 +43,7 @@ const CAMPAIGN_GOAL_TEMPLATES: Record<string, CampaignGoalTemplate> = {
   PACHINKO_HALL: { goldTarget: 4, comboTarget: 4, survivalSeconds: 40, bonusReward: 2200 },
   CYBER_CORE: { goldTarget: 4, comboTarget: 6, survivalSeconds: 50, bonusReward: 3000 },
   QUANTUM_GRID: { goldTarget: 5, comboTarget: 8, survivalSeconds: 60, bonusReward: 4000 },
+  STORM_LATTICE: { goldTarget: 5, comboTarget: 9, survivalSeconds: 60, bonusReward: 4400 },
   PACHINKO_SPIRE: { goldTarget: 4, comboTarget: 5, survivalSeconds: 35, bonusReward: 2800 },
   SINGULARITY_WELL: { goldTarget: 6, comboTarget: 10, survivalSeconds: 75, bonusReward: 5000 },
   // ── Spine extension (#321) ────────────────────────────────────────────────

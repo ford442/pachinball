@@ -11,7 +11,15 @@
  * into the C++ engine.
  */
 
-import type { PhysicsApi, PhysicsBody, PhysicsColliderDesc, PhysicsRigidBodyDesc, PhysicsWorldSink } from '../core/physics-api'
+import {
+  supportsPinFields,
+  type PhysicsApi,
+  type PhysicsBody,
+  type PhysicsColliderDesc,
+  type PhysicsRigidBodyDesc,
+  type PhysicsWorldSink,
+} from '../core/physics-api'
+import { resolvePinField } from '../core/pin-field'
 
 import {
   descCollisionGroups,
@@ -83,6 +91,8 @@ export class TrackColliderEmitter {
 
   /** Record a descriptor and create its own Rapier body carrying the collider. */
   emit(desc: AdventureColliderDesc): EmittedCollider {
+    if (desc.kind === 'forceField') throw new Error('force fields have no body — use emitField()')
+    if (desc.kind === 'pinField') return this.emitPinField(desc)
     const index = this.descriptors.length
     this.descriptors.push(desc)
 
@@ -98,6 +108,54 @@ export class TrackColliderEmitter {
     this.bodyIndex.set(body, index)
     this.bodyByIndex.set(index, body)
 
+    return { body, index }
+  }
+
+  /**
+   * Record a body-less descriptor (a force field) and return its index. The
+   * C++ exporter places it; nothing is built on a Rapier world, which has no
+   * force fields — the Rapier dev path runs the track without them.
+   */
+  emitField(desc: AdventureColliderDesc): number {
+    if (desc.kind !== 'forceField') throw new Error(`emitField() takes a forceField, not ${desc.kind}`)
+    this.descriptors.push(desc)
+    return this.descriptors.length - 1
+  }
+
+  /**
+   * A pin lattice: ONE `pinField` collider on a world that has them (the C++
+   * owner's `WasmTableWorld`), else one fixed body carrying a cylinder per
+   * resolved pin — the same positions C++ collides with.
+   */
+  private emitPinField(desc: AdventureColliderDesc): EmittedCollider {
+    const spec = desc.pinField
+    if (!spec) throw new Error(`pinField descriptor ${desc.label ?? ''} carries no lattice`)
+    const index = this.descriptors.length
+    this.descriptors.push(desc)
+
+    let body: PhysicsBody
+    if (supportsPinFields(this.world)) {
+      body = this.world.createPinField({
+        ...spec,
+        restitution: desc.restitution,
+        friction: desc.friction,
+        collisionGroups: descCollisionGroups(desc),
+      })
+    } else {
+      body = this.world.createRigidBody(this.rapier.RigidBodyDesc.fixed())
+      const rotation = spec.rotation ?? desc.rotation
+      for (const pin of resolvePinField(spec)) {
+        const collider = this.rapier.ColliderDesc.cylinder(spec.halfHeight, spec.radius)
+        collider.setFriction(desc.friction)
+        collider.setRestitution(desc.restitution)
+        collider.setCollisionGroups(descCollisionGroups(desc))
+        collider.setTranslation(pin.position.x, pin.position.y, pin.position.z)
+        collider.setRotation(rotation)
+        this.world.createCollider(collider, body)
+      }
+    }
+    this.bodyIndex.set(body, index)
+    this.bodyByIndex.set(index, body)
     return { body, index }
   }
 
@@ -145,6 +203,9 @@ export class TrackColliderEmitter {
       case 'sphere':
         shape = this.rapier.ColliderDesc.ball(desc.radius ?? 0.5)
         break
+      case 'pinField':
+      case 'forceField':
+        throw new Error(`a ${desc.kind} cannot be attached to another body`)
       case 'convexMesh': {
         const hull = this.rapier.ColliderDesc.convexHull(new Float32Array(desc.vertices ?? []))
         // Only a degenerate (flat or empty) point set has no hull — a builder bug.

@@ -39,6 +39,7 @@ export const TRACK_THEME_OVERRIDES: Record<string, TrackVisualTheme> = {
   PACHINKO_HALL: { primary: 'GOLD', accent: 'MAGENTA', surfaceTint: 'PLAYFIELD' },
   CYBER_CORE: { primary: 'MAGENTA', accent: 'CYAN', surfaceTint: 'PLAYFIELD_DEEP' },
   QUANTUM_GRID: { primary: 'PURPLE', accent: 'WHITE', surfaceTint: 'GLASS' },
+  STORM_LATTICE: { primary: 'CYAN', accent: 'WHITE', surfaceTint: 'PLAYFIELD_DEEP' },
   PACHINKO_SPIRE: { primary: 'GOLD', accent: 'ALERT', surfaceTint: 'PLAYFIELD' },
   SINGULARITY_WELL: { primary: 'ALERT', accent: 'AMBIENT', surfaceTint: 'PLAYFIELD_DEEP' },
   GLITCH_SPIRE: { primary: 'MATRIX', accent: 'CYAN', surfaceTint: 'GLASS' },

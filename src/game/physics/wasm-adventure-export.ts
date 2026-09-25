@@ -6,7 +6,7 @@ import type {
   DescQuat,
   DescVec3,
 } from '../../adventure/track-collider-descriptors'
-import { WasmVolumeShape } from '../../wasm/PhysicsModule'
+import { WasmForceSpace, WasmVolumeShape } from '../../wasm/PhysicsModule'
 import { composePose, quatRotateVec, type Pose, type VolumeKind } from './adventure-kinematics'
 import type { WasmSimEngine } from '../../wasm/wasm-sim-engine'
 import { STATIC_HANDLE_OVERFLOW } from '../../wasm/wasm-types'
@@ -435,8 +435,8 @@ function volumeDebug(volume: { kind: VolumeKind; half: DescVec3 }, pose: Pose, s
  * A collider's body is its own descriptor, or its `parentIndex` descriptor
  * when attached; the body's `motion` decides the route:
  *
- *   fixed               → static box / cylinder / sphere / triangle mesh, or a
- *                         static sensor volume
+ *   fixed               → static box / cylinder / sphere / triangle mesh, a
+ *                         static sensor volume, one pin field, or a force field
  *   kinematic-position  → kinematic mover (pose supplied by the track's
  *   kinematic-velocity    animator, or integrated from the body's spin)
  *   dynamic             → unsupported (no track builds one)
@@ -521,6 +521,29 @@ export function exportAdventureCollidersToWasm(
       return finish(handle, { kind: 'mesh', center: p, triangleCount: indices.length / 3 })
     }
 
+    if (desc.kind === 'pinField' || desc.kind === 'forceField') {
+      if (moving || desc.parentIndex !== undefined) return reject(`a ${desc.kind} must be static and unattached`)
+      if (desc.sensor) return reject(`a ${desc.kind} cannot be a sensor`)
+      if (desc.kind === 'pinField') {
+        if (!desc.pinField) return reject('pinField descriptor carries no lattice')
+        if (!engine.addPinField) return reject('engine exposes no pin fields')
+        const field = { ...desc.pinField, restitution, friction }
+        return finish(engine.addPinField(field), { kind: 'pinField', field })
+      }
+      if (!engine.addForceField) return reject('engine exposes no force fields')
+      const half = desc.halfExtents ?? { x: 0.5, y: 0.5, z: 0.5 }
+      const handle = engine.addForceField({
+        center: p,
+        halfExtents: half,
+        rotation: q,
+        force: desc.acceleration ?? ZERO_VEC,
+        space: desc.forceSpace === 'field' ? WasmForceSpace.Local : WasmForceSpace.World,
+        acceleration: true,
+      })
+      // Drawn as a wireframe volume: a field applies no impulse, like a sensor.
+      return finish(handle, { kind: 'sensor', center: p, halfExtents: half, rotation: q, volumeShape: 'box' })
+    }
+
     const volume = volumeOf(desc)
     if (!volume) return reject(`no C++ equivalent for ${desc.kind}`)
 
@@ -575,6 +598,8 @@ export function collectUnsupported(descriptors: readonly AdventureColliderDesc[]
     addStaticTriangleMesh: handle,
     addSensorVolume: handle,
     addKinematicMover: handle,
+    addPinField: handle,
+    addForceField: handle,
     setCollisionGroups: () => {},
   } as unknown as WasmSimEngine
   return exportAdventureCollidersToWasm(descriptors, probe).unsupported
