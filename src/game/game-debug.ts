@@ -164,6 +164,9 @@ export class GameDebug {
       portalSensorHandle: this.host.adventureMode?.getPortalSensorHandle() ?? -1,
       portalHandleSetSize: this.host.physicsController.getPortalSensorHandleSetSize(),
       tablePhysicsEnabled: this.host.gameObjects?.areTableBodiesEnabled() ?? true,
+      wasmTableUnexported: this.host.physics.isWasmOwnerMode()
+        ? this.host.physicsController.getTableUnexported().length
+        : null,
       activeCameraType: this.host.scene?.activeCamera?.getClassName() ?? 'n/a',
       teardownMeshes: teardown?.meshesDisposed ?? 0,
       teardownBodies: teardown?.bodiesRemoved ?? 0,

@@ -6,7 +6,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TrailMesh } from '@babylonjs/core/Meshes/trailMesh'
 import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../core/physics-api'
 import { BALL_TIERS, BallType, GameConfig } from '../config'
 import { getCampaignRewardsManager } from '../adventure/campaign-rewards-manager'
 import {
@@ -20,7 +20,7 @@ import { getSoundSystem } from './sound-system'
 import { getSessionRngFork, RNG_FORK, type SeededRng } from '../core/seeded-rng'
 import { QualityTier, color, emissive, INTENSITY, PALETTE } from './visual-language'
 
-export function createMainBall(host: BallManagerHost): RAPIER.RigidBody {
+export function createMainBall(host: BallManagerHost): PhysicsBody {
   // Enhanced ball: high-poly sphere with bevel ring and map-reactive material
   const diameter = GameConfig.ball.radius * 2
 
@@ -441,7 +441,7 @@ export function getMaterialForType(host: BallManagerHost, type: BallType): PBRMa
 /**
  * Add trail for a ball with specific color.
  */
-export function addTrailForBall(host: BallManagerHost, body: RAPIER.RigidBody, colorHex: string): void {
+export function addTrailForBall(host: BallManagerHost, body: PhysicsBody, colorHex: string): void {
   const binding = host.bindings.find((b) => b.rigidBody === body)
   if (!binding) return
 
@@ -464,7 +464,7 @@ export function addTrailForBall(host: BallManagerHost, body: RAPIER.RigidBody, c
 /**
  * Create a ball with specific type.
  */
-export function createBallOfType(host: BallManagerHost, type: BallType, position?: Vector3, playEffect = false): RAPIER.RigidBody {
+export function createBallOfType(host: BallManagerHost, type: BallType, position?: Vector3, playEffect = false): PhysicsBody {
   const config = BALL_TIERS[type]
   const spawnPos = position || GameConfig.ball.spawnMain
 
@@ -561,7 +561,7 @@ export function selectWeightedBallType(rng: SeededRng = getSessionRngFork(RNG_FO
 /**
  * Spawn a random ball with weighted probability.
  */
-export function spawnRandomBall(host: BallManagerHost, position?: Vector3): RAPIER.RigidBody {
+export function spawnRandomBall(host: BallManagerHost, position?: Vector3): PhysicsBody {
   const type = selectWeightedBallType()
   const spawnPos = position || GameConfig.ball.spawnMain
 

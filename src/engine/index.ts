@@ -61,6 +61,7 @@ export {
   type MobileQualityHints,
 } from './engine-options'
 export {
+  preloadWasmPhysicsNow,
   scheduleIdleWasmPreload,
   getPreloadedWasmModule,
   resetWasmPreloadForTests,

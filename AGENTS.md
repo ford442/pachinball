@@ -10,7 +10,7 @@
 
 ### Technology Stack
 - **Engine:** Babylon.js (`@babylonjs/core`)
-- **Physics:** Rapier 3D WASM (`@dimforge/rapier3d-compat`)
+- **Physics:** in-house C++ engine compiled to WASM (`native/`, production `wasm-owner`); Rapier 3D WASM (`@dimforge/rapier3d-compat`) only as the lazily loaded dev/degrade path
 - **Language:** TypeScript (ES2022, strict mode)
 - **Build Tool:** Vite
 - **Shaders:** WGSL (WebGPU) with Canvas2D fallback; custom GLSL-style pixel shaders (scanline, lcd-table)
@@ -23,7 +23,7 @@
 - **Shadows:** Blur exponential shadow maps with tuned bias/normal bias.
 - **Renderer toggle:** `src/renderers/renderer-selector.ts` lets you force WebGL2 instead of WebGPU. Priority: `?renderer=webgl2|webgpu` URL param → `window.DEBUG_RENDERER` → `localStorage['pachinball-renderer']` → auto (WebGPU-first). Also exposed as a "Renderer" dropdown in the Developer settings panel (changing it reloads the page). The active backend is tagged on `<canvas data-renderer="webgpu|webgl2">` and `window.currentRenderer` for Playwright.
 - **Engine bootstrap:** `src/main.ts` + `src/engine/` centralize Babylon options (`preserveDrawingBuffer`, `powerPreference`, hardware scaling, tab visibility, idle WASM warm-load). Full option matrix and benchmark procedure: [`docs/ENGINE_BOOTSTRAP.md`](docs/ENGINE_BOOTSTRAP.md).
-- **Debug overlays (Developer settings):** "Wireframe Mode" sets `scene.forceWireframe`; "Physics Debug Draw" renders Rapier's `world.debugRender()` collider/joint lines via `src/game-elements/physics-debug-renderer.ts`. Both work in either renderer, but WebGL2 is recommended for inspecting them with Playwright/agents since WebGPU canvases aren't readable by current automation tooling.
+- **Debug overlays (Developer settings):** "Wireframe Mode" sets `scene.forceWireframe`; "Physics Debug Draw" renders the exported C++ colliders (owner modes) or Rapier's `world.debugRender()` collider/joint lines (Rapier modes) via `src/game-elements/physics-debug-renderer.ts`. Both work in either renderer, but WebGL2 is recommended for inspecting them with Playwright/agents since WebGPU canvases aren't readable by current automation tooling.
 - **WebGL2 ↔ WebGPU porting notes:** Gameplay, physics, materials, and post-processing are backend-agnostic (Babylon abstracts both). The one backend-specific area is `src/display/display-shader.ts`, which uses WGSL `ShaderMaterial`s for the backbox reels with a Canvas2D fallback — check `engine.getClassName() === 'WebGPUEngine'` (or `engine.isWebGPU`) before taking the WGSL path, as the existing display code does.
 - **Babylon imports:** Always use deep paths (`@babylonjs/core/Meshes/mesh`, etc.) — never the `@babylonjs/core` barrel, which defeats tree-shaking. ESLint enforces this; `node scripts/codemod-babylon-deep-imports.mjs` rewrites barrel imports mechanically.
 
@@ -90,7 +90,7 @@ Notes:
 Every major subdirectory exposes a barrel file (`index.ts`). Import through the barrel rather than deep-path imports when possible. `src/style/` also has `index.css` as its CSS barrel; `index.ts` side-effect-imports it for TS entry points.
 
 ### Entry Points
-- **`src/main.ts`** — Bootstrap. Creates the Babylon engine in parallel with Rapier WASM preloading, then instantiates and initializes `Game`.
+- **`src/main.ts`** — Bootstrap. Creates the Babylon engine in parallel with the C++ physics WASM preload (Rapier is fetched only for the explicit `rapier` / `wasm-mirror` modes or the missing-bundle degrade), then instantiates and initializes `Game`.
 - **`src/game.ts`** — Main orchestrator class. Coordinates all subsystems, scene setup, lighting, cameras, and the render loop. **Keep it lean; do not dump feature logic here.**
 - **`src/config.ts`** — Pure configuration (no Babylon dependencies). Contains API bases, ball spawn weights, gameplay constants, effects feature flags, and backbox media paths.
 
@@ -129,7 +129,7 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 #### `src/game-elements/` — Low-level game systems
 | File / Sub-module | Responsibility |
 |-------------------|----------------|
-| `physics.ts` | Rapier world initialization, fixed timestep, collision event queue. **Also defines `CollisionGroups` and `COLLISION_GROUP_PRESETS` used by both table and adventure. Adventure bodies MUST use `ADVENTURE_GROUP`.** |
+| `physics.ts` | Physics world selection (the C++ owner's `WasmTableWorld` by default, or a lazily loaded Rapier world), fixed timestep, collision event queue. **Also defines `CollisionGroups` and `COLLISION_GROUP_PRESETS` used by both table and adventure. Adventure bodies MUST use `ADVENTURE_GROUP`.** |
 | `types.ts` | Shared enums/interfaces: `GameState`, `DisplayState`, `PhysicsBinding`, `InputFrame`, ball types, slot machine types. |
 | `ball-manager.ts` | Ball lifecycle: spawning, multiball, resetting, loss detection, gold-ball stack tracking. |
 | `ball-animator.ts` | Squash-and-stretch visual effects for balls. |
@@ -172,8 +172,8 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 | File | Responsibility |
 |------|----------------|
 | `physics-controller.ts` | Main physics step orchestrator; routes to Rapier or WASM backends. |
-| `wasm-mirror.ts` | WASM mirrors ball+bumper subset; Rapier bodies remain handles. |
-| `wasm-owner.ts` | WASM owns ball + static table geometry; Rapier kept for joints. |
+| `wasm-mirror.ts` | WASM mirrors ball+bumper subset; Rapier stays authoritative and its bodies remain handles. |
+| `wasm-owner.ts` | WASM owns balls, the table scope, flipper hinges and adventure tracks; bodies are `WasmBody`s keyed on WASM public ids (no Rapier). |
 | `collision-dispatch.ts` | Handle-space collision routing to scoring handlers. |
 | `scoring-bridge.ts` | Points, combos, and effect triggers from collision events. |
 
@@ -257,15 +257,16 @@ Gameplay physics never uses Babylon's built-in collision engine. The active back
 
 | Mode | When | Source |
 |------|------|--------|
-| `rapier` | Production default | `@dimforge/rapier3d-compat` via `PhysicsSystem` / `physics-controller.ts` |
-| `wasm-mirror` | Dev parity; WASM mirrors ball+bumper subset | `src/game/physics/wasm-mirror.ts` |
-| `wasm-owner` | C++ owns balls + static table geometry | `src/game/physics/wasm-owner.ts` + `native/` |
+| `wasm-owner` | Production default: C++ owns balls, the table scope, flipper hinges and adventure tracks; Rapier is never loaded | `src/game/physics/wasm-owner.ts` + `src/wasm/wasm-table-world.ts` + `native/` |
+| `wasm-worker` | As `wasm-owner`, C++ world in a Dedicated Worker | `src/wasm/physics-worker-client.ts` |
+| `wasm-mirror` | Dev parity; WASM mirrors ball+bumper subset on Rapier bodies | `src/game/physics/wasm-mirror.ts` |
+| `rapier` | Explicit override, and the fail-closed degrade when the C++ bundle is missing | `@dimforge/rapier3d-compat` via `loadRapier()` / `PhysicsSystem` |
 
-- Import Rapier **exclusively** from `@dimforge/rapier3d-compat` (not `@dimforge/rapier3d`).
-- `PhysicsSystem` initializes Rapier WASM asynchronously and runs a **fixed timestep** with an accumulator (`FIXED_TIMESTEP = 1/60`).
+- Author physics through `PhysicsApi` / `PhysicsWorldSink` / `PhysicsBody` (`src/core/physics-api.ts`), never Rapier values: builders receive `physics.getWorld()` / `physics.getPhysicsApi()`, which are the C++ owner's `WasmTableWorld` + `WASM_PHYSICS_API` or Rapier itself. `src/game-elements/rapier-loader.ts` is the only runtime import of Rapier (type-only imports are fine), and it must stay `@dimforge/rapier3d-compat` (not `@dimforge/rapier3d`).
+- `PhysicsSystem` picks the world at `init()` and runs a **fixed timestep** with an accumulator (`FIXED_TIMESTEP = 1/60`).
 - Collision events are drained from `RAPIER.EventQueue` inside `PhysicsSystem.step()` when Rapier is active.
 - The optional C++ engine (`npm run build:wasm`) is loaded via `src/wasm/PhysicsModule.ts`; parity is checked with `npm run test:wasm-parity`.
-- **Never** use Babylon's built-in collision or physics engine for gameplay logic. Rapier remains required for flipper joints and adventure mode even in `wasm-owner`.
+- **Never** use Babylon's built-in collision or physics engine for gameplay logic. Rapier is not loaded at all in `wasm-owner` / `wasm-worker` (`npm run check:bundle` fails if its chunk is precached or modulepreloaded).
 
 ### 4.3 Display System — Hybrid WebGPU / Canvas2D
 - **Primary path:** WebGPU WGSL shaders (`display-shader.ts`) for slot reels and jackpot overlays.
@@ -472,4 +473,4 @@ Standard commands are in section 2 (`npm run dev`, `npm run build`, `npm run lin
 - **Dev server:** `npm run dev` serves on `http://localhost:5173`. Run it in a long-lived terminal (e.g. tmux) before Playwright E2E specs — `playwright.config.ts` has **no** `webServer` block, so it will not auto-start the dev server; tests will fail/hang against `localhost:5173` if nothing is serving.
 - **Tests:** `npm test` (Vitest, Node env, Babylon/Rapier mocked) needs no server. `*.spec.ts` files are Playwright E2E and DO need the dev server running.
 - **Renderer for automation:** WebGPU canvases can't be read by Playwright/computer-use tooling. Append `?renderer=webgl2` to the URL (e.g. `http://localhost:5173/?renderer=webgl2`) when driving the game from automation or capturing screenshots.
-- **`npm run build` and WASM:** `build` runs `tsc -b && vite build && npm run build:wasm`. The `build:wasm` step compiles an *optional* C++ physics engine (`native/`) via Emscripten and **gracefully skips with exit 0 when `emcc` is not installed** — so `npm run build` succeeds in this environment without Emscripten. Gameplay physics uses Rapier WASM (bundled via npm), independent of that optional C++ module.
+- **`npm run build` and WASM:** `build` runs `tsc -b && vite build && npm run build:wasm`. The `build:wasm` step compiles an *optional* C++ physics engine (`native/`) via Emscripten and **gracefully skips with exit 0 when `emcc` is not installed** — so `npm run build` succeeds in this environment without Emscripten. Without the C++ bundle, gameplay physics degrades to Rapier WASM (bundled via npm, loaded lazily).

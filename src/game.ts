@@ -375,14 +375,14 @@ export class Game extends GameDelegates {
 
   public setupFeederEventHandlers(): void {
     if (!this.effects || !this.ballManager || !this.scene) return
-    this.magSpinFeeder = new MagSpinFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.magSpin)
-    this.nanoLoomFeeder = new NanoLoomFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.nanoLoom)
-    this.prismCoreFeeder = new PrismCoreFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.prismCore)
+    this.magSpinFeeder = new MagSpinFeeder(this.scene, this.physics.getWorld(), this.physics.getPhysicsApi(), GameConfig.magSpin)
+    this.nanoLoomFeeder = new NanoLoomFeeder(this.scene, this.physics.getWorld(), this.physics.getPhysicsApi(), GameConfig.nanoLoom)
+    this.prismCoreFeeder = new PrismCoreFeeder(this.scene, this.physics.getWorld(), this.physics.getPhysicsApi(), GameConfig.prismCore)
     void this.magSpinFeeder.loadInsertGltf(this.qualityTier)
     void this.nanoLoomFeeder.loadInsertGltf(this.qualityTier)
     void this.prismCoreFeeder.loadInsertGltf(this.qualityTier)
-    this.gaussCannon = new GaussCannonFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.gaussCannon)
-    this.quantumTunnel = new QuantumTunnelFeeder(this.scene, this.physics.getWorld()!, this.physics.getRapier()!, GameConfig.quantumTunnel)
+    this.gaussCannon = new GaussCannonFeeder(this.scene, this.physics.getWorld(), this.physics.getPhysicsApi(), GameConfig.gaussCannon)
+    this.quantumTunnel = new QuantumTunnelFeeder(this.scene, this.physics.getWorld(), this.physics.getPhysicsApi(), GameConfig.quantumTunnel)
   }
 
   /** Wire feeder callbacks after AdventureManager is ready (postInitManagers). */

@@ -25,6 +25,9 @@ function makeBody(handle: number, pos: { x: number; y: number; z: number } = { x
     handle,
     translation: () => pos,
     linvel: () => velocity,
+    // Spin transfer runs on every bumper hit now that it no longer needs the Rapier namespace.
+    angvel: () => ({ x: 0, y: 0, z: 0 }),
+    setAngvel: vi.fn(),
     isFixed: () => false,
     isSleeping: () => false,
   }

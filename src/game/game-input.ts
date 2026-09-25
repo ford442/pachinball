@@ -78,7 +78,7 @@ export class GameInputManager {
         getTiltActive: () => this.config.getTiltActive?.() ?? false,
         getAdventureActive: () => this.config.getAdventureActive?.() ?? false,
       },
-      !!physics.getRapier()
+      physics.isReady()
     )
 
     // Setup additional keyboard listeners for game-level shortcuts

@@ -2,7 +2,7 @@ import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { GameConfig } from '../config'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
@@ -11,17 +11,17 @@ export class RailBuilder {
   private static readonly SEGMENT_OVERLAP = 0.12
 
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
 
   private matLib: ReturnType<typeof getMaterialLibrary>
   private meshes: Mesh[] = []
-  private bodies: RAPIER.RigidBody[] = []
+  private bodies: PhysicsBody[] = []
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
      
     _config: typeof GameConfig
   ) {

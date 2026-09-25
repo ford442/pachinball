@@ -1,5 +1,5 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../../core/physics-api'
 
 import type { BumperVisual } from '../../game-elements/types'
 import { ComboSystem, getScoringBreakdownManager, type ComboHitType } from '../../game-elements'
@@ -212,8 +212,8 @@ export class ScoringBridge {
     this.host.rebuildHandleCaches()
   }
 
-  activateHologramCatch(ball: RAPIER.RigidBody, bumper: RAPIER.RigidBody, bumperVisualMap: Map<number, BumperVisual>): void {
-    const visual = bumperVisualMap.get(bumper.handle)
+  activateHologramCatch(ball: PhysicsBody, bumper: PhysicsBody, bumperVisualMap: Map<PhysicsBody, BumperVisual>): void {
+    const visual = bumperVisualMap.get(bumper)
     if (!visual || !visual.hologram) return
     const target = visual.hologram.getAbsolutePosition()
     this.host.ballManager?.activateHologramCatch(ball, target, 4.0)
@@ -223,7 +223,7 @@ export class ScoringBridge {
     this.host.effects?.setLightingMode('reach', 4.0)
   }
 
-  handleBallLoss(body: RAPIER.RigidBody): void {
+  handleBallLoss(body: PhysicsBody): void {
     if (!this.host.stateManager.isPlaying()) return
     if (this.host.adventureMode?.isActive()) {
       const ballBodies = this.host.ballManager?.getBallBodies() || []

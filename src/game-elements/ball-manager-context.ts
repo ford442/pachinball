@@ -4,7 +4,7 @@ import type { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { TrailMesh } from '@babylonjs/core/Meshes/trailMesh'
 import type { Scene } from '@babylonjs/core/scene'
 import type { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import type { BallType } from '../config'
 import { getPhysicsTuningValue } from './physics-tuning'
 import type { BallSaveSystem } from './ball-save-system'
@@ -26,8 +26,8 @@ export interface MultiballState {
 }
 
 export interface SwarmGroup {
-  bodies: Set<RAPIER.RigidBody>
-  collected: Set<RAPIER.RigidBody>
+  bodies: Set<PhysicsBody>
+  collected: Set<PhysicsBody>
   spawnTime: number
   baseType: BallType
 }
@@ -48,36 +48,36 @@ export interface BallMaterialLibrary {
 
 export interface BallManagerHost {
   scene: Scene
-  world: RAPIER.World
-  rapier: typeof RAPIER
-  ballBody: RAPIER.RigidBody | null
-  ballBodies: RAPIER.RigidBody[]
-  caughtBalls: Array<{ body: RAPIER.RigidBody; targetPos: Vector3; timer: number }>
+  world: PhysicsWorldSink
+  rapier: PhysicsApi
+  ballBody: PhysicsBody | null
+  ballBodies: PhysicsBody[]
+  caughtBalls: Array<{ body: PhysicsBody; targetPos: Vector3; timer: number }>
   mirrorTexture: MirrorTexture | null
   bindings: PhysicsBinding[]
   matLib: BallMaterialLibrary
-  trails: Map<RAPIER.RigidBody, TrailMesh>
+  trails: Map<PhysicsBody, TrailMesh>
   trailMaterials: Map<TrailMesh, StandardMaterial>
-  ballTrails: Map<RAPIER.RigidBody, BallTrailData>
-  ballDataMap: Map<RAPIER.RigidBody, BallData>
+  ballTrails: Map<PhysicsBody, BallTrailData>
+  ballDataMap: Map<PhysicsBody, BallData>
   goldBallCount: number
   onGoldBallCollected?: (type: BallType, points: number) => void
   glowTime: number
-  smallGoldBallLifetimes: Map<RAPIER.RigidBody, number>
-  smallGoldBallSpawnTime: Map<RAPIER.RigidBody, number>
+  smallGoldBallLifetimes: Map<PhysicsBody, number>
+  smallGoldBallSpawnTime: Map<PhysicsBody, number>
   swarmGroups: Map<number, SwarmGroup>
-  ballSwarmId: Map<RAPIER.RigidBody, number>
+  ballSwarmId: Map<PhysicsBody, number>
   nextSwarmId: number
-  ballStuckTimers: Map<RAPIER.RigidBody, BallStuckTracker>
+  ballStuckTimers: Map<PhysicsBody, BallStuckTracker>
   chainMultiball: MultiballState
   ballSaveSystem: BallSaveSystem
 
-  removeBall(body: RAPIER.RigidBody): void
-  createMainBall(): RAPIER.RigidBody
-  createBallOfType(type: BallType, position?: Vector3, playEffect?: boolean): RAPIER.RigidBody
-  spawnRandomBall(position?: Vector3): RAPIER.RigidBody
-  spawnSmallGoldBallSwarm(position?: Vector3, baseType?: BallType): RAPIER.RigidBody[]
-  addTrailForBall(body: RAPIER.RigidBody, colorHex: string): void
+  removeBall(body: PhysicsBody): void
+  createMainBall(): PhysicsBody
+  createBallOfType(type: BallType, position?: Vector3, playEffect?: boolean): PhysicsBody
+  spawnRandomBall(position?: Vector3): PhysicsBody
+  spawnSmallGoldBallSwarm(position?: Vector3, baseType?: BallType): PhysicsBody[]
+  addTrailForBall(body: PhysicsBody, colorHex: string): void
   playSpawnEffect(position: Vector3, type: BallType, swarmBurst?: boolean): void
   applyBallSkin(skinId: string): void
   endMultiball(): void

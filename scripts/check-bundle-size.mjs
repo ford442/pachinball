@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
- * Compare gzipped Vite output against bundle-budget.json.
+ * Compare gzipped Vite output against bundle-budget.json, and keep Rapier out
+ * of the default graph (#412): the rapier chunk may exist (the explicit
+ * `rapier` mode and the fail-closed degrade import it lazily) but must be
+ * neither precached by the service worker nor modulepreloaded by index.html.
  *
  * Usage:
  *   node scripts/check-bundle-size.mjs            # fail if over budget
@@ -62,6 +65,7 @@ function measure() {
     /backbox[/\\].*\.(mp4|webm)$/,
     /babylon-loaders-.*\.js$/,
     /ui-overlays-.*\.js$/,
+    /rapier-.*\.js$/,
     /reel\.png$/,
   ]
 
@@ -73,11 +77,21 @@ function measure() {
     precacheTotalKiB += statSync(file).size / 1024
   }
 
+  // Rapier must stay a lazy, degrade-only chunk.
+  const rapierName = rapier ? rapier.split(/[/\\]/).pop() : null
+  const readText = (path) => (statSync(path, { throwIfNoEntry: false })?.isFile() ? readFileSync(path, 'utf8') : '')
+  const serviceWorker = readText(join(distDir, 'sw.js'))
+  const indexHtml = readText(join(distDir, 'index.html'))
+  const rapierPrecached = rapierName !== null && serviceWorker.includes(rapierName)
+  const rapierPreloaded = rapierName !== null && indexHtml.includes(rapierName)
+
   return {
     entryGzipKb: Number(readGzip(entry).toFixed(2)),
     babylonCoreGzipKb: Number(readGzip(babylonCore).toFixed(2)),
     rapierGzipKb: Number(readGzip(rapier).toFixed(2)),
     precacheTotalKiB: Number(precacheTotalKiB.toFixed(2)),
+    rapierPrecached,
+    rapierPreloaded,
     files: {
       entry: entry ? relative(root, entry) : null,
       babylonCore: babylonCore ? relative(root, babylonCore) : null,
@@ -106,6 +120,15 @@ const checks = [
 ]
 
 let failed = false
+if (measured.rapierPrecached || measured.rapierPreloaded) {
+  console.error(
+    `OVER  rapier chunk is in the default graph (precached=${measured.rapierPrecached}, ` +
+      `modulepreloaded=${measured.rapierPreloaded}); only loadRapier() may import it (#412)`,
+  )
+  failed = true
+} else {
+  console.log('ok  rapier chunk is lazy: not precached, not modulepreloaded')
+}
 for (const [name, actual, max] of checks) {
   if (typeof max !== 'number') {
     console.error(`Budget missing numeric ${name}`)

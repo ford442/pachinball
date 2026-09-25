@@ -1,6 +1,7 @@
 /**
- * Idle warm-load for the optional C++ physics WASM bundle.
- * Overlaps fetch/compile with menu idle time so A/B toggling avoids a hitch.
+ * Warm-load for the C++ physics WASM bundle: immediately at bootstrap
+ * (`preloadWasmPhysicsNow`, in parallel with engine creation), or on idle
+ * (`scheduleIdleWasmPreload`) when the bootstrap did not start it.
  *
  * wasm-worker mode warms a Dedicated Worker instead of instantiating the
  * Emscripten module on the main thread (that instance is not transferable).
@@ -27,37 +28,57 @@ async function fetchAndCompileModule(bundleUrl: string): Promise<WasmPhysicsModu
   }
 }
 
+function startPreload(bundleUrl: string): void {
+  if (getPhysicsEnginePreference() === 'wasm-worker') {
+    try {
+      const held = warmPhysicsWorker(bundleUrl)
+      void held.ready.then((ok) => {
+        if (ok) {
+          console.log('[Bootstrap] C++ WASM physics worker warm-loaded')
+        }
+      })
+    } catch {
+      // Worker constructor unavailable (Node / tests)
+    }
+    return
+  }
+
+  preloadPromise = fetchAndCompileModule(bundleUrl)
+  void preloadPromise.then((mod) => {
+    if (mod) {
+      console.log('[Bootstrap] C++ WASM physics module warm-loaded')
+    }
+  })
+}
+
+/** True when the physics preference needs nothing from the C++ bundle. */
+function preloadDisabled(): boolean {
+  return !WASM_PHYSICS.enabled || getPhysicsEnginePreference() === 'rapier'
+}
+
+/**
+ * Fetch and compile the C++ bundle now. The bootstrap calls this in parallel
+ * with engine creation (#412) — the production physics path — so
+ * `PhysicsSystem.init()` finds the module ready instead of fetching it itself.
+ * Safe to call multiple times; a no-op once any preload has started.
+ */
+export function preloadWasmPhysicsNow(bundleUrl = WASM_PHYSICS.bundleUrl): void {
+  if (preloadStarted) return
+  preloadStarted = true
+  if (preloadDisabled()) return
+  startPreload(bundleUrl)
+}
+
 /** Start idle preload if not already started. Safe to call multiple times. */
 export function scheduleIdleWasmPreload(bundleUrl = WASM_PHYSICS.bundleUrl): void {
   if (preloadStarted) return
   preloadStarted = true
 
-  if (!WASM_PHYSICS.enabled || getPhysicsEnginePreference() === 'rapier') {
+  if (preloadDisabled()) {
     return
   }
 
-  const run = () => {
-    if (getPhysicsEnginePreference() === 'wasm-worker') {
-      try {
-        const held = warmPhysicsWorker(bundleUrl)
-        void held.ready.then((ok) => {
-          if (ok) {
-            console.log('[Bootstrap] C++ WASM physics worker warm-loaded')
-          }
-        })
-      } catch {
-        // Worker constructor unavailable (Node / tests)
-      }
-      return
-    }
-
-    preloadPromise = fetchAndCompileModule(bundleUrl)
-    void preloadPromise.then((mod) => {
-      if (mod) {
-        console.log('[Bootstrap] C++ WASM physics module warm-loaded')
-      }
-    })
-  }
+  const run = () => startPreload(bundleUrl)
 
   // Accessed via globalThis (not the bare `window` identifier) so this file stays
   // lib-agnostic — it's imported transitively by the Worker-lib physics-worker.ts

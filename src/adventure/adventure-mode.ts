@@ -9,7 +9,7 @@ import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera'
 import type { Camera } from '@babylonjs/core/Cameras/camera'
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../core/physics-api'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { AdventurePortalMixin } from './adventure-portal'
 import { CAMERA_PRESETS } from './camera-presets'
@@ -42,7 +42,7 @@ export class AdventureMode extends AdventurePortalMixin {
   /** Soft-fail message from the last rejected data-track load (HUD). */
   private lastTrackLoadError: string | null = null
 
-  private activeBallBodies: RAPIER.RigidBody[] = []
+  private activeBallBodies: PhysicsBody[] = []
   private lastTeardownStats: TrackTeardownStats | null = null
 
   getLastTeardownStats(): TrackTeardownStats | null {
@@ -114,7 +114,7 @@ export class AdventureMode extends AdventurePortalMixin {
   /**
    * Update physics and animation state
    */
-  update(dt: number = 0.016, ballBodies: RAPIER.RigidBody[] = []): void {
+  update(dt: number = 0.016, ballBodies: PhysicsBody[] = []): void {
     if (!this.adventureActive) return
 
     this.timeAccumulator += dt
@@ -214,7 +214,7 @@ export class AdventureMode extends AdventurePortalMixin {
    * Activates Adventure Mode
    */
   async start(
-    ballBody: RAPIER.RigidBody,
+    ballBody: PhysicsBody,
     currentCamera: Camera,
     ballMesh: Mesh | undefined,
     trackType: AdventureTrackType = AdventureTrackType.CYBER_CORE
@@ -495,7 +495,7 @@ export class AdventureMode extends AdventurePortalMixin {
     this.clearTrack()
   }
 
-  respawnBallAtStart(ballBody: RAPIER.RigidBody, index = 0): void {
+  respawnBallAtStart(ballBody: PhysicsBody, index = 0): void {
     const lateralOffset = index * 0.35
     ballBody.setLinvel({ x: 0, y: 0, z: 0 }, true)
     ballBody.setAngvel({ x: 0, y: 0, z: 0 }, true)
@@ -506,7 +506,7 @@ export class AdventureMode extends AdventurePortalMixin {
     }, true)
   }
 
-  private recoverFallenBalls(ballBodies: RAPIER.RigidBody[]): void {
+  private recoverFallenBalls(ballBodies: PhysicsBody[]): void {
     for (const [index, ballBody] of ballBodies.entries()) {
       const pos = ballBody.translation()
       if (pos.y < FALLOUT_Y_THRESHOLD) {

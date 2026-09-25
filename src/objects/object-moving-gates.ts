@@ -4,7 +4,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
@@ -18,7 +18,7 @@ export type GateAnimationType = 'slide' | 'rotate' | 'lift'
 export interface MovingGateState {
   mesh: Mesh
   collideMesh: Mesh
-  body: RAPIER.RigidBody
+  body: PhysicsBody
   isOpen: boolean
   openTimer: number
   openDuration: number
@@ -36,13 +36,13 @@ export interface MovingGateState {
 
 export class MovingGateBuilder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
   private matLib: ReturnType<typeof getMaterialLibrary>
   private eventBus: ObstacleEventBusIntegration | null = null
   private zoneTriggerSystem: ZoneTriggerSystem | null = null
   private meshes: Mesh[] = []
-  private bodies: RAPIER.RigidBody[] = []
+  private bodies: PhysicsBody[] = []
   private nodes: TransformNode[] = []
   private qualityTier: QualityTier
   private registeredZoneIds: string[] = []
@@ -50,8 +50,8 @@ export class MovingGateBuilder {
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
     qualityTier: QualityTier = QualityTier.MEDIUM,
   ) {
     this.scene = scene
@@ -359,7 +359,7 @@ export class MovingGateBuilder {
   /**
    * Return all Rapier rigid bodies created by this builder.
    */
-  getBodies(): RAPIER.RigidBody[] {
+  getBodies(): PhysicsBody[] {
     return this.bodies
   }
 

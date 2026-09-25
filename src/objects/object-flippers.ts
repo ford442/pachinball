@@ -3,7 +3,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsImpulseJoint, PhysicsRevoluteJoint, PhysicsWorldSink } from '../core/physics-api'
 import { GameConfig, PhysicsConfig } from '../config'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
@@ -11,20 +11,20 @@ import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 
 export class FlipperBuilder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
 
   private matLib: ReturnType<typeof getMaterialLibrary>
   private meshes: Mesh[] = []
   private roots: TransformNode[] = []
-  private bodies: RAPIER.RigidBody[] = []
-  private anchors: RAPIER.RigidBody[] = []
-  private joints: RAPIER.ImpulseJoint[] = []
+  private bodies: PhysicsBody[] = []
+  private anchors: PhysicsBody[] = []
+  private joints: PhysicsImpulseJoint[] = []
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
      
     _config: typeof GameConfig
   ) {
@@ -36,22 +36,22 @@ export class FlipperBuilder {
   }
 
   createFlippers(): {
-    flippers: Map<string, { mesh: TransformNode; body: RAPIER.RigidBody; joint: RAPIER.ImpulseJoint }>
+    flippers: Map<string, { mesh: TransformNode; body: PhysicsBody; joint: PhysicsImpulseJoint }>
     bindings: PhysicsBinding[]
     meshes: Mesh[]
-    leftJoint: RAPIER.ImpulseJoint
-    rightJoint: RAPIER.ImpulseJoint
+    leftJoint: PhysicsImpulseJoint
+    rightJoint: PhysicsImpulseJoint
   } {
-    const flippers = new Map<string, { mesh: TransformNode; body: RAPIER.RigidBody; joint: RAPIER.ImpulseJoint }>()
+    const flippers = new Map<string, { mesh: TransformNode; body: PhysicsBody; joint: PhysicsImpulseJoint }>()
     const bindings: PhysicsBinding[] = []
     const meshes: Mesh[] = []
-    let leftJoint: RAPIER.ImpulseJoint | null = null
-    let rightJoint: RAPIER.ImpulseJoint | null = null
+    let leftJoint: PhysicsImpulseJoint | null = null
+    let rightJoint: PhysicsImpulseJoint | null = null
 
     const flipperMat = this.matLib.getEnhancedFlipperMaterial()
     const pivotMat = this.matLib.getFlipperPivotMaterial()
 
-    const make = (pos: Vector3, isRight: boolean): RAPIER.RevoluteImpulseJoint => {
+    const make = (pos: Vector3, isRight: boolean): PhysicsRevoluteJoint => {
       const flipperLength = 3.5
       const flipperWidth = 0.5
       const flipperHeight = 0.6
@@ -231,7 +231,7 @@ export class FlipperBuilder {
       jParams.limitsEnabled = true
       jParams.limits = isRight ? [-Math.PI / 4, Math.PI / 6] : [-Math.PI / 6, Math.PI / 4]
 
-      const joint = this.world.createImpulseJoint(jParams, anchor, body, true) as RAPIER.RevoluteImpulseJoint
+      const joint = this.world.createImpulseJoint(jParams, anchor, body, true) as PhysicsRevoluteJoint
       this.joints.push(joint)
 
       joint.configureMotorPosition(

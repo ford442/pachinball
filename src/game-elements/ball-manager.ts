@@ -6,7 +6,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { TrailMesh } from '@babylonjs/core/Meshes/trailMesh'
 import { Scene } from '@babylonjs/core/scene'
 import type { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { BallType, GAME_TUNING } from '../config'
 import { getMaterialLibrary } from '../materials'
 import { BallSaveSystem } from './ball-save-system'
@@ -54,30 +54,30 @@ import type { BallData, PhysicsBinding } from './types'
 
 export class BallManager {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
-  private ballBody: RAPIER.RigidBody | null = null
-  private ballBodies: RAPIER.RigidBody[] = []
-  private caughtBalls: Array<{ body: RAPIER.RigidBody; targetPos: Vector3; timer: number }> = []
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
+  private ballBody: PhysicsBody | null = null
+  private ballBodies: PhysicsBody[] = []
+  private caughtBalls: Array<{ body: PhysicsBody; targetPos: Vector3; timer: number }> = []
   private mirrorTexture: MirrorTexture | null = null
   private bindings: PhysicsBinding[] = []
   private matLib: ReturnType<typeof getMaterialLibrary>
-  private trails: Map<RAPIER.RigidBody, TrailMesh> = new Map()
+  private trails: Map<PhysicsBody, TrailMesh> = new Map()
   private trailMaterials: Map<TrailMesh, StandardMaterial> = new Map()
-  private ballTrails: Map<RAPIER.RigidBody, BallTrailData> = new Map()
-  private ballDataMap: Map<RAPIER.RigidBody, BallData> = new Map()
+  private ballTrails: Map<PhysicsBody, BallTrailData> = new Map()
+  private ballDataMap: Map<PhysicsBody, BallData> = new Map()
   private goldBallCount = 0
   private onGoldBallCollected?: (type: BallType, points: number) => void
   private glowTime = 0
 
-  private smallGoldBallLifetimes: Map<RAPIER.RigidBody, number> = new Map()
-  private smallGoldBallSpawnTime: Map<RAPIER.RigidBody, number> = new Map()
+  private smallGoldBallLifetimes: Map<PhysicsBody, number> = new Map()
+  private smallGoldBallSpawnTime: Map<PhysicsBody, number> = new Map()
 
   private swarmGroups: Map<number, SwarmGroup> = new Map()
-  private ballSwarmId: Map<RAPIER.RigidBody, number> = new Map()
+  private ballSwarmId: Map<PhysicsBody, number> = new Map()
   private nextSwarmId = 1
 
-  private ballStuckTimers: Map<RAPIER.RigidBody, BallStuckTracker> = new Map()
+  private ballStuckTimers: Map<PhysicsBody, BallStuckTracker> = new Map()
   private chainMultiball: MultiballState = {
     isActive: false,
     chainLevel: 0,
@@ -87,7 +87,7 @@ export class BallManager {
 
   ballSaveSystem = new BallSaveSystem({ graceMs: GAME_TUNING.feedback.ballSaveGraceSeconds * 1000 })
 
-  constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER, bindings: PhysicsBinding[]) {
+  constructor(scene: Scene, world: PhysicsWorldSink, rapier: PhysicsApi, bindings: PhysicsBinding[]) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
@@ -111,7 +111,7 @@ export class BallManager {
     return this.bindings
   }
 
-  createMainBall(): RAPIER.RigidBody {
+  createMainBall(): PhysicsBody {
     return createMainBall(this.asHost())
   }
 
@@ -123,7 +123,7 @@ export class BallManager {
     resetBall(this.asHost())
   }
 
-  removeBall(body: RAPIER.RigidBody): void {
+  removeBall(body: PhysicsBody): void {
     this.ballDataMap.delete(body)
     cleanupSwarmTrackingOnRemove(this.asHost(), body)
 
@@ -201,7 +201,7 @@ export class BallManager {
     return triggerForcedMultiball(this.asHost(), totalBalls, reason)
   }
 
-  registerDrain(drainedBody: RAPIER.RigidBody): {
+  registerDrain(drainedBody: PhysicsBody): {
     ballSaved: boolean
     multiballEnded: boolean
     scoreMultiplier: number
@@ -226,7 +226,7 @@ export class BallManager {
     return getChainStats(this.asHost())
   }
 
-  activateHologramCatch(ball: RAPIER.RigidBody, targetPos: Vector3, duration: number): void {
+  activateHologramCatch(ball: PhysicsBody, targetPos: Vector3, duration: number): void {
     ball.setBodyType(this.rapier.RigidBodyType.KinematicPositionBased, true)
     this.caughtBalls.push({ body: ball, targetPos: targetPos.clone(), timer: duration })
 
@@ -243,7 +243,7 @@ export class BallManager {
     }
   }
 
-  updateCaughtBalls(dt: number, onRelease: (ball: RAPIER.RigidBody) => void): void {
+  updateCaughtBalls(dt: number, onRelease: (ball: PhysicsBody) => void): void {
     for (let i = this.caughtBalls.length - 1; i >= 0; i--) {
       const catchData = this.caughtBalls[i]
       catchData.timer -= dt
@@ -279,7 +279,7 @@ export class BallManager {
     }
   }
 
-  getBallBody(): RAPIER.RigidBody | null {
+  getBallBody(): PhysicsBody | null {
     // Heal stale primary pointer after removeBall races / incomplete drain paths.
     if (this.ballBody && typeof this.ballBody.isValid === 'function' && !this.ballBody.isValid()) {
       this.ballBody = this.ballBodies.find((b) => b.isValid?.() !== false) ?? null
@@ -287,11 +287,11 @@ export class BallManager {
     return this.ballBody
   }
 
-  getBallBodies(): RAPIER.RigidBody[] {
+  getBallBodies(): PhysicsBody[] {
     return this.ballBodies
   }
 
-  setBallBody(body: RAPIER.RigidBody | null): void {
+  setBallBody(body: PhysicsBody | null): void {
     this.ballBody = body
   }
 
@@ -315,7 +315,7 @@ export class BallManager {
     updateSmallGoldBallLifetimes(this.asHost(), dt)
   }
 
-  updateStuckDetection(dt: number): RAPIER.RigidBody[] {
+  updateStuckDetection(dt: number): PhysicsBody[] {
     return updateStuckDetection(this.asHost(), dt)
   }
 
@@ -335,19 +335,19 @@ export class BallManager {
     playSpawnEffect(this.asHost(), position, type, swarmBurst)
   }
 
-  createBallOfType(type: BallType, position?: Vector3, playEffect = false): RAPIER.RigidBody {
+  createBallOfType(type: BallType, position?: Vector3, playEffect = false): PhysicsBody {
     return createBallOfType(this.asHost(), type, position, playEffect)
   }
 
-  spawnSmallGoldBallSwarm(position?: Vector3, baseType: BallType = BallType.GOLD_PLATED): RAPIER.RigidBody[] {
+  spawnSmallGoldBallSwarm(position?: Vector3, baseType: BallType = BallType.GOLD_PLATED): PhysicsBody[] {
     return spawnSmallGoldBallSwarm(this.asHost(), position, baseType)
   }
 
-  private addTrailForBall(body: RAPIER.RigidBody, colorHex: string): void {
+  private addTrailForBall(body: PhysicsBody, colorHex: string): void {
     addTrailForBall(this.asHost(), body, colorHex)
   }
 
-  getBallType(body: RAPIER.RigidBody): BallType {
+  getBallType(body: PhysicsBody): BallType {
     return this.ballDataMap.get(body)?.type || BallType.STANDARD
   }
 
@@ -362,11 +362,11 @@ export class BallManager {
     return result
   }
 
-  getBallData(body: RAPIER.RigidBody): BallData | undefined {
+  getBallData(body: PhysicsBody): BallData | undefined {
     return this.ballDataMap.get(body)
   }
 
-  collectBall(body: RAPIER.RigidBody): {
+  collectBall(body: PhysicsBody): {
     type: BallType
     points: number
     jackpotEligible: boolean
@@ -387,7 +387,7 @@ export class BallManager {
     this.ballSaveSystem.onBallLaunched(nowMs())
   }
 
-  spawnRandomBall(position?: Vector3): RAPIER.RigidBody {
+  spawnRandomBall(position?: Vector3): PhysicsBody {
     return spawnRandomBall(this.asHost(), position)
   }
 }

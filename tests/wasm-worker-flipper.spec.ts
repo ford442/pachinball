@@ -51,7 +51,6 @@ test.describe('wasm-worker physics mode', () => {
         game?: {
           ballManager?: { getBallBody?: () => { setTranslation: (v: unknown, w: boolean) => void; setLinvel: (v: unknown, w: boolean) => void; linvel: () => { z: number } } }
           physics?: {
-            getRapier?: () => { Vector3: new (x: number, y: number, z: number) => unknown }
             getLastRapierStepMs?: () => number
             getWasmMode?: () => string
           }
@@ -59,13 +58,12 @@ test.describe('wasm-worker physics mode', () => {
           physicsController?: { rebuildHandleCaches?: () => void }
         }
       }).game
-      const rapier = g?.physics?.getRapier?.()
       const ball = g?.ballManager?.getBallBody?.()
-      if (!rapier || !ball) return { ok: false, vz: 0, rapierMs: -1, mode: g?.physics?.getWasmMode?.() ?? '' }
+      if (!ball) return { ok: false, vz: 0, rapierMs: -1, mode: g?.physics?.getWasmMode?.() ?? '' }
 
       g.physicsController?.rebuildHandleCaches?.()
-      ball.setTranslation(new rapier.Vector3(-2.5, 0.4, -6.2), true)
-      ball.setLinvel(new rapier.Vector3(0, 0, -1.5), true)
+      ball.setTranslation({ x: -2.5, y: 0.4, z: -6.2 }, true)
+      ball.setLinvel({ x: 0, y: 0, z: -1.5 }, true)
       g.physicsController?.rebuildHandleCaches?.()
 
       const waitFrames = (n: number) => new Promise<void>((resolve) => {

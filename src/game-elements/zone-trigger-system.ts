@@ -13,7 +13,7 @@
  */
 
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../core/physics-api'
 import type { DynamicScenario, ScenarioZone } from './dynamic-scenarios'
 
 export interface ZoneBounds {
@@ -211,7 +211,7 @@ export class ZoneTriggerSystem {
    * Update zone detection based on ball position
    * Call this every frame from the game loop
    */
-  update(ballBodies: RAPIER.RigidBody[]): void {
+  update(ballBodies: PhysicsBody[]): void {
     if (this.activeZones.size === 0 || ballBodies.length === 0) {
       return
     }

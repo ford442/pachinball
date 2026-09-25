@@ -6,7 +6,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { GameConfig } from '../../config'
 import { COLLISION_GROUP_PRESETS } from '../../game-elements/physics'
 import { getMaterialLibrary } from '../../materials'
@@ -14,18 +14,18 @@ import type { PhysicsBinding } from '../../game-elements/types'
 
 export class DecorationBuilder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
 
   private matLib: ReturnType<typeof getMaterialLibrary>
   private bindings: PhysicsBinding[] = []
   private pinballMeshes: Mesh[] = []
-  private rigidBodies: RAPIER.RigidBody[] = []
+  private rigidBodies: PhysicsBody[] = []
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
 
     _config: typeof GameConfig
   ) {

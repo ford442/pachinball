@@ -39,6 +39,8 @@ export interface DebugSnapshot {
   portalSensorHandle: number
   portalHandleSetSize: number
   tablePhysicsEnabled: boolean
+  /** Table colliders authored but not simulated by the C++ owner (null off the owner path). */
+  wasmTableUnexported: number | null
   activeCameraType: string
   teardownMeshes: number
   teardownBodies: number
@@ -208,6 +210,7 @@ export class DebugHUD {
       'portal sensor': snapshot.portalSensorHandle,
       'portal handles': snapshot.portalHandleSetSize,
       'table physics': String(snapshot.tablePhysicsEnabled),
+      'wasm unexported': snapshot.wasmTableUnexported ?? 'n/a',
       camera: snapshot.activeCameraType,
       'td meshes': snapshot.teardownMeshes,
       'td bodies': snapshot.teardownBodies,

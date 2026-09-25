@@ -3,7 +3,7 @@ import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../../core/physics-api'
 import { getMaterialLibrary } from '../../materials'
 import { color } from '../visual-language'
 import type { JumpPadConfig } from './types'
@@ -91,7 +91,7 @@ export class JumpPad extends PathMechanic {
     this.padLight.diffuse = color(this.mapBaseColor)
   }
 
-  update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+  update(dt: number, ballBodies: PhysicsBody[]): void {
     if (!this.isSpawned) return
 
     this.currentCooldown = Math.max(0, this.currentCooldown - dt)
@@ -128,7 +128,7 @@ export class JumpPad extends PathMechanic {
     }
   }
 
-  private launchBall(ball: RAPIER.RigidBody): void {
+  private launchBall(ball: PhysicsBody): void {
     this.currentCooldown = this.cooldown
     this.chargeLevel = 0
 

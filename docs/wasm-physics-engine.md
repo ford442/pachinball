@@ -2,9 +2,10 @@
 
 > C++ simulation core for Pachinball, compiled to WebAssembly via Emscripten.
 > It is the **production physics engine** (`wasm-owner`, see
-> [`src/config/physics.ts`](../src/config/physics.ts)). Rapier is still linked for body
-> handles until #412, and still simulates on the explicit `rapier` override or when the
-> WASM bundle is missing (fail-closed fallback).
+> [`src/config/physics.ts`](../src/config/physics.ts)). Since #412 the owner boot never
+> loads Rapier: builders author through a narrow physics API, bodies are keyed on WASM
+> public ids, and `@dimforge/rapier3d-compat` is fetched lazily only for the explicit
+> `rapier` / `wasm-mirror` modes or when the WASM bundle is missing (fail-closed fallback).
 
 ---
 
@@ -26,8 +27,11 @@ Rapier as the simulation owner because it unlocks:
 ## Architecture overview
 
 ```
-TypeScript (game logic)
-        │
+TypeScript (game logic: table builders, balls, toys, adventure tracks)
+        │  PhysicsApi / PhysicsWorldSink / PhysicsBody (src/core/physics-api.ts)
+        ▼
+WASM_PHYSICS_API + WasmTableWorld  ◄──── src/wasm/wasm-{physics-api,table-world,body}.ts
+        │  TableColliderDesc per body; balls are C++ bodies from birth
         ▼
 WasmOwner / WasmMirror  ◄──── src/game/physics/wasm-{owner,mirror}.ts
         │  WasmSimEngine (src/wasm/wasm-sim-engine.ts)
@@ -104,12 +108,15 @@ src/wasm/
 ├── physics-worker.ts            Dedicated Worker entry
 ├── contact-buffer.ts            Packed contact codec
 ├── transform-buffer.ts          Packed transform codec
+├── wasm-physics-api.ts          WASM_PHYSICS_API: descriptor-recording RigidBodyDesc / ColliderDesc / JointData
+├── wasm-table-world.ts          WasmTableWorld: the owner-path PhysicsWorldSink (bodies, colliders, joints)
+├── wasm-body.ts                 WasmBody / WasmCollider: WASM-id-keyed bodies (linked to C++ or pose stores)
 └── index.ts                     Barrel export
 
 src/game/physics/
-├── wasm-owner.ts                wasm-owner / wasm-worker driver
-├── wasm-mirror.ts               wasm-mirror driver
-├── wasm-static-export.ts        Table statics → C++
+├── wasm-owner.ts                wasm-owner / wasm-worker driver + WASM-id contact resolution
+├── wasm-mirror.ts               wasm-mirror driver (Rapier-authoritative parity path)
+├── wasm-static-export.ts        TableColliderDesc → C++ statics / sensors / kinematic movers
 └── wasm-adventure-export.ts     AdventureColliderDesc → C++
 
 scripts/
@@ -281,7 +288,8 @@ import { WasmPhysicsEngine } from './src/wasm'
 
 const engine = new WasmPhysicsEngine()
 
-// Load WASM (async — do once at startup, in parallel with Rapier/Babylon)
+// Load WASM (async — do once at startup; main.ts starts the fetch in parallel
+// with Babylon engine creation via preloadWasmPhysicsNow())
 await engine.load()              // uses './wasm/PhysicsModule.js' by default
 
 // Wire EventBus for contact events
@@ -341,12 +349,15 @@ Set via `localStorage['pachinball:physics-engine']`:
 
 | Mode | Value | Behaviour |
 |------|-------|-----------|
-| **WASM owner** (default) | `wasm-owner` or unset | WASM owns balls + static table geometry + **native hinge flippers** + adventure track geometry and gizmos; Rapier is not stepped (`lastRapierStepMs === 0`). |
-| **Rapier** | `rapier` (explicit) | Dev / degrade path: full Rapier simulation, and the fail-closed fallback when the WASM bundle is missing. Kept deliberately and covered by `tests/physics-degrade.spec.ts` and the fallback case in `tests/wasm-owner-adventure-cutover.spec.ts`. |
-| **WASM mirror** | `wasm-mirror` or legacy `wasm` | WASM steps ball+bumper subset; poses sync Rapier↔WASM each frame |
+| **WASM owner** (default) | `wasm-owner` or unset | WASM owns balls + the table scope + **native hinge flippers** + adventure track geometry and gizmos. Rapier is never loaded: no module, no `World` (`getRapier() === null`, `lastRapierStepMs === 0`). |
+| **Rapier** | `rapier` (explicit) | Dev / degrade path: full Rapier simulation, and the fail-closed fallback when the WASM bundle is missing — Rapier is imported lazily (`loadRapier()`). Kept deliberately and covered by `tests/physics-degrade.spec.ts` and the fallback case in `tests/wasm-owner-adventure-cutover.spec.ts`. |
+| **WASM mirror** | `wasm-mirror` or legacy `wasm` | Rapier authoritative (loaded at boot); WASM steps ball+bumper subset and poses sync Rapier↔WASM each frame |
 | **WASM worker** | `wasm-worker` | Same ownership as `wasm-owner` — table **and** adventure tracks — but `PhysicsWorld` runs in a Dedicated Worker (**one physics frame of extra latency**). Snapshots arrive over a SharedArrayBuffer when the page is cross-origin isolated, otherwise as transferred `ArrayBuffer`s; see *Worker transport*. Worker construction / load failure falls back to in-process `wasm-owner`. `tests/wasm-worker-api-parity.test.ts` fails the build if an engine method has no worker command; `tests/physics-worker-shared-parity.test.ts` runs the worker path against real C++ and requires identical handles, poses and contacts. |
 
-Mirror mode remains a WASM parity path. Owner mode disables Rapier colliders for exported statics, bumpers, balls, **and flippers**. Each flipper is a dynamic WASM capsule with a world-anchored hinge (`PhysicsWorld::createHinge` / `setHingeMotor`). Pose is copied back onto the Rapier puppet for mesh interpolation only.
+Mirror mode remains a WASM parity path on Rapier bodies. Owner mode has no Rapier bodies at
+all (see *Table authoring and WASM-id identity* below): each flipper is a dynamic WASM capsule
+with a world-anchored hinge (`PhysicsWorld::createHinge` / `setHingeMotor`), linked to the
+`WasmBody` the flipper builder authored so meshes interpolate from the C++ pose directly.
 
 ```javascript
 // Dev console — mirror
@@ -363,7 +374,7 @@ localStorage.setItem('pachinball:physics-engine', 'rapier')
 location.reload()
 ```
 
-Debug HUD (Developer settings → Enable Debug HUD) shows `engine` (`wasmMode`), `wasm ms`, `rapier ms` (owner), and `mirror ms` (mirror sync overhead) under the Physics panel. Physics debug draw in owner/worker mode reads packed C++ transform/contact buffers plus cached static box/capsule AABBs.
+Debug HUD (Developer settings → Enable Debug HUD) shows `engine` (`wasmMode`), `wasm ms`, `rapier ms` (owner), and `mirror ms` (mirror sync overhead) under the Physics panel, and `wasm unexported` (table colliders the C++ owner is not simulating) under Campaign. Physics debug draw in owner/worker mode reads packed C++ transform/contact buffers plus the exported collider descriptors.
 
 ---
 
@@ -542,9 +553,10 @@ engine.setCollisionGroups(ballId, CollisionGroups.BALL, COLLIDES_WITH_EVERYTHING
 
 Adventure tracks never build Rapier colliders inline. Every primitive emits an
 `AdventureColliderDesc` (`src/adventure/track-collider-descriptors.ts`), and
-the list has two consumers: `TrackColliderEmitter` realises it on Rapier (the
-dev/degrade path), and `src/game/physics/wasm-adventure-export.ts` walks it
-into the C++ engine. A collider's *body* is its own descriptor, or its
+the list has two consumers: `TrackColliderEmitter` realises it on the active
+world sink (Rapier bodies on the dev/degrade path, `WasmBody` pose stores on
+the owner path), and `src/game/physics/wasm-adventure-export.ts` walks it into
+the C++ engine. A collider's *body* is its own descriptor, or its
 `parentIndex` descriptor when attached, and the body's `motion` picks the route:
 
 | Body motion | Collider | C++ |
@@ -561,11 +573,12 @@ advances each moving body once per frame — animated obstacles take the next
 pose AdventureMode's animator set, spinning platters and mills integrate their
 prescribed angular velocity exactly (`integrateSpin`) — then composes each
 collider's body-local pose and pushes it through `setNextKinematicTransform`.
-Rapier is never stepped for this; the Rapier body only stores the committed
-pose for mesh bindings and for the Rapier fallback.
+No Rapier exists on this path; the track's `WasmBody` only stores the
+committed pose for mesh bindings.
 
-**The ownership gate.** `WasmOwner.syncAdventureTrack()` returns true — and
-Rapier stays unstepped — when every live descriptor is expressible in C++ and
+**The ownership gate.** `WasmOwner.syncAdventureTrack()` returns true — the
+track is fully owned and its WASM overlap bridge is installed — when every live
+descriptor is expressible in C++ and
 the track built nothing outside the descriptor path (`markUnexportedCollider`).
 Exit portals no longer hold Rapier awake: portal entry goes through the
 `AdventurePhysicsBridge`, and its cylinder sensor is exported like any other.
@@ -574,15 +587,94 @@ C++ does not keep a sensor for a body Rapier has removed.
 
 `tests/wasm-owner-adventure.spec.ts` (run in the native-physics CI job) walks
 **every** `AdventureTrackType` in the browser and fails on any unsupported
-collider, an unowned track, a non-zero `lastRapierStepMs`, or a spinning body
-that did not turn.
+collider, an unowned track, a loaded Rapier module, a non-zero
+`lastRapierStepMs`, or a spinning body that did not turn.
 
-**Rapier is still a runtime dependency.** Only adventure *collider authorship*
-has moved; ball, flipper, bumper and table bodies are still created as Rapier
-bodies and used as the game-wide body handle (disabled puppets in owner mode),
-and table statics are exported by reading Rapier colliders
-(`wasm-static-export.ts`). Dropping `@dimforge/rapier3d-compat` from the
-player bundle needs that handle migration first.
+---
+
+## Table authoring and WASM-id identity (#412)
+
+The table, the balls, the toys and the adventure tracks are authored through a
+narrow physics API — `PhysicsApi`, `PhysicsWorldSink`, `PhysicsBody`
+(`src/core/physics-api.ts`) — instead of Rapier types. Rapier satisfies those
+interfaces structurally, so the explicit `rapier` mode and the degrade path hand
+the real library straight to the same builders and build a byte-identical table.
+On the owner path `PhysicsSystem.init()` hands out `WASM_PHYSICS_API` and a
+`WasmTableWorld` instead, and never imports Rapier.
+
+**Descriptors.** `WASM_PHYSICS_API`'s `RigidBodyDesc` / `ColliderDesc` /
+`JointData` builders only record data (`TableBodyDesc`, `TableColliderDesc`,
+Rapier's defaults for anything left unset). `WasmTableWorld.createRigidBody` /
+`createCollider` turn them into `WasmBody`s carrying `TableColliderDesc`s.
+
+**Bodies.** A `WasmBody` is either
+
+- *linked* to a C++ rigid body (`WasmBodyLink.id` is its WASM public id): a
+  dynamic body whose first collider is a sphere becomes a C++ body the moment
+  that collider is attached (balls, multiball, gold swarms), and `WasmOwner`
+  links each flipper to its hinged capsule. Reads come from the engine, writes
+  go straight to it, and values written since the last step are served from a
+  write-through cache, because the C++ transform snapshot only refreshes when
+  the engine steps (an impulse shows in `linvel()` at once, as in Rapier); or
+- a *pose store* (fixed, kinematic): its colliders are exported below, and a
+  kinematic target (`setNextKinematicTranslation`) becomes the pose after the
+  step, as in Rapier.
+
+Two Rapier states have no C++ flag yet — a toy holding a captured ball
+(`setBodyType(KinematicPositionBased)`) and a disabled body. A linked body in
+either state is *held*: `WasmTableWorld.beginStep()` pins it at the hold pose
+with zero velocity before every step, and reads report the hold pose. Disabled
+bodies also drop to collision groups `0/0`. A native `setBodyType` belongs to
+the toys issue; the hold keeps the toy FSMs working until then.
+
+Otherwise a linked body keeps C++'s all-groups default, as owner-mode balls
+always have. The authored group word is kept on the collider but not forwarded
+yet: the adventure chroma masks (`MASK_RED` …) omit `ADVENTURE_GROUP`, so a
+coloured ball would drop through ordinary track geometry. Statics carry their
+authored groups.
+
+**Export.** `wasm-static-export.ts` walks the descriptors — nothing reads a
+Rapier collider:
+
+| Body | Collider | C++ |
+|------|----------|-----|
+| fixed | box / capsule / cylinder / sphere | `addStaticBox` / `addStaticCapsule` / `addStaticCylinder` / `addStaticSphere` |
+| any | sensor box / cylinder / sphere | `addSensorVolume` |
+| kinematic | box / cylinder | `addKinematicMover`, posed each tick from the body's target |
+| any | cone, convex hull, kinematic capsule, unlinked dynamic | reported, not exported |
+
+Export order is deterministic and C++ static ids are index-based, so a
+re-export (an adventure track switch, a table edit) hands every collider the
+same WASM id. Authored collision groups are applied (`setCollisionGroups`).
+
+**The owner table scope.** `GameObjects.getWasmExportBodies()` names the table
+bodies the C++ world simulates: everything with a mesh binding (walls,
+slingshots, bumpers, pachinko pins and targets, decoration rails), the lane
+rollover sensors and the drain. Every other authored body — RailBuilder's rails
+and guards, the plunger body, the ball traps / spinner / launcher / gate, the
+feeders, the LCD ground (the owner's ground plane replaces it) — is recorded but
+held out, and listed with a reason by `WasmOwner.getTableUnsupported()`. Those
+bodies were authored against the Rapier table surface (the LCD ground's top,
+y = −0.9), where the ball rolls underneath them; the owner's ground plane is
+y = 0, and exported unchanged they close the plunger lane. They join the scope
+once calibrated for the owner plane.
+
+**Identity.** `CollisionDispatcher` keys every set on WASM public ids: a ball's
+C++ body id, and a static body's first exported collider id. A contact's WASM
+id resolves collider → body → key in `WasmOwner.resolveContactId`, the C++
+analogue of Rapier's collider-handle → body-handle conversion, and the sets
+rebuild whenever ids change (`WasmOwner.getIdEpoch()`: a re-export, a flipper
+hinge, a ball spawned or removed).
+`WasmMirror.getRapierBody()` is the only WASM-id → Rapier-body map left, for
+the mirror parity path. `tests/collision-dispatch-wasm-ids.test.ts` locks the
+key space.
+
+**Bundle.** `loadRapier()` (`src/game-elements/rapier-loader.ts`) is the one
+runtime import of `@dimforge/rapier3d-compat`. `main.ts` preloads the C++
+bundle in parallel with engine creation (`preloadWasmPhysicsNow()`) and only
+warms Rapier for the explicit Rapier modes. The rapier chunk is excluded from
+the Workbox precache, and `npm run check:bundle` fails if it is ever precached
+or modulepreloaded again.
 
 ---
 
@@ -607,19 +699,19 @@ const angle = engine.getHingeAngle(hingeId)
 
 `WasmOwner` creates one hinge per flipper at `rebuildHandleCaches()`, drives
 `setHingeMotor` from the same `InputFrame` / `PhysicsConfig.flipper` rest and
-active angles + stiffness/damping as Rapier `configureMotorPosition`, and
-**does not** call `world.step()` on Rapier while a table ball is in play
-(Debug HUD `rapier ms` / `lastRapierStepMs === 0`). Adventure tracks are owned by
-C++ too (see *Adventure geometry*); Rapier only steps on the explicit `rapier`
-override or the missing-bundle fallback.
+active angles + stiffness/damping as Rapier `configureMotorPosition`. There is
+no Rapier world on the owner path (Debug HUD `rapier ms` /
+`lastRapierStepMs === 0`); Rapier only exists on the explicit `rapier` override
+or the missing-bundle fallback.
 
 Dynamic capsules now report isotropic inertia (averaged cylinder) so the hinge
 can apply motor torque. Capsule-vs-capsule collision remains skipped.
 
 Native capsules are authored along local +Y; Rapier flipper cuboids are long on
-local +X. `wasm-owner` applies a one-time 90° Z rest rotation (and the inverse
-when copying pose onto the Rapier mesh puppet). That remap is shape-axis
-alignment, not the retired kinematic `syncFlipperProxies` path.
+local +X. `wasm-owner` applies a one-time 90° Z rest rotation, and the authored
+flipper `WasmBody` reports the inverse (`WasmBodyLink.rotationOffset`) plus its
+pivot (`WasmBodyLink.pivot`), exactly as the Rapier flipper body did. That remap
+is shape-axis alignment, not the retired kinematic `syncFlipperProxies` path.
 
 This unblocks #361 Phase 3 (worker + SharedArrayBuffer): flippers no longer
 depend on Rapier impulse joints on the main thread.
@@ -651,7 +743,7 @@ flicking tests; production flippers use hinges (above).
 | **2e – Worker (#361 P1)** | `wasm-worker` + `postMessage` transferables; one-frame lag; no COOP/COEP | ✅ Done |
 | **2f – Adventure (#383)** | Movers, sensors, cylinders, spheres, meshes, force fields; every track owned by C++ | ✅ Done |
 | **3 – Decision** | Replace, not hybrid: `wasm-owner` is the production default | ✅ Done |
-| **4 – Rapier removal (#412)** | Migrate body handles off Rapier; drop `@dimforge/rapier3d-compat` from the player bundle | 🔜 Next |
+| **4 – Rapier removal (#412)** | Builders author through `PhysicsApi`; `WasmTableWorld` / WASM-id identity; no Rapier module or `World` on the owner boot; rapier chunk lazy and out of the PWA precache | ✅ Done |
 | **5 – Worker parity (#414)** | Worker commands for mesh / box body / force field; SAB snapshot transport gated on isolation | ✅ Done |
 
 ---
@@ -751,7 +843,9 @@ The in-process engine applies the same rule.
 - Use `npm run build:wasm:assert` for CI-style `-O3` + `ASSERTIONS=1` without
   full debug cost.
 - The `Debug HUD` (`src/game-elements/debug-hud.ts`) shows WASM vs Rapier step
-  timing when a WASM physics mode is active.
+  timing when a WASM physics mode is active, and how many table colliders the
+  owner is not simulating (`wasm unexported`; the list with reasons is
+  `game.physicsController.getTableUnexported()`).
 ---
 
 ## C++ development without Emscripten

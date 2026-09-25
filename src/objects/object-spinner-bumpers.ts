@@ -4,7 +4,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { PhysicsConfig } from '../config'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getPhysicsTuningValue } from '../game-elements/physics-tuning'
@@ -18,7 +18,7 @@ import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
 
 export interface SpinnerBumperVisual {
   mesh: Mesh
-  body: RAPIER.RigidBody
+  body: PhysicsBody
   id: string
   rotationSpeed: number
   targetRotationSpeed: number
@@ -30,14 +30,14 @@ export interface SpinnerBumperVisual {
 
 export class SpinnerBumperBuilder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
   private matLib: ReturnType<typeof getMaterialLibrary>
   private eventBus: ObstacleEventBusIntegration | null = null
   private zoneTriggerSystem: ZoneTriggerSystem | null = null
   private spinnerCounter: number = 0
   private meshes: Mesh[] = []
-  private bodies: RAPIER.RigidBody[] = []
+  private bodies: PhysicsBody[] = []
   private nodes: TransformNode[] = []
   private qualityTier: QualityTier
   private registeredZoneIds: string[] = []
@@ -45,8 +45,8 @@ export class SpinnerBumperBuilder {
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
     qualityTier: QualityTier = QualityTier.MEDIUM,
   ) {
     this.scene = scene
@@ -80,7 +80,7 @@ export class SpinnerBumperBuilder {
     z: number,
     colorHex: string = PALETTE.CYAN,
     scale: number = 1.0
-  ): { mesh: Mesh; body: RAPIER.RigidBody; visual: SpinnerBumperVisual; bindings: PhysicsBinding[] } {
+  ): { mesh: Mesh; body: PhysicsBody; visual: SpinnerBumperVisual; bindings: PhysicsBinding[] } {
     const bindings: PhysicsBinding[] = []
 
     // Create root for the spinner assembly
@@ -266,7 +266,7 @@ export class SpinnerBumperBuilder {
   /**
    * Return all Rapier rigid bodies created by this builder.
    */
-  getBodies(): RAPIER.RigidBody[] {
+  getBodies(): PhysicsBody[] {
     return this.bodies
   }
 

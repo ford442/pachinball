@@ -4,7 +4,7 @@ import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { GameConfig, PhysicsConfig } from '../config'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding, BumperVisual } from '../game-elements/types'
@@ -12,17 +12,17 @@ import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 
 export class WallBuilder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
 
   private matLib: ReturnType<typeof getMaterialLibrary>
   private meshes: Mesh[] = []
-  private bodies: RAPIER.RigidBody[] = []
+  private bodies: PhysicsBody[] = []
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
      
     _config: typeof GameConfig
   ) {
@@ -183,12 +183,12 @@ export class WallBuilder {
 
   createSlingshots(): {
     bindings: PhysicsBinding[]
-    bumperBodies: RAPIER.RigidBody[]
+    bumperBodies: PhysicsBody[]
     bumperVisuals: BumperVisual[]
     meshes: Mesh[]
   } {
     const bindings: PhysicsBinding[] = []
-    const bumperBodies: RAPIER.RigidBody[] = []
+    const bumperBodies: PhysicsBody[] = []
     const bumperVisuals: BumperVisual[] = []
     const meshes: Mesh[] = []
 
@@ -205,7 +205,7 @@ export class WallBuilder {
     rot: number,
     mat: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial | import('@babylonjs/core/Materials/PBR/pbrMaterial').PBRMaterial,
     bindings: PhysicsBinding[],
-    bumperBodies: RAPIER.RigidBody[],
+    bumperBodies: PhysicsBody[],
     bumperVisuals: BumperVisual[],
     meshes: Mesh[]
   ): void {

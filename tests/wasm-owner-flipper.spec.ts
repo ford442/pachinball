@@ -11,7 +11,7 @@ import {
  * Drives stepPhysics directly to avoid rAF hangs.
  */
 test.describe('wasm-owner native flipper hinge', () => {
-  test('raise/lower launches a ball and skips Rapier step', async ({ page }) => {
+  test('raise/lower launches a ball with no Rapier loaded', async ({ page }) => {
     test.setTimeout(180_000)
     const boot = await bootWasmOwner(page)
     assertWasmOwnerReady(boot)
@@ -32,18 +32,17 @@ test.describe('wasm-owner native flipper hinge', () => {
     // stepPhysics skips (see InputManager.processBufferedInputs +
     // pollHeldFlipperKeys). The real keyboard path has its own coverage in
     // tests/keyboard-input.spec.ts; what this spec gates is the native hinge
-    // and the Rapier skip.
+    // on a boot that never loaded Rapier (assertWasmOwnerReady).
     const launched = await page.evaluate(() => {
       const g = (window as unknown as GameHooks).game
-      const rapier = g?.physics?.getRapier?.()
       const ball = g?.ballManager?.getBallBody?.()
-      if (!g?.physicsController || !g.engine || !rapier || !ball) {
+      if (!g?.physicsController || !g.engine || !ball) {
         return { ok: false, vz: 0, rapierMs: -1, engine: null as string | null }
       }
 
       g.physicsController.rebuildHandleCaches?.()
-      ball.setTranslation(new rapier.Vector3(-5.5, 0.45, -7.0), true)
-      ball.setLinvel(new rapier.Vector3(0, 0, 0), true)
+      ball.setTranslation({ x: -5.5, y: 0.45, z: -7.0 }, true)
+      ball.setLinvel({ x: 0, y: 0, z: 0 }, true)
       g.physicsController.rebuildHandleCaches?.()
 
       const origDt = g.engine.getDeltaTime.bind(g.engine)
@@ -123,10 +122,9 @@ test.describe('wasm-owner native flipper hinge', () => {
 
     const scored = await page.evaluate(() => {
       const g = (window as unknown as GameHooks).game
-      const rapier = g?.physics?.getRapier?.()
       const ball = g?.ballManager?.getBallBody?.()
       const bumper = g.gameObjects?.getBumperBodies?.()?.[0]
-      if (!g?.physicsController || !g.engine || !rapier || !ball || !bumper) {
+      if (!g?.physicsController || !g.engine || !ball || !bumper) {
         return {
           ok: false,
           rapierMs: -1,
@@ -141,8 +139,8 @@ test.describe('wasm-owner native flipper hinge', () => {
       }
       const bp = bumper.translation()
       g.physicsController.resetBallScoreCounters?.()
-      ball.setTranslation(new rapier.Vector3(bp.x + 2.2, bp.y, bp.z), true)
-      ball.setLinvel(new rapier.Vector3(-10, 0, 0), true)
+      ball.setTranslation({ x: bp.x + 2.2, y: bp.y, z: bp.z }, true)
+      ball.setLinvel({ x: -10, y: 0, z: 0 }, true)
       g.physicsController.rebuildHandleCaches?.()
       const origDt = g.engine.getDeltaTime.bind(g.engine)
       g.engine.getDeltaTime = () => 1000 / 60

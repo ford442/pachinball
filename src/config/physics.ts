@@ -100,12 +100,12 @@ export type PhysicsConfigType = typeof PhysicsConfig
  */
 export const WASM_PHYSICS = {
   flagKey: 'pachinball:physics-engine',
-  /** Production physics (table + adventure); Rapier remains the missing-bundle fallback. */
+  /** Production physics (table + adventure); Rapier is imported only as the missing-bundle fallback. */
   defaultEngine: 'wasm-owner',
   /**
    * Engine modes:
    *  - `rapier`       — Rapier only: dev/degrade path (explicit override, or fail-closed when the WASM bundle is missing)
-   *  - `wasm-mirror`  — WASM mirrors ball+bumper subset; Rapier bodies remain handles
+   *  - `wasm-mirror`  — WASM mirrors ball+bumper subset; Rapier stays authoritative and its bodies remain handles
    *  - `wasm-owner`   — WASM owns ball + static table + flipper hinges + adventure tracks (in-process, production default)
    *  - `wasm-worker`  — same ownership as wasm-owner (table + adventure tracks), C++ world
    *                     in a Dedicated Worker with one frame of lag. Snapshots come back over
@@ -151,6 +151,16 @@ export function getWasmPhysicsRuntimeMode(): WasmPhysicsRuntimeMode {
   if (pref === 'wasm-owner') return 'wasm-owner'
   if (pref === 'wasm-worker') return 'wasm-worker'
   return 'rapier'
+}
+
+/**
+ * Whether a runtime mode simulates on Rapier and so has to fetch it at boot:
+ * the explicit `rapier` override and `wasm-mirror` (Rapier authoritative, C++
+ * mirrors a subset). The owner modes never import Rapier unless the C++
+ * bundle fails to load (#412).
+ */
+export function runtimeModeUsesRapier(mode: WasmPhysicsRuntimeMode): boolean {
+  return !WASM_PHYSICS.enabled || mode === 'rapier' || mode === 'wasm-mirror'
 }
 
 /**

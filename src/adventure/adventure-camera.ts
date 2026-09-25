@@ -9,7 +9,7 @@ import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera'
 import type { Camera } from '@babylonjs/core/Cameras/camera'
 import { Scalar } from '@babylonjs/core/Maths/math.scalar'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../core/physics-api'
 import { TrackBuilder } from './track-builder'
 import { CameraEasing } from './camera-easing'
 import { CAMERA_PRESETS } from './camera-presets'
@@ -55,7 +55,7 @@ export abstract class AdventureCameraMixin extends TrackBuilder {
     this.accessibility = config
   }
 
-  protected updateCinematicCamera(ballBody: RAPIER.RigidBody, dt: number): void {
+  protected updateCinematicCamera(ballBody: PhysicsBody, dt: number): void {
     if (!this.followCamera || !this.currentCameraPreset) return
 
     const preset = this.currentCameraPreset

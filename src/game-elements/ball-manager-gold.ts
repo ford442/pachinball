@@ -4,7 +4,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../core/physics-api'
 import { BallType, GameConfig } from '../config'
 import { pulse } from './visual-language'
 import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
@@ -15,7 +15,7 @@ import { getDensityForMass, type BallManagerHost } from './ball-manager-context'
  * collected (e.g. lifetime expiry), invalidate the whole swarm group so
  * the remaining members can no longer trigger a quick-collect bonus.
  */
-export function cleanupSwarmTrackingOnRemove(host: BallManagerHost, body: RAPIER.RigidBody): void {
+export function cleanupSwarmTrackingOnRemove(host: BallManagerHost, body: PhysicsBody): void {
   const swarmId = host.ballSwarmId.get(body)
   if (swarmId === undefined) return
 
@@ -144,7 +144,7 @@ export function updateGoldBallGlow(host: BallManagerHost, dt: number): void {
  * Update small gold ball lifetimes and cleanup.
  */
 export function updateSmallGoldBallLifetimes(host: BallManagerHost, dt: number): void {
-  const toRemove: RAPIER.RigidBody[] = []
+  const toRemove: PhysicsBody[] = []
 
   for (const [body, lifetime] of host.smallGoldBallLifetimes) {
     const remaining = lifetime - dt
@@ -168,13 +168,13 @@ export function updateSmallGoldBallLifetimes(host: BallManagerHost, dt: number):
  * Spawn a swarm of small gold balls instead of single heavy gold ball.
  * Creates chaotic, bouncy behavior for more exciting gameplay.
  */
-export function spawnSmallGoldBallSwarm(host: BallManagerHost, position?: Vector3, baseType: BallType = BallType.GOLD_PLATED): RAPIER.RigidBody[] {
+export function spawnSmallGoldBallSwarm(host: BallManagerHost, position?: Vector3, baseType: BallType = BallType.GOLD_PLATED): PhysicsBody[] {
   if (!GameConfig.smallGoldBalls.enabled) {
     return []
   }
 
   const spawnPos = position || GameConfig.ball.spawnMain
-  const spawnedBodies: RAPIER.RigidBody[] = []
+  const spawnedBodies: PhysicsBody[] = []
   const cfg = GameConfig.smallGoldBalls
 
   // Check concurrent limit
@@ -271,7 +271,7 @@ export function spawnSmallGoldBallSwarm(host: BallManagerHost, position?: Vector
 /**
  * Mark a ball as collected (when it drains).
  */
-export function collectBall(host: BallManagerHost, body: RAPIER.RigidBody): {
+export function collectBall(host: BallManagerHost, body: PhysicsBody): {
   type: BallType
   points: number
   jackpotEligible: boolean

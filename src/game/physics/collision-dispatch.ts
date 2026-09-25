@@ -1,14 +1,23 @@
 /**
- * CollisionDispatcher — collider→body handle-space conversion and obstacle/ball dispatch.
+ * CollisionDispatcher — contact id → body resolution and obstacle/ball dispatch.
  *
- * This module owns the highest-risk logic in the physics pipeline: converting
- * Rapier collider handles (from drainCollisionEvents) into parent rigid-body
- * handles before any set-membership or scoring lookup. The actual per-obstacle
- * reactions live in `collision-handlers.ts` so this file stays focused on
- * handle-space routing.
+ * This module owns the highest-risk logic in the physics pipeline: turning the
+ * raw ids a contact arrives with into the body-level keys every set lookup and
+ * scoring decision uses. There are two key spaces:
+ *
+ *   - **WASM public ids** (wasm-owner / wasm-worker, #412). `WasmOwner` owns
+ *     the id space: a contact's WASM id resolves to its `WasmBody` and the
+ *     body's key (its C++ body id, or its first exported collider's id). Every
+ *     set below then holds WASM ids — the scoring authority for replays.
+ *   - **Rapier body handles** (rapier / wasm-mirror / degrade). Collider
+ *     handles from `drainCollisionEvents` are converted to parent body handles;
+ *     the mirror's WASM contacts map back onto the Rapier bodies it mirrors.
+ *
+ * The actual per-obstacle reactions live in `collision-handlers.ts` so this
+ * file stays focused on id-space routing.
  */
 
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../../core/physics-api'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { BumperVisual } from '../../game-elements/types'
 import type { LaneSensorDef } from '../../objects/object-lane-sensors'
@@ -17,9 +26,17 @@ import { ContactPhase, contactStarted, type PhysicsContact, type WasmContactEven
 import type { PhysicsHost } from './types'
 import type { ScoringBridge } from './scoring-bridge'
 
-/** Minimal WASM bridge surface used by collision dispatch. */
-export interface WasmPhysicsBridge {
-  getRapierBody(wasmId: number): RAPIER.RigidBody | undefined
+/** Maps WASM contact ids onto bodies and dispatch keys. */
+export interface WasmContactBridge {
+  /** Body a WASM public id from a contact belongs to, and the key it is dispatched under. */
+  resolveContactId(wasmId: number): { body: PhysicsBody; key: number } | null
+  /**
+   * Present when the bridge owns the key space (wasm-owner): a body's WASM
+   * public id, or null while it has none. Absent → Rapier body handles.
+   */
+  keyOf?(body: PhysicsBody): number | null
+  /** Changes whenever WASM ids are reassigned; the handle caches rebuild on a change. */
+  getIdEpoch?(): number
 }
 
 import {
@@ -38,7 +55,9 @@ import {
 export class CollisionDispatcher {
   private readonly host: PhysicsHost
   private readonly scoringBridge: ScoringBridge
-  private readonly getWasmBridge: () => WasmPhysicsBridge | null
+  private readonly getWasmBridge: () => WasmContactBridge | null
+  /** Id epoch of the bridge the caches were built against (-1: Rapier handle space). */
+  private cacheIdEpoch = -1
 
   private lastCollisionTime: Map<string, number> = new Map()
   private lastColliderCollisionTime: Map<string, number> = new Map()
@@ -50,11 +69,11 @@ export class CollisionDispatcher {
   private gateHandleSet: Set<number> = new Set()
   private launcherHandleSet: Set<number> = new Set()
   private spinnerHandleSet: Set<number> = new Set()
-  private bumperVisualMap: Map<number, BumperVisual> = new Map()
-  private deathZoneHandle: number = -1
+  private bumperVisualMap: Map<PhysicsBody, BumperVisual> = new Map()
+  private deathZoneHandle: number | null = null
 
-  private adventureSensorHandle: number = -1
-  /** Handles of active exit-portal sensor bodies; collisions are silently skipped
+  private adventureSensorHandle: number | null = null
+  /** Body handles of active exit-portal sensor bodies; collisions are silently skipped
    *  in the dispatcher since portal contact is detected by the bridge overlap test
    *  inside AdventureMode.updateExitPortal(). */
   private portalSensorHandleSet: Set<number> = new Set()
@@ -82,7 +101,7 @@ export class CollisionDispatcher {
 
   private readonly handlerContext: CollisionHandlerContext
 
-  constructor(host: PhysicsHost, scoringBridge: ScoringBridge, getWasmBridge: () => WasmPhysicsBridge | null) {
+  constructor(host: PhysicsHost, scoringBridge: ScoringBridge, getWasmBridge: () => WasmContactBridge | null) {
     this.host = host
     this.scoringBridge = scoringBridge
     this.getWasmBridge = getWasmBridge
@@ -111,7 +130,21 @@ export class CollisionDispatcher {
     this.eventBusUnsubscribers = []
   }
 
+  /**
+   * Rebuild every dispatch set in the active key space — WASM public ids when
+   * the bridge owns the id space, Rapier body handles otherwise.
+   */
   rebuildHandleCaches(): void {
+    const bridge = this.getWasmBridge()
+    const keyOf: (body: PhysicsBody) => number | null = bridge?.keyOf
+      ? bridge.keyOf.bind(bridge)
+      : (body) => body.handle
+    this.cacheIdEpoch = bridge?.keyOf ? (bridge.getIdEpoch?.() ?? 0) : -1
+    const addKey = (set: Set<number>, body: PhysicsBody): void => {
+      const key = keyOf(body)
+      if (key !== null) set.add(key)
+    }
+
     this.bumperHandleSet.clear()
     this.targetHandleSet.clear()
     this.ballHandleSet.clear()
@@ -124,48 +157,49 @@ export class CollisionDispatcher {
     this.laneSensorHandleMap.clear()
 
     for (const b of (this.host.gameObjects?.getBumperBodies() || [])) {
-      this.bumperHandleSet.add(b.handle)
+      addKey(this.bumperHandleSet, b)
     }
-    // Build O(1) bumper visual lookup keyed by body handle
+    // O(1) bumper visual lookup keyed by body identity (independent of key space)
     for (const vis of (this.host.gameObjects?.getBumperVisuals() || [])) {
-      this.bumperVisualMap.set(vis.body.handle, vis)
+      this.bumperVisualMap.set(vis.body, vis)
     }
     for (const b of (this.host.gameObjects?.getTargetBodies() || [])) {
-      this.targetHandleSet.add(b.handle)
+      addKey(this.targetHandleSet, b)
     }
     for (const b of (this.host.ballManager?.getBallBodies() || [])) {
-      this.ballHandleSet.add(b.handle)
+      addKey(this.ballHandleSet, b)
     }
 
     const flippers = this.host.gameObjects?.getAllFlippers() || new Map()
     for (const flipper of flippers.values()) {
-      this.flipperHandleSet.add(flipper.body.handle)
+      addKey(this.flipperHandleSet, flipper.body)
     }
 
     for (const b of (this.host.ballTrapBuilder?.getBodies() || [])) {
-      this.trapHandleSet.add(b.handle)
+      addKey(this.trapHandleSet, b)
     }
     for (const b of (this.host.movingGateBuilder?.getBodies() || [])) {
-      this.gateHandleSet.add(b.handle)
+      addKey(this.gateHandleSet, b)
     }
     for (const b of (this.host.launcherBuilder?.getBodies() || [])) {
-      this.launcherHandleSet.add(b.handle)
+      addKey(this.launcherHandleSet, b)
     }
     for (const b of (this.host.spinnerBuilder?.getBodies() || [])) {
-      this.spinnerHandleSet.add(b.handle)
+      addKey(this.spinnerHandleSet, b)
     }
 
     for (const sensor of (this.host.gameObjects?.getLaneSensors() || [])) {
-      this.laneSensorHandleMap.set(sensor.body.handle, sensor)
+      const key = keyOf(sensor.body)
+      if (key !== null) this.laneSensorHandleMap.set(key, sensor)
     }
 
     const dz = this.host.gameObjects?.getDeathZoneBody()
-    this.deathZoneHandle = dz ? dz.handle : -1
+    this.deathZoneHandle = dz ? keyOf(dz) : null
 
     const adventureSensor = this.host.adventureMode?.isActive()
       ? this.host.adventureMode.getSensor()
       : null
-    this.adventureSensorHandle = adventureSensor ? adventureSensor.handle : -1
+    this.adventureSensorHandle = adventureSensor ? keyOf(adventureSensor) : null
 
     // Portal sensor handles are registered/unregistered dynamically via
     // registerPortalSensor / unregisterPortalSensor and are intentionally NOT
@@ -279,8 +313,9 @@ export class CollisionDispatcher {
 
   /**
    * Handles contacts that originated in the WASM engine. The wrapper already emits
-   * these on the EventBus as 'wasm:physics:contact'; we just map WASM IDs back to
-   * the Rapier bodies that the rest of the game understands.
+   * these on the EventBus as 'wasm:physics:contact'; the bridge resolves each WASM
+   * public id to its body and dispatch key (the id itself in owner mode, the
+   * mirrored Rapier body's handle in mirror mode).
    *
    * Stay/Exit are ignored here — scoring and hit SFX are Enter-edge only, matching
    * Rapier's `started` filter.
@@ -289,19 +324,22 @@ export class CollisionDispatcher {
     if (!contactStarted(evt)) return
     const bridge = this.getWasmBridge()
     if (!bridge) return
+    // A re-export (table edit, adventure track switch) reassigns static ids.
+    if (bridge.keyOf && (bridge.getIdEpoch?.() ?? 0) !== this.cacheIdEpoch) this.rebuildHandleCaches()
 
-    const b1 = bridge.getRapierBody(evt.bodyId1)
-    const b2 = bridge.getRapierBody(evt.bodyId2)
-    if (!b1 || !b2) return
+    const r1 = bridge.resolveContactId(evt.bodyId1)
+    const r2 = bridge.resolveContactId(evt.bodyId2)
+    if (!r1 || !r2 || r1.body === r2.body) return
 
-    this.processBodyCollision(b1, b2, b1.handle, b2.handle)
+    this.processBodyCollision(r1.body, r2.body, r1.key, r2.key)
   }
 
   /**
    * Body-pair debounce + raw-event accounting, then obstacle/ball dispatch.
-   * Called both from the Rapier collider→body path and from the WASM contact path.
+   * Called both from the Rapier collider→body path and from the WASM contact path;
+   * `bh1`/`bh2` are the bodies' keys in the active key space.
    */
-  private processBodyCollision(b1: RAPIER.RigidBody, b2: RAPIER.RigidBody, bh1: number, bh2: number): void {
+  private processBodyCollision(b1: PhysicsBody, b2: PhysicsBody, bh1: number, bh2: number): void {
     this.rawCollisionEvents++
 
     const pairKey = bh1 < bh2 ? `${bh1}_${bh2}` : `${bh2}_${bh1}`
@@ -319,24 +357,24 @@ export class CollisionDispatcher {
    * identical regardless of backend.
    */
   private processCollisionBodies(
-    b1: RAPIER.RigidBody,
-    b2: RAPIER.RigidBody,
+    b1: PhysicsBody,
+    b2: PhysicsBody,
     bh1: number,
     bh2: number
   ): void {
-    // Pre-flight guards — special non-obstacle handles (now in body-handle space)
-    // Exit-portal sensors: contact is handled by the overlap test in
-    // AdventureMode.updateExitPortal(); skip here to avoid misrouting.
-    if (this.portalSensorHandleSet.has(bh1) || this.portalSensorHandleSet.has(bh2)) {
+    // Pre-flight guards — special non-obstacle bodies.
+    // Exit-portal sensors (registered by body handle): contact is handled by the
+    // overlap test in AdventureMode.updateExitPortal(); skip here to avoid misrouting.
+    if (this.portalSensorHandleSet.has(b1.handle) || this.portalSensorHandleSet.has(b2.handle)) {
       return
     }
 
-    if (this.adventureSensorHandle >= 0 && (bh1 === this.adventureSensorHandle || bh2 === this.adventureSensorHandle)) {
+    if (this.adventureSensorHandle !== null && (bh1 === this.adventureSensorHandle || bh2 === this.adventureSensorHandle)) {
       this.host.endAdventureMode()
       return
     }
 
-    if (this.deathZoneHandle >= 0 && (bh1 === this.deathZoneHandle || bh2 === this.deathZoneHandle)) {
+    if (this.deathZoneHandle !== null && (bh1 === this.deathZoneHandle || bh2 === this.deathZoneHandle)) {
       this.scoringBridge.handleBallLoss(bh1 === this.deathZoneHandle ? b2 : b1)
       return
     }
@@ -446,7 +484,7 @@ export class CollisionDispatcher {
     }
   }
 
-  getBallMeshForBody(body: RAPIER.RigidBody): Mesh | null {
+  getBallMeshForBody(body: PhysicsBody): Mesh | null {
     return lookupBallMeshForBody(this.host, body)
   }
 

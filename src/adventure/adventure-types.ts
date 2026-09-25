@@ -6,7 +6,7 @@
 
 import type { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import type { TrackInfo } from './adventure-track-progression'
 
 // Event callback signature for communicating with Game.ts
@@ -88,7 +88,7 @@ export const MASK_BLUE = GROUP_UNIVERSAL | GROUP_BLUE
  * Gravity well configuration
  */
 export interface GravityWell {
-  sensor: RAPIER.RigidBody
+  sensor: PhysicsBody
   center: Vector3
   strength: number
 }
@@ -97,7 +97,7 @@ export interface GravityWell {
  * Damping zone configuration for slowing balls
  */
 export interface DampingZone {
-  sensor: RAPIER.RigidBody
+  sensor: PhysicsBody
   damping: number
 }
 
@@ -105,7 +105,7 @@ export interface DampingZone {
  * Binding between physics body and visual mesh
  */
 export interface KinematicBinding {
-  body: RAPIER.RigidBody
+  body: PhysicsBody
   mesh: Mesh
 }
 
@@ -126,7 +126,7 @@ export interface AnimatedObstacle extends KinematicBinding {
  * Conveyor zone that applies force to balls
  */
 export interface ConveyorZone {
-  sensor: RAPIER.RigidBody
+  sensor: PhysicsBody
   force: Vector3
 }
 
@@ -134,7 +134,7 @@ export interface ConveyorZone {
  * Chroma gate that changes ball color state
  */
 export interface ChromaGate {
-  sensor: RAPIER.RigidBody
+  sensor: PhysicsBody
   colorType: 'RED' | 'GREEN' | 'BLUE'
 }
 
@@ -162,22 +162,22 @@ export interface CameraPreset {
  */
 export interface TrackBuilderContext {
   scene: import('@babylonjs/core/scene').Scene
-  world: RAPIER.World
-  rapier: typeof RAPIER
+  world: PhysicsWorldSink
+  rapier: PhysicsApi
   currentStartPos: Vector3
   /** Track metadata from the campaign catalog, or null for free-roam tracks. */
   currentTrackInfo: TrackInfo | null
   adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[]
   materials: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial[]
-  adventureBodies: RAPIER.RigidBody[]
+  adventureBodies: PhysicsBody[]
   kinematicBindings: KinematicBinding[]
   animatedObstacles: AnimatedObstacle[]
   conveyorZones: ConveyorZone[]
   gravityWells: GravityWell[]
   dampingZones: DampingZone[]
   chromaGates: ChromaGate[]
-  resetSensors: RAPIER.RigidBody[]
-  adventureSensor: RAPIER.RigidBody | null
+  resetSensors: PhysicsBody[]
+  adventureSensor: PhysicsBody | null
   getTrackMaterial: (colorHex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial
   addStraightRamp: (
     startPos: Vector3,
