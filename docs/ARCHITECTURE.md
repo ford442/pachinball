@@ -26,7 +26,7 @@ The codebase is organized into focused modules under `src/`. See [`AGENTS.md`](.
 | [`src/shaders/`](../src/shaders/) | Standalone WGSL/GLSL shaders (scanlines, LCD table, CRT, jackpot overlay) |
 | [`src/cabinet/`](../src/cabinet/) | Cabinet preset geometries (classic, neo, vertical, wide) |
 | [`src/adventure/`](../src/adventure/) | **Canonical** adventure track builders and `AdventureMode` orchestrator |
-| [`src/config.ts`](../src/config.ts) | Pure configuration (no Babylon imports) |
+| [`src/config/index.ts`](../src/config/index.ts) | Pure configuration (no Babylon imports) |
 
 ---
 
@@ -67,7 +67,7 @@ flowchart TB
 | [`src/game-elements/adventure-track-progression.ts`](../src/game-elements/adventure-track-progression.ts) | `TRACK_CATALOG`, `AdventureTrackProgression` — campaign spine metadata (mode type, timers, unlock chain) |
 | [`src/game-elements/adventure-progression-supervisor.ts`](../src/game-elements/adventure-progression-supervisor.ts) | Portal lifecycle + campaign state machine |
 | [`src/game-elements/zone-registry.ts`](../src/game-elements/zone-registry.ts) | Per-track theming / story / music metadata |
-| [`src/game-elements/adventure-state.ts`](../src/game-elements/adventure-state.ts) | **Legacy** level-select UI + cosmetic rewards only — not campaign truth |
+| [`src/adventure/adventure-state.ts`](../src/adventure/adventure-state.ts) | **Legacy** level-select UI + cosmetic rewards only — not campaign truth |
 | [`docs/ADVENTURE_CAMPAIGN.md`](ADVENTURE_CAMPAIGN.md) | Campaign A/B alternation reference |
 
 ### Campaign vs legacy progression
