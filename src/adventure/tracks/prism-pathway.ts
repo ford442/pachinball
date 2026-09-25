@@ -9,7 +9,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import { convexMeshDesc, cylinderDesc } from '../track-collider-descriptors'
 import { triangularPrismLayout } from '../track-geometry'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 
 export function buildPrismPathway(builder: TrackBuilder): void {
   const glassMat = (builder as unknown as { getTrackPBRMaterial: (hex: string) => import('@babylonjs/core/Materials/PBR/pbrMaterial').PBRMaterial }).getTrackPBRMaterial("#E0FFFF")
@@ -18,10 +18,10 @@ export function buildPrismPathway(builder: TrackBuilder): void {
 
   const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
   const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: RAPIER.World }).world
+  const world = (builder as unknown as { world: PhysicsWorldSink }).world
   const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
-  const adventureBodies = (builder as unknown as { adventureBodies: RAPIER.RigidBody[] }).adventureBodies
-  const animatedObstacles = (builder as unknown as { animatedObstacles: { body: RAPIER.RigidBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, frequency: number, amplitude: number, phase: number, axis?: Vector3 }[] }).animatedObstacles
+  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
+  const animatedObstacles = (builder as unknown as { animatedObstacles: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, frequency: number, amplitude: number, phase: number, axis?: Vector3 }[] }).animatedObstacles
 
   let currentPos = currentStartPos.clone()
   let heading = 0

@@ -3,7 +3,7 @@ import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { GameConfig } from '../config'
 import { KEEP_OUT_BOXES } from '../game-elements/daily-cascade-layout'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
@@ -19,17 +19,17 @@ function pinInKeepOut(x: number, z: number): boolean {
 
 export class PachinkoBuilder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
 
   private matLib: ReturnType<typeof getMaterialLibrary>
   private meshes: AbstractMesh[] = []
-  private bodies: RAPIER.RigidBody[] = []
+  private bodies: PhysicsBody[] = []
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
      
     _config: typeof GameConfig
   ) {
@@ -47,7 +47,7 @@ export class PachinkoBuilder {
     pinPositions?: { x: number; z: number }[],
   ): {
     bindings: PhysicsBinding[]
-    targetBodies: RAPIER.RigidBody[]
+    targetBodies: PhysicsBody[]
     targetMeshes: Mesh[]
     targetActive: boolean[]
     targetRespawnTimer: number[]
@@ -55,7 +55,7 @@ export class PachinkoBuilder {
     pins: AbstractMesh[]
   } {
     const bindings: PhysicsBinding[] = []
-    const targetBodies: RAPIER.RigidBody[] = []
+    const targetBodies: PhysicsBody[] = []
     const targetMeshes: Mesh[] = []
     const targetActive: boolean[] = []
     const targetRespawnTimer: number[] = []

@@ -5,7 +5,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { GameConfig } from '../../config'
 import { getSessionRngFork, RNG_FORK } from '../../core/seeded-rng'
 
@@ -21,17 +21,17 @@ export type QuantumTunnelCallback = (state: QuantumTunnelState) => void
 
 export class QuantumTunnelFeeder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
   private config: typeof GameConfig['quantumTunnel']
 
   private inputMesh: Mesh
   private outputMesh: Mesh
-  private inputSensor: RAPIER.RigidBody | null = null
+  private inputSensor: PhysicsBody | null = null
 
   private state: QuantumTunnelState = QuantumTunnelState.IDLE
   private stateTimer: number = 0
-  private capturedBall: RAPIER.RigidBody | null = null
+  private capturedBall: PhysicsBody | null = null
   private gameplayEnabled = true
 
   // Follow-through animation: Smooth portal spin acceleration
@@ -53,8 +53,8 @@ export class QuantumTunnelFeeder {
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
     config: typeof GameConfig['quantumTunnel']
   ) {
     this.scene = scene
@@ -114,7 +114,7 @@ export class QuantumTunnelFeeder {
     this.world.createCollider(colliderDesc, this.inputSensor)
   }
 
-  public update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+  public update(dt: number, ballBodies: PhysicsBody[]): void {
     if (!this.gameplayEnabled) return
     this.stateTimer += dt
 
@@ -170,7 +170,7 @@ export class QuantumTunnelFeeder {
     }
   }
 
-  private updateIdle(ballBodies: RAPIER.RigidBody[]): void {
+  private updateIdle(ballBodies: PhysicsBody[]): void {
     if (!this.inputSensor) return
 
     const sensorHandle = this.inputSensor.collider(0)

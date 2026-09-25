@@ -7,24 +7,24 @@
  * geometry lands; lane points accrue on the Rapier collision path only.
  */
 
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { GameConfig, type LaneRolloverKind } from '../config'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 
 export interface LaneSensorDef {
   id: string
   kind: LaneRolloverKind
-  body: RAPIER.RigidBody
+  body: PhysicsBody
   position: { x: number; y: number; z: number }
 }
 
 export class LaneSensorBuilder {
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
   private sensors: LaneSensorDef[] = []
-  private bodies: RAPIER.RigidBody[] = []
+  private bodies: PhysicsBody[] = []
 
-  constructor(world: RAPIER.World, rapier: typeof RAPIER) {
+  constructor(world: PhysicsWorldSink, rapier: PhysicsApi) {
     this.world = world
     this.rapier = rapier
   }
@@ -68,7 +68,7 @@ export class LaneSensorBuilder {
     return this.sensors
   }
 
-  getBodies(): RAPIER.RigidBody[] {
+  getBodies(): PhysicsBody[] {
     return this.bodies
   }
 

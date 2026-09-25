@@ -7,7 +7,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import type { GameConfigType } from '../../config'
 
 export enum GaussCannonState {
@@ -20,8 +20,8 @@ export enum GaussCannonState {
 
 export class GaussCannonFeeder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
   private config: GameConfigType['gaussCannon']
 
   private position: Vector3
@@ -40,8 +40,8 @@ export class GaussCannonFeeder {
   // Coil stretch animation
   private coilPulsePhase: number = 0
 
-  private caughtBall: RAPIER.RigidBody | null = null
-  private physicsBody: RAPIER.RigidBody | null = null
+  private caughtBall: PhysicsBody | null = null
+  private physicsBody: PhysicsBody | null = null
 
   // Follow-through animation: Barrel recoil with spring physics
   private barrelRecoilOffset: number = 0
@@ -55,8 +55,8 @@ export class GaussCannonFeeder {
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
     config: GameConfigType['gaussCannon']
   ) {
     this.scene = scene
@@ -170,7 +170,7 @@ export class GaussCannonFeeder {
     )
   }
 
-  update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+  update(dt: number, ballBodies: PhysicsBody[]): void {
     if (!this.gameplayEnabled) return
     this.timer -= dt
 
@@ -323,7 +323,7 @@ export class GaussCannonFeeder {
        }
   }
 
-  private checkProximity(ballBodies: RAPIER.RigidBody[]): void {
+  private checkProximity(ballBodies: PhysicsBody[]): void {
     const PULL_RADIUS = this.config.intakeRadius || 1.0
 
     for (const body of ballBodies) {
@@ -341,7 +341,7 @@ export class GaussCannonFeeder {
     }
   }
 
-  private captureBall(body: RAPIER.RigidBody): void {
+  private captureBall(body: PhysicsBody): void {
     this.caughtBall = body
     body.setBodyType(this.rapier.RigidBodyType.KinematicPositionBased, true)
     this.setState(GaussCannonState.LOAD)

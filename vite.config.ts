@@ -27,6 +27,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          // Only the degrade / explicit-`rapier` path imports this, and only via
+          // loadRapier()'s dynamic import (#412) — it is never in the entry graph.
           if (id.includes('@dimforge/rapier3d-compat')) return 'rapier'
           if (id.includes('@babylonjs/loaders')) return 'babylon-loaders'
           if (id.includes('node_modules/@babylonjs/core')) return 'babylon-core'
@@ -86,7 +88,7 @@ export default defineConfig({
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api\//],
         cleanupOutdatedCaches: true,
-        // Main bundle + Rapier WASM chunk exceed Workbox's 2 MiB default
+        // babylon-core exceeds Workbox's 2 MiB default
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         globPatterns: [
           '**/*.{js,css,html,wasm,svg,png,ogg,env,webp,ico,txt,webmanifest}',
@@ -97,6 +99,9 @@ export default defineConfig({
           '**/backbox/*.webm',
           // Classic-cabinet glTF loader — fetched on first classic preset use
           '**/babylon-loaders-*.js',
+          // Rapier (~2.15 MB): only the explicit `rapier` mode and the fail-closed
+          // degrade (C++ bundle missing) load it; the C++ bundle is precached instead (#412)
+          '**/rapier-*.js',
           // Leaderboard / name-entry / level-select overlays
           '**/ui-overlays-*.js',
           // Per-track adventure builders (dynamic import)

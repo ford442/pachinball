@@ -157,11 +157,10 @@ test.describe('wasm-owner adventure: synthwave-surf runs without Rapier', () => 
     // Drop the ball onto the first ramp and let it run.
     const placed = await page.evaluate(() => {
       const g = (window as unknown as AdventureHooks).game
-      const rapier = g?.physics?.getRapier?.()
       const ball = g?.ballManager?.getBallBody?.()
-      if (!rapier || !ball) return false
-      ball.setTranslation(new rapier.Vector3(0, 2, 1), true)
-      ball.setLinvel(new rapier.Vector3(0, 0, 0), true)
+      if (!ball) return false
+      ball.setTranslation({ x: 0, y: 2, z: 1 }, true)
+      ball.setLinvel({ x: 0, y: 0, z: 0 }, true)
       g?.physicsController?.rebuildHandleCaches?.()
       return true
     })

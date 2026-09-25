@@ -17,6 +17,7 @@ export type GameObjectsStubOverrides = {
   getBindings?: ReturnType<typeof vi.fn>
   getAllFlippers?: ReturnType<typeof vi.fn>
   getDeathZoneBody?: ReturnType<typeof vi.fn>
+  getWasmExportBodies?: ReturnType<typeof vi.fn>
   updateBumpers?: ReturnType<typeof vi.fn>
   updateTargets?: ReturnType<typeof vi.fn>
   activateBumperHit?: ReturnType<typeof vi.fn>
@@ -32,6 +33,7 @@ export function makeGameObjectsStub(overrides: GameObjectsStubOverrides = {}) {
     getLaneSensors: overrides.getLaneSensors ?? vi.fn(() => []),
     getAllFlippers: overrides.getAllFlippers ?? vi.fn(() => new Map()),
     getDeathZoneBody: overrides.getDeathZoneBody ?? vi.fn(() => null),
+    getWasmExportBodies: overrides.getWasmExportBodies ?? vi.fn(() => []),
     updateBumpers: overrides.updateBumpers ?? vi.fn(),
     updateTargets: overrides.updateTargets ?? vi.fn(),
     activateBumperHit: overrides.activateBumperHit ?? vi.fn(),

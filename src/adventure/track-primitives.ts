@@ -18,7 +18,7 @@ import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../core/physics-api'
 
 import type {
   ChromaGate,
@@ -54,16 +54,16 @@ export interface TrackPrimitiveContext {
   /** False when there is no Rapier world — primitives become no-ops. */
   hasWorld: boolean
   adventureTrack: Mesh[]
-  adventureBodies: RAPIER.RigidBody[]
+  adventureBodies: PhysicsBody[]
   kinematicBindings: KinematicBinding[]
   gravityWells: GravityWell[]
   chromaGates: ChromaGate[]
-  resetSensors: RAPIER.RigidBody[]
+  resetSensors: PhysicsBody[]
   materials: TrackMaterial[]
   emit: (desc: AdventureColliderDesc) => EmittedCollider
   attach: (parent: EmittedCollider, desc: AdventureColliderDesc) => void
   getTrackMaterial: (colorHex: string) => StandardMaterial
-  setGoalSensor: (body: RAPIER.RigidBody) => void
+  setGoalSensor: (body: PhysicsBody) => void
 }
 
 /** Quaternion for a Babylon YXZ Euler triple, as a plain descriptor quat. */
@@ -530,7 +530,7 @@ export interface ExitPortalParts {
   core: Mesh
   ringMaterial: StandardMaterial
   coreMaterial: StandardMaterial
-  sensor: RAPIER.RigidBody
+  sensor: PhysicsBody
 }
 
 /** Visual exit portal plus its goal sensor. */

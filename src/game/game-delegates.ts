@@ -1,5 +1,4 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 import { GameState, GhostBallRenderer, CameraMode, detectAccessibility, getDailyCascadeState, type FeederKey } from '../game-elements'
 import type { CabinetType } from '../cabinet'
@@ -150,9 +149,6 @@ export abstract class GameDelegates extends GameFields {
   updatePlungerCharge(chargeLevel: number): void { this.inputActions.updatePlungerCharge(chargeLevel) }
   releasePlungerCharge(chargeLevel: number): void { this.inputActions.releasePlungerCharge(chargeLevel) }
   applyNudge(direction: { x: number; y: number; z: number }): void { this.physicsController.applyNudge(direction) }
-  applyOwnedBallImpulse(body: RAPIER.RigidBody, ix: number, iy: number, iz: number): void {
-    this.physicsController.applyOwnedBallImpulse(body, ix, iy, iz)
-  }
 
   // --------------------------------------------------------------------------
   // Adventure / Mode delegates

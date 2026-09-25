@@ -83,9 +83,10 @@ export class GameSystemsInitializer {
   public async initAll(): Promise<void> {
     if (!this.game.scene) throw new Error('Scene not ready')
     const scene = this.game.scene
+    if (!this.game.physics.isReady()) throw new Error('Physics not ready')
+    // The C++ owner's table world + descriptor API, or Rapier on the explicit/degrade path.
     const world = this.game.physics.getWorld()
-    const rapier = this.game.physics.getRapier()
-    if (!world || !rapier) throw new Error('Physics not ready')
+    const rapier = this.game.physics.getPhysicsApi()
 
     this.game.uiManager?.showLoadingState(true, { label: 'LOADING...', progress: 0 })
     this.game.uiManager?.setStartButtonEnabled(false)

@@ -2,7 +2,7 @@
  * Game Input Actions — Flipper, plunger, and nudge input handlers.
  */
 
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsRevoluteJoint } from '../core/physics-api'
 import type { PhysicsSystem } from '../game-elements/physics'
 import type { GameObjects } from '../objects'
 import type { HapticManager } from '../game-elements/haptics'
@@ -27,7 +27,6 @@ export interface InputActionsHost {
   tiltActive: boolean
 
   /** Route a ball impulse into WASM when wasm-owner is simulating the ball. */
-  applyOwnedBallImpulse?(body: RAPIER.RigidBody, ix: number, iy: number, iz: number): void
 }
 
 export class GameInputActions {
@@ -100,7 +99,7 @@ export class GameInputActions {
       const stiffness = getPhysicsTuningValue('flipperStiffness') * stiffnessMultiplier
       const damping = getPhysicsTuningValue('flipperDamping') * dampingMultiplier
       const angle = pressed ? -PhysicsConfig.flipper.activeAngleRad : PhysicsConfig.flipper.restAngleRad
-      ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
+      ;(joint as PhysicsRevoluteJoint).configureMotorPosition(angle, stiffness, damping)
       // Ensure the body is awake so the motor takes effect this step and visual sync sees the pose
       const fl = gameObjects?.getAllFlippers?.().get('left')
       fl?.body?.wakeUp()
@@ -145,7 +144,7 @@ export class GameInputActions {
       const stiffness = getPhysicsTuningValue('flipperStiffness') * stiffnessMultiplier
       const damping = getPhysicsTuningValue('flipperDamping') * dampingMultiplier
       const angle = pressed ? PhysicsConfig.flipper.activeAngleRad : -PhysicsConfig.flipper.restAngleRad
-      ;(joint as RAPIER.RevoluteImpulseJoint).configureMotorPosition(angle, stiffness, damping)
+      ;(joint as PhysicsRevoluteJoint).configureMotorPosition(angle, stiffness, damping)
       // Ensure the body is awake so the motor takes effect this step and visual sync sees the pose
       const fr = gameObjects?.getAllFlippers?.().get('right')
       fr?.body?.wakeUp()
@@ -158,10 +157,9 @@ export class GameInputActions {
   }
 
   handlePlunger(): boolean {
-    const rapier = this.host.physics.getRapier()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ballBody = (this.host as any).ballManager?.getBallBody?.()
-    if (!ballBody || !rapier) return false
+    if (!ballBody) return false
 
     const pos = ballBody.translation()
     if (pos.x > 8 && pos.z < -4) {
@@ -181,8 +179,7 @@ export class GameInputActions {
       this.plungerLaunchState.strikeZ = restZ + overshoot
 
       // Direct impulse for reliable launch (primary mechanism)
-      ballBody.applyImpulse(new rapier.Vector3(0, 0, impulseMagnitude), true)
-      this.host.applyOwnedBallImpulse?.(ballBody, 0, 0, impulseMagnitude)
+      ballBody.applyImpulse({ x: 0, y: 0, z: impulseMagnitude }, true)
 
       const hapticIntensity = 30 + Math.floor(chargeRatio * 40)
       this.host.hapticManager?.trigger([hapticIntensity, 10, Math.floor(hapticIntensity / 2)])
@@ -250,15 +247,12 @@ export class GameInputActions {
     const gameObjects = this.host.gameObjects
     const plungerBody = gameObjects?.getPlungerBody?.()
     if (plungerBody) {
-      const rapier = this.host.physics.getRapier()
-      if (rapier) {
-        const restZ = gameObjects!.getPlungerRestZ()
-        const maxPullback = GameConfig.plunger.maxPullbackDistance
-        const pullback = chargeLevel * maxPullback
-        plungerBody.setNextKinematicTranslation(
-          new rapier.Vector3(GameInputActions.PLUNGER_X, GameInputActions.PLUNGER_Y, restZ - pullback)
-        )
-      }
+      const restZ = gameObjects!.getPlungerRestZ()
+      const maxPullback = GameConfig.plunger.maxPullbackDistance
+      const pullback = chargeLevel * maxPullback
+      plungerBody.setNextKinematicTranslation(
+        { x: GameInputActions.PLUNGER_X, y: GameInputActions.PLUNGER_Y, z: restZ - pullback }
+      )
     }
   }
 
@@ -278,7 +272,6 @@ export class GameInputActions {
     const plungerKnob = scene?.getMeshByName('plungerKnob')
 
     const gameObjects = this.host.gameObjects
-    const rapier = this.host.physics.getRapier()
     const plungerBody = gameObjects?.getPlungerBody?.()
     const restZ = gameObjects?.getPlungerRestZ() ?? -9.8
 
@@ -286,9 +279,9 @@ export class GameInputActions {
       const visualOffset = bodyZ - restZ
       if (shooterRod) shooterRod.position.z = GameInputActions.ROD_BASE_Z + visualOffset
       if (plungerKnob) plungerKnob.position.z = GameInputActions.KNOB_BASE_Z + visualOffset
-      if (plungerBody && rapier) {
+      if (plungerBody) {
         plungerBody.setNextKinematicTranslation(
-          new rapier.Vector3(GameInputActions.PLUNGER_X, GameInputActions.PLUNGER_Y, bodyZ)
+          { x: GameInputActions.PLUNGER_X, y: GameInputActions.PLUNGER_Y, z: bodyZ }
         )
       }
     }
@@ -349,15 +342,14 @@ export class GameInputActions {
     const shooterRod = scene?.getMeshByName('shooterRod')
     const plungerKnob = scene?.getMeshByName('plungerKnob')
     const gameObjects = this.host.gameObjects
-    const rapier = this.host.physics.getRapier()
     const plungerBody = gameObjects?.getPlungerBody?.()
     const restZ = gameObjects?.getPlungerRestZ() ?? -9.8
 
     if (shooterRod) shooterRod.position.z = GameInputActions.ROD_BASE_Z
     if (plungerKnob) plungerKnob.position.z = GameInputActions.KNOB_BASE_Z
-    if (plungerBody && rapier) {
+    if (plungerBody) {
       plungerBody.setNextKinematicTranslation(
-        new rapier.Vector3(GameInputActions.PLUNGER_X, GameInputActions.PLUNGER_Y, restZ)
+        { x: GameInputActions.PLUNGER_X, y: GameInputActions.PLUNGER_Y, z: restZ }
       )
     }
 

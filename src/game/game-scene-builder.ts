@@ -155,9 +155,9 @@ export class GameSceneBuilder {
     ground.position.set(0, -1, 5)
     ground.material = lcdMat
 
-    const physicsWorld = physics.getWorld()
-    const rapier = physics.getRapier()
-    if (physicsWorld && rapier) {
+    if (physics.isReady()) {
+      const physicsWorld = physics.getWorld()
+      const rapier = physics.getPhysicsApi()
       const groundBody = physicsWorld.createRigidBody(
         rapier.RigidBodyDesc.fixed().setTranslation(0, -1, 5)
       )

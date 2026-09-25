@@ -3,7 +3,7 @@ import type { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody, PhysicsImpulseJoint } from '../core/physics-api'
 
 export interface FlipperConfig {
   position: Vector3
@@ -33,7 +33,7 @@ export interface RailConfig {
 }
 
 export interface GameObjectRefs {
-  flippers: Map<string, { mesh: TransformNode; body: RAPIER.RigidBody; joint: RAPIER.ImpulseJoint }>
+  flippers: Map<string, { mesh: TransformNode; body: PhysicsBody; joint: PhysicsImpulseJoint }>
   bumpers: Map<string, Mesh>
   walls: Mesh[]
   rails: Mesh[]

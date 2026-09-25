@@ -168,6 +168,9 @@ export class GameSlotAdventure {
       const pinballMeshes = this.host.gameObjects?.getPinballMeshes() || []
       pinballMeshes.forEach(m => m.setEnabled(false))
       this.host.gameObjects?.setTableBodiesEnabled(false)
+      // BallManager shares GameObjects' bindings array, so disabling the table
+      // also caught the balls — which the adventure is about to play.
+      for (const ball of this.host.ballManager?.getBallBodies() ?? []) ball.setEnabled(true)
 
       const track = this.nextAdventureTrack
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

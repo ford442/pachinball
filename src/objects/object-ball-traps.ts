@@ -6,7 +6,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { GAME_TUNING } from '../config'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getPhysicsTuningValue } from '../game-elements/physics-tuning'
@@ -20,10 +20,10 @@ import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 
 export interface BallTrapState {
   mesh: Mesh
-  body: RAPIER.RigidBody
+  body: PhysicsBody
   id: string
   trapGate: Mesh
-  caughtBall: RAPIER.RigidBody | null
+  caughtBall: PhysicsBody | null
   holdTimer: number
   holdDuration: number
   isOpen: boolean
@@ -33,14 +33,14 @@ export interface BallTrapState {
 
 export class BallTrapBuilder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
   private matLib: ReturnType<typeof getMaterialLibrary>
   private eventBus: ObstacleEventBusIntegration | null = null
   private zoneTriggerSystem: ZoneTriggerSystem | null = null
   private trapCounter: number = 0
   private meshes: Mesh[] = []
-  private bodies: RAPIER.RigidBody[] = []
+  private bodies: PhysicsBody[] = []
   private nodes: TransformNode[] = []
   private materials: StandardMaterial[] = []
   private qualityTier: QualityTier
@@ -49,8 +49,8 @@ export class BallTrapBuilder {
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
     qualityTier: QualityTier = QualityTier.MEDIUM,
   ) {
     this.scene = scene
@@ -201,7 +201,7 @@ export class BallTrapBuilder {
   /**
    * Update trap state (release timing)
    */
-  updateTrap(state: BallTrapState, dt: number): RAPIER.RigidBody | null {
+  updateTrap(state: BallTrapState, dt: number): PhysicsBody | null {
     // Hit-flash decay over the trap entrance material
     if (state.hitTime > 0) {
       state.hitTime -= dt
@@ -260,7 +260,7 @@ export class BallTrapBuilder {
   /**
    * Catch a ball in the trap
    */
-  catchBall(state: BallTrapState, ball: RAPIER.RigidBody, ballPosition?: Vector3): void {
+  catchBall(state: BallTrapState, ball: PhysicsBody, ballPosition?: Vector3): void {
     if (!state.caughtBall) {
       state.caughtBall = ball
       state.holdTimer = 0
@@ -298,7 +298,7 @@ export class BallTrapBuilder {
   /**
    * Release ball with boosted velocity
    */
-  releaseBallWithBoost(state: BallTrapState, ball: RAPIER.RigidBody): void {
+  releaseBallWithBoost(state: BallTrapState, ball: PhysicsBody): void {
     state.hitTime = 0.2
     const boostForce = getPhysicsTuningValue('trapReleaseBoost')
     const rng = getSessionRngFork(RNG_FORK.TRAP)
@@ -331,7 +331,7 @@ export class BallTrapBuilder {
   /**
    * Return all Rapier rigid bodies created by this builder.
    */
-  getBodies(): RAPIER.RigidBody[] {
+  getBodies(): PhysicsBody[] {
     return this.bodies
   }
 

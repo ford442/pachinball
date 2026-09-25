@@ -3,7 +3,7 @@
     "entryGzipMaxKb": 200,
     "babylonCoreGzipMaxKb": 680,
     "rapierGzipMaxKb": 800,
-    "precacheTotalKiBMax": 8300
+    "precacheTotalKiBMax": 6400
   },
   "tolerancePercent": 5
 }

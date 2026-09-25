@@ -1,22 +1,22 @@
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { getMaterialLibrary } from '../../materials'
 
 import type { PathMechanicConfig } from './types'
 
 export abstract class PathMechanic {
   protected scene: Scene
-  protected world: RAPIER.World
-  protected rapier: typeof RAPIER
+  protected world: PhysicsWorldSink
+  protected rapier: PhysicsApi
   protected rootNode: TransformNode
   protected isSpawned = false
   protected mapBaseColor: string
   protected mapAccentColor: string
   protected neonMaterial: PBRMaterial
 
-  constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER) {
+  constructor(scene: Scene, world: PhysicsWorldSink, rapier: PhysicsApi) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
@@ -29,7 +29,7 @@ export abstract class PathMechanic {
 
   abstract spawn(config: PathMechanicConfig): void
   abstract despawn(): void
-  abstract update(dt: number, ballBodies: RAPIER.RigidBody[]): void
+  abstract update(dt: number, ballBodies: PhysicsBody[]): void
 
   setMapColors(baseColor: string, accentColor: string): void {
     this.mapBaseColor = baseColor

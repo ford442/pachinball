@@ -11,7 +11,7 @@
  * into the C++ engine.
  */
 
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsColliderDesc, PhysicsRigidBodyDesc, PhysicsWorldSink } from '../core/physics-api'
 
 import {
   descCollisionGroups,
@@ -20,7 +20,7 @@ import {
 
 /** A descriptor that has been realised as a Rapier body. */
 export interface EmittedCollider {
-  body: RAPIER.RigidBody
+  body: PhysicsBody
   /** Index of the descriptor in the emitter's list — the `parentIndex` anchor. */
   index: number
 }
@@ -28,13 +28,13 @@ export interface EmittedCollider {
 export class TrackColliderEmitter {
   private readonly descriptors: AdventureColliderDesc[] = []
   /** Descriptor index of each body this emitter created, for attach() lookups. */
-  private readonly bodyIndex = new Map<RAPIER.RigidBody, number>()
+  private readonly bodyIndex = new Map<PhysicsBody, number>()
   /** The reverse: the Rapier body a descriptor was realised as. */
-  private readonly bodyByIndex = new Map<number, RAPIER.RigidBody>()
+  private readonly bodyByIndex = new Map<number, PhysicsBody>()
 
   constructor(
-    private readonly world: RAPIER.World,
-    private readonly rapier: typeof RAPIER
+    private readonly world: PhysicsWorldSink,
+    private readonly rapier: PhysicsApi
   ) {}
 
   /** Descriptors recorded so far, in emission order. */
@@ -52,7 +52,7 @@ export class TrackColliderEmitter {
    * The Rapier body a descriptor was realised as. Attached descriptors
    * resolve to their parent's body, which is the body their collider lives on.
    */
-  bodyForDescriptor(index: number): RAPIER.RigidBody | null {
+  bodyForDescriptor(index: number): PhysicsBody | null {
     const direct = this.bodyByIndex.get(index)
     if (direct) return direct
     const parentIndex = this.descriptors[index]?.parentIndex
@@ -64,7 +64,7 @@ export class TrackColliderEmitter {
    * to it) ahead of the caller removing the body from the Rapier world.
    * Returns whether anything was recorded for it.
    */
-  retireBody(body: RAPIER.RigidBody): boolean {
+  retireBody(body: PhysicsBody): boolean {
     const index = this.bodyIndex.get(body)
     if (index === undefined) return false
     this.descriptors.forEach((desc, i) => {
@@ -76,7 +76,7 @@ export class TrackColliderEmitter {
   }
 
   /** Resolve a body this emitter created back to its descriptor anchor. */
-  find(body: RAPIER.RigidBody): EmittedCollider | null {
+  find(body: PhysicsBody): EmittedCollider | null {
     const index = this.bodyIndex.get(body)
     return index === undefined ? null : { body, index }
   }
@@ -86,7 +86,7 @@ export class TrackColliderEmitter {
     const index = this.descriptors.length
     this.descriptors.push(desc)
 
-    const body: RAPIER.RigidBody = this.world.createRigidBody(
+    const body: PhysicsBody = this.world.createRigidBody(
       this.bodyDesc(desc)
         .setTranslation(desc.position.x, desc.position.y, desc.position.z)
         .setRotation(desc.rotation)
@@ -105,20 +105,20 @@ export class TrackColliderEmitter {
    * Record a descriptor as an extra collider on an already-emitted body. Its
    * position/rotation are body-local (the rotating platform's teeth).
    */
-  attach(parent: EmittedCollider | RAPIER.RigidBody, desc: AdventureColliderDesc): void {
+  attach(parent: EmittedCollider | PhysicsBody, desc: AdventureColliderDesc): void {
     const resolved = 'index' in parent ? parent : this.find(parent)
     if (!resolved) {
       // A body this emitter did not create (or a torn-down track): still
       // build the Rapier collider, but do not record an unanchored
       // descriptor the C++ exporter could not place.
-      this.world.createCollider(this.colliderDesc(desc, true), parent as RAPIER.RigidBody)
+      this.world.createCollider(this.colliderDesc(desc, true), parent as PhysicsBody)
       return
     }
     this.descriptors.push({ ...desc, parentIndex: resolved.index })
     this.world.createCollider(this.colliderDesc(desc, true), resolved.body)
   }
 
-  private bodyDesc(desc: AdventureColliderDesc): RAPIER.RigidBodyDesc {
+  private bodyDesc(desc: AdventureColliderDesc): PhysicsRigidBodyDesc {
     switch (desc.motion) {
       case 'kinematic-position':
         return this.rapier.RigidBodyDesc.kinematicPositionBased()
@@ -131,8 +131,8 @@ export class TrackColliderEmitter {
     }
   }
 
-  private colliderDesc(desc: AdventureColliderDesc, local: boolean): RAPIER.ColliderDesc {
-    let shape: RAPIER.ColliderDesc
+  private colliderDesc(desc: AdventureColliderDesc, local: boolean): PhysicsColliderDesc {
+    let shape: PhysicsColliderDesc
     switch (desc.kind) {
       case 'box': {
         const h = desc.halfExtents ?? { x: 0.5, y: 0.5, z: 0.5 }

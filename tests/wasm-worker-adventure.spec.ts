@@ -68,10 +68,8 @@ async function playTrackInWorker(page: Page) {
       return err instanceof Error ? err.message : String(err)
     }
     g.physicsController?.rebuildHandleCaches?.()
-    const rapier = g.physics?.getRapier?.()
-    if (!rapier) return 'rapier missing'
-    ball.setTranslation(new rapier.Vector3(0, 2, 1), true)
-    ball.setLinvel(new rapier.Vector3(0, 0, 0), true)
+    ball.setTranslation({ x: 0, y: 2, z: 1 }, true)
+    ball.setLinvel({ x: 0, y: 0, z: 0 }, true)
     g.physicsController?.rebuildHandleCaches?.()
     return g.adventureMode.isActive() ? null : 'adventure did not start'
   }, TRACK)

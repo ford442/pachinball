@@ -6,20 +6,26 @@ import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import { exposeRenderer } from './renderers/renderer-selector'
 import { applyHardwareScaling, resolveEngineOptions } from './engine/engine-options'
 import { createEngine, isWebGPUEngine } from './engine/create-engine'
-import { scheduleIdleWasmPreload } from './engine/wasm-idle-preload'
+import { preloadWasmPhysicsNow, scheduleIdleWasmPreload } from './engine/wasm-idle-preload'
+import { getWasmPhysicsRuntimeMode, runtimeModeUsesRapier } from './config'
+import { loadRapier } from './game-elements/rapier-loader'
 import { VisibilityManager } from './engine/visibility-manager'
 import { formatGpuProbeSummary } from './engine/gpu-degrade-telemetry'
 import { registerServiceWorker } from './pwa'
 
 /**
- * Preload physics WASM in parallel with engine creation.
- * This overlaps the WASM fetch with engine initialization for faster startup.
- * @returns Promise that resolves with the initialized Rapier module
+ * Start the physics download in parallel with engine creation.
+ *
+ * The production modes (`wasm-owner` / `wasm-worker`) fetch and compile only
+ * the C++ bundle; Rapier is never imported on that path (#412), and
+ * `PhysicsSystem.init()` loads it lazily if the bundle turns out to be
+ * missing. The explicit `rapier` / `wasm-mirror` modes still warm Rapier here.
+ * @returns Rapier when the selected mode simulates on it, else undefined
  */
-async function preloadPhysics(): Promise<typeof RAPIER> {
-  const rapier = await import('@dimforge/rapier3d-compat')
-  await (rapier.init as unknown as () => Promise<void>)()
-  return rapier
+async function preloadPhysics(): Promise<typeof RAPIER | undefined> {
+  if (runtimeModeUsesRapier(getWasmPhysicsRuntimeMode())) return loadRapier()
+  preloadWasmPhysicsNow()
+  return undefined
 }
 
 async function bootstrap(): Promise<void> {
@@ -36,7 +42,7 @@ async function bootstrap(): Promise<void> {
   const [engine, preloadedRapier] = await Promise.all([
     createEngine(canvas),
     preloadPhysics(),
-  ]) as [Engine | WebGPUEngine, typeof RAPIER]
+  ]) as [Engine | WebGPUEngine, typeof RAPIER | undefined]
 
   console.timeEnd('[Bootstrap] Engine + Physics parallel init')
   console.time('[Bootstrap] Game init')
@@ -137,7 +143,7 @@ async function bootstrap(): Promise<void> {
 
   console.timeEnd('[Bootstrap] Game init')
   console.timeEnd('[Bootstrap] Total initialization')
-  console.log('[Bootstrap] Physics WASM preloading completed successfully')
+  console.log(`[Bootstrap] Physics ready (${(window as unknown as { currentPhysicsEngine?: string }).currentPhysicsEngine ?? 'unknown'})`)
 
   // Setup canvas resize handling
   setupResizeHandler(canvas, engine)

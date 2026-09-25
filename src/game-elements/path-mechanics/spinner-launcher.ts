@@ -1,7 +1,7 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../../core/physics-api'
 import { getMaterialLibrary } from '../../materials'
 import { getSessionRngFork, RNG_FORK } from '../../core/seeded-rng'
 import type { SpinnerLauncherConfig } from './types'
@@ -11,7 +11,7 @@ export class SpinnerLauncher extends PathMechanic {
   private spinnerMesh: Mesh | null = null
   private spinnerBlades: Mesh[] = []
   private baseMesh: Mesh | null = null
-  private physicsBody: RAPIER.RigidBody | null = null
+  private physicsBody: PhysicsBody | null = null
   private position = Vector3.Zero()
   private spinnerRadius = 2
   private launchForce = 25
@@ -107,7 +107,7 @@ export class SpinnerLauncher extends PathMechanic {
     )
   }
 
-  update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+  update(dt: number, ballBodies: PhysicsBody[]): void {
     if (!this.isSpawned) return
 
     this.launchCooldown = Math.max(0, this.launchCooldown - dt)
@@ -146,7 +146,7 @@ export class SpinnerLauncher extends PathMechanic {
     }
   }
 
-  private launchBall(ball: RAPIER.RigidBody): void {
+  private launchBall(ball: PhysicsBody): void {
     this.hasLaunched = true
     this.launchCooldown = 1.5
 

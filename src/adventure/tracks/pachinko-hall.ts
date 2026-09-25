@@ -9,7 +9,7 @@ import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import type { TrackInfo } from '../adventure-track-progression'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import {
   boxDesc,
   cylinderDesc,
@@ -19,13 +19,13 @@ import type { EmittedCollider } from '../track-collider-emitter'
 
 type BuilderCtx = {
   scene: import('@babylonjs/core/scene').Scene
-  world: RAPIER.World
-  rapier: typeof RAPIER
+  world: PhysicsWorldSink
+  rapier: PhysicsApi
   currentStartPos: Vector3
   currentTrackInfo: TrackInfo | null
   adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[]
-  adventureBodies: RAPIER.RigidBody[]
-  conveyorZones: { sensor: RAPIER.RigidBody; force: Vector3 }[]
+  adventureBodies: PhysicsBody[]
+  conveyorZones: { sensor: PhysicsBody; force: Vector3 }[]
   getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial
   addStraightRamp: (...args: unknown[]) => Vector3
   addCurvedRamp: (...args: unknown[]) => Vector3

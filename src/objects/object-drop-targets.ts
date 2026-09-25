@@ -2,7 +2,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
@@ -10,7 +10,7 @@ import { PALETTE } from '../game-elements/visual-language'
 
 export interface DropTargetState {
   mesh: Mesh
-  body: RAPIER.RigidBody
+  body: PhysicsBody
   isDropped: boolean
   dropTimer: number
   dropDuration: number
@@ -31,17 +31,17 @@ export interface DropTargetBank {
 
 export class DropTargetBuilder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
   private matLib: ReturnType<typeof getMaterialLibrary>
   private meshes: Mesh[] = []
   private roots: TransformNode[] = []
-  private bodies: RAPIER.RigidBody[] = []
+  private bodies: PhysicsBody[] = []
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
   ) {
     this.scene = scene
     this.world = world

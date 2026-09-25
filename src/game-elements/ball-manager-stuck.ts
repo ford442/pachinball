@@ -1,4 +1,4 @@
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../core/physics-api'
 import type { BallManagerHost } from './ball-manager-context'
 
 /** Threshold: if ball moves less than this per second, it may be stuck */
@@ -11,8 +11,8 @@ export const STUCK_TIMEOUT = 5.0
  * Stuck balls are auto-reset after STUCK_TIMEOUT seconds.
  * Out-of-bounds balls are immediately respawned.
  */
-export function updateStuckDetection(host: BallManagerHost, dt: number): RAPIER.RigidBody[] {
-  const stuckBalls: RAPIER.RigidBody[] = []
+export function updateStuckDetection(host: BallManagerHost, dt: number): PhysicsBody[] {
+  const stuckBalls: PhysicsBody[] = []
 
   for (const body of host.ballBodies) {
     if (body.isSleeping()) continue

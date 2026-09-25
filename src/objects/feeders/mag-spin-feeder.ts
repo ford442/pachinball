@@ -7,7 +7,7 @@ import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import type { GameConfigType } from '../../config'
 import { getSessionRngFork, RNG_FORK } from '../../core/seeded-rng'
 import { color, emissive, FEEDER_STYLES, INTENSITY, type QualityTier } from '../../game-elements/visual-language'
@@ -31,8 +31,8 @@ const RING_COUNT = 3
 
 export class MagSpinFeeder {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
   private config: GameConfigType['magSpin']
 
   private position: Vector3
@@ -44,8 +44,8 @@ export class MagSpinFeeder {
   private state: MagSpinState = MagSpinState.IDLE
   private timer = 0
 
-  private caughtBall: RAPIER.RigidBody | null = null
-  private physicsBody: RAPIER.RigidBody | null = null
+  private caughtBall: PhysicsBody | null = null
+  private physicsBody: PhysicsBody | null = null
   private gameplayEnabled = true
 
   private ringAngularVelocity = 0
@@ -60,8 +60,8 @@ export class MagSpinFeeder {
 
   constructor(
     scene: Scene,
-    world: RAPIER.World,
-    rapier: typeof RAPIER,
+    world: PhysicsWorldSink,
+    rapier: PhysicsApi,
     config: GameConfigType['magSpin']
   ) {
     this.scene = scene
@@ -176,7 +176,7 @@ export class MagSpinFeeder {
     }
   }
 
-  update(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+  update(dt: number, ballBodies: PhysicsBody[]): void {
     if (!this.gameplayEnabled) return
     this.timer -= dt
     this.updateVisuals(dt)
@@ -277,7 +277,7 @@ export class MagSpinFeeder {
     }
   }
 
-  private updateStateMachine(dt: number, ballBodies: RAPIER.RigidBody[]): void {
+  private updateStateMachine(dt: number, ballBodies: PhysicsBody[]): void {
     switch (this.state) {
       case MagSpinState.IDLE:
         this.checkProximity(ballBodies)
@@ -355,7 +355,7 @@ export class MagSpinFeeder {
     }
   }
 
-  private checkProximity(ballBodies: RAPIER.RigidBody[]): void {
+  private checkProximity(ballBodies: PhysicsBody[]): void {
     const pullRadius = this.config.catchRadius
 
     for (const body of ballBodies) {
@@ -373,7 +373,7 @@ export class MagSpinFeeder {
     }
   }
 
-  private captureBall(body: RAPIER.RigidBody): void {
+  private captureBall(body: PhysicsBody): void {
     this.caughtBall = body
     body.setLinvel({ x: 0, y: 0, z: 0 }, true)
     body.setAngvel({ x: 0, y: 0, z: 0 }, true)

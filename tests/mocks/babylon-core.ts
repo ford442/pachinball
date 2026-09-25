@@ -119,6 +119,7 @@ function createMockMesh() {
     setEnabled: vi.fn(),
     dispose: vi.fn(),
     bakeTransformIntoVertices: vi.fn(),
+    addLODLevel: vi.fn(),
   }
 }
 

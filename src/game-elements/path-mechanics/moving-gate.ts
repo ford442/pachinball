@@ -4,7 +4,7 @@ import { Scalar } from '@babylonjs/core/Maths/math.scalar'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsBody } from '../../core/physics-api'
 import { getMaterialLibrary } from '../../materials'
 import type { MovingGateConfig } from './types'
 import { PathMechanic } from './base'
@@ -20,7 +20,7 @@ export class MovingGate extends PathMechanic {
   private gateMesh: Mesh | null = null
   private gateFrameLeft: Mesh | null = null
   private gateFrameRight: Mesh | null = null
-  private physicsBody: RAPIER.RigidBody | null = null
+  private physicsBody: PhysicsBody | null = null
   private position = Vector3.Zero()
   private state = GateState.CLOSED
   private timer = 0
@@ -118,7 +118,7 @@ export class MovingGate extends PathMechanic {
   }
 
    
-  update(dt: number, _ballBodies: RAPIER.RigidBody[]): void {
+  update(dt: number, _ballBodies: PhysicsBody[]): void {
     if (!this.isSpawned || !this.physicsBody) return
 
     this.timer += dt

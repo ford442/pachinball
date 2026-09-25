@@ -1,13 +1,15 @@
 /**
- * WasmOwner's adventure bridge (#383 Slice B): exporting a track's collider
- * descriptors into C++, mapping their handles back for contact dispatch,
- * driving the exported kinematic movers, and deciding whether Rapier may be
- * left unstepped.
+ * WasmOwner's adventure bridge (#383 Slice B, #412): exporting a track's
+ * collider descriptors into C++, resolving their WASM ids for contact
+ * dispatch, driving the exported kinematic movers, and deciding whether the
+ * track is fully owned by the C++ world.
  */
 
 import { describe, it, expect, vi } from 'vitest'
 
 import { WasmOwner, type AdventureTrackState } from '../src/game/physics/wasm-owner'
+import { WasmTableWorld } from '../src/wasm/wasm-table-world'
+import { WASM_PHYSICS_API } from '../src/wasm/wasm-physics-api'
 import {
   boxDesc,
   cylinderDesc,
@@ -47,7 +49,7 @@ function makeEngine() {
   }
 }
 
-/** Minimal Rapier kinematic body: a pending pose plus a committed one. */
+/** Minimal kinematic pose store: a pending pose plus a committed one. */
 function fakeKinematicBody(handle: number) {
   const next = { p: { x: 0, y: 0, z: 0 }, q: { x: 0, y: 0, z: 0, w: 1 } }
   const committed = { p: { x: 0, y: 0, z: 0 }, q: { x: 0, y: 0, z: 0, w: 1 } }
@@ -73,6 +75,13 @@ function fakeKinematicBody(handle: number) {
 
 function fakeBody(handle: number) {
   return { handle, setEnabled: vi.fn() }
+}
+
+function makeOwner(engine: ReturnType<typeof makeEngine>): { owner: WasmOwner; world: WasmTableWorld } {
+  const world = new WasmTableWorld(engine as unknown as WasmPhysicsEngine, { x: 0, y: -9.81, z: -5 })
+  const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine, world)
+  owner.rebuild([])
+  return { owner, world }
 }
 
 function trackState(
@@ -112,10 +121,9 @@ function synthwaveLikeTrack(): AdventureColliderDesc[] {
 }
 
 describe('WasmOwner.syncAdventureTrack', () => {
-  it('leaves Rapier unstepped for a track it can fully express', () => {
+  it('owns a track it can fully express', () => {
     const engine = makeEngine()
-    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
-    owner.rebuild([], [], [], [], [])
+    const { owner } = makeOwner(engine)
 
     const descs = synthwaveLikeTrack()
     const owned = owner.syncAdventureTrack(
@@ -132,10 +140,9 @@ describe('WasmOwner.syncAdventureTrack', () => {
     expect(engine.addKinematicMover).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps Rapier stepping for a track with an inexpressible collider', () => {
+  it('does not own a track with an inexpressible collider', () => {
     const engine = makeEngine()
-    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
-    owner.rebuild([], [], [], [], [])
+    const { owner } = makeOwner(engine)
 
     const descs: AdventureColliderDesc[] = [
       boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }),
@@ -147,10 +154,9 @@ describe('WasmOwner.syncAdventureTrack', () => {
     expect(owner.getAdventureUnsupported().map((u) => u.index)).toEqual([1])
   })
 
-  it('keeps Rapier stepping for a track with geometry built outside the descriptor path', () => {
+  it('does not own a track with geometry built outside the descriptor path', () => {
     const engine = makeEngine()
-    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
-    owner.rebuild([], [], [], [], [])
+    const { owner } = makeOwner(engine)
 
     const owned = owner.syncAdventureTrack(
       trackState([boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 })], {}, {
@@ -161,17 +167,16 @@ describe('WasmOwner.syncAdventureTrack', () => {
     expect(owner.isAdventureOwned()).toBe(false)
   })
 
-  it('stays unstepped when an exit portal sensor is added to an owned track', () => {
+  it('keeps owning a track when an exit portal sensor is added', () => {
     const engine = makeEngine()
-    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
-    owner.rebuild([], [], [], [], [])
+    const { owner } = makeOwner(engine)
 
     const descs = synthwaveLikeTrack()
     const bodies = { 2: fakeKinematicBody(70) }
     expect(owner.syncAdventureTrack(trackState(descs, bodies))).toBe(true)
 
     // Portal entry goes through the physics bridge, so its cylinder sensor is
-    // just more exported geometry — no reason to wake Rapier.
+    // just more exported geometry.
     const withPortal = [
       ...descs,
       cylinderDesc({ x: 0, y: 2, z: 45 }, 0.8, 1.9, { sensor: true, collisionEvents: true, label: 'exitPortalSensor' }),
@@ -180,17 +185,15 @@ describe('WasmOwner.syncAdventureTrack', () => {
     expect(engine.addSensorVolume).toHaveBeenCalledTimes(3)
   })
 
-  it('allows Rapier to stay unstepped when no adventure track is running', () => {
+  it('reports ownership when no adventure track is running', () => {
     const engine = makeEngine()
-    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
-    owner.rebuild([], [], [], [], [])
+    const { owner } = makeOwner(engine)
     expect(owner.syncAdventureTrack(null)).toBe(true)
   })
 
   it('re-exports the static scene only when the collider epoch changes', () => {
     const engine = makeEngine()
-    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
-    owner.rebuild([], [], [], [], [])
+    const { owner } = makeOwner(engine)
     engine.clearStaticGeometry.mockClear()
     engine.addStaticBox.mockClear()
 
@@ -213,8 +216,7 @@ describe('WasmOwner.syncAdventureTrack', () => {
 
   it('clears the previous track rather than stacking a second copy', () => {
     const engine = makeEngine()
-    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
-    owner.rebuild([], [], [], [], [])
+    const { owner } = makeOwner(engine)
 
     const bodies = { 2: fakeKinematicBody(70) }
     owner.syncAdventureTrack(trackState(synthwaveLikeTrack(), bodies))
@@ -226,10 +228,9 @@ describe('WasmOwner.syncAdventureTrack', () => {
     expect(owner.getAdventureUnsupported()).toEqual([])
   })
 
-  it('maps exported C++ handles back to their Rapier bodies for contact dispatch', () => {
+  it('resolves exported WASM ids to their track bodies for contact dispatch', () => {
     const engine = makeEngine()
-    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
-    owner.rebuild([], [], [], [], [])
+    const { owner } = makeOwner(engine)
 
     const goalSensor = fakeBody(99)
     const descs = synthwaveLikeTrack()
@@ -237,31 +238,30 @@ describe('WasmOwner.syncAdventureTrack', () => {
       trackState(descs, { 2: fakeKinematicBody(70), 4: goalSensor })
     )
 
-    // The goal sensor is descriptor 4, the only sensor volume: handle -4000.
-    expect(owner.getRapierBody(-4000)).toBe(goalSensor)
+    // The goal sensor is descriptor 4, the only sensor volume: WASM id -4000,
+    // which is also its dispatch key.
+    expect(owner.resolveContactId(-4000)).toEqual({ body: goalSensor, key: -4000 })
   })
 
   it('drops the previous track’s handle mappings on a re-export', () => {
     const engine = makeEngine()
-    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
-    owner.rebuild([], [], [], [], [])
+    const { owner } = makeOwner(engine)
 
     const oldSensor = fakeBody(99)
     owner.syncAdventureTrack(
       trackState(synthwaveLikeTrack(), { 2: fakeKinematicBody(70), 4: oldSensor })
     )
-    expect(owner.getRapierBody(-4000)).toBe(oldSensor)
+    expect(owner.resolveContactId(-4000)?.body).toBe(oldSensor)
 
     owner.syncAdventureTrack(
       trackState([boxDesc({ x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 })], {}, { epoch: 2 })
     )
-    expect(owner.getRapierBody(-4000)).toBeUndefined()
+    expect(owner.resolveContactId(-4000)).toBeNull()
   })
 
   it('pushes each animated obstacle pending pose into its C++ mover', () => {
     const engine = makeEngine()
-    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
-    owner.rebuild([], [], [], [], [])
+    const { owner } = makeOwner(engine)
 
     const piston = fakeKinematicBody(70)
     const descs = synthwaveLikeTrack()
@@ -275,15 +275,13 @@ describe('WasmOwner.syncAdventureTrack', () => {
       { x: -3, y: 2.4, z: 12 },
       { x: 0, y: 0, z: 0, w: 1 }
     )
-    // The Rapier puppet is committed too, so mesh sync still tracks the piston
-    // even though Rapier never stepped.
+    // The body's pose is committed too, so mesh sync tracks the piston.
     expect(piston.committed.p).toEqual({ x: -3, y: 2.4, z: 12 })
   })
 
   it('does not drive movers for a track that is not fully owned', () => {
     const engine = makeEngine()
-    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
-    owner.rebuild([], [], [], [], [])
+    const { owner } = makeOwner(engine)
 
     const piston = fakeKinematicBody(70)
     const descs = [
@@ -297,8 +295,7 @@ describe('WasmOwner.syncAdventureTrack', () => {
 
   it('integrates a spinning platter in TS and carries its teeth with it', () => {
     const engine = makeEngine()
-    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
-    owner.rebuild([], [], [], [], [])
+    const { owner } = makeOwner(engine)
 
     const platterBody = fakeKinematicBody(80)
     const descs: AdventureColliderDesc[] = [
@@ -325,7 +322,7 @@ describe('WasmOwner.syncAdventureTrack', () => {
     expect(toothPos.z).toBeCloseTo(-4, 6)
     expect(toothRot.y).toBeCloseTo(quarter.y, 6)
     expect(toothRot.w).toBeCloseTo(quarter.w, 6)
-    // The platter pose is committed to its Rapier body once per tick, not per collider.
+    // The platter pose is committed to its body once per tick, not per collider.
     expect(platterBody.committed.q.y).toBeCloseTo(quarter.y, 6)
     expect(platterBody.setRotation).toHaveBeenCalledTimes(2)
   })
@@ -334,14 +331,11 @@ describe('WasmOwner.syncAdventureTrack', () => {
     const engine = makeEngine()
     const ballPos = { x: 0, y: 0, z: 0 }
     engine.getPosition.mockImplementation(() => ballPos)
-    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
-    const ball = {
-      handle: 1,
-      translation: () => ({ x: 0, y: 0, z: 0 }),
-      linvel: () => ({ x: 0, y: 0, z: 0 }),
-      setEnabled: vi.fn(),
-    }
-    owner.rebuild([ball as never], [], [], [], [])
+    const { owner, world } = makeOwner(engine)
+    // A real ball: a dynamic sphere becomes a C++ body (id 1 from the fake) on attach.
+    const ball = world.createRigidBody(WASM_PHYSICS_API.RigidBodyDesc.dynamic())
+    world.createCollider(WASM_PHYSICS_API.ColliderDesc.ball(0.25), ball)
+    expect(ball.wasmId).toBe(1)
 
     const wheelBody = fakeKinematicBody(90)
     const descs: AdventureColliderDesc[] = [
@@ -369,8 +363,7 @@ describe('WasmOwner.syncAdventureTrack', () => {
 
   it('reports adventure colliders in the debug-draw geometry', () => {
     const engine = makeEngine()
-    const owner = new WasmOwner(engine as unknown as WasmPhysicsEngine)
-    owner.rebuild([], [], [], [], [])
+    const { owner } = makeOwner(engine)
     const before = owner.getDebugColliders().length
 
     owner.syncAdventureTrack(

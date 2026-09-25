@@ -1,6 +1,6 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Scene } from '@babylonjs/core/scene'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
+import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { PathMechanic } from './base'
 import { MovingGate } from './moving-gate'
 import { MagneticField } from './magnetic-field'
@@ -32,8 +32,8 @@ export interface PathMechanicsCallbacks {
 
 export class PathMechanicsManager {
   private scene: Scene
-  private world: RAPIER.World
-  private rapier: typeof RAPIER
+  private world: PhysicsWorldSink
+  private rapier: PhysicsApi
   private mechanics: Map<string, PathMechanic> = new Map()
   private zoneTriggers: ZoneTrigger[] = []
   private activeZones: Set<string> = new Set()
@@ -41,7 +41,7 @@ export class PathMechanicsManager {
   private mapAccentColor = '#ff00ff'
   private callbacks: PathMechanicsCallbacks = {}
 
-  constructor(scene: Scene, world: RAPIER.World, rapier: typeof RAPIER) {
+  constructor(scene: Scene, world: PhysicsWorldSink, rapier: PhysicsApi) {
     this.scene = scene
     this.world = world
     this.rapier = rapier
@@ -65,7 +65,7 @@ export class PathMechanicsManager {
     }
   }
 
-  update(dt: number, ballBodies: RAPIER.RigidBody[], ballZ: number): void {
+  update(dt: number, ballBodies: PhysicsBody[], ballZ: number): void {
     // Check zone triggers
     for (const trigger of this.zoneTriggers) {
       const zoneId = `${trigger.mechanicType}_${trigger.minZ}_${trigger.maxZ}`

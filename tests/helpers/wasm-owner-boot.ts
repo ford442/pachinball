@@ -18,7 +18,9 @@ export type GameHooks = {
         }
       }
       getWasmMode?: () => string
-      getRapier?: () => { Vector3: new (x: number, y: number, z: number) => unknown }
+      /** Null on the owner path: Rapier is never loaded there (#412). */
+      getRapier?: () => unknown
+      getRapierWorld?: () => unknown
       getLastRapierStepMs?: () => number
     }
     physicsController?: {
@@ -28,7 +30,6 @@ export type GameHooks = {
       getBumperHitsThisBall?: () => number
       getRawCollisionEvents?: () => number
       getLastLaneHit?: () => string | null
-      applyOwnedBallImpulse?: (body: unknown, ix: number, iy: number, iz: number) => void
       stepPhysics: (
         inputManager: unknown,
         inputActions: unknown,
@@ -60,7 +61,12 @@ export type OwnerEngine = 'wasm-owner' | 'wasm-worker'
 export async function bootWasmOwner(
   page: Page,
   mode: OwnerEngine = 'wasm-owner',
-): Promise<{ wasmReady: boolean; engine: string | null }> {
+): Promise<{ wasmReady: boolean; engine: string | null; rapierLoaded: boolean; rapierRequests: string[] }> {
+  // Any fetch of the Rapier module (the Vite dep in dev, the rapier-*.js chunk in a build).
+  const rapierRequests: string[] = []
+  page.on('request', (req) => {
+    if (/@dimforge|rapier3d|\/assets\/rapier-[^/]*\.js/i.test(req.url())) rapierRequests.push(req.url())
+  })
   await page.addInitScript((m) => {
     localStorage.setItem('pachinball:physics-engine', m)
   }, mode)
@@ -70,18 +76,21 @@ export async function bootWasmOwner(
     return page.evaluate(() => !!(window as unknown as GameHooks).game?.stateManager)
   }, { timeout: 60_000 }).toBe(true)
 
-  return page.evaluate(() => {
+  const state = await page.evaluate(() => {
     const w = window as unknown as GameHooks & { currentPhysicsEngine?: string }
     const g = w.game
     const wasmReady = !!(g?.physics?.isWasmOwnerMode?.() && g?.physics?.getWasmEngine?.()?.isReady)
+    // The owner path must not load Rapier at all: no namespace, no World (#412).
+    const rapierLoaded = g?.physics?.getRapier?.() != null || g?.physics?.getRapierWorld?.() != null
     // currentPhysicsEngine is only exposed once physics first steps.
-    return { wasmReady, engine: w.currentPhysicsEngine ?? g?.physics?.getWasmMode?.() ?? null }
+    return { wasmReady, engine: w.currentPhysicsEngine ?? g?.physics?.getWasmMode?.() ?? null, rapierLoaded }
   })
+  return { ...state, rapierRequests: [...rapierRequests] }
 }
 
 /** Fail in CI when the WASM bundle did not load; skip locally when emcc artefact is absent. */
 export function assertWasmOwnerReady(
-  boot: { wasmReady: boolean; engine: string | null },
+  boot: { wasmReady: boolean; engine: string | null; rapierLoaded: boolean; rapierRequests: string[] },
   mode: OwnerEngine = 'wasm-owner',
 ): void {
   if (!boot.wasmReady) {
@@ -92,6 +101,8 @@ export function assertWasmOwnerReady(
     }
   }
   expect(boot.engine).toBe(mode)
+  expect(boot.rapierLoaded, 'owner boot must not create a Rapier module or World').toBe(false)
+  expect(boot.rapierRequests, 'owner boot must not fetch Rapier').toEqual([])
 }
 
 export async function startPlaying(page: Page): Promise<void> {
