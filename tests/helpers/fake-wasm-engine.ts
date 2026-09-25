@@ -170,6 +170,10 @@ export function makeFakeWasmEngine() {
     getActiveBodyCount: vi.fn(() => bodies.size),
     hasTransformSnapshot: vi.fn(() => true),
     getLastWorkerStepMs: vi.fn(() => 0),
+    /** Snapshots are C++ state; the fake reports the gap like an old bundle. */
+    serializeSnapshot: vi.fn((): Uint8Array | null => null),
+    restoreSnapshot: vi.fn(() => -1),
+    getStaticContentHash: vi.fn((): string | null => null),
     /** Test-only: live C++ body ids. */
     liveBodyIds: () => [...bodies.keys()],
     /** Test-only: a body's native type (0 Dynamic, 1 Static, 2 Kinematic), or -1. */

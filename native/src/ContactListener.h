@@ -2,6 +2,7 @@
 
 #include "MathTypes.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -130,6 +131,14 @@ public:
       }
     }
 
+    // Canonical order within each phase. The maps iterate in hash-bucket
+    // order, which depends on their insertion history — a world restored
+    // from a snapshot (Snapshot.cpp) must emit the same sequence as the one
+    // it was taken from, and the cap below must drop the same pairs.
+    sortByPair(exits);
+    sortByPair(enters);
+    sortByPair(stays);
+
     // Prefer edges over Stay if a cap is hit — scoring depends on Enter/Exit.
     const std::size_t total = exits.size() + enters.size() + stays.size();
     const std::size_t cap = maxContacts_;
@@ -161,6 +170,42 @@ public:
 
     previous_ = std::move(current_);
     current_.clear();
+    ++generation_;
+  }
+
+  /**
+   * Number of `flushEvents()` so far — one per `step()` that ran a substep.
+   * Snapshotted with the manifold so a replay can tell a restored world's
+   * contact stream apart from a freshly built one.
+   */
+  uint64_t generation() const { return generation_; }
+
+  /** The persistent manifold (pairs touching at the last flush), in pair-key order. */
+  std::vector<ContactEvent> manifold() const {
+    std::vector<ContactEvent> out;
+    out.reserve(previous_.size());
+    for (const auto& kv : previous_) out.push_back(kv.second);
+    sortByPair(out);
+    return out;
+  }
+
+  /**
+   * Replace the persistent manifold (snapshot restore). Queued observations
+   * and the last emit are dropped: the restored world has not stepped yet.
+   */
+  void restoreManifold(const std::vector<ContactEvent>& pairs, uint64_t generation,
+                       int droppedTotal) {
+    current_.clear();
+    previous_.clear();
+    previous_.reserve(pairs.size());
+    for (const ContactEvent& e : pairs) {
+      previous_.emplace(contactPairKey(e.bodyId1, e.bodyId2), e);
+    }
+    emitted_.clear();
+    droppedThisStep_ = 0;
+    writeCount_ = 0;
+    generation_ = generation;
+    droppedTotal_ = droppedTotal;
   }
 
   /** Discard queued observations without emitting. Does not clear the manifold. */
@@ -195,6 +240,12 @@ public:
   const std::vector<ContactEvent>& lastEvents() const { return emitted_; }
 
 private:
+  static void sortByPair(std::vector<ContactEvent>& events) {
+    std::sort(events.begin(), events.end(), [](const ContactEvent& a, const ContactEvent& b) {
+      return contactPairKey(a.bodyId1, a.bodyId2) < contactPairKey(b.bodyId1, b.bodyId2);
+    });
+  }
+
   void packBuffer() {
     writeCount_ = static_cast<int>(emitted_.size());
     const std::size_t floats = emitted_.size() * static_cast<std::size_t>(CONTACT_STRIDE);
@@ -250,6 +301,7 @@ private:
     droppedThisStep_ = other.droppedThisStep_;
     droppedTotal_ = other.droppedTotal_;
     maxContacts_ = other.maxContacts_;
+    generation_ = other.generation_;
     other.buffer_ = nullptr;
     other.bufferCapFloats_ = 0;
     other.writeCount_ = 0;
@@ -266,6 +318,7 @@ private:
   int         droppedThisStep_  = 0;
   int         droppedTotal_     = 0;
   std::size_t maxContacts_      = CONTACT_DEFAULT_MAX;
+  uint64_t    generation_       = 0;
 };
 
 } // namespace pachinball

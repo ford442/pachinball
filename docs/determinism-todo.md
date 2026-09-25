@@ -1,8 +1,9 @@
-# Determinism migration — `Math.random()` catalogue
+# Determinism — `Math.random()` catalogue and replay spine
 
-Tracked for **#341** (replay spine) and **#343** (Async Challenges).
+Tracked for **#341** (replay spine), **#343** (Async Challenges) and **#431**
+(solver snapshots + the last physics-affecting `Math.random`).
 
-**Session RNG:** `initSessionRng(seed)` in `game-lifecycle.ts` on every `startGame()`. Physics-affecting draws use `getSessionRngFork(label)` so sub-streams stay independent and reproducible.
+**Session RNG:** `initSessionRng(seed)` in `game-lifecycle.ts` on every `startGame()`. The seed is the replay's seed when spectating, the Daily Cascade layout seed in daily mode, the `?seed=` / `?challenge=seed:target` share-link seed when one is active (`getChallengeSystem()`), and `randomU32Seed()` otherwise. Physics-affecting draws use `getSessionRngFork(label)` so sub-streams stay independent and reproducible; runtime-built collider layouts use `getLayoutRng(key)`.
 
 **Fork labels** (`src/core/seeded-rng.ts` → `RNG_FORK`):
 
@@ -15,89 +16,113 @@ Tracked for **#341** (replay spine) and **#343** (Async Challenges).
 | `spinner` | Spinner bumper spin direction |
 | `feeder` | Mag-spin / quantum-tunnel / nano-loom / spinner-launcher variances |
 | `slot` | Slot-machine activation + reel shuffles |
+| `layout` | Prefix of every `getLayoutRng(key)` stream (below) |
+
+**Layout streams** — `getLayoutRng(key)` is `createSeededRng(hash(sessionSeed : layout : key))`,
+a fresh stream per key rather than a cached advancing fork. Tracks and zones
+are built lazily, in an order the player decides; keyed streams give the same
+colliders for the same seed whatever was built first, and a rebuild of the same
+track reproduces it.
 
 ---
 
-## Physics-trajectory-affecting — **seeded** (this slice)
+## Physics-trajectory-affecting — **seeded**
 
-| File | Line(s) | Usage | Fork |
-|------|---------|-------|------|
-| `src/game-elements/ball-manager-spawn.ts` | ~549 | Weighted ball-type roll | `spawn` |
-| `src/game-elements/ball-manager-spawn.ts` | ~145 | Extra-ball spawn x jitter | `spawn` |
-| `src/game-elements/ball-manager-gold.ts` | ~205–215 | Gold-swarm angle/speed/position | `gold-swarm` |
-| `src/game-elements/ball-manager-multiball.ts` | ~41–43 | Multiball spawn offsets | `multiball` |
-| `src/objects/object-ball-traps.ts` | ~298–300 | Trap release boost vector | `trap` |
-| `src/objects/object-spinner-bumpers.ts` | ~247 | Spinner spin direction | `spinner` |
-| `src/game-elements/ball-manager.ts` | ~277 | Imposter catch release impulse | `spawn` |
-| `src/game-elements/mag-spin-feeder.ts` | ~405 | Release angle variance | `feeder` |
-| `src/game-elements/quantum-tunnel-feeder.ts` | ~271 | Eject impulse z variance | `feeder` |
-| `src/game-elements/nano-loom-feeder.ts` | ~352 | Weave nudge impulse | `feeder` |
-| `src/game-elements/path-mechanics/spinner-launcher.ts` | ~152 | Launch angle | `feeder` |
-| `src/display/slot-machine.ts` | ~145, ~170 | Activation + spin plan | `slot` |
-| `src/display/display-reels.ts` | ~251, ~390, ~401, ~421 | Reel shuffles / stops | `slot` |
+| File | Usage | Stream |
+|------|-------|--------|
+| `src/game-elements/ball-manager-spawn.ts` | Weighted ball-type roll, extra-ball spawn x jitter | fork `spawn` |
+| `src/game-elements/ball-manager-gold.ts` | Gold-swarm angle/speed/position | fork `gold-swarm` |
+| `src/game-elements/ball-manager-multiball.ts` | Multiball spawn offsets | fork `multiball` |
+| `src/objects/object-ball-traps.ts` | Trap release boost vector | fork `trap` |
+| `src/objects/object-spinner-bumpers.ts` | Spinner spin direction | fork `spinner` |
+| `src/game-elements/ball-manager.ts` | Imposter catch release impulse | fork `spawn` |
+| `src/objects/feeders/mag-spin-feeder.ts` | Release angle variance | fork `feeder` |
+| `src/objects/feeders/quantum-tunnel-feeder.ts` | Eject impulse z variance | fork `feeder` |
+| `src/objects/feeders/nano-loom-feeder.ts` | Weave nudge impulse | fork `feeder` |
+| `src/game-elements/path-mechanics/spinner-launcher.ts` | Launch angle | fork `feeder` |
+| `src/display/slot-machine.ts` | Activation + spin plan | fork `slot` |
+| `src/display/display-reels.ts` | Reel shuffles / stops | fork `slot` |
+| `src/game-elements/path-mechanics/reactive-peg-cluster.ts` | Peg cluster radius variance | `peg-cluster:<x>,<y>,<z>` |
+| `src/game/game-scenario.ts` | Dynamic scenario obstacle type/position | `scenario-zone:<index>` |
+| `src/adventure/tracks/prism-pathway.ts` | Prism collider placement + rotation | `track:prism-pathway` |
+| `src/adventure/tracks/casino-heist.ts` | Chip-stack collider placement + height; slot-gate mover phase/frequency | `track:casino-heist:chips`, `…:gates` |
+| `src/adventure/tracks/orbital-junkyard.ts` | Debris collider placement, size, shape, orientation | `track:orbital-junkyard:debris` |
+| `src/adventure/tracks/neural-network.ts` | Cilia collider placement | `track:neural-network:cilia` |
+| `src/adventure/tracks/neon-skyline.ts` | AC-unit collider placement | `track:neon-skyline:ac-units` |
+| `src/adventure/tracks/polychrome-void.ts` | Ghost collider offsets; which isle is green (collision group) | `track:polychrome-void:ghosts`, `…:isles` |
+| `src/adventure/tracks/tesla-tower.ts` | Ball-lightning collider placement + oscillator frequency/phase | `track:tesla-tower:lightning` |
+| `src/replay/challenge-system.ts` | Default challenge seed when `?seed=` is absent | `randomU32Seed()` (entropy, not gameplay) |
 
----
-
-## Physics-trajectory-affecting — **deferred** (migrate in #341)
-
-| File | Line(s) | Usage | Notes |
-|------|---------|-------|-------|
-| `src/game-elements/path-mechanics/reactive-peg-cluster.ts` | 62 | Peg cluster radius variance | Adventure path layout |
-| `src/game-elements/challenge-system.ts` | 44 | Default challenge seed | Use `randomU32Seed()` or session seed |
-| `src/game/game-scenario.ts` | 303, 306 | Dynamic scenario obstacle type/position | Table scenario spawning |
+Nothing is deferred: `grep -rn "Math.random" src` lists only the cosmetic
+entries below plus `randomU32Seed`'s fallback.
 
 ---
 
 ## Cosmetic / exempt — **stay on `Math.random()`**
 
-| File | Line(s) | Usage |
-|------|---------|-------|
-| `src/effects/effects-camera.ts` | 41–43 | Camera shake offsets |
-| `src/effects/effects-screen.ts` | 296–298 | Screen shake offsets |
-| `src/effects/effects-shards.ts` | 28–30 | Particle shard velocity/rotation/scale |
-| `src/effects/effects-audio.ts` | 141, 242 | Synth frequency + noise buffer |
-| `src/effects/effects-jackpot.ts` | 32 | Injectable callback default (`Math.random`) |
-| `src/display/display-lcd-overlay.ts` | 168, 177–178 | Walk-by emoji timer/speed/pick |
-| `src/game-elements/sound-system-synth.ts` | 54, 70, 315, 346, 411, 528 | Noise buffers, pan, frequency jitter |
-| `src/game-elements/sound-system-samples.ts` | 194 | Random sample pick |
-| `src/game-elements/ball-stack-visual.ts` | 77–79 | Reserve-ball visual rotation |
-| `src/game-elements/mag-spin-feeder.ts` | 206–207 | Release shake (visual only) |
-| `src/game-elements/gauss-cannon-feeder.ts` | 267–268 | Barrel vibration (visual only) |
-| `src/game/physics/collision-handlers.ts` | 95, 151 | Bumper beep pitch variance |
-| `src/game/game-renderer.ts` | 288–289 | Render jitter offsets |
-| `src/materials/material-cabinet.ts` | 149–160 | Wood grain procedural texture |
-| `src/materials/material-core.ts` | 232 | Texture noise |
-| `src/objects/object-bumpers.ts` | 149 | Hologram sweep phase (visual only) |
-| `src/objects/decoration/decoration-motifs.ts` | 48, 359–360 | Trace IDs, LED jitter |
-| `src/objects/decoration/decoration-factory.ts` | 76–78, 100 | Trim scale/rotation |
-| `src/objects/decoration/decoration-builder.ts` | 57 | Dummy ball diameter |
-| `src/adventure/tracks/tesla-tower.ts` | 123–124, 150, 153 | Prop placement / animation |
-| `src/adventure/tracks/prism-pathway.ts` | 48–49, 56 | Prop placement |
-| `src/adventure/tracks/polychrome-void.ts` | 72, 114 | Prop placement |
-| `src/adventure/tracks/orbital-junkyard.ts` | 44–49, 64–66 | Debris placement |
-| `src/adventure/tracks/neural-network.ts` | 157–158 | Forest prop placement |
-| `src/adventure/tracks/neon-skyline.ts` | 76–77 | Sky prop placement |
-| `src/adventure/tracks/casino-heist.ts` | 50–51, 54, 61, 141–142 | Maze chips / animation |
+| File | Usage |
+|------|-------|
+| `src/effects/effects-camera.ts` | Camera shake offsets |
+| `src/effects/effects-screen.ts` | Screen shake offsets |
+| `src/effects/effects-shards.ts` | Particle shard velocity/rotation/scale |
+| `src/effects/effects-audio.ts` | Synth frequency + noise buffer |
+| `src/effects/effects-jackpot.ts` | Injectable callback default (`Math.random`) |
+| `src/game/game-post-process.ts` | Table-camera shake offsets |
+| `src/display/display-lcd-overlay.ts` | Walk-by emoji timer/speed/pick |
+| `src/audio/sound-system-synth.ts` | Noise buffers, pan, frequency jitter |
+| `src/audio/sound-system-samples.ts` | Random sample pick |
+| `src/game-elements/ball-stack-visual.ts` | Reserve-ball visual rotation |
+| `src/objects/feeders/mag-spin-feeder.ts` | Release shake of the ring meshes (visual only) |
+| `src/objects/feeders/gauss-cannon-feeder.ts` | Barrel vibration (visual only) |
+| `src/game/physics/collision-handlers.ts` | Bumper / flipper beep pitch variance |
+| `src/materials/material-cabinet.ts` | Wood grain procedural texture |
+| `src/materials/material-core.ts` | Texture noise |
+| `src/objects/object-bumpers.ts` | Hologram sweep phase (visual only) |
+| `src/objects/decoration/decoration-motifs.ts` | Trace IDs, LED jitter |
+| `src/objects/decoration/decoration-factory.ts` | Trim scale/rotation |
+| `src/objects/decoration/decoration-builder.ts` | Dummy ball diameter |
+| `src/adventure/tracks/casino-heist.ts` | Poker-chip material pick (commented in place) |
 
 ---
 
 ## Intentional entropy source
 
-| File | Line(s) | Usage |
-|------|---------|-------|
-| `src/core/seeded-rng.ts` | 110 | `randomU32Seed()` fallback when `crypto.getRandomValues` unavailable |
+| File | Usage |
+|------|-------|
+| `src/core/seeded-rng.ts` | `randomU32Seed()` fallback when `crypto.getRandomValues` unavailable |
 
 ---
 
-## Open questions (from #341 scoping)
+## Wall-clock time on the scoring path
 
-1. **Seed source:** `randomU32Seed()` per session today; add URL `?seed=` + localStorage for #343.
-2. **Module home:** `src/core/seeded-rng.ts` (kernel alongside EventBus); reserve `src/determinism/` for recorder/runner.
-3. **PRNG width:** Mulberry32 (32-bit) sufficient for MVP; revisit if long replays desync.
-4. **Rapier upgrade:** `^0.15` → ~0.19 is a separate decision before snapshot parity work.
+Seeded RNG is not enough if gameplay reads `performance.now()`: a replay stepped
+headless (or restored mid-run) runs at a different wall-clock rate than the live
+game. The collision pair debounce (`CollisionDispatcher`) now runs on the
+simulation clock — fixed steps taken × 1/60 s, from the C++ step counter on the
+owner path and Rapier's otherwise.
+
+Still wall-clock (not physics-trajectory-affecting unless the tape nudges):
+
+| File | Usage | Notes |
+|------|-------|-------|
+| `src/game/physics/physics-controller.ts` | Nudge cooldown / tilt warnings / tilt decay; tilt penalty via `setTimeout` | A tape whose nudges land inside the cooldown in one run and outside in another can TILT differently. Move to the sim clock before nudge-heavy replays are verified. |
+
+---
+
+## Solver snapshots (#431)
+
+`PhysicsWorld::serialize()` / `restore()` (`native/src/Snapshot.{h,cpp}`) —
+versioned little-endian blob of the full C++ solver state, refused on a
+differently built table. Replays carry the frame-0 snapshot plus a world
+fingerprint (see `docs/ASYNC_CHALLENGES_EPIC.md` and `docs/wasm-physics-engine.md`).
+The native and WASM builds produce identical bytes (`npm run test:wasm-parity`);
+the hinge angle uses a libm-independent `atan2` so they can.
 
 ## Roadmap
 
-1. **This slice:** injectable RNG + physics-affecting fork streams + catalogue (done).
-2. **#341:** stable RNG consumption order; `world.createSnapshot()` divergence harness; ReplayRecorder logs seed + inputs.
-3. **#343:** URL `?seed=` share + ghost spectate; graceful divergence degrade.
+1. ~~Injectable RNG + physics-affecting fork streams + catalogue.~~
+2. ~~#341: `ReplayRecorder` logs seed + inputs; C++ world snapshot + divergence harness.~~
+3. ~~#343: URL `?seed=` share → session seed; ghost spectate; divergence toast.~~
+4. Next: sim-clock nudge/tilt; restore across differing ball-id layouts (remap
+   TS links onto the snapshot's ids instead of reporting `id-layout`); worker
+   snapshot round trip.

@@ -9,6 +9,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import { boxDesc, cylinderDesc, sphereDesc } from '../track-collider-descriptors'
 import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import { getLayoutRng } from '../../core/seeded-rng'
 
 export function buildNeuralNetwork(builder: TrackBuilder): void {
   const netMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FFFFFF")
@@ -154,9 +155,11 @@ export function buildNeuralNetwork(builder: TrackBuilder): void {
     const ciliaCount = 50
     const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
 
+    // Cilia are cylinder colliders: seeded placement.
+    const layout = getLayoutRng('track:neural-network:cilia')
     for (let i = 0; i < ciliaCount; i++) {
-      const dist = Math.random() * (forestLen - 2) + 1
-      const offset = (Math.random() - 0.5) * (forestWidth - 1)
+      const dist = layout.next() * (forestLen - 2) + 1
+      const offset = (layout.next() - 0.5) * (forestWidth - 1)
       const pos = forestStart.add(forward.scale(dist)).add(right.scale(offset))
       pos.y += 1.0
 

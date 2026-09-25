@@ -6,6 +6,7 @@
 import type { WasmPhysicsRuntimeMode } from '../config/physics'
 import type { InputFrame } from '../game-elements/types'
 import { DEFAULT_TABLE_MAP_ID } from '../shaders/lcd-table'
+import type { ReplayWorldFingerprint } from './replay-snapshot'
 
 /** Normalise legacy replay metadata (`wasm` → mirror). */
 function normalizeReplayPhysicsEngine(value: unknown): WasmPhysicsRuntimeMode {
@@ -15,7 +16,13 @@ function normalizeReplayPhysicsEngine(value: unknown): WasmPhysicsRuntimeMode {
   return 'rapier'
 }
 
-export interface ReplayMetadata {
+/**
+ * `physicsEngine` plus the optional world fingerprint (#431): snapshot
+ * version, static-table / pin-occupancy / feeder-tunables hashes and the
+ * frame-0 C++ snapshot. Captured at the first recorded step, not at `start()`
+ * — the table (a Daily Cascade rebuild) is exported between the two.
+ */
+export interface ReplayMetadata extends ReplayWorldFingerprint {
   version: number
   buildId: string
   mapId: string
@@ -118,6 +125,7 @@ export class ReplayRecorder {
   private recording = false
   private metadata: ReplayMetadata | null = null
   private frames: InputFrame[] = []
+  private fingerprinted = false
 
   /**
    * Start recording a new session. Resets frame buffer.
@@ -126,6 +134,7 @@ export class ReplayRecorder {
     this.metadata = { ...metadata }
     this.frames = []
     this.recording = true
+    this.fingerprinted = false
   }
 
   /**
@@ -163,6 +172,20 @@ export class ReplayRecorder {
     return this.recording
   }
 
+  /**
+   * Fold the world fingerprint into the metadata. Called once, by the physics
+   * step that recorded frame 0, right before that step runs.
+   */
+  attachWorldFingerprint(fingerprint: ReplayWorldFingerprint): void {
+    if (!this.metadata || this.fingerprinted) return
+    this.metadata = { ...this.metadata, ...fingerprint }
+    this.fingerprinted = true
+  }
+
+  hasWorldFingerprint(): boolean {
+    return this.fingerprinted
+  }
+
   getFrameCount(): number {
     return this.frames.length
   }
@@ -198,6 +221,11 @@ export class ReplayRecorder {
       client_renderer?: 'webgl2' | 'webgpu'
       compressedFrames?: string
       compressed_frames?: string
+      snapshot_version?: number
+      static_hash?: string | null
+      pin_field_occupancy?: string | null
+      feeder_tunables_hash?: string
+      initial_snapshot?: string
     }
 
     let frames: InputFrame[] = Array.isArray(data.frames) ? data.frames : []
@@ -220,6 +248,12 @@ export class ReplayRecorder {
       targetScore: data.targetScore ?? data.target_score,
       replayId: data.replayId ?? data.replay_id,
       challengeId: data.challengeId ?? data.challenge_id,
+      snapshotVersion: data.snapshotVersion ?? data.snapshot_version,
+      // `null` is meaningful here ("hashed, none"), so only fall back on undefined.
+      staticHash: data.staticHash !== undefined ? data.staticHash : data.static_hash,
+      pinFieldOccupancy: data.pinFieldOccupancy !== undefined ? data.pinFieldOccupancy : data.pin_field_occupancy,
+      feederTunablesHash: data.feederTunablesHash ?? data.feeder_tunables_hash,
+      initialSnapshot: data.initialSnapshot ?? data.initial_snapshot,
     }
   }
 

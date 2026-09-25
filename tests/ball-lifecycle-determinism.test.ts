@@ -9,6 +9,7 @@ import { GameConfig } from '../src/config'
 import { selectWeightedBallType } from '../src/game-elements/ball-manager-spawn'
 import {
   createSeededRng,
+  getLayoutRng,
   getSessionRngFork,
   initSessionRng,
   RNG_FORK,
@@ -125,5 +126,34 @@ describe('selectWeightedBallType with explicit fork', () => {
       return { type, trap }
     }
     expect(draw()).toEqual(draw())
+  })
+})
+
+describe('getLayoutRng — runtime collider layouts (#431)', () => {
+  const draw = (key: string, n = 6) => {
+    const rng = getLayoutRng(key)
+    return Array.from({ length: n }, () => rng.next())
+  }
+
+  it('is keyed, not advancing: build order and rebuilds do not change a layout', () => {
+    initSessionRng(12345)
+    const prismFirst = draw('track:prism-pathway')
+    draw('track:orbital-junkyard:debris')
+    initSessionRng(12345)
+    draw('track:orbital-junkyard:debris')
+    draw('track:orbital-junkyard:debris')
+    expect(draw('track:prism-pathway')).toEqual(prismFirst)
+    // A rebuild of the same track in the same session reproduces it too.
+    expect(draw('track:prism-pathway')).toEqual(prismFirst)
+  })
+
+  it('differs per key and per session seed, and leaves the fork streams alone', () => {
+    initSessionRng(12345)
+    const spawnBefore = getSessionRngFork(RNG_FORK.SPAWN).state()
+    expect(draw('scenario-zone:0')).not.toEqual(draw('scenario-zone:1'))
+    expect(getSessionRngFork(RNG_FORK.SPAWN).state()).toBe(spawnBefore)
+    const a = draw('peg-cluster:0,0,0')
+    initSessionRng(54321)
+    expect(draw('peg-cluster:0,0,0')).not.toEqual(a)
   })
 })

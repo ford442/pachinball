@@ -17,6 +17,7 @@ import {
   type GameSettings,
 } from '../game-elements'
 import { initSessionRng, getSessionSeed, randomU32Seed } from '../core/seeded-rng'
+import { getChallengeSystem } from '../replay/challenge-system'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { BallManager } from '../game-elements/ball-manager'
@@ -201,7 +202,9 @@ export class GameLifecycle {
       const layout = dailyState.ensureLayout()
       seed = layout ? layout.seed : randomU32Seed()
     } else {
-      seed = randomU32Seed()
+      // `?seed=` / `?challenge=seed:target` share links (#343): the same seed
+      // must give the same session RNG streams, or a challenge is not a challenge.
+      seed = getChallengeSystem().getActiveChallenge()?.seed ?? randomU32Seed()
     }
 
     initSessionRng(seed)

@@ -10,6 +10,7 @@ import type { TrackBuilder } from '../track-builder'
 import { boxDesc, cylinderDesc } from '../track-collider-descriptors'
 import type { EmittedCollider } from '../track-collider-emitter'
 import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import { getLayoutRng } from '../../core/seeded-rng'
 
 export function buildCasinoHeist(builder: TrackBuilder): void {
   const feltMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#880000")
@@ -48,18 +49,21 @@ export function buildCasinoHeist(builder: TrackBuilder): void {
     const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
     const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
 
+    // Chip stacks are colliders: seeded position and height.
+    const layout = getLayoutRng('track:casino-heist:chips')
     for (let i = 0; i < chipCount; i++) {
-      const dist = 2 + Math.random() * (mazeLen - 4)
-      const offset = (Math.random() - 0.5) * (mazeWidth - 2)
+      const dist = 2 + layout.next() * (mazeLen - 4)
+      const offset = (layout.next() - 0.5) * (mazeWidth - 2)
 
       const pos = mazeStart.add(forward.scale(dist)).add(right.scale(offset))
-      const stackHeight = 0.5 + Math.random() * 1.5
+      const stackHeight = 0.5 + layout.next() * 1.5
       const chipRadius = 1.0
 
       pos.y += stackHeight / 2
 
       const chip = MeshBuilder.CreateCylinder("pokerChip", { diameter: chipRadius * 2, height: stackHeight }, scene)
       chip.position.copyFrom(pos)
+      // Cosmetic: chip colour never reaches physics.
       chip.material = chipMats[Math.floor(Math.random() * chipMats.length)]
       adventureTrack.push(chip)
 
@@ -148,13 +152,15 @@ export function buildCasinoHeist(builder: TrackBuilder): void {
 
     const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
 
+    const gateRng = getLayoutRng('track:casino-heist:gates')
     for (let i = 0; i < gateCount; i++) {
       const dist = 2.0 + i * spacing
       const pos = slotStart.add(forward.scale(dist))
 
       const amp = 2.5
-      const phase = Math.random() * Math.PI * 2
-      const freq = 1.0 + Math.random()
+      // Gate phase / frequency drive a kinematic mover the ball collides with.
+      const phase = gateRng.next() * Math.PI * 2
+      const freq = 1.0 + gateRng.next()
 
       const floorY = pos.y
       const basePos = new Vector3(pos.x, floorY, pos.z)

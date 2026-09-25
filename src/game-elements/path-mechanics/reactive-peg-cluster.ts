@@ -5,6 +5,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { PhysicsBody } from '../../core/physics-api'
+import { getLayoutRng } from '../../core/seeded-rng'
 import { getMaterialLibrary } from '../../materials'
 import { color } from '../visual-language'
 import type { ReactivePegClusterConfig } from './types'
@@ -62,9 +63,13 @@ export class ReactivePegCluster extends PathMechanic {
   private createVisuals(): void {
     const matLib = getMaterialLibrary(this.scene)
 
+    // Pegs are colliders: the radius variance is seeded, keyed on where the
+    // cluster sits so each cluster keeps its own layout whatever the build order.
+    const p = this.position
+    const layout = getLayoutRng(`peg-cluster:${p.x},${p.y},${p.z}`)
     for (let i = 0; i < this.pegCount; i++) {
       const angle = (i / this.pegCount) * Math.PI * 2
-      const radius = this.clusterRadius * (0.5 + Math.random() * 0.5)
+      const radius = this.clusterRadius * (0.5 + layout.next() * 0.5)
       const x = Math.cos(angle) * radius
       const z = Math.sin(angle) * radius
 

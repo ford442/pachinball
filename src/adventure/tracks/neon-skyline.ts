@@ -9,6 +9,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import { boxDesc, cylinderDesc } from '../track-collider-descriptors'
 import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import { getLayoutRng } from '../../core/seeded-rng'
 
 export function buildNeonSkyline(builder: TrackBuilder): void {
   const skylineMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#111122")
@@ -72,9 +73,11 @@ export function buildNeonSkyline(builder: TrackBuilder): void {
     const unitCount = 6
     const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
 
+    // AC units are box colliders: seeded placement.
+    const layout = getLayoutRng('track:neon-skyline:ac-units')
     for (let i = 0; i < unitCount; i++) {
-      const dist = 2 + Math.random() * (skyLen - 4)
-      const offset = (Math.random() - 0.5) * (skyWidth - 2)
+      const dist = 2 + layout.next() * (skyLen - 4)
+      const offset = (layout.next() - 0.5) * (skyWidth - 2)
 
       const pos = skyStart.add(forward.scale(dist)).add(right.scale(offset))
       pos.y += 1.0

@@ -129,6 +129,8 @@ export const RNG_FORK = {
   SPINNER: 'spinner',
   FEEDER: 'feeder',
   SLOT: 'slot',
+  /** Collider layouts built at runtime — see getLayoutRng(). */
+  LAYOUT: 'layout',
 } as const
 
 export type RngForkLabel = (typeof RNG_FORK)[keyof typeof RNG_FORK]
@@ -195,6 +197,21 @@ export function getSessionRngFork(label: RngForkLabel | string): SeededRng {
 }
 
 /**
+ * Reproducible stream for one piece of runtime-built collider layout (an
+ * adventure track's debris, a peg cluster, a scenario zone), keyed by the
+ * session seed and a stable `key` — NOT a cached advancing fork.
+ *
+ * Layouts are built lazily and in player-dependent order (which track is
+ * entered first, when a zone streams in), so sharing one advancing stream
+ * would make track B's collider positions depend on whether track A was built
+ * before it. Keyed streams give the same layout for the same seed and key
+ * whatever the build order, and a rebuild of the same track reproduces it.
+ */
+export function getLayoutRng(key: string): SeededRng {
+  return createSeededRng(hashStringToSeed(`${getSessionSeed()}:${RNG_FORK.LAYOUT}:${key}`))
+}
+
+/**
  * ============================================================================
  * GAMEPLAY VS COSMETIC RNG POLICY
  * ============================================================================
@@ -209,6 +226,8 @@ export function getSessionRngFork(label: RngForkLabel | string): SeededRng {
  * - Dynamic launcher and trap boost impulse variances (fork: trap)
  * - Spinner bumper target rotation direction (fork: spinner)
  * - Slot machine activation checks and reel outcome generation (fork: slot)
+ * - Runtime collider layouts — adventure-track debris / prisms / chips / isles,
+ *   reactive peg clusters, dynamic scenario obstacles (getLayoutRng(key))
  *
  * EXEMPT (Cosmetic RNG, may use Math.random()):
  * - Audio synth frequencies, beep pitches, and noise buffer generation

@@ -10,6 +10,9 @@
 #include <emscripten/bind.h>
 #include "PhysicsWorld.h"
 #include <cstdint>
+#include <cstdio>
+#include <string>
+#include <vector>
 
 using namespace emscripten;
 using namespace pachinball;
@@ -389,5 +392,28 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     .function("getTransformSlotCount", &PhysicsWorld::getTransformSlotCount)
 
     // Legacy per-event callback (tests / debug). Production uses the packed buffer.
-    .function("setContactCallbackJS", &setContactCallbackJS);
+    .function("setContactCallbackJS", &setContactCallbackJS)
+
+    // World snapshots (Snapshot.h). serializeSnapshot hands back a fresh
+    // Uint8Array copy (the native vector dies with the call); restoreSnapshot
+    // copies the JS bytes in and returns a SnapshotStatus (0 = Ok).
+    .function("serializeSnapshot", optional_override([](const PhysicsWorld& self) -> emscripten::val {
+        const std::vector<uint8_t> blob = self.serialize();
+        return emscripten::val::global("Uint8Array").new_(
+            emscripten::typed_memory_view(blob.size(), blob.data()));
+      }))
+    .function("restoreSnapshot", optional_override([](PhysicsWorld& self, emscripten::val bytes) -> int {
+        const std::vector<uint8_t> blob = emscripten::convertJSArrayToNumberVector<uint8_t>(bytes);
+        return static_cast<int>(self.restore(blob.data(), blob.size()));
+      }))
+    // u64 values cross as hex / double: embind has no lossless u64 without BigInt.
+    .function("getStaticContentHash", optional_override([](const PhysicsWorld& self) -> std::string {
+        char hex[17];
+        std::snprintf(hex, sizeof hex, "%016llx",
+                      static_cast<unsigned long long>(self.staticContentHash()));
+        return std::string(hex);
+      }))
+    .function("getContactGeneration", optional_override([](const PhysicsWorld& self) -> double {
+        return static_cast<double>(self.getContactGeneration());
+      }));
 }

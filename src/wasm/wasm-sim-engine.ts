@@ -13,7 +13,7 @@ import type {
   WasmHingeDesc,
   WasmVolumeShape,
 } from './PhysicsModule'
-import type { WasmPhysicsModule } from './wasm-types'
+import type { WasmPhysicsModule, WasmSnapshotStatus } from './wasm-types'
 import type { PinFieldSpec } from '../core/pin-field'
 
 export interface WasmSimEngine {
@@ -139,4 +139,13 @@ export interface WasmSimEngine {
   hasTransformSnapshot(): boolean
   /** Worker-reported C++ step time (ms). In-process engines return 0. */
   getLastWorkerStepMs(): number
+
+  /**
+   * World snapshots (#431, native/src/Snapshot.h). In-process only for now:
+   * the worker client reports `null` / `Unsupported` rather than pretending,
+   * so replay verification refuses to run on the worker path.
+   */
+  serializeSnapshot(): Uint8Array | null
+  restoreSnapshot(bytes: Uint8Array): WasmSnapshotStatus
+  getStaticContentHash(): string | null
 }

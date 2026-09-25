@@ -26,7 +26,7 @@
  * (physics-worker-protocol.ts) — tests/wasm-worker-api-parity.test.ts enforces it.
  */
 
-import type { WasmPhysicsModule, WasmPhysicsWorldInstance, WasmContactEvent } from './wasm-types'
+import { WasmSnapshotStatus, type WasmPhysicsModule, type WasmPhysicsWorldInstance, type WasmContactEvent } from './wasm-types'
 import { CONTACT_STRIDE, decodeContactBuffer, toWasmContactEvent } from './contact-buffer'
 import {
   TRANSFORM_STRIDE,
@@ -581,6 +581,46 @@ export class WasmPhysicsEngine {
 
   hasTransformSnapshot(): boolean {
     return this.isReady
+  }
+
+  // ---- World snapshots (#431, native/src/Snapshot.h) ------------------------
+
+  /**
+   * Full solver-state snapshot, or null when the bundle predates snapshots.
+   * Take it between steps; it survives heap growth (it is a copy).
+   */
+  serializeSnapshot(): Uint8Array | null {
+    return this.world?.serializeSnapshot?.() ?? null
+  }
+
+  /**
+   * Rewind / fast-forward the world to `bytes`. On `Ok` every body — and the
+   * public-id counter — is exactly as serialized, so ids created after the
+   * snapshot are reissued by the replay in the same order. Any other status
+   * leaves the world untouched; `StaticMismatch` means the table was built
+   * differently and the caller must not continue as if restored.
+   */
+  restoreSnapshot(bytes: Uint8Array): WasmSnapshotStatus {
+    if (!this.world?.restoreSnapshot) return WasmSnapshotStatus.Unsupported
+    const status = this.world.restoreSnapshot(bytes) as WasmSnapshotStatus
+    if (status === WasmSnapshotStatus.Ok) {
+      this.stepCount_ = this.world.getStepCount()
+      // The restored world has not stepped: no contacts to deliver, and the
+      // transform buffer was re-scattered natively.
+      this.contactsFresh = false
+      this.transformView = null
+    }
+    return status
+  }
+
+  /** 16-hex-char static table hash, or null when unsupported. */
+  getStaticContentHash(): string | null {
+    return this.world?.getStaticContentHash?.() ?? null
+  }
+
+  /** Contact-manifold flush generation (0 when unsupported). */
+  getContactGeneration(): number {
+    return this.world?.getContactGeneration?.() ?? 0
   }
 
   getLastWorkerStepMs(): number {

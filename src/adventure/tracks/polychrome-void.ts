@@ -9,6 +9,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import { boxDesc } from '../track-collider-descriptors'
 import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import { getLayoutRng } from '../../core/seeded-rng'
 import { GROUP_RED, GROUP_GREEN, GROUP_BLUE, MASK_ALL } from '../adventure-types'
 
 export function buildPolychromeVoid(builder: TrackBuilder): void {
@@ -70,9 +71,11 @@ export function buildPolychromeVoid(builder: TrackBuilder): void {
 
     // Add Blue Ghosts
     const ghostCount = 5
+    // Ghost boxes are colliders: seeded lateral offsets.
+    const ghostRng = getLayoutRng('track:polychrome-void:ghosts')
     for (let i = 0; i < ghostCount; i++) {
       const dist = 3 + i * 2.5
-      const offset = (Math.random() - 0.5) * (crimWidth - 1)
+      const offset = (ghostRng.next() - 0.5) * (crimWidth - 1)
       const pos = crimStart.add(forward.scale(dist))
       const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
       const ghostPos = pos.add(right.scale(offset))
@@ -108,12 +111,14 @@ export function buildPolychromeVoid(builder: TrackBuilder): void {
   const isleSpacing = 3
   const isleSize = 2
 
+  // Which side is green picks each isle's collision group — physics, so seeded.
+  const isleRng = getLayoutRng('track:polychrome-void:isles')
   for (let i = 0; i < isleCount; i++) {
     currentPos = currentPos.add(forward.scale(isleSpacing))
 
     const offset = 1.5
     const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
-    const greenLeft = Math.random() > 0.5
+    const greenLeft = isleRng.next() > 0.5
 
     const p1Pos = currentPos.add(right.scale(-offset))
     const p2Pos = currentPos.add(right.scale(offset))

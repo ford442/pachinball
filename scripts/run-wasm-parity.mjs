@@ -6,7 +6,7 @@
  */
 
 import { execFileSync, execSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import path from 'node:path'
 
@@ -27,15 +27,19 @@ if (!existsSync(wasmModulePath)) {
 }
 console.log(`Using WASM module: ${wasmModulePath}`)
 
-// 1. Native C++ reference (Catch2 suite via ctest or direct binary)
+// 1. Native C++ reference (Catch2 suite via ctest or direct binary). The
+//    snapshot test also drops the parity scene's blob for §snapshot below.
+const snapshotFixture = path.join(buildNativeDir, 'snapshot_parity.bin')
+const nativeEnv = { ...process.env, PACHINBALL_SNAPSHOT_FIXTURE: snapshotFixture }
 try {
   if (!existsSync(nativeTest)) {
     console.log('Native test binary missing — building via npm run test:native')
-    execSync('npm run test:native', { cwd: root, stdio: 'inherit' })
+    execSync('npm run test:native', { cwd: root, stdio: 'inherit', env: nativeEnv })
   } else {
     execFileSync('ctest', ['--test-dir', buildNativeDir, '--output-on-failure'], {
       cwd: root,
       stdio: 'inherit',
+      env: nativeEnv,
     })
   }
   console.log('PASS native physics_world_test')
@@ -946,6 +950,108 @@ const DENSE_FIELD = {
   console.log(
     `${ok ? 'PASS' : 'FAIL'} wasm pin field keep-out/mask/dropout + handle cap ` +
     `(counts=${counts.join('/')} densePins=${pins} droppedStatics=${droppedStatics})`
+  )
+  if (!ok) failed = true
+}
+
+// #431 — world snapshots. The same scene native/tests/snapshot_test.cpp builds
+// (buildParityScene / driveParityScene — keep the two in step), stepped 90
+// frames on the bundle, must serialize to the SAME BYTES as the native build,
+// then round-trip: restore → re-serialize is identical, restore → step
+// replays the run bit-for-bit, and a differently built table is refused.
+{
+  const SNAPSHOT_AT = 90
+  const RUN_FRAMES = 180
+  const buildStatics = (w, extraBox = false) => {
+    w.setGravity(0, -9.81, -4)
+    w.addStaticBox(0, -0.5, 0, 6, 0.5, 8, 0, 0, 0, 1, 0.4, 0.2)
+    w.addStaticBox(0, 0.5, -6.5, 6, 1, 0.5, 0, 0, 0, 1, 0.4, 0.2)
+    for (let ix = -1; ix <= 1; ix++) {
+      for (let iz = 1; iz <= 2; iz++) w.addStaticCylinder(ix, 0.4, iz, 0.1, 0.4, 0, 0, 0, 1, 0.6, 0.1)
+    }
+    addPinField(w, {
+      origin: { x: -2, y: 0.4, z: 3 }, rows: 4, cols: 3, spacingX: 0.6, spacingZ: 0.6, rowOffsetX: 0.3,
+      radius: 0.08, halfHeight: 0.4, restitution: 0.6, friction: 0.1, dropoutSeed: 7, dropout: 0.2,
+    })
+    const piston = w.addKinematicMover(0.75, 0.25, -1.5, 0.5, 0.2, 0.5, 0, 0, 0, 1, 0.4, 0.2)
+    w.addSensorVolume(0, 0.5, -5, 6, 0.5, 0.4, 0, 0, 0, 1)
+    w.addForceField(-3, 0.5, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, -3, 0, true)
+    if (extraBox) w.addStaticBox(4, 0.5, 4, 0.2, 0.2, 0.2, 0, 0, 0, 1, 0.4, 0.2)
+    return piston
+  }
+  const buildScene = (w) => {
+    const piston = buildStatics(w)
+    const balls = []
+    for (let i = 0; i < 5; i++) {
+      balls.push(w.createRigidBody(-1.5 + 0.75 * i, 0.5, 5.5, 0, 0, -2, 0.08, 0.2, 0.5, 0.02, 0, 0, 0.5, 0.2, 0.1))
+    }
+    const flipper = w.createRigidBody(1.5, 0.3, -4.5, 0, 0, 0, 1, 0.12, 0.4, 0.02, 0, 1, 0.6, 0.2, 0.1)
+    w.setBodyRotation(flipper, 0, 0, 0.70710677, 0.70710677)
+    const hinge = w.createHinge(flipper, 0.9, 0.3, -4.5, 0, 1, 0, -0.5, 0.5)
+    return { piston, balls, flipper, hinge }
+  }
+  const drive = (w, s, frame) => {
+    const t = frame % 60
+    w.setNextKinematicTransform(s.piston, 0.75, (t < 30 ? t : 60 - t) / 64 + 0.25, -1.5, 0, 0, 0, 1)
+    w.setHingeMotor(s.hinge, frame % 40 < 20 ? 8 : -8, 50)
+    const ball = s.balls[0]
+    if (frame === 50) w.setBodyType(ball, 2)
+    if (frame >= 50 && frame < 110) w.setNextKinematicTransform(ball, -1.5, 1, 2 - (frame - 50) / 32, 0, 0, 0, 1)
+    if (frame === 110) w.setBodyType(ball, 0)
+  }
+  const trace = (w, s, from, to) => {
+    const out = []
+    for (let f = from; f < to; f++) {
+      drive(w, s, f)
+      w.step(1 / 60)
+      for (const id of [...s.balls, s.flipper]) {
+        out.push(w.getPosX(id), w.getPosY(id), w.getPosZ(id), w.getRotX(id), w.getRotY(id), w.getRotZ(id), w.getRotW(id))
+      }
+      out.push(w.getContactCount())
+    }
+    return out
+  }
+  const sameBytes = (a, b) => a.length === b.length && a.every((v, i) => v === b[i])
+  const firstDiffWord = (a, b) => {
+    for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) return i >> 2
+    return a.length === b.length ? -1 : Math.min(a.length, b.length) >> 2
+  }
+
+  const world = new Module.PhysicsWorld()
+  const scene = buildScene(world)
+  trace(world, scene, 0, SNAPSHOT_AT)
+  const blob = world.serializeSnapshot()
+  const native = existsSync(snapshotFixture) ? new Uint8Array(readFileSync(snapshotFixture)) : null
+  const nativeMatch = native !== null && sameBytes(blob, native)
+
+  const original = trace(world, scene, SNAPSHOT_AT, RUN_FRAMES)
+  const rewound = world.restoreSnapshot(blob)
+  const reserialized = sameBytes(world.serializeSnapshot(), blob)
+  const replayed = trace(world, scene, SNAPSHOT_AT, RUN_FRAMES)
+  const replayMatch = replayed.length === original.length && replayed.every((v, i) => Object.is(v, original[i]))
+
+  const fresh = new Module.PhysicsWorld()
+  buildStatics(fresh)
+  const freshStatus = fresh.restoreSnapshot(blob)
+  const freshMatch = freshStatus === 0 && (() => {
+    const t = trace(fresh, scene, SNAPSHOT_AT, RUN_FRAMES)
+    return t.length === original.length && t.every((v, i) => Object.is(v, original[i]))
+  })()
+
+  const other = new Module.PhysicsWorld()
+  buildStatics(other, true)
+  const mismatch = other.restoreSnapshot(blob)
+  const hashDiffers = other.getStaticContentHash() !== world.getStaticContentHash()
+  world.delete()
+  fresh.delete()
+  other.delete()
+
+  const ok = nativeMatch && rewound === 0 && reserialized && replayMatch && freshMatch && mismatch === 4 && hashDiffers
+  console.log(
+    `${ok ? 'PASS' : 'FAIL'} wasm snapshot native bytes + round trip ` +
+    `(bytes=${blob.length} native=${native ? (nativeMatch ? 'identical' : `differs@word${firstDiffWord(blob, native)}`) : 'missing'} ` +
+    `rewind=${rewound}/${reserialized ? 'same' : 'diff'}/${replayMatch ? 'bit-exact' : 'DIVERGED'} ` +
+    `fresh=${freshStatus}/${freshMatch ? 'bit-exact' : 'DIVERGED'} mismatchStatus=${mismatch})`
   )
   if (!ok) failed = true
 }

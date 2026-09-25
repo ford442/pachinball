@@ -41,6 +41,8 @@ set(PHYSICS_CORE_SOURCES
   src/KinematicBody.cpp
   src/PhysicsWorld.cpp
   src/PhysicsWorldStep.cpp
+  src/Snapshot.cpp
+  src/SnapshotCodec.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -163,6 +165,7 @@ if(NOT EMSCRIPTEN)
     tests/kinematic_body_test.cpp
     tests/cone_test.cpp
     tests/pin_field_test.cpp
+    tests/snapshot_test.cpp
   )
   target_link_libraries(physics_world_test PRIVATE
     pachinball_physics_native

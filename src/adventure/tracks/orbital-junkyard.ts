@@ -9,6 +9,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TrackBuilder } from '../track-builder'
 import { boxDesc } from '../track-collider-descriptors'
 import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import { getLayoutRng } from '../../core/seeded-rng'
 
 export function buildOrbitalJunkyard(builder: TrackBuilder): void {
   const junkMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#888888")
@@ -41,13 +42,15 @@ export function buildOrbitalJunkyard(builder: TrackBuilder): void {
     const rightVec = new Vector3(1, 0, 0)
     const normalVec = new Vector3(0, Math.cos(debrisIncline), Math.sin(debrisIncline))
 
+    // Debris boxes are colliders — placement, size and orientation all seeded.
+    const layout = getLayoutRng('track:orbital-junkyard:debris')
     for (let i = 0; i < debrisCount; i++) {
-      const dist = 2 + Math.random() * (debrisLen - 6)
-      const offset = (Math.random() - 0.5) * (debrisWidth - 2)
+      const dist = 2 + layout.next() * (debrisLen - 6)
+      const offset = (layout.next() - 0.5) * (debrisWidth - 2)
 
       const debrisPosOnSurface = debrisStartPos.add(forwardVec.scale(dist)).add(rightVec.scale(offset))
-      const type = Math.random() > 0.5 ? 'box' : 'tetra'
-      const scale = 0.5 + Math.random() * 1.0
+      const type = layout.next() > 0.5 ? 'box' : 'tetra'
+      const scale = 0.5 + layout.next() * 1.0
       const finalPos = debrisPosOnSurface.add(normalVec.scale(scale * 0.5))
 
       let mesh: import('@babylonjs/core/Meshes/mesh').Mesh
@@ -62,9 +65,9 @@ export function buildOrbitalJunkyard(builder: TrackBuilder): void {
       }
 
       mesh.position.copyFrom(finalPos)
-      mesh.rotation.x = Math.random() * Math.PI
-      mesh.rotation.y = Math.random() * Math.PI
-      mesh.rotation.z = Math.random() * Math.PI
+      mesh.rotation.x = layout.next() * Math.PI
+      mesh.rotation.y = layout.next() * Math.PI
+      mesh.rotation.z = layout.next() * Math.PI
       mesh.material = junkMat
       adventureTrack.push(mesh)
 
