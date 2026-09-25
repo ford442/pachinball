@@ -1,5 +1,5 @@
 /**
- * Replay ↔ C++ world snapshots (#431).
+ * Replay ↔ C++ world snapshots (#422).
  *
  * A replay is an input tape plus the world it was played on. The tape alone
  * is "hope the sim is deterministic"; this module adds the other half:

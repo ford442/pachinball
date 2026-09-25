@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { assertWasmOwnerReady, bootWasmOwner, type GameHooks } from './helpers/wasm-owner-boot'
 
 /**
- * `?seed=12345` twice → the same bumper-hit count over a fixed input tape (#431).
+ * `?seed=12345` twice → the same bumper-hit count over a fixed input tape (#422).
  *
  * Two fresh page loads with the same share-link seed must play the same game:
  * the seed reaches `initSessionRng`, the spawn / feeder forks draw the same
@@ -85,7 +85,7 @@ async function playTape(page: Page): Promise<TapeResult> {
   })
 }
 
-test.describe('share-link seed determinism (#431)', () => {
+test.describe('share-link seed determinism (#422)', () => {
   test('?seed=12345 twice gives the same bumper hits over a fixed tape', async ({ browser }) => {
     test.setTimeout(240_000)
     const runs: TapeResult[] = []

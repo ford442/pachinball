@@ -259,7 +259,7 @@ export class GamePhysicsController {
   }
 
   /**
-   * Frame-0 world snapshot (#431), taken and restored at the same point: after
+   * Frame-0 world snapshot (#422), taken and restored at the same point: after
    * this frame's inputs have driven flippers / movers, right before the step.
    * Recording fingerprints the world once frame 0 is on the tape; playback
    * restores that snapshot, and says so on screen when it cannot.

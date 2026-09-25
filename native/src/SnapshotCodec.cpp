@@ -1,5 +1,5 @@
 /**
- * Little-endian word codec + FNV-1a hasher for world snapshots (#431) —
+ * Little-endian word codec + FNV-1a hasher for world snapshots (#422) —
  * SnapshotWriter / SnapshotReader / SnapshotHasher from Snapshot.h. Bytes are
  * assembled with shifts, never by casting host memory, so the wire format is
  * the same on every build (native x86-64, WASM).

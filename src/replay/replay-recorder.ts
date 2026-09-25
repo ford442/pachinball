@@ -17,7 +17,7 @@ function normalizeReplayPhysicsEngine(value: unknown): WasmPhysicsRuntimeMode {
 }
 
 /**
- * `physicsEngine` plus the optional world fingerprint (#431): snapshot
+ * `physicsEngine` plus the optional world fingerprint (#422): snapshot
  * version, static-table / pin-occupancy / feeder-tunables hashes and the
  * frame-0 C++ snapshot. Captured at the first recorded step, not at `start()`
  * — the table (a Daily Cascade rebuild) is exported between the two.

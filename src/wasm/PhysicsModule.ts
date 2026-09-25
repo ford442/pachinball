@@ -583,7 +583,7 @@ export class WasmPhysicsEngine {
     return this.isReady
   }
 
-  // ---- World snapshots (#431, native/src/Snapshot.h) ------------------------
+  // ---- World snapshots (#422, native/src/Snapshot.h) ------------------------
 
   /**
    * Full solver-state snapshot, or null when the bundle predates snapshots.

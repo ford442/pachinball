@@ -448,7 +448,7 @@ export interface WasmPhysicsWorldInstance {
    * Versioned little-endian world snapshot (native/src/Snapshot.h): bodies,
    * handles, hinges, movers, fields, group masks, kinematic targets and the
    * contact manifold. A fresh copy — safe to keep across steps.
-   * Optional: bundles before #431 do not export it.
+   * Optional: bundles before #422 do not export it.
    */
   serializeSnapshot?(): Uint8Array
 

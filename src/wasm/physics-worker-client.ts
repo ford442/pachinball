@@ -500,7 +500,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   }
 
   /**
-   * Snapshots are in-process only (#431): the C++ world lives on the worker
+   * Snapshots are in-process only (#422): the C++ world lives on the worker
    * and a blob would need a request/reply round trip the batch protocol does
    * not have. Report the gap instead of returning a stale or partial state.
    */

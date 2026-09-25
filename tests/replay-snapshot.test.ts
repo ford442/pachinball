@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * Replay world fingerprint + frame-0 snapshot gate (#431), without a bundle.
+ * Replay world fingerprint + frame-0 snapshot gate (#422), without a bundle.
  * The compiled-bundle round trip lives in tests/replay-snapshot-wasm.test.ts.
  */
 

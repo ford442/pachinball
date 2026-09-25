@@ -50,7 +50,7 @@ describe('ChallengeSystem & Share Link Utilities', () => {
     expect(ChallengeSystem.createChallengeShareUrl(7, 1000)).toContain(`map=${DEFAULT_TABLE_MAP_ID}`)
   })
 
-  it('a challenge id without ?seed= draws a u32 from the entropy source, never Math.random (#431)', () => {
+  it('a challenge id without ?seed= draws a u32 from the entropy source, never Math.random (#422)', () => {
     const random = vi.spyOn(Math, 'random')
     const active = new ChallengeSystem().checkUrlParameters('?challenge=abc123')
     expect(random).not.toHaveBeenCalled()

@@ -7,7 +7,7 @@
 namespace pachinball {
 
 /**
- * Versioned world snapshot (#431) — the solver state a replay needs to rewind
+ * Versioned world snapshot (#422) — the solver state a replay needs to rewind
  * or fast-forward the C++ world bit-for-bit.
  *
  * Wire format: a flat run of little-endian 32-bit words (`float32` bit

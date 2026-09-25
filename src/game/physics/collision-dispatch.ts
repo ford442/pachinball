@@ -315,7 +315,7 @@ export class CollisionDispatcher {
   /**
    * Simulation time for the pair debounce, in ms: fixed steps taken × the fixed
    * step. Wall-clock time would make scoring depend on how fast the frames were
-   * rendered — a replay verified headless (or a snapshot fast-forward, #431)
+   * rendered — a replay verified headless (or a snapshot fast-forward, #422)
    * would debounce different hits than the live run did. Contacts are
    * dispatched after their step is counted, so one step's contacts share a stamp.
    * Hosts without a step counter (unit-test stubs) fall back to wall time.

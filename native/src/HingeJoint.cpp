@@ -21,7 +21,7 @@ float wrapPi(float a) {
  * atan2 from + - * / and sqrt only — every one correctly rounded by IEEE 754 —
  * so the native build (glibc) and the WASM bundle (musl) agree bit-for-bit.
  * `std::atan2` differs between those libms by an ULP or two, which is enough
- * to make a flipper's snapshot bytes diverge (#431, scripts/run-wasm-parity.mjs).
+ * to make a flipper's snapshot bytes diverge (#422, scripts/run-wasm-parity.mjs).
  *
  * Evaluated in double: reduce to t ∈ [-tan(π/12), tan(π/12)] via
  * atan(a) = π/6 + atan((√3·a − 1) / (a + √3)), then an odd Taylor series whose

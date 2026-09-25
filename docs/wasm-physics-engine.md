@@ -89,7 +89,7 @@ native/
 │   ├── ContactListener.h        Contact-event queue + packed contact buffer
 │   ├── PhysicsWorld.h / .cpp    Simulation world: bodies, colliders, handle ranges
 │   ├── PhysicsWorldStep.cpp     step() / substep(): integration, broadphase, solver loop, transform scatter
-│   ├── Snapshot.h / .cpp        serialize() / restore(): versioned LE world snapshot + static hash (#431)
+│   ├── Snapshot.h / .cpp        serialize() / restore(): versioned LE world snapshot + static hash (#422)
 │   ├── SnapshotCodec.cpp        Little-endian word writer / reader + FNV-1a hasher for snapshots
 │   └── bindings.cpp             EMSCRIPTEN_BINDINGS (Embind) — Emscripten only
 └── tests/                       Catch2 (native build only)
@@ -103,7 +103,7 @@ native/
     ├── kinematic_body_test.cpp  Runtime body type: capture, steer, release (#420)
     ├── cone_test.cpp            Static cone: apex / slant / base / inside / groups (#420)
     ├── pin_field_test.cpp       Pin field: 12×12 fall-through, keep-out, mask, dropout, parity, handle cap (#421)
-    ├── snapshot_test.cpp        World snapshot: rewind / fresh-table restore bit-exact, manifold, mismatch, malformed (#431)
+    ├── snapshot_test.cpp        World snapshot: rewind / fresh-table restore bit-exact, manifold, mismatch, malformed (#422)
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
@@ -832,7 +832,7 @@ no Rapier world on the owner path (Debug HUD `rapier ms` /
 or the missing-bundle fallback.
 
 The hinge angle is `2·atan2(sinHalf, w)` of the rest-relative rotation, via a
-portable `atan2` (HingeJoint.cpp) so native and WASM agree bit-for-bit (#431).
+portable `atan2` (HingeJoint.cpp) so native and WASM agree bit-for-bit (#422).
 
 Dynamic capsules now report isotropic inertia (averaged cylinder) so the hinge
 can apply motor torque. Capsule-vs-capsule collision remains skipped.
@@ -878,7 +878,7 @@ flicking tests; production flippers use hinges (above).
 
 ---
 
-## World snapshots (#431)
+## World snapshots (#422)
 
 `native/src/Snapshot.{h,cpp}` adds `PhysicsWorld::serialize()` / `restore()`:
 a flat run of little-endian 32-bit words (float32 bit patterns, int32/uint32;

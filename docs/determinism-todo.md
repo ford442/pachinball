@@ -1,6 +1,6 @@
 # Determinism — `Math.random()` catalogue and replay spine
 
-Tracked for **#341** (replay spine), **#343** (Async Challenges) and **#431**
+Tracked for **#341** (replay spine), **#343** (Async Challenges) and **#422**
 (solver snapshots + the last physics-affecting `Math.random`).
 
 **Session RNG:** `initSessionRng(seed)` in `game-lifecycle.ts` on every `startGame()`. The seed is the replay's seed when spectating, the Daily Cascade layout seed in daily mode, the `?seed=` / `?challenge=seed:target` share-link seed when one is active (`getChallengeSystem()`), and `randomU32Seed()` otherwise. Physics-affecting draws use `getSessionRngFork(label)` so sub-streams stay independent and reproducible; runtime-built collider layouts use `getLayoutRng(key)`.
@@ -109,7 +109,7 @@ Still wall-clock (not physics-trajectory-affecting unless the tape nudges):
 
 ---
 
-## Solver snapshots (#431)
+## Solver snapshots (#422)
 
 `PhysicsWorld::serialize()` / `restore()` (`native/src/Snapshot.{h,cpp}`) —
 versioned little-endian blob of the full C++ solver state, refused on a

@@ -954,7 +954,7 @@ const DENSE_FIELD = {
   if (!ok) failed = true
 }
 
-// #431 — world snapshots. The same scene native/tests/snapshot_test.cpp builds
+// #422 — world snapshots. The same scene native/tests/snapshot_test.cpp builds
 // (buildParityScene / driveParityScene — keep the two in step), stepped 90
 // frames on the bundle, must serialize to the SAME BYTES as the native build,
 // then round-trip: restore → re-serialize is identical, restore → step

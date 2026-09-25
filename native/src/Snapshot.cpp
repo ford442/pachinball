@@ -1,5 +1,5 @@
 /**
- * World snapshots (#431): `PhysicsWorld::serialize()` / `restore()` and the
+ * World snapshots (#422): `PhysicsWorld::serialize()` / `restore()` and the
  * little-endian word codec they share. Format and contract: Snapshot.h.
  *
  * Restore is two-phase — decode everything into scratch copies, validate,

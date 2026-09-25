@@ -129,7 +129,7 @@ describe('selectWeightedBallType with explicit fork', () => {
   })
 })
 
-describe('getLayoutRng — runtime collider layouts (#431)', () => {
+describe('getLayoutRng — runtime collider layouts (#422)', () => {
   const draw = (key: string, n = 6) => {
     const rng = getLayoutRng(key)
     return Array.from({ length: n }, () => rng.next())

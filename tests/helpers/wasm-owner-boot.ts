@@ -61,7 +61,7 @@ export type OwnerEngine = 'wasm-owner' | 'wasm-worker'
 export async function bootWasmOwner(
   page: Page,
   mode: OwnerEngine = 'wasm-owner',
-  /** Extra query parameters, e.g. `seed=12345` (#431). */
+  /** Extra query parameters, e.g. `seed=12345` (#422). */
   query = '',
 ): Promise<{ wasmReady: boolean; engine: string | null; rapierLoaded: boolean; rapierRequests: string[] }> {
   // Any fetch of the Rapier module (the Vite dep in dev, the rapier-*.js chunk in a build).

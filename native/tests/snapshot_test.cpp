@@ -1,5 +1,5 @@
 /**
- * World snapshots (#431): serialize → restore → step must reproduce the
+ * World snapshots (#422): serialize → restore → step must reproduce the
  * original run bit-for-bit, in the same world (rewind) and in a freshly
  * built one (replay start), and a snapshot must refuse a different table.
  *

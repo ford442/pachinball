@@ -1,5 +1,5 @@
 /**
- * Replay against the real compiled bundle on the wasm-owner path (#431):
+ * Replay against the real compiled bundle on the wasm-owner path (#422):
  *
  *   record N frames → the frame-0 C++ snapshot rides in the replay JSON →
  *   a FRESH replay client restores it before frame 0 → replays the input
@@ -182,7 +182,7 @@ async function replay(module: WasmPhysicsModule, payload: ReplayPayload, opts: {
   return client
 }
 
-describe.skipIf(!RUN)('replay from a C++ snapshot on the compiled bundle (#431)', () => {
+describe.skipIf(!RUN)('replay from a C++ snapshot on the compiled bundle (#422)', () => {
   it('restores frame 0 in a fresh client and replays score + ball pose bit-for-bit', async () => {
     const module = await loadModule()
     const { live, payload } = await recordLiveRun(module)

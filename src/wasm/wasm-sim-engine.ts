@@ -141,7 +141,7 @@ export interface WasmSimEngine {
   getLastWorkerStepMs(): number
 
   /**
-   * World snapshots (#431, native/src/Snapshot.h). In-process only for now:
+   * World snapshots (#422, native/src/Snapshot.h). In-process only for now:
    * the worker client reports `null` / `Unsupported` rather than pretending,
    * so replay verification refuses to run on the worker path.
    */
