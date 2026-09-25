@@ -75,16 +75,19 @@ native/
 │   ├── BroadphaseGrid.h / .cpp  Uniform-grid broadphase
 │   ├── Narrowphase.cpp          Pair tests (sphere / capsule / box / statics)
 │   ├── CollisionFilter.h        membership/filter masks (mirrors CollisionGroups)
-│   ├── StaticShapes.h / .cpp    Static box / capsule / sphere
+│   ├── StaticShapes.h / .cpp    Static box / capsule / sphere (+ ConeDesc)
 │   ├── Cylinder.h / .cpp        Static cylinder (closed-form sphere vs cylinder)
+│   ├── Cone.cpp                 Static cone — ball-trap funnels (closed-form sphere vs cone)
 │   ├── TriangleMesh.h / .cpp    Static triangle mesh (addStaticTriangleMesh)
 │   ├── VolumeShape.h / .cpp     Box / Cylinder / Sphere tag for movers + sensors
 │   ├── KinematicMover.h / .cpp  Pose-driven kinematic movers
+│   ├── KinematicBody.cpp        Runtime setBodyType + kinematic rigid-body targets (toy capture)
 │   ├── SensorVolume.h / .cpp    Enter/Stay/Exit trigger volumes
 │   ├── ForceField.h / .cpp      Oriented force / acceleration regions
 │   ├── HingeJoint.h / .cpp      World-anchored revolute hinge + motor
 │   ├── ContactListener.h        Contact-event queue + packed contact buffer
-│   ├── PhysicsWorld.h / .cpp    Simulation world (step, solver, handle ranges)
+│   ├── PhysicsWorld.h / .cpp    Simulation world: bodies, colliders, handle ranges
+│   ├── PhysicsWorldStep.cpp     step() / substep(): integration, broadphase, solver loop, transform scatter
 │   └── bindings.cpp             EMSCRIPTEN_BINDINGS (Embind) — Emscripten only
 └── tests/                       Catch2 (native build only)
     ├── physics_world_test.cpp   Integration, contacts, broadphase, sleep, benchmark
@@ -94,12 +97,14 @@ native/
     ├── kinematic_mover_test.cpp
     ├── sensor_volume_test.cpp
     ├── collision_filter_test.cpp
+    ├── kinematic_body_test.cpp  Runtime body type: capture, steer, release (#420)
+    ├── cone_test.cpp            Static cone: apex / slant / base / inside / groups (#420)
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
 ├── wasm-types.ts                TypeScript interfaces matching the Embind API
 ├── PhysicsModule.ts             WasmPhysicsEngine: load, world, table statics, bodies, hinges, step
-├── physics-module-adventure.ts  Cylinder / sphere / mesh / mover / sensor / box body / force field
+├── physics-module-adventure.ts  Cylinder / sphere / cone / mesh / mover / sensor / box body / force field
 ├── wasm-sim-engine.ts           WasmSimEngine interface (in-process engine + worker client)
 ├── physics-worker-protocol.ts   Worker command union + id shadow
 ├── physics-worker-runtime.ts    applyPhysicsCommand / WorkerSnapshotPublisher
@@ -380,8 +385,8 @@ Debug HUD (Developer settings → Enable Debug HUD) shows `engine` (`wasmMode`),
 
 ## Static colliders (Phase 2a)
 
-The C++ engine supports oriented static boxes, capsules, cylinders and
-spheres in addition to infinite planes and sphere bodies:
+The C++ engine supports oriented static boxes, capsules, cylinders, spheres
+and cones in addition to infinite planes and sphere bodies:
 
 ```typescript
 engine.addStaticBox(
@@ -420,6 +425,17 @@ engine.addStaticSphere(
   0.2
 )
 
+// #420 — ball-trap funnels. Apex at +halfHeight on local Y, base disc at
+// -halfHeight: Rapier's ColliderDesc.cone(halfHeight, radius), with the same
+// radius-first argument swap as the cylinder above.
+engine.addStaticCone(
+  { x: -5, y: 0.5, z: 10 },       // centre
+  0.2, 0.6,                        // base radius, half-height (local Y)
+  { x: 0, y: 0, z: 0, w: 1 },
+  0.6,
+  0.3
+)
+
 // Statics are append-only — a rebuilt scene (a new adventure track, a fresh
 // WasmOwner.rebuild) must clear first or it stacks a second copy. This
 // invalidates every negative handle; dynamic bodies and hinges survive.
@@ -437,7 +453,10 @@ and `native/src/StaticShapes.h`):
 | `-3000` | kinematic OBB mover |
 | `-4000` | OBB sensor volume |
 | `-5000` | static cylinder |
+| `-6000` | static triangle mesh |
+| `-7000` | force field |
 | `-8000` | static sphere |
+| `-9000` | static cone |
 
 **Sphere vs cylinder** is closed form (`native/src/StaticShapes.cpp`). The ball
 centre is transformed into the cylinder's local frame and clamped
@@ -448,6 +467,17 @@ strictly inside the solid falls back to the shallower of the two exit faces.
 No GJK, no convex solver — the adventure tracks between them use only cuboid,
 cylinder and ball, plus prism-pathway's triangular prisms, which are closed
 convex triangle meshes (`triangularPrismLayout`) rather than a hull.
+
+**Sphere vs cone** (`native/src/Cone.cpp`, #420) is closed form too. The solid
+is the triangle apex (0, h) / rim (R, −h) / base centre (0, −h) swept around
+the axis, and a point's nearest cone point always lies in the half-plane
+through the axis and that point — so the query runs in 2D, (ρ, y), against
+the base segment and the slant segment, then lifts back along the point's
+radial direction. Inside the solid it exits through whichever of the base and
+the slant is shallower. The broadphase files a cone under its bounding
+cylinder. `run-wasm-parity.mjs` compares a slant hit against Rapier's own cone.
+A native cone was chosen over a TS-emitted cylinder + sphere compound: it
+added one ~170-line TU and kept `PhysicsWorld.cpp` well under the 500-line cap.
 
 Native C++ tests (no browser, no Emscripten):
 
@@ -492,6 +522,12 @@ Test scenarios (friction and hinge cases live in `hinge_friction_test.cpp`):
 | `ball crossing a sensor volume emits exactly one enter and one exit` (`sensor_volume_test.cpp`) | Enter/Stay/Exit lifecycle, zero impulse |
 | `ball dwelling inside a sensor for N frames emits N-2 stay events` (`sensor_volume_test.cpp`) | Multi-frame dwell + exit-by-teleport lifecycle |
 | `two bodies whose filter masks exclude each other never generate a contact pair` (`collision_filter_test.cpp`) | Broadphase respects membership/filter masks |
+| `Dynamic <-> Kinematic round trip preserves mass` (`kinematic_body_test.cpp`) | `setBodyType` zeroes / restores inverse mass; a captured ball ignores impulses |
+| `kinematic ball does not respond to gravity` (`kinematic_body_test.cpp`) | No integration or force accumulation while kinematic |
+| `release velocity matches the last kinematic delta` (`kinematic_body_test.cpp`) | → Dynamic keeps the pose-delta velocity; free flight continues it |
+| `captured ball holds for 30 frames while a second ball rolls past` (`kinematic_body_test.cpp`) | The held ball stays on its targets and deflects the roller without tunnelling |
+| `kinematic body skips static solids but still trips sensors` (`kinematic_body_test.cpp`) | No impulse-less contact spam against statics; sensors still see a carried ball |
+| `a ball hitting the slant gets the slant normal` (`cone_test.cpp`, + apex / base / inside / rotated / groups) | Sphere-vs-cone regions and handle family |
 
 Parity suite (native Catch2 + compiled WASM bundle):
 
@@ -620,12 +656,32 @@ Rapier's defaults for anything left unset). `WasmTableWorld.createRigidBody` /
   kinematic target (`setNextKinematicTranslation`) becomes the pose after the
   step, as in Rapier.
 
-Two Rapier states have no C++ flag yet — a toy holding a captured ball
-(`setBodyType(KinematicPositionBased)`) and a disabled body. A linked body in
-either state is *held*: `WasmTableWorld.beginStep()` pins it at the hold pose
-with zero velocity before every step, and reads report the hold pose. Disabled
-bodies also drop to collision groups `0/0`. A native `setBodyType` belongs to
-the toys issue; the hold keeps the toy FSMs working until then.
+**Runtime body type (#420).** A linked body's Rapier type is a C++ body type.
+A toy capturing a ball (`setBodyType(KinematicPositionBased)`) flips the C++
+body to `Kinematic` — infinite mass, no gravity, velocity zeroed, pose kept —
+and its `setNextKinematicTranslation` / `Rotation` become C++ pose targets on
+the ball's WASM id (`setNextKinematicTransform(id ≥ 0, …)`): the step moves the
+body onto the target and gives it the pose delta over the fixed tick as its
+velocity, so a held ball pushes a passing ball like a wall. A tick without a
+target leaves a driven body at rest. Back to `Dynamic` rebuilds mass and
+inertia and keeps that last kinematic velocity, so a release carries the
+well's motion before the toy's impulse. A kinematic body never collides with
+statics or movers (no impulse can pass, and Rapier reports no
+kinematic-vs-fixed contact); sensors still see it. A disabled body is frozen
+the same way and also drops to collision groups `0/0`; a hinged flipper is
+never retyped. `WasmBody.translation()` of a driven body reports its last
+target, since the worker's snapshot trails a frame.
+
+Every toy that holds a ball — MagSpin, NanoLoom, Prism Core, Gauss Cannon,
+Quantum Tunnel, `BallManager`'s hologram catch and the ball traps — goes
+through one driver, `CapturedBall` (`src/core/captured-ball.ts`):
+`capture(ball)` → `steer(ball, pose)` each tick → `release(ball, { impulse,
+linvel, angvel })`. The toy state machines stay in TypeScript; the body-type
+flip and the kinematic integration live in the solver that steps the ball.
+`tests/feeder-golden-fixtures.test.ts` replays each feeder's golden FSM on the
+Rapier mock and on the owner path (`WasmTableWorld` + the `WasmSimEngine`
+fake) with identical impulses; `tests/wasm-owner-capture.spec.ts` captures and
+launches a real ball in `wasm-owner` and `wasm-worker`.
 
 Otherwise a linked body keeps C++'s all-groups default, as owner-mode balls
 always have. The authored group word is kept on the collider but not forwarded
@@ -638,10 +694,10 @@ Rapier collider:
 
 | Body | Collider | C++ |
 |------|----------|-----|
-| fixed | box / capsule / cylinder / sphere | `addStaticBox` / `addStaticCapsule` / `addStaticCylinder` / `addStaticSphere` |
+| fixed | box / capsule / cylinder / sphere / cone | `addStaticBox` / `addStaticCapsule` / `addStaticCylinder` / `addStaticSphere` / `addStaticCone` |
 | any | sensor box / cylinder / sphere | `addSensorVolume` |
 | kinematic | box / cylinder | `addKinematicMover`, posed each tick from the body's target |
-| any | cone, convex hull, kinematic capsule, unlinked dynamic | reported, not exported |
+| any | convex hull, kinematic capsule / cone / sphere, unlinked dynamic | reported, not exported |
 
 Export order is deterministic and C++ static ids are index-based, so a
 re-export (an adventure track switch, a table edit) hands every collider the
@@ -650,10 +706,11 @@ same WASM id. Authored collision groups are applied (`setCollisionGroups`).
 **The owner table scope.** `GameObjects.getWasmExportBodies()` names the table
 bodies the C++ world simulates: everything with a mesh binding (walls,
 slingshots, bumpers, pachinko pins and targets, decoration rails), the lane
-rollover sensors and the drain. Every other authored body — RailBuilder's rails
-and guards, the plunger body, the ball traps / spinner / launcher / gate, the
-feeders, the LCD ground (the owner's ground plane replaces it) — is recorded but
-held out, and listed with a reason by `WasmOwner.getTableUnsupported()`. Those
+rollover sensors and the drain; `GamePhysicsController` adds the ball traps
+(funnel cone + chamber sensor, #420). Every other authored body — RailBuilder's
+rails and guards, the plunger body, the spinner / launcher / gate, the
+feeders' well geometry, the LCD ground (the owner's ground plane replaces it)
+— is recorded but held out, and listed with a reason by `WasmOwner.getTableUnsupported()`. Those
 bodies were authored against the Rapier table surface (the LCD ground's top,
 y = −0.9), where the ball rolls underneath them; the owner's ground plane is
 y = 0, and exported unchanged they close the plunger lane. They join the scope

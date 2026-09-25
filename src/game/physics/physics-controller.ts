@@ -98,7 +98,12 @@ export class GamePhysicsController {
           const tableWorld = this.host.physics.getWasmTableWorld?.() ?? null
           if (!this.wasmOwner && tableWorld) {
             this.wasmOwner = new WasmOwner(engine, tableWorld)
-            this.wasmOwner.setTableScope(() => this.host.gameObjects?.getWasmExportBodies() ?? [])
+            this.wasmOwner.setTableScope(() => [
+              ...(this.host.gameObjects?.getWasmExportBodies() ?? []),
+              // Ball traps (#420): the funnel is a C++ cone and the chamber a
+              // sensor sphere; the trap sits well clear of the plunger lane.
+              ...(this.host.ballTrapBuilder?.getBodies() ?? []),
+            ])
           }
           this.wasmBridge = this.wasmOwner
           if (this.wasmOwner) {
@@ -332,8 +337,8 @@ export class GamePhysicsController {
       owner.syncAdventureTrack(this.adventureTrackState(this.host.adventureMode?.isActive() ?? false))
       owner.syncStatics()
       owner.driveFlippers(inputFrame, stepDt)
-      // Pin held balls; push the plunger, gates, pistons, platters and mills
-      // into their C++ movers.
+      // Push the plunger, gates, pistons, platters and mills into their C++
+      // movers (captured balls are C++ kinematic bodies already).
       owner.beginStep(stepDt)
       this.host.physics.setMirrorOverheadMs?.(0)
     }

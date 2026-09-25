@@ -48,3 +48,9 @@ export {
   type Pose,
   type VolumeKind,
 } from './pose-math'
+export {
+  CapturedBall,
+  type CapturedBallOptions,
+  type CapturedBallPose,
+  type CapturedBallRelease,
+} from './captured-ball'

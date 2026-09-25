@@ -43,6 +43,7 @@ export function applyPhysicsCommand(
     | 'addStaticCapsule'
     | 'addStaticCylinder'
     | 'addStaticSphere'
+    | 'addStaticCone'
     | 'addStaticTriangleMesh'
     | 'addSensorVolume'
     | 'addKinematicMover'
@@ -61,6 +62,7 @@ export function applyPhysicsCommand(
     | 'setAngularVelocity'
     | 'setBodyPosition'
     | 'setBodyRotation'
+    | 'setBodyType'
     | 'createHinge'
     | 'setHingeMotor'
     | 'removeHinge'
@@ -92,6 +94,10 @@ export function applyPhysicsCommand(
       )
     case 'addStaticSphere':
       return engine.addStaticSphere(cmd.center, cmd.radius, cmd.restitution, cmd.friction)
+    case 'addStaticCone':
+      return engine.addStaticCone(
+        cmd.center, cmd.radius, cmd.halfHeight, cmd.rotation, cmd.restitution, cmd.friction,
+      )
     case 'addStaticTriangleMesh':
       return engine.addStaticTriangleMesh(
         cmd.vertices, cmd.indices, cmd.restitution, cmd.friction, cmd.doubleSided,
@@ -103,7 +109,7 @@ export function applyPhysicsCommand(
         cmd.position, cmd.halfExtents, cmd.rotation, cmd.restitution, cmd.friction, cmd.shape,
       )
     case 'setNextKinematicTransform':
-      engine.setNextKinematicTransform(cmd.moverId, cmd.position, cmd.rotation)
+      engine.setNextKinematicTransform(cmd.id, cmd.position, cmd.rotation)
       return 0
     case 'setCollisionGroups':
       engine.setCollisionGroups(cmd.id, cmd.membership, cmd.filter)
@@ -143,6 +149,9 @@ export function applyPhysicsCommand(
       return 0
     case 'setBodyRotation':
       engine.setBodyRotation(cmd.id, cmd.qx, cmd.qy, cmd.qz, cmd.qw)
+      return 0
+    case 'setBodyType':
+      engine.setBodyType(cmd.id, cmd.bodyType)
       return 0
     case 'createHinge': {
       const id = engine.createHinge(cmd.desc)

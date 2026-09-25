@@ -5,12 +5,12 @@
  * read back off a Rapier collider any more — and adds each one to the C++
  * world:
  *
- *   fixed body, solid    box / capsule / cylinder / sphere → addStatic*
+ *   fixed body, solid    box / capsule / cylinder / sphere / cone → addStatic*
  *   any body, sensor     box / cylinder / sphere          → addSensorVolume
  *   kinematic body       box / cylinder                   → addKinematicMover
  *
- * Every collider the C++ world cannot represent (cones, convex hulls, a
- * kinematic capsule, a dynamic body with no C++ equivalent) is returned in
+ * Every collider the C++ world cannot represent (convex hulls, a kinematic
+ * capsule or cone, a dynamic body with no C++ equivalent) is returned in
  * `unsupported` with a reason instead of being silently dropped, so the debug
  * HUD can show exactly what owner mode is missing.
  *
@@ -173,8 +173,11 @@ function exportCollider(
       if (id !== null) result.debug.push({ kind: 'sphere', center, radius: shape.radius })
       return id
     }
-    case 'cone':
-      return refuse('the C++ world has no cone shape')
+    case 'cone': {
+      const id = accept(engine.addStaticCone(center, shape.radius, shape.halfHeight, rotation, desc.restitution, desc.friction))
+      if (id !== null) result.debug.push({ kind: 'cone', center, radius: shape.radius, halfHeight: shape.halfHeight, rotation })
+      return id
+    }
     case 'convexHull':
       return refuse('the C++ world has no convex hull shape')
   }

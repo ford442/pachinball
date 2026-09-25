@@ -383,6 +383,28 @@ BodyView BodyStore::viewById(HandleTable& handles, int publicId) {
   return view(dense);
 }
 
+void BodyStore::setType(int denseIndex, BodyType type) {
+  if (denseIndex < 0 || denseIndex >= denseCount()) return;
+  const std::size_t i = static_cast<std::size_t>(denseIndex);
+
+  RigidBodyDesc desc;
+  desc.type = type;
+  desc.shape = static_cast<Shape>(shape_[i]);
+  desc.mass = mass_[i];
+  desc.radius = radius_[i];
+  desc.capsuleHalfHeight = capsuleHalfHeight_[i];
+  desc.boxHalfExtents = boxHalfExtents(denseIndex);
+
+  type_[i] = static_cast<uint8_t>(type);
+  invMass_[i] = (type == BodyType::Dynamic && desc.mass > 0.f) ? 1.f / desc.mass : 0.f;
+  invInertia_[i] = computeInvInertia(desc);
+  forceX_[i] = 0.f;
+  forceY_[i] = 0.f;
+  forceZ_[i] = 0.f;
+  active_[i] = 1;
+  sleepCounter_[i] = 0;
+}
+
 void BodyStore::integrateAll(float dt, const Vec3& gravity) {
   const int n = denseCount();
   for (int i = 0; i < n; ++i) {

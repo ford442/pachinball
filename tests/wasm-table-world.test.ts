@@ -83,24 +83,55 @@ describe('WasmTableWorld balls', () => {
     expect(ball.translation()).toEqual({ x: 1, y: 2, z: 9.5 })
   })
 
-  it('holds a ball a toy made kinematic and releases it on Dynamic', () => {
+  it('flips a captured ball to a C++ kinematic body and releases it with the well motion (#420)', () => {
     const { engine, world } = setup()
     const ball = spawnBall(world)
     ball.setLinvel({ x: 3, y: 0, z: 0 }, true)
     ball.setBodyType(PhysicsBodyType.KinematicPositionBased, true)
     expect(ball.isKinematic()).toBe(true)
-    ball.setNextKinematicTranslation({ x: 4.5, y: 1, z: 15 })
-    ball.applyImpulse({ x: 9, y: 9, z: 9 }, true)
-    expect(engine.applyImpulse).not.toHaveBeenCalled()
-
-    world.beginStep()
-    engine.step(1 / 60)
-    expect(ball.translation()).toEqual({ x: 4.5, y: 1, z: 15 })
+    expect(engine.setBodyType).toHaveBeenLastCalledWith(0, 2)
     expect(ball.linvel()).toEqual({ x: 0, y: 0, z: 0 })
 
+    // The target goes to the ball's WASM id; impulses and velocity writes are dropped.
+    ball.setNextKinematicTranslation({ x: 0.6, y: 0.25, z: 0 })
+    expect(engine.setNextKinematicTransform).toHaveBeenLastCalledWith(0, { x: 0.6, y: 0.25, z: 0 }, { x: 0, y: 0, z: 0, w: 1 })
+    ball.applyImpulse({ x: 9, y: 9, z: 9 }, true)
+    ball.setLinvel({ x: 9, y: 9, z: 9 }, true)
+    expect(engine.applyImpulse).not.toHaveBeenCalled()
+    expect(engine.setVelocity).toHaveBeenCalledTimes(1)
+    // Where the toy sends it is where it is (the worker snapshot may trail a frame).
+    expect(ball.translation()).toEqual({ x: 0.6, y: 0.25, z: 0 })
+
+    // A rotation-only push completes the pose from the last target.
+    const spin = { x: 0, y: Math.SQRT1_2, z: 0, w: Math.SQRT1_2 }
+    ball.setNextKinematicRotation(spin)
+    expect(engine.setNextKinematicTransform).toHaveBeenLastCalledWith(0, { x: 0.6, y: 0.25, z: 0 }, spin)
+
+    engine.step(1 / 60)
+    world.endStep()
+    expect(ball.translation()).toEqual({ x: 0.6, y: 0.25, z: 0 })
+    expect(ball.linvel().x).toBeCloseTo(0.6 * 60, 6)
+
+    // Released: C++ keeps the last kinematic velocity, and impulses land again.
     ball.setBodyType(PhysicsBodyType.Dynamic, true)
+    expect(engine.setBodyType).toHaveBeenLastCalledWith(0, 0)
     ball.applyImpulse({ x: 0, y: 0, z: 1 }, true)
     expect(engine.applyImpulse).toHaveBeenCalledWith(0, 0, 0, 1)
+    expect(ball.linvel().x).toBeCloseTo(36, 6)
+    expect(ball.linvel().z).toBeCloseTo(1, 6)
+  })
+
+  it('freezes a disabled ball as a C++ kinematic body and thaws it on enable', () => {
+    const { engine, world } = setup()
+    const ball = spawnBall(world)
+    ball.setEnabled(false)
+    expect(engine.setBodyType).toHaveBeenLastCalledWith(0, 2)
+    // A disabled body takes no kinematic targets.
+    ball.setNextKinematicTranslation({ x: 1, y: 1, z: 1 })
+    expect(engine.setNextKinematicTransform).not.toHaveBeenCalled()
+    ball.setEnabled(true)
+    expect(engine.setBodyType).toHaveBeenLastCalledWith(0, 0)
+    expect(engine.setBodyType).toHaveBeenCalledTimes(2)
   })
 
   it('takes a disabled ball out of every collision group and restores it', () => {
@@ -194,17 +225,29 @@ describe('exportTableBodiesToWasm', () => {
     expect(result.unsupported).toEqual([])
   })
 
-  it('reports what C++ cannot represent instead of dropping it', () => {
+  it('exports a ball-trap funnel cone and its chamber sensor (#420)', () => {
     const { engine, world } = setup()
     const trap = world.createRigidBody(api.RigidBodyDesc.fixed().setTranslation(-5, 0.5, 10))
-    world.createCollider(api.ColliderDesc.cone(0.4, 0.6), trap)
-    world.createCollider(api.ColliderDesc.ball(0.45).setSensor(true), trap)
+    world.createCollider(api.ColliderDesc.cone(0.6, 0.2).setRestitution(0.6).setFriction(0.3), trap)
+    world.createCollider(api.ColliderDesc.ball(0.45).setTranslation(0, -0.3, 0).setSensor(true), trap)
+    const result = exportTableBodiesToWasm(world.allBodies(), asSimEngine(engine))
+    expect(result.unsupported).toEqual([])
+    expect(engine.addStaticCone).toHaveBeenCalledWith({ x: -5, y: 0.5, z: 10 }, 0.2, 0.6, { x: 0, y: 0, z: 0, w: 1 }, 0.6, 0.3)
+    expect(result.idsByBody.get(trap)).toEqual([-9000, -4000])
+    expect(result.debug).toContainEqual(expect.objectContaining({ kind: 'cone', radius: 0.2, halfHeight: 0.6 }))
+  })
+
+  it('reports what C++ cannot represent instead of dropping it', () => {
+    const { engine, world } = setup()
+    const hull = world.createRigidBody(api.RigidBodyDesc.fixed().setTranslation(-5, 0.5, 10))
+    world.createCollider(api.ColliderDesc.convexHull(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1]))!, hull)
+    world.createCollider(api.ColliderDesc.ball(0.45).setSensor(true), hull)
     const result = exportTableBodiesToWasm(world.allBodies(), asSimEngine(engine))
     expect(result.unsupported).toEqual([
-      { bodyHandle: trap.handle, colliderIndex: 0, shape: 'cone', reason: 'the C++ world has no cone shape' },
+      { bodyHandle: hull.handle, colliderIndex: 0, shape: 'convexHull', reason: 'the C++ world has no convex hull shape' },
     ])
     // The sensor on the same body still exports.
-    expect(result.idsByBody.get(trap)).toEqual([-4000])
+    expect(result.idsByBody.get(hull)).toEqual([-4000])
   })
 
   it('hands every collider the same WASM id on a re-export', () => {

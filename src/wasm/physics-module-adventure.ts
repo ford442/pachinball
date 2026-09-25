@@ -1,7 +1,7 @@
 /**
  * Adventure-geometry half of the in-process WASM engine: static cylinders /
- * spheres / triangle meshes, kinematic movers, sensor volumes, dynamic boxes
- * and force fields (#383 Slice A/B).
+ * spheres / cones / triangle meshes, kinematic movers, sensor volumes, dynamic
+ * boxes and force fields (#383 Slice A/B, cones #420).
  *
  * `WasmPhysicsEngine` (PhysicsModule.ts) owns loading, the world, bodies and
  * hinges, and delegates each adventure method here with its private world /
@@ -34,6 +34,14 @@ export const WasmVolumeShape = {
 } as const
 export type WasmVolumeShape = (typeof WasmVolumeShape)[keyof typeof WasmVolumeShape]
 
+/** Mirrors native `BodyType` (RigidBody.h): the runtime body-type flip (#420). */
+export const WasmBodyType = {
+  Dynamic: 0,
+  Static: 1,
+  Kinematic: 2,
+} as const
+export type WasmBodyType = (typeof WasmBodyType)[keyof typeof WasmBodyType]
+
 /** Whether a force field's vector is world-space or in the field's own frame. */
 export const WasmForceSpace = {
   World: 0,
@@ -52,7 +60,7 @@ export interface WasmBoxBodyDesc {
   friction?:       number
   angularDamping?: number
   /** 0=Dynamic, 1=Static, 2=Kinematic */
-  bodyType?:       0 | 1 | 2
+  bodyType?:       WasmBodyType
 }
 
 /** Oriented box force region — updraft, conveyor, solar wind. */
@@ -95,6 +103,20 @@ export function addStaticSphere(
   return world.addStaticSphere(center.x, center.y, center.z, radius, restitution, friction)
 }
 
+export function addStaticCone(
+  world: World, center: Vec3, radius: number, halfHeight: number,
+  rotation: Quat = IDENTITY, restitution = 0.4, friction = 0.2,
+): number {
+  if (!world?.addStaticCone) return -1
+  return world.addStaticCone(
+    center.x, center.y, center.z,
+    radius, halfHeight,
+    rotation.x, rotation.y, rotation.z, rotation.w,
+    restitution,
+    friction
+  )
+}
+
 export function addKinematicMover(
   world: World, position: Vec3, halfExtents: Vec3, rotation: Quat = IDENTITY,
   restitution = 0.4, friction = 0.2, shape: WasmVolumeShape = WasmVolumeShape.Box,
@@ -120,10 +142,10 @@ export function addKinematicMover(
 }
 
 export function setNextKinematicTransform(
-  world: World, moverId: number, position: Vec3, rotation: Quat,
+  world: World, id: number, position: Vec3, rotation: Quat,
 ): void {
   world?.setNextKinematicTransform(
-    moverId,
+    id,
     position.x, position.y, position.z,
     rotation.x, rotation.y, rotation.z, rotation.w
   )

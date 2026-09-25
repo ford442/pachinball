@@ -167,11 +167,12 @@ export class WasmOwner implements WasmContactBridge {
   }
 
   /**
-   * Before the C++ step: pin held bodies, push table kinematic bodies (the
-   * plunger, moving gates) and every moving adventure body to their movers.
+   * Before the C++ step: push table kinematic bodies (the plunger, moving
+   * gates) and every moving adventure body to their movers. Captured balls
+   * need nothing here — they are C++ kinematic bodies whose targets the toys
+   * already sent (WasmBody.setNextKinematicTranslation).
    */
   beginStep(dt: number): void {
-    this.world.beginStep()
     if (this.tableExport) driveTableMovers(this.tableExport.movers, this.engine)
     this.driveAdventure(dt)
   }

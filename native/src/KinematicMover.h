@@ -54,4 +54,13 @@ static constexpr int KINEMATIC_MOVER_ID_BASE = -3000;
  */
 void advanceKinematicMoverPose(KinematicMover& mover, float dt);
 
+/**
+ * Linear + angular velocity that carries pose (`fromPos`, `fromRot`) to
+ * (`toPos`, `toRot`) over `dt` — shortest-path quaternion delta, small-angle
+ * extraction. Shared by movers and kinematic rigid bodies.
+ */
+void poseDeltaVelocity(const Vec3& fromPos, const Quat& fromRot,
+                       const Vec3& toPos, const Quat& toRot, float dt,
+                       Vec3& outLinear, Vec3& outAngular);
+
 } // namespace pachinball

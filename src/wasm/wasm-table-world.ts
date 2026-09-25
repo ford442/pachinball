@@ -262,13 +262,6 @@ export class WasmTableWorld implements PhysicsWorldSink, WasmBodyHost {
     this.linkRevision++
   }
 
-  /** Before the C++ step: re-pin held (kinematic / disabled) linked bodies. */
-  beginStep(): void {
-    for (const body of this.linkedById.values()) {
-      if (body.isHeld()) body.pinForStep()
-    }
-  }
-
   /** After the C++ step: kinematic pose stores arrive at their targets. */
   endStep(): void {
     for (const body of this.bodies.values()) {

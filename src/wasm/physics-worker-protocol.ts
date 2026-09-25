@@ -9,6 +9,7 @@
 
 import type {
   WasmBodyDesc,
+  WasmBodyType,
   WasmBoxBodyDesc,
   WasmForceFieldDesc,
   WasmHingeDesc,
@@ -25,6 +26,7 @@ export const STATIC_CYLINDER_ID_BASE = -5000
 export const STATIC_MESH_ID_BASE = -6000
 export const FORCE_FIELD_ID_BASE = -7000
 export const STATIC_SPHERE_ID_BASE = -8000
+export const STATIC_CONE_ID_BASE = -9000
 
 /**
  * Mirrors native `STATIC_HANDLE_CAPACITY` in PhysicsWorld.h. Families are
@@ -49,10 +51,12 @@ export type PhysicsWorkerCommand =
   | { type: 'addStaticCapsule'; center: Vec3Msg; radius: number; halfHeight: number; rotation: QuatMsg; restitution: number; friction: number }
   | { type: 'addStaticCylinder'; center: Vec3Msg; radius: number; halfHeight: number; rotation: QuatMsg; restitution: number; friction: number }
   | { type: 'addStaticSphere'; center: Vec3Msg; radius: number; restitution: number; friction: number }
+  | { type: 'addStaticCone'; center: Vec3Msg; radius: number; halfHeight: number; rotation: QuatMsg; restitution: number; friction: number }
   | { type: 'addStaticTriangleMesh'; vertices: Float32Array; indices: Uint32Array; restitution: number; friction: number; doubleSided: boolean }
   | { type: 'addSensorVolume'; center: Vec3Msg; halfExtents: Vec3Msg; rotation: QuatMsg; shape: WasmVolumeShape }
   | { type: 'addKinematicMover'; position: Vec3Msg; halfExtents: Vec3Msg; rotation: QuatMsg; restitution: number; friction: number; shape: WasmVolumeShape }
-  | { type: 'setNextKinematicTransform'; moverId: number; position: Vec3Msg; rotation: QuatMsg }
+  /** `id` is a mover (negative) or a kinematic rigid body (≥ 0). */
+  | { type: 'setNextKinematicTransform'; id: number; position: Vec3Msg; rotation: QuatMsg }
   | { type: 'setCollisionGroups'; id: number; membership: number; filter: number }
   | { type: 'clearStaticGeometry' }
   | { type: 'addForceField'; desc: WasmForceFieldDesc }
@@ -67,6 +71,7 @@ export type PhysicsWorkerCommand =
   | { type: 'setAngularVelocity'; id: number; wx: number; wy: number; wz: number }
   | { type: 'setBodyPosition'; id: number; px: number; py: number; pz: number }
   | { type: 'setBodyRotation'; id: number; qx: number; qy: number; qz: number; qw: number }
+  | { type: 'setBodyType'; id: number; bodyType: WasmBodyType }
   | { type: 'createHinge'; desc: WasmHingeDesc }
   | { type: 'setHingeMotor'; id: number; targetVel: number; maxTorque: number }
   | { type: 'removeHinge'; id: number }
@@ -122,6 +127,7 @@ export class WasmIdShadow {
   private nextCapsule = 0
   private nextCylinder = 0
   private nextSphere = 0
+  private nextCone = 0
   private nextMover = 0
   private nextSensor = 0
   private nextMesh = 0
@@ -159,6 +165,12 @@ export class WasmIdShadow {
     return STATIC_SPHERE_ID_BASE - idx
   }
 
+  allocStaticCone(): number {
+    if (this.nextCone >= STATIC_HANDLE_CAPACITY) return STATIC_HANDLE_OVERFLOW
+    const idx = this.nextCone++
+    return STATIC_CONE_ID_BASE - idx
+  }
+
   allocKinematicMover(): number {
     if (this.nextMover >= STATIC_HANDLE_CAPACITY) return STATIC_HANDLE_OVERFLOW
     const idx = this.nextMover++
@@ -191,6 +203,7 @@ export class WasmIdShadow {
     this.nextCapsule = 0
     this.nextCylinder = 0
     this.nextSphere = 0
+    this.nextCone = 0
     this.nextMover = 0
     this.nextSensor = 0
   }
@@ -199,12 +212,6 @@ export class WasmIdShadow {
     this.resetStaticHandles()
     this.nextBodyId = 0
     this.nextHingeId = 0
-    this.nextBox = 0
-    this.nextCapsule = 0
-    this.nextCylinder = 0
-    this.nextSphere = 0
-    this.nextMover = 0
-    this.nextSensor = 0
   }
 }
 

@@ -84,21 +84,36 @@ void BroadphaseGrid::insertStaticCapsule(int capIndex, const CapsuleDesc& cap) {
   }
 }
 
-void BroadphaseGrid::insertStaticCylinder(int cylIndex, const CylinderDesc& cyl) {
+void BroadphaseGrid::cellsForCylinder(const Vec3& center, const Quat& rotation,
+                                      float radius, float halfHeight,
+                                      std::vector<CellKey>& out) const {
   // Exact world AABB of a rotated cylinder: along world axis e the extent is
   // |halfHeight * a·e| + radius * sqrt(1 - (a·e)^2), where a is the rotated
   // local Y axis.
-  const Vec3 a = cyl.rotation.rotate(Vec3{0.f, 1.f, 0.f});
+  const Vec3 a = rotation.rotate(Vec3{0.f, 1.f, 0.f});
   auto extent = [&](float ae) {
     const float perp = std::sqrt(std::max(0.f, 1.f - ae * ae));
-    return std::fabs(cyl.halfHeight * ae) + cyl.radius * perp + 0.05f;
+    return std::fabs(halfHeight * ae) + radius * perp + 0.05f;
   };
   const float ex = extent(a.x);
   const float ez = extent(a.z);
+  cellsForAabb(center.x - ex, center.x + ex, center.z - ez, center.z + ez, out);
+}
+
+void BroadphaseGrid::insertStaticCylinder(int cylIndex, const CylinderDesc& cyl) {
   std::vector<CellKey> cells;
-  cellsForAabb(cyl.center.x - ex, cyl.center.x + ex,
-               cyl.center.z - ez, cyl.center.z + ez, cells);
+  cellsForCylinder(cyl.center, cyl.rotation, cyl.radius, cyl.halfHeight, cells);
   StaticRef ref{StaticRef::Cylinder, cylIndex};
+  for (const auto& c : cells) {
+    addStaticToCell(c, ref);
+  }
+}
+
+void BroadphaseGrid::insertStaticCone(int coneIndex, const ConeDesc& cone) {
+  // A cone fits inside the cylinder of its base radius and height.
+  std::vector<CellKey> cells;
+  cellsForCylinder(cone.center, cone.rotation, cone.radius, cone.halfHeight, cells);
+  StaticRef ref{StaticRef::Cone, coneIndex};
   for (const auto& c : cells) {
     addStaticToCell(c, ref);
   }
@@ -161,6 +176,7 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
                                 const std::vector<CapsuleDesc>& capsules,
                                 const std::vector<CylinderDesc>& cylinders,
                                 const std::vector<SphereDesc>& spheres,
+                                const std::vector<ConeDesc>& cones,
                                 const std::vector<SensorVolumeDesc>& sensors,
                                 const std::vector<KinematicMover>& movers,
                                 const std::vector<MeshTriangle>& triangles,
@@ -266,11 +282,10 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
             const int meshIndex = triangles[static_cast<std::size_t>(ref.index)].meshIndex;
             refMembership = meshes[static_cast<std::size_t>(meshIndex)].membership;
             refFilter = meshes[static_cast<std::size_t>(meshIndex)].filter;
-          } else if (ref.kind == StaticRef::Triangle) {
-            ptype = Pair::BodyTriangle;
-            const int meshIndex = triangles[static_cast<std::size_t>(ref.index)].meshIndex;
-            refMembership = meshes[static_cast<std::size_t>(meshIndex)].membership;
-            refFilter = meshes[static_cast<std::size_t>(meshIndex)].filter;
+          } else if (ref.kind == StaticRef::Cone) {
+            ptype = Pair::BodyCone;
+            refMembership = cones[static_cast<std::size_t>(ref.index)].membership;
+            refFilter = cones[static_cast<std::size_t>(ref.index)].filter;
           } else {
             ptype = Pair::BodySensor;
             refMembership = sensors[static_cast<std::size_t>(ref.index)].membership;
