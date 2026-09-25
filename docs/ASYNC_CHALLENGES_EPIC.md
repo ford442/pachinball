@@ -57,7 +57,7 @@ Later phases add weekly tournament APIs and (optionally) true realtime co-op mul
 - ~~Leaderboard entries do not link to replays~~ — `handleGameOverLeaderboard()` submits `replay_id`
 - ~~No solver state in replays~~ — the frame-0 C++ snapshot + world fingerprint (#422, below)
 - No procedural layout mutator (#304) beyond the Daily Cascade pin lattice — challenges map `seed` → session RNG, not yet → table variant
-- Deploy credentials still hardcoded in `deploy.py` (#288) — replay uploads need auth before public launch
+- ~~Deploy credentials still hardcoded in `deploy.py`~~ (#288) — `deploy.py` now reads `DEPLOY_TOKEN` from the environment (`require_env`)
 - Spectating does not yet restore across a differing ball-id layout (the spectator's ids were allocated by earlier games); it says so (`id-layout` toast) and plays the tape unverified
 
 ---
