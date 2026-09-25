@@ -13,6 +13,7 @@
 #include "StaticShapes.h"
 #include "TriangleMesh.h"
 #include "ForceField.h"
+#include "PinField.h"
 
 #include <vector>
 #include <cstdint>
@@ -61,7 +62,8 @@ static constexpr int STATIC_CAPSULE_ID_BASE = -2000;
 // STATIC_CYLINDER_ID_BASE (-5000) in StaticShapes.h;
 // STATIC_MESH_ID_BASE (-6000) in TriangleMesh.h;
 // FORCE_FIELD_ID_BASE (-7000) in ForceField.h;
-// STATIC_SPHERE_ID_BASE (-8000) and STATIC_CONE_ID_BASE (-9000) in StaticShapes.h.
+// STATIC_SPHERE_ID_BASE (-8000) and STATIC_CONE_ID_BASE (-9000) in StaticShapes.h;
+// PIN_FIELD_ID_BASE (-10000) in PinField.h.
 
 /**
  * Entries per static-handle family.
@@ -149,6 +151,17 @@ public:
                     float qx, float qy, float qz, float qw,
                     float restitution = 0.4f,
                     float friction = 0.2f);
+
+  /**
+   * Add a whole pachinko pin lattice as ONE static collider (PinField.h).
+   * Consumes a single slot of the pin-field family, however many pins it
+   * holds; contacts report the field id with the pin's lattice index in
+   * `ContactEvent::subIndex`. @returns negative handle.
+   */
+  int addPinField(const PinFieldDesc& desc);
+
+  /** Pins a field actually holds after mask / keep-outs / dropout, or -1 for an unknown id. */
+  int getPinFieldPinCount(int fieldId) const;
 
   /** Add a static sphere collider. @returns negative handle. */
   int addStaticSphere(float px, float py, float pz,
@@ -302,7 +315,11 @@ private:
   void resolveSphereVsCapsuleBody(BodyView& sphere, BodyView& capsule);
 
   // ---- Static cylinder / sphere (StaticShapes.cpp) ---------------------
-  void resolveSphereVsCylinder(BodyView& body, const CylinderDesc& cyl, int cylId);
+  void resolveSphereVsCylinder(BodyView& body, const CylinderDesc& cyl, int cylId, int subIndex = 0);
+  // ---- Pin fields (PinField.cpp) ----------------------------------------
+  /** Broadphase half: one AABB test per (awake sphere, field), appended to `pairs_`. */
+  void appendPinFieldPairs();
+  void resolveSphereVsPinField(BodyView& body, int fieldIndex);
   void resolveSphereVsStaticSphere(BodyView& body, const SphereDesc& sph, int sphId);
   // ---- Static cone (Cone.cpp) -------------------------------------------
   void resolveSphereVsCone(BodyView& body, const ConeDesc& cone, int coneId);
@@ -368,6 +385,7 @@ private:
   std::vector<CylinderDesc>      cylinders_;
   std::vector<SphereDesc>        spheres_;
   std::vector<ConeDesc>          cones_;
+  std::vector<PinField>          pinFields_;
   std::vector<KinematicMover>    movers_;
   std::vector<SensorVolumeDesc>  sensors_;
   std::vector<TriangleMeshDesc>  meshes_;

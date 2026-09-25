@@ -2,7 +2,10 @@
  * Shared physics contact record used by both Rapier and the WASM engine.
  *
  * Packed WASM layout (12 floats, 48 bytes, 16-byte aligned):
- *   id1, id2, nx, ny, nz, px, py, pz, impulse, phase, isSensor, _pad
+ *   id1, id2, nx, ny, nz, px, py, pz, impulse, phase, isSensor, subIndex
+ *
+ * `subIndex` is the lattice index (row * cols + col) of the pin a pin-field
+ * contact touched (#421); 0 for every other collider.
  */
 
 export enum ContactPhase {
@@ -31,6 +34,8 @@ export interface PhysicsContact {
   phase: ContactPhase
   /** True for a sensor-volume overlap: zero impulse, no positional correction. */
   isSensor: boolean
+  /** Pin-field contacts: lattice index of the pin touched. 0 (or absent) otherwise. */
+  subIndex?: number
 }
 
 /** WASM EventBus payload — same record plus the Rapier-shaped `started` flag. */
@@ -76,6 +81,7 @@ export function decodeContactBuffer(
       impulse: data[o + 8] ?? 0,
       phase,
       isSensor: (data[o + 10] ?? 0) !== 0,
+      subIndex: data[o + 11] ?? 0,
     })
   }
   return out
@@ -98,7 +104,7 @@ export function encodeContactBuffer(contacts: PhysicsContact[]): Float32Array {
     buf[o + 8] = c.impulse
     buf[o + 9] = c.phase
     buf[o + 10] = c.isSensor ? 1 : 0
-    buf[o + 11] = 0
+    buf[o + 11] = c.subIndex ?? 0
   }
   return buf
 }

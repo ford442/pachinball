@@ -120,6 +120,7 @@ void PhysicsWorld::substep(float dt) {
 
   broadphase_.buildPairs(bodies_, boxes_, capsules_, cylinders_, spheres_, cones_,
                          sensors_, movers_, triangles_, meshes_, pairs_);
+  appendPinFieldPairs();
 
   // Only dynamic bodies meet static geometry and movers: a kinematic body is
   // as immovable as they are, so no impulse can pass (Rapier reports no
@@ -186,6 +187,10 @@ void PhysicsWorld::substep(float dt) {
         if (!meetsStatics(body) || body.getShape() != Shape::Sphere) continue;
         const int coneId = STATIC_CONE_ID_BASE - pair.bodyB;
         resolveSphereVsCone(body, cones_[static_cast<std::size_t>(pair.bodyB)], coneId);
+      } else if (pair.type == BroadphaseGrid::Pair::BodyPinField) {
+        BodyView body = bodies_.view(pair.bodyA);
+        if (!meetsStatics(body)) continue;
+        resolveSphereVsPinField(body, pair.bodyB);
       } else if (pair.type == BroadphaseGrid::Pair::BodyTriangle) {
         BodyView body = bodies_.view(pair.bodyA);
         if (!meetsStatics(body)) continue;

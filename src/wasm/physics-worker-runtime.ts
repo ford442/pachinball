@@ -44,6 +44,7 @@ export function applyPhysicsCommand(
     | 'addStaticCylinder'
     | 'addStaticSphere'
     | 'addStaticCone'
+    | 'addPinField'
     | 'addStaticTriangleMesh'
     | 'addSensorVolume'
     | 'addKinematicMover'
@@ -98,6 +99,8 @@ export function applyPhysicsCommand(
       return engine.addStaticCone(
         cmd.center, cmd.radius, cmd.halfHeight, cmd.rotation, cmd.restitution, cmd.friction,
       )
+    case 'addPinField':
+      return engine.addPinField(cmd.desc)
     case 'addStaticTriangleMesh':
       return engine.addStaticTriangleMesh(
         cmd.vertices, cmd.indices, cmd.restitution, cmd.friction, cmd.doubleSided,

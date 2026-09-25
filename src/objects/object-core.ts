@@ -20,6 +20,7 @@ import { PachinkoBuilder } from './object-pachinko'
 import { DecorationBuilder } from './object-decoration'
 import { LaneSensorBuilder, type LaneSensorDef } from './object-lane-sensors'
 import type { GameObjectRefs } from './object-types'
+import type { PinLattice } from '../game-elements/daily-cascade-layout'
 
 export class GameObjects {
   private scene: Scene
@@ -262,8 +263,9 @@ export class GameObjects {
     width?: number,
     height?: number,
     pinPositions?: { x: number; z: number }[],
+    pinLattice?: PinLattice,
   ): void {
-    const result = this.pachinkoBuilder.createPachinkoField(center, width, height, pinPositions)
+    const result = this.pachinkoBuilder.createPachinkoField(center, width, height, pinPositions, pinLattice)
     this.bindings.push(...result.bindings)
     this.targetBodies.push(...result.targetBodies)
     this.targetMeshes.push(...result.targetMeshes)
@@ -302,7 +304,7 @@ export class GameObjects {
 
     if (layout) {
       this.createBumpers(layout.bumpers)
-      this.createPachinkoField(undefined, undefined, undefined, layout.pins)
+      this.createPachinkoField(undefined, undefined, undefined, layout.pins, layout.pinLattice)
     } else {
       this.createBumpers()
       this.createPachinkoField()

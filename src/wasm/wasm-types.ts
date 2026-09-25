@@ -188,6 +188,29 @@ export interface WasmPhysicsWorldInstance {
   ): number
 
   /**
+   * Add a whole pachinko pin lattice as ONE static collider (#421). The
+   * keep-outs (4 floats each: minX, maxX, minZ, maxZ) and the bit-packed
+   * occupancy mask are heap byte offsets (allocate with `_malloc`); C++ copies
+   * both. Optional: absent on bundles older than #421.
+   * @returns Negative field id used in contact events (the pin's lattice index
+   * rides in contact slot 11), or `STATIC_HANDLE_OVERFLOW` if the family is full.
+   */
+  addPinField?(
+    px: number, py: number, pz: number,
+    rows: number, cols: number,
+    spacingX: number, spacingZ: number, rowOffsetX: number,
+    radius: number, halfHeight: number,
+    qx: number, qy: number, qz: number, qw: number,
+    restitution: number, friction: number,
+    keepOutPtr: number, keepOutCount: number,
+    maskPtr: number, maskBytes: number,
+    dropoutSeed: number, dropout: number
+  ): number
+
+  /** Pins a field holds after mask / keep-outs / dropout, or -1 for an unknown id. */
+  getPinFieldPinCount?(fieldId: number): number
+
+  /**
    * Drop every static collider, sensor volume and kinematic mover. Statics
    * are append-only, so a rebuilt scene must clear before re-adding or it
    * stacks a second copy. Invalidates every negative handle; dynamic bodies
@@ -357,7 +380,8 @@ export interface WasmPhysicsWorldInstance {
 
   /**
    * Pointer (byte offset into WASM memory) of the packed contact buffer.
-   * Layout: 12 floats/contact — id1, id2, nx, ny, nz, px, py, pz, impulse, phase, isSensor, pad.
+   * Layout: 12 floats/contact — id1, id2, nx, ny, nz, px, py, pz, impulse, phase, isSensor,
+   * pin-field lattice index (0 for every other collider).
    */
   getContactBufferPtr(): number
 

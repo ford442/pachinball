@@ -78,6 +78,7 @@ native/
 │   ├── StaticShapes.h / .cpp    Static box / capsule / sphere (+ ConeDesc)
 │   ├── Cylinder.h / .cpp        Static cylinder (closed-form sphere vs cylinder)
 │   ├── Cone.cpp                 Static cone — ball-trap funnels (closed-form sphere vs cone)
+│   ├── PinField.h / .cpp        Pin field — a whole pachinko lattice as ONE static handle (#421)
 │   ├── TriangleMesh.h / .cpp    Static triangle mesh (addStaticTriangleMesh)
 │   ├── VolumeShape.h / .cpp     Box / Cylinder / Sphere tag for movers + sensors
 │   ├── KinematicMover.h / .cpp  Pose-driven kinematic movers
@@ -99,12 +100,13 @@ native/
     ├── collision_filter_test.cpp
     ├── kinematic_body_test.cpp  Runtime body type: capture, steer, release (#420)
     ├── cone_test.cpp            Static cone: apex / slant / base / inside / groups (#420)
+    ├── pin_field_test.cpp       Pin field: 12×12 fall-through, keep-out, mask, dropout, parity, handle cap (#421)
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
 ├── wasm-types.ts                TypeScript interfaces matching the Embind API
 ├── PhysicsModule.ts             WasmPhysicsEngine: load, world, table statics, bodies, hinges, step
-├── physics-module-adventure.ts  Cylinder / sphere / cone / mesh / mover / sensor / box body / force field
+├── physics-module-adventure.ts  Cylinder / sphere / cone / pin field / mesh / mover / sensor / box body / force field
 ├── wasm-sim-engine.ts           WasmSimEngine interface (in-process engine + worker client)
 ├── physics-worker-protocol.ts   Worker command union + id shadow
 ├── physics-worker-runtime.ts    applyPhysicsCommand / WorkerSnapshotPublisher
@@ -457,6 +459,7 @@ and `native/src/StaticShapes.h`):
 | `-7000` | force field |
 | `-8000` | static sphere |
 | `-9000` | static cone |
+| `-10000` | pin field (one slot per whole lattice) |
 
 **Sphere vs cylinder** is closed form (`native/src/StaticShapes.cpp`). The ball
 centre is transformed into the cylinder's local frame and clamped
@@ -478,6 +481,61 @@ the slant is shallower. The broadphase files a cone under its bounding
 cylinder. `run-wasm-parity.mjs` compares a slant hit against Rapier's own cone.
 A native cone was chosen over a TS-emitted cylinder + sphere compound: it
 added one ~170-line TU and kept `PhysicsWorld.cpp` well under the 500-line cap.
+
+### Pin fields (#421)
+
+A pachinko lattice is ONE static collider, not one cylinder per pin:
+
+```typescript
+// src/core/pin-field.ts — PinFieldSpec; object-pachinko.ts builds it via
+// pachinkoPinFieldSpec() (src/objects/pachinko-pin-field.ts).
+const id = engine.addPinField({
+  origin: { x: -12, y: 0.4, z: -5 },   // centre of pin (row 0, col 0)
+  rows: 10, cols: 13,
+  spacingX: 24 / 13, spacingZ: 2.2,
+  rowOffsetX: 12 / 13,                  // odd rows shift half a column
+  radius: 0.09, halfHeight: 0.75,       // every pin: this cylinder, local Y axis
+  rotation: { x: 0, y: 0, z: 0, w: 1 }, // field orientation
+  restitution: 0.65, friction: 0.1,
+  keepOuts: KEEP_OUT_BOXES,             // world-XZ rectangles, inclusive edges
+  occupancy,                            // optional bit mask, LSB-first, index row * cols + col
+  dropoutSeed, dropout,                 // optional seeded removal (lowbias32 hash, 24-bit compare)
+})
+engine.setCollisionGroups(id, membership, filter)  // one mask for every pin
+```
+
+- **Handles.** A field takes one slot of the `-10000` family however many pins
+  it holds, so four 400-pin fields plus the table's statics never touch
+  `getDroppedStaticCount()` (the cylinder family would have overflowed at
+  1000). `getPinFieldPinCount(id)` reports how many pins survived the mask,
+  keep-outs and dropout.
+- **Collision.** The broadphase half is one world-AABB test per (awake
+  sphere, field). The narrowphase moves the ball into the field frame and
+  derives the candidate row range and, per row, column range from the ball's
+  reach (ball + pin radius): O(1) candidates regardless of field size, never
+  `rows × cols` pairs. Each candidate pin runs the exact
+  `resolveSphereVsCylinder` that `addStaticCylinder` uses, so a field is
+  contact-for-contact interchangeable with the equivalent cylinder loop
+  (`pin_field_test.cpp` and `run-wasm-parity.mjs` compare the two).
+- **Contacts.** Every pin contact reports the field id as `bodyId2`, with the
+  pin's lattice index in contact slot 11 (`PhysicsContact.subIndex`; 0 for all
+  other colliders). Touching two pins of one field in a step folds into one
+  event per pair (peak impulse) — scoring does not need per-pin handles.
+- **Determinism.** `resolvePinField` (TS) mirrors `buildPinField` (C++) rule
+  for rule and does its lattice maths in float32 exactly as `PinField::worldPin`
+  does, so the visual instances sit on precisely the pins that collide; the
+  dropout hash is shared bit-for-bit (goldens in both test suites). A Daily
+  Cascade layout records its `pinLattice`; the builder fits the seeded pins
+  into an occupancy mask (keep-out safety net applied in TS on the layout's
+  double-precision positions, since a seeded pin can land exactly on a keep-out
+  edge in float32).
+- **Paths.** `WasmTableWorld.createPinField` records one fixed body with one
+  `pinField` collider; `wasm-static-export.ts` exports it with a single
+  `addPinField`; the worker carries it as one `addPinField` command with the
+  occupancy mask transferred. A world without the capability (Rapier —
+  `supportsPinFields()` is false) gets one fixed cylinder per pin, from the
+  same resolved positions. Debug draw instances one AABB per pin from the
+  descriptor (`pinFieldPinBounds`); nothing per pin comes back from C++.
 
 Native C++ tests (no browser, no Emscripten):
 
@@ -528,6 +586,10 @@ Test scenarios (friction and hinge cases live in `hinge_friction_test.cpp`):
 | `captured ball holds for 30 frames while a second ball rolls past` (`kinematic_body_test.cpp`) | The held ball stays on its targets and deflects the roller without tunnelling |
 | `kinematic body skips static solids but still trips sensors` (`kinematic_body_test.cpp`) | No impulse-less contact spam against statics; sensors still see a carried ball |
 | `a ball hitting the slant gets the slant normal` (`cone_test.cpp`, + apex / base / inside / rotated / groups) | Sphere-vs-cone regions and handle family |
+| `a ball falling through a 12x12 field contacts its pins` (`pin_field_test.cpp`) | Pin-field narrowphase, lattice sub-index in contacts |
+| `a keep-out AABB holds no pin` / `an occupancy mask punches a hole` (`pin_field_test.cpp`) | Lattice resolution rules shared with `src/core/pin-field.ts` |
+| `a pin field steps like the same pins added one cylinder at a time` (`pin_field_test.cpp`) | Field ≡ `addStaticCylinder` loop |
+| `four dense fields plus table statics fit without dropping a handle` (`pin_field_test.cpp`, + rotated / groups / capacity / dropout) | One handle per field; family capacity and reset |
 
 Parity suite (native Catch2 + compiled WASM bundle):
 
@@ -695,6 +757,7 @@ Rapier collider:
 | Body | Collider | C++ |
 |------|----------|-----|
 | fixed | box / capsule / cylinder / sphere / cone | `addStaticBox` / `addStaticCapsule` / `addStaticCylinder` / `addStaticSphere` / `addStaticCone` |
+| fixed | pin field (`WasmTableWorld.createPinField`) | `addPinField` — one id for the whole lattice |
 | any | sensor box / cylinder / sphere | `addSensorVolume` |
 | kinematic | box / cylinder | `addKinematicMover`, posed each tick from the body's target |
 | any | convex hull, kinematic capsule / cone / sphere, unlinked dynamic | reported, not exported |

@@ -23,6 +23,7 @@
     "src/wasm/contact-buffer.ts",
     "src/wasm/PhysicsModule.ts",
     "src/wasm/physics-module-adventure.ts",
-    "src/wasm/wasm-types.ts"
+    "src/wasm/wasm-types.ts",
+    "src/core/pin-field.ts"
   ]
 }

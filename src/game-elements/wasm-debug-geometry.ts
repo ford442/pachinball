@@ -6,6 +6,7 @@
 import { CONTACT_STRIDE, decodeContactBuffer } from '../wasm/contact-buffer'
 import { TRANSFORM_STRIDE, decodeTransformSlot } from '../wasm/transform-buffer'
 import type { WasmSimEngine } from '../wasm/wasm-sim-engine'
+import { pinFieldPinBounds, type PinFieldSpec } from '../core/pin-field'
 
 export type Vec3 = { x: number; y: number; z: number }
 export type Quat = { x: number; y: number; z: number; w: number }
@@ -21,8 +22,14 @@ export type WasmDebugCollider =
   | { kind: 'sensor'; center: Vec3; halfExtents: Vec3; rotation: Quat; volumeShape: 'box' | 'cylinder' | 'sphere' }
   /** Triangle soup; `triangleCount` is enough for the HUD, the verts are not redrawn. */
   | { kind: 'mesh'; center: Vec3; triangleCount: number }
+  /**
+   * A whole pin lattice (#421): one C++ handle, drawn as one AABB per pin
+   * instanced from the descriptor — nothing per pin comes back from C++.
+   */
+  | { kind: 'pinField'; field: PinFieldSpec }
 
 const WASM_LINE_RGBA = [0, 0.85, 1, 1] as const
+const IDENTITY_QUAT: Quat = { x: 0, y: 0, z: 0, w: 1 }
 const CONTACT_LINE_RGBA = [1, 0.45, 0.1, 1] as const
 
 interface PackedViews {
@@ -249,6 +256,10 @@ export function buildWasmDebugLineBuffers(
       appendCapsuleWire(positions, colors, c.center, c.radius, c.halfHeight, c.rotation)
     } else if (c.kind === 'cone') {
       appendConeWire(positions, colors, c.center, c.radius, c.halfHeight, c.rotation)
+    } else if (c.kind === 'pinField') {
+      for (const pin of pinFieldPinBounds(c.field)) {
+        appendOrientedBoxEdges(positions, colors, pin.center, pin.halfExtents, IDENTITY_QUAT)
+      }
     } else if (c.kind === 'sensor') {
       if (c.volumeShape === 'sphere') {
         appendSphereWire(positions, colors, c.center, c.halfExtents.x)

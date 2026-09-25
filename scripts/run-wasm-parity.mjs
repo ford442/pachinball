@@ -206,6 +206,7 @@ function readContacts(mod, world) {
       nz: heap[o + 4],
       impulse: heap[o + 8],
       phase: heap[o + 9],
+      sub: heap[o + 11],
     })
   }
   return out
@@ -827,6 +828,124 @@ failed ||= !runScenario('wasm dynamic box rests on a static box', (w) => {
   console.log(
     `${ok ? 'PASS' : 'FAIL'} wasm static cone slant deflect (id=${coneId} n=${JSON.stringify(n)} ` +
     `v wasm=${JSON.stringify(wasmV)} rapier=${JSON.stringify(rapierV)})`
+  )
+  if (!ok) failed = true
+}
+// #421 — pin field vs the equivalent loop of addStaticCylinder. The field
+// resolves every pin with the same sphere-vs-cylinder code, so balls dropped
+// through both must end in the same place having touched the same pins.
+/** Upload keep-outs + occupancy through the heap, as physics-module-adventure.ts does. */
+function addPinField(world, d) {
+  const keepOuts = d.keepOuts ?? []
+  const mask = d.occupancy ?? new Uint8Array(0)
+  const kPtr = keepOuts.length ? Module._malloc(keepOuts.length * 16) : 0
+  const mPtr = mask.length ? Module._malloc(mask.length) : 0
+  keepOuts.forEach((k, i) => Module.HEAPF32.set([k.minX, k.maxX, k.minZ, k.maxZ], (kPtr >> 2) + i * 4))
+  if (mPtr) new Uint8Array(Module.HEAPF32.buffer).set(mask, mPtr)
+  const q = d.rotation ?? { x: 0, y: 0, z: 0, w: 1 }
+  const id = world.addPinField(
+    d.origin.x, d.origin.y, d.origin.z, d.rows, d.cols, d.spacingX, d.spacingZ, d.rowOffsetX,
+    d.radius, d.halfHeight, q.x, q.y, q.z, q.w, d.restitution, d.friction,
+    kPtr, keepOuts.length, mPtr, mask.length, d.dropoutSeed ?? 0, d.dropout ?? 0,
+  )
+  if (kPtr) Module._free(kPtr)
+  if (mPtr) Module._free(mPtr)
+  return id
+}
+
+/** The 12×12 field native/tests/pin_field_test.cpp builds. */
+const DENSE_FIELD = {
+  origin: { x: -3.3, y: 0, z: 0 }, rows: 12, cols: 12, spacingX: 0.6, spacingZ: 0.6, rowOffsetX: 0.3,
+  radius: 0.09, halfHeight: 0.75, restitution: 0.65, friction: 0.1,
+}
+
+{
+  const f32 = Math.fround
+  const dropXs = [-2.1, -0.95, 0.05, 1.3, 2.45]
+  const run = (useField) => {
+    const world = new Module.PhysicsWorld()
+    world.setGravity(0, 0, -9.81)
+    let fieldId = null
+    if (useField) {
+      fieldId = addPinField(world, DENSE_FIELD)
+    } else {
+      const d = DENSE_FIELD
+      for (let r = 0; r < d.rows; r++) {
+        for (let c = 0; c < d.cols; c++) {
+          // float32 lattice maths, as PinField::worldPin does it
+          const lx = f32(f32(c * f32(d.spacingX)) + (r & 1 ? f32(d.rowOffsetX) : 0))
+          const lz = f32(r * f32(d.spacingZ))
+          world.addStaticCylinder(f32(f32(d.origin.x) + lx), d.origin.y, f32(f32(d.origin.z) + lz),
+            d.radius, d.halfHeight, 0, 0, 0, 1, d.restitution, d.friction)
+        }
+      }
+    }
+    const balls = dropXs.map((x) => world.createRigidBody(x, 0, 8, 0, 0, 0, 0.08, 0.2, 0.5, 0, 0, 0, 0.5, 0.2, 0))
+    const touched = balls.map(() => new Set())
+    for (let i = 0; i < 240; i++) {
+      world.step(1 / 60)
+      for (const c of readContacts(Module, world)) {
+        const b = balls.indexOf(c.id1)
+        if (b < 0) continue
+        if (useField && c.id2 === fieldId) touched[b].add(c.sub)
+        if (!useField && c.id2 <= -5000 && c.id2 > -6000) touched[b].add(-5000 - c.id2)
+      }
+    }
+    const pos = balls.map((id) => ({ x: world.getPosX(id), z: world.getPosZ(id) }))
+    const extra = useField
+      ? { fieldId, pins: world.getPinFieldPinCount(fieldId), dropped: world.getDroppedStaticCount() }
+      : { dropped: world.getDroppedStaticCount() }
+    world.delete()
+    return { pos, touched, ...extra }
+  }
+
+  const field = run(true)
+  const loop = run(false)
+  let maxErr = 0
+  let sameTouches = true
+  field.pos.forEach((p, i) => {
+    maxErr = Math.max(maxErr, Math.abs(p.x - loop.pos[i].x), Math.abs(p.z - loop.pos[i].z))
+    const a = [...field.touched[i]].sort((m, n) => m - n).join(',')
+    const b = [...loop.touched[i]].sort((m, n) => m - n).join(',')
+    if (a !== b) sameTouches = false
+  })
+  const anyTouch = field.touched.some((t) => t.size >= 2)
+  const ok = field.fieldId === -10000 && field.pins === 144 && field.dropped === 0
+    && maxErr < 1e-3 && sameTouches && anyTouch
+  console.log(
+    `${ok ? 'PASS' : 'FAIL'} wasm pin field == ${DENSE_FIELD.rows * DENSE_FIELD.cols} addStaticCylinder loop ` +
+    `(id=${field.fieldId} pins=${field.pins} maxPosErr=${maxErr.toExponential(2)} sameTouches=${sameTouches} ` +
+    `touched=${field.touched.map((t) => t.size).join('/')})`
+  )
+  if (!ok) failed = true
+}
+
+// #421 — keep-outs, occupancy mask and seeded dropout cross the heap intact
+// (counts match native/tests/pin_field_test.cpp and tests/pin-field.test.ts),
+// and four dense fields cost four handles, not 1600.
+{
+  const world = new Module.PhysicsWorld()
+  const keepOut = addPinField(world, { ...DENSE_FIELD, keepOuts: [{ minX: -3.5, maxX: -2.5, minZ: -0.1, maxZ: 0.7 }] })
+  const mask = new Uint8Array(18).fill(0xff)
+  mask[(5 * 12 + 6) >> 3] &= ~(1 << ((5 * 12 + 6) & 7))
+  const masked = addPinField(world, { ...DENSE_FIELD, occupancy: mask })
+  const dropped = addPinField(world, { ...DENSE_FIELD, dropoutSeed: 12345, dropout: 0.25 })
+  const counts = [keepOut, masked, dropped].map((id) => world.getPinFieldPinCount(id))
+  world.delete()
+
+  const dense = new Module.PhysicsWorld()
+  let pins = 0
+  for (let f = 0; f < 4; f++) {
+    const id = addPinField(dense, { ...DENSE_FIELD, rows: 20, cols: 20, origin: { x: f * 20, y: 0, z: 0 } })
+    pins += dense.getPinFieldPinCount(id)
+  }
+  const droppedStatics = dense.getDroppedStaticCount()
+  dense.delete()
+
+  const ok = counts[0] === 141 && counts[1] === 143 && counts[2] === 116 && pins === 1600 && droppedStatics === 0
+  console.log(
+    `${ok ? 'PASS' : 'FAIL'} wasm pin field keep-out/mask/dropout + handle cap ` +
+    `(counts=${counts.join('/')} densePins=${pins} droppedStatics=${droppedStatics})`
   )
   if (!ok) failed = true
 }

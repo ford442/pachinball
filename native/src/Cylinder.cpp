@@ -70,7 +70,7 @@ int PhysicsWorld::addStaticCylinder(float px, float py, float pz,
   return STATIC_CYLINDER_ID_BASE - idx;
 }
 
-void PhysicsWorld::resolveSphereVsCylinder(BodyView& body, const CylinderDesc& cyl, int cylId) {
+void PhysicsWorld::resolveSphereVsCylinder(BodyView& body, const CylinderDesc& cyl, int cylId, int subIndex) {
   if (!groupsInteract(body.getMembership(), body.getFilter(), cyl.membership, cyl.filter)) return;
 
   const Quat invRot = cyl.rotation.conjugate();
@@ -118,6 +118,7 @@ void PhysicsWorld::resolveSphereVsCylinder(BodyView& body, const CylinderDesc& c
   evt.normal  = normal;
   evt.point   = contactPoint;
   evt.impulse = j;
+  evt.subIndex = subIndex;
   contactListener_.pushContact(evt);
 }
 

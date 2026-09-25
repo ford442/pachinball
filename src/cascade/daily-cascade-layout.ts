@@ -32,10 +32,21 @@ export interface BumperSpec {
   scale: number
 }
 
+/**
+ * The staggered lattice `pins` were drawn from (spacing = field size / count,
+ * odd rows shifted half a column). Lets the table author the seeded pins as
+ * one C++ pin field with an occupancy mask (#421) instead of one collider each.
+ */
+export interface PinLattice {
+  rows: number
+  cols: number
+}
+
 export interface TableLayout {
   seed: number
   seedId: string
   pins: PinSpec[]
+  pinLattice?: PinLattice
   bumpers: BumperSpec[]
   feedersEnabled: Record<FeederKey, boolean>
 }
@@ -163,7 +174,7 @@ export function validateLayout(layout: TableLayout): { ok: boolean; reasons: str
   return { ok: reasons.length === 0, reasons }
 }
 
-function generatePins(rng: SeededRng, dropoutRate: number): PinSpec[] {
+function generatePins(rng: SeededRng, dropoutRate: number): { pins: PinSpec[]; lattice: PinLattice } {
   const { fieldCenter, fieldWidth, fieldHeight, catcherHalf } = LAYOUT_CONSTANTS
   const rows = rng.nextInt(8, 12)
   const cols = rng.nextInt(11, 15)
@@ -191,7 +202,7 @@ function generatePins(rng: SeededRng, dropoutRate: number): PinSpec[] {
       pins.push({ x, z })
     }
   }
-  return pins
+  return { pins, lattice: { rows, cols } }
 }
 
 function generateBumpers(rng: SeededRng): BumperSpec[] {
@@ -242,13 +253,14 @@ export function generateTableLayout(options: GenerateLayoutOptions): TableLayout
     const rng = createSeededRng((options.seed + attempt * 0x9e3779b9) >>> 0)
     const dropout = Math.min(0.45, 0.12 + attempt * 0.008)
     const bumpers = generateBumpers(rng)
-    let pins = generatePins(rng, dropout)
-    pins = carveVerticalCorridors(pins, rng)
+    const generated = generatePins(rng, dropout)
+    let pins = carveVerticalCorridors(generated.pins, rng)
     pins = cullPinsNearBumpers(pins, bumpers)
     const layout: TableLayout = {
       seed: options.seed,
       seedId: options.seedId,
       pins,
+      pinLattice: generated.lattice,
       bumpers,
       feedersEnabled: generateFeeders(rng),
     }

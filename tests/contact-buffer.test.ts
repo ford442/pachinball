@@ -22,6 +22,7 @@ function sample(overrides: Partial<PhysicsContact> = {}): PhysicsContact {
     impulse: 4.5,
     phase: ContactPhase.Enter,
     isSensor: false,
+    subIndex: 0,
     ...overrides,
   }
 }
@@ -33,6 +34,8 @@ describe('contact buffer decode', () => {
       sample({ bodyId1: 7, bodyId2: 8, phase: ContactPhase.Stay, impulse: 1.25 }),
       sample({ bodyId1: 1, bodyId2: -1, phase: ContactPhase.Exit, impulse: 0 }),
       sample({ bodyId1: 3, bodyId2: -4001, phase: ContactPhase.Enter, impulse: 0, isSensor: true }),
+      // Pin field (#421): slot 11 carries the lattice index of the pin touched.
+      sample({ bodyId1: 2, bodyId2: -10000, phase: ContactPhase.Enter, impulse: 0.75, subIndex: 67 }),
     ]
     const packed = encodeContactBuffer(contacts)
     expect(packed.length).toBe(contacts.length * CONTACT_STRIDE)

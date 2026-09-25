@@ -6,6 +6,7 @@
  * world:
  *
  *   fixed body, solid    box / capsule / cylinder / sphere / cone → addStatic*
+ *   fixed body           pin field (a whole lattice)      → addPinField (one id)
  *   any body, sensor     box / cylinder / sphere          → addSensorVolume
  *   kinematic body       box / cylinder                   → addKinematicMover
  *
@@ -176,6 +177,13 @@ function exportCollider(
     case 'cone': {
       const id = accept(engine.addStaticCone(center, shape.radius, shape.halfHeight, rotation, desc.restitution, desc.friction))
       if (id !== null) result.debug.push({ kind: 'cone', center, radius: shape.radius, halfHeight: shape.halfHeight, rotation })
+      return id
+    }
+    case 'pinField': {
+      // The body is the identity pose `createPinField` made; the spec places the pins.
+      const field = { ...shape.field, restitution: desc.restitution, friction: desc.friction }
+      const id = accept(engine.addPinField(field))
+      if (id !== null) result.debug.push({ kind: 'pinField', field })
       return id
     }
     case 'convexHull':
