@@ -6,7 +6,8 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
-import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
+import type { PhysicsApi, PhysicsBody, PhysicsVector, PhysicsWorldSink } from '../core/physics-api'
+import { CapturedBall } from '../core/captured-ball'
 import { GAME_TUNING } from '../config'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getPhysicsTuningValue } from '../game-elements/physics-tuning'
@@ -29,12 +30,26 @@ export interface BallTrapState {
   isOpen: boolean
   trapColor: string
   hitTime: number
+  /** World-space centre of the chamber a caught ball is held in. */
+  chamber: PhysicsVector
+  /** Seconds until the trap can catch again after a release. */
+  rearmTimer: number
 }
+
+/**
+ * A released ball starts inside the funnel and its contact with it restarts,
+ * which would re-trap it on the spot; the trap stays shut this long.
+ */
+export const TRAP_REARM_SECONDS = 0.75
+
+/** Rate (1/s) a caught ball is drawn down into the chamber. */
+const TRAP_PULL_RATE = 12
 
 export class BallTrapBuilder {
   private scene: Scene
   private world: PhysicsWorldSink
   private rapier: PhysicsApi
+  private readonly capture: CapturedBall
   private matLib: ReturnType<typeof getMaterialLibrary>
   private eventBus: ObstacleEventBusIntegration | null = null
   private zoneTriggerSystem: ZoneTriggerSystem | null = null
@@ -56,6 +71,7 @@ export class BallTrapBuilder {
     this.scene = scene
     this.world = world
     this.rapier = rapier
+    this.capture = new CapturedBall(rapier)
     this.matLib = getMaterialLibrary(scene)
     this.qualityTier = qualityTier
   }
@@ -173,6 +189,8 @@ export class BallTrapBuilder {
       isOpen: true,
       trapColor: colorHex,
       hitTime: 0,
+      chamber: { x, y: 0.5 - 0.3 * scale, z },
+      rearmTimer: 0,
     }
 
     bindings.push({ mesh: trapRoot as unknown as Mesh, rigidBody: body })
@@ -217,10 +235,24 @@ export class BallTrapBuilder {
       }
     }
 
+    if (state.rearmTimer > 0) state.rearmTimer = Math.max(0, state.rearmTimer - dt)
+
     if (!state.caughtBall) {
       state.holdTimer = 0
       return null
     }
+
+    // Draw the held ball down into the chamber.
+    const ball = state.caughtBall
+    const current = ball.translation()
+    const pull = 1 - Math.exp(-TRAP_PULL_RATE * dt)
+    this.capture.steer(ball, {
+      translation: {
+        x: current.x + (state.chamber.x - current.x) * pull,
+        y: current.y + (state.chamber.y - current.y) * pull,
+        z: current.z + (state.chamber.z - current.z) * pull,
+      },
+    })
 
     // Increment hold timer
     state.holdTimer += dt
@@ -231,17 +263,21 @@ export class BallTrapBuilder {
       state.caughtBall = null
       state.holdTimer = 0
       state.isOpen = true
+      state.rearmTimer = TRAP_REARM_SECONDS
 
       // Visually open the gate
       if (state.trapGate) {
         state.trapGate.scaling.y = 0.1
       }
 
+      const boost = this.boostVelocity()
+      this.capture.release(releasedBall, { linvel: boost })
+
       // Emit release event (after hold duration expires)
       if (this.eventBus) {
         const pos = state.mesh.getAbsolutePosition()
         this.eventBus.emitTrapBallReleased(state.id, 'ball-released', {
-          x: 0, y: 0, z: 0
+          x: boost.x, y: boost.y, z: boost.z
         })
         this.eventBus.emitPointsAwarded(
           GAME_TUNING.obstacle.trapTimeoutReleaseBase,
@@ -261,7 +297,7 @@ export class BallTrapBuilder {
    * Catch a ball in the trap
    */
   catchBall(state: BallTrapState, ball: PhysicsBody, ballPosition?: Vector3): void {
-    if (!state.caughtBall) {
+    if (!state.caughtBall && state.rearmTimer <= 0) {
       state.caughtBall = ball
       state.holdTimer = 0
       state.isOpen = false
@@ -272,9 +308,9 @@ export class BallTrapBuilder {
         state.trapGate.scaling.y = 1.0
       }
 
-      // Stop ball motion
-      ball.setLinvel(new this.rapier.Vector3(0, -0.5, 0), true)
-      ball.setAngvel(new this.rapier.Vector3(0, 0, 0), true)
+      // Stop the ball and hold it (kinematic) until the hold expires; updateTrap
+      // draws it into the chamber.
+      this.capture.capture(ball)
 
       // Emit EventBus events
       if (this.eventBus) {
@@ -300,15 +336,14 @@ export class BallTrapBuilder {
    */
   releaseBallWithBoost(state: BallTrapState, ball: PhysicsBody): void {
     state.hitTime = 0.2
-    const boostForce = getPhysicsTuningValue('trapReleaseBoost')
-    const rng = getSessionRngFork(RNG_FORK.TRAP)
-    const boostVelocity = new this.rapier.Vector3(
-      (rng.next() - 0.5) * boostForce,
-      boostForce * 0.8,
-      (rng.next() - 0.5) * boostForce * 0.5
-    )
-
-    ball.setLinvel(boostVelocity, true)
+    if (state.caughtBall === ball) {
+      state.caughtBall = null
+      state.holdTimer = 0
+      state.isOpen = true
+      state.rearmTimer = TRAP_REARM_SECONDS
+    }
+    const boostVelocity = this.boostVelocity()
+    this.capture.release(ball, { linvel: boostVelocity })
 
     // Emit EventBus events
     if (this.eventBus) {
@@ -328,8 +363,19 @@ export class BallTrapBuilder {
     }
   }
 
+  /** Launch velocity for a released ball: up out of the chamber with some scatter. */
+  private boostVelocity(): PhysicsVector {
+    const boostForce = getPhysicsTuningValue('trapReleaseBoost')
+    const rng = getSessionRngFork(RNG_FORK.TRAP)
+    return new this.rapier.Vector3(
+      (rng.next() - 0.5) * boostForce,
+      boostForce * 0.8,
+      (rng.next() - 0.5) * boostForce * 0.5
+    )
+  }
+
   /**
-   * Return all Rapier rigid bodies created by this builder.
+   * Return all physics bodies created by this builder.
    */
   getBodies(): PhysicsBody[] {
     return this.bodies

@@ -15,6 +15,8 @@ export type WasmDebugCollider =
   | { kind: 'capsule'; center: Vec3; radius: number; halfHeight: number; rotation: Quat; bodyId?: number }
   | { kind: 'sphere'; center: Vec3; radius: number; bodyId?: number }
   | { kind: 'cylinder'; center: Vec3; radius: number; halfHeight: number; rotation: Quat }
+  /** Local +Y axis, apex at +halfHeight (Rapier's cone convention). */
+  | { kind: 'cone'; center: Vec3; radius: number; halfHeight: number; rotation: Quat }
   /** Sensor volumes draw as wireframe only — they never apply impulse. */
   | { kind: 'sensor'; center: Vec3; halfExtents: Vec3; rotation: Quat; volumeShape: 'box' | 'cylinder' | 'sphere' }
   /** Triangle soup; `triangleCount` is enough for the HUD, the verts are not redrawn. */
@@ -196,6 +198,25 @@ export function appendCapsuleWire(
   }
 }
 
+/** Base ring plus four slant lines up to the apex. */
+export function appendConeWire(
+  positions: number[],
+  colors: number[],
+  center: Vec3,
+  radius: number,
+  halfHeight: number,
+  rotation: Quat,
+  segments = 12,
+): void {
+  const apex = add(center, rotateLocal(rotation, 0, halfHeight, 0))
+  const rim = (i: number) => {
+    const a = (i / segments) * Math.PI * 2
+    return add(center, rotateLocal(rotation, Math.cos(a) * radius, -halfHeight, Math.sin(a) * radius))
+  }
+  for (let i = 0; i < segments; i++) pushSegment(positions, colors, rim(i), rim((i + 1) % segments))
+  for (let i = 0; i < segments; i += segments / 4) pushSegment(positions, colors, rim(i), apex)
+}
+
 export function buildWasmDebugLineBuffers(
   engine: WasmSimEngine | null,
   colliders: readonly WasmDebugCollider[],
@@ -226,6 +247,8 @@ export function buildWasmDebugLineBuffers(
       // Close enough for a debug overlay: a capsule wire of the same radius
       // and half-height traces the cylinder's silhouette.
       appendCapsuleWire(positions, colors, c.center, c.radius, c.halfHeight, c.rotation)
+    } else if (c.kind === 'cone') {
+      appendConeWire(positions, colors, c.center, c.radius, c.halfHeight, c.rotation)
     } else if (c.kind === 'sensor') {
       if (c.volumeShape === 'sphere') {
         appendSphereWire(positions, colors, c.center, c.halfExtents.x)

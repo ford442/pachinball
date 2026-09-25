@@ -119,7 +119,8 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 - **`wasm-types.ts`** — TypeScript types for the WASM module surface.
 
 #### `native/` — C++ physics engine
-- **`src/PhysicsWorld.cpp`** — World step, collision, sleep, broadphase integration.
+- **`src/PhysicsWorld.cpp`** — Body / collider API and handle ranges; **`src/PhysicsWorldStep.cpp`** — `step()` / `substep()`: integration, sleep, broadphase, solver loop. Keep each TU under 500 lines.
+- **`src/KinematicBody.cpp`** — runtime `setBodyType` + kinematic rigid-body targets (a toy capturing a ball, #420). **`src/Cone.cpp`** — static cone (ball-trap funnels).
 - **`src/bindings.cpp`** — Emscripten embind exports for the WASM module.
 - **`tests/physics_world_test.cpp`** — Catch2 suite (`npm run test:native`).
 
@@ -156,7 +157,7 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 | `adventure-track-progression.ts` | `TRACK_CATALOG`, `AdventureTrackProgression` — campaign spine metadata. |
 | `adventure-progression-supervisor.ts` | Portal lifecycle + campaign state machine. |
 | `zone-registry.ts` | Per-track theming / story / music metadata for adventure zones. |
-| Various `*-feeder.ts` | Specialized table toys: `mag-spin-feeder`, `nano-loom-feeder`, `prism-core-feeder`, `gauss-cannon-feeder`, `quantum-tunnel-feeder`. |
+| Various `*-feeder.ts` | Specialized table toys: `mag-spin-feeder`, `nano-loom-feeder`, `prism-core-feeder`, `gauss-cannon-feeder`, `quantum-tunnel-feeder`. Every toy that holds a ball (feeders, traps, BallManager's hologram catch) captures / steers / releases it through `CapturedBall` (`src/core/captured-ball.ts`) — never `setBodyType` directly. |
 
 #### `src/game/` — High-level managers (barrel: `src/game/index.ts`)
 | File | Responsibility |

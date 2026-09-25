@@ -37,11 +37,13 @@ import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
 import * as adventure from './physics-module-adventure'
 import {
   WasmVolumeShape,
+  type WasmBodyType,
   type WasmBoxBodyDesc,
   type WasmForceFieldDesc,
 } from './physics-module-adventure'
 
 export {
+  WasmBodyType,
   WasmVolumeShape,
   WasmForceSpace,
   type WasmBoxBodyDesc,
@@ -76,7 +78,7 @@ export interface WasmBodyDesc {
   /** Angular drag factor for dynamic spheres, default 0.1. */
   angularDamping?: number
   /** 0=Dynamic, 1=Static, 2=Kinematic */
-  bodyType?:       0 | 1 | 2
+  bodyType?:       WasmBodyType
   /** 'sphere' (default) or 'capsule' — capsule segment runs along local +Y. */
   shape?:          'sphere' | 'capsule'
   /** Half-length of the capsule segment (metres). Ignored for sphere shape. */
@@ -259,6 +261,22 @@ export class WasmPhysicsEngine {
     return adventure.addStaticCylinder(this.world, center, radius, halfHeight, rotation, restitution, friction)
   }
 
+  /**
+   * Add an oriented static cone collider (local Y axis, apex at +halfHeight),
+   * matching Rapier's `ColliderDesc.cone(halfHeight, radius)` — ball-trap
+   * funnels. @returns Negative collider id, or -1 when not ready.
+   */
+  addStaticCone(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    halfHeight: number,
+    rotation?: { x: number; y: number; z: number; w: number },
+    restitution?: number,
+    friction?: number
+  ): number {
+    return adventure.addStaticCone(this.world, center, radius, halfHeight, rotation, restitution, friction)
+  }
+
   /** Add a static sphere collider. @returns Negative collider id, or -1. */
   addStaticSphere(
     center: { x: number; y: number; z: number },
@@ -291,13 +309,17 @@ export class WasmPhysicsEngine {
     return adventure.addKinematicMover(this.world, position, halfExtents, rotation, restitution, friction, shape)
   }
 
-  /** Push the pose a kinematic mover should reach by the next `step()`. */
+  /**
+   * Push the pose a kinematic mover (negative id) or a kinematic rigid body
+   * (id ≥ 0, see `setBodyType`) should reach by the next `step()`. Its
+   * velocity for that step is the pose delta over the fixed tick.
+   */
   setNextKinematicTransform(
-    moverId: number,
+    id: number,
     position: { x: number; y: number; z: number },
     rotation: { x: number; y: number; z: number; w: number }
   ): void {
-    adventure.setNextKinematicTransform(this.world, moverId, position, rotation)
+    adventure.setNextKinematicTransform(this.world, id, position, rotation)
   }
 
   /**
@@ -420,6 +442,21 @@ export class WasmPhysicsEngine {
   /** Directly set the rotation of a body (used for Rapier↔WASM sync). */
   setBodyRotation(id: number, qx: number, qy: number, qz: number, qw: number): void {
     this.world?.setBodyRotation(id, qx, qy, qz, qw)
+  }
+
+  /**
+   * Change a live body's simulation type — a toy capturing a ball (#420).
+   * → Kinematic: infinite mass, no gravity, velocity zeroed; it then moves
+   * only by `setNextKinematicTransform`. → Dynamic: mass restored, the last
+   * kinematic velocity kept.
+   */
+  setBodyType(id: number, type: WasmBodyType): void {
+    this.world?.setBodyType?.(id, type)
+  }
+
+  /** Current body type (debug / tests), or -1 for an unknown id or an older bundle. */
+  getBodyType(id: number): number {
+    return this.world?.getBodyType?.(id) ?? -1
   }
 
   // ---- Hinges --------------------------------------------------------------

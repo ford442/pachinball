@@ -6,6 +6,7 @@
 
 import type {
   WasmBodyDesc,
+  WasmBodyType,
   WasmBoxBodyDesc,
   WasmContactEventBus,
   WasmForceFieldDesc,
@@ -59,6 +60,14 @@ export interface WasmSimEngine {
     restitution?: number,
     friction?: number
   ): number
+  addStaticCone(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    halfHeight: number,
+    rotation?: { x: number; y: number; z: number; w: number },
+    restitution?: number,
+    friction?: number
+  ): number
   addStaticTriangleMesh(
     vertices: Float32Array,
     indices: Uint32Array,
@@ -74,8 +83,9 @@ export interface WasmSimEngine {
     friction?: number,
     shape?: WasmVolumeShape
   ): number
+  /** Mover (negative id) or kinematic rigid body (id ≥ 0) pose target for the next step. */
   setNextKinematicTransform(
-    moverId: number,
+    id: number,
     position: { x: number; y: number; z: number },
     rotation: { x: number; y: number; z: number; w: number }
   ): void
@@ -105,6 +115,8 @@ export interface WasmSimEngine {
   setAngularVelocity(id: number, wx: number, wy: number, wz: number): void
   setBodyPosition(id: number, px: number, py: number, pz: number): void
   setBodyRotation(id: number, qx: number, qy: number, qz: number, qw: number): void
+  /** Runtime body-type flip (#420): a toy capturing / releasing a live ball. */
+  setBodyType(id: number, type: WasmBodyType): void
 
   createHinge(desc: WasmHingeDesc): number
   setHingeMotor(id: number, targetVel: number, maxTorque: number): void

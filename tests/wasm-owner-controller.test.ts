@@ -81,19 +81,20 @@ describe('owner-mode stepping without Rapier', () => {
     expect(physics.getRapier).not.toHaveBeenCalled()
   })
 
-  it('pins a ball a toy holds kinematic before every step', () => {
+  it('steps a ball a toy holds as a C++ kinematic body, with no per-step pinning (#420)', () => {
     const { engine, controller, ball } = setup()
     ball.setBodyType(PhysicsBodyType.KinematicPositionBased, true)
     ball.setNextKinematicTranslation({ x: 1, y: 2, z: 3 })
-    engine.setVelocity(ball.wasmId!, 5, 0, 0) // a stray write while held
     engine.setBodyPosition.mockClear()
 
     controller.stepPhysics(null, null)
 
-    expect(engine.setBodyPosition).toHaveBeenCalledWith(ball.wasmId, 1, 2, 3)
-    expect(engine.setBodyPosition.mock.invocationCallOrder[0]).toBeLessThan(engine.step.mock.invocationCallOrder[0])
+    expect(engine.setBodyType).toHaveBeenCalledWith(ball.wasmId, 2)
+    expect(engine.setNextKinematicTransform).toHaveBeenCalledWith(ball.wasmId, { x: 1, y: 2, z: 3 }, { x: 0, y: 0, z: 0, w: 1 })
+    expect(engine.setNextKinematicTransform.mock.invocationCallOrder[0]).toBeLessThan(engine.step.mock.invocationCallOrder[0])
+    // The C++ step moves it; nothing teleports it before the step any more.
+    expect(engine.setBodyPosition).not.toHaveBeenCalled()
     expect(ball.translation()).toEqual({ x: 1, y: 2, z: 3 })
-    expect(ball.linvel()).toEqual({ x: 0, y: 0, z: 0 })
   })
 
   it('steps an adventure track with no Rapier world either', () => {

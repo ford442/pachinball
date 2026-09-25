@@ -401,7 +401,7 @@ export class GameObjects {
    * where the ball rolls beneath them; the owner's ground plane is y = 0, and
    * exported unchanged they close the plunger lane. They stay recorded (and
    * listed by `WasmOwner.getTableUnsupported()`) until they are calibrated for
-   * the owner plane.
+   * the owner plane. (The ball traps join the scope in GamePhysicsController.)
    */
   getWasmExportBodies(): PhysicsBody[] {
     const bodies = this.bindings.map((b) => b.rigidBody)

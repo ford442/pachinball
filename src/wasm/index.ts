@@ -8,7 +8,7 @@
  * import { WasmPhysicsEngine } from './wasm'
  */
 
-export { WasmPhysicsEngine, type WasmBodyDesc, type WasmHingeDesc } from './PhysicsModule'
+export { WasmPhysicsEngine, WasmBodyType, type WasmBodyDesc, type WasmHingeDesc } from './PhysicsModule'
 export type { WasmSimEngine } from './wasm-sim-engine'
 export {
   PhysicsWorkerClient,
@@ -23,6 +23,7 @@ export {
   STATIC_CAPSULE_ID_BASE,
   STATIC_CYLINDER_ID_BASE,
   STATIC_SPHERE_ID_BASE,
+  STATIC_CONE_ID_BASE,
   KINEMATIC_MOVER_ID_BASE,
   SENSOR_VOLUME_ID_BASE,
   HINGE_ANGLE_STRIDE,

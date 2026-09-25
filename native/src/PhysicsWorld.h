@@ -13,7 +13,6 @@
 #include "StaticShapes.h"
 #include "TriangleMesh.h"
 #include "ForceField.h"
-#include "StaticShapes.h"
 
 #include <vector>
 #include <cstdint>
@@ -62,7 +61,7 @@ static constexpr int STATIC_CAPSULE_ID_BASE = -2000;
 // STATIC_CYLINDER_ID_BASE (-5000) in StaticShapes.h;
 // STATIC_MESH_ID_BASE (-6000) in TriangleMesh.h;
 // FORCE_FIELD_ID_BASE (-7000) in ForceField.h;
-// STATIC_SPHERE_ID_BASE (-8000) in StaticShapes.h.
+// STATIC_SPHERE_ID_BASE (-8000) and STATIC_CONE_ID_BASE (-9000) in StaticShapes.h.
 
 /**
  * Entries per static-handle family.
@@ -140,6 +139,17 @@ public:
                         float restitution = 0.4f,
                         float friction = 0.2f);
 
+  /**
+   * Add an oriented static cone (local Y axis, apex at +halfHeight), matching
+   * Rapier's `ColliderDesc.cone(halfHeight, radius)`. Ball-trap funnels.
+   * @returns negative handle.
+   */
+  int addStaticCone(float px, float py, float pz,
+                    float radius, float halfHeight,
+                    float qx, float qy, float qz, float qw,
+                    float restitution = 0.4f,
+                    float friction = 0.2f);
+
   /** Add a static sphere collider. @returns negative handle. */
   int addStaticSphere(float px, float py, float pz,
                       float radius,
@@ -182,9 +192,36 @@ public:
   /** Add a kinematic mover (piston, platter, gate, rotating disc). @returns negative handle. */
   int addKinematicMover(const KinematicMoverDesc& desc);
 
-  /** Push the pose this mover should reach by the next `step()`; velocity is derived from the delta. */
-  void setNextKinematicTransform(int moverId, float px, float py, float pz,
+  /**
+   * Push the pose a kinematic handle should reach by the next `step()`;
+   * velocity is derived from the delta. `id` is either a mover (negative, as
+   * returned by `addKinematicMover`) or a rigid body (id ≥ 0) currently of
+   * `BodyType::Kinematic` — see `setBodyType`. A body target sent while the
+   * body is not kinematic is dropped at the step.
+   */
+  void setNextKinematicTransform(int id, float px, float py, float pz,
                                  float qx, float qy, float qz, float qw);
+
+  /**
+   * Change a live body's simulation type (KinematicBody.cpp) — a toy taking a
+   * rolling ball into its well, then spitting it out.
+   *
+   * → Kinematic / Static: inverse mass and inertia drop to 0, forces stop
+   *   integrating, pose is kept and velocity is zeroed. A kinematic body then
+   *   moves only by `setNextKinematicTransform` targets (velocity = pose delta
+   *   over the fixed tick; a tick without a target leaves it at rest). It
+   *   pushes dynamic bodies it touches but, like a mover, never collides with
+   *   static geometry or other movers; sensors still see it.
+   * → Dynamic: mass and inertia are rebuilt from the body's creation-time
+   *   mass and shape, and the last kinematic velocity is kept as its linear /
+   *   angular velocity, so a release carries the well's motion.
+   *
+   * Hinges on the body stay attached; they cannot drive an infinite-mass body.
+   */
+  void setBodyType(int id, BodyType type);
+
+  /** Current simulation type as its enum value, or -1 for an unknown id. */
+  int getBodyType(int id) const;
 
   /** Add a static OBB trigger volume (Enter/Stay/Exit events, zero impulse). @returns negative handle. */
   int addSensorVolume(const SensorVolumeDesc& desc);
@@ -267,12 +304,24 @@ private:
   // ---- Static cylinder / sphere (StaticShapes.cpp) ---------------------
   void resolveSphereVsCylinder(BodyView& body, const CylinderDesc& cyl, int cylId);
   void resolveSphereVsStaticSphere(BodyView& body, const SphereDesc& sph, int sphId);
+  // ---- Static cone (Cone.cpp) -------------------------------------------
+  void resolveSphereVsCone(BodyView& body, const ConeDesc& cone, int coneId);
   // ---- Static triangle meshes (TriangleMesh.cpp) ------------------------
   void resolveSphereVsTriangle(BodyView& body, int triangleIndex);
 
   // ---- Force fields (ForceField.cpp) ------------------------------------
   /** Accumulate every enabled field's contribution; runs just before integration. */
   void applyForceFields();
+
+  // ---- Kinematic bodies (KinematicBody.cpp) -----------------------------
+  struct KinematicBodyTarget {
+    int  id;
+    Vec3 position;
+    Quat rotation;
+  };
+  void pushKinematicBodyTarget(int id, const Vec3& position, const Quat& rotation);
+  /** Commit this tick's body targets (once per `step()`, before the substeps). */
+  void advanceKinematicBodies(float dt);
 
   // ---- Dynamic boxes (DynamicBox.cpp) -----------------------------------
   /**
@@ -318,6 +367,7 @@ private:
   std::vector<CapsuleDesc>       capsules_;
   std::vector<CylinderDesc>      cylinders_;
   std::vector<SphereDesc>        spheres_;
+  std::vector<ConeDesc>          cones_;
   std::vector<KinematicMover>    movers_;
   std::vector<SensorVolumeDesc>  sensors_;
   std::vector<TriangleMeshDesc>  meshes_;
@@ -325,6 +375,10 @@ private:
   std::vector<MeshTriangle>      triangles_;
   std::vector<ForceFieldDesc>    fields_;
   std::vector<HingeJoint>        hinges_;
+  /** Body targets pushed since the last `step()` (last push per id wins). */
+  std::vector<KinematicBodyTarget> bodyTargets_;
+  /** Bodies a target moved during the previous `step()`. */
+  std::vector<int>               drivenBodies_;
   int                            nextHingeId_ = 0;
   ContactListener                contactListener_;
 

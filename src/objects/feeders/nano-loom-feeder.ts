@@ -8,6 +8,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import { CapturedBall } from '../../core/captured-ball'
 import type { GameConfigType } from '../../config'
 import { getSessionRngFork, RNG_FORK } from '../../core/seeded-rng'
 import type { QualityTier } from '../../game-elements/visual-language'
@@ -44,6 +45,7 @@ export class NanoLoomFeeder {
   private gameplayEnabled = true
 
   private caughtBall: PhysicsBody | null = null
+  private readonly capture: CapturedBall
   public pinActivationProgress = 0
 
   // Physics Handles
@@ -62,6 +64,7 @@ export class NanoLoomFeeder {
     this.scene = scene
     this.world = world
     this.rapier = rapier
+    this.capture = new CapturedBall(rapier)
     this.config = config
 
     this.position = new Vector3(config.loomPosition.x, config.loomPosition.y, config.loomPosition.z)
@@ -291,7 +294,7 @@ export class NanoLoomFeeder {
                 const nextX = Scalar.Lerp(currentPos.x, targetPos.x, dt * this.config.liftAlignLerpSpeed)
                 const nextZ = Scalar.Lerp(currentPos.z, targetPos.z, dt * this.config.liftAlignLerpSpeed)
 
-                this.caughtBall.setNextKinematicTranslation({ x: nextX, y: nextY, z: nextZ })
+                this.capture.steer(this.caughtBall, { translation: { x: nextX, y: nextY, z: nextZ } })
 
                 // Pin activation wave - follows ball height as it rises
                 // const progress = (currentPos.y - this.intakePosition.y) / this.config.height
@@ -360,7 +363,7 @@ export class NanoLoomFeeder {
 
   private captureBall(body: PhysicsBody): void {
       this.caughtBall = body
-      body.setBodyType(this.rapier.RigidBodyType.KinematicPositionBased, true)
+      this.capture.capture(body)
       this.setState(NanoLoomState.LIFT)
   }
 
@@ -393,9 +396,11 @@ export class NanoLoomFeeder {
 
           case NanoLoomState.WEAVE:
               if (this.caughtBall) {
-                  this.caughtBall.setBodyType(this.rapier.RigidBodyType.Dynamic, true)
-                  // Give it a tiny nudge to ensure it doesn't balance perfectly on a pin
-                  this.caughtBall.applyImpulse({ x: (getSessionRngFork(RNG_FORK.FEEDER).next() - 0.5) * this.config.weaveNudgeImpulse, y: 0, z: 0 }, true)
+                  // Dropped into the weave with the lift's last motion, plus a
+                  // tiny nudge so it doesn't balance perfectly on a pin.
+                  this.capture.release(this.caughtBall, {
+                      impulse: { x: (getSessionRngFork(RNG_FORK.FEEDER).next() - 0.5) * this.config.weaveNudgeImpulse, y: 0, z: 0 },
+                  })
               }
               if (this.light) {
                   this.light.diffuse = Color3.FromHexString("#ff00ff") // Magenta for chaos

@@ -12,11 +12,14 @@
  *     body for) are pose stores. `WasmOwner` exports their colliders as C++
  *     statics, sensor volumes and kinematic movers (`wasm-static-export.ts`).
  *
- * Linked bodies emulate two Rapier states the C++ engine has no flag for —
- * kinematic (a toy holding a captured ball) and disabled — by *holding* the
- * body: `WasmTableWorld.beginStep()` pins it at the hold pose with zero
- * velocity before every step, and reads report the hold pose. A disabled
- * body also leaves every collision group.
+ * A linked body's Rapier type maps onto the C++ body type (#420): a toy
+ * making a captured ball `KinematicPositionBased` flips the C++ body to
+ * `Kinematic` (infinite mass, no gravity) and its `setNextKinematic*` targets
+ * become C++ pose targets, committed by the next step with the pose delta as
+ * velocity; back to `Dynamic` restores the mass and keeps that velocity. A
+ * disabled body is frozen the same way and also leaves every collision
+ * group. Hinged flippers (a `pivot` link) are never retyped — disabling one
+ * only drops its groups.
  */
 
 import {
@@ -28,6 +31,7 @@ import {
   type PhysicsVector,
 } from '../core/physics-api'
 import type { WasmSimEngine } from './wasm-sim-engine'
+import { WasmBodyType } from './physics-module-adventure'
 import { quatMul, quatRotateVec } from '../core/pose-math'
 import { colliderMass, type TableBodyDesc, type TableColliderDesc } from './wasm-physics-api'
 
@@ -138,10 +142,15 @@ export class WasmBody implements PhysicsBody {
     linvel?: PhysicsVector
     angvel?: PhysicsVector
   } = { atStep: -1 }
-  /** Linked bodies only: held as a Rapier kinematic body would be (a toy moves it). */
-  private kinematicHold = false
-  /** Pose a held linked body is pinned to. */
-  private holdTranslation: PhysicsVector | null = null
+  /** Linked bodies only: the C++ body type last sent (C++ bodies are born Dynamic). */
+  private cppType: WasmBodyType = WasmBodyType.Dynamic
+  /**
+   * Linked kinematic bodies only: the pose most recently sent as a C++ target
+   * (authored frame). Rapier takes translation and rotation targets
+   * separately; C++ takes a whole pose, so each push completes the other half
+   * from here.
+   */
+  private kinematicTarget: { translation: PhysicsVector; rotation: PhysicsRotation } | null = null
 
   constructor(
     private readonly host: WasmBodyHost,
@@ -176,7 +185,10 @@ export class WasmBody implements PhysicsBody {
     const link = this.link
     if (!link) return copyVec(this.pose.translation)
     if (link.pivot) return copyVec(link.pivot)
-    if (this.holdTranslation) return copyVec(this.holdTranslation)
+    // A driven kinematic body is where its last target sends it — the worker's
+    // snapshot can trail by a frame, and a toy steering from `translation()`
+    // would otherwise crawl at half speed.
+    if (this.kinematicTarget) return copyVec(this.kinematicTarget.translation)
     const w = this.freshWrites()
     if (w?.translation) return copyVec(w.translation)
     if (!this.host.engine.hasTransformSnapshot()) return copyVec(this.pose.translation)
@@ -186,6 +198,7 @@ export class WasmBody implements PhysicsBody {
   rotation(): PhysicsRotation {
     const link = this.link
     if (!link) return copyRot(this.pose.rotation)
+    if (this.kinematicTarget) return copyRot(this.kinematicTarget.rotation)
     const w = this.freshWrites()
     if (w?.rotation) return copyRot(w.rotation)
     if (!this.host.engine.hasTransformSnapshot()) return copyRot(this.pose.rotation)
@@ -206,7 +219,7 @@ export class WasmBody implements PhysicsBody {
   linvel(): PhysicsVector {
     const link = this.link
     if (!link) return copyVec(this.storedLinvel)
-    if (this.isHeld()) return copyVec(ZERO)
+    if (!this.enabled) return copyVec(ZERO)
     const w = this.freshWrites()
     if (w?.linvel) return copyVec(w.linvel)
     if (!this.host.engine.hasTransformSnapshot()) return copyVec(this.storedLinvel)
@@ -216,7 +229,7 @@ export class WasmBody implements PhysicsBody {
   angvel(): PhysicsVector {
     const link = this.link
     if (!link) return copyVec(this.storedAngvel)
-    if (this.isHeld()) return copyVec(ZERO)
+    if (!this.enabled) return copyVec(ZERO)
     const w = this.freshWrites()
     if (w?.angvel) return copyVec(w.angvel)
     if (!this.host.engine.hasTransformSnapshot()) return copyVec(this.storedAngvel)
@@ -241,7 +254,8 @@ export class WasmBody implements PhysicsBody {
       return
     }
     if (link.pivot) return
-    if (this.holdTranslation) this.holdTranslation = copyVec(t)
+    // A teleport also resets where a kinematic target would continue from.
+    if (this.kinematicTarget) this.kinematicTarget.translation = copyVec(t)
     this.host.engine.setBodyPosition(link.id, t.x, t.y, t.z)
     this.write({ translation: t })
   }
@@ -255,7 +269,8 @@ export class WasmBody implements PhysicsBody {
       if (this.type === PhysicsBodyType.Fixed) this.host.bodyChanged(this, 'structure')
       return
     }
-    const cpp = link.rotationOffset ? quatMul(r, conjugate(link.rotationOffset)) : r
+    if (this.kinematicTarget) this.kinematicTarget.rotation = copyRot(r)
+    const cpp = this.toCppRotation(r)
     this.host.engine.setBodyRotation(link.id, cpp.x, cpp.y, cpp.z, cpp.w)
     this.write({ rotation: r })
   }
@@ -267,8 +282,9 @@ export class WasmBody implements PhysicsBody {
       if (this.type === PhysicsBodyType.Dynamic) this.storedLinvel = v
       return
     }
-    // Rapier ignores velocity writes on a kinematic-position body; a held body stays pinned.
-    if (this.isHeld()) return
+    // Rapier ignores velocity writes on a kinematic-position body (its targets
+    // set the velocity); a disabled body stays frozen.
+    if (this.isFrozen()) return
     this.host.engine.setVelocity(link.id, v.x, v.y, v.z)
     this.write({ linvel: v })
   }
@@ -281,32 +297,27 @@ export class WasmBody implements PhysicsBody {
       this.storedAngvel = v
       return
     }
-    if (this.isHeld()) return
+    if (this.isFrozen()) return
     this.host.engine.setAngularVelocity(link.id, v.x, v.y, v.z)
     this.write({ angvel: v })
   }
 
   setNextKinematicTranslation(translation: PhysicsVector): void {
     const t = copyVec(translation)
-    const link = this.link
-    if (!link) {
+    if (!this.link) {
       if (this.isKinematic()) this.next.translation = t
       return
     }
-    if (!this.kinematicHold || link.pivot) return
-    this.holdTranslation = t
-    this.host.engine.setBodyPosition(link.id, t.x, t.y, t.z)
+    this.pushKinematicTarget(t, null)
   }
 
   setNextKinematicRotation(rotation: PhysicsRotation): void {
     const r = copyRot(rotation)
-    const link = this.link
-    if (!link) {
+    if (!this.link) {
       if (this.isKinematic()) this.next.rotation = r
       return
     }
-    if (!this.kinematicHold) return
-    this.setRotation(r, true)
+    this.pushKinematicTarget(null, r)
   }
 
   applyImpulse(impulse: PhysicsVector, _wakeUp: boolean): void {
@@ -322,7 +333,8 @@ export class WasmBody implements PhysicsBody {
       }
       return
     }
-    if (this.isHeld()) return
+    // Rapier drops impulses on kinematic bodies, and C++ has no mass to push while frozen.
+    if (this.isFrozen()) return
     // C++ changes the velocity at once (v += J / m) but its transform snapshot only
     // refreshes on the next step, so remember the result — Rapier reads it back immediately too.
     const v = this.linvel()
@@ -344,15 +356,11 @@ export class WasmBody implements PhysicsBody {
     const next = type as PhysicsBodyTypeValue
     if (next === this.type) return
     this.type = next
-    const link = this.link
-    if (!link) {
+    if (!this.link) {
       this.host.bodyChanged(this, 'structure')
       return
     }
-    const hold = next !== PhysicsBodyType.Dynamic
-    if (hold === this.kinematicHold) return
-    this.kinematicHold = hold
-    this.updateHold()
+    this.syncCppType()
   }
 
   isFixed(): boolean {
@@ -372,7 +380,7 @@ export class WasmBody implements PhysicsBody {
     this.enabled = enabled
     if (this.link) {
       this.applyLinkedCollisionGroups()
-      this.updateHold()
+      this.syncCppType()
     }
     this.host.bodyChanged(this, 'groups')
   }
@@ -408,17 +416,6 @@ export class WasmBody implements PhysicsBody {
 
   // ---- Stepping (WasmTableWorld) -----------------------------------------
 
-  /** @internal Pin a held linked body before the C++ step. */
-  pinForStep(): void {
-    const link = this.link
-    if (!link || !this.holdTranslation || link.pivot) return
-    const t = this.holdTranslation
-    const engine = this.host.engine
-    engine.setBodyPosition(link.id, t.x, t.y, t.z)
-    engine.setVelocity(link.id, 0, 0, 0)
-    engine.setAngularVelocity(link.id, 0, 0, 0)
-  }
-
   /** @internal After a step a kinematic pose store sits at the pose it was sent to (Rapier semantics). */
   commitKinematicStep(): void {
     if (this.link) return
@@ -427,12 +424,14 @@ export class WasmBody implements PhysicsBody {
     this.next = { translation: null, rotation: null }
   }
 
-  /** @internal Bind this body to a C++ rigid body. */
+  /** @internal Bind this body to a C++ rigid body (born Dynamic). */
   attachLink(link: WasmBodyLink): void {
     this.link = link
     this.written = { atStep: -1 }
+    this.cppType = WasmBodyType.Dynamic
+    this.kinematicTarget = null
     if (!this.enabled) this.applyLinkedCollisionGroups()
-    this.updateHold()
+    this.syncCppType()
   }
 
   /** @internal Drop the C++ binding (the owner removed its body). */
@@ -442,35 +441,50 @@ export class WasmBody implements PhysicsBody {
       this.pose.rotation = this.rotation()
     }
     this.link = null
-    this.holdTranslation = null
+    this.cppType = WasmBodyType.Dynamic
+    this.kinematicTarget = null
   }
 
-  isHeld(): boolean {
-    return this.holdTranslation !== null
+  /** Linked and currently kinematic in C++ (a toy holds it, or it is disabled). */
+  isFrozen(): boolean {
+    return this.link !== null && (this.cppType !== WasmBodyType.Dynamic || !this.enabled)
   }
 
-  private updateHold(): void {
-    const shouldHold = this.kinematicHold || !this.enabled
-    if (shouldHold && !this.holdTranslation) {
-      this.holdTranslation = this.translation()
-      const link = this.link
-      if (link) {
-        this.host.engine.setVelocity(link.id, 0, 0, 0)
-        this.host.engine.setAngularVelocity(link.id, 0, 0, 0)
-      }
-    } else if (!shouldHold && this.holdTranslation) {
-      // Release from exactly where the hold kept it, at rest — a toy's launch
-      // impulse usually follows at once.
-      const t = this.holdTranslation
-      this.holdTranslation = null
-      const link = this.link
-      if (link && !link.pivot) {
-        this.host.engine.setBodyPosition(link.id, t.x, t.y, t.z)
-        this.host.engine.setVelocity(link.id, 0, 0, 0)
-        this.host.engine.setAngularVelocity(link.id, 0, 0, 0)
-      }
-      this.write({ translation: t, linvel: copyVec(ZERO), angvel: copyVec(ZERO) })
+  /** The C++ body type this body's Rapier type and enable flag call for. */
+  private wantedCppType(): WasmBodyType {
+    if (this.link?.pivot) return WasmBodyType.Dynamic
+    return this.isDynamic() && this.enabled ? WasmBodyType.Dynamic : WasmBodyType.Kinematic
+  }
+
+  private syncCppType(): void {
+    const link = this.link
+    if (!link) return
+    const wanted = this.wantedCppType()
+    if (wanted === this.cppType) return
+    this.cppType = wanted
+    this.host.engine.setBodyType(link.id, wanted)
+    if (wanted === WasmBodyType.Kinematic) {
+      // C++ stops the body dead; it moves again only by its targets.
+      this.write({ linvel: copyVec(ZERO), angvel: copyVec(ZERO) })
+    } else {
+      // C++ keeps the last kinematic velocity, so a release carries the well's motion.
+      this.kinematicTarget = null
     }
+  }
+
+  /** Send a C++ pose target, completing whichever half Rapier left out. */
+  private pushKinematicTarget(translation: PhysicsVector | null, rotation: PhysicsRotation | null): void {
+    const link = this.link
+    if (!link || link.pivot || !this.isKinematic() || !this.enabled) return
+    const t = translation ?? this.translation()
+    const r = rotation ?? this.rotation()
+    this.kinematicTarget = { translation: copyVec(t), rotation: copyRot(r) }
+    this.host.engine.setNextKinematicTransform(link.id, t, this.toCppRotation(r))
+  }
+
+  private toCppRotation(r: PhysicsRotation): PhysicsRotation {
+    const offset = this.link?.rotationOffset
+    return offset ? quatMul(r, conjugate(offset)) : r
   }
 
   /**

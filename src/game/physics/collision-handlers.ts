@@ -251,7 +251,7 @@ export function handleBallTrapCollision(
   if (!ctx.ballHandleSet.has(ballHandle)) return
 
   const state = ctx.host.trapStates.find(s => s.body === obstacleBody)
-  if (state && state.isOpen && !state.caughtBall) {
+  if (state && state.isOpen && !state.caughtBall && state.rearmTimer <= 0) {
     ctx.scoringBridge.registerComboObstacleHit('trap')
     ctx.scoringBridge.registerComboMultiplierHit()
     const ballPos = ballBody.translation()

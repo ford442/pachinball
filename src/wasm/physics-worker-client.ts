@@ -9,6 +9,7 @@
 
 import type {
   WasmBodyDesc,
+  WasmBodyType,
   WasmBoxBodyDesc,
   WasmContactEventBus,
   WasmForceFieldDesc,
@@ -269,6 +270,21 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     return id
   }
 
+  addStaticCone(
+    center: { x: number; y: number; z: number },
+    radius: number,
+    halfHeight: number,
+    rotation: { x: number; y: number; z: number; w: number } = IDENTITY_Q,
+    restitution = 0.4,
+    friction = 0.2,
+  ): number {
+    if (!this.isReady) return -1
+    const id = this.ids.allocStaticCone()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
+    this.enqueue({ type: 'addStaticCone', center, radius, halfHeight, rotation, restitution, friction })
+    return id
+  }
+
   /**
    * Mirrors the in-process wrapper's guard: a mesh it would refuse before
    * reaching C++ consumes no native id, so it must not consume a shadow one.
@@ -324,11 +340,11 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   }
 
   setNextKinematicTransform(
-    moverId: number,
+    id: number,
     position: { x: number; y: number; z: number },
     rotation: { x: number; y: number; z: number; w: number },
   ): void {
-    this.enqueue({ type: 'setNextKinematicTransform', moverId, position, rotation })
+    this.enqueue({ type: 'setNextKinematicTransform', id, position, rotation })
   }
 
   setCollisionGroups(id: number, membership: number, filter: number): void {
@@ -396,6 +412,10 @@ export class PhysicsWorkerClient implements WasmSimEngine {
 
   setBodyRotation(id: number, qx: number, qy: number, qz: number, qw: number): void {
     this.enqueue({ type: 'setBodyRotation', id, qx, qy, qz, qw })
+  }
+
+  setBodyType(id: number, bodyType: WasmBodyType): void {
+    this.enqueue({ type: 'setBodyType', id, bodyType })
   }
 
   createHinge(desc: WasmHingeDesc): number {

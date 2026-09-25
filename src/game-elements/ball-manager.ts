@@ -7,6 +7,7 @@ import { TrailMesh } from '@babylonjs/core/Meshes/trailMesh'
 import { Scene } from '@babylonjs/core/scene'
 import type { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
+import { CapturedBall } from '../core/captured-ball'
 import { BallType, GAME_TUNING } from '../config'
 import { getMaterialLibrary } from '../materials'
 import { BallSaveSystem } from './ball-save-system'
@@ -56,6 +57,7 @@ export class BallManager {
   private scene: Scene
   private world: PhysicsWorldSink
   private rapier: PhysicsApi
+  private readonly capture: CapturedBall
   private ballBody: PhysicsBody | null = null
   private ballBodies: PhysicsBody[] = []
   private caughtBalls: Array<{ body: PhysicsBody; targetPos: Vector3; timer: number }> = []
@@ -91,13 +93,14 @@ export class BallManager {
     this.scene = scene
     this.world = world
     this.rapier = rapier
+    this.capture = new CapturedBall(rapier)
     this.bindings = bindings
     this.matLib = getMaterialLibrary(scene)
   }
 
   private asHost(): BallManagerHost {
     void [
-      this.scene, this.mirrorTexture, this.matLib, this.onGoldBallCollected, this.glowTime, this.smallGoldBallLifetimes, this.smallGoldBallSpawnTime,
+      this.scene, this.rapier, this.mirrorTexture, this.matLib, this.onGoldBallCollected, this.glowTime, this.smallGoldBallLifetimes, this.smallGoldBallSpawnTime,
       this.swarmGroups, this.ballSwarmId, this.nextSwarmId, this.ballStuckTimers, this.chainMultiball, this.addTrailForBall, this.playSpawnEffect,
     ]
     return this as unknown as BallManagerHost
@@ -227,7 +230,7 @@ export class BallManager {
   }
 
   activateHologramCatch(ball: PhysicsBody, targetPos: Vector3, duration: number): void {
-    ball.setBodyType(this.rapier.RigidBodyType.KinematicPositionBased, true)
+    this.capture.capture(ball)
     this.caughtBalls.push({ body: ball, targetPos: targetPos.clone(), timer: duration })
 
     const mesh = this.bindings.find((b) => b.rigidBody === ball)?.mesh as Mesh
@@ -255,11 +258,9 @@ export class BallManager {
       const nextX = current.x + (target.x - current.x) * lerpFactor
       const nextY = current.y + (target.y - current.y) * lerpFactor
       const nextZ = current.z + (target.z - current.z) * lerpFactor
-      catchData.body.setNextKinematicTranslation({ x: nextX, y: nextY, z: nextZ })
+      this.capture.steer(catchData.body, { translation: { x: nextX, y: nextY, z: nextZ } })
 
       if (catchData.timer <= 0) {
-        catchData.body.setBodyType(this.rapier.RigidBodyType.Dynamic, true)
-
         const mesh = this.bindings.find((b) => b.rigidBody === catchData.body)?.mesh as Mesh
         if (mesh && mesh.material) {
           (mesh.material as PBRMaterial).emissiveColor = new Color3(0.2, 0.2, 0.2)
@@ -272,7 +273,9 @@ export class BallManager {
           trailData.material.alpha = 1.0
         }
 
-        catchData.body.applyImpulse({ x: (getSessionRngFork(RNG_FORK.SPAWN).next() - 0.5) * 5, y: 5, z: 5 }, true)
+        this.capture.release(catchData.body, {
+          impulse: { x: (getSessionRngFork(RNG_FORK.SPAWN).next() - 0.5) * 5, y: 5, z: 5 },
+        })
         onRelease(catchData.body)
         this.caughtBalls.splice(i, 1)
       }
