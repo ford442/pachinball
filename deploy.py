@@ -6,10 +6,18 @@ Usage:
   1. Build:  npm run build
   2. Configure credentials (see .env.deploy.example), then:
      python deploy.py
-     python deploy.py --list-only   # dry-run: print transfer plan only
+     python deploy.py --list-only          # dry-run: print transfer plan only
+     python deploy.py --prune --dry-run    # list remote files absent from dist/
 
 The deploy service zips dist/ locally and uploads a single bundle over HTTPS.
 SFTP credentials stay on the VPS; only DEPLOY_TOKEN is required locally.
+
+--prune --dry-run is read-only: it lists stale remote files (present on the
+server, absent from the local build) via the existing /sizes endpoint. It
+never deletes anything — there is no remote-delete API call in this script.
+Actual pruning (removal) is intentionally NOT implemented yet; this mode
+exists so a human can review the stale-file list before that capability is
+added.
 
 Requirements:
   pip install requests
@@ -174,6 +182,48 @@ def print_transfer_plan(config: DeployConfig, build_path: Path) -> None:
     print("No files were uploaded.")
 
 
+def print_prune_plan(config: DeployConfig, build_path: Path) -> None:
+    """List remote files that are absent from the local build (dry-run only).
+
+    Read-only: reuses the existing /sizes endpoint to enumerate remote
+    files, diffs them against dist/, and prints the stale set. Does not
+    delete anything -- there is no remote-delete request anywhere in this
+    module. Non-dry-run pruning is a future addition, not implemented here.
+    """
+    local_files = {str(rel).replace("\\", "/") for rel in iter_build_files(build_path)}
+
+    print("Prune dry-run (--prune --dry-run)")
+    print("==================================")
+    print(f"Project:        {config.project_name}")
+    print(f"Build dir:      {build_path.resolve()}")
+    print(f"Target folder:  {config.target_folder}")
+    print()
+
+    remote_sizes = fetch_remote_sizes(config)
+    if not remote_sizes:
+        print("No remote file listing available (endpoint unreachable, errored, or empty).")
+        print("Nothing to report; no files were deleted.")
+        return
+
+    stale = sorted(set(remote_sizes) - local_files)
+
+    print(f"Remote files:   {len(remote_sizes)}")
+    print(f"Local files:    {len(local_files)}")
+    print(f"Stale remote:   {len(stale)} (present on server, absent from dist/)")
+    print()
+
+    if stale:
+        print("Remote files that would be pruned (NOT deleted -- dry-run only):")
+        for rel in stale:
+            size_kb = remote_sizes[rel] / 1024
+            print(f"  - {rel} ({size_kb:.1f} KB)")
+    else:
+        print("No stale remote files found.")
+
+    print()
+    print("No files were deleted. --prune has no non-dry-run mode yet.")
+
+
 def deploy_bundle(config: DeployConfig, build_path: Path) -> bool:
     """Zip the build and upload it as a single bundle."""
     url = f"{config.base_url}/api/deploy/{config.project_name}/bundle"
@@ -224,6 +274,17 @@ def parse_args() -> argparse.Namespace:
         help="Print the transfer plan without uploading.",
     )
     parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="List stale remote files absent from dist/. Must be combined with --dry-run; "
+        "there is no non-dry-run prune mode yet (nothing is ever deleted).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Required alongside --prune. Read-only: lists stale remote files without deleting them.",
+    )
+    parser.add_argument(
         "--env-file",
         default=ENV_FILE_NAME,
         help=f"Path to dotenv-style deploy config (default: {ENV_FILE_NAME}).",
@@ -247,6 +308,13 @@ def main() -> None:
         print(f"ERROR: Build directory '{config.build_dir}/' does not exist.")
         print("Please run your build command first (e.g. `npm run build`).")
         sys.exit(1)
+
+    if args.prune:
+        if not args.dry_run:
+            print("ERROR: --prune currently requires --dry-run (no delete mode is implemented yet).")
+            sys.exit(1)
+        print_prune_plan(config, build_path)
+        sys.exit(0)
 
     if args.list_only:
         print_transfer_plan(config, build_path)
