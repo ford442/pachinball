@@ -165,10 +165,13 @@ jobs:
           source emsdk/emsdk_env.sh
           WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npm run test:wasm-parity
 
+      - name: Pin field TS resolver vs compiled bundle
+        run: RUN_WASM_PARITY=1 WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npx vitest run tests/pin-field-wasm.test.ts
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Playwright wasm-owner feel + debug draw + adventure + toy capture
+      - name: Playwright wasm-owner feel + debug draw + adventure + toy capture + pin field
         env:
           CI: 'true'
         run: >
@@ -177,3 +180,4 @@ jobs:
           tests/wasm-owner-debug-draw.spec.ts
           tests/wasm-owner-adventure.spec.ts
           tests/wasm-owner-capture.spec.ts
+          tests/wasm-owner-pin-field.spec.ts

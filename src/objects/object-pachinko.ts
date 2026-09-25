@@ -3,18 +3,29 @@ import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
-import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
+import { supportsPinFields, type PhysicsApi, type PhysicsBody, type PhysicsWorldSink } from '../core/physics-api'
+import { resolvePinField } from '../core/pin-field'
 import { GameConfig } from '../config'
-import { KEEP_OUT_BOXES } from '../game-elements/daily-cascade-layout'
+import type { PinLattice } from '../game-elements/daily-cascade-layout'
+import {
+  PEG_BASE_RADIUS,
+  PEG_COLLIDER_RADIUS,
+  PEG_FRICTION,
+  PEG_HEIGHT,
+  PEG_RESTITUTION,
+  PEG_TOP_RADIUS,
+  PIN_Y,
+  pachinkoPinFieldSpec,
+  pinInKeepOut,
+} from './pachinko-pin-field'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
 
-function pinInKeepOut(x: number, z: number): boolean {
-  for (const box of KEEP_OUT_BOXES) {
-    if (x >= box.minX && x <= box.maxX && z >= box.minZ && z <= box.maxZ) return true
-  }
-  return false
+interface PinPlacement {
+  x: number
+  z: number
+  name: string
 }
 
 export class PachinkoBuilder {
@@ -45,6 +56,7 @@ export class PachinkoBuilder {
     width: number = 24,
     height: number = 22,
     pinPositions?: { x: number; z: number }[],
+    pinLattice?: PinLattice,
   ): {
     bindings: PhysicsBinding[]
     targetBodies: PhysicsBody[]
@@ -65,16 +77,9 @@ export class PachinkoBuilder {
     // Enhanced peg material with map-reactive emissive tips
     const pinMat = this.matLib.getEnhancedPinMaterial()
 
-    // Dense pachinko grid (vanilla) — overridden when pinPositions is provided
-    const rows = 10
-    const cols = 13
-    const spacingX = width / cols
-    const spacingZ = height / rows
-
-    const pegHeight = 1.5
-    const baseRadius = 0.12
-    const topRadius = 0.06
-    const avgRadius = (baseRadius + topRadius) / 2
+    const pegHeight = PEG_HEIGHT
+    const baseRadius = PEG_BASE_RADIUS
+    const topRadius = PEG_TOP_RADIUS
 
     // ================================================================
     // INSTANCED PINS – create 3 LOD template meshes once, then
@@ -126,50 +131,41 @@ export class PachinkoBuilder {
     meshes.push(pinHigh, pinMed, pinLow)
     this.meshes.push(pinHigh, pinMed, pinLow)
 
-    const placePin = (x: number, z: number, name: string) => {
+    // ================================================================
+    // PHYSICS – one pin-field descriptor for the whole lattice. The C++
+    // owner (WasmTableWorld) takes it as ONE collider and exports it with a
+    // single addPinField; Rapier has no such shape, so there every pin is
+    // its own fixed cylinder. The visual instances come from the same
+    // resolver either way, so they sit exactly on the pins that collide.
+    // ================================================================
+    const spec = pachinkoPinFieldSpec(center, width, height, pinPositions, pinLattice)
+    const placements: PinPlacement[] = spec
+      ? resolvePinField(spec).map((pin) => ({
+          x: pin.position.x,
+          z: pin.position.z,
+          name: pinPositions?.length ? `pin_seed_${pin.row}_${pin.col}` : `pin_${pin.row}_${pin.col}`,
+        }))
+      : this.offLatticePlacements(pinPositions ?? [])
+
+    let fieldBody: PhysicsBody | null = null
+    if (spec && supportsPinFields(this.world)) {
+      fieldBody = this.world.createPinField(spec)
+      this.bodies.push(fieldBody)
+    }
+
+    for (const { x, z, name } of placements) {
       const inst = pinHigh.createInstance(name)
-      inst.position.set(x, 0.4, z)
+      inst.position.set(x, PIN_Y, z)
       inst.isPickable = false
       inst.freezeWorldMatrix()
 
-      const body = this.world.createRigidBody(
-        this.rapier.RigidBodyDesc.fixed().setTranslation(x, 0.4, z)
-      )
-      this.world.createCollider(
-        this.rapier.ColliderDesc.cylinder(pegHeight / 2, avgRadius)
-          .setRestitution(0.65)
-          .setFriction(0.1)
-          .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
-        body
-      )
-
+      // Every instance binds to the one field body where there is one: the
+      // body is fixed (no pose sync), and table enable/disable still finds it.
+      const body = fieldBody ?? this.createPinBody(x, z)
       bindings.push({ mesh: inst, rigidBody: body })
       meshes.push(inst)
       pins.push(inst)
       this.meshes.push(inst)
-      this.bodies.push(body)
-    }
-
-    if (pinPositions && pinPositions.length > 0) {
-      for (let i = 0; i < pinPositions.length; i++) {
-        const p = pinPositions[i]!
-        // Seeded layouts should already respect keep-outs; filter as a safety net
-        // so the plunger corridor never fills with pins.
-        if (pinInKeepOut(p.x, p.z)) continue
-        placePin(p.x, p.z, `pin_seed_${i}`)
-      }
-    } else {
-      for (let r = 0; r < rows; r++) {
-        const offsetX = (r % 2 === 0) ? 0 : spacingX / 2
-        for (let c = 0; c < cols; c++) {
-          const x = center.x - (width / 2) + c * spacingX + offsetX
-          const z = center.z - (height / 2) + r * spacingZ
-          // Skip catcher hole, plunger lane, flipper arcs, and drain mouth —
-          // same keep-outs Daily Cascade already enforces for seeded layouts.
-          if (pinInKeepOut(x, z)) continue
-          placePin(x, z, `pin_${r}_${c}`)
-        }
-      }
     }
 
     // Catcher in the center of the pachinko field
@@ -205,6 +201,31 @@ export class PachinkoBuilder {
       meshes,
       pins
     }
+  }
+
+  /** A Rapier-path pin (or an off-lattice seeded one): its own fixed cylinder. */
+  private createPinBody(x: number, z: number): PhysicsBody {
+    const body = this.world.createRigidBody(
+      this.rapier.RigidBodyDesc.fixed().setTranslation(x, PIN_Y, z)
+    )
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cylinder(PEG_HEIGHT / 2, PEG_COLLIDER_RADIUS)
+        .setRestitution(PEG_RESTITUTION)
+        .setFriction(PEG_FRICTION)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
+      body
+    )
+    this.bodies.push(body)
+    return body
+  }
+
+  /** Seeded positions with no lattice to fit: filter the keep-outs and place each pin. */
+  private offLatticePlacements(pinPositions: readonly { x: number; z: number }[]): PinPlacement[] {
+    const placements: PinPlacement[] = []
+    pinPositions.forEach((p, i) => {
+      if (!pinInKeepOut(p.x, p.z)) placements.push({ x: p.x, z: p.z, name: `pin_seed_${i}` })
+    })
+    return placements
   }
 
   dispose(): void {

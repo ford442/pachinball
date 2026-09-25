@@ -34,6 +34,8 @@ struct ContactEvent {
   float         impulse    = 0.f;     ///< Peak impulse magnitude observed this step
   ContactPhase  phase      = ContactPhase::Enter;
   bool          isSensor   = false;   ///< True for sensor-volume overlaps: no impulse/correction applied
+  /** Pin-field lattice index (row * cols + col) of the pin hit; 0 for every other collider. */
+  int           subIndex   = 0;
   bool          isEntering() const { return phase == ContactPhase::Enter; }
 };
 
@@ -210,7 +212,7 @@ private:
       dst[8]  = e.impulse;
       dst[9]  = static_cast<float>(static_cast<int>(e.phase));
       dst[10] = e.isSensor ? 1.f : 0.f;
-      dst[11] = 0.f;
+      dst[11] = static_cast<float>(e.subIndex);
       dst += CONTACT_STRIDE;
     }
   }

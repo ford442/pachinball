@@ -215,6 +215,7 @@ void PhysicsWorld::clearStaticGeometry() {
   cylinders_.clear();
   spheres_.clear();
   cones_.clear();
+  pinFields_.clear();
   movers_.clear();
   sensors_.clear();
   meshes_.clear();
@@ -258,9 +259,13 @@ void PhysicsWorld::setCollisionGroups(int id, uint32_t membership, uint32_t filt
   } else if (id <= STATIC_SPHERE_ID_BASE && id > STATIC_CONE_ID_BASE) {
     const std::size_t idx = static_cast<std::size_t>(STATIC_SPHERE_ID_BASE - id);
     if (idx < spheres_.size()) { spheres_[idx].membership = membership; spheres_[idx].filter = filter; }
-  } else if (id <= STATIC_CONE_ID_BASE) {
+  } else if (id <= STATIC_CONE_ID_BASE && id > PIN_FIELD_ID_BASE) {
     const std::size_t idx = static_cast<std::size_t>(STATIC_CONE_ID_BASE - id);
     if (idx < cones_.size()) { cones_[idx].membership = membership; cones_[idx].filter = filter; }
+  } else if (id <= PIN_FIELD_ID_BASE) {
+    // One mask for the whole lattice: disabling the table's pins is O(1).
+    const std::size_t idx = static_cast<std::size_t>(PIN_FIELD_ID_BASE - id);
+    if (idx < pinFields_.size()) { pinFields_[idx].desc.membership = membership; pinFields_[idx].desc.filter = filter; }
   }
 }
 

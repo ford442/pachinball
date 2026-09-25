@@ -17,6 +17,8 @@
  * may import a Rapier *value*.
  */
 
+import type { PinFieldSpec } from './pin-field'
+
 export interface PhysicsVector {
   x: number
   y: number
@@ -152,6 +154,21 @@ export interface PhysicsWorldSink {
   createImpulseJoint(params: PhysicsJointData, body1: PhysicsBody, body2: PhysicsBody, wakeUp: boolean): PhysicsImpulseJoint
   removeImpulseJoint(joint: PhysicsImpulseJoint, wakeUp: boolean): void
   intersectionPair(collider1: PhysicsCollider, collider2: PhysicsCollider): boolean
+}
+
+/**
+ * Optional capability: author a whole pin lattice as one collider (#421).
+ * `WasmTableWorld` implements it (one C++ `addPinField` handle); Rapier does
+ * not, so builders check `supportsPinFields` and fall back to per-pin
+ * cylinders there. The returned fixed body sits at the world origin; the
+ * field's own `origin` / `rotation` place the pins.
+ */
+export interface PinFieldWorldSink {
+  createPinField(spec: PinFieldSpec): PhysicsBody
+}
+
+export function supportsPinFields(world: PhysicsWorldSink): world is PhysicsWorldSink & PinFieldWorldSink {
+  return typeof (world as Partial<PinFieldWorldSink>).createPinField === 'function'
 }
 
 /** The value namespace builders construct descriptors from (`typeof RAPIER` satisfies it). */

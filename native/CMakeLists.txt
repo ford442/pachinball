@@ -37,6 +37,7 @@ set(PHYSICS_CORE_SOURCES
   src/Narrowphase.cpp
   src/StaticShapes.cpp
   src/Cone.cpp
+  src/PinField.cpp
   src/KinematicBody.cpp
   src/PhysicsWorld.cpp
   src/PhysicsWorldStep.cpp
@@ -161,6 +162,7 @@ if(NOT EMSCRIPTEN)
     tests/adventure_geometry_test.cpp
     tests/kinematic_body_test.cpp
     tests/cone_test.cpp
+    tests/pin_field_test.cpp
   )
   target_link_libraries(physics_world_test PRIVATE
     pachinball_physics_native

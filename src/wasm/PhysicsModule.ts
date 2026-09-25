@@ -35,6 +35,7 @@ import {
 } from './transform-buffer'
 import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
 import * as adventure from './physics-module-adventure'
+import type { PinFieldSpec } from '../core/pin-field'
 import {
   WasmVolumeShape,
   type WasmBodyType,
@@ -275,6 +276,20 @@ export class WasmPhysicsEngine {
     friction?: number
   ): number {
     return adventure.addStaticCone(this.world, center, radius, halfHeight, rotation, restitution, friction)
+  }
+
+  /**
+   * Add a whole pachinko pin lattice as ONE static collider (#421): one
+   * handle and one Embind call however many pins it holds. Contacts carry the
+   * field id with the pin's lattice index. @returns Negative field id, or -1.
+   */
+  addPinField(desc: PinFieldSpec): number {
+    return adventure.addPinField(this.world, this.module, desc)
+  }
+
+  /** Pins a field holds after mask / keep-outs / dropout, or -1 (unknown id, or not ready). */
+  getPinFieldPinCount(fieldId: number): number {
+    return this.world?.getPinFieldPinCount?.(fieldId) ?? -1
   }
 
   /** Add a static sphere collider. @returns Negative collider id, or -1. */

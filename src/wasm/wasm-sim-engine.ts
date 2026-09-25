@@ -14,6 +14,7 @@ import type {
   WasmVolumeShape,
 } from './PhysicsModule'
 import type { WasmPhysicsModule } from './wasm-types'
+import type { PinFieldSpec } from '../core/pin-field'
 
 export interface WasmSimEngine {
   isReady: boolean
@@ -68,6 +69,8 @@ export interface WasmSimEngine {
     restitution?: number,
     friction?: number
   ): number
+  /** One pachinko pin lattice as ONE static handle (#421); groups via `setCollisionGroups`. */
+  addPinField(desc: PinFieldSpec): number
   addStaticTriangleMesh(
     vertices: Float32Array,
     indices: Uint32Array,

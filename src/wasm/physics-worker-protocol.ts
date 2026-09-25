@@ -15,6 +15,7 @@ import type {
   WasmHingeDesc,
   WasmVolumeShape,
 } from './PhysicsModule'
+import type { PinFieldSpec } from '../core/pin-field'
 import { STATIC_HANDLE_OVERFLOW } from './wasm-types'
 
 /** Mirrors native PhysicsWorld.h static collider id bases. */
@@ -27,6 +28,7 @@ export const STATIC_MESH_ID_BASE = -6000
 export const FORCE_FIELD_ID_BASE = -7000
 export const STATIC_SPHERE_ID_BASE = -8000
 export const STATIC_CONE_ID_BASE = -9000
+export const PIN_FIELD_ID_BASE = -10000
 
 /**
  * Mirrors native `STATIC_HANDLE_CAPACITY` in PhysicsWorld.h. Families are
@@ -52,6 +54,8 @@ export type PhysicsWorkerCommand =
   | { type: 'addStaticCylinder'; center: Vec3Msg; radius: number; halfHeight: number; rotation: QuatMsg; restitution: number; friction: number }
   | { type: 'addStaticSphere'; center: Vec3Msg; radius: number; restitution: number; friction: number }
   | { type: 'addStaticCone'; center: Vec3Msg; radius: number; halfHeight: number; rotation: QuatMsg; restitution: number; friction: number }
+  /** One command per lattice — never one `addStaticCylinder` per pin. `desc.occupancy` is transferred. */
+  | { type: 'addPinField'; desc: PinFieldSpec }
   | { type: 'addStaticTriangleMesh'; vertices: Float32Array; indices: Uint32Array; restitution: number; friction: number; doubleSided: boolean }
   | { type: 'addSensorVolume'; center: Vec3Msg; halfExtents: Vec3Msg; rotation: QuatMsg; shape: WasmVolumeShape }
   | { type: 'addKinematicMover'; position: Vec3Msg; halfExtents: Vec3Msg; rotation: QuatMsg; restitution: number; friction: number; shape: WasmVolumeShape }
@@ -128,6 +132,7 @@ export class WasmIdShadow {
   private nextCylinder = 0
   private nextSphere = 0
   private nextCone = 0
+  private nextPinField = 0
   private nextMover = 0
   private nextSensor = 0
   private nextMesh = 0
@@ -171,6 +176,13 @@ export class WasmIdShadow {
     return STATIC_CONE_ID_BASE - idx
   }
 
+  /** A whole pin lattice consumes one slot of its own family. */
+  allocPinField(): number {
+    if (this.nextPinField >= STATIC_HANDLE_CAPACITY) return STATIC_HANDLE_OVERFLOW
+    const idx = this.nextPinField++
+    return PIN_FIELD_ID_BASE - idx
+  }
+
   allocKinematicMover(): number {
     if (this.nextMover >= STATIC_HANDLE_CAPACITY) return STATIC_HANDLE_OVERFLOW
     const idx = this.nextMover++
@@ -204,6 +216,7 @@ export class WasmIdShadow {
     this.nextCylinder = 0
     this.nextSphere = 0
     this.nextCone = 0
+    this.nextPinField = 0
     this.nextMover = 0
     this.nextSensor = 0
   }

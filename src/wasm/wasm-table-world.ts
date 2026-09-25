@@ -27,7 +27,8 @@ import type {
   PhysicsVector,
   PhysicsWorldSink,
 } from '../core/physics-api'
-import { PhysicsBodyType } from '../core/physics-api'
+import { PhysicsBodyType, type PinFieldWorldSink } from '../core/physics-api'
+import type { PinFieldSpec } from '../core/pin-field'
 import type { WasmSimEngine } from './wasm-sim-engine'
 import { sphereTouchesVolume, type VolumeKind } from '../core/pose-math'
 import { WasmBody, WasmCollider, type WasmBodyHost, type WasmBodyLink } from './wasm-body'
@@ -98,7 +99,7 @@ export function volumeOf(desc: TableColliderDesc): { kind: VolumeKind; halfExten
   }
 }
 
-export class WasmTableWorld implements PhysicsWorldSink, WasmBodyHost {
+export class WasmTableWorld implements PhysicsWorldSink, PinFieldWorldSink, WasmBodyHost {
   private readonly bodies = new Map<number, WasmBody>()
   private readonly colliders = new Map<number, WasmCollider>()
   private readonly joints = new Map<number, WasmRevoluteJoint>()
@@ -152,6 +153,28 @@ export class WasmTableWorld implements PhysicsWorldSink, WasmBodyHost {
       this.structureRevision++
     }
     return collider
+  }
+
+  /**
+   * A whole pin lattice as one fixed body with one `pinField` collider (#421).
+   * The owner exports it as a single `addPinField` handle; removing the body
+   * (a Daily Cascade rebuild) drops the field with the rest of the statics.
+   */
+  createPinField(spec: PinFieldSpec): WasmBody {
+    const body = this.createRigidBody(new WasmRigidBodyDesc(PhysicsBodyType.Fixed))
+    const field: PinFieldSpec = {
+      ...spec,
+      origin: { ...spec.origin },
+      rotation: spec.rotation ? { ...spec.rotation } : undefined,
+      keepOuts: spec.keepOuts?.map((k) => ({ ...k })),
+      occupancy: spec.occupancy?.slice(),
+    }
+    const desc = new WasmColliderDesc({ kind: 'pinField', field })
+      .setRestitution(spec.restitution)
+      .setFriction(spec.friction)
+    if (spec.collisionGroups !== undefined) desc.setCollisionGroups(spec.collisionGroups)
+    this.createCollider(desc, body)
+    return body
   }
 
   removeRigidBody(body: PhysicsBody): void {

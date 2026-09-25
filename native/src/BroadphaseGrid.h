@@ -49,6 +49,8 @@ public:
       BodySphere   = 6,
       BodyTriangle = 7,
       BodyCone     = 8,
+      /** bodyB is a pin-field index; emitted by PhysicsWorld::appendPinFieldPairs, not the grid. */
+      BodyPinField = 9,
     };
     Type type;
     int  bodyA;   ///< dense body index

@@ -208,6 +208,44 @@ EMSCRIPTEN_BINDINGS(physics_world) {
             restitution, friction, doubleSided);
         }))
 
+    // Pin fields (#421): a whole pachinko lattice as ONE static handle. The
+    // keep-out rectangles (4 floats each: minX, maxX, minZ, maxZ) and the
+    // bit-packed occupancy mask arrive as heap offsets, like the triangle soup;
+    // C++ copies both, so the caller frees them straight after.
+    .function("addPinField", optional_override([](PhysicsWorld& self,
+        float px, float py, float pz,
+        int rows, int cols,
+        float spacingX, float spacingZ, float rowOffsetX,
+        float radius, float halfHeight,
+        float qx, float qy, float qz, float qw,
+        float restitution, float friction,
+        uintptr_t keepOutPtr, int keepOutCount,
+        uintptr_t maskPtr, int maskBytes,
+        unsigned dropoutSeed, float dropout) -> int {
+          PinFieldDesc desc;
+          desc.origin = {px, py, pz};
+          desc.rows = rows;
+          desc.cols = cols;
+          desc.spacingX = spacingX;
+          desc.spacingZ = spacingZ;
+          desc.rowOffsetX = rowOffsetX;
+          desc.radius = radius;
+          desc.halfHeight = halfHeight;
+          desc.rotation = {qx, qy, qz, qw};
+          desc.restitution = restitution;
+          desc.friction = friction;
+          const float* k = reinterpret_cast<const float*>(keepOutPtr);
+          for (int i = 0; k && i < keepOutCount; ++i) {
+            desc.keepOuts.push_back({k[i * 4], k[i * 4 + 1], k[i * 4 + 2], k[i * 4 + 3]});
+          }
+          const uint8_t* m = reinterpret_cast<const uint8_t*>(maskPtr);
+          if (m && maskBytes > 0) desc.occupancy.assign(m, m + maskBytes);
+          desc.dropoutSeed = static_cast<uint32_t>(dropoutSeed);
+          desc.dropout = dropout;
+          return self.addPinField(desc);
+        }))
+    .function("getPinFieldPinCount", &PhysicsWorld::getPinFieldPinCount)
+
     // Force fields (updraft, conveyor, solar wind)
     .function("addForceField", optional_override([](PhysicsWorld& self,
         float px, float py, float pz,

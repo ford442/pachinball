@@ -38,7 +38,21 @@ export {
   type PhysicsRotation,
   type PhysicsVector,
   type PhysicsWorldSink,
+  type PinFieldWorldSink,
+  supportsPinFields,
 } from './physics-api'
+export {
+  pinFieldHash,
+  pinFieldDropped,
+  pinFieldSlotPosition,
+  resolvePinField,
+  pinFieldOccupancy,
+  pinFieldOccupancyForPositions,
+  pinFieldPinBounds,
+  type PinFieldPin,
+  type PinFieldSpec,
+  type PinKeepOut,
+} from './pin-field'
 export {
   IDENTITY_POSE_ROTATION,
   composePose,

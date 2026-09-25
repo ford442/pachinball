@@ -26,6 +26,7 @@ import {
   type PhysicsRotation,
   type PhysicsVector,
 } from '../core/physics-api'
+import type { PinFieldSpec } from '../core/pin-field'
 
 /** Rapier's `ColliderDesc` defaults — keep in sync with Rapier. */
 export const TABLE_DEFAULT_FRICTION = 0.5
@@ -41,6 +42,8 @@ export type TableColliderShape =
   | { kind: 'cylinder'; radius: number; halfHeight: number }
   | { kind: 'cone'; radius: number; halfHeight: number }
   | { kind: 'convexHull'; points: Float32Array }
+  /** A whole pin lattice (#421) — only `WasmTableWorld.createPinField` builds one. */
+  | { kind: 'pinField'; field: PinFieldSpec }
 
 /** One table collider as a builder authored it, before any engine sees it. */
 export interface TableColliderDesc {
@@ -270,6 +273,7 @@ export function shapeVolume(shape: TableColliderShape): number | null {
     case 'cone':
       return (Math.PI * shape.radius ** 2 * (2 * shape.halfHeight)) / 3
     case 'convexHull':
+    case 'pinField':
       return null
   }
 }

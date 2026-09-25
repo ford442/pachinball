@@ -1,7 +1,7 @@
 /**
  * Adventure-geometry half of the in-process WASM engine: static cylinders /
  * spheres / cones / triangle meshes, kinematic movers, sensor volumes, dynamic
- * boxes and force fields (#383 Slice A/B, cones #420).
+ * boxes, force fields and pin fields (#383 Slice A/B, cones #420, pin fields #421).
  *
  * `WasmPhysicsEngine` (PhysicsModule.ts) owns loading, the world, bodies and
  * hinges, and delegates each adventure method here with its private world /
@@ -11,6 +11,7 @@
  * Stays lib-agnostic: part of the Worker-lib compile graph (tsconfig.worker.json).
  */
 
+import type { PinFieldSpec } from '../core/pin-field'
 import type { WasmPhysicsModule, WasmPhysicsWorldInstance } from './wasm-types'
 
 type Vec3 = { x: number; y: number; z: number }
@@ -209,6 +210,56 @@ export function addStaticTriangleMesh(
   } finally {
     mod._free(vertexPtr)
     mod._free(indexPtr)
+  }
+}
+
+/**
+ * One pin lattice → one C++ handle (#421). Keep-outs and the occupancy mask
+ * are copied into the heap for the call and freed straight after; C++ keeps
+ * its own copy. Collision groups travel separately (`setCollisionGroups` on
+ * the returned id), as for every other static.
+ */
+export function addPinField(world: World, mod: WasmPhysicsModule | null, spec: PinFieldSpec): number {
+  if (!world?.addPinField || !mod?._malloc || !mod._free) return -1
+  const keepOuts = spec.keepOuts ?? []
+  const mask = spec.occupancy ?? new Uint8Array(0)
+  const keepOutBytes = keepOuts.length * 16
+  const keepOutPtr = keepOutBytes > 0 ? mod._malloc(keepOutBytes) : 0
+  const maskPtr = mask.byteLength > 0 ? mod._malloc(mask.byteLength) : 0
+  const release = () => {
+    if (keepOutPtr) mod._free!(keepOutPtr)
+    if (maskPtr) mod._free!(maskPtr)
+  }
+  if ((keepOutBytes > 0 && !keepOutPtr) || (mask.byteLength > 0 && !maskPtr)) {
+    release()
+    return -1
+  }
+
+  try {
+    // Re-read the heap views after _malloc: a growing heap detaches them.
+    const f32 = heapF32(mod)
+    if (!f32) return -1
+    if (keepOutPtr) {
+      const base = keepOutPtr >> 2
+      keepOuts.forEach((k, i) => f32.set([k.minX, k.maxX, k.minZ, k.maxZ], base + i * 4))
+    }
+    if (maskPtr) new Uint8Array(f32.buffer).set(mask, maskPtr)
+
+    const o = spec.origin
+    const q = spec.rotation ?? IDENTITY
+    return world.addPinField(
+      o.x, o.y, o.z,
+      spec.rows, spec.cols,
+      spec.spacingX, spec.spacingZ, spec.rowOffsetX,
+      spec.radius, spec.halfHeight,
+      q.x, q.y, q.z, q.w,
+      spec.restitution, spec.friction,
+      keepOutPtr, keepOuts.length,
+      maskPtr, mask.byteLength,
+      (spec.dropoutSeed ?? 0) >>> 0, spec.dropout ?? 0,
+    )
+  } finally {
+    release()
   }
 }
 

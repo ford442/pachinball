@@ -3,7 +3,8 @@
  *
  * Handle allocation follows native: dynamic bodies get monotonic public ids
  * from 0, each static family counts down from its base (box -1000, capsule
- * -2000, mover -3000, sensor -4000, cylinder -5000, sphere -8000), and
+ * -2000, mover -3000, sensor -4000, cylinder -5000, sphere -8000, cone -9000,
+ * pin field -10000), and
  * `clearStaticGeometry()` resets the families so a re-export hands out the
  * same ids again. Body state is stored so reads return what was written.
  *
@@ -33,7 +34,7 @@ interface FakeBody {
 }
 
 const STATIC_BASES = {
-  box: -1000, capsule: -2000, mover: -3000, sensor: -4000, cylinder: -5000, sphere: -8000, cone: -9000,
+  box: -1000, capsule: -2000, mover: -3000, sensor: -4000, cylinder: -5000, sphere: -8000, cone: -9000, pinField: -10000,
 }
 const ZERO: V3 = { x: 0, y: 0, z: 0 }
 
@@ -41,7 +42,7 @@ export function makeFakeWasmEngine() {
   const bodies = new Map<number, FakeBody>()
   let nextBodyId = 0
   let stepCount = 0
-  const counts = { box: 0, capsule: 0, mover: 0, sensor: 0, cylinder: 0, sphere: 0, cone: 0 }
+  const counts = { box: 0, capsule: 0, mover: 0, sensor: 0, cylinder: 0, sphere: 0, cone: 0, pinField: 0 }
   const nextStatic = (family: keyof typeof counts) => STATIC_BASES[family] - counts[family]++
   const body = (id: number): FakeBody | undefined => bodies.get(id)
 
@@ -58,6 +59,7 @@ export function makeFakeWasmEngine() {
     addStaticCylinder: vi.fn(() => nextStatic('cylinder')),
     addStaticSphere: vi.fn(() => nextStatic('sphere')),
     addStaticCone: vi.fn(() => nextStatic('cone')),
+    addPinField: vi.fn(() => nextStatic('pinField')),
     addStaticTriangleMesh: vi.fn(() => -6000),
     addKinematicMover: vi.fn(() => nextStatic('mover')),
     setNextKinematicTransform: vi.fn((id: number, position: V3, rotation: Q) => {

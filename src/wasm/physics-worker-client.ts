@@ -18,6 +18,7 @@ import type {
 import { WasmVolumeShape } from './physics-module-adventure'
 import type { WasmPhysicsModule } from './wasm-types'
 import type { WasmSimEngine } from './wasm-sim-engine'
+import type { PinFieldSpec } from '../core/pin-field'
 import {
   decodeContactBuffer,
   toWasmContactEvent,
@@ -282,6 +283,27 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     const id = this.ids.allocStaticCone()
     if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
     this.enqueue({ type: 'addStaticCone', center, radius, halfHeight, rotation, restitution, friction })
+    return id
+  }
+
+  /**
+   * One command for the whole lattice. The mask and keep-outs are copied now
+   * (the caller may reuse them) and the mask's buffer is transferred on flush.
+   */
+  addPinField(desc: PinFieldSpec): number {
+    if (!this.isReady) return -1
+    const id = this.ids.allocPinField()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
+    this.enqueue({
+      type: 'addPinField',
+      desc: {
+        ...desc,
+        origin: { ...desc.origin },
+        rotation: desc.rotation ? { ...desc.rotation } : undefined,
+        keepOuts: desc.keepOuts?.map((k) => ({ ...k })),
+        occupancy: desc.occupancy?.slice(),
+      },
+    })
     return id
   }
 
@@ -614,10 +636,11 @@ export class PhysicsWorkerClient implements WasmSimEngine {
       this.loopback(commands)
       return
     }
-    // Mesh arrays were copied at enqueue, so hand them over instead of cloning again.
+    // Mesh arrays and pin masks were copied at enqueue, so hand them over instead of cloning again.
     const transfer: Transferable[] = []
     for (const cmd of commands) {
       if (cmd.type === 'addStaticTriangleMesh') transfer.push(cmd.vertices.buffer, cmd.indices.buffer)
+      if (cmd.type === 'addPinField' && cmd.desc.occupancy) transfer.push(cmd.desc.occupancy.buffer)
     }
     this.post({ type: 'batch', commands }, transfer)
   }
