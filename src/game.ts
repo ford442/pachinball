@@ -91,6 +91,11 @@ export class Game extends GameDelegates {
         photosensitiveMode: settings.photosensitiveMode,
       })
       console.log('[Accessibility] Settings loaded:', settings, 'Accessibility:', this.accessibility)
+      // The constructor set fog from the pre-settings default; honour the
+      // saved reduced-motion preference now that it is known.
+      if (this.accessibility.reducedMotion && this.scene) {
+        this.scene.fogMode = Scene.FOGMODE_NONE
+      }
 
       this.hapticManager = new HapticManager({
         enabled: settings.hapticsEnabled && this.accessibility.hapticsEnabled,

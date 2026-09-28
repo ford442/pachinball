@@ -41,26 +41,12 @@ export {
   NANO_LOOM_INSERT_GLTF,
 } from './insert-gltf-loader'
 
-// Classic preset exports
+// Preset data. The procedural builders (`createClassicCabinet` etc.) are not
+// re-exported: CabinetBuilder loads them on demand so they stay out of the
+// entry chunk.
 export {
   CLASSIC_CONFIG,
-  createClassicCabinet,
-} from './cabinet-classic'
-
-// Neo preset exports
-export {
   NEO_CONFIG,
-  createNeoCabinet,
-} from './cabinet-neo'
-
-// Vertical preset exports
-export {
   VERTICAL_CONFIG,
-  createVerticalCabinet,
-} from './cabinet-vertical'
-
-// Wide preset exports
-export {
   WIDE_CONFIG,
-  createWideCabinet,
-} from './cabinet-wide'
+} from './cabinet-presets'

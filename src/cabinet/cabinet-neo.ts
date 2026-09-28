@@ -11,49 +11,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import { getMaterialLibrary } from '../materials'
 import { PALETTE } from '../game-elements/visual-language'
-import type { CabinetPreset } from './cabinet-types'
-
-export const NEO_CONFIG: CabinetPreset = {
-  type: 'neo',
-  name: 'Neo Arcade',
-  description: 'Sleek black metal with aggressive angles and intense neon',
-
-  width: 30,
-  depth: 42,
-  sideHeight: 18,
-  baseY: -10,
-  backboxZ: 28,
-  backboxHeight: 16,
-  backboxDepth: 8,
-
-  bodyMaterial: 'matte_black',
-  trimMaterial: 'black_metal',
-  interiorMaterial: 'gloss_black',
-
-  neonLayout: {
-    frontVertical: true,
-    sideHorizontal: true,
-    marquee: true,
-    coinDoor: true,
-    underCabinet: true,
-    backboxEdge: true,
-  },
-
-  lightPoints: {
-    interior: new Vector3(0, 1, 5),
-    leftAccent: new Vector3(-14, 4, -10),
-    rightAccent: new Vector3(14, 4, -10),
-    marqueeSpot: {
-      pos: new Vector3(0, 17, 24),
-      target: new Vector3(0, -1, 0.2),
-    },
-    underGlow: new Vector3(0, -8, 5),
-  },
-
-  hasAngledSides: true,
-  hasExtendedMarquee: true,
-  hasCoinDoor: true,
-}
+import { NEO_CONFIG } from './cabinet-presets'
 
 export function createNeoCabinet(scene: Scene, materials: ReturnType<typeof getMaterialLibrary>): Mesh[] {
   const meshes: Mesh[] = []

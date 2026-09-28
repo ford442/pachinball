@@ -9,10 +9,22 @@
 
 import type { WasmPhysicsModule } from '../wasm/wasm-types'
 import { WASM_PHYSICS, getPhysicsEnginePreference } from '../config/physics'
-import { resetPhysicsWorkerPrewarmForTests, warmPhysicsWorker } from '../wasm/physics-worker-client'
 
 let preloadPromise: Promise<WasmPhysicsModule | null> | null = null
 let preloadStarted = false
+
+/**
+ * The worker client is loaded on demand: only the opt-in `wasm-worker`
+ * preference needs it, and a static import would drag the worker protocol
+ * and shared-layout codecs into the entry chunk for every boot.
+ */
+type WorkerClientModule = typeof import('../wasm/physics-worker-client')
+let workerClientModule: Promise<WorkerClientModule> | null = null
+
+function loadWorkerClientModule(): Promise<WorkerClientModule> {
+  workerClientModule ??= import('../wasm/physics-worker-client')
+  return workerClientModule
+}
 
 async function fetchAndCompileModule(bundleUrl: string): Promise<WasmPhysicsModule | null> {
   try {
@@ -30,16 +42,16 @@ async function fetchAndCompileModule(bundleUrl: string): Promise<WasmPhysicsModu
 
 function startPreload(bundleUrl: string): void {
   if (getPhysicsEnginePreference() === 'wasm-worker') {
-    try {
-      const held = warmPhysicsWorker(bundleUrl)
-      void held.ready.then((ok) => {
+    void loadWorkerClientModule()
+      .then(({ warmPhysicsWorker }) => warmPhysicsWorker(bundleUrl).ready)
+      .then((ok) => {
         if (ok) {
           console.log('[Bootstrap] C++ WASM physics worker warm-loaded')
         }
       })
-    } catch {
-      // Worker constructor unavailable (Node / tests)
-    }
+      .catch(() => {
+        // Worker constructor unavailable (Node / tests)
+      })
     return
   }
 
@@ -103,5 +115,7 @@ export async function getPreloadedWasmModule(): Promise<WasmPhysicsModule | null
 export function resetWasmPreloadForTests(): void {
   preloadPromise = null
   preloadStarted = false
-  resetPhysicsWorkerPrewarmForTests()
+  const loaded = workerClientModule
+  workerClientModule = null
+  void loaded?.then((m) => m.resetPhysicsWorkerPrewarmForTests()).catch(() => {})
 }

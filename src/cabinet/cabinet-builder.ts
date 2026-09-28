@@ -24,10 +24,7 @@ import { PALETTE, color, QualityTier } from '../game-elements/visual-language'
 import type { TableMapType } from '../shaders/lcd-table'
 import { TABLE_MAPS } from '../shaders/lcd-table'
 import type { CabinetType, CabinetPreset } from './cabinet-types'
-import { createClassicCabinet, CLASSIC_CONFIG } from './cabinet-classic'
-import { createNeoCabinet, NEO_CONFIG } from './cabinet-neo'
-import { createVerticalCabinet, VERTICAL_CONFIG } from './cabinet-vertical'
-import { createWideCabinet, WIDE_CONFIG } from './cabinet-wide'
+import { CLASSIC_CONFIG, NEO_CONFIG, VERTICAL_CONFIG, WIDE_CONFIG } from './cabinet-presets'
 import {
   loadCabinetGltfForPreset,
   assertCabinetAlignment,
@@ -45,12 +42,16 @@ export const CABINET_PRESETS: Record<CabinetType, CabinetPreset> = {
   wide: WIDE_CONFIG,
 }
 
-// Builder functions registry
-const CABINET_BUILDERS: Record<CabinetType, (scene: Scene, materials: ReturnType<typeof getMaterialLibrary>) => Mesh[]> = {
-  classic: createClassicCabinet,
-  neo: createNeoCabinet,
-  vertical: createVerticalCabinet,
-  wide: createWideCabinet,
+type ProceduralCabinetBuilder = (scene: Scene, materials: ReturnType<typeof getMaterialLibrary>) => Mesh[]
+
+// Builder functions registry. Each preset's procedural builder is its own
+// chunk, fetched the first time that preset is built: only one cabinet is
+// ever on screen, so the other three never need to ride the entry bundle.
+const CABINET_BUILDERS: Record<CabinetType, () => Promise<ProceduralCabinetBuilder>> = {
+  classic: () => import('./cabinet-classic').then((m) => m.createClassicCabinet),
+  neo: () => import('./cabinet-neo').then((m) => m.createNeoCabinet),
+  vertical: () => import('./cabinet-vertical').then((m) => m.createVerticalCabinet),
+  wide: () => import('./cabinet-wide').then((m) => m.createWideCabinet),
 }
 
 // Singleton instance
@@ -149,7 +150,7 @@ export class CabinetBuilder {
         }
       }
 
-      this.buildCabinetProcedural()
+      await this.buildCabinetProcedural()
       console.log(`[Cabinet] Loaded procedural preset: ${preset.name}`)
     } finally {
       this.loadInFlight = false
@@ -229,20 +230,17 @@ export class CabinetBuilder {
   /**
    * Build the complete cabinet using the current preset (procedural).
    */
-  buildCabinet(): void {
-    this.buildCabinetProcedural()
-  }
-
-  private buildCabinetProcedural(): void {
+  private async buildCabinetProcedural(): Promise<void> {
     const preset = this.currentPreset
     const matLib = getMaterialLibrary(this.scene)
 
-    const builder = CABINET_BUILDERS[preset.type]
-    if (!builder) {
+    const loadBuilder = CABINET_BUILDERS[preset.type]
+    if (!loadBuilder) {
       console.warn(`[Cabinet] No builder found for preset: ${preset.type}`)
       return
     }
 
+    const builder = await loadBuilder()
     const newMeshes = builder(this.scene, matLib)
     this.cabinetMeshes = newMeshes
     this.partitionMeshes(newMeshes)

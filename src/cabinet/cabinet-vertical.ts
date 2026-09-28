@@ -11,49 +11,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import { getMaterialLibrary } from '../materials'
 import { PALETTE, color } from '../game-elements/visual-language'
-import type { CabinetPreset } from './cabinet-types'
-
-export const VERTICAL_CONFIG: CabinetPreset = {
-  type: 'vertical',
-  name: 'Vertical Shooter',
-  description: 'Tall narrow cabinet for vertical orientation games',
-
-  width: 26,
-  depth: 38,
-  sideHeight: 22,
-  baseY: -10,
-  backboxZ: 24,
-  backboxHeight: 24,
-  backboxDepth: 12,
-
-  bodyMaterial: 'carbon_fiber',
-  trimMaterial: 'copper',
-  interiorMaterial: 'matte_black',
-
-  neonLayout: {
-    frontVertical: true,
-    sideHorizontal: false,
-    marquee: true,
-    coinDoor: false,
-    underCabinet: true,
-    backboxEdge: true,
-  },
-
-  lightPoints: {
-    interior: new Vector3(0, 3, 5),
-    leftAccent: new Vector3(-12, 8, -6),
-    rightAccent: new Vector3(12, 8, -6),
-    marqueeSpot: {
-      pos: new Vector3(0, 21, 20),
-      target: new Vector3(0, -1, 0.4),
-    },
-    underGlow: new Vector3(0, -8, 5),
-  },
-
-  hasAngledSides: false,
-  hasExtendedMarquee: true,
-  hasCoinDoor: false,
-}
+import { VERTICAL_CONFIG } from './cabinet-presets'
 
 export function createVerticalCabinet(scene: Scene, materials: ReturnType<typeof getMaterialLibrary>): Mesh[] {
   const meshes: Mesh[] = []

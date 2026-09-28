@@ -5,7 +5,7 @@ A Babylon.js scene backed by physics, showcasing a pachinko/pinball hybrid with 
 ## Stack
 - Vite (vanilla TypeScript template)
 - Babylon.js (core)
-- Physics: Rapier 3D WASM (`@dimforge/rapier3d-compat`) by default, with an optional in-house C++ physics engine (`native/` + `src/wasm/`) compiled to WASM — selectable via the `pachinball:physics-engine` localStorage flag (`rapier` / `wasm-mirror` / `wasm-owner`; `wasm-owner` is the shipping default for the table, Rapier remains the adventure-mode path)
+- Physics: in-house C++ engine (`native/` + `src/wasm/`) compiled to WASM and stepped as the `wasm-owner` default for both the table and adventure tracks; Rapier 3D WASM (`@dimforge/rapier3d-compat`) is loaded lazily only for the explicit `rapier` / `wasm-mirror` modes and the missing-bundle degrade path — selectable via the `pachinball:physics-engine` localStorage flag
 
 ## Getting Started
 

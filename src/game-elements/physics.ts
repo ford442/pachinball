@@ -7,7 +7,6 @@ import {
 } from '../config'
 import { WasmPhysicsEngine } from '../wasm'
 import type { WasmSimEngine } from '../wasm/wasm-sim-engine'
-import { PhysicsWorkerClient } from '../wasm/physics-worker-client'
 import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
 import { WASM_PHYSICS_API } from '../wasm/wasm-physics-api'
 import { WasmTableWorld } from '../wasm/wasm-table-world'
@@ -167,6 +166,10 @@ export class PhysicsSystem {
   private async initWasmEngine(): Promise<void> {
     if (this.wasmMode === 'wasm-worker') {
       console.info(`[PhysicsSystem] wasm-worker mode: crossOriginIsolated=${isCrossOriginIsolated()}`)
+      // Only the opt-in worker mode needs the client (and, through it, the
+      // protocol + shared-layout codecs). A dynamic import keeps them out of
+      // the entry chunk on the default wasm-owner boot (bundle-budget.json).
+      const { PhysicsWorkerClient } = await import('../wasm/physics-worker-client')
       const client = new PhysicsWorkerClient()
       await client.load(WASM_PHYSICS.bundleUrl)
       if (client.isReady) {

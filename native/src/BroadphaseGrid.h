@@ -101,8 +101,15 @@ private:
 
   struct CellKeyHash {
     std::size_t operator()(const CellKey& k) const {
-      return static_cast<std::size_t>(k.cx * 73856093) ^
-             static_cast<std::size_t>(k.cz * 19349663);
+      // Multiply in unsigned space: `int * 73856093` overflows (UB) for any
+      // |cx| >= 30, i.e. a ball ~13 m from the origin at the default cell size.
+      // The result is then reinterpreted as a signed 32-bit value so the
+      // bucket assignment is bit-identical to the old two's-complement wrap.
+      const auto mix = [](int v, std::uint32_t prime) {
+        return static_cast<std::size_t>(
+            static_cast<std::int32_t>(static_cast<std::uint32_t>(v) * prime));
+      };
+      return mix(k.cx, 73856093u) ^ mix(k.cz, 19349663u);
     }
   };
 
