@@ -169,18 +169,25 @@ export class PhysicsSystem {
       // Only the opt-in worker mode needs the client (and, through it, the
       // protocol + shared-layout codecs). A dynamic import keeps them out of
       // the entry chunk on the default wasm-owner boot (bundle-budget.json).
-      const { PhysicsWorkerClient } = await import('../wasm/physics-worker-client')
-      const client = new PhysicsWorkerClient()
-      await client.load(WASM_PHYSICS.bundleUrl)
-      if (client.isReady) {
-        console.info(
-          `[PhysicsSystem] wasm-worker snapshot transport requested: ${isCrossOriginIsolated() ? 'shared' : 'post-message'}`,
-        )
-        client.setGravity(GRAVITY.x, GRAVITY.y, GRAVITY.z)
-        client.setRollingResistance(WASM_PHYSICS.tunables.rollingResistance)
-        this.wasmEngine = client
-        this.wasmActive = true
-        return
+      let workerClientModule: typeof import('../wasm/physics-worker-client') | null = null
+      try {
+        workerClientModule = await import('../wasm/physics-worker-client')
+      } catch (err) {
+        console.warn('[PhysicsSystem] Worker client chunk failed to load:', err)
+      }
+      if (workerClientModule) {
+        const client = new workerClientModule.PhysicsWorkerClient()
+        await client.load(WASM_PHYSICS.bundleUrl)
+        if (client.isReady) {
+          console.info(
+            `[PhysicsSystem] wasm-worker snapshot transport requested: ${isCrossOriginIsolated() ? 'shared' : 'post-message'}`,
+          )
+          client.setGravity(GRAVITY.x, GRAVITY.y, GRAVITY.z)
+          client.setRollingResistance(WASM_PHYSICS.tunables.rollingResistance)
+          this.wasmEngine = client
+          this.wasmActive = true
+          return
+        }
       }
       console.warn('[PhysicsSystem] WASM physics worker failed; falling back to in-process wasm-owner.')
       this.wasmMode = 'wasm-owner'

@@ -37,6 +37,17 @@ export class Game extends GameDelegates {
     this.physics = new PhysicsSystem(preloadedRapier)
   }
 
+  /** Distance fog is a motion cue; reduced-motion players get none. */
+  private applyFogPreference(scene: Scene, reducedMotion: boolean): void {
+    if (reducedMotion) {
+      scene.fogMode = Scene.FOGMODE_NONE
+      return
+    }
+    scene.fogMode = Scene.FOGMODE_EXP2
+    scene.fogColor = Color3.FromHexString('#050510')
+    scene.fogDensity = GameConfig.visuals.fogDensity
+  }
+
   async init(): Promise<void> {
     if ('initAsync' in this.engine) {
       await this.engine.initAsync()
@@ -46,13 +57,7 @@ export class Game extends GameDelegates {
     this.scene = scene
     scene.clearColor = color(SURFACES.VOID).toColor4(1)
 
-    if (!this.accessibility?.reducedMotion) {
-      scene.fogMode = Scene.FOGMODE_EXP2
-      scene.fogColor = Color3.FromHexString('#050510')
-      scene.fogDensity = GameConfig.visuals.fogDensity
-    } else {
-      scene.fogMode = Scene.FOGMODE_NONE
-    }
+    this.applyFogPreference(scene, this.accessibility?.reducedMotion ?? false)
 
     this.checkpointDebug = new CheckpointDebugController()
 
@@ -92,9 +97,9 @@ export class Game extends GameDelegates {
       })
       console.log('[Accessibility] Settings loaded:', settings, 'Accessibility:', this.accessibility)
       // The constructor set fog from the pre-settings default; honour the
-      // saved reduced-motion preference now that it is known.
-      if (this.accessibility.reducedMotion && this.scene) {
-        this.scene.fogMode = Scene.FOGMODE_NONE
+      // saved reduced-motion preference (either way) now that it is known.
+      if (this.scene) {
+        this.applyFogPreference(this.scene, this.accessibility.reducedMotion)
       }
 
       this.hapticManager = new HapticManager({

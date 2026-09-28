@@ -136,6 +136,17 @@ export class CabinetBuilder {
 
     this.loadInFlight = true
     try {
+      // Resolve the procedural builder chunk first: it is the primary path
+      // or the glTF fallback, and a failed fetch must leave the cabinet
+      // that is on screen untouched.
+      let builder: ProceduralCabinetBuilder
+      try {
+        builder = await CABINET_BUILDERS[type]()
+      } catch (err) {
+        console.warn(`[Cabinet] Builder chunk failed to load for ${preset.name}; keeping current cabinet:`, err)
+        return
+      }
+
       this.currentPreset = preset
       this.disposeMeshesAndLights()
 
@@ -150,7 +161,7 @@ export class CabinetBuilder {
         }
       }
 
-      await this.buildCabinetProcedural()
+      this.buildCabinetProcedural(builder)
       console.log(`[Cabinet] Loaded procedural preset: ${preset.name}`)
     } finally {
       this.loadInFlight = false
@@ -162,6 +173,12 @@ export class CabinetBuilder {
    * Returns the new preset type.
    */
   async cycleCabinetPreset(options: LoadCabinetOptions = {}): Promise<CabinetType> {
+    if (this.loadInFlight) {
+      // A load (possibly awaiting a builder chunk) is still in progress;
+      // report what is actually on screen rather than an unloaded preset.
+      console.warn('[Cabinet] Ignoring re-entrant cycle while a preset load is in flight')
+      return this.currentPreset.type
+    }
     const types: CabinetType[] = ['classic', 'neo', 'vertical', 'wide']
     const currentIndex = types.indexOf(this.currentPreset.type)
     const nextIndex = (currentIndex + 1) % types.length
@@ -230,17 +247,10 @@ export class CabinetBuilder {
   /**
    * Build the complete cabinet using the current preset (procedural).
    */
-  private async buildCabinetProcedural(): Promise<void> {
+  private buildCabinetProcedural(builder: ProceduralCabinetBuilder): void {
     const preset = this.currentPreset
     const matLib = getMaterialLibrary(this.scene)
 
-    const loadBuilder = CABINET_BUILDERS[preset.type]
-    if (!loadBuilder) {
-      console.warn(`[Cabinet] No builder found for preset: ${preset.type}`)
-      return
-    }
-
-    const builder = await loadBuilder()
     const newMeshes = builder(this.scene, matLib)
     this.cabinetMeshes = newMeshes
     this.partitionMeshes(newMeshes)
