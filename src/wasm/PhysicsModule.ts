@@ -704,7 +704,11 @@ export class WasmPhysicsEngine {
     const heap = this.getHeapF32()
     if (!heap) return null
 
-    const buffer = this.module.wasmMemory?.buffer ?? heap.buffer
+    // Detect heap growth from the exported HEAPF32 view (Emscripten rebinds
+    // it on every grow). Do not read `module.wasmMemory`: it is not in
+    // EXPORTED_RUNTIME_METHODS, and an ASSERTIONS build installs a getter that
+    // aborts on access, which took down the RelWithAsserts parity job.
+    const buffer = heap.buffer
     if (buffer.byteLength !== this.heapByteLength) {
       this.heapByteLength = buffer.byteLength
       this.transformView = null

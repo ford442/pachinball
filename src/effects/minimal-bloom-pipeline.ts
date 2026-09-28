@@ -103,7 +103,7 @@ export class MinimalBloomPipeline
     this.buildPipeline()
   }
 
-  dispose(): void {
+  override dispose(): void {
     this.scene.postProcessRenderPipelineManager.detachCamerasFromRenderPipeline(
       PIPELINE_NAME,
       this.camerasToAttach,

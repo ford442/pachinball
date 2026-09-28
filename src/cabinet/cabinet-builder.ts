@@ -24,10 +24,7 @@ import { PALETTE, color, QualityTier } from '../game-elements/visual-language'
 import type { TableMapType } from '../shaders/lcd-table'
 import { TABLE_MAPS } from '../shaders/lcd-table'
 import type { CabinetType, CabinetPreset } from './cabinet-types'
-import { createClassicCabinet, CLASSIC_CONFIG } from './cabinet-classic'
-import { createNeoCabinet, NEO_CONFIG } from './cabinet-neo'
-import { createVerticalCabinet, VERTICAL_CONFIG } from './cabinet-vertical'
-import { createWideCabinet, WIDE_CONFIG } from './cabinet-wide'
+import { CLASSIC_CONFIG, NEO_CONFIG, VERTICAL_CONFIG, WIDE_CONFIG } from './cabinet-presets'
 import {
   loadCabinetGltfForPreset,
   assertCabinetAlignment,
@@ -45,12 +42,16 @@ export const CABINET_PRESETS: Record<CabinetType, CabinetPreset> = {
   wide: WIDE_CONFIG,
 }
 
-// Builder functions registry
-const CABINET_BUILDERS: Record<CabinetType, (scene: Scene, materials: ReturnType<typeof getMaterialLibrary>) => Mesh[]> = {
-  classic: createClassicCabinet,
-  neo: createNeoCabinet,
-  vertical: createVerticalCabinet,
-  wide: createWideCabinet,
+type ProceduralCabinetBuilder = (scene: Scene, materials: ReturnType<typeof getMaterialLibrary>) => Mesh[]
+
+// Builder functions registry. Each preset's procedural builder is its own
+// chunk, fetched the first time that preset is built: only one cabinet is
+// ever on screen, so the other three never need to ride the entry bundle.
+const CABINET_BUILDERS: Record<CabinetType, () => Promise<ProceduralCabinetBuilder>> = {
+  classic: () => import('./cabinet-classic').then((m) => m.createClassicCabinet),
+  neo: () => import('./cabinet-neo').then((m) => m.createNeoCabinet),
+  vertical: () => import('./cabinet-vertical').then((m) => m.createVerticalCabinet),
+  wide: () => import('./cabinet-wide').then((m) => m.createWideCabinet),
 }
 
 // Singleton instance
@@ -135,6 +136,17 @@ export class CabinetBuilder {
 
     this.loadInFlight = true
     try {
+      // Resolve the procedural builder chunk first: it is the primary path
+      // or the glTF fallback, and a failed fetch must leave the cabinet
+      // that is on screen untouched.
+      let builder: ProceduralCabinetBuilder
+      try {
+        builder = await CABINET_BUILDERS[type]()
+      } catch (err) {
+        console.warn(`[Cabinet] Builder chunk failed to load for ${preset.name}; keeping current cabinet:`, err)
+        return
+      }
+
       this.currentPreset = preset
       this.disposeMeshesAndLights()
 
@@ -149,7 +161,7 @@ export class CabinetBuilder {
         }
       }
 
-      this.buildCabinetProcedural()
+      this.buildCabinetProcedural(builder)
       console.log(`[Cabinet] Loaded procedural preset: ${preset.name}`)
     } finally {
       this.loadInFlight = false
@@ -161,6 +173,12 @@ export class CabinetBuilder {
    * Returns the new preset type.
    */
   async cycleCabinetPreset(options: LoadCabinetOptions = {}): Promise<CabinetType> {
+    if (this.loadInFlight) {
+      // A load (possibly awaiting a builder chunk) is still in progress;
+      // report what is actually on screen rather than an unloaded preset.
+      console.warn('[Cabinet] Ignoring re-entrant cycle while a preset load is in flight')
+      return this.currentPreset.type
+    }
     const types: CabinetType[] = ['classic', 'neo', 'vertical', 'wide']
     const currentIndex = types.indexOf(this.currentPreset.type)
     const nextIndex = (currentIndex + 1) % types.length
@@ -229,19 +247,9 @@ export class CabinetBuilder {
   /**
    * Build the complete cabinet using the current preset (procedural).
    */
-  buildCabinet(): void {
-    this.buildCabinetProcedural()
-  }
-
-  private buildCabinetProcedural(): void {
+  private buildCabinetProcedural(builder: ProceduralCabinetBuilder): void {
     const preset = this.currentPreset
     const matLib = getMaterialLibrary(this.scene)
-
-    const builder = CABINET_BUILDERS[preset.type]
-    if (!builder) {
-      console.warn(`[Cabinet] No builder found for preset: ${preset.type}`)
-      return
-    }
 
     const newMeshes = builder(this.scene, matLib)
     this.cabinetMeshes = newMeshes

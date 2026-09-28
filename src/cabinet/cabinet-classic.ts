@@ -13,54 +13,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import { getMaterialLibrary } from '../materials'
 import { PALETTE } from '../game-elements/visual-language'
-import type { CabinetPreset } from './cabinet-types'
-
-export const CLASSIC_CONFIG: CabinetPreset = {
-  type: 'classic',
-  name: 'Classic Pinball',
-  description: 'Traditional wooden cabinet with chrome trim',
-
-  width: 32,
-  depth: 44,
-  sideHeight: 20,
-  baseY: -10,
-  backboxZ: 30,
-  backboxHeight: 18,
-  backboxDepth: 10,
-
-  bodyMaterial: 'wood',
-  trimMaterial: 'chrome',
-  interiorMaterial: 'dark_felt',
-
-  neonLayout: {
-    frontVertical: true,
-    sideHorizontal: false,
-    marquee: true,
-    coinDoor: true,
-    underCabinet: false,
-    backboxEdge: false,
-  },
-
-  lightPoints: {
-    interior: new Vector3(0, 2, 5),
-    leftAccent: new Vector3(-15, 6, -8),
-    rightAccent: new Vector3(15, 6, -8),
-    marqueeSpot: {
-      pos: new Vector3(0, 19, 26),
-      target: new Vector3(0, -1, 0.3),
-    },
-  },
-
-  hasAngledSides: false,
-  hasExtendedMarquee: false,
-  hasCoinDoor: true,
-
-  gltf: {
-    simpleUrl: 'models/cabinet/classic/simple.glb',
-    highUrl: 'models/cabinet/classic/high.glb',
-    loadTimeoutMs: 15_000,
-  },
-}
+import { CLASSIC_CONFIG } from './cabinet-presets'
 
 export function createClassicCabinet(scene: Scene, materials: ReturnType<typeof getMaterialLibrary>): Mesh[] {
   const meshes: Mesh[] = []
