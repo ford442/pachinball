@@ -1,32 +1,15 @@
 import './style.css'
 import { Game } from './game'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import { exposeRenderer } from './renderers/renderer-selector'
 import { applyHardwareScaling, resolveEngineOptions } from './engine/engine-options'
 import { createEngine, isWebGPUEngine } from './engine/create-engine'
-import { preloadWasmPhysicsNow, scheduleIdleWasmPreload } from './engine/wasm-idle-preload'
-import { getWasmPhysicsRuntimeMode, runtimeModeUsesRapier } from './config'
-import { loadRapier } from './game-elements/rapier-loader'
+import { scheduleIdleWasmPreload } from './engine/wasm-idle-preload'
+import { preloadPhysicsSystem } from './game-elements/physics-preload'
 import { VisibilityManager } from './engine/visibility-manager'
 import { formatGpuProbeSummary } from './engine/gpu-degrade-telemetry'
 import { registerServiceWorker } from './pwa'
-
-/**
- * Start the physics download in parallel with engine creation.
- *
- * The production modes (`wasm-owner` / `wasm-worker`) fetch and compile only
- * the C++ bundle; Rapier is never imported on that path (#412), and
- * `PhysicsSystem.init()` loads it lazily if the bundle turns out to be
- * missing. The explicit `rapier` / `wasm-mirror` modes still warm Rapier here.
- * @returns Rapier when the selected mode simulates on it, else undefined
- */
-async function preloadPhysics(): Promise<typeof RAPIER | undefined> {
-  if (runtimeModeUsesRapier(getWasmPhysicsRuntimeMode())) return loadRapier()
-  preloadWasmPhysicsNow()
-  return undefined
-}
 
 async function bootstrap(): Promise<void> {
   registerServiceWorker()
@@ -39,10 +22,10 @@ async function bootstrap(): Promise<void> {
 
   // Parallelize engine creation and physics WASM loading
   // This reduces total load time by overlapping network fetch (WASM) with GPU initialization
-  const [engine, preloadedRapier] = await Promise.all([
+  const [engine, physics] = await Promise.all([
     createEngine(canvas),
-    preloadPhysics(),
-  ]) as [Engine | WebGPUEngine, typeof RAPIER | undefined]
+    preloadPhysicsSystem(),
+  ])
 
   console.timeEnd('[Bootstrap] Engine + Physics parallel init')
   console.time('[Bootstrap] Game init')
@@ -52,7 +35,7 @@ async function bootstrap(): Promise<void> {
 
   ;(window as unknown as Record<string, unknown>).bootstrapEngineOptions = resolveEngineOptions()
 
-  const game = new Game(engine, preloadedRapier)
+  const game = new Game(engine, physics)
   await game.init()
   console.info(formatGpuProbeSummary())
 

@@ -797,9 +797,12 @@ the mirror parity path. `tests/collision-dispatch-wasm-ids.test.ts` locks the
 key space.
 
 **Bundle.** `loadRapier()` (`src/game-elements/rapier-loader.ts`) is the one
-runtime import of `@dimforge/rapier3d-compat`. `main.ts` preloads the C++
-bundle in parallel with engine creation (`preloadWasmPhysicsNow()`) and only
-warms Rapier for the explicit Rapier modes. The rapier chunk is excluded from
+runtime import of `@dimforge/rapier3d-compat`. `main.ts` calls
+`preloadPhysicsSystem()` (`src/game-elements/physics-preload.ts`), which preloads
+the C++ bundle in parallel with engine creation (`preloadWasmPhysicsNow()`) and only
+warms Rapier for the explicit Rapier modes, then hands `Game` the resulting
+`PhysicsSystem`: `main.ts` / `game.ts` hold no Rapier type
+(`tests/boot-graph-rapier-free.test.ts`). The rapier chunk is excluded from
 the Workbox precache, and `npm run check:bundle` fails if it is ever precached
 or modulepreloaded again.
 

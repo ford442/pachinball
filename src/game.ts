@@ -2,7 +2,6 @@ import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Scene } from '@babylonjs/core/scene'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
 
 import { GameState, PhysicsSystem, BallAnimator, SettingsManager, SURFACES, color, detectAccessibility, HapticManager, getSoundSystem } from './game-elements'
 import { MagSpinFeeder, NanoLoomFeeder, PrismCoreFeeder, GaussCannonFeeder, QuantumTunnelFeeder } from './objects/feeders'
@@ -32,9 +31,9 @@ import { CheckpointDebugController, type DebugStageKey } from './game/checkpoint
 import { GameDelegates } from './game/game-delegates'
 
 export class Game extends GameDelegates {
-  constructor(engine: Engine | WebGPUEngine, preloadedRapier?: typeof RAPIER) {
+  constructor(engine: Engine | WebGPUEngine, physics: PhysicsSystem = new PhysicsSystem()) {
     super(engine)
-    this.physics = new PhysicsSystem(preloadedRapier)
+    this.physics = physics
   }
 
   /** Distance fog is a motion cue; reduced-motion players get none. */

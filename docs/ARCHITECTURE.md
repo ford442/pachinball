@@ -8,7 +8,7 @@ The codebase is organized into focused modules under `src/`. See [`AGENTS.md`](.
 
 | File | Role |
 |------|------|
-| [`src/main.ts`](../src/main.ts) | Application bootstrap — Babylon engine (WebGPU-first), Rapier WASM preload, `Game` instantiation |
+| [`src/main.ts`](../src/main.ts) | Application bootstrap — Babylon engine (WebGPU-first), physics preload (`preloadPhysicsSystem()`: the C++ bundle by default, Rapier only for `rapier` / `wasm-mirror`), `Game` instantiation |
 | [`src/game.ts`](../src/game.ts) | Main game orchestrator — wires subsystems, render loop, state machine |
 | [`src/game/game-systems-init.ts`](../src/game/game-systems-init.ts) | Subsystem initialization (physics, adventure, campaign, display, etc.) |
 

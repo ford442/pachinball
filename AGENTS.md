@@ -90,7 +90,7 @@ Notes:
 Every major subdirectory exposes a barrel file (`index.ts`). Import through the barrel rather than deep-path imports when possible. `src/style/` also has `index.css` as its CSS barrel; `index.ts` side-effect-imports it for TS entry points.
 
 ### Entry Points
-- **`src/main.ts`** — Bootstrap. Creates the Babylon engine in parallel with the C++ physics WASM preload (Rapier is fetched only for the explicit `rapier` / `wasm-mirror` modes or the missing-bundle degrade), then instantiates and initializes `Game`.
+- **`src/main.ts`** — Bootstrap. Creates the Babylon engine in parallel with the C++ physics WASM preload (`preloadPhysicsSystem()` in `src/game-elements/physics-preload.ts` — `main.ts` / `game.ts` never name Rapier; it is fetched only for the explicit `rapier` / `wasm-mirror` modes or the missing-bundle degrade), then instantiates and initializes `Game`.
 - **`src/game.ts`** — Main orchestrator class. Coordinates all subsystems, scene setup, lighting, cameras, and the render loop. **Keep it lean; do not dump feature logic here.**
 - **`src/config.ts`** — Pure configuration (no Babylon dependencies). Contains API bases, ball spawn weights, gameplay constants, effects feature flags, and backbox media paths.
 
