@@ -1,3 +1,11 @@
+/**
+ * Barrel for the game-elements sub-systems.
+ *
+ * Several re-exports below (audio synth / sample bank, daily-cascade layout and
+ * state) go through deprecated one-line shims whose implementation moved to
+ * `src/audio` and `src/cascade`. New call sites should import from those
+ * barrels instead; the shims stay until their remaining importers are migrated.
+ */
 export * from './types'
 export * from './display-config'
 export * from './visual-language'

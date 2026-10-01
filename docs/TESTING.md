@@ -72,7 +72,7 @@ The test mode is built on three modules:
 
 Each track switch calls `AdventureMode.clearTrack()` which:
 - Disposes all track meshes and materials
-- Removes all rigid bodies from the Rapier physics world (checking `getRigidBody(handle)` before removal)
+- Removes all rigid bodies from the physics world — the C++ owner's `WasmTableWorld` by default, Rapier in the Rapier modes (checking `getRigidBody(handle)` before removal)
 - Clears conveyor zones, gravity wells, damping zones, sensors, and chroma gates
 - This prevents body leaks and double-collider bugs during repeated switches
 
