@@ -97,7 +97,8 @@ portal anchors, and `buildTrack()` switch case).
    - `buildKind` — `'json'` or `'ts'`, plus that kind's dispatch field (below)
 3. **JSON path** (`buildKind: 'json'`):
    - Author `src/adventure/track-data/<NAME>.json` conforming to the v1 schema in
-     [`track-schema.ts`](../src/adventure/track-schema.ts).
+     [`track-schema.ts`](../src/adventure/track-schema.ts) (types in
+     [`track-schema-types.ts`](../src/adventure/track-schema-types.ts), re-exported by it).
    - Point the manifest's `dataPath` at it (glob-relative, e.g. `./track-data/<NAME>.json`).
    - The file is auto-registered via `track-data-registry.ts` (`import.meta.glob`); the
      manifest registry cross-checks `dataPath` against the file the definition actually
