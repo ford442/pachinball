@@ -32,6 +32,8 @@ import {
 } from '../src/wasm/physics-worker-runtime'
 import { PhysicsWorkerClient } from '../src/wasm/physics-worker-client'
 import { EventBus } from '../src/core/event-bus'
+import { WasmSnapshotStatus } from '../src/wasm/wasm-types'
+import { fakeSnapshot } from './helpers/fake-snapshot'
 
 function identityTransform(id: number, px: number): WasmTransform {
   return {
@@ -295,5 +297,101 @@ describe('static handle capacity', () => {
 
     ids.resetStaticHandles()
     expect(ids.allocStaticBox()).toBe(STATIC_BOX_ID_BASE)
+  })
+})
+
+/**
+ * #441 — world snapshots over the worker protocol: the request rides in the
+ * ordered batch, the reply is correlated by request id, and the client keeps
+ * its id shadow and step-count guards consistent with the restored world.
+ */
+describe('worker snapshot request/reply', () => {
+  type Reply = Extract<Parameters<PhysicsWorkerClient['receiveWorkerMessage']>[0], { type: 'snapshot-reply' }>
+
+  function setup(restoreStatus = WasmSnapshotStatus.Ok) {
+    const engine = {
+      ...makeMockEngine(),
+      serializeSnapshot: vi.fn(() => new Uint8Array([1, 2, 3, 4])),
+      restoreSnapshot: vi.fn(() => restoreStatus),
+      getStaticContentHash: vi.fn(() => 'feedfacecafebeef'),
+    }
+    const runtime = createWorkerRuntimeState()
+    const client = new PhysicsWorkerClient({ sharedTransport: false })
+    const batches: PhysicsWorkerCommand[][] = []
+    const held: Reply[] = []
+    let holdReplies = false
+    client.attachLoopback((commands) => {
+      batches.push(commands)
+      for (const cmd of commands) applyPhysicsCommand(engine, cmd, runtime)
+      const replies = runtime.replies
+      runtime.replies = []
+      for (const r of replies) {
+        if (holdReplies) held.push(r)
+        else client.receiveWorkerMessage(r)
+      }
+    })
+    return {
+      engine, runtime, client, batches,
+      hold: () => { holdReplies = true },
+      release: () => { holdReplies = false; for (const r of held.splice(0)) client.receiveWorkerMessage(r) },
+    }
+  }
+
+  const blob = fakeSnapshot({ hashHi: 1, hashLo: 2, ids: [0, 3], stepCount: 500, hinges: [{ id: 4, bodyId: 3 }] })
+
+  it('serializes at its place in the command order and correlates the reply', async () => {
+    const { client, batches, engine } = setup()
+    client.createBody({ mass: 1 })
+    const a = client.serializeSnapshot()
+    const b = client.serializeSnapshot()
+    await expect(a).resolves.toEqual(new Uint8Array([1, 2, 3, 4]))
+    await expect(b).resolves.toEqual(new Uint8Array([1, 2, 3, 4]))
+    // createBody went out in the same ordered batch, ahead of the request.
+    expect(batches[0]!.map((c) => c.type)).toEqual(['createBody', 'serializeSnapshot'])
+    expect(engine.serializeSnapshot).toHaveBeenCalledTimes(2)
+    expect(client.getStaticContentHash()).toBe('feedfacecafebeef')
+  })
+
+  it('a restore takes effect before the next step and adopts the snapshot ids and step count', async () => {
+    const { client, batches, runtime, engine, hold, release } = setup()
+    client.createBody({ mass: 1 }) // live id 0
+    hold()
+    const status = client.restoreSnapshot(blob)
+    client.step(1 / 60)
+    // In flight: the client already reports the snapshot's counters.
+    expect(client.getStepCount()).toBe(500)
+    expect(client.createBody({ mass: 1 })).toBe(4) // nextBodyId of the snapshot
+    release()
+    await expect(status).resolves.toBe(WasmSnapshotStatus.Ok)
+    const order = batches.flat().map((c) => c.type)
+    expect(order.indexOf('restoreSnapshot')).toBeLessThan(order.indexOf('step'))
+    expect(engine.restoreSnapshot).toHaveBeenCalledTimes(1)
+    // The worker now publishes exactly the restored world's hinges.
+    expect([...runtime.hingeIds]).toEqual([4])
+  })
+
+  it('drops step results that arrive while a restore is in flight', () => {
+    const { client, hold, release } = setup()
+    hold()
+    void client.restoreSnapshot(blob)
+    const stale = {
+      type: 'step-result' as const, alpha: 0.5, stepCount: 9999, stepMs: 1,
+      transformBuffer: new ArrayBuffer(0), contactBuffer: new ArrayBuffer(0), contactCount: 0, hingeBuffer: new ArrayBuffer(0),
+    }
+    client.applyStepResult(stale)
+    expect(client.getStepCount()).toBe(500)
+    expect(client.getTransportStats().staleSnapshots).toBe(1)
+    release()
+    // After the reply, the restored world's (lower) step counts are accepted.
+    client.applyStepResult({ ...stale, stepCount: 501 })
+    expect(client.getStepCount()).toBe(501)
+  })
+
+  it('a refused restore puts the previous id counters and step count back', async () => {
+    const { client } = setup(WasmSnapshotStatus.StaticMismatch)
+    expect(client.createBody({ mass: 1 })).toBe(0)
+    await expect(client.restoreSnapshot(blob)).resolves.toBe(WasmSnapshotStatus.StaticMismatch)
+    expect(client.getStepCount()).toBe(0)
+    expect(client.createBody({ mass: 1 })).toBe(1)
   })
 })

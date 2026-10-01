@@ -23,23 +23,7 @@ import {
 import { WASM_SNAPSHOT_VERSION, WasmSnapshotStatus } from '../src/wasm/wasm-types'
 import { pachinkoPinFieldSpec } from '../src/objects/pachinko-pin-field'
 import { generateTableLayout } from '../src/cascade/daily-cascade-layout'
-
-/** A v1 blob with the words readSnapshotHeader reads (layout: native/src/Snapshot.cpp). */
-function fakeSnapshot(opts: { hashHi: number; hashLo: number; ids: number[]; version?: number }): Uint8Array {
-  const words: number[] = [0x4e534250, opts.version ?? 1, 0, opts.hashLo, opts.hashHi]
-  for (let i = 0; i < 12; i++) words.push(0) // static counts
-  words.push(0, 0, 0) // step lo/hi, accumulator
-  for (let i = 0; i < 10; i++) words.push(0) // params
-  const nextId = Math.max(-1, ...opts.ids) + 1
-  words.push(nextId, nextId)
-  for (let id = 0; id < nextId; id++) words.push(opts.ids.indexOf(id), 0)
-  words.push(opts.ids.length, ...opts.ids)
-  words[2] = words.length
-  const out = new Uint8Array(words.length * 4)
-  const view = new DataView(out.buffer)
-  words.forEach((w, i) => view.setUint32(i * 4, w >>> 0, true))
-  return out
-}
+import { fakeSnapshot } from './helpers/fake-snapshot'
 
 const HASH = '00c0ffee12345678'
 const blob = fakeSnapshot({ hashHi: 0x00c0ffee, hashLo: 0x12345678, ids: [0, 1, 3] })
@@ -109,9 +93,31 @@ describe('applyReplaySnapshot', () => {
   it('flags changed feeder tuning, unsupported engines and corrupt blobs', () => {
     expect(applyReplaySnapshot(engine(HASH), [0, 1, 3], fingerprint({ feederTunablesHash: 'deadbeef' })).outcome)
       .toBe('tunables-mismatch')
-    expect(applyReplaySnapshot(engine(null), [0, 1, 3], fingerprint()).outcome).toBe('unsupported')
+    expect(applyReplaySnapshot(engine(null, WasmSnapshotStatus.Unsupported), [0, 1, 3], fingerprint()).outcome).toBe('unsupported')
     expect(applyReplaySnapshot(engine(HASH), [0, 1, 3], fingerprint({ initialSnapshot: 'AAAA' })).outcome).toBe('invalid')
     expect(applyReplaySnapshot(engine(HASH, WasmSnapshotStatus.Corrupt), [0, 1, 3], fingerprint()).outcome).toBe('invalid')
+  })
+
+  it('with no live hash yet (worker client) defers the table check to the C++ restore', () => {
+    expect(applyReplaySnapshot(engine(null), [0, 1, 3], fingerprint()).outcome).toBe('restored')
+    expect(applyReplaySnapshot(engine(null, WasmSnapshotStatus.StaticMismatch), [0, 1, 3], fingerprint()).outcome)
+      .toBe('table-mismatch')
+  })
+
+  it('reports an async (worker) restore as provisionally restored, then settles with the status', async () => {
+    const ok = applyReplaySnapshot(
+      { restoreSnapshot: vi.fn(() => Promise.resolve(WasmSnapshotStatus.Ok)), getStaticContentHash: () => null },
+      [0, 1, 3], fingerprint(),
+    )
+    expect(ok.outcome).toBe('restored')
+    expect(ok.status).toBeNull()
+    await expect(ok.settled).resolves.toEqual({ outcome: 'restored', status: 0, message: null })
+
+    const refused = applyReplaySnapshot(
+      { restoreSnapshot: vi.fn(() => Promise.resolve(WasmSnapshotStatus.StaticMismatch)), getStaticContentHash: () => null },
+      [0, 1, 3], fingerprint(),
+    )
+    await expect(refused.settled).resolves.toMatchObject({ outcome: 'table-mismatch', status: WasmSnapshotStatus.StaticMismatch })
   })
 
   it('treats a replay without a snapshot as tape-only, silently', () => {
@@ -121,6 +127,34 @@ describe('applyReplaySnapshot', () => {
 })
 
 describe('recording and playback carry the fingerprint', () => {
+  const meta = {
+    version: 2, buildId: 't', mapId: 'neon-helix', seed: 1, physicsEngine: 'wasm-worker' as const,
+    renderer: 'webgl2' as const, createdAt: '2026-10-01T00:00:00.000Z',
+  }
+
+  it('merges a worker (async) fingerprint when it lands, and only into its own recording', async () => {
+    const recorder = new ReplayRecorder()
+    recorder.start(meta)
+    const e = { serializeSnapshot: vi.fn(() => Promise.resolve(blob)), getStaticContentHash: vi.fn(() => HASH) }
+    const fp = captureReplayFingerprint(e, null)
+    recorder.attachWorldFingerprint(fp)
+    expect(recorder.hasWorldFingerprint()).toBe(true)
+    await fp
+    expect(recorder.getMetadata()).toMatchObject({ staticHash: HASH, initialSnapshot: encodeSnapshotBase64(blob) })
+
+    // A late fingerprint from the previous recording must not land on the next one.
+    let resolveLate!: (b: Uint8Array) => void
+    const late = captureReplayFingerprint(
+      { serializeSnapshot: () => new Promise<Uint8Array>((r) => { resolveLate = r }), getStaticContentHash: () => HASH }, null,
+    )
+    recorder.start(meta)
+    recorder.attachWorldFingerprint(late)
+    recorder.start(meta)
+    resolveLate(blob)
+    await late
+    expect(recorder.getMetadata()?.initialSnapshot).toBeUndefined()
+  })
+
   it('captures once, survives JSON, and the runner hands it back exactly once', () => {
     const recorder = new ReplayRecorder()
     recorder.start({

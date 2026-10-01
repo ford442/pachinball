@@ -155,6 +155,8 @@ export class ReplayRecorder {
   private metadata: ReplayMetadata | null = null
   private frames: InputFrame[] = []
   private fingerprinted = false
+  /** Bumped by `start()`; a late async fingerprint only lands on its own recording. */
+  private session = 0
 
   /**
    * Start recording a new session. Resets frame buffer.
@@ -164,6 +166,7 @@ export class ReplayRecorder {
     this.frames = []
     this.recording = true
     this.fingerprinted = false
+    this.session++
   }
 
   /**
@@ -206,10 +209,22 @@ export class ReplayRecorder {
    * Fold the world fingerprint into the metadata. Called once, by the physics
    * step that recorded frame 0, right before that step runs.
    */
-  attachWorldFingerprint(fingerprint: ReplayWorldFingerprint): void {
+  /**
+   * Attach the world fingerprint once per recording. On the worker path it is
+   * a promise (the snapshot blob comes back from the worker); it is merged
+   * when it lands, and dropped if a new recording has started by then.
+   */
+  attachWorldFingerprint(fingerprint: ReplayWorldFingerprint | Promise<ReplayWorldFingerprint>): void {
     if (!this.metadata || this.fingerprinted) return
-    this.metadata = { ...this.metadata, ...fingerprint }
     this.fingerprinted = true
+    if (fingerprint instanceof Promise) {
+      const session = this.session
+      void fingerprint.then((fp) => {
+        if (this.session === session && this.metadata) this.metadata = { ...this.metadata, ...fp }
+      })
+      return
+    }
+    this.metadata = { ...this.metadata, ...fingerprint }
   }
 
   hasWorldFingerprint(): boolean {

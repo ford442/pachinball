@@ -19,16 +19,9 @@ import { FEEDER_TUNABLES } from '../config/feeders'
 import { hashStringToSeed } from '../core/seeded-rng'
 import { resolvePinField, type PinFieldSpec } from '../core/pin-field'
 import { WASM_SNAPSHOT_VERSION, WasmSnapshotStatus } from '../wasm/wasm-types'
-import type { WasmSimEngine } from '../wasm/wasm-sim-engine'
+import { isPromiseLike, type Awaitable, type WasmSimEngine } from '../wasm/wasm-sim-engine'
 import type { WasmTableWorld } from '../wasm/wasm-table-world'
-
-/** Word offsets in the v1 blob — mirror `PhysicsWorld::serialize()` (Snapshot.cpp). */
-const SNAPSHOT_MAGIC = 0x4e534250
-const WORD_VERSION = 1
-const WORD_HASH_LO = 3
-const WORD_HASH_HI = 4
-/** Header (17) + step counter (2) + accumulator (1) + world params (10). */
-const WORD_HANDLES = 30
+import { readSnapshotIds } from '../wasm/snapshot-layout'
 
 export interface SnapshotHeader {
   version: number
@@ -44,20 +37,8 @@ function hex32(v: number): string {
 
 /** Parse the fields a replay client checks before restoring; null when not a v1 snapshot. */
 export function readSnapshotHeader(bytes: Uint8Array): SnapshotHeader | null {
-  if (bytes.byteLength < (WORD_HANDLES + 2) * 4 || bytes.byteLength % 4 !== 0) return null
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  const word = (i: number) => view.getUint32(i * 4, true)
-  if (word(0) !== SNAPSHOT_MAGIC) return null
-  const version = word(WORD_VERSION)
-  if (version !== WASM_SNAPSHOT_VERSION) return null
-  const slots = word(WORD_HANDLES + 1)
-  const bodyCountWord = WORD_HANDLES + 2 + slots * 2
-  if ((bodyCountWord + 1) * 4 > bytes.byteLength) return null
-  const count = word(bodyCountWord)
-  if ((bodyCountWord + 1 + count) * 4 > bytes.byteLength) return null
-  const bodyIds: number[] = []
-  for (let i = 0; i < count; i++) bodyIds.push(view.getInt32((bodyCountWord + 1 + i) * 4, true))
-  return { version, staticHash: hex32(word(WORD_HASH_HI)) + hex32(word(WORD_HASH_LO)), bodyIds }
+  const ids = readSnapshotIds(bytes)
+  return ids ? { version: ids.version, staticHash: ids.staticHash, bodyIds: ids.bodyIds } : null
 }
 
 export function encodeSnapshotBase64(bytes: Uint8Array): string {
@@ -143,15 +124,20 @@ export function linkedBodyIds(world: WasmTableWorld | null): number[] {
 export function captureReplayFingerprint(
   engine: Pick<WasmSimEngine, 'serializeSnapshot' | 'getStaticContentHash'> | null,
   world: WasmTableWorld | null,
-): ReplayWorldFingerprint {
-  const bytes = engine?.serializeSnapshot() ?? null
-  return {
+): Awaitable<ReplayWorldFingerprint> {
+  // Hashed now: the table is what it is at this frame, whenever the blob lands.
+  const pinFieldOccupancy = pinFieldOccupancyHash(tablePinFieldSpecs(world))
+  const build = (bytes: Uint8Array | null): ReplayWorldFingerprint => ({
     snapshotVersion: bytes ? WASM_SNAPSHOT_VERSION : 0,
+    // The worker client learns its hash from the snapshot reply, so read it after.
     staticHash: engine?.getStaticContentHash() ?? null,
-    pinFieldOccupancy: pinFieldOccupancyHash(tablePinFieldSpecs(world)),
+    pinFieldOccupancy,
     feederTunablesHash: feederTunablesHash(),
     initialSnapshot: bytes ? encodeSnapshotBase64(bytes) : undefined,
-  }
+  })
+  const bytes = engine?.serializeSnapshot() ?? null
+  // The worker answers later; the blob is still the world as of this call.
+  return isPromiseLike(bytes) ? bytes.then(build) : build(bytes)
 }
 
 /** Stand-in for engines that cannot snapshot at all (Rapier / mirror sessions). */
@@ -164,7 +150,7 @@ export type ReplaySnapshotOutcome =
   | 'restored'
   /** The replay carries no snapshot (v1 replay, Rapier recording): input tape only. */
   | 'no-snapshot'
-  /** This engine cannot restore (worker path, old bundle). */
+  /** This engine cannot restore (Rapier / mirror session, a bundle built without snapshots). */
   | 'unsupported'
   /** Different static table — the snapshot was refused. */
   | 'table-mismatch'
@@ -177,10 +163,16 @@ export type ReplaySnapshotOutcome =
 
 export interface ReplaySnapshotResult {
   outcome: ReplaySnapshotOutcome
-  /** Raw restore status when a restore was attempted. */
+  /** Raw restore status when a restore was attempted (null while a worker restore is pending). */
   status: WasmSnapshotStatus | null
   /** Player-facing, for the divergence toast; null when restored cleanly. */
   message: string | null
+  /**
+   * Worker path (#441): the restore was sent and takes effect before the next
+   * step, but its status arrives later. `outcome` is provisionally `restored`;
+   * this settles with the final result.
+   */
+  settled?: Promise<ReplaySnapshotResult>
 }
 
 const MESSAGES: Record<Exclude<ReplaySnapshotOutcome, 'restored' | 'no-snapshot'>, string> = {
@@ -213,23 +205,29 @@ export function applyReplaySnapshot(
   if (fingerprint.feederTunablesHash && fingerprint.feederTunablesHash !== feederTunablesHash()) {
     return result('tunables-mismatch')
   }
+  // Null when the engine cannot hash, or (worker client) has not been told
+  // yet — then C++ itself refuses a different table on restore.
   const liveHash = engine.getStaticContentHash()
   if (fingerprint.staticHash && liveHash && fingerprint.staticHash !== liveHash) {
     return result('table-mismatch', WasmSnapshotStatus.StaticMismatch)
   }
   if (!fingerprint.initialSnapshot) return result('no-snapshot')
-  if (!liveHash) return result('unsupported', WasmSnapshotStatus.Unsupported)
 
   const bytes = decodeSnapshotBase64(fingerprint.initialSnapshot)
   const header = bytes ? readSnapshotHeader(bytes) : null
   if (!bytes || !header) return result('invalid', WasmSnapshotStatus.Corrupt)
-  if (header.staticHash !== liveHash) return result('table-mismatch', WasmSnapshotStatus.StaticMismatch)
+  if (liveHash && header.staticHash !== liveHash) return result('table-mismatch', WasmSnapshotStatus.StaticMismatch)
 
   const live = [...liveBodyIds].sort((a, b) => a - b)
   const recorded = [...header.bodyIds].sort((a, b) => a - b)
   if (live.length !== recorded.length || live.some((id, i) => id !== recorded[i])) return result('id-layout')
 
   const status = engine.restoreSnapshot(bytes)
+  if (!isPromiseLike(status)) return restoreResult(status)
+  return { ...result('restored'), settled: status.then(restoreResult) }
+}
+
+function restoreResult(status: WasmSnapshotStatus): ReplaySnapshotResult {
   if (status === WasmSnapshotStatus.Ok) return result('restored', status)
   if (status === WasmSnapshotStatus.StaticMismatch) return result('table-mismatch', status)
   if (status === WasmSnapshotStatus.Unsupported) return result('unsupported', status)

@@ -278,11 +278,23 @@ export class GamePhysicsController {
     }
     const check = runner?.isPlaying() ? runner.takeSnapshotCheck() : null
     if (!check) return
-    this.lastReplaySnapshot = applyReplaySnapshot(engine ?? NO_SNAPSHOT_ENGINE, linkedBodyIds(world), check)
+    const res = applyReplaySnapshot(engine ?? NO_SNAPSHOT_ENGINE, linkedBodyIds(world), check)
+    this.lastReplaySnapshot = res
     // The restore moved the engine's step counter to the recorder's; the
-    // gameplay clock carries on from where it was.
-    if (this.lastReplaySnapshot.outcome === 'restored') this.simClock.resync(this.host.physics)
-    showReplayDivergenceToast(this.lastReplaySnapshot)
+    // gameplay clock carries on from where it was. (The worker client already
+    // reports the snapshot's counter while its restore is in flight.)
+    if (res.outcome === 'restored') this.simClock.resync(this.host.physics)
+    showReplayDivergenceToast(res)
+    // Worker path: the status arrives with the worker's reply.
+    void res.settled?.then((final) => {
+      if (this.lastReplaySnapshot !== res) return
+      this.lastReplaySnapshot = final
+      if (final.outcome !== 'restored') {
+        // Refused: the world (and its counter) were left as they were.
+        this.simClock.resync(this.host.physics)
+        showReplayDivergenceToast(final)
+      }
+    })
   }
 
   applyInputFrame(frame: InputFrame): void {

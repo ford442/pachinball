@@ -170,6 +170,10 @@ differently built table. Replays carry the frame-0 snapshot plus a world
 fingerprint (see `docs/ASYNC_CHALLENGES_EPIC.md` and `docs/wasm-physics-engine.md`).
 The native and WASM builds produce identical bytes (`npm run test:wasm-parity`);
 the hinge angle uses a libm-independent `atan2` so they can.
+The `wasm-worker` client serializes and restores over an ordered
+request/reply in the command batch (#441, `docs/wasm-physics-engine.md`
+"Over the worker"); a real Worker still serves poses a frame late, which the
+TS flipper drive reads — see the caveat in `docs/ASYNC_CHALLENGES_EPIC.md`.
 
 ## Roadmap
 
