@@ -21,7 +21,7 @@ import { resolvePinField, type PinFieldSpec } from '../core/pin-field'
 import { WASM_SNAPSHOT_VERSION, WasmSnapshotStatus } from '../wasm/wasm-types'
 import { isPromiseLike, type Awaitable, type WasmSimEngine } from '../wasm/wasm-sim-engine'
 import type { WasmTableWorld } from '../wasm/wasm-table-world'
-import { readSnapshotIds } from '../wasm/snapshot-layout'
+import { readSnapshotIds, type SnapshotHinge, type SnapshotIds } from '../wasm/snapshot-layout'
 
 export interface SnapshotHeader {
   version: number
@@ -163,6 +163,11 @@ export type ReplaySnapshotOutcome =
 
 export interface ReplaySnapshotResult {
   outcome: ReplaySnapshotOutcome
+  /**
+   * True when the live body / hinge ids differed from the recording's and the
+   * TS links were moved onto the restored ids (#441) instead of refusing.
+   */
+  remapped?: boolean
   /** Raw restore status when a restore was attempted (null while a worker restore is pending). */
   status: WasmSnapshotStatus | null
   /** Player-facing, for the divergence toast; null when restored cleanly. */
@@ -188,20 +193,80 @@ function result(outcome: ReplaySnapshotOutcome, status: WasmSnapshotStatus | nul
   return { outcome, status, message }
 }
 
+/** The C++ ids the TS side holds: linked bodies, and the hinges it drives. */
+export interface LiveIdLayout {
+  bodyIds: readonly number[]
+  hinges: readonly SnapshotHinge[]
+}
+
+/** Live id → restored id, for bodies and hinges whose id changes. */
+export interface ReplayIdRemap {
+  bodies: ReadonlyMap<number, number>
+  hinges: ReadonlyMap<number, number>
+}
+
+/**
+ * Pair the live ids with the snapshot's by role (#441): hinges in id order
+ * (creation order — the same table authors its flippers in the same order),
+ * their bodies with them, then every other body in id order. Null when a role
+ * has a different count on the two sides — then the layouts genuinely differ.
+ */
+export function planReplayIdRemap(live: LiveIdLayout, recorded: Pick<SnapshotIds, 'bodyIds' | 'hinges'>): ReplayIdRemap | null {
+  const byId = (a: SnapshotHinge, b: SnapshotHinge) => a.id - b.id
+  const liveHinges = [...live.hinges].sort(byId)
+  const recHinges = [...recorded.hinges].sort(byId)
+  if (liveHinges.length !== recHinges.length) return null
+  const liveBodies = new Set(live.bodyIds)
+  const recBodies = new Set(recorded.bodyIds)
+
+  const bodies = new Map<number, number>()
+  const hinges = new Map<number, number>()
+  for (let i = 0; i < liveHinges.length; i++) {
+    const l = liveHinges[i]!
+    const r = recHinges[i]!
+    if (!liveBodies.has(l.bodyId) || !recBodies.has(r.bodyId)) return null
+    if (bodies.has(l.bodyId) && bodies.get(l.bodyId) !== r.bodyId) return null
+    hinges.set(l.id, r.id)
+    bodies.set(l.bodyId, r.bodyId)
+  }
+  const recHinged = new Set(recHinges.map((h) => h.bodyId))
+  const liveRest = [...liveBodies].filter((id) => !bodies.has(id)).sort((a, b) => a - b)
+  const recRest = [...recBodies].filter((id) => !recHinged.has(id)).sort((a, b) => a - b)
+  if (liveRest.length !== recRest.length) return null
+  liveRest.forEach((id, i) => bodies.set(id, recRest[i]!))
+
+  // Only the ids that actually change.
+  for (const [from, to] of bodies) if (from === to) bodies.delete(from)
+  for (const [from, to] of hinges) if (from === to) hinges.delete(from)
+  return { bodies, hinges }
+}
+
+/** The remap that undoes `remap` (a refused worker restore left the world as it was). */
+export function invertReplayIdRemap(remap: ReplayIdRemap): ReplayIdRemap {
+  const flip = (m: ReadonlyMap<number, number>) => new Map([...m].map(([a, b]) => [b, a] as [number, number]))
+  return { bodies: flip(remap.bodies), hinges: flip(remap.hinges) }
+}
+
 /**
  * Restore a replay's frame-0 snapshot into the live engine, before the first
- * replayed frame. `liveBodyIds` are the C++ ids the TS side currently links
- * (balls, flippers); the snapshot's ids must be the same set, or restoring
- * would leave TS pointing at the wrong bodies — that is reported, not forced.
+ * replayed frame. `live` is what the TS side holds in C++ id space (a bare id
+ * list = linked bodies, no hinges). A restore replaces bodies "wholesale,
+ * public ids included", so when the spectator's ids differ from the
+ * recording's (they were allocated by earlier games) the TS links must follow:
+ * with `onRemap` the ids are paired by role and `onRemap` moves every link
+ * onto the restored id (`remapped: true`); without it, or when the roles do
+ * not pair up, that is reported as `id-layout`, never forced.
  *
  * On any outcome but `restored` / `no-snapshot` the world is untouched and
  * `message` says why the ghost may desync.
  */
 export function applyReplaySnapshot(
   engine: Pick<WasmSimEngine, 'restoreSnapshot' | 'getStaticContentHash'>,
-  liveBodyIds: readonly number[],
+  live: readonly number[] | LiveIdLayout,
   fingerprint: ReplayWorldFingerprint,
+  onRemap?: (remap: ReplayIdRemap) => void,
 ): ReplaySnapshotResult {
+  const layout: LiveIdLayout = isLiveIdLayout(live) ? live : { bodyIds: live, hinges: [] }
   if (fingerprint.feederTunablesHash && fingerprint.feederTunablesHash !== feederTunablesHash()) {
     return result('tunables-mismatch')
   }
@@ -214,17 +279,51 @@ export function applyReplaySnapshot(
   if (!fingerprint.initialSnapshot) return result('no-snapshot')
 
   const bytes = decodeSnapshotBase64(fingerprint.initialSnapshot)
-  const header = bytes ? readSnapshotHeader(bytes) : null
-  if (!bytes || !header) return result('invalid', WasmSnapshotStatus.Corrupt)
-  if (liveHash && header.staticHash !== liveHash) return result('table-mismatch', WasmSnapshotStatus.StaticMismatch)
+  const recorded = bytes ? readSnapshotIds(bytes) : null
+  if (!bytes || !recorded) return result('invalid', WasmSnapshotStatus.Corrupt)
+  if (liveHash && recorded.staticHash !== liveHash) return result('table-mismatch', WasmSnapshotStatus.StaticMismatch)
 
-  const live = [...liveBodyIds].sort((a, b) => a - b)
-  const recorded = [...header.bodyIds].sort((a, b) => a - b)
-  if (live.length !== recorded.length || live.some((id, i) => id !== recorded[i])) return result('id-layout')
+  let remap: ReplayIdRemap | null = null
+  if (!sameIds(layout.bodyIds, recorded.bodyIds)) {
+    remap = onRemap ? planReplayIdRemap(layout, recorded) : null
+    if (!remap) return result('id-layout')
+  } else if (onRemap && layout.hinges.length > 0) {
+    // Same bodies; the hinges they hang on may still have been renumbered.
+    remap = planReplayIdRemap(layout, recorded)
+    if (!remap) return result('id-layout')
+  }
+  const remapping = remap !== null && (remap.bodies.size > 0 || remap.hinges.size > 0)
 
   const status = engine.restoreSnapshot(bytes)
-  if (!isPromiseLike(status)) return restoreResult(status)
-  return { ...result('restored'), settled: status.then(restoreResult) }
+  if (!isPromiseLike(status)) {
+    const res = restoreResult(status)
+    if (res.outcome === 'restored' && remapping) {
+      onRemap!(remap!)
+      res.remapped = true
+    }
+    return res
+  }
+  // Worker: the restore applies before the next step, so the links must move
+  // now; a refusal moves them back.
+  if (remapping) onRemap!(remap!)
+  const settled = status.then((s) => {
+    const res = restoreResult(s)
+    if (res.outcome !== 'restored' && remapping) onRemap!(invertReplayIdRemap(remap!))
+    if (res.outcome === 'restored' && remapping) res.remapped = true
+    return res
+  })
+  return { ...result('restored'), remapped: remapping || undefined, settled }
+}
+
+function isLiveIdLayout(live: readonly number[] | LiveIdLayout): live is LiveIdLayout {
+  return !Array.isArray(live)
+}
+
+function sameIds(a: readonly number[], b: readonly number[]): boolean {
+  if (a.length !== b.length) return false
+  const x = [...a].sort((p, q) => p - q)
+  const y = [...b].sort((p, q) => p - q)
+  return x.every((id, i) => id === y[i])
 }
 
 function restoreResult(status: WasmSnapshotStatus): ReplaySnapshotResult {

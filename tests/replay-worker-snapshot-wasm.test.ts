@@ -65,6 +65,20 @@ describe.skipIf(!RUN)('worker world-snapshot RPC on the compiled bundle (#441)',
     expect(workerBlob).toEqual((live.engine as WasmPhysicsEngine).serializeSnapshot())
   })
 
+  it('remaps a differing id layout on the worker path too (#441)', async () => {
+    const module = await loadModule()
+    const { live, payload } = await recordLiveRun(module, { launch: true })
+    const client = await replay(module, payload, { engine: 'worker', shiftIds: 2 })
+    const res = client.controller.getLastReplaySnapshotResult()
+    expect(res).toMatchObject({ outcome: 'restored', remapped: true })
+    await expect(res?.settled).resolves.toMatchObject({ outcome: 'restored', remapped: true })
+    expect(client.ball.wasmId).toBe(live.ball.wasmId)
+    expect(client.host.score).toBe(live.host.score)
+    expect(worldPose(client).p).toEqual(worldPose(live).p)
+    expect(await (client.engine as PhysicsWorkerClient).serializeSnapshot())
+      .toEqual((live.engine as WasmPhysicsEngine).serializeSnapshot())
+  })
+
   it('serializes the worker world over the RPC: its ids, hinges and static hash', async () => {
     const module = await loadModule()
     const workerTable = await makeTable(module, { engine: 'worker' })

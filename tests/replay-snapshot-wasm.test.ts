@@ -88,6 +88,20 @@ describe.skipIf(!RUN)('replay from a C++ snapshot on the compiled bundle (#422)'
     expect(ballPose(client).v).toEqual(ballPose(live).v)
   })
 
+  it('restores across a differing id layout by remapping the TS links (#441)', async () => {
+    const module = await loadModule()
+    const { live, payload } = await recordLiveRun(module, { launch: true })
+    const client = await replay(module, payload, { shiftIds: 3 })
+    expect(client.controller.getLastReplaySnapshotResult()).toMatchObject({ outcome: 'restored', remapped: true, message: null })
+    // The ball now answers to the recording's id, and the run matches bit-for-bit.
+    expect(client.ball.wasmId).toBe(live.ball.wasmId)
+    expect(client.host.score).toBe(live.host.score)
+    expect(client.controller.getBumperMatches()).toBe(live.controller.getBumperMatches())
+    expect(ballPose(client).p).toEqual(ballPose(live).p)
+    expect(ballPose(client).v).toEqual(ballPose(live).v)
+    expect(client.engine.serializeSnapshot()).toEqual(live.engine.serializeSnapshot())
+  })
+
   it('without the snapshot the same tape drifts (control)', async () => {
     const module = await loadModule()
     const { live, payload } = await recordLiveRun(module)

@@ -56,6 +56,12 @@ export type TableOptions = {
   extraBumper?: boolean
   /** In-process owner (default) or a worker client over a loopback worker. */
   engine?: 'owner' | 'worker'
+  /**
+   * Burn this many body ids (and as many hinge ids) before the table is
+   * authored, as a spectator's earlier games would: its live ids then differ
+   * from a recording made on a fresh table (#441).
+   */
+  shiftIds?: number
 }
 
 /** A `PhysicsWorkerClient` whose worker is `applyPhysicsCommand` on a second in-process engine. */
@@ -95,6 +101,11 @@ export async function makeTable(module: WasmPhysicsModule, opts: TableOptions = 
   }
   const eventBus = new EventBus()
   engine.init(eventBus)
+  for (let i = 0; i < (opts.shiftIds ?? 0); i++) {
+    const id = engine.createBody({ position: { x: 0, y: -50, z: 0 }, mass: 1, radius: 0.1 })
+    engine.removeHinge(engine.createHinge({ bodyId: id, worldAnchor: { x: 0, y: -50, z: 0 } }))
+    engine.removeBody(id)
+  }
   engine.setGravity(0, -9.81, -5)
   const world = new WasmTableWorld(engine, { x: 0, y: -9.81, z: -5 })
 

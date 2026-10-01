@@ -278,7 +278,14 @@ export class GamePhysicsController {
     }
     const check = runner?.isPlaying() ? runner.takeSnapshotCheck() : null
     if (!check) return
-    const res = applyReplaySnapshot(engine ?? NO_SNAPSHOT_ENGINE, linkedBodyIds(world), check)
+    // The spectator's ids were allocated by its own earlier games; when they
+    // differ from the recording's, the restore renames the C++ bodies and the
+    // TS links follow (#441).
+    const live = { bodyIds: linkedBodyIds(world), hinges: this.wasmOwner?.getFlipperHinges() ?? [] }
+    const res = applyReplaySnapshot(engine ?? NO_SNAPSHOT_ENGINE, live, check, (remap) => {
+      world?.renameLinkedIds(remap.bodies)
+      this.wasmOwner?.renameIds(remap.bodies, remap.hinges)
+    })
     this.lastReplaySnapshot = res
     // The restore moved the engine's step counter to the recorder's; the
     // gameplay clock carries on from where it was. (The worker client already

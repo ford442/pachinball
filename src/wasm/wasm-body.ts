@@ -434,6 +434,15 @@ export class WasmBody implements PhysicsBody {
     this.syncCppType()
   }
 
+  /**
+   * @internal A world snapshot restore (#441) put this body's C++ state under
+   * another public id: follow it. Nothing else about the binding changes —
+   * the restored C++ body already has the recorded type, groups and pose.
+   */
+  renameLink(id: number): void {
+    if (this.link) this.link = { ...this.link, id }
+  }
+
   /** @internal Drop the C++ binding (the owner removed its body). */
   detachLink(): void {
     if (this.link) {

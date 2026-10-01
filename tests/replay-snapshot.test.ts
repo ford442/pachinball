@@ -14,6 +14,7 @@ import {
   encodeSnapshotBase64,
   feederTunablesHash,
   pinFieldOccupancyHash,
+  planReplayIdRemap,
   readSnapshotHeader,
   REPLAY_DIVERGENCE_ATTRIBUTE,
   REPLAY_DIVERGENCE_TOAST_ID,
@@ -123,6 +124,68 @@ describe('applyReplaySnapshot', () => {
   it('treats a replay without a snapshot as tape-only, silently', () => {
     const res = applyReplaySnapshot(engine(HASH), [], { staticHash: HASH })
     expect(res).toEqual({ outcome: 'no-snapshot', status: null, message: null })
+  })
+})
+
+describe('spectate id remap (#441)', () => {
+  const recordedBlob = fakeSnapshot({
+    hashHi: 0x00c0ffee, hashLo: 0x12345678, ids: [0, 1, 3],
+    hinges: [{ id: 0, bodyId: 0 }, { id: 1, bodyId: 1 }],
+  })
+  const fp = fingerprint({ initialSnapshot: encodeSnapshotBase64(recordedBlob) })
+  // A spectator whose earlier games used up ids: flippers 5/6 on hinges 2/3, ball 9.
+  const live = { bodyIds: [9, 5, 6], hinges: [{ id: 3, bodyId: 6 }, { id: 2, bodyId: 5 }] }
+
+  it('pairs hinges (and their bodies) in id order, then the remaining bodies', () => {
+    expect(planReplayIdRemap(live, { bodyIds: [0, 1, 3], hinges: [{ id: 0, bodyId: 0 }, { id: 1, bodyId: 1 }] })).toEqual({
+      bodies: new Map([[5, 0], [6, 1], [9, 3]]),
+      hinges: new Map([[2, 0], [3, 1]]),
+    })
+  })
+
+  it('restores and moves the TS links onto the recorded ids instead of refusing', () => {
+    const e = engine(HASH)
+    const onRemap = vi.fn()
+    const res = applyReplaySnapshot(e, live, fp, onRemap)
+    expect(res).toMatchObject({ outcome: 'restored', remapped: true, message: null })
+    expect(e.restoreSnapshot).toHaveBeenCalledTimes(1)
+    expect(onRemap).toHaveBeenCalledWith({ bodies: new Map([[5, 0], [6, 1], [9, 3]]), hinges: new Map([[2, 0], [3, 1]]) })
+  })
+
+  it('still refuses when a role has a different count (a different ball layout)', () => {
+    const e = engine(HASH)
+    const onRemap = vi.fn()
+    const extraBall = { bodyIds: [9, 10, 5, 6], hinges: live.hinges }
+    expect(applyReplaySnapshot(e, extraBall, fp, onRemap).outcome).toBe('id-layout')
+    const oneFlipper = { bodyIds: [9, 5, 6], hinges: [{ id: 2, bodyId: 5 }] }
+    expect(applyReplaySnapshot(e, oneFlipper, fp, onRemap).outcome).toBe('id-layout')
+    expect(e.restoreSnapshot).not.toHaveBeenCalled()
+    expect(onRemap).not.toHaveBeenCalled()
+  })
+
+  it('a table mismatch is still a table mismatch, not a remap', () => {
+    const onRemap = vi.fn()
+    expect(applyReplaySnapshot(engine('ffffffffffffffff'), live, fp, onRemap).outcome).toBe('table-mismatch')
+    expect(onRemap).not.toHaveBeenCalled()
+  })
+
+  it('identical ids restore without a remap', () => {
+    const onRemap = vi.fn()
+    const same = { bodyIds: [0, 1, 3], hinges: [{ id: 0, bodyId: 0 }, { id: 1, bodyId: 1 }] }
+    const res = applyReplaySnapshot(engine(HASH), same, fp, onRemap)
+    expect(res.outcome).toBe('restored')
+    expect(res.remapped).toBeUndefined()
+    expect(onRemap).not.toHaveBeenCalled()
+  })
+
+  it('worker restore: links move at once, and move back when the restore is refused', async () => {
+    const onRemap = vi.fn()
+    const e = { restoreSnapshot: vi.fn(() => Promise.resolve(WasmSnapshotStatus.StaticMismatch)), getStaticContentHash: () => null }
+    const res = applyReplaySnapshot(e, live, fp, onRemap)
+    expect(res.outcome).toBe('restored')
+    expect(onRemap).toHaveBeenCalledTimes(1)
+    await expect(res.settled).resolves.toMatchObject({ outcome: 'table-mismatch' })
+    expect(onRemap).toHaveBeenLastCalledWith({ bodies: new Map([[0, 5], [1, 6], [3, 9]]), hinges: new Map([[0, 2], [1, 3]]) })
   })
 })
 

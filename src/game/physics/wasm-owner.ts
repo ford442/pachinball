@@ -141,6 +141,25 @@ export class WasmOwner implements WasmContactBridge {
     return this.idEpoch + this.world.linkRevision
   }
 
+  /** The hinges this owner drives, with the C++ body each is attached to (replay id remap, #441). */
+  getFlipperHinges(): Array<{ id: number; bodyId: number }> {
+    return this.flippers.map((f) => ({ id: f.hingeId, bodyId: f.wasmId }))
+  }
+
+  /**
+   * A world snapshot restore (#441) put the flippers under the recording's
+   * body and hinge ids (maps: live id → restored id). Follow them; the
+   * dispatcher's id caches rebuild on the epoch bump.
+   */
+  renameIds(bodies: ReadonlyMap<number, number>, hinges: ReadonlyMap<number, number>): void {
+    for (const f of this.flippers) {
+      f.wasmId = bodies.get(f.wasmId) ?? f.wasmId
+      f.hingeId = hinges.get(f.hingeId) ?? f.hingeId
+      if ('bodyId' in f.debug) f.debug = { ...f.debug, bodyId: f.wasmId }
+    }
+    this.idEpoch++
+  }
+
   driveFlippers(frame: InputFrame | null, dt: number): void {
     if (frame) {
       if (frame.flipperLeft !== null) this.leftPressed = frame.flipperLeft
