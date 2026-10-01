@@ -39,6 +39,7 @@ WasmOwner / WasmMirror  ◄──── src/game/physics/wasm-{owner,mirror}.ts
         ▼ in-process                    ▼ wasm-worker
 WasmPhysicsEngine                PhysicsWorkerClient ──postMessage──► physics-worker.ts
  src/wasm/PhysicsModule.ts        (physics-worker-protocol.ts)          └─► WasmPhysicsEngine
+ + physics-module-bodies.ts
  + physics-module-adventure.ts
         │  dynamic import
         ▼
@@ -108,7 +109,8 @@ native/
 
 src/wasm/
 ├── wasm-types.ts                TypeScript interfaces matching the Embind API
-├── PhysicsModule.ts             WasmPhysicsEngine: load, world, table statics, bodies, hinges, step
+├── PhysicsModule.ts             WasmPhysicsEngine: load, world, step, transform / contact buffers, snapshots
+├── physics-module-bodies.ts     Plane / box / capsule statics, rigid bodies, hinges, transform-query fallbacks
 ├── physics-module-adventure.ts  Cylinder / sphere / cone / pin field / mesh / mover / sensor / box body / force field
 ├── wasm-sim-engine.ts           WasmSimEngine interface (in-process engine + worker client)
 ├── physics-worker-protocol.ts   Worker command union + id shadow
