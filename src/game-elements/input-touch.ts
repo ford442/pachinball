@@ -144,8 +144,7 @@ export function setupTouchControls(
       return
     }
     if (host.isPlungerHeld()) {
-      host.releasePlungerCharge()
-      host.queueInput('plunger', true, { source: 'touch', eventTimestamp: e.timeStamp })
+      host.queueInput('plungerCharge', host.releasePlungerCharge(), { source: 'touch', eventTimestamp: e.timeStamp })
     }
   }, { passive: false })
 
@@ -181,8 +180,7 @@ export function setupTouchControls(
       return
     }
     if (host.isPlungerHeld()) {
-      host.releasePlungerCharge()
-      host.queueInput('plunger', true, { source: 'touch', eventTimestamp: e.timeStamp })
+      host.queueInput('plungerCharge', host.releasePlungerCharge(), { source: 'touch', eventTimestamp: e.timeStamp })
     }
   })
 

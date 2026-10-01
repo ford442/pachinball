@@ -190,7 +190,16 @@ export interface InputFrame {
   flipperLeft: boolean | null
   /** Right flipper state change - null means no change from previous frame */
   flipperRight: boolean | null
-  /** Plunger trigger (true = fired this frame) */
+  /**
+   * Plunger launch this frame: the 0–1 charge the impulse is scaled by, or
+   * null when the plunger did not fire. This is what replay fires with — the
+   * spectator's own live charge is never read (#441).
+   */
+  plungerCharge: number | null
+  /**
+   * @deprecated Convenience alias for `plungerCharge != null`; kept for one
+   * release so older readers keep working, then removed.
+   */
   plunger: boolean
   /** Nudge direction vector - null means no nudge this frame */
   nudge: { x: number; y: number; z: number } | null
@@ -247,8 +256,8 @@ export interface LatencyReport {
 export interface PlungerChargeState {
   /** Whether the plunger is currently being held/charged */
   isHeld: boolean
-  /** Timestamp when charge started (ms) */
-  chargeStartTime: number
+  /** Sim step count when the charge started — charge counts fixed steps held, not wall time */
+  chargeStartStep: number
   /** Current charge level 0.0 to 1.0 */
   chargeLevel: number
   /** Max charge time in milliseconds */

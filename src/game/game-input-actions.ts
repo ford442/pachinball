@@ -34,6 +34,8 @@ export class GameInputActions {
   private flipperLeftHoldTime = 0
   private flipperRightHoldTime = 0
   private lastFrameTime = 0
+  /** Impulse magnitude of the most recent launch (0 before any) — for determinism tests. */
+  lastLaunchImpulse = 0
   private scene: import('@babylonjs/core/scene').Scene | null = null
 
   // ── Plunger spatial constants ──────────────────────────────────────────────
@@ -156,14 +158,20 @@ export class GameInputActions {
     }
   }
 
-  handlePlunger(): boolean {
+  /**
+   * Fire the plunger at `charge` (0–1). The game loop always passes the charge
+   * carried by the input frame — live or taped — so replay never reads the
+   * spectator's own `plungerChargeLevel` (#441). The host value is the
+   * fallback for direct callers only (debug hooks, tests).
+   */
+  handlePlunger(charge?: number | null): boolean {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ballBody = (this.host as any).ballManager?.getBallBody?.()
     if (!ballBody) return false
 
     const pos = ballBody.translation()
     if (pos.x > 8 && pos.z < -4) {
-      const chargeRatio = applyPlungerChargeCurve(this.host.plungerChargeLevel)
+      const chargeRatio = applyPlungerChargeCurve(charge ?? this.host.plungerChargeLevel)
       const minImpulse = getPhysicsTuningValue('plungerMinImpulse')
       const maxImpulse = getPhysicsTuningValue('plungerMaxImpulse')
       const impulseMagnitude = minImpulse + (maxImpulse - minImpulse) * chargeRatio
@@ -180,6 +188,7 @@ export class GameInputActions {
 
       // Direct impulse for reliable launch (primary mechanism)
       ballBody.applyImpulse({ x: 0, y: 0, z: impulseMagnitude }, true)
+      this.lastLaunchImpulse = impulseMagnitude
 
       const hapticIntensity = 30 + Math.floor(chargeRatio * 40)
       this.host.hapticManager?.trigger([hapticIntensity, 10, Math.floor(hapticIntensity / 2)])

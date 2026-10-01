@@ -283,7 +283,7 @@ export class GamePhysicsController {
     if (frame.flipperRight !== null) {
       // Delegated to input actions
     }
-    if (frame.plunger) {
+    if (frame.plungerCharge !== null) {
       // Delegated to input actions
     }
     if (frame.nudge) {
@@ -311,7 +311,7 @@ export class GamePhysicsController {
 
   stepPhysics(
     inputManager: { update: () => void; processBufferedInputs: () => InputFrame | null } | null,
-    inputActions: { handleFlipperLeft: (p: boolean) => void; handleFlipperRight: (p: boolean) => void; handlePlunger: () => void; updatePlungerFrame?: (dt: number) => void } | null,
+    inputActions: { handleFlipperLeft: (p: boolean) => void; handleFlipperRight: (p: boolean) => void; handlePlunger: (charge?: number | null) => unknown; updatePlungerFrame?: (dt: number) => void } | null,
     replayRunner?: ReplayRunner | null,
     replayRecorder?: ReplayRecorder | null
   ): void {
@@ -336,7 +336,7 @@ export class GamePhysicsController {
       if (!adventureActive) {
         if (inputFrame.flipperLeft !== null) inputActions?.handleFlipperLeft(inputFrame.flipperLeft)
         if (inputFrame.flipperRight !== null) inputActions?.handleFlipperRight(inputFrame.flipperRight)
-        if (inputFrame.plunger) inputActions?.handlePlunger()
+        if (inputFrame.plungerCharge !== null) inputActions?.handlePlunger(inputFrame.plungerCharge)
       }
       this.applyInputFrame(inputFrame)
     }

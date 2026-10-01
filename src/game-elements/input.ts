@@ -25,12 +25,24 @@ import {
 
 export type { InputFrame, PendingInputFrame, LatencyReport, InputLatencySource }
 
+/**
+ * Round a nudge to the 0.01 grid the replay tape stores it on, so the live
+ * impulse is exactly the one a replay re-applies (analog sticks and device
+ * orientation produce arbitrary floats).
+ */
+function quantizeNudge(nudge: InputFrame['nudge']): InputFrame['nudge'] {
+  if (!nudge) return null
+  const q = (v: number) => Math.round((v || 0) * 100) / 100
+  return { x: q(nudge.x), y: q(nudge.y), z: q(nudge.z) }
+}
+
 export class InputHandler {
   // Input buffering for frame-aligned processing
   private pendingInputs: PendingInputFrame = {}
   private lastProcessedFrame: InputFrame = {
     flipperLeft: null,
     flipperRight: null,
+    plungerCharge: null,
     plunger: false,
     nudge: null,
     timestamp: 0
@@ -40,7 +52,7 @@ export class InputHandler {
   // Plunger charge state tracking
   private plungerChargeState: PlungerChargeState = {
     isHeld: false,
-    chargeStartTime: 0,
+    chargeStartStep: 0,
     chargeLevel: 0,
     maxChargeTime: 1500,
     minImpulse: 10,
@@ -70,6 +82,8 @@ export class InputHandler {
   private getState: () => GameState
   private getTiltActive: () => boolean
   private getAdventureActive: () => boolean
+  /** Sim step count — the clock plunger charge is measured on (#441). */
+  private getSimStep: () => number
   /** True once the underlying physics engine has finished booting. */
   private ready = false
 
@@ -109,6 +123,8 @@ export class InputHandler {
       getState: () => GameState
       getTiltActive: () => boolean
       getAdventureActive?: () => boolean
+      /** Sim step count (`simStepCount()`); charge counts fixed steps held. Defaults to 0 (no charge). */
+      getSimStep?: () => number
     },
     ready: boolean
   ) {
@@ -126,6 +142,7 @@ export class InputHandler {
     this.getState = handlers.getState
     this.getTiltActive = handlers.getTiltActive
     this.getAdventureActive = handlers.getAdventureActive || (() => false)
+    this.getSimStep = handlers.getSimStep || (() => 0)
     this.ready = ready
 
     // Initialize plunger charge callbacks (with no-ops as defaults)
@@ -244,8 +261,7 @@ export class InputHandler {
       } else {
         // Release on button up
         if (this.plungerChargeState.isHeld) {
-          this.releasePlungerCharge()
-          this.queueInput('plunger', true)
+          this.queueInput('plungerCharge', this.releasePlungerCharge(), { source: 'gamepad' })
           this.gamepadManager.plungerFeedback()
         }
       }
@@ -294,13 +310,13 @@ export class InputHandler {
    * Cancel any in-progress plunger charge and discard a queued launch.
    */
   cancelPlungerCharge(): void {
-    if (!this.plungerChargeState.isHeld && !this.pendingInputs.plunger) return
+    if (!this.plungerChargeState.isHeld && this.pendingInputs.plungerCharge == null) return
     wipePlungerCharge(this.plungerChargeState)
-    this.pendingInputs.plunger = false
+    delete this.pendingInputs.plungerCharge
     this.onPlungerChargeUpdate(0)
   }
 
-  /** Touch/mouse cancel-without-firing (no callback, chargeStartTime untouched). */
+  /** Touch/mouse cancel-without-firing (no callback, chargeStartStep untouched). */
   private softCancelPlungerCharge(): void {
     softCancelPlungerCharge(this.plungerChargeState)
   }
@@ -438,11 +454,13 @@ export class InputHandler {
   processBufferedInputs(): InputFrame {
     const now = performance.now()
 
+    const plungerCharge = this.pendingInputs.plungerCharge ?? null
     const frame: InputFrame = {
       flipperLeft: this.pendingInputs.flipperLeft ?? null,
       flipperRight: this.pendingInputs.flipperRight ?? null,
-      plunger: this.pendingInputs.plunger ?? false,
-      nudge: this.pendingInputs.nudge ?? null,
+      plungerCharge,
+      plunger: plungerCharge !== null,
+      nudge: quantizeNudge(this.pendingInputs.nudge ?? null),
       timestamp: this.pendingInputs.timestamp ?? now,
       nudgeSource: this.pendingInputs.nudgeSource
     }
@@ -480,7 +498,7 @@ export class InputHandler {
   updatePlungerCharge(): void {
     this.tryStartChargeAfterMenuHold()
     if (!this.plungerChargeState.isHeld) return
-    const newChargeLevel = computePlungerChargeLevel(this.plungerChargeState)
+    const newChargeLevel = computePlungerChargeLevel(this.plungerChargeState, this.getSimStep())
 
     // Only update if charge level changed
     if (newChargeLevel !== this.plungerChargeState.chargeLevel) {
@@ -502,7 +520,7 @@ export class InputHandler {
    * Start plunger charge
    */
   private startPlungerCharge(): void {
-    beginPlungerCharge(this.plungerChargeState)
+    beginPlungerCharge(this.plungerChargeState, this.getSimStep())
     this.onPlungerChargeStart()
   }
 
@@ -510,7 +528,7 @@ export class InputHandler {
    * Release plunger and return the charge level
    */
   private releasePlungerCharge(): number {
-    const finalChargeLevel = finishPlungerCharge(this.plungerChargeState)
+    const finalChargeLevel = finishPlungerCharge(this.plungerChargeState, this.getSimStep())
     this.onPlungerChargeRelease(finalChargeLevel)
     return finalChargeLevel
   }

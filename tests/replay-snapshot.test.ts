@@ -131,7 +131,7 @@ describe('recording and playback carry the fingerprint', () => {
     recorder.attachWorldFingerprint(captureReplayFingerprint(e, null))
     recorder.attachWorldFingerprint({ staticHash: 'later' })
     expect(recorder.hasWorldFingerprint()).toBe(true)
-    recorder.recordFrame({ flipperLeft: true, flipperRight: null, plunger: false, nudge: null, timestamp: 0 })
+    recorder.recordFrame({ flipperLeft: true, flipperRight: null, plungerCharge: null, plunger: false, nudge: null, timestamp: 0 })
     const payload = ReplayRecorder.fromJSON(ReplayRecorder.toJSON(recorder.stop(500)!))
 
     expect(payload).toMatchObject({

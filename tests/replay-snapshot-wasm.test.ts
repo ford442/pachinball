@@ -132,12 +132,37 @@ type Table = Awaited<ReturnType<typeof makeTable>>
 function tapeFrame(frame: number): InputFrame {
   const left = frame % 50 >= 10 && frame % 50 < 22
   const right = (frame + 25) % 50 >= 10 && (frame + 25) % 50 < 22
-  return { flipperLeft: left, flipperRight: right, plunger: false, nudge: null, timestamp: frame * (1000 / 60) }
+  return { flipperLeft: left, flipperRight: right, plungerCharge: null, plunger: false, nudge: null, timestamp: frame * (1000 / 60) }
 }
 
-function tapeInput(from: number) {
+/** Frame the launch tape fires the plunger on, and the charge it fires with. */
+const LAUNCH_FRAME = WARMUP_FRAMES + 30
+const LAUNCH_CHARGE = 0.8
+
+function launchTapeFrame(frame: number): InputFrame {
+  const f = tapeFrame(frame)
+  return frame === LAUNCH_FRAME ? { ...f, plungerCharge: LAUNCH_CHARGE, plunger: true } : f
+}
+
+function tapeInput(from: number, tape: (frame: number) => InputFrame = tapeFrame) {
   let frame = from
-  return { update: () => {}, processBufferedInputs: () => tapeFrame(frame++) }
+  return { update: () => {}, processBufferedInputs: () => tape(frame++) }
+}
+
+/**
+ * Input actions whose launch behaves like `GameInputActions.handlePlunger`:
+ * an impulse scaled by the charge it is handed, falling back to the host's
+ * live charge only when none is passed.
+ */
+function launchActions(t: { host: { plungerChargeLevel: number }; ball: WasmBody }) {
+  return {
+    handleFlipperLeft: () => {},
+    handleFlipperRight: () => {},
+    handlePlunger: (charge?: number | null) => {
+      t.ball.applyImpulse({ x: 0.4, y: 0, z: -(0.2 + 1.6 * (charge ?? t.host.plungerChargeLevel)) }, true)
+      return true
+    },
+  }
 }
 
 function ballPose(t: Table) {
@@ -147,8 +172,12 @@ function ballPose(t: Table) {
   return { id, p, v }
 }
 
-async function recordLiveRun(module: WasmPhysicsModule) {
+async function recordLiveRun(module: WasmPhysicsModule, opts: { launch?: boolean } = {}) {
   const live = await makeTable(module)
+  const tape = opts.launch ? launchTapeFrame : tapeFrame
+  // The recorder's own charge is the one it launched with.
+  live.host.plungerChargeLevel = opts.launch ? LAUNCH_CHARGE : 0
+  const actions = launchActions(live)
   // Warm-up: the ball rolls and the flippers swing. The tape ends this window
   // with both flippers released, so the owner's TS-side flipper state (hold
   // timers) is back to its spawn value — the snapshot carries the C++ half.
@@ -168,17 +197,20 @@ async function recordLiveRun(module: WasmPhysicsModule) {
     renderer: 'webgl2',
     createdAt: '2026-09-25T00:00:00.000Z',
   })
-  const input = tapeInput(WARMUP_FRAMES)
-  for (let f = 0; f < RECORD_FRAMES; f++) live.controller.stepPhysics(input, null, null, recorder)
+  const input = tapeInput(WARMUP_FRAMES, tape)
+  for (let f = 0; f < RECORD_FRAMES; f++) live.controller.stepPhysics(input, actions, null, recorder)
   const payload = recorder.stop(live.host.score)!
   return { live, payload }
 }
 
 async function replay(module: WasmPhysicsModule, payload: ReplayPayload, opts: { extraBumper?: boolean } = {}) {
   const client = await makeTable(module, opts)
+  // The spectator's own live charge is idle — replay must not read it.
+  client.host.plungerChargeLevel = 0
+  const actions = launchActions(client)
   const runner = new ReplayRunner()
   runner.load(ReplayRecorder.fromJSON(ReplayRecorder.toJSON(payload)))
-  for (let f = 0; f < payload.frames.length; f++) client.controller.stepPhysics(null, null, runner, null)
+  for (let f = 0; f < payload.frames.length; f++) client.controller.stepPhysics(null, actions, runner, null)
   return client
 }
 
@@ -210,6 +242,21 @@ describe.skipIf(!RUN)('replay from a C++ snapshot on the compiled bundle (#422)'
     expect(b.v).toEqual(a.v)
     expect(client.engine.getStepCount()).toBe(live.engine.getStepCount())
     expect(client.engine.serializeSnapshot()).toEqual(live.engine.serializeSnapshot())
+  })
+
+  it('replays a charged launch at the taped charge, not the spectator\'s idle charge (#441)', async () => {
+    const module = await loadModule()
+    const { live, payload } = await recordLiveRun(module, { launch: true })
+    const { live: unlaunched } = await recordLiveRun(module)
+    expect(payload.frames[LAUNCH_FRAME - WARMUP_FRAMES]?.plungerCharge).toBe(LAUNCH_CHARGE)
+    // The launch changed the run, so matching it below is not vacuous.
+    expect(ballPose(live).p).not.toEqual(ballPose(unlaunched).p)
+
+    const client = await replay(module, payload)
+    expect(client.controller.getLastReplaySnapshotResult()?.outcome).toBe('restored')
+    expect(client.host.score).toBe(live.host.score)
+    expect(ballPose(client).p).toEqual(ballPose(live).p)
+    expect(ballPose(client).v).toEqual(ballPose(live).v)
   })
 
   it('without the snapshot the same tape drifts (control)', async () => {

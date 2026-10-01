@@ -18,6 +18,7 @@ import {
 } from '../game-elements'
 import { initSessionRng, getSessionSeed, randomU32Seed } from '../core/seeded-rng'
 import { getChallengeSystem } from '../replay/challenge-system'
+import { REPLAY_SCHEMA_VERSION } from '../replay/replay-recorder'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { BallManager } from '../game-elements/ball-manager'
@@ -211,7 +212,7 @@ export class GameLifecycle {
 
     if (!isReplaying && this.host.replayRecorder) {
       this.host.replayRecorder.start({
-        version: 1,
+        version: REPLAY_SCHEMA_VERSION,
         buildId: '1.0.0',
         mapId: this.host.currentMapId ?? DEFAULT_TABLE_MAP_ID,
         seed: getSessionSeed(),

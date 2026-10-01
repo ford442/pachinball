@@ -65,7 +65,7 @@ async function playTape(page: Page): Promise<TapeResult> {
         return {
           flipperLeft: f % 48 >= 8 && f % 48 < 20,
           flipperRight: (f + 24) % 48 >= 8 && (f + 24) % 48 < 20,
-          plunger: false,
+          plungerCharge: null, plunger: false,
           nudge: null,
           timestamp: f * (1000 / 60),
         }

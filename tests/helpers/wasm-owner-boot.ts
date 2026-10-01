@@ -49,7 +49,12 @@ export type GameHooks = {
       getBumperBodies?: () => Array<{ translation: () => { x: number; y: number; z: number } }>
     }
     inputManager?: unknown
-    inputActions?: { handlePlunger?: () => boolean; handleFlipperLeft?: (pressed: boolean) => void }
+    inputActions?: {
+      handlePlunger?: (charge?: number | null) => boolean
+      handleFlipperLeft?: (pressed: boolean) => void
+      /** Impulse magnitude of the most recent launch (#441). */
+      lastLaunchImpulse?: number
+    }
     plungerChargeLevel?: number
     engine?: { getDeltaTime: () => number }
     scene?: { meshes?: Array<{ name: string; getVerticesData?: (kind: string) => Float32Array | number[] | null }> }

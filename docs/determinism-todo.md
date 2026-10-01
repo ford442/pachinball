@@ -109,6 +109,34 @@ Still wall-clock (not physics-trajectory-affecting unless the tape nudges):
 
 ---
 
+## Inputs on the tape (#441)
+
+The replay tape (`InputFrame`, `src/replay/replay-recorder.ts`, schema
+`REPLAY_SCHEMA_VERSION = 2`) carries everything that changes the ball's path:
+
+- **Plunger charge.** `plungerCharge` (0–1 at fire, `null` otherwise) is the
+  value the launch impulse is scaled by. Live and replay both fire through
+  `GameInputActions.handlePlunger(frame.plungerCharge)`; the spectator's own
+  `plungerChargeLevel` is never read. Charge is measured in **fixed steps
+  held** (`input-plunger.ts`, `simStepCount()`), not wall time, so two 60 fps
+  recordings of the same hold agree. RLE rows gain a 7th field (`String(n)`,
+  exact; `-` for none). Schema-1 tapes (fired bit only) replay at charge 0.
+  `InputFrame.plunger` remains as a deprecated alias for one release.
+- **Nudges** are quantised to the tape's 0.01 grid in `processBufferedInputs()`,
+  so the live impulse is exactly the one replay re-applies.
+
+### Next blocker: the tape is per render frame
+
+One `InputFrame` is recorded per `stepPhysics()` call, i.e. per **render**
+frame, and playback steps the world with the viewer's own
+`engine.getDeltaTime()`. A 144 Hz spectator therefore runs a different number of
+fixed steps between taped inputs than the 60 Hz recorder did. Every determinism
+test pins delta to 1/60 s to sidestep this. Fix: record the fixed-step count per
+frame (or one frame per fixed step) and have playback advance exactly that many
+steps regardless of viewer dt.
+
+---
+
 ## Solver snapshots (#422)
 
 `PhysicsWorld::serialize()` / `restore()` (`native/src/Snapshot.{h,cpp}`) —
