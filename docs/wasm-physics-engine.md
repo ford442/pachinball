@@ -73,7 +73,7 @@ native/
 │   ├── DynamicBox.cpp           Dynamic oriented-box bodies (createBoxBody)
 │   ├── BodyStore.h / .cpp       SoA body storage + packed transform buffer
 │   ├── HandleTable.h            Stable body / hinge handles
-│   ├── BroadphaseGrid.h / .cpp  Uniform-grid broadphase
+│   ├── BroadphaseGrid.h / .cpp  Uniform-grid broadphase (sleepers stay in as targets for awake bodies)
 │   ├── Narrowphase.cpp          Pair tests (sphere / capsule / box / statics)
 │   ├── CollisionFilter.h        membership/filter masks (mirrors CollisionGroups)
 │   ├── StaticShapes.h / .cpp    Static box / capsule / sphere (+ ConeDesc)
@@ -105,6 +105,7 @@ native/
     ├── cone_test.cpp            Static cone: apex / slant / base / inside / groups (#420)
     ├── pin_field_test.cpp       Pin field: 12×12 fall-through, keep-out, mask, dropout, parity, handle cap (#421)
     ├── snapshot_test.cpp        World snapshot: rewind / fresh-table restore bit-exact, manifold, mismatch, malformed (#422)
+    ├── sleeper_contact_test.cpp Sleeping balls stay collidable: kinematic / rolling ball wakes one on contact, proximity does not
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
@@ -590,6 +591,9 @@ Test scenarios (friction and hinge cases live in `hinge_friction_test.cpp`):
 | `release velocity matches the last kinematic delta` (`kinematic_body_test.cpp`) | → Dynamic keeps the pose-delta velocity; free flight continues it |
 | `captured ball holds for 30 frames while a second ball rolls past` (`kinematic_body_test.cpp`) | The held ball stays on its targets and deflects the roller without tunnelling |
 | `kinematic body skips static solids but still trips sensors` (`kinematic_body_test.cpp`) | No impulse-less contact spam against statics; sensors still see a carried ball |
+| `a steered kinematic ball wakes the sleeping ball it drives into` (`sleeper_contact_test.cpp`) | A captured, steered ball no longer passes through a resting one; real contact wakes it |
+| `a rolling ball hits a sleeping ball instead of passing through it` (`sleeper_contact_test.cpp`) | The same for a dynamic roller: a sleeper is a target, not a ghost |
+| `a sleeper stays asleep while an awake ball passes without touching it` / `two sleepers neither pair nor wake each other` (`sleeper_contact_test.cpp`) | Broadphase proximity alone wakes nothing; sleeper-vs-sleeper adds no pair |
 | `a ball hitting the slant gets the slant normal` (`cone_test.cpp`, + apex / base / inside / rotated / groups) | Sphere-vs-cone regions and handle family |
 | `a ball falling through a 12x12 field contacts its pins` (`pin_field_test.cpp`) | Pin-field narrowphase, lattice sub-index in contacts |
 | `a keep-out AABB holds no pin` / `an occupancy mask punches a hole` (`pin_field_test.cpp`) | Lattice resolution rules shared with `src/core/pin-field.ts` |
