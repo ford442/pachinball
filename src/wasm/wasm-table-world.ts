@@ -27,7 +27,12 @@ import type {
   PhysicsVector,
   PhysicsWorldSink,
 } from '../core/physics-api'
-import { PhysicsBodyType, type PinFieldWorldSink } from '../core/physics-api'
+import {
+  PhysicsBodyType,
+  type AxisPullFieldSpec,
+  type AxisPullWorldSink,
+  type PinFieldWorldSink,
+} from '../core/physics-api'
 import type { PinFieldSpec } from '../core/pin-field'
 import type { WasmSimEngine } from './wasm-sim-engine'
 import { sphereTouchesVolume, type VolumeKind } from '../core/pose-math'
@@ -99,7 +104,7 @@ export function volumeOf(desc: TableColliderDesc): { kind: VolumeKind; halfExten
   }
 }
 
-export class WasmTableWorld implements PhysicsWorldSink, PinFieldWorldSink, WasmBodyHost {
+export class WasmTableWorld implements PhysicsWorldSink, PinFieldWorldSink, AxisPullWorldSink, WasmBodyHost {
   private readonly bodies = new Map<number, WasmBody>()
   private readonly colliders = new Map<number, WasmCollider>()
   private readonly joints = new Map<number, WasmRevoluteJoint>()
@@ -174,6 +179,19 @@ export class WasmTableWorld implements PhysicsWorldSink, PinFieldWorldSink, Wasm
       .setFriction(spec.friction)
     if (spec.collisionGroups !== undefined) desc.setCollisionGroups(spec.collisionGroups)
     this.createCollider(desc, body)
+    return body
+  }
+
+  /**
+   * A vertical pull well as one fixed body with one `axisPullField` collider.
+   * The owner exports it as a single C++ axis-pull force field; disabling the
+   * body gates the field through its collision groups, and removing it drops
+   * the field with the rest of the statics.
+   */
+  createAxisPullField(spec: AxisPullFieldSpec): WasmBody {
+    const body = this.createRigidBody(new WasmRigidBodyDesc(PhysicsBodyType.Fixed))
+    const field: AxisPullFieldSpec = { ...spec, center: { ...spec.center } }
+    this.createCollider(new WasmColliderDesc({ kind: 'axisPullField', field }), body)
     return body
   }
 

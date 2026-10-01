@@ -7,7 +7,7 @@ import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
-import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import { supportsAxisPullFields, type PhysicsApi, type PhysicsBody, type PhysicsWorldSink } from '../../core/physics-api'
 import { CapturedBall } from '../../core/captured-ball'
 import type { GameConfigType } from '../../config'
 import { getSessionRngFork, RNG_FORK } from '../../core/seeded-rng'
@@ -48,6 +48,8 @@ export class MagSpinFeeder {
   private caughtBall: PhysicsBody | null = null
   private readonly capture: CapturedBall
   private physicsBody: PhysicsBody | null = null
+  /** True when the well is a C++ axis-pull field (owner path) rather than the Rapier-era bowl. */
+  private pullField = false
   private gameplayEnabled = true
 
   private ringAngularVelocity = 0
@@ -146,7 +148,29 @@ export class MagSpinFeeder {
     this.light.range = 10
   }
 
+  /** The body that owns the well's physics: the pull field, or the Rapier-era bowl. */
+  getBodies(): PhysicsBody[] {
+    return this.physicsBody ? [this.physicsBody] : []
+  }
+
   private createPhysics(): void {
+    if (supportsAxisPullFields(this.world)) {
+      // C++ owner path. The authored bowl below was a Rapier-surface (y = -0.9) ghost: on
+      // the owner's y = 0 plane its wall ring would shut balls out of the capture radius and
+      // sit on the hold point. The well is the field instead — the C++ engine draws idle-state
+      // balls in, so capture no longer hinges on a polled ball list. `checkProximity` stays
+      // as the confirm step.
+      this.physicsBody = this.world.createAxisPullField({
+        center: { x: this.position.x, y: this.position.y, z: this.position.z },
+        radius: this.config.pullRadius,
+        halfHeight: this.config.pullHalfHeight,
+        strength: this.config.pullAcceleration,
+        acceleration: true,
+      })
+      this.pullField = true
+      return
+    }
+
     this.physicsBody = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.fixed()
         .setTranslation(this.position.x, this.position.y, this.position.z)
@@ -229,10 +253,22 @@ export class MagSpinFeeder {
         mesh.setEnabled(enabled)
       }
     }
-    if (this.physicsBody && this.world.getRigidBody(this.physicsBody.handle)) {
+    if (this.pullField) {
+      this.syncPullField()
+    } else if (this.physicsBody && this.world.getRigidBody(this.physicsBody.handle)) {
       this.physicsBody.setEnabled(enabled)
     }
     if (this.light) this.light.setEnabled(enabled)
+  }
+
+  /**
+   * The pull only runs while the well is idle and in play: a captured or cooling-down
+   * ball is steered (or ignored), and pulling a released ball back would fight its launch.
+   */
+  private syncPullField(): void {
+    if (!this.pullField || !this.physicsBody) return
+    if (!this.world.getRigidBody(this.physicsBody.handle)) return
+    this.physicsBody.setEnabled(this.gameplayEnabled && this.state === MagSpinState.IDLE)
   }
 
   private updateVisuals(dt: number): void {
@@ -381,6 +417,7 @@ export class MagSpinFeeder {
   private setState(newState: MagSpinState): void {
     this.state = newState
     this.timer = 0
+    this.syncPullField()
     this.onStateChange?.(newState)
 
     switch (newState) {

@@ -794,6 +794,7 @@ Rapier collider:
 |------|----------|-----|
 | fixed | box / capsule / cylinder / sphere / cone | `addStaticBox` / `addStaticCapsule` / `addStaticCylinder` / `addStaticSphere` / `addStaticCone` |
 | fixed | pin field (`WasmTableWorld.createPinField`) | `addPinField` — one id for the whole lattice |
+| fixed | axis-pull well (`WasmTableWorld.createAxisPullField`) | `addForceField` with `mode: 'axis-pull'` — a force field, not geometry; disabling the body gates it through its collision groups |
 | any | sensor box / cylinder / sphere | `addSensorVolume` |
 | kinematic | box / cylinder | `addKinematicMover`, posed each tick from the body's target |
 | any | convex hull, kinematic capsule / cone / sphere, unlinked dynamic | reported, not exported |
@@ -806,14 +807,40 @@ same WASM id. Authored collision groups are applied (`setCollisionGroups`).
 bodies the C++ world simulates: everything with a mesh binding (walls,
 slingshots, bumpers, pachinko pins and targets, decoration rails), the lane
 rollover sensors and the drain; `GamePhysicsController` adds the ball traps
-(funnel cone + chamber sensor, #420). Every other authored body — RailBuilder's
-rails and guards, the plunger body, the spinner / launcher / gate, the
-feeders' well geometry, the LCD ground (the owner's ground plane replaces it)
+(funnel cone + chamber sensor, #420) and MagSpin's well (an axis-pull force
+field). Every other authored body — RailBuilder's
+rails and guards, the plunger body, the spinner / launcher / gate, the other
+four feeders' well geometry, the LCD ground (the owner's ground plane replaces it)
 — is recorded but held out, and listed with a reason by `WasmOwner.getTableUnsupported()`. Those
 bodies were authored against the Rapier table surface (the LCD ground's top,
 y = −0.9), where the ball rolls underneath them; the owner's ground plane is
 y = 0, and exported unchanged they close the plunger lane. They join the scope
 once calibrated for the owner plane.
+
+**MagSpin's well** is the one feeder already calibrated, by being re-authored rather
+than shifted. Its Rapier-era bowl (a floor disc and an eight-wall ring, inner face
+at 1.75) is a ghost above Rapier's lower surface; exported unchanged on the owner
+plane the ring would shut balls out of the 1.5 capture radius and sit on the
+y = 1.0 hold point. So `MagSpinFeeder.createPhysics` builds the bowl only on a world
+that cannot author an axis-pull field (`supportsAxisPullFields(world)`: Rapier,
+`wasm-mirror`), and on the owner path the well *is* the field: C++ draws idle-state
+balls toward the feeder while the TS `checkProximity` capture stays as the confirm
+step, so a ball converges into the capture sphere even when the render thread's
+(or a worker snapshot's) ball list lags. The field is gated off while a ball is held
+or the toy cools down (`syncPullField` → `setEnabled` → collision groups) so it never
+fights a release. A bundle without `addAxisPullField` reports the well in
+`getTableUnsupported()` and capture works as before, unassisted.
+
+`MAG_SPIN_TUNABLES.pullAcceleration` is a play-feel knob. Measured on the owner table
+(gravity z = −5, ground friction 0.18, the standard ball, `pullRadius` 3.0, 3 s):
+
+| Pull (m/s²) | 0 | 6 | **10 (default)** | 15 | 20 | 30 |
+|-------------|---|---|------------------|----|----|----|
+| Resting ball captured out to (m) | 1.4 | 1.7 | **1.9** | 2.2 | 2.4 | 2.7 |
+| Rolling ball (3 m/s) funnel half-width (m) | 1.4 | 1.6 | **1.6** | 1.7 | 1.8 | 1.9 |
+
+`tests/wasm-owner-magspin-pull.spec.ts` pins the in-game claim: a resting ball 1.7 m out is
+captured with the well on and not with it gated off.
 
 **Identity.** `CollisionDispatcher` keys every set on WASM public ids: a ball's
 C++ body id, and a static body's first exported collider id. A contact's WASM
