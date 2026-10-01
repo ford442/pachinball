@@ -7,6 +7,7 @@ import {
   buildTrackCatalogFromManifests,
   buildZoneRegistryFromManifests,
 } from '../src/adventure/manifests'
+import { MANIFEST_DATA } from '../src/adventure/manifests/track-manifest-data'
 import { TRACK_CATALOG } from '../src/adventure/adventure-track-progression'
 import { ZONE_REGISTRY } from '../src/game-elements/zone-registry'
 import { getTrackStartAnchor } from '../src/adventure/portal-routing'
@@ -23,6 +24,10 @@ describe('TrackManifest registry', () => {
       expect(TRACK_MANIFEST_REGISTRY.has(id), `missing manifest for ${id}`).toBe(true)
     }
     expect(TRACK_MANIFEST_REGISTRY.size).toBe(enumValues.length)
+  })
+
+  it('declares manifests in AdventureTrackType order (it drives TRACK_CATALOG key order)', () => {
+    expect(MANIFEST_DATA.map((manifest) => manifest.id)).toEqual(enumValues)
   })
 
   it('derives TRACK_CATALOG identical to manifest catalog entries', () => {

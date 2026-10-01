@@ -89,7 +89,10 @@ portal anchors, and `buildTrack()` switch case).
 
 1. Add the enum value in [`adventure-types.ts`](../src/adventure/adventure-types.ts)
    (`AdventureTrackType`).
-2. Add a manifest entry in [`track-manifest-data.ts`](../src/adventure/manifests/track-manifest-data.ts):
+2. Add a manifest entry, in enum position, to the data module that holds its neighbours —
+   [`track-manifest-data-core.ts`](../src/adventure/manifests/track-manifest-data-core.ts) (first eleven tracks)
+   or [`track-manifest-data-extended.ts`](../src/adventure/manifests/track-manifest-data-extended.ts)
+   (`track-manifest-data.ts` concatenates them; `tests/track-manifest.test.ts` pins the order):
    - `startAnchor` — portal teleport position
    - `zone` — story text, colors, music, transition flags (feeds `ZONE_REGISTRY`)
    - `catalog` — optional campaign metadata (feeds `TRACK_CATALOG` when present)

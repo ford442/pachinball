@@ -7,7 +7,7 @@
  * - Music track ID
  * - Transition type (major/minor - affects shake intensity)
  *
- * ZONE_REGISTRY is derived from TrackManifest — edit manifests/track-manifest-data.ts
+ * ZONE_REGISTRY is derived from TrackManifest — edit manifests/track-manifest-data-{core,extended}.ts
  * to add or change zone theming.
  */
 
