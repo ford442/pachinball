@@ -157,7 +157,7 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 | `adventure-track-progression.ts` | `TRACK_CATALOG`, `AdventureTrackProgression` — campaign spine metadata. |
 | `adventure-progression-supervisor.ts` | Portal lifecycle + campaign state machine. |
 | `zone-registry.ts` | Per-track theming / story / music metadata for adventure zones. |
-| Various `*-feeder.ts` | Specialized table toys: `mag-spin-feeder`, `nano-loom-feeder`, `prism-core-feeder`, `gauss-cannon-feeder`, `quantum-tunnel-feeder`. Every toy that holds a ball (feeders, traps, BallManager's hologram catch) captures / steers / releases it through `CapturedBall` (`src/core/captured-ball.ts`) — never `setBodyType` directly. |
+| Various `*-feeder.ts` | Specialized table toys: `mag-spin-feeder`, `nano-loom-feeder`, `prism-core-feeder`, `gauss-cannon-feeder`, `quantum-tunnel-feeder`. Every toy that holds a ball (feeders, traps, BallManager's hologram catch) captures / steers / releases it through `CapturedBall` (`src/core/captured-ball.ts`) — never `setBodyType` directly. On the C++ owner path MagSpin's well is an axis-pull force field (`WasmTableWorld.createAxisPullField` → `addAxisPullField`), not the Rapier-era bowl, which only a Rapier / `wasm-mirror` world still builds. |
 
 #### `src/game/` — High-level managers (barrel: `src/game/index.ts`)
 | File | Responsibility |
