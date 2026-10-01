@@ -13,6 +13,7 @@ import { GameConfig, PhysicsConfig } from '../config'
 import { applyPlungerChargeCurve, getPhysicsTuningValue } from '../game-elements/physics-tuning'
 import type { AccessibilityConfig } from '../game-elements'
 import { emissive, PALETTE, INTENSITY } from '../game-elements/visual-language'
+import { simClockMs } from '../core/sim-clock'
 
 export interface InputActionsHost {
   readonly physics: PhysicsSystem
@@ -60,7 +61,7 @@ export class GameInputActions {
 
   constructor(host: InputActionsHost) {
     this.host = host
-    this.lastFrameTime = performance.now()
+    this.lastFrameTime = simClockMs()
   }
 
   /** Provide the BabylonJS scene so per-frame visual updates can find meshes. */
@@ -77,8 +78,9 @@ export class GameInputActions {
       return
     }
 
-    const now = performance.now()
-    const dt = (now - this.lastFrameTime) / 1000
+    // Hold time ramps motor stiffness (Rapier path): gameplay clock, not wall time.
+    const now = simClockMs()
+    const dt = Math.max(0, now - this.lastFrameTime) / 1000
     this.lastFrameTime = now
 
     if (pressed) {
@@ -122,8 +124,9 @@ export class GameInputActions {
       return
     }
 
-    const now = performance.now()
-    const dt = (now - this.lastFrameTime) / 1000
+    // Hold time ramps motor stiffness (Rapier path): gameplay clock, not wall time.
+    const now = simClockMs()
+    const dt = Math.max(0, now - this.lastFrameTime) / 1000
     this.lastFrameTime = now
 
     if (pressed) {

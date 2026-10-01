@@ -16,6 +16,7 @@ import { BallType, BALL_TIERS, GAME_TUNING, GameConfig } from '../src/config'
 import * as seededRng from '../src/core/seeded-rng'
 import { createSeededRng } from '../src/core/seeded-rng'
 import { selectWeightedBallType } from '../src/game-elements/ball-manager-spawn'
+import { installSimClock } from '../src/core/sim-clock'
 
 // ---------------------------------------------------------------------------
 // Module mocks — must be declared before the import under test
@@ -696,6 +697,32 @@ describe('BallManager', () => {
       }
 
       expect(last?.quickCollectBonus).toBeUndefined()
+    })
+
+    it('times the quick-collect window on the installed gameplay clock, not wall time (#441)', () => {
+      let simMs = 50_000
+      installSimClock({ steps: () => Math.floor(simMs / (1000 / 60)), ms: () => simMs })
+      const nowSpy = vi.spyOn(performance, 'now').mockReturnValue(0)
+      try {
+        const manager = makeManager()
+        const bodies = manager.spawnSmallGoldBallSwarm(undefined, BallType.GOLD_PLATED)
+        // Hours of wall time pass (a backgrounded tab), but the sim barely moves.
+        nowSpy.mockReturnValue(10_000_000)
+        simMs += (GameConfig.smallGoldBalls.quickCollectBonusWindow - 0.5) * 1000
+        let last: ReturnType<typeof manager.collectBall> = null
+        for (const body of bodies) last = manager.collectBall(body)
+        expect(last?.quickCollectBonus).toBeDefined()
+
+        // And past the window on the sim clock, no bonus, whatever wall time says.
+        const late = manager.spawnSmallGoldBallSwarm(undefined, BallType.GOLD_PLATED)
+        nowSpy.mockReturnValue(0)
+        simMs += (GameConfig.smallGoldBalls.quickCollectBonusWindow + 1) * 1000
+        for (const body of late) last = manager.collectBall(body)
+        expect(last?.quickCollectBonus).toBeUndefined()
+      } finally {
+        installSimClock(null)
+        nowSpy.mockRestore()
+      }
     })
 
     it('marks only the final solid-gold swarm member as jackpot eligible', () => {

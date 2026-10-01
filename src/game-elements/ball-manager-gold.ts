@@ -8,7 +8,7 @@ import type { PhysicsBody } from '../core/physics-api'
 import { BallType, GameConfig } from '../config'
 import { pulse } from './visual-language'
 import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
-import { getDensityForMass, type BallManagerHost } from './ball-manager-context'
+import { getDensityForMass, nowMs, type BallManagerHost } from './ball-manager-context'
 
 /**
  * Clean up swarm group tracking. If the ball leaves play without being
@@ -233,7 +233,7 @@ export function spawnSmallGoldBallSwarm(host: BallManagerHost, position?: Vector
     // Store as small gold ball variant with points
     host.ballDataMap.set(body, {
       type: baseType,
-      spawnTime: performance.now(),
+      spawnTime: nowMs(),
       points: cfg.basePoints,
       mesh: goldBall,
       rigidBody: body,
@@ -243,7 +243,7 @@ export function spawnSmallGoldBallSwarm(host: BallManagerHost, position?: Vector
 
     // Track lifetime
     host.smallGoldBallLifetimes.set(body, cfg.lifetime)
-    host.smallGoldBallSpawnTime.set(body, performance.now())
+    host.smallGoldBallSpawnTime.set(body, nowMs())
 
     // Bright gold trail
     host.addTrailForBall(body, '#ffdd00')
@@ -257,7 +257,7 @@ export function spawnSmallGoldBallSwarm(host: BallManagerHost, position?: Vector
     host.swarmGroups.set(swarmId, {
       bodies: new Set(spawnedBodies),
       collected: new Set(),
-      spawnTime: performance.now(),
+      spawnTime: nowMs(),
       baseType,
     })
     for (const body of spawnedBodies) {
@@ -302,7 +302,7 @@ export function collectBall(host: BallManagerHost, body: PhysicsBody): {
       group.collected.add(body)
       if (group.collected.size >= group.bodies.size) {
         jackpotEligible = group.baseType === BallType.SOLID_GOLD
-        const elapsedSeconds = (performance.now() - group.spawnTime) / 1000
+        const elapsedSeconds = (nowMs() - group.spawnTime) / 1000
         if (elapsedSeconds <= GameConfig.smallGoldBalls.quickCollectBonusWindow) {
           const multiplier = GameConfig.smallGoldBalls.quickCollectMultiplier
           const totalPoints = GameConfig.smallGoldBalls.basePoints * group.bodies.size

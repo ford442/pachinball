@@ -29,6 +29,7 @@ import { GameObjects } from '../objects'
 import { AdventureMode } from '../adventure'
 import { SpinnerBumperBuilder, type SpinnerBumperVisual, BallTrapBuilder, type BallTrapState, LauncherBuilder, type LauncherState, MovingGateBuilder, type MovingGateState } from '../objects'
 import { BallStackVisual } from '../game-elements/ball-stack-visual'
+import { freshNudgeState, type NudgeState } from './physics/types'
 import { CabinetLighting } from '../effects/cabinet-lighting'
 import { CelebrationSequencer } from '../effects/celebration-sequencer'
 import { GameStateManager } from './game-state'
@@ -199,7 +200,7 @@ export abstract class GameFields {
   powerupTimer = 0
   plungerChargeLevel = 0
   tiltActive = false
-  nudgeState = { tiltWarnings: 0, lastNudgeTime: 0, tiltActive: false, tiltWarningActive: false }
+  nudgeState: NudgeState = freshNudgeState()
   isCameraFollowMode = false
   cameraFollowTransition = 0
   readonly cameraFollowTransitionSpeed = GameConfig.visuals.cameraFollowTransitionSpeed

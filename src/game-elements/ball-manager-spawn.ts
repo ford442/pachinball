@@ -520,7 +520,7 @@ export function createBallOfType(host: BallManagerHost, type: BallType, position
   // Store ball data
   host.ballDataMap.set(body, {
     type,
-    spawnTime: performance.now(),
+    spawnTime: nowMs(),
     points: config.basePoints,
     mesh: ball,
     rigidBody: body,

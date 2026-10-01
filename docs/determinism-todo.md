@@ -97,15 +97,40 @@ entries below plus `randomU32Seed`'s fallback.
 
 Seeded RNG is not enough if gameplay reads `performance.now()`: a replay stepped
 headless (or restored mid-run) runs at a different wall-clock rate than the live
-game. The collision pair debounce (`CollisionDispatcher`) now runs on the
-simulation clock — fixed steps taken × 1/60 s, from the C++ step counter on the
-owner path and Rapier's otherwise.
+game. Two clocks replace it (`src/core/sim-clock.ts`):
 
-Still wall-clock (not physics-trajectory-affecting unless the tape nudges):
+- **Engine step counter** — `simNowMs(physics)`: fixed steps the active engine
+  has taken × 1/60 s. The C++ counter whenever a WASM engine is active (owner,
+  worker *and* mirror — the mirror's Rapier world never steps, so reading
+  Rapier's counter there froze the clock), Rapier's otherwise. Used by the
+  collision pair debounce (`CollisionDispatcher`), which already tolerates the
+  counter going backwards.
+- **Gameplay clock** — `GameSimClock`, owned by `GamePhysicsController.simClock`
+  and installed for the whole game (`installSimClock`, read via
+  `simClockMs()` / `simClockSeconds()` / `simClockSteps()`). It accumulates the
+  steps the engine took each frame and never jumps: after a snapshot restore
+  moves the engine counter to the recorder's value it re-anchors (`resync`)
+  instead of counting the jump, so an interval that started before the restore
+  (ball-save from `startGame()`) measures the same on recorder and spectator.
 
-| File | Usage | Notes |
-|------|-------|-------|
-| `src/game/physics/physics-controller.ts` | Nudge cooldown / tilt warnings / tilt decay; tilt penalty via `setTimeout` | A tape whose nudges land inside the cooldown in one run and outside in another can TILT differently. Move to the sim clock before nudge-heavy replays are verified. |
+On the gameplay clock (#441):
+
+| What | Where |
+|------|-------|
+| Nudge cooldown, tilt warnings, warning decay | `physics-controller.ts` `applyNudge` / `tickTilt` |
+| Tilt penalty (no `setTimeout`; released in `tickTilt` each frame) | `physics-controller.ts` `triggerTilt` |
+| Ball-save grace | `ball-manager-context.ts` `nowMs()`, `scoring-bridge.ts` |
+| Combo chain / bumper combo / gold-streak windows | `scoring-bridge.ts` `nowSeconds()` |
+| Gold swarm quick-collect bonus | `ball-manager-gold.ts` `collectBall` |
+| Plunger charge (steps held) | `input-plunger.ts` |
+| Flipper hold-time stiffness ramp (Rapier path) | `game-input-actions.ts` |
+| Gameplay timers stepped per frame: swarm lifetimes (expiry removes bodies), stuck-ball detection, combo-multiplier decay, power-up timer, tilt decay | `stepPhysics()` passes the sim seconds advanced (`simDt`), not render `dt` |
+
+`nudgeState` and `tiltActive` are reset in `startGame()`.
+
+Still wall-clock, cosmetic only: tilt bloom reset (`setTimeout`), the bonus
+tally bloom reset, full-charge haptic pulse, spawn-effect names, mirror sync
+timing for the HUD.
 
 ---
 
@@ -151,6 +176,6 @@ the hinge angle uses a libm-independent `atan2` so they can.
 1. ~~Injectable RNG + physics-affecting fork streams + catalogue.~~
 2. ~~#341: `ReplayRecorder` logs seed + inputs; C++ world snapshot + divergence harness.~~
 3. ~~#343: URL `?seed=` share → session seed; ghost spectate; divergence toast.~~
-4. Next: sim-clock nudge/tilt; restore across differing ball-id layouts (remap
-   TS links onto the snapshot's ids instead of reporting `id-layout`); worker
-   snapshot round trip.
+4. #441: plunger charge on the tape; sim-clock nudge/tilt and scoring windows;
+   worker snapshot round trip; restore across differing ball-id layouts.
+5. Next: tape per fixed step instead of per render frame (see "Next blocker").

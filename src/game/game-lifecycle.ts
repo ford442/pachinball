@@ -19,6 +19,7 @@ import {
 import { initSessionRng, getSessionSeed, randomU32Seed } from '../core/seeded-rng'
 import { getChallengeSystem } from '../replay/challenge-system'
 import { REPLAY_SCHEMA_VERSION } from '../replay/replay-recorder'
+import { freshNudgeState, type NudgeState } from './physics/types'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { BallManager } from '../game-elements/ball-manager'
@@ -77,6 +78,8 @@ export interface LifecycleHost {
   sessionGoldBalls: number
   powerupActive: boolean
   powerupTimer: number
+  tiltActive: boolean
+  nudgeState: NudgeState
 
   updateHUD(): void
   resetBall(): void
@@ -233,6 +236,10 @@ export class GameLifecycle {
     this.host.gameObjects?.resetTargets()
     this.host.powerupActive = false
     this.host.powerupTimer = 0
+    // A new game starts untilted with no nudge history; a stale cooldown or
+    // penalty from the last game must not reach this one's tape.
+    this.host.nudgeState = freshNudgeState()
+    this.host.tiltActive = false
     this.host.ballManager?.removeExtraBalls()
     this.host.updateHUD()
     this.host.resetBall()

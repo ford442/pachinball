@@ -1,6 +1,6 @@
 import { InputHandler, type InputFrame } from '../game-elements/input'
 import type { PhysicsSystem } from '../game-elements/physics'
-import { simStepCount } from '../core/sim-clock'
+import { simClockSteps } from '../core/sim-clock'
 import type { Scene } from '@babylonjs/core/scene'
 export interface InputConfig {
   onFlipperLeft?: (pressed: boolean) => void
@@ -79,7 +79,7 @@ export class GameInputManager {
         getTiltActive: () => this.config.getTiltActive?.() ?? false,
         getAdventureActive: () => this.config.getAdventureActive?.() ?? false,
         // Plunger charge counts fixed physics steps held (#441).
-        getSimStep: () => simStepCount(physics) ?? 0,
+        getSimStep: () => simClockSteps(),
       },
       physics.isReady()
     )
