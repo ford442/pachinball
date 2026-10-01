@@ -242,6 +242,9 @@ uint64_t PhysicsWorld::staticContentHash() const {
   for (const ForceFieldDesc& f : fields_) {
     hashVec(h, f.center); hashVec(h, f.halfExtents); hashQuat(h, f.rotation);
     h.u32(static_cast<uint32_t>(f.space)); h.u32(f.acceleration ? 1u : 0u);
+    // Only for the newer modes, so a world of plain directional fields hashes
+    // exactly as it did before the mode existed.
+    if (f.mode != ForceMode::Directional) { h.u32(static_cast<uint32_t>(f.mode)); h.f32(f.strength); }
   }
   return h.value();
 }

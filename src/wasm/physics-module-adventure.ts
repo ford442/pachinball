@@ -64,16 +64,34 @@ export interface WasmBoxBodyDesc {
   bodyType?:       WasmBodyType
 }
 
-/** Oriented box force region — updraft, conveyor, solar wind. */
+/**
+ * A force region: an oriented box that pushes along `force` (updraft, conveyor,
+ * solar wind), or — with `mode: 'axis-pull'` — a vertical well.
+ */
 export interface WasmForceFieldDesc {
   center:       Vec3
+  /**
+   * Box half-extents. In `axis-pull` mode `x` is the well's radius and `y` its
+   * half-height (`z` is unused).
+   */
   halfExtents:  Vec3
+  /** Ignored by `axis-pull`: the well's axis is always world Y. */
   rotation?:    Quat
-  /** Acceleration in m/s² when `acceleration` is set, otherwise force in newtons. */
-  force:        Vec3
+  /**
+   * Acceleration in m/s² when `acceleration` is set, otherwise force in newtons.
+   * Required for the directional mode; ignored by `axis-pull`.
+   */
+  force?:       Vec3
   space?:       WasmForceSpace
   /** Mass-independent form — a light ball and a heavy one drift alike. */
   acceleration?: boolean
+  /** `directional` (default) pushes along `force`; `axis-pull` draws bodies toward the well's axis. */
+  mode?:        'directional' | 'axis-pull'
+  /**
+   * `axis-pull` only: the pull at the axis (m/s² when `acceleration`, else
+   * newtons). It fades linearly to zero at the rim and acts horizontally only.
+   */
+  strength?:    number
 }
 
 /** HEAPF32 view, rebuilt from `wasmMemory` when the runtime method is not exported. */
@@ -282,13 +300,24 @@ export function createBoxBody(world: World, desc: WasmBoxBodyDesc): number {
 }
 
 export function addForceField(world: World, desc: WasmForceFieldDesc): number {
+  if (desc.mode === 'axis-pull') {
+    // A bundle built before the well existed has no such function: stay dormant.
+    if (!world?.addAxisPullField) return -1
+    return world.addAxisPullField(
+      desc.center.x, desc.center.y, desc.center.z,
+      desc.halfExtents.x, desc.halfExtents.y,
+      desc.strength ?? 0,
+      desc.acceleration ?? false
+    )
+  }
   if (!world?.addForceField) return -1
   const rot = desc.rotation ?? IDENTITY
+  const force = desc.force ?? { x: 0, y: 0, z: 0 }
   return world.addForceField(
     desc.center.x, desc.center.y, desc.center.z,
     desc.halfExtents.x, desc.halfExtents.y, desc.halfExtents.z,
     rot.x, rot.y, rot.z, rot.w,
-    desc.force.x, desc.force.y, desc.force.z,
+    force.x, force.y, force.z,
     desc.space ?? WasmForceSpace.World,
     desc.acceleration ?? false
   )

@@ -106,6 +106,7 @@ native/
     ├── pin_field_test.cpp       Pin field: 12×12 fall-through, keep-out, mask, dropout, parity, handle cap (#421)
     ├── snapshot_test.cpp        World snapshot: rewind / fresh-table restore bit-exact, manifold, mismatch, malformed (#422)
     ├── sleeper_contact_test.cpp Sleeping balls stay collidable: kinematic / rolling ball wakes one on contact, proximity does not
+    ├── axis_pull_field_test.cpp Axis-pull well: horizontal pull, linear falloff, extents, flags, groups, wake, snapshot hash
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
@@ -467,6 +468,24 @@ and `native/src/StaticShapes.h`):
 | `-9000` | static cone |
 | `-10000` | pin field (one slot per whole lattice) |
 
+**Force fields** (`native/src/ForceField.cpp`) push every Dynamic body inside a
+region once per substep, before integration, so the contribution lands in the same
+accumulator as gravity. A kinematic (captured) ball is steered, never pushed. Two
+modes share one id space (`-7000`) and one `ForceFieldDesc`:
+
+- **`Directional`** (default): an oriented box with a constant `force` vector —
+  updrafts, conveyors, solar wind (`addForceField`, adventure `forceField` segments).
+- **`AxisPull`** (`addAxisPullField`): a vertical cylinder — `halfExtents.x` is its
+  radius, `halfExtents.y` its half-height — that pulls bodies **horizontally** toward
+  its own axis with `strength × (1 − d / radius)`: full at the axis, nothing at the
+  rim, never a vertical component. The MagSpin feeder's well. It is a separate Embind
+  function so the 15-argument `addForceField` keeps its arity; on the TS side it is
+  the same `addForceField` command with `mode: 'axis-pull'` on the (structured-cloned)
+  `WasmForceFieldDesc`, so the worker protocol is unchanged and a bundle without it
+  stays dormant (`-1`). The mode and strength join the static-content hash only for
+  non-`Directional` fields, so directional-only worlds hash and snapshot exactly as
+  before (no `SNAPSHOT_VERSION` change).
+
 **Sphere vs cylinder** is closed form (`native/src/StaticShapes.cpp`). The ball
 centre is transformed into the cylinder's local frame and clamped
 independently in the radial and axial directions; that yields the three
@@ -594,6 +613,10 @@ Test scenarios (friction and hinge cases live in `hinge_friction_test.cpp`):
 | `a steered kinematic ball wakes the sleeping ball it drives into` (`sleeper_contact_test.cpp`) | A captured, steered ball no longer passes through a resting one; real contact wakes it |
 | `a rolling ball hits a sleeping ball instead of passing through it` (`sleeper_contact_test.cpp`) | The same for a dynamic roller: a sleeper is a target, not a ghost |
 | `a sleeper stays asleep while an awake ball passes without touching it` / `two sleepers neither pair nor wake each other` (`sleeper_contact_test.cpp`) | Broadphase proximity alone wakes nothing; sleeper-vs-sleeper adds no pair |
+| `axis pull draws a ball horizontally toward the axis` / `… is strongest at the axis and fades linearly to the rim` (`axis_pull_field_test.cpp`) | AxisPull is radial, horizontal-only, `strength × (1 − d / radius)` |
+| `axis pull does nothing outside its radius or its height` / `… applies nothing on the axis itself` / `… honours the acceleration flag` (`axis_pull_field_test.cpp`) | Cylinder extents, the dead zone at the axis, m/s² vs newtons |
+| `a captured kinematic ball is not pulled` / `axis pull respects group masks and the enabled flag` / `… wakes a sleeping ball inside it` (`axis_pull_field_test.cpp`) | Dynamic-only, group-gated, wakes sleepers |
+| `a snapshot refuses a world whose well was built differently` / `directional fields hash exactly as they did before AxisPull existed` (`axis_pull_field_test.cpp`) | Mode + strength are static params; legacy hashes are stable |
 | `a ball hitting the slant gets the slant normal` (`cone_test.cpp`, + apex / base / inside / rotated / groups) | Sphere-vs-cone regions and handle family |
 | `a ball falling through a 12x12 field contacts its pins` (`pin_field_test.cpp`) | Pin-field narrowphase, lattice sub-index in contacts |
 | `a keep-out AABB holds no pin` / `an occupancy mask punches a hole` (`pin_field_test.cpp`) | Lattice resolution rules shared with `src/core/pin-field.ts` |
