@@ -17,7 +17,8 @@ regenerate and check:
 
 ```bash
 npm run models:classic-cabinet   # scripts/generate-classic-cabinet.mjs → classic/{simple,high}.glb
-npm run models:insert-placeholders
+npm run models:mag-spin-insert   # scripts/generate-mag-spin-insert.mjs → inserts/mag-spin/{simple,high}.glb
+npm run models:insert-placeholders   # Prism Core / Nano-Loom box placeholders
 npm run models:check             # tests/model-budgets.test.ts
 ```
 
@@ -100,7 +101,13 @@ with simple fallback).
 
 **Pilot wiring:** `PrismCoreFeeder`, `MagSpinFeeder`, and `NanoLoomFeeder` each call
 `loadInsertGltf(tier)` to overlay `public/models/inserts/<toy-id>/{simple,high}.glb`
-and hide procedural meshes when load succeeds. Colliders remain code-authored / WASM
+and hide procedural meshes when load succeeds. Mag-Spin hides only its well and
+floor; the procedural spin rings and light stay for state feedback, so the insert
+rim stays below them (y ≤ 0.3).
+
+`attachInsertMeshes` moves the file's `__root__` to the toy anchor and leaves the
+meshes under it. Insert art is authored relative to the anchor in Babylon space
+(same handedness rule as the cabinet); node transforms survive. Colliders remain code-authored / WASM
 descriptors in the feeder `createPhysics()` methods — never derive gameplay colliders
 from insert art.
 
@@ -109,9 +116,10 @@ from insert art.
 | `prismCoreInner` | Prism Core | Inner chamber mesh |
 | `prismCoreOuter` | Prism Core | Outer shell |
 | `prismCoreShardDetail` | Prism Core | HIGH-only shard accent |
-| `magSpinWell` | Mag-Spin | Well body |
-| `magSpinFloor` | Mag-Spin | Well floor |
-| `magSpinRingDetail` | Mag-Spin | HIGH-only ring accent |
+| `magSpinWell` | Mag-Spin | Turned bowl, inner radius 1.75 (`WELL_DIAMETER / 2`) |
+| `magSpinFloor` | Mag-Spin | Well floor at y −0.45 |
+| `magSpinFloorSpiral` | Mag-Spin | Emissive two-arm spiral on the floor |
+| `magSpinRingDetail` | Mag-Spin | HIGH-only copper coil bobbins on the lip |
 | `nanoLoomFrame` | Nano-Loom | Frame board |
 | `nanoLoomIntake` | Nano-Loom | Intake |
 | `nanoLoomPinDetail` | Nano-Loom | HIGH-only pin plate |

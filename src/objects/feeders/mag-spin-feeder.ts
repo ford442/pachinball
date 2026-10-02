@@ -218,6 +218,8 @@ export class MagSpinFeeder {
       const result = await loadInsertGltfForPreset(this.scene, MAG_SPIN_INSERT_GLTF, tier)
       this.insertContainer = result.container
       attachInsertMeshes(result.meshes, this.position)
+      // The insert replaces the well shell; the procedural rings and light stay,
+      // they carry the spin / pulse / release-shake feedback.
       this.setProceduralMeshesVisible(false)
       console.info(`[MagSpin] Insert glTF loaded (${result.lod}): ${result.url}`)
     } catch (err) {
@@ -227,9 +229,8 @@ export class MagSpinFeeder {
 
   private setProceduralMeshesVisible(visible: boolean): void {
     this.proceduralMeshesVisible = visible
-    this._mesh?.setEnabled(visible)
-    this.floorMesh?.setEnabled(visible)
-    for (const ring of this.ringMeshes) ring.setEnabled(visible)
+    this._mesh?.setEnabled(visible && this.gameplayEnabled)
+    this.floorMesh?.setEnabled(visible && this.gameplayEnabled)
   }
 
   disposeInsert(): void {
@@ -246,8 +247,8 @@ export class MagSpinFeeder {
     if (this.proceduralMeshesVisible) {
       this._mesh?.setEnabled(enabled)
       this.floorMesh?.setEnabled(enabled)
-      for (const ring of this.ringMeshes) ring.setEnabled(enabled)
     }
+    for (const ring of this.ringMeshes) ring.setEnabled(enabled)
     if (this.insertContainer) {
       for (const mesh of this.insertContainer.meshes) {
         mesh.setEnabled(enabled)

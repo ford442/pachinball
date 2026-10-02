@@ -33,6 +33,7 @@ function pad4(buf, fill) {
  * @param {{ name: string, geometry: {positions:number[],normals:number[],indices:number[]}, material: string }[]} model.nodes
  * @param {Record<string, { baseColor: number[], metallic?: number, roughness?: number,
  *   emissive?: number[], emissiveStrength?: number, doubleSided?: boolean }>} model.materials
+ *   A baseColor alpha below 1 makes the material alpha-blended.
  * @param {string} [model.generator]
  * @returns {Buffer}
  */
@@ -58,6 +59,7 @@ export function writeGlb({ nodes, materials, generator = 'pachinball scripts/lib
         usesEmissiveStrength = true
       }
     }
+    if (m.baseColor.length === 4 && m.baseColor[3] < 1) mat.alphaMode = 'BLEND'
     if (m.doubleSided) mat.doubleSided = true
     return mat
   })

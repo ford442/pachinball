@@ -86,7 +86,13 @@ export async function loadInsertGltfForPreset(
 }
 
 /**
- * Parent insert meshes under a playfield anchor and disable procedural pick.
+ * Place a loaded insert at its playfield anchor and make it unpickable.
+ *
+ * The glTF loader parents every file under `__root__`, whose rotation and
+ * negative Z scale convert glTF's right-handed frame to Babylon's. Moving that
+ * root keeps the conversion and every authored node transform; detaching the
+ * meshes from it (the old behaviour) left inserts mirrored on X and wound
+ * inside-out. Files without a root fall back to placing each mesh.
  */
 export function attachInsertMeshes(
   meshes: AbstractMesh[],
@@ -94,6 +100,13 @@ export function attachInsertMeshes(
 ): void {
   for (const mesh of meshes) {
     mesh.isPickable = false
+  }
+  const root = meshes.find((m) => m.name === '__root__' && !m.parent)
+  if (root) {
+    root.position.set(anchor.x, anchor.y, anchor.z)
+    return
+  }
+  for (const mesh of meshes) {
     mesh.parent = null
     mesh.position.set(anchor.x, anchor.y, anchor.z)
   }
