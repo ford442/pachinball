@@ -16,19 +16,30 @@ import type { Scene } from '@babylonjs/core/scene'
 import { DisplayState, type DisplayConfig } from './display-types'
 import { DISPLAY_LAYER_Z } from './display-layer-depth'
 
+export interface VideoLoadOptions {
+  /** First frame decoded and bound to the plane. */
+  onReady?: () => void
+  /** Load error or timeout; the plane is kept for later loads. */
+  onError?: () => void
+}
+
 export class DisplayVideoLayer {
   private scene: Scene
   private videoTexture: VideoTexture | null = null
   private videoElement: HTMLVideoElement | null = null
   private loaded = false
   private mesh: Mesh | null = null
+  private material: StandardMaterial | null = null
+  private loadToken = 0
+  private loadTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly loadTimeoutMs: number
 
   constructor(
     scene: Scene,
-     
-    _config: DisplayConfig
+    config: DisplayConfig
   ) {
     this.scene = scene
+    this.loadTimeoutMs = config.videoSettings?.loadTimeout ?? 5000
   }
 
   createLayer(parent: TransformNode, config: DisplayConfig): void {
@@ -43,64 +54,70 @@ export class DisplayVideoLayer {
   }
 
   /**
-   * Load a video from URL
-   * NULL FIX: Properly handles cleanup before loading new video
+   * Load a video from URL. A failed or timed-out load releases only the video
+   * resources — the plane stays so the next load can bind to it. Callbacks fire
+   * only for the most recent load.
    */
-  loadVideo(url: string): void {
-    // NULL FIX: Clean up any existing video first
+  loadVideo(url: string, options: VideoLoadOptions = {}): void {
     this.disposeVideo()
+    const token = ++this.loadToken
 
     try {
-      this.videoElement = document.createElement('video')
-      this.videoElement.src = url
-      this.videoElement.loop = true
-      this.videoElement.muted = true
-      this.videoElement.playsInline = true
-      this.videoElement.crossOrigin = 'anonymous'
-      this.videoElement.preload = 'auto'
-      this.videoElement.style.display = 'none'
-      document.body.appendChild(this.videoElement)
+      const video = document.createElement('video')
+      this.videoElement = video
+      video.src = url
+      video.loop = true
+      video.muted = true
+      video.playsInline = true
+      video.crossOrigin = 'anonymous'
+      video.preload = 'auto'
+      video.style.display = 'none'
+      document.body.appendChild(video)
 
-      // Event handlers
-      this.videoElement.onloadeddata = () => {
+      video.onloadeddata = () => {
+        if (token !== this.loadToken) return
+        this.clearLoadTimer()
         this.loaded = true
         this.videoTexture = new VideoTexture(
           'displayVideo',
-          this.videoElement!,
+          video,
           this.scene,
           true,
           true,
           Texture.TRILINEAR_SAMPLINGMODE,
           { autoPlay: false, autoUpdateTexture: true }
         )
-        this.videoElement?.play().catch(() => {
+        video.play().catch(() => {
           console.warn('[DisplayVideo] Autoplay blocked')
         })
 
         if (this.mesh) {
-          const mat = new StandardMaterial('videoMat', this.scene)
-          mat.diffuseTexture = this.videoTexture
-          mat.emissiveColor = Color3.White()
-          mat.disableLighting = true
-          this.mesh.material = mat
+          if (!this.material) {
+            this.material = new StandardMaterial('videoMat', this.scene)
+            this.material.emissiveColor = Color3.White()
+            this.material.disableLighting = true
+          }
+          this.material.diffuseTexture = this.videoTexture
+          this.mesh.material = this.material
         }
+        options.onReady?.()
       }
 
-      this.videoElement.onerror = () => {
-        console.warn('[DisplayVideo] Failed to load:', url)
-        this.dispose()
+      const fail = (reason: string) => {
+        if (token !== this.loadToken) return
+        console.warn(`[DisplayVideo] ${reason}:`, url)
+        this.disposeVideo()
+        options.onError?.()
       }
 
-      // Timeout fallback
-      setTimeout(() => {
-        if (!this.loaded && this.videoElement) {
-          console.warn('[DisplayVideo] Load timeout')
-          this.dispose()
-        }
-      }, 5000)
+      video.onerror = () => fail('Failed to load')
+      this.loadTimer = setTimeout(() => {
+        if (!this.loaded) fail('Load timeout')
+      }, this.loadTimeoutMs)
     } catch (err) {
       console.warn('[DisplayVideo] Error creating video:', err)
-      this.dispose()
+      this.disposeVideo()
+      options.onError?.()
     }
   }
 
@@ -146,7 +163,16 @@ export class DisplayVideoLayer {
    * NULL FIX - Safe disposal of video resources only
    * Preserves the display mesh for layer reuse
    */
+  private clearLoadTimer(): void {
+    if (this.loadTimer !== null) {
+      clearTimeout(this.loadTimer)
+      this.loadTimer = null
+    }
+  }
+
   private disposeVideo(): void {
+    this.loadToken++
+    this.clearLoadTimer()
     try {
       if (this.videoElement) {
         this.videoElement.pause?.()
@@ -159,6 +185,9 @@ export class DisplayVideoLayer {
         }
       }
       this.videoTexture?.dispose()
+      if (this.material) {
+        this.material.diffuseTexture = null
+      }
       // Clear mesh material so it doesn't reference disposed texture
       if (this.mesh) {
         this.mesh.material = null
@@ -179,13 +208,12 @@ export class DisplayVideoLayer {
   dispose(): void {
     this.disposeVideo()
     try {
-      if (this.mesh) {
-        this.mesh.material?.dispose()
-        this.mesh.dispose()
-      }
+      this.material?.dispose()
+      this.mesh?.dispose()
     } catch (err) {
       console.warn('[DisplayVideo] Error during cleanup:', err)
     } finally {
+      this.material = null
       this.mesh = null
     }
   }

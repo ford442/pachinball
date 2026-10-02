@@ -69,10 +69,19 @@ export interface StateMediaConfig {
   opacity?: number;
 
   /**
-   * Optional per-state character / physical-drum take (video or poster image).
-   * When unset or load fails, the LCD overlay emoji walk-by remains the fallback.
+   * Optional per-state character take: a poster image (alpha PNG/WebP).
+   * The LCD overlay emoji walk-by is suppressed only once the poster has
+   * loaded; unset or a failed load keeps the walk-by as the fallback.
+   * A legacy `.webm`/`.mp4` value is treated as a loop with no poster.
    */
   characterLayer?: string;
+
+  /**
+   * Optional looping video for the character take (`.webm`). Plays over the
+   * poster only when motion is allowed (not reduced-motion, not LOW tier, not
+   * photosensitive FEVER/JACKPOT); otherwise the poster stays as a static frame.
+   */
+  characterLoop?: string;
   
   /**
    * Custom shader parameters for this state
@@ -257,6 +266,7 @@ export function adaptLegacyConfig(legacyConfig: {
   reachImagePath?: string;
   adventureImagePath?: string;
   idleCharacterPath?: string;
+  idleCharacterLoopPath?: string;
   reachCharacterPath?: string;
   feverCharacterPath?: string;
   jackpotCharacterPath?: string;
@@ -277,6 +287,7 @@ export function adaptLegacyConfig(legacyConfig: {
       videoPath: legacyConfig.attractVideoPath || '',
       imagePath: legacyConfig.attractImagePath || '',
       characterLayer: legacyConfig.idleCharacterPath || '',
+      characterLoop: legacyConfig.idleCharacterLoopPath || '',
       showShaderBackground: true,
       showReels: !legacyConfig.videoReplacesReels,
       opacity: legacyConfig.imageOpacity ?? 0.85,
@@ -286,6 +297,7 @@ export function adaptLegacyConfig(legacyConfig: {
         videoPath: legacyConfig.reachVideoPath || '',
         imagePath: legacyConfig.reachImagePath || '',
         characterLayer: legacyConfig.reachCharacterPath || '',
+        characterLoop: '',
         showShaderBackground: true,
         showReels: true,
         opacity: 0.95,
@@ -295,6 +307,7 @@ export function adaptLegacyConfig(legacyConfig: {
         videoPath: legacyConfig.feverVideoPath || '',
         imagePath: legacyConfig.feverImagePath || '',
         characterLayer: legacyConfig.feverCharacterPath || '',
+        characterLoop: '',
         showShaderBackground: true,
         showReels: true,
         opacity: 0.95,
@@ -304,12 +317,14 @@ export function adaptLegacyConfig(legacyConfig: {
         videoPath: legacyConfig.jackpotVideoPath || '',
         imagePath: legacyConfig.jackpotImagePath || '',
         characterLayer: legacyConfig.jackpotCharacterPath || '',
+        characterLoop: '',
         showShaderBackground: true,
         showReels: false,
         opacity: 1.0,
         shaderParams: { speed: 20.0, color: '#ff00ff' },
       },
       [DisplayState.ADVENTURE]: {
+        characterLoop: '',
         videoPath: legacyConfig.adventureVideoPath || '',
         imagePath: legacyConfig.adventureImagePath || '',
         showShaderBackground: true,
@@ -318,11 +333,13 @@ export function adaptLegacyConfig(legacyConfig: {
         shaderParams: { speed: 1.0, color: '#00aa00' },
       },
       [DisplayState.PORTAL_OPEN]: {
+        characterLoop: '',
         showShaderBackground: true,
         showReels: false,
         shaderParams: { speed: 18.0, color: '#00d9ff' },
       },
       [DisplayState.ESCAPE]: {
+        characterLoop: '',
         showShaderBackground: true,
         showReels: false,
         shaderParams: { speed: 10.0, color: '#ff4400' },

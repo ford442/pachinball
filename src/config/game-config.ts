@@ -215,6 +215,10 @@ export const GameConfig = {
     get idleCharacterPath(): string {
       return resolveBackboxAssetPath('idle', 'png', 'nexus')
     },
+    /** Idle character loop; IDLE hides the reels, so an opaque loop is safe there. */
+    get idleCharacterLoopPath(): string {
+      return resolveBackboxAssetPath('idle', 'webm', 'nexus')
+    },
     get reachCharacterPath(): string {
       return resolveBackboxAssetPath('reach', 'png', 'nexus')
     },

@@ -1,6 +1,7 @@
 /**
  * PLAN.md §1 layer depth constants for the backbox display stack.
- * Values are local Z offsets within the backbox root (camera faces -Z).
+ * Values are local Z offsets within the backbox root; larger is nearer the
+ * viewer (the root is turned π about Y to face the cabinet camera).
  *
  * Back → Front:
  *   PHYSICAL  — mechanical drums / static art (Layer 1)

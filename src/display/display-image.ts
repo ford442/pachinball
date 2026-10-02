@@ -11,14 +11,24 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import type { Scene } from '@babylonjs/core/scene'
-import type { DisplayConfig, ImageBlendMode } from './display-types'
+import type { DisplayConfig } from './display-types'
 import { DISPLAY_LAYER_Z } from './display-layer-depth'
+
+export interface ImageLoadOptions {
+  opacity?: number
+  /** Use the image's alpha channel (character posters). */
+  hasAlpha?: boolean
+  onLoad?: () => void
+  onError?: () => void
+}
 
 export class DisplayImageLayer {
   private scene: Scene
   private mesh: Mesh | null = null
   private material: StandardMaterial | null = null
   private texture: Texture | null = null
+  private loadToken = 0
+  private tint: Color3 | null = null
 
   constructor(
     scene: Scene,
@@ -46,7 +56,13 @@ export class DisplayImageLayer {
     }
   }
 
-  loadImage(path: string, opacity?: number, blendMode?: ImageBlendMode): void {
+  /**
+   * Load an image onto the layer. Returns a load token; `onLoad` / `onError`
+   * fire only for the most recent load, so a slow stale texture can never
+   * report success for a newer state.
+   */
+  loadImage(path: string, options: ImageLoadOptions = {}): number {
+    const token = ++this.loadToken
     // Clean up existing resources first
     if (this.texture) {
       this.texture.dispose()
@@ -57,22 +73,45 @@ export class DisplayImageLayer {
       this.material = null
     }
 
-    this.texture = new Texture(path, this.scene)
+    this.texture = new Texture(path, this.scene, {
+      onLoad: () => {
+        if (token === this.loadToken) options.onLoad?.()
+      },
+      onError: (message?: string) => {
+        if (token !== this.loadToken) return
+        console.warn('[DisplayImage] Failed to load:', path, message ?? '')
+        options.onError?.()
+      },
+    })
 
     const mat = new StandardMaterial('imageMat', this.scene)
     mat.diffuseTexture = this.texture
-    mat.alpha = opacity ?? 1.0
+    mat.alpha = options.opacity ?? 1.0
 
-    if (blendMode === 'additive') {
-      mat.emissiveColor = Color3.White()
+    if (options.hasAlpha) {
+      // Composite the poster's own alpha over the reels/video behind it.
+      this.texture.hasAlpha = true
+      mat.useAlphaFromDiffuseTexture = true
     }
 
+    // Unlit: with lighting disabled only emissive reaches the texture, so the
+    // emissive colour is the image's brightness (and its tint).
     mat.disableLighting = true
+    mat.emissiveColor = this.tint ? this.tint.clone() : Color3.White()
 
     this.material = mat
 
     if (this.mesh) {
       this.mesh.material = mat
+    }
+    return token
+  }
+
+  /** Multiply tint for the current and future images; null restores white. */
+  setTint(hex: string | null): void {
+    this.tint = hex ? Color3.FromHexString(hex) : null
+    if (this.material) {
+      this.material.emissiveColor = this.tint ? this.tint.clone() : Color3.White()
     }
   }
 
@@ -89,6 +128,7 @@ export class DisplayImageLayer {
   }
 
   dispose(): void {
+    this.loadToken++
     try {
       this.texture?.dispose()
       this.material?.dispose()

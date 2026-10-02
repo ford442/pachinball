@@ -100,6 +100,15 @@ export class DisplayLcdOverlayLayer {
     }
   }
 
+  /** Walk-by state for e2e checks: `eligible` means the emoji fallback may spawn. */
+  getWalkByDebug(): { characterTakeActive: boolean; active: boolean; eligible: boolean } {
+    return {
+      characterTakeActive: this.characterTakeActive,
+      active: this.walkBy?.active ?? false,
+      eligible: !this.characterTakeActive && !this.reducedMotion && this.qualityTier !== QualityTier.LOW,
+    }
+  }
+
   setDisplayOverlay(overlay: DisplayOverlay): void {
     this.displayOverlay = overlay
   }

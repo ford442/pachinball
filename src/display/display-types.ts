@@ -10,10 +10,15 @@ import type { StandardMaterial } from '@babylonjs/core/Materials/standardMateria
 import type { Texture } from '@babylonjs/core/Materials/Textures/texture'
 import type { VideoTexture } from '@babylonjs/core/Materials/Textures/videoTexture'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
-import type { DisplayState } from '../game-elements/display-config'
+import type { DisplayState, StateMediaConfig } from '../game-elements/display-config'
 
 // Re-export canonical definitions from game-elements/display-config
-export { DisplayMode, DisplayState, type DisplayConfig } from '../game-elements/display-config'
+export {
+  DisplayMode,
+  DisplayState,
+  type DisplayConfig,
+  type StateMediaConfig,
+} from '../game-elements/display-config'
 
 /** A display layer with its associated resources */
 export interface DisplayLayer {
@@ -35,29 +40,6 @@ export interface SlotReel {
 
 /** Blend modes for image layers */
 export type ImageBlendMode = 'normal' | 'additive' | 'multiply'
-
-/** Media configuration for a specific display state */
-export interface StateMediaConfig {
-  /** Path to video file (relative to public/) */
-  videoPath?: string
-  /** Path to image file (relative to public/) */
-  imagePath?: string
-  /** If true, shader grid is visible behind media */
-  showShaderBackground?: boolean
-  /** If true, slot reels are visible behind media */
-  showReels?: boolean
-  /** Opacity of the media layer (0.0 - 1.0) */
-  opacity?: number
-  /** Optional character / drum take (video or poster). LCD walk-by if missing. */
-  characterLayer?: string
-  /** Custom shader parameters for this state */
-  shaderParams?: {
-    /** Grid animation speed multiplier */
-    speed?: number
-    /** Grid color as hex string */
-    color?: string
-  }
-}
 
 /** Media layer state tracking */
 export interface MediaLayerState {

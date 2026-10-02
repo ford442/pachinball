@@ -143,7 +143,8 @@ vi.mock('../src/display/display-image', () => ({
     updateParallax = vi.fn()
     setVisible = vi.fn()
     setOpacity = vi.fn()
-    loadImage = vi.fn()
+    loadImage = vi.fn(() => 1)
+    setTint = vi.fn()
     dispose = vi.fn()
   },
 }))
@@ -171,6 +172,8 @@ vi.mock('../src/display/display-lcd-overlay', () => ({
     setTemporaryText = vi.fn()
     setDrainMode = vi.fn()
     setBlend = vi.fn()
+    setCharacterTakeActive = vi.fn()
+    getWalkByDebug = vi.fn(() => ({ characterTakeActive: false, active: false, eligible: true }))
     onStateChange = vi.fn()
     dispose = vi.fn()
   },

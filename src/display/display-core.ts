@@ -15,6 +15,7 @@ import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import {
   DisplayState,
   type DisplayConfig,
+  type StateMediaConfig,
   DEFAULT_DISPLAY_CONFIG,
   getStateConfig,
 } from '../game-elements/display-config'
@@ -28,6 +29,7 @@ import { DisplayReelsLayer, type ReelsRenderTelemetrySnapshot } from './display-
 import { SlotMachine } from './slot-machine'
 import { DisplayVideoLayer } from './display-video'
 import { DisplayImageLayer } from './display-image'
+import { planCharacterMedia, type CharacterTakeStatus } from './display-character'
 import { DisplayPhysicalLayer } from './display-physical'
 import { DisplayLcdOverlayLayer } from './display-lcd-overlay'
 import { DisplayStateMachine } from './display-state-machine'
@@ -63,6 +65,8 @@ export class DisplaySystem {
 
   // State
   private currentState: DisplayState = DisplayState.IDLE
+  private characterGeneration = 0
+  private characterStatus: CharacterTakeStatus = { poster: 'none', loop: 'none', takeActive: false }
   private jackpotPhase = 0
   private globalTime = 0
 
@@ -130,12 +134,19 @@ export class DisplaySystem {
   }
 
   setAccessibility(accessibility: AccessibilityConfig): void {
+    const motionGateChanged =
+      accessibility.reducedMotion !== this.accessibility.reducedMotion ||
+      (accessibility.flashFrequencyMax <= 1) !== (this.accessibility.flashFrequencyMax <= 1)
     this.accessibility = accessibility
     this.shaderLayer.setAccessibilityScanlineFactor?.(accessibility.scanlineIntensity)
     this.lcdOverlayLayer.setAccessibility(
       accessibility.reducedMotion,
       accessibility.flashFrequencyMax <= 1
     )
+    // A running character loop must drop to its static poster immediately.
+    if (motionGateChanged && this.characterStatus.loop !== 'none') {
+      this.applyStateMedia(getStateConfig(this.config, this.currentState), this.currentState)
+    }
   }
 
   /**
@@ -149,6 +160,12 @@ export class DisplaySystem {
     // Create root transform node for the backbox hierarchy
     const backboxRoot = new TransformNode('backboxRoot', this.scene)
     backboxRoot.position = position.clone()
+    // Layers are authored with local +Z toward the viewer (DISPLAY_LAYER_Z:
+    // larger = nearer) and planes rotated π to face local +Z. The cabinet
+    // camera sits at world −Z looking +Z, so the root turns the stack round to
+    // face it; without this the planes were back-face culled and the
+    // double-sided LCD read mirrored.
+    backboxRoot.rotation.y = Math.PI
 
     // Create the main display plane (kept for visual reference)
     const displayPlane = MeshBuilder.CreatePlane(
@@ -162,6 +179,8 @@ export class DisplaySystem {
     displayPlane.parent = backboxRoot
     displayPlane.position.z += 0.5
     displayPlane.rotation.y = Math.PI
+    // Reference only: it sits nearest the viewer and would cover the stack.
+    displayPlane.isVisible = false
 
     // Attach layer meshes to the backbox root (back → front)
     this.physicalLayer.createLayer(backboxRoot, this.config)
@@ -183,6 +202,9 @@ export class DisplaySystem {
     }
     // Apply the current state immediately so the glow colour is correct from the start.
     this.borderGlow.onDisplaySet(this.currentState)
+    // The boot state never passes through setDisplayState (IDLE → IDLE is a
+    // no-op), so its media and character take are applied here.
+    this.applyStateVisuals(this.currentState)
   }
 
   /** Wire an EffectsSystem for the fresnel rim glow during FEVER. */
@@ -303,42 +325,7 @@ export class DisplaySystem {
     console.log(`[Display] State change: ${this.currentState} -> ${state}`)
     this.currentState = state
 
-    const media = getStateConfig(this.config, state)
-
-    this.shaderLayer.setBackgroundVisible(media.showShaderBackground ?? true)
-    this.reelsLayer.setVisible(media.showReels ?? true)
-    this.physicalLayer.setVisible(media.showShaderBackground ?? true)
-
-    if (media.shaderParams) {
-      this.shaderLayer.setShaderParams(media.shaderParams)
-    }
-
-    const character = media.characterLayer?.trim() ?? ''
-    const characterIsVideo = /\.(webm|mp4)(\?|$)/i.test(character)
-    const characterIsImage = /\.(png|jpe?g|webp)(\?|$)/i.test(character)
-    const videoUrl = characterIsVideo ? character : (media.videoPath || '')
-    const imageUrl = characterIsImage ? character : (media.imagePath || '')
-
-    if (videoUrl) {
-      this.videoLayer.loadVideo(videoUrl)
-      this.videoLayer.setVisible(true)
-    } else {
-      this.videoLayer.setVisible(false)
-    }
-
-    if (imageUrl) {
-      this.imageLayer.loadImage(imageUrl, media.opacity ?? 1.0)
-      this.imageLayer.setVisible(true)
-    } else {
-      this.imageLayer.setVisible(false)
-    }
-
-    if (!videoUrl && !imageUrl) {
-      this.shaderLayer.setBackgroundVisible(true)
-      this.reelsLayer.setVisible(true)
-    }
-
-    this.lcdOverlayLayer.setCharacterTakeActive(character.length > 0)
+    this.applyStateVisuals(state)
 
     this.physicalLayer.onStateChange(state)
     this.shaderLayer.onStateChange(state)
@@ -349,6 +336,126 @@ export class DisplaySystem {
 
     const lightingMode = this.lightingModeForState(state)
     this._effectsSystem?.setLightingMode(lightingMode, lightingMode === 'reach' ? 2.5 : lightingMode === 'fever' ? 4.0 : 0)
+  }
+
+  /** Layer visibility, shader params and media for a display state. */
+  private applyStateVisuals(state: DisplayState): void {
+    const media = getStateConfig(this.config, state)
+
+    this.shaderLayer.setBackgroundVisible(media.showShaderBackground ?? true)
+    this.reelsLayer.setVisible(media.showReels ?? true)
+    this.physicalLayer.setVisible(media.showShaderBackground ?? true)
+
+    if (media.shaderParams) {
+      this.shaderLayer.setShaderParams(media.shaderParams)
+    }
+
+    this.applyStateMedia(media, state)
+  }
+
+  /**
+   * Route a state's media onto the video and image planes. A character poster
+   * composites (alpha) in front of the reels; the emoji walk-by is suppressed
+   * only once the poster has actually loaded or the loop is playing.
+   */
+  private applyStateMedia(media: StateMediaConfig, state: DisplayState): void {
+    const generation = ++this.characterGeneration
+    const current = () => generation === this.characterGeneration
+    const plan = planCharacterMedia(
+      media,
+      state,
+      { reducedMotion: this.accessibility.reducedMotion, photosensitive: this.accessibility.flashFrequencyMax <= 1 },
+      this.qualityTier,
+    )
+    const status: CharacterTakeStatus = {
+      poster: plan.posterUrl ? 'loading' : 'none',
+      loop: plan.loopUrl ? 'loading' : plan.loopSkippedReason ? 'skipped' : 'none',
+      takeActive: false,
+    }
+    this.characterStatus = status
+    this.lcdOverlayLayer.setCharacterTakeActive(false)
+
+    const refreshTake = () => {
+      status.takeActive = status.poster === 'loaded' || status.loop === 'playing'
+      this.lcdOverlayLayer.setCharacterTakeActive(status.takeActive)
+    }
+    const loadStateImage = () => {
+      if (plan.fallbackImageUrl) {
+        this.imageLayer.loadImage(plan.fallbackImageUrl, { opacity: media.opacity ?? 1.0 })
+        this.imageLayer.setVisible(true)
+      } else {
+        this.imageLayer.setVisible(false)
+      }
+    }
+    const loadStateVideo = () => {
+      if (plan.fallbackVideoUrl) {
+        this.videoLayer.loadVideo(plan.fallbackVideoUrl)
+        this.videoLayer.setVisible(true)
+      } else {
+        this.videoLayer.setVisible(false)
+      }
+    }
+
+    if (plan.loopUrl) {
+      this.videoLayer.loadVideo(plan.loopUrl, {
+        onReady: () => {
+          if (!current()) return
+          status.loop = 'playing'
+          // The loop carries the whole take; the poster plane would cover it.
+          this.imageLayer.setVisible(false)
+          refreshTake()
+        },
+        onError: () => {
+          if (!current()) return
+          status.loop = 'failed'
+          if (status.poster !== 'failed' && status.poster !== 'none') this.imageLayer.setVisible(true)
+          if (!plan.suppressStateVideo || status.poster === 'failed') loadStateVideo()
+          refreshTake()
+        },
+      })
+      this.videoLayer.setVisible(true)
+    } else if (plan.suppressStateVideo) {
+      this.videoLayer.setVisible(false)
+    } else {
+      loadStateVideo()
+    }
+
+    if (plan.posterUrl) {
+      this.imageLayer.loadImage(plan.posterUrl, {
+        hasAlpha: true,
+        onLoad: () => {
+          if (!current()) return
+          status.poster = 'loaded'
+          refreshTake()
+        },
+        onError: () => {
+          if (!current()) return
+          status.poster = 'failed'
+          refreshTake()
+          // Restore the state's ordinary media; the walk-by is the character fallback.
+          loadStateImage()
+          if (plan.suppressStateVideo && status.loop !== 'playing') loadStateVideo()
+        },
+      })
+      this.imageLayer.setVisible(status.loop !== 'playing')
+    } else {
+      loadStateImage()
+    }
+
+    if (!plan.posterUrl && !plan.loopUrl && !plan.fallbackImageUrl && !plan.fallbackVideoUrl) {
+      this.shaderLayer.setBackgroundVisible(true)
+      this.reelsLayer.setVisible(true)
+    }
+  }
+
+  /** Character take state for the current display state (debug / e2e). */
+  getCharacterTakeStatus(): CharacterTakeStatus {
+    return { ...this.characterStatus }
+  }
+
+  /** LCD emoji walk-by state (debug / e2e). */
+  getWalkByDebug(): ReturnType<DisplayLcdOverlayLayer['getWalkByDebug']> {
+    return this.lcdOverlayLayer.getWalkByDebug()
   }
 
   private lightingModeForState(state: DisplayState): 'normal' | 'reach' | 'fever' | 'hit' {
