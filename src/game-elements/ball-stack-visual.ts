@@ -54,7 +54,7 @@ export class BallStackVisual {
       `stackBall_${type}_${Date.now()}`,
       { diameter: 1, segments: 16 },
       this.scene
-    ) as Mesh
+    )
 
     // Apply material based on type
     ball.material = this.getMaterialForType(type)

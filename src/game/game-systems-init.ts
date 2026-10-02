@@ -283,7 +283,7 @@ export class GameSystemsInitializer {
           // it again here — a double rebuild mid-frame corrupts handle ordering.
           onTrackAdvanced: (nextTrackId) => {
             if (nextTrackId) {
-              this.game.slotAdventure?.switchToTrack(nextTrackId)
+              void this.game.slotAdventure?.switchToTrack(nextTrackId)
             }
           },
         },

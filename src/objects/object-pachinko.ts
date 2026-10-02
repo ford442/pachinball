@@ -94,20 +94,20 @@ export class PachinkoBuilder {
         diameterBottom: baseRadius * 2,
         height: pegHeight,
         tessellation: tess,
-      }, this.scene) as Mesh
+      }, this.scene)
 
       const cap = MeshBuilder.CreateSphere(`pinCapT_${suffix}`, {
         diameter: topRadius * 2.2,
         slice: 0.5,
         segments: capSeg,
-      }, this.scene) as Mesh
+      }, this.scene)
       cap.position.y = pegHeight / 2 - 0.02
 
       const bevel = MeshBuilder.CreateTorus(`pinBevelT_${suffix}`, {
         diameter: baseRadius * 2.3,
         thickness: 0.025,
         tessellation: bevelTess,
-      }, this.scene) as Mesh
+      }, this.scene)
       bevel.position.y = -pegHeight / 2 + 0.03
       bevel.rotation.x = Math.PI / 2
 

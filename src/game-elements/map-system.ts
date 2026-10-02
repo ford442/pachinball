@@ -180,7 +180,7 @@ export class MapSystem {
 
   private resetToHardcodedMaps(): void {
     this.maps.clear()
-    const hardcoded: TableMapType[] = Object.keys(TABLE_MAPS) as TableMapType[]
+    const hardcoded: TableMapType[] = Object.keys(TABLE_MAPS)
     for (const id of hardcoded) {
       const config = TABLE_MAPS[id]
       this.maps.set(id, {
@@ -294,7 +294,7 @@ export class MapSystem {
   }
 
   private isValidBackgroundPattern(
-    pattern: TableMapConfig['backgroundPattern'] | string | undefined
+    pattern: string | undefined
   ): pattern is TableMapConfig['backgroundPattern'] {
     return pattern === 'hex'
       || pattern === 'grid'

@@ -150,7 +150,7 @@ export class GameScenario {
         this.host.ballManager.updateBallMaterialColor(scenario.ballTrailColor)
       }
     }
-    this.host.soundSystem.playMapMusic(zone.musicTrack)
+    void this.host.soundSystem.playMapMusic(zone.musicTrack)
     if (isMajor) {
       this.host.effects?.addCameraShake(0.5)
       this.host.effects?.triggerScreenPulse(zone.mapConfig.baseColor, 0.8, 500)

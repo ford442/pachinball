@@ -15,6 +15,10 @@ import { applyPlungerChargeCurve, getPhysicsTuningValue } from '../game-elements
 import type { AccessibilityConfig } from '../game-elements'
 import { emissive, PALETTE, INTENSITY } from '../game-elements/visual-language'
 import { simClockMs } from '../core/sim-clock'
+import type { Color3 } from '@babylonjs/core/Maths/math.color'
+
+/** The one property these effects touch; Babylon types `Mesh.material` as the base Material. */
+type EmissiveMaterial = { emissiveColor?: Color3 }
 
 export interface InputActionsHost {
   readonly physics: PhysicsSystem
@@ -249,8 +253,7 @@ export class GameInputActions {
       plungerKnob.position.z = GameInputActions.KNOB_BASE_Z - pullback
 
       // Emissive glow on the rod gives visual charge-level feedback (cyan → bright at full charge)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mat = shooterRod.material as any
+      const mat = shooterRod.material as EmissiveMaterial | null
       if (mat && mat.emissiveColor) {
         mat.emissiveColor.copyFrom(emissive(PALETTE.CYAN, chargeLevel * INTENSITY.ACTIVE))
       }
@@ -332,8 +335,7 @@ export class GameInputActions {
         this.plungerLaunchState.phase = 'idle'
         // Snap to exact rest and clear emissive glow
         setPositions(restZ)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mat = shooterRod?.material as any
+        const mat = shooterRod?.material as EmissiveMaterial | null
         if (mat && mat.emissiveColor) {
           mat.emissiveColor.copyFrom(emissive(PALETTE.CYAN, 0))
         }
@@ -365,9 +367,7 @@ export class GameInputActions {
         { x: GameInputActions.PLUNGER_X, y: GameInputActions.PLUNGER_Y, z: restZ }
       )
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mat = shooterRod?.material as any
+    const mat = shooterRod?.material as EmissiveMaterial | null
     if (mat && mat.emissiveColor) {
       mat.emissiveColor.copyFrom(emissive(PALETTE.CYAN, 0))
     }

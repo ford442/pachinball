@@ -217,7 +217,7 @@ export function showLoadingState(
     state.loadingOverlay.style.transition = ''
 
     const labelEl = state.loadingOverlay.querySelector('.loading-label')
-    const fillEl = state.loadingOverlay.querySelector('.loading-bar-fill') as HTMLElement | null
+    const fillEl = state.loadingOverlay.querySelector<HTMLElement>('.loading-bar-fill')
     const pctEl = state.loadingOverlay.querySelector('.loading-pct')
 
     if (labelEl) {

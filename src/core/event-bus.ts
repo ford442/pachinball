@@ -391,15 +391,18 @@ export type PachinballEventHandler<K extends PachinballEventName> = (
   payload: PachinballEventMap[K]
 ) => void
 
-/** One handler set per event, each typed to that event's payload. */
-type ListenerBuckets = { [K in PachinballEventName]?: Set<PachinballEventHandler<K>> }
+/**
+ * Handlers are stored with a `never` parameter: any `(payload: T) => void` is assignable to
+ * it, so on()/off() need no casts, and emit() is the single place that supplies a payload.
+ */
+type StoredHandler = (payload: never) => void
 
 /**
  * Lightweight typed EventBus.
  * No external dependencies.
  */
 export class EventBus {
-  private listeners: ListenerBuckets = {}
+  private listeners = new Map<PachinballEventName, Set<StoredHandler>>()
 
   /**
    * Subscribe to an event.
@@ -409,10 +412,10 @@ export class EventBus {
     event: K,
     handler: PachinballEventHandler<K>
   ): () => void {
-    let bucket = this.listeners[event] as Set<PachinballEventHandler<K>> | undefined
+    let bucket = this.listeners.get(event)
     if (!bucket) {
       bucket = new Set()
-      this.listeners[event] = bucket as ListenerBuckets[K]
+      this.listeners.set(event, bucket)
     }
     bucket.add(handler)
 
@@ -428,8 +431,7 @@ export class EventBus {
     event: K,
     handler: PachinballEventHandler<K>
   ): void {
-    const bucket = this.listeners[event] as Set<PachinballEventHandler<K>> | undefined
-    bucket?.delete(handler)
+    this.listeners.get(event)?.delete(handler)
   }
 
   /**
@@ -441,10 +443,10 @@ export class EventBus {
       ? []
       : [payload: PachinballEventMap[K]]
   ): void {
-    const handlers = this.listeners[event] as Set<PachinballEventHandler<K>> | undefined
+    const handlers = this.listeners.get(event)
     if (!handlers) return
 
-    const payload = args[0] as PachinballEventMap[K]
+    const payload = args[0] as never
     // Clone the set so that a handler calling off() during emit doesn't break iteration
     for (const handler of Array.from(handlers)) {
       handler(payload)
@@ -456,9 +458,9 @@ export class EventBus {
    */
   clear(event?: PachinballEventName): void {
     if (event) {
-      delete this.listeners[event]
+      this.listeners.delete(event)
     } else {
-      this.listeners = {}
+      this.listeners.clear()
     }
   }
 }

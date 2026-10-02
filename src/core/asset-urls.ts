@@ -13,7 +13,7 @@
 export function resolveAssetUrl(assetPath: string | undefined): string | undefined {
   if (!assetPath) return undefined
   if (/^https?:\/\//i.test(assetPath)) return assetPath
-  const base = (import.meta.env.BASE_URL as string) || '/'
+  const base = (import.meta.env.BASE_URL) || '/'
   const cleanPath = assetPath.startsWith('/') ? assetPath.slice(1) : assetPath
   return `${base}${cleanPath}`
 }

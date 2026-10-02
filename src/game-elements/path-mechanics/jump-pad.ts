@@ -34,7 +34,7 @@ export class JumpPad extends PathMechanic {
     this.createVisuals()
 
     this.isSpawned = true
-    console.log(`[JumpPad] Spawned at ${this.position}`)
+    console.log(`[JumpPad] Spawned at ${this.position.toString()}`)
   }
 
   despawn(): void {

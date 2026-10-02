@@ -390,7 +390,7 @@ export class GameSettingsUI {
     refreshBtn.className = 'map-btn map-refresh'
     refreshBtn.title = 'Refresh Content'
     refreshBtn.textContent = '↻'
-    refreshBtn.addEventListener('click', async () => {
+    const refreshContent = async (): Promise<void> => {
       refreshBtn.classList.add('spinning')
       await Promise.all([
         this.host.mapSystem.refresh(),
@@ -404,7 +404,8 @@ export class GameSettingsUI {
       this.buildMapSelectorUI(selector)
       this.updateMapSelectorUI()
       refreshBtn.classList.remove('spinning')
-    }, { signal: this.host.signal })
+    }
+    refreshBtn.addEventListener('click', () => { void refreshContent() }, { signal: this.host.signal })
     selector.appendChild(refreshBtn)
 
     const addHint = document.createElement('a')

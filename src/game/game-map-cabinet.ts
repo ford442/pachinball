@@ -47,7 +47,7 @@ export class GameMapCabinet {
 
     const musicId = (mapConfig as { musicTrackId?: string }).musicTrackId || this.host.mapManager?.getMapSystem().inferMusicTrackId(mapName) || '1'
     if (musicId) {
-      this.host.soundSystem.playMapMusic(musicId)
+      void this.host.soundSystem.playMapMusic(musicId)
     }
 
     this.host.display?.setStoryText(`MAP: ${mapConfig.name.toUpperCase()}`)

@@ -352,8 +352,9 @@ export class ScoringBridge {
 
     if (wasPrimaryBall) {
       const ballBodies = this.host.ballManager?.getBallBodies() || []
-      if (ballBodies.length > 0) {
-        this.host.ballManager?.setBallBody(ballBodies[0])
+      const nextPrimary = ballBodies[0]
+      if (nextPrimary) {
+        this.host.ballManager?.setBallBody(nextPrimary)
       } else {
         if (this.host.handlePrimaryBallDrain()) {
           // Free-map test mode fully handles the drain by loading the next layout

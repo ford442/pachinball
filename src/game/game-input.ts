@@ -1,3 +1,4 @@
+import { GameState } from '../game-elements/types'
 import { InputHandler, type InputFrame } from '../game-elements/input'
 import type { PhysicsSystem } from '../game-elements/physics'
 import { simClockSteps } from '../core/sim-clock'
@@ -114,7 +115,7 @@ export class GameInputManager {
 
     // Get state from config for state-dependent shortcuts
     const gameState = this.config.getState?.()
-    const isPlaying = gameState === 1 // GameState.PLAYING = 1
+    const isPlaying = gameState === GameState.PLAYING
     const adventureActive = this.config.getAdventureActive?.() ?? false
 
     // Dynamic map switching (Digit2-9 → maps 1-8; Digit0/1 are flippers)

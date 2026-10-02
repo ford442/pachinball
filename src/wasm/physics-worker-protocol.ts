@@ -282,8 +282,9 @@ export function encodeHingeAngleBuffer(
   const buf = new Float32Array(entries.length * HINGE_ANGLE_STRIDE)
   for (let i = 0; i < entries.length; i++) {
     const o = i * HINGE_ANGLE_STRIDE
-    buf[o] = entries[i].id
-    buf[o + 1] = entries[i].angle
+    const entry = entries[i]! // i < entries.length
+    buf[o] = entry.id
+    buf[o + 1] = entry.angle
   }
   return buf.buffer
 }

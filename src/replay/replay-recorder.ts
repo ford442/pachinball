@@ -109,8 +109,8 @@ export function decompressInputFrames(compressed: string): InputFrame[] {
     const parts = chunk.split(':')
     if (parts.length !== 2) continue
 
-    const count = parseInt(parts[0]!, 10)
-    const fields = parts[1]!.split(',')
+    const count = parseInt(parts[0], 10)
+    const fields = parts[1].split(',')
     const values = fields.map(Number)
     if (isNaN(count) || values.length < 3) continue
 

@@ -69,7 +69,7 @@ export function decodeContactBuffer(
   const n = Math.max(0, count | 0)
   for (let i = 0; i < n; i++) {
     const o = i * stride
-    const phaseRaw = data[o + 9] ?? 0
+    const phaseRaw = (data[o + 9] ?? 0) as ContactPhase
     const phase = (phaseRaw === ContactPhase.Stay || phaseRaw === ContactPhase.Exit)
       ? phaseRaw
       : ContactPhase.Enter
@@ -91,7 +91,7 @@ export function decodeContactBuffer(
 export function encodeContactBuffer(contacts: PhysicsContact[]): Float32Array {
   const buf = new Float32Array(contacts.length * CONTACT_STRIDE)
   for (let i = 0; i < contacts.length; i++) {
-    const c = contacts[i]
+    const c = contacts[i]! // i < contacts.length
     const o = i * CONTACT_STRIDE
     buf[o] = c.bodyId1
     buf[o + 1] = c.bodyId2

@@ -295,7 +295,7 @@ export class LCDTableState {
     }
     
     // Register the updated config
-    const tempMapId = `${this._currentMap}_temp` as TableMapType
+    const tempMapId = `${this._currentMap}_temp`
     TABLE_MAPS[tempMapId] = updatedConfig
     
     // Switch to temp map with shorter transition

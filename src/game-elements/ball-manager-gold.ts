@@ -3,7 +3,6 @@ import { Color4 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem'
-import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { PhysicsBody } from '../core/physics-api'
 import { BallType, GameConfig } from '../config'
 import { pulse } from './visual-language'
@@ -194,7 +193,7 @@ export function spawnSmallGoldBallSwarm(host: BallManagerHost, position?: Vector
       diameter: smallRadius * 2,
       segments: 24,
       slice: 1,
-    }, host.scene) as Mesh
+    }, host.scene)
 
     // Use bright gold material with strong emissive
     goldBall.material = host.matLib.getSolidGoldBallMaterial()

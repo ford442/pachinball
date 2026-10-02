@@ -66,7 +66,7 @@ export class LeaderboardSystem {
   setContext(mapId: string, adventureLevel?: string): void {
     this.currentMapId = mapId
     this.currentAdventureLevel = adventureLevel
-    this.refresh(true) // Force refresh on context change
+    void this.refresh(true) // Force refresh on context change
   }
 
   /**
@@ -76,7 +76,7 @@ export class LeaderboardSystem {
     this.stop() // Clear existing timer
     this.consecutiveFailures = 0
     this.isPaused = false
-    this.refresh()
+    void this.refresh()
     this.scheduleNextRefresh()
   }
 
@@ -93,7 +93,7 @@ export class LeaderboardSystem {
     )
 
     this.refreshTimer = this.timers.setTimeout(() => {
-      this.refresh().then(() => {
+      void this.refresh().then(() => {
         this.scheduleNextRefresh()
       })
     }, interval)
@@ -196,7 +196,7 @@ export class LeaderboardSystem {
     }
     
     // Refresh after submission
-    this.refresh(true)
+    void this.refresh(true)
     return result
   }
 
@@ -231,7 +231,7 @@ export class LeaderboardSystem {
       this.overlay.style.display = this.isVisible ? 'block' : 'none'
     }
     if (this.isVisible) {
-      this.refresh()
+      void this.refresh()
     }
   }
 
@@ -243,7 +243,7 @@ export class LeaderboardSystem {
     if (this.overlay) {
       this.overlay.style.display = 'block'
     }
-    this.refresh()
+    void this.refresh()
   }
 
   /**

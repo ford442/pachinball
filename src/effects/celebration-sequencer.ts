@@ -41,7 +41,7 @@ export class CelebrationSequencer {
     if (!this.isPlaying && !this.accumulationTimer) {
       this.accumulationTimer = this.timers.setTimeout(() => {
         this.accumulationTimer = null
-        this.processQueue()
+        void this.processQueue()
       }, 100)
     }
   }
@@ -69,7 +69,7 @@ export class CelebrationSequencer {
     this.isPlaying = false
 
     if (this.queue.length > 0) {
-      this.processQueue()
+      void this.processQueue()
     }
   }
 

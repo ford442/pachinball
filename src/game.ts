@@ -215,7 +215,7 @@ export class Game
         onNudge: (direction) => this.physicsController?.applyNudge(direction),
         onPause: () => this.lifecycle?.togglePause(),
         onReset: () => this.resetBall(),
-        onStart: () => this.lifecycle?.startGame(),
+        onStart: () => { void this.lifecycle?.startGame() },
         onAdventureToggle: () => this.toggleAdventure(),
         onTrackNext: () => this.slotAdventure?.cycleAdventureTrack(1),
         onTrackPrev: () => this.slotAdventure?.cycleAdventureTrack(-1),

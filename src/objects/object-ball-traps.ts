@@ -112,7 +112,7 @@ export class BallTrapBuilder {
       diameter: 1.2 * scale,
       height: 0.4,
       tessellation: this.qualityTier === QualityTier.LOW ? 8 : 16
-    }, this.scene) as Mesh
+    }, this.scene)
 
     // Taper the cylinder for funnel effect via scaling
     trapEntrance.scaling.y = 0.8
@@ -126,7 +126,7 @@ export class BallTrapBuilder {
       trapChamber = MeshBuilder.CreateSphere('trapChamber', {
         diameter: 0.9 * scale,
         segments: this.qualityTier === QualityTier.HIGH ? 16 : 8
-      }, this.scene) as Mesh
+      }, this.scene)
 
       trapChamber.position.y = -0.3 * scale
       trapChamber.parent = trapRoot
@@ -140,7 +140,7 @@ export class BallTrapBuilder {
       width: gateWidth,
       height: gateHeight,
       depth: 0.05
-    }, this.scene) as Mesh
+    }, this.scene)
 
     trapGate.position.z = 0.5 * scale
     trapGate.parent = trapRoot

@@ -7,7 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm run dev        # Start Vite dev server (http://localhost:5173)
 npm run build      # TypeScript check + Vite production build + optional WASM
-npm run lint       # ESLint on all .ts/.tsx files
+npm run lint       # ESLint on all .ts/.tsx files (type-aware for src/, incl. no-floating-promises and import-x/no-cycle)
+npm run check:index-strict  # noUncheckedIndexedAccess ratchet: src/core, src/wasm, src/game/physics must stay clean
 npm run preview    # Preview production build locally
 npm test           # Run Vitest unit tests
 npx playwright test  # Run E2E / visual regression tests
@@ -53,6 +54,16 @@ npx vitest run tests/ball-manager.test.ts
 ### Ball lifecycle
 
 Balls are spawned by `BallManager` according to the weighted distribution in `config.ts`. Collection triggers point callbacks and increments the gold-ball counter. `zone-trigger-system.ts` detects spatial events (bumper hits, drain, special zones) and notifies the game loop.
+
+### Lifecycle conventions
+
+A `Game` must tear down completely (`Game.dispose()` → `disposeGame()` in `src/game/game-disposer.ts`), so a second `Game` in the same page starts clean:
+
+- Listeners on `window` / `document` / canvas take `{ signal: game.signal }` (one `AbortController` per `Game`); hosts that need it declare `signal: AbortSignal`.
+- Timers and animation frames go through a `TimerScope` (`src/core/timers.ts`); the owner's `dispose()` calls `scope.dispose()`. Game-level glue uses `game.timers`.
+- Module singletons need a `reset*` that `disposeGame` calls (lazily loaded ones register theirs in `lazySingletonResets`). Do not reset `AdventureState`: it wipes campaign progress.
+- Pass `this` to host consumers; `Game implements` every `*Host` interface, so no `as unknown as XHost` casts.
+- `tests/lifecycle-dispose.spec.ts` counts listeners over CDP and fails if a Game leaks any.
 
 ### Testing approach
 

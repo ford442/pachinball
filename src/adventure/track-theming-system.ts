@@ -175,7 +175,7 @@ export class TrackThemingSystem {
   private retintAdventureTrackMaterials(profile: TrackThemeProfile): void {
     const materials = this.deps.adventureMode?.getTrackMaterials() ?? []
     for (const mat of materials) {
-      const role = mat.metadata?.trackMaterialRole as TrackMaterialRole | undefined
+      const role = (mat.metadata as { trackMaterialRole?: TrackMaterialRole } | null)?.trackMaterialRole
       if (!role) continue
       const hex = profile.materials[role]
       mat.emissiveColor = Color3.FromHexString(hex)

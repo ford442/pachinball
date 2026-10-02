@@ -70,7 +70,7 @@ export function pachinkoPinFieldSpec(
   }
   // Seeded layouts already respect the keep-outs; filtering again is the
   // safety net that keeps the plunger corridor clear.
-  const kept = pinPositions!.filter((p) => !pinInKeepOut(p.x, p.z))
+  const kept = pinPositions.filter((p) => !pinInKeepOut(p.x, p.z))
   const occupancy = pinFieldOccupancyForPositions(spec, kept)
   return occupancy ? { ...spec, occupancy } : null
 }

@@ -161,8 +161,7 @@ export class PostProcessManager {
 
     // DoF / SSAO / SSR / motion blur are HIGH-only (mobile boot caps at MEDIUM).
     this._isSwiftShader = (() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const gl = (this.host.engine as any)._gl as WebGLRenderingContext | null
+      const gl = (this.host.engine as unknown as { _gl?: WebGLRenderingContext | null })._gl
       if (!gl) return false
       const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
       if (!debugInfo) return false
@@ -366,7 +365,7 @@ export class PostProcessManager {
 
     this._webgpuErrorListener = (event: Event) => {
       const gpuEvent = event as GPUUncapturedErrorEvent
-      const message = gpuEvent.error?.message ?? String(gpuEvent.error)
+      const message = gpuEvent.error?.message ?? 'unknown WebGPU error'
       if (!isUniformBufferLimitError(message)) return
 
       const currentTier = this._postProcessProfile?.tier ?? 'full'

@@ -33,7 +33,7 @@ export class SpinnerLauncher extends PathMechanic {
     this.createPhysics()
 
     this.isSpawned = true
-    console.log(`[SpinnerLauncher] Spawned at ${this.position}`)
+    console.log(`[SpinnerLauncher] Spawned at ${this.position.toString()}`)
   }
 
   despawn(): void {

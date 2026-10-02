@@ -70,7 +70,7 @@ export class FlipperBuilder {
         width: flipperLength - 0.4,
         depth: flipperWidth,
         height: flipperHeight
-      }, this.scene) as Mesh
+      }, this.scene)
 
       // Offset blade so pivot is at the base
       bladeMesh.position.x = isRight ? (flipperLength - 0.4) / 2 : -(flipperLength - 0.4) / 2
@@ -85,7 +85,7 @@ export class FlipperBuilder {
       const tipMesh = MeshBuilder.CreateSphere('flipperTip', {
         diameter: flipperWidth * 1.2,
         segments: 32
-      }, this.scene) as Mesh
+      }, this.scene)
       tipMesh.position.x = isRight ? flipperLength - 0.3 : -(flipperLength - 0.3)
       tipMesh.position.y = 0.05
       tipMesh.position.z = 0
@@ -99,7 +99,7 @@ export class FlipperBuilder {
         width: flipperLength - 0.6,
         depth: 0.1,
         height: flipperHeight - 0.1
-      }, this.scene) as Mesh
+      }, this.scene)
       bevelLeft.position.x = bladeMesh.position.x
       bevelLeft.position.z = flipperWidth / 2
       bevelLeft.position.y = 0.05
@@ -113,7 +113,7 @@ export class FlipperBuilder {
         width: flipperLength - 0.6,
         depth: 0.1,
         height: flipperHeight - 0.1
-      }, this.scene) as Mesh
+      }, this.scene)
       bevelRight.position.x = bladeMesh.position.x
       bevelRight.position.z = -flipperWidth / 2
       bevelRight.position.y = 0.05
@@ -132,7 +132,7 @@ export class FlipperBuilder {
         diameter: 0.8,
         height: 0.9,
         tessellation: 32
-      }, this.scene) as Mesh
+      }, this.scene)
       pivotCyl.rotation.x = Math.PI / 2
       pivotCyl.position.x = isRight ? 1.5 : -1.5
       pivotCyl.position.y = -0.1
@@ -146,7 +146,7 @@ export class FlipperBuilder {
         diameter: 0.6,
         height: 0.15,
         tessellation: 32
-      }, this.scene) as Mesh
+      }, this.scene)
       pivotCap.rotation.x = Math.PI / 2
       pivotCap.position.x = isRight ? 1.5 : -1.5
       pivotCap.position.y = -0.1
@@ -161,7 +161,7 @@ export class FlipperBuilder {
         diameter: 0.9,
         thickness: 0.08,
         tessellation: 32
-      }, this.scene) as Mesh
+      }, this.scene)
       pivotRing.position.x = isRight ? 1.5 : -1.5
       pivotRing.position.y = -0.1
       pivotRing.position.z = 0

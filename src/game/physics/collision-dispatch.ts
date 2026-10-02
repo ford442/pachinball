@@ -172,8 +172,7 @@ export class CollisionDispatcher {
       addKey(this.ballHandleSet, b)
     }
 
-    const flippers = this.host.gameObjects?.getAllFlippers() || new Map()
-    for (const flipper of flippers.values()) {
+    for (const flipper of this.host.gameObjects?.getAllFlippers().values() ?? []) {
       addKey(this.flipperHandleSet, flipper.body)
     }
 

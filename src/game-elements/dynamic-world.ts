@@ -192,7 +192,7 @@ export class DynamicWorld {
 
     // Change music
     if (zone.musicTrack) {
-      this.sound.playMapMusic(zone.musicTrack)
+      void this.sound.playMapMusic(zone.musicTrack)
     }
 
     // Spawn zone mechanics

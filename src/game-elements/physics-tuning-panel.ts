@@ -124,7 +124,7 @@ export class PhysicsTuningPanel {
   private syncSlidersFromValues(): void {
     if (!this.container) return
     for (const def of PHYSICS_TUNING_SLIDERS) {
-      const input = this.container.querySelector(`label[data-tuning-key="${def.key}"] input`) as HTMLInputElement | null
+      const input = this.container.querySelector<HTMLInputElement>(`label[data-tuning-key="${def.key}"] input`)
       const valueSpan = this.container.querySelector(`span[data-value-for="${def.key}"]`)
       const val = getPhysicsTuningValue(def.key)
       if (input) input.value = String(val)

@@ -1,5 +1,6 @@
 import type { EventBus } from '../core/event-bus'
 import type { SoundSystem } from './sound-system'
+import { DisplayState } from '../display/display-types'
 
 export function bindSoundEventBindings(soundSystem: SoundSystem, eventBus: EventBus): void {
   const ss = soundSystem
@@ -55,7 +56,7 @@ export function bindSoundEventBindings(soundSystem: SoundSystem, eventBus: Event
 
   ss.addEventBusUnsubscriber(
     eventBus.on('display:set', (state) => {
-      if (state === 'fever') {
+      if (state === DisplayState.FEVER) {
         ss.triggerFeverAudio()
       }
     }),

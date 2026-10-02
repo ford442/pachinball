@@ -186,7 +186,8 @@ export function resetSessionRng(seed?: number): void {
  * Independent reproducible sub-stream for a named gameplay system.
  * One cached advancing instance per label per session; re-created on initSessionRng().
  */
-export function getSessionRngFork(label: RngForkLabel | string): SeededRng {
+/** `string & {}` keeps `RngForkLabel` autocomplete while still accepting ad-hoc labels. */
+export function getSessionRngFork(label: RngForkLabel | (string & {})): SeededRng {
   const key = String(label)
   let fork = sessionForkCache.get(key)
   if (!fork) {

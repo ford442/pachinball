@@ -155,7 +155,7 @@ export class GameLifecycle {
         if (this.host.replayRecorder?.isRecording()) {
           this.host.replayRecorder.stop(this.host.score)
         }
-        this.host.handleGameOverLeaderboard()
+        void this.host.handleGameOverLeaderboard()
         break
     }
   }

@@ -11,6 +11,10 @@ import { INTENSITY, PALETTE, QualityTier, color, emissive } from '../game-elemen
 import type { EventBus } from '../core/event-bus'
 import { ObstacleEventBusIntegration } from '../game-elements/obstacle-eventbus-integration'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
+import type { Color3 } from '@babylonjs/core/Maths/math.color'
+
+/** The one property these effects touch; Babylon types `Mesh.material` as the base Material. */
+type EmissiveMaterial = { emissiveColor?: Color3 }
 
 export interface LauncherState {
   mesh: Mesh
@@ -99,7 +103,7 @@ export class LauncherBuilder {
       width: 0.6 * scale,
       height: 0.8 * scale,
       depth: 0.4 * scale
-    }, this.scene) as Mesh
+    }, this.scene)
 
     launcherMesh.parent = launcherRoot
     launcherMesh.material = this.matLib.getEnhancedBumperBodyMaterial(colorHex)
@@ -108,7 +112,7 @@ export class LauncherBuilder {
     const chargeMesh = MeshBuilder.CreateSphere('launcherCharge', {
       diameter: 0.3 * scale,
       segments: this.qualityTier === QualityTier.LOW ? 8 : 16
-    }, this.scene) as Mesh
+    }, this.scene)
 
     chargeMesh.position.y = 0.5 * scale
     chargeMesh.parent = launcherRoot
@@ -121,7 +125,7 @@ export class LauncherBuilder {
         diameter: 0.8 * scale,
         thickness: 0.06 * scale,
         tessellation: this.qualityTier === QualityTier.HIGH ? 24 : 12
-      }, this.scene) as Mesh
+      }, this.scene)
 
       rimMesh.parent = launcherRoot
       rimMesh.material = this.matLib.getEnhancedBumperRingMaterial(colorHex)
@@ -239,8 +243,7 @@ export class LauncherBuilder {
         )
 
         // Brighten with charge
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mat = state.chargeMesh.material as any
+        const mat = state.chargeMesh.material as EmissiveMaterial | null
         if (mat && mat.emissiveColor) {
           const intensity = 0.5 + state.chargeLevel * 0.5
           mat.emissiveColor.scaleToRef(intensity, mat.emissiveColor)
