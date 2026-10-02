@@ -303,6 +303,27 @@ export class WasmTableWorld implements PhysicsWorldSink, PinFieldWorldSink, Axis
     this.linkRevision++
   }
 
+  /**
+   * A world snapshot restore (#441) replaced the C++ bodies with the
+   * recording's, under the recording's public ids. Move each linked body to
+   * its new id (`ids`: live id → restored id), all at once, since ids can
+   * swap.
+   */
+  renameLinkedIds(ids: ReadonlyMap<number, number>): void {
+    const moved: Array<[WasmBody, number]> = []
+    for (const [id, body] of this.linkedById) {
+      const to = ids.get(id)
+      if (to !== undefined && to !== id) moved.push([body, to])
+    }
+    if (moved.length === 0) return
+    for (const [body] of moved) this.linkedById.delete(body.link!.id)
+    for (const [body, to] of moved) {
+      body.renameLink(to)
+      this.linkedById.set(to, body)
+    }
+    this.linkRevision++
+  }
+
   /** After the C++ step: kinematic pose stores arrive at their targets. */
   endStep(): void {
     for (const body of this.bodies.values()) {

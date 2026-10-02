@@ -1,6 +1,6 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 
-import { GameState, GhostBallRenderer, CameraMode, detectAccessibility, getDailyCascadeState, type FeederKey } from '../game-elements'
+import { GameState, GhostBallRenderer, ReplayRecorder, CameraMode, detectAccessibility, getDailyCascadeState, type FeederKey } from '../game-elements'
 import type { CabinetType } from '../cabinet'
 
 import { TABLE_MAPS } from '../shaders/lcd-table'
@@ -231,7 +231,10 @@ export abstract class GameDelegates extends GameFields {
   async startSpectateReplay(replayId: string): Promise<boolean> {
     try {
       const { apiFetch } = await import('../config')
-      const payload = await apiFetch<import('../game-elements').ReplayPayload>(`/replays/${replayId}`)
+      const raw = await apiFetch<object>(`/replays/${replayId}`)
+      // Uploads are compressed (`frames: []` + `compressedFrames`); decode the
+      // tape, or spectate would play zero frames.
+      const payload = raw ? ReplayRecorder.fromJSON(raw) : null
       if (!payload) {
         this.showMessage('Replay payload not found', 3000)
         return false

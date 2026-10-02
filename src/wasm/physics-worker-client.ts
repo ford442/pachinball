@@ -32,8 +32,10 @@ import {
   WasmIdShadow,
   type PhysicsWorkerCommand,
   type PhysicsWorkerFromWorker,
+  type PhysicsWorkerSnapshotReply,
   type PhysicsWorkerToWorker,
 } from './physics-worker-protocol'
+import { readSnapshotIds } from './snapshot-layout'
 
 const ZERO3 = { x: 0, y: 0, z: 0 }
 const IDENTITY_Q = { x: 0, y: 0, z: 0, w: 1 }
@@ -141,6 +143,12 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   private readonly wantShared: boolean
   private shared: SharedSnapshotReader | null = null
   private stats: PhysicsWorkerTransportStats = PhysicsWorkerClient.emptyStats()
+  /** Snapshot requests awaiting their `snapshot-reply`, by request id. */
+  private pendingSnapshots = new Map<number, (reply: PhysicsWorkerSnapshotReply) => void>()
+  private nextRequestId = 1
+  /** Restores sent but not yet answered: step results until then describe the old world. */
+  private restoresInFlight = 0
+  private staticHash: string | null = null
 
   constructor(options: PhysicsWorkerClientOptions = {}) {
     this.wantShared = options.sharedTransport ?? isCrossOriginIsolated()
@@ -500,20 +508,95 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   }
 
   /**
-   * Snapshots are in-process only (#422): the C++ world lives on the worker
-   * and a blob would need a request/reply round trip the batch protocol does
-   * not have. Report the gap instead of returning a stale or partial state.
+   * Serialize the worker's C++ world (#441). The request rides in the ordered
+   * command batch, so the blob is the world exactly as of this call — after
+   * every mutator already issued, before the next `step`. Resolves when the
+   * worker replies (null when its bundle cannot snapshot).
    */
-  serializeSnapshot(): Uint8Array | null {
-    return null
+  serializeSnapshot(): Promise<Uint8Array | null> {
+    return this.requestSnapshot({ type: 'serializeSnapshot', requestId: 0 }).then((reply) => reply.bytes)
   }
 
-  restoreSnapshot(_bytes: Uint8Array): WasmSnapshotStatus {
-    return WasmSnapshotStatus.Unsupported
+  /**
+   * Restore a `serializeSnapshot()` blob into the worker's world (#441). It
+   * takes effect at this point in the command order — the next `step` runs on
+   * the restored world — and resolves with the C++ status.
+   *
+   * Until the reply arrives the client reports the snapshot's own id counters
+   * and step count, and ignores step results from the world being replaced:
+   * bodies created after this call get the ids C++ will hand out, and the
+   * step-count guards do not mistake the restored (possibly earlier) counter
+   * for a stale snapshot. A refused restore leaves the worker world untouched,
+   * so the reply puts the previous counters back.
+   */
+  restoreSnapshot(bytes: Uint8Array): Promise<WasmSnapshotStatus> {
+    if (!this.isReady) return Promise.resolve(WasmSnapshotStatus.Unsupported)
+    const ids = readSnapshotIds(bytes)
+    const savedIds = this.ids.getCounters()
+    const savedStepCount = this.lastStepCount
+    if (ids) {
+      this.ids.adoptCounters(ids)
+      this.lastStepCount = ids.stepCount
+    }
+    this.restoresInFlight++
+    // Contacts already queued belong to the world being replaced. (A batch the
+    // worker is still applying at this instant can add a few more: the ring
+    // records carry no step stamp to tell them apart.)
+    this.shared?.drainContacts(() => {})
+    // Copied: the bytes are transferred to the worker.
+    const cmd = { type: 'restoreSnapshot' as const, requestId: 0, bytes: bytes.slice() }
+    // Bookkeeping runs as the reply is received — before the step result that
+    // follows it — not in a later microtask.
+    return this.requestSnapshot(cmd, (reply) => {
+      this.restoresInFlight--
+      if (reply.status === WasmSnapshotStatus.Ok) {
+        this.lastStepCount = reply.stepCount
+        return
+      }
+      const now = this.ids.getCounters()
+      if (ids && (now.nextBodyId !== ids.nextBodyId || now.nextHingeId !== ids.nextHingeId)) {
+        console.warn('[PhysicsWorkerClient] ids were allocated while a refused restore was in flight; the id shadow may drift')
+      }
+      this.ids.adoptCounters(savedIds)
+      this.lastStepCount = savedStepCount
+    }).then((reply) => reply.status)
   }
 
+  /** The worker world's static hash as of its last snapshot reply; null before the first. */
   getStaticContentHash(): string | null {
-    return null
+    return this.staticHash
+  }
+
+  /** Send a snapshot request; `onReply` runs synchronously when the reply is received. */
+  private requestSnapshot(
+    cmd: Extract<PhysicsWorkerCommand, { type: 'serializeSnapshot' | 'restoreSnapshot' }>,
+    onReply?: (reply: PhysicsWorkerSnapshotReply) => void,
+  ): Promise<PhysicsWorkerSnapshotReply> {
+    if (!this.isReady) {
+      const refused: PhysicsWorkerSnapshotReply = {
+        type: 'snapshot-reply', requestId: 0, bytes: null,
+        status: WasmSnapshotStatus.Unsupported, staticHash: null, stepCount: this.lastStepCount,
+      }
+      onReply?.(refused)
+      return Promise.resolve(refused)
+    }
+    const requestId = this.nextRequestId++
+    const reply = new Promise<PhysicsWorkerSnapshotReply>((resolve) => {
+      this.pendingSnapshots.set(requestId, (r) => {
+        onReply?.(r)
+        resolve(r)
+      })
+    })
+    this.enqueue({ ...cmd, requestId })
+    this.flush()
+    return reply
+  }
+
+  private receiveSnapshotReply(reply: PhysicsWorkerSnapshotReply): void {
+    this.staticHash = reply.staticHash
+    const resolve = this.pendingSnapshots.get(reply.requestId)
+    this.pendingSnapshots.delete(reply.requestId)
+    resolve?.(reply)
   }
 
   getTransportStats(): PhysicsWorkerTransportStats {
@@ -540,6 +623,14 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     this.lastAlpha = 0
     this.lastStepCount = 0
     this.lastWorkerStepMs = 0
+    const pending = [...this.pendingSnapshots.values()]
+    this.pendingSnapshots.clear()
+    for (const resolve of pending) {
+      resolve({ type: 'snapshot-reply', requestId: 0, bytes: null, status: WasmSnapshotStatus.Unsupported, staticHash: null, stepCount: 0 })
+    }
+    this.staticHash = null
+    this.restoresInFlight = 0
+    this.lastStepCount = 0
   }
 
   /** @internal Vitest: inject a loopback dispatcher instead of a Worker. */
@@ -552,6 +643,11 @@ export class PhysicsWorkerClient implements WasmSimEngine {
 
   applyStepResult(msg: Extract<PhysicsWorkerFromWorker, { type: 'step-result' }>): void {
     this.stats.postMessageSnapshots++
+    // Poses and contacts of a world a pending restore is replacing: drop them.
+    if (this.restoresInFlight > 0) {
+      this.stats.staleSnapshots++
+      return
+    }
     // A `step-result` can be overtaken by a later shared publish that step()
     // already read. Its contacts still count; its poses are stale.
     if (this.snapshotReady && msg.stepCount < this.lastStepCount) {
@@ -591,6 +687,10 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     }
     if (data.type === 'shared-attach') {
       this.attachShared(data.buffer)
+      return
+    }
+    if (data.type === 'snapshot-reply') {
+      this.receiveSnapshotReply(data)
     }
   }
 
@@ -614,6 +714,11 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   private pollShared(): void {
     const shared = this.shared
     if (!shared) return
+    // The worker may already have written post-restore poses and contacts,
+    // but the reply that re-arms the step-count guard has not arrived: leave
+    // the buffer alone until it does (the replaced world's contacts were
+    // discarded when the restore was sent).
+    if (this.restoresInFlight > 0) return
     shared.drainContacts((packed, count) => this.emitContacts(packed, count))
     if (!shared.read()) return
     if (this.snapshotReady && shared.stepCount < this.lastStepCount) {
@@ -657,6 +762,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     const transfer: Transferable[] = []
     for (const cmd of commands) {
       if (cmd.type === 'addStaticTriangleMesh') transfer.push(cmd.vertices.buffer, cmd.indices.buffer)
+      if (cmd.type === 'restoreSnapshot') transfer.push(cmd.bytes.buffer)
       if (cmd.type === 'addPinField' && cmd.desc.occupancy) transfer.push(cmd.desc.occupancy.buffer)
     }
     this.post({ type: 'batch', commands }, transfer)

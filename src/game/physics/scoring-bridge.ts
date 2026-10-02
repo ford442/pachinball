@@ -12,6 +12,7 @@ import { TABLE_MAPS } from '../../shaders/lcd-table'
 import { PALETTE } from '../../game-elements'
 import type { PhysicsHost } from './types'
 import { getFeverScoreMultiplier, applyFeverGoldMultiplier } from './scoring-multipliers'
+import { simClockMs, simClockSeconds } from '../../core/sim-clock'
 
 /**
  * ScoringBridge — owns combo/fever/tally/streak state, score awards, and the
@@ -257,7 +258,7 @@ export class ScoringBridge {
     if (collected && collected.type !== BallType.STANDARD) {
       this.host.soundSystem.playGoldBallCollect(collected.type)
       // Ball stack visual updated by caller
-      this.host.goldBallStack.push({ type: collected.type, timestamp: performance.now() })
+      this.host.goldBallStack.push({ type: collected.type, timestamp: simClockMs() })
       this.host.sessionGoldBalls++
       const collectPos = new Vector3(body.translation().x, body.translation().y, body.translation().z)
 
@@ -357,7 +358,7 @@ export class ScoringBridge {
           this.host.updateHUD()
         } else {
           // Check grace-window ball-save before life loss
-          const nowMs = performance.now()
+          const nowMs = simClockMs()
           if (this.host.ballManager?.ballSaveSystem.canSave(nowMs)) {
             this.host.ballManager.ballSaveSystem.consumeSave()
             this.host.eventBus.emit('ball:save:triggered', { reason: 'grace-window' })
@@ -504,7 +505,8 @@ export class ScoringBridge {
     this.host.showMessage(chain.bonusPoints > 0 ? `${chainLabel} +${chain.bonusPoints}` : chainLabel, 1600)
   }
 
+  /** Combo / streak windows: the gameplay sim clock, never wall time (#441). */
   private nowSeconds(): number {
-    return (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000
+    return simClockSeconds()
   }
 }

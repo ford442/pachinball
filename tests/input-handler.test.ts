@@ -34,12 +34,14 @@ describe('InputHandler', () => {
     onAdventureToggle: vi.fn(),
     getState: vi.fn().mockReturnValue(GameState.PLAYING),
     getTiltActive: vi.fn().mockReturnValue(false),
+    getSimStep: vi.fn().mockReturnValue(0),
   }
 
   beforeEach(() => {
     vi.clearAllMocks()
     callbacks.getState.mockReturnValue(GameState.PLAYING)
     callbacks.getTiltActive.mockReturnValue(false)
+    callbacks.getSimStep.mockReturnValue(0)
     handler = new InputHandler(callbacks, true)
   })
 
@@ -216,15 +218,36 @@ describe('InputHandler', () => {
     })
 
     it('computes plunger charge on release even if no update frame ran', () => {
-      const nowSpy = vi.spyOn(performance, 'now')
-      nowSpy.mockReturnValue(1750)
-      nowSpy.mockReturnValueOnce(1000)
-
+      // 45 fixed steps × 1/60 s = 750 ms of a 1500 ms max charge.
+      callbacks.getSimStep.mockReturnValue(100)
       handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Enter' }))
+      callbacks.getSimStep.mockReturnValue(145)
       handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Enter' }))
 
       expect(callbacks.onPlungerChargeRelease).toHaveBeenCalledWith(0.5)
+    })
+
+    it('measures charge in fixed steps held, never wall time, and carries it on the frame', () => {
+      const nowSpy = vi.spyOn(performance, 'now').mockReturnValue(0)
+      callbacks.getSimStep.mockReturnValue(10)
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Space' }))
+      nowSpy.mockReturnValue(1_000_000) // a wall-clock jump must not add charge
+      handler.updatePlungerCharge()
+      expect(handler.getPlungerChargeState().chargeLevel).toBe(0)
+
+      callbacks.getSimStep.mockReturnValue(10 + 30)
+      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Space' }))
+      const frame = handler.processBufferedInputs()
+      expect(frame.plungerCharge).toBeCloseTo(30 * (1000 / 60) / 1500, 12)
+      expect(frame.plunger).toBe(true)
       nowSpy.mockRestore()
+    })
+
+    it('clamps charge to 1 after holding past the max charge time', () => {
+      handler.handleKeyDown(new KeyboardEvent('keydown', { code: 'Space' }))
+      callbacks.getSimStep.mockReturnValue(10_000)
+      handler.handleKeyUp(new KeyboardEvent('keyup', { code: 'Space' }))
+      expect(handler.processBufferedInputs().plungerCharge).toBe(1)
     })
   })
 
@@ -235,7 +258,9 @@ describe('InputHandler', () => {
 
     expect(handler.isPlungerHeld()).toBe(false)
     expect(handler.getPlungerChargeState().chargeLevel).toBe(0)
-    expect(handler.processBufferedInputs().plunger).toBe(false)
+    const frame = handler.processBufferedInputs()
+    expect(frame.plunger).toBe(false)
+    expect(frame.plungerCharge).toBeNull()
     expect(callbacks.onPlungerChargeUpdate).toHaveBeenCalledWith(0)
   })
 })

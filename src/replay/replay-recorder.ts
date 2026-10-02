@@ -22,6 +22,13 @@ function normalizeReplayPhysicsEngine(value: unknown): WasmPhysicsRuntimeMode {
  * frame-0 C++ snapshot. Captured at the first recorded step, not at `start()`
  * — the table (a Daily Cascade rebuild) is exported between the two.
  */
+/**
+ * Replay schema version.
+ * - 1: RLE rows `count:L,R,P,nx,ny,nz` — plunger as a fired/not-fired bit.
+ * - 2: a 7th field carries the 0–1 plunger charge the launch was scaled by (#441).
+ */
+export const REPLAY_SCHEMA_VERSION = 2
+
 export interface ReplayMetadata extends ReplayWorldFingerprint {
   version: number
   buildId: string
@@ -42,8 +49,13 @@ export interface ReplayPayload extends ReplayMetadata {
 }
 
 /**
- * Losslessly compress an array of InputFrames into a Run-Length Encoded (RLE) string.
- * Example chunk: "60:0,0,0;15:1,0,0;5:1,1,0.5" -> (length:flipperLeft,flipperRight,plunger)
+ * Compress InputFrames into a Run-Length Encoded (RLE) string.
+ * Row: `count:flipperLeft,flipperRight,plunger,nx,ny,nz,charge`, e.g.
+ * `60:0,0,0,0,0,0,-;1:0,0,1,0,0,0,0.5`. `charge` is the plunger charge written
+ * with `String()` (round-trips exactly) or `-` when the plunger did not fire.
+ * Lossy only where playback does not care: a `null` flipper ("no change")
+ * encodes as released, nudges round to 0.01 (live input is quantised the same
+ * way), and `nudgeSource` / `timestamp` are dropped.
  */
 export function compressInputFrames(frames: InputFrame[]): string {
   if (frames.length === 0) return ''
@@ -55,11 +67,12 @@ export function compressInputFrames(frames: InputFrame[]): string {
   for (const frame of frames) {
     const left = frame.flipperLeft ? 1 : 0
     const right = frame.flipperRight ? 1 : 0
-    const plunger = frame.plunger ? 1 : 0
+    const plunger = frame.plungerCharge !== null ? 1 : 0
+    const charge = frame.plungerCharge === null ? '-' : String(frame.plungerCharge)
     const nx = frame.nudge ? Math.round(frame.nudge.x * 100) / 100 : 0
     const ny = frame.nudge ? Math.round(frame.nudge.y * 100) / 100 : 0
     const nz = frame.nudge ? Math.round((frame.nudge.z || 0) * 100) / 100 : 0
-    const key = `${left},${right},${plunger},${nx},${ny},${nz}`
+    const key = `${left},${right},${plunger},${nx},${ny},${nz},${charge}`
 
     if (key === currentKey && runLength < 65535) {
       runLength++
@@ -80,7 +93,9 @@ export function compressInputFrames(frames: InputFrame[]): string {
 }
 
 /**
- * Decompress an RLE string back into an array of InputFrames.
+ * Decompress an RLE string back into an array of InputFrames. Schema-1 rows
+ * (no charge field) fire at charge 0 — what those tapes effectively replayed
+ * with, since playback used to read the spectator's idle charge.
  */
 export function decompressInputFrames(compressed: string): InputFrame[] {
   if (!compressed || compressed.trim().length === 0) return []
@@ -95,12 +110,16 @@ export function decompressInputFrames(compressed: string): InputFrame[] {
     if (parts.length !== 2) continue
 
     const count = parseInt(parts[0]!, 10)
-    const values = parts[1]!.split(',').map(Number)
+    const fields = parts[1]!.split(',')
+    const values = fields.map(Number)
     if (isNaN(count) || values.length < 3) continue
 
     const flipperLeft = values[0] === 1
     const flipperRight = values[1] === 1
-    const plunger = values[2] === 1
+    const fired = values[2] === 1
+    const chargeField = fields[6]
+    const charge = chargeField === undefined || chargeField === '-' ? 0 : Number(chargeField)
+    const plungerCharge = fired ? (Number.isFinite(charge) ? charge : 0) : null
     const nx = values[3] || 0
     const ny = values[4] || 0
     const nz = values[5] || 0
@@ -110,8 +129,9 @@ export function decompressInputFrames(compressed: string): InputFrame[] {
       frames.push({
         flipperLeft,
         flipperRight,
-        plunger,
-        nudge,
+        plungerCharge,
+        plunger: plungerCharge !== null,
+        nudge: nudge ? { ...nudge } : null,
         timestamp: currentTimestamp,
       })
       currentTimestamp += 1000 / 60
@@ -121,11 +141,22 @@ export function decompressInputFrames(compressed: string): InputFrame[] {
   return frames
 }
 
+/**
+ * Fill in `plungerCharge` on a frame from a schema-1 payload (raw `frames`
+ * array, boolean plunger only): a fired plunger replays at charge 0.
+ */
+export function normalizeInputFrame(frame: InputFrame): InputFrame {
+  const plungerCharge = typeof frame.plungerCharge === 'number' ? frame.plungerCharge : frame.plunger ? 0 : null
+  return { ...frame, plungerCharge, plunger: plungerCharge !== null }
+}
+
 export class ReplayRecorder {
   private recording = false
   private metadata: ReplayMetadata | null = null
   private frames: InputFrame[] = []
   private fingerprinted = false
+  /** Bumped by `start()`; a late async fingerprint only lands on its own recording. */
+  private session = 0
 
   /**
    * Start recording a new session. Resets frame buffer.
@@ -135,6 +166,7 @@ export class ReplayRecorder {
     this.frames = []
     this.recording = true
     this.fingerprinted = false
+    this.session++
   }
 
   /**
@@ -145,7 +177,8 @@ export class ReplayRecorder {
     this.frames.push({
       flipperLeft: frame.flipperLeft,
       flipperRight: frame.flipperRight,
-      plunger: frame.plunger,
+      plungerCharge: frame.plungerCharge,
+      plunger: frame.plungerCharge !== null,
       nudge: frame.nudge ? { ...frame.nudge } : null,
       nudgeSource: frame.nudgeSource,
       timestamp: frame.timestamp,
@@ -176,10 +209,22 @@ export class ReplayRecorder {
    * Fold the world fingerprint into the metadata. Called once, by the physics
    * step that recorded frame 0, right before that step runs.
    */
-  attachWorldFingerprint(fingerprint: ReplayWorldFingerprint): void {
+  /**
+   * Attach the world fingerprint once per recording. On the worker path it is
+   * a promise (the snapshot blob comes back from the worker); it is merged
+   * when it lands, and dropped if a new recording has started by then.
+   */
+  attachWorldFingerprint(fingerprint: ReplayWorldFingerprint | Promise<ReplayWorldFingerprint>): void {
     if (!this.metadata || this.fingerprinted) return
-    this.metadata = { ...this.metadata, ...fingerprint }
     this.fingerprinted = true
+    if (fingerprint instanceof Promise) {
+      const session = this.session
+      void fingerprint.then((fp) => {
+        if (this.session === session && this.metadata) this.metadata = { ...this.metadata, ...fp }
+      })
+      return
+    }
+    this.metadata = { ...this.metadata, ...fingerprint }
   }
 
   hasWorldFingerprint(): boolean {
@@ -210,8 +255,9 @@ export class ReplayRecorder {
     return JSON.stringify(copy)
   }
 
-  static fromJSON(jsonString: string): ReplayPayload {
-    const data = JSON.parse(jsonString) as Partial<ReplayPayload> & {
+  /** Parse a stored / uploaded payload — a JSON string, or the object an API fetch already parsed. */
+  static fromJSON(json: string | object): ReplayPayload {
+    const data = (typeof json === 'string' ? JSON.parse(json) : json) as Partial<ReplayPayload> & {
       build_id?: string
       map_id?: string
       final_score?: number
@@ -228,7 +274,7 @@ export class ReplayRecorder {
       initial_snapshot?: string
     }
 
-    let frames: InputFrame[] = Array.isArray(data.frames) ? data.frames : []
+    let frames: InputFrame[] = Array.isArray(data.frames) ? data.frames.map(normalizeInputFrame) : []
     const compressedStr = data.compressedFrames ?? data.compressed_frames
     if (frames.length === 0 && compressedStr) {
       frames = decompressInputFrames(compressedStr)

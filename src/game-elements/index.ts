@@ -134,6 +134,8 @@ export {
   ReplayRecorder,
   compressInputFrames,
   decompressInputFrames,
+  normalizeInputFrame,
+  REPLAY_SCHEMA_VERSION,
   type ReplayMetadata,
   type ReplayPayload,
 } from '../replay/replay-recorder'

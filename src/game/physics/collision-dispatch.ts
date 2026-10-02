@@ -24,7 +24,7 @@ import type { LaneSensorDef } from '../../objects/object-lane-sensors'
 import { ContactPhase, contactStarted, type PhysicsContact, type WasmContactEvent } from '../../wasm'
 
 import type { PhysicsHost } from './types'
-import { FIXED_TIMESTEP } from '../../game-elements/physics'
+import { simNowMs, type SimClockPhysics } from '../../core/sim-clock'
 import type { ScoringBridge } from './scoring-bridge'
 
 /** Maps WASM contact ids onto bodies and dispatch keys. */
@@ -321,10 +321,7 @@ export class CollisionDispatcher {
    * Hosts without a step counter (unit-test stubs) fall back to wall time.
    */
   private debounceClockMs(): number {
-    const physics = this.host.physics as Partial<PhysicsHost['physics']>
-    const wasm = physics.isWasmOwnerMode?.() ? physics.getWasmEngine?.() : null
-    const steps = wasm ? wasm.getStepCount() : physics.getStepCount?.()
-    return typeof steps === 'number' ? steps * FIXED_TIMESTEP * 1000 : performance.now()
+    return simNowMs(this.host.physics as SimClockPhysics)
   }
 
   /** A clock that went backwards (snapshot rewind, new world) never debounces. */

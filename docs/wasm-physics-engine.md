@@ -115,13 +115,14 @@ src/wasm/
 ├── physics-module-bodies.ts     Plane / box / capsule statics, rigid bodies, hinges, transform-query fallbacks
 ├── physics-module-adventure.ts  Cylinder / sphere / cone / pin field / mesh / mover / sensor / box body / force field
 ├── wasm-sim-engine.ts           WasmSimEngine interface (in-process engine + worker client)
-├── physics-worker-protocol.ts   Worker command union + id shadow
+├── physics-worker-protocol.ts   Worker command union + id shadow (+ snapshot request/reply)
 ├── physics-worker-runtime.ts    applyPhysicsCommand / WorkerSnapshotPublisher
 ├── physics-shared-layout.ts     Versioned SharedArrayBuffer snapshot layout (seqlock + contact ring)
 ├── physics-worker-client.ts     Main-thread PhysicsWorkerClient
 ├── physics-worker.ts            Dedicated Worker entry
 ├── contact-buffer.ts            Packed contact codec
 ├── transform-buffer.ts          Packed transform codec
+├── snapshot-layout.ts           readSnapshotIds: id table / hinges / step count of a world snapshot
 ├── wasm-physics-api.ts          WASM_PHYSICS_API: descriptor-recording RigidBodyDesc / ColliderDesc / JointData
 ├── wasm-table-world.ts          WasmTableWorld: the owner-path PhysicsWorldSink (bodies, colliders, joints)
 ├── wasm-body.ts                 WasmBody / WasmCollider: WASM-id-keyed bodies (linked to C++ or pose stores)
@@ -973,15 +974,37 @@ bytes** — `npm run test:wasm-parity` compares them against the fixture
 Embind / TS surface (`WasmPhysicsEngine`, `WasmSimEngine`):
 
 ```typescript
-const bytes = engine.serializeSnapshot()        // Uint8Array copy, or null (old bundle / worker)
+const bytes = engine.serializeSnapshot()        // Uint8Array copy, or null (old bundle)
 const status = engine.restoreSnapshot(bytes)    // WasmSnapshotStatus: Ok 0, BadMagic 1, BadVersion 2,
                                                 // Truncated 3, StaticMismatch 4, Corrupt 5, Unsupported -1
 engine.getStaticContentHash()                   // '0123456789abcdef'
 ```
 
-The worker client reports `null` / `Unsupported` (a blob needs a request /
-reply the batch protocol does not have). Replays use it through
-`src/replay/replay-snapshot.ts` — see `docs/ASYNC_CHALLENGES_EPIC.md`.
+On `WasmSimEngine` both are `Awaitable`: in-process engines answer
+synchronously, the worker client with a promise (#441).
+
+### Over the worker
+
+`serializeSnapshot` / `restoreSnapshot` are `PhysicsWorkerCommand`s carrying a
+`requestId`, so they ride in the **ordered** command batch and take effect
+exactly where they were issued — after every earlier mutator, before the
+frame's `step`. The worker answers each with a `snapshot-reply` (blob
+transferred, status, static hash, step count), posted after the batch and
+before that batch's step result. No second SharedArrayBuffer, no
+`Atomics.wait`; the pose seqlock is unchanged. Off the hot path: replay
+capture, spectate, debug.
+
+A restore replaces bodies and hinges with their recorded public ids, so on
+send the client adopts the blob's id counters (`readSnapshotIds`,
+`WasmIdShadow.adoptCounters`) and step count, discards contacts queued from the
+world being replaced, and ignores step results until the reply lands; a
+refused restore puts the counters back. The worker rebuilds the hinge set it
+publishes from the restored blob. `getStaticContentHash()` on the client is
+the value from the last reply (null before the first) — `applyReplaySnapshot`
+then lets C++ refuse a different table itself.
+
+Replays use all of this through `src/replay/replay-snapshot.ts` — see
+`docs/ASYNC_CHALLENGES_EPIC.md`.
 
 ---
 

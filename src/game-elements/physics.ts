@@ -13,6 +13,7 @@ import { WasmTableWorld } from '../wasm/wasm-table-world'
 import type { PhysicsApi, PhysicsWorldSink } from '../core/physics-api'
 import { loadRapier } from './rapier-loader'
 import type { WasmDebugCollider } from './wasm-debug-geometry'
+import { FIXED_TIMESTEP } from '../core/sim-clock'
 
 /** Greppable marker for "table physics booted on Rapier because WASM failed". */
 export const PHYSICS_DEGRADE_MARKER = '[Bootstrap][physics-degrade]'
@@ -37,8 +38,8 @@ export function exposePhysicsDegradeReason(reason: string | undefined): void {
 // Gravity: -Y (down), -Z (roll towards player)
 export const GRAVITY = { x: 0, y: -9.81, z: -5.0 }
 
-/** Fixed physics timestep for deterministic simulation */
-export const FIXED_TIMESTEP = 1 / 60
+/** Fixed physics timestep for deterministic simulation (defined beside the sim clock). */
+export { FIXED_TIMESTEP }
 
 /** Maximum dt to prevent physics explosions during lag spikes */
 export const MAX_DT = 1 / 30

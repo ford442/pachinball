@@ -27,6 +27,24 @@ import type { BallType } from '../../config'
 import type { CameraMode } from '../../game-elements'
 import type { QualityTier } from '../../game-elements/visual-language'
 
+/**
+ * Nudge / tilt bookkeeping. Times are on the gameplay sim clock
+ * (`GamePhysicsController.simClock`, ms), never wall time (#441).
+ */
+export interface NudgeState {
+  tiltWarnings: number
+  /** Sim time of the last accepted nudge; -Infinity before the first. */
+  lastNudgeTime: number
+  tiltActive: boolean
+  tiltWarningActive: boolean
+  /** Sim time the tilt penalty ends (meaningful while `tiltActive`). */
+  tiltPenaltyUntilMs: number
+}
+
+export function freshNudgeState(): NudgeState {
+  return { tiltWarnings: 0, lastNudgeTime: Number.NEGATIVE_INFINITY, tiltActive: false, tiltWarningActive: false, tiltPenaltyUntilMs: 0 }
+}
+
 export interface PhysicsHost {
   readonly engine: Engine | WebGPUEngine
   readonly physics: PhysicsSystem
@@ -77,7 +95,7 @@ export interface PhysicsHost {
   powerupActive: boolean
   powerupTimer: number
   plungerChargeLevel: number
-  nudgeState: { tiltWarnings: number; lastNudgeTime: number; tiltActive: boolean; tiltWarningActive: boolean }
+  nudgeState: NudgeState
   isCameraFollowMode: boolean
   cameraFollowTransition: number
   readonly cameraFollowTransitionSpeed: number

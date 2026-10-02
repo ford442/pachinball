@@ -58,7 +58,7 @@ Later phases add weekly tournament APIs and (optionally) true realtime co-op mul
 - ~~No solver state in replays~~ — the frame-0 C++ snapshot + world fingerprint (#422, below)
 - No procedural layout mutator (#304) beyond the Daily Cascade pin lattice — challenges map `seed` → session RNG, not yet → table variant
 - ~~Deploy credentials still hardcoded in `deploy.py`~~ (#288) — `deploy.py` now reads `DEPLOY_TOKEN` from the environment (`require_env`)
-- Spectating does not yet restore across a differing ball-id layout (the spectator's ids were allocated by earlier games); it says so (`id-layout` toast) and plays the tape unverified
+- ~~Spectating does not yet restore across a differing ball-id layout~~ — the spectator's TS links are remapped onto the snapshot's ids (#441); `id-layout` now means the layouts genuinely differ
 
 ---
 
@@ -203,7 +203,7 @@ A replay now carries the world it was played on, not just the tape:
 | Field (camelCase; snake_case accepted on read) | Meaning |
 |-------|---------|
 | `physicsEngine` | `rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker` |
-| `snapshotVersion` | `WASM_SNAPSHOT_VERSION` (1) when a snapshot was taken; 0 when the engine could not snapshot (Rapier, worker) |
+| `snapshotVersion` | `WASM_SNAPSHOT_VERSION` (1) when a snapshot was taken; 0 when the engine could not snapshot (Rapier / mirror) |
 | `staticHash` | FNV-1a 64 of the C++ static table (`getStaticContentHash()`), 16 hex |
 | `pinFieldOccupancy` | FNV-1a of every resolved pin (index + position) of every pin field; null without one |
 | `feederTunablesHash` | FNV-1a of `FEEDER_TUNABLES` |
@@ -217,13 +217,38 @@ never forces a restore it cannot trust:
 
 | Outcome | When | Toast |
 |---------|------|-------|
-| `restored` | Table hash, tunables and live body ids all match | — |
+| `restored` | Table hash and tunables match; live body / hinge ids match, or pair up by role and are remapped (`remapped: true`) | — |
 | `no-snapshot` | v1 replay or a Rapier recording: tape only | — |
 | `table-mismatch` | `staticHash` or the blob's hash differs; native `StaticMismatch` | "table differs from the recording (snapshot hash mismatch)" |
 | `tunables-mismatch` | Feeder tuning changed since recording | yes |
-| `id-layout` | Same table, but the live C++ ids differ from the snapshot's (restoring would alias bodies) | yes |
-| `unsupported` | Engine cannot restore (worker path, pre-#422 bundle) | yes |
+| `id-layout` | Same table, but the live bodies / hinges do not pair up with the snapshot's by role (a different ball or flipper count) | yes |
+| `unsupported` | Engine cannot restore (Rapier / mirror, pre-#422 bundle) | yes |
 | `invalid` | Truncated / corrupt / other version | yes |
+
+**Worker path (#441).** `wasm-worker` records and restores too: the
+snapshot request rides in the worker's ordered command batch, so it applies at
+the same point of frame 0 as in-process, and the result comes back with the
+worker's reply. A recording's fingerprint is merged when the blob arrives; a
+replay reports `restored` provisionally and `settled` resolves with the final
+outcome (a refused restore then shows its toast). The client learns the
+worker's static hash from that reply, so before the first one the table check
+is C++'s own `StaticMismatch`. `tests/replay-worker-snapshot-wasm.test.ts`
+records on `wasm-owner`, restores on a worker client and matches score and the
+ball's pose bit-for-bit. Caveat: a real Worker serves poses a frame late, and
+`WasmOwner.driveFlippers` computes the flipper motor from them, so a live
+worker-path session with flipper input is not frame-exact with an in-process
+one (the test's loopback has no lag). Moving the flipper PD loop into C++ is
+the fix; `wasm-worker` stays off by default until then.
+
+**Id remap (#441).** A restore replaces C++ bodies and hinges "wholesale,
+public ids included", and a spectator's ids were allocated by its own earlier
+games. `planReplayIdRemap` pairs the live ids with the snapshot's by role —
+hinges in id order with the bodies they hang on (the flippers), then every
+other linked body in id order — and after the restore the controller moves the
+TS links (`WasmTableWorld.renameLinkedIds`, `WasmOwner.renameIds`, which bumps
+the dispatcher's id epoch). On the worker the links move when the restore is
+sent and move back if it is refused. A different static table is still
+`table-mismatch`, never a remap.
 
 `<body data-replay-divergence="<outcome>">` is set on every check for
 Playwright. The snapshot covers the C++ solver only; TS gameplay state (combo,

@@ -29,6 +29,7 @@ import { GameHUD, type HUDHost } from './game/game-hud'
 import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
 import { CheckpointDebugController, type DebugStageKey } from './game/checkpoint-debug'
 import { GameDelegates } from './game/game-delegates'
+import { installSimClock } from './core/sim-clock'
 
 export class Game extends GameDelegates {
   constructor(engine: Engine | WebGPUEngine, physics: PhysicsSystem = new PhysicsSystem()) {
@@ -162,6 +163,9 @@ export class Game extends GameDelegates {
       })
       this.stateManager.setEventBus(this.eventBus)
       this.physicsController = new GamePhysicsController(this as unknown as PhysicsHost)
+      // Ball-save, combo / streak windows, gold swarms and plunger charge read
+      // the controller's gameplay clock, not wall time (#441).
+      installSimClock(this.physicsController.simClock)
     })
 
     await this.runCheckpointStage('physics', () => this.physics.init())
@@ -414,5 +418,6 @@ export class Game extends GameDelegates {
 
   dispose(): void {
     this.disposer.disposeAll()
+    installSimClock(null)
   }
 }

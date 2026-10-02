@@ -16,7 +16,7 @@ import type {
   WasmVolumeShape,
 } from './PhysicsModule'
 import type { PinFieldSpec } from '../core/pin-field'
-import { STATIC_HANDLE_OVERFLOW } from './wasm-types'
+import { STATIC_HANDLE_OVERFLOW, type WasmSnapshotStatus } from './wasm-types'
 
 /** Mirrors native PhysicsWorld.h static collider id bases. */
 export const STATIC_BOX_ID_BASE = -1000
@@ -81,6 +81,15 @@ export type PhysicsWorkerCommand =
   | { type: 'removeHinge'; id: number }
   | { type: 'step'; rawDt: number }
   | { type: 'dispose' }
+  /**
+   * World snapshot request/reply (#441). Carried in the ordered batch like any
+   * mutator, so it takes effect exactly where it was issued (e.g. right before
+   * the frame's `step`); the worker answers with a `snapshot-reply` carrying
+   * the same `requestId`. Off the hot path: replay capture / spectate / debug.
+   */
+  | { type: 'serializeSnapshot'; requestId: number }
+  /** `bytes` is transferred. */
+  | { type: 'restoreSnapshot'; requestId: number; bytes: Uint8Array }
 
 export type PhysicsWorkerToWorker =
   | { type: 'init'; bundleUrl: string }
@@ -113,11 +122,29 @@ export type PhysicsWorkerSharedAttach = {
   buffer: SharedArrayBuffer
 }
 
+/**
+ * Answer to `serializeSnapshot` / `restoreSnapshot`, posted after the batch
+ * that carried the request and before that batch's step result.
+ */
+export type PhysicsWorkerSnapshotReply = {
+  type: 'snapshot-reply'
+  requestId: number
+  /** `serializeSnapshot`: the blob (transferred), null when the bundle cannot snapshot. */
+  bytes: Uint8Array | null
+  /** `restoreSnapshot`: the restore status; `serializeSnapshot`: Ok or Unsupported. */
+  status: WasmSnapshotStatus
+  /** The worker world's static-table hash after the operation. */
+  staticHash: string | null
+  /** The worker world's step counter after the operation. */
+  stepCount: number
+}
+
 export type PhysicsWorkerFromWorker =
   | { type: 'ready' }
   | { type: 'error'; message: string }
   | PhysicsWorkerStepResult
   | PhysicsWorkerSharedAttach
+  | PhysicsWorkerSnapshotReply
 
 /**
  * Client-side id allocator matching C++ HandleTable + static collider ids.
@@ -225,6 +252,21 @@ export class WasmIdShadow {
     this.resetStaticHandles()
     this.nextBodyId = 0
     this.nextHingeId = 0
+  }
+
+  /** Body / hinge counters, to save around a restore and put back if it fails. */
+  getCounters(): { nextBodyId: number; nextHingeId: number } {
+    return { nextBodyId: this.nextBodyId, nextHingeId: this.nextHingeId }
+  }
+
+  /**
+   * A world snapshot restore replaces bodies and hinges with their recorded
+   * ids, and the C++ counters with the recorded ones (`readSnapshotIds`).
+   * Static handles are rebuilt, not restored, so those counters stay.
+   */
+  adoptCounters(counters: { nextBodyId: number; nextHingeId: number }): void {
+    this.nextBodyId = counters.nextBodyId
+    this.nextHingeId = counters.nextHingeId
   }
 }
 
