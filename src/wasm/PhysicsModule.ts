@@ -10,7 +10,8 @@
  *
  * File layout
  * ───────────
- *   PhysicsModule.ts             load, world config, table statics, bodies, hinges, step
+ *   PhysicsModule.ts             load, world config, step, transform / contact buffers, snapshots
+ *   physics-module-bodies.ts     plane / box / capsule statics, rigid bodies, hinges
  *   physics-module-adventure.ts  cylinder / sphere / mesh / mover / sensor / box body / field
  *   contact-buffer.ts            packed contact codec
  *   transform-buffer.ts          packed transform codec
@@ -35,6 +36,8 @@ import {
 } from './transform-buffer'
 import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
 import * as adventure from './physics-module-adventure'
+import * as bodies from './physics-module-bodies'
+import type { WasmBodyDesc, WasmHingeDesc } from './physics-module-bodies'
 import type { PinFieldSpec } from '../core/pin-field'
 import {
   WasmVolumeShape,
@@ -50,6 +53,7 @@ export {
   type WasmBoxBodyDesc,
   type WasmForceFieldDesc,
 } from './physics-module-adventure'
+export type { WasmBodyDesc, WasmHingeDesc } from './physics-module-bodies'
 
 /**
  * Minimal EventBus surface this engine needs. Deliberately narrower than the
@@ -61,38 +65,6 @@ export {
  */
 export interface WasmContactEventBus {
   emit(event: 'wasm:physics:contact', payload: WasmContactEvent): void
-}
-
-// ---------------------------------------------------------------------------
-// Rigid body descriptor
-// ---------------------------------------------------------------------------
-
-export interface WasmBodyDesc {
-  position?:       { x: number; y: number; z: number }
-  velocity?:       { x: number; y: number; z: number }
-  mass?:           number  // kg, default 1
-  radius?:         number  // metres; sphere radius, or capsule radius, default 0.1
-  restitution?:    number  // 0–1, default 0.4
-  linearDamping?:  number  // 0–1, default 0.02
-  /** Coulomb friction coefficient, default 0.2. Combined per-pair as sqrt(μ_a μ_b). */
-  friction?:       number
-  /** Angular drag factor for dynamic spheres, default 0.1. */
-  angularDamping?: number
-  /** 0=Dynamic, 1=Static, 2=Kinematic */
-  bodyType?:       WasmBodyType
-  /** 'sphere' (default) or 'capsule' — capsule segment runs along local +Y. */
-  shape?:          'sphere' | 'capsule'
-  /** Half-length of the capsule segment (metres). Ignored for sphere shape. */
-  capsuleHalfHeight?: number
-}
-
-/** World-anchored revolute hinge (flipper vs static table). */
-export interface WasmHingeDesc {
-  bodyId: number
-  worldAnchor: { x: number; y: number; z: number }
-  worldAxis?: { x: number; y: number; z: number }
-  minAngle?: number
-  maxAngle?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -200,7 +172,7 @@ export class WasmPhysicsEngine {
    * @param d       Signed plane offset from origin along the normal.
    */
   addStaticPlane(normal: { x: number; y: number; z: number }, d: number, friction = 0.2): void {
-    this.world?.addStaticPlane(normal.x, normal.y, normal.z, d, friction)
+    bodies.addStaticPlane(this.world, normal, d, friction)
   }
 
   /**
@@ -210,18 +182,11 @@ export class WasmPhysicsEngine {
   addStaticBox(
     center: { x: number; y: number; z: number },
     halfExtents: { x: number; y: number; z: number },
-    rotation: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 1 },
-    restitution = 0.4,
-    friction = 0.2
+    rotation?: { x: number; y: number; z: number; w: number },
+    restitution?: number,
+    friction?: number
   ): number {
-    if (!this.world) return -1
-    return this.world.addStaticBox(
-      center.x, center.y, center.z,
-      halfExtents.x, halfExtents.y, halfExtents.z,
-      rotation.x, rotation.y, rotation.z, rotation.w,
-      restitution,
-      friction
-    )
+    return bodies.addStaticBox(this.world, center, halfExtents, rotation, restitution, friction)
   }
 
   /**
@@ -232,18 +197,11 @@ export class WasmPhysicsEngine {
     center: { x: number; y: number; z: number },
     radius: number,
     halfHeight: number,
-    rotation: { x: number; y: number; z: number; w: number } = { x: 0, y: 0, z: 0, w: 1 },
-    restitution = 0.4,
-    friction = 0.2
+    rotation?: { x: number; y: number; z: number; w: number },
+    restitution?: number,
+    friction?: number
   ): number {
-    if (!this.world) return -1
-    return this.world.addStaticCapsule(
-      center.x, center.y, center.z,
-      radius, halfHeight,
-      rotation.x, rotation.y, rotation.z, rotation.w,
-      restitution,
-      friction
-    )
+    return bodies.addStaticCapsule(this.world, center, radius, halfHeight, rotation, restitution, friction)
   }
 
   /**
@@ -406,22 +364,7 @@ export class WasmPhysicsEngine {
    * @returns Stable integer handle, or -1 if the engine is not ready.
    */
   createBody(desc: WasmBodyDesc = {}): number {
-    if (!this.world) return -1
-    const p = desc.position      ?? { x: 0, y: 0, z: 0 }
-    const v = desc.velocity      ?? { x: 0, y: 0, z: 0 }
-    return this.world.createRigidBody(
-      p.x, p.y, p.z,
-      v.x, v.y, v.z,
-      desc.mass          ?? 1,
-      desc.radius        ?? 0.1,
-      desc.restitution   ?? 0.4,
-      desc.linearDamping ?? 0.02,
-      desc.bodyType      ?? 0,
-      desc.shape === 'capsule' ? 1 : 0,
-      desc.capsuleHalfHeight ?? 0.5,
-      desc.friction          ?? 0.2,
-      desc.angularDamping    ?? 0.1
-    )
+    return bodies.createBody(this.world, desc)
   }
 
   /** Remove a body by handle. */
@@ -477,75 +420,37 @@ export class WasmPhysicsEngine {
   // ---- Hinges --------------------------------------------------------------
 
   createHinge(desc: WasmHingeDesc): number {
-    if (!this.world?.createHinge) return -1
-    const a = desc.worldAnchor
-    const n = desc.worldAxis ?? { x: 0, y: 1, z: 0 }
-    return this.world.createHinge(
-      desc.bodyId,
-      a.x, a.y, a.z,
-      n.x, n.y, n.z,
-      desc.minAngle ?? -Math.PI,
-      desc.maxAngle ?? Math.PI
-    )
+    return bodies.createHinge(this.world, desc)
   }
 
   setHingeMotor(id: number, targetVel: number, maxTorque: number): void {
-    this.world?.setHingeMotor?.(id, targetVel, maxTorque)
+    bodies.setHingeMotor(this.world, id, targetVel, maxTorque)
   }
 
   getHingeAngle(id: number): number {
-    return this.world?.getHingeAngle?.(id) ?? 0
+    return bodies.getHingeAngle(this.world, id)
   }
 
   removeHinge(id: number): void {
-    this.world?.removeHinge?.(id)
+    bodies.removeHinge(this.world, id)
   }
 
   // ---- Transform queries -----------------------------------------------
 
   getPosition(id: number): { x: number; y: number; z: number } {
-    const fromBuffer = this.readTransformFromBuffer(id)
-    if (fromBuffer) return fromBuffer.position
-    if (!this.world) return { x: 0, y: 0, z: 0 }
-    return {
-      x: this.world.getPosX(id),
-      y: this.world.getPosY(id),
-      z: this.world.getPosZ(id),
-    }
+    return this.readTransformFromBuffer(id)?.position ?? bodies.readPosition(this.world, id)
   }
 
   getVelocity(id: number): { x: number; y: number; z: number } {
-    const fromBuffer = this.readTransformFromBuffer(id)
-    if (fromBuffer) return fromBuffer.velocity
-    if (!this.world) return { x: 0, y: 0, z: 0 }
-    return {
-      x: this.world.getVelX(id),
-      y: this.world.getVelY(id),
-      z: this.world.getVelZ(id),
-    }
+    return this.readTransformFromBuffer(id)?.velocity ?? bodies.readVelocity(this.world, id)
   }
 
   getAngularVelocity(id: number): { x: number; y: number; z: number } {
-    const fromBuffer = this.readTransformFromBuffer(id)
-    if (fromBuffer) return fromBuffer.angularVelocity
-    if (!this.world) return { x: 0, y: 0, z: 0 }
-    return {
-      x: this.world.getAngVelX(id),
-      y: this.world.getAngVelY(id),
-      z: this.world.getAngVelZ(id),
-    }
+    return this.readTransformFromBuffer(id)?.angularVelocity ?? bodies.readAngularVelocity(this.world, id)
   }
 
   getRotation(id: number): { x: number; y: number; z: number; w: number } {
-    const fromBuffer = this.readTransformFromBuffer(id)
-    if (fromBuffer) return fromBuffer.rotation
-    if (!this.world) return { x: 0, y: 0, z: 0, w: 1 }
-    return {
-      x: this.world.getRotX(id),
-      y: this.world.getRotY(id),
-      z: this.world.getRotZ(id),
-      w: this.world.getRotW(id),
-    }
+    return this.readTransformFromBuffer(id)?.rotation ?? bodies.readRotation(this.world, id)
   }
 
   // ---- Simulation step -------------------------------------------------

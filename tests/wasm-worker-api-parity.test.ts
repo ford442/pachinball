@@ -54,6 +54,9 @@ const EMBIND_ALIASES: Record<string, string> = {
   removeRigidBody: 'removeBody',
   addKinematicMoverShaped: 'addKinematicMover',
   addSensorVolumeShaped: 'addSensorVolume',
+  // The well rides the existing addForceField command: its desc is structured-cloned
+  // whole, so `mode: 'axis-pull'` needs no worker command of its own.
+  addAxisPullField: 'addForceField',
 }
 
 /** Embind functions deliberately not wrapped. */

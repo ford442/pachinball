@@ -77,6 +77,10 @@ public:
    * effect on the very next call with no separate cache to invalidate.
    * Movers move every tick, so their cell membership is rebuilt from
    * scratch here alongside the dynamic bodies.
+   *
+   * A sleeping Dynamic body stays in the grid as a target: an awake body
+   * (a steered kinematic ball, one rolling in) pairs with it so contact can
+   * wake it, but two sleepers never pair and a sleeper never meets statics.
    */
   void buildPairs(const BodyStore& bodies,
                   const std::vector<BoxDesc>& boxes,
@@ -132,6 +136,8 @@ private:
   int gridRows_;
 
   std::unordered_map<CellKey, std::vector<int>, CellKeyHash> dynamicCells_;
+  /** Sleeping Dynamic bodies: paired against awake bodies only, never against each other. */
+  std::unordered_map<CellKey, std::vector<int>, CellKeyHash> sleeperCells_;
   std::unordered_map<CellKey, std::vector<StaticRef>, CellKeyHash> staticCells_;
   std::unordered_map<CellKey, std::vector<int>, CellKeyHash> moverCells_;
 

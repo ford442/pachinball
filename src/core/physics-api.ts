@@ -171,6 +171,39 @@ export function supportsPinFields(world: PhysicsWorldSink): world is PhysicsWorl
   return typeof (world as Partial<PinFieldWorldSink>).createPinField === 'function'
 }
 
+/**
+ * A vertical well that draws balls horizontally toward its axis — the MagSpin
+ * feeder's pull. It lives in the C++ engine as an axis-pull force field, so a
+ * ball converges on the well whether or not the render thread's ball list is
+ * current. Strongest at the axis, fading linearly to nothing at `radius`; it
+ * never lifts a ball, and a captured (kinematic) ball is not pulled.
+ */
+export interface AxisPullFieldSpec {
+  /** The axis passes through (x, z); y is the mid-height of the pulled band. */
+  center: PhysicsVector
+  radius: number
+  /** The well pulls bodies within this distance of `center.y`. */
+  halfHeight: number
+  /** Pull at the axis, in m/s² unless `acceleration` is false (then newtons). */
+  strength: number
+  /** Mass-independent (default true): a light ball and a heavy one are drawn in alike. */
+  acceleration?: boolean
+}
+
+/**
+ * Optional capability: author an axis-pull well. `WasmTableWorld` implements it
+ * (one C++ force field); Rapier has no such primitive, so callers check
+ * `supportsAxisPullFields` and keep their Rapier-era geometry there.
+ */
+export interface AxisPullWorldSink {
+  /** The returned fixed body owns the field: disabling it disables the pull. */
+  createAxisPullField(spec: AxisPullFieldSpec): PhysicsBody
+}
+
+export function supportsAxisPullFields(world: PhysicsWorldSink): world is PhysicsWorldSink & AxisPullWorldSink {
+  return typeof (world as Partial<AxisPullWorldSink>).createAxisPullField === 'function'
+}
+
 /** The value namespace builders construct descriptors from (`typeof RAPIER` satisfies it). */
 export interface PhysicsApi {
   readonly RigidBodyDesc: {

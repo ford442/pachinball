@@ -39,6 +39,7 @@ WasmOwner / WasmMirror  ◄──── src/game/physics/wasm-{owner,mirror}.ts
         ▼ in-process                    ▼ wasm-worker
 WasmPhysicsEngine                PhysicsWorkerClient ──postMessage──► physics-worker.ts
  src/wasm/PhysicsModule.ts        (physics-worker-protocol.ts)          └─► WasmPhysicsEngine
+ + physics-module-bodies.ts
  + physics-module-adventure.ts
         │  dynamic import
         ▼
@@ -72,7 +73,7 @@ native/
 │   ├── DynamicBox.cpp           Dynamic oriented-box bodies (createBoxBody)
 │   ├── BodyStore.h / .cpp       SoA body storage + packed transform buffer
 │   ├── HandleTable.h            Stable body / hinge handles
-│   ├── BroadphaseGrid.h / .cpp  Uniform-grid broadphase
+│   ├── BroadphaseGrid.h / .cpp  Uniform-grid broadphase (sleepers stay in as targets for awake bodies)
 │   ├── Narrowphase.cpp          Pair tests (sphere / capsule / box / statics)
 │   ├── CollisionFilter.h        membership/filter masks (mirrors CollisionGroups)
 │   ├── StaticShapes.h / .cpp    Static box / capsule / sphere (+ ConeDesc)
@@ -104,11 +105,14 @@ native/
     ├── cone_test.cpp            Static cone: apex / slant / base / inside / groups (#420)
     ├── pin_field_test.cpp       Pin field: 12×12 fall-through, keep-out, mask, dropout, parity, handle cap (#421)
     ├── snapshot_test.cpp        World snapshot: rewind / fresh-table restore bit-exact, manifold, mismatch, malformed (#422)
+    ├── sleeper_contact_test.cpp Sleeping balls stay collidable: kinematic / rolling ball wakes one on contact, proximity does not
+    ├── axis_pull_field_test.cpp Axis-pull well: horizontal pull, linear falloff, extents, flags, groups, wake, snapshot hash
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
 ├── wasm-types.ts                TypeScript interfaces matching the Embind API
-├── PhysicsModule.ts             WasmPhysicsEngine: load, world, table statics, bodies, hinges, step
+├── PhysicsModule.ts             WasmPhysicsEngine: load, world, step, transform / contact buffers, snapshots
+├── physics-module-bodies.ts     Plane / box / capsule statics, rigid bodies, hinges, transform-query fallbacks
 ├── physics-module-adventure.ts  Cylinder / sphere / cone / pin field / mesh / mover / sensor / box body / force field
 ├── wasm-sim-engine.ts           WasmSimEngine interface (in-process engine + worker client)
 ├── physics-worker-protocol.ts   Worker command union + id shadow
@@ -464,6 +468,24 @@ and `native/src/StaticShapes.h`):
 | `-9000` | static cone |
 | `-10000` | pin field (one slot per whole lattice) |
 
+**Force fields** (`native/src/ForceField.cpp`) push every Dynamic body inside a
+region once per substep, before integration, so the contribution lands in the same
+accumulator as gravity. A kinematic (captured) ball is steered, never pushed. Two
+modes share one id space (`-7000`) and one `ForceFieldDesc`:
+
+- **`Directional`** (default): an oriented box with a constant `force` vector —
+  updrafts, conveyors, solar wind (`addForceField`, adventure `forceField` segments).
+- **`AxisPull`** (`addAxisPullField`): a vertical cylinder — `halfExtents.x` is its
+  radius, `halfExtents.y` its half-height — that pulls bodies **horizontally** toward
+  its own axis with `strength × (1 − d / radius)`: full at the axis, nothing at the
+  rim, never a vertical component. The MagSpin feeder's well. It is a separate Embind
+  function so the 15-argument `addForceField` keeps its arity; on the TS side it is
+  the same `addForceField` command with `mode: 'axis-pull'` on the (structured-cloned)
+  `WasmForceFieldDesc`, so the worker protocol is unchanged and a bundle without it
+  stays dormant (`-1`). The mode and strength join the static-content hash only for
+  non-`Directional` fields, so directional-only worlds hash and snapshot exactly as
+  before (no `SNAPSHOT_VERSION` change).
+
 **Sphere vs cylinder** is closed form (`native/src/StaticShapes.cpp`). The ball
 centre is transformed into the cylinder's local frame and clamped
 independently in the radial and axial directions; that yields the three
@@ -588,6 +610,13 @@ Test scenarios (friction and hinge cases live in `hinge_friction_test.cpp`):
 | `release velocity matches the last kinematic delta` (`kinematic_body_test.cpp`) | → Dynamic keeps the pose-delta velocity; free flight continues it |
 | `captured ball holds for 30 frames while a second ball rolls past` (`kinematic_body_test.cpp`) | The held ball stays on its targets and deflects the roller without tunnelling |
 | `kinematic body skips static solids but still trips sensors` (`kinematic_body_test.cpp`) | No impulse-less contact spam against statics; sensors still see a carried ball |
+| `a steered kinematic ball wakes the sleeping ball it drives into` (`sleeper_contact_test.cpp`) | A captured, steered ball no longer passes through a resting one; real contact wakes it |
+| `a rolling ball hits a sleeping ball instead of passing through it` (`sleeper_contact_test.cpp`) | The same for a dynamic roller: a sleeper is a target, not a ghost |
+| `a sleeper stays asleep while an awake ball passes without touching it` / `two sleepers neither pair nor wake each other` (`sleeper_contact_test.cpp`) | Broadphase proximity alone wakes nothing; sleeper-vs-sleeper adds no pair |
+| `axis pull draws a ball horizontally toward the axis` / `… is strongest at the axis and fades linearly to the rim` (`axis_pull_field_test.cpp`) | AxisPull is radial, horizontal-only, `strength × (1 − d / radius)` |
+| `axis pull does nothing outside its radius or its height` / `… applies nothing on the axis itself` / `… honours the acceleration flag` (`axis_pull_field_test.cpp`) | Cylinder extents, the dead zone at the axis, m/s² vs newtons |
+| `a captured kinematic ball is not pulled` / `axis pull respects group masks and the enabled flag` / `… wakes a sleeping ball inside it` (`axis_pull_field_test.cpp`) | Dynamic-only, group-gated, wakes sleepers |
+| `a snapshot refuses a world whose well was built differently` / `directional fields hash exactly as they did before AxisPull existed` (`axis_pull_field_test.cpp`) | Mode + strength are static params; legacy hashes are stable |
 | `a ball hitting the slant gets the slant normal` (`cone_test.cpp`, + apex / base / inside / rotated / groups) | Sphere-vs-cone regions and handle family |
 | `a ball falling through a 12x12 field contacts its pins` (`pin_field_test.cpp`) | Pin-field narrowphase, lattice sub-index in contacts |
 | `a keep-out AABB holds no pin` / `an occupancy mask punches a hole` (`pin_field_test.cpp`) | Lattice resolution rules shared with `src/core/pin-field.ts` |
@@ -765,6 +794,7 @@ Rapier collider:
 |------|----------|-----|
 | fixed | box / capsule / cylinder / sphere / cone | `addStaticBox` / `addStaticCapsule` / `addStaticCylinder` / `addStaticSphere` / `addStaticCone` |
 | fixed | pin field (`WasmTableWorld.createPinField`) | `addPinField` — one id for the whole lattice |
+| fixed | axis-pull well (`WasmTableWorld.createAxisPullField`) | `addForceField` with `mode: 'axis-pull'` — a force field, not geometry; disabling the body gates it through its collision groups |
 | any | sensor box / cylinder / sphere | `addSensorVolume` |
 | kinematic | box / cylinder | `addKinematicMover`, posed each tick from the body's target |
 | any | convex hull, kinematic capsule / cone / sphere, unlinked dynamic | reported, not exported |
@@ -777,14 +807,40 @@ same WASM id. Authored collision groups are applied (`setCollisionGroups`).
 bodies the C++ world simulates: everything with a mesh binding (walls,
 slingshots, bumpers, pachinko pins and targets, decoration rails), the lane
 rollover sensors and the drain; `GamePhysicsController` adds the ball traps
-(funnel cone + chamber sensor, #420). Every other authored body — RailBuilder's
-rails and guards, the plunger body, the spinner / launcher / gate, the
-feeders' well geometry, the LCD ground (the owner's ground plane replaces it)
+(funnel cone + chamber sensor, #420) and MagSpin's well (an axis-pull force
+field). Every other authored body — RailBuilder's
+rails and guards, the plunger body, the spinner / launcher / gate, the other
+four feeders' well geometry, the LCD ground (the owner's ground plane replaces it)
 — is recorded but held out, and listed with a reason by `WasmOwner.getTableUnsupported()`. Those
 bodies were authored against the Rapier table surface (the LCD ground's top,
 y = −0.9), where the ball rolls underneath them; the owner's ground plane is
 y = 0, and exported unchanged they close the plunger lane. They join the scope
 once calibrated for the owner plane.
+
+**MagSpin's well** is the one feeder already calibrated, by being re-authored rather
+than shifted. Its Rapier-era bowl (a floor disc and an eight-wall ring, inner face
+at 1.75) is a ghost above Rapier's lower surface; exported unchanged on the owner
+plane the ring would shut balls out of the 1.5 capture radius and sit on the
+y = 1.0 hold point. So `MagSpinFeeder.createPhysics` builds the bowl only on a world
+that cannot author an axis-pull field (`supportsAxisPullFields(world)`: Rapier,
+`wasm-mirror`), and on the owner path the well *is* the field: C++ draws idle-state
+balls toward the feeder while the TS `checkProximity` capture stays as the confirm
+step, so a ball converges into the capture sphere even when the render thread's
+(or a worker snapshot's) ball list lags. The field is gated off while a ball is held
+or the toy cools down (`syncPullField` → `setEnabled` → collision groups) so it never
+fights a release. A bundle without `addAxisPullField` reports the well in
+`getTableUnsupported()` and capture works as before, unassisted.
+
+`MAG_SPIN_TUNABLES.pullAcceleration` is a play-feel knob. Measured on the owner table
+(gravity z = −5, ground friction 0.18, the standard ball, `pullRadius` 3.0, 3 s):
+
+| Pull (m/s²) | 0 | 6 | **10 (default)** | 15 | 20 | 30 |
+|-------------|---|---|------------------|----|----|----|
+| Resting ball captured out to (m) | 1.4 | 1.7 | **1.9** | 2.2 | 2.4 | 2.7 |
+| Rolling ball (3 m/s) funnel half-width (m) | 1.4 | 1.6 | **1.6** | 1.7 | 1.8 | 1.9 |
+
+`tests/wasm-owner-magspin-pull.spec.ts` pins the in-game claim: a resting ball 1.7 m out is
+captured with the well on and not with it gated off.
 
 **Identity.** `CollisionDispatcher` keys every set on WASM public ids: a ball's
 C++ body id, and a static body's first exported collider id. A contact's WASM
@@ -797,9 +853,12 @@ the mirror parity path. `tests/collision-dispatch-wasm-ids.test.ts` locks the
 key space.
 
 **Bundle.** `loadRapier()` (`src/game-elements/rapier-loader.ts`) is the one
-runtime import of `@dimforge/rapier3d-compat`. `main.ts` preloads the C++
-bundle in parallel with engine creation (`preloadWasmPhysicsNow()`) and only
-warms Rapier for the explicit Rapier modes. The rapier chunk is excluded from
+runtime import of `@dimforge/rapier3d-compat`. `main.ts` calls
+`preloadPhysicsSystem()` (`src/game-elements/physics-preload.ts`), which preloads
+the C++ bundle in parallel with engine creation (`preloadWasmPhysicsNow()`) and only
+warms Rapier for the explicit Rapier modes, then hands `Game` the resulting
+`PhysicsSystem`: `main.ts` / `game.ts` hold no Rapier type
+(`tests/boot-graph-rapier-free.test.ts`). The rapier chunk is excluded from
 the Workbox precache, and `npm run check:bundle` fails if it is ever precached
 or modulepreloaded again.
 

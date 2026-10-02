@@ -595,6 +595,19 @@ failed ||= !runScenario('wasm force field lifts ball against gravity', (w) => {
   w.createRigidBody(1, 2, 0, 0, 0, 0, 8, 0.2, 0.1, 0, 0, 0, 0.5, 0.2, 0.1)
 }, (w) => w.getPosY(0) > 2.5 && Math.abs(w.getPosY(0) - w.getPosY(1)) < 0.05)
 
+// Axis-pull well: a ball inside is drawn horizontally toward the axis and never
+// lifted; a ball outside the radius is untouched.
+failed ||= !runScenario('wasm axis-pull field draws ball toward its axis', (w) => {
+  w.setGravity(0, 0, 0)
+  // px,py,pz, radius, halfHeight, strength, acceleration
+  w.addAxisPullField(0, 0.5, 0, 3, 2, 10, true)
+  w.createRigidBody(1, 0.5, 0, 0, 0, 0, 1, 0.2, 0.1, 0, 0, 0, 0.5, 0.2, 0.1)
+  w.createRigidBody(5, 0.5, 0, 0, 0, 0, 1, 0.2, 0.1, 0, 0, 0, 0.5, 0.2, 0.1)
+}, (w) => Math.abs(w.getPosX(0) - 1) > 0.05
+  && Math.abs(w.getPosY(0) - 0.5) < 1e-3
+  && Math.abs(w.getPosZ(0)) < 1e-3
+  && Math.abs(w.getPosX(1) - 5) < 1e-6)
+
 // Dynamic box: a crate settles on a static box instead of sinking or exploding.
 failed ||= !runScenario('wasm dynamic box rests on a static box', (w) => {
   w.setGravity(0, -9.81, 0)

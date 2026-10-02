@@ -112,6 +112,8 @@ export class GamePhysicsController {
               // Ball traps (#420): the funnel is a C++ cone and the chamber a
               // sensor sphere; the trap sits well clear of the plunger lane.
               ...(this.host.ballTrapBuilder?.getBodies() ?? []),
+              // MagSpin's well (#420 leftover): a C++ axis-pull field, not geometry.
+              ...(this.host.magSpinFeeder?.getBodies() ?? []),
             ])
           }
           this.wasmBridge = this.wasmOwner

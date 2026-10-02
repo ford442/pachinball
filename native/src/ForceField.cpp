@@ -11,6 +11,13 @@
 
 namespace pachinball {
 
+namespace {
+
+/** Inside this distance of the axis the pull direction is undefined; apply nothing. */
+constexpr float AXIS_PULL_DEAD_ZONE = 1e-3f;
+
+} // namespace
+
 int PhysicsWorld::addForceField(const ForceFieldDesc& desc) {
   fields_.push_back(desc);
   return FORCE_FIELD_ID_BASE - (static_cast<int>(fields_.size()) - 1);
@@ -45,13 +52,23 @@ void PhysicsWorld::applyForceFields() {
                           field.membership, field.filter)) continue;
 
       const Vec3 local = field.rotation.conjugate().rotate(body.getPosition() - field.center);
-      if (std::fabs(local.x) > field.halfExtents.x) continue;
-      if (std::fabs(local.y) > field.halfExtents.y) continue;
-      if (std::fabs(local.z) > field.halfExtents.z) continue;
 
-      const Vec3 dir = (field.space == ForceSpace::Local)
-                     ? field.rotation.rotate(field.force)
-                     : field.force;
+      Vec3 dir;
+      if (field.mode == ForceMode::AxisPull) {
+        const float radius = field.halfExtents.x;
+        const float d = std::sqrt(local.x * local.x + local.z * local.z);
+        if (std::fabs(local.y) > field.halfExtents.y) continue;
+        if (d > radius || d < AXIS_PULL_DEAD_ZONE) continue;
+        const Vec3 towardAxis = field.rotation.rotate(Vec3{-local.x, 0.f, -local.z}) * (1.f / d);
+        dir = towardAxis * (field.strength * (1.f - d / radius));
+      } else {
+        if (std::fabs(local.x) > field.halfExtents.x) continue;
+        if (std::fabs(local.y) > field.halfExtents.y) continue;
+        if (std::fabs(local.z) > field.halfExtents.z) continue;
+        dir = (field.space == ForceSpace::Local)
+            ? field.rotation.rotate(field.force)
+            : field.force;
+      }
       // A ball that has gone to sleep inside a conveyor or updraft must be
       // roused, or the field would silently stop acting on it.
       if (!body.isActive() && dir.lengthSq() > 1e-12f) body.wake();
