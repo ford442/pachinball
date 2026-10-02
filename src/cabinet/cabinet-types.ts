@@ -13,6 +13,11 @@ export interface CabinetGltfConfig {
   highUrl: string
   /** Per-load timeout; defaults in loader */
   loadTimeoutMs?: number
+  /**
+   * Authored world-space AABB of the model (Babylon coordinates). The dev
+   * alignment check and tests/model-budgets.test.ts compare loads against it.
+   */
+  bounds?: { min: [number, number, number]; max: [number, number, number] }
 }
 
 export interface CabinetPreset {

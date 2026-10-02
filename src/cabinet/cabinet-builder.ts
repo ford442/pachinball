@@ -80,6 +80,26 @@ export interface LoadCabinetOptions {
   onProgress?: CabinetLoadProgress
 }
 
+/** What is on screen: glTF (and which LOD) or the procedural builder. */
+export interface CabinetLoadInfo {
+  type: CabinetType
+  source: 'gltf' | 'procedural' | 'none'
+  lod?: 'simple' | 'high'
+  url?: string
+  meshCount: number
+}
+
+/**
+ * Set a theme emissive on a cabinet mesh. Procedural parts use
+ * StandardMaterial or PBRMaterial; glTF parts are always PBRMaterial.
+ */
+function setEmissive(mesh: AbstractMesh, value: Color3): void {
+  const mat = mesh.material
+  if (mat instanceof PBRMaterial || mat instanceof StandardMaterial) {
+    mat.emissiveColor = value
+  }
+}
+
 /**
  * Main CabinetBuilder class
  * Manages cabinet lifecycle, preset switching, and theme updates
@@ -96,6 +116,7 @@ export class CabinetBuilder {
   private gltfContainer: AssetContainer | null = null
   private loadInFlight = false
   private qualityTier: QualityTier = QualityTier.HIGH
+  private loadInfo: CabinetLoadInfo = { type: 'classic', source: 'none', meshCount: 0 }
 
   constructor(scene: Scene) {
     this.scene = scene
@@ -210,6 +231,10 @@ export class CabinetBuilder {
     return this.cabinetMeshes
   }
 
+  getLoadInfo(): CabinetLoadInfo {
+    return { ...this.loadInfo }
+  }
+
   private async buildCabinetFromGltf(
     preset: CabinetPreset,
     onProgress?: CabinetLoadProgress,
@@ -238,6 +263,7 @@ export class CabinetBuilder {
     this.partitionMeshes(meshes)
     assertCabinetAlignment(result.meshes, preset)
     this.buildInteriorLighting(preset)
+    this.loadInfo = { type: preset.type, source: 'gltf', lod: result.lod, url: result.url, meshCount: meshes.length }
 
     console.log(
       `[Cabinet] Built ${preset.name} from glTF (${result.lod}: ${result.url}, ${meshes.length} meshes)`,
@@ -255,6 +281,7 @@ export class CabinetBuilder {
     this.cabinetMeshes = newMeshes
     this.partitionMeshes(newMeshes)
     this.buildInteriorLighting(preset)
+    this.loadInfo = { type: preset.type, source: 'procedural', meshCount: newMeshes.length }
 
     console.log(`[Cabinet] Built ${preset.name} cabinet (procedural)`)
   }
@@ -343,15 +370,9 @@ export class CabinetBuilder {
       if (mesh.name.includes('LightBar')) {
         mesh.material = newNeonMat
       } else if (mesh.name.includes('Circuit')) {
-        const circuitMat = mesh.material as StandardMaterial
-        if (circuitMat?.emissiveColor) {
-          circuitMat.emissiveColor = accentColor.scale(0.18)
-        }
+        setEmissive(mesh, accentColor.scale(0.18))
       } else if (mesh.name.includes('SidePlate')) {
-        const plateMat = mesh.material as PBRMaterial
-        if (plateMat?.emissiveColor) {
-          plateMat.emissiveColor = primaryColor.scale(0.15)
-        }
+        setEmissive(mesh, primaryColor.scale(0.15))
       }
     }
 
@@ -380,10 +401,7 @@ export class CabinetBuilder {
       if (mesh.name.includes('LightBar')) {
         mesh.material = newNeonMat
       } else if (mesh.name.includes('Circuit')) {
-        const circuitMat = mesh.material as StandardMaterial
-        if (circuitMat && circuitMat.emissiveColor) {
-          circuitMat.emissiveColor = color(this.currentNeonColor).scale(0.15)
-        }
+        setEmissive(mesh, color(this.currentNeonColor).scale(0.15))
       }
     }
 
@@ -391,10 +409,7 @@ export class CabinetBuilder {
 
     for (const mesh of this.decorationMeshes) {
       if (mesh.name.includes('SidePlate')) {
-        const plateMat = mesh.material as PBRMaterial
-        if (plateMat && plateMat.emissiveColor) {
-          plateMat.emissiveColor = glowColor.scale(0.15)
-        }
+        setEmissive(mesh, glowColor.scale(0.15))
       }
     }
 

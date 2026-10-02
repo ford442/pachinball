@@ -12,12 +12,28 @@ public/models/inserts/mag-spin/{simple,high}.glb
 public/models/inserts/nano-loom/{simple,high}.glb
 ```
 
-Regenerate placeholders:
+The classic cabinet is generated, not hand-exported — edit the generator, then
+regenerate and check:
 
 ```bash
-npm run models:cabinet-placeholders
+npm run models:classic-cabinet   # scripts/generate-classic-cabinet.mjs → classic/{simple,high}.glb
 npm run models:insert-placeholders
+npm run models:check             # tests/model-budgets.test.ts
 ```
+
+Generators share `scripts/lib/glb-writer.mjs` (deterministic GLB: positions,
+normals, PBR + `KHR_materials_emissive_strength`, no cameras/lights) and
+`scripts/lib/mesh-primitives.mjs` (chamfered boxes, prisms, lathes, tori).
+
+### Authoring frame and handedness
+
+Generators author in **Babylon world space** — the same numbers the procedural
+builders use (`panelZ = 5`, front at z = −17, camera at −Z looking +Z).
+Babylon's glTF loader parents every file under `__root__`, which maps glTF
+(x, y, z) to Babylon (−x, y, z). The writer applies the inverse (negate X,
+reverse winding), so a loaded model lands on its authored coordinates and its
+faces stay front-facing. `cabinetCoinSlot` sits at x = −2 as the canary: if it
+loads at +2, the handedness is wrong.
 
 ## LOD + QualityTier
 
@@ -26,14 +42,14 @@ npm run models:insert-placeholders
 | `LOW` | `simpleUrl` only (never fetches high) |
 | `MEDIUM` / `HIGH` | `highUrl`, then `simpleUrl` on failure |
 
-Configured on the preset (`CLASSIC_CONFIG.gltf` in `src/cabinet/cabinet-classic.ts`).
+Configured on the preset (`CLASSIC_CONFIG.gltf` in `src/cabinet/cabinet-presets.ts`).
 
-## Load budgets (targets)
+## Load budgets
 
-| Asset | Size budget | Cold load (local Vite) |
-|-------|-------------|-------------------------|
-| `simple.glb` | ≤ ~1.5 MB | ≤ 2 s desktop / ≤ 4 s mid mobile |
-| `high.glb` | ≤ ~8 MB | same window when selected |
+| Asset | Doc ceiling | Classic today | Enforced (`models:check`) |
+|-------|-------------|---------------|---------------------------|
+| `simple.glb` | ≤ ~1.5 MB, ≤ 2 s desktop / ≤ 4 s mid mobile | ~84 KB, ~1.7k tris | ≤ 250 KB, ≤ 4k tris |
+| `high.glb` | ≤ ~8 MB | ~260 KB, ~7.4k tris | ≤ 3 MB, ≤ 60k tris |
 
 Measure:
 
@@ -46,8 +62,10 @@ Menu shows a progress overlay during classic load; **Start** stays disabled unti
 
 - Cabinet glTF is **visual-only** (`isPickable = false`).
 - Ball containment remains [`src/objects/object-walls.ts`](../src/objects/object-walls.ts).
-- World frame must match the procedural classic origin (`panelZ ≈ 5`, dims from `CabinetPreset`: width 32, depth 44, sideHeight 20).
-- Soft AABB check: set `window.DEBUG_CABINET_ALIGN = true` before load to log bbox vs preset.
+- World frame matches the procedural classic origin (`panelZ ≈ 5`, playfield x ±14, z −13…23); the body stays inside the procedural envelope (sides x ±16…18).
+- The head is built around the backbox display (`DisplaySystem.createBackbox` at (0, 13.5, 26.5), 20 × 12) and the back panel stops below it (y 7), so the cabinet frames the display instead of hiding it.
+- `CabinetGltfConfig.bounds` records the authored world AABB. `tests/model-budgets.test.ts` holds the files to it (±0.5); set `window.DEBUG_CABINET_ALIGN = true` before load to log the loaded AABB against it at runtime.
+- A load that resolves after its timeout is disposed, not left in the scene.
 
 ## Blender → glTF checklist
 
@@ -55,7 +73,7 @@ Menu shows a progress overlay during classic load; **Start** stays disabled unti
 2. Export **glTF 2.0 Binary (`.glb`)**.
 3. Y-up, −Z forward (Babylon default glTF orientation).
 4. Do **not** rely on embedded cameras/lights for gameplay lighting (code still builds interior lights from `lightPoints`).
-5. Keep exterior extents within ~4 units of `CabinetPreset` dims.
+5. Keep exterior extents on `CabinetGltfConfig.bounds` (update it with the art).
 6. **Node names** (substring contracts used by theme code):
 
 | Purpose | Name must include |
@@ -65,7 +83,8 @@ Menu shows a progress overlay during classic load; **Start** stays disabled unti
 
 Examples: `cabinetNeonMarquee`, `cabinetLightBar`, `cabinetSidePlateDetail`.
 
-7. Ship both LODs under the paths above; replace placeholders without code changes.
+7. Theme code recolours `Circuit` / `SidePlate` emissives on either StandardMaterial or PBRMaterial; meshes may share materials.
+8. Ship both LODs under the paths above; replacing the generated files needs no code changes (keep the node names in `CLASSIC_REQUIRED_NODES`).
 
 ## Runtime API
 

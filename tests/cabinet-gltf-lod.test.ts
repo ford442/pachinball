@@ -23,6 +23,7 @@ import {
   pickCabinetGltfUrl,
   splitAssetUrl,
   loadCabinetGltfForPreset,
+  loadCabinetGltf,
 } from '../src/cabinet/cabinet-gltf-loader'
 import { MAG_SPIN_INSERT_GLTF, NANO_LOOM_INSERT_GLTF } from '../src/cabinet/insert-gltf-loader'
 import type { CabinetGltfConfig } from '../src/cabinet/cabinet-types'
@@ -124,5 +125,30 @@ describe('loadCabinetGltfForPreset fallback', () => {
     expect(result.lod).toBe('simple')
     expect(loadAssetContainerAsync).toHaveBeenCalledTimes(1)
     expect(loadAssetContainerAsync.mock.calls[0][1]).toBe('simple.glb')
+  })
+})
+
+describe('loadCabinetGltf timeout', () => {
+  beforeEach(() => {
+    loadAssetContainerAsync.mockReset()
+  })
+
+  it('disposes a container that arrives after the timeout instead of leaking it', async () => {
+    vi.useFakeTimers()
+    try {
+      const late = fakeContainer()
+      let resolveLoad: (c: ReturnType<typeof fakeContainer>) => void = () => {}
+      loadAssetContainerAsync.mockReturnValueOnce(new Promise((r) => { resolveLoad = r }))
+      const pending = loadCabinetGltf({} as never, 'models/x.glb', { timeoutMs: 100 })
+      const settled = expect(pending).rejects.toThrow(/Timed out/)
+      await vi.advanceTimersByTimeAsync(101)
+      await settled
+      resolveLoad(late)
+      await vi.runAllTimersAsync()
+      expect(late.dispose).toHaveBeenCalledTimes(1)
+      expect(late.addAllToScene).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

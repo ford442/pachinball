@@ -49,15 +49,24 @@ export function splitAssetUrl(resolvedUrl: string): { rootUrl: string; sceneFile
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+  onLate?: (value: T) => void,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    let timedOut = false
     const timer = setTimeout(() => {
+      timedOut = true
       reject(new Error(`[CabinetGltf] Timed out after ${ms}ms loading ${label}`))
     }, ms)
     promise.then(
       (value) => {
         clearTimeout(timer)
-        resolve(value)
+        // A load that lands after the caller gave up is nobody's: release it.
+        if (timedOut) onLate?.(value)
+        else resolve(value)
       },
       (err: unknown) => {
         clearTimeout(timer)
@@ -102,7 +111,7 @@ export async function loadCabinetGltf(
     },
   )
 
-  const container = await withTimeout(loadPromise, timeoutMs, relativeUrl)
+  const container = await withTimeout(loadPromise, timeoutMs, relativeUrl, (late) => late.dispose())
   container.addAllToScene()
   options.onProgress?.(1)
   return container
@@ -201,6 +210,22 @@ export function assertCabinetAlignment(
     maxY = Math.max(maxY, max.y)
     minZ = Math.min(minZ, min.z)
     maxZ = Math.max(maxZ, max.z)
+  }
+
+  const bounds = preset.gltf?.bounds
+  if (bounds) {
+    const got = [minX, minY, minZ, maxX, maxY, maxZ]
+    const want = [...bounds.min, ...bounds.max]
+    const tol = options.epsilon ?? 1
+    if (got.some((v, i) => Math.abs(v - want[i]) > tol)) {
+      console.warn(
+        `[CabinetGltf] Alignment check soft-fail for ${preset.type}: ` +
+          `aabb=[${got.slice(0, 3).map((v) => v.toFixed(1))}]→[${got.slice(3).map((v) => v.toFixed(1))}] ` +
+          `vs authored [${bounds.min}]→[${bounds.max}]`,
+      )
+      return false
+    }
+    return true
   }
 
   const width = maxX - minX

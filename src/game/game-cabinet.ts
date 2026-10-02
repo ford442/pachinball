@@ -16,6 +16,7 @@ import {
   type CabinetType,
   type CabinetPreset,
   type LoadCabinetOptions,
+  type CabinetLoadInfo,
 } from '../cabinet'
 
 export interface CabinetManagerConfig {
@@ -41,6 +42,11 @@ export class CabinetManager {
 
   getCurrentPreset(): CabinetPreset {
     return CABINET_PRESETS[this.currentType]
+  }
+
+  /** Whether the cabinet on screen came from glTF or the procedural fallback. */
+  getLoadInfo(): CabinetLoadInfo {
+    return getCabinetBuilder(this.scene).getLoadInfo()
   }
 
   /**

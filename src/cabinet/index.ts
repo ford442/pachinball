@@ -14,6 +14,7 @@ export {
   type CabinetType,
   type CabinetPreset,
   type LoadCabinetOptions,
+  type CabinetLoadInfo,
 } from './cabinet-builder'
 
 // Type exports

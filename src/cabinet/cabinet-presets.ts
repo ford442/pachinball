@@ -52,6 +52,9 @@ export const CLASSIC_CONFIG: CabinetPreset = {
     simpleUrl: 'models/cabinet/classic/simple.glb',
     highUrl: 'models/cabinet/classic/high.glb',
     loadTimeoutMs: 15_000,
+    // scripts/generate-classic-cabinet.mjs: body x ±18, legs to y −16.8,
+    // head + marquee framing the display up to y 27.5, coin door to z −17.5.
+    bounds: { min: [-18.2, -16.9, -17.5], max: [18.2, 27.6, 31] },
   },
 }
 

@@ -23,8 +23,10 @@
     "preview": "vite preview",
     "icons:generate": "node scripts/generate-pwa-icons.mjs",
     "assets:nexus": "node scripts/generate-nexus-character-pack.mjs",
-    "models:cabinet-placeholders": "node scripts/generate-cabinet-placeholders.mjs",
+    "models:classic-cabinet": "node scripts/generate-classic-cabinet.mjs",
     "models:insert-placeholders": "node scripts/generate-insert-placeholders.mjs",
+    "models:check": "vitest run tests/model-budgets.test.ts",
+    "assets:check": "vitest run tests/model-budgets.test.ts tests/backbox-nexus-pack.test.ts",
     "tracks:validate": "vitest run tests/tracks-validate-cli.test.ts",
     "test": "vitest run"
   },
