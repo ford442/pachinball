@@ -14,7 +14,7 @@ import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { GameConfig, GAME_TUNING } from '../config'
 import { getMaterialLibrary } from '../materials'
-import { adaptLegacyConfig, type DisplayConfig } from '../game-elements/display-config'
+import { adaptLegacyConfig, DisplayState, type DisplayConfig } from '../display/display-types'
 import { refreshDailyCascadeUI } from './daily-cascade-ui'
 import {
   QualityTier,
@@ -24,7 +24,6 @@ import {
   DebugHUD,
   getDynamicWorld,
   getScoringBreakdownManager,
-  DisplayState,
   BallManager,
   ZoneTriggerSystem,
   SettingsManager,

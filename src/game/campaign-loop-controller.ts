@@ -2,7 +2,7 @@
  * Campaign loop — intermission rewards, celebrations, persistence, and unlock surfacing.
  */
 
-import { DisplayState } from '../game-elements/display-config'
+import { DisplayState } from '../display/display-types'
 import { TRACK_CATALOG } from '../adventure/adventure-track-progression'
 import type { AdventureTrackProgression } from '../adventure/adventure-track-progression'
 import type { CampaignRewardsManager } from '../adventure/campaign-rewards-manager'

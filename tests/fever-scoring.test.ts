@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { BallType, BALL_SPAWN_CONFIG, GameConfig } from '../src/config'
-import { DisplayState } from '../src/game-elements'
+import { DisplayState } from '../src/display/display-types'
 import { applyFeverGoldMultiplier, getFeverScoreMultiplier } from '../src/game/game-physics-controller'
 
 describe('getFeverScoreMultiplier', () => {

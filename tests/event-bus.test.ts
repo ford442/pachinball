@@ -7,7 +7,8 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { EventBus } from '../src/core/event-bus'
-import { DisplayState, GameState } from '../src/game-elements/types'
+import { GameState } from '../src/game-elements/types'
+import { DisplayState } from '../src/display/display-types'
 
 describe('EventBus', () => {
   let bus: EventBus

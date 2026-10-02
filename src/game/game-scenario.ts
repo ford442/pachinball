@@ -17,7 +17,7 @@ import { getScenario, getZoneConfig, ZoneTriggerSystem as ZoneTriggerSystemClass
 import { getMaterialLibrary } from '../materials'
 import { getLayoutRng } from '../core/seeded-rng'
 import { resolveVideoUrl } from './game-utils'
-import { TABLE_MAPS } from '../shaders/lcd-table'
+import { TABLE_MAPS } from '../config/table-maps'
 import type { DynamicScenario, ScenarioZone, WorldZone, ZoneMechanic } from '../game-elements'
 
 export interface ScenarioHost {

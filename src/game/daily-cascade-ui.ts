@@ -5,7 +5,7 @@
 import {
   getDailyCascadeState,
   type DailyCascadeMode,
-} from '../game-elements/daily-cascade-state'
+} from '../cascade/daily-cascade-state'
 import { TRACK_CATALOG } from '../adventure/adventure-track-progression'
 
 export interface DailyCascadeMenuOptions {

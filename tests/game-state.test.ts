@@ -11,7 +11,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { GameStateManager } from '../src/game/game-state'
 import { EventBus } from '../src/core/event-bus'
-import { GameState, DisplayState } from '../src/game-elements/types'
+import { GameState } from '../src/game-elements/types'
+import { DisplayState } from '../src/display/display-types'
 
 describe('GameStateManager', () => {
   let bus: EventBus

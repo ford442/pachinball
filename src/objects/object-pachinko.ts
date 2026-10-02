@@ -6,7 +6,7 @@ import { Scene } from '@babylonjs/core/scene'
 import { supportsPinFields, type PhysicsApi, type PhysicsBody, type PhysicsWorldSink } from '../core/physics-api'
 import { resolvePinField } from '../core/pin-field'
 import { GameConfig } from '../config'
-import type { PinLattice } from '../game-elements/daily-cascade-layout'
+import type { PinLattice } from '../cascade/daily-cascade-layout'
 import {
   PEG_BASE_RADIUS,
   PEG_COLLIDER_RADIUS,

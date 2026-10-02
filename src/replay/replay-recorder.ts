@@ -5,7 +5,7 @@
 
 import type { WasmPhysicsRuntimeMode } from '../config/physics'
 import type { InputFrame } from '../game-elements/types'
-import { DEFAULT_TABLE_MAP_ID } from '../shaders/lcd-table'
+import { DEFAULT_TABLE_MAP_ID } from '../config/table-maps'
 import type { ReplayWorldFingerprint } from './replay-snapshot'
 
 /** Normalise legacy replay metadata (`wasm` → mirror). */

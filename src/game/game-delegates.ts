@@ -1,9 +1,11 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 
-import { GameState, GhostBallRenderer, ReplayRecorder, CameraMode, detectAccessibility, getDailyCascadeState, type FeederKey } from '../game-elements'
+import { GameState, GhostBallRenderer, ReplayRecorder, CameraMode, detectAccessibility } from '../game-elements'
+import { getDailyCascadeState } from '../cascade/daily-cascade-state'
+import type { FeederKey } from '../cascade/daily-cascade-layout'
 import type { CabinetType } from '../cabinet'
 
-import { TABLE_MAPS } from '../shaders/lcd-table'
+import { TABLE_MAPS } from '../config/table-maps'
 
 import { PhysicsTuningPanel } from '../game-elements/physics-tuning-panel'
 import { FreeMapTestMode } from './free-map-test-mode'

@@ -2,9 +2,7 @@
  * Static asset URL resolution — Babylon-free (#322).
  *
  * Split out of `src/game/game-utils.ts` so `src/game-elements/` can resolve
- * asset paths without importing from the high-level game layer. `hexToColor3`
- * stays in game-utils because it constructs a Babylon `Color3`, which this
- * kernel layer is not allowed to depend on.
+ * asset paths without importing from the high-level game layer.
  */
 
 /**

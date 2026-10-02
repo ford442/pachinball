@@ -15,7 +15,7 @@
  */
 
 import type { DisplaySystem } from '../display'
-import type { TableMapType } from '../shaders/lcd-table'
+import type { TableMapType } from '../config/table-maps'
 import { apiFetch } from '../config'
 import { resolveVideoUrl } from '../core/asset-urls'
 

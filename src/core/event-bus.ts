@@ -24,7 +24,7 @@
  *      is created. Emitters import the concrete enums from their own layer.
  */
 
-import type { DisplayState } from '../game-elements/display-config'
+import type { DisplayState } from '../display/display-types'
 import type { GameState, UnlockedReward } from '../game-elements/types'
 import type { WasmContactEvent } from '../wasm/wasm-types'
 

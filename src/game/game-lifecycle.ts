@@ -7,15 +7,15 @@ import { peekAudioEngine } from '../audio/audio-engine'
 import { Scene } from '@babylonjs/core/scene'
 import {
   GameState,
-  DisplayState,
   BallType,
   SettingsManager,
   detectAccessibility,
   QualityTier,
   getScoringBreakdownManager,
-  getDailyCascadeState,
   type GameSettings,
 } from '../game-elements'
+import { getDailyCascadeState } from '../cascade/daily-cascade-state'
+import { DisplayState } from '../display/display-types'
 import { initSessionRng, getSessionSeed, randomU32Seed } from '../core/seeded-rng'
 import { getChallengeSystem } from '../replay/challenge-system'
 import { REPLAY_SCHEMA_VERSION } from '../replay/replay-recorder'
@@ -34,7 +34,7 @@ import { CameraController, CameraMode } from '../game-elements/camera-controller
 import type { TableMapManager } from './game-maps'
 import type { GameUIManager } from './game-ui'
 import { GAME_TUNING } from '../config'
-import { DEFAULT_TABLE_MAP_ID, TABLE_MAPS } from '../shaders/lcd-table'
+import { DEFAULT_TABLE_MAP_ID, TABLE_MAPS } from '../config/table-maps'
 import { getMaterialLibrary } from '../materials'
 import { isMobileUserAgent } from '../engine/engine-options'
 

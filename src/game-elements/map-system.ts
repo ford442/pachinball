@@ -6,7 +6,7 @@
  */
 
 import { API_BASE, apiFetch, isRemoteApiBase } from '../config'
-import { TABLE_MAPS, type TableMapConfig, type TableMapType } from '../shaders/lcd-table'
+import { TABLE_MAPS, type TableMapConfig, type TableMapType } from '../config/table-maps'
 
 export interface DynamicMapConfig extends TableMapConfig {
   id: string

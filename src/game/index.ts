@@ -11,13 +11,7 @@
 export { GameStateManager } from './game-state'
 export { EventBus, type PachinballEventMap, type PachinballEventName, type PachinballEventHandler } from '../core/event-bus'
 export { GameInputManager } from './game-input'
-export {
-  TableMapManager,
-  TABLE_MAPS,
-  type TableMapType,
-  type TableMapConfig,
-  type MapManagerConfig,
-} from './game-maps'
+export { TableMapManager, type MapManagerConfig } from './game-maps'
 export {
   CabinetManager,
   CABINET_PRESETS,
@@ -57,7 +51,7 @@ export { GameSystemsInitializer } from './game-systems-init'
 export { GameDisposer } from './game-disposer'
 export { GameHUD, type HUDHost } from './game-hud'
 export { GameMapCabinet, type MapCabinetHost } from './game-map-cabinet'
-export { hexToColor3, resolveAssetUrl, resolveVideoUrl } from './game-utils'
+export { resolveAssetUrl, resolveVideoUrl } from './game-utils'
 
 export {
   getMapRegistry,

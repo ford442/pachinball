@@ -27,7 +27,7 @@ npx vitest run tests/ball-manager.test.ts
 
 ## Architecture
 
-**Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 7. Physics runs on an in-house C++ engine compiled to WASM (`native/` + `src/wasm/`) by default (`wasm-owner`); Rapier 3D WASM is the lazily loaded dev/degrade path. Runtime mode is selected via `src/config.ts` (`rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker`). Builders author physics through `PhysicsApi` / `PhysicsWorldSink` / `PhysicsBody` (`src/core/physics-api.ts`), never Rapier values — see `docs/wasm-physics-engine.md`.
+**Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 7. Physics runs on an in-house C++ engine compiled to WASM (`native/` + `src/wasm/`) by default (`wasm-owner`); Rapier 3D WASM is the lazily loaded dev/degrade path. Runtime mode is selected via `src/config/` (`rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker`). Builders author physics through `PhysicsApi` / `PhysicsWorldSink` / `PhysicsBody` (`src/core/physics-api.ts`), never Rapier values — see `docs/wasm-physics-engine.md`.
 
 ### Startup flow
 
@@ -48,7 +48,7 @@ npx vitest run tests/ball-manager.test.ts
 | `src/shaders/` | Standalone WGSL/GLSL effect shaders: CRT scanlines + curvature, LCD table, jackpot overlay, number-scroll animation. |
 | `src/materials/` | PBR material library split by domain (ball, metallic, interactive, structural). `material-core.ts` is the entry point. |
 | `src/audio/` | Single `AudioEngine` (one AudioContext) + pachinko worklet + sample bank. EventBus remains the trigger API. |
-| `src/config.ts` | Ball-type definitions (STANDARD / GOLD_PLATED / SOLID_GOLD), spawn weight distribution (75 / 20 / 5 %), point values, fever-mode multipliers, API config. |
+| `src/config/` | Ball-type definitions (STANDARD / GOLD_PLATED / SOLID_GOLD), spawn weight distribution (75 / 20 / 5 %), point values, fever-mode multipliers, API config. |
 
 ### Ball lifecycle
 

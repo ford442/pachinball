@@ -62,7 +62,7 @@ export default defineConfig([
   // Config purity: no Babylon, no game-elements. The display barrel is banned;
   // display-slot.ts is the sole exception (slot enums needed at runtime).
   {
-    files: ['src/config.ts', 'src/config/**/*.ts'],
+    files: ['src/config/**/*.ts'],
     ignores: ['src/config/display-slot.ts'],
     rules: {
       '@typescript-eslint/no-restricted-imports': ['error', {
@@ -129,9 +129,10 @@ export default defineConfig([
             message: 'src/core is the kernel — it must not depend on the game layer.',
           },
           {
-            // Event-map payload types (DisplayState, GameState, ...) still live in
-            // game-elements. Types are erased, so they create no runtime edge;
-            // a runtime import would, and is what this blocks.
+            // Event-map payload types such as GameState still live in game-elements
+            // (DisplayState moved to src/display/display-types). Types are erased,
+            // so they create no runtime edge; a runtime import would, and is what
+            // this blocks.
             group: ['../game-elements/*', '../game-elements/**'],
             allowTypeImports: true,
             message:

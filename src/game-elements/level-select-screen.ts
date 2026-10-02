@@ -9,7 +9,7 @@
  */
 
 import type { AdventureState, AdventureLevel } from '../adventure/adventure-state'
-import type { TableMapType } from '../shaders/lcd-table'
+import type { TableMapType } from '../config/table-maps'
 import { getCampaignRewardsManager } from '../adventure/campaign-rewards-manager'
 import { renderLevelSelectStyles } from './level-select-screen-styles'
 

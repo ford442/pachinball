@@ -24,7 +24,7 @@ import { getMaterialLibrary } from '../materials'
 import type { GameObjects } from '../objects'
 import type { EffectsSystem } from '../effects'
 import type { TableMapManager } from './game-maps'
-import { TABLE_MAPS } from '../shaders/lcd-table'
+import { TABLE_MAPS } from '../config/table-maps'
 import { GameConfig } from '../config'
 
 export interface CabinetBuilderHost {

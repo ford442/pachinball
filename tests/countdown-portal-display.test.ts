@@ -196,7 +196,7 @@ vi.mock('../src/game-elements/accessibility-config', () => ({
 // ---------------------------------------------------------------------------
 
 import { TIMER_COLORS } from '../src/game-elements/visual-language'
-import { DisplayState, DEFAULT_DISPLAY_CONFIG, getStateConfig } from '../src/game-elements/display-config'
+import { DisplayState, DEFAULT_DISPLAY_CONFIG, getStateConfig } from '../src/display/display-types'
 import { DisplaySystem } from '../src/display/display-core'
 
 // ---------------------------------------------------------------------------

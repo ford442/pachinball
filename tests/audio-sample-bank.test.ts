@@ -5,7 +5,7 @@ import {
   getSampleKeyForCategory,
   getSampleKeyForImpact,
   LOCAL_SAMPLE_BANK,
-} from '../src/game-elements/audio-sample-bank'
+} from '../src/audio/audio-sample-bank'
 
 describe('audio-sample-bank', () => {
   it('maps impact categories to sample keys', () => {

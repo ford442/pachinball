@@ -9,8 +9,8 @@ import type { MapSystem } from '../game-elements/map-system'
 import type { PhysicsSystem } from '../game-elements/physics'
 import type { TableMapManager } from './game-maps'
 import { SettingsManager } from '../game-elements'
-import type { AudioSourceMode } from '../game-elements/audio-sample-bank'
-import { TABLE_MAPS, registerMap } from '../shaders/lcd-table'
+import type { AudioSourceMode } from '../audio/audio-sample-bank'
+import { TABLE_MAPS, registerMap } from '../config/table-maps'
 import { PhysicsDebugRenderer } from '../game-elements/physics-debug-renderer'
 import {
   attemptWebGPURenderer,
