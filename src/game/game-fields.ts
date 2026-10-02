@@ -54,7 +54,6 @@ import { PhysicsTuningPanel } from '../game-elements/physics-tuning-panel'
 import { GameDebug } from './game-debug'
 import { GameLifecycle } from './game-lifecycle'
 import { GameSystemsInitializer } from './game-systems-init'
-import { GameDisposer } from './game-disposer'
 import { GameHUD } from './game-hud'
 import { GameMapCabinet } from './game-map-cabinet'
 import { CheckpointDebugController } from './checkpoint-debug'
@@ -244,19 +243,18 @@ export abstract class GameFields {
 
   // Helpers
   renderer!: GameRenderer
-  cabinetBuilder!: GameCabinetBuilder
-  sceneBuilder!: GameSceneBuilder
+  cabinetBuilder: GameCabinetBuilder | null = null
+  sceneBuilder: GameSceneBuilder | null = null
   protected systemsInitializer!: GameSystemsInitializer
-  disposer!: GameDisposer
-  physicsController!: GamePhysicsController
-  inputActions!: GameInputActions
-  scenarioManager!: GameScenario
-  slotAdventure!: GameSlotAdventure
-  settingsUI!: GameSettingsUI
-  debugHelper!: GameDebug
-  lifecycle!: GameLifecycle
-  hud!: GameHUD
-  mapCabinet!: GameMapCabinet
+  physicsController: GamePhysicsController | null = null
+  inputActions: GameInputActions | null = null
+  scenarioManager: GameScenario | null = null
+  slotAdventure: GameSlotAdventure | null = null
+  settingsUI: GameSettingsUI | null = null
+  debugHelper: GameDebug | null = null
+  lifecycle: GameLifecycle | null = null
+  hud: GameHUD | null = null
+  mapCabinet: GameMapCabinet | null = null
   freeMapTestMode: FreeMapTestMode | null = null
   checkpointDebug = new CheckpointDebugController()
   cosmeticSceneBuilt = false

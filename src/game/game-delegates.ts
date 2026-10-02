@@ -18,7 +18,7 @@ export abstract class GameDelegates extends GameFields {
   // Public API
   // --------------------------------------------------------------------------
 
-  startGame(): Promise<void> { return this.lifecycle.startGame() }
+  startGame(): Promise<void> { return this.lifecycle?.startGame() ?? Promise.resolve() }
 
   applyDailyCascadeOnStart(): void {
     const state = getDailyCascadeState()
@@ -51,12 +51,12 @@ export abstract class GameDelegates extends GameFields {
     this.quantumTunnel?.setGameplayEnabled(allOn || !!flags?.quantumTunnel)
   }
 
-  switchTableMap(mapName: string): void { this.mapCabinet.switchTableMap(mapName) }
-  loadCabinetPreset(type: CabinetType): Promise<void> { return this.mapCabinet.loadCabinetPreset(type) }
-  cycleCabinetPreset(): Promise<void> { return this.mapCabinet.cycleCabinetPreset() }
-  cycleTableMap(): void { this.mapCabinet.cycleTableMap() }
-  switchScenario(scenarioId: string): void { this.scenarioManager.switchScenario(scenarioId) }
-  cycleScenario(direction: 1 | -1 = 1): void { this.scenarioManager.cycleScenario(direction) }
+  switchTableMap(mapName: string): void { this.mapCabinet?.switchTableMap(mapName) }
+  loadCabinetPreset(type: CabinetType): Promise<void> { return this.mapCabinet?.loadCabinetPreset(type) ?? Promise.resolve() }
+  cycleCabinetPreset(): Promise<void> { return this.mapCabinet?.cycleCabinetPreset() ?? Promise.resolve() }
+  cycleTableMap(): void { this.mapCabinet?.cycleTableMap() }
+  switchScenario(scenarioId: string): void { this.scenarioManager?.switchScenario(scenarioId) }
+  cycleScenario(direction: 1 | -1 = 1): void { this.scenarioManager?.cycleScenario(direction) }
 
   // SettingsUIHost scanline API
   scanlineEnabled = true
@@ -74,9 +74,9 @@ export abstract class GameDelegates extends GameFields {
 
   bestScore = 0
 
-  setGameState(state: GameState): void { this.lifecycle.setGameState(state) }
-  getCameraMode(): CameraMode { return this.lifecycle.getCameraMode() }
-  togglePause(): void { this.lifecycle.togglePause() }
+  setGameState(state: GameState): void { this.lifecycle?.setGameState(state) }
+  getCameraMode(): CameraMode { return this.lifecycle?.getCameraMode() ?? CameraMode.IDLE }
+  togglePause(): void { this.lifecycle?.togglePause() }
   /**
    * Reset the current run to a clean launch-ready state without changing the active mode/track.
    * This clears transient plunger input/animation state, collapses multiball back to one ball,
@@ -84,7 +84,7 @@ export abstract class GameDelegates extends GameFields {
    */
   resetBall(): void {
     this.inputManager?.cancelPlungerCharge()
-    this.inputActions.resetPlungerState()
+    this.inputActions?.resetPlungerState()
     this.ballManager?.removeExtraBalls()
     this.ballManager?.resetBall()
     this.applyEquippedRewards()
@@ -96,18 +96,18 @@ export abstract class GameDelegates extends GameFields {
     }
     return false
   }
-  triggerJackpot(): void { this.lifecycle.triggerJackpot() }
-  updateHUD(): void { this.hud.updateHUD() }
-  updateGoldBallDisplay(): void { this.hud.updateGoldBallDisplay() }
+  triggerJackpot(): void { this.lifecycle?.triggerJackpot() }
+  updateHUD(): void { this.hud?.updateHUD() }
+  updateGoldBallDisplay(): void { this.hud?.updateGoldBallDisplay() }
   showMessage(msg: string, duration: number): void { this.uiManager?.showMessage(msg, duration) }
-  handleGameOverLeaderboard(): Promise<void> { return this.hud.handleGameOverLeaderboard() }
-  getBallPosition(): Vector3 | null { return this.physicsController.getBallPosition() }
-  endAdventureMode(): void { this.slotAdventure.endAdventureMode() }
-  tryActivateSlotMachine(): void { this.slotAdventure.tryActivateSlotMachine() }
-  forceSlotSpin(): void { this.slotAdventure.forceSlotSpin() }
-  rebuildHandleCaches(): void { this.physicsController.rebuildHandleCaches() }
+  handleGameOverLeaderboard(): Promise<void> { return this.hud?.handleGameOverLeaderboard() ?? Promise.resolve() }
+  getBallPosition(): Vector3 | null { return this.physicsController?.getBallPosition() ?? null }
+  endAdventureMode(): void { this.slotAdventure?.endAdventureMode() }
+  tryActivateSlotMachine(): void { this.slotAdventure?.tryActivateSlotMachine() }
+  forceSlotSpin(): void { this.slotAdventure?.forceSlotSpin() }
+  rebuildHandleCaches(): void { this.physicsController?.rebuildHandleCaches() }
   handleDebugHUDVisibilityChange(visible: boolean): void {
-    this.debugHelper.handleDebugHUDVisibilityChange(
+    this.debugHelper?.handleDebugHUDVisibilityChange(
       visible,
       () => {
         this.eventBusLog.wire(this.eventBus)
@@ -133,24 +133,24 @@ export abstract class GameDelegates extends GameFields {
     this.display?.setAccessibility(this.accessibility)
     this.mapManager?.getLCDTableState().setPhotosensitiveMode(photosensitiveMode)
   }
-  isDebugHUDAvailable(): boolean { return this.debugHelper.isDebugHUDAvailable() }
-  isDebugHUDKeyboardEnabled(): boolean { return this.debugHelper.isDebugHUDKeyboardEnabled() }
-  initializeDynamicZones(mapName: string, mapConfig: typeof TABLE_MAPS[string]): void { this.scenarioManager.initializeDynamicZones(mapName, mapConfig) }
-  updateCabinetLightingForMap(): void { this.cabinetBuilder.updateCabinetLightingForMap() }
+  isDebugHUDAvailable(): boolean { return this.debugHelper?.isDebugHUDAvailable() ?? false }
+  isDebugHUDKeyboardEnabled(): boolean { return this.debugHelper?.isDebugHUDKeyboardEnabled() ?? false }
+  initializeDynamicZones(mapName: string, mapConfig: typeof TABLE_MAPS[string]): void { this.scenarioManager?.initializeDynamicZones(mapName, mapConfig) }
+  updateCabinetLightingForMap(): void { this.cabinetBuilder?.updateCabinetLightingForMap() }
 
   // --------------------------------------------------------------------------
   // Input / Gameplay delegates
   // --------------------------------------------------------------------------
 
-  handleFlipperLeft(pressed: boolean): void { this.inputActions.handleFlipperLeft(pressed) }
-  handleFlipperRight(pressed: boolean): void { this.inputActions.handleFlipperRight(pressed) }
+  handleFlipperLeft(pressed: boolean): void { this.inputActions?.handleFlipperLeft(pressed) }
+  handleFlipperRight(pressed: boolean): void { this.inputActions?.handleFlipperRight(pressed) }
   handlePlunger(): void {
-    this.inputActions.handlePlunger()
+    this.inputActions?.handlePlunger()
   }
-  startPlungerCharge(): void { this.inputActions.startPlungerCharge() }
-  updatePlungerCharge(chargeLevel: number): void { this.inputActions.updatePlungerCharge(chargeLevel) }
-  releasePlungerCharge(chargeLevel: number): void { this.inputActions.releasePlungerCharge(chargeLevel) }
-  applyNudge(direction: { x: number; y: number; z: number }): void { this.physicsController.applyNudge(direction) }
+  startPlungerCharge(): void { this.inputActions?.startPlungerCharge() }
+  updatePlungerCharge(chargeLevel: number): void { this.inputActions?.updatePlungerCharge(chargeLevel) }
+  releasePlungerCharge(chargeLevel: number): void { this.inputActions?.releasePlungerCharge(chargeLevel) }
+  applyNudge(direction: { x: number; y: number; z: number }): void { this.physicsController?.applyNudge(direction) }
 
   // --------------------------------------------------------------------------
   // Adventure / Mode delegates
@@ -158,9 +158,9 @@ export abstract class GameDelegates extends GameFields {
 
   toggleAdventure(): void {
     if (this.adventureMode?.isActive()) {
-      this.slotAdventure.endAdventureMode()
+      this.slotAdventure?.endAdventureMode()
     } else {
-      this.slotAdventure.startAdventureMode()
+      this.slotAdventure?.startAdventureMode()
     }
   }
 
@@ -174,7 +174,7 @@ export abstract class GameDelegates extends GameFields {
     this.levelSelectScreen = getLevelSelectScreen(
       {
         onLevelSelect: (level, mapType) => {
-          this.mapCabinet.switchTableMap(mapType)
+          this.mapCabinet?.switchTableMap(mapType)
           this.adventureState.startLevel(level.id)
         },
         onClose: () => {},
@@ -201,7 +201,7 @@ export abstract class GameDelegates extends GameFields {
         {
           adventureMode: this.adventureMode,
           ballManager: this.ballManager,
-          ensureAdventureActive: () => this.slotAdventure.startAdventureMode(),
+          ensureAdventureActive: () => this.slotAdventure?.startAdventureMode(),
           resetBall: () => this.resetBall(),
           rebuildHandleCaches: () => this.rebuildHandleCaches(),
           mapManager: this.mapManager,
@@ -219,7 +219,7 @@ export abstract class GameDelegates extends GameFields {
     return new LevelLoader({
       adventureMode: this.adventureMode,
       ballManager: this.ballManager,
-      ensureAdventureActive: () => this.slotAdventure.startAdventureMode(),
+      ensureAdventureActive: () => this.slotAdventure?.startAdventureMode(),
       resetBall: () => this.resetBall(),
       rebuildHandleCaches: () => this.rebuildHandleCaches(),
       mapManager: this.mapManager,
@@ -227,8 +227,8 @@ export abstract class GameDelegates extends GameFields {
     })
   }
 
-  cycleAdventureTrack(direction: number): void { this.slotAdventure.cycleAdventureTrack(direction) }
-  startAdventureMode(): void { this.slotAdventure.startAdventureMode() }
+  cycleAdventureTrack(direction: number): void { this.slotAdventure?.cycleAdventureTrack(direction) }
+  startAdventureMode(): void { this.slotAdventure?.startAdventureMode() }
 
   async startSpectateReplay(replayId: string): Promise<boolean> {
     try {
@@ -249,7 +249,7 @@ export abstract class GameDelegates extends GameFields {
       this.replayRunner.load(payload)
       this.ghostBallRenderer?.show()
       this.uiManager?.showMessage(`Watching Replay: ${payload.mapId} (Score: ${payload.finalScore.toLocaleString()})`, 4000)
-      await this.lifecycle.startGame()
+      await this.lifecycle?.startGame()
       return true
     } catch (err) {
       console.warn('[Game] Failed to spectate replay:', err)

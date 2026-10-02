@@ -24,14 +24,16 @@ import { PhysicsTuningPanel, isPhysicsTuningEnabled } from './game-elements/phys
 import { GameDebug, type DebugHost } from './game/game-debug'
 import { GameLifecycle, type LifecycleHost } from './game/game-lifecycle'
 import { GameSystemsInitializer } from './game/game-systems-init'
-import { GameDisposer } from './game/game-disposer'
+import { disposeGame } from './game/game-disposer'
 import { GameHUD, type HUDHost } from './game/game-hud'
 import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
-import { CheckpointDebugController, type DebugStageKey } from './game/checkpoint-debug'
+import type { DebugStageKey } from './game/checkpoint-debug'
 import { GameDelegates } from './game/game-delegates'
 import { installSimClock } from './core/sim-clock'
 
 export class Game extends GameDelegates {
+  private disposed = false
+
   constructor(engine: Engine | WebGPUEngine, physics: PhysicsSystem = new PhysicsSystem()) {
     super(engine)
     this.physics = physics
@@ -58,8 +60,6 @@ export class Game extends GameDelegates {
     scene.clearColor = color(SURFACES.VOID).toColor4(1)
 
     this.applyFogPreference(scene, this.accessibility?.reducedMotion ?? false)
-
-    this.checkpointDebug = new CheckpointDebugController()
 
     await this.runCheckpointStage('settings_ui', async () => {
       this.scoreElement = document.getElementById('score')
@@ -152,7 +152,7 @@ export class Game extends GameDelegates {
 
     await this.runCheckpointStage('state_setup', async () => {
       this.soundSystem = getSoundSystem()
-      this.settingsUI.setupMapSelector()
+      this.settingsUI?.setupMapSelector()
 
       this.eventBus = new EventBus()
       getSoundSystem(this.eventBus)
@@ -170,45 +170,44 @@ export class Game extends GameDelegates {
 
     await this.runCheckpointStage('physics', () => this.physics.init())
     this.systemsInitializer = new GameSystemsInitializer(this)
-    this.disposer = new GameDisposer(this)
     await this.systemsInitializer.initAll()
 
     this.ballAnimator = new BallAnimator(scene)
 
     await this.runCheckpointStage('input_runtime', () => {
       // Provide scene reference so the per-frame plunger animation can find meshes by name
-      this.inputActions.setScene(scene)
+      this.inputActions?.setScene(scene)
       this.inputManager = new GameInputManager(scene, this.physics, {
-        onFlipperLeft: (pressed) => this.inputActions.handleFlipperLeft(pressed),
-        onFlipperRight: (pressed) => this.inputActions.handleFlipperRight(pressed),
+        onFlipperLeft: (pressed) => this.inputActions?.handleFlipperLeft(pressed),
+        onFlipperRight: (pressed) => this.inputActions?.handleFlipperRight(pressed),
         onPlunger: () => {
-          const didLaunch = this.inputActions.handlePlunger()
+          const didLaunch = this.inputActions?.handlePlunger()
           if (didLaunch) {
             this.eventBus?.emit('ball:launched')
             this.ballManager?.startBallSaveGraceWindow()
           }
         },
-        onPlungerChargeStart: () => this.inputActions.startPlungerCharge(),
-        onPlungerChargeRelease: (chargeLevel) => this.inputActions.releasePlungerCharge(chargeLevel),
+        onPlungerChargeStart: () => this.inputActions?.startPlungerCharge(),
+        onPlungerChargeRelease: (chargeLevel) => this.inputActions?.releasePlungerCharge(chargeLevel),
         onPlungerChargeUpdate: (chargeLevel) => {
-          this.inputActions.updatePlungerCharge(chargeLevel)
-          this.inputActions.updatePlungerVisual(scene, chargeLevel)
+          this.inputActions?.updatePlungerCharge(chargeLevel)
+          this.inputActions?.updatePlungerVisual(scene, chargeLevel)
         },
-        onNudge: (direction) => this.physicsController.applyNudge(direction),
-        onPause: () => this.lifecycle.togglePause(),
+        onNudge: (direction) => this.physicsController?.applyNudge(direction),
+        onPause: () => this.lifecycle?.togglePause(),
         onReset: () => this.resetBall(),
-        onStart: () => this.lifecycle.startGame(),
+        onStart: () => this.lifecycle?.startGame(),
         onAdventureToggle: () => this.toggleAdventure(),
-        onTrackNext: () => this.slotAdventure.cycleAdventureTrack(1),
-        onTrackPrev: () => this.slotAdventure.cycleAdventureTrack(-1),
-        onJackpotTrigger: () => this.lifecycle.triggerJackpot(),
+        onTrackNext: () => this.slotAdventure?.cycleAdventureTrack(1),
+        onTrackPrev: () => this.slotAdventure?.cycleAdventureTrack(-1),
+        onJackpotTrigger: () => this.lifecycle?.triggerJackpot(),
         onDebugHUD: () => {
-          if (!this.debugHelper.isDebugHUDKeyboardEnabled()) return
+          if (!this.debugHelper?.isDebugHUDKeyboardEnabled()) return
           this.debugHUD?.toggle()
         },
         onForceSlotSpin: () => {
-          if (!this.debugHelper.isDebugHUDAvailable()) return
-          this.slotAdventure.forceSlotSpin()
+          if (!this.debugHelper?.isDebugHUDAvailable()) return
+          this.slotAdventure?.forceSlotSpin()
         },
         onMapSwitch: (index) => {
           const maps = this.mapManager?.getMapSystem().getMapIds() || []
@@ -223,8 +222,8 @@ export class Game extends GameDelegates {
         onLeaderboardToggle: () => {
           void this.ensureOverlaySystems().then(() => this.leaderboardSystem.toggle())
         },
-        onDynamicModeToggle: () => this.scenarioManager.toggleDynamicMode(),
-        onScenarioCycle: () => this.scenarioManager.cycleScenario(),
+        onDynamicModeToggle: () => this.scenarioManager?.toggleDynamicMode(),
+        onScenarioCycle: () => this.scenarioManager?.cycleScenario(),
         onPerfMonitorToggle: () => this.togglePerformanceMonitor(),
         onFreeMapTestToggle: () => this.toggleFreeMapTestMode(),
         getState: () => this.stateManager.getState(),
@@ -258,9 +257,9 @@ export class Game extends GameDelegates {
       scene.onBeforeRenderObservable.add(() => {
         this.performanceMonitor.frameStart()
         this.performanceMonitor.physicsStart()
-        this.physicsController.stepPhysics(this.inputManager, this.inputActions, this.replayRunner, this.replayRecorder)
+        this.physicsController?.stepPhysics(this.inputManager, this.inputActions, this.replayRunner, this.replayRecorder)
         this.performanceMonitor.physicsEnd()
-        this.settingsUI.updatePhysicsDebugRenderer()
+        this.settingsUI?.updatePhysicsDebugRenderer()
       })
 
       this.engine.runRenderLoop(() => this.renderFrame())
@@ -268,7 +267,7 @@ export class Game extends GameDelegates {
       this.showDebugUI = new URLSearchParams(window.location.search).has('debug')
       if (this.showDebugUI) {
         this.inputManager?.enableLatencyTracking(true)
-        this.settingsUI.setupLatencyOverlay()
+        this.settingsUI?.setupLatencyOverlay()
       }
     })
 
@@ -277,12 +276,12 @@ export class Game extends GameDelegates {
 
     await this.systemsInitializer.postInitManagers()
 
-    this.lifecycle.setGameState(GameState.MENU)
+    this.lifecycle?.setGameState(GameState.MENU)
   }
 
   /** Per-frame render loop body — also used by VisibilityManager on tab resume. */
   renderFrame(): void {
-    this.settingsUI.updateLatencyDisplay(this.inputManager || undefined)
+    this.settingsUI?.updateLatencyDisplay(this.inputManager || undefined)
     this.scene?.render()
     const dt = this.engine.getDeltaTime() / 1000
     this.cabinetLighting?.update(dt)
@@ -332,7 +331,8 @@ export class Game extends GameDelegates {
     this.performanceMonitor.frameEnd()
 
     if (this.debugHUD?.isHUDVisible()) {
-      this.debugHUD.update(this.debugHelper.buildDebugSnapshot(dt, this.lives))
+      const snapshot = this.debugHelper?.buildDebugSnapshot(dt, this.lives)
+      if (snapshot) this.debugHUD.update(snapshot)
       this.debugHUD.updatePanel('EventBus', this.eventBusLog.getPanelData())
     }
 
@@ -375,7 +375,7 @@ export class Game extends GameDelegates {
     const buildCosmetic = () => {
       if (this.cosmeticSceneBuilt) return
       void this.runCheckpointStage('scene_cosmetic', () => {
-        this.sceneBuilder.buildCosmeticScene()
+        this.sceneBuilder?.buildCosmeticScene()
         this.cosmeticSceneBuilt = true
       }, true)
     }
@@ -417,7 +417,10 @@ export class Game extends GameDelegates {
   }
 
   dispose(): void {
-    this.disposer.disposeAll()
+    // Idempotent: a second call (HMR, tests, a retry after a failed init) is a no-op.
+    if (this.disposed) return
+    this.disposed = true
+    disposeGame(this)
     installSimClock(null)
   }
 }
