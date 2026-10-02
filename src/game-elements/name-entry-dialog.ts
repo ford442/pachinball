@@ -17,6 +17,7 @@ export class NameEntryDialog {
   private score = 0
   private rank = 0
   private resolveCallback: ((result: NameEntryResult) => void) | null = null
+  private keyHandler: ((e: KeyboardEvent) => void) | null = null
 
   /**
    * Show the name entry dialog
@@ -39,8 +40,15 @@ export class NameEntryDialog {
    * Hide and cleanup
    */
   hide(): void {
+    this.removeKeyHandler()
     this.overlay?.remove()
     this.overlay = null
+  }
+
+  private removeKeyHandler(): void {
+    if (!this.keyHandler) return
+    document.removeEventListener('keydown', this.keyHandler)
+    this.keyHandler = null
   }
 
   private createOverlay(): void {
@@ -258,12 +266,12 @@ export class NameEntryDialog {
       }
     }
     
+    // Removed in hide(). (This used to listen for a DOM 'remove' event, which does not
+    // exist, so every show() leaked a document-level keydown handler that kept
+    // swallowing arrows, Enter and Space.)
+    this.removeKeyHandler()
+    this.keyHandler = handleKeyDown
     document.addEventListener('keydown', handleKeyDown)
-    
-    // Store handler for cleanup
-    this.overlay?.addEventListener('remove', () => {
-      document.removeEventListener('keydown', handleKeyDown)
-    })
   }
 
   private changeLetter(delta: number): void {

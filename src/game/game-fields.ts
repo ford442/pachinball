@@ -66,6 +66,14 @@ import type { NameEntryDialog } from '../game-elements/name-entry-dialog'
 import type { LevelSelectScreen } from '../game-elements/level-select-screen'
 
 export abstract class GameFields {
+  /**
+   * One controller per Game. Every window/document/canvas listener the Game (or a
+   * system it owns) adds passes `{ signal }`, so dispose() is a single abort() and
+   * a second Game in the same page starts from the page's own listener count (#441).
+   */
+  readonly abort = new AbortController()
+  get signal(): AbortSignal { return this.abort.signal }
+
   readonly engine: Engine | WebGPUEngine
   scene: Nullable<Scene> = null
 
@@ -271,7 +279,7 @@ export abstract class GameFields {
   hud: GameHUD | null = null
   mapCabinet: GameMapCabinet | null = null
   freeMapTestMode: FreeMapTestMode | null = null
-  checkpointDebug = new CheckpointDebugController()
+  checkpointDebug = new CheckpointDebugController({ signal: this.abort.signal })
   cosmeticSceneBuilt = false
   ghostBallRenderer: GhostBallRenderer | null = null
 }

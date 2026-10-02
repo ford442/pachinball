@@ -215,11 +215,11 @@ export class GameInputManager {
   /**
    * Setup gamepad support with configuration
    */
-  setupGamepad(config?: GamepadConfig): void {
+  setupGamepad(config?: GamepadConfig, signal?: AbortSignal): void {
     this.inputHandler.setupGamepad({
       deadZone: config?.deadZone ?? 0.15,
       vibrationEnabled: config?.vibrationEnabled ?? true,
-    })
+    }, signal)
   }
 
   /**
@@ -236,9 +236,10 @@ export class GameInputManager {
     leftBtn: HTMLElement | null,
     rightBtn: HTMLElement | null,
     plungerBtn: HTMLElement | null,
-    nudgeBtn: HTMLElement | null
+    nudgeBtn: HTMLElement | null,
+    signal?: AbortSignal,
   ): void {
-    this.inputHandler.setupTouchControls(leftBtn, rightBtn, plungerBtn, nudgeBtn)
+    this.inputHandler.setupTouchControls(leftBtn, rightBtn, plungerBtn, nudgeBtn, signal)
   }
 
   /**

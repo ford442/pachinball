@@ -48,6 +48,8 @@ export class Game
     PhysicsHost
 {
   private disposed = false
+  /** Stable reference so dispose() can remove exactly this loop from a shared engine. */
+  private readonly renderLoop = (): void => this.renderFrame()
 
   constructor(engine: Engine | WebGPUEngine, physics: PhysicsSystem = new PhysicsSystem()) {
     super(engine)
@@ -80,16 +82,18 @@ export class Game
       this.scoreElement = document.getElementById('score')
       this.menuOverlay = document.getElementById('menu-overlay')
       this.pauseOverlay = document.getElementById('pause-overlay')
-      this.uiManager = new GameUIManager(scene)
+      this.uiManager = new GameUIManager(scene, this.signal)
       this.startScreen = document.getElementById('start-screen')
       this.gameOverScreen = document.getElementById('game-over-screen')
       this.finalScoreElement = document.getElementById('final-score')
 
-      document.getElementById('start-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
-      document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
+      const { signal } = this
+      document.getElementById('start-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() }, { signal })
+      document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() }, { signal })
       this.uiManager?.setStartButtonEnabled(false)
       const { bindDailyCascadeUI } = await import('./game/daily-cascade-ui')
       bindDailyCascadeUI({
+        signal,
         getCampaignStageName: () =>
           this.adventureTrackProgression?.getCurrentTrackInfo()?.name ?? 'Neon Helix',
       })
@@ -255,13 +259,13 @@ export class Game
       this.inputManager.setupGamepad({
         deadZone: 0.15,
         vibrationEnabled: !this.accessibility.reducedMotion,
-      })
+      }, this.signal)
 
       const touchLeftBtn = document.getElementById('touch-left')
       const touchRightBtn = document.getElementById('touch-right')
       const touchPlungerBtn = document.getElementById('touch-plunger')
       const touchNudgeBtn = document.getElementById('touch-nudge')
-      this.inputManager.setupTouchControls(touchLeftBtn, touchRightBtn, touchPlungerBtn, touchNudgeBtn)
+      this.inputManager.setupTouchControls(touchLeftBtn, touchRightBtn, touchPlungerBtn, touchNudgeBtn, this.signal)
 
       const urlParams = new URLSearchParams(window.location.search)
       const replayParam = urlParams.get('replay')
@@ -277,7 +281,7 @@ export class Game
         this.settingsUI?.updatePhysicsDebugRenderer()
       })
 
-      this.engine.runRenderLoop(() => this.renderFrame())
+      this.engine.runRenderLoop(this.renderLoop)
 
       this.showDebugUI = new URLSearchParams(window.location.search).has('debug')
       if (this.showDebugUI) {
@@ -435,6 +439,9 @@ export class Game
     // Idempotent: a second call (HMR, tests, a retry after a failed init) is a no-op.
     if (this.disposed) return
     this.disposed = true
+    // The engine outlives the Game; leave its loop running and a second Game would
+    // render alongside this dead one.
+    this.engine.stopRenderLoop(this.renderLoop)
     disposeGame(this)
     installSimClock(null)
   }

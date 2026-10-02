@@ -85,10 +85,10 @@ export class GameUIManager {
     prefersReducedMotion: false,
   }
 
-  constructor(scene: Scene) {
+  constructor(scene: Scene, signal?: AbortSignal) {
     void scene
     bindHUDElements(this.state)
-    initPrefersReducedMotionListener(this.state)
+    initPrefersReducedMotionListener(this.state, signal)
     ensurePauseButton(this.state)
   }
 

@@ -10,6 +10,8 @@ import { TRACK_CATALOG } from '../adventure/adventure-track-progression'
 
 export interface DailyCascadeMenuOptions {
   getCampaignStageName?: () => string
+  /** Aborting removes the menu listeners and detaches the module-level refresh hook. */
+  signal?: AbortSignal
 }
 
 function defaultCampaignStageName(): string {
@@ -51,13 +53,16 @@ export function bindDailyCascadeUI(options: DailyCascadeMenuOptions = {}): void 
       state.randomize()
     }
     refresh()
-  })
+  }, { signal: options.signal })
 
   randomizeBtn.addEventListener('click', () => {
     state.randomize()
     refresh()
-  })
+  }, { signal: options.signal })
 
   refresh()
   refreshMenu = refresh
+  options.signal?.addEventListener('abort', () => {
+    if (refreshMenu === refresh) refreshMenu = null
+  }, { once: true })
 }

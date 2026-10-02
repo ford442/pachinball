@@ -48,6 +48,8 @@ interface CheckpointDebugControllerOptions {
   documentRef?: Document | null
   locationRef?: Pick<Location, 'pathname' | 'hash'> | null
   historyRef?: Pick<History, 'replaceState'> | null
+  /** Aborting removes the panel and every listener/console hook this controller installed. */
+  signal?: AbortSignal
 }
 
 const STORAGE_KEY = 'pachinball.debugStages'
@@ -88,8 +90,12 @@ export class CheckpointDebugController {
     }
 
     if (this.debugEnabled) {
-      this.createPanel()
-      this.listenForGPUErrors()
+      const { signal } = options
+      this.createPanel(signal)
+      this.listenForGPUErrors(signal)
+      signal?.addEventListener('abort', () => {
+        this.documentRef?.getElementById('checkpoint-debug-panel')?.remove()
+      }, { once: true })
     }
   }
 
@@ -175,7 +181,7 @@ export class CheckpointDebugController {
     console.error(`[StageDebug] ${stage} ✗ failed`, error)
   }
 
-  private createPanel(): void {
+  private createPanel(signal?: AbortSignal): void {
     if (!this.documentRef) return
     const panel = this.documentRef.createElement('div')
     panel.id = 'checkpoint-debug-panel'
@@ -210,7 +216,7 @@ export class CheckpointDebugController {
       const checkbox = this.documentRef.createElement('input')
       checkbox.type = 'checkbox'
       checkbox.checked = this.isStageEnabled(stage)
-      checkbox.addEventListener('change', () => { void this.setStageEnabled(stage, checkbox.checked) })
+      checkbox.addEventListener('change', () => { void this.setStageEnabled(stage, checkbox.checked) }, { signal })
 
       const label = this.documentRef.createElement('span')
       const stageConfig = DEBUG_STAGES[stage]
@@ -355,21 +361,27 @@ export class CheckpointDebugController {
     this.gpuLogEl.scrollTop = this.gpuLogEl.scrollHeight
   }
 
-  private listenForGPUErrors(): void {
+  private listenForGPUErrors(signal?: AbortSignal): void {
     if (typeof window === 'undefined') return
     window.addEventListener('error', (e) => {
       const msg = e.message ?? ''
       if (/wgsl|webgpu|shader|GPUValidation/i.test(msg)) {
         this.appendGPULog(`GPU: ${msg.slice(0, 200)}`)
       }
-    })
-    const origError = console.error.bind(console)
-    console.error = (...args: unknown[]) => {
+    }, { signal })
+    const original = console.error
+    const origError = original.bind(console)
+    const wrapped = (...args: unknown[]): void => {
       origError(...args)
       const msg = args.map((a) => String(a)).join(' ')
       if (/wgsl|WebGPU|ShaderModule|GPUValidation/i.test(msg)) {
         this.appendGPULog(`GPU: ${msg.slice(0, 200)}`)
       }
     }
+    console.error = wrapped
+    // Only restore if nothing wrapped us in the meantime; clobbering a later patch would be worse.
+    signal?.addEventListener('abort', () => {
+      if (console.error === wrapped) console.error = original
+    }, { once: true })
   }
 }

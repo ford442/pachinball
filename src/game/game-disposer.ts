@@ -20,6 +20,9 @@ import { resetTrackThemingSystem } from '../adventure/track-theming-system'
 import type { Game } from '../game'
 
 export function disposeGame(game: Game): void {
+  // Removes every listener registered with `{ signal: game.signal }` in one go.
+  game.abort.abort()
+
   game.sceneOptimizer?.dispose()
   game.sceneOptimizer = null
   game.cabinetLighting?.dispose()

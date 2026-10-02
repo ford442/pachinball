@@ -1,7 +1,5 @@
 import './style.css'
 import { Game } from './game'
-import type { Engine } from '@babylonjs/core/Engines/engine'
-import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import { exposeRenderer } from './renderers/renderer-selector'
 import { applyHardwareScaling, resolveEngineOptions } from './engine/engine-options'
 import { createEngine, isWebGPUEngine } from './engine/create-engine'
@@ -128,29 +126,21 @@ async function bootstrap(): Promise<void> {
   console.timeEnd('[Bootstrap] Total initialization')
   console.log(`[Bootstrap] Physics ready (${(window as unknown as { currentPhysicsEngine?: string }).currentPhysicsEngine ?? 'unknown'})`)
 
-  // Setup canvas resize handling
-  setupResizeHandler(canvas, engine)
+  // Canvas resizing is owned by GameRenderer (game-renderer.ts:setupResizeObserver) and
+  // DPR changes by setupDPRHandling, both torn down by Game.dispose(). A second observer
+  // on the same canvas created an infinite resize loop (engine.resize() mutates
+  // canvas.width/height), so main.ts deliberately registers none.
 
   if (import.meta.hot) {
     import.meta.hot.dispose(() => {
       visibilityManager.dispose()
       game.dispose()
       engine.dispose()
+      const globals = window as unknown as Record<string, unknown>
+      delete globals.game
+      delete globals.runVisibilityDiagnostic
     })
   }
-}
-
-/**
- * Setup resize handling for the canvas
- */
-function setupResizeHandler(_canvas: HTMLCanvasElement, engine: Engine | WebGPUEngine): void {
-  // ResizeObserver is owned by GameRenderer (game-renderer.ts:setupResizeObserver).
-  // A second observer on the same canvas created an infinite resize loop: engine.resize()
-  // mutates canvas.width/height, which triggers the observer again on each call.
-  // Window resize is kept as a lightweight fallback for cases the element observer misses.
-  window.addEventListener('resize', () => {
-    engine.resize()
-  })
 }
 
 bootstrap().catch((err) => {

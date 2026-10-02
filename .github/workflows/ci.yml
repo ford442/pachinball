@@ -90,4 +90,5 @@ jobs:
           --project=mobile-chrome
           tests/verify_prism_core.spec.ts
           tests/basic-gameplay.spec.ts
+          tests/lifecycle-dispose.spec.ts
           tests/mobile-touch-smoke.spec.ts

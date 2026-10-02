@@ -53,6 +53,8 @@ import type { EventBus } from '../core/event-bus'
 
 export interface RendererHost {
   readonly engine: Engine | WebGPUEngine
+  /** Aborted when the Game is disposed. */
+  readonly signal: AbortSignal
   readonly scene: Scene | null
   readonly accessibility: AccessibilityConfig
   qualityTier: QualityTier
@@ -387,7 +389,7 @@ export class GameRenderer {
       const newDpr = Math.round(window.devicePixelRatio || 1)
       console.log(`[GameRenderer] DPR changed: ${newDpr}`)
       this.host.engine.resize()
-    })
+    }, { signal: this.host.signal })
   }
 
   /**
