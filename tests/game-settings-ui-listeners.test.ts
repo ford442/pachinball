@@ -15,6 +15,7 @@ function makeHost(signal: AbortSignal) {
   const loadCabinetPreset = vi.fn(() => Promise.resolve())
   const host = {
     signal,
+    timers: { setTimeout: vi.fn() },
     mapSystem: {
       getAllMaps: () => [],
       getMap: () => undefined,

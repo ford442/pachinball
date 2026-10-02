@@ -1,4 +1,5 @@
 import type { Scene } from '@babylonjs/core/scene'
+import { createTimerScope, type TimerScope } from '../core/timers'
 import type { ScoringBreakdownSnapshot } from '../game-elements/scoring-breakdown'
 import { hideAdventureHUD, updateAdventureHUD, updateCampaignHUD } from './game-ui-adventure-hud'
 import {
@@ -63,6 +64,8 @@ export interface GameUIRuntimeState {
   pauseButton: HTMLButtonElement | null
   pauseButtonHandler: (() => void) | null
   prefersReducedMotion: boolean
+  /** Every popup/toast timer; cancelled by GameUIManager.dispose(). */
+  timers: TimerScope
 }
 
 export class GameUIManager {
@@ -83,6 +86,7 @@ export class GameUIManager {
     pauseButton: null,
     pauseButtonHandler: null,
     prefersReducedMotion: false,
+    timers: createTimerScope(),
   }
 
   constructor(scene: Scene, signal?: AbortSignal) {
@@ -150,6 +154,8 @@ export class GameUIManager {
   dispose(): void {
     for (const popup of this.state.activePopups.values()) popup.remove()
     this.state.activePopups.clear()
+    // Popup <style> tags were removed by timers that dispose() is about to cancel.
+    document.querySelectorAll('style[data-popup-style]').forEach((el) => el.remove())
     this.state.hudElements.clear()
     this.state.goldBallCounter?.remove()
     this.state.goldBallCounter = null
@@ -169,5 +175,6 @@ export class GameUIManager {
     this.state.livesElement = null
     this.state.comboElement = null
     this.state.bestHudElement = null
+    this.state.timers.dispose()
   }
 }

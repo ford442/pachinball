@@ -5,11 +5,13 @@ import type { AdventureCinematicTriggers } from '../adventure/adventure-cinemati
 import type { UnlockedReward } from '../game-elements/types'
 import { QualityTier } from '../game-elements/visual-language'
 import { detectAccessibility } from '../game-elements/accessibility-config'
+import { createTimerScope } from '../core/timers'
 
 export class CelebrationSequencer {
+  private readonly timers = createTimerScope()
   private queue: UnlockedReward[] = []
   private isPlaying = false
-  private accumulationTimer: ReturnType<typeof setTimeout> | null = null
+  private accumulationTimer: number | null = null
   private summaryThreshold = 3
   private unsubscribes: (() => void)[] = []
 
@@ -37,7 +39,7 @@ export class CelebrationSequencer {
     this.queue.push(reward)
 
     if (!this.isPlaying && !this.accumulationTimer) {
-      this.accumulationTimer = setTimeout(() => {
+      this.accumulationTimer = this.timers.setTimeout(() => {
         this.accumulationTimer = null
         this.processQueue()
       }, 100)
@@ -112,7 +114,7 @@ export class CelebrationSequencer {
       }
     }
 
-    await new Promise<void>((resolve) => setTimeout(resolve, durationMs))
+    await new Promise<void>((resolve) => this.timers.setTimeout(resolve, durationMs))
   }
 
   private async celebrateMultiple(items: UnlockedReward[], reducedMotion: boolean, qualityTier: QualityTier): Promise<void> {
@@ -142,14 +144,12 @@ export class CelebrationSequencer {
       this.cabinetLighting.triggerRewardBurst(highestRarity, lightingDuration)
     }
 
-    await new Promise<void>((resolve) => setTimeout(resolve, durationMs))
+    await new Promise<void>((resolve) => this.timers.setTimeout(resolve, durationMs))
   }
 
   public dispose(): void {
-    if (this.accumulationTimer) {
-      clearTimeout(this.accumulationTimer)
-      this.accumulationTimer = null
-    }
+    this.timers.dispose()
+    this.accumulationTimer = null
     for (const unsub of this.unsubscribes) {
       unsub()
     }

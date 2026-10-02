@@ -59,6 +59,7 @@ import { GameSystemsInitializer } from './game-systems-init'
 import { GameHUD } from './game-hud'
 import { GameMapCabinet } from './game-map-cabinet'
 import { CheckpointDebugController } from './checkpoint-debug'
+import { createTimerScope } from '../core/timers'
 import { FreeMapTestMode } from './free-map-test-mode'
 import { LevelLoader } from './level-loader'
 import type { LeaderboardSystem } from '../game-elements/leaderboard-system'
@@ -72,6 +73,8 @@ export abstract class GameFields {
    * a second Game in the same page starts from the page's own listener count (#441).
    */
   readonly abort = new AbortController()
+  /** Timers owned by the Game's own glue code; cancelled by disposeGame(). */
+  readonly timers = createTimerScope()
   get signal(): AbortSignal { return this.abort.signal }
 
   readonly engine: Engine | WebGPUEngine

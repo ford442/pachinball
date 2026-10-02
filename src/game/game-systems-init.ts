@@ -149,7 +149,7 @@ export class GameSystemsInitializer {
       this.game.adventureState.onLevelCompleteCallback((level) => {
         console.log(`[Game] Level complete: ${level.name}`)
         if (level.rewards.unlockMap) {
-          setTimeout(() => { this.game.mapCabinet?.switchTableMap(level.rewards.unlockMap!) }, GAME_TUNING.timing.storyVideoWaitMs)
+          this.game.timers.setTimeout(() => { this.game.mapCabinet?.switchTableMap(level.rewards.unlockMap!) }, GAME_TUNING.timing.storyVideoWaitMs)
         }
       })
       this.game.adventureState.onGoalUpdateCallback((goals) => {

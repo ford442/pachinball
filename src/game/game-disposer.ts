@@ -22,6 +22,7 @@ import type { Game } from '../game'
 export function disposeGame(game: Game): void {
   // Removes every listener registered with `{ signal: game.signal }` in one go.
   game.abort.abort()
+  game.timers.dispose()
 
   game.sceneOptimizer?.dispose()
   game.sceneOptimizer = null
@@ -39,6 +40,7 @@ export function disposeGame(game: Game): void {
 
   // Subsystems that used to be dropped without a dispose(): they hold DOM nodes,
   // listeners or EventBus subscriptions that outlive the scene.
+  game.scenarioManager?.dispose()
   game.freeMapTestMode?.dispose()
   game.freeMapTestMode = null
   game.physicsTuningPanel?.dispose()

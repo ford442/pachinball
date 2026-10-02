@@ -29,6 +29,7 @@ import type { SoundSystem } from '../game-elements/sound-system'
 import type { HapticManager } from '../game-elements/haptics'
 import type { GameStateManager } from './game-state'
 import type { EventBus } from '../core/event-bus'
+import type { TimerScope } from '../core/timers'
 import type { AdventureMode } from '../adventure'
 import { CameraController, CameraMode } from '../game-elements/camera-controller'
 import type { TableMapManager } from './game-maps'
@@ -39,6 +40,7 @@ import { getMaterialLibrary } from '../materials'
 import { isMobileUserAgent } from '../engine/engine-options'
 
 export interface LifecycleHost {
+  readonly timers: TimerScope
   readonly stateManager: GameStateManager
   readonly effects: EffectsSystem | null
   readonly display: DisplaySystem | null
@@ -287,7 +289,7 @@ export class GameLifecycle {
       await Promise.race([
         this.host.soundSystem.init(),
         new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error('Audio init timeout')), 5000)
+          this.host.timers.setTimeout(() => reject(new Error('Audio init timeout')), 5000)
         ),
       ])
       const savedSettings = SettingsManager.load()

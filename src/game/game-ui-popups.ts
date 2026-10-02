@@ -55,6 +55,7 @@ export function showCabinetPopup(state: GameUIRuntimeState, name: string): void 
   `
 
   const style = document.createElement('style')
+  style.dataset.popupStyle = ''
   style.textContent = `
     @keyframes cabinetPopupFade {
       0% { opacity: 0; transform: translate(-50%, -40%); }
@@ -67,7 +68,7 @@ export function showCabinetPopup(state: GameUIRuntimeState, name: string): void 
   document.body.appendChild(popup)
   state.activePopups.set('cabinet', popup)
 
-  setTimeout(() => {
+  state.timers.setTimeout(() => {
     popup.remove()
     style.remove()
     state.activePopups.delete('cabinet')
@@ -106,6 +107,7 @@ export function showMapNamePopup(state: GameUIRuntimeState, name: string, color:
   `
 
   const style = document.createElement('style')
+  style.dataset.popupStyle = ''
   style.textContent = `
     @keyframes mapPopupCRT {
       0% {
@@ -138,12 +140,12 @@ export function showMapNamePopup(state: GameUIRuntimeState, name: string, color:
   cabinet?.appendChild(popup)
   state.activePopups.set('map', popup)
 
-  requestAnimationFrame(() => {
+  state.timers.requestAnimationFrame(() => {
     popup.style.opacity = '1'
     popup.style.transform = 'translate(-50%, -50%) scale(1)'
   })
 
-  setTimeout(() => {
+  state.timers.setTimeout(() => {
     popup.remove()
     style.remove()
     state.activePopups.delete('map')
@@ -232,7 +234,7 @@ export function showLoadingState(
   } else if (state.loadingOverlay) {
     state.loadingOverlay.style.transition = 'opacity 0.5s'
     state.loadingOverlay.style.opacity = '0'
-    setTimeout(() => {
+    state.timers.setTimeout(() => {
       state.loadingOverlay?.remove()
       state.loadingOverlay = null
     }, 500)
@@ -268,7 +270,7 @@ export function showMessage(state: GameUIRuntimeState, message: string, duration
   document.body.appendChild(msgEl)
   state.activePopups.set('message', msgEl)
 
-  setTimeout(() => {
+  state.timers.setTimeout(() => {
     msgEl.remove()
     state.activePopups.delete('message')
   }, duration)
@@ -353,16 +355,16 @@ export function showRewardToast(
   document.getElementById('game-cabinet')?.appendChild(toast)
   state.activePopups.set('campaign-reward', toast)
 
-  requestAnimationFrame(() => {
+  state.timers.requestAnimationFrame(() => {
     toast.style.opacity = '1'
     toast.style.transform = 'translateY(0)'
   })
 
   const dismissDelay = unlockedRewards.length > 0 ? 3200 : 2200
-  setTimeout(() => {
+  state.timers.setTimeout(() => {
     toast.style.opacity = '0'
     toast.style.transform = reducedMotion ? 'translateY(0)' : 'translateY(-6px)'
-    setTimeout(() => {
+    state.timers.setTimeout(() => {
       toast.remove()
       state.activePopups.delete('campaign-reward')
     }, 180)
@@ -446,14 +448,14 @@ export function showPortalOverlay(
   document.getElementById('game-cabinet')?.appendChild(overlay)
   state.activePopups.set('portal-overlay', overlay)
 
-  setTimeout(() => hidePortalOverlay(state), autoDismissMs)
+  state.timers.setTimeout(() => hidePortalOverlay(state), autoDismissMs)
 }
 
 export function hidePortalOverlay(state: GameUIRuntimeState): void {
   const existing = document.getElementById('campaign-portal-overlay')
   if (!existing) return
   existing.style.animation = 'cpoFadeOut 0.3s ease-in forwards'
-  setTimeout(() => {
+  state.timers.setTimeout(() => {
     existing.remove()
     state.activePopups.delete('portal-overlay')
   }, 300)
@@ -572,7 +574,7 @@ export function showScoringBreakdown(
   document.getElementById('game-cabinet')?.appendChild(panel)
   state.scoringBreakdownPanel = panel
 
-  requestAnimationFrame(() => {
+  state.timers.requestAnimationFrame(() => {
     panel.style.opacity = '1'
     panel.style.transform = 'translateY(0)'
     panel.focus()
@@ -580,7 +582,7 @@ export function showScoringBreakdown(
 
   const autoDismissMs = Math.max(0, options.autoDismissMs ?? 0)
   if (autoDismissMs > 0) {
-    window.setTimeout(() => {
+    state.timers.setTimeout(() => {
       if (state.scoringBreakdownPanel === panel) {
         hideScoringBreakdown(state)
       }

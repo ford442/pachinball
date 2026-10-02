@@ -3,6 +3,7 @@
  */
 
 import type { Scene } from '@babylonjs/core/scene'
+import type { TimerScope } from '../core/timers'
 import type { SoundSystem } from '../game-elements/sound-system'
 import type { DebugHUD } from '../game-elements/debug-hud'
 import type { MapSystem } from '../game-elements/map-system'
@@ -28,6 +29,7 @@ import type { PhysicsTuningPanel } from '../game-elements/physics-tuning-panel'
 export interface SettingsUIHost {
   /** Aborted when the Game is disposed; every listener below is registered with it. */
   readonly signal: AbortSignal
+  readonly timers: TimerScope
   readonly mapSystem: MapSystem
   readonly mapManager: TableMapManager | null
   readonly soundSystem: SoundSystem
@@ -450,10 +452,10 @@ export class GameSettingsUI {
     btn.style.transition = 'transform 0.1s ease, box-shadow 0.1s ease'
     btn.style.boxShadow = `0 0 20px ${accentColor}, 0 0 40px ${accentColor}, 0 0 60px ${accentColor}, inset 0 0 20px rgba(255, 255, 255, 0.5)`
 
-    setTimeout(() => {
+    this.host.timers.setTimeout(() => {
       btn.style.transform = 'scale(1.05)'
       btn.style.boxShadow = `0 0 15px ${accentColor}, 0 0 30px ${accentColor}, inset 0 0 10px rgba(255, 255, 255, 0.3)`
-      setTimeout(() => {
+      this.host.timers.setTimeout(() => {
         btn.style.transform = ''
         btn.style.boxShadow = ''
         btn.style.transition = ''

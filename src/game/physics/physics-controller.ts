@@ -27,6 +27,7 @@ import type { WasmContactEvent } from '../../wasm'
 
 /** Shared surface for mirror and owner WASM bridges. */
 import type { WasmContactBridge } from './collision-dispatch'
+import { createTimerScope } from '../../core/timers'
 import {
   applyReplaySnapshot,
   captureReplayFingerprint,
@@ -37,6 +38,7 @@ import {
 } from '../../replay/replay-snapshot'
 
 export class GamePhysicsController {
+  private readonly timers = createTimerScope()
   private readonly host: PhysicsHost
 
   /** WASM bridge for mirror or owner mode. */
@@ -90,6 +92,7 @@ export class GamePhysicsController {
 
   /** Clean up EventBus subscriptions. Must be called when the controller is torn down. */
   dispose(): void {
+    this.timers.dispose()
     this.collisionDispatcher.dispose()
     this.scoringBridge.dispose()
     for (const unsub of this.eventBusUnsubscribers) {
@@ -625,7 +628,7 @@ export class GamePhysicsController {
     this.host.tiltActive = true
     this.host.effects?.setBloomEnergy(3.0)
     // Cosmetic only — the bloom pulse may stay on wall time.
-    setTimeout(() => this.host.effects?.setBloomEnergy(1.0), GAME_TUNING.timing.tiltBloomResetMs)
+    this.timers.setTimeout(() => this.host.effects?.setBloomEnergy(1.0), GAME_TUNING.timing.tiltBloomResetMs)
     this.host.effects?.playBeep(150)
     this.host.hapticManager?.tiltWarning()
   }

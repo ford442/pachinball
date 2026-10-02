@@ -7,6 +7,7 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
 import { BallType } from '../config'
 import { getMaterialLibrary } from '../materials'
+import { createTimerScope } from '../core/timers'
 
 export interface BallStackConfig {
   position: Vector3
@@ -15,6 +16,7 @@ export interface BallStackConfig {
 }
 
 export class BallStackVisual {
+  private readonly timers = createTimerScope()
   private scene: Scene
   private stackRoot: TransformNode
   private balls: Array<{ mesh: Mesh; type: BallType }> = []
@@ -115,7 +117,7 @@ export class BallStackVisual {
       ball.scaling = new Vector3(scale, scale, scale)
       
       if (progress < 1) {
-        requestAnimationFrame(animate)
+        this.timers.requestAnimationFrame(animate)
       } else {
         ball.scaling = new Vector3(this.config.ballScale, this.config.ballScale, this.config.ballScale)
       }
@@ -138,7 +140,7 @@ export class BallStackVisual {
       mat.emissiveColor = Color3.Lerp(new Color3(1, 0.9, 0.4), originalEmissive, progress)
       mat.emissiveIntensity = originalIntensity + (1.5 - originalIntensity) * (1 - progress)
       if (progress < 1) {
-        requestAnimationFrame(animate)
+        this.timers.requestAnimationFrame(animate)
       } else {
         mat.emissiveColor = originalEmissive
         mat.emissiveIntensity = originalIntensity
@@ -195,6 +197,7 @@ export class BallStackVisual {
    * Dispose the entire stack
    */
   dispose(): void {
+    this.timers.dispose()
     this.clear()
     this.stackRoot.dispose()
   }

@@ -16,6 +16,7 @@ import type { TableMapManager } from './game-maps'
 import { getScenario, getZoneConfig, ZoneTriggerSystem as ZoneTriggerSystemClass } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
 import { getLayoutRng } from '../core/seeded-rng'
+import { createTimerScope } from '../core/timers'
 import { resolveVideoUrl } from './game-utils'
 import { TABLE_MAPS } from '../config/table-maps'
 import type { DynamicScenario, ScenarioZone, WorldZone, ZoneMechanic } from '../game-elements'
@@ -42,9 +43,23 @@ export interface ScenarioHost {
 
 export class GameScenario {
   private readonly host: ScenarioHost
+  private readonly timers = createTimerScope()
+  /** Transient popup/style nodes still in the DOM; their removal timers die with dispose(). */
+  private readonly liveElements = new Set<HTMLElement>()
 
   constructor(host: ScenarioHost) {
     this.host = host
+  }
+
+  dispose(): void {
+    this.timers.dispose()
+    for (const el of this.liveElements) el.remove()
+    this.liveElements.clear()
+  }
+
+  private release(el: HTMLElement): void {
+    el.remove()
+    this.liveElements.delete(el)
   }
 
   toggleDynamicMode(): void {
@@ -75,10 +90,11 @@ export class GameScenario {
       transition: opacity 0.3s ease; letter-spacing: 4px;
     `
     document.body.appendChild(popup)
-    requestAnimationFrame(() => { popup.style.opacity = '1' })
-    setTimeout(() => {
+    this.liveElements.add(popup)
+    this.timers.requestAnimationFrame(() => { popup.style.opacity = '1' })
+    this.timers.setTimeout(() => {
       popup.style.opacity = '0'
-      setTimeout(() => popup.remove(), 300)
+      this.timers.setTimeout(() => this.release(popup), 300)
     }, 2000)
   }
 
@@ -220,9 +236,11 @@ export class GameScenario {
     `
     document.head.appendChild(style)
     document.body.appendChild(popup)
-    setTimeout(() => {
-      popup.remove()
-      style.remove()
+    this.liveElements.add(style)
+    this.liveElements.add(popup)
+    this.timers.setTimeout(() => {
+      this.release(popup)
+      this.release(style)
     }, 2000)
   }
 
@@ -247,7 +265,8 @@ export class GameScenario {
     `
     popup.textContent = `SCENARIO: ${name.toUpperCase()}`
     document.body.appendChild(popup)
-    setTimeout(() => popup.remove(), 2000)
+    this.liveElements.add(popup)
+    this.timers.setTimeout(() => this.release(popup), 2000)
   }
 
   cycleScenario(direction: 1 | -1 = 1): void {

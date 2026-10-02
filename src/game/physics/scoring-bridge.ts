@@ -13,6 +13,7 @@ import { PALETTE } from '../../game-elements'
 import type { PhysicsHost } from './types'
 import { getFeverScoreMultiplier, applyFeverGoldMultiplier } from './scoring-multipliers'
 import { simClockMs, simClockSeconds } from '../../core/sim-clock'
+import { createTimerScope } from '../../core/timers'
 
 /**
  * ScoringBridge — owns combo/fever/tally/streak state, score awards, and the
@@ -31,6 +32,7 @@ import { simClockMs, simClockSeconds } from '../../core/sim-clock'
  *    comes from here; it emits `combo:multiplier:changed`.
  */
 export class ScoringBridge {
+  private readonly timers = createTimerScope()
   private readonly host: PhysicsHost
   private readonly comboSystem: ComboSystem
   private readonly comboMultiplierSystem: ComboMultiplierSystem
@@ -126,6 +128,7 @@ export class ScoringBridge {
   }
 
   dispose(): void {
+    this.timers.dispose()
     for (const unsub of this.eventBusUnsubscribers) {
       unsub()
     }
@@ -189,7 +192,7 @@ export class ScoringBridge {
       this.host.eventBus.emit('bonus:tally:start', { totalBonus: total, breakdown })
       this.host.eventBus.emit('bonus:tally:complete', { totalBonus: total })
       this.host.effects?.setBloomEnergy(2.0)
-      setTimeout(() => this.host.effects?.setBloomEnergy(1.0), GAME_TUNING.timing.tiltBloomResetMs)
+      this.timers.setTimeout(() => this.host.effects?.setBloomEnergy(1.0), GAME_TUNING.timing.tiltBloomResetMs)
     }
   }
 

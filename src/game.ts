@@ -392,7 +392,7 @@ export class Game
       return
     }
     const buildCosmetic = () => {
-      if (this.cosmeticSceneBuilt) return
+      if (this.cosmeticSceneBuilt || this.disposed) return
       void this.runCheckpointStage('scene_cosmetic', () => {
         this.sceneBuilder?.buildCosmeticScene()
         this.cosmeticSceneBuilt = true
@@ -401,7 +401,7 @@ export class Game
     if ('requestIdleCallback' in window) {
       requestIdleCallback(buildCosmetic, { timeout: GAME_TUNING.timing.idleCallbackTimeoutMs })
     } else {
-      setTimeout(buildCosmetic, GAME_TUNING.timing.cosmeticFallbackDelayMs)
+      this.timers.setTimeout(buildCosmetic, GAME_TUNING.timing.cosmeticFallbackDelayMs)
     }
   }
 

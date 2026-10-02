@@ -8,6 +8,7 @@
  */
 
 import { apiFetch } from '../config'
+import { createTimerScope } from '../core/timers'
 
 export interface LeaderboardEntry {
   rank: number
@@ -37,6 +38,7 @@ export class LeaderboardSystem {
   private scores: LeaderboardEntry[] = []
   private lastRefresh = 0
   private refreshTimer: number | null = null
+  private readonly timers = createTimerScope()
   private isRefreshing = false
   private currentMapId = 'neon-helix'
   private currentAdventureLevel?: string
@@ -90,7 +92,7 @@ export class LeaderboardSystem {
       this.maxInterval
     )
 
-    this.refreshTimer = window.setTimeout(() => {
+    this.refreshTimer = this.timers.setTimeout(() => {
       this.refresh().then(() => {
         this.scheduleNextRefresh()
       })
@@ -104,7 +106,7 @@ export class LeaderboardSystem {
    */
   stop(): void {
     if (this.refreshTimer) {
-      clearTimeout(this.refreshTimer)
+      this.timers.clearTimeout(this.refreshTimer)
       this.refreshTimer = null
     }
   }
@@ -165,7 +167,7 @@ export class LeaderboardSystem {
       if (this.consecutiveFailures >= this.maxRetries) {
         console.error('[Leaderboard] Max retries exceeded. Pausing polling for 5 minutes.')
         this.pause()
-        setTimeout(() => {
+        this.timers.setTimeout(() => {
           console.log('[Leaderboard] Resuming polling after pause')
           this.consecutiveFailures = Math.floor(this.maxRetries / 2) // Partial reset
           this.resume()
@@ -395,6 +397,9 @@ export class LeaderboardSystem {
    * Clean up resources
    */
   dispose(): void {
+    // Also cancels the 5-minute resume timer, which would otherwise restart polling
+    // on a disposed instance.
+    this.timers.dispose()
     this.stop()
     if (this.overlay) {
       this.overlay.remove()
