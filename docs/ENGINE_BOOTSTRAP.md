@@ -283,10 +283,10 @@ Game pause (`PAUSED` state) still suspends the effects `AudioContext` via `GameL
 
 | Bundle | When | Where |
 |--------|------|-------|
-| **C++ physics** (`public/wasm/PhysicsModule.js`) — `wasm-owner` / `wasm-worker` (default) | Parallel with engine creation | `preloadPhysicsSystem()` (`src/game-elements/physics-preload.ts`) → `preloadWasmPhysicsNow()` |
+| **C++ physics** (`public/wasm/PhysicsModule.js`) — `wasm-worker` (default when cross-origin isolated: warms a Dedicated Worker) / `wasm-owner` (default otherwise: compiles on the main thread) | Parallel with engine creation | `preloadPhysicsSystem()` (`src/game-elements/physics-preload.ts`) → `preloadWasmPhysicsNow()` |
 | **Rapier** (`@dimforge/rapier3d-compat`) — explicit `rapier` / `wasm-mirror` only | Parallel with engine creation | `preloadPhysicsSystem()` → `loadRapier()`; the owner modes load it lazily, and only if the C++ bundle is missing |
 | **C++ physics (idle)** | Idle after bootstrap (`requestIdleCallback`, 8s timeout) | `scheduleIdleWasmPreload()` — a no-op once the parallel preload has started |
-| **C++ physics (active mode)** | `physics.init()` when `localStorage` flag ≠ `rapier` | Reuses the preload via `getPreloadedWasmModule()` |
+| **C++ physics (active mode)** | `physics.init()` when the preference ≠ `rapier` | Owner: reuses the preload via `getPreloadedWasmModule()`. Worker: consumes the prewarmed worker (`consumePrewarmedPhysicsWorker()`); a worker that errors or times out falls back to the owner with `[Bootstrap][physics-degrade]` |
 
 `main.ts` never names a physics engine: `preloadPhysicsSystem()` returns the `PhysicsSystem`
 that `new Game(engine, physics)` consumes (`tests/boot-graph-rapier-free.test.ts` keeps

@@ -27,7 +27,10 @@ on:
       - 'src/wasm/**'
       - 'src/config/physics.ts'
       - 'src/game-elements/physics.ts'
+      - 'src/game-elements/physics-preload.ts'
+      - 'src/engine/wasm-idle-preload.ts'
       - 'tests/wasm-*.test.ts'
+      - 'tests/replay-worker-snapshot-wasm.test.ts'
       - 'tests/wasm-*.spec.ts'
       - 'tests/transform-buffer.test.ts'
       - 'tests/helpers/wasm-owner-boot.ts'
@@ -46,7 +49,10 @@ on:
       - 'src/wasm/**'
       - 'src/config/physics.ts'
       - 'src/game-elements/physics.ts'
+      - 'src/game-elements/physics-preload.ts'
+      - 'src/engine/wasm-idle-preload.ts'
       - 'tests/wasm-*.test.ts'
+      - 'tests/replay-worker-snapshot-wasm.test.ts'
       - 'tests/wasm-*.spec.ts'
       - 'tests/transform-buffer.test.ts'
       - 'tests/helpers/wasm-owner-boot.ts'
@@ -171,13 +177,16 @@ jobs:
       - name: Replay from a C++ snapshot on the compiled bundle (#422)
         run: RUN_WASM_PARITY=1 WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npx vitest run tests/replay-snapshot-wasm.test.ts
 
+      - name: Replay snapshot round-trip through the worker RPC (#436, worker default #439)
+        run: RUN_WASM_PARITY=1 WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npx vitest run tests/replay-worker-snapshot-wasm.test.ts
+
       - name: Axis-pull force field (MagSpin well) on the compiled bundle
         run: RUN_WASM_PARITY=1 WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npx vitest run tests/axis-pull-field.test.ts
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Playwright wasm-owner feel + debug draw + adventure + toy capture + pin field + MagSpin pull
+      - name: Playwright wasm-owner + wasm-worker default (feel, debug draw, adventure, toy capture, pin field, MagSpin pull)
         env:
           CI: 'true'
         run: >
@@ -189,3 +198,6 @@ jobs:
           tests/wasm-owner-pin-field.spec.ts
           tests/wasm-owner-magspin-pull.spec.ts
           tests/replay-seed-determinism.spec.ts
+          tests/wasm-worker-default.spec.ts
+          tests/wasm-worker-adventure.spec.ts
+          tests/basic-gameplay.spec.ts
