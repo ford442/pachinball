@@ -2,10 +2,10 @@
  * WasmPhysicsEngine — TypeScript wrapper around the Emscripten-compiled
  * C++ physics module (native/src → public/wasm/PhysicsModule.js + .wasm).
  *
- * This is the in-process `WasmSimEngine`: `wasm-owner` (production default,
- * `src/config/physics.ts`) and `wasm-mirror` drive it on the main thread, and
- * `physics-worker.ts` drives the same class inside the `wasm-worker` Dedicated
- * Worker. Missing bundle → the engine stays dormant (`isReady === false`) and
+ * This is the in-process `WasmSimEngine`: `wasm-owner` (the default when the
+ * page is not cross-origin isolated, `src/config/physics.ts`) and `wasm-mirror`
+ * drive it on the main thread, and `physics-worker.ts` drives the same class
+ * inside the `wasm-worker` Dedicated Worker (the isolated default). Missing bundle → the engine stays dormant (`isReady === false`) and
  * the physics controller fail-closes to Rapier.
  *
  * File layout

@@ -15,7 +15,10 @@ import { loadRapier } from './rapier-loader'
 import type { WasmDebugCollider } from './wasm-debug-geometry'
 import { FIXED_TIMESTEP } from '../core/sim-clock'
 
-/** Greppable marker for "table physics booted on Rapier because WASM failed". */
+/**
+ * Greppable marker for each fail-closed rung: the worker failed and the
+ * in-process owner took over, or the C++ bundle failed and Rapier took over.
+ */
 export const PHYSICS_DEGRADE_MARKER = '[Bootstrap][physics-degrade]'
 
 /** Engine that actually served the last init/step — not the localStorage preference. */
@@ -24,7 +27,7 @@ export function exposeCurrentPhysicsEngine(mode: WasmPhysicsRuntimeMode): void {
   ;(window as unknown as { currentPhysicsEngine?: WasmPhysicsRuntimeMode }).currentPhysicsEngine = mode
 }
 
-/** Last degrade reason (Playwright / diagnostics); undefined when WASM loaded successfully. */
+/** Last degrade reason (Playwright / diagnostics); undefined when the selected engine booted. */
 export function exposePhysicsDegradeReason(reason: string | undefined): void {
   if (typeof window === 'undefined') return
   const w = window as unknown as { physicsDegradeReason?: string }
@@ -167,9 +170,9 @@ export class PhysicsSystem {
   private async initWasmEngine(): Promise<void> {
     if (this.wasmMode === 'wasm-worker') {
       console.info(`[PhysicsSystem] wasm-worker mode: crossOriginIsolated=${isCrossOriginIsolated()}`)
-      // Only the opt-in worker mode needs the client (and, through it, the
-      // protocol + shared-layout codecs). A dynamic import keeps them out of
-      // the entry chunk on the default wasm-owner boot (bundle-budget.json).
+      // Only the worker mode needs the client (and, through it, the protocol +
+      // shared-layout codecs). A dynamic import keeps them out of the entry
+      // chunk (bundle-budget.json), and the in-process owner boot never fetches them.
       let workerClientModule: typeof import('../wasm/physics-worker-client') | null = null
       try {
         workerClientModule = await import('../wasm/physics-worker-client')
@@ -190,7 +193,9 @@ export class PhysicsSystem {
           return
         }
       }
-      console.warn('[PhysicsSystem] WASM physics worker failed; falling back to in-process wasm-owner.')
+      const reason = `${PHYSICS_DEGRADE_MARKER} WASM physics worker failed to start; falling back to in-process wasm-owner.`
+      console.warn(reason)
+      exposePhysicsDegradeReason(reason)
       this.wasmMode = 'wasm-owner'
     }
 

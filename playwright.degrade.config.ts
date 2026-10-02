@@ -3,7 +3,8 @@ import { defineConfig, devices } from '@playwright/test'
 /**
  * Dev-server config for physics-degrade.spec.ts.
  * Uses Vite dev (console.warn preserved) with public/wasm removed so the
- * default wasm-owner preference fail-closes to Rapier.
+ * default preference fail-closes to Rapier: the isolated dev server defaults
+ * to wasm-worker, which gives way to wasm-owner, which gives way to Rapier.
  */
 export default defineConfig({
   testDir: '.',

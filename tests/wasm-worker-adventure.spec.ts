@@ -3,6 +3,7 @@ import {
   assertWasmOwnerReady,
   bootWasmOwner,
   startPlaying,
+  stripIsolationHeaders,
   type GameHooks,
 } from './helpers/wasm-owner-boot'
 
@@ -26,7 +27,6 @@ type WorkerHooks = GameHooks & {
     scene?: { activeCamera?: unknown }
     engine?: { getDeltaTime: () => number; stopRenderLoop?: () => void }
     mapManager?: { update?: (dt: number) => void }
-    physics?: NonNullable<GameHooks['game']>['physics'] & { getLastWasmStepMs?: () => number }
     physicsController?: NonNullable<NonNullable<GameHooks['game']>['physicsController']> & {
       getAdventureOwnership?: () => {
         owned: boolean
@@ -37,17 +37,6 @@ type WorkerHooks = GameHooks & {
 }
 
 const TRACK = 'SYNTHWAVE_SURF'
-
-/** Serve the page without COOP/COEP so `crossOriginIsolated` is false. */
-async function stripIsolationHeaders(page: Page) {
-  await page.route((url) => url.pathname === '/' || url.pathname.endsWith('/index.html'), async (route) => {
-    const response = await route.fetch()
-    const headers = { ...response.headers() }
-    delete headers['cross-origin-opener-policy']
-    delete headers['cross-origin-embedder-policy']
-    await route.fulfill({ response, headers })
-  })
-}
 
 async function playTrackInWorker(page: Page) {
   const boot = await bootWasmOwner(page, 'wasm-worker')
@@ -82,10 +71,12 @@ async function playTrackInWorker(page: Page) {
     const origDt = g.engine!.getDeltaTime.bind(g.engine)
     g.engine!.getDeltaTime = () => 1000 / 60
     let maxWasmMs = 0
+    let maxWorkerMs = 0
     try {
       for (let i = 0; i < steps; i++) {
         g.physicsController!.stepPhysics(g.inputManager, g.inputActions, null, null)
         maxWasmMs = Math.max(maxWasmMs, g.physics?.getLastWasmStepMs?.() ?? 0)
+        maxWorkerMs = Math.max(maxWorkerMs, g.physics?.getWasmEngine?.()?.getLastWorkerStepMs?.() ?? 0)
         // Let the worker's messages (attach / step-result) land.
         await new Promise((r) => setTimeout(r, 2))
       }
@@ -99,6 +90,7 @@ async function playTrackInWorker(page: Page) {
       mode: g.physics?.getWasmMode?.() ?? '',
       rapierMs: g.physics?.getLastRapierStepMs?.() ?? -1,
       maxWasmMs,
+      maxWorkerMs,
       owned: ownership?.owned ?? false,
       unsupported: (ownership?.unsupported ?? []).map((u) => `${u.label ?? '?'}: ${u.reason}`),
       descriptors: g.adventureMode?.getColliderDescriptors().length ?? 0,
@@ -115,6 +107,7 @@ function expectOwnedAndPlayed(run: Awaited<ReturnType<typeof playTrackInWorker>>
   expect(run.descriptors).toBeGreaterThan(20)
   expect(run.rapierMs, 'Rapier must not step while the worker owns the track').toBe(0)
   expect(run.maxWasmMs, 'the worker must report C++ step time').toBeGreaterThan(0)
+  expect(run.maxWorkerMs, 'getLastWorkerStepMs() must be measured inside the worker').toBeGreaterThan(0)
   expect(run.travelled, 'C++ in the worker must move the ball').toBeGreaterThan(0.5)
 }
 
