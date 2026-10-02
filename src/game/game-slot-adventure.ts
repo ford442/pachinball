@@ -60,37 +60,8 @@ export class GameSlotAdventure {
   private nextAdventureTrack: AdventureTrackType = AdventureTrackType.NEON_HELIX
   private eventUnsubscribers: Array<() => void> = []
 
-  private static readonly TRACK_ORDER: AdventureTrackType[] = [
-    AdventureTrackType.NEON_HELIX,
-    AdventureTrackType.PACHINKO_HALL,
-    AdventureTrackType.CYBER_CORE,
-    AdventureTrackType.QUANTUM_GRID,
-    AdventureTrackType.STORM_LATTICE,
-    AdventureTrackType.SINGULARITY_WELL,
-    AdventureTrackType.GLITCH_SPIRE,
-    AdventureTrackType.RETRO_WAVE_HILLS,
-    AdventureTrackType.CHRONO_CORE,
-    AdventureTrackType.HYPER_DRIFT,
-    AdventureTrackType.PACHINKO_SPIRE,
-    AdventureTrackType.ORBITAL_JUNKYARD,
-    AdventureTrackType.FIREWALL_BREACH,
-    AdventureTrackType.CPU_CORE,
-    AdventureTrackType.CRYO_CHAMBER,
-    AdventureTrackType.BIO_HAZARD_LAB,
-    AdventureTrackType.GRAVITY_FORGE,
-    AdventureTrackType.TIDAL_NEXUS,
-    AdventureTrackType.DIGITAL_ZEN_GARDEN,
-    AdventureTrackType.SYNTHWAVE_SURF,
-    AdventureTrackType.SOLAR_FLARE,
-    AdventureTrackType.PRISM_PATHWAY,
-    AdventureTrackType.MAGNETIC_STORAGE,
-    AdventureTrackType.NEURAL_NETWORK,
-    AdventureTrackType.NEON_STRONGHOLD,
-    AdventureTrackType.CASINO_HEIST,
-    AdventureTrackType.TESLA_TOWER,
-    AdventureTrackType.NEON_SKYLINE,
-    AdventureTrackType.POLYCHROME_VOID,
-  ]
+  /** Every track, in enum order (the manifest order is checked against it). */
+  private static readonly TRACK_ORDER: AdventureTrackType[] = Object.values(AdventureTrackType)
 
   constructor(host: SlotAdventureHost) {
     this.host = host

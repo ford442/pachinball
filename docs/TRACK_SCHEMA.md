@@ -122,6 +122,13 @@ Force fields are **C++-only**: the Rapier dev path builds the track without them
 A field may make a track easier or livelier, but it must never be the only way
 through.
 
+**Gravity is tilted.** Adventure tracks run under the table's gravity,
+`(0, −9.81, −5)` × `gravityMultiplier` (`src/config/physics.ts`). On a `straight`
+heading +Z the downhill pull is `g_y·sin θ − g_z·cos θ`, which is zero near 27°:
+a shallower ramp heading +Z stops the ball and then rolls it back uphill.
+`OVERCLOCK_FOUNDRY` first shipped a 12° shelf and stalled there; keep +Z ramps
+at ≳ 34°, or turn the heading.
+
 `gap` accepts negative `length` and `drop`, which is the idiomatic way to nudge the
 cursor backwards or upwards before a segment whose builder call has a fixed offset
 of its own (see `CHRONO_CORE.json`, where a `-0.5 / -1` gap lines the second gear up
@@ -186,14 +193,22 @@ Hand-tuned flagships that still need custom gizmos (`PACHINKO_HALL`, `TESLA_TOWE
 ## Shipped data tracks
 
 **Campaign spine (JSON):** `NEON_HELIX`, `CYBER_CORE`, `QUANTUM_GRID`, `STORM_LATTICE`, `GLITCH_SPIRE`, `RETRO_WAVE_HILLS`, `HYPER_DRIFT`,
-`CHRONO_CORE`, `SINGULARITY_WELL`, `CRYO_CHAMBER`, `FIREWALL_BREACH`. Optional branch: `PACHINKO_SPIRE`.
+`CHRONO_CORE`, `SINGULARITY_WELL`, `CRYO_CHAMBER`, `FIREWALL_BREACH`, `OVERCLOCK_FOUNDRY`. Optional branch: `PACHINKO_SPIRE`.
 
 **Stage 5 (JSON, C++ toys only):** `STORM_LATTICE`. A 55° lattice board (one pin
 field, 79 pins, a seeded dropout and a hole cleared for a mill) with two
 ramp-anchored updraft shafts and two crosswinds that herd the ball toward the
 goal basin. It is the reference for new schema content.
 
-**Post-finale branch (JSON):** `TIDAL_NEXUS` → `SOLAR_FLARE` → `DIGITAL_ZEN_GARDEN`.
+**Stage 15 / finale (JSON, C++ toys only):** `OVERCLOCK_FOUNDRY`. A two-tier
+smelter: an upper 52° board with a 6×8 lattice (side channels cut by `holes`)
+and a bellows updraft that lofts the ball back through it, a 34° pour shelf
+whose two conveyor fields herd the ball to the centre, and a lower 55° board
+with a 7×8 lattice around a counter-rotating mill and two crosswinds into the
+goal. Two pin-field handles, five force fields, no TypeScript. The lattices
+are offset ±0.375 so neither lines a pin up with the spawn or pour line.
+
+**Post-firewall branch (JSON):** `TIDAL_NEXUS` → `SOLAR_FLARE` → `DIGITAL_ZEN_GARDEN`.
 
 `QUANTUM_GRID` and `CHRONO_CORE` were migrated from TypeScript in #321; the three spine
 tracks above were migrated in the content-foundation slice with the same parity pattern.
@@ -209,8 +224,13 @@ then asserts the two are identical. Do a migration that way rather than by eye.
 
 ## Adding a data track
 
-1. Author `src/adventure/track-data/MY_TRACK.json` with `id` matching an existing enum value.
-2. Point the track's manifest at it: `buildKind: 'json'` + `dataPath: './track-data/MY_TRACK.json'`.
+1. Author `src/adventure/track-data/MY_TRACK.json` with `id` matching an `AdventureTrackType`
+   value (append a new value at the end of the enum).
+2. Point the track's manifest at it: `buildKind: 'json'` + `dataPath: './track-data/MY_TRACK.json'`
+   (a new manifest goes at the end of `track-manifest-data-extended.ts`; order must match the enum).
+   `TRACK_CATALOG`, `ZONE_REGISTRY` and the slot-adventure track order derive from it. Optional
+   polish with fallbacks: a `CAMERA_PRESETS` entry, a `TRACK_THEME_PROFILES` entry and a
+   `CAMPAIGN_GOAL_TEMPLATES` entry.
 3. If it replaces a TS builder, delete the builder and its `src/adventure/index.ts` export,
    and add a parity case before deleting anything.
 4. Run `npm run tracks:validate` and `npm test`.

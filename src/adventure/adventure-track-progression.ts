@@ -50,7 +50,7 @@ export interface SerializableProgressionState {
 }
 
 /**
- * Campaign track catalog — 14 main-spine stages plus 2 optional branches (#321, #424).
+ * Campaign track catalog — 15 main-spine stages plus 2 optional branches (#321, #424).
  *
  * Campaign sequence (main spine), with A = EXTENDED_MAP, B = STATIONARY_TABLE:
  *    1. NEON_HELIX          — A — spiral descent run
@@ -66,13 +66,14 @@ export interface SerializableProgressionState {
  *   11. CHRONO_CORE         — B — gear arena (JSON)
  *   12. CRYO_CHAMBER        — A — ice slalom
  *   13. CASINO_HEIST        — B — vault arena
- *   14. FIREWALL_BREACH     — A — finale
+ *   14. FIREWALL_BREACH     — A — security breach
+ *   15. OVERCLOCK_FOUNDRY   — B — finale: two-tier lattice smelter (JSON, C++ toys)
  *
  * Parallel branches (not on the spine, reachable early):
  *   PACHINKO_SPIRE  — B — unlocks from NEON_HELIX
  *   NEON_STRONGHOLD — B — unlocks from PACHINKO_HALL
  *
- * Stages 2–14 strictly alternate. Before #424 stages 4–5 were an A/A pair
+ * Stages 2–15 strictly alternate. Before #424 stages 4–5 were an A/A pair
  * (QUANTUM_GRID → SINGULARITY_WELL); STORM_LATTICE is the arena content that
  * splits it, leaving only the historical NEON_HELIX → PACHINKO_HALL opener.
  * The rhythm is bounded by content, not preference: mode type describes what
@@ -96,6 +97,7 @@ export const CAMPAIGN_MAIN_PATH = [
   'CRYO_CHAMBER',
   'CASINO_HEIST',
   'FIREWALL_BREACH',
+  'OVERCLOCK_FOUNDRY',
 ] as const
 
 /** Derived from TrackManifest registry — see src/adventure/manifests/ */

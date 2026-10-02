@@ -22,7 +22,7 @@ Campaign alternates between two **gameplay identities**, not just layout size:
 | **Controls** | No flippers (adventure ball physics only) | No flippers (same), but arena toys keep ball alive locally |
 | **Portal placement** | End of course (`portalPosition` at journey terminus); larger portal mesh | Center of arena; smaller portal |
 | **Runtime flag** | `gameMode = 'dynamic'` | `gameMode = 'fixed'` |
-| **Examples** | Neon Helix, **Pachinko Hall** (hub), Quantum Grid, Singularity Well, Retro Wave Hills, Hyper Drift, Cryo Chamber, Firewall Breach | Cyber Core, Storm Lattice, Glitch Spire, Polychrome Void, Chrono Core, Casino Heist, Pachinko Spire (parallel), Neon Stronghold (parallel) |
+| **Examples** | Neon Helix, **Pachinko Hall** (hub), Quantum Grid, Singularity Well, Retro Wave Hills, Hyper Drift, Cryo Chamber, Firewall Breach | Cyber Core, Storm Lattice, Glitch Spire, Polychrome Void, Chrono Core, Casino Heist, Overclock Foundry, Pachinko Spire (parallel), Neon Stronghold (parallel) |
 
 **Pachinko Hall** is the canonical EXTENDED_MAP hub prototype: a neon parlor corridor with pin forests, conveyor merge chutes, and decorative machine alcoves — inspired by classic pachinko-hall floor layouts. It bridges the spiral descent (Neon Helix) and the first pinball arena (Cyber Core).
 
@@ -30,7 +30,7 @@ Track builders read `currentTrackInfo.modeType` from `TRACK_CATALOG` and branch 
 
 ## A/B Pattern
 
-14 main-spine stages, plus 2 optional branches (#321, #424):
+15 main-spine stages, plus 2 optional branches (#321, #424):
 
 ```text
  1. NEON_HELIX        (A)
@@ -46,7 +46,8 @@ Track builders read `currentTrackInfo.modeType` from `TRACK_CATALOG` and branch 
 11. CHRONO_CORE       (B) json   │
 12. CRYO_CHAMBER      (A)        │
 13. CASINO_HEIST      (B)        │
-14. FIREWALL_BREACH   (A) finale │
+14. FIREWALL_BREACH   (A)        │
+15. OVERCLOCK_FOUNDRY (B) json   │  finale: two pin lattices, bellows + conveyors (C++ toys)
                                  │
 Parallel branches:               │
   PACHINKO_SPIRE  (B) [from NEON_HELIX]
@@ -57,7 +58,7 @@ Main spine order is defined in `CAMPAIGN_MAIN_PATH` (`adventure-track-progressio
 
 ### Why the alternation is not perfect
 
-Stages 2–14 alternate strictly; only the NEON_HELIX → PACHINKO_HALL opener is an
+Stages 2–15 alternate strictly; only the NEON_HELIX → PACHINKO_HALL opener is an
 A/A pair. Until #424 QUANTUM_GRID → SINGULARITY_WELL was a second one —
 STORM_LATTICE is the arena content that split it.
 
@@ -72,7 +73,8 @@ alternation from stage 2 on so this cannot silently regress.
 Inserting a stage mid-spine re-points the next stage's `unlockedBy`. Saves written
 before the insertion are migrated on load: `loadSerializableState` re-derives every
 unlock whose `unlockedBy` track is already completed, so the new stage is offered
-rather than skipped.
+rather than skipped. Appending works the same way: OVERCLOCK_FOUNDRY is offered to
+a save that had already finished FIREWALL_BREACH.
 
 ## Portal Loop (Runtime)
 

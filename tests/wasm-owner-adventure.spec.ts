@@ -253,6 +253,64 @@ test.describe('wasm-owner adventure: synthwave-surf runs without Rapier', () => 
     expect(after.z).toBeGreaterThan(before.z)
   })
 
+  test('plays a ball through OVERCLOCK_FOUNDRY: two C++ pin fields, five force fields, down to the lower board', async ({ page }) => {
+    // Schema-only campaign finale: the ball must clear the upper lattice, the
+    // bellows, and the pour shelf (no lips at the 52° → 34° → 55° joints).
+    test.setTimeout(240_000)
+
+    const boot = await bootWasmOwner(page)
+    assertWasmOwnerReady(boot)
+    await startPlaying(page)
+    await pauseRendering(page)
+
+    const started = await startTrack(page, 'OVERCLOCK_FOUNDRY')
+    expect(started.error, started.error ?? 'track start failed').toBeNull()
+    expect(started.ok).toBe(true)
+
+    const track = await page.evaluate(() => {
+      const g = (window as unknown as AdventureHooks).game
+      const descs = (g?.adventureMode?.getColliderDescriptors?.() ?? []).filter((d) => !d.removed)
+      const ownership = g?.physicsController?.getAdventureOwnership?.()
+      return {
+        pinFields: descs.filter((d) => d.kind === 'pinField').length,
+        forceFields: descs.filter((d) => d.kind === 'forceField').length,
+        convex: descs.filter((d) => d.kind === 'convexMesh').length,
+        unexported: [...(g?.adventureMode?.getUnexportedColliders?.() ?? [])],
+        owned: ownership?.owned ?? false,
+        unsupported: (ownership?.unsupported ?? []).map((u) => `${u.label ?? '?'}: ${u.reason}`),
+      }
+    })
+    expect(track).toEqual({ pinFields: 2, forceFields: 5, convex: 0, unexported: [], owned: true, unsupported: [] })
+
+    const before = await page.evaluate(() => {
+      const t = (window as unknown as AdventureHooks).game?.ballManager?.getBallBody?.()?.translation()
+      return { x: t?.x ?? 0, y: t?.y ?? 0, z: t?.z ?? 0 }
+    })
+    // Step in chunks and keep the deepest point the ball reaches while on the
+    // course: once it scores (or drains) adventure hands it back to the table.
+    let run = { ok: true, rapierMs: 0, wasmMs: 0 }
+    let deepest = { ...before }
+    for (let i = 0; i < 25; i++) {
+      run = await stepPhysics(page, 60)
+      expect(run.ok).toBe(true)
+      expect(run.rapierMs).toBe(0)
+      const p = await page.evaluate(() => {
+        const t = (window as unknown as AdventureHooks).game?.ballManager?.getBallBody?.()?.translation()
+        return { x: t?.x ?? 0, y: t?.y ?? 0, z: t?.z ?? 0 }
+      })
+      if (p.z > before.z && p.y < deepest.y) deepest = p
+    }
+    const rapierMs = await page.evaluate(
+      () => (window as unknown as AdventureHooks).game?.physics?.getLastRapierStepMs?.() ?? -1,
+    )
+    expect(rapierMs).toBe(0)
+    // The pour shelf ends ~19 below the spawn and the lower board runs ~15 more:
+    // the ball has to clear the 52° → 34° → 55° joints and get well down the
+    // lower board, not hang at a joint.
+    expect(before.y - deepest.y, `ball stalled: deepest ${JSON.stringify(deepest)}`).toBeGreaterThan(24)
+    expect(deepest.z).toBeGreaterThan(17)
+  })
+
   test('every catalogued track exports fully and runs with Rapier unstepped', async ({ page }) => {
     test.setTimeout(600_000)
 

@@ -57,6 +57,7 @@ const CAMPAIGN_GOAL_TEMPLATES: Record<string, CampaignGoalTemplate> = {
   CRYO_CHAMBER: { goldTarget: 7, comboTarget: 11, survivalSeconds: 80, bonusReward: 6000 },
   CASINO_HEIST: { goldTarget: 7, comboTarget: 12, survivalSeconds: 50, bonusReward: 6500 },
   FIREWALL_BREACH: { goldTarget: 8, comboTarget: 14, survivalSeconds: 90, bonusReward: 8000 },
+  OVERCLOCK_FOUNDRY: { goldTarget: 8, comboTarget: 14, survivalSeconds: 100, bonusReward: 9000 },
   NEON_STRONGHOLD: { goldTarget: 5, comboTarget: 7, survivalSeconds: 50, bonusReward: 3400 },
 }
 

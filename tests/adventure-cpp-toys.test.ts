@@ -407,3 +407,59 @@ describe('save migration for a stage inserted into the spine', () => {
     expect(progression.getNextTrackId()).toBe('STORM_LATTICE')
   })
 })
+
+describe('OVERCLOCK_FOUNDRY — schema-only campaign finale', () => {
+  const raw = JSON.parse(
+    readFileSync(join(import.meta.dirname, '../src/adventure/track-data/OVERCLOCK_FOUNDRY.json'), 'utf8'),
+  )
+
+  function build() {
+    const result = validateTrackDefinition(raw)
+    if (!result.ok) throw new Error(JSON.stringify(result.errors))
+    const builder = new ExportHarnessBuilder()
+    const descriptors = builder.build(result.definition)
+    return { builder, descriptors }
+  }
+
+  it('is a JSON track appended to the spine after FIREWALL_BREACH', () => {
+    expect(getTrackManifest(AdventureTrackType.OVERCLOCK_FOUNDRY)?.buildKind).toBe('json')
+    expect(CAMPAIGN_MAIN_PATH.at(-1)).toBe('OVERCLOCK_FOUNDRY')
+    expect(CAMPAIGN_MAIN_PATH.at(-2)).toBe('FIREWALL_BREACH')
+    expect(TRACK_CATALOG.OVERCLOCK_FOUNDRY.modeType).toBe('STATIONARY_TABLE')
+    expect(TRACK_CATALOG.OVERCLOCK_FOUNDRY.unlockedBy).toBe('FIREWALL_BREACH')
+  })
+
+  it('exports fully to C++ using only box / cylinder / sensor / mover / pin-field / force-field', () => {
+    const { builder, descriptors } = build()
+    expect(exportReportFor(builder).problems).toEqual([])
+    const kinds = new Set(descriptors.map((d) => d.kind))
+    expect([...kinds].sort()).toEqual(['box', 'cylinder', 'forceField', 'pinField'])
+    expect(descriptors.some((d) => d.motion === 'dynamic')).toBe(false)
+  })
+
+  it('carries two lattices as two pin-field handles, five force fields and one mill', () => {
+    const { descriptors } = build()
+    const { engine, of } = recordingEngine()
+    const result = exportAdventureCollidersToWasm(descriptors, engine)
+    expect(result.unsupported).toEqual([])
+    expect(of('addPinField')).toHaveLength(2)
+    expect(of('addForceField')).toHaveLength(5)
+    expect(of('addStaticCylinder')).toHaveLength(0)
+    expect(descriptors.filter((d) => d.kind === 'cylinder' && d.motion === 'kinematic-velocity')).toHaveLength(1)
+    const pins = of('addPinField').reduce((n, call) => n + resolvePinField(call.args[0] as PinFieldSpec).length, 0)
+    expect(pins).toBeGreaterThan(80)
+    expect(pins).toBeLessThan(104)
+  })
+
+  it('is offered next to a save that had finished the old fourteen-stage spine', () => {
+    const progression = new AdventureTrackProgression()
+    const beaten = CAMPAIGN_MAIN_PATH.slice(0, -1) as unknown as string[]
+    progression.loadSerializableState({
+      completedTracks: beaten,
+      unlockedTracks: [...beaten, 'PACHINKO_SPIRE', 'NEON_STRONGHOLD', 'TIDAL_NEXUS'],
+      currentTrack: 'FIREWALL_BREACH',
+    })
+    expect(progression.isTrackUnlocked('OVERCLOCK_FOUNDRY')).toBe(true)
+    expect(progression.getNextTrackId()).toBe('OVERCLOCK_FOUNDRY')
+  })
+})

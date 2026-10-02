@@ -50,6 +50,8 @@ export enum AdventureTrackType {
   TESLA_TOWER = 'TESLA_TOWER',
   NEON_SKYLINE = 'NEON_SKYLINE',
   POLYCHROME_VOID = 'POLYCHROME_VOID',
+  /** Schema-only post-firewall stage: two pin lattices, bellows and conveyors (JSON, C++ toys). */
+  OVERCLOCK_FOUNDRY = 'OVERCLOCK_FOUNDRY',
 }
 
 /**

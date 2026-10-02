@@ -91,6 +91,22 @@ export const CAMERA_PRESETS: Record<string, CameraPreset> = {
     minRadius: 16,
     maxRadius: 40,
   },
+  /** OVERCLOCK_FOUNDRY: Face-on, pulled back to hold both tiers of the smelter board */
+  OVERCLOCK_FOUNDRY: {
+    alpha: -Math.PI / 2,
+    beta: 1.18,
+    radius: 26,
+    fov: 0.9,
+    lookAheadTime: 0.2,
+    trackingSmoothing: 9.0,
+    speedRadiusFactor: 0.1,
+    speedFOVFactor: 0.003,
+    maxRadiusExtension: 5,
+    minBeta: 1.05,
+    maxBeta: 1.42,
+    minRadius: 18,
+    maxRadius: 46,
+  },
   /** SINGULARITY_WELL: Tighter view for gravitational challenge */
   SINGULARITY_WELL: {
     alpha: -Math.PI / 2,
