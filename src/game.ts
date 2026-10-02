@@ -77,6 +77,9 @@ export class Game extends GameDelegates {
       bindDailyCascadeUI({
         getCampaignStageName: () =>
           this.adventureTrackProgression?.getCurrentTrackInfo()?.name ?? 'Neon Helix',
+        onMachineChanged: (identity) => {
+          this.display?.setMachineTheme(identity?.backbox ?? null)
+        },
       })
 
       try {

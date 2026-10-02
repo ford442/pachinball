@@ -14,7 +14,7 @@ import type { AdventureTrackProgression } from '../adventure/adventure-track-pro
 import type { AdventureProgressionSupervisor } from '../adventure/adventure-progression-supervisor'
 import type { AdventureMode } from '../adventure'
 import { getCampaignRewardsManager } from '../adventure/campaign-rewards-manager'
-import { getDailyCascadeState } from '../game-elements/daily-cascade-state'
+import { getDailyCascadeState } from '../cascade/daily-cascade-state'
 import { BallType } from '../config'
 
 export interface HUDHost {

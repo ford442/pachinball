@@ -9,7 +9,8 @@ interface ImageOpts { hasAlpha?: boolean; onLoad?: () => void; onError?: () => v
 interface VideoOpts { onReady?: () => void; onError?: () => void }
 
 const reg = vi.hoisted(() => ({
-  image: null as null | { loadImage: ReturnType<typeof vi.fn>; setVisible: ReturnType<typeof vi.fn> },
+  image: null as null | { loadImage: ReturnType<typeof vi.fn>; setVisible: ReturnType<typeof vi.fn>; setTint: ReturnType<typeof vi.fn> },
+  shader: null as null | { setShaderParams: ReturnType<typeof vi.fn> },
   video: null as null | { loadVideo: ReturnType<typeof vi.fn>; setVisible: ReturnType<typeof vi.fn> },
   lcd: null as null | { setCharacterTakeActive: ReturnType<typeof vi.fn> },
 }))
@@ -33,6 +34,7 @@ vi.mock('../src/display/display-shader', () => ({
         setShaderParams: vi.fn(),
         setAccessibilityScanlineFactor: vi.fn(),
       })
+      reg.shader = this as never
     }
   },
 }))
@@ -189,5 +191,25 @@ describe('DisplaySystem character take routing', () => {
     ds.setAccessibility({ ...A11Y, reducedMotion: true })
     expect(ds.getCharacterTakeStatus().loop).toBe('skipped')
     expect(lastVideo()[0]).toBe('/backbox/attract.mp4')
+  })
+})
+
+describe('DisplaySystem machine theme', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('tints the poster and recolours the IDLE grid, and null restores both', () => {
+    const ds = makeDisplay()
+    ds.setMachineTheme({ primaryHex: '#ff8800', accentHex: '#00ffaa', shaderSpeed: 0.7, characterTint: '#ffe0cc' })
+    expect(reg.image!.setTint).toHaveBeenLastCalledWith('#ffe0cc')
+    expect(reg.shader!.setShaderParams).toHaveBeenLastCalledWith(expect.objectContaining({ color: '#ff8800', speed: 0.7 }))
+
+    ds.setDisplayState(DisplayState.REACH)
+    expect(reg.shader!.setShaderParams).toHaveBeenLastCalledWith(expect.objectContaining({ color: '#ff0055' }))
+    ds.setDisplayState(DisplayState.IDLE)
+    expect(reg.shader!.setShaderParams).toHaveBeenLastCalledWith(expect.objectContaining({ color: '#ff8800' }))
+
+    ds.setMachineTheme(null)
+    expect(reg.image!.setTint).toHaveBeenLastCalledWith(null)
+    expect(reg.shader!.setShaderParams).not.toHaveBeenLastCalledWith(expect.objectContaining({ color: '#ff8800' }))
   })
 })

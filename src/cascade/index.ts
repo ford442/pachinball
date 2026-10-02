@@ -16,3 +16,12 @@ export {
   resetDailyCascadeState,
   type DailyCascadeMode,
 } from './daily-cascade-state'
+export {
+  deriveMachineIdentity,
+  deriveMachineTraits,
+  FEEDER_LABELS,
+  type MachineIdentity,
+  type MachineTraits,
+  type MachineBackboxPick,
+} from './machine-identity'
+export { parseCascadeParam, createCascadeShareUrl, type CascadeLink } from './cascade-url'

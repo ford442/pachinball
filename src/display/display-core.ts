@@ -39,6 +39,16 @@ import type { EventBus } from '../core/event-bus'
 import type { EffectsSystem } from '../effects/effects-core'
 import { DisplayOverlay } from './display-overlay'
 
+/** A Daily Cascade machine's backbox look (structural; see cascade/machine-identity). */
+export interface DisplayMachineTheme {
+  primaryHex: string
+  accentHex: string
+  /** IDLE shader grid speed. */
+  shaderSpeed: number
+  /** Light multiply tint for the character poster. */
+  characterTint: string
+}
+
 export class DisplaySystem {
   public readonly overlay = new DisplayOverlay()
 
@@ -66,6 +76,7 @@ export class DisplaySystem {
   // State
   private currentState: DisplayState = DisplayState.IDLE
   private characterGeneration = 0
+  private machineTheme: DisplayMachineTheme | null = null
   private characterStatus: CharacterTakeStatus = { poster: 'none', loop: 'none', takeActive: false }
   private jackpotPhase = 0
   private globalTime = 0
@@ -341,6 +352,9 @@ export class DisplaySystem {
   /** Layer visibility, shader params and media for a display state. */
   private applyStateVisuals(state: DisplayState): void {
     const media = getStateConfig(this.config, state)
+    if (state === DisplayState.IDLE && this.machineTheme) {
+      media.shaderParams = { ...media.shaderParams, color: this.machineTheme.primaryHex, speed: this.machineTheme.shaderSpeed }
+    }
 
     this.shaderLayer.setBackgroundVisible(media.showShaderBackground ?? true)
     this.reelsLayer.setVisible(media.showReels ?? true)
@@ -571,6 +585,27 @@ export class DisplaySystem {
     const pct = Math.max(0, Math.min(1, progress))
     const bar = '█'.repeat(Math.round(pct * 10)).padEnd(10, '░')
     this.lcdOverlayLayer.setTrackText(`♪ ${trackName}  [${bar}]`)
+  }
+
+  /**
+   * Dress the backbox for a Daily Cascade machine: IDLE grid colour and speed,
+   * LCD theme, and a light tint on the character poster. Null restores the
+   * vanilla look.
+   */
+  setMachineTheme(theme: DisplayMachineTheme | null): void {
+    this.machineTheme = theme
+    this.imageLayer.setTint(theme?.characterTint ?? null)
+    if (theme) {
+      this.setTrackTheme(theme.primaryHex, theme.accentHex)
+    } else {
+      this.setTrackTheme(PALETTE.CYAN, PALETTE.GOLD)
+    }
+    if (this.currentState === DisplayState.IDLE) {
+      const params = getStateConfig(this.config, DisplayState.IDLE).shaderParams
+      this.shaderLayer.setShaderParams(
+        theme ? { ...params, color: theme.primaryHex, speed: theme.shaderSpeed } : params ?? {},
+      )
+    }
   }
 
   setTrackTheme(primaryHex: string, accentHex?: string): void {

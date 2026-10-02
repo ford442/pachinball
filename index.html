@@ -78,7 +78,9 @@
           <p>1 / 0 to Flip</p>
           <p>Space or Enter to Launch</p>
           <div id="daily-cascade-panel" class="daily-cascade-panel">
-            <h2 id="todays-machine-heading" class="todays-machine-heading">Today’s machine</h2>
+            <h2 id="todays-machine-heading" class="todays-machine-heading">Classic table</h2>
+            <p id="cascade-machine-name" class="cascade-machine-name hidden"></p>
+            <p id="cascade-machine-traits" class="cascade-machine-traits hidden"></p>
             <p id="campaign-stage-label" class="campaign-stage-label">Campaign: Neon Helix</p>
             <label class="setting-row">
               Mode
@@ -90,6 +92,7 @@
             </label>
             <p id="cascade-seed-label" class="cascade-seed-label">Vanilla table</p>
             <button type="button" id="cascade-randomize-btn" class="hidden">Randomize</button>
+            <button type="button" id="cascade-share-btn" class="hidden secondary-btn">Share machine</button>
           </div>
           <button id="start-btn" disabled title="Loading cabinet…">Start Game</button>
           <button type="button" id="renderer-toggle-btn" class="secondary-btn">

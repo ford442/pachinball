@@ -1,10 +1,10 @@
 /**
  * Barrel for the game-elements sub-systems.
  *
- * Several re-exports below (audio synth / sample bank, daily-cascade layout and
- * state) go through deprecated one-line shims whose implementation moved to
- * `src/audio` and `src/cascade`. New call sites should import from those
- * barrels instead; the shims stay until their remaining importers are migrated.
+ * Several re-exports below (audio synth / sample bank) go through deprecated
+ * one-line shims whose implementation moved to `src/audio`. Daily Cascade lives
+ * in `src/cascade` and is re-exported from there. New call sites should import
+ * from those barrels instead.
  */
 export * from './types'
 export * from './display-config'
@@ -158,12 +158,12 @@ export {
   type FeederKey,
   type PinSpec,
   type BumperSpec,
-} from './daily-cascade-layout'
+} from '../cascade'
 export {
   DailyCascadeState,
   getDailyCascadeState,
   resetDailyCascadeState,
   type DailyCascadeMode,
-} from './daily-cascade-state'
+} from '../cascade'
 
 export { ObstacleEventBusIntegration } from './obstacle-eventbus-integration'

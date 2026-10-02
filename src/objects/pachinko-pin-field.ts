@@ -5,7 +5,7 @@
  */
 
 import { pinFieldOccupancyForPositions, type PinFieldSpec } from '../core/pin-field'
-import { KEEP_OUT_BOXES, type PinLattice } from '../game-elements/daily-cascade-layout'
+import { KEEP_OUT_BOXES, type PinLattice } from '../cascade/daily-cascade-layout'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 
 /** Vanilla lattice; a Daily Cascade layout brings its own row/column count. */
