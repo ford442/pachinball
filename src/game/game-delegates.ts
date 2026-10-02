@@ -170,7 +170,8 @@ export abstract class GameDelegates extends GameFields {
 
   private async ensureLevelSelectScreen(): Promise<LevelSelectScreen> {
     if (this.levelSelectScreen) return this.levelSelectScreen
-    const { getLevelSelectScreen } = await import('../game-elements/level-select-screen')
+    const { getLevelSelectScreen, resetLevelSelectScreen } = await import('../game-elements/level-select-screen')
+    this.lazySingletonResets.push(resetLevelSelectScreen)
     this.levelSelectScreen = getLevelSelectScreen(
       {
         onLevelSelect: (level, mapType) => {

@@ -10,6 +10,8 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import { SceneOptimizer } from '@babylonjs/core/Misc/sceneOptimizer'
+import type { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation'
+import type { EngineInstrumentation } from '@babylonjs/core/Instrumentation/engineInstrumentation'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { Nullable } from '@babylonjs/core/types'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
@@ -82,11 +84,11 @@ export abstract class GameFields {
   ballAnimator: BallAnimator | null = null
   adventureMode: AdventureMode | null = null
   zoneTriggerSystem: ZoneTriggerSystem | null = null
-  protected magSpinFeeder: MagSpinFeeder | null = null
-  protected nanoLoomFeeder: NanoLoomFeeder | null = null
-  protected prismCoreFeeder: PrismCoreFeeder | null = null
-  protected gaussCannon: GaussCannonFeeder | null = null
-  protected quantumTunnel: QuantumTunnelFeeder | null = null
+  magSpinFeeder: MagSpinFeeder | null = null
+  nanoLoomFeeder: NanoLoomFeeder | null = null
+  prismCoreFeeder: PrismCoreFeeder | null = null
+  gaussCannon: GaussCannonFeeder | null = null
+  quantumTunnel: QuantumTunnelFeeder | null = null
   inputManager: GameInputManager | null = null
   cameraController: CameraController | null = null
   mapManager: TableMapManager | null = null
@@ -117,6 +119,7 @@ export abstract class GameFields {
       ]).then(([lb, ne]) => {
         this._leaderboardSystem = lb.getLeaderboardSystem()
         this._nameEntryDialog = ne.getNameEntryDialog()
+        this.lazySingletonResets.push(lb.resetLeaderboardSystem, ne.resetNameEntryDialog)
         this._leaderboardSystem.setOnSpectateCallback((replayId) => {
           void this.startSpectateReplay(replayId)
         })
@@ -142,9 +145,19 @@ export abstract class GameFields {
     return this._nameEntryDialog
   }
 
+  /**
+   * `reset*` hooks for module singletons that are loaded lazily (and so cannot be
+   * imported statically by the disposer without defeating code splitting).
+   */
+  protected lazySingletonResets: Array<() => void> = []
+
   disposeOverlaySystems(): void {
     this._leaderboardSystem?.stop()
-    this._leaderboardSystem?.dispose()
+    // Resets (and so disposes) the leaderboard singleton too, not just this Game's
+    // reference: getLeaderboardSystem() would otherwise hand a disposed instance
+    // to the next Game.
+    for (const reset of this.lazySingletonResets) reset()
+    this.lazySingletonResets = []
     this._leaderboardSystem = null
     this._nameEntryDialog = null
     this._overlaySystemsReady = null
@@ -172,6 +185,8 @@ export abstract class GameFields {
   bloomPipeline: DefaultRenderingPipeline | null = null
   postProcessDegraded = false
   sceneOptimizer: SceneOptimizer | null = null
+  sceneInstrumentation: SceneInstrumentation | null = null
+  engineInstrumentation: EngineInstrumentation | null = null
   mirrorTexture: MirrorTexture | null = null
   tableRenderTarget: RenderTargetTexture | null = null
   headRenderTarget: RenderTargetTexture | null = null

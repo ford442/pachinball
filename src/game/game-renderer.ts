@@ -53,7 +53,7 @@ import type { EventBus } from '../core/event-bus'
 
 export interface RendererHost {
   readonly engine: Engine | WebGPUEngine
-  readonly scene: Scene
+  readonly scene: Scene | null
   readonly accessibility: AccessibilityConfig
   qualityTier: QualityTier
   isCameraFollowMode: boolean
@@ -68,7 +68,6 @@ export interface RendererHost {
   keyLight: DirectionalLight | null
   rimLight: DirectionalLight | null
   bounceLight: PointLight | null
-  scanlineIntensity: number
   showDebugUI: boolean
   sceneInstrumentation: SceneInstrumentation | null
   engineInstrumentation: EngineInstrumentation | null
@@ -457,7 +456,7 @@ export class GameRenderer {
    */
   private installWebGLLightBudget(): void {
     const { engine, scene } = this.host
-    if (engine.isWebGPU || this._lightBudgetTeardown) return
+    if (!scene || engine.isWebGPU || this._lightBudgetTeardown) return
 
     const webgl = engine as Engine
     let budget = DEFAULT_LIGHT_BUDGET

@@ -154,10 +154,10 @@ describe('EventBus', () => {
 
     it('listener calling on() during emit does not fire the new handler in the same emit cycle', () => {
       let newHandlerCalled = false
-      bus.on('menu:exit', () => {
-        bus.on('menu:exit', () => { newHandlerCalled = true })
+      bus.on('game:pause', () => {
+        bus.on('game:pause', () => { newHandlerCalled = true })
       })
-      bus.emit('menu:exit')
+      bus.emit('game:pause')
       expect(newHandlerCalled).toBe(false)
     })
   })

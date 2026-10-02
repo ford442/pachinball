@@ -34,7 +34,6 @@ export interface SettingsUIHost {
   readonly physics: PhysicsSystem
   readonly physicsTuningPanel: PhysicsTuningPanel | null
 
-  scanlineWeight: number
   scanlineEnabled: boolean
   debugHUDEnabledInSettings: boolean
   showDebugUI: boolean
@@ -42,7 +41,6 @@ export interface SettingsUIHost {
   isDebugHUDAvailable(): boolean
   ensurePhysicsTuningPanel(): PhysicsTuningPanel
   applyAccessibilitySettings(reducedMotion: boolean, photosensitiveMode: boolean): void
-  setScanlineWeight?(weight: number): void
   setScanlineEnabled?(enabled: boolean): void
   setScanlineIntensityMultiplier?(multiplier: number): void
   switchTableMap(mapName: string): void

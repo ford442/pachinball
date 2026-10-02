@@ -28,7 +28,7 @@ import { GameConfig } from '../config'
 import type { AccessibilityConfig, QualityTier } from '../game-elements'
 
 export interface SceneBuilderHost {
-  readonly scene: Scene
+  readonly scene: Scene | null
   readonly physics: PhysicsSystem
   readonly accessibility: AccessibilityConfig
   readonly qualityTier: QualityTier
@@ -58,7 +58,7 @@ export class GameSceneBuilder {
     } = {},
   ): Promise<void> {
     const { scene, gameObjects, ballManager, tableCam, effects, display } = this.host
-    if (!gameObjects || !ballManager || !display) return
+    if (!scene || !gameObjects || !ballManager || !display) return
 
     // Root container for all playfield visuals — pitched so the far end rises toward
     // the backbox. Rapier physics stay flat; gravity provides the slope simulation.
@@ -190,7 +190,7 @@ export class GameSceneBuilder {
 
   buildGameplayScene(): void {
     const { scene, gameObjects, ballManager, display, effects } = this.host
-    if (!gameObjects || !ballManager || !display || !effects) return
+    if (!scene || !gameObjects || !ballManager || !display || !effects) return
 
     // Snapshot before gameplay obstacles are built so we can reparent them to playfieldGroup
     const beforeGameplay = new Set(scene.meshes.map(m => m.uniqueId))

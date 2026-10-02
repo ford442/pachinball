@@ -9,7 +9,13 @@
 import { resetMaterialLibrary } from '../materials'
 import { resetCabinetBuilder } from '../cabinet'
 import { resetCampaignRewardsManager } from '../adventure/campaign-rewards-manager'
-import { resetScoringBreakdownManager } from '../game-elements'
+import {
+  resetScoringBreakdownManager,
+  resetSoundSystem,
+  resetMapSystem,
+  resetChallengeSystem,
+  resetDynamicWorld,
+} from '../game-elements'
 import { resetTrackThemingSystem } from '../adventure/track-theming-system'
 import type { Game } from '../game'
 
@@ -107,6 +113,17 @@ export function disposeGame(game: Game): void {
   resetCampaignRewardsManager()
   resetTrackThemingSystem()
   resetScoringBreakdownManager()
+
+  // Module singletons: each would otherwise hand the next Game an instance wired to
+  // this one's EventBus, scene or DOM. SoundSystem.dispose() unsubscribes from the
+  // bus and closes the AudioContext, so it runs after everything that plays sound.
+  // resetAdventureState() is deliberately absent: it wipes campaign progress.
+  resetSoundSystem()
+  resetMapSystem()
+  resetChallengeSystem()
+  resetDynamicWorld()
+  game.dynamicWorld = null
+  game.levelSelectScreen = null
 
   resetMaterialLibrary()
   // CabinetBuilder is a singleton bound to the scene it was created with; dispose

@@ -319,3 +319,8 @@ export function getNameEntryDialog(): NameEntryDialog {
   }
   return dialogInstance
 }
+
+export function resetNameEntryDialog(): void {
+  dialogInstance?.hide()
+  dialogInstance = null
+}

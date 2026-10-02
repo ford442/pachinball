@@ -31,7 +31,22 @@ import type { DebugStageKey } from './game/checkpoint-debug'
 import { GameDelegates } from './game/game-delegates'
 import { installSimClock } from './core/sim-clock'
 
-export class Game extends GameDelegates {
+export class Game
+  extends GameDelegates
+  implements
+    RendererHost,
+    CabinetBuilderHost,
+    SceneBuilderHost,
+    InputActionsHost,
+    ScenarioHost,
+    SlotAdventureHost,
+    SettingsUIHost,
+    DebugHost,
+    LifecycleHost,
+    HUDHost,
+    MapCabinetHost,
+    PhysicsHost
+{
   private disposed = false
 
   constructor(engine: Engine | WebGPUEngine, physics: PhysicsSystem = new PhysicsSystem()) {
@@ -109,7 +124,7 @@ export class Game extends GameDelegates {
     })
 
     await this.runCheckpointStage('render_bootstrap', () => {
-      this.renderer = new GameRenderer(this as unknown as RendererHost)
+      this.renderer = new GameRenderer(this)
       this.renderer.setupCamera()
       this.renderer.setupPostProcessing()
       this.renderer.setupLighting()
@@ -130,20 +145,20 @@ export class Game extends GameDelegates {
     })
 
     await this.runCheckpointStage('core_helpers', () => {
-      this.cabinetBuilder = new GameCabinetBuilder(this as unknown as CabinetBuilderHost)
-      this.sceneBuilder = new GameSceneBuilder(this as unknown as SceneBuilderHost)
-      this.inputActions = new GameInputActions(this as unknown as InputActionsHost)
-      this.scenarioManager = new GameScenario(this as unknown as ScenarioHost)
-      this.slotAdventure = new GameSlotAdventure(this as unknown as SlotAdventureHost)
-      this.settingsUI = new GameSettingsUI(this as unknown as SettingsUIHost)
+      this.cabinetBuilder = new GameCabinetBuilder(this)
+      this.sceneBuilder = new GameSceneBuilder(this)
+      this.inputActions = new GameInputActions(this)
+      this.scenarioManager = new GameScenario(this)
+      this.slotAdventure = new GameSlotAdventure(this)
+      this.settingsUI = new GameSettingsUI(this)
       if (isPhysicsTuningEnabled(this.physicsTuningEnabledInSettings)) {
         this.physicsTuningPanel = new PhysicsTuningPanel()
         this.physicsTuningPanel.show()
       }
-      this.debugHelper = new GameDebug(this as unknown as DebugHost)
-      this.lifecycle = new GameLifecycle(this as unknown as LifecycleHost)
-      this.hud = new GameHUD(this as unknown as HUDHost)
-      this.mapCabinet = new GameMapCabinet(this as unknown as MapCabinetHost)
+      this.debugHelper = new GameDebug(this)
+      this.lifecycle = new GameLifecycle(this)
+      this.hud = new GameHUD(this)
+      this.mapCabinet = new GameMapCabinet(this)
       this.updateHUD()
 
       this.settingsUI.setupSettingsUI()
@@ -155,14 +170,14 @@ export class Game extends GameDelegates {
       this.settingsUI?.setupMapSelector()
 
       this.eventBus = new EventBus()
-      getSoundSystem(this.eventBus)
+      this.soundSystem.bindEventBus(this.eventBus)
       this.stateManager = new GameStateManager({
         onStateChange: (oldState, newState) => {
           console.log(`[Game] State changed: ${GameState[oldState]} -> ${GameState[newState]}`)
         },
       })
       this.stateManager.setEventBus(this.eventBus)
-      this.physicsController = new GamePhysicsController(this as unknown as PhysicsHost)
+      this.physicsController = new GamePhysicsController(this)
       // Ball-save, combo / streak windows, gold swarms and plunger charge read
       // the controller's gameplay clock, not wall time (#441).
       installSimClock(this.physicsController.simClock)

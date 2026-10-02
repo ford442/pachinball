@@ -39,7 +39,6 @@ export interface PachinballEventMap {
   'game:pause': void
   'game:resume': void
   'menu:enter': void
-  'menu:exit': void
 
   // Display state changes
   'display:set': DisplayState
@@ -54,7 +53,6 @@ export interface PachinballEventMap {
   'jackpot:end': void
   'jackpot:phase': { phase: number }
   'reach:start': void
-  'reach:end': void
   'adventure:start': void
   'adventure:end': void
   /**
@@ -312,16 +310,11 @@ export interface PachinballEventMap {
   'ball:save:triggered': {
     reason: 'grace-window' | 'multiball'
   }
-  'ball:save:expired': void
 
   // Bonus tally events
   'bonus:tally:start': {
     totalBonus: number
     breakdown: Record<string, number>
-  }
-  'bonus:tally:tick': {
-    currentDisplay: number
-    totalBonus: number
   }
   'bonus:tally:complete': {
     totalBonus: number
@@ -388,10 +381,6 @@ export interface PachinballEventMap {
   // C++ WASM physics engine events
   /** Fired once per contact pair per physics step by WasmPhysicsEngine. */
   'wasm:physics:contact': WasmContactEvent
-  /** Fired when the WasmPhysicsEngine WASM module has loaded and the world is ready. */
-  'wasm:physics:ready': void
-  /** Fired when the WasmPhysicsEngine encounters a fatal load error. */
-  'wasm:physics:error': { message: string }
 }
 
 /** Event name derived from the event map keys */
@@ -402,12 +391,15 @@ export type PachinballEventHandler<K extends PachinballEventName> = (
   payload: PachinballEventMap[K]
 ) => void
 
+/** One handler set per event, each typed to that event's payload. */
+type ListenerBuckets = { [K in PachinballEventName]?: Set<PachinballEventHandler<K>> }
+
 /**
  * Lightweight typed EventBus.
- * No external dependencies. Uses Map<string, Set<Function>> internally.
+ * No external dependencies.
  */
 export class EventBus {
-  private listeners = new Map<string, Set<(...args: unknown[]) => void>>()
+  private listeners: ListenerBuckets = {}
 
   /**
    * Subscribe to an event.
@@ -417,10 +409,12 @@ export class EventBus {
     event: K,
     handler: PachinballEventHandler<K>
   ): () => void {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, new Set())
+    let bucket = this.listeners[event] as Set<PachinballEventHandler<K>> | undefined
+    if (!bucket) {
+      bucket = new Set()
+      this.listeners[event] = bucket as ListenerBuckets[K]
     }
-    this.listeners.get(event)!.add(handler as (...args: unknown[]) => void)
+    bucket.add(handler)
 
     return () => {
       this.off(event, handler)
@@ -434,7 +428,8 @@ export class EventBus {
     event: K,
     handler: PachinballEventHandler<K>
   ): void {
-    this.listeners.get(event)?.delete(handler as (...args: unknown[]) => void)
+    const bucket = this.listeners[event] as Set<PachinballEventHandler<K>> | undefined
+    bucket?.delete(handler)
   }
 
   /**
@@ -442,18 +437,17 @@ export class EventBus {
    */
   emit<K extends PachinballEventName>(
     event: K,
-    ...args: PachinballEventMap[K] extends void
+    ...args: [PachinballEventMap[K]] extends [void]
       ? []
       : [payload: PachinballEventMap[K]]
   ): void {
-    const handlers = this.listeners.get(event)
+    const handlers = this.listeners[event] as Set<PachinballEventHandler<K>> | undefined
     if (!handlers) return
 
+    const payload = args[0] as PachinballEventMap[K]
     // Clone the set so that a handler calling off() during emit doesn't break iteration
-    const snapshot = Array.from(handlers)
-    for (const handler of snapshot) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-      ;(handler as Function)(...(args as unknown[]))
+    for (const handler of Array.from(handlers)) {
+      handler(payload)
     }
   }
 
@@ -462,9 +456,9 @@ export class EventBus {
    */
   clear(event?: PachinballEventName): void {
     if (event) {
-      this.listeners.delete(event)
+      delete this.listeners[event]
     } else {
-      this.listeners.clear()
+      this.listeners = {}
     }
   }
 }

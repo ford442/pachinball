@@ -120,6 +120,27 @@ export class SoundSystem {
     this.eventBusUnsubscribers.push(unsub)
   }
 
+  /**
+   * Subscribe to `eventBus`, replacing any earlier binding. The SoundSystem is a
+   * module singleton that outlives a Game, so rebinding must drop the previous
+   * bus's handlers instead of stacking a second set on top (#441).
+   */
+  bindEventBus(eventBus: EventBus): void {
+    this.unbindEventBus()
+    bindSoundEventBindings(this, eventBus)
+  }
+
+  unbindEventBus(): void {
+    for (const unsub of this.eventBusUnsubscribers) {
+      try {
+        unsub()
+      } catch {
+        // ignore
+      }
+    }
+    this.eventBusUnsubscribers = []
+  }
+
   async init(): Promise<void> {
     return initSoundSystemContext(this.asContextState(), () => this.doInit())
   }
@@ -334,14 +355,7 @@ export class SoundSystem {
   }
 
   dispose(): void {
-    for (const unsub of this.eventBusUnsubscribers) {
-      try {
-        unsub()
-      } catch {
-        // ignore
-      }
-    }
-    this.eventBusUnsubscribers = []
+    this.unbindEventBus()
 
     disposeSoundSystemContext(this.asContextState(), { stopMusic: () => this.stopMusic() })
 
@@ -367,12 +381,9 @@ export class SoundSystem {
 
 let soundSystemInstance: SoundSystem | null = null
 
-export function getSoundSystem(eventBus?: EventBus): SoundSystem {
+export function getSoundSystem(): SoundSystem {
   if (!soundSystemInstance) {
     soundSystemInstance = new SoundSystem()
-  }
-  if (eventBus) {
-    bindSoundEventBindings(soundSystemInstance, eventBus)
   }
   return soundSystemInstance
 }

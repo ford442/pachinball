@@ -38,8 +38,6 @@ export interface ScenarioHost {
   gameMode: 'fixed' | 'dynamic'
 
   switchTableMap(mapName: string): void
-  handleZoneTransition(zone: import('../adventure').AdventureTrackType, previousZone: import('../adventure').AdventureTrackType | null, isMajor: boolean): void
-  updateCabinetNeonForZone(baseColor: string, accentColor: string): void
 }
 
 export class GameScenario {
