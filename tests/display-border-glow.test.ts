@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { DisplayState } from '../src/game-elements/types'
+import { DisplayState } from '../src/display/display-types'
 import type { AccessibilityConfig } from '../src/game-elements/accessibility-config'
 
 // ---------------------------------------------------------------------------

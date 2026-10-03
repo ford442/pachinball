@@ -10,7 +10,7 @@ import { validateTrackDefinition } from './track-schema'
 const rawModules = import.meta.glob('./track-data/*.json', {
   eager: true,
   import: 'default',
-}) as Record<string, unknown>
+})
 
 interface BuiltRegistry {
   byId: Map<string, TrackDefinition>

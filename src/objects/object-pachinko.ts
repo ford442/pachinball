@@ -6,7 +6,7 @@ import { Scene } from '@babylonjs/core/scene'
 import { supportsPinFields, type PhysicsApi, type PhysicsBody, type PhysicsWorldSink } from '../core/physics-api'
 import { resolvePinField } from '../core/pin-field'
 import { GameConfig } from '../config'
-import type { PinLattice } from '../game-elements/daily-cascade-layout'
+import type { PinLattice } from '../cascade/daily-cascade-layout'
 import {
   PEG_BASE_RADIUS,
   PEG_COLLIDER_RADIUS,
@@ -94,20 +94,20 @@ export class PachinkoBuilder {
         diameterBottom: baseRadius * 2,
         height: pegHeight,
         tessellation: tess,
-      }, this.scene) as Mesh
+      }, this.scene)
 
       const cap = MeshBuilder.CreateSphere(`pinCapT_${suffix}`, {
         diameter: topRadius * 2.2,
         slice: 0.5,
         segments: capSeg,
-      }, this.scene) as Mesh
+      }, this.scene)
       cap.position.y = pegHeight / 2 - 0.02
 
       const bevel = MeshBuilder.CreateTorus(`pinBevelT_${suffix}`, {
         diameter: baseRadius * 2.3,
         thickness: 0.025,
         tessellation: bevelTess,
-      }, this.scene) as Mesh
+      }, this.scene)
       bevel.position.y = -pegHeight / 2 + 0.03
       bevel.rotation.x = Math.PI / 2
 

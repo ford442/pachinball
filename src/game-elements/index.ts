@@ -1,13 +1,10 @@
 /**
  * Barrel for the game-elements sub-systems.
  *
- * Several re-exports below (audio synth / sample bank, daily-cascade layout and
- * state) go through deprecated one-line shims whose implementation moved to
- * `src/audio` and `src/cascade`. New call sites should import from those
- * barrels instead; the shims stay until their remaining importers are migrated.
+ * Audio synth / sample-bank and daily-cascade layout / state live in
+ * `src/audio` and `src/cascade`; import them from there directly.
  */
 export * from './types'
-export * from './display-config'
 export * from './visual-language'
 export { PhysicsSystem, PHYSICS_DEGRADE_MARKER, exposeCurrentPhysicsEngine, exposePhysicsDegradeReason } from './physics'
 export { SettingsManager, type GameSettings } from './settings'
@@ -37,19 +34,6 @@ export {
 export { HapticManager, type HapticConfig } from './haptics'
 export { GamepadManager, type GamepadConfig, type GamepadState } from './gamepad'
 export { SoundSystem, getSoundSystem, resetSoundSystem, type MapId } from './sound-system'
-export { createImpactVoiceProfile, normalizeImpactVelocity, getPortalMotifFrequencies, type ImpactCategory, type ImpactVoiceOptions, type ImpactVoiceProfile } from './audio-synth'
-export {
-  getJackpotPhaseSampleKey,
-  getLocalAudioPath,
-  getSampleKeyForCategory,
-  getSampleKeyForImpact,
-  LOCAL_MUSIC_STEMS,
-  LOCAL_SAMPLE_BANK,
-  type AudioMusicStem,
-  type AudioSampleKey,
-  type AudioSourceMode,
-  type SampleCategory,
-} from './audio-sample-bank'
 export type { LeaderboardSystem, LeaderboardEntry, ScoreSubmission } from './leaderboard-system'
 export type { NameEntryDialog, NameEntryResult } from './name-entry-dialog'
 export { MapSystem, getMapSystem, resetMapSystem, type DynamicMapConfig } from './map-system'
@@ -147,23 +131,5 @@ export {
   resetChallengeSystem,
   type ChallengeConfig,
 } from '../replay/challenge-system'
-export {
-  generateTableLayout,
-  validateLayout,
-  runSpawnProbes,
-  CANONICAL_BUMPERS,
-  LAYOUT_CONSTANTS,
-  FEEDER_KEYS,
-  type TableLayout,
-  type FeederKey,
-  type PinSpec,
-  type BumperSpec,
-} from './daily-cascade-layout'
-export {
-  DailyCascadeState,
-  getDailyCascadeState,
-  resetDailyCascadeState,
-  type DailyCascadeMode,
-} from './daily-cascade-state'
 
 export { ObstacleEventBusIntegration } from './obstacle-eventbus-integration'

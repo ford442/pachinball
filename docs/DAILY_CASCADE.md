@@ -23,7 +23,7 @@ Cabinet, walls, flippers, lane sensors, and adventure tracks are fixed.
 ## Pipeline
 
 1. `SeededRng` (mulberry32) — [`src/core/seeded-rng.ts`](../src/core/seeded-rng.ts)
-2. `generateTableLayout` + `validateLayout` — [`src/cascade/daily-cascade-layout.ts`](../src/cascade/daily-cascade-layout.ts) (barrel: [`src/cascade/index.ts`](../src/cascade/index.ts); `src/game-elements/daily-cascade-layout.ts` is a deprecated re-export shim)
+2. `generateTableLayout` + `validateLayout` — [`src/cascade/daily-cascade-layout.ts`](../src/cascade/daily-cascade-layout.ts) (barrel: [`src/cascade/index.ts`](../src/cascade/index.ts))
 3. On `startGame()`: `rebuildMutableToys(layout)` + feeder `setGameplayEnabled` + `rebuildHandleCaches()`
 
 Same seed always yields the same layout (see Vitest).

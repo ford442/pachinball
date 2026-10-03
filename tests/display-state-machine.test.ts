@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { DisplayStateMachine } from '../src/display/display-state-machine'
-import { DisplayState } from '../src/game-elements/display-config'
+import { DisplayState } from '../src/display/display-types'
 
 describe('DisplayStateMachine', () => {
   it('starts in IDLE with full blend', () => {

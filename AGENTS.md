@@ -92,7 +92,7 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 ### Entry Points
 - **`src/main.ts`** — Bootstrap. Creates the Babylon engine in parallel with the C++ physics WASM preload (`preloadPhysicsSystem()` in `src/game-elements/physics-preload.ts` — `main.ts` / `game.ts` never name Rapier; it is fetched only for the explicit `rapier` / `wasm-mirror` modes or the missing-bundle degrade), then instantiates and initializes `Game`.
 - **`src/game.ts`** — Main orchestrator class. Coordinates all subsystems, scene setup, lighting, cameras, and the render loop. **Keep it lean; do not dump feature logic here.**
-- **`src/config.ts`** — Pure configuration (no Babylon dependencies). Contains API bases, ball spawn weights, gameplay constants, effects feature flags, and backbox media paths.
+- **`src/config/`** — Pure configuration (no Babylon dependencies). Contains API bases, ball spawn weights, gameplay constants, effects feature flags, and backbox media paths.
 
 ### Core Logic Modules
 
@@ -152,7 +152,6 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 | `path-mechanics.ts` | Dynamic adventure interactive elements: gates, magnets, launch pads, jump pads. |
 | `ball-stack-visual.ts` | Visual stack of reserve balls (gold-ball tracking). |
 | `debug-hud.ts` | Development overlay for runtime state monitoring (FPS, physics, performance tier). |
-| `display-config.ts` | Display system configuration: modes, states, blend modes, media playlists. |
 | `adventure-state.ts` | **Legacy** level-select UI + cosmetic rewards only. Campaign truth is `AdventureTrackProgression` + supervisor. |
 | `adventure-track-progression.ts` | `TRACK_CATALOG`, `AdventureTrackProgression` — campaign spine metadata. |
 | `adventure-progression-supervisor.ts` | Portal lifecycle + campaign state machine. |
@@ -185,7 +184,7 @@ Replaces the old monolithic `display.ts`.
 - **`display-shader.ts`** — WGSL shader reel layer (WebGPU path).
 - **`display-video.ts`** — HTMLVideoElement layer for attract/jackpot/fever/reach/adventure clips.
 - **`display-image.ts`** — Static image display layer for the backbox.
-- **`display-types.ts`** — Enums and interfaces (`DisplayState`, `DisplayMode`, CRT presets).
+- **`display-types.ts`** — Enums, interfaces and default config (`DisplayState`, `DisplayMode`, `DEFAULT_DISPLAY_CONFIG`, CRT presets).
 
 #### `src/effects/` — Visual effects (barrel: `src/effects/index.ts`)
 - **`effects-core.ts`** — `EffectsSystem`: bloom spikes, screen shake, jackpot sequences. Shares `AudioEngine` for stingers (`playVoice` / hud bus) — does **not** create an `AudioContext`.
@@ -254,7 +253,7 @@ Campaign truth is `AdventureTrackProgression` + `AdventureProgressionSupervisor`
 **Good:** Extending `object-bumpers.ts` or `effects-particles.ts`, then calling it from `game.ts`.
 
 ### 4.2 Physics — Engine Selection
-Gameplay physics never uses Babylon's built-in collision engine. The active backend is selected at runtime (`src/config.ts`):
+Gameplay physics never uses Babylon's built-in collision engine. The active backend is selected at runtime (`src/config/`):
 
 | Mode | When | Source |
 |------|------|--------|
@@ -273,10 +272,10 @@ Gameplay physics never uses Babylon's built-in collision engine. The active back
 - **Primary path:** WebGPU WGSL shaders (`display-shader.ts`) for slot reels and jackpot overlays.
 - **Fallback path:** Standard Canvas2D textures (`display-reels.ts`) when WebGPU is unavailable.
 - Backbox media hierarchy: **Video** > **Image** > **Procedural reels**.
-- State-specific media paths (attract, jackpot, fever, reach, adventure) are configured in `src/config.ts` under `GameConfig.backbox`.
+- State-specific media paths (attract, jackpot, fever, reach, adventure) are configured in `src/config/` under `GameConfig.backbox`.
 
 ### 4.4 Config Purity
-`src/config.ts` must **not** import Babylon.js. It contains:
+`src/config/` must **not** import Babylon.js. It contains:
 - Numeric gameplay constants (gravity, flipper strength, ball radius).
 - Color strings / feature flags (`EffectsConfig`).
 - API/asset base URLs (`API_BASE`, `ASSET_BASE`).
@@ -425,7 +424,7 @@ python3 deploy.py --list-only        # dry-run: print transfer plan, no upload
 |------|-------------|----------|
 | `.env.deploy` | **High** | Local deploy token. Gitignored; copy from `.env.deploy.example`. Never commit. |
 | `.env.production` | **High** | Blocked from read access by security policy. Do not paste contents into chat. |
-| `src/config.ts` | Medium | Exposes prod API base (`storage.noahcohn.com`) and asset paths. Safe to reference, not to abuse. |
+| `src/config/` | Medium | Exposes prod API base (`storage.noahcohn.com`) and asset paths. Safe to reference, not to abuse. |
 
 When making changes that touch authentication, API keys, or asset URLs, use `import.meta.env.VITE_API_URL` / `VITE_ASSET_URL` overrides rather than hardcoding new secrets.
 

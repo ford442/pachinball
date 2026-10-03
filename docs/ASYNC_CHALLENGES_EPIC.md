@@ -40,7 +40,7 @@ Later phases add weekly tournament APIs and (optionally) true realtime co-op mul
 | Input frame schema | `src/game-elements/types.ts` → `InputFrame` | Per-physics-frame flipper/plunger/nudge deltas + timestamp |
 | Input buffering | `src/game-elements/input.ts` | `processBufferedInputs()` aligns input to physics frames |
 | Physics fixed timestep | `src/game-elements/physics.ts` | `FIXED_TIMESTEP = 1/60`, accumulator pattern |
-| API helper | `src/config.ts` → `apiFetch()` | Prod base: `https://storage.noahcohn.com/api` |
+| API helper | `src/config/api.ts` → `apiFetch()` | Prod base: `https://storage.noahcohn.com/api` |
 
 ### Backend (minimal)
 

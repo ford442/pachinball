@@ -65,6 +65,6 @@ export function createThemedTrackMaterial(
   const mat = usePbr
     ? createTrackPBRMaterial(scene, sink, hex)
     : createTrackMaterial(scene, sink, hex)
-  mat.metadata = { ...(mat.metadata ?? {}), trackMaterialRole: role, trackId }
+  mat.metadata = { ...((mat.metadata as Record<string, unknown> | null) ?? {}), trackMaterialRole: role, trackId }
   return mat
 }

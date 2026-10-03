@@ -31,6 +31,11 @@ jobs:
       - name: Typecheck
         run: npx tsc -b
 
+      # noUncheckedIndexedAccess ratchet (#441): src/core, src/wasm and src/game/physics are held
+      # to the flag; the rest of src/ is reported as backlog.
+      - name: Indexed-access ratchet
+        run: npm run check:index-strict
+
       - name: Lint
         run: npm run lint
 
@@ -90,4 +95,5 @@ jobs:
           --project=mobile-chrome
           tests/verify_prism_core.spec.ts
           tests/basic-gameplay.spec.ts
+          tests/lifecycle-dispose.spec.ts
           tests/mobile-touch-smoke.spec.ts

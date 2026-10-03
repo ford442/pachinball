@@ -3,7 +3,7 @@
  * Manages smooth cross-fades between Idle, Reach, Fever, and Jackpot states.
  */
 
-import { DisplayState } from '../game-elements/display-config'
+import { DisplayState } from './display-types'
 
 export type DisplayLightingMode = 'idle' | 'reach' | 'fever' | 'jackpot'
 

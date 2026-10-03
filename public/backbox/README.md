@@ -18,7 +18,7 @@ public/backbox/
 
 ### 2. Configure Display Mode
 
-Edit `src/config.ts`:
+Edit `src/config/`:
 
 ```typescript
 import { DisplayMode, type DisplayConfig } from './game-elements/display-config'

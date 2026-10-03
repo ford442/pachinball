@@ -5,7 +5,7 @@
 
 import type { WasmPhysicsRuntimeMode } from '../config/physics'
 import type { InputFrame } from '../game-elements/types'
-import { DEFAULT_TABLE_MAP_ID } from '../shaders/lcd-table'
+import { DEFAULT_TABLE_MAP_ID } from '../config/table-maps'
 import type { ReplayWorldFingerprint } from './replay-snapshot'
 
 /** Normalise legacy replay metadata (`wasm` → mirror). */
@@ -109,8 +109,8 @@ export function decompressInputFrames(compressed: string): InputFrame[] {
     const parts = chunk.split(':')
     if (parts.length !== 2) continue
 
-    const count = parseInt(parts[0]!, 10)
-    const fields = parts[1]!.split(',')
+    const count = parseInt(parts[0], 10)
+    const fields = parts[1].split(',')
     const values = fields.map(Number)
     if (isNaN(count) || values.length < 3) continue
 

@@ -29,14 +29,14 @@ export function createMainBall(host: BallManagerHost): PhysicsBody {
     diameter,
     segments: 32, // High poly for smooth bevel highlights
     slice: 1, // Full sphere
-  }, host.scene) as Mesh
+  }, host.scene)
 
   // Enhanced chrome ball material with map-reactive glow
   const ballMat = host.matLib.getEnhancedChromeBallMaterial()
   ball.material = ballMat
 
   // Subtle bevel highlight: inner core sphere for layered glass/metallic look
-  const ballCore = MeshBuilder.CreateSphere('ballCore', { diameter: diameter * 0.65, segments: 16 }, host.scene) as Mesh
+  const ballCore = MeshBuilder.CreateSphere('ballCore', { diameter: diameter * 0.65, segments: 16 }, host.scene)
   ballCore.parent = ball
   ballCore.material = host.matLib.getEnhancedChromeBallMaterial()
   if (ballCore.material) {
@@ -47,7 +47,7 @@ export function createMainBall(host: BallManagerHost): PhysicsBody {
   }
 
   // Thin equatorial ring for premium highlight detail
-  const ballRing = MeshBuilder.CreateTorus('ballRing', { diameter: diameter * 0.85, thickness: 0.015, tessellation: 32 }, host.scene) as Mesh
+  const ballRing = MeshBuilder.CreateTorus('ballRing', { diameter: diameter * 0.85, thickness: 0.015, tessellation: 32 }, host.scene)
   ballRing.parent = ball
   ballRing.rotation.x = Math.PI / 2
   const ringMat = new StandardMaterial('ballRingMat', host.scene)
@@ -138,7 +138,7 @@ export function spawnExtraBalls(host: BallManagerHost, count: number, position?:
   const rng = getSessionRngFork(RNG_FORK.SPAWN)
 
   for (let i = 0; i < count; i++) {
-    const b = MeshBuilder.CreateSphere('xb', { diameter: GameConfig.ball.radius * 2, segments: 32 }, host.scene) as Mesh
+    const b = MeshBuilder.CreateSphere('xb', { diameter: GameConfig.ball.radius * 2, segments: 32 }, host.scene)
     // Offset slightly to avoid stacking
     b.position.set(spawn.x + (rng.next() - 0.5), spawn.y + (i * 2), spawn.z)
 
@@ -196,7 +196,7 @@ export function resetBall(host: BallManagerHost): void {
   if (host.ballBodies.length === 0) {
     const mat = host.matLib.getEnhancedChromeBallMaterial()
 
-    const b = MeshBuilder.CreateSphere('ball', { diameter: GameConfig.ball.radius * 2, segments: 32 }, host.scene) as Mesh
+    const b = MeshBuilder.CreateSphere('ball', { diameter: GameConfig.ball.radius * 2, segments: 32 }, host.scene)
     b.material = mat
 
     const spawn = GameConfig.ball.spawnMain
@@ -474,7 +474,7 @@ export function createBallOfType(host: BallManagerHost, type: BallType, position
     diameter,
     segments: 32,
     slice: 1,
-  }, host.scene) as Mesh
+  }, host.scene)
 
   // Apply material based on type
   ball.material = getMaterialForType(host, type)

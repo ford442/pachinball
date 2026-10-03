@@ -30,7 +30,7 @@ export class MagneticField extends PathMechanic {
     this.createVisuals()
 
     this.isSpawned = true
-    console.log(`[MagneticField] Spawned at ${this.position}, radius: ${this.fieldRadius}`)
+    console.log(`[MagneticField] Spawned at ${this.position.toString()}, radius: ${this.fieldRadius}`)
   }
 
   despawn(): void {

@@ -9,13 +9,13 @@
  */
 
 import type { Scene } from '@babylonjs/core/scene'
+import { LCDTableState } from '../shaders/lcd-table'
 import {
   TABLE_MAPS,
   type TableMapType,
   type TableMapConfig,
-  LCDTableState,
   registerMap,
-} from '../shaders/lcd-table'
+} from '../config/table-maps'
 import { computeEffectiveScanlineIntensity } from '../shaders/scanline'
 import { SettingsManager } from '../game-elements/settings'
 import { getMapSystem } from '../game-elements/map-system'
@@ -173,5 +173,3 @@ export class TableMapManager {
   }
 }
 
-// Re-export types for convenience
-export { TABLE_MAPS, type TableMapType, type TableMapConfig }

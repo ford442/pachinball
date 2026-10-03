@@ -22,7 +22,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { Scene } from '@babylonjs/core/scene'
-import { DisplayState } from '../game-elements/display-config'
+import { DisplayState } from './display-types'
 import { QualityTier, PALETTE, INTENSITY, emissive, STATE_COLORS } from '../game-elements/visual-language'
 import { type AccessibilityConfig, DEFAULT_ACCESSIBILITY } from '../game-elements/accessibility-config'
 import type { EffectsSystem } from '../effects/effects-core'
@@ -62,7 +62,7 @@ export class BackboxBorderGlow {
   private readonly _strobePhases: number = 6  // 6 half-cycles = 3 flashes
   private _pulseTime: number = 0
   /** Current display state — used for pulse decisions without fragile RGB comparisons */
-  private _displayState: string = 'idle'
+  private _displayState: DisplayState = DisplayState.IDLE
   /** Half-period in seconds for jackpot strobe, capped to accessibility limit */
   private _strobeHalfPeriod: number = 0.25  // 2 Hz default (safety cap)
   /** Whether jackpot strobe is suppressed by accessibility settings */
@@ -124,12 +124,11 @@ export class BackboxBorderGlow {
 
   /** Notify of a new DisplayState. Call whenever the display state changes. */
   onDisplaySet(state: DisplayState): void {
-    const stateStr = state as string
     const wasFever = this._displayState === DisplayState.FEVER
     const willBeFever = state === DisplayState.FEVER
 
-    this._displayState = stateStr
-    const col = BORDER_STATE_COLORS[stateStr] ?? Color3.Black()
+    this._displayState = state
+    const col = BORDER_STATE_COLORS[state] ?? Color3.Black()
     this._targetColor = col.clone()
     this._strobeActive = !this._strobeDisabled && state === DisplayState.JACKPOT
     this._strobeTimer = 0

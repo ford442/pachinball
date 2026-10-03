@@ -337,8 +337,6 @@ engine.dispose()
 | Event | Payload | When |
 |-------|---------|------|
 | `wasm:physics:contact` | `WasmContactEvent` | Each contact pair, each physics step |
-| `wasm:physics:ready` | `void` | After successful WASM load (future — emit from game init) |
-| `wasm:physics:error` | `{ message: string }` | Fatal load error (future) |
 
 ```typescript
 eventBus.on('wasm:physics:contact', (evt) => {

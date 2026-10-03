@@ -15,7 +15,7 @@
  */
 
 import type { DisplaySystem } from '../display'
-import type { TableMapType } from '../shaders/lcd-table'
+import type { TableMapType } from '../config/table-maps'
 import { apiFetch } from '../config'
 import { resolveVideoUrl } from '../core/asset-urls'
 
@@ -500,7 +500,7 @@ export class AdventureState {
     }
 
     this.saveProgress()
-    this.syncToBackend()
+    void this.syncToBackend()
 
     // Show completion story on backbox
     this.showLevelComplete(level)
@@ -682,7 +682,7 @@ export class AdventureState {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
-        const parsed = JSON.parse(saved)
+        const parsed = JSON.parse(saved) as Partial<AdventureProgress>
         // Validate and merge with defaults
         return {
           currentLevel: parsed.currentLevel || 'level-1-neon',

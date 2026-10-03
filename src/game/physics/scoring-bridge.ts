@@ -7,12 +7,13 @@ import { ComboMultiplierSystem } from '../../game-elements/combo-multiplier-syst
 import { BonusTallySystem } from '../../game-elements/bonus-tally-system'
 import { GoldBallStreakSystem } from '../../game-elements/gold-ball-streak-system'
 import { BallType, GAME_TUNING, GameConfig } from '../../config'
-import { DisplayState } from '../../game-elements'
-import { TABLE_MAPS } from '../../shaders/lcd-table'
+import { DisplayState } from '../../display/display-types'
+import { TABLE_MAPS } from '../../config/table-maps'
 import { PALETTE } from '../../game-elements'
 import type { PhysicsHost } from './types'
 import { getFeverScoreMultiplier, applyFeverGoldMultiplier } from './scoring-multipliers'
 import { simClockMs, simClockSeconds } from '../../core/sim-clock'
+import { createTimerScope } from '../../core/timers'
 
 /**
  * ScoringBridge — owns combo/fever/tally/streak state, score awards, and the
@@ -31,6 +32,7 @@ import { simClockMs, simClockSeconds } from '../../core/sim-clock'
  *    comes from here; it emits `combo:multiplier:changed`.
  */
 export class ScoringBridge {
+  private readonly timers = createTimerScope()
   private readonly host: PhysicsHost
   private readonly comboSystem: ComboSystem
   private readonly comboMultiplierSystem: ComboMultiplierSystem
@@ -126,6 +128,7 @@ export class ScoringBridge {
   }
 
   dispose(): void {
+    this.timers.dispose()
     for (const unsub of this.eventBusUnsubscribers) {
       unsub()
     }
@@ -189,7 +192,7 @@ export class ScoringBridge {
       this.host.eventBus.emit('bonus:tally:start', { totalBonus: total, breakdown })
       this.host.eventBus.emit('bonus:tally:complete', { totalBonus: total })
       this.host.effects?.setBloomEnergy(2.0)
-      setTimeout(() => this.host.effects?.setBloomEnergy(1.0), GAME_TUNING.timing.tiltBloomResetMs)
+      this.timers.setTimeout(() => this.host.effects?.setBloomEnergy(1.0), GAME_TUNING.timing.tiltBloomResetMs)
     }
   }
 
@@ -349,8 +352,9 @@ export class ScoringBridge {
 
     if (wasPrimaryBall) {
       const ballBodies = this.host.ballManager?.getBallBodies() || []
-      if (ballBodies.length > 0) {
-        this.host.ballManager?.setBallBody(ballBodies[0])
+      const nextPrimary = ballBodies[0]
+      if (nextPrimary) {
+        this.host.ballManager?.setBallBody(nextPrimary)
       } else {
         if (this.host.handlePrimaryBallDrain()) {
           // Free-map test mode fully handles the drain by loading the next layout
