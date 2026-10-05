@@ -17,7 +17,7 @@ export class CampaignRewardNotifier {
     // Persist to sessionStorage "unseen-rewards"
     try {
       const existingRaw = sessionStorage.getItem('unseen-rewards')
-      const existing: UnlockedReward[] = existingRaw ? JSON.parse(existingRaw) : []
+      const existing = (existingRaw ? JSON.parse(existingRaw) : []) as UnlockedReward[]
       
       // Avoid duplicate persistence in unseen-rewards
       if (!existing.some(item => item.id === unlocked.id)) {
@@ -37,7 +37,7 @@ export class CampaignRewardNotifier {
       const existingRaw = sessionStorage.getItem('unseen-rewards')
       if (!existingRaw) return
 
-      const existing: UnlockedReward[] = JSON.parse(existingRaw)
+      const existing = JSON.parse(existingRaw) as UnlockedReward[]
       if (existing.length === 0) return
 
       // Clear the storage

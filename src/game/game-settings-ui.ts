@@ -3,14 +3,15 @@
  */
 
 import type { Scene } from '@babylonjs/core/scene'
+import type { TimerScope } from '../core/timers'
 import type { SoundSystem } from '../game-elements/sound-system'
 import type { DebugHUD } from '../game-elements/debug-hud'
 import type { MapSystem } from '../game-elements/map-system'
 import type { PhysicsSystem } from '../game-elements/physics'
 import type { TableMapManager } from './game-maps'
 import { SettingsManager } from '../game-elements'
-import type { AudioSourceMode } from '../game-elements/audio-sample-bank'
-import { TABLE_MAPS, registerMap } from '../shaders/lcd-table'
+import type { AudioSourceMode } from '../audio/audio-sample-bank'
+import { TABLE_MAPS, registerMap } from '../config/table-maps'
 import { PhysicsDebugRenderer } from '../game-elements/physics-debug-renderer'
 import {
   attemptWebGPURenderer,
@@ -26,6 +27,9 @@ import {
 import type { PhysicsTuningPanel } from '../game-elements/physics-tuning-panel'
 
 export interface SettingsUIHost {
+  /** Aborted when the Game is disposed; every listener below is registered with it. */
+  readonly signal: AbortSignal
+  readonly timers: TimerScope
   readonly mapSystem: MapSystem
   readonly mapManager: TableMapManager | null
   readonly soundSystem: SoundSystem
@@ -34,7 +38,6 @@ export interface SettingsUIHost {
   readonly physics: PhysicsSystem
   readonly physicsTuningPanel: PhysicsTuningPanel | null
 
-  scanlineWeight: number
   scanlineEnabled: boolean
   debugHUDEnabledInSettings: boolean
   showDebugUI: boolean
@@ -42,7 +45,6 @@ export interface SettingsUIHost {
   isDebugHUDAvailable(): boolean
   ensurePhysicsTuningPanel(): PhysicsTuningPanel
   applyAccessibilitySettings(reducedMotion: boolean, photosensitiveMode: boolean): void
-  setScanlineWeight?(weight: number): void
   setScanlineEnabled?(enabled: boolean): void
   setScanlineIntensityMultiplier?(multiplier: number): void
   switchTableMap(mapName: string): void
@@ -68,16 +70,16 @@ export class GameSettingsUI {
     settingsBtn?.addEventListener('click', () => {
       settingsOverlay?.classList.remove('hidden')
       this.loadSettingsIntoUI()
-    })
+    }, { signal: this.host.signal })
 
     closeBtn?.addEventListener('click', () => {
       settingsOverlay?.classList.add('hidden')
-    })
+    }, { signal: this.host.signal })
 
     saveBtn?.addEventListener('click', () => {
       this.saveSettingsFromUI()
       settingsOverlay?.classList.add('hidden')
-    })
+    }, { signal: this.host.signal })
 
     this.setupScanlineSliderLiveUpdate()
     this.setupScanlineToggleLiveUpdate()
@@ -225,7 +227,7 @@ export class GameSettingsUI {
       this.applyScanlineIntensityMultiplier(value)
       const span = scanlineMultiplierSlider.parentElement?.querySelector('span')
       if (span) span.setAttribute('data-value', String(value))
-    })
+    }, { signal: this.host.signal })
   }
 
   private setupScanlineToggleLiveUpdate(): void {
@@ -234,7 +236,7 @@ export class GameSettingsUI {
 
     scanlineEnabledToggle.addEventListener('change', () => {
       this.applyScanlineEnabled(scanlineEnabledToggle.checked)
-    })
+    }, { signal: this.host.signal })
   }
 
   private setupRendererToggleButton(): void {
@@ -259,7 +261,7 @@ export class GameSettingsUI {
       } else {
         attemptWebGPURenderer()
       }
-    })
+    }, { signal: this.host.signal })
   }
 
   private setupRendererSelectLiveUpdate(): void {
@@ -272,7 +274,7 @@ export class GameSettingsUI {
         value === RENDERER_WEBGPU ? RENDERER_WEBGPU : RENDERER_WEBGL2
       setRendererPreference(preference)
       window.location.reload()
-    })
+    }, { signal: this.host.signal })
   }
 
   private setupWireframeToggleLiveUpdate(): void {
@@ -281,7 +283,7 @@ export class GameSettingsUI {
 
     wireframeCheckbox.addEventListener('change', () => {
       if (this.host.scene) this.host.scene.forceWireframe = wireframeCheckbox.checked
-    })
+    }, { signal: this.host.signal })
   }
 
   private setupPhysicsDebugToggleLiveUpdate(): void {
@@ -294,7 +296,7 @@ export class GameSettingsUI {
         this.physicsDebugRenderer = new PhysicsDebugRenderer(this.host.scene, this.host.physics)
       }
       this.physicsDebugRenderer.setEnabled(physicsDebugCheckbox.checked)
-    })
+    }, { signal: this.host.signal })
   }
 
   /** Call once per frame (after the physics step) to refresh the physics debug overlay. */
@@ -338,6 +340,11 @@ export class GameSettingsUI {
     this.registerUnknownMaps()
     this.buildMapSelectorUI(selector)
     this.updateMapSelectorUI()
+    // These nodes are static (index.html), unlike the rebuilt map buttons above, so
+    // bind them once here. Binding from buildMapSelectorUI stacked a listener per
+    // rebuild and made #levels-btn toggle the level screen twice per click (#441).
+    this.setupCabinetSelector()
+    this.setupLevelsSelector()
 
     void this.host.soundSystem.fetchMusicTracks()
     void this.host.mapSystem.fetchAll().then(() => {
@@ -374,7 +381,7 @@ export class GameSettingsUI {
           this.host.mapManager?.getLCDTableState().triggerFeedbackEffect()
           this.host.switchTableMap(map.id)
         }
-      })
+      }, { signal: this.host.signal })
       selector.appendChild(btn)
       buttonIndex++
     }
@@ -383,7 +390,7 @@ export class GameSettingsUI {
     refreshBtn.className = 'map-btn map-refresh'
     refreshBtn.title = 'Refresh Content'
     refreshBtn.textContent = '↻'
-    refreshBtn.addEventListener('click', async () => {
+    const refreshContent = async (): Promise<void> => {
       refreshBtn.classList.add('spinning')
       await Promise.all([
         this.host.mapSystem.refresh(),
@@ -397,7 +404,8 @@ export class GameSettingsUI {
       this.buildMapSelectorUI(selector)
       this.updateMapSelectorUI()
       refreshBtn.classList.remove('spinning')
-    })
+    }
+    refreshBtn.addEventListener('click', () => { void refreshContent() }, { signal: this.host.signal })
     selector.appendChild(refreshBtn)
 
     const addHint = document.createElement('a')
@@ -411,12 +419,9 @@ export class GameSettingsUI {
       color: var(--map-accent, #00d9ff); text-decoration: none;
       opacity: 0.7; transition: opacity 0.2s; text-align: center;
     `
-    addHint.addEventListener('mouseenter', () => { addHint.style.opacity = '1' })
-    addHint.addEventListener('mouseleave', () => { addHint.style.opacity = '0.7' })
+    addHint.addEventListener('mouseenter', () => { addHint.style.opacity = '1' }, { signal: this.host.signal })
+    addHint.addEventListener('mouseleave', () => { addHint.style.opacity = '0.7' }, { signal: this.host.signal })
     selector.appendChild(addHint)
-
-    this.setupCabinetSelector()
-    this.setupLevelsSelector()
   }
 
   private setupCabinetSelector(): void {
@@ -429,7 +434,7 @@ export class GameSettingsUI {
         if (cabinetType) {
           void this.host.loadCabinetPreset(cabinetType)
         }
-      })
+      }, { signal: this.host.signal })
     })
   }
 
@@ -438,7 +443,7 @@ export class GameSettingsUI {
     if (!levelsBtn) return
     levelsBtn.addEventListener('click', () => {
       this.host.toggleLevelSelect()
-    })
+    }, { signal: this.host.signal })
   }
 
   private animateMapButtonPress(btn: HTMLElement): void {
@@ -448,10 +453,10 @@ export class GameSettingsUI {
     btn.style.transition = 'transform 0.1s ease, box-shadow 0.1s ease'
     btn.style.boxShadow = `0 0 20px ${accentColor}, 0 0 40px ${accentColor}, 0 0 60px ${accentColor}, inset 0 0 20px rgba(255, 255, 255, 0.5)`
 
-    setTimeout(() => {
+    this.host.timers.setTimeout(() => {
       btn.style.transform = 'scale(1.05)'
       btn.style.boxShadow = `0 0 15px ${accentColor}, 0 0 30px ${accentColor}, inset 0 0 10px rgba(255, 255, 255, 0.3)`
-      setTimeout(() => {
+      this.host.timers.setTimeout(() => {
         btn.style.transform = ''
         btn.style.boxShadow = ''
         btn.style.transition = ''

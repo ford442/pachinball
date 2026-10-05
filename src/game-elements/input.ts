@@ -160,8 +160,8 @@ export class InputHandler {
    * Setup gamepad support
    * Call this after initializing the input handler
    */
-  setupGamepad(config?: GamepadConfig): void {
-    this.gamepadManager = new GamepadManager(config)
+  setupGamepad(config?: GamepadConfig, signal?: AbortSignal): void {
+    this.gamepadManager = new GamepadManager(config, signal)
     console.log('[Input] Gamepad support enabled')
   }
 
@@ -591,8 +591,9 @@ export class InputHandler {
     leftBtn: HTMLElement | null,
     rightBtn: HTMLElement | null,
     plungerBtn: HTMLElement | null,
-    nudgeBtn: HTMLElement | null
+    nudgeBtn: HTMLElement | null,
+    signal?: AbortSignal,
   ): void {
-    setupTouchControlsImpl(this.touchHost, leftBtn, rightBtn, plungerBtn, nudgeBtn)
+    setupTouchControlsImpl(this.touchHost, leftBtn, rightBtn, plungerBtn, nudgeBtn, signal)
   }
 }

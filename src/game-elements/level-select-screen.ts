@@ -9,7 +9,7 @@
  */
 
 import type { AdventureState, AdventureLevel } from '../adventure/adventure-state'
-import type { TableMapType } from '../shaders/lcd-table'
+import type { TableMapType } from '../config/table-maps'
 import { getCampaignRewardsManager } from '../adventure/campaign-rewards-manager'
 import { renderLevelSelectStyles } from './level-select-screen-styles'
 
@@ -23,6 +23,7 @@ export class LevelSelectScreen {
   private config: LevelSelectConfig
   private adventureState: AdventureState
   private isVisible = false
+  private escHandler: ((e: KeyboardEvent) => void) | null = null
 
   constructor(config: LevelSelectConfig, adventureState: AdventureState) {
     this.config = config
@@ -64,6 +65,7 @@ export class LevelSelectScreen {
   hide(): void {
     if (!this.container) return
 
+    this.removeEscHandler()
     this.container.classList.remove('visible')
     
     setTimeout(() => {
@@ -71,6 +73,12 @@ export class LevelSelectScreen {
       this.container = null
       this.isVisible = false
     }, 300)
+  }
+
+  private removeEscHandler(): void {
+    if (!this.escHandler) return
+    document.removeEventListener('keydown', this.escHandler)
+    this.escHandler = null
   }
 
   /**
@@ -291,13 +299,16 @@ ${renderLevelSelectStyles()}
     })
 
     // Escape key to close
+    // Removed in hide(), so closing by click-outside or programmatically no longer
+    // leaves a stale document-level handler behind.
+    this.removeEscHandler()
     const escHandler = (e: KeyboardEvent) => {
       if (e.code === 'Escape') {
         this.config.onClose()
         this.hide()
-        document.removeEventListener('keydown', escHandler)
       }
     }
+    this.escHandler = escHandler
     document.addEventListener('keydown', escHandler)
 
     const rewardButtons = this.container?.querySelectorAll('.campaign-equip-btn')

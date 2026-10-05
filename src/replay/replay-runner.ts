@@ -55,7 +55,7 @@ export class ReplayRunner {
       this.playing = false
       return null
     }
-    const frame = this.payload.frames[this.currentFrameIndex++]!
+    const frame = this.payload.frames[this.currentFrameIndex++]
     return frame
   }
 

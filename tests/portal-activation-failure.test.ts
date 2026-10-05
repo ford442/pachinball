@@ -17,7 +17,7 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { EventBus, type PachinballEventMap } from '../src/core/event-bus'
-import { DisplayState } from '../src/game-elements/display-config'
+import { DisplayState } from '../src/display/display-types'
 import { AdventureTrackType } from '../src/adventure/adventure-types'
 import { isAdventureTrackType } from '../src/adventure/portal-routing'
 

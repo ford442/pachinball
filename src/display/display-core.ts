@@ -17,7 +17,7 @@ import {
   type DisplayConfig,
   DEFAULT_DISPLAY_CONFIG,
   getStateConfig,
-} from '../game-elements/display-config'
+} from './display-types'
 import { PALETTE, QualityTier } from '../game-elements/visual-language'
 import {
   type AccessibilityConfig,

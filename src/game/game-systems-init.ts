@@ -14,7 +14,7 @@ import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { GameConfig, GAME_TUNING } from '../config'
 import { getMaterialLibrary } from '../materials'
-import { adaptLegacyConfig, type DisplayConfig } from '../game-elements/display-config'
+import { adaptLegacyConfig, DisplayState, type DisplayConfig } from '../display/display-types'
 import { refreshDailyCascadeUI } from './daily-cascade-ui'
 import {
   QualityTier,
@@ -24,7 +24,6 @@ import {
   DebugHUD,
   getDynamicWorld,
   getScoringBreakdownManager,
-  DisplayState,
   BallManager,
   ZoneTriggerSystem,
   SettingsManager,
@@ -127,7 +126,7 @@ export class GameSystemsInitializer {
       })
       this.game.cabinetLighting.subscribeToEvents(this.game.eventBus)
 
-      if (this.game.debugHelper.isDebugHUDAvailable()) {
+      if (this.game.debugHelper?.isDebugHUDAvailable()) {
         this.game.eventBusLog.wire(this.game.eventBus)
       }
       this.game.performanceMonitor.setRendererBackend(
@@ -139,7 +138,7 @@ export class GameSystemsInitializer {
         onVisibilityChange: (visible) => this.game.handleDebugHUDVisibilityChange(visible),
       })
       this.game.debugHUD.setUpdateCadenceHz(4)
-      if (this.game.debugHUDEnabledInSettings && this.game.debugHelper.isDebugHUDAvailable()) {
+      if (this.game.debugHUDEnabledInSettings && this.game.debugHelper?.isDebugHUDAvailable()) {
         this.game.debugHUD.show()
       }
 
@@ -150,7 +149,7 @@ export class GameSystemsInitializer {
       this.game.adventureState.onLevelCompleteCallback((level) => {
         console.log(`[Game] Level complete: ${level.name}`)
         if (level.rewards.unlockMap) {
-          setTimeout(() => { this.game.mapCabinet.switchTableMap(level.rewards.unlockMap!) }, GAME_TUNING.timing.storyVideoWaitMs)
+          this.game.timers.setTimeout(() => { this.game.mapCabinet?.switchTableMap(level.rewards.unlockMap!) }, GAME_TUNING.timing.storyVideoWaitMs)
         }
       })
       this.game.adventureState.onGoalUpdateCallback((goals) => {
@@ -158,7 +157,7 @@ export class GameSystemsInitializer {
         this.game.display?.setStoryText(goalText)
       })
 
-      this.game.slotAdventure.setupSlotMachineCallbacks()
+      this.game.slotAdventure?.setupSlotMachineCallbacks()
       this.game.checkpointDebug.registerToggleHandler('scene_cosmetic', (enabled) => {
         if (!enabled || this.game.cosmeticSceneBuilt) return
         this.game.scheduleCosmeticSceneBuild()
@@ -284,7 +283,7 @@ export class GameSystemsInitializer {
           // it again here — a double rebuild mid-frame corrupts handle ordering.
           onTrackAdvanced: (nextTrackId) => {
             if (nextTrackId) {
-              this.game.slotAdventure.switchToTrack(nextTrackId)
+              void this.game.slotAdventure?.switchToTrack(nextTrackId)
             }
           },
         },
@@ -292,7 +291,7 @@ export class GameSystemsInitializer {
       const campaignRewards = initializeCampaignRewardsManager(this.game.adventureTrackProgression, this.game.eventBus)
       campaignRewards.configureAppliers({
         applyBallSkin: (skinId) => this.game.ballManager?.applyBallSkin(skinId),
-        applyCabinetTheme: (themeId) => this.game.cabinetBuilder.applyCampaignCabinetTheme(themeId),
+        applyCabinetTheme: (themeId) => this.game.cabinetBuilder?.applyCampaignCabinetTheme(themeId),
         applyBackboxTint: (_tintId) => {
           // Future-proof hook for a dedicated backbox tint pipeline.
         },
@@ -318,7 +317,7 @@ export class GameSystemsInitializer {
             this.game.adventureManager?.startAdventure(trackType)
             this.game.eventBus.emit('adventure:start')
             this.game.eventBus.emit('display:set', DisplayState.ADVENTURE)
-            const trackName = trackType ? this.game.slotAdventure.getTrackDisplayName(trackType) : 'UNKNOWN SECTOR'
+            const trackName = (trackType ? this.game.slotAdventure?.getTrackDisplayName(trackType) : undefined) ?? 'UNKNOWN SECTOR'
             this.game.display?.setTrackInfo(trackName)
             this.game.display?.setStoryText(`ENTERING: ${trackName}`)
             this.game.effects?.setLightingMode('reach', 0.5)
@@ -345,7 +344,7 @@ export class GameSystemsInitializer {
               isMajor: boolean
               ballPosition?: Vector3
             }
-            this.game.scenarioManager.handleZoneTransition(zoneData.zone, zoneData.previousZone, zoneData.isMajor)
+            this.game.scenarioManager?.handleZoneTransition(zoneData.zone, zoneData.previousZone, zoneData.isMajor)
             break
           }
           case 'PORTAL_ACTIVATED': {
@@ -446,7 +445,7 @@ export class GameSystemsInitializer {
     }, true)
 
     await this.game.runCheckpointStage('scene_critical', async () => {
-      await this.game.sceneBuilder.buildCriticalScene({
+      await this.game.sceneBuilder?.buildCriticalScene({
         onCabinetProgress: (progress) => {
           this.game.uiManager?.showLoadingState(true, {
             progress,
@@ -454,16 +453,16 @@ export class GameSystemsInitializer {
           })
         },
       })
-      this.game.cabinetBuilder.updateCabinetLightExclusions()
+      this.game.cabinetBuilder?.updateCabinetLightExclusions()
     })
     this.game.ready = true
     this.game.uiManager?.setStartButtonEnabled(true)
     this.game.uiManager?.showLoadingState(false, { phase: 'gameplay' })
 
     await this.game.runCheckpointStage('scene_gameplay_build', async () => {
-      await this.game.sceneBuilder.yieldFrame()
-      this.game.sceneBuilder.buildGameplayScene()
-      this.game.physicsController.rebuildHandleCaches()
+      await this.game.sceneBuilder?.yieldFrame()
+      this.game.sceneBuilder?.buildGameplayScene()
+      this.game.physicsController?.rebuildHandleCaches()
       this.game.uiManager?.showLoadingState(false, { phase: 'cosmetic' })
     })
     this.game.scheduleCosmeticSceneBuild()
@@ -559,7 +558,7 @@ export class GameSystemsInitializer {
             getScoringBreakdownManager().recordScore(points, 'adventure-goal-award')
             g.updateHUD()
             g.uiManager?.showMessage(`${reason}: +${points}`, 1000)
-            const pos = g.physicsController.getBallPosition()
+            const pos = g.physicsController?.getBallPosition()
             if (pos) g.effects?.spawnFloatingNumber(points, pos)
           },
           onReachTriggered: () => g.tryActivateSlotMachine(),
@@ -568,7 +567,7 @@ export class GameSystemsInitializer {
             getScoringBreakdownManager().recordScore(GAME_TUNING.scoring.adventureEndBonus, 'adventure-end-bonus')
             g.updateHUD()
             g.effects?.startJackpotSequence()
-            const pos = g.physicsController.getBallPosition()
+            const pos = g.physicsController?.getBallPosition()
             if (pos) g.effects?.spawnFloatingNumber(GAME_TUNING.scoring.adventureEndBonus, pos)
           },
         }
@@ -584,10 +583,10 @@ export class GameSystemsInitializer {
           matLib.updateChromeMaterialEmissive(config.baseColor)
           g.gameObjects?.updateBumperColors(config.baseColor)
           g.effects?.setCabinetColor(config.baseColor)
-          g.cabinetBuilder.updateCabinetLightingForMap()
+          g.cabinetBuilder?.updateCabinetLightingForMap()
         },
-        onPopupShow: (name, color) => g.mapCabinet.showMapNamePopup(name, color),
-        onMapSelectorUpdate: () => g.settingsUI.updateMapSelectorUI(),
+        onPopupShow: (name, color) => g.mapCabinet?.showMapNamePopup(name, color),
+        onMapSelectorUpdate: () => g.settingsUI?.updateMapSelectorUI(),
       })
       g.mapManager.setBloomPipeline()
 
@@ -612,8 +611,8 @@ export class GameSystemsInitializer {
       })
 
       g.cabinetManager = new CabinetManager(g.scene!, {
-        onPopupShow: (name) => g.mapCabinet.showCabinetPopup(name),
-        onUISelect: () => g.mapCabinet.updateCabinetSelectorUI(),
+        onPopupShow: (name) => g.mapCabinet?.showCabinetPopup(name),
+        onUISelect: () => g.mapCabinet?.updateCabinetSelectorUI(),
       })
 
       g.wireFeederEventHandlers()

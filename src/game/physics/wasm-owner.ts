@@ -209,7 +209,7 @@ export class WasmOwner implements WasmContactBridge {
     if (body instanceof WasmBody && body.link) return body.link.id
     const ids = (body instanceof WasmBody ? this.tableExport?.idsByBody.get(body) : undefined)
       ?? this.adventureIdsByBody.get(body)
-    return ids && ids.length > 0 ? ids[0] : null
+    return ids?.[0] ?? null
   }
 
   /** Map a WASM public id from a contact to its body and dispatch key. */

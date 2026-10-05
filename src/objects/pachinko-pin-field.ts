@@ -5,7 +5,7 @@
  */
 
 import { pinFieldOccupancyForPositions, type PinFieldSpec } from '../core/pin-field'
-import { KEEP_OUT_BOXES, type PinLattice } from '../game-elements/daily-cascade-layout'
+import { KEEP_OUT_BOXES, type PinLattice } from '../cascade/daily-cascade-layout'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 
 /** Vanilla lattice; a Daily Cascade layout brings its own row/column count. */
@@ -70,7 +70,7 @@ export function pachinkoPinFieldSpec(
   }
   // Seeded layouts already respect the keep-outs; filtering again is the
   // safety net that keeps the plunger corridor clear.
-  const kept = pinPositions!.filter((p) => !pinInKeepOut(p.x, p.z))
+  const kept = pinPositions.filter((p) => !pinInKeepOut(p.x, p.z))
   const occupancy = pinFieldOccupancyForPositions(spec, kept)
   return occupancy ? { ...spec, occupancy } : null
 }

@@ -44,7 +44,7 @@ export class ReactivePegCluster extends PathMechanic {
     this.createVisuals()
 
     this.isSpawned = true
-    console.log(`[ReactivePegCluster] Spawned ${this.pegCount} pegs at ${this.position}`)
+    console.log(`[ReactivePegCluster] Spawned ${this.pegCount} pegs at ${this.position.toString()}`)
   }
 
   despawn(): void {

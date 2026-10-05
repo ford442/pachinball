@@ -35,7 +35,7 @@ export interface DebugHost {
   readonly zoneTriggerSystem: ZoneTriggerSystem | null
   readonly dynamicWorld: ReturnType<typeof import('../game-elements/dynamic-world').getDynamicWorld> | null
   readonly gameObjects: GameObjects | null
-  readonly physicsController: GamePhysicsController
+  readonly physicsController: GamePhysicsController | null
   readonly adventureProgressionSupervisor: AdventureProgressionSupervisor | null
   readonly adventureTrackProgression: AdventureTrackProgression | null
   readonly performanceMonitor: PerformanceMonitor
@@ -162,23 +162,23 @@ export class GameDebug {
       lastTrackSwitchMs: perfMetrics.lastTrackSwitchMs,
       adventureActive: isAdventureActive,
       portalSensorHandle: this.host.adventureMode?.getPortalSensorHandle() ?? -1,
-      portalHandleSetSize: this.host.physicsController.getPortalSensorHandleSetSize(),
+      portalHandleSetSize: this.host.physicsController?.getPortalSensorHandleSetSize() ?? 0,
       tablePhysicsEnabled: this.host.gameObjects?.areTableBodiesEnabled() ?? true,
       wasmTableUnexported: this.host.physics.isWasmOwnerMode()
-        ? this.host.physicsController.getTableUnexported().length
+        ? (this.host.physicsController?.getTableUnexported().length ?? 0)
         : null,
       activeCameraType: this.host.scene?.activeCamera?.getClassName() ?? 'n/a',
       teardownMeshes: teardown?.meshesDisposed ?? 0,
       teardownBodies: teardown?.bodiesRemoved ?? 0,
       teardownLingering: teardown?.lingeringBodies ?? 0,
-      bumperHitsThisBall: this.host.physicsController.getBumperHitsThisBall?.() ?? 0,
-      pointsThisBall: this.host.physicsController.getPointsThisBall?.() ?? 0,
+      bumperHitsThisBall: this.host.physicsController?.getBumperHitsThisBall?.() ?? 0,
+      pointsThisBall: this.host.physicsController?.getPointsThisBall?.() ?? 0,
       zoneEntriesThisBall: this.host.zoneTriggerSystem?.getZoneEntriesThisBall?.() ?? 0,
-      rawCollisionEvents: this.host.physicsController.getRawCollisionEvents?.() ?? 0,
-      knownObstacleMatches: this.host.physicsController.getKnownObstacleMatches?.() ?? 0,
-      bumperMatches: this.host.physicsController.getBumperMatches?.() ?? 0,
-      awardScoreCalls: this.host.physicsController.getAwardScoreCalls?.() ?? 0,
-      lastLaneHit: this.host.physicsController.getLastLaneHit?.() ?? null,
+      rawCollisionEvents: this.host.physicsController?.getRawCollisionEvents?.() ?? 0,
+      knownObstacleMatches: this.host.physicsController?.getKnownObstacleMatches?.() ?? 0,
+      bumperMatches: this.host.physicsController?.getBumperMatches?.() ?? 0,
+      awardScoreCalls: this.host.physicsController?.getAwardScoreCalls?.() ?? 0,
+      lastLaneHit: this.host.physicsController?.getLastLaneHit?.() ?? null,
       audioContexts: getOwnedAudioContextCount(),
       audioWorklet: peekAudioEngine()?.isWorkletReady() ?? false,
     }

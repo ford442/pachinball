@@ -14,6 +14,7 @@
 
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { PhysicsBody } from '../core/physics-api'
+import { parseHexColorUnit } from '../core/color'
 import type { DynamicScenario, ScenarioZone } from './dynamic-scenarios'
 
 export interface ZoneBounds {
@@ -371,8 +372,8 @@ export class ZoneTriggerSystem {
     if (fromPattern !== toPattern) return true
     
     // Major if color changes significantly (compare hue difference)
-    const fromColor = this.hexToRgb(fromZone.mapConfig.baseColor)
-    const toColor = this.hexToRgb(toZone.mapConfig.baseColor)
+    const fromColor = parseHexColorUnit(fromZone.mapConfig.baseColor)
+    const toColor = parseHexColorUnit(toZone.mapConfig.baseColor)
     const colorDistance = this.calculateColorDistance(fromColor, toColor)
     
     // Major if color distance is large
@@ -381,17 +382,6 @@ export class ZoneTriggerSystem {
     return false
   }
 
-  /**
-   * Convert hex color to RGB object
-   */
-  private hexToRgb(hex: string): { r: number; g: number; b: number } {
-    const clean = hex.replace('#', '')
-    return {
-      r: parseInt(clean.substring(0, 2), 16) / 255,
-      g: parseInt(clean.substring(2, 4), 16) / 255,
-      b: parseInt(clean.substring(4, 6), 16) / 255,
-    }
-  }
 
   /**
    * Calculate Euclidean distance between two colors (normalized 0-1)
@@ -567,19 +557,11 @@ export function getZoneTransitionType(
  * Calculate color distance between two hex colors
  */
 function calculateHexColorDistance(hex1: string, hex2: string): number {
-  const c1 = hexToRgb(hex1)
-  const c2 = hexToRgb(hex2)
+  const c1 = parseHexColorUnit(hex1)
+  const c2 = parseHexColorUnit(hex2)
   const dr = c1.r - c2.r
   const dg = c1.g - c2.g
   const db = c1.b - c2.b
   return Math.sqrt(dr * dr + dg * dg + db * db) / Math.sqrt(3)
 }
 
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const clean = hex.replace('#', '')
-  return {
-    r: parseInt(clean.substring(0, 2), 16) / 255,
-    g: parseInt(clean.substring(2, 4), 16) / 255,
-    b: parseInt(clean.substring(4, 6), 16) / 255,
-  }
-}

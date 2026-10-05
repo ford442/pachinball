@@ -22,7 +22,7 @@ Playwright does **not** start the app for you. Start `npm run dev` first and kee
   - `src/display/`: the modular backbox display system. It combines WGSL shader layers, Canvas reel fallback, and video/image overlays.
   - `src/objects/`, `src/effects/`, `src/materials/`, `src/adventure/`, and `src/cabinet/`: builders and focused subsystems for scene geometry, effects, materials, adventure tracks, and cabinet layouts.
 - `PhysicsSystem` in `src/game-elements/physics.ts` owns the Rapier world, fixed-step stepping, and collision-event draining. Gameplay physics belongs there and in the object/ball modules, not in Babylon's built-in physics.
-- `src/config.ts` is a pure configuration module. Keep Babylon imports out of it; use it for gameplay constants, feature flags, API/asset URLs, and backbox media paths.
+- `src/config/` is a pure configuration module. Keep Babylon imports out of it; use it for gameplay constants, feature flags, API/asset URLs, and backbox media paths.
 - Theme changes span multiple systems: `TableMapManager` updates the LCD table shader state, the `MaterialLibrary`, and cabinet theming so map switches stay visually consistent.
 - The display/backbox path is layered: video and image media take precedence, while shader/reel rendering is the fallback.
 

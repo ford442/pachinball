@@ -222,8 +222,8 @@ export function planReplayIdRemap(live: LiveIdLayout, recorded: Pick<SnapshotIds
   const bodies = new Map<number, number>()
   const hinges = new Map<number, number>()
   for (let i = 0; i < liveHinges.length; i++) {
-    const l = liveHinges[i]!
-    const r = recHinges[i]!
+    const l = liveHinges[i]
+    const r = recHinges[i]
     if (!liveBodies.has(l.bodyId) || !recBodies.has(r.bodyId)) return null
     if (bodies.has(l.bodyId) && bodies.get(l.bodyId) !== r.bodyId) return null
     hinges.set(l.id, r.id)
@@ -233,7 +233,7 @@ export function planReplayIdRemap(live: LiveIdLayout, recorded: Pick<SnapshotIds
   const liveRest = [...liveBodies].filter((id) => !bodies.has(id)).sort((a, b) => a - b)
   const recRest = [...recBodies].filter((id) => !recHinged.has(id)).sort((a, b) => a - b)
   if (liveRest.length !== recRest.length) return null
-  liveRest.forEach((id, i) => bodies.set(id, recRest[i]!))
+  liveRest.forEach((id, i) => bodies.set(id, recRest[i]))
 
   // Only the ids that actually change.
   for (const [from, to] of bodies) if (from === to) bodies.delete(from)

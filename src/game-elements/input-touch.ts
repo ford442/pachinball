@@ -26,6 +26,8 @@ export function setupTouchControls(
   rightBtn: HTMLElement | null,
   plungerBtn: HTMLElement | null,
   nudgeBtn: HTMLElement | null,
+  /** Aborting removes every listener registered below. */
+  signal?: AbortSignal,
 ): void {
   if (!host.isReady()) return
 
@@ -47,19 +49,19 @@ export function setupTouchControls(
     if (host.getTiltActive()) return
     setActive(leftBtn, true)
     host.queueInput('flipperLeft', true, { source: 'touch', eventTimestamp: e.timeStamp })
-  }, { passive: false })
+  }, { passive: false, signal })
 
   leftBtn?.addEventListener('touchend', (e) => {
     e.preventDefault()
     setActive(leftBtn, false)
     host.queueInput('flipperLeft', false, { source: 'touch', eventTimestamp: e.timeStamp })
-  }, { passive: false })
+  }, { passive: false, signal })
 
   leftBtn?.addEventListener('touchcancel', (e) => {
     e.preventDefault()
     setActive(leftBtn, false)
     host.queueInput('flipperLeft', false, { source: 'touch', eventTimestamp: e.timeStamp })
-  }, { passive: false })
+  }, { passive: false, signal })
 
   // Also handle mouse events for desktop testing of touch controls
   leftBtn?.addEventListener('mousedown', (e) => {
@@ -68,18 +70,18 @@ export function setupTouchControls(
     if (host.getTiltActive()) return
     setActive(leftBtn, true)
     host.queueInput('flipperLeft', true, { source: 'touch', eventTimestamp: e.timeStamp })
-  })
+  }, { signal })
 
   leftBtn?.addEventListener('mouseup', (e) => {
     e.preventDefault()
     setActive(leftBtn, false)
     host.queueInput('flipperLeft', false, { source: 'touch', eventTimestamp: e.timeStamp })
-  })
+  }, { signal })
 
   leftBtn?.addEventListener('mouseleave', () => {
     setActive(leftBtn, false)
     host.queueInput('flipperLeft', false, { source: 'touch' })
-  })
+  }, { signal })
 
   // Right flipper touch
   rightBtn?.addEventListener('touchstart', (e) => {
@@ -88,19 +90,19 @@ export function setupTouchControls(
     if (host.getTiltActive()) return
     setActive(rightBtn, true)
     host.queueInput('flipperRight', true, { source: 'touch', eventTimestamp: e.timeStamp })
-  }, { passive: false })
+  }, { passive: false, signal })
 
   rightBtn?.addEventListener('touchend', (e) => {
     e.preventDefault()
     setActive(rightBtn, false)
     host.queueInput('flipperRight', false, { source: 'touch', eventTimestamp: e.timeStamp })
-  }, { passive: false })
+  }, { passive: false, signal })
 
   rightBtn?.addEventListener('touchcancel', (e) => {
     e.preventDefault()
     setActive(rightBtn, false)
     host.queueInput('flipperRight', false, { source: 'touch', eventTimestamp: e.timeStamp })
-  }, { passive: false })
+  }, { passive: false, signal })
 
   // Mouse events for right flipper
   rightBtn?.addEventListener('mousedown', (e) => {
@@ -109,18 +111,18 @@ export function setupTouchControls(
     if (host.getTiltActive()) return
     setActive(rightBtn, true)
     host.queueInput('flipperRight', true, { source: 'touch', eventTimestamp: e.timeStamp })
-  })
+  }, { signal })
 
   rightBtn?.addEventListener('mouseup', (e) => {
     e.preventDefault()
     setActive(rightBtn, false)
     host.queueInput('flipperRight', false, { source: 'touch', eventTimestamp: e.timeStamp })
-  })
+  }, { signal })
 
   rightBtn?.addEventListener('mouseleave', () => {
     setActive(rightBtn, false)
     host.queueInput('flipperRight', false, { source: 'touch' })
-  })
+  }, { signal })
 
   // Plunger touch with charge support — MENU starts the game (audio unlock)
   plungerBtn?.addEventListener('touchstart', (e) => {
@@ -134,7 +136,7 @@ export function setupTouchControls(
     if (!host.isPlungerHeld()) {
       host.startPlungerCharge()
     }
-  }, { passive: false })
+  }, { passive: false, signal })
 
   plungerBtn?.addEventListener('touchend', (e) => {
     e.preventDefault()
@@ -146,7 +148,7 @@ export function setupTouchControls(
     if (host.isPlungerHeld()) {
       host.queueInput('plungerCharge', host.releasePlungerCharge(), { source: 'touch', eventTimestamp: e.timeStamp })
     }
-  }, { passive: false })
+  }, { passive: false, signal })
 
   plungerBtn?.addEventListener('touchcancel', (e) => {
     e.preventDefault()
@@ -156,7 +158,7 @@ export function setupTouchControls(
       return
     }
     host.softCancelPlungerCharge()
-  }, { passive: false })
+  }, { passive: false, signal })
 
   // Mouse events for plunger
   plungerBtn?.addEventListener('mousedown', (e) => {
@@ -170,7 +172,7 @@ export function setupTouchControls(
     if (!host.isPlungerHeld()) {
       host.startPlungerCharge()
     }
-  })
+  }, { signal })
 
   plungerBtn?.addEventListener('mouseup', (e) => {
     e.preventDefault()
@@ -182,7 +184,7 @@ export function setupTouchControls(
     if (host.isPlungerHeld()) {
       host.queueInput('plungerCharge', host.releasePlungerCharge(), { source: 'touch', eventTimestamp: e.timeStamp })
     }
-  })
+  }, { signal })
 
   plungerBtn?.addEventListener('mouseleave', () => {
     setActive(plungerBtn, false)
@@ -191,7 +193,7 @@ export function setupTouchControls(
       return
     }
     host.softCancelPlungerCharge()
-  })
+  }, { signal })
 
   // Nudge touch (trigger action - queues once per press)
   nudgeBtn?.addEventListener('touchstart', (e) => {
@@ -200,17 +202,17 @@ export function setupTouchControls(
     host.queueInput('nudge', { x: 0, y: 0, z: 1 }, { source: 'touch', eventTimestamp: e.timeStamp })
     // Auto-remove active class after short delay for nudge
     setTimeout(() => setActive(nudgeBtn, false), 150)
-  }, { passive: false })
+  }, { passive: false, signal })
 
   nudgeBtn?.addEventListener('touchend', (e) => {
     e.preventDefault()
     setActive(nudgeBtn, false)
-  }, { passive: false })
+  }, { passive: false, signal })
 
   nudgeBtn?.addEventListener('touchcancel', (e) => {
     e.preventDefault()
     setActive(nudgeBtn, false)
-  }, { passive: false })
+  }, { passive: false, signal })
 
   // Mouse events for nudge
   nudgeBtn?.addEventListener('mousedown', (e) => {
@@ -218,14 +220,14 @@ export function setupTouchControls(
     setActive(nudgeBtn, true)
     host.queueInput('nudge', { x: 0, y: 0, z: 1 }, { source: 'touch', eventTimestamp: e.timeStamp })
     setTimeout(() => setActive(nudgeBtn, false), 150)
-  })
+  }, { signal })
 
   nudgeBtn?.addEventListener('mouseup', (e) => {
     e.preventDefault()
     setActive(nudgeBtn, false)
-  })
+  }, { signal })
 
   nudgeBtn?.addEventListener('mouseleave', () => {
     setActive(nudgeBtn, false)
-  })
+  }, { signal })
 }

@@ -5,15 +5,11 @@
  * Replaces the monolithic display.ts with modular components.
  */
 
-// Canonical types from game-elements/display-config
+// Display types, enums and default config
 export {
   DisplayMode,
   DisplayState,
   type DisplayConfig,
-} from '../game-elements/display-config'
-
-// Display-specific types
-export {
   type DisplayLayer,
   type SlotReel,
   type StateMediaConfig,

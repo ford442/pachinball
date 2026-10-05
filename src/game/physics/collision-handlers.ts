@@ -10,10 +10,10 @@ import type { PhysicsBody } from '../../core/physics-api'
 
 import type { BumperVisual } from '../../game-elements/types'
 import type { LaneSensorDef } from '../../objects/object-lane-sensors'
-import { DisplayState } from '../../game-elements'
+import { DisplayState } from '../../display/display-types'
 import { getLaneRolloverPoints, GAME_TUNING, PhysicsConfig } from '../../config'
 import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
-import { TABLE_MAPS } from '../../shaders/lcd-table'
+import { TABLE_MAPS } from '../../config/table-maps'
 import { PALETTE } from '../../game-elements'
 
 import type { PhysicsHost } from './types'

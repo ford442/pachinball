@@ -15,7 +15,11 @@ import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { AdventureTrackType } from '../adventure'
 import { MagSpinState } from '../objects/feeders/mag-spin-feeder'
-import { DisplayState } from '../game-elements/display-config'
+import { NanoLoomState } from '../objects/feeders/nano-loom-feeder'
+import { PrismCoreState } from '../objects/feeders/prism-core-feeder'
+import { GaussCannonState } from '../objects/feeders/gauss-cannon-feeder'
+import { QuantumTunnelState } from '../objects/feeders/quantum-tunnel-feeder'
+import { DisplayState } from '../display/display-types'
 import type { GameStateManager } from './game-state'
 import type { GameUIManager } from './game-ui'
 import { getZoneConfig, getTransitionShakeIntensity } from '../game-elements'
@@ -141,7 +145,7 @@ export class AdventureManager {
     this.systems.ballManager?.updateBallMaterialColor(zoneConfig.primaryColor)
 
     // 4. Cross-fade music to zone track
-    this.systems.soundSystem.playMapMusic(zoneConfig.musicTrackId)
+    void this.systems.soundSystem.playMapMusic(zoneConfig.musicTrackId)
 
     // 5. Trigger screen pulse + cabinet shake (major transitions get stronger effects)
     const shakeIntensity = getTransitionShakeIntensity(previousZone, zone)
@@ -274,13 +278,13 @@ export class AdventureManager {
     if (this.nanoLoomFeeder) {
       this.nanoLoomFeeder.onStateChange = (state, position) => {
         switch (state) {
-          case 1: // NanoLoomState.LIFT
+          case NanoLoomState.LIFT:
             this.systems.effects?.playBeep(800)
             break
-          case 2: // NanoLoomState.WEAVE
+          case NanoLoomState.WEAVE:
             this.systems.effects?.playBeep(1000)
             break
-          case 3: // NanoLoomState.EJECT
+          case NanoLoomState.EJECT:
             this.systems.effects?.playBeep(1200)
             if (position) {
               this.systems.effects?.spawnShardBurst(position)
@@ -295,8 +299,8 @@ export class AdventureManager {
     if (this.prismCoreFeeder) {
       this.prismCoreFeeder.onStateChange = (state, count) => {
         switch (state) {
-          case 1: // PrismCoreState.LOCKED_1
-          case 2: // PrismCoreState.LOCKED_2
+          case PrismCoreState.LOCKED_1:
+          case PrismCoreState.LOCKED_2:
             this.systems.effects?.playBeep(1500)
             this.systems.display?.setStoryText(`CORE LOCK: ${count}/3`)
             this.systems.effects?.spawnShardBurst(this.prismCoreFeeder?.getPosition() || Vector3.Zero())
@@ -304,7 +308,7 @@ export class AdventureManager {
             this.systems.ballManager?.spawnExtraBalls(1, new Vector3(8.5, 0.5, -9)) // Plunger lane approx
             break
 
-          case 3: // PrismCoreState.OVERLOAD
+          case PrismCoreState.OVERLOAD:
             this.systems.effects?.playBeep(2000)
             this.systems.effects?.startJackpotSequence()
             this.systems.display?.setStoryText('MULTIBALL ENGAGED')
@@ -320,13 +324,13 @@ export class AdventureManager {
     if (this.gaussCannon) {
       this.gaussCannon.onStateChange = (state) => {
         switch (state) {
-          case 1: // GaussCannonState.LOAD
+          case GaussCannonState.LOAD:
             this.systems.effects?.playBeep(300)
             break
-          case 2: // GaussCannonState.AIM
+          case GaussCannonState.AIM:
             this.systems.effects?.playBeep(600)
             break
-          case 3: // GaussCannonState.FIRE
+          case GaussCannonState.FIRE:
             this.systems.effects?.playBeep(2000)
             this.systems.effects?.spawnShardBurst(this.gaussCannon?.getPosition() || Vector3.Zero())
             this.config.onScoreAward?.(500, 'Gauss Shot')
@@ -339,10 +343,10 @@ export class AdventureManager {
     if (this.quantumTunnel) {
       this.quantumTunnel.onStateChange = (state) => {
         switch (state) {
-          case 1: // QuantumTunnelState.CAPTURE
+          case QuantumTunnelState.CAPTURE:
             this.systems.effects?.playBeep(200)
             break
-          case 3: // QuantumTunnelState.EJECT
+          case QuantumTunnelState.EJECT:
             this.systems.effects?.playBeep(2000)
             this.systems.effects?.spawnShardBurst(this.quantumTunnel?.getPosition() || Vector3.Zero())
             this.config.onScoreAward?.(250, 'Quantum Jump')

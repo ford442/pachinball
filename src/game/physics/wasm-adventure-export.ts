@@ -163,7 +163,8 @@ export function exportAdventureCollidersToWasm(
       const verts = desc.vertices ?? []
       const world = new Float32Array(verts.length)
       for (let v = 0; v + 2 < verts.length; v += 3) {
-        const w = quatRotateVec(q, { x: verts[v], y: verts[v + 1], z: verts[v + 2] })
+        // The loop bound guarantees v, v + 1 and v + 2 are in range.
+        const w = quatRotateVec(q, { x: verts[v]!, y: verts[v + 1]!, z: verts[v + 2]! })
         world[v] = p.x + w.x
         world[v + 1] = p.y + w.y
         world[v + 2] = p.z + w.z

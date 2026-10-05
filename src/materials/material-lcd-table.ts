@@ -5,7 +5,8 @@
 
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
-import type { TableMapConfig } from '../shaders/lcd-table'
+import type { TableMapConfig } from '../config/table-maps'
+import { parseHexColor } from '../core/color'
 import { PlayfieldMaterials } from './material-playfield'
 import {
   PALETTE,
@@ -145,8 +146,8 @@ export class LCDTableMaterials extends PlayfieldMaterials {
     const tex = this._lcdEmissiveTexture
     const ctx = tex.getContext()
     const size = tex.getSize().width
-    const baseRgb = this.hexToRgb(config.baseColor)
-    const accentRgb = this.hexToRgb(config.accentColor)
+    const baseRgb = parseHexColor(config.baseColor)
+    const accentRgb = parseHexColor(config.accentColor)
     const animatedTime = runtime.reducedMotion ? 0 : runtime.timeSeconds * config.animationSpeed
 
     ctx.clearRect(0, 0, size, size)
@@ -520,12 +521,4 @@ export class LCDTableMaterials extends PlayfieldMaterials {
     return video
   }
 
-  private hexToRgb(hex: string): { r: number; g: number; b: number } {
-    const clean = hex.replace('#', '')
-    return {
-      r: parseInt(clean.substring(0, 2), 16) || 0,
-      g: parseInt(clean.substring(2, 4), 16) || 0,
-      b: parseInt(clean.substring(4, 6), 16) || 0,
-    }
-  }
 }

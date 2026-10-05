@@ -2,6 +2,7 @@
  * Game Slot & Adventure — Slot machine callbacks and legacy adventure track cycling.
  */
 
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { Scene } from '@babylonjs/core/scene'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
@@ -174,8 +175,7 @@ export class GameSlotAdventure {
       for (const ball of this.host.ballManager?.getBallBodies() ?? []) ball.setEnabled(true)
 
       const track = this.nextAdventureTrack
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      void this.host.adventureMode.start(ballBody, camera, ballMesh as any, track).then(() => {
+      void this.host.adventureMode.start(ballBody, camera, ballMesh as Mesh | undefined, track).then(() => {
         this.host.physicsController?.rebuildHandleCaches()
         this.host.adventureCinematicSystem?.setCamera(this.host.adventureMode!.getFollowCamera())
 

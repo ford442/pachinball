@@ -1,7 +1,5 @@
 import './style.css'
 import { Game } from './game'
-import type { Engine } from '@babylonjs/core/Engines/engine'
-import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import { exposeRenderer } from './renderers/renderer-selector'
 import { applyHardwareScaling, resolveEngineOptions } from './engine/engine-options'
 import { createEngine, isWebGPUEngine } from './engine/create-engine'
@@ -9,7 +7,16 @@ import { scheduleIdleWasmPreload } from './engine/wasm-idle-preload'
 import { preloadPhysicsSystem } from './game-elements/physics-preload'
 import { VisibilityManager } from './engine/visibility-manager'
 import { formatGpuProbeSummary } from './engine/gpu-degrade-telemetry'
+import { runVisibilityDiagnostic } from './engine/visibility-diagnostic'
 import { registerServiceWorker } from './pwa'
+
+declare global {
+  interface Window {
+    /** The live Game; read by Playwright specs and the diagnostic helper. */
+    game?: Game
+    runVisibilityDiagnostic?: () => void
+  }
+}
 
 async function bootstrap(): Promise<void> {
   registerServiceWorker()
@@ -49,108 +56,29 @@ async function bootstrap(): Promise<void> {
   scheduleIdleWasmPreload()
 
   // Expose for Playwright tests
-  ;(window as unknown as Record<string, unknown>).game = game
+  window.game = game
 
   // Expose visibility diagnostic helper
-  ;(window as unknown as Record<string, unknown>).runVisibilityDiagnostic = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const game = (window as unknown as Record<string, unknown>).game as any
-    if (!game) {
-      console.error('Game not loaded')
-      return
-    }
-    const scene = game.scene
-    const engine = game.engine
-    if (!scene) {
-      console.error('Scene not ready')
-      return
-    }
-    const cam = scene.activeCamera
-    if (!cam) {
-      console.error('No active camera')
-      return
-    }
-    console.log('=== CAMERA ===')
-    console.log('position:', cam.position?.asArray?.() || cam.position)
-    console.log('target:', cam.target?.asArray?.() || cam.target)
-    console.log('alpha/beta/radius:', cam.alpha, cam.beta, cam.radius)
-    console.log('fov:', cam.fov, 'minZ:', cam.minZ, 'maxZ:', cam.maxZ)
-    console.log('viewport:', cam.viewport)
-    console.log('activeCameras:', scene.activeCameras?.map((c: unknown) => (c as { name?: string }).name))
-
-    console.log('=== MESHES (count:', scene.meshes.length, ') ===')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const interesting = scene.meshes.filter((m: any) =>
-      /flipper|ball|bumper|wall|pin|playfield|lcd|cabinet/i.test(m.name),
-    )
-    console.table(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      interesting.map((m: any) => ({
-        name: m.name,
-        enabled: m.isEnabled(),
-        visible: m.isVisible,
-        visibility: m.visibility,
-        inFrustum: cam.isInFrustum(m),
-        x: m.position.x.toFixed(2),
-        y: m.position.y.toFixed(2),
-        z: m.position.z.toFixed(2),
-        material: m.material?.name || '(none)',
-        alpha: m.material?.alpha,
-        parent: m.parent?.name || '(none)',
-      })),
-    )
-
-    console.log('=== LIGHTS ===')
-    console.table(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      scene.lights.map((l: any) => ({
-        name: l.name,
-        type: l.getClassName(),
-        intensity: l.intensity,
-        enabled: l.isEnabled(),
-      })),
-    )
-
-    console.log('=== RENDER STATS ===')
-    console.log('engine fps:', engine?.getFps().toFixed(1))
-    console.log('render width × height:', engine?.getRenderWidth(), '×', engine?.getRenderHeight())
-    console.log('hardware scaling:', engine?.getHardwareScalingLevel())
-    console.log(
-      'canvas client:',
-      engine?.getRenderingCanvas()?.clientWidth,
-      '×',
-      engine?.getRenderingCanvas()?.clientHeight,
-    )
-    console.log('=== DIAGNOSTIC COMPLETE ===')
-  }
+  window.runVisibilityDiagnostic = () => runVisibilityDiagnostic(window.game)
 
   console.timeEnd('[Bootstrap] Game init')
   console.timeEnd('[Bootstrap] Total initialization')
   console.log(`[Bootstrap] Physics ready (${(window as unknown as { currentPhysicsEngine?: string }).currentPhysicsEngine ?? 'unknown'})`)
 
-  // Setup canvas resize handling
-  setupResizeHandler(canvas, engine)
+  // Canvas resizing is owned by GameRenderer (game-renderer.ts:setupResizeObserver) and
+  // DPR changes by setupDPRHandling, both torn down by Game.dispose(). A second observer
+  // on the same canvas created an infinite resize loop (engine.resize() mutates
+  // canvas.width/height), so main.ts deliberately registers none.
 
   if (import.meta.hot) {
     import.meta.hot.dispose(() => {
       visibilityManager.dispose()
       game.dispose()
       engine.dispose()
+      delete window.game
+      delete window.runVisibilityDiagnostic
     })
   }
-}
-
-/**
- * Setup resize handling for the canvas
- */
-function setupResizeHandler(_canvas: HTMLCanvasElement, engine: Engine | WebGPUEngine): void {
-  // ResizeObserver is owned by GameRenderer (game-renderer.ts:setupResizeObserver).
-  // A second observer on the same canvas created an infinite resize loop: engine.resize()
-  // mutates canvas.width/height, which triggers the observer again on each call.
-  // Window resize is kept as a lightweight fallback for cases the element observer misses.
-  window.addEventListener('resize', () => {
-    engine.resize()
-  })
 }
 
 bootstrap().catch((err) => {

@@ -24,7 +24,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { Scene } from '@babylonjs/core/scene'
-import type { TableMapType, TableMapConfig } from '../shaders/lcd-table'
+import type { TableMapType, TableMapConfig } from '../config/table-maps'
 import type { DisplaySystem } from '../display'
 import type { SoundSystem } from './sound-system'
 import { PALETTE, color } from './visual-language'
@@ -192,7 +192,7 @@ export class DynamicWorld {
 
     // Change music
     if (zone.musicTrack) {
-      this.sound.playMapMusic(zone.musicTrack)
+      void this.sound.playMapMusic(zone.musicTrack)
     }
 
     // Spawn zone mechanics

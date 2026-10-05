@@ -7,15 +7,15 @@ import { peekAudioEngine } from '../audio/audio-engine'
 import { Scene } from '@babylonjs/core/scene'
 import {
   GameState,
-  DisplayState,
   BallType,
   SettingsManager,
   detectAccessibility,
   QualityTier,
   getScoringBreakdownManager,
-  getDailyCascadeState,
   type GameSettings,
 } from '../game-elements'
+import { getDailyCascadeState } from '../cascade/daily-cascade-state'
+import { DisplayState } from '../display/display-types'
 import { initSessionRng, getSessionSeed, randomU32Seed } from '../core/seeded-rng'
 import { getChallengeSystem } from '../replay/challenge-system'
 import { REPLAY_SCHEMA_VERSION } from '../replay/replay-recorder'
@@ -29,16 +29,18 @@ import type { SoundSystem } from '../game-elements/sound-system'
 import type { HapticManager } from '../game-elements/haptics'
 import type { GameStateManager } from './game-state'
 import type { EventBus } from '../core/event-bus'
+import type { TimerScope } from '../core/timers'
 import type { AdventureMode } from '../adventure'
 import { CameraController, CameraMode } from '../game-elements/camera-controller'
 import type { TableMapManager } from './game-maps'
 import type { GameUIManager } from './game-ui'
 import { GAME_TUNING } from '../config'
-import { DEFAULT_TABLE_MAP_ID, TABLE_MAPS } from '../shaders/lcd-table'
+import { DEFAULT_TABLE_MAP_ID, TABLE_MAPS } from '../config/table-maps'
 import { getMaterialLibrary } from '../materials'
 import { isMobileUserAgent } from '../engine/engine-options'
 
 export interface LifecycleHost {
+  readonly timers: TimerScope
   readonly stateManager: GameStateManager
   readonly effects: EffectsSystem | null
   readonly display: DisplaySystem | null
@@ -153,7 +155,7 @@ export class GameLifecycle {
         if (this.host.replayRecorder?.isRecording()) {
           this.host.replayRecorder.stop(this.host.score)
         }
-        this.host.handleGameOverLeaderboard()
+        void this.host.handleGameOverLeaderboard()
         break
     }
   }
@@ -287,7 +289,7 @@ export class GameLifecycle {
       await Promise.race([
         this.host.soundSystem.init(),
         new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error('Audio init timeout')), 5000)
+          this.host.timers.setTimeout(() => reject(new Error('Audio init timeout')), 5000)
         ),
       ])
       const savedSettings = SettingsManager.load()

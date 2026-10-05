@@ -24,14 +24,33 @@ import { PhysicsTuningPanel, isPhysicsTuningEnabled } from './game-elements/phys
 import { GameDebug, type DebugHost } from './game/game-debug'
 import { GameLifecycle, type LifecycleHost } from './game/game-lifecycle'
 import { GameSystemsInitializer } from './game/game-systems-init'
-import { GameDisposer } from './game/game-disposer'
+import { disposeGame } from './game/game-disposer'
 import { GameHUD, type HUDHost } from './game/game-hud'
 import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
-import { CheckpointDebugController, type DebugStageKey } from './game/checkpoint-debug'
+import type { DebugStageKey } from './game/checkpoint-debug'
 import { GameDelegates } from './game/game-delegates'
 import { installSimClock } from './core/sim-clock'
 
-export class Game extends GameDelegates {
+export class Game
+  extends GameDelegates
+  implements
+    RendererHost,
+    CabinetBuilderHost,
+    SceneBuilderHost,
+    InputActionsHost,
+    ScenarioHost,
+    SlotAdventureHost,
+    SettingsUIHost,
+    DebugHost,
+    LifecycleHost,
+    HUDHost,
+    MapCabinetHost,
+    PhysicsHost
+{
+  private disposed = false
+  /** Stable reference so dispose() can remove exactly this loop from a shared engine. */
+  private readonly renderLoop = (): void => this.renderFrame()
+
   constructor(engine: Engine | WebGPUEngine, physics: PhysicsSystem = new PhysicsSystem()) {
     super(engine)
     this.physics = physics
@@ -59,22 +78,22 @@ export class Game extends GameDelegates {
 
     this.applyFogPreference(scene, this.accessibility?.reducedMotion ?? false)
 
-    this.checkpointDebug = new CheckpointDebugController()
-
     await this.runCheckpointStage('settings_ui', async () => {
       this.scoreElement = document.getElementById('score')
       this.menuOverlay = document.getElementById('menu-overlay')
       this.pauseOverlay = document.getElementById('pause-overlay')
-      this.uiManager = new GameUIManager(scene)
+      this.uiManager = new GameUIManager(scene, this.signal)
       this.startScreen = document.getElementById('start-screen')
       this.gameOverScreen = document.getElementById('game-over-screen')
       this.finalScoreElement = document.getElementById('final-score')
 
-      document.getElementById('start-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
-      document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() })
+      const { signal } = this
+      document.getElementById('start-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() }, { signal })
+      document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() }, { signal })
       this.uiManager?.setStartButtonEnabled(false)
       const { bindDailyCascadeUI } = await import('./game/daily-cascade-ui')
       bindDailyCascadeUI({
+        signal,
         getCampaignStageName: () =>
           this.adventureTrackProgression?.getCurrentTrackInfo()?.name ?? 'Neon Helix',
       })
@@ -109,7 +128,7 @@ export class Game extends GameDelegates {
     })
 
     await this.runCheckpointStage('render_bootstrap', () => {
-      this.renderer = new GameRenderer(this as unknown as RendererHost)
+      this.renderer = new GameRenderer(this)
       this.renderer.setupCamera()
       this.renderer.setupPostProcessing()
       this.renderer.setupLighting()
@@ -130,20 +149,20 @@ export class Game extends GameDelegates {
     })
 
     await this.runCheckpointStage('core_helpers', () => {
-      this.cabinetBuilder = new GameCabinetBuilder(this as unknown as CabinetBuilderHost)
-      this.sceneBuilder = new GameSceneBuilder(this as unknown as SceneBuilderHost)
-      this.inputActions = new GameInputActions(this as unknown as InputActionsHost)
-      this.scenarioManager = new GameScenario(this as unknown as ScenarioHost)
-      this.slotAdventure = new GameSlotAdventure(this as unknown as SlotAdventureHost)
-      this.settingsUI = new GameSettingsUI(this as unknown as SettingsUIHost)
+      this.cabinetBuilder = new GameCabinetBuilder(this)
+      this.sceneBuilder = new GameSceneBuilder(this)
+      this.inputActions = new GameInputActions(this)
+      this.scenarioManager = new GameScenario(this)
+      this.slotAdventure = new GameSlotAdventure(this)
+      this.settingsUI = new GameSettingsUI(this)
       if (isPhysicsTuningEnabled(this.physicsTuningEnabledInSettings)) {
         this.physicsTuningPanel = new PhysicsTuningPanel()
         this.physicsTuningPanel.show()
       }
-      this.debugHelper = new GameDebug(this as unknown as DebugHost)
-      this.lifecycle = new GameLifecycle(this as unknown as LifecycleHost)
-      this.hud = new GameHUD(this as unknown as HUDHost)
-      this.mapCabinet = new GameMapCabinet(this as unknown as MapCabinetHost)
+      this.debugHelper = new GameDebug(this)
+      this.lifecycle = new GameLifecycle(this)
+      this.hud = new GameHUD(this)
+      this.mapCabinet = new GameMapCabinet(this)
       this.updateHUD()
 
       this.settingsUI.setupSettingsUI()
@@ -152,17 +171,17 @@ export class Game extends GameDelegates {
 
     await this.runCheckpointStage('state_setup', async () => {
       this.soundSystem = getSoundSystem()
-      this.settingsUI.setupMapSelector()
+      this.settingsUI?.setupMapSelector()
 
       this.eventBus = new EventBus()
-      getSoundSystem(this.eventBus)
+      this.soundSystem.bindEventBus(this.eventBus)
       this.stateManager = new GameStateManager({
         onStateChange: (oldState, newState) => {
           console.log(`[Game] State changed: ${GameState[oldState]} -> ${GameState[newState]}`)
         },
       })
       this.stateManager.setEventBus(this.eventBus)
-      this.physicsController = new GamePhysicsController(this as unknown as PhysicsHost)
+      this.physicsController = new GamePhysicsController(this)
       // Ball-save, combo / streak windows, gold swarms and plunger charge read
       // the controller's gameplay clock, not wall time (#441).
       installSimClock(this.physicsController.simClock)
@@ -170,45 +189,44 @@ export class Game extends GameDelegates {
 
     await this.runCheckpointStage('physics', () => this.physics.init())
     this.systemsInitializer = new GameSystemsInitializer(this)
-    this.disposer = new GameDisposer(this)
     await this.systemsInitializer.initAll()
 
     this.ballAnimator = new BallAnimator(scene)
 
     await this.runCheckpointStage('input_runtime', () => {
       // Provide scene reference so the per-frame plunger animation can find meshes by name
-      this.inputActions.setScene(scene)
+      this.inputActions?.setScene(scene)
       this.inputManager = new GameInputManager(scene, this.physics, {
-        onFlipperLeft: (pressed) => this.inputActions.handleFlipperLeft(pressed),
-        onFlipperRight: (pressed) => this.inputActions.handleFlipperRight(pressed),
+        onFlipperLeft: (pressed) => this.inputActions?.handleFlipperLeft(pressed),
+        onFlipperRight: (pressed) => this.inputActions?.handleFlipperRight(pressed),
         onPlunger: () => {
-          const didLaunch = this.inputActions.handlePlunger()
+          const didLaunch = this.inputActions?.handlePlunger()
           if (didLaunch) {
             this.eventBus?.emit('ball:launched')
             this.ballManager?.startBallSaveGraceWindow()
           }
         },
-        onPlungerChargeStart: () => this.inputActions.startPlungerCharge(),
-        onPlungerChargeRelease: (chargeLevel) => this.inputActions.releasePlungerCharge(chargeLevel),
+        onPlungerChargeStart: () => this.inputActions?.startPlungerCharge(),
+        onPlungerChargeRelease: (chargeLevel) => this.inputActions?.releasePlungerCharge(chargeLevel),
         onPlungerChargeUpdate: (chargeLevel) => {
-          this.inputActions.updatePlungerCharge(chargeLevel)
-          this.inputActions.updatePlungerVisual(scene, chargeLevel)
+          this.inputActions?.updatePlungerCharge(chargeLevel)
+          this.inputActions?.updatePlungerVisual(scene, chargeLevel)
         },
-        onNudge: (direction) => this.physicsController.applyNudge(direction),
-        onPause: () => this.lifecycle.togglePause(),
+        onNudge: (direction) => this.physicsController?.applyNudge(direction),
+        onPause: () => this.lifecycle?.togglePause(),
         onReset: () => this.resetBall(),
-        onStart: () => this.lifecycle.startGame(),
+        onStart: () => { void this.lifecycle?.startGame() },
         onAdventureToggle: () => this.toggleAdventure(),
-        onTrackNext: () => this.slotAdventure.cycleAdventureTrack(1),
-        onTrackPrev: () => this.slotAdventure.cycleAdventureTrack(-1),
-        onJackpotTrigger: () => this.lifecycle.triggerJackpot(),
+        onTrackNext: () => this.slotAdventure?.cycleAdventureTrack(1),
+        onTrackPrev: () => this.slotAdventure?.cycleAdventureTrack(-1),
+        onJackpotTrigger: () => this.lifecycle?.triggerJackpot(),
         onDebugHUD: () => {
-          if (!this.debugHelper.isDebugHUDKeyboardEnabled()) return
+          if (!this.debugHelper?.isDebugHUDKeyboardEnabled()) return
           this.debugHUD?.toggle()
         },
         onForceSlotSpin: () => {
-          if (!this.debugHelper.isDebugHUDAvailable()) return
-          this.slotAdventure.forceSlotSpin()
+          if (!this.debugHelper?.isDebugHUDAvailable()) return
+          this.slotAdventure?.forceSlotSpin()
         },
         onMapSwitch: (index) => {
           const maps = this.mapManager?.getMapSystem().getMapIds() || []
@@ -223,8 +241,8 @@ export class Game extends GameDelegates {
         onLeaderboardToggle: () => {
           void this.ensureOverlaySystems().then(() => this.leaderboardSystem.toggle())
         },
-        onDynamicModeToggle: () => this.scenarioManager.toggleDynamicMode(),
-        onScenarioCycle: () => this.scenarioManager.cycleScenario(),
+        onDynamicModeToggle: () => this.scenarioManager?.toggleDynamicMode(),
+        onScenarioCycle: () => this.scenarioManager?.cycleScenario(),
         onPerfMonitorToggle: () => this.togglePerformanceMonitor(),
         onFreeMapTestToggle: () => this.toggleFreeMapTestMode(),
         getState: () => this.stateManager.getState(),
@@ -241,13 +259,13 @@ export class Game extends GameDelegates {
       this.inputManager.setupGamepad({
         deadZone: 0.15,
         vibrationEnabled: !this.accessibility.reducedMotion,
-      })
+      }, this.signal)
 
       const touchLeftBtn = document.getElementById('touch-left')
       const touchRightBtn = document.getElementById('touch-right')
       const touchPlungerBtn = document.getElementById('touch-plunger')
       const touchNudgeBtn = document.getElementById('touch-nudge')
-      this.inputManager.setupTouchControls(touchLeftBtn, touchRightBtn, touchPlungerBtn, touchNudgeBtn)
+      this.inputManager.setupTouchControls(touchLeftBtn, touchRightBtn, touchPlungerBtn, touchNudgeBtn, this.signal)
 
       const urlParams = new URLSearchParams(window.location.search)
       const replayParam = urlParams.get('replay')
@@ -258,17 +276,17 @@ export class Game extends GameDelegates {
       scene.onBeforeRenderObservable.add(() => {
         this.performanceMonitor.frameStart()
         this.performanceMonitor.physicsStart()
-        this.physicsController.stepPhysics(this.inputManager, this.inputActions, this.replayRunner, this.replayRecorder)
+        this.physicsController?.stepPhysics(this.inputManager, this.inputActions, this.replayRunner, this.replayRecorder)
         this.performanceMonitor.physicsEnd()
-        this.settingsUI.updatePhysicsDebugRenderer()
+        this.settingsUI?.updatePhysicsDebugRenderer()
       })
 
-      this.engine.runRenderLoop(() => this.renderFrame())
+      this.engine.runRenderLoop(this.renderLoop)
 
       this.showDebugUI = new URLSearchParams(window.location.search).has('debug')
       if (this.showDebugUI) {
         this.inputManager?.enableLatencyTracking(true)
-        this.settingsUI.setupLatencyOverlay()
+        this.settingsUI?.setupLatencyOverlay()
       }
     })
 
@@ -277,12 +295,12 @@ export class Game extends GameDelegates {
 
     await this.systemsInitializer.postInitManagers()
 
-    this.lifecycle.setGameState(GameState.MENU)
+    this.lifecycle?.setGameState(GameState.MENU)
   }
 
   /** Per-frame render loop body — also used by VisibilityManager on tab resume. */
   renderFrame(): void {
-    this.settingsUI.updateLatencyDisplay(this.inputManager || undefined)
+    this.settingsUI?.updateLatencyDisplay(this.inputManager || undefined)
     this.scene?.render()
     const dt = this.engine.getDeltaTime() / 1000
     this.cabinetLighting?.update(dt)
@@ -332,7 +350,8 @@ export class Game extends GameDelegates {
     this.performanceMonitor.frameEnd()
 
     if (this.debugHUD?.isHUDVisible()) {
-      this.debugHUD.update(this.debugHelper.buildDebugSnapshot(dt, this.lives))
+      const snapshot = this.debugHelper?.buildDebugSnapshot(dt, this.lives)
+      if (snapshot) this.debugHUD.update(snapshot)
       this.debugHUD.updatePanel('EventBus', this.eventBusLog.getPanelData())
     }
 
@@ -373,16 +392,16 @@ export class Game extends GameDelegates {
       return
     }
     const buildCosmetic = () => {
-      if (this.cosmeticSceneBuilt) return
+      if (this.cosmeticSceneBuilt || this.disposed) return
       void this.runCheckpointStage('scene_cosmetic', () => {
-        this.sceneBuilder.buildCosmeticScene()
+        this.sceneBuilder?.buildCosmeticScene()
         this.cosmeticSceneBuilt = true
       }, true)
     }
     if ('requestIdleCallback' in window) {
       requestIdleCallback(buildCosmetic, { timeout: GAME_TUNING.timing.idleCallbackTimeoutMs })
     } else {
-      setTimeout(buildCosmetic, GAME_TUNING.timing.cosmeticFallbackDelayMs)
+      this.timers.setTimeout(buildCosmetic, GAME_TUNING.timing.cosmeticFallbackDelayMs)
     }
   }
 
@@ -417,7 +436,13 @@ export class Game extends GameDelegates {
   }
 
   dispose(): void {
-    this.disposer.disposeAll()
+    // Idempotent: a second call (HMR, tests, a retry after a failed init) is a no-op.
+    if (this.disposed) return
+    this.disposed = true
+    // The engine outlives the Game; leave its loop running and a second Game would
+    // render alongside this dead one.
+    this.engine.stopRenderLoop(this.renderLoop)
+    disposeGame(this)
     installSimClock(null)
   }
 }

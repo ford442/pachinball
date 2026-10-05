@@ -6,6 +6,7 @@ import type { PhysicsRevoluteJoint } from '../core/physics-api'
 import type { PhysicsSystem } from '../game-elements/physics'
 import type { GameObjects } from '../objects'
 import type { HapticManager } from '../game-elements/haptics'
+import type { BallManager } from '../game-elements/ball-manager'
 import type { SoundSystem } from '../game-elements/sound-system'
 import type { EffectsSystem } from '../effects'
 import type { GameStateManager } from './game-state'
@@ -14,6 +15,10 @@ import { applyPlungerChargeCurve, getPhysicsTuningValue } from '../game-elements
 import type { AccessibilityConfig } from '../game-elements'
 import { emissive, PALETTE, INTENSITY } from '../game-elements/visual-language'
 import { simClockMs } from '../core/sim-clock'
+import type { Color3 } from '@babylonjs/core/Maths/math.color'
+
+/** The one property these effects touch; Babylon types `Mesh.material` as the base Material. */
+type EmissiveMaterial = { emissiveColor?: Color3 }
 
 export interface InputActionsHost {
   readonly physics: PhysicsSystem
@@ -24,10 +29,11 @@ export interface InputActionsHost {
   readonly stateManager: GameStateManager
   readonly accessibility: AccessibilityConfig
 
+  /** Only `getBallBody` is used here — the plunger launches the main ball. */
+  readonly ballManager: Pick<BallManager, 'getBallBody'> | null
+
   plungerChargeLevel: number
   tiltActive: boolean
-
-  /** Route a ball impulse into WASM when wasm-owner is simulating the ball. */
 }
 
 export class GameInputActions {
@@ -168,8 +174,7 @@ export class GameInputActions {
    * fallback for direct callers only (debug hooks, tests).
    */
   handlePlunger(charge?: number | null): boolean {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ballBody = (this.host as any).ballManager?.getBallBody?.()
+    const ballBody = this.host.ballManager?.getBallBody()
     if (!ballBody) return false
 
     const pos = ballBody.translation()
@@ -248,8 +253,7 @@ export class GameInputActions {
       plungerKnob.position.z = GameInputActions.KNOB_BASE_Z - pullback
 
       // Emissive glow on the rod gives visual charge-level feedback (cyan → bright at full charge)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mat = shooterRod.material as any
+      const mat = shooterRod.material as EmissiveMaterial | null
       if (mat && mat.emissiveColor) {
         mat.emissiveColor.copyFrom(emissive(PALETTE.CYAN, chargeLevel * INTENSITY.ACTIVE))
       }
@@ -331,8 +335,7 @@ export class GameInputActions {
         this.plungerLaunchState.phase = 'idle'
         // Snap to exact rest and clear emissive glow
         setPositions(restZ)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mat = shooterRod?.material as any
+        const mat = shooterRod?.material as EmissiveMaterial | null
         if (mat && mat.emissiveColor) {
           mat.emissiveColor.copyFrom(emissive(PALETTE.CYAN, 0))
         }
@@ -364,9 +367,7 @@ export class GameInputActions {
         { x: GameInputActions.PLUNGER_X, y: GameInputActions.PLUNGER_Y, z: restZ }
       )
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mat = shooterRod?.material as any
+    const mat = shooterRod?.material as EmissiveMaterial | null
     if (mat && mat.emissiveColor) {
       mat.emissiveColor.copyFrom(emissive(PALETTE.CYAN, 0))
     }
