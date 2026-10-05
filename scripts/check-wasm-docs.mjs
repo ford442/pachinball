@@ -3,7 +3,8 @@
  * Drift check for docs/wasm-physics-engine.md. Fails when the doc:
  *   - still carries a retired claim (Rapier as production default, hybrid rollout),
  *   - lists EXPORTED_RUNTIME_METHODS / EXPORTED_FUNCTIONS that differ from native/CMakeLists.txt,
- *   - does not mark WASM_PHYSICS.defaultEngine (src/config/physics.ts) as the default mode,
+ *   - does not mark WASM_PHYSICS.defaultEngine (src/config/physics.ts) as the `(default)` mode
+ *     and WASM_PHYSICS.nonIsolatedDefaultEngine as `(default when not isolated)`,
  *   - omits a native/src, native/tests, src/wasm or src/game/physics/wasm-* source file
  *     from its directory tree.
  */
@@ -39,15 +40,18 @@ for (const flag of ['-sEXPORTED_RUNTIME_METHODS', '-sEXPORTED_FUNCTIONS']) {
   }
 }
 
-const defaultEngine = read('src/config/physics.ts').match(/defaultEngine:\s*'([\w-]+)'/)?.[1]
-if (!defaultEngine) {
-  errors.push('WASM_PHYSICS.defaultEngine not found in src/config/physics.ts')
-} else {
-  const defaultRows = doc.split('\n').filter((line) => line.startsWith('|') && line.includes('(default)'))
-  if (!defaultRows.some((line) => line.includes(`\`${defaultEngine}\``))) {
-    errors.push(`mode table does not mark \`${defaultEngine}\` as (default)`)
+const physicsConfig = read('src/config/physics.ts')
+const modeRows = doc.split('\n').filter((line) => line.startsWith('|'))
+const requireDefaultRow = (key, label) => {
+  const engine = physicsConfig.match(new RegExp(`^\\s*${key}:\\s*'([\\w-]+)'`, 'm'))?.[1]
+  if (!engine) {
+    errors.push(`WASM_PHYSICS.${key} not found in src/config/physics.ts`)
+  } else if (!modeRows.some((line) => line.includes(label) && line.includes(`\`${engine}\``))) {
+    errors.push(`mode table does not mark \`${engine}\` as ${label}`)
   }
 }
+requireDefaultRow('defaultEngine', '(default)')
+requireDefaultRow('nonIsolatedDefaultEngine', '(default when not isolated)')
 
 const listed = (dir, pattern) =>
   readdirSync(join(root, dir)).filter((name) => pattern.test(name))

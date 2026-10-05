@@ -28,7 +28,7 @@ npx vitest run tests/ball-manager.test.ts
 
 ## Architecture
 
-**Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 7. Physics runs on an in-house C++ engine compiled to WASM (`native/` + `src/wasm/`) by default (`wasm-owner`); Rapier 3D WASM is the lazily loaded dev/degrade path. Runtime mode is selected via `src/config/` (`rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker`). Builders author physics through `PhysicsApi` / `PhysicsWorldSink` / `PhysicsBody` (`src/core/physics-api.ts`), never Rapier values — see `docs/wasm-physics-engine.md`.
+**Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 7. Physics runs on an in-house C++ engine compiled to WASM (`native/` + `src/wasm/`) by default — in a Dedicated Worker (`wasm-worker`) when the page is cross-origin isolated, else in-process (`wasm-owner`); Rapier 3D WASM is the lazily loaded dev/degrade path. Runtime mode is selected via `src/config.ts` (`rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker`). Builders author physics through `PhysicsApi` / `PhysicsWorldSink` / `PhysicsBody` (`src/core/physics-api.ts`), never Rapier values — see `docs/wasm-physics-engine.md`.
 
 ### Startup flow
 

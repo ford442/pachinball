@@ -7,11 +7,13 @@ test.use({
 })
 
 /**
- * Fail-closed degrade path: production build without WASM bundle must boot Rapier
- * and log the greppable physics-degrade marker.
+ * Fail-closed degrade path: a boot without the WASM bundle must reach Rapier
+ * and log the greppable physics-degrade marker on every rung.
  *
- * Runs against `vite preview` (see playwright.degrade.config.ts) so dist/ has no
- * PhysicsModule.* when CI builds with `npx vite build` only.
+ * Runs against the Vite dev server with `public/wasm` removed (see
+ * playwright.degrade.config.ts). The dev server is cross-origin isolated, so
+ * the default is `wasm-worker` and the ladder is worker → in-process owner →
+ * Rapier (#439).
  */
 test('missing WASM bundle degrades to Rapier with marker', async ({ page }) => {
   test.setTimeout(120_000)
@@ -39,6 +41,11 @@ test('missing WASM bundle degrades to Rapier with marker', async ({ page }) => {
     boot.degradeReason?.includes(PHYSICS_DEGRADE_MARKER) ||
       degradeLogs.some((line) => line.includes(PHYSICS_DEGRADE_MARKER)),
   ).toBe(true)
+  // Both rungs, in order: the worker gives way to the owner, then the owner to Rapier.
+  const workerRung = degradeLogs.findIndex((line) => /worker failed/i.test(line))
+  const rapierRung = degradeLogs.findIndex((line) => /falling back to Rapier/i.test(line))
+  expect(workerRung, `worker rung missing from ${JSON.stringify(degradeLogs)}`).toBeGreaterThanOrEqual(0)
+  expect(rapierRung, 'the owner rung must follow the worker rung').toBeGreaterThan(workerRung)
 
   const started = await page.evaluate(async () => {
     const g = (window as unknown as {

@@ -4,7 +4,8 @@
  *
  * Snapshots arrive over the shared layout when the page is cross-origin
  * isolated (read at the top of `step()`, never blocking), otherwise as
- * transferred `step-result` buffers.
+ * transferred `step-result` buffers. Worker creation and the `init`
+ * handshake live in `physics-worker-boot.ts`.
  */
 
 import type {
@@ -36,74 +37,14 @@ import {
   type PhysicsWorkerToWorker,
 } from './physics-worker-protocol'
 import { readSnapshotIds } from './snapshot-layout'
+import {
+  consumePrewarmedPhysicsWorker,
+  startPhysicsWorker,
+  type PrewarmedPhysicsWorker,
+} from './physics-worker-boot'
 
 const ZERO3 = { x: 0, y: 0, z: 0 }
 const IDENTITY_Q = { x: 0, y: 0, z: 0, w: 1 }
-
-export function resolvePhysicsBundleUrl(bundleUrl: string): string {
-  if (/^https?:/i.test(bundleUrl) || bundleUrl.startsWith('blob:')) return bundleUrl
-  // Accessed via globalThis (not the bare `window` identifier) — this file compiles
-  // under both the DOM app project and the WebWorker-lib worker project.
-  const win = (globalThis as Record<string, unknown>).window as
-    | { location?: { href?: string } }
-    | undefined
-  if (!win?.location?.href) return bundleUrl
-  try {
-    return new URL(bundleUrl, win.location.href).href
-  } catch {
-    return bundleUrl
-  }
-}
-
-export function createPhysicsWorker(): Worker {
-  return new Worker(new URL('./physics-worker.ts', import.meta.url), { type: 'module' })
-}
-
-export type PrewarmedPhysicsWorker = {
-  worker: Worker
-  ready: Promise<boolean>
-}
-
-let prewarmed: PrewarmedPhysicsWorker | null = null
-
-/** Start WASM load inside a Dedicated Worker (idle warm-path for wasm-worker). */
-export function warmPhysicsWorker(bundleUrl: string): PrewarmedPhysicsWorker {
-  if (prewarmed) return prewarmed
-  const worker = createPhysicsWorker()
-  const ready = new Promise<boolean>((resolve) => {
-    const onMsg = (event: MessageEvent<PhysicsWorkerFromWorker>) => {
-      const data = event.data
-      if (data?.type === 'ready') {
-        worker.removeEventListener('message', onMsg)
-        resolve(true)
-      } else if (data?.type === 'error') {
-        worker.removeEventListener('message', onMsg)
-        resolve(false)
-      }
-    }
-    worker.addEventListener('message', onMsg)
-  })
-  worker.postMessage({
-    type: 'init',
-    bundleUrl: resolvePhysicsBundleUrl(bundleUrl),
-  } satisfies PhysicsWorkerToWorker)
-  prewarmed = { worker, ready }
-  return prewarmed
-}
-
-export function consumePrewarmedPhysicsWorker(): PrewarmedPhysicsWorker | null {
-  const held = prewarmed
-  prewarmed = null
-  return held
-}
-
-/** @internal */
-export function resetPhysicsWorkerPrewarmForTests(): void {
-  if (prewarmed) {
-    prewarmed.worker.terminate()
-    prewarmed = null
-  }
-}
 
 export type PhysicsWorkerTransport = 'shared' | 'post-message'
 
@@ -139,7 +80,6 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   private hingeView: Float32Array | null = null
   private snapshotReady = false
   private ownsWorker = true
-  private readyWaiters: Array<(ok: boolean) => void> = []
   private readonly wantShared: boolean
   private shared: SharedSnapshotReader | null = null
   private stats: PhysicsWorkerTransportStats = PhysicsWorkerClient.emptyStats()
@@ -167,39 +107,23 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   async load(moduleUrl = './wasm/PhysicsModule.js', _preloadedModule?: WasmPhysicsModule): Promise<void> {
     if (this.isReady) return
 
-    const held = consumePrewarmedPhysicsWorker()
-    if (held) {
-      this.worker = held.worker
-      this.ownsWorker = true
-      this.worker.addEventListener('message', this.onMessage)
-      const ok = await held.ready
-      this.isReady = ok
-      if (!ok) {
-        this.worker.removeEventListener('message', this.onMessage)
-        this.worker.terminate()
-        this.worker = null
-        return
-      }
-      this.requestSharedTransport()
-      return
-    }
-
+    let boot: PrewarmedPhysicsWorker
     try {
-      this.worker = createPhysicsWorker()
-      this.ownsWorker = true
+      boot = consumePrewarmedPhysicsWorker() ?? startPhysicsWorker(moduleUrl)
     } catch (err) {
       console.warn('[PhysicsWorkerClient] Worker construction failed', err)
       return
     }
 
+    // The boot listener owns the handshake (and terminates a failed worker);
+    // the worker sends nothing else until the first batch.
+    const ok = await boot.ready
+    if (!ok) return
+    this.worker = boot.worker
+    this.ownsWorker = true
     this.worker.addEventListener('message', this.onMessage)
-    this.post({ type: 'init', bundleUrl: resolvePhysicsBundleUrl(moduleUrl) })
-
-    const ok = await new Promise<boolean>((resolve) => {
-      this.readyWaiters.push(resolve)
-    })
-    this.isReady = ok
-    if (ok) this.requestSharedTransport()
+    this.isReady = true
+    this.requestSharedTransport()
   }
 
   private requestSharedTransport(): void {
@@ -672,13 +596,11 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   receiveWorkerMessage(data: PhysicsWorkerFromWorker): void {
     if (data.type === 'ready') {
       this.isReady = true
-      this.flushReadyWaiters(true)
       return
     }
     if (data.type === 'error') {
       console.warn('[PhysicsWorkerClient]', data.message)
       this.isReady = false
-      this.flushReadyWaiters(false)
       return
     }
     if (data.type === 'step-result') {
@@ -774,11 +696,5 @@ export class PhysicsWorkerClient implements WasmSimEngine {
 
   private onMessage = (event: MessageEvent<PhysicsWorkerFromWorker>): void => {
     if (event.data) this.receiveWorkerMessage(event.data)
-  }
-
-  private flushReadyWaiters(ok: boolean): void {
-    const waiters = this.readyWaiters
-    this.readyWaiters = []
-    for (const w of waiters) w(ok)
   }
 }

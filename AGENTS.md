@@ -257,8 +257,8 @@ Gameplay physics never uses Babylon's built-in collision engine. The active back
 
 | Mode | When | Source |
 |------|------|--------|
-| `wasm-owner` | Production default: C++ owns balls, the table scope, flipper hinges and adventure tracks; Rapier is never loaded | `src/game/physics/wasm-owner.ts` + `src/wasm/wasm-table-world.ts` + `native/` |
-| `wasm-worker` | As `wasm-owner`, C++ world in a Dedicated Worker | `src/wasm/physics-worker-client.ts` |
+| `wasm-worker` | Production default on a cross-origin-isolated page: as `wasm-owner`, C++ world in a Dedicated Worker; falls back to `wasm-owner` if the worker fails to start | `src/wasm/physics-worker-client.ts` + `src/wasm/physics-worker-boot.ts` |
+| `wasm-owner` | Default when not cross-origin isolated: C++ owns balls, the table scope, flipper hinges and adventure tracks in-process; Rapier is never loaded | `src/game/physics/wasm-owner.ts` + `src/wasm/wasm-table-world.ts` + `native/` |
 | `wasm-mirror` | Dev parity; WASM mirrors ball+bumper subset on Rapier bodies | `src/game/physics/wasm-mirror.ts` |
 | `rapier` | Explicit override, and the fail-closed degrade when the C++ bundle is missing | `@dimforge/rapier3d-compat` via `loadRapier()` / `PhysicsSystem` |
 
