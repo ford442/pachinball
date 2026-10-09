@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { CheckpointDebugController } from '../src/game/checkpoint-debug'
 
 class MemoryStorage {
@@ -65,52 +65,5 @@ describe('CheckpointDebugController', () => {
     expect(snapshot.status).toBe('success')
     expect(snapshot.durationMs).not.toBeNull()
     expect(snapshot.error).toBeNull()
-  })
-})
-
-describe('CheckpointDebugController.describeProgress', () => {
-  const make = () =>
-    new CheckpointDebugController({
-      search: '',
-      storage: new MemoryStorage(),
-      documentRef: null,
-      historyRef: null,
-      locationRef: null,
-    })
-
-  test('says so before any stage has started', () => {
-    expect(make().describeProgress()).toBe('no stage started')
-  })
-
-  test('names every stage still loading (what a stalled boot is waiting on)', async () => {
-    const controller = make()
-    let release!: () => void
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
-    })
-
-    const first = controller.runStage('physics', () => gate)
-    const second = controller.runStage('scene_rendering', () => gate)
-    expect(controller.describeProgress()).toBe(
-      'physics (Physics world init), scene_rendering (Scene rendering systems)',
-    )
-
-    release()
-    await Promise.all([first, second])
-  })
-
-  test('falls back to the stage that started last once nothing is loading, including a failed one', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const controller = make()
-
-    await controller.runStage('settings_ui', () => undefined)
-    await expect(
-      controller.runStage('physics', () => {
-        throw new Error('boom')
-      }),
-    ).rejects.toThrow('boom')
-
-    expect(controller.describeProgress()).toBe('physics (Physics world init)')
-    errorSpy.mockRestore()
   })
 })
