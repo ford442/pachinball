@@ -16,6 +16,14 @@
   </head>
   <body>
 
+    <!-- Boot failure / stall banner (#449, #452); filled and revealed by src/game/boot-error.ts -->
+    <div id="boot-error" role="alert" hidden>
+      <strong></strong>
+      <p></p>
+      <p></p>
+      <a href="?renderer=webgl2">Reload with the WebGL2 renderer (?renderer=webgl2)</a>
+    </div>
+
     <div id="game-cabinet">
 
       <canvas id="pachinball-canvas"></canvas>

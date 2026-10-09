@@ -105,8 +105,8 @@ export class GameUIManager {
   ): void {
     showLoadingStatePopup(this.state, show, optionsOrPhase)
   }
-  setStartButtonEnabled(enabled: boolean): void {
-    setStartButtonEnabledPopup(enabled)
+  setStartButtonEnabled(enabled: boolean, error?: string): void {
+    setStartButtonEnabledPopup(enabled, error)
   }
   updateHUD(data: HUDData): void { updateHUD(this.state, data) }
   updateComboChainMeter(progress: number, target: number, pulseHighlight: boolean): void {

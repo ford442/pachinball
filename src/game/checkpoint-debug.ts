@@ -68,6 +68,7 @@ export class CheckpointDebugController {
   private readonly historyRef: Pick<History, 'replaceState'> | null
   private readonly searchParams: URLSearchParams
   private gpuLogEl: HTMLElement | null = null
+  private lastStarted: DebugStageKey | null = null
 
   constructor(options: CheckpointDebugControllerOptions = {}) {
     const search = options.search ?? (typeof window !== 'undefined' ? window.location.search : '')
@@ -139,6 +140,16 @@ export class CheckpointDebugController {
     }
   }
 
+  /**
+   * What a stalled or failed boot was doing, for the boot banner (#449, #452): the stages
+   * still `loading`, else the one that started last.
+   */
+  describeProgress(): string {
+    const loading = [...this.stageState].filter(([, s]) => s.status === 'loading').map(([k]) => k)
+    const keys = loading.length > 0 ? loading : this.lastStarted ? [this.lastStarted] : []
+    return keys.map((k) => `${k} (${DEBUG_STAGES[k].label})`).join(', ') || 'no stage started'
+  }
+
   markStageSkipped(stage: DebugStageKey, reason = 'disabled'): void {
     const state = this.stageState.get(stage)
     if (!state) return
@@ -155,6 +166,7 @@ export class CheckpointDebugController {
     state.status = 'loading'
     state.durationMs = null
     state.error = null
+    this.lastStarted = stage
     this.updateStageElements(stage)
 
     const start = performance.now()

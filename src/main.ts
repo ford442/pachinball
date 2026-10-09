@@ -9,6 +9,8 @@ import { VisibilityManager } from './engine/visibility-manager'
 import { formatGpuProbeSummary } from './engine/gpu-degrade-telemetry'
 import { runVisibilityDiagnostic } from './engine/visibility-diagnostic'
 import { registerServiceWorker } from './pwa'
+import { createTimerScope } from './core/timers'
+import { BOOT_STALL_MS, armBootWatchdog, showBootError } from './game/boot-error'
 
 declare global {
   interface Window {
@@ -18,7 +20,11 @@ declare global {
   }
 }
 
+/** Set once constructed so the failure banner can name the checkpoint stage that was running. */
+let bootGame: Game | undefined
+
 async function bootstrap(): Promise<void> {
+  const bootStartedAt = performance.now()
   registerServiceWorker()
 
   const canvas = document.getElementById('pachinball-canvas') as HTMLCanvasElement | null
@@ -29,10 +35,13 @@ async function bootstrap(): Promise<void> {
 
   // Parallelize engine creation and physics WASM loading
   // This reduces total load time by overlapping network fetch (WASM) with GPU initialization
+  // The Game (and its timers) does not exist yet; this scope covers only the pre-Game phase.
+  const preGameTimers = createTimerScope()
+  armBootWatchdog(preGameTimers, BOOT_STALL_MS, () => 'engine + physics preload')
   const [engine, physics] = await Promise.all([
     createEngine(canvas),
     preloadPhysicsSystem(),
-  ])
+  ]).finally(() => preGameTimers.dispose())
 
   console.timeEnd('[Bootstrap] Engine + Physics parallel init')
   console.time('[Bootstrap] Game init')
@@ -44,6 +53,12 @@ async function bootstrap(): Promise<void> {
   ;(window as unknown as Record<string, unknown>).bootstrapEngineOptions = resolveEngineOptions()
 
   const game = new Game(engine, physics)
+  bootGame = game
+  armBootWatchdog(
+    game.timers,
+    Math.max(0, BOOT_STALL_MS - (performance.now() - bootStartedAt)),
+    () => game.checkpointDebug.describeProgress(),
+  )
   await game.init()
   console.info(formatGpuProbeSummary())
 
@@ -82,6 +97,12 @@ async function bootstrap(): Promise<void> {
   }
 }
 
-bootstrap().catch((err) => {
+bootstrap().catch((err: unknown) => {
   console.error('Failed to bootstrap game', err)
+  showBootError(
+    'Game failed to start',
+    err instanceof Error ? err.message : String(err),
+    bootGame?.checkpointDebug.describeProgress() ?? 'engine + physics preload',
+    true,
+  )
 })

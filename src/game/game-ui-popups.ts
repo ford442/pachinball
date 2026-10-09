@@ -241,14 +241,23 @@ export function showLoadingState(
   }
 }
 
-/** Gate Start until cabinet (or fallback) has resolved. */
-export function setStartButtonEnabled(enabled: boolean): void {
+/**
+ * Gate Start until cabinet (or fallback) has resolved. Passing `error` (with `enabled`
+ * false) puts the button in its failed state: "Load failed", tooltip = the message (#449).
+ */
+export function setStartButtonEnabled(enabled: boolean, error?: string): void {
   const btn = document.getElementById('start-btn') as HTMLButtonElement | null
   if (!btn) return
   btn.disabled = !enabled
   btn.style.opacity = enabled ? '1' : '0.45'
   btn.style.cursor = enabled ? 'pointer' : 'not-allowed'
-  btn.title = enabled ? '' : 'Loading cabinet…'
+  btn.title = enabled ? '' : (error ?? 'Loading cabinet…')
+  if (error) {
+    btn.textContent = 'Load failed'
+    btn.dataset.state = 'error'
+  }
+  // Start live means the boot made it: a "still loading" banner no longer applies.
+  if (enabled) document.getElementById('boot-error')?.setAttribute('hidden', '')
 }
 
 export function showMessage(state: GameUIRuntimeState, message: string, duration = 2000): void {
