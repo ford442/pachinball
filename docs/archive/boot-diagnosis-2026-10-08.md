@@ -80,7 +80,7 @@ The message on the banner is the real cause; the right-hand column is where to l
 | `scene_critical` | playfield group, cabinet glTF (15 s timeout per LOD, then procedural fallback), LCD playfield, walls, flippers, ball, backbox | **Stalled** here = the cabinet GLB request is hanging (Network tab). **`Critical scene incomplete: N/2 flipper joints, M flipper meshes`** = flippers or joints were not built (new assertion, see #453) |
 | `scene_gameplay_build` | bumpers, slingshots, pachinko field, rails (runs *after* Start enables) | Start is already live; the table is incomplete. A stall here used to be a hidden-tab `requestAnimationFrame` (now raced against 50 ms) |
 | `input_runtime` | `GameInputManager`, gamepad, touch, render loop | The stack on the console error; a skipped stage here means no render loop and a black canvas |
-| `managers_postinit` (optional) | maps/cabinet/adventure managers | Failure is swallowed: `[Game] Optional stage "managers_postinit" failed` + error in the console, boot continues |
+| `managers_postinit` (optional) | maps/cabinet/adventure managers | Failure is swallowed: `Optional stage managers_postinit failed` + the error in the console, boot continues |
 | `scene_optional`, `scene_cosmetic` (optional) | adventure toys, cosmetic scene | Same: logged, not fatal |
 
 `scene_lcd_post` exists in `DEBUG_STAGES` but nothing in `src/` runs it, so it never appears.
