@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { Tools } from '@babylonjs/core/Misc/tools'
+import { createTimerScope, type TimerBase } from '../src/core/timers'
 
 const cabinetLoad = vi.hoisted(() => ({ current: null as null | (() => Promise<void>) }))
 
@@ -13,7 +14,7 @@ vi.mock('../src/objects', () => ({ applyTableDecorations: vi.fn() }))
 vi.mock('../src/materials', () => ({ getMaterialLibrary: vi.fn() }))
 vi.mock('../src/game-elements', () => ({ CameraController: vi.fn() }))
 
-import { GameSceneBuilder, type SceneBuilderHost } from '../src/game/game-scene-builder'
+import { FRAME_YIELD_TIMEOUT_MS, GameSceneBuilder, type SceneBuilderHost } from '../src/game/game-scene-builder'
 
 interface FakeMesh {
   name: string
@@ -100,6 +101,7 @@ function makeRig(opts: { rightJoint?: boolean; flipperCount?: number } = {}): Ri
   const scene = { meshes, getMeshByName: () => null }
 
   const host = {
+    timers: createTimerScope(),
     scene,
     physics: {},
     accessibility: {},
@@ -192,5 +194,58 @@ describe('GameSceneBuilder.buildCriticalScene', () => {
     const rig = makeRig({ flipperCount: 1 })
 
     await expect(rig.builder.buildCriticalScene()).rejects.toThrow(/Critical scene incomplete: no right flipper/)
+  })
+})
+
+describe('GameSceneBuilder.yieldFrame (#452)', () => {
+  /** A scope whose animation frames only fire when the test says so, as in a hidden tab. */
+  function makeFrameScope() {
+    const frames: Array<(time: number) => void> = []
+    const cancelAnimationFrame = vi.fn()
+    const base: TimerBase = {
+      setTimeout: (fn, ms) => globalThis.setTimeout(fn, ms),
+      clearTimeout: (handle) => globalThis.clearTimeout(handle as ReturnType<typeof setTimeout>),
+      setInterval: (fn, ms) => globalThis.setInterval(fn, ms),
+      clearInterval: (handle) => globalThis.clearInterval(handle as ReturnType<typeof setInterval>),
+      requestAnimationFrame: (fn) => frames.push(fn),
+      cancelAnimationFrame,
+    }
+    const timers = createTimerScope(base)
+    const builder = new GameSceneBuilder({ timers } as unknown as SceneBuilderHost)
+    return { builder, frames, cancelAnimationFrame }
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('resolves after the fallback timeout when no frame ever fires (hidden tab)', async () => {
+    const { builder, cancelAnimationFrame } = makeFrameScope()
+    let resolved = false
+    const pending = builder.yieldFrame().then(() => {
+      resolved = true
+    })
+
+    await vi.advanceTimersByTimeAsync(FRAME_YIELD_TIMEOUT_MS - 1)
+    expect(resolved).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await pending
+    expect(resolved).toBe(true)
+    expect(cancelAnimationFrame).toHaveBeenCalledTimes(1) // the dead frame request is dropped
+  })
+
+  it('resolves on the frame and clears the fallback timer when a frame does fire', async () => {
+    const { builder, frames } = makeFrameScope()
+    const pending = builder.yieldFrame()
+
+    frames[0]?.(16)
+    await pending
+
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

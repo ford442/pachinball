@@ -12,6 +12,7 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Tools } from '@babylonjs/core/Misc/tools'
 import { Scene } from '@babylonjs/core/scene'
 import type { TargetCamera } from '@babylonjs/core/Cameras/targetCamera'
+import type { TimerScope } from '../core/timers'
 import type { PhysicsSystem } from '../game-elements/physics'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
@@ -27,7 +28,11 @@ import { getCabinetBuilder } from '../cabinet'
 import { GameConfig } from '../config'
 import type { AccessibilityConfig, QualityTier } from '../game-elements'
 
+/** Longest `yieldFrame` waits for a frame that a hidden tab will never deliver. */
+export const FRAME_YIELD_TIMEOUT_MS = 50
+
 export interface SceneBuilderHost {
+  readonly timers: TimerScope
   readonly scene: Scene | null
   readonly physics: PhysicsSystem
   readonly accessibility: AccessibilityConfig
@@ -258,7 +263,21 @@ export class GameSceneBuilder {
     effects.registerDecorativeMaterial(plasticMat)
   }
 
+  /**
+   * Resolves on the next animation frame, or after FRAME_YIELD_TIMEOUT_MS if none arrives:
+   * a hidden or occluded tab never fires rAF, and awaiting it would stall init (#452).
+   */
   yieldFrame(): Promise<void> {
-    return new Promise(resolve => requestAnimationFrame(() => resolve()))
+    const { timers } = this.host
+    return new Promise(resolve => {
+      const frame = timers.requestAnimationFrame(() => {
+        timers.clearTimeout(fallback)
+        resolve()
+      })
+      const fallback = timers.setTimeout(() => {
+        timers.cancelAnimationFrame(frame)
+        resolve()
+      }, FRAME_YIELD_TIMEOUT_MS)
+    })
   }
 }
