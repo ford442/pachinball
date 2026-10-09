@@ -96,7 +96,7 @@ if(EMSCRIPTEN)
     "-sEXPORT_ES6=1"
     "-sMODULARIZE=1"
     "-sEXPORT_NAME=PhysicsModule"
-    "--bind"
+    "-lembind"
     "-sENVIRONMENT=${PACHINBALL_WASM_ENVIRONMENT}"
     "-sFILESYSTEM=0"
     "-sALLOW_MEMORY_GROWTH=1"

@@ -5,9 +5,12 @@
 #
 # Prerequisites
 # ─────────────
-#   1. Emscripten SDK installed and activated:
+#   1. Emscripten SDK installed and activated at the version pinned in
+#      .emsdk-version (CI installs exactly that one):
+#        ./emsdk install "$(cat .emsdk-version)" && ./emsdk activate "$(cat .emsdk-version)"
 #        source /path/to/emsdk/emsdk_env.sh
-#   2. CMake ≥ 3.20 in PATH.
+#      A different emcc only warns locally; with CI=true it fails.
+#   2. CMake ≥ 3.25 in PATH.
 #
 # Usage
 # ─────
@@ -106,13 +109,33 @@ done
 # ---------------------------------------------------------------------------
 # Check Emscripten
 # ---------------------------------------------------------------------------
+IN_CI=0
+if [[ "${CI:-}" == "true" || "${CI:-}" == "1" ]]; then
+  IN_CI=1
+fi
+
 if ! command -v emcmake &>/dev/null; then
+  if [[ "${IN_CI}" -eq 1 ]]; then
+    echo "[build-wasm] Emscripten (emcmake) not found and CI=true — failing." >&2
+    exit 1
+  fi
   echo "[build:wasm] Emscripten not found — skipping WASM compile (source emsdk_env.sh first)."
   exit 0
 fi
 
 EMSCRIPTEN_VERSION=$(emcc --version 2>&1 | head -1)
 echo "[build-wasm] Using: ${EMSCRIPTEN_VERSION}"
+
+PINNED_EMSDK="$(tr -d '[:space:]' < "${REPO_ROOT}/.emsdk-version" 2>/dev/null || true)"
+ACTUAL_EMSDK="$(sed -nE 's/.*\) ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' <<< "${EMSCRIPTEN_VERSION}")"
+if [[ -n "${PINNED_EMSDK}" && "${ACTUAL_EMSDK}" != "${PINNED_EMSDK}" ]]; then
+  MSG="[build-wasm] emcc ${ACTUAL_EMSDK:-unknown} != pinned ${PINNED_EMSDK} (.emsdk-version) — codegen and parity are only checked on the pin"
+  if [[ "${IN_CI}" -eq 1 ]]; then
+    echo "${MSG}" >&2
+    exit 1
+  fi
+  echo "WARNING: ${MSG}" >&2
+fi
 
 JOBS="$(nproc 2>/dev/null || echo 4)"
 
@@ -132,7 +155,6 @@ configure_and_build() {
 
   mkdir -p "${build_dir}"
   echo "[build-wasm] Configuring (${build_type}, SIMD=${simd}, LTO=${lto}) → ${build_dir}"
-  echo "[build-wasm] ENVIRONMENT=web,worker,node INITIAL_MEMORY=16777216 (see npm run print:wasm-flags)"
   emcmake cmake \
     -S "${NATIVE_DIR}" \
     -B "${build_dir}" \

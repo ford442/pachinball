@@ -156,16 +156,22 @@ public/wasm/                     Generated at build time (git-ignored)
 
 ### Prerequisites
 
+The Emscripten SDK is **pinned** in [`.emsdk-version`](../.emsdk-version)
+(currently 6.0.10). CI installs exactly that version; `build-wasm.sh` warns
+locally on any other `emcc` and fails under `CI=true`, because parity and the
+bench numbers are only verified on the pin. Bumping it is a reviewed change
+that re-runs `test:wasm-parity` and `bench:wasm-flags`.
+
 ```bash
-# Install and activate Emscripten SDK (one-time)
+# Install and activate the pinned Emscripten SDK (one-time, and after a pin bump)
 git clone https://github.com/emscripten-core/emsdk.git
 cd emsdk
-./emsdk install latest
-./emsdk activate latest
+./emsdk install "$(cat ../pachinball/.emsdk-version)"
+./emsdk activate "$(cat ../pachinball/.emsdk-version)"
 source ./emsdk_env.sh   # add to ~/.bashrc or ~/.zshrc
 ```
 
-CMake ≥ 3.20 must also be in `PATH`.
+CMake ≥ 3.25 must also be in `PATH`.
 
 ### Release build (production path)
 
@@ -241,7 +247,7 @@ Configured in [`native/CMakeLists.txt`](../native/CMakeLists.txt). Every
 | `-sEXPORT_ES6=1` | ES module import from Vite / dynamic `import()` |
 | `-sMODULARIZE=1` | Factory `await PhysicsModule()` |
 | `-sEXPORT_NAME=PhysicsModule` | Name expected by `src/wasm/PhysicsModule.ts` |
-| `--bind` | Embind surface in `bindings.cpp` |
+| `-lembind` | Embind surface in `bindings.cpp` (the explicit library form of the old `--bind` alias) |
 | `-sENVIRONMENT=web,worker,node` | Browser + Worker (#361) + Node parity harness (`run-wasm-parity.mjs`). |
 | `-sFILESYSTEM=0` | No FS APIs in the physics module — smaller JS glue |
 | `-sALLOW_MEMORY_GROWTH=1` | Heap grows for large ball swarms |
