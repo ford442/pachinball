@@ -30,6 +30,7 @@ import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
 import type { DebugStageKey } from './game/checkpoint-debug'
 import { GameDelegates } from './game/game-delegates'
 import { installSimClock } from './core/sim-clock'
+import { bootWarn } from './boot-log'
 
 export class Game
   extends GameDelegates
@@ -376,7 +377,8 @@ export class Game
       return true
     } catch (error) {
       if (optional) {
-        console.warn(`[Game] Optional stage "${stage}" failed; continuing`, error)
+        // Swallowed on purpose, so it must reach the prod console (console.* is stripped there).
+        bootWarn(`[Game] Optional stage "${stage}" failed`, error)
         return false
       }
       throw error
