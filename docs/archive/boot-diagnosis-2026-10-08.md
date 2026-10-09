@@ -49,6 +49,7 @@ code that `main` no longer contains. Rule that out first.
      preload` if it failed before the Game existed). `#start-btn` reads **Load failed** and its
      tooltip is the same message. The console has `Failed to bootstrap game` plus the error and
      stack (these reach the production console through `src/boot-log.ts`).
+   - If the `Stage:` line is blank, the lazy chunk could not be fetched (check Network for `boot-error-*.js`); the message and the console error are still correct.
    - *Still loading…* — nothing threw, but Start was still disabled 30 s after the page began
      loading. The `Stage:` line lists the stage(s) still `loading`. The console has
      `[Bootstrap] Start still disabled after 30s; loading: …`.
@@ -151,5 +152,5 @@ at 209.80):
 `console.warn` + 9 `console.error` call sites costs about +2.1 KB more. That cannot fit without
 raising the budget or editing files outside this task's boundaries, so the owner chose to keep
 `drop` and route only boot-critical diagnostics through `src/boot-log.ts`
-(`globalThis.console.*`, which the strip does not match), with the banner lazy-loaded.
+(`globalThis.console.*`, which the strip does not match). The failure banner itself is revealed from static markup in the entry chunk, so it shows even if a lazy chunk cannot be fetched; only the stall watchdog and the `Stage:` line come from a lazy chunk (if that chunk is blocked, the `Stage:` line is blank and the console says `Boot error chunk unavailable`).
 Everything else stays silent in production, as before.
