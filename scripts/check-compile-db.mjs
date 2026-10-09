@@ -42,6 +42,9 @@ for (const entry of entries) {
   if (file.startsWith('native/src/') || file.startsWith('native/tests/')) {
     projectEntries.set(file, entry)
   }
+  if (/(^|\/)unity_\d+_cxx\.cxx$/.test(file)) {
+    errors.push(`${file}: unity batch in the database — configure compile-db with -DPACHINBALL_UNITY_BUILD=OFF`)
+  }
 }
 
 const cachePath = join(root, 'native/build-native/CMakeCache.txt')

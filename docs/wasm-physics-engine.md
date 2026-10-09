@@ -92,6 +92,7 @@ native/
 │   ├── PhysicsWorldStep.cpp     step() / substep(): integration, broadphase, solver loop, transform scatter
 │   ├── Snapshot.h / .cpp        serialize() / restore(): versioned LE world snapshot + static hash (#422)
 │   ├── SnapshotCodec.cpp        Little-endian word writer / reader + FNV-1a hasher for snapshots
+│   ├── SolverConstants.h        Constants shared across resolver TUs (one definition — unity-build safe)
 │   └── bindings.cpp             EMSCRIPTEN_BINDINGS (Embind) — Emscripten only
 └── tests/                       Catch2 (native build only)
     ├── physics_world_test.cpp   Integration, contacts, broadphase, sleep, benchmark
@@ -1205,6 +1206,8 @@ the first configure unless an installed Catch2 3.x is found
 |----------------------------|---------|--------|
 | `PACHINBALL_BUILD_TESTS` | `ON` | `OFF` skips Catch2 entirely — no network on configure (`npm run compile-db -- -DPACHINBALL_BUILD_TESTS=OFF` works offline; `check:compile-db` then skips the `native/tests` TUs with a warning) |
 | `PACHINBALL_SANITIZE` | `OFF` | `-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer` on the library and the tests |
+| `PACHINBALL_UNITY_BUILD` | `OFF` | Unity-builds `pachinball_physics_native` (library only — the test files each define their own helpers). `compile-db` forces it `OFF`; `check:compile-db` rejects `unity_*.cxx` entries. Keep file-scope constants unique per TU or in `SolverConstants.h` |
+| `PACHINBALL_CCACHE` | `OFF` | Uses `ccache` as `CMAKE_CXX_COMPILER_LAUNCHER` when found (both trees); warns and builds without it otherwise |
 
 ```bash
 npm run test:native:san   # native/build-san, PACHINBALL_SANITIZE=ON, ASan + UBSan, any report fails
@@ -1237,8 +1240,19 @@ clangd indexes `native/src/**` without a symlink. Run `compile-db` once after cl
 so the database exists, and again after adding a `.cpp`.
 
 `npm run check:compile-db` verifies the database: every `native/src` and
-`native/tests` TU present, exactly one `-O` level per TU, no `em++` entries, and
-no stray `compile_commands.json` at the repo root or `native/`.
+`native/tests` TU present, exactly one `-O` level per TU, no `em++` entries, no
+unity batches, and no stray `compile_commands.json` at the repo root or `native/`.
+
+`bindings.cpp` is Emscripten-only, so it is not in that database. Every
+`npm run build:wasm*` writes a machine-specific `native/src/.clangd`
+(gitignored, absolute paths from `em-config CACHE`). Its `If: PathMatch:
+bindings\.cpp` block adds `--target=wasm32-unknown-emscripten`, the SDK sysroot
+and `include/compat`, and clangd merges it with the root `.clangd`. A committed
+config cannot expand `$EMSDK`. Check it with the SDK's own clangd:
+
+```bash
+$EMSDK/upstream/bin/clangd --check=native/src/bindings.cpp   # "All checks completed, 0 errors"
+```
 
 ---
 

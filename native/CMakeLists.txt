@@ -20,6 +20,19 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Opt-in rebuild speed-up for both trees. Set before any target exists — the
+# launcher is captured at target creation. Not part of compile_commands.json.
+option(PACHINBALL_CCACHE "Compile through ccache when it is installed" OFF)
+if(PACHINBALL_CCACHE)
+  find_program(PACHINBALL_CCACHE_PROGRAM ccache)
+  if(PACHINBALL_CCACHE_PROGRAM)
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${PACHINBALL_CCACHE_PROGRAM}")
+    message(STATUS "PACHINBALL ccache: ${PACHINBALL_CCACHE_PROGRAM}")
+  else()
+    message(WARNING "PACHINBALL_CCACHE=ON but ccache was not found — building without it")
+  endif()
+endif()
+
 # ---------------------------------------------------------------------------
 # Shared compile policy — linked PRIVATE into every target that compiles
 # project sources (native library, Catch2 tests, PhysicsModule), so
@@ -175,6 +188,10 @@ if(NOT EMSCRIPTEN)
   # ASan + UBSan on the library and the tests; any report fails the run.
   # `npm run test:native:san` configures native/build-san with this ON.
   option(PACHINBALL_SANITIZE "Build with -fsanitize=address,undefined (no recovery)" OFF)
+  # Faster clean builds of the library (one TU per batch). Library only — the
+  # test files each define their own helpers. compile-db forces it OFF: clangd
+  # needs one entry per source file, not unity_*.cxx batches.
+  option(PACHINBALL_UNITY_BUILD "Unity-build pachinball_physics_native (not the tests)" OFF)
 
   # Single-config generators leave CMAKE_BUILD_TYPE empty, which means no
   # CMAKE_CXX_FLAGS_<CONFIG> at all — no -O, no -g, and a compile_commands.json that
@@ -201,6 +218,7 @@ if(NOT EMSCRIPTEN)
   endif()
 
   add_library(pachinball_physics_native STATIC ${PHYSICS_CORE_SOURCES})
+  set_target_properties(pachinball_physics_native PROPERTIES UNITY_BUILD ${PACHINBALL_UNITY_BUILD})
   target_include_directories(pachinball_physics_native PUBLIC src)
   target_link_libraries(pachinball_physics_native
     PRIVATE pachinball_warnings pachinball_fp
