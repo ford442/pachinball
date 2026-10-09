@@ -9,9 +9,6 @@
  * down; a real Worker adds one).
  */
 
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { expect, vi } from 'vitest'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { EventBus } from '../../src/core/event-bus'
@@ -33,18 +30,15 @@ import { WasmTableWorld } from '../../src/wasm/wasm-table-world'
 import type { WasmBody } from '../../src/wasm/wasm-body'
 import type { WasmPhysicsModule } from '../../src/wasm/wasm-types'
 import { makeBallManagerStub, makeGameObjectsStub, makePhysicsHostShell } from './make-physics-host'
+import { loadWasmTestModule, runWasmParity } from './wasm-bundle'
 
-const bundle = resolve(__dirname, '..', '..', process.env.WASM_MODULE_PATH ?? 'public/wasm/PhysicsModule.js')
-export const RUN = process.env.RUN_WASM_PARITY === '1' && existsSync(bundle)
+export const RUN = runWasmParity
 
 export const WARMUP_FRAMES = 48
 export const RECORD_FRAMES = 240
 
-export async function loadModule(): Promise<WasmPhysicsModule> {
-  const { default: factory } = await import(/* @vite-ignore */ pathToFileURL(bundle).href) as {
-    default: () => Promise<WasmPhysicsModule>
-  }
-  return factory()
+export function loadModule(): Promise<WasmPhysicsModule> {
+  return loadWasmTestModule()
 }
 
 /**

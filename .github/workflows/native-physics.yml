@@ -156,6 +156,11 @@ jobs:
           test ! -e public/wasm/PhysicsModule.wasm.map
           test ! -e public/wasm/PhysicsModule.js.map
           echo "WASM size: $(wc -c < public/wasm/PhysicsModule.wasm) bytes"
+          # The shipped glue is ENVIRONMENT=web,worker: no Node shims.
+          if grep -Eq 'process\.|node:' public/wasm/PhysicsModule.js; then
+            echo "public/wasm/PhysicsModule.js carries Node shims (ENVIRONMENT must be web,worker)"
+            exit 1
+          fi
           # The production default must be a C++ engine mode (wasm-owner or
           # wasm-worker), never rapier. Anchored on the key so
           # `nonIsolatedDefaultEngine` cannot satisfy it.

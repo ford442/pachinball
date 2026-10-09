@@ -3,31 +3,22 @@
  * C++ field agree on the table's actual pins, through the in-process
  * `WasmPhysicsEngine` heap upload the owner uses.
  *
- * Gated like tests/wasm-physics-parity.test.ts:
+ * Gated like tests/wasm-physics-parity.test.ts (bundle: tests/helpers/wasm-bundle.ts):
  *   npm run build:wasm:assert
- *   RUN_WASM_PARITY=1 WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npx vitest run tests/pin-field-wasm.test.ts
+ *   RUN_WASM_PARITY=1 npx vitest run tests/pin-field-wasm.test.ts
  */
 
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { WasmPhysicsEngine } from '../src/wasm/PhysicsModule'
 import { decodeContactBuffer } from '../src/wasm/contact-buffer'
-import type { WasmPhysicsModule } from '../src/wasm/wasm-types'
 import { resolvePinField } from '../src/core/pin-field'
 import { pachinkoPinFieldSpec } from '../src/objects/pachinko-pin-field'
 import { generateTableLayout } from '../src/cascade/daily-cascade-layout'
-
-const bundle = resolve(__dirname, '..', process.env.WASM_MODULE_PATH ?? 'public/wasm/PhysicsModule.js')
-const RUN = process.env.RUN_WASM_PARITY === '1' && existsSync(bundle)
+import { loadWasmTestModule, runWasmParity as RUN } from './helpers/wasm-bundle'
 
 async function loadEngine(): Promise<WasmPhysicsEngine> {
-  const { default: factory } = await import(/* @vite-ignore */ pathToFileURL(bundle).href) as {
-    default: () => Promise<WasmPhysicsModule>
-  }
   const engine = new WasmPhysicsEngine()
-  await engine.load(undefined, await factory())
+  await engine.load(undefined, await loadWasmTestModule())
   expect(engine.isReady).toBe(true)
   return engine
 }

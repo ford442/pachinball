@@ -201,11 +201,16 @@ npm run build:wasm:assert
 # Equivalent: bash scripts/build-wasm.sh --assert
 ```
 
-`-O3` + `ASSERTIONS=1` → `native/build-assert/` (does **not** overwrite
-`public/wasm/` unless `WASM_INSTALL_ASSERT=1`).
+`-O3` + `ASSERTIONS=1` + `ENVIRONMENT=web,worker,node` → `native/build-assert/`
+(does **not** overwrite `public/wasm/` unless `WASM_INSTALL_ASSERT=1`). This is
+the bundle everything Node-side loads: `test:wasm-parity` (which builds it when
+missing) and the `RUN_WASM_PARITY` vitest suites via `tests/helpers/wasm-bundle.ts`.
+The shipped `public/wasm/` bundle is `web,worker` only and cannot be
+instantiated from Node. `WASM_MODULE_PATH` (repo-relative) overrides the path.
 
 ```bash
-WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npm run test:wasm-parity
+npm run test:wasm-parity
+RUN_WASM_PARITY=1 npx vitest run tests/replay-snapshot-wasm.test.ts
 ```
 
 ### SIMD / LTO (default ON)
@@ -219,7 +224,7 @@ Print the CMake source-of-truth line (also logged on the `wasm_parity` CI job):
 
 ```bash
 npm run print:wasm-flags
-# [wasm-flags] SIMD=ON LTO=ON ENV=web,worker,node INITIAL_MEMORY=16777216
+# [wasm-flags] SIMD=ON LTO=ON ENV=web,worker INITIAL_MEMORY=16777216 MAXIMUM_MEMORY=268435456 STACK_SIZE=262144
 ```
 
 ### Flag matrix microbench build
@@ -247,11 +252,16 @@ Configured in [`native/CMakeLists.txt`](../native/CMakeLists.txt). Every
 | `-sEXPORT_ES6=1` | ES module import from Vite / dynamic `import()` |
 | `-sMODULARIZE=1` | Factory `await PhysicsModule()` |
 | `-sEXPORT_NAME=PhysicsModule` | Name expected by `src/wasm/PhysicsModule.ts` |
+| `-sSTRICT=1` | No deprecated settings and no implicit system libraries — everything the module links is spelled out (`-lembind`, `--no-entry`) |
+| `--no-entry` | Library module: no `main()` (required under `STRICT`) |
 | `-lembind` | Embind surface in `bindings.cpp` (the explicit library form of the old `--bind` alias) |
-| `-sENVIRONMENT=web,worker,node` | Browser + Worker (#361) + Node parity harness (`run-wasm-parity.mjs`). |
+| `-sENVIRONMENT=web,worker` | Cache variable `PACHINBALL_WASM_ENVIRONMENT`. The shipped bundle runs on the main thread and in the wasm-worker Dedicated Worker (#361) and carries **no Node shims**. `build-wasm.sh --assert` / `--bench-matrix` pass `web,worker,node` because parity, the `RUN_WASM_PARITY` vitest suites and the bench load those artefacts from Node (`tests/helpers/wasm-bundle.ts`). |
+| `-sINCOMING_MODULE_JS_API=[]` | Every caller invokes the factory with no options (the `.wasm` is located via `import.meta.url`), so the glue reads no `Module.*` overrides |
 | `-sFILESYSTEM=0` | No FS APIs in the physics module — smaller JS glue |
 | `-sALLOW_MEMORY_GROWTH=1` | Heap grows for large ball swarms |
 | `-sINITIAL_MEMORY=16777216` | 16 MB initial heap (`emmalloc`; grows if needed) |
+| `-sMAXIMUM_MEMORY=268435456` | Growth stops at 256 MiB: a runaway allocation fails loudly instead of eating the tab (a full table is a few MiB) |
+| `-sSTACK_SIZE=262144` | 256 KiB stack — the solver never recurses; 4× the 64 KiB default as headroom |
 | `-sEXPORTED_RUNTIME_METHODS=["HEAPF32","HEAPU32"]` | `HEAPF32` for packed contact/transform buffer views and mesh vertices; `HEAPU32` for mesh indices — no `addFunction` / UTF8 helpers |
 | `-sEXPORTED_FUNCTIONS=["_malloc","_free"]` | `addStaticTriangleMesh` takes heap pointers, so JS allocates + frees the triangle soup around the call |
 | `-sMALLOC=emmalloc` | Smaller allocator after setup |

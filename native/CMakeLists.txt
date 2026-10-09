@@ -72,10 +72,19 @@ if(EMSCRIPTEN)
   option(PACHINBALL_WASM_SIMD "Enable WASM SIMD auto-vectorization (-msimd128)" ON)
   option(PACHINBALL_WASM_LTO  "Enable link-time optimization (-flto)" ON)
 
-  # web + worker: #361 can instantiate PhysicsModule.js on a Worker.
-  # node: scripts/run-wasm-parity.mjs. Do not drop node.
-  set(PACHINBALL_WASM_ENVIRONMENT "web,worker,node")
+  # web + worker: the shipped bundle (main thread, and the wasm-worker
+  # Dedicated Worker, #361). Node shims stay out of it. Bundles loaded from
+  # Node (run-wasm-parity.mjs, the RUN_WASM_PARITY vitest suites, the bench)
+  # are built with "web,worker,node" — build-wasm.sh passes that for --assert
+  # and --bench-matrix, and always passes the value explicitly so a stale
+  # cache cannot leak one into the other.
+  set(PACHINBALL_WASM_ENVIRONMENT "web,worker" CACHE STRING "Emscripten -sENVIRONMENT for PhysicsModule")
   set(PACHINBALL_WASM_INITIAL_MEMORY 16777216)
+  # Growth stops at 256 MiB: a runaway allocation fails loudly instead of
+  # eating the tab (a full table is a few MiB).
+  set(PACHINBALL_WASM_MAXIMUM_MEMORY 268435456)
+  # The solver never recurses; 256 KiB is 4× the 64 KiB default as headroom.
+  set(PACHINBALL_WASM_STACK_SIZE 262144)
 
   message(STATUS "PACHINBALL WASM SIMD=${PACHINBALL_WASM_SIMD} LTO=${PACHINBALL_WASM_LTO} ENV=${PACHINBALL_WASM_ENVIRONMENT} INITIAL_MEMORY=${PACHINBALL_WASM_INITIAL_MEMORY}")
 
@@ -93,14 +102,23 @@ if(EMSCRIPTEN)
   )
 
   target_link_options(PhysicsModule PRIVATE
+    # STRICT drops deprecated settings and implicit libraries, so everything
+    # the module needs is spelled out below (-lembind, --no-entry).
+    "-sSTRICT=1"
+    "--no-entry"
     "-sEXPORT_ES6=1"
     "-sMODULARIZE=1"
     "-sEXPORT_NAME=PhysicsModule"
     "-lembind"
     "-sENVIRONMENT=${PACHINBALL_WASM_ENVIRONMENT}"
+    # Every caller invokes the factory with no options (the .wasm is found
+    # via import.meta.url), so the glue reads no Module.* overrides.
+    "-sINCOMING_MODULE_JS_API=[]"
     "-sFILESYSTEM=0"
     "-sALLOW_MEMORY_GROWTH=1"
     "-sINITIAL_MEMORY=${PACHINBALL_WASM_INITIAL_MEMORY}"
+    "-sMAXIMUM_MEMORY=${PACHINBALL_WASM_MAXIMUM_MEMORY}"
+    "-sSTACK_SIZE=${PACHINBALL_WASM_STACK_SIZE}"
     "-sMALLOC=emmalloc"
     "-sEXPORTED_RUNTIME_METHODS=[\"HEAPF32\",\"HEAPU32\"]"
     # Triangle soup is uploaded through the heap (addStaticTriangleMesh takes

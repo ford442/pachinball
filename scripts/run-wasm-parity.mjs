@@ -11,18 +11,28 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import path from 'node:path'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-// Override for RelWithAsserts / bench artefacts, e.g.:
-//   WASM_MODULE_PATH=native/build-assert/PhysicsModule.js node scripts/run-wasm-parity.mjs
-const wasmModulePath = process.env.WASM_MODULE_PATH
-  ? path.resolve(root, process.env.WASM_MODULE_PATH)
-  : path.join(root, 'public/wasm/PhysicsModule.js')
+// Node needs a bundle built with ENVIRONMENT=...,node. The shipped one in
+// public/wasm/ is web,worker only (#442), so the default is the
+// RelWithAsserts artefact (`npm run build:wasm:assert`), built here when
+// missing. Override for bench artefacts, e.g.:
+//   WASM_MODULE_PATH=native/build-bench/simd-lto/PhysicsModule.js node scripts/run-wasm-parity.mjs
+const defaultModule = 'native/build-assert/PhysicsModule.js'
+const wasmModulePath = path.resolve(root, process.env.WASM_MODULE_PATH ?? defaultModule)
 const wasmModuleUrl = pathToFileURL(wasmModulePath).href
 const buildNativeDir = path.join(root, 'native/build-native')
 const nativeTest = path.join(buildNativeDir, 'physics_world_test')
 
+if (!existsSync(wasmModulePath) && !process.env.WASM_MODULE_PATH) {
+  console.log(`WASM module missing — building via npm run build:wasm:assert`)
+  try {
+    execSync('npm run build:wasm:assert', { cwd: root, stdio: 'inherit' })
+  } catch {
+    // Reported below.
+  }
+}
 if (!existsSync(wasmModulePath)) {
   console.error(`WASM module missing: ${wasmModulePath}`)
-  console.error('Build with: npm run build:wasm  (or npm run build:wasm:assert)')
+  console.error('Build with: npm run build:wasm:assert (needs the Emscripten SDK in .emsdk-version)')
   process.exit(1)
 }
 console.log(`Using WASM module: ${wasmModulePath}`)

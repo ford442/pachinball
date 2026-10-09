@@ -14,9 +14,10 @@
 #
 # Usage
 # ─────
-#   ./scripts/build-wasm.sh              # Release → public/wasm/ (production)
-#   ./scripts/build-wasm.sh --debug      # Debug (+ source maps)
-#   ./scripts/build-wasm.sh --assert     # RelWithAsserts → native/build-assert/
+#   ./scripts/build-wasm.sh              # Release → public/wasm/ (production, ENV=web,worker)
+#   ./scripts/build-wasm.sh --debug      # Debug (+ source maps, ENV=web,worker)
+#   ./scripts/build-wasm.sh --assert     # RelWithAsserts → native/build-assert/ (ENV=web,worker,node:
+#                                        #   the bundle parity / RUN_WASM_PARITY tests load from Node)
 #   ./scripts/build-wasm.sh --clean      # delete active build dir then rebuild
 #   ./scripts/build-wasm.sh --bench-matrix  # A/B/C flag combos → native/build-bench/
 #   ./scripts/build-wasm.sh --simd       # enable -msimd128
@@ -59,6 +60,11 @@ DO_CLEAN=0
 DO_BENCH_MATRIX=0
 WASM_SIMD="${PACHINBALL_WASM_SIMD:-ON}"
 WASM_LTO="${PACHINBALL_WASM_LTO:-ON}"
+# -sENVIRONMENT: the shipped bundle never carries Node shims; the assert and
+# bench artefacts are loaded from Node, so they do.
+WEB_WASM_ENV="web,worker"
+NODE_WASM_ENV="web,worker,node"
+WASM_ENV="${WEB_WASM_ENV}"
 
 # ---------------------------------------------------------------------------
 # Parse args
@@ -73,6 +79,7 @@ for arg in "$@"; do
     --assert)
       BUILD_TYPE="RelWithAsserts"
       BUILD_DIR="${NATIVE_DIR}/build-assert"
+      WASM_ENV="${NODE_WASM_ENV}"
       # Do not overwrite production public/wasm unless explicitly requested
       if [[ "${WASM_INSTALL_ASSERT:-0}" == "1" ]]; then
         INSTALL_TO_PUBLIC=1
@@ -142,11 +149,15 @@ JOBS="$(nproc 2>/dev/null || echo 4)"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+# Always passed explicitly (it is a CMake cache variable): the shipped bundle
+# is web,worker only; anything Node loads — parity, the RUN_WASM_PARITY vitest
+# suites, the bench — is built with node as well.
 configure_and_build() {
   local build_dir="$1"
   local build_type="$2"
   local simd="$3"
   local lto="$4"
+  local environment="$5"
 
   if [[ "${DO_CLEAN}" -eq 1 ]]; then
     rm -rf "${build_dir}"
@@ -154,13 +165,14 @@ configure_and_build() {
   fi
 
   mkdir -p "${build_dir}"
-  echo "[build-wasm] Configuring (${build_type}, SIMD=${simd}, LTO=${lto}) → ${build_dir}"
+  echo "[build-wasm] Configuring (${build_type}, SIMD=${simd}, LTO=${lto}, ENV=${environment}) → ${build_dir}"
   emcmake cmake \
     -S "${NATIVE_DIR}" \
     -B "${build_dir}" \
     -DCMAKE_BUILD_TYPE="${build_type}" \
     -DPACHINBALL_WASM_SIMD="${simd}" \
-    -DPACHINBALL_WASM_LTO="${lto}"
+    -DPACHINBALL_WASM_LTO="${lto}" \
+    -DPACHINBALL_WASM_ENVIRONMENT="${environment}"
 
   echo "[build-wasm] Building..."
   cmake --build "${build_dir}" --config "${build_type}" -- -j"${JOBS}"
@@ -206,15 +218,15 @@ if [[ "${DO_BENCH_MATRIX}" -eq 1 ]]; then
   echo "[build-wasm] Building flag matrix into ${BENCH_ROOT}"
 
   # A — Release baseline (always-on size/env flags from CMakeLists)
-  configure_and_build "${BENCH_ROOT}/baseline" "Release" "OFF" "OFF"
+  configure_and_build "${BENCH_ROOT}/baseline" "Release" "OFF" "OFF" "${NODE_WASM_ENV}"
   install_artefacts "${BENCH_ROOT}/baseline" "${BENCH_ROOT}/baseline" 0
 
   # B — +SIMD
-  configure_and_build "${BENCH_ROOT}/simd" "Release" "ON" "OFF"
+  configure_and_build "${BENCH_ROOT}/simd" "Release" "ON" "OFF" "${NODE_WASM_ENV}"
   install_artefacts "${BENCH_ROOT}/simd" "${BENCH_ROOT}/simd" 0
 
   # C — +SIMD+LTO
-  configure_and_build "${BENCH_ROOT}/simd-lto" "Release" "ON" "ON"
+  configure_and_build "${BENCH_ROOT}/simd-lto" "Release" "ON" "ON" "${NODE_WASM_ENV}"
   install_artefacts "${BENCH_ROOT}/simd-lto" "${BENCH_ROOT}/simd-lto" 0
 
   echo ""
@@ -226,8 +238,8 @@ fi
 # ---------------------------------------------------------------------------
 # Single-config build
 # ---------------------------------------------------------------------------
-echo "[build-wasm] Build type: ${BUILD_TYPE} (SIMD=${WASM_SIMD}, LTO=${WASM_LTO})"
-configure_and_build "${BUILD_DIR}" "${BUILD_TYPE}" "${WASM_SIMD}" "${WASM_LTO}"
+echo "[build-wasm] Build type: ${BUILD_TYPE} (SIMD=${WASM_SIMD}, LTO=${WASM_LTO}, ENV=${WASM_ENV})"
+configure_and_build "${BUILD_DIR}" "${BUILD_TYPE}" "${WASM_SIMD}" "${WASM_LTO}" "${WASM_ENV}"
 
 COPY_MAPS=0
 if [[ "${BUILD_TYPE}" == "Debug" ]]; then
