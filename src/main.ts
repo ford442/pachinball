@@ -33,6 +33,10 @@ async function bootstrap(): Promise<void> {
 
   // Parallelize engine creation and physics WASM loading
   // This reduces total load time by overlapping network fetch (WASM) with GPU initialization
+  // Tab-visibility handling is only needed once the game runs; its own chunk keeps it out of the
+  // entry (size budget) but is fetched now, in parallel, rather than after the render loop starts.
+  const visibilityModule = import('./engine/visibility-manager')
+  visibilityModule.catch(() => undefined) // a failure surfaces at the await below, not as unhandled
   const loading = Promise.all([createEngine(canvas), preloadPhysicsSystem()])
   // The Game (and its timers) does not exist yet: this watchdog covers only the pre-Game phase.
   void loadBootError().then((m) => m.watchPreGame(loading))
@@ -53,9 +57,9 @@ async function bootstrap(): Promise<void> {
   await game.init()
   console.info(formatGpuProbeSummary())
 
-  // Tab-visibility handling is only needed once the game runs; its own chunk keeps it out of the
-  // entry (size budget). dispose() can land while the chunk loads, so re-check the signal.
-  const { VisibilityManager } = await import('./engine/visibility-manager')
+  // Settled long ago (started with the engine): awaiting a *fresh* import here would queue behind
+  // the running render loop. dispose() can land meanwhile, so re-check the signal.
+  const { VisibilityManager } = await visibilityModule
   if (game.signal.aborted) return
   const visibilityManager = new VisibilityManager({
     engine,
