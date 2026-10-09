@@ -1153,9 +1153,19 @@ executable for unit-testing the C++ logic directly:
 npm run test:native
 ```
 
-Prerequisites: CMake ≥ 3.20 and a C++17 compiler (g++ or clang). No
-Emscripten required. Catch2 v3.7.1 is downloaded automatically on first
-`cmake` configure.
+Prerequisites: CMake ≥ 3.25 and a C++17 compiler (g++ or clang). No
+Emscripten required. Catch2 v3.7.1 (pinned to its commit SHA) is fetched on
+the first configure unless an installed Catch2 3.x is found
+(`FIND_PACKAGE_ARGS 3`).
+
+| CMake option (native tree) | Default | Effect |
+|----------------------------|---------|--------|
+| `PACHINBALL_BUILD_TESTS` | `ON` | `OFF` skips Catch2 entirely — no network on configure (`npm run compile-db -- -DPACHINBALL_BUILD_TESTS=OFF` works offline; `check:compile-db` then skips the `native/tests` TUs with a warning) |
+| `PACHINBALL_SANITIZE` | `OFF` | `-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer` on the library and the tests |
+
+```bash
+npm run test:native:san   # native/build-san, PACHINBALL_SANITIZE=ON, ASan + UBSan, any report fails
+```
 
 This lets you iterate on solver logic with fast compile times using your
 native compiler before re-running the full Emscripten build.
@@ -1196,7 +1206,7 @@ The GitHub Actions workflow (`.github/workflows/native-physics.yml`) runs on cha
 | Job | Status | Tools | What it checks |
 |-----|--------|-------|----------------|
 | `native_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native` (Catch2), `check:compile-db`, `check:wasm-docs` |
-| `sanitizer_ctest` | **BLOCKING** | cmake, g++ | ASan/UBSan Catch2 (`CMAKE_BUILD_TYPE=Debug`) |
+| `sanitizer_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native:san` — ASan/UBSan Catch2, no recovery (`CMAKE_BUILD_TYPE=Debug`) |
 | `wasm_parity` | **BLOCKING** | emsdk | `print:wasm-flags` then Release + RelWithAsserts + `test:wasm-parity` |
 
 `native_ctest` runs in ~15 seconds without requiring Emscripten and gates PRs against C++ logic regressions. Additionally, `tests/embind-surface.test.ts` asserts that TypeScript interface definitions (`src/wasm/wasm-types.ts`) match the exported Embind surface (`native/src/bindings.cpp`), and `tests/wasm-worker-api-parity.test.ts` (Vitest, no WASM) fails when a mutating Embind function is not wrapped on `WasmPhysicsEngine`, or a mutating engine method has no `PhysicsWorkerCommand` and is not on its tracked-gap list.

@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.20)
+# 3.25: FetchContent SYSTEM + FIND_PACKAGE_ARGS (Catch2 below).
+cmake_minimum_required(VERSION 3.25)
 project(pachinball_physics LANGUAGES CXX)
 
 # CMAKE_BUILD_TYPE (single-config generators) / configs:
@@ -138,6 +139,13 @@ endif()
 # compile_commands.json lands in native/build-native/ (see root .clangd).
 # ---------------------------------------------------------------------------
 if(NOT EMSCRIPTEN)
+  # OFF skips Catch2 entirely: no network on configure, so `npm run compile-db --
+  # -DPACHINBALL_BUILD_TESTS=OFF` works offline (the database then omits tests/).
+  option(PACHINBALL_BUILD_TESTS "Build the Catch2 test binary (fetches Catch2 unless installed)" ON)
+  # ASan + UBSan on the library and the tests; any report fails the run.
+  # `npm run test:native:san` configures native/build-san with this ON.
+  option(PACHINBALL_SANITIZE "Build with -fsanitize=address,undefined (no recovery)" OFF)
+
   # Single-config generators leave CMAKE_BUILD_TYPE empty, which means no
   # CMAKE_CXX_FLAGS_<CONFIG> at all — no -O, no -g, and a compile_commands.json that
   # matches nothing anybody debugs. Default to Debug; callers override explicitly.
@@ -152,22 +160,41 @@ if(NOT EMSCRIPTEN)
   if(NOT CMAKE_CXX_FLAGS_DEBUG MATCHES "(^| )-O")
     string(APPEND CMAKE_CXX_FLAGS_DEBUG " -O0")
   endif()
-  message(STATUS "PACHINBALL native: CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
+  message(STATUS "PACHINBALL native: CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} TESTS=${PACHINBALL_BUILD_TESTS} SANITIZE=${PACHINBALL_SANITIZE}")
+
+  add_library(pachinball_sanitize INTERFACE)
+  if(PACHINBALL_SANITIZE)
+    set(_pachinball_san_flags
+      -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer)
+    target_compile_options(pachinball_sanitize INTERFACE ${_pachinball_san_flags})
+    target_link_options(pachinball_sanitize INTERFACE ${_pachinball_san_flags})
+  endif()
 
   add_library(pachinball_physics_native STATIC ${PHYSICS_CORE_SOURCES})
   target_include_directories(pachinball_physics_native PUBLIC src)
-  target_link_libraries(pachinball_physics_native PRIVATE pachinball_warnings pachinball_fp)
+  target_link_libraries(pachinball_physics_native
+    PRIVATE pachinball_warnings pachinball_fp
+    PUBLIC  pachinball_sanitize
+  )
   # No -O here: CMAKE_CXX_FLAGS_<CONFIG> is the single source of the opt level.
   target_compile_options(pachinball_physics_native PRIVATE -fno-exceptions)
+
+  if(NOT PACHINBALL_BUILD_TESTS)
+    return()
+  endif()
 
   include(CTest)
   enable_testing()
 
+  # Pinned to the v3.7.1 commit (a tag can move; a SHA cannot). An installed
+  # Catch2 3.x is used instead when find_package finds one — no network then.
   include(FetchContent)
   FetchContent_Declare(
     Catch2
     GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG        v3.7.1
+    GIT_TAG        fa43b77429ba76c462b1898d6cd2f2d7a9416b14 # v3.7.1
+    SYSTEM
+    FIND_PACKAGE_ARGS 3
   )
   FetchContent_MakeAvailable(Catch2)
 
@@ -195,6 +222,12 @@ if(NOT EMSCRIPTEN)
     Catch2::Catch2WithMain
   )
 
-  include(Catch)
+  # A fetched Catch2 puts its extras/ on CMAKE_MODULE_PATH; an installed one
+  # ships Catch.cmake next to its package config instead.
+  if(Catch2_DIR AND EXISTS "${Catch2_DIR}/Catch.cmake")
+    include("${Catch2_DIR}/Catch.cmake")
+  else()
+    include(Catch)
+  endif()
   catch_discover_tests(physics_world_test)
 endif()
