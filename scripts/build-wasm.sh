@@ -158,6 +158,7 @@ configure_and_build() {
   local simd="$3"
   local lto="$4"
   local environment="$5"
+  local emit_tsd="${6:-OFF}"
 
   if [[ "${DO_CLEAN}" -eq 1 ]]; then
     rm -rf "${build_dir}"
@@ -165,14 +166,15 @@ configure_and_build() {
   fi
 
   mkdir -p "${build_dir}"
-  echo "[build-wasm] Configuring (${build_type}, SIMD=${simd}, LTO=${lto}, ENV=${environment}) → ${build_dir}"
+  echo "[build-wasm] Configuring (${build_type}, SIMD=${simd}, LTO=${lto}, ENV=${environment}, TSD=${emit_tsd}) → ${build_dir}"
   emcmake cmake \
     -S "${NATIVE_DIR}" \
     -B "${build_dir}" \
     -DCMAKE_BUILD_TYPE="${build_type}" \
     -DPACHINBALL_WASM_SIMD="${simd}" \
     -DPACHINBALL_WASM_LTO="${lto}" \
-    -DPACHINBALL_WASM_ENVIRONMENT="${environment}"
+    -DPACHINBALL_WASM_ENVIRONMENT="${environment}" \
+    -DPACHINBALL_WASM_EMIT_TSD="${emit_tsd}"
 
   echo "[build-wasm] Building..."
   cmake --build "${build_dir}" --config "${build_type}" -- -j"${JOBS}"
@@ -238,8 +240,34 @@ fi
 # ---------------------------------------------------------------------------
 # Single-config build
 # ---------------------------------------------------------------------------
+# The Release build also writes the Embind TypeScript declarations
+# (--emit-tsd needs tsc; the repo's node_modules has it after `npm ci`).
+# src/wasm/generated/PhysicsModule.d.ts is committed and CI fails on a diff,
+# so a bindings.cpp change ships with its types.
+GENERATED_DTS="${REPO_ROOT}/src/wasm/generated/PhysicsModule.d.ts"
+EMIT_TSD="OFF"
+if [[ "${BUILD_TYPE}" == "Release" ]]; then
+  if [[ -x "${REPO_ROOT}/node_modules/.bin/tsc" ]]; then
+    export PATH="${REPO_ROOT}/node_modules/.bin:${PATH}"
+  fi
+  if command -v tsc &>/dev/null; then
+    EMIT_TSD="ON"
+  elif [[ "${IN_CI}" -eq 1 ]]; then
+    echo "[build-wasm] tsc not found (run npm ci first) and CI=true — cannot emit ${GENERATED_DTS}" >&2
+    exit 1
+  else
+    echo "WARNING: [build-wasm] tsc not found (npm ci) — not refreshing ${GENERATED_DTS}" >&2
+  fi
+fi
+
 echo "[build-wasm] Build type: ${BUILD_TYPE} (SIMD=${WASM_SIMD}, LTO=${WASM_LTO}, ENV=${WASM_ENV})"
-configure_and_build "${BUILD_DIR}" "${BUILD_TYPE}" "${WASM_SIMD}" "${WASM_LTO}" "${WASM_ENV}"
+configure_and_build "${BUILD_DIR}" "${BUILD_TYPE}" "${WASM_SIMD}" "${WASM_LTO}" "${WASM_ENV}" "${EMIT_TSD}"
+
+if [[ "${EMIT_TSD}" == "ON" ]]; then
+  mkdir -p "$(dirname "${GENERATED_DTS}")"
+  cp "${BUILD_DIR}/PhysicsModule.d.ts" "${GENERATED_DTS}"
+  echo "[build-wasm] Embind declarations → ${GENERATED_DTS}"
+fi
 
 COPY_MAPS=0
 if [[ "${BUILD_TYPE}" == "Debug" ]]; then

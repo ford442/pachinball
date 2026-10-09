@@ -112,6 +112,8 @@ native/
 
 src/wasm/
 ├── wasm-types.ts                TypeScript interfaces matching the Embind API
+├── wasm-types-conformance.ts    Type-only: wasm-types.ts vs generated/PhysicsModule.d.ts (tsc -b fails on drift)
+├── generated/PhysicsModule.d.ts Emscripten --emit-tsd output for bindings.cpp (committed; CI diffs it)
 ├── PhysicsModule.ts             WasmPhysicsEngine: load, world, step, transform / contact buffers, snapshots
 ├── physics-module-bodies.ts     Plane / box / capsule statics, rigid bodies, hinges, transform-query fallbacks
 ├── physics-module-adventure.ts  Cylinder / sphere / cone / pin field / mesh / mover / sensor / box body / force field
@@ -300,12 +302,29 @@ its `compile_commands.json` carries exactly one. It is configured with an explic
 | **Debug** | `-O0 -g -gsource-map` | `ASSERTIONS=2` | yes (`.map` → `public/wasm/` only for `--debug`) |
 | **RelWithAsserts** | `-O3` | `ASSERTIONS=1` | none; artefact in `native/build-assert/` |
 
-### CMake options (default ON)
+### CMake options
 
-| Option | Flags | Notes |
-|--------|-------|-------|
-| `PACHINBALL_WASM_SIMD` | `-msimd128` (compile + link) | Auto-vectorize only; no hand `wasm_simd128` intrinsics |
-| `PACHINBALL_WASM_LTO` | `-flto` (compile + link) | Production default after 2026-08-14 bench |
+| Option | Default | Flags | Notes |
+|--------|---------|-------|-------|
+| `PACHINBALL_WASM_SIMD` | ON | `-msimd128` (compile + link) | Auto-vectorize only; no hand `wasm_simd128` intrinsics |
+| `PACHINBALL_WASM_LTO` | ON | `-flto` (compile + link) | Production default after 2026-08-14 bench |
+| `PACHINBALL_WASM_EMIT_TSD` | OFF (`build-wasm.sh` turns it on for Release) | `--emit-tsd <build>/PhysicsModule.d.ts` | Embind TypeScript declarations; needs `tsc` on `PATH` (the repo's after `npm ci`). Copied to `src/wasm/generated/PhysicsModule.d.ts`, which is committed — CI rebuilds and fails on a diff. Does not change `.js` / `.wasm` |
+
+### Generated declarations (`src/wasm/generated/`)
+
+`src/wasm/generated/PhysicsModule.d.ts` is Emscripten's own view of
+`bindings.cpp` (exact arities, `bigint` for the `uint64_t` returns, every enum
+member). Never edit it by hand: `npm run build:wasm` rewrites it, and CI fails
+if a `bindings.cpp` change lands without the regenerated file. Two checks keep
+the hand-written `wasm-types.ts` (which adds docs, optional members for older
+bundles, and engine-facing types) honest against it:
+
+- `src/wasm/wasm-types-conformance.ts` — type-only; `tsc -b` fails when a
+  binding is missing from `WasmPhysicsWorldInstance`, a declared member is no
+  longer bound, or arity / return type differ.
+- `tests/wasm-generated-types.test.ts` — pins `BodyType`, `Shape`,
+  `VolumeShape` and `ForceSpace` (and their `physics-module-adventure.ts`
+  mirrors) to the generated values.
 
 ### Embind migration (non-goal)
 

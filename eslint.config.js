@@ -9,7 +9,9 @@ export default defineConfig([
   // including Playwright's webServer. It is gitignored, but flat config does not
   // read .gitignore, so without this a local e2e run leaves generated workbox
   // bundles behind and `npm run lint` fails on them.
-  globalIgnores(['dist', 'dev-dist', 'native/build*', 'native/build/**']),
+  // src/wasm/generated is Emscripten's --emit-tsd output (embind `val` → any);
+  // `npm run build:wasm` regenerates it — never edit it by hand.
+  globalIgnores(['dist', 'dev-dist', 'native/build*', 'native/build/**', 'src/wasm/generated/**']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [js.configs.recommended, tseslint.configs.recommended],

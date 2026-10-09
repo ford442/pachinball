@@ -139,14 +139,30 @@ jobs:
       - name: Print effective WASM flags
         run: node scripts/print-wasm-flags.mjs
 
-      # CI=true makes build-wasm.sh fail on a missing emcmake or an emcc that
-      # differs from .emsdk-version.
+      # Before the build: --emit-tsd needs the repo's tsc.
+      - name: Install Node deps
+        run: npm ci
+
+      # CI=true makes build-wasm.sh fail on a missing emcmake or tsc, or an
+      # emcc that differs from .emsdk-version.
       - name: Build WASM module (Release — production path)
         env:
           CI: 'true'
         run: |
           source emsdk/emsdk_env.sh
           npm run build:wasm
+
+      - name: Generated Embind declarations are committed
+        run: |
+          if ! git diff --exit-code -- src/wasm/generated; then
+            echo "src/wasm/generated/PhysicsModule.d.ts is stale — run npm run build:wasm and commit it"
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain -- src/wasm/generated)" ]; then
+            git status --porcelain -- src/wasm/generated
+            echo "src/wasm/generated has uncommitted files — run npm run build:wasm and commit them"
+            exit 1
+          fi
 
       - name: Assert Release WASM artefact exists
         run: |
@@ -175,9 +191,6 @@ jobs:
           npm run build:wasm:assert
           test -s native/build-assert/PhysicsModule.wasm
           test -s native/build-assert/PhysicsModule.js
-
-      - name: Install Node deps for parity
-        run: npm ci
 
       - name: Install cmake/g++ for native reference
         run: sudo apt-get update && sudo apt-get install -y cmake g++

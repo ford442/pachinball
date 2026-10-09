@@ -71,6 +71,11 @@ if(EMSCRIPTEN)
   # SoA / broadphase vectorize under -msimd128; docs/WASM_BENCH_RESULTS.md justifies ON.
   option(PACHINBALL_WASM_SIMD "Enable WASM SIMD auto-vectorization (-msimd128)" ON)
   option(PACHINBALL_WASM_LTO  "Enable link-time optimization (-flto)" ON)
+  # Emscripten writes TypeScript declarations for the Embind surface. Needs
+  # `tsc` on PATH; build-wasm.sh turns it on for the Release build and copies
+  # the file to src/wasm/generated/ (committed, diffed in CI). Does not
+  # change PhysicsModule.js / .wasm.
+  option(PACHINBALL_WASM_EMIT_TSD "Emit PhysicsModule.d.ts (--emit-tsd; needs tsc on PATH)" OFF)
 
   # web + worker: the shipped bundle (main thread, and the wasm-worker
   # Dedicated Worker, #361). Node shims stay out of it. Bundles loaded from
@@ -140,6 +145,11 @@ if(EMSCRIPTEN)
   if(PACHINBALL_WASM_LTO)
     target_compile_options(PhysicsModule PRIVATE "-flto")
     target_link_options(PhysicsModule PRIVATE "-flto")
+  endif()
+
+  if(PACHINBALL_WASM_EMIT_TSD)
+    target_link_options(PhysicsModule PRIVATE
+      "SHELL:--emit-tsd ${CMAKE_BINARY_DIR}/PhysicsModule.d.ts")
   endif()
 
   target_compile_options(PhysicsModule PRIVATE
