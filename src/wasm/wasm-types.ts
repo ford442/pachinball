@@ -52,6 +52,7 @@ export const enum BodyType {
 export const enum Shape {
   Sphere  = 0,
   Capsule = 1,
+  Box     = 2,
 }
 
 // ---------------------------------------------------------------------------
@@ -231,10 +232,10 @@ export interface WasmPhysicsWorldInstance {
   getPinFieldPinCount?(fieldId: number): number
 
   /**
-   * Drop every static collider, sensor volume and kinematic mover. Statics
-   * are append-only, so a rebuilt scene must clear before re-adding or it
-   * stacks a second copy. Invalidates every negative handle; dynamic bodies
-   * and hinges are untouched.
+   * Drop every static collider, sensor volume, kinematic mover and force
+   * field. Statics are append-only, so a rebuilt scene must clear before
+   * re-adding or it stacks a second copy. Invalidates every negative handle;
+   * dynamic bodies and hinges are untouched.
    */
   clearStaticGeometry(): void
 
@@ -298,19 +299,6 @@ export interface WasmPhysicsWorldInstance {
   ): number
 
   /**
-   * Add an oriented static cylinder collider (local Y axis) — pachinko pins,
-   * arc pylons, chroma gates.
-   * @returns Negative collider id used in contact events.
-   */
-  addStaticCylinder(
-    px: number, py: number, pz: number,
-    radius: number, halfHeight: number,
-    qx: number, qy: number, qz: number, qw: number,
-    restitution?: number,
-    friction?: number
-  ): number
-
-  /**
    * Add an immutable static triangle mesh. `verticesPtr` and `indicesPtr` are
    * byte offsets into WASM memory (allocate with `_malloc`); vertices are
    * 3 floats each, indices 3 uint32 per triangle, CCW for the front face.
@@ -356,9 +344,6 @@ export interface WasmPhysicsWorldInstance {
     radius: number, halfHeight: number,
     strength: number, acceleration: boolean
   ): number
-
-  /** Drop all static/kinematic geometry and force fields; negative handles are invalidated. */
-  clearStaticGeometry(): void
 
   setForceFieldEnabled(fieldId: number, enabled: boolean): void
   setForceFieldVector(fieldId: number, fx: number, fy: number, fz: number): void

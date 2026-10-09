@@ -1,7 +1,7 @@
 #pragma once
 
 #include "MathTypes.h"
-#include "RigidBody.h"
+#include "BodyDesc.h"
 #include "ContactListener.h"
 #include "BodyStore.h"
 #include "CollisionFilter.h"

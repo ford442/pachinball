@@ -203,7 +203,7 @@ TEST_CASE("ball hits capsule", "[physics]") {
 
 TEST_CASE("stationary kinematic capsule supports resting ball", "[physics]") {
   // Parity check against "ball hits capsule" (static-geometry path) — a
-  // Kinematic capsule RigidBody at rest should support a dropped ball the
+  // Kinematic capsule body at rest should support a dropped ball the
   // same way a static CapsuleDesc does.
   PhysicsWorld world;
   world.setGravity(0.f, -9.81f, 0.f);

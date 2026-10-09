@@ -23,7 +23,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Source files
 # ---------------------------------------------------------------------------
 set(PHYSICS_CORE_SOURCES
-  src/RigidBody.cpp
   src/BodyStore.cpp
   src/BroadphaseGrid.cpp
   src/HingeJoint.cpp

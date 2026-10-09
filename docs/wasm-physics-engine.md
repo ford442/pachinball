@@ -49,7 +49,7 @@ PhysicsModule.js / .wasm  ◄─── public/wasm/ (Emscripten output, npm run 
 C++ PhysicsWorld  ◄──── native/src/PhysicsWorld.{h,cpp}
         │
    ┌────┴──────────────┬──────────────┬───────────────┐
-BodyStore/RigidBody  Narrowphase   HingeJoint   ContactListener
+   BodyStore         Narrowphase   HingeJoint   ContactListener
 ```
 
 The C++ engine is a sphere-and-capsule rigid-body solver with dynamic boxes,
@@ -69,9 +69,9 @@ native/
 ├── CMakeLists.txt               Emscripten + native (Catch2) build config
 ├── src/
 │   ├── MathTypes.h              Vec3, Quat, Transform
-│   ├── RigidBody.h / .cpp       Dynamic / static / kinematic sphere + capsule bodies
+│   ├── BodyDesc.h               BodyType / Shape enums + RigidBodyDesc (createRigidBody descriptor)
 │   ├── DynamicBox.cpp           Dynamic oriented-box bodies (createBoxBody)
-│   ├── BodyStore.h / .cpp       SoA body storage + packed transform buffer
+│   ├── BodyStore.h / .cpp       SoA body storage (the only body model) + BodyView
 │   ├── HandleTable.h            Stable body / hinge handles
 │   ├── BroadphaseGrid.h / .cpp  Uniform-grid broadphase (sleepers stay in as targets for awake bodies)
 │   ├── Narrowphase.cpp          Pair tests (sphere / capsule / box / statics)
