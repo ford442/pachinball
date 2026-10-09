@@ -87,11 +87,10 @@ export function setRendererPreference(renderer: RendererPreference): void {
  * getRendererPreference, so a stale param from an earlier switch (or the boot-error
  * banner's link) must be rewritten too or the reload lands on the old backend.
  */
-export function reloadWithRenderer(renderer: RendererPreference): void {
+export function reloadWithRenderer(renderer: ActiveRenderer): void {
   setRendererPreference(renderer)
   const url = new URL(window.location.href)
-  if (renderer === RENDERER_AUTO) url.searchParams.delete('renderer')
-  else url.searchParams.set('renderer', renderer)
+  url.searchParams.set('renderer', renderer)
   window.location.assign(url.toString())
 }
 

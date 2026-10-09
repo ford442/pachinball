@@ -21,7 +21,6 @@ import {
   RENDERER_WEBGPU,
   RENDERER_WEBGL2,
   useWebGL2Renderer,
-  type RendererPreference,
 } from '../renderers/renderer-selector'
 
 import type { PhysicsTuningPanel } from '../game-elements/physics-tuning-panel'
@@ -270,9 +269,7 @@ export class GameSettingsUI {
 
     rendererSelect.addEventListener('change', () => {
       const value = rendererSelect.value
-      const preference: RendererPreference =
-        value === RENDERER_WEBGPU ? RENDERER_WEBGPU : RENDERER_WEBGL2
-      reloadWithRenderer(preference)
+      reloadWithRenderer(value === RENDERER_WEBGPU ? RENDERER_WEBGPU : RENDERER_WEBGL2)
     }, { signal: this.host.signal })
   }
 

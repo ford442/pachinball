@@ -10,7 +10,6 @@ import {
   attemptWebGPURenderer,
   getActiveRenderer,
   getRendererPreference,
-  reloadWithRenderer,
   setRendererPreference,
   useWebGL2Renderer,
 } from '../src/renderers/renderer-selector'
@@ -90,14 +89,6 @@ describe('renderer-selector', () => {
       vi.stubGlobal('location', { href: 'http://localhost:4174/?renderer=webgl2', assign })
       attemptWebGPURenderer()
       expect(assign).toHaveBeenCalledWith('http://localhost:4174/?renderer=webgpu')
-    })
-
-    it('auto clears both the stored key and the URL param', () => {
-      storage.set(STORAGE_KEY, RENDERER_WEBGL2)
-      vi.stubGlobal('location', { href: 'http://localhost:4174/?renderer=webgl2&debug=1', assign })
-      reloadWithRenderer(RENDERER_AUTO)
-      expect(storage.has(STORAGE_KEY)).toBe(false)
-      expect(assign).toHaveBeenCalledWith('http://localhost:4174/?debug=1')
     })
   })
 
