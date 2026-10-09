@@ -17,7 +17,7 @@ import {
   attemptWebGPURenderer,
   getActiveRenderer,
   getRendererPreference,
-  setRendererPreference,
+  reloadWithRenderer,
   RENDERER_WEBGPU,
   RENDERER_WEBGL2,
   useWebGL2Renderer,
@@ -272,8 +272,7 @@ export class GameSettingsUI {
       const value = rendererSelect.value
       const preference: RendererPreference =
         value === RENDERER_WEBGPU ? RENDERER_WEBGPU : RENDERER_WEBGL2
-      setRendererPreference(preference)
-      window.location.reload()
+      reloadWithRenderer(preference)
     }, { signal: this.host.signal })
   }
 
