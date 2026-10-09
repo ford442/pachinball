@@ -20,6 +20,25 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ---------------------------------------------------------------------------
+# Shared compile policy — linked PRIVATE into every target that compiles
+# project sources (native library, Catch2 tests, PhysicsModule), so
+# bindings.cpp is held to the same bar as the solver.
+# ---------------------------------------------------------------------------
+add_library(pachinball_warnings INTERFACE)
+target_compile_options(pachinball_warnings INTERFACE
+  -Wall -Wextra -Werror
+  -Wshadow -Wconversion -Wdouble-promotion
+)
+
+# Byte-exact native ↔ WASM parity needs every a*b+c rounded twice. GCC
+# defaults to -ffp-contract=fast outside ISO mode (we build gnu++17), which
+# fuses into FMA on any FMA-capable target (aarch64, -march=native x86-64);
+# Clang defaults to `on`. Neither fuses today (baseline x86-64 has no FMA;
+# wasm has none without relaxed-simd) — this keeps it that way everywhere.
+add_library(pachinball_fp INTERFACE)
+target_compile_options(pachinball_fp INTERFACE -ffp-contract=off)
+
+# ---------------------------------------------------------------------------
 # Source files
 # ---------------------------------------------------------------------------
 set(PHYSICS_CORE_SOURCES
@@ -64,6 +83,7 @@ if(EMSCRIPTEN)
     src/bindings.cpp
   )
   target_include_directories(PhysicsModule PRIVATE src)
+  target_link_libraries(PhysicsModule PRIVATE pachinball_warnings pachinball_fp)
 
   # Output as a proper ES module that can be imported directly by Vite
   set_target_properties(PhysicsModule PROPERTIES
@@ -136,11 +156,9 @@ if(NOT EMSCRIPTEN)
 
   add_library(pachinball_physics_native STATIC ${PHYSICS_CORE_SOURCES})
   target_include_directories(pachinball_physics_native PUBLIC src)
+  target_link_libraries(pachinball_physics_native PRIVATE pachinball_warnings pachinball_fp)
   # No -O here: CMAKE_CXX_FLAGS_<CONFIG> is the single source of the opt level.
-  target_compile_options(pachinball_physics_native PRIVATE
-    -Wall -Wextra -Werror
-    -fno-exceptions
-  )
+  target_compile_options(pachinball_physics_native PRIVATE -fno-exceptions)
 
   include(CTest)
   enable_testing()
@@ -169,13 +187,12 @@ if(NOT EMSCRIPTEN)
     tests/axis_pull_field_test.cpp
     tests/golden_trace_test.cpp
   )
+  # Catch2 requires C++ exceptions; do not pass -fno-exceptions here.
   target_link_libraries(physics_world_test PRIVATE
     pachinball_physics_native
+    pachinball_warnings
+    pachinball_fp
     Catch2::Catch2WithMain
-  )
-  # Catch2 requires C++ exceptions; do not pass -fno-exceptions here.
-  target_compile_options(physics_world_test PRIVATE
-    -Wall -Wextra -Werror
   )
 
   include(Catch)

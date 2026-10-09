@@ -252,6 +252,17 @@ Configured in [`native/CMakeLists.txt`](../native/CMakeLists.txt). Every
 | `--closure=1` | Minify JS glue (parity-validated) |
 | `-fno-exceptions` | No `try`/`throw` in `native/src` — drops EH runtime |
 
+### Compile policy (native **and** WASM)
+
+Two INTERFACE targets are linked into every target that compiles project
+sources — `pachinball_physics_native`, `physics_world_test` and
+`PhysicsModule` — so `bindings.cpp` meets the same bar as the solver.
+
+| Target | Flags | Rationale |
+|--------|-------|-----------|
+| `pachinball_warnings` | `-Wall -Wextra -Werror -Wshadow -Wconversion -Wdouble-promotion` | One warning policy for g++, clang and em++; `bindings.cpp` was previously never warning-checked |
+| `pachinball_fp` | `-ffp-contract=off` | Native ↔ WASM byte-exact parity: GCC defaults to `fast` outside ISO mode and would fuse `a*b+c` into FMA on aarch64 or `-march=native`. No numeric change today — the golden traces and parity fixture are identical with and without it |
+
 ### Per-config compile / link
 
 Emscripten targets only. The native Catch2 tree (`native/build-native`, `npm run test:native`)
