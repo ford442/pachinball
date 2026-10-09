@@ -7,7 +7,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createTimerScope } from '../src/core/timers'
 import { CheckpointDebugController } from '../src/game/checkpoint-debug'
 import { BOOT_STALL_MS, armBootWatchdog, describeProgress, showBootFailure, watchPreGame } from '../src/game/boot-error'
-import { setStartButtonEnabled } from '../src/game/game-ui-popups'
+import {
+  BOOT_PRELOAD_STAGE,
+  bootErrorMessage,
+  revealBootBanner,
+  revealBootFailure,
+  setStartButtonEnabled,
+} from '../src/game/game-ui-popups'
 
 /** The real static markup, so the banner contract with index.html is tested, not a copy of it. */
 function loadIndexBody(): void {
@@ -101,14 +107,6 @@ describe('boot failure banner (#449)', () => {
     expect(banner().children[2]?.textContent).toBe('Stage: physics (Physics world init)')
   })
 
-  it('logs the failure to the console (bootError survives the prod strip)', () => {
-    const err = new Error('boom')
-
-    showBootFailure(err)
-
-    expect(errorSpy).toHaveBeenCalledWith('Failed to bootstrap game', err)
-  })
-
   it('puts Start in its failed state: disabled, "Load failed", tooltip = message', () => {
     showBootFailure(new Error('WebGL2 is not supported on this device'))
 
@@ -129,6 +127,57 @@ describe('boot failure banner (#449)', () => {
 
     expect(startBtn().title).toBe('Loading cabinet…')
     expect(startBtn().textContent).toBe('Start Game')
+  })
+})
+
+describe('failure reveal without the lazy chunk (#449)', () => {
+  it('shows the message, stage and "Load failed" using only entry-resident code', () => {
+    revealBootFailure(new Error('physics init failed'), 'physics (Physics world init)')
+
+    expect(banner().hidden).toBe(false)
+    expect(banner().children[0]?.textContent).toBe('Game failed to start')
+    expect(banner().children[1]?.textContent).toBe('physics init failed')
+    expect(banner().children[2]?.textContent).toBe('Stage: physics (Physics world init)')
+    expect(startBtn().disabled).toBe(true)
+    expect(startBtn().textContent).toBe('Load failed')
+    expect(startBtn().title).toBe('physics init failed')
+  })
+
+  it('gives an empty error a visible message and still flips Start (new Error())', () => {
+    revealBootFailure(new Error(), BOOT_PRELOAD_STAGE)
+
+    expect(banner().children[1]?.textContent).toBe('Unknown error')
+    expect(startBtn().textContent).toBe('Load failed')
+    expect(startBtn().title).toBe('Unknown error')
+  })
+
+  it('blanks the stage line when the stage is not known yet', () => {
+    revealBootFailure(new Error('boom'), '')
+
+    expect(banner().children[2]?.textContent).toBe('')
+  })
+
+  it('the lazy chunk can refine the stage line afterwards', () => {
+    revealBootFailure(new Error('boom'), '')
+
+    showBootFailure(new Error('boom'), { checkpointDebug: makeDebug() })
+
+    expect(banner().children[2]?.textContent).toBe('Stage: no stage started')
+    expect(startBtn().textContent).toBe('Load failed')
+  })
+
+  it('bootErrorMessage covers Errors, strings, empty and odd values', () => {
+    expect(bootErrorMessage(new Error('x'))).toBe('x')
+    expect(bootErrorMessage('plain')).toBe('plain')
+    expect(bootErrorMessage(new Error())).toBe('Unknown error')
+    expect(bootErrorMessage('')).toBe('Unknown error')
+    expect(bootErrorMessage(undefined)).toBe('undefined')
+  })
+
+  it('revealBootBanner is a no-op when the markup is absent', () => {
+    document.body.innerHTML = ''
+
+    expect(() => revealBootBanner('t', 'm', 's')).not.toThrow()
   })
 })
 

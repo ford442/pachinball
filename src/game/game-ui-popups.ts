@@ -257,6 +257,35 @@ export function setStartButtonEnabled(enabled: boolean, error?: string): void {
   if (enabled) document.getElementById('boot-error')?.setAttribute('hidden', '')
 }
 
+/** Stage shown for a failure before the Game (and its checkpoint stages) existed. */
+export const BOOT_PRELOAD_STAGE = 'engine + physics preload'
+
+/** A readable message for anything thrown; never empty (`new Error()` has no message). */
+export function bootErrorMessage(err: unknown): string {
+  return (err instanceof Error ? err.message : String(err)) || 'Unknown error'
+}
+
+/** Fill and reveal the static #boot-error banner (index.html). An empty `stage` blanks its line. */
+export function revealBootBanner(title: string, message: string, stage: string): void {
+  const banner = document.getElementById('boot-error')
+  if (!banner) return
+  ;[title, message, stage && `Stage: ${stage}`].forEach((text, i) => {
+    const slot = banner.children[i]
+    if (slot) slot.textContent = text
+  })
+  banner.hidden = false
+}
+
+/**
+ * Show a failed boot using only static markup, so it still appears when every lazy chunk
+ * (the banner module included) is unreachable. Start goes to "Load failed".
+ */
+export function revealBootFailure(err: unknown, stage: string): void {
+  const message = bootErrorMessage(err)
+  setStartButtonEnabled(false, message)
+  revealBootBanner('Game failed to start', message, stage)
+}
+
 export function showMessage(state: GameUIRuntimeState, message: string, duration = 2000): void {
   const msgEl = document.createElement('div')
   msgEl.textContent = message
