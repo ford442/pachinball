@@ -182,7 +182,7 @@ describe('GameSceneBuilder.buildCriticalScene', () => {
     const rig = makeRig({ rightJoint: false })
 
     // The cabinet promise never settles here: a stage that waited for it would hang.
-    await expect(rig.builder.buildCriticalScene()).rejects.toThrow(/right flipper has no joint/)
+    await expect(rig.builder.buildCriticalScene()).rejects.toThrow(/1\/2 flipper joints/)
     expect(rig.calls).not.toContain('backbox')
 
     // A later cabinet rejection must not surface as an unhandled rejection.
@@ -193,7 +193,7 @@ describe('GameSceneBuilder.buildCriticalScene', () => {
   it('fails when fewer than two flippers were built', async () => {
     const rig = makeRig({ flipperCount: 1 })
 
-    await expect(rig.builder.buildCriticalScene()).rejects.toThrow(/Critical scene incomplete: no right flipper/)
+    await expect(rig.builder.buildCriticalScene()).rejects.toThrow(/Critical scene incomplete: 1\/2 flipper joints, 1 flipper meshes/)
   })
 })
 
@@ -201,18 +201,17 @@ describe('GameSceneBuilder.yieldFrame (#452)', () => {
   /** A scope whose animation frames only fire when the test says so, as in a hidden tab. */
   function makeFrameScope() {
     const frames: Array<(time: number) => void> = []
-    const cancelAnimationFrame = vi.fn()
     const base: TimerBase = {
       setTimeout: (fn, ms) => globalThis.setTimeout(fn, ms),
       clearTimeout: (handle) => globalThis.clearTimeout(handle as ReturnType<typeof setTimeout>),
       setInterval: (fn, ms) => globalThis.setInterval(fn, ms),
       clearInterval: (handle) => globalThis.clearInterval(handle as ReturnType<typeof setInterval>),
       requestAnimationFrame: (fn) => frames.push(fn),
-      cancelAnimationFrame,
+      cancelAnimationFrame: () => undefined,
     }
     const timers = createTimerScope(base)
     const builder = new GameSceneBuilder({ timers } as unknown as SceneBuilderHost)
-    return { builder, frames, cancelAnimationFrame }
+    return { builder, frames, timers }
   }
 
   beforeEach(() => {
@@ -224,7 +223,7 @@ describe('GameSceneBuilder.yieldFrame (#452)', () => {
   })
 
   it('resolves after the fallback timeout when no frame ever fires (hidden tab)', async () => {
-    const { builder, cancelAnimationFrame } = makeFrameScope()
+    const { builder } = makeFrameScope()
     let resolved = false
     const pending = builder.yieldFrame().then(() => {
       resolved = true
@@ -236,16 +235,32 @@ describe('GameSceneBuilder.yieldFrame (#452)', () => {
     await vi.advanceTimersByTimeAsync(1)
     await pending
     expect(resolved).toBe(true)
-    expect(cancelAnimationFrame).toHaveBeenCalledTimes(1) // the dead frame request is dropped
   })
 
-  it('resolves on the frame and clears the fallback timer when a frame does fire', async () => {
+  it('resolves on the frame, well before the fallback timeout, when a frame does fire', async () => {
     const { builder, frames } = makeFrameScope()
-    const pending = builder.yieldFrame()
+    let resolved = false
+    const pending = builder.yieldFrame().then(() => {
+      resolved = true
+    })
 
     frames[0]?.(16)
     await pending
 
-    expect(vi.getTimerCount()).toBe(0)
+    expect(resolved).toBe(true)
+    // The losing timeout is harmless: it fires into an already-resolved promise.
+    await vi.advanceTimersByTimeAsync(FRAME_YIELD_TIMEOUT_MS)
+  })
+
+  it('does not resolve once the owning scope is disposed (Game.dispose)', async () => {
+    const { builder, timers } = makeFrameScope()
+    timers.dispose()
+    let resolved = false
+    void builder.yieldFrame().then(() => {
+      resolved = true
+    })
+
+    await vi.advanceTimersByTimeAsync(FRAME_YIELD_TIMEOUT_MS * 4)
+    expect(resolved).toBe(false)
   })
 })

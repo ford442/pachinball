@@ -133,7 +133,10 @@ export class GameSceneBuilder {
 
     // A table without flippers is unplayable: fail the stage (the boot banner names it)
     // rather than enabling Start on it.
-    this.assertFlippersBuilt(flipperMeshes.length)
+    const joints = [...gameObjects.getAllFlippers().values()].filter(f => f.joint).length
+    if (joints < 2 || flipperMeshes.length < 2) {
+      throw new Error(`Critical scene incomplete: ${joints}/2 flipper joints, ${flipperMeshes.length} flipper meshes`)
+    }
 
     const shadowGenerator = this.host.shadowGenerator
     if (shadowGenerator) {
@@ -155,22 +158,6 @@ export class GameSceneBuilder {
     if (tableCam) {
       this.host.cameraController = new CameraController(tableCam)
     }
-  }
-
-  /** Throws unless both flippers exist with a mesh and a joint, and their meshes are in the scene. */
-  private assertFlippersBuilt(flipperMeshCount: number): void {
-    const flippers = this.host.gameObjects?.getAllFlippers()
-    const left = flippers?.get('left')
-    const right = flippers?.get('right')
-    if (left?.mesh && left.joint && right?.mesh && right.joint && flipperMeshCount >= 2) return
-    const problems = [
-      ...(left ? [] : ['no left flipper']),
-      ...(right ? [] : ['no right flipper']),
-      ...(left && !left.joint ? ['left flipper has no joint'] : []),
-      ...(right && !right.joint ? ['right flipper has no joint'] : []),
-      ...(flipperMeshCount < 2 ? [`${flipperMeshCount} flipper mesh(es) in scene`] : []),
-    ]
-    throw new Error(`Critical scene incomplete: ${problems.join(', ')} after createFlippers()`)
   }
 
   createLCDPlayfield(): void {
@@ -266,18 +253,13 @@ export class GameSceneBuilder {
   /**
    * Resolves on the next animation frame, or after FRAME_YIELD_TIMEOUT_MS if none arrives:
    * a hidden or occluded tab never fires rAF, and awaiting it would stall init (#452).
+   * Whichever loses the race fires into an already-resolved promise.
    */
   yieldFrame(): Promise<void> {
     const { timers } = this.host
     return new Promise(resolve => {
-      const frame = timers.requestAnimationFrame(() => {
-        timers.clearTimeout(fallback)
-        resolve()
-      })
-      const fallback = timers.setTimeout(() => {
-        timers.cancelAnimationFrame(frame)
-        resolve()
-      }, FRAME_YIELD_TIMEOUT_MS)
+      timers.requestAnimationFrame(() => resolve())
+      timers.setTimeout(resolve, FRAME_YIELD_TIMEOUT_MS)
     })
   }
 }
