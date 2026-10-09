@@ -1065,16 +1065,25 @@ const DENSE_FIELD = {
   buildStatics(other, true)
   const mismatch = other.restoreSnapshot(blob)
   const hashDiffers = other.getStaticContentHash() !== world.getStaticContentHash()
+  // -sWASM_BIGINT: the u64 crosses as a BigInt equal to the blob's header words
+  // [3] lo / [4] hi (Snapshot.h), not a rounded double or a hex string.
+  const words = new DataView(blob.buffer, blob.byteOffset, blob.byteLength)
+  const headerHash = (BigInt(words.getUint32(16, true)) << 32n) | BigInt(words.getUint32(12, true))
+  const liveHash = world.getStaticContentHash()
+  const hashLossless = typeof liveHash === 'bigint' && liveHash === headerHash &&
+    typeof world.getStepCount() === 'bigint'
   world.delete()
   fresh.delete()
   other.delete()
 
-  const ok = nativeMatch && rewound === 0 && reserialized && replayMatch && freshMatch && mismatch === 4 && hashDiffers
+  const ok = nativeMatch && rewound === 0 && reserialized && replayMatch && freshMatch && mismatch === 4 &&
+    hashDiffers && hashLossless
   console.log(
     `${ok ? 'PASS' : 'FAIL'} wasm snapshot native bytes + round trip ` +
     `(bytes=${blob.length} native=${native ? (nativeMatch ? 'identical' : `differs@word${firstDiffWord(blob, native)}`) : 'missing'} ` +
     `rewind=${rewound}/${reserialized ? 'same' : 'diff'}/${replayMatch ? 'bit-exact' : 'DIVERGED'} ` +
-    `fresh=${freshStatus}/${freshMatch ? 'bit-exact' : 'DIVERGED'} mismatchStatus=${mismatch})`
+    `fresh=${freshStatus}/${freshMatch ? 'bit-exact' : 'DIVERGED'} mismatchStatus=${mismatch} ` +
+    `u64=${hashLossless ? 'bigint' : `LOSSY(${typeof liveHash})`})`
   )
   if (!ok) failed = true
 }

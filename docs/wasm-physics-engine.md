@@ -268,6 +268,14 @@ Configured in [`native/CMakeLists.txt`](../native/CMakeLists.txt). Every
 | `--closure=1` | Minify JS glue (parity-validated) |
 | `-fno-exceptions` | No `try`/`throw` in `native/src` — drops EH runtime |
 
+**64-bit values.** The pinned SDK always has BigInt integration on (`-sWASM_BIGINT`
+is deprecated there, so it is not passed). The `uint64_t` returns —
+`getStepCount`, `getStaticContentHash`, `getContactGeneration` — therefore
+cross losslessly as JS `BigInt`. `WasmPhysicsEngine` (`PhysicsModule.ts`) is the
+only place that converts them: to a number, and the hash to 16 hex chars, so
+nothing past it changes type. `run-wasm-parity.mjs` checks the hash is a
+`BigInt` equal to the snapshot header's words.
+
 ### Compile policy (native **and** WASM)
 
 Two INTERFACE targets are linked into every target that compiles project

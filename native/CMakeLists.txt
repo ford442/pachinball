@@ -114,6 +114,8 @@ if(EMSCRIPTEN)
     # Every caller invokes the factory with no options (the .wasm is found
     # via import.meta.url), so the glue reads no Module.* overrides.
     "-sINCOMING_MODULE_JS_API=[]"
+    # No -sWASM_BIGINT: BigInt integration is always on in the pinned SDK (the
+    # setting is deprecated), so uint64_t returns cross as a lossless BigInt.
     "-sFILESYSTEM=0"
     "-sALLOW_MEMORY_GROWTH=1"
     "-sINITIAL_MEMORY=${PACHINBALL_WASM_INITIAL_MEMORY}"

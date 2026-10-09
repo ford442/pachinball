@@ -383,8 +383,12 @@ export interface WasmPhysicsWorldInstance {
    */
   step(rawDt: number): number
 
-  /** Total number of substeps taken since world creation. */
-  getStepCount(): number
+  /**
+   * Total number of substeps taken since world creation — a `bigint` from a
+   * `-sWASM_BIGINT` bundle (uint64_t), a number from older ones. Read it
+   * through `WasmPhysicsEngine.getStepCount()`.
+   */
+  getStepCount(): bigint | number
 
   /** Count of active rigid bodies (excluding removed ones). */
   getActiveBodyCount(): number
@@ -452,11 +456,15 @@ export interface WasmPhysicsWorldInstance {
   /** Restore a `serializeSnapshot()` blob; returns a `WasmSnapshotStatus` code. */
   restoreSnapshot?(bytes: Uint8Array): number
 
-  /** FNV-1a 64 of the static table, 16 hex chars — equal iff snapshots are interchangeable. */
-  getStaticContentHash?(): string
+  /**
+   * FNV-1a 64 of the static table — equal iff snapshots are interchangeable.
+   * A `bigint` from a `-sWASM_BIGINT` bundle, 16 hex chars from older ones;
+   * `WasmPhysicsEngine.getStaticContentHash()` always returns the hex form.
+   */
+  getStaticContentHash?(): bigint | string
 
-  /** Contact flushes so far (restored with the snapshot). */
-  getContactGeneration?(): number
+  /** Contact flushes so far (restored with the snapshot); `bigint` from a `-sWASM_BIGINT` bundle. */
+  getContactGeneration?(): bigint | number
 
   /** Release the C++ object. Must be called when done to avoid WASM memory leaks. */
   delete(): void
