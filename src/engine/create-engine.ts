@@ -16,6 +16,7 @@ import type { Engine as EngineType } from '@babylonjs/core/Engines/engine'
 import type { EngineOptions } from '@babylonjs/core/Engines/thinEngine'
 import { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import type { WebGPUEngine as WebGPUEngineType, WebGPUEngineOptions } from '@babylonjs/core/Engines/webgpuEngine'
+import { bootError, bootWarn } from '../boot-log'
 import {
   getRendererPreference,
   RENDERER_AUTO,
@@ -260,7 +261,7 @@ export async function createWebGPUEngineWithFallback(
       }
       return { engine, featureLevel }
     } catch (err) {
-      console.warn(`[Bootstrap] WebGPU init failed at featureLevel=${featureLevel}`, err)
+      bootWarn(`WebGPU init failed (${featureLevel})`, err)
       // Dispose before the next attempt — a half-initialised WebGPUEngine keeps
       // its canvas context and device callbacks alive otherwise.
       try {
@@ -347,7 +348,7 @@ export async function createEngine(
     console.log(`[Bootstrap] Active renderer: ${engine.getClassName()} (WebGL fallback)`)
     return engine
   } catch (err) {
-    console.error('[Bootstrap] WebGL2 fallback failed after WebGPU failed', err)
+    bootError('WebGL2 fallback failed', err)
     throw err
   }
 }

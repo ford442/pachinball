@@ -378,7 +378,7 @@ export class Game
     } catch (error) {
       if (optional) {
         // Swallowed on purpose, so it must reach the prod console (console.* is stripped there).
-        bootWarn(`[Game] Optional stage "${stage}" failed`, error)
+        bootWarn(`Optional stage ${stage} failed`, error)
         return false
       }
       throw error

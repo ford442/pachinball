@@ -252,10 +252,7 @@ export function setStartButtonEnabled(enabled: boolean, error?: string): void {
   btn.style.opacity = enabled ? '1' : '0.45'
   btn.style.cursor = enabled ? 'pointer' : 'not-allowed'
   btn.title = enabled ? '' : (error ?? 'Loading cabinet…')
-  if (error) {
-    btn.textContent = 'Load failed'
-    btn.dataset.state = 'error'
-  }
+  if (error) btn.textContent = 'Load failed'
   // Start live means the boot made it: a "still loading" banner no longer applies.
   if (enabled) document.getElementById('boot-error')?.setAttribute('hidden', '')
 }

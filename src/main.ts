@@ -5,12 +5,8 @@ import { applyHardwareScaling, resolveEngineOptions } from './engine/engine-opti
 import { createEngine, isWebGPUEngine } from './engine/create-engine'
 import { scheduleIdleWasmPreload } from './engine/wasm-idle-preload'
 import { preloadPhysicsSystem } from './game-elements/physics-preload'
-import { VisibilityManager } from './engine/visibility-manager'
 import { formatGpuProbeSummary } from './engine/gpu-degrade-telemetry'
-import { runVisibilityDiagnostic } from './engine/visibility-diagnostic'
 import { registerServiceWorker } from './pwa'
-import { createTimerScope } from './core/timers'
-import { BOOT_STALL_MS, armBootWatchdog, showBootError } from './game/boot-error'
 
 declare global {
   interface Window {
@@ -23,8 +19,10 @@ declare global {
 /** Set once constructed so the failure banner can name the checkpoint stage that was running. */
 let bootGame: Game | undefined
 
+/** The banner is its own chunk: only a failed or stalled boot needs it (#449). */
+const loadBootError = () => import('./game/boot-error')
+
 async function bootstrap(): Promise<void> {
-  const bootStartedAt = performance.now()
   registerServiceWorker()
 
   const canvas = document.getElementById('pachinball-canvas') as HTMLCanvasElement | null
@@ -35,13 +33,10 @@ async function bootstrap(): Promise<void> {
 
   // Parallelize engine creation and physics WASM loading
   // This reduces total load time by overlapping network fetch (WASM) with GPU initialization
-  // The Game (and its timers) does not exist yet; this scope covers only the pre-Game phase.
-  const preGameTimers = createTimerScope()
-  armBootWatchdog(preGameTimers, BOOT_STALL_MS, () => 'engine + physics preload')
-  const [engine, physics] = await Promise.all([
-    createEngine(canvas),
-    preloadPhysicsSystem(),
-  ]).finally(() => preGameTimers.dispose())
+  const loading = Promise.all([createEngine(canvas), preloadPhysicsSystem()])
+  // The Game (and its timers) does not exist yet: this watchdog covers only the pre-Game phase.
+  void loadBootError().then((m) => m.watchPreGame(loading))
+  const [engine, physics] = await loading
 
   console.timeEnd('[Bootstrap] Engine + Physics parallel init')
   console.time('[Bootstrap] Game init')
@@ -54,14 +49,14 @@ async function bootstrap(): Promise<void> {
 
   const game = new Game(engine, physics)
   bootGame = game
-  armBootWatchdog(
-    game.timers,
-    Math.max(0, BOOT_STALL_MS - (performance.now() - bootStartedAt)),
-    () => game.checkpointDebug.describeProgress(),
-  )
+  void loadBootError().then((m) => m.watchGame(game))
   await game.init()
   console.info(formatGpuProbeSummary())
 
+  // Tab-visibility handling is only needed once the game runs; its own chunk keeps it out of the
+  // entry (size budget). dispose() can land while the chunk loads, so re-check the signal.
+  const { VisibilityManager } = await import('./engine/visibility-manager')
+  if (game.signal.aborted) return
   const visibilityManager = new VisibilityManager({
     engine,
     renderFrame: () => game.renderFrame(),
@@ -75,7 +70,9 @@ async function bootstrap(): Promise<void> {
   window.game = game
 
   // Expose visibility diagnostic helper
-  window.runVisibilityDiagnostic = () => runVisibilityDiagnostic(window.game)
+  window.runVisibilityDiagnostic = () => {
+    void import('./engine/visibility-diagnostic').then((m) => m.runVisibilityDiagnostic(window.game))
+  }
 
   console.timeEnd('[Bootstrap] Game init')
   console.timeEnd('[Bootstrap] Total initialization')
@@ -99,10 +96,5 @@ async function bootstrap(): Promise<void> {
 
 bootstrap().catch((err: unknown) => {
   console.error('Failed to bootstrap game', err)
-  showBootError(
-    'Game failed to start',
-    err instanceof Error ? err.message : String(err),
-    bootGame?.checkpointDebug.describeProgress() ?? 'engine + physics preload',
-    true,
-  )
+  void loadBootError().then((m) => m.showBootFailure(err, bootGame))
 })

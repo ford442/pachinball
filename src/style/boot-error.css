@@ -24,8 +24,3 @@
 #boot-error a {
   color: #7fe9ff;
 }
-
-#start-btn[data-state='error'] {
-  border-color: #ff4d6d;
-  color: #ff9aa9;
-}
