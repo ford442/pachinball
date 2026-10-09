@@ -107,6 +107,7 @@ native/
     ├── snapshot_test.cpp        World snapshot: rewind / fresh-table restore bit-exact, manifold, mismatch, malformed (#422)
     ├── sleeper_contact_test.cpp Sleeping balls stay collidable: kinematic / rolling ball wakes one on contact, proximity does not
     ├── axis_pull_field_test.cpp Axis-pull well: horizontal pull, linear falloff, extents, flags, groups, wake, snapshot hash
+    ├── golden_trace_test.cpp    Golden traces: committed FNV-1a hashes of three scenes — any numeric drift fails here (#442)
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
@@ -1147,6 +1148,20 @@ Emscripten required. Catch2 v3.7.1 is downloaded automatically on first
 
 This lets you iterate on solver logic with fast compile times using your
 native compiler before re-running the full Emscripten build.
+
+### Golden traces (numeric drift)
+
+`native/tests/golden_trace_test.cpp` hashes three deterministic scenes (a full
+table, fast balls, sleep) — every contact event plus a `serialize()` blob every
+15 frames — and compares against committed constants. A build-only or
+refactor-only change must leave all three untouched; a change that is meant to
+move the numbers updates the constants it moves and names them (old → new) in
+its commit message, so drift is always attributable to one commit. The
+constants are identical at `-O0` and `-O3`.
+
+```bash
+PACHINBALL_PRINT_GOLDEN=1 ./native/build-native/physics_world_test "[golden]"
+```
 
 ### Language Server & IDE Tooling (`compile_commands.json`)
 

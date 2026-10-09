@@ -167,6 +167,7 @@ if(NOT EMSCRIPTEN)
     tests/snapshot_test.cpp
     tests/sleeper_contact_test.cpp
     tests/axis_pull_field_test.cpp
+    tests/golden_trace_test.cpp
   )
   target_link_libraries(physics_world_test PRIVATE
     pachinball_physics_native
