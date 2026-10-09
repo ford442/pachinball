@@ -38,7 +38,8 @@ async function bootstrap(): Promise<void> {
   console.time('[Bootstrap] Game init')
 
   applyHardwareScaling(engine)
-  exposeRenderer(canvas, isWebGPUEngine(engine))
+  // The WebGL2 fallback swaps in a fresh canvas (#451); tag the one the engine renders to.
+  exposeRenderer(engine.getRenderingCanvas() ?? canvas, isWebGPUEngine(engine))
 
   ;(window as unknown as Record<string, unknown>).bootstrapEngineOptions = resolveEngineOptions()
 

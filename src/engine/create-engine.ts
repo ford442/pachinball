@@ -288,7 +288,26 @@ function createWebGL2Engine(
   return engine
 }
 
-export async function createEngine(canvas: HTMLCanvasElement): Promise<EngineType | WebGPUEngineType> {
+/**
+ * Swap `canvas` for an identical, context-free element and return it.
+ *
+ * A canvas that has handed out a `webgpu` context returns null from
+ * `getContext('webgl2')` for the rest of its life, even after the failed engine is
+ * disposed, so the WebGL2 fallback cannot reuse it (#451). `cloneNode(false)` keeps the id,
+ * class and attributes (the CSS and `getElementById` lookups key on them); listeners are
+ * not copied, which is fine because the disposed WebGPU engine owned the only ones.
+ * Callers must read the canvas back from `engine.getRenderingCanvas()`.
+ */
+export function replaceCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement {
+  const fresh = canvas.cloneNode(false) as HTMLCanvasElement
+  canvas.replaceWith(fresh)
+  return fresh
+}
+
+export async function createEngine(
+  canvas: HTMLCanvasElement,
+  webgpuFactory?: WebGPUEngineFactory,
+): Promise<EngineType | WebGPUEngineType> {
   ensureGpuDegradeBuffer()
   ensureGpuProbe()
   const engineOptions = resolveEngineOptions()
@@ -308,7 +327,7 @@ export async function createEngine(canvas: HTMLCanvasElement): Promise<EngineTyp
   }
 
   console.log('[Bootstrap] Renderer preference: WebGPU (auto or explicit)')
-  const created = await createWebGPUEngineWithFallback(canvas, engineOptions)
+  const created = await createWebGPUEngineWithFallback(canvas, engineOptions, webgpuFactory)
 
   if (created) {
     const engine = created.engine as unknown as WebGPUEngineType
@@ -323,9 +342,14 @@ export async function createEngine(canvas: HTMLCanvasElement): Promise<EngineTyp
 
   console.warn(`${GPU_DEGRADE_MARKER} WebGPU init failed at every featureLevel, using WebGL2 fallback`)
   recordGpuDegrade('webgl2-fallback', 'webgl2', `requested ${engineOptions.featureLevel}`)
-  const engine = createWebGL2Engine(canvas, engineOptions)
-  console.log(`[Bootstrap] Active renderer: ${engine.getClassName()} (WebGL fallback)`)
-  return engine
+  try {
+    const engine = createWebGL2Engine(replaceCanvas(canvas), engineOptions)
+    console.log(`[Bootstrap] Active renderer: ${engine.getClassName()} (WebGL fallback)`)
+    return engine
+  } catch (err) {
+    console.error('[Bootstrap] WebGL2 fallback failed after WebGPU failed', err)
+    throw err
+  }
 }
 
 /** True if the created engine is actually running on WebGPU. */
