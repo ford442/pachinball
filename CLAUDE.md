@@ -59,9 +59,11 @@ Balls are spawned by `BallManager` according to the weighted distribution in `co
 
 A `Game` must tear down completely (`Game.dispose()` → `disposeGame()` in `src/game/game-disposer.ts`), so a second `Game` in the same page starts clean:
 
-- Listeners on `window` / `document` / canvas take `{ signal: game.signal }` (one `AbortController` per `Game`); hosts that need it declare `signal: AbortSignal`.
-- Timers and animation frames go through a `TimerScope` (`src/core/timers.ts`); the owner's `dispose()` calls `scope.dispose()`. Game-level glue uses `game.timers`.
-- Module singletons need a `reset*` that `disposeGame` calls (lazily loaded ones register theirs in `lazySingletonResets`). Do not reset `AdventureState`: it wipes campaign progress.
+- Listeners on `window` / `document` / canvas — and on static `index.html` nodes such as `#start-btn` — take `{ signal: game.signal }` (one `AbortController` per `Game`); hosts that need it declare `signal: AbortSignal`. Never assign `el.onclick = …` on a node that outlives the Game.
+- Timers and animation frames go through a `TimerScope` (`src/core/timers.ts`); the owner's `dispose()` calls `scope.dispose()`. Game-level glue uses `game.timers`. ESLint (`no-restricted-syntax`) bans bare `setTimeout` / `setInterval` / `requestAnimationFrame` in `src/game`, `game-elements`, `effects`, `objects`, `display`, `audio` and `adventure`; a bare call that is provably safe takes `// eslint-disable-next-line no-restricted-syntax -- <why>`.
+- Any `await` (including a lazy `import()`) in a long-lived owner is followed by `if (this.signal.aborted) return` before it touches state or creates a singleton: `dispose()` can land while it is pending.
+- Module singletons need a `reset*` that `disposeGame` calls (lazily loaded ones register theirs in `lazySingletonResets`; `tests/game-disposer-resets.test.ts` pins the list). Do not reset `AdventureState`: it wipes campaign progress.
+- Dev-only tooling stays out of the entry chunk: `DebugHUD` / `GameDebug` (`?debug=1` or DEV), `PhysicsTuningPanel` and `FreeMapTestMode` are dynamically imported, so `game.debugHUD`, `game.physicsTuningPanel` and `game.freeMapTestMode` can be `null` until used and `toggleFreeMapTestMode()` / `ensurePhysicsTuningPanel()` are async. `isDebugHUDAvailable()` and the `isPhysicsTuning*` predicates stay synchronous and dependency-free.
 - Pass `this` to host consumers; `Game implements` every `*Host` interface, so no `as unknown as XHost` casts.
 - `tests/lifecycle-dispose.spec.ts` counts listeners over CDP and fails if a Game leaks any.
 

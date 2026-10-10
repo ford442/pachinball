@@ -280,6 +280,33 @@ export async function playMusicStem(
   await crossfadeToBuffer(state, buffer, trackId, track.title, getEffectiveMusicVolume)
 }
 
+/**
+ * Silence and release the outgoing channel once its fade-out finishes. The closure touches
+ * only these two nodes (owned by the AudioContext, which dispose() closes), never Game
+ * state, so a late fire is harmless — each write is still guarded because a closed
+ * context's nodes may throw.
+ */
+function retireCrossfadeChannel(outSource: AudioBufferSourceNode, outGain: GainNode, delayMs: number): void {
+  // eslint-disable-next-line no-restricted-syntax -- touches only captured audio nodes, guarded below
+  setTimeout(() => {
+    try {
+      outSource.stop()
+    } catch {
+      // ignore
+    }
+    try {
+      outSource.disconnect()
+    } catch {
+      // ignore
+    }
+    try {
+      outGain.gain.value = 0
+    } catch {
+      // ignore: context already closed
+    }
+  }, delayMs)
+}
+
 export async function crossfadeToBuffer(
   state: SoundSystemSamplesState,
   targetBuffer: AudioBuffer,
@@ -365,19 +392,7 @@ export async function crossfadeToBuffer(
     state.musicTrackIdB = trackId
   }
 
-  setTimeout(() => {
-    try {
-      outSource.stop()
-    } catch {
-      // ignore
-    }
-    try {
-      outSource.disconnect()
-    } catch {
-      // ignore
-    }
-    outGain!.gain.value = 0
-  }, duration * 1000)
+  retireCrossfadeChannel(outSource, outGain!, duration * 1000)
 
   state.activeMusicChannel = incomingChannel
   console.log(`[SoundSystem] Cross-fading to music: ${title}`)
@@ -495,19 +510,7 @@ export async function playMapMusic(state: SoundSystemSamplesState, mapId: string
       state.musicTrackIdB = track.id
     }
 
-    setTimeout(() => {
-      try {
-        outSource.stop()
-      } catch {
-        // ignore
-      }
-      try {
-        outSource.disconnect()
-      } catch {
-        // ignore
-      }
-      outGain!.gain.value = 0
-    }, duration * 1000)
+    retireCrossfadeChannel(outSource, outGain!, duration * 1000)
 
     state.activeMusicChannel = incomingChannel
     console.log(`[SoundSystem] Cross-fading to music: ${track.title}`)

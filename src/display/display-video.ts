@@ -91,7 +91,8 @@ export class DisplayVideoLayer {
         this.dispose()
       }
 
-      // Timeout fallback
+      // Timeout fallback. A late fire after dispose() is a no-op: dispose() nulls videoElement.
+      // eslint-disable-next-line no-restricted-syntax -- guarded by `this.videoElement`, which dispose() clears
       setTimeout(() => {
         if (!this.loaded && this.videoElement) {
           console.warn('[DisplayVideo] Load timeout')

@@ -106,3 +106,17 @@ export function applyPlungerChargeCurve(rawCharge: number): number {
   const clamped = Math.min(Math.max(rawCharge, 0), 1)
   return Math.pow(clamped, exponent)
 }
+
+export function isPhysicsTuningQueryEnabled(): boolean {
+  if (typeof window === 'undefined') return false
+  const params = new URLSearchParams(window.location.search)
+  if (!params.has('tune')) return false
+  return import.meta.env.DEV || params.has('debug')
+}
+
+export function isPhysicsTuningEnabled(
+  enabledInSettings: boolean,
+  queryEnabled = isPhysicsTuningQueryEnabled(),
+): boolean {
+  return queryEnabled || enabledInSettings
+}

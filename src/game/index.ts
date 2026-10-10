@@ -45,7 +45,7 @@ export { GameInputActions, type InputActionsHost } from './game-input-actions'
 export { GameScenario, type ScenarioHost } from './game-scenario'
 export { GameSlotAdventure, type SlotAdventureHost } from './game-slot-adventure'
 export { GameSettingsUI, type SettingsUIHost } from './game-settings-ui'
-export { GameDebug, type DebugHost } from './game-debug'
+export type { GameDebug, DebugHost } from './game-debug'
 export { GameLifecycle, type LifecycleHost } from './game-lifecycle'
 export { GameSystemsInitializer } from './game-systems-init'
 export { disposeGame } from './game-disposer'
@@ -73,4 +73,4 @@ export {
   type PlayfieldLoaderDeps,
   type PlayfieldLoadResult,
 } from './playfield-loader'
-export { FreeMapTestMode, type FreeMapTestModeConfig } from './free-map-test-mode'
+export type { FreeMapTestMode, FreeMapTestModeConfig } from './free-map-test-mode'

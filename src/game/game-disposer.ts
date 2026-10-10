@@ -17,6 +17,8 @@ import {
   resetDynamicWorld,
 } from '../game-elements'
 import { resetTrackThemingSystem } from '../adventure/track-theming-system'
+import { resetDailyCascadeState } from '../cascade/daily-cascade-state'
+import { resetSessionRng } from '../core/seeded-rng'
 import type { Game } from '../game'
 
 export function disposeGame(game: Game): void {
@@ -98,6 +100,8 @@ export function disposeGame(game: Game): void {
   game.launcherBuilder = null
   game.movingGateBuilder?.dispose()
   game.movingGateBuilder = null
+  game.gaussCannon?.dispose()
+  game.gaussCannon = null
   game.spinnerVisuals = []
   game.trapStates = []
   game.launcherStates = []
@@ -126,6 +130,10 @@ export function disposeGame(game: Game): void {
   resetSoundSystem()
   resetMapSystem()
   resetChallengeSystem()
+  // Session-scoped state a new Game must not inherit: the Daily Cascade mode/seed and the
+  // session RNG (startGame() re-seeds, so this only drops stale state).
+  resetDailyCascadeState()
+  resetSessionRng()
   resetDynamicWorld()
   game.dynamicWorld = null
   game.levelSelectScreen = null

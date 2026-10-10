@@ -30,6 +30,8 @@ export class JackpotSequenceController {
 
   constructor(private readonly callbacks: JackpotSequenceCallbacks) {
     this.random = callbacks.random ?? Math.random
+    // EffectsSystem always injects a TimerScope; the bare default is for standalone/test use.
+    // eslint-disable-next-line no-restricted-syntax -- injectable scheduler, scoped by the only production caller
     this.scheduleTimeout = callbacks.scheduleTimeout ?? ((callback, delayMs) => setTimeout(callback, delayMs))
   }
 

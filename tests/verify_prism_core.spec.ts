@@ -50,7 +50,7 @@ test('Verify Prism Core Visuals', async ({ page }, testInfo) => {
     }
     type ThemeGame = {
       freeMapTestMode?: { loadById?: (id: string) => boolean }
-      toggleFreeMapTestMode?: () => void
+      toggleFreeMapTestMode?: () => Promise<void>
       display?: DisplayWithTheme
       cabinetNeonLights?: CabinetLight[]
     }
@@ -59,7 +59,8 @@ test('Verify Prism Core Visuals', async ({ page }, testInfo) => {
     const game = (window as unknown as { game?: ThemeGame }).game
     if (!game?.toggleFreeMapTestMode) return { ok: false, reason: 'missing-game-api' }
 
-    game.toggleFreeMapTestMode()
+    // Loads the test-mode chunk on first use; the promise resolves once the toggle is applied.
+    await game.toggleFreeMapTestMode()
     await wait(200)
 
     const load = (id: string) => game.freeMapTestMode?.loadById?.(id) ?? false

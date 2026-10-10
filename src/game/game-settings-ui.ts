@@ -43,7 +43,7 @@ export interface SettingsUIHost {
   showDebugUI: boolean
 
   isDebugHUDAvailable(): boolean
-  ensurePhysicsTuningPanel(): PhysicsTuningPanel
+  ensurePhysicsTuningPanel(): Promise<PhysicsTuningPanel | null>
   applyAccessibilitySettings(reducedMotion: boolean, photosensitiveMode: boolean): void
   setScanlineEnabled?(enabled: boolean): void
   setScanlineIntensityMultiplier?(multiplier: number): void
@@ -188,7 +188,7 @@ export class GameSettingsUI {
     }
 
     if (newSettings.enablePhysicsTuning) {
-      this.host.ensurePhysicsTuningPanel().show()
+      void this.host.ensurePhysicsTuningPanel().then((panel) => panel?.show())
     } else {
       this.host.physicsTuningPanel?.hide()
     }

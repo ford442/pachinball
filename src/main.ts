@@ -52,7 +52,7 @@ async function bootstrap(): Promise<void> {
     getGameState: () => game.stateManager.getState(),
     soundSystem: game.soundSystem,
   })
-  visibilityManager.attach()
+  visibilityManager.attach(game.signal)
   scheduleIdleWasmPreload()
 
   // Expose for Playwright tests

@@ -13,6 +13,7 @@ import { gzipSync } from 'node:zlib'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { bootChunks } from './bundle-graph.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const distDir = join(root, 'dist')
@@ -55,11 +56,30 @@ function measure() {
     .filter((name) => name.endsWith('.js'))
     .map((name) => join(assetsDir, name))
 
-  const entry = findChunk(jsFiles, 'index')
   const babylonCore = findChunk(jsFiles, 'babylon-core')
   const rapier = findChunk(jsFiles, 'rapier')
 
   const readGzip = (path) => (path ? gzipKb(readFileSync(path)) : 0)
+
+  // The entry is whatever index.html boots (`<script type="module" src>`), not "the largest
+  // index-*.js": a dynamic import of a barrel named `index` would otherwise be mistaken for it.
+  // Fall back to the old heuristic only if index.html cannot be parsed.
+  const indexHtmlText = statSync(join(distDir, 'index.html'), { throwIfNoEntry: false })?.isFile()
+    ? readFileSync(join(distDir, 'index.html'), 'utf8')
+    : ''
+  // babylon-core is budgeted on its own row; everything else the browser fetches before boot
+  // (the entry + its modulepreloaded static imports) counts toward `initialJsGzipKb`, so moving
+  // code into an eagerly-loaded manual chunk (ui-overlays) cannot make the entry look smaller.
+  const boot = bootChunks(indexHtmlText, { excludePrefixes: ['babylon-core-'] })
+  const entryFromHtml = boot.entry ? join(assetsDir, boot.entry) : null
+  const entry =
+    entryFromHtml && statSync(entryFromHtml, { throwIfNoEntry: false })?.isFile()
+      ? entryFromHtml
+      : findChunk(jsFiles, 'index')
+  const initialChunks = boot.preloaded
+    .map((name) => join(assetsDir, name))
+    .filter((file) => statSync(file, { throwIfNoEntry: false })?.isFile())
+  const initialJsGzipKbValue = readGzip(entry) + initialChunks.reduce((sum, file) => sum + readGzip(file), 0)
 
   const workboxIgnores = [
     /backbox[/\\].*\.(mp4|webm)$/,
@@ -87,6 +107,7 @@ function measure() {
 
   return {
     entryGzipKb: Number(readGzip(entry).toFixed(2)),
+    initialJsGzipKb: Number(initialJsGzipKbValue.toFixed(2)),
     babylonCoreGzipKb: Number(readGzip(babylonCore).toFixed(2)),
     rapierGzipKb: Number(readGzip(rapier).toFixed(2)),
     precacheTotalKiB: Number(precacheTotalKiB.toFixed(2)),
@@ -94,6 +115,7 @@ function measure() {
     rapierPreloaded,
     files: {
       entry: entry ? relative(root, entry) : null,
+      initialChunks: initialChunks.map((file) => relative(root, file)),
       babylonCore: babylonCore ? relative(root, babylonCore) : null,
       rapier: rapier ? relative(root, rapier) : null,
     },
@@ -118,6 +140,13 @@ const checks = [
   ['rapierGzipKb', measured.rapierGzipKb, chunks.rapierGzipMaxKb],
   ['precacheTotalKiB', measured.precacheTotalKiB, chunks.precacheTotalKiBMax],
 ]
+// Reported always; enforced only once bundle-budget.json carries `initialJsGzipMaxKb`
+// (set in the entry-chunk slice after the lazy-adventure cuts land).
+if (typeof chunks.initialJsGzipMaxKb === 'number') {
+  checks.push(['initialJsGzipKb', measured.initialJsGzipKb, chunks.initialJsGzipMaxKb])
+} else {
+  console.log(`info  initialJsGzipKb: ${measured.initialJsGzipKb.toFixed(2)} (no initialJsGzipMaxKb budget set yet)`)
+}
 
 let failed = false
 if (measured.rapierPrecached || measured.rapierPreloaded) {

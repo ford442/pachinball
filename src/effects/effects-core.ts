@@ -41,9 +41,12 @@ import { FresnelRimController } from './effects-fresnel-rim'
 import { RuntimePerformanceController } from './effects-performance'
 import { getAudioEngine, peekAudioEngine, type PlayVoiceParams } from '../audio/audio-engine'
 import type { EventBus } from '../core/event-bus'
+import { createTimerScope } from '../core/timers'
 import type { BallManager } from '../game-elements/ball-manager'
 
 export class EffectsSystem {
+  /** Jackpot beep schedule; cancelled by dispose() so no beep fires on a torn-down system. */
+  private readonly timers = createTimerScope()
   private scene: Scene
   private audioCtx: AudioContext | null = null
   private audioEffects: AudioEffects | null = null
@@ -164,6 +167,7 @@ export class EffectsSystem {
       setBloomEnergy: (value) => {
         this.bloomEnergy = value
       },
+      scheduleTimeout: (callback, delayMs) => this.timers.setTimeout(callback, delayMs),
     })
   }
 
@@ -363,6 +367,7 @@ export class EffectsSystem {
   }
 
   dispose(): void {
+    this.timers.dispose()
     this.audioEffects?.dispose()
     this.audioCtx = null
 

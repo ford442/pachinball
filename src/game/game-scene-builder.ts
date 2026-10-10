@@ -234,7 +234,9 @@ export class GameSceneBuilder {
     effects.registerDecorativeMaterial(plasticMat)
   }
 
+  /** Resolves next frame even if the Game is disposed meanwhile; the init chain re-checks `signal.aborted` after it. */
   yieldFrame(): Promise<void> {
+    // eslint-disable-next-line no-restricted-syntax -- must resolve so the awaiting init chain can observe the abort
     return new Promise(resolve => requestAnimationFrame(() => resolve()))
   }
 }

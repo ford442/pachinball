@@ -18,6 +18,8 @@ import { getDailyCascadeState } from '../cascade/daily-cascade-state'
 import { BallType } from '../config'
 
 export interface HUDHost {
+  /** Aborted by Game.dispose(); listeners on the static HUD buttons ride it. */
+  readonly signal: AbortSignal
   readonly ballManager: BallManager | null
   readonly ballStackVisual: BallStackVisual | null
   readonly effects: EffectsSystem | null
@@ -55,14 +57,16 @@ export class GameHUD {
   private setupChallengeButton(): void {
     const challengeBtn = document.getElementById('challenge-share-btn')
     if (challengeBtn) {
-      challengeBtn.onclick = async () => {
+      const share = async (): Promise<void> => {
         const mapId = this.host.mapManager?.getCurrentMap() || 'neon-helix'
         const seed = (await import('../core/seeded-rng')).getSessionSeed()
         const copied = await (await import('../game-elements')).ChallengeSystem.copyChallengeLink(seed, this.host.score, mapId)
-        if (copied) {
+        if (copied && !this.host.signal.aborted) {
           this.host.uiManager?.showMessage('Challenge link copied to clipboard! Share with friends.', 3500)
         }
       }
+      // A listener (not `onclick =`) so Game.dispose() removes it with the rest.
+      challengeBtn.addEventListener('click', () => { void share() }, { signal: this.host.signal })
     }
   }
 
@@ -193,6 +197,7 @@ export class GameHUD {
     const fallbackMap = this.host.mapManager?.getCurrentMap() || 'neon-helix'
     const mapId = getDailyCascadeState().getLeaderboardMapId(fallbackMap)
     await this.host.ensureOverlaySystems()
+    if (this.host.signal.aborted) return
     this.host.leaderboardSystem.setContext(mapId)
     const rank = await this.host.leaderboardSystem.checkRank(this.host.score)
     if (rank === null || rank > 100) {

@@ -10,6 +10,7 @@ import { Scene } from '@babylonjs/core/scene'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { CapturedBall } from '../../core/captured-ball'
 import type { GameConfigType } from '../../config'
+import { createTimerScope } from '../../core/timers'
 
 export enum GaussCannonState {
   IDLE,
@@ -29,6 +30,8 @@ export class GaussCannonFeeder {
   private rootNode: TransformNode | null = null
   private barrelMesh: Mesh | null = null
   private light: PointLight | null = null
+  /** Muzzle-flash fade; cancelled by dispose() so it cannot write to a disposed light. */
+  private readonly timers = createTimerScope()
 
   private state: GaussCannonState = GaussCannonState.IDLE
   private timer: number = 0
@@ -436,7 +439,13 @@ export class GaussCannonFeeder {
     // Flash effect
     if (this.light) {
         this.light.intensity = this.config.animation.fireLightFlashIntensity
-        setTimeout(() => { if (this.light) this.light.intensity = this.config.animation.fireLightFadeIntensity }, 100)
+        this.timers.setTimeout(() => { if (this.light) this.light.intensity = this.config.animation.fireLightFadeIntensity }, 100)
     }
+  }
+
+  /** Cancels pending timers and drops the light reference; the scene owns the meshes and light. */
+  dispose(): void {
+    this.timers.dispose()
+    this.light = null
   }
 }

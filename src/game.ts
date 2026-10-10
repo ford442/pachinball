@@ -20,8 +20,8 @@ import { GameInputActions, type InputActionsHost } from './game/game-input-actio
 import { GameScenario, type ScenarioHost } from './game/game-scenario'
 import { GameSlotAdventure, type SlotAdventureHost } from './game/game-slot-adventure'
 import { GameSettingsUI, type SettingsUIHost } from './game/game-settings-ui'
-import { PhysicsTuningPanel, isPhysicsTuningEnabled } from './game-elements/physics-tuning-panel'
-import { GameDebug, type DebugHost } from './game/game-debug'
+import { isPhysicsTuningEnabled } from './game-elements/physics-tuning'
+import type { DebugHost } from './game/game-debug'
 import { GameLifecycle, type LifecycleHost } from './game/game-lifecycle'
 import { GameSystemsInitializer } from './game/game-systems-init'
 import { disposeGame } from './game/game-disposer'
@@ -156,17 +156,15 @@ export class Game
       this.slotAdventure = new GameSlotAdventure(this)
       this.settingsUI = new GameSettingsUI(this)
       if (isPhysicsTuningEnabled(this.physicsTuningEnabledInSettings)) {
-        this.physicsTuningPanel = new PhysicsTuningPanel()
-        this.physicsTuningPanel.show()
+        void this.ensurePhysicsTuningPanel().then((panel) => panel?.show())
       }
-      this.debugHelper = new GameDebug(this)
       this.lifecycle = new GameLifecycle(this)
       this.hud = new GameHUD(this)
       this.mapCabinet = new GameMapCabinet(this)
       this.updateHUD()
 
       this.settingsUI.setupSettingsUI()
-      this.debugHelper.updateDeveloperSettingsVisibility()
+      this.updateDeveloperSettingsVisibility()
     })
 
     await this.runCheckpointStage('state_setup', async () => {
@@ -221,11 +219,11 @@ export class Game
         onTrackPrev: () => this.slotAdventure?.cycleAdventureTrack(-1),
         onJackpotTrigger: () => this.lifecycle?.triggerJackpot(),
         onDebugHUD: () => {
-          if (!this.debugHelper?.isDebugHUDKeyboardEnabled()) return
+          if (!this.isDebugHUDKeyboardEnabled()) return
           this.debugHUD?.toggle()
         },
         onForceSlotSpin: () => {
-          if (!this.debugHelper?.isDebugHUDAvailable()) return
+          if (!this.isDebugHUDAvailable()) return
           this.slotAdventure?.forceSlotSpin()
         },
         onMapSwitch: (index) => {
@@ -239,12 +237,14 @@ export class Game
         onCameraToggle: () => { this.isCameraFollowMode = !this.isCameraFollowMode },
         onLevelSelectToggle: () => this.toggleLevelSelect(),
         onLeaderboardToggle: () => {
-          void this.ensureOverlaySystems().then(() => this.leaderboardSystem.toggle())
+          void this.ensureOverlaySystems().then(() => {
+            if (!this.signal.aborted) this.leaderboardSystem.toggle()
+          })
         },
         onDynamicModeToggle: () => this.scenarioManager?.toggleDynamicMode(),
         onScenarioCycle: () => this.scenarioManager?.cycleScenario(),
         onPerfMonitorToggle: () => this.togglePerformanceMonitor(),
-        onFreeMapTestToggle: () => this.toggleFreeMapTestMode(),
+        onFreeMapTestToggle: () => { void this.toggleFreeMapTestMode() },
         getState: () => this.stateManager.getState(),
         getTiltActive: () => this.tiltActive,
         getAdventureActive: () => this.adventureMode?.isActive() ?? false,

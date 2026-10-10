@@ -7,8 +7,7 @@ import type { CabinetType } from '../cabinet'
 
 import { TABLE_MAPS } from '../config/table-maps'
 
-import { PhysicsTuningPanel } from '../game-elements/physics-tuning-panel'
-import { FreeMapTestMode } from './free-map-test-mode'
+import type { PhysicsTuningPanel } from '../game-elements/physics-tuning-panel'
 import { LevelLoader } from './level-loader'
 import type { LevelSelectScreen } from '../game-elements/level-select-screen'
 import { GameFields } from './game-fields'
@@ -120,10 +119,13 @@ export abstract class GameDelegates extends GameFields {
       },
     )
   }
-  ensurePhysicsTuningPanel(): PhysicsTuningPanel {
-    if (!this.physicsTuningPanel) {
-      this.physicsTuningPanel = new PhysicsTuningPanel()
-    }
+  /** `null` when the Game was disposed while the panel chunk was loading. */
+  async ensurePhysicsTuningPanel(): Promise<PhysicsTuningPanel | null> {
+    if (this.physicsTuningPanel) return this.physicsTuningPanel
+    const { PhysicsTuningPanel } = await import('../game-elements/physics-tuning-panel')
+    if (this.signal.aborted) return null
+    // A concurrent caller may have created it while we awaited.
+    this.physicsTuningPanel ??= new PhysicsTuningPanel()
     return this.physicsTuningPanel
   }
   applyAccessibilitySettings(reducedMotion: boolean, photosensitiveMode: boolean): void {
@@ -133,8 +135,12 @@ export abstract class GameDelegates extends GameFields {
     this.display?.setAccessibility(this.accessibility)
     this.mapManager?.getLCDTableState().setPhotosensitiveMode(photosensitiveMode)
   }
-  isDebugHUDAvailable(): boolean { return this.debugHelper?.isDebugHUDAvailable() ?? false }
-  isDebugHUDKeyboardEnabled(): boolean { return this.debugHelper?.isDebugHUDKeyboardEnabled() ?? false }
+  /** DEV builds, or `?debug=1`. Cheap and synchronous so callers never need the lazy GameDebug chunk. */
+  isDebugHUDAvailable(): boolean { return import.meta.env.DEV || this.debugHUDQueryEnabled }
+  isDebugHUDKeyboardEnabled(): boolean { return this.isDebugHUDAvailable() }
+  updateDeveloperSettingsVisibility(): void {
+    document.getElementById('developer-settings')?.classList.toggle('hidden', !this.isDebugHUDAvailable())
+  }
   initializeDynamicZones(mapName: string, mapConfig: typeof TABLE_MAPS[string]): void { this.scenarioManager?.initializeDynamicZones(mapName, mapConfig) }
   updateCabinetLightingForMap(): void { this.cabinetBuilder?.updateCabinetLightingForMap() }
 
@@ -165,12 +171,15 @@ export abstract class GameDelegates extends GameFields {
   }
 
   toggleLevelSelect(): void {
-    void this.ensureLevelSelectScreen().then((screen) => screen.toggle())
+    void this.ensureLevelSelectScreen().then((screen) => screen?.toggle())
   }
 
-  private async ensureLevelSelectScreen(): Promise<LevelSelectScreen> {
+  /** `null` when the Game was disposed while the chunk was loading. */
+  private async ensureLevelSelectScreen(): Promise<LevelSelectScreen | null> {
     if (this.levelSelectScreen) return this.levelSelectScreen
     const { getLevelSelectScreen, resetLevelSelectScreen } = await import('../game-elements/level-select-screen')
+    // Creating the singleton after dispose() would outlive the reset list disposeGame already drained.
+    if (this.signal.aborted) return null
     this.lazySingletonResets.push(resetLevelSelectScreen)
     this.levelSelectScreen = getLevelSelectScreen(
       {
@@ -193,12 +202,19 @@ export abstract class GameDelegates extends GameFields {
     console.log(`[PerfMonitor] ${enabled ? 'Enabled' : 'Disabled'}`)
   }
 
-  toggleFreeMapTestMode(): void {
+  /**
+   * Loads the dev-only test mode on first use (own chunk), then toggles it. Resolves once the
+   * toggle has been applied, so callers that need `freeMapTestMode` afterwards can await it.
+   */
+  async toggleFreeMapTestMode(): Promise<void> {
     if (!this.levelLoader) {
       this.levelLoader = this.createLevelLoader()
     }
     if (!this.freeMapTestMode) {
-      this.freeMapTestMode = new FreeMapTestMode(
+      const { FreeMapTestMode } = await import('./free-map-test-mode')
+      // dispose() ran while the chunk loaded, or a concurrent toggle already created it.
+      if (this.signal.aborted) return
+      this.freeMapTestMode ??= new FreeMapTestMode(
         {
           adventureMode: this.adventureMode,
           ballManager: this.ballManager,
