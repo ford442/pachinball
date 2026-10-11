@@ -12,6 +12,7 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Tools } from '@babylonjs/core/Misc/tools'
 import { Scene } from '@babylonjs/core/scene'
 import type { TargetCamera } from '@babylonjs/core/Cameras/targetCamera'
+import type { TimerScope } from '../core/timers'
 import type { PhysicsSystem } from '../game-elements/physics'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
@@ -27,7 +28,11 @@ import { getCabinetBuilder } from '../cabinet'
 import { GameConfig } from '../config'
 import type { AccessibilityConfig, QualityTier } from '../game-elements'
 
+/** Longest `yieldFrame` waits for a frame that a hidden tab will never deliver. */
+export const FRAME_YIELD_TIMEOUT_MS = 50
+
 export interface SceneBuilderHost {
+  readonly timers: TimerScope
   readonly scene: Scene | null
   readonly physics: PhysicsSystem
   readonly accessibility: AccessibilityConfig
@@ -66,15 +71,17 @@ export class GameSceneBuilder {
     playfieldGroup.rotation.x = Tools.ToRadians(18.0)
     this.host.playfieldGroup = playfieldGroup
 
-    if (scene) {
-      const cabinetBuilder = getCabinetBuilder(scene)
-      cabinetBuilder.setQualityTier(this.host.qualityTier)
-      // Classic glTF (or procedural fallback) — gate Start until this resolves
-      await cabinetBuilder.loadCabinetPreset('classic', {
-        qualityTier: this.host.qualityTier,
-        onProgress: options.onCabinetProgress,
-      })
-    }
+    // Classic glTF (or procedural fallback). Started now, awaited at the end: walls, flippers
+    // and the ball do not need it, so a slow glTF (15 s loader timeout) can no longer leave the
+    // table without them, and Start still waits for the cabinet below (#453).
+    const cabinetBuilder = getCabinetBuilder(scene)
+    cabinetBuilder.setQualityTier(this.host.qualityTier)
+    const cabinetReady = cabinetBuilder.loadCabinetPreset('classic', {
+      qualityTier: this.host.qualityTier,
+      onProgress: options.onCabinetProgress,
+    })
+    // If a step below throws first, the rejection must not surface as unhandled.
+    cabinetReady.catch(() => undefined)
 
     this.createLCDPlayfield()   // ground + flipperGlow are parented to playfieldGroup inside
 
@@ -92,9 +99,10 @@ export class GameSceneBuilder {
       }
     }
 
-    display.createBackbox(new Vector3(0, 13.5, 26.5))
-
-    // Snapshot mesh IDs after cabinet + backbox so those hierarchies are not reparented
+    // The cabinet and backbox hierarchies do not exist yet (the loader's first step is an
+    // async chunk import). The reparent below runs before either appears, and the snapshot
+    // also covers anything the loader created synchronously, so neither is ever re-parented
+    // into playfieldGroup.
     const beforeStructure = new Set(scene.meshes.map(m => m.uniqueId))
 
     gameObjects.createWalls()
@@ -116,23 +124,31 @@ export class GameSceneBuilder {
       .forEach(m => { m.parent = playfieldGroup })
 
     // Defensive build-phase logging
-    if (scene) {
-      const flipperMeshes = scene.meshes.filter(m => /flipper/i.test(m.name))
-      const ballMeshes = scene.meshes.filter(m => /^ball$/i.test(m.name))
-      console.log(`[GameSceneBuilder] Critical scene built: ${flipperMeshes.length} flipper meshes, ${ballMeshes.length} main ball meshes`)
-      if (flipperMeshes.length === 0) {
-        console.warn('[GameSceneBuilder] WARNING: No flipper meshes found in scene after createFlippers()')
-      }
-      if (ballMeshes.length === 0) {
-        console.warn('[GameSceneBuilder] WARNING: No main ball mesh found in scene after createMainBall()')
-      }
-
-      const shadowGenerator = this.host.shadowGenerator
-      if (shadowGenerator) {
-        for (const mesh of flipperMeshes) shadowGenerator.addShadowCaster(mesh, true)
-        for (const mesh of ballMeshes) shadowGenerator.addShadowCaster(mesh, true)
-      }
+    const flipperMeshes = scene.meshes.filter(m => /flipper/i.test(m.name))
+    const ballMeshes = scene.meshes.filter(m => /^ball$/i.test(m.name))
+    console.log(`[GameSceneBuilder] Critical scene built: ${flipperMeshes.length} flipper meshes, ${ballMeshes.length} main ball meshes`)
+    if (ballMeshes.length === 0) {
+      console.warn('[GameSceneBuilder] WARNING: No main ball mesh found in scene after createMainBall()')
     }
+
+    // A table without flippers is unplayable: fail the stage (the boot banner names it)
+    // rather than enabling Start on it.
+    const joints = [...gameObjects.getAllFlippers().values()].filter(f => f.joint).length
+    if (joints < 2 || flipperMeshes.length < 2) {
+      throw new Error(`Critical scene incomplete: ${joints}/2 flipper joints, ${flipperMeshes.length} flipper meshes`)
+    }
+
+    const shadowGenerator = this.host.shadowGenerator
+    if (shadowGenerator) {
+      for (const mesh of flipperMeshes) shadowGenerator.addShadowCaster(mesh, true)
+      for (const mesh of ballMeshes) shadowGenerator.addShadowCaster(mesh, true)
+    }
+
+    // Start stays gated on the cabinet (or its procedural fallback) resolving.
+    await cabinetReady
+
+    // After the cabinet: the border glow binds to the preset's 'cabinetBackbox' mesh.
+    display.createBackbox(new Vector3(0, 13.5, 26.5))
 
     if (tableCam && effects) {
       effects.registerCamera(tableCam)
@@ -234,7 +250,16 @@ export class GameSceneBuilder {
     effects.registerDecorativeMaterial(plasticMat)
   }
 
+  /**
+   * Resolves on the next animation frame, or after FRAME_YIELD_TIMEOUT_MS if none arrives:
+   * a hidden or occluded tab never fires rAF, and awaiting it would stall init (#452).
+   * Whichever loses the race fires into an already-resolved promise.
+   */
   yieldFrame(): Promise<void> {
-    return new Promise(resolve => requestAnimationFrame(() => resolve()))
+    const { timers } = this.host
+    return new Promise(resolve => {
+      timers.requestAnimationFrame(() => resolve())
+      timers.setTimeout(resolve, FRAME_YIELD_TIMEOUT_MS)
+    })
   }
 }

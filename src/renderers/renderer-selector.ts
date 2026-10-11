@@ -66,11 +66,13 @@ export function getRendererPreference(): RendererPreference {
 
 /**
  * Persist a renderer preference. Takes effect on next reload since the
- * Babylon engine is created once during bootstrap.
+ * Babylon engine is created once during bootstrap. Only `auto` clears the key:
+ * `auto` is WebGPU-first, so removing an explicit `webgl2` choice would send the
+ * player straight back into the renderer they just left (#450).
  */
 export function setRendererPreference(renderer: RendererPreference): void {
   try {
-    if (renderer === RENDERER_AUTO || renderer === RENDERER_WEBGL2) {
+    if (renderer === RENDERER_AUTO) {
       localStorage.removeItem(STORAGE_KEY)
     } else {
       localStorage.setItem(STORAGE_KEY, renderer)
@@ -78,6 +80,18 @@ export function setRendererPreference(renderer: RendererPreference): void {
   } catch {
     // Private browsing / storage disabled — ignore.
   }
+}
+
+/**
+ * Persist `renderer` and reload with it in the URL. `?renderer=` outranks storage in
+ * getRendererPreference, so a stale param from an earlier switch (or the boot-error
+ * banner's link) must be rewritten too or the reload lands on the old backend.
+ */
+export function reloadWithRenderer(renderer: ActiveRenderer): void {
+  setRendererPreference(renderer)
+  const url = new URL(window.location.href)
+  url.searchParams.set('renderer', renderer)
+  window.location.assign(url.toString())
 }
 
 /** Renderer currently running (set during bootstrap via exposeRenderer). */
@@ -93,14 +107,12 @@ export function getActiveRenderer(): ActiveRenderer {
 
 /** Opt into WebGPU on the next page load. */
 export function attemptWebGPURenderer(): void {
-  setRendererPreference(RENDERER_WEBGPU)
-  window.location.reload()
+  reloadWithRenderer(RENDERER_WEBGPU)
 }
 
-/** Return to the default WebGL2 renderer on the next page load. */
+/** Force the WebGL2 renderer on the next page load. */
 export function useWebGL2Renderer(): void {
-  setRendererPreference(RENDERER_WEBGL2)
-  window.location.reload()
+  reloadWithRenderer(RENDERER_WEBGL2)
 }
 
 /**

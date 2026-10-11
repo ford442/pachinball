@@ -5,10 +5,10 @@ import { applyHardwareScaling, resolveEngineOptions } from './engine/engine-opti
 import { createEngine, isWebGPUEngine } from './engine/create-engine'
 import { scheduleIdleWasmPreload } from './engine/wasm-idle-preload'
 import { preloadPhysicsSystem } from './game-elements/physics-preload'
-import { VisibilityManager } from './engine/visibility-manager'
 import { formatGpuProbeSummary } from './engine/gpu-degrade-telemetry'
-import { runVisibilityDiagnostic } from './engine/visibility-diagnostic'
 import { registerServiceWorker } from './pwa'
+import { bootError, bootWarn } from './boot-log'
+import { BOOT_PRELOAD_STAGE, revealBootFailure } from './game/game-ui-popups'
 
 declare global {
   interface Window {
@@ -16,6 +16,20 @@ declare global {
     game?: Game
     runVisibilityDiagnostic?: () => void
   }
+}
+
+/** Set once constructed so the failure banner can name the checkpoint stage that was running. */
+let bootGame: Game | undefined
+
+/**
+ * The watchdog and stage label are their own chunk: only a failed or stalled boot needs them
+ * (#449). A load failure is a warning, never an unhandled rejection, and nothing that must be
+ * visible depends on it (see `revealBootFailure`).
+ */
+function withBootError(use: (m: typeof import('./game/boot-error')) => void): void {
+  void import('./game/boot-error')
+    .then(use)
+    .catch((err: unknown) => bootWarn('Boot error chunk unavailable', err))
 }
 
 async function bootstrap(): Promise<void> {
@@ -29,37 +43,57 @@ async function bootstrap(): Promise<void> {
 
   // Parallelize engine creation and physics WASM loading
   // This reduces total load time by overlapping network fetch (WASM) with GPU initialization
-  const [engine, physics] = await Promise.all([
-    createEngine(canvas),
-    preloadPhysicsSystem(),
-  ])
+  // Tab-visibility handling is only needed once the game runs; its own chunk keeps it out of the
+  // entry (size budget) but is fetched now, in parallel, rather than after the render loop starts.
+  const visibilityModule = import('./engine/visibility-manager')
+  visibilityModule.catch(() => undefined) // a failure surfaces at the await below, not as unhandled
+  const loading = Promise.all([createEngine(canvas), preloadPhysicsSystem()])
+  // The Game (and its timers) does not exist yet: this watchdog covers only the pre-Game phase.
+  withBootError((m) => m.watchPreGame(loading))
+  const [engine, physics] = await loading
 
   console.timeEnd('[Bootstrap] Engine + Physics parallel init')
   console.time('[Bootstrap] Game init')
 
   applyHardwareScaling(engine)
-  exposeRenderer(canvas, isWebGPUEngine(engine))
+  // The WebGL2 fallback swaps in a fresh canvas (#451); tag the one the engine renders to.
+  exposeRenderer(engine.getRenderingCanvas() ?? canvas, isWebGPUEngine(engine))
 
   ;(window as unknown as Record<string, unknown>).bootstrapEngineOptions = resolveEngineOptions()
 
   const game = new Game(engine, physics)
+  bootGame = game
+  withBootError((m) => m.watchGame(game))
   await game.init()
   console.info(formatGpuProbeSummary())
 
-  const visibilityManager = new VisibilityManager({
-    engine,
-    renderFrame: () => game.renderFrame(),
-    getGameState: () => game.stateManager.getState(),
-    soundSystem: game.soundSystem,
-  })
-  visibilityManager.attach()
+  // Optional: a failed chunk fetch costs pause-on-hidden-tab handling, not a running game, so it
+  // must not fail the boot or keep `window.game` unset. Started with the engine, so it has long
+  // settled: awaiting a *fresh* import here would queue behind the running render loop.
+  let visibilityManager: { dispose(): void } | undefined
+  try {
+    const { VisibilityManager } = await visibilityModule
+    if (game.signal.aborted) return // dispose() landed meanwhile
+    const manager = new VisibilityManager({
+      engine,
+      renderFrame: () => game.renderFrame(),
+      getGameState: () => game.stateManager.getState(),
+      soundSystem: game.soundSystem,
+    })
+    manager.attach()
+    visibilityManager = manager
+  } catch (err) {
+    bootWarn('Tab-visibility handling unavailable', err)
+  }
   scheduleIdleWasmPreload()
 
   // Expose for Playwright tests
   window.game = game
 
   // Expose visibility diagnostic helper
-  window.runVisibilityDiagnostic = () => runVisibilityDiagnostic(window.game)
+  window.runVisibilityDiagnostic = () => {
+    void import('./engine/visibility-diagnostic').then((m) => m.runVisibilityDiagnostic(window.game))
+  }
 
   console.timeEnd('[Bootstrap] Game init')
   console.timeEnd('[Bootstrap] Total initialization')
@@ -72,7 +106,7 @@ async function bootstrap(): Promise<void> {
 
   if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-      visibilityManager.dispose()
+      visibilityManager?.dispose()
       game.dispose()
       engine.dispose()
       delete window.game
@@ -81,6 +115,10 @@ async function bootstrap(): Promise<void> {
   }
 }
 
-bootstrap().catch((err) => {
-  console.error('Failed to bootstrap game', err)
+bootstrap().catch((err: unknown) => {
+  bootError('Failed to bootstrap game', err) // not console.error: that is stripped from prod builds
+  // Static markup only, no import: if the banner chunk is unreachable the failure must still show.
+  revealBootFailure(err, bootGame ? '' : BOOT_PRELOAD_STAGE)
+  // The chunk only refines the stage line (it reads the checkpoint snapshots); best effort.
+  withBootError((m) => m.showBootFailure(err, bootGame))
 })
