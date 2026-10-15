@@ -101,9 +101,13 @@ jobs:
         run: >
           cmake -S native -B native/build-san
           -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g -fno-sanitize-recover=all"
 
+      # UBSan used to only print; -fno-sanitize-recover=all + halt_on_error make a
+      # report abort the test and fail the job (#464 item 3).
       - name: Build and run Catch2 under sanitizers
+        env:
+          UBSAN_OPTIONS: halt_on_error=1
         run: |
           cmake --build native/build-san
           ctest --test-dir native/build-san --output-on-failure
