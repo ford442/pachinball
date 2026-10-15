@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && npm run build:wasm",
-    "build_colab": "tsc -b && vite build && npm run build:wasm_colab",
+    "build": "tsc -b && npm run build:wasm && vite build",
+    "build_colab": "tsc -b && npm run build:wasm_colab && vite build",
     "build:wasm": "bash scripts/build-wasm.sh",
     "build:wasm_colab": "bash scripts/build-wasm-colab.sh",
     "build:wasm:debug": "bash scripts/build-wasm.sh --debug",
@@ -20,6 +20,7 @@
     "print:wasm-flags": "node scripts/print-wasm-flags.mjs",
     "lint": "eslint .",
     "check:bundle": "node scripts/check-bundle-size.mjs",
+    "check:dist-wasm": "node scripts/check-dist-wasm.mjs",
     "check:index-strict": "node scripts/check-index-strict.mjs",
     "preview": "vite preview",
     "icons:generate": "node scripts/generate-pwa-icons.mjs",

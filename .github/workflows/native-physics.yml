@@ -14,6 +14,7 @@
 #   npm run check:compile-db     # clangd DB smoke (after compile-db)
 #   npm run check:wasm-docs      # docs/wasm-physics-engine.md drift check
 #   npm run build:wasm           # Emscripten Release → public/wasm/ (production)
+#   npm run check:dist-wasm      # after `npm run build`: dist/wasm is byte-identical to public/wasm
 #   npm run build:wasm:assert    # RelWithAsserts → native/build-assert/
 #   WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npm run test:wasm-parity
 
@@ -40,6 +41,7 @@ on:
       - 'scripts/print-wasm-flags.mjs'
       - 'scripts/check-compile-db.mjs'
       - 'scripts/check-wasm-docs.mjs'
+      - 'scripts/check-dist-wasm.mjs'
       - 'docs/wasm-physics-engine.md'
       - 'package.json'
       - '.github/workflows/native-physics.yml'
@@ -62,6 +64,7 @@ on:
       - 'scripts/print-wasm-flags.mjs'
       - 'scripts/check-compile-db.mjs'
       - 'scripts/check-wasm-docs.mjs'
+      - 'scripts/check-dist-wasm.mjs'
       - 'docs/wasm-physics-engine.md'
       - 'package.json'
       - '.github/workflows/native-physics.yml'
@@ -153,15 +156,24 @@ jobs:
           grep -q "defaultEngine: 'wasm-worker'" src/config/physics.ts && grep -q "nonIsolatedDefaultEngine: 'wasm-owner'" src/config/physics.ts
           echo "defaultEngine is wasm-worker (nonIsolatedDefaultEngine wasm-owner)"
 
+      - name: Install Node deps
+        run: npm ci
+
+      # `npm run build` is tsc -b && build:wasm && vite build. Running it (the
+      # WASM rebuild is an incremental no-op here) pins the order itself: if
+      # vite ever runs first again, dist/wasm holds the previous binary (#464).
+      - name: Production build, then dist/wasm must equal public/wasm
+        run: |
+          source emsdk/emsdk_env.sh
+          npm run build
+          npm run check:dist-wasm
+
       - name: Build RelWithAsserts artefact
         run: |
           source emsdk/emsdk_env.sh
           npm run build:wasm:assert
           test -s native/build-assert/PhysicsModule.wasm
           test -s native/build-assert/PhysicsModule.js
-
-      - name: Install Node deps for parity
-        run: npm ci
 
       - name: Install cmake/g++ for native reference
         run: sudo apt-get update && sudo apt-get install -y cmake g++
