@@ -22,6 +22,8 @@ type TapeResult = {
   bumperMatches: number
   ball: { x: number; y: number; z: number } | null
   staticHash: string | null
+  /** `getStateHash()` after the tape: every column the next step would read. */
+  stateHash: string | null
 }
 
 async function playTape(page: Page): Promise<TapeResult> {
@@ -34,11 +36,14 @@ async function playTape(page: Page): Promise<TapeResult> {
         getBumperMatches?: () => number
       }
       physics: NonNullable<NonNullable<GameHooks['game']>['physics']> & {
-        getWasmEngine?: () => { getStaticContentHash?: () => string | null }
+        getWasmEngine?: () => {
+          getStaticContentHash?: () => string | null
+          getStateHash?: () => string | null | Promise<string | null>
+        }
       }
       gameObjects?: { getBumperVisuals?: () => Array<{ mesh: { position: { x: number; y: number; z: number } } }> }
     }
-    const empty: TapeResult = { ok: false, seed: null, score: 0, bumperMatches: 0, ball: null, staticHash: null }
+    const empty: TapeResult = { ok: false, seed: null, score: 0, bumperMatches: 0, ball: null, staticHash: null, stateHash: null }
     if (!g?.physicsController || !g.engine || !g.startGame) return empty
 
     g.engine.stopRenderLoop()
@@ -81,6 +86,7 @@ async function playTape(page: Page): Promise<TapeResult> {
       bumperMatches: g.physicsController.getBumperMatches?.() ?? 0,
       ball: t ? { x: t.x, y: t.y, z: t.z } : null,
       staticHash: g.physics?.getWasmEngine?.()?.getStaticContentHash?.() ?? null,
+      stateHash: (await g.physics?.getWasmEngine?.()?.getStateHash?.()) ?? null,
     }
   })
 }
@@ -109,5 +115,8 @@ test.describe('share-link seed determinism (#422)', () => {
     expect(b!.score).toBe(a!.score)
     expect(b!.ball).toEqual(a!.ball)
     expect(b!.staticHash).toBe(a!.staticHash)
+    // The whole stepped world, not just the table: same tape, same bits.
+    expect(a!.stateHash).toMatch(/^[0-9a-f]{16}$/)
+    expect(b!.stateHash).toBe(a!.stateHash)
   })
 })
