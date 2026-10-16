@@ -195,11 +195,15 @@ export class GameLifecycle {
   }
 
   async startGame(): Promise<void> {
+    const isReplaying = this.host.replayRunner?.isPlaying() ?? false
+    const dailyState = getDailyCascadeState()
+    // A replay plays on the cascade table it was recorded on, whatever this
+    // player has selected; their own next game gets their selection back (#444).
+    if (isReplaying) dailyState.beginReplay(this.host.replayRunner?.getPayload()?.cascade ?? null)
+    else dailyState.endReplay()
     this.host.applyDailyCascadeOnStart()
 
-    const dailyState = getDailyCascadeState()
     const isDaily = dailyState.getMode() === 'daily'
-    const isReplaying = this.host.replayRunner?.isPlaying() ?? false
 
     let seed: number
     if (isReplaying) {
@@ -224,6 +228,7 @@ export class GameLifecycle {
         physicsEngine: this.host.physics?.getWasmMode() ?? 'rapier',
         renderer: (typeof window !== 'undefined' && (window as unknown as { currentRenderer?: string }).currentRenderer === 'webgpu') ? 'webgpu' : 'webgl2',
         createdAt: new Date().toISOString(),
+        cascade: dailyState.describeForReplay() ?? undefined,
       })
     }
 

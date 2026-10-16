@@ -62,6 +62,8 @@ export type TableOptions = {
    * from a recording made on a fresh table (#441).
    */
   shiftIds?: number
+  /** A second ball the recording never had: the linked bodies no longer pair up (#444). */
+  extraBall?: boolean
 }
 
 /** A `PhysicsWorkerClient` whose worker is `applyPhysicsCommand` on a second in-process engine. */
@@ -138,6 +140,10 @@ export async function makeTable(module: WasmPhysicsModule, opts: TableOptions = 
 
   const ball = world.createRigidBody(api.RigidBodyDesc.dynamic().setTranslation(-2.4, 0, 10).setLinvel(0.2, 0, -1))
   world.createCollider(api.ColliderDesc.ball(0.25), ball)
+  if (opts.extraBall) {
+    const extra = world.createRigidBody(api.RigidBodyDesc.dynamic().setTranslation(2.4, 0, 10))
+    world.createCollider(api.ColliderDesc.ball(0.25), extra)
+  }
 
   const gameObjects = makeGameObjectsStub({
     getBumperBodies: vi.fn(() => bumpers),

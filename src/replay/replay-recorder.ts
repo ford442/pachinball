@@ -6,6 +6,7 @@
 import type { WasmPhysicsRuntimeMode } from '../config/physics'
 import type { InputFrame } from '../game-elements/types'
 import { DEFAULT_TABLE_MAP_ID } from '../config/table-maps'
+import type { ReplayCascade } from '../cascade/daily-cascade-state'
 import type { ReplayWorldFingerprint } from './replay-snapshot'
 
 /** Normalise legacy replay metadata (`wasm` → mirror). */
@@ -40,6 +41,8 @@ export interface ReplayMetadata extends ReplayWorldFingerprint {
   physicsEngine: WasmPhysicsRuntimeMode
   renderer: 'webgl2' | 'webgpu'
   createdAt: string
+  /** The Daily Cascade / free-seed table the run was played on; absent on the vanilla table (#444). */
+  cascade?: ReplayCascade
 }
 
 export interface ReplayPayload extends ReplayMetadata {
@@ -151,6 +154,14 @@ export function decompressInputFrames(compressed: string): InputFrame[] {
 export function normalizeInputFrame(frame: InputFrame): InputFrame {
   const plungerCharge = typeof frame.plungerCharge === 'number' ? frame.plungerCharge : frame.plunger ? 0 : null
   return { ...frame, plungerCharge, plunger: plungerCharge !== null }
+}
+
+function parseReplayCascade(value: unknown): ReplayCascade | undefined {
+  const c = value as Partial<ReplayCascade> | null | undefined
+  if (!c || (c.mode !== 'daily' && c.mode !== 'free') || typeof c.seed !== 'number' || typeof c.seedId !== 'string') {
+    return undefined
+  }
+  return { mode: c.mode, seed: c.seed >>> 0, seedId: c.seedId }
 }
 
 export class ReplayRecorder {
@@ -303,6 +314,7 @@ export class ReplayRecorder {
       pinFieldOccupancy: data.pinFieldOccupancy !== undefined ? data.pinFieldOccupancy : data.pin_field_occupancy,
       feederTunablesHash: data.feederTunablesHash ?? data.feeder_tunables_hash,
       initialSnapshot: data.initialSnapshot ?? data.initial_snapshot,
+      cascade: parseReplayCascade(data.cascade),
     }
   }
 

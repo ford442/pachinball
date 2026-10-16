@@ -318,6 +318,9 @@ export class GamePhysicsController {
       this.wasmOwner?.renameIds(remap.bodies, remap.hinges)
     })
     this.lastReplaySnapshot = res
+    // Bodies that do not pair up by role mean the table descriptors differ:
+    // refuse the replay instead of letting a ghost drift under a toast (#444).
+    if (res.outcome === 'id-layout') runner?.reject(res.outcome, res.message ?? res.outcome)
     // The restore moved the engine's step counter to the recorder's; the
     // gameplay clock carries on from where it was. (The worker client already
     // reports the snapshot's counter while its restore is in flight.)

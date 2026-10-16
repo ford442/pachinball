@@ -1,6 +1,6 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 
-import { GameState, GhostBallRenderer, ReplayRecorder, CameraMode, detectAccessibility } from '../game-elements'
+import { GameState, GhostBallRenderer, ReplayRecorder, CameraMode, detectAccessibility, type ReplayPayload } from '../game-elements'
 import { getDailyCascadeState } from '../cascade/daily-cascade-state'
 import type { FeederKey } from '../cascade/daily-cascade-layout'
 import type { CabinetType } from '../cabinet'
@@ -235,28 +235,37 @@ export abstract class GameDelegates extends GameFields {
     try {
       const { apiFetch } = await import('../config')
       const raw = await apiFetch<object>(`/replays/${replayId}`)
-      // Uploads are compressed (`frames: []` + `compressedFrames`); decode the
-      // tape, or spectate would play zero frames.
-      const payload = raw ? ReplayRecorder.fromJSON(raw) : null
-      if (!payload) {
+      if (!raw) {
         this.showMessage('Replay payload not found', 3000)
         return false
       }
-
-      if (!this.ghostBallRenderer && this.scene) {
-        this.ghostBallRenderer = new GhostBallRenderer(this.scene)
-      }
-
-      this.replayRunner.load(payload)
-      this.ghostBallRenderer?.show()
-      this.uiManager?.showMessage(`Watching Replay: ${payload.mapId} (Score: ${payload.finalScore.toLocaleString()})`, 4000)
-      await this.lifecycle?.startGame()
+      await this.playReplay(raw)
       return true
     } catch (err) {
       console.warn('[Game] Failed to spectate replay:', err)
       this.showMessage('Failed to load replay payload', 3000)
       return false
     }
+  }
+
+  /**
+   * Arm a stored / uploaded replay and start a game on its table: the ghost
+   * is shown and every fixed step from here plays one tape frame. Spectate
+   * and `scripts/verify-replay.mjs` both enter here.
+   */
+  async playReplay(raw: string | object): Promise<ReplayPayload> {
+    // Uploads are compressed (`frames: []` + `compressedFrames`); decode the
+    // tape, or spectate would play zero frames.
+    const payload = ReplayRecorder.fromJSON(raw)
+    if (!this.ghostBallRenderer && this.scene) {
+      this.ghostBallRenderer = new GhostBallRenderer(this.scene)
+    }
+
+    this.replayRunner.load(payload)
+    this.ghostBallRenderer?.show()
+    this.uiManager?.showMessage(`Watching Replay: ${payload.mapId} (Score: ${payload.finalScore.toLocaleString()})`, 4000)
+    await this.lifecycle?.startGame()
+    return payload
   }
 
   // --------------------------------------------------------------------------

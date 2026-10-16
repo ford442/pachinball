@@ -5,7 +5,13 @@
 
 import type { InputFrame } from '../game-elements/types'
 import type { ReplayPayload } from './replay-recorder'
-import type { ReplayWorldFingerprint } from './replay-snapshot'
+import type { ReplaySnapshotOutcome, ReplayWorldFingerprint } from './replay-snapshot'
+
+/** Why a replay was refused instead of played (#444). */
+export interface ReplayRejection {
+  outcome: ReplaySnapshotOutcome
+  message: string
+}
 
 export class ReplayRunner {
   private payload: ReplayPayload | null = null
@@ -13,6 +19,7 @@ export class ReplayRunner {
   private playing = false
   /** True from load()/reset() until the first replayed step has checked the frame-0 snapshot. */
   private snapshotPending = false
+  private rejection: ReplayRejection | null = null
 
   /**
    * Load a replay payload and arm it for playback.
@@ -22,6 +29,22 @@ export class ReplayRunner {
     this.currentFrameIndex = 0
     this.playing = true
     this.snapshotPending = true
+    this.rejection = null
+  }
+
+  /**
+   * Stop playback for good: the tape cannot reproduce the recording on this
+   * world, so playing it on would only show a drifting ghost.
+   */
+  reject(outcome: ReplaySnapshotOutcome, message: string): void {
+    this.playing = false
+    this.snapshotPending = false
+    this.rejection = { outcome, message }
+  }
+
+  /** Set when the last load was refused; cleared by `load()` / `reset()`. */
+  getRejection(): ReplayRejection | null {
+    return this.rejection
   }
 
   /**
@@ -79,6 +102,7 @@ export class ReplayRunner {
     this.currentFrameIndex = 0
     this.playing = this.payload !== null
     this.snapshotPending = this.playing
+    this.rejection = null
   }
 
   stop(): void {

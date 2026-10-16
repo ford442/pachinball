@@ -117,6 +117,18 @@ describe.skipIf(!RUN)('replay from a C++ snapshot on the compiled bundle (#422)'
     expect(client.engine.serializeSnapshot()).toEqual(live.engine.serializeSnapshot())
   })
 
+  it('rejects a replay whose bodies do not pair up with the recording, and stops playing it (#444)', async () => {
+    const module = await loadModule()
+    const { payload } = await recordLiveRun(module)
+    const client = await replay(module, payload, { extraBall: true })
+    expect(client.controller.getLastReplaySnapshotResult()).toMatchObject({ outcome: 'id-layout' })
+    expect(client.runner.getRejection()).toMatchObject({ outcome: 'id-layout', message: expect.stringMatching(/rejected/) })
+    expect(client.runner.isPlaying()).toBe(false)
+    // Frame 0 was the last frame it consumed; nothing was restored.
+    expect(client.runner.getProgress().currentFrame).toBe(1)
+    expect(client.engine.getStepCount()).toBe(1)
+  })
+
   it('without the snapshot the same tape drifts (control)', async () => {
     const module = await loadModule()
     const { live, payload } = await recordLiveRun(module)
