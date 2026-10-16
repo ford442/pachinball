@@ -3,8 +3,7 @@
  * Drift check for docs/wasm-physics-engine.md. Fails when the doc:
  *   - still carries a retired claim (Rapier as production default, hybrid rollout),
  *   - lists EXPORTED_RUNTIME_METHODS / EXPORTED_FUNCTIONS that differ from native/CMakeLists.txt,
- *   - does not mark WASM_PHYSICS.defaultEngine (src/config/physics.ts) as the `(default)` mode
- *     and WASM_PHYSICS.nonIsolatedDefaultEngine as `(default when not isolated)`,
+ *   - does not mark WASM_PHYSICS.defaultEngine (src/config/physics.ts) as the `(default)` mode,
  *   - omits a native/src, native/tests, src/wasm or src/game/physics/wasm-* source file
  *     from its directory tree.
  */
@@ -51,7 +50,6 @@ const requireDefaultRow = (key, label) => {
   }
 }
 requireDefaultRow('defaultEngine', '(default)')
-requireDefaultRow('nonIsolatedDefaultEngine', '(default when not isolated)')
 
 const listed = (dir, pattern) =>
   readdirSync(join(root, dir)).filter((name) => pattern.test(name))

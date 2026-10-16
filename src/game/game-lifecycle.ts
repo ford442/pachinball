@@ -222,7 +222,7 @@ export class GameLifecycle {
     if (!isReplaying && this.host.replayRecorder) {
       this.host.replayRecorder.start({
         version: REPLAY_SCHEMA_VERSION,
-        buildId: '1.0.0',
+        buildId: __PACHINBALL_BUILD__,
         mapId: this.host.currentMapId ?? DEFAULT_TABLE_MAP_ID,
         seed: getSessionSeed(),
         physicsEngine: this.host.physics?.getWasmMode() ?? 'rapier',
