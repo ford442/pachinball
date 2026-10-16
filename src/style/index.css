@@ -1,5 +1,6 @@
 /* Pachinball CSS Modules - Barrel Index */
 @import './base.css';
+@import './boot-error.css';
 @import './cabinet.css';
 @import './hud.css';
 @import './controls.css';

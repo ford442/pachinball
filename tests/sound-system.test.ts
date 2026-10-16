@@ -6,6 +6,7 @@ vi.mock('@babylonjs/core', () => ({
 }))
 
 import { SoundSystem } from '../src/game-elements/sound-system'
+import { EventBus } from '../src/core/event-bus'
 
 describe('SoundSystem', () => {
   let soundSystem: SoundSystem
@@ -201,6 +202,45 @@ describe('SoundSystem', () => {
       soundSystem.playJackpotPhase(1)
 
       expect(mockCreateBufferSource).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('bindEventBus', () => {
+    it('rebinding to a new bus unsubscribes from the old one instead of stacking', () => {
+      const play = vi.spyOn(soundSystem, 'playSample').mockImplementation(() => {})
+      const first = new EventBus()
+      const second = new EventBus()
+
+      soundSystem.bindEventBus(first)
+      soundSystem.bindEventBus(second)
+
+      first.emit('game:start')
+      expect(play).not.toHaveBeenCalled()
+      second.emit('game:start')
+      expect(play).toHaveBeenCalledTimes(1)
+    })
+
+    it('binding the same bus twice does not double-fire handlers', () => {
+      const play = vi.spyOn(soundSystem, 'playSample').mockImplementation(() => {})
+      const bus = new EventBus()
+
+      soundSystem.bindEventBus(bus)
+      soundSystem.bindEventBus(bus)
+
+      bus.emit('game:over')
+      expect(play).toHaveBeenCalledTimes(1)
+    })
+
+    it('unbindEventBus detaches every handler', () => {
+      const play = vi.spyOn(soundSystem, 'playSample').mockImplementation(() => {})
+      const bus = new EventBus()
+
+      soundSystem.bindEventBus(bus)
+      soundSystem.unbindEventBus()
+
+      bus.emit('game:start')
+      bus.emit('game:over')
+      expect(play).not.toHaveBeenCalled()
     })
   })
 })

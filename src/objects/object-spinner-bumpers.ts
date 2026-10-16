@@ -93,7 +93,7 @@ export class SpinnerBumperBuilder {
       diameter: 1.2 * scale,
       height: 0.3,
       tessellation: this.qualityTier === QualityTier.LOW ? 12 : 32
-    }, this.scene) as Mesh
+    }, this.scene)
 
     spinnerMesh.parent = spinnerRoot
     spinnerMesh.material = this.matLib.getEnhancedBumperBodyMaterial(colorHex)
@@ -105,7 +105,7 @@ export class SpinnerBumperBuilder {
         diameter: 1.4 * scale,
         thickness: 0.06 * scale,
         tessellation: this.qualityTier === QualityTier.HIGH ? 32 : 16
-      }, this.scene) as Mesh
+      }, this.scene)
 
       rimMesh.parent = spinnerRoot
       rimMesh.material = this.matLib.getEnhancedBumperRingMaterial(colorHex)
@@ -121,7 +121,7 @@ export class SpinnerBumperBuilder {
         width: 0.3 * scale,
         depth: 0.5 * scale,
         height: 0.15 * scale
-      }, this.scene) as Mesh
+      }, this.scene)
 
       paddle.rotation.z = angle
       paddle.position.x = Math.cos(angle) * 0.4 * scale

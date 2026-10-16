@@ -10,7 +10,7 @@ import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { SoundSystem } from '../game-elements/sound-system'
 import type { AdventureState } from '../adventure/adventure-state'
-import { TABLE_MAPS } from '../shaders/lcd-table'
+import { TABLE_MAPS } from '../config/table-maps'
 
 export interface MapCabinetHost {
   readonly scene: Scene | null
@@ -47,7 +47,7 @@ export class GameMapCabinet {
 
     const musicId = (mapConfig as { musicTrackId?: string }).musicTrackId || this.host.mapManager?.getMapSystem().inferMusicTrackId(mapName) || '1'
     if (musicId) {
-      this.host.soundSystem.playMapMusic(musicId)
+      void this.host.soundSystem.playMapMusic(musicId)
     }
 
     this.host.display?.setStoryText(`MAP: ${mapConfig.name.toUpperCase()}`)

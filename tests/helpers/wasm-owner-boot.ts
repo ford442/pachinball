@@ -8,6 +8,8 @@ export type GameHooks = {
       isWasmOwnerMode?: () => boolean
       getWasmEngine?: () => {
         isReady?: boolean
+        /** PhysicsWorkerClient only (the in-process engine returns 0). */
+        getLastWorkerStepMs?: () => number
         /** PhysicsWorkerClient only. */
         getTransportStats?: () => {
           transport: 'shared' | 'post-message'
@@ -22,6 +24,7 @@ export type GameHooks = {
       getRapier?: () => unknown
       getRapierWorld?: () => unknown
       getLastRapierStepMs?: () => number
+      getLastWasmStepMs?: () => number
     }
     physicsController?: {
       rebuildHandleCaches?: () => void
@@ -49,7 +52,12 @@ export type GameHooks = {
       getBumperBodies?: () => Array<{ translation: () => { x: number; y: number; z: number } }>
     }
     inputManager?: unknown
-    inputActions?: { handlePlunger?: () => boolean; handleFlipperLeft?: (pressed: boolean) => void }
+    inputActions?: {
+      handlePlunger?: (charge?: number | null) => boolean
+      handleFlipperLeft?: (pressed: boolean) => void
+      /** Impulse magnitude of the most recent launch (#441). */
+      lastLaunchImpulse?: number
+    }
     plungerChargeLevel?: number
     engine?: { getDeltaTime: () => number }
     scene?: { meshes?: Array<{ name: string; getVerticesData?: (kind: string) => Float32Array | number[] | null }> }
@@ -58,9 +66,21 @@ export type GameHooks = {
 
 export type OwnerEngine = 'wasm-owner' | 'wasm-worker'
 
+/** Serve the page without COOP/COEP so `crossOriginIsolated` is false. */
+export async function stripIsolationHeaders(page: Page): Promise<void> {
+  await page.route((url) => url.pathname === '/' || url.pathname.endsWith('/index.html'), async (route) => {
+    const response = await route.fetch()
+    const headers = { ...response.headers() }
+    delete headers['cross-origin-opener-policy']
+    delete headers['cross-origin-embedder-policy']
+    await route.fulfill({ response, headers })
+  })
+}
+
 export async function bootWasmOwner(
   page: Page,
-  mode: OwnerEngine = 'wasm-owner',
+  /** `'default'` sets no localStorage override, so isolation picks the engine (#439). */
+  mode: OwnerEngine | 'default' = 'wasm-owner',
   /** Extra query parameters, e.g. `seed=12345` (#422). */
   query = '',
 ): Promise<{ wasmReady: boolean; engine: string | null; rapierLoaded: boolean; rapierRequests: string[] }> {
@@ -69,9 +89,11 @@ export async function bootWasmOwner(
   page.on('request', (req) => {
     if (/@dimforge|rapier3d|\/assets\/rapier-[^/]*\.js/i.test(req.url())) rapierRequests.push(req.url())
   })
-  await page.addInitScript((m) => {
-    localStorage.setItem('pachinball:physics-engine', m)
-  }, mode)
+  if (mode !== 'default') {
+    await page.addInitScript((m) => {
+      localStorage.setItem('pachinball:physics-engine', m)
+    }, mode)
+  }
   await page.goto(`/?renderer=webgl2${query ? `&${query}` : ''}`)
   await expect(page.locator('#start-btn')).toBeVisible({ timeout: 30_000 })
   await expect.poll(async () => {

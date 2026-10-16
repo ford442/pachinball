@@ -5,7 +5,7 @@
  */
 
 import { BallType, BALL_SPAWN_CONFIG } from '../../config'
-import { DisplayState } from '../../game-elements'
+import { DisplayState } from '../../display/display-types'
 
 /** Fever gold-ball multiplier from BALL_SPAWN_CONFIG when display is in FEVER state. */
 export function getFeverScoreMultiplier(

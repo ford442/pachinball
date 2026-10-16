@@ -106,7 +106,7 @@ export function showPauseMenu(
   panel.setAttribute('data-key-handler', 'active')
   ;(panel as HTMLElement & { __pauseKeyHandler?: (event: KeyboardEvent) => void }).__pauseKeyHandler = keyHandler
 
-  requestAnimationFrame(() => panel.focus())
+  state.timers.requestAnimationFrame(() => panel.focus())
 }
 
 export function hidePauseMenu(state: GameUIRuntimeState): void {

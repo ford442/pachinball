@@ -64,22 +64,50 @@ describe('renderer-selector', () => {
     expect(getActiveRenderer()).toBe(RENDERER_WEBGL2)
   })
 
-  it('reload helpers persist preference before reload', () => {
-    const reload = vi.fn()
-    vi.stubGlobal('location', { ...window.location, reload })
+  describe('reload helpers', () => {
+    const assign = vi.fn()
 
-    attemptWebGPURenderer()
-    expect(storage.get(STORAGE_KEY)).toBe(RENDERER_WEBGPU)
-    expect(reload).toHaveBeenCalled()
+    beforeEach(() => {
+      assign.mockClear()
+      vi.stubGlobal('location', { href: 'http://localhost:4174/?debug=1', assign })
+    })
 
-    useWebGL2Renderer()
-    expect(storage.has(STORAGE_KEY)).toBe(false)
-    expect(reload).toHaveBeenCalledTimes(2)
+    it('attemptWebGPURenderer persists webgpu and reloads with ?renderer=webgpu', () => {
+      attemptWebGPURenderer()
+      expect(storage.get(STORAGE_KEY)).toBe(RENDERER_WEBGPU)
+      expect(assign).toHaveBeenCalledWith('http://localhost:4174/?debug=1&renderer=webgpu')
+    })
+
+    it('useWebGL2Renderer stores webgl2 explicitly and reloads with ?renderer=webgl2 (#450)', () => {
+      useWebGL2Renderer()
+      // Removing the key would make the next boot `auto` = WebGPU-first again.
+      expect(storage.get(STORAGE_KEY)).toBe(RENDERER_WEBGL2)
+      expect(assign).toHaveBeenCalledWith('http://localhost:4174/?debug=1&renderer=webgl2')
+    })
+
+    it('rewrites a stale ?renderer= param instead of reloading back into it', () => {
+      vi.stubGlobal('location', { href: 'http://localhost:4174/?renderer=webgl2', assign })
+      attemptWebGPURenderer()
+      expect(assign).toHaveBeenCalledWith('http://localhost:4174/?renderer=webgpu')
+    })
   })
 
-  it('clears storage when selecting the default WebGL2 renderer', () => {
-    storage.set(STORAGE_KEY, RENDERER_WEBGPU)
+  it('stores an explicit webgl2 choice so the next boot is not WebGPU-first auto (#450)', () => {
     setRendererPreference(RENDERER_WEBGL2)
+    expect(storage.get(STORAGE_KEY)).toBe(RENDERER_WEBGL2)
+    expect(getRendererPreference()).toBe(RENDERER_WEBGL2)
+  })
+
+  it('clears storage only when returning to auto', () => {
+    storage.set(STORAGE_KEY, RENDERER_WEBGPU)
+    setRendererPreference(RENDERER_AUTO)
     expect(storage.has(STORAGE_KEY)).toBe(false)
+    expect(getRendererPreference()).toBe(RENDERER_AUTO)
+  })
+
+  it('?renderer= outranks a stored preference', () => {
+    storage.set(STORAGE_KEY, RENDERER_WEBGPU)
+    window.history.replaceState({}, '', '/?renderer=webgl2')
+    expect(getRendererPreference()).toBe(RENDERER_WEBGL2)
   })
 })

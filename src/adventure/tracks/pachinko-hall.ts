@@ -46,7 +46,7 @@ function addPinLane(
   pinMat: import('@babylonjs/core/Materials/standardMaterial').StandardMaterial,
 ): Vector3 {
   const laneStart = start.clone()
-  const end = b.addStraightRamp(start, heading, width, length, incline, mat) as Vector3
+  const end = b.addStraightRamp(start, heading, width, length, incline, mat)
 
   const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
   const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
@@ -99,7 +99,7 @@ function addConveyorRamp(
   forceScale: number,
 ): Vector3 {
   const rampStart = start.clone()
-  const end = b.addStraightRamp(start, heading, width, length, incline, mat) as Vector3
+  const end = b.addStraightRamp(start, heading, width, length, incline, mat)
 
   const forward = new Vector3(
     Math.sin(heading) * Math.cos(incline),
@@ -139,7 +139,7 @@ export function buildPachinkoHall(builder: TrackBuilder): void {
   const modeType = b.currentTrackInfo?.modeType ?? 'EXTENDED_MAP'
 
   // Gallery overlook — drop into the main hall
-  currentPos = b.addStraightRamp(currentPos, heading, 8, 10, (12 * Math.PI) / 180, hallMat) as Vector3
+  currentPos = b.addStraightRamp(currentPos, heading, 8, 10, (12 * Math.PI) / 180, hallMat)
 
   if (modeType === 'EXTENDED_MAP') {
     // Left pin lane
@@ -169,7 +169,7 @@ export function buildPachinkoHall(builder: TrackBuilder): void {
       currentPos, heading,
       14, Math.PI / 2, (4 * Math.PI) / 180,
       6, 1.5, hallMat, 20, -(6 * Math.PI) / 180,
-    ) as Vector3
+    )
     heading += Math.PI / 2
 
     b.createStaticCylinder(
@@ -186,7 +186,7 @@ export function buildPachinkoHall(builder: TrackBuilder): void {
       b, currentPos, heading, 10, 0, 5, hallMat, 40,
     )
   } else {
-    currentPos = b.addStraightRamp(currentPos, heading, 6, 16, (5 * Math.PI) / 180, hallMat) as Vector3
+    currentPos = b.addStraightRamp(currentPos, heading, 6, 16, (5 * Math.PI) / 180, hallMat)
   }
 
   b.addExitPortal(new Vector3(currentPos.x, currentPos.y + 2.0, currentPos.z))

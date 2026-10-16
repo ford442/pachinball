@@ -84,7 +84,7 @@ describe('WasmOwner native hinges', () => {
     const frame: InputFrame = {
       flipperLeft: true,
       flipperRight: null,
-      plunger: false,
+      plungerCharge: null, plunger: false,
       nudge: null,
       timestamp: 0,
     }

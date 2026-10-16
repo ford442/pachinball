@@ -2,9 +2,7 @@
  * Static asset URL resolution — Babylon-free (#322).
  *
  * Split out of `src/game/game-utils.ts` so `src/game-elements/` can resolve
- * asset paths without importing from the high-level game layer. `hexToColor3`
- * stays in game-utils because it constructs a Babylon `Color3`, which this
- * kernel layer is not allowed to depend on.
+ * asset paths without importing from the high-level game layer.
  */
 
 /**
@@ -15,7 +13,7 @@
 export function resolveAssetUrl(assetPath: string | undefined): string | undefined {
   if (!assetPath) return undefined
   if (/^https?:\/\//i.test(assetPath)) return assetPath
-  const base = (import.meta.env.BASE_URL as string) || '/'
+  const base = (import.meta.env.BASE_URL) || '/'
   const cleanPath = assetPath.startsWith('/') ? assetPath.slice(1) : assetPath
   return `${base}${cleanPath}`
 }

@@ -7,6 +7,7 @@ import { vi } from 'vitest'
 
 import { EventBus } from '../../src/core/event-bus'
 import type { PhysicsHost } from '../../src/game/game-physics-controller'
+import { freshNudgeState } from '../../src/game/physics/types'
 import { QualityTier } from '../../src/game-elements/visual-language'
 
 export type GameObjectsStubOverrides = {
@@ -127,7 +128,7 @@ export function makePhysicsHostShell(opts: PhysicsHostShellOpts): PhysicsHost {
     powerupActive: false,
     powerupTimer: 0,
     plungerChargeLevel: 0,
-    nudgeState: { tiltWarnings: 0, lastNudgeTime: 0, tiltActive: false, tiltWarningActive: false },
+    nudgeState: freshNudgeState(),
     isCameraFollowMode: false,
     cameraFollowTransition: 0,
     cameraFollowTransitionSpeed: 1,

@@ -78,12 +78,17 @@ export const DEFAULT_SHARED_CAPACITIES: SharedCapacities = {
   contacts: 1024,
 }
 
+/** Header and scalar words always exist: every buffer is allocated with at least DATA_START words. */
+function word(view: Int32Array | Float32Array, slot: number): number {
+  return view[slot] as number
+}
+
 function regionOffsets(i32: Int32Array) {
-  const transformCap = i32[SharedHeader.TRANSFORM_CAPACITY]
-  const hingeCap = i32[SharedHeader.HINGE_CAPACITY]
+  const transformCap = word(i32, SharedHeader.TRANSFORM_CAPACITY)
+  const hingeCap = word(i32, SharedHeader.HINGE_CAPACITY)
   const hingeStart = DATA_START + transformCap
   const contactStart = hingeStart + hingeCap * HINGE_STRIDE
-  return { transformCap, hingeCap, hingeStart, contactStart, ringSlots: i32[SharedHeader.CONTACT_CAPACITY] + 1 }
+  return { transformCap, hingeCap, hingeStart, contactStart, ringSlots: word(i32, SharedHeader.CONTACT_CAPACITY) + 1 }
 }
 
 export function sharedByteLength(caps: SharedCapacities): number {
@@ -141,13 +146,13 @@ export class SharedSnapshotWriter {
     this.capacities = {
       transformSlots: transformCap / TRANSFORM_STRIDE,
       hinges: hingeCap,
-      contacts: this.i32[SharedHeader.CONTACT_CAPACITY],
+      contacts: word(this.i32, SharedHeader.CONTACT_CAPACITY),
     }
   }
 
   fits(transformFloats: number, hingeCount: number): boolean {
-    return transformFloats <= this.i32[SharedHeader.TRANSFORM_CAPACITY]
-      && hingeCount <= this.i32[SharedHeader.HINGE_CAPACITY]
+    return transformFloats <= word(this.i32, SharedHeader.TRANSFORM_CAPACITY)
+      && hingeCount <= word(this.i32, SharedHeader.HINGE_CAPACITY)
   }
 
   /** Free contact records in the ring right now. */
@@ -163,12 +168,14 @@ export class SharedSnapshotWriter {
   pushContacts(packed: ArrayLike<number>, count: number): boolean {
     if (count <= 0) return true
     if (count > this.contactSpace()) return false
+    // A short buffer would publish NaN records into the ring; refuse it instead.
+    if (packed.length < count * CONTACT_STRIDE) return false
     const { contactStart, ringSlots } = regionOffsets(this.i32)
     let tail = Atomics.load(this.i32, SharedHeader.CONTACT_TAIL)
     for (let r = 0; r < count; r++) {
       const dst = contactStart + tail * CONTACT_STRIDE
       const src = r * CONTACT_STRIDE
-      for (let k = 0; k < CONTACT_STRIDE; k++) this.f32[dst + k] = packed[src + k]
+      for (let k = 0; k < CONTACT_STRIDE; k++) this.f32[dst + k] = packed[src + k] ?? 0
       tail = (tail + 1) % ringSlots
     }
     // Publishing the tail last is what makes the records visible.
@@ -253,15 +260,15 @@ export class SharedSnapshotReader {
 
       // Lengths are read inside the window too, so clamp: a torn value must
       // not index past the region before the SEQ check rejects it.
-      const tf = Math.min(Math.max(this.i32[SharedHeader.TRANSFORM_FLOATS], 0), transformCap)
-      const hc = Math.min(Math.max(this.i32[SharedHeader.HINGE_COUNT], 0), hingeCap)
+      const tf = Math.min(Math.max(word(this.i32, SharedHeader.TRANSFORM_FLOATS), 0), transformCap)
+      const hc = Math.min(Math.max(word(this.i32, SharedHeader.HINGE_COUNT), 0), hingeCap)
       if (this.transformStaging.length < tf) this.transformStaging = new Float32Array(transformCap)
       if (this.hingeStaging.length < hc * HINGE_STRIDE) this.hingeStaging = new Float32Array(hingeCap * HINGE_STRIDE)
       this.transformStaging.set(this.f32.subarray(DATA_START, DATA_START + tf))
       this.hingeStaging.set(this.f32.subarray(hingeStart, hingeStart + hc * HINGE_STRIDE))
-      const alpha = this.f32[SCALAR_ALPHA]
-      const stepMs = this.f32[SCALAR_STEP_MS]
-      const stepCount = this.i32[SharedHeader.STEP_COUNT]
+      const alpha = word(this.f32, SCALAR_ALPHA)
+      const stepMs = word(this.f32, SCALAR_STEP_MS)
+      const stepCount = word(this.i32, SharedHeader.STEP_COUNT)
 
       if (Atomics.load(this.i32, SharedHeader.SEQ) !== s1) continue
 

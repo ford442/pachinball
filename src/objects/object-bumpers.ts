@@ -49,14 +49,14 @@ export class BumperBuilder {
       // ================================================================
       // ORGANIC BUMPER BODY - Flattened sphere with LOD
       // ================================================================
-      const bumperHigh = MeshBuilder.CreateSphere('bump_high', { diameter: 0.9 * scale, segments: 32 }, this.scene) as Mesh
+      const bumperHigh = MeshBuilder.CreateSphere('bump_high', { diameter: 0.9 * scale, segments: 32 }, this.scene)
       bumperHigh.position.set(x, 0.5, z)
       bumperHigh.scaling = new Vector3(1, 0.7, 1)
 
-      const bumperMedium = MeshBuilder.CreateSphere('bump_med', { diameter: 0.9 * scale, segments: 16 }, this.scene) as Mesh
+      const bumperMedium = MeshBuilder.CreateSphere('bump_med', { diameter: 0.9 * scale, segments: 16 }, this.scene)
       bumperMedium.scaling = new Vector3(1, 0.7, 1)
 
-      const bumperLow = MeshBuilder.CreateSphere('bump_low', { diameter: 0.9 * scale, segments: 8 }, this.scene) as Mesh
+      const bumperLow = MeshBuilder.CreateSphere('bump_low', { diameter: 0.9 * scale, segments: 8 }, this.scene)
       bumperLow.scaling = new Vector3(1, 0.7, 1)
 
       bumperHigh.addLODLevel(15, bumperMedium)
@@ -72,7 +72,7 @@ export class BumperBuilder {
       // ================================================================
       // BUMPER CAP - Subtle beveled top
       // ================================================================
-      const bumperCap = MeshBuilder.CreateSphere('bump_cap', { diameter: 0.55 * scale, segments: 16 }, this.scene) as Mesh
+      const bumperCap = MeshBuilder.CreateSphere('bump_cap', { diameter: 0.55 * scale, segments: 16 }, this.scene)
       bumperCap.position.set(x, 0.5 + 0.22 * scale, z)
       bumperCap.scaling = new Vector3(1, 0.35, 1)
       bumperCap.material = bodyMat
@@ -84,7 +84,7 @@ export class BumperBuilder {
         diameter: 0.78 * scale,
         thickness: 0.055 * scale,
         tessellation: 48
-      }, this.scene) as Mesh
+      }, this.scene)
       bumperRing.position.set(x, 0.38 * scale, z)
       bumperRing.rotation.x = Math.PI / 2
 
@@ -112,7 +112,7 @@ export class BumperBuilder {
         diameter: 0.6 * scale,
         thickness: 0.008 * scale,
         tessellation: 32
-      }, this.scene) as Mesh
+      }, this.scene)
       wireframeRing.position.set(x, 0.9 * scale, z)
       wireframeRing.rotation.x = Math.PI / 2
 

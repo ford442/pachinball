@@ -138,7 +138,7 @@ export class AdventureCinematicSystem {
         subtitleText: 'Challenge begins!',
         showDuration: 1.5
       },
-      easing: this.easeInOutCubic
+      easing: (t) => this.easeInOutCubic(t)
     })
   }
 
@@ -171,7 +171,7 @@ export class AdventureCinematicSystem {
       audio: {
         musicIntensity: 1.2
       },
-      easing: this.easeOutCubic
+      easing: (t) => this.easeOutCubic(t)
     })
   }
 
@@ -205,7 +205,7 @@ export class AdventureCinematicSystem {
       audio: {
         musicIntensity: 1.5
       },
-      easing: this.easeInOutCubic
+      easing: (t) => this.easeInOutCubic(t)
     })
   }
 
@@ -239,7 +239,7 @@ export class AdventureCinematicSystem {
       audio: {
         musicIntensity: 1.3
       },
-      easing: this.easeOutQuad
+      easing: (t) => this.easeOutQuad(t)
     })
   }
 

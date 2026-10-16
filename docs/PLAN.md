@@ -1429,7 +1429,7 @@ A "Table within a Table". The player is shrunk down (thematically) to play a min
 
 A comprehensive slot machine mini-game integrated into the backbox display, featuring variable spins, jackpot detection, sound effects, and intermittent activation.
 
-> **Implementation status:** Core slot engine, DisplaySystem wiring, EventBus events, SoundSystem audio, EffectsSystem cabinet lighting, and Vitest unit tests are in place. See `src/display/slot-machine.ts`, `src/display/slot-logic.ts`, `src/display/slot-types.ts`, `src/config.ts` (`SLOT_MACHINE_CONFIG`), `src/game/event-bus.ts`, `src/game-elements/sound-system.ts`, and `tests/slot-machine.test.ts`.
+> **Implementation status:** Core slot engine, DisplaySystem wiring, EventBus events, SoundSystem audio, EffectsSystem cabinet lighting, and Vitest unit tests are in place. See `src/display/slot-machine.ts`, `src/display/slot-logic.ts`, `src/display/slot-types.ts`, `src/config/` (`SLOT_MACHINE_CONFIG`), `src/game/event-bus.ts`, `src/game-elements/sound-system.ts`, and `tests/slot-machine.test.ts`.
 
 ### A. Overview
 

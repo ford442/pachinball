@@ -7,110 +7,138 @@
  */
 
 import { resetMaterialLibrary } from '../materials'
+import { resetCabinetBuilder } from '../cabinet'
 import { resetCampaignRewardsManager } from '../adventure/campaign-rewards-manager'
-import { resetScoringBreakdownManager } from '../game-elements'
+import {
+  resetScoringBreakdownManager,
+  resetSoundSystem,
+  resetMapSystem,
+  resetChallengeSystem,
+  resetDynamicWorld,
+} from '../game-elements'
 import { resetTrackThemingSystem } from '../adventure/track-theming-system'
 import type { Game } from '../game'
 
-export class GameDisposer {
-  constructor(private game: Game) {}
+export function disposeGame(game: Game): void {
+  // Removes every listener registered with `{ signal: game.signal }` in one go.
+  game.abort.abort()
+  game.timers.dispose()
 
-  public disposeAll(): void {
-    this.game.sceneOptimizer?.dispose()
-    this.game.sceneOptimizer = null
-    this.game.cabinetLighting?.dispose()
-    this.game.cabinetLighting = null
-    this.game.celebrationSequencer?.dispose()
-    this.game.celebrationSequencer = null
-    this.game.inputManager?.dispose()
-    this.game.debugHUD?.dispose()
-    this.game.debugHUD = null
-    this.game.eventBusLog.dispose()
-    this.game.uiManager?.dispose()
-    this.game.adventureManager?.dispose()
-    this.game.renderer?.dispose()
+  game.sceneOptimizer?.dispose()
+  game.sceneOptimizer = null
+  game.cabinetLighting?.dispose()
+  game.cabinetLighting = null
+  game.celebrationSequencer?.dispose()
+  game.celebrationSequencer = null
+  game.inputManager?.dispose()
+  game.debugHUD?.dispose()
+  game.debugHUD = null
+  game.eventBusLog.dispose()
+  game.uiManager?.dispose()
+  game.adventureManager?.dispose()
+  game.renderer?.dispose()
 
-    // Explicitly null helper references to break cycles
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.game.cabinetBuilder = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.game.sceneBuilder = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.game.physicsController = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.game.inputActions = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.game.scenarioManager = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.game.slotAdventure = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.game.settingsUI = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.game.debugHelper = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.game.lifecycle = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.game.hud = null as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.game.mapCabinet = null as any
+  // Subsystems that used to be dropped without a dispose(): they hold DOM nodes,
+  // listeners or EventBus subscriptions that outlive the scene.
+  game.scenarioManager?.dispose()
+  game.freeMapTestMode?.dispose()
+  game.freeMapTestMode = null
+  game.physicsTuningPanel?.dispose()
+  game.physicsTuningPanel = null
+  game.ghostBallRenderer?.dispose()
+  game.ghostBallRenderer = null
+  game.zoneTriggerSystem?.dispose()
+  game.zoneTriggerSystem = null
+  game.mapManager?.dispose()
+  game.mapManager = null
+  game.physicsController?.dispose()
 
-    this.game.disposeOverlaySystems()
+  // Explicitly null helper references to break cycles
+  game.cabinetBuilder = null
+  game.sceneBuilder = null
+  game.physicsController = null
+  game.inputActions = null
+  game.scenarioManager = null
+  game.slotAdventure = null
+  game.settingsUI = null
+  game.debugHelper = null
+  game.lifecycle = null
+  game.hud = null
+  game.mapCabinet = null
 
-    this.game.bloomPipeline?.dispose()
-    this.game.bloomPipeline = null
-    this.game.mirrorTexture?.dispose()
-    this.game.mirrorTexture = null
-    this.game.tableRenderTarget?.dispose()
-    this.game.tableRenderTarget = null
-    this.game.headRenderTarget?.dispose()
-    this.game.headRenderTarget = null
-    this.game.shadowGenerator?.dispose()
-    this.game.shadowGenerator = null
-    this.game.ballAnimator?.dispose()
-    this.game.ballAnimator = null
-    this.game.ballStackVisual?.dispose()
-    this.game.ballStackVisual = null
-    this.game.effects?.dispose()
-    this.game.effects = null
-    this.game.gameObjects?.dispose()
-    this.game.gameObjects = null
+  game.disposeOverlaySystems()
 
-    // Dispose obstacle builders
-    this.game.spinnerBuilder?.dispose()
-    this.game.spinnerBuilder = null
-    this.game.ballTrapBuilder?.dispose()
-    this.game.ballTrapBuilder = null
-    this.game.launcherBuilder?.dispose()
-    this.game.launcherBuilder = null
-    this.game.movingGateBuilder?.dispose()
-    this.game.movingGateBuilder = null
-    this.game.spinnerVisuals = []
-    this.game.trapStates = []
-    this.game.launcherStates = []
-    this.game.gateStates = []
+  game.bloomPipeline?.dispose()
+  game.bloomPipeline = null
+  game.mirrorTexture?.dispose()
+  game.mirrorTexture = null
+  game.tableRenderTarget?.dispose()
+  game.tableRenderTarget = null
+  game.headRenderTarget?.dispose()
+  game.headRenderTarget = null
+  game.shadowGenerator?.dispose()
+  game.shadowGenerator = null
+  game.ballAnimator?.dispose()
+  game.ballAnimator = null
+  game.ballStackVisual?.dispose()
+  game.ballStackVisual = null
+  game.effects?.dispose()
+  game.effects = null
+  game.display?.dispose()
+  game.display = null
+  game.gameObjects?.dispose()
+  game.gameObjects = null
 
-    // Dispose adventure systems
-    this.game.adventureGoalTracker?.dispose()
-    this.game.adventureGoalTracker = null
-    this.game.adventureCinematicTriggers?.dispose()
-    this.game.adventureCinematicTriggers = null
-    this.game.adventureCinematicSystem?.dispose()
-    this.game.adventureCinematicSystem = null
-    this.game.adventureUIStateManager?.dispose()
-    this.game.adventureUIStateManager = null
-    this.game.adventureTrackProgression = null
-    this.game.adventureProgressionSupervisor?.reset()
-    this.game.adventureProgressionSupervisor = null
-    resetCampaignRewardsManager()
-    resetTrackThemingSystem()
-    resetScoringBreakdownManager()
+  // Dispose obstacle builders
+  game.spinnerBuilder?.dispose()
+  game.spinnerBuilder = null
+  game.ballTrapBuilder?.dispose()
+  game.ballTrapBuilder = null
+  game.launcherBuilder?.dispose()
+  game.launcherBuilder = null
+  game.movingGateBuilder?.dispose()
+  game.movingGateBuilder = null
+  game.spinnerVisuals = []
+  game.trapStates = []
+  game.launcherStates = []
+  game.gateStates = []
 
-    resetMaterialLibrary()
-    this.game.scene?.dispose()
-    this.game.scene = null
-    this.game.physics.dispose()
-    this.game.ready = false
+  // Dispose adventure systems
+  game.adventureGoalTracker?.dispose()
+  game.adventureGoalTracker = null
+  game.adventureCinematicTriggers?.dispose()
+  game.adventureCinematicTriggers = null
+  game.adventureCinematicSystem?.dispose()
+  game.adventureCinematicSystem = null
+  game.adventureUIStateManager?.dispose()
+  game.adventureUIStateManager = null
+  game.adventureTrackProgression = null
+  game.adventureProgressionSupervisor?.reset()
+  game.adventureProgressionSupervisor = null
+  resetCampaignRewardsManager()
+  resetTrackThemingSystem()
+  resetScoringBreakdownManager()
 
-    console.log('[Game] Disposed all resources')
-  }
+  // Module singletons: each would otherwise hand the next Game an instance wired to
+  // this one's EventBus, scene or DOM. SoundSystem.dispose() unsubscribes from the
+  // bus and closes the AudioContext, so it runs after everything that plays sound.
+  // resetAdventureState() is deliberately absent: it wipes campaign progress.
+  resetSoundSystem()
+  resetMapSystem()
+  resetChallengeSystem()
+  resetDynamicWorld()
+  game.dynamicWorld = null
+  game.levelSelectScreen = null
+
+  resetMaterialLibrary()
+  // CabinetBuilder is a singleton bound to the scene it was created with; dispose
+  // it and drop it so a later Game does not inherit a builder for a dead scene.
+  resetCabinetBuilder()
+  game.cabinetManager = null
+  game.scene?.dispose()
+  game.scene = null
+  game.physics.dispose()
+  game.ready = false
+
+  console.log('[Game] Disposed all resources')
 }

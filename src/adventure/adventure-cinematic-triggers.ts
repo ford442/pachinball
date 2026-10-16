@@ -7,6 +7,7 @@ import type { EventBus } from '../core/event-bus'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { AdventureCinematicSystem } from './adventure-cinematic-system'
 import type { AdventureGoalTracker } from './adventure-goal-tracker'
+import { createTimerScope } from '../core/timers'
 
 export interface CinematicTriggerConfig {
   trackStartEnabled: boolean
@@ -17,6 +18,7 @@ export interface CinematicTriggerConfig {
 }
 
 export class AdventureCinematicTriggers {
+  private readonly timers = createTimerScope()
   private cinematics: AdventureCinematicSystem
   private goalTracker: AdventureGoalTracker | null = null
   private config: CinematicTriggerConfig = {
@@ -93,7 +95,7 @@ export class AdventureCinematicTriggers {
 
     // Play track start cinematic on next update
     if (this.config.trackStartEnabled) {
-      setTimeout(() => {
+      this.timers.setTimeout(() => {
         if (!this.trackState.trackStarted) {
           this.trackState.trackStarted = true
           this.cinematics.playTrackStart(trackName)
@@ -204,7 +206,7 @@ export class AdventureCinematicTriggers {
     })
 
     return new Promise<void>((resolve) => {
-      setTimeout(() => {
+      this.timers.setTimeout(() => {
         resolve()
       }, options.maxDurationMs)
     })
@@ -214,6 +216,7 @@ export class AdventureCinematicTriggers {
    * Clean up references
    */
   dispose(): void {
+    this.timers.dispose()
     this.clearEventBus()
     this.goalTracker = null
     this.reset()

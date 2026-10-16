@@ -1,5 +1,12 @@
+/**
+ * @vitest-environment happy-dom
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { Engine } from '@babylonjs/core/Engines/engine'
+import { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import {
+  createEngine,
+  replaceCanvas,
   resolveEngineCreationPlan,
   webgpuFeatureLevelsToTry,
   toWebGLEngineOptions,
@@ -299,5 +306,96 @@ describe('degrade telemetry from the creation path', () => {
 
     expect(getGpuDegrades().map((d) => d.path)).toEqual(['context-lost', 'context-restored'])
     expect(getGpuDegrades()[0].featureLevel).toBe('core')
+  })
+})
+
+describe('WebGL2 fallback gets a fresh canvas (#451)', () => {
+  const gpuSupport = WebGPUEngine as unknown as { IsSupportedAsync: Promise<boolean> }
+  let errorSpy: ReturnType<typeof vi.spyOn>
+
+  function stubCanvas() {
+    const fresh = { tag: 'fresh' } as unknown as HTMLCanvasElement
+    const original = {
+      tag: 'original',
+      cloneNode: vi.fn(() => fresh),
+      replaceWith: vi.fn(),
+    } as unknown as HTMLCanvasElement
+    return { original, fresh }
+  }
+
+  /** A WebGPU factory whose every attempt throws, as when the adapter/device is rejected. */
+  const failingFactory = () =>
+    vi.fn(() => {
+      throw new Error('webgpu context unavailable')
+    }) as unknown as WebGPUEngineFactory
+
+  beforeEach(() => {
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    gpuSupport.IsSupportedAsync = Promise.resolve(true)
+    vi.mocked(Engine).mockClear()
+    window.history.replaceState({}, '', '/')
+  })
+
+  afterEach(() => {
+    errorSpy.mockRestore()
+    gpuSupport.IsSupportedAsync = Promise.resolve(false)
+    window.history.replaceState({}, '', '/')
+  })
+
+  it('builds the WebGL2 engine on a replacement element after every WebGPU attempt throws', async () => {
+    const { original, fresh } = stubCanvas()
+    const factory = failingFactory()
+
+    const engine = await createEngine(original, factory)
+
+    expect(engine.getClassName()).toBe('Engine')
+    // Both feature levels were tried on the original element...
+    expect(factory).toHaveBeenCalledTimes(2)
+    for (const call of vi.mocked(factory).mock.calls) expect(call[0]).toBe(original)
+    // ...which is then swapped out, and WebGL2 never touches it.
+    expect(original.cloneNode).toHaveBeenCalledWith(false)
+    expect(original.replaceWith).toHaveBeenCalledWith(fresh)
+    expect(vi.mocked(Engine)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(Engine).mock.calls[0][0]).toBe(fresh)
+    expect(errorSpy).not.toHaveBeenCalled()
+  })
+
+  it('logs console.error and rethrows when the WebGL2 fallback itself fails', async () => {
+    const { original } = stubCanvas()
+    vi.mocked(Engine).mockImplementationOnce(function () {
+      throw new Error('getContext returned null')
+    })
+
+    await expect(createEngine(original, failingFactory())).rejects.toThrow('getContext returned null')
+
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    expect(String(errorSpy.mock.calls[0][0])).toContain('WebGL2 fallback failed')
+  })
+
+  it('does not touch the canvas when WebGL2 is requested up front', async () => {
+    window.history.replaceState({}, '', '/?renderer=webgl2')
+    const { original } = stubCanvas()
+    const factory = failingFactory()
+
+    await createEngine(original, factory)
+
+    expect(factory).not.toHaveBeenCalled()
+    expect(original.replaceWith).not.toHaveBeenCalled()
+    expect(vi.mocked(Engine).mock.calls[0][0]).toBe(original)
+  })
+
+  it('replaceCanvas keeps id, class and attributes, in the same DOM position', () => {
+    document.body.innerHTML = '<div><canvas id="pachinball-canvas" class="game" width="640" data-renderer="webgpu"></canvas><p id="after"></p></div>'
+    const old = document.getElementById('pachinball-canvas') as HTMLCanvasElement
+
+    const fresh = replaceCanvas(old)
+
+    expect(fresh).not.toBe(old)
+    expect(document.getElementById('pachinball-canvas')).toBe(fresh)
+    expect(fresh.className).toBe('game')
+    expect(fresh.getAttribute('width')).toBe('640')
+    expect(fresh.dataset.renderer).toBe('webgpu')
+    expect(old.isConnected).toBe(false)
+    expect(fresh.nextElementSibling?.id).toBe('after')
   })
 })

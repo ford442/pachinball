@@ -4,11 +4,11 @@ import type { HUDData } from './game-ui-types'
 import type { GameUIRuntimeState } from './game-ui'
 
 /** Set up a one-time media-query listener so the cached value stays fresh. */
-export function initPrefersReducedMotionListener(state: GameUIRuntimeState): void {
+export function initPrefersReducedMotionListener(state: GameUIRuntimeState, signal?: AbortSignal): void {
   if (typeof window === 'undefined') return
   const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
   state.prefersReducedMotion = mq.matches
-  mq.addEventListener('change', (e) => { state.prefersReducedMotion = e.matches })
+  mq.addEventListener('change', (e) => { state.prefersReducedMotion = e.matches }, { signal })
 }
 
 /**

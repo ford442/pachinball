@@ -121,7 +121,7 @@ export class MaterialLibraryBase {
   protected textureCache: Map<string, BaseTexture> = new Map()
   protected materialCache: Map<string, StandardMaterial | PBRMaterial> = new Map()
 
-  protected textureBasePath = (import.meta.env.BASE_URL as string) + 'textures'
+  protected textureBasePath = (import.meta.env.BASE_URL) + 'textures'
   protected _qualityTier: QualityTier = QualityTier.HIGH
 
   constructor(scene: Scene) {

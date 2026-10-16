@@ -184,6 +184,7 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
                                 std::vector<Pair>& outPairs) {
   outPairs.clear();
   dynamicCells_.clear();
+  sleeperCells_.clear();
   rebuildMoverCells(movers);
 
   const int n = bodies.denseCount();
@@ -191,8 +192,11 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
   cells.reserve(16);
 
   for (int i = 0; i < n; ++i) {
-    if (!bodies.isAwake(i)) continue;
-    if (static_cast<BodyType>(bodies.type(i)) == BodyType::Static) continue;
+    const BodyType type = static_cast<BodyType>(bodies.type(i));
+    if (type == BodyType::Static) continue;
+    // A sleeper is only a target for awake bodies; kinematic bodies never sleep.
+    const bool awake = bodies.isAwake(i);
+    if (!awake && type != BodyType::Dynamic) continue;
 
     const float px = bodies.posX(i);
     const float pz = bodies.posZ(i);
@@ -207,7 +211,11 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
     cells.clear();
     cellsForAabb(px - r, px + r, pz - r, pz + r, cells);
     for (const auto& c : cells) {
-      addToCell(c, i);
+      if (awake) {
+        addToCell(c, i);
+      } else {
+        sleeperCells_[c].push_back(i);
+      }
     }
   }
 
@@ -336,6 +344,30 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
             const uint64_t key = pairKeyBody(a, b);
             if (!seenBody.insert(key).second) continue;
             outPairs.push_back({Pair::BodyBody, a, b});
+          }
+        }
+      }
+    }
+  }
+
+  // Awake body vs sleeper (same cell or one of the 8 neighbours). Emitted with
+  // the lower dense index first, like the awake pairs above; `seenBody` dedups
+  // the cells a pair shares. Contact, not proximity, is what wakes the sleeper.
+  if (!sleeperCells_.empty()) {
+    for (const auto& entry : dynamicCells_) {
+      for (int dz = -1; dz <= 1; ++dz) {
+        for (int dx = -1; dx <= 1; ++dx) {
+          const auto sit = sleeperCells_.find(CellKey{entry.first.cx + dx, entry.first.cz + dz});
+          if (sit == sleeperCells_.end()) continue;
+          for (int awakeBody : entry.second) {
+            for (int sleeper : sit->second) {
+              if (!groupsInteract(bodies.membership(awakeBody), bodies.filter(awakeBody),
+                                  bodies.membership(sleeper), bodies.filter(sleeper))) continue;
+              const int lo = std::min(awakeBody, sleeper);
+              const int hi = std::max(awakeBody, sleeper);
+              if (!seenBody.insert(pairKeyBody(lo, hi)).second) continue;
+              outPairs.push_back({Pair::BodyBody, lo, hi});
+            }
           }
         }
       }

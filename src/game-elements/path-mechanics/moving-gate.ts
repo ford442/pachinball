@@ -47,7 +47,7 @@ export class MovingGate extends PathMechanic {
     this.createPhysics()
 
     this.isSpawned = true
-    console.log(`[MovingGate] Spawned at ${this.position}`)
+    console.log(`[MovingGate] Spawned at ${this.position.toString()}`)
   }
 
   despawn(): void {

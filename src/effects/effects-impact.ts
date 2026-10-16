@@ -2,7 +2,9 @@ import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTextur
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem'
 import { Scene } from '@babylonjs/core/scene'
+import { createTimerScope } from '../core/timers'
 export class ImpactEffects {
+  private readonly timers = createTimerScope()
   private scene: Scene
   private impactFlashPool: ParticleSystem | null = null
   private impactFlashPoolInited = false
@@ -34,7 +36,7 @@ export class ImpactEffects {
     ps.manualEmitCount = count
     ps.start()
 
-    setTimeout(() => {
+    this.timers.setTimeout(() => {
       ps.stop()
     }, 100)
   }
@@ -74,6 +76,7 @@ export class ImpactEffects {
   }
 
   dispose(): void {
+    this.timers.dispose()
     if (this.impactFlashPool) {
       this.impactFlashPool.stop()
       try {

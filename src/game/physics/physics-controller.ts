@@ -15,17 +15,19 @@ import { CollisionDispatcher } from './collision-dispatch'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { PhysicsBody } from '../../core/physics-api'
+import { GameSimClock } from '../../core/sim-clock'
 
 import { type InputFrame, type ReplayRecorder, type ReplayRunner } from '../../game-elements'
 import { BallType, GAME_TUNING, GameConfig } from '../../config'
 import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
-import { DisplayState } from '../../game-elements'
+import { DisplayState } from '../../display/display-types'
 import { CameraMode } from '../../game-elements'
 import { QualityTier } from '../../game-elements/visual-language'
 import type { WasmContactEvent } from '../../wasm'
 
 /** Shared surface for mirror and owner WASM bridges. */
 import type { WasmContactBridge } from './collision-dispatch'
+import { createTimerScope } from '../../core/timers'
 import {
   applyReplaySnapshot,
   captureReplayFingerprint,
@@ -36,6 +38,7 @@ import {
 } from '../../replay/replay-snapshot'
 
 export class GamePhysicsController {
+  private readonly timers = createTimerScope()
   private readonly host: PhysicsHost
 
   /** WASM bridge for mirror or owner mode. */
@@ -47,6 +50,11 @@ export class GamePhysicsController {
   private readonly scoringBridge: ScoringBridge
   private readonly collisionDispatcher: CollisionDispatcher
   private readonly meshInterpolation = new MeshInterpolationSystem()
+  /**
+   * Gameplay clock (#441): nudge cooldown, tilt, ball-save, combo / streak
+   * windows, gold swarms and plunger charge all read this, never wall time.
+   */
+  readonly simClock = new GameSimClock()
   private eventBusUnsubscribers: Array<() => void> = []
 
   constructor(host: PhysicsHost) {
@@ -84,6 +92,7 @@ export class GamePhysicsController {
 
   /** Clean up EventBus subscriptions. Must be called when the controller is torn down. */
   dispose(): void {
+    this.timers.dispose()
     this.collisionDispatcher.dispose()
     this.scoringBridge.dispose()
     for (const unsub of this.eventBusUnsubscribers) {
@@ -112,6 +121,8 @@ export class GamePhysicsController {
               // Ball traps (#420): the funnel is a C++ cone and the chamber a
               // sensor sphere; the trap sits well clear of the plunger lane.
               ...(this.host.ballTrapBuilder?.getBodies() ?? []),
+              // MagSpin's well (#420 leftover): a C++ axis-pull field, not geometry.
+              ...(this.host.magSpinFeeder?.getBodies() ?? []),
             ])
           }
           this.wasmBridge = this.wasmOwner
@@ -272,8 +283,30 @@ export class GamePhysicsController {
     }
     const check = runner?.isPlaying() ? runner.takeSnapshotCheck() : null
     if (!check) return
-    this.lastReplaySnapshot = applyReplaySnapshot(engine ?? NO_SNAPSHOT_ENGINE, linkedBodyIds(world), check)
-    showReplayDivergenceToast(this.lastReplaySnapshot)
+    // The spectator's ids were allocated by its own earlier games; when they
+    // differ from the recording's, the restore renames the C++ bodies and the
+    // TS links follow (#441).
+    const live = { bodyIds: linkedBodyIds(world), hinges: this.wasmOwner?.getFlipperHinges() ?? [] }
+    const res = applyReplaySnapshot(engine ?? NO_SNAPSHOT_ENGINE, live, check, (remap) => {
+      world?.renameLinkedIds(remap.bodies)
+      this.wasmOwner?.renameIds(remap.bodies, remap.hinges)
+    })
+    this.lastReplaySnapshot = res
+    // The restore moved the engine's step counter to the recorder's; the
+    // gameplay clock carries on from where it was. (The worker client already
+    // reports the snapshot's counter while its restore is in flight.)
+    if (res.outcome === 'restored') this.simClock.resync(this.host.physics)
+    showReplayDivergenceToast(res)
+    // Worker path: the status arrives with the worker's reply.
+    void res.settled?.then((final) => {
+      if (this.lastReplaySnapshot !== res) return
+      this.lastReplaySnapshot = final
+      if (final.outcome !== 'restored') {
+        // Refused: the world (and its counter) were left as they were.
+        this.simClock.resync(this.host.physics)
+        showReplayDivergenceToast(final)
+      }
+    })
   }
 
   applyInputFrame(frame: InputFrame): void {
@@ -283,7 +316,7 @@ export class GamePhysicsController {
     if (frame.flipperRight !== null) {
       // Delegated to input actions
     }
-    if (frame.plunger) {
+    if (frame.plungerCharge !== null) {
       // Delegated to input actions
     }
     if (frame.nudge) {
@@ -311,7 +344,7 @@ export class GamePhysicsController {
 
   stepPhysics(
     inputManager: { update: () => void; processBufferedInputs: () => InputFrame | null } | null,
-    inputActions: { handleFlipperLeft: (p: boolean) => void; handleFlipperRight: (p: boolean) => void; handlePlunger: () => void; updatePlungerFrame?: (dt: number) => void } | null,
+    inputActions: { handleFlipperLeft: (p: boolean) => void; handleFlipperRight: (p: boolean) => void; handlePlunger: (charge?: number | null) => unknown; updatePlungerFrame?: (dt: number) => void } | null,
     replayRunner?: ReplayRunner | null,
     replayRecorder?: ReplayRecorder | null
   ): void {
@@ -336,7 +369,7 @@ export class GamePhysicsController {
       if (!adventureActive) {
         if (inputFrame.flipperLeft !== null) inputActions?.handleFlipperLeft(inputFrame.flipperLeft)
         if (inputFrame.flipperRight !== null) inputActions?.handleFlipperRight(inputFrame.flipperRight)
-        if (inputFrame.plunger) inputActions?.handlePlunger()
+        if (inputFrame.plungerCharge !== null) inputActions?.handlePlunger(inputFrame.plungerCharge)
       }
       this.applyInputFrame(inputFrame)
     }
@@ -377,6 +410,7 @@ export class GamePhysicsController {
 
     this.syncReplaySnapshot(owner !== null, replayRunner ?? null, replayRecorder ?? null)
 
+    this.simClock.beforeStep(this.host.physics)
     const alpha = this.host.physics.step(rawDt, (h1, h2, start) => {
       this.collisionDispatcher.processCollision(h1, h2, start)
     }, (h1, h2, maxForce) => {
@@ -396,6 +430,9 @@ export class GamePhysicsController {
     this.syncMeshes(this.host.qualityTier === QualityTier.LOW ? 1 : alpha)
 
     const dt = Math.min(rawDt, 1 / 30)
+    // Gameplay timers advance with the simulation, not the display: the steps
+    // the engine actually took this frame (render dt only for stub hosts).
+    const simDt = this.simClock.advance(this.host.physics, dt)
 
     // Camera controller
     if (this.host.cameraController && this.host.ballManager?.getBallBody()) {
@@ -498,7 +535,7 @@ export class GamePhysicsController {
       .filter((info): info is NonNullable<typeof info> => info !== null)
     this.host.effects?.updateTrails(trailInfos)
 
-    const stuckBalls = this.host.ballManager?.updateStuckDetection(dt) || []
+    const stuckBalls = this.host.ballManager?.updateStuckDetection(simDt) || []
     for (const stuckBall of stuckBalls) {
       if (stuckBall === this.host.ballManager?.getBallBody()) {
         this.host.ballManager?.resetBall()
@@ -511,7 +548,7 @@ export class GamePhysicsController {
     }
 
     // Update small gold ball lifetimes (cleanup expired)
-    this.host.ballManager?.updateSmallGoldBallLifetimes(dt)
+    this.host.ballManager?.updateSmallGoldBallLifetimes(simDt)
 
     const jackpotPhase = this.host.effects?.jackpotPhase || 0
     this.host.display?.update(dt, jackpotPhase)
@@ -529,11 +566,11 @@ export class GamePhysicsController {
       this.host.gameObjects?.setBumperState('IDLE')
     }
 
-    this.scoringBridge.updateCombo(dt)
-    this.updateTiltDecay(dt)
+    this.scoringBridge.updateCombo(simDt)
+    this.tickTilt(simDt)
 
     if (this.host.powerupActive) {
-      this.host.powerupTimer -= dt
+      this.host.powerupTimer -= simDt
       if (this.host.powerupTimer <= 0) this.host.powerupActive = false
     }
   }
@@ -557,7 +594,7 @@ export class GamePhysicsController {
     const ballBody = this.host.ballManager?.getBallBody()
     if (!ballBody) return
 
-    const now = performance.now()
+    const now = this.simClock.ms()
     if (now - this.host.nudgeState.lastNudgeTime < GAME_TUNING.timing.nudgeCooldownMs) {
       this.host.nudgeState.tiltWarnings++
       if (this.host.nudgeState.tiltWarnings >= GameConfig.nudge.maxTiltWarnings) {
@@ -585,22 +622,32 @@ export class GamePhysicsController {
   triggerTilt(): void {
     this.host.nudgeState.tiltActive = true
     this.host.nudgeState.tiltWarningActive = false
+    // The penalty ends on the sim clock (`tickTilt`), never a timer: a replay
+    // must lock and release the flippers on the same step the live run did.
+    this.host.nudgeState.tiltPenaltyUntilMs = this.simClock.ms() + GameConfig.nudge.tiltPenaltyTime
     this.host.tiltActive = true
     this.host.effects?.setBloomEnergy(3.0)
-    setTimeout(() => this.host.effects?.setBloomEnergy(1.0), GAME_TUNING.timing.tiltBloomResetMs)
+    // Cosmetic only — the bloom pulse may stay on wall time.
+    this.timers.setTimeout(() => this.host.effects?.setBloomEnergy(1.0), GAME_TUNING.timing.tiltBloomResetMs)
     this.host.effects?.playBeep(150)
     this.host.hapticManager?.tiltWarning()
-    setTimeout(() => {
-      this.host.nudgeState.tiltActive = false
-      this.host.nudgeState.tiltWarnings = 0
-      this.host.tiltActive = false
-    }, GameConfig.nudge.tiltPenaltyTime)
   }
 
-  private updateTiltDecay(dt: number): void {
-    const now = performance.now()
-    if (now - this.host.nudgeState.lastNudgeTime > GameConfig.nudge.tiltDecayTime && this.host.nudgeState.tiltWarnings > 0) {
-      this.host.nudgeState.tiltWarnings = Math.max(0, this.host.nudgeState.tiltWarnings - dt)
+  /**
+   * Per-frame tilt bookkeeping on the sim clock: release the tilt penalty once
+   * it has run, and bleed off warnings (one per sim second) after
+   * `tiltDecayTime` without a nudge.
+   */
+  private tickTilt(simDt: number): void {
+    const state = this.host.nudgeState
+    const now = this.simClock.ms()
+    if (state.tiltActive && now >= state.tiltPenaltyUntilMs) {
+      state.tiltActive = false
+      state.tiltWarnings = 0
+      this.host.tiltActive = false
+    }
+    if (now - state.lastNudgeTime > GameConfig.nudge.tiltDecayTime && state.tiltWarnings > 0) {
+      state.tiltWarnings = Math.max(0, state.tiltWarnings - simDt)
     }
   }
 }

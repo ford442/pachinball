@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { ChallengeSystem } from '../src/replay/challenge-system'
-import { DEFAULT_TABLE_MAP_ID, TABLE_MAPS } from '../src/shaders/lcd-table'
+import { DEFAULT_TABLE_MAP_ID, TABLE_MAPS } from '../src/config/table-maps'
 
 describe('ChallengeSystem & Share Link Utilities', () => {
   beforeEach(() => {

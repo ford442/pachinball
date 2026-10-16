@@ -4,8 +4,10 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem'
 import { Scene } from '@babylonjs/core/scene'
 import { PALETTE } from '../game-elements/visual-language'
+import { createTimerScope } from '../core/timers'
 
 export class ParticleEffects {
+  private readonly timers = createTimerScope()
   private scene: Scene
   private activeParticles: ParticleSystem[] = []
   private maxParticles = 100
@@ -68,7 +70,7 @@ export class ParticleEffects {
     ps.start()
 
     // Return to pool after particles have died (~0.8 s)
-    setTimeout(() => {
+    this.timers.setTimeout(() => {
       ps.stop()
       item.available = true
     }, 800)
@@ -101,7 +103,7 @@ export class ParticleEffects {
     particleSystem.start()
     this.activeParticles.push(particleSystem)
 
-    setTimeout(() => {
+    this.timers.setTimeout(() => {
       particleSystem.dispose()
       const idx = this.activeParticles.indexOf(particleSystem)
       if (idx > -1) this.activeParticles.splice(idx, 1)
@@ -135,7 +137,7 @@ export class ParticleEffects {
     particleSystem.start()
     this.activeParticles.push(particleSystem)
 
-    setTimeout(() => {
+    this.timers.setTimeout(() => {
       particleSystem.dispose()
       const idx = this.activeParticles.indexOf(particleSystem)
       if (idx > -1) this.activeParticles.splice(idx, 1)
@@ -148,11 +150,11 @@ export class ParticleEffects {
 
   private getParticleTexture(): Texture {
     // Create or return cached particle texture
-    return new Texture((import.meta.env.BASE_URL as string) + 'assets/particle.png', this.scene)
+    return new Texture((import.meta.env.BASE_URL) + 'assets/particle.png', this.scene)
   }
 
   private getShardTexture(): Texture {
-    return new Texture((import.meta.env.BASE_URL as string) + 'assets/shard.png', this.scene)
+    return new Texture((import.meta.env.BASE_URL) + 'assets/shard.png', this.scene)
   }
 
   update(): void {
@@ -169,6 +171,7 @@ export class ParticleEffects {
   }
 
   dispose(): void {
+    this.timers.dispose()
     for (const particles of this.activeParticles) {
       particles.dispose()
     }

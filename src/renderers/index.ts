@@ -5,6 +5,7 @@ export {
   STORAGE_KEY,
   getRendererPreference,
   setRendererPreference,
+  reloadWithRenderer,
   getActiveRenderer,
   attemptWebGPURenderer,
   useWebGL2Renderer,

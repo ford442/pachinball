@@ -18,6 +18,7 @@ import {
   PhysicsActiveEvents,
   PhysicsBodyType,
   PhysicsCombineRule,
+  type AxisPullFieldSpec,
   type PhysicsApi,
   type PhysicsBodyTypeValue,
   type PhysicsColliderDesc,
@@ -44,6 +45,8 @@ export type TableColliderShape =
   | { kind: 'convexHull'; points: Float32Array }
   /** A whole pin lattice (#421) — only `WasmTableWorld.createPinField` builds one. */
   | { kind: 'pinField'; field: PinFieldSpec }
+  /** A MagSpin-style well — only `WasmTableWorld.createAxisPullField` builds one. */
+  | { kind: 'axisPullField'; field: AxisPullFieldSpec }
 
 /** One table collider as a builder authored it, before any engine sees it. */
 export interface TableColliderDesc {
@@ -274,6 +277,7 @@ export function shapeVolume(shape: TableColliderShape): number | null {
       return (Math.PI * shape.radius ** 2 * (2 * shape.halfHeight)) / 3
     case 'convexHull':
     case 'pinField':
+    case 'axisPullField':
       return null
   }
 }

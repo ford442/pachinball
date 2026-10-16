@@ -280,7 +280,7 @@ export class MaterialLibrary extends MaterialLibraryBase {
   }
 
   updateLCDTableVisual(
-    config: import('../shaders/lcd-table').TableMapConfig,
+    config: import('../config/table-maps').TableMapConfig,
     runtime: {
       timeSeconds: number
       flashIntensity: number

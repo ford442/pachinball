@@ -8,6 +8,7 @@
  */
 
 import { apiFetch } from '../config'
+import { createTimerScope } from '../core/timers'
 
 export interface LeaderboardEntry {
   rank: number
@@ -37,6 +38,7 @@ export class LeaderboardSystem {
   private scores: LeaderboardEntry[] = []
   private lastRefresh = 0
   private refreshTimer: number | null = null
+  private readonly timers = createTimerScope()
   private isRefreshing = false
   private currentMapId = 'neon-helix'
   private currentAdventureLevel?: string
@@ -64,7 +66,7 @@ export class LeaderboardSystem {
   setContext(mapId: string, adventureLevel?: string): void {
     this.currentMapId = mapId
     this.currentAdventureLevel = adventureLevel
-    this.refresh(true) // Force refresh on context change
+    void this.refresh(true) // Force refresh on context change
   }
 
   /**
@@ -74,7 +76,7 @@ export class LeaderboardSystem {
     this.stop() // Clear existing timer
     this.consecutiveFailures = 0
     this.isPaused = false
-    this.refresh()
+    void this.refresh()
     this.scheduleNextRefresh()
   }
 
@@ -90,8 +92,8 @@ export class LeaderboardSystem {
       this.maxInterval
     )
 
-    this.refreshTimer = window.setTimeout(() => {
-      this.refresh().then(() => {
+    this.refreshTimer = this.timers.setTimeout(() => {
+      void this.refresh().then(() => {
         this.scheduleNextRefresh()
       })
     }, interval)
@@ -104,7 +106,7 @@ export class LeaderboardSystem {
    */
   stop(): void {
     if (this.refreshTimer) {
-      clearTimeout(this.refreshTimer)
+      this.timers.clearTimeout(this.refreshTimer)
       this.refreshTimer = null
     }
   }
@@ -165,7 +167,7 @@ export class LeaderboardSystem {
       if (this.consecutiveFailures >= this.maxRetries) {
         console.error('[Leaderboard] Max retries exceeded. Pausing polling for 5 minutes.')
         this.pause()
-        setTimeout(() => {
+        this.timers.setTimeout(() => {
           console.log('[Leaderboard] Resuming polling after pause')
           this.consecutiveFailures = Math.floor(this.maxRetries / 2) // Partial reset
           this.resume()
@@ -194,7 +196,7 @@ export class LeaderboardSystem {
     }
     
     // Refresh after submission
-    this.refresh(true)
+    void this.refresh(true)
     return result
   }
 
@@ -229,7 +231,7 @@ export class LeaderboardSystem {
       this.overlay.style.display = this.isVisible ? 'block' : 'none'
     }
     if (this.isVisible) {
-      this.refresh()
+      void this.refresh()
     }
   }
 
@@ -241,7 +243,7 @@ export class LeaderboardSystem {
     if (this.overlay) {
       this.overlay.style.display = 'block'
     }
-    this.refresh()
+    void this.refresh()
   }
 
   /**
@@ -395,6 +397,9 @@ export class LeaderboardSystem {
    * Clean up resources
    */
   dispose(): void {
+    // Also cancels the 5-minute resume timer, which would otherwise restart polling
+    // on a disposed instance.
+    this.timers.dispose()
     this.stop()
     if (this.overlay) {
       this.overlay.remove()

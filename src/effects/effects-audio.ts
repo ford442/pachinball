@@ -1,4 +1,7 @@
+import { createTimerScope } from '../core/timers'
+
 export class AudioEffects {
+  private readonly timers = createTimerScope()
   private audioCtx: AudioContext | null
   private output: AudioNode | null
 
@@ -111,7 +114,7 @@ export class AudioEffects {
     const duration = 0.1 * multiplier
 
     notes.forEach((freq, i) => {
-      setTimeout(() => {
+      this.timers.setTimeout(() => {
         if (!this.audioCtx) return
         const o = this.audioCtx.createOscillator()
         const g = this.audioCtx.createGain()
@@ -151,7 +154,7 @@ export class AudioEffects {
       o.stop(now + i * 0.1 + 0.1)
     }
 
-    setTimeout(() => {
+    this.timers.setTimeout(() => {
       if (!this.audioCtx) return
       const chord = [523.25, 659.25, 783.99, 1046.5]
       chord.forEach((freq, i) => {
@@ -270,7 +273,7 @@ export class AudioEffects {
     punch.stop(now + 0.7)
 
     // Techno stabs (short saw chords)
-    setTimeout(() => {
+    this.timers.setTimeout(() => {
       if (!this.audioCtx) return
       const t = this.audioCtx.currentTime
       const notes = [110, 146.8, 220]
@@ -309,6 +312,7 @@ export class AudioEffects {
   }
 
   dispose(): void {
+    this.timers.dispose()
     // Shared AudioEngine owns the context — do not close it here.
     this.audioCtx = null
     this.output = null

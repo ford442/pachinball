@@ -7,6 +7,7 @@ import { WasmPhysicsEngine } from './PhysicsModule'
 import {
   applyPhysicsCommand,
   createWorkerRuntimeState,
+  postSnapshotReplies,
   WorkerSnapshotPublisher,
 } from './physics-worker-runtime'
 import type { PhysicsWorkerFromWorker, PhysicsWorkerToWorker } from './physics-worker-protocol'
@@ -60,6 +61,10 @@ self.onmessage = (event: MessageEvent<PhysicsWorkerToWorker>) => {
       stepped = true
     }
   }
+
+  // Snapshot replies first: the client must see a restore land before the
+  // step results of the world it produced.
+  postSnapshotReplies(runtime, post)
 
   if (!stepped) return
 

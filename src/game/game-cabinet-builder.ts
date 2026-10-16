@@ -24,11 +24,11 @@ import { getMaterialLibrary } from '../materials'
 import type { GameObjects } from '../objects'
 import type { EffectsSystem } from '../effects'
 import type { TableMapManager } from './game-maps'
-import { TABLE_MAPS } from '../shaders/lcd-table'
+import { TABLE_MAPS } from '../config/table-maps'
 import { GameConfig } from '../config'
 
 export interface CabinetBuilderHost {
-  readonly scene: Scene
+  readonly scene: Scene | null
   readonly qualityTier: QualityTier
   shadowGenerator: ShadowGenerator | null
   mirrorTexture: MirrorTexture | null
@@ -481,7 +481,7 @@ export class GameCabinetBuilder {
 
     console.log(`[Performance] Shadow casters limited: ${shadowCasters.length}/${pinballMeshes.length}`)
 
-    const ground = this.host.scene.getMeshByName('ground')
+    const ground = this.host.scene?.getMeshByName('ground')
     if (ground) {
       ground.receiveShadows = true
     }

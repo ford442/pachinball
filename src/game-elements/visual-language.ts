@@ -12,6 +12,7 @@
  */
 
 import { Color3 } from '@babylonjs/core/Maths/math.color'
+import { parseHexColorUnit } from '../core/color'
 // ============================================================================
 // COLOR PALETTE - Single source of truth
 // ============================================================================
@@ -322,10 +323,7 @@ export const CATEGORIES = {
 
 /** Convert hex string to Babylon Color3 */
 export function color(hex: string): Color3 {
-  const clean = hex.replace('#', '')
-  const r = parseInt(clean.substring(0, 2), 16) / 255
-  const g = parseInt(clean.substring(2, 4), 16) / 255
-  const b = parseInt(clean.substring(4, 6), 16) / 255
+  const { r, g, b } = parseHexColorUnit(hex)
   return new Color3(r, g, b)
 }
 

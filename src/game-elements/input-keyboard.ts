@@ -137,8 +137,7 @@ export function handleKeyUp(host: KeyboardInputHost, event: KeyboardEvent): void
   if (!adventureActive && PLUNGER_KEYS.has(event.code)) {
     // Release plunger on key up
     if (host.isPlungerHeld()) {
-      host.releasePlungerCharge()
-      host.queueInput('plunger', true)
+      host.queueInput('plungerCharge', host.releasePlungerCharge())
     }
   }
 }

@@ -1,3 +1,4 @@
+import { simClockMs } from '../core/sim-clock'
 import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
 import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import type { Vector3 } from '@babylonjs/core/Maths/math.vector'
@@ -91,7 +92,8 @@ export interface TunedBallPhysics {
 }
 
 export function nowMs(): number {
-  return typeof performance !== 'undefined' ? performance.now() : Date.now()
+  // Ball-save grace decides whether a drain costs a life: gameplay clock, not wall time (#441).
+  return simClockMs()
 }
 
 /**

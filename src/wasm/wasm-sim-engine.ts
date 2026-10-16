@@ -16,6 +16,13 @@ import type {
 import type { WasmPhysicsModule, WasmSnapshotStatus } from './wasm-types'
 import type { PinFieldSpec } from '../core/pin-field'
 
+/** A value now (in-process engines) or once the worker answers. */
+export type Awaitable<T> = T | Promise<T>
+
+export function isPromiseLike<T>(value: Awaitable<T>): value is Promise<T> {
+  return typeof (value as { then?: unknown } | null)?.then === 'function'
+}
+
 export interface WasmSimEngine {
   isReady: boolean
 
@@ -141,11 +148,16 @@ export interface WasmSimEngine {
   getLastWorkerStepMs(): number
 
   /**
-   * World snapshots (#422, native/src/Snapshot.h). In-process only for now:
-   * the worker client reports `null` / `Unsupported` rather than pretending,
-   * so replay verification refuses to run on the worker path.
+   * World snapshots (#422, native/src/Snapshot.h). Both take effect at the
+   * call's place in the command order — before any later mutator or step —
+   * but the result may arrive later: in-process engines answer synchronously,
+   * the worker client with a promise settled by the worker's reply (#441).
    */
-  serializeSnapshot(): Uint8Array | null
-  restoreSnapshot(bytes: Uint8Array): WasmSnapshotStatus
+  serializeSnapshot(): Awaitable<Uint8Array | null>
+  restoreSnapshot(bytes: Uint8Array): Awaitable<WasmSnapshotStatus>
+  /**
+   * Static-table hash. In-process: computed now. Worker client: the value the
+   * worker last reported with a snapshot reply, null before the first.
+   */
   getStaticContentHash(): string | null
 }

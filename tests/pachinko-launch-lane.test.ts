@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { KEEP_OUT_BOXES } from '../src/game-elements/daily-cascade-layout'
+import { KEEP_OUT_BOXES } from '../src/cascade/daily-cascade-layout'
 
 /**
  * Vanilla pachinko grid must leave the plunger corridor empty.

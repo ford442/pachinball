@@ -222,13 +222,15 @@ test.describe('Keyboard Input Pipeline', () => {
 
     await page.keyboard.up('Enter');
 
-    // Plunger impulse is along +z, so z velocity should increase.
+    // Plunger impulse is along +z, so z velocity should increase. On the
+    // wasm-worker default (#439) the launch reaches the pose one physics frame
+    // later, and a headless SwiftShader frame can take seconds.
     await expect.poll(async () => {
       const state = await getBallState();
       return (state.vel?.z ?? 0) - (ballBeforePlunger?.z ?? 0);
     }, {
       intervals: [50],
-      timeout: 5_000,
+      timeout: 15_000,
     }).toBeGreaterThan(1);
 
     expectUnexpectedConsoleErrors(consoleErrors);

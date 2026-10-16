@@ -159,6 +159,19 @@ describe('shared snapshot layout', () => {
     expect(drainIds(reader)).toEqual([])
   })
 
+  it('refuses a packed buffer shorter than count records instead of publishing NaN contacts', () => {
+    const writer = new SharedSnapshotWriter(createSharedSnapshotBuffer(caps))
+    const reader = new SharedSnapshotReader(writer.buffer)
+
+    // Claims two records but carries one.
+    expect(writer.pushContacts(contact(1), 2)).toBe(false)
+    expect(writer.contactSpace()).toBe(3)
+    expect(drainIds(reader)).toEqual([])
+
+    expect(writer.pushContacts(contact(1), 1)).toBe(true)
+    expect(drainIds(reader)).toEqual([1])
+  })
+
   it('rejects a buffer from another layout version', () => {
     const buffer = createSharedSnapshotBuffer(caps)
     new Int32Array(buffer)[SharedHeader.VERSION] = SHARED_LAYOUT_VERSION + 1

@@ -7,7 +7,8 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { EventBus } from '../src/core/event-bus'
-import { DisplayState, GameState } from '../src/game-elements/types'
+import { GameState } from '../src/game-elements/types'
+import { DisplayState } from '../src/display/display-types'
 
 describe('EventBus', () => {
   let bus: EventBus
@@ -153,10 +154,10 @@ describe('EventBus', () => {
 
     it('listener calling on() during emit does not fire the new handler in the same emit cycle', () => {
       let newHandlerCalled = false
-      bus.on('menu:exit', () => {
-        bus.on('menu:exit', () => { newHandlerCalled = true })
+      bus.on('game:pause', () => {
+        bus.on('game:pause', () => { newHandlerCalled = true })
       })
-      bus.emit('menu:exit')
+      bus.emit('game:pause')
       expect(newHandlerCalled).toBe(false)
     })
   })

@@ -3,7 +3,7 @@ import {
   createImpactVoiceProfile,
   normalizeImpactVelocity,
   getPortalMotifFrequencies,
-} from '../src/game-elements/audio-synth'
+} from '../src/audio/audio-synth'
 
 describe('audio-synth helpers', () => {
   it('normalizes velocity into 0..1 range', () => {

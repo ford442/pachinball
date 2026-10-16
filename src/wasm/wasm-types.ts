@@ -345,6 +345,18 @@ export interface WasmPhysicsWorldInstance {
     space: number, acceleration: boolean
   ): number
 
+  /**
+   * Add a vertical well that pulls bodies horizontally toward its axis: full
+   * `strength` at the axis, fading linearly to zero at `radius`, within
+   * `halfHeight` of `py`. Absent on bundles built before it existed. Handles
+   * share `addForceField`'s id space (setForceFieldEnabled / setCollisionGroups).
+   */
+  addAxisPullField?(
+    px: number, py: number, pz: number,
+    radius: number, halfHeight: number,
+    strength: number, acceleration: boolean
+  ): number
+
   /** Drop all static/kinematic geometry and force fields; negative handles are invalidated. */
   clearStaticGeometry(): void
 

@@ -20,7 +20,7 @@ import { PachinkoBuilder } from './object-pachinko'
 import { DecorationBuilder } from './object-decoration'
 import { LaneSensorBuilder, type LaneSensorDef } from './object-lane-sensors'
 import type { GameObjectRefs } from './object-types'
-import type { PinLattice } from '../game-elements/daily-cascade-layout'
+import type { PinLattice } from '../cascade/daily-cascade-layout'
 
 export class GameObjects {
   private scene: Scene
@@ -279,7 +279,7 @@ export class GameObjects {
    * Dispose and recreate bumpers + pachinko pins from a Daily Cascade layout
    * (or vanilla defaults when layout is null). Does not touch walls/flippers/lanes/slingshots.
    */
-  rebuildMutableToys(layout: import('../game-elements/daily-cascade-layout').TableLayout | null): void {
+  rebuildMutableToys(layout: import('../cascade/daily-cascade-layout').TableLayout | null): void {
     // BumperBuilder toys have holograms; slingshots do not — preserve slingshot visuals/bodies
     const slingshotVisuals = this.bumperVisuals.filter((v) => !v.hologram)
     const slingshotBodies = new Set(slingshotVisuals.map((v) => v.body))
@@ -403,7 +403,8 @@ export class GameObjects {
    * where the ball rolls beneath them; the owner's ground plane is y = 0, and
    * exported unchanged they close the plunger lane. They stay recorded (and
    * listed by `WasmOwner.getTableUnsupported()`) until they are calibrated for
-   * the owner plane. (The ball traps join the scope in GamePhysicsController.)
+   * the owner plane. (The ball traps and MagSpin's well — a C++ axis-pull force
+   * field, not geometry — join the scope in GamePhysicsController.)
    */
   getWasmExportBodies(): PhysicsBody[] {
     const bodies = this.bindings.map((b) => b.rigidBody)

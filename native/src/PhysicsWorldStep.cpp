@@ -134,7 +134,9 @@ void PhysicsWorld::substep(float dt) {
       if (pair.type == BroadphaseGrid::Pair::BodyBody) {
         BodyView a = bodies_.view(pair.bodyA);
         BodyView b = bodies_.view(pair.bodyB);
-        if (!a.isActive() || !b.isActive()) continue;
+        // Two sleepers never meet. One awake side may meet a sleeper: the contact
+        // path (`applyContactImpulse` → `wakeOnContact`) wakes it when they truly touch.
+        if (!a.isActive() && !b.isActive()) continue;
         if (a.getType() == BodyType::Static && b.getType() == BodyType::Static) continue;
 
         const Shape aShape = a.getShape();

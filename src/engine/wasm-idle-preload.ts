@@ -14,16 +14,16 @@ let preloadPromise: Promise<WasmPhysicsModule | null> | null = null
 let preloadStarted = false
 
 /**
- * The worker client is loaded on demand: only the opt-in `wasm-worker`
- * preference needs it, and a static import would drag the worker protocol
- * and shared-layout codecs into the entry chunk for every boot.
+ * The worker boot module is loaded on demand: only the `wasm-worker`
+ * preference (the cross-origin-isolated default) needs it, and the in-process
+ * owner boot should not fetch it.
  */
-type WorkerClientModule = typeof import('../wasm/physics-worker-client')
-let workerClientModule: Promise<WorkerClientModule> | null = null
+type WorkerBootModule = typeof import('../wasm/physics-worker-boot')
+let workerBootModule: Promise<WorkerBootModule> | null = null
 
-function loadWorkerClientModule(): Promise<WorkerClientModule> {
-  workerClientModule ??= import('../wasm/physics-worker-client')
-  return workerClientModule
+function loadWorkerBootModule(): Promise<WorkerBootModule> {
+  workerBootModule ??= import('../wasm/physics-worker-boot')
+  return workerBootModule
 }
 
 async function fetchAndCompileModule(bundleUrl: string): Promise<WasmPhysicsModule | null> {
@@ -42,7 +42,7 @@ async function fetchAndCompileModule(bundleUrl: string): Promise<WasmPhysicsModu
 
 function startPreload(bundleUrl: string): void {
   if (getPhysicsEnginePreference() === 'wasm-worker') {
-    void loadWorkerClientModule()
+    void loadWorkerBootModule()
       .then(({ warmPhysicsWorker }) => warmPhysicsWorker(bundleUrl).ready)
       .then((ok) => {
         if (ok) {
@@ -115,7 +115,7 @@ export async function getPreloadedWasmModule(): Promise<WasmPhysicsModule | null
 export function resetWasmPreloadForTests(): void {
   preloadPromise = null
   preloadStarted = false
-  const loaded = workerClientModule
-  workerClientModule = null
+  const loaded = workerBootModule
+  workerBootModule = null
   void loaded?.then((m) => m.resetPhysicsWorkerPrewarmForTests()).catch(() => {})
 }

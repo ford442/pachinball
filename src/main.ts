@@ -1,31 +1,35 @@
 import './style.css'
 import { Game } from './game'
-import type * as RAPIER from '@dimforge/rapier3d-compat'
-import type { Engine } from '@babylonjs/core/Engines/engine'
-import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import { exposeRenderer } from './renderers/renderer-selector'
 import { applyHardwareScaling, resolveEngineOptions } from './engine/engine-options'
 import { createEngine, isWebGPUEngine } from './engine/create-engine'
-import { preloadWasmPhysicsNow, scheduleIdleWasmPreload } from './engine/wasm-idle-preload'
-import { getWasmPhysicsRuntimeMode, runtimeModeUsesRapier } from './config'
-import { loadRapier } from './game-elements/rapier-loader'
-import { VisibilityManager } from './engine/visibility-manager'
+import { scheduleIdleWasmPreload } from './engine/wasm-idle-preload'
+import { preloadPhysicsSystem } from './game-elements/physics-preload'
 import { formatGpuProbeSummary } from './engine/gpu-degrade-telemetry'
 import { registerServiceWorker } from './pwa'
+import { bootError, bootWarn } from './boot-log'
+import { BOOT_PRELOAD_STAGE, revealBootFailure } from './game/game-ui-popups'
+
+declare global {
+  interface Window {
+    /** The live Game; read by Playwright specs and the diagnostic helper. */
+    game?: Game
+    runVisibilityDiagnostic?: () => void
+  }
+}
+
+/** Set once constructed so the failure banner can name the checkpoint stage that was running. */
+let bootGame: Game | undefined
 
 /**
- * Start the physics download in parallel with engine creation.
- *
- * The production modes (`wasm-owner` / `wasm-worker`) fetch and compile only
- * the C++ bundle; Rapier is never imported on that path (#412), and
- * `PhysicsSystem.init()` loads it lazily if the bundle turns out to be
- * missing. The explicit `rapier` / `wasm-mirror` modes still warm Rapier here.
- * @returns Rapier when the selected mode simulates on it, else undefined
+ * The watchdog and stage label are their own chunk: only a failed or stalled boot needs them
+ * (#449). A load failure is a warning, never an unhandled rejection, and nothing that must be
+ * visible depends on it (see `revealBootFailure`).
  */
-async function preloadPhysics(): Promise<typeof RAPIER | undefined> {
-  if (runtimeModeUsesRapier(getWasmPhysicsRuntimeMode())) return loadRapier()
-  preloadWasmPhysicsNow()
-  return undefined
+function withBootError(use: (m: typeof import('./game/boot-error')) => void): void {
+  void import('./game/boot-error')
+    .then(use)
+    .catch((err: unknown) => bootWarn('Boot error chunk unavailable', err))
 }
 
 async function bootstrap(): Promise<void> {
@@ -39,137 +43,82 @@ async function bootstrap(): Promise<void> {
 
   // Parallelize engine creation and physics WASM loading
   // This reduces total load time by overlapping network fetch (WASM) with GPU initialization
-  const [engine, preloadedRapier] = await Promise.all([
-    createEngine(canvas),
-    preloadPhysics(),
-  ]) as [Engine | WebGPUEngine, typeof RAPIER | undefined]
+  // Tab-visibility handling is only needed once the game runs; its own chunk keeps it out of the
+  // entry (size budget) but is fetched now, in parallel, rather than after the render loop starts.
+  const visibilityModule = import('./engine/visibility-manager')
+  visibilityModule.catch(() => undefined) // a failure surfaces at the await below, not as unhandled
+  const loading = Promise.all([createEngine(canvas), preloadPhysicsSystem()])
+  // The Game (and its timers) does not exist yet: this watchdog covers only the pre-Game phase.
+  withBootError((m) => m.watchPreGame(loading))
+  const [engine, physics] = await loading
 
   console.timeEnd('[Bootstrap] Engine + Physics parallel init')
   console.time('[Bootstrap] Game init')
 
   applyHardwareScaling(engine)
-  exposeRenderer(canvas, isWebGPUEngine(engine))
+  // The WebGL2 fallback swaps in a fresh canvas (#451); tag the one the engine renders to.
+  exposeRenderer(engine.getRenderingCanvas() ?? canvas, isWebGPUEngine(engine))
 
   ;(window as unknown as Record<string, unknown>).bootstrapEngineOptions = resolveEngineOptions()
 
-  const game = new Game(engine, preloadedRapier)
+  const game = new Game(engine, physics)
+  bootGame = game
+  withBootError((m) => m.watchGame(game))
   await game.init()
   console.info(formatGpuProbeSummary())
 
-  const visibilityManager = new VisibilityManager({
-    engine,
-    renderFrame: () => game.renderFrame(),
-    getGameState: () => game.stateManager.getState(),
-    soundSystem: game.soundSystem,
-  })
-  visibilityManager.attach()
+  // Optional: a failed chunk fetch costs pause-on-hidden-tab handling, not a running game, so it
+  // must not fail the boot or keep `window.game` unset. Started with the engine, so it has long
+  // settled: awaiting a *fresh* import here would queue behind the running render loop.
+  let visibilityManager: { dispose(): void } | undefined
+  try {
+    const { VisibilityManager } = await visibilityModule
+    if (game.signal.aborted) return // dispose() landed meanwhile
+    const manager = new VisibilityManager({
+      engine,
+      renderFrame: () => game.renderFrame(),
+      getGameState: () => game.stateManager.getState(),
+      soundSystem: game.soundSystem,
+    })
+    manager.attach()
+    visibilityManager = manager
+  } catch (err) {
+    bootWarn('Tab-visibility handling unavailable', err)
+  }
   scheduleIdleWasmPreload()
 
   // Expose for Playwright tests
-  ;(window as unknown as Record<string, unknown>).game = game
+  window.game = game
 
   // Expose visibility diagnostic helper
-  ;(window as unknown as Record<string, unknown>).runVisibilityDiagnostic = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const game = (window as unknown as Record<string, unknown>).game as any
-    if (!game) {
-      console.error('Game not loaded')
-      return
-    }
-    const scene = game.scene
-    const engine = game.engine
-    if (!scene) {
-      console.error('Scene not ready')
-      return
-    }
-    const cam = scene.activeCamera
-    if (!cam) {
-      console.error('No active camera')
-      return
-    }
-    console.log('=== CAMERA ===')
-    console.log('position:', cam.position?.asArray?.() || cam.position)
-    console.log('target:', cam.target?.asArray?.() || cam.target)
-    console.log('alpha/beta/radius:', cam.alpha, cam.beta, cam.radius)
-    console.log('fov:', cam.fov, 'minZ:', cam.minZ, 'maxZ:', cam.maxZ)
-    console.log('viewport:', cam.viewport)
-    console.log('activeCameras:', scene.activeCameras?.map((c: unknown) => (c as { name?: string }).name))
-
-    console.log('=== MESHES (count:', scene.meshes.length, ') ===')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const interesting = scene.meshes.filter((m: any) =>
-      /flipper|ball|bumper|wall|pin|playfield|lcd|cabinet/i.test(m.name),
-    )
-    console.table(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      interesting.map((m: any) => ({
-        name: m.name,
-        enabled: m.isEnabled(),
-        visible: m.isVisible,
-        visibility: m.visibility,
-        inFrustum: cam.isInFrustum(m),
-        x: m.position.x.toFixed(2),
-        y: m.position.y.toFixed(2),
-        z: m.position.z.toFixed(2),
-        material: m.material?.name || '(none)',
-        alpha: m.material?.alpha,
-        parent: m.parent?.name || '(none)',
-      })),
-    )
-
-    console.log('=== LIGHTS ===')
-    console.table(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      scene.lights.map((l: any) => ({
-        name: l.name,
-        type: l.getClassName(),
-        intensity: l.intensity,
-        enabled: l.isEnabled(),
-      })),
-    )
-
-    console.log('=== RENDER STATS ===')
-    console.log('engine fps:', engine?.getFps().toFixed(1))
-    console.log('render width × height:', engine?.getRenderWidth(), '×', engine?.getRenderHeight())
-    console.log('hardware scaling:', engine?.getHardwareScalingLevel())
-    console.log(
-      'canvas client:',
-      engine?.getRenderingCanvas()?.clientWidth,
-      '×',
-      engine?.getRenderingCanvas()?.clientHeight,
-    )
-    console.log('=== DIAGNOSTIC COMPLETE ===')
+  window.runVisibilityDiagnostic = () => {
+    void import('./engine/visibility-diagnostic').then((m) => m.runVisibilityDiagnostic(window.game))
   }
 
   console.timeEnd('[Bootstrap] Game init')
   console.timeEnd('[Bootstrap] Total initialization')
   console.log(`[Bootstrap] Physics ready (${(window as unknown as { currentPhysicsEngine?: string }).currentPhysicsEngine ?? 'unknown'})`)
 
-  // Setup canvas resize handling
-  setupResizeHandler(canvas, engine)
+  // Canvas resizing is owned by GameRenderer (game-renderer.ts:setupResizeObserver) and
+  // DPR changes by setupDPRHandling, both torn down by Game.dispose(). A second observer
+  // on the same canvas created an infinite resize loop (engine.resize() mutates
+  // canvas.width/height), so main.ts deliberately registers none.
 
   if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-      visibilityManager.dispose()
+      visibilityManager?.dispose()
       game.dispose()
       engine.dispose()
+      delete window.game
+      delete window.runVisibilityDiagnostic
     })
   }
 }
 
-/**
- * Setup resize handling for the canvas
- */
-function setupResizeHandler(_canvas: HTMLCanvasElement, engine: Engine | WebGPUEngine): void {
-  // ResizeObserver is owned by GameRenderer (game-renderer.ts:setupResizeObserver).
-  // A second observer on the same canvas created an infinite resize loop: engine.resize()
-  // mutates canvas.width/height, which triggers the observer again on each call.
-  // Window resize is kept as a lightweight fallback for cases the element observer misses.
-  window.addEventListener('resize', () => {
-    engine.resize()
-  })
-}
-
-bootstrap().catch((err) => {
-  console.error('Failed to bootstrap game', err)
+bootstrap().catch((err: unknown) => {
+  bootError('Failed to bootstrap game', err) // not console.error: that is stripped from prod builds
+  // Static markup only, no import: if the banner chunk is unreachable the failure must still show.
+  revealBootFailure(err, bootGame ? '' : BOOT_PRELOAD_STAGE)
+  // The chunk only refines the stage line (it reads the checkpoint snapshots); best effort.
+  withBootError((m) => m.showBootFailure(err, bootGame))
 })

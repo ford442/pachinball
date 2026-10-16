@@ -65,7 +65,8 @@ export class GamepadManager {
     DRight: 15
   }
 
-  constructor(config: GamepadConfig = { deadZone: 0.15, vibrationEnabled: true }) {
+  /** @param signal Aborting removes the window listeners this manager installs. */
+  constructor(config: GamepadConfig = { deadZone: 0.15, vibrationEnabled: true }, signal?: AbortSignal) {
     this.config = config
 
     // Listen for gamepad connection events
@@ -73,7 +74,7 @@ export class GamepadManager {
       console.log('[Gamepad] Connected:', e.gamepad.id)
       this.gamepadIndex = e.gamepad.index
       this.previousState.connected = true
-    })
+    }, { signal })
 
     window.addEventListener('gamepaddisconnected', (e) => {
       if (this.gamepadIndex === e.gamepad.index) {
@@ -81,7 +82,7 @@ export class GamepadManager {
         this.gamepadIndex = null
         this.previousState.connected = false
       }
-    })
+    }, { signal })
   }
 
   /**

@@ -51,13 +51,29 @@ first-party same-origin responses served by the dev server itself.
 
 ## Mandatory fallback
 
-`wasm-worker` mode does not require cross-origin isolation to function.
-`isCrossOriginIsolated()` (`src/config/physics.ts`) picks the snapshot transport
-only: shared memory when true, transferred `postMessage` buffers when false. It
-never decides whether the worker (or the game) boots — engine selection and its
-fallbacks in `PhysicsSystem.init()` (`src/game-elements/physics.ts`) do not branch
-on it. `tests/wasm-worker-adventure.spec.ts` plays an adventure track both ways,
-stripping COOP/COEP from the document response for the non-isolated run.
+Isolation picks a default; it never decides whether the game boots.
+`isCrossOriginIsolated()` (`src/config/physics.ts`) chooses two things:
+
+- **The default engine** (#439), used only when there is no localStorage override.
+  Isolated pages default to `wasm-worker`. Pages without the headers (file://, a host
+  that dropped them) default to the in-process `wasm-owner`. That is an ordinary
+  choice, not a degrade, so no degrade marker is logged.
+- **The worker snapshot transport.** Shared memory when isolated, transferred
+  `postMessage` buffers when not. `wasm-worker` still runs without isolation if it
+  is selected explicitly.
+
+The fallbacks in `PhysicsSystem.init()` (`src/game-elements/physics.ts`) do not branch
+on isolation. A worker that fails to start gives way to `wasm-owner`, and a missing
+bundle gives way to Rapier, each with the `[Bootstrap][physics-degrade]` marker.
+
+So **losing the headers costs the worker, not the game**. If the host is rebuilt
+without them, players silently get the main-thread owner. Re-check the headers after
+any server change (see *Verifying locally* and the production check above).
+
+`tests/wasm-worker-default.spec.ts` boots with no override both ways, stripping
+COOP/COEP from the document response for the non-isolated run.
+`tests/wasm-worker-adventure.spec.ts` plays an adventure track on the worker over
+both transports.
 
 ## Verifying locally
 

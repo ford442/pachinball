@@ -97,15 +97,68 @@ entries below plus `randomU32Seed`'s fallback.
 
 Seeded RNG is not enough if gameplay reads `performance.now()`: a replay stepped
 headless (or restored mid-run) runs at a different wall-clock rate than the live
-game. The collision pair debounce (`CollisionDispatcher`) now runs on the
-simulation clock — fixed steps taken × 1/60 s, from the C++ step counter on the
-owner path and Rapier's otherwise.
+game. Two clocks replace it (`src/core/sim-clock.ts`):
 
-Still wall-clock (not physics-trajectory-affecting unless the tape nudges):
+- **Engine step counter** — `simNowMs(physics)`: fixed steps the active engine
+  has taken × 1/60 s. The C++ counter whenever a WASM engine is active (owner,
+  worker *and* mirror — the mirror's Rapier world never steps, so reading
+  Rapier's counter there froze the clock), Rapier's otherwise. Used by the
+  collision pair debounce (`CollisionDispatcher`), which already tolerates the
+  counter going backwards.
+- **Gameplay clock** — `GameSimClock`, owned by `GamePhysicsController.simClock`
+  and installed for the whole game (`installSimClock`, read via
+  `simClockMs()` / `simClockSeconds()` / `simClockSteps()`). It accumulates the
+  steps the engine took each frame and never jumps: after a snapshot restore
+  moves the engine counter to the recorder's value it re-anchors (`resync`)
+  instead of counting the jump, so an interval that started before the restore
+  (ball-save from `startGame()`) measures the same on recorder and spectator.
 
-| File | Usage | Notes |
-|------|-------|-------|
-| `src/game/physics/physics-controller.ts` | Nudge cooldown / tilt warnings / tilt decay; tilt penalty via `setTimeout` | A tape whose nudges land inside the cooldown in one run and outside in another can TILT differently. Move to the sim clock before nudge-heavy replays are verified. |
+On the gameplay clock (#441):
+
+| What | Where |
+|------|-------|
+| Nudge cooldown, tilt warnings, warning decay | `physics-controller.ts` `applyNudge` / `tickTilt` |
+| Tilt penalty (no `setTimeout`; released in `tickTilt` each frame) | `physics-controller.ts` `triggerTilt` |
+| Ball-save grace | `ball-manager-context.ts` `nowMs()`, `scoring-bridge.ts` |
+| Combo chain / bumper combo / gold-streak windows | `scoring-bridge.ts` `nowSeconds()` |
+| Gold swarm quick-collect bonus | `ball-manager-gold.ts` `collectBall` |
+| Plunger charge (steps held) | `input-plunger.ts` |
+| Flipper hold-time stiffness ramp (Rapier path) | `game-input-actions.ts` |
+| Gameplay timers stepped per frame: swarm lifetimes (expiry removes bodies), stuck-ball detection, combo-multiplier decay, power-up timer, tilt decay | `stepPhysics()` passes the sim seconds advanced (`simDt`), not render `dt` |
+
+`nudgeState` and `tiltActive` are reset in `startGame()`.
+
+Still wall-clock, cosmetic only: tilt bloom reset (`setTimeout`), the bonus
+tally bloom reset, full-charge haptic pulse, spawn-effect names, mirror sync
+timing for the HUD.
+
+---
+
+## Inputs on the tape (#441)
+
+The replay tape (`InputFrame`, `src/replay/replay-recorder.ts`, schema
+`REPLAY_SCHEMA_VERSION = 2`) carries everything that changes the ball's path:
+
+- **Plunger charge.** `plungerCharge` (0–1 at fire, `null` otherwise) is the
+  value the launch impulse is scaled by. Live and replay both fire through
+  `GameInputActions.handlePlunger(frame.plungerCharge)`; the spectator's own
+  `plungerChargeLevel` is never read. Charge is measured in **fixed steps
+  held** (`input-plunger.ts`, `simStepCount()`), not wall time, so two 60 fps
+  recordings of the same hold agree. RLE rows gain a 7th field (`String(n)`,
+  exact; `-` for none). Schema-1 tapes (fired bit only) replay at charge 0.
+  `InputFrame.plunger` remains as a deprecated alias for one release.
+- **Nudges** are quantised to the tape's 0.01 grid in `processBufferedInputs()`,
+  so the live impulse is exactly the one replay re-applies.
+
+### Next blocker: the tape is per render frame
+
+One `InputFrame` is recorded per `stepPhysics()` call, i.e. per **render**
+frame, and playback steps the world with the viewer's own
+`engine.getDeltaTime()`. A 144 Hz spectator therefore runs a different number of
+fixed steps between taped inputs than the 60 Hz recorder did. Every determinism
+test pins delta to 1/60 s to sidestep this. Fix: record the fixed-step count per
+frame (or one frame per fixed step) and have playback advance exactly that many
+steps regardless of viewer dt.
 
 ---
 
@@ -117,12 +170,16 @@ differently built table. Replays carry the frame-0 snapshot plus a world
 fingerprint (see `docs/ASYNC_CHALLENGES_EPIC.md` and `docs/wasm-physics-engine.md`).
 The native and WASM builds produce identical bytes (`npm run test:wasm-parity`);
 the hinge angle uses a libm-independent `atan2` so they can.
+The `wasm-worker` client serializes and restores over an ordered
+request/reply in the command batch (#441, `docs/wasm-physics-engine.md`
+"Over the worker"); a real Worker still serves poses a frame late, which the
+TS flipper drive reads — see the caveat in `docs/ASYNC_CHALLENGES_EPIC.md`.
 
 ## Roadmap
 
 1. ~~Injectable RNG + physics-affecting fork streams + catalogue.~~
 2. ~~#341: `ReplayRecorder` logs seed + inputs; C++ world snapshot + divergence harness.~~
 3. ~~#343: URL `?seed=` share → session seed; ghost spectate; divergence toast.~~
-4. Next: sim-clock nudge/tilt; restore across differing ball-id layouts (remap
-   TS links onto the snapshot's ids instead of reporting `id-layout`); worker
-   snapshot round trip.
+4. #441: plunger charge on the tape; sim-clock nudge/tilt and scoring windows;
+   worker snapshot round trip; restore across differing ball-id layouts.
+5. Next: tape per fixed step instead of per render frame (see "Next blocker").

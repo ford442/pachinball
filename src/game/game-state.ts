@@ -1,4 +1,5 @@
-import { GameState, DisplayState } from '../game-elements/types'
+import { GameState } from '../game-elements/types'
+import { DisplayState } from '../display/display-types'
 import { EventBus } from '../core/event-bus'
 
 export interface StateManagerConfig {

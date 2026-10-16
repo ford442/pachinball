@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { GamePhysicsController, type PhysicsHost } from '../src/game/game-physics-controller'
 import { EventBus } from '../src/core/event-bus'
+import { freshNudgeState } from '../src/game/physics/types'
 import { QualityTier } from '../src/game-elements/visual-language'
 
 type BindingBody = {
@@ -108,7 +109,7 @@ function makeHost(opts: {
     powerupActive: false,
     powerupTimer: 0,
     plungerChargeLevel: 0,
-    nudgeState: { tiltWarnings: 0, lastNudgeTime: 0, tiltActive: false, tiltWarningActive: false },
+    nudgeState: freshNudgeState(),
     isCameraFollowMode: false,
     cameraFollowTransition: 0,
     cameraFollowTransitionSpeed: 1,

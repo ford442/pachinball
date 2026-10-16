@@ -55,6 +55,7 @@ export function showCabinetPopup(state: GameUIRuntimeState, name: string): void 
   `
 
   const style = document.createElement('style')
+  style.dataset.popupStyle = ''
   style.textContent = `
     @keyframes cabinetPopupFade {
       0% { opacity: 0; transform: translate(-50%, -40%); }
@@ -67,7 +68,7 @@ export function showCabinetPopup(state: GameUIRuntimeState, name: string): void 
   document.body.appendChild(popup)
   state.activePopups.set('cabinet', popup)
 
-  setTimeout(() => {
+  state.timers.setTimeout(() => {
     popup.remove()
     style.remove()
     state.activePopups.delete('cabinet')
@@ -106,6 +107,7 @@ export function showMapNamePopup(state: GameUIRuntimeState, name: string, color:
   `
 
   const style = document.createElement('style')
+  style.dataset.popupStyle = ''
   style.textContent = `
     @keyframes mapPopupCRT {
       0% {
@@ -138,12 +140,12 @@ export function showMapNamePopup(state: GameUIRuntimeState, name: string, color:
   cabinet?.appendChild(popup)
   state.activePopups.set('map', popup)
 
-  requestAnimationFrame(() => {
+  state.timers.requestAnimationFrame(() => {
     popup.style.opacity = '1'
     popup.style.transform = 'translate(-50%, -50%) scale(1)'
   })
 
-  setTimeout(() => {
+  state.timers.setTimeout(() => {
     popup.remove()
     style.remove()
     state.activePopups.delete('map')
@@ -215,7 +217,7 @@ export function showLoadingState(
     state.loadingOverlay.style.transition = ''
 
     const labelEl = state.loadingOverlay.querySelector('.loading-label')
-    const fillEl = state.loadingOverlay.querySelector('.loading-bar-fill') as HTMLElement | null
+    const fillEl = state.loadingOverlay.querySelector<HTMLElement>('.loading-bar-fill')
     const pctEl = state.loadingOverlay.querySelector('.loading-pct')
 
     if (labelEl) {
@@ -232,21 +234,56 @@ export function showLoadingState(
   } else if (state.loadingOverlay) {
     state.loadingOverlay.style.transition = 'opacity 0.5s'
     state.loadingOverlay.style.opacity = '0'
-    setTimeout(() => {
+    state.timers.setTimeout(() => {
       state.loadingOverlay?.remove()
       state.loadingOverlay = null
     }, 500)
   }
 }
 
-/** Gate Start until cabinet (or fallback) has resolved. */
-export function setStartButtonEnabled(enabled: boolean): void {
+/**
+ * Gate Start until cabinet (or fallback) has resolved. Passing `error` (with `enabled`
+ * false) puts the button in its failed state: "Load failed", tooltip = the message (#449).
+ */
+export function setStartButtonEnabled(enabled: boolean, error?: string): void {
   const btn = document.getElementById('start-btn') as HTMLButtonElement | null
   if (!btn) return
   btn.disabled = !enabled
   btn.style.opacity = enabled ? '1' : '0.45'
   btn.style.cursor = enabled ? 'pointer' : 'not-allowed'
-  btn.title = enabled ? '' : 'Loading cabinet…'
+  btn.title = enabled ? '' : (error ?? 'Loading cabinet…')
+  if (error) btn.textContent = 'Load failed'
+  // Start live means the boot made it: a "still loading" banner no longer applies.
+  if (enabled) document.getElementById('boot-error')?.setAttribute('hidden', '')
+}
+
+/** Stage shown for a failure before the Game (and its checkpoint stages) existed. */
+export const BOOT_PRELOAD_STAGE = 'engine + physics preload'
+
+/** A readable message for anything thrown; never empty (`new Error()` has no message). */
+export function bootErrorMessage(err: unknown): string {
+  return (err instanceof Error ? err.message : String(err)) || 'Unknown error'
+}
+
+/** Fill and reveal the static #boot-error banner (index.html). An empty `stage` blanks its line. */
+export function revealBootBanner(title: string, message: string, stage: string): void {
+  const banner = document.getElementById('boot-error')
+  if (!banner) return
+  ;[title, message, stage && `Stage: ${stage}`].forEach((text, i) => {
+    const slot = banner.children[i]
+    if (slot) slot.textContent = text
+  })
+  banner.hidden = false
+}
+
+/**
+ * Show a failed boot using only static markup, so it still appears when every lazy chunk
+ * (the banner module included) is unreachable. Start goes to "Load failed".
+ */
+export function revealBootFailure(err: unknown, stage: string): void {
+  const message = bootErrorMessage(err)
+  setStartButtonEnabled(false, message)
+  revealBootBanner('Game failed to start', message, stage)
 }
 
 export function showMessage(state: GameUIRuntimeState, message: string, duration = 2000): void {
@@ -268,7 +305,7 @@ export function showMessage(state: GameUIRuntimeState, message: string, duration
   document.body.appendChild(msgEl)
   state.activePopups.set('message', msgEl)
 
-  setTimeout(() => {
+  state.timers.setTimeout(() => {
     msgEl.remove()
     state.activePopups.delete('message')
   }, duration)
@@ -353,16 +390,16 @@ export function showRewardToast(
   document.getElementById('game-cabinet')?.appendChild(toast)
   state.activePopups.set('campaign-reward', toast)
 
-  requestAnimationFrame(() => {
+  state.timers.requestAnimationFrame(() => {
     toast.style.opacity = '1'
     toast.style.transform = 'translateY(0)'
   })
 
   const dismissDelay = unlockedRewards.length > 0 ? 3200 : 2200
-  setTimeout(() => {
+  state.timers.setTimeout(() => {
     toast.style.opacity = '0'
     toast.style.transform = reducedMotion ? 'translateY(0)' : 'translateY(-6px)'
-    setTimeout(() => {
+    state.timers.setTimeout(() => {
       toast.remove()
       state.activePopups.delete('campaign-reward')
     }, 180)
@@ -446,14 +483,14 @@ export function showPortalOverlay(
   document.getElementById('game-cabinet')?.appendChild(overlay)
   state.activePopups.set('portal-overlay', overlay)
 
-  setTimeout(() => hidePortalOverlay(state), autoDismissMs)
+  state.timers.setTimeout(() => hidePortalOverlay(state), autoDismissMs)
 }
 
 export function hidePortalOverlay(state: GameUIRuntimeState): void {
   const existing = document.getElementById('campaign-portal-overlay')
   if (!existing) return
   existing.style.animation = 'cpoFadeOut 0.3s ease-in forwards'
-  setTimeout(() => {
+  state.timers.setTimeout(() => {
     existing.remove()
     state.activePopups.delete('portal-overlay')
   }, 300)
@@ -572,7 +609,7 @@ export function showScoringBreakdown(
   document.getElementById('game-cabinet')?.appendChild(panel)
   state.scoringBreakdownPanel = panel
 
-  requestAnimationFrame(() => {
+  state.timers.requestAnimationFrame(() => {
     panel.style.opacity = '1'
     panel.style.transform = 'translateY(0)'
     panel.focus()
@@ -580,7 +617,7 @@ export function showScoringBreakdown(
 
   const autoDismissMs = Math.max(0, options.autoDismissMs ?? 0)
   if (autoDismissMs > 0) {
-    window.setTimeout(() => {
+    state.timers.setTimeout(() => {
       if (state.scoringBreakdownPanel === panel) {
         hideScoringBreakdown(state)
       }

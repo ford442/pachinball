@@ -7,6 +7,7 @@
  *
  *   fixed body, solid    box / capsule / cylinder / sphere / cone → addStatic*
  *   fixed body           pin field (a whole lattice)      → addPinField (one id)
+ *   fixed body           axis-pull well (MagSpin)         → addForceField, mode 'axis-pull'
  *   any body, sensor     box / cylinder / sphere          → addSensorVolume
  *   kinematic body       box / cylinder                   → addKinematicMover
  *
@@ -185,6 +186,24 @@ function exportCollider(
       const id = accept(engine.addPinField(field))
       if (id !== null) result.debug.push({ kind: 'pinField', field })
       return id
+    }
+    case 'axisPullField': {
+      // A force field, not geometry: the body's pose is the origin `createAxisPullField` made.
+      const f = shape.field
+      const id = engine.addForceField({
+        center: { ...f.center },
+        halfExtents: { x: f.radius, y: f.halfHeight, z: f.radius },
+        mode: 'axis-pull',
+        strength: f.strength,
+        acceleration: f.acceleration ?? true,
+      })
+      // -1 is a dormant engine or a bundle that predates the well — not a full family.
+      if (id === -1) return refuse('this C++ bundle has no axis-pull force field')
+      const accepted = accept(id)
+      if (accepted !== null) {
+        result.debug.push({ kind: 'cylinder', center: { ...f.center }, radius: f.radius, halfHeight: f.halfHeight, rotation: { x: 0, y: 0, z: 0, w: 1 } })
+      }
+      return accepted
     }
     case 'convexHull':
       return refuse('the C++ world has no convex hull shape')

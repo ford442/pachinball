@@ -7,7 +7,7 @@
 
 import { AdventureTrackType } from '../adventure/adventure-types'
 import { TRACK_CATALOG, type TrackModeType } from '../adventure/adventure-track-progression'
-import { TABLE_MAPS } from '../shaders/lcd-table'
+import { TABLE_MAPS } from '../config/table-maps'
 
 /**
  * A single layout entry in the map registry.

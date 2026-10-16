@@ -265,6 +265,20 @@ EMSCRIPTEN_BINDINGS(physics_world) {
           desc.acceleration = acceleration;
           return self.addForceField(desc);
         }))
+    // A vertical well that pulls bodies toward its axis (MagSpin). Separate from
+    // addForceField so that function's Embind arity stays fixed for older callers.
+    .function("addAxisPullField", optional_override([](PhysicsWorld& self,
+        float px, float py, float pz,
+        float radius, float halfHeight,
+        float strength, bool acceleration) -> int {
+          ForceFieldDesc desc;
+          desc.center = {px, py, pz};
+          desc.halfExtents = {radius, halfHeight, radius};
+          desc.mode = ForceMode::AxisPull;
+          desc.strength = strength;
+          desc.acceleration = acceleration;
+          return self.addForceField(desc);
+        }))
     .function("setForceFieldEnabled", &PhysicsWorld::setForceFieldEnabled)
     .function("setForceFieldVector", &PhysicsWorld::setForceFieldVector)
 

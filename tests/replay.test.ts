@@ -28,8 +28,8 @@ describe('ReplayRecorder & ReplayRunner schema & serialization', () => {
 
     expect(recorder.isRecording()).toBe(true)
 
-    const f1: InputFrame = { flipperLeft: true, flipperRight: null, plunger: false, nudge: null, timestamp: 100 }
-    const f2: InputFrame = { flipperLeft: null, flipperRight: true, plunger: true, nudge: { x: 1, y: 0, z: 0 }, timestamp: 116 }
+    const f1: InputFrame = { flipperLeft: true, flipperRight: null, plungerCharge: null, plunger: false, nudge: null, timestamp: 100 }
+    const f2: InputFrame = { flipperLeft: null, flipperRight: true, plungerCharge: 1, plunger: true, nudge: { x: 1, y: 0, z: 0 }, timestamp: 116 }
 
     recorder.recordFrame(f1)
     recorder.recordFrame(f2)
@@ -73,7 +73,7 @@ describe('ReplayRecorder & ReplayRunner schema & serialization', () => {
       renderer: 'webgl2',
       createdAt: '2026-08-07T00:00:00.000Z',
       finalScore: 2500,
-      frames: [{ flipperLeft: true, flipperRight: false, plunger: true, nudge: null, timestamp: 50 }],
+      frames: [{ flipperLeft: true, flipperRight: false, plungerCharge: 1, plunger: true, nudge: null, timestamp: 50 }],
     }
 
     ReplayRecorder.saveToLocalStorage('test_replay_ls', payload)
@@ -96,8 +96,8 @@ describe('ReplayRecorder & ReplayRunner schema & serialization', () => {
       createdAt: '2026-08-07T00:00:00.000Z',
       finalScore: 500,
       frames: [
-        { flipperLeft: true, flipperRight: false, plunger: false, nudge: null, timestamp: 10 },
-        { flipperLeft: false, flipperRight: true, plunger: false, nudge: null, timestamp: 26 },
+        { flipperLeft: true, flipperRight: false, plungerCharge: null, plunger: false, nudge: null, timestamp: 10 },
+        { flipperLeft: false, flipperRight: true, plungerCharge: null, plunger: false, nudge: null, timestamp: 26 },
       ],
     }
 
@@ -149,8 +149,8 @@ describe('Replay Physics Parity (Deterministic Integration)', () => {
       }
 
       // Apply plunger impulse
-      if (frame.plunger) {
-        vel.y += 12.0
+      if (frame.plungerCharge !== null) {
+        vel.y += 12.0 * frame.plungerCharge
       }
 
       // Apply seeded random feeder impulse every 45 ticks
@@ -204,6 +204,7 @@ describe('Replay Physics Parity (Deterministic Integration)', () => {
       const frame: InputFrame = {
         flipperLeft: flipperL,
         flipperRight: flipperR,
+        plungerCharge: plunge ? 0.75 : null,
         plunger: plunge,
         nudge,
         timestamp: tick * 16.66,

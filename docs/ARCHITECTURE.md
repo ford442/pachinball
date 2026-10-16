@@ -8,7 +8,7 @@ The codebase is organized into focused modules under `src/`. See [`AGENTS.md`](.
 
 | File | Role |
 |------|------|
-| [`src/main.ts`](../src/main.ts) | Application bootstrap — Babylon engine (WebGPU-first), Rapier WASM preload, `Game` instantiation |
+| [`src/main.ts`](../src/main.ts) | Application bootstrap — Babylon engine (WebGPU-first), physics preload (`preloadPhysicsSystem()`: the C++ bundle by default, Rapier only for `rapier` / `wasm-mirror`), `Game` instantiation |
 | [`src/game.ts`](../src/game.ts) | Main game orchestrator — wires subsystems, render loop, state machine |
 | [`src/game/game-systems-init.ts`](../src/game/game-systems-init.ts) | Subsystem initialization (physics, adventure, campaign, display, etc.) |
 
@@ -89,7 +89,10 @@ portal anchors, and `buildTrack()` switch case).
 
 1. Add the enum value in [`adventure-types.ts`](../src/adventure/adventure-types.ts)
    (`AdventureTrackType`).
-2. Add a manifest entry in [`track-manifest-data.ts`](../src/adventure/manifests/track-manifest-data.ts):
+2. Add a manifest entry, in enum position, to the data module that holds its neighbours —
+   [`track-manifest-data-core.ts`](../src/adventure/manifests/track-manifest-data-core.ts) (first eleven tracks)
+   or [`track-manifest-data-extended.ts`](../src/adventure/manifests/track-manifest-data-extended.ts)
+   (`track-manifest-data.ts` concatenates them; `tests/track-manifest.test.ts` pins the order):
    - `startAnchor` — portal teleport position
    - `zone` — story text, colors, music, transition flags (feeds `ZONE_REGISTRY`)
    - `catalog` — optional campaign metadata (feeds `TRACK_CATALOG` when present)
@@ -97,7 +100,8 @@ portal anchors, and `buildTrack()` switch case).
    - `buildKind` — `'json'` or `'ts'`, plus that kind's dispatch field (below)
 3. **JSON path** (`buildKind: 'json'`):
    - Author `src/adventure/track-data/<NAME>.json` conforming to the v1 schema in
-     [`track-schema.ts`](../src/adventure/track-schema.ts).
+     [`track-schema.ts`](../src/adventure/track-schema.ts) (types in
+     [`track-schema-types.ts`](../src/adventure/track-schema-types.ts), re-exported by it).
    - Point the manifest's `dataPath` at it (glob-relative, e.g. `./track-data/<NAME>.json`).
    - The file is auto-registered via `track-data-registry.ts` (`import.meta.glob`); the
      manifest registry cross-checks `dataPath` against the file the definition actually

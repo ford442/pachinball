@@ -5,6 +5,22 @@ export interface MagSpinTunables {
   readonly kind: 'mag-spin'
   /** Capture trigger radius in world units. */
   readonly catchRadius: number
+  /**
+   * Radius of the C++ pull well that draws idle-state balls toward the feeder
+   * (owner modes only). Keep `feederPosition.x + pullRadius` clear of the plunger
+   * lane (`checkProximity` skips `x > 8.5`).
+   */
+  readonly pullRadius: number
+  /** Half-height of the pulled band around `feederPosition.y`. */
+  readonly pullHalfHeight: number
+  /**
+   * Pull at the well's axis in m/s², fading linearly to zero at `pullRadius`.
+   * Measured on the owner table (slope z = -5, ground friction 0.18, the standard ball):
+   * a resting ball is captured out to 1.4 m with no pull, and out to 1.7 / 1.9 / 2.2 /
+   * 2.4 / 2.7 m at 6 / 10 / 15 / 20 / 30 m/s². A ball rolling past gains 0.1-0.5 m of
+   * funnel half-width. A play-feel knob: raise it for a stronger tractor beam.
+   */
+  readonly pullAcceleration: number
   /** Duration of the SPIN phase in seconds. */
   readonly spinDuration: number
   /** Post-RELEASE ignore window in seconds. Invariant: >= spinDuration. */
@@ -53,6 +69,9 @@ export const MAG_SPIN_TUNABLES = Object.freeze({
   // Upper-left of center — well clear of the plunger corridor (x≈10.5)
   feederPosition: Object.freeze({ x: 4.5, y: 0.5, z: 15 }),
   catchRadius: 1.5,
+  pullRadius: 3.0,
+  pullHalfHeight: 1.0,
+  pullAcceleration: 10,
   spinDuration: 1.2,
   cooldown: 3.0,
   releaseForce: 25.0,

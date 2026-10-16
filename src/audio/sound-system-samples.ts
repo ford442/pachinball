@@ -400,7 +400,9 @@ export async function playMapMusic(state: SoundSystemSamplesState, mapId: string
     }
 
     if (!track) {
-      console.warn(`[SoundSystem] No music for map: ${mapId}`)
+      // Expected on every map select: musicCache only holds the local `stem-*` entries,
+      // so most map ids have no track. Not a warning (#455).
+      console.debug(`[SoundSystem] No music for map: ${mapId}`)
       return
     }
 

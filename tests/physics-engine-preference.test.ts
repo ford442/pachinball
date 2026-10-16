@@ -22,15 +22,46 @@ describe('physics engine preference', () => {
 
   afterEach(() => {
     Reflect.deleteProperty(globalThis, 'localStorage')
+    Reflect.deleteProperty(globalThis, 'crossOriginIsolated')
   })
 
-  it('defaults to wasm-owner when localStorage is unset', () => {
-    expect(WASM_PHYSICS.defaultEngine).toBe('wasm-owner')
+  function setIsolated(value: boolean): void {
+    Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value })
+  }
+
+  it('defaults to wasm-worker on a cross-origin-isolated page (#439)', () => {
+    setIsolated(true)
+    expect(WASM_PHYSICS.defaultEngine).toBe('wasm-worker')
+    expect(getPhysicsEnginePreference()).toBe('wasm-worker')
+    expect(getWasmPhysicsRuntimeMode()).toBe('wasm-worker')
+  })
+
+  it('defaults to in-process wasm-owner when the page is not isolated', () => {
+    setIsolated(false)
+    expect(WASM_PHYSICS.nonIsolatedDefaultEngine).toBe('wasm-owner')
     expect(getPhysicsEnginePreference()).toBe('wasm-owner')
     expect(getWasmPhysicsRuntimeMode()).toBe('wasm-owner')
   })
 
+  it('defaults to wasm-owner when crossOriginIsolated is undefined (Node, old browsers)', () => {
+    expect('crossOriginIsolated' in globalThis).toBe(false)
+    expect(getPhysicsEnginePreference()).toBe('wasm-owner')
+  })
+
+  it('honors an explicit wasm-owner override on an isolated page', () => {
+    setIsolated(true)
+    localStorage.setItem(WASM_PHYSICS.flagKey, 'wasm-owner')
+    expect(getWasmPhysicsRuntimeMode()).toBe('wasm-owner')
+  })
+
+  it('honors an explicit wasm-worker override on a non-isolated page', () => {
+    setIsolated(false)
+    localStorage.setItem(WASM_PHYSICS.flagKey, 'wasm-worker')
+    expect(getWasmPhysicsRuntimeMode()).toBe('wasm-worker')
+  })
+
   it('honors an explicit rapier override', () => {
+    setIsolated(true)
     localStorage.setItem(WASM_PHYSICS.flagKey, 'rapier')
     expect(getPhysicsEnginePreference()).toBe('rapier')
     expect(getWasmPhysicsRuntimeMode()).toBe('rapier')

@@ -10,13 +10,14 @@
 
 export { WasmPhysicsEngine, WasmBodyType, type WasmBodyDesc, type WasmHingeDesc } from './PhysicsModule'
 export type { WasmSimEngine } from './wasm-sim-engine'
+export { PhysicsWorkerClient } from './physics-worker-client'
 export {
-  PhysicsWorkerClient,
   createPhysicsWorker,
+  startPhysicsWorker,
   warmPhysicsWorker,
   consumePrewarmedPhysicsWorker,
   resetPhysicsWorkerPrewarmForTests,
-} from './physics-worker-client'
+} from './physics-worker-boot'
 export {
   WasmIdShadow,
   STATIC_BOX_ID_BASE,

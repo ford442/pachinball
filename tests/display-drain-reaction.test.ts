@@ -198,7 +198,8 @@ vi.mock('../src/display/display-border-glow', () => ({
   },
 }))
 
-vi.mock('../src/game-elements/display-config', () => ({
+vi.mock('../src/display/display-types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/display/display-types')>()),
   DisplayState: {
     IDLE: 'idle',
     FEVER: 'fever',

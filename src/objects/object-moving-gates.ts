@@ -103,7 +103,7 @@ export class MovingGateBuilder {
       width: width * scale,
       height: height * scale,
       depth: 0.2 * scale
-    }, this.scene) as Mesh
+    }, this.scene)
 
     gateMesh.parent = gateRoot
     gateMesh.material = this.matLib.getEnhancedBumperBodyMaterial(colorHex)
@@ -117,7 +117,7 @@ export class MovingGateBuilder {
         width: width * scale,
         height: height * scale,
         depth: 0.2 * scale
-      }, this.scene) as Mesh
+      }, this.scene)
 
       collideMesh.parent = gateRoot
       collideMesh.isVisible = false

@@ -1,5 +1,7 @@
+import { GameState } from '../game-elements/types'
 import { InputHandler, type InputFrame } from '../game-elements/input'
 import type { PhysicsSystem } from '../game-elements/physics'
+import { simClockSteps } from '../core/sim-clock'
 import type { Scene } from '@babylonjs/core/scene'
 export interface InputConfig {
   onFlipperLeft?: (pressed: boolean) => void
@@ -77,6 +79,8 @@ export class GameInputManager {
         getState: () => this.config.getState?.() ?? 0,
         getTiltActive: () => this.config.getTiltActive?.() ?? false,
         getAdventureActive: () => this.config.getAdventureActive?.() ?? false,
+        // Plunger charge counts fixed physics steps held (#441).
+        getSimStep: () => simClockSteps(),
       },
       physics.isReady()
     )
@@ -111,7 +115,7 @@ export class GameInputManager {
 
     // Get state from config for state-dependent shortcuts
     const gameState = this.config.getState?.()
-    const isPlaying = gameState === 1 // GameState.PLAYING = 1
+    const isPlaying = gameState === GameState.PLAYING
     const adventureActive = this.config.getAdventureActive?.() ?? false
 
     // Dynamic map switching (Digit2-9 → maps 1-8; Digit0/1 are flippers)
@@ -212,11 +216,11 @@ export class GameInputManager {
   /**
    * Setup gamepad support with configuration
    */
-  setupGamepad(config?: GamepadConfig): void {
+  setupGamepad(config?: GamepadConfig, signal?: AbortSignal): void {
     this.inputHandler.setupGamepad({
       deadZone: config?.deadZone ?? 0.15,
       vibrationEnabled: config?.vibrationEnabled ?? true,
-    })
+    }, signal)
   }
 
   /**
@@ -233,9 +237,10 @@ export class GameInputManager {
     leftBtn: HTMLElement | null,
     rightBtn: HTMLElement | null,
     plungerBtn: HTMLElement | null,
-    nudgeBtn: HTMLElement | null
+    nudgeBtn: HTMLElement | null,
+    signal?: AbortSignal,
   ): void {
-    this.inputHandler.setupTouchControls(leftBtn, rightBtn, plungerBtn, nudgeBtn)
+    this.inputHandler.setupTouchControls(leftBtn, rightBtn, plungerBtn, nudgeBtn, signal)
   }
 
   /**

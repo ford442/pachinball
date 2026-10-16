@@ -1,0 +1,14 @@
+{
+  // TODO(#441): ratchet toward `noUncheckedIndexedAccess` in tsconfig.app.json.
+  //
+  // TypeScript cannot scope the flag to a directory (an `include` subset still type-checks
+  // everything it imports), so this project turns it on for all of src/ and
+  // scripts/check-index-strict.mjs fails only on errors under the directories listed in
+  // ENFORCED_DIRS there. Fix a directory, add it to that list; when every directory is
+  // clean, move the flag into tsconfig.app.json and delete this file and the script.
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.index-strict.tsbuildinfo",
+    "noUncheckedIndexedAccess": true
+  }
+}

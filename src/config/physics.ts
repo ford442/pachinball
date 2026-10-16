@@ -96,20 +96,34 @@ export type PhysicsConfigType = typeof PhysicsConfig
 
 /**
  * WASM Physics Engine feature flag configuration.
- * Reads from localStorage at runtime; defaults to wasm-owner.
+ * Reads from localStorage at runtime; with no override, cross-origin-isolated
+ * pages default to wasm-worker and every other page to wasm-owner (#439).
  */
 export const WASM_PHYSICS = {
   flagKey: 'pachinball:physics-engine',
-  /** Production physics (table + adventure); Rapier is imported only as the missing-bundle fallback. */
-  defaultEngine: 'wasm-owner',
+  /**
+   * Production physics (table + adventure) on a cross-origin-isolated page.
+   * Rapier is imported only as the missing-bundle fallback.
+   */
+  defaultEngine: 'wasm-worker',
+  /** Default when the page is not cross-origin isolated (file://, missing COOP/COEP). */
+  nonIsolatedDefaultEngine: 'wasm-owner',
+  /**
+   * Backstop for a worker that never answers `init`. A script that fails to
+   * load already settles boot through the Worker `error` event.
+   */
+  workerReadyTimeoutMs: 10_000,
   /**
    * Engine modes:
    *  - `rapier`       — Rapier only: dev/degrade path (explicit override, or fail-closed when the WASM bundle is missing)
    *  - `wasm-mirror`  — WASM mirrors ball+bumper subset; Rapier stays authoritative and its bodies remain handles
-   *  - `wasm-owner`   — WASM owns ball + static table + flipper hinges + adventure tracks (in-process, production default)
+   *  - `wasm-owner`   — WASM owns ball + static table + flipper hinges + adventure tracks
+   *                     (in-process; the default when the page is not cross-origin isolated,
+   *                     and the fallback when the worker fails to start)
    *  - `wasm-worker`  — same ownership as wasm-owner (table + adventure tracks), C++ world
-   *                     in a Dedicated Worker with one frame of lag. Snapshots come back over
-   *                     a SharedArrayBuffer when `isCrossOriginIsolated()`, else as transferred
+   *                     in a Dedicated Worker with one frame of lag; the production default on
+   *                     a cross-origin-isolated page. Snapshots come back over a
+   *                     SharedArrayBuffer when `isCrossOriginIsolated()`, else as transferred
    *                     `postMessage` buffers (see docs/wasm-physics-engine.md, #414).
    * Legacy `wasm` is treated as `wasm-mirror`.
    */
@@ -141,7 +155,7 @@ export function getPhysicsEnginePreference(): WasmPhysicsEnginePreference {
   } catch {
     // ignore localStorage errors (e.g. disabled storage)
   }
-  return WASM_PHYSICS.defaultEngine as WasmPhysicsEnginePreference
+  return isCrossOriginIsolated() ? WASM_PHYSICS.defaultEngine : WASM_PHYSICS.nonIsolatedDefaultEngine
 }
 
 /** Normalise localStorage values to the documented runtime modes. */
@@ -165,8 +179,9 @@ export function runtimeModeUsesRapier(mode: WasmPhysicsRuntimeMode): boolean {
 
 /**
  * True when the page is cross-origin isolated (SharedArrayBuffer available).
- * Gates the `wasm-worker` snapshot transport: shared memory when true, transferred
- * `postMessage` buffers when false. Never gates whether the worker boots.
+ * Picks the default engine (`wasm-worker` when true, `wasm-owner` when false)
+ * and the `wasm-worker` snapshot transport: shared memory when true, transferred
+ * `postMessage` buffers when false. Never decides whether the game boots.
  */
 export function isCrossOriginIsolated(): boolean {
   return typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated === true

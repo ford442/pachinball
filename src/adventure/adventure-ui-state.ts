@@ -5,6 +5,7 @@
 
 import type { EventBus } from '../core/event-bus'
 import type { AdventureGoal } from './adventure-goal-system'
+import { createTimerScope } from '../core/timers'
 
 export interface GoalUIElement {
   goalId: string
@@ -33,6 +34,7 @@ export interface AdventureUIState {
 }
 
 export class AdventureUIStateManager {
+  private readonly timers = createTimerScope()
   private state: AdventureUIState = {
     showGoalsPanel: true,
     showTrackInfo: true,
@@ -147,7 +149,7 @@ export class AdventureUIStateManager {
     this.state.cinematicSubtitle = subtitle
 
     if (duration && duration > 0) {
-      setTimeout(() => {
+      this.timers.setTimeout(() => {
         this.hideCinematicOverlay()
       }, duration * 1000)
     }
@@ -284,6 +286,7 @@ export class AdventureUIStateManager {
    * Clean up timers and state
    */
   dispose(): void {
+    this.timers.dispose()
     this.clearEventBus()
     this.animationTimers.clear()
     this.reset()

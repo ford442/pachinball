@@ -99,10 +99,14 @@ export class BallManager {
   }
 
   private asHost(): BallManagerHost {
+    // These private members are only reached through the BallManagerHost view below; the list
+    // keeps noUnusedLocals satisfied. The two methods are never called here, hence unbound-method.
+    /* eslint-disable @typescript-eslint/unbound-method */
     void [
       this.scene, this.rapier, this.mirrorTexture, this.matLib, this.onGoldBallCollected, this.glowTime, this.smallGoldBallLifetimes, this.smallGoldBallSpawnTime,
       this.swarmGroups, this.ballSwarmId, this.nextSwarmId, this.ballStuckTimers, this.chainMultiball, this.addTrailForBall, this.playSpawnEffect,
     ]
+    /* eslint-enable @typescript-eslint/unbound-method */
     return this as unknown as BallManagerHost
   }
 

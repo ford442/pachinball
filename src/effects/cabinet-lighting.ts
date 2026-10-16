@@ -10,7 +10,7 @@ import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Scene } from '@babylonjs/core/scene'
 import type { EventBus } from '../core/event-bus'
-import { DisplayState } from '../game-elements/display-config'
+import { DisplayState } from '../display/display-types'
 import { PALETTE, color, QualityTier } from '../game-elements/visual-language'
 
 export interface CabinetLightingConfig {

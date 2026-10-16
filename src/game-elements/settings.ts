@@ -1,7 +1,7 @@
 import { GameConfig } from '../config'
-import type { AudioSourceMode } from './audio-sample-bank'
+import type { AudioSourceMode } from '../audio/audio-sample-bank'
 
-export type { AudioSourceMode } from './audio-sample-bank'
+export type { AudioSourceMode } from '../audio/audio-sample-bank'
 
 export interface GameSettings {
   reducedMotion: boolean

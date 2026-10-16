@@ -217,6 +217,6 @@ then asserts the two are identical. Do a migration that way rather than by eye.
 
 ## Validation
 
-- Runtime: `validateTrackDefinition()` in `src/adventure/track-schema.ts`
+- Runtime: `validateTrackDefinition()` in `src/adventure/track-schema.ts`; the segment / `TrackDefinition` types live in `src/adventure/track-schema-types.ts` (re-exported by `track-schema.ts`, so import from either)
 - CLI: `npm run tracks:validate` (wraps `tests/tracks-validate-cli.test.ts`)
 - CI / local: `tests/track-schema.test.ts`, `tests/track-json-migration-parity.test.ts`

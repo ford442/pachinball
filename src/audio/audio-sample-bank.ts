@@ -63,7 +63,7 @@ const CATEGORY_TO_SAMPLE = new Map<SampleCategory, AudioSampleKey>([
 
 /** Resolve a public/audio path for Vite static serving. */
 export function getLocalAudioPath(fileName: string): string {
-  const base = (import.meta.env.BASE_URL as string) || '/'
+  const base = (import.meta.env.BASE_URL) || '/'
   return `${base}audio/${fileName}`
 }
 

@@ -80,7 +80,7 @@ export interface JsonTrackManifest extends TrackManifestBase {
 }
 
 /**
- * Complete track manifest — one entry per track in `track-manifest-data.ts`,
+ * Complete track manifest — one entry per track in `track-manifest-data-{core,extended}.ts`,
  * aggregated in `registry.ts`. The `buildKind` discriminant makes the build
  * dispatch total: a TS track must supply a `loadBuilder`, a JSON track a `dataPath`.
  */

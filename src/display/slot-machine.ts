@@ -9,7 +9,7 @@
  * - Supports debug force-result and force-spin toggles
  */
 
-import { DisplayState } from '../game-elements/display-config'
+import { DisplayState } from './display-types'
 import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 import { SLOT_MACHINE_CONFIG } from '../config'
 import type { EventBus } from '../core/event-bus'

@@ -8,7 +8,10 @@ import {
   encodeHingeAngleBuffer,
   type PhysicsWorkerCommand,
   type PhysicsWorkerFromWorker,
+  type PhysicsWorkerSnapshotReply,
 } from './physics-worker-protocol'
+import { readSnapshotIds } from './snapshot-layout'
+import { WasmSnapshotStatus } from './wasm-types'
 import {
   canUseSharedMemory,
   createSharedSnapshotBuffer,
@@ -19,10 +22,33 @@ import { TRANSFORM_STRIDE } from './transform-buffer'
 
 export interface WorkerRuntimeState {
   hingeIds: Set<number>
+  /**
+   * Snapshot replies produced while applying a batch, in command order. The
+   * worker posts them after the batch, ahead of that batch's step result.
+   */
+  replies: PhysicsWorkerSnapshotReply[]
 }
 
 export function createWorkerRuntimeState(): WorkerRuntimeState {
-  return { hingeIds: new Set() }
+  return { hingeIds: new Set(), replies: [] }
+}
+
+/**
+ * The worker-side engine's snapshot surface. Synchronous: inside the worker
+ * the C++ world is in-process (`WasmPhysicsEngine`).
+ */
+export interface WorkerSnapshotEngine {
+  serializeSnapshot(): Uint8Array | null
+  restoreSnapshot(bytes: Uint8Array): WasmSnapshotStatus
+  getStaticContentHash(): string | null
+  getStepCount(): number
+}
+
+/** Hand the batch's snapshot replies to `post`, oldest first, transferring each blob. */
+export function postSnapshotReplies(state: WorkerRuntimeState, post: WorkerPost): void {
+  const replies = state.replies
+  state.replies = []
+  for (const reply of replies) post(reply, reply.bytes ? [reply.bytes.buffer] : [])
 }
 
 /** Snapshot accessors the in-process engine exposes for HEAP copies. */
@@ -69,7 +95,7 @@ export function applyPhysicsCommand(
     | 'removeHinge'
     | 'step'
     | 'dispose'
-  >,
+  > & Partial<WorkerSnapshotEngine>,
   cmd: PhysicsWorkerCommand,
   state: WorkerRuntimeState,
 ): number {
@@ -174,6 +200,36 @@ export function applyPhysicsCommand(
       engine.dispose()
       state.hingeIds.clear()
       return 0
+    case 'serializeSnapshot': {
+      const bytes = engine.serializeSnapshot?.() ?? null
+      state.replies.push(snapshotReply(engine, cmd.requestId, bytes, bytes ? WasmSnapshotStatus.Ok : WasmSnapshotStatus.Unsupported))
+      return 0
+    }
+    case 'restoreSnapshot': {
+      const status = engine.restoreSnapshot?.(cmd.bytes) ?? WasmSnapshotStatus.Unsupported
+      if (status === WasmSnapshotStatus.Ok) {
+        // The restored world's hinges replace ours — publish exactly those.
+        state.hingeIds = new Set(readSnapshotIds(cmd.bytes)?.hinges.map((h) => h.id) ?? [])
+      }
+      state.replies.push(snapshotReply(engine, cmd.requestId, null, status))
+      return 0
+    }
+  }
+}
+
+function snapshotReply(
+  engine: Partial<WorkerSnapshotEngine>,
+  requestId: number,
+  bytes: Uint8Array | null,
+  status: WasmSnapshotStatus,
+): PhysicsWorkerSnapshotReply {
+  return {
+    type: 'snapshot-reply',
+    requestId,
+    bytes,
+    status,
+    staticHash: engine.getStaticContentHash?.() ?? null,
+    stepCount: engine.getStepCount?.() ?? 0,
   }
 }
 

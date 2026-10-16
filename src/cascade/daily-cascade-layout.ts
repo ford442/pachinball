@@ -124,7 +124,7 @@ export function validateLayout(layout: TableLayout): { ok: boolean; reasons: str
   const minPinPin = 2 * pinRadius + pinMinGap
 
   for (let i = 0; i < layout.pins.length; i++) {
-    const a = layout.pins[i]!
+    const a = layout.pins[i]
     for (const box of KEEP_OUT_BOXES) {
       if (box.label === 'catcher') continue // catcher hole is intentional skip, not a hard fail for leftover pins
       if (inBox(a.x, a.z, box)) {
@@ -132,7 +132,7 @@ export function validateLayout(layout: TableLayout): { ok: boolean; reasons: str
       }
     }
     for (let j = i + 1; j < layout.pins.length; j++) {
-      const b = layout.pins[j]!
+      const b = layout.pins[j]
       if (dist2(a.x, a.z, b.x, b.z) < minPinPin * minPinPin) {
         reasons.push(`pin-pin too close at (${a.x.toFixed(1)},${a.z.toFixed(1)})`)
         break
@@ -229,7 +229,7 @@ function generateFeeders(rng: SeededRng): Record<FeederKey, boolean> {
   const enabled = {} as Record<FeederKey, boolean>
   for (const k of FEEDER_KEYS) enabled[k] = false
   for (let i = 0; i < enableCount; i++) {
-    enabled[order[i]!] = true
+    enabled[order[i]] = true
   }
   return enabled
 }
