@@ -21,6 +21,8 @@
     "lint": "eslint .",
     "check:bundle": "node scripts/check-bundle-size.mjs",
     "check:index-strict": "node scripts/check-index-strict.mjs",
+    "perf:baseline": "PERF_BASELINE=1 playwright test tests/perf-baseline.spec.ts --project=chromium",
+    "perf:compare": "node scripts/perf-compare.mjs",
     "preview": "vite preview",
     "icons:generate": "node scripts/generate-pwa-icons.mjs",
     "models:cabinet-placeholders": "node scripts/generate-cabinet-placeholders.mjs",
