@@ -299,29 +299,8 @@ export class Game
     this.lifecycle?.setGameState(GameState.MENU)
   }
 
-  /** Per-frame render loop body — also used by VisibilityManager on tab resume. */
-  renderFrame(): void {
-    this.settingsUI?.updateLatencyDisplay(this.inputManager || undefined)
-    this.scene?.render()
-    const dt = this.engine.getDeltaTime() / 1000
-    this.cabinetLighting?.update(dt)
-
-    for (const visual of this.spinnerVisuals) {
-      this.spinnerBuilder?.updateSpinner(visual, dt)
-    }
-    for (const state of this.trapStates) {
-      this.ballTrapBuilder?.updateTrap(state, dt)
-    }
-    for (const state of this.launcherStates) {
-      this.launcherBuilder?.updateLauncher(state, dt)
-    }
-    for (const state of this.gateStates) {
-      this.movingGateBuilder?.updateGate(state, dt)
-    }
-
-    this.adventureCinematicSystem?.update(dt)
-    this.adventureCinematicTriggers?.update()
-    this.adventureUIStateManager?.updateAnimations(dt)
+  /** `PhysicsHost.stepAdventureProgression`: goal and time-limit clocks, once per fixed step. */
+  stepAdventureProgression(dt: number): void {
     this.adventureGoalTracker?.update(dt)
     this.adventureProgressionSupervisor?.update(dt, this.score)
     if (this.adventureMode?.isActive() && this.adventureGoalTracker && this.adventureProgressionSupervisor) {
@@ -330,6 +309,20 @@ export class Game
       )
       this.updateHUD()
     }
+  }
+
+  /** Per-frame render loop body — also used by VisibilityManager on tab resume. */
+  renderFrame(): void {
+    this.settingsUI?.updateLatencyDisplay(this.inputManager || undefined)
+    this.scene?.render()
+    const dt = this.engine.getDeltaTime() / 1000
+    this.cabinetLighting?.update(dt)
+
+    // Spinners, traps, launchers, gates and the adventure goal / time-limit
+    // clocks are gameplay: GamePhysicsController ticks them once per fixed step.
+    this.adventureCinematicSystem?.update(dt)
+    this.adventureCinematicTriggers?.update()
+    this.adventureUIStateManager?.updateAnimations(dt)
 
     if (this.adventureProgressionSupervisor && this.adventureProgressionSupervisor.getTimeRemaining() > 0) {
       const trackInfo = this.adventureTrackProgression?.getCurrentTrackInfo()

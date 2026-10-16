@@ -26,8 +26,11 @@ function normalizeReplayPhysicsEngine(value: unknown): WasmPhysicsRuntimeMode {
  * Replay schema version.
  * - 1: RLE rows `count:L,R,P,nx,ny,nz` — plunger as a fired/not-fired bit.
  * - 2: a 7th field carries the 0–1 plunger charge the launch was scaled by (#441).
+ * - 3: one frame per fixed physics step, not per render frame (#444). Same
+ *   row format; older tapes still load, but were cut at the recorder's frame
+ *   rate and only replay step-exactly if that was 60 Hz.
  */
-export const REPLAY_SCHEMA_VERSION = 2
+export const REPLAY_SCHEMA_VERSION = 3
 
 export interface ReplayMetadata extends ReplayWorldFingerprint {
   version: number

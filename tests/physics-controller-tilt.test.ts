@@ -6,12 +6,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GamePhysicsController } from '../src/game/game-physics-controller'
 import { GAME_TUNING, GameConfig } from '../src/config'
-import { FIXED_TIMESTEP } from '../src/core/sim-clock'
+import { FIXED_TIMESTEP, MAX_FRAME_DT } from '../src/core/sim-clock'
 import { makeBallManagerStub, makeGameObjectsStub, makePhysicsHostShell } from './helpers/make-physics-host'
 
 const STEP_MS = FIXED_TIMESTEP * 1000
 
-function makeTable() {
+/** `frameMs` is the render delta; the controller turns it into fixed steps (#444). */
+function makeTable(frameMs = STEP_MS) {
   let engineSteps = 0
   const applyImpulse = vi.fn()
   const ball = {
@@ -20,8 +21,8 @@ function makeTable() {
     applyImpulse,
   }
   const physics = {
-    // One fixed step per frame, whatever the render delta says.
-    step: vi.fn(() => { engineSteps++; return 1 }),
+    // The controller hands the engine one fixed step per call.
+    step: vi.fn(() => { engineSteps++; return 0 }),
     getStepCount: () => engineSteps,
     getWorld: () => null,
     isWasmActive: () => false,
@@ -32,8 +33,7 @@ function makeTable() {
     ballManager: makeBallManagerStub({ getBallBody: vi.fn(() => ball) }),
     gameObjects: makeGameObjectsStub(),
   })
-  // A wildly wrong render delta: gameplay timers must not follow it.
-  ;(host.engine.getDeltaTime as ReturnType<typeof vi.fn>).mockReturnValue(1000)
+  ;(host.engine.getDeltaTime as ReturnType<typeof vi.fn>).mockReturnValue(frameMs)
   const controller = new GamePhysicsController(host)
   const frames = (n: number) => {
     for (let i = 0; i < n; i++) controller.stepPhysics(null, null, null, null)
@@ -41,6 +41,7 @@ function makeTable() {
   const nudge = () => controller.applyNudge({ x: 1, y: 0, z: 0 })
   return {
     host, controller, frames, nudge, applyImpulse,
+    engineSteps: () => engineSteps,
     jumpEngineCounter: (to: number) => { engineSteps = to },
   }
 }
@@ -63,6 +64,14 @@ describe('nudge / tilt on the sim clock (#441)', () => {
     t.frames(30)
     expect(t.controller.simClock.steps()).toBe(30)
     expect(t.controller.simClock.ms()).toBeCloseTo(30 * STEP_MS, 9)
+  })
+
+  it('a stalled render frame catches up at most MAX_FRAME_DT of fixed steps', () => {
+    const t = makeTable(1000)
+    t.frames(30)
+    // Two fixed steps per one-second frame, not sixty; the clock counts the steps taken.
+    expect(t.engineSteps()).toBe(30 * Math.round(MAX_FRAME_DT / FIXED_TIMESTEP))
+    expect(t.controller.simClock.steps()).toBe(t.engineSteps())
   })
 
   it('nudges inside the cooldown warn, and the third warning tilts', () => {

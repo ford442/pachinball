@@ -112,4 +112,6 @@ export interface PhysicsHost {
   endAdventureMode(): void
   getBallPosition(): Vector3 | null
   getCameraMode(): CameraMode
+  /** Adventure goal / time-limit clocks, advanced once per fixed step (#444). */
+  stepAdventureProgression?(dt: number): void
 }
