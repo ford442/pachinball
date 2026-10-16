@@ -127,6 +127,23 @@ export default defineConfig({
         ],
         runtimeCaching: [
           {
+            // Live arcade reads (#444): the last board and stored replays stay
+            // viewable offline. Writes and auth are POSTs and never cached.
+            urlPattern: /^https:\/\/[a-z0-9]+\.supabase\.co\/rest\/v1\/(leaderboard|replays)\b/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'arcade-reads',
+              networkTimeoutSeconds: 4,
+              expiration: {
+                maxEntries: 48,
+                maxAgeSeconds: 60 * 60 * 24,
+              },
+              cacheableResponse: {
+                statuses: [200],
+              },
+            },
+          },
+          {
             urlPattern: /^https:\/\/storage\.noahcohn\.com\/api\//,
             handler: 'NetworkFirst',
             options: {

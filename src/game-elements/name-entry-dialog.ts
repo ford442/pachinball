@@ -63,7 +63,7 @@ export class NameEntryDialog {
           <span class="score-label">SCORE</span>
           <span class="score-value">${this.score.toLocaleString()}</span>
         </div>
-        <div class="name-entry-rank">RANK #${this.rank}</div>
+        <div class="name-entry-rank">${this.rank > 0 ? `RANK #${this.rank}` : 'OFFLINE · SENT WHEN BACK ONLINE'}</div>
         <div class="name-entry-prompt">ENTER NAME</div>
         <div class="name-entry-letters">
           <span class="letter" data-pos="0">A</span>

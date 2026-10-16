@@ -2,7 +2,6 @@
  * Challenge System — URL parsing, share link generation, and challenge HUD banners.
  */
 
-import { apiFetch } from '../config'
 import { randomU32Seed } from '../core/seeded-rng'
 import { DEFAULT_TABLE_MAP_ID } from '../config/table-maps'
 
@@ -99,21 +98,18 @@ export class ChallengeSystem {
   }
 
   /**
-   * Submit challenge metadata to backend API if available.
+   * Register the challenge on the arcade service (#444); its id, or null
+   * when the service cannot be reached.
    */
   async submitChallenge(challenge: ChallengeConfig): Promise<string | null> {
     try {
-      const res = await apiFetch<{ success: boolean; challenge_id: string }>('/challenges', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          seed: challenge.seed,
-          targetScore: challenge.targetScore,
-          mapId: challenge.mapId,
-          challengerName: challenge.challengerName || 'AAA',
-        }),
+      const { createChallenge } = await import('../arcade/arcade-api')
+      return await createChallenge({
+        seed: challenge.seed,
+        targetScore: challenge.targetScore,
+        mapId: challenge.mapId,
+        challengerName: challenge.challengerName || 'AAA',
       })
-      return res?.challenge_id || null
     } catch {
       return null
     }

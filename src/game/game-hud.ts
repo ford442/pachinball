@@ -170,48 +170,37 @@ export class GameHUD {
       return
     }
 
-    let replayId: string | undefined
-    if (this.host.replayRecorder) {
-      const payload = this.host.replayRecorder.stop(this.host.score)
-      if (payload) {
-        try {
-          const { apiFetch } = await import('../config')
-          const res = await apiFetch<{ success: boolean; replay_id: string }>('/replays', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: (await import('../game-elements')).ReplayRecorder.toJSON(payload, true),
-          })
-          if (res?.replay_id) {
-            replayId = res.replay_id
-          }
-        } catch {
-          // Replay submission optional fallback
-        }
-      }
-    }
+    // The tape goes up with the score, once the player has entered a name (#444).
+    const payload = this.host.replayRecorder?.stop(this.host.score) ?? null
 
     const fallbackMap = this.host.mapManager?.getCurrentMap() || 'neon-helix'
     const mapId = getDailyCascadeState().getLeaderboardMapId(fallbackMap)
     await this.host.ensureOverlaySystems()
-    this.host.leaderboardSystem.setContext(mapId)
-    const rank = await this.host.leaderboardSystem.checkRank(this.host.score)
-    if (rank === null || rank > 100) {
+    const board = this.host.leaderboardSystem
+    void board.flushQueue()
+    board.setContext(mapId)
+    const rank = await board.checkRank(this.host.score)
+    // Offline the rank is unknown: take the name anyway, the run waits for the network.
+    const offline = rank === null && typeof navigator !== 'undefined' && navigator.onLine === false
+    if (!offline && (rank === null || rank > 100)) {
       console.log('[Leaderboard] Score not in top 100')
       return
     }
-    const result = await this.host.nameEntryDialog.show(this.host.score, rank)
+    const result = await this.host.nameEntryDialog.show(this.host.score, rank ?? 0)
     if (result.submitted && result.name) {
-      const submitResult = await this.host.leaderboardSystem.submitScore({
+      const replayJson = payload ? (await import('../game-elements')).ReplayRecorder.toJSON(payload, true) : undefined
+      const submitResult = await board.submitScore({
         name: result.name,
         score: this.host.score,
         map_id: mapId,
         balls: 1,
         combo_max: this.host.comboCount,
-        replay_id: replayId,
-      })
+      }, replayJson)
       if (submitResult.success) {
         console.log(`[Leaderboard] Score submitted! Rank #${submitResult.rank}`)
-        this.host.leaderboardSystem.show()
+        board.show()
+      } else if (submitResult.queued) {
+        this.host.uiManager?.showMessage(submitResult.message ?? 'Score saved; it will be sent when you reconnect', 4000)
       }
     }
   }

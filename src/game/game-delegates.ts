@@ -233,8 +233,8 @@ export abstract class GameDelegates extends GameFields {
 
   async startSpectateReplay(replayId: string): Promise<boolean> {
     try {
-      const { apiFetch } = await import('../config')
-      const raw = await apiFetch<object>(`/replays/${replayId}`)
+      const { fetchReplay } = await import('../arcade/arcade-api')
+      const raw = await fetchReplay(replayId)
       if (!raw) {
         this.showMessage('Replay payload not found', 3000)
         return false
