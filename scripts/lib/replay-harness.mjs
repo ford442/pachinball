@@ -151,7 +151,7 @@ export function launchBrowser() {
  * so frame 0 is the same world either way. A failure carries a `code`:
  * boot | start | setup | record | rejected | snapshot | incomplete.
  */
-async function runInPage({ mode, scenario, replay }) {
+async function runInPage({ mode, scenario, replay, ghostStride }) {
   const fail = (code, reason, extra = {}) => ({ ok: false, code, reason, ...extra })
   const g = window.game
   if (!g?.physicsController || !g.engine || !g.stateManager) return fail('boot', 'window.game hooks missing')
@@ -239,10 +239,24 @@ async function runInPage({ mode, scenario, replay }) {
   } else {
     const runner = g.replayRunner
     const total = runner.getProgress().totalFrames
+    // The race ghost (#444 Slice D): the primary ball every `ghostStride` steps,
+    // sample k after step 1 + k * ghostStride, in millimetres; no ball → INT32_MIN.
+    const track = []
     while (runner.isPlaying() && runner.getProgress().currentFrame < total && g.stateManager.isPlaying()) {
       controller.stepFixed(null, g.inputActions, runner, null)
+      if (ghostStride && (runner.getProgress().currentFrame - 1) % ghostStride === 0) {
+        const p = g.ballManager?.getBallBody?.()?.translation()
+        if (p) track.push(Math.round(p.x * 1000), Math.round(p.y * 1000), Math.round(p.z * 1000))
+        else track.push(-2147483648, 0, 0)
+      }
     }
     steps = runner.getProgress().currentFrame
+    if (ghostStride) {
+      const bytes = new Uint8Array(Int32Array.from(track).buffer)
+      let binary = ''
+      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+      payload = { ghost: { stride: ghostStride, samples: track.length / 3, track: btoa(binary) } }
+    }
     const rejection = runner.getRejection()
     if (rejection) return fail('rejected', `replay rejected: ${rejection.message}`, { outcome: rejection.outcome })
     const snap = controller.getLastReplaySnapshotResult()
@@ -264,15 +278,17 @@ async function runInPage({ mode, scenario, replay }) {
     finalStateHash: (await wasm.getStateHash()) ?? null,
     score: g.score,
     steps,
-    payload,
+    payload: mode === 'record' ? payload : null,
+    ghost: mode === 'verify' ? payload?.ghost ?? null : null,
   }
 }
 
 /**
  * Open a fresh page and run one tape (`{ scenario, replay }`). Never throws:
  * a browser / navigation failure comes back as `{ ok: false, code: 'harness' }`.
+ * `ghostStride` (verify only) also returns the ball's path as `ghost`.
  */
-export async function runTape(browser, base, mode, tape, { verbose = false } = {}) {
+export async function runTape(browser, base, mode, tape, { verbose = false, ghostStride = 0 } = {}) {
   const context = await browser.newContext()
   const page = await context.newPage()
   const errors = []
@@ -287,7 +303,7 @@ export async function runTape(browser, base, mode, tape, { verbose = false } = {
       timeout: BOOT_TIMEOUT_MS,
     })
     await page.locator('#start-btn').waitFor({ state: 'visible', timeout: BOOT_TIMEOUT_MS })
-    const res = await page.evaluate(runInPage, { mode, scenario: tape.scenario, replay: tape.replay })
+    const res = await page.evaluate(runInPage, { mode, scenario: tape.scenario, replay: tape.replay, ghostStride })
     if (!res.ok && errors.length) res.reason += ` | page errors: ${errors.slice(0, 3).join(' / ')}`
     return res
   } catch (err) {

@@ -17,7 +17,7 @@ const ok = (score: number) => ({ ok: true, score, steps: 60, finalStateHash: '01
 describe('replay verifier verdicts (#444 Slice C)', () => {
   it('verifies a tape that replays to the submitted score', () => {
     expect(precheck(claim())).toBeNull()
-    expect(judge(claim(), ok(50_000))).toEqual({ verdict: 'verified', reason: null, verifierScore: 50_000, stateHash: '0123456789abcdef' })
+    expect(judge(claim(), ok(50_000))).toEqual({ verdict: 'verified', reason: null, verifierScore: 50_000, stateHash: '0123456789abcdef', ghost: null })
   })
 
   it('rejects a forged score: the tape says 50 000, the row says 5 000 000', () => {
@@ -49,5 +49,24 @@ describe('replay verifier verdicts (#444 Slice C)', () => {
     const boot = { ok: false, code: 'harness', reason: 'navigation timeout' }
     expect(judge(claim({ attempts: 1 }), boot)).toMatchObject({ verdict: 'retry' })
     expect(judge(claim({ attempts: MAX_ATTEMPTS }), boot)).toMatchObject({ verdict: 'rejected', reason: `verifier error after ${MAX_ATTEMPTS} attempts: navigation timeout` })
+  })
+
+  it('a challenge run must be played on the challenge\'s table (Slice D)', () => {
+    const weekly = { challenge_id: 'w', challenge_kind: 'weekly', challenge_seed: 99, challenge_cascade_seed: 4242, challenge_board: 'weekly-2026-W42' }
+    const onTable = { ...payload, seed: 99, cascade: { mode: 'free', seed: 4242, seedId: 'free-1092' } }
+    expect(precheck(claim({ ...weekly, payload: onTable, map_id: 'weekly-2026-W42' }))).toBeNull()
+    expect(precheck(claim({ ...weekly, payload: { ...onTable, seed: 98 }, map_id: 'weekly-2026-W42' }))?.reason)
+      .toBe("not played on the challenge's table: session seed 98, the challenge's is 99")
+    expect(precheck(claim({ ...weekly, payload: { ...onTable, cascade: undefined }, map_id: 'weekly-2026-W42' }))?.reason)
+      .toBe("not played on the challenge's table: cascade none, the challenge's is 4242")
+    expect(precheck(claim({ ...weekly, payload: onTable, map_id: 'free-cascade-1092' }))?.reason)
+      .toBe('submitted to free-cascade-1092, but the tape was played on weekly-2026-W42')
+    // A player's challenge on the vanilla table: same session seed, no cascade.
+    expect(precheck(claim({ challenge_id: 'p', challenge_kind: 'player', challenge_seed: 7, challenge_cascade_seed: null }))).toBeNull()
+  })
+
+  it('a verified run carries the ghost the verifier recorded', () => {
+    const ghost = { stride: 2, samples: 30, track: 'AAAA' }
+    expect(judge(claim(), { ...ok(50_000), ghost })).toMatchObject({ verdict: 'verified', ghost })
   })
 })

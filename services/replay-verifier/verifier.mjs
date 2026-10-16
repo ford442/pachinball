@@ -5,7 +5,8 @@
  * (`claim_score_verifications`), replays each one's tape in the real game,
  * one fixed step per tape frame (scripts/lib/replay-harness.mjs), and records
  * the verdict (`record_score_verification`): verified when the tape replays
- * to the submitted score, rejected with the reason when it cannot.
+ * to the submitted score, rejected with the reason when it cannot. A verified
+ * run's ball path goes to `ghost_tracks`: the race ghost of a challenge.
  *
  * Builds: the game a run was recorded on is stamped in its tape (`buildId`).
  * With VERIFIER_BUILDS, a directory of builds named by build id (each a
@@ -61,18 +62,31 @@ export function discoverBuilds({ dist, builds }) {
   return { byId, fallback }
 }
 
+/** One sample of the race ghost every this many fixed steps (30 Hz). */
+const GHOST_STRIDE = 2
+
+/** PostgREST with the secret key: `rpc(name, body)` and `rest(path, row)` (an upsert). */
 function client({ url, key }) {
-  return async function rpc(name, body) {
-    const res = await fetch(`${url}/rest/v1/rpc/${name}`, {
+  const post = async (path, body, prefer) => {
+    const res = await fetch(`${url}/rest/v1/${path}`, {
       method: 'POST',
       // A secret key goes in `apikey`; a bearer equal to it is accepted too.
-      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        ...(prefer ? { Prefer: prefer } : {}),
+      },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(30_000),
     })
     const text = await res.text()
-    if (!res.ok) throw new Error(`${name}: HTTP ${res.status} ${text.slice(0, 300)}`)
+    if (!res.ok) throw new Error(`${path}: HTTP ${res.status} ${text.slice(0, 300)}`)
     return text ? JSON.parse(text) : null
+  }
+  return {
+    rpc: (name, body) => post(`rpc/${name}`, body),
+    rest: (path, row) => post(path, row, 'resolution=merge-duplicates,return=minimal'),
   }
 }
 
@@ -83,7 +97,7 @@ function client({ url, key }) {
  */
 export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, batch = 4, once = false, signal } = {}) {
   if (!key) throw new Error('ARCADE_SECRET_KEY is required')
-  const rpc = client({ url, key })
+  const { rpc, rest } = client({ url, key })
   const { byId, fallback } = discoverBuilds({ dist, builds })
   log('start', { builds: [...byId.keys()], default: fallback.id, url })
 
@@ -115,13 +129,24 @@ export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, bat
           const server = await serverFor(claim.payload.buildId)
           version = server.id
           const tape = { scenario: { seed: claim.payload.seed ?? 0, setup: [] }, replay: claim.payload }
-          const result = await runTape(browser, server.base, 'verify', tape)
+          const result = await runTape(browser, server.base, 'verify', tape, { ghostStride: GHOST_STRIDE })
           verdict = judge(claim, result, { verifierVersion: version })
         }
         if (verdict.verdict === 'retry') {
           summary.retried++
           log('retry', { score_id: claim.score_id, attempts: claim.attempts, reason: verdict.reason })
           continue
+        }
+        if (verdict.ghost) {
+          // The race ghost a challenge shows (Slice D); a failed upload does not block the verdict.
+          try {
+            await rest('ghost_tracks?on_conflict=replay_id', {
+              replay_id: claim.replay_id, stride: verdict.ghost.stride, samples: verdict.ghost.samples,
+              track: verdict.ghost.track, verifier_version: version,
+            })
+          } catch (err) {
+            log('ghost-failed', { score_id: claim.score_id, error: String(err) })
+          }
         }
         try {
           await rpc('record_score_verification', {

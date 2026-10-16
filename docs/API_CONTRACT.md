@@ -44,8 +44,9 @@ player's access token in `Authorization: Bearer …`.
 | `POST /rest/v1/rpc/player_rank` `{ p_map_id, p_score, p_adventure_level }` | Where that score would place on that board (1 = top). |
 | `GET /rest/v1/replays?select=payload&id=eq.<uuid>` | `[{ payload }]` — what `ReplayRecorder.fromJSON` reads. |
 
-Scores, replays, challenges and profiles are public. Saves are not readable
-by anyone but their owner.
+Scores, replays, challenges, profiles and ghost tracks are public. Saves
+are not readable by anyone but their player (and that player's linked
+devices).
 
 ## Writes (Edge Functions, signed-in players)
 
@@ -58,7 +59,7 @@ REST call. Errors are `{ success: false, message }` with the HTTP status:
 |----------|------|--------|
 | `POST /functions/v1/submit-replay` | `ReplayRecorder.toJSON(payload)`, ≤ 512 KB | `201 { success, replay_id, frame_count }` |
 | `POST /functions/v1/submit-score` | `{ name, score, map_id, adventure_level?, balls, combo_max, replay_id?, challenge_id? }` | `201 { success, score_id, rank, verified: false }` |
-| `POST /functions/v1/create-challenge` | `{ seed, targetScore, mapId, challengerName?, replayId? }` | `201 { success, challenge_id }` |
+| `POST /functions/v1/create-challenge` | `{ seed, targetScore, mapId, challengerName?, replayId?, cascadeSeed? }` | `201 { success, challenge_id }` |
 | `POST /functions/v1/put-save` | `{ slot?, schema_version, data }` (data ≤ 64 KB) | `200 { success, slot, schema_version, updated_at }` |
 
 The client submits a finished run as the replay first, then the score citing
@@ -114,6 +115,53 @@ a verdict brings it back. Both RPCs are executable by `service_role` only.
 Only runs recorded on the in-process `wasm-owner` engine can verify — the
 default since #444; `?physics=wasm-worker` and Rapier runs are rejected as
 unverifiable.
+
+## Saves across devices (Slice D)
+
+A save belongs to a **player**: the device itself, or the player it is
+linked to (`profiles.linked_to`, `player_id()`); RLS on `saves` uses
+`player_id()`. Device A asks for a code with
+`POST /rest/v1/rpc/create_device_link` (8 characters without 0/O/1/I, valid
+10 minutes, 5 an hour); device B enters it with
+`POST /rest/v1/rpc/redeem_device_link { p_code }` → A's player id, or null
+for an unknown / used / expired code (10 failures an hour). From then on B
+reads and writes A's saves; scores stay with the device that played them.
+
+The client (`src/adventure/campaign-cloud-sync.ts`) pulls the campaign save
+on start when the browser already has a player, runs it through the same
+schema migration as the local save, merges (no progress is ever lost: union
+of tracks and rewards, best scores, the further player's current track) and
+pushes on every campaign checkpoint (`put-save`). Settings → Campaign save
+also exports / imports the save as a file, byte for byte.
+
+## Challenges v2 and the table of the week (Slice D)
+
+A challenge row has a `kind`: `player` (created by a player, citing their
+run's replay — only their own), or `weekly`. `GET /rest/v1/challenges?id=eq.<id>`
+reads one; a share link is `?challenge=<id>`, and the game plays it on its
+table — session `seed`, `cascade_seed` (free-seed cascade table, or the
+vanilla table when null) and `map_id`.
+
+`POST /rest/v1/rpc/current_weekly_challenge` returns this ISO week's table
+of the week, creating it on first ask: Monday 00:00 UTC for seven days, one
+seed (derived from the week) for both the session and the cascade table,
+and its own board `weekly-<YYYY-Www>`. A score citing a weekly challenge
+must go to that board inside the week (enforced on insert); its leaderboard
+is `GET /rest/v1/leaderboard?map_id=eq.weekly-<week>…`.
+
+The verifier rejects a challenge run not played on its challenge's table
+(session seed, cascade seed, board).
+
+## Race ghosts (Slice D)
+
+When the verifier confirms a run it also records the primary ball every 2
+fixed steps from frame 0 (`ghost_tracks`: base64 Int32 millimetre triples;
+`x = INT32_MIN` while there is no ball) — written with the secret key only,
+so a ghost is always a verified run, never a client's report.
+`GET /rest/v1/ghost_tracks?select=stride,samples,track&replay_id=eq.<id>`.
+A player's challenge is raced against its challenger's run; the table of the
+week against the best verified run on its board
+(`leaderboard?…&verified=is.true&order=rank.asc&limit=1`).
 
 ## Changing the contract
 

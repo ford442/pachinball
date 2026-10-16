@@ -124,6 +124,32 @@ components:
         mapId: { $ref: '#/components/schemas/MapId' }
         challengerName: { $ref: '#/components/schemas/Tag' }
         replayId: { $ref: '#/components/schemas/Uuid' }
+        cascadeSeed: { type: integer, minimum: 0, maximum: 4294967295 }
+    Challenge:
+      type: object
+      required: [id, kind, seed, map_id, target_score, starts_at]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        kind: { enum: [player, weekly] }
+        seed: { type: integer, minimum: 0, maximum: 4294967295 }
+        map_id: { type: string }
+        target_score: { type: integer, minimum: 0 }
+        challenger_name: { type: [string, 'null'] }
+        replay_id: { type: [string, 'null'] }
+        cascade_seed: { type: [integer, 'null'] }
+        board: { type: [string, 'null'] }
+        title: { type: [string, 'null'] }
+        starts_at: { type: string }
+        expires_at: { type: [string, 'null'] }
+        creator_id: { type: [string, 'null'] }
+        created_at: { type: string }
+    GhostTrack:
+      type: object
+      required: [stride, samples, track]
+      properties:
+        stride: { type: integer, minimum: 1, maximum: 60 }
+        samples: { type: integer, minimum: 0 }
+        track: { type: string, description: 'Base64 of little-endian Int32 millimetre (x, y, z) triples of the primary ball; x = INT32_MIN when there is no ball' }
     SaveRequest:
       type: object
       additionalProperties: false
@@ -189,6 +215,7 @@ paths:
         - { name: adventure_level, in: query, required: true, schema: { type: string, pattern: '^(is\.null|eq\.[A-Za-z0-9._:-]{1,64})$' } }
         - { name: order, in: query, required: true, schema: { const: rank.asc } }
         - { name: limit, in: query, required: true, schema: { type: string, pattern: '^([1-9]|[1-9][0-9]|100)$' } }
+        - { name: verified, in: query, required: false, schema: { const: is.true } }
       responses:
         '200':
           description: Leaderboard rows.
@@ -237,6 +264,119 @@ paths:
                   required: [payload]
                   properties:
                     payload: { $ref: '#/components/schemas/ReplayPayload' }
+  /rest/v1/saves:
+    get:
+      summary: The player's own save slot (a linked device reads the player's)
+      security: [{ apikey: [], player: [] }]
+      parameters:
+        - { name: select, in: query, required: true, schema: { const: 'slot,schema_version,data,updated_at' } }
+        - { name: slot, in: query, required: true, schema: { type: string, pattern: '^eq\.[a-z0-9-]{1,32}$' } }
+      responses:
+        '200':
+          description: Zero or one save.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 1
+                items:
+                  type: object
+                  required: [slot, schema_version, data, updated_at]
+                  properties:
+                    slot: { type: string }
+                    schema_version: { type: integer }
+                    data: { type: object }
+                    updated_at: { type: string }
+  /rest/v1/rpc/create_device_link:
+    post:
+      summary: A one-time code (10 minutes, 5 an hour) that links another device to this player's saves
+      security: [{ apikey: [], player: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, maxProperties: 0 }
+      responses:
+        '200':
+          description: The code.
+          content:
+            application/json:
+              schema:
+                type: array
+                minItems: 1
+                maxItems: 1
+                items:
+                  type: object
+                  required: [code, expires_at]
+                  properties:
+                    code: { type: string, pattern: '^[A-HJ-NP-Z2-9]{8}$' }
+                    expires_at: { type: string }
+  /rest/v1/rpc/redeem_device_link:
+    post:
+      summary: Link this device to the player behind a code (10 failed codes an hour)
+      security: [{ apikey: [], player: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [p_code]
+              properties:
+                p_code: { type: string, pattern: '^[A-Za-z0-9]{8}$' }
+      responses:
+        '200':
+          description: The player this device now saves as, or null for an unknown, used or expired code.
+          content:
+            application/json:
+              schema: { type: [string, 'null'] }
+  /rest/v1/challenges:
+    get:
+      summary: A challenge
+      parameters:
+        - { name: select, in: query, required: true, schema: { type: string } }
+        - { name: id, in: query, required: true, schema: { type: string, pattern: '^eq\.[0-9a-f-]{36}$' } }
+      responses:
+        '200':
+          description: Zero or one challenge.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 1
+                items: { $ref: '#/components/schemas/Challenge' }
+  /rest/v1/rpc/current_weekly_challenge:
+    post:
+      summary: This ISO week's table of the week (created on first ask)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, maxProperties: 0 }
+      responses:
+        '200':
+          description: The week's challenge.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Challenge' }
+  /rest/v1/ghost_tracks:
+    get:
+      summary: The verifier's recording of a verified run's ball (the race ghost)
+      parameters:
+        - { name: select, in: query, required: true, schema: { const: 'stride,samples,track' } }
+        - { name: replay_id, in: query, required: true, schema: { type: string, pattern: '^eq\.[0-9a-f-]{36}$' } }
+      responses:
+        '200':
+          description: Zero or one track.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 1
+                items: { $ref: '#/components/schemas/GhostTrack' }
   /functions/v1/submit-score:
     post:
       summary: Submit a leaderboard entry (stored unverified)

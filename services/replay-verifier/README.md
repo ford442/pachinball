@@ -26,8 +26,14 @@ A run is rejected when:
 | `score mismatch: the tape replays to A, B was submitted` | The forged-score case. |
 | `verifier error after 3 attempts …` | The verifier itself kept failing on this run. |
 
+| `not played on the challenge's table …` | A challenge run whose session seed, cascade table or board is not the challenge's. |
+
 A rejection names the build the run was recorded on when it differs from
 the verifier's (`(recorded on build …)`).
+
+A verified run also leaves its **race ghost**: while replaying, the
+verifier samples the primary ball every 2 fixed steps and writes the track
+to `ghost_tracks` (the challenge ghost players race; `docs/API_CONTRACT.md`).
 
 ## Install
 
@@ -41,7 +47,7 @@ npx playwright install --with-deps chromium
 # The build players run. `npm run build` also writes dist/build-info.json
 # (the build id stamped into every tape).
 npm run build
-npm run test:verifier            # self-test against a fake backend: 6 cases ok
+npm run test:verifier            # self-test against a fake backend: 8 cases ok
 
 sudo mkdir -p /etc/pachinball
 sudo cp services/replay-verifier/replay-verifier.env.example /etc/pachinball/replay-verifier.env
