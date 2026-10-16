@@ -124,7 +124,8 @@ On the gameplay clock (#441):
 | Gold swarm quick-collect bonus | `ball-manager-gold.ts` `collectBall` |
 | Plunger charge (steps held) | `input-plunger.ts` |
 | Flipper hold-time stiffness ramp (Rapier path) | `game-input-actions.ts` |
-| Gameplay timers stepped per frame: swarm lifetimes (expiry removes bodies), stuck-ball detection, combo-multiplier decay, power-up timer, tilt decay | `stepPhysics()` passes the sim seconds advanced (`simDt`), not render `dt` |
+| Gameplay timers stepped per fixed step: swarm lifetimes (expiry removes bodies), stuck-ball detection, combo-multiplier decay, power-up timer, tilt decay | `stepFixed()` passes the sim seconds advanced (`simDt`), not render `dt` |
+| Jackpot sequence (ends the display's JACKPOT state), display state machine (gates fever scoring), spinner / trap / launcher / gate timers, adventure goal and time-limit clocks | `updateGameplay()` / `Game.stepAdventureProgression`, once per fixed step at `FIXED_TIMESTEP` (#444) |
 
 `nudgeState` and `tiltActive` are reset in `startGame()`.
 
@@ -137,7 +138,7 @@ timing for the HUD.
 ## Inputs on the tape (#441)
 
 The replay tape (`InputFrame`, `src/replay/replay-recorder.ts`, schema
-`REPLAY_SCHEMA_VERSION = 2`) carries everything that changes the ball's path:
+`REPLAY_SCHEMA_VERSION = 3`) carries everything that changes the ball's path:
 
 - **Plunger charge.** `plungerCharge` (0–1 at fire, `null` otherwise) is the
   value the launch impulse is scaled by. Live and replay both fire through
@@ -150,15 +151,57 @@ The replay tape (`InputFrame`, `src/replay/replay-recorder.ts`, schema
 - **Nudges** are quantised to the tape's 0.01 grid in `processBufferedInputs()`,
   so the live impulse is exactly the one replay re-applies.
 
-### Next blocker: the tape is per render frame
+### One frame per fixed step (#444)
 
-One `InputFrame` is recorded per `stepPhysics()` call, i.e. per **render**
-frame, and playback steps the world with the viewer's own
-`engine.getDeltaTime()`. A 144 Hz spectator therefore runs a different number of
-fixed steps between taped inputs than the 60 Hz recorder did. Every determinism
-test pins delta to 1/60 s to sidestep this. Fix: record the fixed-step count per
-frame (or one frame per fixed step) and have playback advance exactly that many
-steps regardless of viewer dt.
+`GamePhysicsController.stepPhysics()` runs once per render frame, but gameplay
+does not: a `FixedStepPacer` (`src/core/sim-clock.ts`) turns the render delta
+into 0..N whole steps (a stall catches up at most `MAX_FRAME_DT`), and each
+`stepFixed()` reads one input frame — live input, or the next tape frame —
+drives flippers and movers, hands the engine exactly one `FIXED_TIMESTEP`, then
+runs every score / lives / ball-path update. Only presentation (mesh
+interpolation by the pacer's alpha, camera, cosmetic effects) runs per render
+frame. So a tape holds one frame per physics step (schema 3) and a 144 Hz
+recording replays bit-for-bit at 30, 60 or 144 Hz
+(`tests/replay-snapshot-wasm.test.ts`). The C++ / Rapier accumulators only ever
+see whole steps; schema-2 tapes still load but were cut per render frame.
+
+A replay also carries the cascade table it was recorded on (`cascade`:
+Daily Cascade / free seed), and `startGame()` plays it on that table — not the
+spectator's selection or today's daily — then gives the player theirs back.
+
+A frame-0 snapshot whose linked bodies / hinges do not pair up with the live
+world (`id-layout`: the table descriptors differ) **rejects** the replay:
+`ReplayRunner.reject()` stops playback with the reason instead of letting a
+ghost drift under a toast.
+
+### Verifying tapes headless
+
+`npm run verify:replay` (`scripts/verify-replay.mjs`) plays each
+`tests/replays/*.json` tape in the real game — headless Chromium, wasm-owner,
+render loop stopped, one step per frame, through `Game.playReplay` (the spectate
+path) — and prints `{ finalStateHash, score, steps }` (`finalStateHash` is the
+C++ `getStateHash()`). It fails on a refused snapshot or a golden mismatch.
+`--update` writes this build's numbers as the goldens (an intentional numeric
+change: commit them with a one-line rationale); `npm run record:replay`
+re-records a tape from its scenario when the tape itself is stale (snapshot
+version, table geometry) and keeps it only if a fresh page replays it.
+The native build is held to the WASM one by `npm run test:wasm-parity`, which
+compares the native and WASM `stateHash` at the snapshot frame.
+
+Not yet step-exact, so not verifiable:
+
+- **`wasm-worker` recordings.** The worker serves poses a frame late and TS
+  gameplay reads them; how late depends on message timing. Verify on the
+  owner path; a worker run is only reproducible if the worker lag is too.
+- **A track switch mid-tape.** Starting an adventure track rebuilds the static
+  world at a step the tape does not record. Tapes that run a track from frame 0
+  (the corpus's scenario setup) verify; a campaign session that enters a track
+  mid-game does not, until the tape records session events.
+- **Physics tuning.** `getPhysicsTuningValue()` (nudge force, plunger impulse)
+  is not in the world fingerprint; a run with a tuned panel replays with the
+  spectator's values.
+- `src/game-elements/path-mechanics/` still resets on `setTimeout`; nothing
+  builds those mechanics today.
 
 ---
 
@@ -182,4 +225,5 @@ TS flipper drive reads — see the caveat in `docs/ASYNC_CHALLENGES_EPIC.md`.
 3. ~~#343: URL `?seed=` share → session seed; ghost spectate; divergence toast.~~
 4. #441: plunger charge on the tape; sim-clock nudge/tilt and scoring windows;
    worker snapshot round trip; restore across differing ball-id layouts.
-5. Next: tape per fixed step instead of per render frame (see "Next blocker").
+5. ~~#444 Slice A: tape per fixed step, cascade table on the tape, `id-layout`
+   rejects, headless verifier + golden tape corpus (`tests/replays/`).~~

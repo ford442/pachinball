@@ -1036,6 +1036,11 @@ const DENSE_FIELD = {
   const blob = world.serializeSnapshot()
   const native = existsSync(snapshotFixture) ? new Uint8Array(readFileSync(snapshotFixture)) : null
   const nativeMatch = native !== null && sameBytes(blob, native)
+  // Same frame, whole stepped world: the native build's stateHash sidecar (#444, #459 Slice A).
+  const stateHash = world.getStateHash()
+  const stateHashFile = `${snapshotFixture}.statehash`
+  const nativeStateHash = existsSync(stateHashFile) ? readFileSync(stateHashFile, 'utf8').trim() : null
+  const stateHashMatch = nativeStateHash !== null && nativeStateHash === stateHash
 
   const original = trace(world, scene, SNAPSHOT_AT, RUN_FRAMES)
   const rewound = world.restoreSnapshot(blob)
@@ -1059,10 +1064,11 @@ const DENSE_FIELD = {
   fresh.delete()
   other.delete()
 
-  const ok = nativeMatch && rewound === 0 && reserialized && replayMatch && freshMatch && mismatch === 4 && hashDiffers
+  const ok = nativeMatch && stateHashMatch && rewound === 0 && reserialized && replayMatch && freshMatch && mismatch === 4 && hashDiffers
   console.log(
     `${ok ? 'PASS' : 'FAIL'} wasm snapshot native bytes + round trip ` +
     `(bytes=${blob.length} native=${native ? (nativeMatch ? 'identical' : `differs@word${firstDiffWord(blob, native)}`) : 'missing'} ` +
+    `stateHash=${stateHash}/${nativeStateHash === null ? 'native missing' : stateHashMatch ? 'native identical' : `native ${nativeStateHash}`} ` +
     `rewind=${rewound}/${reserialized ? 'same' : 'diff'}/${replayMatch ? 'bit-exact' : 'DIVERGED'} ` +
     `fresh=${freshStatus}/${freshMatch ? 'bit-exact' : 'DIVERGED'} mismatchStatus=${mismatch})`
   )

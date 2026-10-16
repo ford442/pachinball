@@ -2,6 +2,11 @@
 #
 # native_ctest + sanitizer_ctest are BLOCKING for PRs touching `native/**`.
 # wasm_parity is BLOCKING for PRs touching `native/**`, `src/wasm/**`, or wasm tests.
+# replay_goldens is BLOCKING for the same paths plus `src/game/physics/**` and
+# `src/replay/**`: every tests/replays/*.json tape must replay to its golden
+# final state hash, score and step count (#444). An intentional numeric change
+# runs `npm run verify:replay -- --update` and commits the new goldens with a
+# one-line rationale.
 # JS-only PRs outside those paths are not gated on Emscripten.
 #
 # Skip triggers:
@@ -17,6 +22,7 @@
 #   npm run check:dist-wasm      # after `npm run build`: dist/wasm is byte-identical to public/wasm
 #   npm run build:wasm:assert    # RelWithAsserts → native/build-assert/
 #   WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npm run test:wasm-parity
+#   npm run verify:replay        # golden replay tapes, headless Chromium (after build:wasm)
 
 name: Native Physics
 
@@ -43,6 +49,10 @@ on:
       - 'scripts/check-wasm-docs.mjs'
       - 'scripts/check-dist-wasm.mjs'
       - 'docs/wasm-physics-engine.md'
+      - 'src/game/physics/**'
+      - 'src/replay/**'
+      - 'tests/replays/**'
+      - 'scripts/verify-replay.mjs'
       - 'package.json'
       - '.github/workflows/native-physics.yml'
   pull_request:
@@ -66,6 +76,10 @@ on:
       - 'scripts/check-wasm-docs.mjs'
       - 'scripts/check-dist-wasm.mjs'
       - 'docs/wasm-physics-engine.md'
+      - 'src/game/physics/**'
+      - 'src/replay/**'
+      - 'tests/replays/**'
+      - 'scripts/verify-replay.mjs'
       - 'package.json'
       - '.github/workflows/native-physics.yml'
 
@@ -217,3 +231,43 @@ jobs:
           tests/wasm-worker-default.spec.ts
           tests/wasm-worker-adventure.spec.ts
           tests/basic-gameplay.spec.ts
+
+  replay_goldens:
+    name: Golden Replay Tapes (Blocking)
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.head_commit.message, '[skip wasm-ci]') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Emscripten SDK
+        uses: actions/cache@v4
+        with:
+          path: emsdk
+          key: emsdk-${{ runner.os }}-latest
+
+      - name: Install and activate Emscripten
+        run: |
+          if [ ! -d emsdk ]; then
+            git clone https://github.com/emscripten-core/emsdk.git
+          fi
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+          echo "$(pwd)" >> $GITHUB_PATH
+
+      - name: Build WASM module (Release — what the game loads)
+        run: |
+          source emsdk/emsdk_env.sh
+          npm run build:wasm
+
+      - name: Install Node deps
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Each tape: a fresh page on the wasm-owner engine plays it through the
+      # spectate path, one fixed step per tape frame, and must land on its
+      # golden { finalStateHash, score, steps }.
+      - name: Verify golden replay tapes (#444)
+        run: npm run verify:replay

@@ -37,9 +37,11 @@ Later phases add weekly tournament APIs and (optionally) true realtime co-op mul
 | Replay recorder / runner / ghost | `src/replay/` | `ReplayRecorder` (append-only `InputFrame[]` while `PLAYING`, RLE JSON), `ReplayRunner`, `GhostBallRenderer`, `ChallengeSystem` |
 | Seeded RNG | `src/core/seeded-rng.ts` | Mulberry32 session RNG, named forks, keyed `getLayoutRng` — catalogue in `docs/determinism-todo.md` |
 | Replay ↔ C++ snapshot | `src/replay/replay-snapshot.ts` | World fingerprint, frame-0 snapshot restore, divergence toast (#422) |
-| Input frame schema | `src/game-elements/types.ts` → `InputFrame` | Per-physics-frame flipper/plunger/nudge deltas + timestamp |
+| Input frame schema | `src/game-elements/types.ts` → `InputFrame` | One frame per fixed physics step (schema 3, #444): flipper/plunger/nudge deltas + timestamp |
 | Input buffering | `src/game-elements/input.ts` | `processBufferedInputs()` aligns input to physics frames |
 | Physics fixed timestep | `src/game-elements/physics.ts` | `FIXED_TIMESTEP = 1/60`, accumulator pattern |
+| Fixed-step gameplay loop | `src/game/physics/physics-controller.ts` | `FixedStepPacer` turns render frames into whole steps; `stepFixed()` runs input → physics → gameplay once per step (#444) |
+| Headless verifier | `scripts/verify-replay.mjs` | `npm run verify:replay` replays `tests/replays/*.json` in headless Chromium → `{ finalStateHash, score, steps }`, checked against goldens in CI |
 | API helper | `src/config/api.ts` → `apiFetch()` | Prod base: `https://storage.noahcohn.com/api` |
 
 ### Backend (minimal)
@@ -221,7 +223,7 @@ never forces a restore it cannot trust:
 | `no-snapshot` | v1 replay or a Rapier recording: tape only | — |
 | `table-mismatch` | `staticHash` or the blob's hash differs; native `StaticMismatch` | "table differs from the recording (snapshot hash mismatch)" |
 | `tunables-mismatch` | Feeder tuning changed since recording | yes |
-| `id-layout` | Same table, but the live bodies / hinges do not pair up with the snapshot's by role (a different ball or flipper count) | yes |
+| `id-layout` | Same table, but the live bodies / hinges do not pair up with the snapshot's by role (a different ball or flipper count). The replay is **rejected**: playback stops with the reason (#444) | yes |
 | `unsupported` | Engine cannot restore (Rapier / mirror, pre-#422 bundle) | yes |
 | `invalid` | Truncated / corrupt / other version | yes |
 
