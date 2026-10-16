@@ -112,17 +112,11 @@ export function playSpawnEffect(host: BallManagerHost, position: Vector3, type: 
   // Gravity
   particleSystem.gravity = new Vector3(0, -2, 0)
 
-  // Start and auto-cleanup
+  // Start and auto-cleanup: `targetStopDuration` (set above) stops emission after the burst and
+  // `disposeOnStop` has the scene dispose the system once its last particle dies. Babylon owns
+  // the lifetime, so nothing fires after scene.dispose() (the old raw timeouts double-disposed).
+  particleSystem.disposeOnStop = true
   particleSystem.start()
-
-  // Stop emission after burst
-  setTimeout(() => {
-    particleSystem.stop()
-    // Dispose after particles die
-    setTimeout(() => {
-      particleSystem.dispose()
-    }, 1500)
-  }, isSolidGold ? 300 : 200)
 }
 
 /**

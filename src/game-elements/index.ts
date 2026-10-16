@@ -94,7 +94,8 @@ export {
   type DynamicWorldConfig,
   type ZoneMechanic,
 } from './dynamic-world'
-export { DebugHUD, type DebugSnapshot } from './debug-hud'
+// Type-only: the DebugHUD class is dynamically imported (only `?debug=1` / DEV builds need it).
+export type { DebugHUD, DebugSnapshot } from './debug-hud'
 export { EventBusLog, type EventBusLogEntry } from './event-bus-log'
 export {
   getPhysicsTuningValue,
@@ -104,7 +105,9 @@ export {
   PHYSICS_TUNING_SLIDERS,
   type PhysicsTuningKey,
 } from './physics-tuning'
-export { PhysicsTuningPanel, isPhysicsTuningQueryEnabled, isPhysicsTuningEnabled } from './physics-tuning-panel'
+export { isPhysicsTuningQueryEnabled, isPhysicsTuningEnabled } from './physics-tuning'
+// Type-only: the panel itself is dynamically imported (?tune=1 / Developer settings).
+export type { PhysicsTuningPanel } from './physics-tuning-panel'
 export { PerformanceMonitor, type PerformanceMetrics } from './performance-monitor'
 
 export {

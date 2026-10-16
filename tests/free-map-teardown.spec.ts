@@ -16,7 +16,7 @@ interface TestGame {
   freeMapTestMode?: {
     loadById: (id: string) => boolean
   }
-  toggleFreeMapTestMode?: () => void
+  toggleFreeMapTestMode?: () => Promise<void>
   levelLoader?: {
     loadCampaignTrack: (trackId: string, options?: { resetBallToPlunger?: boolean }) => {
       success: boolean
@@ -69,7 +69,8 @@ test.describe('Free-map playfield load E2E', () => {
       g.startAdventureMode()
       await wait(300)
 
-      g.toggleFreeMapTestMode?.()
+      // Loads the test-mode chunk on first use; the promise resolves once the toggle is applied.
+      await g.toggleFreeMapTestMode?.()
       await wait(200)
 
       const loaded = g.freeMapTestMode?.loadById('CYBER_CORE') ?? false

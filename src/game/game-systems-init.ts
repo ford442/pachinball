@@ -21,7 +21,6 @@ import {
   PALETTE,
   INTENSITY,
   emissive,
-  DebugHUD,
   getDynamicWorld,
   getScoringBreakdownManager,
   BallManager,
@@ -76,6 +75,18 @@ interface PortalDeactivatedEventData {
   handle: number
 }
 
+/** The `?debug=1` / DEV-only tooling, split into its own chunk (see initAll). */
+async function loadDebugTools(): Promise<{
+  DebugHUD: typeof import('../game-elements/debug-hud').DebugHUD
+  GameDebug: typeof import('./game-debug').GameDebug
+}> {
+  const [{ DebugHUD }, { GameDebug }] = await Promise.all([
+    import('../game-elements/debug-hud'),
+    import('./game-debug'),
+  ])
+  return { DebugHUD, GameDebug }
+}
+
 export class GameSystemsInitializer {
   constructor(private game: Game) {}
 
@@ -89,6 +100,10 @@ export class GameSystemsInitializer {
 
     this.game.uiManager?.showLoadingState(true, { label: 'LOADING...', progress: 0 })
     this.game.uiManager?.setStartButtonEnabled(false)
+    // Debug tooling is only reachable with `?debug=1` (or in DEV builds), so it stays out of the
+    // entry chunk. Load it before the sync stage below so the stage itself never awaits.
+    const debugTools = this.game.isDebugHUDAvailable() ? await loadDebugTools() : null
+    if (this.game.signal.aborted) return
     await this.game.runCheckpointStage('scene_rendering', () => {
       const skybox = MeshBuilder.CreateBox('skybox', { size: GameConfig.visuals.skyboxSize }, scene)
       const skyboxMaterial = new StandardMaterial('skyBox', scene)
@@ -126,7 +141,7 @@ export class GameSystemsInitializer {
       })
       this.game.cabinetLighting.subscribeToEvents(this.game.eventBus)
 
-      if (this.game.debugHelper?.isDebugHUDAvailable()) {
+      if (this.game.isDebugHUDAvailable()) {
         this.game.eventBusLog.wire(this.game.eventBus)
       }
       this.game.performanceMonitor.setRendererBackend(
@@ -134,12 +149,15 @@ export class GameSystemsInitializer {
           (this.game.engine.getClassName().toLowerCase().includes('webgpu') ? 'webgpu' : 'webgl2'),
       )
 
-      this.game.debugHUD = new DebugHUD({
-        onVisibilityChange: (visible) => this.game.handleDebugHUDVisibilityChange(visible),
-      })
-      this.game.debugHUD.setUpdateCadenceHz(4)
-      if (this.game.debugHUDEnabledInSettings && this.game.debugHelper?.isDebugHUDAvailable()) {
-        this.game.debugHUD.show()
+      if (debugTools) {
+        this.game.debugHelper = new debugTools.GameDebug(this.game)
+        this.game.debugHUD = new debugTools.DebugHUD({
+          onVisibilityChange: (visible) => this.game.handleDebugHUDVisibilityChange(visible),
+        })
+        this.game.debugHUD.setUpdateCadenceHz(4)
+        if (this.game.debugHUDEnabledInSettings) {
+          this.game.debugHUD.show()
+        }
       }
 
       this.game.dynamicWorld = getDynamicWorld(scene, this.game.tableCam!, this.game.display, this.game.soundSystem)
@@ -461,6 +479,8 @@ export class GameSystemsInitializer {
 
     await this.game.runCheckpointStage('scene_gameplay_build', async () => {
       await this.game.sceneBuilder?.yieldFrame()
+      // dispose() can land during the one-frame yield; the helpers below are already nulled/disposed.
+      if (this.game.signal.aborted) return
       this.game.sceneBuilder?.buildGameplayScene()
       this.game.physicsController?.rebuildHandleCaches()
       this.game.uiManager?.showLoadingState(false, { phase: 'cosmetic' })

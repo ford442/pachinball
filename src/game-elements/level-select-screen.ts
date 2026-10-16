@@ -54,6 +54,7 @@ export class LevelSelectScreen {
     this.setupEventListeners()
 
     // Animate in
+    // eslint-disable-next-line no-restricted-syntax -- one frame, optional-chained on its own container
     requestAnimationFrame(() => {
       this.container?.classList.add('visible')
     })
@@ -68,6 +69,7 @@ export class LevelSelectScreen {
     this.removeEscHandler()
     this.container.classList.remove('visible')
     
+    // eslint-disable-next-line no-restricted-syntax -- removes this screen's own container; touches no Game state
     setTimeout(() => {
       this.container?.remove()
       this.container = null

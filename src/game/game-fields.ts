@@ -16,7 +16,8 @@ import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { Nullable } from '@babylonjs/core/types'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 
-import { PhysicsSystem, BallManager, ReplayRecorder, ReplayRunner, GhostBallRenderer, BallAnimator, CameraController, QualityTier, detectAccessibility, HapticManager, SoundSystem, getMapSystem, ZoneTriggerSystem, getDynamicWorld, DebugHUD, EventBusLog, PerformanceMonitor, type AccessibilityConfig } from '../game-elements'
+import { PhysicsSystem, BallManager, ReplayRecorder, ReplayRunner, GhostBallRenderer, BallAnimator, CameraController, QualityTier, detectAccessibility, HapticManager, SoundSystem, getMapSystem, ZoneTriggerSystem, getDynamicWorld, EventBusLog, PerformanceMonitor, type AccessibilityConfig } from '../game-elements'
+import type { DebugHUD } from '../game-elements/debug-hud'
 import { MagSpinFeeder, NanoLoomFeeder, PrismCoreFeeder, GaussCannonFeeder, QuantumTunnelFeeder } from '../objects/feeders'
 import { getAdventureState } from '../adventure/adventure-state'
 import { AdventureGoalTracker } from '../adventure/adventure-goal-tracker'
@@ -52,15 +53,15 @@ import { GameInputActions } from './game-input-actions'
 import { GameScenario } from './game-scenario'
 import { GameSlotAdventure } from './game-slot-adventure'
 import { GameSettingsUI } from './game-settings-ui'
-import { PhysicsTuningPanel } from '../game-elements/physics-tuning-panel'
-import { GameDebug } from './game-debug'
+import type { PhysicsTuningPanel } from '../game-elements/physics-tuning-panel'
+import type { GameDebug } from './game-debug'
 import { GameLifecycle } from './game-lifecycle'
 import { GameSystemsInitializer } from './game-systems-init'
 import { GameHUD } from './game-hud'
 import { GameMapCabinet } from './game-map-cabinet'
 import { CheckpointDebugController } from './checkpoint-debug'
 import { createTimerScope } from '../core/timers'
-import { FreeMapTestMode } from './free-map-test-mode'
+import type { FreeMapTestMode } from './free-map-test-mode'
 import { LevelLoader } from './level-loader'
 import type { LeaderboardSystem } from '../game-elements/leaderboard-system'
 import type { NameEntryDialog } from '../game-elements/name-entry-dialog'
@@ -128,6 +129,10 @@ export abstract class GameFields {
         import('../game-elements/leaderboard-system'),
         import('../game-elements/name-entry-dialog'),
       ]).then(([lb, ne]) => {
+        // dispose() ran while the chunks were loading: creating the singletons now would
+        // register resets on a list nothing drains, leaking them into the next Game.
+        // Callers re-check `signal.aborted` before touching the getters.
+        if (this.signal.aborted) return
         this._leaderboardSystem = lb.getLeaderboardSystem()
         this._nameEntryDialog = ne.getNameEntryDialog()
         this.lazySingletonResets.push(lb.resetLeaderboardSystem, ne.resetNameEntryDialog)

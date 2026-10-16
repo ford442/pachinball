@@ -201,6 +201,7 @@ export function setupTouchControls(
     setActive(nudgeBtn, true)
     host.queueInput('nudge', { x: 0, y: 0, z: 1 }, { source: 'touch', eventTimestamp: e.timeStamp })
     // Auto-remove active class after short delay for nudge
+    // eslint-disable-next-line no-restricted-syntax -- toggles a CSS class on a static button; touches no Game state
     setTimeout(() => setActive(nudgeBtn, false), 150)
   }, { passive: false, signal })
 
@@ -219,6 +220,7 @@ export function setupTouchControls(
     e.preventDefault()
     setActive(nudgeBtn, true)
     host.queueInput('nudge', { x: 0, y: 0, z: 1 }, { source: 'touch', eventTimestamp: e.timeStamp })
+    // eslint-disable-next-line no-restricted-syntax -- toggles a CSS class on a static button; touches no Game state
     setTimeout(() => setActive(nudgeBtn, false), 150)
   }, { signal })
 

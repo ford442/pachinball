@@ -67,6 +67,37 @@ export default defineConfig([
       'import-x/no-cycle': ['error', { maxDepth: Infinity, allowUnsafeDynamicCyclicDependency: true }],
     },
   },
+  // Timers in long-lived systems go through a TimerScope (#441) so dispose() can cancel them: a
+  // bare setTimeout outlives its owner and later touches a torn-down scene, DOM node or field.
+  // `timers.setTimeout(…)` / `scope.setTimeout(…)` are member calls on a non-global object and
+  // pass. A bare call that is genuinely safe (touches only captured nodes, guards its own
+  // state) takes `// eslint-disable-next-line no-restricted-syntax -- <why>`.
+  // engine/, wasm/, config/, replay/ and cabinet/ are bootstrap/worker code and stay outside.
+  {
+    files: [
+      'src/game/**/*.ts',
+      'src/game-elements/**/*.ts',
+      'src/effects/**/*.ts',
+      'src/objects/**/*.ts',
+      'src/display/**/*.ts',
+      'src/audio/**/*.ts',
+      'src/adventure/**/*.ts',
+    ],
+    // PathMechanicsManager is never instantiated by the shipped game; revisit when it is wired in.
+    ignores: ['src/game-elements/path-mechanics/**'],
+    rules: {
+      'no-restricted-syntax': ['error',
+        {
+          selector: "CallExpression[callee.type='Identifier'][callee.name=/^(setTimeout|setInterval|requestAnimationFrame)$/]",
+          message: 'Bare timers outlive dispose(). Schedule through a TimerScope (src/core/timers.ts: game.timers or the owner\'s own scope).',
+        },
+        {
+          selector: "CallExpression[callee.type='MemberExpression'][callee.object.name=/^(window|globalThis)$/][callee.property.name=/^(setTimeout|setInterval|requestAnimationFrame)$/]",
+          message: 'Bare timers outlive dispose(). Schedule through a TimerScope (src/core/timers.ts: game.timers or the owner\'s own scope).',
+        },
+      ],
+    },
+  },
   // `!` on an indexed read looks redundant until noUncheckedIndexedAccess is on for the whole
   // project. These directories are already held to it by `npm run check:index-strict`, where the
   // `!` is load-bearing, so don't let the autofixer strip it (#441).

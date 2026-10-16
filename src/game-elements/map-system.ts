@@ -155,6 +155,7 @@ export class MapSystem {
 
   private async fetchStaticMaps(): Promise<DynamicMapConfig[] | null> {
     const controller = new AbortController()
+    // eslint-disable-next-line no-restricted-syntax -- aborts its own fetch controller; cleared in the finally below
     const timer = setTimeout(() => controller.abort(), 4000)
     try {
       const response = await fetch(this.staticMapsUrl(), {

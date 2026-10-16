@@ -3,18 +3,22 @@ import { test, expect, type CDPSession, type Page } from '@playwright/test'
 /**
  * #441 — a Game must tear itself down completely.
  *
- * Counts the event listeners left on window / document / the game canvas (via CDP
- * DOMDebugger.getEventListeners), disposes the page's Game twice, builds and disposes a
+ * Counts the event listeners left on window / document / the game canvas and the static HUD
+ * buttons the Game wires up (via CDP DOMDebugger.getEventListeners, which also reports
+ * `onclick =` style handlers), disposes the page's Game twice, builds and disposes a
  * second Game on the same engine, and asserts the second teardown leaves exactly the
  * same listeners behind as the first. A leak per Game would show up as a growing count.
  */
 
-type ListenerCounts = Record<'window' | 'document' | 'canvas', Record<string, number>>
+type ListenerCounts = Record<'window' | 'document' | 'canvas' | 'startBtn' | 'challengeBtn', Record<string, number>>
 
 const TARGETS: Record<keyof ListenerCounts, string> = {
   window: 'window',
   document: 'document',
   canvas: 'document.querySelector("canvas")',
+  // Static index.html nodes survive the Game, so anything a Game attaches must be detached.
+  startBtn: 'document.getElementById("start-btn")',
+  challengeBtn: 'document.getElementById("challenge-share-btn")',
 }
 
 async function countListeners(cdp: CDPSession): Promise<ListenerCounts> {
@@ -62,6 +66,10 @@ test.describe('Game lifecycle', () => {
     })
     const floor1 = await countListeners(cdp)
     expect(total(floor1), 'dispose() should remove listeners').toBeLessThan(total(live))
+    // main.ts's VisibilityManager rides game.signal: a dead Game must not resume its render loop.
+    expect(floor1.document.visibilitychange ?? 0, 'visibilitychange listener after dispose()').toBe(0)
+    expect(floor1.startBtn, 'start button listeners after dispose()').toEqual({})
+    expect(floor1.challengeBtn, 'challenge button handler after dispose()').toEqual({})
 
     // A second Game on the same engine, then its teardown.
     await page.evaluate(async () => {

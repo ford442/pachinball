@@ -76,4 +76,24 @@ describe('GaussCannonFeeder', () => {
     feeder.update(1 / 60, [second as never])
     expect(second.setBodyType).not.toHaveBeenCalled()
   })
+
+  // #441: the muzzle-flash fade is a timer; it must not outlive dispose() and write to a
+  // light the scene has already torn down.
+  it('dispose() cancels the pending muzzle-flash fade timer', () => {
+    vi.useFakeTimers()
+    try {
+      const pos = FEEDER_TUNABLES['gauss-cannon'].gaussPosition
+      const ball = createMockBall({ x: pos.x, y: pos.y, z: pos.z })
+      feeder.update(1 / 60, [ball as never])
+      for (let i = 0; i < 300; i++) feeder.update(1 / 60, [ball as never])
+      expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+      feeder.dispose()
+
+      expect(vi.getTimerCount()).toBe(0)
+      expect(() => vi.advanceTimersByTime(1000)).not.toThrow()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
