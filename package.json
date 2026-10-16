@@ -17,6 +17,8 @@
     "check:compile-db": "node scripts/check-compile-db.mjs",
     "check:wasm-docs": "node scripts/check-wasm-docs.mjs",
     "test:wasm-parity": "node scripts/run-wasm-parity.mjs",
+    "verify:replay": "node scripts/verify-replay.mjs",
+    "record:replay": "node scripts/verify-replay.mjs --record",
     "print:wasm-flags": "node scripts/print-wasm-flags.mjs",
     "lint": "eslint .",
     "check:bundle": "node scripts/check-bundle-size.mjs",
