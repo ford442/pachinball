@@ -1,6 +1,6 @@
 # Async Challenges & Replay Spectate (P3 Epic)
 
-**Status:** **v1 Implemented** (Client share links, RLE compression, API contract in `api/replays.py`, Leaderboard ▶ spectate button, `GhostBallRenderer`). **Challenges v2 in progress (#422):** C++ solver snapshots, replay world fingerprint, divergence toast.  
+**Status:** **v1 Implemented** (Client share links, RLE compression, API contract in `docs/API_CONTRACT.md` (was `api/replays.py`), Leaderboard ▶ spectate button, `GhostBallRenderer`). **Challenges v2 in progress (#422):** C++ solver snapshots, replay world fingerprint, divergence toast.  
 **Priority:** P3  
 **Related issues:** #297 (replay), #304 (procedural mutator), #292 (lane sensors), #288 (deploy/API auth), #322 / #340 (Async Challenges v1)
 
@@ -48,9 +48,8 @@ Later phases add weekly tournament APIs and (optionally) true realtime co-op mul
 
 | Asset | Location | Notes |
 |-------|----------|-------|
-| Adventure progress stub | `api/adventure.py` | File/GCS progress only |
-| Replay storage | `api/replays.py` | `POST /api/replays` (assigns `replay_id`), `GET /api/replays/{replay_id}` — stores the payload verbatim, so the #422 fingerprint fields ride along |
-| Leaderboard API | External (`storage.noahcohn.com`) | Consumed by client; accepts `replay_id` on submit; contract not versioned in this repo |
+| Live arcade service (#444) | `supabase/` + `src/arcade/` | Postgres (Supabase): `profiles`, `scores`, `replays`, `challenges`, `saves` with RLS; one Edge Function per write path; anonymous players. Contract: `docs/API_CONTRACT.md` + `docs/api/arcade.openapi.yaml` (replaces `api/*.py` and the unversioned `storage.noahcohn.com` leaderboard) |
+| Adventure progress (legacy) | `storage.noahcohn.com/api/adventure/progress` | Still posted by `AdventureState.syncToBackend`; Slice D moves saves to `put-save` |
 
 ### Missing
 
@@ -158,7 +157,7 @@ interface ReplayPayload {
 
 **Storage:** gzip JSON or MessagePack; cap at ~500 KB per run (≈ 3 min @ 60 fps × ~80 bytes/frame). Reject larger server-side.
 
-### API contracts (draft — extend `storage.noahcohn.com`)
+### API contracts (v1 draft — superseded by `docs/API_CONTRACT.md`, #444)
 
 #### `POST /api/replays`
 

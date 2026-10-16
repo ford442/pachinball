@@ -1,0 +1,322 @@
+openapi: 3.1.0
+info:
+  title: Pachinball live arcade service
+  version: 1.0.0
+  description: |
+    Leaderboard, replays, challenges and saves (#444 Slice B). Plain REST over
+    Postgres: reads go to PostgREST, each write path is one Edge Function that
+    writes as the caller, and players are Supabase Auth anonymous users.
+    Prose and rules: docs/API_CONTRACT.md. Schema: supabase/migrations.
+    tests/arcade-contract.test.ts validates every request src/arcade/arcade-api.ts
+    makes against this file.
+servers:
+  - url: https://znsioiaydrtsziwavdat.supabase.co
+security:
+  - apikey: []
+components:
+  securitySchemes:
+    apikey:
+      type: apiKey
+      in: header
+      name: apikey
+      description: The project's publishable key (public; RLS guards the data).
+    player:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: The player's anonymous-session access token.
+  schemas:
+    Tag:
+      type: string
+      pattern: '^[A-Z]{3}$'
+    MapId:
+      type: string
+      pattern: '^[A-Za-z0-9._:-]{1,64}$'
+    Uuid:
+      type: string
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    Session:
+      type: object
+      required: [access_token, refresh_token, expires_in, user]
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        expires_in: { type: integer }
+        expires_at: { type: integer }
+        user:
+          type: object
+          required: [id]
+          properties:
+            id: { $ref: '#/components/schemas/Uuid' }
+            is_anonymous: { type: boolean }
+    LeaderboardEntry:
+      type: object
+      required: [rank, name, score, map_id, balls, combo_max, date, verified]
+      properties:
+        rank: { type: integer, minimum: 1 }
+        name: { $ref: '#/components/schemas/Tag' }
+        score: { type: integer, minimum: 0 }
+        map_id: { $ref: '#/components/schemas/MapId' }
+        adventure_level: { type: [string, 'null'] }
+        balls: { type: integer }
+        combo_max: { type: integer }
+        date: { type: string, format: date-time }
+        replay_id: { type: [string, 'null'] }
+        challenge_id: { type: [string, 'null'] }
+        verified: { type: boolean }
+    ScoreSubmission:
+      type: object
+      additionalProperties: false
+      required: [name, score, map_id]
+      properties:
+        name: { $ref: '#/components/schemas/Tag' }
+        score: { type: integer, minimum: 0, maximum: 1000000000000 }
+        map_id: { $ref: '#/components/schemas/MapId' }
+        adventure_level: { type: [string, 'null'], pattern: '^[A-Za-z0-9._:-]{1,64}$' }
+        balls: { type: integer, minimum: 0, maximum: 99 }
+        combo_max: { type: integer, minimum: 0, maximum: 1000000 }
+        replay_id: { $ref: '#/components/schemas/Uuid' }
+        challenge_id: { $ref: '#/components/schemas/Uuid' }
+    ReplayPayload:
+      description: ReplayRecorder.toJSON(payload) — at most 512 KB (MAX_PAYLOAD_SIZE_BYTES).
+      type: object
+      required: [version, seed, mapId, physicsEngine, finalScore]
+      anyOf:
+        - required: [compressedFrames]
+        - required: [frames]
+      properties:
+        version: { type: integer, minimum: 1 }
+        buildId: { type: string }
+        mapId: { type: string }
+        seed: { type: integer, minimum: 0, maximum: 4294967295 }
+        physicsEngine: { enum: [rapier, wasm-mirror, wasm-owner, wasm-worker] }
+        renderer: { enum: [webgl2, webgpu] }
+        createdAt: { type: string }
+        finalScore: { type: integer, minimum: 0 }
+        targetScore: { type: integer }
+        frames: { type: array }
+        compressedFrames: { type: string }
+        snapshotVersion: { type: integer }
+        staticHash: { type: [string, 'null'] }
+        pinFieldOccupancy: { type: [string, 'null'] }
+        feederTunablesHash: { type: string }
+        initialSnapshot: { type: string }
+        cascade:
+          type: object
+          required: [mode, seed, seedId]
+          properties:
+            mode: { enum: [daily, free] }
+            seed: { type: integer }
+            seedId: { type: string }
+    ChallengeRequest:
+      type: object
+      additionalProperties: false
+      required: [seed, targetScore, mapId]
+      properties:
+        seed: { type: integer, minimum: 0, maximum: 4294967295 }
+        targetScore: { type: integer, minimum: 0, maximum: 1000000000000 }
+        mapId: { $ref: '#/components/schemas/MapId' }
+        challengerName: { $ref: '#/components/schemas/Tag' }
+        replayId: { $ref: '#/components/schemas/Uuid' }
+    SaveRequest:
+      type: object
+      additionalProperties: false
+      required: [schema_version, data]
+      properties:
+        slot: { type: string, pattern: '^[a-z0-9-]{1,32}$' }
+        schema_version: { type: integer, minimum: 1 }
+        data: { type: object }
+    Failure:
+      type: object
+      required: [success, message]
+      properties:
+        success: { const: false }
+        message: { type: string }
+  responses:
+    Failure:
+      description: Refused — validation (400), not signed in (401), not yours (403), too large (413), rate limit (429).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Failure' }
+paths:
+  /auth/v1/signup:
+    post:
+      summary: Start an anonymous player session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, maxProperties: 0 }
+      responses:
+        '200':
+          description: The new session.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+  /auth/v1/token:
+    post:
+      summary: Refresh a player session
+      parameters:
+        - { name: grant_type, in: query, required: true, schema: { const: refresh_token } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: The refreshed session.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+  /rest/v1/leaderboard:
+    get:
+      summary: One board, best first
+      parameters:
+        - { name: select, in: query, required: true, schema: { type: string } }
+        - { name: map_id, in: query, required: true, schema: { type: string, pattern: '^eq\.[A-Za-z0-9._:-]{1,64}$' } }
+        - { name: adventure_level, in: query, required: true, schema: { type: string, pattern: '^(is\.null|eq\.[A-Za-z0-9._:-]{1,64})$' } }
+        - { name: order, in: query, required: true, schema: { const: rank.asc } }
+        - { name: limit, in: query, required: true, schema: { type: string, pattern: '^([1-9]|[1-9][0-9]|100)$' } }
+      responses:
+        '200':
+          description: Leaderboard rows.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LeaderboardEntry' }
+  /rest/v1/rpc/player_rank:
+    post:
+      summary: Where a score would place (1 = top)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [p_map_id, p_score]
+              properties:
+                p_map_id: { $ref: '#/components/schemas/MapId' }
+                p_score: { type: integer, minimum: 0 }
+                p_adventure_level: { type: [string, 'null'] }
+      responses:
+        '200':
+          description: The rank.
+          content:
+            application/json:
+              schema: { type: integer, minimum: 1 }
+  /rest/v1/replays:
+    get:
+      summary: A stored replay's payload
+      parameters:
+        - { name: select, in: query, required: true, schema: { const: payload } }
+        - { name: id, in: query, required: true, schema: { type: string, pattern: '^eq\.[0-9a-f-]{36}$' } }
+      responses:
+        '200':
+          description: Zero or one row.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 1
+                items:
+                  type: object
+                  required: [payload]
+                  properties:
+                    payload: { $ref: '#/components/schemas/ReplayPayload' }
+  /functions/v1/submit-score:
+    post:
+      summary: Submit a leaderboard entry (stored unverified)
+      security: [{ apikey: [], player: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScoreSubmission' }
+      responses:
+        '201':
+          description: Stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, score_id, rank, verified]
+                properties:
+                  success: { const: true }
+                  score_id: { type: integer }
+                  rank: { type: integer, minimum: 1 }
+                  verified: { const: false }
+        default: { $ref: '#/components/responses/Failure' }
+  /functions/v1/submit-replay:
+    post:
+      summary: Upload a replay tape (at most 512 KB)
+      security: [{ apikey: [], player: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReplayPayload' }
+      responses:
+        '201':
+          description: Stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, replay_id, frame_count]
+                properties:
+                  success: { const: true }
+                  replay_id: { $ref: '#/components/schemas/Uuid' }
+                  frame_count: { type: integer, minimum: 0 }
+        default: { $ref: '#/components/responses/Failure' }
+  /functions/v1/create-challenge:
+    post:
+      summary: Register a seed + target challenge
+      security: [{ apikey: [], player: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChallengeRequest' }
+      responses:
+        '201':
+          description: Stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, challenge_id]
+                properties:
+                  success: { const: true }
+                  challenge_id: { $ref: '#/components/schemas/Uuid' }
+        default: { $ref: '#/components/responses/Failure' }
+  /functions/v1/put-save:
+    post:
+      summary: Upsert the caller's save slot (private)
+      security: [{ apikey: [], player: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaveRequest' }
+      responses:
+        '200':
+          description: Stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, slot, schema_version, updated_at]
+                properties:
+                  success: { const: true }
+                  slot: { type: string }
+                  schema_version: { type: integer }
+                  updated_at: { type: string }
+        default: { $ref: '#/components/responses/Failure' }

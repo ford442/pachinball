@@ -1,0 +1,33 @@
+# Live arcade service database (#444): apply supabase/migrations to a local
+# Postgres and run the pgTAP tests (RLS, column grants, rate limits).
+# Local equivalent: supabase db start && supabase test db
+
+name: Arcade Database
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/arcade-db.yml'
+  pull_request:
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/arcade-db.yml'
+
+jobs:
+  rls_tests:
+    name: Migrations + RLS tests (Blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Postgres with the migrations applied
+        run: supabase db start
+
+      - name: pgTAP
+        run: supabase test db
