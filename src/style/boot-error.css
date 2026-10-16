@@ -1,0 +1,26 @@
+/* Boot failure / stall banner (#449, #452). Markup is static in index.html; boot-error.ts reveals it. */
+#boot-error {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 9999;
+  padding: 12px 16px;
+  background: #2a0a12;
+  border-bottom: 2px solid #ff4d6d;
+  color: #ffd9df;
+  font: 14px/1.4 system-ui, sans-serif;
+}
+
+#boot-error strong {
+  display: block;
+  font-size: 16px;
+  color: #fff;
+}
+
+#boot-error p {
+  margin: 4px 0;
+  word-break: break-word;
+}
+
+#boot-error a {
+  color: #7fe9ff;
+}

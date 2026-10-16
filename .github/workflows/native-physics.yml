@@ -150,8 +150,8 @@ jobs:
           test ! -e public/wasm/PhysicsModule.wasm.map
           test ! -e public/wasm/PhysicsModule.js.map
           echo "WASM size: $(wc -c < public/wasm/PhysicsModule.wasm) bytes"
-          grep -q "defaultEngine: 'wasm-owner'" src/config/physics.ts
-          echo "defaultEngine is wasm-owner"
+          grep -q "defaultEngine: 'wasm-worker'" src/config/physics.ts && grep -q "nonIsolatedDefaultEngine: 'wasm-owner'" src/config/physics.ts
+          echo "defaultEngine is wasm-worker (nonIsolatedDefaultEngine wasm-owner)"
 
       - name: Build RelWithAsserts artefact
         run: |

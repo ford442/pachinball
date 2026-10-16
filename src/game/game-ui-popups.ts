@@ -241,14 +241,49 @@ export function showLoadingState(
   }
 }
 
-/** Gate Start until cabinet (or fallback) has resolved. */
-export function setStartButtonEnabled(enabled: boolean): void {
+/**
+ * Gate Start until cabinet (or fallback) has resolved. Passing `error` (with `enabled`
+ * false) puts the button in its failed state: "Load failed", tooltip = the message (#449).
+ */
+export function setStartButtonEnabled(enabled: boolean, error?: string): void {
   const btn = document.getElementById('start-btn') as HTMLButtonElement | null
   if (!btn) return
   btn.disabled = !enabled
   btn.style.opacity = enabled ? '1' : '0.45'
   btn.style.cursor = enabled ? 'pointer' : 'not-allowed'
-  btn.title = enabled ? '' : 'Loading cabinet…'
+  btn.title = enabled ? '' : (error ?? 'Loading cabinet…')
+  if (error) btn.textContent = 'Load failed'
+  // Start live means the boot made it: a "still loading" banner no longer applies.
+  if (enabled) document.getElementById('boot-error')?.setAttribute('hidden', '')
+}
+
+/** Stage shown for a failure before the Game (and its checkpoint stages) existed. */
+export const BOOT_PRELOAD_STAGE = 'engine + physics preload'
+
+/** A readable message for anything thrown; never empty (`new Error()` has no message). */
+export function bootErrorMessage(err: unknown): string {
+  return (err instanceof Error ? err.message : String(err)) || 'Unknown error'
+}
+
+/** Fill and reveal the static #boot-error banner (index.html). An empty `stage` blanks its line. */
+export function revealBootBanner(title: string, message: string, stage: string): void {
+  const banner = document.getElementById('boot-error')
+  if (!banner) return
+  ;[title, message, stage && `Stage: ${stage}`].forEach((text, i) => {
+    const slot = banner.children[i]
+    if (slot) slot.textContent = text
+  })
+  banner.hidden = false
+}
+
+/**
+ * Show a failed boot using only static markup, so it still appears when every lazy chunk
+ * (the banner module included) is unreachable. Start goes to "Load failed".
+ */
+export function revealBootFailure(err: unknown, stage: string): void {
+  const message = bootErrorMessage(err)
+  setStartButtonEnabled(false, message)
+  revealBootBanner('Game failed to start', message, stage)
 }
 
 export function showMessage(state: GameUIRuntimeState, message: string, duration = 2000): void {
