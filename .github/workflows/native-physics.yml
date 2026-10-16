@@ -2,9 +2,10 @@
 #
 # native_ctest + sanitizer_ctest are BLOCKING for PRs touching `native/**`.
 # wasm_parity is BLOCKING for PRs touching `native/**`, `src/wasm/**`, or wasm tests.
-# replay_goldens is BLOCKING for the same paths plus `src/game/physics/**` and
-# `src/replay/**`: every tests/replays/*.json tape must replay to its golden
-# final state hash, score and step count (#444). An intentional numeric change
+# replay_goldens is BLOCKING for the same paths plus `src/game/physics/**`,
+# `src/replay/**` and the replay verifier: every tests/replays/*.json tape must
+# replay to its golden final state hash, score and step count, and the
+# storage-host verifier must pass its self-test (#444). An intentional numeric change
 # runs `npm run verify:replay -- --update` and commits the new goldens with a
 # one-line rationale.
 # JS-only PRs outside those paths are not gated on Emscripten.
@@ -53,6 +54,8 @@ on:
       - 'src/replay/**'
       - 'tests/replays/**'
       - 'scripts/verify-replay.mjs'
+      - 'scripts/lib/**'
+      - 'services/replay-verifier/**'
       - 'package.json'
       - '.github/workflows/native-physics.yml'
   pull_request:
@@ -80,6 +83,8 @@ on:
       - 'src/replay/**'
       - 'tests/replays/**'
       - 'scripts/verify-replay.mjs'
+      - 'scripts/lib/**'
+      - 'services/replay-verifier/**'
       - 'package.json'
       - '.github/workflows/native-physics.yml'
 
@@ -271,3 +276,11 @@ jobs:
       # golden { finalStateHash, score, steps }.
       - name: Verify golden replay tapes (#444)
         run: npm run verify:replay
+
+      # The storage-host verifier against a production build and a fake
+      # Supabase: legitimate runs verify, a forged score, a tape from another
+      # board, a worker recording and a missing replay are rejected (#444 Slice C).
+      - name: Production build, then the replay verifier self-test
+        run: |
+          npx vite build
+          npm run test:verifier

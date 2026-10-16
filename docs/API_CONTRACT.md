@@ -14,6 +14,7 @@ The service is plain REST over Postgres. Today it runs on Supabase project
 | Schema, RLS, grants, triggers | `supabase/migrations/` |
 | RLS / write-rule tests (pgTAP) | `supabase/tests/database/` — `supabase test db` |
 | Write paths (one Edge Function each) | `supabase/functions/` |
+| Replay verifier (storage host) | `services/replay-verifier/` — `npm run test:verifier` |
 | Client | `src/arcade/arcade-api.ts`, endpoint in `src/config/arcade.ts` |
 
 `storage.noahcohn.com` stays the asset CDN (`ASSET_BASE`) and serves `/maps`.
@@ -39,8 +40,8 @@ player's access token in `Authorization: Bearer …`.
 
 | Request | Answer |
 |---------|--------|
-| `GET /rest/v1/leaderboard?select=…&map_id=eq.<map>&adventure_level=is.null\|eq.<level>&order=rank.asc&limit=<n>` | `LeaderboardEntry[]`, best first. `rank` is per (map, adventure level); ties go to the earlier score. `verified` is false until the verifier (Slice C) replays the run. |
-| `POST /rest/v1/rpc/player_rank` `{ p_map_id, p_score, p_adventure_level }` | Where that score would place (1 = top). |
+| `GET /rest/v1/leaderboard?select=…&map_id=eq.<map>&adventure_level=is.null\|eq.<level>&order=rank.asc&limit=<n>` | `LeaderboardEntry[]`, best first: verified runs, and runs still pending for less than 24 hours (rejected runs never). `rank` is per (map, adventure level) over those rows; ties go to the earlier score. `verified` / `verification` say whether the verifier has confirmed the run. |
+| `POST /rest/v1/rpc/player_rank` `{ p_map_id, p_score, p_adventure_level }` | Where that score would place on that board (1 = top). |
 | `GET /rest/v1/replays?select=payload&id=eq.<uuid>` | `[{ payload }]` — what `ReplayRecorder.fromJSON` reads. |
 
 Scores, replays, challenges and profiles are public. Saves are not readable
@@ -84,9 +85,35 @@ These hold for any client, through the functions or straight at PostgREST:
   submitter's own replay.
 - **Rate limits.** Per player: 5 scores and 5 replays a minute, 200 of each a
   day, 20 challenges an hour (HTTP 429).
-- **Verification (Slice C).** `verified`, `verifier_version`,
-  `verifier_score`, `verify_reason`, `verified_at` are written only by the
-  verifier with the service role.
+- **Verification.** `verified`, `verifier_version`, `verifier_score`,
+  `verify_reason`, `verified_at` and the claim columns are written only by
+  the verifier with a secret key (below).
+
+## Verification (Slice C)
+
+Every score starts **pending**. The replay verifier
+(`services/replay-verifier`, Node + headless Chromium on the storage host)
+claims pending scores with `POST /rest/v1/rpc/claim_score_verifications`
+(`{ p_limit }` → the scores with their tapes, oldest first,
+`FOR UPDATE SKIP LOCKED`; a claim older than 15 minutes is handed out again),
+replays each tape in the production build — in-process C++ engine, one fixed
+step per tape frame — and records the verdict with
+`POST /rest/v1/rpc/record_score_verification`:
+
+- **verified** — the tape replays to the submitted score. `verifier_score` is
+  the replayed score, `verify_state_hash` the C++ `getStateHash()` at the end,
+  `verifier_version` the build that replayed it. The board shows ✓.
+- **rejected** — `verify_reason` says why (no replay, an engine that does not
+  replay step-exactly, a tape from another board, an unrecognised table
+  descriptor hash, a tape that does not run to its end, or a score the tape
+  does not reproduce). Never on the default board.
+
+A pending score shows on the board, without ✓, for 24 hours; after that only
+a verdict brings it back. Both RPCs are executable by `service_role` only.
+
+Only runs recorded on the in-process `wasm-owner` engine can verify — the
+default since #444; `?physics=wasm-worker` and Rapier runs are rejected as
+unverifiable.
 
 ## Changing the contract
 

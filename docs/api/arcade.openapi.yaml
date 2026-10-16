@@ -25,6 +25,11 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: The player's anonymous-session access token.
+    verifier:
+      type: apiKey
+      in: header
+      name: apikey
+      description: A secret key (sb_secret_…), held only by the replay verifier on the storage host.
   schemas:
     Tag:
       type: string
@@ -64,6 +69,7 @@ components:
         replay_id: { type: [string, 'null'] }
         challenge_id: { type: [string, 'null'] }
         verified: { type: boolean }
+        verification: { enum: [verified, pending] }
     ScoreSubmission:
       type: object
       additionalProperties: false
@@ -320,3 +326,58 @@ paths:
                   schema_version: { type: integer }
                   updated_at: { type: string }
         default: { $ref: '#/components/responses/Failure' }
+  /rest/v1/rpc/claim_score_verifications:
+    post:
+      summary: 'Verifier only: claim pending scores, oldest first, with their tapes'
+      security: [{ verifier: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                p_limit: { type: integer, minimum: 1, maximum: 32 }
+                p_stale: { type: string, description: 'Postgres interval; a claim older than this is handed out again (default 15 minutes)' }
+      responses:
+        '200':
+          description: The claimed scores (each claim counts an attempt).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [score_id, score, map_id, replay_id, payload, physics_engine, attempts, submitted_at]
+                  properties:
+                    score_id: { type: integer }
+                    score: { type: integer }
+                    map_id: { type: string }
+                    replay_id: { type: [string, 'null'] }
+                    payload: { oneOf: [{ $ref: '#/components/schemas/ReplayPayload' }, { type: 'null' }] }
+                    physics_engine: { type: [string, 'null'] }
+                    attempts: { type: integer }
+                    submitted_at: { type: string, format: date-time }
+  /rest/v1/rpc/record_score_verification:
+    post:
+      summary: 'Verifier only: record a verdict'
+      security: [{ verifier: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [p_score_id, p_verified, p_verifier_version, p_verifier_score, p_reason, p_state_hash]
+              properties:
+                p_score_id: { type: integer }
+                p_verified: { type: boolean }
+                p_verifier_version: { type: string }
+                p_verifier_score: { type: [integer, 'null'] }
+                p_reason: { type: [string, 'null'] }
+                p_state_hash: { type: [string, 'null'] }
+      responses:
+        '204':
+          description: Recorded.
