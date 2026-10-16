@@ -11,11 +11,21 @@ export interface ChallengeConfig {
   targetScore: number
   mapId: string
   challengerName?: string
+  /** Challenges v2 (#444 Slice D), from the challenge row. */
+  kind?: 'player' | 'weekly'
+  /** The leaderboard a weekly challenge's runs submit to. */
+  board?: string
+  /** The free-seed cascade table it is played on. */
+  cascadeSeed?: number
+  /** The challenger's run (its verified ghost is raced). */
+  replayId?: string
 }
 
 export class ChallengeSystem {
   private activeChallenge: ChallengeConfig | null = null
   private bannerElement: HTMLElement | null = null
+  /** A `?challenge=<id>` link is resolved against the arcade service before the game starts. */
+  private resolving: Promise<void> = Promise.resolve()
 
   constructor() {
     this.checkUrlParameters()
@@ -61,6 +71,15 @@ export class ChallengeSystem {
 
   getActiveChallenge(): ChallengeConfig | null {
     return this.activeChallenge
+  }
+
+  /** Resolves once a linked challenge has loaded (or failed to): startGame waits for it. */
+  whenReady(): Promise<void> {
+    return this.resolving
+  }
+
+  setResolving(pending: Promise<void>): void {
+    this.resolving = pending.catch(() => {})
   }
 
   setActiveChallenge(config: ChallengeConfig | null): void {

@@ -1,2 +1,26 @@
 /* Pachinball CSS - Barrel File */
 @import './style/index.css';
+
+/* Campaign save (#444 Slice D) */
+.campaign-save-status {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+.campaign-save-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.campaign-link-code {
+  font-family: 'Orbitron', monospace;
+  letter-spacing: 0.2em;
+  color: #00ff88;
+}
+#campaign-link-input {
+  flex: 1 1 10rem;
+  min-width: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}

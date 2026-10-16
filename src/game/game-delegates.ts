@@ -52,6 +52,8 @@ export abstract class GameDelegates extends GameFields {
   }
 
   switchTableMap(mapName: string): void { this.mapCabinet?.switchTableMap(mapName) }
+  /** The table map in play: what a replay records and its leaderboard board is keyed by (#444). */
+  get currentMapId(): string | null { return this.mapManager?.getCurrentMap() ?? null }
   loadCabinetPreset(type: CabinetType): Promise<void> { return this.mapCabinet?.loadCabinetPreset(type) ?? Promise.resolve() }
   cycleCabinetPreset(): Promise<void> { return this.mapCabinet?.cycleCabinetPreset() ?? Promise.resolve() }
   cycleTableMap(): void { this.mapCabinet?.cycleTableMap() }

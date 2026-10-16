@@ -15,6 +15,8 @@ import type { AdventureProgressionSupervisor } from '../adventure/adventure-prog
 import type { AdventureMode } from '../adventure'
 import { getCampaignRewardsManager } from '../adventure/campaign-rewards-manager'
 import { getDailyCascadeState } from '../cascade/daily-cascade-state'
+import { getChallengeSystem } from '../replay/challenge-system'
+import type { ReplayPayload } from '../replay/replay-recorder'
 import { BallType } from '../config'
 
 export interface HUDHost {
@@ -44,8 +46,22 @@ export interface HUDHost {
   readonly replayRecorder?: import('../game-elements').ReplayRecorder
 }
 
+/** A finished game, kept for submission and "Challenge friends". */
+export interface FinishedRun {
+  payload: ReplayPayload | null
+  score: number
+  /** The leaderboard it goes to. */
+  board: string
+  tableMapId: string
+  name?: string
+  replayId?: string
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export class GameHUD {
   private readonly host: HUDHost
+  private lastRun: FinishedRun | null = null
 
   constructor(host: HUDHost) {
     this.host = host
@@ -55,14 +71,8 @@ export class GameHUD {
   private setupChallengeButton(): void {
     const challengeBtn = document.getElementById('challenge-share-btn')
     if (challengeBtn) {
-      challengeBtn.onclick = async () => {
-        const mapId = this.host.mapManager?.getCurrentMap() || 'neon-helix'
-        const seed = (await import('../core/seeded-rng')).getSessionSeed()
-        const copied = await (await import('../game-elements')).ChallengeSystem.copyChallengeLink(seed, this.host.score, mapId)
-        if (copied) {
-          this.host.uiManager?.showMessage('Challenge link copied to clipboard! Share with friends.', 3500)
-        }
-      }
+      challengeBtn.onclick = () => void import('../replay/challenge-v2').then((m) =>
+        m.challengeFriends(this.lastRun, this.host, (run, rank) => this.submitRun(run, rank)))
     }
   }
 
@@ -165,43 +175,58 @@ export class GameHUD {
   }
 
   async handleGameOverLeaderboard(): Promise<void> {
+    // Game over already stopped the recorder; the HUD submits what it recorded.
+    const recorder = this.host.replayRecorder
+    recorder?.stop(this.host.score)
+    const tableMapId = this.host.mapManager?.getCurrentMap() || 'neon-helix'
+    const challenge = getChallengeSystem().getActiveChallenge()
+    // A weekly run has the week's own board (#444 Slice D).
+    const board = challenge?.kind === 'weekly' && challenge.board
+      ? challenge.board
+      : getDailyCascadeState().getLeaderboardMapId(tableMapId)
+    const run: FinishedRun = { payload: recorder?.getLastPayload() ?? null, score: this.host.score, board, tableMapId }
+    this.lastRun = run
+
     if (this.host.score < 1000) {
       console.log('[Leaderboard] Score too low for submission')
       return
     }
-
-    // The tape goes up with the score, once the player has entered a name (#444).
-    const payload = this.host.replayRecorder?.stop(this.host.score) ?? null
-
-    const fallbackMap = this.host.mapManager?.getCurrentMap() || 'neon-helix'
-    const mapId = getDailyCascadeState().getLeaderboardMapId(fallbackMap)
     await this.host.ensureOverlaySystems()
-    const board = this.host.leaderboardSystem
-    void board.flushQueue()
-    board.setContext(mapId)
-    const rank = await board.checkRank(this.host.score)
+    const leaderboard = this.host.leaderboardSystem
+    void leaderboard.flushQueue()
+    leaderboard.setContext(board)
+    const rank = await leaderboard.checkRank(this.host.score)
     // Offline the rank is unknown: take the name anyway, the run waits for the network.
     const offline = rank === null && typeof navigator !== 'undefined' && navigator.onLine === false
     if (!offline && (rank === null || rank > 100)) {
       console.log('[Leaderboard] Score not in top 100')
       return
     }
-    const result = await this.host.nameEntryDialog.show(this.host.score, rank ?? 0)
-    if (result.submitted && result.name) {
-      const replayJson = payload ? (await import('../game-elements')).ReplayRecorder.toJSON(payload, true) : undefined
-      const submitResult = await board.submitScore({
-        name: result.name,
-        score: this.host.score,
-        map_id: mapId,
-        balls: 1,
-        combo_max: this.host.comboCount,
-      }, replayJson)
-      if (submitResult.success) {
-        console.log(`[Leaderboard] Score submitted! Rank #${submitResult.rank}`)
-        board.show()
-      } else if (submitResult.queued) {
-        this.host.uiManager?.showMessage(submitResult.message ?? 'Score saved; it will be sent when you reconnect', 4000)
-      }
+    await this.submitRun(run, rank)
+  }
+
+  /** Name entry, then the run (replay first, then the score citing it). */
+  async submitRun(run: FinishedRun, rank: number | null): Promise<void> {
+    const result = await this.host.nameEntryDialog.show(run.score, rank ?? 0)
+    if (!result.submitted || !result.name) return
+    run.name = result.name
+    const replayJson = run.payload ? (await import('../game-elements')).ReplayRecorder.toJSON(run.payload, true) : undefined
+    const challengeId = getChallengeSystem().getActiveChallenge()?.id
+    const submitResult = await this.host.leaderboardSystem.submitScore({
+      name: result.name,
+      score: run.score,
+      map_id: run.board,
+      balls: 1,
+      combo_max: this.host.comboCount,
+      // Only a v2 challenge (a row on the service) has an id the service knows.
+      ...(challengeId && UUID.test(challengeId) ? { challenge_id: challengeId } : {}),
+    }, replayJson)
+    if (submitResult.success) {
+      run.replayId = submitResult.replay_id
+      console.log(`[Leaderboard] Score submitted! Rank #${submitResult.rank}`)
+      this.host.leaderboardSystem.show()
+    } else if (submitResult.queued) {
+      this.host.uiManager?.showMessage(submitResult.message ?? 'Score saved; it will be sent when you reconnect', 4000)
     }
   }
 }

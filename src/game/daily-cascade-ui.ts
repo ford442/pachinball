@@ -10,6 +10,8 @@ import { TRACK_CATALOG } from '../adventure/adventure-track-progression'
 
 export interface DailyCascadeMenuOptions {
   getCampaignStageName?: () => string
+  /** "Table of the week" (#444 Slice D): play the weekly challenge. */
+  onWeekly?: () => void
   /** Aborting removes the menu listeners and detaches the module-level refresh hook. */
   signal?: AbortSignal
 }
@@ -36,6 +38,12 @@ export function bindDailyCascadeUI(options: DailyCascadeMenuOptions = {}): void 
   const state = getDailyCascadeState()
   const linkedSeed = parseCascadeSeedParam(window.location.search)
   if (linkedSeed !== null) state.setFreeSeed(linkedSeed)
+
+  const weeklyBtn = document.getElementById('weekly-btn')
+  if (weeklyBtn && options.onWeekly) {
+    const onWeekly = options.onWeekly
+    weeklyBtn.addEventListener('click', () => onWeekly(), { signal: options.signal })
+  }
 
   const modeSelect = document.getElementById('cascade-mode') as HTMLSelectElement | null
   const seedLabel = document.getElementById('cascade-seed-label')

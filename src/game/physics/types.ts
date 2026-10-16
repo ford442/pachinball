@@ -74,6 +74,8 @@ export interface PhysicsHost {
   readonly accessibility: import('../../game-elements').AccessibilityConfig
   readonly qualityTier: QualityTier
   readonly ghostBallRenderer?: import('../../replay/ghost-ball-renderer').GhostBallRenderer | null
+  /** The race ghost of the active challenge (#444 Slice D), moved every render frame. */
+  readonly ghostRace?: import('../../replay/ghost-race').GhostRace | null
 
   readonly spinnerBuilder: SpinnerBumperBuilder | null
   readonly ballTrapBuilder: BallTrapBuilder | null

@@ -40,6 +40,8 @@ export interface SubmitResult {
   success: boolean
   rank?: number
   score_id?: number
+  /** The run's uploaded replay (a challenge cites it). */
+  replay_id?: string
   /** Kept on this device and sent when the network is back. */
   queued?: boolean
   message?: string
@@ -218,6 +220,8 @@ export async function createChallenge(challenge: {
   mapId: string
   challengerName?: string
   replayId?: string
+  /** The free-seed cascade table it is played on; absent on the vanilla table. */
+  cascadeSeed?: number
 }): Promise<string> {
   const res = await callFunction('create-challenge', JSON.stringify(challenge))
   return String(res.challenge_id)
@@ -233,7 +237,7 @@ async function sendRun(run: QueuedRun): Promise<SubmitResult> {
   const score = { ...run.score }
   if (run.replay && !score.replay_id) score.replay_id = await submitReplay(run.replay)
   const res = await callFunction('submit-score', JSON.stringify(score))
-  return { success: true, rank: Number(res.rank), score_id: Number(res.score_id) }
+  return { success: true, rank: Number(res.rank), score_id: Number(res.score_id), replay_id: score.replay_id }
 }
 
 function queueRun(run: QueuedRun): void {
@@ -291,4 +295,121 @@ export function flushQueuedRuns(): Promise<number> {
     flushing = null
   })
   return flushing
+}
+
+// ------------------------------------------------- cloud saves (Slice D)
+
+export interface CloudSave {
+  slot: string
+  schema_version: number
+  data: unknown
+  updated_at: string
+}
+
+/** Whether this browser already has an arcade player (it submitted a run or linked a device). */
+export function hasArcadeSession(): boolean {
+  return readStore<ArcadeSession>(SESSION_KEY) !== null
+}
+
+/** The player's save in `slot`, or null when there is none yet. */
+export async function pullSave(slot = 'campaign'): Promise<CloudSave | null> {
+  const session = await arcadeSession()
+  const params = new URLSearchParams({ select: 'slot,schema_version,data,updated_at', slot: `eq.${slot}` })
+  const rows = (await send(`/rest/v1/saves?${params}`, { token: session.access_token })) as CloudSave[]
+  return rows[0] ?? null
+}
+
+/** Write the player's save in `slot`; resolves with the stored `updated_at`. */
+export async function pushSave(schemaVersion: number, data: object, slot = 'campaign'): Promise<string> {
+  const res = await callFunction('put-save', JSON.stringify({ slot, schema_version: schemaVersion, data }))
+  return String(res.updated_at)
+}
+
+/** A one-time code (10 minutes) another device enters to share this player's saves. */
+export async function createLinkCode(): Promise<{ code: string; expires_at: string }> {
+  const session = await arcadeSession()
+  const rows = (await send('/rest/v1/rpc/create_device_link', { method: 'POST', body: '{}', token: session.access_token })) as Array<{
+    code: string
+    expires_at: string
+  }>
+  if (!rows[0]) throw new ArcadeError('no link code returned', 502)
+  return rows[0]
+}
+
+/** Link this device to the player behind `code`; false for an unknown, used or expired code. */
+export async function redeemLinkCode(code: string): Promise<boolean> {
+  const session = await arcadeSession()
+  const player = await send('/rest/v1/rpc/redeem_device_link', {
+    method: 'POST',
+    body: JSON.stringify({ p_code: code }),
+    token: session.access_token,
+  })
+  return typeof player === 'string'
+}
+
+// ------------------------------------------------- challenges v2 (Slice D)
+
+export interface ArcadeChallenge {
+  id: string
+  kind: 'player' | 'weekly'
+  seed: number
+  map_id: string
+  target_score: number
+  challenger_name: string | null
+  replay_id: string | null
+  cascade_seed: number | null
+  /** The board its runs submit to (weekly); null for a player's challenge. */
+  board: string | null
+  title: string | null
+  starts_at: string
+  expires_at: string | null
+}
+
+/** The verifier's recording of a verified run's ball: the race ghost. */
+export interface GhostTrack {
+  stride: number
+  samples: number
+  /** Base64 little-endian Int32 millimetre triples. */
+  track: string
+}
+
+const CHALLENGE_COLUMNS = 'id,kind,seed,map_id,target_score,challenger_name,replay_id,cascade_seed,board,title,starts_at,expires_at'
+
+export async function fetchChallenge(id: string): Promise<ArcadeChallenge | null> {
+  const params = new URLSearchParams({ select: CHALLENGE_COLUMNS, id: `eq.${id}` })
+  const rows = (await send(`/rest/v1/challenges?${params}`)) as ArcadeChallenge[]
+  return rows[0] ?? null
+}
+
+/** This week's table of the week (created on first ask). */
+export async function fetchWeeklyChallenge(): Promise<ArcadeChallenge | null> {
+  const rows = (await send('/rest/v1/rpc/current_weekly_challenge', { method: 'POST', body: '{}' })) as ArcadeChallenge[]
+  return rows[0] ?? null
+}
+
+export async function fetchGhostTrack(replayId: string): Promise<GhostTrack | null> {
+  const params = new URLSearchParams({ select: 'stride,samples,track', replay_id: `eq.${replayId}` })
+  const rows = (await send(`/rest/v1/ghost_tracks?${params}`)) as GhostTrack[]
+  return rows[0] ?? null
+}
+
+/**
+ * The ghost a challenge is raced against: the challenger's own run, or for a
+ * weekly challenge the best verified run on its board. Null until the
+ * verifier has confirmed such a run.
+ */
+export async function fetchChallengeGhost(challenge: ArcadeChallenge): Promise<GhostTrack | null> {
+  if (challenge.kind === 'player') return challenge.replay_id ? fetchGhostTrack(challenge.replay_id) : null
+  if (!challenge.board) return null
+  const params = new URLSearchParams({
+    select: 'replay_id',
+    map_id: `eq.${challenge.board}`,
+    adventure_level: 'is.null',
+    verified: 'is.true',
+    order: 'rank.asc',
+    limit: '1',
+  })
+  const rows = (await send(`/rest/v1/leaderboard?${params}`)) as Array<{ replay_id: string | null }>
+  const replayId = rows[0]?.replay_id
+  return replayId ? fetchGhostTrack(replayId) : null
 }

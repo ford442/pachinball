@@ -29,6 +29,7 @@ import { GameHUD, type HUDHost } from './game/game-hud'
 import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
 import type { DebugStageKey } from './game/checkpoint-debug'
 import { GameDelegates } from './game/game-delegates'
+import { getChallengeSystem } from './replay/challenge-system'
 import { installSimClock } from './core/sim-clock'
 import { bootWarn } from './boot-log'
 
@@ -92,11 +93,21 @@ export class Game
       document.getElementById('start-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() }, { signal })
       document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() }, { signal })
       this.uiManager?.setStartButtonEnabled(false)
+      // Challenges v2 (#444): a `?challenge=<id>` link loads before the first game.
+      const challengeV2 = () => import('./replay/challenge-v2')
+      if (getChallengeSystem().getActiveChallenge()?.id) {
+        getChallengeSystem().setResolving(challengeV2().then((m) => m.resolveLinkedChallenge(this)))
+      }
+      this.lazySingletonResets.push(() => {
+        this.ghostRace?.dispose()
+        this.ghostRace = null
+      })
       const { bindDailyCascadeUI } = await import('./game/daily-cascade-ui')
       bindDailyCascadeUI({
         signal,
         getCampaignStageName: () =>
           this.adventureTrackProgression?.getCurrentTrackInfo()?.name ?? 'Neon Helix',
+        onWeekly: () => void challengeV2().then((m) => m.playWeekly(this)),
       })
 
       try {

@@ -168,6 +168,8 @@ export class ReplayRecorder {
   private recording = false
   private metadata: ReplayMetadata | null = null
   private frames: InputFrame[] = []
+  /** What the last `stop()` returned: game over stops the recorder before the HUD submits the run. */
+  private lastPayload: ReplayPayload | null = null
   private fingerprinted = false
   /** Bumped by `start()`; a late async fingerprint only lands on its own recording. */
   private session = 0
@@ -177,6 +179,7 @@ export class ReplayRecorder {
    */
   start(metadata: ReplayMetadata): void {
     this.metadata = { ...metadata }
+    this.lastPayload = null
     this.frames = []
     this.recording = true
     this.fingerprinted = false
@@ -212,7 +215,13 @@ export class ReplayRecorder {
       frames: this.frames,
       compressedFrames: compressInputFrames(this.frames),
     }
+    this.lastPayload = payload
     return payload
+  }
+
+  /** The last finished recording (null once a new one starts). */
+  getLastPayload(): ReplayPayload | null {
+    return this.lastPayload
   }
 
   isRecording(): boolean {

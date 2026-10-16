@@ -589,6 +589,7 @@ export class GamePhysicsController {
       const pos = this.getBallPosition()
       if (pos) this.host.ghostBallRenderer.updatePosition(pos)
     }
+    this.host.ghostRace?.update()
 
     // Skip interpolation on LOW quality tier — render at the raw post-step pose.
     this.syncMeshes(this.host.qualityTier === QualityTier.LOW ? 1 : this.pacer.alpha())

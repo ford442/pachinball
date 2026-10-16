@@ -111,7 +111,24 @@ function answer(method: string, url: URL): { status: number; body: unknown } {
     case 'POST /functions/v1/submit-replay': return { status: 201, body: { success: true, replay_id: REPLAY_ID, frame_count: 1200 } }
     case 'POST /functions/v1/submit-score': return { status: 201, body: { success: true, score_id: 42, rank: 3, verified: false } }
     case 'POST /functions/v1/create-challenge': return { status: 201, body: { success: true, challenge_id: CHALLENGE_ID } }
+    case 'GET /rest/v1/saves': return { status: 200, body: [{ slot: 'campaign', schema_version: 2, data: { version: 2 }, updated_at: '2026-10-16T02:00:00Z' }] }
+    case 'POST /functions/v1/put-save': return { status: 200, body: { success: true, slot: 'campaign', schema_version: 2, updated_at: '2026-10-16T02:00:01Z' } }
+    case 'POST /rest/v1/rpc/create_device_link': return { status: 200, body: [{ code: 'K7QX2MZP', expires_at: '2026-10-16T02:10:00Z' }] }
+    case 'POST /rest/v1/rpc/redeem_device_link': return { status: 200, body: PLAYER }
+    case 'GET /rest/v1/challenges': return { status: 200, body: [challengeRow('player')] }
+    case 'POST /rest/v1/rpc/current_weekly_challenge': return { status: 200, body: [challengeRow('weekly')] }
+    case 'GET /rest/v1/ghost_tracks': return { status: 200, body: [{ stride: 2, samples: 1, track: 'AQAAAAIAAAADAAAA' }] }
     default: return { status: 404, body: { message: `no canned answer for ${key}` } }
+  }
+}
+
+function challengeRow(kind: 'player' | 'weekly') {
+  return {
+    id: CHALLENGE_ID, kind, seed: 444001, map_id: 'neon-helix', target_score: kind === 'weekly' ? 0 : 1670,
+    challenger_name: kind === 'weekly' ? null : 'ACE', replay_id: kind === 'weekly' ? null : REPLAY_ID,
+    cascade_seed: kind === 'weekly' ? 3282750858 : null, board: kind === 'weekly' ? 'weekly-2026-W42' : null,
+    title: kind === 'weekly' ? 'Table of the week 2026-W42' : null,
+    starts_at: '2026-10-12T00:00:00Z', expires_at: kind === 'weekly' ? '2026-10-19T00:00:00Z' : null,
   }
 }
 
@@ -212,6 +229,26 @@ describe('arcade client ↔ docs/api/arcade.openapi.yaml (#444)', () => {
     expect(await api.flushQueuedRuns()).toBe(1)
     expect(api.queuedRunCount()).toBe(0)
     expect(captured.map((r) => r.url.pathname)).toEqual(['/auth/v1/signup', '/functions/v1/submit-score'])
+    expectConformant()
+  })
+
+  it('cloud saves, device link codes, challenges v2, the table of the week and ghosts (Slice D)', async () => {
+    const api = await arcade()
+    expect(await api.pullSave()).toMatchObject({ slot: 'campaign', schema_version: 2 })
+    await api.pushSave(2, { version: 2, progression: {} })
+    expect(await api.createLinkCode()).toMatchObject({ code: 'K7QX2MZP' })
+    expect(await api.redeemLinkCode('K7QX2MZP')).toBe(true)
+    const challenge = await api.fetchChallenge(CHALLENGE_ID)
+    expect(challenge).toMatchObject({ kind: 'player', replay_id: REPLAY_ID })
+    expect(await api.fetchChallengeGhost(challenge!)).toMatchObject({ stride: 2, samples: 1 })
+    const weekly = await api.fetchWeeklyChallenge()
+    expect(weekly).toMatchObject({ kind: 'weekly', board: 'weekly-2026-W42' })
+    // The weekly ghost is the best verified run on the week's board.
+    captured = []
+    await api.fetchChallengeGhost(weekly!)
+    expect(captured[0]?.url.searchParams.get('verified')).toBe('is.true')
+    await api.createChallenge({ seed: 444002, targetScore: 870, mapId: 'neon-helix', challengerName: 'ACE', replayId: REPLAY_ID, cascadeSeed: 20261016 })
+    expect(captured.at(-1)?.body).toMatchObject({ cascadeSeed: 20261016 })
     expectConformant()
   })
 

@@ -299,6 +299,12 @@ export class GameSystemsInitializer {
       campaignRewards.applyEquippedRewards()
 
       wireCampaignLoop(this.game, this.game.eventBus, campaignRewards)
+      // Cloud save, device link codes and export / import (#444 Slice D), off the boot path.
+      void import('./campaign-save-ui').then((m) => m.startCampaignSave(campaignRewards, {
+        signal: this.game.signal,
+        showMessage: (msg, ms) => this.game.showMessage(msg, ms),
+        onDispose: (reset) => this.game.addDisposeHook(reset),
+      }))
 
       const notifier = new CampaignRewardNotifier(this.game.eventBus)
       notifier.flushUnseen()

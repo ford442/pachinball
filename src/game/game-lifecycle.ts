@@ -41,6 +41,8 @@ import { isMobileUserAgent } from '../engine/engine-options'
 
 export interface LifecycleHost {
   readonly timers: TimerScope
+  /** The race ghost of the active challenge (#444 Slice D). */
+  readonly ghostRace?: import('../replay/ghost-race').GhostRace | null
   readonly stateManager: GameStateManager
   readonly effects: EffectsSystem | null
   readonly display: DisplaySystem | null
@@ -60,7 +62,7 @@ export interface LifecycleHost {
   readonly renderer: { applyQualityTier(tier: QualityTier): void } | null
   readonly replayRecorder?: import('../game-elements').ReplayRecorder
   readonly replayRunner?: import('../game-elements').ReplayRunner
-  readonly currentMapId?: string
+  readonly currentMapId?: string | null
   qualityTier: QualityTier
   accessibility: import('../game-elements').AccessibilityConfig
 
@@ -195,6 +197,8 @@ export class GameLifecycle {
   }
 
   async startGame(): Promise<void> {
+    // A `?challenge=<id>` link sets this game's seed and table (#444 Slice D).
+    await getChallengeSystem().whenReady()
     const isReplaying = this.host.replayRunner?.isPlaying() ?? false
     const dailyState = getDailyCascadeState()
     // A replay plays on the cascade table it was recorded on, whatever this
@@ -263,6 +267,7 @@ export class GameLifecycle {
 
     // Leaderboard context is set by the caller (Game)
     this.host.setGameState(GameState.PLAYING)
+    if (!isReplaying) this.host.ghostRace?.begin()
   }
 
   /**
