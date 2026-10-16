@@ -75,6 +75,7 @@ export class NameEntryDialog {
           <span>←→ MOVE</span>
           <span>ENTER SUBMIT</span>
         </div>
+        <div class="name-entry-verify">YOUR RUN IS VERIFIED BY REPLAY · ✓ ON THE BOARD WHEN CONFIRMED</div>
       </div>
     `
     
@@ -219,6 +220,13 @@ export class NameEntryDialog {
         }
       }
       
+      .name-entry-verify {
+        margin-top: 14px;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        opacity: 0.7;
+      }
+
       .name-entry-instructions {
         display: flex;
         justify-content: center;

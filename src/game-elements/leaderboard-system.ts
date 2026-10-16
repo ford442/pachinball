@@ -330,6 +330,14 @@ export class LeaderboardSystem {
       scoreVal.textContent = entry.score.toLocaleString()
       right.appendChild(scoreVal)
 
+      // Replayed and confirmed by the verifier (#444); unconfirmed runs leave the board after a day.
+      const check = document.createElement('span')
+      check.className = entry.verified ? 'lb-verified' : 'lb-pending'
+      check.textContent = entry.verified ? '✓' : '…'
+      check.title = entry.verified ? 'Verified: the replay reproduces this score' : 'Being verified'
+      check.style.cssText = `width: 1em; text-align: center; color: ${entry.verified ? '#00ff88' : 'rgba(255, 255, 255, 0.45)'};`
+      right.appendChild(check)
+
       if (entry.replay_id) {
         const replayBtn = document.createElement('button')
         replayBtn.title = 'Watch Replay Spectate'

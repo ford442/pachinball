@@ -188,11 +188,19 @@ version, table geometry) and keeps it only if a fresh page replays it.
 The native build is held to the WASM one by `npm run test:wasm-parity`, which
 compares the native and WASM `stateHash` at the snapshot frame.
 
+Players' runs are verified the same way on the storage host
+(`services/replay-verifier`, #444 Slice C): the harness is shared
+(`scripts/lib/replay-harness.mjs`), the build is the production `dist/` the run
+was recorded on (`buildId` on the tape), and the verdict lands on the score row
+(`docs/API_CONTRACT.md`, *Verification*).
+
 Not yet step-exact, so not verifiable:
 
 - **`wasm-worker` recordings.** The worker serves poses a frame late and TS
-  gameplay reads them; how late depends on message timing. Verify on the
-  owner path; a worker run is only reproducible if the worker lag is too.
+  gameplay reads them; how late depends on message timing. So since #444 the
+  in-process owner is the default engine everywhere and the worker is opt-in
+  (`?physics=wasm-worker`); the replay verifier rejects worker runs as
+  unverifiable.
 - **A track switch mid-tape.** Starting an adventure track rebuilds the static
   world at a step the tape does not record. Tapes that run a track from frame 0
   (the corpus's scenario setup) verify; a campaign session that enters a track

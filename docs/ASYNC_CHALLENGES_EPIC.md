@@ -48,7 +48,7 @@ Later phases add weekly tournament APIs and (optionally) true realtime co-op mul
 
 | Asset | Location | Notes |
 |-------|----------|-------|
-| Live arcade service (#444) | `supabase/` + `src/arcade/` | Postgres (Supabase): `profiles`, `scores`, `replays`, `challenges`, `saves` with RLS; one Edge Function per write path; anonymous players. Contract: `docs/API_CONTRACT.md` + `docs/api/arcade.openapi.yaml` (replaces `api/*.py` and the unversioned `storage.noahcohn.com` leaderboard) |
+| Live arcade service (#444) | `supabase/` + `src/arcade/` + `services/replay-verifier/` | Postgres (Supabase): `profiles`, `scores`, `replays`, `challenges`, `saves` with RLS; one Edge Function per write path; anonymous players; scores verified by replay on the storage host (Slice C). Contract: `docs/API_CONTRACT.md` + `docs/api/arcade.openapi.yaml` (replaces `api/*.py` and the unversioned `storage.noahcohn.com` leaderboard) |
 | Adventure progress (legacy) | `storage.noahcohn.com/api/adventure/progress` | Still posted by `AdventureState.syncToBackend`; Slice D moves saves to `put-save` |
 
 ### Missing
