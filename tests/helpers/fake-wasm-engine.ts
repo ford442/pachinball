@@ -174,6 +174,7 @@ export function makeFakeWasmEngine() {
     serializeSnapshot: vi.fn((): Uint8Array | null => null),
     restoreSnapshot: vi.fn(() => -1),
     getStaticContentHash: vi.fn((): string | null => null),
+    getStateHash: vi.fn((): string | null => null),
     /** Test-only: live C++ body ids. */
     liveBodyIds: () => [...bodies.keys()],
     /** Test-only: a body's native type (0 Dynamic, 1 Static, 2 Kinematic), or -1. */

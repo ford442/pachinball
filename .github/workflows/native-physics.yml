@@ -2,6 +2,12 @@
 #
 # native_ctest + sanitizer_ctest are BLOCKING for PRs touching `native/**`.
 # wasm_parity is BLOCKING for PRs touching `native/**`, `src/wasm/**`, or wasm tests.
+# replay_goldens is BLOCKING for the same paths plus `src/game/physics/**`,
+# `src/replay/**` and the replay verifier: every tests/replays/*.json tape must
+# replay to its golden final state hash, score and step count, and the
+# storage-host verifier must pass its self-test (#444). An intentional numeric change
+# runs `npm run verify:replay -- --update` and commits the new goldens with a
+# one-line rationale.
 # JS-only PRs outside those paths are not gated on Emscripten.
 #
 # Skip triggers:
@@ -14,8 +20,10 @@
 #   npm run check:compile-db     # clangd DB smoke (after compile-db)
 #   npm run check:wasm-docs      # docs/wasm-physics-engine.md drift check
 #   npm run build:wasm           # Emscripten Release → public/wasm/ (production)
+#   npm run check:dist-wasm      # after `npm run build`: dist/wasm is byte-identical to public/wasm
 #   npm run build:wasm:assert    # RelWithAsserts → native/build-assert/
 #   WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npm run test:wasm-parity
+#   npm run verify:replay        # golden replay tapes, headless Chromium (after build:wasm)
 
 name: Native Physics
 
@@ -40,7 +48,18 @@ on:
       - 'scripts/print-wasm-flags.mjs'
       - 'scripts/check-compile-db.mjs'
       - 'scripts/check-wasm-docs.mjs'
+      - 'scripts/check-dist-wasm.mjs'
       - 'docs/wasm-physics-engine.md'
+      - 'src/game/physics/**'
+      - 'src/replay/**'
+      - 'tests/replays/**'
+      - 'scripts/verify-replay.mjs'
+      - 'scripts/lib/**'
+      - 'services/replay-verifier/**'
+      - 'src/arcade/live-broadcast.ts'
+      - 'src/game/live-ui.ts'
+      - 'src/display/**'
+      - 'tests/live-spectate.spec.ts'
       - 'package.json'
       - '.github/workflows/native-physics.yml'
   pull_request:
@@ -62,7 +81,18 @@ on:
       - 'scripts/print-wasm-flags.mjs'
       - 'scripts/check-compile-db.mjs'
       - 'scripts/check-wasm-docs.mjs'
+      - 'scripts/check-dist-wasm.mjs'
       - 'docs/wasm-physics-engine.md'
+      - 'src/game/physics/**'
+      - 'src/replay/**'
+      - 'tests/replays/**'
+      - 'scripts/verify-replay.mjs'
+      - 'scripts/lib/**'
+      - 'services/replay-verifier/**'
+      - 'src/arcade/live-broadcast.ts'
+      - 'src/game/live-ui.ts'
+      - 'src/display/**'
+      - 'tests/live-spectate.spec.ts'
       - 'package.json'
       - '.github/workflows/native-physics.yml'
 
@@ -98,9 +128,13 @@ jobs:
         run: >
           cmake -S native -B native/build-san
           -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g -fno-sanitize-recover=all"
 
+      # UBSan used to only print; -fno-sanitize-recover=all + halt_on_error make a
+      # report abort the test and fail the job (#464 item 3).
       - name: Build and run Catch2 under sanitizers
+        env:
+          UBSAN_OPTIONS: halt_on_error=1
         run: |
           cmake --build native/build-san
           ctest --test-dir native/build-san --output-on-failure
@@ -150,8 +184,20 @@ jobs:
           test ! -e public/wasm/PhysicsModule.wasm.map
           test ! -e public/wasm/PhysicsModule.js.map
           echo "WASM size: $(wc -c < public/wasm/PhysicsModule.wasm) bytes"
-          grep -q "defaultEngine: 'wasm-worker'" src/config/physics.ts && grep -q "nonIsolatedDefaultEngine: 'wasm-owner'" src/config/physics.ts
-          echo "defaultEngine is wasm-worker (nonIsolatedDefaultEngine wasm-owner)"
+          grep -q "defaultEngine: 'wasm-owner'" src/config/physics.ts
+          echo "defaultEngine is wasm-owner (wasm-worker is opt-in, #444)"
+
+      - name: Install Node deps
+        run: npm ci
+
+      # `npm run build` is tsc -b && build:wasm && vite build. Running it (the
+      # WASM rebuild is an incremental no-op here) pins the order itself: if
+      # vite ever runs first again, dist/wasm holds the previous binary (#464).
+      - name: Production build, then dist/wasm must equal public/wasm
+        run: |
+          source emsdk/emsdk_env.sh
+          npm run build
+          npm run check:dist-wasm
 
       - name: Build RelWithAsserts artefact
         run: |
@@ -159,9 +205,6 @@ jobs:
           npm run build:wasm:assert
           test -s native/build-assert/PhysicsModule.wasm
           test -s native/build-assert/PhysicsModule.js
-
-      - name: Install Node deps for parity
-        run: npm ci
 
       - name: Install cmake/g++ for native reference
         run: sudo apt-get update && sudo apt-get install -y cmake g++
@@ -186,7 +229,7 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Playwright wasm-owner + wasm-worker default (feel, debug draw, adventure, toy capture, pin field, MagSpin pull)
+      - name: Playwright wasm-owner + wasm-worker default (feel, debug draw, adventure, toy capture, pin field, MagSpin pull, live spectate)
         env:
           CI: 'true'
         run: >
@@ -201,3 +244,52 @@ jobs:
           tests/wasm-worker-default.spec.ts
           tests/wasm-worker-adventure.spec.ts
           tests/basic-gameplay.spec.ts
+          tests/live-spectate.spec.ts
+
+  replay_goldens:
+    name: Golden Replay Tapes (Blocking)
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.head_commit.message, '[skip wasm-ci]') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Emscripten SDK
+        uses: actions/cache@v4
+        with:
+          path: emsdk
+          key: emsdk-${{ runner.os }}-latest
+
+      - name: Install and activate Emscripten
+        run: |
+          if [ ! -d emsdk ]; then
+            git clone https://github.com/emscripten-core/emsdk.git
+          fi
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+          echo "$(pwd)" >> $GITHUB_PATH
+
+      - name: Build WASM module (Release — what the game loads)
+        run: |
+          source emsdk/emsdk_env.sh
+          npm run build:wasm
+
+      - name: Install Node deps
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Each tape: a fresh page on the wasm-owner engine plays it through the
+      # spectate path, one fixed step per tape frame, and must land on its
+      # golden { finalStateHash, score, steps }.
+      - name: Verify golden replay tapes (#444)
+        run: npm run verify:replay
+
+      # The storage-host verifier against a production build and a fake
+      # Supabase: legitimate runs verify, a forged score, a tape from another
+      # board, a worker recording and a missing replay are rejected (#444 Slice C).
+      - name: Production build, then the replay verifier self-test
+        run: |
+          npx vite build
+          npm run test:verifier

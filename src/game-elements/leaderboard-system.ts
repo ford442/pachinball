@@ -1,38 +1,20 @@
 /**
  * Pachinball Leaderboard System
  *
- * Global high-score table with storage_manager backend.
+ * Global high-score table on the live arcade service (#444, src/arcade).
  * - Auto-refreshes every 30 seconds
  * - Retro LCD-style UI overlay
  * - Filtered by current map + adventure level
+ * - A run submitted offline waits on this device and goes out on `online`
  */
 
-import { apiFetch } from '../config'
+import type { LeaderboardEntry, ScoreSubmission, SubmitResult } from '../arcade/arcade-api'
 import { createTimerScope } from '../core/timers'
 
-export interface LeaderboardEntry {
-  rank: number
-  name: string
-  score: number
-  map_id: string
-  adventure_level?: string
-  balls: number
-  combo_max: number
-  date: string
-  replay_id?: string
-  challenge_id?: string
-}
+export type { LeaderboardEntry, ScoreSubmission, SubmitResult }
 
-export interface ScoreSubmission {
-  name: string
-  score: number
-  map_id: string
-  adventure_level?: string
-  balls: number
-  combo_max: number
-  replay_id?: string
-  challenge_id?: string
-}
+/** The arcade client, fetched on first use: the overlay chunk loads at boot, the client need not. */
+const arcade = () => import('../arcade/arcade-api')
 
 export class LeaderboardSystem {
   private scores: LeaderboardEntry[] = []
@@ -56,8 +38,21 @@ export class LeaderboardSystem {
   private scoreList: HTMLElement | null = null
   private isVisible = false
 
+  /** The `online` listener; aborted by `dispose()`. */
+  private readonly listeners = new AbortController()
+
   constructor() {
     this.createOverlay()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => void this.flushQueue(), { signal: this.listeners.signal })
+    }
+  }
+
+  /** Send runs that were submitted without a network; refreshes the board when any went through. */
+  async flushQueue(): Promise<number> {
+    const sent = await arcade().then((a) => a.flushQueuedRuns()).catch(() => 0)
+    if (sent > 0) void this.refresh(true)
+    return sent
   }
 
   /**
@@ -138,21 +133,8 @@ export class LeaderboardSystem {
     if (this.isRefreshing) return
     this.isRefreshing = true
 
-    const params = new URLSearchParams()
-    params.append('map_id', this.currentMapId)
-    params.append('limit', '10')
-    if (this.currentAdventureLevel) {
-      params.append('adventure_level', this.currentAdventureLevel)
-    }
-
     try {
-      const data = await apiFetch<{ scores: LeaderboardEntry[] }>(`/leaderboard?${params}`)
-      
-      if (!data) {
-        throw new Error('No data returned from API')
-      }
-      
-      this.scores = data.scores || []
+      this.scores = await (await arcade()).fetchLeaderboard(this.currentMapId, this.currentAdventureLevel, 10)
       this.lastRefresh = now
       
       // Reset failure count on success
@@ -179,40 +161,24 @@ export class LeaderboardSystem {
   }
 
   /**
-   * Submit a new score
+   * Submit a finished run: its replay (`ReplayRecorder.toJSON`) when there is
+   * one, then the score citing it. Offline, the run is queued (`queued: true`).
    */
-  async submitScore(score: ScoreSubmission): Promise<{ success: boolean; rank?: number; message?: string }> {
-    const result = await apiFetch<{ success: boolean; rank?: number; message?: string }>(
-      '/leaderboard',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(score),
-      }
-    )
-    
-    if (!result) {
-      return { success: false, message: 'Failed to submit score' }
-    }
-    
-    // Refresh after submission
-    void this.refresh(true)
+  async submitScore(score: ScoreSubmission, replayJson?: string): Promise<SubmitResult> {
+    const result = await (await arcade()).submitRun(score, replayJson)
+    if (result.success) void this.refresh(true)
     return result
   }
 
   /**
-   * Get player's rank for current map
+   * Get player's rank for current map; null when the service cannot be reached.
    */
   async getPlayerRank(score: number): Promise<number | null> {
-    const params = new URLSearchParams()
-    params.append('map_id', this.currentMapId)
-    params.append('score', score.toString())
-    if (this.currentAdventureLevel) {
-      params.append('adventure_level', this.currentAdventureLevel)
+    try {
+      return await (await arcade()).fetchPlayerRank(this.currentMapId, score, this.currentAdventureLevel)
+    } catch {
+      return null
     }
-
-    const data = await apiFetch<{ rank: number }>(`/leaderboard/player-rank?${params}`)
-    return data?.rank ?? null
   }
 
   /**
@@ -364,6 +330,14 @@ export class LeaderboardSystem {
       scoreVal.textContent = entry.score.toLocaleString()
       right.appendChild(scoreVal)
 
+      // Replayed and confirmed by the verifier (#444); unconfirmed runs leave the board after a day.
+      const check = document.createElement('span')
+      check.className = entry.verified ? 'lb-verified' : 'lb-pending'
+      check.textContent = entry.verified ? '✓' : '…'
+      check.title = entry.verified ? 'Verified: the replay reproduces this score' : 'Being verified'
+      check.style.cssText = `width: 1em; text-align: center; color: ${entry.verified ? '#00ff88' : 'rgba(255, 255, 255, 0.45)'};`
+      right.appendChild(check)
+
       if (entry.replay_id) {
         const replayBtn = document.createElement('button')
         replayBtn.title = 'Watch Replay Spectate'
@@ -397,6 +371,7 @@ export class LeaderboardSystem {
    * Clean up resources
    */
   dispose(): void {
+    this.listeners.abort()
     // Also cancels the 5-minute resume timer, which would otherwise restart polling
     // on a disposed instance.
     this.timers.dispose()

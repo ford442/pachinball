@@ -15,6 +15,20 @@ import {
 
 export type DailyCascadeMode = 'vanilla' | 'daily' | 'free'
 
+/** The cascade table a replay was recorded on (#444); a vanilla recording has none. */
+export interface ReplayCascade {
+  mode: 'daily' | 'free'
+  seed: number
+  seedId: string
+}
+
+interface SavedSelection {
+  mode: DailyCascadeMode
+  seed: number
+  seedId: string
+  layout: TableLayout | null
+}
+
 export class DailyCascadeState {
   private mode: DailyCascadeMode = 'vanilla'
   private seed = 0
@@ -22,6 +36,8 @@ export class DailyCascadeState {
   private layout: TableLayout | null = null
   /** True after a mutator layout was applied; vanilla start must rebuild once. */
   private mutatorApplied = false
+  /** The player's own selection while a replay borrows the state (`beginReplay`). */
+  private saved: SavedSelection | null = null
 
   getMode(): DailyCascadeMode {
     return this.mode
@@ -92,7 +108,8 @@ export class DailyCascadeState {
     if (this.mode === 'vanilla') {
       return null
     }
-    if (this.mode === 'daily') {
+    // A replayed daily keeps the day it was recorded on.
+    if (this.mode === 'daily' && !this.saved) {
       const today = dailySeedId()
       if (this.seedId !== today) {
         this.applyDailySeed()
@@ -105,6 +122,31 @@ export class DailyCascadeState {
       })
     }
     return this.layout
+  }
+
+  /** What a recording needs to rebuild this table; null on the vanilla table. */
+  describeForReplay(): ReplayCascade | null {
+    if (this.mode === 'vanilla' || !this.ensureLayout()) return null
+    return { mode: this.mode, seed: this.seed >>> 0, seedId: this.seedId }
+  }
+
+  /**
+   * Play a replay on the cascade table it was recorded on, whatever the
+   * player has selected (null: the vanilla table). `endReplay` puts the
+   * player's selection back.
+   */
+  beginReplay(cascade: ReplayCascade | null): void {
+    this.saved ??= { mode: this.mode, seed: this.seed, seedId: this.seedId, layout: this.layout }
+    this.mode = cascade?.mode ?? 'vanilla'
+    this.seed = (cascade?.seed ?? 0) >>> 0
+    this.seedId = cascade?.seedId ?? ''
+    this.layout = null
+  }
+
+  endReplay(): void {
+    if (!this.saved) return
+    ;({ mode: this.mode, seed: this.seed, seedId: this.seedId, layout: this.layout } = this.saved)
+    this.saved = null
   }
 
   /** Leaderboard map_id for current mode. */

@@ -1,6 +1,8 @@
-/** Hand-built v1 world snapshots for parser / gate tests that run without a bundle. */
+import { WASM_SNAPSHOT_VERSION } from '../../src/wasm/wasm-types'
 
-/** A v1 blob with the words readSnapshotIds reads (layout: native/src/Snapshot.cpp). */
+/** Hand-built world snapshots (current `WASM_SNAPSHOT_VERSION`) for parser / gate tests that run without a bundle. */
+
+/** A blob with the words readSnapshotIds reads (layout: native/src/Snapshot.cpp). */
 export function fakeSnapshot(opts: {
   hashHi: number
   hashLo: number
@@ -9,7 +11,7 @@ export function fakeSnapshot(opts: {
   hinges?: Array<{ id: number; bodyId: number; active?: boolean }>
   stepCount?: number
 }): Uint8Array {
-  const words: number[] = [0x4e534250, opts.version ?? 1, 0, opts.hashLo, opts.hashHi]
+  const words: number[] = [0x4e534250, opts.version ?? WASM_SNAPSHOT_VERSION, 0, opts.hashLo, opts.hashHi]
   for (let i = 0; i < 12; i++) words.push(0) // static counts
   words.push(opts.stepCount ?? 0, 0, 0) // step lo/hi, accumulator
   for (let i = 0; i < 10; i++) words.push(0) // params

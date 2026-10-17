@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm run dev        # Start Vite dev server (http://localhost:5173)
-npm run build      # TypeScript check + Vite production build + optional WASM
+npm run build      # tsc -b → build:wasm (skips without Emscripten) → Vite build; writes dist/build-info.json
 npm run lint       # ESLint on all .ts/.tsx files (type-aware for src/, incl. no-floating-promises and import-x/no-cycle)
 npm run check:index-strict  # noUncheckedIndexedAccess ratchet: src/core, src/wasm, src/game/physics must stay clean
 npm run preview    # Preview production build locally
@@ -19,6 +19,12 @@ npm run check:wasm-docs   # Fail if docs/wasm-physics-engine.md drifts from CMak
 npm run build:wasm        # Emscripten Release → public/wasm/
 npm run test:wasm-parity  # WASM bundle vs native C++ reference
 npm run bench:wasm-flags  # Microbench WASM flag matrix (SIMD/LTO)
+npm run check:dist-wasm   # After `npm run build`: dist/wasm must be byte-identical to public/wasm
+npm run check:bundle      # Bundle-size gate (bundle-budget.json); fails if Rapier is precached/preloaded
+npm run verify:replay     # Golden replay tapes (tests/replays/*.json) in headless Chromium; needs build:wasm. `-- --update` rewrites goldens
+npm run record:replay     # Re-record stale tapes from their scenarios
+npm run test:verifier     # services/replay-verifier self-test (after `npm run build`)
+supabase db start && supabase test db  # Arcade DB migrations + pgTAP RLS tests (supabase/)
 ```
 
 To run a single Vitest test file:
@@ -28,7 +34,7 @@ npx vitest run tests/ball-manager.test.ts
 
 ## Architecture
 
-**Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 7. Physics runs on an in-house C++ engine compiled to WASM (`native/` + `src/wasm/`) by default — in a Dedicated Worker (`wasm-worker`) when the page is cross-origin isolated, else in-process (`wasm-owner`); Rapier 3D WASM is the lazily loaded dev/degrade path. Runtime mode is selected via `src/config.ts` (`rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker`). Builders author physics through `PhysicsApi` / `PhysicsWorldSink` / `PhysicsBody` (`src/core/physics-api.ts`), never Rapier values — see `docs/wasm-physics-engine.md`.
+**Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 7. Physics runs on an in-house C++ engine compiled to WASM (`native/` + `src/wasm/`) by default — in-process (`wasm-owner`), the only mode whose runs replay step-exactly and can be verified for the leaderboard; a Dedicated Worker (`wasm-worker`) is opt-in (`?physics=wasm-worker`); Rapier 3D WASM is the lazily loaded dev/degrade path. Runtime mode is selected via `src/config/physics.ts` (`WASM_PHYSICS.defaultEngine`; `rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker`). Builders author physics through `PhysicsApi` / `PhysicsWorldSink` / `PhysicsBody` (`src/core/physics-api.ts`), never Rapier values — see `docs/wasm-physics-engine.md`.
 
 ### Startup flow
 
@@ -38,8 +44,9 @@ npx vitest run tests/ball-manager.test.ts
 
 | Path | Role |
 |------|------|
-| `src/game.ts` | Central orchestrator (~33 KB / ~840 lines — slimmed from its former ~140 KB monolith; the sub-systems now live under `src/game/`, `src/game-elements/`, `src/display/`, `src/effects/`, `src/objects/`). Owns scene, cameras, lights, materials, post-processing, game-state machine (MENU / PLAYING / PAUSED / GAME_OVER), and wires all sub-systems together. |
-| `src/game-elements/` | Discrete sub-systems: `physics.ts` (physics world: the C++ owner's `WasmTableWorld`, or Rapier), `ball-manager.ts` (spawn/collect/drain), `input.ts` (keyboard/touch/gamepad), `camera-controller.ts`, `sound-system.ts`, `zone-trigger-system.ts`, `leaderboard-system.ts`, `adventure-mode.ts`, `debug-hud.ts`, etc. |
+| `src/game.ts` | Central orchestrator (~20 KB / ~460 lines — slimmed from its former ~140 KB monolith; the sub-systems now live under `src/game/`, `src/game-elements/`, `src/display/`, `src/effects/`, `src/objects/`). Owns scene, cameras, lights, materials, post-processing, game-state machine (MENU / PLAYING / PAUSED / GAME_OVER), and wires all sub-systems together. |
+| `src/game-elements/` | Discrete sub-systems: `physics.ts` (physics world: the C++ owner's `WasmTableWorld`, or Rapier), `ball-manager.ts` (spawn/collect/drain), `input.ts` (keyboard/touch/gamepad), `camera-controller.ts`, `zone-trigger-system.ts`, `leaderboard-system.ts`, `debug-hud.ts`, etc. |
+| `src/adventure/` | Adventure mode (`adventure-mode.ts`), campaign progression/state, zone registry, track builders (`tracks/`) and declarative track data. |
 | `native/` | C++ physics core — rigid bodies, broadphase, contact listener. Catch2-tested via `npm run test:native`. |
 | `src/wasm/` | Emscripten loader (`PhysicsModule.ts`), contact/transform buffer codecs, WASM types. |
 | `src/game/physics/` | Runtime physics engine selection and collision dispatch (`rapier`, `wasm-mirror`, `wasm-owner`). |
@@ -49,11 +56,14 @@ npx vitest run tests/ball-manager.test.ts
 | `src/shaders/` | Standalone WGSL/GLSL effect shaders: CRT scanlines + curvature, LCD table, jackpot overlay, number-scroll animation. |
 | `src/materials/` | PBR material library split by domain (ball, metallic, interactive, structural). `material-core.ts` is the entry point. |
 | `src/audio/` | Single `AudioEngine` (one AudioContext) + pachinko worklet + sample bank. EventBus remains the trigger API. |
+| `src/replay/` | Replay recorder/runner (one tape frame per physics step, frame-0 C++ snapshot), challenges (`challenge-v2.ts`), ghost race. |
+| `src/arcade/` + `supabase/` | Live arcade client (`arcade-api.ts`, endpoint in `src/config/arcade.ts`) on Supabase: migrations, RLS pgTAP tests, Edge Functions. Contract: `docs/API_CONTRACT.md` + `docs/api/arcade.openapi.yaml` (checked by `tests/arcade-contract.test.ts`). Dev/Playwright stay offline unless `VITE_ARCADE_URL` is set. |
+| `services/replay-verifier/` | Storage-host anti-cheat service: replays submitted tapes on the prod build and marks scores verified/rejected. |
 | `src/config/` | Ball-type definitions (STANDARD / GOLD_PLATED / SOLID_GOLD), spawn weight distribution (75 / 20 / 5 %), point values, fever-mode multipliers, API config. |
 
 ### Ball lifecycle
 
-Balls are spawned by `BallManager` according to the weighted distribution in `config.ts`. Collection triggers point callbacks and increments the gold-ball counter. `zone-trigger-system.ts` detects spatial events (bumper hits, drain, special zones) and notifies the game loop.
+Balls are spawned by `BallManager` according to the weighted distribution in `src/config/`. Collection triggers point callbacks and increments the gold-ball counter. `zone-trigger-system.ts` detects spatial events (bumper hits, drain, special zones) and notifies the game loop.
 
 ### Lifecycle conventions
 
@@ -67,9 +77,15 @@ A `Game` must tear down completely (`Game.dispose()` → `disposeGame()` in `src
 - Pass `this` to host consumers; `Game implements` every `*Host` interface, so no `as unknown as XHost` casts.
 - `tests/lifecycle-dispose.spec.ts` counts listeners over CDP and fails if a Game leaks any.
 
+### Determinism
+
+Gameplay runs in whole fixed steps (`FixedStepPacer` / `FIXED_TIMESTEP` in `src/core/sim-clock.ts`). Anything that affects score, lives or the ball's path reads the sim clock, never `performance.now()` — otherwise replays and verification break (`docs/determinism-todo.md`). Intentional numeric changes update the golden tapes (`npm run verify:replay -- --update`) in the same PR.
+
+Production builds strip literal `console.*` calls; use `bootWarn` / `bootError` (`src/boot-log.ts`) for boot-critical diagnostics.
+
 ### Testing approach
 
-Unit tests (`tests/`) run in a Node environment via Vitest. Babylon.js and Rapier are fully mocked — do not import real engine code inside test files. Playwright E2E tests launch the full Vite dev server and access `window.game` for assertions; see `tests/verify_prism_core.spec.ts` for the pattern.
+Unit tests (`tests/`) run in a Node environment via Vitest. Babylon.js and Rapier are fully mocked — do not import real engine code inside test files. Playwright E2E tests auto-start the Vite dev server on 5173 (`webServer` in `playwright.config.ts`; projects `chromium` + `mobile-chrome`) and access `window.game` for assertions; see `tests/verify_prism_core.spec.ts` for the pattern.
 
 ### Campaign progression docs
 

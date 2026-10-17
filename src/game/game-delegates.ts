@@ -1,6 +1,6 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 
-import { GameState, GhostBallRenderer, ReplayRecorder, CameraMode, detectAccessibility } from '../game-elements'
+import { GameState, GhostBallRenderer, ReplayRecorder, CameraMode, detectAccessibility, type ReplayPayload } from '../game-elements'
 import { getDailyCascadeState } from '../cascade/daily-cascade-state'
 import type { FeederKey } from '../cascade/daily-cascade-layout'
 import type { CabinetType } from '../cabinet'
@@ -51,6 +51,8 @@ export abstract class GameDelegates extends GameFields {
   }
 
   switchTableMap(mapName: string): void { this.mapCabinet?.switchTableMap(mapName) }
+  /** The table map in play: what a replay records and its leaderboard board is keyed by (#444). */
+  get currentMapId(): string | null { return this.mapManager?.getCurrentMap() ?? null }
   loadCabinetPreset(type: CabinetType): Promise<void> { return this.mapCabinet?.loadCabinetPreset(type) ?? Promise.resolve() }
   cycleCabinetPreset(): Promise<void> { return this.mapCabinet?.cycleCabinetPreset() ?? Promise.resolve() }
   cycleTableMap(): void { this.mapCabinet?.cycleTableMap() }
@@ -249,30 +251,40 @@ export abstract class GameDelegates extends GameFields {
 
   async startSpectateReplay(replayId: string): Promise<boolean> {
     try {
-      const { apiFetch } = await import('../config')
-      const raw = await apiFetch<object>(`/replays/${replayId}`)
-      // Uploads are compressed (`frames: []` + `compressedFrames`); decode the
-      // tape, or spectate would play zero frames.
-      const payload = raw ? ReplayRecorder.fromJSON(raw) : null
-      if (!payload) {
+      const { fetchReplay } = await import('../arcade/arcade-api')
+      const raw = await fetchReplay(replayId)
+      if (!raw) {
         this.showMessage('Replay payload not found', 3000)
         return false
       }
-
-      if (!this.ghostBallRenderer && this.scene) {
-        this.ghostBallRenderer = new GhostBallRenderer(this.scene)
-      }
-
-      this.replayRunner.load(payload)
-      this.ghostBallRenderer?.show()
-      this.uiManager?.showMessage(`Watching Replay: ${payload.mapId} (Score: ${payload.finalScore.toLocaleString()})`, 4000)
-      await this.lifecycle?.startGame()
+      await this.playReplay(raw)
       return true
     } catch (err) {
       console.warn('[Game] Failed to spectate replay:', err)
       this.showMessage('Failed to load replay payload', 3000)
       return false
     }
+  }
+
+  /**
+   * Arm a stored / uploaded replay and start a game on its table: the ghost
+   * is shown and every fixed step from here plays one tape frame. Spectate
+   * and `scripts/verify-replay.mjs` both enter here, and live spectate with a
+   * `streaming` tape that grows as the run is played (#444 Slice E).
+   */
+  async playReplay(raw: string | object, streaming = false): Promise<ReplayPayload> {
+    // Uploads are compressed (`frames: []` + `compressedFrames`); decode the
+    // tape, or spectate would play zero frames.
+    const payload = ReplayRecorder.fromJSON(raw)
+    if (!this.ghostBallRenderer && this.scene) {
+      this.ghostBallRenderer = new GhostBallRenderer(this.scene)
+    }
+
+    this.replayRunner.load(payload, streaming)
+    this.ghostBallRenderer?.show()
+    if (!streaming) this.uiManager?.showMessage(`Watching Replay: ${payload.mapId} (Score: ${payload.finalScore.toLocaleString()})`, 4000)
+    await this.lifecycle?.startGame()
+    return payload
   }
 
   // --------------------------------------------------------------------------

@@ -6,6 +6,7 @@
 import type { WasmPhysicsRuntimeMode } from '../config/physics'
 import type { InputFrame } from '../game-elements/types'
 import { DEFAULT_TABLE_MAP_ID } from '../config/table-maps'
+import type { ReplayCascade } from '../cascade/daily-cascade-state'
 import type { ReplayWorldFingerprint } from './replay-snapshot'
 
 /** Normalise legacy replay metadata (`wasm` → mirror). */
@@ -26,8 +27,11 @@ function normalizeReplayPhysicsEngine(value: unknown): WasmPhysicsRuntimeMode {
  * Replay schema version.
  * - 1: RLE rows `count:L,R,P,nx,ny,nz` — plunger as a fired/not-fired bit.
  * - 2: a 7th field carries the 0–1 plunger charge the launch was scaled by (#441).
+ * - 3: one frame per fixed physics step, not per render frame (#444). Same
+ *   row format; older tapes still load, but were cut at the recorder's frame
+ *   rate and only replay step-exactly if that was 60 Hz.
  */
-export const REPLAY_SCHEMA_VERSION = 2
+export const REPLAY_SCHEMA_VERSION = 3
 
 export interface ReplayMetadata extends ReplayWorldFingerprint {
   version: number
@@ -37,6 +41,8 @@ export interface ReplayMetadata extends ReplayWorldFingerprint {
   physicsEngine: WasmPhysicsRuntimeMode
   renderer: 'webgl2' | 'webgpu'
   createdAt: string
+  /** The Daily Cascade / free-seed table the run was played on; absent on the vanilla table (#444). */
+  cascade?: ReplayCascade
 }
 
 export interface ReplayPayload extends ReplayMetadata {
@@ -150,10 +156,20 @@ export function normalizeInputFrame(frame: InputFrame): InputFrame {
   return { ...frame, plungerCharge, plunger: plungerCharge !== null }
 }
 
+function parseReplayCascade(value: unknown): ReplayCascade | undefined {
+  const c = value as Partial<ReplayCascade> | null | undefined
+  if (!c || (c.mode !== 'daily' && c.mode !== 'free') || typeof c.seed !== 'number' || typeof c.seedId !== 'string') {
+    return undefined
+  }
+  return { mode: c.mode, seed: c.seed >>> 0, seedId: c.seedId }
+}
+
 export class ReplayRecorder {
   private recording = false
   private metadata: ReplayMetadata | null = null
   private frames: InputFrame[] = []
+  /** What the last `stop()` returned: game over stops the recorder before the HUD submits the run. */
+  private lastPayload: ReplayPayload | null = null
   private fingerprinted = false
   /** Bumped by `start()`; a late async fingerprint only lands on its own recording. */
   private session = 0
@@ -163,6 +179,7 @@ export class ReplayRecorder {
    */
   start(metadata: ReplayMetadata): void {
     this.metadata = { ...metadata }
+    this.lastPayload = null
     this.frames = []
     this.recording = true
     this.fingerprinted = false
@@ -198,7 +215,13 @@ export class ReplayRecorder {
       frames: this.frames,
       compressedFrames: compressInputFrames(this.frames),
     }
+    this.lastPayload = payload
     return payload
+  }
+
+  /** The last finished recording (null once a new one starts). */
+  getLastPayload(): ReplayPayload | null {
+    return this.lastPayload
   }
 
   isRecording(): boolean {
@@ -300,6 +323,7 @@ export class ReplayRecorder {
       pinFieldOccupancy: data.pinFieldOccupancy !== undefined ? data.pinFieldOccupancy : data.pin_field_occupancy,
       feederTunablesHash: data.feederTunablesHash ?? data.feeder_tunables_hash,
       initialSnapshot: data.initialSnapshot ?? data.initial_snapshot,
+      cascade: parseReplayCascade(data.cascade),
     }
   }
 

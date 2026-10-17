@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -349,6 +350,11 @@ TEST_CASE("serialize is deterministic and writes the parity fixture", "[snapshot
     std::ofstream out(path, std::ios::binary);
     REQUIRE(out.good());
     out.write(reinterpret_cast<const char*>(blob.data()), static_cast<std::streamsize>(blob.size()));
+    // Sidecar: the native stateHash at the same frame, for a WASM-side comparison (#459 Slice A).
+    std::ofstream hash(std::string(path) + ".statehash");
+    char hex[17];
+    std::snprintf(hex, sizeof hex, "%016llx", static_cast<unsigned long long>(a.stateHash()));
+    hash << hex;
   }
 }
 
@@ -370,4 +376,240 @@ TEST_CASE("hinge angle uses a libm-independent atan2", "[snapshot][hinge]") {
   CHECK(computeHingeAngle(joint, Quat{0.f, 0.f, 0.f, 1.f}) == 0.f);
   CHECK(near(computeHingeAngle(joint, Quat{0.f, 1.f, 0.f, 0.f}), 3.14159265f, 1e-6f));
   CHECK(near(computeHingeAngle(joint, Quat{0.f, -0.70710677f, 0.f, 0.70710677f}), -1.5707963f, 1e-6f));
+}
+
+// ---- Canonical static hash + state hash (#464 item 2, #459 Slice A) ---------
+
+namespace {
+
+/**
+ * One of every static family, two items each with different content, added in
+ * forward or reverse order. Every `add*()` is called with the same arguments
+ * either way; only the call order (hence handle order) changes.
+ */
+void buildOrderedStatics(PhysicsWorld& w, bool reversed) {
+  struct Item { int kind; int variant; };
+  std::vector<Item> items;
+  for (int kind = 0; kind < 11; ++kind) {
+    for (int variant = 0; variant < 2; ++variant) items.push_back({kind, variant});
+  }
+  if (reversed) std::reverse(items.begin(), items.end());
+
+  static const float quad[2][12] = {
+    {0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 1.f, 0.f, 1.f, 0.f, 0.f, 1.f},
+    {0.f, 1.f, 0.f, 2.f, 1.f, 0.f, 2.f, 1.f, 2.f, 0.f, 1.f, 2.f},
+  };
+  static const uint32_t quadIdx[6] = {0, 1, 2, 0, 2, 3};
+
+  for (const Item& it : items) {
+    const float v = static_cast<float>(it.variant);
+    switch (it.kind) {
+      case 0: w.addStaticPlane(0.f, 1.f, 0.f, -1.f - v, 0.2f + 0.1f * v); break;
+      case 1: w.addStaticBox(v, 0.f, 0.f, 0.5f, 0.5f + v, 0.5f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f); break;
+      case 2: w.addStaticCapsule(0.f, v, 0.f, 0.1f, 0.5f + v, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f); break;
+      case 3: w.addStaticCylinder(0.f, 0.f, v, 0.1f + v, 0.5f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f); break;
+      case 4: w.addStaticSphere(v, v, v, 0.3f, 0.4f, 0.2f); break;
+      case 5: w.addStaticCone(v, 0.f, 2.f, 0.4f, 0.5f + v, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f); break;
+      case 6: {
+        PinFieldDesc pins;
+        pins.origin = {v, 0.f, 4.f};
+        pins.rows = 3 + it.variant;
+        pins.cols = 3;
+        pins.spacingX = 0.5f;
+        pins.spacingZ = 0.5f;
+        pins.radius = 0.05f;
+        pins.dropoutSeed = 3;
+        pins.dropout = 0.25f;
+        w.addPinField(pins);
+        break;
+      }
+      case 7: {
+        KinematicMoverDesc mover;
+        mover.halfExtents = {0.5f + v, 0.2f, 0.5f};
+        w.addKinematicMover(mover);
+        break;
+      }
+      case 8: {
+        SensorVolumeDesc sensor;
+        sensor.center = {v, 0.f, -3.f};
+        w.addSensorVolume(sensor);
+        break;
+      }
+      case 9: w.addStaticTriangleMesh(quad[it.variant], 4, quadIdx, 6, 0.4f, 0.2f, it.variant == 1); break;
+      default: {
+        ForceFieldDesc field;
+        field.center = {0.f, v, 0.f};
+        field.force = {0.f, 3.f + v, 0.f};
+        w.addForceField(field);
+        break;
+      }
+    }
+  }
+}
+
+/** Two dynamic spheres falling onto a floor, so contacts, sleep and forces all occur. */
+void addDynamics(PhysicsWorld& w) {
+  for (int i = 0; i < 2; ++i) {
+    RigidBodyDesc ball;
+    ball.position = {-0.3f + 0.6f * static_cast<float>(i), 1.5f, 0.f};
+    ball.radius = 0.2f;
+    w.createRigidBody(ball);
+  }
+}
+
+} // namespace
+
+TEST_CASE("staticContentHash ignores the order statics were added in", "[snapshot][hash]") {
+  PhysicsWorld forward;
+  PhysicsWorld reversed;
+  buildOrderedStatics(forward, false);
+  buildOrderedStatics(reversed, true);
+  CHECK(forward.staticContentHash() == reversed.staticContentHash());
+
+  // Dropping one item still changes it: the hash is a multiset, not a set of kinds.
+  PhysicsWorld fewer;
+  buildOrderedStatics(fewer, false);
+  fewer.addStaticBox(9.f, 9.f, 9.f, 0.5f, 0.5f, 0.5f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f);
+  CHECK(fewer.staticContentHash() != forward.staticContentHash());
+
+  // Same item twice vs two different items in one family is not a collision.
+  PhysicsWorld twins;
+  PhysicsWorld pair;
+  twins.addStaticBox(0.f, 0.f, 0.f, 1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f);
+  twins.addStaticBox(0.f, 0.f, 0.f, 1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f);
+  pair.addStaticBox(0.f, 0.f, 0.f, 1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f);
+  pair.addStaticBox(0.f, 0.f, 0.f, 1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.21f);
+  CHECK(twins.staticContentHash() != pair.staticContentHash());
+}
+
+TEST_CASE("staticContentHash changes when one float in one box changes", "[snapshot][hash]") {
+  auto table = [](float halfHeight) {
+    auto w = std::make_unique<PhysicsWorld>();
+    buildOrderedStatics(*w, false);
+    w->addStaticBox(5.f, 0.f, 0.f, 0.5f, halfHeight, 0.5f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f);
+    return w;
+  };
+  CHECK(table(1.5f)->staticContentHash() == table(1.5f)->staticContentHash());
+  // One float, one ulp, in one box among the rest of the table.
+  CHECK(table(1.5f)->staticContentHash() != table(std::nextafter(1.5f, 2.f))->staticContentHash());
+
+  // A mesh vertex counts too: triangles are part of their mesh's digest.
+  const uint32_t idx[3] = {0, 1, 2};
+  const float triA[9] = {0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, 0.f, 1.f};
+  float triB[9];
+  std::copy(std::begin(triA), std::end(triA), std::begin(triB));
+  triB[3] = std::nextafter(1.f, 2.f);
+  PhysicsWorld meshA;
+  PhysicsWorld meshB;
+  meshA.addStaticTriangleMesh(triA, 3, idx, 3);
+  meshB.addStaticTriangleMesh(triB, 3, idx, 3);
+  CHECK(meshA.staticContentHash() != meshB.staticContentHash());
+}
+
+TEST_CASE("staticContentHash is unchanged by adding and stepping dynamic bodies", "[snapshot][hash]") {
+  PhysicsWorld world;
+  buildOrderedStatics(world, false);
+  const uint64_t before = world.staticContentHash();
+  addDynamics(world);
+  CHECK(world.staticContentHash() == before);
+  stepFixed(world, 120);
+  CHECK(world.staticContentHash() == before);
+  world.setBodyType(0, BodyType::Kinematic);
+  world.setNextKinematicTransform(0, 0.f, 1.f, 0.f, 0.f, 0.f, 0.f, 1.f);
+  stepFixed(world, 10);
+  CHECK(world.staticContentHash() == before);
+}
+
+TEST_CASE("a snapshot restores onto the right statics when the target added them in another order", "[snapshot][hash]") {
+  PhysicsWorld live;
+  buildOrderedStatics(live, false);
+  addDynamics(live);
+  // Distinct runtime state per item: group masks, field vectors and enables, mover poses.
+  live.setCollisionGroups(STATIC_BOX_ID_BASE - 1, 0x2u, 0x4u);
+  live.setForceFieldVector(FORCE_FIELD_ID_BASE - 1, 7.f, 8.f, 9.f);
+  live.setForceFieldEnabled(FORCE_FIELD_ID_BASE - 0, false);
+  live.setNextKinematicTransform(KINEMATIC_MOVER_ID_BASE - 1, 0.f, 2.f, 0.f, 0.f, 0.f, 0.f, 1.f);
+  stepFixed(live, 30);
+  const std::vector<uint8_t> blob = live.serialize();
+
+  PhysicsWorld other;
+  buildOrderedStatics(other, true);
+  REQUIRE(other.staticContentHash() == live.staticContentHash());
+  REQUIRE(other.restore(blob.data(), blob.size()) == SnapshotStatus::Ok);
+  // Handle order differs, but the blob is written in canonical order: the
+  // restored runtime state landed on the equal-content items, so re-serializing
+  // reproduces the original bytes.
+  CHECK((other.serialize() == blob));
+  CHECK(other.stateHash() == live.stateHash());
+}
+
+TEST_CASE("a version-1 snapshot is refused as BadVersion, not restored", "[snapshot][hash]") {
+  PhysicsWorld world;
+  buildOrderedStatics(world, false);
+  addDynamics(world);
+  stepFixed(world, 5);
+  REQUIRE(SNAPSHOT_VERSION == 2u);
+  std::vector<uint8_t> old = world.serialize();
+  old[4] = 1;
+  const uint64_t before = world.stateHash();
+  CHECK(world.restore(old.data(), old.size()) == SnapshotStatus::BadVersion);
+  CHECK(world.stateHash() == before);
+}
+
+TEST_CASE("stateHash: same steps give the same hash, any touched column changes it", "[snapshot][hash]") {
+  auto build = [](PhysicsWorld& w) {
+    buildOrderedStatics(w, false);
+    w.addStaticBox(0.f, -0.5f, 0.f, 6.f, 0.5f, 6.f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f);
+    addDynamics(w);
+  };
+  PhysicsWorld a;
+  PhysicsWorld b;
+  build(a);
+  build(b);
+  CHECK(a.stateHash() == b.stateHash());
+  stepFixed(a, 90);
+  stepFixed(b, 90);
+  CHECK(a.stateHash() == b.stateHash());
+
+  const uint64_t base = a.stateHash();
+  stepFixed(a, 1);
+  CHECK(a.stateHash() != base);          // time moved
+  stepFixed(b, 1);
+  CHECK(a.stateHash() == b.stateHash());
+
+  // One touched velocity component, however small.
+  const Vec3 v = readVel(b, 1);
+  b.setVelocity(1, v.x, v.y, std::nextafter(v.z, 1.f));
+  CHECK(a.stateHash() != b.stateHash());
+  b.setVelocity(1, v.x, v.y, v.z);
+  CHECK(a.stateHash() == b.stateHash());
+
+  // Other next-step inputs: a queued force, a gravity change, a mover target.
+  b.applyForce(0, 0.f, 0.001f, 0.f);
+  CHECK(a.stateHash() != b.stateHash());
+}
+
+TEST_CASE("stateHash ignores contact-event state and survives snapshot restore", "[snapshot][hash]") {
+  PhysicsWorld world;
+  const Scene s = buildParityScene(world);
+  run(world, s, 0, SNAPSHOT_AT);
+  const uint64_t original = world.stateHash();
+  const std::vector<uint8_t> blob = world.serialize();
+  CHECK(world.stateHash() == original);   // serialize is const
+
+  run(world, s, SNAPSHOT_AT, RUN_FRAMES);
+  CHECK(world.stateHash() != original);
+
+  REQUIRE(world.restore(blob.data(), blob.size()) == SnapshotStatus::Ok);
+  CHECK(world.stateHash() == original);
+
+  // Into a freshly built table too (the replay-client path).
+  PhysicsWorld fresh;
+  buildStatics(fresh);
+  REQUIRE(fresh.restore(blob.data(), blob.size()) == SnapshotStatus::Ok);
+  CHECK(fresh.stateHash() == original);
+
+  // The contact buffer is not state: draining it changes nothing.
+  world.setMaxContacts(1);
+  CHECK(world.stateHash() == original);
 }

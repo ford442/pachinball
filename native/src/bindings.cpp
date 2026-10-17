@@ -427,6 +427,13 @@ EMSCRIPTEN_BINDINGS(physics_world) {
                       static_cast<unsigned long long>(self.staticContentHash()));
         return std::string(hex);
       }))
+    // Cheap per-step world-state digest (PhysicsWorld::stateHash), hex like the static one.
+    .function("getStateHash", optional_override([](const PhysicsWorld& self) -> std::string {
+        char hex[17];
+        std::snprintf(hex, sizeof hex, "%016llx",
+                      static_cast<unsigned long long>(self.stateHash()));
+        return std::string(hex);
+      }))
     .function("getContactGeneration", optional_override([](const PhysicsWorld& self) -> double {
         return static_cast<double>(self.getContactGeneration());
       }));
