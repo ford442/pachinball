@@ -3,7 +3,8 @@ info:
   title: Pachinball live arcade service
   version: 1.0.0
   description: |
-    Leaderboard, replays, challenges and saves (#444 Slice B). Plain REST over
+    Leaderboard, replays, challenges and saves (#444 Slice B), and live
+    spectate streams (Slice E). Plain REST over
     Postgres: reads go to PostgREST, each write path is one Edge Function that
     writes as the caller, and players are Supabase Auth anonymous users.
     Prose and rules: docs/API_CONTRACT.md. Schema: supabase/migrations.
@@ -150,6 +151,34 @@ components:
         stride: { type: integer, minimum: 1, maximum: 60 }
         samples: { type: integer, minimum: 0 }
         track: { type: string, description: 'Base64 of little-endian Int32 millimetre (x, y, z) triples of the primary ball; x = INT32_MIN when there is no ball' }
+    LiveRun:
+      type: object
+      required: [id, map_id, player_tag, chunk_steps, track_stride, chunks, frames, score, status, created_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        map_id: { type: string }
+        player_tag: { type: [string, 'null'], pattern: '^[A-Z]{3}$' }
+        chunk_steps: { type: integer, minimum: 60, maximum: 600 }
+        track_stride: { type: integer, minimum: 1, maximum: 10 }
+        chunks: { type: integer, minimum: 0 }
+        frames: { type: integer, minimum: 0, maximum: 216000 }
+        score: { type: integer, minimum: 0 }
+        status: { enum: [live, left, ended], description: 'live: streaming; left: the player started another run; ended: its final chunk is stored' }
+        created_at: { type: string }
+        updated_at: { type: string }
+        header: { type: object, description: 'ReplayRecorder metadata at frame 0 (wasm-owner, with initialSnapshot), without frames' }
+    LiveChunk:
+      type: object
+      required: [seq, start_frame, frame_count, frames, state_hash, score, track, final]
+      properties:
+        seq: { type: integer, minimum: 0, maximum: 3600 }
+        start_frame: { type: integer, minimum: 0 }
+        frame_count: { type: integer, minimum: 0, maximum: 600 }
+        frames: { type: string, description: 'RLE rows (compressInputFrames) for frames [start_frame, start_frame + frame_count)' }
+        state_hash: { type: string, pattern: '^[0-9a-f]{16}$', description: "The C++ world's getStateHash after the chunk's last step" }
+        score: { type: integer, minimum: 0, description: "The score after the chunk's last step" }
+        track: { type: [string, 'null'], description: "Base64 Int32 millimetre triples of the primary ball, one every track_stride steps (x = INT32_MIN: no ball)" }
+        final: { type: boolean }
     SaveRequest:
       type: object
       additionalProperties: false
@@ -377,6 +406,111 @@ paths:
                 type: array
                 maxItems: 1
                 items: { $ref: '#/components/schemas/GhostTrack' }
+  /rest/v1/rpc/live_start:
+    post:
+      summary: Open a live run (wasm-owner tapes with a frame-0 snapshot; unlists the player's previous run; 30 an hour)
+      security: [{ apikey: [], player: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [p_header, p_map_id]
+              properties:
+                p_header:
+                  type: object
+                  required: [physicsEngine, initialSnapshot, seed, mapId]
+                  properties:
+                    physicsEngine: { const: wasm-owner }
+                    initialSnapshot: { type: string, minLength: 1 }
+                    seed: { type: integer, minimum: 0, maximum: 4294967295 }
+                    mapId: { type: string }
+                p_map_id: { $ref: '#/components/schemas/MapId' }
+                p_tag: { type: [string, 'null'], pattern: '^[A-Z]{3}$' }
+                p_chunk_steps: { type: integer, minimum: 60, maximum: 600 }
+                p_track_stride: { type: integer, minimum: 1, maximum: 10 }
+      responses:
+        '200':
+          description: The run's id.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Uuid' }
+  /rest/v1/rpc/live_append:
+    post:
+      summary: Append the next chunk of a live run (in order; full until the final one; a resend of a stored chunk is accepted; no faster than real time plus 30 s)
+      security: [{ apikey: [], player: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [p_live_id, p_seq, p_frames, p_frame_count, p_state_hash, p_score, p_final]
+              properties:
+                p_live_id: { $ref: '#/components/schemas/Uuid' }
+                p_seq: { type: integer, minimum: 0, maximum: 3600 }
+                p_frames: { type: string }
+                p_frame_count: { type: integer, minimum: 0, maximum: 600 }
+                p_state_hash: { type: string, pattern: '^[0-9a-f]{16}$' }
+                p_score: { type: integer, minimum: 0 }
+                p_track: { type: [string, 'null'] }
+                p_final: { type: boolean }
+      responses:
+        '200':
+          description: Frames streamed so far (409 out of order or after the final chunk, 429 faster than real time).
+          content:
+            application/json:
+              schema: { type: integer, minimum: 0 }
+  /rest/v1/live_now:
+    get:
+      summary: Runs streaming now (something sent in the last 45 seconds), most recently updated first
+      parameters:
+        - { name: select, in: query, required: true, schema: { const: 'id,map_id,player_tag,chunk_steps,track_stride,chunks,frames,score,status,created_at,updated_at' } }
+        - { name: order, in: query, schema: { const: updated_at.desc } }
+        - { name: limit, in: query, schema: { type: string, pattern: '^[0-9]{1,3}$' } }
+      responses:
+        '200':
+          description: Live runs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LiveRun' }
+  /rest/v1/replays_live:
+    get:
+      summary: A live (or finished) run with its frame-0 header
+      parameters:
+        - { name: select, in: query, required: true, schema: { const: 'id,map_id,player_tag,chunk_steps,track_stride,chunks,frames,score,status,created_at,updated_at,header' } }
+        - { name: id, in: query, required: true, schema: { type: string, pattern: '^eq\.[0-9a-f-]{36}$' } }
+      responses:
+        '200':
+          description: Zero or one run.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 1
+                items: { $ref: '#/components/schemas/LiveRun' }
+  /rest/v1/replays_live_chunks:
+    get:
+      summary: A live run's chunks from a sequence number on, in order
+      parameters:
+        - { name: select, in: query, required: true, schema: { const: 'seq,start_frame,frame_count,frames,state_hash,score,track,final' } }
+        - { name: live_id, in: query, required: true, schema: { type: string, pattern: '^eq\.[0-9a-f-]{36}$' } }
+        - { name: seq, in: query, required: true, schema: { type: string, pattern: '^gte\.[0-9]{1,4}$' } }
+        - { name: order, in: query, required: true, schema: { const: seq.asc } }
+        - { name: limit, in: query, schema: { type: string, pattern: '^[0-9]{1,3}$' } }
+      responses:
+        '200':
+          description: Chunks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LiveChunk' }
   /functions/v1/submit-score:
     post:
       summary: Submit a leaderboard entry (stored unverified)

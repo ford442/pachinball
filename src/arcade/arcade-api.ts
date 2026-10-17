@@ -96,6 +96,7 @@ async function send(path: string, init: RequestInit & { token?: string } = {}): 
   if (!arcadeEnabled()) throw new ArcadeError('arcade service disabled in this build', 503)
   const { token, headers, ...rest } = init
   let res: Response
+  let text: string
   try {
     res = await fetch(`${ARCADE_URL}${path}`, {
       ...rest,
@@ -108,10 +109,11 @@ async function send(path: string, init: RequestInit & { token?: string } = {}): 
         ...(headers as Record<string, string> | undefined),
       },
     })
+    // The timeout covers the body too: a reply that stalls halfway is no reply.
+    text = await res.text()
   } catch (err) {
     throw new ArcadeError(err instanceof Error ? err.message : String(err), 0, true)
   }
-  const text = await res.text()
   let body: unknown = null
   try {
     body = text ? JSON.parse(text) : null
@@ -412,4 +414,111 @@ export async function fetchChallengeGhost(challenge: ArcadeChallenge): Promise<G
   const rows = (await send(`/rest/v1/leaderboard?${params}`)) as Array<{ replay_id: string | null }>
   const replayId = rows[0]?.replay_id
   return replayId ? fetchGhostTrack(replayId) : null
+}
+
+// ------------------------------------------------- live spectate (Slice E)
+
+/** A live run: its tape's frame-0 header and how far it has streamed. */
+export interface LiveRun {
+  id: string
+  map_id: string
+  player_tag: string | null
+  chunk_steps: number
+  track_stride: number
+  chunks: number
+  frames: number
+  score: number
+  /** live: streaming · left: the player started another run · ended: its final chunk is stored. */
+  status: 'live' | 'left' | 'ended'
+  created_at: string
+  updated_at: string
+  /** ReplayRecorder metadata at frame 0, without frames (fetchLiveRun only). */
+  header?: object
+}
+
+/**
+ * One chunk of a live tape: frames [start_frame, start_frame + frame_count)
+ * as RLE rows, the C++ world's state hash and the score after its last step,
+ * and the primary ball's path over it (base64 Int32 millimetre triples, one
+ * every `track_stride` steps; null when the ball's path was not sampled).
+ */
+export interface LiveChunk {
+  seq: number
+  start_frame: number
+  frame_count: number
+  frames: string
+  state_hash: string
+  score: number
+  track: string | null
+  final: boolean
+}
+
+/** Open a live run; resolves with its id. Ends the player's previous live run. */
+export async function startLiveRun(run: {
+  header: object
+  mapId: string
+  tag: string | null
+  chunkSteps: number
+  trackStride: number
+}): Promise<string> {
+  const session = await arcadeSession()
+  const id = await send('/rest/v1/rpc/live_start', {
+    method: 'POST',
+    body: JSON.stringify({
+      p_header: run.header,
+      p_map_id: run.mapId,
+      p_tag: run.tag,
+      p_chunk_steps: run.chunkSteps,
+      p_track_stride: run.trackStride,
+    }),
+    token: session.access_token,
+  })
+  if (typeof id !== 'string') throw new ArcadeError('no live run id returned', 502)
+  return id
+}
+
+/** Append the next chunk (`seq` in order; resending the last one is harmless). Resolves with the frames streamed so far. */
+export async function appendLiveChunk(liveId: string, chunk: LiveChunk): Promise<number> {
+  const session = await arcadeSession()
+  return Number(await send('/rest/v1/rpc/live_append', {
+    method: 'POST',
+    body: JSON.stringify({
+      p_live_id: liveId,
+      p_seq: chunk.seq,
+      p_frames: chunk.frames,
+      p_frame_count: chunk.frame_count,
+      p_state_hash: chunk.state_hash,
+      p_score: chunk.score,
+      p_track: chunk.track,
+      p_final: chunk.final,
+    }),
+    token: session.access_token,
+  }))
+}
+
+const LIVE_RUN_COLUMNS = 'id,map_id,player_tag,chunk_steps,track_stride,chunks,frames,score,status,created_at,updated_at'
+
+/** Runs streaming right now, most recently updated first. */
+export async function fetchLiveRuns(limit = 20): Promise<LiveRun[]> {
+  const params = new URLSearchParams({ select: LIVE_RUN_COLUMNS, order: 'updated_at.desc', limit: String(limit) })
+  return (await send(`/rest/v1/live_now?${params}`)) as LiveRun[]
+}
+
+/** A live (or finished) run with its header, or null when there is none. */
+export async function fetchLiveRun(id: string): Promise<LiveRun | null> {
+  const params = new URLSearchParams({ select: `${LIVE_RUN_COLUMNS},header`, id: `eq.${id}` })
+  const rows = (await send(`/rest/v1/replays_live?${params}`)) as LiveRun[]
+  return rows[0] ?? null
+}
+
+/** The run's chunks from `fromSeq` on, in order. */
+export async function fetchLiveChunks(id: string, fromSeq: number, limit = 120): Promise<LiveChunk[]> {
+  const params = new URLSearchParams({
+    select: 'seq,start_frame,frame_count,frames,state_hash,score,track,final',
+    live_id: `eq.${id}`,
+    seq: `gte.${fromSeq}`,
+    order: 'seq.asc',
+    limit: String(limit),
+  })
+  return (await send(`/rest/v1/replays_live_chunks?${params}`)) as LiveChunk[]
 }

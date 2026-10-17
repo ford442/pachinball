@@ -118,8 +118,32 @@ function answer(method: string, url: URL): { status: number; body: unknown } {
     case 'GET /rest/v1/challenges': return { status: 200, body: [challengeRow('player')] }
     case 'POST /rest/v1/rpc/current_weekly_challenge': return { status: 200, body: [challengeRow('weekly')] }
     case 'GET /rest/v1/ghost_tracks': return { status: 200, body: [{ stride: 2, samples: 1, track: 'AQAAAAIAAAADAAAA' }] }
+    case 'POST /rest/v1/rpc/live_start': return { status: 200, body: LIVE_ID }
+    case 'POST /rest/v1/rpc/live_append': return { status: 200, body: 300 }
+    case 'GET /rest/v1/live_now': return { status: 200, body: [liveRun()] }
+    case 'GET /rest/v1/replays_live': return { status: 200, body: [{ ...liveRun(), header: liveHeader() }] }
+    case 'GET /rest/v1/replays_live_chunks': return { status: 200, body: [liveChunk()] }
     default: return { status: 404, body: { message: `no canned answer for ${key}` } }
   }
+}
+
+const LIVE_ID = '9b2d6c1e-3f4a-4b5c-8d7e-6f5a4b3c2d1e'
+
+/** A golden tape's frame-0 header: the recorder's metadata without frames. */
+function liveHeader(): Record<string, unknown> {
+  const { frames: _frames, compressedFrames: _rle, finalScore: _score, ...header } = replayPayload() as Record<string, unknown>
+  return header
+}
+
+function liveRun() {
+  return {
+    id: LIVE_ID, map_id: 'neon-helix', player_tag: 'ACE', chunk_steps: 300, track_stride: 3, chunks: 1, frames: 300,
+    score: 120, status: 'live', created_at: '2026-10-17T03:00:00Z', updated_at: '2026-10-17T03:00:05Z',
+  }
+}
+
+function liveChunk() {
+  return { seq: 0, start_frame: 0, frame_count: 300, frames: '300:0,0,0,0,0,0,-', state_hash: '0123456789abcdef', score: 120, track: null, final: false }
 }
 
 function challengeRow(kind: 'player' | 'weekly') {
@@ -140,6 +164,8 @@ function replayPayload(): object {
 
 let captured: Captured[] = []
 let offline = false
+/** The reply's headers arrive, then its body stalls until the client's timeout aborts it. */
+let stallBody = false
 
 function installFetch(): void {
   vi.stubGlobal('fetch', vi.fn(async (input: string, init: RequestInit = {}) => {
@@ -148,6 +174,11 @@ function installFetch(): void {
     const body = typeof init.body === 'string' ? JSON.parse(init.body) as unknown : undefined
     captured.push({ method, url, headers: (init.headers ?? {}) as Record<string, string>, body })
     if (offline) throw new TypeError('Failed to fetch')
+    if (stallBody) {
+      const res = new Response('{}', { status: 200 })
+      res.text = () => Promise.reject(new DOMException('The user aborted a request.', 'AbortError'))
+      return res
+    }
     const { status, body: out } = answer(method, url)
     const schema = responseSchema(url.pathname, method.toLowerCase(), status)
     if (schema) expect(schemaErrors(schema, out), `canned ${method} ${url.pathname}`).toEqual([])
@@ -171,6 +202,7 @@ describe('arcade client ↔ docs/api/arcade.openapi.yaml (#444)', () => {
   beforeEach(() => {
     captured = []
     offline = false
+    stallBody = false
     localStorage.clear()
     installFetch()
   })
@@ -232,6 +264,15 @@ describe('arcade client ↔ docs/api/arcade.openapi.yaml (#444)', () => {
     expectConformant()
   })
 
+  it('a reply whose body stalls past the timeout counts as offline: the run is queued, not lost', async () => {
+    const api = await arcade()
+    await api.arcadeSession()
+    stallBody = true
+    const res = await api.submitRun({ name: 'ACE', score: 9000, map_id: 'neon-helix', balls: 1, combo_max: 2 })
+    expect(res).toMatchObject({ success: false, queued: true })
+    await expect(api.fetchLiveChunks('9b2d6c1e-3f4a-4b5c-8d7e-6f5a4b3c2d1e', 0)).rejects.toMatchObject({ offline: true })
+  })
+
   it('cloud saves, device link codes, challenges v2, the table of the week and ghosts (Slice D)', async () => {
     const api = await arcade()
     expect(await api.pullSave()).toMatchObject({ slot: 'campaign', schema_version: 2 })
@@ -249,6 +290,25 @@ describe('arcade client ↔ docs/api/arcade.openapi.yaml (#444)', () => {
     expect(captured[0]?.url.searchParams.get('verified')).toBe('is.true')
     await api.createChallenge({ seed: 444002, targetScore: 870, mapId: 'neon-helix', challengerName: 'ACE', replayId: REPLAY_ID, cascadeSeed: 20261016 })
     expect(captured.at(-1)?.body).toMatchObject({ cascadeSeed: 20261016 })
+    expectConformant()
+  })
+
+  it('live spectate: a player streams a run, a spectator lists, joins and polls it (Slice E)', async () => {
+    const api = await arcade()
+    const id = await api.startLiveRun({ header: liveHeader(), mapId: 'neon-helix', tag: 'ACE', chunkSteps: 300, trackStride: 3 })
+    expect(id).toBe(LIVE_ID)
+    expect(await api.appendLiveChunk(id, liveChunk())).toBe(300)
+    expect(await api.appendLiveChunk(id, { ...liveChunk(), seq: 1, start_frame: 300, frame_count: 0, frames: '', final: true })).toBe(300)
+    expect(captured.map((r) => r.url.pathname)).toEqual(['/auth/v1/signup', '/rest/v1/rpc/live_start', '/rest/v1/rpc/live_append', '/rest/v1/rpc/live_append'])
+
+    // Spectators need no session.
+    localStorage.clear()
+    captured = []
+    expect(await api.fetchLiveRuns()).toMatchObject([{ id: LIVE_ID, player_tag: 'ACE' }])
+    const run = await api.fetchLiveRun(LIVE_ID)
+    expect(ReplayRecorder.fromJSON({ ...run!.header, frames: [] }).initialSnapshot).toBeTruthy()
+    expect(await api.fetchLiveChunks(LIVE_ID, 1)).toMatchObject([{ seq: 0, frame_count: 300 }])
+    expect(captured.every((r) => !r.headers.Authorization)).toBe(true)
     expectConformant()
   })
 

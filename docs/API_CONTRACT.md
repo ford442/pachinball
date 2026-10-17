@@ -1,6 +1,7 @@
 # Live arcade service — API contract
 
-Leaderboard, replays, challenges and saves for Pachinball (#444 Slice B).
+Leaderboard, replays, challenges, saves and live spectate streams for
+Pachinball (#444, from Slice B).
 The machine-readable contract is [`docs/api/arcade.openapi.yaml`](api/arcade.openapi.yaml);
 `tests/arcade-contract.test.ts` fails if the client (`src/arcade/arcade-api.ts`)
 sends anything that does not match it. This page is the prose: who may do
@@ -162,6 +163,51 @@ so a ghost is always a verified run, never a client's report.
 A player's challenge is raced against its challenger's run; the table of the
 week against the best verified run on its board
 (`leaderboard?…&verified=is.true&order=rank.asc&limit=1`).
+
+## Live spectate (Slice E)
+
+A player who turned on **Let others watch my games live** (Settings; off by
+default) streams each run on the in-process engine while they play it. No
+server runs the game: the stream is the run's tape, and a spectator's own
+game replays it from the frame-0 snapshot, one chunk behind.
+
+| Request | Answer |
+|---------|--------|
+| `POST /rest/v1/rpc/live_start` `{ p_header, p_map_id, p_tag?, p_chunk_steps?, p_track_stride? }` (player) | The run's id. `p_header` is the recorder's metadata after frame 0: `physicsEngine: wasm-owner` and `initialSnapshot` are required; frames are stripped. |
+| `POST /rest/v1/rpc/live_append` `{ p_live_id, p_seq, p_frames, p_frame_count, p_state_hash, p_score, p_track?, p_final }` (player) | Frames streamed so far. |
+| `GET /rest/v1/live_now?select=…&order=updated_at.desc&limit=<n>` | Runs that sent something in the last 45 seconds. |
+| `GET /rest/v1/replays_live?select=…,header&id=eq.<uuid>` | `[LiveRun]` with its header (never the player's id). |
+| `GET /rest/v1/replays_live_chunks?select=…&live_id=eq.<uuid>&seq=gte.<n>&order=seq.asc` | The chunks from `n` on. |
+
+A chunk is `chunk_steps` fixed steps (300 = 5 s) of input as RLE rows, the
+C++ world's `getStateHash` and the score **after its last step**, and the
+primary ball's path over it (base64 Int32 millimetre triples every
+`track_stride` steps, as ghost tracks). The final chunk may be short or empty
+and ends the run; game over sends it from the run's last step, quitting sends
+an empty one.
+
+What the database holds a stream to (`live_start` / `live_append`, security
+definer, as the calling player):
+
+- Only the run's player appends, chunks arrive in order (`seq` = chunks so
+  far; 409 otherwise), and every chunk but the final one is exactly
+  `chunk_steps` frames; `p_frame_count` must equal the RLE rows' count. A
+  resend of a stored chunk is accepted, so a retry after a timeout is safe.
+- A tape streams no faster than it is played: frames ≤ 60 a second since
+  `live_start` plus 30 s of grace (429). A backlog after a dropped connection
+  waits and goes out at that pace.
+- RLE rows ≤ 48 bytes a frame, the path ≤ 16 characters a sample, the header
+  ≤ 64 KB; at most one hour of frames.
+- 30 runs an hour per player. Starting a run marks the player's previous live
+  run `left` (unlisted; its last chunks can still land). After the final chunk
+  the run is `ended` and takes nothing more. Runs are deleted a day after
+  their last chunk.
+
+The spectator replays every chunk and compares the state hash and score after
+its last step with the chunk's; a mismatch stops the spectate. Joining mid-run,
+the ghost follows the streamed path at the live position while the game
+fast-forwards from frame 0; after a dropped connection the spectator fetches
+from the next `seq` and catches up again.
 
 ## Changing the contract
 
