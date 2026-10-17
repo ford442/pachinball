@@ -80,7 +80,8 @@ async function bootstrap(): Promise<void> {
       getGameState: () => game.stateManager.getState(),
       soundSystem: game.soundSystem,
     })
-    manager.attach()
+    // The Game's signal, so game.dispose() detaches it too (a dead Game must not resume its render loop).
+    manager.attach(game.signal)
     visibilityManager = manager
   } catch (err) {
     bootWarn('Tab-visibility handling unavailable', err)
