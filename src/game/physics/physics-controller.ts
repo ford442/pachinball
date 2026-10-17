@@ -433,6 +433,8 @@ export class GamePhysicsController {
     replayRunner: ReplayRunner | null,
     replayRecorder: ReplayRecorder | null,
   ): void {
+    // A live tape that has run dry waits for its next chunk (#444 Slice E).
+    if (replayRunner?.isStarved()) return
     const dt = FIXED_TIMESTEP
     let inputFrame: InputFrame | null
     if (replayRunner?.isPlaying()) {
@@ -490,6 +492,7 @@ export class GamePhysicsController {
     // The steps the engine actually took (render dt only for stub hosts).
     const simDt = this.simClock.advance(this.host.physics, dt)
     this.updateGameplay(dt, simDt)
+    this.host.afterFixedStep?.()
   }
 
   /** Per-step gameplay after the physics step: zones, feeders, timers, display state, table mechanics. */

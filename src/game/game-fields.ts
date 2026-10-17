@@ -60,7 +60,7 @@ import { GameHUD } from './game-hud'
 import { GameMapCabinet } from './game-map-cabinet'
 import { CheckpointDebugController } from './checkpoint-debug'
 import { createTimerScope } from '../core/timers'
-import { FreeMapTestMode } from './free-map-test-mode'
+import type { FreeMapTestMode } from './free-map-test-mode'
 import { LevelLoader } from './level-loader'
 import type { LeaderboardSystem } from '../game-elements/leaderboard-system'
 import type { NameEntryDialog } from '../game-elements/name-entry-dialog'
@@ -292,4 +292,8 @@ export abstract class GameFields {
   ghostBallRenderer: GhostBallRenderer | null = null
   /** The race ghost of the active challenge (#444 Slice D); set by `replay/challenge-v2`. */
   ghostRace: import('../replay/ghost-race').GhostRace | null = null
+  /** Set by `game/live-ui` (#444 Slice E): the live broadcast and spectator's per-step hook. */
+  afterFixedStep: (() => void) | null = null
+  /** Live spectate's UI (#444 Slice E), loaded after boot. */
+  liveUI: import('./live-ui').LiveUI | null = null
 }

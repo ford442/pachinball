@@ -256,7 +256,7 @@ export class Game
         onDynamicModeToggle: () => this.scenarioManager?.toggleDynamicMode(),
         onScenarioCycle: () => this.scenarioManager?.cycleScenario(),
         onPerfMonitorToggle: () => this.togglePerformanceMonitor(),
-        onFreeMapTestToggle: () => this.toggleFreeMapTestMode(),
+        onFreeMapTestToggle: () => void this.toggleFreeMapTestMode(),
         getState: () => this.stateManager.getState(),
         getTiltActive: () => this.tiltActive,
         getAdventureActive: () => this.adventureMode?.isActive() ?? false,
@@ -284,6 +284,8 @@ export class Game
       if (replayParam) {
         void this.startSpectateReplay(replayParam)
       }
+      // Live spectate (#444 Slice E): the opt-in broadcast, Watch live and `?live=<id>`.
+      void import('./game/live-ui').then((m) => { this.liveUI = m.startLiveUI(this) })
 
       scene.onBeforeRenderObservable.add(() => {
         this.performanceMonitor.frameStart()

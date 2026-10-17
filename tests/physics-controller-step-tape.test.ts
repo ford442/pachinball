@@ -106,4 +106,28 @@ describe('one tape frame per fixed step (#444)', () => {
     expect(updateGate.mock.calls.every(([, dt]) => dt === 1 / 60)).toBe(true)
     expect(stepAdventureProgression).toHaveBeenCalledTimes(6)
   })
+
+  it('a live tape that runs dry waits for its next chunk without stepping (#444 Slice E)', () => {
+    const t = makeTable(1000 / 60)
+    const afterFixedStep = vi.fn()
+    Object.assign(t.host, { afterFixedStep })
+    const runner = new ReplayRunner()
+    const frames = () => Array.from({ length: 4 }, () => liveInput().processBufferedInputs())
+    runner.load({ ...META, finalScore: 0, frames: frames() }, true)
+    for (let f = 0; f < 10; f++) t.controller.stepPhysics(null, t.actions, runner, null)
+    // Four frames, four steps; then nothing steps (and no live input is read) until more arrive.
+    expect(t.stepDts).toHaveLength(4)
+    expect(afterFixedStep).toHaveBeenCalledTimes(4)
+    expect(runner.isStarved()).toBe(true)
+    expect(runner.isPlaying()).toBe(true)
+
+    runner.append(frames())
+    for (let f = 0; f < 10; f++) t.controller.stepPhysics(null, t.actions, runner, null)
+    expect(t.stepDts).toHaveLength(8)
+    // The run is over: playback ends with its last frame, as any replay.
+    runner.endStream()
+    expect(runner.isStarved()).toBe(false)
+    t.controller.stepPhysics(null, t.actions, runner, null)
+    expect(runner.isPlaying()).toBe(false)
+  })
 })

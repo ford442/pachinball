@@ -8,7 +8,6 @@ import type { CabinetType } from '../cabinet'
 import { TABLE_MAPS } from '../config/table-maps'
 
 import { PhysicsTuningPanel } from '../game-elements/physics-tuning-panel'
-import { FreeMapTestMode } from './free-map-test-mode'
 import { LevelLoader } from './level-loader'
 import type { LevelSelectScreen } from '../game-elements/level-select-screen'
 import { GameFields } from './game-fields'
@@ -195,12 +194,15 @@ export abstract class GameDelegates extends GameFields {
     console.log(`[PerfMonitor] ${enabled ? 'Enabled' : 'Disabled'}`)
   }
 
-  toggleFreeMapTestMode(): void {
+  /** Debug: free-map test mode, loaded on first use (it is not on the boot path). */
+  async toggleFreeMapTestMode(): Promise<void> {
     if (!this.levelLoader) {
       this.levelLoader = this.createLevelLoader()
     }
     if (!this.freeMapTestMode) {
-      this.freeMapTestMode = new FreeMapTestMode(
+      const { FreeMapTestMode } = await import('./free-map-test-mode')
+      if (this.signal.aborted) return
+      this.freeMapTestMode ??= new FreeMapTestMode(
         {
           adventureMode: this.adventureMode,
           ballManager: this.ballManager,
@@ -253,9 +255,10 @@ export abstract class GameDelegates extends GameFields {
   /**
    * Arm a stored / uploaded replay and start a game on its table: the ghost
    * is shown and every fixed step from here plays one tape frame. Spectate
-   * and `scripts/verify-replay.mjs` both enter here.
+   * and `scripts/verify-replay.mjs` both enter here, and live spectate with a
+   * `streaming` tape that grows as the run is played (#444 Slice E).
    */
-  async playReplay(raw: string | object): Promise<ReplayPayload> {
+  async playReplay(raw: string | object, streaming = false): Promise<ReplayPayload> {
     // Uploads are compressed (`frames: []` + `compressedFrames`); decode the
     // tape, or spectate would play zero frames.
     const payload = ReplayRecorder.fromJSON(raw)
@@ -263,9 +266,9 @@ export abstract class GameDelegates extends GameFields {
       this.ghostBallRenderer = new GhostBallRenderer(this.scene)
     }
 
-    this.replayRunner.load(payload)
+    this.replayRunner.load(payload, streaming)
     this.ghostBallRenderer?.show()
-    this.uiManager?.showMessage(`Watching Replay: ${payload.mapId} (Score: ${payload.finalScore.toLocaleString()})`, 4000)
+    if (!streaming) this.uiManager?.showMessage(`Watching Replay: ${payload.mapId} (Score: ${payload.finalScore.toLocaleString()})`, 4000)
     await this.lifecycle?.startGame()
     return payload
   }

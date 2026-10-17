@@ -19,7 +19,7 @@ Later phases add weekly tournament APIs and (optionally) true realtime co-op mul
 | Phase | Feature | Depends on |
 |-------|---------|------------|
 | **v1 (this epic)** | Async challenges — seed + target score + replay upload; ghost spectate on another client | Deterministic replay, API storage, scoring reliability |
-| **v2** | Spectate replays — stream recorded input frames to passive observers (polling or SSE; still no netcode) | v1 replay format + stable ghost renderer |
+| **v2** | Spectate replays — stream recorded input frames to passive observers (polling or SSE; still no netcode). **Done in #444 Slice E:** opt-in live broadcast in 5 s chunks (`replays_live` / `replays_live_chunks`), polled; the spectator replays from the frame-0 snapshot one chunk behind, checks every chunk's state hash + score, and shows the ghost on the streamed ball path while it fast-forwards a mid-run join (`src/arcade/live-broadcast.ts`, `src/replay/live-spectate.ts`, `src/game/live-ui.ts`; rules in `docs/API_CONTRACT.md`) | v1 replay format + stable ghost renderer |
 | **v3** | Weekly tournament API — extend `api/` + `storage.noahcohn.com` contracts (brackets, windows, anti-cheat hooks) | v1 + auth hygiene |
 | **Future** | True realtime co-op multiball (Babylon + Rapier authority server) | High complexity — **not v1** |
 

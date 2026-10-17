@@ -56,6 +56,10 @@ on:
       - 'scripts/verify-replay.mjs'
       - 'scripts/lib/**'
       - 'services/replay-verifier/**'
+      - 'src/arcade/live-broadcast.ts'
+      - 'src/game/live-ui.ts'
+      - 'src/display/**'
+      - 'tests/live-spectate.spec.ts'
       - 'package.json'
       - '.github/workflows/native-physics.yml'
   pull_request:
@@ -85,6 +89,10 @@ on:
       - 'scripts/verify-replay.mjs'
       - 'scripts/lib/**'
       - 'services/replay-verifier/**'
+      - 'src/arcade/live-broadcast.ts'
+      - 'src/game/live-ui.ts'
+      - 'src/display/**'
+      - 'tests/live-spectate.spec.ts'
       - 'package.json'
       - '.github/workflows/native-physics.yml'
 
@@ -221,7 +229,7 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Playwright wasm-owner + wasm-worker default (feel, debug draw, adventure, toy capture, pin field, MagSpin pull)
+      - name: Playwright wasm-owner + wasm-worker default (feel, debug draw, adventure, toy capture, pin field, MagSpin pull, live spectate)
         env:
           CI: 'true'
         run: >
@@ -236,6 +244,7 @@ jobs:
           tests/wasm-worker-default.spec.ts
           tests/wasm-worker-adventure.spec.ts
           tests/basic-gameplay.spec.ts
+          tests/live-spectate.spec.ts
 
   replay_goldens:
     name: Golden Replay Tapes (Blocking)

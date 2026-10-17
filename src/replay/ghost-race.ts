@@ -13,14 +13,27 @@ import type { GhostTrack } from '../arcade/arcade-api'
 import { GhostBallRenderer } from './ghost-ball-renderer'
 
 /** A track sample with no ball (between balls). */
-const NO_BALL = -2147483648
+export const NO_BALL = -2147483648
 
 /** Decode a ghost track's base64 Int32 millimetre triples. */
-export function decodeGhostTrack(track: GhostTrack): Int32Array {
+export function decodeGhostTrack(track: Pick<GhostTrack, 'track'>): Int32Array {
   const binary = atob(track.track)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
   return new Int32Array(bytes.buffer, 0, Math.floor(bytes.length / 12) * 3)
+}
+
+/** Millimetre triples (`NO_BALL, 0, 0` for no ball) as a track's base64 little-endian Int32s. */
+export function encodeGhostTrack(samples: readonly number[]): string {
+  const bytes = new Uint8Array(Int32Array.from(samples).buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(binary)
+}
+
+/** The ball's position as a track sample. */
+export function trackSample(pos: { x: number; y: number; z: number } | null | undefined): [number, number, number] {
+  return pos ? [Math.round(pos.x * 1000), Math.round(pos.y * 1000), Math.round(pos.z * 1000)] : [NO_BALL, 0, 0]
 }
 
 /** The ghost's position (m) after `steps` steps of the run, or null (no ball, before start, past the end). */

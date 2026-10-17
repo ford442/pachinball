@@ -20,16 +20,35 @@ export class ReplayRunner {
   /** True from load()/reset() until the first replayed step has checked the frame-0 snapshot. */
   private snapshotPending = false
   private rejection: ReplayRejection | null = null
+  /** A live tape (#444 Slice E): more frames arrive with `append`, until `endStream`. */
+  private streaming = false
 
   /**
-   * Load a replay payload and arm it for playback.
+   * Load a replay payload and arm it for playback. A `streaming` tape is a
+   * live run's: playback waits at its end instead of finishing there.
    */
-  load(payload: ReplayPayload): void {
+  load(payload: ReplayPayload, streaming = false): void {
     this.payload = payload
     this.currentFrameIndex = 0
     this.playing = true
     this.snapshotPending = true
     this.rejection = null
+    this.streaming = streaming
+  }
+
+  /** The next frames of a streaming tape. */
+  append(frames: readonly InputFrame[]): void {
+    this.payload?.frames.push(...frames)
+  }
+
+  /** The live run is over: playback now ends with the last frame it has. */
+  endStream(): void {
+    this.streaming = false
+  }
+
+  /** Playing a live tape and out of frames: nothing may step until more arrive. */
+  isStarved(): boolean {
+    return this.playing && this.streaming && this.currentFrameIndex >= (this.payload?.frames.length ?? 0)
   }
 
   /**
@@ -75,7 +94,7 @@ export class ReplayRunner {
   getNextFrame(): InputFrame | null {
     if (!this.playing || !this.payload) return null
     if (this.currentFrameIndex >= this.payload.frames.length) {
-      this.playing = false
+      if (!this.streaming) this.playing = false
       return null
     }
     const frame = this.payload.frames[this.currentFrameIndex++]

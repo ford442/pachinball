@@ -135,8 +135,10 @@ export class GameLifecycle {
         break
       case GameState.GAME_OVER:
         {
+          // A replay or live run someone else played is not this player's game (#444 Slice E).
+          const ownGame = this.host.replayRecorder?.isRecording() ?? false
           const previousBest = this.host.bestScore
-          const isNewBest = this.host.score > previousBest
+          const isNewBest = ownGame && this.host.score > previousBest
           if (isNewBest) {
             this.host.bestScore = this.host.score
             try {
@@ -156,8 +158,8 @@ export class GameLifecycle {
         this.host.updateHUD()
         if (this.host.replayRecorder?.isRecording()) {
           this.host.replayRecorder.stop(this.host.score)
+          void this.host.handleGameOverLeaderboard()
         }
-        void this.host.handleGameOverLeaderboard()
         break
     }
   }

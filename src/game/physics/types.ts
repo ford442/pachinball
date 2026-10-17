@@ -76,6 +76,8 @@ export interface PhysicsHost {
   readonly ghostBallRenderer?: import('../../replay/ghost-ball-renderer').GhostBallRenderer | null
   /** The race ghost of the active challenge (#444 Slice D), moved every render frame. */
   readonly ghostRace?: import('../../replay/ghost-race').GhostRace | null
+  /** Runs at the end of every fixed step: the live broadcast and spectator (#444 Slice E). */
+  readonly afterFixedStep?: (() => void) | null
 
   readonly spinnerBuilder: SpinnerBumperBuilder | null
   readonly ballTrapBuilder: BallTrapBuilder | null

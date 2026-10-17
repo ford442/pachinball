@@ -194,6 +194,19 @@ Players' runs are verified the same way on the storage host
 was recorded on (`buildId` on the tape), and the verdict lands on the score row
 (`docs/API_CONTRACT.md`, *Verification*).
 
+A fixed step touches no GPU state (#444 Slice E): the backbox reels, LCD
+overlay and jackpot texture mark themselves dirty during the step and draw
+once before the next rendered frame. Stepping without rendering — the
+verifier, a spectator fast-forwarding — therefore runs at CPU speed (~0.4 ms a
+step headless) however long the tape; before, a long tape stalled behind the
+page's pending shader compiles on every texture upload.
+
+Live spectate (#444 Slice E) checks the same property continuously: the
+player's run streams a chunk at a time with the C++ state hash and score after
+each chunk's last step, and the spectator's game, replaying with full
+presentation, must land on every one (`tests/live-spectate.spec.ts`: a player
+stepping headless, a spectator rendering, all chunks match).
+
 Not yet step-exact, so not verifiable:
 
 - **`wasm-worker` recordings.** The worker serves poses a frame late and TS
@@ -235,3 +248,5 @@ TS flipper drive reads — see the caveat in `docs/ASYNC_CHALLENGES_EPIC.md`.
    worker snapshot round trip; restore across differing ball-id layouts.
 5. ~~#444 Slice A: tape per fixed step, cascade table on the tape, `id-layout`
    rejects, headless verifier + golden tape corpus (`tests/replays/`).~~
+6. ~~#444 Slice E: live spectate — fingerprinted tape chunks, a spectator one
+   chunk behind; fixed steps do no GPU work.~~
