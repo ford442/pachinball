@@ -31,6 +31,7 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { PostProcess } from '@babylonjs/core/PostProcesses/postProcess'
+import type { Observer } from '@babylonjs/core/Misc/observable'
 import type { Scene } from '@babylonjs/core/scene'
 import { DisplayState, type DisplayConfig, CRT_PRESETS, type CRTEffectParams } from './display-types'
 import { DISPLAY_LAYER_Z } from './display-layer-depth'
@@ -78,10 +79,14 @@ export class DisplayShaderLayer {
 
   // Cached jackpot phase state – updated in update(), read in onApply
   private jackpotState: JackpotPhaseState = { phase: 0, crack: 0, shock: 0, glitch: 0 }
+  private jackpotTexDirty = false
+  private jackpotTexBlank = false
+  private readonly beforeRender: Observer<Scene> | null
 
   constructor(scene: Scene, config: DisplayConfig) {
     this.scene = scene
     this.config = config
+    this.beforeRender = scene.onBeforeRenderObservable.add(() => this.drawJackpotTexture())
     this.createBackgroundMaterial()
     // PostProcesses are created in createLayer() once an active camera exists
   }
@@ -331,14 +336,28 @@ export class DisplayShaderLayer {
       }
 
       this.jackpotState = { phase, crack, shock, glitch }
+      this.jackpotTexDirty = true
+    } else if (!this.jackpotTexBlank) {
+      this.jackpotTexDirty = true
+    }
+  }
 
-      // Draw phase-specific overlay content into the base texture so the postprocess can show text
-      this.drawJackpotBaseContent(phase)
-    } else if (this.jackpotBaseTex) {
-      // Clear when not in jackpot
-      const ctx = this.jackpotBaseTex.getContext()
-      ctx.clearRect(0, 0, 256, 256)
+  /**
+   * The jackpot base texture, drawn once before a frame renders rather than
+   * on every fixed step, so stepping without rendering never touches the GPU
+   * (#444): the phase's text while the jackpot runs, cleared once after.
+   */
+  private drawJackpotTexture(): void {
+    if (!this.jackpotTexDirty || !this.jackpotBaseTex) return
+    this.jackpotTexDirty = false
+    if (this.jackpotAttached) {
+      // Phase-specific overlay content, so the postprocess can show text
+      this.drawJackpotBaseContent(this.jackpotState.phase)
+      this.jackpotTexBlank = false
+    } else {
+      this.jackpotBaseTex.getContext().clearRect(0, 0, 256, 256)
       this.jackpotBaseTex.update()
+      this.jackpotTexBlank = true
     }
   }
 
@@ -491,6 +510,7 @@ export class DisplayShaderLayer {
   }
 
   dispose(): void {
+    this.scene.onBeforeRenderObservable.remove(this.beforeRender)
     // Detach before disposing to avoid camera pipeline errors
     if (this.crtPostProcess && this.crtAttached) {
       this.detachPP(this.crtPostProcess)
