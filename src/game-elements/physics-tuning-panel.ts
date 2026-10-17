@@ -12,6 +12,10 @@ import {
   type PhysicsTuningSliderDef,
 } from './physics-tuning'
 
+// The predicates live in ./physics-tuning so Game can ask "is the panel wanted?" synchronously
+// without pulling this (lazily loaded) module into the entry chunk.
+export { isPhysicsTuningEnabled, isPhysicsTuningQueryEnabled } from './physics-tuning'
+
 export class PhysicsTuningPanel {
   private container: HTMLElement | null = null
   private isVisible = false
@@ -164,18 +168,4 @@ function formatTuningValue(key: PhysicsTuningKey, value: number): string {
   if (key === 'flipperStiffness') return value.toFixed(0)
   if (key === 'flipperDamping') return value.toFixed(0)
   return value.toFixed(2)
-}
-
-export function isPhysicsTuningQueryEnabled(): boolean {
-  if (typeof window === 'undefined') return false
-  const params = new URLSearchParams(window.location.search)
-  if (!params.has('tune')) return false
-  return import.meta.env.DEV || params.has('debug')
-}
-
-export function isPhysicsTuningEnabled(
-  enabledInSettings: boolean,
-  queryEnabled = isPhysicsTuningQueryEnabled(),
-): boolean {
-  return queryEnabled || enabledInSettings
 }

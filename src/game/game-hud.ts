@@ -20,6 +20,8 @@ import type { ReplayPayload } from '../replay/replay-recorder'
 import { BallType } from '../config'
 
 export interface HUDHost {
+  /** Aborted by Game.dispose(); listeners on the static HUD buttons ride it. */
+  readonly signal: AbortSignal
   readonly ballManager: BallManager | null
   readonly ballStackVisual: BallStackVisual | null
   readonly effects: EffectsSystem | null
@@ -71,8 +73,11 @@ export class GameHUD {
   private setupChallengeButton(): void {
     const challengeBtn = document.getElementById('challenge-share-btn')
     if (challengeBtn) {
-      challengeBtn.onclick = () => void import('../replay/challenge-v2').then((m) =>
-        m.challengeFriends(this.lastRun, this.host, (run, rank) => this.submitRun(run, rank)))
+      // Challenges v2 (#444 Slice D), loaded on click. A listener (not `onclick =`) so Game.dispose() removes it with the rest.
+      challengeBtn.addEventListener('click', () => {
+        void import('../replay/challenge-v2').then((m) =>
+          m.challengeFriends(this.lastRun, this.host, (run, rank) => this.submitRun(run, rank)))
+      }, { signal: this.host.signal })
     }
   }
 
@@ -192,6 +197,7 @@ export class GameHUD {
       return
     }
     await this.host.ensureOverlaySystems()
+    if (this.host.signal.aborted) return
     const leaderboard = this.host.leaderboardSystem
     void leaderboard.flushQueue()
     leaderboard.setContext(board)

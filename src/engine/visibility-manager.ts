@@ -23,8 +23,18 @@ export class VisibilityManager {
     this.deps = deps
   }
 
-  attach(): void {
-    document.addEventListener('visibilitychange', this.onVisibilityChange)
+  /**
+   * Pass the owning Game's signal so a plain `game.dispose()` detaches this too; without it
+   * the listener would resume the render loop of a dead Game. `dispose()` stays for callers
+   * (HMR) that tear down without a signal.
+   */
+  attach(signal?: AbortSignal): void {
+    if (signal?.aborted) {
+      this.disposed = true
+      return
+    }
+    document.addEventListener('visibilitychange', this.onVisibilityChange, signal ? { signal } : undefined)
+    signal?.addEventListener('abort', () => { this.disposed = true }, { once: true })
   }
 
   dispose(): void {

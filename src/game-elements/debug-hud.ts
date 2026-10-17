@@ -237,10 +237,12 @@ export class DebugHUD {
       }
 
       if (this.pendingData.size > 0) {
+        // eslint-disable-next-line no-restricted-syntax -- id kept in flushRafId and cancelled by dispose()
         this.flushRafId = window.requestAnimationFrame(flushLoop)
       }
     }
 
+    // eslint-disable-next-line no-restricted-syntax -- id kept in flushRafId and cancelled by dispose()
     this.flushRafId = window.requestAnimationFrame(flushLoop)
   }
 
