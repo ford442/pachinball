@@ -1,0 +1,836 @@
+[
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/RigidBody.cpp.o -c /root/pachinball/native/src/RigidBody.cpp",
+  "file": "/root/pachinball/native/src/RigidBody.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/RigidBody.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/BodyStore.cpp.o -c /root/pachinball/native/src/BodyStore.cpp",
+  "file": "/root/pachinball/native/src/BodyStore.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/BodyStore.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/BroadphaseGrid.cpp.o -c /root/pachinball/native/src/BroadphaseGrid.cpp",
+  "file": "/root/pachinball/native/src/BroadphaseGrid.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/BroadphaseGrid.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/HingeJoint.cpp.o -c /root/pachinball/native/src/HingeJoint.cpp",
+  "file": "/root/pachinball/native/src/HingeJoint.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/HingeJoint.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/KinematicMover.cpp.o -c /root/pachinball/native/src/KinematicMover.cpp",
+  "file": "/root/pachinball/native/src/KinematicMover.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/KinematicMover.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/SensorVolume.cpp.o -c /root/pachinball/native/src/SensorVolume.cpp",
+  "file": "/root/pachinball/native/src/SensorVolume.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/SensorVolume.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/VolumeShape.cpp.o -c /root/pachinball/native/src/VolumeShape.cpp",
+  "file": "/root/pachinball/native/src/VolumeShape.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/VolumeShape.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/Cylinder.cpp.o -c /root/pachinball/native/src/Cylinder.cpp",
+  "file": "/root/pachinball/native/src/Cylinder.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/Cylinder.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/TriangleMesh.cpp.o -c /root/pachinball/native/src/TriangleMesh.cpp",
+  "file": "/root/pachinball/native/src/TriangleMesh.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/TriangleMesh.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/ForceField.cpp.o -c /root/pachinball/native/src/ForceField.cpp",
+  "file": "/root/pachinball/native/src/ForceField.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/ForceField.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/DynamicBox.cpp.o -c /root/pachinball/native/src/DynamicBox.cpp",
+  "file": "/root/pachinball/native/src/DynamicBox.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/DynamicBox.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/Narrowphase.cpp.o -c /root/pachinball/native/src/Narrowphase.cpp",
+  "file": "/root/pachinball/native/src/Narrowphase.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/Narrowphase.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/StaticShapes.cpp.o -c /root/pachinball/native/src/StaticShapes.cpp",
+  "file": "/root/pachinball/native/src/StaticShapes.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/StaticShapes.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/Cone.cpp.o -c /root/pachinball/native/src/Cone.cpp",
+  "file": "/root/pachinball/native/src/Cone.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/Cone.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/PinField.cpp.o -c /root/pachinball/native/src/PinField.cpp",
+  "file": "/root/pachinball/native/src/PinField.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/PinField.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/KinematicBody.cpp.o -c /root/pachinball/native/src/KinematicBody.cpp",
+  "file": "/root/pachinball/native/src/KinematicBody.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/KinematicBody.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/PhysicsWorld.cpp.o -c /root/pachinball/native/src/PhysicsWorld.cpp",
+  "file": "/root/pachinball/native/src/PhysicsWorld.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/PhysicsWorld.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/PhysicsWorldStep.cpp.o -c /root/pachinball/native/src/PhysicsWorldStep.cpp",
+  "file": "/root/pachinball/native/src/PhysicsWorldStep.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/PhysicsWorldStep.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/Snapshot.cpp.o -c /root/pachinball/native/src/Snapshot.cpp",
+  "file": "/root/pachinball/native/src/Snapshot.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/Snapshot.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -g -O0 -std=gnu++17 -Wall -Wextra -Werror -fno-exceptions -o CMakeFiles/pachinball_physics_native.dir/src/SnapshotCodec.cpp.o -c /root/pachinball/native/src/SnapshotCodec.cpp",
+  "file": "/root/pachinball/native/src/SnapshotCodec.cpp",
+  "output": "CMakeFiles/pachinball_physics_native.dir/src/SnapshotCodec.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -Wall -Wextra -Werror -o CMakeFiles/physics_world_test.dir/tests/physics_world_test.cpp.o -c /root/pachinball/native/tests/physics_world_test.cpp",
+  "file": "/root/pachinball/native/tests/physics_world_test.cpp",
+  "output": "CMakeFiles/physics_world_test.dir/tests/physics_world_test.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -Wall -Wextra -Werror -o CMakeFiles/physics_world_test.dir/tests/hinge_friction_test.cpp.o -c /root/pachinball/native/tests/hinge_friction_test.cpp",
+  "file": "/root/pachinball/native/tests/hinge_friction_test.cpp",
+  "output": "CMakeFiles/physics_world_test.dir/tests/hinge_friction_test.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -Wall -Wextra -Werror -o CMakeFiles/physics_world_test.dir/tests/kinematic_mover_test.cpp.o -c /root/pachinball/native/tests/kinematic_mover_test.cpp",
+  "file": "/root/pachinball/native/tests/kinematic_mover_test.cpp",
+  "output": "CMakeFiles/physics_world_test.dir/tests/kinematic_mover_test.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -Wall -Wextra -Werror -o CMakeFiles/physics_world_test.dir/tests/sensor_volume_test.cpp.o -c /root/pachinball/native/tests/sensor_volume_test.cpp",
+  "file": "/root/pachinball/native/tests/sensor_volume_test.cpp",
+  "output": "CMakeFiles/physics_world_test.dir/tests/sensor_volume_test.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -Wall -Wextra -Werror -o CMakeFiles/physics_world_test.dir/tests/collision_filter_test.cpp.o -c /root/pachinball/native/tests/collision_filter_test.cpp",
+  "file": "/root/pachinball/native/tests/collision_filter_test.cpp",
+  "output": "CMakeFiles/physics_world_test.dir/tests/collision_filter_test.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -Wall -Wextra -Werror -o CMakeFiles/physics_world_test.dir/tests/static_shapes_test.cpp.o -c /root/pachinball/native/tests/static_shapes_test.cpp",
+  "file": "/root/pachinball/native/tests/static_shapes_test.cpp",
+  "output": "CMakeFiles/physics_world_test.dir/tests/static_shapes_test.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -Wall -Wextra -Werror -o CMakeFiles/physics_world_test.dir/tests/adventure_geometry_test.cpp.o -c /root/pachinball/native/tests/adventure_geometry_test.cpp",
+  "file": "/root/pachinball/native/tests/adventure_geometry_test.cpp",
+  "output": "CMakeFiles/physics_world_test.dir/tests/adventure_geometry_test.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -Wall -Wextra -Werror -o CMakeFiles/physics_world_test.dir/tests/kinematic_body_test.cpp.o -c /root/pachinball/native/tests/kinematic_body_test.cpp",
+  "file": "/root/pachinball/native/tests/kinematic_body_test.cpp",
+  "output": "CMakeFiles/physics_world_test.dir/tests/kinematic_body_test.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -Wall -Wextra -Werror -o CMakeFiles/physics_world_test.dir/tests/cone_test.cpp.o -c /root/pachinball/native/tests/cone_test.cpp",
+  "file": "/root/pachinball/native/tests/cone_test.cpp",
+  "output": "CMakeFiles/physics_world_test.dir/tests/cone_test.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -Wall -Wextra -Werror -o CMakeFiles/physics_world_test.dir/tests/pin_field_test.cpp.o -c /root/pachinball/native/tests/pin_field_test.cpp",
+  "file": "/root/pachinball/native/tests/pin_field_test.cpp",
+  "output": "CMakeFiles/physics_world_test.dir/tests/pin_field_test.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -Wall -Wextra -Werror -o CMakeFiles/physics_world_test.dir/tests/snapshot_test.cpp.o -c /root/pachinball/native/tests/snapshot_test.cpp",
+  "file": "/root/pachinball/native/tests/snapshot_test.cpp",
+  "output": "CMakeFiles/physics_world_test.dir/tests/snapshot_test.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -Wall -Wextra -Werror -o CMakeFiles/physics_world_test.dir/tests/sleeper_contact_test.cpp.o -c /root/pachinball/native/tests/sleeper_contact_test.cpp",
+  "file": "/root/pachinball/native/tests/sleeper_contact_test.cpp",
+  "output": "CMakeFiles/physics_world_test.dir/tests/sleeper_contact_test.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/src -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -Wall -Wextra -Werror -o CMakeFiles/physics_world_test.dir/tests/axis_pull_field_test.cpp.o -c /root/pachinball/native/tests/axis_pull_field_test.cpp",
+  "file": "/root/pachinball/native/tests/axis_pull_field_test.cpp",
+  "output": "CMakeFiles/physics_world_test.dir/tests/axis_pull_field_test.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/benchmark/catch_chronometer.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/benchmark/catch_chronometer.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/benchmark/catch_chronometer.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/benchmark/catch_chronometer.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/benchmark/detail/catch_analyse.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/benchmark/detail/catch_analyse.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/benchmark/detail/catch_analyse.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/benchmark/detail/catch_analyse.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/benchmark/detail/catch_benchmark_function.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/benchmark/detail/catch_benchmark_function.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/benchmark/detail/catch_benchmark_function.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/benchmark/detail/catch_benchmark_function.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/benchmark/detail/catch_run_for_at_least.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/benchmark/detail/catch_run_for_at_least.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/benchmark/detail/catch_run_for_at_least.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/benchmark/detail/catch_run_for_at_least.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/benchmark/detail/catch_stats.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/benchmark/detail/catch_stats.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/benchmark/detail/catch_stats.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/benchmark/detail/catch_stats.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/generators/catch_generator_exception.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/generators/catch_generator_exception.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/generators/catch_generator_exception.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/generators/catch_generator_exception.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/generators/catch_generators.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/generators/catch_generators.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/generators/catch_generators.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/generators/catch_generators.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/generators/catch_generators_random.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/generators/catch_generators_random.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/generators/catch_generators_random.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/generators/catch_generators_random.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_automake.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_automake.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_automake.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_automake.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_common_base.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_common_base.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_common_base.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_common_base.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_compact.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_compact.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_compact.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_compact.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_console.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_console.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_console.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_console.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_cumulative_base.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_cumulative_base.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_cumulative_base.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_cumulative_base.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_event_listener.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_event_listener.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_event_listener.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_event_listener.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_helpers.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_helpers.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_helpers.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_helpers.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_json.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_json.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_json.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_json.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_junit.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_junit.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_junit.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_junit.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_multi.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_multi.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_multi.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_multi.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_registrars.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_registrars.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_registrars.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_registrars.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_sonarqube.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_sonarqube.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_sonarqube.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_sonarqube.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_streaming_base.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_streaming_base.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_streaming_base.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_streaming_base.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_tap.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_tap.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_tap.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_tap.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_teamcity.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_teamcity.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_teamcity.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_teamcity.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_xml.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_xml.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/reporters/catch_reporter_xml.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_xml.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_capture.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_capture.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_capture.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_capture.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_config.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_config.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_config.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_config.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_exception.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_exception.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_exception.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_exception.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_generatortracker.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_generatortracker.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_generatortracker.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_generatortracker.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_registry_hub.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_registry_hub.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_registry_hub.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_registry_hub.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_reporter.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_reporter.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_reporter.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_reporter.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_reporter_factory.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_reporter_factory.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_reporter_factory.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_reporter_factory.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_testcase.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_testcase.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/interfaces/catch_interfaces_testcase.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_testcase.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_approx.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_approx.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_approx.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_approx.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_assertion_result.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_assertion_result.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_assertion_result.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_assertion_result.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_config.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_config.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_config.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_config.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_get_random_seed.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_get_random_seed.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_get_random_seed.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_get_random_seed.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_message.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_message.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_message.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_message.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_registry_hub.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_registry_hub.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_registry_hub.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_registry_hub.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_session.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_session.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_session.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_session.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_tag_alias_autoregistrar.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_tag_alias_autoregistrar.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_tag_alias_autoregistrar.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_tag_alias_autoregistrar.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_test_case_info.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_test_case_info.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_test_case_info.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_test_case_info.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_test_spec.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_test_spec.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_test_spec.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_test_spec.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_timer.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_timer.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_timer.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_timer.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_tostring.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_tostring.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_tostring.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_tostring.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_totals.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_totals.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_totals.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_totals.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_translate_exception.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_translate_exception.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_translate_exception.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_translate_exception.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/catch_version.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_version.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/catch_version.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_version.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_assertion_handler.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_assertion_handler.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_assertion_handler.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_assertion_handler.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_case_insensitive_comparisons.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_case_insensitive_comparisons.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_case_insensitive_comparisons.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_case_insensitive_comparisons.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_clara.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_clara.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_clara.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_clara.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_commandline.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_commandline.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_commandline.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_commandline.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_console_colour.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_console_colour.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_console_colour.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_console_colour.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_context.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_context.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_context.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_context.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_debug_console.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_debug_console.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_debug_console.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_debug_console.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_debugger.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_debugger.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_debugger.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_debugger.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_decomposer.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_decomposer.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_decomposer.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_decomposer.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_enforce.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_enforce.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_enforce.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_enforce.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_enum_values_registry.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_enum_values_registry.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_enum_values_registry.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_enum_values_registry.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_errno_guard.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_errno_guard.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_errno_guard.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_errno_guard.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_exception_translator_registry.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_exception_translator_registry.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_exception_translator_registry.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_exception_translator_registry.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_fatal_condition_handler.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_fatal_condition_handler.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_fatal_condition_handler.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_fatal_condition_handler.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_floating_point_helpers.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_floating_point_helpers.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_floating_point_helpers.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_floating_point_helpers.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_getenv.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_getenv.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_getenv.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_getenv.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_istream.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_istream.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_istream.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_istream.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_jsonwriter.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_jsonwriter.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_jsonwriter.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_jsonwriter.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_lazy_expr.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_lazy_expr.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_lazy_expr.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_lazy_expr.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_leak_detector.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_leak_detector.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_leak_detector.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_leak_detector.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_list.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_list.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_list.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_list.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_message_info.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_message_info.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_message_info.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_message_info.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_output_redirect.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_output_redirect.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_output_redirect.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_output_redirect.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_parse_numbers.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_parse_numbers.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_parse_numbers.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_parse_numbers.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_polyfills.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_polyfills.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_polyfills.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_polyfills.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_random_number_generator.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_random_number_generator.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_random_number_generator.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_random_number_generator.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_random_seed_generation.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_random_seed_generation.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_random_seed_generation.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_random_seed_generation.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_reporter_registry.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_reporter_registry.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_reporter_registry.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_reporter_registry.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_reporter_spec_parser.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_reporter_spec_parser.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_reporter_spec_parser.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_reporter_spec_parser.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_reusable_string_stream.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_reusable_string_stream.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_reusable_string_stream.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_reusable_string_stream.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_run_context.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_run_context.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_run_context.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_run_context.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_section.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_section.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_section.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_section.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_singletons.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_singletons.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_singletons.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_singletons.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_source_line_info.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_source_line_info.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_source_line_info.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_source_line_info.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_startup_exception_registry.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_startup_exception_registry.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_startup_exception_registry.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_startup_exception_registry.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_stdstreams.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_stdstreams.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_stdstreams.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_stdstreams.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_string_manip.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_string_manip.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_string_manip.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_string_manip.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_stringref.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_stringref.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_stringref.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_stringref.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_tag_alias_registry.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_tag_alias_registry.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_tag_alias_registry.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_tag_alias_registry.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_test_case_info_hasher.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_test_case_info_hasher.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_test_case_info_hasher.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_test_case_info_hasher.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_test_case_registry_impl.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_test_case_registry_impl.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_test_case_registry_impl.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_test_case_registry_impl.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_test_case_tracker.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_test_case_tracker.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_test_case_tracker.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_test_case_tracker.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_test_failure_exception.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_test_failure_exception.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_test_failure_exception.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_test_failure_exception.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_test_registry.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_test_registry.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_test_registry.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_test_registry.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_test_spec_parser.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_test_spec_parser.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_test_spec_parser.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_test_spec_parser.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_textflow.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_textflow.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_textflow.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_textflow.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_uncaught_exceptions.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_uncaught_exceptions.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_uncaught_exceptions.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_uncaught_exceptions.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_wildcard_pattern.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_wildcard_pattern.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_wildcard_pattern.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_wildcard_pattern.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/internal/catch_xmlwriter.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_xmlwriter.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_xmlwriter.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_xmlwriter.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_container_properties.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers_container_properties.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers_container_properties.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_container_properties.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_exception.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers_exception.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers_exception.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_exception.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_floating_point.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers_floating_point.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers_floating_point.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_floating_point.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_predicate.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers_predicate.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers_predicate.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_predicate.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_quantifiers.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers_quantifiers.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers_quantifiers.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_quantifiers.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_string.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers_string.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers_string.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_string.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_templated.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers_templated.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/catch_matchers_templated.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_templated.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2.dir/catch2/matchers/internal/catch_matchers_impl.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/internal/catch_matchers_impl.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/matchers/internal/catch_matchers_impl.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/internal/catch_matchers_impl.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-native/_deps/catch2-build/src",
+  "command": "/usr/bin/c++  -I/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/.. -I/root/pachinball/native/build-native/_deps/catch2-build/generated-includes -g -O0 -std=gnu++17 -ffile-prefix-map=/root/pachinball/native/build-native/_deps/catch2-src/= -o CMakeFiles/Catch2WithMain.dir/catch2/internal/catch_main.cpp.o -c /root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_main.cpp",
+  "file": "/root/pachinball/native/build-native/_deps/catch2-src/src/catch2/internal/catch_main.cpp",
+  "output": "_deps/catch2-build/src/CMakeFiles/Catch2WithMain.dir/catch2/internal/catch_main.cpp.o"
+}
+]

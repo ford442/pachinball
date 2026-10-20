@@ -1,0 +1,2 @@
+107:staticContentHash ignores the order statics were added in
+110:a snapshot restores onto the right statics when the target added them in another order

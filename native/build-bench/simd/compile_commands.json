@@ -1,0 +1,32 @@
+[
+{
+  "directory": "/root/pachinball/native/build-bench/simd",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -O3 -DNDEBUG -std=gnu++17 -fno-exceptions -msimd128 -O3 -o CMakeFiles/PhysicsModule.dir/src/RigidBody.cpp.o -c /root/pachinball/native/src/RigidBody.cpp",
+  "file": "/root/pachinball/native/src/RigidBody.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/RigidBody.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-bench/simd",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -O3 -DNDEBUG -std=gnu++17 -fno-exceptions -msimd128 -O3 -o CMakeFiles/PhysicsModule.dir/src/BodyStore.cpp.o -c /root/pachinball/native/src/BodyStore.cpp",
+  "file": "/root/pachinball/native/src/BodyStore.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/BodyStore.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-bench/simd",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -O3 -DNDEBUG -std=gnu++17 -fno-exceptions -msimd128 -O3 -o CMakeFiles/PhysicsModule.dir/src/BroadphaseGrid.cpp.o -c /root/pachinball/native/src/BroadphaseGrid.cpp",
+  "file": "/root/pachinball/native/src/BroadphaseGrid.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/BroadphaseGrid.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-bench/simd",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -O3 -DNDEBUG -std=gnu++17 -fno-exceptions -msimd128 -O3 -o CMakeFiles/PhysicsModule.dir/src/PhysicsWorld.cpp.o -c /root/pachinball/native/src/PhysicsWorld.cpp",
+  "file": "/root/pachinball/native/src/PhysicsWorld.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/PhysicsWorld.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-bench/simd",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -O3 -DNDEBUG -std=gnu++17 -fno-exceptions -msimd128 -O3 -o CMakeFiles/PhysicsModule.dir/src/bindings.cpp.o -c /root/pachinball/native/src/bindings.cpp",
+  "file": "/root/pachinball/native/src/bindings.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/bindings.cpp.o"
+}
+]

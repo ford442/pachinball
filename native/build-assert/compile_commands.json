@@ -1,0 +1,128 @@
+[
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/RigidBody.cpp.o -c /root/pachinball/native/src/RigidBody.cpp",
+  "file": "/root/pachinball/native/src/RigidBody.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/RigidBody.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/BodyStore.cpp.o -c /root/pachinball/native/src/BodyStore.cpp",
+  "file": "/root/pachinball/native/src/BodyStore.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/BodyStore.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/BroadphaseGrid.cpp.o -c /root/pachinball/native/src/BroadphaseGrid.cpp",
+  "file": "/root/pachinball/native/src/BroadphaseGrid.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/BroadphaseGrid.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/HingeJoint.cpp.o -c /root/pachinball/native/src/HingeJoint.cpp",
+  "file": "/root/pachinball/native/src/HingeJoint.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/HingeJoint.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/KinematicMover.cpp.o -c /root/pachinball/native/src/KinematicMover.cpp",
+  "file": "/root/pachinball/native/src/KinematicMover.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/KinematicMover.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/SensorVolume.cpp.o -c /root/pachinball/native/src/SensorVolume.cpp",
+  "file": "/root/pachinball/native/src/SensorVolume.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/SensorVolume.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/VolumeShape.cpp.o -c /root/pachinball/native/src/VolumeShape.cpp",
+  "file": "/root/pachinball/native/src/VolumeShape.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/VolumeShape.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/Cylinder.cpp.o -c /root/pachinball/native/src/Cylinder.cpp",
+  "file": "/root/pachinball/native/src/Cylinder.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/Cylinder.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/TriangleMesh.cpp.o -c /root/pachinball/native/src/TriangleMesh.cpp",
+  "file": "/root/pachinball/native/src/TriangleMesh.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/TriangleMesh.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/ForceField.cpp.o -c /root/pachinball/native/src/ForceField.cpp",
+  "file": "/root/pachinball/native/src/ForceField.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/ForceField.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/DynamicBox.cpp.o -c /root/pachinball/native/src/DynamicBox.cpp",
+  "file": "/root/pachinball/native/src/DynamicBox.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/DynamicBox.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/Narrowphase.cpp.o -c /root/pachinball/native/src/Narrowphase.cpp",
+  "file": "/root/pachinball/native/src/Narrowphase.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/Narrowphase.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/StaticShapes.cpp.o -c /root/pachinball/native/src/StaticShapes.cpp",
+  "file": "/root/pachinball/native/src/StaticShapes.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/StaticShapes.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/Cone.cpp.o -c /root/pachinball/native/src/Cone.cpp",
+  "file": "/root/pachinball/native/src/Cone.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/Cone.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/PinField.cpp.o -c /root/pachinball/native/src/PinField.cpp",
+  "file": "/root/pachinball/native/src/PinField.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/PinField.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/KinematicBody.cpp.o -c /root/pachinball/native/src/KinematicBody.cpp",
+  "file": "/root/pachinball/native/src/KinematicBody.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/KinematicBody.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/PhysicsWorld.cpp.o -c /root/pachinball/native/src/PhysicsWorld.cpp",
+  "file": "/root/pachinball/native/src/PhysicsWorld.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/PhysicsWorld.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/PhysicsWorldStep.cpp.o -c /root/pachinball/native/src/PhysicsWorldStep.cpp",
+  "file": "/root/pachinball/native/src/PhysicsWorldStep.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/PhysicsWorldStep.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/Snapshot.cpp.o -c /root/pachinball/native/src/Snapshot.cpp",
+  "file": "/root/pachinball/native/src/Snapshot.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/Snapshot.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/SnapshotCodec.cpp.o -c /root/pachinball/native/src/SnapshotCodec.cpp",
+  "file": "/root/pachinball/native/src/SnapshotCodec.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/SnapshotCodec.cpp.o"
+},
+{
+  "directory": "/root/pachinball/native/build-assert",
+  "command": "/root/emsdk/upstream/emscripten/em++  -I/root/pachinball/native/src -std=gnu++17 -fno-exceptions -msimd128 -flto -O3 -o CMakeFiles/PhysicsModule.dir/src/bindings.cpp.o -c /root/pachinball/native/src/bindings.cpp",
+  "file": "/root/pachinball/native/src/bindings.cpp",
+  "output": "CMakeFiles/PhysicsModule.dir/src/bindings.cpp.o"
+}
+]

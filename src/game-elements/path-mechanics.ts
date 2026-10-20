@@ -1007,7 +1007,7 @@ export interface ZoneTrigger {
   minZ: number
   maxZ: number
   mechanicType: 'gate' | 'magnet' | 'spinner' | 'jumppad' | 'pegs'
-  config: Partial<PathMechanicConfig>
+  config: Partial<PathMechanicConfig> & Record<string, unknown>
   /** Optional callback when this trigger zone is entered */
   onEnter?: () => void
   /** Optional callback when this trigger zone is exited */

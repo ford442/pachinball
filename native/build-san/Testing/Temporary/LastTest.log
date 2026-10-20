@@ -1,0 +1,2543 @@
+Start testing: Oct 16 00:44 CEST
+----------------------------------------------------------
+1/127 Testing: gravity integration
+1/127 Test: gravity integration
+Command: "/root/pachinball/native/build-san/physics_world_test" "gravity integration"
+Directory: /root/pachinball/native/build-san
+"gravity integration" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "gravity integration"
+Randomness seeded to: 1537843994
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"gravity integration" end time: Oct 16 00:44 CEST
+"gravity integration" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/127 Testing: sphere-sphere contact
+2/127 Test: sphere-sphere contact
+Command: "/root/pachinball/native/build-san/physics_world_test" "sphere-sphere contact"
+Directory: /root/pachinball/native/build-san
+"sphere-sphere contact" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "sphere-sphere contact"
+Randomness seeded to: 508808509
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"sphere-sphere contact" end time: Oct 16 00:44 CEST
+"sphere-sphere contact" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/127 Testing: sphere-plane bounce restitution
+3/127 Test: sphere-plane bounce restitution
+Command: "/root/pachinball/native/build-san/physics_world_test" "sphere-plane bounce restitution"
+Directory: /root/pachinball/native/build-san
+"sphere-plane bounce restitution" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "sphere-plane bounce restitution"
+Randomness seeded to: 4234869789
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"sphere-plane bounce restitution" end time: Oct 16 00:44 CEST
+"sphere-plane bounce restitution" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/127 Testing: energy non-explosion (60 steps)
+4/127 Test: energy non-explosion (60 steps)
+Command: "/root/pachinball/native/build-san/physics_world_test" "energy non-explosion (60 steps)"
+Directory: /root/pachinball/native/build-san
+"energy non-explosion (60 steps)" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "energy non-explosion (60 steps)"
+Randomness seeded to: 965491257
+===============================================================================
+All tests passed (56 assertions in 1 test case)
+
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"energy non-explosion (60 steps)" end time: Oct 16 00:44 CEST
+"energy non-explosion (60 steps)" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/127 Testing: body remove and recreate
+5/127 Test: body remove and recreate
+Command: "/root/pachinball/native/build-san/physics_world_test" "body remove and recreate"
+Directory: /root/pachinball/native/build-san
+"body remove and recreate" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "body remove and recreate"
+Randomness seeded to: 2055574468
+===============================================================================
+All tests passed (7 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"body remove and recreate" end time: Oct 16 00:44 CEST
+"body remove and recreate" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/127 Testing: ball drops on box
+6/127 Test: ball drops on box
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball drops on box"
+Directory: /root/pachinball/native/build-san
+"ball drops on box" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball drops on box"
+Randomness seeded to: 2755055984
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"ball drops on box" end time: Oct 16 00:44 CEST
+"ball drops on box" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/127 Testing: ball hits capsule
+7/127 Test: ball hits capsule
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball hits capsule"
+Directory: /root/pachinball/native/build-san
+"ball hits capsule" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball hits capsule"
+Randomness seeded to: 2813798699
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.17 sec
+----------------------------------------------------------
+Test Passed.
+"ball hits capsule" end time: Oct 16 00:44 CEST
+"ball hits capsule" time elapsed: 00:00:00
+----------------------------------------------------------
+
+8/127 Testing: stationary kinematic capsule supports resting ball
+8/127 Test: stationary kinematic capsule supports resting ball
+Command: "/root/pachinball/native/build-san/physics_world_test" "stationary kinematic capsule supports resting ball"
+Directory: /root/pachinball/native/build-san
+"stationary kinematic capsule supports resting ball" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "stationary kinematic capsule supports resting ball"
+Randomness seeded to: 257455319
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.27 sec
+----------------------------------------------------------
+Test Passed.
+"stationary kinematic capsule supports resting ball" end time: Oct 16 00:44 CEST
+"stationary kinematic capsule supports resting ball" time elapsed: 00:00:00
+----------------------------------------------------------
+
+9/127 Testing: kinematic capsule flings ball
+9/127 Test: kinematic capsule flings ball
+Command: "/root/pachinball/native/build-san/physics_world_test" "kinematic capsule flings ball"
+Directory: /root/pachinball/native/build-san
+"kinematic capsule flings ball" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "kinematic capsule flings ball"
+Randomness seeded to: 818396240
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.13 sec
+----------------------------------------------------------
+Test Passed.
+"kinematic capsule flings ball" end time: Oct 16 00:44 CEST
+"kinematic capsule flings ball" time elapsed: 00:00:00
+----------------------------------------------------------
+
+10/127 Testing: contact manifold enter/stay/exit for resting ball
+10/127 Test: contact manifold enter/stay/exit for resting ball
+Command: "/root/pachinball/native/build-san/physics_world_test" "contact manifold enter/stay/exit for resting ball"
+Directory: /root/pachinball/native/build-san
+"contact manifold enter/stay/exit for resting ball" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "contact manifold enter/stay/exit for resting ball"
+Randomness seeded to: 3188426189
+===============================================================================
+All tests passed (25 assertions in 1 test case)
+
+<end of output>
+Test time =   0.13 sec
+----------------------------------------------------------
+Test Passed.
+"contact manifold enter/stay/exit for resting ball" end time: Oct 16 00:44 CEST
+"contact manifold enter/stay/exit for resting ball" time elapsed: 00:00:00
+----------------------------------------------------------
+
+11/127 Testing: one contact event per pair per step despite substeps
+11/127 Test: one contact event per pair per step despite substeps
+Command: "/root/pachinball/native/build-san/physics_world_test" "one contact event per pair per step despite substeps"
+Directory: /root/pachinball/native/build-san
+"one contact event per pair per step despite substeps" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "one contact event per pair per step despite substeps"
+Randomness seeded to: 3899325378
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"one contact event per pair per step despite substeps" end time: Oct 16 00:44 CEST
+"one contact event per pair per step despite substeps" time elapsed: 00:00:00
+----------------------------------------------------------
+
+12/127 Testing: contact listener peak impulse and lossless overflow
+12/127 Test: contact listener peak impulse and lossless overflow
+Command: "/root/pachinball/native/build-san/physics_world_test" "contact listener peak impulse and lossless overflow"
+Directory: /root/pachinball/native/build-san
+"contact listener peak impulse and lossless overflow" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "contact listener peak impulse and lossless overflow"
+Randomness seeded to: 1176925477
+===============================================================================
+All tests passed (17 assertions in 1 test case)
+
+<end of output>
+Test time =   0.19 sec
+----------------------------------------------------------
+Test Passed.
+"contact listener peak impulse and lossless overflow" end time: Oct 16 00:44 CEST
+"contact listener peak impulse and lossless overflow" time elapsed: 00:00:00
+----------------------------------------------------------
+
+13/127 Testing: broadphase culls distant static colliders
+13/127 Test: broadphase culls distant static colliders
+Command: "/root/pachinball/native/build-san/physics_world_test" "broadphase culls distant static colliders"
+Directory: /root/pachinball/native/build-san
+"broadphase culls distant static colliders" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "broadphase culls distant static colliders"
+Randomness seeded to: 3771286823
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.30 sec
+----------------------------------------------------------
+Test Passed.
+"broadphase culls distant static colliders" end time: Oct 16 00:44 CEST
+"broadphase culls distant static colliders" time elapsed: 00:00:00
+----------------------------------------------------------
+
+14/127 Testing: broadphase emits pairs for nearby static colliders
+14/127 Test: broadphase emits pairs for nearby static colliders
+Command: "/root/pachinball/native/build-san/physics_world_test" "broadphase emits pairs for nearby static colliders"
+Directory: /root/pachinball/native/build-san
+"broadphase emits pairs for nearby static colliders" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "broadphase emits pairs for nearby static colliders"
+Randomness seeded to: 4154118708
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"broadphase emits pairs for nearby static colliders" end time: Oct 16 00:44 CEST
+"broadphase emits pairs for nearby static colliders" time elapsed: 00:00:00
+----------------------------------------------------------
+
+15/127 Testing: sleeping bodies reduce broadphase pair count
+15/127 Test: sleeping bodies reduce broadphase pair count
+Command: "/root/pachinball/native/build-san/physics_world_test" "sleeping bodies reduce broadphase pair count"
+Directory: /root/pachinball/native/build-san
+"sleeping bodies reduce broadphase pair count" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "sleeping bodies reduce broadphase pair count"
+Randomness seeded to: 1691513103
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.13 sec
+----------------------------------------------------------
+Test Passed.
+"sleeping bodies reduce broadphase pair count" end time: Oct 16 00:44 CEST
+"sleeping bodies reduce broadphase pair count" time elapsed: 00:00:00
+----------------------------------------------------------
+
+16/127 Testing: large scene step completes under time budget
+16/127 Test: large scene step completes under time budget
+Command: "/root/pachinball/native/build-san/physics_world_test" "large scene step completes under time budget"
+Directory: /root/pachinball/native/build-san
+"large scene step completes under time budget" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "large scene step completes under time budget"
+Randomness seeded to: 4007920408
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.26 sec
+----------------------------------------------------------
+Test Passed.
+"large scene step completes under time budget" end time: Oct 16 00:44 CEST
+"large scene step completes under time budget" time elapsed: 00:00:00
+----------------------------------------------------------
+
+17/127 Testing: ball rolls down inclined plane
+17/127 Test: ball rolls down inclined plane
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball rolls down inclined plane"
+Directory: /root/pachinball/native/build-san
+"ball rolls down inclined plane" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball rolls down inclined plane"
+Randomness seeded to: 928063528
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.21 sec
+----------------------------------------------------------
+Test Passed.
+"ball rolls down inclined plane" end time: Oct 16 00:44 CEST
+"ball rolls down inclined plane" time elapsed: 00:00:00
+----------------------------------------------------------
+
+18/127 Testing: spinning ball deflects on wall contact
+18/127 Test: spinning ball deflects on wall contact
+Command: "/root/pachinball/native/build-san/physics_world_test" "spinning ball deflects on wall contact"
+Directory: /root/pachinball/native/build-san
+"spinning ball deflects on wall contact" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "spinning ball deflects on wall contact"
+Randomness seeded to: 3529719016
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.28 sec
+----------------------------------------------------------
+Test Passed.
+"spinning ball deflects on wall contact" end time: Oct 16 00:44 CEST
+"spinning ball deflects on wall contact" time elapsed: 00:00:00
+----------------------------------------------------------
+
+19/127 Testing: kinematic capsule flick imparts spin
+19/127 Test: kinematic capsule flick imparts spin
+Command: "/root/pachinball/native/build-san/physics_world_test" "kinematic capsule flick imparts spin"
+Directory: /root/pachinball/native/build-san
+"kinematic capsule flick imparts spin" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "kinematic capsule flick imparts spin"
+Randomness seeded to: 309344019
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"kinematic capsule flick imparts spin" end time: Oct 16 00:44 CEST
+"kinematic capsule flick imparts spin" time elapsed: 00:00:00
+----------------------------------------------------------
+
+20/127 Testing: ball on flat plane comes to rest
+20/127 Test: ball on flat plane comes to rest
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball on flat plane comes to rest"
+Directory: /root/pachinball/native/build-san
+"ball on flat plane comes to rest" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball on flat plane comes to rest"
+Randomness seeded to: 995028818
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.19 sec
+----------------------------------------------------------
+Test Passed.
+"ball on flat plane comes to rest" end time: Oct 16 00:44 CEST
+"ball on flat plane comes to rest" time elapsed: 00:00:00
+----------------------------------------------------------
+
+21/127 Testing: orientation integrates from angular velocity
+21/127 Test: orientation integrates from angular velocity
+Command: "/root/pachinball/native/build-san/physics_world_test" "orientation integrates from angular velocity"
+Directory: /root/pachinball/native/build-san
+"orientation integrates from angular velocity" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "orientation integrates from angular velocity"
+Randomness seeded to: 12779973
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"orientation integrates from angular velocity" end time: Oct 16 00:44 CEST
+"orientation integrates from angular velocity" time elapsed: 00:00:00
+----------------------------------------------------------
+
+22/127 Testing: hinge holds angle under gravity
+22/127 Test: hinge holds angle under gravity
+Command: "/root/pachinball/native/build-san/physics_world_test" "hinge holds angle under gravity"
+Directory: /root/pachinball/native/build-san
+"hinge holds angle under gravity" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "hinge holds angle under gravity"
+Randomness seeded to: 1321359373
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.19 sec
+----------------------------------------------------------
+Test Passed.
+"hinge holds angle under gravity" end time: Oct 16 00:44 CEST
+"hinge holds angle under gravity" time elapsed: 00:00:00
+----------------------------------------------------------
+
+23/127 Testing: hinge motor reaches target omega
+23/127 Test: hinge motor reaches target omega
+Command: "/root/pachinball/native/build-san/physics_world_test" "hinge motor reaches target omega"
+Directory: /root/pachinball/native/build-san
+"hinge motor reaches target omega" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "hinge motor reaches target omega"
+Randomness seeded to: 1041081378
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"hinge motor reaches target omega" end time: Oct 16 00:44 CEST
+"hinge motor reaches target omega" time elapsed: 00:00:00
+----------------------------------------------------------
+
+24/127 Testing: hinge angle limits do not explode
+24/127 Test: hinge angle limits do not explode
+Command: "/root/pachinball/native/build-san/physics_world_test" "hinge angle limits do not explode"
+Directory: /root/pachinball/native/build-san
+"hinge angle limits do not explode" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "hinge angle limits do not explode"
+Randomness seeded to: 3576505102
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.13 sec
+----------------------------------------------------------
+Test Passed.
+"hinge angle limits do not explode" end time: Oct 16 00:44 CEST
+"hinge angle limits do not explode" time elapsed: 00:00:00
+----------------------------------------------------------
+
+25/127 Testing: hinge motor wakes sleeping body
+25/127 Test: hinge motor wakes sleeping body
+Command: "/root/pachinball/native/build-san/physics_world_test" "hinge motor wakes sleeping body"
+Directory: /root/pachinball/native/build-san
+"hinge motor wakes sleeping body" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "hinge motor wakes sleeping body"
+Randomness seeded to: 4056082349
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"hinge motor wakes sleeping body" end time: Oct 16 00:44 CEST
+"hinge motor wakes sleeping body" time elapsed: 00:00:00
+----------------------------------------------------------
+
+26/127 Testing: ball resting on a rising kinematic piston is launched upward
+26/127 Test: ball resting on a rising kinematic piston is launched upward
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball resting on a rising kinematic piston is launched upward"
+Directory: /root/pachinball/native/build-san
+"ball resting on a rising kinematic piston is launched upward" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball resting on a rising kinematic piston is launched upward"
+Randomness seeded to: 888695545
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"ball resting on a rising kinematic piston is launched upward" end time: Oct 16 00:44 CEST
+"ball resting on a rising kinematic piston is launched upward" time elapsed: 00:00:00
+----------------------------------------------------------
+
+27/127 Testing: ball on a rotating kinematic platter picks up tangential velocity
+27/127 Test: ball on a rotating kinematic platter picks up tangential velocity
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball on a rotating kinematic platter picks up tangential velocity"
+Directory: /root/pachinball/native/build-san
+"ball on a rotating kinematic platter picks up tangential velocity" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball on a rotating kinematic platter picks up tangential velocity"
+Randomness seeded to: 1194471348
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.24 sec
+----------------------------------------------------------
+Test Passed.
+"ball on a rotating kinematic platter picks up tangential velocity" end time: Oct 16 00:44 CEST
+"ball on a rotating kinematic platter picks up tangential velocity" time elapsed: 00:00:00
+----------------------------------------------------------
+
+28/127 Testing: mover does not respond to bodies excluded by its filter mask
+28/127 Test: mover does not respond to bodies excluded by its filter mask
+Command: "/root/pachinball/native/build-san/physics_world_test" "mover does not respond to bodies excluded by its filter mask"
+Directory: /root/pachinball/native/build-san
+"mover does not respond to bodies excluded by its filter mask" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "mover does not respond to bodies excluded by its filter mask"
+Randomness seeded to: 1129411608
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"mover does not respond to bodies excluded by its filter mask" end time: Oct 16 00:44 CEST
+"mover does not respond to bodies excluded by its filter mask" time elapsed: 00:00:00
+----------------------------------------------------------
+
+29/127 Testing: ball crossing a sensor volume emits exactly one enter and one exit
+29/127 Test: ball crossing a sensor volume emits exactly one enter and one exit
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball crossing a sensor volume emits exactly one enter and one exit"
+Directory: /root/pachinball/native/build-san
+"ball crossing a sensor volume emits exactly one enter and one exit" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball crossing a sensor volume emits exactly one enter and one exit"
+Randomness seeded to: 249380728
+===============================================================================
+All tests passed (41 assertions in 1 test case)
+
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"ball crossing a sensor volume emits exactly one enter and one exit" end time: Oct 16 00:44 CEST
+"ball crossing a sensor volume emits exactly one enter and one exit" time elapsed: 00:00:00
+----------------------------------------------------------
+
+30/127 Testing: ball passing through a sensor volume undergoes no positional correction
+30/127 Test: ball passing through a sensor volume undergoes no positional correction
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball passing through a sensor volume undergoes no positional correction"
+Directory: /root/pachinball/native/build-san
+"ball passing through a sensor volume undergoes no positional correction" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball passing through a sensor volume undergoes no positional correction"
+Randomness seeded to: 3342937456
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.17 sec
+----------------------------------------------------------
+Test Passed.
+"ball passing through a sensor volume undergoes no positional correction" end time: Oct 16 00:44 CEST
+"ball passing through a sensor volume undergoes no positional correction" time elapsed: 00:00:00
+----------------------------------------------------------
+
+31/127 Testing: ball dwelling inside a sensor for N frames emits N-2 stay events
+31/127 Test: ball dwelling inside a sensor for N frames emits N-2 stay events
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball dwelling inside a sensor for N frames emits N-2 stay events"
+Directory: /root/pachinball/native/build-san
+"ball dwelling inside a sensor for N frames emits N-2 stay events" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball dwelling inside a sensor for N frames emits N-2 stay events"
+Randomness seeded to: 582017957
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"ball dwelling inside a sensor for N frames emits N-2 stay events" end time: Oct 16 00:44 CEST
+"ball dwelling inside a sensor for N frames emits N-2 stay events" time elapsed: 00:00:00
+----------------------------------------------------------
+
+32/127 Testing: sensor volume does not overlap a body excluded by its filter mask
+32/127 Test: sensor volume does not overlap a body excluded by its filter mask
+Command: "/root/pachinball/native/build-san/physics_world_test" "sensor volume does not overlap a body excluded by its filter mask"
+Directory: /root/pachinball/native/build-san
+"sensor volume does not overlap a body excluded by its filter mask" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "sensor volume does not overlap a body excluded by its filter mask"
+Randomness seeded to: 563043284
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"sensor volume does not overlap a body excluded by its filter mask" end time: Oct 16 00:44 CEST
+"sensor volume does not overlap a body excluded by its filter mask" time elapsed: 00:00:00
+----------------------------------------------------------
+
+33/127 Testing: two bodies whose filter masks exclude each other never generate a contact pair
+33/127 Test: two bodies whose filter masks exclude each other never generate a contact pair
+Command: "/root/pachinball/native/build-san/physics_world_test" "two bodies whose filter masks exclude each other never generate a contact pair"
+Directory: /root/pachinball/native/build-san
+"two bodies whose filter masks exclude each other never generate a contact pair" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "two bodies whose filter masks exclude each other never generate a contact pair"
+Randomness seeded to: 2340433957
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"two bodies whose filter masks exclude each other never generate a contact pair" end time: Oct 16 00:44 CEST
+"two bodies whose filter masks exclude each other never generate a contact pair" time elapsed: 00:00:00
+----------------------------------------------------------
+
+34/127 Testing: default membership/filter collides with everything (pre-filter behavior preserved)
+34/127 Test: default membership/filter collides with everything (pre-filter behavior preserved)
+Command: "/root/pachinball/native/build-san/physics_world_test" "default membership/filter collides with everything (pre-filter behavior preserved)"
+Directory: /root/pachinball/native/build-san
+"default membership/filter collides with everything (pre-filter behavior preserved)" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "default membership/filter collides with everything (pre-filter behavior preserved)"
+Randomness seeded to: 3322185684
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"default membership/filter collides with everything (pre-filter behavior preserved)" end time: Oct 16 00:44 CEST
+"default membership/filter collides with everything (pre-filter behavior preserved)" time elapsed: 00:00:00
+----------------------------------------------------------
+
+35/127 Testing: ball rolls down a static box rotated 15 degrees without tunnelling or jitter
+35/127 Test: ball rolls down a static box rotated 15 degrees without tunnelling or jitter
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball rolls down a static box rotated 15 degrees without tunnelling or jitter"
+Directory: /root/pachinball/native/build-san
+"ball rolls down a static box rotated 15 degrees without tunnelling or jitter" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball rolls down a static box rotated 15 degrees without tunnelling or jitter"
+Randomness seeded to: 4033893587
+===============================================================================
+All tests passed (185 assertions in 1 test case)
+
+<end of output>
+Test time =   0.19 sec
+----------------------------------------------------------
+Test Passed.
+"ball rolls down a static box rotated 15 degrees without tunnelling or jitter" end time: Oct 16 00:44 CEST
+"ball rolls down a static box rotated 15 degrees without tunnelling or jitter" time elapsed: 00:00:00
+----------------------------------------------------------
+
+36/127 Testing: ball bounces off a static cylinder SIDE wall with a radial normal
+36/127 Test: ball bounces off a static cylinder SIDE wall with a radial normal
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball bounces off a static cylinder SIDE wall with a radial normal"
+Directory: /root/pachinball/native/build-san
+"ball bounces off a static cylinder SIDE wall with a radial normal" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball bounces off a static cylinder SIDE wall with a radial normal"
+Randomness seeded to: 608085478
+===============================================================================
+All tests passed (8 assertions in 1 test case)
+
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"ball bounces off a static cylinder SIDE wall with a radial normal" end time: Oct 16 00:44 CEST
+"ball bounces off a static cylinder SIDE wall with a radial normal" time elapsed: 00:00:00
+----------------------------------------------------------
+
+37/127 Testing: ball bounces off a static cylinder END CAP with an axial normal
+37/127 Test: ball bounces off a static cylinder END CAP with an axial normal
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball bounces off a static cylinder END CAP with an axial normal"
+Directory: /root/pachinball/native/build-san
+"ball bounces off a static cylinder END CAP with an axial normal" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball bounces off a static cylinder END CAP with an axial normal"
+Randomness seeded to: 3458617747
+===============================================================================
+All tests passed (7 assertions in 1 test case)
+
+<end of output>
+Test time =   0.33 sec
+----------------------------------------------------------
+Test Passed.
+"ball bounces off a static cylinder END CAP with an axial normal" end time: Oct 16 00:44 CEST
+"ball bounces off a static cylinder END CAP with an axial normal" time elapsed: 00:00:00
+----------------------------------------------------------
+
+38/127 Testing: ball hitting the static cylinder RIM gets a finite, unit, outward-diagonal normal
+38/127 Test: ball hitting the static cylinder RIM gets a finite, unit, outward-diagonal normal
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball hitting the static cylinder RIM gets a finite\, unit\, outward-diagonal normal"
+Directory: /root/pachinball/native/build-san
+"ball hitting the static cylinder RIM gets a finite, unit, outward-diagonal normal" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball hitting the static cylinder RIM gets a finite\, unit\, outward-diagonal normal"
+Randomness seeded to: 2292082692
+===============================================================================
+All tests passed (67 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"ball hitting the static cylinder RIM gets a finite, unit, outward-diagonal normal" end time: Oct 16 00:44 CEST
+"ball hitting the static cylinder RIM gets a finite, unit, outward-diagonal normal" time elapsed: 00:00:00
+----------------------------------------------------------
+
+39/127 Testing: a ball whose centre starts inside a static cylinder is pushed out with a sane normal
+39/127 Test: a ball whose centre starts inside a static cylinder is pushed out with a sane normal
+Command: "/root/pachinball/native/build-san/physics_world_test" "a ball whose centre starts inside a static cylinder is pushed out with a sane normal"
+Directory: /root/pachinball/native/build-san
+"a ball whose centre starts inside a static cylinder is pushed out with a sane normal" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "a ball whose centre starts inside a static cylinder is pushed out with a sane normal"
+Randomness seeded to: 4251994177
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"a ball whose centre starts inside a static cylinder is pushed out with a sane normal" end time: Oct 16 00:44 CEST
+"a ball whose centre starts inside a static cylinder is pushed out with a sane normal" time elapsed: 00:00:00
+----------------------------------------------------------
+
+40/127 Testing: a rotated static cylinder reports its normal in world space
+40/127 Test: a rotated static cylinder reports its normal in world space
+Command: "/root/pachinball/native/build-san/physics_world_test" "a rotated static cylinder reports its normal in world space"
+Directory: /root/pachinball/native/build-san
+"a rotated static cylinder reports its normal in world space" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "a rotated static cylinder reports its normal in world space"
+Randomness seeded to: 606337180
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.20 sec
+----------------------------------------------------------
+Test Passed.
+"a rotated static cylinder reports its normal in world space" end time: Oct 16 00:44 CEST
+"a rotated static cylinder reports its normal in world space" time elapsed: 00:00:00
+----------------------------------------------------------
+
+41/127 Testing: ball bounces off a static sphere
+41/127 Test: ball bounces off a static sphere
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball bounces off a static sphere"
+Directory: /root/pachinball/native/build-san
+"ball bounces off a static sphere" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball bounces off a static sphere"
+Randomness seeded to: 2915481690
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"ball bounces off a static sphere" end time: Oct 16 00:44 CEST
+"ball bounces off a static sphere" time elapsed: 00:00:00
+----------------------------------------------------------
+
+42/127 Testing: static sphere handles have their own negative id range
+42/127 Test: static sphere handles have their own negative id range
+Command: "/root/pachinball/native/build-san/physics_world_test" "static sphere handles have their own negative id range"
+Directory: /root/pachinball/native/build-san
+"static sphere handles have their own negative id range" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "static sphere handles have their own negative id range"
+Randomness seeded to: 3683301833
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.09 sec
+----------------------------------------------------------
+Test Passed.
+"static sphere handles have their own negative id range" end time: Oct 16 00:44 CEST
+"static sphere handles have their own negative id range" time elapsed: 00:00:00
+----------------------------------------------------------
+
+43/127 Testing: a filter word excludes a static cylinder from a ball that should pass through
+43/127 Test: a filter word excludes a static cylinder from a ball that should pass through
+Command: "/root/pachinball/native/build-san/physics_world_test" "a filter word excludes a static cylinder from a ball that should pass through"
+Directory: /root/pachinball/native/build-san
+"a filter word excludes a static cylinder from a ball that should pass through" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "a filter word excludes a static cylinder from a ball that should pass through"
+Randomness seeded to: 420051049
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"a filter word excludes a static cylinder from a ball that should pass through" end time: Oct 16 00:44 CEST
+"a filter word excludes a static cylinder from a ball that should pass through" time elapsed: 00:00:00
+----------------------------------------------------------
+
+44/127 Testing: a matching filter word lets a ball collide with a static cylinder
+44/127 Test: a matching filter word lets a ball collide with a static cylinder
+Command: "/root/pachinball/native/build-san/physics_world_test" "a matching filter word lets a ball collide with a static cylinder"
+Directory: /root/pachinball/native/build-san
+"a matching filter word lets a ball collide with a static cylinder" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "a matching filter word lets a ball collide with a static cylinder"
+Randomness seeded to: 519526283
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"a matching filter word lets a ball collide with a static cylinder" end time: Oct 16 00:44 CEST
+"a matching filter word lets a ball collide with a static cylinder" time elapsed: 00:00:00
+----------------------------------------------------------
+
+45/127 Testing: a filter word excludes a static sphere from a ball that should pass through
+45/127 Test: a filter word excludes a static sphere from a ball that should pass through
+Command: "/root/pachinball/native/build-san/physics_world_test" "a filter word excludes a static sphere from a ball that should pass through"
+Directory: /root/pachinball/native/build-san
+"a filter word excludes a static sphere from a ball that should pass through" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "a filter word excludes a static sphere from a ball that should pass through"
+Randomness seeded to: 3110700861
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.17 sec
+----------------------------------------------------------
+Test Passed.
+"a filter word excludes a static sphere from a ball that should pass through" end time: Oct 16 00:44 CEST
+"a filter word excludes a static sphere from a ball that should pass through" time elapsed: 00:00:00
+----------------------------------------------------------
+
+46/127 Testing: clearStaticGeometry removes every static, sensor and mover
+46/127 Test: clearStaticGeometry removes every static, sensor and mover
+Command: "/root/pachinball/native/build-san/physics_world_test" "clearStaticGeometry removes every static\, sensor and mover"
+Directory: /root/pachinball/native/build-san
+"clearStaticGeometry removes every static, sensor and mover" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "clearStaticGeometry removes every static\, sensor and mover"
+Randomness seeded to: 2978251256
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"clearStaticGeometry removes every static, sensor and mover" end time: Oct 16 00:44 CEST
+"clearStaticGeometry removes every static, sensor and mover" time elapsed: 00:00:00
+----------------------------------------------------------
+
+47/127 Testing: handles restart from the base after clearStaticGeometry
+47/127 Test: handles restart from the base after clearStaticGeometry
+Command: "/root/pachinball/native/build-san/physics_world_test" "handles restart from the base after clearStaticGeometry"
+Directory: /root/pachinball/native/build-san
+"handles restart from the base after clearStaticGeometry" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "handles restart from the base after clearStaticGeometry"
+Randomness seeded to: 2545793185
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"handles restart from the base after clearStaticGeometry" end time: Oct 16 00:44 CEST
+"handles restart from the base after clearStaticGeometry" time elapsed: 00:00:00
+----------------------------------------------------------
+
+48/127 Testing: re-adding after clearStaticGeometry leaves exactly one copy
+48/127 Test: re-adding after clearStaticGeometry leaves exactly one copy
+Command: "/root/pachinball/native/build-san/physics_world_test" "re-adding after clearStaticGeometry leaves exactly one copy"
+Directory: /root/pachinball/native/build-san
+"re-adding after clearStaticGeometry leaves exactly one copy" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "re-adding after clearStaticGeometry leaves exactly one copy"
+Randomness seeded to: 3438540767
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.09 sec
+----------------------------------------------------------
+Test Passed.
+"re-adding after clearStaticGeometry leaves exactly one copy" end time: Oct 16 00:44 CEST
+"re-adding after clearStaticGeometry leaves exactly one copy" time elapsed: 00:00:00
+----------------------------------------------------------
+
+49/127 Testing: dynamic bodies and hinges survive clearStaticGeometry
+49/127 Test: dynamic bodies and hinges survive clearStaticGeometry
+Command: "/root/pachinball/native/build-san/physics_world_test" "dynamic bodies and hinges survive clearStaticGeometry"
+Directory: /root/pachinball/native/build-san
+"dynamic bodies and hinges survive clearStaticGeometry" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "dynamic bodies and hinges survive clearStaticGeometry"
+Randomness seeded to: 3358270128
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"dynamic bodies and hinges survive clearStaticGeometry" end time: Oct 16 00:44 CEST
+"dynamic bodies and hinges survive clearStaticGeometry" time elapsed: 00:00:00
+----------------------------------------------------------
+
+50/127 Testing: a body-body pair does not suppress a body-cylinder pair with the same key
+50/127 Test: a body-body pair does not suppress a body-cylinder pair with the same key
+Command: "/root/pachinball/native/build-san/physics_world_test" "a body-body pair does not suppress a body-cylinder pair with the same key"
+Directory: /root/pachinball/native/build-san
+"a body-body pair does not suppress a body-cylinder pair with the same key" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "a body-body pair does not suppress a body-cylinder pair with the same key"
+Randomness seeded to: 3621747124
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.13 sec
+----------------------------------------------------------
+Test Passed.
+"a body-body pair does not suppress a body-cylinder pair with the same key" end time: Oct 16 00:44 CEST
+"a body-body pair does not suppress a body-cylinder pair with the same key" time elapsed: 00:00:00
+----------------------------------------------------------
+
+51/127 Testing: a static family refuses creation at its capacity instead of aliasing the next
+51/127 Test: a static family refuses creation at its capacity instead of aliasing the next
+Command: "/root/pachinball/native/build-san/physics_world_test" "a static family refuses creation at its capacity instead of aliasing the next"
+Directory: /root/pachinball/native/build-san
+"a static family refuses creation at its capacity instead of aliasing the next" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "a static family refuses creation at its capacity instead of aliasing the next"
+Randomness seeded to: 2157340579
+===============================================================================
+All tests passed (7 assertions in 1 test case)
+
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"a static family refuses creation at its capacity instead of aliasing the next" end time: Oct 16 00:44 CEST
+"a static family refuses creation at its capacity instead of aliasing the next" time elapsed: 00:00:00
+----------------------------------------------------------
+
+52/127 Testing: every static family enforces the same capacity
+52/127 Test: every static family enforces the same capacity
+Command: "/root/pachinball/native/build-san/physics_world_test" "every static family enforces the same capacity"
+Directory: /root/pachinball/native/build-san
+"every static family enforces the same capacity" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "every static family enforces the same capacity"
+Randomness seeded to: 4285816001
+===============================================================================
+All tests passed (7 assertions in 1 test case)
+
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"every static family enforces the same capacity" end time: Oct 16 00:44 CEST
+"every static family enforces the same capacity" time elapsed: 00:00:00
+----------------------------------------------------------
+
+53/127 Testing: ball rolls down a 15 degree triangle-mesh ramp
+53/127 Test: ball rolls down a 15 degree triangle-mesh ramp
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball rolls down a 15 degree triangle-mesh ramp"
+Directory: /root/pachinball/native/build-san
+"ball rolls down a 15 degree triangle-mesh ramp" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball rolls down a 15 degree triangle-mesh ramp"
+Randomness seeded to: 3613693242
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.13 sec
+----------------------------------------------------------
+Test Passed.
+"ball rolls down a 15 degree triangle-mesh ramp" end time: Oct 16 00:44 CEST
+"ball rolls down a 15 degree triangle-mesh ramp" time elapsed: 00:00:00
+----------------------------------------------------------
+
+54/127 Testing: ball crossing the shared diagonal of a mesh ramp feels no seam
+54/127 Test: ball crossing the shared diagonal of a mesh ramp feels no seam
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball crossing the shared diagonal of a mesh ramp feels no seam"
+Directory: /root/pachinball/native/build-san
+"ball crossing the shared diagonal of a mesh ramp feels no seam" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball crossing the shared diagonal of a mesh ramp feels no seam"
+Randomness seeded to: 4211187719
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.19 sec
+----------------------------------------------------------
+Test Passed.
+"ball crossing the shared diagonal of a mesh ramp feels no seam" end time: Oct 16 00:44 CEST
+"ball crossing the shared diagonal of a mesh ramp feels no seam" time elapsed: 00:00:00
+----------------------------------------------------------
+
+55/127 Testing: a one-sided mesh does not collide from behind its face
+55/127 Test: a one-sided mesh does not collide from behind its face
+Command: "/root/pachinball/native/build-san/physics_world_test" "a one-sided mesh does not collide from behind its face"
+Directory: /root/pachinball/native/build-san
+"a one-sided mesh does not collide from behind its face" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "a one-sided mesh does not collide from behind its face"
+Randomness seeded to: 2104482944
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.21 sec
+----------------------------------------------------------
+Test Passed.
+"a one-sided mesh does not collide from behind its face" end time: Oct 16 00:44 CEST
+"a one-sided mesh does not collide from behind its face" time elapsed: 00:00:00
+----------------------------------------------------------
+
+56/127 Testing: mesh collision-group filtering excludes a non-matching ball
+56/127 Test: mesh collision-group filtering excludes a non-matching ball
+Command: "/root/pachinball/native/build-san/physics_world_test" "mesh collision-group filtering excludes a non-matching ball"
+Directory: /root/pachinball/native/build-san
+"mesh collision-group filtering excludes a non-matching ball" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "mesh collision-group filtering excludes a non-matching ball"
+Randomness seeded to: 1367673732
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.31 sec
+----------------------------------------------------------
+Test Passed.
+"mesh collision-group filtering excludes a non-matching ball" end time: Oct 16 00:44 CEST
+"mesh collision-group filtering excludes a non-matching ball" time elapsed: 00:00:00
+----------------------------------------------------------
+
+57/127 Testing: ball dropped onto a static cylinder cap comes to rest on it
+57/127 Test: ball dropped onto a static cylinder cap comes to rest on it
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball dropped onto a static cylinder cap comes to rest on it"
+Directory: /root/pachinball/native/build-san
+"ball dropped onto a static cylinder cap comes to rest on it" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball dropped onto a static cylinder cap comes to rest on it"
+Randomness seeded to: 3905162686
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"ball dropped onto a static cylinder cap comes to rest on it" end time: Oct 16 00:44 CEST
+"ball dropped onto a static cylinder cap comes to rest on it" time elapsed: 00:00:00
+----------------------------------------------------------
+
+58/127 Testing: ball striking a cylinder wall off-centre is deflected sideways
+58/127 Test: ball striking a cylinder wall off-centre is deflected sideways
+Command: "/root/pachinball/native/build-san/physics_world_test" "ball striking a cylinder wall off-centre is deflected sideways"
+Directory: /root/pachinball/native/build-san
+"ball striking a cylinder wall off-centre is deflected sideways" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "ball striking a cylinder wall off-centre is deflected sideways"
+Randomness seeded to: 3208178155
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.17 sec
+----------------------------------------------------------
+Test Passed.
+"ball striking a cylinder wall off-centre is deflected sideways" end time: Oct 16 00:44 CEST
+"ball striking a cylinder wall off-centre is deflected sideways" time elapsed: 00:00:00
+----------------------------------------------------------
+
+59/127 Testing: spinning kinematic cylinder platter imparts tangential velocity
+59/127 Test: spinning kinematic cylinder platter imparts tangential velocity
+Command: "/root/pachinball/native/build-san/physics_world_test" "spinning kinematic cylinder platter imparts tangential velocity"
+Directory: /root/pachinball/native/build-san
+"spinning kinematic cylinder platter imparts tangential velocity" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "spinning kinematic cylinder platter imparts tangential velocity"
+Randomness seeded to: 2979415481
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.26 sec
+----------------------------------------------------------
+Test Passed.
+"spinning kinematic cylinder platter imparts tangential velocity" end time: Oct 16 00:44 CEST
+"spinning kinematic cylinder platter imparts tangential velocity" time elapsed: 00:00:00
+----------------------------------------------------------
+
+60/127 Testing: cylinder sensor emits one enter and one exit as a ball passes through
+60/127 Test: cylinder sensor emits one enter and one exit as a ball passes through
+Command: "/root/pachinball/native/build-san/physics_world_test" "cylinder sensor emits one enter and one exit as a ball passes through"
+Directory: /root/pachinball/native/build-san
+"cylinder sensor emits one enter and one exit as a ball passes through" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "cylinder sensor emits one enter and one exit as a ball passes through"
+Randomness seeded to: 3311712464
+===============================================================================
+All tests passed (77 assertions in 1 test case)
+
+<end of output>
+Test time =   0.13 sec
+----------------------------------------------------------
+Test Passed.
+"cylinder sensor emits one enter and one exit as a ball passes through" end time: Oct 16 00:44 CEST
+"cylinder sensor emits one enter and one exit as a ball passes through" time elapsed: 00:00:00
+----------------------------------------------------------
+
+61/127 Testing: sphere sensor triggers only within its radius
+61/127 Test: sphere sensor triggers only within its radius
+Command: "/root/pachinball/native/build-san/physics_world_test" "sphere sensor triggers only within its radius"
+Directory: /root/pachinball/native/build-san
+"sphere sensor triggers only within its radius" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "sphere sensor triggers only within its radius"
+Randomness seeded to: 119834218
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.13 sec
+----------------------------------------------------------
+Test Passed.
+"sphere sensor triggers only within its radius" end time: Oct 16 00:44 CEST
+"sphere sensor triggers only within its radius" time elapsed: 00:00:00
+----------------------------------------------------------
+
+62/127 Testing: a capsule body triggers a sensor volume
+62/127 Test: a capsule body triggers a sensor volume
+Command: "/root/pachinball/native/build-san/physics_world_test" "a capsule body triggers a sensor volume"
+Directory: /root/pachinball/native/build-san
+"a capsule body triggers a sensor volume" start time: Oct 16 00:44 CEST
+Output:
+----------------------------------------------------------
+Filters: "a capsule body triggers a sensor volume"
+Randomness seeded to: 2015623585
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.20 sec
+----------------------------------------------------------
+Test Passed.
+"a capsule body triggers a sensor volume" end time: Oct 16 00:45 CEST
+"a capsule body triggers a sensor volume" time elapsed: 00:00:00
+----------------------------------------------------------
+
+63/127 Testing: an updraft force field lifts a ball against gravity
+63/127 Test: an updraft force field lifts a ball against gravity
+Command: "/root/pachinball/native/build-san/physics_world_test" "an updraft force field lifts a ball against gravity"
+Directory: /root/pachinball/native/build-san
+"an updraft force field lifts a ball against gravity" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "an updraft force field lifts a ball against gravity"
+Randomness seeded to: 26161345
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.28 sec
+----------------------------------------------------------
+Test Passed.
+"an updraft force field lifts a ball against gravity" end time: Oct 16 00:45 CEST
+"an updraft force field lifts a ball against gravity" time elapsed: 00:00:00
+----------------------------------------------------------
+
+64/127 Testing: a ball outside a force field's region is untouched
+64/127 Test: a ball outside a force field's region is untouched
+Command: "/root/pachinball/native/build-san/physics_world_test" "a ball outside a force field's region is untouched"
+Directory: /root/pachinball/native/build-san
+"a ball outside a force field's region is untouched" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a ball outside a force field's region is untouched"
+Randomness seeded to: 4100932512
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"a ball outside a force field's region is untouched" end time: Oct 16 00:45 CEST
+"a ball outside a force field's region is untouched" time elapsed: 00:00:00
+----------------------------------------------------------
+
+65/127 Testing: a disabled force field can be switched back on
+65/127 Test: a disabled force field can be switched back on
+Command: "/root/pachinball/native/build-san/physics_world_test" "a disabled force field can be switched back on"
+Directory: /root/pachinball/native/build-san
+"a disabled force field can be switched back on" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a disabled force field can be switched back on"
+Randomness seeded to: 4212784843
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"a disabled force field can be switched back on" end time: Oct 16 00:45 CEST
+"a disabled force field can be switched back on" time elapsed: 00:00:00
+----------------------------------------------------------
+
+66/127 Testing: a dynamic box dropped on a static box comes to rest on it
+66/127 Test: a dynamic box dropped on a static box comes to rest on it
+Command: "/root/pachinball/native/build-san/physics_world_test" "a dynamic box dropped on a static box comes to rest on it"
+Directory: /root/pachinball/native/build-san
+"a dynamic box dropped on a static box comes to rest on it" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a dynamic box dropped on a static box comes to rest on it"
+Randomness seeded to: 2210033346
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.22 sec
+----------------------------------------------------------
+Test Passed.
+"a dynamic box dropped on a static box comes to rest on it" end time: Oct 16 00:45 CEST
+"a dynamic box dropped on a static box comes to rest on it" time elapsed: 00:00:00
+----------------------------------------------------------
+
+67/127 Testing: a ball striking a dynamic box pushes it and recoils
+67/127 Test: a ball striking a dynamic box pushes it and recoils
+Command: "/root/pachinball/native/build-san/physics_world_test" "a ball striking a dynamic box pushes it and recoils"
+Directory: /root/pachinball/native/build-san
+"a ball striking a dynamic box pushes it and recoils" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a ball striking a dynamic box pushes it and recoils"
+Randomness seeded to: 2075594782
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"a ball striking a dynamic box pushes it and recoils" end time: Oct 16 00:45 CEST
+"a ball striking a dynamic box pushes it and recoils" time elapsed: 00:00:00
+----------------------------------------------------------
+
+68/127 Testing: a dynamic box rests on a triangle-mesh floor
+68/127 Test: a dynamic box rests on a triangle-mesh floor
+Command: "/root/pachinball/native/build-san/physics_world_test" "a dynamic box rests on a triangle-mesh floor"
+Directory: /root/pachinball/native/build-san
+"a dynamic box rests on a triangle-mesh floor" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a dynamic box rests on a triangle-mesh floor"
+Randomness seeded to: 2789200689
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.30 sec
+----------------------------------------------------------
+Test Passed.
+"a dynamic box rests on a triangle-mesh floor" end time: Oct 16 00:45 CEST
+"a dynamic box rests on a triangle-mesh floor" time elapsed: 00:00:00
+----------------------------------------------------------
+
+69/127 Testing: a ball bounces off a prism face exactly as off a box face in the same plane
+69/127 Test: a ball bounces off a prism face exactly as off a box face in the same plane
+Command: "/root/pachinball/native/build-san/physics_world_test" "a ball bounces off a prism face exactly as off a box face in the same plane"
+Directory: /root/pachinball/native/build-san
+"a ball bounces off a prism face exactly as off a box face in the same plane" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a ball bounces off a prism face exactly as off a box face in the same plane"
+Randomness seeded to: 3794612390
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.40 sec
+----------------------------------------------------------
+Test Passed.
+"a ball bounces off a prism face exactly as off a box face in the same plane" end time: Oct 16 00:45 CEST
+"a ball bounces off a prism face exactly as off a box face in the same plane" time elapsed: 00:00:00
+----------------------------------------------------------
+
+70/127 Testing: a ball clipping a prism's vertical edge deflects and never enters the solid
+70/127 Test: a ball clipping a prism's vertical edge deflects and never enters the solid
+Command: "/root/pachinball/native/build-san/physics_world_test" "a ball clipping a prism's vertical edge deflects and never enters the solid"
+Directory: /root/pachinball/native/build-san
+"a ball clipping a prism's vertical edge deflects and never enters the solid" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a ball clipping a prism's vertical edge deflects and never enters the solid"
+Randomness seeded to: 3543070736
+===============================================================================
+All tests passed (92 assertions in 1 test case)
+
+<end of output>
+Test time =   0.29 sec
+----------------------------------------------------------
+Test Passed.
+"a ball clipping a prism's vertical edge deflects and never enters the solid" end time: Oct 16 00:45 CEST
+"a ball clipping a prism's vertical edge deflects and never enters the solid" time elapsed: 00:00:00
+----------------------------------------------------------
+
+71/127 Testing: Dynamic <-> Kinematic round trip preserves mass
+71/127 Test: Dynamic <-> Kinematic round trip preserves mass
+Command: "/root/pachinball/native/build-san/physics_world_test" "Dynamic <-> Kinematic round trip preserves mass"
+Directory: /root/pachinball/native/build-san
+"Dynamic <-> Kinematic round trip preserves mass" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "Dynamic <-> Kinematic round trip preserves mass"
+Randomness seeded to: 3512760093
+===============================================================================
+All tests passed (8 assertions in 1 test case)
+
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"Dynamic <-> Kinematic round trip preserves mass" end time: Oct 16 00:45 CEST
+"Dynamic <-> Kinematic round trip preserves mass" time elapsed: 00:00:00
+----------------------------------------------------------
+
+72/127 Testing: kinematic ball does not respond to gravity
+72/127 Test: kinematic ball does not respond to gravity
+Command: "/root/pachinball/native/build-san/physics_world_test" "kinematic ball does not respond to gravity"
+Directory: /root/pachinball/native/build-san
+"kinematic ball does not respond to gravity" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "kinematic ball does not respond to gravity"
+Randomness seeded to: 788296043
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"kinematic ball does not respond to gravity" end time: Oct 16 00:45 CEST
+"kinematic ball does not respond to gravity" time elapsed: 00:00:00
+----------------------------------------------------------
+
+73/127 Testing: kinematic targets move the body and derive its velocity
+73/127 Test: kinematic targets move the body and derive its velocity
+Command: "/root/pachinball/native/build-san/physics_world_test" "kinematic targets move the body and derive its velocity"
+Directory: /root/pachinball/native/build-san
+"kinematic targets move the body and derive its velocity" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "kinematic targets move the body and derive its velocity"
+Randomness seeded to: 2249212776
+===============================================================================
+All tests passed (14 assertions in 1 test case)
+
+<end of output>
+Test time =   0.23 sec
+----------------------------------------------------------
+Test Passed.
+"kinematic targets move the body and derive its velocity" end time: Oct 16 00:45 CEST
+"kinematic targets move the body and derive its velocity" time elapsed: 00:00:00
+----------------------------------------------------------
+
+74/127 Testing: release velocity matches the last kinematic delta
+74/127 Test: release velocity matches the last kinematic delta
+Command: "/root/pachinball/native/build-san/physics_world_test" "release velocity matches the last kinematic delta"
+Directory: /root/pachinball/native/build-san
+"release velocity matches the last kinematic delta" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "release velocity matches the last kinematic delta"
+Randomness seeded to: 4184723968
+===============================================================================
+All tests passed (9 assertions in 1 test case)
+
+<end of output>
+Test time =   0.17 sec
+----------------------------------------------------------
+Test Passed.
+"release velocity matches the last kinematic delta" end time: Oct 16 00:45 CEST
+"release velocity matches the last kinematic delta" time elapsed: 00:00:00
+----------------------------------------------------------
+
+75/127 Testing: a tick without a target leaves a driven body at rest
+75/127 Test: a tick without a target leaves a driven body at rest
+Command: "/root/pachinball/native/build-san/physics_world_test" "a tick without a target leaves a driven body at rest"
+Directory: /root/pachinball/native/build-san
+"a tick without a target leaves a driven body at rest" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a tick without a target leaves a driven body at rest"
+Randomness seeded to: 653132789
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"a tick without a target leaves a driven body at rest" end time: Oct 16 00:45 CEST
+"a tick without a target leaves a driven body at rest" time elapsed: 00:00:00
+----------------------------------------------------------
+
+76/127 Testing: a target sent to a dynamic body is ignored
+76/127 Test: a target sent to a dynamic body is ignored
+Command: "/root/pachinball/native/build-san/physics_world_test" "a target sent to a dynamic body is ignored"
+Directory: /root/pachinball/native/build-san
+"a target sent to a dynamic body is ignored" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a target sent to a dynamic body is ignored"
+Randomness seeded to: 2256139655
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.23 sec
+----------------------------------------------------------
+Test Passed.
+"a target sent to a dynamic body is ignored" end time: Oct 16 00:45 CEST
+"a target sent to a dynamic body is ignored" time elapsed: 00:00:00
+----------------------------------------------------------
+
+77/127 Testing: captured ball holds for 30 frames while a second ball rolls past
+77/127 Test: captured ball holds for 30 frames while a second ball rolls past
+Command: "/root/pachinball/native/build-san/physics_world_test" "captured ball holds for 30 frames while a second ball rolls past"
+Directory: /root/pachinball/native/build-san
+"captured ball holds for 30 frames while a second ball rolls past" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "captured ball holds for 30 frames while a second ball rolls past"
+Randomness seeded to: 3881891348
+===============================================================================
+All tests passed (95 assertions in 1 test case)
+
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"captured ball holds for 30 frames while a second ball rolls past" end time: Oct 16 00:45 CEST
+"captured ball holds for 30 frames while a second ball rolls past" time elapsed: 00:00:00
+----------------------------------------------------------
+
+78/127 Testing: kinematic body skips static solids but still trips sensors
+78/127 Test: kinematic body skips static solids but still trips sensors
+Command: "/root/pachinball/native/build-san/physics_world_test" "kinematic body skips static solids but still trips sensors"
+Directory: /root/pachinball/native/build-san
+"kinematic body skips static solids but still trips sensors" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "kinematic body skips static solids but still trips sensors"
+Randomness seeded to: 2424358472
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.20 sec
+----------------------------------------------------------
+Test Passed.
+"kinematic body skips static solids but still trips sensors" end time: Oct 16 00:45 CEST
+"kinematic body skips static solids but still trips sensors" time elapsed: 00:00:00
+----------------------------------------------------------
+
+79/127 Testing: removing a body with a pending target is safe
+79/127 Test: removing a body with a pending target is safe
+Command: "/root/pachinball/native/build-san/physics_world_test" "removing a body with a pending target is safe"
+Directory: /root/pachinball/native/build-san
+"removing a body with a pending target is safe" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "removing a body with a pending target is safe"
+Randomness seeded to: 3291877613
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.39 sec
+----------------------------------------------------------
+Test Passed.
+"removing a body with a pending target is safe" end time: Oct 16 00:45 CEST
+"removing a body with a pending target is safe" time elapsed: 00:00:00
+----------------------------------------------------------
+
+80/127 Testing: a ball dropped on the apex bounces straight up
+80/127 Test: a ball dropped on the apex bounces straight up
+Command: "/root/pachinball/native/build-san/physics_world_test" "a ball dropped on the apex bounces straight up"
+Directory: /root/pachinball/native/build-san
+"a ball dropped on the apex bounces straight up" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a ball dropped on the apex bounces straight up"
+Randomness seeded to: 3394791033
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"a ball dropped on the apex bounces straight up" end time: Oct 16 00:45 CEST
+"a ball dropped on the apex bounces straight up" time elapsed: 00:00:00
+----------------------------------------------------------
+
+81/127 Testing: a ball hitting the slant gets the slant normal
+81/127 Test: a ball hitting the slant gets the slant normal
+Command: "/root/pachinball/native/build-san/physics_world_test" "a ball hitting the slant gets the slant normal"
+Directory: /root/pachinball/native/build-san
+"a ball hitting the slant gets the slant normal" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a ball hitting the slant gets the slant normal"
+Randomness seeded to: 441495252
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"a ball hitting the slant gets the slant normal" end time: Oct 16 00:45 CEST
+"a ball hitting the slant gets the slant normal" time elapsed: 00:00:00
+----------------------------------------------------------
+
+82/127 Testing: a ball hitting the base from below gets a -Y normal
+82/127 Test: a ball hitting the base from below gets a -Y normal
+Command: "/root/pachinball/native/build-san/physics_world_test" "a ball hitting the base from below gets a -Y normal"
+Directory: /root/pachinball/native/build-san
+"a ball hitting the base from below gets a -Y normal" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a ball hitting the base from below gets a -Y normal"
+Randomness seeded to: 678437920
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.22 sec
+----------------------------------------------------------
+Test Passed.
+"a ball hitting the base from below gets a -Y normal" end time: Oct 16 00:45 CEST
+"a ball hitting the base from below gets a -Y normal" time elapsed: 00:00:00
+----------------------------------------------------------
+
+83/127 Testing: a ball passing inside the bounding cylinder but clear of the slant is untouched
+83/127 Test: a ball passing inside the bounding cylinder but clear of the slant is untouched
+Command: "/root/pachinball/native/build-san/physics_world_test" "a ball passing inside the bounding cylinder but clear of the slant is untouched"
+Directory: /root/pachinball/native/build-san
+"a ball passing inside the bounding cylinder but clear of the slant is untouched" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a ball passing inside the bounding cylinder but clear of the slant is untouched"
+Randomness seeded to: 2355689841
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"a ball passing inside the bounding cylinder but clear of the slant is untouched" end time: Oct 16 00:45 CEST
+"a ball passing inside the bounding cylinder but clear of the slant is untouched" time elapsed: 00:00:00
+----------------------------------------------------------
+
+84/127 Testing: a rotated cone reports its normal in world space
+84/127 Test: a rotated cone reports its normal in world space
+Command: "/root/pachinball/native/build-san/physics_world_test" "a rotated cone reports its normal in world space"
+Directory: /root/pachinball/native/build-san
+"a rotated cone reports its normal in world space" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a rotated cone reports its normal in world space"
+Randomness seeded to: 3290739956
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.13 sec
+----------------------------------------------------------
+Test Passed.
+"a rotated cone reports its normal in world space" end time: Oct 16 00:45 CEST
+"a rotated cone reports its normal in world space" time elapsed: 00:00:00
+----------------------------------------------------------
+
+85/127 Testing: a ball whose centre starts inside the cone is pushed out
+85/127 Test: a ball whose centre starts inside the cone is pushed out
+Command: "/root/pachinball/native/build-san/physics_world_test" "a ball whose centre starts inside the cone is pushed out"
+Directory: /root/pachinball/native/build-san
+"a ball whose centre starts inside the cone is pushed out" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a ball whose centre starts inside the cone is pushed out"
+Randomness seeded to: 2169353323
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.20 sec
+----------------------------------------------------------
+Test Passed.
+"a ball whose centre starts inside the cone is pushed out" end time: Oct 16 00:45 CEST
+"a ball whose centre starts inside the cone is pushed out" time elapsed: 00:00:00
+----------------------------------------------------------
+
+86/127 Testing: a trap funnel stops a ball rolling across the table
+86/127 Test: a trap funnel stops a ball rolling across the table
+Command: "/root/pachinball/native/build-san/physics_world_test" "a trap funnel stops a ball rolling across the table"
+Directory: /root/pachinball/native/build-san
+"a trap funnel stops a ball rolling across the table" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a trap funnel stops a ball rolling across the table"
+Randomness seeded to: 132851652
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"a trap funnel stops a ball rolling across the table" end time: Oct 16 00:45 CEST
+"a trap funnel stops a ball rolling across the table" time elapsed: 00:00:00
+----------------------------------------------------------
+
+87/127 Testing: cone handles: groups, clear and capacity
+87/127 Test: cone handles: groups, clear and capacity
+Command: "/root/pachinball/native/build-san/physics_world_test" "cone handles: groups\, clear and capacity"
+Directory: /root/pachinball/native/build-san
+"cone handles: groups, clear and capacity" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "cone handles: groups\, clear and capacity"
+Randomness seeded to: 3954125520
+===============================================================================
+All tests passed (7 assertions in 1 test case)
+
+<end of output>
+Test time =   0.17 sec
+----------------------------------------------------------
+Test Passed.
+"cone handles: groups, clear and capacity" end time: Oct 16 00:45 CEST
+"cone handles: groups, clear and capacity" time elapsed: 00:00:00
+----------------------------------------------------------
+
+88/127 Testing: a ball falling through a 12x12 field contacts its pins
+88/127 Test: a ball falling through a 12x12 field contacts its pins
+Command: "/root/pachinball/native/build-san/physics_world_test" "a ball falling through a 12x12 field contacts its pins"
+Directory: /root/pachinball/native/build-san
+"a ball falling through a 12x12 field contacts its pins" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a ball falling through a 12x12 field contacts its pins"
+Randomness seeded to: 877552706
+===============================================================================
+All tests passed (18 assertions in 1 test case)
+
+<end of output>
+Test time =   0.45 sec
+----------------------------------------------------------
+Test Passed.
+"a ball falling through a 12x12 field contacts its pins" end time: Oct 16 00:45 CEST
+"a ball falling through a 12x12 field contacts its pins" time elapsed: 00:00:00
+----------------------------------------------------------
+
+89/127 Testing: a keep-out AABB holds no pin
+89/127 Test: a keep-out AABB holds no pin
+Command: "/root/pachinball/native/build-san/physics_world_test" "a keep-out AABB holds no pin"
+Directory: /root/pachinball/native/build-san
+"a keep-out AABB holds no pin" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a keep-out AABB holds no pin"
+Randomness seeded to: 1241965285
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"a keep-out AABB holds no pin" end time: Oct 16 00:45 CEST
+"a keep-out AABB holds no pin" time elapsed: 00:00:00
+----------------------------------------------------------
+
+90/127 Testing: an occupancy mask punches a hole
+90/127 Test: an occupancy mask punches a hole
+Command: "/root/pachinball/native/build-san/physics_world_test" "an occupancy mask punches a hole"
+Directory: /root/pachinball/native/build-san
+"an occupancy mask punches a hole" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "an occupancy mask punches a hole"
+Randomness seeded to: 3609442300
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.20 sec
+----------------------------------------------------------
+Test Passed.
+"an occupancy mask punches a hole" end time: Oct 16 00:45 CEST
+"an occupancy mask punches a hole" time elapsed: 00:00:00
+----------------------------------------------------------
+
+91/127 Testing: a short mask clears the slots it does not cover
+91/127 Test: a short mask clears the slots it does not cover
+Command: "/root/pachinball/native/build-san/physics_world_test" "a short mask clears the slots it does not cover"
+Directory: /root/pachinball/native/build-san
+"a short mask clears the slots it does not cover" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a short mask clears the slots it does not cover"
+Randomness seeded to: 1912329727
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.48 sec
+----------------------------------------------------------
+Test Passed.
+"a short mask clears the slots it does not cover" end time: Oct 16 00:45 CEST
+"a short mask clears the slots it does not cover" time elapsed: 00:00:00
+----------------------------------------------------------
+
+92/127 Testing: seeded dropout is deterministic and shared with TypeScript
+92/127 Test: seeded dropout is deterministic and shared with TypeScript
+Command: "/root/pachinball/native/build-san/physics_world_test" "seeded dropout is deterministic and shared with TypeScript"
+Directory: /root/pachinball/native/build-san
+"seeded dropout is deterministic and shared with TypeScript" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "seeded dropout is deterministic and shared with TypeScript"
+Randomness seeded to: 2059331895
+===============================================================================
+All tests passed (7 assertions in 1 test case)
+
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"seeded dropout is deterministic and shared with TypeScript" end time: Oct 16 00:45 CEST
+"seeded dropout is deterministic and shared with TypeScript" time elapsed: 00:00:00
+----------------------------------------------------------
+
+93/127 Testing: a pin field steps like the same pins added one cylinder at a time
+93/127 Test: a pin field steps like the same pins added one cylinder at a time
+Command: "/root/pachinball/native/build-san/physics_world_test" "a pin field steps like the same pins added one cylinder at a time"
+Directory: /root/pachinball/native/build-san
+"a pin field steps like the same pins added one cylinder at a time" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a pin field steps like the same pins added one cylinder at a time"
+Randomness seeded to: 2125211511
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.20 sec
+----------------------------------------------------------
+Test Passed.
+"a pin field steps like the same pins added one cylinder at a time" end time: Oct 16 00:45 CEST
+"a pin field steps like the same pins added one cylinder at a time" time elapsed: 00:00:00
+----------------------------------------------------------
+
+94/127 Testing: a rotated field collides where its pins actually are
+94/127 Test: a rotated field collides where its pins actually are
+Command: "/root/pachinball/native/build-san/physics_world_test" "a rotated field collides where its pins actually are"
+Directory: /root/pachinball/native/build-san
+"a rotated field collides where its pins actually are" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a rotated field collides where its pins actually are"
+Randomness seeded to: 3572438080
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.23 sec
+----------------------------------------------------------
+Test Passed.
+"a rotated field collides where its pins actually are" end time: Oct 16 00:45 CEST
+"a rotated field collides where its pins actually are" time elapsed: 00:00:00
+----------------------------------------------------------
+
+95/127 Testing: a ball above the pin tops never touches the field
+95/127 Test: a ball above the pin tops never touches the field
+Command: "/root/pachinball/native/build-san/physics_world_test" "a ball above the pin tops never touches the field"
+Directory: /root/pachinball/native/build-san
+"a ball above the pin tops never touches the field" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a ball above the pin tops never touches the field"
+Randomness seeded to: 3413810776
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"a ball above the pin tops never touches the field" end time: Oct 16 00:45 CEST
+"a ball above the pin tops never touches the field" time elapsed: 00:00:00
+----------------------------------------------------------
+
+96/127 Testing: collision groups on the field id gate every pin at once
+96/127 Test: collision groups on the field id gate every pin at once
+Command: "/root/pachinball/native/build-san/physics_world_test" "collision groups on the field id gate every pin at once"
+Directory: /root/pachinball/native/build-san
+"collision groups on the field id gate every pin at once" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "collision groups on the field id gate every pin at once"
+Randomness seeded to: 750886241
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"collision groups on the field id gate every pin at once" end time: Oct 16 00:45 CEST
+"collision groups on the field id gate every pin at once" time elapsed: 00:00:00
+----------------------------------------------------------
+
+97/127 Testing: four dense fields plus table statics fit without dropping a handle
+97/127 Test: four dense fields plus table statics fit without dropping a handle
+Command: "/root/pachinball/native/build-san/physics_world_test" "four dense fields plus table statics fit without dropping a handle"
+Directory: /root/pachinball/native/build-san
+"four dense fields plus table statics fit without dropping a handle" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "four dense fields plus table statics fit without dropping a handle"
+Randomness seeded to: 1147836493
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"four dense fields plus table statics fit without dropping a handle" end time: Oct 16 00:45 CEST
+"four dense fields plus table statics fit without dropping a handle" time elapsed: 00:00:00
+----------------------------------------------------------
+
+98/127 Testing: the pin-field family has its own capacity and clears with the statics
+98/127 Test: the pin-field family has its own capacity and clears with the statics
+Command: "/root/pachinball/native/build-san/physics_world_test" "the pin-field family has its own capacity and clears with the statics"
+Directory: /root/pachinball/native/build-san
+"the pin-field family has its own capacity and clears with the statics" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "the pin-field family has its own capacity and clears with the statics"
+Randomness seeded to: 3767150617
+===============================================================================
+All tests passed (6 assertions in 1 test case)
+
+<end of output>
+Test time =   0.28 sec
+----------------------------------------------------------
+Test Passed.
+"the pin-field family has its own capacity and clears with the statics" end time: Oct 16 00:45 CEST
+"the pin-field family has its own capacity and clears with the statics" time elapsed: 00:00:00
+----------------------------------------------------------
+
+99/127 Testing: the cone family no longer swallows pin-field ids
+99/127 Test: the cone family no longer swallows pin-field ids
+Command: "/root/pachinball/native/build-san/physics_world_test" "the cone family no longer swallows pin-field ids"
+Directory: /root/pachinball/native/build-san
+"the cone family no longer swallows pin-field ids" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "the cone family no longer swallows pin-field ids"
+Randomness seeded to: 2346093233
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"the cone family no longer swallows pin-field ids" end time: Oct 16 00:45 CEST
+"the cone family no longer swallows pin-field ids" time elapsed: 00:00:00
+----------------------------------------------------------
+
+100/127 Testing: snapshot rewind reproduces the run bit-for-bit
+100/127 Test: snapshot rewind reproduces the run bit-for-bit
+Command: "/root/pachinball/native/build-san/physics_world_test" "snapshot rewind reproduces the run bit-for-bit"
+Directory: /root/pachinball/native/build-san
+"snapshot rewind reproduces the run bit-for-bit" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "snapshot rewind reproduces the run bit-for-bit"
+Randomness seeded to: 3702878162
+===============================================================================
+All tests passed (9 assertions in 1 test case)
+
+<end of output>
+Test time =   0.69 sec
+----------------------------------------------------------
+Test Passed.
+"snapshot rewind reproduces the run bit-for-bit" end time: Oct 16 00:45 CEST
+"snapshot rewind reproduces the run bit-for-bit" time elapsed: 00:00:00
+----------------------------------------------------------
+
+101/127 Testing: snapshot restores into a freshly built table
+101/127 Test: snapshot restores into a freshly built table
+Command: "/root/pachinball/native/build-san/physics_world_test" "snapshot restores into a freshly built table"
+Directory: /root/pachinball/native/build-san
+"snapshot restores into a freshly built table" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "snapshot restores into a freshly built table"
+Randomness seeded to: 4253152728
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.63 sec
+----------------------------------------------------------
+Test Passed.
+"snapshot restores into a freshly built table" end time: Oct 16 00:45 CEST
+"snapshot restores into a freshly built table" time elapsed: 00:00:00
+----------------------------------------------------------
+
+102/127 Testing: restored manifold does not re-fire Enter for resting contacts
+102/127 Test: restored manifold does not re-fire Enter for resting contacts
+Command: "/root/pachinball/native/build-san/physics_world_test" "restored manifold does not re-fire Enter for resting contacts"
+Directory: /root/pachinball/native/build-san
+"restored manifold does not re-fire Enter for resting contacts" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "restored manifold does not re-fire Enter for resting contacts"
+Randomness seeded to: 1298825741
+===============================================================================
+All tests passed (7 assertions in 1 test case)
+
+<end of output>
+Test time =   0.37 sec
+----------------------------------------------------------
+Test Passed.
+"restored manifold does not re-fire Enter for resting contacts" end time: Oct 16 00:45 CEST
+"restored manifold does not re-fire Enter for resting contacts" time elapsed: 00:00:00
+----------------------------------------------------------
+
+103/127 Testing: snapshot refuses a differently built table and leaves the world untouched
+103/127 Test: snapshot refuses a differently built table and leaves the world untouched
+Command: "/root/pachinball/native/build-san/physics_world_test" "snapshot refuses a differently built table and leaves the world untouched"
+Directory: /root/pachinball/native/build-san
+"snapshot refuses a differently built table and leaves the world untouched" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "snapshot refuses a differently built table and leaves the world untouched"
+Randomness seeded to: 1203144182
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.19 sec
+----------------------------------------------------------
+Test Passed.
+"snapshot refuses a differently built table and leaves the world untouched" end time: Oct 16 00:45 CEST
+"snapshot refuses a differently built table and leaves the world untouched" time elapsed: 00:00:00
+----------------------------------------------------------
+
+104/127 Testing: snapshot rejects malformed blobs without side effects
+104/127 Test: snapshot rejects malformed blobs without side effects
+Command: "/root/pachinball/native/build-san/physics_world_test" "snapshot rejects malformed blobs without side effects"
+Directory: /root/pachinball/native/build-san
+"snapshot rejects malformed blobs without side effects" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "snapshot rejects malformed blobs without side effects"
+Randomness seeded to: 2551672534
+===============================================================================
+All tests passed (15 assertions in 1 test case)
+
+<end of output>
+Test time =   0.13 sec
+----------------------------------------------------------
+Test Passed.
+"snapshot rejects malformed blobs without side effects" end time: Oct 16 00:45 CEST
+"snapshot rejects malformed blobs without side effects" time elapsed: 00:00:00
+----------------------------------------------------------
+
+105/127 Testing: serialize is deterministic and writes the parity fixture
+105/127 Test: serialize is deterministic and writes the parity fixture
+Command: "/root/pachinball/native/build-san/physics_world_test" "serialize is deterministic and writes the parity fixture"
+Directory: /root/pachinball/native/build-san
+"serialize is deterministic and writes the parity fixture" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "serialize is deterministic and writes the parity fixture"
+Randomness seeded to: 2220963438
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.65 sec
+----------------------------------------------------------
+Test Passed.
+"serialize is deterministic and writes the parity fixture" end time: Oct 16 00:45 CEST
+"serialize is deterministic and writes the parity fixture" time elapsed: 00:00:00
+----------------------------------------------------------
+
+106/127 Testing: hinge angle uses a libm-independent atan2
+106/127 Test: hinge angle uses a libm-independent atan2
+Command: "/root/pachinball/native/build-san/physics_world_test" "hinge angle uses a libm-independent atan2"
+Directory: /root/pachinball/native/build-san
+"hinge angle uses a libm-independent atan2" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "hinge angle uses a libm-independent atan2"
+Randomness seeded to: 2117600186
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"hinge angle uses a libm-independent atan2" end time: Oct 16 00:45 CEST
+"hinge angle uses a libm-independent atan2" time elapsed: 00:00:00
+----------------------------------------------------------
+
+107/127 Testing: staticContentHash ignores the order statics were added in
+107/127 Test: staticContentHash ignores the order statics were added in
+Command: "/root/pachinball/native/build-san/physics_world_test" "staticContentHash ignores the order statics were added in"
+Directory: /root/pachinball/native/build-san
+"staticContentHash ignores the order statics were added in" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "staticContentHash ignores the order statics were added in"
+Randomness seeded to: 2849364769
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"staticContentHash ignores the order statics were added in" end time: Oct 16 00:45 CEST
+"staticContentHash ignores the order statics were added in" time elapsed: 00:00:00
+----------------------------------------------------------
+
+108/127 Testing: staticContentHash changes when one float in one box changes
+108/127 Test: staticContentHash changes when one float in one box changes
+Command: "/root/pachinball/native/build-san/physics_world_test" "staticContentHash changes when one float in one box changes"
+Directory: /root/pachinball/native/build-san
+"staticContentHash changes when one float in one box changes" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "staticContentHash changes when one float in one box changes"
+Randomness seeded to: 2174095946
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"staticContentHash changes when one float in one box changes" end time: Oct 16 00:45 CEST
+"staticContentHash changes when one float in one box changes" time elapsed: 00:00:00
+----------------------------------------------------------
+
+109/127 Testing: staticContentHash is unchanged by adding and stepping dynamic bodies
+109/127 Test: staticContentHash is unchanged by adding and stepping dynamic bodies
+Command: "/root/pachinball/native/build-san/physics_world_test" "staticContentHash is unchanged by adding and stepping dynamic bodies"
+Directory: /root/pachinball/native/build-san
+"staticContentHash is unchanged by adding and stepping dynamic bodies" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "staticContentHash is unchanged by adding and stepping dynamic bodies"
+Randomness seeded to: 2649318485
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.21 sec
+----------------------------------------------------------
+Test Passed.
+"staticContentHash is unchanged by adding and stepping dynamic bodies" end time: Oct 16 00:45 CEST
+"staticContentHash is unchanged by adding and stepping dynamic bodies" time elapsed: 00:00:00
+----------------------------------------------------------
+
+110/127 Testing: a snapshot restores onto the right statics when the target added them in another order
+110/127 Test: a snapshot restores onto the right statics when the target added them in another order
+Command: "/root/pachinball/native/build-san/physics_world_test" "a snapshot restores onto the right statics when the target added them in another order"
+Directory: /root/pachinball/native/build-san
+"a snapshot restores onto the right statics when the target added them in another order" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a snapshot restores onto the right statics when the target added them in another order"
+Randomness seeded to: 1023557240
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.23 sec
+----------------------------------------------------------
+Test Passed.
+"a snapshot restores onto the right statics when the target added them in another order" end time: Oct 16 00:45 CEST
+"a snapshot restores onto the right statics when the target added them in another order" time elapsed: 00:00:00
+----------------------------------------------------------
+
+111/127 Testing: a version-1 snapshot is refused as BadVersion, not restored
+111/127 Test: a version-1 snapshot is refused as BadVersion, not restored
+Command: "/root/pachinball/native/build-san/physics_world_test" "a version-1 snapshot is refused as BadVersion\, not restored"
+Directory: /root/pachinball/native/build-san
+"a version-1 snapshot is refused as BadVersion, not restored" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a version-1 snapshot is refused as BadVersion\, not restored"
+Randomness seeded to: 2369879777
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"a version-1 snapshot is refused as BadVersion, not restored" end time: Oct 16 00:45 CEST
+"a version-1 snapshot is refused as BadVersion, not restored" time elapsed: 00:00:00
+----------------------------------------------------------
+
+112/127 Testing: stateHash: same steps give the same hash, any touched column changes it
+112/127 Test: stateHash: same steps give the same hash, any touched column changes it
+Command: "/root/pachinball/native/build-san/physics_world_test" "stateHash: same steps give the same hash\, any touched column changes it"
+Directory: /root/pachinball/native/build-san
+"stateHash: same steps give the same hash, any touched column changes it" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "stateHash: same steps give the same hash\, any touched column changes it"
+Randomness seeded to: 198633383
+===============================================================================
+All tests passed (7 assertions in 1 test case)
+
+<end of output>
+Test time =   0.31 sec
+----------------------------------------------------------
+Test Passed.
+"stateHash: same steps give the same hash, any touched column changes it" end time: Oct 16 00:45 CEST
+"stateHash: same steps give the same hash, any touched column changes it" time elapsed: 00:00:00
+----------------------------------------------------------
+
+113/127 Testing: stateHash ignores contact-event state and survives snapshot restore
+113/127 Test: stateHash ignores contact-event state and survives snapshot restore
+Command: "/root/pachinball/native/build-san/physics_world_test" "stateHash ignores contact-event state and survives snapshot restore"
+Directory: /root/pachinball/native/build-san
+"stateHash ignores contact-event state and survives snapshot restore" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "stateHash ignores contact-event state and survives snapshot restore"
+Randomness seeded to: 2390540200
+===============================================================================
+All tests passed (7 assertions in 1 test case)
+
+<end of output>
+Test time =   0.40 sec
+----------------------------------------------------------
+Test Passed.
+"stateHash ignores contact-event state and survives snapshot restore" end time: Oct 16 00:45 CEST
+"stateHash ignores contact-event state and survives snapshot restore" time elapsed: 00:00:00
+----------------------------------------------------------
+
+114/127 Testing: a steered kinematic ball wakes the sleeping ball it drives into
+114/127 Test: a steered kinematic ball wakes the sleeping ball it drives into
+Command: "/root/pachinball/native/build-san/physics_world_test" "a steered kinematic ball wakes the sleeping ball it drives into"
+Directory: /root/pachinball/native/build-san
+"a steered kinematic ball wakes the sleeping ball it drives into" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a steered kinematic ball wakes the sleeping ball it drives into"
+Randomness seeded to: 1978061746
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"a steered kinematic ball wakes the sleeping ball it drives into" end time: Oct 16 00:45 CEST
+"a steered kinematic ball wakes the sleeping ball it drives into" time elapsed: 00:00:00
+----------------------------------------------------------
+
+115/127 Testing: a rolling ball hits a sleeping ball instead of passing through it
+115/127 Test: a rolling ball hits a sleeping ball instead of passing through it
+Command: "/root/pachinball/native/build-san/physics_world_test" "a rolling ball hits a sleeping ball instead of passing through it"
+Directory: /root/pachinball/native/build-san
+"a rolling ball hits a sleeping ball instead of passing through it" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a rolling ball hits a sleeping ball instead of passing through it"
+Randomness seeded to: 312014315
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"a rolling ball hits a sleeping ball instead of passing through it" end time: Oct 16 00:45 CEST
+"a rolling ball hits a sleeping ball instead of passing through it" time elapsed: 00:00:00
+----------------------------------------------------------
+
+116/127 Testing: a sleeper stays asleep while an awake ball passes without touching it
+116/127 Test: a sleeper stays asleep while an awake ball passes without touching it
+Command: "/root/pachinball/native/build-san/physics_world_test" "a sleeper stays asleep while an awake ball passes without touching it"
+Directory: /root/pachinball/native/build-san
+"a sleeper stays asleep while an awake ball passes without touching it" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a sleeper stays asleep while an awake ball passes without touching it"
+Randomness seeded to: 1809639080
+===============================================================================
+All tests passed (5 assertions in 1 test case)
+
+<end of output>
+Test time =   0.13 sec
+----------------------------------------------------------
+Test Passed.
+"a sleeper stays asleep while an awake ball passes without touching it" end time: Oct 16 00:45 CEST
+"a sleeper stays asleep while an awake ball passes without touching it" time elapsed: 00:00:00
+----------------------------------------------------------
+
+117/127 Testing: two sleepers neither pair nor wake each other
+117/127 Test: two sleepers neither pair nor wake each other
+Command: "/root/pachinball/native/build-san/physics_world_test" "two sleepers neither pair nor wake each other"
+Directory: /root/pachinball/native/build-san
+"two sleepers neither pair nor wake each other" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "two sleepers neither pair nor wake each other"
+Randomness seeded to: 818567147
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"two sleepers neither pair nor wake each other" end time: Oct 16 00:45 CEST
+"two sleepers neither pair nor wake each other" time elapsed: 00:00:00
+----------------------------------------------------------
+
+118/127 Testing: axis pull draws a ball horizontally toward the axis
+118/127 Test: axis pull draws a ball horizontally toward the axis
+Command: "/root/pachinball/native/build-san/physics_world_test" "axis pull draws a ball horizontally toward the axis"
+Directory: /root/pachinball/native/build-san
+"axis pull draws a ball horizontally toward the axis" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "axis pull draws a ball horizontally toward the axis"
+Randomness seeded to: 3087953849
+===============================================================================
+All tests passed (4 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"axis pull draws a ball horizontally toward the axis" end time: Oct 16 00:45 CEST
+"axis pull draws a ball horizontally toward the axis" time elapsed: 00:00:00
+----------------------------------------------------------
+
+119/127 Testing: axis pull is strongest at the axis and fades linearly to the rim
+119/127 Test: axis pull is strongest at the axis and fades linearly to the rim
+Command: "/root/pachinball/native/build-san/physics_world_test" "axis pull is strongest at the axis and fades linearly to the rim"
+Directory: /root/pachinball/native/build-san
+"axis pull is strongest at the axis and fades linearly to the rim" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "axis pull is strongest at the axis and fades linearly to the rim"
+Randomness seeded to: 4263674235
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"axis pull is strongest at the axis and fades linearly to the rim" end time: Oct 16 00:45 CEST
+"axis pull is strongest at the axis and fades linearly to the rim" time elapsed: 00:00:00
+----------------------------------------------------------
+
+120/127 Testing: axis pull does nothing outside its radius or its height
+120/127 Test: axis pull does nothing outside its radius or its height
+Command: "/root/pachinball/native/build-san/physics_world_test" "axis pull does nothing outside its radius or its height"
+Directory: /root/pachinball/native/build-san
+"axis pull does nothing outside its radius or its height" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "axis pull does nothing outside its radius or its height"
+Randomness seeded to: 511961259
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"axis pull does nothing outside its radius or its height" end time: Oct 16 00:45 CEST
+"axis pull does nothing outside its radius or its height" time elapsed: 00:00:00
+----------------------------------------------------------
+
+121/127 Testing: axis pull applies nothing on the axis itself
+121/127 Test: axis pull applies nothing on the axis itself
+Command: "/root/pachinball/native/build-san/physics_world_test" "axis pull applies nothing on the axis itself"
+Directory: /root/pachinball/native/build-san
+"axis pull applies nothing on the axis itself" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "axis pull applies nothing on the axis itself"
+Randomness seeded to: 3789154330
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"axis pull applies nothing on the axis itself" end time: Oct 16 00:45 CEST
+"axis pull applies nothing on the axis itself" time elapsed: 00:00:00
+----------------------------------------------------------
+
+122/127 Testing: axis pull honours the acceleration flag
+122/127 Test: axis pull honours the acceleration flag
+Command: "/root/pachinball/native/build-san/physics_world_test" "axis pull honours the acceleration flag"
+Directory: /root/pachinball/native/build-san
+"axis pull honours the acceleration flag" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "axis pull honours the acceleration flag"
+Randomness seeded to: 226051455
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.19 sec
+----------------------------------------------------------
+Test Passed.
+"axis pull honours the acceleration flag" end time: Oct 16 00:45 CEST
+"axis pull honours the acceleration flag" time elapsed: 00:00:00
+----------------------------------------------------------
+
+123/127 Testing: a captured kinematic ball is not pulled
+123/127 Test: a captured kinematic ball is not pulled
+Command: "/root/pachinball/native/build-san/physics_world_test" "a captured kinematic ball is not pulled"
+Directory: /root/pachinball/native/build-san
+"a captured kinematic ball is not pulled" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a captured kinematic ball is not pulled"
+Randomness seeded to: 1415764073
+===============================================================================
+All tests passed (2 assertions in 1 test case)
+
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"a captured kinematic ball is not pulled" end time: Oct 16 00:45 CEST
+"a captured kinematic ball is not pulled" time elapsed: 00:00:00
+----------------------------------------------------------
+
+124/127 Testing: axis pull respects group masks and the enabled flag
+124/127 Test: axis pull respects group masks and the enabled flag
+Command: "/root/pachinball/native/build-san/physics_world_test" "axis pull respects group masks and the enabled flag"
+Directory: /root/pachinball/native/build-san
+"axis pull respects group masks and the enabled flag" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "axis pull respects group masks and the enabled flag"
+Randomness seeded to: 3853768037
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.28 sec
+----------------------------------------------------------
+Test Passed.
+"axis pull respects group masks and the enabled flag" end time: Oct 16 00:45 CEST
+"axis pull respects group masks and the enabled flag" time elapsed: 00:00:00
+----------------------------------------------------------
+
+125/127 Testing: axis pull wakes a sleeping ball inside it
+125/127 Test: axis pull wakes a sleeping ball inside it
+Command: "/root/pachinball/native/build-san/physics_world_test" "axis pull wakes a sleeping ball inside it"
+Directory: /root/pachinball/native/build-san
+"axis pull wakes a sleeping ball inside it" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "axis pull wakes a sleeping ball inside it"
+Randomness seeded to: 3888606083
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.13 sec
+----------------------------------------------------------
+Test Passed.
+"axis pull wakes a sleeping ball inside it" end time: Oct 16 00:45 CEST
+"axis pull wakes a sleeping ball inside it" time elapsed: 00:00:00
+----------------------------------------------------------
+
+126/127 Testing: a snapshot refuses a world whose well was built differently
+126/127 Test: a snapshot refuses a world whose well was built differently
+Command: "/root/pachinball/native/build-san/physics_world_test" "a snapshot refuses a world whose well was built differently"
+Directory: /root/pachinball/native/build-san
+"a snapshot refuses a world whose well was built differently" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "a snapshot refuses a world whose well was built differently"
+Randomness seeded to: 3105573008
+===============================================================================
+All tests passed (3 assertions in 1 test case)
+
+<end of output>
+Test time =   0.14 sec
+----------------------------------------------------------
+Test Passed.
+"a snapshot refuses a world whose well was built differently" end time: Oct 16 00:45 CEST
+"a snapshot refuses a world whose well was built differently" time elapsed: 00:00:00
+----------------------------------------------------------
+
+127/127 Testing: directional fields hash exactly as they did before AxisPull existed
+127/127 Test: directional fields hash exactly as they did before AxisPull existed
+Command: "/root/pachinball/native/build-san/physics_world_test" "directional fields hash exactly as they did before AxisPull existed"
+Directory: /root/pachinball/native/build-san
+"directional fields hash exactly as they did before AxisPull existed" start time: Oct 16 00:45 CEST
+Output:
+----------------------------------------------------------
+Filters: "directional fields hash exactly as they did before AxisPull existed"
+Randomness seeded to: 4019218941
+===============================================================================
+All tests passed (1 assertion in 1 test case)
+
+<end of output>
+Test time =   0.13 sec
+----------------------------------------------------------
+Test Passed.
+"directional fields hash exactly as they did before AxisPull existed" end time: Oct 16 00:45 CEST
+"directional fields hash exactly as they did before AxisPull existed" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 16 00:45 CEST

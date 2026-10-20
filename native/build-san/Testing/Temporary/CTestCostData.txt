@@ -1,0 +1,382 @@
+gravity 0 1
+sphere-sphere 0 1
+sphere-plane 0 0
+energy 0 0
+body 0 0
+ball 0 0
+ball 0 0
+stationary 0 0
+kinematic 0 0
+contact 0 0
+one 0 0
+contact 0 0
+broadphase 0 0
+broadphase 0 0
+sleeping 0 0
+large 0 0
+ball 0 0
+spinning 0 0
+kinematic 0 0
+ball 0 0
+orientation 0 0
+hinge 0 0
+hinge 0 0
+hinge 0 0
+hinge 0 0
+ball 0 0
+ball 0 0
+mover 0 0
+ball 0 0
+ball 0 0
+ball 0 0
+sensor 0 0
+two 0 0
+default 0 0
+ball 0 0
+ball 0 0
+ball 0 0
+ball 0 0
+a 0 0
+a 0 0
+ball 0 0
+static 0 0
+a 0 0
+a 0 0
+a 0 0
+clearStaticGeometry 0 0
+handles 0 0
+re-adding 0 0
+dynamic 0 0
+a 0 0
+a 0 0
+every 0 0
+ball 0 0
+ball 0 0
+a 0 0
+mesh 0 0
+ball 0 0
+ball 0 0
+spinning 0 0
+cylinder 0 0
+sphere 0 0
+a 0 0
+an 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+Dynamic 0 0
+kinematic 0 0
+kinematic 0 0
+release 0 0
+a 0 0
+a 0 0
+captured 0 0
+kinematic 0 0
+removing 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+cone 0 0
+a 0 0
+a 0 0
+an 0 0
+a 0 0
+seeded 0 0
+a 0 0
+a 0 0
+a 0 0
+collision 0 0
+four 0 0
+the 0 0
+the 0 0
+snapshot 0 0
+snapshot 0 0
+restored 0 0
+snapshot 0 0
+snapshot 0 0
+serialize 0 0
+hinge 0 0
+staticContentHash 0 0
+staticContentHash 0 0
+staticContentHash 0 0
+a 0 0
+a 0 0
+stateHash: 0 0
+stateHash 0 0
+a 0 0
+a 0 0
+a 0 0
+two 0 0
+axis 0 0
+axis 0 0
+axis 0 0
+axis 0 0
+axis 0 0
+a 0 0
+axis 0 0
+axis 0 0
+a 0 0
+directional 0 0
+gravity 0 1
+sphere-sphere 0 1
+sphere-plane 0 0
+energy 0 0
+body 0 0
+ball 0 0
+ball 0 0
+stationary 0 0
+kinematic 0 0
+contact 0 0
+one 0 0
+contact 0 0
+broadphase 0 0
+broadphase 0 0
+sleeping 0 0
+large 0 0
+ball 0 0
+spinning 0 0
+kinematic 0 0
+ball 0 0
+orientation 0 0
+hinge 0 0
+hinge 0 0
+hinge 0 0
+hinge 0 0
+ball 0 0
+ball 0 0
+mover 0 0
+ball 0 0
+ball 0 0
+ball 0 0
+sensor 0 0
+two 0 0
+default 0 0
+ball 0 0
+ball 0 0
+ball 0 0
+ball 0 0
+a 0 0
+a 0 0
+ball 0 0
+static 0 0
+a 0 0
+a 0 0
+a 0 0
+clearStaticGeometry 0 0
+handles 0 0
+re-adding 0 0
+dynamic 0 0
+a 0 0
+a 0 0
+every 0 0
+ball 0 0
+ball 0 0
+a 0 0
+mesh 0 0
+ball 0 0
+ball 0 0
+spinning 0 0
+cylinder 0 0
+sphere 0 0
+a 0 0
+an 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+Dynamic 0 0
+kinematic 0 0
+kinematic 0 0
+release 0 0
+a 0 0
+a 0 0
+captured 0 0
+kinematic 0 0
+removing 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+a 0 0
+cone 0 0
+a 0 0
+a 0 0
+an 0 0
+a 0 0
+seeded 0 0
+a 0 0
+a 0 0
+a 0 0
+collision 0 0
+four 0 0
+the 0 0
+the 0 0
+snapshot 0 0
+snapshot 0 0
+restored 0 0
+snapshot 0 0
+snapshot 0 0
+serialize 0 0
+hinge 0 0
+staticContentHash 0 0
+staticContentHash 0 0
+staticContentHash 0 0
+a 0 0
+a 0 0
+stateHash: 0 0
+stateHash 0 0
+a 0 0
+a 0 0
+a 0 0
+two 0 0
+axis 0 0
+axis 0 0
+axis 0 0
+axis 0 0
+axis 0 0
+a 0 0
+axis 0 0
+axis 0 0
+a 0 0
+directional 0 0
+gravity integration 1 0.109877
+sphere-sphere contact 1 0.10047
+sphere-plane bounce restitution 1 0.122176
+energy non-explosion (60 steps) 1 0.145124
+body remove and recreate 1 0.123392
+ball drops on box 1 0.135083
+ball hits capsule 1 0.167172
+stationary kinematic capsule supports resting ball 1 0.273739
+kinematic capsule flings ball 1 0.132943
+contact manifold enter/stay/exit for resting ball 1 0.130002
+one contact event per pair per step despite substeps 1 0.144526
+contact listener peak impulse and lossless overflow 1 0.192152
+broadphase culls distant static colliders 1 0.296467
+broadphase emits pairs for nearby static colliders 1 0.109267
+sleeping bodies reduce broadphase pair count 1 0.127303
+large scene step completes under time budget 1 0.259726
+ball rolls down inclined plane 1 0.20682
+spinning ball deflects on wall contact 1 0.282166
+kinematic capsule flick imparts spin 1 0.104684
+ball on flat plane comes to rest 1 0.192359
+orientation integrates from angular velocity 1 0.152503
+hinge holds angle under gravity 1 0.188424
+hinge motor reaches target omega 1 0.147231
+hinge angle limits do not explode 1 0.125572
+hinge motor wakes sleeping body 1 0.141056
+ball resting on a rising kinematic piston is launched upward 1 0.114733
+ball on a rotating kinematic platter picks up tangential velocity 1 0.235087
+mover does not respond to bodies excluded by its filter mask 1 0.138707
+ball crossing a sensor volume emits exactly one enter and one exit 1 0.141508
+ball passing through a sensor volume undergoes no positional correction 1 0.168127
+ball dwelling inside a sensor for N frames emits N-2 stay events 1 0.101495
+sensor volume does not overlap a body excluded by its filter mask 1 0.139367
+two bodies whose filter masks exclude each other never generate a contact pair 1 0.137579
+default membership/filter collides with everything (pre-filter behavior preserved) 1 0.150411
+ball rolls down a static box rotated 15 degrees without tunnelling or jitter 1 0.187329
+ball bounces off a static cylinder SIDE wall with a radial normal 1 0.101327
+ball bounces off a static cylinder END CAP with an axial normal 1 0.329025
+ball hitting the static cylinder RIM gets a finite, unit, outward-diagonal normal 1 0.115014
+a ball whose centre starts inside a static cylinder is pushed out with a sane normal 1 0.147546
+a rotated static cylinder reports its normal in world space 1 0.197987
+ball bounces off a static sphere 1 0.121742
+static sphere handles have their own negative id range 1 0.0914581
+a filter word excludes a static cylinder from a ball that should pass through 1 0.0990429
+a matching filter word lets a ball collide with a static cylinder 1 0.0955939
+a filter word excludes a static sphere from a ball that should pass through 1 0.166623
+clearStaticGeometry removes every static, sensor and mover 1 0.138789
+handles restart from the base after clearStaticGeometry 1 0.101793
+re-adding after clearStaticGeometry leaves exactly one copy 1 0.0891779
+dynamic bodies and hinges survive clearStaticGeometry 1 0.107596
+a body-body pair does not suppress a body-cylinder pair with the same key 1 0.125169
+a static family refuses creation at its capacity instead of aliasing the next 1 0.112266
+every static family enforces the same capacity 1 0.145405
+ball rolls down a 15 degree triangle-mesh ramp 1 0.129027
+ball crossing the shared diagonal of a mesh ramp feels no seam 1 0.192321
+a one-sided mesh does not collide from behind its face 1 0.206507
+mesh collision-group filtering excludes a non-matching ball 1 0.312813
+ball dropped onto a static cylinder cap comes to rest on it 1 0.122435
+ball striking a cylinder wall off-centre is deflected sideways 1 0.171811
+spinning kinematic cylinder platter imparts tangential velocity 1 0.264969
+cylinder sensor emits one enter and one exit as a ball passes through 1 0.134871
+sphere sensor triggers only within its radius 1 0.127193
+a capsule body triggers a sensor volume 1 0.197836
+an updraft force field lifts a ball against gravity 1 0.278134
+a ball outside a force field's region is untouched 1 0.102635
+a disabled force field can be switched back on 1 0.107349
+a dynamic box dropped on a static box comes to rest on it 1 0.220063
+a ball striking a dynamic box pushes it and recoils 1 0.136254
+a dynamic box rests on a triangle-mesh floor 1 0.304842
+a ball bounces off a prism face exactly as off a box face in the same plane 1 0.399417
+a ball clipping a prism's vertical edge deflects and never enters the solid 1 0.286408
+Dynamic <-> Kinematic round trip preserves mass 1 0.113866
+kinematic ball does not respond to gravity 1 0.118605
+kinematic targets move the body and derive its velocity 1 0.225995
+release velocity matches the last kinematic delta 1 0.16651
+a tick without a target leaves a driven body at rest 1 0.117593
+a target sent to a dynamic body is ignored 1 0.228837
+captured ball holds for 30 frames while a second ball rolls past 1 0.140647
+kinematic body skips static solids but still trips sensors 1 0.197162
+removing a body with a pending target is safe 1 0.394728
+a ball dropped on the apex bounces straight up 1 0.145912
+a ball hitting the slant gets the slant normal 1 0.116878
+a ball hitting the base from below gets a -Y normal 1 0.224287
+a ball passing inside the bounding cylinder but clear of the slant is untouched 1 0.123918
+a rotated cone reports its normal in world space 1 0.130702
+a ball whose centre starts inside the cone is pushed out 1 0.19824
+a trap funnel stops a ball rolling across the table 1 0.146913
+cone handles: groups, clear and capacity 1 0.168952
+a ball falling through a 12x12 field contacts its pins 1 0.446437
+a keep-out AABB holds no pin 1 0.139047
+an occupancy mask punches a hole 1 0.204982
+a short mask clears the slots it does not cover 1 0.482691
+seeded dropout is deterministic and shared with TypeScript 1 0.106213
+a pin field steps like the same pins added one cylinder at a time 1 0.195429
+a rotated field collides where its pins actually are 1 0.227777
+a ball above the pin tops never touches the field 1 0.108585
+collision groups on the field id gate every pin at once 1 0.114374
+four dense fields plus table statics fit without dropping a handle 1 0.139617
+the pin-field family has its own capacity and clears with the statics 1 0.28146
+the cone family no longer swallows pin-field ids 1 0.123788
+snapshot rewind reproduces the run bit-for-bit 1 0.694723
+snapshot restores into a freshly built table 1 0.627789
+restored manifold does not re-fire Enter for resting contacts 1 0.3698
+snapshot refuses a differently built table and leaves the world untouched 1 0.189874
+snapshot rejects malformed blobs without side effects 1 0.132657
+serialize is deterministic and writes the parity fixture 1 0.647816
+hinge angle uses a libm-independent atan2 1 0.1187
+staticContentHash ignores the order statics were added in 1 0.116806
+staticContentHash changes when one float in one box changes 1 0.11083
+staticContentHash is unchanged by adding and stepping dynamic bodies 1 0.207911
+a snapshot restores onto the right statics when the target added them in another order 1 0.228892
+a version-1 snapshot is refused as BadVersion, not restored 1 0.104392
+stateHash: same steps give the same hash, any touched column changes it 1 0.307433
+stateHash ignores contact-event state and survives snapshot restore 1 0.397684
+a steered kinematic ball wakes the sleeping ball it drives into 1 0.115795
+a rolling ball hits a sleeping ball instead of passing through it 1 0.113972
+a sleeper stays asleep while an awake ball passes without touching it 1 0.134879
+two sleepers neither pair nor wake each other 1 0.101927
+axis pull draws a ball horizontally toward the axis 1 0.118739
+axis pull is strongest at the axis and fades linearly to the rim 1 0.151159
+axis pull does nothing outside its radius or its height 1 0.108312
+axis pull applies nothing on the axis itself 1 0.116553
+axis pull honours the acceleration flag 1 0.188053
+a captured kinematic ball is not pulled 1 0.144358
+axis pull respects group masks and the enabled flag 1 0.282381
+axis pull wakes a sleeping ball inside it 1 0.129629
+a snapshot refuses a world whose well was built differently 1 0.140518
+directional fields hash exactly as they did before AxisPull existed 1 0.129393
+---

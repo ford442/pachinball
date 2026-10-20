@@ -2370,7 +2370,7 @@ export class Game {
       onZoneEnter: (zone, fromZone, isMajor) => {
         this.handleScenarioZoneEnter(zone, fromZone, isMajor)
       },
-      onZoneExit: (zone, toZone) => {
+      onZoneExit: (_zone, _toZone) => {
         // Optional: handle zone exit effects
       },
       onZoneProgress: (_zone, _progress) => {
@@ -2400,7 +2400,7 @@ export class Game {
    */
   private handleScenarioZoneEnter(
     zone: ScenarioZone,
-    fromZone: ScenarioZone | null,
+    _fromZone: ScenarioZone | null,
     isMajor: boolean
   ): void {
     console.log(`[Game] Entered zone: ${zone.name} (${isMajor ? 'MAJOR' : 'minor'})`)

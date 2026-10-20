@@ -1,0 +1,5 @@
+if(EXISTS "/root/pachinball/native/build-native/physics_world_test-b12d07c_tests.cmake")
+  include("/root/pachinball/native/build-native/physics_world_test-b12d07c_tests.cmake")
+else()
+  add_test(physics_world_test_NOT_BUILT-b12d07c physics_world_test_NOT_BUILT-b12d07c)
+endif()
