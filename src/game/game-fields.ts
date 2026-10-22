@@ -167,6 +167,11 @@ export abstract class GameFields {
    */
   protected lazySingletonResets: Array<() => void> = []
 
+  /** Register a teardown for something a lazily loaded module created (run by dispose). */
+  addDisposeHook(reset: () => void): void {
+    this.lazySingletonResets.push(reset)
+  }
+
   disposeOverlaySystems(): void {
     this._leaderboardSystem?.stop()
     // Resets (and so disposes) the leaderboard singleton too, not just this Game's
@@ -290,4 +295,10 @@ export abstract class GameFields {
   checkpointDebug = new CheckpointDebugController({ signal: this.abort.signal })
   cosmeticSceneBuilt = false
   ghostBallRenderer: GhostBallRenderer | null = null
+  /** The race ghost of the active challenge (#444 Slice D); set by `replay/challenge-v2`. */
+  ghostRace: import('../replay/ghost-race').GhostRace | null = null
+  /** Set by `game/live-ui` (#444 Slice E): the live broadcast and spectator's per-step hook. */
+  afterFixedStep: (() => void) | null = null
+  /** Live spectate's UI (#444 Slice E), loaded after boot. */
+  liveUI: import('./live-ui').LiveUI | null = null
 }

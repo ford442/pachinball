@@ -1,6 +1,6 @@
 # Async Challenges & Replay Spectate (P3 Epic)
 
-**Status:** **v1 Implemented** (Client share links, RLE compression, API contract in `api/replays.py`, Leaderboard ▶ spectate button, `GhostBallRenderer`). **Challenges v2 in progress (#422):** C++ solver snapshots, replay world fingerprint, divergence toast.  
+**Status:** **v1 Implemented** (Client share links, RLE compression, API contract in `docs/API_CONTRACT.md` (was `api/replays.py`), Leaderboard ▶ spectate button, `GhostBallRenderer`). **Challenges v2 in progress (#422):** C++ solver snapshots, replay world fingerprint, divergence toast.  
 **Priority:** P3  
 **Related issues:** #297 (replay), #304 (procedural mutator), #292 (lane sensors), #288 (deploy/API auth), #322 / #340 (Async Challenges v1)
 
@@ -19,7 +19,7 @@ Later phases add weekly tournament APIs and (optionally) true realtime co-op mul
 | Phase | Feature | Depends on |
 |-------|---------|------------|
 | **v1 (this epic)** | Async challenges — seed + target score + replay upload; ghost spectate on another client | Deterministic replay, API storage, scoring reliability |
-| **v2** | Spectate replays — stream recorded input frames to passive observers (polling or SSE; still no netcode) | v1 replay format + stable ghost renderer |
+| **v2** | Spectate replays — stream recorded input frames to passive observers (polling or SSE; still no netcode). **Done in #444 Slice E:** opt-in live broadcast in 5 s chunks (`replays_live` / `replays_live_chunks`), polled; the spectator replays from the frame-0 snapshot one chunk behind, checks every chunk's state hash + score, and shows the ghost on the streamed ball path while it fast-forwards a mid-run join (`src/arcade/live-broadcast.ts`, `src/replay/live-spectate.ts`, `src/game/live-ui.ts`; rules in `docs/API_CONTRACT.md`) | v1 replay format + stable ghost renderer |
 | **v3** | Weekly tournament API — extend `api/` + `storage.noahcohn.com` contracts (brackets, windows, anti-cheat hooks) | v1 + auth hygiene |
 | **Future** | True realtime co-op multiball (Babylon + Rapier authority server) | High complexity — **not v1** |
 
@@ -37,18 +37,19 @@ Later phases add weekly tournament APIs and (optionally) true realtime co-op mul
 | Replay recorder / runner / ghost | `src/replay/` | `ReplayRecorder` (append-only `InputFrame[]` while `PLAYING`, RLE JSON), `ReplayRunner`, `GhostBallRenderer`, `ChallengeSystem` |
 | Seeded RNG | `src/core/seeded-rng.ts` | Mulberry32 session RNG, named forks, keyed `getLayoutRng` — catalogue in `docs/determinism-todo.md` |
 | Replay ↔ C++ snapshot | `src/replay/replay-snapshot.ts` | World fingerprint, frame-0 snapshot restore, divergence toast (#422) |
-| Input frame schema | `src/game-elements/types.ts` → `InputFrame` | Per-physics-frame flipper/plunger/nudge deltas + timestamp |
+| Input frame schema | `src/game-elements/types.ts` → `InputFrame` | One frame per fixed physics step (schema 3, #444): flipper/plunger/nudge deltas + timestamp |
 | Input buffering | `src/game-elements/input.ts` | `processBufferedInputs()` aligns input to physics frames |
 | Physics fixed timestep | `src/game-elements/physics.ts` | `FIXED_TIMESTEP = 1/60`, accumulator pattern |
+| Fixed-step gameplay loop | `src/game/physics/physics-controller.ts` | `FixedStepPacer` turns render frames into whole steps; `stepFixed()` runs input → physics → gameplay once per step (#444) |
+| Headless verifier | `scripts/verify-replay.mjs` | `npm run verify:replay` replays `tests/replays/*.json` in headless Chromium → `{ finalStateHash, score, steps }`, checked against goldens in CI |
 | API helper | `src/config/api.ts` → `apiFetch()` | Prod base: `https://storage.noahcohn.com/api` |
 
 ### Backend (minimal)
 
 | Asset | Location | Notes |
 |-------|----------|-------|
-| Adventure progress stub | `api/adventure.py` | File/GCS progress only |
-| Replay storage | `api/replays.py` | `POST /api/replays` (assigns `replay_id`), `GET /api/replays/{replay_id}` — stores the payload verbatim, so the #422 fingerprint fields ride along |
-| Leaderboard API | External (`storage.noahcohn.com`) | Consumed by client; accepts `replay_id` on submit; contract not versioned in this repo |
+| Live arcade service (#444) | `supabase/` + `src/arcade/` + `services/replay-verifier/` | Postgres (Supabase): `profiles`, `scores`, `replays`, `challenges`, `saves` with RLS; one Edge Function per write path; anonymous players; scores verified by replay on the storage host (Slice C); cloud saves across linked devices, challenge rows, the table of the week and verified race ghosts (Slice D). Contract: `docs/API_CONTRACT.md` + `docs/api/arcade.openapi.yaml` (replaces `api/*.py` and the unversioned `storage.noahcohn.com` leaderboard) |
+| Adventure progress (legacy) | `storage.noahcohn.com/api/adventure/progress` | Still posted by `AdventureState.syncToBackend`; Slice D moves saves to `put-save` |
 
 ### Missing
 
@@ -156,7 +157,7 @@ interface ReplayPayload {
 
 **Storage:** gzip JSON or MessagePack; cap at ~500 KB per run (≈ 3 min @ 60 fps × ~80 bytes/frame). Reject larger server-side.
 
-### API contracts (draft — extend `storage.noahcohn.com`)
+### API contracts (v1 draft — superseded by `docs/API_CONTRACT.md`, #444)
 
 #### `POST /api/replays`
 
@@ -221,7 +222,7 @@ never forces a restore it cannot trust:
 | `no-snapshot` | v1 replay or a Rapier recording: tape only | — |
 | `table-mismatch` | `staticHash` or the blob's hash differs; native `StaticMismatch` | "table differs from the recording (snapshot hash mismatch)" |
 | `tunables-mismatch` | Feeder tuning changed since recording | yes |
-| `id-layout` | Same table, but the live bodies / hinges do not pair up with the snapshot's by role (a different ball or flipper count) | yes |
+| `id-layout` | Same table, but the live bodies / hinges do not pair up with the snapshot's by role (a different ball or flipper count). The replay is **rejected**: playback stops with the reason (#444) | yes |
 | `unsupported` | Engine cannot restore (Rapier / mirror, pre-#422 bundle) | yes |
 | `invalid` | Truncated / corrupt / other version | yes |
 

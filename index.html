@@ -98,6 +98,8 @@
             </label>
             <p id="cascade-seed-label" class="cascade-seed-label">Vanilla table</p>
             <button type="button" id="cascade-randomize-btn" class="hidden">Randomize</button>
+            <button type="button" id="weekly-btn" class="secondary-btn" title="One table for everyone this week, with its own verified leaderboard">Table of the week</button>
+            <button type="button" id="live-btn" class="secondary-btn" title="Watch someone's game while they play it">Watch live</button>
           </div>
           <button id="start-btn" disabled title="Loading cabinet…">Start Game</button>
           <button type="button" id="renderer-toggle-btn" class="secondary-btn">
@@ -186,6 +188,34 @@
             </select>
             <small>Sample bank falls back to synth if files are missing</small>
           </label>
+
+          <h3 style="margin-top: 1.5rem; color: #00d9ff; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">Campaign save</h3>
+          <p id="campaign-save-status" class="campaign-save-status">Saved on this device</p>
+          <div class="setting-row campaign-save-row">
+            <button type="button" id="campaign-link-code-btn" class="secondary-btn">Get link code</button>
+            <strong id="campaign-link-code" class="campaign-link-code"></strong>
+          </div>
+          <div class="setting-row campaign-save-row">
+            <input id="campaign-link-input" maxlength="8" autocomplete="off" spellcheck="false" placeholder="Code from your other device" aria-label="Link code">
+            <button type="button" id="campaign-link-btn" class="secondary-btn">Link this device</button>
+          </div>
+          <div class="setting-row campaign-save-row">
+            <button type="button" id="campaign-export-btn" class="secondary-btn">Export save</button>
+            <button type="button" id="campaign-import-btn" class="secondary-btn">Import save</button>
+            <input type="file" id="campaign-import-file" accept="application/json,.json" hidden>
+          </div>
+          <small>A link code (10 minutes) lets another device share this campaign. Export / import works offline.</small>
+
+          <h3 style="margin-top: 1.5rem; color: #00d9ff; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">Live spectate</h3>
+          <label class="setting-row">
+            <input type="checkbox" id="live-broadcast-toggle">
+            <span>Let others watch my games live</span>
+            <small>Streams your inputs while you play (not video); a ● LIVE badge shows while it does</small>
+          </label>
+          <div class="setting-row campaign-save-row">
+            <input id="live-tag-input" maxlength="3" autocomplete="off" spellcheck="false" placeholder="Tag" aria-label="Your tag, shown to watchers">
+            <small>Three letters shown to watchers</small>
+          </div>
 
           <div id="developer-settings" class="hidden">
             <h3 style="margin-top: 1.5rem; color: #00d9ff; border-bottom: 1px solid #333; padding-bottom: 0.5rem;">Developer</h3>

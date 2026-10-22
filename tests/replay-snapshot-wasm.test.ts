@@ -88,6 +88,21 @@ describe.skipIf(!RUN)('replay from a C++ snapshot on the compiled bundle (#422)'
     expect(ballPose(client).v).toEqual(ballPose(live).v)
   })
 
+  it('a tape is one frame per fixed step: it replays bit-for-bit at any render rate (#444)', async () => {
+    const module = await loadModule()
+    // Recorded on a 144 Hz display: most frames take no step, some take one.
+    const { live, payload } = await recordLiveRun(module, { launch: true, frameMs: 1000 / 144 })
+    expect(payload.frames).toHaveLength(RECORD_FRAMES)
+    for (const frameMs of [1000 / 60, 1000 / 30, 1000 / 144]) {
+      const client = await replay(module, payload, { frameMs })
+      expect(client.controller.getLastReplaySnapshotResult()?.outcome).toBe('restored')
+      expect(client.engine.getStepCount()).toBe(live.engine.getStepCount())
+      expect(client.host.score).toBe(live.host.score)
+      expect(ballPose(client)).toEqual(ballPose(live))
+      expect(client.engine.getStateHash()).toBe(live.engine.getStateHash())
+    }
+  })
+
   it('restores across a differing id layout by remapping the TS links (#441)', async () => {
     const module = await loadModule()
     const { live, payload } = await recordLiveRun(module, { launch: true })
@@ -100,6 +115,18 @@ describe.skipIf(!RUN)('replay from a C++ snapshot on the compiled bundle (#422)'
     expect(ballPose(client).p).toEqual(ballPose(live).p)
     expect(ballPose(client).v).toEqual(ballPose(live).v)
     expect(client.engine.serializeSnapshot()).toEqual(live.engine.serializeSnapshot())
+  })
+
+  it('rejects a replay whose bodies do not pair up with the recording, and stops playing it (#444)', async () => {
+    const module = await loadModule()
+    const { payload } = await recordLiveRun(module)
+    const client = await replay(module, payload, { extraBall: true })
+    expect(client.controller.getLastReplaySnapshotResult()).toMatchObject({ outcome: 'id-layout' })
+    expect(client.runner.getRejection()).toMatchObject({ outcome: 'id-layout', message: expect.stringMatching(/rejected/) })
+    expect(client.runner.isPlaying()).toBe(false)
+    // Frame 0 was the last frame it consumed; nothing was restored.
+    expect(client.runner.getProgress().currentFrame).toBe(1)
+    expect(client.engine.getStepCount()).toBe(1)
   })
 
   it('without the snapshot the same tape drifts (control)', async () => {

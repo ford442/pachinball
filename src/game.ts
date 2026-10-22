@@ -29,6 +29,7 @@ import { GameHUD, type HUDHost } from './game/game-hud'
 import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
 import type { DebugStageKey } from './game/checkpoint-debug'
 import { GameDelegates } from './game/game-delegates'
+import { getChallengeSystem } from './replay/challenge-system'
 import { installSimClock } from './core/sim-clock'
 import { bootWarn } from './boot-log'
 
@@ -92,11 +93,21 @@ export class Game
       document.getElementById('start-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() }, { signal })
       document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() }, { signal })
       this.uiManager?.setStartButtonEnabled(false)
+      // Challenges v2 (#444): a `?challenge=<id>` link loads before the first game.
+      const challengeV2 = () => import('./replay/challenge-v2')
+      if (getChallengeSystem().getActiveChallenge()?.id) {
+        getChallengeSystem().setResolving(challengeV2().then((m) => m.resolveLinkedChallenge(this)))
+      }
+      this.lazySingletonResets.push(() => {
+        this.ghostRace?.dispose()
+        this.ghostRace = null
+      })
       const { bindDailyCascadeUI } = await import('./game/daily-cascade-ui')
       bindDailyCascadeUI({
         signal,
         getCampaignStageName: () =>
           this.adventureTrackProgression?.getCurrentTrackInfo()?.name ?? 'Neon Helix',
+        onWeekly: () => void challengeV2().then((m) => m.playWeekly(this)),
       })
 
       try {
@@ -273,6 +284,8 @@ export class Game
       if (replayParam) {
         void this.startSpectateReplay(replayParam)
       }
+      // Live spectate (#444 Slice E): the opt-in broadcast, Watch live and `?live=<id>`.
+      void import('./game/live-ui').then((m) => { this.liveUI = m.startLiveUI(this) })
 
       scene.onBeforeRenderObservable.add(() => {
         this.performanceMonitor.frameStart()
@@ -299,29 +312,8 @@ export class Game
     this.lifecycle?.setGameState(GameState.MENU)
   }
 
-  /** Per-frame render loop body — also used by VisibilityManager on tab resume. */
-  renderFrame(): void {
-    this.settingsUI?.updateLatencyDisplay(this.inputManager || undefined)
-    this.scene?.render()
-    const dt = this.engine.getDeltaTime() / 1000
-    this.cabinetLighting?.update(dt)
-
-    for (const visual of this.spinnerVisuals) {
-      this.spinnerBuilder?.updateSpinner(visual, dt)
-    }
-    for (const state of this.trapStates) {
-      this.ballTrapBuilder?.updateTrap(state, dt)
-    }
-    for (const state of this.launcherStates) {
-      this.launcherBuilder?.updateLauncher(state, dt)
-    }
-    for (const state of this.gateStates) {
-      this.movingGateBuilder?.updateGate(state, dt)
-    }
-
-    this.adventureCinematicSystem?.update(dt)
-    this.adventureCinematicTriggers?.update()
-    this.adventureUIStateManager?.updateAnimations(dt)
+  /** `PhysicsHost.stepAdventureProgression`: goal and time-limit clocks, once per fixed step. */
+  stepAdventureProgression(dt: number): void {
     this.adventureGoalTracker?.update(dt)
     this.adventureProgressionSupervisor?.update(dt, this.score)
     if (this.adventureMode?.isActive() && this.adventureGoalTracker && this.adventureProgressionSupervisor) {
@@ -330,6 +322,20 @@ export class Game
       )
       this.updateHUD()
     }
+  }
+
+  /** Per-frame render loop body — also used by VisibilityManager on tab resume. */
+  renderFrame(): void {
+    this.settingsUI?.updateLatencyDisplay(this.inputManager || undefined)
+    this.scene?.render()
+    const dt = this.engine.getDeltaTime() / 1000
+    this.cabinetLighting?.update(dt)
+
+    // Spinners, traps, launchers, gates and the adventure goal / time-limit
+    // clocks are gameplay: GamePhysicsController ticks them once per fixed step.
+    this.adventureCinematicSystem?.update(dt)
+    this.adventureCinematicTriggers?.update()
+    this.adventureUIStateManager?.updateAnimations(dt)
 
     if (this.adventureProgressionSupervisor && this.adventureProgressionSupervisor.getTimeRemaining() > 0) {
       const trackInfo = this.adventureTrackProgression?.getCurrentTrackInfo()

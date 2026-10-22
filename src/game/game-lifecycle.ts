@@ -41,6 +41,8 @@ import { isMobileUserAgent } from '../engine/engine-options'
 
 export interface LifecycleHost {
   readonly timers: TimerScope
+  /** The race ghost of the active challenge (#444 Slice D). */
+  readonly ghostRace?: import('../replay/ghost-race').GhostRace | null
   readonly stateManager: GameStateManager
   readonly effects: EffectsSystem | null
   readonly display: DisplaySystem | null
@@ -60,7 +62,7 @@ export interface LifecycleHost {
   readonly renderer: { applyQualityTier(tier: QualityTier): void } | null
   readonly replayRecorder?: import('../game-elements').ReplayRecorder
   readonly replayRunner?: import('../game-elements').ReplayRunner
-  readonly currentMapId?: string
+  readonly currentMapId?: string | null
   qualityTier: QualityTier
   accessibility: import('../game-elements').AccessibilityConfig
 
@@ -133,8 +135,10 @@ export class GameLifecycle {
         break
       case GameState.GAME_OVER:
         {
+          // A replay or live run someone else played is not this player's game (#444 Slice E).
+          const ownGame = this.host.replayRecorder?.isRecording() ?? false
           const previousBest = this.host.bestScore
-          const isNewBest = this.host.score > previousBest
+          const isNewBest = ownGame && this.host.score > previousBest
           if (isNewBest) {
             this.host.bestScore = this.host.score
             try {
@@ -154,8 +158,8 @@ export class GameLifecycle {
         this.host.updateHUD()
         if (this.host.replayRecorder?.isRecording()) {
           this.host.replayRecorder.stop(this.host.score)
+          void this.host.handleGameOverLeaderboard()
         }
-        void this.host.handleGameOverLeaderboard()
         break
     }
   }
@@ -195,11 +199,17 @@ export class GameLifecycle {
   }
 
   async startGame(): Promise<void> {
+    // A `?challenge=<id>` link sets this game's seed and table (#444 Slice D).
+    await getChallengeSystem().whenReady()
+    const isReplaying = this.host.replayRunner?.isPlaying() ?? false
+    const dailyState = getDailyCascadeState()
+    // A replay plays on the cascade table it was recorded on, whatever this
+    // player has selected; their own next game gets their selection back (#444).
+    if (isReplaying) dailyState.beginReplay(this.host.replayRunner?.getPayload()?.cascade ?? null)
+    else dailyState.endReplay()
     this.host.applyDailyCascadeOnStart()
 
-    const dailyState = getDailyCascadeState()
     const isDaily = dailyState.getMode() === 'daily'
-    const isReplaying = this.host.replayRunner?.isPlaying() ?? false
 
     let seed: number
     if (isReplaying) {
@@ -218,12 +228,13 @@ export class GameLifecycle {
     if (!isReplaying && this.host.replayRecorder) {
       this.host.replayRecorder.start({
         version: REPLAY_SCHEMA_VERSION,
-        buildId: '1.0.0',
+        buildId: __PACHINBALL_BUILD__,
         mapId: this.host.currentMapId ?? DEFAULT_TABLE_MAP_ID,
         seed: getSessionSeed(),
         physicsEngine: this.host.physics?.getWasmMode() ?? 'rapier',
         renderer: (typeof window !== 'undefined' && (window as unknown as { currentRenderer?: string }).currentRenderer === 'webgpu') ? 'webgpu' : 'webgl2',
         createdAt: new Date().toISOString(),
+        cascade: dailyState.describeForReplay() ?? undefined,
       })
     }
 
@@ -258,6 +269,7 @@ export class GameLifecycle {
 
     // Leaderboard context is set by the caller (Game)
     this.host.setGameState(GameState.PLAYING)
+    if (!isReplaying) this.host.ghostRace?.begin()
   }
 
   /**

@@ -90,6 +90,8 @@ export type PhysicsWorkerCommand =
   | { type: 'serializeSnapshot'; requestId: number }
   /** `bytes` is transferred. */
   | { type: 'restoreSnapshot'; requestId: number; bytes: Uint8Array }
+  /** World-state hash at this point in the batch; answered with a `snapshot-reply` (`stateHash`). */
+  | { type: 'getStateHash'; requestId: number }
 
 export type PhysicsWorkerToWorker =
   | { type: 'init'; bundleUrl: string }
@@ -123,7 +125,7 @@ export type PhysicsWorkerSharedAttach = {
 }
 
 /**
- * Answer to `serializeSnapshot` / `restoreSnapshot`, posted after the batch
+ * Answer to `serializeSnapshot` / `restoreSnapshot` / `getStateHash`, posted after the batch
  * that carried the request and before that batch's step result.
  */
 export type PhysicsWorkerSnapshotReply = {
@@ -135,6 +137,8 @@ export type PhysicsWorkerSnapshotReply = {
   status: WasmSnapshotStatus
   /** The worker world's static-table hash after the operation. */
   staticHash: string | null
+  /** The worker world's `getStateHash()` after the operation, null when the bundle lacks it. */
+  stateHash: string | null
   /** The worker world's step counter after the operation. */
   stepCount: number
 }

@@ -14,7 +14,8 @@
 - **Language:** TypeScript (ES2022, strict mode)
 - **Build Tool:** Vite
 - **Shaders:** WGSL (WebGPU) with Canvas2D fallback; custom GLSL-style pixel shaders (scanline, lcd-table)
-- **Testing:** Playwright (`@playwright/test`)
+- **Testing:** Vitest (unit) + Playwright (`@playwright/test`, E2E + headless replay verification)
+- **Backend:** Supabase live arcade service (`supabase/`) for leaderboard, replays, challenges and cloud saves; `storage.noahcohn.com` stays the asset CDN
 - **Linting:** ESLint 9 with `typescript-eslint`
 
 ### Rendering Pipeline
@@ -35,8 +36,11 @@
 # Start local dev server (http://localhost:5173)
 npm run dev
 
-# Type-check + production build (outputs to dist/)
+# Type-check + WASM build (skips without Emscripten) + Vite build (outputs to dist/, incl. dist/build-info.json)
 npm run build
+
+# After a build: dist/wasm must be byte-identical to public/wasm
+npm run check:dist-wasm
 
 # Lint the entire codebase
 npm run lint
@@ -64,14 +68,25 @@ npm run test:wasm-parity
 
 # Microbench C++ WASM physics build flags (baseline vs SIMD vs LTO)
 npm run bench:wasm-flags
+
+# Golden replay tapes (tests/replays/*.json) in headless Chromium (after build:wasm).
+# `-- --update` rewrites goldens for an intentional numeric change; record:replay re-records stale tapes.
+npm run verify:replay
+
+# Replay-verifier service self-test (after npm run build)
+npm run test:verifier
+
+# Arcade DB: apply supabase/migrations locally and run pgTAP RLS tests
+supabase db start && supabase test db
 ```
 
 ### Continuous Integration
 
 `.github/workflows/ci.yml` gates every pull request and every push to `main`. The blocking
-`check` job runs, in order: `npm ci` → `npx tsc -b` → `npm run lint` → `npx vitest run` →
-`npx vite build`. **PRs must stay green** — do not merge red. A second, non-blocking
-(`continue-on-error`) `e2e` job runs a Playwright smoke against a live dev server.
+`check` job runs, in order: `npm ci` → `npx tsc -b` → `npm run check:index-strict` →
+`npm run lint` → `npx vitest run` → `npx vite build` → `npm run check:bundle`. **PRs must stay
+green** — do not merge red. A second, also **blocking** `e2e` job runs the Playwright physics-degrade
+spec (no `public/wasm`, `playwright.degrade.config.ts`) and the desktop + mobile smoke specs.
 
 Notes:
 - CI runs `npx vite build`, **not** `npm run build` — the latter chains `build:wasm`
@@ -79,7 +94,10 @@ Notes:
   out of the main `check` job; the localStorage physics-engine flag falls back to Rapier when
   the bundle is absent.
 - `.github/workflows/native-physics.yml` gates PRs touching `native/**` or `src/wasm/**` with
-  blocking native Catch2, ASan/UBSan, and WASM build + parity jobs (requires Emscripten on runner).
+  blocking native Catch2, ASan/UBSan (fatal UBSan), and WASM build + parity jobs (requires Emscripten
+  on runner), plus a blocking golden-replay-tapes job (`npm run verify:replay` + verifier self-test)
+  that also covers `src/game/physics/**` and `src/replay/**`.
+- `.github/workflows/arcade-db.yml` gates PRs touching `supabase/**` (migrations + pgTAP RLS tests).
 - Enabling branch protection on `main` (require the `check` job) is recommended so ungated
   direct-to-`main` pushes can't regress the build.
 
@@ -139,12 +157,12 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 | `accessibility-config.ts` | **Safety-critical.** Detects `prefers-reduced-motion`, photosensitive mode, haptic preferences. |
 | `haptics.ts` | Haptic feedback manager (vibration patterns). |
 | `gamepad.ts` | Gamepad polling + vibration. |
-| `sound-system.ts` | Simple synthesized audio beeps/SFX. |
+| `sound-system.ts` | Deprecated re-export of `src/audio/sound-system.ts`; import from `src/audio/`. |
 | `map-system.ts` | Dynamic backend map fetching. |
 | `leaderboard-system.ts` | Score submission + leaderboard UI. |
 | `name-entry-dialog.ts` | High-score name entry UI. |
 | `level-select-screen.ts` | Adventure level select overlay. |
-| `zone-registry.ts` | Adventure zone configurations and transition metadata. |
+| `zone-registry.ts` | Deprecated re-export of `src/adventure/zone-registry.ts`. |
 | `zone-trigger-system.ts` | AABB zone entry/exit detection. |
 | `dynamic-scenarios.ts` | Scenario definitions for dynamic/fixed mode toggling. |
 | `dynamic-world.ts` | Scrolling world generation for dynamic adventure mode. |
@@ -152,11 +170,7 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 | `path-mechanics.ts` | Dynamic adventure interactive elements: gates, magnets, launch pads, jump pads. |
 | `ball-stack-visual.ts` | Visual stack of reserve balls (gold-ball tracking). |
 | `debug-hud.ts` | Development overlay for runtime state monitoring (FPS, physics, performance tier). |
-| `adventure-state.ts` | **Legacy** level-select UI + cosmetic rewards only. Campaign truth is `AdventureTrackProgression` + supervisor. |
-| `adventure-track-progression.ts` | `TRACK_CATALOG`, `AdventureTrackProgression` — campaign spine metadata. |
-| `adventure-progression-supervisor.ts` | Portal lifecycle + campaign state machine. |
-| `zone-registry.ts` | Per-track theming / story / music metadata for adventure zones. |
-| Various `*-feeder.ts` | Specialized table toys: `mag-spin-feeder`, `nano-loom-feeder`, `prism-core-feeder`, `gauss-cannon-feeder`, `quantum-tunnel-feeder`. Every toy that holds a ball (feeders, traps, BallManager's hologram catch) captures / steers / releases it through `CapturedBall` (`src/core/captured-ball.ts`) — never `setBodyType` directly. On the C++ owner path MagSpin's well is an axis-pull force field (`WasmTableWorld.createAxisPullField` → `addAxisPullField`), not the Rapier-era bowl, which only a Rapier / `wasm-mirror` world still builds. |
+| `src/objects/feeders/*-feeder.ts` (configs in `src/config/feeders/`) | Specialized table toys: `mag-spin-feeder`, `nano-loom-feeder`, `prism-core-feeder`, `gauss-cannon-feeder`, `quantum-tunnel-feeder`. Every toy that holds a ball (feeders, traps, BallManager's hologram catch) captures / steers / releases it through `CapturedBall` (`src/core/captured-ball.ts`) — never `setBodyType` directly. On the C++ owner path MagSpin's well is an axis-pull force field (`WasmTableWorld.createAxisPullField` → `addAxisPullField`), not the Rapier-era bowl, which only a Rapier / `wasm-mirror` world still builds. |
 
 #### `src/game/` — High-level managers (barrel: `src/game/index.ts`)
 | File | Responsibility |
@@ -224,12 +238,28 @@ Replaces the old monolithic `display.ts`.
 - **`camera-presets.ts`** — Cinematic camera angles.
 - **`adventure-types.ts`** — **Single source of truth** for `AdventureTrackType` and adventure interfaces.
 - **`portal-routing.ts`** — Track start anchors and `isAdventureTrackType()` guard.
+- **`adventure-state.ts`** — **Legacy** level-select UI + cosmetic rewards only. Campaign truth is `AdventureTrackProgression` + supervisor.
+- **`adventure-track-progression.ts`** — `TRACK_CATALOG`, `AdventureTrackProgression` — campaign spine metadata.
+- **`adventure-progression-supervisor.ts`** — Portal lifecycle + campaign state machine.
+- **`zone-registry.ts`** — Per-track theming / story / music metadata for adventure zones.
+- **`campaign-cloud-sync.ts`** — Cloud campaign save via the arcade `put-save` function.
 - **`tracks/*.ts`** — Hand-tuned track builders (flagships + complex layouts). Simpler tracks may use declarative JSON under `track-data/` — see [`docs/TRACK_SCHEMA.md`](docs/TRACK_SCHEMA.md).
 
-**Do not recreate legacy builders.** All new track geometry goes in `src/adventure/tracks/`. The barrel also re-exports `TRACK_CATALOG` and `AdventureTrackProgression` from `game-elements/adventure-track-progression.ts`.
+**Do not recreate legacy builders.** All new track geometry goes in `src/adventure/tracks/`. The barrel also re-exports `TRACK_CATALOG` and `AdventureTrackProgression` from `adventure-track-progression.ts`.
 
 Campaign progression reference: `docs/ADVENTURE_CAMPAIGN.md` (A/B alternation + portal loop).  
 Campaign truth is `AdventureTrackProgression` + `AdventureProgressionSupervisor`; `AdventureState` is legacy level-select / cosmetic rewards only.
+
+#### `src/replay/` — Replays, challenges, ghosts (barrel: `src/replay/index.ts`)
+- **`replay-recorder.ts`** / **`replay-runner.ts`** — One tape frame per fixed physics step; a tape carries a frame-0 C++ snapshot, its table (map or cascade seed) and build id. Only `wasm-owner` tapes replay step-exactly.
+- **`replay-snapshot.ts`** — C++ world snapshot/restore for tapes.
+- **`challenge-v2.ts`** / **`challenge-system.ts`** — Challenge links; **`ghost-race.ts`** / **`ghost-ball-renderer.ts`** — verified race ghost.
+
+#### `src/arcade/` + `supabase/` + `services/replay-verifier/` — Live arcade service
+- **`src/arcade/arcade-api.ts`** — Client (anonymous Supabase Auth players, offline queue); endpoint/key in `src/config/arcade.ts`. Dev servers and Playwright stay offline unless `VITE_ARCADE_URL` is set.
+- **`supabase/`** — `migrations/` (schema, RLS, grants), `tests/database/` (pgTAP), `functions/` (Edge Functions: `submit-score`, `submit-replay`, `create-challenge`, `put-save`).
+- **`services/replay-verifier/`** — Node + headless Chromium service on the storage host: claims pending scores, replays the tape on the prod build, records verified/rejected. Shares `scripts/lib/replay-harness.mjs` with `npm run verify:replay`.
+- Contract: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) + `docs/api/arcade.openapi.yaml`; `tests/arcade-contract.test.ts` fails if the client drifts.
 
 #### `src/cabinet/` — Cabinet presets (barrel: `src/cabinet/index.ts`)
 - **`cabinet-builder.ts`** — Factory / orchestrator (async `loadCabinetPreset`; classic may load glTF).
@@ -257,15 +287,15 @@ Gameplay physics never uses Babylon's built-in collision engine. The active back
 
 | Mode | When | Source |
 |------|------|--------|
-| `wasm-worker` | Production default on a cross-origin-isolated page: as `wasm-owner`, C++ world in a Dedicated Worker; falls back to `wasm-owner` if the worker fails to start | `src/wasm/physics-worker-client.ts` + `src/wasm/physics-worker-boot.ts` |
-| `wasm-owner` | Default when not cross-origin isolated: C++ owns balls, the table scope, flipper hinges and adventure tracks in-process; Rapier is never loaded | `src/game/physics/wasm-owner.ts` + `src/wasm/wasm-table-world.ts` + `native/` |
+| `wasm-worker` | Opt-in only (`?physics=wasm-worker` or the localStorage flag): as `wasm-owner`, C++ world in a Dedicated Worker; falls back to `wasm-owner` if the worker fails to start. Its runs cannot be verified (results arrive a frame late) | `src/wasm/physics-worker-client.ts` + `src/wasm/physics-worker-boot.ts` |
+| `wasm-owner` | Default on every page (`WASM_PHYSICS.defaultEngine` in `src/config/physics.ts`); the only verifiable mode. C++ owns balls, the table scope, flipper hinges and adventure tracks in-process; Rapier is never loaded | `src/game/physics/wasm-owner.ts` + `src/wasm/wasm-table-world.ts` + `native/` |
 | `wasm-mirror` | Dev parity; WASM mirrors ball+bumper subset on Rapier bodies | `src/game/physics/wasm-mirror.ts` |
 | `rapier` | Explicit override, and the fail-closed degrade when the C++ bundle is missing | `@dimforge/rapier3d-compat` via `loadRapier()` / `PhysicsSystem` |
 
 - Author physics through `PhysicsApi` / `PhysicsWorldSink` / `PhysicsBody` (`src/core/physics-api.ts`), never Rapier values: builders receive `physics.getWorld()` / `physics.getPhysicsApi()`, which are the C++ owner's `WasmTableWorld` + `WASM_PHYSICS_API` or Rapier itself. `src/game-elements/rapier-loader.ts` is the only runtime import of Rapier (type-only imports are fine), and it must stay `@dimforge/rapier3d-compat` (not `@dimforge/rapier3d`).
-- `PhysicsSystem` picks the world at `init()` and runs a **fixed timestep** with an accumulator (`FIXED_TIMESTEP = 1/60`).
+- `PhysicsSystem` picks the world at `init()`. Gameplay runs in **whole fixed steps**: `FixedStepPacer` (`src/core/sim-clock.ts`, `FIXED_TIMESTEP = 1/60`) turns render frames into steps, and gameplay runs once per step. Anything affecting score, lives or the ball's path must read the sim clock, never `performance.now()` (see `docs/determinism-todo.md`); an intentional numeric change updates the golden tapes via `npm run verify:replay -- --update` in the same PR.
 - Collision events are drained from `RAPIER.EventQueue` inside `PhysicsSystem.step()` when Rapier is active.
-- The optional C++ engine (`npm run build:wasm`) is loaded via `src/wasm/PhysicsModule.ts`; parity is checked with `npm run test:wasm-parity`.
+- The C++ engine (`npm run build:wasm`) is loaded via `src/wasm/PhysicsModule.ts`; parity is checked with `npm run test:wasm-parity`.
 - **Never** use Babylon's built-in collision or physics engine for gameplay logic. Rapier is not loaded at all in `wasm-owner` / `wasm-worker` (`npm run check:bundle` fails if its chunk is precached or modulepreloaded).
 
 ### 4.3 Display System — Hybrid WebGPU / Canvas2D
@@ -278,7 +308,7 @@ Gameplay physics never uses Babylon's built-in collision engine. The active back
 `src/config/` must **not** import Babylon.js. It contains:
 - Numeric gameplay constants (gravity, flipper strength, ball radius).
 - Color strings / feature flags (`EffectsConfig`).
-- API/asset base URLs (`API_BASE`, `ASSET_BASE`).
+- API/asset base URLs (`API_BASE`, `ASSET_BASE`) and the arcade endpoint (`src/config/arcade.ts`).
 - Helper `apiFetch<T>()` with exponential backoff retry logic.
 
 ### 4.5 Accessibility & Safety (CRITICAL)
@@ -381,17 +411,18 @@ Several systems use `getXxx()` / `resetXxx()` singleton helpers (e.g., `getMater
 
 - **Framework:** Playwright (`playwright.config.ts`) + Vitest (`vitest`)
 - **Base URL:** `http://localhost:5173`
-- **Browser:** Desktop Chrome (single project)
+- **Projects:** `chromium` (Desktop Chrome) + `mobile-chrome` (Pixel 7, touch smoke); `playwright.degrade.config.ts` runs the no-WASM degrade spec
+- **Dev server:** started automatically by the `webServer` block (port 5173, `--strictPort`; reuses a running server locally)
+- **Replay goldens:** `tests/replays/*.json`, checked by `npm run verify:replay`
 - **Test location:** `tests/`
 - **E2E test:** `tests/verify_prism_core.spec.ts` — smoke test that boots the game, clicks **Start Game**, waits for scene init, and takes a verification screenshot.
 - **Unit tests:** `tests/ball-manager.test.ts` — BallManager logic tests (Vitest).
 
 **Workflow for adding tests:**
-1. Ensure `npm run dev` is running.
-2. Write `.spec.ts` files in `tests/` for Playwright E2E tests.
-3. Write `.test.ts` files in `tests/` for Vitest unit tests.
-4. Run E2E tests with `npx playwright test`
-5. Run unit tests with `npm test` (alias for `vitest run`).
+1. Write `.spec.ts` files in `tests/` for Playwright E2E tests.
+2. Write `.test.ts` files in `tests/` for Vitest unit tests.
+3. Run E2E tests with `npx playwright test`
+4. Run unit tests with `npm test` (alias for `vitest run`).
 
 ---
 
@@ -424,7 +455,7 @@ python3 deploy.py --list-only        # dry-run: print transfer plan, no upload
 |------|-------------|----------|
 | `.env.deploy` | **High** | Local deploy token. Gitignored; copy from `.env.deploy.example`. Never commit. |
 | `.env.production` | **High** | Blocked from read access by security policy. Do not paste contents into chat. |
-| `src/config/` | Medium | Exposes prod API base (`storage.noahcohn.com`) and asset paths. Safe to reference, not to abuse. |
+| `src/config/` | Medium | Exposes prod API base (`storage.noahcohn.com`), asset paths and the Supabase publishable key (public by design; RLS guards the data). Safe to reference, not to abuse. |
 
 When making changes that touch authentication, API keys, or asset URLs, use `import.meta.env.VITE_API_URL` / `VITE_ASSET_URL` overrides rather than hardcoding new secrets.
 
@@ -462,15 +493,18 @@ When making changes that touch authentication, API keys, or asset URLs, use `imp
 10. **Stale Portal Handles in `portalSensorHandleSet`**  
     Every path that deactivates a portal must unregister its handle. The PORTAL_ENTERED handler covers the happy path, but `switchToTrack()` and `activateExitPortal()` replacement also call `deactivateExitPortal()` — use the `PORTAL_DEACTIVATED` event pattern.
 
+11. **`console.*` Vanishes in Production**  
+    The prod build drops literal `console.*` calls (esbuild `drop`). Use `bootWarn` / `bootError` from `src/boot-log.ts` for boot-critical diagnostics.
+
 ---
 
 ## Cursor Cloud specific instructions
 
-This is a frontend-only Vite + TypeScript app — there is no backend service to run for local development. Dependencies (`npm install` + the Playwright Chromium browser) are refreshed automatically by the cloud update script.
+This is a Vite + TypeScript app. Its live arcade backend (Supabase) is not needed for local development — dev servers and Playwright stay offline unless `VITE_ARCADE_URL` is set. Dependencies (`npm install` + the Playwright Chromium browser) are refreshed automatically by the cloud update script.
 
 Standard commands are in section 2 (`npm run dev`, `npm run build`, `npm run lint`, `npm test`, `npx playwright test`). Non-obvious caveats:
 
-- **Dev server:** `npm run dev` serves on `http://localhost:5173`. Run it in a long-lived terminal (e.g. tmux) before Playwright E2E specs — `playwright.config.ts` has **no** `webServer` block, so it will not auto-start the dev server; tests will fail/hang against `localhost:5173` if nothing is serving.
-- **Tests:** `npm test` (Vitest, Node env, Babylon/Rapier mocked) needs no server. `*.spec.ts` files are Playwright E2E and DO need the dev server running.
+- **Dev server:** `npm run dev` serves on `http://localhost:5173`. `playwright.config.ts` has a `webServer` block that starts it automatically (and reuses one already running), so port 5173 must be free or already serving this app.
+- **Tests:** `npm test` (Vitest, Node env, Babylon/Rapier mocked) needs no server. `*.spec.ts` files are Playwright E2E and use the dev server Playwright starts.
 - **Renderer for automation:** WebGPU canvases can't be read by Playwright/computer-use tooling. Append `?renderer=webgl2` to the URL (e.g. `http://localhost:5173/?renderer=webgl2`) when driving the game from automation or capturing screenshots.
-- **`npm run build` and WASM:** `build` runs `tsc -b && vite build && npm run build:wasm`. The `build:wasm` step compiles an *optional* C++ physics engine (`native/`) via Emscripten and **gracefully skips with exit 0 when `emcc` is not installed** — so `npm run build` succeeds in this environment without Emscripten. Without the C++ bundle, gameplay physics degrades to Rapier WASM (bundled via npm, loaded lazily).
+- **`npm run build` and WASM:** `build` runs `tsc -b && npm run build:wasm && vite build` (WASM first, so `dist/` ships and precaches the fresh bundle). The `build:wasm` step compiles the C++ physics engine (`native/`) via Emscripten and **gracefully skips with exit 0 when `emcc` is not installed** — so `npm run build` succeeds in this environment without Emscripten. Without the C++ bundle, gameplay physics degrades to Rapier WASM (bundled via npm, loaded lazily).

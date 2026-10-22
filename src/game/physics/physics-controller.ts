@@ -15,7 +15,7 @@ import { CollisionDispatcher } from './collision-dispatch'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { PhysicsBody } from '../../core/physics-api'
-import { GameSimClock } from '../../core/sim-clock'
+import { FIXED_TIMESTEP, FixedStepPacer, GameSimClock, MAX_FRAME_DT } from '../../core/sim-clock'
 
 import { type InputFrame, type ReplayRecorder, type ReplayRunner } from '../../game-elements'
 import { BallType, GAME_TUNING, GameConfig } from '../../config'
@@ -37,6 +37,30 @@ import {
   type ReplaySnapshotResult,
 } from '../../replay/replay-snapshot'
 
+/** Live input, read once per fixed step (`GameInputManager`). */
+export interface StepInputSource {
+  update(): void
+  processBufferedInputs(): InputFrame | null
+}
+
+/** What an input frame drives outside the C++ world (`GameInputActions`). */
+export interface StepInputActions {
+  handleFlipperLeft(pressed: boolean): void
+  handleFlipperRight(pressed: boolean): void
+  handlePlunger(charge?: number | null): unknown
+  updatePlungerFrame?(dt: number): void
+}
+
+/** What the tape records for a step that read no input. */
+const NEUTRAL_INPUT_FRAME: InputFrame = {
+  flipperLeft: null,
+  flipperRight: null,
+  plungerCharge: null,
+  plunger: false,
+  nudge: null,
+  timestamp: 0,
+}
+
 export class GamePhysicsController {
   private readonly timers = createTimerScope()
   private readonly host: PhysicsHost
@@ -55,6 +79,8 @@ export class GamePhysicsController {
    * windows, gold swarms and plunger charge all read this, never wall time.
    */
   readonly simClock = new GameSimClock()
+  /** Render frames → whole fixed steps (#444). */
+  private readonly pacer = new FixedStepPacer()
   private eventBusUnsubscribers: Array<() => void> = []
 
   constructor(host: PhysicsHost) {
@@ -292,6 +318,9 @@ export class GamePhysicsController {
       this.wasmOwner?.renameIds(remap.bodies, remap.hinges)
     })
     this.lastReplaySnapshot = res
+    // Bodies that do not pair up by role mean the table descriptors differ:
+    // refuse the replay instead of letting a ghost drift under a toast (#444).
+    if (res.outcome === 'id-layout') runner?.reject(res.outcome, res.message ?? res.outcome)
     // The restore moved the engine's step counter to the recorder's; the
     // gameplay clock carries on from where it was. (The worker client already
     // reports the snapshot's counter while its restore is in flight.)
@@ -342,39 +371,28 @@ export class GamePhysicsController {
     }
   }
 
+  /**
+   * One render frame. Gameplay runs in whole fixed steps (#444): the pacer
+   * turns the render delta into 0..N steps, and each step consumes exactly one
+   * input frame — live input, or the next frame of a replay tape — so a tape
+   * holds one frame per physics step and replays identically at any frame
+   * rate. Only presentation (mesh interpolation, camera, cosmetic effects)
+   * runs per render frame.
+   */
   stepPhysics(
-    inputManager: { update: () => void; processBufferedInputs: () => InputFrame | null } | null,
-    inputActions: { handleFlipperLeft: (p: boolean) => void; handleFlipperRight: (p: boolean) => void; handlePlunger: (charge?: number | null) => unknown; updatePlungerFrame?: (dt: number) => void } | null,
+    inputManager: StepInputSource | null,
+    inputActions: StepInputActions | null,
     replayRunner?: ReplayRunner | null,
     replayRecorder?: ReplayRecorder | null
   ): void {
-    let inputFrame: InputFrame | null = null
-
-    if (replayRunner && replayRunner.isPlaying()) {
-      inputFrame = replayRunner.getNextFrame()
-      const pos = this.getBallPosition()
-      if (pos && this.host.ghostBallRenderer?.isVisible()) {
-        this.host.ghostBallRenderer.updatePosition(pos)
-      }
-    } else {
-      inputManager?.update()
-      inputFrame = inputManager?.processBufferedInputs() ?? null
-    }
-
-    if (inputFrame) {
-      if (replayRecorder && replayRecorder.isRecording() && (!replayRunner || !replayRunner.isPlaying()) && this.host.stateManager.isPlaying()) {
-        replayRecorder.recordFrame(inputFrame)
-      }
-      const adventureActive = this.host.adventureMode?.isActive() ?? false
-      if (!adventureActive) {
-        if (inputFrame.flipperLeft !== null) inputActions?.handleFlipperLeft(inputFrame.flipperLeft)
-        if (inputFrame.flipperRight !== null) inputActions?.handleFlipperRight(inputFrame.flipperRight)
-        if (inputFrame.plungerCharge !== null) inputActions?.handlePlunger(inputFrame.plungerCharge)
-      }
-      this.applyInputFrame(inputFrame)
-    }
-
     if (!this.host.stateManager.isPlaying()) {
+      // MENU / PAUSED / GAME_OVER: live input still reaches the flippers and
+      // plunger, nothing steps, and a replay's tape waits for PLAYING.
+      if (!replayRunner?.isPlaying()) {
+        inputManager?.update()
+        const frame = inputManager?.processBufferedInputs() ?? null
+        if (frame) this.applyStepInput(frame, inputActions)
+      }
       // Mesh sync runs unconditionally so dynamic bodies (ball, flippers) appear at their
       // physics-body positions even during MENU state before the game starts. No physics
       // step has run, so render at the raw pose (alpha=1, i.e. no interpolation).
@@ -383,9 +401,54 @@ export class GamePhysicsController {
     }
 
     const rawDt = this.host.engine.getDeltaTime() / 1000
-    // Advance plunger spring animation each frame (before physics step so kinematic body
-    // is at the correct position when Rapier integrates contacts).
-    inputActions?.updatePlungerFrame?.(Math.min(rawDt, 1 / 30))
+    const steps = this.pacer.stepsFor(rawDt)
+    // A step can end the game (last ball drained); the rest of the frame's steps then do not run.
+    for (let i = 0; i < steps && this.host.stateManager.isPlaying(); i++) {
+      this.stepFixed(inputManager, inputActions, replayRunner ?? null, replayRecorder ?? null)
+    }
+    this.updatePresentation(Math.min(rawDt, MAX_FRAME_DT), replayRunner ?? null)
+  }
+
+  /** Flipper / plunger actions (not on an adventure track) and the nudge, from one input frame. */
+  private applyStepInput(frame: InputFrame, inputActions: StepInputActions | null): void {
+    const adventureActive = this.host.adventureMode?.isActive() ?? false
+    if (!adventureActive) {
+      if (frame.flipperLeft !== null) inputActions?.handleFlipperLeft(frame.flipperLeft)
+      if (frame.flipperRight !== null) inputActions?.handleFlipperRight(frame.flipperRight)
+      if (frame.plungerCharge !== null) inputActions?.handlePlunger(frame.plungerCharge)
+    }
+    this.applyInputFrame(frame)
+  }
+
+  /**
+   * One fixed physics step and everything that decides score, lives or the
+   * ball's path. Every rate here is `FIXED_TIMESTEP` (or the sim clock's step
+   * delta), never the render delta. `stepPhysics` runs it 0..N times per
+   * render frame; the headless verifier (`scripts/verify-replay.mjs`) calls it
+   * directly, with no presentation at all, while the game is PLAYING.
+   */
+  stepFixed(
+    inputManager: StepInputSource | null,
+    inputActions: StepInputActions | null,
+    replayRunner: ReplayRunner | null,
+    replayRecorder: ReplayRecorder | null,
+  ): void {
+    // A live tape that has run dry waits for its next chunk (#444 Slice E).
+    if (replayRunner?.isStarved()) return
+    const dt = FIXED_TIMESTEP
+    let inputFrame: InputFrame | null
+    if (replayRunner?.isPlaying()) {
+      inputFrame = replayRunner.getNextFrame()
+    } else {
+      inputManager?.update()
+      inputFrame = inputManager?.processBufferedInputs() ?? null
+      // One tape frame per step, even a step that read no input.
+      if (replayRecorder?.isRecording()) replayRecorder.recordFrame(inputFrame ?? NEUTRAL_INPUT_FRAME)
+    }
+    if (inputFrame) this.applyStepInput(inputFrame, inputActions)
+
+    // Plunger spring before the step, so its kinematic body is in place when contacts integrate.
+    inputActions?.updatePlungerFrame?.(dt)
 
     const wasmActive = this.host.physics.isWasmActive?.() ?? false
     const isOwner = this.host.physics.isWasmOwnerMode?.() ?? false
@@ -397,21 +460,21 @@ export class GamePhysicsController {
       this.host.physics.setMirrorOverheadMs?.(performance.now() - syncT0)
     }
     if (owner) {
-      const stepDt = Math.min(rawDt, 1 / 30)
       // Pick up a track switch or a table edit before the step.
       owner.syncAdventureTrack(this.adventureTrackState(this.host.adventureMode?.isActive() ?? false))
       owner.syncStatics()
-      owner.driveFlippers(inputFrame, stepDt)
+      owner.driveFlippers(inputFrame, dt)
       // Push the plunger, gates, pistons, platters and mills into their C++
       // movers (captured balls are C++ kinematic bodies already).
-      owner.beginStep(stepDt)
+      owner.beginStep(dt)
       this.host.physics.setMirrorOverheadMs?.(0)
     }
 
-    this.syncReplaySnapshot(owner !== null, replayRunner ?? null, replayRecorder ?? null)
+    this.syncReplaySnapshot(owner !== null, replayRunner, replayRecorder)
 
     this.simClock.beforeStep(this.host.physics)
-    const alpha = this.host.physics.step(rawDt, (h1, h2, start) => {
+    // Exactly one fixed step: the engine's own accumulator only ever sees whole steps.
+    this.host.physics.step(dt, (h1, h2, start) => {
       this.collisionDispatcher.processCollision(h1, h2, start)
     }, (h1, h2, maxForce) => {
       this.collisionDispatcher.processContactForce(h1, h2, maxForce)
@@ -426,13 +489,113 @@ export class GamePhysicsController {
       this.host.physics.setMirrorOverheadMs?.(prev + (performance.now() - syncT0))
     }
 
-    // Skip interpolation on LOW quality tier — render at the raw post-step pose.
-    this.syncMeshes(this.host.qualityTier === QualityTier.LOW ? 1 : alpha)
-
-    const dt = Math.min(rawDt, 1 / 30)
-    // Gameplay timers advance with the simulation, not the display: the steps
-    // the engine actually took this frame (render dt only for stub hosts).
+    // The steps the engine actually took (render dt only for stub hosts).
     const simDt = this.simClock.advance(this.host.physics, dt)
+    this.updateGameplay(dt, simDt)
+    this.host.afterFixedStep?.()
+  }
+
+  /** Per-step gameplay after the physics step: zones, feeders, timers, display state, table mechanics. */
+  private updateGameplay(dt: number, simDt: number): void {
+    const currentBallBodies = this.host.ballManager?.getBallBodies() || []
+    this.host.adventureMode?.update(dt, currentBallBodies)
+    this.host.zoneTriggerSystem?.update(currentBallBodies)
+
+    this.host.gameObjects?.updateBumpers(dt)
+    this.host.gameObjects?.updateTargets(dt)
+
+    if (this.host.magSpinFeeder) {
+      this.host.magSpinFeeder.update(dt, currentBallBodies)
+    }
+    if (this.host.nanoLoomFeeder) {
+      this.host.nanoLoomFeeder.update(dt, currentBallBodies)
+    }
+    if (this.host.prismCoreFeeder) {
+      this.host.prismCoreFeeder.update(dt, currentBallBodies)
+    }
+    if (this.host.gaussCannon) {
+      this.host.gaussCannon.update(dt, currentBallBodies)
+    }
+    if (this.host.quantumTunnel) {
+      this.host.quantumTunnel.update(dt, currentBallBodies)
+    }
+
+    this.host.ballManager?.updateCaughtBalls(dt, () => {
+      this.host.effects?.playBeep(440)
+    })
+
+    this.host.zoneTriggerSystem?.update(currentBallBodies)
+    this.host.adventureState.updateGoal('survive-time', dt)
+
+    const stuckBalls = this.host.ballManager?.updateStuckDetection(simDt) || []
+    for (const stuckBall of stuckBalls) {
+      if (stuckBall === this.host.ballManager?.getBallBody()) {
+        this.host.ballManager?.resetBall()
+      } else {
+        this.host.ballManager?.removeBall(stuckBall)
+      }
+    }
+    if (stuckBalls.length > 0) {
+      this.rebuildHandleCaches()
+    }
+
+    // Update small gold ball lifetimes (cleanup expired)
+    this.host.ballManager?.updateSmallGoldBallLifetimes(simDt)
+
+    // The jackpot sequence decides when the display leaves JACKPOT, and the
+    // display state gates fever scoring: both run on the step, not the frame.
+    this.host.effects?.updateJackpotSequence(dt)
+    const jackpotPhase = this.host.effects?.jackpotPhase || 0
+    this.host.display?.update(dt, jackpotPhase)
+
+    // Drive bumper JACKPOT visuals during the Cyber-Shock sequence (especially phase 3 meltdown)
+    if (this.host.effects?.isJackpotActive) {
+      this.host.gameObjects?.setBumperState('JACKPOT')
+    }
+
+    if (this.host.effects && !this.host.effects.isJackpotActive && this.host.display?.getDisplayState() === DisplayState.JACKPOT) {
+      this.host.eventBus.emit('jackpot:end')
+      this.host.eventBus.emit('display:set', DisplayState.IDLE)
+      this.host.effects.setAtmosphereState('IDLE')
+      // Restore bumpers to normal lighting after sequence
+      this.host.gameObjects?.setBumperState('IDLE')
+    }
+
+    this.scoringBridge.updateCombo(simDt)
+    this.tickTilt(simDt)
+
+    if (this.host.powerupActive) {
+      this.host.powerupTimer -= simDt
+      if (this.host.powerupTimer <= 0) this.host.powerupActive = false
+    }
+
+    // Table mechanics: spinner speed, trap re-arm, launcher charge and gate
+    // timers move C++ movers and gate captures, so they tick with the step.
+    for (const visual of this.host.spinnerVisuals) {
+      this.host.spinnerBuilder?.updateSpinner(visual, dt)
+    }
+    for (const state of this.host.trapStates) {
+      this.host.ballTrapBuilder?.updateTrap(state, dt)
+    }
+    for (const state of this.host.launcherStates) {
+      this.host.launcherBuilder?.updateLauncher(state, dt)
+    }
+    for (const state of this.host.gateStates) {
+      this.host.movingGateBuilder?.updateGate(state, dt)
+    }
+    this.host.stepAdventureProgression?.(dt)
+  }
+
+  /** Per render frame: interpolated meshes, camera, and effects that change nothing but pixels. */
+  private updatePresentation(dt: number, replayRunner: ReplayRunner | null): void {
+    if (replayRunner?.isPlaying() && this.host.ghostBallRenderer?.isVisible()) {
+      const pos = this.getBallPosition()
+      if (pos) this.host.ghostBallRenderer.updatePosition(pos)
+    }
+    this.host.ghostRace?.update()
+
+    // Skip interpolation on LOW quality tier — render at the raw post-step pose.
+    this.syncMeshes(this.host.qualityTier === QualityTier.LOW ? 1 : this.pacer.alpha())
 
     // Camera controller
     if (this.host.cameraController && this.host.ballManager?.getBallBody()) {
@@ -470,44 +633,11 @@ export class GamePhysicsController {
       this.host.dynamicWorld.update(new Vector3(pos.x, pos.y, pos.z), dt)
     }
 
-    // Debug HUD
-    // (delegated to caller)
-
-    // Adventure mode update
-    const currentBallBodies = this.host.ballManager?.getBallBodies() || []
-    this.host.adventureMode?.update(dt, currentBallBodies)
-    this.host.zoneTriggerSystem?.update(currentBallBodies)
-
-    this.host.gameObjects?.updateBumpers(dt)
-    this.host.gameObjects?.updateTargets(dt)
-
-    if (this.host.magSpinFeeder) {
-      this.host.magSpinFeeder.update(dt, currentBallBodies)
-    }
-    if (this.host.nanoLoomFeeder) {
-      this.host.nanoLoomFeeder.update(dt, currentBallBodies)
-    }
-    if (this.host.prismCoreFeeder) {
-      this.host.prismCoreFeeder.update(dt, currentBallBodies)
-    }
-    if (this.host.gaussCannon) {
-      this.host.gaussCannon.update(dt, currentBallBodies)
-    }
-    if (this.host.quantumTunnel) {
-      this.host.quantumTunnel.update(dt, currentBallBodies)
-    }
-
-    this.host.ballManager?.updateCaughtBalls(dt, () => {
-      this.host.effects?.playBeep(440)
-    })
-
     this.host.effects?.updateShards(dt)
     this.host.effects?.updateBloom()
     this.host.effects?.updateCabinetLighting()
     this.host.effects?.updateSlotLighting()
     this.host.mapManager?.update(dt)
-    this.host.zoneTriggerSystem?.update(currentBallBodies)
-    this.host.adventureState.updateGoal('survive-time', dt)
 
     {
       const ballBody = this.host.ballManager?.getBallBody()
@@ -534,45 +664,6 @@ export class GamePhysicsController {
       })
       .filter((info): info is NonNullable<typeof info> => info !== null)
     this.host.effects?.updateTrails(trailInfos)
-
-    const stuckBalls = this.host.ballManager?.updateStuckDetection(simDt) || []
-    for (const stuckBall of stuckBalls) {
-      if (stuckBall === this.host.ballManager?.getBallBody()) {
-        this.host.ballManager?.resetBall()
-      } else {
-        this.host.ballManager?.removeBall(stuckBall)
-      }
-    }
-    if (stuckBalls.length > 0) {
-      this.rebuildHandleCaches()
-    }
-
-    // Update small gold ball lifetimes (cleanup expired)
-    this.host.ballManager?.updateSmallGoldBallLifetimes(simDt)
-
-    const jackpotPhase = this.host.effects?.jackpotPhase || 0
-    this.host.display?.update(dt, jackpotPhase)
-
-    // Drive bumper JACKPOT visuals during the Cyber-Shock sequence (especially phase 3 meltdown)
-    if (this.host.effects?.isJackpotActive) {
-      this.host.gameObjects?.setBumperState('JACKPOT')
-    }
-
-    if (this.host.effects && !this.host.effects.isJackpotActive && this.host.display?.getDisplayState() === DisplayState.JACKPOT) {
-      this.host.eventBus.emit('jackpot:end')
-      this.host.eventBus.emit('display:set', DisplayState.IDLE)
-      this.host.effects.setAtmosphereState('IDLE')
-      // Restore bumpers to normal lighting after sequence
-      this.host.gameObjects?.setBumperState('IDLE')
-    }
-
-    this.scoringBridge.updateCombo(simDt)
-    this.tickTilt(simDt)
-
-    if (this.host.powerupActive) {
-      this.host.powerupTimer -= simDt
-      if (this.host.powerupTimer <= 0) this.host.powerupActive = false
-    }
   }
 
   getBallMeshForBody(body: PhysicsBody): Mesh | null {

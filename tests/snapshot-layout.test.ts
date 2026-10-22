@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { readSnapshotIds } from '../src/wasm/snapshot-layout'
+import { WASM_SNAPSHOT_VERSION } from '../src/wasm/wasm-types'
 import { fakeSnapshot } from './helpers/fake-snapshot'
 
 describe('readSnapshotIds', () => {
@@ -15,7 +16,7 @@ describe('readSnapshotIds', () => {
       hinges: [{ id: 0, bodyId: 2 }, { id: 1, bodyId: 9, active: false }, { id: 2, bodyId: 5 }],
     })
     expect(readSnapshotIds(bytes)).toEqual({
-      version: 1,
+      version: WASM_SNAPSHOT_VERSION,
       staticHash: '00000abc00000def',
       stepCount: 1234,
       bodyIds: [0, 2, 5],

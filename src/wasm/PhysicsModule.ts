@@ -523,6 +523,11 @@ export class WasmPhysicsEngine {
     return this.world?.getStaticContentHash?.() ?? null
   }
 
+  /** 16-hex-char world-state hash (native `PhysicsWorld::stateHash`), or null when unsupported. */
+  getStateHash(): string | null {
+    return this.world?.getStateHash?.() ?? null
+  }
+
   /** Contact-manifold flush generation (0 when unsupported). */
   getContactGeneration(): number {
     return this.world?.getContactGeneration?.() ?? 0

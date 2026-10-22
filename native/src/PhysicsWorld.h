@@ -278,11 +278,30 @@ public:
   SnapshotStatus restore(const uint8_t* data, std::size_t size);
 
   /**
-   * FNV-1a 64 over every static collider's geometry and material, in handle
-   * order (group masks, mover poses and force-field vectors are runtime
-   * state, snapshotted instead of hashed).
+   * FNV-1a 64 over every static collider's geometry and material (group
+   * masks, mover poses and force-field vectors are runtime state,
+   * snapshotted instead of hashed).
+   *
+   * Canonical: each family is folded as the sorted multiset of its items'
+   * own digests, so two worlds holding the same statics hash equal however
+   * the async cabinet / adventure build ordered the add*() calls. Handles
+   * still follow insertion order; only the hash ignores it.
    */
   uint64_t staticContentHash() const;
+
+  /**
+   * FNV-1a 64 over everything the next `step()` reads: per-body pose,
+   * velocities, pending force, type, sleep state and collision groups (in
+   * public-id order), hinge angles and motors, mover / force-field runtime
+   * state (canonical order), pending kinematic targets, world params, the
+   * step counter and `staticContentHash()`. Cosmetic and contact-event state
+   * (manifold, contact buffer, transform buffer) is deliberately out, so
+   * the hash is cheap to compare every step. Replay verifiers compare it.
+   * Cost is O(bodies + static content): the static table is re-digested on
+   * each call, so compare it per step only where a few thousand mesh
+   * triangles are acceptable.
+   */
+  uint64_t stateHash() const;
 
   /** Contact flushes so far (ContactListener::generation). */
   uint64_t getContactGeneration() const { return contactListener_.generation(); }
@@ -330,6 +349,10 @@ private:
   /** Per-family static counts in Snapshot.h header order. */
   void staticCounts(uint32_t out[SNAPSHOT_STATIC_FAMILIES]) const;
   void scatterTransforms();
+  /** Content-sorted order of each static family (Snapshot.cpp). */
+  struct StaticRanking;
+  StaticRanking staticRanking() const;
+  uint64_t staticHashOf(const StaticRanking& ranking) const;
 
   void ensureTransformCapacity(int slotCount);
   void freeTransformBuffer();
