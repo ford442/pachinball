@@ -4,7 +4,6 @@ import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight'
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
-import { RenderTargetTexture } from '@babylonjs/core/Materials/Textures/renderTargetTexture'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
@@ -204,8 +203,6 @@ export abstract class GameFields {
   sceneInstrumentation: SceneInstrumentation | null = null
   engineInstrumentation: EngineInstrumentation | null = null
   mirrorTexture: MirrorTexture | null = null
-  tableRenderTarget: RenderTargetTexture | null = null
-  headRenderTarget: RenderTargetTexture | null = null
   shadowGenerator: ShadowGenerator | null = null
   playfieldGroup: TransformNode | null = null
 

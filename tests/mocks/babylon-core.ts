@@ -445,6 +445,12 @@ export const ShadowGenerator = vi.fn().mockImplementation(function (this: Record
   this.addShadowCaster = vi.fn()
   return this
 })
+// Quality / filter constants the real class exposes (values match Babylon 7.54).
+Object.assign(ShadowGenerator, {
+  QUALITY_HIGH: 0,
+  QUALITY_MEDIUM: 1,
+  QUALITY_LOW: 2,
+})
 
 export const Plane = MockVector3
 

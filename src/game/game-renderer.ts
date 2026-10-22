@@ -14,7 +14,6 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
-import { RenderTargetTexture } from '@babylonjs/core/Materials/Textures/renderTargetTexture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
@@ -43,6 +42,7 @@ import {
   type AccessibilityConfig,
 } from '../game-elements'
 import { getMaterialLibrary, detectQualityTier } from '../materials'
+import { applyShadowSettings, resolveShadowSettings, type ShadowSettings } from './shadow-config'
 import {
   clampMaterialLights,
   computeWebGLLightBudget,
@@ -65,8 +65,6 @@ export interface RendererHost {
   bloomPipeline: BloomPipelineController | null
   shadowGenerator: ShadowGenerator | null
   mirrorTexture: MirrorTexture | null
-  tableRenderTarget: RenderTargetTexture | null
-  headRenderTarget: RenderTargetTexture | null
   keyLight: DirectionalLight | null
   rimLight: DirectionalLight | null
   bounceLight: PointLight | null
@@ -90,6 +88,7 @@ export class GameRenderer {
   private _lastResizeWidth = 0
   private _lastResizeHeight = 0
   private _lightBudgetTeardown: (() => void) | null = null
+  private _shadowSettings: ShadowSettings | null = null
 
   constructor(host: RendererHost) {
     this.host = host
@@ -121,21 +120,28 @@ export class GameRenderer {
    */
   applyQualityTier(tier: QualityTier): void {
     this.postProcess.applyQualityTier(tier)
+    this.applyShadowTier(tier)
   }
 
   /** Drop one quality step (HIGH→MEDIUM→LOW). Returns the new tier. */
   dropQualityTierOnce(): QualityTier {
-    return this.postProcess.dropQualityTierOnce()
+    // The post-process manager applies its own half of the tier; the shadow filter follows it
+    // here, so an automatic drop changes the technique exactly like a settings change does.
+    const next = this.postProcess.dropQualityTierOnce()
+    this.applyShadowTier(next)
+    return next
   }
 
   /** Setup key, rim, bounce, and fill lights + shadow generator. */
   setupLighting(): void {
-    const { scene, qualityTier } = this.host
+    const { scene } = this.host
     if (!scene) return
 
     this.installWebGLLightBudget()
 
-    // Environment lighting
+    // Environment lighting. This is what detects the hardware tier and writes it to
+    // `host.qualityTier`, so everything tier-dependent below reads the host AFTER this call
+    // (it used to be destructured first, so boot always saw the field's MEDIUM default).
     this.setupEnvironmentLighting()
 
     // Fill hemisphere
@@ -151,17 +157,10 @@ export class GameRenderer {
     keyLight.position = new Vector3(-15, 25, -15)
     this.host.keyLight = keyLight
 
-    const shadowMapSize = qualityTier === QualityTier.HIGH ? 4096 : 2048
-    const shadowGenerator = new ShadowGenerator(shadowMapSize, keyLight)
-    shadowGenerator.useBlurExponentialShadowMap = true
-    shadowGenerator.blurKernel = 28
-    shadowGenerator.setDarkness(0.3)
-    shadowGenerator.bias = 0.0005
-    shadowGenerator.normalBias = 0.02
-    if (qualityTier === QualityTier.HIGH) {
-      shadowGenerator.usePercentageCloserFiltering = true
-      shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_HIGH
-    }
+    const shadowSettings = resolveShadowSettings(this.host.qualityTier)
+    const shadowGenerator = new ShadowGenerator(shadowSettings.mapSize, keyLight)
+    applyShadowSettings(shadowGenerator, shadowSettings)
+    this._shadowSettings = shadowSettings
     this.host.shadowGenerator = shadowGenerator
 
     // Rim light
@@ -177,6 +176,22 @@ export class GameRenderer {
     bounceLight.diffuse = color(LIGHTING.BOUNCE.color)
     bounceLight.range = 20
     this.host.bounceLight = bounceLight
+  }
+
+  /**
+   * Re-point the live key-light generator at `tier`'s technique. Switching the filter marks every
+   * receiving material light-dirty, so it recompiles on the next frame. A no-op when the tier maps
+   * to the technique and map size already running (HIGH <-> HIGH, MEDIUM <-> LOW).
+   */
+  private applyShadowTier(tier: QualityTier): void {
+    const generator = this.host.shadowGenerator
+    const current = this._shadowSettings
+    if (!generator || !current) return
+    const next = resolveShadowSettings(tier)
+    if (next.technique === current.technique && next.mapSize === current.mapSize) return
+    applyShadowSettings(generator, next)
+    if (next.mapSize !== current.mapSize) generator.mapSize = next.mapSize
+    this._shadowSettings = next
   }
 
   private setupEnvironmentLighting(): void {
@@ -512,12 +527,6 @@ export class GameRenderer {
 
     this.host.mirrorTexture?.dispose()
     this.host.mirrorTexture = null
-
-    this.host.tableRenderTarget?.dispose()
-    this.host.tableRenderTarget = null
-
-    this.host.headRenderTarget?.dispose()
-    this.host.headRenderTarget = null
 
     this.host.shadowGenerator?.dispose()
     this.host.shadowGenerator = null

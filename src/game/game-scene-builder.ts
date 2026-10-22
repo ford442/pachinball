@@ -185,8 +185,9 @@ export class GameSceneBuilder {
       }
     }
 
+    // Receiver only. It used to be a caster too, which put a table-sized quad into every
+    // shadow-map render (#443).
     ground.receiveShadows = true
-    this.host.shadowGenerator?.addShadowCaster(ground, false)
     if (this.host.playfieldGroup) ground.parent = this.host.playfieldGroup
 
     if (!GameConfig.camera.reducedMotion) {
