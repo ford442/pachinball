@@ -90,7 +90,11 @@ function trackCompileErrors(page: Page): string[] {
 async function boot(page: Page): Promise<void> {
   // Small on purpose: SwiftShader rasterises on the CPU, and none of these checks are pixel-based.
   await page.setViewportSize({ width: 640, height: 360 })
-  await page.goto('/?renderer=webgl2&debug=1')
+  // `noopt=1`: the game's SceneOptimizer (target 55 fps) degrades a software-GL run within seconds
+  // (shadows, particles, post and render targets off, textures, including the shadow map, to 512),
+  // which makes "what is the scene's shadow map size / is the gate frozen" depend on how loaded the
+  // machine is.
+  await page.goto('/?renderer=webgl2&debug=1&noopt=1')
   await expect(page.locator('#start-btn')).toBeVisible({ timeout: 60_000 })
   await page.waitForFunction(() => !!(window as ProbeWindow).game?.ready, undefined, { timeout: 90_000 })
 }
@@ -619,7 +623,7 @@ test.describe('render hygiene (#443)', () => {
 
   test('?freezeMeshes=0 keeps the active-mesh list thawed', async ({ page }) => {
     await page.setViewportSize({ width: 640, height: 360 })
-    await page.goto('/?renderer=webgl2&debug=1&freezeMeshes=0')
+    await page.goto('/?renderer=webgl2&debug=1&noopt=1&freezeMeshes=0')
     await expect(page.locator('#start-btn')).toBeVisible({ timeout: 60_000 })
     await page.waitForFunction(() => !!(window as ProbeWindow).game?.ready, undefined, { timeout: 90_000 })
     await page.evaluate(() => (window as ProbeWindow).game!.performanceMonitor.setOnSustainedJank(null))
