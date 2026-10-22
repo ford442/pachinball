@@ -51,28 +51,17 @@ export function pinLatticeMatrices(
   const yz = y * z
   const xw = x * w
 
-  const r0 = 1 - 2 * (yy + zz)
-  const r1 = 2 * (xy + zw)
-  const r2 = 2 * (zx - yw)
-  const r4 = 2 * (xy - zw)
-  const r5 = 1 - 2 * (zz + xx)
-  const r6 = 2 * (yz + xw)
-  const r8 = 2 * (zx + yw)
-  const r9 = 2 * (yz - xw)
-  const r10 = 1 - 2 * (yy + xx)
+  // Rows 0..2 of the matrix (the fourth column of each stays 0), shared by every instance.
+  const block = [
+    1 - 2 * (yy + zz), 2 * (xy + zw), 2 * (zx - yw), 0,
+    2 * (xy - zw), 1 - 2 * (zz + xx), 2 * (yz + xw), 0,
+    2 * (zx + yw), 2 * (yz - xw), 1 - 2 * (yy + xx), 0,
+  ]
 
   const out = new Float32Array(positions.length * FLOATS_PER_MATRIX)
   positions.forEach((p, i) => {
     const o = i * FLOATS_PER_MATRIX
-    out[o] = r0
-    out[o + 1] = r1
-    out[o + 2] = r2
-    out[o + 4] = r4
-    out[o + 5] = r5
-    out[o + 6] = r6
-    out[o + 8] = r8
-    out[o + 9] = r9
-    out[o + 10] = r10
+    out.set(block, o)
     out[o + 12] = p.x
     out[o + 13] = p.y
     out[o + 14] = p.z
@@ -142,7 +131,10 @@ export function setPinLatticeInstances(
   label: string,
 ): void {
   const matrices = pinLatticeMatrices(positions, rotation)
-  assertUniformPinLattice(matrices, label)
+  // One rotation per lattice holds by construction (`pinLatticeMatrices` writes one block for all
+  // of them); the check is a development guard against a future builder that mixes buffers, and
+  // production builds drop it (and `assertUniformPinLattice` with it).
+  if (import.meta.env.DEV) assertUniformPinLattice(matrices, label)
   mesh.isPickable = false
   mesh.isVisible = true
   mesh.thinInstanceSetBuffer('matrix', matrices, FLOATS_PER_MATRIX, true)

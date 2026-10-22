@@ -46,13 +46,7 @@ import { getMaterialLibrary, detectQualityTier } from '../materials'
 import { applyShadowSettings, resolveShadowSettings, type ShadowSettings } from './shadow-config'
 import { resolveMirrorRefreshRate } from './mirror-config'
 import type { StaticSceneGate } from '../core/static-scene-gate'
-import { FrozenMaterialSet } from './frozen-material-set'
-import {
-  FrozenActiveMeshes,
-  isActiveMeshFreezeEnabled,
-  RenderStateWatcher,
-  type ActiveMeshesScene,
-} from './frozen-active-meshes'
+import type { FreezableMaterial } from './frozen-material-set'
 import {
   clampMaterialLights,
   computeWebGLLightBudget,
@@ -102,14 +96,13 @@ export class GameRenderer {
   private _shadowSettings: ShadowSettings | null = null
   /** WebGL2 only: clamps `maxSimultaneousLights` to the uniform-block budget (see installWebGLLightBudget). */
   private _lightClamp: ((materials: LightCappedMaterial[]) => number) | null = null
-  private _unregisterFrozenMaterials: (() => void) | null = null
-  private _unwatchFog: Array<() => void> = []
-  private _unregisterActiveMeshes: (() => void) | null = null
-  private _unwatchRenderState: (() => void) | null = null
-  /** Explicit allowlist of materials frozen while the scene is static; see frozen-material-set.ts. */
-  private readonly frozenMaterials = new FrozenMaterialSet({
-    clampLights: (materials) => { this._lightClamp?.(materials) },
-  })
+  /**
+   * The allowlist of materials to freeze while the scene is static, each with the reason it is
+   * safe. Only collected here; the frozen set that uses it is built by static-scene-install.ts
+   * (a lazily loaded chunk), which keeps its code out of the entry chunk. Read frozen-material-set.ts
+   * for what may never be added.
+   */
+  private readonly frozenMaterialCandidates: Array<readonly [FreezableMaterial, string]> = []
 
   constructor(host: RendererHost) {
     this.host = host
@@ -163,54 +156,15 @@ export class GameRenderer {
     return next
   }
 
-  /** Make the frozen-material allowlist follow `gate` (thaw on material changes, refreeze when quiet). */
-  attachStaticSceneGate(gate: Pick<StaticSceneGate, 'registerTarget' | 'watchState'> | null): void {
-    this.detachStaticSceneGate()
-    const scene = this.host.scene
-    if (!gate || !scene) return
-    this._unregisterFrozenMaterials = gate.registerTarget(this.frozenMaterials)
-
-    // A frozen material never re-binds its fog uniforms or re-evaluates its fog define, and the
-    // track themes lerp the scene's fog every frame (effects-atmosphere.ts), so fog is state the
-    // frozen set must be told about. Quantised so a lerp that has converged to 1e-4 counts as still.
-    const quantised = (value: number): number => Math.round(value * 10_000)
-    const fog = { materials: true }
-    this._unwatchFog = [
-      gate.watchState('fog', () => (scene.fogEnabled ? 1 : 0) + scene.fogMode * 2, fog),
-      gate.watchState('fog', () => quantised(scene.fogDensity), fog),
-      gate.watchState('fog', () => quantised(scene.fogColor.r), fog),
-      gate.watchState('fog', () => quantised(scene.fogColor.g), fog),
-      gate.watchState('fog', () => quantised(scene.fogColor.b), fog),
-    ]
-
-    // The active-mesh list. Off with ?freezeMeshes=0, and off if this Babylon build lacks the
-    // internals the freeze uses (it then simply stays thawed).
-    if (isActiveMeshFreezeEnabled(window.location.search)) {
-      const target = new FrozenActiveMeshes(scene as unknown as ActiveMeshesScene)
-      if (target.isSupported) {
-        this._unregisterActiveMeshes = gate.registerTarget(target)
-        const watcher = new RenderStateWatcher(scene)
-        this._unwatchRenderState = gate.watchState('render-state', () => watcher.sample())
-      } else {
-        console.warn('[GameRenderer] Active-mesh freeze unavailable: Babylon internals not found')
-      }
+  /** What static-scene-install.ts needs from the renderer: the freeze allowlist and the WebGL light clamp. */
+  getStaticSceneInputs(): {
+    frozenMaterials: ReadonlyArray<readonly [FreezableMaterial, string]>
+    clampLights: (materials: FreezableMaterial[]) => void
+  } {
+    return {
+      frozenMaterials: this.frozenMaterialCandidates,
+      clampLights: (materials) => { this._lightClamp?.(materials) },
     }
-  }
-
-  private detachStaticSceneGate(): void {
-    this._unregisterFrozenMaterials?.()
-    this._unregisterFrozenMaterials = null
-    for (const unwatch of this._unwatchFog) unwatch()
-    this._unwatchFog = []
-    this._unregisterActiveMeshes?.()
-    this._unregisterActiveMeshes = null
-    this._unwatchRenderState?.()
-    this._unwatchRenderState = null
-  }
-
-  /** `[material name, why it is safe to freeze]` for every allowlisted material. */
-  describeFrozenMaterials(): Array<[string, string]> {
-    return this.frozenMaterials.describe()
   }
 
   /** Setup key, rim, bounce, and fill lights + shadow generator. */
@@ -305,7 +259,7 @@ export class GameRenderer {
     const UNLIT_STATIC =
       'unlit room decor (disableLighting): no light blocks in its shader, never written after creation'
     const freezeUnlit = (mat: StandardMaterial): StandardMaterial => {
-      this.frozenMaterials.add(mat, UNLIT_STATIC)
+      this.frozenMaterialCandidates.push([mat, UNLIT_STATIC])
       return mat
     }
     // Static decor that shares a material becomes ONE mesh (one draw call). Only meshes with no
@@ -646,8 +600,7 @@ export class GameRenderer {
   }
 
   dispose(): void {
-    this.detachStaticSceneGate()
-    this.frozenMaterials.clear()
+    this.frozenMaterialCandidates.length = 0
     this._lightBudgetTeardown?.()
     this._lightBudgetTeardown = null
 

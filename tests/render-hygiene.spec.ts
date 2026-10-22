@@ -34,7 +34,6 @@ interface GameProbe {
   }
   shadowGenerator: ShadowGeneratorProbe | null
   renderer: {
-    describeFrozenMaterials: () => Array<[string, string]>
     applyQualityTier: (tier: string) => void
     dropQualityTierOnce: () => string
     postProcess: {
@@ -45,6 +44,7 @@ interface GameProbe {
     }
   }
   postProcessDegraded: boolean
+  staticScene: { materials: { describe: () => Array<[string, string]> } } | null
   staticSceneGate: {
     getStats: () => {
       state: string
@@ -407,7 +407,7 @@ test.describe('render hygiene (#443)', () => {
     }
 
     await waitFrozen()
-    const allowlist = await page.evaluate(() => (window as ProbeWindow).game!.renderer.describeFrozenMaterials())
+    const allowlist = await page.evaluate(() => (window as ProbeWindow).game!.staticScene!.materials.describe())
     const allowed = allowlist.map(([name]) => name).sort()
     const UNLIT_DECOR =
       /^(underBaseMat|underCoreMat|underEdgeMat|spillLMat|spillRMat|arcadePillarMat|pillarCoreMat|ceilingNeonMat|backGridMat|dataFall(Cyan|Magenta)Mat|backLogoMat)$/
