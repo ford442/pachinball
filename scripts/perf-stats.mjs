@@ -82,6 +82,10 @@ export const COMPARE_METRICS = [
   ['activeMeshes', (a) => a.counts?.activeMeshes],
   ['meshes', (a) => a.counts?.meshes],
   ['materials', (a) => a.counts?.materials],
+  ['materialsFrozen', (a) => a.counts?.materialsFrozen],
+  ['shadowRendersPerFrame', (a) => a.counts?.shadowRendersPerFrame],
+  ['mirrorRendersPerFrame', (a) => a.counts?.mirrorRendersPerFrame],
+  ['refreezeCount', (a) => a.counts?.refreezeCount],
 ]
 
 /**
