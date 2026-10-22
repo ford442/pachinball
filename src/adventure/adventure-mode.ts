@@ -25,6 +25,7 @@ import {
 import { FALLOUT_Y_THRESHOLD } from './adventure-portal-types'
 
 import { getDataTrackDefinition } from './track-data-registry'
+import type { StaticSceneGate } from '../core/static-scene-gate'
 import {
   formatTrackValidationErrors,
   validateTrackDefinition,
@@ -44,6 +45,12 @@ export class AdventureMode extends AdventurePortalMixin {
 
   private activeBallBodies: PhysicsBody[] = []
   private lastTeardownStats: TrackTeardownStats | null = null
+  private staticSceneGate: Pick<StaticSceneGate, 'hold' | 'invalidate'> | null = null
+
+  /** A track build or clear rewrites the mesh set and the shadow casters; the gate thaws for it. */
+  setStaticSceneGate(gate: Pick<StaticSceneGate, 'hold' | 'invalidate'> | null): void {
+    this.staticSceneGate = gate
+  }
 
   getLastTeardownStats(): TrackTeardownStats | null {
     return this.lastTeardownStats
@@ -290,9 +297,18 @@ export class AdventureMode extends AdventurePortalMixin {
   }
 
   /**
-   * Build the specified track
+   * Build the specified track. The gate stays thawed across the whole (possibly async) build.
    */
   private async buildTrack(trackType: AdventureTrackType): Promise<void> {
+    const release = this.staticSceneGate?.hold('track:build', { shadows: true })
+    try {
+      await this.buildTrackUnguarded(trackType)
+    } finally {
+      release?.()
+    }
+  }
+
+  private async buildTrackUnguarded(trackType: AdventureTrackType): Promise<void> {
     // Reset per-track state so each builder starts fresh
     this.portalPosition = null
     this.currentTrackInfo = TRACK_CATALOG[trackType] ?? null
@@ -535,6 +551,7 @@ export class AdventureMode extends AdventurePortalMixin {
    * Called by both switchToTrack() and end().
    */
   private clearTrack(): void {
+    this.staticSceneGate?.invalidate('track:clear', { shadows: true })
     const stats = createEmptyTeardownStats()
     stats.meshesDisposed = this.adventureTrack.length
     stats.materialsDisposed = this.materials.length

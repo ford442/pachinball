@@ -53,6 +53,7 @@ import {
 } from './ball-manager-spawn'
 import { updateStuckDetection } from './ball-manager-stuck'
 import { removeFromMirror } from './mirror-render-list'
+import type { StaticSceneGate } from '../core/static-scene-gate'
 import type { BallData, PhysicsBinding } from './types'
 
 export class BallManager {
@@ -64,6 +65,7 @@ export class BallManager {
   private ballBodies: PhysicsBody[] = []
   private caughtBalls: Array<{ body: PhysicsBody; targetPos: Vector3; timer: number }> = []
   private mirrorTexture: MirrorTexture | null = null
+  private staticSceneGate: Pick<StaticSceneGate, 'invalidate'> | null = null
   private bindings: PhysicsBinding[] = []
   private matLib: ReturnType<typeof getMaterialLibrary>
   private trails: Map<PhysicsBody, TrailMesh> = new Map()
@@ -116,23 +118,32 @@ export class BallManager {
     this.mirrorTexture = texture
   }
 
+  /** Balls come and go in a scene the gate may have frozen; every spawn / removal thaws it. */
+  setStaticSceneGate(gate: Pick<StaticSceneGate, 'invalidate'> | null): void {
+    this.staticSceneGate = gate
+  }
+
   getBindings(): PhysicsBinding[] {
     return this.bindings
   }
 
   createMainBall(): PhysicsBody {
+    this.staticSceneGate?.invalidate('ball:spawn')
     return createMainBall(this.asHost())
   }
 
   spawnExtraBalls(count: number, position?: Vector3): void {
+    this.staticSceneGate?.invalidate('ball:spawn')
     spawnExtraBalls(this.asHost(), count, position)
   }
 
   resetBall(): void {
+    this.staticSceneGate?.invalidate('ball:spawn')
     resetBall(this.asHost())
   }
 
   removeBall(body: PhysicsBody): void {
+    this.staticSceneGate?.invalidate('ball:collect')
     this.ballDataMap.delete(body)
     cleanupSwarmTrackingOnRemove(this.asHost(), body)
 
@@ -164,6 +175,7 @@ export class BallManager {
   }
 
   removeExtraBalls(): void {
+    this.staticSceneGate?.invalidate('ball:collect')
     for (let i = this.ballBodies.length - 1; i >= 0; i--) {
       const rb = this.ballBodies[i]
       if (rb !== this.ballBody) {
@@ -348,10 +360,12 @@ export class BallManager {
   }
 
   createBallOfType(type: BallType, position?: Vector3, playEffect = false): PhysicsBody {
+    this.staticSceneGate?.invalidate('ball:spawn')
     return createBallOfType(this.asHost(), type, position, playEffect)
   }
 
   spawnSmallGoldBallSwarm(position?: Vector3, baseType: BallType = BallType.GOLD_PLATED): PhysicsBody[] {
+    this.staticSceneGate?.invalidate('ball:spawn')
     return spawnSmallGoldBallSwarm(this.asHost(), position, baseType)
   }
 

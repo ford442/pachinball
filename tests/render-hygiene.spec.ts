@@ -40,11 +40,24 @@ interface GameProbe {
     }
   }
   postProcessDegraded: boolean
+  staticSceneGate: {
+    getStats: () => {
+      state: string
+      refreezeCount: number
+      invalidationCount: number
+      lastReason: string | null
+      holds: number
+      reasons: Array<[string, number]>
+    }
+  } | null
+  eventBus: { emit: (event: string) => void }
+  debugHelper: { buildDebugSnapshot: (dt: number, lives: number) => { renderStats?: { meshes: number; activeMeshes: number; materials: number; frozenMaterials: number; staticScene: { refreezeCount: number } | null } } } | null
   mirrorTexture: { renderList: unknown[]; refreshRate: number; getSize: () => unknown } | null
   ballManager: {
     spawnExtraBalls: (count: number) => void
     getBallBodies: () => unknown[]
     removeBall: (body: unknown) => void
+    resetBall: () => void
   }
   cabinetManager: { loadCabinetPreset: (type: string) => Promise<void> }
   engine: { getCaps: () => { maxDrawBuffers?: number } }
@@ -302,5 +315,71 @@ test.describe('render hygiene (#443)', () => {
     expect(await page.evaluate(() => JSON.stringify((window as ProbeWindow).game!.mirrorTexture!.getSize()))).toBe(sizeBefore)
 
     expect(compileErrors, 'no shader compile errors across cabinet swaps and tier switches').toEqual([])
+  })
+
+  test('the static-scene gate sees spawns, collects, tier changes, cabinet loads and FEVER windows', async ({ page }) => {
+    test.setTimeout(600_000)
+    await boot(page)
+    await page.evaluate(() => (window as ProbeWindow).game!.performanceMonitor.setOnSustainedJank(null))
+    await renderFrames(page, 4)
+
+    const stats = () =>
+      page.evaluate(() => {
+        const s = (window as ProbeWindow).game!.staticSceneGate!.getStats()
+        return { ...s, reasons: Object.fromEntries(s.reasons) }
+      })
+    const delta = async (action: () => Promise<unknown>, reason: string): Promise<number> => {
+      const before = (await stats()).reasons[reason] ?? 0
+      await action()
+      return ((await stats()).reasons[reason] ?? 0) - before
+    }
+    const run = <T>(fn: (game: GameProbe) => T) => page.evaluate((src) => new Function('game', `return (${src})(game)`)((window as ProbeWindow).game), fn.toString())
+
+    // createMainBall ran during boot, before any spawn made by this test.
+    expect((await stats()).reasons['ball:spawn']).toBeGreaterThanOrEqual(1)
+
+    expect(await delta(() => run((g) => g.ballManager.spawnExtraBalls(1)), 'ball:spawn')).toBeGreaterThanOrEqual(1)
+    expect(await delta(() => run((g) => g.ballManager.removeBall(g.ballManager.getBallBodies().at(-1))), 'ball:collect')).toBe(1)
+    expect(await delta(() => run((g) => g.ballManager.resetBall()), 'ball:spawn')).toBeGreaterThanOrEqual(1)
+
+    // Tier: a real change invalidates, re-applying the current tier does not.
+    await run((g) => g.renderer.applyQualityTier('high'))
+    expect(await delta(() => run((g) => g.renderer.applyQualityTier('medium')), 'quality-tier')).toBe(1)
+    expect(await delta(() => run((g) => g.renderer.applyQualityTier('medium')), 'quality-tier')).toBe(0)
+
+    // Cabinet load: held for the whole async load, released afterwards.
+    const duringLoad = await page.evaluate(async () => {
+      const game = (window as ProbeWindow).game!
+      const loading = game.cabinetManager.loadCabinetPreset('neo')
+      const heldWhileLoading = game.staticSceneGate!.getStats().holds
+      await loading
+      return { heldWhileLoading, heldAfter: game.staticSceneGate!.getStats().holds }
+    })
+    expect(duringLoad.heldWhileLoading).toBeGreaterThanOrEqual(1)
+    expect(duringLoad.heldAfter).toBe(0)
+    expect((await stats()).reasons['cabinet:load']).toBeGreaterThanOrEqual(1)
+
+    // FEVER: held from start to end, then it refreezes once.
+    await renderFrames(page, 6)
+    const quiet = await stats()
+    expect(quiet.holds).toBe(0)
+    await run((g) => g.eventBus.emit('fever:start'))
+    await renderFrames(page, 6)
+    const fever = await stats()
+    expect(fever.holds).toBe(1)
+    expect(fever.state).toBe('thawed')
+    expect(fever.refreezeCount).toBe(quiet.refreezeCount)
+    await run((g) => g.eventBus.emit('fever:end'))
+    await renderFrames(page, 6)
+    const after = await stats()
+    expect(after.holds).toBe(0)
+    expect(after.refreezeCount).toBeGreaterThan(fever.refreezeCount)
+    expect(after.state).toBe('frozen')
+
+    // The counter reaches the debug HUD snapshot.
+    const snapshot = await page.evaluate(() => (window as ProbeWindow).game!.debugHelper!.buildDebugSnapshot(0.016, 3).renderStats)
+    expect(snapshot!.staticScene!.refreezeCount).toBe(after.refreezeCount)
+    expect(snapshot!.activeMeshes).toBeGreaterThan(0)
+    expect(snapshot!.meshes).toBeGreaterThanOrEqual(snapshot!.activeMeshes)
   })
 })

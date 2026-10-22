@@ -46,6 +46,7 @@ import { GameConfig, BallType } from '../config'
 
 import { GameRenderer } from './game-renderer'
 import { GameCabinetBuilder } from './game-cabinet-builder'
+import type { StaticSceneGate } from '../core/static-scene-gate'
 import { GameSceneBuilder } from './game-scene-builder'
 import { GamePhysicsController } from './game-physics-controller'
 import { GameInputActions } from './game-input-actions'
@@ -203,6 +204,8 @@ export abstract class GameFields {
   sceneInstrumentation: SceneInstrumentation | null = null
   engineInstrumentation: EngineInstrumentation | null = null
   mirrorTexture: MirrorTexture | null = null
+  /** Decides when the scene may be treated as static (shadow map, materials, active meshes). */
+  staticSceneGate: StaticSceneGate | null = null
   shadowGenerator: ShadowGenerator | null = null
   playfieldGroup: TransformNode | null = null
 

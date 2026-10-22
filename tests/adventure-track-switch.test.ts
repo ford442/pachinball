@@ -358,6 +358,72 @@ describe('AdventureMode.switchToTrack', () => {
   })
 })
 
+describe('AdventureMode static-scene gate', () => {
+  const scene = {
+    getEngine: () => ({ getRenderingCanvas: () => ({ addEventListener: vi.fn() }) }),
+    activeCamera: null,
+    activeCameras: [],
+  }
+  const world = {
+    getRigidBody: vi.fn(() => null),
+    removeRigidBody: vi.fn(),
+    createRigidBody: vi.fn(),
+    createCollider: vi.fn(),
+    intersectionPair: vi.fn(() => false),
+  }
+
+  function makeGatedMode() {
+    const mode = new AdventureMode(scene as never, world as never, {} as never)
+    const release = vi.fn()
+    const gate = { hold: vi.fn(() => release), invalidate: vi.fn() }
+    mode.setStaticSceneGate(gate)
+    const internals = mode as unknown as {
+      buildTrack: (t: AdventureTrackType) => Promise<void>
+      buildTrackUnguarded: (t: AdventureTrackType) => Promise<void>
+      clearTrack: () => void
+    }
+    return { gate, release, internals }
+  }
+
+  it('holds the gate across a track build and releases it afterwards', async () => {
+    const { gate, release, internals } = makeGatedMode()
+    let heldDuringBuild = false
+    internals.buildTrackUnguarded = vi.fn(async () => {
+      heldDuringBuild = gate.hold.mock.calls.length === 1 && release.mock.calls.length === 0
+    })
+
+    await internals.buildTrack(AdventureTrackType.NEON_HELIX)
+
+    expect(gate.hold).toHaveBeenCalledWith('track:build', { shadows: true })
+    expect(heldDuringBuild).toBe(true)
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases the hold when a track build throws', async () => {
+    const { release, internals } = makeGatedMode()
+    internals.buildTrackUnguarded = vi.fn(async () => {
+      throw new Error('builder blew up')
+    })
+
+    await expect(internals.buildTrack(AdventureTrackType.NEON_HELIX)).rejects.toThrow('builder blew up')
+
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
+  it('invalidates the gate before a track is cleared', () => {
+    const { gate, internals } = makeGatedMode()
+    internals.clearTrack()
+    expect(gate.invalidate).toHaveBeenCalledWith('track:clear', { shadows: true })
+  })
+
+  it('works without a gate', async () => {
+    const mode = new AdventureMode(scene as never, world as never, {} as never)
+    const internals = mode as unknown as { buildTrack: (t: AdventureTrackType) => Promise<void>; buildTrackUnguarded: () => Promise<void> }
+    internals.buildTrackUnguarded = vi.fn(async () => undefined)
+    await expect(internals.buildTrack(AdventureTrackType.NEON_HELIX)).resolves.toBeUndefined()
+  })
+})
+
 describe('GameSlotAdventure.switchToTrack', () => {
   it('orchestrates teardown, build, cinematic, and UI reset in order', async () => {
     const onTrackStart = vi.fn()

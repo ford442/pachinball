@@ -44,6 +44,7 @@ import {
 import { getMaterialLibrary, detectQualityTier } from '../materials'
 import { applyShadowSettings, resolveShadowSettings, type ShadowSettings } from './shadow-config'
 import { resolveMirrorRefreshRate } from './mirror-config'
+import type { StaticSceneGate } from '../core/static-scene-gate'
 import {
   clampMaterialLights,
   computeWebGLLightBudget,
@@ -66,6 +67,7 @@ export interface RendererHost {
   bloomPipeline: BloomPipelineController | null
   shadowGenerator: ShadowGenerator | null
   mirrorTexture: MirrorTexture | null
+  readonly staticSceneGate?: Pick<StaticSceneGate, 'invalidate'> | null
   keyLight: DirectionalLight | null
   rimLight: DirectionalLight | null
   bounceLight: PointLight | null
@@ -120,6 +122,11 @@ export class GameRenderer {
    * Updates bloom knobs and toggles HIGH-only heavy post-process.
    */
   applyQualityTier(tier: QualityTier): void {
+    // Before the mutation: a tier change rewrites shader defines and material properties that
+    // a frozen scene would not pick up. Re-applying the current tier changes nothing.
+    if (tier !== this.host.qualityTier) {
+      this.host.staticSceneGate?.invalidate('quality-tier', { materials: true, shadows: true })
+    }
     this.postProcess.applyQualityTier(tier)
     this.applyShadowTier(tier)
     this.applyMirrorTier(tier)
@@ -127,6 +134,9 @@ export class GameRenderer {
 
   /** Drop one quality step (HIGH→MEDIUM→LOW). Returns the new tier. */
   dropQualityTierOnce(): QualityTier {
+    if (this.host.qualityTier !== QualityTier.LOW) {
+      this.host.staticSceneGate?.invalidate('quality-tier', { materials: true, shadows: true })
+    }
     // The post-process manager applies its own half of the tier; the shadow filter follows it
     // here, so an automatic drop changes the technique exactly like a settings change does.
     const next = this.postProcess.dropQualityTierOnce()

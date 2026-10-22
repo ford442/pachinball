@@ -25,6 +25,9 @@ export function disposeGame(game: Game): void {
   // Removes every listener registered with `{ signal: game.signal }` in one go.
   game.abort.abort()
   game.timers.dispose()
+  // First: its mesh watchers would otherwise react to every mesh the teardown below removes.
+  game.staticSceneGate?.dispose()
+  game.staticSceneGate = null
 
   game.sceneOptimizer?.dispose()
   game.sceneOptimizer = null
