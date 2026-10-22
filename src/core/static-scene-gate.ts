@@ -320,7 +320,11 @@ export class StaticSceneGate {
     const now = this.now()
     const { maxRefreezes, windowMs, cooldownMs } = this.thrash
 
-    while (this.refreezeTimes.length > 0 && now - this.refreezeTimes[0] > windowMs) this.refreezeTimes.shift()
+    let oldest = this.refreezeTimes[0]
+    while (oldest !== undefined && now - oldest > windowMs) {
+      this.refreezeTimes.shift()
+      oldest = this.refreezeTimes[0]
+    }
     if (this.refreezeTimes.length >= maxRefreezes) {
       // Not static: a gate that refreezes every few frames costs more than leaving things alone.
       this.refreezeTimes.length = 0
