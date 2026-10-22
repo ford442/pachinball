@@ -14,6 +14,14 @@ import { DepthOfFieldEffectBlurLevel } from '@babylonjs/core/PostProcesses/depth
 import { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline'
 import { SSRRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssrRenderingPipeline'
 import { MotionBlurPostProcess } from '@babylonjs/core/PostProcesses/motionBlurPostProcess'
+// Side-effects the SSAO2 / SSR / motion-blur chain needs and a tree-shaken build never pulls in
+// on its own. Without them, switching to HIGH on a real GPU failed as follows: SSAO2 fell to the
+// degrade path ("enablePrePassRenderer is not a function"), SSR threw out of applyQualityTier,
+// and with the prepass on, every PBR material threw "enableSubSurfaceForPrePass is not a
+// function" each frame.
+import '@babylonjs/core/Rendering/prePassRendererSceneComponent' // Scene.enablePrePassRenderer
+import '@babylonjs/core/Rendering/depthRendererSceneComponent' // Scene.enableDepthRenderer (SSR, DoF)
+import '@babylonjs/core/Rendering/subSurfaceSceneComponent' // Scene.enableSubSurfaceForPrePass (PBR)
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
 import {
   applyBloomPipelineProfile,
@@ -29,6 +37,15 @@ import { QualityTier, INTENSITY } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
 import { GameConfig } from '../config'
 import type { RendererHost } from './game-renderer'
+
+/**
+ * Colour attachments the shared prepass needs on HIGH: colour, depth, normal, reflectivity (SSR)
+ * and velocity (motion blur), plus albedo and irradiance because the HIGH bumper bodies enable
+ * PBR sub-surface scattering (materials/material-interactive.ts). Below this the prepass shaders
+ * fail with "glFragData ... would exceed MAX_DRAW_BUFFERS" on every material that renders into
+ * it (WebGL2 only guarantees 4; SwiftShader reports 6; desktop GPUs report 8).
+ */
+export const HEAVY_POST_MIN_DRAW_BUFFERS = 7
 
 export class PostProcessManager {
   private readonly host: RendererHost
@@ -293,8 +310,19 @@ export class PostProcessManager {
     const { scene, tableCam } = this.host
     if (!scene || !tableCam) return
 
-    const allowHeavy =
+    const wantsHeavy =
       qualityTier === QualityTier.HIGH && !reducedMotion && !this._isSwiftShader
+    const drawBuffers = this.host.engine.getCaps().maxDrawBuffers ?? 0
+    const allowHeavy = wantsHeavy && drawBuffers >= HEAVY_POST_MIN_DRAW_BUFFERS
+    if (wantsHeavy && !allowHeavy) {
+      if (!this.host.postProcessDegraded) {
+        console.warn(
+          `[GameRenderer] SSAO / SSR / motion blur skipped: ${drawBuffers} draw buffers, ` +
+            `the shared prepass needs ${HEAVY_POST_MIN_DRAW_BUFFERS}`,
+        )
+      }
+      this.host.postProcessDegraded = true
+    }
 
     // DoF lives on the default pipeline
     const bloom = this.host.bloomPipeline
@@ -316,12 +344,28 @@ export class PostProcessManager {
     }
 
     if (allowHeavy) {
+      // One prepass MRT (depth + normals + reflectivity + velocity) shared by SSAO2, SSR and
+      // motion blur. `forceGeometryBuffer = true` would give each of them the legacy
+      // GeometryBufferRenderer instead: a second full scene pass writing the same buffers.
+      // Enabling it up front, once, also fails fast here if the module above was dropped.
+      try {
+        scene.enablePrePassRenderer()
+      } catch (err) {
+        this.host.postProcessDegraded = true
+        console.warn('[GameRenderer] Prepass unavailable; SSAO / SSR / motion blur skipped', err)
+        this.disposeHeavyPostProcesses()
+        return
+      }
+
       if (!this._ssaoPipeline) {
         try {
-          const ssao = new SSAO2RenderingPipeline('ssao', scene, {
-            ssaoRatio: 1.0,
-            blurRatio: 1.0,
-          })
+          const ssao = new SSAO2RenderingPipeline(
+            'ssao',
+            scene,
+            { ssaoRatio: 1.0, blurRatio: 1.0 },
+            undefined,
+            false, // forceGeometryBuffer: share the prepass
+          )
           ssao.radius = 1.5
           ssao.totalStrength = 0.6
           ssao.base = 0.5
@@ -337,20 +381,49 @@ export class PostProcessManager {
       }
 
       if (!this._ssrPipeline) {
-        this._ssrPipeline = new SSRRenderingPipeline('ssr', scene, [tableCam])
-        this._ssrPipeline.step = 0.5
-        this._ssrPipeline.reflectionSpecularFalloffExponent = 3
-        this._ssrPipeline.strength = 0.6
-        this._ssrPipeline.thickness = 0.1
-        this._ssrPipeline.selfCollisionNumSkip = 1
-        this._ssrPipeline.enableSmoothReflections = true
-        this._ssrPipeline.enableAutomaticThicknessComputation = true
+        try {
+          const ssr = new SSRRenderingPipeline(
+            'ssr',
+            scene,
+            [tableCam],
+            false, // forceGeometryBuffer: share the prepass
+          )
+          ssr.step = 0.5
+          ssr.reflectionSpecularFalloffExponent = 3
+          ssr.strength = 0.6
+          ssr.thickness = 0.1
+          ssr.selfCollisionNumSkip = 1
+          ssr.enableSmoothReflections = true
+          ssr.enableAutomaticThicknessComputation = true
+          this._ssrPipeline = ssr
+        } catch (err) {
+          this.host.postProcessDegraded = true
+          console.warn('[GameRenderer] MRT post-process unavailable; SSR failed', err)
+        }
       }
 
       if (!this._motionBlur) {
-        this._motionBlur = new MotionBlurPostProcess('motionBlur', scene, 1.0, tableCam)
-        this._motionBlur.motionStrength = 0.15
-        this._motionBlur.motionBlurSamples = 16
+        try {
+          // forceGeometryBuffer is the 10th parameter; it defaults to false (prepass).
+          const motionBlur = new MotionBlurPostProcess(
+            'motionBlur',
+            scene,
+            1.0,
+            tableCam,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            false,
+          )
+          motionBlur.motionStrength = 0.15
+          motionBlur.motionBlurSamples = 16
+          this._motionBlur = motionBlur
+        } catch (err) {
+          this.host.postProcessDegraded = true
+          console.warn('[GameRenderer] MRT post-process unavailable; motion blur failed', err)
+        }
       }
     } else {
       this.disposeHeavyPostProcesses()
@@ -429,15 +502,29 @@ export class PostProcessManager {
         // Pipeline may already be detached
       }
       this._ssaoPipeline.dispose()
+      // dispose() leaves the pipeline registered with the manager. A zombie `ssao` whose
+      // `isSupported` reads scene.prePassRenderer throws once the prepass is disabled below,
+      // from the manager's per-frame pass, which stops the render loop.
+      scene.postProcessRenderPipelineManager.removePipeline('ssao')
       this._ssaoPipeline = null
     }
     if (this._ssrPipeline) {
       this._ssrPipeline.dispose()
+      scene?.postProcessRenderPipelineManager.removePipeline('ssr')
       this._ssrPipeline = null
     }
     if (this._motionBlur) {
       this._motionBlur.dispose()
       this._motionBlur = null
+    }
+    // Symmetric with the enablePrePassRenderer() in applyHeavyPostProcesses, after every consumer
+    // is gone, so no MRT (and no PREPASS shader variants) outlive the chain.
+    if (scene && !this._ssaoPipeline && !this._ssrPipeline && !this._motionBlur) {
+      try {
+        scene.disablePrePassRenderer()
+      } catch {
+        // Component not registered or already disposed
+      }
     }
   }
 

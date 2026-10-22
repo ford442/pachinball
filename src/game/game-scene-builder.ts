@@ -27,6 +27,7 @@ import { getMaterialLibrary } from '../materials'
 import { getCabinetBuilder } from '../cabinet'
 import { GameConfig } from '../config'
 import type { AccessibilityConfig, QualityTier } from '../game-elements'
+import type { StaticSceneGate } from '../core/static-scene-gate'
 
 /** Longest `yieldFrame` waits for a frame that a hidden tab will never deliver. */
 export const FRAME_YIELD_TIMEOUT_MS = 50
@@ -37,6 +38,7 @@ export interface SceneBuilderHost {
   readonly physics: PhysicsSystem
   readonly accessibility: AccessibilityConfig
   readonly qualityTier: QualityTier
+  readonly staticSceneGate: StaticSceneGate | null
   effects: EffectsSystem | null
   display: DisplaySystem | null
   gameObjects: GameObjects | null
@@ -76,6 +78,7 @@ export class GameSceneBuilder {
     // table without them, and Start still waits for the cabinet below (#453).
     const cabinetBuilder = getCabinetBuilder(scene)
     cabinetBuilder.setQualityTier(this.host.qualityTier)
+    cabinetBuilder.setStaticSceneGate(this.host.staticSceneGate)
     const cabinetReady = cabinetBuilder.loadCabinetPreset('classic', {
       qualityTier: this.host.qualityTier,
       onProgress: options.onCabinetProgress,
@@ -185,8 +188,9 @@ export class GameSceneBuilder {
       }
     }
 
+    // Receiver only. It used to be a caster too, which put a table-sized quad into every
+    // shadow-map render (#443).
     ground.receiveShadows = true
-    this.host.shadowGenerator?.addShadowCaster(ground, false)
     if (this.host.playfieldGroup) ground.parent = this.host.playfieldGroup
 
     if (!GameConfig.camera.reducedMotion) {

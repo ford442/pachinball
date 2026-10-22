@@ -20,6 +20,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { Scene } from '@babylonjs/core/scene'
 import type { PhysicsBody } from '../core/physics-api'
 import { resolvePinField, type PinFieldSpec } from '../core/pin-field'
+import { setPinLatticeInstances } from '../objects/pin-lattice'
 
 import type {
   ChromaGate,
@@ -370,17 +371,21 @@ export function createPinField(
     pinHeight
   )
 
-  for (const finalPos of positions) {
-    const pin = MeshBuilder.CreateCylinder(
-      'pin',
-      { diameter: pinDiameter, height: pinHeight },
-      ctx.scene
-    )
-    pin.position.copyFrom(toVector3(finalPos))
-    pin.rotation.x = inclineRad
-    pin.material = material
-    ctx.adventureTrack.push(pin)
+  if (positions.length === 0) return
 
+  // ONE mesh for the whole lattice: every pin leans with the ramp, so they share one rotation and
+  // the instances are a static thin-instance matrix buffer. (This used to be a mesh, and so a draw
+  // call, per pin.) The colliders stay one body per pin, exactly as before.
+  const lattice = MeshBuilder.CreateCylinder(
+    'pinField',
+    { diameter: pinDiameter, height: pinHeight },
+    ctx.scene
+  )
+  lattice.material = material
+  setPinLatticeInstances(lattice, positions, eulerQuat(inclineRad, 0, 0), 'track pin field')
+  ctx.adventureTrack.push(lattice)
+
+  for (const finalPos of positions) {
     const { body } = ctx.emit(
       cylinderDesc(finalPos, pinHeight / 2, pinDiameter / 2, {
         rotation: eulerQuat(inclineRad, 0, 0),
@@ -394,8 +399,8 @@ export function createPinField(
 
 /**
  * A native pin lattice (#424): ONE `pinField` descriptor, whatever its pin
- * count. The visuals are instances of one cylinder placed from
- * `resolvePinField`, so they sit on exactly the pins C++ collides with.
+ * count. The visuals are ONE mesh whose static thin-instance buffer is placed
+ * from `resolvePinField`, so they sit on exactly the pins C++ collides with.
  */
 export function createPinLattice(
   ctx: TrackPrimitiveContext,
@@ -407,26 +412,24 @@ export function createPinLattice(
   const { body } = ctx.emit(pinFieldDesc(spec, { label: 'pinLattice' }))
   ctx.adventureBodies.push(body)
 
-  const [first, ...rest] = resolvePinField(spec)
-  if (!first) return
-  const rotation = spec.rotation ?? { x: 0, y: 0, z: 0, w: 1 }
-  const source = MeshBuilder.CreateCylinder(
+  const pins = resolvePinField(spec)
+  if (pins.length === 0) return
+
+  // One cylinder, one static thin-instance buffer: every pin is a matrix of the field's single
+  // rotation at its resolved position. Disposing the mesh (clearTrack) takes the instances with it.
+  const lattice = MeshBuilder.CreateCylinder(
     'pinLattice',
     { diameter: spec.radius * 2, height: spec.halfHeight * 2, tessellation: 12 },
     ctx.scene
   )
-  source.material = material
-  source.isPickable = false
-  const place = (mesh: Pick<Mesh, 'position' | 'rotationQuaternion'>, p: GeoVec3): void => {
-    mesh.position.set(p.x, p.y, p.z)
-    mesh.rotationQuaternion = new Quaternion(rotation.x, rotation.y, rotation.z, rotation.w)
-  }
-  place(source, first.position)
-  // Disposing the source (clearTrack) takes its instances with it.
-  ctx.adventureTrack.push(source)
-  for (const pin of rest) {
-    place(source.createInstance(`pinLattice_${pin.index}`), pin.position)
-  }
+  lattice.material = material
+  setPinLatticeInstances(
+    lattice,
+    pins.map((pin) => pin.position),
+    spec.rotation,
+    'track pin lattice'
+  )
+  ctx.adventureTrack.push(lattice)
 }
 
 /**

@@ -2,7 +2,8 @@
  * PachinkoBuilder on the C++ owner path (#421): the whole lattice is ONE
  * `addPinField` — never one `addStaticCylinder` per pin — while the Rapier
  * path (a sink without `createPinField`) still gets a fixed cylinder per pin.
- * Babylon is stubbed: only the physics authoring is under test.
+ * Babylon is stubbed: only the physics authoring is under test. The visual side (#443 A4) is one
+ * thin-instance lattice mesh whose matrix buffer must hold exactly the pins that collide.
  */
 
 import { describe, expect, it, vi } from 'vitest'
@@ -36,6 +37,8 @@ function stubMesh(name: string): Record<string, unknown> {
     isVisible: true,
     addLODLevel: vi.fn(),
     freezeWorldMatrix: vi.fn(),
+    thinInstanceSetBuffer: vi.fn(),
+    thinInstanceSetMatrixAt: vi.fn(),
     isDisposed: () => false,
     dispose: vi.fn(),
     createInstance(instanceName: string) {
@@ -65,11 +68,29 @@ import { WASM_PHYSICS_API as api } from '../src/wasm/wasm-physics-api'
 import { WasmTableWorld } from '../src/wasm/wasm-table-world'
 import { unpackCollisionGroups } from '../src/wasm/wasm-body'
 import { PIN_FIELD_ID_BASE } from '../src/wasm/physics-worker-protocol'
+import { PIN_Y } from '../src/objects/pachinko-pin-field'
 import { exportTableBodiesToWasm } from '../src/game/physics/wasm-static-export'
 import { GameConfig } from '../src/config'
 import { asSimEngine, makeFakeWasmEngine } from './helpers/fake-wasm-engine'
 
 const CENTER = { x: 0, y: 0.5, z: 6 }
+
+type StubLattice = {
+  name: string
+  isPickable: boolean
+  isVisible: boolean
+  thinInstanceSetBuffer: ReturnType<typeof vi.fn>
+  thinInstanceSetMatrixAt: ReturnType<typeof vi.fn>
+}
+
+/** The one matrix buffer the lattice mesh was given, as [x, y, z] translations. */
+function latticeInstances(lattice: StubLattice): { kind: unknown; stride: unknown; isStatic: unknown; positions: number[][] } {
+  expect(lattice.thinInstanceSetBuffer).toHaveBeenCalledTimes(1)
+  const [kind, buffer, stride, isStatic] = lattice.thinInstanceSetBuffer.mock.calls[0] as [string, Float32Array, number, boolean]
+  const positions: number[][] = []
+  for (let i = 0; i < buffer.length; i += 16) positions.push([buffer[i + 12]!, buffer[i + 13]!, buffer[i + 14]!])
+  return { kind, stride, isStatic, positions }
+}
 
 function ownerTable() {
   const engine = makeFakeWasmEngine()
@@ -100,7 +121,9 @@ describe('PachinkoBuilder pin field (#421)', () => {
     const field = builder.createPachinkoField(CENTER as never)
 
     const expected = resolvePinField(pachinkoPinFieldSpec(CENTER, 24, 22)!)
-    expect(field.pins).toHaveLength(expected.length)
+    // One lattice mesh, one instance per pin (#443 A4) — not a mesh per pin.
+    expect(field.pins).toHaveLength(1)
+    expect(latticeInstances(field.pins[0] as unknown as StubLattice).positions).toHaveLength(expected.length)
     expect(expected.length).toBeGreaterThan(80)
 
     const result = exportTableBodiesToWasm(world.allBodies(), asSimEngine(engine))
@@ -115,7 +138,9 @@ describe('PachinkoBuilder pin field (#421)', () => {
 
     // One id for the whole field, carrying the pins' WALL groups.
     const fieldBody = field.bindings[0]!.rigidBody
-    expect(field.bindings.every((b) => b.rigidBody === fieldBody)).toBe(true)
+    expect(field.bindings).toHaveLength(1)
+    expect(field.bindings[0]!.mesh).toBe(field.pins[0])
+    expect(field.pinBodies).toEqual([fieldBody])
     expect(result.idsByBody.get(fieldBody as never)).toEqual([PIN_FIELD_ID_BASE])
     const groups = unpackCollisionGroups(COLLISION_GROUP_PRESETS.WALL)
     expect(engine.setCollisionGroups).toHaveBeenCalledWith(PIN_FIELD_ID_BASE, groups.membership, groups.filter)
@@ -137,7 +162,11 @@ describe('PachinkoBuilder pin field (#421)', () => {
     expect(desc.rows).toBe(layout.pinLattice!.rows)
     expect(desc.cols).toBe(layout.pinLattice!.cols)
     expect(desc.occupancy).toBeInstanceOf(Uint8Array)
-    expect(field.pins.length).toBeGreaterThan(0)
+    // The lattice holds the masked pins only, one instance each.
+    const expected = resolvePinField(pachinkoPinFieldSpec({ x: 0, z: 6 }, 24, 22, layout.pins, layout.pinLattice)!)
+    expect(field.pins).toHaveLength(1)
+    expect(latticeInstances(field.pins[0] as unknown as StubLattice).positions).toHaveLength(expected.length)
+    expect(expected.length).toBeGreaterThan(0)
   })
 
   it('disabling the table zeroes the field id in place', () => {
@@ -169,13 +198,65 @@ describe('PachinkoBuilder pin field (#421)', () => {
 
     exportTableBodiesToWasm(world.allBodies(), asSimEngine(engine))
     expect(engine.addPinField).not.toHaveBeenCalled()
-    expect(engine.addStaticCylinder).toHaveBeenCalledTimes(field.pins.length)
+    const expected = resolvePinField(pachinkoPinFieldSpec(CENTER, 24, 22)!)
+    expect(engine.addStaticCylinder).toHaveBeenCalledTimes(expected.length)
     // Same pins either way.
     const cylinders = engine.addStaticCylinder.mock.calls.map((c) => (c as unknown as [{ x: number; z: number }])[0])
-    const expected = resolvePinField(pachinkoPinFieldSpec(CENTER, 24, 22)!)
     cylinders.forEach((center, i) => {
       expect(center.x).toBeCloseTo(expected[i]!.position.x, 6)
       expect(center.z).toBeCloseTo(expected[i]!.position.z, 6)
+    })
+
+    // Still ONE lattice mesh, bound to the first pin body; every other body is reachable via pinBodies.
+    expect(field.pins).toHaveLength(1)
+    expect(field.pinBodies).toHaveLength(expected.length)
+    expect(new Set(field.pinBodies).size).toBe(expected.length)
+    expect(field.bindings).toHaveLength(1)
+    expect(field.bindings[0]).toEqual({ mesh: field.pins[0], rigidBody: field.pinBodies[0] })
+  })
+
+  describe('the lattice mesh (#443 A4)', () => {
+    it('is one static thin-instance buffer on exactly the pins that collide', () => {
+      const { builder } = ownerTable()
+      const field = builder.createPachinkoField(CENTER as never)
+      const lattice = field.pins[0] as unknown as StubLattice
+      const { kind, stride, isStatic, positions } = latticeInstances(lattice)
+
+      expect(kind).toBe('matrix')
+      expect(stride).toBe(16)
+      expect(isStatic).toBe(true)
+      const expected = resolvePinField(pachinkoPinFieldSpec(CENTER, 24, 22)!)
+      expect(positions).toHaveLength(expected.length)
+      positions.forEach(([x, y, z], i) => {
+        expect(x).toBeCloseTo(expected[i]!.position.x, 5)
+        expect(y).toBeCloseTo(PIN_Y, 5)
+        expect(z).toBeCloseTo(expected[i]!.position.z, 5)
+      })
+    })
+
+    it('is visible, unpickable, and never updated in place', () => {
+      const { builder } = ownerTable()
+      const lattice = builder.createPachinkoField(CENTER as never).pins[0] as unknown as StubLattice
+      expect(lattice.isVisible).toBe(true) // thin instances belong to the mesh: hidden means nothing draws
+      expect(lattice.isPickable).toBe(false)
+      expect(lattice.thinInstanceSetMatrixAt).not.toHaveBeenCalled() // a no-op on a static buffer
+    })
+
+    it('is registered with the builder so dispose() tears it down', () => {
+      const { builder } = ownerTable()
+      const field = builder.createPachinkoField(CENTER as never)
+      const lattice = field.pins[0] as unknown as { dispose: ReturnType<typeof vi.fn> }
+      expect(field.meshes).toContain(lattice)
+      builder.dispose()
+      expect(lattice.dispose).toHaveBeenCalledTimes(1)
+    })
+
+    it('builds nothing visual when the layout has no pins', () => {
+      const { builder } = ownerTable()
+      // Every candidate pin sits inside a keep-out box, so the seeded layout is empty.
+      const field = builder.createPachinkoField(CENTER as never, 24, 22, [{ x: 0, z: 6 }], undefined)
+      expect(field.pins).toHaveLength(0)
+      expect(field.bindings).toHaveLength(0)
     })
   })
 })

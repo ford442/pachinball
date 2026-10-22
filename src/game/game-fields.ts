@@ -4,7 +4,6 @@ import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight'
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
-import { RenderTargetTexture } from '@babylonjs/core/Materials/Textures/renderTargetTexture'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
@@ -47,6 +46,8 @@ import { GameConfig, BallType } from '../config'
 
 import { GameRenderer } from './game-renderer'
 import { GameCabinetBuilder } from './game-cabinet-builder'
+import type { StaticSceneGate } from '../core/static-scene-gate'
+import type { StaticSceneInstall } from './static-scene-install'
 import { GameSceneBuilder } from './game-scene-builder'
 import { GamePhysicsController } from './game-physics-controller'
 import { GameInputActions } from './game-input-actions'
@@ -204,8 +205,10 @@ export abstract class GameFields {
   sceneInstrumentation: SceneInstrumentation | null = null
   engineInstrumentation: EngineInstrumentation | null = null
   mirrorTexture: MirrorTexture | null = null
-  tableRenderTarget: RenderTargetTexture | null = null
-  headRenderTarget: RenderTargetTexture | null = null
+  /** Decides when the scene may be treated as static (shadow map, materials, active meshes). */
+  staticSceneGate: StaticSceneGate | null = null
+  /** The gate's owner: frozen sets, watchers, skybox clear skip. Null until its lazy chunk arrives. */
+  staticScene: StaticSceneInstall | null = null
   shadowGenerator: ShadowGenerator | null = null
   playfieldGroup: TransformNode | null = null
 

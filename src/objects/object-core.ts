@@ -31,6 +31,11 @@ export class GameObjects {
   private bumperVisuals: BumperVisual[] = []
   private bumperBodies: PhysicsBody[] = []
   private targetBodies: PhysicsBody[] = []
+  /**
+   * Every pachinko pin collider's body. The lattice mesh is bound to the first only (one binding
+   * per lattice), so the table enable/disable and the C++ export walk this list for the rest.
+   */
+  private pinBodies: PhysicsBody[] = []
   private targetMeshes: Mesh[] = []
   private targetActive: boolean[] = []
   private targetRespawnTimer: number[] = []
@@ -272,6 +277,7 @@ export class GameObjects {
     this.targetActive.push(...result.targetActive)
     this.targetRespawnTimer.push(...result.targetRespawnTimer)
     this.pinballMeshes.push(...result.meshes)
+    this.pinBodies.push(...result.pinBodies)
     this.refs.pins = result.pins
   }
 
@@ -300,6 +306,7 @@ export class GameObjects {
     this.targetMeshes = []
     this.targetActive = []
     this.targetRespawnTimer = []
+    this.pinBodies = []
     this.refs.pins = []
 
     if (layout) {
@@ -408,6 +415,7 @@ export class GameObjects {
    */
   getWasmExportBodies(): PhysicsBody[] {
     const bodies = this.bindings.map((b) => b.rigidBody)
+    bodies.push(...this.pinBodies)
     bodies.push(...this.laneSensorBuilder.getBodies())
     if (this.deathZoneBody) bodies.push(this.deathZoneBody)
     return bodies
@@ -440,6 +448,9 @@ export class GameObjects {
       bodies.add(binding.rigidBody)
     }
     for (const body of this.bumperBodies) {
+      bodies.add(body)
+    }
+    for (const body of this.pinBodies) {
       bodies.add(body)
     }
     for (const body of this.targetBodies) {
@@ -524,6 +535,7 @@ export class GameObjects {
     this.targetMeshes = []
     this.targetActive = []
     this.targetRespawnTimer = []
+    this.pinBodies = []
     this.pinballMeshes = []
     this.refs.flippers.clear()
     this.refs.bumpers.clear()

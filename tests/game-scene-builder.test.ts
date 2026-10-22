@@ -4,9 +4,12 @@ import { createTimerScope, type TimerBase } from '../src/core/timers'
 
 const cabinetLoad = vi.hoisted(() => ({ current: null as null | (() => Promise<void>) }))
 
+const cabinetGate = vi.hoisted(() => ({ received: [] as unknown[] }))
+
 vi.mock('../src/cabinet', () => ({
   getCabinetBuilder: () => ({
     setQualityTier: vi.fn(),
+    setStaticSceneGate: (gate: unknown) => { cabinetGate.received.push(gate) },
     loadCabinetPreset: () => cabinetLoad.current?.() ?? Promise.resolve(),
   }),
 }))
@@ -106,6 +109,7 @@ function makeRig(opts: { rightJoint?: boolean; flipperCount?: number } = {}): Ri
     physics: {},
     accessibility: {},
     qualityTier: 0,
+    staticSceneGate: { tag: 'gate' },
     effects: null,
     display,
     gameObjects,
@@ -167,6 +171,16 @@ describe('GameSceneBuilder.buildCriticalScene', () => {
     expect(byName('cabinetBody')?.parent).toBeNull()
     expect(byName('cabinetBackbox')?.parent).toBeNull()
     expect(byName('ball')?.parent).toBeNull()
+  })
+
+  it('hands the static-scene gate to the cabinet builder before the preset loads', async () => {
+    cabinetGate.received.length = 0
+    const rig = makeRig()
+    const run = rig.builder.buildCriticalScene()
+    await settle()
+    expect(cabinetGate.received).toEqual([{ tag: 'gate' }])
+    rig.cabinet.resolve()
+    await run
   })
 
   it('propagates a cabinet load failure so the stage fails', async () => {

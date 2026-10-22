@@ -35,8 +35,10 @@ On top of that:
 - **Scene post-processing** (`src/game/game-post-process.ts`):
   `DefaultRenderingPipeline` (bloom, FXAA, tone-map, image processing) or
   `MinimalBloomPipeline`, plus HIGH-tier SSAO2, SSR, depth of field and motion blur.
-- **Render targets**: `tableRenderTarget` / `headRenderTarget`
-  (`game-renderer.ts`), a `MirrorTexture`, and the shadow generator.
+- **Render targets**: a `MirrorTexture` and the shadow generator. (`tableRenderTarget` /
+  `headRenderTarget` were declared and disposed but never assigned, so they were removed in the
+  render-hygiene sprint, #443. Wiring backbox layers to RTTs is Frame Graph work that 7.x cannot
+  express; this document is where that design lives.)
 
 Four to five alpha-blended planes plus two full-screen passes is the "compose
 four planes by hand" the #424 vision wants to retire.
@@ -50,7 +52,7 @@ four planes by hand" the #424 vision wants to retire.
 | CRT pass | backbox texture → backbox texture | full-screen camera `PostProcess` | Scopes CRT to the backbox, which is what it was meant to hit |
 | Jackpot pass | backbox texture → backbox texture | full-screen camera `PostProcess` | Same. Also a clean place to honour the photosensitive flag, which this pass ignores today |
 | Main scene render | scene → HDR colour + depth | implicit camera render | The root the post chain hangs off |
-| Table / head RTTs | scene subsets → textures | `tableRenderTarget` / `headRenderTarget` | Declared dependencies instead of render-order conventions |
+| Table / head RTTs | scene subsets → textures | (removed placeholders, never wired) | Declared dependencies instead of render-order conventions |
 | Bloom | HDR colour → colour | pipeline bloom stage | Kept on every tier except `none` |
 | Image processing (tone-map, curves, vignette) | colour → colour | `DefaultRenderingPipeline` image-processing pass | Becomes a separate, **omittable** node. See the uniform-buffer note below |
 | FXAA / sharpen | colour → colour | pipeline stages | Tier-gated nodes |

@@ -39,6 +39,7 @@ npx vitest run tests/ball-manager.test.ts
 | Path | Role |
 |------|------|
 | `src/game.ts` | Central orchestrator (~33 KB / ~840 lines — slimmed from its former ~140 KB monolith; the sub-systems now live under `src/game/`, `src/game-elements/`, `src/display/`, `src/effects/`, `src/objects/`). Owns scene, cameras, lights, materials, post-processing, game-state machine (MENU / PLAYING / PAUSED / GAME_OVER), and wires all sub-systems together. |
+| `src/core/static-scene-gate.ts` | `StaticSceneGate`: one invalidation point for everything frozen while the scene is static (materials, the active-mesh list, the shadow map). Mutate something frozen → call `game.staticSceneGate?.invalidate(...)`. See `docs/STATIC_SCENE.md`. |
 | `src/game-elements/` | Discrete sub-systems: `physics.ts` (physics world: the C++ owner's `WasmTableWorld`, or Rapier), `ball-manager.ts` (spawn/collect/drain), `input.ts` (keyboard/touch/gamepad), `camera-controller.ts`, `sound-system.ts`, `zone-trigger-system.ts`, `leaderboard-system.ts`, `adventure-mode.ts`, `debug-hud.ts`, etc. |
 | `native/` | C++ physics core — rigid bodies, broadphase, contact listener. Catch2-tested via `npm run test:native`. |
 | `src/wasm/` | Emscripten loader (`PhysicsModule.ts`), contact/transform buffer codecs, WASM types. |
