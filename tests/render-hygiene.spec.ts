@@ -40,6 +40,13 @@ interface GameProbe {
     }
   }
   postProcessDegraded: boolean
+  mirrorTexture: { renderList: unknown[]; refreshRate: number; getSize: () => unknown } | null
+  ballManager: {
+    spawnExtraBalls: (count: number) => void
+    getBallBodies: () => unknown[]
+    removeBall: (body: unknown) => void
+  }
+  cabinetManager: { loadCabinetPreset: (type: string) => Promise<void> }
   engine: { getCaps: () => { maxDrawBuffers?: number } }
   performanceMonitor: { setOnSustainedJank: (cb: (() => void) | null) => void }
 }
@@ -245,5 +252,55 @@ test.describe('render hygiene (#443)', () => {
 
     expect(pageErrors).toEqual([])
     expect(compileErrors).toEqual([])
+  })
+
+  test('mirror render list returns to baseline after spawn/collect cycles and cabinet swaps; refresh rate follows the tier', async ({ page }) => {
+    test.setTimeout(600_000)
+    const compileErrors = trackCompileErrors(page)
+    await boot(page)
+    await page.evaluate(() => (window as ProbeWindow).game!.performanceMonitor.setOnSustainedJank(null))
+    await renderFrames(page, 3)
+
+    const cycles = await page.evaluate(() => {
+      const game = (window as ProbeWindow).game!
+      const mirror = game.mirrorTexture!
+      const baseline = mirror.renderList.length
+      let listedOnSpawn = 0
+      let maxLength = baseline
+      for (let i = 0; i < 50; i++) {
+        game.ballManager.spawnExtraBalls(1)
+        const body = game.ballManager.getBallBodies().at(-1)
+        // The new ball is in the list in the same call that spawned it, so it is drawn on the
+        // first frame it exists.
+        if (mirror.renderList.length === baseline + 1) listedOnSpawn++
+        maxLength = Math.max(maxLength, mirror.renderList.length)
+        game.ballManager.removeBall(body)
+      }
+      return { baseline, listedOnSpawn, maxLength, after: mirror.renderList.length }
+    })
+    expect(cycles.listedOnSpawn).toBe(50)
+    expect(cycles.maxLength).toBe(cycles.baseline + 1)
+    expect(cycles.after).toBe(cycles.baseline)
+
+    // Three preset swaps through the real glTF loader path.
+    const lengths: number[] = []
+    for (const preset of ['neo', 'vertical', 'wide']) {
+      await page.evaluate((p) => (window as ProbeWindow).game!.cabinetManager.loadCabinetPreset(p), preset)
+      await renderFrames(page, 3)
+      lengths.push(await page.evaluate(() => (window as ProbeWindow).game!.mirrorTexture!.renderList.length))
+    }
+    expect(lengths).toEqual([cycles.baseline, cycles.baseline, cycles.baseline])
+
+    // Refresh cadence follows the tier; the mirror is never resized.
+    const sizeBefore = await page.evaluate(() => JSON.stringify((window as ProbeWindow).game!.mirrorTexture!.getSize()))
+    for (const [tier, rate] of [['high', 1], ['medium', 2], ['low', 2], ['high', 1]] as const) {
+      await page.evaluate((t) => (window as ProbeWindow).game!.renderer.applyQualityTier(t), tier)
+      expect(await page.evaluate(() => (window as ProbeWindow).game!.mirrorTexture!.refreshRate), tier).toBe(rate)
+    }
+    await page.evaluate(() => (window as ProbeWindow).game!.renderer.dropQualityTierOnce())
+    expect(await page.evaluate(() => (window as ProbeWindow).game!.mirrorTexture!.refreshRate), 'after auto drop').toBe(2)
+    expect(await page.evaluate(() => JSON.stringify((window as ProbeWindow).game!.mirrorTexture!.getSize()))).toBe(sizeBefore)
+
+    expect(compileErrors, 'no shader compile errors across cabinet swaps and tier switches').toEqual([])
   })
 })

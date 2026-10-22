@@ -43,6 +43,7 @@ import {
 } from '../game-elements'
 import { getMaterialLibrary, detectQualityTier } from '../materials'
 import { applyShadowSettings, resolveShadowSettings, type ShadowSettings } from './shadow-config'
+import { resolveMirrorRefreshRate } from './mirror-config'
 import {
   clampMaterialLights,
   computeWebGLLightBudget,
@@ -121,6 +122,7 @@ export class GameRenderer {
   applyQualityTier(tier: QualityTier): void {
     this.postProcess.applyQualityTier(tier)
     this.applyShadowTier(tier)
+    this.applyMirrorTier(tier)
   }
 
   /** Drop one quality step (HIGH→MEDIUM→LOW). Returns the new tier. */
@@ -129,6 +131,7 @@ export class GameRenderer {
     // here, so an automatic drop changes the technique exactly like a settings change does.
     const next = this.postProcess.dropQualityTierOnce()
     this.applyShadowTier(next)
+    this.applyMirrorTier(next)
     return next
   }
 
@@ -183,6 +186,12 @@ export class GameRenderer {
    * receiving material light-dirty, so it recompiles on the next frame. A no-op when the tier maps
    * to the technique and map size already running (HIGH <-> HIGH, MEDIUM <-> LOW).
    */
+  /** Cadence only: the mirror is never resized on a tier change (see mirror-config.ts). */
+  private applyMirrorTier(tier: QualityTier): void {
+    const mirror = this.host.mirrorTexture
+    if (mirror) mirror.refreshRate = resolveMirrorRefreshRate(tier)
+  }
+
   private applyShadowTier(tier: QualityTier): void {
     const generator = this.host.shadowGenerator
     const current = this._shadowSettings

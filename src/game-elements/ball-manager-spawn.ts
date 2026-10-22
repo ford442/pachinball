@@ -19,6 +19,7 @@ import { COLLISION_GROUP_PRESETS } from './physics'
 import { getSoundSystem } from './sound-system'
 import { getSessionRngFork, RNG_FORK, type SeededRng } from '../core/seeded-rng'
 import { QualityTier, color, emissive, INTENSITY, PALETTE } from './visual-language'
+import { addToMirror } from './mirror-render-list'
 
 export function createMainBall(host: BallManagerHost): PhysicsBody {
   // Enhanced ball: high-poly sphere with bevel ring and map-reactive material
@@ -99,9 +100,7 @@ export function createMainBall(host: BallManagerHost): PhysicsBody {
   host.ballBody = ballBody
   host.ballBodies.push(ballBody)
 
-  if (host.mirrorTexture?.renderList) {
-    host.mirrorTexture.renderList.push(ball)
-  }
+  addToMirror(host.mirrorTexture, ball)
 
   // Add subtle point light for ball visibility (disabled in reduced motion mode)
   if (!GameConfig.camera.reducedMotion) {
@@ -169,9 +168,7 @@ export function spawnExtraBalls(host: BallManagerHost, count: number, position?:
     host.bindings.push({ mesh: b, rigidBody: body })
     host.ballBodies.push(body)
 
-    if (host.mirrorTexture?.renderList) {
-      host.mirrorTexture.renderList.push(b)
-    }
+    addToMirror(host.mirrorTexture, b)
 
     // Add velocity-based trail for extra balls
     const trailWidth = GameConfig.ball.radius * 0.4
@@ -223,9 +220,7 @@ export function resetBall(host: BallManagerHost): void {
     host.ballBodies.push(body)
     host.bindings.push({ mesh: b, rigidBody: body })
 
-    if (host.mirrorTexture?.renderList) {
-      host.mirrorTexture.renderList.push(b)
-    }
+    addToMirror(host.mirrorTexture, b)
   } else {
     const spawn = GameConfig.ball.spawnMain
     host.ballBody!.setTranslation(new host.rapier.Vector3(spawn.x, spawn.y, spawn.z), true)

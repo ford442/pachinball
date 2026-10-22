@@ -21,6 +21,7 @@ import {
   QualityTier,
 } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
+import { addToMirror, removeFromMirror } from '../game-elements/mirror-render-list'
 import type { GameObjects } from '../objects'
 import type { EffectsSystem } from '../effects'
 import type { TableMapManager } from './game-maps'
@@ -42,6 +43,8 @@ export interface CabinetBuilderHost {
 
 export class GameCabinetBuilder {
   private readonly host: CabinetBuilderHost
+  /** Meshes the last createEnhancedCabinet() put in the mirror's render list. */
+  private mirroredCabinetMeshes: Mesh[] = []
 
   constructor(host: CabinetBuilderHost) {
     this.host = host
@@ -185,14 +188,15 @@ export class GameCabinetBuilder {
     plungerTrim.position.set(12, cabinetY + 2, -2)
     plungerTrim.material = chromeMat
 
-    // Mirror render list
-    if (this.host.mirrorTexture?.renderList) {
-      this.host.mirrorTexture.renderList.push(
-        cab, leftPanel, rightPanel, leftTrim, rightTrim,
-        apron, bezel, glassEdge, backWall, leftHinge, rightHinge,
-        plungerWall, plungerTrim, leftLED, rightLED, apronTrim
-      )
-    }
+    // Mirror render list. A rebuild first drops the previous build's meshes: they are disposed
+    // or replaced, and nothing else removes them from the mirror's list.
+    for (const old of this.mirroredCabinetMeshes) removeFromMirror(this.host.mirrorTexture, old)
+    this.mirroredCabinetMeshes = [
+      cab, leftPanel, rightPanel, leftTrim, rightTrim,
+      apron, bezel, glassEdge, backWall, leftHinge, rightHinge,
+      plungerWall, plungerTrim, leftLED, rightLED, apronTrim,
+    ]
+    for (const mesh of this.mirroredCabinetMeshes) addToMirror(this.host.mirrorTexture, mesh)
 
     // Shadow casters
     if (this.host.shadowGenerator) {

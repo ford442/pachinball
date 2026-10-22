@@ -54,6 +54,7 @@ import {
 import { AdventureManager } from './game-adventure'
 import { TableMapManager } from './game-maps'
 import { CabinetManager } from './game-cabinet'
+import { resolveMirrorRefreshRate } from './mirror-config'
 
 import type { Game } from '../game'
 import type { PachinballEventMap } from '../core/event-bus'
@@ -117,6 +118,7 @@ export class GameSystemsInitializer {
       this.game.mirrorTexture = new MirrorTexture('mirror', mirrorSize, scene, true)
       this.game.mirrorTexture.mirrorPlane = new Plane(0, -1, 0, -1.01)
       this.game.mirrorTexture.level = GameConfig.visuals.mirrorTextureLevel
+      this.game.mirrorTexture.refreshRate = resolveMirrorRefreshRate(this.game.qualityTier)
 
       this.game.effects = new EffectsSystem(scene, this.game.bloomPipeline, this.game.accessibility)
       if (this.game.keyLight && this.game.rimLight && this.game.bounceLight) {

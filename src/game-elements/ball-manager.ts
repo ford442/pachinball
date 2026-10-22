@@ -6,6 +6,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { TrailMesh } from '@babylonjs/core/Meshes/trailMesh'
 import { Scene } from '@babylonjs/core/scene'
 import type { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
+import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { CapturedBall } from '../core/captured-ball'
 import { BallType, GAME_TUNING } from '../config'
@@ -51,6 +52,7 @@ import {
   updateTrailEffects,
 } from './ball-manager-spawn'
 import { updateStuckDetection } from './ball-manager-stuck'
+import { removeFromMirror } from './mirror-render-list'
 import type { BallData, PhysicsBinding } from './types'
 
 export class BallManager {
@@ -141,6 +143,8 @@ export class BallManager {
 
       const bIdx = this.bindings.findIndex((b) => b.rigidBody === body)
       if (bIdx !== -1) {
+        // Before dispose: Babylon prunes shadow render lists on dispose, not mirror ones.
+        removeFromMirror(this.mirrorTexture, this.bindings[bIdx].mesh as AbstractMesh)
         this.bindings[bIdx].mesh.dispose()
         this.bindings.splice(bIdx, 1)
       }
@@ -172,6 +176,7 @@ export class BallManager {
       const b = this.bindings[i]
       if (!b.mesh.name.startsWith('ball')) continue
       if (b.rigidBody === this.ballBody) continue
+      removeFromMirror(this.mirrorTexture, b.mesh as AbstractMesh)
       b.mesh.dispose()
       this.bindings.splice(i, 1)
     }
