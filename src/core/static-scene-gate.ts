@@ -199,6 +199,30 @@ export class StaticSceneGate {
     }
   }
 
+  /**
+   * Invalidate whenever `read()` returns a different number from one rendered frame to the next.
+   * For scene state a frozen thing silently ignores and nothing announces: the track theme lerps
+   * the scene's fog every frame, and a frozen material never re-binds its fog uniforms. The first
+   * read is the baseline. Returns an unwatch function; dispose() also removes it.
+   */
+  watchState(reason: string, read: () => number, options: InvalidateOptions = {}): () => void {
+    if (this.disposed) return () => undefined
+    let last = read()
+    const observer = this.scene.onAfterRenderObservable.add(() => {
+      const value = read()
+      if (value === last) return
+      last = value
+      this.invalidate(reason, options)
+    })
+    const unwatch = (): void => {
+      this.scene.onAfterRenderObservable.remove(observer)
+      const index = this.cleanups.indexOf(unwatch)
+      if (index !== -1) this.cleanups.splice(index, 1)
+    }
+    this.cleanups.push(unwatch)
+    return unwatch
+  }
+
   getStats(): StaticSceneStats {
     return {
       state: this._state,

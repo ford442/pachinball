@@ -122,6 +122,7 @@ export class GameSystemsInitializer {
       this.game.mirrorTexture.refreshRate = resolveMirrorRefreshRate(this.game.qualityTier)
 
       this.game.staticSceneGate = new StaticSceneGate(scene, { eventBus: this.game.eventBus })
+      this.game.renderer?.attachStaticSceneGate(this.game.staticSceneGate)
 
       this.game.effects = new EffectsSystem(scene, this.game.bloomPipeline, this.game.accessibility)
       if (this.game.keyLight && this.game.rimLight && this.game.bounceLight) {

@@ -25,11 +25,12 @@ interface GameProbe {
     }
     prePassRenderer: { renderTargets: unknown[] } | null
     geometryBufferRenderer: unknown
-    materials: unknown[]
+    materials: Array<{ name: string; isFrozen: boolean; maxSimultaneousLights?: number }>
     postProcessRenderPipelineManager: { _renderPipelines: Record<string, unknown> }
   }
   shadowGenerator: ShadowGeneratorProbe | null
   renderer: {
+    describeFrozenMaterials: () => Array<[string, string]>
     applyQualityTier: (tier: string) => void
     dropQualityTierOnce: () => string
     postProcess: {
@@ -51,6 +52,7 @@ interface GameProbe {
     }
   } | null
   eventBus: { emit: (event: string) => void }
+  startGame: () => Promise<void>
   debugHelper: { buildDebugSnapshot: (dt: number, lives: number) => { renderStats?: { meshes: number; activeMeshes: number; materials: number; frozenMaterials: number; staticScene: { refreezeCount: number } | null } } } | null
   mirrorTexture: { renderList: unknown[]; refreshRate: number; getSize: () => unknown } | null
   ballManager: {
@@ -381,5 +383,108 @@ test.describe('render hygiene (#443)', () => {
     expect(snapshot!.staticScene!.refreezeCount).toBe(after.refreezeCount)
     expect(snapshot!.activeMeshes).toBeGreaterThan(0)
     expect(snapshot!.meshes).toBeGreaterThanOrEqual(snapshot!.activeMeshes)
+  })
+
+  test('freezes only the unlit room decor, and thaws / refreezes it across tier changes and cabinet loads without a compile error', async ({ page }) => {
+    test.setTimeout(900_000)
+    const compileErrors = trackCompileErrors(page)
+    await boot(page)
+    await page.evaluate(() => (window as ProbeWindow).game!.performanceMonitor.setOnSustainedJank(null))
+    // (a) the menu
+    await renderFrames(page, 8)
+
+    const frozenNames = () =>
+      page.evaluate(() =>
+        (window as ProbeWindow).game!.scene.materials.filter((m) => m.isFrozen).map((m) => m.name).sort(),
+      )
+    const gateState = () => page.evaluate(() => (window as ProbeWindow).game!.staticSceneGate!.getStats().state)
+    const waitFrozen = async () => {
+      for (let i = 0; i < 40 && (await gateState()) !== 'frozen'; i++) await renderFrames(page, 2)
+    }
+
+    await waitFrozen()
+    const allowlist = await page.evaluate(() => (window as ProbeWindow).game!.renderer.describeFrozenMaterials())
+    const allowed = allowlist.map(([name]) => name).sort()
+    const UNLIT_DECOR =
+      /^(underBaseMat|underCoreMat|underEdgeMat|spillLMat|spillRMat|arcadePillarMat|pillarCoreMat\d|ceilingNeonMat|backGridMat|dataFallMat\d|backLogoMat)$/
+
+    // The allowlist is exactly the unlit decor, every member says why, and the frozen set IS the allowlist.
+    expect(allowed).toHaveLength(22)
+    expect(allowed.every((n) => UNLIT_DECOR.test(n))).toBe(true)
+    expect(allowlist.every(([, why]) => why.length > 20)).toBe(true)
+    expect(await frozenNames()).toEqual(allowed)
+    for (const lit of ['arcadeFloorMat', 'arcadeWallMat']) expect(allowed).not.toContain(lit)
+
+    // (b) Start
+    await page.evaluate(() => (window as ProbeWindow).game!.startGame())
+    await renderFrames(page, 6)
+    await waitFrozen()
+    expect(await frozenNames()).toEqual(allowed)
+
+    // (c) a tier switch: thawed before the change lands, refrozen afterwards.
+    const thawedAtOnce = await page.evaluate(() => {
+      const game = (window as ProbeWindow).game!
+      game.renderer.applyQualityTier('low')
+      return game.scene.materials.filter((m) => m.isFrozen).length
+    })
+    expect(thawedAtOnce).toBe(0)
+    await renderFrames(page, 3)
+    await waitFrozen()
+    expect(await frozenNames()).toEqual(allowed)
+    await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('high'))
+    await renderFrames(page, 3)
+    await waitFrozen()
+
+    // (d) cabinet preset swaps that load glTF: thawed for the whole load, refrozen after, lights still clamped.
+    for (const preset of ['neo', 'wide']) {
+      const during = await page.evaluate(async (p) => {
+        const game = (window as ProbeWindow).game!
+        const loading = game.cabinetManager.loadCabinetPreset(p)
+        const frozenWhileLoading = game.scene.materials.filter((m) => m.isFrozen).length
+        await loading
+        return frozenWhileLoading
+      }, preset)
+      expect(during, `${preset}: thawed while loading`).toBe(0)
+      await renderFrames(page, 4)
+      await waitFrozen()
+      expect(await frozenNames(), `${preset}: refrozen`).toEqual(allowed)
+    }
+
+    // The WebGL2 light clamp survived the glTF loads: nothing above the uniform-block budget.
+    const overBudget = await page.evaluate(() => {
+      const game = (window as ProbeWindow).game!
+      const gl = (game.engine as unknown as { _gl: WebGL2RenderingContext })._gl
+      const blocks = Math.min(
+        gl.getParameter(gl.MAX_VERTEX_UNIFORM_BLOCKS) as number,
+        gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_BLOCKS) as number,
+      )
+      const budget = Math.max(4, blocks - 4)
+      return game.scene.materials.filter((m) => (m.maxSimultaneousLights ?? 0) > budget).map((m) => m.name)
+    })
+    expect(overBudget).toEqual([])
+
+    // Fog: a frozen material ignores fog changes, and the track themes lerp fog every frame, so a
+    // change thaws the set and it refreezes once the value holds still.
+    const fogThawed = await page.evaluate(async () => {
+      const game = (window as ProbeWindow).game!
+      const scene = game.scene as unknown as { fogDensity: number }
+      scene.fogDensity += 0.004
+      await new Promise<void>((resolve) => game.scene.onAfterRenderObservable.addOnce(() => resolve()))
+      return game.scene.materials.filter((m) => m.isFrozen).length
+    })
+    expect(fogThawed, 'a fog change thaws the frozen set').toBe(0)
+    await renderFrames(page, 3)
+    await waitFrozen()
+    expect(await frozenNames()).toEqual(allowed)
+
+    // A FEVER window must not freeze (or leave frozen) anything outside the allowlist.
+    await page.evaluate(() => (window as ProbeWindow).game!.eventBus.emit('fever:start'))
+    await renderFrames(page, 4)
+    await page.evaluate(() => (window as ProbeWindow).game!.eventBus.emit('fever:end'))
+    await renderFrames(page, 4)
+    await waitFrozen()
+    expect(await frozenNames()).toEqual(allowed)
+
+    expect(compileErrors, 'no "Error compiling effect" across menu, Start, tier switch and cabinet swaps').toEqual([])
   })
 })

@@ -45,6 +45,7 @@ import { getMaterialLibrary, detectQualityTier } from '../materials'
 import { applyShadowSettings, resolveShadowSettings, type ShadowSettings } from './shadow-config'
 import { resolveMirrorRefreshRate } from './mirror-config'
 import type { StaticSceneGate } from '../core/static-scene-gate'
+import { FrozenMaterialSet } from './frozen-material-set'
 import {
   clampMaterialLights,
   computeWebGLLightBudget,
@@ -92,6 +93,14 @@ export class GameRenderer {
   private _lastResizeHeight = 0
   private _lightBudgetTeardown: (() => void) | null = null
   private _shadowSettings: ShadowSettings | null = null
+  /** WebGL2 only: clamps `maxSimultaneousLights` to the uniform-block budget (see installWebGLLightBudget). */
+  private _lightClamp: ((materials: LightCappedMaterial[]) => number) | null = null
+  private _unregisterFrozenMaterials: (() => void) | null = null
+  private _unwatchFog: Array<() => void> = []
+  /** Explicit allowlist of materials frozen while the scene is static; see frozen-material-set.ts. */
+  private readonly frozenMaterials = new FrozenMaterialSet({
+    clampLights: (materials) => { this._lightClamp?.(materials) },
+  })
 
   constructor(host: RendererHost) {
     this.host = host
@@ -143,6 +152,39 @@ export class GameRenderer {
     this.applyShadowTier(next)
     this.applyMirrorTier(next)
     return next
+  }
+
+  /** Make the frozen-material allowlist follow `gate` (thaw on material changes, refreeze when quiet). */
+  attachStaticSceneGate(gate: Pick<StaticSceneGate, 'registerTarget' | 'watchState'> | null): void {
+    this.detachStaticSceneGate()
+    const scene = this.host.scene
+    if (!gate || !scene) return
+    this._unregisterFrozenMaterials = gate.registerTarget(this.frozenMaterials)
+
+    // A frozen material never re-binds its fog uniforms or re-evaluates its fog define, and the
+    // track themes lerp the scene's fog every frame (effects-atmosphere.ts), so fog is state the
+    // frozen set must be told about. Quantised so a lerp that has converged to 1e-4 counts as still.
+    const quantised = (value: number): number => Math.round(value * 10_000)
+    const fog = { materials: true }
+    this._unwatchFog = [
+      gate.watchState('fog', () => (scene.fogEnabled ? 1 : 0) + scene.fogMode * 2, fog),
+      gate.watchState('fog', () => quantised(scene.fogDensity), fog),
+      gate.watchState('fog', () => quantised(scene.fogColor.r), fog),
+      gate.watchState('fog', () => quantised(scene.fogColor.g), fog),
+      gate.watchState('fog', () => quantised(scene.fogColor.b), fog),
+    ]
+  }
+
+  private detachStaticSceneGate(): void {
+    this._unregisterFrozenMaterials?.()
+    this._unregisterFrozenMaterials = null
+    for (const unwatch of this._unwatchFog) unwatch()
+    this._unwatchFog = []
+  }
+
+  /** `[material name, why it is safe to freeze]` for every allowlisted material. */
+  describeFrozenMaterials(): Array<[string, string]> {
+    return this.frozenMaterials.describe()
   }
 
   /** Setup key, rim, bounce, and fill lights + shadow generator. */
@@ -227,6 +269,20 @@ export class GameRenderer {
     const { scene } = this.host
     if (!scene) return
 
+    // The frozen allowlist (see frozen-material-set.ts for what may never join it). Every member
+    // below is an UNLIT room-decor material: `disableLighting` removes the light blocks from its
+    // shader, so a new light or the glTF loader's maxSimultaneousLights raise cannot change its
+    // defines; nothing outside this method references these materials by name or reference
+    // (grep'd), the effects / quality sync never touch them, and none carries a plugin. The two
+    // LIT materials here (arcadeFloorMat, arcadeWallMat) are deliberately NOT frozen: a frozen lit
+    // material would ignore the lights the cabinet load and every ball add.
+    const UNLIT_STATIC =
+      'unlit room decor (disableLighting): no light blocks in its shader, never written after creation'
+    const freezeUnlit = (mat: StandardMaterial): StandardMaterial => {
+      this.frozenMaterials.add(mat, UNLIT_STATIC)
+      return mat
+    }
+
     const floor = MeshBuilder.CreateGround('arcadeFloor', { width: 120, height: 120 }, scene)
     floor.position.y = -5
     const floorMat = new StandardMaterial('arcadeFloorMat', scene)
@@ -265,7 +321,7 @@ export class GameRenderer {
     ubMat.diffuseColor = Color3.Black()
     ubMat.emissiveColor = color(PALETTE.CYAN).scale(0.18)
     ubMat.disableLighting = true
-    underBase.material = ubMat
+    underBase.material = freezeUnlit(ubMat)
 
     // Hot inner core (magenta — gives the signature "premium machine" bloom kick)
     const underCore = MeshBuilder.CreateBox('underCore', { width: 26, height: 0.09, depth: 38 }, scene)
@@ -275,7 +331,7 @@ export class GameRenderer {
     ucMat.emissiveColor = color(PALETTE.MAGENTA).scale(0.55)
     ucMat.disableLighting = true
     ucMat.alpha = 0.9
-    underCore.material = ucMat
+    underCore.material = freezeUnlit(ucMat)
 
     // Gold edge "plasma" trim (very thin, high intensity)
     const underEdge = MeshBuilder.CreateBox('underEdge', { width: 38, height: 0.05, depth: 51 }, scene)
@@ -284,7 +340,7 @@ export class GameRenderer {
     ueMat.diffuseColor = Color3.Black()
     ueMat.emissiveColor = color(PALETTE.GOLD).scale(0.75)
     ueMat.disableLighting = true
-    underEdge.material = ueMat
+    underEdge.material = freezeUnlit(ueMat)
 
     // Side floor "spill" washes (classic arcade footlight feel)
     const leftSpill = MeshBuilder.CreateBox('spillL', { width: 1.6, height: 0.07, depth: 42 }, scene)
@@ -293,7 +349,7 @@ export class GameRenderer {
     spillLMat.diffuseColor = Color3.Black()
     spillLMat.emissiveColor = color(PALETTE.CYAN).scale(0.35)
     spillLMat.disableLighting = true
-    leftSpill.material = spillLMat
+    leftSpill.material = freezeUnlit(spillLMat)
 
     const rightSpill = MeshBuilder.CreateBox('spillR', { width: 1.6, height: 0.07, depth: 42 }, scene)
     rightSpill.position.set(15.7, -4.55, 5)
@@ -301,7 +357,7 @@ export class GameRenderer {
     spillRMat.diffuseColor = Color3.Black()
     spillRMat.emissiveColor = color(PALETTE.MAGENTA).scale(0.32)
     spillRMat.disableLighting = true
-    rightSpill.material = spillRMat
+    rightSpill.material = freezeUnlit(spillRMat)
 
     // --------------------------------------------------------------------
     // VERTICAL ARCADE PILLARS (the cabinet is framed by the environment)
@@ -310,6 +366,7 @@ export class GameRenderer {
     pillarMat.diffuseColor = Color3.Black()
     pillarMat.emissiveColor = color(PALETTE.CYAN).scale(0.65)
     pillarMat.disableLighting = true
+    freezeUnlit(pillarMat)
 
     const pillarPositions = [
       new Vector3(-22, 4, -18), new Vector3(22, 4, -18),
@@ -323,9 +380,10 @@ export class GameRenderer {
       // Subtle inner core for extra bloom depth
       const core = MeshBuilder.CreateCylinder(`pillarCore${i}`, { height: 18.2, diameter: 0.35 }, scene)
       core.position = pos
-      core.material = new StandardMaterial(`pillarCoreMat${i}`, scene)
-      ;(core.material as StandardMaterial).emissiveColor = color(PALETTE.MAGENTA).scale(0.4)
-      ;(core.material as StandardMaterial).disableLighting = true
+      const coreMat = new StandardMaterial(`pillarCoreMat${i}`, scene)
+      coreMat.emissiveColor = color(PALETTE.MAGENTA).scale(0.4)
+      coreMat.disableLighting = true
+      core.material = freezeUnlit(coreMat)
     })
 
     // --------------------------------------------------------------------
@@ -335,6 +393,7 @@ export class GameRenderer {
     ceilingMat.diffuseColor = Color3.Black()
     ceilingMat.emissiveColor = color(PALETTE.GOLD).scale(0.5)
     ceilingMat.disableLighting = true
+    freezeUnlit(ceilingMat)
 
     for (let i = 0; i < 3; i++) {
       const tube = MeshBuilder.CreateCylinder(`ceilingTube${i}`, { height: 28, diameter: 0.22, tessellation: 5 }, scene)
@@ -354,7 +413,7 @@ export class GameRenderer {
     gridMat.diffuseColor = Color3.FromHexString('#0a0a18')
     gridMat.emissiveColor = color(PALETTE.PURPLE).scale(0.25)
     gridMat.disableLighting = true
-    gridPanel.material = gridMat
+    gridPanel.material = freezeUnlit(gridMat)
 
     // Vertical data "waterfall" lines on the back wall
     for (let i = 0; i < 7; i++) {
@@ -363,7 +422,7 @@ export class GameRenderer {
       const dlMat = new StandardMaterial(`dataFallMat${i}`, scene)
       dlMat.emissiveColor = color(i % 2 ? PALETTE.CYAN : PALETTE.MAGENTA).scale(0.55)
       dlMat.disableLighting = true
-      line.material = dlMat
+      line.material = freezeUnlit(dlMat)
     }
 
     // Signature "NEXUS" style back-wall logo accent (abstract geometric)
@@ -373,7 +432,7 @@ export class GameRenderer {
     const logoMat = new StandardMaterial('backLogoMat', scene)
     logoMat.emissiveColor = color(PALETTE.GOLD).scale(0.85)
     logoMat.disableLighting = true
-    logo.material = logoMat
+    logo.material = freezeUnlit(logoMat)
 
     console.log('[GameRenderer] Nexus Cascade arcade environment created — cabinet now feels legendary')
   }
@@ -506,6 +565,7 @@ export class GameRenderer {
 
     const clampAll = (): void => { clampMaterialLights(scene.materials as LightCappedMaterial[], budget) }
     clampAll()
+    this._lightClamp = (materials) => clampMaterialLights(materials, budget)
 
     const materialObserver = scene.onNewMaterialAddedObservable.add((material: Material) => {
       clampMaterialLights([material as LightCappedMaterial], budget)
@@ -522,6 +582,7 @@ export class GameRenderer {
       })
 
     this._lightBudgetTeardown = () => {
+      this._lightClamp = null
       scene.onNewMaterialAddedObservable.remove(materialObserver)
       SceneLoader.OnPluginActivatedObservable.remove(pluginObserver)
       for (const [loader, observer] of loaderObservers) {
@@ -531,6 +592,8 @@ export class GameRenderer {
   }
 
   dispose(): void {
+    this.detachStaticSceneGate()
+    this.frozenMaterials.clear()
     this._lightBudgetTeardown?.()
     this._lightBudgetTeardown = null
 

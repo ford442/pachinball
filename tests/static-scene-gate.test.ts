@@ -291,6 +291,59 @@ describe('StaticSceneGate', () => {
     })
   })
 
+  describe('watchState', () => {
+    it('invalidates when the watched value changes between frames, and only then', () => {
+      const s = makeScene()
+      const gate = new StaticSceneGate(s.scene, { watchMeshes: false })
+      const t = makeTarget()
+      gate.registerTarget(t.target)
+      let density = 15
+      gate.watchState('fog', () => density, { materials: true })
+
+      s.frames(3)
+      expect(t.thaw).not.toHaveBeenCalled()
+
+      density = 16
+      s.frames(1)
+      expect(t.thaw).toHaveBeenCalledWith({ reason: 'fog', materials: true, shadows: false })
+      s.frames(1)
+      expect(t.thaw).toHaveBeenCalledTimes(1) // unchanged since
+
+      s.frames(FRAMES_BEFORE_REFREEZE)
+      expect(t.refreeze).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps the scene thawed while the value keeps moving (a fog lerp), then refreezes once', () => {
+      const s = makeScene()
+      const gate = new StaticSceneGate(s.scene, { watchMeshes: false })
+      const t = makeTarget()
+      gate.registerTarget(t.target)
+      let density = 0
+      gate.watchState('fog', () => density)
+      for (let i = 1; i <= 20; i++) {
+        density = i
+        s.frames(1)
+      }
+      expect(t.refreeze).not.toHaveBeenCalled()
+      s.frames(FRAMES_BEFORE_REFREEZE)
+      expect(t.refreeze).toHaveBeenCalledTimes(1)
+    })
+
+    it('unwatch and dispose both stop it', () => {
+      const s = makeScene()
+      const gate = new StaticSceneGate(s.scene, { watchMeshes: false })
+      let value = 0
+      const unwatch = gate.watchState('a', () => value)
+      gate.watchState('b', () => value)
+      unwatch()
+      value = 1
+      s.frames(1)
+      expect(gate.getStats().reasons).toEqual([['b', 1]])
+      gate.dispose()
+      expect(s.afterRender.observers).toHaveLength(0)
+    })
+  })
+
   it('reports per-reason counts most frequent first', () => {
     const s = makeScene()
     const gate = new StaticSceneGate(s.scene, { watchMeshes: false })
