@@ -56,6 +56,8 @@ import { TableMapManager } from './game-maps'
 import { CabinetManager } from './game-cabinet'
 import { resolveMirrorRefreshRate } from './mirror-config'
 import { StaticSceneGate } from '../core/static-scene-gate'
+import { SkyboxAutoClear } from './skybox-auto-clear'
+import { isMobileUserAgent } from '../engine/engine-options'
 
 import type { Game } from '../game'
 import type { PachinballEventMap } from '../core/event-bus'
@@ -114,6 +116,12 @@ export class GameSystemsInitializer {
       skyboxMaterial.specularColor = Color3.Black()
       skyboxMaterial.emissiveColor = emissive(PALETTE.AMBIENT, INTENSITY.AMBIENT)
       skybox.material = skyboxMaterial
+      this.game.skyboxAutoClear = new SkyboxAutoClear(
+        scene,
+        skybox,
+        GameConfig.visuals.skyboxSize,
+        isMobileUserAgent(navigator.userAgent),
+      )
 
       const mirrorSize = this.game.qualityTier === QualityTier.HIGH ? GameConfig.visuals.mirrorSizeHigh : GameConfig.visuals.mirrorSizeMedium
       this.game.mirrorTexture = new MirrorTexture('mirror', mirrorSize, scene, true)

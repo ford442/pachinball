@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { EventBus } from '../src/core/event-bus'
 import {
   FRAMES_BEFORE_REFREEZE,
+  READINESS_RETRY_FRAMES,
   StaticSceneGate,
   type StaticSceneGateHost,
   type StaticSceneInvalidation,
@@ -288,6 +289,56 @@ describe('StaticSceneGate', () => {
       }
       expect(gate.state).toBe('suspended')
       expect(gate.refreezeCount).toBe(3)
+    })
+  })
+
+  describe('canRefreeze', () => {
+    it('keeps the scene thawed until every target is ready, then refreezes once', () => {
+      const s = makeScene()
+      const gate = new StaticSceneGate(s.scene, { watchMeshes: false })
+      let ready = false
+      const gated = makeTarget('gated')
+      gated.target.canRefreeze = () => ready
+      const other = makeTarget('other')
+      gate.registerTarget(gated.target)
+      gate.registerTarget(other.target)
+
+      gate.invalidate('boot')
+      s.frames(FRAMES_BEFORE_REFREEZE + 3 * READINESS_RETRY_FRAMES)
+      expect(other.refreeze).not.toHaveBeenCalled() // one target blocks all of them
+      expect(gate.state).toBe('thawed')
+
+      ready = true
+      s.frames(READINESS_RETRY_FRAMES)
+      expect(gated.refreeze).toHaveBeenCalledTimes(1)
+      expect(other.refreeze).toHaveBeenCalledTimes(1)
+    })
+
+    it('asks again only every READINESS_RETRY_FRAMES frames', () => {
+      const s = makeScene()
+      const gate = new StaticSceneGate(s.scene, { watchMeshes: false })
+      const target = makeTarget()
+      const canRefreeze = vi.fn(() => false)
+      target.target.canRefreeze = canRefreeze
+      gate.registerTarget(target.target)
+      gate.invalidate('boot')
+      s.frames(FRAMES_BEFORE_REFREEZE + 2 * READINESS_RETRY_FRAMES)
+      expect(canRefreeze).toHaveBeenCalledTimes(3)
+    })
+
+    it('a new invalidation while waiting restarts the countdown', () => {
+      const s = makeScene()
+      const gate = new StaticSceneGate(s.scene, { watchMeshes: false })
+      let ready = false
+      const target = makeTarget()
+      target.target.canRefreeze = () => ready
+      gate.registerTarget(target.target)
+      gate.invalidate('a')
+      s.frames(FRAMES_BEFORE_REFREEZE + 2)
+      ready = true
+      gate.invalidate('b')
+      s.frames(FRAMES_BEFORE_REFREEZE)
+      expect(target.refreeze).toHaveBeenCalledTimes(1)
     })
   })
 

@@ -16,6 +16,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader'
@@ -46,6 +47,12 @@ import { applyShadowSettings, resolveShadowSettings, type ShadowSettings } from 
 import { resolveMirrorRefreshRate } from './mirror-config'
 import type { StaticSceneGate } from '../core/static-scene-gate'
 import { FrozenMaterialSet } from './frozen-material-set'
+import {
+  FrozenActiveMeshes,
+  isActiveMeshFreezeEnabled,
+  RenderStateWatcher,
+  type ActiveMeshesScene,
+} from './frozen-active-meshes'
 import {
   clampMaterialLights,
   computeWebGLLightBudget,
@@ -97,6 +104,8 @@ export class GameRenderer {
   private _lightClamp: ((materials: LightCappedMaterial[]) => number) | null = null
   private _unregisterFrozenMaterials: (() => void) | null = null
   private _unwatchFog: Array<() => void> = []
+  private _unregisterActiveMeshes: (() => void) | null = null
+  private _unwatchRenderState: (() => void) | null = null
   /** Explicit allowlist of materials frozen while the scene is static; see frozen-material-set.ts. */
   private readonly frozenMaterials = new FrozenMaterialSet({
     clampLights: (materials) => { this._lightClamp?.(materials) },
@@ -173,6 +182,19 @@ export class GameRenderer {
       gate.watchState('fog', () => quantised(scene.fogColor.g), fog),
       gate.watchState('fog', () => quantised(scene.fogColor.b), fog),
     ]
+
+    // The active-mesh list. Off with ?freezeMeshes=0, and off if this Babylon build lacks the
+    // internals the freeze uses (it then simply stays thawed).
+    if (isActiveMeshFreezeEnabled(window.location.search)) {
+      const target = new FrozenActiveMeshes(scene as unknown as ActiveMeshesScene)
+      if (target.isSupported) {
+        this._unregisterActiveMeshes = gate.registerTarget(target)
+        const watcher = new RenderStateWatcher(scene)
+        this._unwatchRenderState = gate.watchState('render-state', () => watcher.sample())
+      } else {
+        console.warn('[GameRenderer] Active-mesh freeze unavailable: Babylon internals not found')
+      }
+    }
   }
 
   private detachStaticSceneGate(): void {
@@ -180,6 +202,10 @@ export class GameRenderer {
     this._unregisterFrozenMaterials = null
     for (const unwatch of this._unwatchFog) unwatch()
     this._unwatchFog = []
+    this._unregisterActiveMeshes?.()
+    this._unregisterActiveMeshes = null
+    this._unwatchRenderState?.()
+    this._unwatchRenderState = null
   }
 
   /** `[material name, why it is safe to freeze]` for every allowlisted material. */
@@ -282,6 +308,14 @@ export class GameRenderer {
       this.frozenMaterials.add(mat, UNLIT_STATIC)
       return mat
     }
+    // Static decor that shares a material becomes ONE mesh (one draw call). Only meshes with no
+    // physics binding and no per-mesh animation are passed in; `disposeSource` is true so the
+    // originals do not linger as invisible scene meshes. World transforms are baked in.
+    const mergeDecor = (name: string, meshes: Mesh[]): void => {
+      if (meshes.length < 2) return
+      const merged = Mesh.MergeMeshes(meshes, true, false, undefined, false, false)
+      if (merged) merged.name = name
+    }
 
     const floor = MeshBuilder.CreateGround('arcadeFloor', { width: 120, height: 120 }, scene)
     floor.position.y = -5
@@ -373,18 +407,27 @@ export class GameRenderer {
       new Vector3(-22, 4, 28),  new Vector3(22, 4, 28),
       new Vector3(-22, 9, 8),   new Vector3(22, 9, 8)
     ]
+    // One shared core material (the six were identical) so the cores merge as well as the pillars.
+    const coreMat = new StandardMaterial('pillarCoreMat', scene)
+    coreMat.emissiveColor = color(PALETTE.MAGENTA).scale(0.4)
+    coreMat.disableLighting = true
+    freezeUnlit(coreMat)
+
+    const pillars: Mesh[] = []
+    const cores: Mesh[] = []
     pillarPositions.forEach((pos, i) => {
       const p = MeshBuilder.CreateCylinder(`arcadePillar${i}`, { height: 18, diameter: 0.9, tessellation: 6 }, scene)
       p.position = pos
       p.material = pillarMat
+      pillars.push(p)
       // Subtle inner core for extra bloom depth
       const core = MeshBuilder.CreateCylinder(`pillarCore${i}`, { height: 18.2, diameter: 0.35 }, scene)
       core.position = pos
-      const coreMat = new StandardMaterial(`pillarCoreMat${i}`, scene)
-      coreMat.emissiveColor = color(PALETTE.MAGENTA).scale(0.4)
-      coreMat.disableLighting = true
-      core.material = freezeUnlit(coreMat)
+      core.material = coreMat
+      cores.push(core)
     })
+    mergeDecor('arcadePillars', pillars)
+    mergeDecor('arcadePillarCores', cores)
 
     // --------------------------------------------------------------------
     // CEILING NEON TUBES (classic dark arcade atmosphere)
@@ -395,12 +438,15 @@ export class GameRenderer {
     ceilingMat.disableLighting = true
     freezeUnlit(ceilingMat)
 
+    const tubes: Mesh[] = []
     for (let i = 0; i < 3; i++) {
       const tube = MeshBuilder.CreateCylinder(`ceilingTube${i}`, { height: 28, diameter: 0.22, tessellation: 5 }, scene)
       tube.rotation.x = Math.PI / 2
       tube.position.set(-14 + i * 14, 17, 6)
       tube.material = ceilingMat
+      tubes.push(tube)
     }
+    mergeDecor('ceilingTubes', tubes)
 
     // --------------------------------------------------------------------
     // BACK WALL CYBER MOTIFS (the machine lives inside a living digital world)
@@ -415,15 +461,23 @@ export class GameRenderer {
     gridMat.disableLighting = true
     gridPanel.material = freezeUnlit(gridMat)
 
-    // Vertical data "waterfall" lines on the back wall
+    // Vertical data "waterfall" lines on the back wall: alternating cyan / magenta, so two shared
+    // materials (they were seven identical-per-colour ones) and two merged meshes.
+    const dataFallMats = [PALETTE.MAGENTA, PALETTE.CYAN].map((hex, k) => {
+      const mat = new StandardMaterial(k === 0 ? 'dataFallMagentaMat' : 'dataFallCyanMat', scene)
+      mat.emissiveColor = color(hex).scale(0.55)
+      mat.disableLighting = true
+      return freezeUnlit(mat)
+    })
+    const dataFallLines: Mesh[][] = [[], []]
     for (let i = 0; i < 7; i++) {
       const line = MeshBuilder.CreateBox(`dataFall${i}`, { width: 0.18, height: 19, depth: 0.06 }, scene)
       line.position.set(-15 + i * 5.2, 11, 39.5)
-      const dlMat = new StandardMaterial(`dataFallMat${i}`, scene)
-      dlMat.emissiveColor = color(i % 2 ? PALETTE.CYAN : PALETTE.MAGENTA).scale(0.55)
-      dlMat.disableLighting = true
-      line.material = freezeUnlit(dlMat)
+      line.material = dataFallMats[i % 2]
+      dataFallLines[i % 2].push(line)
     }
+    mergeDecor('dataFallMagenta', dataFallLines[0])
+    mergeDecor('dataFallCyan', dataFallLines[1])
 
     // Signature "NEXUS" style back-wall logo accent (abstract geometric)
     const logo = MeshBuilder.CreateTorus('backLogo', { diameter: 7, thickness: 0.25, tessellation: 24 }, scene)

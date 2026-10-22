@@ -35,6 +35,9 @@ export const THRASH_WINDOW_MS = 4000
 /** ...so stay thawed until it has been quiet this long. */
 export const THRASH_COOLDOWN_MS = 3000
 
+/** While a target says it cannot freeze yet, ask again this many frames later (not every frame). */
+export const READINESS_RETRY_FRAMES = 8
+
 export interface StaticSceneInvalidation {
   reason: string
   /** Material state may change (quality tier, glTF load): frozen materials thaw too. */
@@ -54,6 +57,12 @@ export interface StaticSceneTarget {
    * invalidation since the previous refreeze.
    */
   refreeze(pending: StaticSceneInvalidation): void
+  /**
+   * Optional. False while the target cannot freeze correctly yet, e.g. a frozen active-mesh list
+   * would capture meshes whose shaders are still compiling and leave them out for good. The gate
+   * keeps the scene thawed and asks again `READINESS_RETRY_FRAMES` frames later.
+   */
+  canRefreeze?(): boolean
 }
 
 export type StaticSceneState = 'frozen' | 'thawed' | 'suspended'
@@ -299,6 +308,10 @@ export class StaticSceneGate {
       this.framesLeft = this.framesBeforeRefreeze
     }
     if (--this.framesLeft > 0) return
+    if (this.targets.some((target) => target.canRefreeze?.() === false)) {
+      this.framesLeft = READINESS_RETRY_FRAMES
+      return
+    }
     this.disarm()
     this.refreeze()
   }

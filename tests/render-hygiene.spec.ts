@@ -26,6 +26,10 @@ interface GameProbe {
     prePassRenderer: { renderTargets: unknown[] } | null
     geometryBufferRenderer: unknown
     materials: Array<{ name: string; isFrozen: boolean; maxSimultaneousLights?: number }>
+    autoClear: boolean
+    _activeMeshesFrozen: boolean
+    getMeshByName: (name: string) => { setEnabled: (v: boolean) => void } | null
+    activeCamera: { position: { x: number; y: number; z: number } } | null
     postProcessRenderPipelineManager: { _renderPipelines: Record<string, unknown> }
   }
   shadowGenerator: ShadowGeneratorProbe | null
@@ -406,10 +410,10 @@ test.describe('render hygiene (#443)', () => {
     const allowlist = await page.evaluate(() => (window as ProbeWindow).game!.renderer.describeFrozenMaterials())
     const allowed = allowlist.map(([name]) => name).sort()
     const UNLIT_DECOR =
-      /^(underBaseMat|underCoreMat|underEdgeMat|spillLMat|spillRMat|arcadePillarMat|pillarCoreMat\d|ceilingNeonMat|backGridMat|dataFallMat\d|backLogoMat)$/
+      /^(underBaseMat|underCoreMat|underEdgeMat|spillLMat|spillRMat|arcadePillarMat|pillarCoreMat|ceilingNeonMat|backGridMat|dataFall(Cyan|Magenta)Mat|backLogoMat)$/
 
     // The allowlist is exactly the unlit decor, every member says why, and the frozen set IS the allowlist.
-    expect(allowed).toHaveLength(22)
+    expect(allowed).toHaveLength(12)
     expect(allowed.every((n) => UNLIT_DECOR.test(n))).toBe(true)
     expect(allowlist.every(([, why]) => why.length > 20)).toBe(true)
     expect(await frozenNames()).toEqual(allowed)
@@ -486,5 +490,170 @@ test.describe('render hygiene (#443)', () => {
     expect(await frozenNames()).toEqual(allowed)
 
     expect(compileErrors, 'no "Error compiling effect" across menu, Start, tier switch and cabinet swaps').toEqual([])
+  })
+
+  test('merges the shared-material room decor into one mesh per material', async ({ page }) => {
+    await boot(page)
+    const decor = await page.evaluate(() => {
+      const scene = (window as ProbeWindow).game!.scene as unknown as {
+        getMeshByName: (n: string) => { material: { name: string } } | null
+      }
+      const names = ['arcadePillars', 'arcadePillarCores', 'ceilingTubes', 'dataFallMagenta', 'dataFallCyan']
+      const originals = ['arcadePillar0', 'arcadePillar5', 'pillarCore3', 'ceilingTube2', 'dataFall0', 'dataFall6']
+      return {
+        merged: Object.fromEntries(names.map((n) => [n, scene.getMeshByName(n)?.material.name ?? null])),
+        originalsGone: originals.every((n) => scene.getMeshByName(n) === null),
+      }
+    })
+    expect(decor.merged).toEqual({
+      arcadePillars: 'arcadePillarMat',
+      arcadePillarCores: 'pillarCoreMat',
+      ceilingTubes: 'ceilingNeonMat',
+      dataFallMagenta: 'dataFallMagentaMat',
+      dataFallCyan: 'dataFallCyanMat',
+    })
+    expect(decor.originalsGone, 'the merged sources are disposed, not left as invisible scene meshes').toBe(true)
+  })
+
+  test('the frozen active-mesh list matches a fresh evaluation after every kind of change', async ({ page }) => {
+    test.setTimeout(900_000)
+    await boot(page)
+    await page.evaluate(() => (window as ProbeWindow).game!.performanceMonitor.setOnSustainedJank(null))
+
+    // Runs every scenario in the page: act, give the watchers a couple of frames, wait for the
+    // gate to refreeze, then compare the frozen list with what a from-scratch evaluation selects.
+    const results = await page.evaluate(async () => {
+      const game = (window as any).game
+      const scene = game.scene
+      const gate = game.staticSceneGate
+      const frames = (n: number) =>
+        new Promise<void>((resolve) => {
+          let k = 0
+          const o = scene.onAfterRenderObservable.add(() => {
+            if (++k >= n) {
+              scene.onAfterRenderObservable.remove(o)
+              resolve()
+            }
+          })
+        })
+      const waitFrozen = async () => {
+        for (let i = 0; i < 80; i++) {
+          if (gate.getStats().state === 'frozen' && scene._activeMeshesFrozen) return true
+          await frames(2)
+        }
+        return false
+      }
+      const ids = () => {
+        const a = scene._activeMeshes
+        const out = new Map<number, string>()
+        for (let i = 0; i < a.length; i++) out.set(a.data[i].uniqueId, a.data[i].name)
+        return out
+      }
+      const results: Array<{ label: string; froze: boolean; thawed: boolean; missing: string[]; extra: string[] }> = []
+      const verify = async (label: string, action?: () => unknown) => {
+        if (action) await action()
+        await frames(1)
+        const thawed = !scene._activeMeshesFrozen || gate.getStats().state !== 'frozen'
+        await frames(1)
+        const froze = await waitFrozen()
+        const frozen = ids()
+        scene.unfreezeActiveMeshes()
+        scene.updateTransformMatrix()
+        // The frozen list is captured with frustum clipping off, so compare it with that.
+        scene.skipFrustumClipping = true
+        scene._evaluateActiveMeshes()
+        scene.skipFrustumClipping = false
+        const fresh = ids()
+        gate.invalidate('verify')
+        results.push({
+          label,
+          froze,
+          thawed,
+          missing: [...fresh].filter(([id]) => !frozen.has(id)).map(([, n]) => n),
+          extra: [...frozen].filter(([id]) => !fresh.has(id)).map(([, n]) => n),
+        })
+      }
+
+      const named = (name: string) => scene.meshes.find((m: { name: string }) => m.name === name)
+      await verify('menu')
+      await verify('start', () => game.startGame())
+      await verify('spawn a ball', () => game.ballManager.spawnExtraBalls(1))
+      await verify('collect a ball', () => game.ballManager.removeBall(game.ballManager.getBallBodies().at(-1)))
+      const cap = named('bump_cap')
+      await verify('disable a mesh', () => cap.setEnabled(false))
+      await verify('enable a mesh', () => cap.setEnabled(true))
+      await verify('hide a mesh', () => { cap.isVisible = false })
+      await verify('show a mesh', () => { cap.isVisible = true })
+      const original = cap.material
+      const other = scene.materials.find((m: any) => m !== original && m.getClassName() === 'StandardMaterial' && !m.isFrozen)
+      await verify('swap a material', () => { cap.material = other })
+      await verify('restore the material', () => { cap.material = original })
+      const mat = scene.materials.find((m: any) => m.getClassName() === 'StandardMaterial' && !m.isFrozen && m.alpha === 1)
+      await verify('fade a material', () => { mat.alpha = 0.5 })
+      await verify('unfade the material', () => { mat.alpha = 1 })
+      const spark = scene.particleSystems.find((p: any) => p.name === 'bumperSpark_pool_0')
+      await verify('start a particle system', () => spark.start())
+      await verify('stop a particle system', () => spark.stop())
+      const camera = scene.activeCamera
+      await verify('move the camera', () => { camera.position.x += 3 })
+      await verify('move the camera back', () => { camera.position.x -= 3 })
+      await verify('FEVER ends', async () => {
+        game.eventBus.emit('fever:start')
+        await frames(3)
+        game.eventBus.emit('fever:end')
+      })
+      await verify('quality tier changes', () => game.renderer.applyQualityTier('low'))
+      await verify('quality tier changes back', () => game.renderer.applyQualityTier('high'))
+      return results
+    })
+
+    for (const r of results) {
+      expect(r.froze, `${r.label}: refroze`).toBe(true)
+      expect(r.missing, `${r.label}: meshes a fresh evaluation selects that the frozen list lacks`).toEqual([])
+      expect(r.extra, `${r.label}: meshes the frozen list draws that a fresh evaluation would not`).toEqual([])
+    }
+    // The watchers (not luck) are what caught the changes: those scenarios thawed the list.
+    const mustThaw = ['start', 'spawn a ball', 'collect a ball', 'disable a mesh', 'hide a mesh', 'swap a material', 'fade a material', 'start a particle system', 'move the camera']
+    for (const label of mustThaw) expect(results.find((r) => r.label === label)?.thawed, `${label}: thawed the list`).toBe(true)
+  })
+
+  test('?freezeMeshes=0 keeps the active-mesh list thawed', async ({ page }) => {
+    await page.setViewportSize({ width: 640, height: 360 })
+    await page.goto('/?renderer=webgl2&debug=1&freezeMeshes=0')
+    await expect(page.locator('#start-btn')).toBeVisible({ timeout: 60_000 })
+    await page.waitForFunction(() => !!(window as ProbeWindow).game?.ready, undefined, { timeout: 90_000 })
+    await page.evaluate(() => (window as ProbeWindow).game!.performanceMonitor.setOnSustainedJank(null))
+    for (let i = 0; i < 20; i++) await renderFrames(page, 2)
+    const state = await page.evaluate(() => {
+      const game = (window as ProbeWindow).game!
+      return {
+        activeFrozen: game.scene._activeMeshesFrozen,
+        gate: game.staticSceneGate!.getStats().state,
+        frozenMaterials: game.scene.materials.filter((m) => m.isFrozen).length,
+      }
+    })
+    expect(state.activeFrozen).toBe(false)
+    // The material freeze is independent of the flag, and the gate itself still settles.
+    expect(state.gate).toBe('frozen')
+    expect(state.frozenMaterials).toBeGreaterThan(0)
+  })
+
+  test('skips the colour clear only while the skybox fills the frame', async ({ page }) => {
+    await boot(page)
+    await page.evaluate(() => (window as ProbeWindow).game!.performanceMonitor.setOnSustainedJank(null))
+    const autoClear = () => page.evaluate(() => (window as ProbeWindow).game!.scene.autoClear)
+    await renderFrames(page, 3)
+    expect(await autoClear(), 'cabinet camera inside the skybox').toBe(false)
+
+    await page.evaluate(() => { (window as ProbeWindow).game!.scene.getMeshByName('skybox')!.setEnabled(false) })
+    await renderFrames(page, 2)
+    expect(await autoClear(), 'skybox disabled').toBe(true)
+    await page.evaluate(() => { (window as ProbeWindow).game!.scene.getMeshByName('skybox')!.setEnabled(true) })
+    await renderFrames(page, 2)
+    expect(await autoClear(), 'skybox back').toBe(false)
+
+    await page.evaluate(() => { (window as ProbeWindow).game!.scene.activeCamera!.position.z = 400 })
+    await renderFrames(page, 2)
+    expect(await autoClear(), 'camera outside the skybox').toBe(true)
   })
 })

@@ -28,6 +28,8 @@ export function disposeGame(game: Game): void {
   // First: its mesh watchers would otherwise react to every mesh the teardown below removes.
   game.staticSceneGate?.dispose()
   game.staticSceneGate = null
+  game.skyboxAutoClear?.dispose()
+  game.skyboxAutoClear = null
 
   game.sceneOptimizer?.dispose()
   game.sceneOptimizer = null
