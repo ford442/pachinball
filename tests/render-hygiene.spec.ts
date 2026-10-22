@@ -18,10 +18,29 @@ interface GameProbe {
   ready?: boolean
   qualityTier: string
   scene: {
-    onAfterRenderObservable: { addOnce: (cb: () => void) => void }
+    onAfterRenderObservable: {
+      add: (cb: () => void) => unknown
+      addOnce: (cb: () => void) => void
+      remove: (observer: unknown) => void
+    }
+    prePassRenderer: { renderTargets: unknown[] } | null
+    geometryBufferRenderer: unknown
+    materials: unknown[]
+    postProcessRenderPipelineManager: { _renderPipelines: Record<string, unknown> }
   }
   shadowGenerator: ShadowGeneratorProbe | null
-  renderer: { applyQualityTier: (tier: string) => void; dropQualityTierOnce: () => string }
+  renderer: {
+    applyQualityTier: (tier: string) => void
+    dropQualityTierOnce: () => string
+    postProcess: {
+      _isSwiftShader: boolean
+      _ssaoPipeline: unknown
+      _ssrPipeline: unknown
+      _motionBlur: unknown
+    }
+  }
+  postProcessDegraded: boolean
+  engine: { getCaps: () => { maxDrawBuffers?: number } }
   performanceMonitor: { setOnSustainedJank: (cb: (() => void) | null) => void }
 }
 
@@ -43,23 +62,29 @@ function trackCompileErrors(page: Page): string[] {
 }
 
 async function boot(page: Page): Promise<void> {
+  // Small on purpose: SwiftShader rasterises on the CPU, and none of these checks are pixel-based.
+  await page.setViewportSize({ width: 640, height: 360 })
   await page.goto('/?renderer=webgl2&debug=1')
   await expect(page.locator('#start-btn')).toBeVisible({ timeout: 60_000 })
   await page.waitForFunction(() => !!(window as ProbeWindow).game?.ready, undefined, { timeout: 90_000 })
 }
 
-/** Resolve after `n` fully rendered frames, so deferred (post-render) work has run. */
+/**
+ * Resolve after `n` fully rendered frames, so deferred (post-render) work has run. A persistent
+ * observer, not a chain of `addOnce`: Babylon runs an observer added during a notification in
+ * that same pass, so re-arming `addOnce` from inside the callback counts one frame for any `n`.
+ */
 async function renderFrames(page: Page, n: number): Promise<void> {
   await page.evaluate(
     (count) =>
       new Promise<void>((resolve) => {
         const scene = (window as ProbeWindow).game!.scene
         let left = count
-        const tick = (): void => {
-          if (--left <= 0) resolve()
-          else scene.onAfterRenderObservable.addOnce(tick)
-        }
-        scene.onAfterRenderObservable.addOnce(tick)
+        const observer = scene.onAfterRenderObservable.add(() => {
+          if (--left > 0) return
+          scene.onAfterRenderObservable.remove(observer)
+          resolve()
+        })
       }),
     n,
   )
@@ -127,5 +152,98 @@ test.describe('render hygiene (#443)', () => {
     }
 
     expect(compileErrors, 'no shader compile errors across tier switches').toEqual([])
+  })
+
+  test('heavy post is skipped, not broken, when the context has too few draw buffers', async ({ page }) => {
+    test.setTimeout(900_000)
+    const compileErrors = trackCompileErrors(page)
+    await boot(page)
+    await page.evaluate(() => (window as ProbeWindow).game!.performanceMonitor.setOnSustainedJank(null))
+
+    // SwiftShader forces the heavy chain off by name; lift that so only the draw-buffer guard
+    // stands between this 6-buffer context and the 7-attachment prepass.
+    const state = await page.evaluate(() => {
+      const game = (window as ProbeWindow).game!
+      game.renderer.postProcess._isSwiftShader = false
+      game.renderer.applyQualityTier('high')
+      const pp = game.renderer.postProcess
+      return {
+        maxDrawBuffers: game.engine.getCaps().maxDrawBuffers ?? 0,
+        ssao: !!pp._ssaoPipeline,
+        ssr: !!pp._ssrPipeline,
+        motionBlur: !!pp._motionBlur,
+        degraded: game.postProcessDegraded,
+        prepass: !!game.scene.prePassRenderer,
+      }
+    })
+    test.skip(state.maxDrawBuffers >= 7, 'this context has enough draw buffers; the guard is not exercised')
+    expect(state).toMatchObject({ ssao: false, ssr: false, motionBlur: false, degraded: true, prepass: false })
+
+    await renderFrames(page, 3)
+    // The pre-guard failure mode: hundreds of "glFragData ... exceed MAX_DRAW_BUFFERS" compiles.
+    expect(compileErrors).toEqual([])
+  })
+
+  test('SSAO2, SSR and motion blur share one prepass and never add a GeometryBufferRenderer', async ({ page }) => {
+    const compileErrors = trackCompileErrors(page)
+    const pageErrors: string[] = []
+    page.on('pageerror', (err) => pageErrors.push(err.message))
+    await boot(page)
+    await page.evaluate(() => (window as ProbeWindow).game!.performanceMonitor.setOnSustainedJank(null))
+
+    // Emulate a desktop GPU on this software context: report 8 draw buffers (SwiftShader's 6
+    // would trip the guard) and switch off the PBR sub-surface scattering that adds 2 attachments,
+    // so the real 6-buffer context fits the 5 the chain needs.
+    await page.evaluate(() => {
+      const game = (window as ProbeWindow).game!
+      game.engine.getCaps().maxDrawBuffers = 8
+      for (const material of game.scene.materials) {
+        const sub = (material as { subSurface?: { isScatteringEnabled: boolean } }).subSurface
+        if (sub?.isScatteringEnabled) sub.isScatteringEnabled = false
+      }
+      game.renderer.postProcess._isSwiftShader = false
+    })
+
+    const snap = () =>
+      page.evaluate(() => {
+        const game = (window as ProbeWindow).game!
+        const pp = game.renderer.postProcess
+        return {
+          ssao: !!pp._ssaoPipeline,
+          ssr: !!pp._ssrPipeline,
+          motionBlur: !!pp._motionBlur,
+          degraded: game.postProcessDegraded,
+          prepass: !!game.scene.prePassRenderer,
+          prepassTargets: game.scene.prePassRenderer?.renderTargets.length ?? 0,
+          geometryBuffer: !!game.scene.geometryBufferRenderer,
+          pipelines: Object.keys(game.scene.postProcessRenderPipelineManager._renderPipelines).sort(),
+        }
+      })
+
+    for (let round = 0; round < 2; round++) {
+      await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('high'))
+      await renderFrames(page, 3)
+      const on = await snap()
+      expect(on, `round ${round}: heavy chain built`).toMatchObject({ ssao: true, ssr: true, motionBlur: true, degraded: false })
+      // Exactly one buffer: the shared prepass MRT, and no legacy G-buffer pass beside it.
+      expect(on.prepass).toBe(true)
+      expect(on.prepassTargets).toBe(1)
+      expect(on.geometryBuffer).toBe(false)
+
+      await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('medium'))
+      // Frames must keep rendering after the chain is gone. A disposed SSAO2 left registered in
+      // the pipeline manager throws from its `isSupported` once the prepass is disabled, which
+      // stops the render loop (this call then never resolves).
+      await renderFrames(page, 3)
+      const off = await snap()
+      expect(off, `round ${round}: heavy chain torn down`).toMatchObject({ ssao: false, ssr: false, motionBlur: false })
+      // Symmetric with the enable: nothing keeps an MRT alive once every consumer is gone, and
+      // no disposed pipeline stays registered with the manager.
+      expect(off.prepass).toBe(false)
+      expect(off.pipelines).toEqual(['pachinbloom'])
+    }
+
+    expect(pageErrors).toEqual([])
+    expect(compileErrors).toEqual([])
   })
 })
