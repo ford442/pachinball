@@ -121,6 +121,7 @@ function createMockMesh() {
     bakeTransformIntoVertices: vi.fn(),
     addLODLevel: vi.fn(),
     createInstance: vi.fn(() => createMockMesh()),
+    thinInstanceSetBuffer: vi.fn(),
   }
 }
 
