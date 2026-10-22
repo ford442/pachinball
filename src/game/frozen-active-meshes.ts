@@ -4,7 +4,8 @@
  * Evaluating the active meshes (frustum test, LOD, activation, material-ready checks, render-group
  * dispatch) is the biggest per-frame CPU cost of this ~800-mesh scene. A frozen list skips all of
  * it: the list captured at freeze time is simply drawn again every frame. Measured in a browser
- * (WebGL2 / SwiftShader, menu): median render time 22.0 -> 14.4 ms.
+ * (WebGL2 / SwiftShader, MEDIUM, `?noopt=1`): active-mesh evaluation 5.5 -> 0 ms and median render
+ * time 16.1 -> 12.1 ms on the menu, 21.3 -> 16.1 ms on the table (docs/RENDER_BUDGET.md).
  *
  * The list is captured with frustum clipping OFF, so it holds every enabled, visible, ready mesh,
  * not just what the camera sees at that instant. The table camera re-aims a hair on nearly every
@@ -18,7 +19,9 @@
  *   - setEnabled / isVisible toggles .. `RenderStateWatcher` (per-frame, below)
  *   - a material swapped on a mesh, or a material or mesh turning translucent (it must move
  *     render groups) .......................... `RenderStateWatcher`
- *   - a particle system starting or stopping .. `RenderStateWatcher`
+ *   - a particle system starting or stopping, or `scene.particlesEnabled` flipping (the game's
+ *     SceneOptimizer does that on a device that misses 55 fps; a frozen list would keep drawing
+ *     the particle systems it captured) ......... `RenderStateWatcher`
  *   - the camera being replaced or moving (LOD picks are frozen too; the table camera's
  *     position never moves, only its aim) ...... `RenderStateWatcher`
  * Any change thaws the list through the gate and it refreezes once the signature holds still.
@@ -66,6 +69,8 @@ export interface RenderStateScene {
   readonly materials: readonly ActiveListMaterial[]
   readonly particleSystems: readonly ActiveListParticleSystem[]
   readonly activeCamera: ActiveListCamera | null
+  /** Babylon's `Scene.particlesEnabled`; undefined reads as on. */
+  readonly particlesEnabled?: boolean
 }
 
 /** What the target drives, including the Babylon internals it needs. */
@@ -101,7 +106,8 @@ export class RenderStateWatcher {
       h = Math.imul(h ^ (value | 0), 16777619)
     }
 
-    const { meshes, materials, particleSystems, activeCamera } = this.scene
+    const { meshes, materials, particleSystems, activeCamera, particlesEnabled } = this.scene
+    mix(particlesEnabled === false ? 1 : 0)
     for (let i = 0; i < meshes.length; i++) {
       const mesh = meshes[i]
       mix(

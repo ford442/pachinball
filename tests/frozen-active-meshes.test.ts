@@ -76,6 +76,7 @@ describe('RenderStateWatcher.sample', () => {
     ['a material starts blending (it changes render group)', (s) => { s.materials[0].blend = true }],
     ['a material becomes alpha-tested', (s) => { s.materials[1].test = true }],
     ['a particle system starts', (s) => { s.particleSystems[0].started = true }],
+    ['the scene switches particles off (the SceneOptimizer does)', (s) => { (s.scene as { particlesEnabled?: boolean }).particlesEnabled = false }],
     ['the camera moves half a unit', (s) => { s.camera.globalPosition.x += 0.5 }],
     ['the camera is swapped', (s) => { s.scene.activeCamera = { ...makeCamera(), uniqueId: 8 } }],
     ['the camera fov changes', (s) => { s.camera.fov = 1.1 }],

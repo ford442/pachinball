@@ -213,17 +213,17 @@ export class GameRenderer {
     this.host.bounceLight = bounceLight
   }
 
-  /**
-   * Re-point the live key-light generator at `tier`'s technique. Switching the filter marks every
-   * receiving material light-dirty, so it recompiles on the next frame. A no-op when the tier maps
-   * to the technique and map size already running (HIGH <-> HIGH, MEDIUM <-> LOW).
-   */
   /** Cadence only: the mirror is never resized on a tier change (see mirror-config.ts). */
   private applyMirrorTier(tier: QualityTier): void {
     const mirror = this.host.mirrorTexture
     if (mirror) mirror.refreshRate = resolveMirrorRefreshRate(tier)
   }
 
+  /**
+   * Re-point the live key-light generator at `tier`'s technique. Switching the filter marks every
+   * receiving material light-dirty, so it recompiles on the next frame. A no-op when the tier maps
+   * to the technique and map size already running (HIGH <-> HIGH, MEDIUM <-> LOW).
+   */
   private applyShadowTier(tier: QualityTier): void {
     const generator = this.host.shadowGenerator
     const current = this._shadowSettings
