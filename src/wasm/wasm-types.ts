@@ -472,7 +472,7 @@ export interface WasmPhysicsWorldInstance {
 
   /**
    * FNV-1a 64 of the stepped world (PhysicsWorld::getStateHash), 16 hex chars:
-   * equal hashes step identically. Optional: bundles before #463 lack it.
+   * equal hashes step identically. Optional: bundles before #459 lack it.
    */
   getStateHash?(): string
 

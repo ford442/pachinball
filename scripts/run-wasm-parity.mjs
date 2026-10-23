@@ -1075,7 +1075,7 @@ const DENSE_FIELD = {
   if (!ok) failed = true
 }
 
-// #463 Slice A — getStateHash(). The plunge scene native/tests/state_hash_test.cpp
+// #459 Slice A — getStateHash(). The plunge scene native/tests/state_hash_test.cpp
 // builds (buildPlungeScene / drivePlunge — keep the two in step): a radius
 // 0.25, mass 1 ball plunged at impulse 36 into a 0.09-radius pin field. The
 // bundle's hash after PLUNGE_FRAMES must equal the native build's, and a

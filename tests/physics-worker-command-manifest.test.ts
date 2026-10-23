@@ -1,5 +1,5 @@
 /**
- * The worker command union must not lag the embind surface again (#463).
+ * The worker command union must not lag the embind surface again (#459).
  *
  * tests/fixtures/physics-worker-commands.json lists every `PhysicsWorld`
  * method native/src/bindings.cpp exports and the `PhysicsWorkerCommand` that

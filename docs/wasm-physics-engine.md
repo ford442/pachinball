@@ -107,7 +107,7 @@ native/
     ├── snapshot_test.cpp        World snapshot: rewind / fresh-table restore bit-exact, manifold, mismatch, malformed (#422)
     ├── sleeper_contact_test.cpp Sleeping balls stay collidable: kinematic / rolling ball wakes one on contact, proximity does not
     ├── axis_pull_field_test.cpp Axis-pull well: horizontal pull, linear falloff, extents, flags, groups, wake, snapshot hash
-    ├── state_hash_test.cpp      getStateHash(): plunge scene determinism, one-ulp sensitivity, restore round trip, parity fixture (#463)
+    ├── state_hash_test.cpp      getStateHash(): plunge scene determinism, one-ulp sensitivity, restore round trip, parity fixture (#459)
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
@@ -1001,7 +1001,7 @@ engine.getStaticContentHash()                   // '0123456789abcdef'
 engine.getStateHash()                           // '0123456789abcdef', or null (old bundle)
 ```
 
-`getStateHash()` (#463) is FNV-1a 64 over exactly the words `serialize()`
+`getStateHash()` (#459) is FNV-1a 64 over exactly the words `serialize()`
 writes after its header, prefixed with `SNAPSHOT_VERSION` and the static
 content hash and followed by each live hinge's angle. Equal hashes step
 identically, so a headless verifier (#444) compares hashes and only fetches a
@@ -1186,7 +1186,7 @@ The GitHub Actions workflow (`.github/workflows/native-physics.yml`) runs on cha
 | `sanitizer_ctest` | **BLOCKING** | cmake, g++ | ASan/UBSan Catch2 (`CMAKE_BUILD_TYPE=Debug`) |
 | `wasm_parity` | **BLOCKING** | emsdk | `print:wasm-flags` then Release + RelWithAsserts + `test:wasm-parity` |
 
-`native_ctest` runs in ~15 seconds without requiring Emscripten and gates PRs against C++ logic regressions. Additionally, `tests/embind-surface.test.ts` asserts that TypeScript interface definitions (`src/wasm/wasm-types.ts`) match the exported Embind surface (`native/src/bindings.cpp`), and `tests/wasm-worker-api-parity.test.ts` (Vitest, no WASM) fails when a mutating Embind function is not wrapped on `WasmPhysicsEngine`, or a mutating engine method has no `PhysicsWorkerCommand` and is not on its tracked-gap list. `tests/physics-worker-command-manifest.test.ts` checks the checked-in manifest `tests/fixtures/physics-worker-commands.json` against both `bindings.cpp` and the `PhysicsWorkerCommand` union: every embind `PhysicsWorld` method names its command or an exemption with a reason (#463).
+`native_ctest` runs in ~15 seconds without requiring Emscripten and gates PRs against C++ logic regressions. Additionally, `tests/embind-surface.test.ts` asserts that TypeScript interface definitions (`src/wasm/wasm-types.ts`) match the exported Embind surface (`native/src/bindings.cpp`), and `tests/wasm-worker-api-parity.test.ts` (Vitest, no WASM) fails when a mutating Embind function is not wrapped on `WasmPhysicsEngine`, or a mutating engine method has no `PhysicsWorkerCommand` and is not on its tracked-gap list. `tests/physics-worker-command-manifest.test.ts` checks the checked-in manifest `tests/fixtures/physics-worker-commands.json` against both `bindings.cpp` and the `PhysicsWorkerCommand` union: every embind `PhysicsWorld` method names its command or an exemption with a reason (#459).
 
 Skip options:
 

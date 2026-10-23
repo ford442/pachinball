@@ -90,7 +90,7 @@ export type PhysicsWorkerCommand =
   | { type: 'serializeSnapshot'; requestId: number }
   /** `bytes` is transferred. */
   | { type: 'restoreSnapshot'; requestId: number; bytes: Uint8Array }
-  /** State-hash request (#463): answered with a `snapshot-reply` carrying `stateHash`, no blob. */
+  /** State-hash request (#459): answered with a `snapshot-reply` carrying `stateHash`, no blob. */
   | { type: 'getStateHash'; requestId: number }
 
 export type PhysicsWorkerToWorker =

@@ -1,5 +1,5 @@
 /**
- * PhysicsWorld::getStateHash() (#463 Slice A) — the cheap "same world?" check
+ * PhysicsWorld::getStateHash() (#459 Slice A) — the cheap "same world?" check
  * a headless replay verifier compares instead of shipping snapshot blobs.
  *
  * The plunge scene uses today's gameplay numbers: ball radius 0.25, mass 1,

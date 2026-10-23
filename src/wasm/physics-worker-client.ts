@@ -492,7 +492,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   }
 
   /**
-   * Hash of the worker's C++ world (#463), taken at this point in the command
+   * Hash of the worker's C++ world (#459), taken at this point in the command
    * order like `serializeSnapshot()` — but without shipping the blob. Null when
    * the worker's bundle cannot hash, or before the worker is ready.
    */
