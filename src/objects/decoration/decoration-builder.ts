@@ -43,16 +43,17 @@ export class DecorationBuilder {
    * `createCabinetDecoration()`: that runs from an idle callback after Start is
    * enabled (or not at all when the cosmetic stage is off), which gave the
    * first frames of play a different table on each load (#464 item 2).
-   * Idempotent; the cosmetic pass binds its meshes to these bodies.
+   * Idempotent; returns the four bodies. The cosmetic pass binds its meshes to them.
    */
-  createRailColliders(): void {
-    if (this.railBodies) return
-    this.railBodies = {
+  createRailColliders(): PhysicsBody[] {
+    this.railBodies ??= {
       left: this.createRailCollider(-11.8, 0.8, 5, 0.6, 1.2, 16, 0.5),
       right: this.createRailCollider(12.8, 0.8, 5, 0.6, 1.2, 16, 0.5),
       leftFlipper: this.createRailCollider(-7, 0.3, -8, 0.3, 0.6, 4, 0.4, -0.15),
       rightFlipper: this.createRailCollider(8.5, 0.3, -8, 0.3, 0.6, 4, 0.4, 0.15),
     }
+    const { left, right, leftFlipper, rightFlipper } = this.railBodies
+    return [left, right, leftFlipper, rightFlipper]
   }
 
   private createRailCollider(

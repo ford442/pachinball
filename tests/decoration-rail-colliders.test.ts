@@ -17,8 +17,15 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 vi.mock('../src/materials', () => ({
   getMaterialLibrary: () => new Proxy({}, { get: () => () => ({}) }),
 }))
+// GameObjects' other builders are not under test.
+vi.mock('../src/objects/object-flippers', () => ({ FlipperBuilder: class { dispose = vi.fn() } }))
+vi.mock('../src/objects/object-walls', () => ({ WallBuilder: class { dispose = vi.fn() } }))
+vi.mock('../src/objects/object-rails', () => ({ RailBuilder: class { dispose = vi.fn() } }))
+vi.mock('../src/objects/object-bumpers', () => ({ BumperBuilder: class { dispose = vi.fn() } }))
+vi.mock('../src/objects/object-pachinko', () => ({ PachinkoBuilder: class { dispose = vi.fn() } }))
 
 import { DecorationBuilder } from '../src/objects/decoration/decoration-builder'
+import { GameObjects } from '../src/objects/object-core'
 import { GameConfig } from '../src/config'
 import type { PhysicsWorldSink } from '../src/core/physics-api'
 import { WasmTableWorld } from '../src/wasm/wasm-table-world'
@@ -107,5 +114,35 @@ describe('DecorationBuilder rail colliders (#464 item 2)', () => {
     expect(world.allBodies()).toHaveLength(0)
     builder.createRailColliders()
     expect(world.allBodies()).toHaveLength(4)
+  })
+})
+
+describe('GameObjects rail colliders (#464 item 2)', () => {
+  function table() {
+    const world = new WasmTableWorld(asSimEngine(makeFakeWasmEngine()), { x: 0, y: -9.81, z: -5 })
+    const scene = { getMeshByName: () => null, beginAnimation: vi.fn() } as unknown as Scene
+    const objects = new GameObjects(scene, world as PhysicsWorldSink, api, GameConfig)
+    objects.createRailColliders()
+    return { world, objects }
+  }
+
+  // The C++ owner exports only the bodies in scope when the table changes. The rails' bindings
+  // arrive with the cosmetic pass, which changes no body, so scoping them by binding left them
+  // out of the C++ world for good.
+  it('the rails are in the C++ export scope before any cosmetic pass', () => {
+    const { world, objects } = table()
+    const rails = world.allBodies()
+    expect(rails).toHaveLength(4)
+    expect(objects.getBindings()).toHaveLength(0)
+    const scope = new Set(objects.getWasmExportBodies())
+    for (const body of rails) expect(scope.has(body)).toBe(true)
+  })
+
+  it('setTableBodiesEnabled reaches the rails without their meshes', () => {
+    const { world, objects } = table()
+    objects.setTableBodiesEnabled(false)
+    expect(world.allBodies().every((b) => !b.isEnabled())).toBe(true)
+    objects.setTableBodiesEnabled(true)
+    expect(world.allBodies().every((b) => b.isEnabled())).toBe(true)
   })
 })
