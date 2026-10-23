@@ -152,12 +152,29 @@ test.describe('wasm-owner pin field', () => {
       const engine = g?.physics?.getWasmEngine?.() as unknown as { getPosition: (id: number) => Vec } | undefined
       const lattice = ((g?.scene?.meshes ?? []) as unknown as PinLattice[]).find((m) => m.name === 'pachinkoPins')
       const pin = lattice ? upperLatticePin(lattice) : null
-      if (!ball || !engine || ball.wasmId == null) return { ok: false, reason: 'hooks missing', maxDx: 0 }
+      const game = g as (typeof g & {
+        engine?: { getDeltaTime: () => number; stopRenderLoop?: () => void }
+        mapManager?: { update?: (dt: number) => void }
+      }) | undefined
+      if (!ball || !engine || ball.wasmId == null || !game?.engine || !game.physicsController) {
+        return { ok: false, reason: 'hooks missing', maxDx: 0 }
+      }
       if (!pin) return { ok: false, reason: 'no pin in the second-highest lattice row', maxDx: 0 }
       const id = ball.wasmId
+      const controller = game.physicsController
 
-      // Worker snapshots arrive between frames, so let the game's own loop step.
-      const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      // Physics-only, like wasm-worker-adventure.spec.ts: stop the render loop and step by hand,
+      // so the test does not wait on a software rasterizer drawing every frame (it timed out at
+      // 180 s on CI's SwiftShader runner when it let the game's rAF loop step). Each step's batch
+      // and the worker's snapshot reply land in the short wait after it.
+      game.engine.stopRenderLoop?.()
+      if (game.mapManager) game.mapManager.update = () => {}
+      const origDt = game.engine.getDeltaTime.bind(game.engine)
+      game.engine.getDeltaTime = () => 1000 / 60
+      const step = async () => {
+        controller.stepPhysics(game.inputManager, game.inputActions, null, null)
+        await new Promise((r) => setTimeout(r, 2))
+      }
       const startX = pin.x + 0.05
       ball.setTranslation({ x: startX, y: 0.5, z: pin.z + 2.5 }, true)
       ball.setLinvel({ x: 0, y: 0, z: 0 }, true)
@@ -169,15 +186,19 @@ test.describe('wasm-owner pin field', () => {
       // first frame that shows the ball above the pin.
       let maxDx = 0
       let arrived = false
-      for (let i = 0; i < 600; i++) {
-        await frame()
-        const t = engine.getPosition(id)
-        if (!arrived) {
-          arrived = t.z > pin.z + 1 && Math.abs(t.x - startX) < 0.05
-          continue
+      try {
+        for (let i = 0; i < 600; i++) {
+          await step()
+          const t = engine.getPosition(id)
+          if (!arrived) {
+            arrived = t.z > pin.z + 1 && Math.abs(t.x - startX) < 0.05
+            continue
+          }
+          if (t.z < pin.z - 0.8) break
+          maxDx = Math.max(maxDx, Math.abs(t.x - startX))
         }
-        if (t.z < pin.z - 0.8) break
-        maxDx = Math.max(maxDx, Math.abs(t.x - startX))
+      } finally {
+        game.engine.getDeltaTime = origDt
       }
       return { ok: arrived, reason: arrived ? '' : 'teleport never reached the snapshot', maxDx }
     })

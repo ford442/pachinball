@@ -132,6 +132,7 @@ test.describe('wasm-owner adventure: synthwave-surf runs without Rapier', () => 
     const boot = await bootWasmOwner(page)
     assertWasmOwnerReady(boot)
     await startPlaying(page)
+    await pauseRendering(page)
 
     const started = await startTrack(page, 'SYNTHWAVE_SURF')
     expect(started.error, started.error ?? 'track start failed').toBeNull()
