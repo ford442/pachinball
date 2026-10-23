@@ -278,9 +278,14 @@ public:
   SnapshotStatus restore(const uint8_t* data, std::size_t size);
 
   /**
-   * FNV-1a 64 over every static collider's geometry and material, in handle
-   * order (group masks, mover poses and force-field vectors are runtime
-   * state, snapshotted instead of hashed).
+   * FNV-1a 64 over every static collider's geometry and material (group
+   * masks, mover poses and force-field vectors are runtime state,
+   * snapshotted instead of hashed).
+   *
+   * Canonical: each family is folded as the sorted multiset of its items'
+   * own digests, so two worlds holding the same statics hash equal however
+   * the async cabinet / adventure build ordered the add*() calls (#464
+   * item 2). Handles still follow insertion order; only the hash ignores it.
    */
   uint64_t staticContentHash() const;
 
@@ -292,8 +297,12 @@ public:
    * hinge's angle. Two worlds with equal hashes step identically; `restore()`
    * of a blob gives back the hash the world had when it was serialized. The
    * cheap equality check for headless replay verification (#444) — compare
-   * hashes, ship the blob only on a mismatch. Allocation-free except for the
-   * manifold copy.
+   * hashes, ship the blob only on a mismatch. Unlike `staticContentHash()`
+   * it also folds the order each static family was added in: static ids in
+   * contacts and the solve order follow insertion, so an equal-content table
+   * built in another order restores a blob fine but does not step
+   * identically, and hashes differently. Cost is O(bodies + static content):
+   * the static table is re-digested (a few small allocations) on each call.
    */
   uint64_t getStateHash() const;
 
@@ -343,8 +352,12 @@ private:
   /** Per-family static counts in Snapshot.h header order. */
   void staticCounts(uint32_t out[SNAPSHOT_STATIC_FAMILIES]) const;
   void scatterTransforms();
+  /** Content-sorted order of each static family (Snapshot.cpp, "Canonical static ordering"). */
+  struct StaticRanking;
+  StaticRanking staticRanking() const;
+  uint64_t staticHashOf(const StaticRanking& ranking) const;
   /** Post-header snapshot payload; `Sink` is SnapshotWriter or SnapshotHasher (Snapshot.cpp). */
-  template <typename Sink> void writeState(Sink& out) const;
+  template <typename Sink> void writeState(Sink& out, const StaticRanking& ranking) const;
 
   void ensureTransformCapacity(int slotCount);
   void freeTransformBuffer();

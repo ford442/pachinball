@@ -980,7 +980,17 @@ static hash + counts, handle ↔ dense consistency, enum ranges) before a single
 member changes, so any status but `Ok` leaves the world as it was. A snapshot
 of a differently built table is refused with `StaticMismatch` — rebuild the
 table, then restore; rigid bodies (and their public ids) are replaced
-wholesale. On success the transform buffer is re-scattered and the contact
+wholesale.
+
+The static content hash is **order-independent** (`SNAPSHOT_VERSION` 2,
+#464 item 2): every static item gets its own FNV-1a 64 digest (a mesh's
+digest covers its triangles), and each family folds its digests sorted, so
+two tables holding the same statics hash equal however the `add*()` calls
+were ordered. Handles still follow insertion order. The per-static runtime
+state in the blob (group masks, mover poses, force-field vectors) is written
+and read in that same content-sorted order, so a restore lands it on the
+equal-content items of a table built in another order. Version-1 blobs carried
+the insertion-order hash and are refused as `BadVersion`. On success the transform buffer is re-scattered and the contact
 buffer is empty until the next step.
 
 Bit-exactness: contact events are emitted in pair-key order within each phase
@@ -1003,9 +1013,12 @@ engine.getStateHash()                           // '0123456789abcdef', or null (
 
 `getStateHash()` (#459) is FNV-1a 64 over exactly the words `serialize()`
 writes after its header, prefixed with `SNAPSHOT_VERSION` and the static
-content hash and followed by each live hinge's angle. Equal hashes step
-identically, so a headless verifier (#444) compares hashes and only fetches a
-blob on a mismatch. `npm run test:wasm-parity` requires the bundle's hash for
+content hash and followed by each live hinge's angle and the insertion order
+of every static family. That last part is what the static hash ignores: static
+ids in contacts and the solve order follow insertion, so an equal-content
+table built in another order restores a blob but does not step identically,
+and its state hash says so. Equal hashes step identically, so a headless
+verifier (#444) compares hashes and only fetches a blob on a mismatch. `npm run test:wasm-parity` requires the bundle's hash for
 the `state_hash_test.cpp` plunge scene to equal the native one
 (`PACHINBALL_STATE_HASH_FIXTURE`), and a restore to give the pre-serialize hash
 back. It moves whenever the snapshot payload does, i.e. on every

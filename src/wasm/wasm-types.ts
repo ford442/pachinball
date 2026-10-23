@@ -22,7 +22,7 @@ export const STATIC_HANDLE_OVERFLOW = 0x7FFFFFFF
 // ---------------------------------------------------------------------------
 
 /** Mirrors native `SNAPSHOT_VERSION` (native/src/Snapshot.h). Recorded in replay metadata. */
-export const WASM_SNAPSHOT_VERSION = 1
+export const WASM_SNAPSHOT_VERSION = 2
 
 /**
  * `restoreSnapshot` result — mirrors native `SnapshotStatus` (Snapshot.h), plus

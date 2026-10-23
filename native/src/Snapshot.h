@@ -18,7 +18,7 @@ namespace pachinball {
  *   [0]  SNAPSHOT_MAGIC ('PBSN')
  *   [1]  SNAPSHOT_VERSION
  *   [2]  total word count (header included) — truncation guard
- *   [3]  static content hash lo   [4] hi   (FNV-1a 64, see staticContentHash)
+ *   [3]  static content hash lo   [4] hi   (FNV-1a 64, order-independent, see staticContentHash)
  *   [5 .. 5+SNAPSHOT_STATIC_FAMILIES)  per-family static counts
  *   then: step counter, accumulator, world params, handle table, the full
  *   BodyStore SoA (poses, velocities, forces, mass/inertia, material, types,
@@ -35,7 +35,14 @@ namespace pachinball {
  * restore. Rigid bodies are replaced wholesale, public ids included.
  */
 inline constexpr uint32_t SNAPSHOT_MAGIC   = 0x4E534250u; // "PBSN" as LE bytes
-inline constexpr uint32_t SNAPSHOT_VERSION = 1u;
+/**
+ * 2: staticContentHash became order-independent (#464 item 2). Version-1 blobs
+ * carry the old insertion-order hash and per-static runtime state in insertion
+ * order, so they are refused (`BadVersion`) rather than restored onto the
+ * wrong statics. The runtime state of statics (group masks, mover poses, force
+ * field vectors) is now written in canonical rank order — see staticContentHash.
+ */
+inline constexpr uint32_t SNAPSHOT_VERSION = 2u;
 
 /**
  * Static families, in header order: planes, boxes, capsules, cylinders,
