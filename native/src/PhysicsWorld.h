@@ -284,6 +284,19 @@ public:
    */
   uint64_t staticContentHash() const;
 
+  /**
+   * FNV-1a 64 of the stepped world: exactly the state `serialize()` carries
+   * after its header (step counter, accumulator, params, handles, every body
+   * column, hinges, kinematic targets, static runtime state, the contact
+   * manifold), plus `SNAPSHOT_VERSION`, `staticContentHash()` and each live
+   * hinge's angle. Two worlds with equal hashes step identically; `restore()`
+   * of a blob gives back the hash the world had when it was serialized. The
+   * cheap equality check for headless replay verification (#444) — compare
+   * hashes, ship the blob only on a mismatch. Allocation-free except for the
+   * manifold copy.
+   */
+  uint64_t getStateHash() const;
+
   /** Contact flushes so far (ContactListener::generation). */
   uint64_t getContactGeneration() const { return contactListener_.generation(); }
 
@@ -330,6 +343,8 @@ private:
   /** Per-family static counts in Snapshot.h header order. */
   void staticCounts(uint32_t out[SNAPSHOT_STATIC_FAMILIES]) const;
   void scatterTransforms();
+  /** Post-header snapshot payload; `Sink` is SnapshotWriter or SnapshotHasher (Snapshot.cpp). */
+  template <typename Sink> void writeState(Sink& out) const;
 
   void ensureTransformCapacity(int slotCount);
   void freeTransformBuffer();

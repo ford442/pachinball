@@ -44,7 +44,8 @@ struct SnapshotAccess {
   static constexpr std::size_t kBodyWords =
       1 + std::size(kFloatCols) + std::size(kByteCols) + 1 + std::size(kWordCols);
 
-  static void writeBodies(SnapshotWriter& w, const BodyStore& s) {
+  template <typename Sink>
+  static void writeBodies(Sink& w, const BodyStore& s) {
     const std::size_t n = s.denseToPublicId_.size();
     w.u32(static_cast<uint32_t>(n));
     for (int id : s.denseToPublicId_) w.i32(id);
@@ -89,7 +90,8 @@ struct SnapshotAccess {
     return !r.failed();
   }
 
-  static void writeHandles(SnapshotWriter& w, const HandleTable& h) {
+  template <typename Sink>
+  static void writeHandles(Sink& w, const HandleTable& h) {
     w.i32(h.nextId_);
     w.u32(static_cast<uint32_t>(h.slots_.size()));
     for (const HandleTable::Slot& s : h.slots_) {
@@ -133,8 +135,10 @@ struct SnapshotAccess {
 
 namespace {
 
-void writeVec(SnapshotWriter& w, const Vec3& v) { w.f32(v.x); w.f32(v.y); w.f32(v.z); }
-void writeQuat(SnapshotWriter& w, const Quat& q) { w.f32(q.x); w.f32(q.y); w.f32(q.z); w.f32(q.w); }
+template <typename Sink>
+void writeVec(Sink& w, const Vec3& v) { w.f32(v.x); w.f32(v.y); w.f32(v.z); }
+template <typename Sink>
+void writeQuat(Sink& w, const Quat& q) { w.f32(q.x); w.f32(q.y); w.f32(q.z); w.f32(q.w); }
 Vec3 readVec(SnapshotReader& r) { const float x = r.f32(), y = r.f32(), z = r.f32(); return {x, y, z}; }
 Quat readQuat(SnapshotReader& r) {
   const float x = r.f32(), y = r.f32(), z = r.f32(), qw = r.f32();
@@ -149,8 +153,8 @@ constexpr std::size_t kTargetWords = 8;
 constexpr std::size_t kContactWords = 12;
 
 /** (membership, filter) for every entry of one static family. */
-template <typename T, typename Get>
-void writeGroups(SnapshotWriter& w, const std::vector<T>& v, Get get) {
+template <typename Sink, typename T, typename Get>
+void writeGroups(Sink& w, const std::vector<T>& v, Get get) {
   for (const T& e : v) {
     const auto& d = get(e);
     w.u32(d.membership);
@@ -249,16 +253,9 @@ uint64_t PhysicsWorld::staticContentHash() const {
   return h.value();
 }
 
-std::vector<uint8_t> PhysicsWorld::serialize() const {
-  SnapshotWriter w;
-  w.u32(SNAPSHOT_MAGIC);
-  w.u32(SNAPSHOT_VERSION);
-  w.u32(0); // total word count, patched below
-  w.u64(staticContentHash());
-  uint32_t counts[SNAPSHOT_STATIC_FAMILIES];
-  staticCounts(counts);
-  for (uint32_t c : counts) w.u32(c);
-
+/** Everything after the header — the stepped state `getStateHash()` also hashes. */
+template <typename Sink>
+void PhysicsWorld::writeState(Sink& w) const {
   w.u64(stepCount_);
   w.f32(accumulator_);
   writeVec(w, params_.gravity);
@@ -322,9 +319,35 @@ std::vector<uint8_t> PhysicsWorld::serialize() const {
     w.f32(e.impulse); w.i32(static_cast<int>(e.phase));
     w.u32(e.isSensor ? 1u : 0u); w.i32(e.subIndex);
   }
+}
+
+std::vector<uint8_t> PhysicsWorld::serialize() const {
+  SnapshotWriter w;
+  w.u32(SNAPSHOT_MAGIC);
+  w.u32(SNAPSHOT_VERSION);
+  w.u32(0); // total word count, patched below
+  w.u64(staticContentHash());
+  uint32_t counts[SNAPSHOT_STATIC_FAMILIES];
+  staticCounts(counts);
+  for (uint32_t c : counts) w.u32(c);
+
+  writeState(w);
 
   w.patch(2, static_cast<uint32_t>(w.wordCount()));
   return w.take();
+}
+
+uint64_t PhysicsWorld::getStateHash() const {
+  SnapshotHasher h;
+  h.u32(SNAPSHOT_VERSION);
+  h.u64(staticContentHash());
+  writeState(h);
+  // Derived from body rotation + rest pose, so already covered above; hashed
+  // anyway so a change to computeHingeAngle shows up here, not only in a trace.
+  for (const HingeJoint& j : hinges_) {
+    if (j.active) { h.i32(j.id); h.f32(getHingeAngle(j.id)); }
+  }
+  return h.value();
 }
 
 SnapshotStatus PhysicsWorld::restore(const uint8_t* data, std::size_t size) {

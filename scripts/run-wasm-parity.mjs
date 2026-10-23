@@ -28,9 +28,15 @@ if (!existsSync(wasmModulePath)) {
 console.log(`Using WASM module: ${wasmModulePath}`)
 
 // 1. Native C++ reference (Catch2 suite via ctest or direct binary). The
-//    snapshot test also drops the parity scene's blob for §snapshot below.
+//    snapshot test also drops the parity scene's blob for §snapshot below, and
+//    the state-hash test its plunge hash for §state hash.
 const snapshotFixture = path.join(buildNativeDir, 'snapshot_parity.bin')
-const nativeEnv = { ...process.env, PACHINBALL_SNAPSHOT_FIXTURE: snapshotFixture }
+const stateHashFixture = path.join(buildNativeDir, 'state_hash_parity.txt')
+const nativeEnv = {
+  ...process.env,
+  PACHINBALL_SNAPSHOT_FIXTURE: snapshotFixture,
+  PACHINBALL_STATE_HASH_FIXTURE: stateHashFixture,
+}
 try {
   if (!existsSync(nativeTest)) {
     console.log('Native test binary missing — building via npm run test:native')
@@ -1067,5 +1073,67 @@ const DENSE_FIELD = {
     `fresh=${freshStatus}/${freshMatch ? 'bit-exact' : 'DIVERGED'} mismatchStatus=${mismatch})`
   )
   if (!ok) failed = true
+}
+
+// #463 Slice A — getStateHash(). The plunge scene native/tests/state_hash_test.cpp
+// builds (buildPlungeScene / drivePlunge — keep the two in step): a radius
+// 0.25, mass 1 ball plunged at impulse 36 into a 0.09-radius pin field. The
+// bundle's hash after PLUNGE_FRAMES must equal the native build's, and a
+// restore must give back the hash the world had when it was serialized.
+{
+  const PLUNGE_AT = 10
+  const SNAPSHOT_AT = 40
+  const PLUNGE_FRAMES = 120
+  const build = (w) => {
+    w.addStaticBox(0, -0.5, 0, 4, 0.5, 10, 0, 0, 0, 1, 0.4, 0.2)
+    w.addStaticBox(-4.5, 1, 0, 0.5, 1, 10, 0, 0, 0, 1, 0.6, 0.1)
+    w.addStaticBox(4.5, 1, 0, 0.5, 1, 10, 0, 0, 0, 1, 0.6, 0.1)
+    w.addStaticBox(0, 1, 10.5, 4, 1, 0.5, 0, 0, 0, 1, 0.6, 0.1)
+    addPinField(w, {
+      origin: { x: -2.7, y: 0.75, z: 2 }, rows: 8, cols: 10, spacingX: 0.6, spacingZ: 0.6, rowOffsetX: 0.3,
+      radius: 0.09, halfHeight: 0.75, restitution: 0.65, friction: 0.1,
+    })
+    const ball = w.createRigidBody(0.1, 0.25, -8, 0, 0, 0, 1, 0.25, 0.5, 0.02, 0, 0, 0.5, 0.2, 0.1)
+    const flipper = w.createRigidBody(1.5, 0.3, -6, 0, 0, 0, 1, 0.12, 0.4, 0.02, 0, 1, 0.6, 0.2, 0.1)
+    w.setBodyRotation(flipper, 0, 0, 0.70710677, 0.70710677)
+    const hinge = w.createHinge(flipper, 0.9, 0.3, -6, 0, 1, 0, -0.5, 0.5)
+    return { ball, hinge }
+  }
+  const run = (w, s, from, to) => {
+    for (let f = from; f < to; f++) {
+      if (f === PLUNGE_AT) w.applyImpulse(s.ball, 0, 0, 36)
+      w.setHingeMotor(s.hinge, f % 40 < 20 ? 8 : -8, 50)
+      w.step(1 / 60)
+    }
+  }
+
+  const world = new Module.PhysicsWorld()
+  if (typeof world.getStateHash !== 'function') {
+    world.delete()
+    console.log('FAIL wasm state hash (bundle has no getStateHash — rebuild with npm run build:wasm)')
+    failed = true
+  } else {
+    const scene = build(world)
+    run(world, scene, 0, SNAPSHOT_AT)
+    const atSnapshot = world.getStateHash()
+    const blob = world.serializeSnapshot()
+    run(world, scene, SNAPSHOT_AT, PLUNGE_FRAMES)
+    const final = world.getStateHash()
+    const native = existsSync(stateHashFixture) ? readFileSync(stateHashFixture, 'utf8').trim() : null
+
+    const restored = world.restoreSnapshot(blob)
+    const rewound = world.getStateHash()
+    run(world, scene, SNAPSHOT_AT, PLUNGE_FRAMES)
+    const replayed = world.getStateHash()
+    world.delete()
+
+    const ok = native === final && restored === 0 && rewound === atSnapshot && replayed === final && final !== atSnapshot
+    console.log(
+      `${ok ? 'PASS' : 'FAIL'} wasm state hash native match + restore ` +
+      `(wasm=${final} native=${native ?? 'missing'} restore=${restored} ` +
+      `rewound=${rewound === atSnapshot ? 'same' : 'diff'} replay=${replayed === final ? 'same' : 'DIVERGED'})`
+    )
+    if (!ok) failed = true
+  }
 }
 process.exit(failed ? 1 : 0)
