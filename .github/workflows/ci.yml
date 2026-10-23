@@ -156,6 +156,12 @@ jobs:
       - name: Build
         run: npx tsc -b && npx vite build
 
+      # The bundle this job boots must carry the WASM just built, not a stale copy (#464 item 1).
+      - name: dist/wasm matches public/wasm
+        env:
+          ALLOW_NO_WASM: ${{ !matrix.wasm && '1' || '' }}
+        run: npm run check:dist-wasm
+
       # Remove continue-on-error once #449 merges.
       - name: Production bundle keeps boot-error reporting
         continue-on-error: true
