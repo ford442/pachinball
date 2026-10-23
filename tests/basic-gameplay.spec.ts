@@ -149,31 +149,38 @@ test.describe('Basic Gameplay Physics Smoke', () => {
     expect(hierarchy.childCount).toBeGreaterThan(0);
     expect(hierarchy.merged).toEqual([]);
 
-    // 6. Plunger launch — verify ball z-velocity increases (impulse is +z)
-    const ballBeforePlunger = await page.evaluate(() => {
+    // 6. Plunger launch — verify ball z-velocity increases (impulse is +z).
+    // Direct-action smoke: same mechanical action, but bypasses InputHandler and charge UI. Real
+    // keyboard plunger coverage lives in keyboard-input.spec.ts. The ball is usually still bouncing
+    // on the plunger after Start (vz swings by about ±2), so one read 200 ms later raced it. Sample
+    // frame by frame from the launch until vz clears the pre-launch value by 5 (a launch reaches
+    // ~14; a bounce never does), bounded by wall time (CI software GL; `wasm-worker` velocities
+    // arrive with the worker's snapshot).
+    const plungerRun = await page.evaluate(() => {
       const g = (window as any).game;
-      const ballBody = g?.ballManager?.getBallBody?.();
-      const vel = ballBody ? ballBody.linvel() : null;
-      return vel ? { x: vel.x, y: vel.y, z: vel.z } : null;
+      const readVz = () => g?.ballManager?.getBallBody?.()?.linvel().z ?? Number.NaN;
+      const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+      return (async () => {
+        const before = Math.max(readVz(), 0);
+        const t0 = performance.now();
+        g?.inputActions?.handlePlunger?.();
+        const samples: Array<[number, number]> = [];
+        for (;;) {
+          await frame();
+          const vz = readVz();
+          const ms = Math.round(performance.now() - t0);
+          samples.push([ms, Number(vz.toFixed(3))]);
+          if (vz > before + 5 || ms > 15_000) break;
+        }
+        return { before, samples };
+      })();
     });
 
-    // Direct-action smoke: same mechanical action, but bypasses InputHandler
-    // and charge UI. Real keyboard plunger coverage lives in keyboard-input.spec.ts.
-    await page.evaluate(() => {
-      const g = (window as any).game;
-      g?.inputActions?.handlePlunger?.();
-    });
-    await page.waitForTimeout(200); // let impulse take effect
-
-    const ballAfterPlunger = await page.evaluate(() => {
-      const g = (window as any).game;
-      const ballBody = g?.ballManager?.getBallBody?.();
-      const vel = ballBody ? ballBody.linvel() : null;
-      return vel ? { x: vel.x, y: vel.y, z: vel.z } : null;
-    });
-
-    // Plunger impulse is along +z, so z velocity should increase
-    expect(ballAfterPlunger!.z).toBeGreaterThan(ballBeforePlunger!.z + 1);
+    const launchVz = plungerRun.samples[plungerRun.samples.length - 1]?.[1] ?? Number.NaN;
+    expect(
+      launchVz,
+      `vz before (floored at 0) ${plungerRun.before}; samples [ms, vz]: ${JSON.stringify(plungerRun.samples)}`,
+    ).toBeGreaterThan(plungerRun.before + 5);
 
     // 7. No unexpected JS errors during the entire test. Local backend map
     // fetch failures and optional asset 404s (WASM physics bundle, sample SFX)
