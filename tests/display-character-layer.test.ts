@@ -97,6 +97,9 @@ const hoisted = vi.hoisted(() => {
       setShaderParams = vi.fn()
       setCRTEffectEnabled = vi.fn()
       setAccessibilityScanlineFactor = vi.fn()
+      setJackpotStill = vi.fn()
+      getEffectPasses = vi.fn(() => ({}))
+      getMeshes = vi.fn(() => [])
       onStateChange = vi.fn()
       startSpin = vi.fn()
       dispose = vi.fn()
@@ -116,6 +119,10 @@ vi.mock('@babylonjs/core', () => ({
 }))
 
 vi.mock('../src/display/display-shader', () => ({ DisplayShaderLayer: hoisted.layerStub() }))
+// The backbox Frame Graph has its own tests; here it never finishes building.
+vi.mock('../src/display/backbox-frame-graph', () => ({
+  BackboxFrameGraph: { create: vi.fn(() => new Promise(() => {})) },
+}))
 vi.mock('../src/display/display-reels', () => ({ DisplayReelsLayer: hoisted.layerStub() }))
 vi.mock('../src/display/display-physical', () => ({ DisplayPhysicalLayer: hoisted.layerStub() }))
 vi.mock('../src/display/display-video', () => ({

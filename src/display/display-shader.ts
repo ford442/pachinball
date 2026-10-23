@@ -1,47 +1,46 @@
 /**
  * Display Shader Layer
  *
- * Handles shader background and effects.
- * Extracted from display.ts for modularity.
+ * Handles the cyber-grid background and the two passes the backbox graph runs on the composite.
  *
  * Architecture
  * ─────────────
- * • backgroundMesh  – a 3-D plane anchored in the backbox hierarchy; renders the
- *                     animated cyber-grid via ShaderMaterial (world-space object).
- * • crtPostProcess  – full-screen PostProcess that applies the CRT effect to the
- *                     rendered scene texture; replaces the old crtMesh plane.
- * • jackpotPostProcess – full-screen PostProcess that composites jackpot overlay
- *                        effects on top of the scene; replaces the old jackpotMesh.
- *
- * Benefits vs. three overlapping planes
- * ─────────────────────────────────────
- * • One draw-call per effect instead of three full-screen rasterisations.
- * • No world/view/projection matrix upload for CRT/jackpot (handled by Babylon).
- * • Zero overdraw from extra blend passes on the background.
- * • Toggle via camera.attachPostProcess / detachPostProcess – no geometry churn.
+ * • backgroundMesh – a plane in the backbox hierarchy; renders the animated cyber grid via
+ *                    ShaderMaterial. It is the `grid` layer of the backbox Frame Graph.
+ * • CRT pass       – `crtEffect` fragment shader, run by backbox-frame-graph.ts on the backbox
+ *                    composite (not on the camera: the playfield is never scanned).
+ * • Jackpot pass   – `jackpotOverlay` fragment shader over the composite, plus the canvas texture
+ *                    holding its WARNING / countdown / JACKPOT text. `getEffectPasses()` hands both
+ *                    passes to the graph; this class only owns their uniforms and per-frame state.
  */
 
-import type { Camera } from '@babylonjs/core/Cameras/camera'
 import { Effect } from '@babylonjs/core/Materials/effect'
 import { ShaderMaterial } from '@babylonjs/core/Materials/shaderMaterial'
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
-import { Texture } from '@babylonjs/core/Materials/Textures/texture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
+import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode'
-import { PostProcess } from '@babylonjs/core/PostProcesses/postProcess'
 import type { Scene } from '@babylonjs/core/scene'
 import { DisplayState, type DisplayConfig, CRT_PRESETS, type CRTEffectParams } from './display-types'
 import { DISPLAY_LAYER_Z } from './display-layer-depth'
+import type { BackboxEffectNode } from './backbox-graph-plan'
+import type { BackboxEffectPass } from './backbox-frame-graph'
 import { crtEffectShader } from '../shaders/crt-effect'
 import { jackpotOverlayPostProcessFragment } from '../shaders/jackpotOverlay'
 import { SCANLINE_UNIFORM, computeEffectiveScanlineIntensity } from '../shaders/scanline'
 
-// ─── Register PostProcess fragment shaders once at module load ────────────────
+// ─── Register the pass fragment shaders once at module load ───────────────────
 // Babylon resolves the shader by looking up "<name>FragmentShader" in the store.
 Effect.ShadersStore['crtEffectFragmentShader'] = crtEffectShader.fragment
 Effect.ShadersStore['jackpotOverlayFragmentShader'] = jackpotOverlayPostProcessFragment
+
+const CRT_UNIFORMS = ['uTime', SCANLINE_UNIFORM, 'uCurvature', 'uVignette', 'uChromaticAberration', 'uGlow', 'uNoise', 'uFlicker']
+const JACKPOT_UNIFORMS = ['uTime', 'uPhase', 'uCrackProgress', 'uShockwaveRadius', 'uGlitchIntensity']
+
+/** The reduced-motion jackpot frame: full crack, one shockwave ring, no glitch, time frozen. */
+const JACKPOT_STILL = { time: 0, crack: 1, shock: 0.55, glitch: 0 } as const
 
 // ─── Private type for jackpot phase state ────────────────────────────────────
 interface JackpotPhaseState {
@@ -59,14 +58,12 @@ export class DisplayShaderLayer {
   private material: ShaderMaterial | null = null
   private backgroundMesh: Mesh | null = null
 
-  // CRT and jackpot are now full-screen PostProcesses
-  private crtPostProcess: PostProcess | null = null
-  private jackpotPostProcess: PostProcess | null = null
+  // Canvas text sampled by the jackpot pass (`myTexture`)
   private jackpotBaseTex: DynamicTexture | null = null
-
-  // Track whether each PostProcess is currently attached to the camera
-  private crtAttached = false
-  private jackpotAttached = false
+  private jackpotActive = false
+  /** Reduced motion: the graph runs the still jackpot pass, so draw its text once, without motion. */
+  private jackpotStill = false
+  private jackpotStillPhase = -1
 
   private time = 0
   private crtEffectActive = false
@@ -74,33 +71,14 @@ export class DisplayShaderLayer {
   private crtEffectParams: CRTEffectParams = CRT_PRESETS.MODERN_LCD
   private scanlineIntensityMultiplier = 1.0
   private accessibilityScanlineFactor = 1.0
-  private warnedMissingScanlineUniform = false
 
-  // Cached jackpot phase state – updated in update(), read in onApply
+  // Cached jackpot phase state – updated in update(), read when the pass binds
   private jackpotState: JackpotPhaseState = { phase: 0, crack: 0, shock: 0, glitch: 0 }
 
   constructor(scene: Scene, config: DisplayConfig) {
     this.scene = scene
     this.config = config
     this.createBackgroundMaterial()
-    // PostProcesses are created in createLayer() once an active camera exists
-  }
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Helpers
-  // ──────────────────────────────────────────────────────────────────────────
-  private getCamera(): Camera | null {
-    return this.scene.activeCamera
-  }
-
-  private attachPP(pp: PostProcess): void {
-    const cam = this.getCamera()
-    if (cam) cam.attachPostProcess(pp)
-  }
-
-  private detachPP(pp: PostProcess): void {
-    const cam = this.getCamera()
-    if (cam) cam.detachPostProcess(pp)
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -152,110 +130,82 @@ export class DisplayShaderLayer {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // CRT PostProcess
+  // Effect passes (run by the backbox Frame Graph on the composite)
   // ──────────────────────────────────────────────────────────────────────────
-  private createCRTPostProcess(): void {
-    const camera = this.getCamera()
-    if (!camera) return
 
-    this.crtPostProcess?.dispose()
+  /** CRT runs while a game system asked for it AND the player has scanlines on. */
+  isCrtActive(): boolean {
+    return this.crtEffectActive && this.playerScanlineEnabled
+  }
 
-    // Create with null camera so we control when it is attached
-    this.crtPostProcess = new PostProcess(
-      'crtPP',
-      'crtEffect',
-      ['uTime', SCANLINE_UNIFORM, 'uCurvature', 'uVignette', 'uChromaticAberration', 'uGlow', 'uNoise', 'uFlicker'],
-      null, // textureSampler is auto-provided by Babylon
-      1.0,
-      null, // manually attached below
-      Texture.BILINEAR_SAMPLINGMODE,
-      this.scene.getEngine()
+  isJackpotActive(): boolean {
+    return this.jackpotActive
+  }
+
+  /** Reduced motion: the graph built the still jackpot pass (see planBackboxGraph). */
+  setJackpotStill(still: boolean): void {
+    if (this.jackpotStill === still) return
+    this.jackpotStill = still
+    this.jackpotStillPhase = -1
+  }
+
+  private bindCrt(effect: Effect): void {
+    const p = this.crtEffectParams
+    const scanlineIntensity = computeEffectiveScanlineIntensity(
+      p.scanlineIntensity,
+      this.scanlineIntensityMultiplier,
+      this.accessibilityScanlineFactor
     )
 
-    this.crtPostProcess.onApply = (effect) => {
-      const hasScanlineUniform = (() => {
-        const effectWithGuards = effect as Effect & {
-          isUniform?: (name: string) => boolean
-          getUniform?: (name: string) => unknown
-        }
-        if (typeof effectWithGuards.isUniform === 'function') {
-          return effectWithGuards.isUniform(SCANLINE_UNIFORM)
-        }
-        if (typeof effectWithGuards.getUniform === 'function') {
-          return Boolean(effectWithGuards.getUniform(SCANLINE_UNIFORM))
-        }
-        return false
-      })()
+    effect.setFloat('uTime', this.time)
+    effect.setFloat(SCANLINE_UNIFORM, scanlineIntensity)
+    effect.setFloat('uCurvature', p.curvature)
+    effect.setFloat('uVignette', p.vignette)
+    effect.setFloat('uChromaticAberration', p.chromaticAberration)
+    effect.setFloat('uGlow', p.glow)
+    effect.setFloat('uNoise', p.noise)
+    effect.setFloat('uFlicker', p.flicker)
+  }
 
-      if (!this.warnedMissingScanlineUniform && !hasScanlineUniform) {
-        console.warn(`[CRT] Uniform ${SCANLINE_UNIFORM} missing — shader source may be out of sync`)
-        this.warnedMissingScanlineUniform = true
-      }
+  private bindJackpot(effect: Effect, still: boolean): void {
+    if (this.jackpotBaseTex) effect.setTexture('myTexture', this.jackpotBaseTex)
+    const s = this.jackpotState
+    effect.setFloat('uTime', still ? JACKPOT_STILL.time : this.time)
+    effect.setInt('uPhase', s.phase)
+    effect.setFloat('uCrackProgress', still ? JACKPOT_STILL.crack : s.crack)
+    effect.setFloat('uShockwaveRadius', still ? JACKPOT_STILL.shock : s.shock)
+    effect.setFloat('uGlitchIntensity', still ? JACKPOT_STILL.glitch : s.glitch)
+  }
 
-      const p = this.crtEffectParams
-      const scanlineIntensity = computeEffectiveScanlineIntensity(
-        p.scanlineIntensity,
-        this.scanlineIntensityMultiplier,
-        this.accessibilityScanlineFactor
-      )
-
-      effect.setFloat('uTime', this.time)
-      effect.setFloat(SCANLINE_UNIFORM, scanlineIntensity)
-      effect.setFloat('uCurvature', p.curvature)
-      effect.setFloat('uVignette', p.vignette)
-      effect.setFloat('uChromaticAberration', p.chromaticAberration)
-      effect.setFloat('uGlow', p.glow)
-      effect.setFloat('uNoise', p.noise)
-      effect.setFloat('uFlicker', p.flicker)
-    }
-
-    // Attach only if CRT was already requested active and player has it enabled
-    if (this.crtEffectActive && this.playerScanlineEnabled) {
-      camera.attachPostProcess(this.crtPostProcess)
-      this.crtAttached = true
-    } else {
-      this.crtAttached = false
+  /** The CRT and jackpot passes, for backbox-frame-graph.ts. Which of them exist is the plan's call. */
+  getEffectPasses(): Record<BackboxEffectNode, BackboxEffectPass> {
+    return {
+      crt: {
+        fragmentShader: 'crtEffect',
+        uniforms: CRT_UNIFORMS,
+        samplers: [],
+        isActive: () => this.isCrtActive(),
+        bind: (effect) => this.bindCrt(effect),
+      },
+      jackpot: {
+        fragmentShader: 'jackpotOverlay',
+        uniforms: JACKPOT_UNIFORMS,
+        samplers: ['myTexture'],
+        isActive: () => this.jackpotActive,
+        bind: (effect) => this.bindJackpot(effect, false),
+      },
+      jackpotStill: {
+        fragmentShader: 'jackpotOverlay',
+        uniforms: JACKPOT_UNIFORMS,
+        samplers: ['myTexture'],
+        isActive: () => this.jackpotActive,
+        bind: (effect) => this.bindJackpot(effect, true),
+      },
     }
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Jackpot PostProcess
-  // ──────────────────────────────────────────────────────────────────────────
-  private createJackpotPostProcess(): void {
-    if (!this.getCamera()) return
-
-    // 256×256 is plenty for the procedural crack/shockwave patterns
-    this.jackpotBaseTex?.dispose()
-    this.jackpotBaseTex = new DynamicTexture('jackpotBase', 256, this.scene, true)
-    const ctx = this.jackpotBaseTex.getContext()
-    ctx.fillStyle = '#050505'
-    ctx.fillRect(0, 0, 256, 256)
-    this.jackpotBaseTex.update()
-
-    this.jackpotPostProcess?.dispose()
-
-    // Create with null camera – attached only when the jackpot state is active
-    this.jackpotPostProcess = new PostProcess(
-      'jackpotPP',
-      'jackpotOverlay',
-      ['uTime', 'uPhase', 'uCrackProgress', 'uShockwaveRadius', 'uGlitchIntensity'],
-      ['myTexture'],
-      1.0,
-      null, // manually attached when jackpot becomes active
-      Texture.BILINEAR_SAMPLINGMODE,
-      this.scene.getEngine()
-    )
-    this.jackpotAttached = false
-
-    this.jackpotPostProcess.onApply = (effect) => {
-      if (!this.jackpotBaseTex) return
-      effect.setTexture('myTexture', this.jackpotBaseTex)
-      effect.setFloat('uTime', this.time)
-      effect.setInt('uPhase', this.jackpotState.phase)
-      effect.setFloat('uCrackProgress', this.jackpotState.crack)
-      effect.setFloat('uShockwaveRadius', this.jackpotState.shock)
-      effect.setFloat('uGlitchIntensity', this.jackpotState.glitch)
-    }
+  getMeshes(): AbstractMesh[] {
+    return this.backgroundMesh ? [this.backgroundMesh] : []
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -263,11 +213,9 @@ export class DisplayShaderLayer {
   // ──────────────────────────────────────────────────────────────────────────
 
   /**
-   * Create the background mesh and post-process effects, parented to the given
-   * root node.  Must be called after the scene has an active camera.
+   * Create the background mesh, parented to the given root node, and the jackpot pass's canvas.
    */
   createLayer(parent: TransformNode): void {
-    // Rebuild only the background mesh (PostProcesses live on the camera)
     this.backgroundMesh?.dispose()
 
     this.backgroundMesh = MeshBuilder.CreatePlane(
@@ -283,9 +231,13 @@ export class DisplayShaderLayer {
     this.backgroundMesh.isPickable = false
     this.backgroundMesh.freezeWorldMatrix()
 
-    // Build (or rebuild) the PostProcesses now that a camera is available
-    this.createCRTPostProcess()
-    this.createJackpotPostProcess()
+    // 256×256 is plenty for the procedural crack/shockwave text
+    this.jackpotBaseTex?.dispose()
+    this.jackpotBaseTex = new DynamicTexture('jackpotBase', 256, this.scene, true)
+    const ctx = this.jackpotBaseTex.getContext()
+    ctx.fillStyle = '#050505'
+    ctx.fillRect(0, 0, 256, 256)
+    this.jackpotBaseTex.update()
   }
 
   update(dt: number, state: DisplayState, jackpotPhase: number): void {
@@ -296,16 +248,10 @@ export class DisplayShaderLayer {
       this.material.setFloat('time', this.time)
     }
 
-    // Jackpot PostProcess – attach/detach only on state transitions
+    // The graph runs the jackpot pass only while this is true
     const isJackpot = state === DisplayState.JACKPOT
-    if (isJackpot !== this.jackpotAttached && this.jackpotPostProcess) {
-      if (isJackpot) {
-        this.attachPP(this.jackpotPostProcess)
-      } else {
-        this.detachPP(this.jackpotPostProcess)
-      }
-      this.jackpotAttached = isJackpot
-    }
+    const wasJackpot = this.jackpotActive
+    this.jackpotActive = isJackpot
 
     if (isJackpot) {
       let phase = 0
@@ -332,9 +278,16 @@ export class DisplayShaderLayer {
 
       this.jackpotState = { phase, crack, shock, glitch }
 
-      // Draw phase-specific overlay content into the base texture so the postprocess can show text
-      this.drawJackpotBaseContent(phase)
-    } else if (this.jackpotBaseTex) {
+      // Draw phase-specific overlay content into the base texture so the pass can show text.
+      // The still pass gets one static frame per phase instead of a redraw every frame.
+      if (!this.jackpotStill) {
+        this.drawJackpotBaseContent(phase)
+      } else if (this.jackpotStillPhase !== phase) {
+        this.jackpotStillPhase = phase
+        this.drawJackpotBaseContent(phase, true)
+      }
+    } else if (wasJackpot && this.jackpotBaseTex) {
+      this.jackpotStillPhase = -1
       // Clear when not in jackpot
       const ctx = this.jackpotBaseTex.getContext()
       ctx.clearRect(0, 0, 256, 256)
@@ -364,10 +317,11 @@ export class DisplayShaderLayer {
   }
 
   /**
-   * Draw phase-specific text/content into the jackpot base texture (used by the postprocess).
-   * This provides WARNING / COUNTDOWN / JACKPOT text for the WGSL overlay path.
+   * Draw phase-specific text/content into the jackpot base texture (sampled by the jackpot pass).
+   * This provides the WARNING / COUNTDOWN / JACKPOT text. `still` (reduced motion) draws one
+   * static frame: no running countdown, no spinning burst.
    */
-  private drawJackpotBaseContent(phase: number): void {
+  private drawJackpotBaseContent(phase: number, still = false): void {
     if (!this.jackpotBaseTex) return
     const raw = this.jackpotBaseTex.getContext()
     const ctx = raw as CanvasRenderingContext2D
@@ -386,6 +340,10 @@ export class DisplayShaderLayer {
       ctx.fillText('WARNING', tw / 2, th * 0.32)
       ctx.font = 'bold 13px monospace'
       ctx.fillText('CORE UNSTABLE', tw / 2, th * 0.44)
+    } else if (phase === 2 && still) {
+      ctx.fillStyle = '#ffffee'
+      ctx.font = 'bold 28px monospace'
+      ctx.fillText('JACKPOT', tw / 2, th * 0.5)
     } else if (phase === 2) {
       // Countdown digits 3 -> 2 -> 1
       const idx = Math.floor((this.time * 1.05) % 3)
@@ -401,7 +359,12 @@ export class DisplayShaderLayer {
       ctx.shadowColor = '#ffd700'
       ctx.shadowBlur = 14
       ctx.fillText('JACKPOT', tw / 2, th * 0.42)
-      // small radial burst lines
+      // small radial burst lines (they spin, so the still frame leaves them out)
+      if (still) {
+        ctx.restore()
+        this.jackpotBaseTex.update()
+        return
+      }
       ctx.strokeStyle = 'rgba(255,215,0,0.6)'
       ctx.lineWidth = 2
       for (let i = 0; i < 6; i++) {
@@ -418,24 +381,10 @@ export class DisplayShaderLayer {
   }
 
   /**
-   * Enable or disable the CRT PostProcess (game-system control).
+   * Ask for the CRT pass (game-system control). It runs while this and the player toggle are on.
    */
   setCRTEffectEnabled(enabled: boolean): void {
-    if (this.crtEffectActive === enabled) return
     this.crtEffectActive = enabled
-    this.syncCRTAttachment()
-  }
-
-  private syncCRTAttachment(): void {
-    if (!this.crtPostProcess) return
-    const shouldAttach = this.crtEffectActive && this.playerScanlineEnabled
-    if (shouldAttach && !this.crtAttached) {
-      this.attachPP(this.crtPostProcess)
-      this.crtAttached = true
-    } else if (!shouldAttach && this.crtAttached) {
-      this.detachPP(this.crtPostProcess)
-      this.crtAttached = false
-    }
   }
 
   /**
@@ -443,14 +392,11 @@ export class DisplayShaderLayer {
    * Works independently of the active preset (even OFF-preset → pass is skipped).
    */
   setPlayerScanlineEnabled(enabled: boolean): void {
-    if (this.playerScanlineEnabled === enabled) return
     this.playerScanlineEnabled = enabled
-    this.syncCRTAttachment()
   }
 
   /**
-   * Update CRT parameters.  The new values are picked up automatically by
-   * the PostProcess onApply callback on the next frame.
+   * Update CRT parameters. The pass reads them when it binds on the next frame.
    */
   setCRTEffectParams(params: Partial<CRTEffectParams>): void {
     this.crtEffectParams = { ...this.crtEffectParams, ...params }
@@ -491,25 +437,11 @@ export class DisplayShaderLayer {
   }
 
   dispose(): void {
-    // Detach before disposing to avoid camera pipeline errors
-    if (this.crtPostProcess && this.crtAttached) {
-      this.detachPP(this.crtPostProcess)
-      this.crtAttached = false
-    }
-    if (this.jackpotPostProcess && this.jackpotAttached) {
-      this.detachPP(this.jackpotPostProcess)
-      this.jackpotAttached = false
-    }
-
     this.material?.dispose()
     this.backgroundMesh?.dispose()
-    this.crtPostProcess?.dispose()
-    this.jackpotPostProcess?.dispose()
     this.jackpotBaseTex?.dispose()
     this.material = null
     this.backgroundMesh = null
-    this.crtPostProcess = null
-    this.jackpotPostProcess = null
     this.jackpotBaseTex = null
   }
 }
