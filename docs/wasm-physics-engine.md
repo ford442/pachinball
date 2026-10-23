@@ -290,7 +290,7 @@ at `1/60` s. Host: Linux build environment (2026-08-07).
 
 **Canonical numbers:** [`docs/WASM_BENCH_RESULTS.md`](WASM_BENCH_RESULTS.md) (2026-08-14) — SIMD+LTO **ON**, 16 MiB heap, `-O3`, `emmalloc`, `--closure=1`. Production combo is **C**.
 
-Historical 2026-08-07 table above is retained for comparison only; do not copy those defaults.
+Historical 2026-08-07 table above is retained for comparison only; do not copy those defaults. Its `.wasm KiB` column is from the 50-sphere build of that day: the current Release artefact (pin fields, meshes, force fields, snapshots, state hash) is ~190 KiB (193,907 bytes with emcc 6.0.13 on 2026-10-23).
 
 **Other decisions:**
 1. **No `-pthread` / `SharedArrayBuffer` yet** — #361; ENVIRONMENT already includes `worker` so the glue can instantiate off-thread without a rebuild of that flag.

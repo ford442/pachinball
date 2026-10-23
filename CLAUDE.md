@@ -38,7 +38,7 @@ npx vitest run tests/ball-manager.test.ts
 
 | Path | Role |
 |------|------|
-| `src/game.ts` | Central orchestrator (~33 KB / ~840 lines — slimmed from its former ~140 KB monolith; the sub-systems now live under `src/game/`, `src/game-elements/`, `src/display/`, `src/effects/`, `src/objects/`). Owns scene, cameras, lights, materials, post-processing, game-state machine (MENU / PLAYING / PAUSED / GAME_OVER), and wires all sub-systems together. |
+| `src/game.ts` | Central orchestrator (~19 KB / ~450 lines — slimmed from its former ~140 KB monolith; the sub-systems now live under `src/game/`, `src/game-elements/`, `src/display/`, `src/effects/`, `src/objects/`). Owns scene, cameras, lights, materials, post-processing, game-state machine (MENU / PLAYING / PAUSED / GAME_OVER), and wires all sub-systems together. |
 | `src/core/static-scene-gate.ts` | `StaticSceneGate`: one invalidation point for everything frozen while the scene is static (materials, the active-mesh list, the shadow map). Mutate something frozen → call `game.staticSceneGate?.invalidate(...)`. See `docs/STATIC_SCENE.md`. |
 | `src/game-elements/` | Discrete sub-systems: `physics.ts` (physics world: the C++ owner's `WasmTableWorld`, or Rapier), `ball-manager.ts` (spawn/collect/drain), `input.ts` (keyboard/touch/gamepad), `camera-controller.ts`, `sound-system.ts`, `zone-trigger-system.ts`, `leaderboard-system.ts`, `adventure-mode.ts`, `debug-hud.ts`, etc. |
 | `native/` | C++ physics core — rigid bodies, broadphase, contact listener. Catch2-tested via `npm run test:native`. |
@@ -47,7 +47,7 @@ npx vitest run tests/ball-manager.test.ts
 | `src/objects/` | Playfield geometry: bumpers, flippers (joint-based rotation), walls, rails, pachinko pins, decoration. All live under `object-core.ts` as the top-level orchestrator. |
 | `src/cabinet/` | Four cabinet presets (classic, neo, vertical, wide) built by `cabinet-builder.ts`. Each defines its own dimensions and styling. |
 | `src/display/` | Multi-layer backbox display, composited by one Frame Graph (`backbox-frame-graph.ts`, nodes chosen by `backbox-graph-plan.ts`) onto one plane; CRT and jackpot are passes on that composite, never on the camera. `display-core.ts` drives state transitions (IDLE → REACH → FEVER). See `docs/FRAME_GRAPH.md`. |
-| `src/shaders/` | Standalone WGSL/GLSL effect shaders: CRT scanlines + curvature, LCD table, jackpot overlay, number-scroll animation. |
+| `src/shaders/` | Standalone GLSL effect shaders: CRT scanlines + curvature, LCD table, jackpot overlay. |
 | `src/materials/` | PBR material library split by domain (ball, metallic, interactive, structural). `material-core.ts` is the entry point. |
 | `src/audio/` | Single `AudioEngine` (one AudioContext) + pachinko worklet + sample bank. EventBus remains the trigger API. |
 | `src/config/` | Ball-type definitions (STANDARD / GOLD_PLATED / SOLID_GOLD), spawn weight distribution (75 / 20 / 5 %), point values, fever-mode multipliers, API config. |
@@ -78,4 +78,4 @@ Use `docs/ADVENTURE_CAMPAIGN.md` for the current A/B alternating campaign model 
 
 ### WebGPU / shader authoring
 
-Shaders in `src/shaders/` use Babylon.js `ShaderMaterial`. `display-shader.ts` targets WebGPU (WGSL); all shaders have a WebGL/canvas fallback path. Check for `engine.isWebGPU` before using WebGPU-only features.
+Shaders in `src/shaders/` use Babylon.js `ShaderMaterial`. The backbox shaders in `display-shader.ts` (and `src/shaders/`) are **GLSL**: on WebGPU Babylon translates them with glslang + twgsl, which `initAsync()` currently fetches from `cdn.babylonjs.com` at runtime (#464 item 6). Only `src/effects/fresnel-rim-plugin.ts` ships WGSL. All shaders have a WebGL/canvas fallback path. Check for `engine.isWebGPU` before using WebGPU-only features.
