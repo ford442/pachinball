@@ -39,6 +39,7 @@ import {
   type AdventurePhysicsBridge,
 } from './track-physics-bridge'
 import * as primitives from './track-primitives'
+import * as wells from './track-primitives-wells'
 import type { TrackPrimitiveContext } from './track-primitives'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import type { AdventureColliderDesc } from './track-collider-descriptors'
@@ -391,38 +392,14 @@ export abstract class TrackBuilder {
       createChromaGate: (pos, color) => this.createChromaGate(pos, color),
       createStaticCylinder: (pos, diameter, height, material) =>
         this.createStaticCylinder(pos, diameter, height, material),
-      createPinField: (
-        rampStart,
-        heading,
-        inclineRad,
-        rampLength,
-        pinSpacing,
-        evenOffsets,
-        oddOffsets,
-        pinDiameter,
-        pinHeight,
-        material,
-      ) =>
-        this.createPinField(
-          rampStart,
-          heading,
-          inclineRad,
-          rampLength,
-          pinSpacing,
-          evenOffsets,
-          oddOffsets,
-          pinDiameter,
-          pinHeight,
-          material,
-        ),
+      createPinField: (...args) => this.createPinField(...args),
       createInclinedMill: (center, radius, inclineRad, angVelAlongNormal, material) =>
         this.createInclinedMill(center, radius, inclineRad, angVelAlongNormal, material),
       createResetBasin: (pos, material) => this.createResetBasin(pos, material),
       createPinLattice: (spec, material) => primitives.createPinLattice(this.primitiveContext(), spec, material),
-      createForceField: (center, halfExtents, rotation, acceleration, space, visible, material) =>
-        primitives.createForceField(
-          this.primitiveContext(), center, halfExtents, rotation, acceleration, space, visible, material
-        ),
+      createForceField: (...args) => primitives.createForceField(this.primitiveContext(), ...args),
+      createStaticCone: (...args) => wells.createStaticCone(this.primitiveContext(), ...args),
+      createAxisPullWell: (...args) => wells.createAxisPullWell(this.primitiveContext(), ...args),
     }
 
     return compileTrackDefinition(def, api)

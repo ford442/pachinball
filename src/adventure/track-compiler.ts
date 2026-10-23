@@ -124,6 +124,26 @@ export interface TrackBuildApi {
     visible: boolean,
     material: TrackMaterial,
   ): void
+  /** One static cone (one C++ handle), base centred on `base`. */
+  createStaticCone(
+    base: GeoVec3,
+    radius: number,
+    halfHeight: number,
+    rotation: GeoQuat,
+    restitution: number,
+    friction: number,
+    material: TrackMaterial,
+  ): void
+  /** One C++ axis-pull well. */
+  createAxisPullWell(
+    center: GeoVec3,
+    radius: number,
+    halfHeight: number,
+    strength: number,
+    enabled: boolean,
+    visible: boolean,
+    material: TrackMaterial,
+  ): void
 }
 
 function degToRad(deg: number): number {
@@ -362,6 +382,34 @@ function applySegment(
         rotation,
         { x: segment.accel.x, y: segment.accel.y, z: segment.accel.z },
         segment.space ?? 'world',
+        segment.visible ?? true,
+        mat,
+      )
+      break
+    }
+    case 'cone': {
+      const mat = resolveMaterial(api, segment.material, fallback)
+      const pos = applyOffset(cursor.pos, segment.offset)
+      api.createStaticCone(
+        { x: pos.x, y: pos.y, z: pos.z },
+        segment.radius,
+        segment.halfHeight,
+        yawQuat(cursor.heading + degToRad(segment.yawDeg ?? 0)),
+        segment.restitution ?? 0.5,
+        segment.friction ?? 0.3,
+        mat,
+      )
+      break
+    }
+    case 'axisPull': {
+      const mat = resolveMaterial(api, segment.material ?? 'energy', fallback)
+      const pos = applyOffset(cursor.pos, segment.offset)
+      api.createAxisPullWell(
+        { x: pos.x, y: pos.y, z: pos.z },
+        segment.radius,
+        segment.halfHeight ?? 1,
+        segment.strength,
+        segment.enabled ?? true,
         segment.visible ?? true,
         mat,
       )
