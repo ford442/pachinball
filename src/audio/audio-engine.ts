@@ -1,4 +1,5 @@
 import { GameConfig } from '../config'
+import { resolveAbsoluteAssetUrl } from '../core/asset-urls'
 
 export type PachinkoVoiceType = 'bumper' | 'peg' | 'flipper' | 'drain'
 
@@ -12,7 +13,12 @@ export interface PlayVoiceParams {
   fever?: boolean
 }
 
-const WORKLET_URL = '/audio/pachinko-voice-processor.js'
+/**
+ * Public-dir path of the voice processor. Resolved against the deploy base at
+ * load time: a root-absolute `/audio/…` 404s under `/pachinball/` and silently
+ * left every player on the oscillator fallback (#464 item 5).
+ */
+export const WORKLET_PATH = 'audio/pachinko-voice-processor.js'
 
 let instance: AudioEngine | null = null
 let ownedContextCount = 0
@@ -63,6 +69,8 @@ export class AudioEngine {
   private workletReady = false
   private workletFailed = false
   private workletPromise: Promise<boolean> | null = null
+  private workletUrl: string | null = null
+  private workletError: string | null = null
 
   private constructor() {
     this.context = createNativeContext()
@@ -105,16 +113,26 @@ export class AudioEngine {
           this.workletFailed = true
           return false
         }
-        await this.context.audioWorklet.addModule(WORKLET_URL)
-        this.workletNode = new AudioWorkletNode(this.context, 'pachinko-voice', {
+        this.workletUrl = resolveAbsoluteAssetUrl(WORKLET_PATH)
+        await this.context.audioWorklet.addModule(this.workletUrl)
+        const node = new AudioWorkletNode(this.context, 'pachinko-voice', {
           numberOfOutputs: 1,
           outputChannelCount: [2],
         })
-        this.workletNode.connect(this.sfxGain)
+        // A processor that throws outputs silence from then on: hand the voices
+        // back to the oscillator fallback instead.
+        node.addEventListener('processorerror', () => {
+          this.workletError = 'processorerror'
+          this.workletReady = false
+          this.workletFailed = true
+        })
+        node.connect(this.sfxGain)
+        this.workletNode = node
         this.workletReady = true
         return true
       } catch (err) {
         console.warn('[AudioEngine] Worklet load failed — oscillator fallback active:', err)
+        this.workletError = err instanceof Error ? err.message : String(err)
         this.workletFailed = true
         return false
       }
@@ -125,6 +143,11 @@ export class AudioEngine {
 
   isWorkletReady(): boolean {
     return this.workletReady
+  }
+
+  /** Where the voice worklet was loaded from, and why it is not running (null while it is). */
+  getWorkletStatus(): { url: string | null; ready: boolean; error: string | null } {
+    return { url: this.workletUrl, ready: this.workletReady, error: this.workletError }
   }
 
   playVoice(params: PlayVoiceParams): boolean {

@@ -11,12 +11,22 @@ import { defineConfig, devices } from '@playwright/test'
  */
 export default defineConfig({
   testDir: '.',
-  webServer: {
-    command: 'npx vite preview --port 4174 --strictPort',
-    url: 'http://localhost:4174',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: 'npx vite preview --port 4174 --strictPort',
+      url: 'http://localhost:4174',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    // The same dist/ mounted under /pachinball/, as production serves it
+    // (tests/preview-subdir.spec.ts). `--base` changes only where preview mounts it.
+    {
+      command: 'npx vite preview --base /pachinball/ --port 4175 --strictPort',
+      url: 'http://localhost:4175/pachinball/',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+  ],
   use: {
     baseURL: 'http://localhost:4174',
     serviceWorkers: 'block',

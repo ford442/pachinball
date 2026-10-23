@@ -39,7 +39,7 @@ import { AtmosphereController } from './effects-atmosphere'
 import { ScreenEffectsController } from './effects-screen'
 import { FresnelRimController } from './effects-fresnel-rim'
 import { RuntimePerformanceController } from './effects-performance'
-import { getAudioEngine, peekAudioEngine, type PlayVoiceParams } from '../audio/audio-engine'
+import { getAudioEngine, peekAudioEngine, type AudioEngine, type PlayVoiceParams } from '../audio/audio-engine'
 import type { EventBus } from '../core/event-bus'
 import { createTimerScope } from '../core/timers'
 import type { BallManager } from '../game-elements/ball-manager'
@@ -364,6 +364,11 @@ export class EffectsSystem {
 
   getAudioContext(): AudioContext | null {
     return peekAudioEngine()?.context ?? this.audioCtx
+  }
+
+  /** Voice worklet load state (Playwright under a subdirectory base, debug). */
+  getVoiceWorkletStatus(): ReturnType<AudioEngine['getWorkletStatus']> | null {
+    return peekAudioEngine()?.getWorkletStatus() ?? null
   }
 
   dispose(): void {

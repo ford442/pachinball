@@ -1,3 +1,5 @@
+import { assetUrl } from '../core/asset-urls'
+
 /**
  * API Configuration - Backend storage manager URL
  * Uses storage.noahcohn.com as the canonical backend
@@ -57,7 +59,7 @@ export function resolveBackboxAssetPath(name: string, ext: string, pack?: string
   if (import.meta.env.PROD) {
     return `${PROD_ASSET_BASE}/pachinball/backbox/${relative}`
   }
-  return `/backbox/${relative}`
+  return assetUrl(`backbox/${relative}`)
 }
 
 /**
