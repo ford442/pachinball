@@ -44,6 +44,7 @@ import {
 } from './backbox-graph-plan'
 import type { BackboxFrameGraph, BackboxGraphInfo, BackboxLayerSource } from './backbox-frame-graph'
 import type { StaticSceneGate } from '../core/static-scene-gate'
+import { isSoftwareRasterizer } from '../engine/software-rasterizer'
 
 export interface DisplaySystemOptions {
   /** `?nopp=1`: the backbox graph is the composite and nothing else (no CRT, no jackpot pass). */
@@ -87,6 +88,7 @@ export class DisplaySystem {
   // Backbox Frame Graph (#461): the layers above composed into one texture on one plane.
   // Lazily imported, like the character layer, so its Babylon tasks stay off the entry chunk.
   private readonly noPostProcess: boolean
+  private readonly softwareRaster: boolean
   private backboxGraph: BackboxFrameGraph | null = null
   private backboxGraphStatus: BackboxGraphStatus = 'idle'
   private backboxGraphError: string | null = null
@@ -138,6 +140,7 @@ export class DisplaySystem {
   ) {
     this.scene = scene
     this.noPostProcess = options.noPostProcess ?? false
+    this.softwareRaster = isSoftwareRasterizer(engine)
     this.config = { ...DEFAULT_DISPLAY_CONFIG, ...config }
     this.qualityTier = qualityTier ?? QualityTier.MEDIUM
     this.accessibility = accessibility ?? detectAccessibility()
@@ -192,6 +195,7 @@ export class DisplaySystem {
       photosensitive: this.accessibility.photosensitiveMode === true,
       reducedMotion: this.accessibility.reducedMotion,
       noPostProcess: this.noPostProcess,
+      softwareRaster: this.softwareRaster,
     }
   }
 

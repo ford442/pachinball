@@ -99,6 +99,8 @@ export interface BackboxGraphInfo {
   width: number
   height: number
   executedFrames: number
+  /** The composite is re-rendered every this many frames (software rasteriser: more than 1). */
+  frameInterval: number
 }
 
 interface LayerTask {
@@ -134,6 +136,7 @@ export class BackboxFrameGraph {
   private ready = false
   private disposed = false
   private executedFrames = 0
+  private frameCounter = 0
   private observer: Observer<Scene> | null = null
   private readonly adopted = new Set<AbstractMesh>()
 
@@ -238,6 +241,7 @@ export class BackboxFrameGraph {
       width: plan?.width ?? 0,
       height: plan?.height ?? 0,
       executedFrames: this.executedFrames,
+      frameInterval: plan?.frameInterval ?? 1,
     }
   }
 
@@ -407,6 +411,12 @@ export class BackboxFrameGraph {
 
   private execute(): void {
     if (!this.ready || this.disposed) return
+    // Adopt new meshes every frame (the scene camera must never draw a layer), render on the interval.
+    const interval = this.plan?.frameInterval ?? 1
+    if (interval > 1 && this.frameCounter++ % interval !== 0) {
+      this.adoptLayerMeshes()
+      return
+    }
     let adoptedNew = false
     for (const { source, task } of this.layerTasks) {
       const meshes = source.meshes()

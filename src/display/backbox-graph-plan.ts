@@ -29,6 +29,11 @@ export interface BackboxGraphFlags {
   reducedMotion: boolean
   /** `?nopp=1`: composite only. */
   noPostProcess: boolean
+  /**
+   * WebGL rasterised on the CPU (SwiftShader: no GPU acceleration, and every CI runner). The
+   * composite drops to the LOW size and refreshes every `SOFTWARE_FRAME_INTERVAL` frames.
+   */
+  softwareRaster?: boolean
 }
 
 export interface BackboxGraphPlan {
@@ -39,7 +44,12 @@ export interface BackboxGraphPlan {
   /** Composite texture size in pixels. */
   width: number
   height: number
+  /** Re-render the composite every N frames (1 = every frame). The plane shows the last one between. */
+  frameInterval: number
 }
+
+/** On a software rasteriser, ~20 Hz backbox updates at 60 fps: each layer pass is CPU raster work. */
+export const SOFTWARE_FRAME_INTERVAL = 3
 
 /**
  * Composite width per tier. Height follows the display's aspect ratio. The backbox covers well
@@ -73,12 +83,14 @@ export function planBackboxGraph(
     }
   }
 
-  const width = COMPOSITE_WIDTH[tier]
+  const width = COMPOSITE_WIDTH[flags.softwareRaster ? QualityTier.LOW : tier]
   const aspect = displayAspect > 0 && Number.isFinite(displayAspect) ? displayAspect : 5 / 3
   // Multiple of 8 keeps row pitch aligned on every backend.
   const height = Math.max(8, Math.round(width / aspect / 8) * 8)
 
-  return { layers: BACKBOX_LAYER_ORDER, effects, omitted, width, height }
+  const frameInterval = flags.softwareRaster ? SOFTWARE_FRAME_INTERVAL : 1
+
+  return { layers: BACKBOX_LAYER_ORDER, effects, omitted, width, height, frameInterval }
 }
 
 /** True when two plans build the same graph (same nodes, same size): no rebuild needed. */

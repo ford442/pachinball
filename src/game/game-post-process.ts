@@ -33,6 +33,7 @@ import {
   type WebGPUPostProcessProfile,
 } from './webgpu-post-process-profile'
 import { MinimalBloomPipeline } from '../effects/minimal-bloom-pipeline'
+import { isSoftwareRasterizer } from '../engine/software-rasterizer'
 import { QualityTier, INTENSITY } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
 import { GameConfig } from '../config'
@@ -177,14 +178,7 @@ export class PostProcessManager {
     }
 
     // DoF / SSAO / SSR / motion blur are HIGH-only (mobile boot caps at MEDIUM).
-    this._isSwiftShader = (() => {
-      const gl = (this.host.engine as unknown as { _gl?: WebGLRenderingContext | null })._gl
-      if (!gl) return false
-      const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
-      if (!debugInfo) return false
-      const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) as string
-      return renderer?.toLowerCase().includes('swiftshader') ?? false
-    })()
+    this._isSwiftShader = isSoftwareRasterizer(this.host.engine)
 
     this.applyHeavyPostProcesses(qualityTier, reducedMotion)
 

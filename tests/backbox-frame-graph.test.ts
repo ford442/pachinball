@@ -285,6 +285,23 @@ describe('BackboxFrameGraph', () => {
     expect(run.get('backbox:jackpot')).toBe(true)
   })
 
+  it('on a software rasteriser, executes every frameInterval-th frame but still adopts late meshes each frame', async () => {
+    const t = setup()
+    const graph = await BackboxFrameGraph.create(t.options, plan({ softwareRaster: true }))
+    const fg = lastGraph()
+    expect(graph.getInfo()).toMatchObject({ width: 512, frameInterval: 3 })
+
+    for (let i = 0; i < 6; i++) t.frame()
+    expect(fg.executions.length).toBe(2)
+
+    t.frame() // frame 6 executes
+    const late = hoisted.mkMesh('displayCharacter')
+    t.meshes.character.push(late)
+    t.frame() // frame 7 is skipped, but the mesh still leaves the scene camera
+    expect(fg.executions.length).toBe(3)
+    expect(late.layerMask).toBe(BACKBOX_LAYER_MASK)
+  })
+
   it('moves layer meshes off the scene camera mask, including late ones, and hands them back on dispose', async () => {
     const t = setup()
     const graph = await BackboxFrameGraph.create(t.options, plan())

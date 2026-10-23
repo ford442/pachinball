@@ -87,6 +87,12 @@ The flags come from `AccessibilityConfig` (`photosensitiveMode`, `reducedMotion`
 in settings rebuilds the graph only if the node set changed. Composite size is per tier
 (HIGH 1024, MEDIUM 768, LOW 512 wide, at the display's aspect).
 
+On a software rasteriser (WebGL on SwiftShader: Chrome without GPU acceleration, and every CI
+runner; `src/engine/software-rasterizer.ts`, the same check that keeps HIGH-only scene post off
+there) the composite uses the LOW size whatever the tier and re-renders every
+`SOFTWARE_FRAME_INTERVAL` (3) frames; the plane shows the last composite in between. The node set
+is unchanged. Layer meshes are still adopted every frame, so the scene camera never draws one.
+
 `DisplaySystem.getBackboxGraphInfo()` reports the plan, the built node list, which effect passes ran
 on the last frame, and the omitted nodes with their reasons (debug HUD / e2e).
 

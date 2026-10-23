@@ -9,6 +9,7 @@ import {
   BACKBOX_LAYER_ORDER,
   planBackboxGraph,
   sameBackboxGraph,
+  SOFTWARE_FRAME_INTERVAL,
   type BackboxGraphFlags,
 } from '../src/display/backbox-graph-plan'
 import { QualityTier } from '../src/game-elements/visual-language'
@@ -59,6 +60,14 @@ describe('planBackboxGraph', () => {
     for (const aspect of [ASPECT, 4 / 3, 16 / 9, 0, Number.NaN]) {
       expect(planBackboxGraph(FLAGS, QualityTier.MEDIUM, aspect).height % 8).toBe(0)
     }
+  })
+
+  it('on a software rasteriser: LOW size whatever the tier, refreshed every few frames', () => {
+    expect(planBackboxGraph(FLAGS, QualityTier.HIGH, ASPECT).frameInterval).toBe(1)
+    const plan = planBackboxGraph({ ...FLAGS, softwareRaster: true }, QualityTier.HIGH, ASPECT)
+    expect(plan).toMatchObject({ width: 512, height: 304, frameInterval: SOFTWARE_FRAME_INTERVAL })
+    expect(SOFTWARE_FRAME_INTERVAL).toBeGreaterThan(1)
+    expect(plan.effects).toEqual(['crt', 'jackpot']) // same nodes, just cheaper
   })
 
   it('sameBackboxGraph is true only when nodes and size match', () => {
