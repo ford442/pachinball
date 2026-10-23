@@ -501,6 +501,17 @@ export class GameSystemsInitializer {
         },
       })
       this.game.cabinetBuilder?.updateCabinetLightExclusions()
+
+      // Owner modes (wasm-owner / wasm-worker) move the flippers only through C++ hinges, which
+      // rebuildHandleCaches() realises. It used to run first in scene_gameplay_build, after Start
+      // was enabled, so a flip before that stage (or every flip, if the stage failed) drove
+      // nothing. Realise them here and fail the stage, like the joint check in
+      // buildCriticalScene, if a table that needs them does not get both.
+      this.game.physicsController?.rebuildHandleCaches()
+      const hinges = this.game.physicsController?.getWasmFlipperHingeCount() ?? null
+      if (hinges !== null && hinges < 2) {
+        throw new Error(`Critical scene incomplete: ${hinges}/2 C++ flipper hinges`)
+      }
     })
     this.game.ready = true
     this.game.uiManager?.setStartButtonEnabled(true)
