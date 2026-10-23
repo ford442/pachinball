@@ -1,5 +1,52 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+
+const isBabylonLoaders = (id: string) => id.includes('node_modules/@babylonjs/loaders')
+
+/**
+ * Babylon 9 lazy-loads much of itself through `import()`: shaders, the glTF extensions, OpenPBR,
+ * Gaussian splatting, KHR_interactivity's FlowGraph. Two facts about the module graph keep that
+ * laziness in the build:
+ *
+ * - `isBoot`: on a chain of *static* imports from the entry. Only those `@babylonjs/core` modules go
+ *   in the `babylon-core` chunk; pinning every core module there would pull the lazy targets back
+ *   into the boot chunk.
+ * - `isAppReachable`: reachable from the entry by static or dynamic imports *without* passing through
+ *   `@babylonjs/loaders`. A lazy chunk that is not is only ever fetched by the glTF loader, which is
+ *   itself not precached, so it gets a `babylon-lazy-` name and the service worker skips it.
+ */
+function babylonChunkGraph() {
+  let boot = new Set<string>()
+  let app = new Set<string>()
+  const plugin: Plugin = {
+    name: 'babylon-chunk-graph',
+    apply: 'build',
+    buildEnd() {
+      const walk = (withDynamic: boolean, enter: (id: string) => boolean) => {
+        const seen = new Set<string>()
+        const stack = [...this.getModuleIds()].filter((id) => this.getModuleInfo(id)?.isEntry)
+        for (let id = stack.pop(); id !== undefined; id = stack.pop()) {
+          if (seen.has(id) || !enter(id)) continue
+          seen.add(id)
+          const info = this.getModuleInfo(id)
+          if (!info) continue
+          stack.push(...info.importedIds)
+          if (withDynamic) stack.push(...info.dynamicallyImportedIds)
+        }
+        return seen
+      }
+      boot = walk(false, () => true)
+      app = walk(true, (id) => !isBabylonLoaders(id))
+    },
+  }
+  return {
+    plugin,
+    isBoot: (id: string) => boot.has(id),
+    isAppReachable: (id: string) => app.has(id),
+  }
+}
+
+const babylonChunks = babylonChunkGraph()
 
 export default defineConfig({
   // Use relative paths so assets resolve correctly when deployed to a subdirectory
@@ -30,17 +77,27 @@ export default defineConfig({
           // Only the degrade / explicit-`rapier` path imports this, and only via
           // loadRapier()'s dynamic import (#412) — it is never in the entry graph.
           if (id.includes('@dimforge/rapier3d-compat')) return 'rapier'
-          if (id.includes('@babylonjs/loaders')) return 'babylon-loaders'
-          if (id.includes('node_modules/@babylonjs/core')) return 'babylon-core'
+          if (isBabylonLoaders(id)) return 'babylon-loaders'
+          if (id.includes('node_modules/@babylonjs/core')) {
+            return babylonChunks.isBoot(id) ? 'babylon-core' : undefined
+          }
           if (id.match(/leaderboard-system|level-select-screen|name-entry-dialog/)) {
             return 'ui-overlays'
           }
           return undefined
         },
+        chunkFileNames(chunk) {
+          const loaderOnly =
+            chunk.moduleIds.length > 0 && !chunk.moduleIds.some((id) => babylonChunks.isAppReachable(id))
+          return loaderOnly && chunk.name !== 'babylon-loaders'
+            ? 'assets/babylon-lazy-[name]-[hash].js'
+            : 'assets/[name]-[hash].js'
+        },
       },
     },
   },
   plugins: [
+    babylonChunks.plugin,
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: false,
@@ -99,6 +156,8 @@ export default defineConfig({
           '**/backbox/*.webm',
           // Classic-cabinet glTF loader — fetched on first classic preset use
           '**/babylon-loaders-*.js',
+          // Babylon code only the glTF loader imports (extensions, OpenPBR, Gaussian splatting, …)
+          '**/babylon-lazy-*.js',
           // Rapier (~2.15 MB): only the explicit `rapier` mode and the fail-closed
           // degrade (C++ bundle missing) load it; the C++ bundle is precached instead (#412)
           '**/rapier-*.js',

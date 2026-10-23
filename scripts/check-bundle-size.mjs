@@ -84,6 +84,7 @@ function measure() {
   const workboxIgnores = [
     /backbox[/\\].*\.(mp4|webm)$/,
     /babylon-loaders-.*\.js$/,
+    /babylon-lazy-.*\.js$/,
     /ui-overlays-.*\.js$/,
     /rapier-.*\.js$/,
     /reel\.png$/,
