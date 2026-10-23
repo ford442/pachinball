@@ -86,6 +86,12 @@ export default defineConfig({
       'Cross-Origin-Embedder-Policy': 'require-corp',
     },
   },
+  // Pre-bundle the dev dependencies the import scan misses. Otherwise a fresh dev server finds them
+  // on the first page load, re-optimizes and reloads the page; on a slow CI runner that reload can
+  // land after a test has already started the game, leaving it a new Game back in the menu.
+  optimizeDeps: {
+    include: ['@babylonjs/core/Cameras/targetCamera', 'workbox-window'],
+  },
   preview: {
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
