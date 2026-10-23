@@ -77,30 +77,46 @@ test.describe('Basic Gameplay Physics Smoke', () => {
     // frames (WasmOwner.driveFlippers), so `inputActions.handleFlipperLeft()` alone plays the sound
     // and never moves it (this check used to pass there only when the flipper was already moving).
     //
-    // Then wait, frame by frame, for the physics to move it. Bounded by wall time, not a frame count:
-    // a CI runner on software GL can take seconds per frame, and under `wasm-worker` the pose arrives
-    // with the worker's next snapshot. The samples (ms since the press, rotation delta) go into the
-    // failure message.
+    // First release it and let it settle, so the press starts from rest: if the flipper is already
+    // up (or on its way), a press cannot move it further. Then press and wait, frame by frame, for
+    // the physics to move it. Both waits are bounded by wall time, not a frame count: a CI runner on
+    // software GL can take seconds per frame, and under `wasm-worker` the pose arrives with the
+    // worker's next snapshot. The samples (ms since the press, rotation delta) go into the failure
+    // message.
     const flipperRun = await page.evaluate(() => {
       const g = (window as any).game;
       const keys = g?.inputManager?.getInputHandler?.()?.keyboardHost;
       if (!keys?.setFlipperLeftHeld || !keys?.queueInput) throw new Error('InputHandler keyboardHost hooks missing');
       const readY = () => g?.gameObjects?.getAllFlippers?.().get('left')?.body.rotation().y ?? 0;
-      const startY = readY();
-      const t0 = performance.now();
-      keys.setFlipperLeftHeld(true);
-      keys.queueInput('flipperLeft', true);
-      return new Promise<{ samples: Array<[number, number]> }>((resolve) => {
+      const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+      return (async () => {
+        keys.setFlipperLeftHeld(false);
+        keys.queueInput('flipperLeft', false);
+        const settle0 = performance.now();
+        let last = readY();
+        let still = 0;
+        while (still < 5 && performance.now() - settle0 < 10_000) {
+          await frame();
+          const y = readY();
+          still = Math.abs(y - last) < 1e-4 ? still + 1 : 0;
+          last = y;
+        }
+        const restY = readY();
+        const settleMs = Math.round(performance.now() - settle0);
+
+        const t0 = performance.now();
+        keys.setFlipperLeftHeld(true);
+        keys.queueInput('flipperLeft', true);
         const samples: Array<[number, number]> = [];
-        const tick = () => {
+        for (;;) {
+          await frame();
           const y = readY();
           const ms = Math.round(performance.now() - t0);
-          samples.push([ms, Number((y - startY).toFixed(4))]);
-          if (Math.abs(y - startY) > 0.05 || ms > 20_000) resolve({ samples });
-          else requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-      });
+          samples.push([ms, Number((y - restY).toFixed(4))]);
+          if (Math.abs(y - restY) > 0.05 || ms > 20_000) break;
+        }
+        return { samples, restY, settleMs };
+      })();
     });
 
     // Release flipper
@@ -111,9 +127,12 @@ test.describe('Basic Gameplay Physics Smoke', () => {
     });
 
     // Flipper should have rotated (Y axis is the rotation axis for the revolute joint). Measured from
-    // the press: `flipperBefore` is a separate round trip, and the flipper can move in between.
+    // the settled pose: `flipperBefore` is a separate round trip, and the flipper can move in between.
     const flipperDelta = Math.abs(flipperRun.samples[flipperRun.samples.length - 1]?.[1] ?? 0);
-    expect(flipperDelta, `flipper samples [ms, Δy]: ${JSON.stringify(flipperRun.samples)}`).toBeGreaterThan(0.05);
+    expect(
+      flipperDelta,
+      `rest y ${flipperRun.restY} after ${flipperRun.settleMs} ms; flipper samples [ms, Δy]: ${JSON.stringify(flipperRun.samples)}`,
+    ).toBeGreaterThan(0.05);
 
     // Visual hierarchy must stay intact: SceneOptimizer must NOT merge flipper
     // child meshes off their physics-driven root (that made flippers look frozen).

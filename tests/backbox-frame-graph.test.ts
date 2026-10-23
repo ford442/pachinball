@@ -363,13 +363,19 @@ describe('BackboxFrameGraph', () => {
     expect(graph.getInfo().nodes.at(-1)).toBe('backbox:output')
   })
 
-  it('a failed rebuild does not block asking for the same plan again', async () => {
+  it('a failed rebuild shows the layers on the scene camera and does not block asking again', async () => {
     const t = setup()
     const graph = await BackboxFrameGraph.create(t.options, plan())
     const fg = lastGraph()
     fg.failNext = true
     await expect(graph.rebuild(plan({ photosensitive: true }))).rejects.toThrow('build failed')
+    // The old graph is gone: the layers go back to the scene camera and the composite plane hides.
+    expect(t.meshes.lcd[0]!.layerMask).toBe(0x0fffffff)
+    expect(graph.plane.isEnabled()).toBe(false)
+    expect(t.onLayerMasksChanged).toHaveBeenCalledTimes(2) // adopt, release
     await graph.rebuild(plan({ photosensitive: true }))
+    expect(t.meshes.lcd[0]!.layerMask).toBe(BACKBOX_LAYER_MASK)
+    expect(graph.plane.isEnabled()).toBe(true)
     expect(graph.getInfo().nodes).not.toContain('backbox:crt')
     t.frame()
     expect(fg.executions.length).toBeGreaterThan(0)

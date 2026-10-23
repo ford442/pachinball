@@ -251,11 +251,8 @@ export class BackboxFrameGraph {
     this.ready = false
     if (this.observer) this.scene.onBeforeRenderObservable.remove(this.observer)
     this.observer = null
-    // Hand the layers back to the scene camera, so a failed or torn-down graph never hides them.
-    for (const mesh of this.adopted) {
-      if (!mesh.isDisposed() && mesh.layerMask === BACKBOX_LAYER_MASK) mesh.layerMask = DEFAULT_LAYER_MASK
-    }
-    this.adopted.clear()
+    // Hand the layers back to the scene camera, so a torn-down graph never hides them.
+    this.releaseLayerMeshes()
     this.frameGraph.dispose()
     this.plane.dispose()
     this.material.dispose()
@@ -284,9 +281,19 @@ export class BackboxFrameGraph {
     this.frameGraph.clear()
     this.layerTasks = []
     this.effectTasks = []
-    this.addTasks(plan)
-    await this.frameGraph.buildAsync()
-    await this.frameGraph.whenReadyAsync()
+    try {
+      this.addTasks(plan)
+      await this.frameGraph.buildAsync()
+      await this.frameGraph.whenReadyAsync()
+    } catch (err) {
+      // The previous graph is already cleared: show the layers through the scene camera again
+      // rather than a frozen composite, until a later build succeeds and adopts them back.
+      if (!this.disposed) {
+        this.plane.setEnabled(false)
+        if (this.releaseLayerMeshes()) this.options.onLayerMasksChanged?.()
+      }
+      throw err
+    }
     // Disposed while compiling. (A newer request waits its turn in the queue.)
     if (this.disposed) return
     this.plan = plan
@@ -400,6 +407,22 @@ export class BackboxFrameGraph {
       }
       this.adopted.add(mesh)
     }
+    return changed
+  }
+
+  /**
+   * Put every adopted mesh back on the scene camera's mask.
+   * @returns true when at least one mesh moved
+   */
+  private releaseLayerMeshes(): boolean {
+    let changed = false
+    for (const mesh of this.adopted) {
+      if (!mesh.isDisposed() && mesh.layerMask === BACKBOX_LAYER_MASK) {
+        mesh.layerMask = DEFAULT_LAYER_MASK
+        changed = true
+      }
+    }
+    this.adopted.clear()
     return changed
   }
 
