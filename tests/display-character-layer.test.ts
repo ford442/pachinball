@@ -217,6 +217,13 @@ describe('DisplaySystem character plane', () => {
     expect(lastTexture()?.url).toBe(IDLE_TAKE)
   })
 
+  it('requests the boot (IDLE) take when the backbox is built, before any state change', async () => {
+    const display = makeDisplay()
+    await vi.dynamicImportSettled()
+    expect(lastTexture()?.url).toBe(IDLE_TAKE)
+    expect(display.getCharacterTakeState()).toEqual({ url: IDLE_TAKE, active: false })
+  })
+
   it('suppresses the LCD walk-by only after the take loads', async () => {
     const display = makeDisplay()
     display.setDisplayState(DisplayState.IDLE)

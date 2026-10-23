@@ -216,6 +216,8 @@ export class DisplaySystem {
     this.imageLayer.createLayer(backboxRoot, this.config)
     this.backboxRoot = backboxRoot
     this.characterLayer?.createLayer(backboxRoot, this.config)
+    // setDisplayState skips the state already current, so the boot (IDLE / attract) take is requested here.
+    this.requestCharacterTake(getStateConfig(this.config, this.currentState).characterLayer ?? '', this.currentState)
     this.lcdOverlayLayer.createLayer(backboxRoot, this.config)
     this.lcdOverlayLayer.setTrackTheme(this.trackThemePrimary, this.trackThemeAccent)
 
