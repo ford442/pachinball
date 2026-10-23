@@ -7,6 +7,7 @@
  *   SHADER    — ambient cyber grid (depth atmosphere)
  *   REELS     — slot drums when visible
  *   MAIN      — primary video / image (Layer 2)
+ *   CHARACTER — Nexus character take, composited over MAIN (display-character.ts)
  *   LCD       — transparent UI overlay (Layer 3)
  */
 
@@ -16,6 +17,7 @@ export const DISPLAY_LAYER_Z = {
   REELS: -0.32,
   MAIN_VIDEO: 0.08,
   MAIN_IMAGE: 0.12,
+  CHARACTER: 0.24,
   LCD: 0.38,
 } as const
 
