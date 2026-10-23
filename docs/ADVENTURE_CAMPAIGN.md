@@ -5,10 +5,28 @@ This document is the canonical mental model for campaign progression.
 ## Source of Truth
 
 - **Campaign progression truth:** `AdventureTrackProgression` + `AdventureProgressionSupervisor` (`src/adventure/`)
-- **Legacy free-form progression:** `AdventureState` + `ADVENTURE_LEVELS` (level-select/reward flow; `@deprecated`)
+- **Legacy free-form progression:** `AdventureState` (persisted free-form progress + ball-trail/skin rewards; `@deprecated`). Its level-select flow and `ADVENTURE_LEVELS` are retired — the Levels button opens the campaign stage map.
 - **Free-map scenario overlay:** `dynamic-scenarios.ts` is debug-only. Gate with `?scenarios=1` (D/S keys). It shares `gameMode` with campaign portal fallback and is **mutually exclusive with campaign**. Do not fold `DYNAMIC_SCENARIOS` into `TrackManifest`.
 
 These systems are intentionally separated to avoid silent dual-state bugs.
+
+## Front Door
+
+The campaign is reachable without a keyboard:
+
+- **Start screen → Mode → Campaign.** Campaign is a *start mode*, not a Daily Cascade mode:
+  it plays the vanilla table and, once the game is PLAYING, enters the stage
+  `AdventureTrackProgression.getCurrentTrack()` names (`GameSlotAdventure.enterCampaignStage()`).
+  Play Again re-enters it.
+- **Stage map** (`src/adventure/ui/campaign-map.ts`, dynamically imported): start-screen
+  **Stage Map** button, the in-play **Campaign** button, or **L**. It renders
+  `CAMPAIGN_MAIN_PATH` as the A/B spine and every off-spine catalogue track on a branch hung
+  off the spine stage that unlocks it (`unlockedBy`; see `campaign-map-model.ts`), with
+  completion and best scores, plus the Nexus Archive reward panel. Clicking a reached stage
+  makes it the current track (persisted) and starts it — a new game from the menu, a stage
+  switch mid-game.
+- **H** is the in-game shortcut: it enters the current stage, or leaves the holo-deck.
+  `[` / `]` still cycle every registered track (dev).
 
 ## Mode Identity: EXTENDED_MAP vs STATIONARY_TABLE
 
@@ -51,6 +69,9 @@ Track builders read `currentTrackInfo.modeType` from `TRACK_CATALOG` and branch 
 Parallel branches:               │
   PACHINKO_SPIRE  (B) [from NEON_HELIX]
   NEON_STRONGHOLD (B) [from PACHINKO_HALL] ◄┘
+
+Post-finale chain [from FIREWALL_BREACH]:
+  TIDAL_NEXUS (A) → SOLAR_FLARE (A) → DIGITAL_ZEN_GARDEN (B)
 ```
 
 Main spine order is defined in `CAMPAIGN_MAIN_PATH` (`adventure-track-progression.ts`). `getNextTrackId()` walks that array first, then optional branch tracks.
@@ -109,7 +130,7 @@ See [`docs/TRACK_SCHEMA.md`](TRACK_SCHEMA.md). Campaign goals/rewards remain in
 
 - Wire campaign behavior through EventBus events:
   - `portal:open`, `portal:entered`, `track:goal-reached`, `track:timeout`, `track:completed`
-- Keep `AdventureState` changes isolated unless explicitly working on legacy level-select flows.
+- Keep `AdventureState` changes isolated; it only persists legacy free-form progress and rewards.
 - Canonical track load after portal entry: `LevelLoader.loadCampaignTrack()` (mode + LCD map + `switchToTrack`).
 - `AdventureProgressionSupervisor.getActiveModeType()` exposes the current track's `modeType` for HUD/UI branching.
 - If both systems are touched in a PR, state the reason explicitly in code comments or PR notes.

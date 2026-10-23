@@ -136,7 +136,8 @@ export function disposeGame(game: Game): void {
   resetSessionRng()
   resetDynamicWorld()
   game.dynamicWorld = null
-  game.levelSelectScreen = null
+  game.campaignMap?.dispose()
+  game.campaignMap = null
 
   resetMaterialLibrary()
   // CabinetBuilder is a singleton bound to the scene it was created with; dispose

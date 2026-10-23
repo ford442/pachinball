@@ -48,7 +48,7 @@ export interface SettingsUIHost {
   setScanlineIntensityMultiplier?(multiplier: number): void
   switchTableMap(mapName: string): void
   loadCabinetPreset(type: import('./game-cabinet').CabinetType): Promise<void> | void
-  toggleLevelSelect(): void
+  toggleCampaignMap(): Promise<void>
 }
 
 export class GameSettingsUI {
@@ -339,7 +339,7 @@ export class GameSettingsUI {
     this.updateMapSelectorUI()
     // These nodes are static (index.html), unlike the rebuilt map buttons above, so
     // bind them once here. Binding from buildMapSelectorUI stacked a listener per
-    // rebuild and made #levels-btn toggle the level screen twice per click (#441).
+    // rebuild and made #levels-btn toggle the stage map twice per click (#441).
     this.setupCabinetSelector()
     this.setupLevelsSelector()
 
@@ -439,7 +439,7 @@ export class GameSettingsUI {
     const levelsBtn = document.getElementById('levels-btn')
     if (!levelsBtn) return
     levelsBtn.addEventListener('click', () => {
-      this.host.toggleLevelSelect()
+      void this.host.toggleCampaignMap()
     }, { signal: this.host.signal })
   }
 

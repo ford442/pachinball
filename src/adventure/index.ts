@@ -89,7 +89,7 @@ export {
   getTransitionShakeIntensity,
   type ZoneConfig,
 } from './zone-registry'
-export { AdventureState, getAdventureState, resetAdventureState, ADVENTURE_LEVELS } from './adventure-state'
+export { AdventureState, getAdventureState, resetAdventureState } from './adventure-state'
 export { AdventureGoalSystem } from './adventure-goal-system'
 export { AdventureGoalTracker } from './adventure-goal-tracker'
 export { AdventureCinematicSystem } from './adventure-cinematic-system'

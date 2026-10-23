@@ -25,11 +25,6 @@ export interface AdventureGoal {
   target: number
 }
 
-export interface AdventureLevel {
-  name: string
-  goals: AdventureGoal[]
-}
-
 export interface ScoringBreakdownDisplayOptions {
   finalScore?: number
   bestScore?: number
