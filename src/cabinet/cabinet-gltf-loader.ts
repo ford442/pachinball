@@ -23,6 +23,29 @@ export interface CabinetGltfLoadResult {
 
 const DEFAULT_TIMEOUT_MS = 15_000
 
+let gltfLoaderRegistered: Promise<void> | null = null
+
+/**
+ * Register the glTF 2.0 SceneLoader plugin, and every built-in glTF extension as a lazy factory.
+ *
+ * Babylon 9's `@babylonjs/loaders/glTF` barrel statically imports all 40-odd extensions (Gaussian
+ * splatting, OpenPBR, KHR_interactivity's FlowGraph, audio emitters). `glTF/2.0/glTFLoader` is the
+ * 2.0 loader alone; `registerBuiltInGLTFExtensions()` registers each extension so its code is only
+ * fetched when a model lists it in `extensionsUsed`. None of our cabinet / insert GLBs list any today.
+ */
+function registerGltfLoader(): Promise<void> {
+  gltfLoaderRegistered ??= Promise.all([
+    import('@babylonjs/loaders/glTF/2.0/glTFLoader'),
+    import('@babylonjs/loaders/glTF/2.0/Extensions/dynamic'),
+  ]).then(([, { registerBuiltInGLTFExtensions }]) => {
+    registerBuiltInGLTFExtensions()
+  }).catch((err: unknown) => {
+    gltfLoaderRegistered = null // a failed chunk fetch can be retried by the next load
+    throw err
+  })
+  return gltfLoaderRegistered
+}
+
 /** Pick LOD URL from quality tier. LOW never requests high. */
 export function pickCabinetGltfUrl(
   gltf: CabinetGltfConfig,
@@ -78,7 +101,7 @@ export async function loadCabinetGltf(
     timeoutMs?: number
   } = {},
 ): Promise<AssetContainer> {
-  await import('@babylonjs/loaders/glTF')
+  await registerGltfLoader()
   const resolved = resolveAssetUrl(relativeUrl)
   if (!resolved) {
     throw new Error(`[CabinetGltf] Invalid URL: ${relativeUrl}`)

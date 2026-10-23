@@ -130,7 +130,9 @@ export class GameSystemsInitializer {
         this.game.effects.registerSceneLights(this.game.keyLight, this.game.rimLight, this.game.bounceLight)
       }
       const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
-      this.game.display = new DisplaySystem(scene, this.game.engine, displayConfig, this.game.qualityTier, this.game.accessibility)
+      this.game.display = new DisplaySystem(scene, this.game.engine, displayConfig, this.game.qualityTier, this.game.accessibility, {
+        noPostProcess: new URLSearchParams(window.location.search).has('nopp'),
+      })
       this.game.display.subscribeToEvents(this.game.eventBus)
       this.game.display.setSlotScoreProvider(() => this.game.score)
       this.game.display.setEffectsSystem(this.game.effects)
@@ -486,6 +488,7 @@ export class GameSystemsInitializer {
       this.game.staticSceneGate = install.gate
       this.game.ballManager?.setStaticSceneGate(install.gate)
       this.game.adventureMode?.setStaticSceneGate(install.gate)
+      this.game.display?.setStaticSceneGate(install.gate)
     } catch (error) {
       // An optimisation, not a dependency: without it nothing is frozen and the game runs as before.
       console.warn('[Game] Static-scene chunk unavailable; the scene stays unfrozen', error)

@@ -160,7 +160,7 @@ export class SpinnerBumperBuilder {
       color: colorHex,
     }
 
-    bindings.push({ mesh: spinnerRoot as unknown as Mesh, rigidBody: body })
+    bindings.push({ mesh: spinnerRoot, rigidBody: body })
 
     this.meshes.push(spinnerMesh)
     if (rimMesh) this.meshes.push(rimMesh)

@@ -28,7 +28,7 @@ npx vitest run tests/ball-manager.test.ts
 
 ## Architecture
 
-**Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 7. Physics runs on an in-house C++ engine compiled to WASM (`native/` + `src/wasm/`) by default — in a Dedicated Worker (`wasm-worker`) when the page is cross-origin isolated, else in-process (`wasm-owner`); Rapier 3D WASM is the lazily loaded dev/degrade path. Runtime mode is selected via `src/config.ts` (`rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker`). Builders author physics through `PhysicsApi` / `PhysicsWorldSink` / `PhysicsBody` (`src/core/physics-api.ts`), never Rapier values — see `docs/wasm-physics-engine.md`.
+**Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 9. Physics runs on an in-house C++ engine compiled to WASM (`native/` + `src/wasm/`) by default — in a Dedicated Worker (`wasm-worker`) when the page is cross-origin isolated, else in-process (`wasm-owner`); Rapier 3D WASM is the lazily loaded dev/degrade path. Runtime mode is selected via `src/config.ts` (`rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker`). Builders author physics through `PhysicsApi` / `PhysicsWorldSink` / `PhysicsBody` (`src/core/physics-api.ts`), never Rapier values — see `docs/wasm-physics-engine.md`.
 
 ### Startup flow
 
@@ -46,7 +46,7 @@ npx vitest run tests/ball-manager.test.ts
 | `src/game/physics/` | Runtime physics engine selection and collision dispatch (`rapier`, `wasm-mirror`, `wasm-owner`). |
 | `src/objects/` | Playfield geometry: bumpers, flippers (joint-based rotation), walls, rails, pachinko pins, decoration. All live under `object-core.ts` as the top-level orchestrator. |
 | `src/cabinet/` | Four cabinet presets (classic, neo, vertical, wide) built by `cabinet-builder.ts`. Each defines its own dimensions and styling. |
-| `src/display/` | Multi-layer backbox display — reels rendered with WGSL shaders (`display-shader.ts`) or a canvas fallback; `display-core.ts` drives state transitions (IDLE → REACH → FEVER). |
+| `src/display/` | Multi-layer backbox display, composited by one Frame Graph (`backbox-frame-graph.ts`, nodes chosen by `backbox-graph-plan.ts`) onto one plane; CRT and jackpot are passes on that composite, never on the camera. `display-core.ts` drives state transitions (IDLE → REACH → FEVER). See `docs/FRAME_GRAPH.md`. |
 | `src/shaders/` | Standalone WGSL/GLSL effect shaders: CRT scanlines + curvature, LCD table, jackpot overlay, number-scroll animation. |
 | `src/materials/` | PBR material library split by domain (ball, metallic, interactive, structural). `material-core.ts` is the entry point. |
 | `src/audio/` | Single `AudioEngine` (one AudioContext) + pachinko worklet + sample bank. EventBus remains the trigger API. |

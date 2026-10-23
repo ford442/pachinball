@@ -156,6 +156,11 @@ export class DisplayCharacterLayer {
     return this.material?.alpha ?? 0
   }
 
+  /** The layer's meshes, for its task in the backbox Frame Graph. */
+  getMeshes(): Mesh[] {
+    return this.mesh ? [this.mesh] : []
+  }
+
   dispose(): void {
     this.timers.dispose()
     this.releaseTake()

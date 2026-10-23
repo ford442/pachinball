@@ -24,6 +24,12 @@ export interface AccessibilityConfig {
   hapticsEnabled: boolean
   /** Haptic intensity multiplier (0.0 to 2.0) */
   hapticIntensity: number
+  /**
+   * The player turned photosensitive mode on. Reduced motion alone also caps
+   * `flashFrequencyMax` at 1, so this is the only way to tell the two apart
+   * (the backbox graph leaves the CRT and jackpot passes out only for this one).
+   */
+  photosensitiveMode?: boolean
 }
 
 export interface AccessibilityOverrides {
@@ -70,12 +76,14 @@ export function detectAccessibility(overrides?: AccessibilityOverrides): Accessi
     return {
       ...REDUCED_MOTION_CONFIG,
       flashFrequencyMax: photosensitiveMode ? 1 : REDUCED_MOTION_CONFIG.flashFrequencyMax,
+      photosensitiveMode,
     }
   }
 
   if (photosensitiveMode) {
     return {
       ...DEFAULT_ACCESSIBILITY,
+      photosensitiveMode: true,
       flashFrequencyMax: 1,
       effectIntensity: 0.45,
       maxCameraShakeIntensity: 0.0,

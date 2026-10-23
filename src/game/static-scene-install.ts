@@ -22,7 +22,7 @@ import {
   type ActiveMeshesScene,
 } from './frozen-active-meshes'
 import { FrozenMaterialSet, type FreezableMaterial } from './frozen-material-set'
-import { SkyboxAutoClear, type AutoClearScene, type SkyboxLike } from './skybox-auto-clear'
+import { SkyboxAutoClear } from './skybox-auto-clear'
 
 export interface StaticSceneInstallInputs {
   scene: Scene
@@ -84,8 +84,8 @@ export function installStaticScene(inputs: StaticSceneInstallInputs): StaticScen
   const skybox = scene.getMeshByName('skybox')
   const skyboxAutoClear = skybox
     ? new SkyboxAutoClear(
-        scene as unknown as AutoClearScene,
-        skybox as unknown as SkyboxLike,
+        scene,
+        skybox,
         inputs.skyboxSize,
         isMobileUserAgent(inputs.userAgent),
       )

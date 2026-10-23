@@ -151,6 +151,7 @@ export class GameSettingsUI {
     const scanlineEnabled = scanlineEnabledToggle?.checked ?? true
 
     const currentSettings = SettingsManager.load()
+    const audioSource: AudioSourceMode = audioSourceSelect?.value === 'synth' ? 'synth' : 'samples'
     const newSettings = {
       reducedMotion: reducedMotionCheckbox?.checked ?? false,
       photosensitiveMode: photosensitiveCheckbox?.checked ?? false,
@@ -168,7 +169,7 @@ export class GameSettingsUI {
       musicVolume: parseFloat(musicVolumeSlider?.value ?? '0.6'),
       sfxVolume: parseFloat(sfxVolumeSlider?.value ?? '0.9'),
       muted: muteCheckbox?.checked ?? false,
-      audioSource: (audioSourceSelect?.value === 'synth' ? 'synth' : 'samples') as AudioSourceMode,
+      audioSource,
       reducedAudio: currentSettings.reducedAudio,
     }
 

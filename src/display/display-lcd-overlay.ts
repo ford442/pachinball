@@ -207,9 +207,11 @@ export class DisplayLcdOverlayLayer {
     const canvas = ctx.canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
+    // Default upload (invertY): upright on the plane, like every other layer's canvas. The backbox
+    // graph shows all layers through one camera, so they have to agree (this was upside down).
     if (this.drainMode) {
       this.drawDrainOverlay(ctx, canvas.width, canvas.height)
-      this.texture.update(false)
+      this.texture.update()
       return
     }
 
@@ -251,7 +253,7 @@ export class DisplayLcdOverlayLayer {
     // Reward unlock overlay
     this.displayOverlay?.render(ctx, canvas.width, canvas.height, this.currentState)
 
-    this.texture.update(false)
+    this.texture.update()
   }
 
   private drawStateVignette(ctx: CanvasRenderingContext2D, w: number, h: number): void {
@@ -532,6 +534,11 @@ export class DisplayLcdOverlayLayer {
 
   setVisible(visible: boolean): void {
     if (this.mesh) this.mesh.isVisible = visible
+  }
+
+  /** The layer's meshes, for its task in the backbox Frame Graph. */
+  getMeshes(): Mesh[] {
+    return this.mesh ? [this.mesh] : []
   }
 
   dispose(): void {

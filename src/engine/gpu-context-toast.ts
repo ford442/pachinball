@@ -65,7 +65,7 @@ export class GpuContextToast {
     this.doc = deps.doc ?? (typeof document !== 'undefined' ? document : undefined)
     this.isReducedMotion = deps.isReducedMotion ?? defaultIsReducedMotion
     this.setTimeoutFn =
-      deps.setTimeoutFn ?? ((handler, ms) => setTimeout(handler, ms) as unknown)
+      deps.setTimeoutFn ?? ((handler, ms) => setTimeout(handler, ms))
     this.clearTimeoutFn =
       deps.clearTimeoutFn ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>))
   }
