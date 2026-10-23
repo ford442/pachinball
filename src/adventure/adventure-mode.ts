@@ -265,7 +265,7 @@ export class AdventureMode extends AdventurePortalMixin {
     const presetKey =
       dataDef?.cameraPresetId ??
       getTrackManifest(trackType)?.cameraPresetId ??
-      (trackType as string)
+      trackType
     this.currentCameraPreset = CAMERA_PRESETS[presetKey] || CAMERA_PRESETS.DEFAULT
     const preset = this.currentCameraPreset
 
@@ -456,7 +456,7 @@ export class AdventureMode extends AdventurePortalMixin {
     // Reset camera transition timer for cinematic entry
     this.cameraTransitionTime = 0
 
-    const presetKey = dataDef?.cameraPresetId ?? (newZone as string)
+    const presetKey = dataDef?.cameraPresetId ?? newZone
     this.currentCameraPreset = CAMERA_PRESETS[presetKey] || CAMERA_PRESETS.DEFAULT
 
     // Tear down old track geometry and physics

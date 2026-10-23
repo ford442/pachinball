@@ -42,7 +42,7 @@ function buildRegistry(): MapConfig[] {
       id: trackType,
       displayName: catalogEntry?.name ?? formatTrackId(trackType),
       layoutType,
-      adventureTrackType: trackType as AdventureTrackType,
+      adventureTrackType: trackType,
       difficulty: catalogEntry?.difficulty,
       theme: catalogEntry?.theme,
     })

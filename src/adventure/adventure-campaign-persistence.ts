@@ -57,7 +57,7 @@ export function migrateCampaignStorage(raw: unknown): CampaignPersistencePayload
 
   const progression = sanitizeProgressionState(
     (record.progression as Partial<SerializableProgressionState> | undefined) ??
-      (version === 1 ? (record as Partial<SerializableProgressionState>) : undefined),
+      (version === 1 ? record : undefined),
   )
 
   const unlockedRewardIds = Array.isArray(record.unlockedRewardIds)

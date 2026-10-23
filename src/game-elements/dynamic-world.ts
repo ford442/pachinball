@@ -241,7 +241,7 @@ export class DynamicWorld {
       case 'collectible':
         return this.createCollectible(mechanic.position)
       case 'portal':
-        return this.createPortal(mechanic.position, mechanic.properties as PortalMechanicProperties | undefined)
+        return this.createPortal(mechanic.position, mechanic.properties)
       default:
         return null
     }
