@@ -73,20 +73,22 @@ test.describe('Basic Gameplay Physics Smoke', () => {
 
     // Direct-action smoke: intentionally bypasses InputHandler. Real keyboard
     // coverage lives in keyboard-input.spec.ts.
-    // Trigger flipper via direct API call and wait for physics frames
-    // using rAF so the render loop (which drives physics) has a chance to step.
+    // Trigger flipper via direct API call and wait, frame by frame, for the physics to move it.
+    // Bounded by frames, not a fixed three: under `wasm-worker` the pose arrives in the worker's
+    // next snapshot, which on a slow software-GL runner can land a frame or two later.
     const flipperAfter = await page.evaluate(() => {
       const g = (window as any).game;
+      const readY = () => g?.gameObjects?.getAllFlippers?.().get('left')?.body.rotation().y ?? 0;
+      const startY = readY();
       g?.inputActions?.handleFlipperLeft?.(true);
       return new Promise<{ bodyY: number }>((resolve) => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              const left = g?.gameObjects?.getAllFlippers?.().get('left');
-              resolve({ bodyY: left ? left.body.rotation().y : 0 });
-            });
-          });
-        });
+        let frames = 0;
+        const tick = () => {
+          const y = readY();
+          if (Math.abs(y - startY) > 0.05 || ++frames >= 30) resolve({ bodyY: y });
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
       });
     });
 
