@@ -2,6 +2,13 @@ import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 const isBabylonLoaders = (id: string) => id.includes('node_modules/@babylonjs/loaders')
+/**
+ * Babylon's own audio engines. The game never runs them: the engine is created with
+ * `audioEngine: false` (src/engine/engine-options.ts) and src/audio owns the one AudioContext. They
+ * are still statically imported by the engine classes, so the chunks they `import()` must not count
+ * as app-reachable.
+ */
+const isBabylonAudio = (id: string) => /node_modules\/@babylonjs\/core\/Audio(V2)?\//.test(id)
 
 /**
  * Babylon 9 lazy-loads much of itself through `import()`: shaders, the glTF extensions, OpenPBR,
@@ -12,37 +19,53 @@ const isBabylonLoaders = (id: string) => id.includes('node_modules/@babylonjs/lo
  *   in the `babylon-core` chunk; pinning every core module there would pull the lazy targets back
  *   into the boot chunk.
  * - `isAppReachable`: reachable from the entry by static or dynamic imports *without* passing through
- *   `@babylonjs/loaders`. A lazy chunk that is not is only ever fetched by the glTF loader, which is
+ *   `@babylonjs/loaders` (or a dynamic import made by Babylon's unused audio engines). A lazy chunk that is not is only ever fetched by the glTF loader, which is
  *   itself not precached, so it gets a `babylon-lazy-` name and the service worker skips it.
+ * - `isLoaderCore`: a `@babylonjs/loaders` module the app imports, or one those import statically
+ *   (the glTF 2.0 loader and its extension registry). Only these go in the `babylon-loaders` chunk;
+ *   the extensions the registry `import()`s on demand get chunks of their own.
  */
 function babylonChunkGraph() {
   let boot = new Set<string>()
   let app = new Set<string>()
+  let loaderCore = new Set<string>()
   const plugin: Plugin = {
     name: 'babylon-chunk-graph',
     apply: 'build',
     buildEnd() {
-      const walk = (withDynamic: boolean, enter: (id: string) => boolean) => {
+      const ids = [...this.getModuleIds()]
+      const walk = (
+        withDynamic: boolean,
+        enter: (id: string) => boolean,
+        from?: string[],
+        followDynamicFrom: (id: string) => boolean = () => true,
+      ) => {
         const seen = new Set<string>()
-        const stack = [...this.getModuleIds()].filter((id) => this.getModuleInfo(id)?.isEntry)
+        const stack = from ?? ids.filter((id) => this.getModuleInfo(id)?.isEntry)
         for (let id = stack.pop(); id !== undefined; id = stack.pop()) {
           if (seen.has(id) || !enter(id)) continue
           seen.add(id)
           const info = this.getModuleInfo(id)
           if (!info) continue
           stack.push(...info.importedIds)
-          if (withDynamic) stack.push(...info.dynamicallyImportedIds)
+          if (withDynamic && followDynamicFrom(id)) stack.push(...info.dynamicallyImportedIds)
         }
         return seen
       }
       boot = walk(false, () => true)
-      app = walk(true, (id) => !isBabylonLoaders(id))
+      app = walk(true, (id) => !isBabylonLoaders(id), undefined, (id) => !isBabylonAudio(id))
+      const loaderRoots = ids.filter((id) => {
+        const info = isBabylonLoaders(id) ? this.getModuleInfo(id) : null
+        return !!info && [...info.importers, ...info.dynamicImporters].some((by) => !isBabylonLoaders(by))
+      })
+      loaderCore = walk(false, isBabylonLoaders, loaderRoots)
     },
   }
   return {
     plugin,
     isBoot: (id: string) => boot.has(id),
     isAppReachable: (id: string) => app.has(id),
+    isLoaderCore: (id: string) => loaderCore.has(id),
   }
 }
 
@@ -77,7 +100,7 @@ export default defineConfig({
           // Only the degrade / explicit-`rapier` path imports this, and only via
           // loadRapier()'s dynamic import (#412) — it is never in the entry graph.
           if (id.includes('@dimforge/rapier3d-compat')) return 'rapier'
-          if (isBabylonLoaders(id)) return 'babylon-loaders'
+          if (isBabylonLoaders(id)) return babylonChunks.isLoaderCore(id) ? 'babylon-loaders' : undefined
           if (id.includes('node_modules/@babylonjs/core')) {
             return babylonChunks.isBoot(id) ? 'babylon-core' : undefined
           }

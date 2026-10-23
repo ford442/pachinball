@@ -60,8 +60,20 @@ const hoisted = vi.hoisted(() => {
     clear() {
       this.tasks = []
     }
+    active = 0
+    maxActive = 0
+    failNext = false
     async buildAsync() {
       this.builds++
+      this.active++
+      this.maxActive = Math.max(this.maxActive, this.active)
+      // Babylon's buildAsync awaits before it records the tasks: give an overlapping build room to interleave.
+      await new Promise((r) => setTimeout(r, 0))
+      this.active--
+      if (this.failNext) {
+        this.failNext = false
+        throw new Error('build failed')
+      }
     }
     async whenReadyAsync() {}
     execute() {
@@ -317,5 +329,32 @@ describe('BackboxFrameGraph', () => {
     await Promise.all([first, second])
     expect(graph.getInfo().nodes).toContain('backbox:crt')
     expect(graph.getInfo().effects).toEqual(['crt', 'jackpot'])
+  })
+
+  it('never runs two builds on the one FrameGraph at once', async () => {
+    const t = setup()
+    const graph = await BackboxFrameGraph.create(t.options, plan())
+    const fg = lastGraph()
+    await Promise.all([
+      graph.rebuild(plan({ photosensitive: true })),
+      graph.rebuild(plan({ reducedMotion: true })),
+      graph.rebuild(plan({ noPostProcess: true })),
+    ])
+    expect(fg.maxActive).toBe(1)
+    // All three requests land before the queue's turn: the two superseded ones are skipped, not built.
+    expect(fg.builds).toBe(2) // create, then noPostProcess
+    expect(graph.getInfo().nodes.at(-1)).toBe('backbox:output')
+  })
+
+  it('a failed rebuild does not block asking for the same plan again', async () => {
+    const t = setup()
+    const graph = await BackboxFrameGraph.create(t.options, plan())
+    const fg = lastGraph()
+    fg.failNext = true
+    await expect(graph.rebuild(plan({ photosensitive: true }))).rejects.toThrow('build failed')
+    await graph.rebuild(plan({ photosensitive: true }))
+    expect(graph.getInfo().nodes).not.toContain('backbox:crt')
+    t.frame()
+    expect(fg.executions.length).toBeGreaterThan(0)
   })
 })

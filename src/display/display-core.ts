@@ -260,7 +260,11 @@ export class DisplaySystem {
     this.shaderLayer.setJackpotStill(plan.effects.includes('jackpotStill'))
     const graph = this.backboxGraph
     if (!graph) return
-    graph.rebuild(plan).catch((err: unknown) => {
+    graph.rebuild(plan).then(() => {
+      if (this.backboxGraph !== graph) return
+      this.backboxGraphStatus = 'built'
+      this.backboxGraphError = null
+    }).catch((err: unknown) => {
       this.backboxGraphStatus = 'failed'
       this.backboxGraphError = err instanceof Error ? err.message : String(err)
       console.warn('[Display] Backbox graph rebuild failed:', err)

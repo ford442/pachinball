@@ -127,12 +127,13 @@ export class BackboxFrameGraph {
   private plan: BackboxGraphPlan | null = null
   /** The plan most recently asked for; ahead of `plan` while a rebuild compiles. */
   private requested: BackboxGraphPlan | null = null
+  /** Builds run one after another (see `enqueueBuild`). */
+  private buildQueue: Promise<void> = Promise.resolve()
   private layerTasks: LayerTask[] = []
   private effectTasks: EffectTask[] = []
   private ready = false
   private disposed = false
   private executedFrames = 0
-  private buildGeneration = 0
   private observer: Observer<Scene> | null = null
   private readonly adopted = new Set<AbstractMesh>()
 
@@ -183,7 +184,8 @@ export class BackboxFrameGraph {
   static async create(options: BackboxFrameGraphOptions, plan: BackboxGraphPlan): Promise<BackboxFrameGraph> {
     const graph = new BackboxFrameGraph(options, plan)
     try {
-      await graph.build(plan)
+      graph.requested = plan
+      await graph.enqueueBuild(plan)
     } catch (err) {
       graph.dispose()
       throw err
@@ -197,10 +199,32 @@ export class BackboxFrameGraph {
     // Compare with the latest request, not the last finished build: toggling a setting off and on
     // again while the first rebuild compiles must still end on the latest plan.
     if (this.requested && sameBackboxGraph(this.requested, plan)) return
-    if (this.requested && (plan.width !== this.requested.width || plan.height !== this.requested.height)) {
+    const sized = this.requested ?? this.plan
+    if (sized && (plan.width !== sized.width || plan.height !== sized.height)) {
       throw new Error('[BackboxFrameGraph] The composite size is fixed for the graph lifetime')
     }
-    await this.build(plan)
+    this.requested = plan
+    await this.enqueueBuild(plan)
+  }
+
+  /**
+   * Builds run one at a time: each clears and refills the one FrameGraph, and `buildAsync()` awaits
+   * before it records the tasks, so two in flight would record each other's task lists. A queued
+   * build that is no longer the latest request when its turn comes is skipped. A failed build clears
+   * `requested`, so asking for any plan again (the same one included) builds it.
+   */
+  private enqueueBuild(plan: BackboxGraphPlan): Promise<void> {
+    const run = this.buildQueue.then(async () => {
+      if (this.disposed || this.requested !== plan) return
+      try {
+        await this.build(plan)
+      } catch (err) {
+        if (this.requested === plan) this.requested = null
+        throw err
+      }
+    })
+    this.buildQueue = run.catch(() => undefined)
+    return run
   }
 
   getInfo(): BackboxGraphInfo {
@@ -252,8 +276,6 @@ export class BackboxFrameGraph {
   }
 
   private async build(plan: BackboxGraphPlan): Promise<void> {
-    const generation = ++this.buildGeneration
-    this.requested = plan
     this.ready = false
     this.frameGraph.clear()
     this.layerTasks = []
@@ -261,8 +283,8 @@ export class BackboxFrameGraph {
     this.addTasks(plan)
     await this.frameGraph.buildAsync()
     await this.frameGraph.whenReadyAsync()
-    // A dispose or a newer rebuild landed while this one was compiling.
-    if (this.disposed || generation !== this.buildGeneration) return
+    // Disposed while compiling. (A newer request waits its turn in the queue.)
+    if (this.disposed) return
     this.plan = plan
     this.adoptLayerMeshes()
     this.plane.setEnabled(true)
