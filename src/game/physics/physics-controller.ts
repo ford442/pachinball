@@ -517,7 +517,6 @@ export class GamePhysicsController {
     this.host.effects?.updateSlotLighting()
     this.host.mapManager?.update(dt)
     this.host.zoneTriggerSystem?.update(currentBallBodies)
-    this.host.adventureState.updateGoal('survive-time', dt)
 
     {
       const ballBody = this.host.ballManager?.getBallBody()

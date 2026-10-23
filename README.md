@@ -64,6 +64,8 @@ lines and a stale emcc dump silently omits newer sources.
 
 The recommended progression path is the alternating A/B campaign system (`EXTENDED_MAP` <-> `STATIONARY_TABLE`) driven by `AdventureTrackProgression` + `AdventureProgressionSupervisor`. See `docs/ADVENTURE_CAMPAIGN.md`.
 
+To play it, pick **Campaign** in the start screen's Mode select, or open the **Stage Map** (start screen, the in-play **Campaign** button, or **L**) and click a reached stage. **H** enters the current stage during a game.
+
 ## Renderer: WebGPU vs WebGL2
 
 The game runs WebGPU-first with an automatic WebGL fallback, but you can force WebGL2 — handy for visual debugging, Playwright, and CI where WebGPU output isn't easily inspectable.

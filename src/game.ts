@@ -91,12 +91,15 @@ export class Game
       const { signal } = this
       document.getElementById('start-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() }, { signal })
       document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() }, { signal })
+      document.getElementById('campaign-map-btn')?.addEventListener('click', () => { void this.toggleCampaignMap() }, { signal })
       this.uiManager?.setStartButtonEnabled(false)
       const { bindDailyCascadeUI } = await import('./game/daily-cascade-ui')
       bindDailyCascadeUI({
         signal,
         getCampaignStageName: () =>
           this.adventureTrackProgression?.getCurrentTrackInfo()?.name ?? 'Neon Helix',
+        isCampaignSelected: () => this.campaignStartSelected,
+        setCampaignSelected: (selected) => { this.campaignStartSelected = selected },
       })
 
       try {
@@ -236,7 +239,7 @@ export class Game
         onMapCycle: () => this.mapManager?.cycleTableMap(),
         onCabinetCycle: () => { void this.cabinetManager?.cycleCabinetPreset() },
         onCameraToggle: () => { this.isCameraFollowMode = !this.isCameraFollowMode },
-        onLevelSelectToggle: () => this.toggleLevelSelect(),
+        onLevelSelectToggle: () => { void this.toggleCampaignMap() },
         onLeaderboardToggle: () => {
           void this.ensureOverlaySystems().then(() => {
             if (!this.signal.aborted) this.leaderboardSystem.toggle()

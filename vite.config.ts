@@ -115,7 +115,7 @@ export default defineConfig({
           if (id.includes('node_modules/@babylonjs/core')) {
             return babylonChunks.isBoot(id) ? 'babylon-core' : undefined
           }
-          if (id.match(/leaderboard-system|level-select-screen|name-entry-dialog/)) {
+          if (id.match(/leaderboard-system|campaign-map|name-entry-dialog/)) {
             return 'ui-overlays'
           }
           return undefined
@@ -195,7 +195,7 @@ export default defineConfig({
           // Rapier (~2.15 MB): only the explicit `rapier` mode and the fail-closed
           // degrade (C++ bundle missing) load it; the C++ bundle is precached instead (#412)
           '**/rapier-*.js',
-          // Leaderboard / name-entry / level-select overlays
+          // Leaderboard / name-entry / campaign stage-map overlays
           '**/ui-overlays-*.js',
           // Per-track adventure builders (dynamic import)
           '**/neon-helix-*.js',

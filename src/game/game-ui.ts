@@ -1,7 +1,7 @@
 import type { Scene } from '@babylonjs/core/scene'
 import { createTimerScope, type TimerScope } from '../core/timers'
 import type { ScoringBreakdownSnapshot } from '../game-elements/scoring-breakdown'
-import { hideAdventureHUD, updateAdventureHUD, updateCampaignHUD } from './game-ui-adventure-hud'
+import { hideAdventureHUD, updateCampaignHUD } from './game-ui-adventure-hud'
 import {
   bindHUDElements,
   ensurePauseButton,
@@ -29,7 +29,6 @@ import {
 } from './game-ui-popups'
 import { hidePauseMenu, showPauseMenu } from './game-ui-settings'
 import type {
-  AdventureLevel,
   HUDData,
   PauseMenuHandlers,
   PauseMenuSettings,
@@ -41,7 +40,6 @@ export type {
   HUDData,
   GoldBallCounts,
   AdventureGoal,
-  AdventureLevel,
   ScoringBreakdownDisplayOptions,
   PauseMenuSettings,
   PauseMenuHandlers,
@@ -115,7 +113,6 @@ export class GameUIManager {
   updateGoldBallDisplay(goldPlated: number, solidGold: number): void {
     updateGoldBallDisplay(this.state, goldPlated, solidGold)
   }
-  updateAdventureHUD(level: AdventureLevel | null, completionPercent: number): void { updateAdventureHUD(level, completionPercent) }
   updateCampaignHUD(state: {
     trackName: string
     modeLabel: string

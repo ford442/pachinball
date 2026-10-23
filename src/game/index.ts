@@ -25,7 +25,6 @@ export {
   type HUDData,
   type GoldBallCounts,
   type AdventureGoal,
-  type AdventureLevel,
   type ScoringBreakdownDisplayOptions,
   type PauseMenuSettings,
   type PauseMenuHandlers,

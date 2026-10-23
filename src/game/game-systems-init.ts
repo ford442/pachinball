@@ -172,18 +172,6 @@ export class GameSystemsInitializer {
       this.game.dynamicWorld = getDynamicWorld(scene, this.game.tableCam!, this.game.display, this.game.soundSystem)
       this.game.ballStackVisual = new BallStackVisual(scene)
 
-      this.game.adventureState.setDisplay(this.game.display)
-      this.game.adventureState.onLevelCompleteCallback((level) => {
-        console.log(`[Game] Level complete: ${level.name}`)
-        if (level.rewards.unlockMap) {
-          this.game.timers.setTimeout(() => { this.game.mapCabinet?.switchTableMap(level.rewards.unlockMap!) }, GAME_TUNING.timing.storyVideoWaitMs)
-        }
-      })
-      this.game.adventureState.onGoalUpdateCallback((goals) => {
-        const goalText = goals.map(g => `${g.description}: ${g.current}/${g.target}`).join('\n')
-        this.game.display?.setStoryText(goalText)
-      })
-
       this.game.slotAdventure?.setupSlotMachineCallbacks()
       this.game.checkpointDebug.registerToggleHandler('scene_cosmetic', (enabled) => {
         if (!enabled || this.game.cosmeticSceneBuilt) return
