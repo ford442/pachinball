@@ -78,7 +78,7 @@ the `core` default — post-process degrades in
 the deterministic way to reproduce the degraded profile in CI.
 
 We construct `new WebGPUEngine(...)` and `await engine.initAsync()` rather than calling
-`WebGPUEngine.CreateAsync()`. In `@babylonjs/core` 7.54.3 `CreateAsync` builds its promise with no
+`WebGPUEngine.CreateAsync()`. In `@babylonjs/core` 7.54.3, and still in 9.30.0, `CreateAsync` builds its promise with no
 reject path, so a failed init never settles — the chain above would hang, and the half-built engine
 would never be disposed.
 
@@ -360,7 +360,7 @@ Use `?renderer=webgl2` for automation-friendly WebGL2 canvas capture.
 - **Rapier** stays `@dimforge/rapier3d-compat@^0.15.0`. 0.18/0.19 add snapshot APIs that replay (#341 leftovers) will want — bump in a dedicated PR; do not mix with bootstrap hygiene.
 - **#361** Worker + SharedArrayBuffer still needs COOP/COEP. Glue ENVIRONMENT is already `web,worker,node`.
 - **Ship degrade telemetry to a sink.** `window.bootstrapGpuDegrades` is the buffer; nothing drains it yet. Wire it to real analytics once one exists — the ring buffer is deliberately the only consumer today. Once it has run on the live demo for a week, revisit **with data**: if the compatibility-fallback and tier-downgrade rates are negligible, close this line of work; if one adapter family (Safari/Metal is the likeliest) degrades heavily, *that* is the justification for a targeted, adapter-conditional workaround — scoped to that adapter, never the default path.
-- **Babylon 8/9.** `@babylonjs/core` and `@babylonjs/loaders` are both `^7.54.3` and already in step; there is nothing to "align". A major bump is a separate migration (WGSL shader loading changes, audio-engine rewrite) and must not ride along with bootstrap hygiene.
+- **Babylon 9.** Done in #461: `@babylonjs/core` and `@babylonjs/loaders` are both `^9.30.0`, bumped together (see [`FRAME_GRAPH.md`](FRAME_GRAPH.md)). The engine options above are unchanged by the bump.
 - **GPU-time HUD.** If one is added, check `adapter.features.has('timestamp-query')` in that pass only. Do **not** add it to `deviceDescriptor.requiredFeatures`; see [Optional WebGPU features](#optional-webgpu-features).
 
 ---
