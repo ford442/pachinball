@@ -470,6 +470,12 @@ export interface WasmPhysicsWorldInstance {
   /** FNV-1a 64 of the static table, 16 hex chars — equal iff snapshots are interchangeable. */
   getStaticContentHash?(): string
 
+  /**
+   * FNV-1a 64 of the stepped world (PhysicsWorld::getStateHash), 16 hex chars:
+   * equal hashes step identically. Optional: bundles before #459 lack it.
+   */
+  getStateHash?(): string
+
   /** Contact flushes so far (restored with the snapshot). */
   getContactGeneration?(): number
 

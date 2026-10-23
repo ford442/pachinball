@@ -114,6 +114,10 @@ public:
   void u32(uint32_t v);
   void i32(int32_t v) { u32(static_cast<uint32_t>(v)); }
   void f32(float v);
+  void u64(uint64_t v) {
+    u32(static_cast<uint32_t>(v & 0xFFFFFFFFu));
+    u32(static_cast<uint32_t>(v >> 32));
+  }
   uint64_t value() const { return h_; }
 
 private:

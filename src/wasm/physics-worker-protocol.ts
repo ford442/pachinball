@@ -90,6 +90,8 @@ export type PhysicsWorkerCommand =
   | { type: 'serializeSnapshot'; requestId: number }
   /** `bytes` is transferred. */
   | { type: 'restoreSnapshot'; requestId: number; bytes: Uint8Array }
+  /** State-hash request (#459): answered with a `snapshot-reply` carrying `stateHash`, no blob. */
+  | { type: 'getStateHash'; requestId: number }
 
 export type PhysicsWorkerToWorker =
   | { type: 'init'; bundleUrl: string }
@@ -123,7 +125,7 @@ export type PhysicsWorkerSharedAttach = {
 }
 
 /**
- * Answer to `serializeSnapshot` / `restoreSnapshot`, posted after the batch
+ * Answer to `serializeSnapshot` / `restoreSnapshot` / `getStateHash`, posted after the batch
  * that carried the request and before that batch's step result.
  */
 export type PhysicsWorkerSnapshotReply = {
@@ -137,6 +139,8 @@ export type PhysicsWorkerSnapshotReply = {
   staticHash: string | null
   /** The worker world's step counter after the operation. */
   stepCount: number
+  /** The worker world's state hash after the operation; null when the bundle cannot hash. */
+  stateHash: string | null
 }
 
 export type PhysicsWorkerFromWorker =

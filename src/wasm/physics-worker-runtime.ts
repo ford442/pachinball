@@ -41,6 +41,7 @@ export interface WorkerSnapshotEngine {
   serializeSnapshot(): Uint8Array | null
   restoreSnapshot(bytes: Uint8Array): WasmSnapshotStatus
   getStaticContentHash(): string | null
+  getStateHash(): string | null
   getStepCount(): number
 }
 
@@ -214,6 +215,9 @@ export function applyPhysicsCommand(
       state.replies.push(snapshotReply(engine, cmd.requestId, null, status))
       return 0
     }
+    case 'getStateHash':
+      state.replies.push(snapshotReply(engine, cmd.requestId, null, WasmSnapshotStatus.Ok))
+      return 0
   }
 }
 
@@ -230,6 +234,7 @@ function snapshotReply(
     status,
     staticHash: engine.getStaticContentHash?.() ?? null,
     stepCount: engine.getStepCount?.() ?? 0,
+    stateHash: engine.getStateHash?.() ?? null,
   }
 }
 
