@@ -86,10 +86,15 @@ export default defineConfig({
       'Cross-Origin-Embedder-Policy': 'require-corp',
     },
   },
-  // Pre-bundle the dev dependencies the import scan misses. Otherwise a fresh dev server finds them
-  // on the first page load, re-optimizes and reloads the page; on a slow CI runner that reload can
-  // land after a test has already started the game, leaving it a new Game back in the menu.
+  // A fresh dev server must pre-bundle everything up front. A dependency it only finds on the first
+  // page load makes it re-optimize and reload the page; on a slow CI runner that reload can land
+  // after a test has already started the game, leaving it a new Game back in the menu.
+  //  - `entries`: scan the app's one HTML entry. By default Vite scans every *.html under the root,
+  //    and CI's WASM job clones emsdk into the checkout: its test pages import files that don't
+  //    resolve, the whole scan fails, and *nothing* is pre-bundled.
+  //  - `include`: the imports the scan still misses.
   optimizeDeps: {
+    entries: ['index.html'],
     include: ['@babylonjs/core/Cameras/targetCamera', 'workbox-window'],
   },
   preview: {
