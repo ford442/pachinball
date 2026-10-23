@@ -76,7 +76,8 @@ export interface StateMediaConfig {
   opacity?: number
 
   /**
-   * Optional per-state character / physical-drum take (video or poster image).
+   * Optional per-state character / physical-drum take (video or poster image),
+   * drawn on its own plane over the video / image (display-character.ts).
    * When unset or load fails, the LCD overlay emoji walk-by remains the fallback.
    */
   characterLayer?: string

@@ -14,9 +14,9 @@
  *
  * Shape coverage is deliberately narrow: the tracks between them use only
  * cuboid, cylinder and ball, plus prism-pathway's closed triangular prisms
- * (`convexMesh`), plus two C++ toys (#424): a whole pin lattice as one
- * `pinField` handle and a `forceField` box. Do not widen this without a track
- * that needs it.
+ * (`convexMesh`), plus the C++ toys: a whole pin lattice as one `pinField`
+ * handle and a `forceField` box (#424), a static `cone` and an
+ * `axisPullField` well. Do not widen this without a track that needs it.
  */
 
 import type { PinFieldSpec } from '../core/pin-field'
@@ -58,6 +58,10 @@ export type AdventureColliderKind =
   | 'pinField'
   /** One C++ `addForceField` box; C++-only, Rapier builds nothing for it. */
   | 'forceField'
+  /** Static cone (local +Y apex): C++ `addStaticCone`, Rapier `ColliderDesc.cone`. */
+  | 'cone'
+  /** One C++ axis-pull well (`addAxisPullField`); C++-only, Rapier builds nothing for it. */
+  | 'axisPullField'
 
 /**
  * Frame a force field's vector is expressed in: `world` as given, `field`
@@ -86,9 +90,9 @@ export interface AdventureColliderDesc {
 
   /** `box` only — half-extents in local space. */
   halfExtents?: DescVec3
-  /** `cylinder` and `sphere`. */
+  /** `cylinder`, `sphere`, `cone`, and an `axisPullField`'s well radius. */
   radius?: number
-  /** `cylinder` only — half of the axis length (local Y, as Rapier). */
+  /** `cylinder`, `cone` and `axisPullField` — half of the axis length (local Y, as Rapier). */
   halfHeight?: number
   /**
    * `convexMesh` only — a CLOSED convex solid in body-local space: 3 floats
@@ -110,6 +114,11 @@ export interface AdventureColliderDesc {
   acceleration?: DescVec3
   /** `forceField` only — defaults to `'world'`. */
   forceSpace?: ForceFieldSpace
+
+  /** `axisPullField` only — pull at the axis, m/s². */
+  pullStrength?: number
+  /** `axisPullField` only — set when the well starts switched off. */
+  disabled?: true
 
   /** Collider offset inside its own body. Ignored when `parentIndex` is set. */
   localPosition?: DescVec3
@@ -277,6 +286,42 @@ export function forceFieldDesc(
     halfExtents,
     acceleration,
     ...(opts.space && opts.space !== 'world' ? { forceSpace: opts.space } : {}),
+    ...common(opts),
+  }
+}
+
+/**
+ * Matches Rapier's `ColliderDesc.cone(halfHeight, radius)`: local +Y apex,
+ * `position` the centre between base and apex. Static only.
+ */
+export function coneDesc(
+  position: DescVec3,
+  halfHeight: number,
+  radius: number,
+  opts: DescOptions = {}
+): AdventureColliderDesc {
+  return { kind: 'cone', position, halfHeight, radius, ...common(opts) }
+}
+
+/**
+ * A vertical axis-pull well (the Mag Spin pull) centred on `position`. Like a
+ * force field it has no body and no Rapier equivalent; the C++ engine's well
+ * is vertical, so the rotation is always identity.
+ */
+export function axisPullFieldDesc(
+  position: DescVec3,
+  radius: number,
+  halfHeight: number,
+  strength: number,
+  opts: Pick<DescOptions, 'membership' | 'filter' | 'label'> & { enabled?: boolean } = {}
+): AdventureColliderDesc {
+  return {
+    kind: 'axisPullField',
+    position,
+    radius,
+    halfHeight,
+    pullStrength: strength,
+    ...(opts.enabled === false ? { disabled: true as const } : {}),
     ...common(opts),
   }
 }

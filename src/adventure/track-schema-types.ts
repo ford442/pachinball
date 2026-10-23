@@ -200,6 +200,57 @@ export interface ForceFieldSegment {
   material?: MaterialRef
 }
 
+/**
+ * A static cone (C++ `addStaticCone`, `native/src/Cone.cpp`): apex up along
+ * local +Y, base seated on cursor + `offset`. One handle, not a triangle fan —
+ * a deflector mound that splits the ball's line, or a funnel's centre post.
+ */
+export interface ConeSegment {
+  type: 'cone'
+  /** Base radius. */
+  radius: number
+  /** Half of the base-to-apex height. */
+  halfHeight: number
+  /** World-space offset from the cursor to the centre of the base. */
+  offset?: Vec3Json
+  /** Extra yaw on top of the cursor heading (orients the visual seam). */
+  yawDeg?: number
+  /** Default 0.5. */
+  restitution?: number
+  /** Default 0.3. */
+  friction?: number
+  material?: MaterialRef
+}
+
+/**
+ * The Mag Spin well as data: a C++ axis-pull force field (`addAxisPullField`)
+ * that draws every ball within `radius` of its axis inward, strongest at the
+ * axis and fading to nothing at the rim. It never lifts a ball.
+ *
+ * C++-only, like `forceField`: the Rapier dev path builds the track without it,
+ * so a well must never be the only way through a track.
+ */
+export interface AxisPullSegment {
+  type: 'axisPull'
+  /** World-space offset from the cursor to the well's origin (the axis passes through it). */
+  offset?: Vec3Json
+  /**
+   * Pull axis. The C++ well is vertical (`addAxisPullField` takes no
+   * rotation), so the validator admits only ±Y; default `{ 0, 1, 0 }`.
+   */
+  axis?: Vec3Json
+  radius: number
+  /** Half-height of the pulled band about the origin; default 1. */
+  halfHeight?: number
+  /** Pull at the axis in m/s² (mass-independent). */
+  strength: number
+  /** Default true. A disabled well is built but pulls nothing. */
+  enabled?: boolean
+  /** Draw a faint translucent column; default true. */
+  visible?: boolean
+  material?: MaterialRef
+}
+
 export type TrackSegment =
   | StraightSegment
   | CurveSegment
@@ -215,6 +266,8 @@ export type TrackSegment =
   | ResetBasinSegment
   | PinLatticeSegment
   | ForceFieldSegment
+  | ConeSegment
+  | AxisPullSegment
 
 export interface TrackDefinition {
   schemaVersion: typeof TRACK_SCHEMA_VERSION

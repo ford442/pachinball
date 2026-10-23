@@ -28,6 +28,7 @@ import { DisplayReelsLayer, type ReelsRenderTelemetrySnapshot } from './display-
 import { SlotMachine } from './slot-machine'
 import { DisplayVideoLayer } from './display-video'
 import { DisplayImageLayer } from './display-image'
+import type { DisplayCharacterLayer } from './display-character'
 import { DisplayPhysicalLayer } from './display-physical'
 import { DisplayLcdOverlayLayer } from './display-lcd-overlay'
 import { DisplayStateMachine } from './display-state-machine'
@@ -52,6 +53,12 @@ export class DisplaySystem {
   private reelsLayer: DisplayReelsLayer
   private videoLayer: DisplayVideoLayer
   private imageLayer: DisplayImageLayer
+  // Lazily imported on the first non-empty characterLayer (keeps it off the entry chunk).
+  private characterLayer: DisplayCharacterLayer | null = null
+  private characterLayerLoading = false
+  private characterRequest: { url: string; state: DisplayState } = { url: '', state: DisplayState.IDLE }
+  private backboxRoot: TransformNode | null = null
+  private disposed = false
   private lcdOverlayLayer: DisplayLcdOverlayLayer
   private stateMachine: DisplayStateMachine
 
@@ -136,6 +143,43 @@ export class DisplaySystem {
       accessibility.reducedMotion,
       accessibility.flashFrequencyMax <= 1
     )
+    this.characterLayer?.setAccessibility(
+      accessibility.reducedMotion,
+      accessibility.flashFrequencyMax <= 1
+    )
+  }
+
+  /** Route a state's characterLayer to the character plane, loading its chunk on first use. */
+  private requestCharacterTake(url: string, state: DisplayState): void {
+    this.characterRequest = { url, state }
+    if (this.characterLayer) {
+      this.characterLayer.setTake(url, state)
+      return
+    }
+    if (!url.trim() || this.characterLayerLoading) return
+    this.characterLayerLoading = true
+    import('./display-character')
+      .then(({ DisplayCharacterLayer }) => {
+        if (this.disposed) return
+        // A loaded take suppresses the LCD walk-by; a missing one leaves it running.
+        const layer = new DisplayCharacterLayer(this.scene, this.config, (active) =>
+          this.lcdOverlayLayer.setCharacterTakeActive(active)
+        )
+        layer.setAccessibility(
+          this.accessibility.reducedMotion,
+          this.accessibility.flashFrequencyMax <= 1
+        )
+        if (this.backboxRoot) layer.createLayer(this.backboxRoot, this.config)
+        this.characterLayer = layer
+        layer.setTake(this.characterRequest.url, this.characterRequest.state)
+      })
+      .catch((err: unknown) => {
+        // The LCD walk-by stays the fallback.
+        console.warn('[Display] Character layer chunk failed to load:', err)
+      })
+      .finally(() => {
+        this.characterLayerLoading = false
+      })
   }
 
   /**
@@ -170,6 +214,10 @@ export class DisplaySystem {
     this.reelsLayer.createLayer(backboxRoot, this.config)
     this.videoLayer.createLayer(backboxRoot, this.config)
     this.imageLayer.createLayer(backboxRoot, this.config)
+    this.backboxRoot = backboxRoot
+    this.characterLayer?.createLayer(backboxRoot, this.config)
+    // setDisplayState skips the state already current, so the boot (IDLE / attract) take is requested here.
+    this.requestCharacterTake(getStateConfig(this.config, this.currentState).characterLayer ?? '', this.currentState)
     this.lcdOverlayLayer.createLayer(backboxRoot, this.config)
     this.lcdOverlayLayer.setTrackTheme(this.trackThemePrimary, this.trackThemeAccent)
 
@@ -236,6 +284,7 @@ export class DisplaySystem {
     this.imageLayer.updateParallax(this.globalTime)
 
     this.physicalLayer.update(dt, this.currentState)
+    this.characterLayer?.update(dt)
     this.lcdOverlayLayer.update(dt, this.currentState, this.jackpotPhase)
 
     this.slotMachine?.update(dt)
@@ -313,11 +362,9 @@ export class DisplaySystem {
       this.shaderLayer.setShaderParams(media.shaderParams)
     }
 
-    const character = media.characterLayer?.trim() ?? ''
-    const characterIsVideo = /\.(webm|mp4)(\?|$)/i.test(character)
-    const characterIsImage = /\.(png|jpe?g|webp)(\?|$)/i.test(character)
-    const videoUrl = characterIsVideo ? character : (media.videoPath || '')
-    const imageUrl = characterIsImage ? character : (media.imagePath || '')
+    // The character take is its own plane over this stack; it never takes the video / image slot.
+    const videoUrl = media.videoPath || ''
+    const imageUrl = media.imagePath || ''
 
     if (videoUrl) {
       this.videoLayer.loadVideo(videoUrl)
@@ -338,7 +385,7 @@ export class DisplaySystem {
       this.reelsLayer.setVisible(true)
     }
 
-    this.lcdOverlayLayer.setCharacterTakeActive(character.length > 0)
+    this.requestCharacterTake(media.characterLayer ?? '', state)
 
     this.physicalLayer.onStateChange(state)
     this.shaderLayer.onStateChange(state)
@@ -609,6 +656,17 @@ export class DisplaySystem {
     this.reelsLayer.dispose()
     this.videoLayer.dispose()
     this.imageLayer.dispose()
+    this.disposed = true
+    this.characterLayer?.dispose()
+    this.characterLayer = null
     this.lcdOverlayLayer.dispose()
+  }
+
+  /** The character take URL currently requested and whether it has loaded (tests / e2e). */
+  getCharacterTakeState(): { url: string; active: boolean } {
+    return {
+      url: this.characterLayer?.getTakeUrl() ?? this.characterRequest.url.trim(),
+      active: this.characterLayer?.isTakeActive() ?? false,
+    }
   }
 }

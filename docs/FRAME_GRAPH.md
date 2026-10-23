@@ -58,8 +58,9 @@ four planes by hand" the #424 vision wants to retire.
 | FXAA / sharpen | colour → colour | pipeline stages | Tier-gated nodes |
 | SSAO / SSR / DoF / motion blur | depth (+ normals) → colour | HIGH-only pipelines | HIGH-only nodes, built only when the tier allows |
 
-Slice B's character layer (REACH/FEVER sprites) should land as a normal
-display layer now, and becomes one more backbox layer task under the graph.
+The character layer (`src/display/display-character.ts`, `DISPLAY_LAYER_Z.CHARACTER`)
+is a normal display plane between the main video / image and the LCD today, and
+becomes one more backbox layer task under the graph.
 
 **Stays outside the graph:** canvas drawing for the LCD and reels
 (`DynamicTexture` uploads are CPU work, and a node only samples the result),

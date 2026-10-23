@@ -37,6 +37,8 @@ const SEGMENT_TYPES = new Set([
   'resetBasin',
   'pinLattice',
   'forceField',
+  'cone',
+  'axisPull',
 ])
 
 /** Ceiling on a lattice's slot count — the occupancy mask and the visuals scale with it. */
@@ -181,6 +183,57 @@ function validateForceField(segment: Record<string, unknown>, path: string, erro
   if (segment.offset !== undefined) validateVec3(segment.offset, `${path}.offset`, errors)
   if (segment.visible !== undefined && typeof segment.visible !== 'boolean') {
     errors.push({ path: `${path}.visible`, message: 'must be a boolean' })
+  }
+  if (segment.material !== undefined) {
+    validateMaterialRef(segment.material, `${path}.material`, errors)
+  }
+}
+
+function validateCone(segment: Record<string, unknown>, path: string, errors: TrackValidationIssue[]): void {
+  for (const key of ['radius', 'halfHeight'] as const) {
+    if (!isFiniteNumber(segment[key]) || segment[key] <= 0) {
+      errors.push({ path: `${path}.${key}`, message: 'must be a finite number > 0' })
+    }
+  }
+  if (segment.offset !== undefined) validateVec3(segment.offset, `${path}.offset`, errors)
+  if (segment.yawDeg !== undefined && !isFiniteNumber(segment.yawDeg)) {
+    errors.push({ path: `${path}.yawDeg`, message: 'must be a finite number' })
+  }
+  for (const key of ['restitution', 'friction'] as const) {
+    if (segment[key] !== undefined && (!isFiniteNumber(segment[key]) || segment[key] < 0)) {
+      errors.push({ path: `${path}.${key}`, message: 'must be a finite number >= 0' })
+    }
+  }
+  if (segment.material !== undefined) {
+    validateMaterialRef(segment.material, `${path}.material`, errors)
+  }
+}
+
+function validateAxisPull(segment: Record<string, unknown>, path: string, errors: TrackValidationIssue[]): void {
+  if (!isFiniteNumber(segment.radius) || segment.radius <= 0) {
+    errors.push({ path: `${path}.radius`, message: 'must be a finite number > 0' })
+  }
+  if (segment.halfHeight !== undefined && (!isFiniteNumber(segment.halfHeight) || segment.halfHeight <= 0)) {
+    errors.push({ path: `${path}.halfHeight`, message: 'must be a finite number > 0' })
+  }
+  if (!isFiniteNumber(segment.strength) || segment.strength < 0 || segment.strength > FORCE_FIELD_MAX_ACCEL) {
+    errors.push({ path: `${path}.strength`, message: `must be a number in [0, ${FORCE_FIELD_MAX_ACCEL}] m/s²` })
+  }
+  if (segment.offset !== undefined) validateVec3(segment.offset, `${path}.offset`, errors)
+  if (segment.axis !== undefined) {
+    validateVec3(segment.axis, `${path}.axis`, errors)
+    if (isPlainObject(segment.axis)) {
+      const { x, y, z } = segment.axis
+      // addAxisPullField takes no rotation: only a vertical well exists in C++.
+      if (isFiniteNumber(x) && isFiniteNumber(y) && isFiniteNumber(z) && (x !== 0 || z !== 0 || y === 0)) {
+        errors.push({ path: `${path}.axis`, message: 'must be vertical ({ x: 0, y: ±1, z: 0 }): the C++ well takes no rotation' })
+      }
+    }
+  }
+  for (const key of ['enabled', 'visible'] as const) {
+    if (segment[key] !== undefined && typeof segment[key] !== 'boolean') {
+      errors.push({ path: `${path}.${key}`, message: 'must be a boolean' })
+    }
   }
   if (segment.material !== undefined) {
     validateMaterialRef(segment.material, `${path}.material`, errors)
@@ -432,6 +485,14 @@ function validateSegment(
     }
     case 'forceField': {
       validateForceField(segment, path, errors)
+      break
+    }
+    case 'cone': {
+      validateCone(segment, path, errors)
+      break
+    }
+    case 'axisPull': {
+      validateAxisPull(segment, path, errors)
       break
     }
     case 'gate': {

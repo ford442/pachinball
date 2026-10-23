@@ -1,16 +1,22 @@
 # Cabinet glTF Pipeline
 
-Classic cabinet shells can load from **glTF 2.0** (`.glb`) with a procedural fallback. Playfield colliders stay **code-authored / WASM descriptors** — never mesh-collide high-poly art.
+All four cabinet shells (classic, neo, vertical, wide) load from **glTF 2.0** (`.glb`) with a procedural fallback. Playfield colliders stay **code-authored / WASM descriptors** — never mesh-collide high-poly art.
 
 ## Asset layout
 
 ```
-public/models/cabinet/classic/simple.glb   # LOW tier (and fallback)
-public/models/cabinet/classic/high.glb     # MEDIUM / HIGH
+public/models/cabinet/<preset>/simple.glb  # LOW tier (and fallback) — preset ∈ classic | neo | vertical | wide
+public/models/cabinet/<preset>/high.glb    # MEDIUM / HIGH
 public/models/inserts/prism-core/{simple,high}.glb
 public/models/inserts/mag-spin/{simple,high}.glb
 public/models/inserts/nano-loom/{simple,high}.glb
 ```
+
+Every file above is committed. The shipped files are the generator's box
+placeholders (a few KB each), sized from each preset's `width` / `depth` /
+`sideHeight` / `backboxZ`. `tests/cabinet-gltf-assets.test.ts` fails if a
+preset or insert points at a file that is missing, is not a GLB, exceeds the
+budget below, or (for shells) drifts more than ±4 units from its preset.
 
 Regenerate placeholders:
 
@@ -26,7 +32,7 @@ npm run models:insert-placeholders
 | `LOW` | `simpleUrl` only (never fetches high) |
 | `MEDIUM` / `HIGH` | `highUrl`, then `simpleUrl` on failure |
 
-Configured on the preset (`CLASSIC_CONFIG.gltf` in `src/cabinet/cabinet-classic.ts`).
+Configured on each preset (`CLASSIC_CONFIG.gltf`, `NEO_CONFIG.gltf`, `VERTICAL_CONFIG.gltf`, `WIDE_CONFIG.gltf` in `src/cabinet/cabinet-presets.ts`). Each block sets `loadTimeoutMs: 15_000`; a timed-out, missing or corrupt file falls back to that preset's procedural builder.
 
 ## Load budgets (targets)
 
@@ -40,13 +46,13 @@ Measure:
 1. Chrome DevTools → Network → filter `.glb` → size + timing.
 2. Or wrap load with `performance.now()` around `loadCabinetGltf` / SceneLoader.
 
-Menu shows a progress overlay during classic load; **Start** stays disabled until the cabinet resolves (glTF **or** procedural fallback).
+Menu shows a progress overlay during the boot (classic) load; **Start** stays disabled until the cabinet resolves (glTF **or** procedural fallback).
 
 ## Physics alignment
 
 - Cabinet glTF is **visual-only** (`isPickable = false`).
 - Ball containment remains [`src/objects/object-walls.ts`](../src/objects/object-walls.ts).
-- World frame must match the procedural classic origin (`panelZ ≈ 5`, dims from `CabinetPreset`: width 32, depth 44, sideHeight 20).
+- World frame must match the procedural origin (`panelZ ≈ 5`, dims from each `CabinetPreset` — classic: width 32, depth 44, sideHeight 20; neo 30×42×18; vertical 26×38×22; wide 38×48×20).
 - Soft AABB check: set `window.DEBUG_CABINET_ALIGN = true` before load to log bbox vs preset.
 
 ## Blender → glTF checklist
