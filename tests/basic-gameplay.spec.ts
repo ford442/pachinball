@@ -63,7 +63,7 @@ test.describe('Basic Gameplay Physics Smoke', () => {
     expect(ballInfo.hasBall).toBe(true);
     expect(ballInfo.pos).not.toBeNull();
 
-    // 5. Verify the flipper joint moves when driven by GameInputActions.
+    // 5. Verify the flipper joint moves when driven by a held-flipper input.
     const flipperBefore = await page.evaluate(() => {
       const g = (window as any).game;
       const left = g?.gameObjects?.getAllFlippers?.().get('left');
@@ -71,21 +71,32 @@ test.describe('Basic Gameplay Physics Smoke', () => {
     });
     expect(flipperBefore).not.toBeNull();
 
-    // Direct-action smoke: intentionally bypasses InputHandler. Real keyboard
-    // coverage lives in keyboard-input.spec.ts.
-    // Trigger flipper via direct API call and wait, frame by frame, for the physics to move it.
-    // Bounded by frames, not a fixed three: under `wasm-worker` the pose arrives in the worker's
-    // next snapshot, which on a slow software-GL runner can land a frame or two later.
-    const flipperAfter = await page.evaluate(() => {
+    // Direct-action smoke: intentionally bypasses the DOM keyboard handler. Real keyboard coverage
+    // lives in keyboard-input.spec.ts. The flipper is held the way a held key holds it, through the
+    // input manager's queue: under wasm-owner / wasm-worker the C++ hinge is driven only by input
+    // frames (WasmOwner.driveFlippers), so `inputActions.handleFlipperLeft()` alone plays the sound
+    // and never moves it (this check used to pass there only when the flipper was already moving).
+    //
+    // Then wait, frame by frame, for the physics to move it. Bounded by wall time, not a frame count:
+    // a CI runner on software GL can take seconds per frame, and under `wasm-worker` the pose arrives
+    // with the worker's next snapshot. The samples (ms since the press, rotation delta) go into the
+    // failure message.
+    const flipperRun = await page.evaluate(() => {
       const g = (window as any).game;
+      const keys = g?.inputManager?.getInputHandler?.()?.keyboardHost;
+      if (!keys?.setFlipperLeftHeld || !keys?.queueInput) throw new Error('InputHandler keyboardHost hooks missing');
       const readY = () => g?.gameObjects?.getAllFlippers?.().get('left')?.body.rotation().y ?? 0;
       const startY = readY();
-      g?.inputActions?.handleFlipperLeft?.(true);
-      return new Promise<{ bodyY: number }>((resolve) => {
-        let frames = 0;
+      const t0 = performance.now();
+      keys.setFlipperLeftHeld(true);
+      keys.queueInput('flipperLeft', true);
+      return new Promise<{ samples: Array<[number, number]> }>((resolve) => {
+        const samples: Array<[number, number]> = [];
         const tick = () => {
           const y = readY();
-          if (Math.abs(y - startY) > 0.05 || ++frames >= 30) resolve({ bodyY: y });
+          const ms = Math.round(performance.now() - t0);
+          samples.push([ms, Number((y - startY).toFixed(4))]);
+          if (Math.abs(y - startY) > 0.05 || ms > 20_000) resolve({ samples });
           else requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
@@ -94,13 +105,15 @@ test.describe('Basic Gameplay Physics Smoke', () => {
 
     // Release flipper
     await page.evaluate(() => {
-      const g = (window as any).game;
-      g?.inputActions?.handleFlipperLeft?.(false);
+      const keys = (window as any).game?.inputManager?.getInputHandler?.()?.keyboardHost;
+      keys?.setFlipperLeftHeld?.(false);
+      keys?.queueInput?.('flipperLeft', false);
     });
 
-    // Flipper should have rotated (Y axis is the rotation axis for the revolute joint)
-    const flipperDelta = Math.abs((flipperAfter?.bodyY ?? 0) - (flipperBefore?.bodyY ?? 0));
-    expect(flipperDelta).toBeGreaterThan(0.05);
+    // Flipper should have rotated (Y axis is the rotation axis for the revolute joint). Measured from
+    // the press: `flipperBefore` is a separate round trip, and the flipper can move in between.
+    const flipperDelta = Math.abs(flipperRun.samples[flipperRun.samples.length - 1]?.[1] ?? 0);
+    expect(flipperDelta, `flipper samples [ms, Δy]: ${JSON.stringify(flipperRun.samples)}`).toBeGreaterThan(0.05);
 
     // Visual hierarchy must stay intact: SceneOptimizer must NOT merge flipper
     // child meshes off their physics-driven root (that made flippers look frozen).
