@@ -117,6 +117,11 @@ export class GameObjects {
     this.pinballMeshes.push(...result.meshes)
   }
 
+  /** Side and flipper-area rail colliders; their meshes come later with the cabinet decoration. */
+  createRailColliders(): void {
+    this.decorationBuilder.createRailColliders()
+  }
+
   createDeathZone(): void {
     this.deathZoneBody = this.world.createRigidBody(
       this.rapier.RigidBodyDesc.fixed().setTranslation(0, -2, -14)
