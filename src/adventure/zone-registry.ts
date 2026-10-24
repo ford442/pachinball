@@ -13,7 +13,7 @@
 
 import { AdventureTrackType } from './adventure-types'
 import { buildZoneRegistryFromManifests } from './manifests'
-import { resolveVideoUrl } from '../core/asset-urls'
+import { resolveAssetUrl } from '../core/asset-urls'
 
 export interface ZoneConfig {
   /** Zone identifier */
@@ -49,7 +49,7 @@ export function getZoneConfig(trackType: AdventureTrackType): ZoneConfig {
   const config = ZONE_REGISTRY[trackType]
   return {
     ...config,
-    videoUrl: resolveVideoUrl(config.videoUrl)
+    videoUrl: resolveAssetUrl(config.videoUrl)
   }
 }
 

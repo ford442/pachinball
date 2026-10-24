@@ -17,7 +17,7 @@ import { getScenario, getZoneConfig, ZoneTriggerSystem as ZoneTriggerSystemClass
 import { getMaterialLibrary } from '../materials'
 import { getLayoutRng } from '../core/seeded-rng'
 import { createTimerScope } from '../core/timers'
-import { resolveVideoUrl } from './game-utils'
+import { resolveAssetUrl } from './game-utils'
 import { TABLE_MAPS } from '../config/table-maps'
 import type { DynamicScenario, ScenarioZone, WorldZone, ZoneMechanic } from '../game-elements'
 
@@ -133,14 +133,14 @@ export class GameScenario {
     this.host.display?.showZoneStory(
       scenario.name,
       scenario.description,
-      resolveVideoUrl(scenario.zones[0]?.videoUrl),
+      resolveAssetUrl(scenario.zones[0]?.videoUrl),
       true
     )
   }
 
   handleScenarioZoneEnter(zone: ScenarioZone, _fromZone: ScenarioZone | null, isMajor: boolean): void {
     console.log(`[Game] Entered zone: ${zone.name} (${isMajor ? 'MAJOR' : 'minor'})`)
-    this.host.display?.showZoneStory(zone.name, zone.storyText, resolveVideoUrl(zone.videoUrl), true)
+    this.host.display?.showZoneStory(zone.name, zone.storyText, resolveAssetUrl(zone.videoUrl), true)
     this.applyZoneMapConfig(zone)
     if (this.host.ballManager) {
       const scenario = this.host.zoneTriggerSystem?.getAllZones()[0]?.id

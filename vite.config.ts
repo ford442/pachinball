@@ -1,3 +1,5 @@
+import { readdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
@@ -71,7 +73,49 @@ function babylonChunkGraph() {
 
 const babylonChunks = babylonChunkGraph()
 
-export default defineConfig({
+/**
+ * Per-track adventure builders are dynamic imports, so each is its own `assets/<file>-<hash>.js`
+ * chunk; the service worker fetches them on first visit to a track instead of precaching all of
+ * them. Derived from the directory so a new track is never precached by accident (#464 item 8).
+ */
+const trackChunkIgnores = readdirSync(fileURLToPath(new URL('./src/adventure/tracks', import.meta.url)))
+  .filter((file) => file.endsWith('.ts'))
+  .map((file) => `**/${file.slice(0, -'.ts'.length)}-*.js`)
+
+/** Runtime caching for the local `storage_manager` (src/config/api.ts DEV_*_BASE); dev only. */
+const localStorageManagerCaching = [
+  {
+    urlPattern: /^http:\/\/localhost:8000\/api\//,
+    handler: 'NetworkFirst' as const,
+    options: {
+      cacheName: 'nexus-api-dev',
+      networkTimeoutSeconds: 4,
+      expiration: {
+        maxEntries: 32,
+        maxAgeSeconds: 60 * 60,
+      },
+      cacheableResponse: {
+        statuses: [0, 200],
+      },
+    },
+  },
+  {
+    urlPattern: /^http:\/\/localhost:8000\/pachinball\//,
+    handler: 'CacheFirst' as const,
+    options: {
+      cacheName: 'nexus-remote-assets-dev',
+      expiration: {
+        maxEntries: 64,
+        maxAgeSeconds: 30 * 24 * 60 * 60,
+      },
+      cacheableResponse: {
+        statuses: [0, 200],
+      },
+    },
+  },
+]
+
+export default defineConfig(({ mode }) => ({
   // Use relative paths so assets resolve correctly when deployed to a subdirectory
   base: './',
   esbuild: {
@@ -133,7 +177,10 @@ export default defineConfig({
   plugins: [
     babylonChunks.plugin,
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': a new worker waits until the player accepts the update toast
+      // (src/pwa/update-toast.ts). 'autoUpdate' reloaded the page whenever a new
+      // worker activated, mid-ball included, and never called onNeedRefresh.
+      registerType: 'prompt',
       injectRegister: false,
       includeAssets: [
         'vite.svg',
@@ -177,8 +224,12 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+        // Unanchored: the game is served from /pachinball/, so its API paths are not at the root.
+        navigateFallbackDenylist: [/\/api\//],
         cleanupOutdatedCaches: true,
+        // The first install controls the open page at once (offline works without a reload).
+        // Updates still wait for the toast: there is no skipWaiting.
+        clientsClaim: true,
         // babylon-core exceeds Workbox's 2 MiB default
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         globPatterns: [
@@ -197,26 +248,14 @@ export default defineConfig({
           '**/rapier-*.js',
           // Leaderboard / name-entry / campaign stage-map overlays
           '**/ui-overlays-*.js',
+          // The update prompt only loads when a newer worker is waiting, i.e. online
+          '**/update-toast-*.js',
           // Per-track adventure builders (dynamic import)
-          '**/neon-helix-*.js',
-          '**/pachinko-hall-*.js',
-          '**/cyber-core-*.js',
-          '**/pachinko-spire-*.js',
-          '**/orbital-junkyard-*.js',
-          '**/cpu-core-*.js',
-          '**/bio-hazard-lab-*.js',
-          '**/gravity-forge-*.js',
-          '**/synthwave-surf-*.js',
-          '**/prism-pathway-*.js',
-          '**/magnetic-storage-*.js',
-          '**/neural-network-*.js',
-          '**/neon-stronghold-*.js',
-          '**/casino-heist-*.js',
-          '**/tesla-tower-*.js',
-          '**/neon-skyline-*.js',
-          '**/polychrome-void-*.js',
+          ...trackChunkIgnores,
           // Canvas reel atlas — runtime-cached on first reel use
           '**/reel.png',
+          // Concept art kept in public/ for reference; the game never loads it (~1 MB)
+          '**/concept/**',
         ],
         runtimeCaching: [
           {
@@ -224,21 +263,6 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'nexus-api',
-              networkTimeoutSeconds: 4,
-              expiration: {
-                maxEntries: 32,
-                maxAgeSeconds: 60 * 60,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-          {
-            urlPattern: /^http:\/\/localhost:8000\/api\//,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'nexus-api-dev',
               networkTimeoutSeconds: 4,
               expiration: {
                 maxEntries: 32,
@@ -263,20 +287,7 @@ export default defineConfig({
               },
             },
           },
-          {
-            urlPattern: /^http:\/\/localhost:8000\/pachinball\//,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'nexus-remote-assets-dev',
-              expiration: {
-                maxEntries: 64,
-                maxAgeSeconds: 30 * 24 * 60 * 60,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
+          ...(mode === 'production' ? [] : localStorageManagerCaching),
           {
             urlPattern: ({ sameOrigin, request, url }) =>
               sameOrigin &&
@@ -315,11 +326,13 @@ export default defineConfig({
           },
         ],
       },
+      // The dev server registers no service worker unless asked (PWA_DEV=1 npm run dev): its
+      // CacheFirst rule for same-origin scripts would serve stale /src modules after an edit.
       devOptions: {
-        enabled: true,
+        enabled: process.env.PWA_DEV === '1',
         navigateFallback: 'index.html',
         type: 'module',
       },
     }),
   ],
-})
+}))

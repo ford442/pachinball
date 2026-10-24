@@ -36,6 +36,12 @@ export class GameObjects {
    * per lattice), so the table enable/disable and the C++ export walk this list for the rest.
    */
   private pinBodies: PhysicsBody[] = []
+  /**
+   * Side and flipper-area rail colliders, from the gameplay build. Their meshes (and bindings)
+   * only arrive with the cosmetic pass, so the table enable/disable and the C++ export walk this
+   * list: the owner exports only what is in scope when the table changes.
+   */
+  private railBodies: PhysicsBody[] = []
   private targetMeshes: Mesh[] = []
   private targetActive: boolean[] = []
   private targetRespawnTimer: number[] = []
@@ -115,6 +121,11 @@ export class GameObjects {
   createDrainRails(): void {
     const result = this.railBuilder.createDrainRails()
     this.pinballMeshes.push(...result.meshes)
+  }
+
+  /** Side and flipper-area rail colliders; their meshes come later with the cabinet decoration. */
+  createRailColliders(): void {
+    this.railBodies = this.decorationBuilder.createRailColliders()
   }
 
   createDeathZone(): void {
@@ -402,8 +413,8 @@ export class GameObjects {
 
   /**
    * Table bodies the C++ owner simulates (#412): everything with a mesh
-   * binding (walls, slingshots, bumpers, pachinko pins and targets,
-   * decoration rails), the lane rollover sensors and the drain.
+   * binding (walls, slingshots, bumpers, pachinko pins and targets), the
+   * decoration rails, the lane rollover sensors and the drain.
    *
    * Held out: RailBuilder's rails and guards, and the plunger body. They were
    * authored against the Rapier table surface (the LCD ground's top, y = -0.9),
@@ -416,6 +427,7 @@ export class GameObjects {
   getWasmExportBodies(): PhysicsBody[] {
     const bodies = this.bindings.map((b) => b.rigidBody)
     bodies.push(...this.pinBodies)
+    bodies.push(...this.railBodies)
     bodies.push(...this.laneSensorBuilder.getBodies())
     if (this.deathZoneBody) bodies.push(this.deathZoneBody)
     return bodies
@@ -451,6 +463,9 @@ export class GameObjects {
       bodies.add(body)
     }
     for (const body of this.pinBodies) {
+      bodies.add(body)
+    }
+    for (const body of this.railBodies) {
       bodies.add(body)
     }
     for (const body of this.targetBodies) {
@@ -536,6 +551,7 @@ export class GameObjects {
     this.targetActive = []
     this.targetRespawnTimer = []
     this.pinBodies = []
+    this.railBodies = []
     this.pinballMeshes = []
     this.refs.flippers.clear()
     this.refs.bumpers.clear()

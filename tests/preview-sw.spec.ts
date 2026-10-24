@@ -9,7 +9,7 @@ test('service-worker-served document stays cross-origin isolated', async ({ page
 
   await page.goto('/')
   await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined))
-  // registerType 'autoUpdate' claims clients on install, so one reload hands the page to the SW.
+  // workbox.clientsClaim takes the page on first install; one reload makes that certain.
   await page.reload()
 
   const state = await page.evaluate(() => ({

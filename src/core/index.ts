@@ -21,7 +21,7 @@ export {
   type SeededRng,
   type RngForkLabel,
 } from './seeded-rng'
-export { resolveAssetUrl, resolveVideoUrl } from './asset-urls'
+export { assetUrl, resolveAbsoluteAssetUrl, resolveAssetUrl } from './asset-urls'
 export {
   PhysicsActiveEvents,
   PhysicsBodyType,

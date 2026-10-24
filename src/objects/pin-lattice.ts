@@ -19,6 +19,9 @@
  */
 
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
+// Babylon 9 ships `Mesh.prototype.thinInstance*` as no-op stubs until this side-effect module
+// runs. Without it every lattice silently got 0 instances: invisible pins over live colliders.
+import '@babylonjs/core/Meshes/thinInstanceMesh'
 import type { PinFieldQuat, PinFieldVec3 } from '../core/pin-field'
 
 const IDENTITY: PinFieldQuat = { x: 0, y: 0, z: 0, w: 1 }

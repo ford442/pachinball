@@ -225,6 +225,7 @@ export class GameSceneBuilder {
     gameObjects.createPachinkoField()
     gameObjects.createFlipperRamps()
     gameObjects.createDrainRails()
+    gameObjects.createRailColliders()
 
     const shadowGenerator = this.host.shadowGenerator
     if (shadowGenerator) {

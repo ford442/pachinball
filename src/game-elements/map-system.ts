@@ -7,6 +7,7 @@
 
 import { API_BASE, apiFetch, isRemoteApiBase } from '../config'
 import { TABLE_MAPS, type TableMapConfig, type TableMapType } from '../config/table-maps'
+import { assetUrl } from '../core/asset-urls'
 
 export interface DynamicMapConfig extends TableMapConfig {
   id: string
@@ -149,8 +150,7 @@ export class MapSystem {
   }
 
   private staticMapsUrl(): string {
-    const base = (import.meta.env.BASE_URL as string | undefined) ?? './'
-    return `${base.endsWith('/') ? base : `${base}/`}maps.json`
+    return assetUrl('maps.json')
   }
 
   private async fetchStaticMaps(): Promise<DynamicMapConfig[] | null> {
