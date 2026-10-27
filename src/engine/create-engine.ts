@@ -220,7 +220,7 @@ export type WebGPUEngineFactory = (
 ) => WebGPUEngineLike
 
 const defaultWebGPUEngineFactory: WebGPUEngineFactory = (canvas, options) =>
-  new WebGPUEngine(canvas, options) as unknown as WebGPUEngineLike
+  new WebGPUEngine(canvas, options)
 
 export interface WebGPUCreationResult {
   engine: WebGPUEngineLike

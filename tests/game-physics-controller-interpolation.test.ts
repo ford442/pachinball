@@ -76,7 +76,6 @@ function makeHost(opts: {
     soundSystem: { playBeep: vi.fn(), playGoldBallCollect: vi.fn() },
     mapManager: null,
     uiManager: null,
-    adventureState: { updateGoal: vi.fn() },
     adventureMode: null,
     adventureManager: null,
     zoneTriggerSystem: null,

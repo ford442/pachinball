@@ -25,7 +25,6 @@ export {
   type HUDData,
   type GoldBallCounts,
   type AdventureGoal,
-  type AdventureLevel,
   type ScoringBreakdownDisplayOptions,
   type PauseMenuSettings,
   type PauseMenuHandlers,
@@ -51,7 +50,7 @@ export { GameSystemsInitializer } from './game-systems-init'
 export { disposeGame } from './game-disposer'
 export { GameHUD, type HUDHost } from './game-hud'
 export { GameMapCabinet, type MapCabinetHost } from './game-map-cabinet'
-export { resolveAssetUrl, resolveVideoUrl } from './game-utils'
+export { resolveAssetUrl } from './game-utils'
 
 export {
   getMapRegistry,

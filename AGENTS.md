@@ -143,7 +143,6 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 | `map-system.ts` | Dynamic backend map fetching. |
 | `leaderboard-system.ts` | Score submission + leaderboard UI. |
 | `name-entry-dialog.ts` | High-score name entry UI. |
-| `level-select-screen.ts` | Adventure level select overlay. |
 | `zone-registry.ts` | Adventure zone configurations and transition metadata. |
 | `zone-trigger-system.ts` | AABB zone entry/exit detection. |
 | `dynamic-scenarios.ts` | Scenario definitions for dynamic/fixed mode toggling. |
@@ -152,7 +151,7 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 | `path-mechanics.ts` | Dynamic adventure interactive elements: gates, magnets, launch pads, jump pads. |
 | `ball-stack-visual.ts` | Visual stack of reserve balls (gold-ball tracking). |
 | `debug-hud.ts` | Development overlay for runtime state monitoring (FPS, physics, performance tier). |
-| `adventure-state.ts` | **Legacy** level-select UI + cosmetic rewards only. Campaign truth is `AdventureTrackProgression` + supervisor. |
+| `adventure-state.ts` | **Legacy** free-form progress + cosmetic-reward persistence only (the level-select flow is retired). Campaign truth is `AdventureTrackProgression` + supervisor. |
 | `adventure-track-progression.ts` | `TRACK_CATALOG`, `AdventureTrackProgression` — campaign spine metadata. |
 | `adventure-progression-supervisor.ts` | Portal lifecycle + campaign state machine. |
 | `zone-registry.ts` | Per-track theming / story / music metadata for adventure zones. |
@@ -225,11 +224,12 @@ Replaces the old monolithic `display.ts`.
 - **`adventure-types.ts`** — **Single source of truth** for `AdventureTrackType` and adventure interfaces.
 - **`portal-routing.ts`** — Track start anchors and `isAdventureTrackType()` guard.
 - **`tracks/*.ts`** — Hand-tuned track builders (flagships + complex layouts). Simpler tracks may use declarative JSON under `track-data/` — see [`docs/TRACK_SCHEMA.md`](docs/TRACK_SCHEMA.md).
+- **`ui/campaign-map.ts`** — Campaign stage map overlay (L / Levels / start-screen Stage Map), dynamically imported. Layout comes from the pure `ui/campaign-map-model.ts` (spine + branches derived from `unlockedBy`).
 
 **Do not recreate legacy builders.** All new track geometry goes in `src/adventure/tracks/`. The barrel also re-exports `TRACK_CATALOG` and `AdventureTrackProgression` from `game-elements/adventure-track-progression.ts`.
 
 Campaign progression reference: `docs/ADVENTURE_CAMPAIGN.md` (A/B alternation + portal loop).  
-Campaign truth is `AdventureTrackProgression` + `AdventureProgressionSupervisor`; `AdventureState` is legacy level-select / cosmetic rewards only.
+Campaign truth is `AdventureTrackProgression` + `AdventureProgressionSupervisor`; `AdventureState` is legacy free-form progress / cosmetic rewards only.
 
 #### `src/cabinet/` — Cabinet presets (barrel: `src/cabinet/index.ts`)
 - **`cabinet-builder.ts`** — Factory / orchestrator (async `loadCabinetPreset`; classic may load glTF).

@@ -21,6 +21,7 @@ export class DecorationBuilder {
   private bindings: PhysicsBinding[] = []
   private pinballMeshes: Mesh[] = []
   private rigidBodies: PhysicsBody[] = []
+  private railBodies: { left: PhysicsBody; right: PhysicsBody; leftFlipper: PhysicsBody; rightFlipper: PhysicsBody } | null = null
 
   constructor(
     scene: Scene,
@@ -34,6 +35,52 @@ export class DecorationBuilder {
     this.rapier = rapier
 
     this.matLib = getMaterialLibrary(scene)
+  }
+
+  /**
+   * Colliders for the side rails and the flipper-area rails. They are walls the
+   * ball plays against, so they are built with the gameplay geometry, not by
+   * `createCabinetDecoration()`: that runs from an idle callback after Start is
+   * enabled (or not at all when the cosmetic stage is off), which gave the
+   * first frames of play a different table on each load (#464 item 2).
+   * Idempotent; returns the four bodies. The cosmetic pass binds its meshes to them.
+   */
+  createRailColliders(): PhysicsBody[] {
+    this.railBodies ??= {
+      left: this.createRailCollider(-11.8, 0.8, 5, 0.6, 1.2, 16, 0.5),
+      right: this.createRailCollider(12.8, 0.8, 5, 0.6, 1.2, 16, 0.5),
+      leftFlipper: this.createRailCollider(-7, 0.3, -8, 0.3, 0.6, 4, 0.4, -0.15),
+      rightFlipper: this.createRailCollider(8.5, 0.3, -8, 0.3, 0.6, 4, 0.4, 0.15),
+    }
+    const { left, right, leftFlipper, rightFlipper } = this.railBodies
+    return [left, right, leftFlipper, rightFlipper]
+  }
+
+  private createRailCollider(
+    px: number, py: number, pz: number,
+    hx: number, hy: number, hz: number,
+    restitution: number,
+    halfYaw?: number,
+  ): PhysicsBody {
+    const placed = this.rapier.RigidBodyDesc.fixed().setTranslation(px, py, pz)
+    const desc = halfYaw === undefined
+      ? placed
+      : placed.setRotation(new this.rapier.Quaternion(0, Math.sin(halfYaw), 0, Math.cos(halfYaw)))
+    const body = this.world.createRigidBody(desc)
+    this.world.createCollider(
+      this.rapier.ColliderDesc.cuboid(hx, hy, hz)
+        .setRestitution(restitution)
+        .setFriction(0.1)
+        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
+      body
+    )
+    this.rigidBodies.push(body)
+    return body
+  }
+
+  /** Bind a rail mesh to its collider (hit lookups find the mesh through the binding). */
+  private bindRail(mesh: Mesh, body: PhysicsBody | undefined): void {
+    if (body) this.bindings.push({ mesh, rigidBody: body })
   }
 
   createCabinetDecoration(): void {
@@ -240,35 +287,9 @@ export class DecorationBuilder {
     }, this.scene)
     rightAccent.material = accentMat
 
-    // ================================================================
-    // SIDE RAIL PHYSICS COLLIDERS
-    // ================================================================
-
-    const leftRailBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(-11.8, 0.8, 5)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(0.6, 1.2, 16)
-        .setRestitution(0.5)
-        .setFriction(0.1)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
-      leftRailBody
-    )
-    this.rigidBodies.push(leftRailBody)
-    this.bindings.push({ mesh: leftRail, rigidBody: leftRailBody })
-
-    const rightRailBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed().setTranslation(12.8, 0.8, 5)
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(0.6, 1.2, 16)
-        .setRestitution(0.5)
-        .setFriction(0.1)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
-      rightRailBody
-    )
-    this.rigidBodies.push(rightRailBody)
-    this.bindings.push({ mesh: rightRail, rigidBody: rightRailBody })
+    // Side rail colliders come from createRailColliders() (gameplay build).
+    this.bindRail(leftRail, this.railBodies?.left)
+    this.bindRail(rightRail, this.railBodies?.right)
 
     // ================================================================
     // OUTLANE BLOCKERS
@@ -343,21 +364,7 @@ export class DecorationBuilder {
     leftFlipperRail.rotation.y = -0.3
     leftFlipperRail.material = metalMat
     this.pinballMeshes.push(leftFlipperRail)
-
-    const leftFlipperRailBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed()
-        .setTranslation(-7, 0.3, -8)
-        .setRotation(new this.rapier.Quaternion(0, Math.sin(-0.15), 0, Math.cos(-0.15)))
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(0.3, 0.6, 4)
-        .setRestitution(0.4)
-        .setFriction(0.1)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
-      leftFlipperRailBody
-    )
-    this.rigidBodies.push(leftFlipperRailBody)
-    this.bindings.push({ mesh: leftFlipperRail, rigidBody: leftFlipperRailBody })
+    this.bindRail(leftFlipperRail, this.railBodies?.leftFlipper)
 
     // Right flipper rail
     const rightFlipperRail = MeshBuilder.CreateBox('rightFlipperRail', { width: 0.6, height: 1.2, depth: 8 }, this.scene)
@@ -365,21 +372,7 @@ export class DecorationBuilder {
     rightFlipperRail.rotation.y = 0.3
     rightFlipperRail.material = metalMat
     this.pinballMeshes.push(rightFlipperRail)
-
-    const rightFlipperRailBody = this.world.createRigidBody(
-      this.rapier.RigidBodyDesc.fixed()
-        .setTranslation(8.5, 0.3, -8)
-        .setRotation(new this.rapier.Quaternion(0, Math.sin(0.15), 0, Math.cos(0.15)))
-    )
-    this.world.createCollider(
-      this.rapier.ColliderDesc.cuboid(0.3, 0.6, 4)
-        .setRestitution(0.4)
-        .setFriction(0.1)
-        .setCollisionGroups(COLLISION_GROUP_PRESETS.WALL),
-      rightFlipperRailBody
-    )
-    this.rigidBodies.push(rightFlipperRailBody)
-    this.bindings.push({ mesh: rightFlipperRail, rigidBody: rightFlipperRailBody })
+    this.bindRail(rightFlipperRail, this.railBodies?.rightFlipper)
   }
 
   getBindings(): PhysicsBinding[] {
@@ -397,6 +390,7 @@ export class DecorationBuilder {
       }
     }
     this.rigidBodies = []
+    this.railBodies = null
 
     for (const mesh of this.pinballMeshes) {
       if (!mesh.isDisposed()) {

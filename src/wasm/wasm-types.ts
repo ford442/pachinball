@@ -22,7 +22,7 @@ export const STATIC_HANDLE_OVERFLOW = 0x7FFFFFFF
 // ---------------------------------------------------------------------------
 
 /** Mirrors native `SNAPSHOT_VERSION` (native/src/Snapshot.h). Recorded in replay metadata. */
-export const WASM_SNAPSHOT_VERSION = 1
+export const WASM_SNAPSHOT_VERSION = 2
 
 /**
  * `restoreSnapshot` result — mirrors native `SnapshotStatus` (Snapshot.h), plus
@@ -469,6 +469,12 @@ export interface WasmPhysicsWorldInstance {
 
   /** FNV-1a 64 of the static table, 16 hex chars — equal iff snapshots are interchangeable. */
   getStaticContentHash?(): string
+
+  /**
+   * FNV-1a 64 of the stepped world (PhysicsWorld::getStateHash), 16 hex chars:
+   * equal hashes step identically. Optional: bundles before #459 lack it.
+   */
+  getStateHash?(): string
 
   /** Contact flushes so far (restored with the snapshot). */
   getContactGeneration?(): number

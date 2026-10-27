@@ -20,18 +20,17 @@ const distDir = join(root, 'dist')
 const assetsDir = join(distDir, 'assets')
 const budgetPath = join(root, 'bundle-budget.json')
 
-function walkFiles(dir) {
-  const out = []
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name)
-    if (entry.isDirectory()) out.push(...walkFiles(full))
-    else out.push(full)
-  }
-  return out
-}
-
 function gzipKb(buf) {
   return gzipSync(buf).length / 1024
+}
+
+/** Relative URLs in Workbox's `precacheAndRoute([{url:"…",revision:…},…])` call. */
+function precacheManifestUrls(serviceWorker) {
+  const start = serviceWorker.indexOf('precacheAndRoute([')
+  if (start < 0) return []
+  const end = serviceWorker.indexOf('],', start)
+  const manifest = serviceWorker.slice(start, end < 0 ? undefined : end)
+  return [...manifest.matchAll(/url:"([^"]+)"/g)].map((m) => m[1])
 }
 
 function findChunk(files, prefix) {
@@ -81,26 +80,24 @@ function measure() {
     .filter((file) => statSync(file, { throwIfNoEntry: false })?.isFile())
   const initialJsGzipKbValue = readGzip(entry) + initialChunks.reduce((sum, file) => sum + readGzip(file), 0)
 
-  const workboxIgnores = [
-    /backbox[/\\].*\.(mp4|webm)$/,
-    /babylon-loaders-.*\.js$/,
-    /ui-overlays-.*\.js$/,
-    /rapier-.*\.js$/,
-    /reel\.png$/,
-  ]
+  const readText = (path) => (statSync(path, { throwIfNoEntry: false })?.isFile() ? readFileSync(path, 'utf8') : '')
+  const serviceWorker = readText(join(distDir, 'sw.js'))
 
+  // What the service worker actually precaches: the URLs in its precacheAndRoute([...])
+  // manifest, so the budget follows vite.config.ts globPatterns / globIgnores (#464 item 8)
+  // instead of a hand-kept copy of them.
+  const precached = precacheManifestUrls(serviceWorker)
+  if (precached.length === 0) throw new Error('dist/sw.js has no precache manifest — was the PWA plugin disabled?')
   let precacheTotalKiB = 0
-  for (const file of walkFiles(distDir)) {
-    const rel = relative(distDir, file).replaceAll('\\', '/')
-    if (workboxIgnores.some((re) => re.test(rel))) continue
-    if (!/\.(js|css|html|wasm|svg|png|ogg|env|webp|ico|txt|webmanifest)$/.test(rel)) continue
-    precacheTotalKiB += statSync(file).size / 1024
+  for (const url of precached) {
+    const file = join(distDir, decodeURIComponent(url))
+    const size = statSync(file, { throwIfNoEntry: false })?.size
+    if (size === undefined) throw new Error(`precached ${url} is not in dist/`)
+    precacheTotalKiB += size / 1024
   }
 
   // Rapier must stay a lazy, degrade-only chunk.
   const rapierName = rapier ? rapier.split(/[/\\]/).pop() : null
-  const readText = (path) => (statSync(path, { throwIfNoEntry: false })?.isFile() ? readFileSync(path, 'utf8') : '')
-  const serviceWorker = readText(join(distDir, 'sw.js'))
   const indexHtml = readText(join(distDir, 'index.html'))
   const rapierPrecached = rapierName !== null && serviceWorker.includes(rapierName)
   const rapierPreloaded = rapierName !== null && indexHtml.includes(rapierName)

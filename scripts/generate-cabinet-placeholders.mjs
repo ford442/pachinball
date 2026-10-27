@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * Generate dimension-matched placeholder GLBs for the classic cabinet.
- * Matches CLASSIC_CONFIG: width 32, depth 44, sideHeight 20, panelZ 5.
+ * Generate dimension-matched placeholder GLBs for every cabinet preset.
+ * Dimensions mirror `src/cabinet/cabinet-presets.ts` (width, depth,
+ * sideHeight, backboxZ; panelZ 5) — `tests/cabinet-gltf-assets.test.ts`
+ * fails if a shell drifts from its preset or exceeds the CABINET_GLTF.md budget.
  * Node names follow neon/theme contracts (Neon, LightBar, Detail).
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -9,7 +11,16 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const outDir = join(__dirname, '../public/models/cabinet/classic')
+const cabinetRoot = join(__dirname, '../public/models/cabinet')
+
+/** Subset of each CabinetPreset the shell geometry depends on. */
+const PRESETS = {
+  classic: { width: 32, depth: 44, sideHeight: 20, backboxZ: 30 },
+  neo: { width: 30, depth: 42, sideHeight: 18, backboxZ: 28 },
+  vertical: { width: 26, depth: 38, sideHeight: 22, backboxZ: 24 },
+  wide: { width: 38, depth: 48, sideHeight: 20, backboxZ: 32 },
+}
+const PANEL_Z = 5
 
 /** Box centered at (cx,cy,cz) with half-extents hx,hy,hz → 24 floats positions + indices */
 function boxGeometry(cx, cy, cz, hx, hy, hz) {
@@ -164,38 +175,39 @@ function buildGlb(meshes) {
   return Buffer.concat([header, jsonHeader, jsonChunk, binHeader, binBuffer])
 }
 
-// Outer shell ≈ width+sideThick*2 = 36, depth 44, height 20; center at panelZ=5, y = sideHeight/2 - 2 = 8
-const body = {
-  name: 'cabinetBody',
-  ...boxGeometry(0, 8, 5, 18, 10, 22),
-}
-const neon = {
-  name: 'cabinetNeonMarquee',
-  ...boxGeometry(0, 18.5, 26, 10, 0.4, 0.4),
-}
-const lightBar = {
-  name: 'cabinetLightBar',
-  ...boxGeometry(0, 1, -14, 12, 0.25, 0.25),
+function writePreset(type, { width, depth, sideHeight, backboxZ }) {
+  const outDir = join(cabinetRoot, type)
+  // Outer shell = width + 2×2 side panels, centred on the panel; y spans baseY+8 … sideHeight-2.
+  const body = {
+    name: 'cabinetBody',
+    ...boxGeometry(0, sideHeight / 2 - 2, PANEL_Z, (width + 4) / 2, sideHeight / 2, depth / 2),
+  }
+  const neon = {
+    name: 'cabinetNeonMarquee',
+    ...boxGeometry(0, sideHeight - 1.5, backboxZ - 4, width / 2 - 6, 0.4, 0.4),
+  }
+  const lightBar = {
+    name: 'cabinetLightBar',
+    ...boxGeometry(0, 1, PANEL_Z - depth / 2 + 3, width / 2 - 4, 0.25, 0.25),
+  }
+  const detail = {
+    name: 'cabinetSidePlateDetail',
+    ...boxGeometry(-(width + 4) / 2 + 0.5, sideHeight / 2 - 2, PANEL_Z, 0.3, sideHeight / 2 - 2, depth / 2 - 4),
+  }
+
+  mkdirSync(outDir, { recursive: true })
+  const simpleGlb = buildGlb([body, neon, lightBar])
+  writeFileSync(join(outDir, 'simple.glb'), simpleGlb)
+  const highGlb = buildGlb([body, neon, lightBar, detail])
+  writeFileSync(join(outDir, 'high.glb'), highGlb)
+  console.log(
+    `Wrote ${type} placeholders: simple=${simpleGlb.byteLength}B high=${highGlb.byteLength}B → ${outDir}`,
+  )
 }
 
-mkdirSync(outDir, { recursive: true })
+for (const [type, dims] of Object.entries(PRESETS)) {
+  writePreset(type, dims)
+}
+
 mkdirSync(join(__dirname, '../public/models/inserts'), { recursive: true })
-
-const simpleGlb = buildGlb([body, neon, lightBar])
-writeFileSync(join(outDir, 'simple.glb'), simpleGlb)
-
-const detail = {
-  name: 'cabinetSidePlateDetail',
-  ...boxGeometry(-17.5, 8, 5, 0.3, 8, 18),
-}
-const highGlb = buildGlb([body, neon, lightBar, detail])
-writeFileSync(join(outDir, 'high.glb'), highGlb)
-
-writeFileSync(
-  join(__dirname, '../public/models/inserts/.gitkeep'),
-  '',
-)
-
-console.log(
-  `Wrote classic placeholders: simple=${simpleGlb.byteLength}B high=${highGlb.byteLength}B → ${outDir}`,
-)
+writeFileSync(join(__dirname, '../public/models/inserts/.gitkeep'), '')

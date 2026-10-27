@@ -41,7 +41,7 @@ const SLOT_SYMBOL_DISPLAY: Record<SlotSymbol, string> = {
 
 const DISPLAY_TO_SLOT_SYMBOL: Record<string, SlotSymbol> = Object.fromEntries(
   Object.entries(SLOT_SYMBOL_DISPLAY).map(([key, label]) => [label, key as SlotSymbol])
-) as Record<string, SlotSymbol>
+)
 
 const DEBUG_FORCE_KEY = 'pachinball-debug-slot-force'
 

@@ -172,7 +172,7 @@ export class LauncherBuilder {
       hitTime: 0,
     }
 
-    bindings.push({ mesh: launcherRoot as unknown as Mesh, rigidBody: body })
+    bindings.push({ mesh: launcherRoot, rigidBody: body })
 
     this.meshes.push(launcherMesh, chargeMesh)
     if (rimMesh) this.meshes.push(rimMesh)

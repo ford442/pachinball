@@ -95,6 +95,12 @@ export const NEO_CONFIG: CabinetPreset = {
   hasAngledSides: true,
   hasExtendedMarquee: true,
   hasCoinDoor: true,
+
+  gltf: {
+    simpleUrl: 'models/cabinet/neo/simple.glb',
+    highUrl: 'models/cabinet/neo/high.glb',
+    loadTimeoutMs: 15_000,
+  },
 }
 
 export const VERTICAL_CONFIG: CabinetPreset = {
@@ -137,6 +143,12 @@ export const VERTICAL_CONFIG: CabinetPreset = {
   hasAngledSides: false,
   hasExtendedMarquee: true,
   hasCoinDoor: false,
+
+  gltf: {
+    simpleUrl: 'models/cabinet/vertical/simple.glb',
+    highUrl: 'models/cabinet/vertical/high.glb',
+    loadTimeoutMs: 15_000,
+  },
 }
 
 export const WIDE_CONFIG: CabinetPreset = {
@@ -178,4 +190,10 @@ export const WIDE_CONFIG: CabinetPreset = {
   hasAngledSides: false,
   hasExtendedMarquee: false,
   hasCoinDoor: true,
+
+  gltf: {
+    simpleUrl: 'models/cabinet/wide/simple.glb',
+    highUrl: 'models/cabinet/wide/high.glb',
+    loadTimeoutMs: 15_000,
+  },
 }

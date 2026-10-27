@@ -331,7 +331,10 @@ production uses the CDN unless `VITE_ASSET_URL` overrides):
 **Nexus character pack** (`characterLayer`): `public/backbox/nexus/{idle,reach,fever,jackpot}.png`
 
 Video and image layers load in parallel on state change; failed video `dispose()`
-leaves image + procedural reels visible. LCD emoji walk-bys run when `characterLayer` is unset.
+leaves image + procedural reels visible. The character take is its own plane
+(`src/display/display-character.ts`) over the video / image stack and never
+replaces either. LCD emoji walk-bys run until a take has loaded, so an unset or
+missing `characterLayer` keeps them.
 
 ### Playfield insert glTF
 

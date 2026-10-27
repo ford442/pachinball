@@ -90,7 +90,6 @@ export function makePhysicsHostShell(opts: PhysicsHostShellOpts): PhysicsHost {
     soundSystem: { playBeep: vi.fn(), playImpact: vi.fn(), playGoldBallCollect: vi.fn() },
     mapManager: null,
     uiManager: null,
-    adventureState: { updateGoal: vi.fn() },
     adventureMode: null,
     adventureManager: null,
     zoneTriggerSystem: null,

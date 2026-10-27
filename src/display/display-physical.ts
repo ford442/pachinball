@@ -8,6 +8,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
+import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { Scene } from '@babylonjs/core/scene'
 import { DisplayState, type DisplayConfig } from './display-types'
@@ -133,6 +134,11 @@ export class DisplayPhysicalLayer {
   setVisible(visible: boolean): void {
     this.visible = visible
     if (this.root) this.root.setEnabled(visible)
+  }
+
+  /** Backdrop and drums, for the layer's task in the backbox Frame Graph. */
+  getMeshes(): AbstractMesh[] {
+    return this.root ? this.root.getChildMeshes() : []
   }
 
   dispose(): void {

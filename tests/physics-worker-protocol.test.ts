@@ -315,6 +315,9 @@ describe('worker snapshot request/reply', () => {
       restoreSnapshot: vi.fn(() => restoreStatus),
       getStaticContentHash: vi.fn(() => 'feedfacecafebeef'),
     }
+    const withHash = Object.assign(engine, {
+      getStateHash: vi.fn(() => `state@${engine.getStepCount()}`),
+    })
     const runtime = createWorkerRuntimeState()
     const client = new PhysicsWorkerClient({ sharedTransport: false })
     const batches: PhysicsWorkerCommand[][] = []
@@ -322,7 +325,7 @@ describe('worker snapshot request/reply', () => {
     let holdReplies = false
     client.attachLoopback((commands) => {
       batches.push(commands)
-      for (const cmd of commands) applyPhysicsCommand(engine, cmd, runtime)
+      for (const cmd of commands) applyPhysicsCommand(withHash, cmd, runtime)
       const replies = runtime.replies
       runtime.replies = []
       for (const r of replies) {
@@ -331,7 +334,7 @@ describe('worker snapshot request/reply', () => {
       }
     })
     return {
-      engine, runtime, client, batches,
+      engine: withHash, runtime, client, batches,
       hold: () => { holdReplies = true },
       release: () => { holdReplies = false; for (const r of held.splice(0)) client.receiveWorkerMessage(r) },
     }
@@ -350,6 +353,27 @@ describe('worker snapshot request/reply', () => {
     expect(batches[0]!.map((c) => c.type)).toEqual(['createBody', 'serializeSnapshot'])
     expect(engine.serializeSnapshot).toHaveBeenCalledTimes(2)
     expect(client.getStaticContentHash()).toBe('feedfacecafebeef')
+  })
+
+  it('hashes the world at its place in the command order, without a blob', async () => {
+    const { client, batches, engine } = setup()
+    client.createBody({ mass: 1 })
+    const before = client.getStateHash()
+    client.step(1 / 60)
+    const after = client.getStateHash()
+    await expect(before).resolves.toBe('state@0')
+    await expect(after).resolves.toBe('state@1')
+    expect(batches.flat().map((c) => c.type)).toEqual(['createBody', 'getStateHash', 'step', 'getStateHash'])
+    expect(engine.serializeSnapshot).not.toHaveBeenCalled()
+    // Every reply carries the hash, including a serialize.
+    const r = createWorkerRuntimeState()
+    applyPhysicsCommand(engine, { type: 'serializeSnapshot', requestId: 9 }, r)
+    expect(r.replies[0]!.stateHash).toBe('state@1')
+  })
+
+  it('getStateHash resolves null before the worker is ready', async () => {
+    const client = new PhysicsWorkerClient({ sharedTransport: false })
+    await expect(client.getStateHash()).resolves.toBeNull()
   })
 
   it('a restore takes effect before the next step and adopts the snapshot ids and step count', async () => {

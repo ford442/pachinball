@@ -16,7 +16,7 @@ export function loadRapier(): Promise<typeof RAPIER> {
   pending ??= (async () => {
     const rapier = await import('@dimforge/rapier3d-compat')
     try {
-      await (rapier.init as unknown as () => Promise<void>)()
+      await rapier.init()
     } catch {
       // ESM test runners reject the export mutation init performs; the WASM is ready regardless.
     }

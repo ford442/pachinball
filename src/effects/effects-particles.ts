@@ -5,6 +5,7 @@ import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem'
 import { Scene } from '@babylonjs/core/scene'
 import { PALETTE } from '../game-elements/visual-language'
 import { createTimerScope } from '../core/timers'
+import { assetUrl } from '../core/asset-urls'
 
 export class ParticleEffects {
   private readonly timers = createTimerScope()
@@ -150,11 +151,11 @@ export class ParticleEffects {
 
   private getParticleTexture(): Texture {
     // Create or return cached particle texture
-    return new Texture((import.meta.env.BASE_URL) + 'assets/particle.png', this.scene)
+    return new Texture(assetUrl('assets/particle.png'), this.scene)
   }
 
   private getShardTexture(): Texture {
-    return new Texture((import.meta.env.BASE_URL) + 'assets/shard.png', this.scene)
+    return new Texture(assetUrl('assets/shard.png'), this.scene)
   }
 
   update(): void {

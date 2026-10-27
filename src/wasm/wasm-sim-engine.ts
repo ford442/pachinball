@@ -160,4 +160,10 @@ export interface WasmSimEngine {
    * worker last reported with a snapshot reply, null before the first.
    */
   getStaticContentHash(): string | null
+  /**
+   * Hash of the stepped world (native `getStateHash()`), null when the bundle
+   * cannot hash. Ordered like the snapshot calls: in-process engines answer
+   * now, the worker client once the worker has applied every earlier command.
+   */
+  getStateHash(): Awaitable<string | null>
 }

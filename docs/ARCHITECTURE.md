@@ -53,9 +53,12 @@ flowchart TB
     ZoneRegistry["zone-registry.ts"] --> AdventureTypes
   end
 
-  subgraph legacyRuntime [Legacy runtime - level-select only]
+  subgraph frontDoor [Campaign front door]
+    CampaignMap["adventure/ui/campaign-map.ts"] --> TrackCatalog
+  end
+
+  subgraph legacyRuntime [Legacy runtime - free-form progress only]
     AdventureState["adventure-state.ts"]
-    LevelSelect["level-select-screen.ts"] --> AdventureState
   end
 ```
 
@@ -67,7 +70,8 @@ flowchart TB
 | [`src/game-elements/adventure-track-progression.ts`](../src/game-elements/adventure-track-progression.ts) | `TRACK_CATALOG`, `AdventureTrackProgression` — campaign spine metadata (mode type, timers, unlock chain) |
 | [`src/game-elements/adventure-progression-supervisor.ts`](../src/game-elements/adventure-progression-supervisor.ts) | Portal lifecycle + campaign state machine |
 | [`src/game-elements/zone-registry.ts`](../src/game-elements/zone-registry.ts) | Per-track theming / story / music metadata |
-| [`src/adventure/adventure-state.ts`](../src/adventure/adventure-state.ts) | **Legacy** level-select UI + cosmetic rewards only — not campaign truth |
+| [`src/adventure/ui/campaign-map.ts`](../src/adventure/ui/campaign-map.ts) | Campaign stage map overlay — spine + branches with completion, Nexus Archive rewards |
+| [`src/adventure/adventure-state.ts`](../src/adventure/adventure-state.ts) | **Legacy** free-form progress + cosmetic rewards only — not campaign truth |
 | [`docs/ADVENTURE_CAMPAIGN.md`](ADVENTURE_CAMPAIGN.md) | Campaign A/B alternation reference |
 
 ### Campaign vs legacy progression
@@ -75,7 +79,7 @@ flowchart TB
 | System | Purpose |
 |--------|---------|
 | `AdventureTrackProgression` + `AdventureProgressionSupervisor` | **Campaign truth** — A/B alternating track loop, portal routing, unlock chain |
-| `AdventureState` + `ADVENTURE_LEVELS` | **Legacy** — free-form level-select screen, cosmetic reward equip (ball trail, skin) |
+| `AdventureState` | **Legacy** — persisted free-form progress, cosmetic reward equip (ball trail, skin). The level-select screen and `ADVENTURE_LEVELS` are retired. |
 
 These are intentionally separated. Do not add campaign features to `AdventureState`.
 

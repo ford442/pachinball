@@ -19,6 +19,7 @@ import { Scene } from '@babylonjs/core/scene'
 // Import KTX2 loader to register the format (side-effect)
 import '@babylonjs/core/Materials/Textures/Loaders/ktxTextureLoader'
 import type { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine'
+import { assetUrl } from '../core/asset-urls'
 import {
   QualityTier,
   TIER_ENV_INTENSITY,
@@ -121,7 +122,7 @@ export class MaterialLibraryBase {
   protected textureCache: Map<string, BaseTexture> = new Map()
   protected materialCache: Map<string, StandardMaterial | PBRMaterial> = new Map()
 
-  protected textureBasePath = (import.meta.env.BASE_URL) + 'textures'
+  protected textureBasePath = assetUrl('textures')
   protected _qualityTier: QualityTier = QualityTier.HIGH
 
   constructor(scene: Scene) {

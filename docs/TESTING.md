@@ -81,3 +81,21 @@ Each track switch calls `AdventureMode.clearTrack()` which:
 - Test mode bypasses campaign unlock gates — all tracks are available immediately.
 - The existing adventure campaign flow is not affected; test mode operates independently.
 - The `GameInputManager` registers Ctrl+Shift+M as a global shortcut (works in any game state).
+
+# Playwright configs and CI jobs
+
+| Config | Server | Port | Projects | CI job | Specs |
+|--------|--------|------|----------|--------|-------|
+| `playwright.config.ts` | `npm run dev` | 5173 | desktop `chromium`, `mobile-chrome` (Pixel 7) | `e2e` (blocking) | `verify_prism_core`, `basic-gameplay`, `lifecycle-dispose`, `mobile-touch-smoke` |
+| `playwright.degrade.config.ts` | dev server with `public/wasm` removed | 4173 | `chromium` | `e2e`, "Physics degrade" step | `physics-degrade` (covers the `[Bootstrap][physics-degrade]` marker) |
+| `playwright.preview.config.ts` | `vite preview` of the built `dist/` | 4174 | `chromium` only | `e2e-preview` (blocking, matrix `wasm: [true, false]`) | `preview-boot`, `preview-sw`, `verify_prism_core`, `basic-gameplay`, `lifecycle-dispose` |
+
+The dev job never runs minified output, so it cannot see problems that only exist in the production bundle (stripped `console.*`, chunking, the `wasm-worker` default under real COOP/COEP). `e2e-preview` covers that:
+
+- `wasm: true` builds the WASM bundle (emsdk, same cache key as `native-physics.yml`) and sets `PREVIEW_EXPECT_ENGINE=wasm-worker`; `wasm: false` deletes `public/wasm` and expects `rapier` (the production fail-closed path).
+- `preview-boot` asserts `crossOriginIsolated`, `currentPhysicsEngine` and a `webgl2` canvas (SwiftShader offers no WebGPU adapter).
+- Service workers are blocked for every spec except `preview-sw`, which lets Workbox control the page and checks that the reloaded document is still cross-origin isolated.
+- `scripts/check-dist-console.mjs` asserts the `Failed to bootstrap game` literal and the absence of `debugger` in the entry chunk.
+- Mobile is dev-only: the touch smoke is not about the bundle, so it is not repeated on preview.
+
+Run it locally: `npx vite build && PREVIEW_EXPECT_ENGINE=rapier npx playwright test --config=playwright.preview.config.ts tests/preview-boot.spec.ts tests/preview-sw.spec.ts` (`PREVIEW_EXPECT_ENGINE` defaults from whether `public/wasm/` exists).

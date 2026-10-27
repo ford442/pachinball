@@ -8,6 +8,11 @@ export default defineConfig({
         find: /^@babylonjs\/core(\/.*)?$/,
         replacement: path.resolve(__dirname, 'tests/mocks/babylon-core.ts'),
       },
+      {
+        // vite-plugin-pwa's virtual module only exists inside a Vite build or dev server.
+        find: /^virtual:pwa-register$/,
+        replacement: path.resolve(__dirname, 'tests/mocks/pwa-register.ts'),
+      },
     ],
   },
   test: {

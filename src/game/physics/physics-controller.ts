@@ -101,6 +101,16 @@ export class GamePhysicsController {
     this.eventBusUnsubscribers = []
   }
 
+  /**
+   * The C++ flipper hinges the owner drives, or null when physics does not run an owner mode.
+   * In an owner mode these hinges are the only thing that moves a flipper (there is no Rapier
+   * joint motor to fall back on), and they exist only once `rebuildHandleCaches()` has run.
+   */
+  getWasmFlipperHingeCount(): number | null {
+    if (!(this.host.physics.isWasmOwnerMode?.() ?? false)) return null
+    return this.wasmOwner?.getFlipperHinges().length ?? 0
+  }
+
   rebuildHandleCaches(): void {
     const wasmActive = this.host.physics.isWasmActive?.() ?? false
     const isOwner = this.host.physics.isWasmOwnerMode?.() ?? false
@@ -507,7 +517,6 @@ export class GamePhysicsController {
     this.host.effects?.updateSlotLighting()
     this.host.mapManager?.update(dt)
     this.host.zoneTriggerSystem?.update(currentBallBodies)
-    this.host.adventureState.updateGoal('survive-time', dt)
 
     {
       const ballBody = this.host.ballManager?.getBallBody()

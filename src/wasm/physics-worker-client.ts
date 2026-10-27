@@ -491,15 +491,24 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     return this.staticHash
   }
 
+  /**
+   * Hash of the worker's C++ world (#459), taken at this point in the command
+   * order like `serializeSnapshot()` — but without shipping the blob. Null when
+   * the worker's bundle cannot hash, or before the worker is ready.
+   */
+  getStateHash(): Promise<string | null> {
+    return this.requestSnapshot({ type: 'getStateHash', requestId: 0 }).then((reply) => reply.stateHash)
+  }
+
   /** Send a snapshot request; `onReply` runs synchronously when the reply is received. */
   private requestSnapshot(
-    cmd: Extract<PhysicsWorkerCommand, { type: 'serializeSnapshot' | 'restoreSnapshot' }>,
+    cmd: Extract<PhysicsWorkerCommand, { type: 'serializeSnapshot' | 'restoreSnapshot' | 'getStateHash' }>,
     onReply?: (reply: PhysicsWorkerSnapshotReply) => void,
   ): Promise<PhysicsWorkerSnapshotReply> {
     if (!this.isReady) {
       const refused: PhysicsWorkerSnapshotReply = {
         type: 'snapshot-reply', requestId: 0, bytes: null,
-        status: WasmSnapshotStatus.Unsupported, staticHash: null, stepCount: this.lastStepCount,
+        status: WasmSnapshotStatus.Unsupported, staticHash: null, stepCount: this.lastStepCount, stateHash: null,
       }
       onReply?.(refused)
       return Promise.resolve(refused)
@@ -550,7 +559,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     const pending = [...this.pendingSnapshots.values()]
     this.pendingSnapshots.clear()
     for (const resolve of pending) {
-      resolve({ type: 'snapshot-reply', requestId: 0, bytes: null, status: WasmSnapshotStatus.Unsupported, staticHash: null, stepCount: 0 })
+      resolve({ type: 'snapshot-reply', requestId: 0, bytes: null, status: WasmSnapshotStatus.Unsupported, staticHash: null, stepCount: 0, stateHash: null })
     }
     this.staticHash = null
     this.restoresInFlight = 0

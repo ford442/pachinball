@@ -88,6 +88,11 @@ export class DisplayImageLayer {
     }
   }
 
+  /** The layer's meshes, for its task in the backbox Frame Graph. */
+  getMeshes(): Mesh[] {
+    return this.mesh ? [this.mesh] : []
+  }
+
   dispose(): void {
     try {
       this.texture?.dispose()

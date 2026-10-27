@@ -94,7 +94,7 @@ export class BackboxBorderGlow {
 
     // Clone to avoid bleeding emissive animation onto the shared cabinet body
     // material. This class owns the cloned material and disposes it in dispose().
-    const clonedMat = (sourceMat as EmissiveMaterial).clone('backboxGlowMat')
+    const clonedMat = sourceMat.clone('backboxGlowMat')
     clonedMat.emissiveColor = Color3.Black()
     backboxMesh.material = clonedMat
     this._ownedMaterial = clonedMat
