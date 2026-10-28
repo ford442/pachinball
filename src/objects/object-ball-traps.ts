@@ -193,7 +193,7 @@ export class BallTrapBuilder {
       rearmTimer: 0,
     }
 
-    bindings.push({ mesh: trapRoot as unknown as Mesh, rigidBody: body })
+    bindings.push({ mesh: trapRoot, rigidBody: body })
 
     this.meshes.push(trapEntrance, trapGate)
     if (trapChamber) this.meshes.push(trapChamber)

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { medianOfMedians, summarize } from '../../scripts/perf-stats.mjs'
 
 export type PerfTier = 'low' | 'medium' | 'high'
-export type PerfState = 'menu' | 'table'
+export type PerfState = 'menu' | 'table' | 'table3'
 
 export interface PerfConfig {
   enabled: boolean
@@ -53,13 +53,19 @@ export function perfConfig(env: NodeJS.ProcessEnv = process.env): PerfConfig {
     enabled: env.PERF_BASELINE === '1',
     label: (env.PERF_LABEL ?? 'baseline').replace(/[^A-Za-z0-9_.-]/g, '_'),
     tiers: list<PerfTier>(env.PERF_TIERS, ['low', 'medium', 'high'], ['medium']),
-    states: list<PerfState>(env.PERF_STATES, ['menu', 'table'], ['menu', 'table']),
+    states: list<PerfState>(env.PERF_STATES, ['menu', 'table', 'table3'], ['menu', 'table', 'table3']),
     frames: int(env.PERF_FRAMES, 120),
     warmup: int(env.PERF_WARMUP, 30),
     repeats: int(env.PERF_REPEATS, 3),
     viewport: size(env.PERF_VIEWPORT, { width: 640, height: 360 }),
     outDir: env.PERF_OUT_DIR ?? 'test-results/perf',
   }
+}
+
+/** The slice of Babylon's `Observable` the harness uses to count render-target renders. */
+interface Observable {
+  add: (callback: () => void) => unknown
+  remove: (observer: unknown) => unknown
 }
 
 /** The slice of `window.game` the harness touches (all optional: the page may still be booting). */
@@ -72,14 +78,23 @@ interface PerfGameHooks {
     lights: unknown[]
     textures: unknown[]
     getActiveMeshes: () => { length: number }
+    onAfterRenderObservable: Observable
+    _activeMeshesFrozen?: boolean
   }
   engine?: {
     _drawCalls?: { current?: number }
     _gl?: WebGLRenderingContext
   }
-  shadowGenerator?: { getShadowMap?: () => { renderList?: unknown[] } | null } | null
+  shadowGenerator?: {
+    getShadowMap?: () => { renderList?: unknown[]; onAfterRenderObservable?: Observable } | null
+  } | null
+  mirrorTexture?: { onAfterRenderObservable?: Observable } | null
+  ballManager?: { spawnExtraBalls: (count: number) => void; getBallBodies: () => unknown[] } | null
+  /** Present from the StaticSceneGate commit on; absent (null) on earlier commits. */
+  staticSceneGate?: { refreezeCount: number; getStats?: () => { state: string } } | null
   stateManager?: { isPlaying?: () => boolean }
   renderer?: { applyQualityTier: (tier: string) => void }
+  performanceMonitor?: { setOnSustainedJank?: (callback: null) => void } | null
   debugHelper?: { initializeDebugInstrumentation: () => void } | null
   sceneInstrumentation?: {
     captureActiveMeshesEvaluationTime: boolean
@@ -109,6 +124,9 @@ export interface RawSamples {
   activeMeshesEval: number[]
   rttRender: number[]
   drawPhase: number[]
+  /** Times the key-light shadow map / the mirror texture rendered during the measured frames. */
+  shadowRenders: number
+  mirrorRenders: number
 }
 
 export interface SceneCounts {
@@ -119,6 +137,19 @@ export interface SceneCounts {
   textures: number
   drawCalls: number
   shadowCasters: number | null
+  /** Materials whose `isFrozen` is true right now (of `materials`). */
+  materialsFrozen: number
+  /** Key-light shadow-map renders per frame; multiply by the frame rate for renders/s. */
+  shadowRendersPerFrame: number | null
+  mirrorRendersPerFrame: number | null
+  /** `StaticSceneGate.refreezeCount`; null before the gate exists. */
+  refreezeCount: number | null
+  /** The gate's state when sampling began (`frozen` once the scene is quiet); null before the gate exists. */
+  gateState: string | null
+  /** Whether Babylon's active-mesh list was frozen when sampling began. */
+  activeListFrozen: boolean | null
+  /** Rendered frames the gate needed to reach `frozen` before sampling (null: no gate, or it never did). */
+  settleFrames: number | null
 }
 
 export interface PerfEnv {
@@ -142,11 +173,23 @@ export interface RepeatResult {
   env: PerfEnv
 }
 
-/** Boot the game (WebGL2, debug tooling on so SceneInstrumentation can be created) and settle it. */
+/**
+ * Boot the game (WebGL2, debug tooling on so SceneInstrumentation can be created) and settle it.
+ *
+ * `noopt=1` is essential under SwiftShader: the game runs a Babylon `SceneOptimizer` (target 55 fps)
+ * that, below target, switches shadows, post-processes, particles and render targets off and halves
+ * the resolution. Software GL runs at 1-3 fps, so within seconds every run would be measuring a
+ * scene with no shadow pass and no mirror, and the shadow/mirror/prepass work could not show up.
+ * The sustained-jank handler (which drops the quality tier) is silenced for the same reason; the
+ * tier under test is applied explicitly below.
+ */
 export async function bootForPerf(page: Page, tier: PerfTier): Promise<void> {
-  await page.goto('/?renderer=webgl2&debug=1')
+  await page.goto('/?renderer=webgl2&debug=1&noopt=1')
   await expect(page.locator('#start-btn')).toBeVisible({ timeout: 60_000 })
   await page.waitForFunction(() => !!(window as PerfWindow).game?.ready, undefined, { timeout: 90_000 })
+  await page.evaluate(() => {
+    ;(window as PerfWindow).game?.performanceMonitor?.setOnSustainedJank?.(null)
+  })
   await waitForSceneSettle(page)
   await page.evaluate((t) => {
     ;(window as PerfWindow).game?.renderer?.applyQualityTier(t)
@@ -181,6 +224,55 @@ export async function startTable(page: Page): Promise<void> {
     return g?.stateManager?.isPlaying?.() === true
   })
   expect(ok, 'startGame() should put the game in PLAYING').toBe(true)
+  await waitForSceneSettle(page)
+}
+
+/**
+ * Wait (in rendered frames) until the StaticSceneGate reports `frozen`, i.e. the scene has been
+ * quiet long enough for the frozen materials and the frozen active-mesh list to be in effect.
+ *
+ * Why this matters: Start and every ball spawn thaw the gate, and the fog then eases to its in-play
+ * values for a few seconds (effects-atmosphere.ts lerps per frame), thawing it again on every frame
+ * until it converges. Sampling before that measures the thawed scene, not the steady state a player
+ * sits in. Returns the frames waited, or null when there is no gate (earlier commits) or it never
+ * settled within `maxFrames`.
+ */
+export async function waitForStaticScene(page: Page, maxFrames = 600): Promise<number | null> {
+  return page.evaluate(
+    (max) =>
+      new Promise<number | null>((resolve) => {
+        const g = (window as PerfWindow).game
+        const gate = g?.staticSceneGate
+        const scene = g?.scene
+        if (!gate?.getStats || !scene) {
+          resolve(null)
+          return
+        }
+        let frames = 0
+        const observer = scene.onAfterRenderObservable.add(() => {
+          frames++
+          const settled = gate.getStats?.().state === 'frozen'
+          if (!settled && frames < max) return
+          scene.onAfterRenderObservable.remove(observer)
+          resolve(settled ? frames : null)
+        })
+      }),
+    maxFrames,
+  )
+}
+
+/**
+ * Bring the table to `total` balls (the game starts with one). Run after `startTable`; the extra
+ * balls are real physics bodies that roll for the whole measurement.
+ */
+export async function addBalls(page: Page, total: number): Promise<void> {
+  const count = await page.evaluate((n) => {
+    const manager = (window as PerfWindow).game?.ballManager
+    const have = manager?.getBallBodies().length ?? 0
+    if (manager && have < n) manager.spawnExtraBalls(n - have)
+    return manager?.getBallBodies().length ?? 0
+  }, total)
+  expect(count, `table should hold ${total} balls`).toBe(total)
   await waitForSceneSettle(page)
 }
 
@@ -239,12 +331,33 @@ function sampleFramesInPage(page: Page, warmup: number, frames: number): Promise
           }
         }
 
-        const out: RawSamples = { frame: [], physics: [], activeMeshesEval: [], rttRender: [], drawPhase: [] }
+        const out: RawSamples = {
+          frame: [],
+          physics: [],
+          activeMeshesEval: [],
+          rttRender: [],
+          drawPhase: [],
+          shadowRenders: 0,
+          mirrorRenders: 0,
+        }
         let seen = 0
+        // Count renders of the shadow map and the mirror, but only inside the measured frames.
+        const shadowMap = g.shadowGenerator?.getShadowMap?.() ?? null
+        const observers: Array<[Observable, unknown]> = []
+        const watch = (observable: Observable | undefined, onRender: () => void): void => {
+          if (observable) observers.push([observable, observable.add(onRender)])
+        }
+        watch(shadowMap?.onAfterRenderObservable, () => {
+          if (seen >= w) out.shadowRenders++
+        })
+        watch(g.mirrorTexture?.onAfterRenderObservable, () => {
+          if (seen >= w) out.mirrorRenders++
+        })
         let lastFrameAt = performance.now()
         const progress = { seen: 0, total: w + n, lastFrameMs: 0 }
         ;(window as PerfWindow).__perfProgress = progress
         const restore = (): void => {
+          for (const [observable, observer] of observers) observable.remove(observer)
           g.renderFrame = originalRender
           if (pc && originalStep) pc.stepPhysics = originalStep
         }
@@ -297,6 +410,14 @@ export async function collectCounts(page: Page): Promise<SceneCounts> {
       textures: scene?.textures.length ?? 0,
       drawCalls: g?.engine?._drawCalls?.current ?? 0,
       shadowCasters: casters ? casters.length : null,
+      materialsFrozen: scene ? (scene.materials as Array<{ isFrozen?: boolean }>).filter((m) => m.isFrozen).length : 0,
+      // Filled in from the sampled frames by toRepeatResult.
+      shadowRendersPerFrame: null,
+      mirrorRendersPerFrame: null,
+      refreezeCount: g?.staticSceneGate ? g.staticSceneGate.refreezeCount : null,
+      gateState: g?.staticSceneGate?.getStats?.().state ?? null,
+      activeListFrozen: scene && g?.staticSceneGate ? scene._activeMeshesFrozen === true : null,
+      settleFrames: null,
     }
   })
 }
@@ -324,7 +445,12 @@ export async function collectEnv(page: Page): Promise<PerfEnv> {
   })
 }
 
-export function toRepeatResult(raw: RawSamples, counts: SceneCounts, env: PerfEnv): RepeatResult {
+export function toRepeatResult(
+  raw: RawSamples,
+  counts: SceneCounts,
+  env: PerfEnv,
+  settleFrames: number | null = null,
+): RepeatResult {
   const render = raw.frame.map((f, i) => f - (raw.physics[i] ?? 0))
   return {
     frames: raw.frame.length,
@@ -334,7 +460,12 @@ export function toRepeatResult(raw: RawSamples, counts: SceneCounts, env: PerfEn
     activeMeshesEvalMs: summarize(raw.activeMeshesEval),
     rttRenderMs: summarize(raw.rttRender),
     drawPhaseMs: summarize(raw.drawPhase),
-    counts,
+    counts: {
+      ...counts,
+      settleFrames,
+      shadowRendersPerFrame: raw.frame.length > 0 ? raw.shadowRenders / raw.frame.length : null,
+      mirrorRendersPerFrame: raw.frame.length > 0 ? raw.mirrorRenders / raw.frame.length : null,
+    },
     env,
   }
 }

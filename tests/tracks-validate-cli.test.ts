@@ -1,5 +1,6 @@
 /**
- * CLI wrapper for `npm run tracks:validate` — validates every track-data JSON file.
+ * CLI wrapper for `npm run tracks:validate` — validates every track-data JSON file,
+ * plus the uncatalogued fixture tracks under tests/fixtures/tracks.
  *
  * Two gates per track: the schema (`validateTrackDefinition`), and the WASM
  * collider vocabulary (#417) — the compiled track must export to the C++
@@ -8,13 +9,17 @@
  */
 import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { validateTrackDefinition } from '../src/adventure/track-schema'
 import { boxDesc } from '../src/adventure/track-collider-descriptors'
 import { ExportHarnessBuilder, exportReportFor } from './helpers/track-export-harness'
 
 const trackDataDir = join(import.meta.dirname, '../src/adventure/track-data')
-const trackFiles = readdirSync(trackDataDir).filter((name) => name.endsWith('.json'))
+// Uncatalogued fixture tracks (tests/fixtures/tracks) pass the same two gates.
+const fixtureDir = join(import.meta.dirname, 'fixtures/tracks')
+const jsonIn = (dir: string) => readdirSync(dir).filter((name) => name.endsWith('.json')).map((name) => join(dir, name))
+const trackPaths = [...jsonIn(trackDataDir), ...jsonIn(fixtureDir)]
+const trackFiles = trackPaths.map((path) => relative(join(import.meta.dirname, '..'), path))
 
 describe('tracks:validate CLI', () => {
   it('has at least one JSON track file', () => {
@@ -23,7 +28,7 @@ describe('tracks:validate CLI', () => {
 
   for (const file of trackFiles) {
     it(`validates ${file}`, () => {
-      const raw = JSON.parse(readFileSync(join(trackDataDir, file), 'utf8'))
+      const raw = JSON.parse(readFileSync(join(import.meta.dirname, '..', file), 'utf8'))
       const result = validateTrackDefinition(raw)
       expect(
         result.ok,
@@ -32,7 +37,7 @@ describe('tracks:validate CLI', () => {
     })
 
     it(`${file} exports to the WASM engine with no unsupported colliders`, () => {
-      const raw = JSON.parse(readFileSync(join(trackDataDir, file), 'utf8'))
+      const raw = JSON.parse(readFileSync(join(import.meta.dirname, '..', file), 'utf8'))
       const result = validateTrackDefinition(raw)
       if (!result.ok) return // the schema case above already fails
 

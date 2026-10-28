@@ -25,6 +25,7 @@ import type { TableMapType } from '../config/table-maps'
 import { TABLE_MAPS } from '../config/table-maps'
 import type { CabinetType, CabinetPreset } from './cabinet-types'
 import { CLASSIC_CONFIG, NEO_CONFIG, VERTICAL_CONFIG, WIDE_CONFIG } from './cabinet-presets'
+import type { StaticSceneGate } from '../core/static-scene-gate'
 import {
   loadCabinetGltfForPreset,
   assertCabinetAlignment,
@@ -95,6 +96,7 @@ export class CabinetBuilder {
   private currentPreset: CabinetPreset = CLASSIC_CONFIG
   private gltfContainer: AssetContainer | null = null
   private loadInFlight = false
+  private staticSceneGate: Pick<StaticSceneGate, 'hold'> | null = null
   private qualityTier: QualityTier = QualityTier.HIGH
 
   constructor(scene: Scene) {
@@ -103,6 +105,10 @@ export class CabinetBuilder {
 
   setQualityTier(tier: QualityTier): void {
     this.qualityTier = tier
+  }
+
+  setStaticSceneGate(gate: Pick<StaticSceneGate, 'hold'> | null): void {
+    this.staticSceneGate = gate
   }
 
   getQualityTier(): QualityTier {
@@ -135,6 +141,9 @@ export class CabinetBuilder {
     }
 
     this.loadInFlight = true
+    // Thawed from the dispose of the old cabinet until the new one (and the light clamp that
+    // follows a glTF load) has settled: a load rewrites materials and the mesh set.
+    const releaseGate = this.staticSceneGate?.hold('cabinet:load', { materials: true, shadows: true })
     try {
       // Resolve the procedural builder chunk first: it is the primary path
       // or the glTF fallback, and a failed fetch must leave the cabinet
@@ -165,6 +174,7 @@ export class CabinetBuilder {
       console.log(`[Cabinet] Loaded procedural preset: ${preset.name}`)
     } finally {
       this.loadInFlight = false
+      releaseGate?.()
     }
   }
 

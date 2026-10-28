@@ -9,7 +9,7 @@ import type { DisplaySystem } from '../display'
 import type { BallManager } from '../game-elements/ball-manager'
 import type { GameObjects } from '../objects'
 import type { AdventureMode } from '../adventure'
-import { AdventureTrackType } from '../adventure'
+import { AdventureTrackType, isAdventureTrackType } from '../adventure'
 import type { AdventureTrackProgression } from '../adventure/adventure-track-progression'
 import { TRACK_CATALOG } from '../adventure/adventure-track-progression'
 import { getTrackThemingSystem } from '../adventure/track-theming-system'
@@ -156,6 +156,19 @@ export class GameSlotAdventure {
     const newTrack = GameSlotAdventure.TRACK_ORDER[newIndex]
     this.nextAdventureTrack = newTrack
     this.endAdventureMode()
+    this.startAdventureMode()
+  }
+
+  /**
+   * Enter the campaign at AdventureTrackProgression's current stage — the start
+   * screen's Campaign mode, the stage map and H all come through here. A live
+   * holo-deck is torn down first so the stage (and its supervisor timer) starts clean.
+   */
+  enterCampaignStage(): void {
+    const trackId = this.host.adventureTrackProgression?.getCurrentTrack()
+    if (!trackId || !isAdventureTrackType(trackId)) return
+    if (this.host.adventureMode?.isActive()) this.endAdventureMode()
+    this.nextAdventureTrack = trackId
     this.startAdventureMode()
   }
 

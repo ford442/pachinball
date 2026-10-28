@@ -1,5 +1,3 @@
-import type { AdventureLevel } from './game-ui-types'
-
 interface CampaignHUDState {
   trackName: string
   modeLabel: string
@@ -12,59 +10,6 @@ interface CampaignHUDState {
   goals: Array<{ description: string; current: number; target: number; completed: boolean }>
   shardTotal: number
   campaignPercent: number
-}
-
-/**
- * Update the adventure mode HUD (legacy level-select path).
- */
-export function updateAdventureHUD(level: AdventureLevel | null, completionPercent: number): void {
-  const hudEl = document.getElementById('adventure-hud')
-  if (!hudEl) return
-
-  if (!level) {
-    hudEl.classList.add('hidden')
-    return
-  }
-
-  hudEl.classList.remove('hidden')
-
-  const levelNameEl = document.getElementById('adventure-level-name')
-  if (levelNameEl) levelNameEl.textContent = level.name
-
-  const goalsEl = document.getElementById('adventure-goals')
-  if (goalsEl) {
-    goalsEl.innerHTML = level.goals.map(goal => {
-      const completed = goal.current >= goal.target
-      const percent = Math.min(100, Math.round((goal.current / goal.target) * 100))
-      return `
-        <div class="adventure-goal ${completed ? 'completed' : ''}">
-          <span class="adventure-goal-text">${goal.description}</span>
-          <span class="adventure-goal-progress">${percent}%</span>
-        </div>
-      `
-    }).join('')
-  }
-
-  const totalGoals = level.goals.length
-  const completedGoals = level.goals.filter(g => g.current >= g.target).length
-  const overallPercent = Math.round((completedGoals / totalGoals) * 100)
-
-  const progressFill = document.getElementById('adventure-progress-fill')
-  const progressText = document.getElementById('adventure-progress-text')
-  if (progressFill) progressFill.style.width = `${overallPercent}%`
-  if (progressText) progressText.textContent = `${overallPercent}%`
-
-  const hasRewards = completionPercent > 0
-  let rewardBadge = hudEl.querySelector('.adventure-reward-badge') as HTMLElement
-  if (hasRewards && !rewardBadge) {
-    rewardBadge = document.createElement('div')
-    rewardBadge.className = 'adventure-reward-badge'
-    rewardBadge.textContent = '🏆'
-    rewardBadge.title = `${Math.round(completionPercent)}% Complete - Rewards Unlocked!`
-    hudEl.appendChild(rewardBadge)
-  } else if (rewardBadge) {
-    rewardBadge.title = `${Math.round(completionPercent)}% Complete - Rewards Unlocked!`
-  }
 }
 
 /** Live campaign track panel — current goal, timer context, next-sector teaser. */

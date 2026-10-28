@@ -523,6 +523,15 @@ export class WasmPhysicsEngine {
     return this.world?.getStaticContentHash?.() ?? null
   }
 
+  /**
+   * 16-hex-char hash of the stepped world — the state `serializeSnapshot()`
+   * carries — or null when the bundle predates it. Equal hashes step
+   * identically; compare these instead of blobs (#444).
+   */
+  getStateHash(): string | null {
+    return this.world?.getStateHash?.() ?? null
+  }
+
   /** Contact-manifold flush generation (0 when unsupported). */
   getContactGeneration(): number {
     return this.world?.getContactGeneration?.() ?? 0

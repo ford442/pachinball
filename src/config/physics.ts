@@ -147,7 +147,10 @@ export type WasmPhysicsRuntimeMode = 'rapier' | 'wasm-mirror' | 'wasm-owner' | '
 
 export function getPhysicsEnginePreference(): WasmPhysicsEnginePreference {
   try {
-    const v = localStorage.getItem(WASM_PHYSICS.flagKey)
+    // Read through globalThis: this module is also type-checked against the WebWorker lib
+    // (tsconfig.worker.json), which has no `localStorage`. A worker never calls this.
+    const storage = (globalThis as { localStorage?: { getItem(key: string): string | null } }).localStorage
+    const v = storage?.getItem(WASM_PHYSICS.flagKey) ?? null
     if (v === 'rapier') return 'rapier'
     if (v === 'wasm' || v === 'wasm-mirror') return 'wasm-mirror'
     if (v === 'wasm-owner') return 'wasm-owner'

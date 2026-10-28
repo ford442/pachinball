@@ -54,6 +54,7 @@ import {
 import { AdventureManager } from './game-adventure'
 import { TableMapManager } from './game-maps'
 import { CabinetManager } from './game-cabinet'
+import { resolveMirrorRefreshRate } from './mirror-config'
 
 import type { Game } from '../game'
 import type { PachinballEventMap } from '../core/event-bus'
@@ -104,6 +105,11 @@ export class GameSystemsInitializer {
     // entry chunk. Load it before the sync stage below so the stage itself never awaits.
     const debugTools = this.game.isDebugHUDAvailable() ? await loadDebugTools() : null
     if (this.game.signal.aborted) return
+    // The static-scene machinery (gate, frozen sets, watchers) is its own chunk, kept out of the
+    // entry chunk's budget. Start loading it now; it is awaited and installed just before the
+    // critical scene is built, so the cabinet load and the main ball are seen by the gate.
+    const staticSceneChunk = import('./static-scene-install')
+    staticSceneChunk.catch(() => undefined) // reported where it is awaited
     await this.game.runCheckpointStage('scene_rendering', () => {
       const skybox = MeshBuilder.CreateBox('skybox', { size: GameConfig.visuals.skyboxSize }, scene)
       const skyboxMaterial = new StandardMaterial('skyBox', scene)
@@ -117,13 +123,16 @@ export class GameSystemsInitializer {
       this.game.mirrorTexture = new MirrorTexture('mirror', mirrorSize, scene, true)
       this.game.mirrorTexture.mirrorPlane = new Plane(0, -1, 0, -1.01)
       this.game.mirrorTexture.level = GameConfig.visuals.mirrorTextureLevel
+      this.game.mirrorTexture.refreshRate = resolveMirrorRefreshRate(this.game.qualityTier)
 
       this.game.effects = new EffectsSystem(scene, this.game.bloomPipeline, this.game.accessibility)
       if (this.game.keyLight && this.game.rimLight && this.game.bounceLight) {
         this.game.effects.registerSceneLights(this.game.keyLight, this.game.rimLight, this.game.bounceLight)
       }
       const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
-      this.game.display = new DisplaySystem(scene, this.game.engine, displayConfig, this.game.qualityTier, this.game.accessibility)
+      this.game.display = new DisplaySystem(scene, this.game.engine, displayConfig, this.game.qualityTier, this.game.accessibility, {
+        noPostProcess: new URLSearchParams(window.location.search).has('nopp'),
+      })
       this.game.display.subscribeToEvents(this.game.eventBus)
       this.game.display.setSlotScoreProvider(() => this.game.score)
       this.game.display.setEffectsSystem(this.game.effects)
@@ -162,18 +171,6 @@ export class GameSystemsInitializer {
 
       this.game.dynamicWorld = getDynamicWorld(scene, this.game.tableCam!, this.game.display, this.game.soundSystem)
       this.game.ballStackVisual = new BallStackVisual(scene)
-
-      this.game.adventureState.setDisplay(this.game.display)
-      this.game.adventureState.onLevelCompleteCallback((level) => {
-        console.log(`[Game] Level complete: ${level.name}`)
-        if (level.rewards.unlockMap) {
-          this.game.timers.setTimeout(() => { this.game.mapCabinet?.switchTableMap(level.rewards.unlockMap!) }, GAME_TUNING.timing.storyVideoWaitMs)
-        }
-      })
-      this.game.adventureState.onGoalUpdateCallback((goals) => {
-        const goalText = goals.map(g => `${g.description}: ${g.current}/${g.target}`).join('\n')
-        this.game.display?.setStoryText(goalText)
-      })
 
       this.game.slotAdventure?.setupSlotMachineCallbacks()
       this.game.checkpointDebug.registerToggleHandler('scene_cosmetic', (enabled) => {
@@ -462,6 +459,29 @@ export class GameSystemsInitializer {
       })
     }, true)
 
+    try {
+      const { installStaticScene } = await staticSceneChunk
+      if (this.game.signal.aborted) return
+      const renderer = this.game.renderer?.getStaticSceneInputs()
+      const install = installStaticScene({
+        scene,
+        eventBus: this.game.eventBus,
+        search: window.location.search,
+        userAgent: navigator.userAgent,
+        skyboxSize: GameConfig.visuals.skyboxSize,
+        frozenMaterials: renderer?.frozenMaterials ?? [],
+        clampLights: renderer?.clampLights,
+      })
+      this.game.staticScene = install
+      this.game.staticSceneGate = install.gate
+      this.game.ballManager?.setStaticSceneGate(install.gate)
+      this.game.adventureMode?.setStaticSceneGate(install.gate)
+      this.game.display?.setStaticSceneGate(install.gate)
+    } catch (error) {
+      // An optimisation, not a dependency: without it nothing is frozen and the game runs as before.
+      console.warn('[Game] Static-scene chunk unavailable; the scene stays unfrozen', error)
+    }
+
     await this.game.runCheckpointStage('scene_critical', async () => {
       await this.game.sceneBuilder?.buildCriticalScene({
         onCabinetProgress: (progress) => {
@@ -472,6 +492,17 @@ export class GameSystemsInitializer {
         },
       })
       this.game.cabinetBuilder?.updateCabinetLightExclusions()
+
+      // Owner modes (wasm-owner / wasm-worker) move the flippers only through C++ hinges, which
+      // rebuildHandleCaches() realises. It used to run first in scene_gameplay_build, after Start
+      // was enabled, so a flip before that stage (or every flip, if the stage failed) drove
+      // nothing. Realise them here and fail the stage, like the joint check in
+      // buildCriticalScene, if a table that needs them does not get both.
+      this.game.physicsController?.rebuildHandleCaches()
+      const hinges = this.game.physicsController?.getWasmFlipperHingeCount() ?? null
+      if (hinges !== null && hinges < 2) {
+        throw new Error(`Critical scene incomplete: ${hinges}/2 C++ flipper hinges`)
+      }
     })
     this.game.ready = true
     this.game.uiManager?.setStartButtonEnabled(true)

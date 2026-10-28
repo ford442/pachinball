@@ -54,9 +54,8 @@ jobs:
         run: npm run check:bundle
 
   # Blocking smoke: desktop + mobile Playwright specs. A red e2e now blocks merges (#319).
-  # The dev server is started by the `webServer` block in playwright.config.ts (pinned to
-  # 5173 with --strictPort, since verify_prism_core.spec.ts hard-codes that URL), so there
-  # is no inline `npm run dev &` poll here. Scope is kept to the known-stable smoke specs —
+  # The dev server is started by the `webServer` block in playwright.config.ts (5173,
+  # --strictPort), so there is no inline `npm run dev &` poll here. Scope is kept to the known-stable smoke specs —
   # the blocking gate must stay deterministic, not run the entire *.spec.ts suite.
   e2e:
     name: playwright smoke (desktop + mobile, blocking)
@@ -97,3 +96,90 @@ jobs:
           tests/basic-gameplay.spec.ts
           tests/lifecycle-dispose.spec.ts
           tests/mobile-touch-smoke.spec.ts
+
+  # Blocking smoke against the production bundle: `vite build` + `vite preview`, the desktop
+  # smoke specs, twice. wasm=true builds the C++ bundle and expects the `wasm-worker` default;
+  # wasm=false removes public/wasm and expects the fail-closed `rapier` path. The dev-server
+  # `e2e` job never boots minified output (console/debugger drop, chunking), which is how
+  # #449 / #452 slipped through. Mobile stays on the dev job.
+  e2e-preview:
+    name: playwright preview (built bundle, wasm=${{ matrix.wasm }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        wasm: [true, false]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Same cache key as native-physics.yml: the cache is repo-scoped, so a warm entry from
+      # that workflow is reused here.
+      - name: Cache Emscripten SDK
+        if: matrix.wasm
+        uses: actions/cache@v4
+        with:
+          path: emsdk
+          key: emsdk-${{ runner.os }}-latest
+
+      - name: Install and activate Emscripten
+        if: matrix.wasm
+        run: |
+          if [ ! -d emsdk ]; then
+            git clone https://github.com/emscripten-core/emsdk.git
+          fi
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+          source ./emsdk_env.sh
+          echo "$(pwd)" >> $GITHUB_PATH
+          emcc --version
+
+      - name: Build WASM module (Release)
+        if: matrix.wasm
+        run: |
+          source emsdk/emsdk_env.sh
+          npm run build:wasm
+          test -s public/wasm/PhysicsModule.wasm
+
+      - name: Remove WASM bundle (fail-closed leg)
+        if: ${{ !matrix.wasm }}
+        run: rm -rf public/wasm
+
+      - name: Build
+        run: npx tsc -b && npx vite build
+
+      # The bundle this job boots must carry the WASM just built, not a stale copy (#464 item 1).
+      - name: dist/wasm matches public/wasm
+        env:
+          ALLOW_NO_WASM: ${{ !matrix.wasm && '1' || '' }}
+        run: npm run check:dist-wasm
+
+      # Remove continue-on-error once #449 merges.
+      - name: Production bundle keeps boot-error reporting
+        continue-on-error: true
+        run: node scripts/check-dist-console.mjs
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Playwright smoke (built bundle)
+        env:
+          CI: 'true'
+          PREVIEW_EXPECT_ENGINE: ${{ matrix.wasm && 'wasm-worker' || 'rapier' }}
+        run: >
+          npx playwright test
+          --config=playwright.preview.config.ts
+          tests/preview-boot.spec.ts
+          tests/preview-sw.spec.ts
+          tests/preview-subdir.spec.ts
+          tests/verify_prism_core.spec.ts
+          tests/basic-gameplay.spec.ts
+          tests/lifecycle-dispose.spec.ts

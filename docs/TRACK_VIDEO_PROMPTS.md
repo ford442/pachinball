@@ -122,6 +122,42 @@ Minimal holographic garden of floating stones and soft purple light, slow camera
 
 ---
 
+## Incident / Event Clips (tables & maps)
+
+Short event-driven loops for backbox triggers on specific incidents (spinner hits, pin cascades, force-field lifts, gap jumps, portal entries, gold swarms, etc.). Match the active track palette. Prefer 3–6 s loops that can play once or cycle on the event.
+
+### Spinner Strike (Cyber Core / arenas)
+Seamless looping close-up of a chrome ball slamming into a rapidly spinning neon cyan-and-magenta spinner disk. Violent sparks, electric arcs, particle explosion, high bloom, holographic rails. Cyber-shock aesthetic, 16:9, no text.
+
+### Pin Forest Cascade (Pachinko Hall)
+Seamless looping macro of a chrome ball cascading chaotically through a dense forest of glowing gold and magenta pachinko pins. Reflective surfaces, warm volumetric light, bloom, slow-motion bounces. Cyber-Japanese parlor aesthetic, 16:9, no text.
+
+### Lattice Updraft (Storm Lattice)
+Seamless looping shot of a chrome ball being lifted upward by glowing cyan force fields amid a steep pin lattice under electric arcs and volumetric fog. Dramatic stormy atmosphere, high-contrast rim lighting, particle streaks. 16:9, no text.
+
+### Glitch Gap Jump (Glitch Spire)
+Seamless looping of a chrome ball leaping across a wide gap between glitching holographic platforms. Matrix-green and pale cyan mist trails, scanline artifacts, occasional magenta corruption flashes, unstable geometry. Ethereal, 16:9, no text.
+
+### Helix Spark Ascent (Neon Helix)
+Seamless looping tracking of a chrome ball climbing a translucent cyan helix ramp and striking a gold energy spark. Magenta rim lights pulse, particle trails, soft volumetric fog. Low-gravity feel, 16:9, no text.
+
+### Conveyor Surge (Pachinko Hall)
+Seamless looping of a chrome ball accelerated along a glowing gold conveyor chute past neon machine alcoves. Magenta accents, warm bloom, subtle holographic signage. Cyber-Japanese aesthetic, 16:9, no text.
+
+### Gold Swarm Release (general / Hall)
+Seamless looping of multiple gold-plated chrome balls bursting outward from a central point in a dense pin field or spiral. High bloom, magenta rim, particle trails, chaotic but controlled motion. 16:9, no text.
+
+### Portal Breach (any track terminus)
+Seamless looping of a chrome ball approaching and entering a glowing holographic portal arch. Track-appropriate rim lights (cyan/magenta/gold), energy rings expanding, soft distortion, bloom. 16:9, no text.
+
+### Electric Arc Hit (Cyber Core)
+Seamless looping close-up of a chrome ball struck by violent magenta and cyan electrical arcs. Orange energy bursts, sparks, high bloom, glitch distortion on impact. Cyber-shock aesthetic, 16:9, no text.
+
+### Force Field Lift (Storm Lattice / arenas)
+Seamless looping of a chrome ball suspended and rising inside a translucent cyan force-field volume amid pin lattice and lightning. Volumetric fog, high rim intensity. 16:9, no text.
+
+---
+
 ## Shared / State Clips (backbox attract, fever, jackpot, reach)
 
 These can be used independently of any single track.

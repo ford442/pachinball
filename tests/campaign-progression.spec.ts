@@ -42,7 +42,7 @@ interface TestGame {
     updateComboChainMeter?: (progress: number, target: number, pulse: boolean) => void
     prefersReducedMotion?: boolean
   }
-  toggleLevelSelect?: () => void
+  toggleCampaignMap?: () => Promise<void>
 }
 
 async function bootGame(page: Page): Promise<void> {
@@ -220,7 +220,7 @@ test.describe('Campaign progression E2E', () => {
   })
 
   test('reward toast appears and archive shows unlocked cosmetics after portal completion', async () => {
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
       const g = (window as unknown as Record<string, unknown>).game as TestGame
       if (g.adventureMode?.isActive()) g.endAdventureMode()
       g.startAdventureMode()
@@ -245,7 +245,8 @@ test.describe('Campaign progression E2E', () => {
       const toast = document.querySelector('[data-testid="campaign-reward-toast"]') as HTMLElement | null
       const toastText = toast?.textContent ?? ''
 
-      g.toggleLevelSelect?.()
+      // The stage map (which hosts the archive) is a lazily loaded chunk.
+      await g.toggleCampaignMap?.()
       const archive = document.querySelector('[data-testid="campaign-archive-panel"]')
       const shardTotal = document.querySelector('[data-testid="campaign-shards-total"]')?.textContent ?? ''
       const unlockedCount = document.querySelectorAll('.campaign-archive-item.unlocked').length

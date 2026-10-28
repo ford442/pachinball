@@ -10,6 +10,11 @@ import {
  * The pachinko pins on the C++ owner path (#421): the whole lattice is ONE
  * pin-field handle (-10000) holding exactly the pins the scene renders, no
  * static handle was dropped, and a ball dropped into the field hits it.
+ *
+ * The scene renders the lattice as ONE thin-instance mesh, `pachinkoPins`
+ * (#443 A4a), so pins are read from its instance matrices, not from per-pin
+ * meshes. The target is what `pin_8_3` used to be: the 4th pin from the left
+ * in the second-highest row, so the ball reaches it through one offset row.
  */
 
 type Vec = { x: number; y: number; z: number }
@@ -26,6 +31,18 @@ type PinFieldHooks = GameHooks & {
   }
 }
 
+/**
+ * The lattice mesh as the page sees it. Babylon 9 only installs
+ * `thinInstanceGetWorldMatrices` with its side-effect module, which the app does
+ * not import, so the spec reads the buffer `thinInstanceSetBuffer('matrix', …)`
+ * stored: 16 floats per pin, translation at 12..14.
+ */
+type PinLattice = {
+  name: string
+  thinInstanceCount: number
+  _thinInstanceDataStorage?: { matrixData?: Float32Array | null }
+}
+
 type InProcessEngine = {
   getPinFieldPinCount?: (id: number) => number
   world?: {
@@ -35,6 +52,32 @@ type InProcessEngine = {
   }
   module?: { HEAPF32?: Float32Array }
 }
+
+/**
+ * Runs in the page (installed with `addInitScript`): the 4th pin from the left
+ * in the second-highest lattice row, from the thin-instance translations.
+ */
+function installUpperLatticePin(): void {
+  ;(globalThis as { upperLatticePin?: (lattice: PinLattice) => Vec | null }).upperLatticePin = (lattice) => {
+    const data = lattice._thinInstanceDataStorage?.matrixData
+    if (!data) return null
+    const pins: Vec[] = []
+    for (let i = 0; i < lattice.thinInstanceCount; i++) {
+      pins.push({ x: data[i * 16 + 12]!, y: data[i * 16 + 13]!, z: data[i * 16 + 14]! })
+    }
+    const rows = [...new Set(pins.map((p) => Math.round(p.z * 1000)))].sort((a, b) => b - a)
+    const row = rows[1]
+    if (row === undefined) return null
+    const inRow = pins.filter((p) => Math.round(p.z * 1000) === row).sort((a, b) => a.x - b.x)
+    return inRow[3] ?? null
+  }
+}
+
+declare const upperLatticePin: (lattice: PinLattice) => Vec | null
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(installUpperLatticePin)
+})
 
 test.describe('wasm-owner pin field', () => {
   test('the table lattice is one C++ pin field that the ball hits', async ({ page }) => {
@@ -50,15 +93,15 @@ test.describe('wasm-owner pin field', () => {
       if (!g?.physicsController || !g.engine || !engine?.world || !engine.getPinFieldPinCount || !ball) {
         return { ok: false, reason: 'hooks missing' }
       }
-      const pinMeshes = (g.scene?.meshes ?? []) as Array<{ name: string; position?: Vec }>
-      const renderedPins = pinMeshes.filter((m) => /^pin_(seed_)?\d+_\d+$/.test(m.name)).length
-      // Aim straight down at a rendered pin in the upper lattice (row 8, col 3).
-      const target = pinMeshes.find((m) => m.name === 'pin_8_3')?.position
+      const lattice = ((g.scene?.meshes ?? []) as unknown as PinLattice[]).find((m) => m.name === 'pachinkoPins')
+      if (!lattice) return { ok: false, reason: 'pachinkoPins lattice not rendered' }
+      const renderedPins = lattice.thinInstanceCount
+      const target = upperLatticePin(lattice)
       const fieldPins = engine.getPinFieldPinCount(-10000)
       const secondField = engine.getPinFieldPinCount(-10001)
       const droppedStatics = engine.world.getDroppedStaticCount()
 
-      if (!target) return { ok: false, reason: 'pin_8_3 not rendered' }
+      if (!target) return { ok: false, reason: 'no pin in the second-highest lattice row' }
       ball.setTranslation({ x: target.x + 0.05, y: 0.5, z: target.z + 2.5 }, true)
       ball.setLinvel({ x: 0, y: 0, z: 0 }, true)
       ball.setAngvel({ x: 0, y: 0, z: 0 }, true)
@@ -107,13 +150,31 @@ test.describe('wasm-owner pin field', () => {
         setAngvel: (v: Vec, w: boolean) => void
       } | undefined
       const engine = g?.physics?.getWasmEngine?.() as unknown as { getPosition: (id: number) => Vec } | undefined
-      const pin = ((g?.scene?.meshes ?? []) as Array<{ name: string; position?: Vec }>)
-        .find((m) => m.name === 'pin_8_3')?.position
-      if (!ball || !engine || ball.wasmId == null || !pin) return { ok: false, reason: 'hooks missing', maxDx: 0 }
+      const lattice = ((g?.scene?.meshes ?? []) as unknown as PinLattice[]).find((m) => m.name === 'pachinkoPins')
+      const pin = lattice ? upperLatticePin(lattice) : null
+      const game = g as (typeof g & {
+        engine?: { getDeltaTime: () => number; stopRenderLoop?: () => void }
+        mapManager?: { update?: (dt: number) => void }
+      }) | undefined
+      if (!ball || !engine || ball.wasmId == null || !game?.engine || !game.physicsController) {
+        return { ok: false, reason: 'hooks missing', maxDx: 0 }
+      }
+      if (!pin) return { ok: false, reason: 'no pin in the second-highest lattice row', maxDx: 0 }
       const id = ball.wasmId
+      const controller = game.physicsController
 
-      // Worker snapshots arrive between frames, so let the game's own loop step.
-      const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      // Physics-only, like wasm-worker-adventure.spec.ts: stop the render loop and step by hand,
+      // so the test does not wait on a software rasterizer drawing every frame (it timed out at
+      // 180 s on CI's SwiftShader runner when it let the game's rAF loop step). Each step's batch
+      // and the worker's snapshot reply land in the short wait after it.
+      game.engine.stopRenderLoop?.()
+      if (game.mapManager) game.mapManager.update = () => {}
+      const origDt = game.engine.getDeltaTime.bind(game.engine)
+      game.engine.getDeltaTime = () => 1000 / 60
+      const step = async () => {
+        controller.stepPhysics(game.inputManager, game.inputActions, null, null)
+        await new Promise((r) => setTimeout(r, 2))
+      }
       const startX = pin.x + 0.05
       ball.setTranslation({ x: startX, y: 0.5, z: pin.z + 2.5 }, true)
       ball.setLinvel({ x: 0, y: 0, z: 0 }, true)
@@ -125,15 +186,19 @@ test.describe('wasm-owner pin field', () => {
       // first frame that shows the ball above the pin.
       let maxDx = 0
       let arrived = false
-      for (let i = 0; i < 600; i++) {
-        await frame()
-        const t = engine.getPosition(id)
-        if (!arrived) {
-          arrived = t.z > pin.z + 1 && Math.abs(t.x - startX) < 0.05
-          continue
+      try {
+        for (let i = 0; i < 600; i++) {
+          await step()
+          const t = engine.getPosition(id)
+          if (!arrived) {
+            arrived = t.z > pin.z + 1 && Math.abs(t.x - startX) < 0.05
+            continue
+          }
+          if (t.z < pin.z - 0.8) break
+          maxDx = Math.max(maxDx, Math.abs(t.x - startX))
         }
-        if (t.z < pin.z - 0.8) break
-        maxDx = Math.max(maxDx, Math.abs(t.x - startX))
+      } finally {
+        game.engine.getDeltaTime = origDt
       }
       return { ok: arrived, reason: arrived ? '' : 'teleport never reached the snapshot', maxDx }
     })

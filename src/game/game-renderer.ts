@@ -14,9 +14,9 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
-import { RenderTargetTexture } from '@babylonjs/core/Materials/Textures/renderTargetTexture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader'
@@ -43,6 +43,10 @@ import {
   type AccessibilityConfig,
 } from '../game-elements'
 import { getMaterialLibrary, detectQualityTier } from '../materials'
+import { applyShadowSettings, resolveShadowSettings, type ShadowSettings } from './shadow-config'
+import { resolveMirrorRefreshRate } from './mirror-config'
+import type { StaticSceneGate } from '../core/static-scene-gate'
+import type { FreezableMaterial } from './frozen-material-set'
 import {
   clampMaterialLights,
   computeWebGLLightBudget,
@@ -65,8 +69,7 @@ export interface RendererHost {
   bloomPipeline: BloomPipelineController | null
   shadowGenerator: ShadowGenerator | null
   mirrorTexture: MirrorTexture | null
-  tableRenderTarget: RenderTargetTexture | null
-  headRenderTarget: RenderTargetTexture | null
+  readonly staticSceneGate?: Pick<StaticSceneGate, 'invalidate'> | null
   keyLight: DirectionalLight | null
   rimLight: DirectionalLight | null
   bounceLight: PointLight | null
@@ -90,6 +93,16 @@ export class GameRenderer {
   private _lastResizeWidth = 0
   private _lastResizeHeight = 0
   private _lightBudgetTeardown: (() => void) | null = null
+  private _shadowSettings: ShadowSettings | null = null
+  /** WebGL2 only: clamps `maxSimultaneousLights` to the uniform-block budget (see installWebGLLightBudget). */
+  private _lightClamp: ((materials: LightCappedMaterial[]) => number) | null = null
+  /**
+   * The allowlist of materials to freeze while the scene is static, each with the reason it is
+   * safe. Only collected here; the frozen set that uses it is built by static-scene-install.ts
+   * (a lazily loaded chunk), which keeps its code out of the entry chunk. Read frozen-material-set.ts
+   * for what may never be added.
+   */
+  private readonly frozenMaterialCandidates: Array<readonly [FreezableMaterial, string]> = []
 
   constructor(host: RendererHost) {
     this.host = host
@@ -120,22 +133,50 @@ export class GameRenderer {
    * Updates bloom knobs and toggles HIGH-only heavy post-process.
    */
   applyQualityTier(tier: QualityTier): void {
+    // Before the mutation: a tier change rewrites shader defines and material properties that
+    // a frozen scene would not pick up. Re-applying the current tier changes nothing.
+    if (tier !== this.host.qualityTier) {
+      this.host.staticSceneGate?.invalidate('quality-tier', { materials: true, shadows: true })
+    }
     this.postProcess.applyQualityTier(tier)
+    this.applyShadowTier(tier)
+    this.applyMirrorTier(tier)
   }
 
   /** Drop one quality step (HIGH→MEDIUM→LOW). Returns the new tier. */
   dropQualityTierOnce(): QualityTier {
-    return this.postProcess.dropQualityTierOnce()
+    if (this.host.qualityTier !== QualityTier.LOW) {
+      this.host.staticSceneGate?.invalidate('quality-tier', { materials: true, shadows: true })
+    }
+    // The post-process manager applies its own half of the tier; the shadow filter follows it
+    // here, so an automatic drop changes the technique exactly like a settings change does.
+    const next = this.postProcess.dropQualityTierOnce()
+    this.applyShadowTier(next)
+    this.applyMirrorTier(next)
+    return next
+  }
+
+  /** What static-scene-install.ts needs from the renderer: the freeze allowlist and the WebGL light clamp. */
+  getStaticSceneInputs(): {
+    frozenMaterials: ReadonlyArray<readonly [FreezableMaterial, string]>
+    clampLights: (materials: FreezableMaterial[]) => void
+  } {
+    return {
+      frozenMaterials: this.frozenMaterialCandidates,
+      clampLights: (materials) => { this._lightClamp?.(materials) },
+    }
   }
 
   /** Setup key, rim, bounce, and fill lights + shadow generator. */
   setupLighting(): void {
-    const { scene, qualityTier } = this.host
+    const { scene } = this.host
     if (!scene) return
 
     this.installWebGLLightBudget()
 
-    // Environment lighting
+    // Environment lighting. This is what detects the hardware tier and writes it to
+    // `host.qualityTier`, so everything tier-dependent below reads the host AFTER this call
+    // (it used to be destructured first, so boot always saw the field's MEDIUM default).
     this.setupEnvironmentLighting()
 
     // Fill hemisphere
@@ -151,17 +192,10 @@ export class GameRenderer {
     keyLight.position = new Vector3(-15, 25, -15)
     this.host.keyLight = keyLight
 
-    const shadowMapSize = qualityTier === QualityTier.HIGH ? 4096 : 2048
-    const shadowGenerator = new ShadowGenerator(shadowMapSize, keyLight)
-    shadowGenerator.useBlurExponentialShadowMap = true
-    shadowGenerator.blurKernel = 28
-    shadowGenerator.setDarkness(0.3)
-    shadowGenerator.bias = 0.0005
-    shadowGenerator.normalBias = 0.02
-    if (qualityTier === QualityTier.HIGH) {
-      shadowGenerator.usePercentageCloserFiltering = true
-      shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_HIGH
-    }
+    const shadowSettings = resolveShadowSettings(this.host.qualityTier)
+    const shadowGenerator = new ShadowGenerator(shadowSettings.mapSize, keyLight)
+    applyShadowSettings(shadowGenerator, shadowSettings)
+    this._shadowSettings = shadowSettings
     this.host.shadowGenerator = shadowGenerator
 
     // Rim light
@@ -179,6 +213,28 @@ export class GameRenderer {
     this.host.bounceLight = bounceLight
   }
 
+  /** Cadence only: the mirror is never resized on a tier change (see mirror-config.ts). */
+  private applyMirrorTier(tier: QualityTier): void {
+    const mirror = this.host.mirrorTexture
+    if (mirror) mirror.refreshRate = resolveMirrorRefreshRate(tier)
+  }
+
+  /**
+   * Re-point the live key-light generator at `tier`'s technique. Switching the filter marks every
+   * receiving material light-dirty, so it recompiles on the next frame. A no-op when the tier maps
+   * to the technique and map size already running (HIGH <-> HIGH, MEDIUM <-> LOW).
+   */
+  private applyShadowTier(tier: QualityTier): void {
+    const generator = this.host.shadowGenerator
+    const current = this._shadowSettings
+    if (!generator || !current) return
+    const next = resolveShadowSettings(tier)
+    if (next.technique === current.technique && next.mapSize === current.mapSize) return
+    applyShadowSettings(generator, next)
+    if (next.mapSize !== current.mapSize) generator.mapSize = next.mapSize
+    this._shadowSettings = next
+  }
+
   private setupEnvironmentLighting(): void {
     const { scene, engine } = this.host
     if (!scene) return
@@ -192,6 +248,28 @@ export class GameRenderer {
   createRoomEnvironment(): void {
     const { scene } = this.host
     if (!scene) return
+
+    // The frozen allowlist (see frozen-material-set.ts for what may never join it). Every member
+    // below is an UNLIT room-decor material: `disableLighting` removes the light blocks from its
+    // shader, so a new light or the glTF loader's maxSimultaneousLights raise cannot change its
+    // defines; nothing outside this method references these materials by name or reference
+    // (grep'd), the effects / quality sync never touch them, and none carries a plugin. The two
+    // LIT materials here (arcadeFloorMat, arcadeWallMat) are deliberately NOT frozen: a frozen lit
+    // material would ignore the lights the cabinet load and every ball add.
+    const UNLIT_STATIC =
+      'unlit room decor (disableLighting): no light blocks in its shader, never written after creation'
+    const freezeUnlit = (mat: StandardMaterial): StandardMaterial => {
+      this.frozenMaterialCandidates.push([mat, UNLIT_STATIC])
+      return mat
+    }
+    // Static decor that shares a material becomes ONE mesh (one draw call). Only meshes with no
+    // physics binding and no per-mesh animation are passed in; `disposeSource` is true so the
+    // originals do not linger as invisible scene meshes. World transforms are baked in.
+    const mergeDecor = (name: string, meshes: Mesh[]): void => {
+      if (meshes.length < 2) return
+      const merged = Mesh.MergeMeshes(meshes, true, false, undefined, false, false)
+      if (merged) merged.name = name
+    }
 
     const floor = MeshBuilder.CreateGround('arcadeFloor', { width: 120, height: 120 }, scene)
     floor.position.y = -5
@@ -231,7 +309,7 @@ export class GameRenderer {
     ubMat.diffuseColor = Color3.Black()
     ubMat.emissiveColor = color(PALETTE.CYAN).scale(0.18)
     ubMat.disableLighting = true
-    underBase.material = ubMat
+    underBase.material = freezeUnlit(ubMat)
 
     // Hot inner core (magenta — gives the signature "premium machine" bloom kick)
     const underCore = MeshBuilder.CreateBox('underCore', { width: 26, height: 0.09, depth: 38 }, scene)
@@ -241,7 +319,7 @@ export class GameRenderer {
     ucMat.emissiveColor = color(PALETTE.MAGENTA).scale(0.55)
     ucMat.disableLighting = true
     ucMat.alpha = 0.9
-    underCore.material = ucMat
+    underCore.material = freezeUnlit(ucMat)
 
     // Gold edge "plasma" trim (very thin, high intensity)
     const underEdge = MeshBuilder.CreateBox('underEdge', { width: 38, height: 0.05, depth: 51 }, scene)
@@ -250,7 +328,7 @@ export class GameRenderer {
     ueMat.diffuseColor = Color3.Black()
     ueMat.emissiveColor = color(PALETTE.GOLD).scale(0.75)
     ueMat.disableLighting = true
-    underEdge.material = ueMat
+    underEdge.material = freezeUnlit(ueMat)
 
     // Side floor "spill" washes (classic arcade footlight feel)
     const leftSpill = MeshBuilder.CreateBox('spillL', { width: 1.6, height: 0.07, depth: 42 }, scene)
@@ -259,7 +337,7 @@ export class GameRenderer {
     spillLMat.diffuseColor = Color3.Black()
     spillLMat.emissiveColor = color(PALETTE.CYAN).scale(0.35)
     spillLMat.disableLighting = true
-    leftSpill.material = spillLMat
+    leftSpill.material = freezeUnlit(spillLMat)
 
     const rightSpill = MeshBuilder.CreateBox('spillR', { width: 1.6, height: 0.07, depth: 42 }, scene)
     rightSpill.position.set(15.7, -4.55, 5)
@@ -267,7 +345,7 @@ export class GameRenderer {
     spillRMat.diffuseColor = Color3.Black()
     spillRMat.emissiveColor = color(PALETTE.MAGENTA).scale(0.32)
     spillRMat.disableLighting = true
-    rightSpill.material = spillRMat
+    rightSpill.material = freezeUnlit(spillRMat)
 
     // --------------------------------------------------------------------
     // VERTICAL ARCADE PILLARS (the cabinet is framed by the environment)
@@ -276,23 +354,34 @@ export class GameRenderer {
     pillarMat.diffuseColor = Color3.Black()
     pillarMat.emissiveColor = color(PALETTE.CYAN).scale(0.65)
     pillarMat.disableLighting = true
+    freezeUnlit(pillarMat)
 
     const pillarPositions = [
       new Vector3(-22, 4, -18), new Vector3(22, 4, -18),
       new Vector3(-22, 4, 28),  new Vector3(22, 4, 28),
       new Vector3(-22, 9, 8),   new Vector3(22, 9, 8)
     ]
+    // One shared core material (the six were identical) so the cores merge as well as the pillars.
+    const coreMat = new StandardMaterial('pillarCoreMat', scene)
+    coreMat.emissiveColor = color(PALETTE.MAGENTA).scale(0.4)
+    coreMat.disableLighting = true
+    freezeUnlit(coreMat)
+
+    const pillars: Mesh[] = []
+    const cores: Mesh[] = []
     pillarPositions.forEach((pos, i) => {
       const p = MeshBuilder.CreateCylinder(`arcadePillar${i}`, { height: 18, diameter: 0.9, tessellation: 6 }, scene)
       p.position = pos
       p.material = pillarMat
+      pillars.push(p)
       // Subtle inner core for extra bloom depth
       const core = MeshBuilder.CreateCylinder(`pillarCore${i}`, { height: 18.2, diameter: 0.35 }, scene)
       core.position = pos
-      core.material = new StandardMaterial(`pillarCoreMat${i}`, scene)
-      ;(core.material as StandardMaterial).emissiveColor = color(PALETTE.MAGENTA).scale(0.4)
-      ;(core.material as StandardMaterial).disableLighting = true
+      core.material = coreMat
+      cores.push(core)
     })
+    mergeDecor('arcadePillars', pillars)
+    mergeDecor('arcadePillarCores', cores)
 
     // --------------------------------------------------------------------
     // CEILING NEON TUBES (classic dark arcade atmosphere)
@@ -301,13 +390,17 @@ export class GameRenderer {
     ceilingMat.diffuseColor = Color3.Black()
     ceilingMat.emissiveColor = color(PALETTE.GOLD).scale(0.5)
     ceilingMat.disableLighting = true
+    freezeUnlit(ceilingMat)
 
+    const tubes: Mesh[] = []
     for (let i = 0; i < 3; i++) {
       const tube = MeshBuilder.CreateCylinder(`ceilingTube${i}`, { height: 28, diameter: 0.22, tessellation: 5 }, scene)
       tube.rotation.x = Math.PI / 2
       tube.position.set(-14 + i * 14, 17, 6)
       tube.material = ceilingMat
+      tubes.push(tube)
     }
+    mergeDecor('ceilingTubes', tubes)
 
     // --------------------------------------------------------------------
     // BACK WALL CYBER MOTIFS (the machine lives inside a living digital world)
@@ -320,17 +413,25 @@ export class GameRenderer {
     gridMat.diffuseColor = Color3.FromHexString('#0a0a18')
     gridMat.emissiveColor = color(PALETTE.PURPLE).scale(0.25)
     gridMat.disableLighting = true
-    gridPanel.material = gridMat
+    gridPanel.material = freezeUnlit(gridMat)
 
-    // Vertical data "waterfall" lines on the back wall
+    // Vertical data "waterfall" lines on the back wall: alternating cyan / magenta, so two shared
+    // materials (they were seven identical-per-colour ones) and two merged meshes.
+    const dataFallMats = [PALETTE.MAGENTA, PALETTE.CYAN].map((hex, k) => {
+      const mat = new StandardMaterial(k === 0 ? 'dataFallMagentaMat' : 'dataFallCyanMat', scene)
+      mat.emissiveColor = color(hex).scale(0.55)
+      mat.disableLighting = true
+      return freezeUnlit(mat)
+    })
+    const dataFallLines: Mesh[][] = [[], []]
     for (let i = 0; i < 7; i++) {
       const line = MeshBuilder.CreateBox(`dataFall${i}`, { width: 0.18, height: 19, depth: 0.06 }, scene)
       line.position.set(-15 + i * 5.2, 11, 39.5)
-      const dlMat = new StandardMaterial(`dataFallMat${i}`, scene)
-      dlMat.emissiveColor = color(i % 2 ? PALETTE.CYAN : PALETTE.MAGENTA).scale(0.55)
-      dlMat.disableLighting = true
-      line.material = dlMat
+      line.material = dataFallMats[i % 2]
+      dataFallLines[i % 2].push(line)
     }
+    mergeDecor('dataFallMagenta', dataFallLines[0])
+    mergeDecor('dataFallCyan', dataFallLines[1])
 
     // Signature "NEXUS" style back-wall logo accent (abstract geometric)
     const logo = MeshBuilder.CreateTorus('backLogo', { diameter: 7, thickness: 0.25, tessellation: 24 }, scene)
@@ -339,7 +440,7 @@ export class GameRenderer {
     const logoMat = new StandardMaterial('backLogoMat', scene)
     logoMat.emissiveColor = color(PALETTE.GOLD).scale(0.85)
     logoMat.disableLighting = true
-    logo.material = logoMat
+    logo.material = freezeUnlit(logoMat)
 
     console.log('[GameRenderer] Nexus Cascade arcade environment created — cabinet now feels legendary')
   }
@@ -472,6 +573,7 @@ export class GameRenderer {
 
     const clampAll = (): void => { clampMaterialLights(scene.materials as LightCappedMaterial[], budget) }
     clampAll()
+    this._lightClamp = (materials) => clampMaterialLights(materials, budget)
 
     const materialObserver = scene.onNewMaterialAddedObservable.add((material: Material) => {
       clampMaterialLights([material as LightCappedMaterial], budget)
@@ -488,6 +590,7 @@ export class GameRenderer {
       })
 
     this._lightBudgetTeardown = () => {
+      this._lightClamp = null
       scene.onNewMaterialAddedObservable.remove(materialObserver)
       SceneLoader.OnPluginActivatedObservable.remove(pluginObserver)
       for (const [loader, observer] of loaderObservers) {
@@ -497,6 +600,7 @@ export class GameRenderer {
   }
 
   dispose(): void {
+    this.frozenMaterialCandidates.length = 0
     this._lightBudgetTeardown?.()
     this._lightBudgetTeardown = null
 
@@ -512,12 +616,6 @@ export class GameRenderer {
 
     this.host.mirrorTexture?.dispose()
     this.host.mirrorTexture = null
-
-    this.host.tableRenderTarget?.dispose()
-    this.host.tableRenderTarget = null
-
-    this.host.headRenderTarget?.dispose()
-    this.host.headRenderTarget = null
 
     this.host.shadowGenerator?.dispose()
     this.host.shadowGenerator = null

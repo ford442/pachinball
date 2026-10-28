@@ -68,7 +68,7 @@ Flat getters (`attract`, `fever`, `jackpot`, `reach`, `adventure`) stay on the m
 public/backbox/nexus/{idle,reach,fever,jackpot}.png
 ```
 
-Wired as `StateMediaConfig.characterLayer` (see `GameConfig.backbox.*CharacterPath`). Video takes may use `.webm` or `.mp4` on the same stem; posters are PNG. If `characterLayer` is empty or fails, the LCD overlay emoji walk-by remains the Canvas2D fallback. Do not add a third video framework — `HTMLVideoElement` in `display-video.ts` is the stack.
+Wired as `StateMediaConfig.characterLayer` (see `GameConfig.backbox.*CharacterPath`). Video takes may use `.webm` or `.mp4` on the same stem; posters are PNG. The take draws on its own plane (`display-character.ts`, between the main video / image and the LCD), so the attract video and image keep their `videoPath` / `imagePath`. If `characterLayer` is empty or fails to load, the LCD overlay emoji walk-by remains the Canvas2D fallback; it is suppressed only once a take has loaded. Photosensitive mode holds the REACH / JACKPOT pulse steady, and reduced motion skips the slide-in walk-on and holds a video take on its first frame. Do not add a third video framework — `HTMLVideoElement` (as in `display-video.ts`) is the stack.
 
 ```typescript
 backbox: {

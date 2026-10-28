@@ -210,7 +210,7 @@ export function createSideServerRacks(scene: Scene, parent: TransformNode): void
     DecorationFactory.createWireBundle(`rackWiresL${ci}`, scene, parent,
       new Vector3(cluster.x + 0.3, 1.8, cluster.zBase + 1.5),
       new Vector3(cluster.x - 0.8, 0.4, cluster.zBase - 3.5),
-      3, rackColors[ci % 3] as string
+      3, rackColors[ci % 3]
     )
   })
 
@@ -239,7 +239,7 @@ export function createSideServerRacks(scene: Scene, parent: TransformNode): void
     DecorationFactory.createWireBundle(`rackWiresR${ci}`, scene, parent,
       new Vector3(cluster.x - 0.25, 1.9, cluster.zBase + 0.8),
       new Vector3(cluster.x + 0.9, 0.35, cluster.zBase - 4.2),
-      4, PALETTE.MAGENTA as string
+      4, PALETTE.MAGENTA
     )
   })
 }
@@ -273,7 +273,7 @@ export function createFloatingHoloShards(scene: Scene, parent: TransformNode): v
 
   // A few elegant floating rings above the shards
   DecorationFactory.createNeonRing('holoRingL', scene, parent, new Vector3(-5.5, 0.85, 11.0), 1.1, PALETTE.CYAN)
-  DecorationFactory.createNeonRing('holoRingR', scene, parent, new Vector3(5.3, 0.9, 10.4), 1.25, PALETTE.MAGENTA as string)
+  DecorationFactory.createNeonRing('holoRingR', scene, parent, new Vector3(5.3, 0.9, 10.4), 1.25, PALETTE.MAGENTA)
 }
 
 export function createFiberOpticWiring(scene: Scene, parent: TransformNode): void {
@@ -292,7 +292,7 @@ export function createFiberOpticWiring(scene: Scene, parent: TransformNode): voi
   ]
 
   routes.forEach((r, i) => {
-    DecorationFactory.createWireBundle(`fiber${i}`, scene, parent, r.s, r.e, 3 + (i % 2), (i % 2 ? PALETTE.CYAN : PALETTE.MAGENTA) as string)
+    DecorationFactory.createWireBundle(`fiber${i}`, scene, parent, r.s, r.e, 3 + (i % 2), (i % 2 ? PALETTE.CYAN : PALETTE.MAGENTA))
   })
 }
 

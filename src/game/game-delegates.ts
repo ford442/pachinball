@@ -9,7 +9,8 @@ import { TABLE_MAPS } from '../config/table-maps'
 
 import type { PhysicsTuningPanel } from '../game-elements/physics-tuning-panel'
 import { LevelLoader } from './level-loader'
-import type { LevelSelectScreen } from '../game-elements/level-select-screen'
+import type { CampaignMapScreen } from '../adventure/ui/campaign-map'
+import { refreshDailyCascadeUI } from './daily-cascade-ui'
 import { GameFields } from './game-fields'
 
 export abstract class GameDelegates extends GameFields {
@@ -162,36 +163,59 @@ export abstract class GameDelegates extends GameFields {
   // Adventure / Mode delegates
   // --------------------------------------------------------------------------
 
+  /** H: leave the holo-deck, or enter the campaign at its current stage. */
   toggleAdventure(): void {
     if (this.adventureMode?.isActive()) {
       this.slotAdventure?.endAdventureMode()
     } else {
-      this.slotAdventure?.startAdventureMode()
+      this.slotAdventure?.enterCampaignStage()
     }
   }
 
-  toggleLevelSelect(): void {
-    void this.ensureLevelSelectScreen().then((screen) => screen?.toggle())
+  /** Start the campaign at AdventureTrackProgression's current stage (LifecycleHost). */
+  enterCampaignStage(): void { this.slotAdventure?.enterCampaignStage() }
+
+  /**
+   * Campaign front door: play `trackId` (a reached stage), or the current one. From the
+   * menu or game-over screen this starts a game in Campaign mode; mid-game it moves the
+   * live ball into that stage. The stage is recorded as progression's current track,
+   * which is persisted, so Play Again and the next session resume there.
+   */
+  async startCampaign(trackId?: string): Promise<void> {
+    const progression = this.adventureTrackProgression
+    if (trackId && progression) {
+      if (!progression.isTrackUnlocked(trackId)) return
+      progression.setCurrentTrack(trackId)
+    }
+    // Same as picking Campaign in the mode select: it rides the vanilla table.
+    this.campaignStartSelected = true
+    getDailyCascadeState().setMode('vanilla')
+    refreshDailyCascadeUI()
+    if (this.stateManager.isPlaying()) {
+      this.enterCampaignStage()
+      return
+    }
+    await this.lifecycle?.startGame()
+  }
+
+  /** L / Levels / Stage Map: the campaign stage map (loaded on first use). */
+  async toggleCampaignMap(): Promise<void> {
+    const map = await this.ensureCampaignMap()
+    map?.toggle()
   }
 
   /** `null` when the Game was disposed while the chunk was loading. */
-  private async ensureLevelSelectScreen(): Promise<LevelSelectScreen | null> {
-    if (this.levelSelectScreen) return this.levelSelectScreen
-    const { getLevelSelectScreen, resetLevelSelectScreen } = await import('../game-elements/level-select-screen')
-    // Creating the singleton after dispose() would outlive the reset list disposeGame already drained.
+  private async ensureCampaignMap(): Promise<CampaignMapScreen | null> {
+    if (this.campaignMap) return this.campaignMap
+    const { CampaignMapScreen } = await import('../adventure/ui/campaign-map')
     if (this.signal.aborted) return null
-    this.lazySingletonResets.push(resetLevelSelectScreen)
-    this.levelSelectScreen = getLevelSelectScreen(
-      {
-        onLevelSelect: (level, mapType) => {
-          this.mapCabinet?.switchTableMap(mapType)
-          this.adventureState.startLevel(level.id)
-        },
-        onClose: () => {},
-      },
-      this.adventureState,
-    )
-    return this.levelSelectScreen
+    // A concurrent caller may have created it while we awaited.
+    this.campaignMap ??= new CampaignMapScreen({
+      signal: this.signal,
+      getProgress: () => this.adventureTrackProgression,
+      onStageSelect: (trackId) => { void this.startCampaign(trackId) },
+    })
+    return this.campaignMap
   }
 
   toggleCameraMode(): void { this.isCameraFollowMode = !this.isCameraFollowMode }

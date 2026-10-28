@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "STORM_LATTICE",
+  "themeProfile": "STORM_LATTICE",
+  "cameraPresetId": "STORM_LATTICE",
+  "materials": {
+    "structure": "#1a3a5e",
+    "accent": "#e8f6ff"
+  },
+  "segments": [
+    { "type": "gap", "length": -2, "drop": -0.7 },
+    { "type": "straight", "width": 5, "length": 7, "inclineDeg": 40, "wallHeight": 1, "material": "structure" },
+    { "type": "straight", "width": 12, "length": 20, "inclineDeg": 45, "wallHeight": 1.5, "friction": 0.3, "material": "structure" },
+    {
+      "type": "pinLattice",
+      "rows": 7,
+      "cols": 6,
+      "spacing": 1.6,
+      "rowSpacing": 2.2,
+      "rowOffset": 0.8,
+      "startAlong": 3,
+      "lateral": -0.4,
+      "diameter": 0.3,
+      "height": 0.8,
+      "dropout": 0.08,
+      "dropoutSeed": 459,
+      "material": "accent"
+    },
+    { "type": "straight", "width": 12, "length": 12, "inclineDeg": 0, "wallHeight": 1.5, "friction": 0.3, "material": "structure" },
+    {
+      "type": "cone",
+      "radius": 1.2,
+      "halfHeight": 0.6,
+      "offset": { "x": 0.35, "y": 0.25, "z": -8 },
+      "restitution": 0.5,
+      "material": "accent"
+    },
+    {
+      "type": "axisPull",
+      "offset": { "x": 0, "y": 1.25, "z": -3 },
+      "axis": { "x": 0, "y": 1, "z": 0 },
+      "radius": 3,
+      "halfHeight": 1,
+      "strength": 8,
+      "material": "glow"
+    },
+    { "type": "portal", "offset": { "x": 0, "y": -0.4, "z": 0 } },
+    { "type": "bucket", "material": "accent", "offset": { "x": 0, "y": -2, "z": 0 } },
+    { "type": "resetBasin", "offset": { "x": -6, "y": -2, "z": 0 }, "material": "structure" },
+    { "type": "resetBasin", "offset": { "x": 6, "y": -2, "z": 0 }, "material": "structure" }
+  ]
+}

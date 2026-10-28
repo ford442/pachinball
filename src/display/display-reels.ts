@@ -591,6 +591,11 @@ export class DisplayReelsLayer {
     }
   }
 
+  /** The layer's meshes, for its task in the backbox Frame Graph. */
+  getMeshes(): Mesh[] {
+    return this.mesh ? [this.mesh] : []
+  }
+
   dispose(): void {
     this.dynamicTexture?.dispose()
     this.mesh?.dispose()

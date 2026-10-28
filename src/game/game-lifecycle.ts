@@ -90,6 +90,9 @@ export interface LifecycleHost {
   getBallPosition(): import('@babylonjs/core/Maths/math.vector').Vector3 | null
   /** Rebuild pins/bumpers/feeders for Daily Cascade / free-play before PLAYING. */
   applyDailyCascadeOnStart(): void
+  /** Start mode "Campaign" is selected: a started game goes straight into the campaign. */
+  readonly campaignStartSelected: boolean
+  enterCampaignStage(): void
 }
 
 export class GameLifecycle {
@@ -258,6 +261,11 @@ export class GameLifecycle {
 
     // Leaderboard context is set by the caller (Game)
     this.host.setGameState(GameState.PLAYING)
+
+    // Campaign rides on the vanilla table: the stage builds once the table is live.
+    if (this.host.campaignStartSelected && !isReplaying) {
+      this.host.enterCampaignStage()
+    }
   }
 
   /**

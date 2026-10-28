@@ -87,8 +87,9 @@ function volumeDebug(volume: { kind: VolumeKind; half: DescVec3 }, pose: Pose, s
  * A collider's body is its own descriptor, or its `parentIndex` descriptor
  * when attached; the body's `motion` decides the route:
  *
- *   fixed               → static box / cylinder / sphere / triangle mesh, a
- *                         static sensor volume, one pin field, or a force field
+ *   fixed               → static box / cylinder / sphere / cone / triangle
+ *                         mesh, a static sensor volume, one pin field, a
+ *                         force field, or an axis-pull well
  *   kinematic-position  → kinematic mover (pose supplied by the track's
  *   kinematic-velocity    animator, or integrated from the body's spin)
  *   dynamic             → unsupported (no track builds one)
@@ -197,6 +198,38 @@ export function exportAdventureCollidersToWasm(
       return finish(handle, { kind: 'sensor', center: p, halfExtents: half, rotation: q, volumeShape: 'box' })
     }
 
+    if (desc.kind === 'cone') {
+      if (moving || desc.parentIndex !== undefined) return reject('a cone must be static and unattached')
+      if (desc.sensor) return reject('a cone cannot be a sensor')
+      if (!engine.addStaticCone) return reject('engine exposes no static cones')
+      const radius = desc.radius ?? 0.5
+      const halfHeight = desc.halfHeight ?? 0.5
+      const handle = engine.addStaticCone(p, radius, halfHeight, q, restitution, friction)
+      return finish(handle, { kind: 'cone', center: p, radius, halfHeight, rotation: q })
+    }
+
+    if (desc.kind === 'axisPullField') {
+      if (moving || desc.parentIndex !== undefined) return reject('an axisPullField must be static and unattached')
+      if (desc.sensor) return reject('an axisPullField cannot be a sensor')
+      // `addAxisPullField` takes no rotation: the well is always vertical.
+      if (Math.abs(q.x) > 1e-6 || Math.abs(q.z) > 1e-6) return reject('the C++ axis-pull well is vertical-only')
+      if (!engine.addForceField) return reject('engine exposes no force fields')
+      const radius = desc.radius ?? 1
+      const halfHeight = desc.halfHeight ?? 1
+      const handle = engine.addForceField({
+        center: p,
+        halfExtents: { x: radius, y: halfHeight, z: radius },
+        mode: 'axis-pull',
+        strength: desc.pullStrength ?? 0,
+        acceleration: true,
+      })
+      // -1 is a bundle that predates the well (or a dormant engine): the track would lose it.
+      if (handle === -1) return reject('this C++ bundle has no axis-pull force field')
+      const placed = finish(handle, { kind: 'cylinder', center: p, radius, halfHeight, rotation: IDENTITY_DESC })
+      if (placed && desc.disabled) engine.setForceFieldEnabled?.(handle, false)
+      return placed
+    }
+
     const volume = volumeOf(desc)
     if (!volume) return reject(`no C++ equivalent for ${desc.kind}`)
 
@@ -241,12 +274,14 @@ export function isFullyExportable(descriptors: readonly AdventureColliderDesc[])
 }
 
 export function collectUnsupported(descriptors: readonly AdventureColliderDesc[]): UnsupportedCollider[] {
-  let next = -1
+  // -1 is the "created nothing" sentinel, so the probe's handles start below it.
+  let next = -2
   const handle = (): number => next--
   const probe = {
     addStaticBox: handle,
     addStaticCapsule: handle,
     addStaticCylinder: handle,
+    addStaticCone: handle,
     addStaticSphere: handle,
     addStaticTriangleMesh: handle,
     addSensorVolume: handle,

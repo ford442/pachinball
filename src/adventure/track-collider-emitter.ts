@@ -91,7 +91,9 @@ export class TrackColliderEmitter {
 
   /** Record a descriptor and create its own Rapier body carrying the collider. */
   emit(desc: AdventureColliderDesc): EmittedCollider {
-    if (desc.kind === 'forceField') throw new Error('force fields have no body — use emitField()')
+    if (desc.kind === 'forceField' || desc.kind === 'axisPullField') {
+      throw new Error(`a ${desc.kind} has no body — use emitField()`)
+    }
     if (desc.kind === 'pinField') return this.emitPinField(desc)
     const index = this.descriptors.length
     this.descriptors.push(desc)
@@ -112,12 +114,14 @@ export class TrackColliderEmitter {
   }
 
   /**
-   * Record a body-less descriptor (a force field) and return its index. The
-   * C++ exporter places it; nothing is built on a Rapier world, which has no
-   * force fields — the Rapier dev path runs the track without them.
+   * Record a body-less descriptor (a force field or an axis-pull well) and
+   * return its index. The C++ exporter places it; nothing is built on a Rapier
+   * world, which has neither — the Rapier dev path runs the track without them.
    */
   emitField(desc: AdventureColliderDesc): number {
-    if (desc.kind !== 'forceField') throw new Error(`emitField() takes a forceField, not ${desc.kind}`)
+    if (desc.kind !== 'forceField' && desc.kind !== 'axisPullField') {
+      throw new Error(`emitField() takes a forceField or axisPullField, not ${desc.kind}`)
+    }
     this.descriptors.push(desc)
     return this.descriptors.length - 1
   }
@@ -203,8 +207,12 @@ export class TrackColliderEmitter {
       case 'sphere':
         shape = this.rapier.ColliderDesc.ball(desc.radius ?? 0.5)
         break
+      case 'cone':
+        shape = this.rapier.ColliderDesc.cone(desc.halfHeight ?? 0.5, desc.radius ?? 0.5)
+        break
       case 'pinField':
       case 'forceField':
+      case 'axisPullField':
         throw new Error(`a ${desc.kind} cannot be attached to another body`)
       case 'convexMesh': {
         const hull = this.rapier.ColliderDesc.convexHull(new Float32Array(desc.vertices ?? []))

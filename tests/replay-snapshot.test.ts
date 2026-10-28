@@ -45,11 +45,11 @@ function fingerprint(extra: Partial<ReplayWorldFingerprint> = {}): ReplayWorldFi
 
 describe('snapshot blob header', () => {
   it('reads version, static hash (hi‖lo hex, as the C++ getter prints it) and body ids', () => {
-    expect(readSnapshotHeader(blob)).toEqual({ version: 1, staticHash: HASH, bodyIds: [0, 1, 3] })
+    expect(readSnapshotHeader(blob)).toEqual({ version: WASM_SNAPSHOT_VERSION, staticHash: HASH, bodyIds: [0, 1, 3] })
   })
 
   it('rejects other versions, bad magic and truncation', () => {
-    expect(readSnapshotHeader(fakeSnapshot({ hashHi: 1, hashLo: 2, ids: [0], version: 2 }))).toBeNull()
+    expect(readSnapshotHeader(fakeSnapshot({ hashHi: 1, hashLo: 2, ids: [0], version: WASM_SNAPSHOT_VERSION + 1 }))).toBeNull()
     const bad = blob.slice()
     bad[0] ^= 0xff
     expect(readSnapshotHeader(bad)).toBeNull()

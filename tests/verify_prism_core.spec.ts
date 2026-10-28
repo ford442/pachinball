@@ -4,7 +4,7 @@ test('Verify Prism Core Visuals', async ({ page }, testInfo) => {
   test.setTimeout(120_000);
 
   // 1. Go to the game
-  await page.goto('http://localhost:5173');
+  await page.goto('/?debug=1'); // the debug HUD is DEV-or-?debug=1 only; the preview bundle is not DEV
 
   // 2. Wait for Start Game button and click it
   const startBtn = page.locator('#start-btn');

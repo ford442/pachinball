@@ -2,6 +2,8 @@
  * Debug HUD - Development overlay for game state monitoring
  */
 
+import type { StaticSceneStats } from '../core/static-scene-gate'
+
 export interface DebugSnapshot {
   gameState: string
   displayState: string
@@ -56,6 +58,14 @@ export interface DebugSnapshot {
   lastLaneHit: string | null
   audioContexts?: number
   audioWorklet?: boolean
+  /** Scene size and the static-scene gate (render-hygiene, #443). */
+  renderStats?: {
+    meshes: number
+    activeMeshes: number
+    materials: number
+    frozenMaterials: number
+    staticScene: StaticSceneStats | null
+  }
 }
 
 interface PanelRow {
@@ -194,6 +204,11 @@ export class DebugHUD {
       particles: snapshot.activeParticles,
       'gold balls': snapshot.goldBallsInPlay,
       'track switch ms': snapshot.lastTrackSwitchMs?.toFixed(1) ?? 'n/a',
+      'meshes (active/all)': snapshot.renderStats ? `${snapshot.renderStats.activeMeshes}/${snapshot.renderStats.meshes}` : 'n/a',
+      'materials (frozen/all)': snapshot.renderStats ? `${snapshot.renderStats.frozenMaterials}/${snapshot.renderStats.materials}` : 'n/a',
+      'static scene': snapshot.renderStats?.staticScene?.state ?? 'n/a',
+      refreezes: snapshot.renderStats?.staticScene?.refreezeCount ?? 'n/a',
+      'last invalidate': snapshot.renderStats?.staticScene?.lastReason ?? 'n/a',
       'audio ctx': snapshot.audioContexts ?? 0,
       worklet: String(snapshot.audioWorklet ?? false),
     })

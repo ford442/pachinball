@@ -73,7 +73,9 @@ test.describe('Game lifecycle', () => {
 
     // A second Game on the same engine, then its teardown.
     await page.evaluate(async () => {
-      const { Game } = await import('/src/game.ts')
+      // The running Game's own class: `import('/src/game.ts')` only exists on the dev server, and
+      // this spec also runs against the built bundle (the e2e-preview job).
+      const Game = (window as any).game.constructor
       const engine = (window as any).game.engine
       const second = new Game(engine)
       await second.init()

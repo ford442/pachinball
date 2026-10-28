@@ -63,7 +63,7 @@ test.describe('Basic Gameplay Physics Smoke', () => {
     expect(ballInfo.hasBall).toBe(true);
     expect(ballInfo.pos).not.toBeNull();
 
-    // 5. Verify the flipper joint moves when driven by GameInputActions.
+    // 5. Verify the flipper joint moves when driven by a held-flipper input.
     const flipperBefore = await page.evaluate(() => {
       const g = (window as any).game;
       const left = g?.gameObjects?.getAllFlippers?.().get('left');
@@ -71,34 +71,68 @@ test.describe('Basic Gameplay Physics Smoke', () => {
     });
     expect(flipperBefore).not.toBeNull();
 
-    // Direct-action smoke: intentionally bypasses InputHandler. Real keyboard
-    // coverage lives in keyboard-input.spec.ts.
-    // Trigger flipper via direct API call and wait for physics frames
-    // using rAF so the render loop (which drives physics) has a chance to step.
-    const flipperAfter = await page.evaluate(() => {
+    // Direct-action smoke: intentionally bypasses the DOM keyboard handler. Real keyboard coverage
+    // lives in keyboard-input.spec.ts. The flipper is held the way a held key holds it, through the
+    // input manager's queue: under wasm-owner / wasm-worker the C++ hinge is driven only by input
+    // frames (WasmOwner.driveFlippers), so `inputActions.handleFlipperLeft()` alone plays the sound
+    // and never moves it (this check used to pass there only when the flipper was already moving).
+    //
+    // First release it and let it settle, so the press starts from rest: if the flipper is already
+    // up (or on its way), a press cannot move it further. Then press and wait, frame by frame, for
+    // the physics to move it. Both waits are bounded by wall time, not a frame count: a CI runner on
+    // software GL can take seconds per frame, and under `wasm-worker` the pose arrives with the
+    // worker's next snapshot. The samples (ms since the press, rotation delta) go into the failure
+    // message.
+    const flipperRun = await page.evaluate(() => {
       const g = (window as any).game;
-      g?.inputActions?.handleFlipperLeft?.(true);
-      return new Promise<{ bodyY: number }>((resolve) => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              const left = g?.gameObjects?.getAllFlippers?.().get('left');
-              resolve({ bodyY: left ? left.body.rotation().y : 0 });
-            });
-          });
-        });
-      });
+      const keys = g?.inputManager?.getInputHandler?.()?.keyboardHost;
+      if (!keys?.setFlipperLeftHeld || !keys?.queueInput) throw new Error('InputHandler keyboardHost hooks missing');
+      const readY = () => g?.gameObjects?.getAllFlippers?.().get('left')?.body.rotation().y ?? 0;
+      const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+      return (async () => {
+        keys.setFlipperLeftHeld(false);
+        keys.queueInput('flipperLeft', false);
+        const settle0 = performance.now();
+        let last = readY();
+        let still = 0;
+        while (still < 5 && performance.now() - settle0 < 10_000) {
+          await frame();
+          const y = readY();
+          still = Math.abs(y - last) < 1e-4 ? still + 1 : 0;
+          last = y;
+        }
+        const restY = readY();
+        const settleMs = Math.round(performance.now() - settle0);
+
+        const t0 = performance.now();
+        keys.setFlipperLeftHeld(true);
+        keys.queueInput('flipperLeft', true);
+        const samples: Array<[number, number]> = [];
+        for (;;) {
+          await frame();
+          const y = readY();
+          const ms = Math.round(performance.now() - t0);
+          samples.push([ms, Number((y - restY).toFixed(4))]);
+          if (Math.abs(y - restY) > 0.05 || ms > 20_000) break;
+        }
+        return { samples, restY, settleMs };
+      })();
     });
 
     // Release flipper
     await page.evaluate(() => {
-      const g = (window as any).game;
-      g?.inputActions?.handleFlipperLeft?.(false);
+      const keys = (window as any).game?.inputManager?.getInputHandler?.()?.keyboardHost;
+      keys?.setFlipperLeftHeld?.(false);
+      keys?.queueInput?.('flipperLeft', false);
     });
 
-    // Flipper should have rotated (Y axis is the rotation axis for the revolute joint)
-    const flipperDelta = Math.abs((flipperAfter?.bodyY ?? 0) - (flipperBefore?.bodyY ?? 0));
-    expect(flipperDelta).toBeGreaterThan(0.05);
+    // Flipper should have rotated (Y axis is the rotation axis for the revolute joint). Measured from
+    // the settled pose: `flipperBefore` is a separate round trip, and the flipper can move in between.
+    const flipperDelta = Math.abs(flipperRun.samples[flipperRun.samples.length - 1]?.[1] ?? 0);
+    expect(
+      flipperDelta,
+      `rest y ${flipperRun.restY} after ${flipperRun.settleMs} ms; flipper samples [ms, Δy]: ${JSON.stringify(flipperRun.samples)}`,
+    ).toBeGreaterThan(0.05);
 
     // Visual hierarchy must stay intact: SceneOptimizer must NOT merge flipper
     // child meshes off their physics-driven root (that made flippers look frozen).
@@ -115,31 +149,38 @@ test.describe('Basic Gameplay Physics Smoke', () => {
     expect(hierarchy.childCount).toBeGreaterThan(0);
     expect(hierarchy.merged).toEqual([]);
 
-    // 6. Plunger launch — verify ball z-velocity increases (impulse is +z)
-    const ballBeforePlunger = await page.evaluate(() => {
+    // 6. Plunger launch — verify ball z-velocity increases (impulse is +z).
+    // Direct-action smoke: same mechanical action, but bypasses InputHandler and charge UI. Real
+    // keyboard plunger coverage lives in keyboard-input.spec.ts. The ball is usually still bouncing
+    // on the plunger after Start (vz swings by about ±2), so one read 200 ms later raced it. Sample
+    // frame by frame from the launch until vz clears the pre-launch value by 5 (a launch reaches
+    // ~14; a bounce never does), bounded by wall time (CI software GL; `wasm-worker` velocities
+    // arrive with the worker's snapshot).
+    const plungerRun = await page.evaluate(() => {
       const g = (window as any).game;
-      const ballBody = g?.ballManager?.getBallBody?.();
-      const vel = ballBody ? ballBody.linvel() : null;
-      return vel ? { x: vel.x, y: vel.y, z: vel.z } : null;
+      const readVz = () => g?.ballManager?.getBallBody?.()?.linvel().z ?? Number.NaN;
+      const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+      return (async () => {
+        const before = Math.max(readVz(), 0);
+        const t0 = performance.now();
+        g?.inputActions?.handlePlunger?.();
+        const samples: Array<[number, number]> = [];
+        for (;;) {
+          await frame();
+          const vz = readVz();
+          const ms = Math.round(performance.now() - t0);
+          samples.push([ms, Number(vz.toFixed(3))]);
+          if (vz > before + 5 || ms > 15_000) break;
+        }
+        return { before, samples };
+      })();
     });
 
-    // Direct-action smoke: same mechanical action, but bypasses InputHandler
-    // and charge UI. Real keyboard plunger coverage lives in keyboard-input.spec.ts.
-    await page.evaluate(() => {
-      const g = (window as any).game;
-      g?.inputActions?.handlePlunger?.();
-    });
-    await page.waitForTimeout(200); // let impulse take effect
-
-    const ballAfterPlunger = await page.evaluate(() => {
-      const g = (window as any).game;
-      const ballBody = g?.ballManager?.getBallBody?.();
-      const vel = ballBody ? ballBody.linvel() : null;
-      return vel ? { x: vel.x, y: vel.y, z: vel.z } : null;
-    });
-
-    // Plunger impulse is along +z, so z velocity should increase
-    expect(ballAfterPlunger!.z).toBeGreaterThan(ballBeforePlunger!.z + 1);
+    const launchVz = plungerRun.samples[plungerRun.samples.length - 1]?.[1] ?? Number.NaN;
+    expect(
+      launchVz,
+      `vz before (floored at 0) ${plungerRun.before}; samples [ms, vz]: ${JSON.stringify(plungerRun.samples)}`,
+    ).toBeGreaterThan(plungerRun.before + 5);
 
     // 7. No unexpected JS errors during the entire test. Local backend map
     // fetch failures and optional asset 404s (WASM physics bundle, sample SFX)

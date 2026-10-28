@@ -1,5 +1,6 @@
 import { test } from '@playwright/test'
 import {
+  addBalls,
   bootForPerf,
   buildRunFile,
   collectCounts,
@@ -8,6 +9,7 @@ import {
   sampleFrames,
   startTable,
   toRepeatResult,
+  waitForStaticScene,
   writeRunFile,
   type PerfState,
   type PerfTier,
@@ -53,13 +55,20 @@ test.describe('perf baseline (opt-in)', () => {
         const page = await context.newPage()
         try {
           await bootForPerf(page, tier)
-          // `menu` must be sampled before `table`: startGame() leaves the menu for good.
+          // `menu` must be sampled before `table`, and `table` before `table3`: startGame() leaves
+          // the menu for good and the extra balls stay on the table.
+          let started = false
           for (const state of cfg.states) {
-            if (state === 'table') await startTable(page)
+            if (state !== 'menu' && !started) {
+              await startTable(page)
+              started = true
+            }
+            if (state === 'table3') await addBalls(page, 3)
+            const settleFrames = await waitForStaticScene(page)
             const raw = await sampleFrames(page, cfg.warmup, cfg.frames, `rep${rep} ${tier}/${state}`)
             const [counts, env] = await Promise.all([collectCounts(page), collectEnv(page)])
             const list = results.get(keyOf(tier, state)) ?? []
-            list.push(toRepeatResult(raw, counts, env))
+            list.push(toRepeatResult(raw, counts, env, settleFrames))
             results.set(keyOf(tier, state), list)
           }
         } finally {
@@ -79,7 +88,11 @@ test.describe('perf baseline (opt-in)', () => {
         summary.push(
           `${tier}/${state}: render ${run.aggregate.renderTimeMs.median.toFixed(2)}ms ` +
             `(MAD ${run.aggregate.renderTimeMs.mad.toFixed(2)}), frame ${run.aggregate.frameTimeMs.median.toFixed(2)}ms, ` +
-            `draws ${run.aggregate.counts.drawCalls}, active ${run.aggregate.counts.activeMeshes}/${run.aggregate.counts.meshes} ` +
+            `draws ${run.aggregate.counts.drawCalls}, active ${run.aggregate.counts.activeMeshes}/${run.aggregate.counts.meshes}, ` +
+            `frozen mats ${run.aggregate.counts.materialsFrozen}/${run.aggregate.counts.materials}, ` +
+            `shadow renders/frame ${run.aggregate.counts.shadowRendersPerFrame?.toFixed(2) ?? 'n/a'}, ` +
+            `refreezes ${run.aggregate.counts.refreezeCount ?? 'n/a'}, gate ${run.aggregate.counts.gateState ?? 'n/a'} ` +
+            `(list frozen ${run.aggregate.counts.activeListFrozen ?? 'n/a'}, settled in ${run.aggregate.counts.settleFrames ?? 'n/a'} frames) ` +
             `[${run.env.physicsEngine}, ${run.env.qualityTier}]`,
         )
       }

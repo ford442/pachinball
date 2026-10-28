@@ -367,15 +367,15 @@ export class SoundSystem {
   }
 
   private asContextState(): SoundSystemContextState {
-    return this as unknown as SoundSystemContextState
+    return this
   }
 
   private asSamplesState(): SoundSystemSamplesState {
-    return this as unknown as SoundSystemSamplesState
+    return this
   }
 
   private asSynthState(): SoundSystemSynthState {
-    return this as unknown as SoundSystemSynthState
+    return this
   }
 }
 
