@@ -624,6 +624,9 @@ Test scenarios (friction and hinge cases live in `hinge_friction_test.cpp`):
 | `ball on a rotating kinematic platter picks up tangential velocity` (`kinematic_mover_test.cpp`) | ω × r at the mover contact point imparts tangential speed via friction |
 | `ball crossing a sensor volume emits exactly one enter and one exit` (`sensor_volume_test.cpp`) | Enter/Stay/Exit lifecycle, zero impulse |
 | `ball dwelling inside a sensor for N frames emits N-2 stay events` (`sensor_volume_test.cpp`) | Multi-frame dwell + exit-by-teleport lifecycle |
+| `kinematic body crossing a thin sensor in one substep emits begin, then end` / `fast dynamic ball crossing …` / `swept sensor crossing works for a thin cylinder …` (`sensor_volume_test.cpp`) | A volume thinner than a tick of travel still reports Enter then Exit, for a captured ball, a fast ball and a portal-shaped cylinder |
+| `a fast ball that passes beside a thin sensor reports nothing` / `a teleport across a sensor between steps is not a crossing` / `a kinematic jump longer than the sweep limit …` / `a swept crossing still honours the sensor's filter mask` (`sensor_volume_test.cpp`) | The sweep adds no false positives: misses, teleports, over-limit jumps and masked-out bodies stay silent |
+| `a restored world sweeps the same crossing the original does` (`sensor_volume_test.cpp`) | The sweep origin is transient: a snapshot restore reproduces the crossing |
 | `two bodies whose filter masks exclude each other never generate a contact pair` (`collision_filter_test.cpp`) | Broadphase respects membership/filter masks |
 | `Dynamic <-> Kinematic round trip preserves mass` (`kinematic_body_test.cpp`) | `setBodyType` zeroes / restores inverse mass; a captured ball ignores impulses |
 | `kinematic ball does not respond to gravity` (`kinematic_body_test.cpp`) | No integration or force accumulation while kinematic |
@@ -693,6 +696,24 @@ byproduct of `ContactListener`'s existing pair-presence bookkeeping, so a
 ball leaving a sensor by teleport (`setBodyPosition`) is handled the same
 way as one leaving by velocity.
 
+**Sensors are swept.** The overlap is tested over the segment a body travelled
+in the substep (previous pose → end pose), not only at the end pose, so a
+volume thinner than a tick of travel is still reported: the pair is Enter on
+the step it was crossed and Exit on the next (the listener emits one event per
+pair per step). `PhysicsWorld::capturePreviousPositions()` takes the start pose
+at the top of `step()` — before kinematic targets land, so a captured ball's
+jump is swept — and again after each substep; it is transient and not in the
+snapshot. A teleport between steps (`setBodyPosition`) and a single-substep
+move longer than `SENSOR_SWEEP_MAX_DISTANCE` (4 m: a toy placing a ball) are
+not crossings. Only sensors are swept; solid statics push a body out, so an
+end-pose miss there is a real miss, and flipper capsules are not swept.
+`BroadphaseGrid::buildPairs` pairs a moved body with the sensors its swept AABB
+reaches; `SensorVolume.cpp` finds the nearest approach with a ternary search of
+the (convex) distance-to-volume along the segment, shape-agnostic across box,
+cylinder and sphere. This is what lets TypeScript consume zone and exit-portal
+begin/end contacts instead of sampling a pose each frame — see
+[Zone sensors](#zone-sensors).
+
 Every body — dynamic/kinematic RigidBody, static box/capsule, mover, or
 sensor — carries a `membership`/`filter` bitmask mirroring `CollisionGroups`
 in `src/game-elements/physics.ts` (see `native/src/CollisionFilter.h`; do not
@@ -735,10 +756,59 @@ committed pose for mesh bindings.
 track is fully owned and its WASM overlap bridge is installed — when every live
 descriptor is expressible in C++ and
 the track built nothing outside the descriptor path (`markUnexportedCollider`).
-Exit portals no longer hold Rapier awake: portal entry goes through the
-`AdventurePhysicsBridge`, and its cylinder sensor is exported like any other.
-Closing a portal retires its descriptors (`TrackColliderEmitter.retireBody`) so
-C++ does not keep a sensor for a body Rapier has removed.
+Exit portals no longer hold Rapier awake: the portal's cylinder sensor is
+exported like any other, and a ball's begin contact with it completes the portal
+(see [Zone sensors](#zone-sensors)). Closing a portal retires its descriptors
+(`TrackColliderEmitter.retireBody`) so C++ does not keep a sensor for a body
+Rapier has removed.
+
+### Zone sensors
+
+Scenario zones, obstacle footprints and exit portals are C++ `SensorVolume`s
+filtered to the ball group. Spatial tests live in the engine, next to the
+solver; zone *policy* (which zone is current, the debounce, what a zone does)
+stays in TypeScript, and camera cuts and score rules never enter `native/`.
+
+| Zone | Volume | Group | Authored by |
+|------|--------|-------|-------------|
+| scenario zone, obstacle footprint (`registerObstacleZone`), table portal (`registerPortalZone`) | box from `ZoneBounds` (Y defaults to −5…30) | `SENSOR` preset: member of `SENSOR`, filter `BALL` — never `ADVENTURE_GROUP` | `ZoneSensors` (`src/game-elements/zone-sensors.ts`), through `PhysicsApi` / `PhysicsWorldSink` |
+| adventure exit portal | the track's cylinder sensor | adventure descriptor default: member of `ADVENTURE_GROUP`, filter `BALL` | the track (`createExitPortal`); `registerPortalBody` only maps it to its zone |
+
+The owner exports `ZoneSensors`' bodies with the table (`GamePhysicsController`
+adds `zoneTriggerSystem.getSensorBodies()` to the owner table scope), so on
+`wasm-owner` and `wasm-worker` each zone is one `addSensorVolume`. The contact
+path is the one every other sensor uses:
+
+```
+C++ step ── swept sensor overlap ──► contact buffer (isSensor, Enter/Exit)
+   wasm-owner:  PhysicsModule decodes it            ─┐
+   wasm-worker: it rides the step-result / shared ring ─┴► EventBus 'wasm:physics:contact'
+      ► CollisionDispatcher.onWasmContact ► feedZoneContact
+      ► ZoneTriggerSystem.contactBegin / contactEnd ► onZoneEnter / onZoneExit / onPortalContact
+```
+
+* **No pose is re-tested in TypeScript.** The sweep makes a zone thinner than
+  one frame of travel still report Enter/Exit, and on the worker the contacts
+  arrive with the step result instead of being derived from a pose a frame late.
+  `ZoneTriggerSystem` has no `update()`; nothing in the frame loop polls a ball.
+* **Debounce counts sim steps.** A ball re-entering a zone within
+  `ZONE_DEBOUNCE_STEPS` (12 steps, the former 200 ms) of entering it is one
+  visit; an exit that soon is held until the window passes (the next zone event
+  announces it) or a re-entry cancels it. Another zone is never debounced, so a
+  thin zone crossed right after a thin zone still fires. The window reads
+  `simClockSteps()`, so a replay debounces as the live run did.
+* **Rapier (`rapier` mode)** gets the same zones as Rapier sensor colliders with
+  `COLLISION_EVENTS`; their begin/end events take the same route
+  (`CollisionDispatcher.processContact`). `wasm-mirror` steps only balls and
+  bumpers in C++ and never steps Rapier, so zones do not fire there (neither do
+  the other table sensors).
+* The debug overlay draws zone volumes like any exported sensor
+  (`getDebugColliders`); it reads nothing back and is not a second source of truth.
+
+`tests/zone-trigger-system.test.ts`, `tests/zone-sensor-contacts.test.ts`
+(owner and worker transports) and `tests/portal-deactivation-paths.test.ts` pin
+the TypeScript side; the swept overlap itself is pinned in
+`native/tests/sensor_volume_test.cpp`.
 
 `tests/wasm-owner-adventure.spec.ts` (run in the native-physics CI job) walks
 **every** `AdventureTrackType` in the browser and fails on any unsupported

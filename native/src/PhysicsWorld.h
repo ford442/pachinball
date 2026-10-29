@@ -427,6 +427,14 @@ private:
                                  float penetration);
 
   // ---- Sensor volumes (SensorVolume.cpp) --------------------------------
+  /**
+   * Record every body's pose as the start of the segment the next substep
+   * sweeps against sensors. Taken before the kinematic targets land (so a
+   * captured ball's jump is swept) and after each substep (so a later substep
+   * of the same `step()` starts where the last one ended). A teleport between
+   * steps (`setBodyPosition`) is therefore never swept.
+   */
+  void capturePreviousPositions();
   void resolveSphereVsSensor(BodyView& body, int sensorIndex);
   void resolveCapsuleVsSensor(BodyView& body, int sensorIndex);
   /** Shared overlap emit — `queryPoint` is the body point nearest the volume. */
@@ -456,6 +464,11 @@ private:
   std::vector<KinematicBodyTarget> bodyTargets_;
   /** Bodies a target moved during the previous `step()`. */
   std::vector<int>               drivenBodies_;
+  /**
+   * Dense-indexed start pose of the current substep (see capturePreviousPositions).
+   * Transient: re-taken at the top of every `step()`, so it is not snapshotted.
+   */
+  std::vector<Vec3>              prevPositions_;
   int                            nextHingeId_ = 0;
   ContactListener                contactListener_;
 

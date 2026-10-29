@@ -78,12 +78,12 @@ export {
 export {
   ZoneTriggerSystem,
   createZoneBounds,
-  areZonesAdjacent,
-  getZoneTransitionType,
+  ZONE_DEBOUNCE_STEPS,
   type ZoneBounds,
+  type ZoneSensorSink,
   type ZoneTriggerCallback,
-  type ActiveZone,
 } from './zone-trigger-system'
+export { ZoneSensors } from './zone-sensors'
 export {
   DynamicWorld,
   getDynamicWorld,

@@ -22,12 +22,16 @@ import { ZoneTriggerSystem } from '../src/game-elements/zone-trigger-system'
 // ---------------------------------------------------------------------------
 // Bug 3 — Zone Trigger Dead Guard
 // ---------------------------------------------------------------------------
-// ZoneTriggerSystem is a pure TypeScript class — no heavy mocks needed.
-// We mock only the Rapier RigidBody type to provide ball position data.
+// ZoneTriggerSystem is a pure TypeScript class — no heavy mocks needed. Zones
+// are sensor volumes in the physics engine; a ball's begin contact reaches the
+// system through contactBegin() (CollisionDispatcher does that), so these tests
+// feed contacts rather than ball positions.
 
 describe('ZoneTriggerSystem — obstacle zones fire without a loaded scenario', () => {
-  it('update() evaluates obstacle zones when no scenario is loaded', () => {
-    const system = new ZoneTriggerSystem(false)
+  const ZONE = { minX: -1, maxX: 1, minZ: -1, maxZ: 1, minY: -1, maxY: 2 }
+
+  it('contactBegin() fires an obstacle zone when no scenario is loaded', () => {
+    const system = new ZoneTriggerSystem(false, () => 0)
 
     let zoneEnterFired = false
     system.setCallback({
@@ -35,27 +39,14 @@ describe('ZoneTriggerSystem — obstacle zones fire without a loaded scenario', 
     })
 
     // Register an obstacle zone (no scenario loaded)
-    system.registerObstacleZone('test-zone', {
-      minX: -1,
-      maxX: 1,
-      minZ: -1,
-      maxZ: 1,
-      minY: -1,
-      maxY: 2,
-    })
-
-    // Simulate a ball inside the registered zone
-    const mockBall = {
-      translation: () => ({ x: 0, y: 0.5, z: 0 }),
-    } as unknown as import('@dimforge/rapier3d-compat').RigidBody
-
-    system.update([mockBall])
+    system.registerObstacleZone('test-zone', ZONE)
+    system.contactBegin('test-zone', 1)
 
     expect(zoneEnterFired).toBe(true)
   })
 
-  it('update() does NOT fire for zones registered via loadScenario when no scenario is loaded', () => {
-    const system = new ZoneTriggerSystem(false)
+  it('contactBegin() does NOT fire for a zone that was never registered', () => {
+    const system = new ZoneTriggerSystem(false, () => 0)
 
     let callbackCount = 0
     system.setCallback({
@@ -63,60 +54,36 @@ describe('ZoneTriggerSystem — obstacle zones fire without a loaded scenario', 
     })
 
     // No zones registered, no scenario loaded
-    const mockBall = {
-      translation: () => ({ x: 0, y: 0.5, z: 0 }),
-    } as unknown as import('@dimforge/rapier3d-compat').RigidBody
-
-    system.update([mockBall])
+    system.contactBegin('test-zone', 1)
 
     expect(callbackCount).toBe(0)
   })
 
   it('obstacle zone callback receives the correct ScenarioZone metadata', () => {
-    const system = new ZoneTriggerSystem(false)
+    const system = new ZoneTriggerSystem(false, () => 0)
 
     let receivedZoneId: string | undefined
     system.setCallback({
       onZoneEnter: (zone) => { receivedZoneId = zone.id },
     })
 
-    system.registerObstacleZone('my-obstacle-zone', {
-      minX: -2,
-      maxX: 2,
-      minZ: -2,
-      maxZ: 2,
-    })
-
-    const mockBall = {
-      translation: () => ({ x: 0, y: 0, z: 0 }),
-    } as unknown as import('@dimforge/rapier3d-compat').RigidBody
-
-    system.update([mockBall])
+    system.registerObstacleZone('my-obstacle-zone', ZONE)
+    system.contactBegin('my-obstacle-zone', 1)
 
     expect(receivedZoneId).toBe('my-obstacle-zone')
   })
 
   it('unregistering an obstacle zone prevents further callbacks', () => {
-    const system = new ZoneTriggerSystem(false)
+    const system = new ZoneTriggerSystem(false, () => 0)
 
     let callCount = 0
     system.setCallback({
       onZoneEnter: () => { callCount++ },
     })
 
-    system.registerObstacleZone('removable-zone', {
-      minX: -1,
-      maxX: 1,
-      minZ: -1,
-      maxZ: 1,
-    })
+    system.registerObstacleZone('removable-zone', ZONE)
     system.unregisterObstacleZone('removable-zone')
-
-    const mockBall = {
-      translation: () => ({ x: 0, y: 0, z: 0 }),
-    } as unknown as import('@dimforge/rapier3d-compat').RigidBody
-
-    system.update([mockBall])
+    system.contactBegin('removable-zone', 1)
 
     expect(callCount).toBe(0)
   })

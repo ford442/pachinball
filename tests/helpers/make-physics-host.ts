@@ -69,6 +69,8 @@ export type PhysicsHostShellOpts = {
   eventBus?: EventBus
   ballManager: unknown
   gameObjects: unknown
+  /** The host's zone system; null (no zones) by default. */
+  zoneTriggerSystem?: unknown
   /** Extra accessibility fields (wasm parity adds maxCameraShakeIntensity). */
   accessibility?: Record<string, unknown>
 }
@@ -92,7 +94,7 @@ export function makePhysicsHostShell(opts: PhysicsHostShellOpts): PhysicsHost {
     uiManager: null,
     adventureMode: null,
     adventureManager: null,
-    zoneTriggerSystem: null,
+    zoneTriggerSystem: opts.zoneTriggerSystem ?? null,
     cameraController: null,
     dynamicWorld: null,
     magSpinFeeder: null,
