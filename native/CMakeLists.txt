@@ -270,6 +270,7 @@ if(NOT EMSCRIPTEN)
     tests/axis_pull_field_test.cpp
     tests/state_hash_test.cpp
     tests/golden_trace_test.cpp
+    tests/broadphase_test.cpp
   )
   # Catch2 requires C++ exceptions; do not pass -fno-exceptions here.
   target_link_libraries(physics_world_test PRIVATE

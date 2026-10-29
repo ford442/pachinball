@@ -110,6 +110,7 @@ native/
     ├── axis_pull_field_test.cpp Axis-pull well: horizontal pull, linear falloff, extents, flags, groups, wake, snapshot hash
     ├── state_hash_test.cpp      getStateHash(): plunge scene determinism, one-ulp sensitivity, restore round trip, parity fixture (#459)
     ├── golden_trace_test.cpp    Golden traces: committed FNV-1a hashes of three scenes — any numeric drift fails here (#442)
+    ├── broadphase_test.cpp      Cell coordinates clamp before the int cast: playfield cells unchanged, NaN / ±inf / 1e25 finite (#487)
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
