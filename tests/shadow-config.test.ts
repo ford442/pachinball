@@ -3,7 +3,11 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import { QualityTier } from '../src/game-elements/visual-language'
 import {
   applyShadowSettings,
+  DYNAMIC_LIGHT_SHARE,
+  resolveDynamicShadowSettings,
   resolveShadowSettings,
+  resolveStaticShadowSettings,
+  splitKeyIntensity,
   type ShadowGeneratorTarget,
 } from '../src/game/shadow-config'
 
@@ -72,5 +76,44 @@ describe('applyShadowSettings — exactly one technique', () => {
       applyShadowSettings(target, resolveShadowSettings(tier))
       expect('useContactHardeningShadow' in writes).toBe(false)
     }
+  })
+})
+
+describe('static / dynamic generator settings (#484)', () => {
+  it('splits the key light so the twins add up to it', () => {
+    for (const intensity of [0, 0.3, 1.2, 2]) {
+      const { static: s, dynamic: d } = splitKeyIntensity(intensity)
+      expect(s + d).toBeCloseTo(intensity)
+      expect(d).toBeCloseTo(intensity * DYNAMIC_LIGHT_SHARE)
+    }
+    expect(splitKeyIntensity(1, 0.25)).toEqual({ static: 0.75, dynamic: 0.25 })
+  })
+
+  it.each([QualityTier.HIGH, QualityTier.MEDIUM, QualityTier.LOW])(
+    '%s: the static generator keeps the single generator\'s technique and map, at full darkness',
+    (tier) => {
+      const single = resolveShadowSettings(tier)
+      expect(resolveStaticShadowSettings(tier)).toEqual({ ...single, darkness: 0 })
+    },
+  )
+
+  it.each([QualityTier.HIGH, QualityTier.MEDIUM, QualityTier.LOW])('%s: the dynamic generator is a small PCF map with no blur', (tier) => {
+    const s = resolveDynamicShadowSettings(tier)
+    expect(s).toMatchObject({ technique: 'pcf', mapSize: 1024, blurKernel: null, darkness: 0 })
+    expect(s.mapSize).toBeLessThan(resolveShadowSettings(tier).mapSize)
+  })
+
+  it('the dynamic PCF kernel is cheaper below HIGH', () => {
+    expect(resolveDynamicShadowSettings(QualityTier.HIGH).pcfQuality).toBe('medium')
+    expect(resolveDynamicShadowSettings(QualityTier.MEDIUM).pcfQuality).toBe('low')
+    expect(resolveDynamicShadowSettings(QualityTier.LOW).pcfQuality).toBe('low')
+  })
+
+  it('a low PCF kernel writes QUALITY_LOW, and only the PCF knobs', () => {
+    const { target, writes } = recordingGenerator()
+    applyShadowSettings(target, resolveDynamicShadowSettings(QualityTier.MEDIUM))
+    expect(writes.usePercentageCloserFiltering).toBe(true)
+    expect(writes.filteringQuality).toBe(ShadowGenerator.QUALITY_LOW)
+    expect('useBlurExponentialShadowMap' in writes).toBe(false)
   })
 })

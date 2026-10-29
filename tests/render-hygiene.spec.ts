@@ -10,7 +10,10 @@ interface ShadowGeneratorProbe {
   filter: number
   filteringQuality: number
   mapSize: number
-  getShadowMap: () => { renderList: Array<{ name: string }> } | null
+  getShadowMap: () => {
+    renderList: Array<{ name: string }>
+    onAfterRenderObservable: { add: (cb: () => void) => unknown; remove: (observer: unknown) => void }
+  } | null
   constructor: { FILTER_PCF: number; FILTER_BLUREXPONENTIALSHADOWMAP: number; QUALITY_MEDIUM: number }
 }
 
@@ -26,12 +29,17 @@ interface GameProbe {
     prePassRenderer: { renderTargets: unknown[] } | null
     geometryBufferRenderer: unknown
     materials: Array<{ name: string; isFrozen: boolean; maxSimultaneousLights?: number }>
+    textures: Array<{ getClassName: () => string }>
+    lights: Array<{ name: string; intensity: number; includedOnlyMeshes: Array<{ name: string }> }>
     autoClear: boolean
     _activeMeshesFrozen: boolean
     getMeshByName: (name: string) => { setEnabled: (v: boolean) => void } | null
     activeCamera: { position: { x: number; y: number; z: number } } | null
   }
   shadowGenerator: ShadowGeneratorProbe | null
+  dynamicShadowGenerator: ShadowGeneratorProbe | null
+  shadowRig: { isStaticLive: () => boolean; getReceivers: () => Array<{ name: string; receiveShadows: boolean }> }
+  keyLight: { intensity: number; excludedMeshes: Array<{ name: string }> }
   renderer: {
     applyQualityTier: (tier: string) => void
     dropQualityTierOnce: () => string
@@ -59,7 +67,6 @@ interface GameProbe {
   eventBus: { emit: (event: string) => void }
   startGame: () => Promise<void>
   debugHelper: { buildDebugSnapshot: (dt: number, lives: number) => { renderStats?: { meshes: number; activeMeshes: number; materials: number; frozenMaterials: number; staticScene: { refreezeCount: number } | null } } } | null
-  mirrorTexture: { renderList: unknown[]; refreshRate: number; getSize: () => unknown } | null
   ballManager: {
     spawnExtraBalls: (count: number) => void
     getBallBodies: () => unknown[]
@@ -268,54 +275,113 @@ test.describe('render hygiene (#443)', () => {
     expect(compileErrors).toEqual([])
   })
 
-  test('mirror render list returns to baseline after spawn/collect cycles and cabinet swaps; refresh rate follows the tier', async ({ page }) => {
+  test('no MirrorTexture exists: a render target nobody samples is not allocated (#484)', async ({ page }) => {
     test.setTimeout(600_000)
     const compileErrors = trackCompileErrors(page)
     await boot(page)
     await page.evaluate(() => (window as ProbeWindow).game!.performanceMonitor.setOnSustainedJank(null))
     await renderFrames(page, 3)
 
-    const cycles = await page.evaluate(() => {
-      const game = (window as ProbeWindow).game!
-      const mirror = game.mirrorTexture!
-      const baseline = mirror.renderList.length
-      let listedOnSpawn = 0
-      let maxLength = baseline
-      for (let i = 0; i < 50; i++) {
-        game.ballManager.spawnExtraBalls(1)
-        const body = game.ballManager.getBallBodies().at(-1)
-        // The new ball is in the list in the same call that spawned it, so it is drawn on the
-        // first frame it exists.
-        if (mirror.renderList.length === baseline + 1) listedOnSpawn++
-        maxLength = Math.max(maxLength, mirror.renderList.length)
-        game.ballManager.removeBall(body)
-      }
-      return { baseline, listedOnSpawn, maxLength, after: mirror.renderList.length }
-    })
-    expect(cycles.listedOnSpawn).toBe(50)
-    expect(cycles.maxLength).toBe(cycles.baseline + 1)
-    expect(cycles.after).toBe(cycles.baseline)
+    const mirrors = () =>
+      page.evaluate(() =>
+        (window as ProbeWindow).game!.scene.textures.filter((t) => t.getClassName() === 'MirrorTexture').length,
+      )
+    expect(await mirrors(), 'after boot').toBe(0)
 
-    // Three preset swaps through the real glTF loader path.
-    const lengths: number[] = []
+    await page.evaluate(() => {
+      const game = (window as ProbeWindow).game!
+      for (let i = 0; i < 10; i++) {
+        game.ballManager.spawnExtraBalls(1)
+        game.ballManager.removeBall(game.ballManager.getBallBodies().at(-1))
+      }
+    })
     for (const preset of ['neo', 'vertical', 'wide']) {
       await page.evaluate((p) => (window as ProbeWindow).game!.cabinetManager.loadCabinetPreset(p), preset)
       await renderFrames(page, 3)
-      lengths.push(await page.evaluate(() => (window as ProbeWindow).game!.mirrorTexture!.renderList.length))
     }
-    expect(lengths).toEqual([cycles.baseline, cycles.baseline, cycles.baseline])
+    expect(await mirrors(), 'after spawn/collect cycles and cabinet swaps').toBe(0)
+    expect(compileErrors, 'no shader compile errors across cabinet swaps').toEqual([])
+  })
 
-    // Refresh cadence follows the tier; the mirror is never resized.
-    const sizeBefore = await page.evaluate(() => JSON.stringify((window as ProbeWindow).game!.mirrorTexture!.getSize()))
-    for (const [tier, rate] of [['high', 1], ['medium', 2], ['low', 2], ['high', 1]] as const) {
-      await page.evaluate((t) => (window as ProbeWindow).game!.renderer.applyQualityTier(t), tier)
-      expect(await page.evaluate(() => (window as ProbeWindow).game!.mirrorTexture!.refreshRate), tier).toBe(rate)
+  test('shadows are two generators: the static map renders on a refreeze, the dynamic one every frame (#484)', async ({ page }) => {
+    test.setTimeout(600_000)
+    const compileErrors = trackCompileErrors(page)
+    await boot(page)
+    await page.evaluate(() => (window as ProbeWindow).game!.performanceMonitor.setOnSustainedJank(null))
+    await page.evaluate(() => (window as ProbeWindow).game!.startGame())
+    await renderFrames(page, 6)
+    for (let i = 0; i < 40 && (await page.evaluate(() => (window as ProbeWindow).game!.staticSceneGate!.getStats().state)) !== 'frozen'; i++) {
+      await renderFrames(page, 2)
     }
-    await page.evaluate(() => (window as ProbeWindow).game!.renderer.dropQualityTierOnce())
-    expect(await page.evaluate(() => (window as ProbeWindow).game!.mirrorTexture!.refreshRate), 'after auto drop').toBe(2)
-    expect(await page.evaluate(() => JSON.stringify((window as ProbeWindow).game!.mirrorTexture!.getSize()))).toBe(sizeBefore)
 
-    expect(compileErrors, 'no shader compile errors across cabinet swaps and tier switches').toEqual([])
+    const design = await page.evaluate(() => {
+      const game = (window as ProbeWindow).game!
+      const names = (g: ShadowGeneratorProbe) => g.getShadowMap()!.renderList.map((m) => m.name)
+      const receivers = game.shadowRig.getReceivers()
+      const twins = game.scene.lights.filter((l) => l.name === 'keyLightStatic' || l.name === 'keyLightDynamic')
+      return {
+        staticCasters: names(game.shadowGenerator!),
+        dynamicCasters: names(game.dynamicShadowGenerator!),
+        receivers: receivers.map((m) => m.name),
+        allReceive: receivers.every((m) => m.receiveShadows),
+        keyExcludes: game.keyLight.excludedMeshes.map((m) => m.name),
+        twinNames: twins.map((l) => l.name).sort(),
+        twinIntensity: twins.reduce((sum, l) => sum + l.intensity, 0),
+        keyIntensity: game.keyLight.intensity,
+        twinsLightOnly: twins.every((l) => l.includedOnlyMeshes.map((m) => m.name).join() === receivers.map((m) => m.name).join()),
+      }
+    })
+    expect(design.twinNames).toEqual(['keyLightDynamic', 'keyLightStatic'])
+    expect(design.receivers).toContain('lcdGround')
+    expect(design.allReceive).toBe(true)
+    expect(design.keyExcludes.sort()).toEqual([...design.receivers].sort())
+    expect(design.twinsLightOnly, 'the twins light the receivers and nothing else').toBe(true)
+    expect(design.twinIntensity, 'twins together carry exactly the key light').toBeCloseTo(design.keyIntensity, 5)
+    expect(design.dynamicCasters).toEqual(expect.arrayContaining(['ball', 'flipperBlade']))
+    expect(design.staticCasters).not.toContain('ball')
+    expect(design.staticCasters).not.toContain('flipperBlade')
+
+    // Count renders of each map over a window of frames.
+    const count = (frames: number, spawn = false) =>
+      page.evaluate(
+        ({ frames: n, spawn }) =>
+          new Promise<{ frames: number; staticRenders: number; dynamicRenders: number }>((resolve) => {
+            const game = (window as ProbeWindow).game!
+            const scene = game.scene
+            const out = { frames: 0, staticRenders: 0, dynamicRenders: 0 }
+            const s = game.shadowGenerator!.getShadowMap()!.onAfterRenderObservable.add(() => out.staticRenders++)
+            const d = game.dynamicShadowGenerator!.getShadowMap()!.onAfterRenderObservable.add(() => out.dynamicRenders++)
+            const f = scene.onAfterRenderObservable.add(() => {
+              if (++out.frames < n) return
+              game.shadowGenerator!.getShadowMap()!.onAfterRenderObservable.remove(s)
+              game.dynamicShadowGenerator!.getShadowMap()!.onAfterRenderObservable.remove(d)
+              scene.onAfterRenderObservable.remove(f)
+              resolve(out)
+            })
+            if (spawn) game.ballManager.spawnExtraBalls(1)
+          }),
+        { frames, spawn },
+      )
+
+    const settled = await count(20)
+    expect(settled.staticRenders, 'static map is not re-rendered while the scene is static').toBe(0)
+    expect(settled.dynamicRenders, 'dynamic map renders every frame').toBe(settled.frames)
+
+    // A ball is a dynamic caster: spawning one thaws the gate but never the static map.
+    const spawned = await count(20, true)
+    expect(spawned.staticRenders, 'ball spawn does not re-render the static map').toBe(0)
+    expect(spawned.dynamicRenders).toBe(spawned.frames)
+
+    // A cabinet swap can change the static casters: the map renders again, then stops again.
+    await page.evaluate(() => (window as ProbeWindow).game!.cabinetManager.loadCabinetPreset('neo'))
+    const swapped = await count(30)
+    expect(swapped.staticRenders, 'a cabinet swap refreshes the static map').toBeGreaterThanOrEqual(1)
+    for (let i = 0; i < 40 && (await page.evaluate(() => (window as ProbeWindow).game!.shadowRig.isStaticLive())); i++) {
+      await renderFrames(page, 2)
+    }
+    expect((await count(20)).staticRenders, 'and then stays still').toBe(0)
+
+    expect(compileErrors, 'no shader compile errors with the twin lights').toEqual([])
   })
 
   test('the static-scene gate sees spawns, collects, tier changes, cabinet loads and FEVER windows', async ({ page }) => {

@@ -4,7 +4,8 @@
  */
 
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
-import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import type { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import { createCanvasTexture } from './canvas-texture'
 import type { TableMapConfig } from '../config/table-maps'
 import { parseHexColor } from '../core/color'
 import { PlayfieldMaterials } from './material-playfield'
@@ -179,7 +180,7 @@ export class LCDTableMaterials extends PlayfieldMaterials {
    */
   private createLCDGridTexture(): DynamicTexture {
     const size = Math.min(LCDTableMaterials.LCD_TEXTURE_SIZE, this.textureSize * 2)
-    const tex = new DynamicTexture('lcdGridTexture', size, this.scene, true)
+    const tex = createCanvasTexture('lcdGridTexture', size, this.scene, true)
     this.updateLCDGridTexture(tex, PALETTE.CYAN)
     return tex
   }

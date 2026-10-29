@@ -5,8 +5,6 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { TrailMesh } from '@babylonjs/core/Meshes/trailMesh'
 import { Scene } from '@babylonjs/core/scene'
-import type { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
-import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import { CapturedBall } from '../core/captured-ball'
 import { BallType, GAME_TUNING } from '../config'
@@ -52,7 +50,6 @@ import {
   updateTrailEffects,
 } from './ball-manager-spawn'
 import { updateStuckDetection } from './ball-manager-stuck'
-import { removeFromMirror } from './mirror-render-list'
 import type { StaticSceneGate } from '../core/static-scene-gate'
 import type { BallData, PhysicsBinding } from './types'
 
@@ -64,7 +61,6 @@ export class BallManager {
   private ballBody: PhysicsBody | null = null
   private ballBodies: PhysicsBody[] = []
   private caughtBalls: Array<{ body: PhysicsBody; targetPos: Vector3; timer: number }> = []
-  private mirrorTexture: MirrorTexture | null = null
   private staticSceneGate: Pick<StaticSceneGate, 'invalidate'> | null = null
   private bindings: PhysicsBinding[] = []
   private matLib: ReturnType<typeof getMaterialLibrary>
@@ -107,15 +103,11 @@ export class BallManager {
     // keeps noUnusedLocals satisfied. The two methods are never called here, hence unbound-method.
     /* eslint-disable @typescript-eslint/unbound-method */
     void [
-      this.scene, this.rapier, this.mirrorTexture, this.matLib, this.onGoldBallCollected, this.glowTime, this.smallGoldBallLifetimes, this.smallGoldBallSpawnTime,
+      this.scene, this.rapier, this.matLib, this.onGoldBallCollected, this.glowTime, this.smallGoldBallLifetimes, this.smallGoldBallSpawnTime,
       this.swarmGroups, this.ballSwarmId, this.nextSwarmId, this.ballStuckTimers, this.chainMultiball, this.addTrailForBall, this.playSpawnEffect,
     ]
     /* eslint-enable @typescript-eslint/unbound-method */
     return this as unknown as BallManagerHost
-  }
-
-  setMirrorTexture(texture: MirrorTexture): void {
-    this.mirrorTexture = texture
   }
 
   /** Balls come and go in a scene the gate may have frozen; every spawn / removal thaws it. */
@@ -154,8 +146,6 @@ export class BallManager {
 
       const bIdx = this.bindings.findIndex((b) => b.rigidBody === body)
       if (bIdx !== -1) {
-        // Before dispose: Babylon prunes shadow render lists on dispose, not mirror ones.
-        removeFromMirror(this.mirrorTexture, this.bindings[bIdx].mesh as AbstractMesh)
         this.bindings[bIdx].mesh.dispose()
         this.bindings.splice(bIdx, 1)
       }
@@ -188,7 +178,6 @@ export class BallManager {
       const b = this.bindings[i]
       if (!b.mesh.name.startsWith('ball')) continue
       if (b.rigidBody === this.ballBody) continue
-      removeFromMirror(this.mirrorTexture, b.mesh as AbstractMesh)
       b.mesh.dispose()
       this.bindings.splice(i, 1)
     }

@@ -89,7 +89,6 @@ function makeRig(opts: { rightJoint?: boolean; flipperCount?: number } = {}): Ri
     getAllFlippers: () => flippers,
   }
   const ballManager = {
-    setMirrorTexture: vi.fn(),
     createMainBall: () => {
       add('ball')
       calls.push('ball')
@@ -117,7 +116,6 @@ function makeRig(opts: { rightJoint?: boolean; flipperCount?: number } = {}): Ri
     tableCam: null,
     cameraController: null,
     adventureMode: null,
-    mirrorTexture: null,
     shadowGenerator: null,
     playfieldGroup: null as unknown,
     uiManager: null,

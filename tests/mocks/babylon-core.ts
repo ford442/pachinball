@@ -350,12 +350,6 @@ export const DynamicTexture = vi.fn().mockImplementation(function (this: Record<
   return this
 })
 
-export const MirrorTexture = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
-  this.dispose = vi.fn()
-  this.mirrorPlane = new MockVector3(0, 1, 0)
-  return this
-})
-
 export const RenderTargetTexture = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
   this.dispose = vi.fn()
   return this

@@ -24,8 +24,8 @@ export interface ShadowSettings {
   technique: ShadowTechnique
   /** Square shadow-map edge in texels. */
   mapSize: number
-  /** PCF kernel quality (`ShadowGenerator.QUALITY_MEDIUM`). Only meaningful for `pcf`. */
-  pcfQuality: 'medium' | null
+  /** PCF kernel quality (`ShadowGenerator.QUALITY_LOW` / `QUALITY_MEDIUM`). Only meaningful for `pcf`. */
+  pcfQuality: 'low' | 'medium' | null
   /** Gaussian blur kernel of the ESM map. Only meaningful for `blur-esm`. */
   blurKernel: number | null
   /** `ShadowGenerator.setDarkness` — 0 is black shadow, 1 is no shadow. */
@@ -56,6 +56,51 @@ export function resolveShadowSettings(tier: QualityTier): ShadowSettings {
   return { ...COMMON, technique: 'blur-esm', pcfQuality: null, blurKernel: 28 }
 }
 
+/**
+ * The key light's shadows are split over two generators, each on its own twin of the key light (a
+ * light carries one generator per camera, so two generators on one light cannot both be sampled).
+ * Lights add, so the split is a split of the key light's intensity: the static twin carries
+ * `1 - DYNAMIC_LIGHT_SHARE` of it, the dynamic twin `DYNAMIC_LIGHT_SHARE`, and both generators cast
+ * full shadow (`darkness: 0`). A static caster's shadow therefore keeps `DYNAMIC_LIGHT_SHARE` of the
+ * key light and a dynamic caster's keeps the rest. Before the split one generator kept
+ * `COMMON.darkness` (0.3) of it for both: 0.4 puts static shadows slightly lighter and ball / flipper
+ * shadows noticeably lighter than that. This one constant is the knob for the trade-off.
+ */
+export const DYNAMIC_LIGHT_SHARE = 0.4
+
+/** The key light's intensity divided between the static and the dynamic shadow twin. */
+export function splitKeyIntensity(
+  intensity: number,
+  share: number = DYNAMIC_LIGHT_SHARE,
+): { static: number; dynamic: number } {
+  return { static: intensity * (1 - share), dynamic: intensity * share }
+}
+
+/**
+ * Static generator: the cabinet. Same technique and map as the single generator it replaces, but
+ * rendered once per StaticSceneGate refreeze rather than every frame, so its cost no longer matters
+ * per frame. The light share (see `DYNAMIC_LIGHT_SHARE`) carries the shadow strength: darkness 0.
+ */
+export function resolveStaticShadowSettings(tier: QualityTier): ShadowSettings {
+  return { ...resolveShadowSettings(tier), darkness: 0 }
+}
+
+/**
+ * Dynamic generator: balls, flippers, bumpers and the moving obstacles. Rendered every frame, so it
+ * is the small one: a 1024² PCF map with no blur pass (the blurred ESM of the static map is the
+ * expensive part of the old per-frame cost).
+ */
+export function resolveDynamicShadowSettings(tier: QualityTier): ShadowSettings {
+  return {
+    ...COMMON,
+    technique: 'pcf',
+    mapSize: 1024,
+    pcfQuality: tier === QualityTier.HIGH ? 'medium' : 'low',
+    blurKernel: null,
+    darkness: 0,
+  }
+}
+
 /** The generator members `applyShadowSettings` writes, so tests can pass a recording fake. */
 export type ShadowGeneratorTarget = Pick<
   ShadowGenerator,
@@ -76,7 +121,7 @@ export type ShadowGeneratorTarget = Pick<
 export function applyShadowSettings(generator: ShadowGeneratorTarget, settings: ShadowSettings): void {
   if (settings.technique === 'pcf') {
     generator.usePercentageCloserFiltering = true
-    generator.filteringQuality = ShadowGenerator.QUALITY_MEDIUM
+    generator.filteringQuality = settings.pcfQuality === 'low' ? ShadowGenerator.QUALITY_LOW : ShadowGenerator.QUALITY_MEDIUM
   } else {
     generator.useBlurExponentialShadowMap = true
     if (settings.blurKernel !== null) generator.blurKernel = settings.blurKernel
