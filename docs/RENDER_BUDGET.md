@@ -64,6 +64,9 @@ What is recorded per tier × state (`tests/helpers/perf.ts`):
   but no heavy post" (SSAO2/SSR/MotionBlur/DoF are forced off on software rendering). True HIGH is manual on a
   real GPU (DevTools Performance trace, plus the GPU-time HUD once `?gpuTiming=1` lands).
 - A CDP `Profiler` self-time breakdown is the tie-breaker for "is this item worth shipping" (see the gate rule in the plan).
+- **GPU time is not measured here, on purpose.** `timestamp-query` is not requested in `deviceDescriptor.requiredFeatures`: it is
+  not universal (Safari / Metal) and a hard requirement fails device creation. `npm run perf:baseline` stays a CPU measure; what a
+  render change buys on the GPU (shadow-map fill, blur passes, sampler count) still needs a real adapter and a DevTools trace.
 - **WebGPU in CI is feasible.** `WEBGPU_CI=1 npx playwright test tests/webgpu-probe.spec.ts --project=chromium` passed on
   2026-10-09: headless Chromium with `--enable-unsafe-webgpu --enable-features=Vulkan --use-webgpu-adapter=swiftshader
   --use-angle=swiftshader --disable-vulkan-surface` (own browser launch, `channel: 'chromium'`) returns an adapter and device
@@ -181,8 +184,8 @@ What this says:
 - **The mirror texture renders 0 times per frame at every commit, base included.** Babylon only renders a `MirrorTexture` that some
   active mesh's material references, and nothing here does. B3 keeps its render list from growing (asserted over 50 spawn/collect
   cycles and 3 cabinet swaps) and sets its refresh rate, but there is no mirror cost to save until a material uses it. Deleting the
-  unused texture is the cleaner fix and is left as a decision.
-- **Shadow renders stay at 1.00 per frame**: B2 (static + dynamic generators) is not implemented in this PR. The shadow pass costs
+  unused texture is the cleaner fix and is left as a decision (done in #484, below).
+- **Shadow renders stay at 1.00 per frame**: B2 (static + dynamic generators) is not implemented in this PR (it landed with #484, below). The shadow pass costs
   ~0.8 ms of CPU per frame at MEDIUM here (`rttRenderMs`), so on this metric B2 can buy at most ~5 %; its case is GPU time.
 - **Draw calls go up, 613 → 652 (+6 %).** A frozen list cannot depend on where the camera is aiming, so it is captured with frustum
   clipping off: off-screen meshes are submitted and clipped by the GPU. The freeze is declined when it would add more than 30 %
@@ -192,6 +195,63 @@ What this says:
   per-node.
 - `refreezes`: 1 on the menu; 11–16 over a table run (each ball spawn or collect and each fog settle thaws and refreezes once).
   The gate settles about 60 frames after Start and 1–2 frames on the menu.
+
+### #484 — shadow split, mirror deleted, WebGPU canvas textures (2026-10-29)
+
+Chromium + SwiftShader, `?renderer=webgl2&debug=1&noopt=1`, 640×360, physics `rapier` (no `public/wasm` in this container),
+3 repeats × 60 measured frames (20 warm-up), MEDIUM and HIGH. `before` = `139f8f0`, `after` = this branch, both recorded with
+this branch's harness (it reads `dynamicShadowGenerator` when present), one after the other on the same machine.
+Median of per-repeat medians (MAD). Not comparable with the tables above (different machine, different frame count).
+
+| tier/state | renderTimeMs before → after | drawPhaseMs before → after | rttRenderMs before → after | draws |
+|---|---|---|---|---:|
+| medium/menu | 21.5 (0.4) → 22.8 (0.7) | 14.9 → 16.9 | 0.87 → 0.86 | 647 → 646 |
+| medium/table | 24.3 (1.1) → 26.4 (1.2) | 15.4 → 16.8 | 0.90 → 0.90 | 647 → 646 |
+| medium/table3 | 23.7 (3.0) → 26.7 (0.2) | 15.3 → 16.8 | 0.87 → 0.78 | 647 → 646 |
+| high/menu | 24.0 (0.4) → 26.7 (2.1) | 15.2 → 16.0 | 0.89 → 0.83 | 658 → 646 |
+| high/table | 25.4 (0.1) → 25.6 (2.7) | 17.4 → 17.3 | 0.83 → 0.81 | 658 → 646 |
+| high/table3 | 25.6 (0.0) → 25.2 (0.3) | 16.3 → 16.4 | 0.81 → 0.96 | 658 → 646 |
+
+`npm run perf:compare` now shows the split (identical at every tier / state):
+
+| metric | before | after |
+|---|---:|---:|
+| key-light shadow casters, static generator | 31 | 0 |
+| static shadow map renders per frame | 1.00 | 0.00 |
+| dynamic generator casters | 0 | 31 |
+| dynamic shadow map renders per frame | 0 | 1.00 |
+| MirrorTexture renders per frame | 0 | 0 (texture deleted) |
+
+What this says:
+
+- **The CPU number did not improve, and at MEDIUM it is 6–12 % worse on SwiftShader** (HIGH is inside the noise; per-repeat medians
+  overlap: e.g. medium/table 24.3 / 23.2 / 26.5 before, 23.4 / 27.6 / 26.4 after). The shadow pass was always ~0.9 ms of CPU
+  (`rttRenderMs` is unchanged), and SwiftShader rasterises on the CPU, so the extra work shows up in the draw phase: the playfield
+  and flipper glow now sample two shadow maps under two lights instead of one. On a GPU the trade is the other way round (a
+  2048² blurred ESM map is no longer re-rendered and re-blurred every frame), but that is exactly the number this harness cannot
+  give; see the GPU-time note above.
+- **The static map is empty by default.** Every one of the 31 casters moves: flippers, the ball, and the spinner / trap / launcher /
+  gate assemblies. The glTF cabinet, walls, rails and pins were never casters and still are not. Only the procedural cabinet
+  (the fallback build) registers static casters. The split is the mechanism for cheap static shadows, not yet a source of them.
+- **Why twin lights.** Babylon keeps one shadow generator per light (per camera), so two generators on the key light replace each
+  other. `ShadowRig` (`src/game/shadow-rig.ts`) puts them on `keyLightStatic` and `keyLightDynamic`, splits the key light's
+  intensity between them (`DYNAMIC_LIGHT_SHARE`, 0.4) and lights only the receivers: the key light excludes them, the twins
+  include only them. The receivers are `lcdGround` and `flipperGlow`, the only meshes with `receiveShadows`, so no other material
+  pays for a second light or sampler. The twins follow the key light's colour, direction and intensity every frame (the track
+  themes animate it).
+- **Shadow strength changes.** Lights add, so a shadow keeps the *other* twin's share: static shadows keep 0.4 of the key light
+  (were 0.3) and ball / flipper / obstacle shadows keep 0.6 (were 0.3). Ball shadows are visibly lighter than before. A 1000×640
+  table screenshot, before vs after: mean absolute difference 1.0 / 255, 1.6 % of pixels above 24 (the animation differs between
+  captures). `DYNAMIC_LIGHT_SHARE` in `src/game/shadow-config.ts` is the one knob if that is not acceptable.
+- **The mirror is gone** (`MirrorTexture`, its refresh cadence, the render-list upkeep in `BallManager` and the cabinet builder,
+  `mirrorSize*` / `mirrorTextureLevel` in config). It rendered 0 times at every commit. `tests/no-mirror-texture.test.ts` fails if
+  `src/` mentions `MirrorTexture` again; the perf harness counts renders of any `MirrorTexture` in `scene.textures`.
+- **WebGPU.** The `createDynamicTexture` throw did not reproduce on Babylon 9.30 (dev server or production build): with
+  `--use-vulkan=swiftshader` the engine boots, builds `lcdGridTexture`, and gets through `scene_critical`. Without that flag the
+  SwiftShader device is lost as soon as a canvas presents (see `docs/FRAME_GRAPH.md`), which is a different failure. Material
+  canvas textures now go through `createCanvasTexture` (`src/materials/canvas-texture.ts`), which imports both engine extensions
+  and names the engine if the method is still missing. `WEBGPU_CI=1 npx playwright test tests/webgpu-boot.spec.ts` covers it.
+  A WebGPU HIGH row is still not recorded here.
 
 ### Answers to the issue's open questions
 
@@ -216,6 +276,7 @@ by moving code into an eagerly loaded manual chunk such as `ui-overlays`.
 | date | commit | entryGzipKb | initialJsGzipKb | precacheTotalKiB |
 |---|---|---:|---:|---:|
 | 2026-10-09 | working tree on `claude/441-residual-lifecycle-gaps` (dist built 2026-10-08) | 205.77 | 233.27 | 6239.74 |
+| 2026-10-29 | #484 (`ShadowRig`, `createCanvasTexture`, mirror removed) | 206.69 | 235.47 | 5534.29 |
 
 #443 slices A + B, `entryGzipKb` per commit (the issue asks for no more than +1 KB over the base):
 
