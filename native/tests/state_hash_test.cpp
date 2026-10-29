@@ -18,7 +18,9 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
+#include <limits>
 #include <vector>
 
 using namespace pachinball;
@@ -193,6 +195,169 @@ TEST_CASE("state hash: writes the parity fixture", "[state-hash]") {
   if (const char* path = std::getenv("PACHINBALL_STATE_HASH_FIXTURE")) {
     char hex[17];
     std::snprintf(hex, sizeof hex, "%016llx", static_cast<unsigned long long>(world.getStateHash()));
+    std::ofstream out(path);
+    REQUIRE(out.good());
+    out << hex;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Non-finite bodies (#487 slice 1a). WASM and native disagree on NaN payloads
+// and on min/max of a NaN operand, so a NaN must neither reach the hash as raw
+// bits nor live long enough to be paired with a healthy body.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+float nanWithBits(uint32_t bits) {
+  float f = 0.f;
+  std::memcpy(&f, &bits, sizeof f);
+  return f;
+}
+
+uint32_t bitsOf(float f) {
+  uint32_t u = 0;
+  std::memcpy(&u, &f, sizeof u);
+  return u;
+}
+
+bool sameBits(const Vec3& a, const Vec3& b) {
+  return bitsOf(a.x) == bitsOf(b.x) && bitsOf(a.y) == bitsOf(b.y) && bitsOf(a.z) == bitsOf(b.z);
+}
+
+WorldParams stillWorld() {
+  WorldParams params;
+  params.gravity = {0.f, 0.f, 0.f};
+  params.sleepFramesRequired = 1;  // a resting ball sleeps on its first substep
+  return params;
+}
+
+RigidBodyDesc ballAt(Vec3 position, Vec3 velocity) {
+  RigidBodyDesc d;
+  d.position = position;
+  d.velocity = velocity;
+  d.radius = 0.2f;
+  d.linearDamping = 0.f;
+  return d;
+}
+
+} // namespace
+
+TEST_CASE("a NaN body is quarantined on its first substep and the hash is payload-invariant",
+          "[state-hash][nan]") {
+  struct Scene {
+    int roller = -1;
+    int frozen = -1;
+  };
+  const auto build = [](PhysicsWorld& w) {
+    Scene s;
+    s.roller = w.createRigidBody(ballAt({-2.f, 0.5f, 0.f}, {1.5f, 0.f, 0.f}));
+    s.frozen = w.createRigidBody(ballAt({0.f, 0.5f, 0.f}, {0.f, 0.f, 0.f}));
+    return s;
+  };
+  PhysicsWorld quietNaN(stillWorld());
+  PhysicsWorld loudNaN(stillWorld());
+  PhysicsWorld asleep(stillWorld());  // the reference: the same ball, simply at rest
+  const Scene s = build(quietNaN);
+  build(loudNaN);
+  build(asleep);
+  quietNaN.setVelocity(s.frozen, nanWithBits(0x7fc00001u), 0.f, 0.f);
+  loudNaN.setVelocity(s.frozen, nanWithBits(0xffffffffu), 0.f, 0.f);
+
+  // Two payloads, one hash: the hasher canonicalises NaN.
+  CHECK(quietNaN.getStateHash() == loudNaN.getStateHash());
+
+  quietNaN.step(FIXED_DT);
+  loudNaN.step(FIXED_DT);
+  asleep.step(FIXED_DT);
+
+  for (const PhysicsWorld* w : {&quietNaN, &loudNaN}) {
+    REQUIRE(w->lastNaNQuarantines().size() == 1);
+    const NaNQuarantine& q = w->lastNaNQuarantines()[0];
+    CHECK(q.bodyId == s.frozen);
+    CHECK(q.step == 0);
+    CHECK(q.substep == 0);
+    // Frozen where the substep started, at rest, asleep.
+    CHECK(sameBits(readPos(*w, s.frozen), {0.f, 0.5f, 0.f}));
+    CHECK(sameBits(readVel(*w, s.frozen), Vec3::zero()));
+    CHECK(sameBits(readAngVel(*w, s.frozen), Vec3::zero()));
+    CHECK(w->getActiveBodyCount() == 1);  // only the roller
+  }
+  CHECK(quietNaN.getStateHash() == loudNaN.getStateHash());
+  CHECK(asleep.lastNaNQuarantines().empty());
+  CHECK(asleep.getActiveBodyCount() == 1);
+
+  // Nothing leaked: the roller meets the frozen ball exactly as it meets the
+  // sleeping one, and both carry on bit for bit.
+  for (int f = 0; f < 120; ++f) {
+    quietNaN.step(FIXED_DT);
+    asleep.step(FIXED_DT);
+    CHECK(quietNaN.lastNaNQuarantines().empty());
+    for (const int id : {s.roller, s.frozen}) {
+      INFO("frame " << f << " body " << id);
+      REQUIRE(sameBits(readPos(quietNaN, id), readPos(asleep, id)));
+      REQUIRE(sameBits(readVel(quietNaN, id), readVel(asleep, id)));
+    }
+  }
+  CHECK(readVel(asleep, s.frozen).x > 0.1f);  // the collision did happen
+}
+
+TEST_CASE("a body created at a non-finite pose is quarantined at the origin", "[state-hash][nan]") {
+  PhysicsWorld world(stillWorld());
+  const float inf = std::numeric_limits<float>::infinity();
+  const int lost = world.createRigidBody(ballAt({std::numeric_limits<float>::quiet_NaN(), 1.f, inf},
+                                                {0.f, 0.f, 0.f}));
+  const int healthy = world.createRigidBody(ballAt({3.f, 0.5f, 0.f}, {1.f, 0.f, 0.f}));
+
+  world.step(FIXED_DT);
+  REQUIRE(world.lastNaNQuarantines().size() == 1);
+  CHECK(world.lastNaNQuarantines()[0].bodyId == lost);
+  CHECK(sameBits(readPos(world, lost), Vec3::zero()));
+  const Quat q = readRot(world, lost);
+  CHECK((q.x == 0.f && q.y == 0.f && q.z == 0.f && q.w == 1.f));
+  CHECK(isFinite(readPos(world, healthy)));
+
+  world.step(FIXED_DT);
+  CHECK(world.lastNaNQuarantines().empty());
+  CHECK(world.getActiveBodyCount() == 1);
+}
+
+TEST_CASE("state hash: writes the NaN quarantine parity fixture", "[state-hash][nan]") {
+  // The §NaN quarantine block of scripts/run-wasm-parity.mjs builds this
+  // scene through Embind — keep the two in step. The NaN here carries payload
+  // 0xffffffff; the bundle's is whatever JS hands it (0x7fc00000), so equal
+  // hashes mean both builds canonicalised it, then froze the ball alike.
+  PhysicsWorld world;
+  world.setGravity(0.f, -9.81f, 0.f);
+  world.addStaticBox(0.f, -0.5f, 0.f, 4.f, 0.5f, 4.f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f);
+  RigidBodyDesc ball;
+  ball.radius = 0.25f;
+  ball.restitution = 0.5f;
+  ball.linearDamping = 0.02f;
+  ball.friction = 0.2f;
+  ball.angularDamping = 0.1f;
+  ball.position = {-1.f, 0.25f, 0.f};
+  ball.velocity = {4.f, 0.f, 0.f};
+  const int roller = world.createRigidBody(ball);
+  ball.position = {0.5f, 0.25f, 0.f};
+  ball.velocity = {0.f, 0.f, 0.f};
+  const int lost = world.createRigidBody(ball);
+
+  stepFixed(world, 10);
+  world.setVelocity(lost, nanWithBits(0xffffffffu), 0.f, 0.f);
+  const uint64_t withNaN = world.getStateHash();
+  world.step(FIXED_DT);
+  REQUIRE(world.lastNaNQuarantines().size() == 1);
+  CHECK(world.lastNaNQuarantines()[0].bodyId == lost);
+  stepFixed(world, 49);
+  CHECK(isFinite(readPos(world, lost)));
+  CHECK(readVel(world, lost).x > 0.f);  // the roller woke it
+  CHECK(isFinite(readPos(world, roller)));
+
+  if (const char* path = std::getenv("PACHINBALL_NAN_QUARANTINE_FIXTURE")) {
+    char hex[34];
+    std::snprintf(hex, sizeof hex, "%016llx %016llx", static_cast<unsigned long long>(withNaN),
+                  static_cast<unsigned long long>(world.getStateHash()));
     std::ofstream out(path);
     REQUIRE(out.good());
     out << hex;

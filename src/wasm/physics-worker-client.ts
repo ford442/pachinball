@@ -254,6 +254,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     if (!this.isReady) return -1
     if (vertices.length < 9 || indices.length < 3) return -1
     const id = this.ids.allocStaticMesh()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
     this.enqueue({
       type: 'addStaticTriangleMesh',
       vertices: vertices.slice(),
@@ -313,6 +314,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   addForceField(desc: WasmForceFieldDesc): number {
     if (!this.isReady) return -1
     const id = this.ids.allocForceField()
+    if (id === STATIC_HANDLE_OVERFLOW) return STATIC_HANDLE_OVERFLOW
     this.enqueue({ type: 'addForceField', desc })
     return id
   }

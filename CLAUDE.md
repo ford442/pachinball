@@ -13,9 +13,11 @@ npm run preview    # Preview production build locally
 npm run machine:validate  # Weekly machine: golden descriptor, next 53 ISO weeks + free seeds, fixtures (like tracks:validate)
 npm test           # Run Vitest unit tests
 npx playwright test  # Run E2E / visual regression tests
-npm run compile-db        # Configure-only: writes native/build-native/compile_commands.json for clangd (see root .clangd). Re-run after adding any .cpp
+npm run compile-db        # Configure-only: writes native/build-native/compile_commands.json for clangd (see root .clangd). Re-run after adding any .cpp. Offline: npm run compile-db -- -DPACHINBALL_BUILD_TESTS=OFF
 npm run check:compile-db  # Fail if that database misses a native TU, mixes -O levels, or contains em++ commands
-npm run test:native       # compile-db + C++ Catch2 tests
+npm run test:native       # compile-db + C++ Catch2 tests (incl. golden traces: any numeric drift fails)
+npm run test:native:release  # same suite at -O3 (native/build-release); golden traces must match Debug
+npm run test:native:san   # Catch2 under ASan + UBSan (native/build-san); any report fails
 npm run check:wasm-docs   # Fail if docs/wasm-physics-engine.md drifts from CMake / config / sources
 npm run build:wasm        # Emscripten Release → public/wasm/
 npm run test:wasm-parity  # WASM bundle vs native C++ reference

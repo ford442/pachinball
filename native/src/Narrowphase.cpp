@@ -6,13 +6,12 @@
  */
 #include "CollisionFilter.h"
 #include "PhysicsWorld.h"
+#include "SolverConstants.h"
 
 #include <algorithm>
 #include <cmath>
 
 namespace pachinball {
-
-static constexpr float CONTACT_EPSILON_SQ = 1e-10f;
 
 namespace {
 

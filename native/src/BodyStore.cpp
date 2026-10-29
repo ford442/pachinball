@@ -232,6 +232,15 @@ void BodyView::wake() {
 
 // ---- BodyStore ----------------------------------------------------------
 
+/**
+ * Inverse scalar (isotropic) inertia.
+ * Dynamic spheres: I = 2/5 m r².
+ * Dynamic capsules: averaged cylinder inertia so hinges can motor the blade.
+ * Dynamic boxes: averaged principal moments, following the same isotropic
+ * simplification as capsules — crates tumble plausibly without forcing a
+ * full inertia tensor through every existing resolver.
+ * Static / kinematic bodies report 0.
+ */
 float BodyStore::computeInvInertia(const RigidBodyDesc& desc) {
   if (desc.type != BodyType::Dynamic || desc.mass <= 0.f) return 0.f;
   if (desc.shape == Shape::Sphere) {
@@ -249,7 +258,7 @@ float BodyStore::computeInvInertia(const RigidBodyDesc& desc) {
   }
   if (desc.shape == Shape::Box) {
     // Isotropic average of the three principal moments, matching the capsule
-    // simplification above — see RigidBody::getInvInertia for the rationale.
+    // simplification above.
     const Vec3 he = desc.boxHalfExtents;
     const float w = 2.f * he.x, h = 2.f * he.y, d = 2.f * he.z;
     const float k = desc.mass / 12.f;
@@ -450,38 +459,6 @@ int BodyStore::activeCount() const {
     if (a != 0) ++count;
   }
   return count;
-}
-
-void BodyStore::scatterTransformSlot(int publicId, float* dst, int stride) const {
-  if (!dst || stride <= 0) return;
-  float* slot = dst + static_cast<std::size_t>(publicId) * static_cast<std::size_t>(stride);
-  for (int k = 0; k < stride; ++k) slot[k] = 0.f;
-
-  int dense = -1;
-  for (int i = 0; i < denseCount(); ++i) {
-    if (denseToPublicId_[static_cast<std::size_t>(i)] == publicId) {
-      dense = i;
-      break;
-    }
-  }
-  if (dense < 0) return;
-
-  const std::size_t i = static_cast<std::size_t>(dense);
-  slot[0]  = static_cast<float>(publicId);
-  slot[1]  = posX_[i];
-  slot[2]  = posY_[i];
-  slot[3]  = posZ_[i];
-  slot[4]  = rotX_[i];
-  slot[5]  = rotY_[i];
-  slot[6]  = rotZ_[i];
-  slot[7]  = rotW_[i];
-  slot[8]  = velX_[i];
-  slot[9]  = velY_[i];
-  slot[10] = velZ_[i];
-  slot[11] = angVelX_[i];
-  slot[12] = angVelY_[i];
-  slot[13] = angVelZ_[i];
-  slot[14] = static_cast<float>(active_[i]);
 }
 
 } // namespace pachinball

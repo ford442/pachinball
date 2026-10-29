@@ -2,19 +2,17 @@
  * `mode: 'axis-pull'` force fields (the MagSpin well): the adapter routes them
  * to the dedicated Embind function, stays dormant on a bundle that predates it,
  * and leaves the directional path untouched. The compiled-bundle case is gated
- * like tests/pin-field-wasm.test.ts:
+ * like tests/pin-field-wasm.test.ts (bundle: tests/helpers/wasm-bundle.ts):
  *
- *   npm run build:wasm
+ *   npm run build:wasm:assert
  *   RUN_WASM_PARITY=1 npx vitest run tests/axis-pull-field.test.ts
  */
 
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import { WasmPhysicsEngine } from '../src/wasm/PhysicsModule'
 import { addForceField } from '../src/wasm/physics-module-adventure'
-import type { WasmPhysicsModule, WasmPhysicsWorldInstance } from '../src/wasm/wasm-types'
+import type { WasmPhysicsWorldInstance } from '../src/wasm/wasm-types'
+import { loadWasmTestModule, runWasmParity as RUN } from './helpers/wasm-bundle'
 
 const well = {
   center: { x: 4.5, y: 0.5, z: 15 },
@@ -73,16 +71,10 @@ describe('axis-pull adapter', () => {
   })
 })
 
-const bundle = resolve(__dirname, '..', process.env.WASM_MODULE_PATH ?? 'public/wasm/PhysicsModule.js')
-const RUN = process.env.RUN_WASM_PARITY === '1' && existsSync(bundle)
-
 describe.skipIf(!RUN)('axis-pull well on the compiled bundle', () => {
   it('draws a ball toward the axis and never lifts it', async () => {
-    const { default: factory } = await import(/* @vite-ignore */ pathToFileURL(bundle).href) as {
-      default: () => Promise<WasmPhysicsModule>
-    }
     const engine = new WasmPhysicsEngine()
-    await engine.load(undefined, await factory())
+    await engine.load(undefined, await loadWasmTestModule())
     expect(engine.isReady).toBe(true)
     engine.setGravity(0, 0, 0)
 

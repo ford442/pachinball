@@ -1,7 +1,7 @@
 #pragma once
 
 #include "MathTypes.h"
-#include "RigidBody.h"
+#include "BodyDesc.h"
 #include "ContactListener.h"
 #include "BodyStore.h"
 #include "CollisionFilter.h"
@@ -16,6 +16,8 @@
 #include "PinField.h"
 #include "Snapshot.h"
 
+#include <algorithm>
+#include <cmath>
 #include <vector>
 #include <cstdint>
 #include <cstdlib>
@@ -87,11 +89,40 @@ inline constexpr int STATIC_HANDLE_OVERFLOW = 0x7FFFFFFF;
 /** Packed transform-buffer layout (16 floats per public-id slot). */
 inline constexpr int TRANSFORM_STRIDE = 16;
 
+/** `WorldParams::maxSubsteps` default, and its upper bound (see sanitizedMaxSubsteps). */
+inline constexpr float DEFAULT_MAX_SUBSTEPS = 8.f;
+inline constexpr float MAX_SUBSTEPS_LIMIT   = 64.f;
+
+/**
+ * The substep cap `step()` actually uses. `maxSubsteps` is a float — it is a
+ * WorldParams field (Embind value_object) and is read back from snapshot
+ * bytes — and casting NaN or ±inf to int is UB. NaN falls back to the
+ * default; everything else is clamped to [1, 64], so a cap below 1 can no
+ * longer freeze the world. The identity on every value in that range.
+ */
+inline float sanitizedMaxSubsteps(float maxSubsteps) {
+  if (std::isnan(maxSubsteps)) return DEFAULT_MAX_SUBSTEPS;
+  return std::min(std::max(maxSubsteps, 1.f), MAX_SUBSTEPS_LIMIT);
+}
+
+/**
+ * A dynamic body found with a non-finite pose or velocity and frozen
+ * (PhysicsWorldStep.cpp, "Non-finite quarantine"): put back where its
+ * substep started — the origin / identity if that pose was not finite
+ * either — with zero velocity, asleep. The engine only freezes; what the
+ * game does with the ball (stuck-ball rescue, score-neutral drain) is its call.
+ */
+struct NaNQuarantine {
+  int      bodyId  = -1;
+  uint64_t step    = 0;  ///< getStepCount() when its substep began (substeps since creation)
+  int      substep = 0;  ///< That substep's index within its step() call
+};
+
 /** Per-world simulation parameters. */
 struct WorldParams {
   Vec3  gravity          = {0.f, -9.81f, -5.0f};
   float fixedTimestep    = 1.f / 60.f;
-  float maxSubsteps      = 8;
+  float maxSubsteps      = DEFAULT_MAX_SUBSTEPS;
   int   solverIterations = 4;
   float rollingResistance = 0.04f;
   float sleepLinearThreshold  = 0.05f;
@@ -174,7 +205,8 @@ public:
    * Add an immutable static triangle mesh from world-space vertex/index
    * arrays (`vertices` is 3 floats per vertex, `indices` 3 per triangle).
    * Adventure ramps, walls and floors arrive through here.
-   * Degenerate (zero-area) triangles are dropped. @returns negative handle.
+   * Degenerate (zero-area) triangles are dropped. @returns negative handle,
+   * or `STATIC_HANDLE_OVERFLOW` (adding no triangle) once 1000 meshes exist.
    */
   int addStaticTriangleMesh(const float* vertices, int vertexCount,
                             const uint32_t* indices, int indexCount,
@@ -194,7 +226,10 @@ public:
    */
   void clearStaticGeometry();
 
-  /** Add an oriented box force region (updraft, conveyor, solar wind). @returns negative handle. */
+  /**
+   * Add an oriented box force region (updraft, conveyor, solar wind).
+   * @returns negative handle, or `STATIC_HANDLE_OVERFLOW` once 1000 fields exist.
+   */
   int addForceField(const ForceFieldDesc& desc);
 
   /** Toggle a force field without removing it (gates a conveyor on and off). */
@@ -312,6 +347,13 @@ public:
   /** Static shapes refused because their family hit STATIC_HANDLE_CAPACITY. */
   int getDroppedStaticCount() const { return droppedStatics_; }
 
+  /**
+   * Bodies frozen for a non-finite state during the last `step()` call, in
+   * the order they were caught (empty on a healthy step). Not snapshotted:
+   * like the contact emit, it describes one call.
+   */
+  const std::vector<NaNQuarantine>& lastNaNQuarantines() const { return quarantines_; }
+
   uint64_t getStepCount() const { return stepCount_; }
   int getActiveBodyCount() const;
 
@@ -347,7 +389,14 @@ private:
   BodyView findView(int id) const;
   BodyView findViewMut(int id);
 
-  void substep(float dt);
+  void substep(float dt, int substepIndex);
+  /**
+   * Freeze every dynamic body whose position, rotation, velocity or angular
+   * velocity is not finite (see NaNQuarantine). Runs after integration — so
+   * a NaN never reaches the broadphase or the solver — and again after the
+   * solve. Read-only on a healthy world.
+   */
+  void quarantineNonFinite(int substepIndex);
   void solveHinges(float dt);
   /** Per-family static counts in Snapshot.h header order. */
   void staticCounts(uint32_t out[SNAPSHOT_STATIC_FAMILIES]) const;
@@ -469,6 +518,9 @@ private:
    * Transient: re-taken at the top of every `step()`, so it is not snapshotted.
    */
   std::vector<Vec3>              prevPositions_;
+  /** Dense-indexed rotation at the start of the current substep (quarantine restore). Transient. */
+  std::vector<Quat>              substepStartRotations_;
+  std::vector<NaNQuarantine>     quarantines_;
   int                            nextHingeId_ = 0;
   ContactListener                contactListener_;
 

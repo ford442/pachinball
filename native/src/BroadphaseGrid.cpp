@@ -5,9 +5,25 @@
 #include "TriangleMesh.h"
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 
 namespace pachinball {
+
+namespace {
+
+static_assert(static_cast<long long>(BroadphaseGrid::CELL_COORD_LIMIT) + 1 < INT_MAX,
+              "the 3x3 neighbour stencil adds +-1 to a clamped cell coordinate");
+
+/** Clamp, then floor and cast: identical to the bare cast for every |scaled| < 1e8. */
+int toCell(float scaled) {
+  if (std::isnan(scaled)) return 0;
+  const float bounded = std::min(std::max(scaled, -BroadphaseGrid::CELL_COORD_LIMIT),
+                                 BroadphaseGrid::CELL_COORD_LIMIT);
+  return static_cast<int>(std::floor(bounded));
+}
+
+} // namespace
 
 BroadphaseGrid::BroadphaseGrid()
     : BroadphaseGrid(Config{}) {}
@@ -23,11 +39,11 @@ void BroadphaseGrid::clearStatics() {
 }
 
 int BroadphaseGrid::cellX(float x) const {
-  return static_cast<int>(std::floor((x - config_.minX) / config_.cellSize));
+  return toCell((x - config_.minX) / config_.cellSize);
 }
 
 int BroadphaseGrid::cellZ(float z) const {
-  return static_cast<int>(std::floor((z - config_.minZ) / config_.cellSize));
+  return toCell((z - config_.minZ) / config_.cellSize);
 }
 
 void BroadphaseGrid::cellsForAabb(float minX, float maxX, float minZ, float maxZ,

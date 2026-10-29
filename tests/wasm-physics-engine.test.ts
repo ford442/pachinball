@@ -253,6 +253,44 @@ describe('WasmPhysicsEngine', () => {
     expect(engine.getDroppedContactCount()).toBe(8)
   })
 
+  it('converts BigInt u64 returns (WASM_BIGINT bundles) at the wrapper only', async () => {
+    const bus = new EventBus()
+    engine.init(bus)
+    const packed = new Float32Array(16)
+    packed.set([1, 2, 0, 1, 0, 0.5, 0.125, 0.25, 3.25, 0, 0, 0], 4)
+    worldStub.getContactCount.mockReturnValue(1)
+    worldStub.getContactBufferPtr.mockReturnValue(16)
+    worldStub.getStepCount.mockReturnValue(10n)
+    const world = worldStub as WorldStub & Record<string, unknown>
+    world.getStaticContentHash = vi.fn().mockReturnValue(0xbeefn)
+    world.getContactGeneration = vi.fn().mockReturnValue(7n)
+    await injectWorld(engine, worldStub, packed)
+
+    let delivered = 0
+    bus.on('wasm:physics:contact', () => { delivered++ })
+    engine.step(1 / 60)
+    expect(engine.getStepCount()).toBe(10)
+    expect(delivered).toBe(1)
+    // Same BigInt step count: no substep ran, so nothing is re-delivered
+    // (a bigint never === the cached number, which would double-score).
+    engine.step(1 / 240)
+    expect(delivered).toBe(1)
+
+    expect(engine.getStaticContentHash()).toBe('000000000000beef')
+    expect(engine.getContactGeneration()).toBe(7)
+  })
+
+  it('still accepts number / hex-string u64 returns from pre-BigInt bundles', async () => {
+    const world = worldStub as WorldStub & Record<string, unknown>
+    world.getStaticContentHash = vi.fn().mockReturnValue('feedfacecafebeef')
+    world.getContactGeneration = vi.fn().mockReturnValue(3)
+    await injectWorld(engine, worldStub)
+    engine.step(1 / 60)
+    expect(engine.getStepCount()).toBe(10)
+    expect(engine.getStaticContentHash()).toBe('feedfacecafebeef')
+    expect(engine.getContactGeneration()).toBe(3)
+  })
+
   // 11 ----------------------------------------------------------------------
   it('dispose() calls world.delete() and sets isReady=false', async () => {
     await injectWorld(engine, worldStub)

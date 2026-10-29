@@ -1,7 +1,7 @@
 #pragma once
 
 #include "MathTypes.h"
-#include "RigidBody.h"
+#include "BodyDesc.h"
 #include "HandleTable.h"
 
 #include <cstdint>
@@ -11,7 +11,7 @@ namespace pachinball {
 
 class BodyStore;
 
-/** Non-owning view over one dense slot in BodyStore — same API surface as RigidBody. */
+/** Non-owning view over one dense slot in BodyStore. */
 class BodyView {
 public:
   BodyView() = default;
@@ -116,8 +116,6 @@ public:
   bool isAwake(int i) const { return isActive(i); }
   uint32_t membership(int i) const { return membership_[static_cast<std::size_t>(i)]; }
   uint32_t filter(int i) const { return filter_[static_cast<std::size_t>(i)]; }
-
-  void scatterTransformSlot(int publicId, float* dst, int stride) const;
 
 private:
   void appendSlot(int publicId, const RigidBodyDesc& desc);

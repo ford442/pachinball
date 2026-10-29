@@ -8,12 +8,10 @@
  * poses and contact streams must match exactly once the client has read the
  * last published snapshot.
  *
- * Skips when public/wasm/PhysicsModule.js has not been built.
+ * Skips when the Node test bundle (tests/helpers/wasm-bundle.ts —
+ * `npm run build:wasm:assert`) has not been built.
  */
 
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { EventBus } from '../src/core/event-bus'
 import { WasmPhysicsEngine, WasmForceSpace, WasmVolumeShape } from '../src/wasm/PhysicsModule'
@@ -26,15 +24,10 @@ import {
 import type { PhysicsWorkerFromWorker } from '../src/wasm/physics-worker-protocol'
 import type { WasmSimEngine } from '../src/wasm/wasm-sim-engine'
 import type { WasmContactEvent, WasmPhysicsModule } from '../src/wasm/wasm-types'
+import { hasWasmTestBundle as hasBundle, loadWasmTestModule } from './helpers/wasm-bundle'
 
-const bundle = resolve(__dirname, '../public/wasm/PhysicsModule.js')
-const hasBundle = existsSync(bundle)
-
-async function freshModule(): Promise<WasmPhysicsModule> {
-  const { default: factory } = await import(/* @vite-ignore */ pathToFileURL(bundle).href) as {
-    default: () => Promise<WasmPhysicsModule>
-  }
-  return factory()
+function freshModule(): Promise<WasmPhysicsModule> {
+  return loadWasmTestModule()
 }
 
 type ContactKey = string

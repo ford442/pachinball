@@ -8,17 +8,12 @@
  */
 #include "CollisionFilter.h"
 #include "PhysicsWorld.h"
+#include "SolverConstants.h"
 
 #include <algorithm>
 #include <cmath>
 
 namespace pachinball {
-
-namespace {
-constexpr float CONTACT_EPSILON_SQ = 1e-10f;
-constexpr float SLOP    = 0.001f;
-constexpr float CORRECT = 0.8f;
-} // namespace
 
 int PhysicsWorld::addStaticSphere(float px, float py, float pz,
                                   float radius,
@@ -55,6 +50,8 @@ void PhysicsWorld::resolveSphereVsStaticSphere(BodyView& body, const SphereDesc&
   const float mu = std::sqrt(std::max(body.getFriction(), 0.f) * std::max(sph.friction, 0.f));
   const float j = applyContactImpulse(body, nullptr, contactPoint, normal, e, mu, penetration);
 
+  constexpr float SLOP    = 0.001f;
+  constexpr float CORRECT = 0.8f;
   if (penetration > SLOP && body.getType() == BodyType::Dynamic) {
     body.setPosition(body.getPosition() + normal * ((penetration - SLOP) * CORRECT));
   }

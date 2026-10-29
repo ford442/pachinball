@@ -10,8 +10,6 @@
 #include <emscripten/bind.h>
 #include "PhysicsWorld.h"
 #include <cstdint>
-#include <cstdio>
-#include <string>
 #include <vector>
 
 using namespace emscripten;
@@ -380,8 +378,7 @@ EMSCRIPTEN_BINDINGS(physics_world) {
 
     // Simulation
     .function("step",               &PhysicsWorld::step)
-    .function("getStepCount",       optional_override([](PhysicsWorld& self) -> double {
-        return static_cast<double>(self.getStepCount()); }))
+    .function("getStepCount",       &PhysicsWorld::getStepCount)
     .function("getActiveBodyCount", &PhysicsWorld::getActiveBodyCount)
 
     // World config
@@ -420,20 +417,21 @@ EMSCRIPTEN_BINDINGS(physics_world) {
         const std::vector<uint8_t> blob = emscripten::convertJSArrayToNumberVector<uint8_t>(bytes);
         return static_cast<int>(self.restore(blob.data(), blob.size()));
       }))
-    // u64 values cross as hex / double: embind has no lossless u64 without BigInt.
-    .function("getStaticContentHash", optional_override([](const PhysicsWorld& self) -> std::string {
-        char hex[17];
-        std::snprintf(hex, sizeof hex, "%016llx",
-                      static_cast<unsigned long long>(self.staticContentHash()));
-        return std::string(hex);
+    // uint64_t crosses losslessly as a JS BigInt (-sWASM_BIGINT); the
+    // WasmPhysicsEngine wrapper turns it back into a number / hex string.
+    .function("getStaticContentHash", &PhysicsWorld::staticContentHash)
+    .function("getStateHash", &PhysicsWorld::getStateHash)
+    .function("getContactGeneration", &PhysicsWorld::getContactGeneration)
+
+    // Bodies the last step() froze for a non-finite state (NaNQuarantine,
+    // #487): how many, then each one's id in the order they were caught
+    // (-1 past the end). The game decides what a frozen ball means.
+    .function("getNaNQuarantineCount", optional_override([](const PhysicsWorld& self) -> int {
+        return static_cast<int>(self.lastNaNQuarantines().size());
       }))
-    .function("getStateHash", optional_override([](const PhysicsWorld& self) -> std::string {
-        char hex[17];
-        std::snprintf(hex, sizeof hex, "%016llx",
-                      static_cast<unsigned long long>(self.getStateHash()));
-        return std::string(hex);
-      }))
-    .function("getContactGeneration", optional_override([](const PhysicsWorld& self) -> double {
-        return static_cast<double>(self.getContactGeneration());
+    .function("getNaNQuarantineBodyId", optional_override([](const PhysicsWorld& self, int index) -> int {
+        const std::vector<NaNQuarantine>& frozen = self.lastNaNQuarantines();
+        if (index < 0 || static_cast<std::size_t>(index) >= frozen.size()) return -1;
+        return frozen[static_cast<std::size_t>(index)].bodyId;
       }));
 }

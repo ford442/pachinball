@@ -52,6 +52,7 @@ export const enum BodyType {
 export const enum Shape {
   Sphere  = 0,
   Capsule = 1,
+  Box     = 2,
 }
 
 // ---------------------------------------------------------------------------
@@ -231,10 +232,10 @@ export interface WasmPhysicsWorldInstance {
   getPinFieldPinCount?(fieldId: number): number
 
   /**
-   * Drop every static collider, sensor volume and kinematic mover. Statics
-   * are append-only, so a rebuilt scene must clear before re-adding or it
-   * stacks a second copy. Invalidates every negative handle; dynamic bodies
-   * and hinges are untouched.
+   * Drop every static collider, sensor volume, kinematic mover and force
+   * field. Statics are append-only, so a rebuilt scene must clear before
+   * re-adding or it stacks a second copy. Invalidates every negative handle;
+   * dynamic bodies and hinges are untouched.
    */
   clearStaticGeometry(): void
 
@@ -298,23 +299,11 @@ export interface WasmPhysicsWorldInstance {
   ): number
 
   /**
-   * Add an oriented static cylinder collider (local Y axis) — pachinko pins,
-   * arc pylons, chroma gates.
-   * @returns Negative collider id used in contact events.
-   */
-  addStaticCylinder(
-    px: number, py: number, pz: number,
-    radius: number, halfHeight: number,
-    qx: number, qy: number, qz: number, qw: number,
-    restitution?: number,
-    friction?: number
-  ): number
-
-  /**
    * Add an immutable static triangle mesh. `verticesPtr` and `indicesPtr` are
    * byte offsets into WASM memory (allocate with `_malloc`); vertices are
    * 3 floats each, indices 3 uint32 per triangle, CCW for the front face.
-   * @returns Negative mesh id used in contact events.
+   * @returns Negative mesh id used in contact events, or
+   * `STATIC_HANDLE_OVERFLOW` (creating nothing) if the family is full.
    */
   addStaticTriangleMesh(
     verticesPtr: number, vertexCount: number,
@@ -335,7 +324,8 @@ export interface WasmPhysicsWorldInstance {
    * Add an oriented box force region (updraft, conveyor, solar wind).
    * `space` is 0 world / 1 local; `acceleration` selects the mass-independent
    * form (m/s²) over a force in newtons.
-   * @returns Negative handle used in setForceField*() / setCollisionGroups.
+   * @returns Negative handle used in setForceField*() / setCollisionGroups, or
+   * `STATIC_HANDLE_OVERFLOW` (creating nothing) if the family is full.
    */
   addForceField(
     px: number, py: number, pz: number,
@@ -356,9 +346,6 @@ export interface WasmPhysicsWorldInstance {
     radius: number, halfHeight: number,
     strength: number, acceleration: boolean
   ): number
-
-  /** Drop all static/kinematic geometry and force fields; negative handles are invalidated. */
-  clearStaticGeometry(): void
 
   setForceFieldEnabled(fieldId: number, enabled: boolean): void
   setForceFieldVector(fieldId: number, fx: number, fy: number, fz: number): void
@@ -398,8 +385,12 @@ export interface WasmPhysicsWorldInstance {
    */
   step(rawDt: number): number
 
-  /** Total number of substeps taken since world creation. */
-  getStepCount(): number
+  /**
+   * Total number of substeps taken since world creation — a `bigint` from a
+   * `-sWASM_BIGINT` bundle (uint64_t), a number from older ones. Read it
+   * through `WasmPhysicsEngine.getStepCount()`.
+   */
+  getStepCount(): bigint | number
 
   /** Count of active rigid bodies (excluding removed ones). */
   getActiveBodyCount(): number
@@ -467,17 +458,34 @@ export interface WasmPhysicsWorldInstance {
   /** Restore a `serializeSnapshot()` blob; returns a `WasmSnapshotStatus` code. */
   restoreSnapshot?(bytes: Uint8Array): number
 
-  /** FNV-1a 64 of the static table, 16 hex chars — equal iff snapshots are interchangeable. */
-  getStaticContentHash?(): string
+  /**
+   * FNV-1a 64 of the static table — equal iff snapshots are interchangeable.
+   * A `bigint` from a `-sWASM_BIGINT` bundle, 16 hex chars from older ones;
+   * `WasmPhysicsEngine.getStaticContentHash()` always returns the hex form.
+   */
+  getStaticContentHash?(): bigint | string
 
   /**
-   * FNV-1a 64 of the stepped world (PhysicsWorld::getStateHash), 16 hex chars:
-   * equal hashes step identically. Optional: bundles before #459 lack it.
+   * FNV-1a 64 of the stepped world (PhysicsWorld::getStateHash): equal hashes
+   * step identically. A `bigint` from a `-sWASM_BIGINT` bundle, 16 hex chars
+   * from older ones; `WasmPhysicsEngine.getStateHash()` always returns the hex
+   * form. Optional: bundles before #459 lack it.
    */
-  getStateHash?(): string
+  getStateHash?(): bigint | string
 
-  /** Contact flushes so far (restored with the snapshot). */
-  getContactGeneration?(): number
+  /** Contact flushes so far (restored with the snapshot); `bigint` from a `-sWASM_BIGINT` bundle. */
+  getContactGeneration?(): bigint | number
+
+  /**
+   * Bodies the last `step()` froze because their pose or velocity stopped
+   * being finite (native `NaNQuarantine`): each was put back where its
+   * substep began with zero velocity, asleep. 0 on a healthy step. Optional:
+   * bundles before #487 lack it.
+   */
+  getNaNQuarantineCount?(): number
+
+  /** Id of the `index`-th body `getNaNQuarantineCount()` counts, or -1 past the end. */
+  getNaNQuarantineBodyId?(index: number): number
 
   /** Release the C++ object. Must be called when done to avoid WASM memory leaks. */
   delete(): void
