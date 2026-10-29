@@ -152,9 +152,10 @@ Photosensitive mode needs nothing here; it still only decides the backbox's CRT 
 
 ### Scene colour target: format, MSAA, SSAO cost (#488 §2–3)
 
-- **Format.** `GpuCapabilities.hdrFormat` (`src/engine/gpu-capabilities.ts`): `rg11b10ufloat` where it is
-  colour-renderable (WebGPU `rg11b10ufloat-renderable`, WebGL2 `EXT_color_buffer_float`) — 32 bits per pixel,
-  half the bandwidth of RGBA16F — else `rgba16f`, `rgba32f`, `rgba8`. The packed format has no alpha; nothing
+- **Format.** `GpuCapabilities.hdrFormat` (`src/engine/gpu-capabilities.ts`): on WebGPU, `rg11b10ufloat` where the
+  device has `rg11b10ufloat-renderable` — 32 bits per pixel, half the bandwidth of RGBA16F — else `rgba16f`,
+  `rgba32f`, `rgba8`. WebGL2 never gets the packed format: Babylon reports it renderable with
+  `EXT_color_buffer_float`, but a target of that type draws a black scene there (SwiftShader / ANGLE). The packed format has no alpha; nothing
   reads the scene colour's alpha (the last pass writes an opaque canvas). The HIGH-only nodes keep their own
   targets at half float. `?hdr=rgba16f` pins a lower format for A/B comparisons. `getSceneGraphInfo().graph.format`.
 - **Anti-aliasing.** The canvas is not multisampled any more (`antialias: false`, `?antialias=1` restores it):

@@ -78,6 +78,11 @@ describe('resolveGpuCapabilities', () => {
     expect(resolveGpuCapabilities(source({ rg11b10ufColorRenderable: true, textureFloatRender: true })).hdrFormat).toBe('rgba32f')
   })
 
+  it('WebGL2 never picks rg11b10ufloat (its render target draws black there)', () => {
+    const caps = resolveGpuCapabilities(source({ rg11b10ufColorRenderable: true, textureHalfFloatRender: true }, false))
+    expect(caps.hdrFormat).toBe('rgba16f')
+  })
+
   it('WebGL2 never reports f16, and defaults MSAA to 1', () => {
     const caps = resolveGpuCapabilities(source({ textureHalfFloatRender: true }, false, ['shader-f16']))
     expect(caps.backend).toBe('webgl2')

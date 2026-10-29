@@ -159,8 +159,8 @@ test.describe('Scene Frame Graph', () => {
     expect(r.graph?.hdr).toBe(true)
     expect(r.graph?.samples).toBe(4)
     expect(r.plan?.omitted).toContainEqual({ node: 'fxaa', reason: 'msaa' })
-    // The capability record's best renderable HDR format: packed rg11b10ufloat where it renders.
-    expect(['rg11b10ufloat', 'rgba16f']).toContain(r.graph?.format)
+    // WebGL2 keeps half float: the packed rg11b10ufloat target draws black there (WebGPU only).
+    expect(r.graph?.format).toBe('rgba16f')
 
     // The camera renders into the graph's target; materials leave tone mapping to the node.
     const state = await page.evaluate(() => ({
@@ -373,6 +373,9 @@ test.describe('Scene Frame Graph on WebGPU (opt-in)', () => {
         expect(probe?.postProcessTier).toBe(strict ? 'bloom-only' : 'full')
         expect(r.graph?.nodes).toEqual(strict ? ['scene:render', 'scene:bloom'] : FULL_NODES)
         expect(r.graph!.executedFrames).toBeGreaterThan(0)
+        // WebGPU render targets support 4x MSAA; the packed HDR format where the device can render it.
+        expect(r.graph?.samples).toBe(4)
+        expect(['rg11b10ufloat', 'rgba16f']).toContain(r.graph?.format)
       } finally {
         await browser.close()
       }

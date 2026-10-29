@@ -38,7 +38,7 @@ export function selectWebGPUFeatures(adapterFeatures: Iterable<string>): Optiona
 /**
  * Format of the scene's HDR colour target, best first:
  * - `rg11b10ufloat`: packed 32-bit float RGB, half the bandwidth of RGBA16F (no alpha; the scene
- *   colour's alpha is never read — the graph's last pass writes an opaque canvas).
+ *   colour's alpha is never read — the graph's last pass writes an opaque canvas). WebGPU only.
  * - `rgba16f` / `rgba32f`: classic half / full float.
  * - `rgba8`: no float render target at all (LDR).
  */
@@ -86,7 +86,9 @@ export function resolveGpuCapabilities(engine: CapsSource | AbstractEngine): Gpu
   const features = new Set(webgpu ? (source.enabledExtensions ?? []) : [])
 
   let hdrFormat: HdrFormat
-  if (caps.rg11b10ufColorRenderable === true && caps.textureHalfFloatRender === true) hdrFormat = 'rg11b10ufloat'
+  // WebGPU only: on WebGL2 Babylon reports R11F_G11F_B10F renderable whenever float colour buffers
+  // are, but a render target of that type draws nothing (black scene, verified on SwiftShader / ANGLE).
+  if (webgpu && caps.rg11b10ufColorRenderable === true && caps.textureHalfFloatRender === true) hdrFormat = 'rg11b10ufloat'
   else if (caps.textureHalfFloatRender === true) hdrFormat = 'rgba16f'
   else if (caps.textureFloatRender === true) hdrFormat = 'rgba32f'
   else hdrFormat = 'rgba8'
