@@ -235,10 +235,12 @@ export default defineConfig(({ mode }) => ({
         globPatterns: [
           '**/*.{js,css,html,wasm,svg,png,ogg,env,webp,ico,txt,webmanifest}',
         ],
-        // Full backbox loops can be large — poster (attract.png) is precached instead
+        // Backbox clips (state loops, tracks/, incidents/) stream on demand; their .webp
+        // posters are not precached either — only the state posters (attract.png, …) are.
         globIgnores: [
-          '**/backbox/*.mp4',
-          '**/backbox/*.webm',
+          '**/backbox/**/*.mp4',
+          '**/backbox/**/*.webm',
+          '**/backbox/**/*.webp',
           // Classic-cabinet glTF loader — fetched on first classic preset use
           '**/babylon-loaders-*.js',
           // Babylon code only the glTF loader imports (extensions, OpenPBR, Gaussian splatting, …)

@@ -9,7 +9,9 @@ import type { SoundSystem } from '../audio/sound-system'
 
 export interface VisibilityManagerDeps {
   engine: BabylonEngine | WebGPUEngine
-  renderFrame: () => void
+  /** Stop / restart the owning Game's own render loop — never every loop on the shared engine. */
+  pauseRendering: () => void
+  resumeRendering: () => void
   getGameState: () => GameState
   soundSystem: SoundSystem
 }
@@ -56,7 +58,7 @@ export class VisibilityManager {
   private pause(): void {
     if (!this.renderLoopActive) return
     this.renderLoopActive = false
-    this.deps.engine.stopRenderLoop()
+    this.deps.pauseRendering()
     void this.suspendAudioContexts()
   }
 
@@ -65,7 +67,7 @@ export class VisibilityManager {
 
     if (!this.renderLoopActive) {
       this.renderLoopActive = true
-      this.deps.engine.runRenderLoop(this.deps.renderFrame)
+      this.deps.resumeRendering()
     }
 
     if (this.deps.getGameState() === GameState.PLAYING) {

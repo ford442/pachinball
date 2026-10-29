@@ -302,7 +302,7 @@ export class Game
     this.lifecycle?.setGameState(GameState.MENU)
   }
 
-  /** Per-frame render loop body — also used by VisibilityManager on tab resume. */
+  /** Per-frame render loop body. */
   renderFrame(): void {
     this.settingsUI?.updateLatencyDisplay(this.inputManager || undefined)
     this.scene?.render()
@@ -438,6 +438,17 @@ export class Game
       soundSystem: this.soundSystem,
     })
     this.adventureManager?.setupFeederEventHandlers()
+  }
+
+  /** Stops only this Game's loop: the engine is shared, so never `engine.stopRenderLoop()` bare. */
+  pauseRendering(): void {
+    this.engine.stopRenderLoop(this.renderLoop)
+  }
+
+  /** Re-registers this Game's own loop (Babylon ignores a duplicate); a disposed Game stays stopped. */
+  resumeRendering(): void {
+    if (this.disposed) return
+    this.engine.runRenderLoop(this.renderLoop)
   }
 
   dispose(): void {
