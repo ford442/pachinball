@@ -74,9 +74,9 @@ export class CollisionDispatcher {
   private deathZoneHandle: number | null = null
 
   private adventureSensorHandle: number | null = null
-  /** Body handles of active exit-portal sensor bodies; collisions are silently skipped
-   *  in the dispatcher since portal contact is detected by the bridge overlap test
-   *  inside AdventureMode.updateExitPortal(). */
+  /** Body handles of active exit-portal sensor bodies. Their begin/end contacts are
+   *  routed to ZoneTriggerSystem (the portal is registered there as a zone); whatever
+   *  is left over is skipped here so a portal sensor never reaches obstacle dispatch. */
   private portalSensorHandleSet: Set<number> = new Set()
   private laneSensorHandleMap: Map<number, LaneSensorDef> = new Map()
   private laneRolloverAwardedKeys: Set<string> = new Set()
@@ -208,13 +208,14 @@ export class CollisionDispatcher {
   }
 
   /**
-   * Register an exit-portal sensor body handle so the collision dispatcher
-   * can skip it cleanly.  Portal contact is detected by the sensor-overlap
-   * test inside AdventureMode.updateExitPortal() (Rapier or WASM, via the
-   * physics bridge); contact events for the sensor body are redundant and
-   * must not reach other handlers.
+   * Register an exit-portal sensor body handle so it never reaches the
+   * obstacle handlers. Its begin/end contacts are zone contacts: the portal is
+   * registered with ZoneTriggerSystem, and `feedZoneContact` hands them over
+   * (the portal is entered on the engine's begin contact, not by sampling a
+   * ball position each frame).
    *
-   * Call this immediately after AdventureMode.activateExitPortal() succeeds.
+   * Call this immediately after AdventureMode.activateExitPortal() succeeds;
+   * every deactivation path unregisters it through PORTAL_DEACTIVATED.
    */
   registerPortalSensor(handle: number): void {
     if (handle >= 0) {
@@ -258,11 +259,15 @@ export class CollisionDispatcher {
 
   /**
    * Unified contact entry for both engines. Rapier begin/end and WASM
-   * Enter/Stay/Exit all collapse here; scoring only runs on Enter.
+   * Enter/Stay/Exit all collapse here; scoring only runs on Enter, and Exit
+   * matters only to zone sensors.
    */
   processContact(contact: PhysicsContact): void {
-    if (!contactStarted(contact)) return
-    this.dispatchStartedPair(contact.bodyId1, contact.bodyId2)
+    if (contactStarted(contact)) {
+      this.dispatchStartedPair(contact.bodyId1, contact.bodyId2)
+    } else if (contact.phase === ContactPhase.Exit) {
+      this.dispatchEndedPair(contact.bodyId1, contact.bodyId2)
+    }
   }
 
   /**
@@ -307,8 +312,49 @@ export class CollisionDispatcher {
     const b2 = world.getRigidBody(bh2)
     if (!b1 || !b2) return
     if (b1.isFixed() && b2.isFixed()) return
+    if (this.feedZoneContact(b1, b2, bh1, bh2, true)) return
 
     this.processBodyCollision(b1, b2, bh1, bh2)
+  }
+
+  /** A Rapier collision ended. Only zone sensors care: everything else reacts on the begin edge. */
+  private dispatchEndedPair(h1: number, h2: number): void {
+    if (h1 === 0 || h2 === 0 || h1 === h2) return
+    const world = this.host.physics.getWorld()
+    if (!world) return
+
+    const bh1 = world.getCollider(h1)?.parent()?.handle ?? -1
+    const bh2 = world.getCollider(h2)?.parent()?.handle ?? -1
+    if (bh1 < 0 || bh2 < 0) return
+    const b1 = world.getRigidBody(bh1)
+    const b2 = world.getRigidBody(bh2)
+    if (!b1 || !b2) return
+
+    this.feedZoneContact(b1, b2, bh1, bh2, false)
+  }
+
+  /**
+   * Hand a sensor begin/end to ZoneTriggerSystem when one side is a zone's
+   * sensor body (a scenario / obstacle zone, or an exit portal). The engine
+   * reported the contact — swept over the substep, and on the worker delivered
+   * with the step result — so nothing is re-tested against a pose here, and
+   * the zone system debounces on the sim clock.
+   *
+   * @returns true when the pair involved a zone sensor (consumed, whichever
+   *          body touched it), so it must not also reach the obstacle handlers.
+   */
+  private feedZoneContact(b1: PhysicsBody, b2: PhysicsBody, key1: number, key2: number, started: boolean): boolean {
+    const zones = this.host.zoneTriggerSystem
+    if (!zones) return false
+    const zone1 = zones.zoneIdOfBody(b1.handle)
+    const zone2 = zone1 === null ? zones.zoneIdOfBody(b2.handle) : null
+    const zoneId = zone1 ?? zone2
+    if (zoneId === null) return false
+
+    const ballKey = zone1 !== null ? key2 : key1
+    if (started) zones.contactBegin(zoneId, ballKey)
+    else zones.contactEnd(zoneId, ballKey)
+    return true
   }
 
   /**
@@ -334,11 +380,13 @@ export class CollisionDispatcher {
    * public id to its body and dispatch key (the id itself in owner mode, the
    * mirrored Rapier body's handle in mirror mode).
    *
-   * Stay/Exit are ignored here — scoring and hit SFX are Enter-edge only, matching
-   * Rapier's `started` filter.
+   * Stay is ignored, and so is Exit outside zone sensors — scoring and hit SFX are
+   * Enter-edge only, matching Rapier's `started` filter.
    */
   onWasmContact(evt: WasmContactEvent): void {
-    if (!contactStarted(evt)) return
+    const started = contactStarted(evt)
+    // Stay carries nothing new. Exit matters only to zone sensors.
+    if (!started && evt.phase !== ContactPhase.Exit) return
     const bridge = this.getWasmBridge()
     if (!bridge) return
     // A re-export (table edit, adventure track switch) reassigns static ids.
@@ -348,6 +396,8 @@ export class CollisionDispatcher {
     const r2 = bridge.resolveContactId(evt.bodyId2)
     if (!r1 || !r2 || r1.body === r2.body) return
 
+    if (this.feedZoneContact(r1.body, r2.body, r1.key, r2.key, started)) return
+    if (!started) return
     this.processBodyCollision(r1.body, r2.body, r1.key, r2.key)
   }
 
@@ -379,8 +429,8 @@ export class CollisionDispatcher {
     bh2: number
   ): void {
     // Pre-flight guards — special non-obstacle bodies.
-    // Exit-portal sensors (registered by body handle): contact is handled by the
-    // overlap test in AdventureMode.updateExitPortal(); skip here to avoid misrouting.
+    // Exit-portal sensors (registered by body handle): their contacts are zone
+    // contacts, already routed to ZoneTriggerSystem; skip here to avoid misrouting.
     if (this.portalSensorHandleSet.has(b1.handle) || this.portalSensorHandleSet.has(b2.handle)) {
       return
     }

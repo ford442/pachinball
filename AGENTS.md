@@ -327,9 +327,10 @@ When the campaign loop (STATIONARY_TABLE ↔ EXTENDED_MAP) is involved, the foll
    - Failure causes stale transition detection on re-entry
 
 6. **Portal sensor handles must be unregistered on ALL deactivation paths.**
-   - `deactivateExitPortal()` MUST emit `PORTAL_DEACTIVATED` event
-   - Handler in `game-systems-init.ts` MUST call `unregisterPortalSensor()`
-   - This covers `switchToTrack()` and `activateExitPortal()` replacement paths
+   - `deactivateExitPortal()` MUST emit `PORTAL_DEACTIVATED` with `{ handle, id }`
+   - Handler in `game-systems-init.ts` MUST call `unregisterClosedPortal()` (`src/game/portal-sensor-lifecycle.ts`), which drops both the dispatcher handle and the portal's zone
+   - This covers `switchToTrack()`, `switchZone()`, `end()` and `activateExitPortal()` replacement paths (`tests/portal-deactivation-paths.test.ts`)
+   - Portal entry is contact-driven (the C++ sensor's begin contact → `ZoneTriggerSystem` → `onPortalContact` → `enterExitPortal`); never sample a ball position for it
 
 7. **Collision groups MUST separate table and adventure bodies.**
    - Adventure bodies use `ADVENTURE_GROUP` membership
@@ -460,7 +461,10 @@ When making changes that touch authentication, API keys, or asset URLs, use `imp
    The table uses `FreeCamera`. Never cast `activeCamera` to `ArcRotateCamera` without type guard. Use base `Camera` type for mode-agnostic code.
 
 10. **Stale Portal Handles in `portalSensorHandleSet`**  
-    Every path that deactivates a portal must unregister its handle. The PORTAL_ENTERED handler covers the happy path, but `switchToTrack()` and `activateExitPortal()` replacement also call `deactivateExitPortal()` — use the `PORTAL_DEACTIVATED` event pattern.
+    Every path that deactivates a portal must unregister its handle (and its zone). Entry covers the happy path, but `switchToTrack()` and `activateExitPortal()` replacement also call `deactivateExitPortal()` — use the `PORTAL_DEACTIVATED` event pattern.
+
+11. **Polling a ball position for a trigger zone**  
+    Zones and exit portals are C++ sensor volumes; the engine sweeps balls against them and reports begin/end contacts (`docs/wasm-physics-engine.md` → Zone sensors). A TS `translation()` poll misses a ball that crosses a thin zone between frames, and on `wasm-worker` the pose is a frame late. Author new zones through `ZoneTriggerSystem.registerObstacleZone()`; debounce in `simClockSteps()`, never `performance.now()`; keep camera cuts and score rules in the callbacks, not in `native/`.
 
 ---
 

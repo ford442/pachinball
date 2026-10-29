@@ -126,7 +126,7 @@ export class AdventureMode extends AdventurePortalMixin {
 
     this.timeAccumulator += dt
     this.activeBallBodies = ballBodies
-    this.updateExitPortal(dt, ballBodies)
+    this.updateExitPortal(dt)
     this.recoverFallenBalls(ballBodies)
 
     // Camera update

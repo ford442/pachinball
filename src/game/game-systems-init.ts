@@ -25,6 +25,7 @@ import {
   getScoringBreakdownManager,
   BallManager,
   ZoneTriggerSystem,
+  ZoneSensors,
   SettingsManager,
 } from '../game-elements'
 import { AdventureGoalTracker } from '../adventure/adventure-goal-tracker'
@@ -44,6 +45,7 @@ import { CabinetLighting } from '../effects/cabinet-lighting'
 import { CelebrationSequencer } from '../effects/celebration-sequencer'
 import { CampaignRewardNotifier } from '../adventure/campaign-reward-notifier'
 import { wireCampaignLoop } from './campaign-loop-controller'
+import { registerOpenPortal, unregisterClosedPortal, wirePortalEntry, type ClosedPortal } from './portal-sensor-lifecycle'
 import {
   SpinnerBumperBuilder,
   BallTrapBuilder,
@@ -72,9 +74,7 @@ interface PortalEnteredEventData {
   position: Vector3
 }
 
-interface PortalDeactivatedEventData {
-  handle: number
-}
+type PortalDeactivatedEventData = ClosedPortal
 
 /** The `?debug=1` / DEV-only tooling, split into its own chunk (see initAll). */
 async function loadDebugTools(): Promise<{
@@ -200,6 +200,12 @@ export class GameSystemsInitializer {
       if (!this.game.zoneTriggerSystem) {
         this.game.zoneTriggerSystem = new ZoneTriggerSystem(this.game.debugHUDQueryEnabled)
       }
+      // Every zone is a ball-filtered sensor volume in the physics world; the engine
+      // reports begin/end contacts and CollisionDispatcher feeds them to the zone system.
+      // Wired before the obstacle builders below register their footprints.
+      this.game.zoneTriggerSystem.setSensors(new ZoneSensors(world, rapier))
+      // Exit-portal entry outlives any scenario's setCallback(): complete the portal on contact.
+      wirePortalEntry(this.game)
 
       const effectIntensity = this.game.accessibility?.effectIntensity ?? 1.0
 
@@ -412,8 +418,10 @@ export class GameSystemsInitializer {
             break
           }
           case 'PORTAL_DEACTIVATED': {
-            const portalData = data as PortalDeactivatedEventData
-            this.game.physicsController?.unregisterPortalSensor(portalData.handle)
+            // Every teardown path (entry, replacement, switchZone, switchToTrack, end)
+            // lands here with the handle read from the payload: getPortalSensorHandle()
+            // is already -1 by now.
+            unregisterClosedPortal(this.game, data as PortalDeactivatedEventData)
             break
           }
         }
@@ -537,13 +545,10 @@ export class GameSystemsInitializer {
       this.game.eventBus.emit('portal:activation-failed', { trackId, kind, mode })
       return
     }
-    // Register the portal sensor handle so the collision dispatcher skips it.
-    // Portal contact is detected by the overlap test in updateExitPortal();
-    // contact events for the sensor body must not reach other handlers.
-    const openedHandle = this.game.adventureMode?.getPortalSensorHandle() ?? -1
-    if (openedHandle >= 0) {
-      this.game.physicsController?.registerPortalSensor(openedHandle)
-    }
+    // Register the portal's sensor as a zone: the engine reports a ball's begin
+    // contact (swept over the substep) and the zone system fires onPortalContact,
+    // which completes the portal. PORTAL_DEACTIVATED unregisters both.
+    registerOpenPortal(this.game, kind)
     // Show the portal overlay on the HUD
     this.game.uiManager?.showPortalOverlay(kind, trackId)
     // The countdown timer is no longer needed once the portal is open

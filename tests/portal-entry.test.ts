@@ -163,47 +163,38 @@ describe('AdventureProgressionSupervisor — portal:entered emission', () => {
 // ─── ZoneTriggerSystem portal zone tests ──────────────────────────────────────
 
 describe('ZoneTriggerSystem — portal zone registration', () => {
-  /** Mock Rapier RigidBody that reports a fixed position. */
-  function mockBall(x: number, y: number, z: number) {
-    return {
-      translation: () => ({ x, y, z }),
-    } as unknown as import('@dimforge/rapier3d-compat').RigidBody
-  }
+  const PORTAL_BOUNDS = { minX: -2, maxX: 2, minY: -2, maxY: 2, minZ: -2, maxZ: 2 }
+  const BALL = 1
 
   /**
-   * Build a minimal zone system with a registered callback, then drive
-   * a ball position through the portal zone AABB so handleZoneTransition fires.
+   * Build a minimal zone system with a registered callback. The physics engine
+   * reports a ball's begin contact with the portal's sensor volume; here the
+   * test plays the engine and feeds that contact to the system directly.
    */
   function buildZoneSystem(kind: 'success' | 'timeout') {
     const onZoneEnter = vi.fn()
     const onPortalContact = vi.fn()
 
-    const system = new ZoneTriggerSystem()
+    const system = new ZoneTriggerSystem(false, () => 0)
     system.setCallback({ onZoneEnter, onPortalContact })
-
-    // Register portal zone centered at (0, 0, 0), 4×4×4
-    system.registerPortalZone(
-      'NEON_HELIX-exit-portal',
-      { minX: -2, maxX: 2, minY: -2, maxY: 2, minZ: -2, maxZ: 2 },
-      kind,
-    )
+    system.registerPortalZone('NEON_HELIX-exit-portal', PORTAL_BOUNDS, kind)
 
     return { system, onZoneEnter, onPortalContact }
   }
 
-  it('fires onPortalContact when ball enters a success portal zone', () => {
+  it('fires onPortalContact when a ball touches a success portal zone', () => {
     const { system, onPortalContact } = buildZoneSystem('success')
 
-    system.update([mockBall(0, 0, 0)])
+    system.contactBegin('NEON_HELIX-exit-portal', BALL)
 
     expect(onPortalContact).toHaveBeenCalledOnce()
     expect(onPortalContact).toHaveBeenCalledWith('NEON_HELIX-exit-portal', 'success')
   })
 
-  it('fires onPortalContact when ball enters a timeout portal zone', () => {
+  it('fires onPortalContact when a ball touches a timeout portal zone', () => {
     const { system, onPortalContact } = buildZoneSystem('timeout')
 
-    system.update([mockBall(0, 0, 0)])
+    system.contactBegin('NEON_HELIX-exit-portal', BALL)
 
     expect(onPortalContact).toHaveBeenCalledOnce()
     expect(onPortalContact).toHaveBeenCalledWith('NEON_HELIX-exit-portal', 'timeout')
@@ -213,16 +204,13 @@ describe('ZoneTriggerSystem — portal zone registration', () => {
     const onZoneEnter = vi.fn()
     const onPortalContact = vi.fn()
 
-    const system = new ZoneTriggerSystem()
+    const system = new ZoneTriggerSystem(false, () => 0)
     system.setCallback({ onZoneEnter, onPortalContact })
 
     // Register as regular obstacle zone (not portal)
-    system.registerObstacleZone(
-      'NEON_HELIX-bumper',
-      { minX: -2, maxX: 2, minY: -2, maxY: 2, minZ: -2, maxZ: 2 },
-    )
+    system.registerObstacleZone('NEON_HELIX-bumper', PORTAL_BOUNDS)
 
-    system.update([mockBall(0, 0, 0)])
+    system.contactBegin('NEON_HELIX-bumper', BALL)
 
     expect(onZoneEnter).toHaveBeenCalled()
     expect(onPortalContact).not.toHaveBeenCalled()
@@ -232,7 +220,7 @@ describe('ZoneTriggerSystem — portal zone registration', () => {
     const { system, onPortalContact } = buildZoneSystem('success')
 
     system.unregisterPortalZone('NEON_HELIX-exit-portal')
-    system.update([mockBall(0, 0, 0)])
+    system.contactBegin('NEON_HELIX-exit-portal', BALL)
 
     expect(onPortalContact).not.toHaveBeenCalled()
   })
@@ -241,21 +229,17 @@ describe('ZoneTriggerSystem — portal zone registration', () => {
     const onZoneEnter = vi.fn()
     const onPortalContact = vi.fn()
 
-    const system = new ZoneTriggerSystem()
+    const system = new ZoneTriggerSystem(false, () => 0)
     system.setCallback({ onZoneEnter, onPortalContact })
-    system.registerPortalZone(
-      'NEON_HELIX-exit-portal',
-      { minX: -2, maxX: 2, minY: -2, maxY: 2, minZ: -2, maxZ: 2 },
-      'success',
-    )
+    system.registerPortalZone('NEON_HELIX-exit-portal', PORTAL_BOUNDS, 'success')
 
     system.dispose()
 
     // After dispose the callback has been cleared so no events will fire,
     // but we also verify the map is emptied by re-setting a callback and
-    // confirming no stale portal contact fires when re-entering the zone.
+    // confirming no stale portal contact fires when the zone is touched again.
     system.setCallback({ onZoneEnter, onPortalContact })
-    system.update([mockBall(0, 0, 0)])
+    system.contactBegin('NEON_HELIX-exit-portal', BALL)
 
     expect(onPortalContact).not.toHaveBeenCalled()
   })

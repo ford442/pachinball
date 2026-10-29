@@ -70,6 +70,8 @@ float PhysicsWorld::step(float rawDt) {
 
   accumulator_ += dt;
 
+  capturePreviousPositions();
+
   // Movers receive one pose push per world tick (see setNextKinematicTransform);
   // derive their velocity for this tick's substeps up front, once.
   for (KinematicMover& mover : movers_) {
@@ -82,6 +84,7 @@ float PhysicsWorld::step(float rawDt) {
   while (accumulator_ >= params_.fixedTimestep &&
          substepsDone < static_cast<int>(params_.maxSubsteps)) {
     substep(params_.fixedTimestep);
+    capturePreviousPositions();
     accumulator_ -= params_.fixedTimestep;
     ++substepsDone;
     ++stepCount_;
@@ -119,7 +122,7 @@ void PhysicsWorld::substep(float dt) {
                       params_.sleepFramesRequired);
 
   broadphase_.buildPairs(bodies_, boxes_, capsules_, cylinders_, spheres_, cones_,
-                         sensors_, movers_, triangles_, meshes_, pairs_);
+                         sensors_, movers_, triangles_, meshes_, prevPositions_, pairs_);
   appendPinFieldPairs();
 
   // Only dynamic bodies meet static geometry and movers: a kinematic body is

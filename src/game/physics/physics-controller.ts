@@ -153,6 +153,9 @@ export class GamePhysicsController {
               ...(this.host.ballTrapBuilder?.getBodies() ?? []),
               // MagSpin's well (#420 leftover): a C++ axis-pull field, not geometry.
               ...(this.host.magSpinFeeder?.getBodies() ?? []),
+              // Zone volumes (scenario zones, obstacle footprints): C++ sensor volumes
+              // that report ball begin/end contacts to ZoneTriggerSystem.
+              ...(this.host.zoneTriggerSystem?.getSensorBodies() ?? []),
             ])
           }
           this.wasmBridge = this.wasmOwner
@@ -236,11 +239,9 @@ export class GamePhysicsController {
   }
 
   /**
-   * Register an exit-portal sensor body handle so the collision dispatcher
-   * can skip it cleanly.  Portal contact is detected by the sensor-overlap
-   * test inside AdventureMode.updateExitPortal() (Rapier or WASM, via the
-   * physics bridge); contact events for the sensor body are redundant and
-   * must not reach other handlers.
+   * Register an exit-portal sensor body handle so it never reaches the
+   * obstacle handlers; its begin/end contacts go to ZoneTriggerSystem (see
+   * `CollisionDispatcher.registerPortalSensor`).
    *
    * Call this immediately after AdventureMode.activateExitPortal() succeeds.
    */
@@ -576,7 +577,6 @@ export class GamePhysicsController {
     // Adventure mode update
     const currentBallBodies = this.host.ballManager?.getBallBodies() || []
     this.host.adventureMode?.update(dt, currentBallBodies)
-    this.host.zoneTriggerSystem?.update(currentBallBodies)
 
     this.host.gameObjects?.updateBumpers(dt)
     this.host.gameObjects?.updateTargets(dt)
@@ -606,7 +606,6 @@ export class GamePhysicsController {
     this.host.effects?.updateCabinetLighting()
     this.host.effects?.updateSlotLighting()
     this.host.mapManager?.update(dt)
-    this.host.zoneTriggerSystem?.update(currentBallBodies)
 
     {
       const ballBody = this.host.ballManager?.getBallBody()

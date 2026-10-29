@@ -181,6 +181,7 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
                                 const std::vector<KinematicMover>& movers,
                                 const std::vector<MeshTriangle>& triangles,
                                 const std::vector<TriangleMeshDesc>& meshes,
+                                const std::vector<Vec3>& previous,
                                 std::vector<Pair>& outPairs) {
   outPairs.clear();
   dynamicCells_.clear();
@@ -191,6 +192,19 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
   std::vector<CellKey> cells;
   cells.reserve(16);
 
+  // XZ extent a body's cells must cover around its position.
+  const auto boundingRadius = [&bodies](int i) {
+    float r = bodies.radius(i);
+    const Shape shape = static_cast<Shape>(bodies.shape(i));
+    if (shape == Shape::Capsule) {
+      r += bodies.capsuleHalfHeight(i);
+    } else if (shape == Shape::Box) {
+      // Circumscribing radius, so any orientation is covered.
+      r = bodies.boxHalfExtents(i).length();
+    }
+    return r;
+  };
+
   for (int i = 0; i < n; ++i) {
     const BodyType type = static_cast<BodyType>(bodies.type(i));
     if (type == BodyType::Static) continue;
@@ -200,14 +214,7 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
 
     const float px = bodies.posX(i);
     const float pz = bodies.posZ(i);
-    float r = bodies.radius(i);
-    const Shape shape = static_cast<Shape>(bodies.shape(i));
-    if (shape == Shape::Capsule) {
-      r += bodies.capsuleHalfHeight(i);
-    } else if (shape == Shape::Box) {
-      // Circumscribing radius, so any orientation is covered.
-      r = bodies.boxHalfExtents(i).length();
-    }
+    const float r = boundingRadius(i);
     cells.clear();
     cellsForAabb(px - r, px + r, pz - r, pz + r, cells);
     for (const auto& c : cells) {
@@ -370,6 +377,45 @@ void BroadphaseGrid::buildPairs(const BodyStore& bodies,
             }
           }
         }
+      }
+    }
+  }
+
+  // Swept sensor candidates. A body that crossed a thin sensor inside one
+  // substep ends on the far side of it, in cells the loops above never paired
+  // with that sensor. Reach the sensors along the whole segment; `seenStatic`
+  // drops the ones the end pose already paired. Only sensors are swept: solid
+  // statics push a body out, so an end-pose miss there is a real miss.
+  for (int i = 0; i < n && i < static_cast<int>(previous.size()); ++i) {
+    if (static_cast<BodyType>(bodies.type(i)) == BodyType::Static) continue;
+    if (!bodies.isAwake(i)) continue;
+    // A hinged blade turns about a pivot; it does not tunnel, and its sensor
+    // test (resolveCapsuleVsSensor) is not swept.
+    if (static_cast<Shape>(bodies.shape(i)) == Shape::Capsule) continue;
+
+    const Vec3& from = previous[static_cast<std::size_t>(i)];
+    const float dx = bodies.posX(i) - from.x;
+    const float dy = bodies.posY(i) - from.y;
+    const float dz = bodies.posZ(i) - from.z;
+    const float travelSq = dx * dx + dy * dy + dz * dz;
+    if (travelSq < SENSOR_SWEEP_MIN_DISTANCE * SENSOR_SWEEP_MIN_DISTANCE ||
+        travelSq > SENSOR_SWEEP_MAX_DISTANCE * SENSOR_SWEEP_MAX_DISTANCE) continue;
+
+    const float r = boundingRadius(i);
+    cells.clear();
+    cellsForAabb(std::min(from.x, bodies.posX(i)) - r, std::max(from.x, bodies.posX(i)) + r,
+                 std::min(from.z, bodies.posZ(i)) - r, std::max(from.z, bodies.posZ(i)) + r,
+                 cells);
+    for (const auto& c : cells) {
+      const auto sit = staticCells_.find(c);
+      if (sit == staticCells_.end()) continue;
+      for (const StaticRef& ref : sit->second) {
+        if (ref.kind != StaticRef::Sensor) continue;
+        const SensorVolumeDesc& sensor = sensors[static_cast<std::size_t>(ref.index)];
+        if (!groupsInteract(bodies.membership(i), bodies.filter(i),
+                            sensor.membership, sensor.filter)) continue;
+        if (!seenStatic.insert(pairKeyStatic(i, ref.index, Pair::BodySensor)).second) continue;
+        outPairs.push_back({Pair::BodySensor, i, ref.index});
       }
     }
   }

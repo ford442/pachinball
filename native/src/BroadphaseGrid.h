@@ -81,6 +81,12 @@ public:
    * A sleeping Dynamic body stays in the grid as a target: an awake body
    * (a steered kinematic ball, one rolling in) pairs with it so contact can
    * wake it, but two sleepers never pair and a sleeper never meets statics.
+   *
+   * `previous` holds each body's pose at the start of the substep, dense-indexed
+   * (see SensorVolume.h). A body that travelled is also paired with every sensor
+   * its swept AABB reaches, so a thin volume crossed within the substep is still
+   * a candidate; the narrowphase (resolveSphereVsSensor) decides whether it was
+   * actually touched. Other static kinds are paired from the end pose only.
    */
   void buildPairs(const BodyStore& bodies,
                   const std::vector<BoxDesc>& boxes,
@@ -92,6 +98,7 @@ public:
                   const std::vector<KinematicMover>& movers,
                   const std::vector<MeshTriangle>& triangles,
                   const std::vector<TriangleMeshDesc>& meshes,
+                  const std::vector<Vec3>& previous,
                   std::vector<Pair>& outPairs);
 
   int lastPairCount() const { return lastPairCount_; }

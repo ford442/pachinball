@@ -2,12 +2,15 @@
  * Adventure Mode — exit-portal lifecycle.
  *
  * Owns the single active exit portal: spawning its visuals/sensor, animating
- * it each frame, and detecting when a ball has passed through.
+ * it each frame, and completing it when a ball passes through. Entry is
+ * contact-driven: the portal's sensor is a physics volume that reports when a
+ * ball begins overlapping it (swept over the substep, so a fast ball cannot
+ * skip it), `GameSystemsInitializer` hands that contact to `enterExitPortal`
+ * through `ZoneTriggerSystem`, and nothing here samples a ball position.
  */
 
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import type { PhysicsBody } from '../core/physics-api'
 import { AdventureCameraMixin } from './adventure-camera'
 import { AdventureTrackType } from './adventure-types'
 import { getTrackStartAnchor } from './portal-routing'
@@ -30,6 +33,11 @@ export abstract class AdventurePortalMixin extends AdventureCameraMixin {
    */
   getPortalSensorHandle(): number {
     return this.exitPortal?.sensor.handle ?? -1
+  }
+
+  /** Zone id of the active exit portal (`<trackId>-exit-portal`), or null when none is open. */
+  getPortalId(): string | null {
+    return this.exitPortal?.id ?? null
   }
 
   activateExitPortal(
@@ -84,7 +92,9 @@ export abstract class AdventurePortalMixin extends AdventureCameraMixin {
     const portal = this.exitPortal
     this.exitPortal = null
 
-    this.onEvent?.('PORTAL_DEACTIVATED', { handle: portal.sensor.handle })
+    // Every teardown path funnels through here (entry, replacement, switchZone,
+    // switchToTrack, end): the handle and zone id let the listener unregister both.
+    this.onEvent?.('PORTAL_DEACTIVATED', { handle: portal.sensor.handle, id: portal.id })
 
     portal.root.dispose()
     this.portalsRemovedSinceClear++
@@ -122,7 +132,27 @@ export abstract class AdventurePortalMixin extends AdventureCameraMixin {
     return new Vector3(anchor.x, anchor.y + yOffset, anchor.z + zOffset)
   }
 
-  protected updateExitPortal(dt: number, ballBodies: PhysicsBody[]): void {
+  /**
+   * A ball began overlapping the exit portal's sensor. Emits `PORTAL_ENTERED`
+   * and tears the portal down; a contact for a portal that is no longer the
+   * active one (replaced, or already entered) is ignored.
+   */
+  enterExitPortal(portalId: string): boolean {
+    const portal = this.exitPortal
+    if (!portal || portal.id !== portalId) return false
+
+    this.onEvent?.('PORTAL_ENTERED', {
+      id: portal.id,
+      trackId: portal.trackId,
+      kind: portal.kind,
+      position: portal.root.position.clone(),
+    })
+
+    this.deactivateExitPortal()
+    return true
+  }
+
+  protected updateExitPortal(dt: number): void {
     const portal = this.exitPortal
     if (!portal) return
 
@@ -137,19 +167,5 @@ export abstract class AdventurePortalMixin extends AdventureCameraMixin {
       portal.ringBase.scaleToRef(1.2 * pulse, portal.ringMaterial.emissiveColor)
       portal.coreBase.scaleToRef(0.85 * pulse, portal.coreMaterial.emissiveColor)
     }
-
-    const isAnyBallInside = ballBodies.some(
-      (candidateBall) => this.testSensorOverlap(portal.sensor, candidateBall)
-    )
-    if (!isAnyBallInside) return
-
-    this.onEvent?.('PORTAL_ENTERED', {
-      id: portal.id,
-      trackId: portal.trackId,
-      kind: portal.kind,
-      position: portal.root.position.clone(),
-    })
-
-    this.deactivateExitPortal()
   }
 }
