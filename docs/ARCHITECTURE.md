@@ -23,7 +23,7 @@ The codebase is organized into focused modules under `src/`. See [`AGENTS.md`](.
 | [`src/display/`](../src/display/) | Backbox display: WGSL reels (WebGPU), Canvas2D fallback, video/image layers |
 | [`src/effects/`](../src/effects/) | Visual/audio effects: bloom spikes, particles, camera shake, lighting |
 | [`src/materials/`](../src/materials/) | PBR material library (quality-tier aware) |
-| [`src/shaders/`](../src/shaders/) | Standalone WGSL/GLSL shaders (scanlines, LCD table, CRT, jackpot overlay) |
+| [`src/shaders/`](../src/shaders/) | Standalone shaders (CRT, jackpot overlay, cyber grid, LCD table, scanlines): GLSL for WebGL2, WGSL twins in `src/shaders/wgsl/` for WebGPU |
 | [`src/cabinet/`](../src/cabinet/) | Cabinet preset geometries (classic, neo, vertical, wide) |
 | [`src/adventure/`](../src/adventure/) | **Canonical** adventure track builders and `AdventureMode` orchestrator |
 | [`src/config/index.ts`](../src/config/index.ts) | Pure configuration (no Babylon imports) |
