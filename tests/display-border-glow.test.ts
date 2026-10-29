@@ -160,6 +160,15 @@ const REDUCED_MOTION: AccessibilityConfig = {
   flashFrequencyMax: 1,
 }
 
+/** What `detectAccessibility({ photosensitiveMode: true })` returns: not reduced motion, flashes capped at 1 Hz. */
+const PHOTOSENSITIVE: AccessibilityConfig = {
+  ...DEFAULT_ACCESSIBILITY,
+  flashFrequencyMax: 1,
+  effectIntensity: 0.45,
+  maxCameraShakeIntensity: 0,
+  photosensitiveMode: true,
+}
+
 /** Create a mesh whose material is a real instance of the mocked StandardMaterial */
 function makeMesh(useMaterial = true) {
   const material = useMaterial ? new StdMat('sourceMat') : null
@@ -291,6 +300,51 @@ describe('BackboxBorderGlow', () => {
       const em = clones[0].emissiveColor as InstanceType<typeof hoisted.FC3>
       // Without strobe the color is still lerping from black — should not be (1,1,1)
       expect(em.r).not.toBe(1)
+    })
+
+    it('photosensitive mode suppresses the JACKPOT strobe too — it is not only a reduced-motion rule', () => {
+      const mesh = makeMesh()
+      const glow = new BackboxBorderGlow(mesh as never, {} as never, QualityTier.MEDIUM, PHOTOSENSITIVE)
+      glow.onDisplaySet(DisplayState.JACKPOT)
+      const seen = new Set<string>()
+      for (let i = 0; i < 120; i++) {
+        glow.update(0.016)
+        const em = clones[0].emissiveColor as InstanceType<typeof hoisted.FC3>
+        expect(em.r === 1 && em.g === 1 && em.b === 1, `frame ${i}`).toBe(false) // never the strobe's white
+        seen.add(em.r.toFixed(2))
+      }
+      expect(seen.size).toBeGreaterThan(1) // it still fades up to the state colour
+    })
+
+    it.each([DisplayState.REACH, DisplayState.FEVER])('photosensitive mode holds %s at a steady colour (no 2 / 4 Hz pulse)', (state) => {
+      const mesh = makeMesh()
+      const glow = new BackboxBorderGlow(mesh as never, {} as never, QualityTier.MEDIUM, PHOTOSENSITIVE)
+      glow.onDisplaySet(state)
+      for (let i = 0; i < 400; i++) glow.update(0.016) // settle the lerp
+      // update() assigns a fresh Color3 every frame: read it again each time.
+      const at = () => {
+        const em = clones[0].emissiveColor as InstanceType<typeof hoisted.FC3>
+        return [em.r, em.g, em.b]
+      }
+      const steady = at()
+      expect(steady.some((v) => v > 0.1)).toBe(true) // lit, not black
+      for (let i = 0; i < 60; i++) {
+        glow.update(0.016)
+        expect(at().map((v, c) => Math.abs(v - steady[c]!)).every((d) => d < 1e-6), `frame ${i}`).toBe(true)
+      }
+    })
+
+    it('the same states do pulse by default', () => {
+      const mesh = makeMesh()
+      const glow = new BackboxBorderGlow(mesh as never, {} as never, QualityTier.MEDIUM, DEFAULT_ACCESSIBILITY)
+      glow.onDisplaySet(DisplayState.REACH)
+      for (let i = 0; i < 400; i++) glow.update(0.016)
+      const reds = new Set<string>()
+      for (let i = 0; i < 60; i++) {
+        glow.update(0.016)
+        reds.add((clones[0].emissiveColor as InstanceType<typeof hoisted.FC3>).r.toFixed(3))
+      }
+      expect(reds.size).toBeGreaterThan(5)
     })
 
     it('ADVENTURE state sets a non-black emissive after lerping', () => {

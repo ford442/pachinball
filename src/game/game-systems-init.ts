@@ -135,7 +135,13 @@ export class GameSystemsInitializer {
       this.game.cabinetLighting = new CabinetLighting(scene, {
         enableEdgeLighting: true,
         enableUnderCabinetGlow: true,
-        enableScreenBorder: false, // TODO: implement screen border
+        enableScreenBorder: true,
+        // Read live: toggling photosensitive mode or reduced motion applies to the strip at once.
+        screenBorder: {
+          width: displayConfig.width,
+          height: displayConfig.height,
+          getAccessibility: () => this.game.accessibility,
+        },
         qualityTier: this.game.qualityTier,
       })
       this.game.cabinetLighting.subscribeToEvents(this.game.eventBus)

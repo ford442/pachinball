@@ -11,12 +11,21 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Scene } from '@babylonjs/core/scene'
 import type { EventBus } from '../core/event-bus'
 import { DisplayState } from '../display/display-types'
+import type { BackboxScreenBorder } from '../display/backbox-screen-border'
+import type { ScreenBorderAccessibility } from '../display/screen-border-model'
 import { PALETTE, color, QualityTier } from '../game-elements/visual-language'
 
 export interface CabinetLightingConfig {
   enableEdgeLighting: boolean
   enableUnderCabinetGlow: boolean
+  /** Light the emissive strip around the backbox glass (needs `screenBorder`). */
   enableScreenBorder: boolean
+  /** What the strip frames and the accessibility settings it honours (read live). */
+  screenBorder?: {
+    width: number
+    height: number
+    getAccessibility: () => ScreenBorderAccessibility
+  }
   qualityTier: QualityTier
 }
 
@@ -53,6 +62,11 @@ export class CabinetLighting {
     pulsePhase: 0,
   }
 
+  // Screen border: an emissive frame around the backbox glass
+  private screenBorder: BackboxScreenBorder | null = null
+  private disposed = false
+  private eventUnsubscribers: Array<() => void> = []
+
   // State tracking
   private currentDisplayState: DisplayState = DisplayState.IDLE
   private eventBurstTime = 0
@@ -75,6 +89,10 @@ export class CabinetLighting {
    * Initialize all cabinet lights
    */
   private initializeLights(): void {
+    if (this.config.enableScreenBorder && this.config.screenBorder && this.config.qualityTier !== QualityTier.LOW) {
+      this.loadScreenBorder(this.config.screenBorder)
+    }
+
     if (!this.config.enableEdgeLighting && !this.config.enableUnderCabinetGlow) {
       return
     }
@@ -88,6 +106,29 @@ export class CabinetLighting {
     if (this.config.enableUnderCabinetGlow && this.config.qualityTier !== QualityTier.LOW) {
       this.createUnderCabinetLight()
     }
+  }
+
+  /**
+   * The strip is its own chunk (the entry chunk's budget is spent). It starts
+   * from the display state seen so far; a phase or contact event that arrives
+   * before it loads is cosmetic and simply missed.
+   */
+  private loadScreenBorder(border: NonNullable<CabinetLightingConfig['screenBorder']>): void {
+    void import('../display/backbox-screen-border')
+      .then(({ BackboxScreenBorder }) => {
+        if (this.disposed) return
+        this.screenBorder = new BackboxScreenBorder(this.scene, {
+          width: border.width,
+          height: border.height,
+          qualityTier: this.config.qualityTier,
+          getAccessibility: border.getAccessibility,
+        })
+        this.screenBorder.onDisplaySet(this.currentDisplayState)
+        this.screenBorder.setEnabled(this.enabled)
+      })
+      .catch((err: unknown) => {
+        console.warn('[CabinetLighting] Screen border chunk failed to load:', err)
+      })
   }
 
   /**
@@ -130,15 +171,22 @@ export class CabinetLighting {
    * Subscribe to game events
    */
   subscribeToEvents(eventBus: EventBus): void {
-    // Display state changes
-    eventBus.on('display:set', (state: DisplayState) => {
-      this.onDisplayStateChange(state)
-    })
+    this.eventUnsubscribers.push(
+      // Display state changes
+      eventBus.on('display:set', (state: DisplayState) => {
+        this.onDisplayStateChange(state)
+      }),
 
-    // Event reactions
-    eventBus.on('fever:start', () => this.triggerEventBurst('FEVER'))
-    eventBus.on('jackpot:start', () => this.triggerEventBurst('JACKPOT'))
-    eventBus.on('adventure:start', () => this.triggerEventBurst('ADVENTURE'))
+      // Event reactions
+      eventBus.on('fever:start', () => this.triggerEventBurst('FEVER')),
+      eventBus.on('jackpot:start', () => this.triggerEventBurst('JACKPOT')),
+      eventBus.on('adventure:start', () => this.triggerEventBurst('ADVENTURE')),
+
+      // Screen border: the phase comes from the sim-step jackpot clock, contacts from the bumpers.
+      eventBus.on('jackpot:phase', ({ phase }) => this.screenBorder?.onJackpotPhase(phase)),
+      eventBus.on('jackpot:end', () => this.screenBorder?.onJackpotPhase(0)),
+      eventBus.on('bumper:contact', ({ strength }) => this.screenBorder?.onContact(strength)),
+    )
   }
 
   /**
@@ -146,6 +194,7 @@ export class CabinetLighting {
    */
   private onDisplayStateChange(state: DisplayState): void {
     this.currentDisplayState = state
+    this.screenBorder?.onDisplaySet(state)
     this.updateLightingForState()
   }
 
@@ -232,6 +281,8 @@ export class CabinetLighting {
    */
   update(dt: number): void {
     if (!this.enabled) return
+
+    this.screenBorder?.update(dt)
 
     // Update edge lighting
     this.updateLightingState(this.edgeLightingState, this.edgeLights, dt)
@@ -344,6 +395,7 @@ export class CabinetLighting {
    */
   setEnabled(enabled: boolean): void {
     this.enabled = enabled
+    this.screenBorder?.setEnabled(enabled)
     for (const light of this.edgeLights) {
       light.intensity = enabled ? 0.8 : 0
     }
@@ -356,6 +408,12 @@ export class CabinetLighting {
    * Dispose resources
    */
   dispose(): void {
+    this.disposed = true
+    for (const unsubscribe of this.eventUnsubscribers) unsubscribe()
+    this.eventUnsubscribers = []
+    this.screenBorder?.dispose()
+    this.screenBorder = null
+
     for (const light of this.edgeLights) {
       light.dispose()
     }

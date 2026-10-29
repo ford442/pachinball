@@ -161,6 +161,23 @@ The player has breached the system's "Core". The machine shouldn't just award po
     *   **Cabinet Lights:** "Rainbow Wave" pattern running top-to-bottom.
     *   **Gameplay:** All bumpers light up; Flashers fire continuously.
 
+### B2. Implementation notes
+
+*   **Clock.** The phases are counted in fixed physics steps, not render `dt` or timers
+    (`src/effects/jackpot-phase-clock.ts`): breach 0–120, critical 120–300, meltdown 300–600
+    steps after the sequence starts. A tape replays the same phase at the same sim step
+    (`docs/determinism-todo.md` → "The jackpot sequence is on the sim clock").
+*   **Border.** `CabinetLighting` (`enableScreenBorder`) lights an emissive strip around the
+    backbox glass (`src/display/backbox-screen-border.ts`, model in `screen-border-model.ts`).
+    It follows `DisplayState`, the `jackpot:phase` event and `bumper:contact`, and is a lazy chunk.
+*   **Accessibility.** The 4 Hz and 10 Hz cabinet pulses above are the nominal rates; every pulse is
+    clamped to `AccessibilityConfig.flashFrequencyMax` (2 Hz by default — the project's seizure
+    cap) and is a sine, not an on/off flash. **Photosensitive mode** turns the pulses, the
+    strobe, the rainbow wave and the contact swell off: each phase holds its end state (red,
+    white/gold, gold) and colours fade slowly between them; the backbox jackpot pass and the
+    cabinet-light strobes are off as well. **Reduced motion** cuts to the end state of each
+    phase with no fade. Score and bumper awards are untouched (`scoring-bridge.ts`).
+
 ### C. Technical Specifications (Shader & Logic)
 *   **Shader Name:** `JackpotOverlayShader` (applies to Layer 3 Transparent Mesh).
 *   **Uniforms Needed:**
