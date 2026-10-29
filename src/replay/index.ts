@@ -4,6 +4,8 @@ export {
   decompressInputFrames,
   normalizeInputFrame,
   REPLAY_SCHEMA_VERSION,
+  REPLAY_FIXED_STEP_SCHEMA,
+  isFixedStepReplay,
   type ReplayMetadata,
   type ReplayPayload,
 } from './replay-recorder'

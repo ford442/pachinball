@@ -12,6 +12,7 @@ import {
   type ReplayPayload,
 } from '../src/game-elements'
 import { initSessionRng, getSessionRng } from '../src/core/seeded-rng'
+import { compressInputFrames, decompressInputFrames, isFixedStepReplay, REPLAY_SCHEMA_VERSION } from '../src/replay'
 
 describe('ReplayRecorder & ReplayRunner schema & serialization', () => {
   it('records frames and serializes/deserializes correctly', () => {
@@ -245,5 +246,28 @@ describe('Replay Physics Parity (Deterministic Integration)', () => {
     expect(vel2.x).toBeCloseTo(vel1.x, 10)
     expect(vel2.y).toBeCloseTo(vel1.y, 10)
     expect(vel2.z).toBeCloseTo(vel1.z, 10)
+  })
+})
+
+describe('replay schema 3 RLE (one row per fixed step)', () => {
+  it('round-trips a "no change" flipper as null, not released', () => {
+    const idle = { flipperLeft: null, flipperRight: null, plungerCharge: null, plunger: false, nudge: null, timestamp: 0 }
+    const held = { ...idle, flipperLeft: true, flipperRight: false }
+    const rle = compressInputFrames([held, idle, idle])
+    expect(rle).toBe('1:1,0,0,0,0,0,-;2:-,-,0,0,0,0,-')
+    const out = decompressInputFrames(rle)
+    expect(out.map((f) => [f.flipperLeft, f.flipperRight])).toEqual([[true, false], [null, null], [null, null]])
+  })
+
+  it('still decodes schema-2 rows (released is 0)', () => {
+    const out = decompressInputFrames('2:1,0,1,0,0,0,0.5')
+    expect(out).toHaveLength(2)
+    expect(out[0]).toMatchObject({ flipperLeft: true, flipperRight: false, plungerCharge: 0.5 })
+  })
+
+  it('classifies payloads by schema', () => {
+    expect(isFixedStepReplay({ version: REPLAY_SCHEMA_VERSION })).toBe(true)
+    expect(isFixedStepReplay({ version: 2 })).toBe(false)
+    expect(isFixedStepReplay(ReplayRecorder.fromJSON('{"compressedFrames":"1:0,0,0,0,0,0"}'))).toBe(false)
   })
 })

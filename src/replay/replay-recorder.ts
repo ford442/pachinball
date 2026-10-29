@@ -26,8 +26,21 @@ function normalizeReplayPhysicsEngine(value: unknown): WasmPhysicsRuntimeMode {
  * Replay schema version.
  * - 1: RLE rows `count:L,R,P,nx,ny,nz` — plunger as a fired/not-fired bit.
  * - 2: a 7th field carries the 0–1 plunger charge the launch was scaled by (#441).
+ *   Still one row per **render** frame; playback steps with the viewer's dt.
+ * - 3: one row per **fixed step** (1/60 s), recorded inside the controller's
+ *   substep loop. A flipper field may be `-` ("no change"): only the first
+ *   step of a render frame carries the frame's input. Playback advances one
+ *   row per fixed step whatever the viewer's refresh rate.
  */
-export const REPLAY_SCHEMA_VERSION = 2
+export const REPLAY_SCHEMA_VERSION = 3
+
+/** First schema whose rows are fixed steps rather than render frames. */
+export const REPLAY_FIXED_STEP_SCHEMA = 3
+
+/** Whether a payload's rows are fixed steps (schema ≥ 3) — else one per render frame. */
+export function isFixedStepReplay(payload: Pick<ReplayMetadata, 'version'>): boolean {
+  return payload.version >= REPLAY_FIXED_STEP_SCHEMA
+}
 
 export interface ReplayMetadata extends ReplayWorldFingerprint {
   version: number
@@ -53,9 +66,10 @@ export interface ReplayPayload extends ReplayMetadata {
  * Row: `count:flipperLeft,flipperRight,plunger,nx,ny,nz,charge`, e.g.
  * `60:0,0,0,0,0,0,-;1:0,0,1,0,0,0,0.5`. `charge` is the plunger charge written
  * with `String()` (round-trips exactly) or `-` when the plunger did not fire.
- * Lossy only where playback does not care: a `null` flipper ("no change")
- * encodes as released, nudges round to 0.01 (live input is quantised the same
- * way), and `nudgeSource` / `timestamp` are dropped.
+ * A `null` flipper ("no change") encodes as `-` (schema 3; schema 1–2 wrote it
+ * as released). Lossy only where playback does not care: nudges round to 0.01
+ * (live input is quantised the same way), and `nudgeSource` / `timestamp` are
+ * dropped.
  */
 export function compressInputFrames(frames: InputFrame[]): string {
   if (frames.length === 0) return ''
@@ -65,8 +79,8 @@ export function compressInputFrames(frames: InputFrame[]): string {
   let currentKey = ''
 
   for (const frame of frames) {
-    const left = frame.flipperLeft ? 1 : 0
-    const right = frame.flipperRight ? 1 : 0
+    const left = frame.flipperLeft === null ? '-' : frame.flipperLeft ? 1 : 0
+    const right = frame.flipperRight === null ? '-' : frame.flipperRight ? 1 : 0
     const plunger = frame.plungerCharge !== null ? 1 : 0
     const charge = frame.plungerCharge === null ? '-' : String(frame.plungerCharge)
     const nx = frame.nudge ? Math.round(frame.nudge.x * 100) / 100 : 0
@@ -112,10 +126,11 @@ export function decompressInputFrames(compressed: string): InputFrame[] {
     const count = parseInt(parts[0], 10)
     const fields = parts[1].split(',')
     const values = fields.map(Number)
-    if (isNaN(count) || values.length < 3) continue
+    if (isNaN(count) || fields.length < 3) continue
 
-    const flipperLeft = values[0] === 1
-    const flipperRight = values[1] === 1
+    const flipper = (field: string | undefined) => (field === '-' ? null : field === '1')
+    const flipperLeft = flipper(fields[0])
+    const flipperRight = flipper(fields[1])
     const fired = values[2] === 1
     const chargeField = fields[6]
     const charge = chargeField === undefined || chargeField === '-' ? 0 : Number(chargeField)
@@ -170,7 +185,8 @@ export class ReplayRecorder {
   }
 
   /**
-   * Append an InputFrame for a single physics step.
+   * Append the InputFrame applied before one fixed physics step (schema 3:
+   * every step gets a row, an idle one when no input arrived).
    */
   recordFrame(frame: InputFrame): void {
     if (!this.recording) return

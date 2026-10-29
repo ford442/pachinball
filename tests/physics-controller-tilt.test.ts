@@ -20,7 +20,7 @@ function makeTable() {
     applyImpulse,
   }
   const physics = {
-    // One fixed step per frame, whatever the render delta says.
+    // Each call is one fixed step: the controller runs one per 1/60 s tick.
     step: vi.fn(() => { engineSteps++; return 1 }),
     getStepCount: () => engineSteps,
     getWorld: () => null,
@@ -32,15 +32,19 @@ function makeTable() {
     ballManager: makeBallManagerStub({ getBallBody: vi.fn(() => ball) }),
     gameObjects: makeGameObjectsStub(),
   })
-  // A wildly wrong render delta: gameplay timers must not follow it.
-  ;(host.engine.getDeltaTime as ReturnType<typeof vi.fn>).mockReturnValue(1000)
+  // A 120 Hz render delta: half the frames run no fixed step, and gameplay
+  // timers must follow the steps, not the frames.
+  ;(host.engine.getDeltaTime as ReturnType<typeof vi.fn>).mockReturnValue(1000 / 120)
   const controller = new GamePhysicsController(host)
+  /** Render frames until the engine has taken `n` more fixed steps. */
   const frames = (n: number) => {
-    for (let i = 0; i < n; i++) controller.stepPhysics(null, null, null, null)
+    const target = engineSteps + n
+    while (engineSteps < target) controller.stepPhysics(null, null, null, null)
   }
+  const renderFrame = () => controller.stepPhysics(null, null, null, null)
   const nudge = () => controller.applyNudge({ x: 1, y: 0, z: 0 })
   return {
-    host, controller, frames, nudge, applyImpulse,
+    host, controller, frames, renderFrame, nudge, applyImpulse,
     jumpEngineCounter: (to: number) => { engineSteps = to },
   }
 }
@@ -130,7 +134,7 @@ describe('nudge / tilt on the sim clock (#441)', () => {
     t.nudge()
     const before = t.controller.simClock.ms()
     t.jumpEngineCounter(0)
-    t.frames(1)
+    t.renderFrame()
     // The rewind frame counts as zero; the clock never runs backwards.
     expect(t.controller.simClock.ms()).toBeCloseTo(before, 9)
     t.frames(cooldownSteps + 1)

@@ -137,7 +137,7 @@ timing for the HUD.
 ## Inputs on the tape (#441)
 
 The replay tape (`InputFrame`, `src/replay/replay-recorder.ts`, schema
-`REPLAY_SCHEMA_VERSION = 2`) carries everything that changes the ball's path:
+`REPLAY_SCHEMA_VERSION = 3`) carries everything that changes the ball's path:
 
 - **Plunger charge.** `plungerCharge` (0–1 at fire, `null` otherwise) is the
   value the launch impulse is scaled by. Live and replay both fire through
@@ -150,15 +150,50 @@ The replay tape (`InputFrame`, `src/replay/replay-recorder.ts`, schema
 - **Nudges** are quantised to the tape's 0.01 grid in `processBufferedInputs()`,
   so the live impulse is exactly the one replay re-applies.
 
-### Next blocker: the tape is per render frame
+### One row per fixed step (schema 3)
 
-One `InputFrame` is recorded per `stepPhysics()` call, i.e. per **render**
-frame, and playback steps the world with the viewer's own
-`engine.getDeltaTime()`. A 144 Hz spectator therefore runs a different number of
-fixed steps between taped inputs than the 60 Hz recorder did. Every determinism
-test pins delta to 1/60 s to sidestep this. Fix: record the fixed-step count per
-frame (or one frame per fixed step) and have playback advance exactly that many
-steps regardless of viewer dt.
+Schema 1–2 recorded one `InputFrame` per `stepPhysics()` call — per **render**
+frame — and playback stepped the world with the viewer's own
+`engine.getDeltaTime()`, so a 144 Hz spectator ran a different number of fixed
+steps between taped inputs than a 60 Hz recorder.
+
+Schema 3 (`REPLAY_SCHEMA_VERSION = 3`) fixes the tape, not the solver:
+
+- **The controller owns the accumulator.** `GamePhysicsController.stepPhysics`
+  adds the clamped render dt (≤ 1/30 s) to its own `stepAccumulator` and runs
+  one **tick** per whole `FIXED_TIMESTEP`. A tick applies exactly one
+  `InputFrame`, drives the flipper hinges and movers, then calls
+  `physics.step(FIXED_TIMESTEP)` — so the Rapier accumulator, the C++ owner's
+  `PhysicsWorld::step` and the worker each take exactly one substep per tick.
+  Mesh interpolation uses the controller's remainder as alpha.
+- **Recording** happens inside that loop: one row per tick, so the tape index
+  is the step index since recording started (the same steps `simStepCount()`
+  counts). Live input is drained by a render frame's first tick; later ticks
+  of the same frame record an idle row whose flippers are `null` ("no change",
+  RLE `-`). A frame that runs no tick (a 144 Hz frame between steps) leaves the
+  input buffered.
+- **Playback** ignores what the viewer's dt *means*: it only decides how many
+  ticks a render frame runs, and each tick consumes exactly one row. At the
+  end of the tape it stops before stepping past the recording.
+- **Worker.** Each tick's `setHingeMotor` / mover commands and the `step` go
+  out in one ordered command batch, inputs first, so the step an input is
+  applied to is that tick's. Poses still come back a batch late on a real
+  Worker (the caveat in `docs/ASYNC_CHALLENGES_EPIC.md`).
+- **Schema 1–2 tapes still load** and play the old way — one row per render
+  frame, stepped with the viewer's dt — so they stay exact only at the
+  recorder's refresh rate.
+
+Pinned by `tests/replay-fixed-step.test.ts` (record at 60 / 144 Hz, replay at
+30 / 60 / 144 Hz: score, pose and state hash match; a schema-2 control drifts)
+and, on the compiled bundle, `tests/replay-snapshot-wasm.test.ts` /
+`tests/replay-worker-snapshot-wasm.test.ts` (`getStateHash()` at 30 / 60 /
+144 Hz on the owner and worker paths).
+
+Still per render frame, outside the tick loop: `updatePlungerFrame` (the
+plunger spring animation), and the `dt` handed to feeders, adventure zones,
+bumpers and caught-ball updates further down `stepPhysics`. Gameplay timers
+already read `simDt`; anything in that list that pushes a body is the next
+audit item.
 
 ---
 
@@ -182,4 +217,5 @@ TS flipper drive reads — see the caveat in `docs/ASYNC_CHALLENGES_EPIC.md`.
 3. ~~#343: URL `?seed=` share → session seed; ghost spectate; divergence toast.~~
 4. #441: plunger charge on the tape; sim-clock nudge/tilt and scoring windows;
    worker snapshot round trip; restore across differing ball-id layouts.
-5. Next: tape per fixed step instead of per render frame (see "Next blocker").
+5. ~~Tape per fixed step instead of per render frame~~ — schema 3 (see "One row per fixed step").
+6. Next: move the per-frame `dt` consumers that push bodies (feeders, plunger spring) onto the tick.
