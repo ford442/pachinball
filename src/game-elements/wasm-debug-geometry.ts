@@ -3,8 +3,9 @@
  * Reuses transform-buffer / contact-buffer codecs — no third layout.
  */
 
-import { CONTACT_STRIDE, decodeContactBuffer } from '../wasm/contact-buffer'
+import { decodeContactBuffer } from '../wasm/contact-buffer'
 import { TRANSFORM_STRIDE, decodeTransformSlot } from '../wasm/transform-buffer'
+import { peekPackedPhysicsBuffers } from './wasm-packed-views'
 import type { WasmSimEngine } from '../wasm/wasm-sim-engine'
 import { pinFieldPinBounds, type PinFieldSpec } from '../core/pin-field'
 
@@ -28,67 +29,14 @@ export type WasmDebugCollider =
    */
   | { kind: 'pinField'; field: PinFieldSpec }
 
+// Re-exported: the per-frame owner path imports it from `wasm-packed-views` directly, so this
+// debug-draw module stays out of the entry chunk.
+export { peekPackedPhysicsBuffers }
+
 const WASM_LINE_RGBA = [0, 0.85, 1, 1] as const
 const IDENTITY_QUAT: Quat = { x: 0, y: 0, z: 0, w: 1 }
 const CONTACT_LINE_RGBA = [1, 0.45, 0.1, 1] as const
 
-interface PackedViews {
-  transforms: Float32Array | null
-  contacts: Float32Array | null
-  contactCount: number
-}
-
-interface HeapWorld {
-  transformView?: Float32Array | null
-  world?: {
-    getTransformBufferPtr?: () => number
-    getTransformSlotCount?: () => number
-    getTransformStride?: () => number
-    getContactBufferPtr?: () => number
-    getContactCount?: () => number
-  }
-  module?: {
-    HEAPF32?: Float32Array
-    wasmMemory?: { buffer: ArrayBuffer }
-  }
-}
-
-function heapF32(engine: HeapWorld): Float32Array | null {
-  if (engine.module?.HEAPF32) return engine.module.HEAPF32
-  const buf = engine.module?.wasmMemory?.buffer
-  return buf ? new Float32Array(buf) : null
-}
-
-/** Duck-type packed views the in-process / worker engines already maintain. */
-export function peekPackedPhysicsBuffers(engine: WasmSimEngine | null): PackedViews {
-  if (!engine) return { transforms: null, contacts: null, contactCount: 0 }
-  const e = engine as unknown as HeapWorld
-  let transforms = e.transformView ?? null
-  const heap = heapF32(e)
-  const world = e.world
-  if (!transforms && heap && world?.getTransformBufferPtr) {
-    const ptr = world.getTransformBufferPtr()
-    const slots = world.getTransformSlotCount?.() ?? 0
-    const stride = world.getTransformStride?.() ?? TRANSFORM_STRIDE
-    if (ptr && slots > 0) {
-      const start = ptr >> 2
-      transforms = heap.subarray(start, start + slots * stride)
-    }
-  }
-
-  let contacts: Float32Array | null = null
-  let contactCount = 0
-  if (heap && world?.getContactBufferPtr) {
-    contactCount = world.getContactCount?.() ?? 0
-    const ptr = world.getContactBufferPtr()
-    if (ptr && contactCount > 0) {
-      const start = ptr >> 2
-      contacts = heap.subarray(start, start + contactCount * CONTACT_STRIDE)
-    }
-  }
-
-  return { transforms, contacts, contactCount }
-}
 
 function rotateLocal(q: Quat, lx: number, ly: number, lz: number): Vec3 {
   const qx = q.x

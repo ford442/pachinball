@@ -12,7 +12,7 @@ import type { TableMapManager } from './game-maps'
 import { SettingsManager } from '../game-elements'
 import type { AudioSourceMode } from '../audio/audio-sample-bank'
 import { TABLE_MAPS, registerMap } from '../config/table-maps'
-import { PhysicsDebugRenderer } from '../game-elements/physics-debug-renderer'
+import type { PhysicsDebugRenderer } from '../game-elements/physics-debug-renderer'
 import {
   attemptWebGPURenderer,
   getActiveRenderer,
@@ -288,12 +288,20 @@ export class GameSettingsUI {
     if (!physicsDebugCheckbox) return
 
     physicsDebugCheckbox.addEventListener('change', () => {
-      if (!this.host.scene) return
-      if (!this.physicsDebugRenderer) {
-        this.physicsDebugRenderer = new PhysicsDebugRenderer(this.host.scene, this.host.physics)
-      }
-      this.physicsDebugRenderer.setEnabled(physicsDebugCheckbox.checked)
+      void this.ensurePhysicsDebugRenderer().then((renderer) => {
+        renderer?.setEnabled(physicsDebugCheckbox.checked)
+      })
     }, { signal: this.host.signal })
+  }
+
+  /** The collider overlay and its line geometry are their own chunk: only the debug toggle needs them. */
+  private async ensurePhysicsDebugRenderer(): Promise<PhysicsDebugRenderer | null> {
+    if (this.physicsDebugRenderer) return this.physicsDebugRenderer
+    const { PhysicsDebugRenderer: Renderer } = await import('../game-elements/physics-debug-renderer')
+    // dispose() can land while the chunk loads.
+    if (this.host.signal.aborted || !this.host.scene) return null
+    this.physicsDebugRenderer ??= new Renderer(this.host.scene, this.host.physics)
+    return this.physicsDebugRenderer
   }
 
   /** Call once per frame (after the physics step) to refresh the physics debug overlay. */
