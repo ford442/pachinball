@@ -28,8 +28,8 @@ float wrapPi(float a) {
  * truncation error (< 1e-11) is far below float resolution.
  */
 float portableAtan2(float yf, float xf) {
-  const double y = yf;
-  const double x = xf;
+  const double y = static_cast<double>(yf);
+  const double x = static_cast<double>(xf);
   const double ax = x < 0.0 ? -x : x;
   const double ay = y < 0.0 ? -y : y;
   if (ax == 0.0 && ay == 0.0) {

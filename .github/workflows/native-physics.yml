@@ -11,6 +11,7 @@
 # Local equivalents:
 #   npm run compile-db           # configure only → native/build-native/compile_commands.json
 #   npm run test:native          # compile-db + Catch2 + ctest (g++/cmake only)
+#   npm run test:native:san      # same under ASan/UBSan (native/build-san), no recovery
 #   npm run check:compile-db     # clangd DB smoke (after compile-db)
 #   npm run check:wasm-docs      # docs/wasm-physics-engine.md drift check
 #   npm run build:wasm           # Emscripten Release → public/wasm/ (production)
@@ -36,7 +37,10 @@ on:
       - 'tests/transform-buffer.test.ts'
       - 'tests/helpers/wasm-owner-boot.ts'
       - 'playwright.config.ts'
+      - '.emsdk-version'
       - 'scripts/build-wasm.sh'
+      - 'scripts/build-wasm-colab.sh'
+      - 'scripts/bench-wasm-flags.mjs'
       - 'scripts/run-wasm-parity.mjs'
       - 'scripts/print-wasm-flags.mjs'
       - 'scripts/check-compile-db.mjs'
@@ -59,7 +63,10 @@ on:
       - 'tests/transform-buffer.test.ts'
       - 'tests/helpers/wasm-owner-boot.ts'
       - 'playwright.config.ts'
+      - '.emsdk-version'
       - 'scripts/build-wasm.sh'
+      - 'scripts/build-wasm-colab.sh'
+      - 'scripts/bench-wasm-flags.mjs'
       - 'scripts/run-wasm-parity.mjs'
       - 'scripts/print-wasm-flags.mjs'
       - 'scripts/check-compile-db.mjs'
@@ -97,20 +104,13 @@ jobs:
       - name: Install build tools
         run: sudo apt-get update && sudo apt-get install -y cmake g++
 
-      - name: Configure with ASan/UBSan
-        run: >
-          cmake -S native -B native/build-san
-          -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g -fno-sanitize-recover=all"
-
-      # UBSan used to only print; -fno-sanitize-recover=all + halt_on_error make a
-      # report abort the test and fail the job (#464 item 3).
-      - name: Build and run Catch2 under sanitizers
+      # Same command locally: PACHINBALL_SANITIZE=ON adds
+      # -fsanitize=address,undefined -fno-sanitize-recover=all, so a UBSan
+      # report fails the job instead of only printing (#464 item 3).
+      - name: Build and run Catch2 under ASan/UBSan
         env:
           UBSAN_OPTIONS: halt_on_error=1
-        run: |
-          cmake --build native/build-san
-          ctest --test-dir native/build-san --output-on-failure
+        run: npm run test:native:san
 
   wasm_parity:
     name: WASM Build + Parity (Blocking)
@@ -119,20 +119,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # One pinned SDK (.emsdk-version) for CI and local builds; bumping the
+      # pin is a reviewed change that re-runs parity and the bench.
       - name: Cache Emscripten SDK
         uses: actions/cache@v4
         with:
           path: emsdk
-          key: emsdk-${{ runner.os }}-latest
+          key: emsdk-${{ runner.os }}-${{ hashFiles('.emsdk-version') }}
 
       - name: Install and activate Emscripten
         run: |
+          EMSDK_VERSION="$(tr -d '[:space:]' < .emsdk-version)"
           if [ ! -d emsdk ]; then
             git clone https://github.com/emscripten-core/emsdk.git
           fi
           cd emsdk
-          ./emsdk install latest
-          ./emsdk activate latest
+          git pull --ff-only || true
+          ./emsdk install "$EMSDK_VERSION"
+          ./emsdk activate "$EMSDK_VERSION"
           source ./emsdk_env.sh
           echo "$(pwd)" >> $GITHUB_PATH
           emcc --version
@@ -140,14 +144,30 @@ jobs:
       - name: Print effective WASM flags
         run: node scripts/print-wasm-flags.mjs
 
+      # Before the build: --emit-tsd needs the repo's tsc.
+      - name: Install Node deps
+        run: npm ci
+
+      # CI=true makes build-wasm.sh fail on a missing emcmake or tsc, or an
+      # emcc that differs from .emsdk-version.
       - name: Build WASM module (Release — production path)
+        env:
+          CI: 'true'
         run: |
           source emsdk/emsdk_env.sh
-          if ! command -v emcmake &>/dev/null; then
-            echo "Emscripten (emcmake) not available — failing WASM job explicitly"
+          npm run build:wasm
+
+      - name: Generated Embind declarations are committed
+        run: |
+          if ! git diff --exit-code -- src/wasm/generated; then
+            echo "src/wasm/generated/PhysicsModule.d.ts is stale — run npm run build:wasm and commit it"
             exit 1
           fi
-          npm run build:wasm
+          if [ -n "$(git status --porcelain -- src/wasm/generated)" ]; then
+            git status --porcelain -- src/wasm/generated
+            echo "src/wasm/generated has uncommitted files — run npm run build:wasm and commit them"
+            exit 1
+          fi
 
       - name: Assert Release WASM artefact exists
         run: |
@@ -157,22 +177,32 @@ jobs:
           test ! -e public/wasm/PhysicsModule.wasm.map
           test ! -e public/wasm/PhysicsModule.js.map
           echo "WASM size: $(wc -c < public/wasm/PhysicsModule.wasm) bytes"
-          grep -q "defaultEngine: 'wasm-worker'" src/config/physics.ts && grep -q "nonIsolatedDefaultEngine: 'wasm-owner'" src/config/physics.ts
-          echo "defaultEngine is wasm-worker (nonIsolatedDefaultEngine wasm-owner)"
-
-      - name: Install Node deps
-        run: npm ci
+          # The shipped glue is ENVIRONMENT=web,worker: no Node shims.
+          if grep -Eq 'process\.|node:' public/wasm/PhysicsModule.js; then
+            echo "public/wasm/PhysicsModule.js carries Node shims (ENVIRONMENT must be web,worker)"
+            exit 1
+          fi
+          # The production default is the C++ engine: wasm-worker when cross-origin
+          # isolated, wasm-owner otherwise — never rapier. Anchored on the key so
+          # `nonIsolatedDefaultEngine` cannot satisfy the first check.
+          grep -Eq "^\s*defaultEngine: 'wasm-worker'" src/config/physics.ts
+          grep -Eq "^\s*nonIsolatedDefaultEngine: 'wasm-owner'" src/config/physics.ts
+          grep -E "^\s*(nonIsolatedD|d)efaultEngine:" src/config/physics.ts
 
       # `npm run build` is tsc -b && build:wasm && vite build. Running it (the
       # WASM rebuild is an incremental no-op here) pins the order itself: if
       # vite ever runs first again, dist/wasm holds the previous binary (#464).
       - name: Production build, then dist/wasm must equal public/wasm
+        env:
+          CI: 'true'
         run: |
           source emsdk/emsdk_env.sh
           npm run build
           npm run check:dist-wasm
 
       - name: Build RelWithAsserts artefact
+        env:
+          CI: 'true'
         run: |
           source emsdk/emsdk_env.sh
           npm run build:wasm:assert

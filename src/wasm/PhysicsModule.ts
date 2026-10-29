@@ -74,6 +74,20 @@ export interface WasmContactEventBus {
 /** Path to the compiled Emscripten ES module (relative to the web root). */
 const WASM_MODULE_URL = './wasm/PhysicsModule.js'
 
+/**
+ * uint64_t values cross Embind as BigInt (-sWASM_BIGINT); bundles built before
+ * that returned a double. These are the only conversions — everything past
+ * `WasmPhysicsEngine` sees plain numbers and hex strings.
+ */
+function u64ToNumber(value: bigint | number): number {
+  return typeof value === 'bigint' ? Number(value) : value
+}
+
+/** A 64-bit hash as 16 lowercase hex chars (pre-BigInt bundles already sent the string). */
+function u64Hex(value: bigint | string): string {
+  return typeof value === 'bigint' ? value.toString(16).padStart(16, '0') : value
+}
+
 /** Resolve a public-root WASM URL. `import(rel)` is relative to this module (`src/wasm/`), not `/`. */
 function resolveModuleUrl(moduleUrl: string): string {
   if (/^(https?:|blob:)/i.test(moduleUrl) || moduleUrl.startsWith('/')) return moduleUrl
@@ -462,7 +476,7 @@ export class WasmPhysicsEngine {
   step(rawDt: number): number {
     if (!this.world) return 0
     const alpha = this.world.step(rawDt)
-    const stepCount = this.world.getStepCount()
+    const stepCount = u64ToNumber(this.world.getStepCount())
     this.contactsFresh = stepCount !== this.stepCount_
     this.stepCount_ = stepCount
     this.transformView = null
@@ -509,7 +523,7 @@ export class WasmPhysicsEngine {
     if (!this.world?.restoreSnapshot) return WasmSnapshotStatus.Unsupported
     const status = this.world.restoreSnapshot(bytes) as WasmSnapshotStatus
     if (status === WasmSnapshotStatus.Ok) {
-      this.stepCount_ = this.world.getStepCount()
+      this.stepCount_ = u64ToNumber(this.world.getStepCount())
       // The restored world has not stepped: no contacts to deliver, and the
       // transform buffer was re-scattered natively.
       this.contactsFresh = false
@@ -520,7 +534,8 @@ export class WasmPhysicsEngine {
 
   /** 16-hex-char static table hash, or null when unsupported. */
   getStaticContentHash(): string | null {
-    return this.world?.getStaticContentHash?.() ?? null
+    const hash = this.world?.getStaticContentHash?.()
+    return hash === undefined ? null : u64Hex(hash)
   }
 
   /**
@@ -529,12 +544,14 @@ export class WasmPhysicsEngine {
    * identically; compare these instead of blobs (#444).
    */
   getStateHash(): string | null {
-    return this.world?.getStateHash?.() ?? null
+    const hash = this.world?.getStateHash?.()
+    return hash === undefined ? null : u64Hex(hash)
   }
 
   /** Contact-manifold flush generation (0 when unsupported). */
   getContactGeneration(): number {
-    return this.world?.getContactGeneration?.() ?? 0
+    const generation = this.world?.getContactGeneration?.()
+    return generation === undefined ? 0 : u64ToNumber(generation)
   }
 
   getLastWorkerStepMs(): number {

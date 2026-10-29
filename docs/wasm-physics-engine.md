@@ -49,7 +49,7 @@ PhysicsModule.js / .wasm  ◄─── public/wasm/ (Emscripten output, npm run 
 C++ PhysicsWorld  ◄──── native/src/PhysicsWorld.{h,cpp}
         │
    ┌────┴──────────────┬──────────────┬───────────────┐
-BodyStore/RigidBody  Narrowphase   HingeJoint   ContactListener
+   BodyStore         Narrowphase   HingeJoint   ContactListener
 ```
 
 The C++ engine is a sphere-and-capsule rigid-body solver with dynamic boxes,
@@ -69,9 +69,9 @@ native/
 ├── CMakeLists.txt               Emscripten + native (Catch2) build config
 ├── src/
 │   ├── MathTypes.h              Vec3, Quat, Transform
-│   ├── RigidBody.h / .cpp       Dynamic / static / kinematic sphere + capsule bodies
+│   ├── BodyDesc.h               BodyType / Shape enums + RigidBodyDesc (createRigidBody descriptor)
 │   ├── DynamicBox.cpp           Dynamic oriented-box bodies (createBoxBody)
-│   ├── BodyStore.h / .cpp       SoA body storage + packed transform buffer
+│   ├── BodyStore.h / .cpp       SoA body storage (the only body model) + BodyView
 │   ├── HandleTable.h            Stable body / hinge handles
 │   ├── BroadphaseGrid.h / .cpp  Uniform-grid broadphase (sleepers stay in as targets for awake bodies)
 │   ├── Narrowphase.cpp          Pair tests (sphere / capsule / box / statics)
@@ -92,6 +92,7 @@ native/
 │   ├── PhysicsWorldStep.cpp     step() / substep(): integration, broadphase, solver loop, transform scatter
 │   ├── Snapshot.h / .cpp        serialize() / restore(): versioned LE world snapshot + static hash (#422)
 │   ├── SnapshotCodec.cpp        Little-endian word writer / reader + FNV-1a hasher for snapshots
+│   ├── SolverConstants.h        Constants shared across resolver TUs (one definition — unity-build safe)
 │   └── bindings.cpp             EMSCRIPTEN_BINDINGS (Embind) — Emscripten only
 └── tests/                       Catch2 (native build only)
     ├── physics_world_test.cpp   Integration, contacts, broadphase, sleep, benchmark
@@ -108,10 +109,13 @@ native/
     ├── sleeper_contact_test.cpp Sleeping balls stay collidable: kinematic / rolling ball wakes one on contact, proximity does not
     ├── axis_pull_field_test.cpp Axis-pull well: horizontal pull, linear falloff, extents, flags, groups, wake, snapshot hash
     ├── state_hash_test.cpp      getStateHash(): plunge scene determinism, one-ulp sensitivity, restore round trip, parity fixture (#459)
+    ├── golden_trace_test.cpp    Golden traces: committed FNV-1a hashes of three scenes — any numeric drift fails here (#442)
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
 ├── wasm-types.ts                TypeScript interfaces matching the Embind API
+├── wasm-types-conformance.ts    Type-only: wasm-types.ts vs generated/PhysicsModule.d.ts (tsc -b fails on drift)
+├── generated/PhysicsModule.d.ts Emscripten --emit-tsd output for bindings.cpp (committed; CI diffs it)
 ├── PhysicsModule.ts             WasmPhysicsEngine: load, world, step, transform / contact buffers, snapshots
 ├── physics-module-bodies.ts     Plane / box / capsule statics, rigid bodies, hinges, transform-query fallbacks
 ├── physics-module-adventure.ts  Cylinder / sphere / cone / pin field / mesh / mover / sensor / box body / force field
@@ -156,16 +160,22 @@ public/wasm/                     Generated at build time (git-ignored)
 
 ### Prerequisites
 
+The Emscripten SDK is **pinned** in [`.emsdk-version`](../.emsdk-version)
+(currently 6.0.10). CI installs exactly that version; `build-wasm.sh` warns
+locally on any other `emcc` and fails under `CI=true`, because parity and the
+bench numbers are only verified on the pin. Bumping it is a reviewed change
+that re-runs `test:wasm-parity` and `bench:wasm-flags`.
+
 ```bash
-# Install and activate Emscripten SDK (one-time)
+# Install and activate the pinned Emscripten SDK (one-time, and after a pin bump)
 git clone https://github.com/emscripten-core/emsdk.git
 cd emsdk
-./emsdk install latest
-./emsdk activate latest
+./emsdk install "$(cat ../pachinball/.emsdk-version)"
+./emsdk activate "$(cat ../pachinball/.emsdk-version)"
 source ./emsdk_env.sh   # add to ~/.bashrc or ~/.zshrc
 ```
 
-CMake ≥ 3.20 must also be in `PATH`.
+CMake ≥ 3.25 must also be in `PATH`.
 
 ### Release build (production path)
 
@@ -195,11 +205,16 @@ npm run build:wasm:assert
 # Equivalent: bash scripts/build-wasm.sh --assert
 ```
 
-`-O3` + `ASSERTIONS=1` → `native/build-assert/` (does **not** overwrite
-`public/wasm/` unless `WASM_INSTALL_ASSERT=1`).
+`-O3` + `ASSERTIONS=1` + `ENVIRONMENT=web,worker,node` → `native/build-assert/`
+(does **not** overwrite `public/wasm/` unless `WASM_INSTALL_ASSERT=1`). This is
+the bundle everything Node-side loads: `test:wasm-parity` (which builds it when
+missing) and the `RUN_WASM_PARITY` vitest suites via `tests/helpers/wasm-bundle.ts`.
+The shipped `public/wasm/` bundle is `web,worker` only and cannot be
+instantiated from Node. `WASM_MODULE_PATH` (repo-relative) overrides the path.
 
 ```bash
-WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npm run test:wasm-parity
+npm run test:wasm-parity
+RUN_WASM_PARITY=1 npx vitest run tests/replay-snapshot-wasm.test.ts
 ```
 
 ### SIMD / LTO (default ON)
@@ -213,7 +228,7 @@ Print the CMake source-of-truth line (also logged on the `wasm_parity` CI job):
 
 ```bash
 npm run print:wasm-flags
-# [wasm-flags] SIMD=ON LTO=ON ENV=web,worker,node INITIAL_MEMORY=16777216
+# [wasm-flags] SIMD=ON LTO=ON ENV=web,worker INITIAL_MEMORY=16777216 MAXIMUM_MEMORY=268435456 STACK_SIZE=262144
 ```
 
 ### Flag matrix microbench build
@@ -241,16 +256,40 @@ Configured in [`native/CMakeLists.txt`](../native/CMakeLists.txt). Every
 | `-sEXPORT_ES6=1` | ES module import from Vite / dynamic `import()` |
 | `-sMODULARIZE=1` | Factory `await PhysicsModule()` |
 | `-sEXPORT_NAME=PhysicsModule` | Name expected by `src/wasm/PhysicsModule.ts` |
-| `--bind` | Embind surface in `bindings.cpp` |
-| `-sENVIRONMENT=web,worker,node` | Browser + Worker (#361) + Node parity harness (`run-wasm-parity.mjs`). |
+| `-sSTRICT=1` | No deprecated settings and no implicit system libraries — everything the module links is spelled out (`-lembind`, `--no-entry`) |
+| `--no-entry` | Library module: no `main()` (required under `STRICT`) |
+| `-lembind` | Embind surface in `bindings.cpp` (the explicit library form of the old `--bind` alias) |
+| `-sENVIRONMENT=web,worker` | Cache variable `PACHINBALL_WASM_ENVIRONMENT`. The shipped bundle runs on the main thread and in the wasm-worker Dedicated Worker (#361) and carries **no Node shims**. `build-wasm.sh --assert` / `--bench-matrix` pass `web,worker,node` because parity, the `RUN_WASM_PARITY` vitest suites and the bench load those artefacts from Node (`tests/helpers/wasm-bundle.ts`). |
+| `-sINCOMING_MODULE_JS_API=[]` | Every caller invokes the factory with no options (the `.wasm` is located via `import.meta.url`), so the glue reads no `Module.*` overrides |
 | `-sFILESYSTEM=0` | No FS APIs in the physics module — smaller JS glue |
 | `-sALLOW_MEMORY_GROWTH=1` | Heap grows for large ball swarms |
 | `-sINITIAL_MEMORY=16777216` | 16 MB initial heap (`emmalloc`; grows if needed) |
+| `-sMAXIMUM_MEMORY=268435456` | Growth stops at 256 MiB: a runaway allocation fails loudly instead of eating the tab (a full table is a few MiB) |
+| `-sSTACK_SIZE=262144` | 256 KiB stack — the solver never recurses; 4× the 64 KiB default as headroom |
 | `-sEXPORTED_RUNTIME_METHODS=["HEAPF32","HEAPU32"]` | `HEAPF32` for packed contact/transform buffer views and mesh vertices; `HEAPU32` for mesh indices — no `addFunction` / UTF8 helpers |
 | `-sEXPORTED_FUNCTIONS=["_malloc","_free"]` | `addStaticTriangleMesh` takes heap pointers, so JS allocates + frees the triangle soup around the call |
 | `-sMALLOC=emmalloc` | Smaller allocator after setup |
 | `--closure=1` | Minify JS glue (parity-validated) |
 | `-fno-exceptions` | No `try`/`throw` in `native/src` — drops EH runtime |
+
+**64-bit values.** The pinned SDK always has BigInt integration on (`-sWASM_BIGINT`
+is deprecated there, so it is not passed). The `uint64_t` returns —
+`getStepCount`, `getStaticContentHash`, `getContactGeneration` — therefore
+cross losslessly as JS `BigInt`. `WasmPhysicsEngine` (`PhysicsModule.ts`) is the
+only place that converts them: to a number, and the hash to 16 hex chars, so
+nothing past it changes type. `run-wasm-parity.mjs` checks the hash is a
+`BigInt` equal to the snapshot header's words.
+
+### Compile policy (native **and** WASM)
+
+Two INTERFACE targets are linked into every target that compiles project
+sources — `pachinball_physics_native`, `physics_world_test` and
+`PhysicsModule` — so `bindings.cpp` meets the same bar as the solver.
+
+| Target | Flags | Rationale |
+|--------|-------|-----------|
+| `pachinball_warnings` | `-Wall -Wextra -Werror -Wshadow -Wconversion -Wdouble-promotion` | One warning policy for g++, clang and em++; `bindings.cpp` was previously never warning-checked |
+| `pachinball_fp` | `-ffp-contract=off` | Native ↔ WASM byte-exact parity: GCC defaults to `fast` outside ISO mode and would fuse `a*b+c` into FMA on aarch64 or `-march=native`. No numeric change today — the golden traces and parity fixture are identical with and without it |
 
 ### Per-config compile / link
 
@@ -265,12 +304,29 @@ its `compile_commands.json` carries exactly one. It is configured with an explic
 | **Debug** | `-O0 -g -gsource-map` | `ASSERTIONS=2` | yes (`.map` → `public/wasm/` only for `--debug`) |
 | **RelWithAsserts** | `-O3` | `ASSERTIONS=1` | none; artefact in `native/build-assert/` |
 
-### CMake options (default ON)
+### CMake options
 
-| Option | Flags | Notes |
-|--------|-------|-------|
-| `PACHINBALL_WASM_SIMD` | `-msimd128` (compile + link) | Auto-vectorize only; no hand `wasm_simd128` intrinsics |
-| `PACHINBALL_WASM_LTO` | `-flto` (compile + link) | Production default after 2026-08-14 bench |
+| Option | Default | Flags | Notes |
+|--------|---------|-------|-------|
+| `PACHINBALL_WASM_SIMD` | ON | `-msimd128` (compile + link) | Auto-vectorize only; no hand `wasm_simd128` intrinsics |
+| `PACHINBALL_WASM_LTO` | ON | `-flto` (compile + link) | Production default after 2026-08-14 bench |
+| `PACHINBALL_WASM_EMIT_TSD` | OFF (`build-wasm.sh` turns it on for Release) | `--emit-tsd <build>/PhysicsModule.d.ts` | Embind TypeScript declarations; needs `tsc` on `PATH` (the repo's after `npm ci`). Copied to `src/wasm/generated/PhysicsModule.d.ts`, which is committed — CI rebuilds and fails on a diff. Does not change `.js` / `.wasm` |
+
+### Generated declarations (`src/wasm/generated/`)
+
+`src/wasm/generated/PhysicsModule.d.ts` is Emscripten's own view of
+`bindings.cpp` (exact arities, `bigint` for the `uint64_t` returns, every enum
+member). Never edit it by hand: `npm run build:wasm` rewrites it, and CI fails
+if a `bindings.cpp` change lands without the regenerated file. Two checks keep
+the hand-written `wasm-types.ts` (which adds docs, optional members for older
+bundles, and engine-facing types) honest against it:
+
+- `src/wasm/wasm-types-conformance.ts` — type-only; `tsc -b` fails when a
+  binding is missing from `WasmPhysicsWorldInstance`, a declared member is no
+  longer bound, or arity / return type differ.
+- `tests/wasm-generated-types.test.ts` — pins `BodyType`, `Shape`,
+  `VolumeShape` and `ForceSpace` (and their `physics-module-adventure.ts`
+  mirrors) to the generated values.
 
 ### Embind migration (non-goal)
 
@@ -1237,12 +1293,38 @@ executable for unit-testing the C++ logic directly:
 npm run test:native
 ```
 
-Prerequisites: CMake ≥ 3.20 and a C++17 compiler (g++ or clang). No
-Emscripten required. Catch2 v3.7.1 is downloaded automatically on first
-`cmake` configure.
+Prerequisites: CMake ≥ 3.25 and a C++17 compiler (g++ or clang). No
+Emscripten required. Catch2 v3.7.1 (pinned to its commit SHA) is fetched on
+the first configure unless an installed Catch2 3.x is found
+(`FIND_PACKAGE_ARGS 3`).
+
+| CMake option (native tree) | Default | Effect |
+|----------------------------|---------|--------|
+| `PACHINBALL_BUILD_TESTS` | `ON` | `OFF` skips Catch2 entirely — no network on configure (`npm run compile-db -- -DPACHINBALL_BUILD_TESTS=OFF` works offline; `check:compile-db` then skips the `native/tests` TUs with a warning) |
+| `PACHINBALL_SANITIZE` | `OFF` | `-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer` on the library and the tests |
+| `PACHINBALL_UNITY_BUILD` | `OFF` | Unity-builds `pachinball_physics_native` (library only — the test files each define their own helpers). `compile-db` forces it `OFF`; `check:compile-db` rejects `unity_*.cxx` entries. Keep file-scope constants unique per TU or in `SolverConstants.h` |
+| `PACHINBALL_CCACHE` | `OFF` | Uses `ccache` as `CMAKE_CXX_COMPILER_LAUNCHER` when found (both trees); warns and builds without it otherwise |
+
+```bash
+npm run test:native:san   # native/build-san, PACHINBALL_SANITIZE=ON, ASan + UBSan, any report fails
+```
 
 This lets you iterate on solver logic with fast compile times using your
 native compiler before re-running the full Emscripten build.
+
+### Golden traces (numeric drift)
+
+`native/tests/golden_trace_test.cpp` hashes three deterministic scenes (a full
+table, fast balls, sleep) — every contact event plus a `serialize()` blob every
+15 frames — and compares against committed constants. A build-only or
+refactor-only change must leave all three untouched; a change that is meant to
+move the numbers updates the constants it moves and names them (old → new) in
+its commit message, so drift is always attributable to one commit. The
+constants are identical at `-O0` and `-O3`.
+
+```bash
+PACHINBALL_PRINT_GOLDEN=1 ./native/build-native/physics_world_test "[golden]"
+```
 
 ### Language Server & IDE Tooling (`compile_commands.json`)
 
@@ -1254,8 +1336,19 @@ clangd indexes `native/src/**` without a symlink. Run `compile-db` once after cl
 so the database exists, and again after adding a `.cpp`.
 
 `npm run check:compile-db` verifies the database: every `native/src` and
-`native/tests` TU present, exactly one `-O` level per TU, no `em++` entries, and
-no stray `compile_commands.json` at the repo root or `native/`.
+`native/tests` TU present, exactly one `-O` level per TU, no `em++` entries, no
+unity batches, and no stray `compile_commands.json` at the repo root or `native/`.
+
+`bindings.cpp` is Emscripten-only, so it is not in that database. Every
+`npm run build:wasm*` writes a machine-specific `native/src/.clangd`
+(gitignored, absolute paths from `em-config CACHE`). Its `If: PathMatch:
+bindings\.cpp` block adds `--target=wasm32-unknown-emscripten`, the SDK sysroot
+and `include/compat`, and clangd merges it with the root `.clangd`. A committed
+config cannot expand `$EMSDK`. Check it with the SDK's own clangd:
+
+```bash
+$EMSDK/upstream/bin/clangd --check=native/src/bindings.cpp   # "All checks completed, 0 errors"
+```
 
 ---
 
@@ -1266,7 +1359,7 @@ The GitHub Actions workflow (`.github/workflows/native-physics.yml`) runs on cha
 | Job | Status | Tools | What it checks |
 |-----|--------|-------|----------------|
 | `native_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native` (Catch2), `check:compile-db`, `check:wasm-docs` |
-| `sanitizer_ctest` | **BLOCKING** | cmake, g++ | ASan/UBSan Catch2 (`CMAKE_BUILD_TYPE=Debug`) |
+| `sanitizer_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native:san` — ASan/UBSan Catch2, no recovery (`CMAKE_BUILD_TYPE=Debug`) |
 | `wasm_parity` | **BLOCKING** | emsdk | `print:wasm-flags` then Release + RelWithAsserts + `test:wasm-parity` |
 
 `native_ctest` runs in ~15 seconds without requiring Emscripten and gates PRs against C++ logic regressions. Additionally, `tests/embind-surface.test.ts` asserts that TypeScript interface definitions (`src/wasm/wasm-types.ts`) match the exported Embind surface (`native/src/bindings.cpp`), and `tests/wasm-worker-api-parity.test.ts` (Vitest, no WASM) fails when a mutating Embind function is not wrapped on `WasmPhysicsEngine`, or a mutating engine method has no `PhysicsWorkerCommand` and is not on its tracked-gap list. `tests/physics-worker-command-manifest.test.ts` checks the checked-in manifest `tests/fixtures/physics-worker-commands.json` against both `bindings.cpp` and the `PhysicsWorkerCommand` union: every embind `PhysicsWorld` method names its command or an exemption with a reason (#459).

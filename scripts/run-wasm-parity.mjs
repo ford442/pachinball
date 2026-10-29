@@ -11,18 +11,28 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import path from 'node:path'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-// Override for RelWithAsserts / bench artefacts, e.g.:
-//   WASM_MODULE_PATH=native/build-assert/PhysicsModule.js node scripts/run-wasm-parity.mjs
-const wasmModulePath = process.env.WASM_MODULE_PATH
-  ? path.resolve(root, process.env.WASM_MODULE_PATH)
-  : path.join(root, 'public/wasm/PhysicsModule.js')
+// Node needs a bundle built with ENVIRONMENT=...,node. The shipped one in
+// public/wasm/ is web,worker only (#442), so the default is the
+// RelWithAsserts artefact (`npm run build:wasm:assert`), built here when
+// missing. Override for bench artefacts, e.g.:
+//   WASM_MODULE_PATH=native/build-bench/simd-lto/PhysicsModule.js node scripts/run-wasm-parity.mjs
+const defaultModule = 'native/build-assert/PhysicsModule.js'
+const wasmModulePath = path.resolve(root, process.env.WASM_MODULE_PATH ?? defaultModule)
 const wasmModuleUrl = pathToFileURL(wasmModulePath).href
 const buildNativeDir = path.join(root, 'native/build-native')
 const nativeTest = path.join(buildNativeDir, 'physics_world_test')
 
+if (!existsSync(wasmModulePath) && !process.env.WASM_MODULE_PATH) {
+  console.log(`WASM module missing — building via npm run build:wasm:assert`)
+  try {
+    execSync('npm run build:wasm:assert', { cwd: root, stdio: 'inherit' })
+  } catch {
+    // Reported below.
+  }
+}
 if (!existsSync(wasmModulePath)) {
   console.error(`WASM module missing: ${wasmModulePath}`)
-  console.error('Build with: npm run build:wasm  (or npm run build:wasm:assert)')
+  console.error('Build with: npm run build:wasm:assert (needs the Emscripten SDK in .emsdk-version)')
   process.exit(1)
 }
 console.log(`Using WASM module: ${wasmModulePath}`)
@@ -1061,16 +1071,25 @@ const DENSE_FIELD = {
   buildStatics(other, true)
   const mismatch = other.restoreSnapshot(blob)
   const hashDiffers = other.getStaticContentHash() !== world.getStaticContentHash()
+  // -sWASM_BIGINT: the u64 crosses as a BigInt equal to the blob's header words
+  // [3] lo / [4] hi (Snapshot.h), not a rounded double or a hex string.
+  const words = new DataView(blob.buffer, blob.byteOffset, blob.byteLength)
+  const headerHash = (BigInt(words.getUint32(16, true)) << 32n) | BigInt(words.getUint32(12, true))
+  const liveHash = world.getStaticContentHash()
+  const hashLossless = typeof liveHash === 'bigint' && liveHash === headerHash &&
+    typeof world.getStepCount() === 'bigint'
   world.delete()
   fresh.delete()
   other.delete()
 
-  const ok = nativeMatch && rewound === 0 && reserialized && replayMatch && freshMatch && mismatch === 4 && hashDiffers
+  const ok = nativeMatch && rewound === 0 && reserialized && replayMatch && freshMatch && mismatch === 4 &&
+    hashDiffers && hashLossless
   console.log(
     `${ok ? 'PASS' : 'FAIL'} wasm snapshot native bytes + round trip ` +
     `(bytes=${blob.length} native=${native ? (nativeMatch ? 'identical' : `differs@word${firstDiffWord(blob, native)}`) : 'missing'} ` +
     `rewind=${rewound}/${reserialized ? 'same' : 'diff'}/${replayMatch ? 'bit-exact' : 'DIVERGED'} ` +
-    `fresh=${freshStatus}/${freshMatch ? 'bit-exact' : 'DIVERGED'} mismatchStatus=${mismatch})`
+    `fresh=${freshStatus}/${freshMatch ? 'bit-exact' : 'DIVERGED'} mismatchStatus=${mismatch} ` +
+    `u64=${hashLossless ? 'bigint' : `LOSSY(${typeof liveHash})`})`
   )
   if (!ok) failed = true
 }

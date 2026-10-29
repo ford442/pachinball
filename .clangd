@@ -11,5 +11,11 @@
 # native/ — clangd cannot parse `em++` command lines, and a stale emcc dump silently
 # drops newer translation units (it is how HingeJoint.cpp went missing). Both of those
 # paths are gitignored and should stay empty.
+#
+# bindings.cpp (Emscripten-only) is not in that database. `npm run build:wasm` writes
+# a machine-specific native/src/.clangd (gitignored) whose `If: PathMatch:
+# bindings\.cpp` block adds --target=wasm32-unknown-emscripten and the pinned SDK's
+# sysroot; clangd merges it with this file. Config files cannot expand $EMSDK, which
+# is why that part is generated rather than committed here.
 CompileFlags:
   CompilationDatabase: native/build-native

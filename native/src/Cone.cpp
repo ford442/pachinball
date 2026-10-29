@@ -23,8 +23,6 @@ namespace pachinball {
 namespace {
 
 constexpr float CONE_EPSILON_SQ = 1e-10f;
-constexpr float SLOP    = 0.001f;
-constexpr float CORRECT = 0.8f;
 
 struct Vec2 {
   float r;
@@ -151,6 +149,8 @@ void PhysicsWorld::resolveSphereVsCone(BodyView& body, const ConeDesc& cone, int
   const float mu = std::sqrt(std::max(body.getFriction(), 0.f) * std::max(cone.friction, 0.f));
   const float j = applyContactImpulse(body, nullptr, contactPoint, normal, e, mu, penetration);
 
+  constexpr float SLOP    = 0.001f;
+  constexpr float CORRECT = 0.8f;
   if (penetration > SLOP && body.getType() == BodyType::Dynamic) {
     body.setPosition(body.getPosition() + normal * ((penetration - SLOP) * CORRECT));
   }

@@ -148,7 +148,6 @@ private:
   std::unordered_map<CellKey, std::vector<StaticRef>, CellKeyHash> staticCells_;
   std::unordered_map<CellKey, std::vector<int>, CellKeyHash> moverCells_;
 
-  std::vector<Pair> scratchPairs_;
   int lastPairCount_ = 0;
 };
 
