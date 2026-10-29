@@ -17,7 +17,6 @@ import * as seededRng from '../src/core/seeded-rng'
 import { createSeededRng } from '../src/core/seeded-rng'
 import { selectWeightedBallType } from '../src/game-elements/ball-manager-spawn'
 import { installSimClock } from '../src/core/sim-clock'
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 
 // ---------------------------------------------------------------------------
 // Module mocks — must be declared before the import under test
@@ -814,88 +813,6 @@ describe('BallManager', () => {
 
       expect(manager.getBallBody()).toBeNull()
       expect(manager.getBallBodies()).toEqual([])
-    })
-  })
-
-  // -------------------------------------------------------------------------
-  // Mirror render list upkeep (#443 B3). Babylon prunes disposed meshes from shadow render
-  // lists but not from a MirrorTexture's, so the list used to grow by one per spawned ball.
-  // -------------------------------------------------------------------------
-  describe('mirror render list', () => {
-    function makeMirror(baseline = 0) {
-      const renderList: Array<{ name: string }> = Array.from({ length: baseline }, (_, i) => ({ name: `static_${i}` }))
-      return { renderList }
-    }
-
-    it('lists a spawned ball on the call that spawns it', () => {
-      const manager = makeManager()
-      const mirror = makeMirror()
-      manager.setMirrorTexture(mirror as never)
-
-      manager.spawnExtraBalls(1)
-
-      expect(mirror.renderList).toHaveLength(1)
-      expect(manager.getBindings().map((b) => b.mesh)).toContain(mirror.renderList[0])
-    })
-
-    it('returns to its baseline after 50 spawn/collect cycles', () => {
-      const manager = makeManager()
-      const mirror = makeMirror(3)
-      manager.setMirrorTexture(mirror as never)
-
-      for (let i = 0; i < 50; i++) {
-        manager.spawnExtraBalls(1)
-        expect(mirror.renderList).toHaveLength(4)
-        const body = manager.getBallBodies().at(-1)!
-        manager.removeBall(body)
-        expect(mirror.renderList).toHaveLength(3)
-      }
-      expect(mirror.renderList.every((m) => m.name.startsWith('static_'))).toBe(true)
-    })
-
-    it('removes the mesh from the list before disposing it', () => {
-      const manager = makeManager()
-      const mirror = makeMirror()
-      manager.setMirrorTexture(mirror as never)
-      manager.spawnExtraBalls(1)
-      const mesh = mirror.renderList[0] as unknown as { dispose: ReturnType<typeof vi.fn> }
-      let listedAtDispose: boolean | null = null
-      mesh.dispose = vi.fn(() => { listedAtDispose = mirror.renderList.includes(mesh as never) })
-
-      manager.removeBall(manager.getBallBodies().at(-1)!)
-
-      expect(mesh.dispose).toHaveBeenCalledTimes(1)
-      expect(listedAtDispose).toBe(false)
-    })
-
-    it('removeExtraBalls drops every extra ball from the list', () => {
-      const manager = makeManager()
-      const mirror = makeMirror(2)
-      manager.setMirrorTexture(mirror as never)
-      // The file-level mock returns one shared sphere for every call; removeExtraBalls only
-      // touches meshes named `ball*`, so hand out distinct ones.
-      for (let i = 0; i < 5; i++) {
-        vi.mocked(MeshBuilder.CreateSphere).mockReturnValueOnce({
-          name: `ball_extra_${i}`,
-          material: null,
-          getChildren: () => [],
-          parent: null,
-          position: { set: vi.fn(), x: 0, y: 0, z: 0 },
-          dispose: vi.fn(),
-        } as never)
-      }
-      manager.spawnExtraBalls(5)
-      expect(mirror.renderList).toHaveLength(7)
-
-      manager.removeExtraBalls()
-
-      expect(mirror.renderList).toHaveLength(2)
-    })
-
-    it('is a no-op without a mirror', () => {
-      const manager = makeManager()
-      manager.spawnExtraBalls(2)
-      expect(() => manager.removeBall(manager.getBallBodies().at(-1)!)).not.toThrow()
     })
   })
 

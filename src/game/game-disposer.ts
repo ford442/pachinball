@@ -76,8 +76,6 @@ export function disposeGame(game: Game): void {
 
   game.bloomPipeline?.dispose()
   game.bloomPipeline = null
-  game.mirrorTexture?.dispose()
-  game.mirrorTexture = null
   game.shadowGenerator?.dispose()
   game.shadowGenerator = null
   game.ballAnimator?.dispose()

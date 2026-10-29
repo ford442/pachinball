@@ -6,9 +6,7 @@
  */
 
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
-import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
-import { Plane } from '@babylonjs/core/Maths/math.plane'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
@@ -17,7 +15,6 @@ import { getMaterialLibrary } from '../materials'
 import { adaptLegacyConfig, DisplayState, type DisplayConfig } from '../display/display-types'
 import { refreshDailyCascadeUI } from './daily-cascade-ui'
 import {
-  QualityTier,
   PALETTE,
   INTENSITY,
   emissive,
@@ -56,7 +53,6 @@ import {
 import { AdventureManager } from './game-adventure'
 import { TableMapManager } from './game-maps'
 import { CabinetManager } from './game-cabinet'
-import { resolveMirrorRefreshRate } from './mirror-config'
 
 import type { Game } from '../game'
 import type { PachinballEventMap } from '../core/event-bus'
@@ -118,12 +114,6 @@ export class GameSystemsInitializer {
       skyboxMaterial.specularColor = Color3.Black()
       skyboxMaterial.emissiveColor = emissive(PALETTE.AMBIENT, INTENSITY.AMBIENT)
       skybox.material = skyboxMaterial
-
-      const mirrorSize = this.game.qualityTier === QualityTier.HIGH ? GameConfig.visuals.mirrorSizeHigh : GameConfig.visuals.mirrorSizeMedium
-      this.game.mirrorTexture = new MirrorTexture('mirror', mirrorSize, scene, true)
-      this.game.mirrorTexture.mirrorPlane = new Plane(0, -1, 0, -1.01)
-      this.game.mirrorTexture.level = GameConfig.visuals.mirrorTextureLevel
-      this.game.mirrorTexture.refreshRate = resolveMirrorRefreshRate(this.game.qualityTier)
 
       this.game.effects = new EffectsSystem(scene, this.game.bloomPipeline, this.game.accessibility)
       if (this.game.keyLight && this.game.rimLight && this.game.bounceLight) {

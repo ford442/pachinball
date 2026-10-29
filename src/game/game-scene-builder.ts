@@ -46,7 +46,6 @@ export interface SceneBuilderHost {
   tableCam: TargetCamera | null
   cameraController: CameraController | null
   adventureMode: AdventureMode | null
-  mirrorTexture: import('@babylonjs/core/Materials/Textures/mirrorTexture').MirrorTexture | null
   shadowGenerator: ShadowGenerator | null
   playfieldGroup: TransformNode | null
   uiManager: GameUIManager | null
@@ -110,9 +109,6 @@ export class GameSceneBuilder {
 
     gameObjects.createWalls()
     gameObjects.createFlippers()
-    if (this.host.mirrorTexture) {
-      ballManager.setMirrorTexture(this.host.mirrorTexture)
-    }
     ballManager.createMainBall()
 
     // Parent flipper assemblies into the tilted playfield group (world pose preserved).

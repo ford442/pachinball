@@ -76,7 +76,7 @@ interface PerfGameHooks {
     meshes: unknown[]
     materials: unknown[]
     lights: unknown[]
-    textures: unknown[]
+    textures: Array<{ getClassName?: () => string; onAfterRenderObservable?: Observable }>
     getActiveMeshes: () => { length: number }
     onAfterRenderObservable: Observable
     _activeMeshesFrozen?: boolean
@@ -88,7 +88,6 @@ interface PerfGameHooks {
   shadowGenerator?: {
     getShadowMap?: () => { renderList?: unknown[]; onAfterRenderObservable?: Observable } | null
   } | null
-  mirrorTexture?: { onAfterRenderObservable?: Observable } | null
   ballManager?: { spawnExtraBalls: (count: number) => void; getBallBodies: () => unknown[] } | null
   /** Present from the StaticSceneGate commit on; absent (null) on earlier commits. */
   staticSceneGate?: { refreezeCount: number; getStats?: () => { state: string } } | null
@@ -124,7 +123,7 @@ export interface RawSamples {
   activeMeshesEval: number[]
   rttRender: number[]
   drawPhase: number[]
-  /** Times the key-light shadow map / the mirror texture rendered during the measured frames. */
+  /** Times the key-light shadow map / any MirrorTexture rendered during the measured frames. */
   shadowRenders: number
   mirrorRenders: number
 }
@@ -350,9 +349,14 @@ function sampleFramesInPage(page: Page, warmup: number, frames: number): Promise
         watch(shadowMap?.onAfterRenderObservable, () => {
           if (seen >= w) out.shadowRenders++
         })
-        watch(g.mirrorTexture?.onAfterRenderObservable, () => {
-          if (seen >= w) out.mirrorRenders++
-        })
+        // The game owns no mirror (#484); any MirrorTexture that appears is found by class, so a
+        // decorative pass that brings one back shows up here as a non-zero count.
+        for (const texture of g.scene?.textures ?? []) {
+          if (texture.getClassName?.() !== 'MirrorTexture') continue
+          watch(texture.onAfterRenderObservable, () => {
+            if (seen >= w) out.mirrorRenders++
+          })
+        }
         let lastFrameAt = performance.now()
         const progress = { seen: 0, total: w + n, lastFrameMs: 0 }
         ;(window as PerfWindow).__perfProgress = progress

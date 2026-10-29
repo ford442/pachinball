@@ -13,7 +13,6 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 // Side-effect: registers ShadowGeneratorSceneComponent on Scene
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
-import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -44,7 +43,6 @@ import {
 } from '../game-elements'
 import { getMaterialLibrary, detectQualityTier } from '../materials'
 import { applyShadowSettings, resolveShadowSettings, type ShadowSettings } from './shadow-config'
-import { resolveMirrorRefreshRate } from './mirror-config'
 import type { StaticSceneGate } from '../core/static-scene-gate'
 import type { FreezableMaterial } from './frozen-material-set'
 import {
@@ -68,7 +66,6 @@ export interface RendererHost {
   tableCam: TargetCamera | null
   bloomPipeline: BloomPipelineController | null
   shadowGenerator: ShadowGenerator | null
-  mirrorTexture: MirrorTexture | null
   readonly staticSceneGate?: Pick<StaticSceneGate, 'invalidate'> | null
   keyLight: DirectionalLight | null
   rimLight: DirectionalLight | null
@@ -140,7 +137,6 @@ export class GameRenderer {
     }
     this.postProcess.applyQualityTier(tier)
     this.applyShadowTier(tier)
-    this.applyMirrorTier(tier)
   }
 
   /** Accessibility settings changed: the post-process graph re-plans (reduced motion drops bloom, sharpen, vignette). */
@@ -162,7 +158,6 @@ export class GameRenderer {
     // here, so an automatic drop changes the technique exactly like a settings change does.
     const next = this.postProcess.dropQualityTierOnce()
     this.applyShadowTier(next)
-    this.applyMirrorTier(next)
     return next
   }
 
@@ -221,12 +216,6 @@ export class GameRenderer {
     bounceLight.diffuse = color(LIGHTING.BOUNCE.color)
     bounceLight.range = 20
     this.host.bounceLight = bounceLight
-  }
-
-  /** Cadence only: the mirror is never resized on a tier change (see mirror-config.ts). */
-  private applyMirrorTier(tier: QualityTier): void {
-    const mirror = this.host.mirrorTexture
-    if (mirror) mirror.refreshRate = resolveMirrorRefreshRate(tier)
   }
 
   /**
@@ -623,9 +612,6 @@ export class GameRenderer {
       this._resizeObserver.disconnect()
       this._resizeObserver = null
     }
-
-    this.host.mirrorTexture?.dispose()
-    this.host.mirrorTexture = null
 
     this.host.shadowGenerator?.dispose()
     this.host.shadowGenerator = null

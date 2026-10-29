@@ -10,7 +10,6 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
-import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -21,7 +20,6 @@ import {
   QualityTier,
 } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
-import { addToMirror, removeFromMirror } from '../game-elements/mirror-render-list'
 import type { GameObjects } from '../objects'
 import type { EffectsSystem } from '../effects'
 import type { TableMapManager } from './game-maps'
@@ -32,7 +30,6 @@ export interface CabinetBuilderHost {
   readonly scene: Scene | null
   readonly qualityTier: QualityTier
   shadowGenerator: ShadowGenerator | null
-  mirrorTexture: MirrorTexture | null
   gameObjects: GameObjects | null
   mapManager: TableMapManager | null
   cabinetNeonLights: PointLight[]
@@ -44,7 +41,6 @@ export interface CabinetBuilderHost {
 export class GameCabinetBuilder {
   private readonly host: CabinetBuilderHost
   /** Meshes the last createEnhancedCabinet() put in the mirror's render list. */
-  private mirroredCabinetMeshes: Mesh[] = []
 
   constructor(host: CabinetBuilderHost) {
     this.host = host
@@ -187,16 +183,6 @@ export class GameCabinetBuilder {
     const plungerTrim = MeshBuilder.CreateBox('plungerTrim', { width: 1.5, height: 0.2, depth: 24 }, scene)
     plungerTrim.position.set(12, cabinetY + 2, -2)
     plungerTrim.material = chromeMat
-
-    // Mirror render list. A rebuild first drops the previous build's meshes: they are disposed
-    // or replaced, and nothing else removes them from the mirror's list.
-    for (const old of this.mirroredCabinetMeshes) removeFromMirror(this.host.mirrorTexture, old)
-    this.mirroredCabinetMeshes = [
-      cab, leftPanel, rightPanel, leftTrim, rightTrim,
-      apron, bezel, glassEdge, backWall, leftHinge, rightHinge,
-      plungerWall, plungerTrim, leftLED, rightLED, apronTrim,
-    ]
-    for (const mesh of this.mirroredCabinetMeshes) addToMirror(this.host.mirrorTexture, mesh)
 
     // Shadow casters
     if (this.host.shadowGenerator) {

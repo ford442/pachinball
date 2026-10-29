@@ -3,7 +3,6 @@ import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight'
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight'
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
-import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
@@ -204,7 +203,6 @@ export abstract class GameFields {
   sceneOptimizer: SceneOptimizer | null = null
   sceneInstrumentation: SceneInstrumentation | null = null
   engineInstrumentation: EngineInstrumentation | null = null
-  mirrorTexture: MirrorTexture | null = null
   /** Decides when the scene may be treated as static (shadow map, materials, active meshes). */
   staticSceneGate: StaticSceneGate | null = null
   /** The gate's owner: frozen sets, watchers, skybox clear skip. Null until its lazy chunk arrives. */

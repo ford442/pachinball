@@ -4,7 +4,6 @@ import type { StandardMaterial } from '@babylonjs/core/Materials/standardMateria
 import type { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { TrailMesh } from '@babylonjs/core/Meshes/trailMesh'
 import type { Scene } from '@babylonjs/core/scene'
-import type { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import type { BallType } from '../config'
 import { getPhysicsTuningValue } from './physics-tuning'
@@ -54,7 +53,6 @@ export interface BallManagerHost {
   ballBody: PhysicsBody | null
   ballBodies: PhysicsBody[]
   caughtBalls: Array<{ body: PhysicsBody; targetPos: Vector3; timer: number }>
-  mirrorTexture: MirrorTexture | null
   bindings: PhysicsBinding[]
   matLib: BallMaterialLibrary
   trails: Map<PhysicsBody, TrailMesh>
