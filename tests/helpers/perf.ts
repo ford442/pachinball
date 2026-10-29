@@ -131,7 +131,7 @@ interface PerfGameHooks {
     renderTargetsRenderTimeCounter: { current: number }
     renderTimeCounter: { current: number }
   } | null
-  physicsController?: { stepPhysics: (...args: unknown[]) => unknown } | null
+  physicsController?: { stepFixed: (...args: unknown[]) => unknown } | null
   physics?: { getWasmMode?: () => string }
   renderFrame: () => void
   startGame: () => Promise<void>
@@ -341,9 +341,9 @@ export async function addBalls(page: Page, total: number): Promise<void> {
 }
 
 /**
- * Sample per-frame CPU timings by wrapping `game.renderFrame` (the engine loop calls it
- * dynamically) and `physicsController.stepPhysics` (called from the scene's onBeforeRender, so
- * it is inside `scene.render()` — render time is frame minus physics).
+ * Sample per-frame CPU timings by wrapping `game.renderFrame` (the frame scheduler's loop calls it
+ * dynamically) and `physicsController.stepFixed` (the scheduler's `physics` phase, #488 §4). The
+ * frame is every phase; `game.frameScheduler.getTimings()` has the per-phase split.
  */
 export async function sampleFrames(page: Page, warmup: number, frames: number, tag = ''): Promise<RawSamples> {
   // PERF_VERBOSE=1 logs frame progress every 10 s — the way to spot a frame-rate collapse mid-run.
@@ -382,10 +382,10 @@ function sampleFramesInPage(page: Page, warmup: number, frames: number): Promise
 
         const originalRender = g.renderFrame
         const pc = g.physicsController ?? null
-        const originalStep = pc?.stepPhysics
+        const originalStep = pc?.stepFixed
         let physicsMs = 0
         if (pc && originalStep) {
-          pc.stepPhysics = function (this: unknown, ...args: unknown[]) {
+          pc.stepFixed = function (this: unknown, ...args: unknown[]) {
             const t = performance.now()
             try {
               return originalStep.apply(this, args)
@@ -432,7 +432,7 @@ function sampleFramesInPage(page: Page, warmup: number, frames: number): Promise
         const restore = (): void => {
           for (const [observable, observer] of observers) observable.remove(observer)
           g.renderFrame = originalRender
-          if (pc && originalStep) pc.stepPhysics = originalStep
+          if (pc && originalStep) pc.stepFixed = originalStep
         }
         // Fail on a stalled render loop (no frame for 2 minutes), not on a total-time budget:
         // SwiftShader frame times vary by an order of magnitude between machines.
