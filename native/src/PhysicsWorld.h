@@ -16,6 +16,8 @@
 #include "PinField.h"
 #include "Snapshot.h"
 
+#include <algorithm>
+#include <cmath>
 #include <vector>
 #include <cstdint>
 #include <cstdlib>
@@ -87,11 +89,27 @@ inline constexpr int STATIC_HANDLE_OVERFLOW = 0x7FFFFFFF;
 /** Packed transform-buffer layout (16 floats per public-id slot). */
 inline constexpr int TRANSFORM_STRIDE = 16;
 
+/** `WorldParams::maxSubsteps` default, and its upper bound (see sanitizedMaxSubsteps). */
+inline constexpr float DEFAULT_MAX_SUBSTEPS = 8.f;
+inline constexpr float MAX_SUBSTEPS_LIMIT   = 64.f;
+
+/**
+ * The substep cap `step()` actually uses. `maxSubsteps` is a float — it is a
+ * WorldParams field (Embind value_object) and is read back from snapshot
+ * bytes — and casting NaN or ±inf to int is UB. NaN falls back to the
+ * default; everything else is clamped to [1, 64], so a cap below 1 can no
+ * longer freeze the world. The identity on every value in that range.
+ */
+inline float sanitizedMaxSubsteps(float maxSubsteps) {
+  if (std::isnan(maxSubsteps)) return DEFAULT_MAX_SUBSTEPS;
+  return std::min(std::max(maxSubsteps, 1.f), MAX_SUBSTEPS_LIMIT);
+}
+
 /** Per-world simulation parameters. */
 struct WorldParams {
   Vec3  gravity          = {0.f, -9.81f, -5.0f};
   float fixedTimestep    = 1.f / 60.f;
-  float maxSubsteps      = 8;
+  float maxSubsteps      = DEFAULT_MAX_SUBSTEPS;
   int   solverIterations = 4;
   float rollingResistance = 0.04f;
   float sleepLinearThreshold  = 0.05f;

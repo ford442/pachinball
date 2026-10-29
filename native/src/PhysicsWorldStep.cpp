@@ -80,9 +80,10 @@ float PhysicsWorld::step(float rawDt) {
   // Kinematic rigid bodies (a captured ball) follow the same one-push-per-tick contract.
   advanceKinematicBodies(params_.fixedTimestep);
 
+  // Sanitised again here: restore() keeps a snapshot's params bit for bit.
+  const int maxSubsteps = static_cast<int>(sanitizedMaxSubsteps(params_.maxSubsteps));
   int substepsDone = 0;
-  while (accumulator_ >= params_.fixedTimestep &&
-         substepsDone < static_cast<int>(params_.maxSubsteps)) {
+  while (accumulator_ >= params_.fixedTimestep && substepsDone < maxSubsteps) {
     substep(params_.fixedTimestep);
     capturePreviousPositions();
     accumulator_ -= params_.fixedTimestep;

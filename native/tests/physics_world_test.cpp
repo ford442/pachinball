@@ -13,7 +13,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <chrono>
+#include <cstdint>
 #include <iterator>
+#include <limits>
 
 using namespace pachinball;
 using namespace pachinball::test;
@@ -491,4 +493,41 @@ TEST_CASE("large scene step completes under time budget", "[physics][benchmark]"
   const auto t1 = std::chrono::steady_clock::now();
   const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
   CHECK(ms < 5000);
+}
+
+TEST_CASE("maxSubsteps is validated at the boundary", "[physics][params]") {
+  // WorldParams carries maxSubsteps as a float; step() used to cast it straight
+  // to int, which is UB for NaN / ±inf and froze the world for anything below 1.
+  struct Outcome {
+    uint64_t hash;
+    uint64_t substeps;
+    bool operator==(const Outcome& o) const { return hash == o.hash && substeps == o.substeps; }
+    bool operator!=(const Outcome& o) const { return !(*this == o); }
+  };
+  const auto run = [](float maxSubsteps) {
+    WorldParams params;
+    params.maxSubsteps = maxSubsteps;
+    PhysicsWorld world(params);
+    world.setGravity(0.f, -9.81f, 0.f);
+    world.addStaticPlane(0.f, 1.f, 0.f, 0.f);
+    world.createRigidBody({{0.f, 1.f, 0.f}, {0.5f, 0.f, 0.f}, 1.f, 0.2f, 0.4f, 0.f, BodyType::Dynamic});
+    // A slow frame (step() clamps it to 1/30 s, two substeps) falls behind a cap of 1.
+    for (int f = 0; f < 30; ++f) world.step(1.f / 30.f);
+    return Outcome{world.getStateHash(), world.getStepCount()};
+  };
+  const float inf = std::numeric_limits<float>::infinity();
+
+  const Outcome atNaN = run(std::numeric_limits<float>::quiet_NaN());
+  const Outcome atDefault = run(8.f);
+  const Outcome atMinus100 = run(-100.f);
+  const Outcome atMinusInf = run(-inf);
+  const Outcome atInf = run(inf);
+  const Outcome at64 = run(64.f);
+
+  CHECK(atNaN == atDefault);       // NaN falls back to the default, 8
+  CHECK(atMinus100 == atMinusInf); // both clamp to 1
+  CHECK(atInf == at64);            // both clamp to 64
+  CHECK(atMinus100.substeps == 30);
+  CHECK(atDefault.substeps > atMinus100.substeps);
+  CHECK(atMinus100 != atDefault);
 }
