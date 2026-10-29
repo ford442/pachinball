@@ -45,6 +45,25 @@ type StepInputActions = {
   updatePlungerFrame?: (dt: number) => void
 }
 
+interface TrailInfo {
+  body: PhysicsBody
+  mesh: Mesh
+  type: BallType
+}
+
+/** Shared empty list for "no ball manager", so the fallback allocates nothing. Never mutated. */
+const NO_BODIES: PhysicsBody[] = []
+
+// Scratch vectors for the per-frame paths. Every consumer copies what it keeps (checked:
+// CameraController clones, DynamicWorld and the atmosphere only read).
+const scratchBallPos = new Vector3()
+const scratchBallVel = new Vector3()
+
+function copyTranslation(body: PhysicsBody, out: Vector3): Vector3 {
+  const t = body.translation()
+  return out.set(t.x, t.y, t.z)
+}
+
 /** The row a tick records when no input arrived: every field "no change". */
 const IDLE_INPUT_FRAME: InputFrame = {
   flipperLeft: null,
@@ -75,6 +94,23 @@ export class GamePhysicsController {
   readonly simClock = new GameSimClock()
   /** Render time not yet consumed by a fixed step (s); its fraction of a step is the mesh alpha. */
   private stepAccumulator = 0
+  /** What `stepFixed` measured this frame, for `updateSim` / `updateVisuals`. */
+  private frameDt = 0
+  private frameSimDt = 0
+  /** False when this frame ran no step (not PLAYING): the sim and visual updates skip it. */
+  private frameStepped = false
+  /** Reused per frame (#488 §5): the camera policy, the trail list and its records. */
+  private readonly cameraPolicy: { reducedMotion: boolean; photosensitiveMode: boolean; qualityTier: QualityTier } = {
+    reducedMotion: false,
+    photosensitiveMode: false,
+    qualityTier: QualityTier.MEDIUM,
+  }
+  private readonly trailInfos: TrailInfo[] = []
+  private readonly trailInfoPool: TrailInfo[] = []
+  private readonly trailMeshByBody = new Map<PhysicsBody, Mesh>()
+  private readonly onCaughtBallBeep = (): void => {
+    this.host.effects?.playBeep(440)
+  }
   private eventBusUnsubscribers: Array<() => void> = []
 
   constructor(host: PhysicsHost) {
@@ -472,7 +508,28 @@ export class GamePhysicsController {
     this.host.gameObjects?.setBumperState('IDLE')
   }
 
+  /**
+   * One render frame of the table: the fixed step, then the sim and visual updates that follow it.
+   * The frame scheduler runs the three parts in its `physics`, `sim` and `visuals` phases
+   * (`stepFixed`, `updateSim`, `updateVisuals`); this composition keeps the old single entry point
+   * for callers that drive the table directly (tests, tools).
+   */
   stepPhysics(
+    inputManager: { update: () => void; processBufferedInputs: () => InputFrame | null } | null,
+    inputActions: StepInputActions | null,
+    replayRunner?: ReplayRunner | null,
+    replayRecorder?: ReplayRecorder | null
+  ): void {
+    this.stepFixed(inputManager, inputActions, replayRunner, replayRecorder)
+    this.updateSim()
+    this.updateVisuals()
+  }
+
+  /**
+   * Frame-scheduler `physics` phase: drain input, run the fixed steps this frame owes, interpolate
+   * the meshes. Outside PLAYING no step runs, and `updateSim` / `updateVisuals` skip the frame.
+   */
+  stepFixed(
     inputManager: { update: () => void; processBufferedInputs: () => InputFrame | null } | null,
     inputActions: StepInputActions | null,
     replayRunner?: ReplayRunner | null,
@@ -495,6 +552,7 @@ export class GamePhysicsController {
       // physics-body positions even during MENU state before the game starts. No physics
       // step has run, so render at the raw pose (alpha=1, i.e. no interpolation).
       this.syncMeshes(1)
+      this.frameStepped = false
       return
     }
 
@@ -562,114 +620,50 @@ export class GamePhysicsController {
     this.syncMeshes(this.host.qualityTier === QualityTier.LOW ? 1 : alpha)
 
     const dt = Math.min(rawDt, 1 / 30)
+    this.frameDt = dt
     // Gameplay timers advance with the simulation, not the display: the steps
     // the engine actually took this frame (render dt only for stub hosts).
-    const simDt = this.simClock.advance(this.host.physics, dt)
+    this.frameSimDt = this.simClock.advance(this.host.physics, dt)
+    this.frameStepped = true
+  }
 
-    // Camera controller
-    if (this.host.cameraController && this.host.ballManager?.getBallBody()) {
-      const ballBody = this.host.ballManager.getBallBody()!
-      const pos = ballBody.translation()
-      const vel = ballBody.linvel()
-      const lifecycleMode = this.host.getCameraMode()
-      const cameraMode = this.host.isCameraFollowMode ? CameraMode.BALL_FOLLOW : lifecycleMode
-
-      if (cameraMode === CameraMode.ADVENTURE) {
-        this.host.cameraController.resetDynamicState()
-      } else {
-        this.host.cameraController.update(
-          dt,
-          new Vector3(pos.x, pos.y, pos.z),
-          new Vector3(vel.x, vel.y, vel.z),
-          cameraMode,
-          {
-            reducedMotion: this.host.accessibility.reducedMotion,
-            photosensitiveMode: this.host.accessibility.maxCameraShakeIntensity <= 0,
-            qualityTier: this.host.qualityTier,
-          }
-        )
-      }
-      if (this.host.isCameraFollowMode && this.host.tableCam) {
-        const targetY = pos.y + 2.5
-        this.host.tableCam.target.y += (targetY - this.host.tableCam.target.y) * dt * 5
-      }
-    }
+  /**
+   * Frame-scheduler `sim` phase: gameplay that runs once per frame after the fixed step — feeders,
+   * captures, stuck balls, combo / tilt / power-up windows. Reads the dt `stepFixed` measured.
+   */
+  updateSim(): void {
+    if (!this.frameStepped) return
+    const dt = this.frameDt
+    const simDt = this.frameSimDt
+    const ballManager = this.host.ballManager
 
     // Dynamic world
-    if (this.host.dynamicWorld && this.host.ballManager?.getBallBody()) {
-      const ballBody = this.host.ballManager.getBallBody()!
-      const pos = ballBody.translation()
-      this.host.dynamicWorld.update(new Vector3(pos.x, pos.y, pos.z), dt)
+    const mainBall = ballManager?.getBallBody()
+    if (this.host.dynamicWorld && mainBall) {
+      this.host.dynamicWorld.update(copyTranslation(mainBall, scratchBallPos), dt)
     }
 
-    // Debug HUD
-    // (delegated to caller)
-
-    // Adventure mode update
-    const currentBallBodies = this.host.ballManager?.getBallBodies() || []
+    const currentBallBodies = ballManager?.getBallBodies() ?? NO_BODIES
     this.host.adventureMode?.update(dt, currentBallBodies)
 
-    this.host.gameObjects?.updateBumpers(dt)
     this.host.gameObjects?.updateTargets(dt)
 
-    if (this.host.magSpinFeeder) {
-      this.host.magSpinFeeder.update(dt, currentBallBodies)
-    }
-    if (this.host.nanoLoomFeeder) {
-      this.host.nanoLoomFeeder.update(dt, currentBallBodies)
-    }
-    if (this.host.prismCoreFeeder) {
-      this.host.prismCoreFeeder.update(dt, currentBallBodies)
-    }
-    if (this.host.gaussCannon) {
-      this.host.gaussCannon.update(dt, currentBallBodies)
-    }
-    if (this.host.quantumTunnel) {
-      this.host.quantumTunnel.update(dt, currentBallBodies)
-    }
+    this.host.magSpinFeeder?.update(dt, currentBallBodies)
+    this.host.nanoLoomFeeder?.update(dt, currentBallBodies)
+    this.host.prismCoreFeeder?.update(dt, currentBallBodies)
+    this.host.gaussCannon?.update(dt, currentBallBodies)
+    this.host.quantumTunnel?.update(dt, currentBallBodies)
 
-    this.host.ballManager?.updateCaughtBalls(dt, () => {
-      this.host.effects?.playBeep(440)
-    })
+    ballManager?.updateCaughtBalls(dt, this.onCaughtBallBeep)
 
-    this.host.effects?.updateShards(dt)
-    this.host.effects?.updateBloom()
-    this.host.effects?.updateCabinetLighting()
-    this.host.effects?.updateSlotLighting()
     this.host.mapManager?.update(dt)
 
-    {
-      const ballBody = this.host.ballManager?.getBallBody()
-      const ballPos = ballBody ? (() => {
-        const t = ballBody.translation()
-        return new Vector3(t.x, t.y, t.z)
-      })() : undefined
-      this.host.effects?.updateAtmosphere(dt, ballPos)
-    }
-
-    this.host.ballManager?.updateTrailEffects()
-    this.host.ballManager?.updateGoldBallGlow(dt)
-
-    const ballBodies = this.host.ballManager?.getBallBodies() || []
-    const isFever = this.host.effects?.currentLightingMode === 'fever'
-    this.host.effects?.update(dt, ballBodies, isFever)
-
-    const trailInfos = ballBodies
-      .map((body) => {
-        const binding = this.host.ballManager?.getBindings().find((b) => b.rigidBody === body)
-        const mesh = binding?.mesh as Mesh | undefined
-        const type = this.host.ballManager?.getBallType(body) || BallType.STANDARD
-        return mesh ? { body, mesh, type } : null
-      })
-      .filter((info): info is NonNullable<typeof info> => info !== null)
-    this.host.effects?.updateTrails(trailInfos)
-
-    const stuckBalls = this.host.ballManager?.updateStuckDetection(simDt) || []
+    const stuckBalls = ballManager?.updateStuckDetection(simDt) ?? NO_BODIES
     for (const stuckBall of stuckBalls) {
-      if (stuckBall === this.host.ballManager?.getBallBody()) {
-        this.host.ballManager?.resetBall()
+      if (stuckBall === ballManager?.getBallBody()) {
+        ballManager?.resetBall()
       } else {
-        this.host.ballManager?.removeBall(stuckBall)
+        ballManager?.removeBall(stuckBall)
       }
     }
     if (stuckBalls.length > 0) {
@@ -677,15 +671,7 @@ export class GamePhysicsController {
     }
 
     // Update small gold ball lifetimes (cleanup expired)
-    this.host.ballManager?.updateSmallGoldBallLifetimes(simDt)
-
-    const jackpotPhase = this.host.effects?.jackpotPhase || 0
-    this.host.display?.update(dt, jackpotPhase)
-
-    // Drive bumper JACKPOT visuals during the Cyber-Shock sequence (especially phase 3 meltdown)
-    if (this.host.effects?.isJackpotActive) {
-      this.host.gameObjects?.setBumperState('JACKPOT')
-    }
+    ballManager?.updateSmallGoldBallLifetimes(simDt)
 
     this.finishJackpotIfDone()
 
@@ -696,6 +682,100 @@ export class GamePhysicsController {
       this.host.powerupTimer -= simDt
       if (this.host.powerupTimer <= 0) this.host.powerupActive = false
     }
+  }
+
+  /**
+   * Frame-scheduler `visuals` phase: camera, effects, trails and the backbox — everything the
+   * coming `scene.render()` shows, computed from this frame's sim state.
+   */
+  updateVisuals(): void {
+    if (!this.frameStepped) return
+    const dt = this.frameDt
+    const { effects } = this.host
+    const ballManager = this.host.ballManager
+    const ballBody = ballManager?.getBallBody() ?? null
+    const ballPos = ballBody ? copyTranslation(ballBody, scratchBallPos) : undefined
+
+    // Camera controller
+    if (this.host.cameraController && ballBody && ballPos) {
+      const lifecycleMode = this.host.getCameraMode()
+      const cameraMode = this.host.isCameraFollowMode ? CameraMode.BALL_FOLLOW : lifecycleMode
+
+      if (cameraMode === CameraMode.ADVENTURE) {
+        this.host.cameraController.resetDynamicState()
+      } else {
+        const vel = ballBody.linvel()
+        this.cameraPolicy.reducedMotion = this.host.accessibility.reducedMotion
+        this.cameraPolicy.photosensitiveMode = this.host.accessibility.maxCameraShakeIntensity <= 0
+        this.cameraPolicy.qualityTier = this.host.qualityTier
+        this.host.cameraController.update(
+          dt,
+          ballPos,
+          scratchBallVel.set(vel.x, vel.y, vel.z),
+          cameraMode,
+          this.cameraPolicy,
+        )
+      }
+      if (this.host.isCameraFollowMode && this.host.tableCam) {
+        const targetY = ballPos.y + 2.5
+        this.host.tableCam.target.y += (targetY - this.host.tableCam.target.y) * dt * 5
+      }
+    }
+
+    this.host.gameObjects?.updateBumpers(dt)
+
+    effects?.updateShards(dt)
+    effects?.updateBloom()
+    effects?.updateCabinetLighting()
+    effects?.updateSlotLighting()
+    effects?.updateAtmosphere(dt, ballPos)
+
+    ballManager?.updateTrailEffects()
+    ballManager?.updateGoldBallGlow(dt)
+
+    const ballBodies = ballManager?.getBallBodies() ?? NO_BODIES
+    const isFever = effects?.currentLightingMode === 'fever'
+    effects?.update(dt, ballBodies, isFever)
+    if (effects) effects.updateTrails(this.collectTrailInfos(ballBodies))
+
+    const jackpotPhase = effects?.jackpotPhase || 0
+    this.host.display?.update(dt, jackpotPhase)
+
+    // Drive bumper JACKPOT visuals during the Cyber-Shock sequence (especially phase 3 meltdown)
+    if (effects?.isJackpotActive) {
+      this.host.gameObjects?.setBumperState('JACKPOT')
+    }
+  }
+
+  /**
+   * The balls that have a mesh, with their type, for the trail effect. One reused array and one
+   * reused record per slot; the bindings are walked once (a map from body to mesh), not once per ball.
+   */
+  private collectTrailInfos(ballBodies: readonly PhysicsBody[]): TrailInfo[] {
+    const out = this.trailInfos
+    out.length = 0
+    const ballManager = this.host.ballManager
+    if (!ballManager) return out
+    const meshByBody = this.trailMeshByBody
+    meshByBody.clear()
+    for (const binding of ballManager.getBindings()) {
+      if (binding.mesh) meshByBody.set(binding.rigidBody, binding.mesh as Mesh)
+    }
+    for (const body of ballBodies) {
+      const mesh = meshByBody.get(body)
+      if (!mesh) continue
+      let record = this.trailInfoPool[out.length]
+      if (!record) {
+        record = { body, mesh, type: BallType.STANDARD }
+        this.trailInfoPool.push(record)
+      }
+      record.body = body
+      record.mesh = mesh
+      record.type = ballManager.getBallType(body) || BallType.STANDARD
+      out.push(record)
+    }
+    meshByBody.clear()
+    return out
   }
 
   getBallMeshForBody(body: PhysicsBody): Mesh | null {
