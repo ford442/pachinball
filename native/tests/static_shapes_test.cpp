@@ -598,3 +598,32 @@ TEST_CASE("meshes and force fields reject the 1001st entry without aliasing",
     CHECK(world.addForceField(wind(0.f)) == FORCE_FIELD_ID_BASE);
   }
 }
+
+TEST_CASE("field ids at the integer limits are rejected and never decoded",
+          "[physics][static-handles]") {
+  PhysicsWorld world;
+  ForceFieldDesc desc;
+  desc.force = {0.f, 1.f, 0.f};
+  world.addForceField(desc);
+  world.addForceField(desc);
+  PinFieldDesc pins;
+  pins.rows = 2;
+  pins.cols = 2;
+  world.addPinField(pins);
+  const uint64_t state = world.getStateHash();
+
+  // INT_MAX is also STATIC_HANDLE_OVERFLOW, the id a refused add*() returns:
+  // BASE - id used to overflow before any range check.
+  const int fieldCount = 2;
+  const int pinFieldCount = 1;
+  for (const int id : {INT_MIN, INT_MAX, STATIC_HANDLE_OVERFLOW, -1, 0,
+                       FORCE_FIELD_ID_BASE + 1, FORCE_FIELD_ID_BASE - fieldCount,
+                       PIN_FIELD_ID_BASE + 1, PIN_FIELD_ID_BASE - pinFieldCount}) {
+    INFO("id " << id);
+    world.setForceFieldEnabled(id, false);
+    world.setForceFieldVector(id, 9.f, 9.f, 9.f);
+    CHECK(world.getPinFieldPinCount(id) == -1);
+    CHECK(world.getStateHash() == state);
+  }
+  CHECK(world.getPinFieldPinCount(PIN_FIELD_ID_BASE) == 4);
+}

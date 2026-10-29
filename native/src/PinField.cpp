@@ -139,8 +139,10 @@ int PhysicsWorld::addPinField(const PinFieldDesc& desc) {
 }
 
 int PhysicsWorld::getPinFieldPinCount(int fieldId) const {
+  // Range first: `BASE - fieldId` overflows (UB) for ids above the base.
+  if (fieldId > PIN_FIELD_ID_BASE) return -1;
   const std::size_t idx = static_cast<std::size_t>(PIN_FIELD_ID_BASE - fieldId);
-  if (fieldId > PIN_FIELD_ID_BASE || idx >= pinFields_.size()) return -1;
+  if (idx >= pinFields_.size()) return -1;
   return pinFields_[idx].pinCount;
 }
 
