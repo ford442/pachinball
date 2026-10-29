@@ -27,12 +27,14 @@
  * (physics-worker-protocol.ts) — tests/wasm-worker-api-parity.test.ts enforces it.
  */
 
-import { WasmSnapshotStatus, type WasmPhysicsModule, type WasmPhysicsWorldInstance, type WasmContactEvent } from './wasm-types'
-import { CONTACT_STRIDE, decodeContactBuffer, toWasmContactEvent } from './contact-buffer'
+import { WasmSnapshotStatus, type WasmPhysicsModule, type WasmPhysicsWorldInstance } from './wasm-types'
+import { CONTACT_STRIDE, ContactBatchEmitter, type WasmContactEventBus } from './contact-buffer'
 import {
   TRANSFORM_STRIDE,
   createTransformBufferView,
+  createTransformRecord,
   decodeTransformSlot,
+  type WasmTransform,
 } from './transform-buffer'
 import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
 import * as adventure from './physics-module-adventure'
@@ -56,16 +58,15 @@ export {
 export type { WasmBodyDesc, WasmHingeDesc } from './physics-module-bodies'
 
 /**
- * Minimal EventBus surface this engine needs. Deliberately narrower than the
- * real `EventBus` type (`../core/event-bus`) — that file's payload types pull in
- * Babylon-typed `GameState`/`UnlockedReward` fields via `game-elements/types.ts`,
- * which this class must stay decoupled from: it's imported by the Worker-lib
- * `physics-worker.ts` compile graph (see tsconfig.worker.json), which has no DOM
- * lib globals. Any real `EventBus` instance satisfies this shape structurally.
+ * Minimal EventBus surface this engine needs (defined in `./contact-buffer`, re-exported here
+ * for existing importers). Deliberately narrower than the real `EventBus` type
+ * (`../core/event-bus`) — that file's payload types pull in Babylon-typed
+ * `GameState`/`UnlockedReward` fields via `game-elements/types.ts`, which this class must stay
+ * decoupled from: it's imported by the Worker-lib `physics-worker.ts` compile graph (see
+ * tsconfig.worker.json), which has no DOM lib globals. Any real `EventBus` instance satisfies
+ * this shape structurally.
  */
-export interface WasmContactEventBus {
-  emit(event: 'wasm:physics:contact', payload: WasmContactEvent): void
-}
+export type { WasmContactEventBus } from './contact-buffer'
 
 // ---------------------------------------------------------------------------
 // Engine class
@@ -109,6 +110,11 @@ export class WasmPhysicsEngine {
   private unsubscribers: Array<() => void> = []
   private transformView: Float32Array | null = null
   private heapByteLength = 0
+  /** Reused decode target for the transform getters (each still returns a fresh vector). */
+  private readonly transformScratch: WasmTransform = createTransformRecord()
+  /** Cached contact-buffer view: rebuilt only when the heap, pointer or needed length changes. */
+  private contactView: Float32Array | null = null
+  private readonly contactEmitter = new ContactBatchEmitter()
 
   // ---- Loading ----------------------------------------------------------
 
@@ -437,20 +443,27 @@ export class WasmPhysicsEngine {
 
   // ---- Transform queries -----------------------------------------------
 
+  // Each getter decodes into the reused scratch record and returns a fresh copy of the one
+  // field asked for: callers may keep the result (WasmBody hands it out as a PhysicsVector).
+
   getPosition(id: number): { x: number; y: number; z: number } {
-    return this.readTransformFromBuffer(id)?.position ?? bodies.readPosition(this.world, id)
+    const p = this.readTransformFromBuffer(id)?.position
+    return p ? { x: p.x, y: p.y, z: p.z } : bodies.readPosition(this.world, id)
   }
 
   getVelocity(id: number): { x: number; y: number; z: number } {
-    return this.readTransformFromBuffer(id)?.velocity ?? bodies.readVelocity(this.world, id)
+    const v = this.readTransformFromBuffer(id)?.velocity
+    return v ? { x: v.x, y: v.y, z: v.z } : bodies.readVelocity(this.world, id)
   }
 
   getAngularVelocity(id: number): { x: number; y: number; z: number } {
-    return this.readTransformFromBuffer(id)?.angularVelocity ?? bodies.readAngularVelocity(this.world, id)
+    const w = this.readTransformFromBuffer(id)?.angularVelocity
+    return w ? { x: w.x, y: w.y, z: w.z } : bodies.readAngularVelocity(this.world, id)
   }
 
   getRotation(id: number): { x: number; y: number; z: number; w: number } {
-    return this.readTransformFromBuffer(id)?.rotation ?? bodies.readRotation(this.world, id)
+    const q = this.readTransformFromBuffer(id)?.rotation
+    return q ? { x: q.x, y: q.y, z: q.z, w: q.w } : bodies.readRotation(this.world, id)
   }
 
   // ---- Simulation step -------------------------------------------------
@@ -600,6 +613,7 @@ export class WasmPhysicsEngine {
     this.isReady  = false
     this.eventBus = null
     this.transformView = null
+    this.contactView = null
     this.heapByteLength = 0
     this.stepCount_ = 0
     this.contactsFresh = false
@@ -607,10 +621,11 @@ export class WasmPhysicsEngine {
 
   // ---- Internal --------------------------------------------------------
 
-  private readTransformFromBuffer(id: number) {
+  /** Decodes into `transformScratch`: the result is only valid until the next call. */
+  private readTransformFromBuffer(id: number): WasmTransform | null {
     const view = this.refreshTransformView()
     if (!view) return null
-    return decodeTransformSlot(view, id, TRANSFORM_STRIDE)
+    return decodeTransformSlot(view, id, TRANSFORM_STRIDE, this.transformScratch)
   }
 
   private refreshTransformView(): Float32Array | null {
@@ -642,8 +657,12 @@ export class WasmPhysicsEngine {
     return this.transformView
   }
 
+  /**
+   * Deliver this step's contacts: one batched `'wasm:physics:contacts'` emit over a view of the
+   * WASM contact buffer, plus the per-contact events while anything subscribes to them.
+   */
   private drainContactBuffer(): void {
-    if (!this.world || !this.module || !this.contactsFresh) return
+    if (!this.world || !this.module || !this.contactsFresh || !this.eventBus) return
     const count = this.world.getContactCount()
     if (count <= 0) return
 
@@ -657,19 +676,17 @@ export class WasmPhysicsEngine {
     const end = start + count * CONTACT_STRIDE
     if (end > heap.length) return
 
-    const view = heap.subarray(start, end)
-    const contacts = decodeContactBuffer(view, count)
-    for (const contact of contacts) {
-      this._handleContact(toWasmContactEvent(contact))
+    // Reuse the view while it still covers this step's contacts in the current heap. It may be
+    // longer than `count` records: every consumer reads `count`, never the view's length.
+    let view = this.contactView
+    if (!view || view.buffer !== heap.buffer || view.byteOffset !== ptr || view.length < end - start) {
+      view = heap.subarray(start, end)
+      this.contactView = view
     }
+    this.contactEmitter.emit(this.eventBus, view, count, CONTACT_STRIDE)
   }
 
   private getHeapF32(): Float32Array | null {
     return adventure.heapF32(this.module)
-  }
-
-  private _handleContact(evt: WasmContactEvent): void {
-    if (!this.eventBus) return
-    this.eventBus.emit('wasm:physics:contact', evt)
   }
 }

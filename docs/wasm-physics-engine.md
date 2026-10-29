@@ -338,14 +338,36 @@ engine.dispose()
 
 | Event | Payload | When |
 |-------|---------|------|
-| `wasm:physics:contact` | `WasmContactEvent` | Each contact pair, each physics step |
+| `wasm:physics:contacts` | `WasmContactBatch` | Once per drained contact buffer (each physics step; a wrapped worker ring drains as two) |
+| `wasm:physics:contact` | `WasmContactEvent` | Each contact pair, each physics step — **only while it has a subscriber** |
+
+Both come from `ContactBatchEmitter` (`src/wasm/contact-buffer.ts`). The batched event is the
+zero-allocation path (#488 §5): `batch.data` is the packed buffer (`CONTACT_STRIDE` floats per
+contact) as a typed-array view — into WASM memory or a reused buffer — and the batch object is
+reused, so both are valid only during the emit. Read it in place with `contactPhaseAt` /
+`decodeContactAt` (one reused `createContactRecord()`), and honour `batch.count`, not
+`data.length`. The per-contact event builds a fresh record per contact; it stays for consumers
+that have not moved to the batch, and the engines skip it entirely once nothing listens.
 
 ```typescript
+const scratch = createContactRecord()
+eventBus.on('wasm:physics:contacts', ({ data, count, stride }) => {
+  for (let i = 0; i < count; i++) {
+    if (contactPhaseAt(data, i, stride) !== ContactPhase.Enter) continue
+    const c = decodeContactAt(data, i, scratch, stride) // overwritten next iteration
+    console.log(`Contact: body ${c.bodyId1} hit body ${c.bodyId2}`)
+  }
+})
+
+// Legacy, allocates per contact:
 eventBus.on('wasm:physics:contact', (evt) => {
   // evt.bodyId1, evt.bodyId2, evt.normal, evt.point, evt.impulse, evt.isEntering
-  console.log(`Contact: body ${evt.bodyId1} hit body ${evt.bodyId2}`)
 })
 ```
+
+`decodeContactBuffer(data, count, stride, out)` and `decodeTransformSlot(data, id, stride, out)`
+take an optional reusable `out` (array / record) for per-frame callers; without it they return
+fresh objects as before.
 
 ---
 

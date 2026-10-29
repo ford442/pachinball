@@ -21,7 +21,7 @@ import type { PhysicsBody } from '../../core/physics-api'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { BumperVisual } from '../../game-elements/types'
 import type { LaneSensorDef } from '../../objects/object-lane-sensors'
-import { ContactPhase, contactStarted, type PhysicsContact, type WasmContactEvent } from '../../wasm'
+import { ContactPhase, contactPhaseAt, contactStarted, type PhysicsContact, type WasmContactBatch, type WasmContactEvent } from '../../wasm'
 
 import type { PhysicsHost } from './types'
 import { simNowMs, type SimClockPhysics } from '../../core/sim-clock'
@@ -339,13 +339,31 @@ export class CollisionDispatcher {
    */
   onWasmContact(evt: WasmContactEvent): void {
     if (!contactStarted(evt)) return
+    this.dispatchWasmPair(evt.bodyId1, evt.bodyId2)
+  }
+
+  /**
+   * Batched form of `onWasmContact` for the `'wasm:physics:contacts'` event (#488 §5): the same
+   * dispatch, in the same order, read straight from the packed buffer. Stay/Exit contacts — the
+   * bulk of every step — cost a single float read and allocate nothing.
+   */
+  onWasmContactBatch(batch: WasmContactBatch): void {
+    const { data, count, stride } = batch
+    for (let i = 0; i < count; i++) {
+      if (contactPhaseAt(data, i, stride) !== ContactPhase.Enter) continue
+      const o = i * stride
+      this.dispatchWasmPair(data[o] ?? 0, data[o + 1] ?? 0)
+    }
+  }
+
+  private dispatchWasmPair(bodyId1: number, bodyId2: number): void {
     const bridge = this.getWasmBridge()
     if (!bridge) return
     // A re-export (table edit, adventure track switch) reassigns static ids.
     if (bridge.keyOf && (bridge.getIdEpoch?.() ?? 0) !== this.cacheIdEpoch) this.rebuildHandleCaches()
 
-    const r1 = bridge.resolveContactId(evt.bodyId1)
-    const r2 = bridge.resolveContactId(evt.bodyId2)
+    const r1 = bridge.resolveContactId(bodyId1)
+    const r2 = bridge.resolveContactId(bodyId2)
     if (!r1 || !r2 || r1.body === r2.body) return
 
     this.processBodyCollision(r1.body, r2.body, r1.key, r2.key)
