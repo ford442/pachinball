@@ -40,7 +40,7 @@ describe('generated Embind declarations', () => {
   })
 
   it('u64 accessors are declared as bigint (lossless)', () => {
-    for (const name of ['getStepCount', 'getStaticContentHash', 'getContactGeneration']) {
+    for (const name of ['getStepCount', 'getStaticContentHash', 'getStateHash', 'getContactGeneration']) {
       expect(dts).toMatch(new RegExp(`\\b${name}\\(\\): bigint;`))
     }
   })

@@ -58,6 +58,7 @@ export interface PhysicsWorld extends ClassHandle {
   getTransformBufferPtr(): number;
   getStepCount(): bigint;
   getStaticContentHash(): bigint;
+  getStateHash(): bigint;
   getContactGeneration(): bigint;
   createRigidBodyDesc(_0: RigidBodyDesc): number;
   createRigidBody(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number, _6: number, _7: number, _8: number, _9: number, _10: number, _11: number, _12: number, _13: number, _14: number): number;
