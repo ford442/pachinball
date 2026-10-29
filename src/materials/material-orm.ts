@@ -3,7 +3,8 @@
  */
 
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
-import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import type { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import { createCanvasTexture } from './canvas-texture'
 import { Texture } from '@babylonjs/core/Materials/Textures/texture'
 import { MaterialLibraryBase, type TextureSet } from './material-core'
 
@@ -109,7 +110,7 @@ export class ORMTexturePacking extends MaterialLibraryBase {
     }
 
     const size = this.textureSize
-    const tex = new DynamicTexture('ormPacked', size, this.scene, true)
+    const tex = createCanvasTexture('ormPacked', size, this.scene, true)
     const ctx = tex.getContext()
 
     // Default values (white for AO = no occlusion, white for roughness = fully rough, black for metallic = non-metal)
