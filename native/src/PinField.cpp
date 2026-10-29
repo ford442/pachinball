@@ -52,7 +52,7 @@ bool maskAllows(const std::vector<uint8_t>& mask, std::size_t index) {
   if (mask.empty()) return true;
   const std::size_t byte = index >> 3;
   if (byte >= mask.size()) return false;
-  return (mask[byte] >> (index & 7u)) & 1u;
+  return ((static_cast<unsigned>(mask[byte]) >> (index & 7u)) & 1u) != 0u;
 }
 
 /** Clamp before the int cast so a ball far off the table cannot overflow it. */
