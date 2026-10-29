@@ -134,6 +134,7 @@ export abstract class GameDelegates extends GameFields {
     this.effects?.registerAccessibility(this.accessibility)
     this.adventureMode?.setAccessibilityConfig(this.accessibility)
     this.display?.setAccessibility(this.accessibility)
+    this.renderer?.syncAccessibility()
     this.mapManager?.getLCDTableState().setPhotosensitiveMode(photosensitiveMode)
   }
   /** DEV builds, or `?debug=1`. Cheap and synchronous so callers never need the lazy GameDebug chunk. */

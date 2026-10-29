@@ -14,8 +14,8 @@
  *   playfield. Which of them exist is decided by `planBackboxGraph()`; whether one runs on a
  *   given frame is `task.disabled`, which passes the input through unchanged.
  *
- * This graph is not `scene.frameGraph`: the scene still renders through its camera and the
- * existing post-process pipeline (Slice B moves that into a graph). It is executed once per frame
+ * This graph is not `scene.frameGraph`: the scene renders through its camera, and the scene post
+ * chain is a graph of its own (game/scene-frame-graph.ts, Slice B). It is executed once per frame
  * from `scene.onBeforeRenderObservable`, before the scene camera samples its output.
  *
  * Nothing here reads accessibility or tier settings: the caller passes a plan in.

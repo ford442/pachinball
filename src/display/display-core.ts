@@ -221,7 +221,7 @@ export class DisplaySystem {
     this.shaderLayer.setJackpotStill(plan.effects.includes('jackpotStill'))
     this.backboxGraphStatus = 'pending'
     this.backboxGraphError = null
-    import('./backbox-frame-graph')
+    import('../frame-graph-runtime')
       .then(({ BackboxFrameGraph }) => {
         if (this.disposed) return null
         return BackboxFrameGraph.create(

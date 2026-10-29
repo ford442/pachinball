@@ -139,7 +139,7 @@ than `undefined`:
 window.bootstrapGpuDegrades
 // [{ path: 'postprocess-tier-boot',
 //    featureLevel: 'core',
-//    detail: 'tier bloom-only: adapter maxUniformBuffersPerShaderStage=12 < … (17) — using standalone BloomEffect',
+//    detail: 'tier bloom-only: adapter maxUniformBuffersPerShaderStage=12 < … (17) — bloom-only graph, no image-processing node',
 //    timestamp: 1757… }]
 ```
 
@@ -148,7 +148,7 @@ window.bootstrapGpuDegrades
 | `webgpu-featurelevel` | `createWebGPUEngineWithFallback()` | WebGPU booted at a lower feature level than requested |
 | `webgl2-fallback` | `createEngine()` | WebGPU failed at every level; the engine is WebGL2 |
 | `postprocess-tier-boot` | `PostProcessManager.setup()` | The adapter's uniform-buffer cap forced a reduced tier at startup |
-| `postprocess-tier-runtime` | the `uncapturederror` guard | A WebGPU validation error forced a further downgrade mid-play |
+| `postprocess-tier-runtime` | the `uncapturederror` guard, or `PostProcessManager.onGraphFailed()` | A WebGPU validation error forced a further downgrade mid-play, or the scene graph could not be built (tier `none`) |
 | `context-lost` / `context-restored` | `attachGpuContextLogging()` | Runtime device loss and recovery |
 
 `featureLevel` is `'core' | 'compatibility' | 'webgl2' | null`. Compatibility is not theoretical —
@@ -198,7 +198,7 @@ Active backend is tagged on `<canvas data-renderer="webgpu|webgl2">` and `window
 
 | Flag | Effect |
 |------|--------|
-| `?nopp=1` | Skip all post-processing in `GameRenderer` |
+| `?nopp=1` | Skip all scene post-processing: no scene graph, the camera renders to the canvas (the backbox composite still runs) |
 | `?noopt=1` | Disable `SceneOptimizer` |
 | `?preserveBuffer=1` | Enable `preserveDrawingBuffer` for framebuffer readback |
 | `?gpu=compat` | WebGPU `featureLevel: 'compatibility'` only (skips the `core` attempt; implies `setMaximumLimits: false`) — the deterministic way to reproduce the degraded profile in CI |
@@ -255,12 +255,24 @@ Or call `window.runVisibilityDiagnostic()` after the game loads.
 
 ## Post-process degradation tiers
 
-1. **Full** — bloom, FXAA, tone-map, DoF, SSAO (+ SSR/motion blur on HIGH tier).
-2. **Bloom-only** — DoF or SSAO failed validation (WebGPU strict adapters or WebGL SwiftShader). `game.postProcessDegraded === true`; debug HUD shows `pp degraded: true`.
-   On WebGPU adapters capped at 12 uniform buffers per stage, the game proactively uses a **bloom-only** profile (bloom without the image-processing pass; FXAA/sharpen/vignette/color-curves disabled). Runtime validation errors downgrade further to post-process disabled (`none`).
-3. **Disabled** — `?nopp=1` skips all post-processing.
+The tier decides which nodes the scene post-process Frame Graph has (`planSceneGraph()`; see
+[`FRAME_GRAPH.md`](FRAME_GRAPH.md), "Slice B"). A node that is not in the plan is never built.
 
-`setMaximumLimits: true` is the first defense for WebGPU MRT (SSAO + DoF + bloom). Try/catch around DoF/SSAO is the second.
+1. **Full** — `scene:render → [ssao → ssr → motionBlur →] bloom → imageProcessing → sharpen → fxaa`. The bracketed
+   HIGH-only nodes also need a context that can afford their geometry pass (not a software rasteriser, enough
+   draw buffers); without it `game.postProcessDegraded === true` and the rest stays.
+2. **Bloom-only** — `scene:render → bloom`. On WebGPU adapters capped at 12 uniform buffers per stage the game
+   proactively uses this tier: the image-processing node (and FXAA, sharpen, vignette, colour curves) is **left out
+   of the graph**, not toggled off on a pipeline whose pass binds its full layout regardless.
+   `game.postProcessDegraded === true`; debug HUD shows `pp degraded: true`. A runtime validation error downgrades
+   further to `none`, rebuilding the graph at that tier (no node: the graph is disposed).
+3. **Disabled** — `?nopp=1`, or tier `none`: no graph; the camera renders straight to the canvas.
+
+Reduced motion drops bloom, sharpen, the vignette and the HIGH-only nodes. `game.renderer.getSceneGraphInfo()` reports
+the plan, every node left out and why, and the built node list.
+
+`setMaximumLimits: true` is the first defense for WebGPU MRT. The geometry pass of the HIGH-only nodes writes four
+colour attachments; contexts with fewer draw buffers build none of them.
 
 **Mobile quality probe (#300):** `detectQualityTier()` in `material-core.ts` applies `applyMobileQualityCap()` using `isMobileUserAgent` from `engine-options.ts` — mobile caps at MEDIUM (LOW on low memory / Save-Data). SSAO/DoF are HIGH-only. Sustained frame time >22ms for 2s triggers a one-shot auto tier drop via `PerformanceMonitor`.
 

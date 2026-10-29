@@ -1,30 +1,22 @@
 /**
- * Post-processing pipeline management — bloom/FXAA/tonemap setup, quality-tier
- * knobs, HIGH-only heavy effects (DoF/SSAO/SSR/motion blur), the WebGPU
- * uniform-buffer overflow guard, and the bloom-kick/camera-shake decay loop.
+ * Post-processing management — the quality-tier knobs, the WebGPU uniform-buffer overflow guard,
+ * and the bloom-kick/camera-shake decay loop. The passes themselves are nodes of the scene
+ * Frame Graph (`scene-frame-graph.ts`, #461 Slice B); this class decides which nodes exist
+ * (`planSceneGraph()`, from the tier in `webgpu-post-process-profile.ts`) and keeps the graph in step
+ * with quality, accessibility and runtime degrades.
  *
  * Extracted from GameRenderer to keep that orchestrator under the house line limit.
  */
 
-import { Color4 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
-import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration'
-import { DepthOfFieldEffectBlurLevel } from '@babylonjs/core/PostProcesses/depthOfFieldEffect'
-import { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline'
-import { SSRRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssrRenderingPipeline'
-import { MotionBlurPostProcess } from '@babylonjs/core/PostProcesses/motionBlurPostProcess'
-// Side-effects the SSAO2 / SSR / motion-blur chain needs and a tree-shaken build never pulls in
-// on its own. Without them, switching to HIGH on a real GPU failed as follows: SSAO2 fell to the
-// degrade path ("enablePrePassRenderer is not a function"), SSR threw out of applyQualityTier,
-// and with the prepass on, every PBR material threw "enableSubSurfaceForPrePass is not a
-// function" each frame.
-import '@babylonjs/core/Rendering/prePassRendererSceneComponent' // Scene.enablePrePassRenderer
-import '@babylonjs/core/Rendering/depthRendererSceneComponent' // Scene.enableDepthRenderer (SSR, DoF)
-import '@babylonjs/core/Rendering/subSurfaceSceneComponent' // Scene.enableSubSurfaceForPrePass (PBR)
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
+// The Frame Graph chunk (lazy, src/frame-graph-runtime.ts) and the glTF loader both use these three
+// Babylon modules. The old pipeline's static prepass imports used to keep them in the boot chunk;
+// without that, each would become a small shared chunk of its own (and a new precache entry).
+import '@babylonjs/core/Materials/Textures/renderTargetTexture'
+import '@babylonjs/core/Materials/Textures/multiRenderTarget'
+import '@babylonjs/core/Meshes/meshBlendingTag'
 import {
-  applyBloomPipelineProfile,
   downgradePostProcessTier,
   isUniformBufferLimitError,
   isWebGPUEngine,
@@ -32,21 +24,30 @@ import {
   resolveWebGPUPostProcessProfile,
   type WebGPUPostProcessProfile,
 } from './webgpu-post-process-profile'
-import { MinimalBloomPipeline } from '../effects/minimal-bloom-pipeline'
+import {
+  BLOOM_QUALITY_PROFILE,
+  HEAVY_POST_MIN_DRAW_BUFFERS,
+  planSceneGraph,
+  sameSceneGraph,
+  type SceneGraphFlags,
+  type SceneGraphPlan,
+} from './scene-graph-plan'
+import { ScenePostController } from './scene-post-controller'
 import { isSoftwareRasterizer } from '../engine/software-rasterizer'
+import type { SceneFrameGraph, SceneGraphInfo } from './scene-frame-graph'
 import { QualityTier, INTENSITY } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
 import { GameConfig } from '../config'
 import type { RendererHost } from './game-renderer'
 
-/**
- * Colour attachments the shared prepass needs on HIGH: colour, depth, normal, reflectivity (SSR)
- * and velocity (motion blur), plus albedo and irradiance because the HIGH bumper bodies enable
- * PBR sub-surface scattering (materials/material-interactive.ts). Below this the prepass shaders
- * fail with "glFragData ... would exceed MAX_DRAW_BUFFERS" on every material that renders into
- * it (WebGL2 only guarantees 4; SwiftShader reports 6; desktop GPUs report 8).
- */
-export const HEAVY_POST_MIN_DRAW_BUFFERS = 7
+/** What `getGraphInfo()` reports: the plan always, the built graph once it exists. */
+export interface SceneGraphReport {
+  plan: SceneGraphPlan | null
+  /** True from the first build request until the graph is built, failed, or dropped. */
+  pending: boolean
+  graph: SceneGraphInfo | null
+  error: string | null
+}
 
 export class PostProcessManager {
   private readonly host: RendererHost
@@ -66,24 +67,33 @@ export class PostProcessManager {
   private _unsubBloom: (() => void) | null = null
   private _unsubShake: (() => void) | null = null
 
-  private _ssaoPipeline: SSAO2RenderingPipeline | null = null
-  private _ssrPipeline: SSRRenderingPipeline | null = null
-  private _motionBlur: MotionBlurPostProcess | null = null
-  private _isSwiftShader = false
   private _postProcessProfile: WebGPUPostProcessProfile | null = null
+  /** Software rasteriser: the HIGH-only nodes cost more than it can pay. */
+  private _isSwiftShader = false
   private _webgpuErrorListener: ((event: Event) => void) | null = null
+
+  /** The knobs `EffectsSystem` and the tiers write; it outlives any one graph. */
+  private controller: ScenePostController | null = null
+  private graph: SceneFrameGraph | null = null
+  private plan: SceneGraphPlan | null = null
+  /** Graph creation and rebuilds run one after another. */
+  private graphQueue: Promise<void> = Promise.resolve()
+  private pendingBuilds = 0
+  private graphError: string | null = null
+  private disposed = false
+  private heavyWarned = false
 
   constructor(host: RendererHost) {
     this.host = host
   }
 
-  /** Setup bloom, FXAA, tone-mapping, DoF, and scanlines. */
+  /** Setup bloom, FXAA, tone-mapping and sharpen as scene graph nodes. */
   setup(): void {
     const { scene, tableCam, qualityTier } = this.host
     if (!scene || !tableCam) return
 
-    // Debug: skip all post-processing via URL flag
-    if (new URLSearchParams(window.location.search).has('nopp')) {
+    // Debug: skip all post-processing via URL flag. The camera renders straight to the canvas.
+    if (this.noPostProcess) {
       console.log('[GameRenderer] Post-processing disabled via ?nopp=1')
       return
     }
@@ -91,8 +101,9 @@ export class PostProcessManager {
     // IBL is wired up by setupEnvironmentLighting() via matLib.loadEnvironmentTexture(),
     // which calls CubeTexture.CreateFromPrefilteredData('textures/environment.env', scene)
     // and assigns it to scene.environmentTexture. PBR materials (ball, flippers, rails)
-    // sample from that map so they get real reflections — here we layer the cinematic
-    // ACES tonemap + bloom on top.
+    // sample from that map so they get real reflections — here we layer bloom on top.
+    // (The image-processing node keeps ImageProcessingConfiguration's defaults: see the note on
+    // ScenePostImageProcessing for why there is no ACES grade here.)
 
     const { accessibility } = this.host
     const reducedMotion = accessibility?.reducedMotion ?? GameConfig.camera.reducedMotion
@@ -108,79 +119,24 @@ export class PostProcessManager {
       this.host.postProcessDegraded = true
       return
     }
-
-    const useMinimalBloom =
-      this._postProcessProfile.tier === 'bloom-only' ||
-      this._postProcessProfile.tier === 'conservative'
-
-    if (useMinimalBloom) {
-      const minimal = new MinimalBloomPipeline(scene, [tableCam])
-      this.host.bloomPipeline = minimal
+    if (this._postProcessProfile.tier !== 'full') {
       this.host.postProcessDegraded = true
       console.warn(
         `[GameRenderer] WebGPU post-process tier: ${this._postProcessProfile.tier} (${this._postProcessProfile.reason})`,
       )
-      this.attachWebGPUUniformBufferGuard()
-    } else {
-      // Defer pipeline build until profile toggles are applied on full DefaultRenderingPipeline.
-      const bloom = new DefaultRenderingPipeline('pachinbloom', true, scene, [tableCam], false)
-      this.host.bloomPipeline = bloom
-      applyBloomPipelineProfile(bloom, this._postProcessProfile, reducedMotion)
-      this.attachWebGPUUniformBufferGuard()
     }
 
-    const bloom = this.host.bloomPipeline
-    if (!bloom) return
+    const controller = new ScenePostController()
+    this.controller = controller
+    this.host.bloomPipeline = controller
+    this.attachWebGPUUniformBufferGuard()
 
     const bloomSafe = !reducedMotion && effectIntensity > 0
-    const baseWeight = 0.25
-    if (!useMinimalBloom) {
-      const fullBloom = bloom as DefaultRenderingPipeline
-      fullBloom.bloomEnabled = bloomSafe
-      fullBloom.bloomKernel = 64
-      fullBloom.bloomScale = 0.5
-      fullBloom.bloomWeight = baseWeight * effectIntensity * INTENSITY.ACTIVE
-      fullBloom.bloomThreshold = 0.75
-      if (fullBloom.imageProcessingEnabled && fullBloom.imageProcessing) {
-        fullBloom.imageProcessing.toneMappingEnabled = true
-        fullBloom.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES
-        fullBloom.imageProcessing.contrast = 1.1
-        fullBloom.imageProcessing.exposure = 1.0
-        fullBloom.imageProcessing.vignetteWeight = 0.4
-        fullBloom.imageProcessing.vignetteColor = new Color4(0, 0, 0, 0)
-        if (fullBloom.imageProcessing.colorCurvesEnabled && fullBloom.imageProcessing.colorCurves) {
-          fullBloom.imageProcessing.colorCurves.globalHue = 5
-          fullBloom.imageProcessing.colorCurves.globalSaturation = 15
-        }
-      }
-      if (fullBloom.sharpenEnabled) {
-        fullBloom.sharpen.edgeAmount = 0.3
-      }
-      fullBloom.prepare()
-    } else {
-      bloom.bloomEnabled = bloomSafe
-      bloom.bloomKernel = 64
-      bloom.bloomScale = 0.5
-      bloom.bloomWeight = baseWeight * effectIntensity * INTENSITY.ACTIVE
-      bloom.bloomThreshold = 0.75
-      bloom.prepare()
-    }
+    controller.bloomThreshold = 0.75
+    this.applyBloomKnobs(qualityTier, effectIntensity)
 
-    if (qualityTier === QualityTier.LOW) {
-      bloom.bloomKernel = 16
-      bloom.bloomScale = 0.2
-      bloom.bloomWeight = Math.min(bloom.bloomWeight, 0.12)
-      bloom.sharpenEnabled = false
-    } else if (qualityTier === QualityTier.MEDIUM) {
-      bloom.bloomKernel = 32
-      bloom.bloomScale = 0.35
-      bloom.bloomWeight = Math.min(bloom.bloomWeight, 0.25)
-    }
-
-    // DoF / SSAO / SSR / motion blur are HIGH-only (mobile boot caps at MEDIUM).
     this._isSwiftShader = isSoftwareRasterizer(this.host.engine)
-
-    this.applyHeavyPostProcesses(qualityTier, reducedMotion)
+    this.replan()
 
     // EventBus subscriptions — bloom kick and camera shake
     const { eventBus } = this.host
@@ -238,11 +194,11 @@ export class PostProcessManager {
 
   /**
    * Apply a quality tier at runtime (settings change or auto-drop).
-   * Updates bloom knobs and toggles HIGH-only heavy post-process.
+   * Updates the bloom knobs and re-plans the graph (sharpen and the HIGH-only passes follow the tier).
    */
   applyQualityTier(tier: QualityTier): void {
-    const { scene, bloomPipeline, accessibility } = this.host
-    if (!scene || !bloomPipeline) {
+    const { scene, accessibility } = this.host
+    if (!scene || !this.controller) {
       this.host.qualityTier = tier
       return
     }
@@ -251,38 +207,21 @@ export class PostProcessManager {
     this.host.effects?.setQualityTier(tier)
     getMaterialLibrary(scene).qualityTier = tier
 
-    const reducedMotion = accessibility?.reducedMotion ?? GameConfig.camera.reducedMotion
     const effectIntensity = accessibility?.effectIntensity ?? 1.0
-    const baseWeight = 0.25 * effectIntensity * INTENSITY.ACTIVE
-
-    bloomPipeline.bloomEnabled = !reducedMotion && effectIntensity > 0
-    bloomPipeline.bloomThreshold = 0.75
-
-    const profile = this._postProcessProfile ?? resolveWebGPUPostProcessProfile(this.host.engine)
-    if (bloomPipeline instanceof DefaultRenderingPipeline) {
-      applyBloomPipelineProfile(bloomPipeline, profile, reducedMotion)
-      if (profile.tier !== 'full') {
-        bloomPipeline.prepare()
-      }
-    }
-
-    if (tier === QualityTier.LOW) {
-      bloomPipeline.bloomKernel = 16
-      bloomPipeline.bloomScale = 0.2
-      bloomPipeline.bloomWeight = Math.min(baseWeight, 0.12)
-      bloomPipeline.sharpenEnabled = false
-    } else if (tier === QualityTier.MEDIUM) {
-      bloomPipeline.bloomKernel = 32
-      bloomPipeline.bloomScale = 0.35
-      bloomPipeline.bloomWeight = Math.min(baseWeight, 0.25)
-    } else {
-      bloomPipeline.bloomKernel = 64
-      bloomPipeline.bloomScale = 0.5
-      bloomPipeline.bloomWeight = baseWeight
-    }
-
-    this.applyHeavyPostProcesses(tier, reducedMotion)
+    this.controller.bloomThreshold = 0.75
+    this.applyBloomKnobs(tier, effectIntensity)
+    this.replan()
     console.log(`[GameRenderer] Quality tier applied: ${tier}`)
+  }
+
+  /**
+   * Accessibility changed (reduced motion, effect intensity): re-plan the graph. Reduced motion
+   * drops bloom, sharpen, the vignette and the HIGH-only passes; turning it off brings them back.
+   */
+  syncAccessibility(): void {
+    if (!this.controller) return
+    this.applyBloomKnobs(this.host.qualityTier, this.host.accessibility?.effectIntensity ?? 1.0)
+    this.replan()
   }
 
   /** Drop one quality step (HIGH→MEDIUM→LOW). Returns the new tier. */
@@ -300,128 +239,165 @@ export class PostProcessManager {
     return next
   }
 
-  private applyHeavyPostProcesses(qualityTier: QualityTier, reducedMotion: boolean): void {
-    const { scene, tableCam } = this.host
-    if (!scene || !tableCam) return
+  /** The plan, and the graph's own report once it is built (debug HUD, e2e). */
+  getGraphInfo(): SceneGraphReport {
+    const graph = this.graph?.getInfo() ?? null
+    return {
+      plan: this.plan,
+      // A build the manager queued, or one the graph started itself (a resize, a new bloom scale).
+      pending: this.pendingBuilds > 0 || graph?.building === true,
+      graph,
+      error: this.graphError,
+    }
+  }
 
-    const wantsHeavy =
-      qualityTier === QualityTier.HIGH && !reducedMotion && !this._isSwiftShader
-    const drawBuffers = this.host.engine.getCaps().maxDrawBuffers ?? 0
-    const allowHeavy = wantsHeavy && drawBuffers >= HEAVY_POST_MIN_DRAW_BUFFERS
-    if (wantsHeavy && !allowHeavy) {
-      if (!this.host.postProcessDegraded) {
-        console.warn(
-          `[GameRenderer] SSAO / SSR / motion blur skipped: ${drawBuffers} draw buffers, ` +
-            `the shared prepass needs ${HEAVY_POST_MIN_DRAW_BUFFERS}`,
-        )
-      }
+  private get noPostProcess(): boolean {
+    return new URLSearchParams(window.location.search).has('nopp')
+  }
+
+  /** The bloom knobs for a quality tier: kernel, scale and a weight cap that shrink with it. */
+  private applyBloomKnobs(tier: QualityTier, effectIntensity: number): void {
+    const controller = this.controller
+    if (!controller) return
+    const profile = BLOOM_QUALITY_PROFILE[tier]
+    const baseWeight = 0.25 * effectIntensity * INTENSITY.ACTIVE
+    controller.bloomKernel = profile.kernel
+    controller.bloomScale = profile.scale
+    controller.bloomWeight = Math.min(baseWeight, profile.maxWeight)
+  }
+
+  private planFlags(): SceneGraphFlags {
+    const { accessibility, qualityTier } = this.host
+    return {
+      tier: this._postProcessProfile?.tier ?? 'full',
+      quality: qualityTier,
+      reducedMotion: accessibility?.reducedMotion ?? GameConfig.camera.reducedMotion,
+      effectIntensity: accessibility?.effectIntensity ?? 1.0,
+      noPostProcess: this.noPostProcess,
+      heavyAvailable: this.heavyAvailable(),
+    }
+  }
+
+  /**
+   * Whether this context can afford the HIGH-only nodes: not a software rasteriser, and enough draw
+   * buffers (and float render targets, for the geometry pass's view depth) for their geometry pass.
+   */
+  private heavyAvailable(): boolean {
+    if (this._isSwiftShader) return false
+    const caps = this.host.engine.getCaps()
+    const drawBuffers = caps.maxDrawBuffers ?? 0
+    const available = drawBuffers >= HEAVY_POST_MIN_DRAW_BUFFERS && caps.textureFloatRender
+    if (!available && this.host.qualityTier === QualityTier.HIGH && !this.heavyWarned) {
+      this.heavyWarned = true
+      console.warn(
+        `[GameRenderer] SSAO / SSR / motion blur skipped: ${drawBuffers} draw buffers ` +
+          `(need ${HEAVY_POST_MIN_DRAW_BUFFERS}), float render targets ${caps.textureFloatRender ? 'yes' : 'no'}`,
+      )
       this.host.postProcessDegraded = true
     }
+    return available
+  }
 
-    // DoF lives on the default pipeline
-    const bloom = this.host.bloomPipeline
-    if (bloom instanceof DefaultRenderingPipeline) {
-      if (allowHeavy) {
-        try {
-          bloom.depthOfFieldEnabled = true
-          bloom.depthOfField.focusDistance = 2500
-          bloom.depthOfField.fStop = 2.4
-          bloom.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.High
-        } catch (err) {
-          bloom.depthOfFieldEnabled = false
-          this.host.postProcessDegraded = true
-          console.warn('[GameRenderer] MRT post-process unavailable; DoF failed', err)
-        }
-      } else {
-        bloom.depthOfFieldEnabled = false
-      }
+  /**
+   * Work out which nodes should exist now and bring the graph in line: create it on first need,
+   * rebuild it when the node set (or the bloom scale) changed, drop it when nothing is left.
+   */
+  private replan(): void {
+    const controller = this.controller
+    if (!controller || this.disposed) return
+    const plan = planSceneGraph(this.planFlags())
+    const previous = this.plan
+    this.plan = plan
+    controller.setImageProcessingPresent(plan.nodes.includes('imageProcessing'), plan.vignette)
+    // Materials leave image processing to the post-process while that node exists. Set up front, so
+    // they compile once rather than again when the graph arrives; the graph keeps it in step after.
+    const config = this.host.scene?.imageProcessingConfiguration
+    if (config) config.applyByPostProcess = plan.nodes.includes('imageProcessing')
+
+    if (plan.nodes.length === 0) {
+      if (previous && previous.nodes.length > 0) this.dropGraph()
+      return
     }
+    if (this.graph && previous && sameSceneGraph(previous, plan)) return
+    this.enqueueGraph(plan)
+  }
 
-    if (allowHeavy) {
-      // One prepass MRT (depth + normals + reflectivity + velocity) shared by SSAO2, SSR and
-      // motion blur. `forceGeometryBuffer = true` would give each of them the legacy
-      // GeometryBufferRenderer instead: a second full scene pass writing the same buffers.
-      // Enabling it up front, once, also fails fast here if the module above was dropped.
+  private enqueueGraph(plan: SceneGraphPlan): void {
+    this.pendingBuilds++
+    this.graphQueue = this.graphQueue
+      .then(() => this.buildGraph(plan))
+      .catch((err: unknown) => this.onGraphFailed(err))
+      .then(() => {
+        this.pendingBuilds--
+      })
+  }
+
+  private async buildGraph(plan: SceneGraphPlan): Promise<void> {
+    // A newer plan is already queued behind this one: skip to it.
+    if (this.plan !== plan || this.disposed) return
+    if (this.graph) {
+      // A rebuild that fails (a resize, a new bloom scale) leaves the running generation in place.
       try {
-        scene.enablePrePassRenderer()
+        await this.graph.rebuild(plan)
       } catch (err) {
-        this.host.postProcessDegraded = true
-        console.warn('[GameRenderer] Prepass unavailable; SSAO / SSR / motion blur skipped', err)
-        this.disposeHeavyPostProcesses()
-        return
+        console.warn('[GameRenderer] Scene graph rebuild failed; keeping the running graph:', err)
+        this.graphError = err instanceof Error ? err.message : String(err)
       }
-
-      if (!this._ssaoPipeline) {
-        try {
-          const ssao = new SSAO2RenderingPipeline(
-            'ssao',
-            scene,
-            { ssaoRatio: 1.0, blurRatio: 1.0 },
-            undefined,
-            false, // forceGeometryBuffer: share the prepass
-          )
-          ssao.radius = 1.5
-          ssao.totalStrength = 0.6
-          ssao.base = 0.5
-          ssao.samples = 32
-          ssao.maxZ = 50
-          ssao.minZAspect = 0.5
-          scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline('ssao', [tableCam])
-          this._ssaoPipeline = ssao
-        } catch (err) {
-          this.host.postProcessDegraded = true
-          console.warn('[GameRenderer] MRT post-process unavailable; SSAO failed', err)
-        }
-      }
-
-      if (!this._ssrPipeline) {
-        try {
-          const ssr = new SSRRenderingPipeline(
-            'ssr',
-            scene,
-            [tableCam],
-            false, // forceGeometryBuffer: share the prepass
-          )
-          ssr.step = 0.5
-          ssr.reflectionSpecularFalloffExponent = 3
-          ssr.strength = 0.6
-          ssr.thickness = 0.1
-          ssr.selfCollisionNumSkip = 1
-          ssr.enableSmoothReflections = true
-          ssr.enableAutomaticThicknessComputation = true
-          this._ssrPipeline = ssr
-        } catch (err) {
-          this.host.postProcessDegraded = true
-          console.warn('[GameRenderer] MRT post-process unavailable; SSR failed', err)
-        }
-      }
-
-      if (!this._motionBlur) {
-        try {
-          // forceGeometryBuffer is the 10th parameter; it defaults to false (prepass).
-          const motionBlur = new MotionBlurPostProcess(
-            'motionBlur',
-            scene,
-            1.0,
-            tableCam,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            false,
-          )
-          motionBlur.motionStrength = 0.15
-          motionBlur.motionBlurSamples = 16
-          this._motionBlur = motionBlur
-        } catch (err) {
-          this.host.postProcessDegraded = true
-          console.warn('[GameRenderer] MRT post-process unavailable; motion blur failed', err)
-        }
-      }
-    } else {
-      this.disposeHeavyPostProcesses()
+      return
     }
+    const { scene, tableCam } = this.host
+    const controller = this.controller
+    if (!scene || !tableCam || !controller) return
+    const { SceneFrameGraph: Graph } = await import('../frame-graph-runtime')
+    // Dispose can land while the chunk loads.
+    if (this.disposed || this.host.signal.aborted || this.plan !== plan) return
+    const graph = await Graph.create(
+      {
+        scene,
+        camera: tableCam,
+        controller,
+        onMaterialsInvalidated: () => this.host.staticSceneGate?.invalidate('post-process-graph', { materials: true }),
+        onRenderPassChanged: () => this.host.staticSceneGate?.invalidate('post-process-render-pass', { materials: true }),
+      },
+      plan,
+    )
+    // Disposed, or the plan emptied (a runtime downgrade to `none`), while it compiled.
+    if (this.disposed || this.host.signal.aborted || !this.plan || this.plan.nodes.length === 0) {
+      graph.dispose()
+      return
+    }
+    this.graph = graph
+    this.graphError = null
+    console.log(`[GameRenderer] Scene graph built: ${graph.getInfo().nodes.join(' → ')}`)
+  }
+
+  /** A graph that cannot be built is tier `none`: the camera renders to the canvas. Countable, like any other degrade. */
+  private onGraphFailed(err: unknown): void {
+    if (this.disposed) return
+    const message = err instanceof Error ? err.message : String(err)
+    this.graphError = message
+    console.warn('[GameRenderer] Scene graph failed to build; post-processing is off:', err)
+    const from = this._postProcessProfile?.tier ?? 'full'
+    if (this._postProcessProfile && from !== 'none') {
+      this._postProcessProfile = {
+        ...this._postProcessProfile,
+        tier: 'none',
+        reason: `scene graph build failed: ${message}`,
+      }
+      recordPostProcessTierDegrade('postprocess-tier-runtime', this._postProcessProfile, from)
+    }
+    this.host.postProcessDegraded = true
+    this.dropGraph()
+    this.disposeBloomPipeline()
+  }
+
+  /** Dispose the graph; the camera goes back to rendering straight to the canvas. */
+  private dropGraph(): void {
+    const graph = this.graph
+    this.graph = null
+    graph?.dispose()
+    const config = this.host.scene?.imageProcessingConfiguration
+    if (config && config.applyByPostProcess) config.applyByPostProcess = false
   }
 
   private attachWebGPUUniformBufferGuard(): void {
@@ -454,24 +430,23 @@ export class PostProcessManager {
       )
       this.host.postProcessDegraded = true
 
+      // Rebuild the graph at the lower tier; `none` has no nodes, so that drops it and the camera
+      // renders straight to the canvas.
+      this.replan()
       if (nextTier === 'none') {
+        this.dropGraph()
         this.disposeBloomPipeline()
-        return
       }
-
-      if (!this.host.bloomPipeline || !(this.host.bloomPipeline instanceof DefaultRenderingPipeline)) return
-
-      const reducedMotion = this.host.accessibility?.reducedMotion ?? GameConfig.camera.reducedMotion
-      applyBloomPipelineProfile(this.host.bloomPipeline, this._postProcessProfile, reducedMotion)
-      this.host.bloomPipeline.prepare()
     }
 
     device.addEventListener('uncapturederror', this._webgpuErrorListener)
   }
 
   private disposeBloomPipeline(): void {
-    if (!this.host.bloomPipeline) return
-    this.host.bloomPipeline.dispose()
+    const controller = this.controller
+    if (!controller) return
+    this.controller = null
+    controller.dispose()
     this.host.bloomPipeline = null
     this.host.effects?.setPipeline(null)
   }
@@ -487,42 +462,8 @@ export class PostProcessManager {
     this._webgpuErrorListener = null
   }
 
-  private disposeHeavyPostProcesses(): void {
-    const { scene, tableCam } = this.host
-    if (this._ssaoPipeline && scene && tableCam) {
-      try {
-        scene.postProcessRenderPipelineManager.detachCamerasFromRenderPipeline('ssao', [tableCam])
-      } catch {
-        // Pipeline may already be detached
-      }
-      this._ssaoPipeline.dispose()
-      // dispose() leaves the pipeline registered with the manager. A zombie `ssao` whose
-      // `isSupported` reads scene.prePassRenderer throws once the prepass is disabled below,
-      // from the manager's per-frame pass, which stops the render loop.
-      scene.postProcessRenderPipelineManager.removePipeline('ssao')
-      this._ssaoPipeline = null
-    }
-    if (this._ssrPipeline) {
-      this._ssrPipeline.dispose()
-      scene?.postProcessRenderPipelineManager.removePipeline('ssr')
-      this._ssrPipeline = null
-    }
-    if (this._motionBlur) {
-      this._motionBlur.dispose()
-      this._motionBlur = null
-    }
-    // Symmetric with the enablePrePassRenderer() in applyHeavyPostProcesses, after every consumer
-    // is gone, so no MRT (and no PREPASS shader variants) outlive the chain.
-    if (scene && !this._ssaoPipeline && !this._ssrPipeline && !this._motionBlur) {
-      try {
-        scene.disablePrePassRenderer()
-      } catch {
-        // Component not registered or already disposed
-      }
-    }
-  }
-
   dispose(): void {
+    this.disposed = true
     this.detachWebGPUUniformBufferGuard()
     this._postProcessProfile = null
 
@@ -531,7 +472,8 @@ export class PostProcessManager {
     this._unsubShake?.()
     this._unsubShake = null
 
+    this.dropGraph()
     this.disposeBloomPipeline()
-    this.disposeHeavyPostProcesses()
+    this.plan = null
   }
 }

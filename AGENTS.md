@@ -19,7 +19,7 @@
 
 ### Rendering Pipeline
 - **WebGPU-first:** `EngineFactory.CreateAsync` attempts WebGPU; falls back to WebGL automatically.
-- **Post-processing:** Bloom (`DefaultRenderingPipeline`), SSAO (`SSAO2RenderingPipeline`), depth of field, scanlines, and filmic tone mapping (Hable/ACES).
+- **Post-processing:** a Frame Graph of nodes chosen from the WebGPU tier (`src/game/scene-frame-graph.ts`, `docs/FRAME_GRAPH.md`): bloom, image processing (the node a strict adapter leaves out), sharpen, FXAA, and HIGH-only SSAO / SSR / motion blur. The backbox CRT and jackpot are passes on the backbox composite, not on the camera.
 - **Shadows:** Blur exponential shadow maps with tuned bias/normal bias.
 - **Renderer toggle:** `src/renderers/renderer-selector.ts` lets you force WebGL2 instead of WebGPU. Priority: `?renderer=webgl2|webgpu` URL param → `window.DEBUG_RENDERER` → `localStorage['pachinball-renderer']` → auto (WebGPU-first). Also exposed as a "Renderer" dropdown in the Developer settings panel (changing it reloads the page). The active backend is tagged on `<canvas data-renderer="webgpu|webgl2">` and `window.currentRenderer` for Playwright.
 - **Engine bootstrap:** `src/main.ts` + `src/engine/` centralize Babylon options (`preserveDrawingBuffer`, `powerPreference`, hardware scaling, tab visibility, idle WASM warm-load). Full option matrix and benchmark procedure: [`docs/ENGINE_BOOTSTRAP.md`](docs/ENGINE_BOOTSTRAP.md).
@@ -294,7 +294,7 @@ When adding any screen flash, shake, or rapid strobe, **always** gate it behind 
 ### 4.6 Quality Tiering
 `detectQualityTier(engine)` returns a `QualityTier` (`LOW`, `MEDIUM`, `HIGH`, `ULTRA`).
 - Used by `MaterialLibrary` to choose texture resolution / compression.
-- Used by `game.ts` to toggle post-processing features (SSAO, DoF, bloom scale).
+- Used by `PostProcessManager` to re-plan the scene post-process graph (sharpen, the HIGH-only nodes, bloom scale).
 
 ### 4.7 Adventure Mode Lifecycle (CRITICAL)
 

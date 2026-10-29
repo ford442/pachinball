@@ -2,8 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE,
   WEBGPU_DEFAULT_MAX_UNIFORM_BUFFERS_PER_STAGE,
-  applyBloomPipelineProfile,
-  bloomPipelineTogglesForTier,
   downgradePostProcessTier,
   isUniformBufferLimitError,
   isWebGPUAdapterStrictForPostProcess,
@@ -11,7 +9,6 @@ import {
   readMaxUniformBuffersPerStage,
   recordPostProcessTierDegrade,
   resolveWebGPUPostProcessProfile,
-  type WebGPUPostProcessProfile,
 } from '../src/game/webgpu-post-process-profile'
 import {
   getGpuDegrades,
@@ -59,30 +56,6 @@ describe('webgpu-post-process-profile', () => {
     expect(profile.isWebGPU).toBe(false)
   })
 
-  it('bloom-only tier disables image processing and optional features', () => {
-    const toggles = bloomPipelineTogglesForTier('bloom-only', false)
-    expect(toggles.imageProcessingEnabled).toBe(false)
-    expect(toggles.fxaaEnabled).toBe(false)
-    expect(toggles.sharpenEnabled).toBe(false)
-    expect(toggles.vignetteEnabled).toBe(false)
-    expect(toggles.colorCurvesEnabled).toBe(false)
-  })
-
-  it('conservative tier matches bloom-only (image-processing pass must be skipped)', () => {
-    const toggles = bloomPipelineTogglesForTier('conservative', false)
-    expect(toggles.imageProcessingEnabled).toBe(false)
-    expect(toggles.fxaaEnabled).toBe(false)
-  })
-
-  it('full tier keeps cinematic features when motion is allowed', () => {
-    const toggles = bloomPipelineTogglesForTier('full', false)
-    expect(toggles.imageProcessingEnabled).toBe(true)
-    expect(toggles.fxaaEnabled).toBe(true)
-    expect(toggles.sharpenEnabled).toBe(true)
-    expect(toggles.vignetteEnabled).toBe(true)
-    expect(toggles.colorCurvesEnabled).toBe(true)
-  })
-
   it('recognizes uniform-buffer validation errors', () => {
     const message =
       'The number of uniform buffers (17) in the Vertex stage exceeds the maximum per-stage limit (12).'
@@ -97,38 +70,7 @@ describe('webgpu-post-process-profile', () => {
     expect(downgradePostProcessTier('none')).toBeNull()
   })
 
-  it('applyBloomPipelineProfile toggles pipeline flags', () => {
-    const bloom = {
-      imageProcessingEnabled: true,
-      fxaaEnabled: true,
-      sharpenEnabled: true,
-      chromaticAberrationEnabled: true,
-      grainEnabled: true,
-      imageProcessing: {
-        vignetteEnabled: true,
-        colorCurvesEnabled: true,
-        colorGradingEnabled: true,
-      },
-    }
-
-    const profile: WebGPUPostProcessProfile = {
-      isWebGPU: true,
-      maxUniformBuffersPerStage: 12,
-      tier: 'bloom-only',
-      reason: 'test',
-    }
-
-    applyBloomPipelineProfile(bloom as never, profile, false)
-
-    expect(bloom.imageProcessingEnabled).toBe(false)
-    expect(bloom.fxaaEnabled).toBe(false)
-    expect(bloom.sharpenEnabled).toBe(false)
-    expect(bloom.imageProcessing.vignetteEnabled).toBe(false)
-    expect(bloom.imageProcessing.colorCurvesEnabled).toBe(false)
-    expect(bloom.imageProcessing.colorGradingEnabled).toBe(false)
-  })
-
-  it('detects strict WebGPU adapters that cannot run DefaultRenderingPipeline', () => {
+  it('detects strict WebGPU adapters that cannot take the full tier', () => {
     expect(
       isWebGPUAdapterStrictForPostProcess(
         mockEngine('WebGPUEngine', { maxUniformBuffersPerShaderStage: 12 }) as never,
