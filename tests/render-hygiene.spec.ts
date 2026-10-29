@@ -30,7 +30,6 @@ interface GameProbe {
     _activeMeshesFrozen: boolean
     getMeshByName: (name: string) => { setEnabled: (v: boolean) => void } | null
     activeCamera: { position: { x: number; y: number; z: number } } | null
-    postProcessRenderPipelineManager: { _renderPipelines: Record<string, unknown> }
   }
   shadowGenerator: ShadowGeneratorProbe | null
   renderer: {
@@ -38,9 +37,11 @@ interface GameProbe {
     dropQualityTierOnce: () => string
     postProcess: {
       _isSwiftShader: boolean
-      _ssaoPipeline: unknown
-      _ssrPipeline: unknown
-      _motionBlur: unknown
+    }
+    getSceneGraphInfo: () => {
+      plan: { nodes: string[]; omitted: Array<{ node: string; reason: string }> } | null
+      pending: boolean
+      graph: { nodes: string[] } | null
     }
   }
   postProcessDegraded: boolean
@@ -191,86 +192,76 @@ test.describe('render hygiene (#443)', () => {
     await page.evaluate(() => (window as ProbeWindow).game!.performanceMonitor.setOnSustainedJank(null))
 
     // SwiftShader forces the heavy chain off by name; lift that so only the draw-buffer guard
-    // stands between this 6-buffer context and the 7-attachment prepass.
+    // stands between this context and the geometry pass's four colour attachments.
     const state = await page.evaluate(() => {
       const game = (window as ProbeWindow).game!
       game.renderer.postProcess._isSwiftShader = false
+      game.engine.getCaps().maxDrawBuffers = 2
       game.renderer.applyQualityTier('high')
-      const pp = game.renderer.postProcess
+      const plan = game.renderer.getSceneGraphInfo().plan
       return {
-        maxDrawBuffers: game.engine.getCaps().maxDrawBuffers ?? 0,
-        ssao: !!pp._ssaoPipeline,
-        ssr: !!pp._ssrPipeline,
-        motionBlur: !!pp._motionBlur,
+        omitted: plan?.omitted.filter((o) => o.reason === 'heavy-unavailable').map((o) => o.node) ?? [],
+        planned: plan?.nodes ?? [],
         degraded: game.postProcessDegraded,
         prepass: !!game.scene.prePassRenderer,
       }
     })
-    test.skip(state.maxDrawBuffers >= 7, 'this context has enough draw buffers; the guard is not exercised')
-    expect(state).toMatchObject({ ssao: false, ssr: false, motionBlur: false, degraded: true, prepass: false })
+    expect(state).toMatchObject({ omitted: ['ssao', 'ssr', 'motionBlur'], degraded: true, prepass: false })
+    expect(state.planned).not.toContain('ssao')
 
     await renderFrames(page, 3)
     // The pre-guard failure mode: hundreds of "glFragData ... exceed MAX_DRAW_BUFFERS" compiles.
     expect(compileErrors).toEqual([])
   })
 
-  test('SSAO2, SSR and motion blur share one prepass and never add a GeometryBufferRenderer', async ({ page }) => {
+  test('SSAO, SSR and motion blur are graph nodes sharing one geometry pass, and never enable a prepass', async ({ page }) => {
+    test.setTimeout(900_000)
     const compileErrors = trackCompileErrors(page)
     const pageErrors: string[] = []
     page.on('pageerror', (err) => pageErrors.push(err.message))
     await boot(page)
     await page.evaluate(() => (window as ProbeWindow).game!.performanceMonitor.setOnSustainedJank(null))
 
-    // Emulate a desktop GPU on this software context: report 8 draw buffers (SwiftShader's 6
-    // would trip the guard) and switch off the PBR sub-surface scattering that adds 2 attachments,
-    // so the real 6-buffer context fits the 5 the chain needs.
+    // SwiftShader forces the heavy chain off by name; lift that. The context has what the geometry
+    // pass needs (four draw buffers, float render targets).
     await page.evaluate(() => {
-      const game = (window as ProbeWindow).game!
-      game.engine.getCaps().maxDrawBuffers = 8
-      for (const material of game.scene.materials) {
-        const sub = (material as { subSurface?: { isScatteringEnabled: boolean } }).subSurface
-        if (sub?.isScatteringEnabled) sub.isScatteringEnabled = false
-      }
-      game.renderer.postProcess._isSwiftShader = false
+      ;(window as ProbeWindow).game!.renderer.postProcess._isSwiftShader = false
     })
 
+    const settle = () =>
+      page.waitForFunction(() => !(window as ProbeWindow).game!.renderer.getSceneGraphInfo().pending, undefined, { timeout: 600_000 })
     const snap = () =>
       page.evaluate(() => {
         const game = (window as ProbeWindow).game!
-        const pp = game.renderer.postProcess
         return {
-          ssao: !!pp._ssaoPipeline,
-          ssr: !!pp._ssrPipeline,
-          motionBlur: !!pp._motionBlur,
-          degraded: game.postProcessDegraded,
+          nodes: game.renderer.getSceneGraphInfo().graph?.nodes ?? [],
           prepass: !!game.scene.prePassRenderer,
-          prepassTargets: game.scene.prePassRenderer?.renderTargets.length ?? 0,
           geometryBuffer: !!game.scene.geometryBufferRenderer,
-          pipelines: Object.keys(game.scene.postProcessRenderPipelineManager._renderPipelines).sort(),
         }
       })
 
     for (let round = 0; round < 2; round++) {
       await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('high'))
+      await settle()
       await renderFrames(page, 3)
       const on = await snap()
-      expect(on, `round ${round}: heavy chain built`).toMatchObject({ ssao: true, ssr: true, motionBlur: true, degraded: false })
-      // Exactly one buffer: the shared prepass MRT, and no legacy G-buffer pass beside it.
-      expect(on.prepass).toBe(true)
-      expect(on.prepassTargets).toBe(1)
+      expect(on.nodes, `round ${round}: heavy chain built`).toEqual(
+        expect.arrayContaining(['scene:geometry', 'scene:ssao', 'scene:ssr', 'scene:motionBlur']),
+      )
+      // Exactly one geometry pass beside the camera render, no engine prepass, no legacy G-buffer pass.
+      expect(on.nodes.filter((n) => n === 'scene:geometry')).toHaveLength(1)
+      expect(on.prepass).toBe(false)
       expect(on.geometryBuffer).toBe(false)
 
       await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('medium'))
-      // Frames must keep rendering after the chain is gone. A disposed SSAO2 left registered in
-      // the pipeline manager throws from its `isSupported` once the prepass is disabled, which
-      // stops the render loop (this call then never resolves).
+      await settle()
+      // Frames must keep rendering after the chain is gone (this call would never resolve if the
+      // render loop had stopped).
       await renderFrames(page, 3)
       const off = await snap()
-      expect(off, `round ${round}: heavy chain torn down`).toMatchObject({ ssao: false, ssr: false, motionBlur: false })
-      // Symmetric with the enable: nothing keeps an MRT alive once every consumer is gone, and
-      // no disposed pipeline stays registered with the manager.
+      expect(off.nodes, `round ${round}: heavy chain torn down`).not.toContain('scene:geometry')
+      expect(off.nodes).toEqual(['scene:render', 'scene:bloom', 'scene:imageProcessing', 'scene:sharpen', 'scene:fxaa'])
       expect(off.prepass).toBe(false)
-      expect(off.pipelines).toEqual(['pachinbloom'])
     }
 
     expect(pageErrors).toEqual([])

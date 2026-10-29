@@ -7,7 +7,6 @@ import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
-import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import { SceneOptimizer } from '@babylonjs/core/Misc/sceneOptimizer'
 import type { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation'
 import type { EngineInstrumentation } from '@babylonjs/core/Instrumentation/engineInstrumentation'
@@ -33,6 +32,7 @@ import { SpinnerBumperBuilder, type SpinnerBumperVisual, BallTrapBuilder, type B
 import { BallStackVisual } from '../game-elements/ball-stack-visual'
 import { freshNudgeState, type NudgeState } from './physics/types'
 import { CabinetLighting } from '../effects/cabinet-lighting'
+import type { BloomPipelineController } from '../effects/bloom-pipeline-types'
 import { CelebrationSequencer } from '../effects/celebration-sequencer'
 import { GameStateManager } from './game-state'
 import { EventBus } from '../core/event-bus'
@@ -199,7 +199,7 @@ export abstract class GameFields {
   adventureProgressionSupervisor: AdventureProgressionSupervisor | null = null
 
   // Rendering
-  bloomPipeline: DefaultRenderingPipeline | null = null
+  bloomPipeline: BloomPipelineController | null = null
   postProcessDegraded = false
   sceneOptimizer: SceneOptimizer | null = null
   sceneInstrumentation: SceneInstrumentation | null = null

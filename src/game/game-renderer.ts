@@ -29,7 +29,7 @@ import {
   SceneOptimizer,
 } from '@babylonjs/core/Misc/sceneOptimizer'
 import { createSafeSceneOptimizerOptions } from './safe-scene-optimizer-options'
-import { PostProcessManager } from './game-post-process'
+import { PostProcessManager, type SceneGraphReport } from './game-post-process'
 import type { BloomPipelineController } from '../effects/bloom-pipeline-types'
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
@@ -123,7 +123,7 @@ export class GameRenderer {
     scene.activeCameras = [camera]
   }
 
-  /** Setup bloom, FXAA, tone-mapping, DoF, and scanlines. */
+  /** Setup the scene post-process graph: bloom, image processing, sharpen, FXAA and the HIGH-only passes. */
   setupPostProcessing(): void {
     this.postProcess.setup()
   }
@@ -141,6 +141,16 @@ export class GameRenderer {
     this.postProcess.applyQualityTier(tier)
     this.applyShadowTier(tier)
     this.applyMirrorTier(tier)
+  }
+
+  /** Accessibility settings changed: the post-process graph re-plans (reduced motion drops bloom, sharpen, vignette). */
+  syncAccessibility(): void {
+    this.postProcess.syncAccessibility()
+  }
+
+  /** The scene post-process graph's plan and, once built, its node list (debug HUD, e2e). */
+  getSceneGraphInfo(): SceneGraphReport {
+    return this.postProcess.getGraphInfo()
   }
 
   /** Drop one quality step (HIGH→MEDIUM→LOW). Returns the new tier. */
