@@ -1,0 +1,125 @@
+{
+  "$comment": "#486 A1: transcode sources for public/backbox/. `node scripts/transcode-backbox.mjs` reads this; outputs are committed. `originalName` is the pre-#486 filename under public/backbox/.",
+  "entries": [
+    {
+      "slug": "chrono-core",
+      "kind": "track",
+      "source": "tracks/chrono-core.mp4",
+      "output": "tracks/chrono-core.mp4",
+      "poster": "tracks/chrono-core.webp",
+      "originalName": "tracks/CHRONO_CORE.mp4"
+    },
+    {
+      "slug": "cryo-chamber",
+      "kind": "track",
+      "source": "tracks/cryo-chamber.mp4",
+      "output": "tracks/cryo-chamber.mp4",
+      "poster": "tracks/cryo-chamber.webp",
+      "originalName": "tracks/CRYO_CHAMBER.mp4"
+    },
+    {
+      "slug": "firewall-breach",
+      "kind": "track",
+      "source": "tracks/firewall-breach.mp4",
+      "output": "tracks/firewall-breach.mp4",
+      "poster": "tracks/firewall-breach.webp",
+      "originalName": "tracks/FIREWALL_BREACH.mp4"
+    },
+    {
+      "slug": "glitch-spire",
+      "kind": "track",
+      "source": "tracks/glitch-spire.mp4",
+      "output": "tracks/glitch-spire.mp4",
+      "poster": "tracks/glitch-spire.webp",
+      "originalName": "tracks/GLITCH_SPIRE — Corrupted Spire.mp4"
+    },
+    {
+      "slug": "hyper-drift",
+      "kind": "track",
+      "source": "tracks/hyper-drift.mp4",
+      "output": "tracks/hyper-drift.mp4",
+      "poster": "tracks/hyper-drift.webp",
+      "originalName": "tracks/HYPER_DRIFT.mp4"
+    },
+    {
+      "slug": "neon-helix",
+      "kind": "track",
+      "source": "tracks/neon-helix.mp4",
+      "output": "tracks/neon-helix.mp4",
+      "poster": "tracks/neon-helix.webp",
+      "originalName": "tracks/NEON_HELIX — Helix Ascent Loop.mp4"
+    },
+    {
+      "slug": "neon-helix-data-core",
+      "kind": "track",
+      "source": "tracks/neon-helix-data-core.mp4",
+      "output": "tracks/neon-helix-data-core.mp4",
+      "poster": "tracks/neon-helix-data-core.webp",
+      "originalName": "tracks/NEON_HELIX — Data Core Approach.mp4"
+    },
+    {
+      "slug": "pachinko-hall",
+      "kind": "track",
+      "source": "tracks/pachinko-hall.mp4",
+      "output": "tracks/pachinko-hall.mp4",
+      "poster": "tracks/pachinko-hall.webp",
+      "originalName": "tracks/PACHINKO_HALL — Parlor Corridor.mp4"
+    },
+    {
+      "slug": "pachinko-hall-gold-cascade",
+      "kind": "track",
+      "source": "tracks/pachinko-hall-gold-cascade.mp4",
+      "output": "tracks/pachinko-hall-gold-cascade.mp4",
+      "poster": "tracks/pachinko-hall-gold-cascade.webp",
+      "originalName": "tracks/PACHINKO_HALL — Gold Cascade.mp4"
+    },
+    {
+      "slug": "retro-wave-hills",
+      "kind": "track",
+      "source": "tracks/retro-wave-hills.mp4",
+      "output": "tracks/retro-wave-hills.mp4",
+      "poster": "tracks/retro-wave-hills.webp",
+      "originalName": "tracks/RETRO_WAVE_HILLS.mp4"
+    },
+    {
+      "slug": "singularity-well",
+      "kind": "track",
+      "source": "tracks/singularity-well.mp4",
+      "output": "tracks/singularity-well.mp4",
+      "poster": "tracks/singularity-well.webp",
+      "originalName": "tracks/SINGULARITY_WELL.mp4"
+    },
+    {
+      "slug": "tidal-nexus",
+      "kind": "track",
+      "source": "tracks/tidal-nexus.mp4",
+      "output": "tracks/tidal-nexus.mp4",
+      "poster": "tracks/tidal-nexus.webp",
+      "originalName": "tracks/TIDAL_NEXUS Dolphin theme variant.mp4"
+    },
+    {
+      "slug": "lattice-updraft",
+      "kind": "incident",
+      "source": "incidents/lattice-updraft.mp4",
+      "output": "incidents/lattice-updraft.mp4",
+      "poster": "incidents/lattice-updraft.webp",
+      "originalName": "lattice-updraft.mp4"
+    },
+    {
+      "slug": "pin-cascade",
+      "kind": "incident",
+      "source": "incidents/pin-cascade.mp4",
+      "output": "incidents/pin-cascade.mp4",
+      "poster": "incidents/pin-cascade.webp",
+      "originalName": "pin-cascade.mp4"
+    },
+    {
+      "slug": "spinner-strike",
+      "kind": "incident",
+      "source": "incidents/spinner-strike.mp4",
+      "output": "incidents/spinner-strike.mp4",
+      "poster": "incidents/spinner-strike.webp",
+      "originalName": "spinner-strike.mp4"
+    }
+  ]
+}

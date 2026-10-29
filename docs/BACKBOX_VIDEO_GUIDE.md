@@ -114,6 +114,18 @@ ffmpeg -y -i public/backbox/jackpot.mp4 -update 1 -frames:v 1 public/backbox/jac
 Production clips: **16:9**, H.264 baseline or main, **720p–1080p**, ≤50 MB, seamless loop,
 no audio track (muted autoplay). Match filenames above so config getters resolve without edits.
 
+## Track and incident clips (#486 A1)
+
+Sources live in `assets-src/backbox/{tracks,incidents}/` (kebab-case theme slugs), **not** in `public/`:
+`vite build` copies `public/` verbatim and `deploy.py` uploads every file. `assets-src/backbox/manifest.json`
+maps slug → source → output; `node scripts/transcode-backbox.mjs [slug…]` (needs ffmpeg) writes the shippable
+H.264 High 720p30 clips (no audio, `+faststart`, `-maxrate 1.4M`, ~1.8 MiB per 10 s) to
+`public/backbox/tracks/<slug>.mp4` / `public/backbox/incidents/<slug>.mp4` plus a `.webp` poster each. Commit the outputs.
+
+Neither the clips nor the posters are precached (`globIgnores` in `vite.config.ts`), and `npm run check:bundle`
+fails when `dist/` exceeds `distTotalMiBMax` (40) or any file exceeds `distFileMiBMax` (8) — see `bundle-budget.json`.
+Nothing references the clips yet; wiring them in is #489.
+
 ## Runtime API
 
 ```typescript
