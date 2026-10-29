@@ -267,7 +267,8 @@ test.describe('render hygiene (#443)', () => {
       await renderFrames(page, 3)
       const off = await snap()
       expect(off.nodes, `round ${round}: heavy chain torn down`).not.toContain('scene:geometry')
-      expect(off.nodes).toEqual(['scene:render', 'scene:bloom', 'scene:imageProcessing', 'scene:sharpen', 'scene:fxaa'])
+      // MEDIUM: MSAA on the scene target, so no FXAA node (#488 §3).
+      expect(off.nodes).toEqual(['scene:render', 'scene:bloom', 'scene:imageProcessing', 'scene:sharpen'])
       expect(off.prepass).toBe(false)
     }
 

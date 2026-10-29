@@ -56,6 +56,7 @@ import {
 } from './scene-graph-plan'
 import { addGeometryPass, createHeavyTask, type GeometryPass } from './scene-heavy-nodes'
 import type { ScenePostController, ScenePostOwner } from './scene-post-controller'
+import { hdrTextureType, resolveGpuCapabilities, type HdrFormat } from '../engine/gpu-capabilities'
 
 /** Rendered frames a new canvas size must hold still before the graph is rebuilt for it. */
 export const RESIZE_SETTLE_FRAMES = 8
@@ -97,8 +98,12 @@ export interface SceneGraphInfo {
   omitted: Array<SceneGraphPlan['omitted'][number]>
   width: number
   height: number
-  /** The scene colour texture is half float (HDR); otherwise 8-bit. */
+  /** The scene colour texture is a float format (HDR); otherwise 8-bit. */
   hdr: boolean
+  /** The scene colour texture's format (`GpuCapabilities.hdrFormat`, or `?hdr=` override). */
+  format: HdrFormat
+  /** MSAA samples of the scene colour texture. */
+  samples: number
   executedFrames: number
   /** Generations swapped in so far: moves whenever the node set, the bloom scale or the size changed. */
   generation: number
@@ -133,6 +138,7 @@ interface Generation {
   width: number
   height: number
   hdr: boolean
+  format: HdrFormat
   /** The handle of the imported scene colour; re-pointed at the real target when a staging one was used. */
   sceneHandle: FrameGraphTextureHandle
   /** A same-size stand-in the graph was built against, while the real target has the old size. */
@@ -147,12 +153,28 @@ interface Generation {
 
 type GenerationRequest = Pick<Generation, 'plan' | 'bloomScale' | 'width' | 'height'>
 
-/** HDR when the context can render to half float (or float), as the old pipeline did. */
-function sceneColorType(scene: Scene): number {
-  const caps = scene.getEngine().getCaps()
-  if (caps.textureHalfFloatRender) return Constants.TEXTURETYPE_HALF_FLOAT
-  if (caps.textureFloatRender) return Constants.TEXTURETYPE_FLOAT
-  return Constants.TEXTURETYPE_UNSIGNED_BYTE
+/**
+ * The scene colour format: the capability record's best renderable HDR format (`rg11b10ufloat`,
+ * half the bandwidth of RGBA16F, where it renders), else half / full float, else 8-bit.
+ * `?hdr=rgba16f` (or any `HdrFormat`) pins it, for A/B comparisons.
+ */
+function sceneColorFormat(scene: Scene): HdrFormat {
+  const best = resolveGpuCapabilities(scene.getEngine()).hdrFormat
+  const forced = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('hdr')
+  const order: HdrFormat[] = ['rg11b10ufloat', 'rgba16f', 'rgba32f', 'rgba8']
+  // Only a format at or below the best one is honoured: the context must be able to render it.
+  if (forced && order.includes(forced as HdrFormat) && order.indexOf(forced as HdrFormat) >= order.indexOf(best)) {
+    return forced as HdrFormat
+  }
+  return best
+}
+
+/**
+ * The heavy nodes keep their own targets at half float: SSR and motion blur write colour with
+ * alpha, which the packed format has none of.
+ */
+function heavyTextureType(format: HdrFormat): number {
+  return format === 'rg11b10ufloat' ? Constants.TEXTURETYPE_HALF_FLOAT : hdrTextureType(format)
 }
 
 export class SceneFrameGraph implements ScenePostOwner {
@@ -161,6 +183,8 @@ export class SceneFrameGraph implements ScenePostOwner {
   private current: Generation | null = null
   /** The scene colour target: one for the graph's life (see the header). */
   private target: RenderTargetTexture | null = null
+  /** Its format, fixed with it. */
+  private targetFormat: HdrFormat = 'rgba16f'
   /** Render-pass ids the camera has rendered with; a new one thaws the static-scene gate first. */
   private readonly renderedPassIds = new Set<number>()
   /** What the latest build was asked for; ahead of `current` while it compiles. */
@@ -233,6 +257,8 @@ export class SceneFrameGraph implements ScenePostOwner {
       width: gen?.width ?? 0,
       height: gen?.height ?? 0,
       hdr: gen?.hdr ?? false,
+      format: gen?.format ?? this.targetFormat,
+      samples: this.target?.samples ?? 1,
       executedFrames: this.executedFrames,
       generation: this.generations,
       active: this.running,
@@ -461,6 +487,10 @@ export class SceneFrameGraph implements ScenePostOwner {
         throw err
       }
     }
+    // MSAA follows the tier (none on LOW). Same target object, so the same render-pass id; only its
+    // multisample buffer is recreated, and the resolved texture the graph reads stays put.
+    const target = this.target
+    if (target && target.samples !== request.plan.msaaSamples) target.samples = request.plan.msaaSamples
     this.failedSize = null
     this.current = gen
     this.generations++
@@ -490,8 +520,10 @@ export class SceneFrameGraph implements ScenePostOwner {
     const { scene } = this
     const { controller } = this.options
     const engine = scene.getEngine()
-    const type = sceneColorType(scene)
-    const hdr = type !== Constants.TEXTURETYPE_UNSIGNED_BYTE
+    const format = this.target ? this.targetFormat : sceneColorFormat(scene)
+    const type = hdrTextureType(format)
+    const hdr = format !== 'rgba8'
+    const samples = request.plan.msaaSamples
 
     // The one scene colour target. Not in the optimizer's reach: `scale()` would resize it to a
     // square and strand the graph.
@@ -503,8 +535,10 @@ export class SceneFrameGraph implements ScenePostOwner {
         type,
         format: Constants.TEXTUREFORMAT_RGBA,
         samplingMode: Constants.TEXTURE_BILINEAR_SAMPLINGMODE,
+        samples,
       })
       this.target.disableRescaling()
+      this.targetFormat = format
     }
     const target = this.target
     const sizeChanged = target.getRenderWidth() !== request.width || target.getRenderHeight() !== request.height
@@ -528,6 +562,7 @@ export class SceneFrameGraph implements ScenePostOwner {
     const gen: Generation = {
       ...request,
       hdr,
+      format,
       sceneHandle: -1,
       staging,
       graph,
@@ -567,7 +602,7 @@ export class SceneFrameGraph implements ScenePostOwner {
           case 'ssr':
           case 'motionBlur': {
             if (!geometry) throw new Error(`[SceneFrameGraph] "${node}" has no geometry pass`)
-            task = createHeavyTask(node, graph, scene, this.options.camera, geometry, type)
+            task = createHeavyTask(node, graph, scene, this.options.camera, geometry, heavyTextureType(format), request.plan.ssaoSamples)
             break
           }
           case 'bloom': {

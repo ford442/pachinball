@@ -24,6 +24,8 @@ interface SceneGraphReport {
     width: number
     height: number
     hdr: boolean
+    format: string
+    samples: number
     executedFrames: number
     generation: number
     active: boolean
@@ -63,7 +65,12 @@ type ProbeWindow = Window & {
 }
 
 const COMPILE_ERROR = /Error compiling effect|Unable to compile effect|Shader compilation/i
-const FULL_NODES = ['scene:render', 'scene:bloom', 'scene:imageProcessing', 'scene:sharpen', 'scene:fxaa']
+/**
+ * MEDIUM / HIGH: the scene colour target is 4× MSAA, so there is no FXAA node (#488 §3). LOW drops
+ * MSAA and sharpen and keeps FXAA.
+ */
+const FULL_NODES = ['scene:render', 'scene:bloom', 'scene:imageProcessing', 'scene:sharpen']
+const LOW_NODES = ['scene:render', 'scene:bloom', 'scene:imageProcessing', 'scene:fxaa']
 
 function trackCompileErrors(page: Page): string[] {
   const errors: string[] = []
@@ -143,13 +150,17 @@ test.describe('Scene Frame Graph', () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(240_000)
 
-  test('?renderer=webgl2: bloom, image processing, sharpen and FXAA, 0 compile errors, scene drawn', async ({ page }) => {
+  test('?renderer=webgl2: bloom, image processing and sharpen on a 4x MSAA HDR target, 0 compile errors, scene drawn', async ({ page }) => {
     const compileErrors = trackCompileErrors(page)
     const r = await boot(page, 'renderer=webgl2&noopt=1')
     expect(r.error, r.error ?? '').toBeNull()
     expect(r.graph?.backend).toBe('webgl2')
     expect(r.graph?.nodes).toEqual(FULL_NODES)
     expect(r.graph?.hdr).toBe(true)
+    expect(r.graph?.samples).toBe(4)
+    expect(r.plan?.omitted).toContainEqual({ node: 'fxaa', reason: 'msaa' })
+    // The capability record's best renderable HDR format: packed rg11b10ufloat where it renders.
+    expect(['rg11b10ufloat', 'rgba16f']).toContain(r.graph?.format)
 
     // The camera renders into the graph's target; materials leave tone mapping to the node.
     const state = await page.evaluate(() => ({
@@ -229,8 +240,11 @@ test.describe('Scene Frame Graph', () => {
     await boot(page, 'renderer=webgl2&noopt=1')
 
     await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('low'))
-    await waitForNodes(page, ['scene:render', 'scene:bloom', 'scene:imageProcessing', 'scene:fxaa'])
+    await waitForNodes(page, LOW_NODES)
     expect((await report(page)).plan?.omitted).toContainEqual({ node: 'sharpen', reason: 'quality-tier' })
+    // LOW: no MSAA (FXAA instead); same target object, so its sample count changed in place.
+    expect((await report(page)).graph?.samples).toBe(1)
+    expect(await canvasMean(page)).toBeGreaterThan(DRAWN)
 
     await page.evaluate(() => (window as ProbeWindow).game!.renderer.applyQualityTier('high'))
     await waitForNodes(page, FULL_NODES)
@@ -246,7 +260,7 @@ test.describe('Scene Frame Graph', () => {
     await boot(page, 'renderer=webgl2&noopt=1')
 
     await page.evaluate(() => (window as ProbeWindow).game!.applyAccessibilitySettings(true, false))
-    await waitForNodes(page, ['scene:render', 'scene:imageProcessing', 'scene:fxaa'])
+    await waitForNodes(page, ['scene:render', 'scene:imageProcessing'])
     const reduced = await report(page)
     expect(reduced.plan?.omitted).toContainEqual({ node: 'bloom', reason: 'reduced-motion' })
     expect(reduced.plan?.omitted).toContainEqual({ node: 'sharpen', reason: 'reduced-motion' })
@@ -278,7 +292,6 @@ test.describe('Scene Frame Graph', () => {
       'scene:bloom',
       'scene:imageProcessing',
       'scene:sharpen',
-      'scene:fxaa',
     ])
     await page.waitForTimeout(2000)
     expect(await canvasMean(page), 'scene drawn with the HIGH-only nodes').toBeGreaterThan(DRAWN)

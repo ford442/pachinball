@@ -34,6 +34,8 @@ import {
 } from './scene-graph-plan'
 import { ScenePostController } from './scene-post-controller'
 import { isSoftwareRasterizer } from '../engine/software-rasterizer'
+import { resolveGpuCapabilities } from '../engine/gpu-capabilities'
+import { isMobileUserAgent } from '../engine/engine-options'
 import type { SceneFrameGraph, SceneGraphInfo } from './scene-frame-graph'
 import { QualityTier, INTENSITY } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
@@ -275,6 +277,8 @@ export class PostProcessManager {
       effectIntensity: accessibility?.effectIntensity ?? 1.0,
       noPostProcess: this.noPostProcess,
       heavyAvailable: this.heavyAvailable(),
+      maxMsaaSamples: resolveGpuCapabilities(this.host.engine).maxMsaaSamples,
+      mobile: isMobileUserAgent(typeof navigator !== 'undefined' ? navigator.userAgent : ''),
     }
   }
 
