@@ -95,8 +95,25 @@ class MockColor3 {
     this.b = c.b
     return this
   }
+  scaleToRef(s: number, ref: MockColor3) {
+    ref.r = this.r * s
+    ref.g = this.g * s
+    ref.b = this.b * s
+    return ref
+  }
+  copyFromFloats(r: number, g: number, b: number) {
+    this.r = r
+    this.g = g
+    this.b = b
+    return this
+  }
   clone() {
     return new MockColor3(this.r, this.g, this.b)
+  }
+  static LerpToRef(a: MockColor3, b: MockColor3, t: number, ref: MockColor3) {
+    ref.r = a.r + (b.r - a.r) * t
+    ref.g = a.g + (b.g - a.g) * t
+    ref.b = a.b + (b.b - a.b) * t
   }
 }
 
