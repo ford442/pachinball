@@ -302,7 +302,8 @@ export interface WasmPhysicsWorldInstance {
    * Add an immutable static triangle mesh. `verticesPtr` and `indicesPtr` are
    * byte offsets into WASM memory (allocate with `_malloc`); vertices are
    * 3 floats each, indices 3 uint32 per triangle, CCW for the front face.
-   * @returns Negative mesh id used in contact events.
+   * @returns Negative mesh id used in contact events, or
+   * `STATIC_HANDLE_OVERFLOW` (creating nothing) if the family is full.
    */
   addStaticTriangleMesh(
     verticesPtr: number, vertexCount: number,
@@ -323,7 +324,8 @@ export interface WasmPhysicsWorldInstance {
    * Add an oriented box force region (updraft, conveyor, solar wind).
    * `space` is 0 world / 1 local; `acceleration` selects the mass-independent
    * form (m/s²) over a force in newtons.
-   * @returns Negative handle used in setForceField*() / setCollisionGroups.
+   * @returns Negative handle used in setForceField*() / setCollisionGroups, or
+   * `STATIC_HANDLE_OVERFLOW` (creating nothing) if the family is full.
    */
   addForceField(
     px: number, py: number, pz: number,

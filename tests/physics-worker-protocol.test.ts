@@ -18,6 +18,8 @@ import {
   STATIC_CYLINDER_ID_BASE,
   STATIC_SPHERE_ID_BASE,
   STATIC_CONE_ID_BASE,
+  STATIC_MESH_ID_BASE,
+  FORCE_FIELD_ID_BASE,
   STATIC_HANDLE_CAPACITY,
   STATIC_HANDLE_OVERFLOW,
   cloneFloat32Array,
@@ -288,6 +290,21 @@ describe('static handle capacity', () => {
 
     // The overflow must not consume or disturb another family's range.
     expect(ids.allocStaticSphere()).toBe(STATIC_SPHERE_ID_BASE)
+  })
+
+  it('refuses the 1001st mesh and force field like native instead of aliasing -7000 / -8000', () => {
+    const ids = new WasmIdShadow()
+    for (let i = 0; i < STATIC_HANDLE_CAPACITY; i++) {
+      expect(ids.allocStaticMesh()).toBe(STATIC_MESH_ID_BASE - i)
+      expect(ids.allocForceField()).toBe(FORCE_FIELD_ID_BASE - i)
+    }
+    expect(ids.allocStaticMesh()).toBe(STATIC_HANDLE_OVERFLOW)
+    expect(ids.allocForceField()).toBe(STATIC_HANDLE_OVERFLOW)
+    expect(ids.allocStaticSphere()).toBe(STATIC_SPHERE_ID_BASE)
+
+    ids.resetStaticHandles()
+    expect(ids.allocStaticMesh()).toBe(STATIC_MESH_ID_BASE)
+    expect(ids.allocForceField()).toBe(FORCE_FIELD_ID_BASE)
   })
 
   it('restarts every family after resetStaticHandles', () => {

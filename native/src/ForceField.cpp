@@ -19,6 +19,7 @@ constexpr float AXIS_PULL_DEAD_ZONE = 1e-3f;
 } // namespace
 
 int PhysicsWorld::addForceField(const ForceFieldDesc& desc) {
+  if (fields_.size() >= STATIC_HANDLE_CAPACITY) { ++droppedStatics_; return STATIC_HANDLE_OVERFLOW; }
   fields_.push_back(desc);
   return FORCE_FIELD_ID_BASE - (static_cast<int>(fields_.size()) - 1);
 }

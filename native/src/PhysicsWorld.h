@@ -174,7 +174,8 @@ public:
    * Add an immutable static triangle mesh from world-space vertex/index
    * arrays (`vertices` is 3 floats per vertex, `indices` 3 per triangle).
    * Adventure ramps, walls and floors arrive through here.
-   * Degenerate (zero-area) triangles are dropped. @returns negative handle.
+   * Degenerate (zero-area) triangles are dropped. @returns negative handle,
+   * or `STATIC_HANDLE_OVERFLOW` (adding no triangle) once 1000 meshes exist.
    */
   int addStaticTriangleMesh(const float* vertices, int vertexCount,
                             const uint32_t* indices, int indexCount,
@@ -194,7 +195,10 @@ public:
    */
   void clearStaticGeometry();
 
-  /** Add an oriented box force region (updraft, conveyor, solar wind). @returns negative handle. */
+  /**
+   * Add an oriented box force region (updraft, conveyor, solar wind).
+   * @returns negative handle, or `STATIC_HANDLE_OVERFLOW` once 1000 fields exist.
+   */
   int addForceField(const ForceFieldDesc& desc);
 
   /** Toggle a force field without removing it (gates a conveyor on and off). */

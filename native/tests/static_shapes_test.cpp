@@ -10,7 +10,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <climits>
 #include <cmath>
+#include <cstdint>
 #include <optional>
 
 using namespace pachinball;
@@ -518,4 +520,81 @@ TEST_CASE("every static family enforces the same capacity", "[physics][static-ha
   CHECK(world.getDroppedStaticCount() == 0);
   CHECK(world.addStaticCylinder(0.f, 0.f, 0.f, 0.1f, 0.1f, 0.f, 0.f, 0.f, 1.f, 0.4f, 0.2f)
         == STATIC_CYLINDER_ID_BASE);
+}
+
+TEST_CASE("meshes and force fields reject the 1001st entry without aliasing",
+          "[physics][static-handles]") {
+  // One small floor triangle per mesh, shifted so every mesh has its own content.
+  const auto addMesh = [](PhysicsWorld& world, float x) {
+    const float vertices[] = {x, 0.f, 0.f, x + 1.f, 0.f, 0.f, x, 0.f, -1.f};
+    const uint32_t indices[] = {0, 1, 2};
+    return world.addStaticTriangleMesh(vertices, 3, indices, 3, 0.4f, 0.2f, false);
+  };
+  const auto wind = [](float z) {
+    ForceFieldDesc desc;
+    desc.center = {0.f, 0.5f, z};
+    desc.force = {0.f, 1.f, 0.f};
+    return desc;
+  };
+
+  // The dropped count is part of the content hash, as for every family; the
+  // refused geometry is not. Two worlds that refused different shapes hash equal.
+  SECTION("triangle meshes") {
+    const auto fill = [&](PhysicsWorld& world) {
+      for (std::size_t i = 0; i < STATIC_HANDLE_CAPACITY; ++i) {
+        REQUIRE(addMesh(world, static_cast<float>(i) * 0.01f) == STATIC_MESH_ID_BASE - static_cast<int>(i));
+      }
+      CHECK(world.getDroppedStaticCount() == 0);
+    };
+    PhysicsWorld world;
+    PhysicsWorld other;
+    fill(world);
+    fill(other);
+
+    // The 1001st mesh used to be handed -7000, the first force field's id.
+    CHECK(addMesh(world, 50.f) == STATIC_HANDLE_OVERFLOW);
+    CHECK(addMesh(other, -50.f) == STATIC_HANDLE_OVERFLOW);
+    CHECK(world.getDroppedStaticCount() == 1);
+    CHECK(world.staticContentHash() == other.staticContentHash());  // no triangle reached either table
+    CHECK(world.getStateHash() == other.getStateHash());
+
+    const int field = world.addForceField(wind(0.f));
+    CHECK(field == FORCE_FIELD_ID_BASE);
+    other.addForceField(wind(0.f));
+    world.setForceFieldEnabled(field, false);
+    world.setCollisionGroups(field, 0x2u, 0x2u);
+    CHECK(world.staticContentHash() == other.staticContentHash());  // edits the field, never a mesh
+  }
+
+  SECTION("force fields") {
+    const auto fill = [&](PhysicsWorld& world) {
+      for (std::size_t i = 0; i < STATIC_HANDLE_CAPACITY; ++i) {
+        REQUIRE(world.addForceField(wind(static_cast<float>(i) * 0.01f)) ==
+                FORCE_FIELD_ID_BASE - static_cast<int>(i));
+      }
+      CHECK(world.getDroppedStaticCount() == 0);
+    };
+    PhysicsWorld world;
+    PhysicsWorld other;
+    fill(world);
+    fill(other);
+
+    // The 1001st field used to be handed -8000, the first static sphere's id.
+    CHECK(world.addForceField(wind(50.f)) == STATIC_HANDLE_OVERFLOW);
+    CHECK(other.addForceField(wind(-50.f)) == STATIC_HANDLE_OVERFLOW);
+    CHECK(world.getDroppedStaticCount() == 1);
+    CHECK(world.staticContentHash() == other.staticContentHash());
+    CHECK(world.getStateHash() == other.getStateHash());
+
+    const int sphere = world.addStaticSphere(0.f, 0.f, 0.f, 0.1f, 0.4f, 0.2f);
+    CHECK(sphere == STATIC_SPHERE_ID_BASE);
+    const uint64_t withSphere = world.getStateHash();
+    world.setForceFieldEnabled(sphere, false);
+    world.setForceFieldVector(sphere, 5.f, 5.f, 5.f);
+    CHECK(world.getStateHash() == withSphere);  // a sphere id names no field
+
+    world.clearStaticGeometry();
+    CHECK(world.getDroppedStaticCount() == 0);
+    CHECK(world.addForceField(wind(0.f)) == FORCE_FIELD_ID_BASE);
+  }
 }
