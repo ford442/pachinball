@@ -272,8 +272,8 @@ Or call `window.runVisibilityDiagnostic()` after the game loads.
 
 | Event | Action |
 |-------|--------|
-| Tab hidden | `engine.stopRenderLoop()`, suspend `SoundSystem`, `EffectsSystem`, and Babylon `Engine.audioEngine` contexts |
-| Tab visible | `engine.resize()`, restart `runRenderLoop(game.renderFrame())`, resume audio **only if** game state is `PLAYING` |
+| Tab hidden | `game.pauseRendering()` (stops only that Game's own loop — never bare `engine.stopRenderLoop()`), suspend `SoundSystem`, `EffectsSystem`, and Babylon `Engine.audioEngine` contexts |
+| Tab visible | `engine.resize()`, `game.resumeRendering()` (a disposed Game stays stopped), resume audio **only if** game state is `PLAYING` |
 
 Game pause (`PAUSED` state) still suspends the effects `AudioContext` via `GameLifecycle` independently.
 

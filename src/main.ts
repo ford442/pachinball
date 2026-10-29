@@ -76,7 +76,8 @@ async function bootstrap(): Promise<void> {
     if (game.signal.aborted) return // dispose() landed meanwhile
     const manager = new VisibilityManager({
       engine,
-      renderFrame: () => game.renderFrame(),
+      pauseRendering: () => game.pauseRendering(),
+      resumeRendering: () => game.resumeRendering(),
       getGameState: () => game.stateManager.getState(),
       soundSystem: game.soundSystem,
     })
