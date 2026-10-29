@@ -21,7 +21,8 @@ describe('resolveEngineOptions', () => {
   it('defaults preserveDrawingBuffer to false on desktop', () => {
     const opts = resolveEngineOptions(desktopCtx())
     expect(opts.preserveDrawingBuffer).toBe(false)
-    expect(opts.antialias).toBe(true)
+    // The canvas is not multisampled: MSAA lives on the scene's HDR target (#488 §3).
+    expect(opts.antialias).toBe(false)
     expect(opts.stencil).toBe(true)
     expect(opts.setMaximumLimits).toBe(true)
     expect(opts.adaptToDeviceRatio).toBe(false)
@@ -52,9 +53,10 @@ describe('resolveEngineOptions', () => {
     expect(opts.preserveDrawingBuffer).toBe(true)
   })
 
-  it('honors ?antialias=0 and ?maxLimits=0', () => {
-    const opts = resolveEngineOptions(desktopCtx('?antialias=0&maxLimits=0'))
-    expect(opts.antialias).toBe(false)
+  it('honors ?antialias=1 (canvas MSAA back on) and ?maxLimits=0', () => {
+    expect(resolveEngineOptions(desktopCtx('?antialias=1')).antialias).toBe(true)
+    expect(resolveEngineOptions(desktopCtx('?antialias=0')).antialias).toBe(false)
+    const opts = resolveEngineOptions(desktopCtx('?maxLimits=0'))
     expect(opts.setMaximumLimits).toBe(false)
   })
 
@@ -71,17 +73,23 @@ describe('resolveEngineOptions', () => {
 })
 
 describe('resolveHardwareScalingLevel', () => {
-  it('returns 2 on mobile', () => {
-    expect(resolveHardwareScalingLevel(mobileCtx())).toBe(2)
+  // level = 1 / renderScale; renderScale = min(DPR, 1.5 mobile | 2 desktop) before the tier is known.
+  it('renders a DPR-3 phone at 1.5x CSS pixels (was level 2: half CSS, 1/6 of native per axis)', () => {
+    expect(1 / resolveHardwareScalingLevel(mobileCtx())).toBeCloseTo(1.5)
   })
 
-  it('returns 1 on HiDPI desktop (DPR never lowers resolution below CSS pixels)', () => {
-    expect(resolveHardwareScalingLevel(desktopCtx('', 3))).toBe(1)
-    expect(resolveHardwareScalingLevel(desktopCtx('', 2))).toBe(1)
-    expect(resolveHardwareScalingLevel(desktopCtx('', 1.5))).toBe(1)
+  it('follows DPR on desktop up to 2x', () => {
+    expect(resolveHardwareScalingLevel(desktopCtx('', 3))).toBeCloseTo(0.5)
+    expect(resolveHardwareScalingLevel(desktopCtx('', 2))).toBeCloseTo(0.5)
+    expect(1 / resolveHardwareScalingLevel(desktopCtx('', 1.5))).toBeCloseTo(1.5)
   })
 
   it('returns 1 on standard desktop', () => {
     expect(resolveHardwareScalingLevel(desktopCtx('', 1))).toBe(1)
+  })
+
+  it('honours ?renderScale=', () => {
+    expect(resolveHardwareScalingLevel(desktopCtx('?renderScale=1', 2))).toBe(1)
+    expect(1 / resolveHardwareScalingLevel(mobileCtx('?renderScale=0.75'))).toBeCloseTo(0.75)
   })
 })

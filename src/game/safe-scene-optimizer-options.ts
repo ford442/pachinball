@@ -5,6 +5,10 @@
  * which merges same-material meshes (flipper blades/pivots, bumpers, balls)
  * into static `_merged` meshes and detaches them from physics-driven parents.
  * That makes flippers appear frozen while joints still actuate.
+ *
+ * No HardwareScalingOptimization either: the hardware scaling level belongs to the resolution
+ * policy (`render-resolution.ts`), whose dynamic resolution steps it both ways with hysteresis. The
+ * optimizer would only ever raise it, and fight the policy's re-application on tier / DPR changes.
  */
 import {
   SceneOptimizerOptions,
@@ -14,7 +18,6 @@ import {
   ParticlesOptimization,
   TextureOptimization,
   RenderTargetsOptimization,
-  HardwareScalingOptimization,
 } from '@babylonjs/core/Misc/sceneOptimizer'
 
 export function createSafeSceneOptimizerOptions(targetFrameRate = 55): SceneOptimizerOptions {
@@ -32,9 +35,6 @@ export function createSafeSceneOptimizerOptions(targetFrameRate = 55): SceneOpti
 
   priority++
   options.addOptimization(new RenderTargetsOptimization(priority))
-
-  priority++
-  options.addOptimization(new HardwareScalingOptimization(priority, 2))
 
   return options
 }
