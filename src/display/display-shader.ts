@@ -12,9 +12,17 @@
  * • Jackpot pass   – `jackpotOverlay` fragment shader over the composite, plus the canvas texture
  *                    holding its WARNING / countdown / JACKPOT text. `getEffectPasses()` hands both
  *                    passes to the graph; this class only owns their uniforms and per-frame state.
+ *
+ * Shader language (#488)
+ * ──────────────────────
+ * Every shader here is dual: GLSL for WebGL2 (registered in `Effect.ShadersStore` at module load)
+ * and a WGSL twin for WebGPU under the same store name (`backbox-shaders-wgsl.ts`, a lazy chunk
+ * loaded through Babylon's `extraInitializationsAsync` before the first effect compiles). On WebGPU
+ * nothing here compiles GLSL, so Babylon never fetches its glslang + twgsl translator.
  */
 
 import { Effect } from '@babylonjs/core/Materials/effect'
+import { ShaderLanguage } from '@babylonjs/core/Materials/shaderLanguage'
 import { ShaderMaterial } from '@babylonjs/core/Materials/shaderMaterial'
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
@@ -28,13 +36,37 @@ import { DISPLAY_LAYER_Z } from './display-layer-depth'
 import type { BackboxEffectNode } from './backbox-graph-plan'
 import type { BackboxEffectPass } from './backbox-frame-graph'
 import { crtEffectShader } from '../shaders/crt-effect'
+import { cyberGridShader } from '../shaders/cyber-grid'
 import { jackpotOverlayPostProcessFragment } from '../shaders/jackpotOverlay'
 import { SCANLINE_UNIFORM, computeEffectiveScanlineIntensity } from '../shaders/scanline'
 
-// ─── Register the pass fragment shaders once at module load ───────────────────
-// Babylon resolves the shader by looking up "<name>FragmentShader" in the store.
+// ─── Register the GLSL shaders once at module load ────────────────────────────
+// Babylon resolves a shader by looking up "<name>VertexShader" / "<name>FragmentShader" in the
+// store of the effect's language. The WGSL twins use the same keys (backbox-shaders-wgsl.ts).
 Effect.ShadersStore['crtEffectFragmentShader'] = crtEffectShader.fragment
 Effect.ShadersStore['jackpotOverlayFragmentShader'] = jackpotOverlayPostProcessFragment
+Effect.ShadersStore[`${cyberGridShader.name}VertexShader`] = cyberGridShader.vertex
+Effect.ShadersStore[`${cyberGridShader.name}FragmentShader`] = cyberGridShader.fragment
+
+/** The language half of a ShaderMaterial / effect-wrapper creation options object. */
+export interface DisplayShaderSource {
+  shaderLanguage: ShaderLanguage
+  /** Babylon awaits this before it reads the shader store (WebGPU: loads the WGSL chunk). */
+  extraInitializationsAsync?: () => Promise<void>
+}
+
+/** Load the WGSL chunk and register its sources. `import()` caches the module; re-registering is a no-op. */
+async function loadBackboxWgsl(): Promise<void> {
+  const { registerBackboxWgslShaders } = await import('./backbox-shaders-wgsl')
+  registerBackboxWgslShaders()
+}
+
+/** WGSL on WebGPU (no glslang / twgsl download), GLSL on WebGL2. */
+export function displayShaderSource(isWebGPU: boolean): DisplayShaderSource {
+  return isWebGPU
+    ? { shaderLanguage: ShaderLanguage.WGSL, extraInitializationsAsync: loadBackboxWgsl }
+    : { shaderLanguage: ShaderLanguage.GLSL }
+}
 
 const CRT_UNIFORMS = ['uTime', SCANLINE_UNIFORM, 'uCurvature', 'uVignette', 'uChromaticAberration', 'uGlow', 'uNoise', 'uFlicker']
 const JACKPOT_UNIFORMS = ['uTime', 'uPhase', 'uCrackProgress', 'uShockwaveRadius', 'uGlitchIntensity']
@@ -53,6 +85,8 @@ interface JackpotPhaseState {
 export class DisplayShaderLayer {
   private scene: Scene
   private config: DisplayConfig
+  /** Picked once from the engine: every shader this layer compiles uses it. */
+  private readonly shaderSource: DisplayShaderSource
 
   // Background – remains a 3-D plane inside the backbox hierarchy
   private material: ShaderMaterial | null = null
@@ -78,6 +112,7 @@ export class DisplayShaderLayer {
   constructor(scene: Scene, config: DisplayConfig) {
     this.scene = scene
     this.config = config
+    this.shaderSource = displayShaderSource(scene.getEngine().isWebGPU)
     this.createBackgroundMaterial()
   }
 
@@ -88,38 +123,12 @@ export class DisplayShaderLayer {
     const cyberShader = new ShaderMaterial(
       'cyberBg',
       this.scene,
-      {
-        vertexSource: `
-          attribute vec3 position;
-          attribute vec2 uv;
-          uniform mat4 worldViewProjection;
-          varying vec2 vUV;
-          void main() {
-            gl_Position = worldViewProjection * vec4(position, 1.0);
-            vUV = uv;
-          }
-        `,
-        fragmentSource: `
-          precision highp float;
-          uniform float time;
-          uniform float speed;
-          uniform vec3 colorTint;
-          varying vec2 vUV;
-          void main() {
-            float t = time * speed;
-            float gridX = step(0.95, fract(vUV.x * 20.0 + sin(t*0.5)*0.5));
-            float gridY = step(0.95, fract(vUV.y * 10.0 + t));
-            vec3 base = colorTint * 0.2;
-            vec3 lines = colorTint * (gridX + gridY) * 0.8;
-            float alpha = 0.05 + (gridX + gridY) * 0.4;
-            gl_FragColor = vec4(base + lines, alpha);
-          }
-        `,
-      },
+      { vertex: cyberGridShader.name, fragment: cyberGridShader.name },
       {
         attributes: ['position', 'uv'],
         uniforms: ['worldViewProjection', 'time', 'speed', 'colorTint'],
         needAlphaBlending: true,
+        ...this.shaderSource,
       }
     )
 
@@ -184,6 +193,7 @@ export class DisplayShaderLayer {
         fragmentShader: 'crtEffect',
         uniforms: CRT_UNIFORMS,
         samplers: [],
+        ...this.shaderSource,
         isActive: () => this.isCrtActive(),
         bind: (effect) => this.bindCrt(effect),
       },
@@ -191,6 +201,7 @@ export class DisplayShaderLayer {
         fragmentShader: 'jackpotOverlay',
         uniforms: JACKPOT_UNIFORMS,
         samplers: ['myTexture'],
+        ...this.shaderSource,
         isActive: () => this.jackpotActive,
         bind: (effect) => this.bindJackpot(effect, false),
       },
@@ -198,6 +209,7 @@ export class DisplayShaderLayer {
         fragmentShader: 'jackpotOverlay',
         uniforms: JACKPOT_UNIFORMS,
         samplers: ['myTexture'],
+        ...this.shaderSource,
         isActive: () => this.jackpotActive,
         bind: (effect) => this.bindJackpot(effect, true),
       },

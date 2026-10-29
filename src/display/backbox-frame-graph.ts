@@ -37,6 +37,7 @@ import { FrameGraphObjectRendererTask } from '@babylonjs/core/FrameGraph/Tasks/R
 import { FrameGraphClearTextureTask } from '@babylonjs/core/FrameGraph/Tasks/Texture/clearTextureTask'
 import { FrameGraphCopyToTextureTask } from '@babylonjs/core/FrameGraph/Tasks/Texture/copyToTextureTask'
 import type { Effect } from '@babylonjs/core/Materials/effect'
+import type { ShaderLanguage } from '@babylonjs/core/Materials/shaderLanguage'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture'
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color'
@@ -62,10 +63,17 @@ export interface BackboxLayerSource {
   meshes(): readonly AbstractMesh[]
 }
 
-/** One effect pass on the composite. The shader is registered in `ShaderStore.ShadersStore`. */
+/**
+ * One effect pass on the composite. The shader is registered in the ShaderStore of its language:
+ * `ShadersStore` (GLSL, WebGL2) or `ShadersStoreWGSL` (WebGPU).
+ */
 export interface BackboxEffectPass {
   /** ShaderStore name (`<name>FragmentShader`); samples the composite as `textureSampler`. */
   fragmentShader: string
+  /** WGSL on WebGPU: a GLSL effect there makes Babylon fetch its glslang + twgsl translator. */
+  shaderLanguage: ShaderLanguage
+  /** Awaited before the effect reads the store, e.g. to load a lazy chunk holding the source. */
+  extraInitializationsAsync?: () => Promise<void>
   uniforms: readonly string[]
   /** Extra samplers besides `textureSampler`. */
   samplers: readonly string[]
@@ -375,6 +383,8 @@ export class BackboxFrameGraph {
         name: `backbox:${node}`,
         fragmentShader: pass.fragmentShader,
         useShaderStore: true,
+        shaderLanguage: pass.shaderLanguage,
+        extraInitializationsAsync: pass.extraInitializationsAsync,
         uniforms: [...pass.uniforms],
         samplers: [...pass.samplers],
       })
