@@ -83,6 +83,8 @@
     "getTransformSlotCount": { "exempt": "worker-internal sizing for the shared layout" },
     "setContactCallbackJS": { "exempt": "debug-only per-event callback; production reads the packed contact buffer" },
     "getStaticContentHash": { "exempt": "carried on every snapshot-reply as staticHash" },
-    "getContactGeneration": { "exempt": "carried inside the snapshot blob" }
+    "getContactGeneration": { "exempt": "carried inside the snapshot blob" },
+    "getNaNQuarantineCount": { "exempt": "read-only per-step diagnostic; not yet in step-result (#487: the game decides rescue vs drain later)" },
+    "getNaNQuarantineBodyId": { "exempt": "read-only per-step diagnostic; not yet in step-result (#487)" }
   }
 }

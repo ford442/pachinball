@@ -105,6 +105,19 @@ inline float sanitizedMaxSubsteps(float maxSubsteps) {
   return std::min(std::max(maxSubsteps, 1.f), MAX_SUBSTEPS_LIMIT);
 }
 
+/**
+ * A dynamic body found with a non-finite pose or velocity and frozen
+ * (PhysicsWorldStep.cpp, "Non-finite quarantine"): put back where its
+ * substep started — the origin / identity if that pose was not finite
+ * either — with zero velocity, asleep. The engine only freezes; what the
+ * game does with the ball (stuck-ball rescue, score-neutral drain) is its call.
+ */
+struct NaNQuarantine {
+  int      bodyId  = -1;
+  uint64_t step    = 0;  ///< getStepCount() when its substep began (substeps since creation)
+  int      substep = 0;  ///< That substep's index within its step() call
+};
+
 /** Per-world simulation parameters. */
 struct WorldParams {
   Vec3  gravity          = {0.f, -9.81f, -5.0f};
@@ -334,6 +347,13 @@ public:
   /** Static shapes refused because their family hit STATIC_HANDLE_CAPACITY. */
   int getDroppedStaticCount() const { return droppedStatics_; }
 
+  /**
+   * Bodies frozen for a non-finite state during the last `step()` call, in
+   * the order they were caught (empty on a healthy step). Not snapshotted:
+   * like the contact emit, it describes one call.
+   */
+  const std::vector<NaNQuarantine>& lastNaNQuarantines() const { return quarantines_; }
+
   uint64_t getStepCount() const { return stepCount_; }
   int getActiveBodyCount() const;
 
@@ -369,7 +389,14 @@ private:
   BodyView findView(int id) const;
   BodyView findViewMut(int id);
 
-  void substep(float dt);
+  void substep(float dt, int substepIndex);
+  /**
+   * Freeze every dynamic body whose position, rotation, velocity or angular
+   * velocity is not finite (see NaNQuarantine). Runs after integration — so
+   * a NaN never reaches the broadphase or the solver — and again after the
+   * solve. Read-only on a healthy world.
+   */
+  void quarantineNonFinite(int substepIndex);
   void solveHinges(float dt);
   /** Per-family static counts in Snapshot.h header order. */
   void staticCounts(uint32_t out[SNAPSHOT_STATIC_FAMILIES]) const;
@@ -491,6 +518,9 @@ private:
    * Transient: re-taken at the top of every `step()`, so it is not snapshotted.
    */
   std::vector<Vec3>              prevPositions_;
+  /** Dense-indexed rotation at the start of the current substep (quarantine restore). Transient. */
+  std::vector<Quat>              substepStartRotations_;
+  std::vector<NaNQuarantine>     quarantines_;
   int                            nextHingeId_ = 0;
   ContactListener                contactListener_;
 

@@ -42,10 +42,12 @@ console.log(`Using WASM module: ${wasmModulePath}`)
 //    the state-hash test its plunge hash for §state hash.
 const snapshotFixture = path.join(buildNativeDir, 'snapshot_parity.bin')
 const stateHashFixture = path.join(buildNativeDir, 'state_hash_parity.txt')
+const nanQuarantineFixture = path.join(buildNativeDir, 'nan_quarantine_parity.txt')
 const nativeEnv = {
   ...process.env,
   PACHINBALL_SNAPSHOT_FIXTURE: snapshotFixture,
   PACHINBALL_STATE_HASH_FIXTURE: stateHashFixture,
+  PACHINBALL_NAN_QUARANTINE_FIXTURE: nanQuarantineFixture,
 }
 try {
   if (!existsSync(nativeTest)) {
@@ -1094,6 +1096,14 @@ const DENSE_FIELD = {
   if (!ok) failed = true
 }
 
+// getStateHash is a uint64_t binding: a BigInt from the pinned SDK
+// (-sWASM_BIGINT). The native fixtures are 16 hex chars, the form
+// WasmPhysicsEngine hands out; anything else fails as LOSSY.
+const stateHex = (w) => {
+  const hash = w.getStateHash()
+  return typeof hash === 'bigint' ? hash.toString(16).padStart(16, '0') : `LOSSY(${typeof hash}:${hash})`
+}
+
 // #459 Slice A — getStateHash(). The plunge scene native/tests/state_hash_test.cpp
 // builds (buildPlungeScene / drivePlunge — keep the two in step): a radius
 // 0.25, mass 1 ball plunged at impulse 36 into a 0.09-radius pin field. The
@@ -1126,13 +1136,6 @@ const DENSE_FIELD = {
     }
   }
 
-  // A uint64_t binding: a BigInt from the pinned SDK (-sWASM_BIGINT). The
-  // native fixture is 16 hex chars, the form WasmPhysicsEngine hands out.
-  const stateHex = (w) => {
-    const hash = w.getStateHash()
-    return typeof hash === 'bigint' ? hash.toString(16).padStart(16, '0') : `LOSSY(${typeof hash}:${hash})`
-  }
-
   const world = new Module.PhysicsWorld()
   if (typeof world.getStateHash !== 'function') {
     world.delete()
@@ -1158,6 +1161,48 @@ const DENSE_FIELD = {
       `${ok ? 'PASS' : 'FAIL'} wasm state hash native match + restore ` +
       `(wasm=${final} native=${native ?? 'missing'} restore=${restored} ` +
       `rewound=${rewound === atSnapshot ? 'same' : 'diff'} replay=${replayed === final ? 'same' : 'DIVERGED'})`
+    )
+    if (!ok) failed = true
+  }
+}
+// #487 slice 1a — NaN quarantine. native/tests/state_hash_test.cpp ("writes
+// the NaN quarantine parity fixture") builds this scene — keep the two in
+// step. Its NaN carries payload 0xffffffff; this one is whatever JS hands
+// Embind (0x7fc00000). Equal hashes with the NaN live mean both builds
+// canonicalised it; equal hashes 50 frames later mean both froze the ball
+// where its substep began and the roller woke it the same way.
+{
+  const world = new Module.PhysicsWorld()
+  if (typeof world.getNaNQuarantineCount !== 'function') {
+    world.delete()
+    console.log('FAIL wasm NaN quarantine (bundle has no getNaNQuarantineCount — rebuild with npm run build:wasm)')
+    failed = true
+  } else {
+    world.setGravity(0, -9.81, 0)
+    world.addStaticBox(0, -0.5, 0, 4, 0.5, 4, 0, 0, 0, 1, 0.4, 0.2)
+    // px,py,pz, vx,vy,vz, mass,radius,restitution,damping, bodyType, shape, capsuleHalfHeight, friction, angularDamping
+    world.createRigidBody(-1, 0.25, 0, 4, 0, 0, 1, 0.25, 0.5, 0.02, 0, 0, 0.5, 0.2, 0.1)
+    const lost = world.createRigidBody(0.5, 0.25, 0, 0, 0, 0, 1, 0.25, 0.5, 0.02, 0, 0, 0.5, 0.2, 0.1)
+    for (let f = 0; f < 10; f++) world.step(1 / 60)
+    world.setVelocity(lost, Number.NaN, 0, 0)
+    const withNaN = stateHex(world)
+    world.step(1 / 60)
+    const frozen = world.getNaNQuarantineCount()
+    const frozenId = world.getNaNQuarantineBodyId(0)
+    for (let f = 0; f < 49; f++) world.step(1 / 60)
+    const after = stateHex(world)
+    const finite = Number.isFinite(world.getPosX(lost)) && Number.isFinite(world.getVelX(lost))
+    world.delete()
+
+    const native = existsSync(nanQuarantineFixture)
+      ? readFileSync(nanQuarantineFixture, 'utf8').trim().split(/\s+/)
+      : null
+    const ok = native !== null && native[0] === withNaN && native[1] === after &&
+      frozen === 1 && frozenId === lost && finite
+    console.log(
+      `${ok ? 'PASS' : 'FAIL'} wasm NaN quarantine native match ` +
+      `(withNaN=${withNaN} native=${native?.[0] ?? 'missing'} after=${after} native=${native?.[1] ?? 'missing'} ` +
+      `frozen=${frozen}/${frozenId === lost ? 'ball' : frozenId} finite=${finite})`
     )
     if (!ok) failed = true
   }

@@ -10,10 +10,23 @@
 #include "PhysicsWorld.h"
 #include "KinematicMover.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 
 namespace pachinball {
+
+namespace {
+
+bool isFiniteVec(const Vec3& v) {
+  return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+}
+
+bool isFiniteQuat(const Quat& q) {
+  return std::isfinite(q.x) && std::isfinite(q.y) && std::isfinite(q.z) && std::isfinite(q.w);
+}
+
+} // namespace
 
 void PhysicsWorld::freeTransformBuffer() {
   if (transformBuffer_) {
@@ -69,6 +82,7 @@ float PhysicsWorld::step(float rawDt) {
   float dt = (rawDt < MAX_DT) ? rawDt : MAX_DT;
 
   accumulator_ += dt;
+  quarantines_.clear();
 
   capturePreviousPositions();
 
@@ -84,7 +98,7 @@ float PhysicsWorld::step(float rawDt) {
   const int maxSubsteps = static_cast<int>(sanitizedMaxSubsteps(params_.maxSubsteps));
   int substepsDone = 0;
   while (accumulator_ >= params_.fixedTimestep && substepsDone < maxSubsteps) {
-    substep(params_.fixedTimestep);
+    substep(params_.fixedTimestep, substepsDone);
     capturePreviousPositions();
     accumulator_ -= params_.fixedTimestep;
     ++substepsDone;
@@ -113,10 +127,50 @@ void PhysicsWorld::wakeOnContact(BodyView& a, BodyView* b) {
   if (b && b->valid() && !b->isActive() && wakesSleepers(&a)) b->wake();
 }
 
-void PhysicsWorld::substep(float dt) {
+// ---- Non-finite quarantine ------------------------------------------------
+//
+// One NaN body poisons everything it touches, and not the same way on every
+// build: WASM and x86 produce different NaN payloads, and std::min / f32.min
+// disagree on a NaN operand. So a body whose state stops being finite is
+// frozen before anything reads it. The hash canonicalises NaN as well
+// (SnapshotHasher::f32), so two worlds frozen from different payloads match.
+
+void PhysicsWorld::quarantineNonFinite(int substepIndex) {
+  for (int i = 0; i < bodies_.denseCount(); ++i) {
+    BodyView body = bodies_.view(i);
+    if (body.getType() != BodyType::Dynamic) continue;
+    if (isFiniteVec(body.getPosition()) && isFiniteQuat(body.getRotation()) &&
+        isFiniteVec(body.getVelocity()) && isFiniteVec(body.getAngularVelocity())) continue;
+
+    const std::size_t si = static_cast<std::size_t>(i);
+    Vec3 position = si < prevPositions_.size() ? prevPositions_[si] : Vec3::zero();
+    Quat rotation = si < substepStartRotations_.size() ? substepStartRotations_[si] : Quat::identity();
+    // A pose that was already non-finite when the substep began (created or
+    // set that way between steps) has nowhere to go back to.
+    if (!isFiniteVec(position)) position = Vec3::zero();
+    if (!isFiniteQuat(rotation)) rotation = Quat::identity();
+
+    body.setPosition(position);
+    body.setRotation(rotation);
+    body.setVelocity(Vec3::zero());
+    body.setAngularVelocity(Vec3::zero());
+    body.clearForces();
+    // The sleep flag the hash already covers (the setters above woke it).
+    body.setActive(false);
+    quarantines_.push_back({body.getId(), stepCount_, substepIndex});
+  }
+}
+
+void PhysicsWorld::substep(float dt, int substepIndex) {
+  substepStartRotations_.resize(static_cast<std::size_t>(bodies_.denseCount()));
+  for (int i = 0; i < bodies_.denseCount(); ++i) {
+    substepStartRotations_[static_cast<std::size_t>(i)] = bodies_.view(i).getRotation();
+  }
+
   applyForceFields();
 
   bodies_.integrateAll(dt, params_.gravity);
+  quarantineNonFinite(substepIndex);
 
   bodies_.updateSleep(params_.sleepLinearThreshold,
                       params_.sleepAngularThreshold,
@@ -239,6 +293,8 @@ void PhysicsWorld::substep(float dt) {
 
     solveHinges(dt);
   }
+
+  quarantineNonFinite(substepIndex);
 }
 
 } // namespace pachinball

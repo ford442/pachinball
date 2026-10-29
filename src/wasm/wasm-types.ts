@@ -476,6 +476,17 @@ export interface WasmPhysicsWorldInstance {
   /** Contact flushes so far (restored with the snapshot); `bigint` from a `-sWASM_BIGINT` bundle. */
   getContactGeneration?(): bigint | number
 
+  /**
+   * Bodies the last `step()` froze because their pose or velocity stopped
+   * being finite (native `NaNQuarantine`): each was put back where its
+   * substep began with zero velocity, asleep. 0 on a healthy step. Optional:
+   * bundles before #487 lack it.
+   */
+  getNaNQuarantineCount?(): number
+
+  /** Id of the `index`-th body `getNaNQuarantineCount()` counts, or -1 past the end. */
+  getNaNQuarantineBodyId?(index: number): number
+
   /** Release the C++ object. Must be called when done to avoid WASM memory leaks. */
   delete(): void
 }

@@ -596,6 +596,7 @@ SnapshotStatus PhysicsWorld::restore(const uint8_t* data, std::size_t size) {
   meshes_ = std::move(meshes);
   fields_ = std::move(fields);
   pairs_.clear();
+  quarantines_.clear();
   contactListener_.restoreManifold(manifold, generation, droppedTotal);
   scatterTransforms();
   return SnapshotStatus::Ok;

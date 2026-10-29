@@ -53,6 +53,8 @@ export interface PhysicsWorld extends ClassHandle {
   getMaxContacts(): number;
   getTransformStride(): number;
   getTransformSlotCount(): number;
+  getNaNQuarantineCount(): number;
+  getNaNQuarantineBodyId(_0: number): number;
   setCollisionGroups(_0: number, _1: number, _2: number): void;
   getContactBufferPtr(): number;
   getTransformBufferPtr(): number;

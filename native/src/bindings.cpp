@@ -421,5 +421,17 @@ EMSCRIPTEN_BINDINGS(physics_world) {
     // WasmPhysicsEngine wrapper turns it back into a number / hex string.
     .function("getStaticContentHash", &PhysicsWorld::staticContentHash)
     .function("getStateHash", &PhysicsWorld::getStateHash)
-    .function("getContactGeneration", &PhysicsWorld::getContactGeneration);
+    .function("getContactGeneration", &PhysicsWorld::getContactGeneration)
+
+    // Bodies the last step() froze for a non-finite state (NaNQuarantine,
+    // #487): how many, then each one's id in the order they were caught
+    // (-1 past the end). The game decides what a frozen ball means.
+    .function("getNaNQuarantineCount", optional_override([](const PhysicsWorld& self) -> int {
+        return static_cast<int>(self.lastNaNQuarantines().size());
+      }))
+    .function("getNaNQuarantineBodyId", optional_override([](const PhysicsWorld& self, int index) -> int {
+        const std::vector<NaNQuarantine>& frozen = self.lastNaNQuarantines();
+        if (index < 0 || static_cast<std::size_t>(index) >= frozen.size()) return -1;
+        return frozen[static_cast<std::size_t>(index)].bodyId;
+      }));
 }
