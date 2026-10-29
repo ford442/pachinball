@@ -5,11 +5,15 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { PhysicsBody } from '../../core/physics-api'
+import { distance3 } from '../../core/vec3-scalar'
 import { getLayoutRng } from '../../core/seeded-rng'
 import { getMaterialLibrary } from '../../materials'
 import { color } from '../visual-language'
 import type { ReactivePegClusterConfig } from './types'
 import { PathMechanic } from './base'
+
+/** Read-only source colour for the per-frame light writes; never assigned to a light. */
+const GRAY = Color3.Gray()
 
 export enum PegState {
   INACTIVE,
@@ -31,6 +35,9 @@ export class ReactivePegCluster extends PathMechanic {
   private clusterActive = false
   private activationLevel = 0
   private pulseTime = 0
+  /** `color(mapBaseColor)`, re-parsed only when the map colour changes (it was parsed per peg per frame). */
+  private readonly baseColor = new Color3()
+  private baseColorHex: string | null = null
 
   spawn(config: ReactivePegClusterConfig): void {
     if (this.isSpawned) return
@@ -103,15 +110,14 @@ export class ReactivePegCluster extends PathMechanic {
 
     this.pulseTime += dt * 4
 
-    // Check for ball-peg collisions
-    for (let i = 0; i < this.pegs.length; i++) {
-      const peg = this.pegs[i]
-      const pegPos = peg.position
-
-      for (const ball of ballBodies) {
-        const pos = ball.translation()
-        const ballPos = new Vector3(pos.x, pos.y, pos.z)
-        const distance = Vector3.Distance(ballPos, pegPos)
+    // Check for ball-peg collisions. Ball-major so each ball's translation() is read once per
+    // frame rather than once per peg; hitPeg(i) only touches peg i, and each peg still sees
+    // the balls in the same order, so the outcome is unchanged.
+    for (const ball of ballBodies) {
+      const pos = ball.translation()
+      for (let i = 0; i < this.pegs.length; i++) {
+        const pegPos = this.pegs[i].position
+        const distance = distance3(pos, pegPos)
 
         // Collision detection
         if (distance < 0.6 && Math.abs(pos.y - pegPos.y) < 1) {
@@ -124,7 +130,8 @@ export class ReactivePegCluster extends PathMechanic {
     this.updatePegVisuals(dt)
 
     // Check for full cluster activation
-    const activeCount = this.pegStates.filter(s => s === PegState.ACTIVE).length
+    let activeCount = 0
+    for (const s of this.pegStates) if (s === PegState.ACTIVE) activeCount++
     this.activationLevel = activeCount / this.pegCount
 
     if (this.activationLevel >= 1 && !this.clusterActive) {
@@ -141,8 +148,19 @@ export class ReactivePegCluster extends PathMechanic {
     }
   }
 
+  private currentBaseColor(): Color3 {
+    if (this.baseColorHex !== this.mapBaseColor) {
+      this.baseColor.copyFrom(color(this.mapBaseColor))
+      this.baseColorHex = this.mapBaseColor
+    }
+    return this.baseColor
+  }
+
+  /** Per frame: light colours are written into each light's own Color3, not reassigned. */
   private updatePegVisuals(dt: number): void {
     const matLib = getMaterialLibrary(this.scene)
+    // Looked up once per frame (each lookup builds a factory closure), only if a peg needs it.
+    let pinMaterial: ReturnType<typeof matLib.getPinMaterial> | null = null
 
     for (let i = 0; i < this.pegs.length; i++) {
       const state = this.pegStates[i]
@@ -153,14 +171,15 @@ export class ReactivePegCluster extends PathMechanic {
         case PegState.INACTIVE:
           // Dim, gray
           light.intensity = 0.2 + Math.sin(this.pulseTime + i) * 0.1
-          light.diffuse = Color3.Gray()
-          peg.material = matLib.getPinMaterial()
+          light.diffuse.copyFrom(GRAY)
+          pinMaterial ??= matLib.getPinMaterial()
+          peg.material = pinMaterial
           break
 
         case PegState.ACTIVATING:
           // Transition to active
           light.intensity = Scalar.Lerp(light.intensity, 2, dt * 5)
-          light.diffuse = Color3.Lerp(Color3.Gray(), color(this.mapBaseColor), dt * 3)
+          Color3.LerpToRef(GRAY, this.currentBaseColor(), dt * 3, light.diffuse)
 
           if (light.intensity > 1.8) {
             this.pegStates[i] = PegState.ACTIVE
@@ -172,7 +191,7 @@ export class ReactivePegCluster extends PathMechanic {
           // Glowing, pulsing
           const pulse = 2 + Math.sin(this.pulseTime * 2 + i) * 0.5
           light.intensity = pulse
-          light.diffuse = color(this.mapBaseColor)
+          light.diffuse.copyFrom(this.currentBaseColor())
 
           // Scale bump on hit
           const targetScale = 1 + this.pegHits[i] * 0.1

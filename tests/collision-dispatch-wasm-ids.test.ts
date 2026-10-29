@@ -16,7 +16,8 @@ import { WasmTableWorld } from '../src/wasm/wasm-table-world'
 import type { WasmBody } from '../src/wasm/wasm-body'
 import { COLLISION_GROUP_PRESETS } from '../src/game-elements/physics'
 import type { BumperVisual } from '../src/game-elements/types'
-import { ContactPhase, toWasmContactEvent } from '../src/wasm/contact-buffer'
+import { CONTACT_STRIDE, ContactPhase, encodeContactBuffer, toWasmContactEvent, type PhysicsContact } from '../src/wasm/contact-buffer'
+import type { CollisionDispatcher } from '../src/game/physics/collision-dispatch'
 import type { LaneSensorDef } from '../src/objects/object-lane-sensors'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { asSimEngine, makeFakeWasmEngine } from './helpers/fake-wasm-engine'
@@ -88,8 +89,9 @@ function setup() {
   controller.rebuildHandleCaches()
 
   const contact = (id1: number, id2: number, isSensor = false) => {
-    eventBus.emit(
-      'wasm:physics:contact',
+    // The controller listens to the batched event (#488 §5): one contact, packed.
+    eventBus.emit('wasm:physics:contacts', {
+      data: encodeContactBuffer([
       toWasmContactEvent({
         bodyId1: id1,
         bodyId2: id2,
@@ -99,7 +101,10 @@ function setup() {
         phase: ContactPhase.Enter,
         isSensor,
       }),
-    )
+      ]),
+      count: 1,
+      stride: CONTACT_STRIDE,
+    })
   }
   return { engine, world, eventBus, controller, contact, gameObjects, ballManager, physics, ball, bumper, laneBody, deathZone }
 }
@@ -173,5 +178,59 @@ describe('collision dispatch keyed on WASM public ids (#412)', () => {
     contact(-4000, 0, true)
     expect(controller.getLastLaneHit()).toBe('launch-1')
     expect(gameObjects.activateBumperHit).not.toHaveBeenCalled()
+  })
+
+  describe('batched wasm:physics:contacts (#488 §5)', () => {
+    const packed = (pairs: Array<[number, number, ContactPhase, boolean?]>): Float32Array =>
+      encodeContactBuffer(pairs.map(([id1, id2, phase, isSensor]): PhysicsContact => ({
+        bodyId1: id1,
+        bodyId2: id2,
+        normal: { x: 1, y: 0, z: 0 },
+        point: { x: 0, y: 0, z: 0 },
+        impulse: 1,
+        phase,
+        isSensor: isSensor ?? false,
+      })))
+    const dispatcherOf = (controller: unknown): CollisionDispatcher =>
+      (controller as { collisionDispatcher: CollisionDispatcher }).collisionDispatcher
+
+    it('dispatches only the Enter contacts of a batch, like the per-contact path', () => {
+      const { controller, gameObjects, bumper, ballManager, ball } = setup()
+      const data = packed([
+        [0, -8000, ContactPhase.Stay],
+        [0, -8000, ContactPhase.Exit],
+        [0, -8000, ContactPhase.Enter],
+        [0, -4002, ContactPhase.Enter, true],
+      ])
+      dispatcherOf(controller).onWasmContactBatch({ data, count: 4, stride: CONTACT_STRIDE })
+      expect(gameObjects.activateBumperHit).toHaveBeenCalledTimes(1)
+      expect(gameObjects.activateBumperHit).toHaveBeenCalledWith(bumper)
+      expect(controller.getBumperMatches()).toBe(1)
+      expect(ballManager.collectBall).toHaveBeenCalledWith(ball)
+      expect(controller.getRawCollisionEvents()).toBe(2)
+    })
+
+    it('hands Exit contacts to the zone sensors, like the per-contact path (Stay is dropped)', () => {
+      const { controller } = setup()
+      const dispatcher = dispatcherOf(controller)
+      const feed = vi.spyOn(dispatcher as unknown as { feedZoneContact: (...a: unknown[]) => boolean }, 'feedZoneContact')
+      const data = packed([
+        [0, -8000, ContactPhase.Stay],
+        [0, -8000, ContactPhase.Exit],
+      ])
+      dispatcher.onWasmContactBatch({ data, count: 2, stride: CONTACT_STRIDE })
+      expect(feed).toHaveBeenCalledTimes(1)
+      expect(feed.mock.calls[0]?.[4]).toBe(false)
+    })
+
+    it('honours count, not the view length (the engine may hand a longer reused view)', () => {
+      const { controller, gameObjects } = setup()
+      const data = packed([
+        [0, -8000, ContactPhase.Stay],
+        [0, -8000, ContactPhase.Enter],
+      ])
+      dispatcherOf(controller).onWasmContactBatch({ data, count: 1, stride: CONTACT_STRIDE })
+      expect(gameObjects.activateBumperHit).not.toHaveBeenCalled()
+    })
   })
 })

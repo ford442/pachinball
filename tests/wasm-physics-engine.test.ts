@@ -25,6 +25,7 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { WasmPhysicsEngine } from '../src/wasm/PhysicsModule'
 import { EventBus } from '../src/core/event-bus'
+import { encodeTransformBuffer } from '../src/wasm/transform-buffer'
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -245,6 +246,83 @@ describe('WasmPhysicsEngine', () => {
     worldStub.getStepCount.mockReturnValue(11)
     engine.step(1 / 60)
     expect(received).not.toBeNull()
+  })
+
+  it('delivers each step\'s contacts as one batched wasm:physics:contacts emit (#488 §5)', async () => {
+    const bus = new EventBus()
+    engine.init(bus)
+
+    const packed = new Float32Array(4 + 2 * 12)
+    packed.set([
+      1, 2, 0, 1, 0, 0.5, 0.125, 0.25, 3.25, 0, 0, 0,
+      3, 4, 1, 0, 0, 0, 0, 0, 0.5, 1, 1, 7,
+    ], 4)
+    worldStub.getContactCount.mockReturnValue(2)
+    worldStub.getContactBufferPtr.mockReturnValue(16)
+    await injectWorld(engine, worldStub, packed)
+
+    const batches: Array<{ count: number; stride: number; ids: number[]; same: unknown }> = []
+    let lastBatch: unknown = null
+    bus.on('wasm:physics:contacts', (batch) => {
+      batches.push({
+        count: batch.count,
+        stride: batch.stride,
+        ids: [batch.data[0] ?? -1, batch.data[1] ?? -1, batch.data[12] ?? -1, batch.data[13] ?? -1],
+        same: lastBatch === null ? null : lastBatch === batch,
+      })
+      lastBatch = batch
+    })
+    const emit = vi.spyOn(bus, 'emit')
+
+    engine.step(1 / 60)
+    worldStub.getStepCount.mockReturnValue(11)
+    engine.step(1 / 60)
+
+    expect(batches).toEqual([
+      { count: 2, stride: 12, ids: [1, 2, 3, 4], same: null },
+      // The batch object is reused across steps.
+      { count: 2, stride: 12, ids: [1, 2, 3, 4], same: true },
+    ])
+    // Nobody listens per contact, so no per-contact payloads were built.
+    expect(emit.mock.calls.map(([event]) => event)).toEqual(['wasm:physics:contacts', 'wasm:physics:contacts'])
+  })
+
+  it('transform getters decode through one scratch record but return independent vectors', async () => {
+    const heap = new Float32Array(4 + 2 * 16)
+    heap.set(encodeTransformBuffer([
+      { id: 0, transform: { id: 0, position: { x: 1, y: 2, z: 3 }, rotation: { x: 0, y: 0, z: 0, w: 1 }, velocity: { x: 7, y: 8, z: 9 }, angularVelocity: { x: 0, y: 0.5, z: 0 }, active: true } },
+      { id: 1, transform: { id: 1, position: { x: 4, y: 5, z: 6 }, rotation: { x: 0, y: 1, z: 0, w: 0 }, velocity: { x: 0, y: 0, z: 0 }, angularVelocity: { x: 0, y: 0, z: 0 }, active: true } },
+    ]), 4)
+    worldStub.getTransformBufferPtr.mockReturnValue(16)
+    worldStub.getTransformSlotCount.mockReturnValue(2)
+    await injectWorld(engine, worldStub, heap)
+
+    const a = engine.getPosition(0)
+    const b = engine.getPosition(1)
+    expect(a).toEqual({ x: 1, y: 2, z: 3 })
+    expect(b).toEqual({ x: 4, y: 5, z: 6 })
+    expect(engine.getPosition(0)).not.toBe(a)
+    expect(engine.getVelocity(0)).toEqual({ x: 7, y: 8, z: 9 })
+    expect(engine.getAngularVelocity(0)).toEqual({ x: 0, y: 0.5, z: 0 })
+    expect(engine.getRotation(1)).toEqual({ x: 0, y: 1, z: 0, w: 0 })
+    // The buffer was read, not the per-field Embind getters.
+    expect(worldStub.getPosX).not.toHaveBeenCalled()
+  })
+
+  it('keeps per-contact events flowing while they still have a subscriber', async () => {
+    const bus = new EventBus()
+    engine.init(bus)
+    const packed = new Float32Array(4 + 12)
+    packed.set([5, 6, 0, 0, 1, 0, 0, 0, 1, 2, 0, 0], 4)
+    worldStub.getContactCount.mockReturnValue(1)
+    worldStub.getContactBufferPtr.mockReturnValue(16)
+    await injectWorld(engine, worldStub, packed)
+
+    const order: string[] = []
+    bus.on('wasm:physics:contact', (evt) => order.push(`contact ${evt.bodyId1}-${evt.bodyId2} phase ${evt.phase}`))
+    bus.on('wasm:physics:contacts', (batch) => order.push(`batch ${batch.count}`))
+    engine.step(1 / 60)
+    expect(order).toEqual(['contact 5-6 phase 2', 'batch 1'])
   })
 
   it('getDroppedContactCount surfaces the WASM cap counter', async () => {

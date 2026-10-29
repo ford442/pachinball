@@ -3,9 +3,16 @@
  * Reuses transform-buffer / contact-buffer codecs — no third layout.
  */
 
-import { decodeContactBuffer } from '../wasm/contact-buffer'
-import { TRANSFORM_STRIDE, decodeTransformSlot } from '../wasm/transform-buffer'
+import { createContactRecord, decodeContactAt } from '../wasm/contact-buffer'
+import { TRANSFORM_STRIDE, createTransformRecord, decodeTransformSlot } from '../wasm/transform-buffer'
 import { peekPackedPhysicsBuffers } from './wasm-packed-views'
+
+/**
+ * Reused decode records for the per-frame overlay rebuild (#488 §5). Everything read from them
+ * is consumed by the append* call it is passed to, never kept.
+ */
+const scratchTransform = createTransformRecord()
+const scratchContact = createContactRecord()
 import type { WasmSimEngine } from '../wasm/wasm-sim-engine'
 import { pinFieldPinBounds, type PinFieldSpec } from '../core/pin-field'
 
@@ -184,7 +191,7 @@ export function buildWasmDebugLineBuffers(
     if (bodyId === undefined || !packed.transforms) {
       return { p: fallback, r: fallbackRot ?? { x: 0, y: 0, z: 0, w: 1 } }
     }
-    const slot = decodeTransformSlot(packed.transforms, bodyId)
+    const slot = decodeTransformSlot(packed.transforms, bodyId, TRANSFORM_STRIDE, scratchTransform)
     if (!slot) return { p: fallback, r: fallbackRot ?? { x: 0, y: 0, z: 0, w: 1 } }
     return { p: slot.position, r: slot.rotation }
   }
@@ -233,15 +240,15 @@ export function buildWasmDebugLineBuffers(
     )
     for (let id = 0; id < slots; id++) {
       if (known.has(id)) continue
-      const slot = decodeTransformSlot(packed.transforms, id)
+      const slot = decodeTransformSlot(packed.transforms, id, stride, scratchTransform)
       if (!slot?.active) continue
       appendSphereWire(positions, colors, slot.position, 0.25)
     }
   }
 
   if (packed.contacts && packed.contactCount > 0) {
-    const contacts = decodeContactBuffer(packed.contacts, packed.contactCount)
-    for (const contact of contacts) {
+    for (let i = 0; i < packed.contactCount; i++) {
+      const contact = decodeContactAt(packed.contacts, i, scratchContact)
       const n = contact.normal
       const pt = contact.point
       pushSegment(

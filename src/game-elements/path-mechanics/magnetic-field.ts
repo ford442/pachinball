@@ -3,6 +3,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { PhysicsBody } from '../../core/physics-api'
+import { distance3 } from '../../core/vec3-scalar'
 import { getMaterialLibrary } from '../../materials'
 import { color } from '../visual-language'
 import type { MagneticFieldConfig } from './types'
@@ -88,7 +89,7 @@ export class MagneticField extends PathMechanic {
     // Animate field ring
     if (this.fieldRing) {
       this.fieldRing.rotation.y += dt * 2
-      this.fieldRing.scaling = new Vector3(
+      this.fieldRing.scaling.copyFromFloats(
         1 + Math.sin(this.pulseTime) * 0.1,
         1,
         1 + Math.sin(this.pulseTime) * 0.1
@@ -103,13 +104,16 @@ export class MagneticField extends PathMechanic {
     // Apply magnetic force to balls in range
     for (const ball of ballBodies) {
       const pos = ball.translation()
-      const ballPos = new Vector3(pos.x, pos.y, pos.z)
-      const distance = Vector3.Distance(ballPos, this.position)
+      const distance = distance3(pos, this.position)
 
       if (distance < this.fieldRadius && pos.y < 3) {
-        // Calculate pull direction (toward field center)
-        const pullDir = this.position.subtract(ballPos).normalize()
-        pullDir.y = 0 // Keep horizontal pull
+        // Pull direction toward the field centre: (position - ball) normalised in 3D (its length is
+        // `distance`; a zero vector stays zero, like Vector3.normalize), then flattened (y ignored).
+        const inv = distance === 0 ? 0 : 1 / distance
+        const pullDir = {
+          x: (this.position.x - pos.x) * inv,
+          z: (this.position.z - pos.z) * inv,
+        }
 
         // Distance factor (stronger when closer)
         const strength = this.pullStrength * (1 - distance / this.fieldRadius)

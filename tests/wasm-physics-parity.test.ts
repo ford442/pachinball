@@ -15,6 +15,7 @@ import { GamePhysicsController } from '../src/game/game-physics-controller'
 import { EventBus } from '../src/core/event-bus'
 import type { BumperVisual } from '../src/game-elements/types'
 import type { WasmContactEvent } from '../src/wasm/wasm-types'
+import { CONTACT_STRIDE, encodeContactBuffer } from '../src/wasm/contact-buffer'
 import {
   makeBallManagerStub,
   makeGameObjectsStub,
@@ -119,7 +120,8 @@ function makeWasmEngineStub() {
         started,
         isEntering: started,
       }
-      bus?.emit('wasm:physics:contact', evt)
+      // The controller listens to the batched event (#488 §5).
+      bus?.emit('wasm:physics:contacts', { data: encodeContactBuffer([evt]), count: 1, stride: CONTACT_STRIDE })
     },
     _bodies: bodies,
   }

@@ -29,6 +29,8 @@ npm run perf:compare -- before after
 | `PERF_VIEWPORT` | `640x360` | browser viewport; small on purpose (see below) |
 | `PERF_VERBOSE` | — | `1` logs frame progress every 10 s (spots a frame-rate collapse) |
 | `PERF_REPEATS` | `3` | repeats are interleaved across tiers; the headline is the median of per-repeat medians |
+| `PERF_ALLOC_FRAMES` | `600` | frames of the allocation probe run after each phase's timing sample; `0` skips it |
+| `PERF_ALLOC_BUDGET_KB` | — | optional KB-allocated-per-frame budget; set, a phase over it fails the spec (soft assertion). Unset: report-only |
 
 What is recorded per tier × state (`tests/helpers/perf.ts`):
 
@@ -42,6 +44,13 @@ What is recorded per tier × state (`tests/helpers/perf.ts`):
   renders per second; under SwiftShader the wall-clock frame rate is meaningless, so the per-frame figure is the one to quote)
   and `refreezeCount` (`StaticSceneGate.refreezeCount`; `n/a` on commits before the gate exists).
 - `env`: physics engine, renderer, quality tier, post-process tier, GPU string.
+- `alloc` (#488 §5, `probeAllocations`): after the timed frames, `PERF_ALLOC_FRAMES` more frames bracketed by forced GCs
+  (CDP `HeapProfiler.collectGarbage`). `allocatedPerFrameBytes` is what the hot path allocated per frame, garbage included
+  (V8 sampling heap profiler with `includeObjectsCollectedByMajorGC/MinorGC`; sampled, so a few KB/frame is noise) and is
+  the zero-allocation number; `heapDeltaPerFrameBytes` is what it *retained* (heap after GC minus heap after GC, from CDP
+  `Runtime.getHeapUsage`) and catches leaks; `topAllocators` lists the 15 largest allocating call sites. The probe runs
+  separately from the timed frames because the sampling profiler costs time. `perf:compare` shows `allocKBPerFrame` and
+  `heapDeltaKBPerFrame`.
 
 ### Caveats
 

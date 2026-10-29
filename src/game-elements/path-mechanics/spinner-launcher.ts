@@ -2,6 +2,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { PhysicsBody } from '../../core/physics-api'
+import { distance3 } from '../../core/vec3-scalar'
 import { getMaterialLibrary } from '../../materials'
 import { getSessionRngFork, RNG_FORK } from '../../core/seeded-rng'
 import type { SpinnerLauncherConfig } from './types'
@@ -135,8 +136,7 @@ export class SpinnerLauncher extends PathMechanic {
     if (this.launchCooldown <= 0) {
       for (const ball of ballBodies) {
         const pos = ball.translation()
-        const ballPos = new Vector3(pos.x, pos.y, pos.z)
-        const distance = Vector3.Distance(ballPos, this.position)
+        const distance = distance3(pos, this.position)
 
         if (distance < this.spinnerRadius * 0.8 && pos.y < 1) {
           this.launchBall(ball)

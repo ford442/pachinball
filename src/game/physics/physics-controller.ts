@@ -23,7 +23,6 @@ import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
 import { DisplayState } from '../../display/display-types'
 import { CameraMode } from '../../game-elements'
 import { QualityTier } from '../../game-elements/visual-language'
-import type { WasmContactEvent } from '../../wasm'
 
 /** Shared surface for mirror and owner WASM bridges. */
 import type { WasmContactBridge } from './collision-dispatch'
@@ -136,12 +135,12 @@ export class GamePhysicsController {
       })
     )
 
-    // Route WASM contact events to the same dispatcher used for Rapier collisions.
-    // The wrapper already emits these on the EventBus; we just map WASM IDs back to
-    // the Rapier bodies that the scoring/effects code expects.
+    // Route WASM contacts to the same dispatcher used for Rapier collisions, as one batch per
+    // drained buffer (#488 §5): with no per-contact subscriber left, the engines build no
+    // per-contact payloads at all. The dispatcher maps WASM ids back to the bodies scoring expects.
     this.eventBusUnsubscribers.push(
-      host.eventBus.on('wasm:physics:contact', (evt: WasmContactEvent) => {
-        this.collisionDispatcher.onWasmContact(evt)
+      host.eventBus.on('wasm:physics:contacts', (batch) => {
+        this.collisionDispatcher.onWasmContactBatch(batch)
       })
     )
   }

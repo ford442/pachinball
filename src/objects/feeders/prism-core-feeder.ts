@@ -9,6 +9,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { CapturedBall } from '../../core/captured-ball'
+import { distance3 } from '../../core/vec3-scalar'
 import type { GameConfigType } from '../../config'
 import type { QualityTier } from '../../game-elements/visual-language'
 import {
@@ -240,7 +241,7 @@ export class PrismCoreFeeder {
           if (this.caughtBalls.includes(body)) continue
 
           const pos = body.translation()
-          const dist = Vector3.Distance(new Vector3(pos.x, pos.y, pos.z), this.position)
+          const dist = distance3(pos, this.position)
 
           if (dist < this.config.captureRadius) {
               this.captureBall(body)

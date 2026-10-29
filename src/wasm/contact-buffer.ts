@@ -56,34 +56,170 @@ export function toWasmContactEvent(contact: PhysicsContact): WasmContactEvent {
 }
 
 /**
+ * One physics step's contacts as the packed WASM buffer, delivered in a single
+ * `'wasm:physics:contacts'` emit instead of one `'wasm:physics:contact'` per pair (#488 §5).
+ *
+ * `data` holds `count` records of `stride` floats from offset 0, laid out as the module header
+ * describes. It is a view into WASM memory or a reused buffer, and the batch object itself is
+ * reused by the emitter: both are valid only during the emit. Read with `contactPhaseAt` /
+ * `decodeContactAt` (or index `data` directly) and copy anything you keep.
+ */
+export interface WasmContactBatch {
+  readonly data: Float32Array
+  readonly count: number
+  readonly stride: number
+}
+
+/**
+ * The slice of the game EventBus the WASM engines emit contacts on. Deliberately narrower than
+ * `EventBus` (`../core/event-bus`): that file's payload types pull in Babylon-typed game types,
+ * and this one is part of the Worker-lib compile graph (tsconfig.worker.json). Any real
+ * `EventBus` satisfies it structurally.
+ */
+export interface WasmContactEventBus {
+  emit(event: 'wasm:physics:contact', payload: WasmContactEvent): void
+  emit(event: 'wasm:physics:contacts', payload: WasmContactBatch): void
+  /**
+   * Whether an event has handlers. Optional so minimal fakes still type-check; without it the
+   * emitter assumes both contact events are wanted.
+   */
+  hasListeners?(event: 'wasm:physics:contact' | 'wasm:physics:contacts'): boolean
+}
+
+const EMPTY_CONTACTS = new Float32Array(0)
+
+/**
+ * Delivers one step's packed contacts on a bus: the legacy per-contact `'wasm:physics:contact'`
+ * events (each a fresh record, as before) only while something still subscribes to them, then
+ * one `'wasm:physics:contacts'` emit carrying the packed view, which allocates nothing.
+ * Holds the reused batch object; one emitter per engine.
+ */
+export class ContactBatchEmitter {
+  private readonly batch: { data: Float32Array; count: number; stride: number } = {
+    data: EMPTY_CONTACTS,
+    count: 0,
+    stride: CONTACT_STRIDE,
+  }
+
+  emit(bus: WasmContactEventBus, data: Float32Array, count: number, stride = CONTACT_STRIDE): void {
+    const n = Math.min(Math.max(0, count | 0), Math.floor(data.length / stride))
+    if (n === 0) return
+    // Per-contact consumers first, so a legacy subscriber sees each contact at the same point
+    // in the step it always did.
+    if (bus.hasListeners?.('wasm:physics:contact') ?? true) {
+      for (let i = 0; i < n; i++) bus.emit('wasm:physics:contact', wasmContactEventAt(data, i, stride))
+    }
+    if (bus.hasListeners?.('wasm:physics:contacts') ?? true) {
+      const batch = this.batch
+      batch.data = data
+      batch.count = n
+      batch.stride = stride
+      try {
+        bus.emit('wasm:physics:contacts', batch)
+      } finally {
+        // Do not pin the WASM heap view (or a posted buffer) until the next step.
+        batch.data = EMPTY_CONTACTS
+        batch.count = 0
+      }
+    }
+  }
+}
+
+/**
+ * Phase of packed contact `index`. Any value other than Stay/Exit decodes as Enter, exactly as
+ * `decodeContactBuffer` always has.
+ */
+export function contactPhaseAt(data: ArrayLike<number>, index: number, stride = CONTACT_STRIDE): ContactPhase {
+  const raw = (data[index * stride + 9] ?? 0) as ContactPhase
+  return raw === ContactPhase.Stay || raw === ContactPhase.Exit ? raw : ContactPhase.Enter
+}
+
+/** A zeroed record for `decodeContactAt` / `decodeContactBuffer(…, out)` to fill. */
+export function createContactRecord(): PhysicsContact {
+  return {
+    bodyId1: 0,
+    bodyId2: 0,
+    normal: { x: 0, y: 0, z: 0 },
+    point: { x: 0, y: 0, z: 0 },
+    impulse: 0,
+    phase: ContactPhase.Enter,
+    isSensor: false,
+    subIndex: 0,
+  }
+}
+
+/**
+ * Decode packed contact `index` into `out` (overwriting every field, the nested vectors in
+ * place) and return `out`. Allocates nothing: reuse one record across a per-step loop.
+ */
+export function decodeContactAt(
+  data: ArrayLike<number>,
+  index: number,
+  out: PhysicsContact,
+  stride = CONTACT_STRIDE,
+): PhysicsContact {
+  const o = index * stride
+  out.bodyId1 = data[o] ?? 0
+  out.bodyId2 = data[o + 1] ?? 0
+  out.normal.x = data[o + 2] ?? 0
+  out.normal.y = data[o + 3] ?? 0
+  out.normal.z = data[o + 4] ?? 0
+  out.point.x = data[o + 5] ?? 0
+  out.point.y = data[o + 6] ?? 0
+  out.point.z = data[o + 7] ?? 0
+  out.impulse = data[o + 8] ?? 0
+  out.phase = contactPhaseAt(data, index, stride)
+  out.isSensor = (data[o + 10] ?? 0) !== 0
+  out.subIndex = data[o + 11] ?? 0
+  return out
+}
+
+/** A fresh `WasmContactEvent` for packed contact `index` (the legacy per-contact payload). */
+export function wasmContactEventAt(data: ArrayLike<number>, index: number, stride = CONTACT_STRIDE): WasmContactEvent {
+  const o = index * stride
+  const phase = contactPhaseAt(data, index, stride)
+  const started = phase === ContactPhase.Enter
+  return {
+    bodyId1: data[o] ?? 0,
+    bodyId2: data[o + 1] ?? 0,
+    normal: { x: data[o + 2] ?? 0, y: data[o + 3] ?? 0, z: data[o + 4] ?? 0 },
+    point: { x: data[o + 5] ?? 0, y: data[o + 6] ?? 0, z: data[o + 7] ?? 0 },
+    impulse: data[o + 8] ?? 0,
+    phase,
+    isSensor: (data[o + 10] ?? 0) !== 0,
+    subIndex: data[o + 11] ?? 0,
+    started,
+    isEntering: started,
+  }
+}
+
+/**
  * Decode a packed WASM contact buffer into typed records.
  * `data` is a Float32Array view (or any array-like of floats) covering
  * `count * CONTACT_STRIDE` values.
+ *
+ * Without `out` every call returns a fresh array of fresh records (safe to keep). With `out`,
+ * that array and the records already in it are reused — overwritten in place, new ones created
+ * only when `count` exceeds what `out` held, `out.length` set to `count` — so a per-frame caller
+ * passing the same array allocates nothing in steady state. The records are then only valid
+ * until the next call with that `out`.
  */
 export function decodeContactBuffer(
   data: ArrayLike<number>,
   count: number,
   stride = CONTACT_STRIDE,
+  out?: PhysicsContact[],
 ): PhysicsContact[] {
-  const out: PhysicsContact[] = []
   const n = Math.max(0, count | 0)
-  for (let i = 0; i < n; i++) {
-    const o = i * stride
-    const phaseRaw = (data[o + 9] ?? 0) as ContactPhase
-    const phase = (phaseRaw === ContactPhase.Stay || phaseRaw === ContactPhase.Exit)
-      ? phaseRaw
-      : ContactPhase.Enter
-    out.push({
-      bodyId1: data[o] ?? 0,
-      bodyId2: data[o + 1] ?? 0,
-      normal: { x: data[o + 2] ?? 0, y: data[o + 3] ?? 0, z: data[o + 4] ?? 0 },
-      point:  { x: data[o + 5] ?? 0, y: data[o + 6] ?? 0, z: data[o + 7] ?? 0 },
-      impulse: data[o + 8] ?? 0,
-      phase,
-      isSensor: (data[o + 10] ?? 0) !== 0,
-      subIndex: data[o + 11] ?? 0,
-    })
+  if (!out) {
+    const fresh: PhysicsContact[] = []
+    for (let i = 0; i < n; i++) fresh.push(decodeContactAt(data, i, createContactRecord(), stride))
+    return fresh
   }
+  for (let i = 0; i < n; i++) {
+    out[i] = decodeContactAt(data, i, out[i] ?? createContactRecord(), stride)
+  }
+  out.length = n
   return out
 }
 

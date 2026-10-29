@@ -67,6 +67,7 @@ export {
   contactStarted,
   toWasmContactEvent,
   type PhysicsContact,
+  type WasmContactBatch,
   type WasmContactEvent,
 } from './contact-buffer'
 
