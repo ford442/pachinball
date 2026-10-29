@@ -120,24 +120,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Same cache key as native-physics.yml: the cache is repo-scoped, so a warm entry from
-      # that workflow is reused here.
+      # The SDK pinned in .emsdk-version, never `latest`: a bundle built here must be the
+      # one native-physics.yml checked for parity, and a replay verified against it must
+      # verify against the next build too (#487). Same cache key as native-physics.yml (the
+      # cache is repo-scoped, so a warm entry from that workflow is reused here); it changes
+      # when the pin does.
       - name: Cache Emscripten SDK
         if: matrix.wasm
         uses: actions/cache@v4
         with:
           path: emsdk
-          key: emsdk-${{ runner.os }}-latest
+          key: emsdk-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.emsdk-version') }}
 
       - name: Install and activate Emscripten
         if: matrix.wasm
         run: |
+          EMSDK_VERSION="$(tr -d '[:space:]' < .emsdk-version)"
           if [ ! -d emsdk ]; then
             git clone https://github.com/emscripten-core/emsdk.git
           fi
           cd emsdk
-          ./emsdk install latest
-          ./emsdk activate latest
+          git pull --ff-only || true
+          ./emsdk install "$EMSDK_VERSION"
+          ./emsdk activate "$EMSDK_VERSION"
           source ./emsdk_env.sh
           echo "$(pwd)" >> $GITHUB_PATH
           emcc --version

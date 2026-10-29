@@ -56,6 +56,9 @@ npx playwright test
 # Never copy native/build/compile_commands.json (Emscripten) to the repo root or native/.
 npm run test:native
 
+# Same suite at -O3 (native/build-release); the golden traces must match Debug.
+npm run test:native:release
+
 # Same suite under ASan + UBSan (native/build-san); any sanitizer report fails.
 npm run test:native:san
 

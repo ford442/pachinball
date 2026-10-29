@@ -1,6 +1,8 @@
 # Native C++ physics Catch2 unit tests + blocking WASM build/parity verification.
 #
 # native_ctest + sanitizer_ctest are BLOCKING for PRs touching `native/**`.
+# native_release_ctest + native_arm64_ctest run the same Catch2 suite at -O3 and
+# on aarch64 (non-blocking for their first week).
 # wasm_parity is BLOCKING for PRs touching `native/**`, `src/wasm/**`, or wasm tests.
 # JS-only PRs outside those paths are not gated on Emscripten.
 #
@@ -11,6 +13,7 @@
 # Local equivalents:
 #   npm run compile-db           # configure only → native/build-native/compile_commands.json
 #   npm run test:native          # compile-db + Catch2 + ctest (g++/cmake only)
+#   npm run test:native:release  # same at -O3 (native/build-release) — native_release_ctest, native_arm64_ctest
 #   npm run test:native:san      # same under ASan/UBSan (native/build-san), no recovery
 #   npm run check:compile-db     # clangd DB smoke (after compile-db)
 #   npm run check:wasm-docs      # docs/wasm-physics-engine.md drift check
@@ -95,6 +98,43 @@ jobs:
       - name: WASM doc drift check
         run: npm run check:wasm-docs
 
+  # Parity used to be checked only at Debug -O0 on x86-64. The golden traces
+  # must come out identical at -O3 and on aarch64, where GCC would fuse a*b+c
+  # into FMA without -ffp-contract=off (#487 slice 0). Both jobs are
+  # non-blocking for their first week; drop continue-on-error after 2026-11-05.
+  native_release_ctest:
+    name: Native CTest Release -O3 (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake g++
+
+      - name: Run native Catch2 tests (Release)
+        run: npm run test:native:release
+
+  native_arm64_ctest:
+    name: Native CTest aarch64 (non-blocking)
+    runs-on: ubuntu-24.04-arm
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake g++
+
+      - name: Run native Catch2 tests (Debug)
+        run: npm run test:native
+
+      - name: Run native Catch2 tests (Release)
+        run: npm run test:native:release
+
   sanitizer_ctest:
     name: Sanitizer CTest (Blocking)
     runs-on: ubuntu-latest
@@ -125,7 +165,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: emsdk
-          key: emsdk-${{ runner.os }}-${{ hashFiles('.emsdk-version') }}
+          # runner.arch: an arm64 job can never restore (or save) an x64 SDK.
+          key: emsdk-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.emsdk-version') }}
 
       - name: Install and activate Emscripten
         run: |

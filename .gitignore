@@ -17,6 +17,7 @@ native/build-native/
 native/build-assert/
 native/build-bench/
 native/build-san/
+native/build-release/
 public/wasm/
 
 # Emscripten SDK checkout — CI clones it into the repo root (.emsdk-version pins it)

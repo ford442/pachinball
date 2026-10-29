@@ -1311,7 +1311,8 @@ the first configure unless an installed Catch2 3.x is found
 | `PACHINBALL_CCACHE` | `OFF` | Uses `ccache` as `CMAKE_CXX_COMPILER_LAUNCHER` when found (both trees); warns and builds without it otherwise |
 
 ```bash
-npm run test:native:san   # native/build-san, PACHINBALL_SANITIZE=ON, ASan + UBSan, any report fails
+npm run test:native:release  # native/build-release, -O3 — the golden traces must match the Debug tree
+npm run test:native:san      # native/build-san, PACHINBALL_SANITIZE=ON, ASan + UBSan, any report fails
 ```
 
 This lets you iterate on solver logic with fast compile times using your
@@ -1325,7 +1326,8 @@ table, fast balls, sleep) — every contact event plus a `serialize()` blob ever
 refactor-only change must leave all three untouched; a change that is meant to
 move the numbers updates the constants it moves and names them (old → new) in
 its commit message, so drift is always attributable to one commit. The
-constants are identical at `-O0` and `-O3`.
+constants are identical at `-O0` and `-O3`, with g++ and clang, on x86-64 and
+aarch64 (`native_release_ctest`, `native_arm64_ctest`).
 
 ```bash
 PACHINBALL_PRINT_GOLDEN=1 ./native/build-native/physics_world_test "[golden]"
@@ -1364,8 +1366,15 @@ The GitHub Actions workflow (`.github/workflows/native-physics.yml`) runs on cha
 | Job | Status | Tools | What it checks |
 |-----|--------|-------|----------------|
 | `native_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native` (Catch2), `check:compile-db`, `check:wasm-docs` |
+| `native_release_ctest` | non-blocking (first week) | cmake, g++ | `npm run test:native:release` — the same Catch2 suite at `-O3`; the golden traces must not move with the optimisation level |
+| `native_arm64_ctest` | non-blocking (first week) | cmake, g++ on `ubuntu-24.04-arm` | `test:native` and `test:native:release` on aarch64, where an unchecked `a*b+c` would fuse into FMA |
 | `sanitizer_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native:san` — ASan/UBSan Catch2, no recovery (`CMAKE_BUILD_TYPE=Debug`) |
-| `wasm_parity` | **BLOCKING** | emsdk | `print:wasm-flags` then Release + RelWithAsserts + `test:wasm-parity` |
+| `wasm_parity` | **BLOCKING** | emsdk (`.emsdk-version`) | `print:wasm-flags` then Release + RelWithAsserts + `test:wasm-parity` |
+
+Every job that installs Emscripten (`wasm_parity` here, `e2e-preview` in
+`ci.yml`) installs the version in `.emsdk-version`, never `latest`, under the
+cache key `emsdk-<os>-<arch>-<hash of .emsdk-version>`: bumping the pin is the
+only way the toolchain changes, and it re-runs parity and the golden traces.
 
 `native_ctest` runs in ~15 seconds without requiring Emscripten and gates PRs against C++ logic regressions. Additionally, `tests/embind-surface.test.ts` asserts that TypeScript interface definitions (`src/wasm/wasm-types.ts`) match the exported Embind surface (`native/src/bindings.cpp`), and `tests/wasm-worker-api-parity.test.ts` (Vitest, no WASM) fails when a mutating Embind function is not wrapped on `WasmPhysicsEngine`, or a mutating engine method has no `PhysicsWorkerCommand` and is not on its tracked-gap list. `tests/physics-worker-command-manifest.test.ts` checks the checked-in manifest `tests/fixtures/physics-worker-commands.json` against both `bindings.cpp` and the `PhysicsWorkerCommand` union: every embind `PhysicsWorld` method names its command or an exemption with a reason (#459).
 
