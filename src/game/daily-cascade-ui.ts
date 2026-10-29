@@ -1,5 +1,5 @@
 /**
- * Start-screen mode select — Vanilla / Daily Cascade / Free Play / Campaign —
+ * Start-screen mode select — Vanilla / Daily Cascade / Weekly Machine / Free Play / Campaign —
  * plus the seed label, Randomize, and the campaign stage label.
  *
  * Campaign is a start mode, not a cascade mode: it plays the vanilla table and
@@ -64,6 +64,8 @@ export function bindDailyCascadeUI(options: DailyCascadeMenuOptions = {}): void 
       state.setMode(mode)
       if (mode === 'daily') {
         state.applyDailySeed()
+      } else if (mode === 'weekly') {
+        state.applyWeeklySeed()
       } else if (mode === 'free' && !state.getSeedId().startsWith('free-')) {
         state.randomize()
       }

@@ -438,7 +438,38 @@ export class GamePhysicsController {
       const prev = this.host.physics.getLastMirrorOverheadMs?.() ?? 0
       this.host.physics.setMirrorOverheadMs?.(prev + (performance.now() - syncT0))
     }
+    this.tickJackpot()
     return alpha
+  }
+
+  /**
+   * Advance the jackpot phase clock by this tick. It runs here, once per fixed
+   * step, so a phase change (and the end of the sequence) lands on its own sim
+   * step on every client — not on whichever render frame happens to follow it.
+   */
+  private tickJackpot(): void {
+    const effects = this.host.effects
+    if (!effects) return
+    if (effects.isJackpotActive) effects.advanceJackpotToStep(this.simClock.liveSteps())
+    // Also catches a JACKPOT display state raised with no sequence behind it
+    // (the solid-gold pulse): it ends on the tick that raised it.
+    this.finishJackpotIfDone()
+  }
+
+  /**
+   * Leave the JACKPOT display state once the sequence is over. The display
+   * state gates hologram catches and fever (`handleBumperCollision`), so this
+   * is gameplay and runs on the step the sequence ends; the render-frame call
+   * only catches a sequence that ended outside a tick.
+   */
+  private finishJackpotIfDone(): void {
+    const effects = this.host.effects
+    if (!effects || effects.isJackpotActive || this.host.display?.getDisplayState() !== DisplayState.JACKPOT) return
+    this.host.eventBus.emit('jackpot:end')
+    this.host.eventBus.emit('display:set', DisplayState.IDLE)
+    effects.setAtmosphereState('IDLE')
+    // Restore bumpers to normal lighting after sequence
+    this.host.gameObjects?.setBumperState('IDLE')
   }
 
   stepPhysics(
@@ -656,13 +687,7 @@ export class GamePhysicsController {
       this.host.gameObjects?.setBumperState('JACKPOT')
     }
 
-    if (this.host.effects && !this.host.effects.isJackpotActive && this.host.display?.getDisplayState() === DisplayState.JACKPOT) {
-      this.host.eventBus.emit('jackpot:end')
-      this.host.eventBus.emit('display:set', DisplayState.IDLE)
-      this.host.effects.setAtmosphereState('IDLE')
-      // Restore bumpers to normal lighting after sequence
-      this.host.gameObjects?.setBumperState('IDLE')
-    }
+    this.finishJackpotIfDone()
 
     this.scoringBridge.updateCombo(simDt)
     this.tickTilt(simDt)

@@ -10,6 +10,7 @@ npm run build      # TypeScript check + Vite production build + optional WASM
 npm run lint       # ESLint on all .ts/.tsx files (type-aware for src/, incl. no-floating-promises and import-x/no-cycle)
 npm run check:index-strict  # noUncheckedIndexedAccess ratchet: src/core, src/wasm, src/game/physics must stay clean
 npm run preview    # Preview production build locally
+npm run machine:validate  # Weekly machine: golden descriptor, next 53 ISO weeks + free seeds, fixtures (like tracks:validate)
 npm test           # Run Vitest unit tests
 npx playwright test  # Run E2E / visual regression tests
 npm run compile-db        # Configure-only: writes native/build-native/compile_commands.json for clangd (see root .clangd). Re-run after adding any .cpp

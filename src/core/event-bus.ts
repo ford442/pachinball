@@ -52,6 +52,8 @@ export interface PachinballEventMap {
   'jackpot:start': void
   'jackpot:end': void
   'jackpot:phase': { phase: number }
+  /** A ball hit a bumper (the table's contact path); `strength` is 0–1 impact speed. Cosmetic listeners only. */
+  'bumper:contact': { strength: number }
   'reach:start': void
   'adventure:start': void
   'adventure:end': void

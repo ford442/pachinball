@@ -56,7 +56,7 @@ Later phases add weekly tournament APIs and (optionally) true realtime co-op mul
 - ~~No seeded RNG for gameplay-affecting randomness~~ — `src/core/seeded-rng.ts`; every physics-affecting `Math.random` is gone (`docs/determinism-todo.md`)
 - ~~Leaderboard entries do not link to replays~~ — `handleGameOverLeaderboard()` submits `replay_id`
 - ~~No solver state in replays~~ — the frame-0 C++ snapshot + world fingerprint (#422, below)
-- No procedural layout mutator (#304) beyond the Daily Cascade pin lattice — challenges map `seed` → session RNG, not yet → table variant
+- ~~No procedural layout mutator (#304) beyond the Daily Cascade pin lattice~~ — a `?seed=` / `?challenge=` seed now selects the **weekly machine** (pin density and keep-outs, bumper offsets, armed feeders; see `docs/DAILY_CASCADE.md` → Weekly machine). A replay of one carries `machine: 'weekly'`.
 - ~~Deploy credentials still hardcoded in `deploy.py`~~ (#288) — `deploy.py` now reads `DEPLOY_TOKEN` from the environment (`require_env`)
 - ~~Spectating does not yet restore across a differing ball-id layout~~ — the spectator's TS links are remapped onto the snapshot's ids (#441); `id-layout` now means the layouts genuinely differ
 
@@ -214,6 +214,7 @@ A replay now carries the world it was played on, not just the tape:
 | Field (camelCase; snake_case accepted on read) | Meaning |
 |-------|---------|
 | `physicsEngine` | `rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker` |
+| `machine` | `weekly` when the run was played on the weekly machine for `seed`; a spectator rebuilds that descriptor before the frame-0 snapshot. Absent otherwise |
 | `snapshotVersion` | `WASM_SNAPSHOT_VERSION` (1) when a snapshot was taken; 0 when the engine could not snapshot (Rapier / mirror) |
 | `staticHash` | FNV-1a 64 of the C++ static table (`getStaticContentHash()`), 16 hex |
 | `pinFieldOccupancy` | FNV-1a of every resolved pin (index + position) of every pin field; null without one |

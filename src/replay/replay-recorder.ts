@@ -50,6 +50,12 @@ export interface ReplayMetadata extends ReplayWorldFingerprint {
   physicsEngine: WasmPhysicsRuntimeMode
   renderer: 'webgl2' | 'webgpu'
   createdAt: string
+  /**
+   * `weekly`: the run was played on the weekly machine for `seed`; a spectator
+   * rebuilds that descriptor from the seed before the frame-0 snapshot. Absent
+   * on every other table (and on tapes older than the weekly machine).
+   */
+  machine?: 'weekly'
 }
 
 export interface ReplayPayload extends ReplayMetadata {
@@ -304,6 +310,7 @@ export class ReplayRecorder {
       physicsEngine: normalizeReplayPhysicsEngine(data.physicsEngine),
       renderer: data.renderer ?? data.client_renderer ?? 'webgl2',
       createdAt: data.createdAt ?? new Date().toISOString(),
+      ...(data.machine === 'weekly' ? { machine: 'weekly' as const } : {}),
       frames,
       compressedFrames: compressedStr,
       finalScore: data.finalScore ?? data.final_score ?? 0,

@@ -167,6 +167,61 @@ TEST_CASE("seeded dropout is deterministic and shared with TypeScript", "[physic
   CHECK(all.getPinFieldPinCount(all.addPinField(desc)) == 0);
 }
 
+TEST_CASE("a weekly machine's field (dropout + keep-outs, no mask) holds the pins TypeScript resolves", "[physics][pin-field][weekly]") {
+  // tests/fixtures/weekly-machines/2026-W44.json → resolveWeeklyLayout → pachinkoPinFieldSpec: 8 × 12
+  // lattice, seeded dropout, the table's four keep-outs, one extra and a clearance box per bumper.
+  // tests/weekly-machine.test.ts resolves the same 48 pins in TypeScript. Keep-out edges are
+  // doubles on the JS side and arrive here as floats, as through embind.
+  PinFieldDesc desc;
+  desc.origin = {-12.f, 0.4f, -5.f};
+  desc.rows = 8;
+  desc.cols = 12;
+  desc.spacingX = 2.f;
+  desc.spacingZ = 2.75f;
+  desc.rowOffsetX = 1.f;
+  desc.radius = 0.09f;
+  desc.halfHeight = 0.75f;
+  desc.restitution = 0.65f;
+  desc.friction = 0.1f;
+  desc.dropoutSeed = 199252044u;
+  desc.dropout = 0.1875f;
+  const double boxes[][4] = {
+      {-8, 8, -6, -1.5},
+      {8.5, 12, -12, 18},
+      {-6, 6, -16, -11},
+      {-2.5, 2.5, 3.5, 8.5},
+      {-10.8125, -8.234375, -1.71875, 4.328125},
+      {-0.740625, 0.959375, 8.0875, 9.7875},
+      {-4.98875, -3.44875, 3.214375, 4.754375},
+      {3.620625, 5.160625, 2.51125, 4.05125},
+      {-3.120625, -1.660625, -0.10499999999999998, 1.355},
+      {1.9575, 3.4175, -0.57375, 0.88625},
+      {-1.71, -0.29000000000000004, 12.680625, 14.100625},
+      {-7.77, -6.23, 9.855, 11.395},
+      {0.16500000000000004, 1.585, 0.38375000000000004, 1.80375},
+      {-5.4175, -3.9575, 4.535625, 5.995625},
+      {4.4575, 5.9175, 5.73875, 7.19875},
+      {-5.09625, -3.71625, -1.205625, 0.17437500000000006},
+      {4.06, 5.44, -1.549375, -0.16937499999999994},
+  };
+  for (const auto& b : boxes) {
+    desc.keepOuts.push_back({static_cast<float>(b[0]), static_cast<float>(b[1]),
+                             static_cast<float>(b[2]), static_cast<float>(b[3])});
+  }
+
+  const std::vector<int> expected = {0,12,13,24,28,30,32,33,34,36,38,39,40,41,42,43,49,50,52,56,57,58,60,61,63,64,65,66,67,68,69,72,73,74,75,77,78,79,80,81,84,87,88,89,90,91,92,93};
+  const PinField field = buildPinField(desc);
+  CHECK(field.pinCount == static_cast<int>(expected.size()));
+  std::vector<int> present;
+  for (size_t i = 0; i < field.present.size(); ++i) {
+    if (field.present[i]) present.push_back(static_cast<int>(i));
+  }
+  CHECK(present == expected);
+
+  PhysicsWorld world;
+  CHECK(world.getPinFieldPinCount(world.addPinField(desc)) == 48);
+}
+
 TEST_CASE("a pin field steps like the same pins added one cylinder at a time", "[physics][pin-field]") {
   const PinFieldDesc desc = denseField();
   PhysicsWorld fieldWorld;

@@ -100,6 +100,20 @@ export function seedFromDailyId(id: string): number {
   return hashStringToSeed(id)
 }
 
+/** UTC ISO-8601 week id `YYYY-Www` (weeks start Monday; week 1 holds the year's first Thursday). */
+export function weeklySeedId(date: Date = new Date()): string {
+  const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+  // Move to the Thursday of this ISO week: it decides which year the week belongs to.
+  day.setUTCDate(day.getUTCDate() + 4 - (day.getUTCDay() || 7))
+  const yearStart = Date.UTC(day.getUTCFullYear(), 0, 1)
+  const week = Math.ceil(((day.getTime() - yearStart) / 86_400_000 + 1) / 7)
+  return `${day.getUTCFullYear()}-W${String(week).padStart(2, '0')}`
+}
+
+export function seedFromWeeklyId(id: string): number {
+  return hashStringToSeed(`weekly:${id}`)
+}
+
 /** Fresh free-play u32 seed. */
 export function randomU32Seed(): number {
   if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {

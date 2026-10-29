@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "seed": 1,
+  "pinField": {
+    "rows": 10,
+    "cols": 13,
+    "dropout": 0.125,
+    "dropoutSeed": 3203675234,
+    "keepOuts": []
+  },
+  "bumpers": [
+    {
+      "dx": 0,
+      "dz": 0
+    },
+    {
+      "dx": 0,
+      "dz": 0
+    },
+    {
+      "dx": 0,
+      "dz": 0
+    },
+    {
+      "dx": 0,
+      "dz": 0
+    },
+    {
+      "dx": 0,
+      "dz": 0
+    },
+    {
+      "dx": 0,
+      "dz": 0
+    },
+    {
+      "dx": 0,
+      "dz": 0
+    },
+    {
+      "dx": 0,
+      "dz": 0
+    },
+    {
+      "dx": 0,
+      "dz": 0
+    },
+    {
+      "dx": 0,
+      "dz": 0
+    },
+    {
+      "dx": 0,
+      "dz": 0
+    },
+    {
+      "dx": 0,
+      "dz": 0
+    }
+  ],
+  "feeders": {
+    "magSpin": false,
+    "nanoLoom": true,
+    "prismCore": true,
+    "gaussCannon": true,
+    "quantumTunnel": false
+  }
+}

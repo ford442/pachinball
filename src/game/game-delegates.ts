@@ -2,7 +2,8 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 
 import { GameState, GhostBallRenderer, ReplayRecorder, CameraMode, detectAccessibility } from '../game-elements'
 import { getDailyCascadeState } from '../cascade/daily-cascade-state'
-import type { FeederKey } from '../cascade/daily-cascade-layout'
+import type { FeederKey, TableLayout } from '../cascade/daily-cascade-layout'
+import type { StartMachine } from '../cascade/start-machine'
 import type { CabinetType } from '../cabinet'
 
 import { TABLE_MAPS } from '../config/table-maps'
@@ -20,11 +21,17 @@ export abstract class GameDelegates extends GameFields {
 
   startGame(): Promise<void> { return this.lifecycle?.startGame() ?? Promise.resolve() }
 
-  applyDailyCascadeOnStart(): void {
+  /**
+   * Rebuild the mutable toys (bumpers, pachinko field) and arm the feeders for
+   * the machine this game starts on. Runs from `startGame`, after the session
+   * RNG is seeded and before the first physics step, so the C++ world is
+   * re-exported before the frame-0 fingerprint.
+   */
+  applyDailyCascadeOnStart(machine: StartMachine): void {
     const state = getDailyCascadeState()
-    const mode = state.getMode()
 
-    if (mode === 'vanilla') {
+    if (machine.kind === 'vanilla') {
+      state.clearWeekly()
       if (state.wasMutatorApplied()) {
         this.gameObjects?.rebuildMutableToys(null)
         this.applyFeederGameplayFlags(null)
@@ -34,7 +41,13 @@ export abstract class GameDelegates extends GameFields {
       return
     }
 
-    const layout = state.ensureLayout()
+    let layout: TableLayout | null
+    if (machine.kind === 'weekly') {
+      layout = state.weeklyLayout(machine.seed)
+    } else {
+      state.clearWeekly()
+      layout = state.ensureLayout()
+    }
     if (!layout || !this.gameObjects) return
     this.gameObjects.rebuildMutableToys(layout)
     this.applyFeederGameplayFlags(layout.feedersEnabled)

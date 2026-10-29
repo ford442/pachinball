@@ -103,6 +103,7 @@ export function handleBumperCollision(
   const velocity = ballBody.linvel()
   const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
   ctx.host.hapticManager?.bumper(speed)
+  ctx.host.eventBus.emit('bumper:contact', { strength: Math.min(speed / 20, 1) })
 
   const impactNormal = new Vector3(
     ballPos.x - vis.mesh.position.x,

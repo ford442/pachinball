@@ -15,6 +15,7 @@ import {
   type GameSettings,
 } from '../game-elements'
 import { getDailyCascadeState } from '../cascade/daily-cascade-state'
+import { resolveStartMachine, type StartMachine } from '../cascade/start-machine'
 import { DisplayState } from '../display/display-types'
 import { initSessionRng, getSessionSeed, randomU32Seed } from '../core/seeded-rng'
 import { getChallengeSystem } from '../replay/challenge-system'
@@ -40,6 +41,7 @@ import { getMaterialLibrary } from '../materials'
 import { isMobileUserAgent } from '../engine/engine-options'
 
 export interface LifecycleHost {
+  readonly signal: AbortSignal
   readonly timers: TimerScope
   readonly stateManager: GameStateManager
   readonly effects: EffectsSystem | null
@@ -89,7 +91,7 @@ export interface LifecycleHost {
   handleGameOverLeaderboard(): Promise<void>
   getBallPosition(): import('@babylonjs/core/Maths/math.vector').Vector3 | null
   /** Rebuild pins/bumpers/feeders for Daily Cascade / free-play before PLAYING. */
-  applyDailyCascadeOnStart(): void
+  applyDailyCascadeOnStart(machine: StartMachine): void
   /** Start mode "Campaign" is selected: a started game goes straight into the campaign. */
   readonly campaignStartSelected: boolean
   enterCampaignStage(): void
@@ -198,25 +200,44 @@ export class GameLifecycle {
   }
 
   async startGame(): Promise<void> {
-    this.host.applyDailyCascadeOnStart()
-
     const dailyState = getDailyCascadeState()
-    const isDaily = dailyState.getMode() === 'daily'
     const isReplaying = this.host.replayRunner?.isPlaying() ?? false
+    const replayPayload = isReplaying ? this.host.replayRunner?.getPayload() ?? null : null
+    const challengeSeed = getChallengeSystem().getActiveChallenge()?.seed ?? null
+
+    const machine = resolveStartMachine({
+      mode: dailyState.getMode(),
+      modeSeed: dailyState.getModeSeed(),
+      replay: replayPayload ? { seed: replayPayload.seed, machine: replayPayload.machine } : null,
+      challengeSeed,
+      campaign: this.host.campaignStartSelected,
+    })
+
+    if (machine.kind === 'weekly') {
+      // Its generator is a lazy chunk. Awaited before the RNG is seeded, so nothing is half-built if the game is disposed meanwhile.
+      await dailyState.loadWeekly()
+      if (this.host.signal.aborted) return
+    }
 
     let seed: number
     if (isReplaying) {
-      seed = this.host.replayRunner?.getPayload()?.seed ?? randomU32Seed()
-    } else if (isDaily) {
+      seed = replayPayload?.seed ?? randomU32Seed()
+    } else if (machine.kind === 'weekly') {
+      seed = machine.seed
+    } else if (machine.kind === 'cascade' && dailyState.getMode() === 'daily') {
       const layout = dailyState.ensureLayout()
       seed = layout ? layout.seed : randomU32Seed()
     } else {
       // `?seed=` / `?challenge=seed:target` share links (#343): the same seed
       // must give the same session RNG streams, or a challenge is not a challenge.
-      seed = getChallengeSystem().getActiveChallenge()?.seed ?? randomU32Seed()
+      seed = challengeSeed ?? randomU32Seed()
     }
 
     initSessionRng(seed)
+    // After the session RNG: the weekly machine draws its layout through
+    // getLayoutRng, and the table must be rebuilt before the first recorded
+    // step so the frame-0 fingerprint (static hash, pin occupancy) includes it.
+    this.host.applyDailyCascadeOnStart(machine)
 
     if (!isReplaying && this.host.replayRecorder) {
       this.host.replayRecorder.start({
@@ -227,6 +248,8 @@ export class GameLifecycle {
         physicsEngine: this.host.physics?.getWasmMode() ?? 'rapier',
         renderer: (typeof window !== 'undefined' && (window as unknown as { currentRenderer?: string }).currentRenderer === 'webgpu') ? 'webgpu' : 'webgl2',
         createdAt: new Date().toISOString(),
+        // A spectator rebuilds the same machine from `seed` alone.
+        ...(machine.kind === 'weekly' ? { machine: 'weekly' as const } : {}),
       })
     }
 

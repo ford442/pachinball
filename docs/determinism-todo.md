@@ -66,7 +66,7 @@ entries below plus `randomU32Seed`'s fallback.
 | `src/effects/effects-screen.ts` | Screen shake offsets |
 | `src/effects/effects-shards.ts` | Particle shard velocity/rotation/scale |
 | `src/effects/effects-audio.ts` | Synth frequency + noise buffer |
-| `src/effects/effects-jackpot.ts` | Injectable callback default (`Math.random`) |
+| `src/effects/effects-jackpot.ts` | Injectable callback default (`Math.random`): burst positions only; the sequence itself is on the sim clock |
 | `src/game/game-post-process.ts` | Table-camera shake offsets |
 | `src/display/display-lcd-overlay.ts` | Walk-by emoji timer/speed/pick |
 | `src/audio/sound-system-synth.ts` | Noise buffers, pan, frequency jitter |
@@ -127,6 +127,28 @@ On the gameplay clock (#441):
 | Gameplay timers stepped per frame: swarm lifetimes (expiry removes bodies), stuck-ball detection, combo-multiplier decay, power-up timer, tilt decay | `stepPhysics()` passes the sim seconds advanced (`simDt`), not render `dt` |
 
 `nudgeState` and `tiltActive` are reset in `startGame()`.
+
+### The jackpot sequence is on the sim clock
+
+The Cyber-Shock sequence (breach 0–2 s, critical 2–5 s, meltdown 5–10 s) used to
+count render `dt` and schedule its countdown beeps with `setTimeout`. It also
+decides when the display leaves JACKPOT, and the display state gates hologram
+catches and fever (`handleBumperCollision`), so its length is gameplay: a 30 Hz
+recorder and a 144 Hz spectator ended it on different steps.
+
+`src/effects/jackpot-phase-clock.ts` makes the phase a pure function of
+`step - startStep` (120 / 300 / 600 steps; the beeps are cues at +18 / +54 / +90
+steps into the critical phase). `GamePhysicsController.runTick` advances it once
+per fixed tick from `GameSimClock.liveSteps()` (committed steps plus the ticks
+of the render frame in progress, which `steps()` does not count until the frame
+ends), and leaves the JACKPOT display state on the step the sequence ends. The
+start step is read the same way, so a sequence started from a contact callback
+lands on the same step on every client. `EffectsSystem.jackpotPhaseLog` records
+`{ step, phase }`; `tests/replay-jackpot-phase.test.ts` replays a tape at 30, 60
+and 144 Hz and checks the log, the score and the display state match.
+
+Render-rate work that stays: the extra meltdown bursts
+(`updateJackpotSequence(dt)`) and every visual that reads the phase.
 
 Still wall-clock, cosmetic only: tilt bloom reset (`setTimeout`), the bonus
 tally bloom reset, full-charge haptic pulse, spawn-effect names, mirror sync
