@@ -1126,6 +1126,13 @@ const DENSE_FIELD = {
     }
   }
 
+  // A uint64_t binding: a BigInt from the pinned SDK (-sWASM_BIGINT). The
+  // native fixture is 16 hex chars, the form WasmPhysicsEngine hands out.
+  const stateHex = (w) => {
+    const hash = w.getStateHash()
+    return typeof hash === 'bigint' ? hash.toString(16).padStart(16, '0') : `LOSSY(${typeof hash}:${hash})`
+  }
+
   const world = new Module.PhysicsWorld()
   if (typeof world.getStateHash !== 'function') {
     world.delete()
@@ -1134,16 +1141,16 @@ const DENSE_FIELD = {
   } else {
     const scene = build(world)
     run(world, scene, 0, SNAPSHOT_AT)
-    const atSnapshot = world.getStateHash()
+    const atSnapshot = stateHex(world)
     const blob = world.serializeSnapshot()
     run(world, scene, SNAPSHOT_AT, PLUNGE_FRAMES)
-    const final = world.getStateHash()
+    const final = stateHex(world)
     const native = existsSync(stateHashFixture) ? readFileSync(stateHashFixture, 'utf8').trim() : null
 
     const restored = world.restoreSnapshot(blob)
-    const rewound = world.getStateHash()
+    const rewound = stateHex(world)
     run(world, scene, SNAPSHOT_AT, PLUNGE_FRAMES)
-    const replayed = world.getStateHash()
+    const replayed = stateHex(world)
     world.delete()
 
     const ok = native === final && restored === 0 && rewound === atSnapshot && replayed === final && final !== atSnapshot

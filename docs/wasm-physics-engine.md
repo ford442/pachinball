@@ -274,10 +274,11 @@ Configured in [`native/CMakeLists.txt`](../native/CMakeLists.txt). Every
 
 **64-bit values.** The pinned SDK always has BigInt integration on (`-sWASM_BIGINT`
 is deprecated there, so it is not passed). The `uint64_t` returns —
-`getStepCount`, `getStaticContentHash`, `getContactGeneration` — therefore
+`getStepCount`, `getStaticContentHash`, `getStateHash`, `getContactGeneration` — therefore
 cross losslessly as JS `BigInt`. `WasmPhysicsEngine` (`PhysicsModule.ts`) is the
 only place that converts them: to a number, and the hash to 16 hex chars, so
-nothing past it changes type. `run-wasm-parity.mjs` checks the hash is a
+nothing past it changes type (`getStateHash()` keeps returning the same 16 hex
+chars it did as a string binding). `run-wasm-parity.mjs` checks the hash is a
 `BigInt` equal to the snapshot header's words.
 
 ### Compile policy (native **and** WASM)
@@ -288,8 +289,12 @@ sources — `pachinball_physics_native`, `physics_world_test` and
 
 | Target | Flags | Rationale |
 |--------|-------|-----------|
-| `pachinball_warnings` | `-Wall -Wextra -Werror -Wshadow -Wconversion -Wdouble-promotion` | One warning policy for g++, clang and em++; `bindings.cpp` was previously never warning-checked |
+| `pachinball_warnings` | `-Wall -Wextra -Werror -Wshadow -Wconversion -Wsign-conversion -Wdouble-promotion -Wold-style-cast` | One warning policy for g++, clang and em++; `bindings.cpp` was previously never warning-checked. `-Wdouble-promotion` and `-Wconversion` catch a stray `0.5` turning an f32 expression into f64 (a numeric change); `-Wsign-conversion` / `-Wold-style-cast` keep index and id arithmetic explicit. Catch2 itself is fetched `SYSTEM` and never compiled with them |
 | `pachinball_fp` | `-ffp-contract=off` | Native ↔ WASM byte-exact parity: GCC defaults to `fast` outside ISO mode and would fuse `a*b+c` into FMA on aarch64 or `-march=native`. No numeric change today — the golden traces and parity fixture are identical with and without it |
+
+The language mode is ISO `-std=c++17` (`CMAKE_CXX_EXTENSIONS OFF`), not
+`gnu++17`, so GCC's GNU-mode `-ffp-contract=fast` default cannot come back
+if `pachinball_fp` is ever dropped from a target.
 
 ### Per-config compile / link
 

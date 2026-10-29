@@ -18,6 +18,9 @@ project(pachinball_physics LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# -std=c++17, not gnu++17: GCC's GNU mode defaults to -ffp-contract=fast, so
+# ISO mode is the second guard (after pachinball_fp) against fused a*b+c.
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Opt-in rebuild speed-up for both trees. Set before any target exists — the
@@ -39,16 +42,18 @@ endif()
 # bindings.cpp is held to the same bar as the solver.
 # ---------------------------------------------------------------------------
 add_library(pachinball_warnings INTERFACE)
+# Not on Catch2 itself (fetched SYSTEM, never linked to this target).
 target_compile_options(pachinball_warnings INTERFACE
   -Wall -Wextra -Werror
-  -Wshadow -Wconversion -Wdouble-promotion
+  -Wshadow -Wconversion -Wsign-conversion -Wdouble-promotion -Wold-style-cast
 )
 
 # Byte-exact native ↔ WASM parity needs every a*b+c rounded twice. GCC
-# defaults to -ffp-contract=fast outside ISO mode (we build gnu++17), which
-# fuses into FMA on any FMA-capable target (aarch64, -march=native x86-64);
-# Clang defaults to `on`. Neither fuses today (baseline x86-64 has no FMA;
-# wasm has none without relaxed-simd) — this keeps it that way everywhere.
+# defaults to -ffp-contract=fast outside ISO mode (CMAKE_CXX_EXTENSIONS is OFF
+# above, so we build c++17), which fuses into FMA on any FMA-capable target
+# (aarch64, -march=native x86-64); Clang defaults to `on`. Neither fuses today
+# (baseline x86-64 has no FMA; wasm has none without relaxed-simd) — this
+# keeps it that way everywhere, whatever the language mode.
 add_library(pachinball_fp INTERFACE)
 target_compile_options(pachinball_fp INTERFACE -ffp-contract=off)
 
