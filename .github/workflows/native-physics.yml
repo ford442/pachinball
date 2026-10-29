@@ -14,7 +14,7 @@
 #   npm run compile-db           # configure only → native/build-native/compile_commands.json
 #   npm run test:native          # compile-db + Catch2 + ctest (g++/cmake only)
 #   npm run test:native:release  # same at -O3 (native/build-release) — native_release_ctest, native_arm64_ctest
-#   npm run test:native:san      # same under ASan/UBSan (native/build-san), no recovery
+#   CXX=clang++ npm run test:native:san  # same under ASan/UBSan + float-cast-overflow (native/build-san), no recovery
 #   npm run check:compile-db     # clangd DB smoke (after compile-db)
 #   npm run check:wasm-docs      # docs/wasm-physics-engine.md drift check
 #   npm run build:wasm           # Emscripten Release → public/wasm/ (production)
@@ -135,22 +135,29 @@ jobs:
       - name: Run native Catch2 tests (Release)
         run: npm run test:native:release
 
+  # clang, not g++: the sanitizer runtime the WASM toolchain's compiler shares,
+  # and float-cast-overflow (an unchecked NaN / ±inf → int cast) is reported
+  # as reliably as the rest of UBSan. Pinned to 24.04 so clang-18 and its
+  # compiler-rt package match.
   sanitizer_ctest:
     name: Sanitizer CTest (Blocking)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y cmake g++
+        run: sudo apt-get update && sudo apt-get install -y cmake clang-18 libclang-rt-18-dev
 
       # Same command locally: PACHINBALL_SANITIZE=ON adds
-      # -fsanitize=address,undefined -fno-sanitize-recover=all, so a UBSan
-      # report fails the job instead of only printing (#464 item 3).
-      - name: Build and run Catch2 under ASan/UBSan
+      # -fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=all,
+      # so a UBSan report fails the job instead of only printing (#464 item 3).
+      - name: Build and run Catch2 under ASan/UBSan (clang)
         env:
+          CXX: clang++-18
           UBSAN_OPTIONS: halt_on_error=1
-        run: npm run test:native:san
+        run: |
+          "$CXX" --version
+          npm run test:native:san
 
   wasm_parity:
     name: WASM Build + Parity (Blocking)

@@ -192,7 +192,10 @@ if(NOT EMSCRIPTEN)
   option(PACHINBALL_BUILD_TESTS "Build the Catch2 test binary (fetches Catch2 unless installed)" ON)
   # ASan + UBSan on the library and the tests; any report fails the run.
   # `npm run test:native:san` configures native/build-san with this ON.
-  option(PACHINBALL_SANITIZE "Build with -fsanitize=address,undefined (no recovery)" OFF)
+  # float-cast-overflow is spelled out: neither compiler's `undefined` group
+  # includes it, and an out-of-range float→int cast is exactly the UB a
+  # NaN / ±inf body position used to hit in the broadphase (#487).
+  option(PACHINBALL_SANITIZE "Build with -fsanitize=address,undefined,float-cast-overflow (no recovery)" OFF)
   # Faster clean builds of the library (one TU per batch). Library only — the
   # test files each define their own helpers. compile-db forces it OFF: clangd
   # needs one entry per source file, not unity_*.cxx batches.
@@ -217,7 +220,7 @@ if(NOT EMSCRIPTEN)
   add_library(pachinball_sanitize INTERFACE)
   if(PACHINBALL_SANITIZE)
     set(_pachinball_san_flags
-      -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer)
+      -fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=all -fno-omit-frame-pointer)
     target_compile_options(pachinball_sanitize INTERFACE ${_pachinball_san_flags})
     target_link_options(pachinball_sanitize INTERFACE ${_pachinball_san_flags})
   endif()

@@ -1306,13 +1306,13 @@ the first configure unless an installed Catch2 3.x is found
 | CMake option (native tree) | Default | Effect |
 |----------------------------|---------|--------|
 | `PACHINBALL_BUILD_TESTS` | `ON` | `OFF` skips Catch2 entirely — no network on configure (`npm run compile-db -- -DPACHINBALL_BUILD_TESTS=OFF` works offline; `check:compile-db` then skips the `native/tests` TUs with a warning) |
-| `PACHINBALL_SANITIZE` | `OFF` | `-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer` on the library and the tests |
+| `PACHINBALL_SANITIZE` | `OFF` | `-fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=all -fno-omit-frame-pointer` on the library and the tests. `float-cast-overflow` is outside both compilers' `undefined` group, so it is named; CI runs this tree with clang |
 | `PACHINBALL_UNITY_BUILD` | `OFF` | Unity-builds `pachinball_physics_native` (library only — the test files each define their own helpers). `compile-db` forces it `OFF`; `check:compile-db` rejects `unity_*.cxx` entries. Keep file-scope constants unique per TU or in `SolverConstants.h` |
 | `PACHINBALL_CCACHE` | `OFF` | Uses `ccache` as `CMAKE_CXX_COMPILER_LAUNCHER` when found (both trees); warns and builds without it otherwise |
 
 ```bash
 npm run test:native:release  # native/build-release, -O3 — the golden traces must match the Debug tree
-npm run test:native:san      # native/build-san, PACHINBALL_SANITIZE=ON, ASan + UBSan, any report fails
+CXX=clang++ npm run test:native:san  # native/build-san, PACHINBALL_SANITIZE=ON, ASan + UBSan + float-cast-overflow, any report fails
 ```
 
 This lets you iterate on solver logic with fast compile times using your
@@ -1368,7 +1368,7 @@ The GitHub Actions workflow (`.github/workflows/native-physics.yml`) runs on cha
 | `native_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native` (Catch2), `check:compile-db`, `check:wasm-docs` |
 | `native_release_ctest` | non-blocking (first week) | cmake, g++ | `npm run test:native:release` — the same Catch2 suite at `-O3`; the golden traces must not move with the optimisation level |
 | `native_arm64_ctest` | non-blocking (first week) | cmake, g++ on `ubuntu-24.04-arm` | `test:native` and `test:native:release` on aarch64, where an unchecked `a*b+c` would fuse into FMA |
-| `sanitizer_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native:san` — ASan/UBSan Catch2, no recovery (`CMAKE_BUILD_TYPE=Debug`) |
+| `sanitizer_ctest` | **BLOCKING** | cmake, clang-18 + compiler-rt | `CXX=clang++-18 npm run test:native:san` — ASan/UBSan + `float-cast-overflow` Catch2, no recovery (`CMAKE_BUILD_TYPE=Debug`) |
 | `wasm_parity` | **BLOCKING** | emsdk (`.emsdk-version`) | `print:wasm-flags` then Release + RelWithAsserts + `test:wasm-parity` |
 
 Every job that installs Emscripten (`wasm_parity` here, `e2e-preview` in
