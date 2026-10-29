@@ -1154,7 +1154,9 @@ verifier (#444) compares hashes and only fetches a blob on a mismatch. `npm run 
 the `state_hash_test.cpp` plunge scene to equal the native one
 (`PACHINBALL_STATE_HASH_FIXTURE`), and a restore to give the pre-serialize hash
 back. It moves whenever the snapshot payload does, i.e. on every
-`SNAPSHOT_VERSION` bump.
+`SNAPSHOT_VERSION` bump. Every NaN it reads is hashed as the canonical quiet
+NaN (see "Input contract" below), so the hash never depends on a build's NaN
+payload.
 
 On `WasmSimEngine` both are `Awaitable`: in-process engines answer
 synchronously, the worker client with a promise (#441).
@@ -1333,6 +1335,27 @@ aarch64 (`native_release_ctest`, `native_arm64_ctest`).
 ```bash
 PACHINBALL_PRINT_GOLDEN=1 ./native/build-native/physics_world_test "[golden]"
 ```
+
+### Input contract: UB, NaN and capacity (#487 slice 1a)
+
+Verified scores replay a world from untrusted input, so the engine has no
+undefined behaviour and no build-dependent result on *any* input. Every rule
+below is the identity on finite, in-capacity, in-range input — the golden
+traces did not move when they landed — and changes behaviour only where the
+old code hit UB, aliased a handle, or exposed a platform-dependent NaN.
+
+| Input | Behaviour | Test |
+|-------|-----------|------|
+| The 1001st triangle mesh or force field | Refused like every other static family: `STATIC_HANDLE_OVERFLOW`, `getDroppedStaticCount()` +1, no triangle reaches the table (it used to be handed `-7000` / `-8000`, the next family's first id). `WasmIdShadow` mirrors the cap | `meshes and force fields reject the 1001st entry without aliasing` |
+| A force-field / pin-field id above its base (`INT_MAX`, `STATIC_HANDLE_OVERFLOW`, another family's id) | Range-checked before `BASE - id`, so no signed overflow; a no-op / `-1` as before | `field ids at the integer limits are rejected and never decoded` |
+| A broadphase coordinate that is NaN, ±inf or past ±1e8 cells | `cellX` / `cellZ` clamp to `±CELL_COORD_LIMIT` (1e8 cells, 44,000 km) before the cast; NaN goes to cell 0. Not clamped to the grid extent, so no playfield body changes cell | `broadphase_test.cpp` |
+| `WorldParams::maxSubsteps` NaN or outside [1, 64] | NaN → the default 8; everything else clamped to [1, 64]. Applied in the constructor (stored sanitised) and again at the cast in `step()` (a restored snapshot keeps its params bit for bit). No binding takes `WorldParams` today; the constructor is where it enters | `maxSubsteps is validated at the boundary` |
+| A dynamic body whose position, rotation, velocity or angular velocity is not finite | Frozen after integration (before the broadphase and solver see it) and again after the solve: back to its substep-start pose (origin / identity if that was not finite), velocities and forces zeroed, asleep via the existing active flag. Recorded as `NaNQuarantine{bodyId, step, substep}` (`lastNaNQuarantines()`, Embind `getNaNQuarantineCount()` / `getNaNQuarantineBodyId(i)`), not in the contact buffer. The engine only freezes; the game decides what the ball means | `a NaN body is quarantined…`, `a body created at a non-finite pose…` |
+| A NaN anywhere the hash reads | `SnapshotHasher::f32` hashes every NaN as `0x7FC00000`, so payloads (which differ between WASM engines and native) never reach `getStateHash()` / `staticContentHash()`. `SnapshotWriter::f32` keeps the raw bits; `-0.0f` is not canonicalised. `run-wasm-parity.mjs` checks a `0xffffffff`-payload native world against the bundle's | `state hash: writes the NaN quarantine parity fixture` |
+
+`droppedStatics_` stays part of `staticContentHash()`, as it was for every
+family: two tables that refused a shape hash differently from two that did
+not, but never by what the refused shape was.
 
 ### Language Server & IDE Tooling (`compile_commands.json`)
 
