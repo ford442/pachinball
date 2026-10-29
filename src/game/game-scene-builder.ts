@@ -2,7 +2,7 @@
  * Game Scene Builder — Staged scene construction helpers.
  */
 
-import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
+import type { ShadowRig } from './shadow-rig'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
@@ -46,7 +46,7 @@ export interface SceneBuilderHost {
   tableCam: TargetCamera | null
   cameraController: CameraController | null
   adventureMode: AdventureMode | null
-  shadowGenerator: ShadowGenerator | null
+  shadowRig: ShadowRig | null
   playfieldGroup: TransformNode | null
   uiManager: GameUIManager | null
 }
@@ -137,10 +137,10 @@ export class GameSceneBuilder {
       throw new Error(`Critical scene incomplete: ${joints}/2 flipper joints, ${flipperMeshes.length} flipper meshes`)
     }
 
-    const shadowGenerator = this.host.shadowGenerator
-    if (shadowGenerator) {
-      for (const mesh of flipperMeshes) shadowGenerator.addShadowCaster(mesh, true)
-      for (const mesh of ballMeshes) shadowGenerator.addShadowCaster(mesh, true)
+    const shadowRig = this.host.shadowRig
+    if (shadowRig) {
+      for (const mesh of flipperMeshes) shadowRig.addDynamicCaster(mesh, true)
+      for (const mesh of ballMeshes) shadowRig.addDynamicCaster(mesh, true)
     }
 
     // Start stays gated on the cabinet (or its procedural fallback) resolving.
@@ -186,19 +186,20 @@ export class GameSceneBuilder {
 
     // Receiver only. It used to be a caster too, which put a table-sized quad into every
     // shadow-map render (#443).
-    ground.receiveShadows = true
+    this.host.shadowRig?.addReceiver(ground)
     if (this.host.playfieldGroup) ground.parent = this.host.playfieldGroup
 
     if (!GameConfig.camera.reducedMotion) {
       const flipperGlow = MeshBuilder.CreateGround('flipperGlow', { width: 10, height: 6 }, scene)
       flipperGlow.position.set(0, -0.95, -7)
-      flipperGlow.receiveShadows = true
       if (this.host.playfieldGroup) flipperGlow.parent = this.host.playfieldGroup
       const glowMat = new StandardMaterial('flipperGlowMat', scene)
       glowMat.diffuseColor = new Color3(0, 0, 0)
       glowMat.emissiveColor = new Color3(0, 0.07, 0.2)
       glowMat.alpha = 0.3
       flipperGlow.material = glowMat
+      // After the material: the rig lifts the material's light cap by one for the extra twin light.
+      this.host.shadowRig?.addReceiver(flipperGlow)
     }
 
     console.log('[GameSceneBuilder] LCD playfield created')
@@ -223,10 +224,11 @@ export class GameSceneBuilder {
     gameObjects.createDrainRails()
     gameObjects.createRailColliders()
 
-    const shadowGenerator = this.host.shadowGenerator
-    if (shadowGenerator) {
+    // Bumpers pulse and slingshots flex on a hit, so they are dynamic casters.
+    const shadowRig = this.host.shadowRig
+    if (shadowRig) {
       const gameplayMeshes = scene.meshes.filter(m => /bumper|slingshot/i.test(m.name))
-      for (const mesh of gameplayMeshes) shadowGenerator.addShadowCaster(mesh, true)
+      for (const mesh of gameplayMeshes) shadowRig.addDynamicCaster(mesh, true)
     }
 
     // Reparent all new obstacle meshes into the tilted visual group

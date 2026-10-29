@@ -247,14 +247,15 @@ export class GameSystemsInitializer {
         }
       }
 
-      const shadowGenerator = this.game.shadowGenerator
-      if (shadowGenerator) {
+      // Spinners, traps, launchers and gates all move.
+      const shadowRig = this.game.shadowRig
+      if (shadowRig) {
         for (const root of obstacleMeshes) {
           if (!root) continue
           if (root instanceof AbstractMesh) {
-            shadowGenerator.addShadowCaster(root, true)
+            shadowRig.addDynamicCaster(root, true)
           } else {
-            for (const child of root.getChildMeshes()) shadowGenerator.addShadowCaster(child, false)
+            for (const child of root.getChildMeshes()) shadowRig.addDynamicCaster(child, false)
           }
         }
       }
@@ -469,6 +470,7 @@ export class GameSystemsInitializer {
         skyboxSize: GameConfig.visuals.skyboxSize,
         frozenMaterials: renderer?.frozenMaterials ?? [],
         clampLights: renderer?.clampLights,
+        staticShadows: renderer?.staticShadows,
       })
       this.game.staticScene = install
       this.game.staticSceneGate = install.gate

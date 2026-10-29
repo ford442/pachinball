@@ -90,7 +90,8 @@ test.describe('perf baseline (opt-in)', () => {
             `(MAD ${run.aggregate.renderTimeMs.mad.toFixed(2)}), frame ${run.aggregate.frameTimeMs.median.toFixed(2)}ms, ` +
             `draws ${run.aggregate.counts.drawCalls}, active ${run.aggregate.counts.activeMeshes}/${run.aggregate.counts.meshes}, ` +
             `frozen mats ${run.aggregate.counts.materialsFrozen}/${run.aggregate.counts.materials}, ` +
-            `shadow renders/frame ${run.aggregate.counts.shadowRendersPerFrame?.toFixed(2) ?? 'n/a'}, ` +
+            `shadow renders/frame static ${run.aggregate.counts.shadowRendersPerFrame?.toFixed(2) ?? 'n/a'} / ` +
+            `dynamic ${run.aggregate.counts.dynamicShadowRendersPerFrame?.toFixed(2) ?? 'n/a'}, ` +
             `refreezes ${run.aggregate.counts.refreezeCount ?? 'n/a'}, gate ${run.aggregate.counts.gateState ?? 'n/a'} ` +
             `(list frozen ${run.aggregate.counts.activeListFrozen ?? 'n/a'}, settled in ${run.aggregate.counts.settleFrames ?? 'n/a'} frames) ` +
             `[${run.env.physicsEngine}, ${run.env.qualityTier}]`,

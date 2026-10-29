@@ -36,6 +36,13 @@ caster, or toggles meshes in bulk, call `invalidate` (or `hold` around async wor
   material changes render group, a particle system starts or stops, `scene.particlesEnabled` flips, or the camera moves or is
   replaced. Off with `?freezeMeshes=0`. Not `scene.freezeActiveMeshes()`: that waits for every particle system and texture to be
   ready, which never happens once the ball trail starts.
+- **Static shadow map** (`ShadowRig`, `src/game/shadow-rig.ts`, #484): the key light's shadows are two generators, one for the
+  cabinet (static, 2048², the per-tier technique) and one for everything that moves (dynamic, 1024² PCF, no blur pass). The rig is a
+  gate target: the static map renders every frame until the first refreeze, then once per refreeze. Only an invalidation with
+  `shadows: true` (cabinet load, track build / clear, tier change, `install`) thaws it, so a ball spawn or collect does not.
+  `canRefreeze` waits for every static caster's depth shader, because a map rendered once while one is still compiling leaves
+  that caster out until the next refresh. **A mesh that moves, scales or spins is a dynamic caster**
+  (`shadowRig.addDynamicCaster`); only geometry that provably never moves belongs in `addStaticCaster`.
 - **Colour clear** (`SkyboxAutoClear`, `src/game/skybox-auto-clear.ts`): `scene.autoClear = false` only while the camera is inside
   the skybox and the skybox is enabled and visible; never on mobile (tile GPUs get slower).
 

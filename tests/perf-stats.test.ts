@@ -71,6 +71,18 @@ describe('perf-stats', () => {
     expect(warnings).toContain('only in "after": high/menu')
   })
 
+  it('compareRuns reads a missing dynamic shadow pass as 0 so the static / dynamic split shows up', () => {
+    const run = (counts: Record<string, number | null>) => ({ tier: 'medium', state: 'table', aggregate: { counts } })
+    const { rows } = compareRuns(
+      [run({ shadowCasters: 32, shadowRendersPerFrame: 1, dynamicShadowCasters: null, dynamicShadowRendersPerFrame: null })],
+      [run({ shadowCasters: 0, shadowRendersPerFrame: 0, dynamicShadowCasters: 32, dynamicShadowRendersPerFrame: 1 })],
+    )
+    const pick = (metric: string) => rows.find((r) => r.metric === metric)
+    expect(pick('shadowRendersPerFrame (static)')).toMatchObject({ before: 1, after: 0 })
+    expect(pick('dynamicShadowRendersPerFrame')).toMatchObject({ before: 0, after: 1 })
+    expect(pick('dynamicShadowCasters')).toMatchObject({ before: 0, after: 32 })
+  })
+
   it('formatMarkdown renders a signed delta column', () => {
     const md = formatMarkdown([{ key: 'medium/table', metric: 'renderTimeMs (median)', before: 10, after: 7, deltaPct: -30 }])
     expect(md).toContain('| medium/table | renderTimeMs (median) | 10.00 | 7.00 | -30.0% |')

@@ -13,7 +13,7 @@
 
 import type { Scene } from '@babylonjs/core/scene'
 import type { EventBus } from '../core/event-bus'
-import { StaticSceneGate } from '../core/static-scene-gate'
+import { StaticSceneGate, type StaticSceneTarget } from '../core/static-scene-gate'
 import { isMobileUserAgent } from '../engine/engine-options'
 import {
   FrozenActiveMeshes,
@@ -35,6 +35,8 @@ export interface StaticSceneInstallInputs {
   frozenMaterials: ReadonlyArray<readonly [FreezableMaterial, string]>
   /** WebGL2: re-clamp `maxSimultaneousLights` on these before they are frozen. */
   clampLights?: (materials: FreezableMaterial[]) => void
+  /** The static shadow map: renders every frame until the first refreeze, then once per refreeze. */
+  staticShadows?: StaticSceneTarget | null
 }
 
 export interface StaticSceneInstall {
@@ -52,6 +54,7 @@ export function installStaticScene(inputs: StaticSceneInstallInputs): StaticScen
   const materials = new FrozenMaterialSet({ clampLights: inputs.clampLights })
   for (const [material, why] of inputs.frozenMaterials) materials.add(material, why)
   const unregister: Array<() => void> = [gate.registerTarget(materials)]
+  if (inputs.staticShadows) unregister.push(gate.registerTarget(inputs.staticShadows))
 
   // A frozen material never re-binds its fog uniforms or re-evaluates its fog define, and the
   // track themes lerp the scene's fog every frame (effects-atmosphere.ts), so fog is state the

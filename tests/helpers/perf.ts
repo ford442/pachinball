@@ -85,7 +85,12 @@ interface PerfGameHooks {
     _drawCalls?: { current?: number }
     _gl?: WebGLRenderingContext
   }
+  /** The key light's shadow generator; from #484 on it is the STATIC one (cabinet), and `dynamicShadowGenerator` joins it. */
   shadowGenerator?: {
+    getShadowMap?: () => { renderList?: unknown[]; onAfterRenderObservable?: Observable } | null
+  } | null
+  /** Balls, flippers, bumpers, moving obstacles. Absent (null) on commits before the split. */
+  dynamicShadowGenerator?: {
     getShadowMap?: () => { renderList?: unknown[]; onAfterRenderObservable?: Observable } | null
   } | null
   ballManager?: { spawnExtraBalls: (count: number) => void; getBallBodies: () => unknown[] } | null
@@ -125,6 +130,8 @@ export interface RawSamples {
   drawPhase: number[]
   /** Times the key-light shadow map / any MirrorTexture rendered during the measured frames. */
   shadowRenders: number
+  /** Renders of the dynamic generator's map; stays 0 before the static / dynamic split. */
+  dynamicShadowRenders: number
   mirrorRenders: number
 }
 
@@ -136,10 +143,14 @@ export interface SceneCounts {
   textures: number
   drawCalls: number
   shadowCasters: number | null
+  /** Casters of the dynamic generator; null before the static / dynamic split. */
+  dynamicShadowCasters: number | null
   /** Materials whose `isFrozen` is true right now (of `materials`). */
   materialsFrozen: number
   /** Key-light shadow-map renders per frame; multiply by the frame rate for renders/s. */
   shadowRendersPerFrame: number | null
+  /** Dynamic generator renders per frame; null before the static / dynamic split. */
+  dynamicShadowRendersPerFrame: number | null
   mirrorRendersPerFrame: number | null
   /** `StaticSceneGate.refreezeCount`; null before the gate exists. */
   refreezeCount: number | null
@@ -337,6 +348,7 @@ function sampleFramesInPage(page: Page, warmup: number, frames: number): Promise
           rttRender: [],
           drawPhase: [],
           shadowRenders: 0,
+          dynamicShadowRenders: 0,
           mirrorRenders: 0,
         }
         let seen = 0
@@ -348,6 +360,9 @@ function sampleFramesInPage(page: Page, warmup: number, frames: number): Promise
         }
         watch(shadowMap?.onAfterRenderObservable, () => {
           if (seen >= w) out.shadowRenders++
+        })
+        watch(g.dynamicShadowGenerator?.getShadowMap?.()?.onAfterRenderObservable, () => {
+          if (seen >= w) out.dynamicShadowRenders++
         })
         // The game owns no mirror (#484); any MirrorTexture that appears is found by class, so a
         // decorative pass that brings one back shows up here as a non-zero count.
@@ -406,6 +421,7 @@ export async function collectCounts(page: Page): Promise<SceneCounts> {
     const g = (window as PerfWindow).game
     const scene = g?.scene
     const casters = g?.shadowGenerator?.getShadowMap?.()?.renderList
+    const dynamicCasters = g?.dynamicShadowGenerator?.getShadowMap?.()?.renderList
     return {
       meshes: scene?.meshes.length ?? 0,
       activeMeshes: scene?.getActiveMeshes().length ?? 0,
@@ -414,9 +430,11 @@ export async function collectCounts(page: Page): Promise<SceneCounts> {
       textures: scene?.textures.length ?? 0,
       drawCalls: g?.engine?._drawCalls?.current ?? 0,
       shadowCasters: casters ? casters.length : null,
+      dynamicShadowCasters: dynamicCasters ? dynamicCasters.length : null,
       materialsFrozen: scene ? (scene.materials as Array<{ isFrozen?: boolean }>).filter((m) => m.isFrozen).length : 0,
       // Filled in from the sampled frames by toRepeatResult.
       shadowRendersPerFrame: null,
+      dynamicShadowRendersPerFrame: null,
       mirrorRendersPerFrame: null,
       refreezeCount: g?.staticSceneGate ? g.staticSceneGate.refreezeCount : null,
       gateState: g?.staticSceneGate?.getStats?.().state ?? null,
@@ -468,6 +486,8 @@ export function toRepeatResult(
       ...counts,
       settleFrames,
       shadowRendersPerFrame: raw.frame.length > 0 ? raw.shadowRenders / raw.frame.length : null,
+      dynamicShadowRendersPerFrame:
+        raw.frame.length > 0 && counts.dynamicShadowCasters !== null ? raw.dynamicShadowRenders / raw.frame.length : null,
       mirrorRendersPerFrame: raw.frame.length > 0 ? raw.mirrorRenders / raw.frame.length : null,
     },
     env,

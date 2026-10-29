@@ -76,8 +76,10 @@ export function disposeGame(game: Game): void {
 
   game.bloomPipeline?.dispose()
   game.bloomPipeline = null
-  game.shadowGenerator?.dispose()
+  game.shadowRig?.dispose()
+  game.shadowRig = null
   game.shadowGenerator = null
+  game.dynamicShadowGenerator = null
   game.ballAnimator?.dispose()
   game.ballAnimator = null
   game.ballStackVisual?.dispose()

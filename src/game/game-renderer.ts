@@ -42,8 +42,8 @@ import {
   type AccessibilityConfig,
 } from '../game-elements'
 import { getMaterialLibrary, detectQualityTier } from '../materials'
-import { applyShadowSettings, resolveShadowSettings, type ShadowSettings } from './shadow-config'
-import type { StaticSceneGate } from '../core/static-scene-gate'
+import { ShadowRig } from './shadow-rig'
+import type { StaticSceneGate, StaticSceneTarget } from '../core/static-scene-gate'
 import type { FreezableMaterial } from './frozen-material-set'
 import {
   clampMaterialLights,
@@ -65,7 +65,10 @@ export interface RendererHost {
   readonly cameraFollowTransitionSpeed: number
   tableCam: TargetCamera | null
   bloomPipeline: BloomPipelineController | null
+  /** The static generator (cabinet). `shadowRig` owns it and the dynamic one. */
   shadowGenerator: ShadowGenerator | null
+  dynamicShadowGenerator: ShadowGenerator | null
+  shadowRig: ShadowRig | null
   readonly staticSceneGate?: Pick<StaticSceneGate, 'invalidate'> | null
   keyLight: DirectionalLight | null
   rimLight: DirectionalLight | null
@@ -90,7 +93,6 @@ export class GameRenderer {
   private _lastResizeWidth = 0
   private _lastResizeHeight = 0
   private _lightBudgetTeardown: (() => void) | null = null
-  private _shadowSettings: ShadowSettings | null = null
   /** WebGL2 only: clamps `maxSimultaneousLights` to the uniform-block budget (see installWebGLLightBudget). */
   private _lightClamp: ((materials: LightCappedMaterial[]) => number) | null = null
   /**
@@ -136,7 +138,7 @@ export class GameRenderer {
       this.host.staticSceneGate?.invalidate('quality-tier', { materials: true, shadows: true })
     }
     this.postProcess.applyQualityTier(tier)
-    this.applyShadowTier(tier)
+    this.host.shadowRig?.applyTier(tier)
   }
 
   /** Accessibility settings changed: the post-process graph re-plans (reduced motion drops bloom, sharpen, vignette). */
@@ -157,7 +159,7 @@ export class GameRenderer {
     // The post-process manager applies its own half of the tier; the shadow filter follows it
     // here, so an automatic drop changes the technique exactly like a settings change does.
     const next = this.postProcess.dropQualityTierOnce()
-    this.applyShadowTier(next)
+    this.host.shadowRig?.applyTier(next)
     return next
   }
 
@@ -165,8 +167,10 @@ export class GameRenderer {
   getStaticSceneInputs(): {
     frozenMaterials: ReadonlyArray<readonly [FreezableMaterial, string]>
     clampLights: (materials: FreezableMaterial[]) => void
+    staticShadows: StaticSceneTarget | null
   } {
     return {
+      staticShadows: this.host.shadowRig,
       frozenMaterials: this.frozenMaterialCandidates,
       clampLights: (materials) => { this._lightClamp?.(materials) },
     }
@@ -197,11 +201,12 @@ export class GameRenderer {
     keyLight.position = new Vector3(-15, 25, -15)
     this.host.keyLight = keyLight
 
-    const shadowSettings = resolveShadowSettings(this.host.qualityTier)
-    const shadowGenerator = new ShadowGenerator(shadowSettings.mapSize, keyLight)
-    applyShadowSettings(shadowGenerator, shadowSettings)
-    this._shadowSettings = shadowSettings
-    this.host.shadowGenerator = shadowGenerator
+    // Static (cabinet) and dynamic (balls, flippers, ...) shadows are two generators on two twins
+    // of the key light; see shadow-rig.ts for why they cannot share the key light itself.
+    const shadowRig = new ShadowRig(scene, keyLight, this.host.qualityTier)
+    this.host.shadowRig = shadowRig
+    this.host.shadowGenerator = shadowRig.staticGenerator
+    this.host.dynamicShadowGenerator = shadowRig.dynamicGenerator
 
     // Rim light
     const rimLight = new DirectionalLight('rimLight', new Vector3(0.2, -0.3, 0.9), scene)
@@ -216,22 +221,6 @@ export class GameRenderer {
     bounceLight.diffuse = color(LIGHTING.BOUNCE.color)
     bounceLight.range = 20
     this.host.bounceLight = bounceLight
-  }
-
-  /**
-   * Re-point the live key-light generator at `tier`'s technique. Switching the filter marks every
-   * receiving material light-dirty, so it recompiles on the next frame. A no-op when the tier maps
-   * to the technique and map size already running (HIGH <-> HIGH, MEDIUM <-> LOW).
-   */
-  private applyShadowTier(tier: QualityTier): void {
-    const generator = this.host.shadowGenerator
-    const current = this._shadowSettings
-    if (!generator || !current) return
-    const next = resolveShadowSettings(tier)
-    if (next.technique === current.technique && next.mapSize === current.mapSize) return
-    applyShadowSettings(generator, next)
-    if (next.mapSize !== current.mapSize) generator.mapSize = next.mapSize
-    this._shadowSettings = next
   }
 
   private setupEnvironmentLighting(): void {
@@ -613,7 +602,9 @@ export class GameRenderer {
       this._resizeObserver = null
     }
 
-    this.host.shadowGenerator?.dispose()
+    this.host.shadowRig?.dispose()
+    this.host.shadowRig = null
     this.host.shadowGenerator = null
+    this.host.dynamicShadowGenerator = null
   }
 }

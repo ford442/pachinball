@@ -2,7 +2,8 @@ import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera'
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight'
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight'
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
-import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
+import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
+import type { ShadowRig } from './shadow-rig'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
@@ -207,7 +208,10 @@ export abstract class GameFields {
   staticSceneGate: StaticSceneGate | null = null
   /** The gate's owner: frozen sets, watchers, skybox clear skip. Null until its lazy chunk arrives. */
   staticScene: StaticSceneInstall | null = null
+  /** The static (cabinet) generator; the dynamic one and the twin lights live in `shadowRig`. */
   shadowGenerator: ShadowGenerator | null = null
+  dynamicShadowGenerator: ShadowGenerator | null = null
+  shadowRig: ShadowRig | null = null
   playfieldGroup: TransformNode | null = null
 
   // Scene lights

@@ -83,7 +83,11 @@ export const COMPARE_METRICS = [
   ['meshes', (a) => a.counts?.meshes],
   ['materials', (a) => a.counts?.materials],
   ['materialsFrozen', (a) => a.counts?.materialsFrozen],
-  ['shadowRendersPerFrame', (a) => a.counts?.shadowRendersPerFrame],
+  ['shadowCasters (static)', (a) => a.counts?.shadowCasters],
+  ['shadowRendersPerFrame (static)', (a) => a.counts?.shadowRendersPerFrame],
+  // Absent / null before the static-dynamic split: there was no dynamic pass then, so it reads as 0.
+  ['dynamicShadowCasters', (a) => (a.counts ? (a.counts.dynamicShadowCasters ?? 0) : undefined)],
+  ['dynamicShadowRendersPerFrame', (a) => (a.counts ? (a.counts.dynamicShadowRendersPerFrame ?? 0) : undefined)],
   ['mirrorRendersPerFrame', (a) => a.counts?.mirrorRendersPerFrame],
   ['refreezeCount', (a) => a.counts?.refreezeCount],
 ]
