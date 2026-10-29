@@ -15,7 +15,7 @@ import { CollisionDispatcher } from './collision-dispatch'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { PhysicsBody } from '../../core/physics-api'
-import { GameSimClock } from '../../core/sim-clock'
+import { FIXED_TIMESTEP, GameSimClock } from '../../core/sim-clock'
 
 import { type InputFrame, type ReplayRecorder, type ReplayRunner } from '../../game-elements'
 import { BallType, GAME_TUNING, GameConfig } from '../../config'
@@ -28,6 +28,7 @@ import type { WasmContactEvent } from '../../wasm'
 /** Shared surface for mirror and owner WASM bridges. */
 import type { WasmContactBridge } from './collision-dispatch'
 import { createTimerScope } from '../../core/timers'
+import { isFixedStepReplay } from '../../replay/replay-recorder'
 import {
   applyReplaySnapshot,
   captureReplayFingerprint,
@@ -36,6 +37,23 @@ import {
   showReplayDivergenceToast,
   type ReplaySnapshotResult,
 } from '../../replay/replay-snapshot'
+
+type StepInputActions = {
+  handleFlipperLeft: (p: boolean) => void
+  handleFlipperRight: (p: boolean) => void
+  handlePlunger: (charge?: number | null) => unknown
+  updatePlungerFrame?: (dt: number) => void
+}
+
+/** The row a tick records when no input arrived: every field "no change". */
+const IDLE_INPUT_FRAME: InputFrame = {
+  flipperLeft: null,
+  flipperRight: null,
+  plungerCharge: null,
+  plunger: false,
+  nudge: null,
+  timestamp: 0,
+}
 
 export class GamePhysicsController {
   private readonly timers = createTimerScope()
@@ -55,6 +73,8 @@ export class GamePhysicsController {
    * windows, gold swarms and plunger charge all read this, never wall time.
    */
   readonly simClock = new GameSimClock()
+  /** Render time not yet consumed by a fixed step (s); its fraction of a step is the mesh alpha. */
+  private stepAccumulator = 0
   private eventBusUnsubscribers: Array<() => void> = []
 
   constructor(host: PhysicsHost) {
@@ -352,39 +372,93 @@ export class GamePhysicsController {
     }
   }
 
+  /** Drain the live input once (`update()` first: it re-queues held keys). */
+  private pollInput(inputManager: { update: () => void; processBufferedInputs: () => InputFrame | null } | null): InputFrame | null {
+    inputManager?.update()
+    return inputManager?.processBufferedInputs() ?? null
+  }
+
+  /** Route a frame to the input actions; a `null` field means "no change". */
+  private applyFrameActions(frame: InputFrame, inputActions: StepInputActions | null): void {
+    const adventureActive = this.host.adventureMode?.isActive() ?? false
+    if (!adventureActive) {
+      if (frame.flipperLeft !== null) inputActions?.handleFlipperLeft(frame.flipperLeft)
+      if (frame.flipperRight !== null) inputActions?.handleFlipperRight(frame.flipperRight)
+      if (frame.plungerCharge !== null) inputActions?.handlePlunger(frame.plungerCharge)
+    }
+    this.applyInputFrame(frame)
+  }
+
+  /**
+   * One physics tick: apply `frame`, drive the movers, step the engine once
+   * with `physicsDt`. On a schema-3 tick `physicsDt` is exactly
+   * `FIXED_TIMESTEP`, so every engine takes exactly one substep. On the worker
+   * the flipper motors and movers ride in the same command batch as the
+   * `step`, ahead of it, so the step they are applied to is this tick's.
+   */
+  private runTick(
+    frame: InputFrame | null,
+    driveDt: number,
+    physicsDt: number,
+    inputActions: StepInputActions | null,
+    owner: WasmOwner | null,
+    wasmActive: boolean,
+    runner: ReplayRunner | null,
+    recorder: ReplayRecorder | null,
+  ): number {
+    if (frame) this.applyFrameActions(frame, inputActions)
+
+    if (wasmActive && !owner) {
+      const syncT0 = performance.now()
+      this.wasmMirror?.syncToWasm()
+      const prev = this.host.physics.getLastMirrorOverheadMs?.() ?? 0
+      this.host.physics.setMirrorOverheadMs?.(prev + (performance.now() - syncT0))
+    }
+    if (owner) {
+      owner.driveFlippers(frame, driveDt)
+      // Push the plunger, gates, pistons, platters and mills into their C++
+      // movers (captured balls are C++ kinematic bodies already).
+      owner.beginStep(driveDt)
+    }
+
+    this.syncReplaySnapshot(owner !== null, runner, recorder)
+
+    const alpha = this.host.physics.step(physicsDt, (h1, h2, start) => {
+      this.collisionDispatcher.processCollision(h1, h2, start)
+    }, (h1, h2, maxForce) => {
+      this.collisionDispatcher.processContactForce(h1, h2, maxForce)
+    })
+
+    if (owner) {
+      owner.endStep()
+    } else if (wasmActive) {
+      const syncT0 = performance.now()
+      this.wasmMirror?.syncFromWasm()
+      const prev = this.host.physics.getLastMirrorOverheadMs?.() ?? 0
+      this.host.physics.setMirrorOverheadMs?.(prev + (performance.now() - syncT0))
+    }
+    return alpha
+  }
+
   stepPhysics(
     inputManager: { update: () => void; processBufferedInputs: () => InputFrame | null } | null,
-    inputActions: { handleFlipperLeft: (p: boolean) => void; handleFlipperRight: (p: boolean) => void; handlePlunger: (charge?: number | null) => unknown; updatePlungerFrame?: (dt: number) => void } | null,
+    inputActions: StepInputActions | null,
     replayRunner?: ReplayRunner | null,
     replayRecorder?: ReplayRecorder | null
   ): void {
-    let inputFrame: InputFrame | null = null
-
-    if (replayRunner && replayRunner.isPlaying()) {
-      inputFrame = replayRunner.getNextFrame()
+    const replaying = replayRunner?.isPlaying() ?? false
+    if (replaying) {
       const pos = this.getBallPosition()
       if (pos && this.host.ghostBallRenderer?.isVisible()) {
         this.host.ghostBallRenderer.updatePosition(pos)
       }
-    } else {
-      inputManager?.update()
-      inputFrame = inputManager?.processBufferedInputs() ?? null
-    }
-
-    if (inputFrame) {
-      if (replayRecorder && replayRecorder.isRecording() && (!replayRunner || !replayRunner.isPlaying()) && this.host.stateManager.isPlaying()) {
-        replayRecorder.recordFrame(inputFrame)
-      }
-      const adventureActive = this.host.adventureMode?.isActive() ?? false
-      if (!adventureActive) {
-        if (inputFrame.flipperLeft !== null) inputActions?.handleFlipperLeft(inputFrame.flipperLeft)
-        if (inputFrame.flipperRight !== null) inputActions?.handleFlipperRight(inputFrame.flipperRight)
-        if (inputFrame.plungerCharge !== null) inputActions?.handlePlunger(inputFrame.plungerCharge)
-      }
-      this.applyInputFrame(inputFrame)
     }
 
     if (!this.host.stateManager.isPlaying()) {
+      // No step runs: the frame's input still reaches the input actions (they
+      // gate themselves on game state) and nothing is recorded.
+      const frame = replaying ? replayRunner!.getNextFrame() : this.pollInput(inputManager)
+      if (frame) this.applyFrameActions(frame, inputActions)
       // Mesh sync runs unconditionally so dynamic bodies (ball, flippers) appear at their
       // physics-body positions even during MENU state before the game starts. No physics
       // step has run, so render at the raw pose (alpha=1, i.e. no interpolation).
@@ -400,40 +474,56 @@ export class GamePhysicsController {
     const wasmActive = this.host.physics.isWasmActive?.() ?? false
     const isOwner = this.host.physics.isWasmOwnerMode?.() ?? false
     const owner = isOwner ? this.wasmOwner : null
-
-    if (wasmActive && !isOwner) {
-      const syncT0 = performance.now()
-      this.wasmMirror?.syncToWasm()
-      this.host.physics.setMirrorOverheadMs?.(performance.now() - syncT0)
-    }
     if (owner) {
-      const stepDt = Math.min(rawDt, 1 / 30)
       // Pick up a track switch or a table edit before the step.
       owner.syncAdventureTrack(this.adventureTrackState(this.host.adventureMode?.isActive() ?? false))
       owner.syncStatics()
-      owner.driveFlippers(inputFrame, stepDt)
-      // Push the plunger, gates, pistons, platters and mills into their C++
-      // movers (captured balls are C++ kinematic bodies already).
-      owner.beginStep(stepDt)
+      this.host.physics.setMirrorOverheadMs?.(0)
+    } else if (wasmActive) {
       this.host.physics.setMirrorOverheadMs?.(0)
     }
 
-    this.syncReplaySnapshot(owner !== null, replayRunner ?? null, replayRecorder ?? null)
-
     this.simClock.beforeStep(this.host.physics)
-    const alpha = this.host.physics.step(rawDt, (h1, h2, start) => {
-      this.collisionDispatcher.processCollision(h1, h2, start)
-    }, (h1, h2, maxForce) => {
-      this.collisionDispatcher.processContactForce(h1, h2, maxForce)
-    })
-
-    if (owner) {
-      owner.endStep()
-    } else if (wasmActive) {
-      const syncT0 = performance.now()
-      this.wasmMirror?.syncFromWasm()
-      const prev = this.host.physics.getLastMirrorOverheadMs?.() ?? 0
-      this.host.physics.setMirrorOverheadMs?.(prev + (performance.now() - syncT0))
+    let alpha: number
+    if (replaying && !isFixedStepReplay(replayRunner!.getPayload()!)) {
+      // Schema 1–2 tape: one row per render frame, stepped with the viewer's dt
+      // (exact only when the viewer runs at the recorder's refresh rate).
+      const frame = replayRunner!.getNextFrame()
+      // A null frame is the end of the tape: do not step past the recording.
+      alpha = frame
+        ? this.runTick(frame, Math.min(rawDt, 1 / 30), rawDt, inputActions, owner, wasmActive, replayRunner ?? null, null)
+        : 1
+    } else {
+      // Schema 3: this controller owns the fixed-step accumulator. Every 1/60 s
+      // tick applies exactly one InputFrame, then steps the engine exactly once
+      // — on the recorder that frame is the tape row, on playback the tape row
+      // is that frame, so the viewer's refresh rate only decides how many ticks
+      // a render frame runs, never what a tick does.
+      this.stepAccumulator += Math.min(rawDt, 1 / 30)
+      const recording = !replaying && (replayRecorder?.isRecording() ?? false)
+      let tick = 0
+      while (this.stepAccumulator >= FIXED_TIMESTEP) {
+        this.stepAccumulator -= FIXED_TIMESTEP
+        let frame: InputFrame | null
+        if (replaying) {
+          if (!replayRunner!.peekNextFrame()) {
+            // End of tape: stop here rather than step past the recording.
+            replayRunner!.getNextFrame()
+            this.stepAccumulator += FIXED_TIMESTEP
+            break
+          }
+          frame = replayRunner!.getNextFrame()
+        } else {
+          // Live input is drained once per render frame, by its first tick; a
+          // frame that runs no tick leaves it buffered for the next one.
+          frame = tick === 0 ? this.pollInput(inputManager) : null
+          if (recording) replayRecorder!.recordFrame(frame ?? IDLE_INPUT_FRAME)
+        }
+        this.runTick(frame, FIXED_TIMESTEP, FIXED_TIMESTEP, inputActions, owner, wasmActive, replayRunner ?? null, replayRecorder ?? null)
+        tick++
+      }
+      if (tick === 0 && !replaying) inputManager?.update()
+      alpha = this.stepAccumulator / FIXED_TIMESTEP
     }
 
     // Skip interpolation on LOW quality tier — render at the raw post-step pose.

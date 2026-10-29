@@ -65,6 +65,18 @@ describe.skipIf(!RUN)('worker world-snapshot RPC on the compiled bundle (#441)',
     expect(workerBlob).toEqual((live.engine as WasmPhysicsEngine).serializeSnapshot())
   })
 
+  it.each([30, 144])('a 60 Hz owner recording replays on the worker at %i Hz to the same state hash', async (hz) => {
+    const module = await loadModule()
+    const { live, payload } = await recordLiveRun(module, { launch: true })
+    const client = await replay(module, payload, { engine: 'worker', hz })
+    await expect(client.controller.getLastReplaySnapshotResult()?.settled).resolves.toMatchObject({ outcome: 'restored' })
+    expect(client.host.score).toBe(live.host.score)
+    expect(worldPose(client)).toEqual(worldPose(live))
+    const workerHash = await (client.engine as PhysicsWorkerClient).getStateHash()
+    expect(workerHash).not.toBeNull()
+    expect(workerHash).toBe((live.engine as WasmPhysicsEngine).getStateHash())
+  })
+
   it('remaps a differing id layout on the worker path too (#441)', async () => {
     const module = await loadModule()
     const { live, payload } = await recordLiveRun(module, { launch: true })

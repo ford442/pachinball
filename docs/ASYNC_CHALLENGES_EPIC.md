@@ -80,7 +80,8 @@ These are **hard gates** for v1 acceptance. Do not start replay work in parallel
 
 **Deliverables before v1 coding:**
 
-- [x] `ReplayRecorder` — append-only `InputFrame[]` + metadata each physics tick while `PLAYING`
+- [x] `ReplayRecorder` — append-only `InputFrame[]` + metadata each physics tick while `PLAYING` (one row per fixed step since schema 3)
+- [x] Refresh-rate independent playback: record at 60 Hz, replay at 30 / 60 / 144 Hz → same score, pose and `getStateHash()` (`tests/replay-fixed-step.test.ts`, compiled-bundle variants in `tests/replay-*-wasm.test.ts`)
 - [x] `SeededRng` — session RNG replacing `Math.random` on gameplay paths (ball spawn, slot, feeders)
 - [x] `ReplayRunner` — feed recorded frames into `applyInputFrame`; disable live input
 - [x] Parity test: record N frames → replay → assert final score + ball position within epsilon
@@ -134,6 +135,16 @@ sequenceDiagram
 | `src/replay/challenge-system.ts` | Parse share URL (`?challenge=seed:target`, `?seed=`); the seed becomes the session seed in `startGame()` |
 | Extend `leaderboard-system.ts` | `replay_id` on entries; click → open spectate mode |
 | Extend `game-hud.ts` | Upload replay after name entry, attach `replay_id` to score POST |
+
+### Tape rows: one per fixed step (schema 3)
+
+`REPLAY_SCHEMA_VERSION = 3`: `frames` / `compressedFrames` hold one row per
+1/60 s physics step, recorded inside `GamePhysicsController`'s tick loop, and
+spectate advances exactly one row per tick whatever the viewer's refresh rate
+(a 144 Hz spectator of a 60 Hz run reaches the same `getStateHash()`). Rows a
+render frame runs after its first carry `-` flippers ("no change"). Schema 1–2
+tapes (one row per render frame) still load and replay at the viewer's dt.
+Details: `docs/determinism-todo.md` → "One row per fixed step".
 
 ### Replay payload schema (draft v1)
 

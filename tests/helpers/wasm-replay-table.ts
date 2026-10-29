@@ -18,7 +18,7 @@ import { EventBus } from '../../src/core/event-bus'
 import { GamePhysicsController } from '../../src/game/game-physics-controller'
 import { COLLISION_GROUP_PRESETS } from '../../src/game-elements/physics'
 import type { BumperVisual, InputFrame } from '../../src/game-elements/types'
-import { ReplayRecorder, type ReplayPayload } from '../../src/replay/replay-recorder'
+import { REPLAY_SCHEMA_VERSION, ReplayRecorder, type ReplayPayload } from '../../src/replay/replay-recorder'
 import { ReplayRunner } from '../../src/replay/replay-runner'
 import { WasmPhysicsEngine } from '../../src/wasm/PhysicsModule'
 import { PhysicsWorkerClient } from '../../src/wasm/physics-worker-client'
@@ -62,6 +62,8 @@ export type TableOptions = {
    * from a recording made on a fresh table (#441).
    */
   shiftIds?: number
+  /** Viewer refresh rate the client renders at (default 60 Hz). */
+  hz?: number
 }
 
 /** A `PhysicsWorkerClient` whose worker is `applyPhysicsCommand` on a second in-process engine. */
@@ -166,6 +168,7 @@ export async function makeTable(module: WasmPhysicsModule, opts: TableOptions = 
     setWasmDebugColliders: vi.fn(),
   }
   const host = makePhysicsHostShell({ physics, eventBus, ballManager, gameObjects })
+  ;(host.engine.getDeltaTime as ReturnType<typeof vi.fn>).mockReturnValue(1000 / (opts.hz ?? 60))
   const controller = new GamePhysicsController(host)
   controller.rebuildHandleCaches()
   return { engine, workerEngine, world, host, controller, ball }
@@ -234,7 +237,7 @@ export async function recordLiveRun(module: WasmPhysicsModule, opts: { launch?: 
 
   const recorder = new ReplayRecorder()
   recorder.start({
-    version: 1,
+    version: REPLAY_SCHEMA_VERSION,
     buildId: 'vitest',
     mapId: 'neon-helix',
     seed: 12345,
@@ -255,6 +258,9 @@ export async function replay(module: WasmPhysicsModule, payload: ReplayPayload, 
   const actions = launchActions(client)
   const runner = new ReplayRunner()
   runner.load(ReplayRecorder.fromJSON(ReplayRecorder.toJSON(payload)))
-  for (let f = 0; f < payload.frames.length; f++) client.controller.stepPhysics(null, actions, runner, null)
+  // Render until the tape runs out: at 60 Hz that is one frame per row, at
+  // other rates more or fewer — schema 3 advances one row per fixed step.
+  let guard = 0
+  while (runner.isPlaying() && guard++ < 100_000) client.controller.stepPhysics(null, actions, runner, null)
   return client
 }
