@@ -6,7 +6,7 @@ import { Scene } from '@babylonjs/core/scene'
 import { supportsPinFields, type PhysicsApi, type PhysicsBody, type PhysicsWorldSink } from '../core/physics-api'
 import { resolvePinField } from '../core/pin-field'
 import { GameConfig } from '../config'
-import type { PinLattice } from '../cascade/daily-cascade-layout'
+import type { PinLattice, SeededPinField } from '../cascade/daily-cascade-layout'
 import {
   PEG_BASE_RADIUS,
   PEG_COLLIDER_RADIUS,
@@ -57,6 +57,7 @@ export class PachinkoBuilder {
     height: number = 22,
     pinPositions?: { x: number; z: number }[],
     pinLattice?: PinLattice,
+    seededField?: SeededPinField,
   ): {
     bindings: PhysicsBinding[]
     targetBodies: PhysicsBody[]
@@ -139,7 +140,7 @@ export class PachinkoBuilder {
     // its own fixed cylinder. The visual instances come from the same
     // resolver either way, so they sit exactly on the pins that collide.
     // ================================================================
-    const spec = pachinkoPinFieldSpec(center, width, height, pinPositions, pinLattice)
+    const spec = pachinkoPinFieldSpec(center, width, height, pinPositions, pinLattice, seededField)
     const placements: PinPlacement[] = spec
       ? resolvePinField(spec).map((pin) => ({
           x: pin.position.x,

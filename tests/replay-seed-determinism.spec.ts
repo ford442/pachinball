@@ -3,6 +3,8 @@ import { assertWasmOwnerReady, bootWasmOwner, type GameHooks } from './helpers/w
 
 /**
  * `?seed=12345` twice → the same bumper-hit count over a fixed input tape (#422).
+ * A share-link seed selects the weekly machine (docs/DAILY_CASCADE.md), so both loads
+ * build the same descriptor and the same `staticContentHash()` too.
  *
  * Two fresh page loads with the same share-link seed must play the same game:
  * the seed reaches `initSessionRng`, the spawn / feeder forks draw the same
@@ -41,7 +43,7 @@ async function playTape(page: Page): Promise<TapeResult> {
           getStateHash?: () => string | null | Promise<string | null>
         }
       }
-      gameObjects?: { getBumperVisuals?: () => Array<{ mesh: { position: { x: number; y: number; z: number } } }> }
+      gameObjects?: { getBumperVisuals?: () => Array<{ hologram?: unknown; mesh: { position: { x: number; y: number; z: number } } }> }
     }
     const empty: TapeResult = { ok: false, seed: null, score: 0, bumperMatches: 0, ball: null, staticHash: null, stateHash: null }
     if (!g?.physicsController || !g.engine || !g.startGame) return empty
@@ -52,7 +54,8 @@ async function playTape(page: Page): Promise<TapeResult> {
     if (!g.stateManager?.isPlaying?.()) return empty
 
     const ball = g.ballManager?.getBallBody?.()
-    const bumper = g.gameObjects?.getBumperVisuals?.()?.[0]
+    // A `?seed=` link plays the weekly machine, whose rebuild lists the slingshots first: take a real (hologram) bumper.
+    const bumper = g.gameObjects?.getBumperVisuals?.()?.find((v) => v.hologram)
     if (!ball || !bumper) return empty
     g.physicsController.rebuildHandleCaches?.()
     // Onto the first bumper, as scoring-collision-dispatch.spec.ts does, so the

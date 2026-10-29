@@ -42,11 +42,27 @@ export interface PinLattice {
   cols: number
 }
 
+/**
+ * A pin field the table resolves itself (the weekly machine): the lattice plus
+ * seeded dropout and keep-out rectangles, authored as one `PinFieldSpec` with
+ * no occupancy mask. `pins` on the layout is that spec resolved, for the
+ * constraint checks and spawn probes.
+ */
+export interface SeededPinField extends PinLattice {
+  /** Fraction of lattice slots the seeded hash removes, in [0, 1). */
+  dropout: number
+  dropoutSeed: number
+  /** Every XZ keep-out the field applies (table keep-outs, the machine's own, bumper clearance). */
+  keepOuts: readonly { minX: number; maxX: number; minZ: number; maxZ: number }[]
+}
+
 export interface TableLayout {
   seed: number
   seedId: string
   pins: PinSpec[]
   pinLattice?: PinLattice
+  /** Set by the weekly machine: the table builds this field as-is instead of masking `pins` onto the lattice. */
+  pinField?: SeededPinField
   bumpers: BumperSpec[]
   feedersEnabled: Record<FeederKey, boolean>
 }

@@ -5,7 +5,7 @@
  */
 
 import { pinFieldOccupancyForPositions, type PinFieldSpec } from '../core/pin-field'
-import { KEEP_OUT_BOXES, type PinLattice } from '../cascade/daily-cascade-layout'
+import { KEEP_OUT_BOXES, type PinLattice, type SeededPinField } from '../cascade/daily-cascade-layout'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 
 /** Vanilla lattice; a Daily Cascade layout brings its own row/column count. */
@@ -38,6 +38,10 @@ export function pinInKeepOut(x: number, z: number): boolean {
  *              exactly on a keep-out edge in float32 (x = 8.000000000000004
  *              → 8), and the mask must reproduce the layout pin for pin.
  *
+ *   weekly   — the weekly machine's field as authored (`seededField`): the
+ *              lattice with a seeded dropout rate and its own keep-outs,
+ *              which C++ resolves exactly as `resolvePinField` does. No mask.
+ *
  * Null when seeded positions do not sit on the lattice; the caller then
  * places them one by one.
  */
@@ -47,10 +51,11 @@ export function pachinkoPinFieldSpec(
   height: number,
   pinPositions?: readonly { x: number; z: number }[],
   pinLattice?: PinLattice,
+  seededField?: SeededPinField,
 ): PinFieldSpec | null {
   const seeded = !!pinPositions && pinPositions.length > 0
-  if (seeded && !pinLattice) return null
-  const lattice = seeded ? pinLattice! : VANILLA_LATTICE
+  if (seeded && !pinLattice && !seededField) return null
+  const lattice = seededField ?? (seeded ? pinLattice! : VANILLA_LATTICE)
   const spacingX = width / lattice.cols
   const spec: PinFieldSpec = {
     origin: { x: center.x - width / 2, y: PIN_Y, z: center.z - height / 2 },
@@ -64,6 +69,14 @@ export function pachinkoPinFieldSpec(
     restitution: PEG_RESTITUTION,
     friction: PEG_FRICTION,
     collisionGroups: COLLISION_GROUP_PRESETS.WALL,
+  }
+  if (seededField) {
+    return {
+      ...spec,
+      keepOuts: seededField.keepOuts.map(({ minX, maxX, minZ, maxZ }) => ({ minX, maxX, minZ, maxZ })),
+      dropout: seededField.dropout,
+      dropoutSeed: seededField.dropoutSeed,
+    }
   }
   if (!seeded) {
     return { ...spec, keepOuts: KEEP_OUT_BOXES.map(({ minX, maxX, minZ, maxZ }) => ({ minX, maxX, minZ, maxZ })) }
