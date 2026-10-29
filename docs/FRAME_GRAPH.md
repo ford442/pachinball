@@ -59,8 +59,8 @@ backbox:clear → physical → grid → reels → video → image → character 
   (`disableImageProcessing`), so the scene pipeline grades the plane once.
 - **WGSL on WebGPU (#488).** The CRT and jackpot passes, and the grid layer's `ShaderMaterial`, are
   dual GLSL / WGSL. `BackboxEffectPass.shaderLanguage` is WGSL on WebGPU and the task gets the pass's
-  `extraInitializationsAsync`, which imports the WGSL sources (`backbox-shaders-wgsl.ts`, its own lazy
-  chunk) before the effect compiles. No backbox shader is GLSL on WebGPU, so Babylon never fetches
+  `extraInitializationsAsync`, which imports that backend's sources (`backbox-shaders-wgsl.ts` or
+  `backbox-shaders-glsl.ts`, each its own lazy chunk) before the effect compiles. No backbox shader is GLSL on WebGPU, so Babylon never fetches
   glslang + twgsl from `cdn.babylonjs.com` (`tests/webgpu-no-glslang.spec.ts`).
 - **CPU work stays CPU work.** Canvas `DynamicTexture` uploads (LCD, reels, jackpot text) and video
   decode happen in each layer as before; a task only samples the result.

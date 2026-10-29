@@ -15,13 +15,13 @@
  *
  * Shader language (#488)
  * ──────────────────────
- * Every shader here is dual: GLSL for WebGL2 (registered in `Effect.ShadersStore` at module load)
- * and a WGSL twin for WebGPU under the same store name (`backbox-shaders-wgsl.ts`, a lazy chunk
- * loaded through Babylon's `extraInitializationsAsync` before the first effect compiles). On WebGPU
- * nothing here compiles GLSL, so Babylon never fetches its glslang + twgsl translator.
+ * Every shader here is dual: GLSL for WebGL2 (`backbox-shaders-glsl.ts`) and a WGSL twin for WebGPU
+ * under the same store name (`backbox-shaders-wgsl.ts`). Both are lazy chunks, loaded through
+ * Babylon's `extraInitializationsAsync` before the first effect compiles, each only on its backend.
+ * On WebGPU nothing here compiles GLSL, so Babylon never fetches its glslang + twgsl translator.
  */
 
-import { Effect } from '@babylonjs/core/Materials/effect'
+import type { Effect } from '@babylonjs/core/Materials/effect'
 import { ShaderLanguage } from '@babylonjs/core/Materials/shaderLanguage'
 import { ShaderMaterial } from '@babylonjs/core/Materials/shaderMaterial'
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
@@ -35,24 +35,18 @@ import { DisplayState, type DisplayConfig, CRT_PRESETS, type CRTEffectParams } f
 import { DISPLAY_LAYER_Z } from './display-layer-depth'
 import type { BackboxEffectNode } from './backbox-graph-plan'
 import type { BackboxEffectPass } from './backbox-frame-graph'
-import { crtEffectShader } from '../shaders/crt-effect'
-import { cyberGridShader } from '../shaders/cyber-grid'
-import { jackpotOverlayPostProcessFragment } from '../shaders/jackpotOverlay'
 import { SCANLINE_UNIFORM, computeEffectiveScanlineIntensity } from '../shaders/scanline'
+// Only the grid's store name is read here; its sources register from the lazy chunks.
+import { cyberGridShader } from '../shaders/cyber-grid'
 
-// ─── Register the GLSL shaders once at module load ────────────────────────────
 // Babylon resolves a shader by looking up "<name>VertexShader" / "<name>FragmentShader" in the
-// store of the effect's language. The WGSL twins use the same keys (backbox-shaders-wgsl.ts).
-Effect.ShadersStore['crtEffectFragmentShader'] = crtEffectShader.fragment
-Effect.ShadersStore['jackpotOverlayFragmentShader'] = jackpotOverlayPostProcessFragment
-Effect.ShadersStore[`${cyberGridShader.name}VertexShader`] = cyberGridShader.vertex
-Effect.ShadersStore[`${cyberGridShader.name}FragmentShader`] = cyberGridShader.fragment
+// store of the effect's language; both chunks register under the same keys.
 
 /** The language half of a ShaderMaterial / effect-wrapper creation options object. */
 export interface DisplayShaderSource {
   shaderLanguage: ShaderLanguage
-  /** Babylon awaits this before it reads the shader store (WebGPU: loads the WGSL chunk). */
-  extraInitializationsAsync?: () => Promise<void>
+  /** Babylon awaits this before it reads the shader store: loads the backend's source chunk. */
+  extraInitializationsAsync: () => Promise<void>
 }
 
 /** Load the WGSL chunk and register its sources. `import()` caches the module; re-registering is a no-op. */
@@ -61,11 +55,17 @@ async function loadBackboxWgsl(): Promise<void> {
   registerBackboxWgslShaders()
 }
 
-/** WGSL on WebGPU (no glslang / twgsl download), GLSL on WebGL2. */
+/** Load the GLSL chunk and register its sources (WebGL2). */
+async function loadBackboxGlsl(): Promise<void> {
+  const { registerBackboxGlslShaders } = await import('./backbox-shaders-glsl')
+  registerBackboxGlslShaders()
+}
+
+/** WGSL on WebGPU (no glslang / twgsl download), GLSL on WebGL2; each from its own lazy chunk. */
 export function displayShaderSource(isWebGPU: boolean): DisplayShaderSource {
   return isWebGPU
     ? { shaderLanguage: ShaderLanguage.WGSL, extraInitializationsAsync: loadBackboxWgsl }
-    : { shaderLanguage: ShaderLanguage.GLSL }
+    : { shaderLanguage: ShaderLanguage.GLSL, extraInitializationsAsync: loadBackboxGlsl }
 }
 
 const CRT_UNIFORMS = ['uTime', SCANLINE_UNIFORM, 'uCurvature', 'uVignette', 'uChromaticAberration', 'uGlow', 'uNoise', 'uFlicker']

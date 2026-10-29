@@ -142,6 +142,7 @@ vi.mock('@babylonjs/core', () => ({
 
 import { DisplayShaderLayer } from '../src/display/display-shader'
 import { BACKBOX_WGSL_SHADERS, registerBackboxWgslShaders } from '../src/display/backbox-shaders-wgsl'
+import { BACKBOX_GLSL_SHADERS, registerBackboxGlslShaders } from '../src/display/backbox-shaders-glsl'
 import { BackboxFrameGraph } from '../src/display/backbox-frame-graph'
 import { planBackboxGraph } from '../src/display/backbox-graph-plan'
 import { DEFAULT_DISPLAY_CONFIG } from '../src/display/display-types'
@@ -208,10 +209,13 @@ function clear(store: Record<string, string>) {
 
 describe('WGSL twins of the GLSL shaders', () => {
   it('every shader registered in ShadersStore has a ShadersStoreWGSL twin under the same key', () => {
-    // display-shader.ts registered its GLSL at module load.
+    // Neither language registers at module load: each is a lazy chunk (entry-chunk budget).
+    clear(hoisted.glsl)
+    registerBackboxGlslShaders()
     expect(Object.keys(hoisted.glsl).sort()).toEqual(
       ['crtEffectFragmentShader', 'cyberGridFragmentShader', 'cyberGridVertexShader', 'jackpotOverlayFragmentShader'],
     )
+    expect(Object.keys(BACKBOX_GLSL_SHADERS).sort()).toEqual(Object.keys(hoisted.glsl).sort())
     clear(hoisted.wgsl)
     registerBackboxWgslShaders()
     expect(Object.keys(hoisted.wgsl).sort()).toEqual(Object.keys(hoisted.glsl).sort())
@@ -261,17 +265,21 @@ describe('the WebGPU path compiles WGSL only', () => {
     }
   })
 
-  it('on WebGL2 they stay GLSL and load nothing', () => {
+  it('on WebGL2 they stay GLSL, loaded lazily from the GLSL chunk, and register no WGSL', async () => {
+    clear(hoisted.glsl)
     const scene = { getEngine: () => ({ isWebGPU: false }) }
     const layer = new DisplayShaderLayer(scene as never, DEFAULT_DISPLAY_CONFIG)
     const [grid] = hoisted.ShaderMaterial.created
     expect(grid!.options.shaderLanguage).toBe(GLSL)
-    expect(grid!.options.extraInitializationsAsync).toBeUndefined()
+    expect(hoisted.glsl).toEqual({})
+    await grid!.options.extraInitializationsAsync!()
+    expect(hoisted.glsl['cyberGridVertexShader']).toBe(cyberGridShader.vertex)
     for (const pass of Object.values(layer.getEffectPasses())) {
       expect(pass.shaderLanguage).toBe(GLSL)
-      expect(pass.extraInitializationsAsync).toBeUndefined()
+      await pass.extraInitializationsAsync!()
       expect(hoisted.glsl[`${pass.fragmentShader}FragmentShader`], pass.fragmentShader).toBeTruthy()
     }
+    expect(hoisted.wgsl).toEqual({})
   })
 
   it('the backbox Frame Graph hands each pass language and loader to its post-process task', async () => {
