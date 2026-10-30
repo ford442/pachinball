@@ -6,25 +6,23 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilder } from '../track-builder'
+import type { TrackBuilderApi } from '../track-builder-api'
 import { boxDesc } from '../track-collider-descriptors'
-import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { getLayoutRng } from '../../core/seeded-rng'
 import { GROUP_RED, GROUP_GREEN, GROUP_BLUE, MASK_ALL } from '../adventure-types'
 
-export function buildPolychromeVoid(builder: TrackBuilder): void {
-  const whiteMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FFFFFF")
-  const redMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FF0000")
-  const greenMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#00FF00")
-  const blueMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#0000FF")
+export function buildPolychromeVoid(builder: TrackBuilderApi): void {
+  const whiteMat = builder.getTrackMaterial("#FFFFFF")
+  const redMat = builder.getTrackMaterial("#FF0000")
+  const greenMat = builder.getTrackMaterial("#00FF00")
+  const blueMat = builder.getTrackMaterial("#0000FF")
 
-  const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: PhysicsWorldSink }).world
-  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
-  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
-  const chromaGates = (builder as unknown as { chromaGates: { sensor: PhysicsBody, colorType: 'RED' | 'GREEN' | 'BLUE' }[] }).chromaGates
-  void chromaGates // Used for gate tracking
+  const {
+    currentStartPos,
+    scene,
+    adventureTrack,
+    adventureBodies,
+  } = builder
 
   let currentPos = currentStartPos.clone()
   let heading = 0
@@ -32,12 +30,12 @@ export function buildPolychromeVoid(builder: TrackBuilder): void {
   // 1. Monochrome Injection
   const entryLen = 10
   const entryIncline = (15 * Math.PI) / 180
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, 6, entryLen, entryIncline, whiteMat, 0, 0.5)
+  currentPos = builder.addStraightRamp(currentPos, heading, 6, entryLen, entryIncline, whiteMat, 0, 0.5)
 
   // 2. The Red Shift
   const gatePos = currentPos.clone()
   gatePos.y += 1.0
-  ;(builder as unknown as { createChromaGate: (...args: unknown[]) => void }).createChromaGate(gatePos, 'RED')
+  builder.createChromaGate(gatePos, 'RED')
 
   // 3. Crimson Walkway
   const crimLen = 15
@@ -53,7 +51,7 @@ export function buildPolychromeVoid(builder: TrackBuilder): void {
   floor.material = redMat
   adventureTrack.push(floor)
 
-  if (world) {
+  if (builder.hasWorld) {
     const q = Quaternion.FromEulerAngles(0, heading, 0)
     const { body } = builder.emitCollider(
       boxDesc(
@@ -104,7 +102,7 @@ export function buildPolychromeVoid(builder: TrackBuilder): void {
   currentPos = currentPos.add(forward.scale(jumpGap))
   const greenGatePos = currentPos.clone()
   greenGatePos.y += 2.0
-  ;(builder as unknown as { createChromaGate: (...args: unknown[]) => void }).createChromaGate(greenGatePos, 'GREEN')
+  builder.createChromaGate(greenGatePos, 'GREEN')
 
   // 5. Emerald Isles
   const isleCount = 5
@@ -132,7 +130,7 @@ export function buildPolychromeVoid(builder: TrackBuilder): void {
       box.material = mat
       adventureTrack.push(box)
 
-      if (world) {
+      if (builder.hasWorld) {
         const { body } = builder.emitCollider(
           boxDesc({ x: pos.x, y: pos.y, z: pos.z }, { x: isleSize / 2, y: 0.25, z: isleSize / 2 }, {
             membership: grp,
@@ -150,19 +148,19 @@ export function buildPolychromeVoid(builder: TrackBuilder): void {
 
   // 6. The Blue Shift
   currentPos = currentPos.add(forward.scale(isleSpacing))
-  ;(builder as unknown as { createChromaGate: (...args: unknown[]) => void }).createChromaGate(currentPos, 'BLUE')
+  builder.createChromaGate(currentPos, 'BLUE')
 
   // 7. Sapphire Spiral
   const spiralRadius = 10
   const spiralAngle = 2 * Math.PI
   const spiralIncline = -(10 * Math.PI) / 180
 
-  currentPos = (builder as unknown as { addCurvedRamp: (...args: unknown[]) => Vector3 }).addCurvedRamp(currentPos, heading, spiralRadius, spiralAngle, spiralIncline, 6, 1.0, blueMat, 20)
+  currentPos = builder.addCurvedRamp(currentPos, heading, spiralRadius, spiralAngle, spiralIncline, 6, 1.0, blueMat, 20)
   heading += spiralAngle
 
   // 8. Whiteout
   const goalForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
   const goalPos = currentPos.add(goalForward.scale(4))
 
-  ;(builder as unknown as { createBasin: (...args: unknown[]) => void }).createBasin(goalPos, whiteMat)
+  builder.createBasin(goalPos, whiteMat)
 }

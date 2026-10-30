@@ -6,21 +6,21 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilder } from '../track-builder'
+import type { TrackBuilderApi } from '../track-builder-api'
 import { boxDesc, cylinderDesc } from '../track-collider-descriptors'
-import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 
-export function buildNeonStronghold(builder: TrackBuilder): void {
-  const stoneMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#2F2F2F")
-  const neonMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#0088FF")
+export function buildNeonStronghold(builder: TrackBuilderApi): void {
+  const stoneMat = builder.getTrackMaterial("#2F2F2F")
+  const neonMat = builder.getTrackMaterial("#0088FF")
 
-  const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: PhysicsWorldSink }).world
-  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
-  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
-  const kinematicBindings = (builder as unknown as { kinematicBindings: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
-  const animatedObstacles = (builder as unknown as { animatedObstacles: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, frequency: number, amplitude: number, phase: number }[] }).animatedObstacles
+  const {
+    currentStartPos,
+    scene,
+    adventureTrack,
+    adventureBodies,
+    kinematicBindings,
+    animatedObstacles,
+  } = builder
 
   let currentPos = currentStartPos.clone()
   let heading = 0
@@ -28,7 +28,7 @@ export function buildNeonStronghold(builder: TrackBuilder): void {
   // 1. The Approach
   const approachLen = 15
   const approachIncline = (10 * Math.PI) / 180
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, 6, approachLen, approachIncline, stoneMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, 6, approachLen, approachIncline, stoneMat)
 
   // 2. The Drawbridge
   const moatLen = 6
@@ -39,7 +39,7 @@ export function buildNeonStronghold(builder: TrackBuilder): void {
   const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
   const waterCenter = waterPos.add(forward.scale(moatLen / 2))
 
-  if (world) {
+  if (builder.hasWorld) {
     const water = MeshBuilder.CreateBox("moatWater", { width: 10, height: 1, depth: moatLen }, scene)
     water.position.copyFrom(waterCenter)
     water.material = neonMat
@@ -54,10 +54,10 @@ export function buildNeonStronghold(builder: TrackBuilder): void {
   const gatehouseWidth = 4
   const gatehouseStart = currentPos.clone()
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, gatehouseWidth, gatehouseLen, 0, stoneMat, 2.0)
+  currentPos = builder.addStraightRamp(currentPos, heading, gatehouseWidth, gatehouseLen, 0, stoneMat, 2.0)
 
   // Portcullis Gates
-  if (world) {
+  if (builder.hasWorld) {
     const gateCount = 3
     const gateSpacing = 4.0
     const startDist = 3.0
@@ -111,9 +111,9 @@ export function buildNeonStronghold(builder: TrackBuilder): void {
   const courtSpeed = 0.5
   const courtCenter = currentPos.add(forward.scale(courtRadius + 1))
 
-  ;(builder as unknown as { createRotatingPlatform: (...args: unknown[]) => void }).createRotatingPlatform(courtCenter, courtRadius, courtSpeed, stoneMat)
+  builder.createRotatingPlatform(courtCenter, courtRadius, courtSpeed, stoneMat)
 
-  if (world && adventureBodies.length > 0) {
+  if (builder.hasWorld && adventureBodies.length > 0) {
     const platformBody = adventureBodies[adventureBodies.length - 1]
     const turretCount = 2
     const turretDist = 6.0
@@ -153,7 +153,7 @@ export function buildNeonStronghold(builder: TrackBuilder): void {
   const keepStart = courtCenter.add(forward.scale(courtRadius + 1))
   currentPos = keepStart
 
-  currentPos = (builder as unknown as { addCurvedRamp: (...args: unknown[]) => Vector3 }).addCurvedRamp(currentPos, heading, keepRadius, keepAngle, keepIncline, 6, 2.0, stoneMat, 20)
+  currentPos = builder.addCurvedRamp(currentPos, heading, keepRadius, keepAngle, keepIncline, 6, 2.0, stoneMat, 20)
   heading += keepAngle
 
   // 6. The Throne
@@ -162,5 +162,5 @@ export function buildNeonStronghold(builder: TrackBuilder): void {
   const goalForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
   const finalGoalPos = goalPos.add(goalForward.scale(4))
 
-  ;(builder as unknown as { createBasin: (...args: unknown[]) => void }).createBasin(finalGoalPos, neonMat)
+  builder.createBasin(finalGoalPos, neonMat)
 }

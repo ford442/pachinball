@@ -225,7 +225,7 @@ Replaces the old monolithic `display.ts`.
 
 #### `src/adventure/` — Adventure mode tracks (barrel: `src/adventure/index.ts`)
 - **`adventure-mode.ts`** — Main adventure orchestrator. **Start/end lifecycle MUST disable/enable table physics. Zone state MUST be reset in `end()`.**
-- **`track-builder.ts`** — Generic track construction helpers (`addStraightRamp`, `addCurvedRamp`, etc.).
+- **`track-builder.ts`** — Track construction base class; `trackBuilderApi()` hands TS track modules and the JSON compiler the typed **`TrackBuilderApi`** (`track-builder-api.ts`: `addStraightRamp`, `addCurvedRamp`, materials, `emitCollider`, …). Track modules never cast into `TrackBuilder` (`npm run check:unknown-casts`).
 - **`camera-presets.ts`** — Cinematic camera angles.
 - **`adventure-types.ts`** — **Single source of truth** for `AdventureTrackType` and adventure interfaces.
 - **`portal-routing.ts`** — Track start anchors and `isAdventureTrackType()` guard.

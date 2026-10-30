@@ -172,6 +172,7 @@ export const MeshBuilder = {
   CreateTiledGround: vi.fn().mockImplementation(() => createMockMesh()),
   CreateCapsule: vi.fn().mockImplementation(() => createMockMesh()),
   CreateRibbon: vi.fn().mockImplementation(() => createMockMesh()),
+  CreateTube: vi.fn().mockImplementation(() => createMockMesh()),
 }
 
 export const Vector3 = MockVector3
@@ -220,6 +221,7 @@ export const PBRMaterial = vi.fn().mockImplementation(function (this: Record<str
   this.metallic = 0
   this.roughness = 0
   this.subSurface = { isRefractionEnabled: false, tintColor: null }
+  this.clearCoat = { isEnabled: false, intensity: 0, roughness: 0 }
   this.dispose = vi.fn()
   return this
 })

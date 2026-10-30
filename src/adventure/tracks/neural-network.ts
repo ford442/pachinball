@@ -6,22 +6,22 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilder } from '../track-builder'
+import type { TrackBuilderApi } from '../track-builder-api'
 import { boxDesc, cylinderDesc, sphereDesc } from '../track-collider-descriptors'
-import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { getLayoutRng } from '../../core/seeded-rng'
 
-export function buildNeuralNetwork(builder: TrackBuilder): void {
-  const netMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FFFFFF")
-  const veinMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FF0000")
+export function buildNeuralNetwork(builder: TrackBuilderApi): void {
+  const netMat = builder.getTrackMaterial("#FFFFFF")
+  const veinMat = builder.getTrackMaterial("#FF0000")
 
-  const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: PhysicsWorldSink }).world
-  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
-  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
-  const animatedObstacles = (builder as unknown as { animatedObstacles: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, frequency: number, amplitude: number, phase: number }[] }).animatedObstacles
-  const dampingZones = (builder as unknown as { dampingZones: { sensor: PhysicsBody, damping: number }[] }).dampingZones
+  const {
+    currentStartPos,
+    scene,
+    adventureTrack,
+    adventureBodies,
+    animatedObstacles,
+    dampingZones,
+  } = builder
 
   let currentPos = currentStartPos.clone()
   const heading = 0
@@ -29,7 +29,7 @@ export function buildNeuralNetwork(builder: TrackBuilder): void {
   // 1. The Stimulus
   const stimLen = 12
   const stimIncline = (25 * Math.PI) / 180
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, 6, stimLen, stimIncline, netMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, 6, stimLen, stimIncline, netMat)
 
   // 2. The Axon Terminal
   const forkStart = currentPos.clone()
@@ -38,20 +38,20 @@ export function buildNeuralNetwork(builder: TrackBuilder): void {
   // Left Path
   let leftPos = forkStart.clone()
   let leftHeading = forkHeading
-  leftPos = (builder as unknown as { addCurvedRamp: (...args: unknown[]) => Vector3 }).addCurvedRamp(leftPos, leftHeading, 10, Math.PI / 4, 0, 2, 0, veinMat, 10)
+  leftPos = builder.addCurvedRamp(leftPos, leftHeading, 10, Math.PI / 4, 0, 2, 0, veinMat, 10)
   leftHeading -= Math.PI / 4
-  leftPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(leftPos, leftHeading, 2, 5, 0, veinMat)
-  leftPos = (builder as unknown as { addCurvedRamp: (...args: unknown[]) => Vector3 }).addCurvedRamp(leftPos, leftHeading, 10, -Math.PI / 4, 0, 2, 0, veinMat, 10)
+  leftPos = builder.addStraightRamp(leftPos, leftHeading, 2, 5, 0, veinMat)
+  leftPos = builder.addCurvedRamp(leftPos, leftHeading, 10, -Math.PI / 4, 0, 2, 0, veinMat, 10)
 
   // Right Path
   let rightPos = forkStart.clone()
   let rightHeading = forkHeading
-  rightPos = (builder as unknown as { addCurvedRamp: (...args: unknown[]) => Vector3 }).addCurvedRamp(rightPos, rightHeading, 10, -Math.PI / 4, 0, 6, 1.0, netMat, 10)
+  rightPos = builder.addCurvedRamp(rightPos, rightHeading, 10, -Math.PI / 4, 0, 6, 1.0, netMat, 10)
   rightHeading += Math.PI / 4
   const rightStraightStart = rightPos.clone()
-  rightPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(rightPos, rightHeading, 6, 5, 0, netMat)
+  rightPos = builder.addStraightRamp(rightPos, rightHeading, 6, 5, 0, netMat)
 
-  if (world) {
+  if (builder.hasWorld) {
     const forward = new Vector3(Math.sin(rightHeading), 0, Math.cos(rightHeading))
     const rockRadius = 0.5
     const rockPos = rightStraightStart.add(forward.scale(2.5))
@@ -66,7 +66,7 @@ export function buildNeuralNetwork(builder: TrackBuilder): void {
     adventureBodies.push(body)
   }
 
-  rightPos = (builder as unknown as { addCurvedRamp: (...args: unknown[]) => Vector3 }).addCurvedRamp(rightPos, rightHeading, 10, Math.PI / 4, 0, 6, 1.0, netMat, 10)
+  rightPos = builder.addCurvedRamp(rightPos, rightHeading, 10, Math.PI / 4, 0, 6, 1.0, netMat, 10)
 
   // Converge
   currentPos = leftPos.add(rightPos).scale(0.5)
@@ -78,7 +78,7 @@ export function buildNeuralNetwork(builder: TrackBuilder): void {
 
   currentPos = currentPos.add(forward.scale(gapLen))
 
-  if (world) {
+  if (builder.hasWorld) {
     const bridgeWidth = 4
     const bridgeLen = 4
     const bridgeHeight = 1.0
@@ -127,9 +127,9 @@ export function buildNeuralNetwork(builder: TrackBuilder): void {
   const forestWidth = 10
   const forestStart = currentPos.clone()
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, forestWidth, forestLen, 0, netMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, forestWidth, forestLen, 0, netMat)
 
-  if (world) {
+  if (builder.hasWorld) {
     const hLen = forestLen
     const center = forestStart.add(forward.scale(hLen / 2))
     center.y += 0.5
@@ -180,5 +180,5 @@ export function buildNeuralNetwork(builder: TrackBuilder): void {
   goalPos.y -= 2
   goalPos.z += 2
 
-  ;(builder as unknown as { createBasin: (...args: unknown[]) => void }).createBasin(goalPos, netMat)
+  builder.createBasin(goalPos, netMat)
 }

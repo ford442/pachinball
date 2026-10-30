@@ -6,13 +6,16 @@
  *   - reads currentTrackInfo.modeType from the context
  *   - calls addExitPortal() at a position above the catch basin
  *
- * The mock validates the shape expected by TrackBuilderContext without
+ * The mock validates the shape expected by TrackBuilderApi without
  * importing any browser-only dependencies.
  */
 
 import { describe, it, expect } from 'vitest'
 import { TRACK_CATALOG } from '../src/adventure/adventure-track-progression'
-import type { TrackBuilderContext } from '../src/adventure/adventure-types'
+import type { TrackBuilderApi } from '../src/adventure/track-builder-api'
+
+/** The slice of the builder API these tests exercise. */
+type PortalContext = Pick<TrackBuilderApi, 'currentStartPos' | 'currentTrackInfo' | 'addExitPortal'>
 
 // ─── Minimal Vector3-like helper ─────────────────────────────────────────────
 
@@ -29,44 +32,12 @@ class MockVec3 {
 function makeMockContext(
   trackId: string,
   startPos: MockVec3 = new MockVec3(0, 0, 0)
-): { ctx: TrackBuilderContext; portalPositions: MockVec3[] } {
+): { ctx: PortalContext; portalPositions: MockVec3[] } {
   const portalPositions: MockVec3[] = []
 
-  const ctx: TrackBuilderContext = {
-    scene: {} as never,
-    world: {} as never,
-    rapier: {} as never,
+  const ctx: PortalContext = {
     currentStartPos: startPos as never,
     currentTrackInfo: TRACK_CATALOG[trackId] ?? null,
-    adventureTrack: [],
-    materials: [],
-    adventureBodies: [],
-    kinematicBindings: [],
-    animatedObstacles: [],
-    conveyorZones: [],
-    gravityWells: [],
-    dampingZones: [],
-    chromaGates: [],
-    resetSensors: [],
-    adventureSensor: null,
-    getTrackMaterial: () => ({} as never),
-    addStraightRamp: (startP: never, _heading: number, _w: number, length: number, incline: number) => {
-      const hLen = length * Math.cos(incline)
-      const vDrop = length * Math.sin(incline)
-      const sp = startP as unknown as MockVec3
-      return new MockVec3(sp.x, sp.y - vDrop, sp.z + hLen) as never
-    },
-    addCurvedRamp: (startP: never) => {
-      // simplified: return the same position (orientation changes are irrelevant here)
-      const sp = startP as unknown as MockVec3
-      return sp.clone() as never
-    },
-    createBasin: () => { /* no-op */ },
-    createRotatingPlatform: () => { /* no-op */ },
-    createStaticCylinder: () => { /* no-op */ },
-    createDynamicBlock: () => { /* no-op */ },
-    createChromaGate: () => { /* no-op */ },
-    createArcPylon: () => { /* no-op */ },
     addExitPortal: (position: never) => {
       const p = position as unknown as MockVec3
       portalPositions.push(p.clone())
@@ -76,9 +47,9 @@ function makeMockContext(
   return { ctx, portalPositions }
 }
 
-// ─── TrackBuilderContext shape tests ─────────────────────────────────────────
+// ─── TrackBuilderApi shape tests ─────────────────────────────────────────
 
-describe('TrackBuilderContext interface', () => {
+describe('TrackBuilderApi portal surface', () => {
   it('includes currentTrackInfo and addExitPortal fields', () => {
     const { ctx } = makeMockContext('NEON_HELIX')
     expect('currentTrackInfo' in ctx).toBe(true)
