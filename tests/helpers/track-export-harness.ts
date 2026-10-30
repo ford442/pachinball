@@ -16,6 +16,8 @@ import type { Scene } from '@babylonjs/core/scene'
 import { TrackBuilder } from '../../src/adventure/track-builder'
 import type { AdventureColliderDesc } from '../../src/adventure/track-collider-descriptors'
 import type { TrackDefinition } from '../../src/adventure/track-schema'
+import type { TrackInfo } from '../../src/adventure/adventure-track-progression'
+import type { TrackBuilderFn } from '../../src/adventure/manifests/track-manifest-types'
 import { collectUnsupported } from '../../src/game/physics/wasm-adventure-export'
 
 /** Any chain of `desc.setX(...).setY(...)` calls on a Rapier descriptor. */
@@ -75,4 +77,63 @@ export function exportReportFor(builder: TrackBuilder): TrackExportReport {
     ...builder.getUnexportedColliders().map((reason) => `unexported Rapier collider: ${reason}`),
   ]
   return { descriptorCount: descriptors.length, problems }
+}
+
+/** What a TS track builder left behind, in a form stable enough to pin. */
+export interface TrackFootprint {
+  descriptors: number
+  meshes: number
+  bodies: number
+  kinematicBindings: number
+  animatedObstacles: number
+  conveyorZones: number
+  gravityWells: number
+  dampingZones: number
+  chromaGates: number
+  resetSensors: number
+  hasGoalSensor: boolean
+  hasPortal: boolean
+  /** FNV-1a over the descriptor list (positions rounded to 1e-4). */
+  descriptorHash: string
+}
+
+function fnv1a(text: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0).toString(16).padStart(8, '0')
+}
+
+function roundedJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    typeof v === 'number' ? Math.round(v * 1e4) / 1e4 : v,
+  )
+}
+
+/** Concrete harness for the TS track modules (`src/adventure/tracks/*`). */
+export class TsTrackHarnessBuilder extends ExportHarnessBuilder {
+  /** Build one TS track module the way `AdventureMode.buildTrack` does. */
+  buildTs(fn: TrackBuilderFn, start: Vector3, info: TrackInfo | null): TrackFootprint {
+    this.resetTrackColliders()
+    this.currentStartPos = start
+    this.currentTrackInfo = info
+    fn(this)
+    return {
+      descriptors: this.getColliderDescriptors().length,
+      meshes: this.adventureTrack.length,
+      bodies: this.adventureBodies.length,
+      kinematicBindings: this.kinematicBindings.length,
+      animatedObstacles: this.animatedObstacles.length,
+      conveyorZones: this.conveyorZones.length,
+      gravityWells: this.gravityWells.length,
+      dampingZones: this.dampingZones.length,
+      chromaGates: this.chromaGates.length,
+      resetSensors: this.resetSensors.length,
+      hasGoalSensor: this.adventureSensor !== null,
+      hasPortal: this.portalPosition !== null,
+      descriptorHash: fnv1a(roundedJson(this.getColliderDescriptors())),
+    }
+  }
 }
