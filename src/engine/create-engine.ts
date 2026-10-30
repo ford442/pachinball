@@ -38,6 +38,7 @@ import {
   type GpuDegradeFeatureLevel,
 } from './gpu-degrade-telemetry'
 import { GpuContextToast, type GpuContextToastDeps } from './gpu-context-toast'
+import { selectWebGPUFeatures } from './gpu-capabilities'
 
 export type EngineCreationPlan = 'webgl2' | 'webgpu'
 
@@ -89,6 +90,7 @@ export function toWebGLEngineOptions(options: ResolvedEngineOptions): EngineOpti
 export function toWebGPUEngineOptions(
   options: ResolvedEngineOptions,
   featureLevel: GpuFeatureLevel = options.featureLevel,
+  requiredFeatures: readonly string[] = [],
 ): WebGPUEngineOptions {
   const gpuPower =
     options.powerPreference === 'default'
@@ -109,13 +111,11 @@ export function toWebGPUEngineOptions(
     featureLevel,
     enableGPUDebugMarkers: options.enableGPUDebugMarkers,
     enableAllFeatures: false,
-    // Deliberately empty: risky optional features (timestamp-query,
-    // float32-filterable, rg11b10ufloat-renderable) are not universally supported,
-    // and a hard requirement here fails device creation outright. The rule is to
-    // check `adapter.features.has(...)` in the pass that needs one and degrade
-    // there instead. Babylon mutates this object during initAsync, so it must stay
-    // a fresh literal per call.
-    deviceDescriptor: { requiredFeatures: [] },
+    // The optional-feature allow-list already intersected with this adapter's features
+    // (`selectWebGPUFeatures`, gpu-capabilities.ts), so no entry can fail device creation.
+    // Consumers read the result from `resolveGpuCapabilities()`, never from this list.
+    // Babylon mutates this object during initAsync, so it must stay a fresh literal per call.
+    deviceDescriptor: { requiredFeatures: [...requiredFeatures] as GPUFeatureName[] },
   }
 }
 
@@ -222,6 +222,23 @@ export type WebGPUEngineFactory = (
 const defaultWebGPUEngineFactory: WebGPUEngineFactory = (canvas, options) =>
   new WebGPUEngine(canvas, options)
 
+/** The features the adapter Babylon will get offers (null: unknown — ask for none). */
+export type AdapterFeatureProbe = (options: WebGPUEngineOptions) => Promise<Iterable<string> | null>
+
+/**
+ * Ask for the adapter with the options Babylon's `initAsync` passes to `requestAdapter`, so it is
+ * the same adapter, and read its features. A failure here is not fatal: the attempt then requests
+ * no optional feature (Babylon's own intersection would drop them anyway).
+ */
+const defaultAdapterFeatureProbe: AdapterFeatureProbe = async (options) => {
+  try {
+    const adapter = await navigator.gpu?.requestAdapter(options)
+    return adapter ? adapter.features : null
+  } catch {
+    return null
+  }
+}
+
 export interface WebGPUCreationResult {
   engine: WebGPUEngineLike
   featureLevel: GpuFeatureLevel
@@ -239,11 +256,13 @@ export async function createWebGPUEngineWithFallback(
   canvas: HTMLCanvasElement,
   options: ResolvedEngineOptions,
   factory: WebGPUEngineFactory = defaultWebGPUEngineFactory,
+  probeAdapterFeatures: AdapterFeatureProbe = defaultAdapterFeatureProbe,
 ): Promise<WebGPUCreationResult | null> {
   const levels = webgpuFeatureLevelsToTry(options.featureLevel)
 
   for (const featureLevel of levels) {
-    const gpuOptions = toWebGPUEngineOptions(options, featureLevel)
+    const offered = await probeAdapterFeatures(toWebGPUEngineOptions(options, featureLevel))
+    const gpuOptions = toWebGPUEngineOptions(options, featureLevel, offered ? selectWebGPUFeatures(offered) : [])
     let engine: WebGPUEngineLike | undefined
     try {
       engine = factory(canvas, gpuOptions)
@@ -285,7 +304,7 @@ function createWebGL2Engine(
   const engine = new Engine(canvas, undefined, toWebGLEngineOptions(engineOptions))
   setActiveGpuFeatureLevel('webgl2')
   recordGpuProbeEngine('webgl2', 'webgl2')
-  attachGpuContextLogging(engine, { featureLevel: 'webgl2' })
+  detachOnDispose(engine, attachGpuContextLogging(engine, { featureLevel: 'webgl2' }))
   return engine
 }
 
@@ -299,6 +318,14 @@ function createWebGL2Engine(
  * not copied, which is fine because the disposed WebGPU engine owned the only ones.
  * Callers must read the canvas back from `engine.getRenderingCanvas()`.
  */
+/** The context-loss listeners, toast and debug hooks live exactly as long as the engine. */
+function detachOnDispose(
+  engine: { onDisposeObservable?: { addOnce(cb: () => void): unknown } },
+  detach: () => void,
+): void {
+  engine.onDisposeObservable?.addOnce(detach)
+}
+
 export function replaceCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement {
   const fresh = canvas.cloneNode(false) as HTMLCanvasElement
   canvas.replaceWith(fresh)
@@ -334,7 +361,7 @@ export async function createEngine(
     const engine = created.engine as unknown as WebGPUEngineType
     setActiveGpuFeatureLevel(created.featureLevel)
     recordGpuProbeEngine('webgpu', created.featureLevel)
-    attachGpuContextLogging(engine, { featureLevel: created.featureLevel })
+    detachOnDispose(engine, attachGpuContextLogging(engine, { featureLevel: created.featureLevel }))
     console.log(
       `[Bootstrap] Active renderer: ${engine.getClassName()} (featureLevel=${created.featureLevel})`,
     )

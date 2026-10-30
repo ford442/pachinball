@@ -24,6 +24,9 @@ import { TRACK_CATALOG } from '../adventure/adventure-track-progression'
 import { getOwnedAudioContextCount, peekAudioEngine } from '../audio/audio-engine'
 import { getGpuProbe } from '../engine/gpu-degrade-telemetry'
 import type { StaticSceneGate } from '../core/static-scene-gate'
+import type { FrameScheduler } from '../core/frame-scheduler'
+import type { RenderResolutionInfo } from './render-resolution'
+import { formatFramePanel } from './frame-panel'
 
 export interface DebugHost {
   readonly engine: Engine | WebGPUEngine
@@ -51,6 +54,9 @@ export interface DebugHost {
 
   sceneInstrumentation: SceneInstrumentation | null
   engineInstrumentation: EngineInstrumentation | null
+  readonly frameScheduler: Pick<FrameScheduler, 'getTimings'>
+  /** Optional: the renderer exists once render_bootstrap ran. */
+  readonly renderer?: { getResolutionInfo(): RenderResolutionInfo | null } | null
 }
 
 export class GameDebug {
@@ -100,6 +106,11 @@ export class GameDebug {
     this.host.sceneInstrumentation = null
     this.host.engineInstrumentation?.dispose()
     this.host.engineInstrumentation = null
+  }
+
+  /** The HUD's "Frame" panel: per-phase CPU time and the render scale (#488 §3–4). */
+  buildFramePanel(): Record<string, string | number> {
+    return formatFramePanel(this.host.frameScheduler.getTimings(), this.host.renderer?.getResolutionInfo() ?? null)
   }
 
   buildDebugSnapshot(rawDt: number, lives: number): DebugSnapshot {

@@ -42,6 +42,7 @@ const hoisted = vi.hoisted(() => {
 
 vi.mock('@babylonjs/core', () => ({
   Effect: { ShadersStore: {} as Record<string, string> },
+  ShaderLanguage: { GLSL: 0, WGSL: 1 },
   ShaderMaterial: hoisted.ShaderMaterial,
   DynamicTexture: hoisted.DynamicTexture,
   Color3: { FromHexString: () => ({}) },
@@ -70,7 +71,8 @@ function makeEffect() {
 }
 
 function makeLayer() {
-  const layer = new DisplayShaderLayer({} as never, DEFAULT_DISPLAY_CONFIG)
+  const scene = { getEngine: () => ({ isWebGPU: false }) }
+  const layer = new DisplayShaderLayer(scene as never, DEFAULT_DISPLAY_CONFIG)
   layer.createLayer({} as never)
   return layer
 }

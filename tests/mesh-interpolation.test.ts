@@ -65,4 +65,35 @@ describe('MeshInterpolationSystem invalid-body guard', () => {
     expect(isFixed).not.toHaveBeenCalled()
     system.dispose()
   })
+
+  it('drops the previous pose of a body that left the bindings, so it restarts from its new pose', async () => {
+    const { MeshInterpolationSystem } = await import('../src/game/physics/mesh-interpolation')
+    const system = new MeshInterpolationSystem()
+    let x = 0
+    const body = {
+      isValid: () => true,
+      isFixed: () => false,
+      translation: () => ({ x, y: 0, z: 0 }),
+      rotation: () => ({ x: 0, y: 0, z: 0, w: 1 }),
+      isSleeping: () => false,
+    }
+    const positions: number[] = []
+    const mesh = {
+      isDisposed: () => false,
+      parent: null,
+      position: { copyFrom: (v: { x: number }) => positions.push(v.x) },
+      rotationQuaternion: { copyFrom: vi.fn() },
+      scaling: { set: vi.fn(), x: 1, y: 1, z: 1 },
+    }
+    const bound = [{ rigidBody: body as never, mesh: mesh as never }]
+
+    system.syncMeshes(0.5, bound) // first sight: prev = current = 0
+    x = 10
+    system.syncMeshes(0.5, bound) // halfway from 0 to 10
+    system.syncMeshes(0.5, []) // body unbound: its previous pose is dropped
+    x = 20
+    system.syncMeshes(0.5, bound) // back: starts fresh at 20 instead of lerping from 10
+    expect(positions).toEqual([0, 5, 20])
+    system.dispose()
+  })
 })

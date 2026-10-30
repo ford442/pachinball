@@ -34,7 +34,7 @@ import { FrameGraphGeometryRendererTask } from '@babylonjs/core/FrameGraph/Tasks
 import { FrameGraphClearTextureTask } from '@babylonjs/core/FrameGraph/Tasks/Texture/clearTextureTask'
 import { ThinMotionBlurPostProcess } from '@babylonjs/core/PostProcesses/thinMotionBlurPostProcess'
 import type { Scene } from '@babylonjs/core/scene'
-import type { SceneGraphNodeId } from './scene-graph-plan'
+import { SSAO_RATIO, SSAO_SAMPLES, type SceneGraphNodeId } from './scene-graph-plan'
 
 /** The geometry pass and the handles of what it wrote. */
 export interface GeometryPass {
@@ -135,17 +135,20 @@ export function createHeavyTask(
   camera: Camera,
   geometry: GeometryPass,
   textureType: number,
+  ssaoSamples: number = SSAO_SAMPLES.desktop,
 ): HeavyTask {
   switch (node) {
     case 'ssao': {
-      const task = new FrameGraphSSAO2RenderingPipelineTask('scene:ssao', graph, 1.0, 1.0, textureType)
+      // Half-resolution occlusion, blurred at full resolution: AO is low frequency, and the full-size
+      // 32-sample pass was the costliest node of the HIGH tier (#488 §3).
+      const task = new FrameGraphSSAO2RenderingPipelineTask('scene:ssao', graph, SSAO_RATIO, 1.0, textureType)
       task.camera = camera
       task.depthTexture = geometry.viewDepth
       task.normalTexture = geometry.viewNormal
       task.ssao.radius = 1.5
       task.ssao.totalStrength = 0.6
       task.ssao.base = 0.5
-      task.ssao.samples = 32
+      task.ssao.samples = ssaoSamples
       task.ssao.maxZ = 50
       task.ssao.minZAspect = 0.5
       return task

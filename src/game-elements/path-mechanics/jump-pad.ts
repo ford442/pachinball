@@ -4,6 +4,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { PhysicsBody } from '../../core/physics-api'
+import { distance3 } from '../../core/vec3-scalar'
 import { getMaterialLibrary } from '../../materials'
 import { color } from '../visual-language'
 import type { JumpPadConfig } from './types'
@@ -110,15 +111,14 @@ export class JumpPad extends PathMechanic {
     // Scale arrow with charge
     if (this.launchArrow) {
       const scale = 1 + this.chargeLevel * 0.5
-      this.launchArrow.scaling = new Vector3(scale, scale, scale)
+      this.launchArrow.scaling.setAll(scale)
     }
 
     // Check for ball contact
     if (this.currentCooldown <= 0) {
       for (const ball of ballBodies) {
         const pos = ball.translation()
-        const ballPos = new Vector3(pos.x, pos.y, pos.z)
-        const distance = Vector3.Distance(ballPos, this.position)
+        const distance = distance3(pos, this.position)
 
         if (distance < 1.2 && pos.y < 1 && pos.y > -0.5) {
           this.launchBall(ball)

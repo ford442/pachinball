@@ -3,9 +3,10 @@ import type { AdventurePhysicsBridge } from '../../adventure/track-physics-bridg
 import { WASM_PHYSICS, PhysicsConfig, GameConfig } from '../../config'
 import type { PhysicsBody } from '../../core/physics-api'
 import { getPhysicsTuningValue } from '../../game-elements/physics-tuning'
-import { peekPackedPhysicsBuffers, type WasmDebugCollider } from '../../game-elements/wasm-debug-geometry'
+import type { WasmDebugCollider } from '../../game-elements/wasm-debug-geometry'
+import { peekPackedPhysicsBuffers } from '../../game-elements/wasm-packed-views'
 import type { InputFrame } from '../../game-elements/types'
-import { ContactPhase, decodeContactBuffer } from '../../wasm/contact-buffer'
+import { ContactPhase, contactPhaseAt, CONTACT_STRIDE } from '../../wasm/contact-buffer'
 import type { WasmSimEngine } from '../../wasm/wasm-sim-engine'
 import {
   exportAdventureCollidersToWasm,
@@ -246,10 +247,16 @@ export class WasmOwner implements WasmContactBridge {
     const packed = peekPackedPhysicsBuffers(this.engine)
     if (!packed.contacts || packed.contactCount <= 0) return
 
-    for (const evt of decodeContactBuffer(packed.contacts, packed.contactCount)) {
-      if (!evt.isSensor || !this.sensorBodyByHandle.has(evt.bodyId2)) continue
-      const key = `${evt.bodyId2}:${evt.bodyId1}`
-      if (evt.phase === ContactPhase.Exit) this.sensorOverlaps.delete(key)
+    // Read the packed fields in place (#488 §5): no decoded record per contact, and only the
+    // sensor contacts this owner tracks build a key.
+    const data = packed.contacts
+    for (let i = 0; i < packed.contactCount; i++) {
+      const o = i * CONTACT_STRIDE
+      if ((data[o + 10] ?? 0) === 0) continue // not a sensor overlap
+      const bodyId2 = data[o + 1] ?? 0
+      if (!this.sensorBodyByHandle.has(bodyId2)) continue
+      const key = `${bodyId2}:${data[o] ?? 0}`
+      if (contactPhaseAt(data, i) === ContactPhase.Exit) this.sensorOverlaps.delete(key)
       else this.sensorOverlaps.add(key)
     }
   }

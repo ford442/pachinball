@@ -30,6 +30,7 @@ import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
 import type { DebugStageKey } from './game/checkpoint-debug'
 import { GameDelegates } from './game/game-delegates'
 import { installSimClock } from './core/sim-clock'
+import { FrameScheduler } from './core/frame-scheduler'
 import { bootWarn } from './boot-log'
 
 export class Game
@@ -49,12 +50,16 @@ export class Game
     PhysicsHost
 {
   private disposed = false
-  /** Stable reference so dispose() can remove exactly this loop from a shared engine. */
-  private readonly renderLoop = (): void => this.renderFrame()
+  /**
+   * The one owner of `engine.runRenderLoop` (#488 §4). Its loop calls `renderFrame()` (looked up per
+   * frame, so a harness may wrap it), which runs the phases; disposed with the Game's signal.
+   */
+  readonly frameScheduler: FrameScheduler
 
   constructor(engine: Engine | WebGPUEngine, physics: PhysicsSystem = new PhysicsSystem()) {
     super(engine)
     this.physics = physics
+    this.frameScheduler = new FrameScheduler(engine, { signal: this.signal, frame: () => this.renderFrame() })
   }
 
   /** Distance fog is a motion cue; reduced-motion players get none. */
@@ -138,7 +143,7 @@ export class Game
       this.renderer.setupLighting()
       this.renderer.createRoomEnvironment()
       this.renderer.setupResizeObserver()
-      this.renderer.setupDPRHandling()
+      this.renderer.setupResolution(this.frameScheduler)
       this.renderer.setupSceneOptimizer()
 
       // One-shot auto quality drop when avg frame time stays >22ms for 2s (#300)
@@ -277,15 +282,8 @@ export class Game
         void this.startSpectateReplay(replayParam)
       }
 
-      scene.onBeforeRenderObservable.add(() => {
-        this.performanceMonitor.frameStart()
-        this.performanceMonitor.physicsStart()
-        this.physicsController?.stepPhysics(this.inputManager, this.inputActions, this.replayRunner, this.replayRecorder)
-        this.performanceMonitor.physicsEnd()
-        this.settingsUI?.updatePhysicsDebugRenderer()
-      })
-
-      this.engine.runRenderLoop(this.renderLoop)
+      this.registerFrameSystems(scene)
+      this.frameScheduler.start()
 
       this.showDebugUI = new URLSearchParams(window.location.search).has('debug')
       if (this.showDebugUI) {
@@ -302,16 +300,46 @@ export class Game
     this.lifecycle?.setGameState(GameState.MENU)
   }
 
-  /** Per-frame render loop body. */
+  /** One frame: every scheduler phase in order (the scheduler's render loop calls this). */
   renderFrame(): void {
-    this.settingsUI?.updateLatencyDisplay(this.inputManager || undefined)
-    this.scene?.render()
-    const dt = this.engine.getDeltaTime() / 1000
-    this.cabinetLighting?.update(dt)
+    this.frameScheduler.tick()
+  }
 
-    for (const visual of this.spinnerVisuals) {
-      this.spinnerBuilder?.updateSpinner(visual, dt)
-    }
+  /**
+   * The frame, as scheduler systems (#488 §4): input → physics → sim → visuals → render → hud.
+   * Everything a frame draws is computed before `scene.render()` in that frame — cabinet lighting
+   * and spinners used to update after it, one frame late.
+   */
+  private registerFrameSystems(scene: Scene): void {
+    const s = this.frameScheduler
+    const { signal } = this
+    s.register({
+      phase: 'input',
+      name: 'latency-display',
+      update: () => this.settingsUI?.updateLatencyDisplay(this.inputManager || undefined),
+    }, { signal })
+    s.register({
+      phase: 'physics',
+      name: 'fixed-step',
+      update: () => {
+        this.performanceMonitor.frameStart()
+        this.performanceMonitor.physicsStart()
+        this.physicsController?.stepFixed(this.inputManager, this.inputActions, this.replayRunner, this.replayRecorder)
+        this.performanceMonitor.physicsEnd()
+        this.settingsUI?.updatePhysicsDebugRenderer()
+      },
+    }, { signal })
+    s.register({ phase: 'sim', name: 'table', update: () => this.physicsController?.updateSim() }, { signal })
+    s.register({ phase: 'sim', name: 'mechanisms', update: (dt) => this.updateMechanisms(dt) }, { signal })
+    s.register({ phase: 'sim', name: 'adventure', update: (dt) => this.updateAdventure(dt) }, { signal })
+    s.register({ phase: 'visuals', name: 'table-visuals', update: () => this.physicsController?.updateVisuals() }, { signal })
+    s.register({ phase: 'visuals', name: 'cabinet', update: (dt) => this.updateCabinetVisuals(dt) }, { signal })
+    s.register({ phase: 'render', name: 'scene', update: () => scene.render() }, { signal })
+    s.register({ phase: 'hud', name: 'hud', update: (dt) => this.updateFrameHUD(dt) }, { signal })
+  }
+
+  /** Traps, launchers and moving gates: they hold, push and block balls, so they are sim. */
+  private updateMechanisms(dt: number): void {
     for (const state of this.trapStates) {
       this.ballTrapBuilder?.updateTrap(state, dt)
     }
@@ -321,7 +349,9 @@ export class Game
     for (const state of this.gateStates) {
       this.movingGateBuilder?.updateGate(state, dt)
     }
+  }
 
+  private updateAdventure(dt: number): void {
     this.adventureCinematicSystem?.update(dt)
     this.adventureCinematicTriggers?.update()
     this.adventureUIStateManager?.updateAnimations(dt)
@@ -333,7 +363,16 @@ export class Game
       )
       this.updateHUD()
     }
+  }
 
+  private updateCabinetVisuals(dt: number): void {
+    this.cabinetLighting?.update(dt)
+    for (const visual of this.spinnerVisuals) {
+      this.spinnerBuilder?.updateSpinner(visual, dt)
+    }
+  }
+
+  private updateFrameHUD(dt: number): void {
     if (this.adventureProgressionSupervisor && this.adventureProgressionSupervisor.getTimeRemaining() > 0) {
       const trackInfo = this.adventureTrackProgression?.getCurrentTrackInfo()
       if (trackInfo) {
@@ -357,6 +396,8 @@ export class Game
       const snapshot = this.debugHelper?.buildDebugSnapshot(dt, this.lives)
       if (snapshot) this.debugHUD.update(snapshot)
       this.debugHUD.updatePanel('EventBus', this.eventBusLog.getPanelData())
+      const framePanel = this.debugHelper?.buildFramePanel()
+      if (framePanel) this.debugHUD.updatePanel('Frame', framePanel)
     }
 
     const perfMetrics = this.performanceMonitor.getMetrics()
@@ -442,13 +483,13 @@ export class Game
 
   /** Stops only this Game's loop: the engine is shared, so never `engine.stopRenderLoop()` bare. */
   pauseRendering(): void {
-    this.engine.stopRenderLoop(this.renderLoop)
+    this.frameScheduler.pause()
   }
 
-  /** Re-registers this Game's own loop (Babylon ignores a duplicate); a disposed Game stays stopped. */
+  /** Restarts this Game's own loop; a disposed Game (and its scheduler) stays stopped. */
   resumeRendering(): void {
     if (this.disposed) return
-    this.engine.runRenderLoop(this.renderLoop)
+    this.frameScheduler.resume()
   }
 
   dispose(): void {
@@ -456,8 +497,8 @@ export class Game
     if (this.disposed) return
     this.disposed = true
     // The engine outlives the Game; leave its loop running and a second Game would
-    // render alongside this dead one.
-    this.engine.stopRenderLoop(this.renderLoop)
+    // render alongside this dead one. (The signal disposes it too; this is explicit and first.)
+    this.frameScheduler.dispose()
     disposeGame(this)
     installSimClock(null)
   }

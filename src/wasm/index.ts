@@ -49,10 +49,17 @@ export {
   encodeContactBuffer,
   contactStarted,
   toWasmContactEvent,
+  contactPhaseAt,
+  createContactRecord,
+  decodeContactAt,
+  wasmContactEventAt,
+  ContactBatchEmitter,
+  type WasmContactBatch,
 } from './contact-buffer'
 export {
   TRANSFORM_STRIDE,
   decodeTransformSlot,
+  createTransformRecord,
   encodeTransformBuffer,
   createTransformBufferView,
   type WasmTransform,

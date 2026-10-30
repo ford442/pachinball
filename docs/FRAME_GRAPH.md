@@ -57,6 +57,11 @@ backbox:clear → physical → grid → reels → video → image → character 
 - **One plane.** The scene sees one `backboxComposite` plane (unlit, emissive = the composite) at
   `DISPLAY_LAYER_Z.COMPOSITE`. Layer colours go into the composite without image processing
   (`disableImageProcessing`), so the scene pipeline grades the plane once.
+- **WGSL on WebGPU (#488).** The CRT and jackpot passes, and the grid layer's `ShaderMaterial`, are
+  dual GLSL / WGSL. `BackboxEffectPass.shaderLanguage` is WGSL on WebGPU and the task gets the pass's
+  `extraInitializationsAsync`, which imports that backend's sources (`backbox-shaders-wgsl.ts` or
+  `backbox-shaders-glsl.ts`, each its own lazy chunk) before the effect compiles. No backbox shader is GLSL on WebGPU, so Babylon never fetches
+  glslang + twgsl from `cdn.babylonjs.com` (`tests/webgpu-no-glslang.spec.ts`).
 - **CPU work stays CPU work.** Canvas `DynamicTexture` uploads (LCD, reels, jackpot text) and video
   decode happen in each layer as before; a task only samples the result.
 - **Execution.** The graph is not `scene.frameGraph`: it runs once per frame from
@@ -137,13 +142,30 @@ exists before the graph chunk loads.
 | `bloom` | `FrameGraphBloomTask` | any tier but `none`; not reduced motion; effect intensity > 0 |
 | `imageProcessing` | `FrameGraphImageProcessingTask` | tier `full` only. **Left out, not toggled off**, on a strict adapter |
 | `sharpen` | `FrameGraphSharpenTask` | tier `full`, not reduced motion, not LOW |
-| `fxaa` | `FrameGraphFXAATask` | tier `full` |
+| `fxaa` | `FrameGraphFXAATask` | tier `full`, and the scene target is **not** multisampled (LOW, or no MSAA) |
 
 `?nopp=1` and tier `none` have no node at all: no graph exists and the camera renders straight to the canvas.
 The vignette is a setting of the image-processing node (off under reduced motion, flashes included), not a node.
 Photosensitive mode needs nothing here; it still only decides the backbox's CRT / jackpot nodes.
 `heavyAvailable` is: not a software rasteriser (the same check as before), at least `HEAVY_POST_MIN_DRAW_BUFFERS`
 (4, the geometry pass's attachments) draw buffers, and float render targets.
+
+### Scene colour target: format, MSAA, SSAO cost (#488 §2–3)
+
+- **Format.** `GpuCapabilities.hdrFormat` (`src/engine/gpu-capabilities.ts`): on WebGPU, `rg11b10ufloat` where the
+  device has `rg11b10ufloat-renderable` — 32 bits per pixel, half the bandwidth of RGBA16F — else `rgba16f`,
+  `rgba32f`, `rgba8`. WebGL2 never gets the packed format: Babylon reports it renderable with
+  `EXT_color_buffer_float`, but a target of that type draws a black scene there (SwiftShader / ANGLE). The packed format has no alpha; nothing
+  reads the scene colour's alpha (the last pass writes an opaque canvas). The HIGH-only nodes keep their own
+  targets at half float. `?hdr=rgba16f` pins a lower format for A/B comparisons. `getSceneGraphInfo().graph.format`.
+- **Anti-aliasing.** The canvas is not multisampled any more (`antialias: false`, `?antialias=1` restores it):
+  the camera never renders to it while a graph exists. MEDIUM and HIGH render the scene target with
+  `SCENE_MSAA_SAMPLES` (4) and have **no** FXAA node; LOW (and a context without MSAA) has FXAA and 1 sample.
+  The sample count is a setting of the one scene target (`plan.msaaSamples`), changed in place at the swap, so
+  the render-pass id survives a tier change. Babylon's post-process tasks force their own outputs to 1 sample,
+  so MSAA stops at the scene target. TAA is a later option once motion vectors exist.
+- **SSAO.** Half resolution (`SSAO_RATIO` 0.5, blurred at full size) and `SSAO_SAMPLES` 16 on desktop / 8 on
+  mobile (was 32 at full resolution).
 
 ### Why the scene render is not `scene.frameGraph`
 

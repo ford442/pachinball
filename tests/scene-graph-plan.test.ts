@@ -11,6 +11,8 @@ import {
   BLOOM_QUALITY_PROFILE,
   SCENE_HEAVY_NODES,
   SCENE_NODE_ORDER,
+  SCENE_MSAA_SAMPLES,
+  SSAO_SAMPLES,
   planSceneGraph,
   sameSceneGraph,
   type SceneGraphFlags,
@@ -28,6 +30,8 @@ const FLAGS: SceneGraphFlags = {
   effectIntensity: 1,
   noPostProcess: false,
   heavyAvailable: false,
+  maxMsaaSamples: 1,
+  mobile: false,
 }
 
 function webgpuEngine(maxUniformBuffersPerShaderStage: number) {
@@ -158,5 +162,60 @@ describe('BLOOM_QUALITY_PROFILE', () => {
     expect(BLOOM_QUALITY_PROFILE[HIGH]).toMatchObject({ kernel: 64, scale: 0.5 })
     expect(BLOOM_QUALITY_PROFILE[MEDIUM]).toMatchObject({ kernel: 32, scale: 0.35, maxWeight: 0.25 })
     expect(BLOOM_QUALITY_PROFILE[LOW]).toMatchObject({ kernel: 16, scale: 0.2, maxWeight: 0.12 })
+  })
+
+  describe('anti-aliasing (#488 §3)', () => {
+    const msaa: SceneGraphFlags = { ...FLAGS, maxMsaaSamples: 4 }
+
+    it('MEDIUM and HIGH multisample the scene target and drop FXAA', () => {
+      for (const quality of [QualityTier.MEDIUM, QualityTier.HIGH]) {
+        const plan = planSceneGraph({ ...msaa, quality })
+        expect(plan.msaaSamples).toBe(SCENE_MSAA_SAMPLES)
+        expect(plan.nodes).not.toContain('fxaa')
+        expect(plan.omitted).toContainEqual({ node: 'fxaa', reason: 'msaa' })
+      }
+    })
+
+    it('LOW keeps FXAA and no MSAA', () => {
+      const plan = planSceneGraph({ ...msaa, quality: QualityTier.LOW })
+      expect(plan.msaaSamples).toBe(1)
+      expect(plan.nodes.at(-1)).toBe('fxaa')
+    })
+
+    it('a context without MSAA keeps FXAA on every tier', () => {
+      for (const quality of Object.values(QualityTier)) {
+        const plan = planSceneGraph({ ...FLAGS, quality })
+        expect(plan.msaaSamples).toBe(1)
+        expect(plan.nodes).toContain('fxaa')
+      }
+    })
+
+    it('no graph, no MSAA: the camera renders straight to the canvas', () => {
+      expect(planSceneGraph({ ...msaa, noPostProcess: true }).msaaSamples).toBe(1)
+      expect(planSceneGraph({ ...msaa, tier: 'none' }).msaaSamples).toBe(1)
+    })
+
+    it('bloom-only still multisamples (the target is not a node)', () => {
+      const plan = planSceneGraph({ ...msaa, tier: 'bloom-only' })
+      expect(plan.nodes).toEqual(['bloom'])
+      expect(plan.msaaSamples).toBe(SCENE_MSAA_SAMPLES)
+    })
+
+    it('a tier change across LOW rebuilds (the sample count differs)', () => {
+      const medium = planSceneGraph({ ...msaa, quality: QualityTier.MEDIUM })
+      const low = planSceneGraph({ ...msaa, quality: QualityTier.LOW })
+      expect(sameSceneGraph(medium, low)).toBe(false)
+    })
+  })
+
+  describe('SSAO cost', () => {
+    const high: SceneGraphFlags = { ...FLAGS, quality: QualityTier.HIGH, heavyAvailable: true }
+
+    it('16 samples on desktop, 8 on mobile, none without the node', () => {
+      expect(planSceneGraph(high).ssaoSamples).toBe(SSAO_SAMPLES.desktop)
+      expect(planSceneGraph({ ...high, mobile: true }).ssaoSamples).toBe(SSAO_SAMPLES.mobile)
+      expect(planSceneGraph(FLAGS).ssaoSamples).toBe(0)
+      expect(SSAO_SAMPLES.desktop).toBeLessThan(32)
+    })
   })
 })

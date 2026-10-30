@@ -22,8 +22,8 @@ import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader'
 import type { ISceneLoaderPlugin, ISceneLoaderPluginAsync } from '@babylonjs/core/Loading/sceneLoader'
 import type { Observer } from '@babylonjs/core/Misc/observable'
 import type { Material } from '@babylonjs/core/Materials/material'
-import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation'
-import { EngineInstrumentation } from '@babylonjs/core/Instrumentation/engineInstrumentation'
+import type { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation'
+import type { EngineInstrumentation } from '@babylonjs/core/Instrumentation/engineInstrumentation'
 import {
   SceneOptimizer,
 } from '@babylonjs/core/Misc/sceneOptimizer'
@@ -52,6 +52,9 @@ import {
   type LightCappedMaterial,
 } from '../materials/light-budget'
 import type { EventBus } from '../core/event-bus'
+import type { FrameScheduler } from '../core/frame-scheduler'
+import { formatGpuCapabilities, resolveGpuCapabilities } from '../engine/gpu-capabilities'
+import type { RenderResolution, RenderResolutionInfo } from './render-resolution'
 
 export interface RendererHost {
   readonly engine: Engine | WebGPUEngine
@@ -89,6 +92,8 @@ export class GameRenderer {
   private readonly host: RendererHost
   private readonly postProcess: PostProcessManager
   private _resizeObserver: ResizeObserver | null = null
+  private resolution: RenderResolution | null = null
+  private resolutionRequested = false
   private _sceneOptimizer: SceneOptimizer | null = null
   private _lastResizeWidth = 0
   private _lastResizeHeight = 0
@@ -139,6 +144,7 @@ export class GameRenderer {
     }
     this.postProcess.applyQualityTier(tier)
     this.host.shadowRig?.applyTier(tier)
+    this.resolution?.onQualityTierChanged()
   }
 
   /** Accessibility settings changed: the post-process graph re-plans (reduced motion drops bloom, sharpen, vignette). */
@@ -160,6 +166,7 @@ export class GameRenderer {
     // here, so an automatic drop changes the technique exactly like a settings change does.
     const next = this.postProcess.dropQualityTierOnce()
     this.host.shadowRig?.applyTier(next)
+    this.resolution?.onQualityTierChanged()
     return next
   }
 
@@ -460,25 +467,30 @@ export class GameRenderer {
     console.log('[GameRenderer] ResizeObserver initialized')
   }
 
-  /** Setup proper DPR handling with Math.round(). */
-  setupDPRHandling(): void {
-    const canvas = this.host.engine.getRenderingCanvas()
-    if (!canvas) return
+  /**
+   * Resolution policy (#488 §3): DPR-aware render scale capped per platform and tier, re-applied on
+   * DPR and tier changes, and dynamic resolution as a frame-scheduler system. Call after
+   * `setupLighting()` (which detects the tier). The controller is its own chunk; the boot-time
+   * scale (`applyHardwareScaling`) holds until it lands.
+   */
+  setupResolution(scheduler: Pick<FrameScheduler, 'register'>): void {
+    if (this.resolutionRequested) return
+    this.resolutionRequested = true
+    console.log(formatGpuCapabilities(resolveGpuCapabilities(this.host.engine)))
+    import('./render-resolution')
+      .then(({ RenderResolution }) => {
+        if (this.host.signal.aborted) return
+        const resolution = new RenderResolution(this.host)
+        this.resolution = resolution
+        resolution.start()
+        scheduler.register(resolution.frameSystem, { signal: this.host.signal })
+      })
+      .catch((err: unknown) => console.warn('[GameRenderer] Resolution policy unavailable; keeping the boot scale', err))
+  }
 
-    const dpr = Math.round(window.devicePixelRatio || 1)
-    if (
-      canvas.width !== canvas.clientWidth * dpr ||
-      canvas.height !== canvas.clientHeight * dpr
-    ) {
-      this.host.engine.resize()
-    }
-
-    const mediaQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
-    mediaQuery.addEventListener('change', () => {
-      const newDpr = Math.round(window.devicePixelRatio || 1)
-      console.log(`[GameRenderer] DPR changed: ${newDpr}`)
-      this.host.engine.resize()
-    }, { signal: this.host.signal })
+  /** Render scale, its range and the dynamic-resolution state (debug HUD, e2e). */
+  getResolutionInfo(): RenderResolutionInfo | null {
+    return this.resolution?.getInfo() ?? null
   }
 
   /**
@@ -509,31 +521,6 @@ export class GameRenderer {
     })
     this._sceneOptimizer.start()
     console.log('[SceneOptimizer] Adaptive quality optimizer started (target: 55 fps, no mesh merge)')
-  }
-
-  /** Initialize debug instrumentation when HUD becomes visible. */
-  initializeDebugInstrumentation(): void {
-    const { scene, engine } = this.host
-    if (!scene) return
-    if (!this.host.sceneInstrumentation) {
-      this.host.sceneInstrumentation = new SceneInstrumentation(scene)
-      this.host.sceneInstrumentation.captureActiveMeshesEvaluationTime = false
-      this.host.sceneInstrumentation.captureRenderTargetsRenderTime = false
-      this.host.sceneInstrumentation.captureFrameTime = true
-      this.host.sceneInstrumentation.captureInterFrameTime = false
-    }
-    if (!this.host.engineInstrumentation) {
-      this.host.engineInstrumentation = new EngineInstrumentation(engine)
-      this.host.engineInstrumentation.captureGPUFrameTime = false
-      this.host.engineInstrumentation.captureShaderCompilationTime = false
-    }
-  }
-
-  disposeDebugInstrumentation(): void {
-    this.host.sceneInstrumentation?.dispose()
-    this.host.sceneInstrumentation = null
-    this.host.engineInstrumentation?.dispose()
-    this.host.engineInstrumentation = null
   }
 
   /**
@@ -593,6 +580,8 @@ export class GameRenderer {
     this._lightBudgetTeardown = null
 
     this.postProcess.dispose()
+    this.resolution?.dispose()
+    this.resolution = null
 
     this._sceneOptimizer?.dispose()
     this._sceneOptimizer = null

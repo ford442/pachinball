@@ -15,33 +15,53 @@ export interface WasmTransform {
   active: boolean
 }
 
-/** Read one body slot from a packed transform buffer at public `bodyId`. */
+/** A zeroed record for `decodeTransformSlot(…, out)` to fill. */
+export function createTransformRecord(): WasmTransform {
+  return {
+    id: -1,
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0, w: 1 },
+    velocity: { x: 0, y: 0, z: 0 },
+    angularVelocity: { x: 0, y: 0, z: 0 },
+    active: false,
+  }
+}
+
+/**
+ * Read one body slot from a packed transform buffer at public `bodyId`.
+ *
+ * Without `out` it returns a fresh record (five objects). With `out`, the slot is written into
+ * that record — every field, the nested vectors in place — and `out` is returned, so a per-frame
+ * reader allocates nothing; the record is then only valid until the next decode into it. A
+ * missing or stale slot returns null and leaves `out` untouched.
+ */
 export function decodeTransformSlot(
   data: ArrayLike<number>,
   bodyId: number,
   stride = TRANSFORM_STRIDE,
+  out?: WasmTransform,
 ): WasmTransform | null {
   const o = bodyId * stride
   if (o + 14 > data.length) return null
   const slotId = data[o] ?? -1
   if (slotId !== bodyId) return null
-  return {
-    id: bodyId,
-    position: { x: data[o + 1] ?? 0, y: data[o + 2] ?? 0, z: data[o + 3] ?? 0 },
-    rotation: {
-      x: data[o + 4] ?? 0,
-      y: data[o + 5] ?? 0,
-      z: data[o + 6] ?? 0,
-      w: data[o + 7] ?? 1,
-    },
-    velocity: { x: data[o + 8] ?? 0, y: data[o + 9] ?? 0, z: data[o + 10] ?? 0 },
-    angularVelocity: {
-      x: data[o + 11] ?? 0,
-      y: data[o + 12] ?? 0,
-      z: data[o + 13] ?? 0,
-    },
-    active: (data[o + 14] ?? 0) > 0.5,
-  }
+  const t = out ?? createTransformRecord()
+  t.id = bodyId
+  t.position.x = data[o + 1] ?? 0
+  t.position.y = data[o + 2] ?? 0
+  t.position.z = data[o + 3] ?? 0
+  t.rotation.x = data[o + 4] ?? 0
+  t.rotation.y = data[o + 5] ?? 0
+  t.rotation.z = data[o + 6] ?? 0
+  t.rotation.w = data[o + 7] ?? 1
+  t.velocity.x = data[o + 8] ?? 0
+  t.velocity.y = data[o + 9] ?? 0
+  t.velocity.z = data[o + 10] ?? 0
+  t.angularVelocity.x = data[o + 11] ?? 0
+  t.angularVelocity.y = data[o + 12] ?? 0
+  t.angularVelocity.z = data[o + 13] ?? 0
+  t.active = (data[o + 14] ?? 0) > 0.5
+  return t
 }
 
 /** Encode slots into a sparse buffer (test helper). */

@@ -20,7 +20,7 @@ import { WasmTableWorld } from '../src/wasm/wasm-table-world'
 import { WASM_PHYSICS_API } from '../src/wasm/wasm-physics-api'
 import { unpackCollisionGroups, type WasmBody } from '../src/wasm/wasm-body'
 import { PhysicsWorkerClient } from '../src/wasm/physics-worker-client'
-import { ContactPhase, encodeContactBuffer, decodeContactBuffer, toWasmContactEvent, type PhysicsContact } from '../src/wasm/contact-buffer'
+import { CONTACT_STRIDE, ContactPhase, encodeContactBuffer, decodeContactBuffer, toWasmContactEvent, type PhysicsContact } from '../src/wasm/contact-buffer'
 import { WasmVolumeShape } from '../src/wasm/physics-module-adventure'
 import { WasmOwner } from '../src/game/physics/wasm-owner'
 import { CollisionDispatcher } from '../src/game/physics/collision-dispatch'
@@ -491,7 +491,7 @@ describe('GamePhysicsController — zones on the owner path, end to end', () => 
     expect(engine.addSensorVolume).toHaveBeenCalledTimes(1)
     expect(controller.getTableUnexported()).toEqual([])
 
-    eventBus.emit('wasm:physics:contact', toWasmContactEvent(sensorContact(ball.link!.id, -4000, ContactPhase.Enter)))
+    eventBus.emit('wasm:physics:contacts', { data: encodeContactBuffer([sensorContact(ball.link!.id, -4000, ContactPhase.Enter)]), count: 1, stride: CONTACT_STRIDE })
     expect(events).toEqual(['enter thin-zone'])
   })
 

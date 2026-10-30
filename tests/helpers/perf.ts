@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { medianOfMedians, summarize } from '../../scripts/perf-stats.mjs'
+import { median, medianOfMedians, summarize } from '../../scripts/perf-stats.mjs'
 
 export type PerfTier = 'low' | 'medium' | 'high'
 export type PerfState = 'menu' | 'table' | 'table3'
@@ -23,6 +23,16 @@ export interface PerfConfig {
    */
   viewport: { width: number; height: number }
   outDir: string
+  /**
+   * Frames of the allocation probe run after each phase's timing sample (`probeAllocations`); 0 skips it.
+   * Separate from the timed frames because the sampling heap profiler adds its own overhead.
+   */
+  allocFrames: number
+  /**
+   * Optional budget in KB allocated per frame (`PERF_ALLOC_BUDGET_KB`). Unset: report-only, like every
+   * other metric here. Set: a phase over budget fails the spec (soft assertion, so all phases still run).
+   */
+  allocBudgetKbPerFrame: number | null
 }
 
 function list<T extends string>(raw: string | undefined, allowed: readonly T[], fallback: T[]): T[] {
@@ -42,6 +52,17 @@ function int(raw: string | undefined, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback
 }
 
+/** Like `int` but `0` is a valid value (disables the probe). */
+function intOrZero(raw: string | undefined, fallback: number): number {
+  const n = Number.parseInt(raw ?? '', 10)
+  return Number.isFinite(n) && n >= 0 ? n : fallback
+}
+
+function positiveOrNull(raw: string | undefined): number | null {
+  const n = Number.parseFloat(raw ?? '')
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 /**
  * The harness is opt-in (`PERF_BASELINE=1`) and report-only: SwiftShader timings are noisy and
  * a full run takes minutes, so it never gates CI. See docs/RENDER_BUDGET.md.
@@ -59,6 +80,8 @@ export function perfConfig(env: NodeJS.ProcessEnv = process.env): PerfConfig {
     repeats: int(env.PERF_REPEATS, 3),
     viewport: size(env.PERF_VIEWPORT, { width: 640, height: 360 }),
     outDir: env.PERF_OUT_DIR ?? 'test-results/perf',
+    allocFrames: intOrZero(env.PERF_ALLOC_FRAMES, 600),
+    allocBudgetKbPerFrame: positiveOrNull(env.PERF_ALLOC_BUDGET_KB),
   }
 }
 
@@ -108,7 +131,7 @@ interface PerfGameHooks {
     renderTargetsRenderTimeCounter: { current: number }
     renderTimeCounter: { current: number }
   } | null
-  physicsController?: { stepPhysics: (...args: unknown[]) => unknown } | null
+  physicsController?: { stepFixed: (...args: unknown[]) => unknown } | null
   physics?: { getWasmMode?: () => string }
   renderFrame: () => void
   startGame: () => Promise<void>
@@ -181,6 +204,37 @@ export interface RepeatResult {
   drawPhaseMs: ReturnType<typeof summarize>
   counts: SceneCounts
   env: PerfEnv
+  /** Heap / allocation probe for this phase; null when `PERF_ALLOC_FRAMES=0`. */
+  alloc: AllocSample | null
+}
+
+/**
+ * One allocation probe: `frames` rendered frames bracketed by forced full GCs.
+ *
+ * - `heapDeltaBytes` — JS heap in use after a forced GC at the end minus after a forced GC at the
+ *   start: what the hot path *retained* (a leak shows up here; per-frame garbage does not).
+ * - `allocatedBytes` — what the window *allocated*, including objects the GC already collected, from
+ *   the V8 sampling heap profiler (`includeObjectsCollectedByMajorGC/MinorGC`); its estimate is unbiased
+ *   but sampled, so treat a few KB/frame as noise. This is the zero-allocation number.
+ */
+export interface AllocSample {
+  frames: number
+  wallMs: number
+  /** Where the heap sizes came from: CDP `Runtime.getHeapUsage` (precise) or `performance.memory` (quantised). */
+  heapSource: 'cdp' | 'performance.memory' | 'unavailable'
+  heapBeforeBytes: number | null
+  heapAfterBytes: number | null
+  heapDeltaBytes: number | null
+  heapDeltaPerFrameBytes: number | null
+  allocatedBytes: number | null
+  allocatedPerFrameBytes: number | null
+  /** The largest allocating call sites in the window (self bytes, all frames together). */
+  topAllocators: AllocSite[]
+}
+
+export interface AllocSite {
+  site: string
+  bytes: number
 }
 
 /**
@@ -287,9 +341,9 @@ export async function addBalls(page: Page, total: number): Promise<void> {
 }
 
 /**
- * Sample per-frame CPU timings by wrapping `game.renderFrame` (the engine loop calls it
- * dynamically) and `physicsController.stepPhysics` (called from the scene's onBeforeRender, so
- * it is inside `scene.render()` — render time is frame minus physics).
+ * Sample per-frame CPU timings by wrapping `game.renderFrame` (the frame scheduler's loop calls it
+ * dynamically) and `physicsController.stepFixed` (the scheduler's `physics` phase, #488 §4). The
+ * frame is every phase; `game.frameScheduler.getTimings()` has the per-phase split.
  */
 export async function sampleFrames(page: Page, warmup: number, frames: number, tag = ''): Promise<RawSamples> {
   // PERF_VERBOSE=1 logs frame progress every 10 s — the way to spot a frame-rate collapse mid-run.
@@ -328,10 +382,10 @@ function sampleFramesInPage(page: Page, warmup: number, frames: number): Promise
 
         const originalRender = g.renderFrame
         const pc = g.physicsController ?? null
-        const originalStep = pc?.stepPhysics
+        const originalStep = pc?.stepFixed
         let physicsMs = 0
         if (pc && originalStep) {
-          pc.stepPhysics = function (this: unknown, ...args: unknown[]) {
+          pc.stepFixed = function (this: unknown, ...args: unknown[]) {
             const t = performance.now()
             try {
               return originalStep.apply(this, args)
@@ -378,7 +432,7 @@ function sampleFramesInPage(page: Page, warmup: number, frames: number): Promise
         const restore = (): void => {
           for (const [observable, observer] of observers) observable.remove(observer)
           g.renderFrame = originalRender
-          if (pc && originalStep) pc.stepPhysics = originalStep
+          if (pc && originalStep) pc.stepFixed = originalStep
         }
         // Fail on a stalled render loop (no frame for 2 minutes), not on a total-time budget:
         // SwiftShader frame times vary by an order of magnitude between machines.
@@ -414,6 +468,133 @@ function sampleFramesInPage(page: Page, warmup: number, frames: number): Promise
       }),
     { warmup, frames },
   )
+}
+
+/** Resolve after `frames` more frames have rendered (counted on `scene.onAfterRenderObservable`). */
+function waitRenderedFrames(page: Page, frames: number): Promise<void> {
+  return page.evaluate(
+    (n) =>
+      new Promise<void>((resolve, reject) => {
+        const scene = (window as PerfWindow).game?.scene
+        if (!scene) {
+          reject(new Error('window.game.scene missing'))
+          return
+        }
+        let seen = 0
+        let lastFrameAt = performance.now()
+        const guard = window.setInterval(() => {
+          if (performance.now() - lastFrameAt < 120_000) return
+          window.clearInterval(guard)
+          scene.onAfterRenderObservable.remove(observer)
+          reject(new Error(`probeAllocations stalled: no frame for 120s after ${seen}/${n} frames`))
+        }, 5000)
+        const observer = scene.onAfterRenderObservable.add(() => {
+          seen++
+          lastFrameAt = performance.now()
+          if (seen < n) return
+          window.clearInterval(guard)
+          scene.onAfterRenderObservable.remove(observer)
+          resolve()
+        })
+      }),
+    frames,
+  )
+}
+
+interface SamplingHeapProfileNode {
+  selfSize: number
+  callFrame: { functionName: string; url: string; lineNumber: number }
+  children: SamplingHeapProfileNode[]
+}
+
+/** Total sampled bytes, plus the `top` call sites (function @ file:line) by self size. */
+function summarizeProfile(root: SamplingHeapProfileNode, top: number): { total: number; sites: AllocSite[] } {
+  let total = 0
+  const bySite = new Map<string, number>()
+  const stack = [root]
+  for (let node = stack.pop(); node; node = stack.pop()) {
+    total += node.selfSize
+    if (node.selfSize > 0) {
+      const f = node.callFrame
+      const file = f.url.replace(/^.*\/(src|node_modules)\//, '$1/').replace(/\?.*$/, '')
+      const site = `${f.functionName || '(anonymous)'} @ ${file || '(native)'}:${f.lineNumber + 1}`
+      bySite.set(site, (bySite.get(site) ?? 0) + node.selfSize)
+    }
+    for (const child of node.children) stack.push(child)
+  }
+  const sites = [...bySite.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, top)
+    .map(([site, bytes]) => ({ site, bytes }))
+  return { total, sites }
+}
+
+/**
+ * Heap-delta + allocation probe over `frames` rendered frames (Chromium only: it needs CDP).
+ * GC is forced through `HeapProfiler.collectGarbage` before and after, heap sizes come from
+ * `Runtime.getHeapUsage` (falling back to the quantised `performance.memory.usedJSHeapSize`), and
+ * allocations from the sampling heap profiler. `performance.measureUserAgentSpecificMemory` is not
+ * used: it needs cross-origin isolation, which the dev server does not set, and it resolves lazily.
+ */
+export async function probeAllocations(page: Page, frames: number): Promise<AllocSample> {
+  const cdp = await page.context().newCDPSession(page)
+  try {
+    await cdp.send('HeapProfiler.enable')
+    const heapUsed = async (): Promise<{ bytes: number | null; source: AllocSample['heapSource'] }> => {
+      try {
+        const usage = await cdp.send('Runtime.getHeapUsage')
+        return { bytes: usage.usedSize, source: 'cdp' }
+      } catch {
+        const bytes = await page.evaluate(
+          () => (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? null,
+        )
+        return { bytes, source: bytes === null ? 'unavailable' : 'performance.memory' }
+      }
+    }
+
+    await cdp.send('HeapProfiler.collectGarbage')
+    const before = await heapUsed()
+    let sampling = false
+    try {
+      await cdp.send('HeapProfiler.startSampling', {
+        samplingInterval: 4096,
+        includeObjectsCollectedByMajorGC: true,
+        includeObjectsCollectedByMinorGC: true,
+      })
+      sampling = true
+    } catch {
+      sampling = false
+    }
+    const t0 = Date.now()
+    let profile: { profile: { head: SamplingHeapProfileNode } } | null = null
+    try {
+      await waitRenderedFrames(page, frames)
+    } finally {
+      // Always stop the profiler, even when the frame wait failed.
+      if (sampling) profile = await cdp.send('HeapProfiler.stopSampling').catch(() => null)
+    }
+    const wallMs = Date.now() - t0
+    await cdp.send('HeapProfiler.collectGarbage')
+    const after = await heapUsed()
+
+    const summary = profile ? summarizeProfile(profile.profile.head, 15) : null
+    const allocatedBytes = summary ? summary.total : null
+    const heapDeltaBytes = before.bytes !== null && after.bytes !== null ? after.bytes - before.bytes : null
+    return {
+      frames,
+      wallMs,
+      heapSource: after.source,
+      heapBeforeBytes: before.bytes,
+      heapAfterBytes: after.bytes,
+      heapDeltaBytes,
+      heapDeltaPerFrameBytes: heapDeltaBytes === null ? null : heapDeltaBytes / frames,
+      allocatedBytes,
+      allocatedPerFrameBytes: allocatedBytes === null ? null : allocatedBytes / frames,
+      topAllocators: summary?.sites ?? [],
+    }
+  } finally {
+    await cdp.detach().catch(() => undefined)
+  }
 }
 
 export async function collectCounts(page: Page): Promise<SceneCounts> {
@@ -472,6 +653,7 @@ export function toRepeatResult(
   counts: SceneCounts,
   env: PerfEnv,
   settleFrames: number | null = null,
+  alloc: AllocSample | null = null,
 ): RepeatResult {
   const render = raw.frame.map((f, i) => f - (raw.physics[i] ?? 0))
   return {
@@ -491,6 +673,7 @@ export function toRepeatResult(
       mirrorRendersPerFrame: raw.frame.length > 0 ? raw.mirrorRenders / raw.frame.length : null,
     },
     env,
+    alloc,
   }
 }
 
@@ -509,8 +692,34 @@ export interface RunFile {
     rttRenderMs: ReturnType<typeof medianOfMedians>
     drawPhaseMs: ReturnType<typeof medianOfMedians>
     counts: SceneCounts
+    /** Median over repeats of each probe figure; null when no repeat ran the probe. */
+    alloc: AllocAggregate | null
   }
   env: PerfEnv
+}
+
+export interface AllocAggregate {
+  frames: number
+  heapDeltaPerFrameBytes: number | null
+  allocatedPerFrameBytes: number | null
+  heapSource: AllocSample['heapSource']
+}
+
+function medianOrNull(values: Array<number | null>): number | null {
+  const finite = values.filter((v): v is number => v !== null && Number.isFinite(v))
+  return finite.length > 0 ? median(finite) : null
+}
+
+export function aggregateAlloc(repeats: RepeatResult[]): AllocAggregate | null {
+  const samples = repeats.map((r) => r.alloc).filter((a): a is AllocSample => a !== null && a !== undefined)
+  const last = samples[samples.length - 1]
+  if (!last) return null
+  return {
+    frames: last.frames,
+    heapDeltaPerFrameBytes: medianOrNull(samples.map((a) => a.heapDeltaPerFrameBytes)),
+    allocatedPerFrameBytes: medianOrNull(samples.map((a) => a.allocatedPerFrameBytes)),
+    heapSource: last.heapSource,
+  }
 }
 
 export function buildRunFile(
@@ -536,6 +745,7 @@ export function buildRunFile(
       rttRenderMs: agg((r) => r.rttRenderMs),
       drawPhaseMs: agg((r) => r.drawPhaseMs),
       counts: last.counts,
+      alloc: aggregateAlloc(repeats),
     },
     env: last.env,
   }

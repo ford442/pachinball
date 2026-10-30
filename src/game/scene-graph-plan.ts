@@ -14,6 +14,8 @@
  * - Reduced motion drops bloom, sharpen, vignette and the HIGH-only passes.
  * - Photosensitive mode needs nothing here: it only decides the backbox's CRT / jackpot nodes
  *   (`backbox-graph-plan.ts`), as before.
+ * - Anti-aliasing (#488 §3): the canvas is not multisampled. MEDIUM and HIGH render the scene
+ *   colour target with 4× MSAA; FXAA is the LOW tier's anti-aliasing (and any context without MSAA).
  *
  * Nothing here reads accessibility or tier settings itself: the caller passes the flags in.
  */
@@ -55,6 +57,8 @@ export type SceneNodeOmitReason =
   | 'quality-tier'
   /** Software rasteriser, or too few draw buffers for the geometry pass. */
   | 'heavy-unavailable'
+  /** FXAA is not needed: the scene colour target is multisampled. */
+  | 'msaa'
 
 export interface SceneGraphFlags {
   /** `resolveWebGPUPostProcessProfile().tier`, or the tier a runtime downgrade moved to. */
@@ -67,6 +71,10 @@ export interface SceneGraphFlags {
   noPostProcess: boolean
   /** The caller's verdict on the HIGH-only passes' prerequisites (not a software rasteriser, enough draw buffers). */
   heavyAvailable: boolean
+  /** Largest MSAA sample count the context's render targets support (`GpuCapabilities.maxMsaaSamples`). */
+  maxMsaaSamples: number
+  /** Mobile device: the HIGH-only passes take their cheaper settings. */
+  mobile: boolean
 }
 
 export interface SceneGraphPlan {
@@ -77,7 +85,18 @@ export interface SceneGraphPlan {
   omitted: ReadonlyArray<{ node: SceneGraphNodeId; reason: SceneNodeOmitReason }>
   /** Vignette is a setting of the image-processing node, not a node: off under reduced motion. */
   vignette: boolean
+  /** MSAA samples of the scene colour target (1 = none). */
+  msaaSamples: number
+  /** SSAO kernel samples (only read when the plan has `ssao`). */
+  ssaoSamples: number
 }
+
+/** MSAA sample count on MEDIUM / HIGH when the context has it (WebGPU only knows 1 and 4). */
+export const SCENE_MSAA_SAMPLES = 4
+
+/** SSAO kernel per device class; it runs at half resolution (`SSAO_RATIO`) either way. */
+export const SSAO_SAMPLES = { desktop: 16, mobile: 8 } as const
+export const SSAO_RATIO = 0.5
 
 /** Bloom knobs per quality tier: what `applyQualityTier` has always applied, in one place. */
 export const BLOOM_QUALITY_PROFILE: Record<QualityTier, { kernel: number; scale: number; maxWeight: number }> = {
@@ -97,11 +116,13 @@ export function planSceneGraph(flags: SceneGraphFlags): SceneGraphPlan {
   const none = flags.noPostProcess ? 'nopp' : tier === 'none' ? 'tier' : null
   if (none) {
     for (const node of SCENE_NODE_ORDER) skip(node, none)
-    return { tier, nodes, omitted, vignette: false }
+    return { tier, nodes, omitted, vignette: false, msaaSamples: 1, ssaoSamples: 0 }
   }
 
   // Only the full tier has the image-processing node; every other tier is bloom and nothing else.
   const full = tier === 'full'
+  const msaaSamples =
+    quality !== QualityTier.LOW && flags.maxMsaaSamples >= SCENE_MSAA_SAMPLES ? SCENE_MSAA_SAMPLES : 1
 
   for (const node of SCENE_NODE_ORDER) {
     switch (node) {
@@ -120,9 +141,13 @@ export function planSceneGraph(flags: SceneGraphFlags): SceneGraphPlan {
         else nodes.push(node)
         break
       case 'imageProcessing':
-      case 'fxaa':
         if (full) nodes.push(node)
         else skip(node, 'tier')
+        break
+      case 'fxaa':
+        if (!full) skip(node, 'tier')
+        else if (msaaSamples > 1) skip(node, 'msaa')
+        else nodes.push(node)
         break
       case 'sharpen':
         if (!full) skip(node, 'tier')
@@ -133,13 +158,22 @@ export function planSceneGraph(flags: SceneGraphFlags): SceneGraphPlan {
     }
   }
 
-  return { tier, nodes, omitted, vignette: nodes.includes('imageProcessing') && !reducedMotion }
+  // Nothing to multisample into without a graph: the camera renders straight to the canvas.
+  return {
+    tier,
+    nodes,
+    omitted,
+    vignette: nodes.includes('imageProcessing') && !reducedMotion,
+    msaaSamples: nodes.length > 0 ? msaaSamples : 1,
+    ssaoSamples: nodes.includes('ssao') ? (flags.mobile ? SSAO_SAMPLES.mobile : SSAO_SAMPLES.desktop) : 0,
+  }
 }
 
 /**
  * True when two plans build the same graph: no rebuild needed. The vignette is a setting of an
- * existing node, so it is not compared.
+ * existing node, so it is not compared; the MSAA sample count is a setting of the scene colour
+ * target, but a rebuild is where the target is changed, so it is.
  */
 export function sameSceneGraph(a: SceneGraphPlan, b: SceneGraphPlan): boolean {
-  return a.nodes.join() === b.nodes.join()
+  return a.nodes.join() === b.nodes.join() && a.msaaSamples === b.msaaSamples && a.ssaoSamples === b.ssaoSamples
 }

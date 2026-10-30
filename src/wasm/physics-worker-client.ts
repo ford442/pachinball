@@ -20,11 +20,13 @@ import { WasmVolumeShape } from './physics-module-adventure'
 import { WasmSnapshotStatus, type WasmPhysicsModule } from './wasm-types'
 import type { WasmSimEngine } from './wasm-sim-engine'
 import type { PinFieldSpec } from '../core/pin-field'
+import { ContactBatchEmitter } from './contact-buffer'
 import {
-  decodeContactBuffer,
-  toWasmContactEvent,
-} from './contact-buffer'
-import { decodeTransformSlot, TRANSFORM_STRIDE } from './transform-buffer'
+  createTransformRecord,
+  decodeTransformSlot,
+  TRANSFORM_STRIDE,
+  type WasmTransform,
+} from './transform-buffer'
 import { SharedSnapshotReader } from './physics-shared-layout'
 import { isCrossOriginIsolated } from '../config/physics'
 import {
@@ -78,6 +80,13 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   private lastWorkerStepMs = 0
   private transformView: Float32Array | null = null
   private hingeView: Float32Array | null = null
+  /** Reused decode target for the transform getters (each still returns a fresh vector). */
+  private readonly transformScratch: WasmTransform = createTransformRecord()
+  private readonly contactEmitter = new ContactBatchEmitter()
+  /** Bound once: `pollShared` hands it to the shared reader every step. */
+  private readonly emitContactsSink = (packed: Float32Array, count: number): void => {
+    this.emitContacts(packed, count)
+  }
   private snapshotReady = false
   private ownsWorker = true
   private readonly wantShared: boolean
@@ -394,20 +403,27 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     this.enqueue({ type: 'removeHinge', id })
   }
 
+  // Each getter decodes into the reused scratch record and returns a fresh copy of the one
+  // field asked for: callers may keep the result (WasmBody hands it out as a PhysicsVector).
+
   getPosition(id: number): { x: number; y: number; z: number } {
-    return this.readTransform(id)?.position ?? ZERO3
+    const p = this.readTransform(id)?.position
+    return p ? { x: p.x, y: p.y, z: p.z } : ZERO3
   }
 
   getVelocity(id: number): { x: number; y: number; z: number } {
-    return this.readTransform(id)?.velocity ?? ZERO3
+    const v = this.readTransform(id)?.velocity
+    return v ? { x: v.x, y: v.y, z: v.z } : ZERO3
   }
 
   getAngularVelocity(id: number): { x: number; y: number; z: number } {
-    return this.readTransform(id)?.angularVelocity ?? ZERO3
+    const w = this.readTransform(id)?.angularVelocity
+    return w ? { x: w.x, y: w.y, z: w.z } : ZERO3
   }
 
   getRotation(id: number): { x: number; y: number; z: number; w: number } {
-    return this.readTransform(id)?.rotation ?? IDENTITY_Q
+    const q = this.readTransform(id)?.rotation
+    return q ? { x: q.x, y: q.y, z: q.z, w: q.w } : IDENTITY_Q
   }
 
   step(rawDt: number): number {
@@ -652,7 +668,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     // the buffer alone until it does (the replaced world's contacts were
     // discarded when the restore was sent).
     if (this.restoresInFlight > 0) return
-    shared.drainContacts((packed, count) => this.emitContacts(packed, count))
+    shared.drainContacts(this.emitContactsSink)
     if (!shared.read()) return
     if (this.snapshotReady && shared.stepCount < this.lastStepCount) {
       this.stats.staleSnapshots++
@@ -667,16 +683,19 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     this.snapshotReady = true
   }
 
+  /**
+   * One batched `'wasm:physics:contacts'` emit per drained chunk (a wrapped shared ring drains
+   * as two), plus the per-contact events while anything subscribes to them.
+   */
   private emitContacts(packed: Float32Array, count: number): void {
     if (!this.eventBus) return
-    for (const contact of decodeContactBuffer(packed, count)) {
-      this.eventBus.emit('wasm:physics:contact', toWasmContactEvent(contact))
-    }
+    this.contactEmitter.emit(this.eventBus, packed, count)
   }
 
-  private readTransform(id: number) {
+  /** Decodes into `transformScratch`: the result is only valid until the next call. */
+  private readTransform(id: number): WasmTransform | null {
     if (!this.transformView) return null
-    return decodeTransformSlot(this.transformView, id, TRANSFORM_STRIDE)
+    return decodeTransformSlot(this.transformView, id, TRANSFORM_STRIDE, this.transformScratch)
   }
 
   private enqueue(cmd: PhysicsWorkerCommand): void {
