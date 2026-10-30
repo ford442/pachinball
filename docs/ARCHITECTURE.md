@@ -113,8 +113,15 @@ portal anchors, and `buildTrack()` switch case).
    - See [`docs/TRACK_SCHEMA.md`](TRACK_SCHEMA.md) for the field reference.
 4. **TS-builder path** (`buildKind: 'ts'`):
    - Create the builder in [`src/adventure/tracks/<name>.ts`](../src/adventure/tracks/)
-   - Reference it directly as the manifest's `builder` — there is no separate
+     as `(builder: TrackBuilderApi) => void`. It builds only through
+     [`TrackBuilderApi`](../src/adventure/track-builder-api.ts) (primitives, materials,
+     collider emission, the scene and the per-track lists); if it needs more, extend that
+     interface — never reach into `TrackBuilder` with a cast. `npm run check:unknown-casts`
+     holds `as unknown as` under `src/adventure` at zero.
+   - Reference it directly as the manifest's `loadBuilder` — there is no separate
      dispatch table to update.
+   - Its build is pinned in [`tests/ts-track-footprint.test.ts`](../tests/ts-track-footprint.test.ts);
+     add it there. Prefer the JSON path for new tracks (#489 retires the TS one).
    - Export from [`src/adventure/index.ts`](../src/adventure/index.ts) if needed externally.
 5. `switchToTrack` validates JSON tracks fail-closed — an invalid track is rejected
    without tearing down physics. `buildTrack` likewise refuses to build (and records
@@ -123,7 +130,7 @@ portal anchors, and `buildTrack()` switch case).
    and [`tests/track-schema.test.ts`](../tests/track-schema.test.ts) as appropriate.
 
 `TrackManifest` is a discriminated union on `buildKind`: a `'ts'` entry must supply a
-`builder`, a `'json'` entry a `dataPath`, so the compiler rejects a half-registered
+`loadBuilder`, a `'json'` entry a `dataPath`, so the compiler rejects a half-registered
 track. `TRACK_CATALOG` and `ZONE_REGISTRY` are **derived** from manifests — do not edit
 them directly. `AdventureMode.buildTrack()` dispatches via `getTrackManifest()` — no
 switch case needed.

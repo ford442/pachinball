@@ -6,22 +6,22 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilder } from '../track-builder'
+import type { TrackBuilderApi } from '../track-builder-api'
 import { boxDesc } from '../track-collider-descriptors'
-import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 
-export function buildSynthwaveSurf(builder: TrackBuilder): void {
-  const floorMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#110022")
-  const gridMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#00FFFF")
-  const barMat1 = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#00FF00")
-  const barMat2 = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FF0000")
+export function buildSynthwaveSurf(builder: TrackBuilderApi): void {
+  const floorMat = builder.getTrackMaterial("#110022")
+  const gridMat = builder.getTrackMaterial("#00FFFF")
+  const barMat1 = builder.getTrackMaterial("#00FF00")
+  const barMat2 = builder.getTrackMaterial("#FF0000")
 
-  const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: PhysicsWorldSink }).world
-  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
-  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
-  const animatedObstacles = (builder as unknown as { animatedObstacles: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, frequency: number, amplitude: number, phase: number }[] }).animatedObstacles
+  const {
+    currentStartPos,
+    scene,
+    adventureTrack,
+    adventureBodies,
+    animatedObstacles,
+  } = builder
 
   let currentPos = currentStartPos.clone()
   let heading = 0
@@ -30,16 +30,16 @@ export function buildSynthwaveSurf(builder: TrackBuilder): void {
   const dropLen = 15
   const dropIncline = (25 * Math.PI) / 180
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, 8, dropLen, dropIncline, floorMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, 8, dropLen, dropIncline, floorMat)
 
   // 2. The Equalizer
   const eqLen = 20
   const eqWidth = 10
   const eqStart = currentPos.clone()
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, eqWidth, eqLen, 0, floorMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, eqWidth, eqLen, 0, floorMat)
 
-  if (world) {
+  if (builder.hasWorld) {
     const rows = 5
     const cols = 4
     const rowSpacing = 3.0
@@ -102,7 +102,7 @@ export function buildSynthwaveSurf(builder: TrackBuilder): void {
   const turnIncline = -(5 * Math.PI) / 180
   const turnBank = -(15 * Math.PI) / 180
 
-  currentPos = (builder as unknown as { addCurvedRamp: (...args: unknown[]) => Vector3 }).addCurvedRamp(currentPos, heading, turnRadius, turnAngle, turnIncline, 8, 2.0, gridMat, 20, turnBank)
+  currentPos = builder.addCurvedRamp(currentPos, heading, turnRadius, turnAngle, turnIncline, 8, 2.0, gridMat, 20, turnBank)
   heading += turnAngle
 
   // 4. The Sub-Woofer
@@ -111,7 +111,7 @@ export function buildSynthwaveSurf(builder: TrackBuilder): void {
   const spiralIncline = (15 * Math.PI) / 180
   const spiralBank = -(30 * Math.PI) / 180
 
-  currentPos = (builder as unknown as { addCurvedRamp: (...args: unknown[]) => Vector3 }).addCurvedRamp(currentPos, heading, spiralRadius, spiralAngle, spiralIncline, 8, 2.0, floorMat, 30, spiralBank)
+  currentPos = builder.addCurvedRamp(currentPos, heading, spiralRadius, spiralAngle, spiralIncline, 8, 2.0, floorMat, 30, spiralBank)
   heading += spiralAngle
 
   // 5. The Mic Drop
@@ -119,5 +119,5 @@ export function buildSynthwaveSurf(builder: TrackBuilder): void {
   goalPos.y -= 2
   goalPos.z += 2
 
-  ;(builder as unknown as { createBasin: (...args: unknown[]) => void }).createBasin(goalPos, gridMat)
+  builder.createBasin(goalPos, gridMat)
 }

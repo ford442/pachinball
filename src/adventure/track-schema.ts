@@ -586,7 +586,10 @@ export function validateTrackDefinition(raw: unknown): TrackValidationResult {
     return { ok: false, errors }
   }
 
-  return { ok: true, definition: raw as unknown as TrackDefinition }
+  // Every check above passed, so `raw` has the TrackDefinition shape; this is
+  // the one place the validator asserts it.
+  const validated: object = raw
+  return { ok: true, definition: validated as TrackDefinition }
 }
 
 /** Format validation errors for HUD / console. */

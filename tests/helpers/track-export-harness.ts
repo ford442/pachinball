@@ -119,7 +119,7 @@ export class TsTrackHarnessBuilder extends ExportHarnessBuilder {
     this.resetTrackColliders()
     this.currentStartPos = start
     this.currentTrackInfo = info
-    fn(this)
+    fn(this.trackBuilderApi())
     return {
       descriptors: this.getColliderDescriptors().length,
       meshes: this.adventureTrack.length,

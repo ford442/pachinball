@@ -6,36 +6,36 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilder } from '../track-builder'
+import type { TrackBuilderApi } from '../track-builder-api'
 import { boxDesc } from '../track-collider-descriptors'
-import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 
-export function buildCpuCore(builder: TrackBuilder): void {
-  const pcbMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#004400")
-  const traceMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FFD700")
+export function buildCpuCore(builder: TrackBuilderApi): void {
+  const pcbMat = builder.getTrackMaterial("#004400")
+  const traceMat = builder.getTrackMaterial("#FFD700")
 
-  const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: PhysicsWorldSink }).world
-  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
-  const kinematicBindings = (builder as unknown as { kinematicBindings: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
+  const {
+    currentStartPos,
+    scene,
+    adventureBodies,
+    kinematicBindings,
+  } = builder
 
   let currentPos = currentStartPos.clone()
   let heading = 0
 
   // 1. The Front Side Bus
   const entryLen = 15
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, 6, entryLen, 0, pcbMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, 6, entryLen, 0, pcbMat)
 
   // 2. The Logic Gate
   const gateWidth = 3
   const gateLen = 5
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, gateWidth, gateLen, 0, traceMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, gateWidth, gateLen, 0, traceMat)
   heading -= Math.PI / 2
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, gateWidth, gateLen, 0, traceMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, gateWidth, gateLen, 0, traceMat)
   heading += Math.PI / 2
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, gateWidth, gateLen, 0, traceMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, gateWidth, gateLen, 0, traceMat)
 
   // 3. The Heatsink
   const fanRadius = 8
@@ -44,9 +44,9 @@ export function buildCpuCore(builder: TrackBuilder): void {
   const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
   const fanCenter = currentPos.add(forward.scale(fanRadius + 1))
 
-  ;(builder as unknown as { createRotatingPlatform: (...args: unknown[]) => void }).createRotatingPlatform(fanCenter, fanRadius, -fanSpeed, pcbMat)
+  builder.createRotatingPlatform(fanCenter, fanRadius, -fanSpeed, pcbMat)
 
-  if (world && adventureBodies.length > 0) {
+  if (builder.hasWorld && adventureBodies.length > 0) {
     const fanBody = adventureBodies[adventureBodies.length - 1]
     const bladeCount = 4
     const bladeLength = fanRadius - 1
@@ -87,17 +87,17 @@ export function buildCpuCore(builder: TrackBuilder): void {
   const bridgeLen = 10
   const bridgeWidth = 2.0
 
-  const bridgeEnd = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(bridgeStart, heading, bridgeWidth, bridgeLen, 0, traceMat)
+  const bridgeEnd = builder.addStraightRamp(bridgeStart, heading, bridgeWidth, bridgeLen, 0, traceMat)
 
   // 5. The Processor Die
   const goalPos = bridgeEnd.clone()
   goalPos.z += 4
 
-  ;(builder as unknown as { createBasin: (...args: unknown[]) => void }).createBasin(goalPos, pcbMat)
+  builder.createBasin(goalPos, pcbMat)
 
   const socket = MeshBuilder.CreateBox("cpuSocket", { width: 4, height: 0.2, depth: 4 }, scene)
   socket.position.copyFrom(goalPos)
   socket.position.y += 0.5
   socket.material = traceMat
-  ;(builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack.push(socket)
+  builder.adventureTrack.push(socket)
 }

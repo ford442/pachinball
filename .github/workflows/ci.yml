@@ -36,6 +36,11 @@ jobs:
       - name: Indexed-access ratchet
         run: npm run check:index-strict
 
+      # `as unknown as` ratchet (#489): src/adventure is held to zero — track modules build through
+      # TrackBuilderApi; the rest of src/ is reported as backlog.
+      - name: Unknown-cast ratchet
+        run: npm run check:unknown-casts
+
       - name: Lint
         run: npm run lint
 

@@ -339,7 +339,7 @@ export class AdventureMode extends AdventurePortalMixin {
     }
 
     const builder = await manifest.loadBuilder()
-    builder(this)
+    builder(this.trackBuilderApi())
     this.applyDefaultAdventureCollisionGroups()
   }
 

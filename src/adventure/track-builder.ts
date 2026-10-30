@@ -45,11 +45,8 @@ import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import type { AdventureColliderDesc } from './track-collider-descriptors'
 import { TrackColliderEmitter, type EmittedCollider } from './track-collider-emitter'
 import type { TrackDefinition } from './track-schema'
-import {
-  compileTrackDefinition,
-  type TrackBuildApi,
-  type TrackCursor,
-} from './track-compiler'
+import { compileTrackDefinition, type TrackCursor } from './track-compiler'
+import type { TrackBuilderApi } from './track-builder-api'
 
 const RAPIER_DEFAULT_COLLISION_GROUPS = 0xFFFFFFFF
 
@@ -335,74 +332,52 @@ export abstract class TrackBuilder {
       this.applyGravityMultiplier(multiplier)
     }
 
-    const api: TrackBuildApi = {
-      currentStartPos: this.currentStartPos,
-      getTrackMaterial: (hex) => this.getTrackMaterial(hex),
-      getThemedTrackMaterial: (role) => this.getThemedTrackMaterial(role),
-      addStraightRamp: (
-        startPos,
-        heading,
-        width,
-        length,
-        inclineRad,
-        material,
-        wallHeight,
-        friction,
-      ) =>
-        this.addStraightRamp(
-          startPos,
-          heading,
-          width,
-          length,
-          inclineRad,
-          material,
-          wallHeight,
-          friction,
-        ),
-      addCurvedRamp: (
-        startPos,
-        startHeading,
-        radius,
-        totalAngle,
-        inclineRad,
-        width,
-        wallHeight,
-        material,
-        segments,
-        bankingAngle,
-        friction,
-      ) =>
-        this.addCurvedRamp(
-          startPos,
-          startHeading,
-          radius,
-          totalAngle,
-          inclineRad,
-          width,
-          wallHeight,
-          material,
-          segments,
-          bankingAngle,
-          friction,
-        ),
-      createBasin: (pos, material) => this.createBasin(pos, material),
-      addExitPortal: (position) => this.addExitPortal(position),
-      createRotatingPlatform: (center, radius, angVelY, material, hasTeeth) =>
-        this.createRotatingPlatform(center, radius, angVelY, material, hasTeeth),
-      createChromaGate: (pos, color) => this.createChromaGate(pos, color),
-      createStaticCylinder: (pos, diameter, height, material) =>
-        this.createStaticCylinder(pos, diameter, height, material),
-      createPinField: (...args) => this.createPinField(...args),
-      createInclinedMill: (center, radius, inclineRad, angVelAlongNormal, material) =>
-        this.createInclinedMill(center, radius, inclineRad, angVelAlongNormal, material),
-      createResetBasin: (pos, material) => this.createResetBasin(pos, material),
-      createPinLattice: (spec, material) => primitives.createPinLattice(this.primitiveContext(), spec, material),
-      createForceField: (...args) => primitives.createForceField(this.primitiveContext(), ...args),
-      createStaticCone: (...args) => wells.createStaticCone(this.primitiveContext(), ...args),
-      createAxisPullWell: (...args) => wells.createAxisPullWell(this.primitiveContext(), ...args),
-    }
+    return compileTrackDefinition(def, this.trackBuilderApi())
+  }
 
-    return compileTrackDefinition(def, api)
+  /**
+   * The typed surface track modules build through (TS builders and the JSON
+   * compiler alike). Rebuilt per build — clearTrack() swaps the lists out, so
+   * a cached object would hold the old track's arrays.
+   */
+  protected trackBuilderApi(): TrackBuilderApi {
+    const ctx = this.primitiveContext()
+    return {
+      scene: this.scene,
+      hasWorld: Boolean(this.world),
+      currentStartPos: this.currentStartPos,
+      currentTrackInfo: this.currentTrackInfo,
+      adventureTrack: this.adventureTrack,
+      adventureBodies: this.adventureBodies,
+      kinematicBindings: this.kinematicBindings,
+      animatedObstacles: this.animatedObstacles,
+      conveyorZones: this.conveyorZones,
+      gravityWells: this.gravityWells,
+      dampingZones: this.dampingZones,
+      chromaGates: this.chromaGates,
+      resetSensors: this.resetSensors,
+      getTrackMaterial: (hex) => this.getTrackMaterial(hex),
+      getTrackPBRMaterial: (hex) => this.getTrackPBRMaterial(hex),
+      getThemedTrackMaterial: (role) => this.getThemedTrackMaterial(role),
+      addStraightRamp: (...args) => primitives.addStraightRamp(ctx, ...args),
+      addCurvedRamp: (...args) => primitives.addCurvedRamp(ctx, ...args),
+      createBasin: (pos, material) => primitives.createBasin(ctx, pos, material),
+      addExitPortal: (position, rotation, isActiveInitially) =>
+        this.addExitPortal(position, rotation, isActiveInitially),
+      createRotatingPlatform: (...args) => primitives.createRotatingPlatform(ctx, ...args),
+      createChromaGate: (pos, color) => primitives.createChromaGate(ctx, pos, color),
+      createArcPylon: (pos, mat) => primitives.createArcPylon(ctx, pos, mat),
+      createStaticCylinder: (...args) => primitives.createStaticCylinder(ctx, ...args),
+      createPinField: (...args) => primitives.createPinField(ctx, ...args),
+      createInclinedMill: (...args) => primitives.createInclinedMill(ctx, ...args),
+      createResetBasin: (pos, material) => primitives.createResetBasin(ctx, pos, material),
+      createPinLattice: (spec, material) => primitives.createPinLattice(ctx, spec, material),
+      createForceField: (...args) => primitives.createForceField(ctx, ...args),
+      createStaticCone: (...args) => wells.createStaticCone(ctx, ...args),
+      createAxisPullWell: (...args) => wells.createAxisPullWell(ctx, ...args),
+      emitCollider: (desc) => this.emitCollider(desc),
+      attachCollider: (parent, desc) => this.attachCollider(parent, desc),
+    }
   }
 
   protected applyGravityMultiplier(multiplier: number): void {
@@ -433,8 +408,8 @@ export abstract class TrackBuilder {
   // --- Primitive Builders ---
   //
   // Geometry + mesh construction lives in track-primitives.ts (over the pure
-  // layout maths in track-geometry.ts). These wrappers keep the protected
-  // method surface every track module already calls.
+  // layout maths in track-geometry.ts). Track modules reach it through
+  // trackBuilderApi(); there are no per-primitive wrappers here.
 
   /** Context handed to each primitive. Rebuilt per call — clearTrack() swaps
    * the arrays out, so a cached context would hold the old track's lists. */
@@ -457,153 +432,6 @@ export abstract class TrackBuilder {
         this.adventureSensor = body
       },
     }
-  }
-
-  /**
-   * Creates a straight ramp segment.
-   * @param startPos Start position (top center of the start edge)
-   * @param heading Y Rotation (direction)
-   * @param width Width of the ramp
-   * @param length Length of the mesh (Hypotenuse)
-   * @param inclineRad Angle of slope in radians (Positive = Downward slope)
-   * @param material Material
-   * @param wallHeight Height of walls (0 for no walls)
-   * @param friction Surface friction
-   * @returns End position of the segment
-   */
-  protected addStraightRamp(
-    startPos: Vector3,
-    heading: number,
-    width: number,
-    length: number,
-    inclineRad: number,
-    material: StandardMaterial | PBRMaterial,
-    wallHeight: number = 0,
-    friction: number = 0.5
-  ): Vector3 {
-    return primitives.addStraightRamp(
-      this.primitiveContext(),
-      startPos, heading, width, length, inclineRad, material, wallHeight, friction
-    )
-  }
-
-  /** Creates a curved ramp segment. */
-  protected addCurvedRamp(
-    startPos: Vector3,
-    startHeading: number,
-    radius: number,
-    totalAngle: number,
-    inclineRad: number,
-    width: number,
-    wallHeight: number,
-    material: StandardMaterial | PBRMaterial,
-    segments: number = 48,
-    bankingAngle: number = 0,
-    friction: number = 0.5
-  ): Vector3 {
-    return primitives.addCurvedRamp(
-      this.primitiveContext(),
-      startPos, startHeading, radius, totalAngle, inclineRad, width, wallHeight,
-      material, segments, bankingAngle, friction
-    )
-  }
-
-  /** Creates walls alongside a track segment. */
-  protected createWall(
-    center: Vector3,
-    heading: number,
-    length: number,
-    trackWidth: number,
-    height: number,
-    inclineRad: number,
-    mat: StandardMaterial | PBRMaterial,
-    friction: number = 0.5
-  ): void {
-    primitives.createWall(
-      this.primitiveContext(),
-      center, heading, length, trackWidth, height, inclineRad, mat, friction
-    )
-  }
-
-  /** Creates a rotating platform. */
-  protected createRotatingPlatform(
-    center: Vector3,
-    radius: number,
-    angVelY: number,
-    material: StandardMaterial | PBRMaterial,
-    hasTeeth: boolean = false
-  ): void {
-    primitives.createRotatingPlatform(
-      this.primitiveContext(), center, radius, angVelY, material, hasTeeth
-    )
-  }
-
-  /** Creates a goal basin at the specified position. */
-  protected createBasin(pos: Vector3, material: StandardMaterial | PBRMaterial): void {
-    primitives.createBasin(this.primitiveContext(), pos, material)
-  }
-
-  /** Creates a static cylinder obstacle. */
-  protected createStaticCylinder(
-    pos: Vector3,
-    diameter: number,
-    height: number,
-    material: StandardMaterial | PBRMaterial,
-  ): void {
-    primitives.createStaticCylinder(this.primitiveContext(), pos, diameter, height, material)
-  }
-
-  /** Lattice of static pins on the most recent straight ramp surface. */
-  protected createPinField(
-    rampStart: Vector3,
-    heading: number,
-    inclineRad: number,
-    rampLength: number,
-    pinSpacing: number,
-    evenOffsets: readonly number[],
-    oddOffsets: readonly number[],
-    pinDiameter: number,
-    pinHeight: number,
-    material: StandardMaterial | PBRMaterial,
-  ): void {
-    primitives.createPinField(
-      this.primitiveContext(),
-      rampStart, heading, inclineRad, rampLength, pinSpacing,
-      evenOffsets, oddOffsets, pinDiameter, pinHeight, material
-    )
-  }
-
-  /** Kinematic mill whose angular velocity is along the ramp normal (not world Y). */
-  protected createInclinedMill(
-    center: Vector3,
-    radius: number,
-    inclineRad: number,
-    angVelAlongNormal: number,
-    material: StandardMaterial | PBRMaterial,
-  ): void {
-    primitives.createInclinedMill(
-      this.primitiveContext(), center, radius, inclineRad, angVelAlongNormal, material
-    )
-  }
-
-  /** Side catch basin with a reset sensor (penalty zone). */
-  protected createResetBasin(pos: Vector3, material: StandardMaterial | PBRMaterial): void {
-    primitives.createResetBasin(this.primitiveContext(), pos, material)
-  }
-
-  /** Creates a dynamic physics block. */
-  protected createDynamicBlock(pos: Vector3, size: number, mass: number, material: StandardMaterial): void {
-    primitives.createDynamicBlock(this.primitiveContext(), pos, size, mass, material)
-  }
-
-  /** Creates a chroma gate that changes ball color state. */
-  protected createChromaGate(pos: Vector3, color: 'RED' | 'GREEN' | 'BLUE'): void {
-    primitives.createChromaGate(this.primitiveContext(), pos, color)
-  }
-
-  /** Creates an arc pylon with repulsive gravity well. */
-  protected createArcPylon(pos: Vector3, mat: StandardMaterial): void {
-    primitives.createArcPylon(this.primitiveContext(), pos, mat)
   }
 
   /**

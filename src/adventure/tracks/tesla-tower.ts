@@ -6,23 +6,23 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilder } from '../track-builder'
+import type { TrackBuilderApi } from '../track-builder-api'
 import { boxDesc, sphereDesc } from '../track-collider-descriptors'
-import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { getLayoutRng } from '../../core/seeded-rng'
 
-export function buildTeslaTower(builder: TrackBuilder): void {
-  const coilMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#CD7F32")
-  const lightningMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#00DDFF")
+export function buildTeslaTower(builder: TrackBuilderApi): void {
+  const coilMat = builder.getTrackMaterial("#CD7F32")
+  const lightningMat = builder.getTrackMaterial("#00DDFF")
 
-  const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: PhysicsWorldSink }).world
-  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
-  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
-  const kinematicBindings = (builder as unknown as { kinematicBindings: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
-  const animatedObstacles = (builder as unknown as { animatedObstacles: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, frequency: number, amplitude: number, phase: number, axis?: Vector3 }[] }).animatedObstacles
-  const conveyorZones = (builder as unknown as { conveyorZones: { sensor: PhysicsBody, force: Vector3 }[] }).conveyorZones
+  const {
+    currentStartPos,
+    scene,
+    adventureTrack,
+    adventureBodies,
+    kinematicBindings,
+    animatedObstacles,
+    conveyorZones,
+  } = builder
 
   let currentPos = currentStartPos.clone()
   let heading = 0
@@ -35,9 +35,9 @@ export function buildTeslaTower(builder: TrackBuilder): void {
   const coilStart = currentPos.clone()
   const coilStartHeading = heading
 
-  currentPos = (builder as unknown as { addCurvedRamp: (...args: unknown[]) => Vector3 }).addCurvedRamp(currentPos, heading, coilRadius, coilAngle, coilIncline, 8, 2.0, coilMat, 30)
+  currentPos = builder.addCurvedRamp(currentPos, heading, coilRadius, coilAngle, coilIncline, 8, 2.0, coilMat, 30)
 
-  if (world) {
+  if (builder.hasWorld) {
     const segments = 20
     const segAngle = coilAngle / segments
     const chordLen = 2 * coilRadius * Math.sin(segAngle / 2)
@@ -98,23 +98,23 @@ export function buildTeslaTower(builder: TrackBuilder): void {
   const zigLen = 6
   const zigWidth = 4
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, zigWidth, zigLen, 0, coilMat)
-  ;(builder as unknown as { createArcPylon: (...args: unknown[]) => void }).createArcPylon(currentPos, lightningMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, zigWidth, zigLen, 0, coilMat)
+  builder.createArcPylon(currentPos, lightningMat)
   heading -= Math.PI / 2
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, zigWidth, zigLen, 0, coilMat)
-  ;(builder as unknown as { createArcPylon: (...args: unknown[]) => void }).createArcPylon(currentPos, lightningMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, zigWidth, zigLen, 0, coilMat)
+  builder.createArcPylon(currentPos, lightningMat)
   heading += Math.PI / 2
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, zigWidth, zigLen, 0, coilMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, zigWidth, zigLen, 0, coilMat)
 
   // 4. The Faraday Cage
   const cageSize = 12
   const cageStart = currentPos.clone()
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, cageSize, cageSize, 0, coilMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, cageSize, cageSize, 0, coilMat)
 
-  if (world) {
+  if (builder.hasWorld) {
     const sphereRadius = 1.0
     const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
     const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
@@ -162,5 +162,5 @@ export function buildTeslaTower(builder: TrackBuilder): void {
   const goalForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
   const goalPos = currentPos.add(goalForward.scale(4))
 
-  ;(builder as unknown as { createBasin: (...args: unknown[]) => void }).createBasin(goalPos, coilMat)
+  builder.createBasin(goalPos, coilMat)
 }

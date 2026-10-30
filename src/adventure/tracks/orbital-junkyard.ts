@@ -6,18 +6,18 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilder } from '../track-builder'
+import type { TrackBuilderApi } from '../track-builder-api'
 import { boxDesc } from '../track-collider-descriptors'
-import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { getLayoutRng } from '../../core/seeded-rng'
 
-export function buildOrbitalJunkyard(builder: TrackBuilder): void {
-  const junkMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#888888")
-  const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: PhysicsWorldSink }).world
-  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
-  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
+export function buildOrbitalJunkyard(builder: TrackBuilderApi): void {
+  const junkMat = builder.getTrackMaterial("#888888")
+  const {
+    currentStartPos,
+    scene,
+    adventureTrack,
+    adventureBodies,
+  } = builder
 
   let currentPos = currentStartPos.clone()
   const heading = 0
@@ -25,7 +25,7 @@ export function buildOrbitalJunkyard(builder: TrackBuilder): void {
   // 1. Launch Tube
   const launchLen = 8
   const launchIncline = (10 * Math.PI) / 180
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, 4, launchLen, launchIncline, junkMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, 4, launchLen, launchIncline, junkMat)
 
   // 2. The Debris Field
   const debrisLen = 25
@@ -33,10 +33,10 @@ export function buildOrbitalJunkyard(builder: TrackBuilder): void {
   const debrisWidth = 10
 
   const debrisStartPos = currentPos.clone()
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, debrisWidth, debrisLen, debrisIncline, junkMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, debrisWidth, debrisLen, debrisIncline, junkMat)
 
   // 3. Debris Objects
-  if (world) {
+  if (builder.hasWorld) {
     const debrisCount = 25
     const forwardVec = new Vector3(0, -Math.sin(debrisIncline), Math.cos(debrisIncline))
     const rightVec = new Vector3(1, 0, 0)
@@ -124,5 +124,5 @@ export function buildOrbitalJunkyard(builder: TrackBuilder): void {
   goalPos.y -= 2
   goalPos.z += 2
 
-  ;(builder as unknown as { createBasin: (...args: unknown[]) => void }).createBasin(goalPos, junkMat)
+  builder.createBasin(goalPos, junkMat)
 }

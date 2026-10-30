@@ -7,36 +7,14 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilder } from '../track-builder'
-import type { TrackInfo } from '../adventure-track-progression'
-import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
+import type { TrackBuilderApi } from '../track-builder-api'
 import {
   boxDesc,
   cylinderDesc,
-  type AdventureColliderDesc,
 } from '../track-collider-descriptors'
-import type { EmittedCollider } from '../track-collider-emitter'
-
-type BuilderCtx = {
-  scene: import('@babylonjs/core/scene').Scene
-  world: PhysicsWorldSink
-  rapier: PhysicsApi
-  currentStartPos: Vector3
-  currentTrackInfo: TrackInfo | null
-  adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[]
-  adventureBodies: PhysicsBody[]
-  conveyorZones: { sensor: PhysicsBody; force: Vector3 }[]
-  getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial
-  addStraightRamp: (...args: unknown[]) => Vector3
-  addCurvedRamp: (...args: unknown[]) => Vector3
-  createBasin: (...args: unknown[]) => void
-  createStaticCylinder: (...args: unknown[]) => void
-  addExitPortal: (position: Vector3) => void
-  emitCollider: (desc: AdventureColliderDesc) => EmittedCollider
-}
 
 function addPinLane(
-  b: BuilderCtx,
+  b: TrackBuilderApi,
   start: Vector3,
   heading: number,
   length: number,
@@ -89,7 +67,7 @@ function addPinLane(
 }
 
 function addConveyorRamp(
-  b: BuilderCtx,
+  b: TrackBuilderApi,
   start: Vector3,
   heading: number,
   length: number,
@@ -128,8 +106,7 @@ function addConveyorRamp(
   return end
 }
 
-export function buildPachinkoHall(builder: TrackBuilder): void {
-  const b = builder as unknown as BuilderCtx
+export function buildPachinkoHall(b: TrackBuilderApi): void {
   const hallMat = b.getTrackMaterial('#ffdd00')
   const pinMat = b.getTrackMaterial('#ff66cc')
   const machineMat = b.getTrackMaterial('#00ffff')

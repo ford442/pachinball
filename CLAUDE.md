@@ -9,6 +9,7 @@ npm run dev        # Start Vite dev server (http://localhost:5173)
 npm run build      # TypeScript check + Vite production build + optional WASM
 npm run lint       # ESLint on all .ts/.tsx files (type-aware for src/, incl. no-floating-promises and import-x/no-cycle)
 npm run check:index-strict  # noUncheckedIndexedAccess ratchet: src/core, src/wasm, src/game/physics must stay clean
+npm run check:unknown-casts # `as unknown as` ratchet: src/adventure holds zero (track modules build through TrackBuilderApi)
 npm run preview    # Preview production build locally
 npm run machine:validate  # Weekly machine: golden descriptor, next 53 ISO weeks + free seeds, fixtures (like tracks:validate)
 npm test           # Run Vitest unit tests

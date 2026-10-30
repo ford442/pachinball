@@ -8,7 +8,7 @@
 import type { AdventureTrackType } from '../adventure-types'
 import type { TrackModeType } from '../adventure-types'
 import type { VisualThemeColor } from '../../game-elements/visual-language'
-import type { TrackBuilder } from '../track-builder'
+import type { TrackBuilderApi } from '../track-builder-api'
 
 /** Zone theming / story metadata (derived into ZONE_REGISTRY). */
 export interface TrackManifestZone {
@@ -42,8 +42,8 @@ export interface TrackManifestCatalog {
 
 export type TrackBuildKind = 'ts' | 'json'
 
-/** TS track builder function signature. */
-export type TrackBuilderFn = (ctx: TrackBuilder) => void
+/** TS track builder function signature: builds only through the public API. */
+export type TrackBuilderFn = (api: TrackBuilderApi) => void
 
 /** Lazy loader for TS track builders (code-split per track). */
 export type TrackBuilderLoader = () => Promise<TrackBuilderFn>
