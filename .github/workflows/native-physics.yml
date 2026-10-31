@@ -106,6 +106,9 @@ on:
       - 'package.json'
       - '.github/workflows/native-physics.yml'
 
+permissions:
+  contents: read
+
 jobs:
   native_ctest:
     name: Native CTest (Blocking)
