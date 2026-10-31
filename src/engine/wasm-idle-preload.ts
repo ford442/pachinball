@@ -15,7 +15,7 @@ let preloadStarted = false
 
 /**
  * The worker boot module is loaded on demand: only the `wasm-worker`
- * preference (the cross-origin-isolated default) needs it, and the in-process
+ * preference (opt-in since #444) needs it, and the in-process
  * owner boot should not fetch it.
  */
 type WorkerBootModule = typeof import('../wasm/physics-worker-boot')

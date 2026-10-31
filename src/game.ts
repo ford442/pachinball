@@ -29,6 +29,7 @@ import { GameHUD, type HUDHost } from './game/game-hud'
 import { GameMapCabinet, type MapCabinetHost } from './game/game-map-cabinet'
 import type { DebugStageKey } from './game/checkpoint-debug'
 import { GameDelegates } from './game/game-delegates'
+import { getChallengeSystem } from './replay/challenge-system'
 import { installSimClock } from './core/sim-clock'
 import { FrameScheduler } from './core/frame-scheduler'
 import { bootWarn } from './boot-log'
@@ -98,11 +99,21 @@ export class Game
       document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() }, { signal })
       document.getElementById('campaign-map-btn')?.addEventListener('click', () => { void this.toggleCampaignMap() }, { signal })
       this.uiManager?.setStartButtonEnabled(false)
+      // Challenges v2 (#444): a `?challenge=<id>` link loads before the first game.
+      const challengeV2 = () => import('./replay/challenge-v2')
+      if (getChallengeSystem().getActiveChallenge()?.id) {
+        getChallengeSystem().setResolving(challengeV2().then((m) => m.resolveLinkedChallenge(this)))
+      }
+      this.lazySingletonResets.push(() => {
+        this.ghostRace?.dispose()
+        this.ghostRace = null
+      })
       const { bindDailyCascadeUI } = await import('./game/daily-cascade-ui')
       bindDailyCascadeUI({
         signal,
         getCampaignStageName: () =>
           this.adventureTrackProgression?.getCurrentTrackInfo()?.name ?? 'Neon Helix',
+        onWeekly: () => void challengeV2().then((m) => m.playWeekly(this)),
         isCampaignSelected: () => this.campaignStartSelected,
         setCampaignSelected: (selected) => { this.campaignStartSelected = selected },
       })
@@ -281,6 +292,8 @@ export class Game
       if (replayParam) {
         void this.startSpectateReplay(replayParam)
       }
+      // Live spectate (#444 Slice E): the opt-in broadcast, Watch live and `?live=<id>`.
+      void import('./game/live-ui').then((m) => { this.liveUI = m.startLiveUI(this) })
 
       this.registerFrameSystems(scene)
       this.frameScheduler.start()
@@ -309,6 +322,7 @@ export class Game
    * The frame, as scheduler systems (#488 §4): input → physics → sim → visuals → render → hud.
    * Everything a frame draws is computed before `scene.render()` in that frame — cabinet lighting
    * and spinners used to update after it, one frame late.
+   * Gates, traps, launchers and adventure clocks run inside the fixed step, not here.
    */
   private registerFrameSystems(scene: Scene): void {
     const s = this.frameScheduler
@@ -330,7 +344,6 @@ export class Game
       },
     }, { signal })
     s.register({ phase: 'sim', name: 'table', update: () => this.physicsController?.updateSim() }, { signal })
-    s.register({ phase: 'sim', name: 'mechanisms', update: (dt) => this.updateMechanisms(dt) }, { signal })
     s.register({ phase: 'sim', name: 'adventure', update: (dt) => this.updateAdventure(dt) }, { signal })
     s.register({ phase: 'visuals', name: 'table-visuals', update: () => this.physicsController?.updateVisuals() }, { signal })
     s.register({ phase: 'visuals', name: 'cabinet', update: (dt) => this.updateCabinetVisuals(dt) }, { signal })
@@ -338,23 +351,8 @@ export class Game
     s.register({ phase: 'hud', name: 'hud', update: (dt) => this.updateFrameHUD(dt) }, { signal })
   }
 
-  /** Traps, launchers and moving gates: they hold, push and block balls, so they are sim. */
-  private updateMechanisms(dt: number): void {
-    for (const state of this.trapStates) {
-      this.ballTrapBuilder?.updateTrap(state, dt)
-    }
-    for (const state of this.launcherStates) {
-      this.launcherBuilder?.updateLauncher(state, dt)
-    }
-    for (const state of this.gateStates) {
-      this.movingGateBuilder?.updateGate(state, dt)
-    }
-  }
-
-  private updateAdventure(dt: number): void {
-    this.adventureCinematicSystem?.update(dt)
-    this.adventureCinematicTriggers?.update()
-    this.adventureUIStateManager?.updateAnimations(dt)
+  /** `PhysicsHost.stepAdventureProgression`: goal and time-limit clocks, once per fixed step. */
+  stepAdventureProgression(dt: number): void {
     this.adventureGoalTracker?.update(dt)
     this.adventureProgressionSupervisor?.update(dt, this.score)
     if (this.adventureMode?.isActive() && this.adventureGoalTracker && this.adventureProgressionSupervisor) {
@@ -363,6 +361,12 @@ export class Game
       )
       this.updateHUD()
     }
+  }
+
+  private updateAdventure(dt: number): void {
+    this.adventureCinematicSystem?.update(dt)
+    this.adventureCinematicTriggers?.update()
+    this.adventureUIStateManager?.updateAnimations(dt)
   }
 
   private updateCabinetVisuals(dt: number): void {

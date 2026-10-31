@@ -8,10 +8,12 @@ import {
 } from './helpers/wasm-owner-boot'
 
 /**
- * #439 Slice 1: with no localStorage override, a cross-origin-isolated page
- * boots the C++ world in a Dedicated Worker, a non-isolated page keeps the
- * in-process owner, and a worker that cannot load falls back to that owner
- * with the greppable degrade marker instead of hanging boot.
+ * #444: with no override every page — cross-origin isolated or not — runs the
+ * in-process owner (only its runs replay step-exactly, so only they can be
+ * verified). The Dedicated Worker of #439 is opt-in: an opted-in worker runs
+ * plunger and flippers off the main thread over the shared-memory transport,
+ * and one that cannot load falls back to the owner with the greppable degrade
+ * marker instead of hanging boot.
  *
  * Physics is stepped by hand (render loop stopped, fixed 1/60 s dt), as in
  * wasm-worker-adventure.spec.ts: headless SwiftShader renders about one frame
@@ -76,12 +78,12 @@ async function readTiming(page: Page) {
   })
 }
 
-test.describe('wasm-worker default (#439)', () => {
-  test('isolated boot defaults to wasm-worker: plunger and flipper run in the worker', async ({ page }) => {
+test.describe('wasm-owner default, wasm-worker opt-in (#439, #444)', () => {
+  test('an opted-in wasm-worker runs plunger and flipper in the worker', async ({ page }) => {
     test.setTimeout(240_000)
     const degrade = collectDegradeLogs(page)
 
-    const boot = await bootWasmOwner(page, 'default')
+    const boot = await bootWasmOwner(page, 'wasm-worker')
     assertWasmOwnerReady(boot, 'wasm-worker')
     await startPlaying(page)
 
@@ -114,12 +116,29 @@ test.describe('wasm-worker default (#439)', () => {
     const timing = await readTiming(page)
     expect(timing.isolated, 'dev server must send COOP/COEP').toBe(true)
     expect(timing.mode).toBe('wasm-worker')
-    expect(timing.rapierMs, 'Rapier must not step on the worker default').toBe(0)
+    expect(timing.rapierMs, 'Rapier must not step on the worker').toBe(0)
     expect(maxWorkerMs, 'getLastWorkerStepMs() must be measured inside the worker').toBeGreaterThan(0)
     expect(timing.stats?.transport).toBe('shared')
     expect(timing.stats?.sharedSnapshots).toBeGreaterThan(0)
     expect(timing.degradeReason).toBeNull()
     expect(degrade, 'a healthy worker boot logs no degrade marker').toEqual([])
+  })
+
+  test('isolated boot defaults to the in-process wasm-owner (#444)', async ({ page }) => {
+    test.setTimeout(240_000)
+    const degrade = collectDegradeLogs(page)
+
+    const boot = await bootWasmOwner(page, 'default')
+    assertWasmOwnerReady(boot, 'wasm-owner')
+    await startPlaying(page)
+    await stepByHand(page, 30)
+
+    const timing = await readTiming(page)
+    expect(timing.isolated, 'dev server must send COOP/COEP').toBe(true)
+    expect(timing.mode).toBe('wasm-owner')
+    expect(timing.rapierMs).toBe(0)
+    expect(timing.degradeReason, 'the owner default is not a degrade').toBeNull()
+    expect(degrade).toEqual([])
   })
 
   test('non-isolated boot keeps the in-process wasm-owner', async ({ page }) => {
@@ -147,7 +166,7 @@ test.describe('wasm-worker default (#439)', () => {
     // the client / boot / protocol modules on the main thread still load.
     await page.route((url) => url.pathname.endsWith('/physics-worker.ts'), (route) => route.abort())
 
-    const boot = await bootWasmOwner(page, 'default')
+    const boot = await bootWasmOwner(page, 'wasm-worker')
     assertWasmOwnerReady(boot, 'wasm-owner')
     await startPlaying(page)
     await stepByHand(page, 30)

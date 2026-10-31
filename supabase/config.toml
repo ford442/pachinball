@@ -1,0 +1,26 @@
+# Supabase CLI config for the live arcade service (#444, docs/API_CONTRACT.md).
+# Local: `supabase db start && supabase test db` applies supabase/migrations to a
+# throwaway Postgres and runs the pgTAP tests in supabase/tests/database.
+# The hosted project is znsioiaydrtsziwavdat; settings left out here take the
+# CLI defaults.
+project_id = "pachinball"
+
+[db]
+major_version = 17
+
+[auth]
+site_url = "https://test.1ink.us/pachinball/"
+# Every player is an anonymous user (the hosted project needs the same switch).
+enable_anonymous_sign_ins = true
+
+[functions.submit-score]
+verify_jwt = true
+
+[functions.submit-replay]
+verify_jwt = true
+
+[functions.create-challenge]
+verify_jwt = true
+
+[functions.put-save]
+verify_jwt = true

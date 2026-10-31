@@ -1,7 +1,37 @@
+import { execSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+
+/**
+ * The build a replay was recorded on, and the build that verified it (#444):
+ * the commit, `-dirty` when the tree has uncommitted changes.
+ * `PACHINBALL_BUILD_ID` overrides it (CI, a release tag).
+ */
+function resolveBuildId(): string {
+  if (process.env.PACHINBALL_BUILD_ID) return process.env.PACHINBALL_BUILD_ID
+  const git = (args: string) => execSync(`git ${args}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+  try {
+    const sha = git('rev-parse --short=12 HEAD')
+    return git('status --porcelain --untracked-files=no') ? `${sha}-dirty` : sha
+  } catch {
+    return 'unknown'
+  }
+}
+
+const BUILD_ID = resolveBuildId()
+
+/** `dist/build-info.json`: the replay verifier reports this as its verifier_version. */
+function buildInfo(): Plugin {
+  return {
+    name: 'pachinball-build-info',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'build-info.json', source: `${JSON.stringify({ buildId: BUILD_ID })}\n` })
+    },
+  }
+}
 
 const isBabylonLoaders = (id: string) => id.includes('node_modules/@babylonjs/loaders')
 /**
@@ -118,6 +148,9 @@ const localStorageManagerCaching = [
 export default defineConfig(({ mode }) => ({
   // Use relative paths so assets resolve correctly when deployed to a subdirectory
   base: './',
+  define: {
+    __PACHINBALL_BUILD__: JSON.stringify(BUILD_ID),
+  },
   esbuild: {
     drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
   },
@@ -175,6 +208,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [
+    buildInfo(),
     babylonChunks.plugin,
     VitePWA({
       // 'prompt': a new worker waits until the player accepts the update toast

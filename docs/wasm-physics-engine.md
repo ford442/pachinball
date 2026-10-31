@@ -436,14 +436,13 @@ fresh objects as before.
 ## Physics engine modes
 
 Production physics runs on the C++ engine for the table **and** every catalogued
-adventure track (see *Adventure geometry* below). With no localStorage override,
-`crossOriginIsolated` picks where that engine runs (#439):
-
-- **Isolated** (production Apache and the Vite dev/preview servers send COOP/COEP; see
-  `docs/cross-origin-isolation.md`): **WASM worker** (`WASM_PHYSICS.defaultEngine`), the
-  C++ world in a Dedicated Worker with the shared-memory snapshot transport.
-- **Not isolated** (file://, a host without the headers): **WASM owner**
-  (`WASM_PHYSICS.nonIsolatedDefaultEngine`), in-process. This is a choice, not a degrade.
+adventure track (see *Adventure geometry* below), **in-process** (`wasm-owner`,
+`WASM_PHYSICS.defaultEngine`) on every page, cross-origin isolated or not (#444).
+Only in-process runs replay step-exactly, so only they can be verified and
+ranked (`docs/API_CONTRACT.md`). The Dedicated Worker (`wasm-worker`) is opt-in:
+`?physics=wasm-worker` for one page load, or the localStorage flag below. On an
+isolated page (production Apache and the Vite servers send COOP/COEP; see
+`docs/cross-origin-isolation.md`) it uses the shared-memory snapshot transport.
 
 Init fail-closes down a ladder and logs `[Bootstrap][physics-degrade]` (also
 `window.physicsDegradeReason`) at each rung it takes:
@@ -460,14 +459,14 @@ Init fail-closes down a ladder and logs `[Bootstrap][physics-degrade]` (also
 init/step (`rapier` | `wasm-mirror` | `wasm-owner` | `wasm-worker`), not the
 localStorage preference.
 
-Set via `localStorage['pachinball:physics-engine']`:
+Set via `?physics=<value>` (this page load) or `localStorage['pachinball:physics-engine']`:
 
 | Mode | Value | Behaviour |
 |------|-------|-----------|
-| **WASM owner** (default when not isolated) | `wasm-owner`, or unset on a page that is not cross-origin isolated | WASM owns balls + the table scope + **native hinge flippers** + adventure track geometry and gizmos. Rapier is never loaded: no module, no `World` (`getRapier() === null`, `lastRapierStepMs === 0`). |
+| **WASM owner** (default) | `wasm-owner`, or unset | WASM owns balls + the table scope + **native hinge flippers** + adventure track geometry and gizmos. Rapier is never loaded: no module, no `World` (`getRapier() === null`, `lastRapierStepMs === 0`). |
 | **Rapier** | `rapier` (explicit) | Dev / degrade path: full Rapier simulation, and the fail-closed fallback when the WASM bundle is missing — Rapier is imported lazily (`loadRapier()`). Kept deliberately and covered by `tests/physics-degrade.spec.ts` and the fallback case in `tests/wasm-owner-adventure-cutover.spec.ts`. |
 | **WASM mirror** | `wasm-mirror` or legacy `wasm` | Rapier authoritative (loaded at boot); WASM steps ball+bumper subset and poses sync Rapier↔WASM each frame |
-| **WASM worker** (default) | `wasm-worker`, or unset on a cross-origin-isolated page | Same ownership as `wasm-owner` — table **and** adventure tracks — but `PhysicsWorld` runs in a Dedicated Worker (**one physics frame of extra latency**). Snapshots arrive over a SharedArrayBuffer when the page is cross-origin isolated, otherwise as transferred `ArrayBuffer`s; see *Worker transport*. Worker construction / load failure / timeout falls back to in-process `wasm-owner` with the degrade marker. `tests/wasm-worker-default.spec.ts` covers the isolated default, the non-isolated owner, and a worker script that cannot load. `tests/wasm-worker-api-parity.test.ts` fails the build if an engine method has no worker command; `tests/physics-worker-shared-parity.test.ts` runs the worker path against real C++ and requires identical handles, poses and contacts. |
+| **WASM worker** (opt-in) | `wasm-worker` | Same ownership as `wasm-owner` — table **and** adventure tracks — but `PhysicsWorld` runs in a Dedicated Worker (**one physics frame of extra latency**). Snapshots arrive over a SharedArrayBuffer when the page is cross-origin isolated, otherwise as transferred `ArrayBuffer`s; see *Worker transport*. Its runs are not verifiable: game code reads the worker's step results a frame late, and how late varies by machine. Worker construction / load failure / timeout falls back to in-process `wasm-owner` with the degrade marker. `tests/wasm-worker-default.spec.ts` covers the owner default on isolated and non-isolated pages, the opted-in worker, and a worker script that cannot load. `tests/wasm-worker-api-parity.test.ts` fails the build if an engine method has no worker command; `tests/physics-worker-shared-parity.test.ts` runs the worker path against real C++ and requires identical handles, poses and contacts. |
 
 Mirror mode remains a WASM parity path on Rapier bodies. Owner mode has no Rapier bodies at
 all (see *Table authoring and WASM-id identity* below): each flipper is a dynamic WASM capsule
@@ -478,13 +477,13 @@ with a world-anchored hinge (`PhysicsWorld::createHinge` / `setHingeMotor`), lin
 // Dev console — mirror
 localStorage.setItem('pachinball:physics-engine', 'wasm-mirror')
 
-// Owner mode — in-process C++ world (the default when not cross-origin isolated)
+// Owner mode — in-process C++ world (the default)
 localStorage.setItem('pachinball:physics-engine', 'wasm-owner')
 
-// Worker mode — same as owner, C++ world off the main thread (the isolated default)
+// Worker mode — same as owner, C++ world off the main thread (opt-in; runs are not verifiable)
 localStorage.setItem('pachinball:physics-engine', 'wasm-worker')
 
-// Back to the default for this page (worker when isolated, owner otherwise)
+// Back to the default (in-process owner)
 localStorage.removeItem('pachinball:physics-engine')
 
 // Explicit Rapier override
@@ -1224,7 +1223,8 @@ Replays use all of this through `src/replay/replay-snapshot.ts` — see
 commands, and each `step()` first reads whatever the worker last published,
 then posts the frame's command batch. Visuals therefore trail by one physics
 frame. Idle preload warms the worker instead of compiling the module on the
-main thread. The worker is the default on a cross-origin-isolated page (#439);
+main thread. The worker was the default on a cross-origin-isolated page from
+#439 until #444 made it opt-in (verified runs need the in-process owner);
 `startPhysicsWorker()` (`src/wasm/physics-worker-boot.ts`) owns the `init` /
 `ready` handshake for both the prewarmed and the cold worker, and settles it
 false (terminating the worker) on an `error` reply, a Worker `error` /

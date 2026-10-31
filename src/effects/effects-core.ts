@@ -486,7 +486,8 @@ export class EffectsSystem {
   ): void {
     this.performanceController.checkPerformance(dt)
 
-    this.updateJackpotSequence(dt)
+    // The jackpot sequence is gameplay (it ends the display's JACKPOT state):
+    // GamePhysicsController advances it once per fixed step, not here (#444).
 
     this.updateShards(dt)
     this.updateBloom()

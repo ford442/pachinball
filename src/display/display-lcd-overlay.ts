@@ -29,6 +29,7 @@ export class DisplayLcdOverlayLayer {
   private mesh: Mesh | null = null
   private texture: DynamicTexture | null = null
   private material: StandardMaterial | null = null
+  private dirty = false
 
   private storyText = ''
   private trackText = ''
@@ -83,6 +84,11 @@ export class DisplayLcdOverlayLayer {
     this.mesh.position.z = DISPLAY_LAYER_Z.LCD
     this.mesh.material = this.material
     this.mesh.isPickable = false
+    this.mesh.onBeforeRenderObservable.add(() => {
+      if (!this.dirty) return
+      this.dirty = false
+      this.draw()
+    })
 
     this.preloadSplashImages()
     this.redraw()
@@ -201,7 +207,12 @@ export class DisplayLcdOverlayLayer {
     }
   }
 
+  /** Marked by a step; drawn once before the mesh renders, never on the step itself (#444). */
   private redraw(): void {
+    this.dirty = true
+  }
+
+  private draw(): void {
     if (!this.texture) return
     const ctx = this.texture.getContext() as CanvasRenderingContext2D
     const canvas = ctx.canvas

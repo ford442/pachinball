@@ -206,6 +206,11 @@ export function applyPhysicsCommand(
       state.replies.push(snapshotReply(engine, cmd.requestId, bytes, bytes ? WasmSnapshotStatus.Ok : WasmSnapshotStatus.Unsupported))
       return 0
     }
+    case 'getStateHash': {
+      const stateHash = engine.getStateHash?.() ?? null
+      state.replies.push(snapshotReply(engine, cmd.requestId, null, stateHash ? WasmSnapshotStatus.Ok : WasmSnapshotStatus.Unsupported, stateHash))
+      return 0
+    }
     case 'restoreSnapshot': {
       const status = engine.restoreSnapshot?.(cmd.bytes) ?? WasmSnapshotStatus.Unsupported
       if (status === WasmSnapshotStatus.Ok) {
@@ -215,9 +220,6 @@ export function applyPhysicsCommand(
       state.replies.push(snapshotReply(engine, cmd.requestId, null, status))
       return 0
     }
-    case 'getStateHash':
-      state.replies.push(snapshotReply(engine, cmd.requestId, null, WasmSnapshotStatus.Ok))
-      return 0
   }
 }
 
@@ -226,6 +228,7 @@ function snapshotReply(
   requestId: number,
   bytes: Uint8Array | null,
   status: WasmSnapshotStatus,
+  stateHash: string | null = engine.getStateHash?.() ?? null,
 ): PhysicsWorkerSnapshotReply {
   return {
     type: 'snapshot-reply',
@@ -233,8 +236,8 @@ function snapshotReply(
     bytes,
     status,
     staticHash: engine.getStaticContentHash?.() ?? null,
+    stateHash,
     stepCount: engine.getStepCount?.() ?? 0,
-    stateHash: engine.getStateHash?.() ?? null,
   }
 }
 

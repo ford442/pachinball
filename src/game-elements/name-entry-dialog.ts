@@ -63,7 +63,7 @@ export class NameEntryDialog {
           <span class="score-label">SCORE</span>
           <span class="score-value">${this.score.toLocaleString()}</span>
         </div>
-        <div class="name-entry-rank">RANK #${this.rank}</div>
+        <div class="name-entry-rank">${this.rank > 0 ? `RANK #${this.rank}` : 'OFFLINE · SENT WHEN BACK ONLINE'}</div>
         <div class="name-entry-prompt">ENTER NAME</div>
         <div class="name-entry-letters">
           <span class="letter" data-pos="0">A</span>
@@ -75,6 +75,7 @@ export class NameEntryDialog {
           <span>←→ MOVE</span>
           <span>ENTER SUBMIT</span>
         </div>
+        <div class="name-entry-verify">YOUR RUN IS VERIFIED BY REPLAY · ✓ ON THE BOARD WHEN CONFIRMED</div>
       </div>
     `
     
@@ -219,6 +220,13 @@ export class NameEntryDialog {
         }
       }
       
+      .name-entry-verify {
+        margin-top: 14px;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        opacity: 0.7;
+      }
+
       .name-entry-instructions {
         display: flex;
         justify-content: center;

@@ -1,0 +1,23 @@
+# Replay verifier (#444 Slice C) — see services/replay-verifier/README.md.
+[Unit]
+Description=Pachinball replay verifier
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pachinball
+WorkingDirectory=/srv/pachinball
+EnvironmentFile=/etc/pachinball/replay-verifier.env
+ExecStart=/usr/bin/node services/replay-verifier/verifier.mjs
+Restart=on-failure
+RestartSec=30
+# Finishes the run in progress on stop.
+KillSignal=SIGTERM
+TimeoutStopSec=180
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

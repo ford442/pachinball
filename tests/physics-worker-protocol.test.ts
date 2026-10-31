@@ -331,6 +331,7 @@ describe('worker snapshot request/reply', () => {
       serializeSnapshot: vi.fn(() => new Uint8Array([1, 2, 3, 4])),
       restoreSnapshot: vi.fn(() => restoreStatus),
       getStaticContentHash: vi.fn(() => 'feedfacecafebeef'),
+      getStateHash: vi.fn(() => '0123456789abcdef'),
     }
     const withHash = Object.assign(engine, {
       getStateHash: vi.fn(() => `state@${engine.getStepCount()}`),
@@ -388,9 +389,11 @@ describe('worker snapshot request/reply', () => {
     expect(r.replies[0]!.stateHash).toBe('state@1')
   })
 
-  it('getStateHash resolves null before the worker is ready', async () => {
-    const client = new PhysicsWorkerClient({ sharedTransport: false })
+  it('getStateHash resolves null when the bundle cannot hash, and when the worker is not ready', async () => {
+    const { client, engine } = setup()
+    engine.getStateHash.mockReturnValue(null as unknown as string)
     await expect(client.getStateHash()).resolves.toBeNull()
+    await expect(new PhysicsWorkerClient({ sharedTransport: false }).getStateHash()).resolves.toBeNull()
   })
 
   it('a restore takes effect before the next step and adopts the snapshot ids and step count', async () => {
