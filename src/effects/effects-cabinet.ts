@@ -121,15 +121,20 @@ export function updateCabinetLighting(state: CabinetState): void {
     let intensity = INTENSITY.NORMAL
 
     if (state.isJackpotActive) {
+      // Photosensitive mode and reduced motion hold each phase at its end state: no 4 Hz / strobe pulse.
+      const steady = accessibility.photosensitiveMode === true || accessibility.reducedMotion
       if (state.jackpotPhase === 1) {
-        const p = pulse(time, 4, 0.2, 1.0)
+        const p = steady ? 1 : pulse(time, 4, 0.2, 1.0)
         targetColor = emissive(STATE_COLORS.REACH, p * INTENSITY.FLASH)
         intensity = INTENSITY.FLASH
       } else if (state.jackpotPhase === 2) {
         const flashFreq = accessibility.flashFrequencyMax
-        const strobe = (Math.sin(time * Math.PI * 2 * flashFreq) + 1) * 0.5
+        const strobe = steady ? 1 : (Math.sin(time * Math.PI * 2 * flashFreq) + 1) * 0.5
         targetColor = emissive(PALETTE.GOLD, strobe * INTENSITY.BURST)
         intensity = INTENSITY.BURST
+      } else if (steady) {
+        targetColor = emissive(PALETTE.GOLD, INTENSITY.HIGH)
+        intensity = INTENSITY.HIGH
       } else {
         const hue = (time * 0.5 + idx * 0.1) % 1
         targetColor = Color3.FromHSV(hue * 360, 1.0, 1.0).scale(INTENSITY.HIGH)
@@ -180,7 +185,9 @@ export function updateCabinetLighting(state: CabinetState): void {
 
   decorativeLights.forEach((mat) => {
     if (state.isJackpotActive) {
-      if (state.jackpotPhase === 3) {
+      if (state.jackpotPhase === 3 && (accessibility.photosensitiveMode === true || accessibility.reducedMotion)) {
+        mat.emissiveColor = emissive(PALETTE.GOLD, INTENSITY.HIGH)
+      } else if (state.jackpotPhase === 3) {
         const hue = (time * 2) % 1
         mat.emissiveColor = Color3.FromHSV(hue * 360, 1.0, INTENSITY.HIGH)
       } else {

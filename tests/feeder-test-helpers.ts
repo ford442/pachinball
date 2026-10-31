@@ -134,6 +134,30 @@ export function mockBabylonCore() {
     scale(s: number) {
       return new MockColor3(this.r * s, this.g * s, this.b * s)
     }
+    // In-place forms the feeders' per-frame paths use (#488 §5).
+    scaleToRef(s: number, ref: MockColor3) {
+      ref.r = this.r * s
+      ref.g = this.g * s
+      ref.b = this.b * s
+      return ref
+    }
+    copyFrom(c: MockColor3) {
+      this.r = c.r
+      this.g = c.g
+      this.b = c.b
+      return this
+    }
+    copyFromFloats(r: number, g: number, b: number) {
+      this.r = r
+      this.g = g
+      this.b = b
+      return this
+    }
+    static LerpToRef(a: MockColor3, b: MockColor3, t: number, ref: MockColor3) {
+      ref.r = a.r + (b.r - a.r) * t
+      ref.g = a.g + (b.g - a.g) * t
+      ref.b = a.b + (b.b - a.b) * t
+    }
   }
 
   return {

@@ -52,7 +52,8 @@ struct SnapshotAccess {
   static constexpr std::size_t kBodyWords =
       1 + std::size(kFloatCols) + std::size(kByteCols) + 1 + std::size(kWordCols);
 
-  static void writeBodies(SnapshotWriter& w, const BodyStore& s) {
+  template <typename Sink>
+  static void writeBodies(Sink& w, const BodyStore& s) {
     const std::size_t n = s.denseToPublicId_.size();
     w.u32(static_cast<uint32_t>(n));
     for (int id : s.denseToPublicId_) w.i32(id);
@@ -97,7 +98,8 @@ struct SnapshotAccess {
     return !r.failed();
   }
 
-  static void writeHandles(SnapshotWriter& w, const HandleTable& h) {
+  template <typename Sink>
+  static void writeHandles(Sink& w, const HandleTable& h) {
     w.i32(h.nextId_);
     w.u32(static_cast<uint32_t>(h.slots_.size()));
     for (const HandleTable::Slot& s : h.slots_) {
@@ -118,22 +120,6 @@ struct SnapshotAccess {
       s.generation = static_cast<uint16_t>(gen);
     }
     return !r.failed();
-  }
-
-  /** The columns the next step reads for one body (stateHash). */
-  static void hashBody(SnapshotHasher& h, const BodyStore& s, std::size_t i) {
-    for (FloatCol c : {&BodyStore::posX_, &BodyStore::posY_, &BodyStore::posZ_,
-                       &BodyStore::rotX_, &BodyStore::rotY_, &BodyStore::rotZ_, &BodyStore::rotW_,
-                       &BodyStore::velX_, &BodyStore::velY_, &BodyStore::velZ_,
-                       &BodyStore::angVelX_, &BodyStore::angVelY_, &BodyStore::angVelZ_,
-                       &BodyStore::forceX_, &BodyStore::forceY_, &BodyStore::forceZ_}) {
-      h.f32((s.*c)[i]);
-    }
-    h.u32(s.type_[i]);
-    h.u32(s.active_[i]);
-    h.u32(s.sleepCounter_[i]);
-    h.u32(s.membership_[i]);
-    h.u32(s.filter_[i]);
   }
 
   /** Every live id resolves to its dense slot and back; no stray bindings. */
@@ -157,8 +143,10 @@ struct SnapshotAccess {
 
 namespace {
 
-void writeVec(SnapshotWriter& w, const Vec3& v) { w.f32(v.x); w.f32(v.y); w.f32(v.z); }
-void writeQuat(SnapshotWriter& w, const Quat& q) { w.f32(q.x); w.f32(q.y); w.f32(q.z); w.f32(q.w); }
+template <typename Sink>
+void writeVec(Sink& w, const Vec3& v) { w.f32(v.x); w.f32(v.y); w.f32(v.z); }
+template <typename Sink>
+void writeQuat(Sink& w, const Quat& q) { w.f32(q.x); w.f32(q.y); w.f32(q.z); w.f32(q.w); }
 Vec3 readVec(SnapshotReader& r) { const float x = r.f32(), y = r.f32(), z = r.f32(); return {x, y, z}; }
 Quat readQuat(SnapshotReader& r) {
   const float x = r.f32(), y = r.f32(), z = r.f32(), qw = r.f32();
@@ -173,8 +161,8 @@ constexpr std::size_t kTargetWords = 8;
 constexpr std::size_t kContactWords = 12;
 
 /** (membership, filter) for every entry of one static family, in canonical rank order. */
-template <typename T, typename Get>
-void writeGroups(SnapshotWriter& w, const std::vector<T>& v, const std::vector<SnapshotRank>& rank, Get get) {
+template <typename Sink, typename T, typename Get>
+void writeGroups(Sink& w, const std::vector<T>& v, const std::vector<SnapshotRank>& rank, Get get) {
   for (const SnapshotRank& k : rank) {
     const auto& d = get(v[k.index]);
     w.u32(d.membership);
@@ -197,9 +185,10 @@ void readGroups(SnapshotReader& r, std::vector<T>& v, const std::vector<Snapshot
 // order that depends only on what the table holds. The hash folds the sorted
 // digests; the per-static runtime state in the blob (group masks, mover poses,
 // field vectors) is written and read in that rank order, so a snapshot restores
-// onto the right items even when the target world added them in another order.
-// Items with identical content tie-break by insertion index, which is
-// harmless unless their unhashed runtime state differs.
+// onto the right items even when the target world added them in another order,
+// and `getStateHash()` (which hashes the same payload) is order-independent
+// for statics too. Items with identical content tie-break by insertion index,
+// which is harmless unless their unhashed runtime state differs.
 
 template <typename Fill>
 uint64_t digestOf(Fill fill) {
@@ -365,72 +354,9 @@ uint64_t PhysicsWorld::staticHashOf(const StaticRanking& r) const {
   return h.value();
 }
 
-uint64_t PhysicsWorld::stateHash() const {
-  SnapshotHasher h;
-  h.u64(stepCount_);
-  h.f32(accumulator_);
-  hashVec(h, params_.gravity);
-  h.f32(params_.fixedTimestep); h.f32(params_.maxSubsteps); h.i32(params_.solverIterations);
-  h.f32(params_.rollingResistance);
-  h.f32(params_.sleepLinearThreshold); h.f32(params_.sleepAngularThreshold);
-  h.i32(params_.sleepFramesRequired);
-  const StaticRanking r = staticRanking();
-  h.u64(staticHashOf(r));
-
-  // Bodies by ascending public id: independent of swap-and-pop dense order.
-  const int slots = handles_.nextId();
-  for (int id = 0; id < slots; ++id) {
-    const int dense = handles_.findDenseIndex(id);
-    if (dense < 0) continue;
-    h.i32(id);
-    SnapshotAccess::hashBody(h, bodies_, static_cast<std::size_t>(dense));
-  }
-
-  for (const HingeJoint& j : hinges_) {
-    h.i32(j.id); h.i32(j.bodyId); h.u32(j.active ? 1u : 0u);
-    h.f32(j.motorTargetVel); h.f32(j.motorMaxTorque);
-    h.f32(getHingeAngle(j.id));
-  }
-
-  // Runtime state of statics, in canonical order like the snapshot blob.
-  for (const SnapshotRank& k : r.movers) {
-    const KinematicMover& m = movers_[k.index];
-    hashVec(h, m.currentPos); hashQuat(h, m.currentRot);
-    hashVec(h, m.nextPos); hashQuat(h, m.nextRot);
-    h.u32(m.hasNextPose ? 1u : 0u);
-    hashVec(h, m.linearVelocity); hashVec(h, m.angularVelocity);
-  }
-  for (const SnapshotRank& k : r.fields) {
-    hashVec(h, fields_[k.index].force);
-    h.u32(fields_[k.index].enabled ? 1u : 0u);
-  }
-
-  // Kinematic-body targets pending for the next step. Push order is not state,
-  // so each entry is digested alone and the digests are summed (commutative).
-  uint64_t pending = 0;
-  for (const KinematicBodyTarget& t : bodyTargets_) {
-    pending += digestOf([&](SnapshotHasher& e) { e.i32(t.id); hashVec(e, t.position); hashQuat(e, t.rotation); });
-  }
-  h.u32(static_cast<uint32_t>(bodyTargets_.size()));
-  h.u64(pending);
-  uint64_t driven = 0;
-  for (int id : drivenBodies_) driven += digestOf([&](SnapshotHasher& e) { e.i32(id); });
-  h.u32(static_cast<uint32_t>(drivenBodies_.size()));
-  h.u64(driven);
-  return h.value();
-}
-
-std::vector<uint8_t> PhysicsWorld::serialize() const {
-  SnapshotWriter w;
-  const StaticRanking rank = staticRanking();
-  w.u32(SNAPSHOT_MAGIC);
-  w.u32(SNAPSHOT_VERSION);
-  w.u32(0); // total word count, patched below
-  w.u64(staticContentHash());
-  uint32_t counts[SNAPSHOT_STATIC_FAMILIES];
-  staticCounts(counts);
-  for (uint32_t c : counts) w.u32(c);
-
+/** Everything after the header — the stepped state `getStateHash()` also hashes. */
+template <typename Sink>
+void PhysicsWorld::writeState(Sink& w, const StaticRanking& rank) const {
   w.u64(stepCount_);
   w.f32(accumulator_);
   writeVec(w, params_.gravity);
@@ -496,9 +422,45 @@ std::vector<uint8_t> PhysicsWorld::serialize() const {
     w.f32(e.impulse); w.i32(static_cast<int>(e.phase));
     w.u32(e.isSensor ? 1u : 0u); w.i32(e.subIndex);
   }
+}
+
+std::vector<uint8_t> PhysicsWorld::serialize() const {
+  const StaticRanking rank = staticRanking();
+  SnapshotWriter w;
+  w.u32(SNAPSHOT_MAGIC);
+  w.u32(SNAPSHOT_VERSION);
+  w.u32(0); // total word count, patched below
+  w.u64(staticHashOf(rank));
+  uint32_t counts[SNAPSHOT_STATIC_FAMILIES];
+  staticCounts(counts);
+  for (uint32_t c : counts) w.u32(c);
+
+  writeState(w, rank);
 
   w.patch(2, static_cast<uint32_t>(w.wordCount()));
   return w.take();
+}
+
+uint64_t PhysicsWorld::getStateHash() const {
+  const StaticRanking rank = staticRanking();
+  SnapshotHasher h;
+  h.u32(SNAPSHOT_VERSION);
+  h.u64(staticHashOf(rank));
+  writeState(h, rank);
+  // Derived from body rotation + rest pose, so already covered above; hashed
+  // anyway so a change to computeHingeAngle shows up here, not only in a trace.
+  for (const HingeJoint& j : hinges_) {
+    if (j.active) { h.i32(j.id); h.f32(getHingeAngle(j.id)); }
+  }
+  // The insertion order the content hash deliberately ignores: static ids in
+  // contacts and the solve order follow it, so two equal-content tables built
+  // in another order step differently and must not share a state hash.
+  for (const std::vector<SnapshotRank>* family :
+       {&rank.planes, &rank.boxes, &rank.capsules, &rank.cylinders, &rank.spheres, &rank.cones,
+        &rank.pinFields, &rank.movers, &rank.sensors, &rank.meshes, &rank.fields}) {
+    for (const SnapshotRank& k : *family) h.u32(k.index);
+  }
+  return h.value();
 }
 
 SnapshotStatus PhysicsWorld::restore(const uint8_t* data, std::size_t size) {
@@ -511,7 +473,8 @@ SnapshotStatus PhysicsWorld::restore(const uint8_t* data, std::size_t size) {
   if (static_cast<std::size_t>(totalWords) * 4 != size) return SnapshotStatus::Corrupt;
 
   // Refuse a differently built table before decoding anything else.
-  if (r.u64() != staticContentHash()) return SnapshotStatus::StaticMismatch;
+  const StaticRanking rank = staticRanking();
+  if (r.u64() != staticHashOf(rank)) return SnapshotStatus::StaticMismatch;
   uint32_t counts[SNAPSHOT_STATIC_FAMILIES];
   staticCounts(counts);
   for (uint32_t c : counts) {
@@ -570,7 +533,6 @@ SnapshotStatus PhysicsWorld::restore(const uint8_t* data, std::size_t size) {
   std::vector<SensorVolumeDesc> sensors = sensors_;
   std::vector<TriangleMeshDesc> meshes = meshes_;
   std::vector<ForceFieldDesc> fields = fields_;
-  const StaticRanking rank = staticRanking();
   readGroups(r, boxes, rank.boxes, self);
   readGroups(r, capsules, rank.capsules, self);
   readGroups(r, cylinders, rank.cylinders, self);
@@ -634,6 +596,7 @@ SnapshotStatus PhysicsWorld::restore(const uint8_t* data, std::size_t size) {
   meshes_ = std::move(meshes);
   fields_ = std::move(fields);
   pairs_.clear();
+  quarantines_.clear();
   contactListener_.restoreManifold(manifold, generation, droppedTotal);
   scatterTransforms();
   return SnapshotStatus::Ok;

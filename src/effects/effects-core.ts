@@ -27,6 +27,7 @@ import { TrailEffects } from './effects-trails'
 import { FloatingNumberEffects } from './effects-floating'
 import { RipplesEffects } from './effects-ripples'
 import { JackpotSequenceController } from './effects-jackpot'
+import type { JackpotPhaseLogEntry } from './jackpot-phase-clock'
 import { createSharedParticleTexture } from './effects-utils'
 import {
   createCabinetLighting,
@@ -39,14 +40,11 @@ import { AtmosphereController } from './effects-atmosphere'
 import { ScreenEffectsController } from './effects-screen'
 import { FresnelRimController } from './effects-fresnel-rim'
 import { RuntimePerformanceController } from './effects-performance'
-import { getAudioEngine, peekAudioEngine, type PlayVoiceParams } from '../audio/audio-engine'
+import { getAudioEngine, peekAudioEngine, type AudioEngine, type PlayVoiceParams } from '../audio/audio-engine'
 import type { EventBus } from '../core/event-bus'
-import { createTimerScope } from '../core/timers'
 import type { BallManager } from '../game-elements/ball-manager'
 
 export class EffectsSystem {
-  /** Jackpot beep schedule; cancelled by dispose() so no beep fires on a torn-down system. */
-  private readonly timers = createTimerScope()
   private scene: Scene
   private audioCtx: AudioContext | null = null
   private audioEffects: AudioEffects | null = null
@@ -100,6 +98,11 @@ export class EffectsSystem {
 
   get isJackpotActive(): boolean {
     return this.jackpotSequenceController.isJackpotActive
+  }
+
+  /** Every jackpot phase change as `{ step, phase }` (sim steps), for tape replay checks. */
+  get jackpotPhaseLog(): readonly JackpotPhaseLogEntry[] {
+    return this.jackpotSequenceController.phaseLog
   }
 
   get jackpotPhase(): number {
@@ -167,7 +170,6 @@ export class EffectsSystem {
       setBloomEnergy: (value) => {
         this.bloomEnergy = value
       },
-      scheduleTimeout: (callback, delayMs) => this.timers.setTimeout(callback, delayMs),
     })
   }
 
@@ -267,6 +269,16 @@ export class EffectsSystem {
     this.jackpotSequenceController.startJackpotSequence()
   }
 
+  /**
+   * Advance the jackpot phase clock to sim step `step`. The physics controller
+   * calls it once per fixed tick, so each phase change lands on its own step.
+   * Returns true when the sequence ended during this call.
+   */
+  advanceJackpotToStep(step: number): boolean {
+    return this.jackpotSequenceController.advanceToStep(step)
+  }
+
+  /** Per render frame: cosmetic extras (meltdown bursts). Never changes the sequence. */
   updateJackpotSequence(dt: number): void {
     this.jackpotSequenceController.updateJackpotSequence(dt)
   }
@@ -366,8 +378,12 @@ export class EffectsSystem {
     return peekAudioEngine()?.context ?? this.audioCtx
   }
 
+  /** Voice worklet load state (Playwright under a subdirectory base, debug). */
+  getVoiceWorkletStatus(): ReturnType<AudioEngine['getWorkletStatus']> | null {
+    return peekAudioEngine()?.getWorkletStatus() ?? null
+  }
+
   dispose(): void {
-    this.timers.dispose()
     this.audioEffects?.dispose()
     this.audioCtx = null
 

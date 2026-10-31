@@ -37,7 +37,6 @@ export { SoundSystem, getSoundSystem, resetSoundSystem, type MapId } from './sou
 export type { LeaderboardSystem, LeaderboardEntry, ScoreSubmission } from './leaderboard-system'
 export type { NameEntryDialog, NameEntryResult } from './name-entry-dialog'
 export { MapSystem, getMapSystem, resetMapSystem, type DynamicMapConfig } from './map-system'
-export type { LevelSelectScreen, LevelSelectConfig } from './level-select-screen'
 export {
   PathMechanic,
   MovingGate,
@@ -79,12 +78,12 @@ export {
 export {
   ZoneTriggerSystem,
   createZoneBounds,
-  areZonesAdjacent,
-  getZoneTransitionType,
+  ZONE_DEBOUNCE_STEPS,
   type ZoneBounds,
+  type ZoneSensorSink,
   type ZoneTriggerCallback,
-  type ActiveZone,
 } from './zone-trigger-system'
+export { ZoneSensors } from './zone-sensors'
 export {
   DynamicWorld,
   getDynamicWorld,

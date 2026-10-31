@@ -103,11 +103,13 @@ describe('create-engine', () => {
     expect(gpu.featureLevel).toBe('core')
   })
 
-  it('requests no optional device features by default', () => {
+  it('requests no optional device features unless handed the adapter-filtered list', () => {
     const resolved = resolveEngineOptions(desktopCtx())
     const gpu = toWebGPUEngineOptions(resolved)
     expect(gpu.deviceDescriptor?.requiredFeatures).toEqual([])
     expect(gpu.deviceDescriptor?.requiredLimits).toBeUndefined()
+    const withFeatures = toWebGPUEngineOptions(resolved, 'core', ['timestamp-query'])
+    expect(withFeatures.deviceDescriptor?.requiredFeatures).toEqual(['timestamp-query'])
   })
 
   it('hands out a fresh deviceDescriptor per call (Babylon mutates it during initAsync)', () => {
@@ -244,6 +246,32 @@ describe('createWebGPUEngineWithFallback', () => {
     const result = await createWebGPUEngineWithFallback(canvas, resolveEngineOptions(desktopCtx()), factory)
 
     expect(result?.engine).toBe(ok)
+  })
+  it('requests the optional-feature allow-list intersected with what the adapter offers (#488 §2)', async () => {
+    const seen: Array<readonly unknown[] | undefined> = []
+    const factory = vi.fn((_canvas: HTMLCanvasElement, options: { deviceDescriptor?: { requiredFeatures?: readonly unknown[] } }) => {
+      seen.push(options.deviceDescriptor?.requiredFeatures)
+      return stubEngine(() => Promise.resolve())
+    }) as unknown as WebGPUEngineFactory
+    const probe = vi.fn(() => Promise.resolve(new Set(['timestamp-query', 'texture-compression-bc', 'subgroups'])))
+
+    await createWebGPUEngineWithFallback(canvas, resolveEngineOptions(desktopCtx()), factory, probe)
+
+    expect(probe).toHaveBeenCalledTimes(1)
+    // Allow-list order; 'subgroups' is not on the list, the adapter lacks the rest.
+    expect(seen).toEqual([['texture-compression-bc', 'timestamp-query']])
+  })
+
+  it('asks for no optional feature when the adapter probe fails', async () => {
+    const seen: Array<readonly unknown[] | undefined> = []
+    const factory = vi.fn((_canvas: HTMLCanvasElement, options: { deviceDescriptor?: { requiredFeatures?: readonly unknown[] } }) => {
+      seen.push(options.deviceDescriptor?.requiredFeatures)
+      return stubEngine(() => Promise.resolve())
+    }) as unknown as WebGPUEngineFactory
+
+    await createWebGPUEngineWithFallback(canvas, resolveEngineOptions(desktopCtx()), factory, () => Promise.resolve(null))
+
+    expect(seen).toEqual([[]])
   })
 })
 

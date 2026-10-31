@@ -9,6 +9,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import { supportsAxisPullFields, type PhysicsApi, type PhysicsBody, type PhysicsWorldSink } from '../../core/physics-api'
 import { CapturedBall } from '../../core/captured-ball'
+import { distance3 } from '../../core/vec3-scalar'
 import type { GameConfigType } from '../../config'
 import { getSessionRngFork, RNG_FORK } from '../../core/seeded-rng'
 import { color, emissive, FEEDER_STYLES, INTENSITY, type QualityTier } from '../../game-elements/visual-language'
@@ -29,6 +30,8 @@ export enum MagSpinState {
 const WELL_DIAMETER = 3.5
 const WELL_RADIUS = WELL_DIAMETER / 2
 const RING_COUNT = 3
+/** Ring heights above the well when not shaking (hoisted: read every frame). */
+const RING_Y_OFFSETS: readonly number[] = [0.35, 0.5, 0.65]
 
 export class MagSpinFeeder {
   private scene: Scene
@@ -59,6 +62,10 @@ export class MagSpinFeeder {
   private floorMesh: Mesh | null = null
   private insertContainer: AssetContainer | null = null
   private proceduralMeshesVisible = true
+  /** Hold point (well position + holdYOffset), computed once instead of per frame. */
+  private readonly holdPoint: Vector3
+  /** Idle ring emissive base; the pulse scales it into each ring material's own Color3. */
+  private readonly idleRingColor = color(FEEDER_STYLES.MAG_SPIN.active)
 
   public onStateChange: ((state: MagSpinState) => void) | null = null
 
@@ -78,6 +85,7 @@ export class MagSpinFeeder {
       this.config.feederPosition.y,
       this.config.feederPosition.z
     )
+    this.holdPoint = new Vector3(this.position.x, this.position.y + this.config.holdYOffset, this.position.z)
 
     this.createMesh()
     this.createPhysics()
@@ -297,10 +305,9 @@ export class MagSpinFeeder {
       }
       this.releaseShakeIntensity *= this.config.animation.shakeDecay
     } else {
-      const ringYOffsets = [0.35, 0.5, 0.65]
       for (let i = 0; i < this.ringMeshes.length; i++) {
         this.ringMeshes[i].position.copyFrom(this.position)
-        this.ringMeshes[i].position.y += ringYOffsets[i]
+        this.ringMeshes[i].position.y += RING_Y_OFFSETS[i]
       }
     }
 
@@ -310,8 +317,10 @@ export class MagSpinFeeder {
       if (this.light) {
         this.light.intensity = anim.idleLightBase + pulse * anim.idleLightPulseAmplitude
       }
+      // In place: every ring material owns its emissive Color3 (see setRingColor).
+      const k = anim.idleEmissiveBase + pulse * anim.idleEmissivePulseAmplitude
       for (const mat of this.ringMaterials) {
-        mat.emissiveColor = color(FEEDER_STYLES.MAG_SPIN.active).scale(anim.idleEmissiveBase + pulse * anim.idleEmissivePulseAmplitude)
+        this.idleRingColor.scaleToRef(k, mat.emissiveColor)
       }
     }
   }
@@ -349,19 +358,17 @@ export class MagSpinFeeder {
     if (!this.caughtBall) return
 
     const currentPos = this.caughtBall.translation()
-    const targetPos = this.position.add(new Vector3(0, this.config.holdYOffset, 0))
+    const targetPos = this.holdPoint
     const lerpFactor = dt * this.config.catchLerpSpeed
 
     const newX = Scalar.Lerp(currentPos.x, targetPos.x, lerpFactor)
     const newY = Scalar.Lerp(currentPos.y, targetPos.y, lerpFactor)
     const newZ = Scalar.Lerp(currentPos.z, targetPos.z, lerpFactor)
 
-    this.capture.steer(this.caughtBall, { translation: { x: newX, y: newY, z: newZ } })
+    const translation = { x: newX, y: newY, z: newZ }
+    this.capture.steer(this.caughtBall, { translation })
 
-    const dist = Vector3.Distance(
-      new Vector3(newX, newY, newZ),
-      targetPos
-    )
+    const dist = distance3(translation, targetPos)
     if (dist < this.config.catchArrivalDistance) {
       this.setState(MagSpinState.SPIN)
     }
@@ -370,7 +377,7 @@ export class MagSpinFeeder {
   private updateSpin(dt: number): void {
     if (!this.caughtBall) return
 
-    const targetPos = this.position.add(new Vector3(0, this.config.holdYOffset, 0))
+    const targetPos = this.holdPoint
     this.ballSpinAngle += dt * this.config.spinAngularSpeed
     const extras = this.config.physicsExtras
     const spinQ = Quaternion.FromEulerAngles(
@@ -398,7 +405,7 @@ export class MagSpinFeeder {
       // Full corridor height matches KEEP_OUT_BOXES.launchLane (z up to 18).
       if (pos.x > 8.5 && pos.z < 16) continue
 
-      const dist = Vector3.Distance(new Vector3(pos.x, pos.y, pos.z), this.position)
+      const dist = distance3(pos, this.position)
 
       if (dist < pullRadius && pos.y < this.config.maxCaptureHeightY) {
         this.captureBall(body)
@@ -462,8 +469,9 @@ export class MagSpinFeeder {
 
   private setRingColor(hex: string): void {
     const c = color(hex)
+    // Copy, not share: the idle pulse writes each material's Color3 in place.
     for (const mat of this.ringMaterials) {
-      mat.emissiveColor = c
+      mat.emissiveColor.copyFrom(c)
     }
   }
 

@@ -2,14 +2,16 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 
 import { GameState, GhostBallRenderer, ReplayRecorder, CameraMode, detectAccessibility, type ReplayPayload } from '../game-elements'
 import { getDailyCascadeState } from '../cascade/daily-cascade-state'
-import type { FeederKey } from '../cascade/daily-cascade-layout'
+import type { FeederKey, TableLayout } from '../cascade/daily-cascade-layout'
+import type { StartMachine } from '../cascade/start-machine'
 import type { CabinetType } from '../cabinet'
 
 import { TABLE_MAPS } from '../config/table-maps'
 
 import type { PhysicsTuningPanel } from '../game-elements/physics-tuning-panel'
 import { LevelLoader } from './level-loader'
-import type { LevelSelectScreen } from '../game-elements/level-select-screen'
+import type { CampaignMapScreen } from '../adventure/ui/campaign-map'
+import { refreshDailyCascadeUI } from './daily-cascade-ui'
 import { GameFields } from './game-fields'
 
 export abstract class GameDelegates extends GameFields {
@@ -19,11 +21,17 @@ export abstract class GameDelegates extends GameFields {
 
   startGame(): Promise<void> { return this.lifecycle?.startGame() ?? Promise.resolve() }
 
-  applyDailyCascadeOnStart(): void {
+  /**
+   * Rebuild the mutable toys (bumpers, pachinko field) and arm the feeders for
+   * the machine this game starts on. Runs from `startGame`, after the session
+   * RNG is seeded and before the first physics step, so the C++ world is
+   * re-exported before the frame-0 fingerprint.
+   */
+  applyDailyCascadeOnStart(machine: StartMachine): void {
     const state = getDailyCascadeState()
-    const mode = state.getMode()
 
-    if (mode === 'vanilla') {
+    if (machine.kind === 'vanilla') {
+      state.clearWeekly()
       if (state.wasMutatorApplied()) {
         this.gameObjects?.rebuildMutableToys(null)
         this.applyFeederGameplayFlags(null)
@@ -33,7 +41,13 @@ export abstract class GameDelegates extends GameFields {
       return
     }
 
-    const layout = state.ensureLayout()
+    let layout: TableLayout | null
+    if (machine.kind === 'weekly') {
+      layout = state.weeklyLayout(machine.seed)
+    } else {
+      state.clearWeekly()
+      layout = state.ensureLayout()
+    }
     if (!layout || !this.gameObjects) return
     this.gameObjects.rebuildMutableToys(layout)
     this.applyFeederGameplayFlags(layout.feedersEnabled)
@@ -135,6 +149,7 @@ export abstract class GameDelegates extends GameFields {
     this.effects?.registerAccessibility(this.accessibility)
     this.adventureMode?.setAccessibilityConfig(this.accessibility)
     this.display?.setAccessibility(this.accessibility)
+    this.renderer?.syncAccessibility()
     this.mapManager?.getLCDTableState().setPhotosensitiveMode(photosensitiveMode)
   }
   /** DEV builds, or `?debug=1`. Cheap and synchronous so callers never need the lazy GameDebug chunk. */
@@ -164,36 +179,59 @@ export abstract class GameDelegates extends GameFields {
   // Adventure / Mode delegates
   // --------------------------------------------------------------------------
 
+  /** H: leave the holo-deck, or enter the campaign at its current stage. */
   toggleAdventure(): void {
     if (this.adventureMode?.isActive()) {
       this.slotAdventure?.endAdventureMode()
     } else {
-      this.slotAdventure?.startAdventureMode()
+      this.slotAdventure?.enterCampaignStage()
     }
   }
 
-  toggleLevelSelect(): void {
-    void this.ensureLevelSelectScreen().then((screen) => screen?.toggle())
+  /** Start the campaign at AdventureTrackProgression's current stage (LifecycleHost). */
+  enterCampaignStage(): void { this.slotAdventure?.enterCampaignStage() }
+
+  /**
+   * Campaign front door: play `trackId` (a reached stage), or the current one. From the
+   * menu or game-over screen this starts a game in Campaign mode; mid-game it moves the
+   * live ball into that stage. The stage is recorded as progression's current track,
+   * which is persisted, so Play Again and the next session resume there.
+   */
+  async startCampaign(trackId?: string): Promise<void> {
+    const progression = this.adventureTrackProgression
+    if (trackId && progression) {
+      if (!progression.isTrackUnlocked(trackId)) return
+      progression.setCurrentTrack(trackId)
+    }
+    // Same as picking Campaign in the mode select: it rides the vanilla table.
+    this.campaignStartSelected = true
+    getDailyCascadeState().setMode('vanilla')
+    refreshDailyCascadeUI()
+    if (this.stateManager.isPlaying()) {
+      this.enterCampaignStage()
+      return
+    }
+    await this.lifecycle?.startGame()
+  }
+
+  /** L / Levels / Stage Map: the campaign stage map (loaded on first use). */
+  async toggleCampaignMap(): Promise<void> {
+    const map = await this.ensureCampaignMap()
+    map?.toggle()
   }
 
   /** `null` when the Game was disposed while the chunk was loading. */
-  private async ensureLevelSelectScreen(): Promise<LevelSelectScreen | null> {
-    if (this.levelSelectScreen) return this.levelSelectScreen
-    const { getLevelSelectScreen, resetLevelSelectScreen } = await import('../game-elements/level-select-screen')
-    // Creating the singleton after dispose() would outlive the reset list disposeGame already drained.
+  private async ensureCampaignMap(): Promise<CampaignMapScreen | null> {
+    if (this.campaignMap) return this.campaignMap
+    const { CampaignMapScreen } = await import('../adventure/ui/campaign-map')
     if (this.signal.aborted) return null
-    this.lazySingletonResets.push(resetLevelSelectScreen)
-    this.levelSelectScreen = getLevelSelectScreen(
-      {
-        onLevelSelect: (level, mapType) => {
-          this.mapCabinet?.switchTableMap(mapType)
-          this.adventureState.startLevel(level.id)
-        },
-        onClose: () => {},
-      },
-      this.adventureState,
-    )
-    return this.levelSelectScreen
+    // A concurrent caller may have created it while we awaited.
+    this.campaignMap ??= new CampaignMapScreen({
+      signal: this.signal,
+      getProgress: () => this.adventureTrackProgression,
+      onStageSelect: (trackId) => { void this.startCampaign(trackId) },
+    })
+    return this.campaignMap
   }
 
   toggleCameraMode(): void { this.isCameraFollowMode = !this.isCameraFollowMode }

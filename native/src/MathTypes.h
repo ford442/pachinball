@@ -9,7 +9,7 @@ struct Vec3 {
   float x = 0.f, y = 0.f, z = 0.f;
 
   Vec3() = default;
-  Vec3(float x, float y, float z) : x(x), y(y), z(z) {}
+  Vec3(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
 
   Vec3 operator+(const Vec3& o) const { return {x + o.x, y + o.y, z + o.z}; }
   Vec3 operator-(const Vec3& o) const { return {x - o.x, y - o.y, z - o.z}; }
@@ -40,7 +40,7 @@ struct Quat {
   float x = 0.f, y = 0.f, z = 0.f, w = 1.f;
 
   Quat() = default;
-  Quat(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {}
+  Quat(float x_, float y_, float z_, float w_) : x(x_), y(y_), z(z_), w(w_) {}
 
   static Quat identity() { return {0.f, 0.f, 0.f, 1.f}; }
 

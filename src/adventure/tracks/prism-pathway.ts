@@ -6,23 +6,23 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilder } from '../track-builder'
+import type { TrackBuilderApi } from '../track-builder-api'
 import { convexMeshDesc, cylinderDesc } from '../track-collider-descriptors'
 import { triangularPrismLayout } from '../track-geometry'
-import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { getLayoutRng } from '../../core/seeded-rng'
 
-export function buildPrismPathway(builder: TrackBuilder): void {
-  const glassMat = (builder as unknown as { getTrackPBRMaterial: (hex: string) => import('@babylonjs/core/Materials/PBR/pbrMaterial').PBRMaterial }).getTrackPBRMaterial("#E0FFFF")
-  const laserMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FF00FF")
-  const whiteMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FFFFFF")
+export function buildPrismPathway(builder: TrackBuilderApi): void {
+  const glassMat = builder.getTrackPBRMaterial("#E0FFFF")
+  const laserMat = builder.getTrackMaterial("#FF00FF")
+  const whiteMat = builder.getTrackMaterial("#FFFFFF")
 
-  const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: PhysicsWorldSink }).world
-  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
-  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
-  const animatedObstacles = (builder as unknown as { animatedObstacles: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, frequency: number, amplitude: number, phase: number, axis?: Vector3 }[] }).animatedObstacles
+  const {
+    currentStartPos,
+    scene,
+    adventureTrack,
+    adventureBodies,
+    animatedObstacles,
+  } = builder
 
   let currentPos = currentStartPos.clone()
   let heading = 0
@@ -30,16 +30,16 @@ export function buildPrismPathway(builder: TrackBuilder): void {
   // 1. The Fiber Injection
   const entryLen = 15
   const entryIncline = (20 * Math.PI) / 180
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, 4, entryLen, entryIncline, glassMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, 4, entryLen, entryIncline, glassMat)
 
   // 2. The Refractor Field
   const fieldLen = 20
   const fieldWidth = 10
   const fieldStart = currentPos.clone()
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, fieldWidth, fieldLen, 0, glassMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, fieldWidth, fieldLen, 0, glassMat)
 
-  if (world) {
+  if (builder.hasWorld) {
     const prismCount = 5
     const prismHeight = 1.5
     const prismRadius = 0.5
@@ -78,7 +78,7 @@ export function buildPrismPathway(builder: TrackBuilder): void {
     const gauntletWidth = 8
     const gauntletStart = currentPos.clone()
 
-    currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, gauntletWidth, gauntletLen, 0, glassMat)
+    currentPos = builder.addStraightRamp(currentPos, heading, gauntletWidth, gauntletLen, 0, glassMat)
 
     const laserCount = 3
     const laserHeight = 2.0
@@ -125,14 +125,14 @@ export function buildPrismPathway(builder: TrackBuilder): void {
   const loopIncline = -(10 * Math.PI) / 180
   const loopBank = (20 * Math.PI) / 180
 
-  currentPos = (builder as unknown as { addCurvedRamp: (...args: unknown[]) => Vector3 }).addCurvedRamp(currentPos, heading, loopRadius, loopAngle, loopIncline, 8, 2.0, glassMat, 30, loopBank)
+  currentPos = builder.addCurvedRamp(currentPos, heading, loopRadius, loopAngle, loopIncline, 8, 2.0, glassMat, 30, loopBank)
   heading += loopAngle
 
   // 5. The White Light
   const goalForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
   const goalPos = currentPos.add(goalForward.scale(4))
 
-  ;(builder as unknown as { createBasin: (...args: unknown[]) => void }).createBasin(goalPos, glassMat)
+  builder.createBasin(goalPos, glassMat)
 
   const goalLight = MeshBuilder.CreateSphere("goalLight", { diameter: 2 }, scene)
   goalLight.position.copyFrom(goalPos)

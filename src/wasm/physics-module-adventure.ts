@@ -35,7 +35,7 @@ export const WasmVolumeShape = {
 } as const
 export type WasmVolumeShape = (typeof WasmVolumeShape)[keyof typeof WasmVolumeShape]
 
-/** Mirrors native `BodyType` (RigidBody.h): the runtime body-type flip (#420). */
+/** Mirrors native `BodyType` (BodyDesc.h): the runtime body-type flip (#420). */
 export const WasmBodyType = {
   Dynamic: 0,
   Static: 1,

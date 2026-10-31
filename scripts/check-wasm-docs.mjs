@@ -3,6 +3,8 @@
  * Drift check for docs/wasm-physics-engine.md. Fails when the doc:
  *   - still carries a retired claim (Rapier as production default, hybrid rollout),
  *   - lists EXPORTED_RUNTIME_METHODS / EXPORTED_FUNCTIONS that differ from native/CMakeLists.txt,
+ *   - has no flag-table row for an Emscripten setting (-sNAME) or a compile/link flag
+ *     (-f…, -m…, -l…, -W…, --…) that native/CMakeLists.txt passes,
  *   - does not mark WASM_PHYSICS.defaultEngine (src/config/physics.ts) as the `(default)` mode,
  *   - omits a native/src, native/tests, src/wasm or src/game/physics/wasm-* source file
  *     from its directory tree.
@@ -39,8 +41,26 @@ for (const flag of ['-sEXPORTED_RUNTIME_METHODS', '-sEXPORTED_FUNCTIONS']) {
   }
 }
 
+const tableRows = doc.split('\n').filter((line) => line.startsWith('|'))
+const tableText = tableRows.join('\n')
+
+// Every flag CMake passes needs a rationale row, so none can land silently.
+// Comments are stripped first (they quote flags we deliberately do not pass).
+const cmakeCode = cmake.replace(/#.*$/gm, '')
+for (const [, name] of cmakeCode.matchAll(/-s([A-Z][A-Z0-9_]+)/g)) {
+  if (!tableText.includes(`-s${name}`) && !tableText.includes(`${name}=`)) {
+    errors.push(`flag table has no row for Emscripten setting -s${name} (from CMakeLists.txt)`)
+  }
+}
+const FLAG = /(?<=["\s;(])(--[a-z][a-z-]*(?:=\d+)?|-l[a-z]+|-f[a-z][a-z-]*(?:=[a-z]+)?|-m[a-z][a-z0-9]*|-W[a-z][a-z-]*)(?=["\s;),])/g
+for (const flag of new Set([...cmakeCode.matchAll(FLAG)].map((m) => m[0]))) {
+  if (!tableText.includes(flag)) {
+    errors.push(`flag table has no row for \`${flag}\` (from CMakeLists.txt)`)
+  }
+}
+
 const physicsConfig = read('src/config/physics.ts')
-const modeRows = doc.split('\n').filter((line) => line.startsWith('|'))
+const modeRows = tableRows
 const requireDefaultRow = (key, label) => {
   const engine = physicsConfig.match(new RegExp(`^\\s*${key}:\\s*'([\\w-]+)'`, 'm'))?.[1]
   if (!engine) {

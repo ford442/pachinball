@@ -49,7 +49,7 @@ PhysicsModule.js / .wasm  ◄─── public/wasm/ (Emscripten output, npm run 
 C++ PhysicsWorld  ◄──── native/src/PhysicsWorld.{h,cpp}
         │
    ┌────┴──────────────┬──────────────┬───────────────┐
-BodyStore/RigidBody  Narrowphase   HingeJoint   ContactListener
+   BodyStore         Narrowphase   HingeJoint   ContactListener
 ```
 
 The C++ engine is a sphere-and-capsule rigid-body solver with dynamic boxes,
@@ -69,9 +69,9 @@ native/
 ├── CMakeLists.txt               Emscripten + native (Catch2) build config
 ├── src/
 │   ├── MathTypes.h              Vec3, Quat, Transform
-│   ├── RigidBody.h / .cpp       Dynamic / static / kinematic sphere + capsule bodies
+│   ├── BodyDesc.h               BodyType / Shape enums + RigidBodyDesc (createRigidBody descriptor)
 │   ├── DynamicBox.cpp           Dynamic oriented-box bodies (createBoxBody)
-│   ├── BodyStore.h / .cpp       SoA body storage + packed transform buffer
+│   ├── BodyStore.h / .cpp       SoA body storage (the only body model) + BodyView
 │   ├── HandleTable.h            Stable body / hinge handles
 │   ├── BroadphaseGrid.h / .cpp  Uniform-grid broadphase (sleepers stay in as targets for awake bodies)
 │   ├── Narrowphase.cpp          Pair tests (sphere / capsule / box / statics)
@@ -92,6 +92,7 @@ native/
 │   ├── PhysicsWorldStep.cpp     step() / substep(): integration, broadphase, solver loop, transform scatter
 │   ├── Snapshot.h / .cpp        serialize() / restore(): versioned LE world snapshot + static hash (#422)
 │   ├── SnapshotCodec.cpp        Little-endian word writer / reader + FNV-1a hasher for snapshots
+│   ├── SolverConstants.h        Constants shared across resolver TUs (one definition — unity-build safe)
 │   └── bindings.cpp             EMSCRIPTEN_BINDINGS (Embind) — Emscripten only
 └── tests/                       Catch2 (native build only)
     ├── physics_world_test.cpp   Integration, contacts, broadphase, sleep, benchmark
@@ -107,10 +108,15 @@ native/
     ├── snapshot_test.cpp        World snapshot: rewind / fresh-table restore bit-exact, manifold, mismatch, malformed (#422)
     ├── sleeper_contact_test.cpp Sleeping balls stay collidable: kinematic / rolling ball wakes one on contact, proximity does not
     ├── axis_pull_field_test.cpp Axis-pull well: horizontal pull, linear falloff, extents, flags, groups, wake, snapshot hash
+    ├── state_hash_test.cpp      getStateHash(): plunge scene determinism, one-ulp sensitivity, restore round trip, parity fixture (#459)
+    ├── golden_trace_test.cpp    Golden traces: committed FNV-1a hashes of three scenes — any numeric drift fails here (#442)
+    ├── broadphase_test.cpp      Cell coordinates clamp before the int cast: playfield cells unchanged, NaN / ±inf / 1e25 finite (#487)
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
 ├── wasm-types.ts                TypeScript interfaces matching the Embind API
+├── wasm-types-conformance.ts    Type-only: wasm-types.ts vs generated/PhysicsModule.d.ts (tsc -b fails on drift)
+├── generated/PhysicsModule.d.ts Emscripten --emit-tsd output for bindings.cpp (committed; CI diffs it)
 ├── PhysicsModule.ts             WasmPhysicsEngine: load, world, step, transform / contact buffers, snapshots
 ├── physics-module-bodies.ts     Plane / box / capsule statics, rigid bodies, hinges, transform-query fallbacks
 ├── physics-module-adventure.ts  Cylinder / sphere / cone / pin field / mesh / mover / sensor / box body / force field
@@ -155,16 +161,22 @@ public/wasm/                     Generated at build time (git-ignored)
 
 ### Prerequisites
 
+The Emscripten SDK is **pinned** in [`.emsdk-version`](../.emsdk-version)
+(currently 6.0.10). CI installs exactly that version; `build-wasm.sh` warns
+locally on any other `emcc` and fails under `CI=true`, because parity and the
+bench numbers are only verified on the pin. Bumping it is a reviewed change
+that re-runs `test:wasm-parity` and `bench:wasm-flags`.
+
 ```bash
-# Install and activate Emscripten SDK (one-time)
+# Install and activate the pinned Emscripten SDK (one-time, and after a pin bump)
 git clone https://github.com/emscripten-core/emsdk.git
 cd emsdk
-./emsdk install latest
-./emsdk activate latest
+./emsdk install "$(cat ../pachinball/.emsdk-version)"
+./emsdk activate "$(cat ../pachinball/.emsdk-version)"
 source ./emsdk_env.sh   # add to ~/.bashrc or ~/.zshrc
 ```
 
-CMake ≥ 3.20 must also be in `PATH`.
+CMake ≥ 3.25 must also be in `PATH`.
 
 ### Release build (production path)
 
@@ -194,11 +206,16 @@ npm run build:wasm:assert
 # Equivalent: bash scripts/build-wasm.sh --assert
 ```
 
-`-O3` + `ASSERTIONS=1` → `native/build-assert/` (does **not** overwrite
-`public/wasm/` unless `WASM_INSTALL_ASSERT=1`).
+`-O3` + `ASSERTIONS=1` + `ENVIRONMENT=web,worker,node` → `native/build-assert/`
+(does **not** overwrite `public/wasm/` unless `WASM_INSTALL_ASSERT=1`). This is
+the bundle everything Node-side loads: `test:wasm-parity` (which builds it when
+missing) and the `RUN_WASM_PARITY` vitest suites via `tests/helpers/wasm-bundle.ts`.
+The shipped `public/wasm/` bundle is `web,worker` only and cannot be
+instantiated from Node. `WASM_MODULE_PATH` (repo-relative) overrides the path.
 
 ```bash
-WASM_MODULE_PATH=native/build-assert/PhysicsModule.js npm run test:wasm-parity
+npm run test:wasm-parity
+RUN_WASM_PARITY=1 npx vitest run tests/replay-snapshot-wasm.test.ts
 ```
 
 ### SIMD / LTO (default ON)
@@ -212,7 +229,7 @@ Print the CMake source-of-truth line (also logged on the `wasm_parity` CI job):
 
 ```bash
 npm run print:wasm-flags
-# [wasm-flags] SIMD=ON LTO=ON ENV=web,worker,node INITIAL_MEMORY=16777216
+# [wasm-flags] SIMD=ON LTO=ON ENV=web,worker INITIAL_MEMORY=16777216 MAXIMUM_MEMORY=268435456 STACK_SIZE=262144
 ```
 
 ### Flag matrix microbench build
@@ -240,16 +257,45 @@ Configured in [`native/CMakeLists.txt`](../native/CMakeLists.txt). Every
 | `-sEXPORT_ES6=1` | ES module import from Vite / dynamic `import()` |
 | `-sMODULARIZE=1` | Factory `await PhysicsModule()` |
 | `-sEXPORT_NAME=PhysicsModule` | Name expected by `src/wasm/PhysicsModule.ts` |
-| `--bind` | Embind surface in `bindings.cpp` |
-| `-sENVIRONMENT=web,worker,node` | Browser + Worker (#361) + Node parity harness (`run-wasm-parity.mjs`). |
+| `-sSTRICT=1` | No deprecated settings and no implicit system libraries — everything the module links is spelled out (`-lembind`, `--no-entry`) |
+| `--no-entry` | Library module: no `main()` (required under `STRICT`) |
+| `-lembind` | Embind surface in `bindings.cpp` (the explicit library form of the old `--bind` alias) |
+| `-sENVIRONMENT=web,worker` | Cache variable `PACHINBALL_WASM_ENVIRONMENT`. The shipped bundle runs on the main thread and in the wasm-worker Dedicated Worker (#361) and carries **no Node shims**. `build-wasm.sh --assert` / `--bench-matrix` pass `web,worker,node` because parity, the `RUN_WASM_PARITY` vitest suites and the bench load those artefacts from Node (`tests/helpers/wasm-bundle.ts`). |
+| `-sINCOMING_MODULE_JS_API=[]` | Every caller invokes the factory with no options (the `.wasm` is located via `import.meta.url`), so the glue reads no `Module.*` overrides |
 | `-sFILESYSTEM=0` | No FS APIs in the physics module — smaller JS glue |
 | `-sALLOW_MEMORY_GROWTH=1` | Heap grows for large ball swarms |
 | `-sINITIAL_MEMORY=16777216` | 16 MB initial heap (`emmalloc`; grows if needed) |
+| `-sMAXIMUM_MEMORY=268435456` | Growth stops at 256 MiB: a runaway allocation fails loudly instead of eating the tab (a full table is a few MiB) |
+| `-sSTACK_SIZE=262144` | 256 KiB stack — the solver never recurses; 4× the 64 KiB default as headroom |
 | `-sEXPORTED_RUNTIME_METHODS=["HEAPF32","HEAPU32"]` | `HEAPF32` for packed contact/transform buffer views and mesh vertices; `HEAPU32` for mesh indices — no `addFunction` / UTF8 helpers |
 | `-sEXPORTED_FUNCTIONS=["_malloc","_free"]` | `addStaticTriangleMesh` takes heap pointers, so JS allocates + frees the triangle soup around the call |
 | `-sMALLOC=emmalloc` | Smaller allocator after setup |
 | `--closure=1` | Minify JS glue (parity-validated) |
 | `-fno-exceptions` | No `try`/`throw` in `native/src` — drops EH runtime |
+
+**64-bit values.** The pinned SDK always has BigInt integration on (`-sWASM_BIGINT`
+is deprecated there, so it is not passed). The `uint64_t` returns —
+`getStepCount`, `getStaticContentHash`, `getStateHash`, `getContactGeneration` — therefore
+cross losslessly as JS `BigInt`. `WasmPhysicsEngine` (`PhysicsModule.ts`) is the
+only place that converts them: to a number, and the hash to 16 hex chars, so
+nothing past it changes type (`getStateHash()` keeps returning the same 16 hex
+chars it did as a string binding). `run-wasm-parity.mjs` checks the hash is a
+`BigInt` equal to the snapshot header's words.
+
+### Compile policy (native **and** WASM)
+
+Two INTERFACE targets are linked into every target that compiles project
+sources — `pachinball_physics_native`, `physics_world_test` and
+`PhysicsModule` — so `bindings.cpp` meets the same bar as the solver.
+
+| Target | Flags | Rationale |
+|--------|-------|-----------|
+| `pachinball_warnings` | `-Wall -Wextra -Werror -Wshadow -Wconversion -Wsign-conversion -Wdouble-promotion -Wold-style-cast` | One warning policy for g++, clang and em++; `bindings.cpp` was previously never warning-checked. `-Wdouble-promotion` and `-Wconversion` catch a stray `0.5` turning an f32 expression into f64 (a numeric change); `-Wsign-conversion` / `-Wold-style-cast` keep index and id arithmetic explicit. Catch2 itself is fetched `SYSTEM` and never compiled with them |
+| `pachinball_fp` | `-ffp-contract=off` | Native ↔ WASM byte-exact parity: GCC defaults to `fast` outside ISO mode and would fuse `a*b+c` into FMA on aarch64 or `-march=native`. No numeric change today — the golden traces and parity fixture are identical with and without it |
+
+The language mode is ISO `-std=c++17` (`CMAKE_CXX_EXTENSIONS OFF`), not
+`gnu++17`, so GCC's GNU-mode `-ffp-contract=fast` default cannot come back
+if `pachinball_fp` is ever dropped from a target.
 
 ### Per-config compile / link
 
@@ -264,12 +310,29 @@ its `compile_commands.json` carries exactly one. It is configured with an explic
 | **Debug** | `-O0 -g -gsource-map` | `ASSERTIONS=2` | yes (`.map` → `public/wasm/` only for `--debug`) |
 | **RelWithAsserts** | `-O3` | `ASSERTIONS=1` | none; artefact in `native/build-assert/` |
 
-### CMake options (default ON)
+### CMake options
 
-| Option | Flags | Notes |
-|--------|-------|-------|
-| `PACHINBALL_WASM_SIMD` | `-msimd128` (compile + link) | Auto-vectorize only; no hand `wasm_simd128` intrinsics |
-| `PACHINBALL_WASM_LTO` | `-flto` (compile + link) | Production default after 2026-08-14 bench |
+| Option | Default | Flags | Notes |
+|--------|---------|-------|-------|
+| `PACHINBALL_WASM_SIMD` | ON | `-msimd128` (compile + link) | Auto-vectorize only; no hand `wasm_simd128` intrinsics |
+| `PACHINBALL_WASM_LTO` | ON | `-flto` (compile + link) | Production default after 2026-08-14 bench |
+| `PACHINBALL_WASM_EMIT_TSD` | OFF (`build-wasm.sh` turns it on for Release) | `--emit-tsd <build>/PhysicsModule.d.ts` | Embind TypeScript declarations; needs `tsc` on `PATH` (the repo's after `npm ci`). Copied to `src/wasm/generated/PhysicsModule.d.ts`, which is committed — CI rebuilds and fails on a diff. Does not change `.js` / `.wasm` |
+
+### Generated declarations (`src/wasm/generated/`)
+
+`src/wasm/generated/PhysicsModule.d.ts` is Emscripten's own view of
+`bindings.cpp` (exact arities, `bigint` for the `uint64_t` returns, every enum
+member). Never edit it by hand: `npm run build:wasm` rewrites it, and CI fails
+if a `bindings.cpp` change lands without the regenerated file. Two checks keep
+the hand-written `wasm-types.ts` (which adds docs, optional members for older
+bundles, and engine-facing types) honest against it:
+
+- `src/wasm/wasm-types-conformance.ts` — type-only; `tsc -b` fails when a
+  binding is missing from `WasmPhysicsWorldInstance`, a declared member is no
+  longer bound, or arity / return type differ.
+- `tests/wasm-generated-types.test.ts` — pins `BodyType`, `Shape`,
+  `VolumeShape` and `ForceSpace` (and their `physics-module-adventure.ts`
+  mirrors) to the generated values.
 
 ### Embind migration (non-goal)
 
@@ -289,7 +352,7 @@ at `1/60` s. Host: Linux build environment (2026-08-07).
 
 **Canonical numbers:** [`docs/WASM_BENCH_RESULTS.md`](WASM_BENCH_RESULTS.md) (2026-08-14) — SIMD+LTO **ON**, 16 MiB heap, `-O3`, `emmalloc`, `--closure=1`. Production combo is **C**.
 
-Historical 2026-08-07 table above is retained for comparison only; do not copy those defaults.
+Historical 2026-08-07 table above is retained for comparison only; do not copy those defaults. Its `.wasm KiB` column is from the 50-sphere build of that day: the current Release artefact (pin fields, meshes, force fields, snapshots, state hash) is ~190 KiB (193,907 bytes with emcc 6.0.13 on 2026-10-23).
 
 **Other decisions:**
 1. **No `-pthread` / `SharedArrayBuffer` yet** — #361; ENVIRONMENT already includes `worker` so the glue can instantiate off-thread without a rebuild of that flag.
@@ -337,14 +400,36 @@ engine.dispose()
 
 | Event | Payload | When |
 |-------|---------|------|
-| `wasm:physics:contact` | `WasmContactEvent` | Each contact pair, each physics step |
+| `wasm:physics:contacts` | `WasmContactBatch` | Once per drained contact buffer (each physics step; a wrapped worker ring drains as two) |
+| `wasm:physics:contact` | `WasmContactEvent` | Each contact pair, each physics step — **only while it has a subscriber** |
+
+Both come from `ContactBatchEmitter` (`src/wasm/contact-buffer.ts`). The batched event is the
+zero-allocation path (#488 §5): `batch.data` is the packed buffer (`CONTACT_STRIDE` floats per
+contact) as a typed-array view — into WASM memory or a reused buffer — and the batch object is
+reused, so both are valid only during the emit. Read it in place with `contactPhaseAt` /
+`decodeContactAt` (one reused `createContactRecord()`), and honour `batch.count`, not
+`data.length`. The per-contact event builds a fresh record per contact; it stays for consumers
+that have not moved to the batch, and the engines skip it entirely once nothing listens.
 
 ```typescript
+const scratch = createContactRecord()
+eventBus.on('wasm:physics:contacts', ({ data, count, stride }) => {
+  for (let i = 0; i < count; i++) {
+    if (contactPhaseAt(data, i, stride) !== ContactPhase.Enter) continue
+    const c = decodeContactAt(data, i, scratch, stride) // overwritten next iteration
+    console.log(`Contact: body ${c.bodyId1} hit body ${c.bodyId2}`)
+  }
+})
+
+// Legacy, allocates per contact:
 eventBus.on('wasm:physics:contact', (evt) => {
   // evt.bodyId1, evt.bodyId2, evt.normal, evt.point, evt.impulse, evt.isEntering
-  console.log(`Contact: body ${evt.bodyId1} hit body ${evt.bodyId2}`)
 })
 ```
+
+`decodeContactBuffer(data, count, stride, out)` and `decodeTransformSlot(data, id, stride, out)`
+take an optional reusable `out` (array / record) for per-frame callers; without it they return
+fresh objects as before.
 
 ---
 
@@ -622,6 +707,9 @@ Test scenarios (friction and hinge cases live in `hinge_friction_test.cpp`):
 | `ball on a rotating kinematic platter picks up tangential velocity` (`kinematic_mover_test.cpp`) | ω × r at the mover contact point imparts tangential speed via friction |
 | `ball crossing a sensor volume emits exactly one enter and one exit` (`sensor_volume_test.cpp`) | Enter/Stay/Exit lifecycle, zero impulse |
 | `ball dwelling inside a sensor for N frames emits N-2 stay events` (`sensor_volume_test.cpp`) | Multi-frame dwell + exit-by-teleport lifecycle |
+| `kinematic body crossing a thin sensor in one substep emits begin, then end` / `fast dynamic ball crossing …` / `swept sensor crossing works for a thin cylinder …` (`sensor_volume_test.cpp`) | A volume thinner than a tick of travel still reports Enter then Exit, for a captured ball, a fast ball and a portal-shaped cylinder |
+| `a fast ball that passes beside a thin sensor reports nothing` / `a teleport across a sensor between steps is not a crossing` / `a kinematic jump longer than the sweep limit …` / `a swept crossing still honours the sensor's filter mask` (`sensor_volume_test.cpp`) | The sweep adds no false positives: misses, teleports, over-limit jumps and masked-out bodies stay silent |
+| `a restored world sweeps the same crossing the original does` (`sensor_volume_test.cpp`) | The sweep origin is transient: a snapshot restore reproduces the crossing |
 | `two bodies whose filter masks exclude each other never generate a contact pair` (`collision_filter_test.cpp`) | Broadphase respects membership/filter masks |
 | `Dynamic <-> Kinematic round trip preserves mass` (`kinematic_body_test.cpp`) | `setBodyType` zeroes / restores inverse mass; a captured ball ignores impulses |
 | `kinematic ball does not respond to gravity` (`kinematic_body_test.cpp`) | No integration or force accumulation while kinematic |
@@ -644,6 +732,7 @@ Test scenarios (friction and hinge cases live in `hinge_friction_test.cpp`):
 | `restored manifold does not re-fire Enter for resting contacts` (`snapshot_test.cpp`) | Contact manifold + flush generation survive restore |
 | `snapshot refuses a differently built table…` / `…rejects malformed blobs…` (`snapshot_test.cpp`) | `StaticMismatch` / `BadMagic` / `BadVersion` / `Truncated` / `Corrupt`, world untouched |
 | `hinge angle uses a libm-independent atan2` (`snapshot_test.cpp`) | Native (glibc) and WASM (musl) hinge maths agree bit-for-bit |
+| `state hash: same inputs give the same hash every step` / `… one touched value changes it` / `… restore gives back the original hash` (`state_hash_test.cpp`) | Plunge at impulse 36 (r 0.25, m 1) into a 0.09 pin field: per-step hash identical across worlds and after restore; a one-ulp velocity, a motor target or one extra static changes it |
 
 Parity suite (native Catch2 + compiled WASM bundle):
 
@@ -690,6 +779,24 @@ byproduct of `ContactListener`'s existing pair-presence bookkeeping, so a
 ball leaving a sensor by teleport (`setBodyPosition`) is handled the same
 way as one leaving by velocity.
 
+**Sensors are swept.** The overlap is tested over the segment a body travelled
+in the substep (previous pose → end pose), not only at the end pose, so a
+volume thinner than a tick of travel is still reported: the pair is Enter on
+the step it was crossed and Exit on the next (the listener emits one event per
+pair per step). `PhysicsWorld::capturePreviousPositions()` takes the start pose
+at the top of `step()` — before kinematic targets land, so a captured ball's
+jump is swept — and again after each substep; it is transient and not in the
+snapshot. A teleport between steps (`setBodyPosition`) and a single-substep
+move longer than `SENSOR_SWEEP_MAX_DISTANCE` (4 m: a toy placing a ball) are
+not crossings. Only sensors are swept; solid statics push a body out, so an
+end-pose miss there is a real miss, and flipper capsules are not swept.
+`BroadphaseGrid::buildPairs` pairs a moved body with the sensors its swept AABB
+reaches; `SensorVolume.cpp` finds the nearest approach with a ternary search of
+the (convex) distance-to-volume along the segment, shape-agnostic across box,
+cylinder and sphere. This is what lets TypeScript consume zone and exit-portal
+begin/end contacts instead of sampling a pose each frame — see
+[Zone sensors](#zone-sensors).
+
 Every body — dynamic/kinematic RigidBody, static box/capsule, mover, or
 sensor — carries a `membership`/`filter` bitmask mirroring `CollisionGroups`
 in `src/game-elements/physics.ts` (see `native/src/CollisionFilter.h`; do not
@@ -732,10 +839,59 @@ committed pose for mesh bindings.
 track is fully owned and its WASM overlap bridge is installed — when every live
 descriptor is expressible in C++ and
 the track built nothing outside the descriptor path (`markUnexportedCollider`).
-Exit portals no longer hold Rapier awake: portal entry goes through the
-`AdventurePhysicsBridge`, and its cylinder sensor is exported like any other.
-Closing a portal retires its descriptors (`TrackColliderEmitter.retireBody`) so
-C++ does not keep a sensor for a body Rapier has removed.
+Exit portals no longer hold Rapier awake: the portal's cylinder sensor is
+exported like any other, and a ball's begin contact with it completes the portal
+(see [Zone sensors](#zone-sensors)). Closing a portal retires its descriptors
+(`TrackColliderEmitter.retireBody`) so C++ does not keep a sensor for a body
+Rapier has removed.
+
+### Zone sensors
+
+Scenario zones, obstacle footprints and exit portals are C++ `SensorVolume`s
+filtered to the ball group. Spatial tests live in the engine, next to the
+solver; zone *policy* (which zone is current, the debounce, what a zone does)
+stays in TypeScript, and camera cuts and score rules never enter `native/`.
+
+| Zone | Volume | Group | Authored by |
+|------|--------|-------|-------------|
+| scenario zone, obstacle footprint (`registerObstacleZone`), table portal (`registerPortalZone`) | box from `ZoneBounds` (Y defaults to −5…30) | `SENSOR` preset: member of `SENSOR`, filter `BALL` — never `ADVENTURE_GROUP` | `ZoneSensors` (`src/game-elements/zone-sensors.ts`), through `PhysicsApi` / `PhysicsWorldSink` |
+| adventure exit portal | the track's cylinder sensor | adventure descriptor default: member of `ADVENTURE_GROUP`, filter `BALL` | the track (`createExitPortal`); `registerPortalBody` only maps it to its zone |
+
+The owner exports `ZoneSensors`' bodies with the table (`GamePhysicsController`
+adds `zoneTriggerSystem.getSensorBodies()` to the owner table scope), so on
+`wasm-owner` and `wasm-worker` each zone is one `addSensorVolume`. The contact
+path is the one every other sensor uses:
+
+```
+C++ step ── swept sensor overlap ──► contact buffer (isSensor, Enter/Exit)
+   wasm-owner:  PhysicsModule decodes it            ─┐
+   wasm-worker: it rides the step-result / shared ring ─┴► EventBus 'wasm:physics:contact'
+      ► CollisionDispatcher.onWasmContact ► feedZoneContact
+      ► ZoneTriggerSystem.contactBegin / contactEnd ► onZoneEnter / onZoneExit / onPortalContact
+```
+
+* **No pose is re-tested in TypeScript.** The sweep makes a zone thinner than
+  one frame of travel still report Enter/Exit, and on the worker the contacts
+  arrive with the step result instead of being derived from a pose a frame late.
+  `ZoneTriggerSystem` has no `update()`; nothing in the frame loop polls a ball.
+* **Debounce counts sim steps.** A ball re-entering a zone within
+  `ZONE_DEBOUNCE_STEPS` (12 steps, the former 200 ms) of entering it is one
+  visit; an exit that soon is held until the window passes (the next zone event
+  announces it) or a re-entry cancels it. Another zone is never debounced, so a
+  thin zone crossed right after a thin zone still fires. The window reads
+  `simClockSteps()`, so a replay debounces as the live run did.
+* **Rapier (`rapier` mode)** gets the same zones as Rapier sensor colliders with
+  `COLLISION_EVENTS`; their begin/end events take the same route
+  (`CollisionDispatcher.processContact`). `wasm-mirror` steps only balls and
+  bumpers in C++ and never steps Rapier, so zones do not fire there (neither do
+  the other table sensors).
+* The debug overlay draws zone volumes like any exported sensor
+  (`getDebugColliders`); it reads nothing back and is not a second source of truth.
+
+`tests/zone-trigger-system.test.ts`, `tests/zone-sensor-contacts.test.ts`
+(owner and worker transports) and `tests/portal-deactivation-paths.test.ts` pin
+the TypeScript side; the swept overlap itself is pinned in
+`native/tests/sensor_volume_test.cpp`.
 
 `tests/wasm-owner-adventure.spec.ts` (run in the native-physics CI job) walks
 **every** `AdventureTrackType` in the browser and fails on any unsupported
@@ -977,7 +1133,17 @@ static hash + counts, handle ↔ dense consistency, enum ranges) before a single
 member changes, so any status but `Ok` leaves the world as it was. A snapshot
 of a differently built table is refused with `StaticMismatch` — rebuild the
 table, then restore; rigid bodies (and their public ids) are replaced
-wholesale. On success the transform buffer is re-scattered and the contact
+wholesale.
+
+The static content hash is **order-independent** (`SNAPSHOT_VERSION` 2,
+#464 item 2): every static item gets its own FNV-1a 64 digest (a mesh's
+digest covers its triangles), and each family folds its digests sorted, so
+two tables holding the same statics hash equal however the `add*()` calls
+were ordered. Handles still follow insertion order. The per-static runtime
+state in the blob (group masks, mover poses, force-field vectors) is written
+and read in that same content-sorted order, so a restore lands it on the
+equal-content items of a table built in another order. Version-1 blobs carried
+the insertion-order hash and are refused as `BadVersion`. On success the transform buffer is re-scattered and the contact
 buffer is empty until the next step.
 
 Bit-exactness: contact events are emitted in pair-key order within each phase
@@ -995,18 +1161,34 @@ const bytes = engine.serializeSnapshot()        // Uint8Array copy, or null (old
 const status = engine.restoreSnapshot(bytes)    // WasmSnapshotStatus: Ok 0, BadMagic 1, BadVersion 2,
                                                 // Truncated 3, StaticMismatch 4, Corrupt 5, Unsupported -1
 engine.getStaticContentHash()                   // '0123456789abcdef'
+engine.getStateHash()                           // '0123456789abcdef', or null (old bundle)
 ```
+
+`getStateHash()` (#459) is FNV-1a 64 over exactly the words `serialize()`
+writes after its header, prefixed with `SNAPSHOT_VERSION` and the static
+content hash and followed by each live hinge's angle and the insertion order
+of every static family. That last part is what the static hash ignores: static
+ids in contacts and the solve order follow insertion, so an equal-content
+table built in another order restores a blob but does not step identically,
+and its state hash says so. Equal hashes step identically, so a headless
+verifier (#444) compares hashes and only fetches a blob on a mismatch. `npm run test:wasm-parity` requires the bundle's hash for
+the `state_hash_test.cpp` plunge scene to equal the native one
+(`PACHINBALL_STATE_HASH_FIXTURE`), and a restore to give the pre-serialize hash
+back. It moves whenever the snapshot payload does, i.e. on every
+`SNAPSHOT_VERSION` bump. Every NaN it reads is hashed as the canonical quiet
+NaN (see "Input contract" below), so the hash never depends on a build's NaN
+payload.
 
 On `WasmSimEngine` both are `Awaitable`: in-process engines answer
 synchronously, the worker client with a promise (#441).
 
 ### Over the worker
 
-`serializeSnapshot` / `restoreSnapshot` are `PhysicsWorkerCommand`s carrying a
+`serializeSnapshot` / `restoreSnapshot` / `getStateHash` are `PhysicsWorkerCommand`s carrying a
 `requestId`, so they ride in the **ordered** command batch and take effect
 exactly where they were issued — after every earlier mutator, before the
 frame's `step`. The worker answers each with a `snapshot-reply` (blob
-transferred, status, static hash, step count), posted after the batch and
+transferred, status, static hash, step count, state hash), posted after the batch and
 before that batch's step result. No second SharedArrayBuffer, no
 `Atomics.wait`; the pose seqlock is unchanged. Off the hot path: replay
 capture, spectate, debug.
@@ -1141,12 +1323,61 @@ executable for unit-testing the C++ logic directly:
 npm run test:native
 ```
 
-Prerequisites: CMake ≥ 3.20 and a C++17 compiler (g++ or clang). No
-Emscripten required. Catch2 v3.7.1 is downloaded automatically on first
-`cmake` configure.
+Prerequisites: CMake ≥ 3.25 and a C++17 compiler (g++ or clang). No
+Emscripten required. Catch2 v3.7.1 (pinned to its commit SHA) is fetched on
+the first configure unless an installed Catch2 3.x is found
+(`FIND_PACKAGE_ARGS 3`).
+
+| CMake option (native tree) | Default | Effect |
+|----------------------------|---------|--------|
+| `PACHINBALL_BUILD_TESTS` | `ON` | `OFF` skips Catch2 entirely — no network on configure (`npm run compile-db -- -DPACHINBALL_BUILD_TESTS=OFF` works offline; `check:compile-db` then skips the `native/tests` TUs with a warning) |
+| `PACHINBALL_SANITIZE` | `OFF` | `-fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=all -fno-omit-frame-pointer` on the library and the tests. `float-cast-overflow` is outside both compilers' `undefined` group, so it is named; CI runs this tree with clang |
+| `PACHINBALL_UNITY_BUILD` | `OFF` | Unity-builds `pachinball_physics_native` (library only — the test files each define their own helpers). `compile-db` forces it `OFF`; `check:compile-db` rejects `unity_*.cxx` entries. Keep file-scope constants unique per TU or in `SolverConstants.h` |
+| `PACHINBALL_CCACHE` | `OFF` | Uses `ccache` as `CMAKE_CXX_COMPILER_LAUNCHER` when found (both trees); warns and builds without it otherwise |
+
+```bash
+npm run test:native:release  # native/build-release, -O3 — the golden traces must match the Debug tree
+CXX=clang++ npm run test:native:san  # native/build-san, PACHINBALL_SANITIZE=ON, ASan + UBSan + float-cast-overflow, any report fails
+```
 
 This lets you iterate on solver logic with fast compile times using your
 native compiler before re-running the full Emscripten build.
+
+### Golden traces (numeric drift)
+
+`native/tests/golden_trace_test.cpp` hashes three deterministic scenes (a full
+table, fast balls, sleep) — every contact event plus a `serialize()` blob every
+15 frames — and compares against committed constants. A build-only or
+refactor-only change must leave all three untouched; a change that is meant to
+move the numbers updates the constants it moves and names them (old → new) in
+its commit message, so drift is always attributable to one commit. The
+constants are identical at `-O0` and `-O3`, with g++ and clang, on x86-64 and
+aarch64 (`native_release_ctest`, `native_arm64_ctest`).
+
+```bash
+PACHINBALL_PRINT_GOLDEN=1 ./native/build-native/physics_world_test "[golden]"
+```
+
+### Input contract: UB, NaN and capacity (#487 slice 1a)
+
+Verified scores replay a world from untrusted input, so the engine has no
+undefined behaviour and no build-dependent result on *any* input. Every rule
+below is the identity on finite, in-capacity, in-range input — the golden
+traces did not move when they landed — and changes behaviour only where the
+old code hit UB, aliased a handle, or exposed a platform-dependent NaN.
+
+| Input | Behaviour | Test |
+|-------|-----------|------|
+| The 1001st triangle mesh or force field | Refused like every other static family: `STATIC_HANDLE_OVERFLOW`, `getDroppedStaticCount()` +1, no triangle reaches the table (it used to be handed `-7000` / `-8000`, the next family's first id). `WasmIdShadow` mirrors the cap | `meshes and force fields reject the 1001st entry without aliasing` |
+| A force-field / pin-field id above its base (`INT_MAX`, `STATIC_HANDLE_OVERFLOW`, another family's id) | Range-checked before `BASE - id`, so no signed overflow; a no-op / `-1` as before | `field ids at the integer limits are rejected and never decoded` |
+| A broadphase coordinate that is NaN, ±inf or past ±1e8 cells | `cellX` / `cellZ` clamp to `±CELL_COORD_LIMIT` (1e8 cells, 44,000 km) before the cast; NaN goes to cell 0. Not clamped to the grid extent, so no playfield body changes cell | `broadphase_test.cpp` |
+| `WorldParams::maxSubsteps` NaN or outside [1, 64] | NaN → the default 8; everything else clamped to [1, 64]. Applied in the constructor (stored sanitised) and again at the cast in `step()` (a restored snapshot keeps its params bit for bit). No binding takes `WorldParams` today; the constructor is where it enters | `maxSubsteps is validated at the boundary` |
+| A dynamic body whose position, rotation, velocity or angular velocity is not finite | Frozen after integration (before the broadphase and solver see it) and again after the solve: back to its substep-start pose (origin / identity if that was not finite), velocities and forces zeroed, asleep via the existing active flag. Recorded as `NaNQuarantine{bodyId, step, substep}` (`lastNaNQuarantines()`, Embind `getNaNQuarantineCount()` / `getNaNQuarantineBodyId(i)`), not in the contact buffer. The engine only freezes; the game decides what the ball means | `a NaN body is quarantined…`, `a body created at a non-finite pose…` |
+| A NaN anywhere the hash reads | `SnapshotHasher::f32` hashes every NaN as `0x7FC00000`, so payloads (which differ between WASM engines and native) never reach `getStateHash()` / `staticContentHash()`. `SnapshotWriter::f32` keeps the raw bits; `-0.0f` is not canonicalised. `run-wasm-parity.mjs` checks a `0xffffffff`-payload native world against the bundle's | `state hash: writes the NaN quarantine parity fixture` |
+
+`droppedStatics_` stays part of `staticContentHash()`, as it was for every
+family: two tables that refused a shape hash differently from two that did
+not, but never by what the refused shape was.
 
 ### Language Server & IDE Tooling (`compile_commands.json`)
 
@@ -1158,8 +1389,19 @@ clangd indexes `native/src/**` without a symlink. Run `compile-db` once after cl
 so the database exists, and again after adding a `.cpp`.
 
 `npm run check:compile-db` verifies the database: every `native/src` and
-`native/tests` TU present, exactly one `-O` level per TU, no `em++` entries, and
-no stray `compile_commands.json` at the repo root or `native/`.
+`native/tests` TU present, exactly one `-O` level per TU, no `em++` entries, no
+unity batches, and no stray `compile_commands.json` at the repo root or `native/`.
+
+`bindings.cpp` is Emscripten-only, so it is not in that database. Every
+`npm run build:wasm*` writes a machine-specific `native/src/.clangd`
+(gitignored, absolute paths from `em-config CACHE`). Its `If: PathMatch:
+bindings\.cpp` block adds `--target=wasm32-unknown-emscripten`, the SDK sysroot
+and `include/compat`, and clangd merges it with the root `.clangd`. A committed
+config cannot expand `$EMSDK`. Check it with the SDK's own clangd:
+
+```bash
+$EMSDK/upstream/bin/clangd --check=native/src/bindings.cpp   # "All checks completed, 0 errors"
+```
 
 ---
 
@@ -1170,10 +1412,17 @@ The GitHub Actions workflow (`.github/workflows/native-physics.yml`) runs on cha
 | Job | Status | Tools | What it checks |
 |-----|--------|-------|----------------|
 | `native_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native` (Catch2), `check:compile-db`, `check:wasm-docs` |
-| `sanitizer_ctest` | **BLOCKING** | cmake, g++ | ASan/UBSan Catch2 (`CMAKE_BUILD_TYPE=Debug`) |
-| `wasm_parity` | **BLOCKING** | emsdk | `print:wasm-flags` then Release + RelWithAsserts + `test:wasm-parity` |
+| `native_release_ctest` | non-blocking (first week) | cmake, g++ | `npm run test:native:release` — the same Catch2 suite at `-O3`; the golden traces must not move with the optimisation level |
+| `native_arm64_ctest` | non-blocking (first week) | cmake, g++ on `ubuntu-24.04-arm` | `test:native` and `test:native:release` on aarch64, where an unchecked `a*b+c` would fuse into FMA |
+| `sanitizer_ctest` | **BLOCKING** | cmake, clang-18 + compiler-rt | `CXX=clang++-18 npm run test:native:san` — ASan/UBSan + `float-cast-overflow` Catch2, no recovery (`CMAKE_BUILD_TYPE=Debug`) |
+| `wasm_parity` | **BLOCKING** | emsdk (`.emsdk-version`) | `print:wasm-flags` then Release + RelWithAsserts + `test:wasm-parity` |
 
-`native_ctest` runs in ~15 seconds without requiring Emscripten and gates PRs against C++ logic regressions. Additionally, `tests/embind-surface.test.ts` asserts that TypeScript interface definitions (`src/wasm/wasm-types.ts`) match the exported Embind surface (`native/src/bindings.cpp`), and `tests/wasm-worker-api-parity.test.ts` (Vitest, no WASM) fails when a mutating Embind function is not wrapped on `WasmPhysicsEngine`, or a mutating engine method has no `PhysicsWorkerCommand` and is not on its tracked-gap list.
+Every job that installs Emscripten (`wasm_parity` here, `e2e-preview` in
+`ci.yml`) installs the version in `.emsdk-version`, never `latest`, under the
+cache key `emsdk-<os>-<arch>-<hash of .emsdk-version>`: bumping the pin is the
+only way the toolchain changes, and it re-runs parity and the golden traces.
+
+`native_ctest` runs in ~15 seconds without requiring Emscripten and gates PRs against C++ logic regressions. Additionally, `tests/embind-surface.test.ts` asserts that TypeScript interface definitions (`src/wasm/wasm-types.ts`) match the exported Embind surface (`native/src/bindings.cpp`), and `tests/wasm-worker-api-parity.test.ts` (Vitest, no WASM) fails when a mutating Embind function is not wrapped on `WasmPhysicsEngine`, or a mutating engine method has no `PhysicsWorkerCommand` and is not on its tracked-gap list. `tests/physics-worker-command-manifest.test.ts` checks the checked-in manifest `tests/fixtures/physics-worker-commands.json` against both `bindings.cpp` and the `PhysicsWorkerCommand` union: every embind `PhysicsWorld` method names its command or an exemption with a reason (#459).
 
 Skip options:
 

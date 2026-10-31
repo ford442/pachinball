@@ -9,7 +9,6 @@ import type { GameUIManager } from './game-ui'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
 import type { SoundSystem } from '../game-elements/sound-system'
-import type { AdventureState } from '../adventure/adventure-state'
 import { TABLE_MAPS } from '../config/table-maps'
 
 export interface MapCabinetHost {
@@ -20,8 +19,6 @@ export interface MapCabinetHost {
   readonly effects: EffectsSystem | null
   readonly display: DisplaySystem | null
   readonly soundSystem: SoundSystem
-  readonly adventureState: AdventureState
-  readonly levelSelectScreen: import('../game-elements/level-select-screen').LevelSelectScreen | null
   readonly dynamicWorld: import('../game-elements/dynamic-world').DynamicWorld | null
 
   switchTableMap(mapName: string): void
@@ -51,18 +48,6 @@ export class GameMapCabinet {
     }
 
     this.host.display?.setStoryText(`MAP: ${mapConfig.name.toUpperCase()}`)
-
-    const levelForMap = this.host.adventureState.getAllLevels().find(l => l.mapType === mapName)
-    if (levelForMap && this.host.adventureState.isMapUnlocked(mapName)) {
-      this.host.adventureState.startLevel(levelForMap.id)
-      if (levelForMap.story?.intro) {
-        this.host.display?.setStoryText(levelForMap.story.intro)
-      }
-    }
-
-    if (this.host.levelSelectScreen?.isShowing()) {
-      this.host.levelSelectScreen.updateProgress()
-    }
 
     const mapMode = mapConfig.mode || 'fixed'
     this.host.dynamicWorld?.setMode(mapMode)

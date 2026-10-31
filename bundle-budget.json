@@ -5,5 +5,9 @@
     "rapierGzipMaxKb": 800,
     "precacheTotalKiBMax": 6400
   },
+  "dist": {
+    "distTotalMiBMax": 40,
+    "distFileMiBMax": 8
+  },
   "tolerancePercent": 5
 }

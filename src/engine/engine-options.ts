@@ -7,6 +7,8 @@
  * `src/game/webgpu-post-process-profile.ts` instead.
  */
 
+import { hardwareScalingLevelFor, resolveRenderScale } from './resolution-policy'
+
 export type PowerPreference = 'default' | 'high-performance' | 'low-power'
 export type GpuFeatureLevel = 'core' | 'compatibility'
 
@@ -96,7 +98,9 @@ export function shouldForceLowQualityMobile(hints: MobileQualityHints = {}): boo
 export function resolveEngineOptions(ctx: EngineOptionsContext = DEFAULT_CONTEXT): ResolvedEngineOptions {
   const params = new URLSearchParams(ctx.search)
 
-  const antialiasOff = parseBoolParam(params, 'antialias') === false
+  // Off by default: the scene renders into its own HDR target (MSAA there, FXAA on LOW), so a
+  // multisampled canvas only costs memory and a resolve. `?antialias=1` turns it back on.
+  const antialiasOn = parseBoolParam(params, 'antialias') === true
   const preserveFromUrl = parseBoolParam(params, 'preserveBuffer')
   const preserveDrawingBuffer =
     preserveFromUrl === true ||
@@ -121,7 +125,7 @@ export function resolveEngineOptions(ctx: EngineOptionsContext = DEFAULT_CONTEXT
   const enableGPUDebugMarkers = parseBoolParam(params, 'gpuDebug') === true
 
   return {
-    antialias: !antialiasOff,
+    antialias: antialiasOn,
     preserveDrawingBuffer,
     stencil: true,
     setMaximumLimits: !maxLimitsOff,
@@ -137,20 +141,25 @@ export function resolveEngineOptions(ctx: EngineOptionsContext = DEFAULT_CONTEXT
 }
 
 /**
- * Hardware scaling level for Babylon's setHardwareScalingLevel().
- * Higher level = lower internal render resolution.
+ * Boot-time hardware scaling level for Babylon's setHardwareScalingLevel().
+ * Higher level = lower internal render resolution; `level = 1 / renderScale`.
  *
  * With `adaptToDeviceRatio: false`, Babylon's `resize()` sizes the backbuffer to
- * `clientWidth / level` — DPR never enters. So level 1 is CSS-pixel resolution and
- * any level > 1 renders *below* CSS pixels. Only mobile trades that sharpness for
- * fill rate; HiDPI desktop stays at 1 (the former `min(DPR, 2)` rendered a 2× display
- * at a quarter of its native pixels per axis). See docs/ENGINE_BOOTSTRAP.md.
+ * `clientWidth / level` — DPR never enters on its own, so the policy brings it in:
+ * `renderScale = min(DPR, 1.5 mobile | 2 desktop)` (see `resolution-policy.ts`). The quality tier
+ * is not known yet at boot; `GameRenderer` re-applies the policy with the tier's cap once it is.
  */
 export function resolveHardwareScalingLevel(ctx: EngineOptionsContext = DEFAULT_CONTEXT): number {
-  return isMobileUserAgent(ctx.userAgent) ? 2 : 1
+  const scale = resolveRenderScale({
+    devicePixelRatio: ctx.devicePixelRatio,
+    mobile: isMobileUserAgent(ctx.userAgent),
+    quality: null,
+    search: ctx.search,
+  })
+  return hardwareScalingLevelFor(scale)
 }
 
-/** Apply resolved hardware scaling and log when non-default. */
+/** Apply the boot-time hardware scaling and log it when it is not 1. */
 export function applyHardwareScaling(
   engine: { setHardwareScalingLevel: (level: number) => void; getHardwareScalingLevel?: () => number },
   ctx: EngineOptionsContext = DEFAULT_CONTEXT,
@@ -159,5 +168,5 @@ export function applyHardwareScaling(
   if (level === 1) return
 
   engine.setHardwareScalingLevel(level)
-  console.log(`[Bootstrap] Mobile detected: hardware scaling ${level}x (half CSS-pixel resolution)`)
+  console.log(`[Bootstrap] Render scale ${(1 / level).toFixed(2)}x CSS pixels (DPR ${ctx.devicePixelRatio})`)
 }

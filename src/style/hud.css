@@ -75,10 +75,22 @@ h1 {
   color: #00d9ff;
   margin: 0 0 0.35rem;
 }
+.campaign-stage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
 .campaign-stage-label {
   font-size: 0.8rem;
   opacity: 0.9;
-  margin: 0 0 0.5rem !important;
+  margin: 0 !important;
+}
+.campaign-map-btn {
+  margin-top: 0;
+  padding: 4px 12px;
+  font-size: 0.7rem;
 }
 .daily-cascade-panel .setting-row {
   display: flex;

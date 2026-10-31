@@ -156,8 +156,12 @@ function parseEnginePreference(v: string | null): WasmPhysicsEnginePreference | 
 
 export function getPhysicsEnginePreference(): WasmPhysicsEnginePreference {
   try {
+    // URL param wins. Storage is read through globalThis: this module is also
+    // type-checked against the WebWorker lib (tsconfig.worker.json), which has
+    // no `localStorage`. A worker never calls this.
     const fromUrl = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get(WASM_PHYSICS.urlParam)
-    const pref = parseEnginePreference(fromUrl) ?? parseEnginePreference(localStorage.getItem(WASM_PHYSICS.flagKey))
+    const storage = (globalThis as { localStorage?: { getItem(key: string): string | null } }).localStorage
+    const pref = parseEnginePreference(fromUrl) ?? parseEnginePreference(storage?.getItem(WASM_PHYSICS.flagKey) ?? null)
     if (pref) return pref
   } catch {
     // ignore localStorage errors (e.g. disabled storage)

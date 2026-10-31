@@ -10,6 +10,60 @@ namespace pachinball {
 
 static constexpr float SENSOR_EPSILON_SQ = 1e-10f;
 
+/** Ternary-search rounds: (2/3)^24 of the segment, far below any sensor thickness. */
+static constexpr int SENSOR_SWEEP_ITERATIONS = 24;
+
+namespace {
+
+/** Distance from a volume-local point to the volume; zero inside. */
+float distanceToVolume(const SensorVolumeDesc& sensor, const Vec3& local) {
+  bool inside = false;
+  const Vec3 closest = closestPointOnVolume(sensor.shape, local, sensor.halfExtents, inside);
+  return inside ? 0.f : (local - closest).length();
+}
+
+/** True when a sphere of `radius` at world-space `point` touches the sensor volume. */
+bool sphereTouchesSensor(const SensorVolumeDesc& sensor, const Vec3& point, float radius) {
+  const Vec3 local = sensor.rotation.conjugate().rotate(point - sensor.center);
+  bool inside = false;
+  const Vec3 closest = closestPointOnVolume(sensor.shape, local, sensor.halfExtents, inside);
+  return inside || (local - closest).lengthSq() < radius * radius;
+}
+
+/**
+ * Point of the segment `from`→`to` nearest the volume. Distance to a convex set
+ * is convex along a line, so a ternary search finds the minimum for every
+ * shape tag without a per-shape sweep.
+ */
+Vec3 nearestApproach(const SensorVolumeDesc& sensor, const Vec3& from, const Vec3& to) {
+  const Quat inv = sensor.rotation.conjugate();
+  const Vec3 a = inv.rotate(from - sensor.center);
+  const Vec3 b = inv.rotate(to - sensor.center);
+  float lo = 0.f;
+  float hi = 1.f;
+  for (int i = 0; i < SENSOR_SWEEP_ITERATIONS; ++i) {
+    const float third = (hi - lo) / 3.f;
+    const float m1 = lo + third;
+    const float m2 = hi - third;
+    if (distanceToVolume(sensor, a + (b - a) * m1) < distanceToVolume(sensor, a + (b - a) * m2)) {
+      hi = m2;
+    } else {
+      lo = m1;
+    }
+  }
+  return from + (to - from) * (0.5f * (lo + hi));
+}
+
+} // namespace
+
+void PhysicsWorld::capturePreviousPositions() {
+  const int count = bodies_.denseCount();
+  prevPositions_.resize(static_cast<std::size_t>(count));
+  for (int i = 0; i < count; ++i) {
+    prevPositions_[static_cast<std::size_t>(i)] = {bodies_.posX(i), bodies_.posY(i), bodies_.posZ(i)};
+  }
+}
+
 /**
  * Overlap test only — no contact normal/penetration solve is needed since
  * sensors never apply impulse or positional correction. Enter/Stay/Exit
@@ -56,7 +110,26 @@ void PhysicsWorld::emitSensorOverlap(BodyView& body, int sensorIndex, const Vec3
 void PhysicsWorld::resolveSphereVsSensor(BodyView& body, int sensorIndex) {
   const SensorVolumeDesc& sensor = sensors_[static_cast<std::size_t>(sensorIndex)];
   if (!groupsInteract(body.getMembership(), body.getFilter(), sensor.membership, sensor.filter)) return;
-  emitSensorOverlap(body, sensorIndex, body.getPosition());
+
+  Vec3 queryPoint = body.getPosition();
+  const std::size_t dense = static_cast<std::size_t>(body.denseIndex());
+  if (dense < prevPositions_.size() &&
+      !sphereTouchesSensor(sensor, queryPoint, body.getRadius())) {
+    // Not touching where the substep ended: it may still have crossed the volume
+    // on the way. Test the nearest point of the travelled segment instead.
+    const Vec3 from = prevPositions_[dense];
+    const float travelSq = (queryPoint - from).lengthSq();
+    if (travelSq >= SENSOR_SWEEP_MIN_DISTANCE * SENSOR_SWEEP_MIN_DISTANCE &&
+        travelSq <= SENSOR_SWEEP_MAX_DISTANCE * SENSOR_SWEEP_MAX_DISTANCE) {
+      // Cheap reject first: a segment that never nears the volume's bounding sphere.
+      const Vec3 nearCenter = closestPointOnSegment(sensor.center, from, queryPoint);
+      const float reach = sensor.halfExtents.length() + body.getRadius();
+      if ((nearCenter - sensor.center).lengthSq() <= reach * reach) {
+        queryPoint = nearestApproach(sensor, from, queryPoint);
+      }
+    }
+  }
+  emitSensorOverlap(body, sensorIndex, queryPoint);
 }
 
 void PhysicsWorld::resolveCapsuleVsSensor(BodyView& body, int sensorIndex) {

@@ -16,23 +16,35 @@ namespace {
 /** Inside this distance of the axis the pull direction is undefined; apply nothing. */
 constexpr float AXIS_PULL_DEAD_ZONE = 1e-3f;
 
+/**
+ * Index of a force-field handle, or -1 when `fieldId` names no field. The
+ * base check comes first: `BASE - fieldId` overflows (UB) for ids above it,
+ * STATIC_HANDLE_OVERFLOW among them, and none of those is a field.
+ */
+int forceFieldIndex(int fieldId, std::size_t count) {
+  if (fieldId > FORCE_FIELD_ID_BASE) return -1;
+  const std::size_t idx = static_cast<std::size_t>(FORCE_FIELD_ID_BASE - fieldId);
+  return idx < count ? static_cast<int>(idx) : -1;
+}
+
 } // namespace
 
 int PhysicsWorld::addForceField(const ForceFieldDesc& desc) {
+  if (fields_.size() >= STATIC_HANDLE_CAPACITY) { ++droppedStatics_; return STATIC_HANDLE_OVERFLOW; }
   fields_.push_back(desc);
   return FORCE_FIELD_ID_BASE - (static_cast<int>(fields_.size()) - 1);
 }
 
 void PhysicsWorld::setForceFieldEnabled(int fieldId, bool enabled) {
-  const std::size_t idx = static_cast<std::size_t>(FORCE_FIELD_ID_BASE - fieldId);
-  if (idx >= fields_.size()) return;
-  fields_[idx].enabled = enabled;
+  const int idx = forceFieldIndex(fieldId, fields_.size());
+  if (idx < 0) return;
+  fields_[static_cast<std::size_t>(idx)].enabled = enabled;
 }
 
 void PhysicsWorld::setForceFieldVector(int fieldId, float fx, float fy, float fz) {
-  const std::size_t idx = static_cast<std::size_t>(FORCE_FIELD_ID_BASE - fieldId);
-  if (idx >= fields_.size()) return;
-  fields_[idx].force = {fx, fy, fz};
+  const int idx = forceFieldIndex(fieldId, fields_.size());
+  if (idx < 0) return;
+  fields_[static_cast<std::size_t>(idx)].force = {fx, fy, fz};
 }
 
 void PhysicsWorld::applyForceFields() {

@@ -23,6 +23,10 @@ import type { AdventureTrackProgression } from '../adventure/adventure-track-pro
 import { TRACK_CATALOG } from '../adventure/adventure-track-progression'
 import { getOwnedAudioContextCount, peekAudioEngine } from '../audio/audio-engine'
 import { getGpuProbe } from '../engine/gpu-degrade-telemetry'
+import type { StaticSceneGate } from '../core/static-scene-gate'
+import type { FrameScheduler } from '../core/frame-scheduler'
+import type { RenderResolutionInfo } from './render-resolution'
+import { formatFramePanel } from './frame-panel'
 
 export interface DebugHost {
   readonly engine: Engine | WebGPUEngine
@@ -39,6 +43,7 @@ export interface DebugHost {
   readonly adventureProgressionSupervisor: AdventureProgressionSupervisor | null
   readonly adventureTrackProgression: AdventureTrackProgression | null
   readonly performanceMonitor: PerformanceMonitor
+  readonly staticSceneGate: Pick<StaticSceneGate, 'getStats'> | null
   postProcessDegraded: boolean
 
   readonly debugHUDQueryEnabled: boolean
@@ -49,6 +54,9 @@ export interface DebugHost {
 
   sceneInstrumentation: SceneInstrumentation | null
   engineInstrumentation: EngineInstrumentation | null
+  readonly frameScheduler: Pick<FrameScheduler, 'getTimings'>
+  /** Optional: the renderer exists once render_bootstrap ran. */
+  readonly renderer?: { getResolutionInfo(): RenderResolutionInfo | null } | null
 }
 
 export class GameDebug {
@@ -100,6 +108,11 @@ export class GameDebug {
     this.host.engineInstrumentation = null
   }
 
+  /** The HUD's "Frame" panel: per-phase CPU time and the render scale (#488 §3–4). */
+  buildFramePanel(): Record<string, string | number> {
+    return formatFramePanel(this.host.frameScheduler.getTimings(), this.host.renderer?.getResolutionInfo() ?? null)
+  }
+
   buildDebugSnapshot(rawDt: number, lives: number): DebugSnapshot {
     const gameState = GameState[this.host.stateManager.getState()] ?? 'UNKNOWN'
     const displayState = this.host.display?.getDisplayState() ?? 'none'
@@ -122,6 +135,7 @@ export class GameDebug {
     const perfMetrics = this.host.performanceMonitor.getMetrics()
     const gpuProbe = getGpuProbe()
     const teardown = this.host.adventureMode?.getLastTeardownStats()
+    const scene = this.host.scene
 
     return {
       gameState,
@@ -181,6 +195,15 @@ export class GameDebug {
       lastLaneHit: this.host.physicsController?.getLastLaneHit?.() ?? null,
       audioContexts: getOwnedAudioContextCount(),
       audioWorklet: peekAudioEngine()?.isWorkletReady() ?? false,
+      renderStats: scene
+        ? {
+            meshes: scene.meshes.length,
+            activeMeshes: scene.getActiveMeshes().length,
+            materials: scene.materials.length,
+            frozenMaterials: scene.materials.reduce((n, m) => n + (m.isFrozen ? 1 : 0), 0),
+            staticScene: this.host.staticSceneGate?.getStats() ?? null,
+          }
+        : undefined,
     }
   }
 

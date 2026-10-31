@@ -95,8 +95,25 @@ class MockColor3 {
     this.b = c.b
     return this
   }
+  scaleToRef(s: number, ref: MockColor3) {
+    ref.r = this.r * s
+    ref.g = this.g * s
+    ref.b = this.b * s
+    return ref
+  }
+  copyFromFloats(r: number, g: number, b: number) {
+    this.r = r
+    this.g = g
+    this.b = b
+    return this
+  }
   clone() {
     return new MockColor3(this.r, this.g, this.b)
+  }
+  static LerpToRef(a: MockColor3, b: MockColor3, t: number, ref: MockColor3) {
+    ref.r = a.r + (b.r - a.r) * t
+    ref.g = a.g + (b.g - a.g) * t
+    ref.b = a.b + (b.b - a.b) * t
   }
 }
 
@@ -121,6 +138,7 @@ function createMockMesh() {
     bakeTransformIntoVertices: vi.fn(),
     addLODLevel: vi.fn(),
     createInstance: vi.fn(() => createMockMesh()),
+    thinInstanceSetBuffer: vi.fn(),
   }
 }
 
@@ -154,6 +172,7 @@ export const MeshBuilder = {
   CreateTiledGround: vi.fn().mockImplementation(() => createMockMesh()),
   CreateCapsule: vi.fn().mockImplementation(() => createMockMesh()),
   CreateRibbon: vi.fn().mockImplementation(() => createMockMesh()),
+  CreateTube: vi.fn().mockImplementation(() => createMockMesh()),
 }
 
 export const Vector3 = MockVector3
@@ -202,6 +221,7 @@ export const PBRMaterial = vi.fn().mockImplementation(function (this: Record<str
   this.metallic = 0
   this.roughness = 0
   this.subSurface = { isRefractionEnabled: false, tintColor: null }
+  this.clearCoat = { isEnabled: false, intensity: 0, roughness: 0 }
   this.dispose = vi.fn()
   return this
 })
@@ -349,12 +369,6 @@ export const DynamicTexture = vi.fn().mockImplementation(function (this: Record<
   return this
 })
 
-export const MirrorTexture = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
-  this.dispose = vi.fn()
-  this.mirrorPlane = new MockVector3(0, 1, 0)
-  return this
-})
-
 export const RenderTargetTexture = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
   this.dispose = vi.fn()
   return this
@@ -444,6 +458,12 @@ export const ShadowGenerator = vi.fn().mockImplementation(function (this: Record
   this.dispose = vi.fn()
   this.addShadowCaster = vi.fn()
   return this
+})
+// Quality / filter constants the real class exposes (values match Babylon 7.54).
+Object.assign(ShadowGenerator, {
+  QUALITY_HIGH: 0,
+  QUALITY_MEDIUM: 1,
+  QUALITY_LOW: 2,
 })
 
 export const Plane = MockVector3

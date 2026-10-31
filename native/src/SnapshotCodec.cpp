@@ -6,6 +6,7 @@
  */
 #include "Snapshot.h"
 
+#include <cmath>
 #include <cstring>
 
 namespace pachinball {
@@ -69,6 +70,11 @@ void SnapshotHasher::u32(uint32_t v) {
 void SnapshotHasher::f32(float v) {
   uint32_t bits;
   std::memcpy(&bits, &v, sizeof bits);
+  // Every NaN hashes as the canonical quiet NaN: payloads differ between
+  // WASM engines and native builds, and the hash must not. Only the hasher —
+  // SnapshotWriter::f32 keeps the raw bits, so a restore is exact. -0.0f is
+  // left alone (healthy traces contain it).
+  if (std::isnan(v)) bits = 0x7FC00000u;
   u32(bits);
 }
 

@@ -1,5 +1,11 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { simClockLiveSteps } from '../core/sim-clock'
 import { PALETTE } from '../game-elements/visual-language'
+import {
+  JackpotPhaseClock,
+  type JackpotClockHandlers,
+  type JackpotPhaseLogEntry,
+} from './jackpot-phase-clock'
 
 type LightingMode = 'normal' | 'hit' | 'fever' | 'reach'
 
@@ -12,27 +18,53 @@ interface JackpotSequenceCallbacks {
   addCameraShake: (intensity: number) => void
   isReducedMotion: () => boolean
   setBloomEnergy: (value: number) => void
+  /** Cosmetic randomness only (burst positions); never gameplay. */
   random?: () => number
-  scheduleTimeout?: (callback: () => void, delayMs: number) => unknown
+  /** The sim step a sequence starts on; the installed `GameSimClock`'s live count by default. */
+  currentStep?: () => number
 }
 
+/**
+ * The Cyber-Shock jackpot sequence (docs/PLAN.md §8): Breach 0–2 s, Critical
+ * 2–5 s, Meltdown 5–10 s. The phase is a pure function of the sim steps since
+ * it started (`JackpotPhaseClock`); this class turns the clock's transitions
+ * into the `jackpot:phase` event, the burst particles and the countdown beeps.
+ * Audio stays on the one `AudioEngine` (`playBeep`, and the `jackpot:phase`
+ * listener in `sound-event-bindings.ts`); score and bumper awards stay in
+ * `scoring-bridge.ts`.
+ */
 export class JackpotSequenceController {
-  jackpotTimer = 0
-  isJackpotActive = false
-  jackpotPhase = 0 // 0=Idle, 1=Breach, 2=Error, 3=Meltdown
+  private readonly clock = new JackpotPhaseClock()
 
   private isSolidGoldPulseActive = false
   private solidGoldPulseTimer = 0
   private readonly SOLID_GOLD_PULSE_DURATION = 1.5
 
   private readonly random: () => number
-  private readonly scheduleTimeout: (callback: () => void, delayMs: number) => unknown
+  private readonly currentStep: () => number
 
   constructor(private readonly callbacks: JackpotSequenceCallbacks) {
     this.random = callbacks.random ?? Math.random
-    // EffectsSystem always injects a TimerScope; the bare default is for standalone/test use.
-    // eslint-disable-next-line no-restricted-syntax -- injectable scheduler, scoped by the only production caller
-    this.scheduleTimeout = callbacks.scheduleTimeout ?? ((callback, delayMs) => setTimeout(callback, delayMs))
+    this.currentStep = callbacks.currentStep ?? simClockLiveSteps
+  }
+
+  get isJackpotActive(): boolean {
+    return this.clock.active
+  }
+
+  /** 0=Idle, 1=Breach, 2=Critical, 3=Meltdown */
+  get jackpotPhase(): number {
+    return this.clock.phase
+  }
+
+  /** Sim seconds since the sequence started; 0 when idle. */
+  get jackpotTimer(): number {
+    return this.clock.elapsedSeconds(this.currentStep())
+  }
+
+  /** Every phase change as `{ step, phase }`, for tape replay checks. */
+  get phaseLog(): readonly JackpotPhaseLogEntry[] {
+    return this.clock.log
   }
 
   get pulseActive(): boolean {
@@ -44,64 +76,48 @@ export class JackpotSequenceController {
   }
 
   startJackpotSequence(): void {
-    this.isJackpotActive = true
-    this.jackpotTimer = 0
-    this.jackpotPhase = 1
-    this.callbacks.emitJackpotPhase(1)
+    this.clock.start(this.currentStep(), this.handlers)
   }
 
   /**
-   * Advance the 10s Cyber-Shock jackpot sequence with real dt.
-   * Phases:
-   *   1: Breach     (0-2s)  - alarm, cracks, red pulse
-   *   2: Critical   (2-5s)  - rising turbine, countdown glitch, white reveal, white/gold strobe
-   *   3: Meltdown   (5-10s) - explosion, chrome JACKPOT, shockwaves, rainbow, bumper flash
+   * Advance the sequence to sim step `step` — once per fixed physics tick, so
+   * each phase change lands on its own step. Returns true when the sequence
+   * ended during this call.
    */
-  updateJackpotSequence(dt: number): void {
-    if (!this.isJackpotActive) return
+  advanceToStep(step: number): boolean {
+    const wasActive = this.clock.active
+    this.clock.advanceTo(step, this.handlers)
+    return wasActive && !this.clock.active
+  }
 
-    this.jackpotTimer += dt
+  /**
+   * Per render frame: the extra meltdown bursts. Cosmetic and display-rate
+   * dependent by design — it never changes the sequence's state.
+   */
+  updateJackpotSequence(_dt: number): void {
+    if (this.clock.phase === 3 && this.random() < 0.08) {
+      this.callbacks.spawnJackpotBurst(
+        new Vector3((this.random() - 0.5) * 8, 3 + this.random() * 5, 2 + this.random() * 6)
+      )
+    }
+  }
 
-    // Phase 1: Breach (0-2s)
-    if (this.jackpotTimer < 2.0) {
-      if (this.jackpotPhase !== 1) {
-        this.jackpotPhase = 1
-        this.callbacks.emitJackpotPhase(1)
+  private readonly handlers: JackpotClockHandlers = {
+    onPhase: (phase) => {
+      if (phase === 0) {
+        this.callbacks.setLightingMode('normal')
+        return
       }
-    }
-    // Phase 2: Critical Error (2-5s)
-    else if (this.jackpotTimer < 5.0) {
-      if (this.jackpotPhase !== 2) {
-        this.jackpotPhase = 2
-        this.callbacks.emitJackpotPhase(2)
-        // Digital "countdown" beeps (lightweight proxy)
-        this.scheduleTimeout(() => this.callbacks.playBeep(880), 300)
-        this.scheduleTimeout(() => this.callbacks.playBeep(880), 900)
-        this.scheduleTimeout(() => this.callbacks.playBeep(660), 1500)
-      }
-    }
-    // Phase 3: Meltdown (5-10s)
-    else if (this.jackpotTimer < 10.0) {
-      if (this.jackpotPhase !== 3) {
-        this.jackpotPhase = 3
-        this.callbacks.emitJackpotPhase(3)
+      this.callbacks.emitJackpotPhase(phase)
+      if (phase === 3) {
         // Gold particle bursts
         this.callbacks.spawnJackpotBurst(new Vector3(0, 5, 6))
         this.callbacks.spawnJackpotBurst(new Vector3(-2, 4, 3))
         this.callbacks.spawnJackpotBurst(new Vector3(3, 7, 1))
-      } else if (this.random() < 0.08) {
-        // Occasional extra bursts during meltdown
-        this.callbacks.spawnJackpotBurst(
-          new Vector3((this.random() - 0.5) * 8, 3 + this.random() * 5, 2 + this.random() * 6)
-        )
       }
-    }
-    // End
-    else {
-      this.isJackpotActive = false
-      this.jackpotPhase = 0
-      this.callbacks.setLightingMode('normal')
-    }
+    },
+    // Digital "countdown" beeps (lightweight proxy)
+    onCue: (cue) => this.callbacks.playBeep(cue.freq),
   }
 
   startSolidGoldPulse(): void {

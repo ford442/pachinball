@@ -18,6 +18,8 @@ import {
   STATIC_CYLINDER_ID_BASE,
   STATIC_SPHERE_ID_BASE,
   STATIC_CONE_ID_BASE,
+  STATIC_MESH_ID_BASE,
+  FORCE_FIELD_ID_BASE,
   STATIC_HANDLE_CAPACITY,
   STATIC_HANDLE_OVERFLOW,
   cloneFloat32Array,
@@ -290,6 +292,21 @@ describe('static handle capacity', () => {
     expect(ids.allocStaticSphere()).toBe(STATIC_SPHERE_ID_BASE)
   })
 
+  it('refuses the 1001st mesh and force field like native instead of aliasing -7000 / -8000', () => {
+    const ids = new WasmIdShadow()
+    for (let i = 0; i < STATIC_HANDLE_CAPACITY; i++) {
+      expect(ids.allocStaticMesh()).toBe(STATIC_MESH_ID_BASE - i)
+      expect(ids.allocForceField()).toBe(FORCE_FIELD_ID_BASE - i)
+    }
+    expect(ids.allocStaticMesh()).toBe(STATIC_HANDLE_OVERFLOW)
+    expect(ids.allocForceField()).toBe(STATIC_HANDLE_OVERFLOW)
+    expect(ids.allocStaticSphere()).toBe(STATIC_SPHERE_ID_BASE)
+
+    ids.resetStaticHandles()
+    expect(ids.allocStaticMesh()).toBe(STATIC_MESH_ID_BASE)
+    expect(ids.allocForceField()).toBe(FORCE_FIELD_ID_BASE)
+  })
+
   it('restarts every family after resetStaticHandles', () => {
     const ids = new WasmIdShadow()
     for (let i = 0; i < STATIC_HANDLE_CAPACITY; i++) ids.allocStaticBox()
@@ -316,6 +333,9 @@ describe('worker snapshot request/reply', () => {
       getStaticContentHash: vi.fn(() => 'feedfacecafebeef'),
       getStateHash: vi.fn(() => '0123456789abcdef'),
     }
+    const withHash = Object.assign(engine, {
+      getStateHash: vi.fn(() => `state@${engine.getStepCount()}`),
+    })
     const runtime = createWorkerRuntimeState()
     const client = new PhysicsWorkerClient({ sharedTransport: false })
     const batches: PhysicsWorkerCommand[][] = []
@@ -323,7 +343,7 @@ describe('worker snapshot request/reply', () => {
     let holdReplies = false
     client.attachLoopback((commands) => {
       batches.push(commands)
-      for (const cmd of commands) applyPhysicsCommand(engine, cmd, runtime)
+      for (const cmd of commands) applyPhysicsCommand(withHash, cmd, runtime)
       const replies = runtime.replies
       runtime.replies = []
       for (const r of replies) {
@@ -332,7 +352,7 @@ describe('worker snapshot request/reply', () => {
       }
     })
     return {
-      engine, runtime, client, batches,
+      engine: withHash, runtime, client, batches,
       hold: () => { holdReplies = true },
       release: () => { holdReplies = false; for (const r of held.splice(0)) client.receiveWorkerMessage(r) },
     }
@@ -353,12 +373,20 @@ describe('worker snapshot request/reply', () => {
     expect(client.getStaticContentHash()).toBe('feedfacecafebeef')
   })
 
-  it('getStateHash is answered in command order, after the mutators queued before it', async () => {
+  it('hashes the world at its place in the command order, without a blob', async () => {
     const { client, batches, engine } = setup()
     client.createBody({ mass: 1 })
-    await expect(client.getStateHash()).resolves.toBe('0123456789abcdef')
-    expect(batches[0]!.map((c) => c.type)).toEqual(['createBody', 'getStateHash'])
-    expect(engine.getStateHash).toHaveBeenCalledTimes(1)
+    const before = client.getStateHash()
+    client.step(1 / 60)
+    const after = client.getStateHash()
+    await expect(before).resolves.toBe('state@0')
+    await expect(after).resolves.toBe('state@1')
+    expect(batches.flat().map((c) => c.type)).toEqual(['createBody', 'getStateHash', 'step', 'getStateHash'])
+    expect(engine.serializeSnapshot).not.toHaveBeenCalled()
+    // Every reply carries the hash, including a serialize.
+    const r = createWorkerRuntimeState()
+    applyPhysicsCommand(engine, { type: 'serializeSnapshot', requestId: 9 }, r)
+    expect(r.replies[0]!.stateHash).toBe('state@1')
   })
 
   it('getStateHash resolves null when the bundle cannot hash, and when the worker is not ready', async () => {

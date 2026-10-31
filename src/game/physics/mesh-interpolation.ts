@@ -14,7 +14,16 @@ export interface InterpolationBinding {
 export class MeshInterpolationSystem {
   /** Pose at the end of the previous physics step, per rigid body — used to
    *  interpolate mesh transforms toward the current pose by the step's alpha. */
-  private readonly prevPoses: Map<PhysicsBody, { pos: Vector3; rot: Quaternion }> = new Map()
+  private readonly prevPoses: Map<PhysicsBody, { pos: Vector3; rot: Quaternion; seen: number }> = new Map()
+  /**
+   * Bumped every `syncMeshes`; a pose whose `seen` lags it was not synced this call. Replaces
+   * a `new Set` of live bodies per frame (V8 also reallocates a Set's table on `clear()`) (#488 §5).
+   */
+  private syncPass = 0
+  /** Bound once; deleting the current entry inside Map.forEach is safe. */
+  private readonly dropUnseenPose = (prev: { seen: number }, body: PhysicsBody): void => {
+    if (prev.seen !== this.syncPass) this.prevPoses.delete(body)
+  }
   private readonly scratchCurrPos = new Vector3()
   private readonly scratchCurrRot = new Quaternion()
   private readonly scratchInterpPos = new Vector3()
@@ -22,7 +31,7 @@ export class MeshInterpolationSystem {
   private readonly scratchScale = new Vector3(1, 1, 1)
 
   syncMeshes(alpha: number, bindings: InterpolationBinding[]): void {
-    const liveBodies = new Set<PhysicsBody>()
+    const pass = ++this.syncPass
 
     for (const binding of bindings) {
       const body = binding.rigidBody
@@ -39,15 +48,15 @@ export class MeshInterpolationSystem {
       if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y) || !Number.isFinite(pos.z)) continue
       if (Math.abs(pos.x) > 100 || Math.abs(pos.y) > 100 || Math.abs(pos.z) > 100) continue
 
-      liveBodies.add(body)
       this.scratchCurrPos.set(pos.x, pos.y, pos.z)
       this.scratchCurrRot.set(rot.x, rot.y, rot.z, rot.w)
 
       let prev = this.prevPoses.get(body)
       if (!prev) {
-        prev = { pos: this.scratchCurrPos.clone(), rot: this.scratchCurrRot.clone() }
+        prev = { pos: this.scratchCurrPos.clone(), rot: this.scratchCurrRot.clone(), seen: pass }
         this.prevPoses.set(body, prev)
       }
+      prev.seen = pass
 
       if (alpha < 1 && !body.isSleeping()) {
         const interpPos = Vector3.LerpToRef(prev.pos, this.scratchCurrPos, alpha, this.scratchInterpPos)
@@ -62,9 +71,7 @@ export class MeshInterpolationSystem {
     }
 
     // Drop poses for bodies no longer bound to a mesh (e.g. collected/drained balls).
-    for (const body of this.prevPoses.keys()) {
-      if (!liveBodies.has(body)) this.prevPoses.delete(body)
-    }
+    this.prevPoses.forEach(this.dropUnseenPose)
   }
 
   /** Apply a physics-world pose to a bound mesh, respecting playfield parenting. */

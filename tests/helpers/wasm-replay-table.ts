@@ -9,16 +9,13 @@
  * down; a real Worker adds one).
  */
 
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { expect, vi } from 'vitest'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { EventBus } from '../../src/core/event-bus'
 import { GamePhysicsController } from '../../src/game/game-physics-controller'
 import { COLLISION_GROUP_PRESETS } from '../../src/game-elements/physics'
 import type { BumperVisual, InputFrame } from '../../src/game-elements/types'
-import { ReplayRecorder, type ReplayPayload } from '../../src/replay/replay-recorder'
+import { REPLAY_SCHEMA_VERSION, ReplayRecorder, type ReplayPayload } from '../../src/replay/replay-recorder'
 import { ReplayRunner } from '../../src/replay/replay-runner'
 import { WasmPhysicsEngine } from '../../src/wasm/PhysicsModule'
 import { PhysicsWorkerClient } from '../../src/wasm/physics-worker-client'
@@ -33,18 +30,15 @@ import { WasmTableWorld } from '../../src/wasm/wasm-table-world'
 import type { WasmBody } from '../../src/wasm/wasm-body'
 import type { WasmPhysicsModule } from '../../src/wasm/wasm-types'
 import { makeBallManagerStub, makeGameObjectsStub, makePhysicsHostShell } from './make-physics-host'
+import { loadWasmTestModule, runWasmParity } from './wasm-bundle'
 
-const bundle = resolve(__dirname, '..', '..', process.env.WASM_MODULE_PATH ?? 'public/wasm/PhysicsModule.js')
-export const RUN = process.env.RUN_WASM_PARITY === '1' && existsSync(bundle)
+export const RUN = runWasmParity
 
 export const WARMUP_FRAMES = 48
 export const RECORD_FRAMES = 240
 
-export async function loadModule(): Promise<WasmPhysicsModule> {
-  const { default: factory } = await import(/* @vite-ignore */ pathToFileURL(bundle).href) as {
-    default: () => Promise<WasmPhysicsModule>
-  }
-  return factory()
+export function loadModule(): Promise<WasmPhysicsModule> {
+  return loadWasmTestModule()
 }
 
 /**
@@ -64,6 +58,8 @@ export type TableOptions = {
   shiftIds?: number
   /** A second ball the recording never had: the linked bodies no longer pair up (#444). */
   extraBall?: boolean
+  /** Viewer refresh rate the client renders at (default 60 Hz). */
+  hz?: number
 }
 
 /** A `PhysicsWorkerClient` whose worker is `applyPhysicsCommand` on a second in-process engine. */
@@ -172,6 +168,7 @@ export async function makeTable(module: WasmPhysicsModule, opts: TableOptions = 
     setWasmDebugColliders: vi.fn(),
   }
   const host = makePhysicsHostShell({ physics, eventBus, ballManager, gameObjects })
+  ;(host.engine.getDeltaTime as ReturnType<typeof vi.fn>).mockReturnValue(1000 / (opts.hz ?? 60))
   const controller = new GamePhysicsController(host)
   controller.rebuildHandleCaches()
   return { engine, workerEngine, world, host, controller, ball }
@@ -251,7 +248,7 @@ export async function recordLiveRun(module: WasmPhysicsModule, opts: { launch?: 
 
   const recorder = new ReplayRecorder()
   recorder.start({
-    version: 1,
+    version: REPLAY_SCHEMA_VERSION,
     buildId: 'vitest',
     mapId: 'neon-helix',
     seed: 12345,
@@ -277,9 +274,9 @@ export async function replay(
   const actions = launchActions(client)
   const runner = new ReplayRunner()
   runner.load(ReplayRecorder.fromJSON(ReplayRecorder.toJSON(payload)))
-  // One tape frame per fixed step: render frames until the tape is consumed (or rejected).
-  while (runner.isPlaying() && runner.getProgress().currentFrame < payload.frames.length) {
-    client.controller.stepPhysics(null, actions, runner, null)
-  }
+  // Render until the tape runs out: at 60 Hz that is one frame per row, at
+  // other rates more or fewer — schema 3 advances one row per fixed step.
+  let guard = 0
+  while (runner.isPlaying() && guard++ < 100_000) client.controller.stepPhysics(null, actions, runner, null)
   return { ...client, runner }
 }

@@ -7,11 +7,11 @@ import { GameSettingsUI, type SettingsUIHost } from '../src/game/game-settings-u
 /**
  * #441: the static `#levels-btn` / `.cabinet-btn` nodes live in index.html, but their listeners were
  * bound from buildMapSelectorUI, which runs on setup, again after fetchAll() resolves, and on every
- * refresh click. Each run stacked another listener, so one click toggled the level screen twice.
+ * refresh click. Each run stacked another listener, so one click toggled the stage map twice.
  * Every listener is also tied to the Game's AbortSignal so dispose() removes it.
  */
 function makeHost(signal: AbortSignal) {
-  const toggleLevelSelect = vi.fn()
+  const toggleCampaignMap = vi.fn(() => Promise.resolve())
   const loadCabinetPreset = vi.fn(() => Promise.resolve())
   const host = {
     signal,
@@ -24,10 +24,10 @@ function makeHost(signal: AbortSignal) {
     },
     mapManager: null,
     soundSystem: { fetchMusicTracks: () => Promise.resolve() },
-    toggleLevelSelect,
+    toggleCampaignMap,
     loadCabinetPreset,
   }
-  return { host: host as unknown as SettingsUIHost, toggleLevelSelect, loadCabinetPreset }
+  return { host: host as unknown as SettingsUIHost, toggleCampaignMap, loadCabinetPreset }
 }
 
 function mountDom(): void {
@@ -44,7 +44,7 @@ describe('GameSettingsUI static listeners', () => {
 
   it('binds #levels-btn and .cabinet-btn once, even after the map selector is rebuilt', async () => {
     const abort = new AbortController()
-    const { host, toggleLevelSelect, loadCabinetPreset } = makeHost(abort.signal)
+    const { host, toggleCampaignMap, loadCabinetPreset } = makeHost(abort.signal)
     const ui = new GameSettingsUI(host)
 
     ui.setupMapSelector()
@@ -54,13 +54,13 @@ describe('GameSettingsUI static listeners', () => {
     document.getElementById('levels-btn')!.click()
     document.querySelector<HTMLElement>('.cabinet-btn')!.click()
 
-    expect(toggleLevelSelect).toHaveBeenCalledTimes(1)
+    expect(toggleCampaignMap).toHaveBeenCalledTimes(1)
     expect(loadCabinetPreset).toHaveBeenCalledTimes(1)
   })
 
   it('stops reacting once the Game signal aborts', async () => {
     const abort = new AbortController()
-    const { host, toggleLevelSelect, loadCabinetPreset } = makeHost(abort.signal)
+    const { host, toggleCampaignMap, loadCabinetPreset } = makeHost(abort.signal)
     const ui = new GameSettingsUI(host)
 
     ui.setupMapSelector()
@@ -71,7 +71,7 @@ describe('GameSettingsUI static listeners', () => {
     document.getElementById('levels-btn')!.click()
     document.querySelector<HTMLElement>('.cabinet-btn')!.click()
 
-    expect(toggleLevelSelect).not.toHaveBeenCalled()
+    expect(toggleCampaignMap).not.toHaveBeenCalled()
     expect(loadCabinetPreset).not.toHaveBeenCalled()
   })
 })

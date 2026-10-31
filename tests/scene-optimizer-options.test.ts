@@ -70,3 +70,12 @@ describe('createSafeSceneOptimizerOptions', () => {
     ).not.toContain('Merging similar meshes together')
   })
 })
+
+describe('createSafeSceneOptimizerOptions: hardware scaling', () => {
+  it('leaves the hardware scaling level to the resolution policy (#488 §3)', async () => {
+    const { createSafeSceneOptimizerOptions } = await import('../src/game/safe-scene-optimizer-options')
+    const { HardwareScalingOptimization } = await import('@babylonjs/core/Misc/sceneOptimizer')
+    const options = createSafeSceneOptimizerOptions(55)
+    expect(options.optimizations.some((opt) => opt instanceof HardwareScalingOptimization)).toBe(false)
+  })
+})

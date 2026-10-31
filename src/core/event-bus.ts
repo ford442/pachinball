@@ -26,7 +26,7 @@
 
 import type { DisplayState } from '../display/display-types'
 import type { GameState, UnlockedReward } from '../game-elements/types'
-import type { WasmContactEvent } from '../wasm/wasm-types'
+import type { WasmContactBatch, WasmContactEvent } from '../wasm/wasm-types'
 
 /**
  * Typed event map for all Pachinball game events.
@@ -52,6 +52,8 @@ export interface PachinballEventMap {
   'jackpot:start': void
   'jackpot:end': void
   'jackpot:phase': { phase: number }
+  /** A ball hit a bumper (the table's contact path); `strength` is 0–1 impact speed. Cosmetic listeners only. */
+  'bumper:contact': { strength: number }
   'reach:start': void
   'adventure:start': void
   'adventure:end': void
@@ -379,8 +381,18 @@ export interface PachinballEventMap {
   }
 
   // C++ WASM physics engine events
-  /** Fired once per contact pair per physics step by WasmPhysicsEngine. */
+  /**
+   * Fired once per contact pair per physics step by the WASM engines — only while it has a
+   * subscriber. Each payload is a fresh record. Prefer the batched `'wasm:physics:contacts'`
+   * on hot paths: this one allocates per contact.
+   */
   'wasm:physics:contact': WasmContactEvent
+  /**
+   * One step's contacts in a single emit (#488 §5): the packed buffer (`CONTACT_STRIDE` floats per
+   * contact) as a typed-array view. The view and the batch object are reused — valid only during
+   * the emit. Decode with `contactPhaseAt` / `decodeContactAt` from `src/wasm/contact-buffer`.
+   */
+  'wasm:physics:contacts': WasmContactBatch
 }
 
 /** Event name derived from the event map keys */
@@ -398,11 +410,24 @@ export type PachinballEventHandler<K extends PachinballEventName> = (
 type StoredHandler = (payload: never) => void
 
 /**
+ * One event's handlers. `snapshot` is the array `emit` iterates: built lazily from `set` on the
+ * first emit after a change and then reused, so an emit with an unchanged handler set allocates
+ * nothing (#488 §5). on()/off() never touch the array in place — they drop it (`null`) — so an
+ * emit already iterating the old array keeps the handler list it started with: a handler added
+ * during an emit is not called by it, and one removed during an emit still is (exactly what the
+ * former per-emit `Array.from(set)` clone did).
+ */
+interface HandlerBucket {
+  set: Set<StoredHandler>
+  snapshot: readonly StoredHandler[] | null
+}
+
+/**
  * Lightweight typed EventBus.
  * No external dependencies.
  */
 export class EventBus {
-  private listeners = new Map<PachinballEventName, Set<StoredHandler>>()
+  private listeners = new Map<PachinballEventName, HandlerBucket>()
 
   /**
    * Subscribe to an event.
@@ -414,10 +439,13 @@ export class EventBus {
   ): () => void {
     let bucket = this.listeners.get(event)
     if (!bucket) {
-      bucket = new Set()
+      bucket = { set: new Set(), snapshot: null }
       this.listeners.set(event, bucket)
     }
-    bucket.add(handler)
+    if (!bucket.set.has(handler)) {
+      bucket.set.add(handler)
+      bucket.snapshot = null
+    }
 
     return () => {
       this.off(event, handler)
@@ -431,7 +459,16 @@ export class EventBus {
     event: K,
     handler: PachinballEventHandler<K>
   ): void {
-    this.listeners.get(event)?.delete(handler)
+    const bucket = this.listeners.get(event)
+    if (bucket?.set.delete(handler)) bucket.snapshot = null
+  }
+
+  /**
+   * True when `event` has at least one handler. Emitters of high-volume events use it to skip
+   * building a payload nobody would receive.
+   */
+  hasListeners(event: PachinballEventName): boolean {
+    return (this.listeners.get(event)?.set.size ?? 0) > 0
   }
 
   /**
@@ -443,14 +480,29 @@ export class EventBus {
       ? []
       : [payload: PachinballEventMap[K]]
   ): void {
-    const handlers = this.listeners.get(event)
-    if (!handlers) return
+    const bucket = this.listeners.get(event)
+    if (!bucket) return
 
-    const payload = args[0] as never
-    // Clone the set so that a handler calling off() during emit doesn't break iteration
-    for (const handler of Array.from(handlers)) {
-      handler(payload)
+    let handlers = bucket.snapshot
+    if (!handlers) {
+      handlers = Array.from(bucket.set)
+      bucket.snapshot = handlers
     }
+    const payload = args[0] as never
+    // Iterate the local reference: on()/off() during a handler replace `bucket.snapshot`,
+    // never mutate this array, so the rest of this emit is unaffected.
+    for (let i = 0; i < handlers.length; i++) {
+      const handler = handlers[i]
+      if (handler) handler(payload)
+    }
+  }
+
+  /**
+   * @internal Test hook: the handler array the next `emit(event)` iterates if no handler
+   * changes before it (null when it will be rebuilt, undefined for an unknown event).
+   */
+  dispatchSnapshot(event: PachinballEventName): readonly ((payload: never) => void)[] | null | undefined {
+    return this.listeners.get(event)?.snapshot
   }
 
   /**

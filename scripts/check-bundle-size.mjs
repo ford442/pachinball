@@ -4,6 +4,8 @@
  * of the default graph (#412): the rapier chunk may exist (the explicit
  * `rapier` mode and the fail-closed degrade import it lazily) but must be
  * neither precached by the service worker nor modulepreloaded by index.html.
+ * Also caps the raw size of everything `vite build` puts in dist/ (#486 A1):
+ * `dist.distTotalMiBMax` for the whole tree, `dist.distFileMiBMax` per file.
  *
  * Usage:
  *   node scripts/check-bundle-size.mjs            # fail if over budget
@@ -20,18 +22,17 @@ const distDir = join(root, 'dist')
 const assetsDir = join(distDir, 'assets')
 const budgetPath = join(root, 'bundle-budget.json')
 
-function walkFiles(dir) {
-  const out = []
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name)
-    if (entry.isDirectory()) out.push(...walkFiles(full))
-    else out.push(full)
-  }
-  return out
-}
-
 function gzipKb(buf) {
   return gzipSync(buf).length / 1024
+}
+
+/** Relative URLs in Workbox's `precacheAndRoute([{url:"…",revision:…},…])` call. */
+function precacheManifestUrls(serviceWorker) {
+  const start = serviceWorker.indexOf('precacheAndRoute([')
+  if (start < 0) return []
+  const end = serviceWorker.indexOf('],', start)
+  const manifest = serviceWorker.slice(start, end < 0 ? undefined : end)
+  return [...manifest.matchAll(/url:"([^"]+)"/g)].map((m) => m[1])
 }
 
 function findChunk(files, prefix) {
@@ -42,6 +43,17 @@ function findChunk(files, prefix) {
   // Vite may emit more than one `index-*.js` (entry + tiny helpers).
   // Budget the largest — that's the app entry.
   return matches.sort((a, b) => statSync(b).size - statSync(a).size)[0]
+}
+
+/** Every file under dir with its byte size (recursive). */
+function walk(dir) {
+  const out = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) out.push(...walk(path))
+    else if (entry.isFile()) out.push({ path, size: statSync(path).size })
+  }
+  return out
 }
 
 function measure() {
@@ -81,31 +93,36 @@ function measure() {
     .filter((file) => statSync(file, { throwIfNoEntry: false })?.isFile())
   const initialJsGzipKbValue = readGzip(entry) + initialChunks.reduce((sum, file) => sum + readGzip(file), 0)
 
-  const workboxIgnores = [
-    /backbox[/\\].*\.(mp4|webm)$/,
-    /babylon-loaders-.*\.js$/,
-    /ui-overlays-.*\.js$/,
-    /rapier-.*\.js$/,
-    /reel\.png$/,
-  ]
+  const readText = (path) => (statSync(path, { throwIfNoEntry: false })?.isFile() ? readFileSync(path, 'utf8') : '')
+  const serviceWorker = readText(join(distDir, 'sw.js'))
 
+  // What the service worker actually precaches: the URLs in its precacheAndRoute([...])
+  // manifest, so the budget follows vite.config.ts globPatterns / globIgnores (#464 item 8)
+  // instead of a hand-kept copy of them.
+  const precached = precacheManifestUrls(serviceWorker)
+  if (precached.length === 0) throw new Error('dist/sw.js has no precache manifest — was the PWA plugin disabled?')
   let precacheTotalKiB = 0
-  for (const file of walkFiles(distDir)) {
-    const rel = relative(distDir, file).replaceAll('\\', '/')
-    if (workboxIgnores.some((re) => re.test(rel))) continue
-    if (!/\.(js|css|html|wasm|svg|png|ogg|env|webp|ico|txt|webmanifest)$/.test(rel)) continue
-    precacheTotalKiB += statSync(file).size / 1024
+  for (const url of precached) {
+    const file = join(distDir, decodeURIComponent(url))
+    const size = statSync(file, { throwIfNoEntry: false })?.size
+    if (size === undefined) throw new Error(`precached ${url} is not in dist/`)
+    precacheTotalKiB += size / 1024
   }
 
   // Rapier must stay a lazy, degrade-only chunk.
   const rapierName = rapier ? rapier.split(/[/\\]/).pop() : null
-  const readText = (path) => (statSync(path, { throwIfNoEntry: false })?.isFile() ? readFileSync(path, 'utf8') : '')
-  const serviceWorker = readText(join(distDir, 'sw.js'))
   const indexHtml = readText(join(distDir, 'index.html'))
   const rapierPrecached = rapierName !== null && serviceWorker.includes(rapierName)
   const rapierPreloaded = rapierName !== null && indexHtml.includes(rapierName)
 
+  const distFiles = walk(distDir)
+  const distTotalMiB = distFiles.reduce((sum, f) => sum + f.size, 0) / 1024 / 1024
+  const largest = [...distFiles].sort((a, b) => b.size - a.size)
+
   return {
+    distTotalMiB: Number(distTotalMiB.toFixed(2)),
+    distLargestFiles: largest.slice(0, 5).map((f) => ({ file: relative(root, f.path), MiB: Number((f.size / 1024 / 1024).toFixed(2)) })),
+    distFiles: largest,
     entryGzipKb: Number(readGzip(entry).toFixed(2)),
     initialJsGzipKb: Number(initialJsGzipKbValue.toFixed(2)),
     babylonCoreGzipKb: Number(readGzip(babylonCore).toFixed(2)),
@@ -126,7 +143,7 @@ const printOnly = process.argv.includes('--print')
 const measured = measure()
 
 console.log('Bundle size report')
-console.log(JSON.stringify(measured, null, 2))
+console.log(JSON.stringify({ ...measured, distFiles: undefined }, null, 2))
 
 if (printOnly) process.exit(0)
 
@@ -158,6 +175,29 @@ if (measured.rapierPrecached || measured.rapierPreloaded) {
 } else {
   console.log('ok  rapier chunk is lazy: not precached, not modulepreloaded')
 }
+// Raw dist/ size: what deploy.py uploads. Untoleranced — these are hard caps.
+const distBudget = budget.dist ?? {}
+if (typeof distBudget.distTotalMiBMax !== 'number' || typeof distBudget.distFileMiBMax !== 'number') {
+  console.error('Budget missing numeric dist.distTotalMiBMax / dist.distFileMiBMax')
+  failed = true
+} else {
+  const totalOk = measured.distTotalMiB <= distBudget.distTotalMiBMax
+  console.log(`${totalOk ? 'ok' : 'OVER'}  distTotalMiB: ${measured.distTotalMiB.toFixed(2)} / max ${distBudget.distTotalMiBMax}`)
+  if (!totalOk) {
+    failed = true
+    for (const f of measured.distLargestFiles) console.error(`        ${f.MiB.toFixed(2)} MiB  ${f.file}`)
+  }
+  const fileCap = distBudget.distFileMiBMax * 1024 * 1024
+  const offenders = measured.distFiles.filter((f) => f.size > fileCap)
+  if (offenders.length > 0) {
+    failed = true
+    console.error(`OVER  ${offenders.length} dist file(s) above ${distBudget.distFileMiBMax} MiB:`)
+    for (const f of offenders) console.error(`        ${(f.size / 1024 / 1024).toFixed(2)} MiB  ${relative(root, f.path)}`)
+  } else {
+    console.log(`ok  no dist file above ${distBudget.distFileMiBMax} MiB`)
+  }
+}
+
 for (const [name, actual, max] of checks) {
   if (typeof max !== 'number') {
     console.error(`Budget missing numeric ${name}`)

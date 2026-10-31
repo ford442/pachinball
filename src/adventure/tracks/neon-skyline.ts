@@ -6,21 +6,21 @@
 
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilder } from '../track-builder'
+import type { TrackBuilderApi } from '../track-builder-api'
 import { boxDesc, cylinderDesc } from '../track-collider-descriptors'
-import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { getLayoutRng } from '../../core/seeded-rng'
 
-export function buildNeonSkyline(builder: TrackBuilder): void {
-  const skylineMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#111122")
-  const windMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#AAFFFF")
+export function buildNeonSkyline(builder: TrackBuilderApi): void {
+  const skylineMat = builder.getTrackMaterial("#111122")
+  const windMat = builder.getTrackMaterial("#AAFFFF")
 
-  const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: PhysicsWorldSink }).world
-  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
-  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
-  const conveyorZones = (builder as unknown as { conveyorZones: { sensor: PhysicsBody, force: Vector3 }[] }).conveyorZones
+  const {
+    currentStartPos,
+    scene,
+    adventureTrack,
+    adventureBodies,
+    conveyorZones,
+  } = builder
 
   let currentPos = currentStartPos.clone()
   let heading = 0
@@ -28,7 +28,7 @@ export function buildNeonSkyline(builder: TrackBuilder): void {
   // 1. The Rooftop Run
   const entryLen = 15
   const entryIncline = (10 * Math.PI) / 180
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, 6, entryLen, entryIncline, skylineMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, 6, entryLen, entryIncline, skylineMat)
 
   // 2. The Vent Jump
   const gapLen = 5
@@ -37,7 +37,7 @@ export function buildNeonSkyline(builder: TrackBuilder): void {
   const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
   const gapStart = currentPos.clone()
 
-  if (world) {
+  if (builder.hasWorld) {
     const center = gapStart.add(forward.scale(gapLen / 2))
     center.y -= 2.0
 
@@ -67,9 +67,9 @@ export function buildNeonSkyline(builder: TrackBuilder): void {
   const skyWidth = 10
   const skyStart = currentPos.clone()
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, skyWidth, skyLen, 0, skylineMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, skyWidth, skyLen, 0, skylineMat)
 
-  if (world) {
+  if (builder.hasWorld) {
     const unitCount = 6
     const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
 
@@ -99,12 +99,12 @@ export function buildNeonSkyline(builder: TrackBuilder): void {
   const boardAngle = Math.PI / 2
   const boardBank = -(45 * Math.PI) / 180
 
-  currentPos = (builder as unknown as { addCurvedRamp: (...args: unknown[]) => Vector3 }).addCurvedRamp(currentPos, heading, boardRadius, boardAngle, 0, 8, 2.0, windMat, 20, boardBank)
+  currentPos = builder.addCurvedRamp(currentPos, heading, boardRadius, boardAngle, 0, 8, 2.0, windMat, 20, boardBank)
   heading += boardAngle
 
   // 5. The Penthouse Landing
   const goalForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
   const goalPos = currentPos.add(goalForward.scale(4))
 
-  ;(builder as unknown as { createBasin: (...args: unknown[]) => void }).createBasin(goalPos, skylineMat)
+  builder.createBasin(goalPos, skylineMat)
 }

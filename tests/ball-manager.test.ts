@@ -815,4 +815,49 @@ describe('BallManager', () => {
       expect(manager.getBallBodies()).toEqual([])
     })
   })
+
+  // -------------------------------------------------------------------------
+  // StaticSceneGate hooks (#443 A3): every spawn and removal thaws the static scene.
+  // -------------------------------------------------------------------------
+  describe('static scene gate', () => {
+    function gated() {
+      const manager = makeManager()
+      const gate = { invalidate: vi.fn() }
+      manager.setStaticSceneGate(gate)
+      return { manager, gate }
+    }
+    const reasons = (gate: { invalidate: ReturnType<typeof vi.fn> }) => gate.invalidate.mock.calls.map(([r]) => r)
+
+    // createMainBall has the same one-line hook; this suite's fakes cannot build a main ball, so
+    // it is covered by the real-engine spec (tests/render-hygiene.spec.ts).
+    it.each([
+      ['spawnExtraBalls', (m: BallManager) => m.spawnExtraBalls(1)],
+      ['createBallOfType', (m: BallManager) => m.createBallOfType(BallType.STANDARD)],
+      ['spawnSmallGoldBallSwarm', (m: BallManager) => m.spawnSmallGoldBallSwarm(undefined, BallType.GOLD_PLATED)],
+      ['resetBall', (m: BallManager) => m.resetBall()],
+    ])('invalidates the gate when %s creates balls', (_name, create) => {
+      const { manager, gate } = gated()
+      create(manager)
+      expect(reasons(gate)).toContain('ball:spawn')
+      expect(new Set(reasons(gate))).toEqual(new Set(['ball:spawn']))
+    })
+
+    it('invalidates before a ball is removed, and on removeExtraBalls', () => {
+      const { manager, gate } = gated()
+      manager.spawnExtraBalls(1)
+      gate.invalidate.mockClear()
+      manager.removeBall(manager.getBallBodies().at(-1)!)
+      expect(reasons(gate)).toEqual(['ball:collect'])
+      manager.removeExtraBalls()
+      expect(reasons(gate)).toEqual(['ball:collect', 'ball:collect'])
+    })
+
+    it('spawns and removes fine without a gate', () => {
+      const manager = makeManager()
+      expect(() => {
+        manager.spawnExtraBalls(1)
+        manager.removeBall(manager.getBallBodies().at(-1)!)
+      }).not.toThrow()
+    })
+  })
 })

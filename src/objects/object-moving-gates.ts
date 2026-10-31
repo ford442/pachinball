@@ -158,7 +158,7 @@ export class MovingGateBuilder {
       hitTime: 0,
     }
 
-    bindings.push({ mesh: gateRoot as unknown as Mesh, rigidBody: body })
+    bindings.push({ mesh: gateRoot, rigidBody: body })
 
     this.meshes.push(gateMesh)
     if (collideMesh !== gateMesh) this.meshes.push(collideMesh)

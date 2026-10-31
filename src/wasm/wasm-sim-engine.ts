@@ -161,9 +161,9 @@ export interface WasmSimEngine {
    */
   getStaticContentHash(): string | null
   /**
-   * World-state hash (native `PhysicsWorld::stateHash`) as of this call's place
-   * in the command order. In-process engines answer now; the worker client
-   * with a promise settled by the worker's reply. Null when unsupported.
+   * Hash of the stepped world (native `getStateHash()`), null when the bundle
+   * cannot hash. Ordered like the snapshot calls: in-process engines answer
+   * now, the worker client once the worker has applied every earlier command.
    */
   getStateHash(): Awaitable<string | null>
 }

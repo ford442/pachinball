@@ -66,7 +66,7 @@ entries below plus `randomU32Seed`'s fallback.
 | `src/effects/effects-screen.ts` | Screen shake offsets |
 | `src/effects/effects-shards.ts` | Particle shard velocity/rotation/scale |
 | `src/effects/effects-audio.ts` | Synth frequency + noise buffer |
-| `src/effects/effects-jackpot.ts` | Injectable callback default (`Math.random`) |
+| `src/effects/effects-jackpot.ts` | Injectable callback default (`Math.random`): burst positions only; the sequence itself is on the sim clock |
 | `src/game/game-post-process.ts` | Table-camera shake offsets |
 | `src/display/display-lcd-overlay.ts` | Walk-by emoji timer/speed/pick |
 | `src/audio/sound-system-synth.ts` | Noise buffers, pan, frequency jitter |
@@ -129,6 +129,28 @@ On the gameplay clock (#441):
 
 `nudgeState` and `tiltActive` are reset in `startGame()`.
 
+### The jackpot sequence is on the sim clock
+
+The Cyber-Shock sequence (breach 0–2 s, critical 2–5 s, meltdown 5–10 s) used to
+count render `dt` and schedule its countdown beeps with `setTimeout`. It also
+decides when the display leaves JACKPOT, and the display state gates hologram
+catches and fever (`handleBumperCollision`), so its length is gameplay: a 30 Hz
+recorder and a 144 Hz spectator ended it on different steps.
+
+`src/effects/jackpot-phase-clock.ts` makes the phase a pure function of
+`step - startStep` (120 / 300 / 600 steps; the beeps are cues at +18 / +54 / +90
+steps into the critical phase). `GamePhysicsController.runTick` advances it once
+per fixed tick from `GameSimClock.liveSteps()` (committed steps plus the ticks
+of the render frame in progress, which `steps()` does not count until the frame
+ends), and leaves the JACKPOT display state on the step the sequence ends. The
+start step is read the same way, so a sequence started from a contact callback
+lands on the same step on every client. `EffectsSystem.jackpotPhaseLog` records
+`{ step, phase }`; `tests/replay-jackpot-phase.test.ts` replays a tape at 30, 60
+and 144 Hz and checks the log, the score and the display state match.
+
+Render-rate work that stays: the extra meltdown bursts
+(`updateJackpotSequence(dt)`) and every visual that reads the phase.
+
 Still wall-clock, cosmetic only: tilt bloom reset (`setTimeout`), the bonus
 tally bloom reset, full-charge haptic pulse, spawn-effect names, mirror sync
 timing for the HUD.
@@ -151,78 +173,68 @@ The replay tape (`InputFrame`, `src/replay/replay-recorder.ts`, schema
 - **Nudges** are quantised to the tape's 0.01 grid in `processBufferedInputs()`,
   so the live impulse is exactly the one replay re-applies.
 
-### One frame per fixed step (#444)
+### One row per fixed step (schema 3)
 
-`GamePhysicsController.stepPhysics()` runs once per render frame, but gameplay
-does not: a `FixedStepPacer` (`src/core/sim-clock.ts`) turns the render delta
-into 0..N whole steps (a stall catches up at most `MAX_FRAME_DT`), and each
-`stepFixed()` reads one input frame — live input, or the next tape frame —
-drives flippers and movers, hands the engine exactly one `FIXED_TIMESTEP`, then
-runs every score / lives / ball-path update. Only presentation (mesh
-interpolation by the pacer's alpha, camera, cosmetic effects) runs per render
-frame. So a tape holds one frame per physics step (schema 3) and a 144 Hz
-recording replays bit-for-bit at 30, 60 or 144 Hz
-(`tests/replay-snapshot-wasm.test.ts`). The C++ / Rapier accumulators only ever
-see whole steps; schema-2 tapes still load but were cut per render frame.
+Schema 1–2 recorded one `InputFrame` per `stepPhysics()` call — per **render**
+frame — and playback stepped the world with the viewer's own
+`engine.getDeltaTime()`, so a 144 Hz spectator ran a different number of fixed
+steps between taped inputs than a 60 Hz recorder.
+
+Schema 3 (`REPLAY_SCHEMA_VERSION = 3`) fixes the tape, not the solver:
+
+- **The controller owns the accumulator.** `GamePhysicsController.stepPhysics`
+  adds the clamped render dt (≤ 1/30 s) to its own `stepAccumulator` and runs
+  one **tick** per whole `FIXED_TIMESTEP`. A tick applies exactly one
+  `InputFrame`, drives the flipper hinges and movers, then calls
+  `physics.step(FIXED_TIMESTEP)` — so the Rapier accumulator, the C++ owner's
+  `PhysicsWorld::step` and the worker each take exactly one substep per tick.
+  Mesh interpolation uses the controller's remainder as alpha.
+- **Recording** happens inside that loop: one row per tick, so the tape index
+  is the step index since recording started (the same steps `simStepCount()`
+  counts). Live input is drained by a render frame's first tick; later ticks
+  of the same frame record an idle row whose flippers are `null` ("no change",
+  RLE `-`). A frame that runs no tick (a 144 Hz frame between steps) leaves the
+  input buffered.
+- **Playback** ignores what the viewer's dt *means*: it only decides how many
+  ticks a render frame runs, and each tick consumes exactly one row. At the
+  end of the tape it stops before stepping past the recording.
+- **Worker.** Each tick's `setHingeMotor` / mover commands and the `step` go
+  out in one ordered command batch, inputs first, so the step an input is
+  applied to is that tick's. Poses still come back a batch late on a real
+  Worker (the caveat in `docs/ASYNC_CHALLENGES_EPIC.md`).
+- **Schema 1–2 tapes still load** and play the old way — one row per render
+  frame, stepped with the viewer's dt — so they stay exact only at the
+  recorder's refresh rate.
+
+Pinned by `tests/replay-fixed-step.test.ts` (record at 60 / 144 Hz, replay at
+30 / 60 / 144 Hz: score, pose and state hash match; a schema-2 control drifts)
+and, on the compiled bundle, `tests/replay-snapshot-wasm.test.ts` /
+`tests/replay-worker-snapshot-wasm.test.ts` (`getStateHash()` at 30 / 60 /
+144 Hz on the owner and worker paths).
+
+Still per render frame, outside the tick loop: `updatePlungerFrame` (the
+plunger spring animation), and the `dt` handed to feeders, adventure zones,
+bumpers and caught-ball updates further down `stepPhysics`. Gameplay timers
+already read `simDt`; anything in that list that pushes a body is the next
+audit item.
 
 A replay also carries the cascade table it was recorded on (`cascade`:
 Daily Cascade / free seed), and `startGame()` plays it on that table — not the
 spectator's selection or today's daily — then gives the player theirs back.
+A weekly-machine tape carries `machine: 'weekly'` and is rebuilt from `seed`.
 
 A frame-0 snapshot whose linked bodies / hinges do not pair up with the live
 world (`id-layout`: the table descriptors differ) **rejects** the replay:
 `ReplayRunner.reject()` stops playback with the reason instead of letting a
 ghost drift under a toast.
 
-### Verifying tapes headless
+`npm run verify:replay` plays each `tests/replays/*.json` tape in the real game
+(headless Chromium, wasm-owner) and checks the C++ `getStateHash()`. Players'
+runs are verified the same way on the storage host (`services/replay-verifier`).
+Live spectate streams fingerprinted chunks; the spectator must land on each
+chunk's hash. Gates, traps, launchers and adventure clocks advance once per
+tick at `FIXED_TIMESTEP`; feeders still run once per render frame.
 
-`npm run verify:replay` (`scripts/verify-replay.mjs`) plays each
-`tests/replays/*.json` tape in the real game — headless Chromium, wasm-owner,
-render loop stopped, one step per frame, through `Game.playReplay` (the spectate
-path) — and prints `{ finalStateHash, score, steps }` (`finalStateHash` is the
-C++ `getStateHash()`). It fails on a refused snapshot or a golden mismatch.
-`--update` writes this build's numbers as the goldens (an intentional numeric
-change: commit them with a one-line rationale); `npm run record:replay`
-re-records a tape from its scenario when the tape itself is stale (snapshot
-version, table geometry) and keeps it only if a fresh page replays it.
-The native build is held to the WASM one by `npm run test:wasm-parity`, which
-compares the native and WASM `stateHash` at the snapshot frame.
-
-Players' runs are verified the same way on the storage host
-(`services/replay-verifier`, #444 Slice C): the harness is shared
-(`scripts/lib/replay-harness.mjs`), the build is the production `dist/` the run
-was recorded on (`buildId` on the tape), and the verdict lands on the score row
-(`docs/API_CONTRACT.md`, *Verification*).
-
-A fixed step touches no GPU state (#444 Slice E): the backbox reels, LCD
-overlay and jackpot texture mark themselves dirty during the step and draw
-once before the next rendered frame. Stepping without rendering — the
-verifier, a spectator fast-forwarding — therefore runs at CPU speed (~0.4 ms a
-step headless) however long the tape; before, a long tape stalled behind the
-page's pending shader compiles on every texture upload.
-
-Live spectate (#444 Slice E) checks the same property continuously: the
-player's run streams a chunk at a time with the C++ state hash and score after
-each chunk's last step, and the spectator's game, replaying with full
-presentation, must land on every one (`tests/live-spectate.spec.ts`: a player
-stepping headless, a spectator rendering, all chunks match).
-
-Not yet step-exact, so not verifiable:
-
-- **`wasm-worker` recordings.** The worker serves poses a frame late and TS
-  gameplay reads them; how late depends on message timing. So since #444 the
-  in-process owner is the default engine everywhere and the worker is opt-in
-  (`?physics=wasm-worker`); the replay verifier rejects worker runs as
-  unverifiable.
-- **A track switch mid-tape.** Starting an adventure track rebuilds the static
-  world at a step the tape does not record. Tapes that run a track from frame 0
-  (the corpus's scenario setup) verify; a campaign session that enters a track
-  mid-game does not, until the tape records session events.
-- **Physics tuning.** `getPhysicsTuningValue()` (nudge force, plunger impulse)
-  is not in the world fingerprint; a run with a tuned panel replays with the
-  spectator's values.
-- `src/game-elements/path-mechanics/` still resets on `setTimeout`; nothing
-  builds those mechanics today.
 
 ---
 
@@ -250,3 +262,4 @@ TS flipper drive reads — see the caveat in `docs/ASYNC_CHALLENGES_EPIC.md`.
    rejects, headless verifier + golden tape corpus (`tests/replays/`).~~
 6. ~~#444 Slice E: live spectate — fingerprinted tape chunks, a spectator one
    chunk behind; fixed steps do no GPU work.~~
+7. Next: move the remaining per-frame `dt` consumers that push bodies (feeders, plunger spring) onto the tick.

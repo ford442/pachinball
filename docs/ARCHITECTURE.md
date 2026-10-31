@@ -23,7 +23,7 @@ The codebase is organized into focused modules under `src/`. See [`AGENTS.md`](.
 | [`src/display/`](../src/display/) | Backbox display: WGSL reels (WebGPU), Canvas2D fallback, video/image layers |
 | [`src/effects/`](../src/effects/) | Visual/audio effects: bloom spikes, particles, camera shake, lighting |
 | [`src/materials/`](../src/materials/) | PBR material library (quality-tier aware) |
-| [`src/shaders/`](../src/shaders/) | Standalone WGSL/GLSL shaders (scanlines, LCD table, CRT, jackpot overlay) |
+| [`src/shaders/`](../src/shaders/) | Standalone shaders (CRT, jackpot overlay, cyber grid, LCD table, scanlines): GLSL for WebGL2, WGSL twins in `src/shaders/wgsl/` for WebGPU |
 | [`src/cabinet/`](../src/cabinet/) | Cabinet preset geometries (classic, neo, vertical, wide) |
 | [`src/adventure/`](../src/adventure/) | **Canonical** adventure track builders and `AdventureMode` orchestrator |
 | [`src/config/index.ts`](../src/config/index.ts) | Pure configuration (no Babylon imports) |
@@ -53,9 +53,12 @@ flowchart TB
     ZoneRegistry["zone-registry.ts"] --> AdventureTypes
   end
 
-  subgraph legacyRuntime [Legacy runtime - level-select only]
+  subgraph frontDoor [Campaign front door]
+    CampaignMap["adventure/ui/campaign-map.ts"] --> TrackCatalog
+  end
+
+  subgraph legacyRuntime [Legacy runtime - free-form progress only]
     AdventureState["adventure-state.ts"]
-    LevelSelect["level-select-screen.ts"] --> AdventureState
   end
 ```
 
@@ -67,7 +70,8 @@ flowchart TB
 | [`src/game-elements/adventure-track-progression.ts`](../src/game-elements/adventure-track-progression.ts) | `TRACK_CATALOG`, `AdventureTrackProgression` — campaign spine metadata (mode type, timers, unlock chain) |
 | [`src/game-elements/adventure-progression-supervisor.ts`](../src/game-elements/adventure-progression-supervisor.ts) | Portal lifecycle + campaign state machine |
 | [`src/game-elements/zone-registry.ts`](../src/game-elements/zone-registry.ts) | Per-track theming / story / music metadata |
-| [`src/adventure/adventure-state.ts`](../src/adventure/adventure-state.ts) | **Legacy** level-select UI + cosmetic rewards only — not campaign truth |
+| [`src/adventure/ui/campaign-map.ts`](../src/adventure/ui/campaign-map.ts) | Campaign stage map overlay — spine + branches with completion, Nexus Archive rewards |
+| [`src/adventure/adventure-state.ts`](../src/adventure/adventure-state.ts) | **Legacy** free-form progress + cosmetic rewards only — not campaign truth |
 | [`docs/ADVENTURE_CAMPAIGN.md`](ADVENTURE_CAMPAIGN.md) | Campaign A/B alternation reference |
 
 ### Campaign vs legacy progression
@@ -75,7 +79,7 @@ flowchart TB
 | System | Purpose |
 |--------|---------|
 | `AdventureTrackProgression` + `AdventureProgressionSupervisor` | **Campaign truth** — A/B alternating track loop, portal routing, unlock chain |
-| `AdventureState` + `ADVENTURE_LEVELS` | **Legacy** — free-form level-select screen, cosmetic reward equip (ball trail, skin) |
+| `AdventureState` | **Legacy** — persisted free-form progress, cosmetic reward equip (ball trail, skin). The level-select screen and `ADVENTURE_LEVELS` are retired. |
 
 These are intentionally separated. Do not add campaign features to `AdventureState`.
 
@@ -109,8 +113,15 @@ portal anchors, and `buildTrack()` switch case).
    - See [`docs/TRACK_SCHEMA.md`](TRACK_SCHEMA.md) for the field reference.
 4. **TS-builder path** (`buildKind: 'ts'`):
    - Create the builder in [`src/adventure/tracks/<name>.ts`](../src/adventure/tracks/)
-   - Reference it directly as the manifest's `builder` — there is no separate
+     as `(builder: TrackBuilderApi) => void`. It builds only through
+     [`TrackBuilderApi`](../src/adventure/track-builder-api.ts) (primitives, materials,
+     collider emission, the scene and the per-track lists); if it needs more, extend that
+     interface — never reach into `TrackBuilder` with a cast. `npm run check:unknown-casts`
+     holds `as unknown as` under `src/adventure` at zero.
+   - Reference it directly as the manifest's `loadBuilder` — there is no separate
      dispatch table to update.
+   - Its build is pinned in [`tests/ts-track-footprint.test.ts`](../tests/ts-track-footprint.test.ts);
+     add it there. Prefer the JSON path for new tracks (#489 retires the TS one).
    - Export from [`src/adventure/index.ts`](../src/adventure/index.ts) if needed externally.
 5. `switchToTrack` validates JSON tracks fail-closed — an invalid track is rejected
    without tearing down physics. `buildTrack` likewise refuses to build (and records
@@ -119,7 +130,7 @@ portal anchors, and `buildTrack()` switch case).
    and [`tests/track-schema.test.ts`](../tests/track-schema.test.ts) as appropriate.
 
 `TrackManifest` is a discriminated union on `buildKind`: a `'ts'` entry must supply a
-`builder`, a `'json'` entry a `dataPath`, so the compiler rejects a half-registered
+`loadBuilder`, a `'json'` entry a `dataPath`, so the compiler rejects a half-registered
 track. `TRACK_CATALOG` and `ZONE_REGISTRY` are **derived** from manifests — do not edit
 them directly. `AdventureMode.buildTrack()` dispatches via `getTrackManifest()` — no
 switch case needed.

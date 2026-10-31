@@ -1,20 +1,26 @@
 /**
- * Zone Trigger System - Dynamic Adventure Mode Zone Detection
- * 
- * Tracks ball position and triggers zone transitions when the ball
- * crosses into new zones. Works with DynamicScenario configurations
- * to enable multi-zone maps with seamless transitions.
- * 
- * Features:
- * - Position-based zone detection (3D bounding boxes)
- * - Smooth zone transition debouncing (prevents flickering)
- * - Integration with path mechanics for zone-specific gameplay
- * - Callback system for Game.ts to handle visual/audio changes
+ * Zone Trigger System - Dynamic Adventure Mode zone policy
+ *
+ * Spatial tests live in the physics engine. Every zone (a scenario zone, an
+ * obstacle's footprint, an exit portal) is a ball-filtered sensor volume, and
+ * the engine reports when a ball begins and stops overlapping it — swept over
+ * the substep, so a zone thinner than one frame of travel is still entered,
+ * and on the worker the contacts arrive with the step result instead of being
+ * re-derived from a pose a frame late. This class holds only what the engine
+ * cannot know:
+ *
+ * - which zone is current / previous, and whether a transition is major
+ * - the boundary-flicker debounce, counted in sim steps (`simClockSteps()`),
+ *   never wall time, so a replay debounces exactly as the live run did
+ * - the callbacks `Game` uses for visuals, audio and portal entry
+ *
+ * Feed it with `contactBegin` / `contactEnd` (CollisionDispatcher does). Camera
+ * cuts and score rules stay in the callbacks; nothing here polls a position.
  */
 
-import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import type { PhysicsBody } from '../core/physics-api'
 import { parseHexColorUnit } from '../core/color'
+import type { PhysicsBody } from '../core/physics-api'
+import { FIXED_TIMESTEP, simClockSteps } from '../core/sim-clock'
 import type { DynamicScenario, ScenarioZone } from './dynamic-scenarios'
 
 export interface ZoneBounds {
@@ -26,15 +32,23 @@ export interface ZoneBounds {
   maxY?: number
 }
 
+/** Vertical extent of a zone that does not declare one (a scenario zone spans the whole table). */
+export const ZONE_MIN_Y = -5
+export const ZONE_MAX_Y = 30
+
+/**
+ * Re-entry window, in fixed sim steps: the former 200 ms boundary debounce.
+ * A ball that touches a zone's edge, leaves and returns inside this window is
+ * one visit, not three.
+ */
+export const ZONE_DEBOUNCE_STEPS = Math.round(200 / (FIXED_TIMESTEP * 1000))
+
 export interface ZoneTriggerCallback {
   onZoneEnter: (zone: ScenarioZone, fromZone: ScenarioZone | null, isMajor: boolean) => void
   onZoneExit?: (zone: ScenarioZone, toZone: ScenarioZone | null) => void
-  onZoneProgress?: (zone: ScenarioZone, progress: number) => void
   /**
-   * Fired when the ball enters the AABB region of a registered exit-portal zone.
-   * This is a convenience extension of `onZoneEnter` that carries typed portal
-   * metadata.  Fired at most once per portal-zone entry (debounced with the
-   * standard zone-transition timer).
+   * Fired when a ball begins overlapping a registered exit-portal sensor, right
+   * after `onZoneEnter` for the same entry. Carries the typed portal metadata.
    *
    * @param portalId   The portal zone id (e.g. `NEON_HELIX-exit-portal`).
    * @param kind       Whether this is a success or timeout portal.
@@ -42,465 +56,360 @@ export interface ZoneTriggerCallback {
   onPortalContact?: (portalId: string, kind: 'success' | 'timeout') => void
 }
 
-export interface ActiveZone {
+/**
+ * Where zone volumes live in the physics world. `ZoneSensors` is the real one;
+ * tests pass a fake. Every volume is a sensor filtered to the ball group.
+ */
+export interface ZoneSensorSink {
+  /** Author a new sensor volume for zone `id` from its bounds (replaces an earlier one). */
+  author(id: string, bounds: ZoneBounds): void
+  /** Claim an existing sensor body (an adventure exit portal's) as zone `id`. */
+  adopt(id: string, bodyHandle: number): void
+  /** Drop zone `id`'s mapping and remove the body if it was authored here. */
+  release(id: string): void
+  /** The zone a physics body stands for, or null. */
+  zoneIdOf(bodyHandle: number): string | null
+  /** Bodies authored here — the owner path exports these with the table. */
+  bodies(): readonly PhysicsBody[]
+  dispose(): void
+}
+
+type PortalKind = 'success' | 'timeout'
+
+interface ZoneEntry {
   zone: ScenarioZone
-  bounds: ZoneBounds
-  entryTime: number
-  entryPosition: Vector3
+  portalKind?: PortalKind
+  /** Loaded by `loadScenario` (replaced with the next scenario) rather than registered ad hoc. */
+  fromScenario: boolean
+  /** Balls currently overlapping the zone's sensor. */
+  occupants: Set<number>
+  /** `onZoneEnter` was delivered for this visit and no exit has balanced it yet. */
+  announced: boolean
+  enteredAtStep: number
+  /** Sim step an exit was held back for the debounce window; null when none. */
+  heldExitAtStep: number | null
 }
 
 /**
- * Zone Trigger System - Monitors ball position and triggers zone transitions
+ * Zone Trigger System - turns sensor contacts into zone transitions
  */
 export class ZoneTriggerSystem {
   private scenario: DynamicScenario | null = null
-  private activeZones: Map<string, ActiveZone> = new Map()
+  private zones: Map<string, ZoneEntry> = new Map()
   private currentZoneId: string | null = null
   private previousZoneId: string | null = null
-  
-  // Debounce timing to prevent zone flicker at boundaries
-  private readonly ZONE_DEBOUNCE_MS = 200
-  private lastTransitionTime = -Infinity
-  
-  // Progress tracking for current zone
-  private zoneEntryPosition: Vector3 | null = null
-  
-  // Callbacks
+  /** The current zone's `onZoneExit` has been delivered, so a later transition does not repeat it. */
+  private currentExitFired = false
+  private sensors: ZoneSensorSink | null = null
   private callback: ZoneTriggerCallback | null = null
-  
-  /** Maps portal zone ids → kind so handleZoneTransition can fire onPortalContact. */
-  private portalZoneKinds: Map<string, 'success' | 'timeout'> = new Map()
-
-  // Debug mode
-  private debug = false
-
-  // Per-ball zone entry counter for scoring coverage instrumentation
+  private extraCallbacks: Set<Partial<ZoneTriggerCallback>> = new Set()
   private zoneEntriesThisBall = 0
 
-  constructor(debug = false) {
-    this.debug = debug
+  /** `clock` is `simClockSteps` in the game, a test-controlled counter in tests. */
+  constructor(private readonly debug = false, private readonly clock: () => number = simClockSteps) {}
+
+  /** Attach the physics-side sensor registry (before any zone is registered). */
+  setSensors(sensors: ZoneSensorSink | null): void {
+    this.sensors = sensors
   }
 
-  /**
-   * Register an ad-hoc obstacle zone (not part of a loaded scenario)
-   */
+  /** Bodies the owner path must export with the table (the authored zone volumes). */
+  getSensorBodies(): readonly PhysicsBody[] {
+    return this.sensors?.bodies() ?? []
+  }
+
+  /** The zone a physics body is the sensor of, or null. CollisionDispatcher routes contacts with it. */
+  zoneIdOfBody(bodyHandle: number): string | null {
+    return this.sensors?.zoneIdOf(bodyHandle) ?? null
+  }
+
+  /** Register an ad-hoc obstacle zone (not part of a loaded scenario). */
   registerObstacleZone(id: string, bounds: ZoneBounds, metadata?: Record<string, unknown>): void {
-    const syntheticZone: ScenarioZone = {
-      id,
-      name: id,
-      position: { x: (bounds.minX + bounds.maxX) / 2, z: (bounds.minZ + bounds.maxZ) / 2 },
-      width: bounds.maxX - bounds.minX,
-      depth: bounds.maxZ - bounds.minZ,
-      mapConfig: {
-        baseColor: (metadata?.['color'] as string) || '#ffffff',
-        accentColor: '#000000',
-        backgroundPattern: 'hex',
-        scanlineIntensity: 0.1,
-        glowIntensity: 0.3,
-        animationSpeed: 0,
-      },
-      mechanics: [],
-      storyText: `Obstacle zone: ${id}`,
-      musicTrack: 'default',
-    }
-
-    this.activeZones.set(id, {
-      zone: syntheticZone,
-      bounds,
-      entryTime: 0,
-      entryPosition: Vector3.Zero(),
-    })
-
-    if (this.debug) {
-      console.log(`[ZoneTriggerSystem] Registered obstacle zone: ${id}`)
-    }
+    this.addZone(id, syntheticZone(id, bounds, metadata), false)
+    this.sensors?.author(id, bounds)
   }
 
   /**
-   * Unregister an obstacle zone
+   * Register an exit-portal zone from bounds, authoring its sensor, so that
+   * `onPortalContact` fires when a ball enters it. Portal ids follow
+   * `<trackId>-exit-portal`; `kind` is `'success'` for a win, `'timeout'` for the escape portal.
    */
+  registerPortalZone(id: string, bounds: ZoneBounds, kind: PortalKind): void {
+    this.addZone(id, syntheticZone(id, bounds, { portalKind: kind }), false, kind)
+    this.sensors?.author(id, bounds)
+  }
+
+  /**
+   * Register an exit portal whose sensor body already exists — the adventure
+   * track's cylinder, on `ADVENTURE_GROUP`. No second volume is authored; the
+   * body's contacts reach this zone until it is unregistered.
+   */
+  registerPortalBody(id: string, bodyHandle: number, kind: PortalKind): void {
+    this.addZone(id, syntheticZone(id, { minX: 0, maxX: 0, minZ: 0, maxZ: 0 }, { portalKind: kind }), false, kind)
+    this.sensors?.adopt(id, bodyHandle)
+  }
+
+  /** Unregister an obstacle zone. Safe if it was never registered. */
   unregisterObstacleZone(id: string): void {
-    if (this.activeZones.has(id)) {
-      this.activeZones.delete(id)
-      if (this.currentZoneId === id) {
-        this.currentZoneId = null
-      }
-      if (this.previousZoneId === id) {
-        this.previousZoneId = null
-      }
-      if (this.debug) {
-        console.log(`[ZoneTriggerSystem] Unregistered obstacle zone: ${id}`)
-      }
-    }
+    this.removeZone(id)
   }
 
-  /**
-   * Register an exit-portal AABB zone so that `onPortalContact` is fired when
-   * the ball enters it.  Internally delegates to `registerObstacleZone` and
-   * records the kind so `handleZoneTransition` can route it correctly.
-   *
-   * Convention: portal zone ids follow the pattern `<trackId>-exit-portal`
-   * (e.g. `NEON_HELIX-exit-portal`).
-   *
-   * @param id     Unique portal zone id.
-   * @param bounds AABB bounding box of the portal sensor.
-   * @param kind   `'success'` when the portal is lit for a win,
-   *               `'timeout'` when it is the escape portal on time-up.
-   */
-  registerPortalZone(id: string, bounds: ZoneBounds, kind: 'success' | 'timeout'): void {
-    this.registerObstacleZone(id, bounds, { portalKind: kind })
-    this.portalZoneKinds.set(id, kind)
-    if (this.debug) {
-      console.log(`[ZoneTriggerSystem] Registered portal zone: ${id} (${kind})`)
-    }
-  }
-
-  /**
-   * Unregister a portal zone and remove its kind mapping.  Safe to call if
-   * the zone was never registered.
-   */
+  /** Unregister a portal zone. Safe if it was never registered (every portal deactivation path calls it). */
   unregisterPortalZone(id: string): void {
-    this.unregisterObstacleZone(id)
-    this.portalZoneKinds.delete(id)
-    if (this.debug) {
-      console.log(`[ZoneTriggerSystem] Unregistered portal zone: ${id}`)
-    }
+    this.removeZone(id)
   }
 
-  /**
-   * Load a scenario and initialize zone detection
-   */
+  /** Load a scenario: its zones replace the previous scenario's; ad-hoc obstacle and portal zones stay. */
   loadScenario(scenario: DynamicScenario): void {
+    this.removeZones((entry) => entry.fromScenario)
     this.scenario = scenario
-    this.activeZones.clear()
-    this.currentZoneId = null
-    this.previousZoneId = null
-    this.zoneEntryPosition = null
-    
-    // Pre-calculate zone bounds from scenario zones
     for (const zone of scenario.zones) {
-      const bounds: ZoneBounds = {
-        minX: zone.position.x - zone.width / 2,
-        maxX: zone.position.x + zone.width / 2,
-        minZ: zone.position.z - zone.depth / 2,
-        maxZ: zone.position.z + zone.depth / 2,
-        minY: -5, // Allow some vertical tolerance
-        maxY: 30, // Ceiling for zone detection
-      }
-      
-      this.activeZones.set(zone.id, {
-        zone,
-        bounds,
-        entryTime: 0,
-        entryPosition: Vector3.Zero(),
-      })
+      this.addZone(zone.id, zone, true)
+      this.sensors?.author(zone.id, createZoneBounds(zone))
     }
-    
-    if (this.debug) {
-      console.log(`[ZoneTriggerSystem] Loaded scenario: ${scenario.name} with ${scenario.zones.length} zones`)
-    }
+    if (this.debug) console.log(`[ZoneTriggerSystem] Loaded scenario: ${scenario.name} with ${scenario.zones.length} zones`)
   }
 
-  /**
-   * Set the callback for zone events
-   */
+  /** Drop the loaded scenario's zones and callback; obstacle and portal zones stay. */
+  unloadScenario(): void {
+    this.removeZones((entry) => entry.fromScenario)
+    this.scenario = null
+    this.callback = null
+  }
+
+  /** Set the callback for zone events (the scenario's; replaces the previous one). */
   setCallback(callback: ZoneTriggerCallback): void {
     this.callback = callback
   }
 
+  /** Add a listener that survives `setCallback` — wiring that outlives any scenario, such as portal entry. */
+  addCallback(callback: Partial<ZoneTriggerCallback>): () => void {
+    this.extraCallbacks.add(callback)
+    return () => {
+      this.extraCallbacks.delete(callback)
+    }
+  }
+
   /**
-   * Update zone detection based on ball position
-   * Call this every frame from the game loop
+   * A ball began overlapping zone `zoneId`'s sensor. `ballKey` is the ball's
+   * dispatch key; a zone with several balls inside is entered by the first and left by the last.
    */
-  update(ballBodies: PhysicsBody[]): void {
-    if (this.activeZones.size === 0 || ballBodies.length === 0) {
+  contactBegin(zoneId: string, ballKey: number): void {
+    const entry = this.zones.get(zoneId)
+    if (!entry) return
+    const now = this.clock()
+    this.flushHeldExits(now)
+
+    // A repeat begin for a ball already inside is not an entry (static ids shift when
+    // the table is re-exported, and the engine then reports the same overlap again).
+    if (entry.occupants.has(ballKey)) return
+    entry.occupants.add(ballKey)
+    if (entry.occupants.size > 1) return
+
+    if (entry.heldExitAtStep !== null) {
+      const flicker = within(entry.heldExitAtStep, now)
+      entry.heldExitAtStep = null
+      if (flicker) return // straight back across the edge: still the same visit
+      this.announceExit(entry, null)
+    }
+    this.announceEnter(entry, now)
+  }
+
+  /** A ball stopped overlapping zone `zoneId`'s sensor. */
+  contactEnd(zoneId: string, ballKey: number): void {
+    const entry = this.zones.get(zoneId)
+    if (!entry) return
+    const now = this.clock()
+    this.flushHeldExits(now)
+
+    // An end for a ball that was never inside (a stale pair from before a re-export) is not an exit.
+    if (!entry.occupants.delete(ballKey)) return
+    if (entry.occupants.size > 0 || !entry.announced) return
+
+    // An exit this soon after the entry is edge jitter: hold it for the next begin to cancel,
+    // or the next zone event to confirm.
+    if (within(entry.enteredAtStep, now)) {
+      entry.heldExitAtStep = now
       return
     }
-    
-    // Use the first ball for zone detection (primary ball)
-    const ball = ballBodies[0]
-    const pos = ball.translation()
-    const ballPos = new Vector3(pos.x, pos.y, pos.z)
-    
-    // Find which zone the ball is currently in
-    const containingZone = this.findContainingZone(ballPos)
-    
-    // Check for zone transition
-    if (containingZone && containingZone.zone.id !== this.currentZoneId) {
-      this.handleZoneTransition(containingZone, ballPos)
-    } else if (!containingZone && this.currentZoneId) {
-      // Ball left all zones (in transition area)
-      this.handleZoneExit(null)
-    }
-    
-    // Update progress within current zone
-    if (containingZone && this.callback?.onZoneProgress) {
-      const progress = this.calculateZoneProgress(containingZone, ballPos)
-      this.callback.onZoneProgress(containingZone.zone, progress)
+    this.announceExit(entry, null)
+  }
+
+  /** Announce the exits held back for the debounce window that have since proven real. */
+  private flushHeldExits(now: number): void {
+    for (const entry of this.zones.values()) {
+      if (entry.heldExitAtStep === null || entry.occupants.size > 0 || within(entry.heldExitAtStep, now)) continue
+      entry.heldExitAtStep = null
+      this.announceExit(entry, null)
     }
   }
 
-  /**
-   * Find which zone contains the given position
-   */
-  private findContainingZone(position: Vector3): ActiveZone | null {
-    for (const activeZone of this.activeZones.values()) {
-      if (this.isPositionInZone(position, activeZone.bounds)) {
-        return activeZone
-      }
-    }
-    return null
-  }
+  private announceEnter(entry: ZoneEntry, now: number): void {
+    const zone = entry.zone
 
-  /**
-   * Check if position is within zone bounds
-   */
-  private isPositionInZone(position: Vector3, bounds: ZoneBounds): boolean {
-    return (
-      position.x >= bounds.minX &&
-      position.x <= bounds.maxX &&
-      position.z >= bounds.minZ &&
-      position.z <= bounds.maxZ &&
-      (bounds.minY === undefined || position.y >= bounds.minY) &&
-      (bounds.maxY === undefined || position.y <= bounds.maxY)
-    )
-  }
-
-  /**
-   * Handle zone transition
-   */
-  private handleZoneTransition(newZone: ActiveZone, entryPosition: Vector3): void {
-    const now = performance.now()
-    
-    // Debounce: prevent rapid zone switching
-    if (now - this.lastTransitionTime < this.ZONE_DEBOUNCE_MS) {
-      return
+    // Leaving the current zone for this one (zones may overlap, so it can still be occupied).
+    if (this.currentZoneId && this.currentZoneId !== zone.id && !this.currentExitFired) {
+      const leaving = this.zones.get(this.currentZoneId)
+      if (leaving) this.announceExit(leaving, zone)
     }
-    
-    // Update previous zone
+
     this.previousZoneId = this.currentZoneId
-    
-    // Exit current zone if any
-    if (this.currentZoneId) {
-      const previousZone = this.activeZones.get(this.currentZoneId)
-      if (previousZone) {
-        this.handleZoneExit(newZone.zone)
+    this.currentZoneId = zone.id
+    this.currentExitFired = false
+    entry.announced = true
+    entry.enteredAtStep = now
+    this.zoneEntriesThisBall++
+
+    const previous = this.previousZoneId ? this.zones.get(this.previousZoneId)?.zone ?? null : null
+    const isMajor = isMajorTransition(previous, zone)
+    if (this.debug) console.log(`[ZoneTriggerSystem] Zone transition: ${previous?.id ?? null} -> ${zone.id} (${isMajor ? 'MAJOR' : 'minor'})`)
+
+    this.emit((cb) => cb.onZoneEnter?.(zone, previous, isMajor))
+    const kind = entry.portalKind
+    if (kind !== undefined) this.emit((cb) => cb.onPortalContact?.(zone.id, kind))
+  }
+
+  private announceExit(entry: ZoneEntry, toZone: ScenarioZone | null): void {
+    entry.announced = false
+    // The current zone stays current until another is entered: this only reports the exit.
+    if (this.currentZoneId !== entry.zone.id || this.currentExitFired) return
+    this.currentExitFired = true
+    this.emit((cb) => cb.onZoneExit?.(entry.zone, toZone))
+  }
+
+  /** Invoke every callback; one that throws cannot starve the rest. */
+  private emit(invoke: (cb: Partial<ZoneTriggerCallback>) => void): void {
+    const targets = this.callback ? [this.callback, ...this.extraCallbacks] : [...this.extraCallbacks]
+    for (const cb of targets) {
+      try {
+        invoke(cb)
+      } catch (err) {
+        console.error('[ZoneTriggerSystem] zone callback threw', err)
       }
     }
-    
-    // Enter new zone
-    this.currentZoneId = newZone.zone.id
-    newZone.entryTime = now
-    newZone.entryPosition = entryPosition.clone()
-    this.zoneEntryPosition = entryPosition.clone()
-    this.lastTransitionTime = now
-    this.zoneEntriesThisBall++
-    
-    // Determine if this is a major transition
-    const isMajor = this.isMajorZoneTransition(this.previousZoneId, this.currentZoneId)
-    
-    // Get previous zone for callback
-    const previousZone = this.previousZoneId ? this.activeZones.get(this.previousZoneId)?.zone || null : null
-    
-    if (this.debug) {
-      console.log(`[ZoneTriggerSystem] Zone transition: ${this.previousZoneId} -> ${this.currentZoneId} (${isMajor ? 'MAJOR' : 'minor'})`)
+  }
+
+  private addZone(id: string, zone: ScenarioZone, fromScenario: boolean, portalKind?: PortalKind): void {
+    this.removeZone(id)
+    this.zones.set(id, {
+      zone,
+      ...(portalKind !== undefined ? { portalKind } : {}),
+      fromScenario,
+      occupants: new Set(),
+      announced: false,
+      enteredAtStep: 0,
+      heldExitAtStep: null,
+    })
+  }
+
+  /** Forget a zone and its sensor. */
+  private removeZone(id: string): void {
+    this.zones.delete(id)
+    this.sensors?.release(id)
+    if (this.currentZoneId === id) this.currentZoneId = null
+    if (this.previousZoneId === id) this.previousZoneId = null
+  }
+
+  private removeZones(matching: (entry: ZoneEntry) => boolean): void {
+    for (const [id, entry] of [...this.zones]) {
+      if (matching(entry)) this.removeZone(id)
     }
-    
-    // Trigger callback
-    this.callback?.onZoneEnter(newZone.zone, previousZone, isMajor)
-
-    // If the entered zone is a portal zone, fire the typed portal callback as well
-    const portalKind = this.portalZoneKinds.get(newZone.zone.id)
-    if (portalKind !== undefined) {
-      this.callback?.onPortalContact?.(newZone.zone.id, portalKind)
-    }
   }
 
-  /**
-   * Handle zone exit
-   */
-  private handleZoneExit(toZone: ScenarioZone | null): void {
-    if (!this.currentZoneId) return
-    
-    const exitingZone = this.activeZones.get(this.currentZoneId)
-    if (!exitingZone) return
-    
-    // Zone exit tracking
-    
-    if (this.debug) {
-      console.log(`[ZoneTriggerSystem] Zone exit: ${exitingZone.zone.id} -> ${toZone?.id || 'none'}`)
-    }
-    
-    this.callback?.onZoneExit?.(exitingZone.zone, toZone)
-    
-    // Don't clear currentZoneId immediately - wait for new zone entry
-    // This prevents flickering in transition areas
-  }
-
-  /**
-   * Calculate progress through current zone (0-1)
-   */
-  private calculateZoneProgress(activeZone: ActiveZone, currentPosition: Vector3): number {
-    const bounds = activeZone.bounds
-    
-    // Calculate progress based on Z position (assuming forward progression)
-    const zoneDepth = bounds.maxZ - bounds.minZ
-    const progress = (currentPosition.z - bounds.minZ) / zoneDepth
-    
-    return Math.max(0, Math.min(1, progress))
-  }
-
-  /**
-   * Determine if transition between zones is major (triggers stronger effects)
-   */
-  private isMajorZoneTransition(fromId: string | null, toId: string): boolean {
-    if (!fromId) return true // First entry is always major
-    if (fromId === toId) return false
-    
-    // Get zone configs
-    const fromZone = this.activeZones.get(fromId)?.zone
-    const toZone = this.activeZones.get(toId)?.zone
-    
-    if (!fromZone || !toZone) return true
-    
-    // Major transition if theme changes significantly
-    // This is determined by comparing map configs
-    const fromPattern = fromZone.mapConfig.backgroundPattern
-    const toPattern = toZone.mapConfig.backgroundPattern
-    
-    // Major if pattern type changes
-    if (fromPattern !== toPattern) return true
-    
-    // Major if color changes significantly (compare hue difference)
-    const fromColor = parseHexColorUnit(fromZone.mapConfig.baseColor)
-    const toColor = parseHexColorUnit(toZone.mapConfig.baseColor)
-    const colorDistance = this.calculateColorDistance(fromColor, toColor)
-    
-    // Major if color distance is large
-    if (colorDistance > 0.5) return true
-    
-    return false
-  }
-
-
-  /**
-   * Calculate Euclidean distance between two colors (normalized 0-1)
-   */
-  private calculateColorDistance(c1: { r: number; g: number; b: number }, c2: { r: number; g: number; b: number }): number {
-    const dr = c1.r - c2.r
-    const dg = c1.g - c2.g
-    const db = c1.b - c2.b
-    return Math.sqrt(dr * dr + dg * dg + db * db) / Math.sqrt(3)
-  }
-
-  /**
-   * Get current zone ID
-   */
   getCurrentZoneId(): string | null {
     return this.currentZoneId
   }
 
-  /**
-   * Get current zone config
-   */
   getCurrentZone(): ScenarioZone | null {
-    if (!this.currentZoneId) return null
-    return this.activeZones.get(this.currentZoneId)?.zone || null
+    return this.currentZoneId ? this.zones.get(this.currentZoneId)?.zone ?? null : null
   }
 
-  /**
-   * Get previous zone ID
-   */
   getPreviousZoneId(): string | null {
     return this.previousZoneId
   }
 
-  /**
-   * Get all zones in current scenario
-   */
+  /** Zones of the loaded scenario. */
   getAllZones(): ScenarioZone[] {
-    if (!this.scenario) return []
-    return this.scenario.zones
+    return this.scenario?.zones ?? []
   }
 
-  /**
-   * Check if ball is in any zone
-   */
   isInZone(): boolean {
     return this.currentZoneId !== null
   }
 
-  /**
-   * Get zone progress (0-1) for current zone
-   */
-  getCurrentZoneProgress(): number {
-    if (!this.currentZoneId || !this.zoneEntryPosition) return 0
-    
-    const activeZone = this.activeZones.get(this.currentZoneId)
-    if (!activeZone) return 0
-    
-    // Return cached progress from last update
-    const bounds = activeZone.bounds
-    const zoneDepth = bounds.maxZ - bounds.minZ
-    return (activeZone.entryPosition.z - bounds.minZ) / zoneDepth
-  }
-
-  /** Per-ball zone entry count (instrumentation) */
+  /** Per-ball zone entry count (instrumentation). */
   getZoneEntriesThisBall(): number {
     return this.zoneEntriesThisBall
   }
 
-  /** Reset per-ball counters (called on new ball launch) */
+  /** Reset per-ball counters (called on new ball launch). */
   resetBallCounters(): void {
     this.zoneEntriesThisBall = 0
   }
 
-  /**
-   * Clear all obstacle zones registered via registerObstacleZone / registerPortalZone
-   * without destroying the scenario-loaded zones.
-   */
+  /** Clear the ad-hoc obstacle and portal zones (and their sensors); scenario zones stay. */
   clearObstacleZones(): void {
-    // Remove obstacle zones (ids that are not in the current scenario)
-    const scenarioZoneIds = new Set(this.scenario?.zones.map(z => z.id) ?? [])
-    for (const id of this.activeZones.keys()) {
-      if (!scenarioZoneIds.has(id)) {
-        this.activeZones.delete(id)
-      }
-    }
-    this.portalZoneKinds.clear()
-    if (this.currentZoneId && !this.activeZones.has(this.currentZoneId)) {
-      this.currentZoneId = null
-    }
-    if (this.previousZoneId && !this.activeZones.has(this.previousZoneId)) {
-      this.previousZoneId = null
-    }
+    this.removeZones((entry) => !entry.fromScenario)
   }
 
-  /**
-   * Reset the zone system
-   */
   reset(): void {
     this.currentZoneId = null
     this.previousZoneId = null
-    this.zoneEntryPosition = null
-    this.lastTransitionTime = 0
-    
-    // Reset entry times
-    for (const activeZone of this.activeZones.values()) {
-      activeZone.entryTime = 0
+    this.currentExitFired = false
+    for (const entry of this.zones.values()) {
+      entry.occupants.clear()
+      entry.announced = false
+      entry.enteredAtStep = 0
+      entry.heldExitAtStep = null
     }
   }
 
-  /**
-   * Clean up resources
-   */
   dispose(): void {
-    this.activeZones.clear()
-    this.portalZoneKinds.clear()
+    this.removeZones(() => true)
+    this.sensors?.dispose()
+    this.sensors = null
     this.scenario = null
     this.callback = null
+    this.extraCallbacks.clear()
     this.reset()
   }
+}
+
+/** `last` and `now` are on the same clock and closer than the debounce; a clock that went backwards never debounces. */
+function within(last: number, now: number): boolean {
+  return now >= last && now - last < ZONE_DEBOUNCE_STEPS
+}
+
+/** Zone placeholder for something that is not a scenario zone (an obstacle footprint, an exit portal). */
+function syntheticZone(id: string, bounds: ZoneBounds, metadata?: Record<string, unknown>): ScenarioZone {
+  return {
+    id,
+    name: id,
+    position: { x: (bounds.minX + bounds.maxX) / 2, z: (bounds.minZ + bounds.maxZ) / 2 },
+    width: bounds.maxX - bounds.minX,
+    depth: bounds.maxZ - bounds.minZ,
+    mapConfig: {
+      baseColor: (metadata?.['color'] as string) || '#ffffff',
+      accentColor: '#000000',
+      backgroundPattern: 'hex',
+      scanlineIntensity: 0.1,
+      glowIntensity: 0.3,
+      animationSpeed: 0,
+    },
+    mechanics: [],
+    storyText: `Obstacle zone: ${id}`,
+    musicTrack: 'default',
+  }
+}
+
+/** A first entry is always major; otherwise a change of pattern or a large colour shift is. */
+function isMajorTransition(from: ScenarioZone | null, to: ScenarioZone): boolean {
+  if (!from) return true
+  if (from.id === to.id) return false
+  if (from.mapConfig.backgroundPattern !== to.mapConfig.backgroundPattern) return true
+  const a = parseHexColorUnit(from.mapConfig.baseColor)
+  const b = parseHexColorUnit(to.mapConfig.baseColor)
+  return Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b) / Math.sqrt(3) > 0.5
 }
 
 /**
@@ -512,56 +421,7 @@ export function createZoneBounds(zone: ScenarioZone): ZoneBounds {
     maxX: zone.position.x + zone.width / 2,
     minZ: zone.position.z - zone.depth / 2,
     maxZ: zone.position.z + zone.depth / 2,
-    minY: -5,
-    maxY: 30,
+    minY: ZONE_MIN_Y,
+    maxY: ZONE_MAX_Y,
   }
 }
-
-/**
- * Check if two zones are adjacent (for transition optimization)
- */
-export function areZonesAdjacent(zone1: ScenarioZone, zone2: ScenarioZone): boolean {
-  const dx = Math.abs(zone1.position.x - zone2.position.x)
-  const dz = Math.abs(zone1.position.z - zone2.position.z)
-  
-  const widthSum = (zone1.width + zone2.width) / 2
-  const depthSum = (zone1.depth + zone2.depth) / 2
-  
-  // Zones are adjacent if they're close enough
-  return dx < widthSum + 2 && dz < depthSum + 2
-}
-
-/**
- * Get the recommended transition type between zones
- */
-export function getZoneTransitionType(
-  fromZone: ScenarioZone | null,
-  toZone: ScenarioZone
-): 'instant' | 'fade' | 'crossfade' | 'wipe' {
-  if (!fromZone) return 'fade'
-  
-  // Use crossfade for major theme changes
-  const colorDistance = calculateHexColorDistance(
-    fromZone.mapConfig.baseColor,
-    toZone.mapConfig.baseColor
-  )
-  
-  if (colorDistance > 0.6) return 'crossfade'
-  if (colorDistance > 0.3) return 'fade'
-  if (areZonesAdjacent(fromZone, toZone)) return 'wipe'
-  
-  return 'instant'
-}
-
-/**
- * Calculate color distance between two hex colors
- */
-function calculateHexColorDistance(hex1: string, hex2: string): number {
-  const c1 = parseHexColorUnit(hex1)
-  const c2 = parseHexColorUnit(hex2)
-  const dr = c1.r - c2.r
-  const dg = c1.g - c2.g
-  const db = c1.b - c2.b
-  return Math.sqrt(dr * dr + dg * dg + db * db) / Math.sqrt(3)
-}
-

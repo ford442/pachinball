@@ -6,20 +6,20 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilder } from '../track-builder'
+import type { TrackBuilderApi } from '../track-builder-api'
 import { boxDesc } from '../track-collider-descriptors'
-import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 
-export function buildMagneticStorage(builder: TrackBuilder): void {
-  const storageMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#222222")
-  const laserMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FF0000")
+export function buildMagneticStorage(builder: TrackBuilderApi): void {
+  const storageMat = builder.getTrackMaterial("#222222")
+  const laserMat = builder.getTrackMaterial("#FF0000")
 
-  const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: PhysicsWorldSink }).world
-  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
-  const kinematicBindings = (builder as unknown as { kinematicBindings: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
-  const animatedObstacles = (builder as unknown as { animatedObstacles: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, baseRot?: Quaternion, frequency: number, amplitude: number, phase: number, axis?: Vector3 }[] }).animatedObstacles
+  const {
+    currentStartPos,
+    scene,
+    adventureBodies,
+    kinematicBindings,
+    animatedObstacles,
+  } = builder
 
   let currentPos = currentStartPos.clone()
   const heading = 0
@@ -27,7 +27,7 @@ export function buildMagneticStorage(builder: TrackBuilder): void {
   // 1. The Write Head
   const entryLen = 12
   const entryIncline = (25 * Math.PI) / 180
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, 6, entryLen, entryIncline, storageMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, 6, entryLen, entryIncline, storageMat)
 
   // 2. The Platter
   const platterRadius = 12
@@ -37,10 +37,10 @@ export function buildMagneticStorage(builder: TrackBuilder): void {
   const platterCenter = currentPos.add(forward.scale(platterRadius + 1))
   platterCenter.y -= 1.0
 
-  ;(builder as unknown as { createRotatingPlatform: (...args: unknown[]) => void }).createRotatingPlatform(platterCenter, platterRadius, platterSpeed, storageMat)
+  builder.createRotatingPlatform(platterCenter, platterRadius, platterSpeed, storageMat)
 
   // 3. Bad Sectors
-  if (world && adventureBodies.length > 0) {
+  if (builder.hasWorld && adventureBodies.length > 0) {
     const platterBody = adventureBodies[adventureBodies.length - 1]
     const binding = kinematicBindings.find(b => b.body === platterBody)
 
@@ -91,11 +91,11 @@ export function buildMagneticStorage(builder: TrackBuilder): void {
   const armWidth = 1.0
   const armHeight = 1.0
 
-  if (world) {
+  if (builder.hasWorld) {
     const pivotMesh = MeshBuilder.CreateSphere("actuatorPivot", { diameter: 2 }, scene)
     pivotMesh.position.copyFrom(pivotPos)
     pivotMesh.material = storageMat
-    ;(builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack.push(pivotMesh)
+    builder.adventureTrack.push(pivotMesh)
 
     const armBox = MeshBuilder.CreateBox("actuatorArm", { width: armLength, height: armHeight, depth: armWidth }, scene)
     armBox.parent = pivotMesh
@@ -134,5 +134,5 @@ export function buildMagneticStorage(builder: TrackBuilder): void {
   const goalPos = platterCenter.add(right.scale(-platterRadius - 6))
   goalPos.y -= 2.0
 
-  ;(builder as unknown as { createBasin: (...args: unknown[]) => void }).createBasin(goalPos, storageMat)
+  builder.createBasin(goalPos, storageMat)
 }

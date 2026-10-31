@@ -28,6 +28,8 @@ export class QuantumTunnelFeeder {
 
   private inputMesh: Mesh
   private outputMesh: Mesh
+  /** Each portal's event-horizon disc (its first child), looked up once instead of per frame. */
+  private readonly discByPortal = new Map<Mesh, Mesh>()
   private inputSensor: PhysicsBody | null = null
 
   private state: QuantumTunnelState = QuantumTunnelState.IDLE
@@ -76,6 +78,10 @@ export class QuantumTunnelFeeder {
 
     // Output Portal (Left Wall)
     this.outputMesh = this.createPortalMesh("tunnelOutput", outputPos, new Color3(0.1, 0.1, 0.1), Math.PI / 2) // Face Right (+X)
+    for (const portal of [this.inputMesh, this.outputMesh]) {
+      const disc = portal.getChildren()[0] as Mesh | undefined
+      if (disc) this.discByPortal.set(portal, disc)
+    }
 
     // Physics Sensor (Input Only)
     this.createSensor(inputPos)
@@ -195,7 +201,7 @@ export class QuantumTunnelFeeder {
     // Pulse Input Visual
     const pulse = this.config.animation.idlePulseBase
       + Math.sin(performance.now() * this.config.animation.idlePulseRate) * this.config.animation.idlePulseAmplitude
-    this.setPortalEmissive(this.inputMesh, new Color3(0.5, 0, 1.0).scale(pulse))
+    this.setPortalEmissive(this.inputMesh, 0.5 * pulse, 0 * pulse, 1.0 * pulse)
   }
 
   private updateCapture(dt: number): void {
@@ -218,12 +224,15 @@ export class QuantumTunnelFeeder {
         // Pull towards center
         const target = this.config.inputPosition
         const current = this.capturedBall.translation()
-        const next = Vector3.Lerp(
-            new Vector3(current.x, current.y, current.z),
-            new Vector3(target.x, target.y, target.z),
-            dt * this.config.capturePullLerpSpeed
-        )
-        this.capture.steer(this.capturedBall, { translation: { x: next.x, y: next.y, z: next.z } })
+        const t = dt * this.config.capturePullLerpSpeed
+        // Vector3.Lerp's formula on scalars (start + (end - start) * t), without three Vector3s.
+        this.capture.steer(this.capturedBall, {
+            translation: {
+                x: current.x + (target.x - current.x) * t,
+                y: current.y + (target.y - current.y) * t,
+                z: current.z + (target.z - current.z) * t,
+            },
+        })
     } else {
         this.transitionTo(QuantumTunnelState.TRANSPORT)
     }
@@ -240,8 +249,13 @@ export class QuantumTunnelFeeder {
 
     // Charge Output Portal
     const charge = Math.min(this.stateTimer / this.config.transportDelay, 1.0)
-    const color = Color3.Lerp(new Color3(0.1, 0.1, 0.1), new Color3(0, 1.0, 1.0), charge)
-    this.setPortalEmissive(this.outputMesh, color)
+    // Color3.Lerp((0.1, 0.1, 0.1), (0, 1, 1), charge) on scalars.
+    this.setPortalEmissive(
+      this.outputMesh,
+      0.1 + (0 - 0.1) * charge,
+      0.1 + (1.0 - 0.1) * charge,
+      0.1 + (1.0 - 0.1) * charge,
+    )
 
     if (this.stateTimer >= this.config.transportDelay) {
         this.transitionTo(QuantumTunnelState.EJECT)
@@ -276,7 +290,7 @@ export class QuantumTunnelFeeder {
     this.capturedBall = null
 
     // 5. Flash Output
-    this.setPortalEmissive(this.outputMesh, new Color3(1, 1, 1))
+    this.setPortalEmissive(this.outputMesh, 1, 1, 1)
 
     // 6. Trigger eject recoil
     this.ejectRecoil = this.config.ejectRecoilDistance
@@ -287,10 +301,10 @@ export class QuantumTunnelFeeder {
   private updateCooldown(): void {
     // Fade output
     const fade = 1.0 - Math.min(this.stateTimer / this.config.cooldownFadeDuration, 1.0)
-    this.setPortalEmissive(this.outputMesh, new Color3(0, 1.0, 1.0).scale(fade))
+    this.setPortalEmissive(this.outputMesh, 0 * fade, 1.0 * fade, 1.0 * fade)
 
     if (this.stateTimer >= this.config.cooldown) {
-        this.setPortalEmissive(this.outputMesh, new Color3(0.1, 0.1, 0.1)) // Off
+        this.setPortalEmissive(this.outputMesh, 0.1, 0.1, 0.1) // Off
         this.transitionTo(QuantumTunnelState.IDLE)
     }
   }
@@ -306,15 +320,20 @@ export class QuantumTunnelFeeder {
     }
   }
 
-  private setPortalEmissive(portal: Mesh, color: Color3): void {
-      // Assuming structure: portal (Torus) -> children[0] (Disc)
+  /**
+   * Called every frame in most states, so it writes each material's own emissive Color3 in place
+   * (#488 §5) rather than assigning fresh ones; the values are what `color` / `color.scale(s)` were.
+   */
+  private setPortalEmissive(portal: Mesh, r: number, g: number, b: number): void {
+      // Structure: portal (Torus) -> children[0] (Disc)
       const ringMat = portal.material as StandardMaterial
-      if (ringMat) ringMat.emissiveColor = color
+      if (ringMat) ringMat.emissiveColor.copyFromFloats(r, g, b)
 
-      const disc = portal.getChildren()[0] as Mesh
+      const disc = this.discByPortal.get(portal)
       if (disc) {
           const discMat = disc.material as StandardMaterial
-          if (discMat) discMat.emissiveColor = color.scale(this.config.animation.discEmissiveScale)
+          const s = this.config.animation.discEmissiveScale
+          if (discMat) discMat.emissiveColor.copyFromFloats(r * s, g * s, b * s)
       }
   }
 

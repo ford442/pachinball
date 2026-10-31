@@ -1,13 +1,16 @@
-import { test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import {
+  addBalls,
   bootForPerf,
   buildRunFile,
   collectCounts,
   collectEnv,
   perfConfig,
+  probeAllocations,
   sampleFrames,
   startTable,
   toRepeatResult,
+  waitForStaticScene,
   writeRunFile,
   type PerfState,
   type PerfTier,
@@ -25,8 +28,17 @@ import {
  * `renderTimeMs` = frame time minus the physics step, because slices A/B only touch rendering.
  * Never compare runs recorded with different `env.physicsEngine` (CI has no public/wasm, so
  * physics falls back to main-thread Rapier and dominates frame time).
+ *
+ * After each phase's timing sample, `probeAllocations` renders `PERF_ALLOC_FRAMES` (600) more frames
+ * between two forced GCs and records the retained heap delta and the bytes allocated per frame
+ * (#488 §5, zero-allocation hot path). `PERF_ALLOC_BUDGET_KB` turns the per-frame figure into a
+ * (soft) gate; without it the probe is report-only like the timings.
  */
 const cfg = perfConfig()
+
+function formatKb(bytes: number | null | undefined): string {
+  return typeof bytes === 'number' ? (bytes / 1024).toFixed(2) : 'n/a'
+}
 
 test.describe('perf baseline (opt-in)', () => {
   test.skip(!cfg.enabled, 'set PERF_BASELINE=1 to run the render-perf baseline')
@@ -35,7 +47,7 @@ test.describe('perf baseline (opt-in)', () => {
     const perFrameBudgetMs = 6000
     const phases = cfg.states.length
     test.setTimeout(
-      cfg.repeats * cfg.tiers.length * (120_000 + phases * (cfg.warmup + cfg.frames) * perFrameBudgetMs),
+      cfg.repeats * cfg.tiers.length * (120_000 + phases * (cfg.warmup + cfg.frames + cfg.allocFrames) * perFrameBudgetMs),
     )
 
     const use = testInfo.project.use
@@ -53,13 +65,26 @@ test.describe('perf baseline (opt-in)', () => {
         const page = await context.newPage()
         try {
           await bootForPerf(page, tier)
-          // `menu` must be sampled before `table`: startGame() leaves the menu for good.
+          // `menu` must be sampled before `table`, and `table` before `table3`: startGame() leaves
+          // the menu for good and the extra balls stay on the table.
+          let started = false
           for (const state of cfg.states) {
-            if (state === 'table') await startTable(page)
+            if (state !== 'menu' && !started) {
+              await startTable(page)
+              started = true
+            }
+            if (state === 'table3') await addBalls(page, 3)
+            const settleFrames = await waitForStaticScene(page)
             const raw = await sampleFrames(page, cfg.warmup, cfg.frames, `rep${rep} ${tier}/${state}`)
             const [counts, env] = await Promise.all([collectCounts(page), collectEnv(page)])
+            const alloc = cfg.allocFrames > 0 ? await probeAllocations(page, cfg.allocFrames) : null
+            if (alloc && cfg.allocBudgetKbPerFrame !== null && alloc.allocatedPerFrameBytes !== null) {
+              expect
+                .soft(alloc.allocatedPerFrameBytes / 1024, `rep${rep} ${tier}/${state}: KB allocated per frame`)
+                .toBeLessThanOrEqual(cfg.allocBudgetKbPerFrame)
+            }
             const list = results.get(keyOf(tier, state)) ?? []
-            list.push(toRepeatResult(raw, counts, env))
+            list.push(toRepeatResult(raw, counts, env, settleFrames, alloc))
             results.set(keyOf(tier, state), list)
           }
         } finally {
@@ -79,7 +104,15 @@ test.describe('perf baseline (opt-in)', () => {
         summary.push(
           `${tier}/${state}: render ${run.aggregate.renderTimeMs.median.toFixed(2)}ms ` +
             `(MAD ${run.aggregate.renderTimeMs.mad.toFixed(2)}), frame ${run.aggregate.frameTimeMs.median.toFixed(2)}ms, ` +
-            `draws ${run.aggregate.counts.drawCalls}, active ${run.aggregate.counts.activeMeshes}/${run.aggregate.counts.meshes} ` +
+            `draws ${run.aggregate.counts.drawCalls}, active ${run.aggregate.counts.activeMeshes}/${run.aggregate.counts.meshes}, ` +
+            `frozen mats ${run.aggregate.counts.materialsFrozen}/${run.aggregate.counts.materials}, ` +
+            `shadow renders/frame static ${run.aggregate.counts.shadowRendersPerFrame?.toFixed(2) ?? 'n/a'} / ` +
+            `dynamic ${run.aggregate.counts.dynamicShadowRendersPerFrame?.toFixed(2) ?? 'n/a'}, ` +
+            `refreezes ${run.aggregate.counts.refreezeCount ?? 'n/a'}, gate ${run.aggregate.counts.gateState ?? 'n/a'} ` +
+            `(list frozen ${run.aggregate.counts.activeListFrozen ?? 'n/a'}, settled in ${run.aggregate.counts.settleFrames ?? 'n/a'} frames) ` +
+            `alloc ${formatKb(run.aggregate.alloc?.allocatedPerFrameBytes)} KB/frame, ` +
+            `heap Δ ${formatKb(run.aggregate.alloc?.heapDeltaPerFrameBytes)} KB/frame ` +
+            `over ${run.aggregate.alloc?.frames ?? 0} frames (${run.aggregate.alloc?.heapSource ?? 'off'}) ` +
             `[${run.env.physicsEngine}, ${run.env.qualityTier}]`,
         )
       }

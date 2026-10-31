@@ -177,6 +177,11 @@ export class DisplayVideoLayer {
    * NULL FIX - Safe disposal with proper null checks
    * Prevents errors during cleanup by checking element existence
    */
+  /** The layer's meshes, for its task in the backbox Frame Graph. */
+  getMeshes(): Mesh[] {
+    return this.mesh ? [this.mesh] : []
+  }
+
   dispose(): void {
     this.disposeVideo()
     try {

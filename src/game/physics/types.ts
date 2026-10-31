@@ -12,7 +12,6 @@ import type { SoundSystem } from '../../game-elements/sound-system'
 import type { HapticManager } from '../../game-elements/haptics'
 import type { GameStateManager } from '../game-state'
 import type { EventBus } from '../../core/event-bus'
-import type { AdventureState } from '../../adventure/adventure-state'
 import type { AdventureManager } from '../game-adventure'
 import type { AdventureMode } from '../../adventure'
 import type { ZoneTriggerSystem } from '../../game-elements/zone-trigger-system'
@@ -59,7 +58,6 @@ export interface PhysicsHost {
   readonly soundSystem: SoundSystem
   readonly mapManager: import('../game-maps').TableMapManager | null
   readonly uiManager: import('../game-ui').GameUIManager | null
-  readonly adventureState: AdventureState
   readonly adventureMode: AdventureMode | null
   adventureManager: AdventureManager | null
   readonly zoneTriggerSystem: ZoneTriggerSystem | null

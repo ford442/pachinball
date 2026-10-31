@@ -10,19 +10,19 @@ Resolved by [`src/engine/engine-options.ts`](../src/engine/engine-options.ts) vi
 
 | Option | Production default | Override (first match wins) |
 |--------|-------------------|----------------------------|
-| `antialias` | `true` | `?antialias=0` |
+| `antialias` | **`false`** — the scene renders into its own HDR target (4× MSAA on MEDIUM/HIGH, FXAA on LOW; see [`FRAME_GRAPH.md`](FRAME_GRAPH.md)) | `?antialias=1` |
 | `preserveDrawingBuffer` | **`false`** | `?preserveBuffer=1`, `window.DEBUG_PRESERVE_DRAWING_BUFFER = true` |
 | `stencil` | `true` | — |
 | `setMaximumLimits` | `true` (WebGPU MRT defense) | `?maxLimits=0` — do **not** disable to "fix" Safari; see [`webgpu-post-process-profile.ts`](../src/game/webgpu-post-process-profile.ts) |
 | `powerPreference` | `'high-performance'` (desktop), `'default'` (mobile UA) | `?power=high-performance\|low-power\|default` |
-| `adaptToDeviceRatio` | **`false`** | Documented only — manual hardware scaling owns DPR |
+| `adaptToDeviceRatio` | **`false`** | Documented only — the resolution policy owns DPR (see [Resolution](#resolution--hardware-scaling-pipeline)) |
 | `audioEngine` | **`false`** | — (SoundSystem + EffectsSystem own audio; avoid a third AudioContext) |
 | `doNotHandleContextLost` | **`false`** | — Babylon owns the rebuild; we only log (see [Context loss](#context-loss)) |
 | `failIfMajorPerformanceCaveat` | **`false`** (SwiftShader CI) | `?gpu=strict` |
 | `premultipliedAlpha` | **`true`** | — (matches CSS cabinet) |
 | `featureLevel` | `'core'`, then `'compatibility'` on init failure | `?gpu=compat` (skip core, also forces `setMaximumLimits: false`) |
 | `enableGPUDebugMarkers` | `false` | `?gpuDebug=1` |
-| `deviceDescriptor.requiredFeatures` / `enableAllFeatures` | `[]` / `false` | — see [Optional WebGPU features](#optional-webgpu-features) |
+| `deviceDescriptor.requiredFeatures` / `enableAllFeatures` | `OPTIONAL_WEBGPU_FEATURES ∩ adapter.features` / `false` | — see [Optional WebGPU features](#optional-webgpu-features) |
 | `deviceDescriptor.requiredLimits` | **never set** | — see [Why we don't probe-and-clamp](#why-we-dont-probe-and-clamp) |
 
 `setMaximumLimits: true` is the first defense for WebGPU MRT (SSAO + DoF + bloom). Try/catch around DoF/SSAO is the second.
@@ -53,7 +53,7 @@ the next reader of `setMaximumLimits: true` doesn't re-file it.
    a silent visual regression instead of the loud fallback we already handle.
 
 `setMaximumLimits: true` stays at core level, the compatibility retry stays, and
-`deviceDescriptor` stays `{ requiredFeatures: [] }`. The data-driven version of this work is the
+`deviceDescriptor.requiredLimits` stays unset. The data-driven version of this work is the
 telemetry below: measure how often we degrade before optimizing for it.
 
 ### WebGPU feature-level degrade
@@ -78,7 +78,7 @@ the `core` default — post-process degrades in
 the deterministic way to reproduce the degraded profile in CI.
 
 We construct `new WebGPUEngine(...)` and `await engine.initAsync()` rather than calling
-`WebGPUEngine.CreateAsync()`. In `@babylonjs/core` 7.54.3 `CreateAsync` builds its promise with no
+`WebGPUEngine.CreateAsync()`. In `@babylonjs/core` 7.54.3, and still in 9.30.0, `CreateAsync` builds its promise with no
 reject path, so a failed init never settles — the chain above would hang, and the half-built engine
 would never be disposed.
 
@@ -87,14 +87,24 @@ Until a real analytics sink exists, that string is how you count degrades in a c
 
 ### Optional WebGPU features
 
-`deviceDescriptor.requiredFeatures` is deliberately `[]` — we require **no** optional WebGPU feature
-at device creation. Anything listed there is a hard requirement: an adapter that lacks it fails
-`requestDevice()` outright, turning a degraded-but-playable boot into no boot at all. Current
-adapter support makes that a real risk (`timestamp-query` ~98% but flaky on Safari/Metal,
-`float32-filterable` ~92%, `rg11b10ufloat-renderable` ~99.97%).
+`deviceDescriptor.requiredFeatures` is the allow-list `OPTIONAL_WEBGPU_FEATURES`
+([`gpu-capabilities.ts`](../src/engine/gpu-capabilities.ts)) **intersected with the adapter's features**
+(`selectWebGPUFeatures`) — so the device gets every one of them the adapter offers, and none it does not:
 
-**Rule:** a pass that wants an optional feature checks `adapter.features.has(...)` at the point of
-use and degrades there, instead of adding it to this list.
+`texture-compression-bc`, `texture-compression-astc`, `texture-compression-etc2`, `timestamp-query`,
+`float32-filterable`, `rg11b10ufloat-renderable`, `shader-f16`.
+
+A feature listed but not offered would fail `requestDevice()` outright, so `createWebGPUEngineWithFallback`
+first asks for the adapter with the same options Babylon's `initAsync` passes to `requestAdapter` (same
+adapter), reads `adapter.features`, and requests the intersection. If that probe fails it requests none.
+Babylon 9.30 also intersects `requiredFeatures` itself (`webgpuEngine.pure.js` `initAsync`), which is the
+backstop; the explicit intersection is there so the code says what it does.
+
+**Rule:** consumers never read this list. They query the capability record,
+`resolveGpuCapabilities(engine)`: `{ backend, compressedTextures: { bc, astc, etc2 }, gpuTimer, hdrFormat, f16,
+float32Filterable, maxMsaaSamples }`, built from the engine caps Babylon derives from the enabled features
+(`caps.s3tc` / `astc` / `etc2` → KTX2 transcodes to a compressed format instead of RGBA; `caps.timerQuery` →
+dynamic resolution reads GPU time). The boot log prints it once: `[Bootstrap] GPU caps: …`.
 
 (`enableAllFeatures: false` is belt-and-braces — Babylon ignores it once `requiredFeatures` is set
 explicitly.)
@@ -139,7 +149,7 @@ than `undefined`:
 window.bootstrapGpuDegrades
 // [{ path: 'postprocess-tier-boot',
 //    featureLevel: 'core',
-//    detail: 'tier bloom-only: adapter maxUniformBuffersPerShaderStage=12 < … (17) — using standalone BloomEffect',
+//    detail: 'tier bloom-only: adapter maxUniformBuffersPerShaderStage=12 < … (17) — bloom-only graph, no image-processing node',
 //    timestamp: 1757… }]
 ```
 
@@ -148,7 +158,7 @@ window.bootstrapGpuDegrades
 | `webgpu-featurelevel` | `createWebGPUEngineWithFallback()` | WebGPU booted at a lower feature level than requested |
 | `webgl2-fallback` | `createEngine()` | WebGPU failed at every level; the engine is WebGL2 |
 | `postprocess-tier-boot` | `PostProcessManager.setup()` | The adapter's uniform-buffer cap forced a reduced tier at startup |
-| `postprocess-tier-runtime` | the `uncapturederror` guard | A WebGPU validation error forced a further downgrade mid-play |
+| `postprocess-tier-runtime` | the `uncapturederror` guard, or `PostProcessManager.onGraphFailed()` | A WebGPU validation error forced a further downgrade mid-play, or the scene graph could not be built (tier `none`) |
 | `context-lost` / `context-restored` | `attachGpuContextLogging()` | Runtime device loss and recovery |
 
 `featureLevel` is `'core' | 'compatibility' | 'webgl2' | null`. Compatibility is not theoretical —
@@ -198,7 +208,7 @@ Active backend is tagged on `<canvas data-renderer="webgpu|webgl2">` and `window
 
 | Flag | Effect |
 |------|--------|
-| `?nopp=1` | Skip all post-processing in `GameRenderer` |
+| `?nopp=1` | Skip all scene post-processing: no scene graph, the camera renders to the canvas (the backbox composite still runs) |
 | `?noopt=1` | Disable `SceneOptimizer` |
 | `?preserveBuffer=1` | Enable `preserveDrawingBuffer` for framebuffer readback |
 | `?gpu=compat` | WebGPU `featureLevel: 'compatibility'` only (skips the `core` attempt; implies `setMaximumLimits: false`) — the deterministic way to reproduce the degraded profile in CI |
@@ -211,34 +221,42 @@ Active backend is tagged on `<canvas data-renderer="webgpu|webgl2">` and `window
 
 The game canvas is **not** full-viewport. It fills `#game-cabinet`, sized in CSS as `min(85vh, 85vw)` ([`src/style.css`](../src/style.css)).
 
-```
-#pachinball-canvas CSS client size (100% of cabinet)
-  → ResizeObserver in GameRenderer.setupResizeObserver() → engine.resize()
-  → hardwareScalingLevel from resolveHardwareScalingLevel():
-       mobile UA: 2 (half CSS-pixel resolution)
-       desktop (any DPR): 1 (CSS-pixel resolution)
-  → adaptToDeviceRatio=false (Babylon does NOT multiply DPR — ever)
-  → setupDPRHandling(): re-call engine.resize() on DPR media-query change
-```
-
-**Effective render pixels** (approximate):
+With `adaptToDeviceRatio: false`, Babylon's `resize()` is `setSize(clientWidth / level, …)` — DPR never
+enters on its own. The resolution policy ([`resolution-policy.ts`](../src/engine/resolution-policy.ts),
+#488 §3) works in **render scale** (backbuffer pixels per CSS pixel) and sets `level = 1 / scale`:
 
 ```
-renderWidth  ≈ clientWidth  / hardwareScalingLevel
-renderHeight ≈ clientHeight / hardwareScalingLevel
+renderScale = min(devicePixelRatio, platform cap, tier cap)        (or ?renderScale=X)
+  platform cap: 1.5 mobile, 2 desktop
+  tier cap:     HIGH none, MEDIUM 1.5, LOW 1
+renderWidth  ≈ clientWidth  × renderScale
+renderHeight ≈ clientHeight × renderScale
 ```
 
-DPR does not appear: Babylon's `resize()` is `setSize(clientWidth / level, …)`, and
-with `adaptToDeviceRatio: false` the level starts at 1. `setupDPRHandling()` only
-re-triggers `resize()` when the DPR media query changes.
+| Device | Before (fixed level) | Now (MEDIUM) |
+|---|---|---|
+| DPR-3 phone | level 2: ½× CSS, **1/6 of native per axis** | 1.5× CSS (½ of native per axis) |
+| DPR-2 laptop | level 1: 1× CSS | 1.5× CSS (2× on HIGH) |
+| DPR-1 desktop | 1× | 1× |
 
-**HiDPI decision (2026-09-17).** Desktop used to return `min(DPR, 2)`, on the
-assumption that DPR was multiplied in first. It is not, so a 2× display rendered at
-half its CSS size — a quarter of native pixels per axis, visibly soft. Desktop is now
-pinned to 1 at any DPR: CSS-pixel resolution, never supersampled to native DPR (that
-would quadruple fill cost under the post-process stack). Mobile keeps 2 as a
-deliberate fill-rate trade. `SceneOptimizer` may still raise the level at runtime
-when the frame budget slips.
+- **Boot** (`applyHardwareScaling`, `main.ts`): the platform cap only — the tier is not known yet.
+- **`RenderResolution`** ([`render-resolution.ts`](../src/game/render-resolution.ts), a lazy chunk loaded by
+  `GameRenderer.setupResolution()` after tier detection) re-applies the policy with the tier cap, on every tier
+  change (settings or auto-drop), and on every DPR change. The DPR watch is a `(resolution: Xdppx)` media query
+  **re-armed after each change** (a query only matches the DPR it names; the old handler compared against
+  `clientWidth × DPR`, which never matches with `adaptToDeviceRatio: false`, and was never re-armed).
+- **Dynamic resolution** ([`dynamic-resolution.ts`](../src/engine/dynamic-resolution.ts)): one sample per frame
+  (frame-scheduler `idle` phase). With `timestamp-query` (`GpuCapabilities.gpuTimer`, WebGPU) the sample is GPU
+  frame time from `EngineInstrumentation.gpuFrameTimeCounter` against a 14 ms budget; without it, the frame
+  interval against 1000/55 ms. 30 consecutive frames over budget step the scale down by 0.125; 120 under
+  (< 0.8 × budget, or < 0.95 × for the interval) step it up; frames in between reset both counts. A step up
+  that is undone by the next step down doubles the frames the next step up needs (to 960). Range:
+  `[max(0.5, max/2), max]`. `?dynres=0` or a pinned `?renderScale=` turns it off. Under automation
+  (`navigator.webdriver`, i.e. Playwright) it is off unless `?dynres=1`: SwiftShader never meets the budget.
+- **The scene optimizer no longer touches the hardware scaling level** (no `HardwareScalingOptimization` in
+  `safe-scene-optimizer-options.ts`): it could only raise it, and fought the policy's re-application.
+- The scene Frame Graph rebuilds at the new size (`RESIZE_SETTLE_FRAMES`), double-buffered, so a step never
+  shows an unprocessed frame. The bloom kernel scales with the level.
 
 (Babylon applies internal rounding; use `engine.getRenderWidth()` / `getRenderHeight()` for ground truth.)
 
@@ -247,20 +265,34 @@ Inspect at runtime:
 ```js
 const e = window.game.engine
 console.log(e.getRenderWidth(), e.getRenderHeight(), e.getHardwareScalingLevel())
+window.game.renderer.getResolutionInfo() // { scale, maxScale, minScale, dynamic, source, devicePixelRatio, changes }
 ```
 
-Or call `window.runVisibilityDiagnostic()` after the game loads.
+The debug HUD's **Frame** panel shows the same, with the frame scheduler's per-phase CPU time. Or call
+`window.runVisibilityDiagnostic()` after the game loads.
 
 ---
 
 ## Post-process degradation tiers
 
-1. **Full** — bloom, FXAA, tone-map, DoF, SSAO (+ SSR/motion blur on HIGH tier).
-2. **Bloom-only** — DoF or SSAO failed validation (WebGPU strict adapters or WebGL SwiftShader). `game.postProcessDegraded === true`; debug HUD shows `pp degraded: true`.
-   On WebGPU adapters capped at 12 uniform buffers per stage, the game proactively uses a **bloom-only** profile (bloom without the image-processing pass; FXAA/sharpen/vignette/color-curves disabled). Runtime validation errors downgrade further to post-process disabled (`none`).
-3. **Disabled** — `?nopp=1` skips all post-processing.
+The tier decides which nodes the scene post-process Frame Graph has (`planSceneGraph()`; see
+[`FRAME_GRAPH.md`](FRAME_GRAPH.md), "Slice B"). A node that is not in the plan is never built.
 
-`setMaximumLimits: true` is the first defense for WebGPU MRT (SSAO + DoF + bloom). Try/catch around DoF/SSAO is the second.
+1. **Full** — `scene:render → [ssao → ssr → motionBlur →] bloom → imageProcessing → sharpen → fxaa`. The bracketed
+   HIGH-only nodes also need a context that can afford their geometry pass (not a software rasteriser, enough
+   draw buffers); without it `game.postProcessDegraded === true` and the rest stays.
+2. **Bloom-only** — `scene:render → bloom`. On WebGPU adapters capped at 12 uniform buffers per stage the game
+   proactively uses this tier: the image-processing node (and FXAA, sharpen, vignette, colour curves) is **left out
+   of the graph**, not toggled off on a pipeline whose pass binds its full layout regardless.
+   `game.postProcessDegraded === true`; debug HUD shows `pp degraded: true`. A runtime validation error downgrades
+   further to `none`, rebuilding the graph at that tier (no node: the graph is disposed).
+3. **Disabled** — `?nopp=1`, or tier `none`: no graph; the camera renders straight to the canvas.
+
+Reduced motion drops bloom, sharpen, the vignette and the HIGH-only nodes. `game.renderer.getSceneGraphInfo()` reports
+the plan, every node left out and why, and the built node list.
+
+`setMaximumLimits: true` is the first defense for WebGPU MRT. The geometry pass of the HIGH-only nodes writes four
+colour attachments; contexts with fewer draw buffers build none of them.
 
 **Mobile quality probe (#300):** `detectQualityTier()` in `material-core.ts` applies `applyMobileQualityCap()` using `isMobileUserAgent` from `engine-options.ts` — mobile caps at MEDIUM (LOW on low memory / Save-Data). SSAO/DoF are HIGH-only. Sustained frame time >22ms for 2s triggers a one-shot auto tier drop via `PerformanceMonitor`.
 
@@ -272,10 +304,40 @@ Or call `window.runVisibilityDiagnostic()` after the game loads.
 
 | Event | Action |
 |-------|--------|
-| Tab hidden | `engine.stopRenderLoop()`, suspend `SoundSystem`, `EffectsSystem`, and Babylon `Engine.audioEngine` contexts |
-| Tab visible | `engine.resize()`, restart `runRenderLoop(game.renderFrame())`, resume audio **only if** game state is `PLAYING` |
+| Tab hidden | `game.pauseRendering()` (stops only that Game's own loop — never bare `engine.stopRenderLoop()`), suspend `SoundSystem`, `EffectsSystem`, and Babylon `Engine.audioEngine` contexts |
+| Tab visible | `engine.resize()`, `game.resumeRendering()` (a disposed Game stays stopped), resume audio **only if** game state is `PLAYING` |
 
 Game pause (`PAUSED` state) still suspends the effects `AudioContext` via `GameLifecycle` independently.
+
+## Frame scheduler (one render loop)
+
+[`src/core/frame-scheduler.ts`](../src/core/frame-scheduler.ts) (#488 §4) is the only caller of
+`engine.runRenderLoop`. `Game` owns one (`game.frameScheduler`, disposed with the Game's signal);
+`pauseRendering()` / `resumeRendering()` are its `pause()` / `resume()`, which stop and restart that one loop
+and nothing else, so the hide → show → dispose leak cannot come back (a disposed scheduler never restarts;
+`tests/lifecycle-dispose.spec.ts` counts `engine.activeRenderLoops`).
+
+Each frame runs its phases in order, every system in registration order within its phase:
+
+| Phase | Systems (`Game.registerFrameSystems`) |
+|---|---|
+| `input` | latency display |
+| `physics` | `physicsController.stepFixed()` — input drain, the fixed steps this frame owes, mesh interpolation |
+| `sim` | `physicsController.updateSim()` (feeders, captures, stuck balls, combo / tilt / power-up), traps / launchers / moving gates, adventure mode |
+| `visuals` | `physicsController.updateVisuals()` (camera, effects, trails, backbox), cabinet lighting, spinners |
+| `render` | `scene.render()` |
+| `hud` | countdown, perf monitor, debug HUD |
+| `idle` | dynamic resolution's frame-time sample |
+
+Cabinet lighting and spinners used to update **after** `scene.render()` (one frame late); the physics step ran
+inside `scene.render()` from `onBeforeRenderObservable`. Now everything a frame shows is computed before it is
+drawn. `stepPhysics()` stays as `stepFixed → updateSim → updateVisuals` for callers that drive the table directly.
+
+A system is `{ phase, name?, update(dt), dispose? }`; `register(system, { signal })` returns its unregister
+function and drops it when the signal aborts. Registration is copy-on-write, so a frame iterates a stable list
+and allocates nothing. Per-phase CPU time is measured every frame and smoothed (`getTimings()`): the debug HUD's
+**Frame** panel shows it. The scheduler's loop calls `game.renderFrame()` (looked up per frame), which calls
+`tick()` — so the perf harness can still wrap `renderFrame`.
 
 ---
 
@@ -360,8 +422,8 @@ Use `?renderer=webgl2` for automation-friendly WebGL2 canvas capture.
 - **Rapier** stays `@dimforge/rapier3d-compat@^0.15.0`. 0.18/0.19 add snapshot APIs that replay (#341 leftovers) will want — bump in a dedicated PR; do not mix with bootstrap hygiene.
 - **#361** Worker + SharedArrayBuffer still needs COOP/COEP. Glue ENVIRONMENT is already `web,worker,node`.
 - **Ship degrade telemetry to a sink.** `window.bootstrapGpuDegrades` is the buffer; nothing drains it yet. Wire it to real analytics once one exists — the ring buffer is deliberately the only consumer today. Once it has run on the live demo for a week, revisit **with data**: if the compatibility-fallback and tier-downgrade rates are negligible, close this line of work; if one adapter family (Safari/Metal is the likeliest) degrades heavily, *that* is the justification for a targeted, adapter-conditional workaround — scoped to that adapter, never the default path.
-- **Babylon 8/9.** `@babylonjs/core` and `@babylonjs/loaders` are both `^7.54.3` and already in step; there is nothing to "align". A major bump is a separate migration (WGSL shader loading changes, audio-engine rewrite) and must not ride along with bootstrap hygiene.
-- **GPU-time HUD.** If one is added, check `adapter.features.has('timestamp-query')` in that pass only. Do **not** add it to `deviceDescriptor.requiredFeatures`; see [Optional WebGPU features](#optional-webgpu-features).
+- **Babylon 9.** Done in #461: `@babylonjs/core` and `@babylonjs/loaders` are both `^9.30.0`, bumped together (see [`FRAME_GRAPH.md`](FRAME_GRAPH.md)). The engine options above are unchanged by the bump.
+- **GPU-time HUD.** `timestamp-query` is now requested where the adapter has it; a GPU-time HUD reads `resolveGpuCapabilities(engine).gpuTimer` and `EngineInstrumentation.gpuFrameTimeCounter` (dynamic resolution already does). Never assume it: Safari/Metal often lacks it.
 
 ---
 

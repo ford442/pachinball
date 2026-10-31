@@ -207,7 +207,7 @@ export class FlipperBuilder {
       )
 
       // Register binding with root mesh
-      bindings.push({ mesh: flipperRoot as unknown as Mesh, rigidBody: body })
+      bindings.push({ mesh: flipperRoot, rigidBody: body })
       meshes.push(bladeMesh, tipMesh, bevelLeft, bevelRight)
       meshes.push(pivotCyl, pivotCap, pivotRing)
       this.meshes.push(bladeMesh, tipMesh, bevelLeft, bevelRight, pivotCyl, pivotCap, pivotRing)

@@ -1,10 +1,10 @@
 import { expect, type Page } from '@playwright/test'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { medianOfMedians, summarize } from '../../scripts/perf-stats.mjs'
+import { median, medianOfMedians, summarize } from '../../scripts/perf-stats.mjs'
 
 export type PerfTier = 'low' | 'medium' | 'high'
-export type PerfState = 'menu' | 'table'
+export type PerfState = 'menu' | 'table' | 'table3'
 
 export interface PerfConfig {
   enabled: boolean
@@ -23,6 +23,16 @@ export interface PerfConfig {
    */
   viewport: { width: number; height: number }
   outDir: string
+  /**
+   * Frames of the allocation probe run after each phase's timing sample (`probeAllocations`); 0 skips it.
+   * Separate from the timed frames because the sampling heap profiler adds its own overhead.
+   */
+  allocFrames: number
+  /**
+   * Optional budget in KB allocated per frame (`PERF_ALLOC_BUDGET_KB`). Unset: report-only, like every
+   * other metric here. Set: a phase over budget fails the spec (soft assertion, so all phases still run).
+   */
+  allocBudgetKbPerFrame: number | null
 }
 
 function list<T extends string>(raw: string | undefined, allowed: readonly T[], fallback: T[]): T[] {
@@ -42,6 +52,17 @@ function int(raw: string | undefined, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback
 }
 
+/** Like `int` but `0` is a valid value (disables the probe). */
+function intOrZero(raw: string | undefined, fallback: number): number {
+  const n = Number.parseInt(raw ?? '', 10)
+  return Number.isFinite(n) && n >= 0 ? n : fallback
+}
+
+function positiveOrNull(raw: string | undefined): number | null {
+  const n = Number.parseFloat(raw ?? '')
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 /**
  * The harness is opt-in (`PERF_BASELINE=1`) and report-only: SwiftShader timings are noisy and
  * a full run takes minutes, so it never gates CI. See docs/RENDER_BUDGET.md.
@@ -53,13 +74,21 @@ export function perfConfig(env: NodeJS.ProcessEnv = process.env): PerfConfig {
     enabled: env.PERF_BASELINE === '1',
     label: (env.PERF_LABEL ?? 'baseline').replace(/[^A-Za-z0-9_.-]/g, '_'),
     tiers: list<PerfTier>(env.PERF_TIERS, ['low', 'medium', 'high'], ['medium']),
-    states: list<PerfState>(env.PERF_STATES, ['menu', 'table'], ['menu', 'table']),
+    states: list<PerfState>(env.PERF_STATES, ['menu', 'table', 'table3'], ['menu', 'table', 'table3']),
     frames: int(env.PERF_FRAMES, 120),
     warmup: int(env.PERF_WARMUP, 30),
     repeats: int(env.PERF_REPEATS, 3),
     viewport: size(env.PERF_VIEWPORT, { width: 640, height: 360 }),
     outDir: env.PERF_OUT_DIR ?? 'test-results/perf',
+    allocFrames: intOrZero(env.PERF_ALLOC_FRAMES, 600),
+    allocBudgetKbPerFrame: positiveOrNull(env.PERF_ALLOC_BUDGET_KB),
   }
+}
+
+/** The slice of Babylon's `Observable` the harness uses to count render-target renders. */
+interface Observable {
+  add: (callback: () => void) => unknown
+  remove: (observer: unknown) => unknown
 }
 
 /** The slice of `window.game` the harness touches (all optional: the page may still be booting). */
@@ -70,16 +99,29 @@ interface PerfGameHooks {
     meshes: unknown[]
     materials: unknown[]
     lights: unknown[]
-    textures: unknown[]
+    textures: Array<{ getClassName?: () => string; onAfterRenderObservable?: Observable }>
     getActiveMeshes: () => { length: number }
+    onAfterRenderObservable: Observable
+    _activeMeshesFrozen?: boolean
   }
   engine?: {
     _drawCalls?: { current?: number }
     _gl?: WebGLRenderingContext
   }
-  shadowGenerator?: { getShadowMap?: () => { renderList?: unknown[] } | null } | null
+  /** The key light's shadow generator; from #484 on it is the STATIC one (cabinet), and `dynamicShadowGenerator` joins it. */
+  shadowGenerator?: {
+    getShadowMap?: () => { renderList?: unknown[]; onAfterRenderObservable?: Observable } | null
+  } | null
+  /** Balls, flippers, bumpers, moving obstacles. Absent (null) on commits before the split. */
+  dynamicShadowGenerator?: {
+    getShadowMap?: () => { renderList?: unknown[]; onAfterRenderObservable?: Observable } | null
+  } | null
+  ballManager?: { spawnExtraBalls: (count: number) => void; getBallBodies: () => unknown[] } | null
+  /** Present from the StaticSceneGate commit on; absent (null) on earlier commits. */
+  staticSceneGate?: { refreezeCount: number; getStats?: () => { state: string } } | null
   stateManager?: { isPlaying?: () => boolean }
   renderer?: { applyQualityTier: (tier: string) => void }
+  performanceMonitor?: { setOnSustainedJank?: (callback: null) => void } | null
   debugHelper?: { initializeDebugInstrumentation: () => void } | null
   sceneInstrumentation?: {
     captureActiveMeshesEvaluationTime: boolean
@@ -89,7 +131,7 @@ interface PerfGameHooks {
     renderTargetsRenderTimeCounter: { current: number }
     renderTimeCounter: { current: number }
   } | null
-  physicsController?: { stepPhysics: (...args: unknown[]) => unknown } | null
+  physicsController?: { stepFixed: (...args: unknown[]) => unknown } | null
   physics?: { getWasmMode?: () => string }
   renderFrame: () => void
   startGame: () => Promise<void>
@@ -109,6 +151,11 @@ export interface RawSamples {
   activeMeshesEval: number[]
   rttRender: number[]
   drawPhase: number[]
+  /** Times the key-light shadow map / any MirrorTexture rendered during the measured frames. */
+  shadowRenders: number
+  /** Renders of the dynamic generator's map; stays 0 before the static / dynamic split. */
+  dynamicShadowRenders: number
+  mirrorRenders: number
 }
 
 export interface SceneCounts {
@@ -119,6 +166,23 @@ export interface SceneCounts {
   textures: number
   drawCalls: number
   shadowCasters: number | null
+  /** Casters of the dynamic generator; null before the static / dynamic split. */
+  dynamicShadowCasters: number | null
+  /** Materials whose `isFrozen` is true right now (of `materials`). */
+  materialsFrozen: number
+  /** Key-light shadow-map renders per frame; multiply by the frame rate for renders/s. */
+  shadowRendersPerFrame: number | null
+  /** Dynamic generator renders per frame; null before the static / dynamic split. */
+  dynamicShadowRendersPerFrame: number | null
+  mirrorRendersPerFrame: number | null
+  /** `StaticSceneGate.refreezeCount`; null before the gate exists. */
+  refreezeCount: number | null
+  /** The gate's state when sampling began (`frozen` once the scene is quiet); null before the gate exists. */
+  gateState: string | null
+  /** Whether Babylon's active-mesh list was frozen when sampling began. */
+  activeListFrozen: boolean | null
+  /** Rendered frames the gate needed to reach `frozen` before sampling (null: no gate, or it never did). */
+  settleFrames: number | null
 }
 
 export interface PerfEnv {
@@ -140,13 +204,56 @@ export interface RepeatResult {
   drawPhaseMs: ReturnType<typeof summarize>
   counts: SceneCounts
   env: PerfEnv
+  /** Heap / allocation probe for this phase; null when `PERF_ALLOC_FRAMES=0`. */
+  alloc: AllocSample | null
 }
 
-/** Boot the game (WebGL2, debug tooling on so SceneInstrumentation can be created) and settle it. */
+/**
+ * One allocation probe: `frames` rendered frames bracketed by forced full GCs.
+ *
+ * - `heapDeltaBytes` — JS heap in use after a forced GC at the end minus after a forced GC at the
+ *   start: what the hot path *retained* (a leak shows up here; per-frame garbage does not).
+ * - `allocatedBytes` — what the window *allocated*, including objects the GC already collected, from
+ *   the V8 sampling heap profiler (`includeObjectsCollectedByMajorGC/MinorGC`); its estimate is unbiased
+ *   but sampled, so treat a few KB/frame as noise. This is the zero-allocation number.
+ */
+export interface AllocSample {
+  frames: number
+  wallMs: number
+  /** Where the heap sizes came from: CDP `Runtime.getHeapUsage` (precise) or `performance.memory` (quantised). */
+  heapSource: 'cdp' | 'performance.memory' | 'unavailable'
+  heapBeforeBytes: number | null
+  heapAfterBytes: number | null
+  heapDeltaBytes: number | null
+  heapDeltaPerFrameBytes: number | null
+  allocatedBytes: number | null
+  allocatedPerFrameBytes: number | null
+  /** The largest allocating call sites in the window (self bytes, all frames together). */
+  topAllocators: AllocSite[]
+}
+
+export interface AllocSite {
+  site: string
+  bytes: number
+}
+
+/**
+ * Boot the game (WebGL2, debug tooling on so SceneInstrumentation can be created) and settle it.
+ *
+ * `noopt=1` is essential under SwiftShader: the game runs a Babylon `SceneOptimizer` (target 55 fps)
+ * that, below target, switches shadows, post-processes, particles and render targets off and halves
+ * the resolution. Software GL runs at 1-3 fps, so within seconds every run would be measuring a
+ * scene with no shadow pass and no mirror, and the shadow/mirror/prepass work could not show up.
+ * The sustained-jank handler (which drops the quality tier) is silenced for the same reason; the
+ * tier under test is applied explicitly below.
+ */
 export async function bootForPerf(page: Page, tier: PerfTier): Promise<void> {
-  await page.goto('/?renderer=webgl2&debug=1')
+  await page.goto('/?renderer=webgl2&debug=1&noopt=1')
   await expect(page.locator('#start-btn')).toBeVisible({ timeout: 60_000 })
   await page.waitForFunction(() => !!(window as PerfWindow).game?.ready, undefined, { timeout: 90_000 })
+  await page.evaluate(() => {
+    ;(window as PerfWindow).game?.performanceMonitor?.setOnSustainedJank?.(null)
+  })
   await waitForSceneSettle(page)
   await page.evaluate((t) => {
     ;(window as PerfWindow).game?.renderer?.applyQualityTier(t)
@@ -185,9 +292,58 @@ export async function startTable(page: Page): Promise<void> {
 }
 
 /**
- * Sample per-frame CPU timings by wrapping `game.renderFrame` (the engine loop calls it
- * dynamically) and `physicsController.stepPhysics` (called from the scene's onBeforeRender, so
- * it is inside `scene.render()` — render time is frame minus physics).
+ * Wait (in rendered frames) until the StaticSceneGate reports `frozen`, i.e. the scene has been
+ * quiet long enough for the frozen materials and the frozen active-mesh list to be in effect.
+ *
+ * Why this matters: Start and every ball spawn thaw the gate, and the fog then eases to its in-play
+ * values for a few seconds (effects-atmosphere.ts lerps per frame), thawing it again on every frame
+ * until it converges. Sampling before that measures the thawed scene, not the steady state a player
+ * sits in. Returns the frames waited, or null when there is no gate (earlier commits) or it never
+ * settled within `maxFrames`.
+ */
+export async function waitForStaticScene(page: Page, maxFrames = 600): Promise<number | null> {
+  return page.evaluate(
+    (max) =>
+      new Promise<number | null>((resolve) => {
+        const g = (window as PerfWindow).game
+        const gate = g?.staticSceneGate
+        const scene = g?.scene
+        if (!gate?.getStats || !scene) {
+          resolve(null)
+          return
+        }
+        let frames = 0
+        const observer = scene.onAfterRenderObservable.add(() => {
+          frames++
+          const settled = gate.getStats?.().state === 'frozen'
+          if (!settled && frames < max) return
+          scene.onAfterRenderObservable.remove(observer)
+          resolve(settled ? frames : null)
+        })
+      }),
+    maxFrames,
+  )
+}
+
+/**
+ * Bring the table to `total` balls (the game starts with one). Run after `startTable`; the extra
+ * balls are real physics bodies that roll for the whole measurement.
+ */
+export async function addBalls(page: Page, total: number): Promise<void> {
+  const count = await page.evaluate((n) => {
+    const manager = (window as PerfWindow).game?.ballManager
+    const have = manager?.getBallBodies().length ?? 0
+    if (manager && have < n) manager.spawnExtraBalls(n - have)
+    return manager?.getBallBodies().length ?? 0
+  }, total)
+  expect(count, `table should hold ${total} balls`).toBe(total)
+  await waitForSceneSettle(page)
+}
+
+/**
+ * Sample per-frame CPU timings by wrapping `game.renderFrame` (the frame scheduler's loop calls it
+ * dynamically) and `physicsController.stepFixed` (the scheduler's `physics` phase, #488 §4). The
+ * frame is every phase; `game.frameScheduler.getTimings()` has the per-phase split.
  */
 export async function sampleFrames(page: Page, warmup: number, frames: number, tag = ''): Promise<RawSamples> {
   // PERF_VERBOSE=1 logs frame progress every 10 s — the way to spot a frame-rate collapse mid-run.
@@ -226,10 +382,10 @@ function sampleFramesInPage(page: Page, warmup: number, frames: number): Promise
 
         const originalRender = g.renderFrame
         const pc = g.physicsController ?? null
-        const originalStep = pc?.stepPhysics
+        const originalStep = pc?.stepFixed
         let physicsMs = 0
         if (pc && originalStep) {
-          pc.stepPhysics = function (this: unknown, ...args: unknown[]) {
+          pc.stepFixed = function (this: unknown, ...args: unknown[]) {
             const t = performance.now()
             try {
               return originalStep.apply(this, args)
@@ -239,14 +395,44 @@ function sampleFramesInPage(page: Page, warmup: number, frames: number): Promise
           }
         }
 
-        const out: RawSamples = { frame: [], physics: [], activeMeshesEval: [], rttRender: [], drawPhase: [] }
+        const out: RawSamples = {
+          frame: [],
+          physics: [],
+          activeMeshesEval: [],
+          rttRender: [],
+          drawPhase: [],
+          shadowRenders: 0,
+          dynamicShadowRenders: 0,
+          mirrorRenders: 0,
+        }
         let seen = 0
+        // Count renders of the shadow map and the mirror, but only inside the measured frames.
+        const shadowMap = g.shadowGenerator?.getShadowMap?.() ?? null
+        const observers: Array<[Observable, unknown]> = []
+        const watch = (observable: Observable | undefined, onRender: () => void): void => {
+          if (observable) observers.push([observable, observable.add(onRender)])
+        }
+        watch(shadowMap?.onAfterRenderObservable, () => {
+          if (seen >= w) out.shadowRenders++
+        })
+        watch(g.dynamicShadowGenerator?.getShadowMap?.()?.onAfterRenderObservable, () => {
+          if (seen >= w) out.dynamicShadowRenders++
+        })
+        // The game owns no mirror (#484); any MirrorTexture that appears is found by class, so a
+        // decorative pass that brings one back shows up here as a non-zero count.
+        for (const texture of g.scene?.textures ?? []) {
+          if (texture.getClassName?.() !== 'MirrorTexture') continue
+          watch(texture.onAfterRenderObservable, () => {
+            if (seen >= w) out.mirrorRenders++
+          })
+        }
         let lastFrameAt = performance.now()
         const progress = { seen: 0, total: w + n, lastFrameMs: 0 }
         ;(window as PerfWindow).__perfProgress = progress
         const restore = (): void => {
+          for (const [observable, observer] of observers) observable.remove(observer)
           g.renderFrame = originalRender
-          if (pc && originalStep) pc.stepPhysics = originalStep
+          if (pc && originalStep) pc.stepFixed = originalStep
         }
         // Fail on a stalled render loop (no frame for 2 minutes), not on a total-time budget:
         // SwiftShader frame times vary by an order of magnitude between machines.
@@ -284,11 +470,139 @@ function sampleFramesInPage(page: Page, warmup: number, frames: number): Promise
   )
 }
 
+/** Resolve after `frames` more frames have rendered (counted on `scene.onAfterRenderObservable`). */
+function waitRenderedFrames(page: Page, frames: number): Promise<void> {
+  return page.evaluate(
+    (n) =>
+      new Promise<void>((resolve, reject) => {
+        const scene = (window as PerfWindow).game?.scene
+        if (!scene) {
+          reject(new Error('window.game.scene missing'))
+          return
+        }
+        let seen = 0
+        let lastFrameAt = performance.now()
+        const guard = window.setInterval(() => {
+          if (performance.now() - lastFrameAt < 120_000) return
+          window.clearInterval(guard)
+          scene.onAfterRenderObservable.remove(observer)
+          reject(new Error(`probeAllocations stalled: no frame for 120s after ${seen}/${n} frames`))
+        }, 5000)
+        const observer = scene.onAfterRenderObservable.add(() => {
+          seen++
+          lastFrameAt = performance.now()
+          if (seen < n) return
+          window.clearInterval(guard)
+          scene.onAfterRenderObservable.remove(observer)
+          resolve()
+        })
+      }),
+    frames,
+  )
+}
+
+interface SamplingHeapProfileNode {
+  selfSize: number
+  callFrame: { functionName: string; url: string; lineNumber: number }
+  children: SamplingHeapProfileNode[]
+}
+
+/** Total sampled bytes, plus the `top` call sites (function @ file:line) by self size. */
+function summarizeProfile(root: SamplingHeapProfileNode, top: number): { total: number; sites: AllocSite[] } {
+  let total = 0
+  const bySite = new Map<string, number>()
+  const stack = [root]
+  for (let node = stack.pop(); node; node = stack.pop()) {
+    total += node.selfSize
+    if (node.selfSize > 0) {
+      const f = node.callFrame
+      const file = f.url.replace(/^.*\/(src|node_modules)\//, '$1/').replace(/\?.*$/, '')
+      const site = `${f.functionName || '(anonymous)'} @ ${file || '(native)'}:${f.lineNumber + 1}`
+      bySite.set(site, (bySite.get(site) ?? 0) + node.selfSize)
+    }
+    for (const child of node.children) stack.push(child)
+  }
+  const sites = [...bySite.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, top)
+    .map(([site, bytes]) => ({ site, bytes }))
+  return { total, sites }
+}
+
+/**
+ * Heap-delta + allocation probe over `frames` rendered frames (Chromium only: it needs CDP).
+ * GC is forced through `HeapProfiler.collectGarbage` before and after, heap sizes come from
+ * `Runtime.getHeapUsage` (falling back to the quantised `performance.memory.usedJSHeapSize`), and
+ * allocations from the sampling heap profiler. `performance.measureUserAgentSpecificMemory` is not
+ * used: it needs cross-origin isolation, which the dev server does not set, and it resolves lazily.
+ */
+export async function probeAllocations(page: Page, frames: number): Promise<AllocSample> {
+  const cdp = await page.context().newCDPSession(page)
+  try {
+    await cdp.send('HeapProfiler.enable')
+    const heapUsed = async (): Promise<{ bytes: number | null; source: AllocSample['heapSource'] }> => {
+      try {
+        const usage = await cdp.send('Runtime.getHeapUsage')
+        return { bytes: usage.usedSize, source: 'cdp' }
+      } catch {
+        const bytes = await page.evaluate(
+          () => (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? null,
+        )
+        return { bytes, source: bytes === null ? 'unavailable' : 'performance.memory' }
+      }
+    }
+
+    await cdp.send('HeapProfiler.collectGarbage')
+    const before = await heapUsed()
+    let sampling = false
+    try {
+      await cdp.send('HeapProfiler.startSampling', {
+        samplingInterval: 4096,
+        includeObjectsCollectedByMajorGC: true,
+        includeObjectsCollectedByMinorGC: true,
+      })
+      sampling = true
+    } catch {
+      sampling = false
+    }
+    const t0 = Date.now()
+    let profile: { profile: { head: SamplingHeapProfileNode } } | null = null
+    try {
+      await waitRenderedFrames(page, frames)
+    } finally {
+      // Always stop the profiler, even when the frame wait failed.
+      if (sampling) profile = await cdp.send('HeapProfiler.stopSampling').catch(() => null)
+    }
+    const wallMs = Date.now() - t0
+    await cdp.send('HeapProfiler.collectGarbage')
+    const after = await heapUsed()
+
+    const summary = profile ? summarizeProfile(profile.profile.head, 15) : null
+    const allocatedBytes = summary ? summary.total : null
+    const heapDeltaBytes = before.bytes !== null && after.bytes !== null ? after.bytes - before.bytes : null
+    return {
+      frames,
+      wallMs,
+      heapSource: after.source,
+      heapBeforeBytes: before.bytes,
+      heapAfterBytes: after.bytes,
+      heapDeltaBytes,
+      heapDeltaPerFrameBytes: heapDeltaBytes === null ? null : heapDeltaBytes / frames,
+      allocatedBytes,
+      allocatedPerFrameBytes: allocatedBytes === null ? null : allocatedBytes / frames,
+      topAllocators: summary?.sites ?? [],
+    }
+  } finally {
+    await cdp.detach().catch(() => undefined)
+  }
+}
+
 export async function collectCounts(page: Page): Promise<SceneCounts> {
   return page.evaluate(() => {
     const g = (window as PerfWindow).game
     const scene = g?.scene
     const casters = g?.shadowGenerator?.getShadowMap?.()?.renderList
+    const dynamicCasters = g?.dynamicShadowGenerator?.getShadowMap?.()?.renderList
     return {
       meshes: scene?.meshes.length ?? 0,
       activeMeshes: scene?.getActiveMeshes().length ?? 0,
@@ -297,6 +611,16 @@ export async function collectCounts(page: Page): Promise<SceneCounts> {
       textures: scene?.textures.length ?? 0,
       drawCalls: g?.engine?._drawCalls?.current ?? 0,
       shadowCasters: casters ? casters.length : null,
+      dynamicShadowCasters: dynamicCasters ? dynamicCasters.length : null,
+      materialsFrozen: scene ? (scene.materials as Array<{ isFrozen?: boolean }>).filter((m) => m.isFrozen).length : 0,
+      // Filled in from the sampled frames by toRepeatResult.
+      shadowRendersPerFrame: null,
+      dynamicShadowRendersPerFrame: null,
+      mirrorRendersPerFrame: null,
+      refreezeCount: g?.staticSceneGate ? g.staticSceneGate.refreezeCount : null,
+      gateState: g?.staticSceneGate?.getStats?.().state ?? null,
+      activeListFrozen: scene && g?.staticSceneGate ? scene._activeMeshesFrozen === true : null,
+      settleFrames: null,
     }
   })
 }
@@ -324,7 +648,13 @@ export async function collectEnv(page: Page): Promise<PerfEnv> {
   })
 }
 
-export function toRepeatResult(raw: RawSamples, counts: SceneCounts, env: PerfEnv): RepeatResult {
+export function toRepeatResult(
+  raw: RawSamples,
+  counts: SceneCounts,
+  env: PerfEnv,
+  settleFrames: number | null = null,
+  alloc: AllocSample | null = null,
+): RepeatResult {
   const render = raw.frame.map((f, i) => f - (raw.physics[i] ?? 0))
   return {
     frames: raw.frame.length,
@@ -334,8 +664,16 @@ export function toRepeatResult(raw: RawSamples, counts: SceneCounts, env: PerfEn
     activeMeshesEvalMs: summarize(raw.activeMeshesEval),
     rttRenderMs: summarize(raw.rttRender),
     drawPhaseMs: summarize(raw.drawPhase),
-    counts,
+    counts: {
+      ...counts,
+      settleFrames,
+      shadowRendersPerFrame: raw.frame.length > 0 ? raw.shadowRenders / raw.frame.length : null,
+      dynamicShadowRendersPerFrame:
+        raw.frame.length > 0 && counts.dynamicShadowCasters !== null ? raw.dynamicShadowRenders / raw.frame.length : null,
+      mirrorRendersPerFrame: raw.frame.length > 0 ? raw.mirrorRenders / raw.frame.length : null,
+    },
     env,
+    alloc,
   }
 }
 
@@ -354,8 +692,34 @@ export interface RunFile {
     rttRenderMs: ReturnType<typeof medianOfMedians>
     drawPhaseMs: ReturnType<typeof medianOfMedians>
     counts: SceneCounts
+    /** Median over repeats of each probe figure; null when no repeat ran the probe. */
+    alloc: AllocAggregate | null
   }
   env: PerfEnv
+}
+
+export interface AllocAggregate {
+  frames: number
+  heapDeltaPerFrameBytes: number | null
+  allocatedPerFrameBytes: number | null
+  heapSource: AllocSample['heapSource']
+}
+
+function medianOrNull(values: Array<number | null>): number | null {
+  const finite = values.filter((v): v is number => v !== null && Number.isFinite(v))
+  return finite.length > 0 ? median(finite) : null
+}
+
+export function aggregateAlloc(repeats: RepeatResult[]): AllocAggregate | null {
+  const samples = repeats.map((r) => r.alloc).filter((a): a is AllocSample => a !== null && a !== undefined)
+  const last = samples[samples.length - 1]
+  if (!last) return null
+  return {
+    frames: last.frames,
+    heapDeltaPerFrameBytes: medianOrNull(samples.map((a) => a.heapDeltaPerFrameBytes)),
+    allocatedPerFrameBytes: medianOrNull(samples.map((a) => a.allocatedPerFrameBytes)),
+    heapSource: last.heapSource,
+  }
 }
 
 export function buildRunFile(
@@ -381,6 +745,7 @@ export function buildRunFile(
       rttRenderMs: agg((r) => r.rttRenderMs),
       drawPhaseMs: agg((r) => r.drawPhaseMs),
       counts: last.counts,
+      alloc: aggregateAlloc(repeats),
     },
     env: last.env,
   }

@@ -129,6 +129,21 @@ describe.skipIf(!RUN)('replay from a C++ snapshot on the compiled bundle (#422)'
     expect(client.engine.getStepCount()).toBe(1)
   })
 
+  it.each([30, 60, 144])('a 60 Hz recording replays to the same state hash at %i Hz', async (hz) => {
+    const module = await loadModule()
+    const { live, payload } = await recordLiveRun(module, { launch: true })
+    // One row per fixed step: the 60 Hz recorder took one step per frame.
+    expect(payload.frames).toHaveLength(RECORD_FRAMES)
+    const client = await replay(module, payload, { hz })
+    expect(client.controller.getLastReplaySnapshotResult()?.outcome).toBe('restored')
+    expect(client.host.score).toBe(live.host.score)
+    expect(ballPose(client)).toEqual(ballPose(live))
+    expect(client.engine.getStepCount()).toBe(live.engine.getStepCount())
+    const hash = (client.engine as { getStateHash(): string | null }).getStateHash()
+    expect(hash).not.toBeNull()
+    expect(hash).toBe((live.engine as { getStateHash(): string | null }).getStateHash())
+  })
+
   it('without the snapshot the same tape drifts (control)', async () => {
     const module = await loadModule()
     const { live, payload } = await recordLiveRun(module)

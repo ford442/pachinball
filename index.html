@@ -87,13 +87,18 @@
           <p>Space or Enter to Launch</p>
           <div id="daily-cascade-panel" class="daily-cascade-panel">
             <h2 id="todays-machine-heading" class="todays-machine-heading">Today’s machine</h2>
-            <p id="campaign-stage-label" class="campaign-stage-label">Campaign: Neon Helix</p>
+            <div class="campaign-stage-row">
+              <p id="campaign-stage-label" class="campaign-stage-label">Campaign: Neon Helix</p>
+              <button type="button" id="campaign-map-btn" class="secondary-btn campaign-map-btn" title="Campaign stage map (L)">Stage Map</button>
+            </div>
             <label class="setting-row">
               Mode
               <select id="cascade-mode">
                 <option value="vanilla">Vanilla</option>
                 <option value="daily">Daily Cascade</option>
+                <option value="weekly">Weekly Machine</option>
                 <option value="free">Free Play</option>
+                <option value="campaign">Campaign</option>
               </select>
             </label>
             <p id="cascade-seed-label" class="cascade-seed-label">Vanilla table</p>
@@ -313,16 +318,17 @@
         <button class="cabinet-btn active" data-cabinet="classic" title="Classic Pinball">Classic</button>
         <button class="cabinet-btn" data-cabinet="neo" title="Neo Arcade">Neo</button>
         <button class="cabinet-btn" data-cabinet="vertical" title="Vertical Shooter">Vertical</button>
+        <button class="cabinet-btn" data-cabinet="wide" title="Deluxe Wide">Wide</button>
       </div>
 
       <div id="levels-selector">
-        <div class="levels-hint" title="Press L for levels">L</div>
-        <button class="levels-btn" id="levels-btn" title="Select Level">Levels</button>
+        <div class="levels-hint" title="Press L for the campaign stage map">L</div>
+        <button class="levels-btn" id="levels-btn" title="Campaign stage map">Campaign</button>
       </div>
 
     </div>
 
-    <div id="controls-hint">Controls — 1/0: Flippers &nbsp;|&nbsp; Space/Enter: Launch &nbsp;|&nbsp; W/Z/Slash: Nudge &nbsp;|&nbsp; P: Pause &nbsp;|&nbsp; R: Reset</div>
+    <div id="controls-hint">Controls — 1/0: Flippers &nbsp;|&nbsp; Space/Enter: Launch &nbsp;|&nbsp; W/Z/Slash: Nudge &nbsp;|&nbsp; P: Pause &nbsp;|&nbsp; R: Reset &nbsp;|&nbsp; H: Campaign &nbsp;|&nbsp; L: Stage Map</div>
 
     <div id="power-toast" class="toast hidden"></div>
 

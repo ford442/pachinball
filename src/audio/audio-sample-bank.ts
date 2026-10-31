@@ -1,4 +1,5 @@
 import type { ImpactCategory } from './audio-synth'
+import { assetUrl } from '../core/asset-urls'
 
 /** Keys for short SFX samples under `public/audio/`. */
 export type AudioSampleKey =
@@ -63,8 +64,7 @@ const CATEGORY_TO_SAMPLE = new Map<SampleCategory, AudioSampleKey>([
 
 /** Resolve a public/audio path for Vite static serving. */
 export function getLocalAudioPath(fileName: string): string {
-  const base = (import.meta.env.BASE_URL) || '/'
-  return `${base}audio/${fileName}`
+  return assetUrl(`audio/${fileName}`)
 }
 
 export function getSampleKeyForImpact(category: ImpactCategory): AudioSampleKey | undefined {

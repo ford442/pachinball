@@ -74,10 +74,12 @@ Roles resolve via `getThemedTrackMaterial` / track theme profiles.
 | `resetBasin` | optional `offset`, `material` | `createResetBasin` |
 | `pinLattice` | `rows`, `cols`, `spacing`, `diameter`, `height`, optional `rowSpacing`, `rowOffset`, `startAlong`, `lateral`, `restitution`, `friction`, `dropout`, `dropoutSeed`, `holes`, `material` | `createPinLattice` on the previous straight — **one** C++ pin field |
 | `forceField` | `size`, `accel`, optional `space`, `alongRamp` + `lateral` + `surfaceOffset` **or** `offset` + `yawDeg`, `visible`, `material` | `createForceField` — one C++ force field |
+| `cone` | `radius`, `halfHeight`, optional `offset`, `yawDeg`, `restitution` (0.5), `friction` (0.3), `material` | `createStaticCone` (`track-primitives-wells.ts`) — one C++ `addStaticCone` handle |
+| `axisPull` | `radius`, `strength`, optional `offset`, `axis` (±Y only), `halfHeight` (1), `enabled` (true), `visible` (true), `material` | `createAxisPullWell` (`track-primitives-wells.ts`) — one C++ axis-pull force field |
 
 Cursor starts at `getTrackStartAnchor(id)` with heading `initialHeadingDeg` (default `0`).
 
-`offset` (on `bucket`, `portal`, `gate`, `cylinder`, `resetBasin`, and `spinner` when set) is a **world-space** vector added to the
+`offset` (on `bucket`, `portal`, `gate`, `cylinder`, `resetBasin`, `cone`, `axisPull`, and `spinner` when set) is a **world-space** vector added to the
 cursor — it does not rotate with heading. Gates in particular usually need a `y`
 offset, or they sit buried in the running surface. When `spinner` omits `offset`, the compiler uses the legacy `(radius+1 along heading, y-1)` placement.
 
@@ -122,6 +124,35 @@ Force fields are **C++-only**: the Rapier dev path builds the track without them
 A field may make a track easier or livelier, but it must never be the only way
 through.
 
+### C++ toys: `cone` and `axisPull`
+
+Two more toys that used to exist only inside hand-written table feeders.
+
+**`cone`** is a static solid cone, apex up along +Y, its base centred on
+cursor + `offset` (the compiler lifts the collider centre by `halfHeight`). It
+exports as ONE `cone` descriptor → `addStaticCone` (`native/src/Cone.cpp`), never
+a triangle fan; the Rapier dev path builds `ColliderDesc.cone(halfHeight, radius)`.
+Use it as a deflector mound that splits the ball's line. Keep the apex off the
+spawn line for the same reason as lattice pins: a ball dropped dead-centre on
+it balances in a deterministic solver.
+
+**`axisPull`** is the Mag Spin well as data: a vertical cylinder of `radius`
+and `halfHeight` about cursor + `offset` that pulls every ball inside it
+horizontally toward the axis — `strength` m/s² at the axis, fading linearly to
+nothing at the rim, mass-independent, never lifting. It exports as ONE
+`axisPullField` descriptor → `addForceField({ mode: 'axis-pull' })`, i.e.
+`addAxisPullField`. That binding takes no rotation, so `axis` must be
+`{ x: 0, y: ±1, z: 0 }`; the validator refuses anything else, and the exporter
+refuses a tilted descriptor. `strength` is capped at 60 m/s² like `forceField`.
+`enabled: false` builds the well switched off (`setForceFieldEnabled`).
+`visible` draws a faint, static translucent column — nothing flashes.
+
+The well is **C++-only**: the Rapier dev path builds the track without it, and
+does not build the Mag Spin feeder's Rapier-era bowl either (that bowl stays
+inside `MagSpinFeeder`'s own degrade branch). Like a force field, a well must
+never be the only way through a track. A bundle that predates the well returns
+`-1`, which the exporter reports `unsupported` rather than dropping it silently.
+
 `gap` accepts negative `length` and `drop`, which is the idiomatic way to nudge the
 cursor backwards or upwards before a segment whose builder call has a fixed offset
 of its own (see `CHRONO_CORE.json`, where a `-0.5 / -1` gap lines the second gear up
@@ -145,9 +176,12 @@ walks them into the C++ engine. A descriptor it cannot place is reported
 | `convexMesh` (closed, CCW) | `fixed` | no | `addStaticTriangleMesh` |
 | `pinField` (a whole lattice) | `fixed` | no | `addPinField` (one handle) |
 | `forceField` (box, no body) | `fixed` | no | `addForceField` |
+| `cone` | `fixed` | no | `addStaticCone` |
+| `axisPullField` (vertical cylinder, no body) | `fixed` | no | `addForceField` (`mode: 'axis-pull'` → `addAxisPullField`) |
 
 Rejected: `dynamic` bodies, a moving or sensor `convexMesh`, a moving, sensor
-or attached `pinField` / `forceField`, attachments
+or attached `pinField` / `forceField` / `cone` / `axisPullField`, a tilted
+`axisPullField`, attachments
 nested more than one level deep (`parentIndex` on a parent), and any Rapier
 collider built outside the descriptor path (`markUnexportedCollider`). There is
 no capsule descriptor, no general hull, and no trimesh beyond closed convex
@@ -166,6 +200,8 @@ Every JSON segment type above compiles to this vocabulary:
 | `gate` | fixed cylinder sensor (chroma recolour on overlap) |
 | `pinLattice` | one `pinField` |
 | `forceField` | one `forceField` |
+| `cone` | one `cone` |
+| `axisPull` | one `axisPullField` |
 | `portal`, `gap`, `turn` | none (portal sensor is created on activation) |
 
 `npm run tracks:validate` enforces the contract: it builds every JSON track
@@ -195,6 +231,15 @@ goal basin. It is the reference for new schema content.
 
 **Post-finale branch (JSON):** `TIDAL_NEXUS` → `SOLAR_FLARE` → `DIGITAL_ZEN_GARDEN`.
 
+**Fixture (not catalogued):** `tests/fixtures/tracks/FUNNEL_WELL.json` — a 45°
+pin lattice that empties onto a flat floor with a `cone` deflector and an
+`axisPull` well before the goal basin. It is the reference for the two newer
+toys. It is not under `src/adventure/track-data/`, has no manifest entry and is
+not in the campaign rotation: a new pin-dense track waits for continuous
+collision (#459 Slice B). Until it gets its own `AdventureTrackType` it borrows
+`STORM_LATTICE`'s id, because the validator only admits catalogued ids.
+`npm run tracks:validate` and `tests/track-cone-axis-pull.test.ts` build it.
+
 `QUANTUM_GRID` and `CHRONO_CORE` were migrated from TypeScript in #321; the three spine
 tracks above were migrated in the content-foundation slice with the same parity pattern.
 
@@ -218,5 +263,5 @@ then asserts the two are identical. Do a migration that way rather than by eye.
 ## Validation
 
 - Runtime: `validateTrackDefinition()` in `src/adventure/track-schema.ts`; the segment / `TrackDefinition` types live in `src/adventure/track-schema-types.ts` (re-exported by `track-schema.ts`, so import from either)
-- CLI: `npm run tracks:validate` (wraps `tests/tracks-validate-cli.test.ts`)
+- CLI: `npm run tracks:validate` (wraps `tests/tracks-validate-cli.test.ts`; covers `src/adventure/track-data/` and `tests/fixtures/tracks/`)
 - CI / local: `tests/track-schema.test.ts`, `tests/track-json-migration-parity.test.ts`

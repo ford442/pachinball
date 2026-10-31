@@ -54,12 +54,15 @@ export {
   TRACK_SCHEMA_VERSION,
 } from './track-schema'
 export type {
+  AxisPullSegment,
+  ConeSegment,
   TrackDefinition,
   TrackSegment,
   TrackValidationResult,
   TrackValidationIssue,
 } from './track-schema'
 export { compileTrackDefinition } from './track-compiler'
+export { createAxisPullWell, createStaticCone } from './track-primitives-wells'
 export type { TrackBuildApi, TrackCursor } from './track-compiler'
 export {
   DATA_TRACK_REGISTRY,
@@ -86,7 +89,7 @@ export {
   getTransitionShakeIntensity,
   type ZoneConfig,
 } from './zone-registry'
-export { AdventureState, getAdventureState, resetAdventureState, ADVENTURE_LEVELS } from './adventure-state'
+export { AdventureState, getAdventureState, resetAdventureState } from './adventure-state'
 export { AdventureGoalSystem } from './adventure-goal-system'
 export { AdventureGoalTracker } from './adventure-goal-tracker'
 export { AdventureCinematicSystem } from './adventure-cinematic-system'

@@ -9,6 +9,7 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { CapturedBall } from '../../core/captured-ball'
+import { distance3 } from '../../core/vec3-scalar'
 import type { GameConfigType } from '../../config'
 import { createTimerScope } from '../../core/timers'
 
@@ -43,6 +44,10 @@ export class GaussCannonFeeder {
 
   // Coil stretch animation
   private coilPulsePhase: number = 0
+  /** The barrel's coil rings, kept at creation so the AIM animation need not call getChildren() per frame. */
+  private readonly coilMeshes: Mesh[] = []
+  /** Breech (position + breechYOffset), where a loaded ball is held; computed once. */
+  private readonly breechPoint: Vector3
 
   private caughtBall: PhysicsBody | null = null
   private readonly capture: CapturedBall
@@ -70,6 +75,7 @@ export class GaussCannonFeeder {
     this.capture = new CapturedBall(rapier)
     this.config = config
     this.position = new Vector3(this.config.gaussPosition.x, this.config.gaussPosition.y, this.config.gaussPosition.z)
+    this.breechPoint = new Vector3(this.position.x, this.position.y + this.config.breechYOffset, this.position.z)
 
     this.createMesh()
     this.createPhysics()
@@ -145,6 +151,7 @@ export class GaussCannonFeeder {
             tessellation: 16
         }, this.scene)
         coil.parent = this.barrelMesh
+        this.coilMeshes.push(coil)
         // Position along the barrel length (which is now Y-aligned in local space)
         // Local Y ranges from 0 (pivot) to 4 (muzzle)
         coil.position.y = 1.0 + (i * 1.0)
@@ -205,13 +212,11 @@ export class GaussCannonFeeder {
           const chargeProgress = 1 - (this.timer / this.config.aimDuration)
           const stretch = 1.0 + Math.sin(this.coilPulsePhase) * anim.coilStretchAmplitude * chargeProgress
           
-          this.barrelMesh.getChildren().forEach((child) => {
-            if (child instanceof Mesh && child.name.includes("gaussCoil")) {
-              child.scaling.y = stretch
-              child.scaling.x = 1.0 / Math.sqrt(stretch)
-              child.scaling.z = 1.0 / Math.sqrt(stretch)
-            }
-          })
+          for (const coil of this.coilMeshes) {
+            coil.scaling.y = stretch
+            coil.scaling.x = 1.0 / Math.sqrt(stretch)
+            coil.scaling.z = 1.0 / Math.sqrt(stretch)
+          }
         }
         break
 
@@ -293,7 +298,7 @@ export class GaussCannonFeeder {
       // Target: Breech of the cannon
       // Calculate based on current barrel rotation
       // Breech is at the pivot point (root position + y offset)
-      const targetPos = this.position.add(new Vector3(0, this.config.breechYOffset, 0))
+      const targetPos = this.breechPoint
 
       const lerpFactor = dt * this.config.loadLerpSpeed
       const newX = Scalar.Lerp(currentPos.x, targetPos.x, lerpFactor)
@@ -302,10 +307,7 @@ export class GaussCannonFeeder {
 
       this.capture.steer(this.caughtBall, { translation: { x: newX, y: newY, z: newZ } })
 
-      const dist = Vector3.Distance(
-        new Vector3(currentPos.x, currentPos.y, currentPos.z),
-        targetPos
-      )
+      const dist = distance3(currentPos, targetPos)
 
       if (dist < this.config.loadArrivalDistance) {
         this.setState(GaussCannonState.AIM)
@@ -324,7 +326,7 @@ export class GaussCannonFeeder {
 
        // Sync ball to breech
        if (this.caughtBall) {
-           const targetPos = this.position.add(new Vector3(0, this.config.breechYOffset, 0))
+           const targetPos = this.breechPoint
            this.capture.steer(this.caughtBall, { translation: { x: targetPos.x, y: targetPos.y, z: targetPos.z } })
        }
   }
@@ -334,10 +336,7 @@ export class GaussCannonFeeder {
 
     for (const body of ballBodies) {
       const pos = body.translation()
-      const dist = Vector3.Distance(
-        new Vector3(pos.x, pos.y, pos.z),
-        this.position
-      )
+      const dist = distance3(pos, this.position)
 
       if (dist < PULL_RADIUS) {
          // Check height logic if needed

@@ -1,12 +1,13 @@
 /**
- * WebGPU post-process compatibility — DefaultRenderingPipeline's image-processing
- * pass can exceed maxUniformBuffersPerShaderStage (12 on many Windows adapters).
- * See ENGINE_BOOTSTRAP.md post-process degradation tiers.
+ * WebGPU post-process compatibility — the image-processing pass of the old monolithic
+ * DefaultRenderingPipeline could exceed maxUniformBuffersPerShaderStage (12 on many Windows
+ * adapters). This module picks the tier (`full` / `bloom-only` / `none`); `planSceneGraph()`
+ * (scene-graph-plan.ts) turns it into the scene Frame Graph's node set, leaving the
+ * image-processing node out below `full`. See ENGINE_BOOTSTRAP.md post-process degradation tiers.
  */
 
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
-import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import { recordGpuDegrade, recordGpuProbePostProcess } from '../engine/gpu-degrade-telemetry'
 
 /** Conservative default: WebGPU spec minimum per-stage uniform buffer count. */
@@ -14,8 +15,10 @@ export const WEBGPU_DEFAULT_MAX_UNIFORM_BUFFERS_PER_STAGE = 12
 
 /**
  * Estimated uniform buffers for DefaultRenderingPipeline's vertex stage (bloom +
- * image-processing stack). Babylon still binds the full layout even when toggles
- * disable FXAA/sharpen/vignette — adapters below this cap cannot run the pipeline.
+ * image-processing stack). Babylon still bound the full layout even when toggles
+ * disabled FXAA/sharpen/vignette — adapters below this cap get the `bloom-only` tier, whose
+ * graph has no image-processing node at all. The cut-off is unchanged, so the same adapters
+ * land on the same tiers they always did.
  */
 export const FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE = 17
 
@@ -26,16 +29,6 @@ export interface WebGPUPostProcessProfile {
   readonly maxUniformBuffersPerStage: number | null
   readonly tier: WebGPUPostProcessTier
   readonly reason: string
-}
-
-export interface BloomPipelineToggles {
-  imageProcessingEnabled: boolean
-  fxaaEnabled: boolean
-  sharpenEnabled: boolean
-  vignetteEnabled: boolean
-  colorCurvesEnabled: boolean
-  chromaticAberrationEnabled: boolean
-  grainEnabled: boolean
 }
 
 export function isWebGPUEngine(engine: Engine | WebGPUEngine): boolean {
@@ -93,7 +86,7 @@ export function resolveWebGPUPostProcessProfile(
       isWebGPU: true,
       maxUniformBuffersPerStage,
       tier: 'bloom-only',
-      reason: `adapter maxUniformBuffersPerShaderStage=${maxUniformBuffersPerStage} < estimated DefaultRenderingPipeline minimum (${FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE}) — using standalone BloomEffect`,
+      reason: `adapter maxUniformBuffersPerShaderStage=${maxUniformBuffersPerStage} < estimated DefaultRenderingPipeline minimum (${FULL_PIPELINE_UNIFORM_BUFFER_ESTIMATE}) — bloom-only graph, no image-processing node`,
     }
   }
 
@@ -101,71 +94,7 @@ export function resolveWebGPUPostProcessProfile(
     isWebGPU: true,
     maxUniformBuffersPerStage,
     tier: 'full',
-    reason: 'adapter supports full DefaultRenderingPipeline image-processing stack',
-  }
-}
-
-/** Map tier → enabled pipeline features (fewer features → fewer vertex uniform buffers). */
-export function bloomPipelineTogglesForTier(
-  tier: WebGPUPostProcessTier,
-  reducedMotion: boolean,
-): BloomPipelineToggles {
-  if (tier === 'none') {
-    return {
-      imageProcessingEnabled: false,
-      fxaaEnabled: false,
-      sharpenEnabled: false,
-      vignetteEnabled: false,
-      colorCurvesEnabled: false,
-      chromaticAberrationEnabled: false,
-      grainEnabled: false,
-    }
-  }
-
-  if (tier === 'bloom-only' || tier === 'conservative') {
-    // Image-processing vertex shaders bind all features regardless of toggles;
-    // strict adapters must skip the pass entirely.
-    return {
-      imageProcessingEnabled: false,
-      fxaaEnabled: false,
-      sharpenEnabled: false,
-      vignetteEnabled: false,
-      colorCurvesEnabled: false,
-      chromaticAberrationEnabled: false,
-      grainEnabled: false,
-    }
-  }
-
-  return {
-    imageProcessingEnabled: true,
-    fxaaEnabled: true,
-    sharpenEnabled: !reducedMotion,
-    vignetteEnabled: !reducedMotion,
-    colorCurvesEnabled: true,
-    chromaticAberrationEnabled: false,
-    grainEnabled: false,
-  }
-}
-
-export function applyBloomPipelineProfile(
-  bloom: DefaultRenderingPipeline,
-  profile: WebGPUPostProcessProfile,
-  reducedMotion: boolean,
-): void {
-  const toggles = bloomPipelineTogglesForTier(profile.tier, reducedMotion)
-
-  bloom.imageProcessingEnabled = toggles.imageProcessingEnabled
-  bloom.fxaaEnabled = toggles.fxaaEnabled
-  bloom.sharpenEnabled = toggles.sharpenEnabled
-  bloom.chromaticAberrationEnabled = toggles.chromaticAberrationEnabled
-  bloom.grainEnabled = toggles.grainEnabled
-
-  if (bloom.imageProcessing) {
-    bloom.imageProcessing.vignetteEnabled = toggles.vignetteEnabled
-    bloom.imageProcessing.colorCurvesEnabled = toggles.colorCurvesEnabled
-    if (!toggles.colorCurvesEnabled) {
-      bloom.imageProcessing.colorGradingEnabled = false
-    }
+    reason: 'adapter supports the full image-processing stack',
   }
 }
 
@@ -203,7 +132,7 @@ export function downgradePostProcessTier(current: WebGPUPostProcessTier): WebGPU
   return null
 }
 
-/** True when the active WebGPU adapter cannot run DefaultRenderingPipeline. */
+/** True when the active WebGPU adapter is below the cap the `full` tier needs. */
 export function isWebGPUAdapterStrictForPostProcess(engine: Engine | WebGPUEngine): boolean {
   if (!isWebGPUEngine(engine)) return false
   const cap = readMaxUniformBuffersPerStage(engine)

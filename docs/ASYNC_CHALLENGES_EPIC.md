@@ -57,7 +57,7 @@ Later phases add weekly tournament APIs and (optionally) true realtime co-op mul
 - ~~No seeded RNG for gameplay-affecting randomness~~ — `src/core/seeded-rng.ts`; every physics-affecting `Math.random` is gone (`docs/determinism-todo.md`)
 - ~~Leaderboard entries do not link to replays~~ — `handleGameOverLeaderboard()` submits `replay_id`
 - ~~No solver state in replays~~ — the frame-0 C++ snapshot + world fingerprint (#422, below)
-- No procedural layout mutator (#304) beyond the Daily Cascade pin lattice — challenges map `seed` → session RNG, not yet → table variant
+- ~~No procedural layout mutator (#304) beyond the Daily Cascade pin lattice~~ — a `?seed=` / `?challenge=` seed now selects the **weekly machine** (pin density and keep-outs, bumper offsets, armed feeders; see `docs/DAILY_CASCADE.md` → Weekly machine). A replay of one carries `machine: 'weekly'`.
 - ~~Deploy credentials still hardcoded in `deploy.py`~~ (#288) — `deploy.py` now reads `DEPLOY_TOKEN` from the environment (`require_env`)
 - ~~Spectating does not yet restore across a differing ball-id layout~~ — the spectator's TS links are remapped onto the snapshot's ids (#441); `id-layout` now means the layouts genuinely differ
 
@@ -81,7 +81,8 @@ These are **hard gates** for v1 acceptance. Do not start replay work in parallel
 
 **Deliverables before v1 coding:**
 
-- [x] `ReplayRecorder` — append-only `InputFrame[]` + metadata each physics tick while `PLAYING`
+- [x] `ReplayRecorder` — append-only `InputFrame[]` + metadata each physics tick while `PLAYING` (one row per fixed step since schema 3)
+- [x] Refresh-rate independent playback: record at 60 Hz, replay at 30 / 60 / 144 Hz → same score, pose and `getStateHash()` (`tests/replay-fixed-step.test.ts`, compiled-bundle variants in `tests/replay-*-wasm.test.ts`)
 - [x] `SeededRng` — session RNG replacing `Math.random` on gameplay paths (ball spawn, slot, feeders)
 - [x] `ReplayRunner` — feed recorded frames into `applyInputFrame`; disable live input
 - [x] Parity test: record N frames → replay → assert final score + ball position within epsilon
@@ -135,6 +136,16 @@ sequenceDiagram
 | `src/replay/challenge-system.ts` | Parse share URL (`?challenge=seed:target`, `?seed=`); the seed becomes the session seed in `startGame()` |
 | Extend `leaderboard-system.ts` | `replay_id` on entries; click → open spectate mode |
 | Extend `game-hud.ts` | Upload replay after name entry, attach `replay_id` to score POST |
+
+### Tape rows: one per fixed step (schema 3)
+
+`REPLAY_SCHEMA_VERSION = 3`: `frames` / `compressedFrames` hold one row per
+1/60 s physics step, recorded inside `GamePhysicsController`'s tick loop, and
+spectate advances exactly one row per tick whatever the viewer's refresh rate
+(a 144 Hz spectator of a 60 Hz run reaches the same `getStateHash()`). Rows a
+render frame runs after its first carry `-` flippers ("no change"). Schema 1–2
+tapes (one row per render frame) still load and replay at the viewer's dt.
+Details: `docs/determinism-todo.md` → "One row per fixed step".
 
 ### Replay payload schema (draft v1)
 
@@ -204,6 +215,7 @@ A replay now carries the world it was played on, not just the tape:
 | Field (camelCase; snake_case accepted on read) | Meaning |
 |-------|---------|
 | `physicsEngine` | `rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker` |
+| `machine` | `weekly` when the run was played on the weekly machine for `seed`; a spectator rebuilds that descriptor before the frame-0 snapshot. Absent otherwise |
 | `snapshotVersion` | `WASM_SNAPSHOT_VERSION` (1) when a snapshot was taken; 0 when the engine could not snapshot (Rapier / mirror) |
 | `staticHash` | FNV-1a 64 of the C++ static table (`getStaticContentHash()`), 16 hex |
 | `pinFieldOccupancy` | FNV-1a of every resolved pin (index + position) of every pin field; null without one |

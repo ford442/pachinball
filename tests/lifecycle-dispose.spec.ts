@@ -73,7 +73,9 @@ test.describe('Game lifecycle', () => {
 
     // A second Game on the same engine, then its teardown.
     await page.evaluate(async () => {
-      const { Game } = await import('/src/game.ts')
+      // The running Game's own class: `import('/src/game.ts')` only exists on the dev server, and
+      // this spec also runs against the built bundle (the e2e-preview job).
+      const Game = (window as any).game.constructor
       const engine = (window as any).game.engine
       const second = new Game(engine)
       await second.init()
@@ -89,5 +91,37 @@ test.describe('Game lifecycle', () => {
     // Give any timer that outlived dispose() a chance to fire and throw.
     await page.waitForTimeout(4000)
     expect(pageErrors).toEqual([])
+  })
+
+  test('hide → show → dispose leaves zero render loops; a second Game runs exactly one', async ({ page }) => {
+    test.setTimeout(180_000)
+    await bootGame(page)
+
+    const loops = (): Promise<number> => page.evaluate(() => (window as any).game.engine.activeRenderLoops.length)
+    const setHidden = (hidden: boolean): Promise<void> => page.evaluate((h) => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (h ? 'hidden' : 'visible') })
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => h })
+      document.dispatchEvent(new Event('visibilitychange'))
+    }, hidden)
+
+    expect(await loops(), 'one loop while playing').toBe(1)
+    await setHidden(true)
+    expect(await loops(), 'hidden tab renders nothing').toBe(0)
+    await setHidden(false)
+    expect(await loops(), 'resume re-registers exactly one loop').toBe(1)
+
+    // #486 A3: the resumed loop must be the Game's own, so dispose() can remove it.
+    await page.evaluate(() => (window as any).game.dispose())
+    expect(await loops(), 'render loops after hide/show/dispose').toBe(0)
+
+    await page.evaluate(async () => {
+      const Game = (window as any).game.constructor
+      const second = new Game((window as any).game.engine)
+      await second.init()
+      ;(window as any).secondGame = second
+    })
+    expect(await page.evaluate(() => (window as any).secondGame.engine.activeRenderLoops.length), 'second Game').toBe(1)
+    await page.evaluate(() => (window as any).secondGame.dispose())
+    expect(await page.evaluate(() => (window as any).secondGame.engine.activeRenderLoops.length)).toBe(0)
   })
 })

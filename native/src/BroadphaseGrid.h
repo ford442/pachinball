@@ -81,6 +81,12 @@ public:
    * A sleeping Dynamic body stays in the grid as a target: an awake body
    * (a steered kinematic ball, one rolling in) pairs with it so contact can
    * wake it, but two sleepers never pair and a sleeper never meets statics.
+   *
+   * `previous` holds each body's pose at the start of the substep, dense-indexed
+   * (see SensorVolume.h). A body that travelled is also paired with every sensor
+   * its swept AABB reaches, so a thin volume crossed within the substep is still
+   * a candidate; the narrowphase (resolveSphereVsSensor) decides whether it was
+   * actually touched. Other static kinds are paired from the end pose only.
    */
   void buildPairs(const BodyStore& bodies,
                   const std::vector<BoxDesc>& boxes,
@@ -92,9 +98,24 @@ public:
                   const std::vector<KinematicMover>& movers,
                   const std::vector<MeshTriangle>& triangles,
                   const std::vector<TriangleMeshDesc>& meshes,
+                  const std::vector<Vec3>& previous,
                   std::vector<Pair>& outPairs);
 
   int lastPairCount() const { return lastPairCount_; }
+
+  /**
+   * Bound on |cell coordinate|. cellX / cellZ clamp the scaled position to it
+   * before the float→int cast (and send NaN to cell 0): the bare cast was UB
+   * for NaN, ±inf or anything past 2^31 cells — x86 produced INT_MIN while
+   * aarch64 and WASM saturate — and the ±1 neighbour stencil then overflowed.
+   * 1e8 cells of 0.44 m is 44,000 km, so no table coordinate moves cell; nor
+   * is it clamped to the grid extent, which would re-bucket far bodies.
+   */
+  static constexpr float CELL_COORD_LIMIT = 1.0e8f;
+
+  /** Cell coordinate of a world x / z (public for broadphase_test.cpp). */
+  int cellX(float x) const;
+  int cellZ(float z) const;
 
 private:
   struct CellKey {
@@ -117,8 +138,6 @@ private:
     }
   };
 
-  int cellX(float x) const;
-  int cellZ(float z) const;
   void cellsForAabb(float minX, float maxX, float minZ, float maxZ,
                     std::vector<CellKey>& out) const;
   /** Conservative (rotation-agnostic) cell coverage via the OBB's circumscribing radius. */
@@ -141,7 +160,6 @@ private:
   std::unordered_map<CellKey, std::vector<StaticRef>, CellKeyHash> staticCells_;
   std::unordered_map<CellKey, std::vector<int>, CellKeyHash> moverCells_;
 
-  std::vector<Pair> scratchPairs_;
   int lastPairCount_ = 0;
 };
 

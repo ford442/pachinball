@@ -9,6 +9,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { Scene } from '@babylonjs/core/scene'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { CapturedBall } from '../../core/captured-ball'
+import { distance3 } from '../../core/vec3-scalar'
 import type { GameConfigType } from '../../config'
 import { getSessionRngFork, RNG_FORK } from '../../core/seeded-rng'
 import type { QualityTier } from '../../game-elements/visual-language'
@@ -17,6 +18,13 @@ import {
   loadInsertGltfForPreset,
   NANO_LOOM_INSERT_GLTF,
 } from '../../cabinet/insert-gltf-loader'
+
+
+/**
+ * Idle pin glow. Read-only source for the per-frame pin writes, which copy/scale it *into* the
+ * pin material's own `emissiveColor` (#488 §5) — never assign this object to a material.
+ */
+const PIN_GREEN = Color3.FromHexString('#00ff00')
 
 export enum NanoLoomState {
   IDLE,
@@ -275,7 +283,7 @@ export class NanoLoomFeeder {
             if (this.caughtBall) {
                 const anim = this.config.animation
                 const topY = this.position.y + (this.config.height / 2) - anim.liftTopYOffset
-                const targetPos = new Vector3(this.position.x, topY, this.position.z)
+                const targetPos = this.position // x/z alignment target; the lift drives y to topY
                 const currentPos = this.caughtBall.translation()
 
                 // Determine progress
@@ -301,20 +309,24 @@ export class NanoLoomFeeder {
                 // Activate pins near ball height
                 const ballRow = Math.floor((this.config.height / 2 - (currentPos.y - this.position.y)) / this.config.pinSpacing)
 
-                this.pins.forEach((pin, index) => {
+                // Written in place into the material's own Color3 (all pins share one material,
+                // so as before the last pin's value is the one that renders).
+                for (let index = 0; index < this.pins.length; index++) {
+                    const pin = this.pins[index]
+                    if (!pin) continue
                     const row = Math.floor(index / this.config.pinCols)
                     const distanceFromActive = Math.abs(row - ballRow)
+                    const pinMat = pin.material as StandardMaterial
 
                     if (distanceFromActive < anim.pinActivationRowRadius) {
                         const activation = 1.0 - (distanceFromActive / anim.pinActivationRowRadius)
                         pin.scaling.setAll(1.0 + activation * anim.pinActivationScaleBoost)
-                        ;(pin.material as StandardMaterial).emissiveColor =
-                          Color3.FromHexString("#00ff00").scale(anim.pinActivationEmissiveBase + activation * anim.pinActivationEmissiveBase)
+                        PIN_GREEN.scaleToRef(anim.pinActivationEmissiveBase + activation * anim.pinActivationEmissiveBase, pinMat.emissiveColor)
                     } else {
                         pin.scaling.setAll(1.0)
-                        ;(pin.material as StandardMaterial).emissiveColor = Color3.FromHexString("#00ff00")
+                        pinMat.emissiveColor.copyFrom(PIN_GREEN)
                     }
-                })
+                }
             }
             break
 
@@ -349,10 +361,7 @@ export class NanoLoomFeeder {
       const radius = this.config.intakeRadius
       for (const body of ballBodies) {
           const pos = body.translation()
-          const dist = Vector3.Distance(
-              new Vector3(pos.x, pos.y, pos.z),
-              this.intakePosition
-          )
+          const dist = distance3(pos, this.intakePosition)
 
           if (dist < radius) {
               this.captureBall(body)
@@ -367,11 +376,12 @@ export class NanoLoomFeeder {
       this.setState(NanoLoomState.LIFT)
   }
 
+  /** Runs every frame outside LIFT: in place, no Color3 per pin per frame. */
   private resetPins(): void {
-    this.pins.forEach(pin => {
+    for (const pin of this.pins) {
       pin.scaling.setAll(1.0)
-      ;(pin.material as StandardMaterial).emissiveColor = Color3.FromHexString("#00ff00")
-    })
+      ;(pin.material as StandardMaterial).emissiveColor.copyFrom(PIN_GREEN)
+    }
   }
 
   private setState(newState: NanoLoomState): void {

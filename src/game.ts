@@ -31,6 +31,7 @@ import type { DebugStageKey } from './game/checkpoint-debug'
 import { GameDelegates } from './game/game-delegates'
 import { getChallengeSystem } from './replay/challenge-system'
 import { installSimClock } from './core/sim-clock'
+import { FrameScheduler } from './core/frame-scheduler'
 import { bootWarn } from './boot-log'
 
 export class Game
@@ -50,12 +51,16 @@ export class Game
     PhysicsHost
 {
   private disposed = false
-  /** Stable reference so dispose() can remove exactly this loop from a shared engine. */
-  private readonly renderLoop = (): void => this.renderFrame()
+  /**
+   * The one owner of `engine.runRenderLoop` (#488 §4). Its loop calls `renderFrame()` (looked up per
+   * frame, so a harness may wrap it), which runs the phases; disposed with the Game's signal.
+   */
+  readonly frameScheduler: FrameScheduler
 
   constructor(engine: Engine | WebGPUEngine, physics: PhysicsSystem = new PhysicsSystem()) {
     super(engine)
     this.physics = physics
+    this.frameScheduler = new FrameScheduler(engine, { signal: this.signal, frame: () => this.renderFrame() })
   }
 
   /** Distance fog is a motion cue; reduced-motion players get none. */
@@ -92,6 +97,7 @@ export class Game
       const { signal } = this
       document.getElementById('start-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() }, { signal })
       document.getElementById('restart-btn')?.addEventListener('click', () => { void this.lifecycle?.startGame() }, { signal })
+      document.getElementById('campaign-map-btn')?.addEventListener('click', () => { void this.toggleCampaignMap() }, { signal })
       this.uiManager?.setStartButtonEnabled(false)
       // Challenges v2 (#444): a `?challenge=<id>` link loads before the first game.
       const challengeV2 = () => import('./replay/challenge-v2')
@@ -108,6 +114,8 @@ export class Game
         getCampaignStageName: () =>
           this.adventureTrackProgression?.getCurrentTrackInfo()?.name ?? 'Neon Helix',
         onWeekly: () => void challengeV2().then((m) => m.playWeekly(this)),
+        isCampaignSelected: () => this.campaignStartSelected,
+        setCampaignSelected: (selected) => { this.campaignStartSelected = selected },
       })
 
       try {
@@ -146,7 +154,7 @@ export class Game
       this.renderer.setupLighting()
       this.renderer.createRoomEnvironment()
       this.renderer.setupResizeObserver()
-      this.renderer.setupDPRHandling()
+      this.renderer.setupResolution(this.frameScheduler)
       this.renderer.setupSceneOptimizer()
 
       // One-shot auto quality drop when avg frame time stays >22ms for 2s (#300)
@@ -247,7 +255,7 @@ export class Game
         onMapCycle: () => this.mapManager?.cycleTableMap(),
         onCabinetCycle: () => { void this.cabinetManager?.cycleCabinetPreset() },
         onCameraToggle: () => { this.isCameraFollowMode = !this.isCameraFollowMode },
-        onLevelSelectToggle: () => this.toggleLevelSelect(),
+        onLevelSelectToggle: () => { void this.toggleCampaignMap() },
         onLeaderboardToggle: () => {
           void this.ensureOverlaySystems().then(() => {
             if (!this.signal.aborted) this.leaderboardSystem.toggle()
@@ -287,15 +295,8 @@ export class Game
       // Live spectate (#444 Slice E): the opt-in broadcast, Watch live and `?live=<id>`.
       void import('./game/live-ui').then((m) => { this.liveUI = m.startLiveUI(this) })
 
-      scene.onBeforeRenderObservable.add(() => {
-        this.performanceMonitor.frameStart()
-        this.performanceMonitor.physicsStart()
-        this.physicsController?.stepPhysics(this.inputManager, this.inputActions, this.replayRunner, this.replayRecorder)
-        this.performanceMonitor.physicsEnd()
-        this.settingsUI?.updatePhysicsDebugRenderer()
-      })
-
-      this.engine.runRenderLoop(this.renderLoop)
+      this.registerFrameSystems(scene)
+      this.frameScheduler.start()
 
       this.showDebugUI = new URLSearchParams(window.location.search).has('debug')
       if (this.showDebugUI) {
@@ -312,6 +313,44 @@ export class Game
     this.lifecycle?.setGameState(GameState.MENU)
   }
 
+  /** One frame: every scheduler phase in order (the scheduler's render loop calls this). */
+  renderFrame(): void {
+    this.frameScheduler.tick()
+  }
+
+  /**
+   * The frame, as scheduler systems (#488 §4): input → physics → sim → visuals → render → hud.
+   * Everything a frame draws is computed before `scene.render()` in that frame — cabinet lighting
+   * and spinners used to update after it, one frame late.
+   * Gates, traps, launchers and adventure clocks run inside the fixed step, not here.
+   */
+  private registerFrameSystems(scene: Scene): void {
+    const s = this.frameScheduler
+    const { signal } = this
+    s.register({
+      phase: 'input',
+      name: 'latency-display',
+      update: () => this.settingsUI?.updateLatencyDisplay(this.inputManager || undefined),
+    }, { signal })
+    s.register({
+      phase: 'physics',
+      name: 'fixed-step',
+      update: () => {
+        this.performanceMonitor.frameStart()
+        this.performanceMonitor.physicsStart()
+        this.physicsController?.stepFixed(this.inputManager, this.inputActions, this.replayRunner, this.replayRecorder)
+        this.performanceMonitor.physicsEnd()
+        this.settingsUI?.updatePhysicsDebugRenderer()
+      },
+    }, { signal })
+    s.register({ phase: 'sim', name: 'table', update: () => this.physicsController?.updateSim() }, { signal })
+    s.register({ phase: 'sim', name: 'adventure', update: (dt) => this.updateAdventure(dt) }, { signal })
+    s.register({ phase: 'visuals', name: 'table-visuals', update: () => this.physicsController?.updateVisuals() }, { signal })
+    s.register({ phase: 'visuals', name: 'cabinet', update: (dt) => this.updateCabinetVisuals(dt) }, { signal })
+    s.register({ phase: 'render', name: 'scene', update: () => scene.render() }, { signal })
+    s.register({ phase: 'hud', name: 'hud', update: (dt) => this.updateFrameHUD(dt) }, { signal })
+  }
+
   /** `PhysicsHost.stepAdventureProgression`: goal and time-limit clocks, once per fixed step. */
   stepAdventureProgression(dt: number): void {
     this.adventureGoalTracker?.update(dt)
@@ -324,19 +363,20 @@ export class Game
     }
   }
 
-  /** Per-frame render loop body — also used by VisibilityManager on tab resume. */
-  renderFrame(): void {
-    this.settingsUI?.updateLatencyDisplay(this.inputManager || undefined)
-    this.scene?.render()
-    const dt = this.engine.getDeltaTime() / 1000
-    this.cabinetLighting?.update(dt)
-
-    // Spinners, traps, launchers, gates and the adventure goal / time-limit
-    // clocks are gameplay: GamePhysicsController ticks them once per fixed step.
+  private updateAdventure(dt: number): void {
     this.adventureCinematicSystem?.update(dt)
     this.adventureCinematicTriggers?.update()
     this.adventureUIStateManager?.updateAnimations(dt)
+  }
 
+  private updateCabinetVisuals(dt: number): void {
+    this.cabinetLighting?.update(dt)
+    for (const visual of this.spinnerVisuals) {
+      this.spinnerBuilder?.updateSpinner(visual, dt)
+    }
+  }
+
+  private updateFrameHUD(dt: number): void {
     if (this.adventureProgressionSupervisor && this.adventureProgressionSupervisor.getTimeRemaining() > 0) {
       const trackInfo = this.adventureTrackProgression?.getCurrentTrackInfo()
       if (trackInfo) {
@@ -360,6 +400,8 @@ export class Game
       const snapshot = this.debugHelper?.buildDebugSnapshot(dt, this.lives)
       if (snapshot) this.debugHUD.update(snapshot)
       this.debugHUD.updatePanel('EventBus', this.eventBusLog.getPanelData())
+      const framePanel = this.debugHelper?.buildFramePanel()
+      if (framePanel) this.debugHUD.updatePanel('Frame', framePanel)
     }
 
     const perfMetrics = this.performanceMonitor.getMetrics()
@@ -443,13 +485,24 @@ export class Game
     this.adventureManager?.setupFeederEventHandlers()
   }
 
+  /** Stops only this Game's loop: the engine is shared, so never `engine.stopRenderLoop()` bare. */
+  pauseRendering(): void {
+    this.frameScheduler.pause()
+  }
+
+  /** Restarts this Game's own loop; a disposed Game (and its scheduler) stays stopped. */
+  resumeRendering(): void {
+    if (this.disposed) return
+    this.frameScheduler.resume()
+  }
+
   dispose(): void {
     // Idempotent: a second call (HMR, tests, a retry after a failed init) is a no-op.
     if (this.disposed) return
     this.disposed = true
     // The engine outlives the Game; leave its loop running and a second Game would
-    // render alongside this dead one.
-    this.engine.stopRenderLoop(this.renderLoop)
+    // render alongside this dead one. (The signal disposes it too; this is explicit and first.)
+    this.frameScheduler.dispose()
     disposeGame(this)
     installSimClock(null)
   }

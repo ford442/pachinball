@@ -54,5 +54,6 @@ describe('Embind surface and type declaration consistency', () => {
 
     expect(Shape.Sphere).toBe(0)
     expect(Shape.Capsule).toBe(1)
+    expect(Shape.Box).toBe(2)
   })
 })

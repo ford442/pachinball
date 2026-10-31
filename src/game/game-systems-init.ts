@@ -6,9 +6,7 @@
  */
 
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
-import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
-import { Plane } from '@babylonjs/core/Maths/math.plane'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
@@ -17,7 +15,6 @@ import { getMaterialLibrary } from '../materials'
 import { adaptLegacyConfig, DisplayState, type DisplayConfig } from '../display/display-types'
 import { refreshDailyCascadeUI } from './daily-cascade-ui'
 import {
-  QualityTier,
   PALETTE,
   INTENSITY,
   emissive,
@@ -25,6 +22,7 @@ import {
   getScoringBreakdownManager,
   BallManager,
   ZoneTriggerSystem,
+  ZoneSensors,
   SettingsManager,
 } from '../game-elements'
 import { AdventureGoalTracker } from '../adventure/adventure-goal-tracker'
@@ -44,6 +42,7 @@ import { CabinetLighting } from '../effects/cabinet-lighting'
 import { CelebrationSequencer } from '../effects/celebration-sequencer'
 import { CampaignRewardNotifier } from '../adventure/campaign-reward-notifier'
 import { wireCampaignLoop } from './campaign-loop-controller'
+import { registerOpenPortal, unregisterClosedPortal, wirePortalEntry, type ClosedPortal } from './portal-sensor-lifecycle'
 import {
   SpinnerBumperBuilder,
   BallTrapBuilder,
@@ -71,9 +70,7 @@ interface PortalEnteredEventData {
   position: Vector3
 }
 
-interface PortalDeactivatedEventData {
-  handle: number
-}
+type PortalDeactivatedEventData = ClosedPortal
 
 /** The `?debug=1` / DEV-only tooling, split into its own chunk (see initAll). */
 async function loadDebugTools(): Promise<{
@@ -104,6 +101,11 @@ export class GameSystemsInitializer {
     // entry chunk. Load it before the sync stage below so the stage itself never awaits.
     const debugTools = this.game.isDebugHUDAvailable() ? await loadDebugTools() : null
     if (this.game.signal.aborted) return
+    // The static-scene machinery (gate, frozen sets, watchers) is its own chunk, kept out of the
+    // entry chunk's budget. Start loading it now; it is awaited and installed just before the
+    // critical scene is built, so the cabinet load and the main ball are seen by the gate.
+    const staticSceneChunk = import('./static-scene-install')
+    staticSceneChunk.catch(() => undefined) // reported where it is awaited
     await this.game.runCheckpointStage('scene_rendering', () => {
       const skybox = MeshBuilder.CreateBox('skybox', { size: GameConfig.visuals.skyboxSize }, scene)
       const skyboxMaterial = new StandardMaterial('skyBox', scene)
@@ -113,17 +115,14 @@ export class GameSystemsInitializer {
       skyboxMaterial.emissiveColor = emissive(PALETTE.AMBIENT, INTENSITY.AMBIENT)
       skybox.material = skyboxMaterial
 
-      const mirrorSize = this.game.qualityTier === QualityTier.HIGH ? GameConfig.visuals.mirrorSizeHigh : GameConfig.visuals.mirrorSizeMedium
-      this.game.mirrorTexture = new MirrorTexture('mirror', mirrorSize, scene, true)
-      this.game.mirrorTexture.mirrorPlane = new Plane(0, -1, 0, -1.01)
-      this.game.mirrorTexture.level = GameConfig.visuals.mirrorTextureLevel
-
       this.game.effects = new EffectsSystem(scene, this.game.bloomPipeline, this.game.accessibility)
       if (this.game.keyLight && this.game.rimLight && this.game.bounceLight) {
         this.game.effects.registerSceneLights(this.game.keyLight, this.game.rimLight, this.game.bounceLight)
       }
       const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
-      this.game.display = new DisplaySystem(scene, this.game.engine, displayConfig, this.game.qualityTier, this.game.accessibility)
+      this.game.display = new DisplaySystem(scene, this.game.engine, displayConfig, this.game.qualityTier, this.game.accessibility, {
+        noPostProcess: new URLSearchParams(window.location.search).has('nopp'),
+      })
       this.game.display.subscribeToEvents(this.game.eventBus)
       this.game.display.setSlotScoreProvider(() => this.game.score)
       this.game.display.setEffectsSystem(this.game.effects)
@@ -136,7 +135,13 @@ export class GameSystemsInitializer {
       this.game.cabinetLighting = new CabinetLighting(scene, {
         enableEdgeLighting: true,
         enableUnderCabinetGlow: true,
-        enableScreenBorder: false, // TODO: implement screen border
+        enableScreenBorder: true,
+        // Read live: toggling photosensitive mode or reduced motion applies to the strip at once.
+        screenBorder: {
+          width: displayConfig.width,
+          height: displayConfig.height,
+          getAccessibility: () => this.game.accessibility,
+        },
         qualityTier: this.game.qualityTier,
       })
       this.game.cabinetLighting.subscribeToEvents(this.game.eventBus)
@@ -162,18 +167,6 @@ export class GameSystemsInitializer {
 
       this.game.dynamicWorld = getDynamicWorld(scene, this.game.tableCam!, this.game.display, this.game.soundSystem)
       this.game.ballStackVisual = new BallStackVisual(scene)
-
-      this.game.adventureState.setDisplay(this.game.display)
-      this.game.adventureState.onLevelCompleteCallback((level) => {
-        console.log(`[Game] Level complete: ${level.name}`)
-        if (level.rewards.unlockMap) {
-          this.game.timers.setTimeout(() => { this.game.mapCabinet?.switchTableMap(level.rewards.unlockMap!) }, GAME_TUNING.timing.storyVideoWaitMs)
-        }
-      })
-      this.game.adventureState.onGoalUpdateCallback((goals) => {
-        const goalText = goals.map(g => `${g.description}: ${g.current}/${g.target}`).join('\n')
-        this.game.display?.setStoryText(goalText)
-      })
 
       this.game.slotAdventure?.setupSlotMachineCallbacks()
       this.game.checkpointDebug.registerToggleHandler('scene_cosmetic', (enabled) => {
@@ -203,6 +196,12 @@ export class GameSystemsInitializer {
       if (!this.game.zoneTriggerSystem) {
         this.game.zoneTriggerSystem = new ZoneTriggerSystem(this.game.debugHUDQueryEnabled)
       }
+      // Every zone is a ball-filtered sensor volume in the physics world; the engine
+      // reports begin/end contacts and CollisionDispatcher feeds them to the zone system.
+      // Wired before the obstacle builders below register their footprints.
+      this.game.zoneTriggerSystem.setSensors(new ZoneSensors(world, rapier))
+      // Exit-portal entry outlives any scenario's setCallback(): complete the portal on contact.
+      wirePortalEntry(this.game)
 
       const effectIntensity = this.game.accessibility?.effectIntensity ?? 1.0
 
@@ -254,14 +253,15 @@ export class GameSystemsInitializer {
         }
       }
 
-      const shadowGenerator = this.game.shadowGenerator
-      if (shadowGenerator) {
+      // Spinners, traps, launchers and gates all move.
+      const shadowRig = this.game.shadowRig
+      if (shadowRig) {
         for (const root of obstacleMeshes) {
           if (!root) continue
           if (root instanceof AbstractMesh) {
-            shadowGenerator.addShadowCaster(root, true)
+            shadowRig.addDynamicCaster(root, true)
           } else {
-            for (const child of root.getChildMeshes()) shadowGenerator.addShadowCaster(child, false)
+            for (const child of root.getChildMeshes()) shadowRig.addDynamicCaster(child, false)
           }
         }
       }
@@ -421,8 +421,10 @@ export class GameSystemsInitializer {
             break
           }
           case 'PORTAL_DEACTIVATED': {
-            const portalData = data as PortalDeactivatedEventData
-            this.game.physicsController?.unregisterPortalSensor(portalData.handle)
+            // Every teardown path (entry, replacement, switchZone, switchToTrack, end)
+            // lands here with the handle read from the payload: getPortalSensorHandle()
+            // is already -1 by now.
+            unregisterClosedPortal(this.game, data as PortalDeactivatedEventData)
             break
           }
         }
@@ -468,6 +470,30 @@ export class GameSystemsInitializer {
       })
     }, true)
 
+    try {
+      const { installStaticScene } = await staticSceneChunk
+      if (this.game.signal.aborted) return
+      const renderer = this.game.renderer?.getStaticSceneInputs()
+      const install = installStaticScene({
+        scene,
+        eventBus: this.game.eventBus,
+        search: window.location.search,
+        userAgent: navigator.userAgent,
+        skyboxSize: GameConfig.visuals.skyboxSize,
+        frozenMaterials: renderer?.frozenMaterials ?? [],
+        clampLights: renderer?.clampLights,
+        staticShadows: renderer?.staticShadows,
+      })
+      this.game.staticScene = install
+      this.game.staticSceneGate = install.gate
+      this.game.ballManager?.setStaticSceneGate(install.gate)
+      this.game.adventureMode?.setStaticSceneGate(install.gate)
+      this.game.display?.setStaticSceneGate(install.gate)
+    } catch (error) {
+      // An optimisation, not a dependency: without it nothing is frozen and the game runs as before.
+      console.warn('[Game] Static-scene chunk unavailable; the scene stays unfrozen', error)
+    }
+
     await this.game.runCheckpointStage('scene_critical', async () => {
       await this.game.sceneBuilder?.buildCriticalScene({
         onCabinetProgress: (progress) => {
@@ -478,6 +504,17 @@ export class GameSystemsInitializer {
         },
       })
       this.game.cabinetBuilder?.updateCabinetLightExclusions()
+
+      // Owner modes (wasm-owner / wasm-worker) move the flippers only through C++ hinges, which
+      // rebuildHandleCaches() realises. It used to run first in scene_gameplay_build, after Start
+      // was enabled, so a flip before that stage (or every flip, if the stage failed) drove
+      // nothing. Realise them here and fail the stage, like the joint check in
+      // buildCriticalScene, if a table that needs them does not get both.
+      this.game.physicsController?.rebuildHandleCaches()
+      const hinges = this.game.physicsController?.getWasmFlipperHingeCount() ?? null
+      if (hinges !== null && hinges < 2) {
+        throw new Error(`Critical scene incomplete: ${hinges}/2 C++ flipper hinges`)
+      }
     })
     this.game.ready = true
     this.game.uiManager?.setStartButtonEnabled(true)
@@ -512,13 +549,10 @@ export class GameSystemsInitializer {
       this.game.eventBus.emit('portal:activation-failed', { trackId, kind, mode })
       return
     }
-    // Register the portal sensor handle so the collision dispatcher skips it.
-    // Portal contact is detected by the overlap test in updateExitPortal();
-    // contact events for the sensor body must not reach other handlers.
-    const openedHandle = this.game.adventureMode?.getPortalSensorHandle() ?? -1
-    if (openedHandle >= 0) {
-      this.game.physicsController?.registerPortalSensor(openedHandle)
-    }
+    // Register the portal's sensor as a zone: the engine reports a ball's begin
+    // contact (swept over the substep) and the zone system fires onPortalContact,
+    // which completes the portal. PORTAL_DEACTIVATED unregisters both.
+    registerOpenPortal(this.game, kind)
     // Show the portal overlay on the HUD
     this.game.uiManager?.showPortalOverlay(kind, trackId)
     // The countdown timer is no longer needed once the portal is open

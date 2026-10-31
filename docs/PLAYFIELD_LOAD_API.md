@@ -104,7 +104,7 @@ if (result.success) {
 
 | Step | Owner | Resources removed |
 |------|-------|-------------------|
-| 1 | `deactivateExitPortal()` | Exit portal mesh, portal Rapier sensor; emits `PORTAL_DEACTIVATED` → `unregisterPortalSensor()` |
+| 1 | `deactivateExitPortal()` | Exit portal mesh, portal Rapier sensor; emits `PORTAL_DEACTIVATED` → `unregisterClosedPortal()` (dispatcher handle + portal zone) |
 | 2 | `clearTrack()` | Adventure meshes/materials, rigid bodies, conveyor/gravity/damping zones, reset sensors, chroma gates, adventure sensor |
 | 3 | `rebuildHandleCaches()` | Refreshes collision-dispatch handle maps (caller, via `loadPlayfield`) |
 

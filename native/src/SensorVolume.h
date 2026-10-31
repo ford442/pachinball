@@ -28,4 +28,17 @@ struct SensorVolumeDesc {
 /** Negative-id base for sensor volumes in contact events / setCollisionGroups. */
 static constexpr int SENSOR_VOLUME_ID_BASE = -4000;
 
+/**
+ * Sensors are tested over the segment a body travelled in the substep, not
+ * only at its end pose, so a thin volume crossed inside one substep still
+ * reports an overlap (Enter on that step, Exit on the next).
+ *
+ * Below `SENSOR_SWEEP_MIN_DISTANCE` the body did not move: the end-pose test is
+ * the whole story. Above `SENSOR_SWEEP_MAX_DISTANCE` it was teleported (a toy
+ * placing a ball, a respawn), not travelled, and the empty space it skipped
+ * must not trip every sensor in between.
+ */
+static constexpr float SENSOR_SWEEP_MIN_DISTANCE = 1e-3f;
+static constexpr float SENSOR_SWEEP_MAX_DISTANCE = 4.f;
+
 } // namespace pachinball

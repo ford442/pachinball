@@ -81,6 +81,12 @@ export function simNowMs(physics: SimClockPhysics | null | undefined): number {
 export interface SimClockSource {
   steps(): number
   ms(): number
+  /**
+   * Steps including those the engine took since the last render-frame commit —
+   * the value a fixed tick or a contact callback must read (see `GameSimClock.liveSteps`).
+   * Sources without it (test fakes) fall back to `steps()`.
+   */
+  liveSteps?(): number
 }
 
 /**
@@ -96,6 +102,8 @@ export class GameSimClock implements SimClockSource {
   private totalSteps = 0
   private totalMs = 0
   private lastEngineSteps: number | null = null
+  /** The host the last `beforeStep` / `advance` / `resync` read, for `liveSteps()`. */
+  private physics: SimClockPhysics | null = null
 
   steps(): number {
     return this.totalSteps
@@ -105,8 +113,25 @@ export class GameSimClock implements SimClockSource {
     return this.totalMs
   }
 
+  /**
+   * `steps()` plus the steps the engine has taken since the last `advance()`.
+   * `steps()` only moves once per render frame, so two viewers that group the
+   * same fixed ticks into different frames read different values mid-frame;
+   * anything that must land on the same step on both (the jackpot phase clock,
+   * started from a contact callback and advanced once per tick) reads this.
+   * A host without a counter, or one whose counter went backwards, reports
+   * the committed count.
+   */
+  liveSteps(): number {
+    const now = simStepCount(this.physics)
+    const last = this.lastEngineSteps
+    if (now === null || last === null || now < last) return this.totalSteps
+    return this.totalSteps + (now - last)
+  }
+
   /** Anchor to the engine's counter before a step (no-op once anchored). */
   beforeStep(physics: SimClockPhysics | null | undefined): void {
+    this.physics = physics ?? null
     if (this.lastEngineSteps === null) this.lastEngineSteps = simStepCount(physics)
   }
 
@@ -116,6 +141,7 @@ export class GameSimClock implements SimClockSource {
    * that went backwards (a new world) re-anchors without advancing.
    */
   advance(physics: SimClockPhysics | null | undefined, fallbackDtSeconds: number): number {
+    this.physics = physics ?? null
     const now = simStepCount(physics)
     if (now === null) {
       this.totalMs += fallbackDtSeconds * 1000
@@ -131,6 +157,7 @@ export class GameSimClock implements SimClockSource {
 
   /** The engine's counter was moved under us (snapshot restore): re-anchor without counting it. */
   resync(physics: SimClockPhysics | null | undefined): void {
+    this.physics = physics ?? null
     this.lastEngineSteps = simStepCount(physics)
   }
 }
@@ -159,4 +186,15 @@ export function simClockSeconds(): number {
 /** Gameplay clock in fixed steps; 0 when none is installed. */
 export function simClockSteps(): number {
   return installed ? installed.steps() : 0
+}
+
+/**
+ * Gameplay clock in fixed steps, counting the ticks of the render frame in
+ * progress; 0 when none is installed. Read it where the exact step matters
+ * (see `GameSimClock.liveSteps`), `simClockSteps()` everywhere a frame-granular
+ * value is enough.
+ */
+export function simClockLiveSteps(): number {
+  if (!installed) return 0
+  return installed.liveSteps ? installed.liveSteps() : installed.steps()
 }

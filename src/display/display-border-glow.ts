@@ -14,6 +14,8 @@
  *   - Strobe frequency is capped to `AccessibilityConfig.flashFrequencyMax`
  *     (default 2 Hz; seizure-safety cap enforced by the accessibility system).
  *   - GlowLayer and jackpot strobe are disabled when `reducedMotion` is true.
+ *   - Photosensitive mode turns off the jackpot strobe and the REACH / FEVER
+ *     pulses too: the border holds a steady colour per state.
  */
 
 import { GlowLayer } from '@babylonjs/core/Layers/glowLayer'
@@ -67,6 +69,8 @@ export class BackboxBorderGlow {
   private _strobeHalfPeriod: number = 0.25  // 2 Hz default (safety cap)
   /** Whether jackpot strobe is suppressed by accessibility settings */
   private _strobeDisabled: boolean = false
+  /** Photosensitive mode or reduced motion: no REACH / FEVER pulse either. */
+  private _pulseDisabled: boolean = false
 
   // Fresnel rim support
   private _backboxMesh: Mesh | null = null
@@ -94,7 +98,7 @@ export class BackboxBorderGlow {
 
     // Clone to avoid bleeding emissive animation onto the shared cabinet body
     // material. This class owns the cloned material and disposes it in dispose().
-    const clonedMat = (sourceMat as EmissiveMaterial).clone('backboxGlowMat')
+    const clonedMat = sourceMat.clone('backboxGlowMat')
     clonedMat.emissiveColor = Color3.Black()
     backboxMesh.material = clonedMat
     this._ownedMaterial = clonedMat
@@ -103,8 +107,9 @@ export class BackboxBorderGlow {
     // flashFrequencyMax is in Hz (full cycles); one half-cycle = 1 / (2 * Hz).
     const maxHz = accessibility.flashFrequencyMax
     this._strobeHalfPeriod = 1 / (2 * Math.max(maxHz, 0.1))
-    // Disable strobe entirely under reduced-motion preferences.
-    this._strobeDisabled = accessibility.reducedMotion
+    // Disable strobe entirely under reduced-motion preferences or photosensitive mode.
+    this._pulseDisabled = accessibility.reducedMotion || accessibility.photosensitiveMode === true
+    this._strobeDisabled = this._pulseDisabled
 
     // GlowLayer only on HIGH tier and when reduced motion is not requested.
     if (qualityTier === QualityTier.HIGH && !accessibility.reducedMotion) {
@@ -171,8 +176,10 @@ export class BackboxBorderGlow {
     const isReach = this._displayState === DisplayState.REACH
     const isFever = this._displayState === DisplayState.FEVER
     let intensityScale = 1.0
-    if (isReach) intensityScale = 0.5 + 0.5 * Math.sin(this._pulseTime * Math.PI * 4)  // 2 Hz
-    if (isFever) intensityScale = 0.8 + 0.2 * Math.sin(this._pulseTime * Math.PI * 8)  // 4 Hz
+    if (!this._pulseDisabled) {
+      if (isReach) intensityScale = 0.5 + 0.5 * Math.sin(this._pulseTime * Math.PI * 4)  // 2 Hz
+      if (isFever) intensityScale = 0.8 + 0.2 * Math.sin(this._pulseTime * Math.PI * 8)  // 4 Hz
+    }
 
     Color3.LerpToRef(
       this._currentColor,

@@ -6,11 +6,10 @@ import { Animation } from '@babylonjs/core/Animations/animation'
 import { GlowLayer } from '@babylonjs/core/Layers/glowLayer'
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight'
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
-import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
+import type { ShadowRig } from './shadow-rig'
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
-import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -25,13 +24,11 @@ import type { GameObjects } from '../objects'
 import type { EffectsSystem } from '../effects'
 import type { TableMapManager } from './game-maps'
 import { TABLE_MAPS } from '../config/table-maps'
-import { GameConfig } from '../config'
 
 export interface CabinetBuilderHost {
   readonly scene: Scene | null
   readonly qualityTier: QualityTier
-  shadowGenerator: ShadowGenerator | null
-  mirrorTexture: MirrorTexture | null
+  shadowRig: ShadowRig | null
   gameObjects: GameObjects | null
   mapManager: TableMapManager | null
   cabinetNeonLights: PointLight[]
@@ -42,6 +39,7 @@ export interface CabinetBuilderHost {
 
 export class GameCabinetBuilder {
   private readonly host: CabinetBuilderHost
+  /** Meshes the last createEnhancedCabinet() put in the mirror's render list. */
 
   constructor(host: CabinetBuilderHost) {
     this.host = host
@@ -185,21 +183,9 @@ export class GameCabinetBuilder {
     plungerTrim.position.set(12, cabinetY + 2, -2)
     plungerTrim.material = chromeMat
 
-    // Mirror render list
-    if (this.host.mirrorTexture?.renderList) {
-      this.host.mirrorTexture.renderList.push(
-        cab, leftPanel, rightPanel, leftTrim, rightTrim,
-        apron, bezel, glassEdge, backWall, leftHinge, rightHinge,
-        plungerWall, plungerTrim, leftLED, rightLED, apronTrim
-      )
-    }
-
-    // Shadow casters
-    if (this.host.shadowGenerator) {
-      [cab, leftPanel, rightPanel, leftTrim, rightTrim,
-       apron, bezel, backWall, plungerWall].forEach(mesh => {
-        this.host.shadowGenerator?.addShadowCaster(mesh)
-      })
+    // Shadow casters: the cabinet never moves, so it goes in the static map.
+    for (const mesh of [cab, leftPanel, rightPanel, leftTrim, rightTrim, apron, bezel, backWall, plungerWall]) {
+      this.host.shadowRig?.addStaticCaster(mesh)
     }
   }
 
@@ -440,50 +426,5 @@ export class GameCabinetBuilder {
     if (cabinetNeonLights[1]) cabinetNeonLights[1].diffuse = right
     if (cabinetNeonLights[2]) cabinetNeonLights[2].diffuse = back
     if (cabinetNeonLights[3]) cabinetNeonLights[3].diffuse = under
-  }
-
-  // ============================================================================
-  // SHADOW CASTERS
-  // ============================================================================
-
-  registerShadowCasters(): void {
-    const { shadowGenerator, gameObjects } = this.host
-    if (!shadowGenerator || !gameObjects) return
-
-    if (!GameConfig.camera.reducedMotion) {
-      shadowGenerator.useContactHardeningShadow = true
-      shadowGenerator.contactHardeningLightSizeUVRatio = 0.05
-    }
-    shadowGenerator.frustumEdgeFalloff = 1.0
-
-    const MAX_SHADOW_CASTERS = 20
-    const pinballMeshes = gameObjects.getPinballMeshes()
-
-    const shadowCasters = pinballMeshes
-      .filter(mesh => {
-        if (mesh.name.includes('holo') || mesh.name.includes('glass')) return false
-        if (mesh.name.includes('pin')) {
-          mesh.receiveShadows = true
-          return false
-        }
-        return true
-      })
-      .sort((a, b) => {
-        const aPriority = a.name.includes('ball') ? 2 : a.name.includes('flipper') ? 1 : 0
-        const bPriority = b.name.includes('ball') ? 2 : b.name.includes('flipper') ? 1 : 0
-        return bPriority - aPriority
-      })
-      .slice(0, MAX_SHADOW_CASTERS)
-
-    for (const mesh of shadowCasters) {
-      shadowGenerator.addShadowCaster(mesh, true)
-    }
-
-    console.log(`[Performance] Shadow casters limited: ${shadowCasters.length}/${pinballMeshes.length}`)
-
-    const ground = this.host.scene?.getMeshByName('ground')
-    if (ground) {
-      ground.receiveShadows = true
-    }
   }
 }

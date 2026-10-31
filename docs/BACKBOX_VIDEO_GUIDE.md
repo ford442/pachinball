@@ -68,7 +68,7 @@ Flat getters (`attract`, `fever`, `jackpot`, `reach`, `adventure`) stay on the m
 public/backbox/nexus/{idle,reach,fever,jackpot}.png
 ```
 
-Wired as `StateMediaConfig.characterLayer` (see `GameConfig.backbox.*CharacterPath`). Video takes may use `.webm` or `.mp4` on the same stem; posters are PNG. If `characterLayer` is empty or fails, the LCD overlay emoji walk-by remains the Canvas2D fallback. Do not add a third video framework — `HTMLVideoElement` in `display-video.ts` is the stack.
+Wired as `StateMediaConfig.characterLayer` (see `GameConfig.backbox.*CharacterPath`). Video takes may use `.webm` or `.mp4` on the same stem; posters are PNG. The take draws on its own plane (`display-character.ts`, between the main video / image and the LCD), so the attract video and image keep their `videoPath` / `imagePath`. If `characterLayer` is empty or fails to load, the LCD overlay emoji walk-by remains the Canvas2D fallback; it is suppressed only once a take has loaded. Photosensitive mode holds the REACH / JACKPOT pulse steady, and reduced motion skips the slide-in walk-on and holds a video take on its first frame. Do not add a third video framework — `HTMLVideoElement` (as in `display-video.ts`) is the stack.
 
 ```typescript
 backbox: {
@@ -113,6 +113,18 @@ ffmpeg -y -i public/backbox/jackpot.mp4 -update 1 -frames:v 1 public/backbox/jac
 
 Production clips: **16:9**, H.264 baseline or main, **720p–1080p**, ≤50 MB, seamless loop,
 no audio track (muted autoplay). Match filenames above so config getters resolve without edits.
+
+## Track and incident clips (#486 A1)
+
+Sources live in `assets-src/backbox/{tracks,incidents}/` (kebab-case theme slugs), **not** in `public/`:
+`vite build` copies `public/` verbatim and `deploy.py` uploads every file. `assets-src/backbox/manifest.json`
+maps slug → source → output; `node scripts/transcode-backbox.mjs [slug…]` (needs ffmpeg) writes the shippable
+H.264 High 720p30 clips (no audio, `+faststart`, `-maxrate 1.4M`, ~1.8 MiB per 10 s) to
+`public/backbox/tracks/<slug>.mp4` / `public/backbox/incidents/<slug>.mp4` plus a `.webp` poster each. Commit the outputs.
+
+Neither the clips nor the posters are precached (`globIgnores` in `vite.config.ts`), and `npm run check:bundle`
+fails when `dist/` exceeds `distTotalMiBMax` (40) or any file exceeds `distFileMiBMax` (8) — see `bundle-budget.json`.
+Nothing references the clips yet; wiring them in is #489.
 
 ## Runtime API
 

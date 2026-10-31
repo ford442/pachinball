@@ -7,7 +7,6 @@
 
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import type { Scene } from '@babylonjs/core/scene'
 import type { Engine } from '@babylonjs/core/Engines/engine'
@@ -28,6 +27,7 @@ import { DisplayReelsLayer, type ReelsRenderTelemetrySnapshot } from './display-
 import { SlotMachine } from './slot-machine'
 import { DisplayVideoLayer } from './display-video'
 import { DisplayImageLayer } from './display-image'
+import type { DisplayCharacterLayer } from './display-character'
 import { DisplayPhysicalLayer } from './display-physical'
 import { DisplayLcdOverlayLayer } from './display-lcd-overlay'
 import { DisplayStateMachine } from './display-state-machine'
@@ -36,6 +36,30 @@ import type { CRTEffectParams } from './display-types'
 import type { EventBus } from '../core/event-bus'
 import type { EffectsSystem } from '../effects/effects-core'
 import { DisplayOverlay } from './display-overlay'
+import { DISPLAY_LAYER_Z } from './display-layer-depth'
+import {
+  planBackboxGraph,
+  type BackboxGraphFlags,
+  type BackboxGraphPlan,
+} from './backbox-graph-plan'
+import type { BackboxFrameGraph, BackboxGraphInfo, BackboxLayerSource } from './backbox-frame-graph'
+import type { StaticSceneGate } from '../core/static-scene-gate'
+import { isSoftwareRasterizer } from '../engine/software-rasterizer'
+
+export interface DisplaySystemOptions {
+  /** `?nopp=1`: the backbox graph is the composite and nothing else (no CRT, no jackpot pass). */
+  noPostProcess?: boolean
+}
+
+export type BackboxGraphStatus = 'idle' | 'pending' | 'built' | 'failed'
+
+/** What `getBackboxGraphInfo()` reports: the plan always, the built graph once it exists. */
+export interface BackboxGraphReport {
+  status: BackboxGraphStatus
+  error: string | null
+  plan: BackboxGraphPlan
+  graph: BackboxGraphInfo | null
+}
 
 export class DisplaySystem {
   public readonly overlay = new DisplayOverlay()
@@ -52,8 +76,23 @@ export class DisplaySystem {
   private reelsLayer: DisplayReelsLayer
   private videoLayer: DisplayVideoLayer
   private imageLayer: DisplayImageLayer
+  // Lazily imported on the first non-empty characterLayer (keeps it off the entry chunk).
+  private characterLayer: DisplayCharacterLayer | null = null
+  private characterLayerLoading = false
+  private characterRequest: { url: string; state: DisplayState } = { url: '', state: DisplayState.IDLE }
+  private backboxRoot: TransformNode | null = null
+  private disposed = false
   private lcdOverlayLayer: DisplayLcdOverlayLayer
   private stateMachine: DisplayStateMachine
+
+  // Backbox Frame Graph (#461): the layers above composed into one texture on one plane.
+  // Lazily imported, like the character layer, so its Babylon tasks stay off the entry chunk.
+  private readonly noPostProcess: boolean
+  private readonly softwareRaster: boolean
+  private backboxGraph: BackboxFrameGraph | null = null
+  private backboxGraphStatus: BackboxGraphStatus = 'idle'
+  private backboxGraphError: string | null = null
+  private staticSceneGate: Pick<StaticSceneGate, 'invalidate'> | null = null
 
   // Border glow
   private borderGlow: BackboxBorderGlow | null = null
@@ -96,9 +135,12 @@ export class DisplaySystem {
     engine: Engine | WebGPUEngine,
     config?: Partial<DisplayConfig>,
     qualityTier?: QualityTier,
-    accessibility?: AccessibilityConfig
+    accessibility?: AccessibilityConfig,
+    options: DisplaySystemOptions = {}
   ) {
     this.scene = scene
+    this.noPostProcess = options.noPostProcess ?? false
+    this.softwareRaster = isSoftwareRasterizer(engine)
     this.config = { ...DEFAULT_DISPLAY_CONFIG, ...config }
     this.qualityTier = qualityTier ?? QualityTier.MEDIUM
     this.accessibility = accessibility ?? detectAccessibility()
@@ -136,6 +178,144 @@ export class DisplaySystem {
       accessibility.reducedMotion,
       accessibility.flashFrequencyMax <= 1
     )
+    this.characterLayer?.setAccessibility(
+      accessibility.reducedMotion,
+      accessibility.flashFrequencyMax <= 1
+    )
+    this.syncBackboxGraphPlan()
+  }
+
+  /** Thawed when the backbox graph moves layer meshes off the scene camera's layer mask. */
+  setStaticSceneGate(gate: Pick<StaticSceneGate, 'invalidate'> | null): void {
+    this.staticSceneGate = gate
+  }
+
+  private backboxGraphFlags(): BackboxGraphFlags {
+    return {
+      photosensitive: this.accessibility.photosensitiveMode === true,
+      reducedMotion: this.accessibility.reducedMotion,
+      noPostProcess: this.noPostProcess,
+      softwareRaster: this.softwareRaster,
+    }
+  }
+
+  private backboxGraphPlan(): BackboxGraphPlan {
+    return planBackboxGraph(this.backboxGraphFlags(), this.qualityTier, this.config.width / this.config.height)
+  }
+
+  private backboxLayerSources(): BackboxLayerSource[] {
+    return [
+      { id: 'physical', meshes: () => this.physicalLayer.getMeshes() },
+      { id: 'grid', meshes: () => this.shaderLayer.getMeshes() },
+      { id: 'reels', meshes: () => this.reelsLayer.getMeshes() },
+      { id: 'video', meshes: () => this.videoLayer.getMeshes() },
+      { id: 'image', meshes: () => this.imageLayer.getMeshes() },
+      { id: 'character', meshes: () => this.characterLayer?.getMeshes() ?? [] },
+      { id: 'lcd', meshes: () => this.lcdOverlayLayer.getMeshes() },
+    ]
+  }
+
+  /** Build the backbox graph once the layers exist. Until it is ready, nothing is composited. */
+  private startBackboxGraph(root: TransformNode): void {
+    const plan = this.backboxGraphPlan()
+    this.shaderLayer.setJackpotStill(plan.effects.includes('jackpotStill'))
+    this.backboxGraphStatus = 'pending'
+    this.backboxGraphError = null
+    import('../frame-graph-runtime')
+      .then(({ BackboxFrameGraph }) => {
+        if (this.disposed) return null
+        return BackboxFrameGraph.create(
+          {
+            scene: this.scene,
+            root,
+            displayWidth: this.config.width,
+            displayHeight: this.config.height,
+            planeZ: DISPLAY_LAYER_Z.COMPOSITE,
+            layers: this.backboxLayerSources(),
+            effects: this.shaderLayer.getEffectPasses(),
+            onLayerMasksChanged: () => this.staticSceneGate?.invalidate('backbox-graph'),
+          },
+          plan
+        )
+      })
+      .then((graph) => {
+        if (!graph) return
+        if (this.disposed) {
+          graph.dispose()
+          return
+        }
+        this.backboxGraph = graph
+        this.backboxGraphStatus = 'built'
+        console.log(`[Display] Backbox graph built: ${graph.getInfo().nodes.join(' → ')}`)
+        // Accessibility may have changed while the graph was compiling.
+        this.syncBackboxGraphPlan()
+      })
+      .catch((err: unknown) => {
+        // The graph handed the layer meshes back to the scene camera when it failed.
+        this.backboxGraphStatus = 'failed'
+        this.backboxGraphError = err instanceof Error ? err.message : String(err)
+        console.warn('[Display] Backbox graph failed to build:', err)
+      })
+  }
+
+  /** Rebuild the graph when the node set changes (photosensitive / reduced motion toggled). */
+  private syncBackboxGraphPlan(): void {
+    const plan = this.backboxGraphPlan()
+    this.shaderLayer.setJackpotStill(plan.effects.includes('jackpotStill'))
+    const graph = this.backboxGraph
+    if (!graph) return
+    graph.rebuild(plan).then(() => {
+      if (this.backboxGraph !== graph) return
+      this.backboxGraphStatus = 'built'
+      this.backboxGraphError = null
+    }).catch((err: unknown) => {
+      this.backboxGraphStatus = 'failed'
+      this.backboxGraphError = err instanceof Error ? err.message : String(err)
+      console.warn('[Display] Backbox graph rebuild failed:', err)
+    })
+  }
+
+  /** The backbox graph's plan and, once built, its node list (debug HUD, e2e). */
+  getBackboxGraphInfo(): BackboxGraphReport {
+    return {
+      status: this.backboxGraphStatus,
+      error: this.backboxGraphError,
+      plan: this.backboxGraphPlan(),
+      graph: this.backboxGraph?.getInfo() ?? null,
+    }
+  }
+
+  /** Route a state's characterLayer to the character plane, loading its chunk on first use. */
+  private requestCharacterTake(url: string, state: DisplayState): void {
+    this.characterRequest = { url, state }
+    if (this.characterLayer) {
+      this.characterLayer.setTake(url, state)
+      return
+    }
+    if (!url.trim() || this.characterLayerLoading) return
+    this.characterLayerLoading = true
+    import('./display-character')
+      .then(({ DisplayCharacterLayer }) => {
+        if (this.disposed) return
+        // A loaded take suppresses the LCD walk-by; a missing one leaves it running.
+        const layer = new DisplayCharacterLayer(this.scene, this.config, (active) =>
+          this.lcdOverlayLayer.setCharacterTakeActive(active)
+        )
+        layer.setAccessibility(
+          this.accessibility.reducedMotion,
+          this.accessibility.flashFrequencyMax <= 1
+        )
+        if (this.backboxRoot) layer.createLayer(this.backboxRoot, this.config)
+        this.characterLayer = layer
+        layer.setTake(this.characterRequest.url, this.characterRequest.state)
+      })
+      .catch((err: unknown) => {
+        // The LCD walk-by stays the fallback.
+        console.warn('[Display] Character layer chunk failed to load:', err)
+      })
+      .finally(() => {
+        this.characterLayerLoading = false
+      })
   }
 
   /**
@@ -150,19 +330,6 @@ export class DisplaySystem {
     const backboxRoot = new TransformNode('backboxRoot', this.scene)
     backboxRoot.position = position.clone()
 
-    // Create the main display plane (kept for visual reference)
-    const displayPlane = MeshBuilder.CreatePlane(
-      'display',
-      {
-        width: this.config.width,
-        height: this.config.height,
-      },
-      this.scene
-    )
-    displayPlane.parent = backboxRoot
-    displayPlane.position.z += 0.5
-    displayPlane.rotation.y = Math.PI
-
     // Attach layer meshes to the backbox root (back → front)
     this.physicalLayer.createLayer(backboxRoot, this.config)
     this.shaderLayer.createLayer(backboxRoot)
@@ -170,10 +337,18 @@ export class DisplaySystem {
     this.reelsLayer.createLayer(backboxRoot, this.config)
     this.videoLayer.createLayer(backboxRoot, this.config)
     this.imageLayer.createLayer(backboxRoot, this.config)
+    this.backboxRoot = backboxRoot
+    this.characterLayer?.createLayer(backboxRoot, this.config)
+    // setDisplayState skips the state already current, so the boot (IDLE / attract) take is requested here.
+    this.requestCharacterTake(getStateConfig(this.config, this.currentState).characterLayer ?? '', this.currentState)
     this.lcdOverlayLayer.createLayer(backboxRoot, this.config)
     this.lcdOverlayLayer.setTrackTheme(this.trackThemePrimary, this.trackThemeAccent)
 
+    // One composite of every layer above, on the one plane the scene camera sees.
+    this.startBackboxGraph(backboxRoot)
+
     // Initialise border glow on the cabinet backbox mesh (built by cabinet preset).
+    // It lights the cabinet frame (a scene mesh around the glass), so it is not a graph layer.
     // The mesh is named 'cabinetBackbox' in all four cabinet presets.
     const backboxMesh = this.scene.getMeshByName('cabinetBackbox') as Mesh | null
     this.borderGlow = new BackboxBorderGlow(backboxMesh, this.scene, this.qualityTier, this.accessibility)
@@ -236,6 +411,7 @@ export class DisplaySystem {
     this.imageLayer.updateParallax(this.globalTime)
 
     this.physicalLayer.update(dt, this.currentState)
+    this.characterLayer?.update(dt)
     this.lcdOverlayLayer.update(dt, this.currentState, this.jackpotPhase)
 
     this.slotMachine?.update(dt)
@@ -313,11 +489,9 @@ export class DisplaySystem {
       this.shaderLayer.setShaderParams(media.shaderParams)
     }
 
-    const character = media.characterLayer?.trim() ?? ''
-    const characterIsVideo = /\.(webm|mp4)(\?|$)/i.test(character)
-    const characterIsImage = /\.(png|jpe?g|webp)(\?|$)/i.test(character)
-    const videoUrl = characterIsVideo ? character : (media.videoPath || '')
-    const imageUrl = characterIsImage ? character : (media.imagePath || '')
+    // The character take is its own plane over this stack; it never takes the video / image slot.
+    const videoUrl = media.videoPath || ''
+    const imageUrl = media.imagePath || ''
 
     if (videoUrl) {
       this.videoLayer.loadVideo(videoUrl)
@@ -338,7 +512,7 @@ export class DisplaySystem {
       this.reelsLayer.setVisible(true)
     }
 
-    this.lcdOverlayLayer.setCharacterTakeActive(character.length > 0)
+    this.requestCharacterTake(media.characterLayer ?? '', state)
 
     this.physicalLayer.onStateChange(state)
     this.shaderLayer.onStateChange(state)
@@ -602,6 +776,8 @@ export class DisplaySystem {
    * Dispose all resources
    */
   dispose(): void {
+    this.backboxGraph?.dispose()
+    this.backboxGraph = null
     this.slotMachine?.dispose()
     this.borderGlow?.dispose()
     this.physicalLayer.dispose()
@@ -609,6 +785,17 @@ export class DisplaySystem {
     this.reelsLayer.dispose()
     this.videoLayer.dispose()
     this.imageLayer.dispose()
+    this.disposed = true
+    this.characterLayer?.dispose()
+    this.characterLayer = null
     this.lcdOverlayLayer.dispose()
+  }
+
+  /** The character take URL currently requested and whether it has loaded (tests / e2e). */
+  getCharacterTakeState(): { url: string; active: boolean } {
+    return {
+      url: this.characterLayer?.getTakeUrl() ?? this.characterRequest.url.trim(),
+      active: this.characterLayer?.isTakeActive() ?? false,
+    }
   }
 }

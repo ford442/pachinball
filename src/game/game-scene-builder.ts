@@ -2,7 +2,7 @@
  * Game Scene Builder — Staged scene construction helpers.
  */
 
-import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
+import type { ShadowRig } from './shadow-rig'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
@@ -27,6 +27,7 @@ import { getMaterialLibrary } from '../materials'
 import { getCabinetBuilder } from '../cabinet'
 import { GameConfig } from '../config'
 import type { AccessibilityConfig, QualityTier } from '../game-elements'
+import type { StaticSceneGate } from '../core/static-scene-gate'
 
 /** Longest `yieldFrame` waits for a frame that a hidden tab will never deliver. */
 export const FRAME_YIELD_TIMEOUT_MS = 50
@@ -37,6 +38,7 @@ export interface SceneBuilderHost {
   readonly physics: PhysicsSystem
   readonly accessibility: AccessibilityConfig
   readonly qualityTier: QualityTier
+  readonly staticSceneGate: StaticSceneGate | null
   effects: EffectsSystem | null
   display: DisplaySystem | null
   gameObjects: GameObjects | null
@@ -44,8 +46,7 @@ export interface SceneBuilderHost {
   tableCam: TargetCamera | null
   cameraController: CameraController | null
   adventureMode: AdventureMode | null
-  mirrorTexture: import('@babylonjs/core/Materials/Textures/mirrorTexture').MirrorTexture | null
-  shadowGenerator: ShadowGenerator | null
+  shadowRig: ShadowRig | null
   playfieldGroup: TransformNode | null
   uiManager: GameUIManager | null
 }
@@ -76,6 +77,7 @@ export class GameSceneBuilder {
     // table without them, and Start still waits for the cabinet below (#453).
     const cabinetBuilder = getCabinetBuilder(scene)
     cabinetBuilder.setQualityTier(this.host.qualityTier)
+    cabinetBuilder.setStaticSceneGate(this.host.staticSceneGate)
     const cabinetReady = cabinetBuilder.loadCabinetPreset('classic', {
       qualityTier: this.host.qualityTier,
       onProgress: options.onCabinetProgress,
@@ -107,9 +109,6 @@ export class GameSceneBuilder {
 
     gameObjects.createWalls()
     gameObjects.createFlippers()
-    if (this.host.mirrorTexture) {
-      ballManager.setMirrorTexture(this.host.mirrorTexture)
-    }
     ballManager.createMainBall()
 
     // Parent flipper assemblies into the tilted playfield group (world pose preserved).
@@ -138,10 +137,10 @@ export class GameSceneBuilder {
       throw new Error(`Critical scene incomplete: ${joints}/2 flipper joints, ${flipperMeshes.length} flipper meshes`)
     }
 
-    const shadowGenerator = this.host.shadowGenerator
-    if (shadowGenerator) {
-      for (const mesh of flipperMeshes) shadowGenerator.addShadowCaster(mesh, true)
-      for (const mesh of ballMeshes) shadowGenerator.addShadowCaster(mesh, true)
+    const shadowRig = this.host.shadowRig
+    if (shadowRig) {
+      for (const mesh of flipperMeshes) shadowRig.addDynamicCaster(mesh, true)
+      for (const mesh of ballMeshes) shadowRig.addDynamicCaster(mesh, true)
     }
 
     // Start stays gated on the cabinet (or its procedural fallback) resolving.
@@ -185,20 +184,22 @@ export class GameSceneBuilder {
       }
     }
 
-    ground.receiveShadows = true
-    this.host.shadowGenerator?.addShadowCaster(ground, false)
+    // Receiver only. It used to be a caster too, which put a table-sized quad into every
+    // shadow-map render (#443).
+    this.host.shadowRig?.addReceiver(ground)
     if (this.host.playfieldGroup) ground.parent = this.host.playfieldGroup
 
     if (!GameConfig.camera.reducedMotion) {
       const flipperGlow = MeshBuilder.CreateGround('flipperGlow', { width: 10, height: 6 }, scene)
       flipperGlow.position.set(0, -0.95, -7)
-      flipperGlow.receiveShadows = true
       if (this.host.playfieldGroup) flipperGlow.parent = this.host.playfieldGroup
       const glowMat = new StandardMaterial('flipperGlowMat', scene)
       glowMat.diffuseColor = new Color3(0, 0, 0)
       glowMat.emissiveColor = new Color3(0, 0.07, 0.2)
       glowMat.alpha = 0.3
       flipperGlow.material = glowMat
+      // After the material: the rig lifts the material's light cap by one for the extra twin light.
+      this.host.shadowRig?.addReceiver(flipperGlow)
     }
 
     console.log('[GameSceneBuilder] LCD playfield created')
@@ -221,11 +222,13 @@ export class GameSceneBuilder {
     gameObjects.createPachinkoField()
     gameObjects.createFlipperRamps()
     gameObjects.createDrainRails()
+    gameObjects.createRailColliders()
 
-    const shadowGenerator = this.host.shadowGenerator
-    if (shadowGenerator) {
+    // Bumpers pulse and slingshots flex on a hit, so they are dynamic casters.
+    const shadowRig = this.host.shadowRig
+    if (shadowRig) {
       const gameplayMeshes = scene.meshes.filter(m => /bumper|slingshot/i.test(m.name))
-      for (const mesh of gameplayMeshes) shadowGenerator.addShadowCaster(mesh, true)
+      for (const mesh of gameplayMeshes) shadowRig.addDynamicCaster(mesh, true)
     }
 
     // Reparent all new obstacle meshes into the tilted visual group

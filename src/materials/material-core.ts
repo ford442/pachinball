@@ -13,12 +13,14 @@ import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture'
 import { CubeTexture } from '@babylonjs/core/Materials/Textures/cubeTexture'
-import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import type { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
+import { createCanvasTexture } from './canvas-texture'
 import { Texture } from '@babylonjs/core/Materials/Textures/texture'
 import { Scene } from '@babylonjs/core/scene'
 // Import KTX2 loader to register the format (side-effect)
 import '@babylonjs/core/Materials/Textures/Loaders/ktxTextureLoader'
 import type { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine'
+import { assetUrl } from '../core/asset-urls'
 import {
   QualityTier,
   TIER_ENV_INTENSITY,
@@ -121,7 +123,7 @@ export class MaterialLibraryBase {
   protected textureCache: Map<string, BaseTexture> = new Map()
   protected materialCache: Map<string, StandardMaterial | PBRMaterial> = new Map()
 
-  protected textureBasePath = (import.meta.env.BASE_URL) + 'textures'
+  protected textureBasePath = assetUrl('textures')
   protected _qualityTier: QualityTier = QualityTier.HIGH
 
   constructor(scene: Scene) {
@@ -213,7 +215,7 @@ export class MaterialLibraryBase {
     }
 
     const size = 256
-    const tex = new DynamicTexture('microRoughness', size, this.scene, true)
+    const tex = createCanvasTexture('microRoughness', size, this.scene, true)
     const ctx = tex.getContext()
 
     // Base smooth metal in green channel (POLISHED = 0.05)

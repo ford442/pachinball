@@ -11,26 +11,44 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import path from 'node:path'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-// Override for RelWithAsserts / bench artefacts, e.g.:
-//   WASM_MODULE_PATH=native/build-assert/PhysicsModule.js node scripts/run-wasm-parity.mjs
-const wasmModulePath = process.env.WASM_MODULE_PATH
-  ? path.resolve(root, process.env.WASM_MODULE_PATH)
-  : path.join(root, 'public/wasm/PhysicsModule.js')
+// Node needs a bundle built with ENVIRONMENT=...,node. The shipped one in
+// public/wasm/ is web,worker only (#442), so the default is the
+// RelWithAsserts artefact (`npm run build:wasm:assert`), built here when
+// missing. Override for bench artefacts, e.g.:
+//   WASM_MODULE_PATH=native/build-bench/simd-lto/PhysicsModule.js node scripts/run-wasm-parity.mjs
+const defaultModule = 'native/build-assert/PhysicsModule.js'
+const wasmModulePath = path.resolve(root, process.env.WASM_MODULE_PATH ?? defaultModule)
 const wasmModuleUrl = pathToFileURL(wasmModulePath).href
 const buildNativeDir = path.join(root, 'native/build-native')
 const nativeTest = path.join(buildNativeDir, 'physics_world_test')
 
+if (!existsSync(wasmModulePath) && !process.env.WASM_MODULE_PATH) {
+  console.log(`WASM module missing — building via npm run build:wasm:assert`)
+  try {
+    execSync('npm run build:wasm:assert', { cwd: root, stdio: 'inherit' })
+  } catch {
+    // Reported below.
+  }
+}
 if (!existsSync(wasmModulePath)) {
   console.error(`WASM module missing: ${wasmModulePath}`)
-  console.error('Build with: npm run build:wasm  (or npm run build:wasm:assert)')
+  console.error('Build with: npm run build:wasm:assert (needs the Emscripten SDK in .emsdk-version)')
   process.exit(1)
 }
 console.log(`Using WASM module: ${wasmModulePath}`)
 
 // 1. Native C++ reference (Catch2 suite via ctest or direct binary). The
-//    snapshot test also drops the parity scene's blob for §snapshot below.
+//    snapshot test also drops the parity scene's blob for §snapshot below, and
+//    the state-hash test its plunge hash for §state hash.
 const snapshotFixture = path.join(buildNativeDir, 'snapshot_parity.bin')
-const nativeEnv = { ...process.env, PACHINBALL_SNAPSHOT_FIXTURE: snapshotFixture }
+const stateHashFixture = path.join(buildNativeDir, 'state_hash_parity.txt')
+const nanQuarantineFixture = path.join(buildNativeDir, 'nan_quarantine_parity.txt')
+const nativeEnv = {
+  ...process.env,
+  PACHINBALL_SNAPSHOT_FIXTURE: snapshotFixture,
+  PACHINBALL_STATE_HASH_FIXTURE: stateHashFixture,
+  PACHINBALL_NAN_QUARANTINE_FIXTURE: nanQuarantineFixture,
+}
 try {
   if (!existsSync(nativeTest)) {
     console.log('Native test binary missing — building via npm run test:native')
@@ -1060,18 +1078,139 @@ const DENSE_FIELD = {
   buildStatics(other, true)
   const mismatch = other.restoreSnapshot(blob)
   const hashDiffers = other.getStaticContentHash() !== world.getStaticContentHash()
+  // -sWASM_BIGINT: the u64 crosses as a BigInt equal to the blob's header words
+  // [3] lo / [4] hi (Snapshot.h), not a rounded double or a hex string.
+  const words = new DataView(blob.buffer, blob.byteOffset, blob.byteLength)
+  const headerHash = (BigInt(words.getUint32(16, true)) << 32n) | BigInt(words.getUint32(12, true))
+  const liveHash = world.getStaticContentHash()
+  const hashLossless = typeof liveHash === 'bigint' && liveHash === headerHash &&
+    typeof world.getStepCount() === 'bigint'
   world.delete()
   fresh.delete()
   other.delete()
 
-  const ok = nativeMatch && stateHashMatch && rewound === 0 && reserialized && replayMatch && freshMatch && mismatch === 4 && hashDiffers
+  const ok = nativeMatch && stateHashMatch && rewound === 0 && reserialized && replayMatch && freshMatch && mismatch === 4 &&
+    hashDiffers && hashLossless
   console.log(
     `${ok ? 'PASS' : 'FAIL'} wasm snapshot native bytes + round trip ` +
     `(bytes=${blob.length} native=${native ? (nativeMatch ? 'identical' : `differs@word${firstDiffWord(blob, native)}`) : 'missing'} ` +
     `stateHash=${stateHash}/${nativeStateHash === null ? 'native missing' : stateHashMatch ? 'native identical' : `native ${nativeStateHash}`} ` +
     `rewind=${rewound}/${reserialized ? 'same' : 'diff'}/${replayMatch ? 'bit-exact' : 'DIVERGED'} ` +
-    `fresh=${freshStatus}/${freshMatch ? 'bit-exact' : 'DIVERGED'} mismatchStatus=${mismatch})`
+    `fresh=${freshStatus}/${freshMatch ? 'bit-exact' : 'DIVERGED'} mismatchStatus=${mismatch} ` +
+    `u64=${hashLossless ? 'bigint' : `LOSSY(${typeof liveHash})`})`
   )
   if (!ok) failed = true
+}
+
+// getStateHash is a uint64_t binding: a BigInt from the pinned SDK
+// (-sWASM_BIGINT). The native fixtures are 16 hex chars, the form
+// WasmPhysicsEngine hands out; anything else fails as LOSSY.
+const stateHex = (w) => {
+  const hash = w.getStateHash()
+  return typeof hash === 'bigint' ? hash.toString(16).padStart(16, '0') : `LOSSY(${typeof hash}:${hash})`
+}
+
+// #459 Slice A — getStateHash(). The plunge scene native/tests/state_hash_test.cpp
+// builds (buildPlungeScene / drivePlunge — keep the two in step): a radius
+// 0.25, mass 1 ball plunged at impulse 36 into a 0.09-radius pin field. The
+// bundle's hash after PLUNGE_FRAMES must equal the native build's, and a
+// restore must give back the hash the world had when it was serialized.
+{
+  const PLUNGE_AT = 10
+  const SNAPSHOT_AT = 40
+  const PLUNGE_FRAMES = 120
+  const build = (w) => {
+    w.addStaticBox(0, -0.5, 0, 4, 0.5, 10, 0, 0, 0, 1, 0.4, 0.2)
+    w.addStaticBox(-4.5, 1, 0, 0.5, 1, 10, 0, 0, 0, 1, 0.6, 0.1)
+    w.addStaticBox(4.5, 1, 0, 0.5, 1, 10, 0, 0, 0, 1, 0.6, 0.1)
+    w.addStaticBox(0, 1, 10.5, 4, 1, 0.5, 0, 0, 0, 1, 0.6, 0.1)
+    addPinField(w, {
+      origin: { x: -2.7, y: 0.75, z: 2 }, rows: 8, cols: 10, spacingX: 0.6, spacingZ: 0.6, rowOffsetX: 0.3,
+      radius: 0.09, halfHeight: 0.75, restitution: 0.65, friction: 0.1,
+    })
+    const ball = w.createRigidBody(0.1, 0.25, -8, 0, 0, 0, 1, 0.25, 0.5, 0.02, 0, 0, 0.5, 0.2, 0.1)
+    const flipper = w.createRigidBody(1.5, 0.3, -6, 0, 0, 0, 1, 0.12, 0.4, 0.02, 0, 1, 0.6, 0.2, 0.1)
+    w.setBodyRotation(flipper, 0, 0, 0.70710677, 0.70710677)
+    const hinge = w.createHinge(flipper, 0.9, 0.3, -6, 0, 1, 0, -0.5, 0.5)
+    return { ball, hinge }
+  }
+  const run = (w, s, from, to) => {
+    for (let f = from; f < to; f++) {
+      if (f === PLUNGE_AT) w.applyImpulse(s.ball, 0, 0, 36)
+      w.setHingeMotor(s.hinge, f % 40 < 20 ? 8 : -8, 50)
+      w.step(1 / 60)
+    }
+  }
+
+  const world = new Module.PhysicsWorld()
+  if (typeof world.getStateHash !== 'function') {
+    world.delete()
+    console.log('FAIL wasm state hash (bundle has no getStateHash — rebuild with npm run build:wasm)')
+    failed = true
+  } else {
+    const scene = build(world)
+    run(world, scene, 0, SNAPSHOT_AT)
+    const atSnapshot = stateHex(world)
+    const blob = world.serializeSnapshot()
+    run(world, scene, SNAPSHOT_AT, PLUNGE_FRAMES)
+    const final = stateHex(world)
+    const native = existsSync(stateHashFixture) ? readFileSync(stateHashFixture, 'utf8').trim() : null
+
+    const restored = world.restoreSnapshot(blob)
+    const rewound = stateHex(world)
+    run(world, scene, SNAPSHOT_AT, PLUNGE_FRAMES)
+    const replayed = stateHex(world)
+    world.delete()
+
+    const ok = native === final && restored === 0 && rewound === atSnapshot && replayed === final && final !== atSnapshot
+    console.log(
+      `${ok ? 'PASS' : 'FAIL'} wasm state hash native match + restore ` +
+      `(wasm=${final} native=${native ?? 'missing'} restore=${restored} ` +
+      `rewound=${rewound === atSnapshot ? 'same' : 'diff'} replay=${replayed === final ? 'same' : 'DIVERGED'})`
+    )
+    if (!ok) failed = true
+  }
+}
+// #487 slice 1a — NaN quarantine. native/tests/state_hash_test.cpp ("writes
+// the NaN quarantine parity fixture") builds this scene — keep the two in
+// step. Its NaN carries payload 0xffffffff; this one is whatever JS hands
+// Embind (0x7fc00000). Equal hashes with the NaN live mean both builds
+// canonicalised it; equal hashes 50 frames later mean both froze the ball
+// where its substep began and the roller woke it the same way.
+{
+  const world = new Module.PhysicsWorld()
+  if (typeof world.getNaNQuarantineCount !== 'function') {
+    world.delete()
+    console.log('FAIL wasm NaN quarantine (bundle has no getNaNQuarantineCount — rebuild with npm run build:wasm)')
+    failed = true
+  } else {
+    world.setGravity(0, -9.81, 0)
+    world.addStaticBox(0, -0.5, 0, 4, 0.5, 4, 0, 0, 0, 1, 0.4, 0.2)
+    // px,py,pz, vx,vy,vz, mass,radius,restitution,damping, bodyType, shape, capsuleHalfHeight, friction, angularDamping
+    world.createRigidBody(-1, 0.25, 0, 4, 0, 0, 1, 0.25, 0.5, 0.02, 0, 0, 0.5, 0.2, 0.1)
+    const lost = world.createRigidBody(0.5, 0.25, 0, 0, 0, 0, 1, 0.25, 0.5, 0.02, 0, 0, 0.5, 0.2, 0.1)
+    for (let f = 0; f < 10; f++) world.step(1 / 60)
+    world.setVelocity(lost, Number.NaN, 0, 0)
+    const withNaN = stateHex(world)
+    world.step(1 / 60)
+    const frozen = world.getNaNQuarantineCount()
+    const frozenId = world.getNaNQuarantineBodyId(0)
+    for (let f = 0; f < 49; f++) world.step(1 / 60)
+    const after = stateHex(world)
+    const finite = Number.isFinite(world.getPosX(lost)) && Number.isFinite(world.getVelX(lost))
+    world.delete()
+
+    const native = existsSync(nanQuarantineFixture)
+      ? readFileSync(nanQuarantineFixture, 'utf8').trim().split(/\s+/)
+      : null
+    const ok = native !== null && native[0] === withNaN && native[1] === after &&
+      frozen === 1 && frozenId === lost && finite
+    console.log(
+      `${ok ? 'PASS' : 'FAIL'} wasm NaN quarantine native match ` +
+      `(withNaN=${withNaN} native=${native?.[0] ?? 'missing'} after=${after} native=${native?.[1] ?? 'missing'} ` +
+      `frozen=${frozen}/${frozenId === lost ? 'ball' : frozenId} finite=${finite})`
+    )
+    if (!ok) failed = true
+  }
 }
 process.exit(failed ? 1 : 0)

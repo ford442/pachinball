@@ -6,7 +6,7 @@ import { Scene } from '@babylonjs/core/scene'
 import { supportsPinFields, type PhysicsApi, type PhysicsBody, type PhysicsWorldSink } from '../core/physics-api'
 import { resolvePinField } from '../core/pin-field'
 import { GameConfig } from '../config'
-import type { PinLattice } from '../cascade/daily-cascade-layout'
+import type { PinLattice, SeededPinField } from '../cascade/daily-cascade-layout'
 import {
   PEG_BASE_RADIUS,
   PEG_COLLIDER_RADIUS,
@@ -21,11 +21,11 @@ import {
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import { getMaterialLibrary } from '../materials'
 import type { PhysicsBinding } from '../game-elements/types'
+import { setPinLatticeInstances } from './pin-lattice'
 
 interface PinPlacement {
   x: number
   z: number
-  name: string
 }
 
 export class PachinkoBuilder {
@@ -57,6 +57,7 @@ export class PachinkoBuilder {
     height: number = 22,
     pinPositions?: { x: number; z: number }[],
     pinLattice?: PinLattice,
+    seededField?: SeededPinField,
   ): {
     bindings: PhysicsBinding[]
     targetBodies: PhysicsBody[]
@@ -64,7 +65,14 @@ export class PachinkoBuilder {
     targetActive: boolean[]
     targetRespawnTimer: number[]
     meshes: AbstractMesh[]
+    /** `[latticeMesh]` — every pin is one instance of it. Empty when the layout has no pins. */
     pins: AbstractMesh[]
+    /**
+     * Every pin collider's body: the one pin-field body on the C++ owner, else one fixed body
+     * per pin. Only the first is bound to the lattice mesh, so table enable/disable and the
+     * C++ export reach the rest through this list.
+     */
+    pinBodies: PhysicsBody[]
   } {
     const bindings: PhysicsBinding[] = []
     const targetBodies: PhysicsBody[] = []
@@ -73,6 +81,7 @@ export class PachinkoBuilder {
     const targetRespawnTimer: number[] = []
     const meshes: AbstractMesh[] = []
     const pins: AbstractMesh[] = []
+    const pinBodies: PhysicsBody[] = []
 
     // Enhanced peg material with map-reactive emissive tips
     const pinMat = this.matLib.getEnhancedPinMaterial()
@@ -82,28 +91,33 @@ export class PachinkoBuilder {
     const topRadius = PEG_TOP_RADIUS
 
     // ================================================================
-    // INSTANCED PINS – create 3 LOD template meshes once, then
-    // stamp instances for every grid position.  All instances share
-    // the same vertex buffer → O(LOD_levels) draw-calls instead of
-    // O(pin_count).
+    // PINS – ONE mesh for the whole lattice. Its instances are a static
+    // thin-instance matrix buffer built below from `resolvePinField`, so the
+    // lattice is a single scene node and a single draw call.
+    //
+    // It used to be an InstancedMesh per pin over three LOD templates. LOD is
+    // per mesh, not per instance, so a thin-instance lattice cannot keep it:
+    // one geometry is used, the 'med' one. From the fixed table camera 87 of
+    // 91 vanilla pins were on 'low' and 4 on 'med' ('high' was never chosen),
+    // so this is the same or finer everywhere.
     // ================================================================
 
-    const buildTemplate = (suffix: string, tess: number, capSeg: number, bevelTess: number): Mesh => {
-      const cyl = MeshBuilder.CreateCylinder(`pinT_${suffix}`, {
+    const buildTemplate = (tess: number, capSeg: number, bevelTess: number): Mesh => {
+      const cyl = MeshBuilder.CreateCylinder('pinT', {
         diameterTop: topRadius * 2,
         diameterBottom: baseRadius * 2,
         height: pegHeight,
         tessellation: tess,
       }, this.scene)
 
-      const cap = MeshBuilder.CreateSphere(`pinCapT_${suffix}`, {
+      const cap = MeshBuilder.CreateSphere('pinCapT', {
         diameter: topRadius * 2.2,
         slice: 0.5,
         segments: capSeg,
       }, this.scene)
       cap.position.y = pegHeight / 2 - 0.02
 
-      const bevel = MeshBuilder.CreateTorus(`pinBevelT_${suffix}`, {
+      const bevel = MeshBuilder.CreateTorus('pinBevelT', {
         diameter: baseRadius * 2.3,
         thickness: 0.025,
         tessellation: bevelTess,
@@ -111,25 +125,13 @@ export class PachinkoBuilder {
       bevel.position.y = -pegHeight / 2 + 0.03
       bevel.rotation.x = Math.PI / 2
 
-      // Merge sub-meshes into a single draw-call-efficient mesh at origin
-      const merged = Mesh.MergeMeshes([cyl, cap, bevel], true, true, undefined, false, true)!
+      // Merge the parts into ONE mesh with ONE submesh (the last argument, multiMultiMaterials,
+      // is false: `true` made a submesh per part, and each submesh is its own instanced draw).
+      const merged = Mesh.MergeMeshes([cyl, cap, bevel], true, true, undefined, false, false)!
+      merged.name = 'pachinkoPins'
       merged.material = pinMat
-      merged.isPickable = false
-      merged.isVisible = false  // template is hidden; instances render
       return merged
     }
-
-    const pinHigh = buildTemplate('high', 12, 10, 10)
-    const pinMed  = buildTemplate('med',   8,  6,  8)
-    const pinLow  = buildTemplate('low',   6,  4,  6)
-
-    pinHigh.addLODLevel(12, pinMed)
-    pinHigh.addLODLevel(25, pinLow)
-    pinHigh.addLODLevel(50, null)
-
-    // Track templates so they are disposed and toggled with the scene
-    meshes.push(pinHigh, pinMed, pinLow)
-    this.meshes.push(pinHigh, pinMed, pinLow)
 
     // ================================================================
     // PHYSICS – one pin-field descriptor for the whole lattice. The C++
@@ -138,12 +140,11 @@ export class PachinkoBuilder {
     // its own fixed cylinder. The visual instances come from the same
     // resolver either way, so they sit exactly on the pins that collide.
     // ================================================================
-    const spec = pachinkoPinFieldSpec(center, width, height, pinPositions, pinLattice)
+    const spec = pachinkoPinFieldSpec(center, width, height, pinPositions, pinLattice, seededField)
     const placements: PinPlacement[] = spec
       ? resolvePinField(spec).map((pin) => ({
           x: pin.position.x,
           z: pin.position.z,
-          name: pinPositions?.length ? `pin_seed_${pin.row}_${pin.col}` : `pin_${pin.row}_${pin.col}`,
         }))
       : this.offLatticePlacements(pinPositions ?? [])
 
@@ -151,21 +152,32 @@ export class PachinkoBuilder {
     if (spec && supportsPinFields(this.world)) {
       fieldBody = this.world.createPinField(spec)
       this.bodies.push(fieldBody)
+      pinBodies.push(fieldBody)
     }
 
-    for (const { x, z, name } of placements) {
-      const inst = pinHigh.createInstance(name)
-      inst.position.set(x, PIN_Y, z)
-      inst.isPickable = false
-      inst.freezeWorldMatrix()
+    // The Rapier path (and off-lattice seeded pins) still need a body per pin.
+    // createPinBody registers each in this.bodies for disposal.
+    if (!fieldBody) {
+      for (const { x, z } of placements) pinBodies.push(this.createPinBody(x, z))
+    }
 
-      // Every instance binds to the one field body where there is one: the
-      // body is fixed (no pose sync), and table enable/disable still finds it.
-      const body = fieldBody ?? this.createPinBody(x, z)
-      bindings.push({ mesh: inst, rigidBody: body })
-      meshes.push(inst)
-      pins.push(inst)
-      this.meshes.push(inst)
+    if (placements.length > 0) {
+      const lattice = buildTemplate(8, 6, 8)
+      setPinLatticeInstances(
+        lattice,
+        placements.map(({ x, z }) => ({ x, y: PIN_Y, z })),
+        undefined,
+        'pachinko pin lattice',
+      )
+
+      // One binding for the lattice, to the first pin body (the field body on the owner). Every
+      // pin body is fixed, so pose sync skips it and the mesh stays at the origin; the binding
+      // only keeps the mesh and a collider findable together. Table enable/disable reaches the
+      // other pin bodies through `pinBodies`, and the mesh through `meshes`.
+      bindings.push({ mesh: lattice, rigidBody: pinBodies[0] })
+      meshes.push(lattice)
+      pins.push(lattice)
+      this.meshes.push(lattice)
     }
 
     // Catcher in the center of the pachinko field
@@ -199,7 +211,8 @@ export class PachinkoBuilder {
       targetActive,
       targetRespawnTimer,
       meshes,
-      pins
+      pins,
+      pinBodies,
     }
   }
 
@@ -222,9 +235,9 @@ export class PachinkoBuilder {
   /** Seeded positions with no lattice to fit: filter the keep-outs and place each pin. */
   private offLatticePlacements(pinPositions: readonly { x: number; z: number }[]): PinPlacement[] {
     const placements: PinPlacement[] = []
-    pinPositions.forEach((p, i) => {
-      if (!pinInKeepOut(p.x, p.z)) placements.push({ x: p.x, z: p.z, name: `pin_seed_${i}` })
-    })
+    for (const p of pinPositions) {
+      if (!pinInKeepOut(p.x, p.z)) placements.push({ x: p.x, z: p.z })
+    }
     return placements
   }
 

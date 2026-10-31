@@ -12,7 +12,7 @@ import type { TableMapManager } from './game-maps'
 import { SettingsManager } from '../game-elements'
 import type { AudioSourceMode } from '../audio/audio-sample-bank'
 import { TABLE_MAPS, registerMap } from '../config/table-maps'
-import { PhysicsDebugRenderer } from '../game-elements/physics-debug-renderer'
+import type { PhysicsDebugRenderer } from '../game-elements/physics-debug-renderer'
 import {
   attemptWebGPURenderer,
   getActiveRenderer,
@@ -48,7 +48,7 @@ export interface SettingsUIHost {
   setScanlineIntensityMultiplier?(multiplier: number): void
   switchTableMap(mapName: string): void
   loadCabinetPreset(type: import('./game-cabinet').CabinetType): Promise<void> | void
-  toggleLevelSelect(): void
+  toggleCampaignMap(): Promise<void>
 }
 
 export class GameSettingsUI {
@@ -151,6 +151,7 @@ export class GameSettingsUI {
     const scanlineEnabled = scanlineEnabledToggle?.checked ?? true
 
     const currentSettings = SettingsManager.load()
+    const audioSource: AudioSourceMode = audioSourceSelect?.value === 'synth' ? 'synth' : 'samples'
     const newSettings = {
       reducedMotion: reducedMotionCheckbox?.checked ?? false,
       photosensitiveMode: photosensitiveCheckbox?.checked ?? false,
@@ -168,7 +169,7 @@ export class GameSettingsUI {
       musicVolume: parseFloat(musicVolumeSlider?.value ?? '0.6'),
       sfxVolume: parseFloat(sfxVolumeSlider?.value ?? '0.9'),
       muted: muteCheckbox?.checked ?? false,
-      audioSource: (audioSourceSelect?.value === 'synth' ? 'synth' : 'samples') as AudioSourceMode,
+      audioSource,
       reducedAudio: currentSettings.reducedAudio,
     }
 
@@ -287,12 +288,20 @@ export class GameSettingsUI {
     if (!physicsDebugCheckbox) return
 
     physicsDebugCheckbox.addEventListener('change', () => {
-      if (!this.host.scene) return
-      if (!this.physicsDebugRenderer) {
-        this.physicsDebugRenderer = new PhysicsDebugRenderer(this.host.scene, this.host.physics)
-      }
-      this.physicsDebugRenderer.setEnabled(physicsDebugCheckbox.checked)
+      void this.ensurePhysicsDebugRenderer().then((renderer) => {
+        renderer?.setEnabled(physicsDebugCheckbox.checked)
+      })
     }, { signal: this.host.signal })
+  }
+
+  /** The collider overlay and its line geometry are their own chunk: only the debug toggle needs them. */
+  private async ensurePhysicsDebugRenderer(): Promise<PhysicsDebugRenderer | null> {
+    if (this.physicsDebugRenderer) return this.physicsDebugRenderer
+    const { PhysicsDebugRenderer: Renderer } = await import('../game-elements/physics-debug-renderer')
+    // dispose() can land while the chunk loads.
+    if (this.host.signal.aborted || !this.host.scene) return null
+    this.physicsDebugRenderer ??= new Renderer(this.host.scene, this.host.physics)
+    return this.physicsDebugRenderer
   }
 
   /** Call once per frame (after the physics step) to refresh the physics debug overlay. */
@@ -338,7 +347,7 @@ export class GameSettingsUI {
     this.updateMapSelectorUI()
     // These nodes are static (index.html), unlike the rebuilt map buttons above, so
     // bind them once here. Binding from buildMapSelectorUI stacked a listener per
-    // rebuild and made #levels-btn toggle the level screen twice per click (#441).
+    // rebuild and made #levels-btn toggle the stage map twice per click (#441).
     this.setupCabinetSelector()
     this.setupLevelsSelector()
 
@@ -438,7 +447,7 @@ export class GameSettingsUI {
     const levelsBtn = document.getElementById('levels-btn')
     if (!levelsBtn) return
     levelsBtn.addEventListener('click', () => {
-      this.host.toggleLevelSelect()
+      void this.host.toggleCampaignMap()
     }, { signal: this.host.signal })
   }
 

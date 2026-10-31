@@ -44,7 +44,6 @@ export interface GameTuning {
   }
   timing: {
     nudgeCooldownMs: number
-    storyVideoWaitMs: number
     tiltBloomResetMs: number
     idleCallbackTimeoutMs: number
     cosmeticFallbackDelayMs: number
@@ -127,7 +126,6 @@ export const GAME_TUNING = {
   },
   timing: {
     nudgeCooldownMs: 450,
-    storyVideoWaitMs: 3000,
     tiltBloomResetMs: 1000,
     idleCallbackTimeoutMs: 500,
     cosmeticFallbackDelayMs: 100,

@@ -12,7 +12,7 @@ import { makeBallManagerStub, makeGameObjectsStub, makePhysicsHostShell } from '
 const STEP_MS = FIXED_TIMESTEP * 1000
 
 /** `frameMs` is the render delta; the controller turns it into fixed steps (#444). */
-function makeTable(frameMs = STEP_MS) {
+function makeTable(frameMs = 1000 / 120) {
   let engineSteps = 0
   const applyImpulse = vi.fn()
   const ball = {
@@ -21,8 +21,8 @@ function makeTable(frameMs = STEP_MS) {
     applyImpulse,
   }
   const physics = {
-    // The controller hands the engine one fixed step per call.
-    step: vi.fn(() => { engineSteps++; return 0 }),
+    // Each call is one fixed step: the controller runs one per 1/60 s tick.
+    step: vi.fn(() => { engineSteps++; return 1 }),
     getStepCount: () => engineSteps,
     getWorld: () => null,
     isWasmActive: () => false,
@@ -33,14 +33,18 @@ function makeTable(frameMs = STEP_MS) {
     ballManager: makeBallManagerStub({ getBallBody: vi.fn(() => ball) }),
     gameObjects: makeGameObjectsStub(),
   })
+  // Default is a 120 Hz render delta: half the frames run no fixed step.
   ;(host.engine.getDeltaTime as ReturnType<typeof vi.fn>).mockReturnValue(frameMs)
   const controller = new GamePhysicsController(host)
+  /** Render frames until the engine has taken `n` more fixed steps. */
   const frames = (n: number) => {
-    for (let i = 0; i < n; i++) controller.stepPhysics(null, null, null, null)
+    const target = engineSteps + n
+    while (engineSteps < target) controller.stepPhysics(null, null, null, null)
   }
+  const renderFrame = () => controller.stepPhysics(null, null, null, null)
   const nudge = () => controller.applyNudge({ x: 1, y: 0, z: 0 })
   return {
-    host, controller, frames, nudge, applyImpulse,
+    host, controller, frames, renderFrame, nudge, applyImpulse,
     engineSteps: () => engineSteps,
     jumpEngineCounter: (to: number) => { engineSteps = to },
   }
@@ -68,7 +72,7 @@ describe('nudge / tilt on the sim clock (#441)', () => {
 
   it('a stalled render frame catches up at most MAX_FRAME_DT of fixed steps', () => {
     const t = makeTable(1000)
-    t.frames(30)
+    for (let i = 0; i < 30; i++) t.renderFrame()
     // Two fixed steps per one-second frame, not sixty; the clock counts the steps taken.
     expect(t.engineSteps()).toBe(30 * Math.round(MAX_FRAME_DT / FIXED_TIMESTEP))
     expect(t.controller.simClock.steps()).toBe(t.engineSteps())
@@ -139,7 +143,7 @@ describe('nudge / tilt on the sim clock (#441)', () => {
     t.nudge()
     const before = t.controller.simClock.ms()
     t.jumpEngineCounter(0)
-    t.frames(1)
+    t.renderFrame()
     // The rewind frame counts as zero; the clock never runs backwards.
     expect(t.controller.simClock.ms()).toBeCloseTo(before, 9)
     t.frames(cooldownSteps + 1)

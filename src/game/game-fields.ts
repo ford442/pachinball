@@ -2,13 +2,11 @@ import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera'
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight'
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight'
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
-import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
-import { MirrorTexture } from '@babylonjs/core/Materials/Textures/mirrorTexture'
-import { RenderTargetTexture } from '@babylonjs/core/Materials/Textures/renderTargetTexture'
+import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
+import type { ShadowRig } from './shadow-rig'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode'
 import { Scene } from '@babylonjs/core/scene'
-import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline'
 import { SceneOptimizer } from '@babylonjs/core/Misc/sceneOptimizer'
 import type { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation'
 import type { EngineInstrumentation } from '@babylonjs/core/Instrumentation/engineInstrumentation'
@@ -34,6 +32,7 @@ import { SpinnerBumperBuilder, type SpinnerBumperVisual, BallTrapBuilder, type B
 import { BallStackVisual } from '../game-elements/ball-stack-visual'
 import { freshNudgeState, type NudgeState } from './physics/types'
 import { CabinetLighting } from '../effects/cabinet-lighting'
+import type { BloomPipelineController } from '../effects/bloom-pipeline-types'
 import { CelebrationSequencer } from '../effects/celebration-sequencer'
 import { GameStateManager } from './game-state'
 import { EventBus } from '../core/event-bus'
@@ -47,6 +46,8 @@ import { GameConfig, BallType } from '../config'
 
 import { GameRenderer } from './game-renderer'
 import { GameCabinetBuilder } from './game-cabinet-builder'
+import type { StaticSceneGate } from '../core/static-scene-gate'
+import type { StaticSceneInstall } from './static-scene-install'
 import { GameSceneBuilder } from './game-scene-builder'
 import { GamePhysicsController } from './game-physics-controller'
 import { GameInputActions } from './game-input-actions'
@@ -65,7 +66,7 @@ import type { FreeMapTestMode } from './free-map-test-mode'
 import { LevelLoader } from './level-loader'
 import type { LeaderboardSystem } from '../game-elements/leaderboard-system'
 import type { NameEntryDialog } from '../game-elements/name-entry-dialog'
-import type { LevelSelectScreen } from '../game-elements/level-select-screen'
+import type { CampaignMapScreen } from '../adventure/ui/campaign-map'
 
 export abstract class GameFields {
   /**
@@ -203,15 +204,19 @@ export abstract class GameFields {
   adventureProgressionSupervisor: AdventureProgressionSupervisor | null = null
 
   // Rendering
-  bloomPipeline: DefaultRenderingPipeline | null = null
+  bloomPipeline: BloomPipelineController | null = null
   postProcessDegraded = false
   sceneOptimizer: SceneOptimizer | null = null
   sceneInstrumentation: SceneInstrumentation | null = null
   engineInstrumentation: EngineInstrumentation | null = null
-  mirrorTexture: MirrorTexture | null = null
-  tableRenderTarget: RenderTargetTexture | null = null
-  headRenderTarget: RenderTargetTexture | null = null
+  /** Decides when the scene may be treated as static (shadow map, materials, active meshes). */
+  staticSceneGate: StaticSceneGate | null = null
+  /** The gate's owner: frozen sets, watchers, skybox clear skip. Null until its lazy chunk arrives. */
+  staticScene: StaticSceneInstall | null = null
+  /** The static (cabinet) generator; the dynamic one and the twin lights live in `shadowRig`. */
   shadowGenerator: ShadowGenerator | null = null
+  dynamicShadowGenerator: ShadowGenerator | null = null
+  shadowRig: ShadowRig | null = null
   playfieldGroup: TransformNode | null = null
 
   // Scene lights
@@ -253,9 +258,12 @@ export abstract class GameFields {
 
   // Map / Adventure
   mapSystem = getMapSystem()
-  // Legacy level-select + cosmetic rewards; campaign truth is adventureTrackProgression.
+  // Legacy free-form progress + cosmetic rewards; campaign truth is adventureTrackProgression.
   adventureState = getAdventureState()
-  levelSelectScreen: LevelSelectScreen | null = null
+  /** Stage map overlay; loaded on first open (L / Levels / Stage Map). */
+  campaignMap: CampaignMapScreen | null = null
+  /** Start mode "Campaign": Start / Play Again enter the campaign's current stage. */
+  campaignStartSelected = false
   dynamicWorld: ReturnType<typeof getDynamicWorld> | null = null
   ballStackVisual: BallStackVisual | null = null
 

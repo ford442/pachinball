@@ -9,12 +9,16 @@ npm run dev        # Start Vite dev server (http://localhost:5173)
 npm run build      # tsc -b → build:wasm (skips without Emscripten) → Vite build; writes dist/build-info.json
 npm run lint       # ESLint on all .ts/.tsx files (type-aware for src/, incl. no-floating-promises and import-x/no-cycle)
 npm run check:index-strict  # noUncheckedIndexedAccess ratchet: src/core, src/wasm, src/game/physics must stay clean
+npm run check:unknown-casts # `as unknown as` ratchet: src/adventure holds zero (track modules build through TrackBuilderApi)
 npm run preview    # Preview production build locally
+npm run machine:validate  # Weekly machine: golden descriptor, next 53 ISO weeks + free seeds, fixtures (like tracks:validate)
 npm test           # Run Vitest unit tests
 npx playwright test  # Run E2E / visual regression tests
-npm run compile-db        # Configure-only: writes native/build-native/compile_commands.json for clangd (see root .clangd). Re-run after adding any .cpp
+npm run compile-db        # Configure-only: writes native/build-native/compile_commands.json for clangd (see root .clangd). Re-run after adding any .cpp. Offline: npm run compile-db -- -DPACHINBALL_BUILD_TESTS=OFF
 npm run check:compile-db  # Fail if that database misses a native TU, mixes -O levels, or contains em++ commands
-npm run test:native       # compile-db + C++ Catch2 tests
+npm run test:native       # compile-db + C++ Catch2 tests (incl. golden traces: any numeric drift fails)
+npm run test:native:release  # same suite at -O3 (native/build-release); golden traces must match Debug
+npm run test:native:san   # Catch2 under ASan + UBSan (native/build-san); any report fails
 npm run check:wasm-docs   # Fail if docs/wasm-physics-engine.md drifts from CMake / config / sources
 npm run build:wasm        # Emscripten Release → public/wasm/
 npm run test:wasm-parity  # WASM bundle vs native C++ reference
@@ -34,7 +38,7 @@ npx vitest run tests/ball-manager.test.ts
 
 ## Architecture
 
-**Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 7. Physics runs on an in-house C++ engine compiled to WASM (`native/` + `src/wasm/`) by default — in-process (`wasm-owner`), the only mode whose runs replay step-exactly and can be verified for the leaderboard; a Dedicated Worker (`wasm-worker`) is opt-in (`?physics=wasm-worker`); Rapier 3D WASM is the lazily loaded dev/degrade path. Runtime mode is selected via `src/config/physics.ts` (`WASM_PHYSICS.defaultEngine`; `rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker`). Builders author physics through `PhysicsApi` / `PhysicsWorldSink` / `PhysicsBody` (`src/core/physics-api.ts`), never Rapier values — see `docs/wasm-physics-engine.md`.
+**Pachinball** is a 3D WebGPU-first pachinko/pinball hybrid built with Babylon.js 9. Physics runs on an in-house C++ engine compiled to WASM (`native/` + `src/wasm/`) by default — in-process (`wasm-owner`), the only mode whose runs replay step-exactly and can be verified for the leaderboard; a Dedicated Worker (`wasm-worker`) is opt-in (`?physics=wasm-worker`); Rapier 3D WASM is the lazily loaded dev/degrade path. Runtime mode is selected via `src/config/physics.ts` (`WASM_PHYSICS.defaultEngine`; `rapier` / `wasm-mirror` / `wasm-owner` / `wasm-worker`). Builders author physics through `PhysicsApi` / `PhysicsWorldSink` / `PhysicsBody` (`src/core/physics-api.ts`), never Rapier values — see `docs/wasm-physics-engine.md`.
 
 ### Startup flow
 
@@ -44,7 +48,10 @@ npx vitest run tests/ball-manager.test.ts
 
 | Path | Role |
 |------|------|
-| `src/game.ts` | Central orchestrator (~20 KB / ~460 lines — slimmed from its former ~140 KB monolith; the sub-systems now live under `src/game/`, `src/game-elements/`, `src/display/`, `src/effects/`, `src/objects/`). Owns scene, cameras, lights, materials, post-processing, game-state machine (MENU / PLAYING / PAUSED / GAME_OVER), and wires all sub-systems together. |
+| `src/game.ts` | Central orchestrator. Owns scene, cameras, lights, materials, post-processing, game-state machine (MENU / PLAYING / PAUSED / GAME_OVER), and wires all sub-systems together. The frame scheduler (`registerFrameSystems`) owns the render loop. |
+| `src/core/frame-scheduler.ts` | `FrameScheduler`: the one owner of `engine.runRenderLoop`. Phases `input → physics → sim → visuals → render → hud → idle`; systems register `{ phase, update(dt) }` with `{ signal }`. New per-frame work registers here — never a second `runRenderLoop`, never an update after `scene.render()`. See `docs/ENGINE_BOOTSTRAP.md` "Frame scheduler". |
+| `src/engine/gpu-capabilities.ts`, `src/engine/resolution-policy.ts` | `resolveGpuCapabilities(engine)` — query `{ compressedTextures, gpuTimer, hdrFormat, f16, maxMsaaSamples }` instead of guessing from the quality tier. Render scale = `min(DPR, 1.5 mobile / 2 desktop, tier cap)` with dynamic resolution (`src/game/render-resolution.ts`); the scene optimizer never touches the hardware scaling level. |
+| `src/core/static-scene-gate.ts` | `StaticSceneGate`: one invalidation point for everything frozen while the scene is static (materials, the active-mesh list, the shadow map). Mutate something frozen → call `game.staticSceneGate?.invalidate(...)`. See `docs/STATIC_SCENE.md`. |
 | `src/game-elements/` | Discrete sub-systems: `physics.ts` (physics world: the C++ owner's `WasmTableWorld`, or Rapier), `ball-manager.ts` (spawn/collect/drain), `input.ts` (keyboard/touch/gamepad), `camera-controller.ts`, `zone-trigger-system.ts`, `leaderboard-system.ts`, `debug-hud.ts`, etc. |
 | `src/adventure/` | Adventure mode (`adventure-mode.ts`), campaign progression/state, zone registry, track builders (`tracks/`) and declarative track data. |
 | `native/` | C++ physics core — rigid bodies, broadphase, contact listener. Catch2-tested via `npm run test:native`. |
@@ -52,8 +59,9 @@ npx vitest run tests/ball-manager.test.ts
 | `src/game/physics/` | Runtime physics engine selection and collision dispatch (`rapier`, `wasm-mirror`, `wasm-owner`). |
 | `src/objects/` | Playfield geometry: bumpers, flippers (joint-based rotation), walls, rails, pachinko pins, decoration. All live under `object-core.ts` as the top-level orchestrator. |
 | `src/cabinet/` | Four cabinet presets (classic, neo, vertical, wide) built by `cabinet-builder.ts`. Each defines its own dimensions and styling. |
-| `src/display/` | Multi-layer backbox display — reels rendered with WGSL shaders (`display-shader.ts`) or a canvas fallback; `display-core.ts` drives state transitions (IDLE → REACH → FEVER). |
-| `src/shaders/` | Standalone WGSL/GLSL effect shaders: CRT scanlines + curvature, LCD table, jackpot overlay, number-scroll animation. |
+| `src/display/` | Multi-layer backbox display, composited by one Frame Graph (`backbox-frame-graph.ts`, nodes chosen by `backbox-graph-plan.ts`) onto one plane; CRT and jackpot are passes on that composite, never on the camera. `display-core.ts` drives state transitions (IDLE → REACH → FEVER). See `docs/FRAME_GRAPH.md`. |
+| `src/game/scene-*.ts`, `game-post-process.ts` | Scene post-processing as a second Frame Graph (bloom → image processing → sharpen, plus HIGH-only SSAO / SSR / motion blur; the scene target is 4× MSAA on MEDIUM/HIGH and FXAA is the LOW tier’s AA). `scene-graph-plan.ts` (pure) picks the nodes from the `webgpu-post-process-profile.ts` tier; `scene-frame-graph.ts` builds and runs them; `ScenePostController` is the knob surface effects write to. The camera still renders the scene (into one HDR target), not `scene.frameGraph`. New visual passes land as nodes here, not as camera `PostProcess`es. Both graphs load through `src/frame-graph-runtime.ts` (one lazy chunk). See `docs/FRAME_GRAPH.md`. |
+| `src/shaders/` | Standalone effect shaders (CRT scanlines + curvature, jackpot overlay, cyber grid, LCD table, scanline): GLSL for WebGL2, WGSL twins in `src/shaders/wgsl/` for WebGPU. |
 | `src/materials/` | PBR material library split by domain (ball, metallic, interactive, structural). `material-core.ts` is the entry point. |
 | `src/audio/` | Single `AudioEngine` (one AudioContext) + pachinko worklet + sample bank. EventBus remains the trigger API. |
 | `src/replay/` | Replay recorder/runner (one tape frame per physics step, frame-0 C++ snapshot), challenges (`challenge-v2.ts`), ghost race. |
@@ -93,4 +101,4 @@ Use `docs/ADVENTURE_CAMPAIGN.md` for the current A/B alternating campaign model 
 
 ### WebGPU / shader authoring
 
-Shaders in `src/shaders/` use Babylon.js `ShaderMaterial`. `display-shader.ts` targets WebGPU (WGSL); all shaders have a WebGL/canvas fallback path. Check for `engine.isWebGPU` before using WebGPU-only features.
+Our custom shaders are **dual GLSL / WGSL** (#488): each GLSL source in `src/shaders/` (CRT, jackpot overlay, cyber grid, LCD table, scanline) has a WGSL twin in `src/shaders/wgsl/` with the same uniforms, samplers and math. `display-shader.ts` picks the language from `engine.isWebGPU` (`displayShaderSource()`): on WebGPU the grid `ShaderMaterial` and the backbox Frame Graph passes are created with `shaderLanguage: ShaderLanguage.WGSL`, on WebGL2 with GLSL, and either way their `extraInitializationsAsync` lazily imports that backend's source chunk — `src/display/backbox-shaders-wgsl.ts` (`ShaderStore.ShadersStoreWGSL`) or `src/display/backbox-shaders-glsl.ts` (`Effect.ShadersStore`), same keys — so no shader source sits in the entry chunk. Babylon fetches its GLSL → WGSL translator (glslang + twgsl, ~2.7 MB from `cdn.babylonjs.com`) the first time any GLSL effect compiles on WebGPU, so **a WebGPU boot must compile no GLSL**: a new shader needs a WGSL twin (`textureSample` only in uniform control flow, sampler `<texture>Sampler`, `uniforms.x`, `fragmentInputs.vUV`, `fragmentOutputs.color`), and a new `BackboxEffectPass` must carry the right `shaderLanguage`. `tests/webgpu-shader-language.test.ts` checks every `ShadersStore` key has a WGSL twin with the same interface; `tests/webgpu-no-glslang.spec.ts` boots WebGPU and fails on any glslang / twgsl / `cdn.babylonjs.com` request. `src/effects/fresnel-rim-plugin.ts` injects GLSL or WGSL by the language Babylon asks for. Check for `engine.isWebGPU` before using WebGPU-only features.

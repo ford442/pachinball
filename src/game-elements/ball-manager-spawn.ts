@@ -99,10 +99,6 @@ export function createMainBall(host: BallManagerHost): PhysicsBody {
   host.ballBody = ballBody
   host.ballBodies.push(ballBody)
 
-  if (host.mirrorTexture?.renderList) {
-    host.mirrorTexture.renderList.push(ball)
-  }
-
   // Add subtle point light for ball visibility (disabled in reduced motion mode)
   if (!GameConfig.camera.reducedMotion) {
     const ballLight = new PointLight('ballLight', Vector3.Zero(), host.scene)
@@ -169,10 +165,6 @@ export function spawnExtraBalls(host: BallManagerHost, count: number, position?:
     host.bindings.push({ mesh: b, rigidBody: body })
     host.ballBodies.push(body)
 
-    if (host.mirrorTexture?.renderList) {
-      host.mirrorTexture.renderList.push(b)
-    }
-
     // Add velocity-based trail for extra balls
     const trailWidth = GameConfig.ball.radius * 0.4
     const trail = new TrailMesh(`trail_${i}`, b, host.scene, trailWidth, 15, true)
@@ -223,9 +215,6 @@ export function resetBall(host: BallManagerHost): void {
     host.ballBodies.push(body)
     host.bindings.push({ mesh: b, rigidBody: body })
 
-    if (host.mirrorTexture?.renderList) {
-      host.mirrorTexture.renderList.push(b)
-    }
   } else {
     const spawn = GameConfig.ball.spawnMain
     host.ballBody!.setTranslation(new host.rapier.Vector3(spawn.x, spawn.y, spawn.z), true)

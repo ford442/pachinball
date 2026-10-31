@@ -13,11 +13,11 @@ import type { HapticManager } from '../game-elements/haptics'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
 import type { AdventureManager } from './game-adventure'
 import type { TableMapManager } from './game-maps'
-import { getScenario, getZoneConfig, ZoneTriggerSystem as ZoneTriggerSystemClass } from '../game-elements'
+import { getScenario, getZoneConfig } from '../game-elements'
 import { getMaterialLibrary } from '../materials'
 import { getLayoutRng } from '../core/seeded-rng'
 import { createTimerScope } from '../core/timers'
-import { resolveVideoUrl } from './game-utils'
+import { resolveAssetUrl } from './game-utils'
 import { TABLE_MAPS } from '../config/table-maps'
 import type { DynamicScenario, ScenarioZone, WorldZone, ZoneMechanic } from '../game-elements'
 
@@ -100,7 +100,12 @@ export class GameScenario {
 
   startDynamicMode(): void {
     console.log('[Game] Starting Dynamic Mode with Zone System')
-    this.host.zoneTriggerSystem = new ZoneTriggerSystemClass(false)
+    // The zone system is wired at init (its sensor registry, the obstacle builders'
+    // footprints, portal entry) and outlives dynamic mode; only the scenario changes.
+    if (!this.host.zoneTriggerSystem) {
+      console.warn('[Game] Zone system is not initialised; dynamic mode has no zones')
+      return
+    }
     const scenario = getScenario('samurai-realm')
     if (scenario) {
       this.loadScenario(scenario)
@@ -110,8 +115,7 @@ export class GameScenario {
 
   stopDynamicMode(): void {
     console.log('[Game] Stopping Dynamic Mode')
-    this.host.zoneTriggerSystem?.dispose()
-    this.host.zoneTriggerSystem = null
+    this.host.zoneTriggerSystem?.unloadScenario()
     this.host.switchTableMap('neon-helix')
   }
 
@@ -124,7 +128,6 @@ export class GameScenario {
         this.handleScenarioZoneEnter(zone, fromZone, isMajor)
       },
       onZoneExit: () => {},
-      onZoneProgress: () => {},
     })
     this.applyScenarioLighting(scenario.globalLighting)
     if (scenario.zones.length > 0) {
@@ -133,14 +136,17 @@ export class GameScenario {
     this.host.display?.showZoneStory(
       scenario.name,
       scenario.description,
-      resolveVideoUrl(scenario.zones[0]?.videoUrl),
+      resolveAssetUrl(scenario.zones[0]?.videoUrl),
       true
     )
   }
 
   handleScenarioZoneEnter(zone: ScenarioZone, _fromZone: ScenarioZone | null, isMajor: boolean): void {
+    // Obstacle footprints and exit portals are zones too (the zone system reports them
+    // through the same callback), but only the loaded scenario's zones restyle the table.
+    if (!this.host.zoneTriggerSystem?.getAllZones().some((z) => z.id === zone.id)) return
     console.log(`[Game] Entered zone: ${zone.name} (${isMajor ? 'MAJOR' : 'minor'})`)
-    this.host.display?.showZoneStory(zone.name, zone.storyText, resolveVideoUrl(zone.videoUrl), true)
+    this.host.display?.showZoneStory(zone.name, zone.storyText, resolveAssetUrl(zone.videoUrl), true)
     this.applyZoneMapConfig(zone)
     if (this.host.ballManager) {
       const scenario = this.host.zoneTriggerSystem?.getAllZones()[0]?.id

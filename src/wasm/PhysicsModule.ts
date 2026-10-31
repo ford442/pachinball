@@ -27,12 +27,14 @@
  * (physics-worker-protocol.ts) — tests/wasm-worker-api-parity.test.ts enforces it.
  */
 
-import { WasmSnapshotStatus, type WasmPhysicsModule, type WasmPhysicsWorldInstance, type WasmContactEvent } from './wasm-types'
-import { CONTACT_STRIDE, decodeContactBuffer, toWasmContactEvent } from './contact-buffer'
+import { WasmSnapshotStatus, type WasmPhysicsModule, type WasmPhysicsWorldInstance } from './wasm-types'
+import { CONTACT_STRIDE, ContactBatchEmitter, type WasmContactEventBus } from './contact-buffer'
 import {
   TRANSFORM_STRIDE,
   createTransformBufferView,
+  createTransformRecord,
   decodeTransformSlot,
+  type WasmTransform,
 } from './transform-buffer'
 import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
 import * as adventure from './physics-module-adventure'
@@ -56,16 +58,15 @@ export {
 export type { WasmBodyDesc, WasmHingeDesc } from './physics-module-bodies'
 
 /**
- * Minimal EventBus surface this engine needs. Deliberately narrower than the
- * real `EventBus` type (`../core/event-bus`) — that file's payload types pull in
- * Babylon-typed `GameState`/`UnlockedReward` fields via `game-elements/types.ts`,
- * which this class must stay decoupled from: it's imported by the Worker-lib
- * `physics-worker.ts` compile graph (see tsconfig.worker.json), which has no DOM
- * lib globals. Any real `EventBus` instance satisfies this shape structurally.
+ * Minimal EventBus surface this engine needs (defined in `./contact-buffer`, re-exported here
+ * for existing importers). Deliberately narrower than the real `EventBus` type
+ * (`../core/event-bus`) — that file's payload types pull in Babylon-typed
+ * `GameState`/`UnlockedReward` fields via `game-elements/types.ts`, which this class must stay
+ * decoupled from: it's imported by the Worker-lib `physics-worker.ts` compile graph (see
+ * tsconfig.worker.json), which has no DOM lib globals. Any real `EventBus` instance satisfies
+ * this shape structurally.
  */
-export interface WasmContactEventBus {
-  emit(event: 'wasm:physics:contact', payload: WasmContactEvent): void
-}
+export type { WasmContactEventBus } from './contact-buffer'
 
 // ---------------------------------------------------------------------------
 // Engine class
@@ -73,6 +74,20 @@ export interface WasmContactEventBus {
 
 /** Path to the compiled Emscripten ES module (relative to the web root). */
 const WASM_MODULE_URL = './wasm/PhysicsModule.js'
+
+/**
+ * uint64_t values cross Embind as BigInt (-sWASM_BIGINT); bundles built before
+ * that returned a double. These are the only conversions — everything past
+ * `WasmPhysicsEngine` sees plain numbers and hex strings.
+ */
+function u64ToNumber(value: bigint | number): number {
+  return typeof value === 'bigint' ? Number(value) : value
+}
+
+/** A 64-bit hash as 16 lowercase hex chars (pre-BigInt bundles already sent the string). */
+function u64Hex(value: bigint | string): string {
+  return typeof value === 'bigint' ? value.toString(16).padStart(16, '0') : value
+}
 
 /** Resolve a public-root WASM URL. `import(rel)` is relative to this module (`src/wasm/`), not `/`. */
 function resolveModuleUrl(moduleUrl: string): string {
@@ -109,6 +124,11 @@ export class WasmPhysicsEngine {
   private unsubscribers: Array<() => void> = []
   private transformView: Float32Array | null = null
   private heapByteLength = 0
+  /** Reused decode target for the transform getters (each still returns a fresh vector). */
+  private readonly transformScratch: WasmTransform = createTransformRecord()
+  /** Cached contact-buffer view: rebuilt only when the heap, pointer or needed length changes. */
+  private contactView: Float32Array | null = null
+  private readonly contactEmitter = new ContactBatchEmitter()
 
   // ---- Loading ----------------------------------------------------------
 
@@ -437,20 +457,27 @@ export class WasmPhysicsEngine {
 
   // ---- Transform queries -----------------------------------------------
 
+  // Each getter decodes into the reused scratch record and returns a fresh copy of the one
+  // field asked for: callers may keep the result (WasmBody hands it out as a PhysicsVector).
+
   getPosition(id: number): { x: number; y: number; z: number } {
-    return this.readTransformFromBuffer(id)?.position ?? bodies.readPosition(this.world, id)
+    const p = this.readTransformFromBuffer(id)?.position
+    return p ? { x: p.x, y: p.y, z: p.z } : bodies.readPosition(this.world, id)
   }
 
   getVelocity(id: number): { x: number; y: number; z: number } {
-    return this.readTransformFromBuffer(id)?.velocity ?? bodies.readVelocity(this.world, id)
+    const v = this.readTransformFromBuffer(id)?.velocity
+    return v ? { x: v.x, y: v.y, z: v.z } : bodies.readVelocity(this.world, id)
   }
 
   getAngularVelocity(id: number): { x: number; y: number; z: number } {
-    return this.readTransformFromBuffer(id)?.angularVelocity ?? bodies.readAngularVelocity(this.world, id)
+    const w = this.readTransformFromBuffer(id)?.angularVelocity
+    return w ? { x: w.x, y: w.y, z: w.z } : bodies.readAngularVelocity(this.world, id)
   }
 
   getRotation(id: number): { x: number; y: number; z: number; w: number } {
-    return this.readTransformFromBuffer(id)?.rotation ?? bodies.readRotation(this.world, id)
+    const q = this.readTransformFromBuffer(id)?.rotation
+    return q ? { x: q.x, y: q.y, z: q.z, w: q.w } : bodies.readRotation(this.world, id)
   }
 
   // ---- Simulation step -------------------------------------------------
@@ -462,7 +489,7 @@ export class WasmPhysicsEngine {
   step(rawDt: number): number {
     if (!this.world) return 0
     const alpha = this.world.step(rawDt)
-    const stepCount = this.world.getStepCount()
+    const stepCount = u64ToNumber(this.world.getStepCount())
     this.contactsFresh = stepCount !== this.stepCount_
     this.stepCount_ = stepCount
     this.transformView = null
@@ -509,7 +536,7 @@ export class WasmPhysicsEngine {
     if (!this.world?.restoreSnapshot) return WasmSnapshotStatus.Unsupported
     const status = this.world.restoreSnapshot(bytes) as WasmSnapshotStatus
     if (status === WasmSnapshotStatus.Ok) {
-      this.stepCount_ = this.world.getStepCount()
+      this.stepCount_ = u64ToNumber(this.world.getStepCount())
       // The restored world has not stepped: no contacts to deliver, and the
       // transform buffer was re-scattered natively.
       this.contactsFresh = false
@@ -520,17 +547,24 @@ export class WasmPhysicsEngine {
 
   /** 16-hex-char static table hash, or null when unsupported. */
   getStaticContentHash(): string | null {
-    return this.world?.getStaticContentHash?.() ?? null
+    const hash = this.world?.getStaticContentHash?.()
+    return hash === undefined ? null : u64Hex(hash)
   }
 
-  /** 16-hex-char world-state hash (native `PhysicsWorld::stateHash`), or null when unsupported. */
+  /**
+   * 16-hex-char hash of the stepped world — the state `serializeSnapshot()`
+   * carries — or null when the bundle predates it. Equal hashes step
+   * identically; compare these instead of blobs (#444).
+   */
   getStateHash(): string | null {
-    return this.world?.getStateHash?.() ?? null
+    const hash = this.world?.getStateHash?.()
+    return hash === undefined ? null : u64Hex(hash)
   }
 
   /** Contact-manifold flush generation (0 when unsupported). */
   getContactGeneration(): number {
-    return this.world?.getContactGeneration?.() ?? 0
+    const generation = this.world?.getContactGeneration?.()
+    return generation === undefined ? 0 : u64ToNumber(generation)
   }
 
   getLastWorkerStepMs(): number {
@@ -596,6 +630,7 @@ export class WasmPhysicsEngine {
     this.isReady  = false
     this.eventBus = null
     this.transformView = null
+    this.contactView = null
     this.heapByteLength = 0
     this.stepCount_ = 0
     this.contactsFresh = false
@@ -603,10 +638,11 @@ export class WasmPhysicsEngine {
 
   // ---- Internal --------------------------------------------------------
 
-  private readTransformFromBuffer(id: number) {
+  /** Decodes into `transformScratch`: the result is only valid until the next call. */
+  private readTransformFromBuffer(id: number): WasmTransform | null {
     const view = this.refreshTransformView()
     if (!view) return null
-    return decodeTransformSlot(view, id, TRANSFORM_STRIDE)
+    return decodeTransformSlot(view, id, TRANSFORM_STRIDE, this.transformScratch)
   }
 
   private refreshTransformView(): Float32Array | null {
@@ -638,8 +674,12 @@ export class WasmPhysicsEngine {
     return this.transformView
   }
 
+  /**
+   * Deliver this step's contacts: one batched `'wasm:physics:contacts'` emit over a view of the
+   * WASM contact buffer, plus the per-contact events while anything subscribes to them.
+   */
   private drainContactBuffer(): void {
-    if (!this.world || !this.module || !this.contactsFresh) return
+    if (!this.world || !this.module || !this.contactsFresh || !this.eventBus) return
     const count = this.world.getContactCount()
     if (count <= 0) return
 
@@ -653,19 +693,17 @@ export class WasmPhysicsEngine {
     const end = start + count * CONTACT_STRIDE
     if (end > heap.length) return
 
-    const view = heap.subarray(start, end)
-    const contacts = decodeContactBuffer(view, count)
-    for (const contact of contacts) {
-      this._handleContact(toWasmContactEvent(contact))
+    // Reuse the view while it still covers this step's contacts in the current heap. It may be
+    // longer than `count` records: every consumer reads `count`, never the view's length.
+    let view = this.contactView
+    if (!view || view.buffer !== heap.buffer || view.byteOffset !== ptr || view.length < end - start) {
+      view = heap.subarray(start, end)
+      this.contactView = view
     }
+    this.contactEmitter.emit(this.eventBus, view, count, CONTACT_STRIDE)
   }
 
   private getHeapF32(): Float32Array | null {
     return adventure.heapF32(this.module)
-  }
-
-  private _handleContact(evt: WasmContactEvent): void {
-    if (!this.eventBus) return
-    this.eventBus.emit('wasm:physics:contact', evt)
   }
 }

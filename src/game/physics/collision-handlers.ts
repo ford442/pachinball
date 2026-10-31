@@ -99,11 +99,11 @@ export function handleBumperCollision(
   ctx.host.effects?.playBeep(400 + Math.random() * 200)
   ctx.host.updateHUD()
   ctx.host.effects?.setLightingMode('hit', impactTier === 'heavy' ? 0.35 : impactTier === 'medium' ? 0.25 : 0.2)
-  ctx.host.adventureState.updateGoal('hit-pegs', 1)
 
   const velocity = ballBody.linvel()
   const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
   ctx.host.hapticManager?.bumper(speed)
+  ctx.host.eventBus.emit('bumper:contact', { strength: Math.min(speed / 20, 1) })
 
   const impactNormal = new Vector3(
     ballPos.x - vis.mesh.position.x,

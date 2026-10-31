@@ -6,45 +6,45 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilder } from '../track-builder'
+import type { TrackBuilderApi } from '../track-builder-api'
 import { boxDesc, cylinderDesc } from '../track-collider-descriptors'
 import type { EmittedCollider } from '../track-collider-emitter'
-import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 import { getLayoutRng } from '../../core/seeded-rng'
 
-export function buildCasinoHeist(builder: TrackBuilder): void {
-  const feltMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#880000")
-  const goldMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FFD700")
-  const chipMatRed = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FF0000")
-  const chipMatBlue = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#0000FF")
-  const chipMatBlack = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#111111")
-  const chipMatWhite = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FFFFFF")
+export function buildCasinoHeist(builder: TrackBuilderApi): void {
+  const feltMat = builder.getTrackMaterial("#880000")
+  const goldMat = builder.getTrackMaterial("#FFD700")
+  const chipMatRed = builder.getTrackMaterial("#FF0000")
+  const chipMatBlue = builder.getTrackMaterial("#0000FF")
+  const chipMatBlack = builder.getTrackMaterial("#111111")
+  const chipMatWhite = builder.getTrackMaterial("#FFFFFF")
   const chipMats = [chipMatRed, chipMatBlue, chipMatBlack, chipMatWhite]
 
-  const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: PhysicsWorldSink }).world
-  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
-  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
-  const kinematicBindings = (builder as unknown as { kinematicBindings: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
-  const resetSensors = (builder as unknown as { resetSensors: PhysicsBody[] }).resetSensors
-  const animatedObstacles = (builder as unknown as { animatedObstacles: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, frequency: number, amplitude: number, phase: number }[] }).animatedObstacles
+  const {
+    currentStartPos,
+    scene,
+    adventureTrack,
+    adventureBodies,
+    kinematicBindings,
+    resetSensors,
+    animatedObstacles,
+  } = builder
 
   let currentPos = currentStartPos.clone()
   const heading = 0
 
   const entryLen = 15
   const entryIncline = (15 * Math.PI) / 180
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, 8, entryLen, entryIncline, feltMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, 8, entryLen, entryIncline, feltMat)
 
   // 2. The Chip Stack Maze
   const mazeLen = 20
   const mazeWidth = 12
   const mazeStart = currentPos.clone()
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, mazeWidth, mazeLen, 0, feltMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, mazeWidth, mazeLen, 0, feltMat)
 
-  if (world) {
+  if (builder.hasWorld) {
     const chipCount = 15
     const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
     const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
@@ -82,7 +82,7 @@ export function buildCasinoHeist(builder: TrackBuilder): void {
 
     const wheelCenter = currentPos.add(forward.scale(wheelRadius + 1))
 
-    ;(builder as unknown as { createRotatingPlatform: (...args: unknown[]) => void }).createRotatingPlatform(wheelCenter, wheelRadius, wheelSpeed, feltMat)
+    builder.createRotatingPlatform(wheelCenter, wheelRadius, wheelSpeed, feltMat)
 
     // Zero Pockets
     const pocketCount = 2
@@ -141,9 +141,9 @@ export function buildCasinoHeist(builder: TrackBuilder): void {
   currentPos = wheelExit
   const slotStart = currentPos.clone()
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, slotWidth, slotLen, 0, feltMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, slotWidth, slotLen, 0, feltMat)
 
-  if (world) {
+  if (builder.hasWorld) {
     const gateCount = 3
     const gateWidth = slotWidth
     const gateHeight = 4.0
@@ -202,5 +202,5 @@ export function buildCasinoHeist(builder: TrackBuilder): void {
   goalPos.y -= 2
   goalPos.z += 2
 
-  ;(builder as unknown as { createBasin: (...args: unknown[]) => void }).createBasin(goalPos, goldMat)
+  builder.createBasin(goalPos, goldMat)
 }

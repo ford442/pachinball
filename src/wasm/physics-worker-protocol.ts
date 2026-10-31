@@ -90,7 +90,7 @@ export type PhysicsWorkerCommand =
   | { type: 'serializeSnapshot'; requestId: number }
   /** `bytes` is transferred. */
   | { type: 'restoreSnapshot'; requestId: number; bytes: Uint8Array }
-  /** World-state hash at this point in the batch; answered with a `snapshot-reply` (`stateHash`). */
+  /** State-hash request (#459): answered with a `snapshot-reply` carrying `stateHash`, no blob. */
   | { type: 'getStateHash'; requestId: number }
 
 export type PhysicsWorkerToWorker =
@@ -226,16 +226,17 @@ export class WasmIdShadow {
     return SENSOR_VOLUME_ID_BASE - idx
   }
 
-  /**
-   * Native meshes and force fields have no capacity check, so neither does
-   * the shadow: it must hand out exactly the id C++ will.
-   */
+  /** Meshes and force fields hit the same capacity as every other family (#487). */
   allocStaticMesh(): number {
-    return STATIC_MESH_ID_BASE - this.nextMesh++
+    if (this.nextMesh >= STATIC_HANDLE_CAPACITY) return STATIC_HANDLE_OVERFLOW
+    const idx = this.nextMesh++
+    return STATIC_MESH_ID_BASE - idx
   }
 
   allocForceField(): number {
-    return FORCE_FIELD_ID_BASE - this.nextField++
+    if (this.nextField >= STATIC_HANDLE_CAPACITY) return STATIC_HANDLE_OVERFLOW
+    const idx = this.nextField++
+    return FORCE_FIELD_ID_BASE - idx
   }
 
   /** Mirror of PhysicsWorld::clearStaticGeometry — negative handles restart. */

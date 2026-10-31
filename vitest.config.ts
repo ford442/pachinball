@@ -2,11 +2,19 @@ import path from 'node:path'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  define: {
+    __PACHINBALL_BUILD__: JSON.stringify('vitest'),
+  },
   resolve: {
     alias: [
       {
         find: /^@babylonjs\/core(\/.*)?$/,
         replacement: path.resolve(__dirname, 'tests/mocks/babylon-core.ts'),
+      },
+      {
+        // vite-plugin-pwa's virtual module only exists inside a Vite build or dev server.
+        find: /^virtual:pwa-register$/,
+        replacement: path.resolve(__dirname, 'tests/mocks/pwa-register.ts'),
       },
     ],
   },

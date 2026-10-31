@@ -82,7 +82,22 @@ export const COMPARE_METRICS = [
   ['activeMeshes', (a) => a.counts?.activeMeshes],
   ['meshes', (a) => a.counts?.meshes],
   ['materials', (a) => a.counts?.materials],
+  ['materialsFrozen', (a) => a.counts?.materialsFrozen],
+  ['shadowCasters (static)', (a) => a.counts?.shadowCasters],
+  ['shadowRendersPerFrame (static)', (a) => a.counts?.shadowRendersPerFrame],
+  // Absent / null before the static-dynamic split: there was no dynamic pass then, so it reads as 0.
+  ['dynamicShadowCasters', (a) => (a.counts ? (a.counts.dynamicShadowCasters ?? 0) : undefined)],
+  ['dynamicShadowRendersPerFrame', (a) => (a.counts ? (a.counts.dynamicShadowRendersPerFrame ?? 0) : undefined)],
+  ['mirrorRendersPerFrame', (a) => a.counts?.mirrorRendersPerFrame],
+  ['refreezeCount', (a) => a.counts?.refreezeCount],
+  // Allocation probe (#488 §5): bytes allocated / retained per frame, in KB.
+  ['allocKBPerFrame', (a) => kb(a.alloc?.allocatedPerFrameBytes)],
+  ['heapDeltaKBPerFrame', (a) => kb(a.alloc?.heapDeltaPerFrameBytes)],
 ]
+
+function kb(bytes) {
+  return typeof bytes === 'number' ? bytes / 1024 : undefined
+}
 
 /**
  * Compare two sets of runs keyed by `${tier}/${state}`.

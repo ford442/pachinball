@@ -6,24 +6,24 @@
 
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
-import type { TrackBuilder } from '../track-builder'
+import type { TrackBuilderApi } from '../track-builder-api'
 import { boxDesc } from '../track-collider-descriptors'
-import type { PhysicsBody, PhysicsWorldSink } from '../../core/physics-api'
 
-export function buildGravityForge(builder: TrackBuilder): void {
-  const rustMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#8B4513")
-  const steelMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#333333")
-  const moltenMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#FF4500")
-  const waterMat = (builder as unknown as { getTrackMaterial: (hex: string) => import('@babylonjs/core/Materials/standardMaterial').StandardMaterial }).getTrackMaterial("#0088FF")
+export function buildGravityForge(builder: TrackBuilderApi): void {
+  const rustMat = builder.getTrackMaterial("#8B4513")
+  const steelMat = builder.getTrackMaterial("#333333")
+  const moltenMat = builder.getTrackMaterial("#FF4500")
+  const waterMat = builder.getTrackMaterial("#0088FF")
 
-  const currentStartPos = (builder as unknown as { currentStartPos: Vector3 }).currentStartPos
-  const scene = (builder as unknown as { scene: import('@babylonjs/core/scene').Scene }).scene
-  const world = (builder as unknown as { world: PhysicsWorldSink }).world
-  const adventureBodies = (builder as unknown as { adventureBodies: PhysicsBody[] }).adventureBodies
-  const kinematicBindings = (builder as unknown as { kinematicBindings: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh }[] }).kinematicBindings
-  const conveyorZones = (builder as unknown as { conveyorZones: { sensor: PhysicsBody, force: Vector3 }[] }).conveyorZones
-  const animatedObstacles = (builder as unknown as { animatedObstacles: { body: PhysicsBody, mesh: import('@babylonjs/core/Meshes/mesh').Mesh, type: string, basePos: Vector3, frequency: number, amplitude: number, phase: number }[] }).animatedObstacles
-  const adventureTrack = (builder as unknown as { adventureTrack: import('@babylonjs/core/Meshes/mesh').Mesh[] }).adventureTrack
+  const {
+    currentStartPos,
+    scene,
+    adventureBodies,
+    kinematicBindings,
+    conveyorZones,
+    animatedObstacles,
+    adventureTrack,
+  } = builder
 
   let currentPos = currentStartPos.clone()
   let heading = 0
@@ -33,9 +33,9 @@ export function buildGravityForge(builder: TrackBuilder): void {
   const feedIncline = (30 * Math.PI) / 180
   const conveyorStart = currentPos.clone()
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, 6, feedLen, feedIncline, rustMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, 6, feedLen, feedIncline, rustMat)
 
-  if (world) {
+  if (builder.hasWorld) {
     const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
     const hLen = feedLen * Math.cos(feedIncline)
     const vDrop = feedLen * Math.sin(feedIncline)
@@ -69,9 +69,9 @@ export function buildGravityForge(builder: TrackBuilder): void {
   const crushWidth = 8
   const crushStart = currentPos.clone()
 
-  currentPos = (builder as unknown as { addStraightRamp: (...args: unknown[]) => Vector3 }).addStraightRamp(currentPos, heading, crushWidth, crushLen, 0, steelMat)
+  currentPos = builder.addStraightRamp(currentPos, heading, crushWidth, crushLen, 0, steelMat)
 
-  if (world) {
+  if (builder.hasWorld) {
     const pistonWidth = 6
     const pistonDepth = 3
     const pistonHeight = 4
@@ -119,10 +119,10 @@ export function buildGravityForge(builder: TrackBuilder): void {
   const turnRadius = 10
   const turnAngle = Math.PI / 2
 
-  currentPos = (builder as unknown as { addCurvedRamp: (...args: unknown[]) => Vector3 }).addCurvedRamp(currentPos, heading, turnRadius, -turnAngle, 0, 2, 0, moltenMat, 15)
+  currentPos = builder.addCurvedRamp(currentPos, heading, turnRadius, -turnAngle, 0, 2, 0, moltenMat, 15)
   heading -= turnAngle
 
-  currentPos = (builder as unknown as { addCurvedRamp: (...args: unknown[]) => Vector3 }).addCurvedRamp(currentPos, heading, turnRadius, turnAngle, 0, 2, 0, moltenMat, 15)
+  currentPos = builder.addCurvedRamp(currentPos, heading, turnRadius, turnAngle, 0, 2, 0, moltenMat, 15)
   heading += turnAngle
 
   // 4. The Centrifugal Caster
@@ -132,9 +132,9 @@ export function buildGravityForge(builder: TrackBuilder): void {
   const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
   const castCenter = currentPos.add(forward.scale(castRadius + 1))
 
-  ;(builder as unknown as { createRotatingPlatform: (...args: unknown[]) => void }).createRotatingPlatform(castCenter, castRadius, castSpeed, steelMat)
+  builder.createRotatingPlatform(castCenter, castRadius, castSpeed, steelMat)
 
-  if (world && adventureBodies.length > 0) {
+  if (builder.hasWorld && adventureBodies.length > 0) {
     const platformBody = adventureBodies[adventureBodies.length - 1]
     const wallHeight = 3.0
     const wallThickness = 0.5
@@ -182,7 +182,7 @@ export function buildGravityForge(builder: TrackBuilder): void {
   const goalPos = castCenter.add(exitForward.scale(castRadius + 4))
   goalPos.y -= 5.0
 
-  ;(builder as unknown as { createBasin: (...args: unknown[]) => void }).createBasin(goalPos, moltenMat)
+  builder.createBasin(goalPos, moltenMat)
   const basinMesh = adventureTrack[adventureTrack.length - 1]
   if (basinMesh) basinMesh.material = waterMat
 }

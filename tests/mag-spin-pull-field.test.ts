@@ -22,7 +22,25 @@ vi.mock('@babylonjs/core', async () => {
 })
 
 vi.mock('../src/game-elements/visual-language', () => ({
-  color: (_hex: string) => ({ r: 0, g: 1, b: 1, scale: () => ({ r: 0, g: 1, b: 1 }) }),
+  // A mutable colour: the mag-spin idle pulse scales into each ring material's Color3 in place.
+  color: (_hex: string) => ({
+    r: 0,
+    g: 1,
+    b: 1,
+    scale: () => ({ r: 0, g: 1, b: 1 }),
+    scaleToRef(s: number, ref: { r: number; g: number; b: number }) {
+      ref.r = this.r * s
+      ref.g = this.g * s
+      ref.b = this.b * s
+      return ref
+    },
+    copyFrom(c: { r: number; g: number; b: number }) {
+      this.r = c.r
+      this.g = c.g
+      this.b = c.b
+      return this
+    },
+  }),
   emissive: () => ({ r: 0, g: 0.5, b: 1 }),
   FEEDER_STYLES: {
     MAG_SPIN: { base: '#00aaff', active: '#00ffff', locked: '#aa00ff', release: '#ff00aa' },

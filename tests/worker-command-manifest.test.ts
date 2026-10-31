@@ -82,6 +82,9 @@ const MANIFEST: Record<string, Route> = {
   restoreSnapshot: 'restoreSnapshot',
   getStaticContentHash: 'serializeSnapshot', // staticHash on every snapshot-reply
   getStateHash: 'getStateHash',
+  // Read-only per-step diagnostics; not yet on the step-result (#487).
+  getNaNQuarantineCount: 'read-back',
+  getNaNQuarantineBodyId: 'read-back',
 }
 
 function embindWorldMethods(): string[] {

@@ -15,6 +15,7 @@ import {
   type GameSettings,
 } from '../game-elements'
 import { getDailyCascadeState } from '../cascade/daily-cascade-state'
+import { resolveStartMachine, type StartMachine } from '../cascade/start-machine'
 import { DisplayState } from '../display/display-types'
 import { initSessionRng, getSessionSeed, randomU32Seed } from '../core/seeded-rng'
 import { getChallengeSystem } from '../replay/challenge-system'
@@ -40,6 +41,7 @@ import { getMaterialLibrary } from '../materials'
 import { isMobileUserAgent } from '../engine/engine-options'
 
 export interface LifecycleHost {
+  readonly signal: AbortSignal
   readonly timers: TimerScope
   /** The race ghost of the active challenge (#444 Slice D). */
   readonly ghostRace?: import('../replay/ghost-race').GhostRace | null
@@ -91,7 +93,10 @@ export interface LifecycleHost {
   handleGameOverLeaderboard(): Promise<void>
   getBallPosition(): import('@babylonjs/core/Maths/math.vector').Vector3 | null
   /** Rebuild pins/bumpers/feeders for Daily Cascade / free-play before PLAYING. */
-  applyDailyCascadeOnStart(): void
+  applyDailyCascadeOnStart(machine: StartMachine): void
+  /** Start mode "Campaign" is selected: a started game goes straight into the campaign. */
+  readonly campaignStartSelected: boolean
+  enterCampaignStage(): void
 }
 
 export class GameLifecycle {
@@ -201,29 +206,49 @@ export class GameLifecycle {
   async startGame(): Promise<void> {
     // A `?challenge=<id>` link sets this game's seed and table (#444 Slice D).
     await getChallengeSystem().whenReady()
-    const isReplaying = this.host.replayRunner?.isPlaying() ?? false
+    if (this.host.signal.aborted) return
     const dailyState = getDailyCascadeState()
+    const isReplaying = this.host.replayRunner?.isPlaying() ?? false
+    const replayPayload = isReplaying ? this.host.replayRunner?.getPayload() ?? null : null
     // A replay plays on the cascade table it was recorded on, whatever this
     // player has selected; their own next game gets their selection back (#444).
-    if (isReplaying) dailyState.beginReplay(this.host.replayRunner?.getPayload()?.cascade ?? null)
+    if (isReplaying) dailyState.beginReplay(replayPayload?.cascade ?? null)
     else dailyState.endReplay()
-    this.host.applyDailyCascadeOnStart()
+    const challengeSeed = getChallengeSystem().getActiveChallenge()?.seed ?? null
 
-    const isDaily = dailyState.getMode() === 'daily'
+    const machine = resolveStartMachine({
+      mode: dailyState.getMode(),
+      modeSeed: dailyState.getModeSeed(),
+      replay: replayPayload ? { seed: replayPayload.seed, machine: replayPayload.machine } : null,
+      challengeSeed,
+      campaign: this.host.campaignStartSelected,
+    })
+
+    if (machine.kind === 'weekly') {
+      // Its generator is a lazy chunk. Awaited before the RNG is seeded, so nothing is half-built if the game is disposed meanwhile.
+      await dailyState.loadWeekly()
+      if (this.host.signal.aborted) return
+    }
 
     let seed: number
     if (isReplaying) {
-      seed = this.host.replayRunner?.getPayload()?.seed ?? randomU32Seed()
-    } else if (isDaily) {
+      seed = replayPayload?.seed ?? randomU32Seed()
+    } else if (machine.kind === 'weekly') {
+      seed = machine.seed
+    } else if (machine.kind === 'cascade' && dailyState.getMode() === 'daily') {
       const layout = dailyState.ensureLayout()
       seed = layout ? layout.seed : randomU32Seed()
     } else {
       // `?seed=` / `?challenge=seed:target` share links (#343): the same seed
       // must give the same session RNG streams, or a challenge is not a challenge.
-      seed = getChallengeSystem().getActiveChallenge()?.seed ?? randomU32Seed()
+      seed = challengeSeed ?? randomU32Seed()
     }
 
     initSessionRng(seed)
+    // After the session RNG: the weekly machine draws its layout through
+    // getLayoutRng, and the table must be rebuilt before the first recorded
+    // step so the frame-0 fingerprint (static hash, pin occupancy) includes it.
+    this.host.applyDailyCascadeOnStart(machine)
 
     if (!isReplaying && this.host.replayRecorder) {
       this.host.replayRecorder.start({
@@ -235,6 +260,8 @@ export class GameLifecycle {
         renderer: (typeof window !== 'undefined' && (window as unknown as { currentRenderer?: string }).currentRenderer === 'webgpu') ? 'webgpu' : 'webgl2',
         createdAt: new Date().toISOString(),
         cascade: dailyState.describeForReplay() ?? undefined,
+        // A spectator rebuilds the same machine from `seed` alone.
+        ...(machine.kind === 'weekly' ? { machine: 'weekly' as const } : {}),
       })
     }
 
@@ -269,7 +296,12 @@ export class GameLifecycle {
 
     // Leaderboard context is set by the caller (Game)
     this.host.setGameState(GameState.PLAYING)
-    if (!isReplaying) this.host.ghostRace?.begin()
+    if (!isReplaying) this.host.ghostRace?.begin?.()
+
+    // Campaign rides on the vanilla table: the stage builds once the table is live.
+    if (this.host.campaignStartSelected && !isReplaying) {
+      this.host.enterCampaignStage()
+    }
   }
 
   /**

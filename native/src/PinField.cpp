@@ -52,7 +52,7 @@ bool maskAllows(const std::vector<uint8_t>& mask, std::size_t index) {
   if (mask.empty()) return true;
   const std::size_t byte = index >> 3;
   if (byte >= mask.size()) return false;
-  return (mask[byte] >> (index & 7u)) & 1u;
+  return ((static_cast<unsigned>(mask[byte]) >> (index & 7u)) & 1u) != 0u;
 }
 
 /** Clamp before the int cast so a ball far off the table cannot overflow it. */
@@ -139,8 +139,10 @@ int PhysicsWorld::addPinField(const PinFieldDesc& desc) {
 }
 
 int PhysicsWorld::getPinFieldPinCount(int fieldId) const {
+  // Range first: `BASE - fieldId` overflows (UB) for ids above the base.
+  if (fieldId > PIN_FIELD_ID_BASE) return -1;
   const std::size_t idx = static_cast<std::size_t>(PIN_FIELD_ID_BASE - fieldId);
-  if (fieldId > PIN_FIELD_ID_BASE || idx >= pinFields_.size()) return -1;
+  if (idx >= pinFields_.size()) return -1;
   return pinFields_[idx].pinCount;
 }
 

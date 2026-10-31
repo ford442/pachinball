@@ -10,6 +10,10 @@
  *   - a project TU carries more than one -O level (e.g. -O0 and -O3),
  *   - a project TU was compiled by em++/emcc,
  *   - a stray compile_commands.json sits at the repo root or native/.
+ *
+ * A tree configured with -DPACHINBALL_BUILD_TESTS=OFF (the offline
+ * `npm run compile-db -- -DPACHINBALL_BUILD_TESTS=OFF`) has no native/tests
+ * TUs; that is reported as a warning, not a failure.
  */
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
@@ -38,11 +42,22 @@ for (const entry of entries) {
   if (file.startsWith('native/src/') || file.startsWith('native/tests/')) {
     projectEntries.set(file, entry)
   }
+  if (/(^|\/)unity_\d+_cxx\.cxx$/.test(file)) {
+    errors.push(`${file}: unity batch in the database — configure compile-db with -DPACHINBALL_UNITY_BUILD=OFF`)
+  }
+}
+
+const cachePath = join(root, 'native/build-native/CMakeCache.txt')
+const testsOff =
+  existsSync(cachePath) &&
+  /^PACHINBALL_BUILD_TESTS:BOOL=(OFF|FALSE|0|NO)$/im.test(readFileSync(cachePath, 'utf8'))
+if (testsOff) {
+  console.warn('[compile-db] PACHINBALL_BUILD_TESTS=OFF — native/tests TUs not checked (clangd will not index them)')
 }
 
 // bindings.cpp is Embind glue — Emscripten-only, never part of the native tree.
 const EMSCRIPTEN_ONLY = new Set(['native/src/bindings.cpp'])
-const expected = ['native/src', 'native/tests'].flatMap((dir) =>
+const expected = (testsOff ? ['native/src'] : ['native/src', 'native/tests']).flatMap((dir) =>
   readdirSync(join(root, dir))
     .filter((name) => name.endsWith('.cpp'))
     .map((name) => `${dir}/${name}`)

@@ -67,6 +67,10 @@ int PhysicsWorld::addStaticTriangleMesh(const float* vertices, int vertexCount,
                                         const uint32_t* indices, int indexCount,
                                         float restitution, float friction,
                                         bool doubleSided) {
+  // Before any triangle reaches the broadphase: a refused mesh leaves
+  // `triangles_` and the static content hash exactly as they were.
+  if (meshes_.size() >= STATIC_HANDLE_CAPACITY) { ++droppedStatics_; return STATIC_HANDLE_OVERFLOW; }
+
   TriangleMeshDesc mesh;
   mesh.restitution = restitution;
   mesh.friction = friction;

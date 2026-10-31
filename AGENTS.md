@@ -20,7 +20,7 @@
 
 ### Rendering Pipeline
 - **WebGPU-first:** `EngineFactory.CreateAsync` attempts WebGPU; falls back to WebGL automatically.
-- **Post-processing:** Bloom (`DefaultRenderingPipeline`), SSAO (`SSAO2RenderingPipeline`), depth of field, scanlines, and filmic tone mapping (Hable/ACES).
+- **Post-processing:** a Frame Graph of nodes chosen from the WebGPU tier (`src/game/scene-frame-graph.ts`, `docs/FRAME_GRAPH.md`): bloom, image processing (the node a strict adapter leaves out), sharpen, FXAA, and HIGH-only SSAO / SSR / motion blur. The backbox CRT and jackpot are passes on the backbox composite, not on the camera.
 - **Shadows:** Blur exponential shadow maps with tuned bias/normal bias.
 - **Renderer toggle:** `src/renderers/renderer-selector.ts` lets you force WebGL2 instead of WebGPU. Priority: `?renderer=webgl2|webgpu` URL param → `window.DEBUG_RENDERER` → `localStorage['pachinball-renderer']` → auto (WebGPU-first). Also exposed as a "Renderer" dropdown in the Developer settings panel (changing it reloads the page). The active backend is tagged on `<canvas data-renderer="webgpu|webgl2">` and `window.currentRenderer` for Playwright.
 - **Engine bootstrap:** `src/main.ts` + `src/engine/` centralize Babylon options (`preserveDrawingBuffer`, `powerPreference`, hardware scaling, tab visibility, idle WASM warm-load). Full option matrix and benchmark procedure: [`docs/ENGINE_BOOTSTRAP.md`](docs/ENGINE_BOOTSTRAP.md).
@@ -59,6 +59,12 @@ npx playwright test
 # native/build-native/compile_commands.json, the ONLY compile DB clangd reads (root .clangd).
 # Never copy native/build/compile_commands.json (Emscripten) to the repo root or native/.
 npm run test:native
+
+# Same suite at -O3 (native/build-release); the golden traces must match Debug.
+npm run test:native:release
+
+# Same suite under ASan + UBSan (native/build-san); any sanitizer report fails.
+npm run test:native:san
 
 # Build C++ physics to WASM (requires Emscripten)
 npm run build:wasm
@@ -161,7 +167,6 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 | `map-system.ts` | Dynamic backend map fetching. |
 | `leaderboard-system.ts` | Score submission + leaderboard UI. |
 | `name-entry-dialog.ts` | High-score name entry UI. |
-| `level-select-screen.ts` | Adventure level select overlay. |
 | `zone-registry.ts` | Deprecated re-export of `src/adventure/zone-registry.ts`. |
 | `zone-trigger-system.ts` | AABB zone entry/exit detection. |
 | `dynamic-scenarios.ts` | Scenario definitions for dynamic/fixed mode toggling. |
@@ -234,7 +239,7 @@ Replaces the old monolithic `display.ts`.
 
 #### `src/adventure/` — Adventure mode tracks (barrel: `src/adventure/index.ts`)
 - **`adventure-mode.ts`** — Main adventure orchestrator. **Start/end lifecycle MUST disable/enable table physics. Zone state MUST be reset in `end()`.**
-- **`track-builder.ts`** — Generic track construction helpers (`addStraightRamp`, `addCurvedRamp`, etc.).
+- **`track-builder.ts`** — Track construction base class; `trackBuilderApi()` hands TS track modules and the JSON compiler the typed **`TrackBuilderApi`** (`track-builder-api.ts`: `addStraightRamp`, `addCurvedRamp`, materials, `emitCollider`, …). Track modules never cast into `TrackBuilder` (`npm run check:unknown-casts`).
 - **`camera-presets.ts`** — Cinematic camera angles.
 - **`adventure-types.ts`** — **Single source of truth** for `AdventureTrackType` and adventure interfaces.
 - **`portal-routing.ts`** — Track start anchors and `isAdventureTrackType()` guard.
@@ -244,11 +249,12 @@ Replaces the old monolithic `display.ts`.
 - **`zone-registry.ts`** — Per-track theming / story / music metadata for adventure zones.
 - **`campaign-cloud-sync.ts`** — Cloud campaign save via the arcade `put-save` function.
 - **`tracks/*.ts`** — Hand-tuned track builders (flagships + complex layouts). Simpler tracks may use declarative JSON under `track-data/` — see [`docs/TRACK_SCHEMA.md`](docs/TRACK_SCHEMA.md).
+- **`ui/campaign-map.ts`** — Campaign stage map overlay (L / Levels / start-screen Stage Map), dynamically imported. Layout comes from the pure `ui/campaign-map-model.ts` (spine + branches derived from `unlockedBy`).
 
 **Do not recreate legacy builders.** All new track geometry goes in `src/adventure/tracks/`. The barrel also re-exports `TRACK_CATALOG` and `AdventureTrackProgression` from `adventure-track-progression.ts`.
 
 Campaign progression reference: `docs/ADVENTURE_CAMPAIGN.md` (A/B alternation + portal loop).  
-Campaign truth is `AdventureTrackProgression` + `AdventureProgressionSupervisor`; `AdventureState` is legacy level-select / cosmetic rewards only.
+Campaign truth is `AdventureTrackProgression` + `AdventureProgressionSupervisor`; `AdventureState` is legacy free-form progress / cosmetic rewards only.
 
 #### `src/replay/` — Replays, challenges, ghosts (barrel: `src/replay/index.ts`)
 - **`replay-recorder.ts`** / **`replay-runner.ts`** — One tape frame per fixed physics step; a tape carries a frame-0 C++ snapshot, its table (map or cascade seed) and build id. Only `wasm-owner` tapes replay step-exactly.
@@ -324,7 +330,7 @@ When adding any screen flash, shake, or rapid strobe, **always** gate it behind 
 ### 4.6 Quality Tiering
 `detectQualityTier(engine)` returns a `QualityTier` (`LOW`, `MEDIUM`, `HIGH`, `ULTRA`).
 - Used by `MaterialLibrary` to choose texture resolution / compression.
-- Used by `game.ts` to toggle post-processing features (SSAO, DoF, bloom scale).
+- Used by `PostProcessManager` to re-plan the scene post-process graph (sharpen, the HIGH-only nodes, bloom scale).
 
 ### 4.7 Adventure Mode Lifecycle (CRITICAL)
 
@@ -357,9 +363,10 @@ When the campaign loop (STATIONARY_TABLE ↔ EXTENDED_MAP) is involved, the foll
    - Failure causes stale transition detection on re-entry
 
 6. **Portal sensor handles must be unregistered on ALL deactivation paths.**
-   - `deactivateExitPortal()` MUST emit `PORTAL_DEACTIVATED` event
-   - Handler in `game-systems-init.ts` MUST call `unregisterPortalSensor()`
-   - This covers `switchToTrack()` and `activateExitPortal()` replacement paths
+   - `deactivateExitPortal()` MUST emit `PORTAL_DEACTIVATED` with `{ handle, id }`
+   - Handler in `game-systems-init.ts` MUST call `unregisterClosedPortal()` (`src/game/portal-sensor-lifecycle.ts`), which drops both the dispatcher handle and the portal's zone
+   - This covers `switchToTrack()`, `switchZone()`, `end()` and `activateExitPortal()` replacement paths (`tests/portal-deactivation-paths.test.ts`)
+   - Portal entry is contact-driven (the C++ sensor's begin contact → `ZoneTriggerSystem` → `onPortalContact` → `enterExitPortal`); never sample a ball position for it
 
 7. **Collision groups MUST separate table and adventure bodies.**
    - Adventure bodies use `ADVENTURE_GROUP` membership
@@ -491,7 +498,10 @@ When making changes that touch authentication, API keys, or asset URLs, use `imp
    The table uses `FreeCamera`. Never cast `activeCamera` to `ArcRotateCamera` without type guard. Use base `Camera` type for mode-agnostic code.
 
 10. **Stale Portal Handles in `portalSensorHandleSet`**  
-    Every path that deactivates a portal must unregister its handle. The PORTAL_ENTERED handler covers the happy path, but `switchToTrack()` and `activateExitPortal()` replacement also call `deactivateExitPortal()` — use the `PORTAL_DEACTIVATED` event pattern.
+    Every path that deactivates a portal must unregister its handle (and its zone). Entry covers the happy path, but `switchToTrack()` and `activateExitPortal()` replacement also call `deactivateExitPortal()` — use the `PORTAL_DEACTIVATED` event pattern.
+
+11. **Polling a ball position for a trigger zone**  
+    Zones and exit portals are C++ sensor volumes; the engine sweeps balls against them and reports begin/end contacts (`docs/wasm-physics-engine.md` → Zone sensors). A TS `translation()` poll misses a ball that crosses a thin zone between frames, and on `wasm-worker` the pose is a frame late. Author new zones through `ZoneTriggerSystem.registerObstacleZone()`; debounce in `simClockSteps()`, never `performance.now()`; keep camera cuts and score rules in the callbacks, not in `native/`.
 
 11. **`console.*` Vanishes in Production**  
     The prod build drops literal `console.*` calls (esbuild `drop`). Use `bootWarn` / `bootError` from `src/boot-log.ts` for boot-critical diagnostics.
