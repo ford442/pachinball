@@ -37,7 +37,7 @@ import {
   type ReplaySnapshotResult,
 } from '../../replay/replay-snapshot'
 
-type StepInputActions = {
+export type StepInputActions = {
   handleFlipperLeft: (p: boolean) => void
   handleFlipperRight: (p: boolean) => void
   handlePlunger: (charge?: number | null) => unknown
@@ -474,7 +474,18 @@ export class GamePhysicsController {
       this.host.physics.setMirrorOverheadMs?.(prev + (performance.now() - syncT0))
     }
     this.tickJackpot()
+    this.tickStepMechanisms(driveDt)
+    this.host.afterFixedStep?.()
     return alpha
+  }
+
+  /** Gates, traps, launchers and adventure clocks: once per physics tick, at that tick's dt. */
+  private tickStepMechanisms(dt: number): void {
+    const { host } = this
+    for (const state of host.trapStates) host.ballTrapBuilder?.updateTrap(state, dt)
+    for (const state of host.launcherStates) host.launcherBuilder?.updateLauncher(state, dt)
+    for (const state of host.gateStates) host.movingGateBuilder?.updateGate(state, dt)
+    host.stepAdventureProgression?.(dt)
   }
 
   /**
@@ -543,9 +554,10 @@ export class GamePhysicsController {
     }
 
     if (!this.host.stateManager.isPlaying()) {
-      // No step runs: the frame's input still reaches the input actions (they
-      // gate themselves on game state) and nothing is recorded.
-      const frame = replaying ? replayRunner!.getNextFrame() : this.pollInput(inputManager)
+      // No step runs: live input still reaches the input actions (they gate
+      // themselves on game state). A replay must not consume a frame here —
+      // playback waits until the game is PLAYING (#444).
+      const frame = replaying ? null : this.pollInput(inputManager)
       if (frame) this.applyFrameActions(frame, inputActions)
       // Mesh sync runs unconditionally so dynamic bodies (ball, flippers) appear at their
       // physics-body positions even during MENU state before the game starts. No physics
@@ -595,6 +607,11 @@ export class GamePhysicsController {
         this.stepAccumulator -= FIXED_TIMESTEP
         let frame: InputFrame | null
         if (replaying) {
+          // A live stream with no chunk yet is still playing: wait, don't step.
+          if (replayRunner!.isStarved()) {
+            this.stepAccumulator += FIXED_TIMESTEP
+            break
+          }
           if (!replayRunner!.peekNextFrame()) {
             // End of tape: stop here rather than step past the recording.
             replayRunner!.getNextFrame()

@@ -29,18 +29,30 @@ describe('physics engine preference', () => {
     Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value })
   }
 
-  it('defaults to wasm-worker on a cross-origin-isolated page (#439)', () => {
+  it('defaults to in-process wasm-owner on a cross-origin-isolated page too (#444)', () => {
     setIsolated(true)
-    expect(WASM_PHYSICS.defaultEngine).toBe('wasm-worker')
-    expect(getPhysicsEnginePreference()).toBe('wasm-worker')
-    expect(getWasmPhysicsRuntimeMode()).toBe('wasm-worker')
+    expect(WASM_PHYSICS.defaultEngine).toBe('wasm-owner')
+    expect(getPhysicsEnginePreference()).toBe('wasm-owner')
+    expect(getWasmPhysicsRuntimeMode()).toBe('wasm-owner')
   })
 
   it('defaults to in-process wasm-owner when the page is not isolated', () => {
     setIsolated(false)
-    expect(WASM_PHYSICS.nonIsolatedDefaultEngine).toBe('wasm-owner')
     expect(getPhysicsEnginePreference()).toBe('wasm-owner')
     expect(getWasmPhysicsRuntimeMode()).toBe('wasm-owner')
+  })
+
+  it('?physics= opts into an engine for the page load, ahead of the localStorage flag', () => {
+    setIsolated(true)
+    localStorage.setItem(WASM_PHYSICS.flagKey, 'rapier')
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: { search: '?seed=1&physics=wasm-worker' } })
+    try {
+      expect(getWasmPhysicsRuntimeMode()).toBe('wasm-worker')
+      Object.defineProperty(globalThis, 'location', { configurable: true, value: { search: '?physics=bogus' } })
+      expect(getWasmPhysicsRuntimeMode()).toBe('rapier')
+    } finally {
+      Reflect.deleteProperty(globalThis, 'location')
+    }
   })
 
   it('defaults to wasm-owner when crossOriginIsolated is undefined (Node, old browsers)', () => {

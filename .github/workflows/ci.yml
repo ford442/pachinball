@@ -13,6 +13,9 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   check:
     name: typecheck / lint / test / build
@@ -103,7 +106,7 @@ jobs:
           tests/mobile-touch-smoke.spec.ts
 
   # Blocking smoke against the production bundle: `vite build` + `vite preview`, the desktop
-  # smoke specs, twice. wasm=true builds the C++ bundle and expects the `wasm-worker` default;
+  # smoke specs, twice. wasm=true builds the C++ bundle and expects the `wasm-owner` default;
   # wasm=false removes public/wasm and expects the fail-closed `rapier` path. The dev-server
   # `e2e` job never boots minified output (console/debugger drop, chunking), which is how
   # #449 / #452 slipped through. Mobile stays on the dev job.
@@ -183,7 +186,7 @@ jobs:
       - name: Playwright smoke (built bundle)
         env:
           CI: 'true'
-          PREVIEW_EXPECT_ENGINE: ${{ matrix.wasm && 'wasm-worker' || 'rapier' }}
+          PREVIEW_EXPECT_ENGINE: ${{ matrix.wasm && 'wasm-owner' || 'rapier' }}
         run: >
           npx playwright test
           --config=playwright.preview.config.ts

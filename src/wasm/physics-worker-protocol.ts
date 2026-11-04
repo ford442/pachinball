@@ -137,10 +137,10 @@ export type PhysicsWorkerSnapshotReply = {
   status: WasmSnapshotStatus
   /** The worker world's static-table hash after the operation. */
   staticHash: string | null
+  /** The worker world's `getStateHash()` after the operation, null when the bundle lacks it. */
+  stateHash: string | null
   /** The worker world's step counter after the operation. */
   stepCount: number
-  /** The worker world's state hash after the operation; null when the bundle cannot hash. */
-  stateHash: string | null
 }
 
 export type PhysicsWorkerFromWorker =

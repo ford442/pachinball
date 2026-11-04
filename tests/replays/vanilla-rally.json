@@ -1,0 +1,76 @@
+{
+  "name": "vanilla-rally",
+  "description": "Vanilla table: ball dropped onto the first bumper, alternating flipper strokes, two nudges, relaunches after a drain.",
+  "scenario": {
+    "seed": 444001,
+    "setup": [
+      {
+        "action": "ontoBumper",
+        "index": 0,
+        "vel": [
+          0.35,
+          0,
+          -4
+        ]
+      }
+    ],
+    "input": {
+      "steps": 1200,
+      "launches": [
+        {
+          "step": 30,
+          "charge": 1
+        },
+        {
+          "step": 600,
+          "charge": 0.85
+        }
+      ],
+      "flippers": {
+        "period": 48,
+        "left": [
+          8,
+          20
+        ],
+        "right": [
+          32,
+          44
+        ]
+      },
+      "nudges": [
+        {
+          "step": 240,
+          "x": 1,
+          "z": 0
+        },
+        {
+          "step": 520,
+          "x": -1,
+          "z": 0
+        }
+      ]
+    }
+  },
+  "replay": {
+    "version": 3,
+    "buildId": "1.0.0",
+    "mapId": "neon-helix",
+    "seed": 444001,
+    "physicsEngine": "wasm-owner",
+    "renderer": "webgl2",
+    "createdAt": "2026-10-16T00:52:28.109Z",
+    "snapshotVersion": 2,
+    "staticHash": "8b10cd3bfa458bd8",
+    "pinFieldOccupancy": "7eee82e2",
+    "feederTunablesHash": "98bf211f",
+    "initialSnapshot": "UEJTTgIAAAAoAQAA2ItF+jvNEIsBAAAADQAAAAAAAAAAAAAADAAAAAEAAAABAAAAAAAAABUAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAw/UcwQAAoMCJiIg8AAAAQQQAAAAK1yM9zcxMPc3MzD08AAAAAwAAAAMAAAAAAAAAAAAAAAEAAAAAAAAAAgAAAAAAAAADAAAAAAAAAAEAAAACAAAAAAAAAJqZscCambFAzcxMPwAAgL4AAIC+ZmYOQQAA4MAAAODAMzOzPgAAAAAAAAAAAAAAAAAAAAAAAAAAAACAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPMENb/zBDW/AACAP/MENT/zBDU/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAPwAAAD8AAAA/AAAgQr3+Yj+9/mI/AACAPpqZmT6amZk+AAAAP2Zmxj9mZsY/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/AAAAPwAAAD8AAAA/XI9CP2ZmZj9mZmY/KVwPPgrXoz0K16M9zczMPQAAAD8AAAA/7FE4PgAAAEAAAABAAACAPwAAAEAAAABAAAAAAAAAAAAAAAAAAAAAAAEAAAABAAAAAQAAAAEAAAABAAAAAAAAAAAAAAAAAAAA////////////////////////////////AgAAAAIAAAAAAAAAAQAAAAEAAAAAAIDAAACAvgAA4MAAAAAAAACAPwAAAAAAAAA0Z2bGPwAAAAAAAAAAAAAAAPMENb/zBDU/kgoGv9sPST/bD8lBAADIRs3MTD4BAAAAAgAAAAEAAAAAAIBAAACAvgAA4MAAAAAAAACAPwAAAAAAAAC0Z2bGvwAAAAAAAAAAAAAAAPMENb/zBDU/2w9Jv5IKBj/bD8nBAADIRs3MTD4AAAAAAAAAAAIAAAABAAAAAgAAAAEAAAAEAAAAAQAAAAQAAAABAAAAAgAAAAEAAAACAAAAAQAAAAIAAAABAAAAAgAAAAEAAAACAAAAAQAAAAIAAAABAAAAAgAAAAEAAAACAAAAAQAAAAIAAAABAAAABAAAAAEAAAAEAAAAAQAAAAQAAAABAAAABAAAAAEAAAAEAAAAAQAAAAQAAAABAAAABAAAAAEAAAAEAAAAAQAAAAQAAAABAAAABAAAAAEAAAAEAAAAAQAAAAQAAAABAAAAIAAAAAEAAAACAAAAAQAAAAgAAAABAAAACAAAAAEAAAAIAAAAAQAAAAgAAAABAAAACAAAAAEAAAAIAAAAAQAAAAgAAAABAAAACAAAAAEAAAAIAAAAAQAAAAgAAAABAAAACAAAAAEAAAAIAAAAAQAAAAgAAAABAAAACAAAAAEAAAAIAAAAAQAAAAgAAAABAAAACAAAAAEAAAAIAAAAAQAAAAgAAAABAAAACAAAAAEAAAAIAAAAAQAAAP//////////AAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "finalScore": 1670,
+    "frames": [],
+    "compressedFrames": "8:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;10:0,0,0,0,0,0,-;1:0,0,1,0,0,0,1;1:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;4:0,0,0,0,0,0,-;1:0,0,0,1,0,0,-;7:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;8:0,1,0,0,0,0,-;1:0,1,0,-1,0,0,-;3:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;4:0,0,0,0,0,0,-;1:0,0,1,0,0,0,0.85;7:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;12:0,0,0,0,0,0,-;12:1,0,0,0,0,0,-;12:0,0,0,0,0,0,-;12:0,1,0,0,0,0,-;4:0,0,0,0,0,0,-"
+  },
+  "golden": {
+    "finalStateHash": "f85ab5c7aae2f803",
+    "score": 1670,
+    "steps": 1200
+  }
+}

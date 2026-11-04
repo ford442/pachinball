@@ -51,27 +51,27 @@ first-party same-origin responses served by the dev server itself.
 
 ## Mandatory fallback
 
-Isolation picks a default; it never decides whether the game boots.
-`isCrossOriginIsolated()` (`src/config/physics.ts`) chooses two things:
+Isolation never decides whether the game boots, and since #444 it no longer
+picks the engine: every page defaults to the in-process `wasm-owner`, because
+only its runs replay step-exactly and can be verified for the leaderboard
+(#439 had made `wasm-worker` the isolated default). `isCrossOriginIsolated()`
+(`src/config/physics.ts`) chooses one thing:
 
-- **The default engine** (#439), used only when there is no localStorage override.
-  Isolated pages default to `wasm-worker`. Pages without the headers (file://, a host
-  that dropped them) default to the in-process `wasm-owner`. That is an ordinary
-  choice, not a degrade, so no degrade marker is logged.
-- **The worker snapshot transport.** Shared memory when isolated, transferred
-  `postMessage` buffers when not. `wasm-worker` still runs without isolation if it
-  is selected explicitly.
+- **The worker snapshot transport**, when `wasm-worker` is opted into
+  (`?physics=wasm-worker` or the localStorage flag): shared memory when isolated,
+  transferred `postMessage` buffers when not. The worker runs either way.
 
 The fallbacks in `PhysicsSystem.init()` (`src/game-elements/physics.ts`) do not branch
 on isolation. A worker that fails to start gives way to `wasm-owner`, and a missing
 bundle gives way to Rapier, each with the `[Bootstrap][physics-degrade]` marker.
 
-So **losing the headers costs the worker, not the game**. If the host is rebuilt
-without them, players silently get the main-thread owner. Re-check the headers after
-any server change (see *Verifying locally* and the production check above).
+So **losing the headers costs only the opted-in worker its shared memory**.
+Re-check the headers after any server change (see *Verifying locally* and the
+production check above).
 
-`tests/wasm-worker-default.spec.ts` boots with no override both ways, stripping
-COOP/COEP from the document response for the non-isolated run.
+`tests/wasm-worker-default.spec.ts` boots with no override both ways (the owner
+either way), stripping COOP/COEP from the document response for the
+non-isolated run, and boots an opted-in worker.
 `tests/wasm-worker-adventure.spec.ts` plays an adventure track on the worker over
 both transports.
 

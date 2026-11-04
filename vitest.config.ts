@@ -2,6 +2,9 @@ import path from 'node:path'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  define: {
+    __PACHINBALL_BUILD__: JSON.stringify('vitest'),
+  },
   resolve: {
     alias: [
       {

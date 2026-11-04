@@ -99,6 +99,8 @@ export class CampaignRewardsManager {
   private equippedRewards: Partial<Record<CampaignRewardType, string>> = {}
   private appliers: CampaignRewardAppliers = {}
   private notifier: CampaignRewardNotifier | null = null
+  /** Called after every local save — the cloud sync pushes from here (#444 Slice D). */
+  onPersist: ((payload: CampaignPersistencePayload) => void) | null = null
 
   constructor(
     private readonly progression: AdventureTrackProgression,
@@ -204,6 +206,30 @@ export class CampaignRewardsManager {
     this.save()
   }
 
+  /** The save as stored: what the cloud sync and the export file carry. */
+  getStoragePayload(): CampaignPersistencePayload {
+    return {
+      version: CAMPAIGN_STORAGE_VERSION,
+      progression: this.progression.getSerializableState(),
+      unlockedRewardIds: Array.from(this.unlockedRewardIds),
+      equippedRewards: { ...this.equippedRewards },
+    }
+  }
+
+  /**
+   * Adopt a save from elsewhere (the cloud, an imported file): migrate it,
+   * apply it, re-equip, and save locally.
+   */
+  applyExternalPayload(raw: unknown): boolean {
+    const migrated = migrateCampaignStorage(raw)
+    if (!migrated) return false
+    this.applyStoragePayload(migrated)
+    this.unlockFromShardTotal(true)
+    this.applyEquippedRewards()
+    this.save()
+    return true
+  }
+
   private applyReward(reward: CampaignRewardItem): void {
     switch (reward.type) {
       case 'ball-skin':
@@ -275,6 +301,7 @@ export class CampaignRewardsManager {
     } catch (error) {
       console.warn('[CampaignRewards] Failed to save campaign rewards state:', error)
     }
+    this.onPersist?.(serializableState)
   }
 }
 

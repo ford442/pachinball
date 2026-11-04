@@ -3,10 +3,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const apiFetch = vi.hoisted(() => vi.fn())
-vi.mock('../src/config', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/config')>()),
-  apiFetch,
+const fetchLeaderboard = vi.hoisted(() => vi.fn())
+vi.mock('../src/arcade/arcade-api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/arcade/arcade-api')>()),
+  fetchLeaderboard,
 }))
 
 import { GameUIManager } from '../src/game/game-ui'
@@ -22,7 +22,7 @@ describe('timers do not outlive dispose()', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     document.body.innerHTML = '<div id="game-cabinet"></div>'
-    apiFetch.mockReset()
+    fetchLeaderboard.mockReset()
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -55,19 +55,20 @@ describe('timers do not outlive dispose()', () => {
   })
 
   it('LeaderboardSystem does not resume polling from its 5-minute pause after dispose', async () => {
-    apiFetch.mockRejectedValue(new Error('backend down'))
+    fetchLeaderboard.mockRejectedValue(new Error('backend down'))
     const board = new LeaderboardSystem()
 
     // maxRetries (5) consecutive failures pause polling and arm a 5-minute resume timer.
     for (let i = 0; i < 5; i++) await board.refresh(true)
     expect(vi.getTimerCount()).toBeGreaterThan(0)
-    const callsBefore = apiFetch.mock.calls.length
+    const callsBefore = fetchLeaderboard.mock.calls.length
 
     board.dispose()
     expect(vi.getTimerCount()).toBe(0)
 
     await vi.advanceTimersByTimeAsync(10 * 60_000)
-    expect(apiFetch.mock.calls.length).toBe(callsBefore)
+    expect(callsBefore).toBe(5)
+    expect(fetchLeaderboard.mock.calls.length).toBe(callsBefore)
     expect(vi.getTimerCount()).toBe(0)
   })
 

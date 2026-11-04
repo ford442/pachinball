@@ -56,6 +56,8 @@ export type TableOptions = {
    * from a recording made on a fresh table (#441).
    */
   shiftIds?: number
+  /** A second ball the recording never had: the linked bodies no longer pair up (#444). */
+  extraBall?: boolean
   /** Viewer refresh rate the client renders at (default 60 Hz). */
   hz?: number
 }
@@ -134,6 +136,10 @@ export async function makeTable(module: WasmPhysicsModule, opts: TableOptions = 
 
   const ball = world.createRigidBody(api.RigidBodyDesc.dynamic().setTranslation(-2.4, 0, 10).setLinvel(0.2, 0, -1))
   world.createCollider(api.ColliderDesc.ball(0.25), ball)
+  if (opts.extraBall) {
+    const extra = world.createRigidBody(api.RigidBodyDesc.dynamic().setTranslation(2.4, 0, 10))
+    world.createCollider(api.ColliderDesc.ball(0.25), extra)
+  }
 
   const gameObjects = makeGameObjectsStub({
     getBumperBodies: vi.fn(() => bumpers),
@@ -214,8 +220,19 @@ export function ballPose(t: Table) {
   return { id, p, v }
 }
 
-export async function recordLiveRun(module: WasmPhysicsModule, opts: { launch?: boolean } = {}) {
+/** Pin the table's render delta: the controller turns it into fixed steps (#444). */
+export function setFrameMs(t: Table, frameMs: number): void {
+  ;(t.host.engine.getDeltaTime as ReturnType<typeof vi.fn>).mockReturnValue(frameMs)
+}
+
+/** Render frames until the engine has taken `steps` fixed steps (the tape holds one frame per step). */
+function runUntilStep(t: Table, steps: number, frame: () => void): void {
+  while (t.engine.getStepCount() < steps) frame()
+}
+
+export async function recordLiveRun(module: WasmPhysicsModule, opts: { launch?: boolean; frameMs?: number } = {}) {
   const live = await makeTable(module)
+  if (opts.frameMs !== undefined) setFrameMs(live, opts.frameMs)
   const tape = opts.launch ? launchTapeFrame : tapeFrame
   // The recorder's own charge is the one it launched with.
   live.host.plungerChargeLevel = opts.launch ? LAUNCH_CHARGE : 0
@@ -224,7 +241,7 @@ export async function recordLiveRun(module: WasmPhysicsModule, opts: { launch?: 
   // with both flippers released, so the owner's TS-side flipper state (hold
   // timers) is back to its spawn value — the snapshot carries the C++ half.
   const warmup = tapeInput(0)
-  for (let f = 0; f < WARMUP_FRAMES; f++) live.controller.stepPhysics(warmup, null, null, null)
+  runUntilStep(live, WARMUP_FRAMES, () => live.controller.stepPhysics(warmup, null, null, null))
   expect(tapeFrame(WARMUP_FRAMES - 1)).toMatchObject({ flipperLeft: false, flipperRight: false })
   expect(live.controller.getBumperMatches()).toBe(0)
   expect(live.host.score).toBe(0)
@@ -240,13 +257,18 @@ export async function recordLiveRun(module: WasmPhysicsModule, opts: { launch?: 
     createdAt: '2026-09-25T00:00:00.000Z',
   })
   const input = tapeInput(WARMUP_FRAMES, tape)
-  for (let f = 0; f < RECORD_FRAMES; f++) live.controller.stepPhysics(input, actions, null, recorder)
+  runUntilStep(live, WARMUP_FRAMES + RECORD_FRAMES, () => live.controller.stepPhysics(input, actions, null, recorder))
   const payload = recorder.stop(live.host.score)!
   return { live, payload }
 }
 
-export async function replay(module: WasmPhysicsModule, payload: ReplayPayload, opts: TableOptions = {}) {
+export async function replay(
+  module: WasmPhysicsModule,
+  payload: ReplayPayload,
+  opts: TableOptions & { frameMs?: number } = {},
+) {
   const client = await makeTable(module, opts)
+  if (opts.frameMs !== undefined) setFrameMs(client, opts.frameMs)
   // The spectator's own live charge is idle — replay must not read it.
   client.host.plungerChargeLevel = 0
   const actions = launchActions(client)
@@ -256,5 +278,5 @@ export async function replay(module: WasmPhysicsModule, payload: ReplayPayload, 
   // other rates more or fewer — schema 3 advances one row per fixed step.
   let guard = 0
   while (runner.isPlaying() && guard++ < 100_000) client.controller.stepPhysics(null, actions, runner, null)
-  return client
+  return { ...client, runner }
 }

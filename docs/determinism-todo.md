@@ -124,7 +124,8 @@ On the gameplay clock (#441):
 | Gold swarm quick-collect bonus | `ball-manager-gold.ts` `collectBall` |
 | Plunger charge (steps held) | `input-plunger.ts` |
 | Flipper hold-time stiffness ramp (Rapier path) | `game-input-actions.ts` |
-| Gameplay timers stepped per frame: swarm lifetimes (expiry removes bodies), stuck-ball detection, combo-multiplier decay, power-up timer, tilt decay | `stepPhysics()` passes the sim seconds advanced (`simDt`), not render `dt` |
+| Gameplay timers stepped per fixed step: swarm lifetimes (expiry removes bodies), stuck-ball detection, combo-multiplier decay, power-up timer, tilt decay | `stepFixed()` passes the sim seconds advanced (`simDt`), not render `dt` |
+| Jackpot sequence (ends the display's JACKPOT state), display state machine (gates fever scoring), spinner / trap / launcher / gate timers, adventure goal and time-limit clocks | `updateGameplay()` / `Game.stepAdventureProgression`, once per fixed step at `FIXED_TIMESTEP` (#444) |
 
 `nudgeState` and `tiltActive` are reset in `startGame()`.
 
@@ -217,6 +218,24 @@ bumpers and caught-ball updates further down `stepPhysics`. Gameplay timers
 already read `simDt`; anything in that list that pushes a body is the next
 audit item.
 
+A replay also carries the cascade table it was recorded on (`cascade`:
+Daily Cascade / free seed), and `startGame()` plays it on that table — not the
+spectator's selection or today's daily — then gives the player theirs back.
+A weekly-machine tape carries `machine: 'weekly'` and is rebuilt from `seed`.
+
+A frame-0 snapshot whose linked bodies / hinges do not pair up with the live
+world (`id-layout`: the table descriptors differ) **rejects** the replay:
+`ReplayRunner.reject()` stops playback with the reason instead of letting a
+ghost drift under a toast.
+
+`npm run verify:replay` plays each `tests/replays/*.json` tape in the real game
+(headless Chromium, wasm-owner) and checks the C++ `getStateHash()`. Players'
+runs are verified the same way on the storage host (`services/replay-verifier`).
+Live spectate streams fingerprinted chunks; the spectator must land on each
+chunk's hash. Gates, traps, launchers and adventure clocks advance once per
+tick at `FIXED_TIMESTEP`; feeders still run once per render frame.
+
+
 ---
 
 ## Solver snapshots (#422)
@@ -239,5 +258,8 @@ TS flipper drive reads — see the caveat in `docs/ASYNC_CHALLENGES_EPIC.md`.
 3. ~~#343: URL `?seed=` share → session seed; ghost spectate; divergence toast.~~
 4. #441: plunger charge on the tape; sim-clock nudge/tilt and scoring windows;
    worker snapshot round trip; restore across differing ball-id layouts.
-5. ~~Tape per fixed step instead of per render frame~~ — schema 3 (see "One row per fixed step").
-6. Next: move the per-frame `dt` consumers that push bodies (feeders, plunger spring) onto the tick.
+5. ~~#444 Slice A: tape per fixed step, cascade table on the tape, `id-layout`
+   rejects, headless verifier + golden tape corpus (`tests/replays/`).~~
+6. ~~#444 Slice E: live spectate — fingerprinted tape chunks, a spectator one
+   chunk behind; fixed steps do no GPU work.~~
+7. Next: move the remaining per-frame `dt` consumers that push bodies (feeders, plunger spring) onto the tick.

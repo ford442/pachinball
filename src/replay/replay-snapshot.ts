@@ -154,7 +154,11 @@ export type ReplaySnapshotOutcome =
   | 'unsupported'
   /** Different static table — the snapshot was refused. */
   | 'table-mismatch'
-  /** Same table, but the live body ids differ from the recording's; restoring would alias bodies. */
+  /**
+   * Same static table, but the linked bodies / hinges do not pair up by role
+   * with the recording's: the table descriptors differ. The replay is
+   * rejected, not played (#444).
+   */
   | 'id-layout'
   /** Truncated / corrupt / wrong version. */
   | 'invalid'
@@ -183,7 +187,7 @@ export interface ReplaySnapshotResult {
 const MESSAGES: Record<Exclude<ReplaySnapshotOutcome, 'restored' | 'no-snapshot'>, string> = {
   unsupported: 'Replay not verified: this physics engine cannot restore snapshots — ghost may drift',
   'table-mismatch': 'Replay diverged: table differs from the recording (snapshot hash mismatch)',
-  'id-layout': 'Replay not verified: ball layout differs from the recording — ghost may drift',
+  'id-layout': 'Replay rejected: the table\'s balls and flippers do not match the recording',
   invalid: 'Replay diverged: recording snapshot is corrupt or from another version',
   'tunables-mismatch': 'Replay diverged: feeder tuning changed since this recording',
 }

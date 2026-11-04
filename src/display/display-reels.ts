@@ -66,6 +66,7 @@ export class DisplayReelsLayer {
 
   private mesh: Mesh | null = null
   private dynamicTexture: DynamicTexture | null = null
+  private reelsDirty = false
 
   private telemetryEnabled = false
   private telemetryFrameCount = 0
@@ -279,11 +280,25 @@ export class DisplayReelsLayer {
     mat.disableLighting = true
 
     this.mesh.material = mat
+    this.mesh.onBeforeRenderObservable.add(() => {
+      if (!this.reelsDirty) return
+      this.reelsDirty = false
+      this.drawReels()
+    })
 
     this.renderReels()
   }
 
+  /**
+   * The reels changed. A fixed step only marks them: the canvas is drawn and
+   * uploaded once, right before the mesh renders, so stepping without
+   * rendering (the verifier, a spectator catching up) never touches the GPU (#444).
+   */
   private renderReels(): void {
+    this.reelsDirty = true
+  }
+
+  private drawReels(): void {
     const ctx = this.dynamicTexture?.getContext() as CanvasRenderingContext2D | null
     if (!ctx || !this.dynamicTexture) return
 
@@ -479,11 +494,8 @@ export class DisplayReelsLayer {
 
     _state: DisplayState
   ): void {
-    if (!this.spinning) {
-      // Still render in case we need to show static reels
-      this.renderReels()
-      return
-    }
+    // Still reels have nothing new to draw.
+    if (!this.spinning) return
 
     this.stopTimer += dt
 

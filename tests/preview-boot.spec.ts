@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs'
 // Runs only under playwright.preview.config.ts: boots the built bundle, not the dev server.
 // The CI leg sets PREVIEW_EXPECT_ENGINE; locally it follows whether public/wasm exists.
 const expectedEngine =
-  process.env.PREVIEW_EXPECT_ENGINE ?? (existsSync('public/wasm/PhysicsModule.wasm') ? 'wasm-worker' : 'rapier')
+  process.env.PREVIEW_EXPECT_ENGINE ?? (existsSync('public/wasm/PhysicsModule.wasm') ? 'wasm-owner' : 'rapier')
 
 test('production bundle boots cross-origin isolated on the expected physics engine', async ({ page }) => {
   test.setTimeout(120_000)

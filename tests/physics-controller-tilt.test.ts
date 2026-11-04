@@ -6,12 +6,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GamePhysicsController } from '../src/game/game-physics-controller'
 import { GAME_TUNING, GameConfig } from '../src/config'
-import { FIXED_TIMESTEP } from '../src/core/sim-clock'
+import { FIXED_TIMESTEP, MAX_FRAME_DT } from '../src/core/sim-clock'
 import { makeBallManagerStub, makeGameObjectsStub, makePhysicsHostShell } from './helpers/make-physics-host'
 
 const STEP_MS = FIXED_TIMESTEP * 1000
 
-function makeTable() {
+/** `frameMs` is the render delta; the controller turns it into fixed steps (#444). */
+function makeTable(frameMs = 1000 / 120) {
   let engineSteps = 0
   const applyImpulse = vi.fn()
   const ball = {
@@ -32,9 +33,8 @@ function makeTable() {
     ballManager: makeBallManagerStub({ getBallBody: vi.fn(() => ball) }),
     gameObjects: makeGameObjectsStub(),
   })
-  // A 120 Hz render delta: half the frames run no fixed step, and gameplay
-  // timers must follow the steps, not the frames.
-  ;(host.engine.getDeltaTime as ReturnType<typeof vi.fn>).mockReturnValue(1000 / 120)
+  // Default is a 120 Hz render delta: half the frames run no fixed step.
+  ;(host.engine.getDeltaTime as ReturnType<typeof vi.fn>).mockReturnValue(frameMs)
   const controller = new GamePhysicsController(host)
   /** Render frames until the engine has taken `n` more fixed steps. */
   const frames = (n: number) => {
@@ -45,6 +45,7 @@ function makeTable() {
   const nudge = () => controller.applyNudge({ x: 1, y: 0, z: 0 })
   return {
     host, controller, frames, renderFrame, nudge, applyImpulse,
+    engineSteps: () => engineSteps,
     jumpEngineCounter: (to: number) => { engineSteps = to },
   }
 }
@@ -67,6 +68,14 @@ describe('nudge / tilt on the sim clock (#441)', () => {
     t.frames(30)
     expect(t.controller.simClock.steps()).toBe(30)
     expect(t.controller.simClock.ms()).toBeCloseTo(30 * STEP_MS, 9)
+  })
+
+  it('a stalled render frame catches up at most MAX_FRAME_DT of fixed steps', () => {
+    const t = makeTable(1000)
+    for (let i = 0; i < 30; i++) t.renderFrame()
+    // Two fixed steps per one-second frame, not sixty; the clock counts the steps taken.
+    expect(t.engineSteps()).toBe(30 * Math.round(MAX_FRAME_DT / FIXED_TIMESTEP))
+    expect(t.controller.simClock.steps()).toBe(t.engineSteps())
   })
 
   it('nudges inside the cooldown warn, and the third warning tilts', () => {

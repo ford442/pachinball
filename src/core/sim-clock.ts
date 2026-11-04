@@ -16,6 +16,44 @@
 /** Fixed physics timestep (s) — every engine steps the world in these increments. */
 export const FIXED_TIMESTEP = 1 / 60
 
+/** Longest render frame the sim catches up on (s); a longer stall is dropped, not replayed. */
+export const MAX_FRAME_DT = 1 / 30
+
+/**
+ * Slack on the step boundary (s): a host that pins the frame to
+ * `1000 / 60` ms gets exactly one step per frame even when that ms value,
+ * divided back down, lands an ulp under `FIXED_TIMESTEP`.
+ */
+const STEP_EPSILON = 1e-9
+
+/**
+ * Render frames → whole fixed steps (#444). The game runs its gameplay once
+ * per fixed step and the replay tape holds one input frame per step, so how
+ * many steps a frame takes is decided here, from wall time, and nowhere else.
+ * The C++ / Rapier worlds are then handed exactly one `FIXED_TIMESTEP` per
+ * call and never see the render delta.
+ */
+export class FixedStepPacer {
+  private accumulator = 0
+
+  /** Fixed steps due for a render frame of `rawDtSeconds`. */
+  stepsFor(rawDtSeconds: number): number {
+    const dt = Number.isFinite(rawDtSeconds) ? Math.min(Math.max(rawDtSeconds, 0), MAX_FRAME_DT) : 0
+    this.accumulator += dt
+    let steps = 0
+    while (this.accumulator >= FIXED_TIMESTEP - STEP_EPSILON) {
+      this.accumulator -= FIXED_TIMESTEP
+      steps++
+    }
+    return steps
+  }
+
+  /** How far the frame is into the next step, 0–1: the mesh interpolation alpha. */
+  alpha(): number {
+    return Math.min(Math.max(this.accumulator / FIXED_TIMESTEP, 0), 1)
+  }
+}
+
 /** The slice of `PhysicsSystem` the clock reads; every member optional for stubs. */
 export interface SimClockPhysics {
   isWasmActive?(): boolean
