@@ -1055,7 +1055,11 @@ const DENSE_FIELD = {
   const native = existsSync(snapshotFixture) ? new Uint8Array(readFileSync(snapshotFixture)) : null
   const nativeMatch = native !== null && sameBytes(blob, native)
   // Same frame, whole stepped world: the native build's stateHash sidecar (#444, #459 Slice A).
-  const stateHash = world.getStateHash()
+  // getStateHash() crosses Embind as a BigInt (7ed4419); the sidecar is 16 hex digits.
+  const rawStateHash = world.getStateHash()
+  const stateHash = typeof rawStateHash === 'bigint'
+    ? rawStateHash.toString(16).padStart(16, '0')
+    : `LOSSY(${typeof rawStateHash}:${rawStateHash})`
   const stateHashFile = `${snapshotFixture}.statehash`
   const nativeStateHash = existsSync(stateHashFile) ? readFileSync(stateHashFile, 'utf8').trim() : null
   const stateHashMatch = nativeStateHash !== null && nativeStateHash === stateHash

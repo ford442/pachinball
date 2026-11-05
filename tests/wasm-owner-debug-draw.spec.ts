@@ -19,10 +19,9 @@ test('wasm-owner physics debug draw shows C++ collider wireframes', async ({ pag
     checkbox.dispatchEvent(new Event('change', { bubbles: true }))
   })
 
-  // PhysicsDebugRenderer caps refresh at 250ms; wait for render loop to populate lines.
-  await page.waitForTimeout(600)
-
-  const debugLines = await page.evaluate(() => {
+  // The overlay is a lazy chunk (00d840c): the toggle imports it, then the
+  // renderer refreshes at most every 250ms. Wait for the lines, not a fixed time.
+  const readDebugLines = () => page.evaluate(() => {
     const scene = (window as unknown as { game?: { scene?: { meshes?: Array<{ name: string; getVerticesData?: (kind: string) => Float32Array | number[] | null }> } } }).game?.scene
     const mesh = scene?.meshes?.find((m) => m.name === 'physicsDebugLines')
     const positions = mesh?.getVerticesData?.('position')
@@ -31,6 +30,30 @@ test('wasm-owner physics debug draw shows C++ collider wireframes', async ({ pag
     return { vertexCount, engine }
   })
 
-  expect(debugLines.engine).toBe('wasm-owner')
-  expect(debugLines.vertexCount, 'C++ debug wireframes should have vertices from cached static colliders').toBeGreaterThan(0)
+  // On failure, say why the overlay is empty: chunk not loaded, not enabled, or no colliders.
+  const overlayState = () => page.evaluate(() => {
+    const g = (window as unknown as {
+      game?: {
+        physics?: { getWasmMode?: () => string; getWasmDebugColliders?: () => ArrayLike<unknown> | null }
+        settingsUI?: { physicsDebugRenderer?: { isEnabled?: () => boolean } | null }
+      }
+    }).game
+    const checkbox = document.getElementById('debug-physics-draw') as HTMLInputElement | null
+    return {
+      checkbox: checkbox ? checkbox.checked : 'missing',
+      rendererLoaded: !!g?.settingsUI?.physicsDebugRenderer,
+      rendererEnabled: g?.settingsUI?.physicsDebugRenderer?.isEnabled?.() ?? null,
+      mode: g?.physics?.getWasmMode?.() ?? null,
+      colliders: g?.physics?.getWasmDebugColliders?.()?.length ?? null,
+    }
+  })
+  try {
+    await expect.poll(async () => (await readDebugLines()).vertexCount, {
+      message: 'C++ debug wireframes should have vertices from cached static colliders',
+      timeout: 15_000,
+    }).toBeGreaterThan(0)
+  } catch (err) {
+    throw new Error(`${err instanceof Error ? err.message : String(err)}\noverlay state: ${JSON.stringify(await overlayState())}`)
+  }
+  expect((await readDebugLines()).engine).toBe('wasm-owner')
 })
