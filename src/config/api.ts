@@ -62,8 +62,33 @@ export function resolveBackboxAssetPath(name: string, ext: string, pack?: string
   return assetUrl(`backbox/${relative}`)
 }
 
+/** Plain-object copy of any `HeadersInit` shape (object, `Headers`, `[name, value][]`). */
+export function normalizeHeaders(headers: HeadersInit | undefined): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (!headers) return out
+  if (typeof Headers !== 'undefined' && headers instanceof Headers) {
+    headers.forEach((value, key) => {
+      out[key] = value
+    })
+  } else if (Array.isArray(headers)) {
+    for (const [key, value] of headers) out[key] = value
+  } else {
+    Object.assign(out, headers)
+  }
+  return out
+}
+
+/** Methods a retry cannot duplicate (RFC 9110 §9.2.2). POST / PATCH are never retried (#503 A4). */
+const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS'])
+
+/** True when `apiFetch` may retry a request with this method (no method = GET). */
+export function isIdempotentMethod(method: string | undefined): boolean {
+  return IDEMPOTENT_METHODS.has((method ?? 'GET').toUpperCase())
+}
+
 /**
- * Helper to make API calls with exponential backoff retry logic.
+ * Helper to make API calls with exponential backoff retry logic. Only idempotent methods are
+ * retried; a POST is sent once, so a slow-but-committed request can never land twice.
  */
 export async function apiFetch<T>(
   endpoint = '',
@@ -74,17 +99,16 @@ export async function apiFetch<T>(
     ? trimmedEndpoint
     : `${API_BASE}${trimmedEndpoint.startsWith('/') ? trimmedEndpoint : `/${trimmedEndpoint}`}`
 
-  const maxAttempts = 3
+  // `options` first, then the merged headers: a caller's `headers` adds to Accept, never replaces it.
+  const headers = { Accept: 'application/json', ...normalizeHeaders(options.headers) }
+  const maxAttempts = isIdempotentMethod(options.method) ? 3 : 1
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const { signal, cancel } = withTimeoutSignal(options.signal)
     try {
       const response = await fetch(resolvedUrl, {
-        headers: {
-          Accept: 'application/json',
-          ...(options.headers ?? {}),
-        },
         ...options,
+        headers,
         signal,
       })
       cancel()
