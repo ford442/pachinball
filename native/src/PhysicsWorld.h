@@ -130,6 +130,22 @@ struct WorldParams {
   int   sleepFramesRequired   = 60;
 };
 
+/** Upper bound on `solverIterations` a snapshot may carry (CPU DoS guard). */
+constexpr int MAX_SOLVER_ITERATIONS = 64;
+
+/** True when every parameter is finite and in a range `step()` can run. */
+inline bool worldParamsValid(const WorldParams& p) {
+  const bool finiteG = std::isfinite(p.gravity.x) && std::isfinite(p.gravity.y) && std::isfinite(p.gravity.z);
+  return finiteG &&
+         std::isfinite(p.fixedTimestep) && p.fixedTimestep > 0.f && p.fixedTimestep <= 1.f &&
+         !std::isnan(p.maxSubsteps) &&
+         p.solverIterations >= 1 && p.solverIterations <= MAX_SOLVER_ITERATIONS &&
+         std::isfinite(p.rollingResistance) && p.rollingResistance >= 0.f &&
+         std::isfinite(p.sleepLinearThreshold) && p.sleepLinearThreshold >= 0.f &&
+         std::isfinite(p.sleepAngularThreshold) && p.sleepAngularThreshold >= 0.f &&
+         p.sleepFramesRequired >= 0;
+}
+
 class PhysicsWorld {
 public:
   explicit PhysicsWorld(const WorldParams& params = WorldParams{});

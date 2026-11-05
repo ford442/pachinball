@@ -234,10 +234,10 @@ void PhysicsWorld::resolveSphereVsBox(BodyView& body, const BoxDesc& box, int bo
     const float dx = box.halfExtents.x - std::fabs(localCenter.x);
     const float dy = box.halfExtents.y - std::fabs(localCenter.y);
     const float dz = box.halfExtents.z - std::fabs(localCenter.z);
-    Vec3 localNormal = Vec3::up();
+    Vec3 localNormal = {0.f, localCenter.y >= 0.f ? 1.f : -1.f, 0.f};
     float shallow = dy;
     if (dx < shallow) { shallow = dx; localNormal = {localCenter.x >= 0.f ? 1.f : -1.f, 0.f, 0.f}; }
-    if (dz < shallow) { localNormal = {0.f, 0.f, localCenter.z >= 0.f ? 1.f : -1.f}; }
+    if (dz < shallow) { shallow = dz; localNormal = {0.f, 0.f, localCenter.z >= 0.f ? 1.f : -1.f}; }
     normal = box.rotation.rotate(localNormal).normalized();
     penetration = radius + shallow;
   } else {
