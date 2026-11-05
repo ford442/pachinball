@@ -85,8 +85,6 @@ export default defineConfig([
       'src/audio/**/*.ts',
       'src/adventure/**/*.ts',
     ],
-    // PathMechanicsManager is never instantiated by the shipped game; revisit when it is wired in.
-    ignores: ['src/game-elements/path-mechanics/**'],
     rules: {
       'no-restricted-syntax': ['error',
         {

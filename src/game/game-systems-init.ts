@@ -150,8 +150,7 @@ export class GameSystemsInitializer {
         this.game.eventBusLog.wire(this.game.eventBus)
       }
       this.game.performanceMonitor.setRendererBackend(
-        (window as unknown as { currentRenderer?: string }).currentRenderer ??
-          (this.game.engine.getClassName().toLowerCase().includes('webgpu') ? 'webgpu' : 'webgl2'),
+        window.currentRenderer ?? (this.game.engine.isWebGPU ? 'webgpu' : 'webgl2'),
       )
 
       if (debugTools) {

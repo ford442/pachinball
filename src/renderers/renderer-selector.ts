@@ -46,7 +46,7 @@ export function getRendererPreference(): RendererPreference {
     return urlRenderer
   }
 
-  const debugGlobal = (window as unknown as { DEBUG_RENDERER?: string }).DEBUG_RENDERER
+  const debugGlobal = window.DEBUG_RENDERER
   if (typeof debugGlobal === 'string') {
     const normalized = debugGlobal.toLowerCase()
     if (normalized === RENDERER_WEBGL2 || normalized === RENDERER_WEBGPU) return normalized
@@ -96,7 +96,7 @@ export function reloadWithRenderer(renderer: ActiveRenderer): void {
 
 /** Renderer currently running (set during bootstrap via exposeRenderer). */
 export function getActiveRenderer(): ActiveRenderer {
-  const fromWindow = (window as unknown as { currentRenderer?: string }).currentRenderer
+  const fromWindow = window.currentRenderer
   if (fromWindow === RENDERER_WEBGPU) return RENDERER_WEBGPU
 
   const canvas = document.getElementById('pachinball-canvas') as HTMLCanvasElement | null
@@ -122,7 +122,7 @@ export function useWebGL2Renderer(): void {
  */
 export function exposeRenderer(canvas: HTMLCanvasElement, isWebGPU: boolean): void {
   const active = isWebGPU ? RENDERER_WEBGPU : RENDERER_WEBGL2
-  ;(window as unknown as { currentRenderer?: string }).currentRenderer = active
+  window.currentRenderer = active
   canvas.dataset.renderer = active
   canvas.dataset.webglVersion = isWebGPU ? '' : '2'
 }

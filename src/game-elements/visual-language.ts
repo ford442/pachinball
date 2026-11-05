@@ -76,7 +76,7 @@ export const SURFACES = {
 // ============================================================================
 
 /** Standardized emissive intensity multipliers */
-export const INTENSITY: Record<string, number> = {
+export const INTENSITY = {
   /** Subtle ambient glow - background elements */
   AMBIENT: 0.2,
   
@@ -94,7 +94,7 @@ export const INTENSITY: Record<string, number> = {
   
   /** Bloom threshold kick - brief spikes */
   BURST: 3.0,
-}
+} satisfies Record<string, number>
 
 // ============================================================================
 // STATE COLOR MAPPING - Consistent state visualization

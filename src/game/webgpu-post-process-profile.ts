@@ -8,6 +8,7 @@
 
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
+import { isWebGPUEngine } from '../engine/create-engine'
 import { recordGpuDegrade, recordGpuProbePostProcess } from '../engine/gpu-degrade-telemetry'
 
 /** Conservative default: WebGPU spec minimum per-stage uniform buffer count. */
@@ -31,12 +32,8 @@ export interface WebGPUPostProcessProfile {
   readonly reason: string
 }
 
-export function isWebGPUEngine(engine: Engine | WebGPUEngine): boolean {
-  return (
-    engine.getClassName() === 'WebGPUEngine' ||
-    (engine as unknown as { isWebGPU?: boolean }).isWebGPU === true
-  )
-}
+/** One helper for the whole app: `AbstractEngine.isWebGPU` is public API. */
+export { isWebGPUEngine }
 
 /** Read adapter/device uniform-buffer cap when running on WebGPU. */
 export function readMaxUniformBuffersPerStage(engine: Engine | WebGPUEngine): number | null {

@@ -50,7 +50,7 @@ const DEFAULT_CONTEXT: EngineOptionsContext = {
   devicePixelRatio: typeof window !== 'undefined' ? window.devicePixelRatio : 1,
   debugPreserveDrawingBuffer:
     typeof window !== 'undefined'
-      ? (window as unknown as { DEBUG_PRESERVE_DRAWING_BUFFER?: boolean }).DEBUG_PRESERVE_DRAWING_BUFFER
+      ? window.DEBUG_PRESERVE_DRAWING_BUFFER
       : undefined,
 }
 

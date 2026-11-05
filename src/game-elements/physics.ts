@@ -24,17 +24,16 @@ export const PHYSICS_DEGRADE_MARKER = '[Bootstrap][physics-degrade]'
 /** Engine that actually served the last init/step — not the localStorage preference. */
 export function exposeCurrentPhysicsEngine(mode: WasmPhysicsRuntimeMode): void {
   if (typeof window === 'undefined') return
-  ;(window as unknown as { currentPhysicsEngine?: WasmPhysicsRuntimeMode }).currentPhysicsEngine = mode
+  window.currentPhysicsEngine = mode
 }
 
 /** Last degrade reason (Playwright / diagnostics); undefined when the selected engine booted. */
 export function exposePhysicsDegradeReason(reason: string | undefined): void {
   if (typeof window === 'undefined') return
-  const w = window as unknown as { physicsDegradeReason?: string }
   if (reason === undefined) {
-    delete w.physicsDegradeReason
+    delete window.physicsDegradeReason
   } else {
-    w.physicsDegradeReason = reason
+    window.physicsDegradeReason = reason
   }
 }
 

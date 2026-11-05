@@ -46,7 +46,7 @@ export function startMultiball(host: BallManagerHost, totalBalls: number, ballSa
   }
 
   if (host.ballBodies.length > 0 && (!host.ballBody || !host.ballBodies.includes(host.ballBody))) {
-    host.ballBody = host.ballBodies[0]
+    host.ballBody = host.ballBodies[0] ?? null
   }
 
   if (!wasActive) {

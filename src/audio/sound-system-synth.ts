@@ -305,13 +305,13 @@ export function playPortalEnter(
 
 function playMotif(state: SoundSystemSynthState, notes: number[], startTime: number, gain = 0.14): void {
   if (!state.audioContext || !state.sfxGain || notes.length === 0) return
-  for (let i = 0; i < notes.length; i++) {
+  for (const [i, note] of notes.entries()) {
     const osc = state.audioContext.createOscillator()
     const g = state.audioContext.createGain()
     const noteStart = startTime + i * 0.055
     const noteEnd = noteStart + 0.2
     osc.type = i % 2 === 0 ? 'triangle' : 'sine'
-    osc.frequency.setValueAtTime(notes[i], noteStart)
+    osc.frequency.setValueAtTime(note, noteStart)
     g.gain.setValueAtTime(0.0001, noteStart)
     g.gain.linearRampToValueAtTime(gain, noteStart + 0.015)
     g.gain.exponentialRampToValueAtTime(0.0001, noteEnd)

@@ -13,7 +13,15 @@ import { spawnSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const ENFORCED_DIRS = ['src/core/', 'src/wasm/', 'src/game/physics/']
+const ENFORCED_DIRS = [
+  'src/core/',
+  'src/wasm/',
+  'src/game/physics/',
+  'src/materials/',
+  'src/audio/',
+  'src/game-elements/',
+  'src/game.ts',
+]
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const tsc = resolve(root, 'node_modules/typescript/bin/tsc')

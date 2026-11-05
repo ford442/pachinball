@@ -81,7 +81,7 @@ export class DisplayPhysicalLayer {
 
       const mat = new StandardMaterial(`physicalDrumMat${i}`, this.scene)
       mat.diffuseColor = Color3.Black()
-      mat.emissiveColor = emissive(cfg.color, INTENSITY.MEDIUM)
+      mat.emissiveColor = emissive(cfg.color, INTENSITY.NORMAL)
       mat.specularColor = color(cfg.color).scale(0.3)
       drum.material = mat
 
@@ -105,9 +105,9 @@ export class DisplayPhysicalLayer {
     if (this.backdrop?.material) {
       const mat = this.backdrop.material as StandardMaterial
       if (state === DisplayState.REACH) {
-        mat.emissiveColor = emissive(STATE_COLORS.REACH, INTENSITY.LOW)
+        mat.emissiveColor = emissive(STATE_COLORS.REACH, INTENSITY.NORMAL)
       } else if (state === DisplayState.FEVER || state === DisplayState.JACKPOT) {
-        mat.emissiveColor = emissive(PALETTE.GOLD, INTENSITY.MEDIUM)
+        mat.emissiveColor = emissive(PALETTE.GOLD, INTENSITY.NORMAL)
       } else {
         mat.emissiveColor = emissive(PALETTE.AMBIENT, INTENSITY.AMBIENT)
       }

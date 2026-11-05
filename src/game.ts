@@ -33,6 +33,7 @@ import { getChallengeSystem } from './replay/challenge-system'
 import { installSimClock } from './core/sim-clock'
 import { FrameScheduler } from './core/frame-scheduler'
 import { bootWarn } from './boot-log'
+import { engineDrawCallCount } from './engine/create-engine'
 
 export class Game
   extends GameDelegates
@@ -247,9 +248,9 @@ export class Game
           this.slotAdventure?.forceSlotSpin()
         },
         onMapSwitch: (index) => {
-          const maps = this.mapManager?.getMapSystem().getMapIds() || []
-          if (index >= 0 && index < maps.length) {
-            this.mapManager?.switchTableMap(maps[index])
+          const mapId = this.mapManager?.getMapSystem().getMapIds()[index]
+          if (mapId !== undefined) {
+            this.mapManager?.switchTableMap(mapId)
           }
         },
         onMapCycle: () => this.mapManager?.cycleTableMap(),
@@ -387,9 +388,8 @@ export class Game
       }
     }
 
-    const drawCallsCounter = (this.engine as unknown as { _drawCalls?: { current?: number } })._drawCalls
     this.performanceMonitor.updateEngineMetrics(
-      drawCallsCounter?.current ?? 0,
+      engineDrawCallCount(this.engine),
       this.physics.getActiveBodyCount(),
     )
     this.performanceMonitor.setParticleCount(this.effects?.getActiveParticleCount() ?? 0)

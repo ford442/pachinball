@@ -37,6 +37,7 @@ const FLAGS: SceneGraphFlags = {
 function webgpuEngine(maxUniformBuffersPerShaderStage: number) {
   return {
     getClassName: () => 'WebGPUEngine',
+    isWebGPU: true,
     currentLimits: { maxUniformBuffersPerShaderStage },
   } as never
 }

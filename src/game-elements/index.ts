@@ -38,25 +38,6 @@ export type { LeaderboardSystem, LeaderboardEntry, ScoreSubmission } from './lea
 export type { NameEntryDialog, NameEntryResult } from './name-entry-dialog'
 export { MapSystem, getMapSystem, resetMapSystem, type DynamicMapConfig } from './map-system'
 export {
-  PathMechanic,
-  MovingGate,
-  GateState,
-  MagneticField,
-  SpinnerLauncher,
-  JumpPad,
-  ReactivePegCluster,
-  PegState,
-  PathMechanicsManager,
-  type PathMechanicConfig,
-  type MovingGateConfig,
-  type MagneticFieldConfig,
-  type SpinnerLauncherConfig,
-  type JumpPadConfig,
-  type ReactivePegClusterConfig,
-  type ZoneTrigger,
-  type PathMechanicsCallbacks,
-} from './path-mechanics'
-export {
   SAMURAI_REALM_SCENARIO,
   CYBER_NOIR_SCENARIO,
   QUANTUM_DREAM_SCENARIO,

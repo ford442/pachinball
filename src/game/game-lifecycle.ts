@@ -259,7 +259,7 @@ export class GameLifecycle {
         mapId: this.host.currentMapId ?? DEFAULT_TABLE_MAP_ID,
         seed: getSessionSeed(),
         physicsEngine: this.host.physics?.getWasmMode() ?? 'rapier',
-        renderer: (typeof window !== 'undefined' && (window as unknown as { currentRenderer?: string }).currentRenderer === 'webgpu') ? 'webgpu' : 'webgl2',
+        renderer: (typeof window !== 'undefined' && window.currentRenderer === 'webgpu') ? 'webgpu' : 'webgl2',
         createdAt: new Date().toISOString(),
         cascade: dailyState.describeForReplay() ?? undefined,
         // A spectator rebuilds the same machine from `seed` alone.
