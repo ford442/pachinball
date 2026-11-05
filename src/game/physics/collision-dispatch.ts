@@ -25,6 +25,7 @@ import { ContactPhase, contactPhaseAt, contactStarted, type PhysicsContact, type
 
 import type { PhysicsHost } from './types'
 import { simNowMs, type SimClockPhysics } from '../../core/sim-clock'
+import { bootError } from '../../boot-log'
 import type { ScoringBridge } from './scoring-bridge'
 
 /** Maps WASM contact ids onto bodies and dispatch keys. */
@@ -401,7 +402,12 @@ export class CollisionDispatcher {
       const phase = contactPhaseAt(data, i, stride)
       if (phase === ContactPhase.Stay) continue
       const o = i * stride
-      this.dispatchWasmPair(data[o] ?? 0, data[o + 1] ?? 0, phase === ContactPhase.Enter)
+      // One bad contact must not drop the rest of this step's contacts (#503 A3).
+      try {
+        this.dispatchWasmPair(data[o] ?? 0, data[o + 1] ?? 0, phase === ContactPhase.Enter)
+      } catch (error) {
+        reportContactFault(error)
+      }
     }
   }
 
@@ -590,4 +596,12 @@ export class CollisionDispatcher {
     }
     return null
   }
+}
+
+/**
+ * A contact handler threw (#503 A3). Logged so it survives the production console strip; the
+ * remaining contacts of the step still dispatch.
+ */
+export function reportContactFault(error: unknown): void {
+  bootError('[CollisionDispatcher] contact dispatch threw:', error)
 }

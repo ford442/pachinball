@@ -12,7 +12,7 @@
  *     leaves the bus usable;
  *   - re-entrant emits of the same event see the handler set as of their own start.
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { EventBus } from '../src/core/event-bus'
 
 describe('EventBus dispatch snapshot', () => {
@@ -86,7 +86,7 @@ describe('EventBus dispatch snapshot', () => {
     expect(calls).toEqual([])
   })
 
-  it('a throwing handler aborts the rest of that emit and the bus keeps working', () => {
+  it('a throwing handler does not abort the rest of that emit, and the bus keeps working (#503 A3)', () => {
     const calls: string[] = []
     let shouldThrow = true
     bus.on('game:start', () => {
@@ -95,8 +95,10 @@ describe('EventBus dispatch snapshot', () => {
     })
     bus.on('game:start', () => calls.push('b'))
 
-    expect(() => bus.emit('game:start')).toThrow('boom')
-    expect(calls).toEqual(['a'])
+    const consoleError = vi.spyOn(globalThis.console, 'error').mockImplementation(() => {})
+    expect(() => bus.emit('game:start')).not.toThrow()
+    expect(calls).toEqual(['a', 'b'])
+    consoleError.mockRestore()
 
     shouldThrow = false
     calls.length = 0

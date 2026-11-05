@@ -31,8 +31,8 @@ import type { DebugStageKey } from './game/checkpoint-debug'
 import { GameDelegates } from './game/game-delegates'
 import { getChallengeSystem } from './replay/challenge-system'
 import { installSimClock } from './core/sim-clock'
-import { FrameScheduler } from './core/frame-scheduler'
-import { bootWarn } from './boot-log'
+import { FrameScheduler, type FrameFault } from './core/frame-scheduler'
+import { bootError, bootWarn } from './boot-log'
 
 export class Game
   extends GameDelegates
@@ -60,7 +60,26 @@ export class Game
   constructor(engine: Engine | WebGPUEngine, physics: PhysicsSystem = new PhysicsSystem()) {
     super(engine)
     this.physics = physics
-    this.frameScheduler = new FrameScheduler(engine, { signal: this.signal, frame: () => this.renderFrame() })
+    this.frameScheduler = new FrameScheduler(engine, {
+      signal: this.signal,
+      frame: () => this.renderFrame(),
+      onFault: (fault) => this.onFrameFault(fault),
+    })
+  }
+
+  /**
+   * A frame system threw (#503 A3). Presentation systems are quarantined by the scheduler; a
+   * physics / sim fault may have diverged the world, so a replay playback is rejected at once
+   * rather than shown (or verified) on a world that no longer matches the tape.
+   */
+  private onFrameFault(fault: FrameFault): void {
+    bootError(
+      `[Game] frame system ${fault.phase}/${fault.name} threw${fault.quarantined ? ' — quarantined' : ''}:`,
+      fault.error,
+    )
+    if (!fault.sim) return
+    const runner = this.replayRunner
+    if (runner?.isPlaying()) runner.reject('sim-fault', `${fault.phase}/${fault.name}: ${fault.message}`)
   }
 
   /** Distance fog is a motion cue; reduced-motion players get none. */

@@ -174,3 +174,71 @@ describe('FrameScheduler', () => {
     expect(() => s.register({ phase: 'bogus' as FramePhase, update: () => undefined })).toThrow(/Unknown phase/)
   })
 })
+
+describe('FrameScheduler fault isolation (#503 A3)', () => {
+  it('a throwing system does not stop the rest of its phase or later phases', () => {
+    const engine = fakeEngine()
+    const onFault = vi.fn()
+    const s = new FrameScheduler(engine, { onFault })
+    const ran: string[] = []
+    s.register({ phase: 'visuals', name: 'boom', update: () => { throw new Error('boom') } })
+    s.register({ phase: 'visuals', name: 'after', update: () => ran.push('after') })
+    s.register({ phase: 'hud', name: 'hud', update: () => ran.push('hud') })
+    s.start()
+    engine.frame()
+    expect(ran).toEqual(['after', 'hud'])
+    expect(onFault).toHaveBeenCalledWith(expect.objectContaining({ phase: 'visuals', name: 'boom', message: 'boom', quarantined: false }))
+  })
+
+  it('quarantines a presentation system on its 3rd throw in 8 frames; the loop keeps running', () => {
+    const engine = fakeEngine()
+    const onFault = vi.fn()
+    const s = new FrameScheduler(engine, { onFault })
+    const dispose = vi.fn()
+    const thrower = vi.fn(() => { throw new Error('x') })
+    let hud = 0
+    s.register({ phase: 'render', name: 'scene', update: thrower, dispose })
+    s.register({ phase: 'hud', name: 'hud', update: () => { hud++ } })
+    s.start()
+    for (let i = 0; i < 6; i++) engine.frame()
+    expect(thrower).toHaveBeenCalledTimes(3)
+    expect(dispose).toHaveBeenCalledTimes(1)
+    expect(s.describe().render).toEqual([])
+    expect(hud).toBe(6)
+    expect(engine.loops).toHaveLength(1)
+    expect(onFault.mock.calls.at(-1)?.[0]).toMatchObject({ quarantined: true, overLimit: true })
+  })
+
+  it('the window catches a system that throws every other frame', () => {
+    const engine = fakeEngine()
+    const s = new FrameScheduler(engine, { onFault: () => {} })
+    let n = 0
+    s.register({ phase: 'idle', name: 'flaky', update: () => { if (n++ % 2 === 0) throw new Error('odd') } })
+    for (let i = 0; i < 5; i++) s.tick()
+    expect(s.describe().idle).toEqual([])
+  })
+
+  it('does not quarantine a system that throws rarely', () => {
+    const s = new FrameScheduler(fakeEngine(), { onFault: () => {} })
+    let n = 0
+    s.register({ phase: 'hud', name: 'rare', update: () => { if (n++ % 5 === 0) throw new Error('rare') } })
+    for (let i = 0; i < 40; i++) s.tick()
+    expect(s.describe().hud).toEqual(['rare'])
+  })
+
+  it('never removes a physics / sim system; reports sim faults', () => {
+    const onFault = vi.fn()
+    const s = new FrameScheduler(fakeEngine(), { onFault })
+    s.register({ phase: 'sim', name: 'table', update: () => { throw new Error('nan') } })
+    for (let i = 0; i < 10; i++) s.tick()
+    expect(s.describe().sim).toEqual(['table'])
+    expect(onFault).toHaveBeenCalledTimes(10)
+    expect(onFault.mock.calls.at(-1)?.[0]).toMatchObject({ sim: true, overLimit: true, quarantined: false })
+  })
+
+  it('a throwing onFault does not escape the frame', () => {
+    const s = new FrameScheduler(fakeEngine(), { onFault: () => { throw new Error('reporter') } })
+    s.register({ phase: 'hud', name: 'boom', update: () => { throw new Error('boom') } })
+    expect(() => s.tick()).not.toThrow()
+  })
+})
