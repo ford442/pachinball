@@ -9,7 +9,7 @@ import {
 } from '../src/adventure/manifests'
 import { MANIFEST_DATA } from '../src/adventure/manifests/track-manifest-data'
 import { TRACK_CATALOG } from '../src/adventure/adventure-track-progression'
-import { ZONE_REGISTRY } from '../src/game-elements/zone-registry'
+import { ZONE_REGISTRY } from '../src/adventure/zone-registry'
 import { getTrackStartAnchor } from '../src/adventure/portal-routing'
 import {
   getDataTrackDefinition,

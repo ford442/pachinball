@@ -109,14 +109,9 @@ export class DisplayReelsLayer {
   private exposeDebugGlobals(): void {
     if (typeof window === 'undefined') return
     try {
-      const w = window as unknown as {
-        setReelsTelemetryEnabled?: (enabled: boolean) => void
-        getReelsTelemetry?: () => ReelsRenderTelemetrySnapshot
-        resetReelsTelemetry?: () => void
-      }
-      w.setReelsTelemetryEnabled = (enabled: boolean) => this.setTelemetryEnabled(enabled)
-      w.getReelsTelemetry = () => this.getTelemetry()
-      w.resetReelsTelemetry = () => this.resetTelemetry()
+      window.setReelsTelemetryEnabled = (enabled: boolean) => this.setTelemetryEnabled(enabled)
+      window.getReelsTelemetry = () => this.getTelemetry()
+      window.resetReelsTelemetry = () => this.resetTelemetry()
     } catch {
       // Ignore if window object is frozen
     }

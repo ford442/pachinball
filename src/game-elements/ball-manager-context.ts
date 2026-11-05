@@ -33,7 +33,6 @@ export interface SwarmGroup {
 }
 
 export interface BallStuckTracker {
-  lastPos: { x: number; y: number; z: number }
   stuckTime: number
 }
 
@@ -68,6 +67,8 @@ export interface BallManagerHost {
   ballSwarmId: Map<PhysicsBody, number>
   nextSwarmId: number
   ballStuckTimers: Map<PhysicsBody, BallStuckTracker>
+  /** Result buffer `updateStuckDetection` refills each step. */
+  readonly stuckBallsScratch: PhysicsBody[]
   chainMultiball: MultiballState
   ballSaveSystem: BallSaveSystem
 

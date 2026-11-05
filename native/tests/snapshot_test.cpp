@@ -18,11 +18,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <memory>
+#include <string>
 #include <vector>
 
 using namespace pachinball;
@@ -349,6 +351,13 @@ TEST_CASE("serialize is deterministic and writes the parity fixture", "[snapshot
     std::ofstream out(path, std::ios::binary);
     REQUIRE(out.good());
     out.write(reinterpret_cast<const char*>(blob.data()), static_cast<std::streamsize>(blob.size()));
+    // Sidecar: the native getStateHash at the same frame, for the WASM-side
+    // comparison in run-wasm-parity.mjs (#459 Slice A).
+    std::ofstream hash(std::string(path) + ".statehash");
+    REQUIRE(hash.good());
+    char hex[17];
+    std::snprintf(hex, sizeof hex, "%016llx", static_cast<unsigned long long>(a.getStateHash()));
+    hash << hex;
   }
 }
 

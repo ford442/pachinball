@@ -4,7 +4,7 @@
  * no `performance.now()` read decides a nudge, and no timer ends the penalty.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { GamePhysicsController } from '../src/game/game-physics-controller'
+import { GamePhysicsController } from '../src/game/physics/physics-controller'
 import { GAME_TUNING, GameConfig } from '../src/config'
 import { FIXED_TIMESTEP, MAX_FRAME_DT } from '../src/core/sim-clock'
 import { makeBallManagerStub, makeGameObjectsStub, makePhysicsHostShell } from './helpers/make-physics-host'

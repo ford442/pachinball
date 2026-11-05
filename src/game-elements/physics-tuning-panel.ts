@@ -61,7 +61,7 @@ export class PhysicsTuningPanel {
     header.appendChild(resetBtn)
     el.appendChild(header)
 
-    const groups: Record<string, PhysicsTuningSliderDef[]> = {
+    const groups: Record<PhysicsTuningSliderDef['group'], PhysicsTuningSliderDef[]> = {
       ball: [],
       flipper: [],
       launch: [],

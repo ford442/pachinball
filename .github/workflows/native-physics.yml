@@ -311,7 +311,7 @@ jobs:
         env:
           CI: 'true'
         run: >
-          npx playwright test --project=chromium
+          npx playwright test --project=chromium --trace retain-on-failure
           tests/wasm-owner-flipper.spec.ts
           tests/wasm-owner-debug-draw.spec.ts
           tests/wasm-owner-adventure.spec.ts
@@ -323,6 +323,15 @@ jobs:
           tests/wasm-worker-adventure.spec.ts
           tests/basic-gameplay.spec.ts
           tests/live-spectate.spec.ts
+
+      # Diagnostics only: keep Playwright's error context and traces of a failed run.
+      - name: Upload Playwright results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-owner-playwright-results
+          path: test-results/
+          retention-days: 7
 
   replay_goldens:
     name: Golden Replay Tapes (Blocking)

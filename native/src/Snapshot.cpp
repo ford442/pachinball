@@ -492,6 +492,8 @@ SnapshotStatus PhysicsWorld::restore(const uint8_t* data, std::size_t size) {
   params.sleepLinearThreshold = r.f32();
   params.sleepAngularThreshold = r.f32();
   params.sleepFramesRequired = r.i32();
+  if (r.failed()) return SnapshotStatus::Truncated;
+  if (!worldParamsValid(params)) return SnapshotStatus::Corrupt;
 
   HandleTable handles;
   BodyStore bodies;

@@ -44,7 +44,7 @@ void shallowestBoxFace(const Vec3& local, const Vec3& he, Vec3& outNormal, float
   const float dx = he.x - std::fabs(local.x);
   const float dy = he.y - std::fabs(local.y);
   const float dz = he.z - std::fabs(local.z);
-  outNormal = Vec3::up();
+  outNormal = {0.f, local.y >= 0.f ? 1.f : -1.f, 0.f};
   outDepth = dy;
   if (dx < outDepth) { outDepth = dx; outNormal = {local.x >= 0.f ? 1.f : -1.f, 0.f, 0.f}; }
   if (dz < outDepth) { outDepth = dz; outNormal = {0.f, 0.f, local.z >= 0.f ? 1.f : -1.f}; }

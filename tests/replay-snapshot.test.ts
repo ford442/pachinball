@@ -13,6 +13,7 @@ import {
   decodeSnapshotBase64,
   encodeSnapshotBase64,
   feederTunablesHash,
+  NO_SNAPSHOT_ENGINE,
   pinFieldOccupancyHash,
   planReplayIdRemap,
   readSnapshotHeader,
@@ -160,6 +161,14 @@ describe('spectate id remap (#441)', () => {
     const oneFlipper = { bodyIds: [9, 5, 6], hinges: [{ id: 2, bodyId: 5 }] }
     expect(applyReplaySnapshot(e, oneFlipper, fp, onRemap).outcome).toBe('id-layout')
     expect(e.restoreSnapshot).not.toHaveBeenCalled()
+    expect(onRemap).not.toHaveBeenCalled()
+  })
+
+  it('a Rapier / mirror session reports unsupported, not id-layout, so the input tape still plays', () => {
+    const onRemap = vi.fn()
+    // No C++ bodies or hinges on that side: an id comparison could only fail.
+    const rapier = { bodyIds: [], hinges: [] }
+    expect(applyReplaySnapshot(NO_SNAPSHOT_ENGINE, rapier, fp, onRemap).outcome).toBe('unsupported')
     expect(onRemap).not.toHaveBeenCalled()
   })
 

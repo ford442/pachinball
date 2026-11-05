@@ -11,14 +11,6 @@ import { bootError, bootWarn } from './boot-log'
 import { installErrorReporter } from './engine/error-reporter'
 import { BOOT_PRELOAD_STAGE, revealBootFailure } from './game/game-ui-popups'
 
-declare global {
-  interface Window {
-    /** The live Game; read by Playwright specs and the diagnostic helper. */
-    game?: Game
-    runVisibilityDiagnostic?: () => void
-  }
-}
-
 /** Set once constructed so the failure banner can name the checkpoint stage that was running. */
 let bootGame: Game | undefined
 
@@ -60,7 +52,7 @@ async function bootstrap(): Promise<void> {
   // The WebGL2 fallback swaps in a fresh canvas (#451); tag the one the engine renders to.
   exposeRenderer(engine.getRenderingCanvas() ?? canvas, isWebGPUEngine(engine))
 
-  ;(window as unknown as Record<string, unknown>).bootstrapEngineOptions = resolveEngineOptions()
+  window.bootstrapEngineOptions = resolveEngineOptions()
 
   const game = new Game(engine, physics)
   bootGame = game
@@ -102,7 +94,7 @@ async function bootstrap(): Promise<void> {
 
   console.timeEnd('[Bootstrap] Game init')
   console.timeEnd('[Bootstrap] Total initialization')
-  console.log(`[Bootstrap] Physics ready (${(window as unknown as { currentPhysicsEngine?: string }).currentPhysicsEngine ?? 'unknown'})`)
+  console.log(`[Bootstrap] Physics ready (${window.currentPhysicsEngine ?? 'unknown'})`)
 
   // Canvas resizing is owned by GameRenderer (game-renderer.ts:setupResizeObserver) and
   // DPR changes by setupDPRHandling, both torn down by Game.dispose(). A second observer

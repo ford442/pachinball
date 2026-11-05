@@ -15,7 +15,7 @@
  * ends the sequence on a different step at each refresh rate.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { GamePhysicsController } from '../src/game/game-physics-controller'
+import { GamePhysicsController } from '../src/game/physics/physics-controller'
 import { FIXED_TIMESTEP, installSimClock } from '../src/core/sim-clock'
 import { DisplayState } from '../src/display/display-types'
 import type { InputFrame } from '../src/game-elements/types'

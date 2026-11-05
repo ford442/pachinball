@@ -231,6 +231,7 @@ export function planReplayIdRemap(live: LiveIdLayout, recorded: Pick<SnapshotIds
   for (let i = 0; i < liveHinges.length; i++) {
     const l = liveHinges[i]
     const r = recHinges[i]
+    if (!l || !r) return null
     if (!liveBodies.has(l.bodyId) || !recBodies.has(r.bodyId)) return null
     if (bodies.has(l.bodyId) && bodies.get(l.bodyId) !== r.bodyId) return null
     hinges.set(l.id, r.id)
@@ -240,7 +241,11 @@ export function planReplayIdRemap(live: LiveIdLayout, recorded: Pick<SnapshotIds
   const liveRest = [...liveBodies].filter((id) => !bodies.has(id)).sort((a, b) => a - b)
   const recRest = [...recBodies].filter((id) => !recHinged.has(id)).sort((a, b) => a - b)
   if (liveRest.length !== recRest.length) return null
-  liveRest.forEach((id, i) => bodies.set(id, recRest[i]))
+  for (const [i, id] of liveRest.entries()) {
+    const rec = recRest[i]
+    if (rec === undefined) return null
+    bodies.set(id, rec)
+  }
 
   // Only the ids that actually change.
   for (const [from, to] of bodies) if (from === to) bodies.delete(from)
@@ -284,6 +289,10 @@ export function applyReplaySnapshot(
     return result('table-mismatch', WasmSnapshotStatus.StaticMismatch)
   }
   if (!fingerprint.initialSnapshot) return result('no-snapshot')
+  // Rapier / mirror sessions cannot restore at all and own no C++ bodies or
+  // hinges, so an id comparison would always fail. Say "unsupported" (the input
+  // tape still plays, under a toast), not `id-layout`, which refuses the replay.
+  if (engine === NO_SNAPSHOT_ENGINE) return result('unsupported', WasmSnapshotStatus.Unsupported)
 
   const bytes = decodeSnapshotBase64(fingerprint.initialSnapshot)
   const recorded = bytes ? readSnapshotIds(bytes) : null
@@ -362,5 +371,6 @@ export function showReplayDivergenceToast(res: ReplaySnapshotResult, doc: Docume
     z-index: 1600; pointer-events: none;
   `
   doc.body.appendChild(toast)
+  // eslint-disable-next-line no-restricted-syntax -- touches only the captured toast node; remove() on a detached node is a no-op
   setTimeout(() => toast.remove(), 6000)
 }

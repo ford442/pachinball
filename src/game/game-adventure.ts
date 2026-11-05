@@ -3,7 +3,8 @@ import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Scene } from '@babylonjs/core/scene'
 import type { PhysicsSystem } from '../game-elements/physics'
-import type { ZoneConfig, BallManager, SoundSystem } from '../game-elements'
+import type { BallManager, SoundSystem } from '../game-elements'
+import type { ZoneConfig } from '../adventure/zone-registry'
 import type {
   MagSpinFeeder,
   NanoLoomFeeder,
@@ -22,7 +23,7 @@ import { QuantumTunnelState } from '../objects/feeders/quantum-tunnel-feeder'
 import { DisplayState } from '../display/display-types'
 import type { GameStateManager } from './game-state'
 import type { GameUIManager } from './game-ui'
-import { getZoneConfig, getTransitionShakeIntensity } from '../game-elements'
+import { getZoneConfig, getTransitionShakeIntensity } from '../adventure/zone-registry'
 import { GameConfig } from '../config'
 import { FEEDER_STYLES } from '../game-elements/visual-language'
 

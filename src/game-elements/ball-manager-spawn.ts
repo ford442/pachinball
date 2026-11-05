@@ -16,7 +16,7 @@ import {
   type BallManagerHost,
 } from './ball-manager-context'
 import { COLLISION_GROUP_PRESETS } from './physics'
-import { getSoundSystem } from './sound-system'
+import { getSoundSystem } from '../audio/sound-system'
 import { getSessionRngFork, RNG_FORK, type SeededRng } from '../core/seeded-rng'
 import { QualityTier, color, emissive, INTENSITY, PALETTE } from './visual-language'
 
@@ -261,37 +261,45 @@ export function updateBallMaterialColor(host: BallManagerHost, mapColorHex: stri
     }
   }
 
-  // Also update trail color
+  // Also update trail color. Each material gets its own copy: updateTrailEffects lerps into
+  // `emissiveColor` in place, so a shared instance would make every trail follow the last one.
   const mapColor = Color3.FromHexString(mapColorHex)
   for (const trailMat of host.trailMaterials.values()) {
-    trailMat.emissiveColor = mapColor
+    trailMat.emissiveColor = mapColor.clone()
   }
 }
 
-export function updateTrailEffects(host: BallManagerHost): void {
-  const cyan = Color3.FromHexString('#00ffff')
-  const magenta = Color3.FromHexString('#ff00ff')
+// Speed-tint endpoints for updateTrailEffects, parsed once instead of per trail per frame.
+const TRAIL_SLOW_COLOR: Readonly<Color3> = Color3.FromHexString('#00ffff')
+const TRAIL_FAST_COLOR: Readonly<Color3> = Color3.FromHexString('#ff00ff')
+const TRAIL_FADE_COLOR: Readonly<Color3> = Color3.Black()
 
+/** Ribbon width multiplier for a ball moving at `speed` (1× at rest, 2× from 30 u/s up). */
+export function trailWidthMultiplier(speed: number): number {
+  return 1.0 + Math.min(speed / 30, 1.0)
+}
+
+/**
+ * Per-frame trail update: widen with speed, tint cyan → magenta, or fade out when caught.
+ * Allocation-free: colours lerp into each material's own `emissiveColor`.
+ */
+export function updateTrailEffects(host: BallManagerHost): void {
   for (const [body, trailData] of host.ballTrails) {
     const vel = body.linvel()
     const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z)
+    const material = trailData.material
 
     if (trailData.isFading) {
       // Fade trail when ball is hologram-caught
-      trailData.material.alpha = Math.max(0, trailData.material.alpha - 0.05)
-      trailData.material.emissiveColor = Color3.Lerp(
-        trailData.material.emissiveColor,
-        Color3.Black(),
-        0.1,
-      )
+      material.alpha = Math.max(0, material.alpha - 0.05)
+      Color3.LerpToRef(material.emissiveColor, TRAIL_FADE_COLOR, 0.1, material.emissiveColor)
     } else {
-      // Width widens with speed (Babylon.js TrailMesh supports width updates)
-      const widthMultiplier = 1.0 + Math.min(speed / 30, 1.0)
-      ;(trailData.mesh as unknown as { width: number }).width = trailData.baseWidth * widthMultiplier
+      // TrailMesh's ribbon width is `diameter` (read every frame when it extends the ribbon).
+      trailData.mesh.diameter = trailData.baseWidth * trailWidthMultiplier(speed)
 
       // Color shifts cyan -> magenta with speed
       const t = Math.min(speed / 40, 1.0)
-      trailData.material.emissiveColor = Color3.Lerp(cyan, magenta, t)
+      Color3.LerpToRef(TRAIL_SLOW_COLOR, TRAIL_FAST_COLOR, t, material.emissiveColor)
     }
   }
 }
@@ -556,11 +564,11 @@ export function spawnRandomBall(host: BallManagerHost, position?: Vector3): Phys
 
   // Gold-tier balls spawn as a chaotic swarm of small balls instead of one heavy ball
   if (type !== BallType.STANDARD && GameConfig.smallGoldBalls.enabled) {
-    const swarm = host.spawnSmallGoldBallSwarm(position, type)
-    if (swarm.length > 0) {
+    const [leader] = host.spawnSmallGoldBallSwarm(position, type)
+    if (leader) {
       const soundSystem = getSoundSystem()
       soundSystem.playGoldBallSpawn(type)
-      return swarm[0]
+      return leader
     }
     // Fall through to single-ball spawn if swarm capacity is reached
   }

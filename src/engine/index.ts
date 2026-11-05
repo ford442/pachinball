@@ -1,6 +1,7 @@
 export {
   createEngine,
   isWebGPUEngine,
+  engineDrawCallCount,
   resolveEngineCreationPlan,
   webgpuFeatureLevelsToTry,
   toWebGLEngineOptions,

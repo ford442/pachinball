@@ -114,7 +114,7 @@ export class MagSpinFeeder {
 
     const wellMat = new StandardMaterial('magSpinMat', this.scene)
     wellMat.diffuseColor = Color3.Black()
-    wellMat.emissiveColor = emissive(FEEDER_STYLES.MAG_SPIN.base, INTENSITY.LOW)
+    wellMat.emissiveColor = emissive(FEEDER_STYLES.MAG_SPIN.base, INTENSITY.NORMAL)
     wellMat.backFaceCulling = false
     well.material = wellMat
 

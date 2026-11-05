@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi } from 'vitest'
 
-import { GamePhysicsController } from '../src/game/game-physics-controller'
+import { GamePhysicsController } from '../src/game/physics/physics-controller'
 import { EventBus } from '../src/core/event-bus'
 import { GAME_TUNING } from '../src/config'
 import type { LaneSensorDef } from '../src/objects/object-lane-sensors'

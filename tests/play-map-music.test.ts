@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { SoundSystem } from '../src/game-elements/sound-system'
+import { SoundSystem } from '../src/audio/sound-system'
 import type { MusicTrack } from '../src/audio/sound-system-samples'
 
 /** A SoundSystem past `initialize()` far enough for playMapMusic's guard, with only stem tracks cached. */

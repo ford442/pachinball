@@ -382,10 +382,11 @@ export class InputHandler {
     const sorted = [...samples].sort((a, b) => a - b)
     const sum = sorted.reduce((a, b) => a + b, 0)
     const avg = sum / sorted.length
-    const min = sorted[0]
-    const max = sorted[sorted.length - 1]
-    const p95Index = Math.floor(sorted.length * 0.95)
-    const p95 = sorted[Math.min(p95Index, sorted.length - 1)]
+    const last = sorted.length - 1
+    // `samples` is non-empty, so every index below is in range.
+    const min = sorted[0] ?? 0
+    const max = sorted[last] ?? 0
+    const p95 = sorted[Math.min(Math.floor(sorted.length * 0.95), last)] ?? 0
     return { avg, min, max, p95, sampleCount: sorted.length, source }
   }
 

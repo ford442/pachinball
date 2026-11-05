@@ -42,6 +42,13 @@ export const FRAMING_ZONES = {
   RIGHT_FLIPPER: { target: new Vector3(3, 0, 4), weight: 0.1 },
 }
 
+/** Zones blended by getZoneTarget, with the ball z each one peaks at (hoisted: no per-frame array). */
+const ZONE_INFLUENCES = [
+  { zone: FRAMING_ZONES.UPPER_ZONE, zThreshold: -8 },
+  { zone: FRAMING_ZONES.PLAYFIELD_ZONE, zThreshold: 2 },
+  { zone: FRAMING_ZONES.FLIPPER_ZONE, zThreshold: 8 },
+] as const
+
 /**
  * Configuration for soft ball following with dead zone
  */
@@ -88,8 +95,15 @@ export class CameraController {
   private currentTarget = new Vector3(0, 0, 2)
   private currentMode = CameraMode.IDLE
   private softFollowConfig: SoftFollowConfig
-  private lastBallPos: Vector3 | null = null
-  private velocityEstimate = new Vector3(0, 0, 0)
+  private readonly lastBallPos = new Vector3(0, 0, 0)
+  private hasLastBallPos = false
+  private readonly velocityEstimate = new Vector3(0, 0, 0)
+  // Per-frame scratch (#505 §D): update() allocates no Vector3.
+  private readonly zoneTarget = new Vector3(0, 0, 0)
+  private readonly modeTarget = new Vector3(0, 0, 0)
+  private readonly dynamicTarget = new Vector3(0, 0, 0)
+  private readonly followOffset = new Vector3(0, 0, 0)
+  private readonly instantVel = new Vector3(0, 0, 0)
   private readonly baseFov: number
   private dynamicFovBias = 0
   private speedTargetBiasZ = 0
@@ -147,17 +161,19 @@ export class CameraController {
     // Clamp dt to prevent large jumps on frame drops
     const clampedDt = Math.min(dt, 1 / 30)
     const t = 2.0 * clampedDt  // Conservative lerp speed
-    this.currentTarget = Vector3.Lerp(this.currentTarget, target, t)
+    Vector3.LerpToRef(this.currentTarget, target, t, this.currentTarget)
 
     // Safety clamp: ensure target stays within reasonable bounds
     this.currentTarget.x = Scalar.Clamp(this.currentTarget.x, -8, 8)
     this.currentTarget.y = 0  // Keep y at table level
     this.currentTarget.z = Scalar.Clamp(this.currentTarget.z, -15, 10)
 
-    this.tableCam.target = this.currentTarget.clone()
+    // TargetCamera's setter derives the view from the vector without keeping it.
+    this.tableCam.target = this.currentTarget
     this.tableCam.fov = this.baseFov + this.dynamicFovBias
 
-    this.lastBallPos = ballPos.clone()
+    this.lastBallPos.copyFrom(ballPos)
+    this.hasLastBallPos = true
   }
 
   notifyImpact(impactPos: Vector3, intensity: number): void {
@@ -220,36 +236,30 @@ export class CameraController {
     mode: CameraMode
   ): Vector3 {
     // Start with base target based on ball position zone
-    const baseTarget = this.getZoneTarget(ballPos)
+    const baseTarget = this.getZoneTarget(ballPos, this.zoneTarget)
 
     // Apply mode-specific framing adjustments
-    const modeTarget = this.getModeTarget(mode, ballPos)
+    const modeTarget = this.getModeTarget(mode, ballPos, this.modeTarget)
 
     // Blend zone target with mode target
-    let target = Vector3.Lerp(baseTarget, modeTarget, 0.5)
+    const target = Vector3.LerpToRef(baseTarget, modeTarget, 0.5, this.dynamicTarget)
 
     // Apply soft follow with dead zone
-    target = this.applySoftFollow(target, ballPos, ballVel)
+    this.applySoftFollow(target, ballPos, ballVel)
 
     return target
   }
 
   /**
-   * Get base target based on which zone the ball is in
+   * Base target from which zone the ball is in, written into `out`.
    */
-  private getZoneTarget(ballPos: Vector3): Vector3 {
+  private getZoneTarget(ballPos: Vector3, out: Vector3): Vector3 {
     // Default center target
-    let target = new Vector3(0, 0, 2)
+    const target = out.set(0, 0, 2)
     let totalWeight = 0
 
     // Calculate weighted target based on ball proximity to zones
-    const zones = [
-      { zone: FRAMING_ZONES.UPPER_ZONE, zThreshold: -8 },
-      { zone: FRAMING_ZONES.PLAYFIELD_ZONE, zThreshold: 2 },
-      { zone: FRAMING_ZONES.FLIPPER_ZONE, zThreshold: 8 },
-    ]
-
-    for (const { zone, zThreshold } of zones) {
+    for (const { zone, zThreshold } of ZONE_INFLUENCES) {
       // Calculate influence based on distance to threshold
       const distance = Math.abs(ballPos.z - zThreshold)
       const influence = Math.max(0, 1 - distance / 10)
@@ -271,10 +281,10 @@ export class CameraController {
     if (ballPos.z > 2) {
       if (ballPos.x < -2) {
         // Ball near left flipper
-        target = Vector3.Lerp(target, FRAMING_ZONES.LEFT_FLIPPER.target, 0.3)
+        Vector3.LerpToRef(target, FRAMING_ZONES.LEFT_FLIPPER.target, 0.3, target)
       } else if (ballPos.x > 2) {
         // Ball near right flipper
-        target = Vector3.Lerp(target, FRAMING_ZONES.RIGHT_FLIPPER.target, 0.3)
+        Vector3.LerpToRef(target, FRAMING_ZONES.RIGHT_FLIPPER.target, 0.3, target)
       }
     }
 
@@ -282,106 +292,96 @@ export class CameraController {
   }
 
   /**
-   * Get target adjustment for specific camera mode
+   * Target adjustment for a camera mode, written into `out`.
    */
-  private getModeTarget(mode: CameraMode, ballPos: Vector3): Vector3 {
+  private getModeTarget(mode: CameraMode, ballPos: Vector3, out: Vector3): Vector3 {
     switch (mode) {
       case CameraMode.IDLE:
         // Default framing, slight emphasis on center
-        return new Vector3(0, 0, 0)
+        return out.set(0, 0, 0)
 
       case CameraMode.FLIPPER_READY:
         // Emphasize flipper area when waiting for launch
-        return new Vector3(ballPos.x * 0.3, 0, 5)
+        return out.set(ballPos.x * 0.3, 0, 5)
 
       case CameraMode.MULTIBALL:
         // Center view for wider playfield coverage during multiball
-        return new Vector3(0, 0, -2)
+        return out.set(0, 0, -2)
 
       case CameraMode.UPPER_PLAY:
         // Focus on upper playfield
-        return new Vector3(ballPos.x * 0.2, 0, -10)
+        return out.set(ballPos.x * 0.2, 0, -10)
 
       case CameraMode.JACKPOT:
         // Focus on jackpot area (typically center upper)
-        return new Vector3(0, 0, -8)
+        return out.set(0, 0, -8)
 
       case CameraMode.ADVENTURE:
         // Follow ball more closely in adventure mode
-        return new Vector3(ballPos.x * 0.5, 0, ballPos.z * 0.3)
+        return out.set(ballPos.x * 0.5, 0, ballPos.z * 0.3)
 
       case CameraMode.BALL_FOLLOW:
         // Chase cam: close ball follow with slight lead
-        return new Vector3(ballPos.x * 0.7, 0, ballPos.z * 0.6)
+        return out.set(ballPos.x * 0.7, 0, ballPos.z * 0.6)
 
       default:
-        return new Vector3(0, 0, 2)
+        return out.set(0, 0, 2)
     }
   }
 
   /**
-   * Apply soft follow with dead zone
+   * Apply soft follow with dead zone, in place on `target`.
    */
   private applySoftFollow(
-    baseTarget: Vector3,
+    target: Vector3,
     ballPos: Vector3,
     ballVel: Vector3
-  ): Vector3 {
+  ): void {
     // ballVel is available for direct use; we currently use smoothed velocityEstimate
     void ballVel
     const config = this.softFollowConfig
-    const target = baseTarget.clone()
 
-    // Calculate offset from target to ball (ignoring y for 2D dead zone)
-    const offset = new Vector3(
-      ballPos.x - target.x,
-      0,
-      ballPos.z - target.z
-    )
-    const distance = offset.length()
+    // Offset from target to ball (ignoring y for 2D dead zone)
+    const offsetX = ballPos.x - target.x
+    const offsetZ = ballPos.z - target.z
+    const distance = Math.sqrt(offsetX * offsetX + offsetZ * offsetZ)
 
     // Only follow if ball is outside dead zone
     if (distance > config.deadZoneRadius) {
       // Use estimated velocity for smoother prediction
-      const predictedPos = ballPos.add(
-        this.velocityEstimate.scale(config.velocityPrediction)
-      )
-      const predictedOffset = new Vector3(
-        predictedPos.x - target.x,
-        0,
-        predictedPos.z - target.z
-      )
+      const predictedX = ballPos.x + this.velocityEstimate.x * config.velocityPrediction
+      const predictedZ = ballPos.z + this.velocityEstimate.z * config.velocityPrediction
 
       // Calculate how much to follow (0 to 1 based on distance beyond dead zone)
       const excessDistance = distance - config.deadZoneRadius
       const followIntensity = Math.min(1, excessDistance / config.deadZoneRadius)
 
-      // Calculate follow offset with max offset clamping
-      let followOffset = predictedOffset.scale(config.followSpeed * followIntensity)
+      // Follow offset with max offset clamping
+      const followOffset = this.followOffset.set(predictedX - target.x, 0, predictedZ - target.z)
+      followOffset.scaleInPlace(config.followSpeed * followIntensity)
 
       // Clamp to max offset
-      if (followOffset.length() > config.maxOffset) {
-        followOffset = followOffset.normalize().scale(config.maxOffset)
+      const followLength = followOffset.length()
+      if (followLength > config.maxOffset) {
+        followOffset.scaleInPlace(1 / followLength).scaleInPlace(config.maxOffset)
       }
 
       target.addInPlace(followOffset)
     }
-
-    return target
   }
 
   /**
    * Update velocity estimate with smoothing to reduce physics jitter
    */
   private updateVelocityEstimate(ballPos: Vector3, dt: number): void {
-    if (this.lastBallPos && dt > 0) {
-      const instantVel = ballPos.subtract(this.lastBallPos).scale(1 / dt)
-      // Smooth velocity estimate
-      this.velocityEstimate = Vector3.Lerp(
-        this.velocityEstimate,
-        instantVel,
-        0.1  // Low pass filter factor
-      )
+    if (this.hasLastBallPos && dt > 0) {
+      const instantVel = this.instantVel.set(
+        ballPos.x - this.lastBallPos.x,
+        ballPos.y - this.lastBallPos.y,
+        ballPos.z - this.lastBallPos.z,
+      ).scaleInPlace(1 / dt)
+      // Smooth velocity estimate (low pass filter factor 0.1)
+      Vector3.LerpToRef(this.velocityEstimate, instantVel, 0.1, this.velocityEstimate)
     }
   }
 
@@ -389,10 +389,10 @@ export class CameraController {
    * Reset camera target to default position
    */
   reset(): void {
-    this.currentTarget = new Vector3(0, 0, 2)
+    this.currentTarget.set(0, 0, 2)
     this.currentMode = CameraMode.IDLE
-    this.velocityEstimate = new Vector3(0, 0, 0)
-    this.lastBallPos = null
+    this.velocityEstimate.set(0, 0, 0)
+    this.hasLastBallPos = false
     this.resetDynamicState()
   }
 

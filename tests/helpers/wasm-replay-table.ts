@@ -12,7 +12,7 @@
 import { expect, vi } from 'vitest'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { EventBus } from '../../src/core/event-bus'
-import { GamePhysicsController } from '../../src/game/game-physics-controller'
+import { GamePhysicsController } from '../../src/game/physics/physics-controller'
 import { COLLISION_GROUP_PRESETS } from '../../src/game-elements/physics'
 import type { BumperVisual, InputFrame } from '../../src/game-elements/types'
 import { REPLAY_SCHEMA_VERSION, ReplayRecorder, type ReplayPayload } from '../../src/replay/replay-recorder'

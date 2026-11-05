@@ -146,9 +146,7 @@ export class DisplaySystem {
     this.accessibility = accessibility ?? detectAccessibility()
 
     // Detect WebGPU/WGSL support
-    this.useWGSL =
-      engine.getClassName() === 'WebGPUEngine' ||
-      (engine as unknown as { isWebGPU: boolean }).isWebGPU === true
+    this.useWGSL = engine.isWebGPU
 
     // Initialize layer managers
     this.stateMachine = new DisplayStateMachine(this.config.transitions?.fadeDuration ?? 0.35)

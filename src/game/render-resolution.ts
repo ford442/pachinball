@@ -54,8 +54,6 @@ export interface RenderResolutionInfo {
   changes: number
 }
 
-type GpuTimerEngine = { getGPUFrameTimeCounter?: () => { current: number } | undefined }
-
 export class RenderResolution {
   private readonly host: RenderResolutionHost
   private readonly dynamic: boolean
@@ -174,7 +172,7 @@ export class RenderResolution {
   private startFrameTimeSource(): void {
     const engine = this.host.engine
     const gpuTimer =
-      resolveGpuCapabilities(engine).gpuTimer && typeof (engine as unknown as GpuTimerEngine).getGPUFrameTimeCounter === 'function'
+      resolveGpuCapabilities(engine).gpuTimer && typeof engine.getGPUFrameTimeCounter === 'function'
     if (gpuTimer) {
       this.instrumentation = new EngineInstrumentation(engine)
       this.instrumentation.captureGPUFrameTime = true

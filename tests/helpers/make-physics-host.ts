@@ -6,7 +6,7 @@
 import { vi } from 'vitest'
 
 import { EventBus } from '../../src/core/event-bus'
-import type { PhysicsHost } from '../../src/game/game-physics-controller'
+import type { PhysicsHost } from '../../src/game/physics/types'
 import { freshNudgeState } from '../../src/game/physics/types'
 import { QualityTier } from '../../src/game-elements/visual-language'
 

@@ -8,6 +8,7 @@
 
 import type { Engine } from '@babylonjs/core/Engines/engine'
 import type { WebGPUEngine } from '@babylonjs/core/Engines/webgpuEngine'
+import { isWebGPUEngine } from '../engine/create-engine'
 import { recordGpuDegrade, recordGpuProbePostProcess } from '../engine/gpu-degrade-telemetry'
 
 /** Conservative default: WebGPU spec minimum per-stage uniform buffer count. */
@@ -31,12 +32,8 @@ export interface WebGPUPostProcessProfile {
   readonly reason: string
 }
 
-export function isWebGPUEngine(engine: Engine | WebGPUEngine): boolean {
-  return (
-    engine.getClassName() === 'WebGPUEngine' ||
-    (engine as unknown as { isWebGPU?: boolean }).isWebGPU === true
-  )
-}
+/** One helper for the whole app: `AbstractEngine.isWebGPU` is public API. */
+export { isWebGPUEngine }
 
 /** Read adapter/device uniform-buffer cap when running on WebGPU. */
 export function readMaxUniformBuffersPerStage(engine: Engine | WebGPUEngine): number | null {
@@ -46,8 +43,8 @@ export function readMaxUniformBuffersPerStage(engine: Engine | WebGPUEngine): nu
   const fromLimits = webgpu.currentLimits?.maxUniformBuffersPerShaderStage
   if (typeof fromLimits === 'number' && fromLimits > 0) return fromLimits
 
-  const fromEngine = (webgpu as unknown as { maxUniformBuffersPerShaderStage?: number })
-    .maxUniformBuffersPerShaderStage
+  // Some engine builds expose the cap directly on the engine rather than on currentLimits.
+  const fromEngine = 'maxUniformBuffersPerShaderStage' in webgpu ? webgpu.maxUniformBuffersPerShaderStage : undefined
   if (typeof fromEngine === 'number' && fromEngine > 0) return fromEngine
 
   return WEBGPU_DEFAULT_MAX_UNIFORM_BUFFERS_PER_STAGE
