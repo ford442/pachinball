@@ -164,6 +164,8 @@ export type ReplaySnapshotOutcome =
   | 'invalid'
   /** Same table, but tuning the tape depends on changed since recording. */
   | 'tunables-mismatch'
+  /** A physics / sim system threw during playback: the world may have diverged (#503 A3). */
+  | 'sim-fault'
 
 export interface ReplaySnapshotResult {
   outcome: ReplaySnapshotOutcome
@@ -190,6 +192,7 @@ const MESSAGES: Record<Exclude<ReplaySnapshotOutcome, 'restored' | 'no-snapshot'
   'id-layout': 'Replay rejected: the table\'s balls and flippers do not match the recording',
   invalid: 'Replay diverged: recording snapshot is corrupt or from another version',
   'tunables-mismatch': 'Replay diverged: feeder tuning changed since this recording',
+  'sim-fault': 'Replay rejected: a physics system faulted during playback',
 }
 
 function result(outcome: ReplaySnapshotOutcome, status: WasmSnapshotStatus | null = null): ReplaySnapshotResult {

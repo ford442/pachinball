@@ -6,6 +6,12 @@
  * isolated (read at the top of `step()`, never blocking), otherwise as
  * transferred `step-result` buffers. Worker creation and the `init`
  * handshake live in `physics-worker-boot.ts`.
+ *
+ * Supervision (#503 A2): the client listens for `error` / `messageerror` and the worker's own
+ * `fatal` for the worker's whole lifetime, and treats `watchdogSteps` steps without a result as
+ * death too. On death it terminates the worker, rebuilds the world in-process from its command
+ * log (`PhysicsCommandLog`: structure + the last checkpoint + the commands since) and keeps
+ * serving the same API from the main thread; `onEngineSwitched` tells the host.
  */
 
 import type {
@@ -39,6 +45,15 @@ import {
   type PhysicsWorkerToWorker,
 } from './physics-worker-protocol'
 import { readSnapshotIds } from './snapshot-layout'
+import { PhysicsCommandLog } from './physics-command-log'
+import {
+  createWorkerRuntimeState,
+  runWorkerBatch,
+  WorkerSnapshotPublisher,
+  type WorkerBatchEngine,
+  type WorkerPost,
+} from './physics-worker-runtime'
+import { bootError } from '../boot-log'
 import {
   consumePrewarmedPhysicsWorker,
   startPhysicsWorker,
@@ -66,6 +81,30 @@ export interface PhysicsWorkerTransportStats {
 export interface PhysicsWorkerClientOptions {
   /** Ask the worker for the shared transport. Defaults to `crossOriginIsolated`. */
   sharedTransport?: boolean
+  /** Keep a recovery log and fall back in-process when the worker dies (default true). */
+  supervise?: boolean
+  /** Steps sent without any result before the worker counts as dead (default 30, ~0.5 s). */
+  watchdogSteps?: number
+  /** Steps between recovery checkpoints (default 600, ~10 s at 60 Hz). */
+  checkpointSteps?: number
+  /** The in-process engine the fallback rebuilds into; defaults to a fresh `WasmPhysicsEngine`. */
+  createFallbackEngine?: (bundleUrl: string) => Promise<WorkerBatchEngine | null>
+}
+
+/** Where the client's world lives (#503 A2). */
+export type PhysicsWorkerSupervisionState = 'worker' | 'recovering' | 'in-process' | 'failed'
+
+export interface PhysicsEngineSwitch {
+  readonly from: 'wasm-worker'
+  readonly to: 'wasm-owner'
+  readonly reason: string
+}
+
+async function defaultFallbackEngine(bundleUrl: string): Promise<WorkerBatchEngine | null> {
+  const { WasmPhysicsEngine } = await import('./PhysicsModule')
+  const engine = new WasmPhysicsEngine()
+  await engine.load(bundleUrl)
+  return engine.isReady ? engine : null
 }
 
 export class PhysicsWorkerClient implements WasmSimEngine {
@@ -99,8 +138,37 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   private restoresInFlight = 0
   private staticHash: string | null = null
 
+  // Supervision (#503 A2)
+  private log: PhysicsCommandLog | null
+  private readonly watchdogSteps: number
+  private readonly checkpointSteps: number
+  private readonly createFallbackEngine: (bundleUrl: string) => Promise<WorkerBatchEngine | null>
+  private bundleUrl = './wasm/PhysicsModule.js'
+  private supervision: PhysicsWorkerSupervisionState = 'worker'
+  private stepsAwaitingResult = 0
+  private checkpointPending = false
+  private suppressContacts = false
+  private disposed = false
+  private failureReason: string | null = null
+  /** Set by the host: the world moved from the worker to the main thread. */
+  onEngineSwitched: ((change: PhysicsEngineSwitch) => void) | null = null
+
   constructor(options: PhysicsWorkerClientOptions = {}) {
     this.wantShared = options.sharedTransport ?? isCrossOriginIsolated()
+    this.log = options.supervise === false ? null : new PhysicsCommandLog()
+    this.watchdogSteps = options.watchdogSteps ?? 30
+    this.checkpointSteps = options.checkpointSteps ?? 600
+    this.createFallbackEngine = options.createFallbackEngine ?? defaultFallbackEngine
+  }
+
+  /** Where the world lives now (#503 A2). */
+  getSupervisionState(): PhysicsWorkerSupervisionState {
+    return this.supervision
+  }
+
+  /** Why the worker was given up on, or null while it is healthy. */
+  getFailureReason(): string | null {
+    return this.failureReason
   }
 
   private static emptyStats(): PhysicsWorkerTransportStats {
@@ -115,6 +183,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
 
   async load(moduleUrl = './wasm/PhysicsModule.js', _preloadedModule?: WasmPhysicsModule): Promise<void> {
     if (this.isReady) return
+    this.bundleUrl = moduleUrl
 
     let boot: PrewarmedPhysicsWorker
     try {
@@ -131,6 +200,8 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     this.worker = boot.worker
     this.ownsWorker = true
     this.worker.addEventListener('message', this.onMessage)
+    this.worker.addEventListener('error', this.onWorkerError)
+    this.worker.addEventListener('messageerror', this.onWorkerMessageError)
     this.isReady = true
     this.requestSharedTransport()
   }
@@ -428,9 +499,111 @@ export class PhysicsWorkerClient implements WasmSimEngine {
 
   step(rawDt: number): number {
     this.pollShared()
+    if (this.supervision === 'worker' && !this.loopback) {
+      // A restore in flight legitimately withholds results (the shared reader waits for its reply).
+      if (this.restoresInFlight === 0 && ++this.stepsAwaitingResult > this.watchdogSteps) {
+        this.fail(`no step result for ${this.watchdogSteps} steps`)
+      } else {
+        this.maybeCheckpoint()
+      }
+    }
     this.enqueue({ type: 'step', rawDt })
     this.flush()
     return this.lastAlpha
+  }
+
+  /** Every `checkpointSteps` steps, snapshot the worker's world so recovery replays seconds, not the session. */
+  private maybeCheckpoint(): void {
+    const log = this.log
+    if (!log || this.checkpointPending || log.stepsSinceCheckpoint < this.checkpointSteps) return
+    this.checkpointPending = true
+    // The serialize request is recorded right after the commands still queued.
+    const at = log.mark() + this.queue.length
+    void this.requestSnapshot({ type: 'serializeSnapshot', requestId: 0 }).then((reply) => {
+      this.checkpointPending = false
+      if (reply.bytes && this.log === log && this.supervision === 'worker') log.checkpoint(reply.bytes, at)
+    })
+  }
+
+  /**
+   * The worker is dead or wedged (#503 A2): drop it and rebuild its world in-process. Idempotent;
+   * without supervision the client just stops being ready (the pre-#503 behaviour, but loud).
+   */
+  fail(reason: string): void {
+    if (this.supervision !== 'worker' || this.disposed) return
+    this.failureReason = reason
+    bootError(`[PhysicsWorkerClient] physics worker failed: ${reason}`)
+    this.detachWorker()
+    this.shared = null
+    this.stats.transport = 'post-message'
+    if (!this.log) {
+      this.supervision = 'failed'
+      this.isReady = false
+      return
+    }
+    this.supervision = 'recovering'
+    void this.recover(reason)
+  }
+
+  private async recover(reason: string): Promise<void> {
+    let engine: WorkerBatchEngine | null = null
+    try {
+      engine = await this.createFallbackEngine(this.bundleUrl)
+    } catch (err) {
+      bootError('[PhysicsWorkerClient] in-process fallback engine failed to load', err)
+    }
+    if (this.disposed) {
+      engine?.dispose()
+      return
+    }
+    const log = this.log
+    if (!engine || !log) {
+      this.supervision = 'failed'
+      this.isReady = false
+      return
+    }
+    const runtime = createWorkerRuntimeState()
+    const post: WorkerPost = (msg) => this.receiveWorkerMessage(msg)
+    const publisher = new WorkerSnapshotPublisher(post, false)
+    const batch = [...log.recoveryBatch(), ...this.queue]
+    this.queue = []
+    this.log = null
+    // The rebuilt world's results replace whatever the dead worker last sent; contacts replayed
+    // from the log were (mostly) already dispatched, so they are not dispatched again.
+    this.snapshotReady = false
+    this.suppressContacts = true
+    try {
+      runWorkerBatch(engine, runtime, batch, publisher, post)
+    } catch (err) {
+      bootError('[PhysicsWorkerClient] in-process recovery replay threw', err)
+      this.suppressContacts = false
+      this.supervision = 'failed'
+      this.isReady = false
+      return
+    } finally {
+      this.suppressContacts = false
+    }
+    this.loopback = (commands) => runWorkerBatch(engine, runtime, commands, publisher, post)
+    this.supervision = 'in-process'
+    this.onEngineSwitched?.({ from: 'wasm-worker', to: 'wasm-owner', reason })
+  }
+
+  private detachWorker(): void {
+    const worker = this.worker
+    if (!worker) return
+    worker.removeEventListener('message', this.onMessage)
+    worker.removeEventListener('error', this.onWorkerError)
+    worker.removeEventListener('messageerror', this.onWorkerMessageError)
+    if (this.ownsWorker) worker.terminate()
+    this.worker = null
+  }
+
+  private onWorkerError = (event: Event): void => {
+    this.fail(`worker error: ${(event as ErrorEvent).message || 'uncaught error'}`)
+  }
+
+  private onWorkerMessageError = (): void => {
+    this.fail('worker reply could not be deserialized')
   }
 
   getStepCount(): number {
@@ -557,11 +730,9 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   dispose(): void {
     this.enqueue({ type: 'dispose' })
     this.flush()
-    if (this.worker) {
-      this.worker.removeEventListener('message', this.onMessage)
-      if (this.ownsWorker) this.worker.terminate()
-    }
-    this.worker = null
+    this.disposed = true
+    this.detachWorker()
+    this.log?.clear()
     this.isReady = false
     this.eventBus = null
     this.queue = []
@@ -593,6 +764,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   private loopback: ((batch: PhysicsWorkerCommand[]) => void) | null = null
 
   applyStepResult(msg: Extract<PhysicsWorkerFromWorker, { type: 'step-result' }>): void {
+    this.stepsAwaitingResult = 0
     this.stats.postMessageSnapshots++
     // Poses and contacts of a world a pending restore is replacing: drop them.
     if (this.restoresInFlight > 0) {
@@ -628,6 +800,10 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     if (data.type === 'error') {
       console.warn('[PhysicsWorkerClient]', data.message)
       this.isReady = false
+      return
+    }
+    if (data.type === 'fatal') {
+      this.fail(`worker batch threw: ${data.message}`)
       return
     }
     if (data.type === 'step-result') {
@@ -670,6 +846,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
     if (this.restoresInFlight > 0) return
     shared.drainContacts(this.emitContactsSink)
     if (!shared.read()) return
+    this.stepsAwaitingResult = 0
     if (this.snapshotReady && shared.stepCount < this.lastStepCount) {
       this.stats.staleSnapshots++
       return
@@ -688,7 +865,7 @@ export class PhysicsWorkerClient implements WasmSimEngine {
    * as two), plus the per-contact events while anything subscribes to them.
    */
   private emitContacts(packed: Float32Array, count: number): void {
-    if (!this.eventBus) return
+    if (!this.eventBus || this.suppressContacts) return
     this.contactEmitter.emit(this.eventBus, packed, count)
   }
 
@@ -703,9 +880,11 @@ export class PhysicsWorkerClient implements WasmSimEngine {
   }
 
   private flush(): void {
-    if (this.queue.length === 0) return
+    // While the fallback engine loads, commands wait in the queue; recovery replays them.
+    if (this.queue.length === 0 || this.supervision === 'recovering') return
     const commands = this.queue
     this.queue = []
+    this.log?.record(commands)
     if (this.loopback) {
       this.loopback(commands)
       return

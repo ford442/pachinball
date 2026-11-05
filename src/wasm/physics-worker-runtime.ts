@@ -351,3 +351,35 @@ export class WorkerSnapshotPublisher {
     return true
   }
 }
+
+/** The engine surface `runWorkerBatch` needs: commands, snapshots and HEAP publication. */
+export type WorkerBatchEngine = Parameters<typeof applyPhysicsCommand>[0] & WasmHeapSnapshotSource
+
+/**
+ * Apply one ordered batch and publish its results: snapshot replies first (the client must see a
+ * restore land before the step results of the world it produced), then the step snapshot when
+ * the batch stepped. The Dedicated Worker runs this per `batch` message; the client's in-process
+ * fallback (#503 A2) runs the same function on the main thread.
+ */
+export function runWorkerBatch(
+  engine: WorkerBatchEngine,
+  runtime: WorkerRuntimeState,
+  commands: readonly PhysicsWorkerCommand[],
+  publisher: WorkerSnapshotPublisher,
+  post: WorkerPost,
+  now: () => number = () => performance.now(),
+): void {
+  let alpha = 0
+  let stepped = false
+  const t0 = now()
+  for (const cmd of commands) {
+    const result = applyPhysicsCommand(engine, cmd, runtime)
+    if (cmd.type === 'step') {
+      alpha = result
+      stepped = true
+    }
+  }
+  postSnapshotReplies(runtime, post)
+  if (!stepped) return
+  publisher.publish(engine, runtime, alpha, now() - t0)
+}

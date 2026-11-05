@@ -24,7 +24,9 @@
  *      is created. Emitters import the concrete enums from their own layer.
  */
 
+import { bootError } from '../boot-log'
 import type { DisplayState } from '../display/display-types'
+import { createFaultWindow, faultMessage, recordFault, type FaultWindow } from './fault-window'
 import type { GameState, UnlockedReward } from '../game-elements/types'
 import type { WasmContactBatch, WasmContactEvent } from '../wasm/wasm-types'
 
@@ -393,6 +395,26 @@ export interface PachinballEventMap {
    * the emit. Decode with `contactPhaseAt` / `decodeContactAt` from `src/wasm/contact-buffer`.
    */
   'wasm:physics:contacts': WasmContactBatch
+
+  /**
+   * The physics worker died and its world now runs in-process (#503 A2). The HUD shows a toast;
+   * `game.physics.getWasmMode()` reads `wasm-owner` from here on.
+   */
+  'physics:engine-switched': {
+    from: string
+    to: string
+    reason: string
+  }
+
+  // Fault isolation (#503 A3)
+  /**
+   * A handler threw on 3 of the last 8 emits of `event` and was unsubscribed. Emitted after the
+   * emit that removed it finished, never from inside it.
+   */
+  'handler:quarantined': {
+    event: string
+    message: string
+  }
 }
 
 /** Event name derived from the event map keys */
@@ -420,6 +442,10 @@ type StoredHandler = (payload: never) => void
 interface HandlerBucket {
   set: Set<StoredHandler>
   snapshot: readonly StoredHandler[] | null
+  /** Emits of this event so far: the tick of each handler's fault window. */
+  emits: number
+  /** Per-handler fault windows; created on the first throw only (#503 A3). */
+  faults: Map<StoredHandler, FaultWindow> | null
 }
 
 /**
@@ -439,7 +465,7 @@ export class EventBus {
   ): () => void {
     let bucket = this.listeners.get(event)
     if (!bucket) {
-      bucket = { set: new Set(), snapshot: null }
+      bucket = { set: new Set(), snapshot: null, emits: 0, faults: null }
       this.listeners.set(event, bucket)
     }
     if (!bucket.set.has(handler)) {
@@ -460,7 +486,10 @@ export class EventBus {
     handler: PachinballEventHandler<K>
   ): void {
     const bucket = this.listeners.get(event)
-    if (bucket?.set.delete(handler)) bucket.snapshot = null
+    if (bucket?.set.delete(handler)) {
+      bucket.snapshot = null
+      bucket.faults?.delete(handler)
+    }
   }
 
   /**
@@ -489,11 +518,36 @@ export class EventBus {
       bucket.snapshot = handlers
     }
     const payload = args[0] as never
+    const tick = bucket.emits++
+    let quarantined: string[] | null = null
     // Iterate the local reference: on()/off() during a handler replace `bucket.snapshot`,
     // never mutate this array, so the rest of this emit is unaffected.
     for (let i = 0; i < handlers.length; i++) {
       const handler = handlers[i]
-      if (handler) handler(payload)
+      if (!handler) continue
+      // One throwing handler must not skip the others, nor escape into the frame (#503 A3).
+      try {
+        handler(payload)
+      } catch (error) {
+        const message = faultMessage(error)
+        bootError(`[EventBus] handler for '${event}' threw:`, error)
+        bucket.faults ??= new Map()
+        let window = bucket.faults.get(handler)
+        if (!window) {
+          window = createFaultWindow()
+          bucket.faults.set(handler, window)
+        }
+        if (recordFault(window, tick) && bucket.set.has(handler)) {
+          this.off(event, handler as PachinballEventHandler<K>)
+          ;(quarantined ??= []).push(message)
+        }
+      }
+    }
+    if (quarantined && event !== 'handler:quarantined') {
+      for (const message of quarantined) {
+        bootError(`[EventBus] handler for '${event}' quarantined after repeated throws`)
+        this.emit('handler:quarantined', { event, message })
+      }
     }
   }
 

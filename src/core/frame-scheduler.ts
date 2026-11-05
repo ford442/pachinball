@@ -1,3 +1,6 @@
+import { bootError } from '../boot-log'
+import { createFaultWindow, faultMessage, recordFault, type FaultWindow } from './fault-window'
+
 /**
  * Frame scheduler — the one owner of `engine.runRenderLoop` (#488 §4).
  *
@@ -14,6 +17,13 @@
  *
  * Pause / resume stop and restart this scheduler's own loop only — the engine is shared, so the
  * scheduler never calls a bare `engine.stopRenderLoop()`. A disposed scheduler never restarts.
+ *
+ * Fault isolation (#503 A3): a throwing `update` never stops the frame — the other systems of that
+ * phase and every later phase still run, and the frame always returns to Babylon (whose render
+ * loop stops for good on a throw). A system in a presentation phase (`input`, `visuals`, `render`,
+ * `hud`, `idle`) that throws on 3 of the last 8 frames is quarantined (unregistered). `physics` /
+ * `sim` systems are never removed silently: their faults are reported (`onFault` with
+ * `sim: true`) and the host decides (reject a replay playback, end the run).
  *
  * Per-phase CPU time is measured every frame (two `now()` reads per phase that has systems) and
  * smoothed, for the debug HUD and `perf:baseline`.
@@ -40,6 +50,22 @@ export interface FrameSchedulerEngine {
   getDeltaTime(): number
 }
 
+/** Phases whose systems change the world: a fault there is never quarantined silently. */
+export const SIM_PHASES: ReadonlySet<FramePhase> = new Set<FramePhase>(['physics', 'sim'])
+
+export interface FrameFault {
+  readonly phase: FramePhase
+  readonly name: string
+  readonly message: string
+  readonly error: unknown
+  /** The system's phase is `physics` or `sim`. */
+  readonly sim: boolean
+  /** Over the fault window (3 throws in 8 frames). Presentation systems are removed on this. */
+  readonly overLimit: boolean
+  /** The system was unregistered because of this fault. */
+  readonly quarantined: boolean
+}
+
 export interface FrameSchedulerOptions {
   /** Aborting it disposes the scheduler. */
   signal?: AbortSignal
@@ -52,6 +78,11 @@ export interface FrameSchedulerOptions {
    * in `tick()` (the Game passes `() => this.renderFrame()`, so a perf harness can wrap that method).
    */
   frame?: () => void
+  /**
+   * Called after the frame, once per throw (never re-entrantly inside a phase). Defaults to a
+   * `console.error` that survives the production strip.
+   */
+  onFault?: (fault: FrameFault) => void
 }
 
 export interface FramePhaseTimings {
@@ -67,6 +98,15 @@ interface Entry {
   readonly system: FrameSystem
   removed: boolean
   detachSignal: (() => void) | null
+  /** Allocated on the first throw only. */
+  faults: FaultWindow | null
+}
+
+const defaultOnFault = (fault: FrameFault): void => {
+  bootError(
+    `[FrameScheduler] ${fault.phase}/${fault.name} threw${fault.quarantined ? ' — quarantined' : ''}:`,
+    fault.error,
+  )
 }
 
 const defaultNow = (): number =>
@@ -92,11 +132,15 @@ export class FrameScheduler {
   private disposed = false
   /** Stable reference: the engine removes exactly this loop. */
   private readonly loop: () => void
+  private readonly onFault: (fault: FrameFault) => void
+  /** Faults of the current frame, reported after it; reused, so a clean frame allocates nothing. */
+  private readonly pendingFaults: FrameFault[] = []
 
   constructor(engine: FrameSchedulerEngine, options: FrameSchedulerOptions = {}) {
     this.engine = engine
     this.now = options.now ?? defaultNow
     this.smoothing = options.timingSmoothing ?? 0.1
+    this.onFault = options.onFault ?? defaultOnFault
     const frame = options.frame
     this.loop = frame ? () => frame() : () => this.tick()
     const { signal } = options
@@ -119,7 +163,7 @@ export class FrameScheduler {
    * unregistered when that signal aborts. A disposed scheduler disposes the system at once.
    */
   register(system: FrameSystem, options: { signal?: AbortSignal } = {}): () => void {
-    const entry: Entry = { system, removed: false, detachSignal: null }
+    const entry: Entry = { system, removed: false, detachSignal: null, faults: null }
     const unregister = (): void => this.remove(entry)
     if (this.disposed || options.signal?.aborted) {
       entry.removed = true
@@ -170,8 +214,15 @@ export class FrameScheduler {
         const entry = list[i]
         // Unregistered by an earlier system this frame: the snapshot still holds it.
         if (!entry || entry.removed) continue
-        entry.system.update(dt)
-        if (this.disposed) return
+        try {
+          entry.system.update(dt)
+        } catch (error) {
+          this.fault(entry, FRAME_PHASES[p] as FramePhase, error)
+        }
+        if (this.disposed) {
+          this.flushFaults()
+          return
+        }
       }
       const ms = this.now() - start
       const phase = FRAME_PHASES[p] as FramePhase
@@ -180,6 +231,35 @@ export class FrameScheduler {
     }
     this.totalMs = this.frames === 0 ? total : this.totalMs + (total - this.totalMs) * a
     this.frames++
+    if (this.pendingFaults.length > 0) this.flushFaults()
+  }
+
+  private fault(entry: Entry, phase: FramePhase, error: unknown): void {
+    entry.faults ??= createFaultWindow()
+    const overLimit = recordFault(entry.faults, this.frames)
+    const sim = SIM_PHASES.has(phase)
+    const quarantined = overLimit && !sim
+    if (quarantined) this.remove(entry)
+    this.pendingFaults.push({
+      phase,
+      name: entry.system.name ?? '(anonymous)',
+      message: faultMessage(error),
+      error,
+      sim,
+      overLimit,
+      quarantined,
+    })
+  }
+
+  private flushFaults(): void {
+    const faults = this.pendingFaults.splice(0)
+    for (const fault of faults) {
+      try {
+        this.onFault(fault)
+      } catch (error) {
+        bootError('[FrameScheduler] onFault threw:', error)
+      }
+    }
   }
 
   /** Smoothed per-phase CPU time (a fresh object; call it from the HUD, not per frame from hot code). */

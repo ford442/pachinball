@@ -90,7 +90,11 @@ A `Game` must tear down completely (`Game.dispose()` → `disposeGame()` in `src
 
 Gameplay runs in whole fixed steps (`FixedStepPacer` / `FIXED_TIMESTEP` in `src/core/sim-clock.ts`). Anything that affects score, lives or the ball's path reads the sim clock, never `performance.now()` — otherwise replays and verification break (`docs/determinism-todo.md`). Intentional numeric changes update the golden tapes (`npm run verify:replay -- --update`) in the same PR.
 
-Production builds strip literal `console.*` calls; use `bootWarn` / `bootError` (`src/boot-log.ts`) for boot-critical diagnostics.
+Production builds drop `console.log` / `info` / `debug` / `time*` (esbuild `pure`, keyed on Vite's `mode`) but keep `console.warn` / `console.error`; use `bootWarn` / `bootError` (`src/boot-log.ts`) for boot-critical diagnostics — they also feed the 50-line ring `src/engine/error-reporter.ts` attaches to uncaught errors / unhandled rejections (`window.pachinballErrors`). Source maps are built `hidden` and moved to `dist-sourcemaps/` (never deployed).
+
+### Fault isolation (#503)
+
+One throw must never stop the game. `FrameScheduler` runs each system in a try/catch: a presentation-phase system (`input` / `visuals` / `render` / `hud` / `idle`) that throws on 3 of the last 8 frames is quarantined; `physics` / `sim` systems are never removed, their faults go to `Game.onFrameFault` (which rejects a replay playback with `sim-fault`). `EventBus.emit` isolates each handler the same way (3 throws in 8 emits → unsubscribed + `'handler:quarantined'`), and contact dispatch isolates each contact. In `wasm-worker` mode the client supervises the worker (`fatal` message, `error` / `messageerror`, 30 unanswered steps) and rebuilds its world in-process from `PhysicsCommandLog` (structure + a checkpoint every 600 steps + the commands since), after which `getWasmMode()` reads `wasm-owner` and `'physics:engine-switched'` fires. `apiFetch` retries only idempotent methods.
 
 ### Testing approach
 

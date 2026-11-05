@@ -8,6 +8,7 @@ import { preloadPhysicsSystem } from './game-elements/physics-preload'
 import { formatGpuProbeSummary } from './engine/gpu-degrade-telemetry'
 import { registerServiceWorker } from './pwa'
 import { bootError, bootWarn } from './boot-log'
+import { installErrorReporter } from './engine/error-reporter'
 import { BOOT_PRELOAD_STAGE, revealBootFailure } from './game/game-ui-popups'
 
 /** Set once constructed so the failure banner can name the checkpoint stage that was running. */
@@ -55,6 +56,8 @@ async function bootstrap(): Promise<void> {
 
   const game = new Game(engine, physics)
   bootGame = game
+  // Uncaught errors / rejections are visible in production too (#503 A5).
+  installErrorReporter(game.signal)
   withBootError((m) => m.watchGame(game))
   await game.init()
   console.info(formatGpuProbeSummary())
