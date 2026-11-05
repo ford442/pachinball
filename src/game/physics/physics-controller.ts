@@ -52,6 +52,7 @@ interface TrailInfo {
 
 /** Shared empty list for "no ball manager", so the fallback allocates nothing. Never mutated. */
 const NO_BODIES: PhysicsBody[] = []
+const NO_STUCK_BODIES: readonly PhysicsBody[] = []
 
 // Scratch vectors for the per-frame paths. Every consumer copies what it keeps (checked:
 // CameraController clones, DynamicWorld and the atmosphere only read).
@@ -107,6 +108,14 @@ export class GamePhysicsController {
   private readonly trailInfos: TrailInfo[] = []
   private readonly trailInfoPool: TrailInfo[] = []
   private readonly trailMeshByBody = new Map<PhysicsBody, Mesh>()
+  // Bound once: step() takes them every tick (#505 §D).
+  private readonly onCollision = (h1: number, h2: number, started: boolean): void => {
+    this.collisionDispatcher.processCollision(h1, h2, started)
+  }
+  private readonly onContactForce = (h1: number, h2: number, maxForce: number): void => {
+    this.collisionDispatcher.processContactForce(h1, h2, maxForce)
+  }
+
   private readonly onCaughtBallBeep = (): void => {
     this.host.effects?.playBeep(440)
   }
@@ -378,16 +387,8 @@ export class GamePhysicsController {
     })
   }
 
+  /** Flippers and plunger are driven by the input actions; only the nudge is applied here. */
   applyInputFrame(frame: InputFrame): void {
-    if (frame.flipperLeft !== null) {
-      // Delegated to input actions
-    }
-    if (frame.flipperRight !== null) {
-      // Delegated to input actions
-    }
-    if (frame.plungerCharge !== null) {
-      // Delegated to input actions
-    }
     if (frame.nudge) {
       this.applyNudge({ x: frame.nudge.x, y: frame.nudge.y, z: frame.nudge.z })
     }
@@ -462,11 +463,7 @@ export class GamePhysicsController {
 
     this.syncReplaySnapshot(owner !== null, runner, recorder)
 
-    const alpha = this.host.physics.step(physicsDt, (h1, h2, start) => {
-      this.collisionDispatcher.processCollision(h1, h2, start)
-    }, (h1, h2, maxForce) => {
-      this.collisionDispatcher.processContactForce(h1, h2, maxForce)
-    })
+    const alpha = this.host.physics.step(physicsDt, this.onCollision, this.onContactForce)
 
     if (owner) {
       owner.endStep()
@@ -677,7 +674,7 @@ export class GamePhysicsController {
 
     this.host.mapManager?.update(dt)
 
-    const stuckBalls = ballManager?.updateStuckDetection(simDt) ?? NO_BODIES
+    const stuckBalls = ballManager?.updateStuckDetection(simDt) ?? NO_STUCK_BODIES
     for (const stuckBall of stuckBalls) {
       if (stuckBall === ballManager?.getBallBody()) {
         ballManager?.resetBall()

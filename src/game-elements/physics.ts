@@ -126,6 +126,8 @@ export class PhysicsSystem {
   /** The owner-mode world sink (null on every Rapier path). */
   private tableWorld: WasmTableWorld | null = null
   private stepCount = 0
+  /** Last mode written to `window.currentPhysicsEngine`; step() rewrites it only on a change. */
+  private exposedMode: WasmPhysicsRuntimeMode | null = null
 
   /** WASM backend, only active when the feature flag is set and the bundle loads. */
   private wasmEngine: WasmSimEngine | null = null
@@ -162,7 +164,8 @@ export class PhysicsSystem {
     } else {
       await this.initRapierWorld()
     }
-    exposeCurrentPhysicsEngine(this.getWasmMode())
+    this.exposedMode = this.getWasmMode()
+    exposeCurrentPhysicsEngine(this.exposedMode)
   }
 
   /** Load the C++ engine for the selected mode; on failure fall back to `rapier` with a degrade reason. */
@@ -360,7 +363,10 @@ export class PhysicsSystem {
     forceCallback?: ContactForceCallback
   ): number {
     const mode = this.getWasmMode()
-    exposeCurrentPhysicsEngine(mode)
+    if (mode !== this.exposedMode) {
+      this.exposedMode = mode
+      exposeCurrentPhysicsEngine(mode)
+    }
 
     if (mode === 'wasm-mirror' && this.wasmEngine?.isReady) {
       const t0 = performance.now()

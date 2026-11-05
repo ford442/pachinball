@@ -85,6 +85,7 @@ export class BallManager implements BallManagerHost {
   nextSwarmId = 1
 
   ballStuckTimers: Map<PhysicsBody, BallStuckTracker> = new Map()
+  readonly stuckBallsScratch: PhysicsBody[] = []
   chainMultiball: MultiballState = {
     isActive: false,
     chainLevel: 0,
@@ -323,7 +324,7 @@ export class BallManager implements BallManagerHost {
     updateSmallGoldBallLifetimes(this, dt)
   }
 
-  updateStuckDetection(dt: number): PhysicsBody[] {
+  updateStuckDetection(dt: number): readonly PhysicsBody[] {
     return updateStuckDetection(this, dt)
   }
 
