@@ -311,7 +311,7 @@ jobs:
         env:
           CI: 'true'
         run: >
-          npx playwright test --project=chromium
+          npx playwright test --project=chromium --trace retain-on-failure
           tests/wasm-owner-flipper.spec.ts
           tests/wasm-owner-debug-draw.spec.ts
           tests/wasm-owner-adventure.spec.ts

@@ -281,6 +281,10 @@ export function applyReplaySnapshot(
     return result('table-mismatch', WasmSnapshotStatus.StaticMismatch)
   }
   if (!fingerprint.initialSnapshot) return result('no-snapshot')
+  // Rapier / mirror sessions cannot restore at all and own no C++ bodies or
+  // hinges, so an id comparison would always fail. Say "unsupported" (the input
+  // tape still plays, under a toast), not `id-layout`, which refuses the replay.
+  if (engine === NO_SNAPSHOT_ENGINE) return result('unsupported', WasmSnapshotStatus.Unsupported)
 
   const bytes = decodeSnapshotBase64(fingerprint.initialSnapshot)
   const recorded = bytes ? readSnapshotIds(bytes) : null
