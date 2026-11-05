@@ -162,10 +162,10 @@ test.describe('wasm-owner MagSpin capture', () => {
         return { ok: false, reason: 'hooks missing' }
       }
       const id = ball.wasmId
-      // One game tick: physics, then the trap update renderFrame runs.
+      // One game tick. The fixed step already updates every trap at the tick's dt
+      // (tickStepMechanisms, 2c62f98); updating it here as well ran its hold clock twice as fast.
       const step = () => {
         g.physicsController!.stepPhysics(g.inputManager, g.inputActions, null, null)
-        traps.updateTrap(trap, 1 / 60)
       }
       const origDt = g.engine.getDeltaTime.bind(g.engine)
       g.engine.getDeltaTime = () => 1000 / 60
