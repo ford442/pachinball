@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process'
-import { readdirSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -22,13 +23,36 @@ function resolveBuildId(): string {
 
 const BUILD_ID = resolveBuildId()
 
-/** `dist/build-info.json`: the replay verifier reports this as its verifier_version. */
+/**
+ * SHA-256 (hex) of the physics binary this build ships (#490 Slice B): `public/wasm/PhysicsModule.wasm`,
+ * which `vite build` copies to `dist/wasm/` byte for byte (`check:dist-wasm`). `npm run build` runs
+ * `build:wasm` before Vite loads this file, so it is the binary players run. Null in a Rapier-only tree.
+ * Stamped into every tape (`wasmSha256`) so the verifier replays a run on the binary it was played on.
+ */
+function resolveWasmSha256(): string | null {
+  try {
+    return createHash('sha256').update(readFileSync(fileURLToPath(new URL('./public/wasm/PhysicsModule.wasm', import.meta.url)))).digest('hex')
+  } catch {
+    return null
+  }
+}
+
+const WASM_SHA256 = resolveWasmSha256()
+
+/**
+ * `dist/build-info.json`: the replay verifier reports `buildId` as its verifier_version and checks
+ * `wasmSha256` against the archived build's own `wasm/PhysicsModule.wasm`.
+ */
 function buildInfo(): Plugin {
   return {
     name: 'pachinball-build-info',
     apply: 'build',
     generateBundle() {
-      this.emitFile({ type: 'asset', fileName: 'build-info.json', source: `${JSON.stringify({ buildId: BUILD_ID })}\n` })
+      this.emitFile({
+        type: 'asset',
+        fileName: 'build-info.json',
+        source: `${JSON.stringify({ buildId: BUILD_ID, wasmSha256: WASM_SHA256 })}\n`,
+      })
     },
   }
 }
@@ -145,11 +169,13 @@ const localStorageManagerCaching = [
   },
 ]
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode, command }) => ({
   // Use relative paths so assets resolve correctly when deployed to a subdirectory
   base: './',
   define: {
     __PACHINBALL_BUILD__: JSON.stringify(BUILD_ID),
+    // Builds only: the dev server can outlive a `build:wasm`, and a stale hash is worse than none.
+    __PACHINBALL_WASM_SHA256__: JSON.stringify(command === 'build' ? WASM_SHA256 : null),
   },
   esbuild: {
     drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],

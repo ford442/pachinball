@@ -28,6 +28,7 @@ npm run check:bundle      # Bundle-size gate (bundle-budget.json); fails if Rapi
 npm run verify:replay     # Golden replay tapes (tests/replays/*.json) in headless Chromium; needs build:wasm. `-- --update` rewrites goldens
 npm run record:replay     # Re-record stale tapes from their scenarios
 npm run test:verifier     # services/replay-verifier self-test (after `npm run build`)
+npm run release:archive -- --to <dir>  # archive dist/ as a released build for the verifier, with its golden tapes (#490 B)
 supabase db start && supabase test db  # Arcade DB migrations + pgTAP RLS tests (supabase/)
 ```
 
@@ -66,7 +67,7 @@ npx vitest run tests/ball-manager.test.ts
 | `src/audio/` | Single `AudioEngine` (one AudioContext) + pachinko worklet + sample bank. EventBus remains the trigger API. |
 | `src/replay/` | Replay recorder/runner (one tape frame per physics step, frame-0 C++ snapshot), challenges (`challenge-v2.ts`), ghost race. |
 | `src/arcade/` + `supabase/` | Live arcade client (`arcade-api.ts`, endpoint in `src/config/arcade.ts`) on Supabase: migrations, RLS pgTAP tests, Edge Functions. Contract: `docs/API_CONTRACT.md` + `docs/api/arcade.openapi.yaml` (checked by `tests/arcade-contract.test.ts`). Dev/Playwright stay offline unless `VITE_ARCADE_URL` is set. |
-| `services/replay-verifier/` | Storage-host anti-cheat service: replays submitted tapes on the prod build and marks scores verified/rejected. |
+| `services/replay-verifier/` | Storage-host anti-cheat service: replays submitted tapes on the build shipping the tape's own `PhysicsModule.wasm` (SHA-256 stamped in every tape) and marks scores verified/rejected; weekly tournaments freeze from verified runs only (`docs/API_CONTRACT.md`). |
 | `src/config/` | Ball-type definitions (STANDARD / GOLD_PLATED / SOLID_GOLD), spawn weight distribution (75 / 20 / 5 %), point values, fever-mode multipliers, API config. |
 
 ### Ball lifecycle

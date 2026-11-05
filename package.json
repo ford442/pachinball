@@ -22,6 +22,7 @@
     "verify:replay": "node scripts/verify-replay.mjs",
     "record:replay": "node scripts/verify-replay.mjs --record",
     "test:verifier": "node services/replay-verifier/selftest.mjs",
+    "release:archive": "node scripts/archive-release.mjs",
     "print:wasm-flags": "node scripts/print-wasm-flags.mjs",
     "lint": "eslint .",
     "check:bundle": "node scripts/check-bundle-size.mjs",

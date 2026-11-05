@@ -123,6 +123,12 @@ function answer(method: string, url: URL): { status: number; body: unknown } {
     case 'GET /rest/v1/live_now': return { status: 200, body: [liveRun()] }
     case 'GET /rest/v1/replays_live': return { status: 200, body: [{ ...liveRun(), header: liveHeader() }] }
     case 'GET /rest/v1/replays_live_chunks': return { status: 200, body: [liveChunk()] }
+    case 'GET /rest/v1/tournaments': return { status: 200, body: [tournament()] }
+    case 'GET /rest/v1/tournament_standings': return { status: 200, body: [standing(url.searchParams.get('mine') === 'is.true')] }
+    case 'POST /rest/v1/rpc/tournament_ghosts': return {
+      status: 200,
+      body: [{ rank: 1, name: 'ACE', score: 12000, replay_id: REPLAY_ID, stride: 2, samples: 1, track: 'AQAAAAIAAAADAAAA' }],
+    }
     default: return { status: 404, body: { message: `no canned answer for ${key}` } }
   }
 }
@@ -144,6 +150,21 @@ function liveRun() {
 
 function liveChunk() {
   return { seq: 0, start_frame: 0, frame_count: 300, frames: '300:0,0,0,0,0,0,-', state_hash: '0123456789abcdef', score: 120, track: null, final: false }
+}
+
+function tournament() {
+  return {
+    challenge_id: CHALLENGE_ID, board: 'weekly-2026-W45', title: 'Table of the week 2026-W45', seed: 3282750858,
+    cascade_seed: 3282750858, map_id: 'neon-helix', starts_at: '2026-11-02T00:00:00Z', expires_at: '2026-11-09T00:00:00Z',
+    frozen_at: null, status: 'open', entries: 12, leader_name: 'ACE', leader_score: 12000,
+  }
+}
+
+function standing(mine: boolean) {
+  return {
+    challenge_id: CHALLENGE_ID, board: 'weekly-2026-W45', rank: mine ? 4 : 1, name: mine ? 'YOU' : 'ACE', score: mine ? 7000 : 12000,
+    replay_id: REPLAY_ID, played_at: '2026-11-03T20:00:00Z', final: false, mine, has_ghost: true,
+  }
 }
 
 function challengeRow(kind: 'player' | 'weekly') {
@@ -290,6 +311,22 @@ describe('arcade client ↔ docs/api/arcade.openapi.yaml (#444)', () => {
     expect(captured[0]?.url.searchParams.get('verified')).toBe('is.true')
     await api.createChallenge({ seed: 444002, targetScore: 870, mapId: 'neon-helix', challengerName: 'ACE', replayId: REPLAY_ID, cascadeSeed: 20261016 })
     expect(captured.at(-1)?.body).toMatchObject({ cascadeSeed: 20261016 })
+    expectConformant()
+  })
+
+  it('weekly tournaments: the archive, standings, my row and the top ghosts (#490 Slice C)', async () => {
+    const api = await arcade()
+    expect(await api.fetchTournaments(5)).toMatchObject([{ board: 'weekly-2026-W45', status: 'open' }])
+    expect(await api.fetchTournamentStandings('weekly-2026-W45', 10)).toMatchObject([{ rank: 1, name: 'ACE', final: false }])
+    // Reading never creates a player: no session, no row of mine.
+    expect(await api.fetchMyTournamentStanding('weekly-2026-W45')).toBeNull()
+    expect(captured.every((r) => !r.headers.Authorization)).toBe(true)
+    await api.arcadeSession()
+    captured = []
+    expect(await api.fetchMyTournamentStanding('weekly-2026-W45')).toMatchObject({ rank: 4, mine: true })
+    expect(captured[0]?.url.searchParams.get('mine')).toBe('is.true')
+    expect(captured[0]?.headers.Authorization).toBe('Bearer fresh')
+    expect(await api.fetchTournamentGhosts('weekly-2026-W45', 3)).toMatchObject([{ rank: 1, stride: 2, samples: 1 }])
     expectConformant()
   })
 

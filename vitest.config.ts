@@ -4,6 +4,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   define: {
     __PACHINBALL_BUILD__: JSON.stringify('vitest'),
+    __PACHINBALL_WASM_SHA256__: JSON.stringify(null),
   },
   resolve: {
     alias: [

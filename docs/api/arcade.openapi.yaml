@@ -3,8 +3,8 @@ info:
   title: Pachinball live arcade service
   version: 1.0.0
   description: |
-    Leaderboard, replays, challenges and saves (#444 Slice B), and live
-    spectate streams (Slice E). Plain REST over
+    Leaderboard, replays, challenges and saves (#444 Slice B), live
+    spectate streams (Slice E) and weekly tournaments (#490 Slice C). Plain REST over
     Postgres: reads go to PostgREST, each write path is one Edge Function that
     writes as the caller, and players are Supabase Auth anonymous users.
     Prose and rules: docs/API_CONTRACT.md. Schema: supabase/migrations.
@@ -94,6 +94,7 @@ components:
       properties:
         version: { type: integer, minimum: 1 }
         buildId: { type: string }
+        wasmSha256: { type: string, pattern: '^[0-9a-f]{64}$', description: 'SHA-256 of the PhysicsModule.wasm the run was played on (#490 Slice B); absent on dev-server and older tapes' }
         mapId: { type: string }
         seed: { type: integer, minimum: 0, maximum: 4294967295 }
         physicsEngine: { enum: [rapier, wasm-mirror, wasm-owner, wasm-worker] }
@@ -144,6 +145,7 @@ components:
         expires_at: { type: [string, 'null'] }
         creator_id: { type: [string, 'null'] }
         created_at: { type: string }
+        frozen_at: { type: [string, 'null'], description: 'weekly: when its tournament results were frozen' }
     GhostTrack:
       type: object
       required: [stride, samples, track]
@@ -151,6 +153,48 @@ components:
         stride: { type: integer, minimum: 1, maximum: 60 }
         samples: { type: integer, minimum: 0 }
         track: { type: string, description: 'Base64 of little-endian Int32 millimetre (x, y, z) triples of the primary ball; x = INT32_MIN when there is no ball' }
+    Tournament:
+      type: object
+      required: [challenge_id, board, title, seed, cascade_seed, map_id, starts_at, expires_at, frozen_at, status, entries, leader_name, leader_score]
+      properties:
+        challenge_id: { $ref: '#/components/schemas/Uuid' }
+        board: { $ref: '#/components/schemas/MapId' }
+        title: { type: [string, 'null'] }
+        seed: { type: integer, minimum: 0, maximum: 4294967295 }
+        cascade_seed: { type: [integer, 'null'] }
+        map_id: { type: string }
+        starts_at: { type: string }
+        expires_at: { type: string }
+        frozen_at: { type: [string, 'null'] }
+        status: { enum: [open, verifying, final], description: 'open: inside the week; verifying: ended, runs still being verified; final: results frozen' }
+        entries: { type: integer, minimum: 0 }
+        leader_name: { type: [string, 'null'] }
+        leader_score: { type: [integer, 'null'] }
+    TournamentStanding:
+      type: object
+      required: [challenge_id, board, rank, name, score, replay_id, played_at, final, mine, has_ghost]
+      properties:
+        challenge_id: { $ref: '#/components/schemas/Uuid' }
+        board: { $ref: '#/components/schemas/MapId' }
+        rank: { type: integer, minimum: 1 }
+        name: { $ref: '#/components/schemas/Tag' }
+        score: { type: integer, minimum: 0 }
+        replay_id: { type: [string, 'null'] }
+        played_at: { type: string }
+        final: { type: boolean, description: 'frozen results (true) or the live standings of an unfrozen week' }
+        mine: { type: boolean, description: "the requesting player's own row" }
+        has_ghost: { type: boolean }
+    TournamentGhost:
+      type: object
+      required: [rank, name, score, replay_id, stride, samples, track]
+      properties:
+        rank: { type: integer, minimum: 1 }
+        name: { $ref: '#/components/schemas/Tag' }
+        score: { type: integer, minimum: 0 }
+        replay_id: { $ref: '#/components/schemas/Uuid' }
+        stride: { type: integer, minimum: 1, maximum: 60 }
+        samples: { type: integer, minimum: 0 }
+        track: { type: string }
     LiveRun:
       type: object
       required: [id, map_id, player_tag, chunk_steps, track_stride, chunks, frames, score, status, created_at, updated_at]
@@ -406,6 +450,61 @@ paths:
                 type: array
                 maxItems: 1
                 items: { $ref: '#/components/schemas/GhostTrack' }
+  /rest/v1/tournaments:
+    get:
+      summary: This week's tournament and the archive (#490 Slice C)
+      parameters:
+        - { name: select, in: query, required: true, schema: { type: string } }
+        - { name: order, in: query, schema: { const: 'starts_at.desc' } }
+        - { name: limit, in: query, schema: { type: string, pattern: '^[0-9]{1,3}$' } }
+      responses:
+        '200':
+          description: Weekly tournaments, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Tournament' }
+  /rest/v1/tournament_standings:
+    get:
+      summary: "A tournament board: a finished week's frozen results, or an open week's live standings — verified runs only, one per player"
+      parameters:
+        - { name: select, in: query, required: true, schema: { type: string } }
+        - { name: board, in: query, required: true, schema: { type: string, pattern: '^eq\.[A-Za-z0-9._:-]{1,64}$' } }
+        - { name: mine, in: query, schema: { const: 'is.true' }, description: "Only the requesting player's row (needs the player's token)" }
+        - { name: order, in: query, schema: { const: 'rank.asc' } }
+        - { name: limit, in: query, schema: { type: string, pattern: '^[0-9]{1,3}$' } }
+      responses:
+        '200':
+          description: Standings, best first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TournamentStanding' }
+  /rest/v1/rpc/tournament_ghosts:
+    post:
+      summary: "The top verified runs on a tournament board that have a ghost, with their tracks: what a tournament run races"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [p_board]
+              properties:
+                p_board: { $ref: '#/components/schemas/MapId' }
+                p_limit: { type: integer, minimum: 1, maximum: 5 }
+      responses:
+        '200':
+          description: At most p_limit (default 3) ghosts, best first.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 5
+                items: { $ref: '#/components/schemas/TournamentGhost' }
   /rest/v1/rpc/live_start:
     post:
       summary: Open a live run (wasm-owner tapes with a frame-0 snapshot; unlists the player's previous run; 30 an hour)
@@ -652,6 +751,7 @@ paths:
                 p_verifier_score: { type: [integer, 'null'] }
                 p_reason: { type: [string, 'null'] }
                 p_state_hash: { type: [string, 'null'] }
+                p_wasm_sha256: { type: [string, 'null'], pattern: '^[0-9a-f]{64}$', description: 'SHA-256 of the PhysicsModule.wasm that replayed the run; null when it was rejected without replaying (#490 Slice B)' }
       responses:
         '204':
           description: Recorded.
