@@ -324,6 +324,15 @@ jobs:
           tests/basic-gameplay.spec.ts
           tests/live-spectate.spec.ts
 
+      # Diagnostics only: keep Playwright's error context and traces of a failed run.
+      - name: Upload Playwright results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-owner-playwright-results
+          path: test-results/
+          retention-days: 7
+
   replay_goldens:
     name: Golden Replay Tapes (Blocking)
     runs-on: ubuntu-latest
