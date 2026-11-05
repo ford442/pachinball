@@ -111,6 +111,7 @@ native/
     ├── state_hash_test.cpp      getStateHash(): plunge scene determinism, one-ulp sensitivity, restore round trip, parity fixture (#459)
     ├── golden_trace_test.cpp    Golden traces: committed FNV-1a hashes of three scenes — any numeric drift fails here (#442)
     ├── broadphase_test.cpp      Cell coordinates clamp before the int cast: playfield cells unchanged, NaN / ±inf / 1e25 finite (#487)
+    ├── correctness_bugs_test.cpp #504 §1: box face normals (z depth, −Y), snapshot WorldParams validation, setRotation wakes
     └── test_helpers.hpp         Shared test utilities
 
 src/wasm/
