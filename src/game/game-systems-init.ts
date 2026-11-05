@@ -126,7 +126,6 @@ export class GameSystemsInitializer {
       this.game.display.subscribeToEvents(this.game.eventBus)
       this.game.display.setSlotScoreProvider(() => this.game.score)
       this.game.display.setEffectsSystem(this.game.effects)
-      this.game.stateManager.setDisplaySystem(this.game.display)
       // Apply persisted scanline settings now that the display system exists
       const initialSettings = SettingsManager.load()
       this.game.display.setPlayerScanlineEnabled(initialSettings.scanlineEnabled)

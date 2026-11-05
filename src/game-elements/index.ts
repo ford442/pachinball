@@ -15,13 +15,6 @@ export { ComboMultiplierSystem, type ComboMultiplierConfig } from './combo-multi
 export { BallSaveSystem, type BallSaveConfig } from './ball-save-system'
 export { BonusTallySystem, type BonusTallyConfig } from './bonus-tally-system'
 export { GoldBallStreakSystem, type GoldBallStreakConfig, type GoldBallStreakResult } from './gold-ball-streak-system'
-export {
-  ZONE_REGISTRY,
-  getZoneConfig,
-  isMajorTransition,
-  getTransitionShakeIntensity,
-  type ZoneConfig,
-} from './zone-registry'
 export { BallAnimator } from './ball-animator'
 export { CameraController, CameraMode, FRAMING_ZONES, DEFAULT_SOFT_FOLLOW, type CameraRuntimePolicy } from './camera-controller'
 export {
@@ -33,7 +26,7 @@ export {
 } from './accessibility-config'
 export { HapticManager, type HapticConfig } from './haptics'
 export { GamepadManager, type GamepadConfig, type GamepadState } from './gamepad'
-export { SoundSystem, getSoundSystem, resetSoundSystem, type MapId } from './sound-system'
+export { SoundSystem, getSoundSystem, resetSoundSystem, type MapId } from '../audio/sound-system'
 export type { LeaderboardSystem, LeaderboardEntry, ScoreSubmission } from './leaderboard-system'
 export type { NameEntryDialog, NameEntryResult } from './name-entry-dialog'
 export { MapSystem, getMapSystem, resetMapSystem, type DynamicMapConfig } from './map-system'

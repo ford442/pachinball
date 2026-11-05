@@ -43,8 +43,8 @@ export function readMaxUniformBuffersPerStage(engine: Engine | WebGPUEngine): nu
   const fromLimits = webgpu.currentLimits?.maxUniformBuffersPerShaderStage
   if (typeof fromLimits === 'number' && fromLimits > 0) return fromLimits
 
-  const fromEngine = (webgpu as unknown as { maxUniformBuffersPerShaderStage?: number })
-    .maxUniformBuffersPerShaderStage
+  // Some engine builds expose the cap directly on the engine rather than on currentLimits.
+  const fromEngine = 'maxUniformBuffersPerShaderStage' in webgpu ? webgpu.maxUniformBuffersPerShaderStage : undefined
   if (typeof fromEngine === 'number' && fromEngine > 0) return fromEngine
 
   return WEBGPU_DEFAULT_MAX_UNIFORM_BUFFERS_PER_STAGE

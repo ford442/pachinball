@@ -16,7 +16,7 @@ import {
   type BallManagerHost,
 } from './ball-manager-context'
 import { COLLISION_GROUP_PRESETS } from './physics'
-import { getSoundSystem } from './sound-system'
+import { getSoundSystem } from '../audio/sound-system'
 import { getSessionRngFork, RNG_FORK, type SeededRng } from '../core/seeded-rng'
 import { QualityTier, color, emissive, INTENSITY, PALETTE } from './visual-language'
 

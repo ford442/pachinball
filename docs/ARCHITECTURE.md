@@ -69,7 +69,7 @@ flowchart TB
 | [`src/adventure/`](../src/adventure/) | Track builders, `AdventureMode` orchestrator, `AdventureTrackType`, portal routing. **Single entry point** for types, catalog re-exports, and builders via [`index.ts`](../src/adventure/index.ts). |
 | [`src/game-elements/adventure-track-progression.ts`](../src/game-elements/adventure-track-progression.ts) | `TRACK_CATALOG`, `AdventureTrackProgression` — campaign spine metadata (mode type, timers, unlock chain) |
 | [`src/game-elements/adventure-progression-supervisor.ts`](../src/game-elements/adventure-progression-supervisor.ts) | Portal lifecycle + campaign state machine |
-| [`src/game-elements/zone-registry.ts`](../src/game-elements/zone-registry.ts) | Per-track theming / story / music metadata |
+| [`src/adventure/zone-registry.ts`](../src/adventure/zone-registry.ts) | Per-track theming / story / music metadata |
 | [`src/adventure/ui/campaign-map.ts`](../src/adventure/ui/campaign-map.ts) | Campaign stage map overlay — spine + branches with completion, Nexus Archive rewards |
 | [`src/adventure/adventure-state.ts`](../src/adventure/adventure-state.ts) | **Legacy** free-form progress + cosmetic rewards only — not campaign truth |
 | [`docs/ADVENTURE_CAMPAIGN.md`](ADVENTURE_CAMPAIGN.md) | Campaign A/B alternation reference |

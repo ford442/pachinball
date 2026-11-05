@@ -152,7 +152,7 @@ vi.mock('../src/materials', () => ({
 }))
 
 // Stub the sound system so gold-ball spawn sounds don't crash.
-vi.mock('../src/game-elements/sound-system', () => ({
+vi.mock('../src/audio/sound-system', () => ({
   getSoundSystem: vi.fn().mockReturnValue({
     playGoldBallSpawn: vi.fn(),
     playGoldBallCollect: vi.fn(),

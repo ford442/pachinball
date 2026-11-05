@@ -11,7 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import { GamePhysicsController } from '../src/game/game-physics-controller'
+import { GamePhysicsController } from '../src/game/physics/physics-controller'
 import { EventBus } from '../src/core/event-bus'
 import type { BumperVisual } from '../src/game-elements/types'
 import type { WasmContactEvent } from '../src/wasm/wasm-types'

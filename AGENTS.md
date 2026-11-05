@@ -163,11 +163,9 @@ Every major subdirectory exposes a barrel file (`index.ts`). Import through the 
 | `accessibility-config.ts` | **Safety-critical.** Detects `prefers-reduced-motion`, photosensitive mode, haptic preferences. |
 | `haptics.ts` | Haptic feedback manager (vibration patterns). |
 | `gamepad.ts` | Gamepad polling + vibration. |
-| `sound-system.ts` | Deprecated re-export of `src/audio/sound-system.ts`; import from `src/audio/`. |
 | `map-system.ts` | Dynamic backend map fetching. |
 | `leaderboard-system.ts` | Score submission + leaderboard UI. |
 | `name-entry-dialog.ts` | High-score name entry UI. |
-| `zone-registry.ts` | Deprecated re-export of `src/adventure/zone-registry.ts`. |
 | `zone-trigger-system.ts` | AABB zone entry/exit detection. |
 | `dynamic-scenarios.ts` | Scenario definitions for dynamic/fixed mode toggling. |
 | `dynamic-world.ts` | Scrolling world generation for dynamic adventure mode. |

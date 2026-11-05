@@ -5,7 +5,7 @@ vi.mock('@babylonjs/core', () => ({
   Vector3: vi.fn().mockImplementation((x = 0, y = 0, z = 0) => ({ x, y, z })),
 }))
 
-import { SoundSystem } from '../src/game-elements/sound-system'
+import { SoundSystem } from '../src/audio/sound-system'
 import { EventBus } from '../src/core/event-bus'
 
 describe('SoundSystem', () => {

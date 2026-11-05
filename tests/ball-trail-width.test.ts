@@ -7,7 +7,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('../src/game-elements/sound-system', () => ({ getSoundSystem: () => ({ playSample: vi.fn() }) }))
+vi.mock('../src/audio/sound-system', () => ({ getSoundSystem: () => ({ playSample: vi.fn() }) }))
 vi.mock('../src/adventure/campaign-rewards-manager', () => ({ getCampaignRewardsManager: () => null }))
 
 import { trailWidthMultiplier, updateTrailEffects } from '../src/game-elements/ball-manager-spawn'

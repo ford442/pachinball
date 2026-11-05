@@ -8,7 +8,7 @@ import type { CabinetManager } from './game-cabinet'
 import type { GameUIManager } from './game-ui'
 import type { EffectsSystem } from '../effects'
 import type { DisplaySystem } from '../display'
-import type { SoundSystem } from '../game-elements/sound-system'
+import type { SoundSystem } from '../audio/sound-system'
 import { TABLE_MAPS } from '../config/table-maps'
 
 export interface MapCabinetHost {

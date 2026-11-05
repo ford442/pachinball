@@ -360,10 +360,9 @@ function createOptionalStereoPanner(
   reducedAudio: boolean,
 ): StereoPannerNode | null {
   if (!state.audioContext || reducedAudio) return null
-  const createStereoPanner = (state.audioContext as unknown as { createStereoPanner?: () => StereoPannerNode })
-    .createStereoPanner
-  if (!createStereoPanner) return null
-  const panner = createStereoPanner.call(state.audioContext)
+  // Feature check: older WebKit shipped AudioContext without StereoPannerNode.
+  if (typeof state.audioContext.createStereoPanner !== 'function') return null
+  const panner = state.audioContext.createStereoPanner()
   const pan = position ? Math.max(-1, Math.min(1, position.x / 8)) : Math.random() * 0.3 - 0.15
   panner.pan.value = pan
   panner.connect(state.sfxGain!)

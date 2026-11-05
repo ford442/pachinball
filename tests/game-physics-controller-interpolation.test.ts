@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector'
-import { GamePhysicsController, type PhysicsHost } from '../src/game/game-physics-controller'
+import { GamePhysicsController } from '../src/game/physics/physics-controller'
+import type { PhysicsHost } from '../src/game/physics/types'
 import { EventBus } from '../src/core/event-bus'
 import { freshNudgeState } from '../src/game/physics/types'
 import { QualityTier } from '../src/game-elements/visual-language'

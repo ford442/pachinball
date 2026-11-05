@@ -4,6 +4,7 @@
  */
 
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
+import type { ICanvasRenderingContext } from '@babylonjs/core/Engines/ICanvas'
 import type { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
 import { createCanvasTexture } from './canvas-texture'
 import type { TableMapConfig } from '../config/table-maps'
@@ -19,6 +20,10 @@ import {
   emissive,
 } from '../game-elements/visual-language'
 
+
+/** The LCD canvas context: Babylon's portable surface plus the compositing mode the layers use. */
+type LCDContext = ICanvasRenderingContext & Pick<CanvasRenderingContext2D, 'globalCompositeOperation'>
+
 export class LCDTableMaterials extends PlayfieldMaterials {
   private static readonly LCD_TEXTURE_SIZE = 1024
 
@@ -33,9 +38,6 @@ export class LCDTableMaterials extends PlayfieldMaterials {
   private _lcdImageCache = new Map<string, HTMLImageElement>()
   private _lcdVideoCache = new Map<string, HTMLVideoElement>()
 
-  private static getLCDContextType(): ReturnType<DynamicTexture['getContext']> | null {
-    return null
-  }
 
   /**
    * Get the LCD table material - glowing phosphor display with scanlines
@@ -145,7 +147,9 @@ export class LCDTableMaterials extends PlayfieldMaterials {
     this._lcdLastDrawMs = drawStamp
 
     const tex = this._lcdEmissiveTexture
-    const ctx = tex.getContext()
+    // A DynamicTexture's context is a real 2D canvas context; Babylon's ICanvasRenderingContext
+    // just doesn't declare globalCompositeOperation.
+    const ctx = tex.getContext() as LCDContext
     const size = tex.getSize().width
     const baseRgb = parseHexColor(config.baseColor)
     const accentRgb = parseHexColor(config.accentColor)
@@ -214,7 +218,7 @@ export class LCDTableMaterials extends PlayfieldMaterials {
   }
 
   private drawLCDBackdrop(
-    ctx: NonNullable<ReturnType<typeof LCDTableMaterials.getLCDContextType>>,
+    ctx: LCDContext,
     size: number,
     baseRgb: { r: number; g: number; b: number },
     accentRgb: { r: number; g: number; b: number }
@@ -228,7 +232,7 @@ export class LCDTableMaterials extends PlayfieldMaterials {
   }
 
   private drawLCDMediaLayer(
-    ctx: NonNullable<ReturnType<typeof LCDTableMaterials.getLCDContextType>>,
+    ctx: LCDContext,
     size: number,
     config: TableMapConfig
   ): void {
@@ -248,7 +252,7 @@ export class LCDTableMaterials extends PlayfieldMaterials {
   }
 
   private drawMapPattern(
-    ctx: NonNullable<ReturnType<typeof LCDTableMaterials.getLCDContextType>>,
+    ctx: LCDContext,
     size: number,
     pattern: TableMapConfig['backgroundPattern'],
     baseRgb: { r: number; g: number; b: number },
@@ -256,7 +260,7 @@ export class LCDTableMaterials extends PlayfieldMaterials {
     time: number
   ): void {
     ctx.save()
-    ;(ctx as unknown as CanvasRenderingContext2D).globalCompositeOperation = 'screen'
+    ctx.globalCompositeOperation = 'screen'
 
     if (pattern === 'hex') {
       const cell = size / 10
@@ -327,14 +331,14 @@ export class LCDTableMaterials extends PlayfieldMaterials {
   }
 
   private drawLCDSubpixels(
-    ctx: NonNullable<ReturnType<typeof LCDTableMaterials.getLCDContextType>>,
+    ctx: LCDContext,
     size: number,
     baseRgb: { r: number; g: number; b: number },
     intensity: number
   ): void {
     const alpha = 0.04 + intensity * 0.08
     ctx.save()
-    ;(ctx as unknown as CanvasRenderingContext2D).globalCompositeOperation = 'screen'
+    ctx.globalCompositeOperation = 'screen'
     const stripeWidth = Math.max(1, Math.floor(size / 192))
     for (let x = 0; x < size; x += stripeWidth * 3) {
       ctx.fillStyle = `rgba(${baseRgb.r}, 40, 40, ${alpha})`
@@ -348,7 +352,7 @@ export class LCDTableMaterials extends PlayfieldMaterials {
   }
 
   private drawLCDGrid(
-    ctx: NonNullable<ReturnType<typeof LCDTableMaterials.getLCDContextType>>,
+    ctx: LCDContext,
     size: number,
     baseRgb: { r: number; g: number; b: number },
     accentRgb: { r: number; g: number; b: number },
@@ -386,7 +390,7 @@ export class LCDTableMaterials extends PlayfieldMaterials {
   }
 
   private drawLCDScanlines(
-    ctx: NonNullable<ReturnType<typeof LCDTableMaterials.getLCDContextType>>,
+    ctx: LCDContext,
     size: number,
     intensity: number,
     photosensitiveMode: boolean
@@ -401,7 +405,7 @@ export class LCDTableMaterials extends PlayfieldMaterials {
   }
 
   private drawLCDGlow(
-    ctx: NonNullable<ReturnType<typeof LCDTableMaterials.getLCDContextType>>,
+    ctx: LCDContext,
     size: number,
     baseRgb: { r: number; g: number; b: number },
     intensity: number
@@ -415,7 +419,7 @@ export class LCDTableMaterials extends PlayfieldMaterials {
   }
 
   private drawRipple(
-    ctx: NonNullable<ReturnType<typeof LCDTableMaterials.getLCDContextType>>,
+    ctx: LCDContext,
     size: number,
     baseRgb: { r: number; g: number; b: number },
     intensity: number,
@@ -435,7 +439,7 @@ export class LCDTableMaterials extends PlayfieldMaterials {
   }
 
   private drawFlash(
-    ctx: NonNullable<ReturnType<typeof LCDTableMaterials.getLCDContextType>>,
+    ctx: LCDContext,
     size: number,
     intensity: number
   ): void {
@@ -449,7 +453,7 @@ export class LCDTableMaterials extends PlayfieldMaterials {
   }
 
   private drawFrame(
-    ctx: NonNullable<ReturnType<typeof LCDTableMaterials.getLCDContextType>>,
+    ctx: LCDContext,
     size: number,
     accentRgb: { r: number; g: number; b: number }
   ): void {
@@ -461,7 +465,7 @@ export class LCDTableMaterials extends PlayfieldMaterials {
   }
 
   private traceHex(
-    ctx: NonNullable<ReturnType<typeof LCDTableMaterials.getLCDContextType>>,
+    ctx: LCDContext,
     cx: number,
     cy: number,
     radius: number
