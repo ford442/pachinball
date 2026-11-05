@@ -41,3 +41,33 @@ describe('race ghost track (#444 Slice D)', () => {
     expect(ghostPositionAt(samples, 2, 9)).toBeNull()
   })
 })
+
+describe('racing several ghosts (#490 Slice C)', () => {
+  const lane = (x: number, label: string) => ({ track: encode([[x, 0, 0], [x, 0, 0]]), label })
+
+  it('starts every lane with the game and moves each on its own track', async () => {
+    const { GhostRace } = await import('../src/replay/ghost-race')
+    const { installSimClock } = await import('../src/core/sim-clock')
+    let steps = 100
+    installSimClock({ ms: () => steps * (1000 / 60), steps: () => steps })
+    const race = new GhostRace({} as never, [lane(1000, '#1 ACE'), lane(2000, '#2 BOB'), lane(3000, '#3 CAT')])
+    expect(race.size).toBe(3)
+    expect(race.label).toBe('#1 ACE')
+    expect(race.labels).toEqual(['#1 ACE', '#2 BOB', '#3 CAT'])
+    race.begin()
+    steps = 101
+    race.update()
+    const renderers = (race as unknown as { lanes: Array<{ renderer: { isVisible(): boolean } }> }).lanes.map((l) => l.renderer)
+    expect(renderers.map((r) => r.isVisible())).toEqual([true, true, true])
+    race.dispose()
+    installSimClock(null)
+  })
+
+  it('a single track is one lane under its label, as before', async () => {
+    const { GhostRace } = await import('../src/replay/ghost-race')
+    const race = new GhostRace({} as never, encode([[0, 0, 0]]), 'ACE')
+    expect(race.size).toBe(1)
+    expect(race.label).toBe('ACE')
+    race.dispose()
+  })
+})

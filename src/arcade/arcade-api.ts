@@ -416,6 +416,88 @@ export async function fetchChallengeGhost(challenge: ArcadeChallenge): Promise<G
   return replayId ? fetchGhostTrack(replayId) : null
 }
 
+// ------------------------------------- weekly tournaments (#490 Slice C)
+
+/** A weekly tournament: this week's table, or one in the archive. */
+export interface Tournament {
+  challenge_id: string
+  board: string
+  title: string | null
+  seed: number
+  cascade_seed: number | null
+  map_id: string
+  starts_at: string
+  expires_at: string
+  /** When its results were frozen; null while open or verifying. */
+  frozen_at: string | null
+  /** open: inside the week · verifying: ended, runs still being verified · final: results frozen. */
+  status: 'open' | 'verifying' | 'final'
+  entries: number
+  leader_name: string | null
+  leader_score: number | null
+}
+
+/** One player's best verified run on a tournament board. */
+export interface TournamentStanding {
+  challenge_id: string
+  board: string
+  rank: number
+  name: string
+  score: number
+  replay_id: string | null
+  played_at: string
+  /** Frozen results (true), or this week's live standings. */
+  final: boolean
+  /** The requesting player's own row. */
+  mine: boolean
+  /** The verifier recorded this run's ghost. */
+  has_ghost: boolean
+}
+
+/** A top run's race ghost, with who played it. */
+export interface TournamentGhost extends GhostTrack {
+  rank: number
+  name: string
+  score: number
+  replay_id: string
+}
+
+const TOURNAMENT_COLUMNS = 'challenge_id,board,title,seed,cascade_seed,map_id,starts_at,expires_at,frozen_at,status,entries,leader_name,leader_score'
+const STANDING_COLUMNS = 'challenge_id,board,rank,name,score,replay_id,played_at,final,mine,has_ghost'
+
+/** This week's tournament and the archive, newest first. */
+export async function fetchTournaments(limit = 10): Promise<Tournament[]> {
+  const params = new URLSearchParams({ select: TOURNAMENT_COLUMNS, order: 'starts_at.desc', limit: String(limit) })
+  return (await send(`/rest/v1/tournaments?${params}`)) as Tournament[]
+}
+
+/** The top `limit` of a tournament board: verified runs only, one per player. */
+export async function fetchTournamentStandings(board: string, limit = 10): Promise<TournamentStanding[]> {
+  const params = new URLSearchParams({ select: STANDING_COLUMNS, board: `eq.${board}`, order: 'rank.asc', limit: String(limit) })
+  return (await send(`/rest/v1/tournament_standings?${params}`)) as TournamentStanding[]
+}
+
+/**
+ * This player's own row on a tournament board, or null when they have no
+ * verified run there (or no arcade player in this browser yet — reading
+ * never creates one).
+ */
+export async function fetchMyTournamentStanding(board: string): Promise<TournamentStanding | null> {
+  if (!hasArcadeSession()) return null
+  const session = await arcadeSession()
+  const params = new URLSearchParams({ select: STANDING_COLUMNS, board: `eq.${board}`, mine: 'is.true', limit: '1' })
+  const rows = (await send(`/rest/v1/tournament_standings?${params}`, { token: session.access_token })) as TournamentStanding[]
+  return rows[0] ?? null
+}
+
+/** The top `limit` (1–5) verified runs on a tournament board with their ghosts, best first. */
+export async function fetchTournamentGhosts(board: string, limit = 3): Promise<TournamentGhost[]> {
+  return (await send('/rest/v1/rpc/tournament_ghosts', {
+    method: 'POST',
+    body: JSON.stringify({ p_board: board, p_limit: limit }),
+  })) as TournamentGhost[]
+}
+
 // ------------------------------------------------- live spectate (Slice E)
 
 /** A live run: its tape's frame-0 header and how far it has streamed. */

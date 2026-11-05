@@ -7,6 +7,36 @@
  * scripts/lib/replay-harness.mjs `runTape(…, 'verify', …)` returned.
  */
 
+/** A tape's `wasmSha256`, when it carries a well-formed one. */
+export function tapeWasmSha256(payload) {
+  const hash = payload?.wasmSha256
+  return typeof hash === 'string' && /^[0-9a-f]{64}$/.test(hash) ? hash : null
+}
+
+const short = (hash) => (hash ? hash.slice(0, 12) : 'none')
+
+/**
+ * The build a run replays on (#490 Slice B). `builds` are the verifier's
+ * archived builds `{ id, wasmSha256 }`, newest first; `fallback` is the
+ * default one. A tape stamped with its `PhysicsModule.wasm` hash replays on a
+ * build shipping that binary — the one with the tape's build id when there
+ * are several — and `binary` is `same`. When the verifier holds no such
+ * binary the run still replays on the build with its id, else the default
+ * (`binary: 'missing'`: a step-exact replay to the submitted score is proof
+ * on any binary, but a failure may be the binary's, see `judge`). A tape
+ * without the stamp (older builds, the dev server) picks by build id as
+ * before (`binary: 'unstamped'`).
+ */
+export function selectBuild(payload, builds, fallback) {
+  const byId = builds.find((b) => b.id === payload?.buildId) ?? null
+  const wanted = tapeWasmSha256(payload)
+  if (!wanted) return { build: byId ?? fallback, binary: 'unstamped' }
+  const same = builds.filter((b) => b.wasmSha256 === wanted)
+  const pick = same.find((b) => b.id === payload?.buildId) ?? same.find((b) => b.id === fallback.id) ?? same[0]
+  if (pick) return { build: pick, binary: 'same' }
+  return { build: byId ?? fallback, binary: 'missing' }
+}
+
 /** Only the in-process owner replays step-exactly (docs/determinism-todo.md). */
 export const VERIFIABLE_ENGINE = 'wasm-owner'
 /** Verifier-side failures (boot, browser) are retried this many times before the run is rejected. */
@@ -63,9 +93,26 @@ export function precheck(claim) {
 /**
  * `verified` when the tape replays to the submitted score, `rejected` with
  * the reason when it cannot, `retry` when the verifier itself failed and
- * attempts remain.
+ * attempts remain. `binary` is `selectBuild`'s: when the tape's own
+ * `PhysicsModule.wasm` is not held (`missing`), a run that does not replay is
+ * retried while attempts remain — the release may not be archived yet — and
+ * then rejected naming the binary it was played on.
  */
-export function judge(claim, result, { verifierVersion = null, maxAttempts = MAX_ATTEMPTS } = {}) {
+export function judge(claim, result, { verifierVersion = null, maxAttempts = MAX_ATTEMPTS, binary = 'unstamped' } = {}) {
+  const verdict = judgeReplay(claim, result, { verifierVersion, maxAttempts })
+  // The tape's failure on this build (a score mismatch included), not the verifier's own.
+  const tapeFailed = result.ok || REPLAY_FAILURES.has(result.code)
+  if (binary !== 'missing' || verdict.verdict !== 'rejected' || !tapeFailed) return verdict
+  const missing = `the tape was played on PhysicsModule.wasm ${short(tapeWasmSha256(claim.payload))}, which this verifier does not hold`
+  return claim.attempts >= maxAttempts
+    ? { ...verdict, reason: `${verdict.reason} (${missing})` }
+    : { verdict: 'retry', reason: `${missing}: ${verdict.reason}`, verifierScore: null, stateHash: null }
+}
+
+/** Result codes that are the tape's failure on this build, not the verifier's. */
+const REPLAY_FAILURES = new Set(['snapshot', 'rejected', 'incomplete'])
+
+function judgeReplay(claim, result, { verifierVersion, maxAttempts }) {
   const recordedOn = claim.payload?.buildId
   const onOtherBuild = recordedOn && verifierVersion && recordedOn !== verifierVersion ? ` (recorded on build ${recordedOn})` : ''
   if (!result.ok) {

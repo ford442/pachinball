@@ -1,7 +1,7 @@
 # Live arcade service — API contract
 
-Leaderboard, replays, challenges, saves and live spectate streams for
-Pachinball (#444, from Slice B).
+Leaderboard, replays, challenges, saves, live spectate streams and weekly
+tournaments for Pachinball (#444 from Slice B; #490 Slices B–C).
 The machine-readable contract is [`docs/api/arcade.openapi.yaml`](api/arcade.openapi.yaml);
 `tests/arcade-contract.test.ts` fails if the client (`src/arcade/arcade-api.ts`)
 sends anything that does not match it. This page is the prose: who may do
@@ -81,7 +81,9 @@ These hold for any client, through the functions or straight at PostgREST:
   replay's derived columns.
 - **Replays.** `seed`, `map_id`, `physics_engine`, `snapshot_version`,
   `static_hash` (the table descriptor hash), `feeder_tunables_hash`,
-  `final_score` and `frame_count` are derived from the payload by a trigger.
+  `wasm_sha256` (the physics binary, #490 Slice B; a malformed stamp is
+  dropped), `final_score` and `frame_count` are derived from the payload by a
+  trigger.
   Payload ≤ 512 KB; at most 216 000 frames (one hour of fixed steps).
 - **Scores.** `name` is three letters A–Z; a score may only cite the
   submitter's own replay.
@@ -114,8 +116,35 @@ A pending score shows on the board, without ✓, for 24 hours; after that only
 a verdict brings it back. Both RPCs are executable by `service_role` only.
 
 Only runs recorded on the in-process `wasm-owner` engine can verify — the
-default since #444; `?physics=wasm-worker` and Rapier runs are rejected as
-unverifiable.
+default since #444, and the engine of ranked play; `?physics=wasm-worker` and
+Rapier runs are rejected as unverifiable.
+
+### Pinned to the shipped binary (#490 Slice B)
+
+`npm run build` stamps the SHA-256 of the `PhysicsModule.wasm` it ships into
+`dist/build-info.json` and into every tape it records (`wasmSha256`; the dev
+server and Rapier-only builds stamp none). The verifier keeps every released
+build (`npm run release:archive` after each deploy,
+`services/replay-verifier/README.md`) and hashes each one's own binary:
+
+- A stamped tape replays on a build shipping **that** binary — its own build
+  when the verifier has it. A build whose binary is not the one its
+  `build-info.json` declares is never used.
+- When the verifier holds no build with the tape's binary, the run replays
+  on its build id's build, else the default one. A step-exact replay to the
+  submitted score verifies on any binary; a run that does not replay is
+  retried (the release may not be archived yet) and, after three attempts,
+  rejected with `(the tape was played on PhysicsModule.wasm <hash>, which this
+  verifier does not hold)`.
+- An unstamped tape picks its build by build id, as before.
+
+The verdict records the binary that replayed the run
+(`record_score_verification … p_wasm_sha256` → `scores.verify_wasm_sha256`;
+null for a run rejected without replaying). Each archived release carries the
+golden tapes it reproduced when it was archived;
+`npm run verify:replay -- --releases <dir>` replays every release on its own
+goldens, so a Chromium upgrade on the host that changes an old release's
+numbers is caught before an honest old run is rejected on it.
 
 ## Saves across devices (Slice D)
 
@@ -152,6 +181,36 @@ is `GET /rest/v1/leaderboard?map_id=eq.weekly-<week>…`.
 
 The verifier rejects a challenge run not played on its challenge's table
 (session seed, cascade seed, board).
+
+## Weekly tournaments (#490 Slice C)
+
+The table of the week is the tournament: its weekly challenge row, its board
+`weekly-<YYYY-Www>`, seven days from Monday 00:00 UTC.
+
+| Request | Answer |
+|---------|--------|
+| `GET /rest/v1/tournaments?select=…&order=starts_at.desc&limit=<n>` | `Tournament[]`: this week and the archive. `status` is `open` (inside the week), `verifying` (ended, results not frozen yet) or `final`; `entries`, `leader_name`, `leader_score`. |
+| `GET /rest/v1/tournament_standings?select=…&board=eq.<board>&order=rank.asc&limit=<n>` | `TournamentStanding[]`: a final week's frozen results, or an open week's live standings (`final`). |
+| `GET /rest/v1/tournament_standings?select=…&board=eq.<board>&mine=is.true&limit=1` (player token) | The player's own row: best verified run and rank. |
+| `POST /rest/v1/rpc/tournament_ghosts` `{ p_board, p_limit? }` | The top `p_limit` (1–5, default 3) verified runs that have a ghost, best first, with their tracks. A tournament game races them (`challenge-v2.ts`). |
+
+Rules:
+
+- **Verified only.** A tournament board counts verified runs and nothing
+  else: a pending run shows on no tournament board until the verifier
+  confirms it (the general board's 24-hour pending rule does not apply here).
+- **One row per player**, their best run; ties go to the earlier run.
+  Players' ids are never returned (`mine` marks the caller's own row).
+- **Freezing.** `freeze_weekly_tournaments` (service role) copies an ended
+  week's standings into `tournament_results` once no run on its board is
+  still waiting for the verifier, or a day after the week ended at the
+  latest. From then the results are final: a run verified later does not
+  change them, and nobody writes `tournament_results` but the freeze.
+- **Rotation.** `rotate_weekly_tournament()` (service role) freezes what has
+  finished and opens this week's table. pg_cron runs it hourly at minute 7
+  (job `rotate-weekly-tournament`, scheduled by the migration where pg_cron is
+  available); without pg_cron, `current_weekly_challenge` still opens each
+  week on first ask and the freeze runs by hand.
 
 ## Race ghosts (Slice D)
 

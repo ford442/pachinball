@@ -9,6 +9,11 @@ import { DEFAULT_TABLE_MAP_ID } from '../config/table-maps'
 import type { ReplayCascade } from '../cascade/daily-cascade-state'
 import type { ReplayWorldFingerprint } from './replay-snapshot'
 
+/** `{ wasmSha256 }` for a well-formed binary hash (64 lowercase hex), else nothing. */
+function wasmSha256Of(value: unknown): { wasmSha256?: string } {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value) ? { wasmSha256: value } : {}
+}
+
 /** Normalise legacy replay metadata (`wasm` → mirror). */
 function normalizeReplayPhysicsEngine(value: unknown): WasmPhysicsRuntimeMode {
   if (value === 'wasm-mirror' || value === 'wasm') return 'wasm-mirror'
@@ -46,6 +51,12 @@ export function isFixedStepReplay(payload: Pick<ReplayMetadata, 'version'>): boo
 export interface ReplayMetadata extends ReplayWorldFingerprint {
   version: number
   buildId: string
+  /**
+   * SHA-256 (hex) of the `PhysicsModule.wasm` the run was played on (#490 Slice B): the verifier
+   * replays it on an archived build holding the same binary. Absent on dev-server tapes, Rapier-only
+   * builds and tapes older than the stamp.
+   */
+  wasmSha256?: string
   mapId: string
   seed: number
   physicsEngine: WasmPhysicsRuntimeMode
@@ -301,6 +312,7 @@ export class ReplayRecorder {
   static fromJSON(json: string | object): ReplayPayload {
     const data = (typeof json === 'string' ? JSON.parse(json) : json) as Partial<ReplayPayload> & {
       build_id?: string
+      wasm_sha256?: string
       map_id?: string
       final_score?: number
       target_score?: number
@@ -325,6 +337,7 @@ export class ReplayRecorder {
     return {
       version: data.version ?? 1,
       buildId: data.buildId ?? data.build_id ?? '1.0.0',
+      ...wasmSha256Of(data.wasmSha256 ?? data.wasm_sha256),
       mapId: data.mapId ?? data.map_id ?? DEFAULT_TABLE_MAP_ID,
       seed: data.seed ?? 0,
       physicsEngine: normalizeReplayPhysicsEngine(data.physicsEngine),

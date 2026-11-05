@@ -254,6 +254,8 @@ export class GameLifecycle {
       this.host.replayRecorder.start({
         version: REPLAY_SCHEMA_VERSION,
         buildId: __PACHINBALL_BUILD__,
+        // The physics binary the verifier must replay this run on (#490 Slice B).
+        ...(__PACHINBALL_WASM_SHA256__ ? { wasmSha256: __PACHINBALL_WASM_SHA256__ } : {}),
         mapId: this.host.currentMapId ?? DEFAULT_TABLE_MAP_ID,
         seed: getSessionSeed(),
         physicsEngine: this.host.physics?.getWasmMode() ?? 'rapier',

@@ -3,8 +3,9 @@
  * seed, table, target and the challenger's run. Opening `?challenge=<id>`
  * loads it before the first game (`ChallengeSystem.whenReady`), plays on its
  * table, and races the challenger's verified ghost. The table of the week is
- * a weekly challenge row with its own board, raced against the best verified
- * run so far. Loaded lazily; nothing here is on the boot path.
+ * a weekly challenge row with its own board — the weekly tournament (#490
+ * Slice C) — raced against its top verified runs so far. Loaded lazily;
+ * nothing here is on the boot path.
  */
 
 import type { Scene } from '@babylonjs/core/scene'
@@ -12,7 +13,7 @@ import * as arcade from '../arcade/arcade-api'
 import type { ArcadeChallenge } from '../arcade/arcade-api'
 import { getDailyCascadeState } from '../cascade/daily-cascade-state'
 import { getChallengeSystem, type ChallengeConfig } from './challenge-system'
-import { GhostRace } from './ghost-race'
+import { GhostRace, type GhostLane } from './ghost-race'
 import type { FinishedRun, HUDHost } from '../game/game-hud'
 
 /** What the game provides (Game implements it). */
@@ -27,6 +28,8 @@ export interface ChallengeHost {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const LOAD_TIMEOUT_MS = 6000
+/** How many of a weekly tournament's top verified runs a game races. */
+export const WEEKLY_GHOSTS = 3
 
 function toConfig(row: ArcadeChallenge): ChallengeConfig {
   return {
@@ -61,9 +64,19 @@ export async function adoptChallenge(host: ChallengeHost, row: ArcadeChallenge):
 
   host.ghostRace?.dispose()
   host.ghostRace = null
-  const ghost = await withTimeout(arcade.fetchChallengeGhost(row).catch(() => null), LOAD_TIMEOUT_MS)
-  if (ghost && host.scene) host.ghostRace = new GhostRace(host.scene, ghost, row.challenger_name ?? row.title ?? 'ghost')
+  const lanes = await withTimeout(challengeGhosts(row).catch(() => []), LOAD_TIMEOUT_MS)
+  if (lanes?.length && host.scene) host.ghostRace = new GhostRace(host.scene, lanes)
   return host.ghostRace !== null
+}
+
+/** A player's challenge races its challenger's run; the table of the week, its top verified runs. */
+async function challengeGhosts(row: ArcadeChallenge): Promise<GhostLane[]> {
+  if (row.kind === 'weekly' && row.board) {
+    const top = await arcade.fetchTournamentGhosts(row.board, WEEKLY_GHOSTS)
+    return top.map((g) => ({ track: g, label: `#${g.rank} ${g.name}` }))
+  }
+  const ghost = await arcade.fetchChallengeGhost(row)
+  return ghost ? [{ track: ghost, label: row.challenger_name ?? row.title ?? 'ghost' }] : []
 }
 
 /**
@@ -96,7 +109,9 @@ export async function playWeekly(host: ChallengeHost): Promise<void> {
     return
   }
   const racing = await adoptChallenge(host, row)
-  host.showMessage(racing ? `${row.title ?? 'Table of the week'} — racing the leader` : `${row.title ?? 'Table of the week'} — set the first verified score`, 4000)
+  const title = row.title ?? 'Table of the week'
+  const ghosts = host.ghostRace?.size ?? 0
+  host.showMessage(racing ? `${title} — racing ${ghosts === 1 ? 'the leader' : `the top ${ghosts}`}` : `${title} — set the first verified score`, 4000)
   await host.startGame()
 }
 

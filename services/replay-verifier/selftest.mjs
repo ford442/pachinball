@@ -11,6 +11,7 @@
 import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
+import { inspectBuild } from '../../scripts/lib/build-info.mjs'
 import { freePort, repoRoot } from '../../scripts/lib/replay-harness.mjs'
 import { boardFor } from './judge.mjs'
 import { runVerifier } from './verifier.mjs'
@@ -20,8 +21,16 @@ const tape = (name) => JSON.parse(readFileSync(path.join(repoRoot, 'tests', 'rep
 const vanilla = tape('vanilla-rally')
 const cascade = tape('free-cascade')
 
+// The binary dist/ ships, and one no build holds (#490 Slice B).
+const dist = inspectBuild(path.join(repoRoot, 'dist'))
+if (!dist?.wasmSha256) {
+  console.error('verifier self-test: dist/ has no build-info.json or wasm/PhysicsModule.wasm: run `npm run build` first')
+  process.exit(1)
+}
+const UNHELD_WASM = 'f'.repeat(64)
+
 let nextId = 1
-const claim = (label, payload, score, mapId, expect, challenge = {}) => {
+const claim = (label, payload, score, mapId, expect, challenge = {}, attempts = 1) => {
   const id = nextId++
   return {
     label,
@@ -33,7 +42,7 @@ const claim = (label, payload, score, mapId, expect, challenge = {}) => {
       replay_id: payload ? `00000000-0000-4000-8000-${String(id).padStart(12, '0')}` : null,
       payload,
       physics_engine: payload?.physicsEngine ?? null,
-      attempts: 1,
+      attempts,
       submitted_at: new Date().toISOString(),
       challenge_id: null,
       challenge_kind: null,
@@ -57,7 +66,7 @@ const weekly = {
 const cases = [
   claim('legitimate vanilla run', vanilla.replay, vanilla.golden.score, 'neon-helix', { verified: true, score: vanilla.golden.score }),
   claim('legitimate cascade run', cascade.replay, cascade.golden.score, boardFor(cascade.replay), { verified: true, score: cascade.golden.score }),
-  claim('forged score', vanilla.replay, 5_000_000, 'neon-helix', { verified: false, reason: /score mismatch: the tape replays to 1670, 5000000 was submitted/ }),
+  claim('forged score', vanilla.replay, 5_000_000, 'neon-helix', { verified: false, reason: new RegExp(`score mismatch: the tape replays to ${vanilla.golden.score}, 5000000 was submitted`) }),
   claim('replay from another board', cascade.replay, cascade.golden.score, 'neon-helix', { verified: false, reason: /submitted to neon-helix, but the tape was played on free-cascade-/ }),
   claim('worker recording', { ...vanilla.replay, physicsEngine: 'wasm-worker' }, vanilla.golden.score, 'neon-helix', { verified: false, reason: /unverifiable engine wasm-worker/ }),
   claim('no replay', null, 12_345, 'neon-helix', { verified: false, reason: /^no replay$/ }),
@@ -65,6 +74,16 @@ const cases = [
   claim('weekly run on another table', cascade.replay, cascade.golden.score, 'weekly-selftest',
     { verified: false, reason: /not played on the challenge's table: cascade 20261016, the challenge's is 1/ },
     { ...weekly, challenge_cascade_seed: 1 }),
+  // Slice B: the tape names its physics binary.
+  claim('run stamped with the shipped binary', { ...vanilla.replay, wasmSha256: dist.wasmSha256 }, vanilla.golden.score, 'neon-helix',
+    { verified: true, score: vanilla.golden.score, wasm: dist.wasmSha256 }),
+  claim('run on a binary the verifier does not hold, replaying exactly', { ...vanilla.replay, wasmSha256: UNHELD_WASM }, vanilla.golden.score, 'neon-helix',
+    { verified: true, score: vanilla.golden.score, wasm: dist.wasmSha256 }),
+  claim('forged score on an unheld binary waits for its release', { ...vanilla.replay, wasmSha256: UNHELD_WASM }, 5_000_000, 'neon-helix',
+    { retry: true }),
+  claim('forged score on an unheld binary, attempts used up', { ...vanilla.replay, wasmSha256: UNHELD_WASM }, 5_000_000, 'neon-helix',
+    { verified: false, reason: /score mismatch: .*\(the tape was played on PhysicsModule\.wasm ffffffffffff, which this verifier does not hold\)$/ },
+    {}, 3),
 ]
 
 const recorded = new Map()
@@ -109,8 +128,18 @@ try {
   for (const c of cases) {
     const v = recorded.get(c.row.score_id)
     const problems = []
+    if (c.expect.retry) {
+      // Left pending: claimed again once the claim goes stale.
+      if (v) problems.push(`recorded a verdict (verified=${v.p_verified}) instead of retrying`)
+      if (ghosts.has(c.row.replay_id)) problems.push('a retried run left a ghost')
+      if (problems.length) failures++
+      console.log(`${problems.length ? 'FAIL' : 'ok  '} ${c.label}${problems.length ? ` — ${problems.join(', ')}` : ''}`)
+      continue
+    }
     if (!v) problems.push('no verdict recorded')
     else {
+      if (c.expect.wasm !== undefined && v.p_wasm_sha256 !== c.expect.wasm) problems.push(`wasm_sha256=${v.p_wasm_sha256}`)
+      if (!c.row.payload && v.p_wasm_sha256 !== null) problems.push('a run rejected without replaying names a binary')
       if (v.p_verified !== c.expect.verified) problems.push(`verified=${v.p_verified}`)
       if (c.expect.score !== undefined && v.p_verifier_score !== c.expect.score) problems.push(`verifier_score=${v.p_verifier_score}`)
       if (c.expect.reason && !c.expect.reason.test(v.p_reason ?? '')) problems.push(`reason=${JSON.stringify(v.p_reason)}`)
