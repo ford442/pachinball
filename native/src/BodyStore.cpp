@@ -117,6 +117,7 @@ void BodyView::setRotation(const Quat& q) {
   store_->rotY_[i] = q.y;
   store_->rotZ_[i] = q.z;
   store_->rotW_[i] = q.w;
+  wake();
 }
 
 void BodyView::applyForce(const Vec3& f) {

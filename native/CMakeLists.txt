@@ -271,6 +271,7 @@ if(NOT EMSCRIPTEN)
     tests/state_hash_test.cpp
     tests/golden_trace_test.cpp
     tests/broadphase_test.cpp
+    tests/correctness_bugs_test.cpp
   )
   # Catch2 requires C++ exceptions; do not pass -fno-exceptions here.
   target_link_libraries(physics_world_test PRIVATE

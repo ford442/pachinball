@@ -326,7 +326,7 @@ void checkGolden(const char* name, uint64_t actual, uint64_t expected) {
 } // namespace
 
 TEST_CASE("golden trace: table", "[golden]") {
-  checkGolden("table", tableTrace(), 0xa401ea04967f59d3ull);
+  checkGolden("table", tableTrace(), 0xac59d5b873e96d1dull);
 }
 
 TEST_CASE("golden trace: fast balls", "[golden]") {
