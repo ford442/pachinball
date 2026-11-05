@@ -316,7 +316,7 @@ its `compile_commands.json` carries exactly one. It is configured with an explic
 |--------|---------|-------|-------|
 | `PACHINBALL_WASM_SIMD` | ON | `-msimd128` (compile + link) | Auto-vectorize only; no hand `wasm_simd128` intrinsics |
 | `PACHINBALL_WASM_LTO` | ON | `-flto` (compile + link) | Production default after 2026-08-14 bench |
-| `PACHINBALL_WASM_EMIT_TSD` | OFF (`build-wasm.sh` turns it on for Release) | `--emit-tsd <build>/PhysicsModule.d.ts` | Embind TypeScript declarations; needs `tsc` on `PATH` (the repo's after `npm ci`). Copied to `src/wasm/generated/PhysicsModule.d.ts`, which is committed — CI rebuilds and fails on a diff. Does not change `.js` / `.wasm` |
+| `PACHINBALL_WASM_EMIT_TSD` | OFF (`build-wasm.sh` turns it on for Release) | `--emit-tsd <build>/PhysicsModule.d.ts` | Embind TypeScript declarations; needs `tsc` on `PATH` (the repo's after `npm ci`, behind the `scripts/emcc-tsc/tsc` shim that adds `--ignoreConfig` so TypeScript 6 does not fail with TS5112). Copied to `src/wasm/generated/PhysicsModule.d.ts`, which is committed — CI rebuilds and fails on a diff. Does not change `.js` / `.wasm` |
 
 ### Generated declarations (`src/wasm/generated/`)
 

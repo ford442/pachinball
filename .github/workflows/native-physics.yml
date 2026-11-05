@@ -331,29 +331,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Same pinned SDK as wasm_parity (.emsdk-version, never `latest`):
+      # build-wasm.sh refuses an emcc that differs from the pin under CI=true.
       - name: Cache Emscripten SDK
         uses: actions/cache@v4
         with:
           path: emsdk
-          key: emsdk-${{ runner.os }}-latest
+          key: emsdk-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.emsdk-version') }}
 
       - name: Install and activate Emscripten
         run: |
+          EMSDK_VERSION="$(tr -d '[:space:]' < .emsdk-version)"
           if [ ! -d emsdk ]; then
             git clone https://github.com/emscripten-core/emsdk.git
           fi
           cd emsdk
-          ./emsdk install latest
-          ./emsdk activate latest
+          git pull --ff-only || true
+          ./emsdk install "$EMSDK_VERSION"
+          ./emsdk activate "$EMSDK_VERSION"
+          source ./emsdk_env.sh
           echo "$(pwd)" >> $GITHUB_PATH
+          emcc --version
+
+      # Before the build: --emit-tsd needs the repo's tsc.
+      - name: Install Node deps
+        run: npm ci
 
       - name: Build WASM module (Release — what the game loads)
+        env:
+          CI: 'true'
         run: |
           source emsdk/emsdk_env.sh
           npm run build:wasm
-
-      - name: Install Node deps
-        run: npm ci
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium

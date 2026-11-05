@@ -3,8 +3,9 @@ import { defineConfig, devices } from '@playwright/test'
 /**
  * Dev-server config for physics-degrade.spec.ts.
  * Uses Vite dev (console.warn preserved) with public/wasm removed so the
- * default preference fail-closes to Rapier: the isolated dev server defaults
- * to wasm-worker, which gives way to wasm-owner, which gives way to Rapier.
+ * physics ladder fail-closes to Rapier. The default engine is wasm-owner
+ * (#471), which gives way to Rapier; with ?physics=wasm-worker the worker
+ * gives way to wasm-owner first, then Rapier. The spec covers both.
  */
 export default defineConfig({
   testDir: '.',
