@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Post-build check that boot-failure reporting survived the esbuild settings in
- * vite.config.ts (`drop: ['console', 'debugger']` in production). Asserts the
+ * vite.config.ts (production: `drop: ['debugger']`, `pure` on the chatty console levels). Asserts the
  * `Failed to bootstrap game` literal from src/main.ts is in the entry chunk (a bare
  * `console.error(` check would be satisfied by any dependency) and that no `debugger`
  * statement shipped.

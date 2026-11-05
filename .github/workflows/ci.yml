@@ -192,6 +192,7 @@ jobs:
           --config=playwright.preview.config.ts
           tests/preview-boot.spec.ts
           tests/preview-sw.spec.ts
+          tests/offline-boot.spec.ts
           tests/preview-subdir.spec.ts
           tests/verify_prism_core.spec.ts
           tests/basic-gameplay.spec.ts
