@@ -11,8 +11,10 @@ export const STUCK_TIMEOUT = 5.0
  * Stuck balls are auto-reset after STUCK_TIMEOUT seconds.
  * Out-of-bounds balls are immediately respawned.
  */
-export function updateStuckDetection(host: BallManagerHost, dt: number): PhysicsBody[] {
-  const stuckBalls: PhysicsBody[] = []
+export function updateStuckDetection(host: BallManagerHost, dt: number): readonly PhysicsBody[] {
+  // Reused every step (#505 §D); the caller consumes it before the next step.
+  const stuckBalls = host.stuckBallsScratch
+  stuckBalls.length = 0
 
   for (const body of host.ballBodies) {
     if (body.isSleeping()) continue
@@ -32,7 +34,7 @@ export function updateStuckDetection(host: BallManagerHost, dt: number): Physics
     // Stuck detection: low velocity for extended time
     let tracker = host.ballStuckTimers.get(body)
     if (!tracker) {
-      tracker = { lastPos: { x: pos.x, y: pos.y, z: pos.z }, stuckTime: 0 }
+      tracker = { stuckTime: 0 }
       host.ballStuckTimers.set(body, tracker)
     }
 
@@ -45,8 +47,6 @@ export function updateStuckDetection(host: BallManagerHost, dt: number): Physics
     } else {
       tracker.stuckTime = 0
     }
-
-    tracker.lastPos = { x: pos.x, y: pos.y, z: pos.z }
   }
 
   return stuckBalls

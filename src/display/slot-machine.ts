@@ -93,12 +93,8 @@ export class SlotMachine {
   private exposeDebugGlobals(): void {
     if (typeof window === 'undefined') return
     try {
-      const w = window as unknown as {
-        forceSlotSpin?: (forcedResult?: SlotSymbol[]) => void
-        setSlotDebugForce?: (symbols: SlotSymbol[]) => void
-      }
-      w.forceSlotSpin = (forcedResult?: SlotSymbol[]) => this.forceSpin(forcedResult)
-      w.setSlotDebugForce = (symbols: SlotSymbol[]) => this.setDebugForceResult(symbols)
+      window.forceSlotSpin = (forcedResult?: SlotSymbol[]) => this.forceSpin(forcedResult)
+      window.setSlotDebugForce = (symbols: SlotSymbol[]) => this.setDebugForceResult(symbols)
     } catch {
       // Ignore if window object is frozen
     }

@@ -46,6 +46,7 @@ function toConfig(row: ArcadeChallenge): ChallengeConfig {
 }
 
 function withTimeout<T>(work: Promise<T>, ms: number): Promise<T | null> {
+  // eslint-disable-next-line no-restricted-syntax -- only settles a local promise; resolving an already-raced promise is a no-op
   return Promise.race([work, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))])
 }
 

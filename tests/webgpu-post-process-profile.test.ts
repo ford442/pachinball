@@ -19,6 +19,7 @@ import {
 function mockEngine(className: string, limits?: { maxUniformBuffersPerShaderStage?: number }) {
   return {
     getClassName: () => className,
+    isWebGPU: className === 'WebGPUEngine',
     currentLimits: limits,
     maxUniformBuffersPerShaderStage: limits?.maxUniformBuffersPerShaderStage,
   }

@@ -30,7 +30,7 @@ import { ZoneSensors } from '../src/game-elements/zone-sensors'
 import { ADVENTURE_GROUP, CollisionGroups, COLLISION_GROUP_PRESETS } from '../src/game-elements/physics'
 import { getScenario } from '../src/game-elements/dynamic-scenarios'
 import { cylinderDesc } from '../src/adventure/track-collider-descriptors'
-import { GamePhysicsController } from '../src/game/game-physics-controller'
+import { GamePhysicsController } from '../src/game/physics/physics-controller'
 import { makeFakeWasmEngine, asSimEngine } from './helpers/fake-wasm-engine'
 import { makeBallManagerStub, makeGameObjectsStub, makePhysicsHostShell } from './helpers/make-physics-host'
 

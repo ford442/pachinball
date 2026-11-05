@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { BallType, BALL_SPAWN_CONFIG, GameConfig } from '../src/config'
 import { DisplayState } from '../src/display/display-types'
-import { applyFeverGoldMultiplier, getFeverScoreMultiplier } from '../src/game/game-physics-controller'
+import { applyFeverGoldMultiplier, getFeverScoreMultiplier } from '../src/game/physics/scoring-multipliers'
 
 describe('getFeverScoreMultiplier', () => {
   it('returns 1× for gold-plated when display is IDLE', () => {

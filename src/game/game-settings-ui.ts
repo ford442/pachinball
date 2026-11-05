@@ -4,7 +4,7 @@
 
 import type { Scene } from '@babylonjs/core/scene'
 import type { TimerScope } from '../core/timers'
-import type { SoundSystem } from '../game-elements/sound-system'
+import type { SoundSystem } from '../audio/sound-system'
 import type { DebugHUD } from '../game-elements/debug-hud'
 import type { MapSystem } from '../game-elements/map-system'
 import type { PhysicsSystem } from '../game-elements/physics'

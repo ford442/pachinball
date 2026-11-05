@@ -315,7 +315,7 @@ export function getMaterialLibrary(scene?: Scene): MaterialLibrary {
     materialLibrary = new MaterialLibrary(scene)
     // Expose for debugging (dev only)
     if (typeof window !== 'undefined') {
-      (window as unknown as Record<string, unknown>).materialLibrary = materialLibrary
+      window.materialLibrary = materialLibrary
     }
   }
   if (!materialLibrary) {

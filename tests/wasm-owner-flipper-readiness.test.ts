@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { GamePhysicsController } from '../src/game/game-physics-controller'
+import { GamePhysicsController } from '../src/game/physics/physics-controller'
 import { EventBus } from '../src/core/event-bus'
 import type { PhysicsBody } from '../src/core/physics-api'
 import { WasmTableWorld } from '../src/wasm/wasm-table-world'

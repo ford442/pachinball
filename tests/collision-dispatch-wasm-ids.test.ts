@@ -10,7 +10,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { EventBus } from '../src/core/event-bus'
-import { GamePhysicsController } from '../src/game/game-physics-controller'
+import { GamePhysicsController } from '../src/game/physics/physics-controller'
 import { WASM_PHYSICS_API as api } from '../src/wasm/wasm-physics-api'
 import { WasmTableWorld } from '../src/wasm/wasm-table-world'
 import type { WasmBody } from '../src/wasm/wasm-body'

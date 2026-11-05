@@ -26,7 +26,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { Scene } from '@babylonjs/core/scene'
 import type { TableMapType, TableMapConfig } from '../config/table-maps'
 import type { DisplaySystem } from '../display'
-import type { SoundSystem } from './sound-system'
+import type { SoundSystem } from '../audio/sound-system'
 import { PALETTE, color } from './visual-language'
 
 export type WorldMode = 'fixed' | 'dynamic'

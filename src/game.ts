@@ -15,7 +15,8 @@ import { GameConfig, GAME_TUNING } from './config'
 import { GameRenderer, type RendererHost } from './game/game-renderer'
 import { GameCabinetBuilder, type CabinetBuilderHost } from './game/game-cabinet-builder'
 import { GameSceneBuilder, type SceneBuilderHost } from './game/game-scene-builder'
-import { GamePhysicsController, type PhysicsHost } from './game/game-physics-controller'
+import { GamePhysicsController } from './game/physics/physics-controller'
+import type { PhysicsHost } from './game/physics/types'
 import { GameInputActions, type InputActionsHost } from './game/game-input-actions'
 import { GameScenario, type ScenarioHost } from './game/game-scenario'
 import { GameSlotAdventure, type SlotAdventureHost } from './game/game-slot-adventure'
@@ -33,6 +34,7 @@ import { getChallengeSystem } from './replay/challenge-system'
 import { installSimClock } from './core/sim-clock'
 import { FrameScheduler } from './core/frame-scheduler'
 import { bootWarn } from './boot-log'
+import { engineDrawCallCount } from './engine/create-engine'
 
 export class Game
   extends GameDelegates
@@ -247,9 +249,9 @@ export class Game
           this.slotAdventure?.forceSlotSpin()
         },
         onMapSwitch: (index) => {
-          const maps = this.mapManager?.getMapSystem().getMapIds() || []
-          if (index >= 0 && index < maps.length) {
-            this.mapManager?.switchTableMap(maps[index])
+          const mapId = this.mapManager?.getMapSystem().getMapIds()[index]
+          if (mapId !== undefined) {
+            this.mapManager?.switchTableMap(mapId)
           }
         },
         onMapCycle: () => this.mapManager?.cycleTableMap(),
@@ -306,7 +308,6 @@ export class Game
     })
 
     this.ready = true
-    this.stateManager.setSystems(this.effects, this.display)
 
     await this.systemsInitializer.postInitManagers()
 
@@ -387,9 +388,8 @@ export class Game
       }
     }
 
-    const drawCallsCounter = (this.engine as unknown as { _drawCalls?: { current?: number } })._drawCalls
     this.performanceMonitor.updateEngineMetrics(
-      drawCallsCounter?.current ?? 0,
+      engineDrawCallCount(this.engine),
       this.physics.getActiveBodyCount(),
     )
     this.performanceMonitor.setParticleCount(this.effects?.getActiveParticleCount() ?? 0)
