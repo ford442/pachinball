@@ -11,7 +11,7 @@ import { MeshInterpolationSystem } from './mesh-interpolation'
 import { WasmMirror } from './wasm-mirror'
 import { WasmOwner, type AdventureTrackState } from './wasm-owner'
 import { ScoringBridge } from './scoring-bridge'
-import { CollisionDispatcher } from './collision-dispatch'
+import { CollisionDispatcher, reportContactFault } from './collision-dispatch'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { PhysicsBody } from '../../core/physics-api'
@@ -142,6 +142,17 @@ export class GamePhysicsController {
       host.eventBus.on('wasm:physics:contacts', (batch) => {
         this.collisionDispatcher.onWasmContactBatch(batch)
       })
+    )
+
+    // A dead physics worker's world moved in-process (#503 A2): tell the bus, and the player.
+    host.physics.setEngineSwitchListener?.((change) => {
+      this.host.eventBus.emit('physics:engine-switched', { ...change })
+    })
+    this.eventBusUnsubscribers.push(
+      host.eventBus.on('physics:engine-switched', () => {
+        this.host.uiManager?.showMessage('Physics worker stopped — switched to in-process physics', 4000)
+      }),
+      () => host.physics.setEngineSwitchListener?.(null),
     )
   }
 
@@ -459,10 +470,19 @@ export class GamePhysicsController {
 
     this.syncReplaySnapshot(owner !== null, runner, recorder)
 
+    // Per-contact isolation (#503 A3): a throw on one Rapier event must not drop the rest.
     const alpha = this.host.physics.step(physicsDt, (h1, h2, start) => {
-      this.collisionDispatcher.processCollision(h1, h2, start)
+      try {
+        this.collisionDispatcher.processCollision(h1, h2, start)
+      } catch (error) {
+        reportContactFault(error)
+      }
     }, (h1, h2, maxForce) => {
-      this.collisionDispatcher.processContactForce(h1, h2, maxForce)
+      try {
+        this.collisionDispatcher.processContactForce(h1, h2, maxForce)
+      } catch (error) {
+        reportContactFault(error)
+      }
     })
 
     if (owner) {

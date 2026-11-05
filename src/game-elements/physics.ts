@@ -14,6 +14,7 @@ import type { PhysicsApi, PhysicsWorldSink } from '../core/physics-api'
 import { loadRapier } from './rapier-loader'
 import type { WasmDebugCollider } from './wasm-debug-geometry'
 import { FIXED_TIMESTEP } from '../core/sim-clock'
+import { bootWarn } from '../boot-log'
 
 /**
  * Greppable marker for each fail-closed rung: the worker failed and the
@@ -53,6 +54,13 @@ export const MAX_DT = 1 / 30
  * @param handle2 - Collider handle of second body
  * @param maxForceMagnitude - Maximum contact force magnitude during the step
  */
+/** A dead physics worker's world moved in-process (#503 A2); mirrors `PhysicsEngineSwitch`. */
+export interface PhysicsEngineSwitchInfo {
+  readonly from: 'wasm-worker'
+  readonly to: 'wasm-owner'
+  readonly reason: string
+}
+
 export type ContactForceCallback = (handle1: number, handle2: number, maxForceMagnitude: number) => void
 
 /**
@@ -132,6 +140,8 @@ export class PhysicsSystem {
   private wasmEngine: WasmSimEngine | null = null
   private wasmMode: WasmPhysicsRuntimeMode = 'rapier'
   private wasmActive = false
+  private engineSwitchListener: ((change: PhysicsEngineSwitchInfo) => void) | null = null
+  private lastEngineSwitch: PhysicsEngineSwitchInfo | null = null
 
   /** Last-step timing for Debug HUD (milliseconds). */
   private lastWasmStepMs = 0
@@ -180,7 +190,16 @@ export class PhysicsSystem {
         console.warn('[PhysicsSystem] Worker client chunk failed to load:', err)
       }
       if (workerClientModule) {
-        const client = new workerClientModule.PhysicsWorkerClient()
+        const client = new workerClientModule.PhysicsWorkerClient({
+          // The in-process engine a dead worker's world is rebuilt into (#503 A2).
+          createFallbackEngine: async (bundleUrl) => {
+            const engine = new WasmPhysicsEngine()
+            const preloaded = await getPreloadedWasmModule()
+            await engine.load(bundleUrl, preloaded ?? undefined)
+            return engine.isReady ? engine : null
+          },
+        })
+        client.onEngineSwitched = (change) => this.handleEngineSwitch(change)
         await client.load(WASM_PHYSICS.bundleUrl)
         if (client.isReady) {
           console.info(
@@ -213,6 +232,30 @@ export class PhysicsSystem {
     console.warn(reason)
     exposePhysicsDegradeReason(reason)
     this.wasmMode = 'rapier'
+  }
+
+  /**
+   * The worker died and its world now runs in-process (#503 A2). Same C++ engine, same API (the
+   * client kept serving it), so only the label changes: from here on this is `wasm-owner`.
+   */
+  private handleEngineSwitch(change: PhysicsEngineSwitchInfo): void {
+    const reason = `${PHYSICS_DEGRADE_MARKER} physics worker failed (${change.reason}); switched to in-process wasm-owner.`
+    bootWarn(reason)
+    exposePhysicsDegradeReason(reason)
+    this.wasmMode = 'wasm-owner'
+    exposeCurrentPhysicsEngine(this.getWasmMode())
+    this.lastEngineSwitch = change
+    this.engineSwitchListener?.(change)
+  }
+
+  /** Called when the worker's world moves in-process (#503 A2). One listener; null clears it. */
+  setEngineSwitchListener(listener: ((change: PhysicsEngineSwitchInfo) => void) | null): void {
+    this.engineSwitchListener = listener
+  }
+
+  /** The last worker → in-process switch, or null. */
+  getLastEngineSwitch(): PhysicsEngineSwitchInfo | null {
+    return this.lastEngineSwitch
   }
 
   /** Rapier world for `rapier`, `wasm-mirror` and the degrade path. */
@@ -422,6 +465,7 @@ export class PhysicsSystem {
     this.wasmEngine?.dispose()
     this.wasmEngine = null
     this.wasmActive = false
+    this.engineSwitchListener = null
     this.wasmMode = 'rapier'
     this.world?.free()
     this.world = null

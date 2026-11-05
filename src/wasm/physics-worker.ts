@@ -5,9 +5,8 @@
 
 import { WasmPhysicsEngine } from './PhysicsModule'
 import {
-  applyPhysicsCommand,
   createWorkerRuntimeState,
-  postSnapshotReplies,
+  runWorkerBatch,
   WorkerSnapshotPublisher,
 } from './physics-worker-runtime'
 import type { PhysicsWorkerFromWorker, PhysicsWorkerToWorker } from './physics-worker-protocol'
@@ -49,24 +48,25 @@ self.onmessage = (event: MessageEvent<PhysicsWorkerToWorker>) => {
     return
   }
 
-  if (data.type !== 'batch') return
+  // After a fatal the world may be half-stepped: apply nothing more.
+  if (data.type !== 'batch' || fatalSent) return
 
-  let alpha = 0
-  let stepped = false
-  const t0 = performance.now()
-  for (const cmd of data.commands) {
-    const result = applyPhysicsCommand(engine, cmd, runtime)
-    if (cmd.type === 'step') {
-      alpha = result
-      stepped = true
-    }
+  // A throw here (a WASM trap, an embind error) would otherwise only reach the worker's global
+  // `error` event and leave the client serving its last snapshot forever (#503 A2): tell it.
+  try {
+    runWorkerBatch(engine, runtime, data.commands, publisher, post)
+  } catch (err) {
+    fatal(err)
   }
-
-  // Snapshot replies first: the client must see a restore land before the
-  // step results of the world it produced.
-  postSnapshotReplies(runtime, post)
-
-  if (!stepped) return
-
-  publisher.publish(engine, runtime, alpha, performance.now() - t0)
 }
+
+let fatalSent = false
+function fatal(err: unknown): void {
+  if (fatalSent) return
+  fatalSent = true
+  const message = err instanceof Error ? err.message : String(err)
+  const stack = err instanceof Error ? err.stack : undefined
+  post({ type: 'fatal', message, stack })
+}
+
+self.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => fatal(event.reason))
