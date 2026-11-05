@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# tsc shim for emcc --emit-tsd (scripts/build-wasm.sh puts this directory first
+# on PATH for the Release build only).
+#
+# emcc runs `tsc --skipLibCheck --declaration --emitDeclarationOnly --allowJs
+# <tmp>/jsdoc.js` from the build directory. TypeScript 6 refuses that with
+# TS5112 ("tsconfig.json is present but will not be loaded if files are
+# specified on commandline") whenever a tsconfig.json is found upward — the
+# repo root has one. --ignoreConfig is the TS 6 opt-out: compile exactly the
+# files named, as emcc expects. Everything else is passed through unchanged.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_tsc="${here}/../../node_modules/.bin/tsc"
+if [[ ! -x "${repo_tsc}" ]]; then
+  echo "[emcc-tsc] ${repo_tsc} missing — run npm ci" >&2
+  exit 127
+fi
+exec "${repo_tsc}" --ignoreConfig "$@"
