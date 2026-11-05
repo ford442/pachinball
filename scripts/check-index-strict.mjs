@@ -20,6 +20,10 @@ const ENFORCED_DIRS = [
   'src/materials/',
   'src/audio/',
   'src/game-elements/',
+  'src/effects/',
+  'src/shaders/',
+  'src/replay/',
+  'src/arcade/',
   'src/game.ts',
 ]
 

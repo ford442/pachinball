@@ -169,8 +169,8 @@ export class LiveSpectator {
       return
     }
     const at = runner.getProgress().currentFrame
-    while (this.checks.length && this.checks[0].endFrame <= at) {
-      const check = this.checks.shift()!
+    for (let check = this.checks[0]; check && check.endFrame <= at; check = this.checks[0]) {
+      this.checks.shift()
       if (check.endFrame < at) continue
       const hash = this.host.stateHash()
       const score = Math.max(0, Math.floor(this.host.score))
@@ -275,7 +275,10 @@ export class LiveSpectator {
     const want = Math.ceil(this.received / stride) - Math.ceil(from / stride)
     const got = chunk.track ? decodeGhostTrack({ track: chunk.track }) : new Int32Array(0)
     for (let i = 0; i < want; i++) {
-      if (i * 3 + 2 < got.length) this.track.push(got[i * 3], got[i * 3 + 1], got[i * 3 + 2])
+      const x = got[i * 3]
+      const y = got[i * 3 + 1]
+      const z = got[i * 3 + 2]
+      if (x !== undefined && y !== undefined && z !== undefined) this.track.push(x, y, z)
       else this.track.push(NO_BALL, 0, 0)
     }
     this.trackSamples = Int32Array.from(this.track)

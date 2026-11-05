@@ -7,7 +7,7 @@ import type { BloomPipelineController } from './bloom-pipeline-types'
 import { GameConfig } from '../config'
 import type { AccessibilityConfig } from '../game-elements/accessibility-config'
 import type { TrackThemeProfile } from '../adventure/track-theme-profiles'
-import { FOG_STATES, LIGHTING, LIGHTING_STATES, SURFACES, TEMPERATURE, color, pulse } from '../game-elements/visual-language'
+import { LIGHTING, SURFACES, fogStateFor, lightingStateFor, TEMPERATURE, color, pulse } from '../game-elements/visual-language'
 import { TrackAmbientEffects } from './track-ambient-effects'
 
 export class AtmosphereController {
@@ -90,7 +90,7 @@ export class AtmosphereController {
     }
 
     this.trackAmbientEffects.applyProfile(null)
-    const fogState = FOG_STATES[this.currentAtmosphereState] || FOG_STATES['IDLE']
+    const fogState = fogStateFor(this.currentAtmosphereState)
     this.targetFogDensity = fogState.density
     this.targetFogColor = color(fogState.color)
   }
@@ -104,7 +104,7 @@ export class AtmosphereController {
     this.currentAtmosphereState = state
 
     // Fog targets
-    const fogState = FOG_STATES[state] || FOG_STATES['IDLE']
+    const fogState = fogStateFor(state)
     this.targetFogDensity = fogState.density
     this.targetFogColor = color(fogState.color)
 
@@ -113,7 +113,7 @@ export class AtmosphereController {
     this.targetKeyColor = color(tempColor)
 
     // Rim light drama targets
-    const lightState = LIGHTING_STATES[state] || LIGHTING_STATES['IDLE']
+    const lightState = lightingStateFor(state)
     this.targetRimIntensity = lightState.rim
     this.targetRimColor = color(lightState.rimColor)
   }
@@ -140,7 +140,7 @@ export class AtmosphereController {
       this.keyLight.diffuse.g += (this.targetKeyColor.g - this.keyLight.diffuse.g) * lerpSpeed
       this.keyLight.diffuse.b += (this.targetKeyColor.b - this.keyLight.diffuse.b) * lerpSpeed
 
-      const lightState = LIGHTING_STATES[this.currentAtmosphereState] || LIGHTING_STATES['IDLE']
+      const lightState = lightingStateFor(this.currentAtmosphereState)
       const targetKey = this.trackAtmosphereActive
         ? this.targetTrackKeyIntensity * this.trackFlickerScale
         : lightState.key

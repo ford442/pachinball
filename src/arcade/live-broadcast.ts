@@ -203,8 +203,8 @@ export class LiveBroadcast {
     if (this.sending || this.disposed) return
     this.sending = true
     try {
-      while (this.outbox.length) {
-        const { run, chunk } = this.outbox[0]
+      for (let head = this.outbox[0]; head; head = this.outbox[0]) {
+        const { run, chunk } = head
         if (run.failed) {
           this.outbox.shift()
           continue

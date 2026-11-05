@@ -457,24 +457,46 @@ export const TEMPERATURE = {
 // LIGHTING STATES - Per-state intensity profiles for key/fill/rim lights
 // ============================================================================
 
-export const LIGHTING_STATES: Record<string, { key: number; fill: number; rim: number; rimColor: string }> = {
+export interface LightingState {
+  key: number
+  fill: number
+  rim: number
+  rimColor: string
+}
+
+export const LIGHTING_STATES = {
   IDLE:      { key: 1.2,  fill: 0.25, rim: 0.8,  rimColor: '#80bfff' },
   REACH:     { key: 1.0,  fill: 0.15, rim: 1.6,  rimColor: '#ff4400' },
   FEVER:     { key: 1.4,  fill: 0.30, rim: 1.2,  rimColor: '#ffd700' },
   JACKPOT:   { key: 1.5,  fill: 0.40, rim: 1.8,  rimColor: '#ff00aa' },
   ADVENTURE: { key: 1.1,  fill: 0.20, rim: 1.0,  rimColor: '#00ff44' },
+} satisfies Record<string, LightingState>
+
+/** Lighting profile for a display/atmosphere state name; unknown names get IDLE. */
+export function lightingStateFor(state: string): LightingState {
+  return (LIGHTING_STATES as Partial<Record<string, LightingState>>)[state] ?? LIGHTING_STATES.IDLE
 }
 
 // ============================================================================
 // FOG STATES - Per-state fog parameters for atmospheric depth
 // ============================================================================
 
-export const FOG_STATES: Record<string, { density: number; color: string }> = {
+export interface FogState {
+  density: number
+  color: string
+}
+
+export const FOG_STATES = {
   IDLE:      { density: 0.005, color: '#080818' },
   REACH:     { density: 0.008, color: '#1a0500' },
   FEVER:     { density: 0.006, color: '#1a1000' },
   JACKPOT:   { density: 0.010, color: '#1a0010' },
   ADVENTURE: { density: 0.004, color: '#001a08' },
+} satisfies Record<string, FogState>
+
+/** Fog parameters for a display/atmosphere state name; unknown names get IDLE. */
+export function fogStateFor(state: string): FogState {
+  return (FOG_STATES as Partial<Record<string, FogState>>)[state] ?? FOG_STATES.IDLE
 }
 
 // ============================================================================

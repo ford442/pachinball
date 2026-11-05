@@ -93,11 +93,12 @@ export class ReplayRunner {
    */
   getNextFrame(): InputFrame | null {
     if (!this.playing || !this.payload) return null
-    if (this.currentFrameIndex >= this.payload.frames.length) {
+    const frame = this.payload.frames[this.currentFrameIndex]
+    if (frame === undefined) {
       if (!this.streaming) this.playing = false
       return null
     }
-    const frame = this.payload.frames[this.currentFrameIndex++]
+    this.currentFrameIndex++
     return frame
   }
 
