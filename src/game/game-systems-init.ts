@@ -14,6 +14,7 @@ import { GameConfig, GAME_TUNING } from '../config'
 import { getMaterialLibrary } from '../materials'
 import { adaptLegacyConfig, DisplayState, type DisplayConfig } from '../display/display-types'
 import { refreshDailyCascadeUI } from './daily-cascade-ui'
+import { machineBackboxConfig } from '../machine/machine-backbox'
 import {
   PALETTE,
   INTENSITY,
@@ -119,7 +120,7 @@ export class GameSystemsInitializer {
       if (this.game.keyLight && this.game.rimLight && this.game.bounceLight) {
         this.game.effects.registerSceneLights(this.game.keyLight, this.game.rimLight, this.game.bounceLight)
       }
-      const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
+      const displayConfig: DisplayConfig = adaptLegacyConfig(machineBackboxConfig(GameConfig.backbox, this.game.machine))
       this.game.display = new DisplaySystem(scene, this.game.engine, displayConfig, this.game.qualityTier, this.game.accessibility, {
         noPostProcess: new URLSearchParams(window.location.search).has('nopp'),
       })
@@ -671,6 +672,7 @@ export class GameSystemsInitializer {
       g.cabinetManager = new CabinetManager(g.scene!, {
         onPopupShow: (name) => g.mapCabinet?.showCabinetPopup(name),
         onUISelect: () => g.mapCabinet?.updateCabinetSelectorUI(),
+        initialType: g.machine?.cabinet,
       })
 
       g.wireFeederEventHandlers()

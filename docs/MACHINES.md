@@ -1,0 +1,41 @@
+# Machines (#506)
+
+A **machine** is one piece of plain JSON: cabinet preset + track(s) + backbox
+character + music stems + rules + seed policy. Schema and validator:
+`src/schemas/machine.ts` (`MachineDescriptor`, `validateMachine`).
+
+| Field | Meaning | Applied at runtime? |
+|-------|---------|---------------------|
+| `cabinet` | `classic` / `neo` / `vertical` / `wide` | yes: the critical scene loads it |
+| `backbox.{idle,reach,fever}` | clips (+ optional poster) relative to `public/backbox/` | yes: `machine-backbox.ts` → `DisplaySystem` |
+| `backbox.border`, `backbox.shaderParams` | accent colour, shader knobs | not yet |
+| `tracks` | `{ id }` of a shipped track or `{ inline: TrackDefinition }` | carried on `game.machine`, not yet built |
+| `audio.{stems,bpm}` | stem files relative to `public/audio/` | not yet (Slice D) |
+| `rules` | ball weights / points / fever multipliers, fever threshold, `cascade.weekly` | validated only: non-default rules boot with a warning until the replay tape records them |
+| `seedPolicy` | `vanilla` / `daily` / `weekly` / `free` | not yet |
+
+Media paths are relative to `public/` only (no scheme, no `..`), so a machine
+opened from a link cannot point the page at another host.
+
+## Booting a machine
+
+- `?machine=<id>` loads `public/machines/<id>.json` (shipped: `classic`, `neo`, `vertical`, `wide`; listed in `index.json`).
+- `?machine=<path>.json` loads a same-origin JSON file (an exported `.machine.json`).
+- `#machine=v1.<payload>` is a share link: `base64url(deflate-raw(JSON))` via the native `CompressionStream` (`src/machine/machine-share.ts`). It takes precedence over `?machine=`.
+
+`main.ts` imports the loader chunk only when the URL names a machine. A machine
+that fails to load or validate boots the vanilla table with a `bootWarn`.
+
+## The weekly machine
+
+`WeeklyMachineDescriptor` is a derived view: `machineFromWeekly(weekly)` is the
+classic machine with `seedPolicy: 'weekly'` and the seeded table in
+`rules.cascade.weekly` (validated by `validateWeeklyMachine`); `weeklyView(machine)`
+reads it back.
+
+## Checks
+
+`npm run machine:validate` runs the weekly golden plus `tests/machine-schema.test.ts`
+(shipped machines, media on disk, every ISO week of 2027 round-tripping),
+`tests/machine-share.test.ts` (every shipped machine, and every shipped track inlined,
+≤ 8 KB as a link; crafted links rejected) and `tests/machine-loader.test.ts`.

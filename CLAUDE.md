@@ -11,7 +11,7 @@ npm run lint       # ESLint on all .ts/.tsx files (type-aware for src/, incl. no
 npm run check:index-strict  # noUncheckedIndexedAccess ratchet: the ENFORCED_DIRS in scripts/check-index-strict.mjs (core, wasm, game/physics, materials, audio, game-elements, effects, shaders, replay, arcade, game.ts) must stay clean
 npm run check:unknown-casts # `as unknown as` ratchet: src/adventure holds zero (track modules build through TrackBuilderApi)
 npm run preview    # Preview production build locally
-npm run machine:validate  # Weekly machine: golden descriptor, next 53 ISO weeks + free seeds, fixtures (like tracks:validate)
+npm run machine:validate  # Weekly machine golden + next 53 ISO weeks + free seeds; MachineDescriptor: public/machines/*.json, 2027 weekly round-trip, share-link ≤ 8 KB
 npm test           # Run Vitest unit tests
 npx playwright test  # Run E2E / visual regression tests
 npm run compile-db        # Configure-only: writes native/build-native/compile_commands.json for clangd (see root .clangd). Re-run after adding any .cpp. Offline: npm run compile-db -- -DPACHINBALL_BUILD_TESTS=OFF
@@ -68,6 +68,7 @@ npx vitest run tests/ball-manager.test.ts
 | `src/replay/` | Replay recorder/runner (one tape frame per physics step, frame-0 C++ snapshot), challenges (`challenge-v2.ts`), ghost race. |
 | `src/arcade/` + `supabase/` | Live arcade client (`arcade-api.ts`, endpoint in `src/config/arcade.ts`) on Supabase: migrations, RLS pgTAP tests, Edge Functions. Contract: `docs/API_CONTRACT.md` + `docs/api/arcade.openapi.yaml` (checked by `tests/arcade-contract.test.ts`). Dev/Playwright stay offline unless `VITE_ARCADE_URL` is set. |
 | `services/replay-verifier/` | Storage-host anti-cheat service: replays submitted tapes on the build shipping the tape's own `PhysicsModule.wasm` (SHA-256 stamped in every tape) and marks scores verified/rejected; weekly tournaments freeze from verified runs only (`docs/API_CONTRACT.md`). |
+| `src/schemas/machine.ts`, `src/machine/` | `MachineDescriptor` (cabinet + tracks + backbox clips + stems + rules + seed policy) and its loader: `?machine=<id>` (`public/machines/*.json`) or a `#machine=v1.…` share link; cabinet and backbox clips are applied, rules not yet. See `docs/MACHINES.md`. |
 | `src/config/` | Ball-type definitions (STANDARD / GOLD_PLATED / SOLID_GOLD), spawn weight distribution (75 / 20 / 5 %), point values, fever-mode multipliers, API config. |
 
 ### Ball lifecycle

@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "id": "wide",
+  "name": "Deluxe Wide",
+  "cabinet": "wide",
+  "tracks": [
+    {
+      "id": "RETRO_WAVE_HILLS"
+    },
+    {
+      "id": "HYPER_DRIFT"
+    },
+    {
+      "id": "TIDAL_NEXUS"
+    }
+  ],
+  "backbox": {
+    "idle": {
+      "video": "tracks/retro-wave-hills.mp4",
+      "poster": "tracks/retro-wave-hills.webp"
+    },
+    "reach": {
+      "video": "tracks/hyper-drift.mp4",
+      "poster": "tracks/hyper-drift.webp"
+    },
+    "fever": {
+      "video": "tracks/tidal-nexus.mp4",
+      "poster": "tracks/tidal-nexus.webp"
+    },
+    "border": "#ff6a00",
+    "shaderParams": {}
+  },
+  "audio": {
+    "stems": [],
+    "bpm": 120
+  },
+  "rules": {
+    "balls": {
+      "weights": {
+        "standard": 0.75,
+        "gold_plated": 0.2,
+        "solid_gold": 0.05
+      },
+      "points": {
+        "standard": 0,
+        "gold_plated": 1000,
+        "solid_gold": 5000
+      },
+      "feverMultipliers": {
+        "standard": 1,
+        "gold_plated": 2,
+        "solid_gold": 5
+      }
+    },
+    "fever": {
+      "threshold": 12
+    },
+    "cascade": {}
+  },
+  "seedPolicy": "vanilla"
+}

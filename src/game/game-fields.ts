@@ -67,6 +67,7 @@ import { LevelLoader } from './level-loader'
 import type { LeaderboardSystem } from '../game-elements/leaderboard-system'
 import type { NameEntryDialog } from '../game-elements/name-entry-dialog'
 import type { CampaignMapScreen } from '../adventure/ui/campaign-map'
+import type { MachineDescriptor } from '../schemas/machine'
 
 export abstract class GameFields {
   /**
@@ -85,6 +86,12 @@ export abstract class GameFields {
   constructor(engine: Engine | WebGPUEngine) {
     this.engine = engine
   }
+
+  /**
+   * The machine this page booted on (`?machine=` / a share link, #506), or null for the vanilla
+   * table. Set by the constructor; its cabinet and backbox clips are applied, its rules are not yet.
+   */
+  machine: MachineDescriptor | null = null
 
   // Game Systems
   physics!: PhysicsSystem

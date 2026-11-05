@@ -52,7 +52,11 @@ export const ASSET_BASE = import.meta.env.VITE_ASSET_URL as string | undefined
  * Backbox media path: VITE_ASSET_URL override → prod CDN → dev `public/backbox/` bundle.
  */
 export function resolveBackboxAssetPath(name: string, ext: string, pack?: string): string {
-  const relative = pack ? `${pack}/${name}.${ext}` : `${name}.${ext}`
+  return backboxAssetUrl(pack ? `${pack}/${name}.${ext}` : `${name}.${ext}`)
+}
+
+/** A path relative to `public/backbox/` (a machine's `VideoRef`), resolved like `resolveBackboxAssetPath`. */
+export function backboxAssetUrl(relative: string): string {
   if (import.meta.env.VITE_ASSET_URL) {
     return `${import.meta.env.VITE_ASSET_URL}/pachinball/backbox/${relative}`
   }
