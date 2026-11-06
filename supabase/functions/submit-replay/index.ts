@@ -1,9 +1,11 @@
 /**
  * POST /functions/v1/submit-replay — store a replay tape (#444 Slice B).
  * Body: ReplayRecorder.toJSON(payload). The database derives seed, map,
- * fingerprint and frame count from it and enforces the caps.
+ * fingerprint and frame count from it and enforces the caps. An
+ * `Idempotency-Key` makes a retried upload return the first replay id instead
+ * of storing the tape again (#503 A4).
  */
-import { asObject, BadRequest, json, readJson, rest, serve } from '../_shared/arcade.ts'
+import { asObject, BadRequest, idempotent, readJson, rest, serve } from '../_shared/arcade.ts'
 
 /** MAX_PAYLOAD_SIZE_BYTES: the replay cap the client and the replays table share. */
 const MAX_PAYLOAD_SIZE_BYTES = 512 * 1024
@@ -16,10 +18,12 @@ serve(async (req) => {
   if (typeof payload.compressedFrames !== 'string' && !Array.isArray(payload.frames)) {
     throw new BadRequest('payload needs compressedFrames or frames')
   }
-  const [row] = await rest<Array<{ id: string; frame_count: number }>>(req, 'replays?select=id,frame_count', {
-    method: 'POST',
-    body: { payload },
-    prefer: 'return=representation',
+  return idempotent(req, 'replay', async () => {
+    const [row] = await rest<Array<{ id: string; frame_count: number }>>(req, 'replays?select=id,frame_count', {
+      method: 'POST',
+      body: { payload },
+      prefer: 'return=representation',
+    })
+    return { status: 201, body: { success: true, replay_id: row?.id ?? null, frame_count: row?.frame_count ?? 0 } }
   })
-  return json({ success: true, replay_id: row?.id ?? null, frame_count: row?.frame_count ?? 0 }, 201)
 })

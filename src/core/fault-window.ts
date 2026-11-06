@@ -36,6 +36,17 @@ export function recordFault(window: FaultWindow, tick: number): boolean {
   return popcount8(window.mask) >= FAULT_WINDOW_LIMIT
 }
 
+/**
+ * A fault in a phase that changes the world (#503 A3): a `physics` / `sim` frame system, or a
+ * contact handler inside the physics step. Its host decides — reject a strict replay playback,
+ * mark a live run unranked, end the game on a run that keeps faulting.
+ */
+export interface SimFaultReport {
+  readonly phase: 'physics' | 'sim'
+  readonly name: string
+  readonly message: string
+}
+
 /** Short message for logs / events, never throwing on odd values. */
 export function faultMessage(error: unknown): string {
   if (error instanceof Error) return error.message

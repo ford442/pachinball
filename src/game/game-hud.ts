@@ -46,6 +46,8 @@ export interface HUDHost {
 
   updateHUD(): void
   readonly replayRecorder?: import('../game-elements').ReplayRecorder
+  /** The run hit a physics / sim fault (#503 A3): submitted with `ranked: false`. */
+  readonly runUnranked?: boolean
 }
 
 /** A finished game, kept for submission and "Challenge friends". */
@@ -57,6 +59,8 @@ export interface FinishedRun {
   tableMapId: string
   name?: string
   replayId?: string
+  /** False when the run hit a sim fault (#503 A3): stored, never verified or shown on a board. */
+  ranked: boolean
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -189,8 +193,11 @@ export class GameHUD {
     const board = challenge?.kind === 'weekly' && challenge.board
       ? challenge.board
       : getDailyCascadeState().getLeaderboardMapId(tableMapId)
-    const run: FinishedRun = { payload: recorder?.getLastPayload() ?? null, score: this.host.score, board, tableMapId }
+    const ranked = !this.host.runUnranked
+    const run: FinishedRun = { payload: recorder?.getLastPayload() ?? null, score: this.host.score, board, tableMapId, ranked }
     this.lastRun = run
+    // Once, at game over — never from the frame path (#503 A3).
+    if (!ranked) this.host.uiManager?.showMessage('An internal error interrupted this run: it is not ranked', 5000)
 
     if (this.host.score < 1000) {
       console.log('[Leaderboard] Score too low for submission')
@@ -226,6 +233,7 @@ export class GameHUD {
       combo_max: this.host.comboCount,
       // Only a v2 challenge (a row on the service) has an id the service knows.
       ...(challengeId && UUID.test(challengeId) ? { challenge_id: challengeId } : {}),
+      ...(run.ranked ? {} : { ranked: false }),
     }, replayJson)
     if (submitResult.success) {
       run.replayId = submitResult.replay_id

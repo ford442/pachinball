@@ -26,6 +26,7 @@ import { ContactPhase, contactPhaseAt, contactStarted, type PhysicsContact, type
 import type { PhysicsHost } from './types'
 import { simNowMs, type SimClockPhysics } from '../../core/sim-clock'
 import { bootError } from '../../boot-log'
+import { faultMessage } from '../../core/fault-window'
 import type { ScoringBridge } from './scoring-bridge'
 
 /** Maps WASM contact ids onto bodies and dispatch keys. */
@@ -403,7 +404,7 @@ export class CollisionDispatcher {
       try {
         this.dispatchWasmPair(data[o] ?? 0, data[o + 1] ?? 0, phase === ContactPhase.Enter)
       } catch (error) {
-        reportContactFault(error)
+        reportContactFault(this.host, error)
       }
     }
   }
@@ -593,9 +594,15 @@ export class CollisionDispatcher {
 }
 
 /**
- * A contact handler threw (#503 A3). Logged so it survives the production console strip; the
- * remaining contacts of the step still dispatch.
+ * A contact handler threw (#503 A3). Logged so it survives the production console strip, and
+ * reported to the host as a physics-phase sim fault; the remaining contacts of the step still
+ * dispatch.
  */
-export function reportContactFault(error: unknown): void {
+export function reportContactFault(host: Pick<PhysicsHost, 'onSimFault'>, error: unknown): void {
   bootError('[CollisionDispatcher] contact dispatch threw:', error)
+  try {
+    host.onSimFault?.({ phase: 'physics', name: 'contact', message: faultMessage(error) })
+  } catch (hostError) {
+    bootError('[CollisionDispatcher] onSimFault threw:', hostError)
+  }
 }

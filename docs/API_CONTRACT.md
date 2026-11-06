@@ -54,19 +54,46 @@ devices).
 Each function validates its body, then writes through PostgREST **as the
 caller**, so the database rules below apply exactly as they would to a direct
 REST call. Errors are `{ success: false, message }` with the HTTP status:
-400 validation, 401 not signed in, 403 not yours, 413 too large, 429 rate limit.
+400 validation, 401 not signed in, 403 not yours, 413 too large, 429 rate limit,
+409 the same `Idempotency-Key` is still being processed.
 
 | Function | Body | Answer |
 |----------|------|--------|
 | `POST /functions/v1/submit-replay` | `ReplayRecorder.toJSON(payload)`, ≤ 512 KB | `201 { success, replay_id, frame_count }` |
-| `POST /functions/v1/submit-score` | `{ name, score, map_id, adventure_level?, balls, combo_max, replay_id?, challenge_id? }` | `201 { success, score_id, rank, verified: false }` |
+| `POST /functions/v1/submit-score` | `{ name, score, map_id, adventure_level?, balls, combo_max, replay_id?, challenge_id?, ranked? }` | `201 { success, score_id, rank, verified: false }` |
 | `POST /functions/v1/create-challenge` | `{ seed, targetScore, mapId, challengerName?, replayId?, cascadeSeed? }` | `201 { success, challenge_id }` |
 | `POST /functions/v1/put-save` | `{ slot?, schema_version, data }` (data ≤ 64 KB) | `200 { success, slot, schema_version, updated_at }` |
 
 The client submits a finished run as the replay first, then the score citing
 its `replay_id` (`submitRun`). Offline, the run is queued on the device
 (`pachinball:arcade-queue`, at most five) and sent on the next `online` event
-or game over; a run the service refuses is dropped, a rate-limited one waits.
+or game over; a run the service refuses is dropped, a rate-limited one (or a
+409) waits.
+
+### Exactly once (#503 A4)
+
+A request that times out may still have been stored, and the queued run is
+then sent again. So every finished run gets one submission id (a UUID, kept
+with the run in the queue), and `submit-replay` / `submit-score` carry
+`Idempotency-Key: <id>:replay` / `<id>:score` on every attempt. The functions
+claim the key in `public.submission_keys` (unique per player, key and kind;
+service-only, reached through the security-definer `claim_submission` /
+`complete_submission` / `release_submission`) before they insert, and store
+their answer with it. A repeat gets the stored answer back
+(`Idempotent-Replayed: true`) and writes nothing; one that arrives while the
+first is still running gets 409; a write that fails releases the key. A claim
+left unanswered for 2 minutes (a function that died mid-write) is taken over.
+Keys live 7 days. Once the replay is stored, the queued run keeps only its
+`replay_id`, so a retry after a failed score call never uploads the tape again.
+A request without the header (older clients) just writes.
+
+### Unranked runs (#503 A3)
+
+A run whose physics / sim phase threw (a frame system or a contact handler)
+may have diverged from what its replay rebuilds. The client submits it with
+`ranked: false`, and the player is told at game over. The row is stored as
+already decided (`verify_reason = 'unranked'`): never handed to the verifier,
+never on a board, in a rank or in tournament standings.
 
 ## Rules the database enforces
 
@@ -109,8 +136,11 @@ step per tape frame — and records the verdict with
   `verifier_version` the build that replayed it. The board shows ✓.
 - **rejected** — `verify_reason` says why (no replay, an engine that does not
   replay step-exactly, a tape from another board, an unrecognised table
-  descriptor hash, a tape that does not run to its end, or a score the tape
-  does not reproduce). Never on the default board.
+  descriptor hash, a tape that does not run to its end, a score the tape
+  does not reproduce, or a playback whose physics / sim phase threw — the
+  verifier plays tapes with a strict runner (`ReplayRunner.setStrict(true)`),
+  so a fault rejects the run even when it reproduces the score, #503 A3).
+  Never on the default board.
 
 A pending score shows on the board, without ✓, for 24 hours; after that only
 a verdict brings it back. Both RPCs are executable by `service_role` only.

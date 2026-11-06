@@ -84,6 +84,17 @@ components:
         combo_max: { type: integer, minimum: 0, maximum: 1000000 }
         replay_id: { $ref: '#/components/schemas/Uuid' }
         challenge_id: { $ref: '#/components/schemas/Uuid' }
+        ranked:
+          type: boolean
+          description: >-
+            false for a run that hit a physics / sim fault (#503 A3): stored, but never verified
+            and never on a board. Absent means ranked.
+    IdempotencyKey:
+      description: >-
+        One per write of a finished run (#503 A4): `<submission uuid>:replay` / `<submission uuid>:score`,
+        the same on every retry of that run.
+      type: string
+      pattern: '^[A-Za-z0-9._:-]{8,128}$'
     ReplayPayload:
       description: ReplayRecorder.toJSON(payload) — at most 512 KB (MAX_PAYLOAD_SIZE_BYTES).
       type: object
@@ -239,7 +250,7 @@ components:
         message: { type: string }
   responses:
     Failure:
-      description: Refused — validation (400), not signed in (401), not yours (403), too large (413), rate limit (429).
+      description: Refused — validation (400), not signed in (401), not yours (403), too large (413), rate limit (429), the same Idempotency-Key still being processed (409).
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Failure' }
@@ -614,6 +625,14 @@ paths:
     post:
       summary: Submit a leaderboard entry (stored unverified)
       security: [{ apikey: [], player: [] }]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          description: >-
+            A repeat of a key this player already used for this operation gets the first answer
+            back (`Idempotent-Replayed: true`) and stores nothing; one that arrives while the first
+            is still running gets 409. Keys are kept 7 days.
+          schema: { $ref: '#/components/schemas/IdempotencyKey' }
       requestBody:
         required: true
         content:
@@ -637,6 +656,14 @@ paths:
     post:
       summary: Upload a replay tape (at most 512 KB)
       security: [{ apikey: [], player: [] }]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          description: >-
+            A repeat of a key this player already used for this operation gets the first answer
+            back (`Idempotent-Replayed: true`) and stores nothing; one that arrives while the first
+            is still running gets 409. Keys are kept 7 days.
+          schema: { $ref: '#/components/schemas/IdempotencyKey' }
       requestBody:
         required: true
         content:

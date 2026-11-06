@@ -33,6 +33,8 @@ import { GameDelegates } from './game/game-delegates'
 import { getChallengeSystem } from './replay/challenge-system'
 import { installSimClock } from './core/sim-clock'
 import { FrameScheduler, type FrameFault } from './core/frame-scheduler'
+import type { SimFaultReport } from './core/fault-window'
+import { SimFaultPolicy } from './game/sim-fault-policy'
 import { bootError, bootWarn } from './boot-log'
 import { engineDrawCallCount } from './engine/create-engine'
 import type { MachineDescriptor } from './schemas/machine'
@@ -76,19 +78,51 @@ export class Game
     })
   }
 
+  /** What a physics / sim fault does to the run (#503 A3). */
+  private readonly simFaultPolicy = new SimFaultPolicy({
+    replayRunner: this.replayRunner,
+    isRunLive: () => this.stateManager?.isPlaying() ?? false,
+    frame: () => this.frameScheduler.getFrameCount(),
+    onUnranked: (reason, ended) => this.eventBus?.emit('run:unranked', { reason, ended }),
+    endRun: (reason) => {
+      if (this.signal.aborted) return
+      bootError(`[Game] ending the run: repeated sim faults (${reason})`)
+      this.setGameState(GameState.GAME_OVER)
+    },
+    defer: (fn) => queueMicrotask(fn),
+  })
+
   /**
-   * A frame system threw (#503 A3). Presentation systems are quarantined by the scheduler; a
-   * physics / sim fault may have diverged the world, so a replay playback is rejected at once
-   * rather than shown (or verified) on a world that no longer matches the tape.
+   * A frame system threw (#503 A3). Presentation systems are quarantined by the scheduler (and
+   * announced as `'system:quarantined'`); a physics / sim fault goes to `onSimFault`.
    */
   private onFrameFault(fault: FrameFault): void {
     bootError(
       `[Game] frame system ${fault.phase}/${fault.name} threw${fault.quarantined ? ' — quarantined' : ''}:`,
       fault.error,
     )
-    if (!fault.sim) return
-    const runner = this.replayRunner
-    if (runner?.isPlaying()) runner.reject('sim-fault', `${fault.phase}/${fault.name}: ${fault.message}`)
+    if (fault.quarantined) {
+      this.eventBus?.emit('system:quarantined', { phase: fault.phase, name: fault.name, message: fault.message })
+    }
+    if (fault.sim) this.onSimFault({ phase: fault.phase === 'physics' ? 'physics' : 'sim', name: fault.name, message: fault.message })
+  }
+
+  /**
+   * A physics / sim fault: a frame system in those phases, or a contact handler inside the step
+   * (`PhysicsHost.onSimFault`). See `SimFaultPolicy`.
+   */
+  readonly onSimFault = (fault: SimFaultReport): void => {
+    this.simFaultPolicy.report(fault)
+  }
+
+  /** This run hit a sim fault: submitted with `ranked: false` (`HUDHost`). */
+  get runUnranked(): boolean {
+    return this.simFaultPolicy.isUnranked()
+  }
+
+  /** A new run starts ranked with a clean fault window (`LifecycleHost.startGame`). */
+  resetRunFaults(): void {
+    this.simFaultPolicy.reset()
   }
 
   /** Distance fog is a motion cue; reduced-motion players get none. */

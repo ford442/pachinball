@@ -34,6 +34,11 @@ export interface ScoreSubmission {
   combo_max: number
   replay_id?: string
   challenge_id?: string
+  /**
+   * False for a run that hit a physics / sim fault (#503 A3): stored, but never verified and never
+   * on a board. Absent means ranked.
+   */
+  ranked?: boolean
 }
 
 export interface SubmitResult {
@@ -205,14 +210,23 @@ export async function fetchReplay(replayId: string): Promise<object | null> {
 
 // ------------------------------------------------------------------- writes
 
-async function callFunction(name: string, body: string): Promise<Record<string, unknown>> {
+async function callFunction(name: string, body: string, idempotencyKey?: string): Promise<Record<string, unknown>> {
   const session = await arcadeSession()
-  return (await send(`/functions/v1/${name}`, { method: 'POST', body, token: session.access_token })) as Record<string, unknown>
+  return (await send(`/functions/v1/${name}`, {
+    method: 'POST',
+    body,
+    token: session.access_token,
+    ...(idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : {}),
+  })) as Record<string, unknown>
 }
 
-/** Upload a replay (`ReplayRecorder.toJSON`), returning its id. */
-export async function submitReplay(replayJson: string): Promise<string> {
-  const res = await callFunction('submit-replay', replayJson)
+/**
+ * Upload a replay (`ReplayRecorder.toJSON`), returning its id. With an `idempotencyKey`, a repeat
+ * (a retry after a timeout the service had already committed) returns the first upload's id
+ * instead of storing the tape again (#503 A4).
+ */
+export async function submitReplay(replayJson: string, idempotencyKey?: string): Promise<string> {
+  const res = await callFunction('submit-replay', replayJson, idempotencyKey)
   return String(res.replay_id)
 }
 
@@ -231,15 +245,43 @@ export async function createChallenge(challenge: {
 
 interface QueuedRun {
   score: ScoreSubmission
+  /** Dropped once uploaded: `score.replay_id` then cites it. */
   replay?: string
   queuedAt: string
+  /**
+   * One per finished run (#503 A4), kept while it waits in the queue: every attempt sends the same
+   * `Idempotency-Key`s (`<id>:replay`, `<id>:score`), so a run the service already stored — a
+   * timeout after the commit — is not stored twice. Absent on runs queued by older builds.
+   */
+  submissionId?: string
 }
 
+function newSubmissionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  // Non-secure contexts have no randomUUID; a key only has to be unique per player.
+  const hex = (n: number): string => Math.floor(Math.random() * 16 ** n).toString(16).padStart(n, '0')
+  return `${hex(8)}-${hex(4)}-4${hex(3)}-${(8 + Math.floor(Math.random() * 4)).toString(16)}${hex(3)}-${hex(12)}`
+}
+
+/**
+ * Send one run: the replay (unless already uploaded), then the score citing it. Updates `run` in
+ * place as it goes — the uploaded replay's id is written back onto `run.score` and the tape is
+ * dropped — so a run re-queued after a failed score call never uploads its replay again.
+ */
 async function sendRun(run: QueuedRun): Promise<SubmitResult> {
-  const score = { ...run.score }
-  if (run.replay && !score.replay_id) score.replay_id = await submitReplay(run.replay)
-  const res = await callFunction('submit-score', JSON.stringify(score))
-  return { success: true, rank: Number(res.rank), score_id: Number(res.score_id), replay_id: score.replay_id }
+  const id = (run.submissionId ??= newSubmissionId())
+  if (run.replay && !run.score.replay_id) {
+    const replayId = await submitReplay(run.replay, `${id}:replay`)
+    run.score = { ...run.score, replay_id: replayId }
+    run.replay = undefined
+  }
+  const res = await callFunction('submit-score', JSON.stringify(run.score), `${id}:score`)
+  return { success: true, rank: Number(res.rank), score_id: Number(res.score_id), replay_id: run.score.replay_id }
+}
+
+/** Kept for the next flush: the network, a rate limit, or the service still finishing the same key. */
+function retryable(err: unknown): boolean {
+  return err instanceof ArcadeError && (err.offline || err.status === 429 || err.status === 409)
 }
 
 function queueRun(run: QueuedRun): void {
@@ -251,16 +293,21 @@ function queueRun(run: QueuedRun): void {
 /**
  * Submit a finished run: the replay first (when there is one), then the
  * score citing it. Without a network the run is queued on this device and
- * `flushQueuedRuns` sends it later.
+ * `flushQueuedRuns` sends it later, under the same idempotency keys.
  */
 export async function submitRun(score: ScoreSubmission, replayJson?: string): Promise<SubmitResult> {
-  const run: QueuedRun = { score, replay: replayJson, queuedAt: new Date().toISOString() }
+  const run: QueuedRun = { score, replay: replayJson, queuedAt: new Date().toISOString(), submissionId: newSubmissionId() }
   try {
     return await sendRun(run)
   } catch (err) {
-    if (err instanceof ArcadeError && err.offline) {
+    if (retryable(err)) {
       queueRun(run)
-      return { success: false, queued: true, message: 'Offline: your score will be sent when you reconnect' }
+      const offline = (err as ArcadeError).offline
+      return {
+        success: false,
+        queued: true,
+        message: offline ? 'Offline: your score will be sent when you reconnect' : 'The arcade is busy: your score will be sent shortly',
+      }
     }
     return { success: false, message: err instanceof Error ? err.message : String(err) }
   }
@@ -288,7 +335,8 @@ export function flushQueuedRuns(): Promise<number> {
         await sendRun(run)
         sent++
       } catch (err) {
-        if (err instanceof ArcadeError && (err.offline || err.status === 429)) kept.push(run)
+        // `run` carries what already went through (its replay id), and its submission id.
+        if (retryable(err)) kept.push(run)
       }
     }
     writeStore(QUEUE_KEY, kept.length ? kept : null)

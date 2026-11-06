@@ -84,7 +84,12 @@ const cases = [
   claim('forged score on an unheld binary, attempts used up', { ...vanilla.replay, wasmSha256: UNHELD_WASM }, 5_000_000, 'neon-helix',
     { verified: false, reason: /score mismatch: .*\(the tape was played on PhysicsModule\.wasm ffffffffffff, which this verifier does not hold\)$/ },
     {}, 3),
+  // #503 A3: a contact handler threw during playback. The world may have diverged, so the run is
+  // rejected even though the tape and its score are the golden ones.
+  claim('sim fault during playback, matching score', vanilla.replay, vanilla.golden.score, 'neon-helix',
+    { verified: false, reason: /replay rejected: physics\/contact: injected contact fault/ }),
 ]
+const FAULTED = cases.at(-1).row.score_id
 
 const recorded = new Map()
 const ghosts = new Map()
@@ -124,6 +129,7 @@ try {
     key: KEY,
     dist: path.join(repoRoot, 'dist'),
     once: true,
+    injectContactFault: (c) => c.score_id === FAULTED,
   })
   for (const c of cases) {
     const v = recorded.get(c.row.score_id)

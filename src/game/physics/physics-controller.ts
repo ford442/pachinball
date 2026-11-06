@@ -108,12 +108,21 @@ export class GamePhysicsController {
   private readonly trailInfos: TrailInfo[] = []
   private readonly trailInfoPool: TrailInfo[] = []
   private readonly trailMeshByBody = new Map<PhysicsBody, Mesh>()
-  // Bound once: step() takes them every tick (#505 §D).
+  // Bound once: step() takes them every tick (#505 §D). Per-contact isolation (#503 A3): a throw
+  // on one Rapier event must not drop the rest of that step's events.
   private readonly onCollision = (h1: number, h2: number, started: boolean): void => {
-    this.collisionDispatcher.processCollision(h1, h2, started)
+    try {
+      this.collisionDispatcher.processCollision(h1, h2, started)
+    } catch (error) {
+      reportContactFault(this.host, error)
+    }
   }
   private readonly onContactForce = (h1: number, h2: number, maxForce: number): void => {
-    this.collisionDispatcher.processContactForce(h1, h2, maxForce)
+    try {
+      this.collisionDispatcher.processContactForce(h1, h2, maxForce)
+    } catch (error) {
+      reportContactFault(this.host, error)
+    }
   }
 
   private readonly onCaughtBallBeep = (): void => {
@@ -474,20 +483,7 @@ export class GamePhysicsController {
 
     this.syncReplaySnapshot(owner !== null, runner, recorder)
 
-    // Per-contact isolation (#503 A3): a throw on one Rapier event must not drop the rest.
-    const alpha = this.host.physics.step(physicsDt, (h1, h2, start) => {
-      try {
-        this.collisionDispatcher.processCollision(h1, h2, start)
-      } catch (error) {
-        reportContactFault(error)
-      }
-    }, (h1, h2, maxForce) => {
-      try {
-        this.collisionDispatcher.processContactForce(h1, h2, maxForce)
-      } catch (error) {
-        reportContactFault(error)
-      }
-    })
+    const alpha = this.host.physics.step(physicsDt, this.onCollision, this.onContactForce)
 
     if (owner) {
       owner.endStep()
