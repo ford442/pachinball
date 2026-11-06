@@ -28,6 +28,7 @@ import { getCabinetBuilder } from '../cabinet'
 import { GameConfig } from '../config'
 import type { AccessibilityConfig, QualityTier } from '../game-elements'
 import type { StaticSceneGate } from '../core/static-scene-gate'
+import type { MachineDescriptor } from '../schemas/machine'
 
 /** Longest `yieldFrame` waits for a frame that a hidden tab will never deliver. */
 export const FRAME_YIELD_TIMEOUT_MS = 50
@@ -49,6 +50,8 @@ export interface SceneBuilderHost {
   shadowRig: ShadowRig | null
   playfieldGroup: TransformNode | null
   uiManager: GameUIManager | null
+  /** The booted machine (#506); its cabinet replaces the default classic preset. */
+  readonly machine: MachineDescriptor | null
 }
 
 export class GameSceneBuilder {
@@ -72,13 +75,13 @@ export class GameSceneBuilder {
     playfieldGroup.rotation.x = Tools.ToRadians(18.0)
     this.host.playfieldGroup = playfieldGroup
 
-    // Classic glTF (or procedural fallback). Started now, awaited at the end: walls, flippers
+    // The machine's cabinet, else classic: glTF (or procedural fallback). Started now, awaited at the end: walls, flippers
     // and the ball do not need it, so a slow glTF (15 s loader timeout) can no longer leave the
     // table without them, and Start still waits for the cabinet below (#453).
     const cabinetBuilder = getCabinetBuilder(scene)
     cabinetBuilder.setQualityTier(this.host.qualityTier)
     cabinetBuilder.setStaticSceneGate(this.host.staticSceneGate)
-    const cabinetReady = cabinetBuilder.loadCabinetPreset('classic', {
+    const cabinetReady = cabinetBuilder.loadCabinetPreset(this.host.machine?.cabinet ?? 'classic', {
       qualityTier: this.host.qualityTier,
       onProgress: options.onCabinetProgress,
     })

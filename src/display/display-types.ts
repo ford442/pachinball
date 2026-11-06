@@ -246,11 +246,8 @@ export const DEFAULT_DISPLAY_CONFIG: DisplayConfig = {
   },
 }
 
-/**
- * Legacy config adapter
- * Converts old GameConfig.backbox format to new DisplayConfig
- */
-export function adaptLegacyConfig(legacyConfig: {
+/** The `GameConfig.backbox` shape `adaptLegacyConfig` reads (a machine overrides its clip paths, `machine-loader.ts`). */
+export interface LegacyBackboxConfig {
   attractVideoPath?: string
   videoReplacesReels?: boolean
   attractImagePath?: string
@@ -268,7 +265,13 @@ export function adaptLegacyConfig(legacyConfig: {
   reachCharacterPath?: string
   feverCharacterPath?: string
   jackpotCharacterPath?: string
-}): DisplayConfig {
+}
+
+/**
+ * Legacy config adapter
+ * Converts old GameConfig.backbox format to new DisplayConfig
+ */
+export function adaptLegacyConfig(legacyConfig: LegacyBackboxConfig): DisplayConfig {
   const hasVideo = legacyConfig.attractVideoPath && legacyConfig.attractVideoPath.trim() !== ''
   const hasImage = legacyConfig.attractImagePath && legacyConfig.attractImagePath.trim() !== ''
   

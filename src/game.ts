@@ -35,6 +35,12 @@ import { installSimClock } from './core/sim-clock'
 import { FrameScheduler, type FrameFault } from './core/frame-scheduler'
 import { bootError, bootWarn } from './boot-log'
 import { engineDrawCallCount } from './engine/create-engine'
+import type { MachineDescriptor } from './schemas/machine'
+
+export interface GameOptions {
+  /** The machine to build (resolved by `src/machine/machine-loader.ts`); null or absent for the vanilla table. */
+  machine?: MachineDescriptor | null
+}
 
 export class Game
   extends GameDelegates
@@ -59,9 +65,10 @@ export class Game
    */
   readonly frameScheduler: FrameScheduler
 
-  constructor(engine: Engine | WebGPUEngine, physics: PhysicsSystem = new PhysicsSystem()) {
+  constructor(engine: Engine | WebGPUEngine, physics: PhysicsSystem = new PhysicsSystem(), options: GameOptions = {}) {
     super(engine)
     this.physics = physics
+    this.machine = options.machine ?? null
     this.frameScheduler = new FrameScheduler(engine, {
       signal: this.signal,
       frame: () => this.renderFrame(),

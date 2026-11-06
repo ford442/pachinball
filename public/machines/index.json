@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "machines": [
+    {
+      "id": "classic",
+      "name": "Classic Pinball",
+      "cabinet": "classic"
+    },
+    {
+      "id": "neo",
+      "name": "Neo Arcade",
+      "cabinet": "neo"
+    },
+    {
+      "id": "vertical",
+      "name": "Vertical Shooter",
+      "cabinet": "vertical"
+    },
+    {
+      "id": "wide",
+      "name": "Deluxe Wide",
+      "cabinet": "wide"
+    }
+  ]
+}

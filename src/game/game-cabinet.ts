@@ -23,6 +23,8 @@ export interface CabinetManagerConfig {
   onPopupShow?: (name: string) => void
   onCabinetBuild?: (meshes: Mesh[]) => void
   onUISelect?: (type: CabinetType) => void
+  /** The preset the critical scene already loaded (a machine's cabinet); defaults to classic. */
+  initialType?: CabinetType
 }
 
 export class CabinetManager {
@@ -33,6 +35,7 @@ export class CabinetManager {
   constructor(scene: Scene, config: CabinetManagerConfig = {}) {
     this.scene = scene
     this.config = config
+    this.currentType = config.initialType ?? 'classic'
   }
 
   getCurrentType(): CabinetType {

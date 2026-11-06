@@ -40,10 +40,20 @@ async function bootstrap(): Promise<void> {
   // entry (size budget) but is fetched now, in parallel, rather than after the render loop starts.
   const visibilityModule = import('./engine/visibility-manager')
   visibilityModule.catch(() => undefined) // a failure surfaces at the await below, not as unhandled
-  const loading = Promise.all([createEngine(canvas), preloadPhysicsSystem()])
+  // A machine named by the URL (`?machine=` / `#machine=`, #506) is fetched alongside; the loader
+  // is its own chunk, imported only when the URL names one.
+  const machineLoading = /[?&#]machine=/.test(location.search + location.hash)
+    ? import('./machine/machine-loader')
+        .then((m) => m.bootMachine(location, (msg) => bootWarn(msg)))
+        .catch((err: unknown) => {
+          bootWarn('[machine] loader unavailable, booting the vanilla table', err)
+          return null
+        })
+    : Promise.resolve(null)
+  const loading = Promise.all([createEngine(canvas), preloadPhysicsSystem(), machineLoading])
   // The Game (and its timers) does not exist yet: this watchdog covers only the pre-Game phase.
   withBootError((m) => m.watchPreGame(loading))
-  const [engine, physics] = await loading
+  const [engine, physics, machine] = await loading
 
   console.timeEnd('[Bootstrap] Engine + Physics parallel init')
   console.time('[Bootstrap] Game init')
@@ -54,7 +64,7 @@ async function bootstrap(): Promise<void> {
 
   window.bootstrapEngineOptions = resolveEngineOptions()
 
-  const game = new Game(engine, physics)
+  const game = new Game(engine, physics, { machine })
   bootGame = game
   // Uncaught errors / rejections are visible in production too (#503 A5).
   installErrorReporter(game.signal)
