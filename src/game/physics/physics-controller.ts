@@ -114,14 +114,14 @@ export class GamePhysicsController {
     try {
       this.collisionDispatcher.processCollision(h1, h2, started)
     } catch (error) {
-      reportContactFault(error)
+      reportContactFault(this.host, error)
     }
   }
   private readonly onContactForce = (h1: number, h2: number, maxForce: number): void => {
     try {
       this.collisionDispatcher.processContactForce(h1, h2, maxForce)
     } catch (error) {
-      reportContactFault(error)
+      reportContactFault(this.host, error)
     }
   }
 

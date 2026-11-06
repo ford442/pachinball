@@ -34,8 +34,8 @@ export type FramePhase = (typeof FRAME_PHASES)[number]
 
 export interface FrameSystem {
   readonly phase: FramePhase
-  /** Shown in timing reports; optional. */
-  readonly name?: string
+  /** Shown in timing reports and fault reports. */
+  readonly name: string
   /** `dt` is the engine's frame delta in seconds, unclamped: each system clamps it as it needs. */
   update(dt: number): void
   /** Called once, when the system is unregistered or the scheduler is disposed. */
@@ -242,7 +242,7 @@ export class FrameScheduler {
     if (quarantined) this.remove(entry)
     this.pendingFaults.push({
       phase,
-      name: entry.system.name ?? '(anonymous)',
+      name: entry.system.name,
       message: faultMessage(error),
       error,
       sim,
@@ -260,6 +260,11 @@ export class FrameScheduler {
         bootError('[FrameScheduler] onFault threw:', error)
       }
     }
+  }
+
+  /** Frames run since the scheduler was created (a monotonic tick for fault windows). */
+  getFrameCount(): number {
+    return this.frames
   }
 
   /** Smoothed per-phase CPU time (a fresh object; call it from the HUD, not per frame from hot code). */

@@ -149,9 +149,10 @@ export function launchBrowser() {
  * returns the recorder's payload; 'verify' plays `replay` through the spectate
  * path. Both apply the scenario's setup between startGame and the first step,
  * so frame 0 is the same world either way. A failure carries a `code`:
- * boot | start | setup | record | rejected | snapshot | incomplete.
+ * boot | start | setup | record | rejected | snapshot | incomplete. A strict
+ * playback that hit a sim fault is `rejected` with outcome `sim-fault`.
  */
-async function runInPage({ mode, scenario, replay, ghostStride }) {
+async function runInPage({ mode, scenario, replay, ghostStride, throwOnContact }) {
   const fail = (code, reason, extra = {}) => ({ ok: false, code, reason, ...extra })
   const g = window.game
   if (!g?.physicsController || !g.engine || !g.stateManager) return fail('boot', 'window.game hooks missing')
@@ -171,7 +172,23 @@ async function runInPage({ mode, scenario, replay, ghostStride }) {
     // A cascade scenario's page was opened with `?cascade=<seed>`.
     await g.startGame()
   } else {
+    // Verification playback (#503 A3): a physics / sim fault — a contact handler that threw
+    // inside the step included — rejects the tape, even one that would reach the same score.
+    g.replayRunner.setStrict?.(true)
     await g.playReplay(replay)
+    if (throwOnContact) {
+      // Self-test only (services/replay-verifier/selftest.mjs): the first contact handler throws.
+      const dispatcher = g.physicsController.collisionDispatcher
+      const dispatch = dispatcher.dispatchWasmPair.bind(dispatcher)
+      let thrown = false
+      dispatcher.dispatchWasmPair = (...args) => {
+        if (!thrown) {
+          thrown = true
+          throw new Error('injected contact fault')
+        }
+        return dispatch(...args)
+      }
+    }
   }
   if (!g.stateManager.isPlaying()) return fail('start', 'the game did not reach PLAYING')
 
@@ -243,7 +260,15 @@ async function runInPage({ mode, scenario, replay, ghostStride }) {
     // sample k after step 1 + k * ghostStride, in millimetres; no ball → INT32_MIN.
     const track = []
     while (runner.isPlaying() && runner.getProgress().currentFrame < total && g.stateManager.isPlaying()) {
-      controller.stepFixed(null, g.inputActions, runner, null)
+      // Nothing schedules this loop's steps, so a step that throws is reported here, as the frame
+      // scheduler reports a physics-phase fault in the game.
+      try {
+        controller.stepFixed(null, g.inputActions, runner, null)
+      } catch (err) {
+        g.onSimFault?.({ phase: 'physics', name: 'fixed-step', message: err instanceof Error ? err.message : String(err) })
+        if (runner.isPlaying()) runner.reject('sim-fault', `physics/fixed-step: ${err}`)
+        break
+      }
       if (ghostStride && (runner.getProgress().currentFrame - 1) % ghostStride === 0) {
         const p = g.ballManager?.getBallBody?.()?.translation()
         if (p) track.push(Math.round(p.x * 1000), Math.round(p.y * 1000), Math.round(p.z * 1000))
@@ -287,8 +312,9 @@ async function runInPage({ mode, scenario, replay, ghostStride }) {
  * Open a fresh page and run one tape (`{ scenario, replay }`). Never throws:
  * a browser / navigation failure comes back as `{ ok: false, code: 'harness' }`.
  * `ghostStride` (verify only) also returns the ball's path as `ghost`.
+ * `throwOnContact` (verify, self-test only) makes the first contact handler throw.
  */
-export async function runTape(browser, base, mode, tape, { verbose = false, ghostStride = 0 } = {}) {
+export async function runTape(browser, base, mode, tape, { verbose = false, ghostStride = 0, throwOnContact = false } = {}) {
   const context = await browser.newContext()
   const page = await context.newPage()
   const errors = []
@@ -303,7 +329,7 @@ export async function runTape(browser, base, mode, tape, { verbose = false, ghos
       timeout: BOOT_TIMEOUT_MS,
     })
     await page.locator('#start-btn').waitFor({ state: 'visible', timeout: BOOT_TIMEOUT_MS })
-    const res = await page.evaluate(runInPage, { mode, scenario: tape.scenario, replay: tape.replay, ghostStride })
+    const res = await page.evaluate(runInPage, { mode, scenario: tape.scenario, replay: tape.replay, ghostStride, throwOnContact })
     if (!res.ok && errors.length) res.reason += ` | page errors: ${errors.slice(0, 3).join(' / ')}`
     return res
   } catch (err) {

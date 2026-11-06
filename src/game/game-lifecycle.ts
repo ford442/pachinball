@@ -89,6 +89,8 @@ export interface LifecycleHost {
 
   updateHUD(): void
   resetBall(): void
+  /** A new run starts ranked, with no sim faults counted (#503 A3). */
+  resetRunFaults?(): void
   setGameState(state: GameState): void
   handleGameOverLeaderboard(): Promise<void>
   getBallPosition(): import('@babylonjs/core/Maths/math.vector').Vector3 | null
@@ -269,6 +271,7 @@ export class GameLifecycle {
 
     this.scoringBreakdown.reset()
     this.host.uiManager?.hideScoringBreakdown()
+    this.host.resetRunFaults?.()
     this.host.score = 0
     this.host.lives = 3
     this.host.comboCount = 0

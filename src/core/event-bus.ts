@@ -415,6 +415,23 @@ export interface PachinballEventMap {
     event: string
     message: string
   }
+  /**
+   * A presentation frame system (`input` / `visuals` / `render` / `hud` / `idle`) threw on 3 of
+   * the last 8 frames and was unregistered. Emitted after the frame, never from inside a phase.
+   */
+  'system:quarantined': {
+    phase: string
+    name: string
+    message: string
+  }
+  /**
+   * A live run hit a physics / sim fault and can no longer rank (#503 A3); `ended` when the faults
+   * kept coming (3 of 8 frames) and the run went to game over instead of playing on a diverged world.
+   */
+  'run:unranked': {
+    reason: string
+    ended: boolean
+  }
 }
 
 /** Event name derived from the event map keys */

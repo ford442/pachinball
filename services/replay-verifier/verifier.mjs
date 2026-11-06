@@ -71,8 +71,10 @@ function client({ url, key }) {
  * Run the claim → replay → verdict loop. Resolves when `once` is set and one
  * round is done, or when `signal` aborts (the current replay finishes first;
  * unprocessed claims are handed out again after the claim goes stale).
+ * `injectContactFault(claim)` is the self-test's: true makes that replay's
+ * first contact handler throw, a sim fault the strict playback must reject.
  */
-export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, batch = 4, once = false, signal } = {}) {
+export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, batch = 4, once = false, signal, injectContactFault } = {}) {
   if (!key) throw new Error('ARCADE_SECRET_KEY is required')
   const { rpc, rest } = client({ url, key })
   // A build whose binary is not the one its build-info.json declares is never replayed on.
@@ -115,7 +117,10 @@ export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, bat
           const pick = selectBuild(claim.payload, known.builds, known.fallback)
           build = pick.build
           const tape = { scenario: { seed: claim.payload.seed ?? 0, setup: [] }, replay: claim.payload }
-          const result = await runTape(browser, await serverFor(build), 'verify', tape, { ghostStride: GHOST_STRIDE })
+          const result = await runTape(browser, await serverFor(build), 'verify', tape, {
+            ghostStride: GHOST_STRIDE,
+            throwOnContact: injectContactFault?.(claim) ?? false,
+          })
           verdict = judge(claim, result, { verifierVersion: build.id, binary: pick.binary })
         }
         const version = build.id

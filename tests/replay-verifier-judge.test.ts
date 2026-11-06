@@ -45,6 +45,13 @@ describe('replay verifier verdicts (#444 Slice C)', () => {
     expect(judge(claim(), { ok: false, code: 'incomplete', reason: 'played 10 of 60 tape frames', score: 900 })).toMatchObject({ verdict: 'rejected', verifierScore: 900 })
   })
 
+  it('rejects a strict playback that hit a sim fault, whatever score it reached (#503 A3)', () => {
+    const faulted = { ok: false, code: 'rejected', outcome: 'sim-fault', reason: 'replay rejected: physics/contact: boom' }
+    expect(judge(claim(), faulted)).toMatchObject({ verdict: 'rejected', reason: 'replay rejected: physics/contact: boom' })
+    // The tape's failure, not the verifier's: never retried as one of its own.
+    expect(judge(claim({ attempts: 1 }), faulted).verdict).toBe('rejected')
+  })
+
   it('retries its own failures, then gives up with the reason', () => {
     const boot = { ok: false, code: 'harness', reason: 'navigation timeout' }
     expect(judge(claim({ attempts: 1 }), boot)).toMatchObject({ verdict: 'retry' })
