@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "id": "classic",
+  "name": "Classic Pinball",
+  "cabinet": "classic",
+  "tracks": [
+    {
+      "id": "NEON_HELIX"
+    }
+  ],
+  "backbox": {
+    "idle": {
+      "video": "attract.mp4",
+      "poster": "attract.png"
+    },
+    "reach": {
+      "video": "reach.mp4",
+      "poster": "reach.png"
+    },
+    "fever": {
+      "video": "fever.mp4",
+      "poster": "fever.png"
+    },
+    "border": "#00ffff",
+    "shaderParams": {}
+  },
+  "audio": {
+    "stems": [],
+    "bpm": 120
+  },
+  "rules": {
+    "balls": {
+      "weights": {
+        "standard": 0.75,
+        "gold_plated": 0.2,
+        "solid_gold": 0.05
+      },
+      "points": {
+        "standard": 0,
+        "gold_plated": 1000,
+        "solid_gold": 5000
+      },
+      "feverMultipliers": {
+        "standard": 1,
+        "gold_plated": 2,
+        "solid_gold": 5
+      }
+    },
+    "fever": {
+      "threshold": 12
+    },
+    "cascade": {}
+  },
+  "seedPolicy": "vanilla"
+}

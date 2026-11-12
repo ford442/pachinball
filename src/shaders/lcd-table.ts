@@ -11,7 +11,7 @@
 
 import { SCANLINE_UNIFORM } from './scanline'
 import { parseHexColor } from '../core/color'
-import { TABLE_MAPS, type TableMapConfig, type TableMapType } from '../config/table-maps'
+import { TABLE_MAPS, tableMapConfig, type TableMapConfig, type TableMapType } from '../config/table-maps'
 
 export const lcdTablePixelShader = {
   name: "lcdTable",
@@ -288,7 +288,7 @@ export class LCDTableState {
    */
   updateFromMapConfig(config: Partial<TableMapConfig>): void {
     // Create a temporary map entry with updated values
-    const current = TABLE_MAPS[this._currentMap]
+    const current = tableMapConfig(this._currentMap)
     const updatedConfig: TableMapConfig = {
       ...current,
       ...config,
@@ -377,11 +377,11 @@ export class LCDTableState {
    * Get current map configuration (interpolated during transition)
    */
   getCurrentConfig(): TableMapConfig {
-    const current = TABLE_MAPS[this._currentMap]
+    const current = tableMapConfig(this._currentMap)
 
     if (!this._isTransitioning) return current
 
-    const target = TABLE_MAPS[this._targetMap]
+    const target = tableMapConfig(this._targetMap)
     const t = this.easeInOutCubic(this._blendFactor)
 
     return {

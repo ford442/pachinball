@@ -8,10 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev        # Start Vite dev server (http://localhost:5173)
 npm run build      # tsc -b → build:wasm (skips without Emscripten) → Vite build; writes dist/build-info.json
 npm run lint       # ESLint on all .ts/.tsx files (type-aware for src/, incl. no-floating-promises and import-x/no-cycle)
-npm run check:index-strict  # noUncheckedIndexedAccess ratchet: src/core, src/wasm, src/game/physics must stay clean
+npm run check:index-strict  # noUncheckedIndexedAccess ratchet: the ENFORCED_DIRS in scripts/check-index-strict.mjs (core, wasm, game/physics, materials, audio, game-elements, effects, shaders, replay, arcade, game.ts) must stay clean
 npm run check:unknown-casts # `as unknown as` ratchet: src/adventure holds zero (track modules build through TrackBuilderApi)
 npm run preview    # Preview production build locally
-npm run machine:validate  # Weekly machine: golden descriptor, next 53 ISO weeks + free seeds, fixtures (like tracks:validate)
+npm run machine:validate  # Weekly machine golden + next 53 ISO weeks + free seeds; MachineDescriptor: public/machines/*.json, 2027 weekly round-trip, share-link ≤ 8 KB
 npm test           # Run Vitest unit tests
 npx playwright test  # Run E2E / visual regression tests
 npm run compile-db        # Configure-only: writes native/build-native/compile_commands.json for clangd (see root .clangd). Re-run after adding any .cpp. Offline: npm run compile-db -- -DPACHINBALL_BUILD_TESTS=OFF
@@ -28,6 +28,7 @@ npm run check:bundle      # Bundle-size gate (bundle-budget.json); fails if Rapi
 npm run verify:replay     # Golden replay tapes (tests/replays/*.json) in headless Chromium; needs build:wasm. `-- --update` rewrites goldens
 npm run record:replay     # Re-record stale tapes from their scenarios
 npm run test:verifier     # services/replay-verifier self-test (after `npm run build`)
+npm run release:archive -- --to <dir>  # archive dist/ as a released build for the verifier, with its golden tapes (#490 B)
 supabase db start && supabase test db  # Arcade DB migrations + pgTAP RLS tests (supabase/)
 ```
 
@@ -66,7 +67,8 @@ npx vitest run tests/ball-manager.test.ts
 | `src/audio/` | Single `AudioEngine` (one AudioContext) + pachinko worklet + sample bank. EventBus remains the trigger API. |
 | `src/replay/` | Replay recorder/runner (one tape frame per physics step, frame-0 C++ snapshot), challenges (`challenge-v2.ts`), ghost race. |
 | `src/arcade/` + `supabase/` | Live arcade client (`arcade-api.ts`, endpoint in `src/config/arcade.ts`) on Supabase: migrations, RLS pgTAP tests, Edge Functions. Contract: `docs/API_CONTRACT.md` + `docs/api/arcade.openapi.yaml` (checked by `tests/arcade-contract.test.ts`). Dev/Playwright stay offline unless `VITE_ARCADE_URL` is set. |
-| `services/replay-verifier/` | Storage-host anti-cheat service: replays submitted tapes on the prod build and marks scores verified/rejected. |
+| `services/replay-verifier/` | Storage-host anti-cheat service: replays submitted tapes on the build shipping the tape's own `PhysicsModule.wasm` (SHA-256 stamped in every tape) and marks scores verified/rejected; weekly tournaments freeze from verified runs only (`docs/API_CONTRACT.md`). |
+| `src/schemas/machine.ts`, `src/machine/` | `MachineDescriptor` (cabinet + tracks + backbox clips + stems + rules + seed policy) and its loader: `?machine=<id>` (`public/machines/*.json`) or a `#machine=v1.…` share link; cabinet and backbox clips are applied, rules not yet. See `docs/MACHINES.md`. |
 | `src/config/` | Ball-type definitions (STANDARD / GOLD_PLATED / SOLID_GOLD), spawn weight distribution (75 / 20 / 5 %), point values, fever-mode multipliers, API config. |
 
 ### Ball lifecycle
@@ -89,7 +91,11 @@ A `Game` must tear down completely (`Game.dispose()` → `disposeGame()` in `src
 
 Gameplay runs in whole fixed steps (`FixedStepPacer` / `FIXED_TIMESTEP` in `src/core/sim-clock.ts`). Anything that affects score, lives or the ball's path reads the sim clock, never `performance.now()` — otherwise replays and verification break (`docs/determinism-todo.md`). Intentional numeric changes update the golden tapes (`npm run verify:replay -- --update`) in the same PR.
 
-Production builds strip literal `console.*` calls; use `bootWarn` / `bootError` (`src/boot-log.ts`) for boot-critical diagnostics.
+Production builds drop `console.log` / `info` / `debug` / `time*` (esbuild `pure`, keyed on Vite's `mode`) but keep `console.warn` / `console.error`; use `bootWarn` / `bootError` (`src/boot-log.ts`) for boot-critical diagnostics — they also feed the 50-line ring `src/engine/error-reporter.ts` attaches to uncaught errors / unhandled rejections (`window.pachinballErrors`). Source maps are built `hidden` and moved to `dist-sourcemaps/` (never deployed).
+
+### Fault isolation (#503)
+
+One throw must never stop the game. `FrameScheduler` runs each system in a try/catch: a presentation-phase system (`input` / `visuals` / `render` / `hud` / `idle`) that throws on 3 of the last 8 frames is quarantined; `physics` / `sim` systems are never removed: their faults — and a contact handler that throws inside the step (`PhysicsHost.onSimFault`) — go to `SimFaultPolicy` (`src/game/sim-fault-policy.ts`), which rejects a **strict** playback with `sim-fault` (the verifier sets `ReplayRunner.setStrict(true)`; spectate / ghosts play on), marks a live run unranked (`ranked: false` on submit, off every board) and ends it on 3 faulting frames of 8. `EventBus.emit` isolates each handler the same way (3 throws in 8 emits → unsubscribed + `'handler:quarantined'`), and contact dispatch isolates each contact. In `wasm-worker` mode the client supervises the worker (`fatal` message, `error` / `messageerror`, 30 unanswered steps) and rebuilds its world in-process from `PhysicsCommandLog` (structure + a checkpoint every 600 steps + the commands since), after which `getWasmMode()` reads `wasm-owner` and `'physics:engine-switched'` fires. `apiFetch` retries only idempotent methods; a finished arcade run is stored exactly once (one submission id per run, `Idempotency-Key` on `submit-replay` / `submit-score`, `public.submission_keys`; `docs/API_CONTRACT.md`).
 
 ### Testing approach
 

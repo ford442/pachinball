@@ -25,6 +25,8 @@ import { ContactPhase, contactPhaseAt, contactStarted, type PhysicsContact, type
 
 import type { PhysicsHost } from './types'
 import { simNowMs, type SimClockPhysics } from '../../core/sim-clock'
+import { bootError } from '../../boot-log'
+import { faultMessage } from '../../core/fault-window'
 import type { ScoringBridge } from './scoring-bridge'
 
 /** Maps WASM contact ids onto bodies and dispatch keys. */
@@ -52,6 +54,10 @@ import {
   getBallMeshForBody as lookupBallMeshForBody,
   type CollisionHandlerContext,
 } from './collision-handlers'
+import { PairDebounce } from './pair-debounce'
+
+/** One fixed physics step (1000 / 60 ≈ 16.7 ms) passes; a same-step repeat does not. */
+const COLLISION_DEBOUNCE_MS = 16
 
 export class CollisionDispatcher {
   private readonly host: PhysicsHost
@@ -60,8 +66,9 @@ export class CollisionDispatcher {
   /** Id epoch of the bridge the caches were built against (-1: Rapier handle space). */
   private cacheIdEpoch = -1
 
-  private lastCollisionTime: Map<string, number> = new Map()
-  private lastColliderCollisionTime: Map<string, number> = new Map()
+  /** Body-pair and collider-pair contact debounce (numeric keys, pruned; #505 §D). */
+  private readonly bodyPairDebounce = new PairDebounce(COLLISION_DEBOUNCE_MS)
+  private readonly colliderPairDebounce = new PairDebounce(COLLISION_DEBOUNCE_MS)
   private bumperHandleSet: Set<number> = new Set()
   private targetHandleSet: Set<number> = new Set()
   private ballHandleSet: Set<number> = new Set()
@@ -88,8 +95,6 @@ export class CollisionDispatcher {
   private knownObstacleMatches = 0
   private bumperMatches = 0
 
-  /** One fixed physics step (1000 / 60 ≈ 16.7 ms) passes; a same-step repeat does not. */
-  private static readonly COLLISION_DEBOUNCE_MS = 16
   /** Minimum contact force to trigger visual effects */
   private static readonly CONTACT_FORCE_THRESHOLD = 5
   /** Force value used to normalize intensity to 0-1 range */
@@ -130,6 +135,8 @@ export class CollisionDispatcher {
       unsub()
     }
     this.eventBusUnsubscribers = []
+    this.bodyPairDebounce.clear()
+    this.colliderPairDebounce.clear()
   }
 
   /**
@@ -291,10 +298,7 @@ export class CollisionDispatcher {
     if (h1 === 0 || h2 === 0 || h1 === h2) return
 
     // First debounce in collider-handle space (the raw event index space).
-    const colliderPairKey = h1 < h2 ? `${h1}_${h2}` : `${h2}_${h1}`
-    const now = this.debounceClockMs()
-    if (CollisionDispatcher.debounced(this.lastColliderCollisionTime.get(colliderPairKey), now)) return
-    this.lastColliderCollisionTime.set(colliderPairKey, now)
+    if (this.colliderPairDebounce.hit(h1, h2, this.debounceClockMs())) return
 
     const world = this.host.physics.getWorld()
     if (!world) return
@@ -369,11 +373,6 @@ export class CollisionDispatcher {
     return simNowMs(this.host.physics as SimClockPhysics)
   }
 
-  /** A clock that went backwards (snapshot rewind, new world) never debounces. */
-  private static debounced(last: number | undefined, now: number): boolean {
-    return last !== undefined && now >= last && now - last < CollisionDispatcher.COLLISION_DEBOUNCE_MS
-  }
-
   /**
    * Handles contacts that originated in the WASM engine. The wrapper already emits
    * these on the EventBus as 'wasm:physics:contact'; the bridge resolves each WASM
@@ -401,7 +400,12 @@ export class CollisionDispatcher {
       const phase = contactPhaseAt(data, i, stride)
       if (phase === ContactPhase.Stay) continue
       const o = i * stride
-      this.dispatchWasmPair(data[o] ?? 0, data[o + 1] ?? 0, phase === ContactPhase.Enter)
+      // One bad contact must not drop the rest of this step's contacts (#503 A3).
+      try {
+        this.dispatchWasmPair(data[o] ?? 0, data[o + 1] ?? 0, phase === ContactPhase.Enter)
+      } catch (error) {
+        reportContactFault(this.host, error)
+      }
     }
   }
 
@@ -429,10 +433,7 @@ export class CollisionDispatcher {
   private processBodyCollision(b1: PhysicsBody, b2: PhysicsBody, bh1: number, bh2: number): void {
     this.rawCollisionEvents++
 
-    const pairKey = bh1 < bh2 ? `${bh1}_${bh2}` : `${bh2}_${bh1}`
-    const now = this.debounceClockMs()
-    if (CollisionDispatcher.debounced(this.lastCollisionTime.get(pairKey), now)) return
-    this.lastCollisionTime.set(pairKey, now)
+    if (this.bodyPairDebounce.hit(bh1, bh2, this.debounceClockMs())) return
 
     this.processCollisionBodies(b1, b2, bh1, bh2)
   }
@@ -589,5 +590,19 @@ export class CollisionDispatcher {
       return { sensor: s2, ballHandle: bh1 }
     }
     return null
+  }
+}
+
+/**
+ * A contact handler threw (#503 A3). Logged so it survives the production console strip, and
+ * reported to the host as a physics-phase sim fault; the remaining contacts of the step still
+ * dispatch.
+ */
+export function reportContactFault(host: Pick<PhysicsHost, 'onSimFault'>, error: unknown): void {
+  bootError('[CollisionDispatcher] contact dispatch threw:', error)
+  try {
+    host.onSimFault?.({ phase: 'physics', name: 'contact', message: faultMessage(error) })
+  } catch (hostError) {
+    bootError('[CollisionDispatcher] onSimFault threw:', hostError)
   }
 }

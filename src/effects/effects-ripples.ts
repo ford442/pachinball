@@ -57,6 +57,7 @@ export class RipplesEffects {
   updateRippleRings(dt: number): void {
     for (let i = this.rippleRings.length - 1; i >= 0; i--) {
       const ring = this.rippleRings[i]
+      if (!ring) continue
       ring.age += dt
 
       if (ring.age >= ring.maxAge) {

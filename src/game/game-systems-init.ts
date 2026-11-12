@@ -14,6 +14,7 @@ import { GameConfig, GAME_TUNING } from '../config'
 import { getMaterialLibrary } from '../materials'
 import { adaptLegacyConfig, DisplayState, type DisplayConfig } from '../display/display-types'
 import { refreshDailyCascadeUI } from './daily-cascade-ui'
+import { machineBackboxConfig } from '../machine/machine-backbox'
 import {
   PALETTE,
   INTENSITY,
@@ -119,14 +120,13 @@ export class GameSystemsInitializer {
       if (this.game.keyLight && this.game.rimLight && this.game.bounceLight) {
         this.game.effects.registerSceneLights(this.game.keyLight, this.game.rimLight, this.game.bounceLight)
       }
-      const displayConfig: DisplayConfig = adaptLegacyConfig(GameConfig.backbox)
+      const displayConfig: DisplayConfig = adaptLegacyConfig(machineBackboxConfig(GameConfig.backbox, this.game.machine))
       this.game.display = new DisplaySystem(scene, this.game.engine, displayConfig, this.game.qualityTier, this.game.accessibility, {
         noPostProcess: new URLSearchParams(window.location.search).has('nopp'),
       })
       this.game.display.subscribeToEvents(this.game.eventBus)
       this.game.display.setSlotScoreProvider(() => this.game.score)
       this.game.display.setEffectsSystem(this.game.effects)
-      this.game.stateManager.setDisplaySystem(this.game.display)
       // Apply persisted scanline settings now that the display system exists
       const initialSettings = SettingsManager.load()
       this.game.display.setPlayerScanlineEnabled(initialSettings.scanlineEnabled)
@@ -150,8 +150,7 @@ export class GameSystemsInitializer {
         this.game.eventBusLog.wire(this.game.eventBus)
       }
       this.game.performanceMonitor.setRendererBackend(
-        (window as unknown as { currentRenderer?: string }).currentRenderer ??
-          (this.game.engine.getClassName().toLowerCase().includes('webgpu') ? 'webgpu' : 'webgl2'),
+        window.currentRenderer ?? (this.game.engine.isWebGPU ? 'webgpu' : 'webgl2'),
       )
 
       if (debugTools) {
@@ -673,6 +672,7 @@ export class GameSystemsInitializer {
       g.cabinetManager = new CabinetManager(g.scene!, {
         onPopupShow: (name) => g.mapCabinet?.showCabinetPopup(name),
         onUISelect: () => g.mapCabinet?.updateCabinetSelectorUI(),
+        initialType: g.machine?.cabinet,
       })
 
       g.wireFeederEventHandlers()

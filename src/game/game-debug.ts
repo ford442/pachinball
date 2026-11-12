@@ -13,7 +13,7 @@ import type { DisplaySystem } from '../display'
 import type { AdventureMode } from '../adventure'
 import type { ZoneTriggerSystem } from '../game-elements/zone-trigger-system'
 import type { GameObjects } from '../objects'
-import type { GamePhysicsController } from './game-physics-controller'
+import type { GamePhysicsController } from './physics/physics-controller'
 import type { GameStateManager } from './game-state'
 import type { DebugSnapshot, PerformanceMonitor } from '../game-elements'
 import { GameState } from '../game-elements'
@@ -116,7 +116,6 @@ export class GameDebug {
   buildDebugSnapshot(rawDt: number, lives: number): DebugSnapshot {
     const gameState = GameState[this.host.stateManager.getState()] ?? 'UNKNOWN'
     const displayState = this.host.display?.getDisplayState() ?? 'none'
-    const drawCallsCounter = (this.host.engine as unknown as { _drawCalls?: { current?: number } })._drawCalls
     const adventureTrack = this.host.adventureMode?.getCurrentZone()
     const campaignTrackId = this.host.adventureTrackProgression?.getCurrentTrack() ?? null
     const trackInfo = campaignTrackId ? TRACK_CATALOG[campaignTrackId] : null
@@ -150,7 +149,7 @@ export class GameDebug {
       portalState: portalOpen ? 'open' : 'closed',
       portalKind,
       fps: this.host.scene?.getEngine().getFps() ?? perfMetrics.fps,
-      drawCalls: drawCallsCounter?.current ?? perfMetrics.drawCalls,
+      drawCalls: this.host.sceneInstrumentation?.drawCallsCounter.current ?? perfMetrics.drawCalls,
       frameTimeMs: perfMetrics.frameTimeMs > 0 ? perfMetrics.frameTimeMs : rawDt * 1000,
       activeBodies: this.host.physics.getActiveBodyCount(),
       colliderCount: this.host.physics.getColliderCount(),

@@ -229,7 +229,7 @@ export class MaterialLibraryBase {
     for (let i = 0; i < data.length; i += 4) {
       // Subtle roughness noise in green channel
       const noise = (Math.random() - 0.5) * 20
-      data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise))
+      data[i + 1] = Math.max(0, Math.min(255, (data[i + 1] ?? 0) + noise))
     }
     ctx.putImageData(imageData, 0, 0)
 

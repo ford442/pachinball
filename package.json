@@ -22,6 +22,7 @@
     "verify:replay": "node scripts/verify-replay.mjs",
     "record:replay": "node scripts/verify-replay.mjs --record",
     "test:verifier": "node services/replay-verifier/selftest.mjs",
+    "release:archive": "node scripts/archive-release.mjs",
     "print:wasm-flags": "node scripts/print-wasm-flags.mjs",
     "lint": "eslint .",
     "check:bundle": "node scripts/check-bundle-size.mjs",
@@ -35,7 +36,7 @@
     "models:cabinet-placeholders": "node scripts/generate-cabinet-placeholders.mjs",
     "models:insert-placeholders": "node scripts/generate-insert-placeholders.mjs",
     "tracks:validate": "vitest run tests/tracks-validate-cli.test.ts",
-    "machine:validate": "vitest run tests/weekly-machine-validate-cli.test.ts",
+    "machine:validate": "vitest run tests/weekly-machine-validate-cli.test.ts tests/machine-schema.test.ts tests/machine-share.test.ts tests/machine-loader.test.ts",
     "test": "vitest run"
   },
   "dependencies": {

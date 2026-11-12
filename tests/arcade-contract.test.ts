@@ -15,7 +15,7 @@ import { resolve } from 'node:path'
 import Ajv from 'ajv'
 import { load } from 'js-yaml'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MAP_ID, TAG, UUID } from '../supabase/functions/_shared/arcade'
+import { IDEMPOTENCY_KEY, MAP_ID, TAG, UUID } from '../supabase/functions/_shared/arcade'
 import { ReplayRecorder } from '../src/replay/replay-recorder'
 
 vi.mock('../src/config/arcade', () => ({
@@ -68,6 +68,18 @@ function contractProblems(req: Captured): string[] {
   if (!req.headers.apikey) problems.push('missing apikey header')
   const needsPlayer = op.security?.some((s) => 'player' in s) ?? false
   if (needsPlayer && !/^Bearer \S+$/.test(req.headers.Authorization ?? '')) problems.push('missing player bearer token')
+  const headerParams = new Map((op.parameters ?? []).filter((p) => p.in === 'header').map((p) => [p.name.toLowerCase(), p]))
+  for (const [name, value] of Object.entries(req.headers)) {
+    if (!/^idempotency-key$/i.test(name)) continue
+    const param = headerParams.get(name.toLowerCase())
+    if (!param) problems.push(`undeclared header ${name}`)
+    else problems.push(...schemaErrors(param.schema, value).map((e) => `header ${name}:${e}`))
+  }
+  for (const param of headerParams.values()) {
+    if (param.required && !Object.keys(req.headers).some((h) => h.toLowerCase() === param.name.toLowerCase())) {
+      problems.push(`missing header ${param.name}`)
+    }
+  }
   const declared = new Map((op.parameters ?? []).filter((p) => p.in === 'query').map((p) => [p.name, p]))
   for (const [name, value] of req.url.searchParams) {
     const param = declared.get(name)
@@ -96,8 +108,24 @@ const session = (token: string) => ({
   expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: PLAYER, is_anonymous: true },
 })
 
+/**
+ * The service's side of `Idempotency-Key` (#503 A4), as supabase/functions/_shared/arcade.ts
+ * `idempotent` does it: a key seen before gets the stored answer and stores nothing.
+ */
+const idempotency = new Map<string, unknown>()
+let rows = { replay: 0, score: 0 }
+
+function idempotent(headers: Record<string, string>, kind: 'replay' | 'score', fresh: () => unknown): { status: number; body: unknown } {
+  const key = headers['Idempotency-Key']
+  if (key && idempotency.has(key)) return { status: 201, body: idempotency.get(key) }
+  rows[kind]++
+  const body = fresh()
+  if (key) idempotency.set(key, body)
+  return { status: 201, body }
+}
+
 /** Canned answers, each in the documented response shape. */
-function answer(method: string, url: URL): { status: number; body: unknown } {
+function answer(method: string, url: URL, headers: Record<string, string> = {}): { status: number; body: unknown } {
   const key = `${method} ${url.pathname}`
   switch (key) {
     case 'POST /auth/v1/signup': return { status: 200, body: session('fresh') }
@@ -108,8 +136,8 @@ function answer(method: string, url: URL): { status: number; body: unknown } {
     }
     case 'POST /rest/v1/rpc/player_rank': return { status: 200, body: 3 }
     case 'GET /rest/v1/replays': return { status: 200, body: [{ payload: replayPayload() }] }
-    case 'POST /functions/v1/submit-replay': return { status: 201, body: { success: true, replay_id: REPLAY_ID, frame_count: 1200 } }
-    case 'POST /functions/v1/submit-score': return { status: 201, body: { success: true, score_id: 42, rank: 3, verified: false } }
+    case 'POST /functions/v1/submit-replay': return idempotent(headers, 'replay', () => ({ success: true, replay_id: REPLAY_ID, frame_count: 1200 }))
+    case 'POST /functions/v1/submit-score': return idempotent(headers, 'score', () => ({ success: true, score_id: 41 + rows.score, rank: 3, verified: false }))
     case 'POST /functions/v1/create-challenge': return { status: 201, body: { success: true, challenge_id: CHALLENGE_ID } }
     case 'GET /rest/v1/saves': return { status: 200, body: [{ slot: 'campaign', schema_version: 2, data: { version: 2 }, updated_at: '2026-10-16T02:00:00Z' }] }
     case 'POST /functions/v1/put-save': return { status: 200, body: { success: true, slot: 'campaign', schema_version: 2, updated_at: '2026-10-16T02:00:01Z' } }
@@ -123,6 +151,12 @@ function answer(method: string, url: URL): { status: number; body: unknown } {
     case 'GET /rest/v1/live_now': return { status: 200, body: [liveRun()] }
     case 'GET /rest/v1/replays_live': return { status: 200, body: [{ ...liveRun(), header: liveHeader() }] }
     case 'GET /rest/v1/replays_live_chunks': return { status: 200, body: [liveChunk()] }
+    case 'GET /rest/v1/tournaments': return { status: 200, body: [tournament()] }
+    case 'GET /rest/v1/tournament_standings': return { status: 200, body: [standing(url.searchParams.get('mine') === 'is.true')] }
+    case 'POST /rest/v1/rpc/tournament_ghosts': return {
+      status: 200,
+      body: [{ rank: 1, name: 'ACE', score: 12000, replay_id: REPLAY_ID, stride: 2, samples: 1, track: 'AQAAAAIAAAADAAAA' }],
+    }
     default: return { status: 404, body: { message: `no canned answer for ${key}` } }
   }
 }
@@ -146,6 +180,21 @@ function liveChunk() {
   return { seq: 0, start_frame: 0, frame_count: 300, frames: '300:0,0,0,0,0,0,-', state_hash: '0123456789abcdef', score: 120, track: null, final: false }
 }
 
+function tournament() {
+  return {
+    challenge_id: CHALLENGE_ID, board: 'weekly-2026-W45', title: 'Table of the week 2026-W45', seed: 3282750858,
+    cascade_seed: 3282750858, map_id: 'neon-helix', starts_at: '2026-11-02T00:00:00Z', expires_at: '2026-11-09T00:00:00Z',
+    frozen_at: null, status: 'open', entries: 12, leader_name: 'ACE', leader_score: 12000,
+  }
+}
+
+function standing(mine: boolean) {
+  return {
+    challenge_id: CHALLENGE_ID, board: 'weekly-2026-W45', rank: mine ? 4 : 1, name: mine ? 'YOU' : 'ACE', score: mine ? 7000 : 12000,
+    replay_id: REPLAY_ID, played_at: '2026-11-03T20:00:00Z', final: false, mine, has_ghost: true,
+  }
+}
+
 function challengeRow(kind: 'player' | 'weekly') {
   return {
     id: CHALLENGE_ID, kind, seed: 444001, map_id: 'neon-helix', target_score: kind === 'weekly' ? 0 : 1670,
@@ -166,6 +215,8 @@ let captured: Captured[] = []
 let offline = false
 /** The reply's headers arrive, then its body stalls until the client's timeout aborts it. */
 let stallBody = false
+/** Requests to this path are answered (and committed) server-side, but the reply stalls. */
+let stallAfterCommit: string | null = null
 
 function installFetch(): void {
   vi.stubGlobal('fetch', vi.fn(async (input: string, init: RequestInit = {}) => {
@@ -174,12 +225,17 @@ function installFetch(): void {
     const body = typeof init.body === 'string' ? JSON.parse(init.body) as unknown : undefined
     captured.push({ method, url, headers: (init.headers ?? {}) as Record<string, string>, body })
     if (offline) throw new TypeError('Failed to fetch')
-    if (stallBody) {
+    const stalled = (): Response => {
       const res = new Response('{}', { status: 200 })
       res.text = () => Promise.reject(new DOMException('The user aborted a request.', 'AbortError'))
       return res
     }
-    const { status, body: out } = answer(method, url)
+    if (stallAfterCommit === url.pathname) {
+      answer(method, url, (init.headers ?? {}) as Record<string, string>)
+      return stalled()
+    }
+    if (stallBody) return stalled()
+    const { status, body: out } = answer(method, url, (init.headers ?? {}) as Record<string, string>)
     const schema = responseSchema(url.pathname, method.toLowerCase(), status)
     if (schema) expect(schemaErrors(schema, out), `canned ${method} ${url.pathname}`).toEqual([])
     return new Response(JSON.stringify(out), { status, headers: { 'Content-Type': 'application/json' } })
@@ -203,6 +259,9 @@ describe('arcade client ↔ docs/api/arcade.openapi.yaml (#444)', () => {
     captured = []
     offline = false
     stallBody = false
+    stallAfterCommit = null
+    idempotency.clear()
+    rows = { replay: 0, score: 0 }
     localStorage.clear()
     installFetch()
   })
@@ -228,6 +287,80 @@ describe('arcade client ↔ docs/api/arcade.openapi.yaml (#444)', () => {
     expect(res).toMatchObject({ success: true, rank: 3, score_id: 42 })
     expect(captured.map((r) => r.url.pathname)).toEqual(['/auth/v1/signup', '/functions/v1/submit-replay', '/functions/v1/submit-score'])
     expect(captured[2]?.body).toMatchObject({ replay_id: REPLAY_ID })
+    // One submission id per run, one key per write (#503 A4).
+    const [replayKey, scoreKey] = [captured[1]?.headers['Idempotency-Key'], captured[2]?.headers['Idempotency-Key']]
+    expect(replayKey).toMatch(/^[0-9a-f-]{36}:replay$/)
+    expect(scoreKey).toBe(replayKey?.replace(/:replay$/, ':score'))
+    expect(rows).toEqual({ replay: 1, score: 1 })
+    expectConformant()
+  })
+
+  it('two runs carry different submission ids', async () => {
+    const api = await arcade()
+    const run = { name: 'ACE', score: 12000, map_id: 'neon-helix', balls: 1, combo_max: 4 }
+    await api.submitRun(run)
+    await api.submitRun(run)
+    const keys = captured.filter((r) => r.url.pathname === '/functions/v1/submit-score').map((r) => r.headers['Idempotency-Key'])
+    expect(new Set(keys).size).toBe(2)
+    expect(rows.score).toBe(2)
+  })
+
+  it('a score that timed out after the service stored it is queued, then flushed under the same key: one row (#503 A4)', async () => {
+    const api = await arcade()
+    stallAfterCommit = '/functions/v1/submit-score'
+    const res = await api.submitRun({ name: 'ACE', score: 9000, map_id: 'neon-helix', balls: 1, combo_max: 2 }, JSON.stringify(replayPayload()))
+    expect(res).toMatchObject({ success: false, queued: true })
+    expect(rows).toEqual({ replay: 1, score: 1 })
+
+    stallAfterCommit = null
+    const first = captured.filter((r) => r.url.pathname === '/functions/v1/submit-score')[0]
+    captured = []
+    expect(await api.flushQueuedRuns()).toBe(1)
+    // The replay went through the first time: the flush only re-sends the score, citing it.
+    expect(captured.map((r) => r.url.pathname)).toEqual(['/functions/v1/submit-score'])
+    expect(captured[0]?.headers['Idempotency-Key']).toBe(first?.headers['Idempotency-Key'])
+    expect(captured[0]?.body).toMatchObject({ replay_id: REPLAY_ID })
+    expect(rows).toEqual({ replay: 1, score: 1 })
+    expect(api.queuedRunCount()).toBe(0)
+    expectConformant()
+  })
+
+  it('a replay that timed out after the service stored it is re-sent under the same key: one replay row', async () => {
+    const api = await arcade()
+    stallAfterCommit = '/functions/v1/submit-replay'
+    const res = await api.submitRun({ name: 'ACE', score: 9000, map_id: 'neon-helix', balls: 1, combo_max: 2 }, JSON.stringify(replayPayload()))
+    expect(res).toMatchObject({ success: false, queued: true })
+    const firstKey = captured.find((r) => r.url.pathname === '/functions/v1/submit-replay')?.headers['Idempotency-Key']
+
+    stallAfterCommit = null
+    captured = []
+    expect(await api.flushQueuedRuns()).toBe(1)
+    expect(captured.map((r) => r.url.pathname)).toEqual(['/functions/v1/submit-replay', '/functions/v1/submit-score'])
+    expect(captured[0]?.headers['Idempotency-Key']).toBe(firstKey)
+    expect(rows).toEqual({ replay: 1, score: 1 })
+    expectConformant()
+  })
+
+  it('a run queued by an older build (no submission id) gets one on its first flush and keeps it', async () => {
+    localStorage.setItem('pachinball:arcade-queue', JSON.stringify([
+      { score: { name: 'ACE', score: 9000, map_id: 'neon-helix', balls: 1, combo_max: 2 }, queuedAt: '2026-11-01T00:00:00Z' },
+    ]))
+    const api = await arcade()
+    stallAfterCommit = '/functions/v1/submit-score'
+    expect(await api.flushQueuedRuns()).toBe(0)
+    const key = captured.find((r) => r.url.pathname === '/functions/v1/submit-score')?.headers['Idempotency-Key']
+    expect(key).toMatch(/:score$/)
+    stallAfterCommit = null
+    captured = []
+    expect(await api.flushQueuedRuns()).toBe(1)
+    expect(captured.at(-1)?.headers['Idempotency-Key']).toBe(key)
+    expect(rows.score).toBe(1)
+  })
+
+  it('an unranked run (#503 A3) is submitted with ranked: false', async () => {
+    const api = await arcade()
+    await api.submitRun({ name: 'ACE', score: 9000, map_id: 'neon-helix', balls: 1, combo_max: 2, ranked: false })
+    expect(captured.at(-1)?.body).toMatchObject({ ranked: false })
     expectConformant()
   })
 
@@ -293,6 +426,22 @@ describe('arcade client ↔ docs/api/arcade.openapi.yaml (#444)', () => {
     expectConformant()
   })
 
+  it('weekly tournaments: the archive, standings, my row and the top ghosts (#490 Slice C)', async () => {
+    const api = await arcade()
+    expect(await api.fetchTournaments(5)).toMatchObject([{ board: 'weekly-2026-W45', status: 'open' }])
+    expect(await api.fetchTournamentStandings('weekly-2026-W45', 10)).toMatchObject([{ rank: 1, name: 'ACE', final: false }])
+    // Reading never creates a player: no session, no row of mine.
+    expect(await api.fetchMyTournamentStanding('weekly-2026-W45')).toBeNull()
+    expect(captured.every((r) => !r.headers.Authorization)).toBe(true)
+    await api.arcadeSession()
+    captured = []
+    expect(await api.fetchMyTournamentStanding('weekly-2026-W45')).toMatchObject({ rank: 4, mine: true })
+    expect(captured[0]?.url.searchParams.get('mine')).toBe('is.true')
+    expect(captured[0]?.headers.Authorization).toBe('Bearer fresh')
+    expect(await api.fetchTournamentGhosts('weekly-2026-W45', 3)).toMatchObject([{ rank: 1, stride: 2, samples: 1 }])
+    expectConformant()
+  })
+
   it('live spectate: a player streams a run, a spectator lists, joins and polls it (Slice E)', async () => {
     const api = await arcade()
     const id = await api.startLiveRun({ header: liveHeader(), mapId: 'neon-helix', tag: 'ACE', chunkSteps: 300, trackStride: 3 })
@@ -318,6 +467,10 @@ describe('arcade client ↔ docs/api/arcade.openapi.yaml (#444)', () => {
     expect(contractProblems({ ...base, headers: { apikey: 'k' }, url: new URL('https://a/functions/v1/submit-score'), body: { name: 'ACE', score: 1, map_id: 'm' } })).toContain('missing player bearer token')
     expect(contractProblems({ method: 'GET', headers: { apikey: 'k' }, url: new URL('https://a/rest/v1/leaderboard?select=*&map_id=eq.m&adventure_level=is.null&order=rank.asc&limit=10&score=gt.5'), body: undefined }))
       .toContain('undeclared query parameter score')
+    expect(contractProblems({ ...base, headers: { ...base.headers, 'Idempotency-Key': 'k' }, url: new URL('https://a/functions/v1/submit-score'), body: { name: 'ACE', score: 1, map_id: 'm' } }))
+      .toEqual(expect.arrayContaining([expect.stringMatching(/^header Idempotency-Key/)]))
+    expect(contractProblems({ ...base, headers: { ...base.headers, 'Idempotency-Key': 'abcdefgh:score' }, url: new URL('https://a/functions/v1/create-challenge'), body: { seed: 1, targetScore: 1, mapId: 'm' } }))
+      .toContain('undeclared header Idempotency-Key')
   })
 
   it('the Edge Functions validate with the patterns the contract publishes', () => {
@@ -325,5 +478,6 @@ describe('arcade client ↔ docs/api/arcade.openapi.yaml (#444)', () => {
     expect(TAG.source).toBe((schemas.Tag as { pattern: string }).pattern)
     expect(MAP_ID.source).toBe((schemas.MapId as { pattern: string }).pattern)
     expect(UUID.source).toBe((schemas.Uuid as { pattern: string }).pattern)
+    expect(IDEMPOTENCY_KEY.source).toBe((schemas.IdempotencyKey as { pattern: string }).pattern)
   })
 })

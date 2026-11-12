@@ -284,6 +284,7 @@ export class NameEntryDialog {
 
   private changeLetter(delta: number): void {
     const current = this.currentName[this.currentPosition]
+    if (current === undefined) return
     const currentCode = current.charCodeAt(0)
     
     // A-Z range (65-90)
@@ -305,7 +306,7 @@ export class NameEntryDialog {
   private updateDisplay(): void {
     const letters = this.overlay?.querySelectorAll('.letter')
     letters?.forEach((el, i) => {
-      el.textContent = this.currentName[i]
+      el.textContent = this.currentName[i] ?? ''
       el.classList.toggle('active', i === this.currentPosition)
     })
   }

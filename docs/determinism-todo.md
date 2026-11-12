@@ -39,10 +39,8 @@ track reproduces it.
 | `src/objects/feeders/mag-spin-feeder.ts` | Release angle variance | fork `feeder` |
 | `src/objects/feeders/quantum-tunnel-feeder.ts` | Eject impulse z variance | fork `feeder` |
 | `src/objects/feeders/nano-loom-feeder.ts` | Weave nudge impulse | fork `feeder` |
-| `src/game-elements/path-mechanics/spinner-launcher.ts` | Launch angle | fork `feeder` |
 | `src/display/slot-machine.ts` | Activation + spin plan | fork `slot` |
 | `src/display/display-reels.ts` | Reel shuffles / stops | fork `slot` |
-| `src/game-elements/path-mechanics/reactive-peg-cluster.ts` | Peg cluster radius variance | `peg-cluster:<x>,<y>,<z>` |
 | `src/game/game-scenario.ts` | Dynamic scenario obstacle type/position | `scenario-zone:<index>` |
 | `src/adventure/tracks/prism-pathway.ts` | Prism collider placement + rotation | `track:prism-pathway` |
 | `src/adventure/tracks/casino-heist.ts` | Chip-stack collider placement + height; slot-gate mover phase/frequency | `track:casino-heist:chips`, `…:gates` |

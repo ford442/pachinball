@@ -81,7 +81,7 @@ function measure() {
     : ''
   // babylon-core is budgeted on its own row; everything else the browser fetches before boot
   // (the entry + its modulepreloaded static imports) counts toward `initialJsGzipKb`, so moving
-  // code into an eagerly-loaded manual chunk (ui-overlays) cannot make the entry look smaller.
+  // code into an eagerly-loaded manual chunk cannot make the entry look smaller.
   const boot = bootChunks(indexHtmlText, { excludePrefixes: ['babylon-core-'] })
   const entryFromHtml = boot.entry ? join(assetsDir, boot.entry) : null
   const entry =
@@ -109,6 +109,14 @@ function measure() {
     precacheTotalKiB += size / 1024
   }
 
+  // Every chunk the browser fetches to boot (entry + modulepreloads, babylon-core included) must
+  // be precached, or the PWA cannot boot offline after one visit (#503 A1).
+  const precachedNames = new Set(precached.map((url) => url.split('/').pop()))
+  const bootAll = bootChunks(indexHtmlText)
+  const bootNotPrecached = [bootAll.entry, ...bootAll.preloaded].filter(
+    (name) => name && !precachedNames.has(name),
+  )
+
   // Rapier must stay a lazy, degrade-only chunk.
   const rapierName = rapier ? rapier.split(/[/\\]/).pop() : null
   const indexHtml = readText(join(distDir, 'index.html'))
@@ -130,6 +138,7 @@ function measure() {
     precacheTotalKiB: Number(precacheTotalKiB.toFixed(2)),
     rapierPrecached,
     rapierPreloaded,
+    bootNotPrecached,
     files: {
       entry: entry ? relative(root, entry) : null,
       initialChunks: initialChunks.map((file) => relative(root, file)),
@@ -174,6 +183,15 @@ if (measured.rapierPrecached || measured.rapierPreloaded) {
   failed = true
 } else {
   console.log('ok  rapier chunk is lazy: not precached, not modulepreloaded')
+}
+if (measured.bootNotPrecached.length > 0) {
+  console.error(
+    `FAIL  boot chunk(s) modulepreloaded but not precached — offline revisit cannot boot (#503 A1): ` +
+      measured.bootNotPrecached.join(', '),
+  )
+  failed = true
+} else {
+  console.log('ok  every boot chunk (entry + modulepreloads) is precached')
 }
 // Raw dist/ size: what deploy.py uploads. Untoleranced — these are hard caps.
 const distBudget = budget.dist ?? {}

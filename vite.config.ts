@@ -1,5 +1,7 @@
 import { execSync } from 'node:child_process'
-import { readdirSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdirSync, readdirSync, readFileSync, renameSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -22,13 +24,58 @@ function resolveBuildId(): string {
 
 const BUILD_ID = resolveBuildId()
 
-/** `dist/build-info.json`: the replay verifier reports this as its verifier_version. */
+/**
+ * SHA-256 (hex) of the physics binary this build ships (#490 Slice B): `public/wasm/PhysicsModule.wasm`,
+ * which `vite build` copies to `dist/wasm/` byte for byte (`check:dist-wasm`). `npm run build` runs
+ * `build:wasm` before Vite loads this file, so it is the binary players run. Null in a Rapier-only tree.
+ * Stamped into every tape (`wasmSha256`) so the verifier replays a run on the binary it was played on.
+ */
+function resolveWasmSha256(): string | null {
+  try {
+    return createHash('sha256').update(readFileSync(fileURLToPath(new URL('./public/wasm/PhysicsModule.wasm', import.meta.url)))).digest('hex')
+  } catch {
+    return null
+  }
+}
+
+const WASM_SHA256 = resolveWasmSha256()
+
+/**
+ * `dist/build-info.json`: the replay verifier reports `buildId` as its verifier_version and checks
+ * `wasmSha256` against the archived build's own `wasm/PhysicsModule.wasm`.
+ */
 function buildInfo(): Plugin {
   return {
     name: 'pachinball-build-info',
     apply: 'build',
     generateBundle() {
-      this.emitFile({ type: 'asset', fileName: 'build-info.json', source: `${JSON.stringify({ buildId: BUILD_ID })}\n` })
+      this.emitFile({
+        type: 'asset',
+        fileName: 'build-info.json',
+        source: `${JSON.stringify({ buildId: BUILD_ID, wasmSha256: WASM_SHA256 })}\n`,
+      })
+    },
+  }
+}
+
+/**
+ * `build.sourcemap: 'hidden'` writes `.map` files next to the bundles. They are for symbolicating
+ * a production stack offline (#503 A5), not for players: move them out of `dist/` (which
+ * deploy.py uploads whole) into `dist-sourcemaps/`, keeping their relative paths.
+ */
+function sourcemapsOutOfDist(): Plugin {
+  return {
+    name: 'pachinball-sourcemaps-out-of-dist',
+    apply: 'build',
+    writeBundle(options, bundle) {
+      const outDir = options.dir ?? 'dist'
+      const mapsDir = join(dirname(outDir), 'dist-sourcemaps')
+      for (const fileName of Object.keys(bundle)) {
+        if (!fileName.endsWith('.map')) continue
+        const to = join(mapsDir, fileName)
+        mkdirSync(dirname(to), { recursive: true })
+        renameSync(join(outDir, fileName), to)
+      }
     },
   }
 }
@@ -145,14 +192,19 @@ const localStorageManagerCaching = [
   },
 ]
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode, command }) => ({
   // Use relative paths so assets resolve correctly when deployed to a subdirectory
   base: './',
   define: {
     __PACHINBALL_BUILD__: JSON.stringify(BUILD_ID),
+    // Builds only: the dev server can outlive a `build:wasm`, and a stale hash is worse than none.
+    __PACHINBALL_WASM_SHA256__: JSON.stringify(command === 'build' ? WASM_SHA256 : null),
   },
+  // Keyed on Vite's `mode`, not NODE_ENV (#503 A5). Production keeps console.warn / console.error
+  // (the only trace a player's failure leaves) and marks the chatty levels pure, so esbuild drops them.
   esbuild: {
-    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
+    drop: mode === 'production' ? ['debugger'] : [],
+    pure: mode === 'production' ? ['console.log', 'console.debug', 'console.info', 'console.time', 'console.timeEnd'] : [],
   },
   // Cross-origin isolation for `crossOriginIsolated`/SharedArrayBuffer support in
   // local dev + preview. Production (Apache, outside this repo) already serves the
@@ -182,6 +234,9 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     target: 'es2022',
+    // Maps are emitted but not referenced from the bundles: a stack from the field can be
+    // symbolicated offline without shipping the source to every player (#503 A5).
+    sourcemap: 'hidden',
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -192,9 +247,10 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('node_modules/@babylonjs/core')) {
             return babylonChunks.isBoot(id) ? 'babylon-core' : undefined
           }
-          if (id.match(/leaderboard-system|campaign-map|name-entry-dialog/)) {
-            return 'ui-overlays'
-          }
+          // No app-code manual chunks: Rollup hoists shared modules into them, so the entry ends up
+          // statically importing (and index.html modulepreloading) them. A boot chunk the service
+          // worker does not precache breaks the offline revisit (#503 A1); check-bundle-size.mjs
+          // asserts every modulepreloaded chunk is precached.
           return undefined
         },
         chunkFileNames(chunk) {
@@ -207,8 +263,11 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
+  // The worker is created with `type: 'module'`; emit it as one (#503 B).
+  worker: { format: 'es' },
   plugins: [
     buildInfo(),
+    sourcemapsOutOfDist(),
     babylonChunks.plugin,
     VitePWA({
       // 'prompt': a new worker waits until the player accepts the update toast
@@ -282,8 +341,6 @@ export default defineConfig(({ mode }) => ({
           // Rapier (~2.15 MB): only the explicit `rapier` mode and the fail-closed
           // degrade (C++ bundle missing) load it; the C++ bundle is precached instead (#412)
           '**/rapier-*.js',
-          // Leaderboard / name-entry / campaign stage-map overlays
-          '**/ui-overlays-*.js',
           // The update prompt only loads when a newer worker is waiting, i.e. online
           '**/update-toast-*.js',
           // Per-track adventure builders (dynamic import)

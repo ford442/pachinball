@@ -6,7 +6,7 @@
  */
 
 import { API_BASE, apiFetch, isRemoteApiBase } from '../config'
-import { TABLE_MAPS, type TableMapConfig, type TableMapType } from '../config/table-maps'
+import { TABLE_MAPS, type TableMapConfig } from '../config/table-maps'
 import { assetUrl } from '../core/asset-urls'
 
 export interface DynamicMapConfig extends TableMapConfig {
@@ -181,9 +181,7 @@ export class MapSystem {
 
   private resetToHardcodedMaps(): void {
     this.maps.clear()
-    const hardcoded: TableMapType[] = Object.keys(TABLE_MAPS)
-    for (const id of hardcoded) {
-      const config = TABLE_MAPS[id]
+    for (const [id, config] of Object.entries(TABLE_MAPS)) {
       this.maps.set(id, {
         ...config,
         id,

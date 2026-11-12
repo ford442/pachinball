@@ -1,9 +1,10 @@
 {
   "chunks": {
-    "entryGzipMaxKb": 205,
+    "entryGzipMaxKb": 235,
     "babylonCoreGzipMaxKb": 680,
     "rapierGzipMaxKb": 800,
-    "precacheTotalKiBMax": 6400
+    "precacheTotalKiBMax": 6400,
+    "initialJsGzipMaxKb": 240
   },
   "dist": {
     "distTotalMiBMax": 40,

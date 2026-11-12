@@ -15,7 +15,8 @@ import { GameConfig, GAME_TUNING } from './config'
 import { GameRenderer, type RendererHost } from './game/game-renderer'
 import { GameCabinetBuilder, type CabinetBuilderHost } from './game/game-cabinet-builder'
 import { GameSceneBuilder, type SceneBuilderHost } from './game/game-scene-builder'
-import { GamePhysicsController, type PhysicsHost } from './game/game-physics-controller'
+import { GamePhysicsController } from './game/physics/physics-controller'
+import type { PhysicsHost } from './game/physics/types'
 import { GameInputActions, type InputActionsHost } from './game/game-input-actions'
 import { GameScenario, type ScenarioHost } from './game/game-scenario'
 import { GameSlotAdventure, type SlotAdventureHost } from './game/game-slot-adventure'
@@ -31,8 +32,17 @@ import type { DebugStageKey } from './game/checkpoint-debug'
 import { GameDelegates } from './game/game-delegates'
 import { getChallengeSystem } from './replay/challenge-system'
 import { installSimClock } from './core/sim-clock'
-import { FrameScheduler } from './core/frame-scheduler'
-import { bootWarn } from './boot-log'
+import { FrameScheduler, type FrameFault } from './core/frame-scheduler'
+import type { SimFaultReport } from './core/fault-window'
+import { SimFaultPolicy } from './game/sim-fault-policy'
+import { bootError, bootWarn } from './boot-log'
+import { engineDrawCallCount } from './engine/create-engine'
+import type { MachineDescriptor } from './schemas/machine'
+
+export interface GameOptions {
+  /** The machine to build (resolved by `src/machine/machine-loader.ts`); null or absent for the vanilla table. */
+  machine?: MachineDescriptor | null
+}
 
 export class Game
   extends GameDelegates
@@ -57,10 +67,62 @@ export class Game
    */
   readonly frameScheduler: FrameScheduler
 
-  constructor(engine: Engine | WebGPUEngine, physics: PhysicsSystem = new PhysicsSystem()) {
+  constructor(engine: Engine | WebGPUEngine, physics: PhysicsSystem = new PhysicsSystem(), options: GameOptions = {}) {
     super(engine)
     this.physics = physics
-    this.frameScheduler = new FrameScheduler(engine, { signal: this.signal, frame: () => this.renderFrame() })
+    this.machine = options.machine ?? null
+    this.frameScheduler = new FrameScheduler(engine, {
+      signal: this.signal,
+      frame: () => this.renderFrame(),
+      onFault: (fault) => this.onFrameFault(fault),
+    })
+  }
+
+  /** What a physics / sim fault does to the run (#503 A3). */
+  private readonly simFaultPolicy = new SimFaultPolicy({
+    replayRunner: this.replayRunner,
+    isRunLive: () => this.stateManager?.isPlaying() ?? false,
+    frame: () => this.frameScheduler.getFrameCount(),
+    onUnranked: (reason, ended) => this.eventBus?.emit('run:unranked', { reason, ended }),
+    endRun: (reason) => {
+      if (this.signal.aborted) return
+      bootError(`[Game] ending the run: repeated sim faults (${reason})`)
+      this.setGameState(GameState.GAME_OVER)
+    },
+    defer: (fn) => queueMicrotask(fn),
+  })
+
+  /**
+   * A frame system threw (#503 A3). Presentation systems are quarantined by the scheduler (and
+   * announced as `'system:quarantined'`); a physics / sim fault goes to `onSimFault`.
+   */
+  private onFrameFault(fault: FrameFault): void {
+    bootError(
+      `[Game] frame system ${fault.phase}/${fault.name} threw${fault.quarantined ? ' — quarantined' : ''}:`,
+      fault.error,
+    )
+    if (fault.quarantined) {
+      this.eventBus?.emit('system:quarantined', { phase: fault.phase, name: fault.name, message: fault.message })
+    }
+    if (fault.sim) this.onSimFault({ phase: fault.phase === 'physics' ? 'physics' : 'sim', name: fault.name, message: fault.message })
+  }
+
+  /**
+   * A physics / sim fault: a frame system in those phases, or a contact handler inside the step
+   * (`PhysicsHost.onSimFault`). See `SimFaultPolicy`.
+   */
+  readonly onSimFault = (fault: SimFaultReport): void => {
+    this.simFaultPolicy.report(fault)
+  }
+
+  /** This run hit a sim fault: submitted with `ranked: false` (`HUDHost`). */
+  get runUnranked(): boolean {
+    return this.simFaultPolicy.isUnranked()
+  }
+
+  /** A new run starts ranked with a clean fault window (`LifecycleHost.startGame`). */
+  resetRunFaults(): void {
+    this.simFaultPolicy.reset()
   }
 
   /** Distance fog is a motion cue; reduced-motion players get none. */
@@ -247,9 +309,9 @@ export class Game
           this.slotAdventure?.forceSlotSpin()
         },
         onMapSwitch: (index) => {
-          const maps = this.mapManager?.getMapSystem().getMapIds() || []
-          if (index >= 0 && index < maps.length) {
-            this.mapManager?.switchTableMap(maps[index])
+          const mapId = this.mapManager?.getMapSystem().getMapIds()[index]
+          if (mapId !== undefined) {
+            this.mapManager?.switchTableMap(mapId)
           }
         },
         onMapCycle: () => this.mapManager?.cycleTableMap(),
@@ -306,7 +368,6 @@ export class Game
     })
 
     this.ready = true
-    this.stateManager.setSystems(this.effects, this.display)
 
     await this.systemsInitializer.postInitManagers()
 
@@ -387,9 +448,8 @@ export class Game
       }
     }
 
-    const drawCallsCounter = (this.engine as unknown as { _drawCalls?: { current?: number } })._drawCalls
     this.performanceMonitor.updateEngineMetrics(
-      drawCallsCounter?.current ?? 0,
+      engineDrawCallCount(this.engine),
       this.physics.getActiveBodyCount(),
     )
     this.performanceMonitor.setParticleCount(this.effects?.getActiveParticleCount() ?? 0)

@@ -8,7 +8,7 @@ import type { BallAnimator } from '../../game-elements/ball-animator'
 import type { GameObjects } from '../../objects'
 import type { EffectsSystem } from '../../effects'
 import type { DisplaySystem } from '../../display'
-import type { SoundSystem } from '../../game-elements/sound-system'
+import type { SoundSystem } from '../../audio/sound-system'
 import type { HapticManager } from '../../game-elements/haptics'
 import type { GameStateManager } from '../game-state'
 import type { EventBus } from '../../core/event-bus'
@@ -74,6 +74,11 @@ export interface PhysicsHost {
   readonly ghostBallRenderer?: import('../../replay/ghost-ball-renderer').GhostBallRenderer | null
   /** The race ghost of the active challenge (#444 Slice D), moved every render frame. */
   readonly ghostRace?: import('../../replay/ghost-race').GhostRace | null
+  /**
+   * A contact handler threw inside the physics step (#503 A3); the step's other contacts still
+   * dispatched. The Game treats it as a sim fault (unranked run / strict-playback rejection).
+   */
+  readonly onSimFault?: ((fault: import('../../core/fault-window').SimFaultReport) => void) | null
   /** Runs at the end of every fixed step: the live broadcast and spectator (#444 Slice E). */
   readonly afterFixedStep?: (() => void) | null
 

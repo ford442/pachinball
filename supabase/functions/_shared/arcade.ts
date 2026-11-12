@@ -8,15 +8,15 @@
 
 export const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, idempotency-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Max-Age': '86400',
 }
 
-export function json(body: unknown, status = 200): Response {
+export function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', ...headers },
   })
 }
 
@@ -103,6 +103,50 @@ export async function rest<T>(req: Request, path: string, init: { method: string
     throw new BadRequest(message, res.status)
   }
   return parsed as T
+}
+
+/** What a client may send as `Idempotency-Key`: the arcade client sends `<uuid>:replay` / `<uuid>:score`. */
+export const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{8,128}$/
+
+type Claim = { claimed: true } | { claimed: false; response: unknown } | { claimed: false; pending: true }
+
+/**
+ * Run a write at most once per `Idempotency-Key` (#503 A4). The key is claimed in
+ * `public.submission_keys` (unique per player, key and kind) before `write` runs, and the answer is
+ * stored with it; a repeat gets the stored answer back (`Idempotent-Replayed: true`) and writes
+ * nothing. A repeat that arrives while the first is still running gets 409, which the client keeps
+ * queued. A failed write releases the claim, so the retry runs it again. Without the header the
+ * write just runs (older clients).
+ */
+export async function idempotent(
+  req: Request,
+  kind: 'replay' | 'score',
+  write: () => Promise<{ status: number; body: unknown }>,
+): Promise<Response> {
+  const key = req.headers.get('Idempotency-Key')
+  if (key === null) {
+    const out = await write()
+    return json(out.body, out.status)
+  }
+  if (!IDEMPOTENCY_KEY.test(key)) throw new BadRequest(`Idempotency-Key must match ${IDEMPOTENCY_KEY}`)
+  const args = { p_key: key, p_kind: kind }
+  const claim = await rest<Claim>(req, 'rpc/claim_submission', { method: 'POST', body: args })
+  if (!claim.claimed) {
+    if ('pending' in claim) throw new BadRequest('this submission is still being processed; retry shortly', 409)
+    return json(claim.response, 201, { 'Idempotent-Replayed': 'true' })
+  }
+  let out: { status: number; body: unknown }
+  try {
+    out = await write()
+  } catch (err) {
+    await rest(req, 'rpc/release_submission', { method: 'POST', body: args }).catch(() => null)
+    throw err
+  }
+  // Stored, so the answer goes back even if recording it fails; that key then frees up after the
+  // claim goes stale (2 minutes), the one window in which a retry could write twice.
+  await rest(req, 'rpc/complete_submission', { method: 'POST', body: { ...args, p_response: out.body } })
+    .catch((err) => console.error('complete_submission failed', err))
+  return json(out.body, out.status)
 }
 
 /** Run a handler with the shared gate and error mapping. */

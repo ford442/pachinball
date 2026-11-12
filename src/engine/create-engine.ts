@@ -380,10 +380,16 @@ export async function createEngine(
   }
 }
 
-/** True if the created engine is actually running on WebGPU. */
-export function isWebGPUEngine(engine: EngineType | WebGPUEngineType): boolean {
-  return (
-    engine.getClassName() === 'WebGPUEngine' ||
-    (engine as unknown as { isWebGPU?: boolean }).isWebGPU === true
-  )
+/** True if the created engine is actually running on WebGPU (`AbstractEngine.isWebGPU` is public). */
+export function isWebGPUEngine(engine: Pick<EngineType | WebGPUEngineType, 'isWebGPU'>): boolean {
+  return engine.isWebGPU
+}
+
+/**
+ * Draw calls submitted in the last frame. This is the counter `SceneInstrumentation.drawCallsCounter`
+ * returns (`scene.getEngine()._drawCalls`), read without building an instrumentation object, so the
+ * performance monitor has it in production builds too.
+ */
+export function engineDrawCallCount(engine: Pick<EngineType | WebGPUEngineType, '_drawCalls'>): number {
+  return engine._drawCalls?.current ?? 0
 }

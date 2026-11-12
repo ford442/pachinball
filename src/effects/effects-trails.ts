@@ -115,6 +115,7 @@ export class TrailEffects {
     for (const [, trails] of this.feverTrails) {
       for (let i = trails.length - 1; i >= 0; i--) {
         const trail = trails[i]
+        if (!trail) continue
         trail.life -= dt
 
         if (trail.life <= 0) {

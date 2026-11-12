@@ -20,6 +20,8 @@
  *   npm run verify:replay -- tests/replays/a.json # just these
  *   npm run verify:replay -- --update             # write this build's numbers as the goldens
  *   npm run record:replay -- [files]              # re-record tapes from their scenarios
+ *   npm run verify:replay -- --release <dir>      # an archived release on its own goldens (#490 B)
+ *   npm run verify:replay -- --releases <dir>     # every release archived under <dir>
  *
  * --update is for an intentional numeric change (solver, tuning): the
  * goldens move in the same PR with a one-line rationale. --record is for
@@ -30,25 +32,40 @@
  * Options: --url <base> uses a running server (dev or preview) instead of
  * starting the Vite dev server; --verbose streams the page console and the
  * server log to stderr.
+ *
+ * --release / --releases replay a build the verifier keeps
+ * (`npm run release:archive`) on the golden tapes archived with it, served
+ * as shipped: run them on the storage host after a Chromium / Playwright
+ * upgrade, so an old release that stopped reproducing is caught before an
+ * honest old run is rejected on it.
  */
 
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { launchBrowser, repoRoot as root, runTape, startDevServer } from './lib/replay-harness.mjs'
+import { goldenDiffs as compare, listReleases } from './lib/build-info.mjs'
+import { checkRelease } from './lib/release-archive.mjs'
 
 const REPLAY_DIR = path.join(root, 'tests', 'replays')
 
 function parseArgs(argv) {
-  const opts = { mode: 'verify', update: false, url: null, verbose: false, files: [] }
+  const opts = { mode: 'verify', update: false, url: null, verbose: false, files: [], releases: [] }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--record') opts.mode = 'record'
     else if (a === '--update') opts.update = true
     else if (a === '--url') opts.url = argv[++i]
     else if (a === '--verbose') opts.verbose = true
-    else if (a.startsWith('--')) throw new Error(`unknown option ${a}`)
+    else if (a === '--release') opts.releases.push(path.resolve(argv[++i]))
+    else if (a === '--releases') {
+      const parent = path.resolve(argv[++i])
+      const found = listReleases(parent)
+      if (found.length === 0) throw new Error(`no archived release under ${parent}`)
+      opts.releases.push(...found)
+    } else if (a.startsWith('--')) throw new Error(`unknown option ${a}`)
     else opts.files.push(path.resolve(a))
   }
+  if (opts.releases.length) return opts
   if (opts.files.length === 0) {
     opts.files = readdirSync(REPLAY_DIR)
       .filter((f) => f.endsWith('.json'))
@@ -58,12 +75,30 @@ function parseArgs(argv) {
   return opts
 }
 
-function compare(golden, res) {
-  const diffs = []
-  for (const key of ['finalStateHash', 'score', 'steps']) {
-    if (golden?.[key] !== res[key]) diffs.push(`${key} ${JSON.stringify(golden?.[key])} → ${JSON.stringify(res[key])}`)
+/** Each archived release on its own golden tapes; resolves the number of failing tapes. */
+async function verifyReleases(dirs, { verbose }) {
+  const browser = await launchBrowser()
+  let failed = 0
+  try {
+    for (const dir of dirs) {
+      const name = path.relative(process.cwd(), dir) || dir
+      let checked
+      try {
+        checked = await checkRelease(dir, { browser, verbose })
+      } catch (err) {
+        failed++
+        console.log(JSON.stringify({ release: name, ok: false, reason: err instanceof Error ? err.message : String(err) }))
+        continue
+      }
+      for (const r of checked.results) {
+        if (!r.ok) failed++
+        console.log(JSON.stringify({ release: name, buildId: checked.build.id, wasmSha256: checked.build.wasmSha256, ...r }))
+      }
+    }
+  } finally {
+    await browser.close()
   }
-  return diffs
+  return failed
 }
 
 function writeTape(file, tape) {
@@ -72,6 +107,14 @@ function writeTape(file, tape) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2))
+  if (opts.releases.length) {
+    const failed = await verifyReleases(opts.releases, opts)
+    if (failed) {
+      console.error(`verify-replay: ${failed} release tape(s) failed`)
+      process.exit(1)
+    }
+    return
+  }
   const server = opts.url ? null : await startDevServer({ verbose: opts.verbose })
   const base = opts.url ?? server.base
   const browser = await launchBrowser()

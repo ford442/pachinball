@@ -8,15 +8,8 @@ import { preloadPhysicsSystem } from './game-elements/physics-preload'
 import { formatGpuProbeSummary } from './engine/gpu-degrade-telemetry'
 import { registerServiceWorker } from './pwa'
 import { bootError, bootWarn } from './boot-log'
+import { installErrorReporter } from './engine/error-reporter'
 import { BOOT_PRELOAD_STAGE, revealBootFailure } from './game/game-ui-popups'
-
-declare global {
-  interface Window {
-    /** The live Game; read by Playwright specs and the diagnostic helper. */
-    game?: Game
-    runVisibilityDiagnostic?: () => void
-  }
-}
 
 /** Set once constructed so the failure banner can name the checkpoint stage that was running. */
 let bootGame: Game | undefined
@@ -47,10 +40,20 @@ async function bootstrap(): Promise<void> {
   // entry (size budget) but is fetched now, in parallel, rather than after the render loop starts.
   const visibilityModule = import('./engine/visibility-manager')
   visibilityModule.catch(() => undefined) // a failure surfaces at the await below, not as unhandled
-  const loading = Promise.all([createEngine(canvas), preloadPhysicsSystem()])
+  // A machine named by the URL (`?machine=` / `#machine=`, #506) is fetched alongside; the loader
+  // is its own chunk, imported only when the URL names one.
+  const machineLoading = /[?&#]machine=/.test(location.search + location.hash)
+    ? import('./machine/machine-loader')
+        .then((m) => m.bootMachine(location, (msg) => bootWarn(msg)))
+        .catch((err: unknown) => {
+          bootWarn('[machine] loader unavailable, booting the vanilla table', err)
+          return null
+        })
+    : Promise.resolve(null)
+  const loading = Promise.all([createEngine(canvas), preloadPhysicsSystem(), machineLoading])
   // The Game (and its timers) does not exist yet: this watchdog covers only the pre-Game phase.
   withBootError((m) => m.watchPreGame(loading))
-  const [engine, physics] = await loading
+  const [engine, physics, machine] = await loading
 
   console.timeEnd('[Bootstrap] Engine + Physics parallel init')
   console.time('[Bootstrap] Game init')
@@ -59,10 +62,12 @@ async function bootstrap(): Promise<void> {
   // The WebGL2 fallback swaps in a fresh canvas (#451); tag the one the engine renders to.
   exposeRenderer(engine.getRenderingCanvas() ?? canvas, isWebGPUEngine(engine))
 
-  ;(window as unknown as Record<string, unknown>).bootstrapEngineOptions = resolveEngineOptions()
+  window.bootstrapEngineOptions = resolveEngineOptions()
 
-  const game = new Game(engine, physics)
+  const game = new Game(engine, physics, { machine })
   bootGame = game
+  // Uncaught errors / rejections are visible in production too (#503 A5).
+  installErrorReporter(game.signal)
   withBootError((m) => m.watchGame(game))
   await game.init()
   console.info(formatGpuProbeSummary())
@@ -99,7 +104,7 @@ async function bootstrap(): Promise<void> {
 
   console.timeEnd('[Bootstrap] Game init')
   console.timeEnd('[Bootstrap] Total initialization')
-  console.log(`[Bootstrap] Physics ready (${(window as unknown as { currentPhysicsEngine?: string }).currentPhysicsEngine ?? 'unknown'})`)
+  console.log(`[Bootstrap] Physics ready (${window.currentPhysicsEngine ?? 'unknown'})`)
 
   // Canvas resizing is owned by GameRenderer (game-renderer.ts:setupResizeObserver) and
   // DPR changes by setupDPRHandling, both torn down by Game.dispose(). A second observer

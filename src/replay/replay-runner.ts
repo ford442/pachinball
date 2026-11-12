@@ -22,6 +22,12 @@ export class ReplayRunner {
   private rejection: ReplayRejection | null = null
   /** A live tape (#444 Slice E): more frames arrive with `append`, until `endStream`. */
   private streaming = false
+  /**
+   * Verification playback (#503 A3): a physics / sim fault rejects the playback at once
+   * (`'sim-fault'`), so a run whose fault happens to reproduce the same score still cannot verify.
+   * Opt-in — spectate, ghosts and tests leave it off; it survives `load()` / `reset()`.
+   */
+  private strict = false
 
   /**
    * Load a replay payload and arm it for playback. A `streaming` tape is a
@@ -61,6 +67,14 @@ export class ReplayRunner {
     this.rejection = { outcome, message }
   }
 
+  setStrict(strict: boolean): void {
+    this.strict = strict
+  }
+
+  isStrict(): boolean {
+    return this.strict
+  }
+
   /** Set when the last load was refused; cleared by `load()` / `reset()`. */
   getRejection(): ReplayRejection | null {
     return this.rejection
@@ -93,11 +107,12 @@ export class ReplayRunner {
    */
   getNextFrame(): InputFrame | null {
     if (!this.playing || !this.payload) return null
-    if (this.currentFrameIndex >= this.payload.frames.length) {
+    const frame = this.payload.frames[this.currentFrameIndex]
+    if (frame === undefined) {
       if (!this.streaming) this.playing = false
       return null
     }
-    const frame = this.payload.frames[this.currentFrameIndex++]
+    this.currentFrameIndex++
     return frame
   }
 

@@ -141,8 +141,11 @@ describe('weekly machine descriptor', () => {
   })
 
   describe('every generated machine is a playable table', () => {
-    it('validates, passes the Daily Cascade constraints and the spawn probes (seeds 0–119)', () => {
-      for (let seed = 0; seed < 120; seed++) {
+    // One test per seed (#503 B): a 120-seed loop under the default 5 s timeout flaked when the
+    // full suite ran next to the native tests; each seed takes milliseconds on its own.
+    it.each(Array.from({ length: 120 }, (_, seed) => seed))(
+      'seed %i validates, passes the Daily Cascade constraints and the spawn probes',
+      (seed) => {
         const d = machineFor(seed)
         const result = validateWeeklyMachine(d)
         expect(result.ok, `seed ${seed}: ${JSON.stringify(result.ok ? [] : result.errors)}`).toBe(true)
@@ -150,10 +153,10 @@ describe('weekly machine descriptor', () => {
         expect(validateLayout(layout).reasons, `seed ${seed}`).toEqual([])
         expect(runSpawnProbes(layout).ok, `seed ${seed}`).toBe(true)
         expect(layout.pins.length).toBeGreaterThanOrEqual(WEEKLY_ENVELOPE.minPins)
-      }
-    })
+      },
+    )
 
-    it('the generator rarely needs the plain fallback', () => {
+    it('the generator rarely needs the plain fallback', { timeout: 30_000 }, () => {
       let fallbacks = 0
       for (let seed = 0; seed < 120; seed++) {
         if (weeklyMachineHash(machineFor(seed)) === weeklyMachineHash(plainWeeklyMachine(seed))) fallbacks++

@@ -26,24 +26,6 @@ export class GameStateManager {
     this.eventBus = eventBus
   }
 
-  /** @deprecated Systems now subscribe via EventBus; kept for backward compat */
-  setSystems(
-     
-    _effects?: { dispose?(): void } | null,
-     
-    _display?: { dispose?(): void } | null
-  ): void {
-    // no-op: DisplaySystem now self-manages via EventBus subscription
-  }
-
-  /** @deprecated Use EventBus subscription instead; kept for backward compat */
-  setDisplaySystem(
-     
-    _display?: { dispose?(): void } | null
-  ): void {
-    // no-op: DisplaySystem now self-manages via EventBus subscription
-  }
-
   getState(): GameState {
     return this.state
   }

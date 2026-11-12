@@ -145,6 +145,11 @@ export type BuiltInTableMapId = keyof typeof BUILTIN_TABLE_MAPS
  */
 export const TABLE_MAPS: Record<string, TableMapConfig> = { ...BUILTIN_TABLE_MAPS }
 
+/** A map's config, or the default map's for an id that is not (or no longer) registered. */
+export function tableMapConfig(id: string): TableMapConfig {
+  return TABLE_MAPS[id] ?? BUILTIN_TABLE_MAPS[DEFAULT_TABLE_MAP_ID]
+}
+
 /**
  * Register a dynamic map at runtime (e.g. fetched from backend).
  */

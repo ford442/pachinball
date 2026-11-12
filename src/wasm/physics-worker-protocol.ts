@@ -146,6 +146,8 @@ export type PhysicsWorkerSnapshotReply = {
 export type PhysicsWorkerFromWorker =
   | { type: 'ready' }
   | { type: 'error'; message: string }
+  /** The worker's batch loop threw (#503 A2): its world is gone; the client must fall back. */
+  | { type: 'fatal'; message: string; stack?: string }
   | PhysicsWorkerStepResult
   | PhysicsWorkerSharedAttach
   | PhysicsWorkerSnapshotReply

@@ -52,21 +52,56 @@ export function ghostPositionAt(samples: Int32Array, stride: number, steps: numb
   return { x: lerp(0), y: lerp(1), z: lerp(2) }
 }
 
-export class GhostRace {
-  private readonly samples: Int32Array
-  private readonly stride: number
-  private readonly renderer: GhostBallRenderer
-  private startStep: number | null = null
+/** One ghost in a race: a verified run's track and who played it. */
+export interface GhostLane {
+  track: GhostTrack
+  label: string
+}
 
-  constructor(scene: Scene, track: GhostTrack, readonly label: string) {
-    this.samples = decodeGhostTrack(track)
-    this.stride = track.stride
-    this.renderer = new GhostBallRenderer(scene)
-    this.renderer.setGhostColor('#ff3cf0', 0.45)
-    this.renderer.hide()
+/** Lane colours, leader first: magenta (the challenger / #1), gold, cyan, lime, orange. */
+const LANE_COLORS = ['#ff3cf0', '#ffd23c', '#3cf0ff', '#9cff3c', '#ff8a3c'] as const
+
+function isLaneList(value: GhostTrack | readonly GhostLane[]): value is readonly GhostLane[] {
+  return Array.isArray(value)
+}
+
+interface Lane {
+  readonly samples: Int32Array
+  readonly stride: number
+  readonly renderer: GhostBallRenderer
+}
+
+/**
+ * The ghosts a game races: one (a challenger's run) or several (a weekly
+ * tournament's top verified runs, #490 Slice C), all started with the game.
+ */
+export class GhostRace {
+  private readonly lanes: Lane[]
+  private startStep: number | null = null
+  /** The first lane's label (the challenger, or the leader). */
+  readonly label: string
+  readonly labels: readonly string[]
+
+  constructor(scene: Scene, track: GhostTrack, label: string)
+  constructor(scene: Scene, lanes: readonly GhostLane[])
+  constructor(scene: Scene, trackOrLanes: GhostTrack | readonly GhostLane[], label = 'ghost') {
+    const lanes = isLaneList(trackOrLanes) ? trackOrLanes : [{ track: trackOrLanes, label }]
+    this.labels = lanes.map((l) => l.label)
+    this.label = this.labels[0] ?? label
+    this.lanes = lanes.map((lane, i) => {
+      const renderer = new GhostBallRenderer(scene)
+      renderer.setGhostColor(LANE_COLORS[i % LANE_COLORS.length] ?? LANE_COLORS[0], 0.45)
+      renderer.hide()
+      return { samples: decodeGhostTrack(lane.track), stride: lane.track.stride, renderer }
+    })
   }
 
-  /** A game started: the ghost runs from its frame 0 now. */
+  /** How many ghosts race. */
+  get size(): number {
+    return this.lanes.length
+  }
+
+  /** A game started: the ghosts run from their frame 0 now. */
   begin(): void {
     this.startStep = simClockSteps()
   }
@@ -74,17 +109,20 @@ export class GhostRace {
   /** Once per render frame. */
   update(): void {
     if (this.startStep === null) return
-    const pos = ghostPositionAt(this.samples, this.stride, simClockSteps() - this.startStep)
-    if (!pos) {
-      if (this.renderer.isVisible()) this.renderer.hide()
-      return
+    const steps = simClockSteps() - this.startStep
+    for (const lane of this.lanes) {
+      const pos = ghostPositionAt(lane.samples, lane.stride, steps)
+      if (!pos) {
+        if (lane.renderer.isVisible()) lane.renderer.hide()
+        continue
+      }
+      if (!lane.renderer.isVisible()) lane.renderer.show()
+      lane.renderer.updatePosition(pos)
     }
-    if (!this.renderer.isVisible()) this.renderer.show()
-    this.renderer.updatePosition(pos)
   }
 
   dispose(): void {
     this.startStep = null
-    this.renderer.dispose()
+    for (const lane of this.lanes) lane.renderer.dispose()
   }
 }

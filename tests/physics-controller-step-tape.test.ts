@@ -6,7 +6,7 @@
  * replays while the game is not PLAYING.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { GamePhysicsController } from '../src/game/game-physics-controller'
+import { GamePhysicsController } from '../src/game/physics/physics-controller'
 import type { InputFrame } from '../src/game-elements/types'
 import { ReplayRecorder } from '../src/replay/replay-recorder'
 import { ReplayRunner } from '../src/replay/replay-runner'

@@ -8,11 +8,16 @@
  * to the submitted score, rejected with the reason when it cannot. A verified
  * run's ball path goes to `ghost_tracks`: the race ghost of a challenge.
  *
- * Builds: the game a run was recorded on is stamped in its tape (`buildId`).
+ * Builds: the game a run was recorded on is stamped in its tape (`buildId`),
+ * and so is the SHA-256 of its physics binary (`wasmSha256`, #490 Slice B).
  * With VERIFIER_BUILDS, a directory of builds named by build id (each a
- * `npm run build` dist with build-info.json), a run replays on its own build
- * when the verifier has it, else on the default build (VERIFIER_DIST, or the
- * newest in VERIFIER_BUILDS). `verifier_version` is the build that replayed it.
+ * `npm run build` dist with build-info.json, archived by `npm run
+ * release:archive`), a run replays on a build shipping its own
+ * `PhysicsModule.wasm` — its own build when held — else on its build id's,
+ * else on the default build (VERIFIER_DIST, or the newest in VERIFIER_BUILDS;
+ * judge.mjs `selectBuild`). A build whose binary is not the one its
+ * build-info.json declares is never used. `verifier_version` is the build
+ * that replayed the run, `verify_wasm_sha256` its binary.
  *
  *   node services/replay-verifier/verifier.mjs          # poll forever
  *   node services/replay-verifier/verifier.mjs --once   # one claim round, then exit
@@ -26,41 +31,13 @@
  *   VERIFIER_BATCH        scores per claim, default 4
  */
 
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { discoverBuilds } from '../../scripts/lib/build-info.mjs'
 import { launchBrowser, repoRoot, runTape, serveDist } from '../../scripts/lib/replay-harness.mjs'
-import { judge, precheck } from './judge.mjs'
+import { judge, precheck, selectBuild } from './judge.mjs'
 
 const log = (event, fields = {}) => console.log(JSON.stringify({ t: new Date().toISOString(), event, ...fields }))
-
-function readBuildId(dir) {
-  try {
-    return JSON.parse(readFileSync(path.join(dir, 'build-info.json'), 'utf8')).buildId ?? null
-  } catch {
-    return null
-  }
-}
-
-/** Build id → dist directory, and the default build. */
-export function discoverBuilds({ dist, builds }) {
-  const byId = new Map()
-  let newest = null
-  if (builds && existsSync(builds)) {
-    for (const name of readdirSync(builds)) {
-      const dir = path.join(builds, name)
-      const id = statSync(dir).isDirectory() ? readBuildId(dir) : null
-      if (!id) continue
-      byId.set(id, dir)
-      if (!newest || statSync(dir).mtimeMs > statSync(newest.dir).mtimeMs) newest = { id, dir }
-    }
-  }
-  const distId = dist && existsSync(dist) ? readBuildId(dist) : null
-  if (distId) byId.set(distId, dist)
-  const fallback = distId ? { id: distId, dir: dist } : newest
-  if (!fallback) throw new Error(`no build with a build-info.json in ${dist ?? '(no VERIFIER_DIST)'} or ${builds ?? '(no VERIFIER_BUILDS)'}`)
-  return { byId, fallback }
-}
 
 /** One sample of the race ghost every this many fixed steps (30 Hz). */
 const GHOST_STRIDE = 2
@@ -94,18 +71,28 @@ function client({ url, key }) {
  * Run the claim → replay → verdict loop. Resolves when `once` is set and one
  * round is done, or when `signal` aborts (the current replay finishes first;
  * unprocessed claims are handed out again after the claim goes stale).
+ * `injectContactFault(claim)` is the self-test's: true makes that replay's
+ * first contact handler throw, a sim fault the strict playback must reject.
  */
-export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, batch = 4, once = false, signal } = {}) {
+export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, batch = 4, once = false, signal, injectContactFault } = {}) {
   if (!key) throw new Error('ARCADE_SECRET_KEY is required')
   const { rpc, rest } = client({ url, key })
-  const { byId, fallback } = discoverBuilds({ dist, builds })
-  log('start', { builds: [...byId.keys()], default: fallback.id, url })
+  // A build whose binary is not the one its build-info.json declares is never replayed on.
+  const known = discoverBuilds({
+    dist,
+    builds,
+    onSkip: (build) => log('build-skipped', { build: build.id, dir: build.dir, reason: build.problem }),
+  })
+  log('start', {
+    builds: known.builds.map((b) => ({ id: b.id, wasm: b.wasmSha256?.slice(0, 12) ?? null })),
+    default: known.fallback.id,
+    url,
+  })
 
   const servers = new Map()
-  const serverFor = async (buildId) => {
-    const build = byId.has(buildId) ? { id: buildId, dir: byId.get(buildId) } : fallback
+  const serverFor = async (build) => {
     if (!servers.has(build.id)) servers.set(build.id, await serveDist(build.dir))
-    return { id: build.id, base: servers.get(build.id).base }
+    return servers.get(build.id).base
   }
 
   let browser = await launchBrowser()
@@ -123,15 +110,20 @@ export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, bat
         if (signal?.aborted) break
         const started = Date.now()
         let verdict = precheck(claim)
-        let version = fallback.id
+        let build = known.fallback
+        const replayed = !verdict
         if (!verdict) {
           if (!browser.isConnected()) browser = await launchBrowser()
-          const server = await serverFor(claim.payload.buildId)
-          version = server.id
+          const pick = selectBuild(claim.payload, known.builds, known.fallback)
+          build = pick.build
           const tape = { scenario: { seed: claim.payload.seed ?? 0, setup: [] }, replay: claim.payload }
-          const result = await runTape(browser, server.base, 'verify', tape, { ghostStride: GHOST_STRIDE })
-          verdict = judge(claim, result, { verifierVersion: version })
+          const result = await runTape(browser, await serverFor(build), 'verify', tape, {
+            ghostStride: GHOST_STRIDE,
+            throwOnContact: injectContactFault?.(claim) ?? false,
+          })
+          verdict = judge(claim, result, { verifierVersion: build.id, binary: pick.binary })
         }
+        const version = build.id
         if (verdict.verdict === 'retry') {
           summary.retried++
           log('retry', { score_id: claim.score_id, attempts: claim.attempts, reason: verdict.reason })
@@ -156,11 +148,14 @@ export async function runVerifier({ url, key, dist, builds, pollMs = 30_000, bat
             p_verifier_score: verdict.verifierScore,
             p_reason: verdict.reason,
             p_state_hash: verdict.stateHash,
+            // The binary that replayed it; null for a run rejected without replaying.
+            p_wasm_sha256: replayed ? build.wasmSha256 ?? null : null,
           })
           summary[verdict.verdict === 'verified' ? 'verified' : 'rejected']++
           log(verdict.verdict, {
             score_id: claim.score_id, map_id: claim.map_id, score: claim.score,
-            replayed: verdict.verifierScore, reason: verdict.reason, build: version, ms: Date.now() - started,
+            replayed: verdict.verifierScore, reason: verdict.reason, build: version,
+            wasm: replayed ? build.wasmSha256?.slice(0, 12) ?? null : null, ms: Date.now() - started,
           })
         } catch (err) {
           summary.errors++

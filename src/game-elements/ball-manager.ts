@@ -53,34 +53,40 @@ import { updateStuckDetection } from './ball-manager-stuck'
 import type { StaticSceneGate } from '../core/static-scene-gate'
 import type { BallData, PhysicsBinding } from './types'
 
-export class BallManager {
-  private scene: Scene
-  private world: PhysicsWorldSink
-  private rapier: PhysicsApi
+/**
+ * Ball spawning, collection and per-frame ball effects. The state the `ball-manager-*` helper
+ * modules read and write is the public `BallManagerHost` surface (the class passes `this`);
+ * everything else should go through the methods.
+ */
+export class BallManager implements BallManagerHost {
+  scene: Scene
+  world: PhysicsWorldSink
+  rapier: PhysicsApi
   private readonly capture: CapturedBall
-  private ballBody: PhysicsBody | null = null
-  private ballBodies: PhysicsBody[] = []
-  private caughtBalls: Array<{ body: PhysicsBody; targetPos: Vector3; timer: number }> = []
+  ballBody: PhysicsBody | null = null
+  ballBodies: PhysicsBody[] = []
+  caughtBalls: Array<{ body: PhysicsBody; targetPos: Vector3; timer: number }> = []
   private staticSceneGate: Pick<StaticSceneGate, 'invalidate'> | null = null
-  private bindings: PhysicsBinding[] = []
-  private matLib: ReturnType<typeof getMaterialLibrary>
-  private trails: Map<PhysicsBody, TrailMesh> = new Map()
-  private trailMaterials: Map<TrailMesh, StandardMaterial> = new Map()
-  private ballTrails: Map<PhysicsBody, BallTrailData> = new Map()
-  private ballDataMap: Map<PhysicsBody, BallData> = new Map()
-  private goldBallCount = 0
-  private onGoldBallCollected?: (type: BallType, points: number) => void
-  private glowTime = 0
+  bindings: PhysicsBinding[] = []
+  matLib: ReturnType<typeof getMaterialLibrary>
+  trails: Map<PhysicsBody, TrailMesh> = new Map()
+  trailMaterials: Map<TrailMesh, StandardMaterial> = new Map()
+  ballTrails: Map<PhysicsBody, BallTrailData> = new Map()
+  ballDataMap: Map<PhysicsBody, BallData> = new Map()
+  goldBallCount = 0
+  onGoldBallCollected?: (type: BallType, points: number) => void
+  glowTime = 0
 
-  private smallGoldBallLifetimes: Map<PhysicsBody, number> = new Map()
-  private smallGoldBallSpawnTime: Map<PhysicsBody, number> = new Map()
+  smallGoldBallLifetimes: Map<PhysicsBody, number> = new Map()
+  smallGoldBallSpawnTime: Map<PhysicsBody, number> = new Map()
 
-  private swarmGroups: Map<number, SwarmGroup> = new Map()
-  private ballSwarmId: Map<PhysicsBody, number> = new Map()
-  private nextSwarmId = 1
+  swarmGroups: Map<number, SwarmGroup> = new Map()
+  ballSwarmId: Map<PhysicsBody, number> = new Map()
+  nextSwarmId = 1
 
-  private ballStuckTimers: Map<PhysicsBody, BallStuckTracker> = new Map()
-  private chainMultiball: MultiballState = {
+  ballStuckTimers: Map<PhysicsBody, BallStuckTracker> = new Map()
+  readonly stuckBallsScratch: PhysicsBody[] = []
+  chainMultiball: MultiballState = {
     isActive: false,
     chainLevel: 0,
     ballSaveUsed: false,
@@ -98,18 +104,6 @@ export class BallManager {
     this.matLib = getMaterialLibrary(scene)
   }
 
-  private asHost(): BallManagerHost {
-    // These private members are only reached through the BallManagerHost view below; the list
-    // keeps noUnusedLocals satisfied. The two methods are never called here, hence unbound-method.
-    /* eslint-disable @typescript-eslint/unbound-method */
-    void [
-      this.scene, this.rapier, this.matLib, this.onGoldBallCollected, this.glowTime, this.smallGoldBallLifetimes, this.smallGoldBallSpawnTime,
-      this.swarmGroups, this.ballSwarmId, this.nextSwarmId, this.ballStuckTimers, this.chainMultiball, this.addTrailForBall, this.playSpawnEffect,
-    ]
-    /* eslint-enable @typescript-eslint/unbound-method */
-    return this as unknown as BallManagerHost
-  }
-
   /** Balls come and go in a scene the gate may have frozen; every spawn / removal thaws it. */
   setStaticSceneGate(gate: Pick<StaticSceneGate, 'invalidate'> | null): void {
     this.staticSceneGate = gate
@@ -121,23 +115,23 @@ export class BallManager {
 
   createMainBall(): PhysicsBody {
     this.staticSceneGate?.invalidate('ball:spawn')
-    return createMainBall(this.asHost())
+    return createMainBall(this)
   }
 
   spawnExtraBalls(count: number, position?: Vector3): void {
     this.staticSceneGate?.invalidate('ball:spawn')
-    spawnExtraBalls(this.asHost(), count, position)
+    spawnExtraBalls(this, count, position)
   }
 
   resetBall(): void {
     this.staticSceneGate?.invalidate('ball:spawn')
-    resetBall(this.asHost())
+    resetBall(this)
   }
 
   removeBall(body: PhysicsBody): void {
     this.staticSceneGate?.invalidate('ball:collect')
     this.ballDataMap.delete(body)
-    cleanupSwarmTrackingOnRemove(this.asHost(), body)
+    cleanupSwarmTrackingOnRemove(this, body)
 
     const idx = this.ballBodies.indexOf(body)
     if (idx !== -1) {
@@ -145,8 +139,9 @@ export class BallManager {
       this.ballBodies.splice(idx, 1)
 
       const bIdx = this.bindings.findIndex((b) => b.rigidBody === body)
-      if (bIdx !== -1) {
-        this.bindings[bIdx].mesh.dispose()
+      const binding = this.bindings[bIdx]
+      if (binding) {
+        binding.mesh.dispose()
         this.bindings.splice(bIdx, 1)
       }
 
@@ -168,7 +163,7 @@ export class BallManager {
     this.staticSceneGate?.invalidate('ball:collect')
     for (let i = this.ballBodies.length - 1; i >= 0; i--) {
       const rb = this.ballBodies[i]
-      if (rb !== this.ballBody) {
+      if (rb && rb !== this.ballBody) {
         this.world.removeRigidBody(rb)
         this.ballBodies.splice(i, 1)
       }
@@ -176,7 +171,7 @@ export class BallManager {
 
     for (let i = this.bindings.length - 1; i >= 0; i--) {
       const b = this.bindings[i]
-      if (!b.mesh.name.startsWith('ball')) continue
+      if (!b || !b.mesh.name.startsWith('ball')) continue
       if (b.rigidBody === this.ballBody) continue
       b.mesh.dispose()
       this.bindings.splice(i, 1)
@@ -185,11 +180,11 @@ export class BallManager {
   }
 
   getScoreMultiplier(): number {
-    return getScoreMultiplier(this.asHost())
+    return getScoreMultiplier(this)
   }
 
   canSaveDrain(currentMs: number = nowMs()): boolean {
-    return canSaveDrain(this.asHost(), currentMs)
+    return canSaveDrain(this, currentMs)
   }
 
   startMultiball(totalBalls: number, ballSaveMs: number = GAME_TUNING.multiball.drainGraceMs): {
@@ -200,7 +195,7 @@ export class BallManager {
     chainLevel: number
     ballSaveRemainingMs: number
   } {
-    return startMultiball(this.asHost(), totalBalls, ballSaveMs)
+    return startMultiball(this, totalBalls, ballSaveMs)
   }
 
   triggerForcedMultiball(totalBalls: number, reason: string): {
@@ -211,7 +206,7 @@ export class BallManager {
     chainLevel: number
     ballSaveRemainingMs: number
   } {
-    return triggerForcedMultiball(this.asHost(), totalBalls, reason)
+    return triggerForcedMultiball(this, totalBalls, reason)
   }
 
   registerDrain(drainedBody: PhysicsBody): {
@@ -221,11 +216,11 @@ export class BallManager {
     ballsInPlay: number
     ballSaveRemainingMs: number
   } {
-    return registerDrain(this.asHost(), drainedBody)
+    return registerDrain(this, drainedBody)
   }
 
   endMultiball(): void {
-    endMultiball(this.asHost())
+    endMultiball(this)
   }
 
   getChainStats(): {
@@ -236,7 +231,7 @@ export class BallManager {
     ballSaveAvailable: boolean
     ballSaveRemainingMs: number
   } {
-    return getChainStats(this.asHost())
+    return getChainStats(this)
   }
 
   activateHologramCatch(ball: PhysicsBody, targetPos: Vector3, duration: number): void {
@@ -259,6 +254,7 @@ export class BallManager {
   updateCaughtBalls(dt: number, onRelease: (ball: PhysicsBody) => void): void {
     for (let i = this.caughtBalls.length - 1; i >= 0; i--) {
       const catchData = this.caughtBalls[i]
+      if (!catchData) continue
       catchData.timer -= dt
 
       const current = catchData.body.translation()
@@ -313,53 +309,53 @@ export class BallManager {
   }
 
   updateBallMaterialColor(mapColorHex: string): void {
-    updateBallMaterialColor(this.asHost(), mapColorHex)
+    updateBallMaterialColor(this, mapColorHex)
   }
 
   updateGoldBallGlow(dt: number): void {
-    updateGoldBallGlow(this.asHost(), dt)
+    updateGoldBallGlow(this, dt)
   }
 
   updateTrailEffects(): void {
-    updateTrailEffects(this.asHost())
+    updateTrailEffects(this)
   }
 
   updateSmallGoldBallLifetimes(dt: number): void {
-    updateSmallGoldBallLifetimes(this.asHost(), dt)
+    updateSmallGoldBallLifetimes(this, dt)
   }
 
-  updateStuckDetection(dt: number): PhysicsBody[] {
-    return updateStuckDetection(this.asHost(), dt)
+  updateStuckDetection(dt: number): readonly PhysicsBody[] {
+    return updateStuckDetection(this, dt)
   }
 
   applyBallSkin(skinId: string): void {
-    applyBallSkin(this.asHost(), skinId)
+    applyBallSkin(this, skinId)
   }
 
   applyBallTrail(trailId: string): void {
-    applyBallTrail(this.asHost(), trailId)
+    applyBallTrail(this, trailId)
   }
 
   clearRewards(): void {
-    clearRewards(this.asHost())
+    clearRewards(this)
   }
 
-  private playSpawnEffect(position: Vector3, type: BallType, swarmBurst = false): void {
-    playSpawnEffect(this.asHost(), position, type, swarmBurst)
+  playSpawnEffect(position: Vector3, type: BallType, swarmBurst = false): void {
+    playSpawnEffect(this, position, type, swarmBurst)
   }
 
   createBallOfType(type: BallType, position?: Vector3, playEffect = false): PhysicsBody {
     this.staticSceneGate?.invalidate('ball:spawn')
-    return createBallOfType(this.asHost(), type, position, playEffect)
+    return createBallOfType(this, type, position, playEffect)
   }
 
   spawnSmallGoldBallSwarm(position?: Vector3, baseType: BallType = BallType.GOLD_PLATED): PhysicsBody[] {
     this.staticSceneGate?.invalidate('ball:spawn')
-    return spawnSmallGoldBallSwarm(this.asHost(), position, baseType)
+    return spawnSmallGoldBallSwarm(this, position, baseType)
   }
 
-  private addTrailForBall(body: PhysicsBody, colorHex: string): void {
-    addTrailForBall(this.asHost(), body, colorHex)
+  addTrailForBall(body: PhysicsBody, colorHex: string): void {
+    addTrailForBall(this, body, colorHex)
   }
 
   getBallType(body: PhysicsBody): BallType {
@@ -387,7 +383,7 @@ export class BallManager {
     jackpotEligible: boolean
     quickCollectBonus?: { multiplier: number; totalPoints: number }
   } | null {
-    return collectBallFromGold(this.asHost(), body)
+    return collectBallFromGold(this, body)
   }
 
   setOnGoldBallCollected(callback: (type: BallType, points: number) => void): void {
@@ -403,6 +399,6 @@ export class BallManager {
   }
 
   spawnRandomBall(position?: Vector3): PhysicsBody {
-    return spawnRandomBall(this.asHost(), position)
+    return spawnRandomBall(this, position)
   }
 }

@@ -44,7 +44,7 @@ export class LightingEffects {
     // Update ambient light
     const ambientLight = this.scene.getLightByName('ambientLight')
     if (ambientLight) {
-      (ambientLight as unknown as { diffuse: Color3 }).diffuse = color
+      ambientLight.diffuse = color
     }
 
     // Update glow layer if exists

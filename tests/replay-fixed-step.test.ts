@@ -13,7 +13,7 @@
  * scenario in tests/replay-snapshot-wasm.test.ts (RUN_WASM_PARITY=1).
  */
 import { describe, expect, it, vi } from 'vitest'
-import { GamePhysicsController } from '../src/game/game-physics-controller'
+import { GamePhysicsController } from '../src/game/physics/physics-controller'
 import { FIXED_TIMESTEP } from '../src/core/sim-clock'
 import type { InputFrame } from '../src/game-elements/types'
 import { REPLAY_SCHEMA_VERSION, ReplayRecorder, type ReplayPayload } from '../src/replay/replay-recorder'

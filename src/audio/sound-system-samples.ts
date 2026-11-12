@@ -192,7 +192,7 @@ export function playSample(
   }
 
   const randomId = sampleIds[Math.floor(Math.random() * sampleIds.length)]
-  const cached = state.sampleCache.get(randomId)
+  const cached = randomId === undefined ? undefined : state.sampleCache.get(randomId)
 
   if (!cached) {
     console.warn(`[SoundSystem] Sample not cached: ${randomId}`)

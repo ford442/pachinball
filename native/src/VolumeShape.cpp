@@ -60,7 +60,7 @@ void deepestVolumeNormal(VolumeShape shape, const Vec3& local, const Vec3& halfE
       const float dx = halfExtents.x - std::fabs(local.x);
       const float dy = halfExtents.y - std::fabs(local.y);
       const float dz = halfExtents.z - std::fabs(local.z);
-      outLocalNormal = Vec3::up();
+      outLocalNormal = {0.f, local.y >= 0.f ? 1.f : -1.f, 0.f};
       outShallow = dy;
       if (dx < outShallow) { outShallow = dx; outLocalNormal = {local.x >= 0.f ? 1.f : -1.f, 0.f, 0.f}; }
       if (dz < outShallow) { outShallow = dz; outLocalNormal = {0.f, 0.f, local.z >= 0.f ? 1.f : -1.f}; }

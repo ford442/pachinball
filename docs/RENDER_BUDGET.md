@@ -220,7 +220,9 @@ What this says:
 
 `node scripts/check-bundle-size.mjs --print` reports `entryGzipKb` (the module script `index.html` boots) and
 `initialJsGzipKb` (entry + every modulepreloaded chunk except `babylon-core`). The second number cannot be improved
-by moving code into an eagerly loaded manual chunk such as `ui-overlays`.
+by moving code into an eagerly loaded manual chunk. There are no app-code manual chunks any more (#503 A1: the
+former `ui-overlays` chunk was modulepreloaded but not precached, so the PWA could not boot offline), and
+`check:bundle` now fails when any modulepreloaded chunk is missing from the service-worker precache.
 
 | date | commit | entryGzipKb | initialJsGzipKb | precacheTotalKiB |
 |---|---|---:|---:|---:|

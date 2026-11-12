@@ -49,6 +49,7 @@ export class ShardEffects {
   updateShards(dt: number): void {
     for (let i = this.shards.length - 1; i >= 0; i--) {
       const s = this.shards[i]
+      if (!s) continue
       s.life -= dt
 
       if (s.life <= 0) {

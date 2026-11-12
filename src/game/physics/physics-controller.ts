@@ -11,7 +11,7 @@ import { MeshInterpolationSystem } from './mesh-interpolation'
 import { WasmMirror } from './wasm-mirror'
 import { WasmOwner, type AdventureTrackState } from './wasm-owner'
 import { ScoringBridge } from './scoring-bridge'
-import { CollisionDispatcher } from './collision-dispatch'
+import { CollisionDispatcher, reportContactFault } from './collision-dispatch'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { PhysicsBody } from '../../core/physics-api'
@@ -52,6 +52,7 @@ interface TrailInfo {
 
 /** Shared empty list for "no ball manager", so the fallback allocates nothing. Never mutated. */
 const NO_BODIES: PhysicsBody[] = []
+const NO_STUCK_BODIES: readonly PhysicsBody[] = []
 
 // Scratch vectors for the per-frame paths. Every consumer copies what it keeps (checked:
 // CameraController clones, DynamicWorld and the atmosphere only read).
@@ -107,6 +108,23 @@ export class GamePhysicsController {
   private readonly trailInfos: TrailInfo[] = []
   private readonly trailInfoPool: TrailInfo[] = []
   private readonly trailMeshByBody = new Map<PhysicsBody, Mesh>()
+  // Bound once: step() takes them every tick (#505 §D). Per-contact isolation (#503 A3): a throw
+  // on one Rapier event must not drop the rest of that step's events.
+  private readonly onCollision = (h1: number, h2: number, started: boolean): void => {
+    try {
+      this.collisionDispatcher.processCollision(h1, h2, started)
+    } catch (error) {
+      reportContactFault(this.host, error)
+    }
+  }
+  private readonly onContactForce = (h1: number, h2: number, maxForce: number): void => {
+    try {
+      this.collisionDispatcher.processContactForce(h1, h2, maxForce)
+    } catch (error) {
+      reportContactFault(this.host, error)
+    }
+  }
+
   private readonly onCaughtBallBeep = (): void => {
     this.host.effects?.playBeep(440)
   }
@@ -142,6 +160,17 @@ export class GamePhysicsController {
       host.eventBus.on('wasm:physics:contacts', (batch) => {
         this.collisionDispatcher.onWasmContactBatch(batch)
       })
+    )
+
+    // A dead physics worker's world moved in-process (#503 A2): tell the bus, and the player.
+    host.physics.setEngineSwitchListener?.((change) => {
+      this.host.eventBus.emit('physics:engine-switched', { ...change })
+    })
+    this.eventBusUnsubscribers.push(
+      host.eventBus.on('physics:engine-switched', () => {
+        this.host.uiManager?.showMessage('Physics worker stopped — switched to in-process physics', 4000)
+      }),
+      () => host.physics.setEngineSwitchListener?.(null),
     )
   }
 
@@ -358,6 +387,9 @@ export class GamePhysicsController {
       this.wasmOwner?.renameIds(remap.bodies, remap.hinges)
     })
     this.lastReplaySnapshot = res
+    // Bodies that do not pair up by role mean the table descriptors differ:
+    // refuse the replay instead of letting a ghost drift under a toast (#444).
+    if (res.outcome === 'id-layout') runner?.reject(res.outcome, res.message ?? res.outcome)
     // The restore moved the engine's step counter to the recorder's; the
     // gameplay clock carries on from where it was. (The worker client already
     // reports the snapshot's counter while its restore is in flight.)
@@ -375,16 +407,8 @@ export class GamePhysicsController {
     })
   }
 
+  /** Flippers and plunger are driven by the input actions; only the nudge is applied here. */
   applyInputFrame(frame: InputFrame): void {
-    if (frame.flipperLeft !== null) {
-      // Delegated to input actions
-    }
-    if (frame.flipperRight !== null) {
-      // Delegated to input actions
-    }
-    if (frame.plungerCharge !== null) {
-      // Delegated to input actions
-    }
     if (frame.nudge) {
       this.applyNudge({ x: frame.nudge.x, y: frame.nudge.y, z: frame.nudge.z })
     }
@@ -459,11 +483,7 @@ export class GamePhysicsController {
 
     this.syncReplaySnapshot(owner !== null, runner, recorder)
 
-    const alpha = this.host.physics.step(physicsDt, (h1, h2, start) => {
-      this.collisionDispatcher.processCollision(h1, h2, start)
-    }, (h1, h2, maxForce) => {
-      this.collisionDispatcher.processContactForce(h1, h2, maxForce)
-    })
+    const alpha = this.host.physics.step(physicsDt, this.onCollision, this.onContactForce)
 
     if (owner) {
       owner.endStep()
@@ -674,7 +694,7 @@ export class GamePhysicsController {
 
     this.host.mapManager?.update(dt)
 
-    const stuckBalls = ballManager?.updateStuckDetection(simDt) ?? NO_BODIES
+    const stuckBalls = ballManager?.updateStuckDetection(simDt) ?? NO_STUCK_BODIES
     for (const stuckBall of stuckBalls) {
       if (stuckBall === ballManager?.getBallBody()) {
         ballManager?.resetBall()

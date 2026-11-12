@@ -26,7 +26,7 @@ import type { DisplaySystem } from '../display'
 import type { BallManager } from '../game-elements/ball-manager'
 import type { BallStackVisual } from '../game-elements/ball-stack-visual'
 import type { GameObjects } from '../objects'
-import type { SoundSystem } from '../game-elements/sound-system'
+import type { SoundSystem } from '../audio/sound-system'
 import type { HapticManager } from '../game-elements/haptics'
 import type { GameStateManager } from './game-state'
 import type { EventBus } from '../core/event-bus'
@@ -89,6 +89,8 @@ export interface LifecycleHost {
 
   updateHUD(): void
   resetBall(): void
+  /** A new run starts ranked, with no sim faults counted (#503 A3). */
+  resetRunFaults?(): void
   setGameState(state: GameState): void
   handleGameOverLeaderboard(): Promise<void>
   getBallPosition(): import('@babylonjs/core/Maths/math.vector').Vector3 | null
@@ -254,10 +256,12 @@ export class GameLifecycle {
       this.host.replayRecorder.start({
         version: REPLAY_SCHEMA_VERSION,
         buildId: __PACHINBALL_BUILD__,
+        // The physics binary the verifier must replay this run on (#490 Slice B).
+        ...(__PACHINBALL_WASM_SHA256__ ? { wasmSha256: __PACHINBALL_WASM_SHA256__ } : {}),
         mapId: this.host.currentMapId ?? DEFAULT_TABLE_MAP_ID,
         seed: getSessionSeed(),
         physicsEngine: this.host.physics?.getWasmMode() ?? 'rapier',
-        renderer: (typeof window !== 'undefined' && (window as unknown as { currentRenderer?: string }).currentRenderer === 'webgpu') ? 'webgpu' : 'webgl2',
+        renderer: (typeof window !== 'undefined' && window.currentRenderer === 'webgpu') ? 'webgpu' : 'webgl2',
         createdAt: new Date().toISOString(),
         cascade: dailyState.describeForReplay() ?? undefined,
         // A spectator rebuilds the same machine from `seed` alone.
@@ -267,6 +271,7 @@ export class GameLifecycle {
 
     this.scoringBreakdown.reset()
     this.host.uiManager?.hideScoringBreakdown()
+    this.host.resetRunFaults?.()
     this.host.score = 0
     this.host.lives = 3
     this.host.comboCount = 0

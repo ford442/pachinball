@@ -74,7 +74,7 @@ export default defineConfig([
   // `timers.setTimeout(…)` / `scope.setTimeout(…)` are member calls on a non-global object and
   // pass. A bare call that is genuinely safe (touches only captured nodes, guards its own
   // state) takes `// eslint-disable-next-line no-restricted-syntax -- <why>`.
-  // engine/, wasm/, config/, replay/ and cabinet/ are bootstrap/worker code and stay outside.
+  // engine/, wasm/, config/ and cabinet/ are bootstrap/worker code and stay outside.
   {
     files: [
       'src/game/**/*.ts',
@@ -84,9 +84,11 @@ export default defineConfig([
       'src/display/**/*.ts',
       'src/audio/**/*.ts',
       'src/adventure/**/*.ts',
+      'src/replay/**/*.ts',
+      'src/materials/**/*.ts',
+      'src/cascade/**/*.ts',
+      'src/pwa/**/*.ts',
     ],
-    // PathMechanicsManager is never instantiated by the shipped game; revisit when it is wired in.
-    ignores: ['src/game-elements/path-mechanics/**'],
     rules: {
       'no-restricted-syntax': ['error',
         {
@@ -104,7 +106,20 @@ export default defineConfig([
   // project. These directories are already held to it by `npm run check:index-strict`, where the
   // `!` is load-bearing, so don't let the autofixer strip it (#441).
   {
-    files: ['src/core/**/*.ts', 'src/wasm/**/*.ts', 'src/game/physics/**/*.ts'],
+    // Keep in step with ENFORCED_DIRS in scripts/check-index-strict.mjs.
+    files: [
+      'src/core/**/*.ts',
+      'src/wasm/**/*.ts',
+      'src/game/physics/**/*.ts',
+      'src/materials/**/*.ts',
+      'src/audio/**/*.ts',
+      'src/game-elements/**/*.ts',
+      'src/effects/**/*.ts',
+      'src/shaders/**/*.ts',
+      'src/replay/**/*.ts',
+      'src/arcade/**/*.ts',
+      'src/game.ts',
+    ],
     rules: { '@typescript-eslint/no-unnecessary-type-assertion': 'off' },
   },
   // ── Layering (#322) ───────────────────────────────────────────────────────
