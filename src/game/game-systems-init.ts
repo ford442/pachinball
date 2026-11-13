@@ -58,6 +58,9 @@ import { CabinetManager } from './game-cabinet'
 import type { Game } from '../game'
 import type { PachinballEventMap } from '../core/event-bus'
 
+/** Caller-owned out-vector for `getBallPosition`; consumers clone what they keep. */
+const scratchBallPos = new Vector3()
+
 interface PortalActivatedEventData {
   trackId: AdventureTrackType
   kind: 'success' | 'timeout'
@@ -617,7 +620,7 @@ export class GameSystemsInitializer {
             getScoringBreakdownManager().recordScore(points, 'adventure-goal-award')
             g.updateHUD()
             g.uiManager?.showMessage(`${reason}: +${points}`, 1000)
-            const pos = g.physicsController?.getBallPosition()
+            const pos = g.physicsController?.getBallPosition(scratchBallPos)
             if (pos) g.effects?.spawnFloatingNumber(points, pos)
           },
           onReachTriggered: () => g.tryActivateSlotMachine(),
@@ -626,7 +629,7 @@ export class GameSystemsInitializer {
             getScoringBreakdownManager().recordScore(GAME_TUNING.scoring.adventureEndBonus, 'adventure-end-bonus')
             g.updateHUD()
             g.effects?.startJackpotSequence()
-            const pos = g.physicsController?.getBallPosition()
+            const pos = g.physicsController?.getBallPosition(scratchBallPos)
             if (pos) g.effects?.spawnFloatingNumber(GAME_TUNING.scoring.adventureEndBonus, pos)
           },
         }

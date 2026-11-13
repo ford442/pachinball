@@ -117,7 +117,8 @@ export interface PhysicsHost {
   showMessage(msg: string, duration: number): void
   setGameState(state: import('../../game-elements').GameState): void
   endAdventureMode(): void
-  getBallPosition(): Vector3 | null
+  /** Interpolated ball position (as drawn) written into `out`; null when there is no ball. */
+  getBallPosition(out: Vector3): Vector3 | null
   getCameraMode(): CameraMode
   /** Adventure goal / time-limit clocks, advanced once per fixed step (#444). */
   stepAdventureProgression?(dt: number): void

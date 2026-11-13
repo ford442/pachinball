@@ -5,6 +5,7 @@
 import type { PhysicsSystem } from '../game-elements/physics'
 import { peekAudioEngine } from '../audio/audio-engine'
 import { Scene } from '@babylonjs/core/scene'
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import {
   GameState,
   BallType,
@@ -39,6 +40,9 @@ import { GAME_TUNING } from '../config'
 import { DEFAULT_TABLE_MAP_ID, TABLE_MAPS } from '../config/table-maps'
 import { getMaterialLibrary } from '../materials'
 import { isMobileUserAgent } from '../engine/engine-options'
+
+/** Caller-owned out-vector for `getBallPosition`; consumers clone what they keep. */
+const scratchBallPos = new Vector3()
 
 export interface LifecycleHost {
   readonly signal: AbortSignal
@@ -93,7 +97,7 @@ export interface LifecycleHost {
   resetRunFaults?(): void
   setGameState(state: GameState): void
   handleGameOverLeaderboard(): Promise<void>
-  getBallPosition(): import('@babylonjs/core/Maths/math.vector').Vector3 | null
+  getBallPosition(out: import('@babylonjs/core/Maths/math.vector').Vector3): import('@babylonjs/core/Maths/math.vector').Vector3 | null
   /** Rebuild pins/bumpers/feeders for Daily Cascade / free-play before PLAYING. */
   applyDailyCascadeOnStart(machine: StartMachine): void
   /** Start mode "Campaign" is selected: a started game goes straight into the campaign. */
@@ -499,7 +503,7 @@ export class GameLifecycle {
       })
     }
     this.host.updateHUD()
-    const pos = this.host.getBallPosition()
+    const pos = this.host.getBallPosition(scratchBallPos)
     if (pos) this.host.effects?.spawnFloatingNumber(awardedJackpot, pos)
   }
 }
