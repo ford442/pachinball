@@ -2,12 +2,15 @@
  * TypeScript type definitions for the Emscripten-compiled Pachinball physics
  * WASM module (native/src → native/build/PhysicsModule.js + .wasm).
  *
- * These types match the Embind bindings declared in native/src/bindings.cpp.
- * They are intentionally narrow — only the surface area actually exposed to JS.
+ * The world's method surface is the Emscripten-generated declaration
+ * (generated/PhysicsModule.d.ts) plus a short overlay; the constants below
+ * mirror sentinels embind cannot express.
  */
 
+import type { PhysicsWorld as GeneratedWorld } from './generated/PhysicsModule'
+
 /**
- * Mirrors native `STATIC_HANDLE_OVERFLOW` in PhysicsWorld.h. Every `add*`
+ * Mirrors native `STATIC_HANDLE_OVERFLOW` in StaticShapes.h. Every `add*`
  * that creates a static shape returns this instead of a handle once its
  * family hits `STATIC_HANDLE_CAPACITY` (1000), and creates no collider.
  *
@@ -75,18 +78,53 @@ export {
 // Raw WASM module interface (Embind class bindings)
 // ---------------------------------------------------------------------------
 
-/** The compiled Embind class proxy for PhysicsWorld. */
-export interface WasmPhysicsWorldInstance {
-  /** Create a rigid body (sphere or capsule shape); returns a stable integer handle. */
-  createRigidBody(
+/**
+ * Embind's per-handle plumbing on every bound class. Only `delete()` is used
+ * (to free the world), so the rest is dropped from the public surface.
+ */
+type HandlePlumbing = 'isAliasOf' | 'deleteLater' | 'isDeleted' | 'clone'
+
+/**
+ * Bindings a shipped bundle may lack (they post-date it): callers reach them
+ * through `?.()`. Their signatures still come from the generated declarations.
+ */
+export type LegacyOptionalBinding =
+  | 'setBodyType' | 'getBodyType'
+  | 'addStaticCone' | 'addPinField' | 'getPinFieldPinCount' | 'addAxisPullField'
+  | 'getNaNQuarantineCount' | 'getNaNQuarantineBodyId'
+
+/**
+ * What embind's generated declarations cannot say. Every key here must be a
+ * method bound in bindings.cpp with the same arity (wasm-types-conformance.ts
+ * checks); only the parameter / return types are refined.
+ */
+export interface WasmPhysicsWorldOverlay {
+  /** Static restitution / friction default on the JS side of older callers. */
+  addStaticBox(
     px: number, py: number, pz: number,
-    vx: number, vy: number, vz: number,
-    mass: number, radius: number, restitution: number, linearDamping: number,
-    bodyType: number, shape: number, capsuleHalfHeight: number,
-    friction: number, angularDamping: number
+    hx: number, hy: number, hz: number,
+    qx: number, qy: number, qz: number, qw: number,
+    restitution?: number, friction?: number
+  ): number
+  addStaticCapsule(
+    px: number, py: number, pz: number,
+    radius: number, halfHeight: number,
+    qx: number, qy: number, qz: number, qw: number,
+    restitution?: number, friction?: number
+  ): number
+  addStaticCylinder(
+    px: number, py: number, pz: number,
+    radius: number, halfHeight: number,
+    qx: number, qy: number, qz: number, qw: number,
+    restitution?: number, friction?: number
+  ): number
+  addStaticSphere(
+    px: number, py: number, pz: number,
+    radius: number,
+    restitution?: number, friction?: number
   ): number
 
-  /** Create a rigid body from a bound RigidBodyDesc value object. */
+  /** The generated `RigidBodyDesc` wants enum value objects; the binding reads plain ints too. */
   createRigidBodyDesc(desc: {
     position: { x: number; y: number; z: number }
     velocity: { x: number; y: number; z: number }
@@ -101,343 +139,10 @@ export interface WasmPhysicsWorldInstance {
     angularDamping: number
   }): number
 
-  /** Remove a body by handle. The handle is no longer valid after this. */
-  removeRigidBody(id: number): void
-
-  /** Accumulate a world-space force on a dynamic body. */
-  applyForce(id: number, fx: number, fy: number, fz: number): void
-
-  /** Apply an instantaneous world-space impulse. */
-  applyImpulse(id: number, ix: number, iy: number, iz: number): void
-
-  /** Directly set the velocity of a body. */
-  setVelocity(id: number, vx: number, vy: number, vz: number): void
-
-  /** Directly set the angular velocity of a body. */
-  setAngularVelocity(id: number, wx: number, wy: number, wz: number): void
-
-  /** Directly set the position of a body. */
-  setBodyPosition(id: number, px: number, py: number, pz: number): void
-
-  /** Directly set the rotation of a body. */
-  setBodyRotation(id: number, qx: number, qy: number, qz: number, qw: number): void
-
-  /**
-   * Change a live body's simulation type (0 Dynamic, 1 Static, 2 Kinematic).
-   * Optional: absent on bundles older than #420.
-   */
-  setBodyType?(id: number, type: number): void
-
-  /** Current body type (0/1/2), or -1 for an unknown id. Optional as above. */
-  getBodyType?(id: number): number
-
-  createHinge(
-    bodyId: number,
-    ax: number, ay: number, az: number,
-    nx: number, ny: number, nz: number,
-    minAngle: number, maxAngle: number
-  ): number
-  setHingeMotor(id: number, targetVel: number, maxTorque: number): void
-  getHingeAngle(id: number): number
-  removeHinge(id: number): void
-
-  /** Add an infinite static plane defined by a normal + d offset. */
-  addStaticPlane(nx: number, ny: number, nz: number, distance: number, friction: number): void
-
-  /**
-   * Add an oriented static box collider.
-   * @returns Negative collider id used in contact events.
-   */
-  addStaticBox(
-    px: number, py: number, pz: number,
-    hx: number, hy: number, hz: number,
-    qx: number, qy: number, qz: number, qw: number,
-    restitution?: number,
-    friction?: number
-  ): number
-
-  /**
-   * Add an oriented static capsule collider (local Y axis).
-   * @returns Negative collider id used in contact events.
-   */
-  addStaticCapsule(
-    px: number, py: number, pz: number,
-    radius: number, halfHeight: number,
-    qx: number, qy: number, qz: number, qw: number,
-    restitution?: number,
-    friction?: number
-  ): number
-
-  /**
-   * Add an oriented static cylinder collider (local Y axis), matching
-   * Rapier's `ColliderDesc.cylinder(halfHeight, radius)`.
-   * @returns Negative collider id used in contact events, or
-   * `STATIC_HANDLE_OVERFLOW` (creating nothing) if the family is full.
-   */
-  addStaticCylinder(
-    px: number, py: number, pz: number,
-    radius: number, halfHeight: number,
-    qx: number, qy: number, qz: number, qw: number,
-    restitution?: number,
-    friction?: number
-  ): number
-
-  /**
-   * Add a static sphere collider.
-   * @returns Negative collider id used in contact events, or
-   * `STATIC_HANDLE_OVERFLOW` (creating nothing) if the family is full.
-   */
-  addStaticSphere(
-    px: number, py: number, pz: number,
-    radius: number,
-    restitution?: number,
-    friction?: number
-  ): number
-
-  /**
-   * Add an oriented static cone (local Y axis, apex at +halfHeight), matching
-   * Rapier's `ColliderDesc.cone(halfHeight, radius)`. Optional: absent on
-   * bundles older than #420.
-   * @returns Negative collider id used in contact events, or
-   * `STATIC_HANDLE_OVERFLOW` (creating nothing) if the family is full.
-   */
-  addStaticCone?(
-    px: number, py: number, pz: number,
-    radius: number, halfHeight: number,
-    qx: number, qy: number, qz: number, qw: number,
-    restitution: number,
-    friction: number
-  ): number
-
-  /**
-   * Add a whole pachinko pin lattice as ONE static collider (#421). The
-   * keep-outs (4 floats each: minX, maxX, minZ, maxZ) and the bit-packed
-   * occupancy mask are heap byte offsets (allocate with `_malloc`); C++ copies
-   * both. Optional: absent on bundles older than #421.
-   * @returns Negative field id used in contact events (the pin's lattice index
-   * rides in contact slot 11), or `STATIC_HANDLE_OVERFLOW` if the family is full.
-   */
-  addPinField?(
-    px: number, py: number, pz: number,
-    rows: number, cols: number,
-    spacingX: number, spacingZ: number, rowOffsetX: number,
-    radius: number, halfHeight: number,
-    qx: number, qy: number, qz: number, qw: number,
-    restitution: number, friction: number,
-    keepOutPtr: number, keepOutCount: number,
-    maskPtr: number, maskBytes: number,
-    dropoutSeed: number, dropout: number
-  ): number
-
-  /** Pins a field holds after mask / keep-outs / dropout, or -1 for an unknown id. */
-  getPinFieldPinCount?(fieldId: number): number
-
-  /**
-   * Drop every static collider, sensor volume, kinematic mover and force
-   * field. Statics are append-only, so a rebuilt scene must clear before
-   * re-adding or it stacks a second copy. Invalidates every negative handle;
-   * dynamic bodies and hinges are untouched.
-   */
-  clearStaticGeometry(): void
-
-  /**
-   * Add a kinematic oriented-box mover (piston, platter, gate). Its pose is
-   * pushed once per tick via `setNextKinematicTransform`; linear/angular
-   * velocity is derived from the pose delta so contacts pick up its motion.
-   * @returns Negative handle used in contact events / setCollisionGroups.
-   */
-  addKinematicMover(
-    px: number, py: number, pz: number,
-    hx: number, hy: number, hz: number,
-    qx: number, qy: number, qz: number, qw: number,
-    restitution: number,
-    friction: number
-  ): number
-
-  /**
-   * Add a kinematic mover with an explicit shape tag (0 box, 1 cylinder,
-   * 2 sphere). A cylinder mover keeps a rotating platform's round profile
-   * instead of approximating it with a faceted box.
-   * @returns Negative handle used in contact events / setCollisionGroups.
-   */
-  addKinematicMoverShaped(
-    shape: number,
-    px: number, py: number, pz: number,
-    hx: number, hy: number, hz: number,
-    qx: number, qy: number, qz: number, qw: number,
-    restitution: number,
-    friction: number
-  ): number
-
-  /**
-   * Push the pose a mover (negative id) or a kinematic rigid body (id ≥ 0)
-   * should reach by the next `step()`.
-   */
-  setNextKinematicTransform(
-    id: number,
-    px: number, py: number, pz: number,
-    qx: number, qy: number, qz: number, qw: number
-  ): void
-
-  /**
-   * Add a static OBB trigger volume. Produces Enter/Stay/Exit contact
-   * events (via the packed contact buffer, `isSensor` bit set) with zero
-   * impulse and no positional correction.
-   * @returns Negative handle used in contact events / setCollisionGroups.
-   */
-  addSensorVolume(
-    px: number, py: number, pz: number,
-    hx: number, hy: number, hz: number,
-    qx: number, qy: number, qz: number, qw: number
-  ): number
-
-  /** Sensor volume with an explicit shape tag (0 box, 1 cylinder, 2 sphere). */
-  addSensorVolumeShaped(
-    shape: number,
-    px: number, py: number, pz: number,
-    hx: number, hy: number, hz: number,
-    qx: number, qy: number, qz: number, qw: number
-  ): number
-
-  /**
-   * Add an immutable static triangle mesh. `verticesPtr` and `indicesPtr` are
-   * byte offsets into WASM memory (allocate with `_malloc`); vertices are
-   * 3 floats each, indices 3 uint32 per triangle, CCW for the front face.
-   * @returns Negative mesh id used in contact events, or
-   * `STATIC_HANDLE_OVERFLOW` (creating nothing) if the family is full.
-   */
-  addStaticTriangleMesh(
-    verticesPtr: number, vertexCount: number,
-    indicesPtr: number, indexCount: number,
-    restitution: number, friction: number, doubleSided: boolean
-  ): number
-
-  /** Create a dynamic oriented-box body (crate). @returns Stable body handle. */
-  createBoxBody(
-    px: number, py: number, pz: number,
-    vx: number, vy: number, vz: number,
-    mass: number, hx: number, hy: number, hz: number,
-    restitution: number, linearDamping: number,
-    bodyType: number, friction: number, angularDamping: number
-  ): number
-
-  /**
-   * Add an oriented box force region (updraft, conveyor, solar wind).
-   * `space` is 0 world / 1 local; `acceleration` selects the mass-independent
-   * form (m/s²) over a force in newtons.
-   * @returns Negative handle used in setForceField*() / setCollisionGroups, or
-   * `STATIC_HANDLE_OVERFLOW` (creating nothing) if the family is full.
-   */
-  addForceField(
-    px: number, py: number, pz: number,
-    hx: number, hy: number, hz: number,
-    qx: number, qy: number, qz: number, qw: number,
-    fx: number, fy: number, fz: number,
-    space: number, acceleration: boolean
-  ): number
-
-  /**
-   * Add a vertical well that pulls bodies horizontally toward its axis: full
-   * `strength` at the axis, fading linearly to zero at `radius`, within
-   * `halfHeight` of `py`. Absent on bundles built before it existed. Handles
-   * share `addForceField`'s id space (setForceFieldEnabled / setCollisionGroups).
-   */
-  addAxisPullField?(
-    px: number, py: number, pz: number,
-    radius: number, halfHeight: number,
-    strength: number, acceleration: boolean
-  ): number
-
-  setForceFieldEnabled(fieldId: number, enabled: boolean): void
-  setForceFieldVector(fieldId: number, fx: number, fy: number, fz: number): void
-
-  /**
-   * Set the collision-group membership/filter mask for any handle — a
-   * dynamic/kinematic body (id ≥ 0) or a static
-   * box/capsule/cylinder/sphere/mover/sensor (id < 0, as returned by the
-   * matching add*() call). Mirrors
-   * `CollisionGroups` in src/game-elements/physics.ts.
-   */
-  setCollisionGroups(id: number, membership: number, filter: number): void
-
-  // Position getters
-  getPosX(id: number): number
-  getPosY(id: number): number
-  getPosZ(id: number): number
-
-  // Velocity getters
-  getVelX(id: number): number
-  getVelY(id: number): number
-  getVelZ(id: number): number
-
-  getAngVelX(id: number): number
-  getAngVelY(id: number): number
-  getAngVelZ(id: number): number
-
-  // Rotation (quaternion) getters
-  getRotX(id: number): number
-  getRotY(id: number): number
-  getRotZ(id: number): number
-  getRotW(id: number): number
-
-  /**
-   * Advance the simulation by rawDt seconds.
-   * @returns Interpolation alpha (0–1) for visual smoothing.
-   */
-  step(rawDt: number): number
-
-  /**
-   * Total number of substeps taken since world creation — a `bigint` from a
-   * `-sWASM_BIGINT` bundle (uint64_t), a number from older ones. Read it
-   * through `WasmPhysicsEngine.getStepCount()`.
-   */
+  /** uint64_t: a `bigint` from a `-sWASM_BIGINT` bundle, a number from older ones. */
   getStepCount(): bigint | number
 
-  /** Count of active rigid bodies (excluding removed ones). */
-  getActiveBodyCount(): number
-
-  /** Override global gravity. */
-  setGravity(gx: number, gy: number, gz: number): void
-
-  setRollingResistance(rr: number): void
-  getRollingResistance(): number
-
-  /**
-   * Pointer (byte offset into WASM memory) of the packed contact buffer.
-   * Layout: 12 floats/contact — id1, id2, nx, ny, nz, px, py, pz, impulse, phase, isSensor,
-   * pin-field lattice index (0 for every other collider).
-   */
-  getContactBufferPtr(): number
-
-  /** Contacts written this step. */
-  getContactCount(): number
-
-  /** Contacts discarded this step when the cap was hit. */
-  getDroppedContactCount(): number
-
-  /**
-   * Static shapes refused because their negative-handle family hit its
-   * 1000-entry capacity. Non-zero means geometry is missing from the C++
-   * world — the alternative would have been two shapes sharing a handle.
-   */
-  getDroppedStaticCount(): number
-
-  setMaxContacts(max: number): void
-  getMaxContacts(): number
-
-  /**
-   * Pointer to packed per-id transform slots (16 floats/slot).
-   * Layout: id, px, py, pz, qx, qy, qz, qw, vx, vy, vz, wx, wy, wz, active, pad.
-   */
-  getTransformBufferPtr(): number
-  getTransformStride(): number
-  getTransformSlotCount(): number
-
-  /**
-   * Optional legacy per-event callback.
-   * Signature: (id1, id2, nx, ny, nz, px, py, pz, impulse, phase) => void
-   * Production drain uses getContactBufferPtr() instead.
-   */
+  /** Legacy per-event callback `(id1, id2, nx, ny, nz, px, py, pz, impulse, phase)`; production drains the contact buffer. */
   setContactCallbackJS(
     cb: (
       id1: number, id2: number,
@@ -448,49 +153,37 @@ export interface WasmPhysicsWorldInstance {
     ) => void
   ): void
 
-  /**
-   * Versioned little-endian world snapshot (native/src/Snapshot.h): bodies,
-   * handles, hinges, movers, fields, group masks, kinematic targets and the
-   * contact manifold. A fresh copy — safe to keep across steps.
-   * Optional: bundles before #422 do not export it.
-   */
+  /** Versioned LE world snapshot (Snapshot.h), a fresh copy. Absent before #422. */
   serializeSnapshot?(): Uint8Array
-
-  /** Restore a `serializeSnapshot()` blob; returns a `WasmSnapshotStatus` code. */
+  /** Returns a `WasmSnapshotStatus` code. Absent before #422. */
   restoreSnapshot?(bytes: Uint8Array): number
-
-  /**
-   * FNV-1a 64 of the static table — equal iff snapshots are interchangeable.
-   * A `bigint` from a `-sWASM_BIGINT` bundle, 16 hex chars from older ones;
-   * `WasmPhysicsEngine.getStaticContentHash()` always returns the hex form.
-   */
+  /** FNV-1a 64 of the static table: `bigint`, or 16 hex chars from pre-BIGINT bundles. */
   getStaticContentHash?(): bigint | string
-
-  /**
-   * FNV-1a 64 of the stepped world (PhysicsWorld::getStateHash): equal hashes
-   * step identically. A `bigint` from a `-sWASM_BIGINT` bundle, 16 hex chars
-   * from older ones; `WasmPhysicsEngine.getStateHash()` always returns the hex
-   * form. Optional: bundles before #459 lack it.
-   */
+  /** FNV-1a 64 of the stepped world; as above. Absent before #459. */
   getStateHash?(): bigint | string
-
-  /** Contact flushes so far (restored with the snapshot); `bigint` from a `-sWASM_BIGINT` bundle. */
+  /** Contact flushes so far; `bigint` from a `-sWASM_BIGINT` bundle. */
   getContactGeneration?(): bigint | number
-
-  /**
-   * Bodies the last `step()` froze because their pose or velocity stopped
-   * being finite (native `NaNQuarantine`): each was put back where its
-   * substep began with zero velocity, asleep. 0 on a healthy step. Optional:
-   * bundles before #487 lack it.
-   */
-  getNaNQuarantineCount?(): number
-
-  /** Id of the `index`-th body `getNaNQuarantineCount()` counts, or -1 past the end. */
-  getNaNQuarantineBodyId?(index: number): number
-
-  /** Release the C++ object. Must be called when done to avoid WASM memory leaks. */
-  delete(): void
 }
+
+/**
+ * The generated methods by name. `[Symbol.dispose]` sits behind a `@ts-ignore`
+ * in the generated file and reads as a string index signature without the
+ * esnext.disposable lib; the remap drops it (and every other non-literal key).
+ */
+type GeneratedMethods = {
+  [K in keyof GeneratedWorld as K extends string ? (string extends K ? never : K extends HandlePlumbing ? never : K) : never]: GeneratedWorld[K]
+}
+
+/**
+ * The compiled Embind `PhysicsWorld`: the declarations `emcc --emit-tsd`
+ * generates from bindings.cpp (generated/PhysicsModule.d.ts), with
+ * `WasmPhysicsWorldOverlay` refinements and the legacy-optional bindings.
+ * A method added in bindings.cpp appears here with no edit.
+ */
+export type WasmPhysicsWorldInstance =
+  Omit<GeneratedMethods, keyof WasmPhysicsWorldOverlay | LegacyOptionalBinding>
+  & Partial<Pick<GeneratedMethods, LegacyOptionalBinding>>
+  & WasmPhysicsWorldOverlay
 
 // ---------------------------------------------------------------------------
 // Module factory

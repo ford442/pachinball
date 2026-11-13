@@ -80,6 +80,7 @@ set(PHYSICS_CORE_SOURCES
   src/PhysicsWorldStep.cpp
   src/Snapshot.cpp
   src/SnapshotCodec.cpp
+  src/SnapshotRestore.cpp
 )
 
 # ---------------------------------------------------------------------------

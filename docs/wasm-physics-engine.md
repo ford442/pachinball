@@ -79,7 +79,8 @@ native/
 │   ├── BroadphaseGrid.h / .cpp  Uniform-grid broadphase (sleepers stay in as targets for awake bodies)
 │   ├── Narrowphase.cpp          Pair tests (sphere / capsule / box / statics)
 │   ├── CollisionFilter.h        membership/filter masks (mirrors CollisionGroups)
-│   ├── StaticShapes.h / .cpp    Static box / capsule / sphere (+ ConeDesc)
+│   ├── StaticShapes.h / .cpp    Static plane / box / capsule / cylinder / sphere / cone descs, handle cap
+│   ├── WorldParams.h            WorldParams, NaNQuarantine, substep / accumulator bounds
 │   ├── Cylinder.h / .cpp        Static cylinder (closed-form sphere vs cylinder)
 │   ├── Cone.cpp                 Static cone — ball-trap funnels (closed-form sphere vs cone)
 │   ├── PinField.h / .cpp        Pin field — a whole pachinko lattice as ONE static handle (#421)
@@ -93,7 +94,9 @@ native/
 │   ├── ContactListener.h        Contact-event queue + packed contact buffer
 │   ├── PhysicsWorld.h / .cpp    Simulation world: bodies, colliders, handle ranges
 │   ├── PhysicsWorldStep.cpp     step() / substep(): integration, broadphase, solver loop, transform scatter
-│   ├── Snapshot.h / .cpp        serialize() / restore(): versioned LE world snapshot + static hash (#422)
+│   ├── Snapshot.h / .cpp        serialize() / getStateHash(): versioned LE world snapshot + static hash (#422)
+│   ├── SnapshotRestore.cpp      restore(): two-phase decode → validate → commit
+│   ├── SnapshotInternal.h       Column lists + codec helpers shared by the save / restore TUs
 │   ├── SnapshotCodec.cpp        Little-endian word writer / reader + FNV-1a hasher for snapshots
 │   ├── SolverConstants.h        Constants shared across resolver TUs (one definition — unity-build safe)
 │   └── bindings.cpp             EMSCRIPTEN_BINDINGS (Embind) — Emscripten only
@@ -571,8 +574,7 @@ engine.addStaticCone(
 engine.clearStaticGeometry()
 ```
 
-Negative handle ranges, one per shape family (see `native/src/PhysicsWorld.h`
-and `native/src/StaticShapes.h`):
+Negative handle ranges, one per shape family (see `native/src/StaticShapes.h`):
 
 | Base | Shape |
 |------|-------|
