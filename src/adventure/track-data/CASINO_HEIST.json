@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "CASINO_HEIST",
+  "segments": [
+    { "type": "straight", "width": 8, "length": 15, "inclineDeg": 15, "material": "#880000" },
+    { "type": "straight", "width": 12, "length": 20, "inclineDeg": 0, "material": "#880000" },
+    {
+      "type": "scatter",
+      "seedKey": "track:casino-heist:chips",
+      "count": 15,
+      "along": { "random": [2, 18] },
+      "lateral": { "random": [-5, 5] },
+      "shape": { "kind": "cylinder", "diameter": 2, "height": "size" },
+      "size": [0.5, 2],
+      "seat": true,
+      "restitution": 0.8,
+      "label": "pokerChip",
+      "materials": ["#FF0000", "#0000FF", "#111111", "#FFFFFF"]
+    },
+    { "type": "spinner", "radius": 12, "angVel": 1.5, "at": { "along": 13 }, "material": "#880000" },
+    {
+      "type": "spinnerParts",
+      "body": "own",
+      "reset": true,
+      "ring": { "count": 2 },
+      "radiusFactor": 0.7,
+      "y": 0.5,
+      "shape": { "kind": "cylinder", "diameter": 2, "height": 1 },
+      "sensor": true,
+      "label": "zeroPocket",
+      "mesh": { "shape": { "kind": "cylinder", "diameter": 2, "height": 0.1 }, "y": 0.55 },
+      "material": "#111111"
+    },
+    { "type": "jump", "at": { "along": 13 } },
+    { "type": "straight", "width": 8, "length": 12, "inclineDeg": 0, "material": "#880000" },
+    {
+      "type": "obstacle",
+      "seedKey": "track:casino-heist:gates",
+      "shape": { "kind": "box", "size": { "x": 8, "y": 4, "z": 0.5 } },
+      "orient": "heading",
+      "material": "#FFD700",
+      "label": "slotGate",
+      "motion": {
+        "kind": "piston",
+        "amplitude": 2.5,
+        "phase": { "random": [0, 6.283185307179586] },
+        "frequency": { "random": [1, 2], "scale": 3 },
+        "draw": ["phase", "frequency"]
+      },
+      "items": [
+        { "at": { "from": "rampStart", "along": 2 } },
+        { "at": { "from": "rampStart", "along": 5 } },
+        { "at": { "from": "rampStart", "along": 8 } }
+      ]
+    },
+    { "type": "bucket", "material": "#FFD700", "offset": { "x": 0, "y": -2, "z": 2 } }
+  ]
+}

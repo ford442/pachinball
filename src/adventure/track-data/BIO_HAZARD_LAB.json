@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "id": "BIO_HAZARD_LAB",
+  "segments": [
+    {
+      "type": "straight",
+      "width": 6,
+      "length": 15,
+      "inclineDeg": 20,
+      "material": "#39FF14",
+      "wallHeight": 1,
+      "friction": 0.1
+    },
+    { "type": "spinner", "radius": 10, "angVel": 3, "at": { "along": 11, "up": [-2] }, "material": "#39FF14" },
+    {
+      "type": "decor",
+      "parent": "spinner",
+      "items": [
+        {
+          "local": { "x": 0, "y": 0.25, "z": 0 },
+          "shape": { "kind": "torus", "diameter": 20, "thickness": 0.5, "tessellation": 32 },
+          "material": "#FFFF00"
+        }
+      ]
+    },
+    {
+      "type": "spinnerParts",
+      "ring": { "count": 16 },
+      "radius": 10,
+      "y": 0.5,
+      "shape": { "kind": "box", "size": { "x": 0.5, "y": 0.5, "z": "arc" }, "arcPad": 0.2 },
+      "yaw": true,
+      "label": "centrifugeWall",
+      "mesh": false
+    },
+    { "type": "jump", "at": { "from": "spinner", "along": 12, "up": [-1] } },
+    { "type": "straight", "width": 6, "length": 4, "inclineDeg": 0, "material": "#FFFF00", "wallHeight": 2 },
+    {
+      "type": "straight",
+      "width": 2.5,
+      "length": 12,
+      "inclineDeg": 0,
+      "material": "#39FF14",
+      "wallHeight": 4
+    },
+    {
+      "type": "curve",
+      "radius": 8,
+      "angleDeg": -45,
+      "inclineDeg": 0,
+      "width": 4,
+      "wallHeight": 1,
+      "material": "#39FF14",
+      "segments": 10,
+      "bankingDeg": 0,
+      "friction": 0.1
+    },
+    { "type": "gap", "length": 2, "drop": 0 },
+    {
+      "type": "curve",
+      "radius": 8,
+      "angleDeg": -45,
+      "inclineDeg": 0,
+      "width": 4,
+      "wallHeight": 1,
+      "material": "#39FF14",
+      "segments": 10,
+      "bankingDeg": 0,
+      "friction": 0.1
+    },
+    { "type": "straight", "width": 4, "length": 3, "inclineDeg": 0, "material": "#FFFF00" },
+    {
+      "type": "curve",
+      "radius": 8,
+      "angleDeg": 45,
+      "inclineDeg": 0,
+      "width": 4,
+      "wallHeight": 1,
+      "material": "#39FF14",
+      "segments": 10,
+      "bankingDeg": 0,
+      "friction": 0.1
+    },
+    { "type": "gap", "length": 2, "drop": 0 },
+    {
+      "type": "curve",
+      "radius": 8,
+      "angleDeg": 45,
+      "inclineDeg": 0,
+      "width": 4,
+      "wallHeight": 1,
+      "material": "#39FF14",
+      "segments": 10,
+      "bankingDeg": 0,
+      "friction": 0.1
+    },
+    { "type": "bucket", "material": "#39FF14", "offset": { "x": 0, "y": -2, "z": 2 } }
+  ]
+}

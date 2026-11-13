@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "CPU_CORE",
+  "segments": [
+    { "type": "straight", "width": 6, "length": 15, "inclineDeg": 0, "material": "#004400" },
+    { "type": "straight", "width": 3, "length": 5, "inclineDeg": 0, "material": "#FFD700" },
+    { "type": "turn", "deltaHeadingDeg": -90 },
+    { "type": "straight", "width": 3, "length": 5, "inclineDeg": 0, "material": "#FFD700" },
+    { "type": "turn", "deltaHeadingDeg": 90 },
+    { "type": "straight", "width": 3, "length": 5, "inclineDeg": 0, "material": "#FFD700" },
+    {
+      "type": "spinner",
+      "radius": 8,
+      "angVel": -1.5,
+      "at": { "along": 9 },
+      "advance": true,
+      "material": "#004400"
+    },
+    {
+      "type": "spinnerParts",
+      "ring": { "count": 4 },
+      "radius": 3.5,
+      "y": 1,
+      "shape": { "kind": "box", "size": { "x": 0.5, "y": 1.5, "z": 7 } },
+      "yaw": true,
+      "label": "fanBlade",
+      "material": "#FFD700",
+      "mesh": { "y": 0.75 }
+    },
+    { "type": "straight", "width": 2, "length": 10, "inclineDeg": 0, "material": "#FFD700" },
+    { "type": "bucket", "material": "#004400", "offset": { "x": 0, "y": 0, "z": 4 } },
+    {
+      "type": "decor",
+      "items": [
+        {
+          "at": { "offset": { "x": 0, "y": 0, "z": 4 }, "up": [0.5] },
+          "shape": { "kind": "box", "size": { "x": 4, "y": 0.2, "z": 4 } },
+          "material": "#FFD700"
+        }
+      ]
+    }
+  ]
+}

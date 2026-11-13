@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "NEON_SKYLINE",
+  "segments": [
+    { "type": "straight", "width": 6, "length": 15, "inclineDeg": 10, "material": "#111122" },
+    {
+      "type": "decor",
+      "items": [
+        {
+          "at": { "along": 2.5, "up": [-2] },
+          "shape": { "kind": "cylinder", "diameter": 4, "height": 0.5 },
+          "material": "#AAFFFF"
+        }
+      ]
+    },
+    {
+      "type": "obstacle",
+      "shape": { "kind": "cylinder", "diameter": 5, "height": 6 },
+      "zone": { "kind": "conveyor", "force": { "x": 0, "y": 250, "z": 0 } },
+      "label": "ventFanUpdraft",
+      "items": [{ "at": { "along": 2.5, "up": [-2, 1] } }]
+    },
+    { "type": "gap", "length": 5, "drop": -5 },
+    { "type": "straight", "width": 10, "length": 15, "inclineDeg": 0, "material": "#111122" },
+    {
+      "type": "scatter",
+      "seedKey": "track:neon-skyline:ac-units",
+      "count": 6,
+      "along": { "random": [2, 13] },
+      "lateral": { "random": [-4, 4] },
+      "shape": { "kind": "box", "size": { "x": 2, "y": 2, "z": 2 } },
+      "seat": true,
+      "label": "acUnit",
+      "material": "#111122"
+    },
+    {
+      "type": "curve",
+      "radius": 12,
+      "angleDeg": 90,
+      "inclineDeg": 0,
+      "width": 8,
+      "wallHeight": 2,
+      "material": "#AAFFFF",
+      "segments": 20,
+      "bankingDeg": -45
+    },
+    { "type": "bucket", "material": "#111122", "at": { "along": 4 } }
+  ]
+}

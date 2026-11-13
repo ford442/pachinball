@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "ORBITAL_JUNKYARD",
+  "segments": [
+    { "type": "straight", "width": 4, "length": 8, "inclineDeg": 10, "material": "#888888" },
+    { "type": "straight", "width": 10, "length": 25, "inclineDeg": 5, "material": "#888888" },
+    {
+      "type": "scatter",
+      "seedKey": "track:orbital-junkyard:debris",
+      "count": 25,
+      "frame": "surface",
+      "along": { "random": [2, 21] },
+      "lateral": { "random": [-4, 4] },
+      "shapes": [{ "kind": "tetra", "size": "size" }, { "kind": "box", "size": "size" }],
+      "size": [0.5, 1.5],
+      "rotation": { "x": { "random": [0, 0.5] }, "y": { "random": [0, 0.5] }, "z": { "random": [0, 0.5] } },
+      "seat": true,
+      "label": "junkDebris",
+      "material": "#888888"
+    },
+    {
+      "type": "obstacle",
+      "shape": { "kind": "box", "size": { "x": 4, "y": 2, "z": 2 } },
+      "orient": "ramp",
+      "label": "crusherBlock",
+      "material": "#888888",
+      "items": [
+        { "at": { "from": "rampStart", "frame": "surface", "along": 23, "lateral": -3, "normal": 1 } },
+        { "at": { "from": "rampStart", "frame": "surface", "along": 23, "lateral": 3, "normal": 1 } }
+      ]
+    },
+    { "type": "bucket", "material": "#888888", "offset": { "x": 0, "y": -2, "z": 2 } }
+  ]
+}

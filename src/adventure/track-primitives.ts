@@ -588,7 +588,7 @@ export function createChromaGate(
 export function createArcPylon(
   ctx: TrackPrimitiveContext,
   pos: Vector3,
-  mat: StandardMaterial
+  mat: TrackMaterial
 ): void {
   if (!ctx.hasWorld) return
 
