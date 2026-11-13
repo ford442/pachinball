@@ -55,7 +55,7 @@ npx vitest run tests/ball-manager.test.ts
 
 | Path | Role |
 |------|------|
-| `src/game.ts` | Central orchestrator. Owns scene, cameras, lights, materials, post-processing, game-state machine (MENU / PLAYING / PAUSED / GAME_OVER), and wires all sub-systems together. The frame scheduler (`registerFrameSystems`) owns the render loop. |
+| `src/game.ts` | Central orchestrator. Owns scene, cameras, lights, materials, post-processing, game-state machine (MENU / PLAYING / PAUSED / GAME_OVER), and wires all sub-systems together. Boot-time wiring runs as `registerX(game)` stages under `src/game/init/`, ordered by `game-systems-init.ts`. The frame scheduler (`registerFrameSystems`) owns the render loop. |
 | `src/core/frame-scheduler.ts` | `FrameScheduler`: the one owner of `engine.runRenderLoop`. Phases `input → physics → sim → visuals → render → hud → idle`; systems register `{ phase, update(dt) }` with `{ signal }`. New per-frame work registers here — never a second `runRenderLoop`, never an update after `scene.render()`. See `docs/ENGINE_BOOTSTRAP.md` "Frame scheduler". |
 | `src/engine/gpu-capabilities.ts`, `src/engine/resolution-policy.ts` | `resolveGpuCapabilities(engine)` — query `{ compressedTextures, gpuTimer, hdrFormat, f16, maxMsaaSamples }` instead of guessing from the quality tier. Render scale = `min(DPR, 1.5 mobile / 2 desktop, tier cap)` with dynamic resolution (`src/game/render-resolution.ts`); the scene optimizer never touches the hardware scaling level. |
 | `src/core/static-scene-gate.ts` | `StaticSceneGate`: one invalidation point for everything frozen while the scene is static (materials, the active-mesh list, the shadow map). Mutate something frozen → call `game.staticSceneGate?.invalidate(...)`. See `docs/STATIC_SCENE.md`. |
@@ -63,7 +63,7 @@ npx vitest run tests/ball-manager.test.ts
 | `src/adventure/` | Adventure mode (`adventure-mode.ts`), campaign progression/state, zone registry, track builders (`tracks/`) and declarative track data. |
 | `native/` | C++ physics core — rigid bodies, broadphase, contact listener. Catch2-tested via `npm run test:native`. |
 | `src/wasm/` | Emscripten loader (`PhysicsModule.ts`), contact/transform buffer codecs, WASM types. |
-| `src/game/physics/` | Runtime physics engine selection and collision dispatch (`rapier`, `wasm-mirror`, `wasm-owner`). |
+| `src/game/physics/` | Runtime physics engine selection and collision dispatch (`rapier`, `wasm-mirror`, `wasm-owner`). `physics-controller.ts` keeps construction, `stepFixed` and the pacer; the other scheduler phases and concerns are their own files (`sim-phase`, `visual-phase`, `step-gameplay`, `nudge-tilt`, `wasm-bridges`, `replay-snapshot-sync`). |
 | `src/objects/` | Playfield geometry: bumpers, flippers (joint-based rotation), walls, rails, pachinko pins, decoration. All live under `object-core.ts` as the top-level orchestrator. |
 | `src/cabinet/` | Four cabinet presets (classic, neo, vertical, wide) built by `cabinet-builder.ts`. Each defines its own dimensions and styling. |
 | `src/display/` | Multi-layer backbox display, composited by one Frame Graph (`backbox-frame-graph.ts`, nodes chosen by `backbox-graph-plan.ts`) onto one plane; CRT and jackpot are passes on that composite, never on the camera. `display-core.ts` drives state transitions (IDLE → REACH → FEVER). See `docs/FRAME_GRAPH.md`. |
