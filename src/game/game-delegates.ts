@@ -116,7 +116,7 @@ export abstract class GameDelegates extends GameFields {
   updateGoldBallDisplay(): void { this.hud?.updateGoldBallDisplay() }
   showMessage(msg: string, duration: number): void { this.uiManager?.showMessage(msg, duration) }
   handleGameOverLeaderboard(): Promise<void> { return this.hud?.handleGameOverLeaderboard() ?? Promise.resolve() }
-  getBallPosition(): Vector3 | null { return this.physicsController?.getBallPosition() ?? null }
+  getBallPosition(out: Vector3): Vector3 | null { return this.physicsController?.getBallPosition(out) ?? null }
   endAdventureMode(): void { this.slotAdventure?.endAdventureMode() }
   tryActivateSlotMachine(): void { this.slotAdventure?.tryActivateSlotMachine() }
   forceSlotSpin(): void { this.slotAdventure?.forceSlotSpin() }

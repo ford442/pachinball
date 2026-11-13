@@ -2,6 +2,7 @@
  * Game Slot & Adventure — Slot machine callbacks and legacy adventure track cycling.
  */
 
+import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { Scene } from '@babylonjs/core/scene'
 import type { EffectsSystem } from '../effects'
@@ -22,6 +23,9 @@ import type { PerformanceMonitor } from '../game-elements/performance-monitor'
 
 import type { TableMapManager } from './game-maps'
 import type { LevelLoader } from './level-loader'
+
+/** Caller-owned out-vector for `getBallPosition`; consumers clone what they keep. */
+const scratchBallPos = new Vector3()
 
 export interface SlotAdventureHost {
   readonly display: DisplaySystem | null
@@ -50,7 +54,7 @@ export interface SlotAdventureHost {
   readonly uiManager: { showMessage(message: string, duration?: number): void } | null
 
   updateHUD(): void
-  getBallPosition(): import('@babylonjs/core/Maths/math.vector').Vector3 | null
+  getBallPosition(out: import('@babylonjs/core/Maths/math.vector').Vector3): import('@babylonjs/core/Maths/math.vector').Vector3 | null
   triggerJackpot(): void
   setGameState(state: import('../game-elements').GameState): void
   resetBall(): void
@@ -111,7 +115,7 @@ export class GameSlotAdventure {
 
     this.eventUnsubscribers.push(
       eventBus.on('slot:win', ({ points, combination }) => {
-        const pos = this.host.getBallPosition()
+        const pos = this.host.getBallPosition(scratchBallPos)
         if (pos) effects?.spawnFloatingNumber(points, pos)
         console.log(`[Slot] Win: ${combination} — ${points} points`)
       }),

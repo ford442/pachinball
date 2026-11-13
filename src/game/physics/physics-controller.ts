@@ -58,11 +58,7 @@ const NO_STUCK_BODIES: readonly PhysicsBody[] = []
 // CameraController clones, DynamicWorld and the atmosphere only read).
 const scratchBallPos = new Vector3()
 const scratchBallVel = new Vector3()
-
-function copyTranslation(body: PhysicsBody, out: Vector3): Vector3 {
-  const t = body.translation()
-  return out.set(t.x, t.y, t.z)
-}
+const scratchGhostPos = new Vector3()
 
 /** The row a tick records when no input arrived: every field "no change". */
 const IDLE_INPUT_FRAME: InputFrame = {
@@ -98,6 +94,8 @@ export class GamePhysicsController {
   private frameDt = 0
   /** False when this frame ran no step (not PLAYING): the sim and visual updates skip it. */
   private frameStepped = false
+  /** Alpha the meshes were last drawn with; `getBallPosition` and the camera use the same blend. */
+  private renderAlpha = 1
   /** Reused per frame (#488 §5): the camera policy, the trail list and its records. */
   private readonly cameraPolicy: { reducedMotion: boolean; photosensitiveMode: boolean; qualityTier: QualityTier } = {
     reducedMotion: false,
@@ -413,9 +411,13 @@ export class GamePhysicsController {
     }
   }
 
-  /** Delegates mesh interpolation to MeshInterpolationSystem. */
-  private syncMeshes(alpha: number): void {
-    this.meshInterpolation.syncMeshes(alpha, this.host.gameObjects?.getBindings() || [])
+  /**
+   * Delegates mesh interpolation to MeshInterpolationSystem. `snap` also makes the stored pose the
+   * live one (no step ran, the world may have been repositioned).
+   */
+  private syncMeshes(alpha: number, snap = false): void {
+    this.renderAlpha = alpha
+    this.meshInterpolation.syncMeshes(alpha, this.host.gameObjects?.getBindings() || [], snap)
   }
 
 
@@ -469,6 +471,9 @@ export class GamePhysicsController {
     // engine step, so the kinematic body's next pose is set when contacts integrate (and, on the
     // C++ owner, before `beginStep` pushes it). Per render frame it made a launch depend on the
     // viewer's refresh rate (determinism-todo item 7).
+    // Snapshot the pose before this tick; the render blend runs from it. Taken per tick, so a frame
+    // with several ticks keeps the pose before the last one, and a frame with none keeps the old one.
+    this.meshInterpolation.capturePreStep(this.host.gameObjects?.getBindings() || [])
     inputActions?.updatePlungerFrame?.(driveDt)
     if (frame) this.applyFrameActions(frame, inputActions)
 
@@ -618,12 +623,6 @@ export class GamePhysicsController {
     replayRecorder?: ReplayRecorder | null
   ): void {
     const replaying = replayRunner?.isPlaying() ?? false
-    if (replaying) {
-      const pos = this.getBallPosition()
-      if (pos && this.host.ghostBallRenderer?.isVisible()) {
-        this.host.ghostBallRenderer.updatePosition(pos)
-      }
-    }
 
     if (!this.host.stateManager.isPlaying()) {
       // No step runs: live input still reaches the input actions (they gate
@@ -633,8 +632,10 @@ export class GamePhysicsController {
       if (frame) this.applyFrameActions(frame, inputActions)
       // Mesh sync runs unconditionally so dynamic bodies (ball, flippers) appear at their
       // physics-body positions even during MENU state before the game starts. No physics
-      // step has run, so render at the raw pose (alpha=1, i.e. no interpolation).
-      this.syncMeshes(1)
+      // step has run, so render at the raw pose (alpha=1, i.e. no interpolation) and snap the
+      // stored pose to it, so a body repositioned here does not blend from a stale pose.
+      this.syncMeshes(1, true)
+      if (replaying) this.placeGhost()
       this.frameStepped = false
       return
     }
@@ -701,8 +702,9 @@ export class GamePhysicsController {
       alpha = this.stepAccumulator / FIXED_TIMESTEP
     }
 
-    // Skip interpolation on LOW quality tier — render at the raw post-step pose.
-    this.syncMeshes(this.host.qualityTier === QualityTier.LOW ? 1 : alpha)
+    // Every tier blends: lerp(pose before the last tick, live pose, alpha) is one lerp per dynamic body.
+    this.syncMeshes(alpha)
+    if (replaying) this.placeGhost()
 
     const dt = Math.min(rawDt, 1 / 30)
     this.frameDt = dt
@@ -710,6 +712,14 @@ export class GamePhysicsController {
     // per-step gameplay already ran with the fixed dt in stepGameplay.
     this.simClock.advance(this.host.physics, dt)
     this.frameStepped = true
+  }
+
+  /** Put the ghost ball where the primary ball is drawn this frame (after the mesh sync, same blend). */
+  private placeGhost(): void {
+    const ghost = this.host.ghostBallRenderer
+    if (!ghost?.isVisible()) return
+    const pos = this.getBallPosition(scratchGhostPos)
+    if (pos) ghost.updatePosition(pos)
   }
 
   /**
@@ -727,7 +737,7 @@ export class GamePhysicsController {
     // Dynamic world
     const mainBall = this.host.ballManager?.getBallBody()
     if (this.host.dynamicWorld && mainBall) {
-      this.host.dynamicWorld.update(copyTranslation(mainBall, scratchBallPos), dt)
+      this.host.dynamicWorld.update(this.meshInterpolation.getInterpolatedPosition(mainBall, this.renderAlpha, scratchBallPos), dt)
     }
 
     this.host.mapManager?.update(dt)
@@ -745,7 +755,8 @@ export class GamePhysicsController {
     const { effects } = this.host
     const ballManager = this.host.ballManager
     const ballBody = ballManager?.getBallBody() ?? null
-    const ballPos = ballBody ? copyTranslation(ballBody, scratchBallPos) : undefined
+    // The camera, atmosphere and follow target use the position the ball mesh is drawn at.
+    const ballPos = ballBody ? this.meshInterpolation.getInterpolatedPosition(ballBody, this.renderAlpha, scratchBallPos) : undefined
 
     // Camera controller
     if (this.host.cameraController && ballBody && ballPos) {
@@ -833,11 +844,11 @@ export class GamePhysicsController {
     return this.collisionDispatcher.getBallMeshForBody(body)
   }
 
-  getBallPosition(): Vector3 | null {
+  /** The primary ball as its mesh is drawn this frame (interpolated), written into `out`; null if there is no ball. */
+  getBallPosition(out: Vector3): Vector3 | null {
     const body = this.host.ballManager?.getBallBody()
     if (!body) return null
-    const t = body.translation()
-    return new Vector3(t.x, t.y, t.z)
+    return this.meshInterpolation.getInterpolatedPosition(body, this.renderAlpha, out)
   }
 
   applyNudge(direction: { x: number; y: number; z: number }): void {

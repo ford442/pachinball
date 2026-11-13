@@ -45,19 +45,31 @@ function makeHost(opts: {
   qualityTier?: QualityTier
   bindings: Array<{ rigidBody: BindingBody; mesh: BindingMesh }>
   stepImpl?: () => number
+  /** Scripted frame delta, in ms; read on every frame. */
+  deltaMs?: () => number
+  ballBody?: BindingBody
 }) {
   const eventBus = new EventBus()
   const physics = {
     step: vi.fn(() => opts.stepImpl?.() ?? 1),
     getWorld: vi.fn(() => null),
   }
+  const ballManager = opts.ballBody
+    ? {
+        getBallBody: () => opts.ballBody,
+        getBallBodies: () => [opts.ballBody],
+        updateCaughtBalls: vi.fn(),
+        updateStuckDetection: () => [],
+        updateSmallGoldBallLifetimes: vi.fn(),
+      }
+    : null
 
   const host = {
-    engine: { getDeltaTime: vi.fn(() => 16.6667) },
+    engine: { getDeltaTime: vi.fn(() => opts.deltaMs?.() ?? 16.6667) },
     physics,
     stateManager: { isPlaying: vi.fn(() => true) },
     eventBus,
-    ballManager: null,
+    ballManager,
     gameObjects: {
       getBindings: vi.fn(() => opts.bindings),
       getBumperBodies: vi.fn(() => []),
@@ -172,7 +184,7 @@ describe('GamePhysicsController mesh interpolation', () => {
     expect(mesh.position.z).toBe(12)
   })
 
-  it('forces raw post-step poses on LOW quality tier even when physics returns alpha below 1', () => {
+  it('blends on LOW quality tier too: lerp(pose before the tick, live pose, accumulator alpha)', () => {
     const { body, state } = makeBody({ position: { x: 0, y: 0, z: 0 } })
     const mesh: BindingMesh = {
       position: new Vector3(),
@@ -181,18 +193,91 @@ describe('GamePhysicsController mesh interpolation', () => {
     const { host, physics } = makeHost({
       qualityTier: QualityTier.LOW,
       bindings: [{ rigidBody: body, mesh }],
+      // 25 ms = one 1/60 s tick plus half a tick left in the accumulator.
+      deltaMs: () => 25,
       stepImpl: () => {
         state.position = { x: 7, y: -3, z: 5 }
-        return 0.5
+        return 1
       },
     })
     const controller = new GamePhysicsController(host)
 
     controller.stepPhysics(null, null)
 
-    expect(physics.step).toHaveBeenCalled()
-    expect(mesh.position.x).toBe(7)
-    expect(mesh.position.y).toBe(-3)
-    expect(mesh.position.z).toBe(5)
+    expect(physics.step).toHaveBeenCalledTimes(1)
+    expect(mesh.position.x).toBeCloseTo(3.5, 3)
+    expect(mesh.position.y).toBeCloseTo(-1.5, 3)
+    expect(mesh.position.z).toBeCloseTo(2.5, 3)
+  })
+
+  for (const tier of [QualityTier.LOW, QualityTier.HIGH]) {
+    it(`at 144 Hz over a 60 Hz step the ball mesh moves on every frame and never jumps backward (${QualityTier[tier]})`, () => {
+      const { body, state } = makeBody({ position: { x: 0, y: 0, z: 0 } })
+      const mesh: BindingMesh = {
+        position: new Vector3(),
+        rotationQuaternion: new Quaternion(),
+      }
+      // The physics poses: the live pose after each step, and the pose before it.
+      const STEP = 1
+      let preStep = 0
+      let stepsThisFrame = 0
+      const { host } = makeHost({
+        qualityTier: tier,
+        bindings: [{ rigidBody: body, mesh }],
+        ballBody: body,
+        deltaMs: () => 1000 / 144,
+        stepImpl: () => {
+          preStep = state.position.x
+          state.position = { x: preStep + STEP, y: 0, z: 0 }
+          stepsThisFrame++
+          return 1
+        },
+      })
+      const controller = new GamePhysicsController(host)
+
+      const frames: Array<{ x: number; stepped: boolean; live: number; pre: number; ballX: number }> = []
+      const out = new Vector3()
+      for (let i = 0; i < 60; i++) {
+        stepsThisFrame = 0
+        controller.stepFixed(null, null)
+        const ball = controller.getBallPosition(out)
+        frames.push({ x: mesh.position.x, stepped: stepsThisFrame > 0, live: state.position.x, pre: preStep, ballX: ball!.x })
+      }
+
+      // Skip the first stepping frame: before it there is no previous pose to blend from.
+      const steady = frames.slice(frames.findIndex((f) => f.stepped) + 1)
+      expect(steady.some((f) => !f.stepped)).toBe(true)
+      for (let i = 1; i < steady.length; i++) {
+        const f = steady[i]!
+        const prev = steady[i - 1]!
+        // Never behind the pre-step snapshot, never past the live pose.
+        expect(f.x).toBeGreaterThanOrEqual(f.pre - 1e-4)
+        expect(f.x).toBeLessThanOrEqual(f.live + 1e-4)
+        // A frame that did not step still advances the mesh.
+        if (!f.stepped) expect(f.x).toBeGreaterThan(prev.x)
+        // And no frame ever moves it backward.
+        expect(f.x).toBeGreaterThanOrEqual(prev.x - 1e-4)
+        // The camera / ghost position is the drawn position.
+        expect(f.ballX).toBeCloseTo(f.x, 3)
+      }
+    })
+  }
+
+  it('getBallPosition fills the caller-owned vector and returns it', () => {
+    const { body } = makeBody({ position: { x: 4, y: 5, z: 6 } })
+    const { host } = makeHost({ bindings: [], ballBody: body })
+    const controller = new GamePhysicsController(host)
+    const out = new Vector3()
+
+    expect(controller.getBallPosition(out)).toBe(out)
+    expect(out.x).toBe(4)
+    expect(out.y).toBe(5)
+    expect(out.z).toBe(6)
+  })
+
+  it('getBallPosition is null without a ball', () => {
+    const { host } = makeHost({ bindings: [] })
+    const controller = new GamePhysicsController(host)
+    expect(controller.getBallPosition(new Vector3())).toBeNull()
   })
 })
