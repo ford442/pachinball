@@ -30,7 +30,7 @@ import {
 import { MachineDescriptorSchema, TrackRefSchema } from '../src/schemas/machine'
 import { ProfileSchema } from '../src/schemas/profile'
 import { MachineRulesSchema } from '../src/schemas/rules'
-import { TrackDefinitionSchema } from '../src/schemas/track'
+import { TRACK_SCHEMA_PARTS, TrackDefinitionSchema } from '../src/schemas/track'
 import { WeeklyMachineSchema } from '../src/schemas/weekly'
 
 const BASE: ConversionConfig = {
@@ -51,12 +51,13 @@ function document(title: string, description: string, schema: v.GenericSchema, d
 
 /** Published file name → JSON Schema document. */
 export function buildJsonSchemas(): Record<string, JsonObject> {
-  const machineDefs = { TrackRef: TrackRefSchema, TrackDefinition: TrackDefinitionSchema, WeeklyMachine: WeeklyMachineSchema }
+  const machineDefs = { TrackRef: TrackRefSchema, TrackDefinition: TrackDefinitionSchema, WeeklyMachine: WeeklyMachineSchema, ...TRACK_SCHEMA_PARTS }
   return {
     'track.json': document(
       'Pachinball adventure track',
       'A declarative track (src/adventure/track-data/*.json; docs/TRACK_SCHEMA.md).',
       TrackDefinitionSchema,
+      TRACK_SCHEMA_PARTS,
     ),
     'machine.json': document(
       'Pachinball machine',

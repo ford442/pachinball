@@ -811,6 +811,25 @@ const TrackSegmentSchema = v.variant('type', SEGMENT_SCHEMAS, (issue) =>
   issue.path ? `type must be one of: ${TRACK_SEGMENT_TYPES.join(', ')}` : 'segment must be an object',
 )
 
+/**
+ * The named parts of the track schema, for tools that describe it rather than
+ * parse with it: the JSON Schema generator emits each as one definition
+ * instead of inlining it at every use, and the machine editor's inspector can
+ * render one form per part.
+ */
+export const TRACK_SCHEMA_PARTS = {
+  Vec3,
+  MaterialRef,
+  Placement,
+  NumberSpec: NumberSpecSchema,
+  Shape: ShapeSchema,
+  MeshShape: MeshShapeSchema,
+  VisualMesh,
+  Motion: MotionSchema,
+  Zone: ZoneSchema,
+  TrackSegment: TrackSegmentSchema,
+} as const
+
 export type StraightSegment = v.InferOutput<typeof StraightSegment>
 export type CurveSegment = v.InferOutput<typeof CurveSegment>
 export type GapSegment = v.InferOutput<typeof GapSegment>

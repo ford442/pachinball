@@ -46,941 +46,7 @@
     "segments": {
       "type": "array",
       "items": {
-        "oneOf": [
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "straight"
-              },
-              "width": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "length": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "inclineDeg": {
-                "type": "number"
-              },
-              "material": {
-                "anyOf": [
-                  {
-                    "enum": [
-                      "structure",
-                      "accent",
-                      "energy",
-                      "glow"
-                    ],
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^#[0-9A-Fa-f]{6}$"
-                  }
-                ]
-              },
-              "wallHeight": {
-                "type": "number"
-              },
-              "friction": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "type",
-              "width",
-              "length",
-              "inclineDeg"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "curve"
-              },
-              "radius": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "angleDeg": {
-                "type": "number"
-              },
-              "inclineDeg": {
-                "type": "number"
-              },
-              "width": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "wallHeight": {
-                "type": "number"
-              },
-              "bankingDeg": {
-                "type": "number"
-              },
-              "segments": {
-                "type": "number",
-                "minimum": 1
-              },
-              "material": {
-                "anyOf": [
-                  {
-                    "enum": [
-                      "structure",
-                      "accent",
-                      "energy",
-                      "glow"
-                    ],
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^#[0-9A-Fa-f]{6}$"
-                  }
-                ]
-              },
-              "friction": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "type",
-              "radius",
-              "angleDeg",
-              "inclineDeg",
-              "width"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "gap"
-              },
-              "length": {
-                "type": "number"
-              },
-              "drop": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "type",
-              "length",
-              "drop"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "turn"
-              },
-              "deltaHeadingDeg": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "type",
-              "deltaHeadingDeg"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "bucket"
-              },
-              "material": {
-                "anyOf": [
-                  {
-                    "enum": [
-                      "structure",
-                      "accent",
-                      "energy",
-                      "glow"
-                    ],
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^#[0-9A-Fa-f]{6}$"
-                  }
-                ]
-              },
-              "offset": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "number"
-                  },
-                  "y": {
-                    "type": "number"
-                  },
-                  "z": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "x",
-                  "y",
-                  "z"
-                ],
-                "additionalProperties": false
-              }
-            },
-            "required": [
-              "type"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "portal"
-              },
-              "offset": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "number"
-                  },
-                  "y": {
-                    "type": "number"
-                  },
-                  "z": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "x",
-                  "y",
-                  "z"
-                ],
-                "additionalProperties": false
-              }
-            },
-            "required": [
-              "type"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "spinner"
-              },
-              "radius": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "angVelDeg": {
-                "type": "number"
-              },
-              "teeth": {
-                "type": "boolean"
-              },
-              "advance": {
-                "type": "boolean"
-              },
-              "offset": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "number"
-                  },
-                  "y": {
-                    "type": "number"
-                  },
-                  "z": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "x",
-                  "y",
-                  "z"
-                ],
-                "additionalProperties": false
-              },
-              "material": {
-                "anyOf": [
-                  {
-                    "enum": [
-                      "structure",
-                      "accent",
-                      "energy",
-                      "glow"
-                    ],
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^#[0-9A-Fa-f]{6}$"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "type",
-              "radius",
-              "angVelDeg"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "gate"
-              },
-              "color": {
-                "enum": [
-                  "RED",
-                  "GREEN",
-                  "BLUE"
-                ],
-                "type": "string"
-              },
-              "offset": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "number"
-                  },
-                  "y": {
-                    "type": "number"
-                  },
-                  "z": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "x",
-                  "y",
-                  "z"
-                ],
-                "additionalProperties": false
-              }
-            },
-            "required": [
-              "type",
-              "color"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "cylinder"
-              },
-              "diameter": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "height": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "offset": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "number"
-                  },
-                  "y": {
-                    "type": "number"
-                  },
-                  "z": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "x",
-                  "y",
-                  "z"
-                ],
-                "additionalProperties": false
-              },
-              "material": {
-                "anyOf": [
-                  {
-                    "enum": [
-                      "structure",
-                      "accent",
-                      "energy",
-                      "glow"
-                    ],
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^#[0-9A-Fa-f]{6}$"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "type",
-              "diameter",
-              "height"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "pinField"
-              },
-              "spacing": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "evenOffsets": {
-                "type": "array",
-                "items": {
-                  "type": "number"
-                }
-              },
-              "oddOffsets": {
-                "type": "array",
-                "items": {
-                  "type": "number"
-                }
-              },
-              "diameter": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "height": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "material": {
-                "anyOf": [
-                  {
-                    "enum": [
-                      "structure",
-                      "accent",
-                      "energy",
-                      "glow"
-                    ],
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^#[0-9A-Fa-f]{6}$"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "type",
-              "spacing",
-              "evenOffsets",
-              "oddOffsets",
-              "diameter",
-              "height"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "mill"
-              },
-              "alongRamp": {
-                "type": "number"
-              },
-              "lateral": {
-                "type": "number"
-              },
-              "radius": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "angVel": {
-                "type": "number"
-              },
-              "surfaceOffset": {
-                "type": "number"
-              },
-              "material": {
-                "anyOf": [
-                  {
-                    "enum": [
-                      "structure",
-                      "accent",
-                      "energy",
-                      "glow"
-                    ],
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^#[0-9A-Fa-f]{6}$"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "type",
-              "alongRamp",
-              "lateral",
-              "radius",
-              "angVel"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "resetBasin"
-              },
-              "offset": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "number"
-                  },
-                  "y": {
-                    "type": "number"
-                  },
-                  "z": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "x",
-                  "y",
-                  "z"
-                ],
-                "additionalProperties": false
-              },
-              "material": {
-                "anyOf": [
-                  {
-                    "enum": [
-                      "structure",
-                      "accent",
-                      "energy",
-                      "glow"
-                    ],
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^#[0-9A-Fa-f]{6}$"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "type"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "pinLattice"
-              },
-              "rows": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 9007199254740991
-              },
-              "cols": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 9007199254740991
-              },
-              "spacing": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "rowSpacing": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "rowOffset": {
-                "type": "number"
-              },
-              "startAlong": {
-                "type": "number",
-                "minimum": 0
-              },
-              "lateral": {
-                "type": "number"
-              },
-              "diameter": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "height": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "restitution": {
-                "type": "number",
-                "minimum": 0
-              },
-              "friction": {
-                "type": "number",
-                "minimum": 0
-              },
-              "dropout": {
-                "type": "number",
-                "minimum": 0,
-                "exclusiveMaximum": 1
-              },
-              "dropoutSeed": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 4294967295
-              },
-              "holes": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "row": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
-                    },
-                    "col": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
-                    }
-                  },
-                  "required": [
-                    "row",
-                    "col"
-                  ],
-                  "additionalProperties": false
-                }
-              },
-              "material": {
-                "anyOf": [
-                  {
-                    "enum": [
-                      "structure",
-                      "accent",
-                      "energy",
-                      "glow"
-                    ],
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^#[0-9A-Fa-f]{6}$"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "type",
-              "rows",
-              "cols",
-              "spacing",
-              "diameter",
-              "height"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "forceField"
-              },
-              "size": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  },
-                  "y": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  },
-                  "z": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  }
-                },
-                "required": [
-                  "x",
-                  "y",
-                  "z"
-                ],
-                "additionalProperties": false
-              },
-              "accel": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "number"
-                  },
-                  "y": {
-                    "type": "number"
-                  },
-                  "z": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "x",
-                  "y",
-                  "z"
-                ],
-                "additionalProperties": false
-              },
-              "space": {
-                "enum": [
-                  "world",
-                  "field"
-                ],
-                "type": "string"
-              },
-              "alongRamp": {
-                "type": "number"
-              },
-              "lateral": {
-                "type": "number"
-              },
-              "surfaceOffset": {
-                "type": "number"
-              },
-              "offset": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "number"
-                  },
-                  "y": {
-                    "type": "number"
-                  },
-                  "z": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "x",
-                  "y",
-                  "z"
-                ],
-                "additionalProperties": false
-              },
-              "yawDeg": {
-                "type": "number"
-              },
-              "visible": {
-                "type": "boolean"
-              },
-              "material": {
-                "anyOf": [
-                  {
-                    "enum": [
-                      "structure",
-                      "accent",
-                      "energy",
-                      "glow"
-                    ],
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^#[0-9A-Fa-f]{6}$"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "type",
-              "size",
-              "accel"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "cone"
-              },
-              "radius": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "halfHeight": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "offset": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "number"
-                  },
-                  "y": {
-                    "type": "number"
-                  },
-                  "z": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "x",
-                  "y",
-                  "z"
-                ],
-                "additionalProperties": false
-              },
-              "yawDeg": {
-                "type": "number"
-              },
-              "restitution": {
-                "type": "number",
-                "minimum": 0
-              },
-              "friction": {
-                "type": "number",
-                "minimum": 0
-              },
-              "material": {
-                "anyOf": [
-                  {
-                    "enum": [
-                      "structure",
-                      "accent",
-                      "energy",
-                      "glow"
-                    ],
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^#[0-9A-Fa-f]{6}$"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "type",
-              "radius",
-              "halfHeight"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "const": "axisPull"
-              },
-              "offset": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "number"
-                  },
-                  "y": {
-                    "type": "number"
-                  },
-                  "z": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "x",
-                  "y",
-                  "z"
-                ],
-                "additionalProperties": false
-              },
-              "axis": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "number"
-                  },
-                  "y": {
-                    "type": "number"
-                  },
-                  "z": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "x",
-                  "y",
-                  "z"
-                ],
-                "additionalProperties": false
-              },
-              "radius": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "halfHeight": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "strength": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 60
-              },
-              "enabled": {
-                "type": "boolean"
-              },
-              "visible": {
-                "type": "boolean"
-              },
-              "material": {
-                "anyOf": [
-                  {
-                    "enum": [
-                      "structure",
-                      "accent",
-                      "energy",
-                      "glow"
-                    ],
-                    "type": "string"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^#[0-9A-Fa-f]{6}$"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "type",
-              "radius",
-              "strength"
-            ],
-            "additionalProperties": false
-          }
-        ]
+        "$ref": "#/$defs/TrackSegment"
       },
       "minItems": 1
     }
@@ -990,5 +56,1958 @@
     "id",
     "segments"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "0": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "random": {
+              "type": "array",
+              "items": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "minItems": 2
+            },
+            "scale": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "random"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "start": {
+              "type": "number"
+            },
+            "step": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "start",
+            "step"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Vec3": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "z": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "z"
+      ],
+      "additionalProperties": false
+    },
+    "MaterialRef": {
+      "anyOf": [
+        {
+          "enum": [
+            "structure",
+            "accent",
+            "energy",
+            "glow"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        {
+          "type": "string",
+          "pattern": "^pbr:#[0-9A-Fa-f]{6}$"
+        }
+      ]
+    },
+    "Placement": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "enum": [
+            "cursor",
+            "rampStart",
+            "rampCenter",
+            "spinner"
+          ],
+          "type": "string"
+        },
+        "mark": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,31}$"
+        },
+        "frame": {
+          "enum": [
+            "flat",
+            "surface"
+          ],
+          "type": "string"
+        },
+        "offset": {
+          "$ref": "#/$defs/Vec3"
+        },
+        "along": {
+          "type": "number"
+        },
+        "lateral": {
+          "type": "number"
+        },
+        "normal": {
+          "type": "number"
+        },
+        "up": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "NumberSpec": {
+      "$ref": "#/$defs/0"
+    },
+    "Shape": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "box"
+            },
+            "size": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "y": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "z": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "z"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "const": "size"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "size"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "cylinder"
+            },
+            "diameter": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "const": "size"
+                }
+              ]
+            },
+            "height": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "const": "size"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "diameter",
+            "height"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "sphere"
+            },
+            "diameter": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "const": "size"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "diameter"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "prism"
+            },
+            "diameter": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "const": "size"
+                }
+              ]
+            },
+            "height": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "const": "size"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "diameter",
+            "height"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "tetra"
+            },
+            "size": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "const": "size"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "size"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "MeshShape": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "box"
+            },
+            "size": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "y": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "z": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "x",
+                "y",
+                "z"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "kind",
+            "size"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "cylinder"
+            },
+            "diameter": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "height": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "tessellation": {
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 128
+            }
+          },
+          "required": [
+            "kind",
+            "diameter",
+            "height"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "sphere"
+            },
+            "diameter": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "diameter"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "torus"
+            },
+            "diameter": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "thickness": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "tessellation": {
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 128
+            }
+          },
+          "required": [
+            "kind",
+            "diameter",
+            "thickness"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "tetra"
+            },
+            "size": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "size"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "VisualMesh": {
+      "type": "object",
+      "properties": {
+        "shape": {
+          "$ref": "#/$defs/MeshShape"
+        },
+        "local": {
+          "$ref": "#/$defs/Vec3"
+        },
+        "material": {
+          "$ref": "#/$defs/MaterialRef"
+        }
+      },
+      "required": [
+        "shape"
+      ],
+      "additionalProperties": false
+    },
+    "Motion": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "piston",
+            "oscillator",
+            "rotatingOscillator"
+          ],
+          "type": "string"
+        },
+        "frequency": {
+          "$ref": "#/$defs/NumberSpec"
+        },
+        "amplitude": {
+          "$ref": "#/$defs/NumberSpec"
+        },
+        "phase": {
+          "$ref": "#/$defs/NumberSpec"
+        },
+        "axis": {
+          "anyOf": [
+            {
+              "const": "right"
+            },
+            {
+              "$ref": "#/$defs/Vec3"
+            }
+          ]
+        },
+        "travel": {
+          "type": "array",
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 2
+        },
+        "draw": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "frequency",
+              "amplitude",
+              "phase"
+            ],
+            "type": "string"
+          }
+        },
+        "bindMesh": {
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "Zone": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "conveyor"
+            },
+            "force": {
+              "$ref": "#/$defs/Vec3"
+            }
+          },
+          "required": [
+            "kind",
+            "force"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "rampConveyor"
+            },
+            "force": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "kind",
+            "force"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "damping"
+            },
+            "damping": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "damping"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "TrackSegment": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "straight"
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "length": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "inclineDeg": {
+              "type": "number"
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            },
+            "wallHeight": {
+              "type": "number"
+            },
+            "friction": {
+              "type": "number"
+            },
+            "headingOffsetDeg": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "type",
+            "width",
+            "length",
+            "inclineDeg"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "curve"
+            },
+            "radius": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "angleDeg": {
+              "type": "number"
+            },
+            "inclineDeg": {
+              "type": "number"
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "wallHeight": {
+              "type": "number"
+            },
+            "bankingDeg": {
+              "type": "number"
+            },
+            "segments": {
+              "type": "number",
+              "minimum": 1
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            },
+            "friction": {
+              "type": "number"
+            },
+            "conveyor": {
+              "type": "object",
+              "properties": {
+                "segments": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 256
+                },
+                "force": {
+                  "type": "number"
+                },
+                "halfWidth": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "halfHeight": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "lift": {
+                  "type": "number"
+                },
+                "label": {
+                  "type": "string",
+                  "maxLength": 48
+                }
+              },
+              "required": [
+                "segments",
+                "force",
+                "halfWidth",
+                "halfHeight"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "type",
+            "radius",
+            "angleDeg",
+            "inclineDeg",
+            "width"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "gap"
+            },
+            "length": {
+              "type": "number"
+            },
+            "drop": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "type",
+            "length",
+            "drop"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "turn"
+            },
+            "deltaHeadingDeg": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "type",
+            "deltaHeadingDeg"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "bucket"
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            },
+            "offset": {
+              "$ref": "#/$defs/Vec3"
+            },
+            "at": {
+              "$ref": "#/$defs/Placement"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "portal"
+            },
+            "offset": {
+              "$ref": "#/$defs/Vec3"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "spinner"
+            },
+            "radius": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "angVelDeg": {
+              "type": "number"
+            },
+            "angVel": {
+              "type": "number"
+            },
+            "teeth": {
+              "type": "boolean"
+            },
+            "advance": {
+              "type": "boolean"
+            },
+            "offset": {
+              "$ref": "#/$defs/Vec3"
+            },
+            "at": {
+              "$ref": "#/$defs/Placement"
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            }
+          },
+          "required": [
+            "type",
+            "radius"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "gate"
+            },
+            "color": {
+              "enum": [
+                "RED",
+                "GREEN",
+                "BLUE"
+              ],
+              "type": "string"
+            },
+            "offset": {
+              "$ref": "#/$defs/Vec3"
+            }
+          },
+          "required": [
+            "type",
+            "color"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "cylinder"
+            },
+            "diameter": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "height": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "offset": {
+              "$ref": "#/$defs/Vec3"
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            }
+          },
+          "required": [
+            "type",
+            "diameter",
+            "height"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "pinField"
+            },
+            "spacing": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "evenOffsets": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "oddOffsets": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "diameter": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "height": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            }
+          },
+          "required": [
+            "type",
+            "spacing",
+            "evenOffsets",
+            "oddOffsets",
+            "diameter",
+            "height"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "mill"
+            },
+            "alongRamp": {
+              "type": "number"
+            },
+            "lateral": {
+              "type": "number"
+            },
+            "radius": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "angVel": {
+              "type": "number"
+            },
+            "surfaceOffset": {
+              "type": "number"
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            }
+          },
+          "required": [
+            "type",
+            "alongRamp",
+            "lateral",
+            "radius",
+            "angVel"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "resetBasin"
+            },
+            "offset": {
+              "$ref": "#/$defs/Vec3"
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "pinLattice"
+            },
+            "rows": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "cols": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "spacing": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "rowSpacing": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "rowOffset": {
+              "type": "number"
+            },
+            "startAlong": {
+              "type": "number",
+              "minimum": 0
+            },
+            "lateral": {
+              "type": "number"
+            },
+            "diameter": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "height": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "restitution": {
+              "type": "number",
+              "minimum": 0
+            },
+            "friction": {
+              "type": "number",
+              "minimum": 0
+            },
+            "dropout": {
+              "type": "number",
+              "minimum": 0,
+              "exclusiveMaximum": 1
+            },
+            "dropoutSeed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "holes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "row": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "col": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "row",
+                  "col"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            }
+          },
+          "required": [
+            "type",
+            "rows",
+            "cols",
+            "spacing",
+            "diameter",
+            "height"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "forceField"
+            },
+            "size": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "y": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "z": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "x",
+                "y",
+                "z"
+              ],
+              "additionalProperties": false
+            },
+            "accel": {
+              "$ref": "#/$defs/Vec3"
+            },
+            "space": {
+              "enum": [
+                "world",
+                "field"
+              ],
+              "type": "string"
+            },
+            "alongRamp": {
+              "type": "number"
+            },
+            "lateral": {
+              "type": "number"
+            },
+            "surfaceOffset": {
+              "type": "number"
+            },
+            "offset": {
+              "$ref": "#/$defs/Vec3"
+            },
+            "yawDeg": {
+              "type": "number"
+            },
+            "visible": {
+              "type": "boolean"
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            }
+          },
+          "required": [
+            "type",
+            "size",
+            "accel"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "cone"
+            },
+            "radius": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "halfHeight": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "offset": {
+              "$ref": "#/$defs/Vec3"
+            },
+            "yawDeg": {
+              "type": "number"
+            },
+            "restitution": {
+              "type": "number",
+              "minimum": 0
+            },
+            "friction": {
+              "type": "number",
+              "minimum": 0
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            }
+          },
+          "required": [
+            "type",
+            "radius",
+            "halfHeight"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "axisPull"
+            },
+            "offset": {
+              "$ref": "#/$defs/Vec3"
+            },
+            "axis": {
+              "$ref": "#/$defs/Vec3"
+            },
+            "radius": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "halfHeight": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "strength": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 60
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "visible": {
+              "type": "boolean"
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            }
+          },
+          "required": [
+            "type",
+            "radius",
+            "strength"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "mark"
+            },
+            "name": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "type",
+            "name"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "jump"
+            },
+            "to": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,31}$"
+            },
+            "midpoint": {
+              "type": "array",
+              "items": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,31}$"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,31}$"
+                }
+              ],
+              "minItems": 2
+            },
+            "at": {
+              "$ref": "#/$defs/Placement"
+            },
+            "headingOf": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,31}$"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "scatter"
+            },
+            "seedKey": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9:_-]{0,63}$"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1024
+            },
+            "from": {
+              "enum": [
+                "cursor",
+                "rampStart",
+                "rampCenter",
+                "spinner"
+              ],
+              "type": "string"
+            },
+            "mark": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,31}$"
+            },
+            "frame": {
+              "enum": [
+                "flat",
+                "surface"
+              ],
+              "type": "string"
+            },
+            "along": {
+              "$ref": "#/$defs/NumberSpec"
+            },
+            "lateral": {
+              "$ref": "#/$defs/NumberSpec"
+            },
+            "shapes": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Shape"
+              },
+              "minItems": 2
+            },
+            "size": {
+              "type": "array",
+              "items": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              ],
+              "minItems": 2
+            },
+            "rotation": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "$ref": "#/$defs/NumberSpec"
+                },
+                "y": {
+                  "$ref": "#/$defs/NumberSpec"
+                },
+                "z": {
+                  "$ref": "#/$defs/NumberSpec"
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            "seat": {
+              "type": "boolean"
+            },
+            "up": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "materials": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/MaterialRef"
+              },
+              "minItems": 1
+            },
+            "shape": {
+              "$ref": "#/$defs/Shape"
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 48
+            },
+            "orient": {
+              "enum": [
+                "heading",
+                "ramp"
+              ],
+              "type": "string"
+            },
+            "restitution": {
+              "type": "number",
+              "minimum": 0
+            },
+            "friction": {
+              "type": "number",
+              "minimum": 0
+            },
+            "collisionColor": {
+              "enum": [
+                "RED",
+                "GREEN",
+                "BLUE"
+              ],
+              "type": "string"
+            },
+            "local": {
+              "$ref": "#/$defs/Vec3"
+            },
+            "sensor": {
+              "type": "boolean"
+            },
+            "zone": {
+              "$ref": "#/$defs/Zone"
+            },
+            "motion": {
+              "$ref": "#/$defs/Motion"
+            },
+            "mesh": {
+              "anyOf": [
+                {
+                  "const": false
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/VisualMesh"
+                  },
+                  "minItems": 1
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "seedKey",
+            "count",
+            "along"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "obstacle"
+            },
+            "seedKey": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9:_-]{0,63}$"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "at": {
+                    "$ref": "#/$defs/Placement"
+                  },
+                  "shape": {
+                    "$ref": "#/$defs/Shape"
+                  },
+                  "material": {
+                    "$ref": "#/$defs/MaterialRef"
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 48
+                  },
+                  "orient": {
+                    "enum": [
+                      "heading",
+                      "ramp"
+                    ],
+                    "type": "string"
+                  },
+                  "restitution": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "friction": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "collisionColor": {
+                    "enum": [
+                      "RED",
+                      "GREEN",
+                      "BLUE"
+                    ],
+                    "type": "string"
+                  },
+                  "local": {
+                    "$ref": "#/$defs/Vec3"
+                  },
+                  "sensor": {
+                    "type": "boolean"
+                  },
+                  "zone": {
+                    "$ref": "#/$defs/Zone"
+                  },
+                  "motion": {
+                    "$ref": "#/$defs/Motion"
+                  },
+                  "mesh": {
+                    "anyOf": [
+                      {
+                        "const": false
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/VisualMesh"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "at"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1
+            },
+            "variants": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "at": {
+                      "$ref": "#/$defs/Placement"
+                    },
+                    "shape": {
+                      "$ref": "#/$defs/Shape"
+                    },
+                    "material": {
+                      "$ref": "#/$defs/MaterialRef"
+                    },
+                    "label": {
+                      "type": "string",
+                      "maxLength": 48
+                    },
+                    "orient": {
+                      "enum": [
+                        "heading",
+                        "ramp"
+                      ],
+                      "type": "string"
+                    },
+                    "restitution": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "friction": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "collisionColor": {
+                      "enum": [
+                        "RED",
+                        "GREEN",
+                        "BLUE"
+                      ],
+                      "type": "string"
+                    },
+                    "local": {
+                      "$ref": "#/$defs/Vec3"
+                    },
+                    "sensor": {
+                      "type": "boolean"
+                    },
+                    "zone": {
+                      "$ref": "#/$defs/Zone"
+                    },
+                    "motion": {
+                      "$ref": "#/$defs/Motion"
+                    },
+                    "mesh": {
+                      "anyOf": [
+                        {
+                          "const": false
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/VisualMesh"
+                          },
+                          "minItems": 1
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "at"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1
+              },
+              "minItems": 2
+            },
+            "shape": {
+              "$ref": "#/$defs/Shape"
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 48
+            },
+            "orient": {
+              "enum": [
+                "heading",
+                "ramp"
+              ],
+              "type": "string"
+            },
+            "restitution": {
+              "type": "number",
+              "minimum": 0
+            },
+            "friction": {
+              "type": "number",
+              "minimum": 0
+            },
+            "collisionColor": {
+              "enum": [
+                "RED",
+                "GREEN",
+                "BLUE"
+              ],
+              "type": "string"
+            },
+            "local": {
+              "$ref": "#/$defs/Vec3"
+            },
+            "sensor": {
+              "type": "boolean"
+            },
+            "zone": {
+              "$ref": "#/$defs/Zone"
+            },
+            "motion": {
+              "$ref": "#/$defs/Motion"
+            },
+            "mesh": {
+              "anyOf": [
+                {
+                  "const": false
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/VisualMesh"
+                  },
+                  "minItems": 1
+                }
+              ]
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "spinnerParts"
+            },
+            "ring": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 256
+                },
+                "gapDeg": {
+                  "type": "number",
+                  "minimum": 0,
+                  "exclusiveMaximum": 360
+                },
+                "segments": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 256
+                }
+              },
+              "required": [
+                "count"
+              ],
+              "additionalProperties": false
+            },
+            "points": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "angleDeg": {
+                    "type": "number"
+                  },
+                  "radius": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "angleDeg",
+                  "radius"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1
+            },
+            "radius": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "radiusFactor": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "y": {
+              "type": "number"
+            },
+            "shape": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "box"
+                    },
+                    "size": {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "y": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "z": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "exclusiveMinimum": 0
+                            },
+                            {
+                              "const": "arc"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "z"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "arcPad": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "size"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "cylinder"
+                    },
+                    "diameter": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "height": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "diameter",
+                    "height"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "yaw": {
+              "type": "boolean"
+            },
+            "sensor": {
+              "type": "boolean"
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 48
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            },
+            "mesh": {
+              "anyOf": [
+                {
+                  "const": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "shape": {
+                      "$ref": "#/$defs/MeshShape"
+                    },
+                    "y": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "body": {
+              "enum": [
+                "platform",
+                "own"
+              ],
+              "type": "string"
+            },
+            "reset": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "y",
+            "shape"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "pinRows"
+            },
+            "spacing": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "evenOffsets": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "oddOffsets": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "pinHeight": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "pinRadius": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "meshDiameter": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "lift": {
+              "type": "number"
+            },
+            "edgeMargin": {
+              "type": "number",
+              "minimum": 0
+            },
+            "restitution": {
+              "type": "number",
+              "minimum": 0
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 48
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            }
+          },
+          "required": [
+            "type",
+            "spacing",
+            "evenOffsets",
+            "oddOffsets",
+            "pinHeight",
+            "pinRadius"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "arcPylon"
+            },
+            "at": {
+              "$ref": "#/$defs/Placement"
+            },
+            "material": {
+              "$ref": "#/$defs/MaterialRef"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "decor"
+            },
+            "parent": {
+              "const": "spinner"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "at": {
+                    "$ref": "#/$defs/Placement"
+                  },
+                  "local": {
+                    "$ref": "#/$defs/Vec3"
+                  },
+                  "to": {
+                    "$ref": "#/$defs/Placement"
+                  },
+                  "tubeRadius": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "shape": {
+                    "$ref": "#/$defs/MeshShape"
+                  },
+                  "rotationDeg": {
+                    "$ref": "#/$defs/Vec3"
+                  },
+                  "material": {
+                    "$ref": "#/$defs/MaterialRef"
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "type",
+            "items"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
 }
