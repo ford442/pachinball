@@ -318,7 +318,7 @@ Gameplay physics never uses Babylon's built-in collision engine. The active back
 - Numeric gameplay constants (gravity, flipper strength, ball radius).
 - Color strings / feature flags (`EffectsConfig`).
 - API/asset base URLs (`API_BASE`, `ASSET_BASE`) and the arcade endpoint (`src/config/arcade.ts`).
-- Helper `apiFetch<T>()` with exponential backoff retry logic.
+- Helper `apiFetch(url, schema)` with exponential backoff retry logic; the body is parsed with a Valibot schema (`src/schemas/`, docs/SCHEMAS.md), never cast.
 
 ### 4.5 Accessibility & Safety (CRITICAL)
 `detectAccessibility()` reads system preferences and impacts:
