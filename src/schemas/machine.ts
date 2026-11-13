@@ -23,15 +23,12 @@
 
 import * as v from 'valibot'
 import { AdventureTrackType } from '../adventure/adventure-types'
-import { BALL_SPAWN_CONFIG, BallType } from '../config/balls'
-import { GAME_TUNING } from '../config/gameplay'
 import { TrackDefinitionSchema } from './track'
-import { WeeklyMachineSchema, type WeeklyMachineDescriptor } from './weekly'
+import { type WeeklyMachineDescriptor } from './weekly'
+import { MachineRulesSchema, defaultMachineRules } from './rules'
 import { validateWeeklyMachine } from '../cascade/weekly-machine'
 import {
-  canonicalJson,
   formatSchemaIssues,
-  intInRange,
   inRange,
   isRecord,
   parseWith,
@@ -53,7 +50,6 @@ export type MachineSeedPolicy = (typeof MACHINE_SEED_POLICIES)[number]
 export const STEM_ROLES = ['drums', 'bass', 'lead', 'fever'] as const
 export type StemRole = (typeof STEM_ROLES)[number]
 
-export const BALL_TYPE_KEYS = [BallType.STANDARD, BallType.GOLD_PLATED, BallType.SOLID_GOLD] as const
 
 /** Limits the validator enforces; the editor's form renderer reads them too. */
 export const MACHINE_LIMITS = {
@@ -63,9 +59,6 @@ export const MACHINE_LIMITS = {
   stems: { max: 8 },
   bpm: { min: 40, max: 240 },
   shaderParams: { maxCount: 16, keyPattern: /^[a-zA-Z][a-zA-Z0-9]{0,31}$/, min: -1000, max: 1000 },
-  points: { max: 1_000_000 },
-  feverMultiplier: { min: 1, max: 100 },
-  feverThreshold: { min: 1, max: 100 },
 } as const
 
 /** A path under `public/backbox/`: lower-case segments, no scheme, no `..`. */
@@ -134,9 +127,9 @@ const AudioSchema = strict({
 })
 
 /** A shipped track by id, or a whole track definition inline (editor drafts, share links). */
-const TrackIdRef = strict({ id: v.picklist(TRACK_IDS, 'unknown track id') })
-const TrackInlineRef = strict({ inline: TrackDefinitionSchema })
-const TrackRefSchema = v.lazy((input) => {
+export const TrackIdRef = strict({ id: v.picklist(TRACK_IDS, 'unknown track id') })
+export const TrackInlineRef = strict({ inline: TrackDefinitionSchema })
+export const TrackRefSchema = v.lazy((input) => {
   if (isRecord(input) && 'id' in input) return TrackIdRef
   if (isRecord(input) && 'inline' in input) return TrackInlineRef
   return v.union([TrackIdRef, TrackInlineRef], (issue) => (isRecord(issue.input) ? 'needs `id` or `inline`' : 'must be an object'))
@@ -151,38 +144,6 @@ const TracksSchema = v.pipe(
   ),
 )
 
-function ballTable<S extends v.GenericSchema<unknown, number>>(value: () => S) {
-  return strict({
-    [BallType.STANDARD]: value(),
-    [BallType.GOLD_PLATED]: value(),
-    [BallType.SOLID_GOLD]: value(),
-  })
-}
-
-const RulesSchema = strict({
-  balls: strict({
-    /** Spawn weights; must sum to 1. */
-    weights: withCrossCheck(ballTable(() => inRange({ min: 0, max: 1 })), (weights, issue) => {
-      if (!isRecord(weights)) return
-      const sum = BALL_TYPE_KEYS.reduce((acc, key) => {
-        const w = weights[key]
-        return acc + (typeof w === 'number' && Number.isFinite(w) ? w : 0)
-      }, 0)
-      if (Math.abs(sum - 1) > 1e-9) issue([], `weights sum to ${sum}; must sum to 1`)
-    }),
-    points: ballTable(() => intInRange({ min: 0, max: MACHINE_LIMITS.points.max })),
-    feverMultipliers: ballTable(() => inRange(MACHINE_LIMITS.feverMultiplier)),
-  }),
-  fever: strict({
-    /** Combo count that enters FEVER from IDLE. */
-    threshold: intInRange(MACHINE_LIMITS.feverThreshold),
-  }),
-  /** Daily Cascade constraints; `weekly` is the seeded table of a weekly machine. */
-  cascade: strict({
-    weekly: v.optional(WeeklyMachineSchema),
-  }),
-})
-
 /**
  * The machine's shape. `validateMachine` adds what a schema cannot say: the
  * table a weekly descriptor resolves to must pass the Daily Cascade layout
@@ -191,6 +152,8 @@ const RulesSchema = strict({
 export const MachineDescriptorSchema = withCrossCheck(
   strict(
     {
+      /** Editor completion only (`public/schemas/machine.json`). */
+      $schema: v.optional(v.string('must be a string')),
       schemaVersion: v.literal(MACHINE_SCHEMA_VERSION, `must be ${MACHINE_SCHEMA_VERSION}`),
       id: safePath(MACHINE_LIMITS.idPattern, 'must be lower-case letters, digits and dashes (≤ 48)'),
       name: v.pipe(
@@ -204,7 +167,7 @@ export const MachineDescriptorSchema = withCrossCheck(
       tracks: TracksSchema,
       backbox: BackboxSchema,
       audio: AudioSchema,
-      rules: RulesSchema,
+      rules: MachineRulesSchema,
       seedPolicy: enumOf(MACHINE_SEED_POLICIES),
     },
     'machine must be an object',
@@ -224,8 +187,6 @@ export type VideoRef = MachineBackbox['idle']
 export type MachineAudio = MachineDescriptor['audio']
 export type StemRef = MachineAudio['stems'][number]
 export type TrackRef = MachineDescriptor['tracks'][number]
-export type MachineRules = MachineDescriptor['rules']
-export type BallTable = Record<BallType, number>
 
 export type MachineIssue = SchemaIssue
 
@@ -260,23 +221,18 @@ export function formatMachineErrors(errors: readonly MachineIssue[]): string {
 }
 
 export type { WeeklyMachineDescriptor }
+export {
+  BALL_TYPE_KEYS,
+  RULES_LIMITS,
+  defaultMachineRules,
+  rulesAreDefault,
+  type BallTable,
+  type MachineRules,
+} from './rules'
 
 // ---------------------------------------------------------------------------
 // Defaults and derived views
 // ---------------------------------------------------------------------------
-
-/** The rules the game plays today (`BALL_SPAWN_CONFIG`, `GAME_TUNING.combo`), as machine rules. */
-export function defaultMachineRules(): MachineRules {
-  return {
-    balls: {
-      weights: { ...BALL_SPAWN_CONFIG.weights },
-      points: { ...BALL_SPAWN_CONFIG.points },
-      feverMultipliers: { ...BALL_SPAWN_CONFIG.feverMultipliers },
-    },
-    fever: { threshold: GAME_TUNING.combo.feverThreshold },
-    cascade: {},
-  }
-}
 
 /** The backbox the game shows without a machine (`GameConfig.backbox` clips). */
 export function defaultMachineBackbox(): MachineBackbox {
@@ -287,13 +243,6 @@ export function defaultMachineBackbox(): MachineBackbox {
     border: '#00ffff',
     shaderParams: {},
   }
-}
-
-/** True when `rules` are the ones the game plays without a machine (the only rules the runtime applies yet). */
-export function rulesAreDefault(rules: MachineRules): boolean {
-  const { cascade: _cascade, ...rest } = rules
-  const { cascade: _defaultCascade, ...defaults } = defaultMachineRules()
-  return canonicalJson(rest) === canonicalJson(defaults)
 }
 
 /** The weekly machine for a seeded table: the classic machine, its seed policy `weekly`. */

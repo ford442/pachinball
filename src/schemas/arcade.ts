@@ -69,20 +69,23 @@ export type CloudSave = v.InferOutput<typeof CloudSaveSchema>
 
 export const LinkCodeSchema = v.object({ code: str(), expires_at: str() })
 
+/** A nullable column the contract does not promise: absent reads as null. */
+const orNull = <S extends v.GenericSchema>(schema: S) => v.optional(v.nullable(schema), null)
+
 export const ArcadeChallengeSchema = v.object({
   id: str(),
   kind: v.picklist(['player', 'weekly']),
   seed: n(),
   map_id: str(),
   target_score: n(),
-  challenger_name: nullableStr(),
-  replay_id: nullableStr(),
-  cascade_seed: v.nullable(n()),
+  challenger_name: orNull(str()),
+  replay_id: orNull(str()),
+  cascade_seed: orNull(n()),
   /** The board its runs submit to (weekly); null for a player's challenge. */
-  board: nullableStr(),
-  title: nullableStr(),
+  board: orNull(str()),
+  title: orNull(str()),
   starts_at: str(),
-  expires_at: nullableStr(),
+  expires_at: orNull(str()),
 })
 export type ArcadeChallenge = v.InferOutput<typeof ArcadeChallengeSchema>
 

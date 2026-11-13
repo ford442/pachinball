@@ -1,0 +1,258 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Pachinball machine rules",
+  "description": "MachineDescriptor.rules (v1).",
+  "type": "object",
+  "properties": {
+    "balls": {
+      "type": "object",
+      "properties": {
+        "weights": {
+          "type": "object",
+          "properties": {
+            "standard": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "gold_plated": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "solid_gold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "standard",
+            "gold_plated",
+            "solid_gold"
+          ],
+          "additionalProperties": false
+        },
+        "points": {
+          "type": "object",
+          "properties": {
+            "standard": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            "gold_plated": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            "solid_gold": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            }
+          },
+          "required": [
+            "standard",
+            "gold_plated",
+            "solid_gold"
+          ],
+          "additionalProperties": false
+        },
+        "feverMultipliers": {
+          "type": "object",
+          "properties": {
+            "standard": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "gold_plated": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "solid_gold": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "required": [
+            "standard",
+            "gold_plated",
+            "solid_gold"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "weights",
+        "points",
+        "feverMultipliers"
+      ],
+      "additionalProperties": false
+    },
+    "fever": {
+      "type": "object",
+      "properties": {
+        "threshold": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "threshold"
+      ],
+      "additionalProperties": false
+    },
+    "cascade": {
+      "type": "object",
+      "properties": {
+        "weekly": {
+          "$ref": "#/$defs/WeeklyMachine"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "balls",
+    "fever",
+    "cascade"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "WeeklyMachine": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "pinField": {
+          "type": "object",
+          "properties": {
+            "rows": {
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 12
+            },
+            "cols": {
+              "type": "integer",
+              "minimum": 11,
+              "maximum": 15
+            },
+            "dropout": {
+              "type": "number"
+            },
+            "dropoutSeed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "keepOuts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "minX": {
+                    "type": "number"
+                  },
+                  "maxX": {
+                    "type": "number"
+                  },
+                  "minZ": {
+                    "type": "number"
+                  },
+                  "maxZ": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "minX",
+                  "maxX",
+                  "minZ",
+                  "maxZ"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 3
+            }
+          },
+          "required": [
+            "rows",
+            "cols",
+            "dropout",
+            "dropoutSeed",
+            "keepOuts"
+          ],
+          "additionalProperties": false
+        },
+        "bumpers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "dx": {
+                "type": "number"
+              },
+              "dz": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "dx",
+              "dz"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 12,
+          "maxItems": 12
+        },
+        "feeders": {
+          "type": "object",
+          "properties": {
+            "magSpin": {
+              "type": "boolean"
+            },
+            "nanoLoom": {
+              "type": "boolean"
+            },
+            "prismCore": {
+              "type": "boolean"
+            },
+            "gaussCannon": {
+              "type": "boolean"
+            },
+            "quantumTunnel": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "magSpin",
+            "nanoLoom",
+            "prismCore",
+            "gaussCannon",
+            "quantumTunnel"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "seed",
+        "pinField",
+        "bumpers",
+        "feeders"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

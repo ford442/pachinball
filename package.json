@@ -43,6 +43,7 @@
     "models:insert-placeholders": "node scripts/generate-insert-placeholders.mjs",
     "tracks:validate": "vitest run tests/tracks-validate-cli.test.ts",
     "machine:validate": "vitest run tests/weekly-machine-validate-cli.test.ts tests/machine-schema.test.ts tests/machine-share.test.ts tests/machine-loader.test.ts",
+    "schemas:json": "UPDATE_JSON_SCHEMAS=1 vitest run tests/json-schemas.test.ts",
     "test": "vitest run"
   },
   "dependencies": {
