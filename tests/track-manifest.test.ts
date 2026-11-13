@@ -12,8 +12,9 @@ import { TRACK_CATALOG } from '../src/adventure/adventure-track-progression'
 import { ZONE_REGISTRY } from '../src/adventure/zone-registry'
 import { getTrackStartAnchor } from '../src/adventure/portal-routing'
 import {
-  getDataTrackDefinition,
+  getDataTrackIds,
   getDataTrackSourcePath,
+  loadDataTrackDefinition,
 } from '../src/adventure/track-data-registry'
 
 describe('TrackManifest registry', () => {
@@ -40,46 +41,28 @@ describe('TrackManifest registry', () => {
     expect(derived).toEqual(ZONE_REGISTRY)
   })
 
-  it('maps json manifests to validated data definitions', () => {
-    const jsonManifests = getAllTrackManifests().filter((m) => m.buildKind === 'json')
-    // Count is a floor, not a fixture — migrating a TS track to JSON (#321)
-    // should not require editing this test.
-    expect(jsonManifests.length).toBeGreaterThanOrEqual(3)
-    for (const manifest of jsonManifests) {
-      expect(getDataTrackDefinition(manifest.id)).toBeDefined()
+  it('every track is JSON (the TS track modules are gone, #505 §A)', () => {
+    expect(getAllTrackManifests().every((m) => m.buildKind === 'json')).toBe(true)
+    expect(getDataTrackIds()).toEqual([...enumValues].sort())
+  })
+
+  it('maps every manifest to a definition that loads and validates', async () => {
+    for (const manifest of getAllTrackManifests()) {
+      const loaded = await loadDataTrackDefinition(manifest.id)
+      expect(loaded.ok ? loaded.definition.id : loaded.error, manifest.id).toBe(manifest.id)
     }
   })
 
-  it('declares a dataPath on every json manifest matching its loaded source file', () => {
-    const jsonManifests = getAllTrackManifests().filter((m) => m.buildKind === 'json')
-    for (const manifest of jsonManifests) {
-      // Narrow through buildKind so the discriminated union exposes dataPath.
-      if (manifest.buildKind !== 'json') continue
-      expect(manifest.dataPath, `${manifest.id} must declare a dataPath`).toBeTruthy()
+  it('declares a dataPath on every manifest matching its source file', () => {
+    for (const manifest of getAllTrackManifests()) {
+      expect(manifest.dataPath, `${manifest.id} dataPath`).toMatch(/^\.\/track-data\/.+\.json$/)
       expect(getDataTrackSourcePath(manifest.id)).toBe(manifest.dataPath)
     }
   })
 
-  it('maps ts manifests to builder functions', () => {
-    const tsManifests = getAllTrackManifests().filter((m) => m.buildKind === 'ts')
-    const jsonCount = getAllTrackManifests().filter((m) => m.buildKind === 'json').length
-    expect(tsManifests.length).toBe(enumValues.length - jsonCount)
-    for (const manifest of tsManifests) {
-      if (manifest.buildKind !== 'ts') continue
-      expect(manifest.loadBuilder).toBeTypeOf('function')
-    }
-  })
-
-  it('resolves build dispatch from the manifest alone — no parallel builder table', () => {
-    // Registration is one manifest entry: every registered track carries its own
-    // dispatch (TS builder or JSON dataPath), so adding a track needs no second list.
-    for (const manifest of getAllTrackManifests()) {
-      if (manifest.buildKind === 'ts') {
-        expect(manifest.loadBuilder, `${manifest.id} loadBuilder`).toBeTypeOf('function')
-      } else {
-        expect(manifest.dataPath, `${manifest.id} dataPath`).toMatch(/^\.\/track-data\/.+\.json$/)
-      }
-    }
+  it('a missing track file loads as an error, not a throw', async () => {
+    const loaded = await loadDataTrackDefinition('NOT_A_TRACK')
+    expect(loaded).toEqual({ ok: false, error: 'No track JSON for NOT_A_TRACK' })
   })
 
   it('start anchors match portal-routing helpers', () => {

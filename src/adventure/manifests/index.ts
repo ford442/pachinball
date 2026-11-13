@@ -1,6 +1,4 @@
-export type {
-  TrackManifest,
-} from './track-manifest-types'
+export type { TrackManifest } from './track-manifest-types'
 
 export {
   TRACK_MANIFEST_REGISTRY,

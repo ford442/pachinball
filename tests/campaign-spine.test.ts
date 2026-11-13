@@ -12,7 +12,7 @@ import {
   TRACK_CATALOG,
 } from '../src/adventure/adventure-track-progression'
 import { getAllTrackManifests, getTrackManifest } from '../src/adventure/manifests'
-import { getDataTrackDefinition } from '../src/adventure/track-data-registry'
+import { loadDataTrackDefinition } from '../src/adventure/track-data-registry'
 import { buildCampaignGoalsForTrack } from '../src/adventure/adventure-track-goals'
 
 const catalogIds = Object.keys(TRACK_CATALOG)
@@ -22,13 +22,13 @@ describe('campaign catalogue size and composition', () => {
     expect(catalogIds.length).toBeGreaterThanOrEqual(13)
   })
 
-  it('backs at least 5 catalogued tracks with declarative JSON', () => {
+  it('backs every catalogued track with declarative JSON', async () => {
     const jsonBacked = catalogIds.filter((id) => getTrackManifest(id as never)?.buildKind === 'json')
 
-    expect(jsonBacked.length).toBeGreaterThanOrEqual(5)
+    expect(jsonBacked).toEqual(catalogIds)
     // Each one must actually resolve to a validated definition, not just claim to.
     for (const id of jsonBacked) {
-      expect(getDataTrackDefinition(id), `${id} definition`).toBeDefined()
+      expect((await loadDataTrackDefinition(id)).ok, `${id} definition`).toBe(true)
     }
   })
 

@@ -42,13 +42,7 @@ track reproduces it.
 | `src/display/slot-machine.ts` | Activation + spin plan | fork `slot` |
 | `src/display/display-reels.ts` | Reel shuffles / stops | fork `slot` |
 | `src/game/game-scenario.ts` | Dynamic scenario obstacle type/position | `scenario-zone:<index>` |
-| `src/adventure/tracks/prism-pathway.ts` | Prism collider placement + rotation | `track:prism-pathway` |
-| `src/adventure/tracks/casino-heist.ts` | Chip-stack collider placement + height; slot-gate mover phase/frequency | `track:casino-heist:chips`, `…:gates` |
-| `src/adventure/tracks/orbital-junkyard.ts` | Debris collider placement, size, shape, orientation | `track:orbital-junkyard:debris` |
-| `src/adventure/tracks/neural-network.ts` | Cilia collider placement | `track:neural-network:cilia` |
-| `src/adventure/tracks/neon-skyline.ts` | AC-unit collider placement | `track:neon-skyline:ac-units` |
-| `src/adventure/tracks/polychrome-void.ts` | Ghost collider offsets; which isle is green (collision group) | `track:polychrome-void:ghosts`, `…:isles` |
-| `src/adventure/tracks/tesla-tower.ts` | Ball-lightning collider placement + oscillator frequency/phase | `track:tesla-tower:lightning` |
+| `src/adventure/track-elements.ts` (`scatter`, seeded `obstacle` numbers and `variants`) | Every seeded track layout, keyed by the segment's `seedKey`: Prism Pathway prisms, Casino Heist chips + slot-gate phase/frequency, Orbital Junkyard debris, Neural Network cilia, Neon Skyline AC units, Polychrome Void ghosts + which isle is green, Tesla Tower ball lightning | `seedKey` (e.g. `track:prism-pathway`, `track:casino-heist:chips`, `…:gates`) |
 | `src/replay/challenge-system.ts` | Default challenge seed when `?seed=` is absent | `randomU32Seed()` (entropy, not gameplay) |
 
 Nothing is deferred: `grep -rn "Math.random" src` lists only the cosmetic
@@ -79,7 +73,6 @@ entries below plus `randomU32Seed`'s fallback.
 | `src/objects/decoration/decoration-motifs.ts` | Trace IDs, LED jitter |
 | `src/objects/decoration/decoration-factory.ts` | Trim scale/rotation |
 | `src/objects/decoration/decoration-builder.ts` | Dummy ball diameter |
-| `src/adventure/tracks/casino-heist.ts` | Poker-chip material pick (commented in place) |
 
 ---
 

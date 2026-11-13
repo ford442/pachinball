@@ -24,12 +24,9 @@ import {
 } from './track-teardown-stats'
 import { FALLOUT_Y_THRESHOLD } from './adventure-portal-types'
 
-import { getDataTrackDefinition } from './track-data-registry'
+import { loadDataTrackDefinition } from './track-data-registry'
 import type { StaticSceneGate } from '../core/static-scene-gate'
-import {
-  formatTrackValidationErrors,
-  validateTrackDefinition,
-} from '../schemas/track'
+import type { TrackDefinition } from '../schemas/track'
 
 export { AdventureTrackType }
 
@@ -41,6 +38,9 @@ export class AdventureMode extends AdventurePortalMixin {
 
   /** Soft-fail message from the last rejected data-track load (HUD). */
   private lastTrackLoadError: string | null = null
+
+  /** The definition the current track was built from (null before the first build). */
+  private currentTrackDefinition: TrackDefinition | null = null
 
   private activeBallBodies: PhysicsBody[] = []
   private lastTeardownStats: TrackTeardownStats | null = null
@@ -260,7 +260,7 @@ export class AdventureMode extends AdventurePortalMixin {
 
     // Load track-specific camera preset. JSON schema override wins, then the
     // manifest's cameraPresetId, then the track id itself, then DEFAULT.
-    const dataDef = getDataTrackDefinition(trackType)
+    const dataDef = this.currentTrackDefinition
     const presetKey =
       dataDef?.cameraPresetId ??
       getTrackManifest(trackType)?.cameraPresetId ??
@@ -310,6 +310,7 @@ export class AdventureMode extends AdventurePortalMixin {
   private async buildTrackUnguarded(trackType: AdventureTrackType): Promise<void> {
     // Reset per-track state so each builder starts fresh
     this.portalPosition = null
+    this.currentTrackDefinition = null
     this.currentTrackInfo = TRACK_CATALOG[trackType] ?? null
     this.currentStartPos = getTrackStartAnchor(trackType)
 
@@ -323,22 +324,17 @@ export class AdventureMode extends AdventurePortalMixin {
       return
     }
 
-    if (manifest.buildKind === 'json') {
-      const dataDef = getDataTrackDefinition(trackType)
-      if (!dataDef) {
-        this.lastTrackLoadError =
-          `Track ${trackType} declares data path ${manifest.dataPath} but no valid ` +
-          'definition was loaded for it'
-        console.error(`[AdventureMode] ${this.lastTrackLoadError}`)
-        return
-      }
-      this.buildFromDefinition(dataDef)
-      this.applyDefaultAdventureCollisionGroups()
+    // The track JSON (and the schema that parses it) are lazy chunks, fetched on first build.
+    const loaded = await loadDataTrackDefinition(trackType)
+    // end() may have landed while the chunk was in flight.
+    if (!this.adventureActive) return
+    if (!loaded.ok) {
+      this.lastTrackLoadError = `Track ${trackType} (${manifest.dataPath}): ${loaded.error}`
+      console.error(`[AdventureMode] ${this.lastTrackLoadError}`)
       return
     }
-
-    const builder = await manifest.loadBuilder()
-    builder(this.trackBuilderApi())
+    this.currentTrackDefinition = loaded.definition
+    this.buildFromDefinition(loaded.definition)
     this.applyDefaultAdventureCollisionGroups()
   }
 
@@ -432,16 +428,15 @@ export class AdventureMode extends AdventurePortalMixin {
       return false
     }
 
-    // Validate declarative tracks before teardown so a bad JSON never clears a healthy world
-    const dataDef = getDataTrackDefinition(newZone)
-    if (dataDef) {
-      const validation = validateTrackDefinition(dataDef)
-      if (!validation.ok) {
-        this.lastTrackLoadError = formatTrackValidationErrors(validation.errors)
-        console.warn(`[AdventureMode] ${this.lastTrackLoadError}`)
-        return false
-      }
+    // Load and parse the track before teardown so a bad JSON never clears a healthy world
+    const loaded = await loadDataTrackDefinition(newZone)
+    if (!this.adventureActive) return false
+    if (!loaded.ok) {
+      this.lastTrackLoadError = loaded.error
+      console.warn(`[AdventureMode] ${this.lastTrackLoadError}`)
+      return false
     }
+    const dataDef = loaded.definition
     this.lastTrackLoadError = null
 
     this.deactivateExitPortal()
@@ -455,7 +450,7 @@ export class AdventureMode extends AdventurePortalMixin {
     // Reset camera transition timer for cinematic entry
     this.cameraTransitionTime = 0
 
-    const presetKey = dataDef?.cameraPresetId ?? newZone
+    const presetKey = dataDef.cameraPresetId ?? newZone
     this.currentCameraPreset = cameraPresetFor(presetKey)
 
     // Tear down old track geometry and physics

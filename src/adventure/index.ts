@@ -48,11 +48,8 @@ export {
 } from './manifests'
 export type { TrackManifest } from './manifests'
 
-export {
-  validateTrackDefinition,
-  formatTrackValidationErrors,
-  TRACK_SCHEMA_VERSION,
-} from '../schemas/track'
+// The track schema itself (`validateTrackDefinition`, …) is not re-exported here: it
+// loads lazily with the track data, so nothing on the boot path may import it.
 export type {
   AxisPullSegment,
   ConeSegment,
@@ -65,10 +62,11 @@ export { compileTrackDefinition } from './track-compiler'
 export { createAxisPullWell, createStaticCone } from './track-primitives-wells'
 export type { TrackBuildApi, TrackCursor } from './track-compiler'
 export {
-  DATA_TRACK_REGISTRY,
-  getDataTrackDefinition,
+  getDataTrackIds,
   isDataDrivenTrack,
+  loadDataTrackDefinition,
 } from './track-data-registry'
+export type { DataTrackLoad } from './track-data-registry'
 
 // Campaign catalog (moved from game-elements)
 export {
