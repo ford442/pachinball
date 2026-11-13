@@ -18,10 +18,10 @@ interface TestGame {
   }
   toggleFreeMapTestMode?: () => Promise<void>
   levelLoader?: {
-    loadCampaignTrack: (trackId: string, options?: { resetBallToPlunger?: boolean }) => {
+    loadCampaignTrack: (trackId: string, options?: { resetBallToPlunger?: boolean }) => Promise<{
       success: boolean
       teardown?: { lingeringBodies: number; exitPortalsRemoved?: number } | null
-    }
+    }>
   }
   endAdventureMode: () => void
   startAdventureMode: () => void
@@ -74,7 +74,9 @@ test.describe('Free-map playfield load E2E', () => {
       await wait(200)
 
       const loaded = g.freeMapTestMode?.loadById('CYBER_CORE') ?? false
-      await wait(400)
+      // The track's JSON chunk (and the track schema) load on first use: wait for the switch, not a fixed time.
+      for (let waited = 0; waited < 30_000 && g.adventureMode?.getCurrentZone() !== 'CYBER_CORE'; waited += 100) await wait(100)
+      await wait(100)
 
       const teardown = g.adventureMode?.getLastTeardownStats?.() ?? null
       const zone = g.adventureMode?.getCurrentZone() ?? null
@@ -109,12 +111,11 @@ test.describe('Free-map playfield load E2E', () => {
       g.startAdventureMode()
       await wait(300)
 
-      loader.loadCampaignTrack('NEON_HELIX', { resetBallToPlunger: true })
-      await wait(300)
+      // Each load fetches its track's JSON chunk on first use: await it rather than sleep.
+      await loader.loadCampaignTrack('NEON_HELIX', { resetBallToPlunger: true })
       const first = adventureMode.getLastTeardownStats?.() ?? null
 
-      loader.loadCampaignTrack('QUANTUM_GRID', { resetBallToPlunger: true })
-      await wait(300)
+      await loader.loadCampaignTrack('QUANTUM_GRID', { resetBallToPlunger: true })
       const second = adventureMode.getLastTeardownStats?.() ?? null
 
       return {

@@ -21,9 +21,8 @@ non-eager `import.meta.glob`, so each file is its own `assets/track-data-<ID>-*.
 chunk, fetched the first time the track is built (`loadDataTrackDefinition`) and
 parsed then with the Valibot schema (`src/schemas/track.ts`, itself a lazy chunk).
 Whether a track exists and where its file lives are answered from the glob's keys,
-so the entry chunk carries neither the data nor the schema, and the service worker
-does not precache the track chunks (`trackChunkIgnores` in `vite.config.ts`, derived
-from this directory).
+so the entry chunk carries neither the data nor the schema. The service worker
+precaches the track chunks (all 29 are ~34 KiB), so every track plays offline.
 `TRACK_ID` must already exist as an `AdventureTrackType` / catalog key.
 
 ## Document shape

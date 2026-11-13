@@ -1,6 +1,6 @@
 import type { EventBus } from '../core/event-bus'
 import type { UnlockedReward } from '../game-elements/types'
-import { parseJsonWith } from '../schemas/schema-kit'
+import { parseJsonWith } from '../schemas/record-kit'
 import { UnseenRewardsSchema } from '../schemas/storage'
 import type { CampaignRewardItem } from './campaign-rewards-manager'
 

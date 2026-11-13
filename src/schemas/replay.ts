@@ -9,7 +9,7 @@
  */
 
 import * as v from 'valibot'
-import { lenient } from './schema-kit'
+import { lenient } from './record-kit'
 
 const str = () => v.string()
 const nullableStr = () => v.nullable(v.string())
