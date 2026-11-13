@@ -6,6 +6,12 @@ namespace pachinball {
 
 class BodyView;
 
+/**
+ * |angle limit| createHinge stores: float π, the bound of the wrapped hinge
+ * angle (computeHingeAngle). JS `Math.PI` rounds to this same float.
+ */
+inline constexpr float HINGE_ANGLE_LIMIT = 3.14159265f;
+
 /** World-anchored 1-DOF revolute (flipper vs static table). Body-body hinges are out of scope. */
 struct HingeDesc {
   Vec3  worldAnchor     = Vec3::zero();

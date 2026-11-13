@@ -129,7 +129,7 @@ void PhysicsWorld::resolveSphereVsCone(BodyView& body, const ConeDesc& cone, int
   if (!q.inside && distSq >= radius * radius) return;
 
   Vec3 localNormal;
-  float penetration;
+  float penetration = 0.f;
   if (q.inside || distSq < CONE_EPSILON_SQ) {
     localNormal = q.exitNormal;
     penetration = radius + q.exitDepth;

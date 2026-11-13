@@ -1,6 +1,8 @@
 # Native C++ physics Catch2 unit tests + blocking WASM build/parity verification.
 #
 # native_ctest + sanitizer_ctest are BLOCKING for PRs touching `native/**`.
+# native_tidy (clang-tidy, warnings as errors) and fuzz (both libFuzzer
+# targets, 60 s each under ASan + UBSan) are BLOCKING too (#520 §5).
 # native_release_ctest + native_arm64_ctest run the same Catch2 suite at -O3 and
 # on aarch64 (BLOCKING since #519, after a non-blocking first week).
 # wasm_parity is BLOCKING for PRs touching `native/**`, `src/wasm/**`, or wasm tests.
@@ -20,7 +22,9 @@
 #   npm run compile-db           # configure only → native/build-native/compile_commands.json
 #   npm run test:native          # compile-db + Catch2 + ctest (g++/cmake only)
 #   npm run test:native:release  # same at -O3 (native/build-release) — native_release_ctest, native_arm64_ctest
-#   CXX=clang++ npm run test:native:san  # same under ASan/UBSan + float-cast-overflow (native/build-san), no recovery
+#   CXX=clang++ npm run test:native:san  # same under ASan/UBSan + float-cast-overflow (native/build-san, -O1), no recovery
+#   npm run compile-db && npm run lint:native  # clang-tidy over native/src + native/fuzz (native/.clang-tidy)
+#   CXX=clang++ npm run fuzz             # fuzz_snapshot_restore + fuzz_command_stream, 60 s each (native/build-fuzz)
 #   npm run check:compile-db     # clangd DB smoke (after compile-db)
 #   npm run check:wasm-docs      # docs/wasm-physics-engine.md drift check
 #   npm run build:wasm           # Emscripten Release → public/wasm/ (production)
@@ -58,6 +62,8 @@ on:
       - 'scripts/check-compile-db.mjs'
       - 'scripts/check-wasm-docs.mjs'
       - 'scripts/check-dist-wasm.mjs'
+      - 'scripts/run-clang-tidy.mjs'
+      - 'scripts/run-fuzzers.mjs'
       - 'docs/wasm-physics-engine.md'
       - 'src/game/physics/**'
       - 'src/replay/**'
@@ -96,6 +102,8 @@ on:
       - 'scripts/check-compile-db.mjs'
       - 'scripts/check-wasm-docs.mjs'
       - 'scripts/check-dist-wasm.mjs'
+      - 'scripts/run-clang-tidy.mjs'
+      - 'scripts/run-fuzzers.mjs'
       - 'docs/wasm-physics-engine.md'
       - 'src/game/physics/**'
       - 'src/replay/**'
@@ -183,8 +191,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cmake clang-18 libclang-rt-18-dev
 
       # Same command locally: PACHINBALL_SANITIZE=ON adds
-      # -fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=all,
-      # so a UBSan report fails the job instead of only printing (#464 item 3).
+      # -fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=all
+      # -fno-omit-frame-pointer, so a UBSan report fails the job instead of only
+      # printing (#464 item 3). Built at -O1 (#520 §5): ASan's own recommendation,
+      # and a closer match to the optimised code that ships than -O0.
       - name: Build and run Catch2 under ASan/UBSan (clang)
         env:
           CXX: clang++-18
@@ -192,6 +202,53 @@ jobs:
         run: |
           "$CXX" --version
           npm run test:native:san
+
+  # clang-tidy-18 matches the clang that sanitizer_ctest and fuzz build with,
+  # so a check behaves the same here as on a developer machine with the pin.
+  native_tidy:
+    name: clang-tidy (Blocking)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ clang-tidy-18
+
+      # compile-db writes native/build-native/compile_commands.json (configure only).
+      - name: clang-tidy over native/src + native/fuzz (warnings are errors)
+        env:
+          CLANG_TIDY: clang-tidy-18
+        run: |
+          npm run compile-db
+          npm run lint:native
+
+  # Both libFuzzer targets under ASan + UBSan (#520 §5): fuzz_snapshot_restore
+  # from every golden tape's frame-0 snapshot, fuzz_command_stream from
+  # synthetic sessions. A finding fails the job and its input is uploaded;
+  # reproduce it with the target binary and that file.
+  fuzz:
+    name: libFuzzer 60 s x 2 (Blocking)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake clang-18 libclang-rt-18-dev
+
+      - name: Build and run both fuzzers (60 s each)
+        env:
+          CXX: clang++-18
+          FUZZ_SECONDS: '60'
+        run: npm run fuzz
+
+      - name: Upload fuzzer findings
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-findings
+          path: native/build-fuzz/artifacts/
+          retention-days: 14
+          if-no-files-found: ignore
 
   wasm_parity:
     name: WASM Build + Parity (Blocking)

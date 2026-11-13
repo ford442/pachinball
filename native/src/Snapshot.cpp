@@ -10,9 +10,11 @@
  * PhysicsWorld methods here are declared in PhysicsWorld.h.
  */
 #include "Snapshot.h"
+#include "Boundary.h"
 #include "PhysicsWorld.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <iterator>
 
@@ -120,6 +122,50 @@ struct SnapshotAccess {
       s.generation = static_cast<uint16_t>(gen);
     }
     return !r.failed();
+  }
+
+  /**
+   * Largest radius / half-extent a restored body may have. Nothing on a table
+   * comes close; a crafted 1e30 m ball would make the broadphase walk its
+   * whole clamped cell range (BroadphaseGrid::CELL_COORD_LIMIT) every substep.
+   */
+  static constexpr float kMaxBodyExtent = 10.f;
+
+  /**
+   * Every column holds a value the world itself could have written (#520
+   * row 8). Floats are finite — a NaN or inf only ever exists between a bad
+   * setter and the next substep's quarantine, and NaN payloads differ between
+   * builds, so such a blob could not restore bit-exactly anyway. Rotations
+   * are unit (integrate and every setter normalise). Inverse mass and inertia
+   * are derived values, so they are re-derived and compared: a forged
+   * feather-weight ball is refused rather than replayed.
+   */
+  static bool bodiesValid(const BodyStore& s) {
+    for (FloatCol c : kFloatCols) {
+      for (float v : s.*c) {
+        if (!std::isfinite(v)) return false;
+      }
+    }
+    const std::size_t n = s.denseToPublicId_.size();
+    for (std::size_t i = 0; i < n; ++i) {
+      if (s.active_[i] > 1) return false;
+      if (!isUnitQuat({s.rotX_[i], s.rotY_[i], s.rotZ_[i], s.rotW_[i]})) return false;
+      for (float extent : {s.radius_[i], s.capsuleHalfHeight_[i], s.boxHalfX_[i], s.boxHalfY_[i], s.boxHalfZ_[i]}) {
+        if (!(extent >= 0.f && extent <= kMaxBodyExtent)) return false;
+      }
+      RigidBodyDesc d;
+      d.type = static_cast<BodyType>(s.type_[i]);
+      d.shape = static_cast<Shape>(s.shape_[i]);
+      d.mass = s.mass_[i];
+      d.radius = s.radius_[i];
+      d.capsuleHalfHeight = s.capsuleHalfHeight_[i];
+      d.boxHalfExtents = {s.boxHalfX_[i], s.boxHalfY_[i], s.boxHalfZ_[i]};
+      // The formulas of BodyStore::appendSlot / setType, the only writers.
+      const float invMass = (d.type == BodyType::Dynamic && d.mass > 0.f) ? 1.f / d.mass : 0.f;
+      if (s.invMass_[i] != invMass) return false;
+      if (s.invInertia_[i] != BodyStore::computeInvInertia(d)) return false;
+    }
+    return true;
   }
 
   /** Every live id resolves to its dense slot and back; no stray bindings. */
@@ -299,6 +345,61 @@ uint64_t digestField(const ForceFieldDesc& f) {
 
 constexpr auto self = [](auto& e) -> auto& { return e; };
 constexpr auto pinDesc = [](auto& f) -> auto& { return f.desc; };
+
+// ---- Restore validation (#520 row 8) ----------------------------------------
+//
+// restore() decodes into scratch copies; each check below runs before the
+// commit, so a refused blob leaves the world exactly as it was. Each accepts
+// what the world's own setters can store — they sanitise their inputs
+// (Boundary.h) — so a world's own snapshot always restores.
+
+int compareInt(const void* pa, const void* pb) {
+  const int a = *static_cast<const int*>(pa);
+  const int b = *static_cast<const int*>(pb);
+  return a < b ? -1 : (a > b ? 1 : 0);
+}
+
+/** True when no id repeats. O(n log n): a blob can carry millions of entries. */
+bool idsUnique(std::vector<int> ids) {
+  if (ids.size() < 2) return true;
+  std::qsort(ids.data(), ids.size(), sizeof(int), compareInt);
+  return std::adjacent_find(ids.begin(), ids.end()) == ids.end();
+}
+
+/**
+ * Hinge records as createHinge / setHingeMotor write them: ids ascending and
+ * below `nextHingeId`, a live body, finite anchors, a unit axis and rest
+ * rotation, limits within ±π, a non-negative motor torque and a positive
+ * Baumgarte factor.
+ */
+bool hingeValid(const HingeJoint& j, const HandleTable& handles) {
+  return handles.findDenseIndex(j.bodyId) >= 0 && isFiniteVec3(j.worldAnchor) && isFiniteVec3(j.localAnchor) &&
+         isUnitVec3(j.worldAxis) && isUnitQuat(j.restRotation) && std::fabs(j.minAngle) <= HINGE_ANGLE_LIMIT &&
+         std::fabs(j.maxAngle) <= HINGE_ANGLE_LIMIT && std::isfinite(j.motorTargetVel) &&
+         std::isfinite(j.motorMaxTorque) && j.motorMaxTorque >= 0.f && std::isfinite(j.baumgarte) && j.baumgarte > 0.f;
+}
+
+bool moverValid(const KinematicMover& m) {
+  return isFiniteVec3(m.currentPos) && isUnitQuat(m.currentRot) && isFiniteVec3(m.nextPos) && isUnitQuat(m.nextRot) &&
+         isFiniteVec3(m.linearVelocity) && isFiniteVec3(m.angularVelocity);
+}
+
+/**
+ * Manifold entries as flushEvents leaves them: strictly ascending pair keys,
+ * pin indices ≥ 0. Their floats are not checked: they only ever feed an Exit
+ * event, never the solver, and a live world can store an overflowed impulse.
+ */
+bool manifoldValid(const std::vector<ContactEvent>& manifold) {
+  for (std::size_t i = 0; i < manifold.size(); ++i) {
+    const ContactEvent& e = manifold[i];
+    if (e.subIndex < 0) return false;
+    if (i > 0) {
+      const ContactEvent& p = manifold[i - 1];
+      if (contactPairKey(p.bodyId1, p.bodyId2) >= contactPairKey(e.bodyId1, e.bodyId2)) return false;
+    }
+  }
+  return true;
+}
 
 } // namespace
 
@@ -494,35 +595,63 @@ SnapshotStatus PhysicsWorld::restore(const uint8_t* data, std::size_t size) {
   params.sleepFramesRequired = r.i32();
   if (r.failed()) return SnapshotStatus::Truncated;
   if (!worldParamsValid(params)) return SnapshotStatus::Corrupt;
+  // step() keeps the accumulator in [0, maxAccumulator]: a NaN froze the
+  // world (no comparison passes), +inf ran every substep of every tick.
+  if (!(accumulator >= 0.f && accumulator <= maxAccumulator(params))) return SnapshotStatus::Corrupt;
 
   HandleTable handles;
   BodyStore bodies;
   if (!SnapshotAccess::readHandles(r, handles)) return r.failed() ? SnapshotStatus::Truncated : SnapshotStatus::Corrupt;
   if (!SnapshotAccess::readBodies(r, bodies)) return r.failed() ? SnapshotStatus::Truncated : SnapshotStatus::Corrupt;
   if (!SnapshotAccess::consistent(handles, bodies)) return SnapshotStatus::Corrupt;
+  if (!SnapshotAccess::bodiesValid(bodies)) return SnapshotStatus::Corrupt;
 
   const int nextHingeId = r.i32();
   const uint32_t hingeCount = r.u32();
   if (!r.fits(hingeCount, kHingeWords)) return SnapshotStatus::Truncated;
-  std::vector<HingeJoint> hinges(hingeCount);
-  for (HingeJoint& j : hinges) {
+  if (nextHingeId < 0) return SnapshotStatus::Corrupt;
+  std::vector<HingeJoint> hinges;
+  hinges.reserve(hingeCount);
+  int lastHingeId = -1;
+  for (uint32_t i = 0; i < hingeCount; ++i) {
+    HingeJoint j;
     j.id = r.i32(); j.bodyId = r.i32(); j.active = r.u32() != 0;
     j.worldAnchor = readVec(r); j.worldAxis = readVec(r); j.localAnchor = readVec(r);
     j.restRotation = readQuat(r);
     j.minAngle = r.f32(); j.maxAngle = r.f32();
     j.motorTargetVel = r.f32(); j.motorMaxTorque = r.f32(); j.baumgarte = r.f32();
+    if (r.failed()) return SnapshotStatus::Truncated;
+    if (j.id <= lastHingeId || j.id >= nextHingeId) return SnapshotStatus::Corrupt;
+    lastHingeId = j.id;
+    // Blobs written before #520 row 12 still list removed hinges, disabled.
+    // A live world holds none, so they are dropped rather than restored.
+    if (!j.active) continue;
+    if (!hingeValid(j, handles)) return SnapshotStatus::Corrupt;
+    hinges.push_back(j);
   }
 
   const uint32_t targetCount = r.u32();
   if (!r.fits(targetCount, kTargetWords)) return SnapshotStatus::Truncated;
   std::vector<KinematicBodyTarget> targets(targetCount);
+  std::vector<int> targetIds;
+  targetIds.reserve(targetCount);
   for (KinematicBodyTarget& t : targets) {
     t.id = r.i32(); t.position = readVec(r); t.rotation = readQuat(r);
+    // As setNextKinematicTransform stores them: body ids, finite, unit, one per body.
+    if (t.id < 0 || !isFiniteVec3(t.position) || !isUnitQuat(t.rotation)) {
+      return r.failed() ? SnapshotStatus::Truncated : SnapshotStatus::Corrupt;
+    }
+    targetIds.push_back(t.id);
   }
+  if (!idsUnique(std::move(targetIds))) return SnapshotStatus::Corrupt;
   const uint32_t drivenCount = r.u32();
   if (!r.fits(drivenCount, 1)) return SnapshotStatus::Truncated;
   std::vector<int> driven(drivenCount);
-  for (int& id : driven) id = r.i32();
+  for (int& id : driven) {
+    id = r.i32();
+    if (id < 0) return r.failed() ? SnapshotStatus::Truncated : SnapshotStatus::Corrupt;
+  }
+  if (!idsUnique(driven)) return SnapshotStatus::Corrupt;
 
   // Runtime state of the (hash-verified) statics, decoded into copies.
   std::vector<BoxDesc> boxes = boxes_;
@@ -551,15 +680,18 @@ SnapshotStatus PhysicsWorld::restore(const uint8_t* data, std::size_t size) {
     m.nextPos = readVec(r); m.nextRot = readQuat(r);
     m.hasNextPose = r.u32() != 0;
     m.linearVelocity = readVec(r); m.angularVelocity = readVec(r);
+    if (!moverValid(m)) return r.failed() ? SnapshotStatus::Truncated : SnapshotStatus::Corrupt;
   }
   for (const SnapshotRank& k : rank.fields) {
     ForceFieldDesc& f = fields[k.index];
     f.force = readVec(r);
     f.enabled = r.u32() != 0;
+    if (!isFiniteVec3(f.force)) return r.failed() ? SnapshotStatus::Truncated : SnapshotStatus::Corrupt;
   }
 
   const uint64_t generation = r.u64();
   const int droppedTotal = r.i32();
+  if (droppedTotal < 0) return r.failed() ? SnapshotStatus::Truncated : SnapshotStatus::Corrupt;
   const uint32_t contactCount = r.u32();
   if (!r.fits(contactCount, kContactWords)) return SnapshotStatus::Truncated;
   std::vector<ContactEvent> manifold(contactCount);
@@ -576,6 +708,7 @@ SnapshotStatus PhysicsWorld::restore(const uint8_t* data, std::size_t size) {
 
   if (r.failed()) return SnapshotStatus::Truncated;
   if (r.remainingWords() != 0) return SnapshotStatus::Corrupt;
+  if (!manifoldValid(manifold)) return SnapshotStatus::Corrupt;
 
   // ---- Commit: nothing below can fail. ----
   stepCount_ = stepCount;

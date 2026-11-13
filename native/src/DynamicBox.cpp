@@ -67,9 +67,9 @@ void PhysicsWorld::resolveSphereVsBoxBody(BodyView& sphere, BodyView& box) {
   if (distSq >= radius * radius) return;
 
   Vec3 localNormal;
-  float penetration;
+  float penetration = 0.f;
   if (distSq < BOX_EPSILON_SQ) {
-    float depth;
+    float depth = 0.f;
     shallowestBoxFace(local, he, localNormal, depth);
     penetration = radius + depth;
   } else {

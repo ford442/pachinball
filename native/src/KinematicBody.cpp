@@ -23,6 +23,8 @@
 namespace pachinball {
 
 void PhysicsWorld::setBodyType(int id, BodyType type) {
+  // An unnamed tag is ignored, as the binding already does for its int (#520 row 10).
+  if (static_cast<int>(type) > static_cast<int>(BodyType::Kinematic)) return;
   BodyView body = findViewMut(id);
   if (!body.valid() || body.getType() == type) return;
 

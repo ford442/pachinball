@@ -229,7 +229,7 @@ void PhysicsWorld::resolveSphereVsBox(BodyView& body, const BoxDesc& box, int bo
   if (distSq >= radius * radius) return;
 
   Vec3 normal;
-  float penetration;
+  float penetration = 0.f;
   if (distSq < CONTACT_EPSILON_SQ) {
     const float dx = box.halfExtents.x - std::fabs(localCenter.x);
     const float dy = box.halfExtents.y - std::fabs(localCenter.y);

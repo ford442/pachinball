@@ -19,7 +19,7 @@ void SnapshotWriter::u32(uint32_t v) {
 }
 
 void SnapshotWriter::f32(float v) {
-  uint32_t bits;
+  uint32_t bits = 0;
   std::memcpy(&bits, &v, sizeof bits);
   u32(bits);
 }
@@ -46,7 +46,7 @@ uint32_t SnapshotReader::u32() {
 
 float SnapshotReader::f32() {
   const uint32_t bits = u32();
-  float v;
+  float v = 0.f;
   std::memcpy(&v, &bits, sizeof v);
   return v;
 }
@@ -68,7 +68,7 @@ void SnapshotHasher::u32(uint32_t v) {
 }
 
 void SnapshotHasher::f32(float v) {
-  uint32_t bits;
+  uint32_t bits = 0;
   std::memcpy(&bits, &v, sizeof bits);
   // Every NaN hashes as the canonical quiet NaN: payloads differ between
   // WASM engines and native builds, and the hash must not. Only the hasher —

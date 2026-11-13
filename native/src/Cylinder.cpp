@@ -85,9 +85,9 @@ void PhysicsWorld::resolveSphereVsCylinder(BodyView& body, const CylinderDesc& c
   if (!inside && distSq >= radius * radius) return;
 
   Vec3 localNormal;
-  float penetration;
+  float penetration = 0.f;
   if (inside || distSq < CYLINDER_EPSILON_SQ) {
-    float shallow;
+    float shallow = 0.f;
     deepestCylinderNormal(localCenter, cyl.radius, cyl.halfHeight, localNormal, shallow);
     penetration = radius + shallow;
   } else {

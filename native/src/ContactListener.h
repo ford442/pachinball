@@ -37,7 +37,7 @@ struct ContactEvent {
   bool          isSensor   = false;   ///< True for sensor-volume overlaps: no impulse/correction applied
   /** Pin-field lattice index (row * cols + col) of the pin hit; 0 for every other collider. */
   int           subIndex   = 0;
-  bool          isEntering() const { return phase == ContactPhase::Enter; }
+  [[nodiscard]] bool isEntering() const { return phase == ContactPhase::Enter; }
 };
 
 /** Callback signature for contact events. */

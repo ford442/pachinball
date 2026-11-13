@@ -106,7 +106,8 @@ inline float sanitizedMaxSubsteps(float maxSubsteps) {
 }
 
 /**
- * A dynamic body found with a non-finite pose or velocity and frozen
+ * A dynamic body found with a non-finite pose or velocity, or a rotation
+ * that is no longer unit, and frozen
  * (PhysicsWorldStep.cpp, "Non-finite quarantine"): put back where its
  * substep started — the origin / identity if that pose was not finite
  * either — with zero velocity, asleep. The engine only freezes; what the
@@ -129,6 +130,17 @@ struct WorldParams {
   float sleepAngularThreshold = 0.1f;
   int   sleepFramesRequired   = 60;
 };
+
+/**
+ * The most simulated time `step()` carries over between calls: one capped
+ * tick, `fixedTimestep · ⌊sanitizedMaxSubsteps⌋`. After any `step()` the
+ * accumulator is in [0, maxAccumulator], so `restore()` refuses a blob outside
+ * it — a NaN accumulator froze the world and +inf ran every substep of every
+ * tick (#520 row 8).
+ */
+inline float maxAccumulator(const WorldParams& p) {
+  return p.fixedTimestep * static_cast<float>(static_cast<int>(sanitizedMaxSubsteps(p.maxSubsteps)));
+}
 
 /** Upper bound on `solverIterations` a snapshot may carry (CPU DoS guard). */
 constexpr int MAX_SOLVER_ITERATIONS = 64;
@@ -397,8 +409,10 @@ public:
   /** Test hook — pairs emitted by broadphase in the last substep. */
   int getLastBroadphasePairCount() const { return broadphase_.lastPairCount(); }
 
-  void setGravity(float gx, float gy, float gz) { params_.gravity = {gx, gy, gz}; }
-  void setRollingResistance(float rr) { params_.rollingResistance = rr; }
+  /** Ignored unless finite (Boundary.h). */
+  void setGravity(float gx, float gy, float gz);
+  /** Ignored unless finite and ≥ 0. */
+  void setRollingResistance(float rr);
   float getRollingResistance() const { return params_.rollingResistance; }
 
 private:
@@ -408,12 +422,21 @@ private:
   void substep(float dt, int substepIndex);
   /**
    * Freeze every dynamic body whose position, rotation, velocity or angular
-   * velocity is not finite (see NaNQuarantine). Runs after integration — so
+   * velocity is not finite, or whose rotation is not unit — an overflowed
+   * quaternion normalises to zero (see NaNQuarantine). Runs after integration — so
    * a NaN never reaches the broadphase or the solver — and again after the
    * solve. Read-only on a healthy world.
    */
   void quarantineNonFinite(int substepIndex);
   void solveHinges(float dt);
+  /** Live hinge by id (binary search: `hinges_` is id-ordered), or nullptr. */
+  HingeJoint* findHinge(int id);
+  const HingeJoint* findHinge(int id) const;
+  /** Erase every hinge `pred` selects, keeping the rest in id order. */
+  template <typename Pred>
+  void eraseHingesIf(Pred pred) {
+    hinges_.erase(std::remove_if(hinges_.begin(), hinges_.end(), pred), hinges_.end());
+  }
   /** Per-family static counts in Snapshot.h header order. */
   void staticCounts(uint32_t out[SNAPSHOT_STATIC_FAMILIES]) const;
   void scatterTransforms();
@@ -524,6 +547,7 @@ private:
   /** Flat, world-space triangle soup across every mesh; indices are stable. */
   std::vector<MeshTriangle>      triangles_;
   std::vector<ForceFieldDesc>    fields_;
+  /** Live hinges only, ascending id (see "Hinges" in PhysicsWorld.cpp). */
   std::vector<HingeJoint>        hinges_;
   /** Body targets pushed since the last `step()` (last push per id wins). */
   std::vector<KinematicBodyTarget> bodyTargets_;

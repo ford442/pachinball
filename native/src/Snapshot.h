@@ -75,7 +75,7 @@ public:
   }
   /** Overwrite an already-written word (header back-patching). */
   void patch(std::size_t wordIndex, uint32_t v);
-  std::size_t wordCount() const { return bytes_.size() / 4; }
+  [[nodiscard]] std::size_t wordCount() const { return bytes_.size() / 4; }
   std::vector<uint8_t> take() { return std::move(bytes_); }
 
 private:
@@ -104,8 +104,8 @@ public:
    * `count` items of `wordsEach` words can still fit. Latches failure otherwise.
    */
   bool fits(uint32_t count, std::size_t wordsEach);
-  std::size_t remainingWords() const { return (size_ - pos_) / 4; }
-  bool failed() const { return failed_; }
+  [[nodiscard]] std::size_t remainingWords() const { return (size_ - pos_) / 4; }
+  [[nodiscard]] bool failed() const { return failed_; }
   void fail() { failed_ = true; }
 
 private:
@@ -125,7 +125,7 @@ public:
     u32(static_cast<uint32_t>(v & 0xFFFFFFFFu));
     u32(static_cast<uint32_t>(v >> 32));
   }
-  uint64_t value() const { return h_; }
+  [[nodiscard]] uint64_t value() const { return h_; }
 
 private:
   uint64_t h_ = 0xCBF29CE484222325ull;

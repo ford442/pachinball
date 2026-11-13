@@ -235,6 +235,25 @@ if(NOT EMSCRIPTEN)
   # No -O here: CMAKE_CXX_FLAGS_<CONFIG> is the single source of the opt level.
   target_compile_options(pachinball_physics_native PRIVATE -fno-exceptions)
 
+  # libFuzzer targets (#520 §5): native/fuzz/fuzz_*.cpp. Clang only; meant
+  # with PACHINBALL_SANITIZE=ON (ASan + UBSan) and the tests off — npm run
+  # fuzz configures native/build-fuzz that way (scripts/run-fuzzers.mjs).
+  # The library gets coverage instrumentation (-fsanitize=fuzzer-no-link);
+  # each target links libFuzzer's main.
+  option(PACHINBALL_FUZZ "Build the libFuzzer targets in native/fuzz (clang)" OFF)
+  if(PACHINBALL_FUZZ)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      message(FATAL_ERROR "PACHINBALL_FUZZ needs clang++ (libFuzzer); got ${CMAKE_CXX_COMPILER_ID}")
+    endif()
+    target_compile_options(pachinball_sanitize INTERFACE -fsanitize=fuzzer-no-link)
+    foreach(_pachinball_fuzz fuzz_snapshot_restore fuzz_command_stream)
+      add_executable(${_pachinball_fuzz} fuzz/${_pachinball_fuzz}.cpp)
+      target_link_libraries(${_pachinball_fuzz} PRIVATE pachinball_physics_native pachinball_warnings pachinball_fp)
+      target_compile_options(${_pachinball_fuzz} PRIVATE -fsanitize=fuzzer)
+      target_link_options(${_pachinball_fuzz} PRIVATE -fsanitize=fuzzer)
+    endforeach()
+  endif()
+
   if(NOT PACHINBALL_BUILD_TESTS)
     return()
   endif()
@@ -272,6 +291,7 @@ if(NOT EMSCRIPTEN)
     tests/golden_trace_test.cpp
     tests/broadphase_test.cpp
     tests/correctness_bugs_test.cpp
+    tests/correctness_520_test.cpp
   )
   # Catch2 requires C++ exceptions; do not pass -fno-exceptions here.
   target_link_libraries(physics_world_test PRIVATE

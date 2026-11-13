@@ -1,0 +1,24 @@
+# clang-tidy for the C++ physics engine (#520 §5). `npm run lint:native`
+# runs it over native/src and native/fuzz against the compile database
+# (`npm run compile-db`); CI fails on any warning. bindings.cpp is
+# Emscripten-only and not in that database, so it is not linted here.
+#
+# Off, with reasons:
+#   bugprone-easily-swappable-parameters — the Embind surface is positional
+#     floats on purpose (one JS call per command); #520 §6.5 replaces it.
+#   performance-enum-size — the wide enum bases are wire formats: ContactPhase
+#     and SnapshotStatus cross Embind and the contact buffer as int, and
+#     CollisionGroup is a 32-bit mask.
+#   readability-identifier-naming — not enabled: the codebase's names are
+#     consistent already and a rename pass would bury real diffs.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  performance-*,
+  -performance-enum-size,
+  cppcoreguidelines-init-variables,
+  modernize-use-nodiscard
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/native/(src|fuzz)/.*'
+FormatStyle: file

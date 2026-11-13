@@ -1,0 +1,31 @@
+# clang-format for native/ (#520 §5): the style the engine is already written
+# in, as near as clang-format can say it. Not applied wholesale and not a CI
+# gate: the engine hand-aligns declaration columns (BodyStore.h, MathTypes.h)
+# that no clang-format option reproduces. `npm run format:native` formats only
+# the lines you have staged (git clang-format); keep the alignment of the
+# block you are in when it would break it.
+BasedOnStyle: Google
+ColumnLimit: 120
+IndentWidth: 2
+ContinuationIndentWidth: 4
+AccessModifierOffset: -2
+NamespaceIndentation: None
+FixNamespaceComments: true
+SpacesBeforeTrailingComments: 1
+DerivePointerAlignment: false
+PointerAlignment: Left
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortLambdasOnASingleLine: All
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignTrailingComments: false
+BinPackArguments: true
+BinPackParameters: true
+BreakBeforeBraces: Attach
+IncludeBlocks: Preserve
+SortIncludes: Never
+ReflowComments: false
