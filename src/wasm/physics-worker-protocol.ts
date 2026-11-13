@@ -18,7 +18,7 @@ import type {
 import type { PinFieldSpec } from '../core/pin-field'
 import { STATIC_HANDLE_OVERFLOW, type WasmSnapshotStatus } from './wasm-types'
 
-/** Mirrors native PhysicsWorld.h static collider id bases. */
+/** Mirrors native StaticShapes.h (and per-family header) static collider id bases. */
 export const STATIC_BOX_ID_BASE = -1000
 export const STATIC_CAPSULE_ID_BASE = -2000
 export const KINEMATIC_MOVER_ID_BASE = -3000
@@ -31,7 +31,7 @@ export const STATIC_CONE_ID_BASE = -9000
 export const PIN_FIELD_ID_BASE = -10000
 
 /**
- * Mirrors native `STATIC_HANDLE_CAPACITY` in PhysicsWorld.h. Families are
+ * Mirrors native `STATIC_HANDLE_CAPACITY` in StaticShapes.h. Families are
  * spaced 1000 apart, so the 1001st shape of a family would take the next
  * family's base and alias it.
  */
