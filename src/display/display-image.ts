@@ -4,7 +4,8 @@
  * Handles static image display on the backbox.
  */
 
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Texture } from '@babylonjs/core/Materials/Textures/texture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
@@ -59,7 +60,7 @@ export class DisplayImageLayer {
 
     this.texture = new Texture(path, this.scene)
 
-    const mat = new StandardMaterial('imageMat', this.scene)
+    const mat = createStandardMaterial(this.scene, 'imageMat')
     mat.diffuseTexture = this.texture
     mat.alpha = opacity ?? 1.0
 

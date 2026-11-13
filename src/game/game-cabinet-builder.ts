@@ -8,7 +8,7 @@ import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight'
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
 import type { ShadowRig } from './shadow-rig'
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
@@ -110,7 +110,7 @@ export class GameCabinetBuilder {
       inlay.position.set(xPos, cabinetY + 0.5, 5)
       inlay.rotation.y = rotY
 
-      const inlayMat = new StandardMaterial(`${name}Mat`, scene)
+      const inlayMat = createStandardMaterial(scene, `${name}Mat`)
       inlayMat.backFaceCulling = false
 
       if (this.host.qualityTier === QualityTier.HIGH) {
@@ -148,7 +148,7 @@ export class GameCabinetBuilder {
     apronTrim.material = accentMat
 
     // Front bezel
-    const bezelMat = new StandardMaterial('bezelMat', scene)
+    const bezelMat = createStandardMaterial(scene, 'bezelMat')
     bezelMat.diffuseColor = Color3.Black()
     bezelMat.emissiveColor = new Color3(0.6, 0, 0.4) // magenta ambient
 
@@ -219,7 +219,7 @@ export class GameCabinetBuilder {
       ring.position.set(vis.mesh.position.x, vis.mesh.position.y + radiusY, vis.mesh.position.z)
       ring.rotation.x = Math.PI / 2
 
-      const mat = new StandardMaterial(`bumperNeonMat_${i}`, scene)
+      const mat = createStandardMaterial(scene, `bumperNeonMat_${i}`)
       const baseColor = Color3.FromHexString(vis.color || '#00d9ff')
       mat.emissiveColor = baseColor
       mat.disableLighting = true
@@ -296,7 +296,7 @@ export class GameCabinetBuilder {
 
     const floor = MeshBuilder.CreateGround('roomFloor', { width: 100, height: 100 }, scene)
     floor.position.y = -8
-    const floorMat = new StandardMaterial('floorMat', scene)
+    const floorMat = createStandardMaterial(scene, 'floorMat')
     floorMat.diffuseColor = Color3.FromHexString('#0a0a0a')
     floorMat.specularColor = Color3.FromHexString('#111111')
     floorMat.roughness = 0.8
@@ -306,7 +306,7 @@ export class GameCabinetBuilder {
     const backWall = MeshBuilder.CreatePlane('roomBackWall', { width: 80, height: 40 }, scene)
     backWall.position.set(0, 10, 30)
     backWall.rotation.x = Math.PI
-    const wallMat = new StandardMaterial('wallMat', scene)
+    const wallMat = createStandardMaterial(scene, 'wallMat')
     wallMat.diffuseColor = Color3.FromHexString('#050505')
     wallMat.roughness = 1.0
     backWall.material = wallMat

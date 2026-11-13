@@ -7,7 +7,8 @@
  */
 
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import type { Scene } from '@babylonjs/core/scene'
 
@@ -22,7 +23,7 @@ export function createTrackMaterial(
   sink: TrackMaterial[],
   colorHex: string
 ): StandardMaterial {
-  const mat = new StandardMaterial('trackMat', scene)
+  const mat = createStandardMaterial(scene, 'trackMat')
   mat.emissiveColor = Color3.FromHexString(colorHex)
   mat.diffuseColor = Color3.Black()
   mat.alpha = 0.6

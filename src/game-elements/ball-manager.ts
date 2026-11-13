@@ -1,5 +1,5 @@
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -9,6 +9,7 @@ import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-
 import { CapturedBall } from '../core/captured-ball'
 import { BallType, GAME_TUNING } from '../config'
 import { getMaterialLibrary } from '../materials'
+import { TrailMaterialPool } from '../materials/material-trail'
 import { BallSaveSystem } from './ball-save-system'
 import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 import {
@@ -71,6 +72,7 @@ export class BallManager implements BallManagerHost {
   matLib: ReturnType<typeof getMaterialLibrary>
   trails: Map<PhysicsBody, TrailMesh> = new Map()
   trailMaterials: Map<TrailMesh, StandardMaterial> = new Map()
+  trailMaterialPool: TrailMaterialPool
   ballTrails: Map<PhysicsBody, BallTrailData> = new Map()
   ballDataMap: Map<PhysicsBody, BallData> = new Map()
   goldBallCount = 0
@@ -102,6 +104,7 @@ export class BallManager implements BallManagerHost {
     this.capture = new CapturedBall(rapier)
     this.bindings = bindings
     this.matLib = getMaterialLibrary(scene)
+    this.trailMaterialPool = new TrailMaterialPool(scene)
   }
 
   /** Balls come and go in a scene the gate may have frozen; every spawn / removal thaws it. */
@@ -145,18 +148,25 @@ export class BallManager implements BallManagerHost {
         this.bindings.splice(bIdx, 1)
       }
 
-      const trail = this.trails.get(body)
-      if (trail) {
-        this.trailMaterials.delete(trail)
-        trail.dispose()
-        this.trails.delete(body)
-      }
-      this.ballTrails.delete(body)
+      this.disposeTrail(body)
     }
 
     if (this.ballBody === body) {
       this.ballBody = this.ballBodies[0] ?? null
     }
+  }
+
+  /** Dispose a ball's ribbon trail and hand its material back to the pool. */
+  private disposeTrail(body: PhysicsBody): void {
+    const trail = this.trails.get(body)
+    if (trail) {
+      const material = this.trailMaterials.get(trail)
+      this.trailMaterials.delete(trail)
+      trail.dispose()
+      this.trails.delete(body)
+      if (material) this.trailMaterialPool.release(material)
+    }
+    this.ballTrails.delete(body)
   }
 
   removeExtraBalls(): void {
@@ -166,6 +176,8 @@ export class BallManager implements BallManagerHost {
       if (rb && rb !== this.ballBody) {
         this.world.removeRigidBody(rb)
         this.ballBodies.splice(i, 1)
+        // Their trails used to outlive them (and their materials never went away).
+        this.disposeTrail(rb)
       }
     }
 

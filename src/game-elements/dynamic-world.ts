@@ -18,7 +18,7 @@
 
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera'
 import { PointLight } from '@babylonjs/core/Lights/pointLight'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -255,7 +255,7 @@ export class DynamicWorld {
     )
     bumper.position = pos
 
-    const mat = new StandardMaterial('bumperMat', this.scene)
+    const mat = createStandardMaterial(this.scene, 'bumperMat')
     mat.emissiveColor = color('#ff6600')
     bumper.material = mat
 
@@ -277,7 +277,7 @@ export class DynamicWorld {
     )
     target.position = pos
 
-    const mat = new StandardMaterial('targetMat', this.scene)
+    const mat = createStandardMaterial(this.scene, 'targetMat')
     mat.emissiveColor = color('#00ff88')
     target.material = mat
 
@@ -292,7 +292,7 @@ export class DynamicWorld {
     )
     collectible.position = pos.add(new Vector3(0, 1, 0))
 
-    const mat = new StandardMaterial('collectibleMat', this.scene)
+    const mat = createStandardMaterial(this.scene, 'collectibleMat')
     mat.emissiveColor = color('#ff00ff')
     collectible.material = mat
 
@@ -318,7 +318,7 @@ export class DynamicWorld {
     portal.position = pos
     portal.rotation.x = Math.PI / 2
 
-    const portalMat = new StandardMaterial('zonePortalMat', this.scene)
+    const portalMat = createStandardMaterial(this.scene, 'zonePortalMat')
     portalMat.diffuseColor = Color3.Black()
     portalMat.emissiveColor = color(ringColor).scale(1.2)
     portal.material = portalMat
@@ -331,7 +331,7 @@ export class DynamicWorld {
     core.parent = portal
     core.position.z = -0.1
 
-    const coreMat = new StandardMaterial('zonePortalCoreMat', this.scene)
+    const coreMat = createStandardMaterial(this.scene, 'zonePortalCoreMat')
     coreMat.diffuseColor = Color3.Black()
     coreMat.emissiveColor = color(coreColor).scale(0.75)
     coreMat.alpha = 0.72

@@ -4,7 +4,8 @@
  * Renders a glowing semi-transparent sphere mesh with emissive material.
  */
 
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
@@ -24,7 +25,7 @@ export class GhostBallRenderer {
 
   private createGhostMesh(): void {
     const mesh = MeshBuilder.CreateSphere('ghostBallMesh', { diameter: 0.24, segments: 16 }, this.scene)
-    const mat = new StandardMaterial('ghostBallMat', this.scene)
+    const mat = createStandardMaterial(this.scene, 'ghostBallMat')
 
     mat.diffuseColor = Color3.FromHexString(PALETTE.CYAN)
     mat.emissiveColor = emissive(PALETTE.CYAN, INTENSITY.HIGH)

@@ -6,7 +6,7 @@
  * visual and the physics cannot drift. See docs/TRACK_SCHEMA.md.
  */
 
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Quaternion } from '@babylonjs/core/Maths/math.vector'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
@@ -79,7 +79,7 @@ export function createAxisPullWell(
   column.position.set(center.x, center.y, center.z)
   column.isPickable = false
 
-  const tint = new StandardMaterial('axisPullWellMat', ctx.scene)
+  const tint = createStandardMaterial(ctx.scene, 'axisPullWellMat')
   tint.diffuseColor = Color3.Black()
   tint.emissiveColor = material.emissiveColor.clone()
   tint.alpha = enabled ? 0.1 : 0.04

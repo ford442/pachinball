@@ -1,17 +1,24 @@
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color4 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import { Mesh } from '@babylonjs/core/Meshes/mesh'
+import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem'
 import { Scene } from '@babylonjs/core/scene'
 import type { PhysicsBody } from '../core/physics-api'
 import { EffectsConfig, BallType } from '../config'
 import { emissive, QualityTier } from '../game-elements/visual-language'
+import { TransientField } from './transient-field'
 
+/** Trail quads alive at once, across all balls (`maxParticlesPerBall` each). Spawns beyond it are dropped. */
+const FEVER_TRAIL_CAPACITY = 512
+/** Peak alpha of a fresh trail quad; it fades linearly to 0 over its lifetime. */
+const FEVER_TRAIL_ALPHA = 0.7
+
+/** One fever-trail quad: a position and an age. It is a row in a `TransientField`, not a mesh. */
 interface FeverTrail {
-  mesh: Mesh
-  material: StandardMaterial
+  x: number
+  y: number
+  z: number
   life: number
   maxLife: number
 }
@@ -20,6 +27,14 @@ export class TrailEffects {
   private scene: Scene
   private feverTrails: Map<number, FeverTrail[]> = new Map()
   private lastTrailSpawn: Map<number, number> = new Map()
+  /** Every fever-trail quad is an instance of this one camera-facing plane (#524). */
+  private readonly feverField: TransientField
+  /** Spent particles, reused so a fever burst allocates nothing once warm. */
+  private readonly feverPool: FeverTrail[] = []
+  private feverLive = 0
+  private readonly feverTintR: number
+  private readonly feverTintG: number
+  private readonly feverTintB: number
 
   private ballTrails: Map<
     number,
@@ -33,6 +48,16 @@ export class TrailEffects {
 
   constructor(scene: Scene) {
     this.scene = scene
+    this.feverField = new TransientField(
+      scene,
+      () => MeshBuilder.CreatePlane('feverTrailField', { size: 0.25 }, scene),
+      FEVER_TRAIL_CAPACITY,
+    )
+    // Same colour as the emissive material this replaced; the field clamps it to 0..1.
+    const tint = emissive(EffectsConfig.feverTrail.color, EffectsConfig.feverTrail.intensity)
+    this.feverTintR = tint.r
+    this.feverTintG = tint.g
+    this.feverTintB = tint.b
   }
 
   // Fever trail API (assumes gating is handled externally)
@@ -81,37 +106,29 @@ export class TrailEffects {
       this.feverTrails.set(handle, trails)
     }
 
-    // Enforce max particles per ball
+    // Enforce max particles per ball: the oldest is recycled as the new one
+    let particle: FeverTrail | undefined
     if (trails.length >= EffectsConfig.feverTrail.maxParticlesPerBall) {
-      // Remove oldest
-      const oldest = trails.shift()
-      if (oldest) {
-        oldest.mesh.dispose()
-        oldest.material.dispose()
-      }
+      particle = trails.shift()
+    } else if (this.feverLive >= FEVER_TRAIL_CAPACITY) {
+      return
+    } else {
+      this.feverLive++
     }
+    particle ??= this.feverPool.pop() ?? { x: 0, y: 0, z: 0, life: 0, maxLife: 0 }
 
-    // Create particle mesh
-    const particle = MeshBuilder.CreatePlane(`feverTrail_${Date.now()}`, { size: 0.25 }, this.scene)
-
-    particle.position.set(pos.x, pos.y, pos.z)
-    particle.billboardMode = Mesh.BILLBOARDMODE_ALL
-
-    const mat = new StandardMaterial(`trailMat_${Date.now()}`, this.scene)
-    mat.emissiveColor = emissive(EffectsConfig.feverTrail.color, EffectsConfig.feverTrail.intensity)
-    mat.alpha = 0.7
-    mat.disableLighting = true
-    particle.material = mat
-
-    trails.push({
-      mesh: particle,
-      material: mat,
-      life: EffectsConfig.feverTrail.lifetime,
-      maxLife: EffectsConfig.feverTrail.lifetime,
-    })
+    particle.x = pos.x
+    particle.y = pos.y
+    particle.z = pos.z
+    particle.life = EffectsConfig.feverTrail.lifetime
+    particle.maxLife = EffectsConfig.feverTrail.lifetime
+    trails.push(particle)
   }
 
   private updateTrailParticles(dt: number): void {
+    const field = this.feverField
+    field.begin()
+    field.setBillboardCamera(this.scene.activeCamera)
     for (const [, trails] of this.feverTrails) {
       for (let i = trails.length - 1; i >= 0; i--) {
         const trail = trails[i]
@@ -119,32 +136,45 @@ export class TrailEffects {
         trail.life -= dt
 
         if (trail.life <= 0) {
-          trail.mesh.dispose()
-          trail.material.dispose()
+          this.feverPool.push(trail)
+          this.feverLive--
           trails.splice(i, 1)
           continue
         }
 
-        // Fade alpha
+        // Fade alpha, shrink slightly
         const lifeRatio = trail.life / trail.maxLife
-        trail.material.alpha = 0.7 * lifeRatio
-
-        // Shrink slightly
-        const scale = 0.5 + lifeRatio * 0.5
-        trail.mesh.scaling.setAll(scale)
+        field.pushBillboard(
+          trail.x, trail.y, trail.z,
+          0.5 + lifeRatio * 0.5,
+          this.feverTintR, this.feverTintG, this.feverTintB, FEVER_TRAIL_ALPHA * lifeRatio,
+        )
       }
     }
+    field.end()
   }
 
   clearFeverTrails(): void {
+    // Called every frame outside fever: nothing to release, nothing shown.
+    if (this.feverLive === 0 && this.feverTrails.size === 0) return
     for (const trails of this.feverTrails.values()) {
-      for (const trail of trails) {
-        trail.mesh.dispose()
-        trail.material.dispose()
-      }
+      for (const trail of trails) this.feverPool.push(trail)
     }
+    this.feverLive = 0
     this.feverTrails.clear()
     this.lastTrailSpawn.clear()
+    this.feverField.begin()
+    this.feverField.end()
+  }
+
+  dispose(): void {
+    this.clearFeverTrails()
+    for (const trail of this.ballTrails.values()) {
+      trail.system.stop()
+      trail.system.dispose()
+    }
+    this.ballTrails.clear()
+    this.feverField.dispose()
   }
 
   // Ball particle trails

@@ -17,7 +17,8 @@
  *    frame (a still).
  */
 
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Texture } from '@babylonjs/core/Materials/Textures/texture'
 import { VideoTexture } from '@babylonjs/core/Materials/Textures/videoTexture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
@@ -246,7 +247,7 @@ export class DisplayCharacterLayer {
   }
 
   private attachMaterial(texture: Texture): void {
-    const mat = new StandardMaterial('displayCharacterMat', this.scene)
+    const mat = createStandardMaterial(this.scene, 'displayCharacterMat')
     mat.diffuseTexture = texture
     mat.useAlphaFromDiffuseTexture = true
     mat.emissiveColor = Color3.White()

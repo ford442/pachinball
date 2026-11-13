@@ -4,7 +4,8 @@
  * Renders over the main video layer (Layer 2).
  */
 
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
@@ -69,7 +70,7 @@ export class DisplayLcdOverlayLayer {
     this.texture = new DynamicTexture('displayLcdTex', { width: texW, height: texH }, this.scene, false)
     this.texture.hasAlpha = true
 
-    this.material = new StandardMaterial('displayLcdMat', this.scene)
+    this.material = createStandardMaterial(this.scene, 'displayLcdMat')
     this.material.diffuseTexture = this.texture
     this.material.opacityTexture = this.texture
     this.material.emissiveTexture = this.texture

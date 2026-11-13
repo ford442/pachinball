@@ -1,5 +1,5 @@
 import { Animation } from '@babylonjs/core/Animations/animation'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../../materials/material-basic'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Scalar } from '@babylonjs/core/Maths/math.scalar'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
@@ -117,7 +117,7 @@ export class DecorationBuilder {
     const btn = MeshBuilder.CreateCylinder('blastBtn', { diameter: 1.2, height: 0.3 }, this.scene)
     btn.position.set(0, 1, 0)
     btn.parent = panel
-    const btnMat = new StandardMaterial('btnMat', this.scene)
+    const btnMat = createStandardMaterial(this.scene, 'btnMat')
     btnMat.diffuseColor = Color3.FromHexString('#ff0044')
     btnMat.emissiveColor = Color3.FromHexString('#ff0044').scale(0.8)
     btn.material = btnMat
@@ -149,7 +149,7 @@ export class DecorationBuilder {
       }, this.scene)
       shooterRod.rotation.x = Math.PI / 2
       shooterRod.position.set(10.5, -0.2, -10)
-      const rodMat = new StandardMaterial('rodMat', this.scene)
+      const rodMat = createStandardMaterial(this.scene, 'rodMat')
       rodMat.diffuseColor = new Color3(0.7, 0.7, 0.8)
       rodMat.specularColor = new Color3(1, 1, 1)
       shooterRod.material = rodMat
@@ -172,7 +172,7 @@ export class DecorationBuilder {
       }, this.scene)
       spring.position.set(10.5, -0.2, -11.5)
       spring.rotation.x = Math.PI / 2
-      const springMat = new StandardMaterial('springMat', this.scene)
+      const springMat = createStandardMaterial(this.scene, 'springMat')
       springMat.diffuseColor = new Color3(0.5, 0.5, 0.6)
       spring.material = springMat
 

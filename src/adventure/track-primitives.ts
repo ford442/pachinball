@@ -12,7 +12,8 @@
  */
 
 import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -462,7 +463,7 @@ export function createForceField(
   volume.rotationQuaternion = new Quaternion(rotation.x, rotation.y, rotation.z, rotation.w)
   volume.isPickable = false
 
-  const tint = new StandardMaterial('forceFieldMat', ctx.scene)
+  const tint = createStandardMaterial(ctx.scene, 'forceFieldMat')
   tint.diffuseColor = Color3.Black()
   tint.emissiveColor = material.emissiveColor.clone()
   tint.alpha = 0.12
@@ -646,12 +647,12 @@ export function createExitPortal(
   core.parent = ring
   core.position.z = -0.08
 
-  const ringMaterial = new StandardMaterial('exitPortalRingMat', ctx.scene)
+  const ringMaterial = createStandardMaterial(ctx.scene, 'exitPortalRingMat')
   ringMaterial.diffuseColor = Color3.Black()
   ringMaterial.emissiveColor = emissive(ringColorHex, INTENSITY.HIGH)
   ring.material = ringMaterial
 
-  const coreMaterial = new StandardMaterial('exitPortalCoreMat', ctx.scene)
+  const coreMaterial = createStandardMaterial(ctx.scene, 'exitPortalCoreMat')
   coreMaterial.diffuseColor = Color3.Black()
   coreMaterial.emissiveColor = emissive(coreColorHex, INTENSITY.ACTIVE)
   coreMaterial.alpha = 0.72

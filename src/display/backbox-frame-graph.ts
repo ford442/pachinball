@@ -38,7 +38,8 @@ import { FrameGraphClearTextureTask } from '@babylonjs/core/FrameGraph/Tasks/Tex
 import { FrameGraphCopyToTextureTask } from '@babylonjs/core/FrameGraph/Tasks/Texture/copyToTextureTask'
 import type { Effect } from '@babylonjs/core/Materials/effect'
 import type { ShaderLanguage } from '@babylonjs/core/Materials/shaderLanguage'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture'
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
@@ -182,7 +183,7 @@ export class BackboxFrameGraph {
     plane.position.z = options.planeZ
     plane.isPickable = false
     plane.setEnabled(false) // until the first build succeeds
-    const material = new StandardMaterial('backboxCompositeMat', scene)
+    const material = createStandardMaterial(scene, 'backboxCompositeMat')
     material.disableLighting = true
     material.diffuseColor = Color3.Black()
     material.specularColor = Color3.Black()

@@ -13,7 +13,8 @@
  * frozen-material allowlist (frozen-material-set.ts): they change every frame.
  */
 
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { Scene } from '@babylonjs/core/scene'
@@ -121,7 +122,7 @@ export class BackboxScreenBorder {
         { width: seg.w, height: seg.h, depth: DEPTH },
         this.scene,
       )
-      const material = new StandardMaterial(`backboxScreenBorderMat_${seg.name}`, this.scene)
+      const material = createStandardMaterial(this.scene, `backboxScreenBorderMat_${seg.name}`)
       material.disableLighting = true
       material.diffuseColor.set(0, 0, 0)
       material.specularColor.set(0, 0, 0)

@@ -209,9 +209,13 @@ export const StandardMaterial = vi.fn().mockImplementation(function (this: Recor
   this.alpha = 1
   this.backFaceCulling = true
   this.wireframe = false
+  this.onDisposeObservable = { add: vi.fn(), remove: vi.fn() }
   this.dispose = vi.fn()
   return this
 })
+
+/** Only the constants the code under test reads (`transparencyMode`). */
+export const Material = { MATERIAL_OPAQUE: 0, MATERIAL_ALPHATEST: 1, MATERIAL_ALPHABLEND: 2 }
 
 export const PBRMaterial = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
   this.emissiveColor = new MockColor3(0, 0, 0)
@@ -278,6 +282,23 @@ export class MockQuaternion {
   }
   static FromEulerAngles(x: number, y: number, z: number) {
     return new MockQuaternion(x, y, z, 1)
+  }
+  /** Babylon's formula: a mesh's `rotation` (x pitch, y yaw, z roll) as a quaternion. */
+  static RotationYawPitchRollToRef(yaw: number, pitch: number, roll: number, result: MockQuaternion) {
+    const sinRoll = Math.sin(roll * 0.5)
+    const cosRoll = Math.cos(roll * 0.5)
+    const sinPitch = Math.sin(pitch * 0.5)
+    const cosPitch = Math.cos(pitch * 0.5)
+    const sinYaw = Math.sin(yaw * 0.5)
+    const cosYaw = Math.cos(yaw * 0.5)
+    result.x = cosYaw * sinPitch * cosRoll + sinYaw * cosPitch * sinRoll
+    result.y = sinYaw * cosPitch * cosRoll - cosYaw * sinPitch * sinRoll
+    result.z = cosYaw * cosPitch * sinRoll - sinYaw * sinPitch * cosRoll
+    result.w = cosYaw * cosPitch * cosRoll + sinYaw * sinPitch * sinRoll
+    return result
+  }
+  static RotationYawPitchRoll(yaw: number, pitch: number, roll: number) {
+    return MockQuaternion.RotationYawPitchRollToRef(yaw, pitch, roll, new MockQuaternion())
   }
   static Identity() {
     return new MockQuaternion(0, 0, 0, 1)

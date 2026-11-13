@@ -5,7 +5,8 @@
  * Extracted from display.ts for modularity.
  */
 
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
 import { Texture } from '@babylonjs/core/Materials/Textures/texture'
 import { VideoTexture } from '@babylonjs/core/Materials/Textures/videoTexture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
@@ -78,7 +79,7 @@ export class DisplayVideoLayer {
         })
 
         if (this.mesh) {
-          const mat = new StandardMaterial('videoMat', this.scene)
+          const mat = createStandardMaterial(this.scene, 'videoMat')
           mat.diffuseTexture = this.videoTexture
           mat.emissiveColor = Color3.White()
           mat.disableLighting = true

@@ -276,6 +276,76 @@ What this says:
    `TypeError: engine.createDynamicTexture is not a function` (`StructuralMaterials.createLCDGridTexture`) — identically at the base
    commit, so it is not something this branch introduced. WebGL2 and WebGPU therefore need separate rows from a GPU machine.
 
+### #524 — one material for transients, no stray `StandardMaterial` (2026-11-13)
+
+`MaterialLibrary` owns the PBR set; ~70 `new StandardMaterial` calls still sat in feeders, effects, ball trails, the dynamic
+world, decoration, the display layers and the room. Several built a material per burst. Now `new StandardMaterial` exists only
+under `src/materials/` and `src/cabinet/` (ESLint `no-restricted-syntax`, plus `tests/standard-material-ownership.test.ts` as a
+text scan), and nothing builds a material per spawn:
+
+| what | before | after |
+|---|---|---|
+| shard burst (8 shards) | 8 materials + 8 meshes per burst | 8 instances of one `TransientField`, shared material |
+| impact ring, ripple rings | a mesh + a material each, an `Animation` per ring | instances of two `TransientField`s |
+| fever-trail quad | a mesh + a material per quad, every 0.05 s per ball | instances of one camera-facing `TransientField` |
+| floating score number | plane + `DynamicTexture` + material per popup | ≤ 8 recycled slots, built on first use |
+| per-ball ribbon trail | a material per ball spawn (never freed on `removeExtraBalls`) | `TrailMaterialPool`, handed back on removal |
+| ball equator ring | a material per ball | one shared unlit material per scene |
+| decoration (struts, nodes, wires, crystals, panels) | one material per mesh | one per distinct look (`getSharedMaterial`) |
+| everything else (feeders, display, room, adventure, …) | `new StandardMaterial` at the call site | `createStandardMaterial` / `createUnlitMaterial` (same properties, same behaviour) |
+
+How transients draw: every shard / ring / quad is an instance of a dynamic thin-instance buffer (`src/effects/transient-field.ts`)
+on the one `transientUnlitMat` (white, unlit, alpha-blended, built at boot). Tint and fade are the per-instance RGBA
+(`thinInstanceSetBuffer('color', …)`; Babylon multiplies the base colour by `instanceColor.rgb` and the alpha by `instanceColor.a`,
+on both the GLSL and WGSL standard shaders). A field's **mesh** is built the first time it is shown and hidden while empty (a
+thin-instanced mesh with zero instances draws one ordinary mesh); the **material** is not part of that, so a burst never creates
+one. Billboard quads compose the camera-facing rotation on the CPU: the transpose of the view rotation, which is exactly what
+`BILLBOARDMODE_ALL` applies. One look changes: shards and ripple rings were lit `StandardMaterial`s (emissive saturated, plus
+diffuse / specular from the scene lights); they are unlit now, like the impact ring and the trail quads already were.
+
+**Measured** (`PERF_LABEL=before|after PERF_TIERS=medium PERF_STATES=table,table3 PERF_REPEATS=3 PERF_FRAMES=40 PERF_WARMUP=10
+PERF_ALLOC_FRAMES=150`; Chromium + SwiftShader, `?renderer=webgl2&debug=1&noopt=1`, 640×360, physics `rapier` (no `public/wasm` in
+this container, so these numbers are not comparable with the `wasm-worker` PR0 table above), quality tier MEDIUM. `before` is a
+pristine checkout of the base commit `515bf7b`, `after` is this branch; both recorded on an otherwise idle machine, one after
+the other):
+
+| state | materials before → after | meshes | draw calls | allocKB / frame (per-repeat) before → after |
+|---|---|---:|---:|---|
+| medium/table | **257 → 163** | 687 → 687 | 651 → 651 | 2917 / 2914 / 2896 → 2892 / 2900 / 2913 (median 2914 → 2900, −0.5 %) |
+| medium/table3 | **260 → 166** | 687 → 687 | 651 → 651 | 2896 / 2899 / 2905 → 2888 / 2903 / 2898 (median 2899 → 2898, 0.0 %) |
+
+`renderTimeMs` medians: table 19.36 → 19.54 ms, table3 17.22 → 16.06 ms. The per-repeat medians overlap (table before
+21.8 / 18.9 / 19.4, after 18.8 / 21.3 / 19.5), so this is **no measurable change**, not a win; the point of the issue is the
+material count and the per-burst allocations, not frame time. Draw calls, active meshes (623) and frozen materials (12) are
+unchanged. The net saving (−94) is almost all decoration: wire strands, tech panels / nodes and holo crystals were one material per
+mesh and are now one per distinct look (+1 for `transientUnlitMat`, +1 for the eager transition-flash material).
+
+**A burst, in the real engine** (`tests/transient-materials.spec.ts`, WebGL2 under SwiftShader): one shard burst + impact ring +
+heavy bumper impact + FEVER trails grows the scene from 257 to **283 materials on the base commit** (+26, and they are disposed a
+second later); on this branch the scene stays at its boot count through the first burst, and a second burst builds no material
+and no mesh. Per-frame fever-trail and shard updates write into pre-sized `Float32Array`s and allocate nothing while idle.
+
+What this says:
+
+- **An eager version cost allocation.** The first cut built the four field meshes (and the transition-flash quad) at boot: five
+  extra scene meshes, and `allocKB/frame` came out ≈ +15 KB (+0.5 %) in *every* repeat (table 2924–2940 vs 2896–2917,
+  table3 2912–2915 vs 2896–2905). Babylon does a little per mesh per frame even for a disabled mesh (see the next point), so
+  idle meshes for effects most frames never draw are not free. Building the mesh on first use removed it (the table above); the
+  transition flash keeps its material eager (entering FEVER must not create one) and its mesh lazy.
+- **The dominant allocator is not materials.** The CDP sampling profile of an idle MEDIUM table is ≈ 2.1 MB / frame in
+  `set shadowEnabled` plus ≈ 0.5 MB in `_markMeshesAsLightDirty`: Babylon's `Light.shadowEnabled` setter and the light-dirty
+  marking it triggers over the scene's meshes. Nothing under `src/` writes `shadowEnabled` per frame (the one assignment is at
+  light creation in `effects-cabinet.ts`), so the per-frame caller is inside Babylon and was not traced here. The cost
+  scales with the number of scene meshes, it is ~90 % of `allocKBPerFrame`, and it is the lead for the next zero-allocation
+  pass; this change does not touch it.
+- **Not recorded: WebGPU.** `?renderer=webgpu` on the software (SwiftShader) adapter boots with no shader errors on this branch
+  but presents a black frame for the base commit as well, so it says nothing about the new path. The WGSL standard shader has the
+  same `INSTANCESCOLOR` handling as the GLSL one (`instancesDeclaration` / `defaultFragmentAlpha`); a real-GPU look is still owed.
+- A burst becomes visible when its field is first built (the new mesh thaws the static-scene gate immediately) or, afterwards,
+  at the next `RenderStateWatcher` sample after the field is enabled: see `docs/STATIC_SCENE.md`.
+- `removeExtraBalls` used to leave the extra balls' `TrailMesh` (and its material) behind; it now disposes them and returns the
+  material to the pool.
+
 ## Bundle budget
 
 `node scripts/check-bundle-size.mjs --print` reports `entryGzipKb` (the module script `index.html` boots) and
@@ -288,6 +358,8 @@ former `ui-overlays` chunk was modulepreloaded but not precached, so the PWA cou
 |---|---|---:|---:|---:|
 | 2026-10-09 | working tree on `claude/441-residual-lifecycle-gaps` (dist built 2026-10-08) | 205.77 | 233.27 | 6239.74 |
 | 2026-10-29 | #484 (`ShadowRig`, `createCanvasTexture`, mirror removed) | 206.69 | 235.47 | 5534.29 |
+| 2026-11-13 | `515bf7b` (base of #524) | 240.92 | 240.92 | 5985.15 |
+| 2026-11-13 | #524 (`material-basic` / `-transient` / `-trail`, `TransientField`, floating pool) | 243.19 | 243.19 | 5990.91 |
 
 #443 slices A + B, `entryGzipKb` per commit (the issue asks for no more than +1 KB over the base):
 

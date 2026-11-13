@@ -11,7 +11,7 @@ import type { PointLight } from '@babylonjs/core/Lights/pointLight'
 import type { Color3 } from '@babylonjs/core/Maths/math.color'
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
 import type { BloomPipelineController } from './bloom-pipeline-types'
-import type { CabinetLight, ShardParticle } from '../game-elements/types'
+import type { CabinetLight } from '../game-elements/types'
 import { PALETTE, QualityTier } from '../game-elements/visual-language'
 import { BallType, EffectsConfig } from '../config'
 import type { PhysicsBody } from '../core/physics-api'
@@ -50,7 +50,6 @@ export class EffectsSystem {
   private audioEffects: AudioEffects | null = null
   private bloomPipeline: BloomPipelineController | null = null
   private bloomEnergy = 0
-  private shards: ShardParticle[] = []
   private cabinetLights: CabinetLight[] = []
   private decorativeLights: (StandardMaterial | PBRMaterial)[] = []
   private currentCabinetColor: string = PALETTE.CYAN
@@ -132,7 +131,7 @@ export class EffectsSystem {
     if (scene.activeCamera) {
       this.cameraEffects = new CameraEffects(scene.activeCamera)
     }
-    this.shardEffects = new ShardEffects(scene, this.shards, this.maxImpactRings)
+    this.shardEffects = new ShardEffects(scene, this.maxImpactRings)
     this.trailEffects = new TrailEffects(scene)
     this.floatingEffects = new FloatingNumberEffects(scene)
     this.ripplesEffects = new RipplesEffects(scene)
@@ -393,13 +392,10 @@ export class EffectsSystem {
 
     this.fresnelRimController.dispose()
 
-    this.trailEffects?.clearFeverTrails()
-    this.shards.forEach((s) => {
-      s.mesh.dispose()
-      s.material.dispose()
-    })
-    this.shards = []
-    this.ripplesEffects?.clear()
+    this.trailEffects?.dispose()
+    this.shardEffects?.dispose()
+    this.ripplesEffects?.dispose()
+    this.floatingEffects?.dispose()
     this.cabinetLights.forEach((l) => {
       l.mesh.dispose()
       l.pointLight.dispose()

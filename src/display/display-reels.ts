@@ -5,7 +5,7 @@
  * Extracted from display.ts for modularity.
  */
 
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
@@ -269,7 +269,7 @@ export class DisplayReelsLayer {
       false
     )
 
-    const mat = new StandardMaterial('displayReelsMat', this.scene)
+    const mat = createStandardMaterial(this.scene, 'displayReelsMat')
     mat.diffuseTexture = this.dynamicTexture
     mat.emissiveColor = Color3.White()
     mat.disableLighting = true

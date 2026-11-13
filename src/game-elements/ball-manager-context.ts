@@ -4,6 +4,7 @@ import type { StandardMaterial } from '@babylonjs/core/Materials/standardMateria
 import type { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import type { TrailMesh } from '@babylonjs/core/Meshes/trailMesh'
 import type { Scene } from '@babylonjs/core/scene'
+import type { TrailMaterialPool } from '../materials/material-trail'
 import type { PhysicsApi, PhysicsBody, PhysicsWorldSink } from '../core/physics-api'
 import type { BallType } from '../config'
 import { getPhysicsTuningValue } from './physics-tuning'
@@ -56,6 +57,8 @@ export interface BallManagerHost {
   matLib: BallMaterialLibrary
   trails: Map<PhysicsBody, TrailMesh>
   trailMaterials: Map<TrailMesh, StandardMaterial>
+  /** Recycles the per-ball trail materials: a ball's trail takes one, its removal hands it back (#524). */
+  trailMaterialPool: TrailMaterialPool
   ballTrails: Map<PhysicsBody, BallTrailData>
   ballDataMap: Map<PhysicsBody, BallData>
   goldBallCount: number

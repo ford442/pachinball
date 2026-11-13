@@ -5,7 +5,7 @@
  * from the main Game class.
  */
 
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh'
@@ -112,7 +112,7 @@ export class GameSystemsInitializer {
     staticSceneChunk.catch(() => undefined) // reported where it is awaited
     await this.game.runCheckpointStage('scene_rendering', () => {
       const skybox = MeshBuilder.CreateBox('skybox', { size: GameConfig.visuals.skyboxSize }, scene)
-      const skyboxMaterial = new StandardMaterial('skyBox', scene)
+      const skyboxMaterial = createStandardMaterial(scene, 'skyBox')
       skyboxMaterial.backFaceCulling = false
       skyboxMaterial.diffuseColor = Color3.Black()
       skyboxMaterial.specularColor = Color3.Black()

@@ -1,4 +1,4 @@
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { getSharedMaterial } from '../../materials/material-basic'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -40,10 +40,11 @@ export class DecorationFactory {
     strut.parent = parent
     strut.position = pos
 
-    const mat = new StandardMaterial(`${name}-mat`, scene)
-    mat.emissiveColor = emissive(PALETTE.CYAN, INTENSITY.NORMAL)
-    mat.diffuseColor = Color3.Black()
-    strut.material = mat
+    // Decoration is static and never writes its material, so identical looks share one (#524).
+    strut.material = getSharedMaterial(scene, 'decorNeonStrut', {
+      emissive: emissive(PALETTE.CYAN, INTENSITY.NORMAL),
+      diffuse: Color3.Black(),
+    })
     return strut
   }
 
@@ -56,9 +57,9 @@ export class DecorationFactory {
     node.parent = parent
     node.position = pos
 
-    const mat = new StandardMaterial(`${name}-mat`, scene)
-    mat.emissiveColor = emissive(PALETTE.MAGENTA, INTENSITY.HIGH)
-    node.material = mat
+    node.material = getSharedMaterial(scene, 'decorTechNode', {
+      emissive: emissive(PALETTE.MAGENTA, INTENSITY.HIGH),
+    })
     return node
   }
 
@@ -76,11 +77,11 @@ export class DecorationFactory {
       Math.random() * 0.6 + 0.4
     )
 
-    const mat = new StandardMaterial(`${name}-mat`, scene)
-    mat.emissiveColor = emissive(tint, INTENSITY.HIGH)
-    mat.diffuseColor = Color3.Black()
-    mat.disableLighting = true
-    crystal.material = mat
+    crystal.material = getSharedMaterial(scene, 'decorHoloCrystal', {
+      emissive: emissive(tint, INTENSITY.HIGH),
+      diffuse: Color3.Black(),
+      unlit: true,
+    })
     return crystal
   }
 
@@ -97,11 +98,11 @@ export class DecorationFactory {
     ring.position = pos
     ring.rotation.x = Math.PI / 2 + (Math.random() - 0.5) * 0.15
 
-    const mat = new StandardMaterial(`${name}-mat`, scene)
-    mat.emissiveColor = emissive(colorHex, INTENSITY.ACTIVE)
-    mat.diffuseColor = Color3.Black()
-    mat.disableLighting = true
-    ring.material = mat
+    ring.material = getSharedMaterial(scene, 'decorNeonRing', {
+      emissive: emissive(colorHex, INTENSITY.ACTIVE),
+      diffuse: Color3.Black(),
+      unlit: true,
+    })
     return ring
   }
 
@@ -138,11 +139,11 @@ export class DecorationFactory {
       }, scene)
 
       wire.parent = parent
-      const mat = new StandardMaterial(`${name}_mat_s${i}`, scene)
-      mat.emissiveColor = emissive(colors[i % colors.length], 0.95 + i * 0.08)
-      mat.diffuseColor = Color3.Black()
-      mat.disableLighting = true
-      wire.material = mat
+      wire.material = getSharedMaterial(scene, 'decorWire', {
+        emissive: emissive(colors[i % colors.length], 0.95 + i * 0.08),
+        diffuse: Color3.Black(),
+        unlit: true,
+      })
       bundle.push(wire)
     }
     return bundle
@@ -156,10 +157,10 @@ export class DecorationFactory {
     panel.parent = parent
     panel.position = pos
 
-    const mat = new StandardMaterial(`${name}-mat`, scene)
-    mat.emissiveColor = emissive(emissiveHex, INTENSITY.NORMAL * 0.7)
-    mat.diffuseColor = new Color3(0.02, 0.02, 0.04)
-    panel.material = mat
+    panel.material = getSharedMaterial(scene, 'decorTechPanel', {
+      emissive: emissive(emissiveHex, INTENSITY.NORMAL * 0.7),
+      diffuse: new Color3(0.02, 0.02, 0.04),
+    })
     return panel
   }
 }

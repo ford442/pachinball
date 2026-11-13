@@ -3,7 +3,7 @@
  */
 
 import type { ShadowRig } from './shadow-rig'
-import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { createStandardMaterial } from '../materials/material-basic'
 import { Color3 } from '@babylonjs/core/Maths/math.color'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
 import { Mesh } from '@babylonjs/core/Meshes/mesh'
@@ -196,7 +196,7 @@ export class GameSceneBuilder {
       const flipperGlow = MeshBuilder.CreateGround('flipperGlow', { width: 10, height: 6 }, scene)
       flipperGlow.position.set(0, -0.95, -7)
       if (this.host.playfieldGroup) flipperGlow.parent = this.host.playfieldGroup
-      const glowMat = new StandardMaterial('flipperGlowMat', scene)
+      const glowMat = createStandardMaterial(scene, 'flipperGlowMat')
       glowMat.diffuseColor = new Color3(0, 0, 0)
       glowMat.emissiveColor = new Color3(0, 0.07, 0.2)
       glowMat.alpha = 0.3
