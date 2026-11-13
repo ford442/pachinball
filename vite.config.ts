@@ -98,8 +98,8 @@ const isBabylonAudio = (id: string) => /node_modules\/@babylonjs\/core\/Audio(V2
  *   in the `babylon-core` chunk; pinning every core module there would pull the lazy targets back
  *   into the boot chunk.
  * - `isAppReachable`: reachable from the entry by static or dynamic imports *without* passing through
- *   `@babylonjs/loaders` (or a dynamic import made by Babylon's unused audio engines). A lazy chunk that is not is only ever fetched by the glTF loader, which is
- *   itself not precached, so it gets a `babylon-lazy-` name and the service worker skips it.
+ *   `@babylonjs/loaders` (or a dynamic import made by Babylon's unused audio engines). A lazy chunk that is not is only ever fetched by the glTF loader on behalf of
+ *   a model extension none of our GLBs uses, so it gets a `babylon-lazy-` name and the service worker skips it.
  * - `isLoaderCore`: a `@babylonjs/loaders` module the app imports, or one those import statically
  *   (the glTF 2.0 loader and its extension registry). Only these go in the `babylon-loaders` chunk;
  *   the extensions the registry `import()`s on demand get chunks of their own.
@@ -149,6 +149,13 @@ function babylonChunkGraph() {
 }
 
 const babylonChunks = babylonChunkGraph()
+
+/**
+ * Lazy glTF-loader chunks fetched on every model load (seen in the network log of a default boot):
+ * the always-on `ExtrasAsMetadata` extension and the PBR material adapter. tests/offline-boot.spec.ts
+ * fails if another one joins them without being precached.
+ */
+const GLTF_ALWAYS_LOADED_CHUNKS = ['ExtrasAsMetadata', 'pbrMaterialLoadingAdapter']
 
 /**
  * Per-track adventure builders are dynamic imports, so each is its own `assets/<file>-<hash>.js`
@@ -256,9 +263,12 @@ export default defineConfig(({ mode, command }) => ({
         chunkFileNames(chunk) {
           const loaderOnly =
             chunk.moduleIds.length > 0 && !chunk.moduleIds.some((id) => babylonChunks.isAppReachable(id))
-          return loaderOnly && chunk.name !== 'babylon-loaders'
-            ? 'assets/babylon-lazy-[name]-[hash].js'
-            : 'assets/[name]-[hash].js'
+          if (!loaderOnly || chunk.name === 'babylon-loaders') return 'assets/[name]-[hash].js'
+          // The glTF loader import()s these for every GLB, extensions or not, so the boot's cabinet
+          // load needs them: they join the precached `babylon-loaders-` family (#519 A2).
+          return GLTF_ALWAYS_LOADED_CHUNKS.some((name) => chunk.name.startsWith(name))
+            ? 'assets/babylon-loaders-[name]-[hash].js'
+            : 'assets/babylon-lazy-[name]-[hash].js'
         },
       },
     },
@@ -326,7 +336,8 @@ export default defineConfig(({ mode, command }) => ({
         // babylon-core exceeds Workbox's 2 MiB default
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         globPatterns: [
-          '**/*.{js,css,html,wasm,svg,png,ogg,env,webp,ico,txt,webmanifest}',
+          // glb: cabinet / insert models (~40 KB) — the default classic cabinet loads one at boot
+          '**/*.{js,css,html,wasm,glb,svg,png,ogg,env,webp,ico,txt,webmanifest}',
         ],
         // Backbox clips (state loops, tracks/, incidents/) stream on demand; their .webp
         // posters are not precached either — only the state posters (attract.png, …) are.
@@ -334,8 +345,9 @@ export default defineConfig(({ mode, command }) => ({
           '**/backbox/**/*.mp4',
           '**/backbox/**/*.webm',
           '**/backbox/**/*.webp',
-          // Classic-cabinet glTF loader — fetched on first classic preset use
-          '**/babylon-loaders-*.js',
+          // The glTF loader core (babylon-loaders-*.js, ~160 KB) IS precached: the default classic
+          // cabinet loads its GLB at boot, so offline it would fall back to the procedural shell
+          // (#519 A2). Only the code behind it that no shipped model uses stays out:
           // Babylon code only the glTF loader imports (extensions, OpenPBR, Gaussian splatting, …)
           '**/babylon-lazy-*.js',
           // Rapier (~2.15 MB): only the explicit `rapier` mode and the fail-closed
@@ -347,8 +359,6 @@ export default defineConfig(({ mode, command }) => ({
           ...trackChunkIgnores,
           // Canvas reel atlas — runtime-cached on first reel use
           '**/reel.png',
-          // Concept art kept in public/ for reference; the game never loads it (~1 MB)
-          '**/concept/**',
         ],
         runtimeCaching: [
           {

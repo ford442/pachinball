@@ -274,11 +274,13 @@ back under the 680 KB budget without raising it (570.9 KB at the time of the bum
 
 - `vite.config.ts` only pins **statically reachable** `@babylonjs/core` modules into `babylon-core`;
   lazily reached ones get their own chunks. Chunks reachable only through `@babylonjs/loaders`
-  (itself not precached), or only through an `import()` made by Babylon's own audio engines (never
+  (on behalf of an extension no shipped GLB uses), or only through an `import()` made by Babylon's own audio engines (never
   run: `audioEngine: false`), are named `babylon-lazy-*` and kept out of the service-worker precache.
 - `babylon-loaders` holds only the loader modules the app imports and their static imports (the
   glTF 2.0 loader and its extension registry, ~160 KB raw). The extensions it `import()`s on demand
   get chunks of their own, so the first cabinet load no longer downloads all of them (~670 KB).
+  `babylon-loaders` itself and the GLBs are precached: the default classic cabinet loads one at boot,
+  so offline it would otherwise fall back to the procedural shell (#519 A2).
 - The cabinet loader imports the glTF 2.0 loader alone and registers the built-in extensions as
   lazy factories (`registerBuiltInGLTFExtensions()`), instead of the `@babylonjs/loaders/glTF`
   barrel that imports all of them. None of the cabinet / insert GLBs list an extension today.

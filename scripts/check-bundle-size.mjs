@@ -117,6 +117,21 @@ function measure() {
     (name) => name && !precachedNames.has(name),
   )
 
+  // Fetched on every default boot but not modulepreloaded, so bootChunks() cannot see them
+  // (#519 A2): the C++ physics pair (`import()` of wasm/PhysicsModule.js + its .wasm), the glTF
+  // loader core (the default `classic` cabinet loads its GLB at boot) and the GLBs themselves.
+  // Missing from the precache, the offline boot either loses the C++ engine or the cabinet.
+  const distRel = (path) => relative(distDir, path).split(/[/\\]/).join('/')
+  const runtimeBootAssets = walk(distDir)
+    .map((f) => distRel(f.path))
+    .filter((rel) =>
+      /^wasm\/PhysicsModule\.(js|wasm)$/.test(rel) ||
+      /^assets\/babylon-loaders-[^/]+\.js$/.test(rel) ||
+      /^models\/.+\.glb$/.test(rel),
+    )
+  const precachedPaths = new Set(precached.map((url) => decodeURIComponent(url).replace(/^\.?\//, '')))
+  const runtimeBootNotPrecached = runtimeBootAssets.filter((rel) => !precachedPaths.has(rel))
+
   // Rapier must stay a lazy, degrade-only chunk.
   const rapierName = rapier ? rapier.split(/[/\\]/).pop() : null
   const indexHtml = readText(join(distDir, 'index.html'))
@@ -139,6 +154,8 @@ function measure() {
     rapierPrecached,
     rapierPreloaded,
     bootNotPrecached,
+    runtimeBootAssets,
+    runtimeBootNotPrecached,
     files: {
       entry: entry ? relative(root, entry) : null,
       initialChunks: initialChunks.map((file) => relative(root, file)),
@@ -192,6 +209,19 @@ if (measured.bootNotPrecached.length > 0) {
   failed = true
 } else {
   console.log('ok  every boot chunk (entry + modulepreloads) is precached')
+}
+if (measured.runtimeBootNotPrecached.length > 0) {
+  console.error(
+    `FAIL  boot asset(s) loaded at runtime but not precached — offline revisit loses them (#519 A2): ` +
+      measured.runtimeBootNotPrecached.join(', '),
+  )
+  failed = true
+} else {
+  const hasWasm = measured.runtimeBootAssets.some((rel) => rel.startsWith('wasm/'))
+  console.log(
+    `ok  runtime boot assets are precached (${measured.runtimeBootAssets.length}` +
+      `${hasWasm ? ', C++ physics pair included' : ', no C++ physics bundle in this build'})`,
+  )
 }
 // Raw dist/ size: what deploy.py uploads. Untoleranced — these are hard caps.
 const distBudget = budget.dist ?? {}
