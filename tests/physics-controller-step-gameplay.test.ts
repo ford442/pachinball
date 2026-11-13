@@ -68,6 +68,28 @@ describe('per-step gameplay (#519 A1)', () => {
   })
 })
 
+describe('plunger spring per tick (determinism-todo item 7)', () => {
+  for (const hz of [30, 60, 144]) {
+    it(`at ${hz} Hz the spring advances once per fixed step, ahead of the engine step`, () => {
+      const t = makeTable(1000 / hz)
+      const order: string[] = []
+      const actions = {
+        handleFlipperLeft: vi.fn(),
+        handleFlipperRight: vi.fn(),
+        handlePlunger: vi.fn(),
+        updatePlungerFrame: vi.fn(() => { order.push('plunger') }),
+      }
+      t.host.physics.step = vi.fn(() => { order.push('step'); return 1 }) as never
+      for (let i = 0; i < hz; i++) t.controller.stepFixed(null, actions as never, null, null)
+      const steps = order.filter((o) => o === 'step').length
+      expect(steps).toBeGreaterThanOrEqual(59)
+      expect(actions.updatePlungerFrame).toHaveBeenCalledTimes(steps)
+      for (const [dt] of actions.updatePlungerFrame.mock.calls as unknown as number[][]) expect(dt).toBeCloseTo(FIXED_TIMESTEP, 12)
+      for (let i = 0; i < order.length; i += 2) expect(order.slice(i, i + 2)).toEqual(['plunger', 'step'])
+    })
+  }
+})
+
 describe('GameSimClock.liveMs', () => {
   it('counts the steps taken since the last advance, like liveSteps', () => {
     let steps = 0

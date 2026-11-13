@@ -260,4 +260,4 @@ TS flipper drive reads — see the caveat in `docs/ASYNC_CHALLENGES_EPIC.md`.
    rejects, headless verifier + golden tape corpus (`tests/replays/`).~~
 6. ~~#444 Slice E: live spectate — fingerprinted tape chunks, a spectator one
    chunk behind; fixed steps do no GPU work.~~
-7. Next: move the remaining per-frame `dt` consumers that push bodies (feeders, plunger spring) onto the tick.
+7. Done: every per-frame `dt` consumer that pushes a body runs once per fixed tick at `FIXED_TIMESTEP` — feeders, captures, caught balls, targets and `adventureMode.update` in `stepGameplay` (#519 A1), gates / traps / launchers in `tickStepMechanisms`, and the plunger spring at the head of `runTick`. The render-frame `sim` phase (`updateSim`) keeps only the dynamic world camera / zone visuals and the map manager, which move no body. Feeder ring / barrel animation and the vibration `Math.random()` only touch meshes.
