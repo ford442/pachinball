@@ -9,7 +9,7 @@
  */
 
 import * as v from 'valibot'
-import { lenient } from './schema-kit'
+import { lenient } from './record-kit'
 
 const finite = () => v.pipe(v.number(), v.finite())
 const stringList = () => v.pipe(v.array(v.unknown()), v.transform((items) => items.filter((s): s is string => typeof s === 'string')))

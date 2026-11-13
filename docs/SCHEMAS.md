@@ -9,7 +9,8 @@ there is no second hand-written description, and nothing is cast
 
 | Module | What it parses | Loads with |
 |--------|----------------|------------|
-| `schema-kit.ts` | Shared helpers: `strict` / `loose` objects, `num` / `intInRange` / `u32`, `lenient`, `withCrossCheck`, `parseWith` / `parseJsonWith`, `canonicalJson` | wherever a schema loads |
+| `record-kit.ts` | Boot helpers for stored records: `parseJsonWith`, `lenient`, `pickDefined`, `isRecord` | boot |
+| `schema-kit.ts` | The authoring kit: `strict` / `loose` objects, `num` / `intInRange` / `u32`, `withCrossCheck`, `parseWith`, issue → `{ path, message }`, `canonicalJson` (re-exports `record-kit`) | with the lazy schemas |
 | `track.ts` | `TrackDefinition` and every segment type; `validateTrackDefinition` | the adventure track loader |
 | `weekly.ts` | `WeeklyMachineDescriptor` shape and envelope (`validateWeeklyMachine` adds the layout checks) | the cascade / machine loaders |
 | `rules.ts` | Machine rules v1 (ball weights / points / fever multipliers, fever threshold, `cascade.weekly`) | the machine loader |
@@ -47,9 +48,21 @@ there is no second hand-written description, and nothing is cast
 
 ## Entry chunk
 
-Only `settings.ts` and `storage.ts`, plus the Valibot functions they use, are
-on the boot path. Track, machine, weekly, rules and arcade schemas load with
-their loaders. `npm run check:bundle` holds the entry inside `bundle-budget.json`.
+Only `record-kit.ts`, `settings.ts`, `storage.ts` and `replay.ts`, plus the
+Valibot functions they use, are on the boot path. Track, machine, weekly,
+rules, profile and arcade schemas load with their loaders; the track JSON
+files are one lazy chunk each (precached: all 29 are ~34 KiB).
+
+Valibot ships as one ES module, and Rollup puts a module in one chunk with
+every export any chunk uses. If nothing intervened, the functions only the lazy
+schemas need (`variant`, `tuple`, `lazy`, `strictObject`, the bound checks)
+would ride in the entry. The `lazySchemaValibot` plugin in `vite.config.ts`
+prevents that. A lazy schema module (anything in `src/schemas/` but the four
+boot modules above, plus `src/arcade/`) resolves `valibot` to a second module
+instance, tree-shaken on its own into `valibot-lazy-*.js`. Valibot schemas are
+plain objects, so schemas from the two instances compose. Keep boot code
+importing `record-kit.ts`, never `schema-kit.ts`. `npm run check:bundle` holds
+the entry inside `bundle-budget.json`.
 
 ## JSON Schema
 

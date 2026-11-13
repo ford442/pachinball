@@ -9,7 +9,7 @@
  */
 
 import * as v from 'valibot'
-import { lenient } from './schema-kit'
+import { lenient } from './record-kit'
 
 const finite = () => v.pipe(v.number(), v.finite())
 

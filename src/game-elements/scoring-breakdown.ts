@@ -1,4 +1,4 @@
-import { parseJsonWith } from '../schemas/schema-kit'
+import { parseJsonWith } from '../schemas/record-kit'
 import { ScoringBreakdownSchema } from '../schemas/storage'
 
 export interface ScoringBreakdownSnapshot {

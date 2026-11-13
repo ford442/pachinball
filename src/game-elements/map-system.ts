@@ -9,7 +9,7 @@ import { API_BASE, apiFetch, isRemoteApiBase } from '../config'
 import { TABLE_MAPS, type TableMapConfig } from '../config/table-maps'
 import { assetUrl } from '../core/asset-urls'
 import * as v from 'valibot'
-import { parseJsonWith, pickDefined } from '../schemas/schema-kit'
+import { parseJsonWith, pickDefined } from '../schemas/record-kit'
 import { MapCacheSchema, RemoteTableMapListSchema, type RemoteTableMap } from '../schemas/storage'
 
 export interface DynamicMapConfig extends TableMapConfig {

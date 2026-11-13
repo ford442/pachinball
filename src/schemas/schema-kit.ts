@@ -8,10 +8,17 @@
  * and an object never reports "Invalid key": an extra key is `unknown field`,
  * a missing one carries the message of the field it is missing.
  *
+ * The authoring kit: only the lazily loaded schemas (track, machine,
+ * weekly, rules, profile, arcade) import it. What boot needs to read stored
+ * records lives in `./record-kit.ts`, so the entry does not carry this.
+ *
  * Pure TS — no Babylon, no DOM.
  */
 
 import * as v from 'valibot'
+import { isRecord } from './record-kit'
+
+export { isRecord, lenient, parseJsonWith, pickDefined } from './record-kit'
 
 /** One validation error: a dotted / indexed path into the value and what is wrong there. */
 export interface SchemaIssue {
@@ -56,19 +63,6 @@ export function toSchemaIssues(issues: readonly v.BaseIssue<unknown>[]): SchemaI
 export function parseWith<S extends AnySchema>(schema: S, raw: unknown): ParseResult<v.InferOutput<S>> {
   const result = v.safeParse(schema, raw)
   return result.success ? { ok: true, value: result.output } : { ok: false, errors: toSchemaIssues(result.issues) }
-}
-
-/** `JSON.parse` + `schema`: null on bad JSON or a failed parse. For `localStorage` and other untrusted text. */
-export function parseJsonWith<S extends AnySchema>(schema: S, text: string | null | undefined): v.InferOutput<S> | null {
-  if (text == null || text === '') return null
-  let raw: unknown
-  try {
-    raw = JSON.parse(text)
-  } catch {
-    return null
-  }
-  const result = v.safeParse(schema, raw)
-  return result.success ? result.output : null
 }
 
 export function formatSchemaIssues(errors: readonly SchemaIssue[]): string {
@@ -178,27 +172,6 @@ export function bool(message = 'must be a boolean') {
   return v.boolean(message)
 }
 
-// ---------------------------------------------------------------------------
-// Lenient records (storage written by older builds)
-// ---------------------------------------------------------------------------
-
-/**
- * An optional field that reads as absent when it holds the wrong type: a
- * stored record from an older build loses that field, not the whole record.
- */
-export function lenient<S extends AnySchema>(schema: S) {
-  return v.fallback(v.optional(schema), undefined)
-}
-
-/** `value` without its `undefined` fields, so spreading it over defaults keeps the defaults. */
-export function pickDefined<T extends object>(value: T): Partial<T> {
-  const out: Partial<T> = {}
-  for (const key of Object.keys(value) as (keyof T)[]) {
-    if (value[key] !== undefined) out[key] = value[key]
-  }
-  return out
-}
-
 /** A string matching `pattern` with no `..` segment (a media path must not climb out of `public/`). */
 export function safePath(pattern: RegExp, message: string) {
   return v.pipe(v.string(message), v.regex(pattern, message), v.check((s) => !s.includes('..'), message))
@@ -209,11 +182,6 @@ export function safePath(pattern: RegExp, message: string) {
 // ---------------------------------------------------------------------------
 
 type AddIssue = (info: { message: string; path?: [v.IssuePathItem, ...v.IssuePathItem[]] }) => void
-
-/** True for a non-null, non-array object. */
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 /** Report `message` at `keys` below the value a `rawCheck` runs on (`[]` = the value itself). */
 export function addIssueAt(addIssue: AddIssue, root: unknown, keys: readonly (string | number)[], message: string): void {

@@ -13,7 +13,7 @@
 import type { TableMapType } from '../config/table-maps'
 import * as v from 'valibot'
 import { apiFetch } from '../config'
-import { parseJsonWith, pickDefined } from '../schemas/schema-kit'
+import { parseJsonWith, pickDefined } from '../schemas/record-kit'
 import { StoredAdventureProgressSchema, type RewardType, type UnlockableReward } from '../schemas/storage'
 
 export type { RewardType, UnlockableReward } from '../schemas/storage'

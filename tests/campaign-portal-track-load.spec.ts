@@ -19,7 +19,7 @@ interface TestGame {
     onPortalEntered: (finalScore: number, goldBalls: number) => void
   }
   levelLoader?: {
-    loadCampaignTrack: (trackId: string, options?: { resetBallToPlunger?: boolean }) => { success: boolean }
+    loadCampaignTrack: (trackId: string, options?: { resetBallToPlunger?: boolean }) => Promise<{ success: boolean }>
   }
   eventBus?: {
     on: (event: string, handler: (payload: unknown) => void) => () => void
@@ -84,7 +84,9 @@ test.describe('Campaign portal → track load E2E', () => {
       supervisor.update(0.1, 55_000)
       const portalOpenBeforeEntry = supervisor.isPortalOpen()
       supervisor.onPortalEntered(55_000, g.sessionGoldBalls ?? 0)
-      await wait(500)
+      // The next track's JSON chunk (and the track schema) load on first use: wait for the switch.
+      for (let waited = 0; waited < 30_000 && adventureMode.getCurrentZone() !== 'PACHINKO_HALL'; waited += 100) await wait(100)
+      await wait(100)
 
       const teardown = adventureMode.getLastTeardownStats?.() ?? null
 

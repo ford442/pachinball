@@ -43,7 +43,7 @@ import {
   type TournamentGhost,
   type TournamentStanding,
 } from '../schemas/arcade'
-import { isRecord, parseJsonWith } from '../schemas/schema-kit'
+import { isRecord, parseJsonWith } from '../schemas/record-kit'
 
 export type {
   ArcadeChallenge,

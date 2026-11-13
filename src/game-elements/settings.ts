@@ -1,6 +1,6 @@
 import { GameConfig } from '../config'
 import type { AudioSourceMode } from '../audio/audio-sample-bank'
-import { parseJsonWith, pickDefined } from '../schemas/schema-kit'
+import { parseJsonWith, pickDefined } from '../schemas/record-kit'
 import { StoredSettingsSchema } from '../schemas/settings'
 
 export type { AudioSourceMode } from '../audio/audio-sample-bank'

@@ -50,6 +50,7 @@ test('Verify Prism Core Visuals', async ({ page }, testInfo) => {
     }
     type ThemeGame = {
       freeMapTestMode?: { loadById?: (id: string) => boolean }
+      adventureMode?: { getCurrentZone?: () => string | null }
       toggleFreeMapTestMode?: () => Promise<void>
       display?: DisplayWithTheme
       cabinetNeonLights?: CabinetLight[]
@@ -64,6 +65,11 @@ test('Verify Prism Core Visuals', async ({ page }, testInfo) => {
     await wait(200)
 
     const load = (id: string) => game.freeMapTestMode?.loadById?.(id) ?? false
+    // A track's JSON chunk loads on first use: wait for the switch, then let the theme apply.
+    const settle = async (id: string) => {
+      for (let waited = 0; waited < 30_000 && game.adventureMode?.getCurrentZone?.() !== id; waited += 100) await wait(100)
+      await wait(400)
+    }
     const readThemeHex = () => {
       const displayHex = game.display?.trackThemePrimary
       if (displayHex) return displayHex
@@ -72,11 +78,11 @@ test('Verify Prism Core Visuals', async ({ page }, testInfo) => {
     }
 
     if (!load('NEON_HELIX')) return { ok: false, reason: 'load-neon-failed' }
-    await wait(400)
+    await settle('NEON_HELIX')
     const neonHex = readThemeHex()
 
     if (!load('CYBER_CORE')) return { ok: false, reason: 'load-cyber-failed' }
-    await wait(400)
+    await settle('CYBER_CORE')
     const cyberHex = readThemeHex()
 
     return {
