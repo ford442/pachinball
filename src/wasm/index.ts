@@ -50,6 +50,7 @@ export {
   contactStarted,
   toWasmContactEvent,
   contactPhaseAt,
+  contactPointXAt,
   createContactRecord,
   decodeContactAt,
   wasmContactEventAt,

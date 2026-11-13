@@ -134,6 +134,11 @@ export function contactPhaseAt(data: ArrayLike<number>, index: number, stride = 
   return raw === ContactPhase.Stay || raw === ContactPhase.Exit ? raw : ContactPhase.Enter
 }
 
+/** World-space x of packed contact `index`'s contact point (the voice pan source). One float read, no allocation. */
+export function contactPointXAt(data: ArrayLike<number>, index: number, stride = CONTACT_STRIDE): number {
+  return data[index * stride + 5] ?? 0
+}
+
 /** A zeroed record for `decodeContactAt` / `decodeContactBuffer(…, out)` to fill. */
 export function createContactRecord(): PhysicsContact {
   return {
