@@ -44,7 +44,7 @@ import {
   formatTrackValidationErrors,
   TRACK_SCHEMA_VERSION,
   type TrackDefinition,
-} from '../src/adventure/track-schema'
+} from '../src/schemas/track'
 import { compileTrackDefinition } from '../src/adventure/track-compiler'
 
 const TRACK_DATA_DIR = join(

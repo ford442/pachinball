@@ -8,7 +8,8 @@
  *   - bumper offsets from the canonical set, inside a tested envelope;
  *   - which of the five existing feeders are armed.
  *
- * The result is a `WeeklyMachineDescriptor`: plain JSON, validated the way a
+ * The result is a `WeeklyMachineDescriptor`: plain JSON whose shape and
+ * envelope are a Valibot schema (`src/schemas/weekly.ts`), validated the way a
  * track definition is (`validateWeeklyMachine`, like `validateTrackDefinition`).
  * An offset outside the envelope is rejected, never clamped; the generator
  * only ever draws offsets that pass. The table builds it through the same
@@ -33,63 +34,30 @@ import {
   type FeederKey,
   type TableLayout,
 } from './daily-cascade-layout'
+import { parseWith, type SchemaIssue } from '../schemas/schema-kit'
+import {
+  WEEKLY_ENVELOPE,
+  WEEKLY_FIELD_BOUNDS,
+  WEEKLY_GRID,
+  WEEKLY_MACHINE_VERSION,
+  WeeklyMachineSchema,
+  type WeeklyBumperOffset,
+  type WeeklyMachineDescriptor,
+} from '../schemas/weekly'
 
-export const WEEKLY_MACHINE_VERSION = 1
+export {
+  WEEKLY_ENVELOPE,
+  WEEKLY_MACHINE_VERSION,
+  WeeklyMachineSchema,
+  type WeeklyBumperOffset,
+  type WeeklyMachineDescriptor,
+  type WeeklyPinFieldDescriptor,
+} from '../schemas/weekly'
 
-/** Offsets, keep-outs and the dropout rate live on this grid (a power of two), so they survive JSON exactly. */
-const GRID = 64
+const GRID = WEEKLY_GRID
+const { minX: FIELD_MIN_X, maxX: FIELD_MAX_X, minZ: FIELD_MIN_Z, maxZ: FIELD_MAX_Z } = WEEKLY_FIELD_BOUNDS
 
-/** The tested envelope. Everything the generator draws, and everything the validator accepts, is inside it. */
-export const WEEKLY_ENVELOPE = {
-  rows: { min: 8, max: 12 },
-  cols: { min: 11, max: 15 },
-  /** Fraction of slots the seeded hash removes: 12.5 % – 37.5 %. */
-  dropout: { min: 8 / GRID, max: 24 / GRID },
-  /** A bumper may move this far from its canonical spot along each axis. */
-  bumperOffsetMax: 1,
-  keepOuts: { maxCount: 3, minWidth: 1, maxWidth: 3, minHeight: 3, maxHeight: 10 },
-  armedFeeders: { min: 2, max: 4 },
-  /** Fewer resolved pins than this is not a pachinko field. */
-  minPins: 40,
-  /** Clear space between two bumpers' rims. */
-  bumperGap: 0.5,
-} as const
-
-/** Wall of the field the extra keep-outs must stay inside (the lattice's own footprint). */
-const FIELD_MIN_X = LAYOUT_CONSTANTS.fieldCenter.x - LAYOUT_CONSTANTS.fieldWidth / 2
-const FIELD_MAX_X = LAYOUT_CONSTANTS.fieldCenter.x + LAYOUT_CONSTANTS.fieldWidth / 2
-const FIELD_MIN_Z = LAYOUT_CONSTANTS.fieldCenter.z - LAYOUT_CONSTANTS.fieldHeight / 2
-const FIELD_MAX_Z = LAYOUT_CONSTANTS.fieldCenter.z + LAYOUT_CONSTANTS.fieldHeight / 2
-
-export interface WeeklyBumperOffset {
-  dx: number
-  dz: number
-}
-
-export interface WeeklyPinFieldDescriptor {
-  rows: number
-  cols: number
-  /** Fraction of slots removed by the seeded hash. */
-  dropout: number
-  dropoutSeed: number
-  /** Rectangles, beyond the table's own keep-outs, the pins stay out of. */
-  keepOuts: PinKeepOut[]
-}
-
-export interface WeeklyMachineDescriptor {
-  schemaVersion: typeof WEEKLY_MACHINE_VERSION
-  seed: number
-  pinField: WeeklyPinFieldDescriptor
-  /** One offset per `CANONICAL_BUMPERS` entry, in order. */
-  bumpers: WeeklyBumperOffset[]
-  /** Which feeders are armed. */
-  feeders: Record<FeederKey, boolean>
-}
-
-export interface WeeklyMachineIssue {
-  path: string
-  message: string
-}
+export type WeeklyMachineIssue = SchemaIssue
 
 export type WeeklyMachineValidation =
   | { ok: true; descriptor: WeeklyMachineDescriptor; layout: TableLayout }
@@ -98,162 +66,6 @@ export type WeeklyMachineValidation =
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-const onGrid = (value: number): boolean => Number.isInteger(value * GRID)
-
-function rejectUnknownKeys(
-  obj: Record<string, unknown>,
-  allowed: readonly string[],
-  path: string,
-  errors: WeeklyMachineIssue[],
-): void {
-  for (const key of Object.keys(obj)) {
-    if (!allowed.includes(key)) errors.push({ path: path ? `${path}.${key}` : key, message: 'unknown field' })
-  }
-}
-
-function checkInt(
-  value: unknown,
-  range: { min: number; max: number },
-  path: string,
-  errors: WeeklyMachineIssue[],
-): void {
-  if (!Number.isInteger(value) || (value as number) < range.min || (value as number) > range.max) {
-    errors.push({ path, message: `must be an integer in [${range.min}, ${range.max}]` })
-  }
-}
-
-function checkGrid(
-  value: unknown,
-  range: { min: number; max: number },
-  path: string,
-  errors: WeeklyMachineIssue[],
-): value is number {
-  if (!isFiniteNumber(value)) {
-    errors.push({ path, message: 'must be a finite number' })
-    return false
-  }
-  if (!onGrid(value)) {
-    errors.push({ path, message: `must be a multiple of 1/${GRID}` })
-    return false
-  }
-  if (value < range.min || value > range.max) {
-    errors.push({ path, message: `${value} is outside the envelope [${range.min}, ${range.max}]` })
-    return false
-  }
-  return true
-}
-
-function validateShape(raw: unknown): { errors: WeeklyMachineIssue[]; descriptor: WeeklyMachineDescriptor | null } {
-  const errors: WeeklyMachineIssue[] = []
-  if (!isPlainObject(raw)) {
-    return { errors: [{ path: '', message: 'descriptor must be an object' }], descriptor: null }
-  }
-  rejectUnknownKeys(raw, ['schemaVersion', 'seed', 'pinField', 'bumpers', 'feeders'], '', errors)
-
-  if (raw.schemaVersion !== WEEKLY_MACHINE_VERSION) {
-    errors.push({ path: 'schemaVersion', message: `must be ${WEEKLY_MACHINE_VERSION}` })
-  }
-  if (!Number.isInteger(raw.seed) || (raw.seed as number) < 0 || (raw.seed as number) > 0xffffffff) {
-    errors.push({ path: 'seed', message: 'must be a u32' })
-  }
-
-  const field = raw.pinField
-  if (!isPlainObject(field)) {
-    errors.push({ path: 'pinField', message: 'must be an object' })
-  } else {
-    rejectUnknownKeys(field, ['rows', 'cols', 'dropout', 'dropoutSeed', 'keepOuts'], 'pinField', errors)
-    checkInt(field.rows, WEEKLY_ENVELOPE.rows, 'pinField.rows', errors)
-    checkInt(field.cols, WEEKLY_ENVELOPE.cols, 'pinField.cols', errors)
-    checkGrid(field.dropout, WEEKLY_ENVELOPE.dropout, 'pinField.dropout', errors)
-    if (!Number.isInteger(field.dropoutSeed) || (field.dropoutSeed as number) < 0 || (field.dropoutSeed as number) > 0xffffffff) {
-      errors.push({ path: 'pinField.dropoutSeed', message: 'must be a u32' })
-    }
-    if (!Array.isArray(field.keepOuts)) {
-      errors.push({ path: 'pinField.keepOuts', message: 'must be an array' })
-    } else {
-      if (field.keepOuts.length > WEEKLY_ENVELOPE.keepOuts.maxCount) {
-        errors.push({
-          path: 'pinField.keepOuts',
-          message: `at most ${WEEKLY_ENVELOPE.keepOuts.maxCount} extra keep-outs`,
-        })
-      }
-      field.keepOuts.forEach((k: unknown, i: number) => validateKeepOut(k, `pinField.keepOuts[${i}]`, errors))
-    }
-  }
-
-  if (!Array.isArray(raw.bumpers)) {
-    errors.push({ path: 'bumpers', message: 'must be an array' })
-  } else {
-    if (raw.bumpers.length !== CANONICAL_BUMPERS.length) {
-      errors.push({ path: 'bumpers', message: `needs exactly ${CANONICAL_BUMPERS.length} offsets, got ${raw.bumpers.length}` })
-    }
-    const range = { min: -WEEKLY_ENVELOPE.bumperOffsetMax, max: WEEKLY_ENVELOPE.bumperOffsetMax }
-    raw.bumpers.forEach((b: unknown, i: number) => {
-      const path = `bumpers[${i}]`
-      if (!isPlainObject(b)) {
-        errors.push({ path, message: 'must be an object' })
-        return
-      }
-      rejectUnknownKeys(b, ['dx', 'dz'], path, errors)
-      checkGrid(b.dx, range, `${path}.dx`, errors)
-      checkGrid(b.dz, range, `${path}.dz`, errors)
-    })
-  }
-
-  const feeders = raw.feeders
-  if (!isPlainObject(feeders)) {
-    errors.push({ path: 'feeders', message: 'must be an object' })
-  } else {
-    rejectUnknownKeys(feeders, FEEDER_KEYS, 'feeders', errors)
-    let armed = 0
-    for (const key of FEEDER_KEYS) {
-      if (typeof feeders[key] !== 'boolean') errors.push({ path: `feeders.${key}`, message: 'must be a boolean' })
-      else if (feeders[key]) armed++
-    }
-    if (armed < WEEKLY_ENVELOPE.armedFeeders.min || armed > WEEKLY_ENVELOPE.armedFeeders.max) {
-      errors.push({
-        path: 'feeders',
-        message: `${armed} armed; must be ${WEEKLY_ENVELOPE.armedFeeders.min}–${WEEKLY_ENVELOPE.armedFeeders.max}`,
-      })
-    }
-  }
-
-  return { errors, descriptor: errors.length === 0 ? (raw as unknown as WeeklyMachineDescriptor) : null }
-}
-
-function validateKeepOut(raw: unknown, path: string, errors: WeeklyMachineIssue[]): void {
-  if (!isPlainObject(raw)) {
-    errors.push({ path, message: 'must be an object' })
-    return
-  }
-  rejectUnknownKeys(raw, ['minX', 'maxX', 'minZ', 'maxZ'], path, errors)
-  const { keepOuts } = WEEKLY_ENVELOPE
-  const x = { min: FIELD_MIN_X, max: FIELD_MAX_X }
-  const z = { min: FIELD_MIN_Z, max: FIELD_MAX_Z }
-  const ok =
-    checkGrid(raw.minX, x, `${path}.minX`, errors) &&
-    checkGrid(raw.maxX, x, `${path}.maxX`, errors) &&
-    checkGrid(raw.minZ, z, `${path}.minZ`, errors) &&
-    checkGrid(raw.maxZ, z, `${path}.maxZ`, errors)
-  if (!ok) return
-  const width = (raw.maxX as number) - (raw.minX as number)
-  const height = (raw.maxZ as number) - (raw.minZ as number)
-  if (width < keepOuts.minWidth || width > keepOuts.maxWidth) {
-    errors.push({ path, message: `width ${width} is outside [${keepOuts.minWidth}, ${keepOuts.maxWidth}]` })
-  }
-  if (height < keepOuts.minHeight || height > keepOuts.maxHeight) {
-    errors.push({ path, message: `height ${height} is outside [${keepOuts.minHeight}, ${keepOuts.maxHeight}]` })
-  }
-}
 
 /** The rim-to-rim gaps and table clearances the shape checks cannot see. */
 function validateBumpers(bumpers: readonly BumperSpec[], errors: WeeklyMachineIssue[]): void {
@@ -281,10 +93,10 @@ function validateBumpers(bumpers: readonly BumperSpec[], errors: WeeklyMachineIs
  * Out-of-envelope values are errors; nothing is clamped.
  */
 export function validateWeeklyMachine(raw: unknown): WeeklyMachineValidation {
-  const shape = validateShape(raw)
-  if (!shape.descriptor) return { ok: false, errors: shape.errors }
+  const shape = parseWith(WeeklyMachineSchema, raw)
+  if (!shape.ok) return shape
 
-  const descriptor = shape.descriptor
+  const descriptor = shape.value
   const layout = resolveWeeklyLayout(descriptor)
   const errors: WeeklyMachineIssue[] = []
   validateBumpers(layout.bumpers, errors)

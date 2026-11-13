@@ -15,7 +15,7 @@ import type { Scene } from '@babylonjs/core/scene'
 
 import { TrackBuilder } from '../../src/adventure/track-builder'
 import type { AdventureColliderDesc } from '../../src/adventure/track-collider-descriptors'
-import type { TrackDefinition } from '../../src/adventure/track-schema'
+import type { TrackDefinition } from '../../src/schemas/track'
 import type { TrackInfo } from '../../src/adventure/adventure-track-progression'
 import type { TrackBuilderFn } from '../../src/adventure/manifests/track-manifest-types'
 import { collectUnsupported } from '../../src/game/physics/wasm-adventure-export'

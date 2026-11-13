@@ -44,7 +44,7 @@ import type { TrackPrimitiveContext } from './track-primitives'
 import { COLLISION_GROUP_PRESETS } from '../game-elements/physics'
 import type { AdventureColliderDesc } from './track-collider-descriptors'
 import { TrackColliderEmitter, type EmittedCollider } from './track-collider-emitter'
-import type { TrackDefinition } from './track-schema'
+import type { TrackDefinition } from '../schemas/track'
 import { compileTrackDefinition, type TrackCursor } from './track-compiler'
 import type { TrackBuilderApi } from './track-builder-api'
 

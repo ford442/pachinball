@@ -35,7 +35,7 @@ import {
   validateTrackDefinition,
   type PinLatticeSegment,
   type TrackSegment,
-} from '../src/adventure/track-schema'
+} from '../src/schemas/track'
 import {
   AdventureTrackProgression,
   CAMPAIGN_MAIN_PATH,

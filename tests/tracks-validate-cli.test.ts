@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { validateTrackDefinition } from '../src/adventure/track-schema'
+import { validateTrackDefinition } from '../src/schemas/track'
 import { boxDesc } from '../src/adventure/track-collider-descriptors'
 import { ExportHarnessBuilder, exportReportFor } from './helpers/track-export-harness'
 
