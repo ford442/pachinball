@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "id": "POLYCHROME_VOID",
+  "segments": [
+    {
+      "type": "straight",
+      "width": 6,
+      "length": 10,
+      "inclineDeg": 15,
+      "material": "#FFFFFF",
+      "wallHeight": 0,
+      "friction": 0.5
+    },
+    { "type": "gate", "color": "RED", "offset": { "x": 0, "y": 1, "z": 0 } },
+    {
+      "type": "obstacle",
+      "shape": { "kind": "box", "size": { "x": 4, "y": 0.5, "z": 15 } },
+      "orient": "heading",
+      "collisionColor": "RED",
+      "label": "crimsonWalkway",
+      "material": "#FF0000",
+      "items": [{ "at": { "along": 7.5 } }]
+    },
+    {
+      "type": "scatter",
+      "seedKey": "track:polychrome-void:ghosts",
+      "count": 5,
+      "from": "cursor",
+      "along": { "start": 3, "step": 2.5 },
+      "lateral": { "random": [-1.5, 1.5] },
+      "shape": { "kind": "box", "size": { "x": 1, "y": 1, "z": 1 } },
+      "seat": true,
+      "collisionColor": "BLUE",
+      "label": "blueGhost",
+      "material": "#0000FF"
+    },
+    { "type": "gap", "length": 15, "drop": 0 },
+    { "type": "gap", "length": 4, "drop": 0 },
+    { "type": "gate", "color": "GREEN", "offset": { "x": 0, "y": 2, "z": 0 } },
+    { "type": "gap", "length": 3, "drop": 0 },
+    {
+      "type": "obstacle",
+      "seedKey": "track:polychrome-void:isles",
+      "shape": { "kind": "box", "size": { "x": 2, "y": 0.5, "z": 2 } },
+      "label": "emeraldIsle",
+      "variants": [
+        [
+          { "at": { "lateral": -1.5 }, "collisionColor": "RED", "material": "#FF0000" },
+          { "at": { "lateral": 1.5 }, "collisionColor": "GREEN", "material": "#00FF00" }
+        ],
+        [
+          { "at": { "lateral": -1.5 }, "collisionColor": "GREEN", "material": "#00FF00" },
+          { "at": { "lateral": 1.5 }, "collisionColor": "RED", "material": "#FF0000" }
+        ]
+      ]
+    },
+    { "type": "gap", "length": 3, "drop": 0 },
+    {
+      "type": "obstacle",
+      "seedKey": "track:polychrome-void:isles",
+      "shape": { "kind": "box", "size": { "x": 2, "y": 0.5, "z": 2 } },
+      "label": "emeraldIsle",
+      "variants": [
+        [
+          { "at": { "lateral": -1.5 }, "collisionColor": "RED", "material": "#FF0000" },
+          { "at": { "lateral": 1.5 }, "collisionColor": "GREEN", "material": "#00FF00" }
+        ],
+        [
+          { "at": { "lateral": -1.5 }, "collisionColor": "GREEN", "material": "#00FF00" },
+          { "at": { "lateral": 1.5 }, "collisionColor": "RED", "material": "#FF0000" }
+        ]
+      ]
+    },
+    { "type": "gap", "length": 3, "drop": 0 },
+    {
+      "type": "obstacle",
+      "seedKey": "track:polychrome-void:isles",
+      "shape": { "kind": "box", "size": { "x": 2, "y": 0.5, "z": 2 } },
+      "label": "emeraldIsle",
+      "variants": [
+        [
+          { "at": { "lateral": -1.5 }, "collisionColor": "RED", "material": "#FF0000" },
+          { "at": { "lateral": 1.5 }, "collisionColor": "GREEN", "material": "#00FF00" }
+        ],
+        [
+          { "at": { "lateral": -1.5 }, "collisionColor": "GREEN", "material": "#00FF00" },
+          { "at": { "lateral": 1.5 }, "collisionColor": "RED", "material": "#FF0000" }
+        ]
+      ]
+    },
+    { "type": "gap", "length": 3, "drop": 0 },
+    {
+      "type": "obstacle",
+      "seedKey": "track:polychrome-void:isles",
+      "shape": { "kind": "box", "size": { "x": 2, "y": 0.5, "z": 2 } },
+      "label": "emeraldIsle",
+      "variants": [
+        [
+          { "at": { "lateral": -1.5 }, "collisionColor": "RED", "material": "#FF0000" },
+          { "at": { "lateral": 1.5 }, "collisionColor": "GREEN", "material": "#00FF00" }
+        ],
+        [
+          { "at": { "lateral": -1.5 }, "collisionColor": "GREEN", "material": "#00FF00" },
+          { "at": { "lateral": 1.5 }, "collisionColor": "RED", "material": "#FF0000" }
+        ]
+      ]
+    },
+    { "type": "gap", "length": 3, "drop": 0 },
+    {
+      "type": "obstacle",
+      "seedKey": "track:polychrome-void:isles",
+      "shape": { "kind": "box", "size": { "x": 2, "y": 0.5, "z": 2 } },
+      "label": "emeraldIsle",
+      "variants": [
+        [
+          { "at": { "lateral": -1.5 }, "collisionColor": "RED", "material": "#FF0000" },
+          { "at": { "lateral": 1.5 }, "collisionColor": "GREEN", "material": "#00FF00" }
+        ],
+        [
+          { "at": { "lateral": -1.5 }, "collisionColor": "GREEN", "material": "#00FF00" },
+          { "at": { "lateral": 1.5 }, "collisionColor": "RED", "material": "#FF0000" }
+        ]
+      ]
+    },
+    { "type": "gap", "length": 3, "drop": 0 },
+    { "type": "gate", "color": "BLUE" },
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": 360,
+      "inclineDeg": -10,
+      "width": 6,
+      "wallHeight": 1,
+      "material": "#0000FF",
+      "segments": 20
+    },
+    { "type": "bucket", "material": "#FFFFFF", "at": { "along": 4 } }
+  ]
+}

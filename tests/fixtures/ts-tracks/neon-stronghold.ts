@@ -1,0 +1,166 @@
+/**
+ * Neon Stronghold Track
+ * 
+ * A fortress-themed track with drawbridges, portcullis gates, and courtyards.
+ */
+
+import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import type { TrackBuilderApi } from '../../../src/adventure/track-builder-api'
+import { boxDesc, cylinderDesc } from '../../../src/adventure/track-collider-descriptors'
+
+export function buildNeonStronghold(builder: TrackBuilderApi): void {
+  const stoneMat = builder.getTrackMaterial("#2F2F2F")
+  const neonMat = builder.getTrackMaterial("#0088FF")
+
+  const {
+    currentStartPos,
+    scene,
+    adventureTrack,
+    adventureBodies,
+    kinematicBindings,
+    animatedObstacles,
+  } = builder
+
+  let currentPos = currentStartPos.clone()
+  let heading = 0
+
+  // 1. The Approach
+  const approachLen = 15
+  const approachIncline = (10 * Math.PI) / 180
+  currentPos = builder.addStraightRamp(currentPos, heading, 6, approachLen, approachIncline, stoneMat)
+
+  // 2. The Drawbridge
+  const moatLen = 6
+  const jumpHeight = 2.0
+
+  const waterPos = currentPos.clone()
+  waterPos.y -= 3.0
+  const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+  const waterCenter = waterPos.add(forward.scale(moatLen / 2))
+
+  if (builder.hasWorld) {
+    const water = MeshBuilder.CreateBox("moatWater", { width: 10, height: 1, depth: moatLen }, scene)
+    water.position.copyFrom(waterCenter)
+    water.material = neonMat
+    adventureTrack.push(water)
+  }
+
+  currentPos = currentPos.add(forward.scale(moatLen))
+  currentPos.y += jumpHeight
+
+  // 3. The Gatehouse
+  const gatehouseLen = 18
+  const gatehouseWidth = 4
+  const gatehouseStart = currentPos.clone()
+
+  currentPos = builder.addStraightRamp(currentPos, heading, gatehouseWidth, gatehouseLen, 0, stoneMat, 2.0)
+
+  // Portcullis Gates
+  if (builder.hasWorld) {
+    const gateCount = 3
+    const gateSpacing = 4.0
+    const startDist = 3.0
+    const gateWidth = gatehouseWidth
+    const gateHeight = 3.0
+    const gateDepth = 0.5
+
+    for (let i = 0; i < gateCount; i++) {
+      const dist = startDist + i * gateSpacing
+      const pos = gatehouseStart.add(forward.scale(dist))
+
+      const floorY = pos.y
+      const midY = floorY + gateHeight / 2 + 1.25
+      const amp = 1.25
+      const basePos = new Vector3(pos.x, midY, pos.z)
+
+      const gate = MeshBuilder.CreateBox("portcullis", { width: gateWidth, height: gateHeight, depth: gateDepth }, scene)
+      gate.position.copyFrom(basePos)
+      gate.rotation.y = heading
+      gate.material = neonMat
+      adventureTrack.push(gate)
+
+      const q = Quaternion.FromEulerAngles(0, heading, 0)
+      const { body } = builder.emitCollider(
+        boxDesc(
+          { x: basePos.x, y: basePos.y, z: basePos.z },
+          { x: gateWidth / 2, y: gateHeight / 2, z: gateDepth / 2 },
+          {
+            rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+            motion: 'kinematic-position',
+            label: 'strongholdGate',
+          }
+        )
+      )
+      adventureBodies.push(body)
+
+      animatedObstacles.push({
+        body,
+        mesh: gate,
+        type: 'PISTON',
+        basePos,
+        frequency: 2.0,
+        amplitude: amp,
+        phase: i * 1.5
+      })
+    }
+  }
+
+  // 4. The Courtyard
+  const courtRadius = 10
+  const courtSpeed = 0.5
+  const courtCenter = currentPos.add(forward.scale(courtRadius + 1))
+
+  builder.createRotatingPlatform(courtCenter, courtRadius, courtSpeed, stoneMat)
+
+  if (builder.hasWorld && adventureBodies.length > 0) {
+    const platformBody = adventureBodies[adventureBodies.length - 1]
+    const turretCount = 2
+    const turretDist = 6.0
+
+    for (let i = 0; i < turretCount; i++) {
+      const angle = i * Math.PI
+      const turretHeight = 2.0
+      const turretRadius = 1.0
+
+      const turret = MeshBuilder.CreateCylinder("turret", { diameter: turretRadius * 2, height: turretHeight }, scene)
+      const binding = kinematicBindings.find(b => b.body === platformBody)
+      if (binding) {
+        turret.parent = binding.mesh
+        const cx = Math.sin(angle) * turretDist
+        const cz = Math.cos(angle) * turretDist
+        turret.position.set(cx, turretHeight / 2 + 0.25, cz)
+        turret.material = neonMat
+
+        builder.attachCollider(
+          platformBody,
+          cylinderDesc(
+            { x: cx, y: turretHeight / 2 + 0.25, z: cz },
+            turretHeight / 2,
+            turretRadius,
+            { label: 'turret' }
+          )
+        )
+      }
+    }
+  }
+
+  // 5. The Keep
+  const keepRadius = 8
+  const keepAngle = (270 * Math.PI) / 180
+  const keepIncline = -(20 * Math.PI) / 180
+
+  const keepStart = courtCenter.add(forward.scale(courtRadius + 1))
+  currentPos = keepStart
+
+  currentPos = builder.addCurvedRamp(currentPos, heading, keepRadius, keepAngle, keepIncline, 6, 2.0, stoneMat, 20)
+  heading += keepAngle
+
+  // 6. The Throne
+  const goalPos = currentPos.clone()
+  goalPos.y -= 1
+  const goalForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+  const finalGoalPos = goalPos.add(goalForward.scale(4))
+
+  builder.createBasin(finalGoalPos, neonMat)
+}

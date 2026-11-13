@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "id": "NEURAL_NETWORK",
+  "segments": [
+    { "type": "straight", "width": 6, "length": 12, "inclineDeg": 25, "material": "#FFFFFF" },
+    { "type": "mark", "name": "fork" },
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": 45,
+      "inclineDeg": 0,
+      "width": 2,
+      "wallHeight": 0,
+      "material": "#FF0000",
+      "segments": 10
+    },
+    { "type": "turn", "deltaHeadingDeg": -90 },
+    { "type": "straight", "width": 2, "length": 5, "inclineDeg": 0, "material": "#FF0000" },
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": -45,
+      "inclineDeg": 0,
+      "width": 2,
+      "wallHeight": 0,
+      "material": "#FF0000",
+      "segments": 10
+    },
+    { "type": "mark", "name": "left" },
+    { "type": "jump", "to": "fork" },
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": -45,
+      "inclineDeg": 0,
+      "width": 6,
+      "wallHeight": 1,
+      "material": "#FFFFFF",
+      "segments": 10
+    },
+    { "type": "turn", "deltaHeadingDeg": 90 },
+    { "type": "straight", "width": 6, "length": 5, "inclineDeg": 0, "material": "#FFFFFF" },
+    {
+      "type": "obstacle",
+      "shape": { "kind": "sphere", "diameter": 1 },
+      "label": "cellBody",
+      "material": "#FF0000",
+      "items": [{ "at": { "from": "rampStart", "along": 2.5, "up": [0.5] } }]
+    },
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": 45,
+      "inclineDeg": 0,
+      "width": 6,
+      "wallHeight": 1,
+      "material": "#FFFFFF",
+      "segments": 10
+    },
+    { "type": "mark", "name": "right" },
+    { "type": "jump", "midpoint": ["left", "right"], "headingOf": "fork" },
+    {
+      "type": "obstacle",
+      "shape": { "kind": "box", "size": { "x": 4, "y": 1, "z": 4 } },
+      "orient": "heading",
+      "material": "#FF0000",
+      "label": "synapticBridge",
+      "motion": { "kind": "piston", "frequency": 2, "phase": 0, "travel": [0, -2] },
+      "items": [{ "at": { "along": 3 } }]
+    },
+    { "type": "gap", "length": 6, "drop": 0 },
+    { "type": "straight", "width": 10, "length": 20, "inclineDeg": 0, "material": "#FFFFFF" },
+    {
+      "type": "obstacle",
+      "shape": { "kind": "box", "size": { "x": 10, "y": 2, "z": 20 } },
+      "orient": "heading",
+      "zone": { "kind": "damping", "damping": 2 },
+      "label": "dendriteForestDamping",
+      "items": [{ "at": { "from": "rampStart", "along": 10, "up": [0.5] } }]
+    },
+    {
+      "type": "scatter",
+      "seedKey": "track:neural-network:cilia",
+      "count": 50,
+      "along": { "random": [1, 19] },
+      "lateral": { "random": [-4.5, 4.5] },
+      "shape": { "kind": "cylinder", "diameter": 0.2, "height": 2 },
+      "seat": true,
+      "label": "cilia",
+      "material": "#FF0000"
+    },
+    { "type": "bucket", "material": "#FFFFFF", "offset": { "x": 0, "y": -2, "z": 2 } }
+  ]
+}

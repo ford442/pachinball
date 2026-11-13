@@ -5,20 +5,34 @@
  * can stub the surface without loading the engine.
  */
 
-import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial'
-import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial'
+import { Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector'
+import { boxDesc } from './track-collider-descriptors'
 import type {
   MaterialRef,
   PinLatticeSegment,
   TrackDefinition,
   TrackSegment,
 } from '../schemas/track'
-import { isMaterialRole } from '../schemas/track'
-import type { TrackMaterialRole } from './track-theme-profiles'
+import { isMaterialRole, PBR_MATERIAL_PREFIX } from './track-material-roles'
 import type { PinFieldSpec } from '../core/pin-field'
 import { pinFieldOccupancy } from '../core/pin-field'
-import type { ForceFieldSpace } from './track-collider-descriptors'
+import type { SeededRng } from '../core/seeded-rng'
+import type { TrackBuilderApi, TrackMaterial } from './track-builder-api'
+import {
+  buildArcPylon,
+  buildDecor,
+  buildObstacle,
+  buildPinRows,
+  buildScatter,
+  buildSpinnerParts,
+  degToRad,
+  placementPoint,
+  rampForward,
+  rampNormal,
+  type CursorMark,
+  type ElementContext,
+  type SpinnerAnchor,
+} from './track-elements'
 import {
   pinLatticeLayout,
   rampQuat,
@@ -28,6 +42,8 @@ import {
   type GeoVec3,
 } from './track-geometry'
 
+export type { TrackBuildApi, TrackBuilderApi, TrackMaterial } from './track-builder-api'
+
 export interface TrackCursor {
   pos: Vector3
   heading: number
@@ -35,123 +51,19 @@ export interface TrackCursor {
   lastRampStart?: Vector3
   lastInclineRad?: number
   lastRampLength?: number
+  lastRampWidth?: number
   /**
    * Heading the most recent straight was built with. `pinLattice` and a
    * ramp-anchored `forceField` use it, so a `turn` after the ramp cannot
    * swing them off it (the older `pinField` / `mill` read the live heading).
    */
   lastRampHeading?: number
-}
-
-export type TrackMaterial = StandardMaterial | PBRMaterial
-
-/**
- * Subset of TrackBuilder methods used by the compiler.
- * Implemented by TrackBuilder.buildFromDefinition; stubbed in unit tests.
- */
-export interface TrackBuildApi {
-  currentStartPos: Vector3
-  getTrackMaterial(colorHex: string): TrackMaterial
-  getThemedTrackMaterial(role: TrackMaterialRole): TrackMaterial
-  addStraightRamp(
-    startPos: Vector3,
-    heading: number,
-    width: number,
-    length: number,
-    inclineRad: number,
-    material: TrackMaterial,
-    wallHeight?: number,
-    friction?: number,
-  ): Vector3
-  addCurvedRamp(
-    startPos: Vector3,
-    startHeading: number,
-    radius: number,
-    totalAngle: number,
-    inclineRad: number,
-    width: number,
-    wallHeight: number,
-    material: TrackMaterial,
-    segments?: number,
-    bankingAngle?: number,
-    friction?: number,
-  ): Vector3
-  createBasin(pos: Vector3, material: TrackMaterial): void
-  addExitPortal(position: Vector3): void
-  createRotatingPlatform(
-    center: Vector3,
-    radius: number,
-    angVelY: number,
-    material: TrackMaterial,
-    hasTeeth?: boolean,
-  ): void
-  createChromaGate(pos: Vector3, color: 'RED' | 'GREEN' | 'BLUE'): void
-  createStaticCylinder(
-    pos: Vector3,
-    diameter: number,
-    height: number,
-    material: TrackMaterial,
-  ): void
-  createPinField(
-    rampStart: Vector3,
-    heading: number,
-    inclineRad: number,
-    rampLength: number,
-    pinSpacing: number,
-    evenOffsets: readonly number[],
-    oddOffsets: readonly number[],
-    pinDiameter: number,
-    pinHeight: number,
-    material: TrackMaterial,
-  ): void
-  createInclinedMill(
-    center: Vector3,
-    radius: number,
-    inclineRad: number,
-    angVelAlongNormal: number,
-    material: TrackMaterial,
-  ): void
-  createResetBasin(pos: Vector3, material: TrackMaterial): void
-  /** One native pin field (a single C++ handle), spec already in world space. */
-  createPinLattice(spec: PinFieldSpec, material: TrackMaterial): void
-  /** One C++ force field box. */
-  createForceField(
-    center: GeoVec3,
-    halfExtents: GeoVec3,
-    rotation: GeoQuat,
-    acceleration: GeoVec3,
-    space: ForceFieldSpace,
-    visible: boolean,
-    material: TrackMaterial,
-  ): void
-  /** One static cone (one C++ handle), base centred on `base`. */
-  createStaticCone(
-    base: GeoVec3,
-    radius: number,
-    halfHeight: number,
-    rotation: GeoQuat,
-    restitution: number,
-    friction: number,
-    material: TrackMaterial,
-  ): void
-  /** One C++ axis-pull well. */
-  createAxisPullWell(
-    center: GeoVec3,
-    radius: number,
-    halfHeight: number,
-    strength: number,
-    enabled: boolean,
-    visible: boolean,
-    material: TrackMaterial,
-  ): void
-}
-
-function degToRad(deg: number): number {
-  return (deg * Math.PI) / 180
+  /** The most recent spinner (what `spinnerParts` attach to). */
+  lastSpinner?: SpinnerAnchor
 }
 
 function resolveMaterial(
-  api: TrackBuildApi,
+  api: TrackBuilderApi,
   ref: MaterialRef | undefined,
   fallbackHex: string,
 ): TrackMaterial {
@@ -161,7 +73,37 @@ function resolveMaterial(
   if (isMaterialRole(ref)) {
     return api.getThemedTrackMaterial(ref)
   }
+  if (ref.startsWith(PBR_MATERIAL_PREFIX)) {
+    return api.getTrackPBRMaterial(ref.slice(PBR_MATERIAL_PREFIX.length))
+  }
   return api.getTrackMaterial(ref)
+}
+
+/** Per-compile state: marks and seeded streams live for the whole track. */
+interface CompileState {
+  marks: Map<string, CursorMark>
+  streams: Map<string, SeededRng>
+}
+
+/** An element context whose materials are resolved once per ref for this segment. */
+function elementContext(api: TrackBuilderApi, def: TrackDefinition, cursor: TrackCursor, state: CompileState): ElementContext {
+  const fallback = defaultHex(def)
+  const cache = new Map<string, TrackMaterial>()
+  return {
+    api,
+    cursor,
+    marks: state.marks,
+    streams: state.streams,
+    material(ref) {
+      const key = ref ?? ''
+      let mat = cache.get(key)
+      if (!mat) {
+        mat = resolveMaterial(api, ref, fallback)
+        cache.set(key, mat)
+      }
+      return mat
+    },
+  }
 }
 
 function defaultHex(def: TrackDefinition): string {
@@ -176,49 +118,34 @@ function rightVec(heading: number): Vector3 {
   return new Vector3(Math.cos(heading), 0, -Math.sin(heading))
 }
 
-/** Unit vector along the ramp surface (heading 0 → (0, -sin, cos)). */
-function rampForward(heading: number, inclineRad: number): Vector3 {
-  const horiz = forward(heading)
-  return new Vector3(
-    horiz.x * Math.cos(inclineRad),
-    -Math.sin(inclineRad),
-    horiz.z * Math.cos(inclineRad),
-  )
-}
-
-/** Ramp surface normal (heading 0 → (0, cos, sin)). */
-function rampNormal(heading: number, inclineRad: number): Vector3 {
-  const horiz = forward(heading)
-  return new Vector3(
-    horiz.x * Math.sin(inclineRad),
-    Math.cos(inclineRad),
-    horiz.z * Math.sin(inclineRad),
-  )
-}
-
 function applyOffset(pos: Vector3, offset?: { x: number; y: number; z: number }): Vector3 {
   if (!offset) return pos.clone()
   return pos.add(new Vector3(offset.x, offset.y, offset.z))
 }
 
 function applySegment(
-  api: TrackBuildApi,
+  api: TrackBuilderApi,
   def: TrackDefinition,
   cursor: TrackCursor,
   segment: TrackSegment,
+  state: CompileState,
 ): void {
   const fallback = defaultHex(def)
+  const elements = () => elementContext(api, def, cursor, state)
 
   switch (segment.type) {
     case 'straight': {
       const mat = resolveMaterial(api, segment.material, fallback)
+      const heading =
+        segment.headingOffsetDeg !== undefined ? cursor.heading + degToRad(segment.headingOffsetDeg) : cursor.heading
       cursor.lastRampStart = cursor.pos.clone()
       cursor.lastInclineRad = degToRad(segment.inclineDeg)
       cursor.lastRampLength = segment.length
-      cursor.lastRampHeading = cursor.heading
+      cursor.lastRampWidth = segment.width
+      cursor.lastRampHeading = heading
       cursor.pos = api.addStraightRamp(
         cursor.pos,
-        cursor.heading,
+        heading,
         segment.width,
         segment.length,
         degToRad(segment.inclineDeg),
@@ -231,6 +158,8 @@ function applySegment(
     case 'curve': {
       const mat = resolveMaterial(api, segment.material, fallback)
       const angleRad = degToRad(segment.angleDeg)
+      const curveStart = cursor.pos.clone()
+      const curveHeading = cursor.heading
       cursor.pos = api.addCurvedRamp(
         cursor.pos,
         cursor.heading,
@@ -244,6 +173,9 @@ function applySegment(
         segment.bankingDeg !== undefined ? degToRad(segment.bankingDeg) : 0,
         segment.friction ?? 0.5,
       )
+      if (segment.conveyor) {
+        curveConveyor(api, curveStart, curveHeading, segment.radius, angleRad, degToRad(segment.inclineDeg), segment.conveyor)
+      }
       cursor.heading += angleRad
       break
     }
@@ -260,7 +192,9 @@ function applySegment(
     case 'bucket': {
       const mat = resolveMaterial(api, segment.material, fallback)
       let pos = cursor.pos.clone()
-      if (segment.offset) {
+      if (segment.at) {
+        pos = placementPoint(elements(), segment.at).pos
+      } else if (segment.offset) {
         pos = pos.add(new Vector3(segment.offset.x, segment.offset.y, segment.offset.z))
       }
       api.createBasin(pos, mat)
@@ -277,19 +211,22 @@ function applySegment(
     case 'spinner': {
       const mat = resolveMaterial(api, segment.material, fallback)
       let center: Vector3
-      if (segment.offset) {
+      if (segment.at) {
+        center = placementPoint(elements(), segment.at).pos
+      } else if (segment.offset) {
         center = applyOffset(cursor.pos, segment.offset)
       } else {
         center = cursor.pos.add(forward(cursor.heading).scale(segment.radius + 1))
         center.y -= 1
       }
-      api.createRotatingPlatform(
-        center,
-        segment.radius,
-        degToRad(segment.angVelDeg),
-        mat,
-        segment.teeth ?? false,
-      )
+      const angVel = segment.angVel ?? degToRad(segment.angVelDeg ?? 0)
+      // A spinner is anchored only when the platform was really built (a world-less build skips it).
+      const bindingsBefore = api.hasWorld ? api.kinematicBindings.length : 0
+      api.createRotatingPlatform(center, segment.radius, angVel, mat, segment.teeth ?? false)
+      const binding = api.hasWorld ? api.kinematicBindings[bindingsBefore] : undefined
+      if (binding) {
+        cursor.lastSpinner = { center, heading: cursor.heading, radius: segment.radius, angVel, body: binding.body, mesh: binding.mesh }
+      }
       if (segment.advance) {
         cursor.pos = center.add(forward(cursor.heading).scale(segment.radius))
       }
@@ -401,6 +338,47 @@ function applySegment(
       )
       break
     }
+    case 'mark': {
+      state.marks.set(segment.name, { pos: cursor.pos.clone(), heading: cursor.heading })
+      break
+    }
+    case 'jump': {
+      const markOf = (name: string): CursorMark => {
+        const mark = state.marks.get(name)
+        if (!mark) throw new Error(`no mark named ${name}`)
+        return mark
+      }
+      if (segment.to !== undefined) {
+        const mark = markOf(segment.to)
+        cursor.pos = mark.pos.clone()
+        cursor.heading = mark.heading
+      } else if (segment.midpoint) {
+        const [a, b] = segment.midpoint
+        cursor.pos = markOf(a).pos.add(markOf(b).pos).scale(0.5)
+      } else if (segment.at) {
+        cursor.pos = placementPoint(elements(), segment.at).pos
+      }
+      if (segment.headingOf !== undefined) cursor.heading = markOf(segment.headingOf).heading
+      break
+    }
+    case 'scatter':
+      buildScatter(elements(), segment)
+      break
+    case 'obstacle':
+      buildObstacle(elements(), segment)
+      break
+    case 'spinnerParts':
+      buildSpinnerParts(elements(), segment)
+      break
+    case 'pinRows':
+      buildPinRows(elements(), segment)
+      break
+    case 'arcPylon':
+      buildArcPylon(elements(), segment)
+      break
+    case 'decor':
+      buildDecor(elements(), segment)
+      break
     case 'axisPull': {
       const mat = resolveMaterial(api, segment.material ?? 'energy', fallback)
       const pos = applyOffset(cursor.pos, segment.offset)
@@ -465,20 +443,63 @@ export function pinLatticeSpec(cursor: TrackCursor, segment: PinLatticeSegment):
 }
 
 /**
+ * Conveyor sensors following a curve (Tesla Tower's induction coil): one box
+ * per chord, walked the way the curve's chords are, each pushing `force`
+ * along its chord and down the incline.
+ */
+function curveConveyor(
+  api: TrackBuilderApi,
+  start: Vector3,
+  startHeading: number,
+  radius: number,
+  angleRad: number,
+  inclineRad: number,
+  spec: { segments: number; force: number; halfWidth: number; halfHeight: number; lift?: number; label?: string },
+): void {
+  if (!api.hasWorld) return
+  const segAngle = angleRad / spec.segments
+  const chordLen = 2 * radius * Math.sin(segAngle / 2)
+  const drop = chordLen * Math.sin(inclineRad)
+  let heading = startHeading
+  let pos = start.clone()
+  for (let i = 0; i < spec.segments; i++) {
+    heading += segAngle / 2
+    const fwd = forward(heading)
+    const center = pos.add(fwd.scale(chordLen / 2))
+    center.y -= drop / 2
+    if (spec.lift !== undefined) center.y += spec.lift
+    const q = Quaternion.FromEulerAngles(inclineRad, heading, 0)
+    const { body: sensor } = api.emitCollider(
+      boxDesc({ x: center.x, y: center.y, z: center.z }, { x: spec.halfWidth, y: spec.halfHeight, z: chordLen / 2 }, {
+        rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+        sensor: true,
+        label: spec.label ?? 'curveConveyor',
+      }),
+    )
+    const force = new Vector3(Math.sin(heading), -Math.sin(inclineRad), Math.cos(heading)).normalize().scale(spec.force)
+    api.conveyorZones.push({ sensor, force })
+    pos = pos.add(fwd.scale(chordLen))
+    pos.y -= drop
+    heading += segAngle / 2
+  }
+}
+
+/**
  * Compile a validated definition into geometry via the build API.
  * Returns the final cursor (useful for unit tests).
  */
 export function compileTrackDefinition(
   def: TrackDefinition,
-  api: TrackBuildApi,
+  api: TrackBuilderApi,
 ): TrackCursor {
   const cursor: TrackCursor = {
     pos: api.currentStartPos.clone(),
     heading: degToRad(def.initialHeadingDeg ?? 0),
   }
+  const state: CompileState = { marks: new Map(), streams: new Map() }
 
   for (const segment of def.segments) {
-    applySegment(api, def, cursor, segment)
+    applySegment(api, def, cursor, segment, state)
   }
 
   return cursor

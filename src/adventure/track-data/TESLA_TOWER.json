@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "TESLA_TOWER",
+  "segments": [
+    {
+      "type": "curve",
+      "radius": 10,
+      "angleDeg": 360,
+      "inclineDeg": 15,
+      "width": 8,
+      "wallHeight": 2,
+      "material": "#CD7F32",
+      "segments": 30,
+      "conveyor": { "segments": 20, "force": 200, "halfWidth": 4, "halfHeight": 1, "lift": 0.5, "label": "coilConveyor" }
+    },
+    {
+      "type": "decor",
+      "items": [{ "at": {}, "to": { "along": 8, "up": [-2] }, "tubeRadius": 0.2, "material": "#00DDFF" }]
+    },
+    { "type": "gap", "length": 8, "drop": 2 },
+    { "type": "straight", "width": 4, "length": 6, "inclineDeg": 0, "material": "#CD7F32" },
+    { "type": "arcPylon", "material": "#00DDFF" },
+    { "type": "turn", "deltaHeadingDeg": -90 },
+    { "type": "straight", "width": 4, "length": 6, "inclineDeg": 0, "material": "#CD7F32" },
+    { "type": "arcPylon", "material": "#00DDFF" },
+    { "type": "turn", "deltaHeadingDeg": 90 },
+    { "type": "straight", "width": 4, "length": 6, "inclineDeg": 0, "material": "#CD7F32" },
+    { "type": "straight", "width": 12, "length": 12, "inclineDeg": 0, "material": "#CD7F32" },
+    {
+      "type": "scatter",
+      "seedKey": "track:tesla-tower:lightning",
+      "count": 3,
+      "along": { "random": [2, 10] },
+      "lateral": { "random": [-4, 4] },
+      "shape": { "kind": "sphere", "diameter": 2 },
+      "up": [2],
+      "restitution": 1.2,
+      "label": "ballLightning",
+      "material": "#00DDFF",
+      "motion": {
+        "kind": "oscillator",
+        "amplitude": 3,
+        "frequency": { "random": [0.5, 1.5] },
+        "phase": { "random": [0, 3.141592653589793] },
+        "axis": "right",
+        "bindMesh": true
+      }
+    },
+    { "type": "bucket", "material": "#CD7F32", "at": { "along": 4 } }
+  ]
+}

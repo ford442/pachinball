@@ -1,0 +1,166 @@
+/**
+ * Polychrome Void Track
+ * 
+ * A color-based puzzle track with chroma gates and colored platforms.
+ */
+
+import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector'
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder'
+import type { TrackBuilderApi } from '../../../src/adventure/track-builder-api'
+import { boxDesc } from '../../../src/adventure/track-collider-descriptors'
+import { getLayoutRng } from '../../../src/core/seeded-rng'
+import { GROUP_RED, GROUP_GREEN, GROUP_BLUE, MASK_ALL } from '../../../src/adventure/adventure-types'
+
+export function buildPolychromeVoid(builder: TrackBuilderApi): void {
+  const whiteMat = builder.getTrackMaterial("#FFFFFF")
+  const redMat = builder.getTrackMaterial("#FF0000")
+  const greenMat = builder.getTrackMaterial("#00FF00")
+  const blueMat = builder.getTrackMaterial("#0000FF")
+
+  const {
+    currentStartPos,
+    scene,
+    adventureTrack,
+    adventureBodies,
+  } = builder
+
+  let currentPos = currentStartPos.clone()
+  let heading = 0
+
+  // 1. Monochrome Injection
+  const entryLen = 10
+  const entryIncline = (15 * Math.PI) / 180
+  currentPos = builder.addStraightRamp(currentPos, heading, 6, entryLen, entryIncline, whiteMat, 0, 0.5)
+
+  // 2. The Red Shift
+  const gatePos = currentPos.clone()
+  gatePos.y += 1.0
+  builder.createChromaGate(gatePos, 'RED')
+
+  // 3. Crimson Walkway
+  const crimLen = 15
+  const crimWidth = 4
+  const crimStart = currentPos.clone()
+
+  const forward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+  const crimCenter = crimStart.add(forward.scale(crimLen / 2))
+
+  const floor = MeshBuilder.CreateBox("crimsonFloor", { width: crimWidth, height: 0.5, depth: crimLen }, scene)
+  floor.position.copyFrom(crimCenter)
+  floor.rotation.y = heading
+  floor.material = redMat
+  adventureTrack.push(floor)
+
+  if (builder.hasWorld) {
+    const q = Quaternion.FromEulerAngles(0, heading, 0)
+    const { body } = builder.emitCollider(
+      boxDesc(
+        { x: crimCenter.x, y: crimCenter.y, z: crimCenter.z },
+        { x: crimWidth / 2, y: 0.25, z: crimLen / 2 },
+        {
+          rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+          membership: GROUP_RED,
+          filter: MASK_ALL,
+          label: 'crimsonWalkway',
+        }
+      )
+    )
+    adventureBodies.push(body)
+
+    // Add Blue Ghosts
+    const ghostCount = 5
+    // Ghost boxes are colliders: seeded lateral offsets.
+    const ghostRng = getLayoutRng('track:polychrome-void:ghosts')
+    for (let i = 0; i < ghostCount; i++) {
+      const dist = 3 + i * 2.5
+      const offset = (ghostRng.next() - 0.5) * (crimWidth - 1)
+      const pos = crimStart.add(forward.scale(dist))
+      const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+      const ghostPos = pos.add(right.scale(offset))
+      ghostPos.y += 0.5
+
+      const ghost = MeshBuilder.CreateBox("blueGhost", { size: 1.0 }, scene)
+      ghost.position.copyFrom(ghostPos)
+      ghost.material = blueMat
+      adventureTrack.push(ghost)
+
+      const { body: ghostBody } = builder.emitCollider(
+        boxDesc({ x: ghostPos.x, y: ghostPos.y, z: ghostPos.z }, { x: 0.5, y: 0.5, z: 0.5 }, {
+          membership: GROUP_BLUE,
+          filter: MASK_ALL,
+          label: 'blueGhost',
+        })
+      )
+      adventureBodies.push(ghostBody)
+    }
+  }
+
+  currentPos = crimStart.add(forward.scale(crimLen))
+
+  // 4. The Green Filter
+  const jumpGap = 4
+  currentPos = currentPos.add(forward.scale(jumpGap))
+  const greenGatePos = currentPos.clone()
+  greenGatePos.y += 2.0
+  builder.createChromaGate(greenGatePos, 'GREEN')
+
+  // 5. Emerald Isles
+  const isleCount = 5
+  const isleSpacing = 3
+  const isleSize = 2
+
+  // Which side is green picks each isle's collision group — physics, so seeded.
+  const isleRng = getLayoutRng('track:polychrome-void:isles')
+  for (let i = 0; i < isleCount; i++) {
+    currentPos = currentPos.add(forward.scale(isleSpacing))
+
+    const offset = 1.5
+    const right = new Vector3(Math.cos(heading), 0, -Math.sin(heading))
+    const greenLeft = isleRng.next() > 0.5
+
+    const p1Pos = currentPos.add(right.scale(-offset))
+    const p2Pos = currentPos.add(right.scale(offset))
+
+    const createIsle = (pos: Vector3, color: 'GREEN' | 'RED') => {
+      const mat = color === 'GREEN' ? greenMat : redMat
+      const grp = color === 'GREEN' ? GROUP_GREEN : GROUP_RED
+
+      const box = MeshBuilder.CreateBox("isle", { width: isleSize, height: 0.5, depth: isleSize }, scene)
+      box.position.copyFrom(pos)
+      box.material = mat
+      adventureTrack.push(box)
+
+      if (builder.hasWorld) {
+        const { body } = builder.emitCollider(
+          boxDesc({ x: pos.x, y: pos.y, z: pos.z }, { x: isleSize / 2, y: 0.25, z: isleSize / 2 }, {
+            membership: grp,
+            filter: MASK_ALL,
+            label: 'emeraldIsle',
+          })
+        )
+        adventureBodies.push(body)
+      }
+    }
+
+    createIsle(p1Pos, greenLeft ? 'GREEN' : 'RED')
+    createIsle(p2Pos, greenLeft ? 'RED' : 'GREEN')
+  }
+
+  // 6. The Blue Shift
+  currentPos = currentPos.add(forward.scale(isleSpacing))
+  builder.createChromaGate(currentPos, 'BLUE')
+
+  // 7. Sapphire Spiral
+  const spiralRadius = 10
+  const spiralAngle = 2 * Math.PI
+  const spiralIncline = -(10 * Math.PI) / 180
+
+  currentPos = builder.addCurvedRamp(currentPos, heading, spiralRadius, spiralAngle, spiralIncline, 6, 1.0, blueMat, 20)
+  heading += spiralAngle
+
+  // 8. Whiteout
+  const goalForward = new Vector3(Math.sin(heading), 0, Math.cos(heading))
+  const goalPos = currentPos.add(goalForward.scale(4))
+
+  builder.createBasin(goalPos, whiteMat)
+}
