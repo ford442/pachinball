@@ -13,14 +13,14 @@ npm run check:unknown-casts # `as unknown as` ratchet: src/adventure holds zero 
 npm run preview    # Preview production build locally
 npm run machine:validate  # Weekly machine golden + next 53 ISO weeks + free seeds; MachineDescriptor: public/machines/*.json, 2027 weekly round-trip, share-link ≤ 8 KB
 npm test           # Run Vitest unit tests
-npx playwright test  # Run E2E / visual regression tests
+npx playwright test  # Run E2E / visual regression tests (every dev-server spec; the nightly workflow runs this, ci.yml the blocking subset + preview/degrade configs)
 npm run compile-db        # Configure-only: writes native/build-native/compile_commands.json for clangd (see root .clangd). Re-run after adding any .cpp. Offline: npm run compile-db -- -DPACHINBALL_BUILD_TESTS=OFF
 npm run check:compile-db  # Fail if that database misses a native TU, mixes -O levels, or contains em++ commands
 npm run test:native       # compile-db + C++ Catch2 tests (incl. golden traces: any numeric drift fails)
 npm run test:native:release  # same suite at -O3 (native/build-release); golden traces must match Debug
 npm run test:native:san   # Catch2 under ASan + UBSan (native/build-san); any report fails
 npm run check:wasm-docs   # Fail if docs/wasm-physics-engine.md drifts from CMake / config / sources
-npm run build:wasm        # Emscripten Release → public/wasm/
+npm run build:wasm        # Emscripten Release → public/wasm/. Fails on any emcc but .emsdk-version (emsdk repo commit: .emsdk-commit); PACHINBALL_ALLOW_EMSDK_MISMATCH=1 for experiments, never for shipped builds or tapes
 npm run test:wasm-parity  # WASM bundle vs native C++ reference
 npm run bench:wasm-flags  # Microbench WASM flag matrix (SIMD/LTO)
 npm run check:dist-wasm   # After `npm run build`: dist/wasm must be byte-identical to public/wasm
@@ -29,6 +29,7 @@ npm run verify:replay     # Golden replay tapes (tests/replays/*.json) in headle
 npm run record:replay     # Re-record stale tapes from their scenarios
 npm run test:verifier     # services/replay-verifier self-test (after `npm run build`)
 npm run release:archive -- --to <dir>  # archive dist/ as a released build for the verifier, with its golden tapes (#490 B)
+node scripts/verify-live.mjs   # after a deploy: live build-info.json = dist/build-info.json, COOP/COEP on index.html + wasm, sw.js and boot assets 200 (.github/workflows/deploy.yml runs it)
 supabase db start && supabase test db  # Arcade DB migrations + pgTAP RLS tests (supabase/)
 ```
 

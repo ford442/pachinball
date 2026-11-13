@@ -14,7 +14,7 @@ import { chromium, expect, test } from '@playwright/test'
 test.describe('WebGPU boot (opt-in)', () => {
   test.skip(process.env.WEBGPU_CI !== '1', 'set WEBGPU_CI=1 to boot the game on the WebGPU backend')
 
-  test('scene_critical builds the LCD grid texture on WebGPU', async () => {
+  test('scene_critical builds the LCD grid texture on WebGPU', async ({ baseURL }) => {
     test.setTimeout(180_000)
     const browser = await chromium.launch({
       channel: 'chromium',
@@ -30,7 +30,9 @@ test.describe('WebGPU boot (opt-in)', () => {
       ],
     })
     try {
-      const page = await (await browser.newContext({ viewport: { width: 640, height: 360 } })).newPage()
+      // Its own browser does not inherit the config's baseURL: without it `goto('/')` is not a URL.
+      const origin = baseURL ?? 'http://localhost:5173'
+      const page = await (await browser.newContext({ baseURL: origin, viewport: { width: 640, height: 360 } })).newPage()
       const errors: string[] = []
       page.on('pageerror', (e) => errors.push(e.message))
       page.on('console', (m) => {

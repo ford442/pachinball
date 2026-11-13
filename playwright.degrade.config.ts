@@ -8,7 +8,9 @@ import { defineConfig, devices } from '@playwright/test'
  * gives way to wasm-owner first, then Rapier. The spec covers both.
  */
 export default defineConfig({
-  testDir: '.',
+  testDir: 'tests',
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
   testMatch: '**/physics-degrade.spec.ts',
   webServer: {
     command: 'rm -rf public/wasm && npm run dev -- --port 4173 --strictPort',
@@ -17,6 +19,7 @@ export default defineConfig({
     timeout: 120_000,
   },
   use: {
+    trace: 'retain-on-failure',
     baseURL: 'http://localhost:4173',
     launchOptions: {
       args: [
@@ -25,6 +28,7 @@ export default defineConfig({
         '--disable-gpu-sandbox',
         '--use-gl=angle',
         '--use-angle=swiftshader',
+        '--enable-unsafe-swiftshader',
       ],
     },
   },

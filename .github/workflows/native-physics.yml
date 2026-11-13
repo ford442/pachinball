@@ -2,7 +2,7 @@
 #
 # native_ctest + sanitizer_ctest are BLOCKING for PRs touching `native/**`.
 # native_release_ctest + native_arm64_ctest run the same Catch2 suite at -O3 and
-# on aarch64 (non-blocking for their first week).
+# on aarch64 (BLOCKING since #519, after a non-blocking first week).
 # wasm_parity is BLOCKING for PRs touching `native/**`, `src/wasm/**`, or wasm tests.
 # replay_goldens is BLOCKING for the same paths plus `src/game/physics/**`,
 # `src/replay/**` and the replay verifier: every tests/replays/*.json tape must
@@ -48,6 +48,8 @@ on:
       - 'tests/helpers/wasm-owner-boot.ts'
       - 'playwright.config.ts'
       - '.emsdk-version'
+      - '.emsdk-commit'
+      - '.github/actions/setup-emsdk/**'
       - 'scripts/build-wasm.sh'
       - 'scripts/build-wasm-colab.sh'
       - 'scripts/bench-wasm-flags.mjs'
@@ -84,6 +86,8 @@ on:
       - 'tests/helpers/wasm-owner-boot.ts'
       - 'playwright.config.ts'
       - '.emsdk-version'
+      - '.emsdk-commit'
+      - '.github/actions/setup-emsdk/**'
       - 'scripts/build-wasm.sh'
       - 'scripts/build-wasm-colab.sh'
       - 'scripts/bench-wasm-flags.mjs'
@@ -110,9 +114,11 @@ permissions:
   contents: read
 
 jobs:
+  # x64 jobs are pinned to ubuntu-24.04: the latest-label runner moved to 26.04 on 2026-11-12,
+  # where Playwright 1.57 cannot install Chromium's dependencies (#519). Move the pin deliberately.
   native_ctest:
     name: Native CTest (Blocking)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -130,12 +136,11 @@ jobs:
 
   # Parity used to be checked only at Debug -O0 on x86-64. The golden traces
   # must come out identical at -O3 and on aarch64, where GCC would fuse a*b+c
-  # into FMA without -ffp-contract=off (#487 slice 0). Both jobs are
-  # non-blocking for their first week; drop continue-on-error after 2026-11-05.
+  # into FMA without -ffp-contract=off (#487 slice 0). Blocking since #519
+  # (both passed every run of their non-blocking week).
   native_release_ctest:
-    name: Native CTest Release -O3 (non-blocking)
-    runs-on: ubuntu-latest
-    continue-on-error: true
+    name: Native CTest Release -O3 (Blocking)
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -146,15 +151,14 @@ jobs:
         run: npm run test:native:release
 
   native_arm64_ctest:
-    name: Native CTest aarch64 (non-blocking)
+    name: Native CTest aarch64 (Blocking)
     runs-on: ubuntu-24.04-arm
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
 
       - name: Install build tools
         run: sudo apt-get update && sudo apt-get install -y cmake g++
@@ -191,33 +195,20 @@ jobs:
 
   wasm_parity:
     name: WASM Build + Parity (Blocking)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: ${{ !contains(github.event.head_commit.message, '[skip wasm-ci]') }}
     steps:
       - uses: actions/checkout@v4
 
-      # One pinned SDK (.emsdk-version) for CI and local builds; bumping the
-      # pin is a reviewed change that re-runs parity and the bench.
-      - name: Cache Emscripten SDK
-        uses: actions/cache@v4
+      - uses: actions/setup-node@v4
         with:
-          path: emsdk
-          # runner.arch: an arm64 job can never restore (or save) an x64 SDK.
-          key: emsdk-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.emsdk-version') }}
+          node-version-file: .nvmrc
+          cache: npm
 
-      - name: Install and activate Emscripten
-        run: |
-          EMSDK_VERSION="$(tr -d '[:space:]' < .emsdk-version)"
-          if [ ! -d emsdk ]; then
-            git clone https://github.com/emscripten-core/emsdk.git
-          fi
-          cd emsdk
-          git pull --ff-only || true
-          ./emsdk install "$EMSDK_VERSION"
-          ./emsdk activate "$EMSDK_VERSION"
-          source ./emsdk_env.sh
-          echo "$(pwd)" >> $GITHUB_PATH
-          emcc --version
+      # One pinned SDK (.emsdk-version, from the emsdk commit in .emsdk-commit) for CI and
+      # local builds; bumping either pin is a reviewed change that re-runs parity and the bench.
+      - name: Set up the pinned Emscripten SDK
+        uses: ./.github/actions/setup-emsdk
 
       - name: Print effective WASM flags
         run: node scripts/print-wasm-flags.mjs
@@ -335,32 +326,20 @@ jobs:
 
   replay_goldens:
     name: Golden Replay Tapes (Blocking)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: ${{ !contains(github.event.head_commit.message, '[skip wasm-ci]') }}
     steps:
       - uses: actions/checkout@v4
 
-      # Same pinned SDK as wasm_parity (.emsdk-version, never `latest`):
-      # build-wasm.sh refuses an emcc that differs from the pin under CI=true.
-      - name: Cache Emscripten SDK
-        uses: actions/cache@v4
+      - uses: actions/setup-node@v4
         with:
-          path: emsdk
-          key: emsdk-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.emsdk-version') }}
+          node-version-file: .nvmrc
+          cache: npm
 
-      - name: Install and activate Emscripten
-        run: |
-          EMSDK_VERSION="$(tr -d '[:space:]' < .emsdk-version)"
-          if [ ! -d emsdk ]; then
-            git clone https://github.com/emscripten-core/emsdk.git
-          fi
-          cd emsdk
-          git pull --ff-only || true
-          ./emsdk install "$EMSDK_VERSION"
-          ./emsdk activate "$EMSDK_VERSION"
-          source ./emsdk_env.sh
-          echo "$(pwd)" >> $GITHUB_PATH
-          emcc --version
+      # Same pinned SDK as wasm_parity (.emsdk-version, never `latest`):
+      # build-wasm.sh refuses an emcc that differs from the pin.
+      - name: Set up the pinned Emscripten SDK
+        uses: ./.github/actions/setup-emsdk
 
       # Before the build: --emit-tsd needs the repo's tsc.
       - name: Install Node deps
@@ -389,3 +368,12 @@ jobs:
         run: |
           npx vite build
           npm run test:verifier
+
+      - name: Upload Playwright results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: replay-goldens-results
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore

@@ -1,0 +1,35 @@
+name: Set up the pinned Emscripten SDK
+description: >
+  Install the SDK in .emsdk-version from an emsdk checkout pinned to the commit in .emsdk-commit
+  (never `latest`, never a moving branch), cached under both pins, and put it on PATH. Callers
+  still `source emsdk/emsdk_env.sh` in the steps that build.
+runs:
+  using: composite
+  steps:
+    # The cache is repo-scoped: every workflow that calls this action shares one entry per pin.
+    - name: Cache Emscripten SDK
+      uses: actions/cache@v4
+      with:
+        path: emsdk
+        # runner.arch: an arm64 job can never restore (or save) an x64 SDK.
+        key: emsdk-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.emsdk-version', '.emsdk-commit') }}
+
+    - name: Install and activate Emscripten
+      shell: bash
+      run: |
+        EMSDK_VERSION="$(tr -d '[:space:]' < .emsdk-version)"
+        EMSDK_COMMIT="$(tr -d '[:space:]' < .emsdk-commit)"
+        if [ ! -d emsdk/.git ]; then
+          git clone --quiet https://github.com/emscripten-core/emsdk.git emsdk
+        fi
+        cd emsdk
+        if [ "$(git rev-parse HEAD)" != "$EMSDK_COMMIT" ]; then
+          git fetch --quiet origin
+          git checkout --quiet --detach "$EMSDK_COMMIT"
+        fi
+        echo "emsdk repo at $(git rev-parse HEAD)"
+        ./emsdk install "$EMSDK_VERSION"
+        ./emsdk activate "$EMSDK_VERSION"
+        source ./emsdk_env.sh
+        echo "$(pwd)" >> "$GITHUB_PATH"
+        emcc --version
