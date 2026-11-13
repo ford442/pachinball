@@ -8,6 +8,8 @@ import type { InputFrame } from '../game-elements/types'
 import { DEFAULT_TABLE_MAP_ID } from '../config/table-maps'
 import type { ReplayCascade } from '../cascade/daily-cascade-state'
 import type { ReplayWorldFingerprint } from './replay-snapshot'
+import * as v from 'valibot'
+import { StoredReplaySchema, type StoredReplay } from '../schemas/replay'
 
 /** `{ wasmSha256 }` for a well-formed binary hash (64 lowercase hex), else nothing. */
 function wasmSha256Of(value: unknown): { wasmSha256?: string } {
@@ -180,17 +182,9 @@ export function decompressInputFrames(compressed: string): InputFrame[] {
  * Fill in `plungerCharge` on a frame from a schema-1 payload (raw `frames`
  * array, boolean plunger only): a fired plunger replays at charge 0.
  */
-export function normalizeInputFrame(frame: InputFrame): InputFrame {
+export function normalizeInputFrame(frame: Omit<InputFrame, 'plungerCharge'> & { plungerCharge?: number | null }): InputFrame {
   const plungerCharge = typeof frame.plungerCharge === 'number' ? frame.plungerCharge : frame.plunger ? 0 : null
   return { ...frame, plungerCharge, plunger: plungerCharge !== null }
-}
-
-function parseReplayCascade(value: unknown): ReplayCascade | undefined {
-  const c = value as Partial<ReplayCascade> | null | undefined
-  if (!c || (c.mode !== 'daily' && c.mode !== 'free') || typeof c.seed !== 'number' || typeof c.seedId !== 'string') {
-    return undefined
-  }
-  return { mode: c.mode, seed: c.seed >>> 0, seedId: c.seedId }
 }
 
 export class ReplayRecorder {
@@ -310,23 +304,10 @@ export class ReplayRecorder {
 
   /** Parse a stored / uploaded payload — a JSON string, or the object an API fetch already parsed. */
   static fromJSON(json: string | object): ReplayPayload {
-    const data = (typeof json === 'string' ? JSON.parse(json) : json) as Partial<ReplayPayload> & {
-      build_id?: string
-      wasm_sha256?: string
-      map_id?: string
-      final_score?: number
-      target_score?: number
-      replay_id?: string
-      challenge_id?: string
-      client_renderer?: 'webgl2' | 'webgpu'
-      compressedFrames?: string
-      compressed_frames?: string
-      snapshot_version?: number
-      static_hash?: string | null
-      pin_field_occupancy?: string | null
-      feeder_tunables_hash?: string
-      initial_snapshot?: string
-    }
+    const raw: unknown = typeof json === 'string' ? JSON.parse(json) : json
+    // Lenient: a field of the wrong type reads as absent and takes its default, like a missing one.
+    const parsed = v.safeParse(StoredReplaySchema, raw)
+    const data: StoredReplay = parsed.success ? parsed.output : {}
 
     let frames: InputFrame[] = Array.isArray(data.frames) ? data.frames.map(normalizeInputFrame) : []
     const compressedStr = data.compressedFrames ?? data.compressed_frames
@@ -356,7 +337,7 @@ export class ReplayRecorder {
       pinFieldOccupancy: data.pinFieldOccupancy !== undefined ? data.pinFieldOccupancy : data.pin_field_occupancy,
       feederTunablesHash: data.feederTunablesHash ?? data.feeder_tunables_hash,
       initialSnapshot: data.initialSnapshot ?? data.initial_snapshot,
-      cascade: parseReplayCascade(data.cascade),
+      cascade: data.cascade ? { ...data.cascade, seed: data.cascade.seed >>> 0 } : undefined,
     }
   }
 

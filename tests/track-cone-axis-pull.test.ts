@@ -30,7 +30,7 @@ import {
   validateTrackDefinition,
   type TrackDefinition,
   type TrackSegment,
-} from '../src/adventure/track-schema'
+} from '../src/schemas/track'
 import { collectUnsupported, exportAdventureCollidersToWasm } from '../src/game/physics/wasm-adventure-export'
 import type { PhysicsApi, PhysicsWorldSink } from '../src/core/physics-api'
 import type { WasmSimEngine } from '../src/wasm/wasm-sim-engine'

@@ -1,0 +1,520 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Pachinball arcade responses",
+  "description": "What the client reads from the arcade service (src/schemas/arcade.ts); docs/api/arcade.openapi.yaml is the contract.",
+  "definitions": {
+    "LeaderboardEntry": {
+      "type": "object",
+      "properties": {
+        "rank": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "score": {
+          "type": "number"
+        },
+        "map_id": {
+          "type": "string"
+        },
+        "adventure_level": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "balls": {
+          "type": "number"
+        },
+        "combo_max": {
+          "type": "number"
+        },
+        "date": {
+          "type": "string"
+        },
+        "replay_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "challenge_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verified": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "rank",
+        "name",
+        "score",
+        "map_id",
+        "balls",
+        "combo_max",
+        "date"
+      ]
+    },
+    "CloudSave": {
+      "type": "object",
+      "properties": {
+        "slot": {
+          "type": "string"
+        },
+        "schema_version": {
+          "type": "number"
+        },
+        "data": {},
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "slot",
+        "schema_version",
+        "data",
+        "updated_at"
+      ]
+    },
+    "Challenge": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "player",
+            "weekly"
+          ],
+          "type": "string"
+        },
+        "seed": {
+          "type": "number"
+        },
+        "map_id": {
+          "type": "string"
+        },
+        "target_score": {
+          "type": "number"
+        },
+        "challenger_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "replay_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "cascade_seed": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "board": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "starts_at": {
+          "type": "string"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "seed",
+        "map_id",
+        "target_score",
+        "starts_at"
+      ]
+    },
+    "GhostTrack": {
+      "type": "object",
+      "properties": {
+        "stride": {
+          "type": "number"
+        },
+        "samples": {
+          "type": "number"
+        },
+        "track": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "stride",
+        "samples",
+        "track"
+      ]
+    },
+    "Tournament": {
+      "type": "object",
+      "properties": {
+        "challenge_id": {
+          "type": "string"
+        },
+        "board": {
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seed": {
+          "type": "number"
+        },
+        "cascade_seed": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "map_id": {
+          "type": "string"
+        },
+        "starts_at": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "frozen_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "enum": [
+            "open",
+            "verifying",
+            "final"
+          ],
+          "type": "string"
+        },
+        "entries": {
+          "type": "number"
+        },
+        "leader_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "leader_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "challenge_id",
+        "board",
+        "title",
+        "seed",
+        "cascade_seed",
+        "map_id",
+        "starts_at",
+        "expires_at",
+        "frozen_at",
+        "status",
+        "entries",
+        "leader_name",
+        "leader_score"
+      ]
+    },
+    "TournamentStanding": {
+      "type": "object",
+      "properties": {
+        "challenge_id": {
+          "type": "string"
+        },
+        "board": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "score": {
+          "type": "number"
+        },
+        "replay_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "played_at": {
+          "type": "string"
+        },
+        "final": {
+          "type": "boolean"
+        },
+        "mine": {
+          "type": "boolean"
+        },
+        "has_ghost": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "challenge_id",
+        "board",
+        "rank",
+        "name",
+        "score",
+        "replay_id",
+        "played_at",
+        "final",
+        "mine",
+        "has_ghost"
+      ]
+    },
+    "TournamentGhost": {
+      "type": "object",
+      "properties": {
+        "stride": {
+          "type": "number"
+        },
+        "samples": {
+          "type": "number"
+        },
+        "track": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "score": {
+          "type": "number"
+        },
+        "replay_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "stride",
+        "samples",
+        "track",
+        "rank",
+        "name",
+        "score",
+        "replay_id"
+      ]
+    },
+    "LiveRun": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "map_id": {
+          "type": "string"
+        },
+        "player_tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "chunk_steps": {
+          "type": "number"
+        },
+        "track_stride": {
+          "type": "number"
+        },
+        "chunks": {
+          "type": "number"
+        },
+        "frames": {
+          "type": "number"
+        },
+        "score": {
+          "type": "number"
+        },
+        "status": {
+          "enum": [
+            "live",
+            "left",
+            "ended"
+          ],
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        },
+        "header": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "id",
+        "map_id",
+        "player_tag",
+        "chunk_steps",
+        "track_stride",
+        "chunks",
+        "frames",
+        "score",
+        "status",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    "LiveChunk": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "number"
+        },
+        "start_frame": {
+          "type": "number"
+        },
+        "frame_count": {
+          "type": "number"
+        },
+        "frames": {
+          "type": "string"
+        },
+        "state_hash": {
+          "type": "string"
+        },
+        "score": {
+          "type": "number"
+        },
+        "track": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "final": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "seq",
+        "start_frame",
+        "frame_count",
+        "frames",
+        "state_hash",
+        "score",
+        "track",
+        "final"
+      ]
+    }
+  }
+}

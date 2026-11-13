@@ -29,7 +29,7 @@ import type { StaticSceneGate } from '../core/static-scene-gate'
 import {
   formatTrackValidationErrors,
   validateTrackDefinition,
-} from './track-schema'
+} from '../schemas/track'
 
 export { AdventureTrackType, CAMERA_PRESETS }
 export type { AdventureCallback, CameraPreset }

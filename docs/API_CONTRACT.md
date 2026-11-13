@@ -4,8 +4,11 @@ Leaderboard, replays, challenges, saves, live spectate streams and weekly
 tournaments for Pachinball (#444 from Slice B; #490 Slices B–C).
 The machine-readable contract is [`docs/api/arcade.openapi.yaml`](api/arcade.openapi.yaml);
 `tests/arcade-contract.test.ts` fails if the client (`src/arcade/arcade-api.ts`)
-sends anything that does not match it. This page is the prose: who may do
-what, and the rules the database enforces.
+sends anything that does not match it. The client parses every response with
+the Valibot schemas in `src/schemas/arcade.ts`. `tests/json-schemas.test.ts`
+fails if one of them reads a field this contract does not document, or
+requires one it does not promise. This page is the prose: who may do what, and
+the rules the database enforces.
 
 The service is plain REST over Postgres. Today it runs on Supabase project
 `znsioiaydrtsziwavdat` (`https://znsioiaydrtsziwavdat.supabase.co`):
@@ -304,7 +307,9 @@ from the next `seq` and catches up again.
    version the project records), apply it, and extend
    `supabase/tests/database/arcade_rls.test.sql`.
 2. Update `docs/api/arcade.openapi.yaml` and this page.
-3. Update `src/arcade/arcade-api.ts`; `npx vitest run tests/arcade-contract.test.ts`
+3. Update `src/arcade/arcade-api.ts` and its response schemas in
+   `src/schemas/arcade.ts` (then `npm run schemas:json`);
+   `npx vitest run tests/arcade-contract.test.ts tests/json-schemas.test.ts`
    must pass. The Edge Functions' `TAG` / `MAP_ID` / `UUID` patterns are held
    to the OpenAPI ones by the same test.
 4. Redeploy the functions you touched (`supabase functions deploy <name>`).

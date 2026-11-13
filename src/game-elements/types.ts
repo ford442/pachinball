@@ -164,13 +164,7 @@ export type PlungerInputEvent =
 // Re-export BallType and BallTierConfig from config.ts for convenience
 export { BallType, type BallTierConfig } from '../config'
 
-export interface UnlockedReward {
-  kind: 'ball-skin' | 'cabinet-theme' | 'flipper-style' | 'backbox-tint'
-  id: string
-  label: string
-  rarity: 'common' | 'rare' | 'legendary'
-  scope: 'track' | 'campaign-complete'
-}
+export type { UnlockedReward } from '../schemas/storage'
 
 /**
  * BallData interface

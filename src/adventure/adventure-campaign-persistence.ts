@@ -2,7 +2,9 @@
  * Adventure campaign persistence — versioned localStorage with schema migration.
  */
 
+import * as v from 'valibot'
 import type { SerializableProgressionState } from './adventure-track-progression'
+import { StoredCampaignSchema, StoredProgressionSchema, type StoredProgression } from '../schemas/storage'
 import { TRACK_CATALOG } from './adventure-track-progression'
 
 export const CAMPAIGN_STORAGE_KEY = 'pachinball.campaign.rewards.v1'
@@ -16,7 +18,7 @@ export interface CampaignPersistencePayload {
 }
 
 export function sanitizeProgressionState(
-  raw: Partial<SerializableProgressionState> | undefined,
+  raw: Partial<SerializableProgressionState> | StoredProgression | undefined,
 ): SerializableProgressionState {
   const validTrackIds = new Set(Object.keys(TRACK_CATALOG))
   const completedTracks = (raw?.completedTracks ?? []).filter((id) => validTrackIds.has(id))
@@ -26,7 +28,7 @@ export function sanitizeProgressionState(
   const bestScores: Record<string, number> = {}
   for (const [trackId, score] of Object.entries(raw?.bestScores ?? {})) {
     if (!validTrackIds.has(trackId)) continue
-    if (typeof score !== 'number' || !Number.isFinite(score)) continue
+    if (typeof score !== 'number' || !Number.isFinite(score)) continue // a stored record's scores are unchecked
     const normalized = Math.max(0, Math.round(score))
     if (normalized <= 0) continue
     bestScores[trackId] = normalized
@@ -45,42 +47,38 @@ export function sanitizeProgressionState(
   }
 }
 
+/** Read any stored / exported / cloud campaign record (every older schema migrates); null when it is not an object. */
 export function migrateCampaignStorage(raw: unknown): CampaignPersistencePayload | null {
-  if (!raw || typeof raw !== 'object') return null
-
-  const record = raw as Record<string, unknown>
-  const version = typeof record.version === 'number' ? record.version : 1
+  const parsed = v.safeParse(StoredCampaignSchema, raw)
+  if (!parsed.success) return null
+  const record = parsed.output
+  const version = record.version ?? 1
 
   if (version > CAMPAIGN_STORAGE_VERSION) {
     console.warn('[CampaignPersistence] Future schema version — applying best-effort sanitize')
   }
 
-  const progression = sanitizeProgressionState(
-    (record.progression as Partial<SerializableProgressionState> | undefined) ??
-      (version === 1 ? record : undefined),
-  )
-
-  const unlockedRewardIds = Array.isArray(record.unlockedRewardIds)
-    ? record.unlockedRewardIds.filter((id): id is string => typeof id === 'string')
-    : []
-
-  const equippedRewards =
-    record.equippedRewards && typeof record.equippedRewards === 'object'
-      ? (record.equippedRewards as Record<string, string>)
-      : {}
+  // Version 1 kept the progression fields at the top level.
+  const legacy = version === 1 && !record.progression ? v.safeParse(StoredProgressionSchema, raw) : null
+  const progression = sanitizeProgressionState(record.progression ?? (legacy?.success ? legacy.output : undefined))
 
   return {
     version: CAMPAIGN_STORAGE_VERSION,
     progression,
-    unlockedRewardIds,
-    equippedRewards,
+    unlockedRewardIds: record.unlockedRewardIds ?? [],
+    equippedRewards: record.equippedRewards ?? {},
+  }
+}
+
+/** The stored record for `payload`, as a plain object (the cloud slot's `data`). */
+export function campaignStorageRecord(payload: CampaignPersistencePayload): CampaignPersistencePayload {
+  return {
+    ...payload,
+    version: CAMPAIGN_STORAGE_VERSION,
+    progression: sanitizeProgressionState(payload.progression),
   }
 }
 
 export function serializeCampaignStorage(payload: CampaignPersistencePayload): string {
-  return JSON.stringify({
-    ...payload,
-    version: CAMPAIGN_STORAGE_VERSION,
-    progression: sanitizeProgressionState(payload.progression),
-  })
+  return JSON.stringify(campaignStorageRecord(payload))
 }

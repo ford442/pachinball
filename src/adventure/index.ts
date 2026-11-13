@@ -52,7 +52,7 @@ export {
   validateTrackDefinition,
   formatTrackValidationErrors,
   TRACK_SCHEMA_VERSION,
-} from './track-schema'
+} from '../schemas/track'
 export type {
   AxisPullSegment,
   ConeSegment,
@@ -60,7 +60,7 @@ export type {
   TrackSegment,
   TrackValidationResult,
   TrackValidationIssue,
-} from './track-schema'
+} from '../schemas/track'
 export { compileTrackDefinition } from './track-compiler'
 export { createAxisPullWell, createStaticCone } from './track-primitives-wells'
 export type { TrackBuildApi, TrackCursor } from './track-compiler'

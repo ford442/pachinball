@@ -8,37 +8,54 @@
  * on the boot path. storage.noahcohn.com stays the asset CDN (`ASSET_BASE`).
  */
 
+import * as v from 'valibot'
 import { ARCADE_KEY, ARCADE_URL, arcadeEnabled } from '../config/arcade'
+import {
+  ArcadeChallengeSchema,
+  ArcadeSessionSchema,
+  AuthSessionResponse,
+  CloudSaveSchema,
+  CreateChallengeResponse,
+  GhostTrackSchema,
+  LeaderboardEntrySchema,
+  LeaderboardReplayIdSchema,
+  LinkCodeSchema,
+  LiveChunkSchema,
+  LiveRunSchema,
+  PutSaveResponse,
+  QueuedRunsSchema,
+  ReplayRowSchema,
+  SubmitReplayResponse,
+  SubmitScoreResponse,
+  TournamentGhostSchema,
+  TournamentSchema,
+  TournamentStandingSchema,
+  type ArcadeChallenge,
+  type ArcadeSession,
+  type CloudSave,
+  type GhostTrack,
+  type LeaderboardEntry,
+  type LiveChunk,
+  type LiveRun,
+  type QueuedRun,
+  type ScoreSubmission,
+  type Tournament,
+  type TournamentGhost,
+  type TournamentStanding,
+} from '../schemas/arcade'
+import { isRecord, parseJsonWith } from '../schemas/schema-kit'
 
-export interface LeaderboardEntry {
-  rank: number
-  name: string
-  score: number
-  map_id: string
-  adventure_level?: string | null
-  balls: number
-  combo_max: number
-  date: string
-  replay_id?: string | null
-  challenge_id?: string | null
-  /** Replayed and confirmed by the verifier (Slice C). */
-  verified?: boolean
-}
-
-export interface ScoreSubmission {
-  name: string
-  score: number
-  map_id: string
-  adventure_level?: string
-  balls: number
-  combo_max: number
-  replay_id?: string
-  challenge_id?: string
-  /**
-   * False for a run that hit a physics / sim fault (#503 A3): stored, but never verified and never
-   * on a board. Absent means ranked.
-   */
-  ranked?: boolean
+export type {
+  ArcadeChallenge,
+  CloudSave,
+  GhostTrack,
+  LeaderboardEntry,
+  LiveChunk,
+  LiveRun,
+  ScoreSubmission,
+  Tournament,
+  TournamentGhost,
+  TournamentStanding,
 }
 
 export interface SubmitResult {
@@ -70,18 +87,10 @@ const MAX_QUEUED_RUNS = 5
 
 // ------------------------------------------------------------------ session
 
-interface ArcadeSession {
-  access_token: string
-  refresh_token: string
-  /** Seconds since the epoch. */
-  expires_at: number
-  user_id: string
-}
-
-function readStore<T>(key: string): T | null {
+/** A stored value, parsed with `schema`; null when absent, unreadable or not of that shape. */
+function readStore<S extends v.GenericSchema>(key: string, schema: S): v.InferOutput<S> | null {
   try {
-    const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as T) : null
+    return parseJsonWith(schema, localStorage.getItem(key))
   } catch {
     return null
   }
@@ -94,6 +103,24 @@ function writeStore(key: string, value: unknown): void {
   } catch {
     // Storage disabled or full: the session / queue just does not persist.
   }
+}
+
+/** A response body that is not what the contract says: the service is broken, not the request. */
+function parseBody<S extends v.GenericSchema>(path: string, schema: S, body: unknown): v.InferOutput<S> {
+  const result = v.safeParse(schema, body)
+  if (result.success) return result.output
+  const issue = result.issues[0]
+  const at = v.getDotPath(issue)
+  throw new ArcadeError(`unexpected response from ${path.split('?')[0]}: ${at ? `${at}: ` : ''}${issue.message}`, 502)
+}
+
+/** `send`, its body parsed with `schema`. */
+async function request<S extends v.GenericSchema>(
+  path: string,
+  schema: S,
+  init: RequestInit & { token?: string } = {},
+): Promise<v.InferOutput<S>> {
+  return parseBody(path, schema, await send(path, init))
 }
 
 async function send(path: string, init: RequestInit & { token?: string } = {}): Promise<unknown> {
@@ -127,7 +154,7 @@ async function send(path: string, init: RequestInit & { token?: string } = {}): 
   }
   if (!res.ok) {
     // PostgREST and the functions say `message`, Supabase Auth says `msg`.
-    const said = body && typeof body === 'object' ? (body as { message?: unknown; msg?: unknown }) : {}
+    const said: Record<string, unknown> = isRecord(body) ? body : {}
     const message = typeof said.message === 'string' ? said.message : typeof said.msg === 'string' ? said.msg : res.statusText
     throw new ArcadeError(message, res.status)
   }
@@ -135,8 +162,9 @@ async function send(path: string, init: RequestInit & { token?: string } = {}): 
 }
 
 function toSession(body: unknown): ArcadeSession {
-  const b = body as { access_token?: string; refresh_token?: string; expires_at?: number; expires_in?: number; user?: { id?: string } }
-  if (!b?.access_token || !b.refresh_token || !b.user?.id) throw new ArcadeError('auth answered without a session', 502)
+  const parsed = v.safeParse(AuthSessionResponse, body)
+  if (!parsed.success) throw new ArcadeError('auth answered without a session', 502)
+  const b = parsed.output
   return {
     access_token: b.access_token,
     refresh_token: b.refresh_token,
@@ -153,7 +181,7 @@ let pendingSession: Promise<ArcadeSession> | null = null
  */
 export function arcadeSession(): Promise<ArcadeSession> {
   pendingSession ??= (async () => {
-    const stored = readStore<ArcadeSession>(SESSION_KEY)
+    const stored = readStore(SESSION_KEY, ArcadeSessionSchema)
     const now = Math.floor(Date.now() / 1000)
     if (stored && stored.expires_at - 60 > now) return stored
     let next: ArcadeSession | null = null
@@ -190,34 +218,34 @@ export async function fetchLeaderboard(mapId: string, adventureLevel?: string, l
     order: 'rank.asc',
     limit: String(limit),
   })
-  return (await send(`/rest/v1/leaderboard?${params}`)) as LeaderboardEntry[]
+  return request(`/rest/v1/leaderboard?${params}`, v.array(LeaderboardEntrySchema))
 }
 
 /** Where `score` would place on the board (1 = top). */
 export async function fetchPlayerRank(mapId: string, score: number, adventureLevel?: string): Promise<number> {
-  return (await send('/rest/v1/rpc/player_rank', {
+  return request('/rest/v1/rpc/player_rank', v.number(), {
     method: 'POST',
     body: JSON.stringify({ p_map_id: mapId, p_score: score, p_adventure_level: adventureLevel ?? null }),
-  })) as number
+  })
 }
 
 /** A stored replay's payload (what `ReplayRecorder.fromJSON` reads), or null when there is none. */
 export async function fetchReplay(replayId: string): Promise<object | null> {
   const params = new URLSearchParams({ select: 'payload', id: `eq.${replayId}` })
-  const rows = (await send(`/rest/v1/replays?${params}`)) as Array<{ payload: object }>
+  const rows = await request(`/rest/v1/replays?${params}`, v.array(ReplayRowSchema))
   return rows[0]?.payload ?? null
 }
 
 // ------------------------------------------------------------------- writes
 
-async function callFunction(name: string, body: string, idempotencyKey?: string): Promise<Record<string, unknown>> {
+async function callFunction<S extends v.GenericSchema>(name: string, schema: S, body: string, idempotencyKey?: string): Promise<v.InferOutput<S>> {
   const session = await arcadeSession()
-  return (await send(`/functions/v1/${name}`, {
+  return request(`/functions/v1/${name}`, schema, {
     method: 'POST',
     body,
     token: session.access_token,
     ...(idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : {}),
-  })) as Record<string, unknown>
+  })
 }
 
 /**
@@ -226,8 +254,8 @@ async function callFunction(name: string, body: string, idempotencyKey?: string)
  * instead of storing the tape again (#503 A4).
  */
 export async function submitReplay(replayJson: string, idempotencyKey?: string): Promise<string> {
-  const res = await callFunction('submit-replay', replayJson, idempotencyKey)
-  return String(res.replay_id)
+  const res = await callFunction('submit-replay', SubmitReplayResponse, replayJson, idempotencyKey)
+  return res.replay_id
 }
 
 export async function createChallenge(challenge: {
@@ -239,21 +267,8 @@ export async function createChallenge(challenge: {
   /** The free-seed cascade table it is played on; absent on the vanilla table. */
   cascadeSeed?: number
 }): Promise<string> {
-  const res = await callFunction('create-challenge', JSON.stringify(challenge))
-  return String(res.challenge_id)
-}
-
-interface QueuedRun {
-  score: ScoreSubmission
-  /** Dropped once uploaded: `score.replay_id` then cites it. */
-  replay?: string
-  queuedAt: string
-  /**
-   * One per finished run (#503 A4), kept while it waits in the queue: every attempt sends the same
-   * `Idempotency-Key`s (`<id>:replay`, `<id>:score`), so a run the service already stored — a
-   * timeout after the commit — is not stored twice. Absent on runs queued by older builds.
-   */
-  submissionId?: string
+  const res = await callFunction('create-challenge', CreateChallengeResponse, JSON.stringify(challenge))
+  return res.challenge_id
 }
 
 function newSubmissionId(): string {
@@ -275,8 +290,8 @@ async function sendRun(run: QueuedRun): Promise<SubmitResult> {
     run.score = { ...run.score, replay_id: replayId }
     run.replay = undefined
   }
-  const res = await callFunction('submit-score', JSON.stringify(run.score), `${id}:score`)
-  return { success: true, rank: Number(res.rank), score_id: Number(res.score_id), replay_id: run.score.replay_id }
+  const res = await callFunction('submit-score', SubmitScoreResponse, JSON.stringify(run.score), `${id}:score`)
+  return { success: true, rank: res.rank, score_id: res.score_id, replay_id: run.score.replay_id }
 }
 
 /** Kept for the next flush: the network, a rate limit, or the service still finishing the same key. */
@@ -285,7 +300,7 @@ function retryable(err: unknown): boolean {
 }
 
 function queueRun(run: QueuedRun): void {
-  const queue = readStore<QueuedRun[]>(QUEUE_KEY) ?? []
+  const queue = readStore(QUEUE_KEY, QueuedRunsSchema) ?? []
   queue.push(run)
   writeStore(QUEUE_KEY, queue.slice(-MAX_QUEUED_RUNS))
 }
@@ -315,7 +330,7 @@ export async function submitRun(score: ScoreSubmission, replayJson?: string): Pr
 
 /** Runs waiting for the network. */
 export function queuedRunCount(): number {
-  return readStore<QueuedRun[]>(QUEUE_KEY)?.length ?? 0
+  return readStore(QUEUE_KEY, QueuedRunsSchema)?.length ?? 0
 }
 
 let flushing: Promise<number> | null = null
@@ -327,7 +342,7 @@ let flushing: Promise<number> | null = null
  */
 export function flushQueuedRuns(): Promise<number> {
   flushing ??= (async () => {
-    const queue = readStore<QueuedRun[]>(QUEUE_KEY) ?? []
+    const queue = readStore(QUEUE_KEY, QueuedRunsSchema) ?? []
     let sent = 0
     const kept: QueuedRun[] = []
     for (const run of queue) {
@@ -349,39 +364,29 @@ export function flushQueuedRuns(): Promise<number> {
 
 // ------------------------------------------------- cloud saves (Slice D)
 
-export interface CloudSave {
-  slot: string
-  schema_version: number
-  data: unknown
-  updated_at: string
-}
-
 /** Whether this browser already has an arcade player (it submitted a run or linked a device). */
 export function hasArcadeSession(): boolean {
-  return readStore<ArcadeSession>(SESSION_KEY) !== null
+  return readStore(SESSION_KEY, ArcadeSessionSchema) !== null
 }
 
 /** The player's save in `slot`, or null when there is none yet. */
 export async function pullSave(slot = 'campaign'): Promise<CloudSave | null> {
   const session = await arcadeSession()
   const params = new URLSearchParams({ select: 'slot,schema_version,data,updated_at', slot: `eq.${slot}` })
-  const rows = (await send(`/rest/v1/saves?${params}`, { token: session.access_token })) as CloudSave[]
+  const rows = await request(`/rest/v1/saves?${params}`, v.array(CloudSaveSchema), { token: session.access_token })
   return rows[0] ?? null
 }
 
 /** Write the player's save in `slot`; resolves with the stored `updated_at`. */
 export async function pushSave(schemaVersion: number, data: object, slot = 'campaign'): Promise<string> {
-  const res = await callFunction('put-save', JSON.stringify({ slot, schema_version: schemaVersion, data }))
-  return String(res.updated_at)
+  const res = await callFunction('put-save', PutSaveResponse, JSON.stringify({ slot, schema_version: schemaVersion, data }))
+  return res.updated_at
 }
 
 /** A one-time code (10 minutes) another device enters to share this player's saves. */
 export async function createLinkCode(): Promise<{ code: string; expires_at: string }> {
   const session = await arcadeSession()
-  const rows = (await send('/rest/v1/rpc/create_device_link', { method: 'POST', body: '{}', token: session.access_token })) as Array<{
-    code: string
-    expires_at: string
-  }>
+  const rows = await request('/rest/v1/rpc/create_device_link', v.array(LinkCodeSchema), { method: 'POST', body: '{}', token: session.access_token })
   if (!rows[0]) throw new ArcadeError('no link code returned', 502)
   return rows[0]
 }
@@ -399,47 +404,23 @@ export async function redeemLinkCode(code: string): Promise<boolean> {
 
 // ------------------------------------------------- challenges v2 (Slice D)
 
-export interface ArcadeChallenge {
-  id: string
-  kind: 'player' | 'weekly'
-  seed: number
-  map_id: string
-  target_score: number
-  challenger_name: string | null
-  replay_id: string | null
-  cascade_seed: number | null
-  /** The board its runs submit to (weekly); null for a player's challenge. */
-  board: string | null
-  title: string | null
-  starts_at: string
-  expires_at: string | null
-}
-
-/** The verifier's recording of a verified run's ball: the race ghost. */
-export interface GhostTrack {
-  stride: number
-  samples: number
-  /** Base64 little-endian Int32 millimetre triples. */
-  track: string
-}
-
 const CHALLENGE_COLUMNS = 'id,kind,seed,map_id,target_score,challenger_name,replay_id,cascade_seed,board,title,starts_at,expires_at'
 
 export async function fetchChallenge(id: string): Promise<ArcadeChallenge | null> {
   const params = new URLSearchParams({ select: CHALLENGE_COLUMNS, id: `eq.${id}` })
-  const rows = (await send(`/rest/v1/challenges?${params}`)) as ArcadeChallenge[]
+  const rows = await request(`/rest/v1/challenges?${params}`, v.array(ArcadeChallengeSchema))
   return rows[0] ?? null
 }
 
 /** This week's table of the week (created on first ask). */
 export async function fetchWeeklyChallenge(): Promise<ArcadeChallenge | null> {
-  const rows = (await send('/rest/v1/rpc/current_weekly_challenge', { method: 'POST', body: '{}' })) as ArcadeChallenge[]
+  const rows = await request('/rest/v1/rpc/current_weekly_challenge', v.array(ArcadeChallengeSchema), { method: 'POST', body: '{}' })
   return rows[0] ?? null
 }
 
 export async function fetchGhostTrack(replayId: string): Promise<GhostTrack | null> {
   const params = new URLSearchParams({ select: 'stride,samples,track', replay_id: `eq.${replayId}` })
-  const rows = (await send(`/rest/v1/ghost_tracks?${params}`)) as GhostTrack[]
+  const rows = await request(`/rest/v1/ghost_tracks?${params}`, v.array(GhostTrackSchema))
   return rows[0] ?? null
 }
 
@@ -459,56 +440,12 @@ export async function fetchChallengeGhost(challenge: ArcadeChallenge): Promise<G
     order: 'rank.asc',
     limit: '1',
   })
-  const rows = (await send(`/rest/v1/leaderboard?${params}`)) as Array<{ replay_id: string | null }>
+  const rows = await request(`/rest/v1/leaderboard?${params}`, v.array(LeaderboardReplayIdSchema))
   const replayId = rows[0]?.replay_id
   return replayId ? fetchGhostTrack(replayId) : null
 }
 
 // ------------------------------------- weekly tournaments (#490 Slice C)
-
-/** A weekly tournament: this week's table, or one in the archive. */
-export interface Tournament {
-  challenge_id: string
-  board: string
-  title: string | null
-  seed: number
-  cascade_seed: number | null
-  map_id: string
-  starts_at: string
-  expires_at: string
-  /** When its results were frozen; null while open or verifying. */
-  frozen_at: string | null
-  /** open: inside the week · verifying: ended, runs still being verified · final: results frozen. */
-  status: 'open' | 'verifying' | 'final'
-  entries: number
-  leader_name: string | null
-  leader_score: number | null
-}
-
-/** One player's best verified run on a tournament board. */
-export interface TournamentStanding {
-  challenge_id: string
-  board: string
-  rank: number
-  name: string
-  score: number
-  replay_id: string | null
-  played_at: string
-  /** Frozen results (true), or this week's live standings. */
-  final: boolean
-  /** The requesting player's own row. */
-  mine: boolean
-  /** The verifier recorded this run's ghost. */
-  has_ghost: boolean
-}
-
-/** A top run's race ghost, with who played it. */
-export interface TournamentGhost extends GhostTrack {
-  rank: number
-  name: string
-  score: number
-  replay_id: string
-}
 
 const TOURNAMENT_COLUMNS = 'challenge_id,board,title,seed,cascade_seed,map_id,starts_at,expires_at,frozen_at,status,entries,leader_name,leader_score'
 const STANDING_COLUMNS = 'challenge_id,board,rank,name,score,replay_id,played_at,final,mine,has_ghost'
@@ -516,13 +453,13 @@ const STANDING_COLUMNS = 'challenge_id,board,rank,name,score,replay_id,played_at
 /** This week's tournament and the archive, newest first. */
 export async function fetchTournaments(limit = 10): Promise<Tournament[]> {
   const params = new URLSearchParams({ select: TOURNAMENT_COLUMNS, order: 'starts_at.desc', limit: String(limit) })
-  return (await send(`/rest/v1/tournaments?${params}`)) as Tournament[]
+  return request(`/rest/v1/tournaments?${params}`, v.array(TournamentSchema))
 }
 
 /** The top `limit` of a tournament board: verified runs only, one per player. */
 export async function fetchTournamentStandings(board: string, limit = 10): Promise<TournamentStanding[]> {
   const params = new URLSearchParams({ select: STANDING_COLUMNS, board: `eq.${board}`, order: 'rank.asc', limit: String(limit) })
-  return (await send(`/rest/v1/tournament_standings?${params}`)) as TournamentStanding[]
+  return request(`/rest/v1/tournament_standings?${params}`, v.array(TournamentStandingSchema))
 }
 
 /**
@@ -534,54 +471,19 @@ export async function fetchMyTournamentStanding(board: string): Promise<Tourname
   if (!hasArcadeSession()) return null
   const session = await arcadeSession()
   const params = new URLSearchParams({ select: STANDING_COLUMNS, board: `eq.${board}`, mine: 'is.true', limit: '1' })
-  const rows = (await send(`/rest/v1/tournament_standings?${params}`, { token: session.access_token })) as TournamentStanding[]
+  const rows = await request(`/rest/v1/tournament_standings?${params}`, v.array(TournamentStandingSchema), { token: session.access_token })
   return rows[0] ?? null
 }
 
 /** The top `limit` (1–5) verified runs on a tournament board with their ghosts, best first. */
 export async function fetchTournamentGhosts(board: string, limit = 3): Promise<TournamentGhost[]> {
-  return (await send('/rest/v1/rpc/tournament_ghosts', {
+  return request('/rest/v1/rpc/tournament_ghosts', v.array(TournamentGhostSchema), {
     method: 'POST',
     body: JSON.stringify({ p_board: board, p_limit: limit }),
-  })) as TournamentGhost[]
+  })
 }
 
 // ------------------------------------------------- live spectate (Slice E)
-
-/** A live run: its tape's frame-0 header and how far it has streamed. */
-export interface LiveRun {
-  id: string
-  map_id: string
-  player_tag: string | null
-  chunk_steps: number
-  track_stride: number
-  chunks: number
-  frames: number
-  score: number
-  /** live: streaming · left: the player started another run · ended: its final chunk is stored. */
-  status: 'live' | 'left' | 'ended'
-  created_at: string
-  updated_at: string
-  /** ReplayRecorder metadata at frame 0, without frames (fetchLiveRun only). */
-  header?: object
-}
-
-/**
- * One chunk of a live tape: frames [start_frame, start_frame + frame_count)
- * as RLE rows, the C++ world's state hash and the score after its last step,
- * and the primary ball's path over it (base64 Int32 millimetre triples, one
- * every `track_stride` steps; null when the ball's path was not sampled).
- */
-export interface LiveChunk {
-  seq: number
-  start_frame: number
-  frame_count: number
-  frames: string
-  state_hash: string
-  score: number
-  track: string | null
-  final: boolean
-}
 
 /** Open a live run; resolves with its id. Ends the player's previous live run. */
 export async function startLiveRun(run: {
@@ -610,7 +512,7 @@ export async function startLiveRun(run: {
 /** Append the next chunk (`seq` in order; resending the last one is harmless). Resolves with the frames streamed so far. */
 export async function appendLiveChunk(liveId: string, chunk: LiveChunk): Promise<number> {
   const session = await arcadeSession()
-  return Number(await send('/rest/v1/rpc/live_append', {
+  return request('/rest/v1/rpc/live_append', v.number(), {
     method: 'POST',
     body: JSON.stringify({
       p_live_id: liveId,
@@ -623,7 +525,7 @@ export async function appendLiveChunk(liveId: string, chunk: LiveChunk): Promise
       p_final: chunk.final,
     }),
     token: session.access_token,
-  }))
+  })
 }
 
 const LIVE_RUN_COLUMNS = 'id,map_id,player_tag,chunk_steps,track_stride,chunks,frames,score,status,created_at,updated_at'
@@ -631,13 +533,13 @@ const LIVE_RUN_COLUMNS = 'id,map_id,player_tag,chunk_steps,track_stride,chunks,f
 /** Runs streaming right now, most recently updated first. */
 export async function fetchLiveRuns(limit = 20): Promise<LiveRun[]> {
   const params = new URLSearchParams({ select: LIVE_RUN_COLUMNS, order: 'updated_at.desc', limit: String(limit) })
-  return (await send(`/rest/v1/live_now?${params}`)) as LiveRun[]
+  return request(`/rest/v1/live_now?${params}`, v.array(LiveRunSchema))
 }
 
 /** A live (or finished) run with its header, or null when there is none. */
 export async function fetchLiveRun(id: string): Promise<LiveRun | null> {
   const params = new URLSearchParams({ select: `${LIVE_RUN_COLUMNS},header`, id: `eq.${id}` })
-  const rows = (await send(`/rest/v1/replays_live?${params}`)) as LiveRun[]
+  const rows = await request(`/rest/v1/replays_live?${params}`, v.array(LiveRunSchema))
   return rows[0] ?? null
 }
 
@@ -650,5 +552,5 @@ export async function fetchLiveChunks(id: string, fromSeq: number, limit = 120):
     order: 'seq.asc',
     limit: String(limit),
   })
-  return (await send(`/rest/v1/replays_live_chunks?${params}`)) as LiveChunk[]
+  return request(`/rest/v1/replays_live_chunks?${params}`, v.array(LiveChunkSchema))
 }

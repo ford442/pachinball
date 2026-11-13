@@ -4,8 +4,8 @@
  * Synced via import.meta.glob so JSON tracks stay off the TS builder code-split.
  */
 
-import type { TrackDefinition } from './track-schema'
-import { validateTrackDefinition } from './track-schema'
+import type { TrackDefinition } from '../schemas/track'
+import { validateTrackDefinition } from '../schemas/track'
 
 const rawModules = import.meta.glob('./track-data/*.json', {
   eager: true,

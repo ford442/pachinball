@@ -1,5 +1,7 @@
 import { GameConfig } from '../config'
 import type { AudioSourceMode } from '../audio/audio-sample-bank'
+import { parseJsonWith, pickDefined } from '../schemas/schema-kit'
+import { StoredSettingsSchema } from '../schemas/settings'
 
 export type { AudioSourceMode } from '../audio/audio-sample-bank'
 
@@ -52,36 +54,20 @@ export class SettingsManager {
     }
     
     try {
-      const saved = localStorage.getItem(this.STORAGE_KEY)
-      if (saved) {
-        const parsed = JSON.parse(saved) as Partial<GameSettings> & { scanlineIntensity?: number }
-        const migratedScanlineWeight =
-          typeof parsed.scanlineWeight === 'number'
-            ? parsed.scanlineWeight
-            : typeof parsed.scanlineIntensity === 'number'
-              ? parsed.scanlineIntensity
-              : defaults.scanlineWeight
+      const parsed = parseJsonWith(StoredSettingsSchema, localStorage.getItem(this.STORAGE_KEY))
+      if (parsed) {
+        const { scanlineIntensity, ...stored } = parsed
+        const migratedScanlineWeight = parsed.scanlineWeight ?? scanlineIntensity ?? defaults.scanlineWeight
         const migratedScanlineIntensityMultiplier =
-          typeof parsed.scanlineIntensityMultiplier === 'number'
-            ? parsed.scanlineIntensityMultiplier
-            : typeof parsed.scanlineWeight === 'number'
-              ? parsed.scanlineWeight
-              : defaults.scanlineIntensityMultiplier
-        const scanlineEnabled =
-          typeof parsed.scanlineEnabled === 'boolean'
-            ? parsed.scanlineEnabled
-            : defaults.scanlineEnabled
+          parsed.scanlineIntensityMultiplier ?? parsed.scanlineWeight ?? defaults.scanlineIntensityMultiplier
         return {
           ...defaults,
-          ...parsed,
+          ...pickDefined(stored),
           scanlineWeight: migratedScanlineWeight,
           scanlineIntensityMultiplier: migratedScanlineIntensityMultiplier,
-          scanlineEnabled,
-          audioSource: parsed.audioSource === 'synth' ? 'synth' : 'samples',
-          reducedAudio:
-            typeof parsed.reducedAudio === 'boolean'
-              ? parsed.reducedAudio
-              : parsed.reducedMotion === true,
+          scanlineEnabled: parsed.scanlineEnabled ?? defaults.scanlineEnabled,
+          audioSource: parsed.audioSource ?? 'samples',
+          reducedAudio: parsed.reducedAudio ?? parsed.reducedMotion === true,
         }
       }
     } catch {

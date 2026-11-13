@@ -1,3 +1,6 @@
+import { parseJsonWith } from '../schemas/schema-kit'
+import { ScoringBreakdownSchema } from '../schemas/storage'
+
 export interface ScoringBreakdownSnapshot {
   bumpers: number
   specialObstacles: number
@@ -94,9 +97,8 @@ export class ScoringBreakdownManager {
       return { ...EMPTY_BREAKDOWN }
     }
     try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (!raw) return { ...EMPTY_BREAKDOWN }
-      const parsed = JSON.parse(raw) as Partial<MutableBreakdown>
+      const parsed = parseJsonWith(ScoringBreakdownSchema, localStorage.getItem(STORAGE_KEY))
+      if (!parsed) return { ...EMPTY_BREAKDOWN }
       return {
         bumpers: this.toSafeNumber(parsed.bumpers),
         specialObstacles: this.toSafeNumber(parsed.specialObstacles),

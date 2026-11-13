@@ -13,8 +13,8 @@ import type {
   PinLatticeSegment,
   TrackDefinition,
   TrackSegment,
-} from './track-schema'
-import { isMaterialRole } from './track-schema'
+} from '../schemas/track'
+import { isMaterialRole } from '../schemas/track'
 import type { TrackMaterialRole } from './track-theme-profiles'
 import type { PinFieldSpec } from '../core/pin-field'
 import { pinFieldOccupancy } from '../core/pin-field'

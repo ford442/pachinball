@@ -1,0 +1,7 @@
+{
+  "json.schemas": [
+    { "fileMatch": ["/src/adventure/track-data/*.json", "/tests/fixtures/tracks/*.json"], "url": "./public/schemas/track.json" },
+    { "fileMatch": ["/public/machines/*.json", "!/public/machines/index.json", "*.machine.json"], "url": "./public/schemas/machine.json" },
+    { "fileMatch": ["*.pachinball-profile.json"], "url": "./public/schemas/profile.json" }
+  ]
+}

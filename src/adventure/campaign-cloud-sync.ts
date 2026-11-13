@@ -16,6 +16,7 @@ import type { SerializableProgressionState } from './adventure-track-progression
 import {
   CAMPAIGN_STORAGE_VERSION,
   migrateCampaignStorage,
+  campaignStorageRecord,
   serializeCampaignStorage,
   type CampaignPersistencePayload,
 } from './adventure-campaign-persistence'
@@ -155,7 +156,7 @@ export class CampaignCloudSync {
     this.setStatus('syncing')
     try {
       const payload = this.manager.getStoragePayload()
-      await this.arcade.pushSave(CAMPAIGN_STORAGE_VERSION, JSON.parse(serializeCampaignStorage(payload)) as object, CAMPAIGN_SAVE_SLOT)
+      await this.arcade.pushSave(CAMPAIGN_STORAGE_VERSION, campaignStorageRecord(payload), CAMPAIGN_SAVE_SLOT)
       this.pending = false
       this.setStatus('synced')
     } catch (err) {

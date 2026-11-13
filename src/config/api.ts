@@ -1,3 +1,4 @@
+import * as v from 'valibot'
 import { assetUrl } from '../core/asset-urls'
 
 /**
@@ -93,11 +94,15 @@ export function isIdempotentMethod(method: string | undefined): boolean {
 /**
  * Helper to make API calls with exponential backoff retry logic. Only idempotent methods are
  * retried; a POST is sent once, so a slow-but-committed request can never land twice.
+ *
+ * The response body is parsed with `schema`, not cast: a body that does not match is a failed
+ * request (null, with a warning), exactly like a 4xx.
  */
-export async function apiFetch<T>(
-  endpoint = '',
+export async function apiFetch<S extends v.GenericSchema>(
+  endpoint: string,
+  schema: S,
   options: RequestInit = {}
-): Promise<T | null> {
+): Promise<v.InferOutput<S> | null> {
   const trimmedEndpoint = endpoint.trim()
   const resolvedUrl = /^https?:\/\//i.test(trimmedEndpoint)
     ? trimmedEndpoint
@@ -130,7 +135,14 @@ export async function apiFetch<T>(
         return null
       }
 
-      return await response.json() as T
+      const body: unknown = await response.json()
+      const parsed = v.safeParse(schema, body)
+      if (!parsed.success) {
+        const issue = parsed.issues[0]
+        console.warn(`[apiFetch] Unexpected response from ${resolvedUrl}: ${v.getDotPath(issue) ?? ''} ${issue.message}`.trim())
+        return null
+      }
+      return parsed.output
     } catch (error) {
       cancel()
       if (error instanceof Error && error.name === 'AbortError') {
