@@ -127,6 +127,8 @@ src/wasm/
 ├── physics-shared-layout.ts     Versioned SharedArrayBuffer snapshot layout (seqlock + contact ring)
 ├── physics-worker-client.ts     Main-thread PhysicsWorkerClient
 ├── physics-worker-boot.ts       Worker creation + init handshake (error / timeout → fallback), prewarm slot
+├── bundle-url.ts                resolvePhysicsBundleUrl: public-root bundle URL against the page, not the importing chunk (#519)
+├── physics-command-log.ts       PhysicsCommandLog: structure + checkpoints + commands since, to rebuild a dead worker in-process (#503)
 ├── physics-worker.ts            Dedicated Worker entry
 ├── contact-buffer.ts            Packed contact codec
 ├── transform-buffer.ts          Packed transform codec
@@ -163,10 +165,16 @@ public/wasm/                     Generated at build time (git-ignored)
 ### Prerequisites
 
 The Emscripten SDK is **pinned** in [`.emsdk-version`](../.emsdk-version)
-(currently 6.0.10). CI installs exactly that version; `build-wasm.sh` warns
-locally on any other `emcc` and fails under `CI=true`, because parity and the
-bench numbers are only verified on the pin. Bumping it is a reviewed change
-that re-runs `test:wasm-parity` and `bench:wasm-flags`.
+(currently 6.0.10), installed from the emsdk repository commit in
+[`.emsdk-commit`](../.emsdk-commit). CI installs exactly that (the
+`.github/actions/setup-emsdk` composite action); `build-wasm.sh` **fails on any
+other `emcc`, locally too** (#519): a binary from another compiler has another
+`wasmSha256`, so the tapes recorded on it never verify on the shipped build, and
+parity and the bench numbers are only checked on the pin.
+`PACHINBALL_ALLOW_EMSDK_MISMATCH=1` downgrades the failure to a warning for
+toolchain experiments; never ship or record tapes from such a build. Bumping
+either pin is a reviewed change that re-runs `test:wasm-parity` and
+`bench:wasm-flags`.
 
 ```bash
 # Install and activate the pinned Emscripten SDK (one-time, and after a pin bump)
@@ -1413,15 +1421,19 @@ The GitHub Actions workflow (`.github/workflows/native-physics.yml`) runs on cha
 | Job | Status | Tools | What it checks |
 |-----|--------|-------|----------------|
 | `native_ctest` | **BLOCKING** | cmake, g++ | `npm run test:native` (Catch2), `check:compile-db`, `check:wasm-docs` |
-| `native_release_ctest` | non-blocking (first week) | cmake, g++ | `npm run test:native:release` — the same Catch2 suite at `-O3`; the golden traces must not move with the optimisation level |
-| `native_arm64_ctest` | non-blocking (first week) | cmake, g++ on `ubuntu-24.04-arm` | `test:native` and `test:native:release` on aarch64, where an unchecked `a*b+c` would fuse into FMA |
+| `native_release_ctest` | **BLOCKING** (since #519) | cmake, g++ | `npm run test:native:release` — the same Catch2 suite at `-O3`; the golden traces must not move with the optimisation level |
+| `native_arm64_ctest` | **BLOCKING** (since #519) | cmake, g++ on `ubuntu-24.04-arm` | `test:native` and `test:native:release` on aarch64, where an unchecked `a*b+c` would fuse into FMA |
 | `sanitizer_ctest` | **BLOCKING** | cmake, clang-18 + compiler-rt | `CXX=clang++-18 npm run test:native:san` — ASan/UBSan + `float-cast-overflow` Catch2, no recovery (`CMAKE_BUILD_TYPE=Debug`) |
 | `wasm_parity` | **BLOCKING** | emsdk (`.emsdk-version`) | `print:wasm-flags` then Release + RelWithAsserts + `test:wasm-parity` |
 
-Every job that installs Emscripten (`wasm_parity` here, `e2e-preview` in
-`ci.yml`) installs the version in `.emsdk-version`, never `latest`, under the
-cache key `emsdk-<os>-<arch>-<hash of .emsdk-version>`: bumping the pin is the
-only way the toolchain changes, and it re-runs parity and the golden traces.
+Every job that installs Emscripten (`wasm_parity` and `replay_goldens` here,
+`e2e-preview` in `ci.yml`, the nightly) goes through
+`.github/actions/setup-emsdk`: the version in `.emsdk-version` from the emsdk
+commit in `.emsdk-commit`, never `latest` or a moving branch, under the cache
+key `emsdk-<os>-<arch>-<hash of both pins>`. Bumping a pin is the only way the
+toolchain changes, and it re-runs parity and the golden traces. x64 jobs run on
+`ubuntu-24.04`, not `ubuntu-latest` (26.04 since 2026-11-12, where Playwright
+1.57 cannot install Chromium's dependencies).
 
 `native_ctest` runs in ~15 seconds without requiring Emscripten and gates PRs against C++ logic regressions. Additionally, `tests/embind-surface.test.ts` asserts that TypeScript interface definitions (`src/wasm/wasm-types.ts`) match the exported Embind surface (`native/src/bindings.cpp`), and `tests/wasm-worker-api-parity.test.ts` (Vitest, no WASM) fails when a mutating Embind function is not wrapped on `WasmPhysicsEngine`, or a mutating engine method has no `PhysicsWorkerCommand` and is not on its tracked-gap list. `tests/physics-worker-command-manifest.test.ts` checks the checked-in manifest `tests/fixtures/physics-worker-commands.json` against both `bindings.cpp` and the `PhysicsWorkerCommand` union: every embind `PhysicsWorld` method names its command or an exemption with a reason (#459).
 
