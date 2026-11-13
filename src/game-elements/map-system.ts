@@ -8,6 +8,9 @@
 import { API_BASE, apiFetch, isRemoteApiBase } from '../config'
 import { TABLE_MAPS, type TableMapConfig } from '../config/table-maps'
 import { assetUrl } from '../core/asset-urls'
+import * as v from 'valibot'
+import { parseJsonWith, pickDefined } from '../schemas/schema-kit'
+import { MapCacheSchema, RemoteTableMapListSchema, type RemoteTableMap } from '../schemas/storage'
 
 export interface DynamicMapConfig extends TableMapConfig {
   id: string
@@ -70,16 +73,14 @@ export class MapSystem {
         return
       }
 
-      const remoteMaps = await apiFetch<DynamicMapConfig[]>('/maps')
+      const remoteMaps = await apiFetch('/maps', RemoteTableMapListSchema)
       if (!remoteMaps || remoteMaps.length === 0) {
         this.loaded = true
         console.log(`[MapSystem] Loaded ${this.maps.size} maps (hardcoded/cache/static only)`)
         return
       }
 
-      const sanitizedMaps = remoteMaps
-        .map((map) => this.sanitizeRemoteMap(map))
-        .filter((map): map is DynamicMapConfig => map !== null)
+      const sanitizedMaps = remoteMaps.map((map) => this.sanitizeRemoteMap(map))
 
       this.mergeMaps(sanitizedMaps)
       this.writeCache(sanitizedMaps)
@@ -166,12 +167,8 @@ export class MapSystem {
         return null
       }
       const data: unknown = await response.json()
-      if (!Array.isArray(data)) {
-        return null
-      }
-      return data
-        .map((map) => this.sanitizeRemoteMap(map as DynamicMapConfig))
-        .filter((map): map is DynamicMapConfig => map !== null)
+      const maps = v.safeParse(RemoteTableMapListSchema, data)
+      return maps.success ? maps.output.map((map) => this.sanitizeRemoteMap(map)) : null
     } catch {
       return null
     } finally {
@@ -204,30 +201,23 @@ export class MapSystem {
     this.overlayMaps(maps)
   }
 
-  private sanitizeRemoteMap(map: DynamicMapConfig | null | undefined): DynamicMapConfig | null {
-    if (!map || typeof map.id !== 'string' || typeof map.name !== 'string') {
-      return null
-    }
-
+  /** A parsed remote / cached map, its missing or mistyped fields filled from the built-in map of that id (or defaults). */
+  private sanitizeRemoteMap(map: RemoteTableMap): DynamicMapConfig {
     const fallback = TABLE_MAPS[map.id]
-    const backgroundPattern = this.isValidBackgroundPattern(map.backgroundPattern)
-      ? map.backgroundPattern
-      : fallback?.backgroundPattern || 'none'
-
     return {
       ...fallback,
-      ...map,
+      ...pickDefined(map),
       id: map.id,
       name: map.name,
-      baseColor: map.baseColor || fallback?.baseColor || '#00d9ff',
-      accentColor: map.accentColor || fallback?.accentColor || '#ff00aa',
-      scanlineIntensity: this.coerceNumber(map.scanlineIntensity, fallback?.scanlineIntensity ?? 0.2),
-      pixelGridIntensity: this.coerceNumber(map.pixelGridIntensity, fallback?.pixelGridIntensity ?? 0.6),
-      subpixelIntensity: this.coerceNumber(map.subpixelIntensity, fallback?.subpixelIntensity ?? 0.35),
-      glowIntensity: this.coerceNumber(map.glowIntensity, fallback?.glowIntensity ?? 1.0),
-      animationSpeed: this.coerceNumber(map.animationSpeed, fallback?.animationSpeed ?? 0.5),
-      backgroundPattern,
-      musicTrackId: map.musicTrackId || fallback?.musicTrackId || this.inferMusicTrackId(map.id),
+      baseColor: map.baseColor ?? fallback?.baseColor ?? '#00d9ff',
+      accentColor: map.accentColor ?? fallback?.accentColor ?? '#ff00aa',
+      scanlineIntensity: map.scanlineIntensity ?? fallback?.scanlineIntensity ?? 0.2,
+      pixelGridIntensity: map.pixelGridIntensity ?? fallback?.pixelGridIntensity ?? 0.6,
+      subpixelIntensity: map.subpixelIntensity ?? fallback?.subpixelIntensity ?? 0.35,
+      glowIntensity: map.glowIntensity ?? fallback?.glowIntensity ?? 1.0,
+      animationSpeed: map.animationSpeed ?? fallback?.animationSpeed ?? 0.5,
+      backgroundPattern: map.backgroundPattern ?? fallback?.backgroundPattern ?? 'none',
+      musicTrackId: map.musicTrackId ?? fallback?.musicTrackId ?? this.inferMusicTrackId(map.id),
     }
   }
 
@@ -242,19 +232,13 @@ export class MapSystem {
         return null
       }
 
-      const parsed = JSON.parse(raw) as {
-        expiresAt?: number
-        maps?: DynamicMapConfig[]
-      }
-
-      if (!parsed.expiresAt || parsed.expiresAt < Date.now() || !Array.isArray(parsed.maps)) {
+      const parsed = parseJsonWith(MapCacheSchema, raw)
+      if (!parsed || parsed.expiresAt < Date.now()) {
         localStorage.removeItem(MapSystem.CACHE_KEY)
         return null
       }
 
-      return parsed.maps
-        .map((map) => this.sanitizeRemoteMap(map))
-        .filter((map): map is DynamicMapConfig => map !== null)
+      return parsed.maps.map((map) => this.sanitizeRemoteMap(map))
     } catch (error) {
       console.warn('[MapSystem] Failed to read map cache', error)
       return null
@@ -286,20 +270,6 @@ export class MapSystem {
     } catch (error) {
       console.warn('[MapSystem] Failed to clear map cache', error)
     }
-  }
-
-  private coerceNumber(value: number | undefined, fallback: number): number {
-    return typeof value === 'number' && Number.isFinite(value) ? value : fallback
-  }
-
-  private isValidBackgroundPattern(
-    pattern: string | undefined
-  ): pattern is TableMapConfig['backgroundPattern'] {
-    return pattern === 'hex'
-      || pattern === 'grid'
-      || pattern === 'circuit'
-      || pattern === 'data-flow'
-      || pattern === 'none'
   }
 }
 

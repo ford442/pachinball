@@ -178,6 +178,27 @@ export function bool(message = 'must be a boolean') {
   return v.boolean(message)
 }
 
+// ---------------------------------------------------------------------------
+// Lenient records (storage written by older builds)
+// ---------------------------------------------------------------------------
+
+/**
+ * An optional field that reads as absent when it holds the wrong type: a
+ * stored record from an older build loses that field, not the whole record.
+ */
+export function lenient<S extends AnySchema>(schema: S) {
+  return v.fallback(v.optional(schema), undefined)
+}
+
+/** `value` without its `undefined` fields, so spreading it over defaults keeps the defaults. */
+export function pickDefined<T extends object>(value: T): Partial<T> {
+  const out: Partial<T> = {}
+  for (const key of Object.keys(value) as (keyof T)[]) {
+    if (value[key] !== undefined) out[key] = value[key]
+  }
+  return out
+}
+
 /** A string matching `pattern` with no `..` segment (a media path must not climb out of `public/`). */
 export function safePath(pattern: RegExp, message: string) {
   return v.pipe(v.string(message), v.regex(pattern, message), v.check((s) => !s.includes('..'), message))

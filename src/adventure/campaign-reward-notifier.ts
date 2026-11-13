@@ -1,5 +1,7 @@
 import type { EventBus } from '../core/event-bus'
 import type { UnlockedReward } from '../game-elements/types'
+import { parseJsonWith } from '../schemas/schema-kit'
+import { UnseenRewardsSchema } from '../schemas/storage'
 import type { CampaignRewardItem } from './campaign-rewards-manager'
 
 export class CampaignRewardNotifier {
@@ -16,9 +18,8 @@ export class CampaignRewardNotifier {
 
     // Persist to sessionStorage "unseen-rewards"
     try {
-      const existingRaw = sessionStorage.getItem('unseen-rewards')
-      const existing = (existingRaw ? JSON.parse(existingRaw) : []) as UnlockedReward[]
-      
+      const existing = parseJsonWith(UnseenRewardsSchema, sessionStorage.getItem('unseen-rewards')) ?? []
+
       // Avoid duplicate persistence in unseen-rewards
       if (!existing.some(item => item.id === unlocked.id)) {
         existing.push(unlocked)
@@ -37,8 +38,11 @@ export class CampaignRewardNotifier {
       const existingRaw = sessionStorage.getItem('unseen-rewards')
       if (!existingRaw) return
 
-      const existing = JSON.parse(existingRaw) as UnlockedReward[]
-      if (existing.length === 0) return
+      const existing = parseJsonWith(UnseenRewardsSchema, existingRaw) ?? []
+      if (existing.length === 0) {
+        sessionStorage.removeItem('unseen-rewards')
+        return
+      }
 
       // Clear the storage
       sessionStorage.removeItem('unseen-rewards')

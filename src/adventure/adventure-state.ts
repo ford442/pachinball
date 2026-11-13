@@ -11,17 +11,12 @@
  */
 
 import type { TableMapType } from '../config/table-maps'
+import * as v from 'valibot'
 import { apiFetch } from '../config'
+import { parseJsonWith, pickDefined } from '../schemas/schema-kit'
+import { StoredAdventureProgressSchema, type RewardType, type UnlockableReward } from '../schemas/storage'
 
-export type RewardType = 'ball-trail' | 'neon-pattern' | 'skin'
-
-export interface UnlockableReward {
-  id: string
-  name: string
-  type: RewardType
-  unlockedAt: string
-  equipped: boolean
-}
+export type { RewardType, UnlockableReward } from '../schemas/storage'
 
 export interface AdventureProgress {
   currentLevel: string
@@ -149,22 +144,9 @@ export class AdventureState {
 
   private loadProgress(): AdventureProgress {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (saved) {
-        const parsed = JSON.parse(saved) as Partial<AdventureProgress>
-        const defaults = defaultProgress()
-        // Validate and merge with defaults
-        return {
-          currentLevel: parsed.currentLevel || defaults.currentLevel,
-          currentMap: parsed.currentMap || defaults.currentMap,
-          completedLevels: parsed.completedLevels || defaults.completedLevels,
-          unlockedMaps: parsed.unlockedMaps || defaults.unlockedMaps,
-          unlockedRewards: parsed.unlockedRewards || defaults.unlockedRewards,
-          totalScore: parsed.totalScore || defaults.totalScore,
-          bestScores: parsed.bestScores || defaults.bestScores,
-          lastPlayed: parsed.lastPlayed || defaults.lastPlayed,
-        }
-      }
+      const parsed = parseJsonWith(StoredAdventureProgressSchema, localStorage.getItem(STORAGE_KEY))
+      // Each field is checked; a missing or mistyped one takes its default.
+      if (parsed) return { ...defaultProgress(), ...pickDefined(parsed) }
     } catch (e) {
       console.warn('[AdventureState] Failed to load progress:', e)
     }
@@ -185,8 +167,9 @@ export class AdventureState {
    * Sync progress to backend
    */
   async syncToBackend(): Promise<void> {
-    const result = await apiFetch<AdventureProgress>(
+    const result = await apiFetch(
       '/adventure/progress',
+      v.unknown(),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -205,10 +188,10 @@ export class AdventureState {
    * Fetch progress from backend
    */
   async fetchFromBackend(): Promise<void> {
-    const backendProgress = await apiFetch<AdventureProgress>('/adventure/progress')
+    const backendProgress = await apiFetch('/adventure/progress', StoredAdventureProgressSchema)
 
-    if (backendProgress && backendProgress.lastPlayed > this.progress.lastPlayed) {
-      this.progress = { ...this.progress, ...backendProgress }
+    if (backendProgress?.lastPlayed !== undefined && backendProgress.lastPlayed > this.progress.lastPlayed) {
+      this.progress = { ...this.progress, ...pickDefined(backendProgress) }
       this.saveProgress()
       console.log('[AdventureState] Progress loaded from backend')
     }

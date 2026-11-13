@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import * as v from 'valibot'
 import { apiFetch, isIdempotentMethod, normalizeHeaders } from '../src/config/api'
+
+const Ok = v.object({ ok: v.number() })
 
 function jsonResponse(status: number, body: unknown = {}): Response {
   return {
@@ -29,7 +32,7 @@ describe('apiFetch (#503 A4)', () => {
   ])('keeps Accept when the caller passes %s', async (_label, headers) => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { ok: 1 }))
     vi.stubGlobal('fetch', fetchMock)
-    await expect(apiFetch('/x', { method: 'POST', headers, body: '{}' })).resolves.toEqual({ ok: 1 })
+    await expect(apiFetch('/x', Ok, { method: 'POST', headers, body: '{}' })).resolves.toEqual({ ok: 1 })
     const sent = headersOf(fetchMock)
     expect(sent.Accept).toBe('application/json')
     expect(sent['Content-Type'] ?? sent['content-type']).toBe('application/json')
@@ -39,14 +42,14 @@ describe('apiFetch (#503 A4)', () => {
   it('never retries a POST that gets a 5xx', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(500))
     vi.stubGlobal('fetch', fetchMock)
-    await expect(apiFetch('/x', { method: 'POST', body: '{}' })).resolves.toBeNull()
+    await expect(apiFetch('/x', v.unknown(), { method: 'POST', body: '{}' })).resolves.toBeNull()
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('never retries a POST whose fetch rejects', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError('network'))
     vi.stubGlobal('fetch', fetchMock)
-    await expect(apiFetch('/x', { method: 'post', body: '{}' })).resolves.toBeNull()
+    await expect(apiFetch('/x', v.unknown(), { method: 'post', body: '{}' })).resolves.toBeNull()
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
@@ -56,10 +59,22 @@ describe('apiFetch (#503 A4)', () => {
       .mockResolvedValueOnce(jsonResponse(503))
       .mockResolvedValueOnce(jsonResponse(200, { n: 2 }))
     vi.stubGlobal('fetch', fetchMock)
-    const pending = apiFetch('/x')
+    const pending = apiFetch('/x', v.object({ n: v.number() }))
     await vi.runAllTimersAsync()
     await expect(pending).resolves.toEqual({ n: 2 })
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('parses the body with the schema: a body that does not match is a failed request', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { ok: 'yes', extra: true }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(apiFetch('/x', Ok)).resolves.toBeNull()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Unexpected response'))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    fetchMock.mockResolvedValue(jsonResponse(200, { ok: 2, extra: true }))
+    await expect(apiFetch('/x', Ok)).resolves.toEqual({ ok: 2 })
+    warn.mockRestore()
   })
 
   it('classifies methods', () => {

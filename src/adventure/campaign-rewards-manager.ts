@@ -266,7 +266,7 @@ export class CampaignRewardsManager {
       const raw = localStorage.getItem(CAMPAIGN_STORAGE_KEY)
       if (!raw) return
 
-      const parsed = JSON.parse(raw) as unknown
+      const parsed: unknown = JSON.parse(raw)
       const migrated = migrateCampaignStorage(parsed)
       if (!migrated) return
 

@@ -9,7 +9,9 @@
  * - Supports debug force-result and force-spin toggles
  */
 
+import * as v from 'valibot'
 import { DisplayState } from './display-types'
+import { parseJsonWith } from '../schemas/schema-kit'
 import { getSessionRngFork, RNG_FORK } from '../core/seeded-rng'
 import { SLOT_MACHINE_CONFIG } from '../config'
 import type { EventBus } from '../core/event-bus'
@@ -44,6 +46,14 @@ const DISPLAY_TO_SLOT_SYMBOL: Record<string, SlotSymbol> = Object.fromEntries(
 )
 
 const DEBUG_FORCE_KEY = 'pachinball-debug-slot-force'
+/** The forced reels: the first three entries, the ones that are symbols. */
+const DEBUG_FORCE_SCHEMA = v.pipe(
+  v.array(v.unknown()),
+  v.transform((items) => items.slice(0, 3).flatMap((s) => {
+    const symbol = v.safeParse(v.enum(SlotSymbol), s)
+    return symbol.success ? [symbol.output] : []
+  })),
+)
 
 export class SlotMachine {
   private config: SlotMachineConfig
@@ -303,14 +313,8 @@ export class SlotMachine {
   private loadDebugForceFromStorage(): void {
     if (typeof localStorage === 'undefined') return
     try {
-      const raw = localStorage.getItem(DEBUG_FORCE_KEY)
-      if (!raw) return
-      const parsed = JSON.parse(raw) as string[]
-      const valid = parsed
-        .slice(0, 3)
-        .map((s) => (Object.values(SlotSymbol) as string[]).includes(s) ? (s as SlotSymbol) : null)
-        .filter((s): s is SlotSymbol => s !== null)
-      if (valid.length === 3) {
+      const valid = parseJsonWith(DEBUG_FORCE_SCHEMA, localStorage.getItem(DEBUG_FORCE_KEY))
+      if (valid && valid.length === 3) {
         this.debugForceResult = valid
       }
     } catch {
