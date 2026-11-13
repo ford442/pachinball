@@ -465,6 +465,11 @@ export class GamePhysicsController {
     runner: ReplayRunner | null,
     recorder: ReplayRecorder | null,
   ): number {
+    // Plunger spring: once per tick at the tick's dt, before this tick's input and before the
+    // engine step, so the kinematic body's next pose is set when contacts integrate (and, on the
+    // C++ owner, before `beginStep` pushes it). Per render frame it made a launch depend on the
+    // viewer's refresh rate (determinism-todo item 7).
+    inputActions?.updatePlungerFrame?.(driveDt)
     if (frame) this.applyFrameActions(frame, inputActions)
 
     if (wasmActive && !owner) {
@@ -635,9 +640,6 @@ export class GamePhysicsController {
     }
 
     const rawDt = this.host.engine.getDeltaTime() / 1000
-    // Advance plunger spring animation each frame (before physics step so kinematic body
-    // is at the correct position when Rapier integrates contacts).
-    inputActions?.updatePlungerFrame?.(Math.min(rawDt, 1 / 30))
 
     const wasmActive = this.host.physics.isWasmActive?.() ?? false
     const isOwner = this.host.physics.isWasmOwnerMode?.() ?? false
@@ -717,6 +719,8 @@ export class GamePhysicsController {
    * `stepGameplay` (#519 A1).
    */
   updateSim(): void {
+    // Nothing here may move a body: `dynamicWorld` only steers the camera target and zone
+    // visuals. Body-moving updates run per tick (`tickStepMechanisms` / `stepGameplay`).
     if (!this.frameStepped) return
     const dt = this.frameDt
 
