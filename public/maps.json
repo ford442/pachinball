@@ -106,5 +106,17 @@
     "glowIntensity": 1.3,
     "backgroundPattern": "hex",
     "animationSpeed": 0.4
+  },
+  {
+    "id": "weeks-on-fire",
+    "name": "Weeks on Fire",
+    "baseColor": "#ff6a00",
+    "accentColor": "#ffdd66",
+    "scanlineIntensity": 0.22,
+    "pixelGridIntensity": 0.5,
+    "subpixelIntensity": 0.34,
+    "glowIntensity": 1.7,
+    "backgroundPattern": "circuit",
+    "animationSpeed": 0.6
   }
 ]

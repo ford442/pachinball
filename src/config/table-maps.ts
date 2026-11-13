@@ -134,6 +134,20 @@ const BUILTIN_TABLE_MAPS = {
     backgroundPattern: 'hex',
     animationSpeed: 0.4,
   },
+  // Themed after the "Weeks on Fire" short-film series (Laser Serpent motif:
+  // ember-orange phosphor, white-hot gold glow, circuit/laser traces).
+  // Source for future asset refreshes: https://github.com/ford442/weeks_on_fire
+  'weeks-on-fire': {
+    name: 'Weeks on Fire',
+    baseColor: '#ff6a00',
+    accentColor: '#ffdd66',
+    scanlineIntensity: 0.22,
+    pixelGridIntensity: 0.5,
+    subpixelIntensity: 0.34,
+    glowIntensity: 1.7,
+    backgroundPattern: 'circuit',
+    animationSpeed: 0.6,
+  },
 } satisfies Record<string, TableMapConfig>
 
 /** Ids of the maps that ship with the game (always present in `TABLE_MAPS`). */
