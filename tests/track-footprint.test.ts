@@ -1,18 +1,24 @@
 /**
- * Golden footprint of every TS track module (#489 slice A/B).
+ * Golden footprint of the 14 tracks that were TS modules until #505 §A.
  *
- * Each `src/adventure/tracks/*` builder runs through the real TrackBuilder
- * (Babylon mocked) and must leave exactly the colliders, meshes and zone
- * lists it did when this was pinned. Typing the builder surface, or porting a
- * track to JSON, must not move any of these numbers: a drift is a geometry
- * change, not a refactor. Re-pin only for an intended layout change.
+ * Each track builds from its JSON through the real TrackBuilder (Babylon
+ * mocked) and must leave exactly the colliders, meshes and zone lists its TS
+ * builder did when this was pinned (the numbers and descriptor hashes below
+ * are the TS builders'). `tests/track-element-parity.test.ts` compares the
+ * same builds against frozen copies of those builders, unrounded; this pin
+ * stays put if both ever move together. A drift is a geometry change, not a
+ * refactor. Re-pin only for an intended layout change.
  */
 
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { Vector3 } from '@babylonjs/core/Maths/math.vector'
-import { getAllTrackManifests, getManifestStartAnchor } from '../src/adventure/manifests'
+import { getManifestStartAnchor } from '../src/adventure/manifests'
 import { TRACK_CATALOG } from '../src/adventure/adventure-track-progression'
-import { TsTrackHarnessBuilder, type TrackFootprint } from './helpers/track-export-harness'
+import type { AdventureTrackType } from '../src/adventure/adventure-types'
+import { validateTrackDefinition } from '../src/schemas/track'
+import { TrackFootprintHarness, type TrackFootprint } from './helpers/track-export-harness'
 
 const GOLDEN: Record<string, TrackFootprint> = {
   BIO_HAZARD_LAB: {
@@ -60,8 +66,9 @@ const GOLDEN: Record<string, TrackFootprint> = {
     gravityWells: 0, dampingZones: 0, chromaGates: 0, resetSensors: 0, hasGoalSensor: true,
     hasPortal: false, descriptorHash: 'f5d53550',
   },
+  // bodies was 109: the TS lane builder also listed its two conveyor sensors in adventureBodies.
   PACHINKO_HALL: {
-    descriptors: 110, meshes: 107, bodies: 109, kinematicBindings: 0, animatedObstacles: 0, conveyorZones: 2,
+    descriptors: 110, meshes: 107, bodies: 107, kinematicBindings: 0, animatedObstacles: 0, conveyorZones: 2,
     gravityWells: 0, dampingZones: 0, chromaGates: 0, resetSensors: 0, hasGoalSensor: true,
     hasPortal: true, descriptorHash: '6131d1f0',
   },
@@ -87,24 +94,20 @@ const GOLDEN: Record<string, TrackFootprint> = {
   },
 }
 
-const tsManifests = getAllTrackManifests().filter((m) => m.buildKind === 'ts')
+const DATA_DIR = join(import.meta.dirname, '../src/adventure/track-data')
 
-describe('TS track footprints', () => {
-  it('covers every TS track and nothing else', () => {
-    expect(tsManifests.map((m) => m.id).sort()).toEqual(Object.keys(GOLDEN).sort())
-  })
-
-  for (const manifest of tsManifests) {
-    it(`${manifest.id} builds its pinned footprint`, async () => {
-      if (manifest.buildKind !== 'ts') return
-      const fn = await manifest.loadBuilder()
-      const a = getManifestStartAnchor(manifest.id)
-      const footprint = new TsTrackHarnessBuilder().buildTs(
-        fn,
+describe('converted track footprints', () => {
+  for (const id of Object.keys(GOLDEN)) {
+    it(`${id} builds its pinned footprint`, () => {
+      const result = validateTrackDefinition(JSON.parse(readFileSync(join(DATA_DIR, `${id}.json`), 'utf8')))
+      if (!result.ok) throw new Error(`${id}: ${result.errors.map((e) => `${e.path}: ${e.message}`).join('; ')}`)
+      const a = getManifestStartAnchor(id as AdventureTrackType)
+      const footprint = new TrackFootprintHarness().buildFootprint(
+        result.definition,
         new Vector3(a.x, a.y, a.z),
-        TRACK_CATALOG[manifest.id] ?? null,
+        TRACK_CATALOG[id] ?? null,
       )
-      expect(footprint).toEqual(GOLDEN[manifest.id])
+      expect(footprint).toEqual(GOLDEN[id])
     })
   }
 })

@@ -2,13 +2,12 @@
  * TrackManifest — single registration surface for adventure tracks.
  *
  * Each manifest consolidates zone theming, portal anchors, campaign catalog
- * metadata (optional), and build dispatch (TS builder or JSON data path).
+ * metadata (optional), and the JSON data path the track is compiled from.
  */
 
 import type { AdventureTrackType } from '../adventure-types'
 import type { TrackModeType } from '../adventure-types'
 import type { VisualThemeColor } from '../../game-elements/visual-language'
-import type { TrackBuilderApi } from '../track-builder-api'
 
 /** Zone theming / story metadata (derived into ZONE_REGISTRY). */
 export interface TrackManifestZone {
@@ -40,16 +39,11 @@ export interface TrackManifestCatalog {
   }
 }
 
-export type TrackBuildKind = 'ts' | 'json'
+/** Every track is declarative JSON (the TS track modules were converted in #505 §A). */
+export type TrackBuildKind = 'json'
 
-/** TS track builder function signature: builds only through the public API. */
-export type TrackBuilderFn = (api: TrackBuilderApi) => void
-
-/** Lazy loader for TS track builders (code-split per track). */
-export type TrackBuilderLoader = () => Promise<TrackBuilderFn>
-
-/** Fields shared by both build kinds. */
-interface TrackManifestBase {
+/** One track's registration: anchor, zone theming, optional catalog entry, and its JSON. */
+export interface TrackManifest {
   id: AdventureTrackType
   startAnchor: { x: number; y: number; z: number }
   zone: TrackManifestZone
@@ -57,31 +51,15 @@ interface TrackManifestBase {
   catalog?: TrackManifestCatalog
   /**
    * Optional CAMERA_PRESETS key. Defaults to the track id, then to DEFAULT.
-   * JSON tracks may also override this via the schema's `cameraPresetId`.
+   * The track's own `cameraPresetId` (schema) wins over this.
    */
   cameraPresetId?: string
-}
-
-/** Hand-tuned TS track — geometry emitted by a lazily loaded builder function. */
-export interface TsTrackManifest extends TrackManifestBase {
-  buildKind: 'ts'
-  loadBuilder: TrackBuilderLoader
-}
-
-/** Declarative track — geometry compiled from a JSON definition. */
-export interface JsonTrackManifest extends TrackManifestBase {
-  buildKind: 'json'
+  buildKind: TrackBuildKind
   /**
    * Glob-relative path of the backing JSON, as keyed by `track-data-registry`
    * (e.g. `./track-data/GLITCH_SPIRE.json`). Cross-checked at registry build
-   * time against the definition actually loaded for this track id.
+   * time against the track files that exist.
    */
   dataPath: string
 }
 
-/**
- * Complete track manifest — one entry per track in `track-manifest-data-{core,extended}.ts`,
- * aggregated in `registry.ts`. The `buildKind` discriminant makes the build
- * dispatch total: a TS track must supply a `loadBuilder`, a JSON track a `dataPath`.
- */
-export type TrackManifest = TsTrackManifest | JsonTrackManifest

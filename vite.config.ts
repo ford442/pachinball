@@ -158,13 +158,16 @@ const babylonChunks = babylonChunkGraph()
 const GLTF_ALWAYS_LOADED_CHUNKS = ['ExtrasAsMetadata', 'pbrMaterialLoadingAdapter']
 
 /**
- * Per-track adventure builders are dynamic imports, so each is its own `assets/<file>-<hash>.js`
- * chunk; the service worker fetches them on first visit to a track instead of precaching all of
+ * Every adventure track is a JSON file loaded through a non-eager `import.meta.glob`
+ * (`src/adventure/track-data-registry.ts`), so each is its own `assets/track-data-<ID>-<hash>.js`
+ * chunk; the service worker fetches it on first visit to the track instead of precaching all of
  * them. Derived from the directory so a new track is never precached by accident (#464 item 8).
  */
-const trackChunkIgnores = readdirSync(fileURLToPath(new URL('./src/adventure/tracks', import.meta.url)))
-  .filter((file) => file.endsWith('.ts'))
-  .map((file) => `**/${file.slice(0, -'.ts'.length)}-*.js`)
+const TRACK_DATA_DIR = fileURLToPath(new URL('./src/adventure/track-data', import.meta.url))
+const TRACK_DATA_MODULE = /[\\/]src[\\/]adventure[\\/]track-data[\\/][^\\/]+\.json$/
+const trackChunkIgnores = readdirSync(TRACK_DATA_DIR)
+  .filter((file) => file.endsWith('.json'))
+  .map((file) => `**/track-data-${file.slice(0, -'.json'.length)}-*.js`)
 
 /** Runtime caching for the local `storage_manager` (src/config/api.ts DEV_*_BASE); dev only. */
 const localStorageManagerCaching = [
@@ -261,6 +264,10 @@ export default defineConfig(({ mode, command }) => ({
           return undefined
         },
         chunkFileNames(chunk) {
+          // One adventure track's JSON (a lazy glob entry): named so trackChunkIgnores can find it.
+          if (chunk.moduleIds.length === 1 && TRACK_DATA_MODULE.test(chunk.moduleIds[0] ?? '')) {
+            return 'assets/track-data-[name]-[hash].js'
+          }
           const loaderOnly =
             chunk.moduleIds.length > 0 && !chunk.moduleIds.some((id) => babylonChunks.isAppReachable(id))
           if (!loaderOnly || chunk.name === 'babylon-loaders') return 'assets/[name]-[hash].js'
@@ -355,7 +362,7 @@ export default defineConfig(({ mode, command }) => ({
           '**/rapier-*.js',
           // The update prompt only loads when a newer worker is waiting, i.e. online
           '**/update-toast-*.js',
-          // Per-track adventure builders (dynamic import)
+          // Per-track adventure JSON (lazy glob, one chunk per track)
           ...trackChunkIgnores,
           // Canvas reel atlas — runtime-cached on first reel use
           '**/reel.png',

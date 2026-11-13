@@ -17,7 +17,6 @@ import { TrackBuilder } from '../../src/adventure/track-builder'
 import type { AdventureColliderDesc } from '../../src/adventure/track-collider-descriptors'
 import type { TrackDefinition } from '../../src/schemas/track'
 import type { TrackInfo } from '../../src/adventure/adventure-track-progression'
-import type { TrackBuilderFn } from '../../src/adventure/manifests/track-manifest-types'
 import { collectUnsupported } from '../../src/game/physics/wasm-adventure-export'
 
 /** Any chain of `desc.setX(...).setY(...)` calls on a Rapier descriptor. */
@@ -79,7 +78,7 @@ export function exportReportFor(builder: TrackBuilder): TrackExportReport {
   return { descriptorCount: descriptors.length, problems }
 }
 
-/** What a TS track builder left behind, in a form stable enough to pin. */
+/** What a track build left behind, in a form stable enough to pin. */
 export interface TrackFootprint {
   descriptors: number
   meshes: number
@@ -112,14 +111,14 @@ function roundedJson(value: unknown): string {
   )
 }
 
-/** Concrete harness for the TS track modules (`src/adventure/tracks/*`). */
-export class TsTrackHarnessBuilder extends ExportHarnessBuilder {
-  /** Build one TS track module the way `AdventureMode.buildTrack` does. */
-  buildTs(fn: TrackBuilderFn, start: Vector3, info: TrackInfo | null): TrackFootprint {
+/** Harness that reports what a track build left behind (`tests/track-footprint.test.ts`). */
+export class TrackFootprintHarness extends ExportHarnessBuilder {
+  /** Build one track the way `AdventureMode.buildTrack` does. */
+  buildFootprint(def: TrackDefinition, start: Vector3, info: TrackInfo | null): TrackFootprint {
     this.resetTrackColliders()
     this.currentStartPos = start
     this.currentTrackInfo = info
-    fn(this.trackBuilderApi())
+    this.buildFromDefinition(def)
     return {
       descriptors: this.getColliderDescriptors().length,
       meshes: this.adventureTrack.length,

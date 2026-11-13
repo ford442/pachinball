@@ -15,7 +15,15 @@ Ship JSON under:
 src/adventure/track-data/<TRACK_ID>.json
 ```
 
-Files are loaded eagerly via `import.meta.glob` (synchronous `buildTrack`).
+Every adventure track is one of these files (the TS track modules were converted
+in #505 §A). They load lazily: `src/adventure/track-data-registry.ts` holds a
+non-eager `import.meta.glob`, so each file is its own `assets/track-data-<ID>-*.js`
+chunk, fetched the first time the track is built (`loadDataTrackDefinition`) and
+parsed then with the Valibot schema (`src/schemas/track.ts`, itself a lazy chunk).
+Whether a track exists and where its file lives are answered from the glob's keys,
+so the entry chunk carries neither the data nor the schema, and the service worker
+does not precache the track chunks (`trackChunkIgnores` in `vite.config.ts`, derived
+from this directory).
 `TRACK_ID` must already exist as an `AdventureTrackType` / catalog key.
 
 ## Document shape
@@ -158,6 +166,92 @@ cursor backwards or upwards before a segment whose builder call has a fixed offs
 of its own (see `CHRONO_CORE.json`, where a `-0.5 / -1` gap lines the second gear up
 with the position its original TypeScript builder used).
 
+## Element segments (#505 §A)
+
+What the hand-written TS track modules built inline — seeded scatters, kinematic
+movers, parts riding a spinner, pin lanes, decor — as data. They compile in
+`src/adventure/track-elements.ts`, through `TrackBuilderApi` only.
+
+### Placements (`at`)
+
+`{ from?, mark?, frame?, offset?, along?, lateral?, normal?, up? }`. From an anchor
+the compiler adds, in this order, each as one vector add: the world-space `offset`,
+`along` the anchor's heading, `lateral` along its right, `normal` off the ramp
+surface, then each `up` entry to y in turn. A placement therefore reproduces the
+arithmetic of the builders it replaced (`start.add(fwd.scale(a)).add(right.scale(l))`,
+then `y +=`), which is what keeps the converted tracks bit-identical.
+
+| Anchor | Position | Heading |
+|--------|----------|---------|
+| `cursor` (default) | the cursor | the cursor's |
+| `rampStart` | start of the most recent straight | that straight's |
+| `rampCenter` | that straight's centre line at half its length | that straight's |
+| `spinner` | centre of the most recent spinner | the one it was built at |
+| `mark: "<name>"` | a `mark` | the mark's |
+
+`frame: "surface"` (with `from: "rampStart"`) measures `along` down the ramp surface
+and `normal` off it, instead of horizontally.
+
+### Numbers
+
+Movers, scatters and rotations take a **number spec**: a literal, `{ start, step }`
+(element `i` gets `start + i × step`), or `{ random: [min, max], scale? }`
+(`min + r × (max − min)`, times `scale`, `r` from the segment's seeded stream). A
+`seedKey` names the stream, `getLayoutRng(seedKey)`: one stream per key for the
+whole track, keyed by the session seed like every runtime collider layout.
+Rotations are in **turns** (`{ random: [0, 1] }` is a full yaw).
+
+### Shapes
+
+Collider shapes: `box` (`size: { x, y, z }`, full extents), `cylinder` / `prism`
+(`diameter`, `height`; a prism is one triangular convex hull), `sphere`
+(`diameter`), `tetra` (debris: a cube collider of half-extent `size / 3`, a
+tetrahedron mesh). Inside a `scatter`, a dimension may be `"size"`: the copy's
+seeded size. An element's mesh matches its collider unless `mesh` is `false` or a
+list of mesh shapes (the first rides the body, the rest are its children at
+`local`). Mesh-only shapes add `torus`.
+
+### Segments
+
+| `type` | What it builds |
+|--------|----------------|
+| `mark` | Remembers the cursor (position and heading) as `name`. |
+| `jump` | Moves the cursor: `to` a mark (its heading too), the `midpoint` of two marks, or `at` a placement; `headingOf` takes a mark's heading. |
+| `scatter` | `count` copies of `shape` (or one of `shapes`) strewn by `seedKey`. Each copy draws, in this order: `along`, `lateral`, the shape (copy uses `shapes[k]`, k = how many of 1/n, 2/n, … the draw exceeds), `size`, the `rotation` axes x, y, z, then its motion numbers. Positions from `from` (default `rampStart`); `seat` lifts each copy by half its height (off the surface in a surface frame), `up` by fixed amounts. `materials` cycles cosmetic colours. |
+| `obstacle` | Explicit `items` (each with its own `at`): static colliders, sensors, `zone`s and movers. The segment's fields are defaults an item overrides. `variants` (with `seedKey`) picks one item list by one draw. |
+| `spinnerParts` | Colliders riding the most recent spinner: a `ring` (`count`, optional `gapDeg` opening and `segments` steps) or `points` (`angleDeg`, `radius`), at `radius` / `radiusFactor` and local height `y`. A box may be as deep as its ring step (`size.z: "arc"`, plus `arcPad`). `body: "own"` builds them as one co-rotating kinematic sensor body (`reset`: a reset sensor) instead of attaching them to the platform. |
+| `pinRows` | Pachinko Hall's pin lanes on the most recent straight: row k at `k × spacing`, pins at `oddOffsets` / `evenOffsets`, none closer than `edgeMargin` to a side, `max(2, ⌊length / spacing⌋ − 1)` rows, one static cylinder each. The lift follows the heading-0 ramp normal, as the TS lane did. |
+| `arcPylon` | A static post with a repulsive gravity well, at the cursor or `at`. |
+| `decor` | Meshes only — no colliders. `parent: "spinner"` hangs them on the most recent spinner at `local`; a tube runs from `at` to `to`. |
+
+Element fields (on `obstacle` and `scatter`, and on each obstacle item): `shape`,
+`material`, `label`, `orient` (`heading`: yawed to the anchor heading; `ramp`: also
+tilted with the most recent straight), `restitution`, `friction`, `collisionColor`
+(chroma group `RED` / `GREEN` / `BLUE`), `local` (collider offset in its body),
+`sensor`, `zone`, `motion`, `mesh`.
+
+- `motion`: `{ kind: piston | oscillator | rotatingOscillator, frequency, amplitude,
+  phase, axis ("right" or a vector), travel, draw, bindMesh }` — a
+  `kinematic-position` body driven per frame (`AnimatedObstacle`). `travel: [top,
+  bottom]` sets a piston's centre and amplitude from two y offsets. `draw` orders the
+  seeded draws (default frequency, amplitude, phase). `bindMesh` also registers a
+  kinematic binding.
+- `zone`: `{ kind: "conveyor", force }` (world force), `{ kind: "rampConveyor", force }`
+  (down the most recent straight's slope) or `{ kind: "damping", damping }`. A zone is
+  a sensor owned by its zone list, with no mesh unless `mesh` asks for one.
+
+Smaller additions: `straight.headingOffsetDeg` (build the ramp off the cursor
+heading without turning the cursor), `curve.conveyor` (chord-by-chord conveyor
+sensors along the curve: Tesla Tower's coil), `spinner.angVel` (rad/s, instead of
+`angVelDeg`) and `spinner.at` / `bucket.at` placements, and `pbr:#rrggbb` materials
+(the glassy PBR track material).
+
+The validator also checks order across the track: `spinnerParts`, a spinner-parented
+`decor` and any `from: "spinner"` placement need an earlier spinner; `rampStart` /
+`rampCenter`, `pinRows`, a ramp conveyor and `orient: "ramp"` need an earlier
+straight; every mark a segment names must be defined before it; a `{ random }`
+value or `variants` needs a `seedKey`.
+
 ## Collider vocabulary (WASM export contract)
 
 Every track must run on `wasm-owner` with Rapier unstepped. Builders emit
@@ -202,7 +296,12 @@ Every JSON segment type above compiles to this vocabulary:
 | `forceField` | one `forceField` |
 | `cone` | one `cone` |
 | `axisPull` | one `axisPullField` |
-| `portal`, `gap`, `turn` | none (portal sensor is created on activation) |
+| `scatter`, `obstacle` | fixed or `kinematic-position` boxes / cylinders / spheres / prism hulls; sensor boxes / cylinders for zones |
+| `spinnerParts` | boxes / cylinders attached to the platform, or one `kinematic-velocity` sensor body with attachments |
+| `pinRows` | fixed cylinders |
+| `arcPylon` | fixed cylinder + sphere sensor (gravity well) |
+| `curve` with `conveyor` | the curve's boxes + sensor boxes |
+| `portal`, `gap`, `turn`, `mark`, `jump`, `decor` | none (portal sensor is created on activation) |
 
 `npm run tracks:validate` enforces the contract: it builds every JSON track
 through the real `TrackBuilder.buildFromDefinition` path
@@ -211,13 +310,13 @@ list has an `unsupported` entry or an unexported Rapier collider.
 
 ## Runtime behavior
 
-1. If `id` has a JSON definition, `validateTrackDefinition` runs **before**
-   `clearTrack()`.
-2. Invalid data → `switchToTrack` returns `false`, prior geometry stays intact,
-   HUD shows a soft error via `uiManager.showMessage`.
+1. `switchToTrack` loads and parses the track (`loadDataTrackDefinition`: its JSON
+   chunk and the schema, cached after the first load) **before** `clearTrack()`.
+2. A missing or invalid track → `switchToTrack` returns `false`, prior geometry
+   stays intact, HUD shows a soft error via `uiManager.showMessage`.
 3. Valid data → tear down → `buildFromDefinition` → collision groups.
 
-Hand-tuned flagships that still need custom gizmos (`PACHINKO_HALL`, `TESLA_TOWER`, `CASINO_HEIST`) remain TypeScript builders. `NEON_HELIX`, `CYBER_CORE`, and `PACHINKO_SPIRE` are JSON + `buildKind: 'json'`.
+Every track is JSON (`buildKind: 'json'`); there are no TypeScript track builders.
 
 ## Shipped data tracks
 
@@ -230,6 +329,11 @@ ramp-anchored updraft shafts and two crosswinds that herd the ball toward the
 goal basin. It is the reference for new schema content.
 
 **Post-finale branch (JSON):** `TIDAL_NEXUS` → `SOLAR_FLARE` → `DIGITAL_ZEN_GARDEN`.
+
+**Converted from TypeScript (#505 §A):** `PACHINKO_HALL`, `ORBITAL_JUNKYARD`, `CPU_CORE`,
+`BIO_HAZARD_LAB`, `GRAVITY_FORGE`, `SYNTHWAVE_SURF`, `PRISM_PATHWAY`, `MAGNETIC_STORAGE`,
+`NEURAL_NETWORK`, `NEON_STRONGHOLD`, `CASINO_HEIST`, `TESLA_TOWER`, `NEON_SKYLINE`,
+`POLYCHROME_VOID` — built with the element segments above.
 
 **Fixture (not catalogued):** `tests/fixtures/tracks/FUNNEL_WELL.json` — a 45°
 pin lattice that empties onto a flat floor with a `cone` deflector and an
@@ -248,6 +352,16 @@ A migration is only sound if the compiled JSON reproduces the original geometry.
 sequence from a frozen copy of each original builder and from the compiled JSON,
 then asserts the two are identical. Do a migration that way rather than by eye.
 
+`tests/track-element-parity.test.ts` holds the 14 tracks converted in #505 §A to a
+stricter bar: frozen copies of their builders (`tests/fixtures/ts-tracks/`) and the
+JSON both build through the real `TrackBuilder` on two session seeds, and the
+collider descriptor list (unrounded), body order, every per-track list and every
+mesh pose must be identical — so the golden replay tapes (`CASINO_HEIST` has one)
+cannot move. The one intended difference: Pachinko Hall's two conveyor sensors are
+no longer also listed in `adventureBodies` (a zone sensor belongs to its zone list;
+`clearTrack` used to remove them twice). Cosmetic only: Casino Heist's chip colours
+cycle through the four chip materials instead of `Math.random()`.
+
 > `QUANTUM_GRID`'s builder branched on `modeType`. Its catalog entry pins it to
 > `EXTENDED_MAP`, so only that branch ever ran; the JSON captures it and the
 > unreachable `STATIONARY_TABLE` variant is gone.
@@ -256,12 +370,10 @@ then asserts the two are identical. Do a migration that way rather than by eye.
 
 1. Author `src/adventure/track-data/MY_TRACK.json` with `id` matching an existing enum value.
 2. Point the track's manifest at it: `buildKind: 'json'` + `dataPath: './track-data/MY_TRACK.json'`.
-3. If it replaces a TS builder, delete the builder and its `src/adventure/index.ts` export,
-   and add a parity case before deleting anything.
-4. Run `npm run tracks:validate` and `npm test`.
+3. Run `npm run tracks:validate` and `npm test`.
 
 ## Validation
 
-- Runtime: `validateTrackDefinition()` in `src/adventure/track-schema.ts`; the segment / `TrackDefinition` types live in `src/adventure/track-schema-types.ts` (re-exported by `track-schema.ts`, so import from either)
+- Runtime: `validateTrackDefinition()` in `src/schemas/track.ts` — one Valibot schema; the segment / `TrackDefinition` types are inferred from it
 - CLI: `npm run tracks:validate` (wraps `tests/tracks-validate-cli.test.ts`; covers `src/adventure/track-data/` and `tests/fixtures/tracks/`)
-- CI / local: `tests/track-schema.test.ts`, `tests/track-json-migration-parity.test.ts`
+- CI / local: `tests/track-schema.test.ts`, `tests/track-element-schema.test.ts`, `tests/track-json-migration-parity.test.ts`, `tests/track-element-parity.test.ts`, `tests/track-footprint.test.ts`

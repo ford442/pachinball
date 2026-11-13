@@ -11,8 +11,8 @@ export const EXTENDED_MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.ORBITAL_JUNKYARD,
     startAnchor: { x: 0, y: 15, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/orbital-junkyard').then((m) => m.buildOrbitalJunkyard),
+    buildKind: 'json',
+    dataPath: './track-data/ORBITAL_JUNKYARD.json',
     zone: {
       name: 'Orbital Junkyard',
       storyText: 'ORBITAL DEBRIS FIELD\n\nNavigate the scrap sector...',
@@ -56,8 +56,8 @@ export const EXTENDED_MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.CPU_CORE,
     startAnchor: { x: 0, y: 15, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/cpu-core').then((m) => m.buildCpuCore),
+    buildKind: 'json',
+    dataPath: './track-data/CPU_CORE.json',
     zone: {
       name: 'CPU Core',
       storyText: 'ENTERING: CPU CORE\n\nThe central processor awaits...',
@@ -101,8 +101,8 @@ export const EXTENDED_MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.BIO_HAZARD_LAB,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/bio-hazard-lab').then((m) => m.buildBioHazardLab),
+    buildKind: 'json',
+    dataPath: './track-data/BIO_HAZARD_LAB.json',
     zone: {
       name: 'Bio Hazard Lab',
       storyText: 'BIOHAZARD WARNING\n\nToxic materials present...',
@@ -118,8 +118,8 @@ export const EXTENDED_MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.GRAVITY_FORGE,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/gravity-forge').then((m) => m.buildGravityForge),
+    buildKind: 'json',
+    dataPath: './track-data/GRAVITY_FORGE.json',
     zone: {
       name: 'Gravity Forge',
       storyText: 'GRAVITY FORGE\n\nHeavy industry sector...',
@@ -191,8 +191,8 @@ export const EXTENDED_MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.SYNTHWAVE_SURF,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/synthwave-surf').then((m) => m.buildSynthwaveSurf),
+    buildKind: 'json',
+    dataPath: './track-data/SYNTHWAVE_SURF.json',
     zone: {
       name: 'Synthwave Surf',
       storyText: 'SURF THE WAVES\n\nCatch the perfect break...',
@@ -236,8 +236,8 @@ export const EXTENDED_MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.PRISM_PATHWAY,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/prism-pathway').then((m) => m.buildPrismPathway),
+    buildKind: 'json',
+    dataPath: './track-data/PRISM_PATHWAY.json',
     zone: {
       name: 'Prism Pathway',
       storyText: 'PRISM PATHWAY\n\nLight refracts infinitely...',
@@ -253,8 +253,8 @@ export const EXTENDED_MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.MAGNETIC_STORAGE,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/magnetic-storage').then((m) => m.buildMagneticStorage),
+    buildKind: 'json',
+    dataPath: './track-data/MAGNETIC_STORAGE.json',
     zone: {
       name: 'Magnetic Storage',
       storyText: 'MAGNETIC STORAGE\n\nData streams flowing...',
@@ -270,8 +270,8 @@ export const EXTENDED_MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.NEURAL_NETWORK,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/neural-network').then((m) => m.buildNeuralNetwork),
+    buildKind: 'json',
+    dataPath: './track-data/NEURAL_NETWORK.json',
     zone: {
       name: 'Neural Network',
       storyText: 'NEURAL NETWORK\n\nSynaptic pathways active...',
@@ -287,8 +287,8 @@ export const EXTENDED_MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.NEON_STRONGHOLD,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/neon-stronghold').then((m) => m.buildNeonStronghold),
+    buildKind: 'json',
+    dataPath: './track-data/NEON_STRONGHOLD.json',
     zone: {
       name: 'Neon Stronghold',
       storyText: 'NEON STRONGHOLD\n\nThe fortress awaits...',
@@ -315,8 +315,8 @@ export const EXTENDED_MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.CASINO_HEIST,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/casino-heist').then((m) => m.buildCasinoHeist),
+    buildKind: 'json',
+    dataPath: './track-data/CASINO_HEIST.json',
     zone: {
       name: 'Casino Heist',
       storyText: 'CASINO HEIST\n\nHigh stakes ahead...',
@@ -343,8 +343,8 @@ export const EXTENDED_MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.TESLA_TOWER,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/tesla-tower').then((m) => m.buildTeslaTower),
+    buildKind: 'json',
+    dataPath: './track-data/TESLA_TOWER.json',
     zone: {
       name: 'Tesla Tower',
       storyText: 'TESLA TOWER\n\nHigh voltage zone...',
@@ -360,8 +360,8 @@ export const EXTENDED_MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.NEON_SKYLINE,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/neon-skyline').then((m) => m.buildNeonSkyline),
+    buildKind: 'json',
+    dataPath: './track-data/NEON_SKYLINE.json',
     zone: {
       name: 'Neon Skyline',
       storyText: 'NEON SKYLINE\n\nThe city never sleeps...',
@@ -377,8 +377,8 @@ export const EXTENDED_MANIFEST_DATA: TrackManifest[] = [
   {
     id: AdventureTrackType.POLYCHROME_VOID,
     startAnchor: { x: 0, y: 20, z: 0 },
-    buildKind: 'ts',
-    loadBuilder: () => import('../tracks/polychrome-void').then((m) => m.buildPolychromeVoid),
+    buildKind: 'json',
+    dataPath: './track-data/POLYCHROME_VOID.json',
     zone: {
       name: 'Polychrome Void',
       storyText: 'THE POLYCHROME VOID\n\nBeyond the spectrum...',

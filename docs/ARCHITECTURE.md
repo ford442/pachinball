@@ -32,13 +32,13 @@ The codebase is organized into focused modules under `src/`. See [`AGENTS.md`](.
 
 ## Adventure Mode Architecture
 
-Adventure mode has a single canonical construction stack. **Do not recreate legacy builders** — all track geometry lives under `src/adventure/tracks/`.
+Adventure mode has a single canonical construction stack. **Do not recreate legacy builders** — every track is declarative JSON under `src/adventure/track-data/`, compiled by `track-compiler.ts` / `track-elements.ts` (see [`docs/TRACK_SCHEMA.md`](TRACK_SCHEMA.md)).
 
 ```mermaid
 flowchart TB
   subgraph canonical [Canonical - ACTIVE]
     AdventureMode["src/adventure/adventure-mode.ts"]
-    TrackBuilders["src/adventure/tracks/*.ts"]
+    TrackBuilders["src/adventure/track-data/*.json\n(track-compiler.ts)"]
     AdventureTypes["src/adventure/adventure-types.ts"]
     TrackCatalog["adventure-track-progression.ts\nTRACK_CATALOG"]
     AdventureMode --> TrackBuilders
@@ -101,27 +101,21 @@ portal anchors, and `buildTrack()` switch case).
    - `zone` — story text, colors, music, transition flags (feeds `ZONE_REGISTRY`)
    - `catalog` — optional campaign metadata (feeds `TRACK_CATALOG` when present)
    - `cameraPresetId` — optional `CAMERA_PRESETS` key (defaults to the track id, then `DEFAULT`)
-   - `buildKind` — `'json'` or `'ts'`, plus that kind's dispatch field (below)
-3. **JSON path** (`buildKind: 'json'`):
+   - `buildKind: 'json'` and `dataPath` (below)
+3. **The track** (every track is JSON):
    - Author `src/adventure/track-data/<NAME>.json` conforming to the v1 schema in
      [`src/schemas/track.ts`](../src/schemas/track.ts) — one Valibot schema; the types are
      inferred from it and `public/schemas/track.json` is generated from it (docs/SCHEMAS.md).
    - Point the manifest's `dataPath` at it (glob-relative, e.g. `./track-data/<NAME>.json`).
-   - The file is auto-registered via `track-data-registry.ts` (`import.meta.glob`); the
-     manifest registry cross-checks `dataPath` against the file the definition actually
-     came from, so a typo or rename fails loudly at startup.
+   - The file is auto-registered via `track-data-registry.ts` (a lazy `import.meta.glob`:
+     one chunk per track, parsed on first load); the manifest registry cross-checks
+     `dataPath` against the files that exist, so a typo or rename fails loudly at startup.
    - See [`docs/TRACK_SCHEMA.md`](TRACK_SCHEMA.md) for the field reference.
-4. **TS-builder path** (`buildKind: 'ts'`):
-   - Create the builder in [`src/adventure/tracks/<name>.ts`](../src/adventure/tracks/)
-     as `(builder: TrackBuilderApi) => void`. It builds only through
-     [`TrackBuilderApi`](../src/adventure/track-builder-api.ts) (primitives, materials,
-     collider emission, the scene and the per-track lists); if it needs more, extend that
-     interface — never reach into `TrackBuilder` with a cast. `npm run check:unknown-casts`
-     holds `as unknown as` under `src/adventure` at zero.
-   - Reference it directly as the manifest's `loadBuilder` — there is no separate
-     dispatch table to update.
-   - Its build is pinned in [`tests/ts-track-footprint.test.ts`](../tests/ts-track-footprint.test.ts);
-     add it there. Prefer the JSON path for new tracks (#489 retires the TS one).
+4. **What a track builds**: the schema's element segments (`scatter`, `obstacle`,
+   `spinnerParts`, `pinRows`, `decor`, …) cover what the old TS builders did inline,
+   through [`TrackBuilderApi`](../src/adventure/track-builder-api.ts); a new kind of
+   element is a schema entry plus a builder in `track-elements.ts`, never a cast into
+   `TrackBuilder` (`npm run check:unknown-casts` holds `src/adventure` at zero).
    - Export from [`src/adventure/index.ts`](../src/adventure/index.ts) if needed externally.
 5. `switchToTrack` validates JSON tracks fail-closed — an invalid track is rejected
    without tearing down physics. `buildTrack` likewise refuses to build (and records
@@ -129,11 +123,10 @@ portal anchors, and `buildTrack()` switch case).
 6. Add coverage in [`tests/track-manifest.test.ts`](../tests/track-manifest.test.ts)
    and [`tests/track-schema.test.ts`](../tests/track-schema.test.ts) as appropriate.
 
-`TrackManifest` is a discriminated union on `buildKind`: a `'ts'` entry must supply a
-`loadBuilder`, a `'json'` entry a `dataPath`, so the compiler rejects a half-registered
+Every `TrackManifest` carries its `dataPath`, so the compiler rejects a half-registered
 track. `TRACK_CATALOG` and `ZONE_REGISTRY` are **derived** from manifests — do not edit
-them directly. `AdventureMode.buildTrack()` dispatches via `getTrackManifest()` — no
-switch case needed.
+them directly. `AdventureMode.buildTrack()` loads the track through
+`loadDataTrackDefinition()` — no switch case needed.
 
 ---
 

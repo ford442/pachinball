@@ -251,10 +251,10 @@ Replaces the old monolithic `display.ts`.
 - **`adventure-progression-supervisor.ts`** — Portal lifecycle + campaign state machine.
 - **`zone-registry.ts`** — Per-track theming / story / music metadata for adventure zones.
 - **`campaign-cloud-sync.ts`** — Cloud campaign save via the arcade `put-save` function.
-- **`tracks/*.ts`** — Hand-tuned track builders (flagships + complex layouts). Simpler tracks may use declarative JSON under `track-data/` — see [`docs/TRACK_SCHEMA.md`](docs/TRACK_SCHEMA.md).
+- **`track-data/*.json`** — Every adventure track, as declarative JSON (the TS track modules were converted in #505 §A); compiled by `track-compiler.ts` + `track-elements.ts` — see [`docs/TRACK_SCHEMA.md`](docs/TRACK_SCHEMA.md).
 - **`ui/campaign-map.ts`** — Campaign stage map overlay (L / Levels / start-screen Stage Map), dynamically imported. Layout comes from the pure `ui/campaign-map-model.ts` (spine + branches derived from `unlockedBy`).
 
-**Do not recreate legacy builders.** All new track geometry goes in `src/adventure/tracks/`. The barrel also re-exports `TRACK_CATALOG` and `AdventureTrackProgression` from `adventure-track-progression.ts`.
+**Do not recreate legacy builders.** All new track geometry goes in `src/adventure/track-data/` as JSON. The barrel also re-exports `TRACK_CATALOG` and `AdventureTrackProgression` from `adventure-track-progression.ts`.
 
 Campaign progression reference: `docs/ADVENTURE_CAMPAIGN.md` (A/B alternation + portal loop).  
 Campaign truth is `AdventureTrackProgression` + `AdventureProgressionSupervisor`; `AdventureState` is legacy free-form progress / cosmetic rewards only.
