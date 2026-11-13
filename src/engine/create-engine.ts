@@ -4,8 +4,8 @@
  * Babylon's EngineFactory.CreateAsync always prefers WebGPU when supported and
  * ignores a `disableWebGPU` option, so forced WebGL2 must use Engine directly.
  *
- * We also avoid `WebGPUEngine.CreateAsync`: in @babylonjs/core 7.54.3 it wraps
- * `initAsync()` in a promise with no reject path, so a failed WebGPU init never
+ * We also avoid `WebGPUEngine.CreateAsync`: it wraps `initAsync()` in a promise
+ * with no reject path (first seen in 7.54.3, unchanged in 9.30.0), so a failed WebGPU init never
  * settles (and leaves the half-built engine undisposed). Constructing the
  * engine ourselves and awaiting `initAsync()` gives us both a real rejection to
  * fall back on and a handle to dispose before the next attempt.

@@ -123,7 +123,7 @@ async function bootstrap(): Promise<void> {
 }
 
 bootstrap().catch((err: unknown) => {
-  bootError('Failed to bootstrap game', err) // not console.error: that is stripped from prod builds
+  bootError('Failed to bootstrap game', err) // also feeds the error-reporter ring (src/boot-log.ts)
   // Static markup only, no import: if the banner chunk is unreachable the failure must still show.
   revealBootFailure(err, bootGame ? '' : BOOT_PRELOAD_STAGE)
   // The chunk only refines the stage line (it reads the checkpoint snapshots); best effort.

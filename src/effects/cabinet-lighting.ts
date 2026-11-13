@@ -243,6 +243,11 @@ export class CabinetLighting {
         underColor = new Color3(0.2, 0.8, 1.0) // Cyan accent
         underIntensity = 0.4
         break
+
+      // Portal and escape keep the default blue scheme set above.
+      case DisplayState.ESCAPE:
+      case DisplayState.PORTAL_OPEN:
+        break
     }
 
     // Update state targets

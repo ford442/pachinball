@@ -51,6 +51,13 @@ export default defineConfig([
       // `async` without `await` is deliberate here: it guarantees a Promise return and turns a
       // synchronous throw into a rejection for handlers/hooks typed `() => Promise<void>`.
       '@typescript-eslint/require-await': 'off',
+      // A new union member / enum value must be handled where the union is switched on (#519 E).
+      // `default:` still satisfies it: considerDefaultExhaustiveForUnions keeps the intentional
+      // catch-alls, and a switch on a non-union (number, string) is not checked.
+      '@typescript-eslint/switch-exhaustiveness-check': ['error', {
+        considerDefaultExhaustiveForUnions: true,
+        requireDefaultForNonUnion: false,
+      }],
     },
   },
   // Lock in the current zero-cycle import graph (#322, #441). Type-only imports are erased and
