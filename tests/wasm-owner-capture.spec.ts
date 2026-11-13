@@ -228,8 +228,12 @@ test.describe('wasm-owner MagSpin capture', () => {
     assertWasmOwnerReady(boot, 'wasm-worker')
     await startPlaying(page)
 
-    // Worker snapshots only arrive between tasks, so this one rides the
-    // page's own rAF loop instead of stepping synchronously.
+    // Worker snapshots only arrive between tasks, so the steps cannot run synchronously like the
+    // owner tests above. They used to ride the page's rAF loop: ~46 rendered frames for a 1.5 s
+    // sim sequence, which on a software-GL CI runner (a few frames a second) plus the boot outran
+    // the 180 s budget (#519 A4; the worker itself stayed healthy). Now the frame scheduler is
+    // paused and each iteration takes one fixed step, then yields until the worker's next
+    // snapshot lands — the same between-tasks delivery, without paying for a render per step.
     const run = await page.evaluate(async ({ MAG_SPIN, HOLD_Y_OFFSET }) => {
       const g = (window as unknown as CaptureHooks).game
       const feeder = g?.magSpinFeeder
@@ -237,11 +241,28 @@ test.describe('wasm-owner MagSpin capture', () => {
       const engine = g?.physics?.getWasmEngine?.() as unknown as {
         getPosition: (id: number) => Vec
         getVelocity: (id: number) => Vec
+        getTransportStats: () => { sharedSnapshots: number; postMessageSnapshots: number }
       } | undefined
-      if (!feeder || !ball || !engine || ball.wasmId == null) return { ok: false, reason: 'hooks missing' }
+      const scheduler = (g as unknown as { frameScheduler?: { pause: () => void; resume: () => void } } | undefined)?.frameScheduler
+      if (!g?.physicsController || !g.engine || !feeder || !ball || !engine || !scheduler || ball.wasmId == null) {
+        return { ok: false, reason: 'hooks missing' }
+      }
       const id = ball.wasmId
+      // What the worker has published: step-result messages, or the shared buffer's publish count
+      // (read only by the next `step()`'s poll, so `getTransportStats()` lags it by a step).
+      const shared = () => (engine as unknown as { shared?: { getPublishCount: () => number } | null }).shared ?? null
+      const snapshots = () => engine.getTransportStats().postMessageSnapshots + (shared()?.getPublishCount() ?? 0)
+      const nextTask = () => new Promise<void>((resolve) => setTimeout(resolve, 1))
+      /** Yield until the worker published a snapshot newer than `seen`; false after 5 s. */
+      const awaitSnapshot = async (seen: number) => {
+        const t0 = performance.now()
+        while (snapshots() <= seen) {
+          if (performance.now() - t0 > 5_000) return false
+          await nextTask()
+        }
+        return true
+      }
 
-      const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
       const states: number[] = []
       const prev = feeder.onStateChange
       feeder.onStateChange = (s) => {
@@ -257,9 +278,19 @@ test.describe('wasm-owner MagSpin capture', () => {
 
       let minHoldError = Infinity
       let releaseSpeed = 0
+      let stalledAt = -1
+      let steps = 0
+      const origDt = g.engine.getDeltaTime.bind(g.engine)
+      scheduler.pause()
+      g.engine.getDeltaTime = () => 1000 / 60
       try {
-        for (let i = 0; i < 900; i++) {
-          await frame()
+        for (; steps < 900; steps++) {
+          const seen = snapshots()
+          g.physicsController.stepPhysics(g.inputManager, g.inputActions, null, null)
+          if (!(await awaitSnapshot(seen))) {
+            stalledAt = steps
+            break
+          }
           const state = feeder.getState()
           if (state === MAG_SPIN.SPIN) {
             const p = engine.getPosition(id)
@@ -273,8 +304,11 @@ test.describe('wasm-owner MagSpin capture', () => {
         }
       } finally {
         feeder.onStateChange = prev
+        g.engine.getDeltaTime = origDt
+        scheduler.resume()
       }
-      return { ok: true, reason: '', states, minHoldError, releaseSpeed }
+      const reason = stalledAt >= 0 ? `no worker snapshot for 5 s after step ${stalledAt}` : ''
+      return { ok: stalledAt < 0, reason, states, minHoldError, releaseSpeed, steps }
     }, { MAG_SPIN, HOLD_Y_OFFSET })
 
     expect(run.ok, run.reason).toBe(true)

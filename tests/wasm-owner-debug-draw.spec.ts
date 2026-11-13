@@ -1,9 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { assertWasmOwnerReady, bootWasmOwner, startPlaying } from './helpers/wasm-owner-boot'
 
-test.use({
-  launchOptions: { args: ['--no-sandbox', '--disable-setuid-sandbox'] },
-})
+// No `test.use({ launchOptions })` here: it REPLACES the config's args (it does not merge), so the
+// spec ran on a different flag set from every other wasm-owner spec.
 
 test('wasm-owner physics debug draw shows C++ collider wireframes', async ({ page }) => {
   test.setTimeout(180_000)
@@ -47,6 +46,14 @@ test('wasm-owner physics debug draw shows C++ collider wireframes', async ({ pag
       colliders: g?.physics?.getWasmDebugColliders?.()?.length ?? null,
     }
   })
+  // #519 A3: on a software-GL runner the page draws a few frames a second, and the toggle's lazy
+  // import (a module graph on the dev server) used up the 15 s poll before the first overlay
+  // refresh. The import is not what this spec measures: wait for it on its own, then give the
+  // 250 ms-throttled overlay its 15 s.
+  await expect.poll(async () => (await overlayState()).rendererLoaded, {
+    message: 'the physics debug overlay chunk should load after the toggle',
+    timeout: 60_000,
+  }).toBe(true)
   try {
     await expect.poll(async () => (await readDebugLines()).vertexCount, {
       message: 'C++ debug wireframes should have vertices from cached static colliders',
