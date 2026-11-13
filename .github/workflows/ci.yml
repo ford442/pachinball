@@ -46,6 +46,10 @@ jobs:
       - name: Unknown-cast ratchet
         run: npm run check:unknown-casts
 
+      # The voice AudioWorklet script in public/audio/ is build output of src/audio/pachinko-voice-processor.ts.
+      - name: Worklet script drift
+        run: npm run check:worklet
+
       - name: Lint
         run: npm run lint
 

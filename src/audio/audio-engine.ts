@@ -1,5 +1,6 @@
 import { GameConfig } from '../config'
 import { resolveAbsoluteAssetUrl } from '../core/asset-urls'
+import { panFromPlayfieldX, type VoiceHit } from './voice-hit'
 
 export type PachinkoVoiceType = 'bumper' | 'peg' | 'flipper' | 'drain'
 
@@ -7,6 +8,7 @@ export interface PlayVoiceParams {
   type: PachinkoVoiceType
   /** Normalized 0–1 impact energy. */
   velocity: number
+  /** Where the hit landed. Only `x` is read (pan, via {@link panFromPlayfieldX}). Prefer the contact point. */
   position?: { x: number; y?: number; z?: number }
   /** Ball angular speed mapped 0–1 for rolling rumble. */
   spin?: number
@@ -71,6 +73,8 @@ export class AudioEngine {
   private workletPromise: Promise<boolean> | null = null
   private workletUrl: string | null = null
   private workletError: string | null = null
+  /** Reused for every post: `postMessage` structured-clones synchronously, so one object serves all hits. */
+  private readonly hit: VoiceHit = { velocity: 0, impact: 0, metal: 0, spin: 0, fever: 0, pan: 0 }
 
   private constructor() {
     this.context = createNativeContext()
@@ -158,16 +162,15 @@ export class AudioEngine {
     const velocity = Math.max(0, Math.min(1, params.velocity)) * (reduced ? 0.45 : 1)
     if (velocity < 0.02) return true
 
-    const pan = params.position ? Math.max(-1, Math.min(1, params.position.x / 12)) : 0
-    this.workletNode.port.postMessage({
-      type: params.type,
-      velocity,
-      impact: velocity,
-      metal: metalForType(params.type),
-      spin: Math.max(0, Math.min(1, params.spin ?? 0)),
-      fever: params.fever ? 1 : 0,
-      pan: reduced ? pan * 0.35 : pan,
-    })
+    const pan = params.position ? panFromPlayfieldX(params.position.x) : 0
+    const hit = this.hit
+    hit.velocity = velocity
+    hit.impact = velocity
+    hit.metal = metalForType(params.type)
+    hit.spin = Math.max(0, Math.min(1, params.spin ?? 0))
+    hit.fever = params.fever ? 1 : 0
+    hit.pan = reduced ? pan * 0.35 : pan
+    this.workletNode.port.postMessage(hit)
     return true
   }
 

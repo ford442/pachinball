@@ -19,5 +19,5 @@
     "noImplicitOverride": true
   },
   "include": ["src"],
-  "exclude": ["src/wasm/physics-worker.ts"]
+  "exclude": ["src/wasm/physics-worker.ts", "src/audio/pachinko-voice-processor.ts", "src/audio/worklet-globals.d.ts"]
 }

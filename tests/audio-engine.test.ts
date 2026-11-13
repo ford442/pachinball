@@ -82,6 +82,35 @@ describe('AudioEngine', () => {
     })
   })
 
+  it('stays the only AudioContext after the worklet loads, and posts a clean VoiceHit with pan from x', async () => {
+    class WorkletContext extends FakeAudioContext {
+      audioWorklet = { addModule: vi.fn().mockResolvedValue(undefined) }
+    }
+    vi.stubGlobal('AudioContext', WorkletContext)
+    vi.stubGlobal('AudioWorkletNode', FakeWorkletNode)
+    vi.stubGlobal('document', { baseURI: 'http://localhost:5173/' })
+    const { getAudioEngine, getOwnedAudioContextCount } = await import('../src/audio/audio-engine')
+    const engine = getAudioEngine()
+    await engine.ensureWorklet()
+    expect(getOwnedAudioContextCount()).toBe(1)
+    expect(getAudioEngine()).toBe(engine)
+    expect(getOwnedAudioContextCount()).toBe(1)
+
+    // The engine reuses one message object: snapshot what each post carried.
+    const posted: unknown[] = []
+    const node = FakeWorkletNode.last!
+    node.port.postMessage = vi.fn((m: unknown) => { posted.push(structuredClone(m)) })
+    engine.playVoice({ type: 'peg', velocity: 0.5, position: { x: 6 }, spin: 2, fever: true })
+    engine.playVoice({ type: 'drain', velocity: 0.5, position: { x: -99 } })
+    engine.playVoice({ type: 'bumper', velocity: 0.5 })
+    expect(posted).toEqual([
+      { velocity: 0.5, impact: 0.5, metal: 1, spin: 1, fever: 1, pan: 0.5 },
+      { velocity: 0.5, impact: 0.5, metal: 0.12, spin: 0, fever: 0, pan: -1 },
+      { velocity: 0.5, impact: 0.5, metal: 0.55, spin: 0, fever: 0, pan: 0 },
+    ])
+    expect(getOwnedAudioContextCount()).toBe(1)
+  })
+
   it('a processor error hands the voices back to the oscillator fallback', async () => {
     class WorkletContext extends FakeAudioContext {
       audioWorklet = { addModule: vi.fn().mockResolvedValue(undefined) }

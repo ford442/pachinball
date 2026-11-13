@@ -26,6 +26,11 @@ export interface CollisionHandlerContext {
   bumperVisualMap: Map<PhysicsBody, BumperVisual>
   laneRolloverAwardedKeys: Set<string>
   setLastLaneHit: (laneId: string) => void
+  /**
+   * World x of the contact point being dispatched, or undefined when the engine did not report one
+   * (Rapier events carry no point). Presentation only: the voice's pan.
+   */
+  contactX: () => number | undefined
 }
 
 export function handleBumperCollision(
@@ -122,7 +127,7 @@ export function handleBumperCollision(
   }
 
   ctx.host.soundSystem.playImpact('bumper', speed, {
-    position: new Vector3(ballPos.x, ballPos.y, ballPos.z),
+    position: new Vector3(ctx.contactX() ?? ballPos.x, ballPos.y, ballPos.z),
   })
 }
 
@@ -154,7 +159,7 @@ export function handleFlipperCollision(
   ctx.host.hapticManager?.flipper()
   ctx.host.effects?.playBeep(880 + Math.random() * 200)
   ctx.host.soundSystem.playImpact('flipper', speed, {
-    position: new Vector3(ballPos.x, ballPos.y, ballPos.z),
+    position: new Vector3(ctx.contactX() ?? ballPos.x, ballPos.y, ballPos.z),
   })
 
   const kickScale = getPhysicsTuningValue('flipperKickImpulse')
@@ -190,7 +195,11 @@ export function handleTargetCollision(
       const impactIntensity = Math.min(speed / 20, 1.0)
       ctx.host.ballAnimator.animateSimpleImpact(ballMesh, impactIntensity)
       ctx.host.soundSystem.playImpact('peg', speed, {
-        position: new Vector3(ballBody.translation().x, ballBody.translation().y, ballBody.translation().z),
+        position: new Vector3(
+          ctx.contactX() ?? ballBody.translation().x,
+          ballBody.translation().y,
+          ballBody.translation().z,
+        ),
       })
     }
   }

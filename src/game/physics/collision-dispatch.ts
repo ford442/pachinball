@@ -21,7 +21,7 @@ import type { PhysicsBody } from '../../core/physics-api'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh'
 import type { BumperVisual } from '../../game-elements/types'
 import type { LaneSensorDef } from '../../objects/object-lane-sensors'
-import { ContactPhase, contactPhaseAt, contactStarted, type PhysicsContact, type WasmContactBatch, type WasmContactEvent } from '../../wasm'
+import { ContactPhase, contactPhaseAt, contactPointXAt, contactStarted, type PhysicsContact, type WasmContactBatch, type WasmContactEvent } from '../../wasm'
 
 import type { PhysicsHost } from './types'
 import { simNowMs, type SimClockPhysics } from '../../core/sim-clock'
@@ -107,6 +107,8 @@ export class CollisionDispatcher {
   private static readonly SHAKE_FORCE_SCALE = 0.5
 
   private readonly handlerContext: CollisionHandlerContext
+  /** Contact-point x of the WASM contact being dispatched; undefined outside one. Read by handlers for voice pan. */
+  private currentContactX: number | undefined = undefined
 
   constructor(host: PhysicsHost, scoringBridge: ScoringBridge, getWasmBridge: () => WasmContactBridge | null) {
     this.host = host
@@ -121,6 +123,7 @@ export class CollisionDispatcher {
       setLastLaneHit: (laneId: string) => {
         this.lastLaneHitId = laneId
       },
+      contactX: () => this.currentContactX,
     }
 
     this.eventBusUnsubscribers.push(
@@ -386,7 +389,7 @@ export class CollisionDispatcher {
     const started = contactStarted(evt)
     // Stay carries nothing new. Exit matters only to zone sensors.
     if (!started && evt.phase !== ContactPhase.Exit) return
-    this.dispatchWasmPair(evt.bodyId1, evt.bodyId2, started)
+    this.dispatchWasmPair(evt.bodyId1, evt.bodyId2, started, evt.point.x)
   }
 
   /**
@@ -402,15 +405,20 @@ export class CollisionDispatcher {
       const o = i * stride
       // One bad contact must not drop the rest of this step's contacts (#503 A3).
       try {
-        this.dispatchWasmPair(data[o] ?? 0, data[o + 1] ?? 0, phase === ContactPhase.Enter)
+        this.dispatchWasmPair(
+          data[o] ?? 0,
+          data[o + 1] ?? 0,
+          phase === ContactPhase.Enter,
+          contactPointXAt(data, i, stride),
+        )
       } catch (error) {
         reportContactFault(this.host, error)
       }
     }
   }
 
-  /** `started`: an Enter contact; false is an Exit (only zone sensors use it). */
-  private dispatchWasmPair(bodyId1: number, bodyId2: number, started: boolean): void {
+  /** `started`: an Enter contact; false is an Exit (only zone sensors use it). `contactX`: the contact point's world x. */
+  private dispatchWasmPair(bodyId1: number, bodyId2: number, started: boolean, contactX?: number): void {
     const bridge = this.getWasmBridge()
     if (!bridge) return
     // A re-export (table edit, adventure track switch) reassigns static ids.
@@ -422,7 +430,12 @@ export class CollisionDispatcher {
 
     if (this.feedZoneContact(r1.body, r2.body, r1.key, r2.key, started)) return
     if (!started) return
-    this.processBodyCollision(r1.body, r2.body, r1.key, r2.key)
+    this.currentContactX = contactX
+    try {
+      this.processBodyCollision(r1.body, r2.body, r1.key, r2.key)
+    } finally {
+      this.currentContactX = undefined
+    }
   }
 
   /**

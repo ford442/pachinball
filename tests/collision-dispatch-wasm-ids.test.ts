@@ -88,7 +88,7 @@ function setup() {
   const controller = new GamePhysicsController(host)
   controller.rebuildHandleCaches()
 
-  const contact = (id1: number, id2: number, isSensor = false) => {
+  const contact = (id1: number, id2: number, isSensor = false, pointX = 0) => {
     // The controller listens to the batched event (#488 §5): one contact, packed.
     eventBus.emit('wasm:physics:contacts', {
       data: encodeContactBuffer([
@@ -96,7 +96,7 @@ function setup() {
         bodyId1: id1,
         bodyId2: id2,
         normal: { x: 1, y: 0, z: 0 },
-        point: { x: 0, y: 0, z: 0 },
+        point: { x: pointX, y: 0, z: 0 },
         impulse: 1,
         phase: ContactPhase.Enter,
         isSensor,
@@ -106,7 +106,7 @@ function setup() {
       stride: CONTACT_STRIDE,
     })
   }
-  return { engine, world, eventBus, controller, contact, gameObjects, ballManager, physics, ball, bumper, laneBody, deathZone }
+  return { engine, world, eventBus, controller, contact, host, gameObjects, ballManager, physics, ball, bumper, laneBody, deathZone }
 }
 
 describe('collision dispatch keyed on WASM public ids (#412)', () => {
@@ -124,6 +124,15 @@ describe('collision dispatch keyed on WASM public ids (#412)', () => {
     expect(gameObjects.activateBumperHit).toHaveBeenCalledWith(bumper)
     expect(controller.getBumperMatches()).toBe(1)
     expect(physics.getRapier).not.toHaveBeenCalled()
+  })
+
+  it("pans a bumper's voice from the contact point's x, not the ball centre", () => {
+    const { contact, host } = setup()
+    contact(0, -8000, false, 6)
+    const playImpact = host.soundSystem.playImpact as ReturnType<typeof vi.fn>
+    expect(playImpact).toHaveBeenCalledTimes(1)
+    const options = playImpact.mock.calls[0]![2] as { position: { x: number } }
+    expect(options.position.x).toBe(6)
   })
 
   it('routes a hit on a secondary collider (the hologram sensor) to its body key', () => {
