@@ -96,7 +96,6 @@ export class GamePhysicsController {
   private stepAccumulator = 0
   /** What `stepFixed` measured this frame, for `updateSim` / `updateVisuals`. */
   private frameDt = 0
-  private frameSimDt = 0
   /** False when this frame ran no step (not PLAYING): the sim and visual updates skip it. */
   private frameStepped = false
   /** Reused per frame (#488 §5): the camera policy, the trail list and its records. */
@@ -495,8 +494,56 @@ export class GamePhysicsController {
     }
     this.tickJackpot()
     this.tickStepMechanisms(driveDt)
+    this.stepGameplay(driveDt)
     this.host.afterFixedStep?.()
     return alpha
+  }
+
+  /**
+   * Gameplay that reads or moves the ball, once per fixed step after the engine step: feeders and
+   * their captures, caught balls, stuck detection, combo / tilt / power-up windows, adventure
+   * obstacles (#519 A1). These ran per step on the branch the golden tapes were recorded on; the
+   * merge that brought in the frame scheduler (#488 §4) put them in the render-frame `sim` phase,
+   * which the headless verifier (`stepFixed` only) never runs — so a MagSpin capture happened
+   * live and never on verification, and any run with one was rejected.
+   */
+  private stepGameplay(dt: number): void {
+    const ballManager = this.host.ballManager
+    const currentBallBodies = ballManager?.getBallBodies() ?? NO_BODIES
+    this.host.adventureMode?.update(dt, currentBallBodies)
+
+    this.host.gameObjects?.updateTargets(dt)
+
+    this.host.magSpinFeeder?.update(dt, currentBallBodies)
+    this.host.nanoLoomFeeder?.update(dt, currentBallBodies)
+    this.host.prismCoreFeeder?.update(dt, currentBallBodies)
+    this.host.gaussCannon?.update(dt, currentBallBodies)
+    this.host.quantumTunnel?.update(dt, currentBallBodies)
+
+    ballManager?.updateCaughtBalls(dt, this.onCaughtBallBeep)
+
+    const stuckBalls = ballManager?.updateStuckDetection(dt) ?? NO_STUCK_BODIES
+    for (const stuckBall of stuckBalls) {
+      if (stuckBall === ballManager?.getBallBody()) {
+        ballManager?.resetBall()
+      } else {
+        ballManager?.removeBall(stuckBall)
+      }
+    }
+    if (stuckBalls.length > 0) {
+      this.rebuildHandleCaches()
+    }
+
+    // Small gold ball lifetimes (cleanup expired)
+    ballManager?.updateSmallGoldBallLifetimes(dt)
+
+    this.scoringBridge.updateCombo(dt)
+    this.tickTilt(dt)
+
+    if (this.host.powerupActive) {
+      this.host.powerupTimer -= dt
+      if (this.host.powerupTimer <= 0) this.host.powerupActive = false
+    }
   }
 
   /** Gates, traps, launchers and adventure clocks: once per physics tick, at that tick's dt. */
@@ -657,67 +704,31 @@ export class GamePhysicsController {
 
     const dt = Math.min(rawDt, 1 / 30)
     this.frameDt = dt
-    // Gameplay timers advance with the simulation, not the display: the steps
-    // the engine actually took this frame (render dt only for stub hosts).
-    this.frameSimDt = this.simClock.advance(this.host.physics, dt)
+    // Commit the steps the engine took this frame to the sim clock (simClockSteps(), debounce);
+    // per-step gameplay already ran with the fixed dt in stepGameplay.
+    this.simClock.advance(this.host.physics, dt)
     this.frameStepped = true
   }
 
   /**
-   * Frame-scheduler `sim` phase: gameplay that runs once per frame after the fixed step — feeders,
-   * captures, stuck balls, combo / tilt / power-up windows. Reads the dt `stepFixed` measured.
+   * Frame-scheduler `sim` phase: what follows the fixed steps once per render frame and does not
+   * move the ball or the score — the dynamic world's zone reveal, the map manager, and the
+   * jackpot exit for a sequence that ended outside a tick. Gameplay runs per step in
+   * `stepGameplay` (#519 A1).
    */
   updateSim(): void {
     if (!this.frameStepped) return
     const dt = this.frameDt
-    const simDt = this.frameSimDt
-    const ballManager = this.host.ballManager
 
     // Dynamic world
-    const mainBall = ballManager?.getBallBody()
+    const mainBall = this.host.ballManager?.getBallBody()
     if (this.host.dynamicWorld && mainBall) {
       this.host.dynamicWorld.update(copyTranslation(mainBall, scratchBallPos), dt)
     }
 
-    const currentBallBodies = ballManager?.getBallBodies() ?? NO_BODIES
-    this.host.adventureMode?.update(dt, currentBallBodies)
-
-    this.host.gameObjects?.updateTargets(dt)
-
-    this.host.magSpinFeeder?.update(dt, currentBallBodies)
-    this.host.nanoLoomFeeder?.update(dt, currentBallBodies)
-    this.host.prismCoreFeeder?.update(dt, currentBallBodies)
-    this.host.gaussCannon?.update(dt, currentBallBodies)
-    this.host.quantumTunnel?.update(dt, currentBallBodies)
-
-    ballManager?.updateCaughtBalls(dt, this.onCaughtBallBeep)
-
     this.host.mapManager?.update(dt)
 
-    const stuckBalls = ballManager?.updateStuckDetection(simDt) ?? NO_STUCK_BODIES
-    for (const stuckBall of stuckBalls) {
-      if (stuckBall === ballManager?.getBallBody()) {
-        ballManager?.resetBall()
-      } else {
-        ballManager?.removeBall(stuckBall)
-      }
-    }
-    if (stuckBalls.length > 0) {
-      this.rebuildHandleCaches()
-    }
-
-    // Update small gold ball lifetimes (cleanup expired)
-    ballManager?.updateSmallGoldBallLifetimes(simDt)
-
     this.finishJackpotIfDone()
-
-    this.scoringBridge.updateCombo(simDt)
-    this.tickTilt(simDt)
-
-    if (this.host.powerupActive) {
-      this.host.powerupTimer -= simDt
-      if (this.host.powerupTimer <= 0) this.host.powerupActive = false
-    }
   }
 
   /**
@@ -833,7 +844,7 @@ export class GamePhysicsController {
     const ballBody = this.host.ballManager?.getBallBody()
     if (!ballBody) return
 
-    const now = this.simClock.ms()
+    const now = this.simClock.liveMs()
     if (now - this.host.nudgeState.lastNudgeTime < GAME_TUNING.timing.nudgeCooldownMs) {
       this.host.nudgeState.tiltWarnings++
       if (this.host.nudgeState.tiltWarnings >= GameConfig.nudge.maxTiltWarnings) {
@@ -863,7 +874,7 @@ export class GamePhysicsController {
     this.host.nudgeState.tiltWarningActive = false
     // The penalty ends on the sim clock (`tickTilt`), never a timer: a replay
     // must lock and release the flippers on the same step the live run did.
-    this.host.nudgeState.tiltPenaltyUntilMs = this.simClock.ms() + GameConfig.nudge.tiltPenaltyTime
+    this.host.nudgeState.tiltPenaltyUntilMs = this.simClock.liveMs() + GameConfig.nudge.tiltPenaltyTime
     this.host.tiltActive = true
     this.host.effects?.setBloomEnergy(3.0)
     // Cosmetic only — the bloom pulse may stay on wall time.
@@ -879,7 +890,7 @@ export class GamePhysicsController {
    */
   private tickTilt(simDt: number): void {
     const state = this.host.nudgeState
-    const now = this.simClock.ms()
+    const now = this.simClock.liveMs()
     if (state.tiltActive && now >= state.tiltPenaltyUntilMs) {
       state.tiltActive = false
       state.tiltWarnings = 0

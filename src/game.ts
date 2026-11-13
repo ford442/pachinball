@@ -383,7 +383,8 @@ export class Game
    * The frame, as scheduler systems (#488 §4): input → physics → sim → visuals → render → hud.
    * Everything a frame draws is computed before `scene.render()` in that frame — cabinet lighting
    * and spinners used to update after it, one frame late.
-   * Gates, traps, launchers and adventure clocks run inside the fixed step, not here.
+   * Gates, traps, launchers, feeders, captures, stuck balls, combo / tilt windows and adventure
+   * clocks run inside the fixed step (`stepFixed`, which the replay verifier drives), not here.
    */
   private registerFrameSystems(scene: Scene): void {
     const s = this.frameScheduler
