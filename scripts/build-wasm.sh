@@ -28,6 +28,7 @@
 #   PACHINBALL_WASM_SIMD=ON|OFF
 #   PACHINBALL_WASM_LTO=ON|OFF
 #   WASM_INSTALL_ASSERT=1   # also copy RelWithAsserts artefacts to public/wasm/
+#   PACHINBALL_ALLOW_EMSDK_MISMATCH=1  # build with an emcc other than .emsdk-version (experiments only)
 #
 # Output
 # ──────
@@ -135,13 +136,18 @@ echo "[build-wasm] Using: ${EMSCRIPTEN_VERSION}"
 
 PINNED_EMSDK="$(tr -d '[:space:]' < "${REPO_ROOT}/.emsdk-version" 2>/dev/null || true)"
 ACTUAL_EMSDK="$(sed -nE 's/.*\) ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' <<< "${EMSCRIPTEN_VERSION}")"
+# Fatal everywhere, not only under CI=true (#519 C): a binary from another emcc has another
+# wasmSha256, so the replays recorded on it never verify on the shipped build. The override is
+# for toolchain experiments only; never ship or record tapes from such a build.
 if [[ -n "${PINNED_EMSDK}" && "${ACTUAL_EMSDK}" != "${PINNED_EMSDK}" ]]; then
-  MSG="[build-wasm] emcc ${ACTUAL_EMSDK:-unknown} != pinned ${PINNED_EMSDK} (.emsdk-version) — codegen and parity are only checked on the pin"
-  if [[ "${IN_CI}" -eq 1 ]]; then
+  MSG="[build-wasm] emcc ${ACTUAL_EMSDK:-unknown} != pinned ${PINNED_EMSDK} (.emsdk-version) — codegen, parity and replay verification are only checked on the pin"
+  if [[ "${PACHINBALL_ALLOW_EMSDK_MISMATCH:-}" == "1" ]]; then
+    echo "WARNING: ${MSG} (PACHINBALL_ALLOW_EMSDK_MISMATCH=1: continuing; do not ship or record tapes from this build)" >&2
+  else
     echo "${MSG}" >&2
+    echo "[build-wasm] Install the pin: ./emsdk install ${PINNED_EMSDK} && ./emsdk activate ${PINNED_EMSDK}, or set PACHINBALL_ALLOW_EMSDK_MISMATCH=1 for an experiment." >&2
     exit 1
   fi
-  echo "WARNING: ${MSG}" >&2
 fi
 
 # clangd: bindings.cpp is Emscripten-only, so it is not in the native

@@ -271,6 +271,9 @@ export class AdventureManager {
             this.config.onScoreAward?.(100, 'MagSpin Release')
             break
           }
+          case MagSpinState.IDLE:
+          case MagSpinState.COOLDOWN:
+            break
         }
       }
     }
@@ -291,6 +294,8 @@ export class AdventureManager {
               this.systems.effects?.spawnShardBurst(position)
             }
             this.config.onScoreAward?.(1000, 'NanoLoom Processed')
+            break
+          case NanoLoomState.IDLE:
             break
         }
       }
@@ -317,6 +322,8 @@ export class AdventureManager {
             this.systems.effects?.spawnShardBurst(this.prismCoreFeeder?.getPosition() || Vector3.Zero())
             this.config.onScoreAward?.(750, 'Prism Overload')
             break
+          case PrismCoreState.IDLE:
+            break
         }
       }
     }
@@ -336,6 +343,9 @@ export class AdventureManager {
             this.systems.effects?.spawnShardBurst(this.gaussCannon?.getPosition() || Vector3.Zero())
             this.config.onScoreAward?.(500, 'Gauss Shot')
             break
+          case GaussCannonState.IDLE:
+          case GaussCannonState.COOLDOWN:
+            break
         }
       }
     }
@@ -351,6 +361,10 @@ export class AdventureManager {
             this.systems.effects?.playBeep(2000)
             this.systems.effects?.spawnShardBurst(this.quantumTunnel?.getPosition() || Vector3.Zero())
             this.config.onScoreAward?.(250, 'Quantum Jump')
+            break
+          case QuantumTunnelState.IDLE:
+          case QuantumTunnelState.TRANSPORT:
+          case QuantumTunnelState.COOLDOWN:
             break
         }
       }

@@ -13,21 +13,9 @@
 
 import { WASM_PHYSICS } from '../config/physics'
 import type { PhysicsWorkerFromWorker, PhysicsWorkerToWorker } from './physics-worker-protocol'
+import { resolvePhysicsBundleUrl } from './bundle-url'
 
-export function resolvePhysicsBundleUrl(bundleUrl: string): string {
-  if (/^https?:/i.test(bundleUrl) || bundleUrl.startsWith('blob:')) return bundleUrl
-  // Accessed via globalThis (not the bare `window` identifier) — this file compiles
-  // under both the DOM app project and the WebWorker-lib worker project.
-  const win = (globalThis as Record<string, unknown>).window as
-    | { location?: { href?: string } }
-    | undefined
-  if (!win?.location?.href) return bundleUrl
-  try {
-    return new URL(bundleUrl, win.location.href).href
-  } catch {
-    return bundleUrl
-  }
-}
+export { resolvePhysicsBundleUrl }
 
 export function createPhysicsWorker(): Worker {
   return new Worker(new URL('./physics-worker.ts', import.meta.url), { type: 'module' })

@@ -37,6 +37,7 @@ import {
   type WasmTransform,
 } from './transform-buffer'
 import { getPreloadedWasmModule } from '../engine/wasm-idle-preload'
+import { resolvePhysicsBundleUrl } from './bundle-url'
 import * as adventure from './physics-module-adventure'
 import * as bodies from './physics-module-bodies'
 import type { WasmBodyDesc, WasmHingeDesc } from './physics-module-bodies'
@@ -89,23 +90,6 @@ function u64Hex(value: bigint | string): string {
   return typeof value === 'bigint' ? value.toString(16).padStart(16, '0') : value
 }
 
-/** Resolve a public-root WASM URL. `import(rel)` is relative to this module (`src/wasm/`), not `/`. */
-function resolveModuleUrl(moduleUrl: string): string {
-  if (/^(https?:|blob:)/i.test(moduleUrl) || moduleUrl.startsWith('/')) return moduleUrl
-  // Accessed via globalThis (not the bare `window` identifier) — this class is
-  // instantiated both on the main thread (DOM lib) and inside the physics worker
-  // (WebWorker lib), so it must stay lib-agnostic.
-  const win = (globalThis as Record<string, unknown>).window as
-    | { location?: { href?: string } }
-    | undefined
-  if (!win?.location?.href) return moduleUrl
-  try {
-    return new URL(moduleUrl, win.location.href).href
-  } catch {
-    return moduleUrl
-  }
-}
-
 export class WasmPhysicsEngine {
   /** true once the WASM module has loaded and the world is ready. */
   isReady = false
@@ -150,7 +134,7 @@ export class WasmPhysicsEngine {
         if (cached) {
           this.module = cached
         } else {
-          const { default: factory } = await import(/* @vite-ignore */ resolveModuleUrl(moduleUrl)) as {
+          const { default: factory } = await import(/* @vite-ignore */ resolvePhysicsBundleUrl(moduleUrl)) as {
             default: () => Promise<WasmPhysicsModule>
           }
           this.module = await factory()

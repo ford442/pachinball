@@ -1,0 +1,73 @@
+# Every Playwright spec, every night (#519 A). The blocking jobs in ci.yml and native-physics.yml
+# run a deterministic subset; this one runs the whole suite on the shipped default (the C++ bundle
+# built from the pinned SDK), so a spec no PR runs still goes red within a day. Opt-in specs run
+# here with their switch on: webgpu-probe (WEBGPU_CI=1) and perf-baseline (PERF_BASELINE=1,
+# report-only).
+#
+# The preview-only and degrade specs are not repeated here: ci.yml runs all of them on every PR.
+# Not blocking: a red nightly opens no gate, it says which spec to fix. Local equivalent:
+#   CI=true npm run build:wasm && npx playwright test
+
+name: Nightly Playwright
+
+on:
+  schedule:
+    # 03:17 UTC, off the hour.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-playwright
+  cancel-in-progress: true
+
+jobs:
+  full:
+    name: playwright full (dev server, shard ${{ matrix.shard }}/3)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set up the pinned Emscripten SDK
+        uses: ./.github/actions/setup-emsdk
+
+      - name: Build WASM module (Release)
+        env:
+          CI: 'true'
+        run: |
+          source emsdk/emsdk_env.sh
+          npm run build:wasm
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # playwright.config.ts ignores the preview / degrade specs; ci.yml runs those.
+      - name: Playwright, every dev-server spec
+        env:
+          CI: 'true'
+          WEBGPU_CI: '1'
+          PERF_BASELINE: '1'
+        run: npx playwright test --shard=${{ matrix.shard }}/3
+
+      - name: Upload Playwright results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-playwright-results-${{ matrix.shard }}
+          path: test-results/
+          retention-days: 7

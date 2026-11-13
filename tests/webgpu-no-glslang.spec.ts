@@ -11,7 +11,8 @@ import { chromium, expect, test, type Page } from '@playwright/test'
  *   - no shader-compile or WebGPU validation error reached the console.
  *
  * Needs a WebGPU adapter in headless Chromium (SwiftShader on a GPU-less box, see
- * tests/webgpu-probe.spec.ts); the test skips itself when the browser exposes none.
+ * tests/webgpu-probe.spec.ts); the test skips itself when the browser exposes none, except under
+ * WEBGPU_CI=1 (ci.yml's blocking smoke job), where a missing adapter fails.
  * Locally, point PW_CHROMIUM_PATH at a Chromium that matches the installed Playwright if the
  * bundled one is missing.
  */
@@ -92,7 +93,11 @@ test.describe('WebGPU boot fetches no GLSL translator (#488)', () => {
     try {
       const origin = baseURL ?? 'http://localhost:5173'
       const page = await browser.newPage({ baseURL: origin, viewport: { width: 640, height: 360 } })
-      test.skip(!(await hasWebGpuAdapter(page, origin)), 'this browser exposes no WebGPU adapter')
+      const adapter = await hasWebGpuAdapter(page, origin)
+      // In CI (WEBGPU_CI=1, the blocking smoke job) a missing adapter is a failure, not a skip:
+      // a guard that silently skips guards nothing (#519).
+      if (process.env.WEBGPU_CI === '1') expect(adapter, 'WEBGPU_CI=1 but this browser exposes no WebGPU adapter').toBe(true)
+      test.skip(!adapter, 'this browser exposes no WebGPU adapter')
 
       const requests: string[] = []
       const shaderErrors: string[] = []

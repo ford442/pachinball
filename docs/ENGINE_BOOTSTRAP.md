@@ -322,8 +322,8 @@ Each frame runs its phases in order, every system in registration order within i
 | Phase | Systems (`Game.registerFrameSystems`) |
 |---|---|
 | `input` | latency display |
-| `physics` | `physicsController.stepFixed()` — input drain, the fixed steps this frame owes, mesh interpolation |
-| `sim` | `physicsController.updateSim()` (feeders, captures, stuck balls, combo / tilt / power-up), traps / launchers / moving gates, adventure mode |
+| `physics` | `physicsController.stepFixed()` — input drain, the fixed steps this frame owes, and per step: the engine step, then traps / launchers / moving gates, feeders, captures, stuck balls, combo / tilt / power-up, adventure obstacles; then mesh interpolation |
+| `sim` | `physicsController.updateSim()` (dynamic-world zone reveal, map manager, a jackpot exit outside a tick), adventure mode |
 | `visuals` | `physicsController.updateVisuals()` (camera, effects, trails, backbox), cabinet lighting, spinners |
 | `render` | `scene.render()` |
 | `hud` | countdown, perf monitor, debug HUD |
@@ -332,6 +332,11 @@ Each frame runs its phases in order, every system in registration order within i
 Cabinet lighting and spinners used to update **after** `scene.render()` (one frame late); the physics step ran
 inside `scene.render()` from `onBeforeRenderObservable`. Now everything a frame shows is computed before it is
 drawn. `stepPhysics()` stays as `stepFixed → updateSim → updateVisuals` for callers that drive the table directly.
+
+Anything that reads or moves the ball, or the score, runs **per fixed step inside `stepFixed`**, never in `sim`:
+the headless replay verifier calls only `stepFixed`. The 10-31 merge of the scheduler into #471 had moved the
+feeders, captures, stuck detection and combo / tilt windows into `updateSim`, so a MagSpin capture happened live
+and never on verification (#519 A1); `tests/physics-controller-step-gameplay.test.ts` pins the split.
 
 A system is `{ phase, name?, update(dt), dispose? }`; `register(system, { signal })` returns its unregister
 function and drops it when the signal aborts. Registration is copy-on-write, so a frame iterates a stable list

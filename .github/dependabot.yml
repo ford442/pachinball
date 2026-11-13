@@ -1,0 +1,45 @@
+# Dependency updates (#519 C). npm weekly, GitHub Actions monthly. Babylon and TypeScript each come
+# as one grouped PR that a person merges by hand: a Babylon bump moves the bundle budget, the shader
+# path (WGSL / GLSL) and the frame graphs; a TypeScript bump moves the tsc -b / index-strict
+# ratchets. Neither is auto-merged. The Emscripten SDK is pinned in .emsdk-version / .emsdk-commit,
+# not here: bumping it changes the shipped wasmSha256 and needs new golden tapes.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      babylon:
+        patterns:
+          - '@babylonjs/*'
+      typescript:
+        patterns:
+          - 'typescript'
+          - 'typescript-eslint'
+          - '@typescript-eslint/*'
+      dev-tooling:
+        dependency-type: development
+        exclude-patterns:
+          - '@babylonjs/*'
+          - 'typescript'
+          - 'typescript-eslint'
+          - '@typescript-eslint/*'
+          - '@playwright/test'
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    # The composite action pins actions/cache too.
+    directories:
+      - /
+      - /.github/actions/setup-emsdk
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - '*'

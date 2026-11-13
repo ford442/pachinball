@@ -9,6 +9,7 @@
 
 import type { WasmPhysicsModule } from '../wasm/wasm-types'
 import { WASM_PHYSICS, getPhysicsEnginePreference } from '../config/physics'
+import { resolvePhysicsBundleUrl } from '../wasm/bundle-url'
 
 let preloadPromise: Promise<WasmPhysicsModule | null> | null = null
 let preloadStarted = false
@@ -26,12 +27,15 @@ function loadWorkerBootModule(): Promise<WorkerBootModule> {
   return workerBootModule
 }
 
+/**
+ * #519 A2: the URL is resolved against the page (a bare `import('./wasm/…')` from a built chunk
+ * means `/assets/wasm/…`, a 404 — the preload never worked in production), and there is no
+ * `HEAD` probe: Workbox's precache route answers GET only, so offline the probe failed and the
+ * boot loaded the glue a second time. A missing bundle makes the import reject, caught below.
+ */
 async function fetchAndCompileModule(bundleUrl: string): Promise<WasmPhysicsModule | null> {
   try {
-    const head = await fetch(bundleUrl, { method: 'HEAD' })
-    if (!head.ok) return null
-
-    const { default: factory } = (await import(/* @vite-ignore */ bundleUrl)) as {
+    const { default: factory } = (await import(/* @vite-ignore */ resolvePhysicsBundleUrl(bundleUrl))) as {
       default: () => Promise<WasmPhysicsModule>
     }
     return await factory()
@@ -74,7 +78,7 @@ function preloadDisabled(): boolean {
  * `PhysicsSystem.init()` finds the module ready instead of fetching it itself.
  * Safe to call multiple times; a no-op once any preload has started.
  */
-export function preloadWasmPhysicsNow(bundleUrl = WASM_PHYSICS.bundleUrl): void {
+export function preloadWasmPhysicsNow(bundleUrl: string = WASM_PHYSICS.bundleUrl): void {
   if (preloadStarted) return
   preloadStarted = true
   if (preloadDisabled()) return
@@ -82,7 +86,7 @@ export function preloadWasmPhysicsNow(bundleUrl = WASM_PHYSICS.bundleUrl): void 
 }
 
 /** Start idle preload if not already started. Safe to call multiple times. */
-export function scheduleIdleWasmPreload(bundleUrl = WASM_PHYSICS.bundleUrl): void {
+export function scheduleIdleWasmPreload(bundleUrl: string = WASM_PHYSICS.bundleUrl): void {
   if (preloadStarted) return
   preloadStarted = true
 

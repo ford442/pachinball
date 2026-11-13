@@ -10,7 +10,9 @@ import { defineConfig, devices } from '@playwright/test'
  * Mobile stays on the dev-server config (playwright.config.ts).
  */
 export default defineConfig({
-  testDir: '.',
+  testDir: 'tests',
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
   webServer: [
     {
       command: 'npx vite preview --port 4174 --strictPort',
@@ -28,6 +30,7 @@ export default defineConfig({
     },
   ],
   use: {
+    trace: 'retain-on-failure',
     baseURL: 'http://localhost:4174',
     serviceWorkers: 'block',
     launchOptions: {

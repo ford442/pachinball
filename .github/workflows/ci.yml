@@ -17,15 +17,17 @@ permissions:
   contents: read
 
 jobs:
+  # Every job is pinned to ubuntu-24.04: `ubuntu-latest` moved to 26.04 on 2026-11-12, where
+  # Playwright 1.57 cannot install Chromium's dependencies (#519). Move the pin deliberately.
   check:
     name: typecheck / lint / test / build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
@@ -52,14 +54,10 @@ jobs:
 
       # NOTE: intentionally `vite build`, NOT `npm run build`.
       # `npm run build` chains `build:wasm` (scripts/build-wasm.sh), which needs Emscripten.
-      # emcc is not installed on the default runner, so WASM is kept out of this job; the
-      # localStorage physics-engine flag falls back to Rapier when the bundle is absent.
-      # This step still verifies the TS/Vite bundle compiles and links.
+      # emcc is not installed here, so this only verifies the TS/Vite bundle compiles and links.
+      # The bundle-size gate runs on the bundle that ships, the wasm=true preview leg (#519).
       - name: Build (bundle only, no WASM)
         run: npx vite build
-
-      - name: Bundle size gate
-        run: npm run check:bundle
 
   # Blocking smoke: desktop + mobile Playwright specs. A red e2e now blocks merges (#319).
   # The dev server is started by the `webServer` block in playwright.config.ts (5173,
@@ -67,13 +65,13 @@ jobs:
   # the blocking gate must stay deterministic, not run the entire *.spec.ts suite.
   e2e:
     name: playwright smoke (desktop + mobile, blocking)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
@@ -105,6 +103,27 @@ jobs:
           tests/lifecycle-dispose.spec.ts
           tests/mobile-touch-smoke.spec.ts
 
+      # The two WebGPU guards CLAUDE.md relies on (#519): a WebGPU boot compiles no GLSL (so it
+      # never fetches glslang / twgsl from cdn.babylonjs.com), and the WebGPU boot reaches PLAYING.
+      # Each launches its own SwiftShader-Vulkan browser.
+      - name: Playwright WebGPU guards
+        env:
+          CI: 'true'
+          WEBGPU_CI: '1'
+        run: >
+          npx playwright test
+          --project=chromium
+          tests/webgpu-no-glslang.spec.ts
+          tests/webgpu-boot.spec.ts
+
+      - name: Upload Playwright results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-playwright-results
+          path: test-results/
+          retention-days: 7
+
   # Blocking smoke against the production bundle: `vite build` + `vite preview`, the desktop
   # smoke specs, twice. wasm=true builds the C++ bundle and expects the `wasm-owner` default;
   # wasm=false removes public/wasm and expects the fail-closed `rapier` path. The dev-server
@@ -122,41 +141,23 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      # The SDK pinned in .emsdk-version, never `latest`: a bundle built here must be the
-      # one native-physics.yml checked for parity, and a replay verified against it must
-      # verify against the next build too (#487). Same cache key as native-physics.yml (the
-      # cache is repo-scoped, so a warm entry from that workflow is reused here); it changes
-      # when the pin does.
-      - name: Cache Emscripten SDK
+      # The SDK pinned in .emsdk-version (from the emsdk commit in .emsdk-commit), never
+      # `latest`: a bundle built here must be the one native-physics.yml checked for parity,
+      # and a replay verified against it must verify against the next build too (#487).
+      - name: Set up the pinned Emscripten SDK
         if: matrix.wasm
-        uses: actions/cache@v4
-        with:
-          path: emsdk
-          key: emsdk-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.emsdk-version') }}
-
-      - name: Install and activate Emscripten
-        if: matrix.wasm
-        run: |
-          EMSDK_VERSION="$(tr -d '[:space:]' < .emsdk-version)"
-          if [ ! -d emsdk ]; then
-            git clone https://github.com/emscripten-core/emsdk.git
-          fi
-          cd emsdk
-          git pull --ff-only || true
-          ./emsdk install "$EMSDK_VERSION"
-          ./emsdk activate "$EMSDK_VERSION"
-          source ./emsdk_env.sh
-          echo "$(pwd)" >> $GITHUB_PATH
-          emcc --version
+        uses: ./.github/actions/setup-emsdk
 
       - name: Build WASM module (Release)
         if: matrix.wasm
+        env:
+          CI: 'true'
         run: |
           source emsdk/emsdk_env.sh
           npm run build:wasm
@@ -175,10 +176,14 @@ jobs:
           ALLOW_NO_WASM: ${{ !matrix.wasm && '1' || '' }}
         run: npm run check:dist-wasm
 
-      # Remove continue-on-error once #449 merges.
       - name: Production bundle keeps boot-error reporting
-        continue-on-error: true
         run: node scripts/check-dist-console.mjs
+
+      # Budgeted on the bundle that ships (C++ physics included), not a no-WASM build (#519):
+      # also checks the WASM pair, the glTF loader and the GLBs are precached.
+      - name: Bundle size gate
+        if: matrix.wasm
+        run: npm run check:bundle
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
@@ -197,3 +202,11 @@ jobs:
           tests/verify_prism_core.spec.ts
           tests/basic-gameplay.spec.ts
           tests/lifecycle-dispose.spec.ts
+
+      - name: Upload Playwright results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-playwright-results-wasm-${{ matrix.wasm }}
+          path: test-results/
+          retention-days: 7

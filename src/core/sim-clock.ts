@@ -129,6 +129,15 @@ export class GameSimClock implements SimClockSource {
     return this.totalSteps + (now - last)
   }
 
+  /**
+   * `ms()` plus the steps the engine has taken since the last `advance()` — the gameplay time of
+   * the tick that is running, for per-step gameplay (nudge cooldown, tilt penalty; #519 A1).
+   * Like `liveSteps()`, it lands on the same step whatever render frames the ticks were grouped in.
+   */
+  liveMs(): number {
+    return this.totalMs + (this.liveSteps() - this.totalSteps) * FIXED_TIMESTEP * 1000
+  }
+
   /** Anchor to the engine's counter before a step (no-op once anchored). */
   beforeStep(physics: SimClockPhysics | null | undefined): void {
     this.physics = physics ?? null
